@@ -97,6 +97,24 @@
   .chip:disabled { opacity: 0.45; cursor: not-allowed; }
   /* Compact chips only where the pointer is precise; touch keeps 44 px targets. */
   @media (min-width: 640px) and (pointer: fine) { .chip-sm { min-height: 36px; } }
+  /* Visualization box: viewport-aware so HOLD TO PLAY stays in the first viewport (spec §5).
+     Each offset is the measured height of everything above and below the canvas down to the
+     hold button's bottom, minus the sticky header (--header-h, measured at runtime). The vh
+     declaration is the fallback for browsers without small-viewport units. */
+  .viz-box { height: clamp(88px, calc(100vh - var(--header-h, 101px) - 510px), 148px); }
+  .viz-box { height: clamp(88px, calc(100svh - var(--header-h, 101px) - 510px), 148px); }
+  @media (min-width: 640px) {
+    .viz-box { height: clamp(120px, calc(100vh - var(--header-h, 113px) - 794px), 250px); }
+    .viz-box { height: clamp(120px, calc(100svh - var(--header-h, 113px) - 794px), 250px); }
+  }
+  @media (min-width: 1024px) {
+    .viz-box { height: clamp(180px, calc(100vh - var(--header-h, 57px) - 446px), 330px); }
+    .viz-box { height: clamp(180px, calc(100svh - var(--header-h, 57px) - 446px), 330px); }
+  }
+  @media (min-width: 1280px) {
+    .viz-box { height: clamp(180px, calc(100vh - var(--header-h, 57px) - 414px), 360px); }
+    .viz-box { height: clamp(180px, calc(100svh - var(--header-h, 57px) - 414px), 360px); }
+  }
   .hold-btn { touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
   .fmap { touch-action: pan-y; user-select: none; -webkit-user-select: none; cursor: ew-resize; }
   input[type="range"] { accent-color: rgb(var(--c-accent)); width: 100%; height: 44px; cursor: pointer; }
@@ -150,8 +168,17 @@
       <div role="status" aria-live="polite" aria-atomic="true"
            class="flex items-center gap-1.5 h-8 px-2.5 rounded-full border text-[11px] font-semibold tracking-widest"
            :class="{ 'border-accent text-accent': status === 'PLAYING', 'border-warn text-warn': status === 'RELEASING', 'border-danger text-danger': status === 'ERROR', 'border-line text-muted': ['READY','STOPPED'].includes(status) }">
-        <span aria-hidden="true" x-text="statusIcon"></span><span class="sr-only">Playback state:</span><span x-text="status">READY</span>
+        <span aria-hidden="true" x-text="statusIcon"></span><span class="sr-only">Playback state:</span><span x-text="status" :class="micActive ? 'max-sm:sr-only' : ''">READY</span>
       </div>
+      <!-- Persistent microphone indicator: visible in every mode and view while the mic is open. -->
+      <button type="button" x-show="micActive" x-cloak @click="toggleMic()" :disabled="micPending"
+              class="chip chip-sm w-11 px-0 sm:w-auto sm:px-2.5 flex items-center justify-center gap-1 border-danger text-danger text-[11px] font-semibold tracking-widest"
+              aria-label="Microphone on — stop the microphone">
+        <svg class="w-4 h-4 sm:hidden" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3" fill="currentColor"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21"/></svg>
+        <span class="hidden sm:inline-block w-2 h-2 rounded-full bg-danger" aria-hidden="true"></span>
+        <span class="hidden sm:inline" aria-hidden="true">MIC ON</span>
+        <svg class="hidden sm:block w-3 h-3" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m2 2 10 10M12 2 2 12"/></svg>
+      </button>
       <button type="button" class="chip chip-sm w-11 px-0 flex items-center justify-center" @click="explore = !explore" :aria-pressed="explore"
               aria-label="Explore mode: contextual hints" data-tooltip-target="tip-explore">
         <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .9-1 1.6V14"/><circle cx="12" cy="17.2" r=".6" fill="currentColor"/></svg>
@@ -226,23 +253,30 @@
       <select id="viz-select" class="field sm:hidden w-auto flex-1 py-1" :value="vizMode" @change="vizMode = $event.target.value">
         <template x-for="v in VIZ_MODES" :key="v.id"><option :value="v.id" x-text="v.label" :selected="vizMode === v.id"></option></template>
       </select>
-      <div role="radiogroup" aria-label="Visualization mode" class="hidden sm:flex flex-wrap gap-1">
+      <div role="radiogroup" aria-label="Visualization mode" class="hidden sm:flex flex-wrap gap-1" x-roving>
         <template x-for="v in VIZ_MODES" :key="v.id">
           <button type="button" role="radio" class="chip chip-sm text-xs" :aria-checked="vizMode === v.id" @click="vizMode = v.id" x-text="v.label"></button>
         </template>
       </div>
       <div class="flex items-center gap-1 ml-auto" x-show="vizMode === 'spectrum'" x-cloak>
-        <div role="radiogroup" aria-label="Frequency axis" class="flex gap-1">
+        <div role="radiogroup" aria-label="Frequency axis" class="flex gap-1" x-roving>
           <button type="button" role="radio" class="chip chip-sm text-xs" :aria-checked="spectrumScale === 'log'" @click="spectrumScale = 'log'">LOG</button>
           <button type="button" role="radio" class="chip chip-sm text-xs" :aria-checked="spectrumScale === 'linear'" @click="spectrumScale = 'linear'">LIN</button>
         </div>
-        <button type="button" id="overlayButton" data-dropdown-toggle="overlayMenu" class="chip chip-sm text-xs" aria-haspopup="true">Overlays</button>
-        <div id="overlayMenu" class="z-40 hidden w-52 rounded-lg border border-line bg-surface p-2 shadow-sm">
-          <fieldset><legend class="eyebrow px-2 pb-1">Spectrum overlays</legend>
-            <label class="flex items-center gap-2 px-2 h-11 text-sm"><input type="checkbox" class="w-4 h-4" x-model="overlays.regions"> Frequency regions</label>
-            <label class="flex items-center gap-2 px-2 h-11 text-sm"><input type="checkbox" class="w-4 h-4" x-model="overlays.notes"> Musical notes (C)</label>
-            <label class="flex items-center gap-2 px-2 h-11 text-sm"><input type="checkbox" class="w-4 h-4" x-model="overlays.thirds"> Third-octave bands</label>
-          </fieldset>
+        <div class="relative" @keydown.escape="closeOverlayMenu(true)" @click.outside="closeOverlayMenu(false)">
+          <button type="button" id="overlayButton" class="chip chip-sm text-xs" aria-haspopup="menu" aria-controls="overlayMenu"
+                  :aria-expanded="overlayMenuOpen" @click="toggleOverlayMenu()">Overlays</button>
+          <div id="overlayMenu" class="absolute right-0 top-full mt-1.5 z-40 hidden w-56 rounded-lg border border-line bg-surface shadow-sm">
+            <ul class="py-1 text-sm" role="menu" aria-label="Spectrum overlays" @keydown="overlayMenuKey($event)">
+              <template x-for="o in [['regions', 'Frequency regions'], ['notes', 'Musical notes (C)'], ['thirds', 'Third-octave bands']]" :key="o[0]">
+                <li role="none"><button type="button" role="menuitemcheckbox" tabindex="-1" class="w-full text-left px-3 h-11 hover:bg-surface2 flex items-center gap-2"
+                            :aria-checked="!!overlays[o[0]]" @click="overlays[o[0]] = !overlays[o[0]]">
+                  <span class="w-4 h-4 shrink-0 rounded border border-muted flex items-center justify-center text-[11px] leading-none" :class="overlays[o[0]] ? 'bg-accent border-accent text-surface' : ''" aria-hidden="true" x-text="overlays[o[0]] ? '✓' : ''"></span>
+                  <span x-text="o[1]"></span>
+                </button></li>
+              </template>
+            </ul>
+          </div>
         </div>
         <button type="button" class="chip chip-sm text-xs flex items-center gap-1" @click="toggleMic()" :aria-pressed="micActive" :disabled="micPending">
           <span class="w-2 h-2 rounded-full" :class="micActive ? 'bg-danger' : 'bg-line'" aria-hidden="true"></span>
@@ -250,19 +284,20 @@
         </button>
       </div>
     </div>
-    <div class="relative mx-2 sm:mx-3 mt-2 rounded-lg border border-line overflow-hidden h-[148px] sm:h-[250px] lg:h-[330px] xl:h-[360px]" x-ref="vizCanvas"
-         role="img" :aria-label="vizFailed ? 'Visualization unavailable' : `${vizMode} visualization. ${vizCaption}`">
+    <div class="viz-box relative mx-2 sm:mx-3 mt-2 rounded-lg border border-line overflow-hidden" x-ref="vizCanvas"
+         role="img" aria-describedby="viz-caption"
+         :aria-label="vizFailed ? 'Visualization unavailable' : `${(VIZ_MODES.find((v) => v.id === vizMode) || VIZ_MODES[0]).label} visualization`">
       <template x-if="vizFailed">
         <div class="absolute inset-0 flex items-center justify-center p-4 text-center text-sm text-muted">Visualization unavailable (p5.js did not load). Audio and controls still work.</div>
       </template>
     </div>
-    <p class="hidden sm:block px-3 pt-2 text-[11px] text-muted" x-text="vizCaption"></p>
+    <p id="viz-caption" class="sr-only sm:not-sr-only sm:block sm:px-3 sm:pt-2 text-[11px] text-muted" x-text="vizCaption"></p>
     <dl class="hidden sm:grid grid-cols-3 md:grid-cols-6 gap-px m-3 mt-2 rounded-lg overflow-hidden border border-line bg-line text-[11px]">
       <div class="bg-surface px-2 py-1.5"><dt class="eyebrow">Requested</dt><dd class="font-mono" x-text="formatFrequency(frequency)"></dd></div>
       <div class="bg-surface px-2 py-1.5"><dt class="eyebrow">Instantaneous</dt><dd class="font-mono" x-text="instFreqText"></dd></div>
       <div class="bg-surface px-2 py-1.5"><dt class="eyebrow">Period</dt><dd class="font-mono" x-text="periodText"></dd></div>
       <div class="bg-surface px-2 py-1.5"><dt class="eyebrow">Wavelength ≈</dt><dd class="font-mono" x-text="wavelengthText"></dd></div>
-      <div class="bg-surface px-2 py-1.5"><dt class="eyebrow">Nearest note</dt><dd class="font-mono" x-text="noteText"></dd></div>
+      <div class="bg-surface px-2 py-1.5"><dt class="eyebrow">Nearest note</dt><dd class="font-mono" x-text="metricNoteText"></dd></div>
       <div class="bg-surface px-2 py-1.5"><dt class="eyebrow">Nyquist</dt><dd class="font-mono"><span x-text="formatFrequency(nyquist)"></span><span x-show="provisional" class="text-warn"> (prov.)</span></dd></div>
     </dl>
     <div class="h-2 sm:hidden"></div>
@@ -2606,8 +2641,8 @@ const viz = {
       interNote: '', interNoteNarrow: '',
     },
     pathNodes: [],
-    harm: { list: [], below: 0, total: 0, shown: 0, capped: false, axisMax: 0, summary: '', summaryShort: '' },
-    harmB: { list: [], below: 0, total: 0, shown: 0, capped: false, axisMax: 0, summary: '', summaryShort: '' },
+    harm: { list: [], below: 0, total: 0, shown: 0, capped: false, axisMax: 0, summary: '', summaryShort: '', summaryTiny: '' },
+    harmB: { list: [], below: 0, total: 0, shown: 0, capped: false, axisMax: 0, summary: '', summaryShort: '', summaryTiny: '' },
   },
 
   readPalette() {
@@ -2752,7 +2787,7 @@ function partialCount(wave, nMax) {
 function harmonicTable(wave, f, nyquist) {
   const list = [];
   if (!(f > 0) || !(nyquist > 0)) {
-    return { list, below: 0, total: 0, shown: 0, capped: false, axisMax: 0, summary: '', summaryShort: '' };
+    return { list, below: 0, total: 0, shown: 0, capped: false, axisMax: 0, summary: '', summaryShort: '', summaryTiny: '' };
   }
   const nLim = harmonicLimit(wave);
   const step = wave === 'sawtooth' ? 1 : 2;
@@ -2774,6 +2809,7 @@ function harmonicTable(wave, f, nyquist) {
     list, below, total, shown, capped, axisMax,
     summary: `${below} of ${total} harmonics ≥ −60 dB below Nyquist${more}`,
     summaryShort: `${below}/${total} below Nyquist${more}`,
+    summaryTiny: `${below}/${total} below Nyquist`,
   };
 }
 
@@ -2809,6 +2845,7 @@ function pathNodesFor(plan, st) {
 
 const modalInstances = {};
 let themeDropdown; // Flowbite Dropdown for #themeMenu; null when Flowbite is unavailable
+let overlayDropdown; // Flowbite Dropdown for #overlayMenu; null when Flowbite is unavailable
 let uiNotify = null; // set by oscillaApp.init so global error handlers can surface problems
 let focusBeforeModal = null;
 let alertSeq = 0;
@@ -2911,6 +2948,7 @@ function oscillaApp() {
     safetyCollapsed: false,
     safetyExpanded: false,
     themeMenuOpen: false,
+    overlayMenuOpen: false,
     mapDragging: false,
     customMinText: '100 Hz',
     customMaxText: '10.00 kHz',
@@ -4159,6 +4197,50 @@ function oscillaApp() {
     },
 
     // ============================== visualization + debug
+    /** Spectrum overlays menu: the same Flowbite Dropdown pattern as the theme menu. */
+    overlayMenu() {
+      if (overlayDropdown !== undefined) return overlayDropdown;
+      const menu = document.getElementById('overlayMenu');
+      const button = document.getElementById('overlayButton');
+      overlayDropdown = typeof window.Dropdown === 'function' && menu && button
+        ? new window.Dropdown(menu, button, {
+          placement: 'bottom-end', triggerType: 'none', offsetDistance: 6,
+          onShow: () => this.onOverlayMenu(true), onHide: () => this.onOverlayMenu(false),
+        }, { id: 'overlayMenu', override: true })
+        : null;
+      return overlayDropdown;
+    },
+    onOverlayMenu(open) {
+      this.overlayMenuOpen = open;
+      if (open) document.querySelector('#overlayMenu [role="menuitemcheckbox"]')?.focus();
+    },
+    toggleOverlayMenu() {
+      const dd = this.overlayMenu();
+      if (dd) { dd.toggle(); return; }
+      // Flowbite unavailable: the menu is CSS-positioned under the trigger; toggle it directly.
+      const open = !this.overlayMenuOpen;
+      document.getElementById('overlayMenu')?.classList.toggle('hidden', !open);
+      this.onOverlayMenu(open);
+    },
+    closeOverlayMenu(refocus) {
+      if (!this.overlayMenuOpen) return;
+      const dd = this.overlayMenu();
+      if (dd) dd.hide(); else { document.getElementById('overlayMenu')?.classList.add('hidden'); this.onOverlayMenu(false); }
+      if (refocus) document.getElementById('overlayButton')?.focus();
+    },
+    overlayMenuKey(e) {
+      const items = [...e.currentTarget.querySelectorAll('[role="menuitemcheckbox"]')];
+      const i = items.indexOf(document.activeElement);
+      let next = null;
+      if (e.key === 'ArrowDown') next = (i + 1) % items.length;
+      if (e.key === 'ArrowUp') next = (i - 1 + items.length) % items.length;
+      if (e.key === 'Home') next = 0;
+      if (e.key === 'End') next = items.length - 1;
+      if (e.key === 'Tab') this.closeOverlayMenu(false);
+      if (next == null) return;
+      e.preventDefault();
+      items[next].focus();
+    },
     syncViz() {
       const s = viz.state;
       s.vizMode = this.vizMode;
@@ -4301,6 +4383,23 @@ const THIRD_OCTAVE_HALF_BAND = 2 ** (1 / 6);
 const SMALL_CANVAS_AREA = 420 * 260; // CSS px²: small canvases may use 3× backing pixels
 const PATH_GAP_X = 14;
 const PATH_GAP_Y = 20;
+const WAVE_TITLE = 'SLOWED VISUAL MODEL';
+const WAVE_DISCLAIMER = 'Visual representation — not real-time physical scale.';
+const WAVE_DISCLAIMER_A = 'Visual representation —';
+const WAVE_DISCLAIMER_B = 'not real-time physical scale.';
+// Longest first; the sketch draws the first variant that fits the space it has.
+const DENSE_NOTES = ['cycles too dense to draw — band shows the min/max envelope', 'cycles too dense: min/max band', 'min/max band'];
+const CAPTIONS_AM = ['AM: level follows the modulator', 'AM: level', 'AM'];
+const CAPTIONS_FM = ['FM: cycle spacing follows the modulator', 'FM: spacing follows the modulator', 'FM: spacing', 'FM'];
+const CAPTIONS_LFO = ['LFO: cycle spacing glides with the LFO', 'LFO: frequency glides with the LFO', 'LFO: glide', 'LFO'];
+const MIC_LEGENDS = ['● microphone (relative)', '● mic'];
+const DIGITAL_LIMIT_LABEL = 'digital limit 95 %';
+const SPECTRUM_IDLE_NOTES = ['The measured spectrum appears once audio starts — press HOLD TO PLAY.', 'Spectrum appears once audio starts.', 'press HOLD TO PLAY'];
+const FAST_FM_NOTES = ['modulation faster than the display: deviation band shown', 'too fast to draw: deviation band', 'deviation band'];
+const HARMONIC_TITLE = 'THEORETICAL OSCILLATOR SPECTRUM';
+const HARMONIC_DISCLAIMERS = ['digitally representable below Nyquist · actual speaker output unknown', 'theoretical · speaker output unknown', 'speaker output unknown'];
+const INTERFERENCE_SLOWED = 'carriers slowed — visual representation';
+const DENSE_CYCLES = 60; // more cycles than this in the analyser window cannot be drawn as a line
 
 function waveSample(shape, phase) {
   const p = phase - Math.floor(phase);
@@ -4349,9 +4448,29 @@ function createSketch(container) {
     let pathSubs = [];
     let pathSubsNodes = null;
     let pathSubsBw = -1;
+    let pathTitles = [];
+    let pathSubsSize = -1;
+    let pathGapX = PATH_GAP_X;
+    let pathGapY = PATH_GAP_Y;
+    let pathFooter = 14;
     // interference lane geometry
     const laneY = new Float64Array(3);
     const laneH = new Float64Array(3);
+    // monospace advance per text size (index = px size), measured when the geometry changes
+    const charW = new Float64Array(16);
+    let geoW = -1;
+    let geoH = -1;
+    // wave layout, rebuilt by layoutWave() only when the canvas size changes
+    const WV = {
+      compact: false, ts: 10, t1: 16, discLines: 1, discSize: 9, discY: 29,
+      mx0: 12, mx1: 100, my0: 40, my1: 100, ey0: 0, ey1: 0, envLabel: '', envX: 12, envLabelY: 0,
+      rx0: 0, rx1: 0, ry0: 0, ry1: 0, rTitle: '', rTitleDense: '', rTitleSize: 10, rTitleY: 16,
+      denseNote: '', denseY: 0, infoTitle: '', infoTitleSize: 10, infoTitleY: 0, infoRows: 1,
+      infoSize: 9, infoY0: 0, infoStep: 12, infoValX: 0,
+    };
+    // per-column min/max of the analyser trace (resized with the canvas)
+    let bandMin = new Float32Array(1);
+    let bandMax = new Float32Array(1);
 
     const C = (rgb, a = 255) => p.color(rgb[0], rgb[1], rgb[2], a);
     const ensurePalette = () => {
@@ -4443,6 +4562,7 @@ function createSketch(container) {
       viz.fps = fpsSmoothed;
       p.frameRate(st.playing ? 60 : 30);
       if (!st.reducedMotion) modelPhase += dt * 0.5;
+      ensureGeometry();
       updateEnvelope(st);
       p.background(pal.bg);
       switch (st.vizMode) {
@@ -4456,12 +4576,32 @@ function createSketch(container) {
     };
 
     // ---------------------------------------------------------------- shared helpers
+    /** Text metrics and the size-dependent layouts; runs only when the canvas size changes. */
+    function ensureGeometry() {
+      if (geoW === W && geoH === H) return;
+      geoW = W;
+      geoH = H;
+      for (let s = 6; s < charW.length; s++) { p.textSize(s); charW[s] = p.textWidth('0'); }
+      const cols = Math.max(1, Math.floor(W));
+      if (bandMin.length < cols) { bandMin = new Float32Array(cols); bandMax = new Float32Array(cols); }
+      layoutWave();
+    }
+    /** Width of a string in the monospace canvas font (arithmetic only — no measuring per frame). */
+    function tw(txt, size) { return txt.length * charW[size]; }
+    function fits(txt, size, w) { return txt.length * charW[size] <= w; }
+    /** The first (longest) variant that fits, or '' when none does. */
+    function pickFit(list, size, w) {
+      for (let i = 0; i < list.length; i++) if (fits(list[i], size, w)) return list[i];
+      return '';
+    }
+
     function updateEnvelope(st) {
       let level = 0;
       const d = st.live.timeData;
       if (d) {
+        // every sample: a decimated read aliases with tones whose period divides the stride
         let peak = 0;
-        for (let i = 0; i < d.length; i += 4) { const a = Math.abs(d[i]); if (a > peak) peak = a; }
+        for (let i = 0; i < d.length; i++) { const a = Math.abs(d[i]); if (a > peak) peak = a; }
         level = clamp(peak / Math.max(st.gain, 1e-4), 0, 1.2);
       }
       viz.envLevel = level;
@@ -4477,8 +4617,6 @@ function createSketch(container) {
       p.text(txt, x, y);
     }
 
-    function hLine(y, col, w = 1) { p.stroke(col); p.strokeWeight(w); p.line(0, y, W, y); }
-
     function logX(f, fmin, fmax, x0, x1) {
       return x0 + frequencyToNormalized(f, fmin, fmax) * (x1 - x0);
     }
@@ -4490,22 +4628,106 @@ function createSketch(container) {
     }
 
     // ---------------------------------------------------------------- WAVE
+    /** Two layouts: 'side' (model left, analyser and real-signal block right) when the canvas
+     *  is at least 300 × 200 px, else 'compact' (side-by-side columns, one-line labels, readout
+     *  row at the bottom). Every box is laid out bottom-up from H, so none can invert. */
+    function layoutWave() {
+      const compact = W < 300 || H < 200;
+      WV.compact = compact;
+      if (compact) {
+        const ts = H >= 130 ? 9 : 8;
+        const split = Math.round(W * (W >= 600 ? 0.6 : 0.55));
+        WV.ts = ts;
+        WV.t1 = ts + 2;
+        WV.mx0 = 8;
+        WV.mx1 = split - 6;
+        WV.rx0 = split + 6;
+        WV.rx1 = W - 8;
+        WV.discSize = 8;
+        WV.discLines = fits(WAVE_DISCLAIMER, 8, W - 16) ? 1 : 2;
+        WV.discY = WV.t1 + 10;
+        const top = WV.t1 + 10 * WV.discLines + 4;
+        const bottom = H - 15;
+        WV.ey1 = bottom;
+        WV.ey0 = bottom - (H >= 150 ? 10 : 6);
+        WV.envLabel = fits('ENVELOPE', 8, (WV.mx1 - WV.mx0) * 0.3) ? 'ENVELOPE' : 'ENV';
+        WV.envX = WV.mx0 + tw(WV.envLabel, 8) + 4;
+        WV.envLabelY = bottom;
+        WV.my0 = top + 2;
+        WV.my1 = WV.ey0 - 4;
+        WV.ry0 = top + 2;
+        WV.ry1 = Math.max(WV.ry0 + 8, bottom);
+        const rw = WV.rx1 - WV.rx0;
+        WV.rTitleSize = ts;
+        WV.rTitleY = WV.t1;
+        WV.rTitle = fits('ANALYSER OUTPUT', ts, rw) ? 'ANALYSER OUTPUT' : 'ANALYSER';
+        WV.rTitleDense = 'ANALYSER';
+        // compact: the density note shares the analyser title row
+        WV.denseNote = pickFit(DENSE_NOTES, 8, rw - tw(WV.rTitleDense, ts) - 6);
+        WV.denseY = WV.t1;
+        WV.infoTitle = 'REAL SIGNAL';
+        WV.infoTitleSize = 8;
+        WV.infoTitleY = H - 4;
+        WV.infoRows = 1;
+        WV.infoSize = 8;
+        WV.infoY0 = H - 4;
+        WV.infoStep = 0;
+        WV.infoValX = 8 + tw('REAL SIGNAL ', 8);
+        return;
+      }
+      WV.ts = 10;
+      WV.t1 = 16;
+      WV.mx0 = 12;
+      WV.mx1 = W * 0.62;
+      WV.rx0 = W * 0.66;
+      WV.rx1 = W - 12;
+      const oneLine = 12 + tw(WAVE_DISCLAIMER, 9) <= WV.rx0 - 8;
+      WV.discLines = oneLine ? 1 : 2;
+      WV.discSize = oneLine ? 9 : 8;
+      WV.discY = oneLine ? 29 : 28;
+      WV.ey1 = H - 6;
+      WV.ey0 = WV.ey1 - 16;
+      WV.envLabel = 'ENVELOPE (relative level)';
+      WV.envX = WV.mx0;
+      WV.envLabelY = WV.ey0 - 3;
+      WV.my0 = oneLine ? 40 : 46;
+      WV.my1 = H - 34;
+      const rw = WV.rx1 - WV.rx0;
+      WV.rTitleSize = 10;
+      WV.rTitleY = 16;
+      WV.rTitle = fits('ANALYSER OUTPUT', 10, rw) ? 'ANALYSER OUTPUT' : 'ANALYSER';
+      WV.rTitleDense = WV.rTitle;
+      // real-signal block, bottom-up: rows, title, density note, then the analyser box
+      const wideRows = H >= 280 && fits('frequency  15.50 kHz (start)', 10, rw);
+      WV.infoRows = wideRows ? 3 : 2;
+      WV.infoSize = wideRows ? 10 : fits('15.50 kHz · T 64.5 µs', 9, rw) ? 9 : 8;
+      WV.infoStep = WV.infoSize + 4;
+      WV.infoY0 = H - 8 - (WV.infoRows - 1) * WV.infoStep;
+      WV.infoTitleSize = wideRows ? 10 : 9;
+      WV.infoTitleY = WV.infoY0 - WV.infoStep - 2;
+      WV.infoTitle = fits('REAL SIGNAL INFORMATION', WV.infoTitleSize, rw) ? 'REAL SIGNAL INFORMATION' : 'REAL SIGNAL';
+      WV.denseNote = pickFit(DENSE_NOTES, 8, rw);
+      WV.denseY = WV.infoTitleY - 14;
+      WV.ry0 = 28;
+      WV.ry1 = Math.max(WV.ry0 + 8, WV.denseY - 10);
+      WV.infoValX = WV.rx0;
+    }
+
     function drawWave(st) {
       const L = st.live;
       const lb = st.labels;
-      const wide = W >= 300;
-      const short = H < 220;
-      const mx0 = 12;
-      const mx1 = wide ? W * 0.62 : W - 12;
+      const compact = WV.compact;
+      const mx0 = WV.mx0;
+      const mx1 = WV.mx1;
       const plan = L.plan;
       const am = plan && plan.type === 'am' ? plan.depth : 0;
       const fm = plan && plan.type === 'fm' ? Math.min(6, plan.depth / Math.max(1, plan.modFreq)) : 0;
       const lfo = plan && plan.type === 'lfo';
-      const roomy = mx1 - mx0 >= 380;
-      // on a narrow model the modulation caption gets its own row under the disclaimer
-      const capRow = !roomy && (am || fm || lfo);
-      const my0 = (W < 560 ? 46 : 40) + (capRow ? 10 : 0);
-      const my1 = wide ? H - 34 : H * 0.55;
+      const roomy = !compact && mx1 - mx0 >= 380;
+      // on a narrow side layout the modulation caption gets its own row under the disclaimer
+      const capRow = !compact && !roomy && (am || fm || lfo);
+      const my0 = WV.my0 + (capRow ? 10 : 0);
+      const my1 = WV.my1;
       let f = L.voice ? L.inst : planFreqAt(plan, modelPhase);
       if (!isNum(f)) f = L.refFreq;
       const shape = plan && plan.type === 'dual' ? plan.a.wave : st.waveform;
@@ -4513,20 +4735,22 @@ function createSketch(container) {
       const cycles = 1.5 + 12.5 * frequencyToNormalized(clamp(f, 20, 20000), 20, 20000);
       const amp = st.playing ? Math.max(0.12, Math.min(1, viz.envLevel)) : 0.55;
       const midY = (my0 + my1) / 2;
-      const halfH = (my1 - my0) / 2 - 4;
-      hLine(midY, pal.gridSoft);
-      label('SLOWED VISUAL MODEL', mx0, 16, pal.fg, 10);
-      if (W < 560) {
-        label('Visual representation —', mx0, 28, pal.muted, 8);
-        label('not real-time physical scale.', mx0, 38, pal.muted, 8);
+      const halfH = Math.max(1, (my1 - my0) / 2 - 2);
+      p.stroke(pal.gridSoft);
+      p.strokeWeight(1);
+      p.line(mx0, midY, mx1, midY);
+      label(WAVE_TITLE, mx0, WV.t1, pal.fg, WV.ts);
+      if (WV.discLines === 1) {
+        label(WAVE_DISCLAIMER, mx0, WV.discY, pal.muted, WV.discSize);
       } else {
-        label('Visual representation — not real-time physical scale.', mx0, 29, pal.muted, 9);
+        label(WAVE_DISCLAIMER_A, mx0, WV.discY, pal.muted, WV.discSize);
+        label(WAVE_DISCLAIMER_B, mx0, WV.discY + 10, pal.muted, WV.discSize);
       }
       p.noFill();
       p.stroke(st.playing ? pal.accent : pal.dim);
       p.strokeWeight(2);
       p.beginShape();
-      const n = Math.min(480, Math.floor(mx1 - mx0));
+      const n = Math.max(1, Math.min(480, Math.floor(mx1 - mx0)));
       for (let i = 0; i <= n; i++) {
         const x = i / n;
         let ph = x * cycles - modelPhase * 2;
@@ -4537,69 +4761,115 @@ function createSketch(container) {
       }
       p.endShape();
       if (am || fm || lfo) {
-        let cap = roomy ? 'LFO: cycle spacing glides with the LFO' : 'LFO: frequency glides with the LFO';
-        if (am) cap = 'AM: level follows the modulator';
-        else if (fm) cap = roomy ? 'FM: cycle spacing follows the modulator' : 'FM: spacing follows the modulator';
-        if (capRow) label(cap, mx0, my0 - 4, pal.accent2, 8);
-        else label(cap, mx1, 16, pal.accent2, 9, p.RIGHT);
+        const caps = am ? CAPTIONS_AM : fm ? CAPTIONS_FM : CAPTIONS_LFO;
+        if (compact) {
+          // inline after the title, in whatever room the left column has
+          const cx = mx0 + tw(WAVE_TITLE, WV.ts) + 6;
+          const cap = pickFit(caps, 8, mx1 - cx);
+          if (cap) label(cap, cx, WV.t1, pal.accent2, 8);
+        } else if (capRow) {
+          const cap = pickFit(caps, 8, mx1 - mx0);
+          if (cap) label(cap, mx0, my0 - 4, pal.accent2, 8);
+        } else {
+          const cap = pickFit(caps, 9, mx1 - mx0 - tw(WAVE_TITLE, 10) - 12);
+          if (cap) label(cap, mx1, 16, pal.accent2, 9, p.RIGHT);
+        }
       }
 
       // envelope strip (relative level history)
-      const ey1 = wide ? H - 6 : my1 + 30;
-      const ey0 = ey1 - 16;
-      label('ENVELOPE (relative level)', mx0, ey0 - 3, pal.muted, 8);
+      const ey0 = WV.ey0;
+      const ey1 = WV.ey1;
+      label(WV.envLabel, mx0, WV.envLabelY, pal.muted, 8);
       p.noStroke();
       p.fill(pal.accentSoft);
       const len = viz.envHistory.length;
-      const bw = (mx1 - mx0) / len;
+      const ex0 = WV.envX;
+      const bw = (mx1 - ex0) / len;
       for (let i = 0; i < len; i++) {
         const v = viz.envHistory[(viz.envIndex + i) % len];
-        if (v > 0.002) p.rect(mx0 + i * bw, ey1 - v * (ey1 - ey0), Math.max(1, bw), v * (ey1 - ey0));
+        if (v > 0.002) p.rect(ex0 + i * bw, ey1 - Math.min(1, v) * (ey1 - ey0), Math.max(1, bw), Math.min(1, v) * (ey1 - ey0));
       }
 
       // real analyser trace + real signal info
-      const rx0 = wide ? W * 0.66 : 12;
-      const rx1 = W - 12;
-      const ry0 = wide ? 28 : ey1 + 22;
-      const ry1 = wide ? (short ? H - 44 : H * 0.58) : H - 40;
-      label('ANALYSER OUTPUT', rx0, ry0 - 12, pal.fg, 10);
+      const rx0 = WV.rx0;
+      const rx1 = WV.rx1;
+      const ry0 = WV.ry0;
+      const ry1 = WV.ry1;
       p.noFill();
       p.stroke(pal.grid);
       p.strokeWeight(1);
       p.rect(rx0, ry0, rx1 - rx0, ry1 - ry0);
       const d = L.timeData;
+      let dense = false;
       if (d && st.playing && L.sampleRate > 0) {
         const win = Math.min(1024, d.length >> 1);
         let start = 0;
         for (let i = 1; i < d.length - win; i++) { if (d[i - 1] < 0 && d[i] >= 0) { start = i; break; } }
         const g = Math.max(st.gain, 1e-4);
         const ymid = (ry0 + ry1) / 2;
-        const hh = (ry1 - ry0) / 2 - 3;
-        p.stroke(pal.accent);
-        p.strokeWeight(1.25);
-        p.beginShape();
-        const step = Math.max(1, Math.floor(win / (rx1 - rx0)));
-        for (let i = 0; i < win; i += step) {
-          p.vertex(rx0 + (i / win) * (rx1 - rx0), ymid - clamp(d[start + i] / g, -1.1, 1.1) * hh);
+        const hh = Math.max(1, (ry1 - ry0) / 2 - 3);
+        const cols = Math.max(1, Math.min(bandMin.length, Math.floor(rx1 - rx0)));
+        const spc = win / cols; // samples per pixel column
+        // fewer than two columns per cycle, or more cycles than a line can show: draw the band
+        dense = f > L.sampleRate / (2 * Math.max(1, spc)) || f * (win / L.sampleRate) > DENSE_CYCLES;
+        if (!dense) {
+          // resolvable: every sample of the window (a decimated polyline would alias)
+          p.stroke(pal.accent);
+          p.strokeWeight(1.25);
+          p.beginShape();
+          for (let i = 0; i < win; i++) p.vertex(rx0 + (i / win) * (rx1 - rx0), ymid - clamp(d[start + i] / g, -1.1, 1.1) * hh);
+          p.endShape();
         }
-        p.endShape();
-        if (f * (win / L.sampleRate) > 60) label('cycles too dense to resolve here', rx0 + 4, ry1 - 4, pal.warn, 9);
-        if (rx1 - rx0 >= 150) label(lb.winMs, rx1, ry0 - 12, pal.muted, 9, p.RIGHT);
+        // too dense: the sample min/max around each pixel column as a filled band instead of a
+        // false slow wave. The window is widened to ~2 ms so the band's edges do not ripple with
+        // the beat between the tone and the sample grid (15.5 kHz at 48 kHz beats at 500 Hz).
+        const pad = Math.ceil(L.sampleRate * 0.001);
+        for (let c = 0; dense && c < cols; c++) {
+          const a0 = Math.max(0, start + Math.floor(c * spc) - pad);
+          const a1 = Math.min(d.length, start + Math.max(Math.floor((c + 1) * spc), Math.floor(c * spc) + 1) + pad);
+          let lo = Infinity;
+          let hi = -Infinity;
+          for (let i = a0; i < a1; i++) {
+            const v = d[i];
+            if (v < lo) lo = v;
+            if (v > hi) hi = v;
+          }
+          if (lo > hi) { lo = 0; hi = 0; }
+          bandMin[c] = ymid - clamp(lo / g, -1.1, 1.1) * hh;
+          bandMax[c] = ymid - clamp(hi / g, -1.1, 1.1) * hh;
+        }
+        if (dense) {
+          p.fill(pal.accentSoft);
+          p.stroke(pal.accent);
+          p.strokeWeight(1);
+          p.beginShape();
+          for (let c = 0; c < cols; c++) p.vertex(rx0 + c + 0.5, bandMax[c]);
+          for (let c = cols - 1; c >= 0; c--) p.vertex(rx0 + c + 0.5, bandMin[c]);
+          p.endShape(p.CLOSE);
+        }
       } else {
-        label(L.hasCtx ? 'press HOLD TO PLAY' : 'starts with audio', rx0 + 6, (ry0 + ry1) / 2, pal.muted, 9);
+        label(L.hasCtx ? 'press HOLD TO PLAY' : 'starts with audio', rx0 + 6, (ry0 + ry1) / 2 + 3, pal.muted, compact ? 8 : 9);
       }
-      const ix = rx0;
-      const iy = wide ? ry1 + (short ? 14 : 20) : H - 24;
-      label(rx1 - rx0 >= 150 ? 'REAL SIGNAL INFORMATION' : 'REAL SIGNAL', ix, iy, pal.fg, short ? 9 : 10);
-      if (short) {
-        label(lb.realShort1, ix, iy + 12, pal.muted, 9);
-        label(lb.realShort2, ix, iy + 24, pal.muted, 9);
-      } else if (wide) {
-        label(lb.realWide1, ix, iy + 15, pal.muted, 10);
-        label(lb.realWide2, ix, iy + 29, pal.muted, 10);
-        label(lb.realWide3, ix, iy + 43, pal.muted, 10);
+      const rw = rx1 - rx0;
+      if (compact && dense && WV.denseNote) {
+        label(WV.rTitleDense, rx0, WV.rTitleY, pal.fg, WV.rTitleSize);
+        label(WV.denseNote, rx1, WV.denseY, pal.warn, 8, p.RIGHT);
       } else {
-        label(lb.realCompact, ix, iy + 14, pal.muted, 9);
+        label(WV.rTitle, rx0, WV.rTitleY, pal.fg, WV.rTitleSize);
+        if (d && st.playing && tw(WV.rTitle, WV.rTitleSize) + tw(lb.winMs, 9) + 8 <= rw) label(lb.winMs, rx1, WV.rTitleY, pal.muted, 9, p.RIGHT);
+        if (!compact && dense && WV.denseNote) label(WV.denseNote, rx0, WV.denseY, pal.warn, 8);
+      }
+      label(WV.infoTitle, compact ? 8 : rx0, WV.infoTitleY, pal.fg, WV.infoTitleSize);
+      if (compact) {
+        const room = W - 8 - WV.infoValX;
+        label(fits(lb.realCompact, 8, room) ? lb.realCompact : lb.realShort1, WV.infoValX, WV.infoY0, pal.muted, 8);
+      } else if (WV.infoRows === 3) {
+        label(lb.realWide1, rx0, WV.infoY0, pal.muted, WV.infoSize);
+        label(lb.realWide2, rx0, WV.infoY0 + WV.infoStep, pal.muted, WV.infoSize);
+        label(lb.realWide3, rx0, WV.infoY0 + 2 * WV.infoStep, pal.muted, WV.infoSize);
+      } else {
+        label(lb.realShort1, rx0, WV.infoY0, pal.muted, WV.infoSize);
+        label(lb.realShort2, rx0, WV.infoY0 + WV.infoStep, pal.muted, WV.infoSize);
       }
     }
 
@@ -4616,15 +4886,19 @@ function createSketch(container) {
     function rebuildColumns(bins, x0, x1) {
       const cols = Math.max(1, Math.floor(x1 - x0));
       if (cols === colCols && axLog === colLog && axFmin === colFmin && axFmax === colFmax && bins === colBins) return;
+      // Bin k is centred on k · binHz. A column spanning [fa, fb) takes the bins whose centres
+      // fall inside it; a column narrower than a bin takes the bin nearest its centre. Both keep
+      // a pure tone's peak on the column of its frequency marker (floor() shifted it half a bin).
       const binHz = axFmax / bins;
+      const at = (u) => (axLog ? normalizedToFrequency(u, axFmin, axFmax) : u * axFmax);
       colLo = new Int32Array(cols);
       colHi = new Int32Array(cols);
       for (let c = 0; c < cols; c++) {
-        const fa = axLog ? normalizedToFrequency(c / cols, axFmin, axFmax) : (c / cols) * axFmax;
-        const fb = axLog ? normalizedToFrequency((c + 1) / cols, axFmin, axFmax) : ((c + 1) / cols) * axFmax;
-        const lo = clamp(Math.floor(fa / binHz), 0, bins - 1);
-        colLo[c] = lo;
-        colHi[c] = clamp(Math.max(lo, Math.ceil(fb / binHz) - 1), 0, bins - 1);
+        let lo = Math.ceil(at(c / cols) / binHz - 1e-9);
+        let hi = Math.ceil(at((c + 1) / cols) / binHz - 1e-9) - 1;
+        if (hi < lo) { lo = Math.round(at((c + 0.5) / cols) / binHz); hi = lo; }
+        colLo[c] = clamp(lo, 0, bins - 1);
+        colHi[c] = clamp(hi, colLo[c], bins - 1);
       }
       colCols = cols;
       colLog = axLog;
@@ -4644,27 +4918,35 @@ function createSketch(container) {
         const hi = Math.min(colHi[c], data.length - 1);
         for (let b = colLo[c]; b <= hi; b++) if (data[b] > v) v = data[b];
         if (!Number.isFinite(v)) v = dbMin;
-        p.vertex(x0 + c, y1 - ((clamp(v, dbMin, dbMax) - dbMin) / (dbMax - dbMin)) * (y1 - y0));
+        p.vertex(x0 + c + 0.5, y1 - ((clamp(v, dbMin, dbMax) - dbMin) / (dbMax - dbMin)) * (y1 - y0));
       }
       p.endShape();
     }
     function drawSpectrum(st) {
       const L = st.live;
+      const short = H < 160;
+      const ts = short ? 8 : 9;
       const x0 = 40;
       const x1 = W - 10;
-      const y0 = 22;
-      const y1 = H - 24;
+      const y0 = short ? 18 : 22;
+      const y1 = H - (short ? 20 : 24);
+      // label rows inside the plot, top-down: region names, requested, Nyquist, digital limit
+      const row = short ? 10 : 11;
       updateSpectrumAxis(st);
-      // dB grid
+      // dB grid: label every row only when the rows are at least 10 px apart
+      const gap = (y1 - y0) / (SPECTRUM_DB_GRID.length - 1);
+      const stride = gap >= 10 ? 1 : gap >= 5 ? 2 : 4;
       for (let i = 0; i < SPECTRUM_DB_GRID.length; i++) {
         const y = y1 - ((SPECTRUM_DB_GRID[i] + 140) / 140) * (y1 - y0);
         p.stroke(pal.gridSoft);
         p.strokeWeight(1);
         p.line(x0, y, x1, y);
-        label(SPECTRUM_DB_LABELS[i], x0 - 4, y + 3, pal.muted, 8, p.RIGHT);
+        if (i % stride === 0) label(SPECTRUM_DB_LABELS[i], x0 - 4, y + 3, pal.muted, 8, p.RIGHT);
       }
-      label('RELATIVE LEVEL (dB, uncalibrated)', x0, 13, pal.muted, 9);
-      label(axLog ? 'LOG' : 'LINEAR', x1, 13, pal.muted, 9, p.RIGHT);
+      const title = 'RELATIVE LEVEL (dB, uncalibrated)';
+      const scaleLabel = axLog ? 'LOG' : 'LINEAR';
+      label(title, x0, y0 - 9, pal.muted, ts);
+      label(scaleLabel, x1, y0 - 9, pal.muted, ts, p.RIGHT);
       // overlays
       if (st.overlays.regions) {
         for (let i = 0; i < FREQUENCY_REGIONS.length; i++) {
@@ -4675,7 +4957,7 @@ function createSketch(container) {
           p.noStroke();
           p.fill(i % 2 ? pal.bandAlt : pal.band);
           p.rect(a, y0, b - a, y1 - y0);
-          if (b - a > 34) label(r.short, a + 3, y0 + 10, pal.muted, 8);
+          if (b - a > tw(r.short, 8) + 6) label(r.short, a + 3, y0 + row - 1, pal.muted, 8);
         }
       }
       if (st.overlays.thirds) {
@@ -4692,6 +4974,7 @@ function createSketch(container) {
         }
       }
       if (st.overlays.notes) {
+        let lastRight = -Infinity;
         for (let oct = 0; oct <= 10; oct++) {
           const f = midiToFrequency((oct + 1) * 12, st.a4);
           if (f < Math.max(axFmin, 1) || f > axFmax) continue;
@@ -4699,12 +4982,16 @@ function createSketch(container) {
           p.stroke(pal.accent2Soft);
           p.strokeWeight(1);
           p.line(x, y1 - 14, x, y1);
-          label(OCTAVE_C_LABELS[oct], x + 2, y1 - 4, pal.accent2, 8);
+          if (x + 2 > lastRight + 2) {
+            label(OCTAVE_C_LABELS[oct], x + 2, y1 - 4, pal.accent2, 8);
+            lastRight = x + 2 + tw(OCTAVE_C_LABELS[oct], 8);
+          }
         }
       }
-      // frequency ticks
+      // frequency ticks; a label that would overlap its left neighbour is skipped
       const ticks = axLog ? SPECTRUM_MARKERS : LINEAR_TICKS;
       const tickLabels = axLog ? SPECTRUM_MARKER_LABELS : LINEAR_TICK_LABELS;
+      let tickRight = -Infinity;
       for (let i = 0; i < ticks.length; i++) {
         const f = ticks[i];
         if (f < axFmin || f > axFmax) continue;
@@ -4712,7 +4999,10 @@ function createSketch(container) {
         p.stroke(pal.grid);
         p.strokeWeight(1);
         p.line(x, y1, x, y1 + 4);
-        label(tickLabels[i], x, y1 + 15, pal.muted, 9, p.CENTER);
+        const half = tw(tickLabels[i], ts) / 2;
+        if (x - half < tickRight + 4 || x + half > W) continue;
+        label(tickLabels[i], x, y1 + (short ? 13 : 15), pal.muted, ts, p.CENTER);
+        tickRight = x + half;
       }
       // data
       const data = L.analyser ? viz.outputSpectrum() : null;
@@ -4722,10 +5012,17 @@ function createSketch(container) {
         const mic = L.mic ? viz.micSpectrum() : null;
         if (mic) {
           plotSpectrum(mic, x0, y0, y1, pal.accent2, 1.25);
-          label('● microphone (relative)', x0 + 6, y1 - 6, pal.accent2, 9);
+          // legend in the title row, between the title and the scale name
+          const room = x1 - tw(scaleLabel, ts) - 8 - (x0 + tw(title, ts) + 8);
+          const legend = pickFit(MIC_LEGENDS, ts, room);
+          if (legend) label(legend, x1 - tw(scaleLabel, ts) - 8, y0 - 9, pal.accent2, ts, p.RIGHT);
         }
       } else {
-        label('The measured spectrum appears once audio starts — press HOLD TO PLAY.', x0 + 8, (y0 + y1) / 2, pal.muted, 10);
+        // bottom-left, clear of the label rows; on a short plot also clear of the digital-limit label
+        const ns = short ? 9 : 10;
+        const xl = freqToX(axFmax * SAFE_NYQUIST_FACTOR, x0, x1);
+        const room = y1 - 6 - (y0 + 4 * row) < 12 ? xl - 12 - tw(DIGITAL_LIMIT_LABEL, 8) - (x0 + 8) : x1 - x0 - 16;
+        label(pickFit(SPECTRUM_IDLE_NOTES, ns, room), x0 + 8, y1 - 6, pal.muted, ns);
       }
       // requested carrier marker: instantaneous while playing, the plan's start frequency idle
       const fc = L.voice ? L.inst : L.refFreq;
@@ -4733,29 +5030,32 @@ function createSketch(container) {
         const x = freqToX(fc, x0, x1);
         dashedV(x, y0, y1, pal.accent2);
         const right = x > (x0 + x1) / 2;
-        label(st.labels.requested, x + (right ? -4 : 4), y0 + 22, pal.accent2, 9, right ? p.RIGHT : p.LEFT);
+        label(st.labels.requested, x + (right ? -4 : 4), y0 + 2 * row, pal.accent2, ts, right ? p.RIGHT : p.LEFT);
       }
       if (st.source === 'dual' && st.dual.fb >= axFmin && st.dual.fb <= axFmax) dashedV(freqToX(st.dual.fb, x0, x1), y0, y1, pal.accent2Soft);
-      // Nyquist + safe maximum
+      // Nyquist, and the 95 % digital limit the engine clamps requested frequencies to
       const xn = freqToX(axFmax, x0, x1);
       p.stroke(pal.danger);
       p.strokeWeight(1.5);
       p.line(xn, y0, xn, y1);
-      label(st.labels.nyquist, xn - 4, y0 + 36, pal.danger, 9, p.RIGHT);
-      dashedV(freqToX(axFmax * SAFE_NYQUIST_FACTOR, x0, x1), y0 + 40, y1, pal.warn);
+      label(st.labels.nyquist, xn - 4, y0 + 3 * row, pal.danger, ts, p.RIGHT);
+      const xl = freqToX(axFmax * SAFE_NYQUIST_FACTOR, x0, x1);
+      label(DIGITAL_LIMIT_LABEL, Math.min(xl, xn - 2) - 4, y0 + 4 * row, pal.warn, 8, p.RIGHT);
+      dashedV(xl, y0 + 4 * row + 3, y1, pal.warn);
     }
 
     // ---------------------------------------------------------------- FREQUENCY MOTION
     function motionY(f) { return mY1 - frequencyToNormalized(f, mLo, mHi) * (mY1 - mY0); }
     function drawMotion(st) {
       const L = st.live;
+      const short = H < 160;
       const x0 = 46;
       const x1 = W - 12;
-      mY0 = 24;
-      mY1 = H - 24;
+      mY0 = short ? 18 : 24;
+      mY1 = H - (short ? 18 : 24);
       const voice = L.voice;
       const plan = L.plan;
-      label('REQUESTED INSTANTANEOUS FREQUENCY', x0, 14, pal.fg, 10);
+      label('REQUESTED INSTANTANEOUS FREQUENCY', x0, short ? 11 : 14, pal.fg, short ? 9 : 10);
       if (!plan) { label('No playable configuration.', x0, (mY0 + mY1) / 2, pal.warn, 10); return; }
       const elapsed = L.elapsed;
       const finite = plan.kind === 'finite';
@@ -4770,6 +5070,7 @@ function createSketch(container) {
       if (plan.type === 'dual') { lo = Math.min(plan.a.freq, plan.b.freq); hi = Math.max(plan.a.freq, plan.b.freq); }
       mLo = Math.max(1, lo / 1.5);
       mHi = Math.min(st.nyquist, Math.max(hi * 1.5, mLo * 4));
+      let lastTickY = Infinity; // ticks run upwards; a label closer than 10 px to the last is skipped
       for (let i = 0; i < MOTION_TICKS.length; i++) {
         const f = MOTION_TICKS[i];
         if (f < mLo || f > mHi) continue;
@@ -4777,9 +5078,12 @@ function createSketch(container) {
         p.stroke(pal.gridSoft);
         p.strokeWeight(1);
         p.line(x0, y, x1, y);
+        if (lastTickY - y < 10) continue;
         label(MOTION_TICK_LABELS[i], x0 - 5, y + 3, pal.muted, 9, p.RIGHT);
+        lastTickY = y;
       }
-      label(finite ? st.labels.motionSpan : voice ? 'last 6 s' : 'next 6 s (planned)', x1, mY1 + 16, pal.muted, 9, p.RIGHT);
+      // idle, a continuous plan is drawn from its start: the first 6 s, not "the next"
+      label(finite ? st.labels.motionSpan : voice ? 'last 6 s' : 'first 6 s (planned)', x1, mY1 + (short ? 13 : 16), pal.muted, 9, p.RIGHT);
       if (plan.type === 'dual') {
         p.stroke(pal.accent);
         p.strokeWeight(2);
@@ -4801,7 +5105,7 @@ function createSketch(container) {
         p.rect(x0, yTop, x1 - x0, motionY(plan.freq - plan.depth) - yTop);
         p.stroke(pal.accent);
         p.line(x0, motionY(plan.freq), x1, motionY(plan.freq));
-        label('modulation faster than the display: deviation band shown', x0 + 6, mY0 + 12, pal.muted, 9);
+        label(pickFit(FAST_FM_NOTES, 9, x1 - x0 - 12), x0 + 6, mY0 + 12, pal.muted, 9);
         return;
       }
       const cols = Math.floor(x1 - x0);
@@ -4837,26 +5141,42 @@ function createSketch(container) {
       const r = Math.floor(i / pCols);
       let c = i % pCols;
       if (r % 2 === 1) c = pCols - 1 - c; // snake layout keeps arrows short
-      pPos[0] = 12 + c * (pBw + PATH_GAP_X);
-      pPos[1] = pTop + r * (pBh + PATH_GAP_Y);
+      pPos[0] = 12 + c * (pBw + pathGapX);
+      pPos[1] = pTop + r * (pBh + pathGapY);
     }
-    /** Subtitles truncated to the box width; rebuilt only when the nodes or the width change. */
-    function ensurePathSubs(nodes) {
-      if (nodes === pathSubsNodes && pBw === pathSubsBw) return;
-      const maxChars = Math.max(4, Math.floor(pBw / 5.2) - 1);
-      pathSubs = nodes.map((n) => (n.sub.length * 5.2 > pBw ? `${n.sub.slice(0, maxChars)}…` : n.sub));
+    /** Titles and subtitles truncated to the box width; rebuilt only when the nodes or the
+     *  width change. */
+    function ensurePathSubs(nodes, titleSize) {
+      if (nodes === pathSubsNodes && pBw === pathSubsBw && titleSize === pathSubsSize) return;
+      const room = pBw - 9;
+      const fit = (t, size) => {
+        if (fits(t, size, room)) return t;
+        return `${t.slice(0, Math.max(3, Math.floor(room / charW[size]) - 1))}…`;
+      };
+      pathTitles = nodes.map((n) => fit(n.title, titleSize));
+      pathSubs = nodes.map((n) => fit(n.sub, 8));
       pathSubsNodes = nodes;
       pathSubsBw = pBw;
+      pathSubsSize = titleSize;
     }
     function drawPath(st, now) {
       const nodes = st.pathNodes;
       if (!nodes.length) return;
       pCols = W >= 760 ? 7 : W >= 430 ? 4 : 3;
       const rows = Math.ceil(nodes.length / pCols);
-      pBw = (W - 24 - PATH_GAP_X * (pCols - 1)) / pCols;
-      pBh = Math.min(58, (H - 24 - PATH_GAP_Y * (rows - 1)) / rows);
-      pTop = (H - (rows * pBh + (rows - 1) * PATH_GAP_Y)) / 2;
-      ensurePathSubs(nodes);
+      pathGapX = W < 430 ? 10 : PATH_GAP_X;
+      pathGapY = H < 160 ? 8 : PATH_GAP_Y;
+      pathFooter = H < 140 ? 0 : 14;
+      // an unmodulated source skips the modulation stage: OSC → ENVELOPE runs over a bypass arc
+      // above the first row (the first three nodes always share it)
+      const bypass = nodes.length > 2 && nodes[1].mod && !nodes[1].enabled;
+      const arcRoom = bypass ? 12 : 0;
+      const avail = H - pathFooter - arcRoom - 8;
+      pBw = (W - 24 - pathGapX * (pCols - 1)) / pCols;
+      pBh = Math.max(12, Math.min(58, (avail - pathGapY * (rows - 1)) / rows));
+      pTop = arcRoom + 4 + Math.max(0, (avail - (rows * pBh + (rows - 1) * pathGapY)) / 2);
+      const titleSize = pBw < 90 || pBh < 26 ? 8 : 10;
+      ensurePathSubs(nodes, titleSize);
       const playing = st.playing && st.live.voice;
       const t = (now / 1000) * 0.6;
       for (let i = 0; i < nodes.length - 1; i++) {
@@ -4871,8 +5191,10 @@ function createSketch(container) {
         const y1 = sameRow ? ay + pBh / 2 : ay + pBh;
         const x2 = sameRow ? (bx > ax ? bx : bx + pBw) : bx + pBw / 2;
         const y2 = sameRow ? by + pBh / 2 : by;
-        const active = playing && (nodes[i + 1].mod ? nodes[i + 1].enabled : true);
-        p.stroke(active ? pal.accent : pal.grid);
+        // OSC → MODULATION and MODULATION → ENVELOPE carry nothing while bypassed
+        const bypassed = bypass && i < 2;
+        const active = playing && !bypassed && (nodes[i + 1].mod ? nodes[i + 1].enabled : true);
+        p.stroke(active ? pal.accent : bypassed ? pal.gridSoft : pal.grid);
         p.strokeWeight(active ? 1.5 : 1);
         p.line(x1, y1, x2, y2);
         if (active && !st.reducedMotion) {
@@ -4880,6 +5202,24 @@ function createSketch(container) {
           p.noStroke();
           p.fill(pal.accent);
           p.circle(x1 + (x2 - x1) * k, y1 + (y2 - y1) * k, 4);
+        }
+      }
+      if (bypass) {
+        pathPos(0);
+        const ax = pPos[0] + pBw / 2;
+        const ay = pPos[1];
+        pathPos(2);
+        const bx = pPos[0] + pBw / 2;
+        const h = (arcRoom * 4) / 3; // a cubic with both handles at h peaks at 0.75 h
+        p.noFill();
+        p.stroke(playing ? pal.accent : pal.grid);
+        p.strokeWeight(playing ? 1.5 : 1);
+        p.bezier(ax, ay, ax, ay - h, bx, ay - h, bx, ay);
+        if (playing && !st.reducedMotion) {
+          const k = t % 1;
+          p.noStroke();
+          p.fill(pal.accent);
+          p.circle(p.bezierPoint(ax, ax, bx, bx, k), p.bezierPoint(ay, ay - h, ay - h, ay, k), 4);
         }
       }
       for (let i = 0; i < nodes.length; i++) {
@@ -4892,11 +5232,11 @@ function createSketch(container) {
         p.fill(pal.bg);
         p.stroke(on ? pal.accent : n.mod && !n.enabled ? pal.gridSoft : pal.grid);
         p.strokeWeight(on ? 1.5 + pulse * 0.8 : 1);
-        p.rect(x, y, pBw, pBh, 6);
-        label(n.title, x + 7, y + 16, on ? pal.fg : pal.muted, pBw < 90 ? 8 : 10);
+        p.rect(x, y, pBw, pBh, Math.min(6, pBh / 3));
+        label(pathTitles[i], x + 7, pBh >= 26 ? y + 16 : y + pBh / 2 + 3, on ? pal.fg : pal.muted, titleSize);
         if (pBh > 34) label(pathSubs[i], x + 7, y + 31, pal.muted, 8);
       }
-      label(playing ? 'active path' : 'idle — subdued nodes are not processing', 12, H - 6, pal.muted, 9);
+      if (pathFooter) label(playing ? 'active path' : 'idle — subdued nodes are not processing', 12, H - 6, pal.muted, 9);
     }
 
     // ---------------------------------------------------------------- HARMONICS
@@ -4920,15 +5260,28 @@ function createSketch(container) {
       }
     }
     function drawHarmonics(st) {
+      const compact = H < 160;
+      const narrow = W < 600;
       const x0 = 40;
       const x1 = W - 12;
-      const narrow = W < 600;
-      const y0 = narrow ? 52 : 46;
-      const y1 = H - 26;
+      const y0 = compact ? 32 : narrow ? 52 : 46;
+      const y1 = H - (compact ? 16 : 26);
       const h = st.harm;
       const hb = st.harmB;
-      label('THEORETICAL OSCILLATOR SPECTRUM', x0, 13, pal.fg, 10);
-      label(W < 520 ? 'theoretical · speaker output unknown' : 'digitally representable below Nyquist · actual speaker output unknown', x0, 26, pal.muted, 9);
+      if (compact) {
+        // two rows: title, then the disclaimer with the summary right-aligned when it fits
+        label(HARMONIC_TITLE, 8, 10, pal.fg, fits(HARMONIC_TITLE, 9, W - 16) ? 9 : 8);
+        const disc = pickFit(HARMONIC_DISCLAIMERS, 8, W - 24 - tw(h.summaryTiny, 8));
+        label(disc, 8, 20, pal.muted, 8);
+        const room = W - 16 - tw(disc, 8) - 8;
+        const sum = fits(h.summary, 8, room) ? h.summary : fits(h.summaryShort, 8, room) ? h.summaryShort : fits(h.summaryTiny, 8, room) ? h.summaryTiny : '';
+        if (sum) label(sum, W - 8, 20, pal.muted, 8, p.RIGHT);
+      } else {
+        label(HARMONIC_TITLE, x0, 13, pal.fg, 10);
+        label(W < 520 ? HARMONIC_DISCLAIMERS[1] : HARMONIC_DISCLAIMERS[0], x0, 26, pal.muted, 9);
+        if (narrow) label(fits(h.summaryShort, 9, x1 - x0) ? h.summaryShort : h.summaryTiny, x0, 38, pal.muted, 9);
+        else label(h.summary, x1, 13, pal.muted, 9, p.RIGHT);
+      }
       if (!h.list.length) return;
       const fmin = Math.max(1, h.list[0].f / 2);
       let fmax = Math.max(h.axisMax, h.list[h.list.length - 1].f * 1.1);
@@ -4949,29 +5302,34 @@ function createSketch(container) {
       const nearRight = xn > x1 - 120;
       label('NYQUIST', nearRight ? xn - 4 : xn + 4, y0 + 10, pal.danger, 9, nearRight ? p.RIGHT : p.LEFT);
       label(nearRight ? '← representable' : 'not representable →', nearRight ? xn - 4 : xn + 4, y0 + 22, pal.muted, 8, nearRight ? p.RIGHT : p.LEFT);
+      const ts = compact ? 8 : 9;
+      let tickRight = -Infinity;
       for (let i = 0; i < SPECTRUM_MARKERS.length; i++) {
         const f = SPECTRUM_MARKERS[i];
         if (f < fmin || f > fmax) continue;
-        label(SPECTRUM_MARKER_LABELS[i], logX(f, fmin, fmax, x0, x1), y1 + 14, pal.muted, 9, p.CENTER);
+        const x = logX(f, fmin, fmax, x0, x1);
+        const half = tw(SPECTRUM_MARKER_LABELS[i], ts) / 2;
+        if (x - half < tickRight + 4 || x + half > W) continue;
+        label(SPECTRUM_MARKER_LABELS[i], x, y1 + (compact ? 12 : 14), pal.muted, ts, p.CENTER);
+        tickRight = x + half;
       }
-      if (narrow) label(h.summaryShort, x0, 38, pal.muted, 9);
-      else label(h.summary, x1, 13, pal.muted, 9, p.RIGHT);
     }
 
     // ---------------------------------------------------------------- INTERFERENCE
-    function legendItem(txt, x, col) {
-      label(txt, x, 26, col, 9);
-      return x + p.textWidth(txt) + 10;
+    function legendItem(txt, x, y, col, size) {
+      label(txt, x, y, col, size);
+      return x + tw(txt, size) + 10;
     }
     function drawInterference(st, now) {
       const d = st.dual;
       const lb = st.labels;
       const delta = Math.abs(d.fa - d.fb);
+      const compact = H < 160;
       const narrow = W < 520;
       const x0 = 12;
       const x1 = W - 12;
-      const top = narrow ? 44 : 34;
-      const bottom = H - 16;
+      const top = compact ? 26 : narrow ? 44 : 34;
+      const bottom = H - (compact ? 12 : 16);
       const avail = bottom - top;
       // A and B lanes are thin; the sum lane gets most of the height.
       laneY[0] = top + avail * 0.11;
@@ -4980,14 +5338,19 @@ function createSketch(container) {
       laneH[0] = avail * 0.09;
       laneH[1] = avail * 0.09;
       laneH[2] = avail * 0.26;
-      label(lb.beat, x0, 13, pal.fg, narrow ? 9 : 10);
+      label(lb.beat, x0, compact ? 10 : 13, pal.fg, compact ? 8 : narrow ? 9 : 10);
       // legend instead of per-lane titles, so labels never overlap the traces
-      let lx = legendItem(lb.legendA, x0, pal.accent);
-      lx = legendItem(lb.legendB, lx, pal.accent2);
-      lx = legendItem('A+B', lx, pal.fg);
-      legendItem('envelope', lx, pal.warn);
-      if (narrow) label('carriers slowed — visual representation', x0, 37, pal.muted, 8);
-      else label('carriers slowed — visual representation', x1, 26, pal.muted, 9, p.RIGHT);
+      const ly0 = compact ? 20 : 26;
+      const ls = compact ? 8 : 9;
+      let lx = legendItem(lb.legendA, x0, ly0, pal.accent, ls);
+      lx = legendItem(lb.legendB, lx, ly0, pal.accent2, ls);
+      lx = legendItem('A+B', lx, ly0, pal.fg, ls);
+      lx = legendItem('envelope', lx, ly0, pal.warn, ls);
+      if (compact) {
+        // no row of its own: shares the legend row when there is room (the caption says it too)
+        if (fits(INTERFERENCE_SLOWED, 8, x1 - lx)) label(INTERFERENCE_SLOWED, x1, ly0, pal.muted, 8, p.RIGHT);
+      } else if (narrow) label(INTERFERENCE_SLOWED, x0, 37, pal.muted, 8);
+      else label(INTERFERENCE_SLOWED, x1, 26, pal.muted, 9, p.RIGHT);
       // Visual model: two beats across the width, carriers ~10 cycles per beat.
       const beatsShown = 2;
       const k = 10 * beatsShown;
@@ -5028,7 +5391,8 @@ function createSketch(container) {
           }
         }
       }
-      label(narrow ? lb.interNoteNarrow : lb.interNote, x0, H - 4, pal.muted, 9);
+      const ns = compact ? 8 : 9;
+      label(fits(lb.interNote, ns, x1 - x0) ? lb.interNote : lb.interNoteNarrow, x0, H - (compact ? 3 : 4), pal.muted, ns);
     }
   };
 }
