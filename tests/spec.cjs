@@ -211,13 +211,14 @@ async function main() {
       'square 15.5 kHz @48 kHz lists 3f (46.5 kHz) as above Nyquist',
       !!h.sq15 && h.sq15.below === false,
       JSON.stringify(h.sq15),
-    ); // known bug — fixed in index.html
-    // odd n with n·20 < 24000 → n ∈ {1, 3, …, 1199} → 600 harmonics
+    );
+    // The count covers partials ≥ −60 dB (square: 1/n ≥ 0.001 → n ≤ 999) below Nyquist:
+    // odd n ≤ 999 with n·20 < 24000 → 500, counted analytically even though the list is capped.
     check(
-      'square 20 Hz @48 kHz: 600 odd harmonics below Nyquist',
-      h.sq20Below === 600,
+      'square 20 Hz @48 kHz: 500 odd harmonics ≥ −60 dB below Nyquist',
+      h.sq20Below === 500,
       `below=${h.sq20Below} listed=${h.sq20ListBelow}`,
-    ); // known bug — fixed in index.html
+    );
 
     console.log('§33/§34 sweep presets and rates');
     const sw = await app(page, (a, e, O) => {
@@ -401,7 +402,7 @@ async function main() {
       'applying “High sweep” leaves the Sweep-mode settings untouched',
       !!pt.sweepAfterHigh && pt.sweepAfterHigh.before === pt.sweepAfterHigh.after,
       JSON.stringify(pt.sweepAfterHigh),
-    ); // known bug — fixed in index.html
+    );
 
     console.log('§44 learn topics');
     const ids = await page.evaluate(() => window.OSCILLA.LEARN_TOPICS.map((t) => t.id));
@@ -442,7 +443,7 @@ async function main() {
       'Explore at 15.5 kHz square shows the Nyquist hint',
       await hintText('Nyquist is a digital limit'),
       JSON.stringify(hints),
-    ); // known bug — fixed in index.html
+    );
     await context.close();
   }
 
@@ -554,7 +555,7 @@ async function main() {
       'sweep playing: REAL SIGNAL label follows the instantaneous frequency',
       follows(s1) && follows(s2) && s1.label !== s2.label,
       JSON.stringify([s1, s2]),
-    ); // known bug — fixed in index.html
+    );
     await app(page, (a) => a.stopNow());
 
     console.log('§35 stereo split');
@@ -692,7 +693,7 @@ async function main() {
       'idle draw loop makes 0 setAttribute/getAttribute calls over 60 frames',
       probe.draw === 0,
       JSON.stringify(probe),
-    ); // known bug — fixed in index.html
+    );
 
     await page.evaluate(() => {
       Object.defineProperty(document, 'hidden', { configurable: true, get: () => true });

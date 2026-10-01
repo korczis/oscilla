@@ -250,7 +250,8 @@
         </button>
       </div>
     </div>
-    <div class="relative mx-2 sm:mx-3 mt-2 rounded-lg border border-line overflow-hidden h-[148px] sm:h-[250px] lg:h-[330px] xl:h-[360px]" x-ref="vizCanvas">
+    <div class="relative mx-2 sm:mx-3 mt-2 rounded-lg border border-line overflow-hidden h-[148px] sm:h-[250px] lg:h-[330px] xl:h-[360px]" x-ref="vizCanvas"
+         role="img" :aria-label="vizFailed ? 'Visualization unavailable' : `${vizMode} visualization. ${vizCaption}`">
       <template x-if="vizFailed">
         <div class="absolute inset-0 flex items-center justify-center p-4 text-center text-sm text-muted">Visualization unavailable (p5.js did not load). Audio and controls still work.</div>
       </template>
@@ -2576,16 +2577,34 @@ const viz = {
   envHistory: new Float32Array(240),
   envIndex: 0,
   envLevel: 0,
+  hidden: false,
+  looping: true,
+  redrawQueued: 0,
+  labelTimer: 0,
+  labelledPlan: undefined,
   state: {
     vizMode: 'wave', frequency: 440, waveform: 'sine', gain: DEFAULT_GAIN, rangeMin: 20, rangeMax: 20000,
     nyquist: PROVISIONAL_SAMPLE_RATE / 2, safeMax: (PROVISIONAL_SAMPLE_RATE / 2) * SAFE_NYQUIST_FACTOR,
     provisional: true, spectrumScale: 'log', overlays: { regions: true, notes: false, thirds: false },
-    plan: null, playing: false, status: 'READY', a4: 440, source: 'single', reducedMotion: false,
+    plan: null, playing: false, status: 'READY', a4: 440, source: 'single', reducedMotion: false, mic: false,
     dual: { fa: 440, fb: 442, la: 0.8, lb: 0.8, stereo: false, waveA: 'sine', waveB: 'sine' },
-    labels: { freq: '440 Hz', period: '2.27 ms', wavelength: '0.78 m', note: 'A4', attack: '10 ms', release: '30 ms', gain: '0.080' },
+    // Engine scalars copied by viz.pull() once per frame without allocating: the sketch reads
+    // these and the analyser buffers, never the engine object graph.
+    live: {
+      hasCtx: false, analyser: false, mic: false, sampleRate: 0, voice: false, plan: null,
+      elapsed: 0, inst: NaN, refFreq: 440, timeData: null,
+    },
+    labels: {
+      freq: '440 Hz', period: '2.27 ms', wavelength: '0.78 m', note: 'A4', attack: '10 ms', release: '30 ms', gain: '0.080',
+      // readouts that change during playback are refreshed by the 100 ms label timer
+      realFreq: '440 Hz', realPeriod: '2.27 ms', realWavelength: '0.78 m', realShort1: '', realShort2: '',
+      realCompact: '', realWide1: '', realWide2: '', realWide3: '', requested: '', winMs: '',
+      nyquist: '', motionSpan: '', motionA: '', motionB: '', beat: '', legendA: '', legendB: '',
+      interNote: '', interNoteNarrow: '',
+    },
     pathNodes: [],
-    harm: { list: [], below: 0, total: 0 },
-    harmB: { list: [], below: 0, total: 0 },
+    harm: { list: [], below: 0, total: 0, shown: 0, capped: false, axisMax: 0, summary: '', summaryShort: '' },
+    harmB: { list: [], below: 0, total: 0, shown: 0, capped: false, axisMax: 0, summary: '', summaryShort: '' },
   },
 
   readPalette() {
@@ -2601,26 +2620,158 @@ const viz = {
       warn: rgb('--c-warn', [180, 83, 9]), danger: rgb('--c-danger', [220, 38, 38]),
     };
     this.paletteVersion++;
+    this.requestRedraw();
+  },
+
+  /** Per-frame copy of engine scalars into state.live. Allocation-free; called by the sketch. */
+  pull() {
+    const L = this.state.live;
+    const ctx = engine.ctx;
+    const v = engine.voice;
+    L.hasCtx = !!ctx;
+    L.analyser = !!(ctx && engine.analyser && engine.timeData);
+    L.mic = !!engine.mic;
+    L.sampleRate = ctx ? ctx.sampleRate : 0;
+    L.voice = !!(v && ctx);
+    L.plan = L.voice ? v.plan : this.state.plan;
+    L.elapsed = L.voice ? Math.max(0, ctx.currentTime - v.t0) : 0;
+    const f = L.voice ? planFreqAt(L.plan, L.elapsed) : null;
+    L.inst = f == null ? NaN : f;
+    if (L.analyser) engine.analyser.getFloatTimeDomainData(engine.timeData);
+    L.timeData = L.analyser ? engine.timeData : null;
+  },
+
+  /** Fill and return the preallocated output spectrum buffer (null before audio starts). */
+  outputSpectrum() {
+    if (!engine.analyser || !engine.freqData) return null;
+    engine.analyser.getFloatFrequencyData(engine.freqData);
+    return engine.freqData;
+  },
+
+  /** Fill and return the preallocated microphone spectrum buffer (null without a microphone). */
+  micSpectrum() {
+    const m = engine.mic;
+    if (!m) return null;
+    m.analyser.getFloatFrequencyData(m.freqData);
+    return m.freqData;
+  },
+
+  /** Recompute the label strings that depend on the playing voice. Runs on state change and
+   *  every 100 ms while playing — never per frame. */
+  refreshLabels() {
+    const s = this.state;
+    const L = s.live;
+    const lb = s.labels;
+    this.pull();
+    const plan = L.plan;
+    if (plan !== this.labelledPlan) {
+      this.labelledPlan = plan;
+      lb.motionSpan = plan && plan.kind === 'finite' ? `0 … ${sig(plan.dur, 3)} s` : '';
+      lb.motionA = plan && plan.type === 'dual' ? `A ${formatFrequency(plan.a.freq)}` : '';
+      lb.motionB = plan && plan.type === 'dual' ? `B ${formatFrequency(plan.b.freq)}` : '';
+    }
+    // reference frequency when idle: the plan's start (sweeps, patterns) or the source frequency
+    let ref = s.source === 'dual' ? s.dual.fa : planFreqAt(plan, 0);
+    if (ref == null && plan && plan.freqs && plan.freqs.length) ref = plan.freqs[0];
+    if (ref == null) ref = s.frequency;
+    L.refFreq = ref;
+    const gap = L.voice && !isNum(L.inst);
+    const f = L.voice ? L.inst : ref;
+    const tag = !L.voice && plan && plan.type !== 'const' && plan.type !== 'am' && plan.type !== 'dual' ? ' (start)' : '';
+    lb.realFreq = gap ? '— (silent gap)' : formatFrequency(f);
+    lb.realPeriod = gap ? '—' : formatPeriod(f);
+    lb.realWavelength = gap ? '—' : formatWavelength(f);
+    lb.realShort1 = `${lb.realFreq} · T ${lb.realPeriod}`;
+    lb.realShort2 = `λ ≈ ${lb.realWavelength}`;
+    lb.realCompact = `${lb.realFreq} · T ${lb.realPeriod} · λ ${lb.realWavelength}`;
+    lb.realWide1 = `frequency  ${lb.realFreq}${tag}`;
+    lb.realWide2 = `period     ${lb.realPeriod}`;
+    lb.realWide3 = `wavelength ${lb.realWavelength}`;
+    lb.requested = gap ? '' : `requested ${formatFrequency(f)}${tag}`;
+    const sr = L.sampleRate || s.nyquist * 2;
+    const win = engine.timeData ? Math.min(1024, engine.timeData.length >> 1) : 1024;
+    lb.winMs = `${sig((win / sr) * 1000, 3)} ms`;
+    lb.nyquist = `NYQUIST ${formatFrequency(s.nyquist)}${s.provisional && !L.hasCtx ? ' (provisional)' : ''}`;
+  },
+
+  /** Start or stop the 100 ms label refresh that follows a playing voice. */
+  setLiveLabels(on) {
+    if (on && !this.labelTimer) this.labelTimer = setInterval(() => this.refreshLabels(), 100);
+    if (!on && this.labelTimer) { clearInterval(this.labelTimer); this.labelTimer = 0; }
+  },
+
+  /** Loop only while something moves: idle under prefers-reduced-motion redraws on change only. */
+  updateLoop() {
+    const p = this.p5;
+    if (!p || !p.canvas) return;
+    const s = this.state;
+    const want = !this.hidden && !(s.reducedMotion && !s.playing && !s.mic);
+    if (want !== this.looping) {
+      this.looping = want;
+      if (want) p.loop(); else p.noLoop();
+    }
+    this.sketchState = this.hidden ? 'paused (tab hidden)' : want ? 'running' : 'idle (reduced motion: redraw on change)';
+    this.requestRedraw();
+  },
+
+  /** One redraw on the next animation frame while the loop is stopped. */
+  requestRedraw() {
+    if (!this.p5 || this.looping || this.hidden || this.redrawQueued) return;
+    this.redrawQueued = requestAnimationFrame(() => {
+      this.redrawQueued = 0;
+      if (this.p5 && !this.looping) this.p5.redraw();
+    });
   },
 };
 
-/** Theoretical harmonic amplitudes of the built-in oscillator shapes (relative to f). */
+const HARMONIC_FLOOR_DB = -60;
+const HARMONIC_LIST_CAP = 64;
+
+/** Highest partial number of a shape whose amplitude reaches the −60 dB display floor. */
+function harmonicLimit(wave) {
+  const r = 10 ** (-HARMONIC_FLOOR_DB / 20); // 1000
+  if (wave === 'sawtooth' || wave === 'square') return Math.floor(r);
+  if (wave === 'triangle') return Math.floor(Math.sqrt(r));
+  return 1;
+}
+
+/** Number of non-zero partials with n ≤ nMax (sawtooth: every n; square, triangle: odd n). */
+function partialCount(wave, nMax) {
+  if (nMax < 1) return 0;
+  if (wave === 'sawtooth') return nMax;
+  if (wave === 'square' || wave === 'triangle') return Math.floor((nMax + 1) / 2);
+  return 1;
+}
+
+/** Theoretical harmonic amplitudes of the built-in oscillator shapes (relative to f).
+ *  `below` and `total` are counted analytically over every partial ≥ −60 dB; `list` holds the
+ *  partials up to the display axis — at least the first three non-zero ones, at most 64. */
 function harmonicTable(wave, f, nyquist) {
   const list = [];
-  if (!(f > 0)) return { list, below: 0, total: 0 };
-  const axisMax = Math.max(nyquist * 1.6, f * 2.2);
-  for (let n = 1; n <= 64 && n * f <= axisMax; n++) {
-    let amp = 0;
-    if (n === 1) amp = 1;
-    else if (wave === 'sawtooth') amp = 1 / n;
-    else if (wave === 'square' && n % 2 === 1) amp = 1 / n;
-    else if (wave === 'triangle' && n % 2 === 1) amp = 1 / (n * n);
-    if (amp <= 0) continue;
-    const db = 20 * Math.log10(amp);
-    if (db < -60) continue;
-    list.push({ n, f: n * f, db, below: n * f < nyquist });
+  if (!(f > 0) || !(nyquist > 0)) {
+    return { list, below: 0, total: 0, shown: 0, capped: false, axisMax: 0, summary: '', summaryShort: '' };
   }
-  return { list, below: list.filter((h) => h.below).length, total: list.length };
+  const nLim = harmonicLimit(wave);
+  const step = wave === 'sawtooth' ? 1 : 2;
+  const total = partialCount(wave, nLim);
+  let nBelow = Math.floor(nyquist / f);
+  if (nBelow * f >= nyquist) nBelow--;
+  const below = partialCount(wave, Math.min(nLim, nBelow));
+  const firstOvertone = nLim > 1 ? (1 + step) * f : f;
+  const axisMax = Math.max(nyquist * 1.6, firstOvertone * 1.1);
+  for (let n = 1; n <= nLim && list.length < HARMONIC_LIST_CAP; n += step) {
+    if (list.length >= 3 && n * f > axisMax) break;
+    const amp = n === 1 ? 1 : wave === 'triangle' ? 1 / (n * n) : 1 / n;
+    list.push({ n, f: n * f, db: 20 * Math.log10(amp), below: n * f < nyquist });
+  }
+  const shown = list.length;
+  const capped = shown < total;
+  const more = capped ? ` · first ${shown} shown` : '';
+  return {
+    list, below, total, shown, capped, axisMax,
+    summary: `${below} of ${total} harmonics ≥ −60 dB below Nyquist${more}`,
+    summaryShort: `${below}/${total} below Nyquist${more}`,
+  };
 }
 
 function pathNodesFor(plan, st) {
@@ -4009,7 +4160,33 @@ function oscillaApp() {
       const usesGlobal = this.source === 'single' && this.currentPattern.params.some((p) => p.obj === 'global' && p.key === 'frequency');
       const hf = this.source === 'dual' ? s.dual.fa : usesGlobal || !res.ok ? this.frequency : res.plan.freqs[0];
       s.harm = harmonicTable(this.source === 'dual' ? d.a.wave : this.waveform, hf, this.nyquist);
-      s.harmB = this.source === 'dual' ? harmonicTable(d.b.wave, s.dual.fb, this.nyquist) : { list: [], below: 0, total: 0 };
+      s.harmB = harmonicTable(this.source === 'dual' ? d.b.wave : 'sine', this.source === 'dual' ? s.dual.fb : 0, this.nyquist);
+      s.mic = this.micActive;
+      // interference labels (drawn every frame, built here)
+      const delta = Math.abs(s.dual.fa - s.dual.fb);
+      s.labels.beat = delta > 0.005
+        ? `Δf ${sig(delta, 3)} Hz → beat rate ≈ ${sig(delta, 3)} Hz (period ${formatPeriod(delta)})`
+        : 'equal frequencies: no beating';
+      s.labels.legendA = `A ${formatFrequency(s.dual.fa)}`;
+      s.labels.legendB = `B ${formatFrequency(s.dual.fb)}`;
+      let note = 'Carriers slowed for display; the envelope moves at the real beat rate.';
+      let noteNarrow = 'Envelope moves at the real beat rate.';
+      if (delta > 12) {
+        note = 'Beat rate above 12 Hz: animation capped; heard as roughness rather than distinct beats.';
+        noteNarrow = 'Beat rate > 12 Hz: animation capped.';
+      }
+      if (this.source !== 'dual') {
+        note = 'Showing DUAL OSC settings — open DUAL OSC to play them.';
+        noteNarrow = 'Showing DUAL OSC settings.';
+      } else if (s.dual.stereo) {
+        note = 'Stereo split: each channel carries one tone. Bottom lane: the mathematical sum A+B (mono mix).';
+        noteNarrow = 'Stereo: one tone per channel; A+B = mono sum.';
+      }
+      s.labels.interNote = note;
+      s.labels.interNoteNarrow = noteNarrow;
+      viz.refreshLabels();
+      viz.setLiveLabels(this.playing);
+      viz.updateLoop();
       if (this.playing && res.ok) engine.updateLive(res.plan);
     },
     initVisualizer() {
@@ -4057,8 +4234,30 @@ function oscillaApp() {
 // ============================================================
 // 9. P5 SKETCH
 // ============================================================
-// Instance-mode sketch. Per-frame work reads viz.state and the engine's preallocated
-// analyser buffers; nothing in draw() allocates arrays or touches the DOM.
+// Instance-mode sketch. draw() first calls viz.pull(), which copies the engine scalars it needs
+// into viz.state.live; after that every draw function reads viz.state and the preallocated
+// analyser buffers the bridge hands out — never the engine itself. Per frame the sketch builds
+// no strings, arrays, objects or closures and never touches the DOM: label strings come from
+// viz.state.labels (built by the bridge on state change or by its 100 ms label timer), constant
+// tick arrays and their labels live below, and geometry caches are rebuilt only when their
+// inputs change. Allocation inside p5 itself (vertex(), color setters, text rendering) is out of
+// this code's reach.
+
+const SPECTRUM_DB_GRID = [0, -20, -40, -60, -80, -100, -120, -140];
+const SPECTRUM_DB_LABELS = SPECTRUM_DB_GRID.map(String);
+const HARMONIC_DB_GRID = [0, -20, -40, -60];
+const HARMONIC_DB_LABELS = HARMONIC_DB_GRID.map(String);
+const SPECTRUM_MARKER_LABELS = SPECTRUM_MARKERS.map(formatFrequencyShort);
+const LINEAR_TICKS = [0, 2000, 5000, 10000, 15000, 20000, 25000, 30000, 40000];
+const LINEAR_TICK_LABELS = LINEAR_TICKS.map(formatFrequencyShort);
+const MOTION_TICKS = [1, 2, 5, 10, 20, 50, 100, 200, 500, 1000, 2000, 5000, 10000, 20000, 50000];
+const MOTION_TICK_LABELS = MOTION_TICKS.map(formatFrequencyShort);
+const OCTAVE_C_LABELS = ['C0', 'C1', 'C2', 'C3', 'C4', 'C5', 'C6', 'C7', 'C8', 'C9', 'C10'];
+const HARMONIC_N_LABELS = ['', 'f', '2f', '3f', '4f', '5f', '6f', '7f'];
+const THIRD_OCTAVE_HALF_BAND = 2 ** (1 / 6);
+const SMALL_CANVAS_AREA = 420 * 260; // CSS px²: small canvases may use 3× backing pixels
+const PATH_GAP_X = 14;
+const PATH_GAP_Y = 20;
 
 function waveSample(shape, phase) {
   const p = phase - Math.floor(phase);
@@ -4074,15 +4273,42 @@ function createSketch(container) {
   return (p) => {
     let W = 10;
     let H = 10;
+    let mW = 10;
+    let mH = 10;
+    let density = 1;
     let pal = null;
     let paletteSeen = -1;
     let modelPhase = 0;
     let lastMs = 0;
-    // spectrum column → bin lookup, rebuilt only when geometry or scale changes
+    let fpsSmoothed = 0;
+    // spectrum axis, and the column → bin lookup rebuilt only when geometry or scale changes
+    let axLog = true;
+    let axFmin = 20;
+    let axFmax = 24000;
     let colLo = new Int32Array(1);
     let colHi = new Int32Array(1);
-    let colKey = '';
-    let fpsSmoothed = 0;
+    let colCols = -1;
+    let colLog = null;
+    let colFmin = -1;
+    let colFmax = -1;
+    let colBins = -1;
+    // frequency-motion axis
+    let mLo = 1;
+    let mHi = 2;
+    let mY0 = 0;
+    let mY1 = 1;
+    // signal-path layout, scratch position and truncated-subtitle cache
+    let pCols = 1;
+    let pBw = 1;
+    let pBh = 1;
+    let pTop = 0;
+    const pPos = new Float64Array(2);
+    let pathSubs = [];
+    let pathSubsNodes = null;
+    let pathSubsBw = -1;
+    // interference lane geometry
+    const laneY = new Float64Array(3);
+    const laneH = new Float64Array(3);
 
     const C = (rgb, a = 255) => p.color(rgb[0], rgb[1], rgb[2], a);
     const ensurePalette = () => {
@@ -4092,39 +4318,80 @@ function createSketch(container) {
         bg: C(q.bg), grid: C(q.grid), gridSoft: C(q.grid, 120), fg: C(q.fg), muted: C(q.muted),
         accent: C(q.accent), accentSoft: C(q.accent, 70), accentFaint: C(q.accent, 28),
         accent2: C(q.accent2), accent2Soft: C(q.accent2, 70), warn: C(q.warn), danger: C(q.danger),
-        band: C(q.fg, 10), bandAlt: C(q.fg, 20), dim: C(q.muted, 110),
+        band: C(q.fg, 10), bandAlt: C(q.fg, 20), dim: C(q.muted, 110), thirdBand: C(q.accent2, 16),
       };
       paletteSeen = viz.paletteVersion;
     };
 
-    const measure = () => {
+    function measure() {
       const r = container.getBoundingClientRect();
-      return [Math.max(40, Math.floor(r.width)), Math.max(40, Math.floor(r.height))];
-    };
+      mW = Math.max(40, Math.floor(r.width));
+      mH = Math.max(40, Math.floor(r.height));
+    }
+
+    /** Backing-store density: up to 3× on small canvases, 2× otherwise. */
+    function densityFor(w, h) {
+      const dpr = window.devicePixelRatio || 1;
+      return Math.min(dpr, w * h <= SMALL_CANVAS_AREA ? 3 : 2);
+    }
+
+    /** Re-measure when devicePixelRatio changes (zoom, moving to another display). */
+    function watchDensity() {
+      if (typeof window.matchMedia !== 'function') return;
+      try {
+        const mq = window.matchMedia(`(resolution: ${window.devicePixelRatio || 1}dppx)`);
+        const onChange = () => {
+          if (mq.removeEventListener) mq.removeEventListener('change', onChange);
+          else if (mq.removeListener) mq.removeListener(onChange);
+          if (viz.resize) viz.resize();
+          watchDensity();
+        };
+        if (mq.addEventListener) mq.addEventListener('change', onChange);
+        else if (mq.addListener) mq.addListener(onChange);
+      } catch (e) { /* resolution media queries unsupported */ }
+    }
 
     p.setup = () => {
-      [W, H] = measure();
-      p.pixelDensity(Math.min(window.devicePixelRatio || 1, 2));
+      viz.p5 = p;
+      measure();
+      W = mW;
+      H = mH;
+      density = densityFor(W, H);
+      p.pixelDensity(density);
       const c = p.createCanvas(W, H);
-      c.elt.setAttribute('role', 'img');
-      c.elt.setAttribute('aria-label', 'Signal visualization');
+      // The container carries role="img" and a reactive aria-label; the canvas itself is
+      // decorative, so the draw loop never has to label it.
+      c.elt.setAttribute('aria-hidden', 'true');
       c.elt.style.display = 'block';
       p.textFont('monospace'); // p5 quotes the name, so a CSS font stack would be invalid
       p.frameRate(30);
-      viz.sketchState = 'running';
       viz.resize = () => {
-        const [w, h] = measure();
-        if (w !== W || h !== H) { W = w; H = h; p.resizeCanvas(W, H); }
+        measure();
+        const d = densityFor(mW, mH);
+        const densityChanged = d !== density;
+        if (densityChanged) { density = d; p.pixelDensity(d); }
+        if (mW !== W || mH !== H) { W = mW; H = mH; p.resizeCanvas(W, H); } else if (densityChanged) viz.requestRedraw();
       };
       if (typeof ResizeObserver === 'function') new ResizeObserver(() => viz.resize()).observe(container);
       else window.addEventListener('resize', () => viz.resize(), { passive: true });
+      watchDensity();
       document.addEventListener('visibilitychange', () => {
-        if (document.hidden) { p.noLoop(); viz.sketchState = 'paused (tab hidden)'; } else { p.loop(); viz.sketchState = 'running'; }
+        viz.hidden = document.hidden;
+        viz.updateLoop();
       });
+      try {
+        const rm = window.matchMedia('(prefers-reduced-motion: reduce)');
+        const onMotion = () => { viz.state.reducedMotion = rm.matches; viz.updateLoop(); };
+        if (rm.addEventListener) rm.addEventListener('change', onMotion); else if (rm.addListener) rm.addListener(onMotion);
+      } catch (e) { /* matchMedia unavailable */ }
+      viz.hidden = document.hidden;
+      viz.looping = true;
+      viz.updateLoop();
     };
 
     p.draw = () => {
       ensurePalette();
+      viz.pull();
       const st = viz.state;
       const now = p.millis();
       const dt = Math.min(0.1, (now - lastMs) / 1000);
@@ -4133,7 +4400,7 @@ function createSketch(container) {
       viz.fps = fpsSmoothed;
       p.frameRate(st.playing ? 60 : 30);
       if (!st.reducedMotion) modelPhase += dt * 0.5;
-      updateEnvelope();
+      updateEnvelope(st);
       p.background(pal.bg);
       switch (st.vizMode) {
         case 'spectrum': drawSpectrum(st); break;
@@ -4143,20 +4410,16 @@ function createSketch(container) {
         case 'interference': drawInterference(st, now); break;
         default: drawWave(st);
       }
-      const label = `${st.vizMode} visualization`;
-      if (p.canvas && p.canvas.getAttribute('aria-label') !== label) p.canvas.setAttribute('aria-label', label);
     };
 
     // ---------------------------------------------------------------- shared helpers
-    function updateEnvelope() {
+    function updateEnvelope(st) {
       let level = 0;
-      if (engine.ctx && engine.analyser) {
-        engine.analyser.getFloatTimeDomainData(engine.timeData);
-        const d = engine.timeData;
+      const d = st.live.timeData;
+      if (d) {
         let peak = 0;
         for (let i = 0; i < d.length; i += 4) { const a = Math.abs(d[i]); if (a > peak) peak = a; }
-        const g = Math.max(viz.state.gain, 1e-4);
-        level = clamp(peak / g, 0, 1.2);
+        level = clamp(peak / Math.max(st.gain, 1e-4), 0, 1.2);
       }
       viz.envLevel = level;
       viz.envHistory[viz.envIndex] = level;
@@ -4185,16 +4448,23 @@ function createSketch(container) {
 
     // ---------------------------------------------------------------- WAVE
     function drawWave(st) {
+      const L = st.live;
+      const lb = st.labels;
       const wide = W >= 300;
       const short = H < 220;
       const mx0 = 12;
       const mx1 = wide ? W * 0.62 : W - 12;
-      const my0 = W < 560 ? 46 : 40;
+      const plan = L.plan;
+      const am = plan && plan.type === 'am' ? plan.depth : 0;
+      const fm = plan && plan.type === 'fm' ? Math.min(6, plan.depth / Math.max(1, plan.modFreq)) : 0;
+      const lfo = plan && plan.type === 'lfo';
+      const roomy = mx1 - mx0 >= 380;
+      // on a narrow model the modulation caption gets its own row under the disclaimer
+      const capRow = !roomy && (am || fm || lfo);
+      const my0 = (W < 560 ? 46 : 40) + (capRow ? 10 : 0);
       const my1 = wide ? H - 34 : H * 0.55;
-      const plan = engine.voice ? engine.voice.plan : st.plan;
-      const tPlan = engine.voice && engine.ctx ? Math.max(0, engine.ctx.currentTime - engine.voice.t0) : modelPhase;
-      let f = planFreqAt(plan, tPlan);
-      if (f == null) f = st.frequency;
+      let f = L.voice ? L.inst : planFreqAt(plan, modelPhase);
+      if (!isNum(f)) f = L.refFreq;
       const shape = plan && plan.type === 'dual' ? plan.a.wave : st.waveform;
       // slowed model: visible cycles grow with log frequency
       const cycles = 1.5 + 12.5 * frequencyToNormalized(clamp(f, 20, 20000), 20, 20000);
@@ -4214,8 +4484,6 @@ function createSketch(container) {
       p.strokeWeight(2);
       p.beginShape();
       const n = Math.min(480, Math.floor(mx1 - mx0));
-      const am = plan && plan.type === 'am' ? plan.depth : 0;
-      const fm = plan && plan.type === 'fm' ? Math.min(6, plan.depth / Math.max(1, plan.modFreq)) : 0;
       for (let i = 0; i <= n; i++) {
         const x = i / n;
         let ph = x * cycles - modelPhase * 2;
@@ -4225,7 +4493,13 @@ function createSketch(container) {
         p.vertex(mx0 + x * (mx1 - mx0), midY - y * halfH * amp);
       }
       p.endShape();
-      if (am || fm) label(am ? 'AM: level follows the modulator' : 'FM: cycle spacing follows the modulator', mx1, 16, pal.accent2, 9, p.RIGHT);
+      if (am || fm || lfo) {
+        let cap = roomy ? 'LFO: cycle spacing glides with the LFO' : 'LFO: frequency glides with the LFO';
+        if (am) cap = 'AM: level follows the modulator';
+        else if (fm) cap = roomy ? 'FM: cycle spacing follows the modulator' : 'FM: spacing follows the modulator';
+        if (capRow) label(cap, mx0, my0 - 4, pal.accent2, 8);
+        else label(cap, mx1, 16, pal.accent2, 9, p.RIGHT);
+      }
 
       // envelope strip (relative level history)
       const ey1 = wide ? H - 6 : my1 + 30;
@@ -4250,8 +4524,8 @@ function createSketch(container) {
       p.stroke(pal.grid);
       p.strokeWeight(1);
       p.rect(rx0, ry0, rx1 - rx0, ry1 - ry0);
-      if (engine.ctx && st.playing) {
-        const d = engine.timeData;
+      const d = L.timeData;
+      if (d && st.playing && L.sampleRate > 0) {
         const win = Math.min(1024, d.length >> 1);
         let start = 0;
         for (let i = 1; i < d.length - win; i++) { if (d[i - 1] < 0 && d[i] >= 0) { start = i; break; } }
@@ -4266,54 +4540,54 @@ function createSketch(container) {
           p.vertex(rx0 + (i / win) * (rx1 - rx0), ymid - clamp(d[start + i] / g, -1.1, 1.1) * hh);
         }
         p.endShape();
-        const ms = (win / engine.ctx.sampleRate) * 1000;
-        if (f * ms / 1000 > 60) label('cycles too dense to resolve here', rx0 + 4, ry1 - 4, pal.warn, 9);
-        label(`${sig(ms, 3)} ms`, rx1, ry0 - 12, pal.muted, 9, p.RIGHT);
+        if (f * (win / L.sampleRate) > 60) label('cycles too dense to resolve here', rx0 + 4, ry1 - 4, pal.warn, 9);
+        if (rx1 - rx0 >= 150) label(lb.winMs, rx1, ry0 - 12, pal.muted, 9, p.RIGHT);
       } else {
-        label(engine.ctx ? 'press HOLD TO PLAY' : 'starts with audio', rx0 + 6, (ry0 + ry1) / 2, pal.muted, 9);
+        label(L.hasCtx ? 'press HOLD TO PLAY' : 'starts with audio', rx0 + 6, (ry0 + ry1) / 2, pal.muted, 9);
       }
       const ix = rx0;
       const iy = wide ? ry1 + (short ? 14 : 20) : H - 24;
-      label('REAL SIGNAL', ix, iy, pal.fg, short ? 9 : 10);
+      label(rx1 - rx0 >= 150 ? 'REAL SIGNAL INFORMATION' : 'REAL SIGNAL', ix, iy, pal.fg, short ? 9 : 10);
       if (short) {
-        label(`${st.labels.freq} · T ${st.labels.period}`, ix, iy + 12, pal.muted, 9);
-        label(`λ ≈ ${st.labels.wavelength}`, ix, iy + 24, pal.muted, 9);
+        label(lb.realShort1, ix, iy + 12, pal.muted, 9);
+        label(lb.realShort2, ix, iy + 24, pal.muted, 9);
       } else if (wide) {
-        label(`frequency  ${st.labels.freq}`, ix, iy + 15, pal.muted, 10);
-        label(`period     ${st.labels.period}`, ix, iy + 29, pal.muted, 10);
-        label(`wavelength ${st.labels.wavelength}`, ix, iy + 43, pal.muted, 10);
+        label(lb.realWide1, ix, iy + 15, pal.muted, 10);
+        label(lb.realWide2, ix, iy + 29, pal.muted, 10);
+        label(lb.realWide3, ix, iy + 43, pal.muted, 10);
       } else {
-        label(`${st.labels.freq} · T ${st.labels.period} · λ ${st.labels.wavelength}`, ix, iy + 14, pal.muted, 9);
+        label(lb.realCompact, ix, iy + 14, pal.muted, 9);
       }
     }
 
     // ---------------------------------------------------------------- SPECTRUM
-    function spectrumAxis(st) {
-      const nyq = engine.ctx ? engine.ctx.sampleRate / 2 : st.nyquist;
-      const fmin = st.spectrumScale === 'log' ? (st.rangeMin < 20 ? 5 : 20) : 0;
-      return { fmin, fmax: nyq, nyq };
+    function updateSpectrumAxis(st) {
+      axLog = st.spectrumScale === 'log';
+      axFmin = axLog ? (st.rangeMin < 20 ? 5 : 20) : 0;
+      axFmax = st.live.sampleRate > 0 ? st.live.sampleRate / 2 : st.nyquist;
     }
-    function freqToX(f, ax, x0, x1) {
-      if (st0.spectrumScale === 'log') return logX(Math.max(f, ax.fmin), ax.fmin, ax.fmax, x0, x1);
-      return x0 + (f / ax.fmax) * (x1 - x0);
+    function freqToX(f, x0, x1) {
+      if (axLog) return logX(Math.max(f, axFmin), axFmin, axFmax, x0, x1);
+      return x0 + (f / axFmax) * (x1 - x0);
     }
-    let st0 = viz.state;
-    function rebuildColumns(ax, x0, x1) {
-      const bins = engine.freqData ? engine.freqData.length : 4096;
-      const binHz = ax.nyq / bins;
-      const key = `${W}|${st0.spectrumScale}|${ax.fmin}|${ax.nyq}|${bins}`;
-      if (key === colKey) return;
+    function rebuildColumns(bins, x0, x1) {
       const cols = Math.max(1, Math.floor(x1 - x0));
+      if (cols === colCols && axLog === colLog && axFmin === colFmin && axFmax === colFmax && bins === colBins) return;
+      const binHz = axFmax / bins;
       colLo = new Int32Array(cols);
       colHi = new Int32Array(cols);
       for (let c = 0; c < cols; c++) {
-        const fa = st0.spectrumScale === 'log' ? normalizedToFrequency(c / cols, ax.fmin, ax.fmax) : (c / cols) * ax.fmax;
-        const fb = st0.spectrumScale === 'log' ? normalizedToFrequency((c + 1) / cols, ax.fmin, ax.fmax) : ((c + 1) / cols) * ax.fmax;
+        const fa = axLog ? normalizedToFrequency(c / cols, axFmin, axFmax) : (c / cols) * axFmax;
+        const fb = axLog ? normalizedToFrequency((c + 1) / cols, axFmin, axFmax) : ((c + 1) / cols) * axFmax;
         const lo = clamp(Math.floor(fa / binHz), 0, bins - 1);
         colLo[c] = lo;
         colHi[c] = clamp(Math.max(lo, Math.ceil(fb / binHz) - 1), 0, bins - 1);
       }
-      colKey = key;
+      colCols = cols;
+      colLog = axLog;
+      colFmin = axFmin;
+      colFmax = axFmax;
+      colBins = bins;
     }
     function plotSpectrum(data, x0, y0, y1, col, weight) {
       const dbMin = -140;
@@ -4324,151 +4598,167 @@ function createSketch(container) {
       p.beginShape();
       for (let c = 0; c < colLo.length; c++) {
         let v = -Infinity;
-        for (let b = colLo[c]; b <= colHi[c]; b++) if (data[b] > v) v = data[b];
+        const hi = Math.min(colHi[c], data.length - 1);
+        for (let b = colLo[c]; b <= hi; b++) if (data[b] > v) v = data[b];
         if (!Number.isFinite(v)) v = dbMin;
         p.vertex(x0 + c, y1 - ((clamp(v, dbMin, dbMax) - dbMin) / (dbMax - dbMin)) * (y1 - y0));
       }
       p.endShape();
     }
     function drawSpectrum(st) {
-      st0 = st;
+      const L = st.live;
       const x0 = 40;
       const x1 = W - 10;
       const y0 = 22;
       const y1 = H - 24;
-      const ax = spectrumAxis(st);
+      updateSpectrumAxis(st);
       // dB grid
-      for (let db = 0; db >= -140; db -= 20) {
-        const y = y1 - ((db + 140) / 140) * (y1 - y0);
+      for (let i = 0; i < SPECTRUM_DB_GRID.length; i++) {
+        const y = y1 - ((SPECTRUM_DB_GRID[i] + 140) / 140) * (y1 - y0);
         p.stroke(pal.gridSoft);
         p.strokeWeight(1);
         p.line(x0, y, x1, y);
-        label(`${db}`, x0 - 4, y + 3, pal.muted, 8, p.RIGHT);
+        label(SPECTRUM_DB_LABELS[i], x0 - 4, y + 3, pal.muted, 8, p.RIGHT);
       }
       label('RELATIVE LEVEL (dB, uncalibrated)', x0, 13, pal.muted, 9);
-      label(st.spectrumScale === 'log' ? 'LOG' : 'LINEAR', x1, 13, pal.muted, 9, p.RIGHT);
+      label(axLog ? 'LOG' : 'LINEAR', x1, 13, pal.muted, 9, p.RIGHT);
       // overlays
       if (st.overlays.regions) {
-        let i = 0;
-        for (const r of FREQUENCY_REGIONS) {
-          if (r.max <= ax.fmin || r.min >= ax.fmax) { i++; continue; }
-          const a = freqToX(Math.max(r.min, ax.fmin || 1), ax, x0, x1);
-          const b = freqToX(Math.min(r.max, ax.fmax), ax, x0, x1);
+        for (let i = 0; i < FREQUENCY_REGIONS.length; i++) {
+          const r = FREQUENCY_REGIONS[i];
+          if (r.max <= axFmin || r.min >= axFmax) continue;
+          const a = freqToX(Math.max(r.min, axFmin || 1), x0, x1);
+          const b = freqToX(Math.min(r.max, axFmax), x0, x1);
           p.noStroke();
           p.fill(i % 2 ? pal.bandAlt : pal.band);
           p.rect(a, y0, b - a, y1 - y0);
           if (b - a > 34) label(r.short, a + 3, y0 + 10, pal.muted, 8);
-          i++;
         }
       }
       if (st.overlays.thirds) {
-        for (const f of THIRD_OCTAVE_FREQUENCIES) {
-          if (f < ax.fmin || f > ax.fmax) continue;
-          const x = freqToX(f, ax, x0, x1);
-          p.stroke(pal.gridSoft);
-          p.line(x, y0 + 14, x, y1);
+        // alternate third-octave bands, each spanning f·2^(−1/6) … f·2^(1/6)
+        p.noStroke();
+        p.fill(pal.thirdBand);
+        for (let i = 0; i < THIRD_OCTAVE_FREQUENCIES.length; i += 2) {
+          const fc = THIRD_OCTAVE_FREQUENCIES[i];
+          const lo = Math.max(fc / THIRD_OCTAVE_HALF_BAND, axFmin);
+          const hi = Math.min(fc * THIRD_OCTAVE_HALF_BAND, axFmax);
+          if (hi <= lo) continue;
+          const a = freqToX(lo, x0, x1);
+          p.rect(a, y0 + 14, freqToX(hi, x0, x1) - a, y1 - y0 - 14);
         }
       }
       if (st.overlays.notes) {
         for (let oct = 0; oct <= 10; oct++) {
           const f = midiToFrequency((oct + 1) * 12, st.a4);
-          if (f < Math.max(ax.fmin, 1) || f > ax.fmax) continue;
-          const x = freqToX(f, ax, x0, x1);
+          if (f < Math.max(axFmin, 1) || f > axFmax) continue;
+          const x = freqToX(f, x0, x1);
           p.stroke(pal.accent2Soft);
+          p.strokeWeight(1);
           p.line(x, y1 - 14, x, y1);
-          label(`C${oct}`, x + 2, y1 - 4, pal.accent2, 8);
+          label(OCTAVE_C_LABELS[oct], x + 2, y1 - 4, pal.accent2, 8);
         }
       }
       // frequency ticks
-      const ticks = st.spectrumScale === 'log' ? SPECTRUM_MARKERS : [0, 2000, 5000, 10000, 15000, 20000, 25000, 30000, 40000];
-      for (const f of ticks) {
-        if (f < ax.fmin || f > ax.fmax) continue;
-        const x = freqToX(f, ax, x0, x1);
+      const ticks = axLog ? SPECTRUM_MARKERS : LINEAR_TICKS;
+      const tickLabels = axLog ? SPECTRUM_MARKER_LABELS : LINEAR_TICK_LABELS;
+      for (let i = 0; i < ticks.length; i++) {
+        const f = ticks[i];
+        if (f < axFmin || f > axFmax) continue;
+        const x = freqToX(f, x0, x1);
         p.stroke(pal.grid);
+        p.strokeWeight(1);
         p.line(x, y1, x, y1 + 4);
-        label(formatFrequencyShort(f), x, y1 + 15, pal.muted, 9, p.CENTER);
+        label(tickLabels[i], x, y1 + 15, pal.muted, 9, p.CENTER);
       }
       // data
-      if (engine.ctx && engine.analyser) {
-        rebuildColumns(ax, x0, x1);
-        engine.analyser.getFloatFrequencyData(engine.freqData);
-        plotSpectrum(engine.freqData, x0, y0, y1, pal.accent, 1.5);
-        if (engine.mic) {
-          engine.mic.analyser.getFloatFrequencyData(engine.mic.freqData);
-          plotSpectrum(engine.mic.freqData, x0, y0, y1, pal.accent2, 1.25);
+      const data = L.analyser ? viz.outputSpectrum() : null;
+      if (data) {
+        rebuildColumns(data.length, x0, x1);
+        plotSpectrum(data, x0, y0, y1, pal.accent, 1.5);
+        const mic = L.mic ? viz.micSpectrum() : null;
+        if (mic) {
+          plotSpectrum(mic, x0, y0, y1, pal.accent2, 1.25);
           label('● microphone (relative)', x0 + 6, y1 - 6, pal.accent2, 9);
         }
       } else {
         label('The measured spectrum appears once audio starts — press HOLD TO PLAY.', x0 + 8, (y0 + y1) / 2, pal.muted, 10);
       }
-      // requested carrier marker
-      const inst = engine.voice ? engine.instantaneousFrequency() : null;
-      const fc = inst != null ? inst : st.source === 'dual' ? st.dual.fa : st.frequency;
-      if (fc >= ax.fmin && fc <= ax.fmax) {
-        const x = freqToX(fc, ax, x0, x1);
+      // requested carrier marker: instantaneous while playing, the plan's start frequency idle
+      const fc = L.voice ? L.inst : L.refFreq;
+      if (isNum(fc) && fc >= axFmin && fc <= axFmax) {
+        const x = freqToX(fc, x0, x1);
         dashedV(x, y0, y1, pal.accent2);
         const right = x > (x0 + x1) / 2;
-        label(`requested ${formatFrequency(fc)}`, x + (right ? -4 : 4), y0 + 22, pal.accent2, 9, right ? p.RIGHT : p.LEFT);
+        label(st.labels.requested, x + (right ? -4 : 4), y0 + 22, pal.accent2, 9, right ? p.RIGHT : p.LEFT);
       }
-      if (st.source === 'dual' && st.dual.fb >= ax.fmin && st.dual.fb <= ax.fmax) dashedV(freqToX(st.dual.fb, ax, x0, x1), y0, y1, pal.accent2Soft);
+      if (st.source === 'dual' && st.dual.fb >= axFmin && st.dual.fb <= axFmax) dashedV(freqToX(st.dual.fb, x0, x1), y0, y1, pal.accent2Soft);
       // Nyquist + safe maximum
-      const xn = freqToX(ax.nyq, ax, x0, x1);
+      const xn = freqToX(axFmax, x0, x1);
       p.stroke(pal.danger);
       p.strokeWeight(1.5);
       p.line(xn, y0, xn, y1);
-      label(`NYQUIST ${formatFrequency(ax.nyq)}${st.provisional && !engine.ctx ? ' (provisional)' : ''}`, xn - 4, y0 + 36, pal.danger, 9, p.RIGHT);
-      dashedV(freqToX(ax.nyq * SAFE_NYQUIST_FACTOR, ax, x0, x1), y0 + 40, y1, pal.warn);
+      label(st.labels.nyquist, xn - 4, y0 + 36, pal.danger, 9, p.RIGHT);
+      dashedV(freqToX(axFmax * SAFE_NYQUIST_FACTOR, x0, x1), y0 + 40, y1, pal.warn);
     }
 
     // ---------------------------------------------------------------- FREQUENCY MOTION
+    function motionY(f) { return mY1 - frequencyToNormalized(f, mLo, mHi) * (mY1 - mY0); }
     function drawMotion(st) {
+      const L = st.live;
       const x0 = 46;
       const x1 = W - 12;
-      const y0 = 24;
-      const y1 = H - 24;
-      const voice = engine.voice;
-      const plan = voice ? voice.plan : st.plan;
+      mY0 = 24;
+      mY1 = H - 24;
+      const voice = L.voice;
+      const plan = L.plan;
       label('REQUESTED INSTANTANEOUS FREQUENCY', x0, 14, pal.fg, 10);
-      if (!plan) { label('No playable configuration.', x0, (y0 + y1) / 2, pal.warn, 10); return; }
-      const elapsed = voice && engine.ctx ? Math.max(0, engine.ctx.currentTime - voice.t0) : 0;
+      if (!plan) { label('No playable configuration.', x0, (mY0 + mY1) / 2, pal.warn, 10); return; }
+      const elapsed = L.elapsed;
       const finite = plan.kind === 'finite';
       const span = finite ? plan.dur : 6;
       const tStart = finite ? 0 : Math.max(0, elapsed - span);
       // frequency axis bounds from the plan
       let lo = Infinity;
       let hi = 0;
-      for (const f of plan.freqs) { if (f < lo) lo = f; if (f > hi) hi = f; }
+      const freqs = plan.freqs;
+      for (let i = 0; i < freqs.length; i++) { const f = freqs[i]; if (f < lo) lo = f; if (f > hi) hi = f; }
       if (plan.type === 'lfo' || plan.type === 'fm') { lo = Math.max(1, (plan.center || plan.freq) - plan.depth); hi = (plan.center || plan.freq) + plan.depth; }
       if (plan.type === 'dual') { lo = Math.min(plan.a.freq, plan.b.freq); hi = Math.max(plan.a.freq, plan.b.freq); }
-      lo = Math.max(1, lo / 1.5);
-      hi = Math.min(st.nyquist, Math.max(hi * 1.5, lo * 4));
-      const yOf = (f) => y1 - frequencyToNormalized(f, lo, hi) * (y1 - y0);
-      for (const f of [1, 2, 5, 10, 20, 50, 100, 200, 500, 1000, 2000, 5000, 10000, 20000, 50000]) {
-        if (f < lo || f > hi) continue;
-        const y = yOf(f);
+      mLo = Math.max(1, lo / 1.5);
+      mHi = Math.min(st.nyquist, Math.max(hi * 1.5, mLo * 4));
+      for (let i = 0; i < MOTION_TICKS.length; i++) {
+        const f = MOTION_TICKS[i];
+        if (f < mLo || f > mHi) continue;
+        const y = motionY(f);
         p.stroke(pal.gridSoft);
         p.strokeWeight(1);
         p.line(x0, y, x1, y);
-        label(formatFrequencyShort(f), x0 - 5, y + 3, pal.muted, 9, p.RIGHT);
+        label(MOTION_TICK_LABELS[i], x0 - 5, y + 3, pal.muted, 9, p.RIGHT);
       }
-      label(finite ? `0 … ${sig(span, 3)} s` : 'last 6 s', x1, y1 + 16, pal.muted, 9, p.RIGHT);
+      label(finite ? st.labels.motionSpan : voice ? 'last 6 s' : 'next 6 s (planned)', x1, mY1 + 16, pal.muted, 9, p.RIGHT);
       if (plan.type === 'dual') {
-        for (const [f, txt] of [[plan.a.freq, 'A'], [plan.b.freq, 'B']]) {
-          p.stroke(pal.accent);
-          p.strokeWeight(2);
-          p.line(x0, yOf(f), x1, yOf(f));
-          label(`${txt} ${formatFrequency(f)}`, x0 + 6, yOf(f) - 5, pal.accent, 9);
-        }
+        p.stroke(pal.accent);
+        p.strokeWeight(2);
+        const ya = motionY(plan.a.freq);
+        const yb = motionY(plan.b.freq);
+        p.line(x0, ya, x1, ya);
+        label(st.labels.motionA, x0 + 6, ya - 5, pal.accent, 9);
+        p.stroke(pal.accent);
+        p.strokeWeight(2);
+        p.line(x0, yb, x1, yb);
+        label(st.labels.motionB, x0 + 6, yb - 5, pal.accent, 9);
         return;
       }
       const fastFm = plan.type === 'fm' && plan.modFreq * span > (x1 - x0) / 4;
       if (fastFm) {
+        const yTop = motionY(plan.freq + plan.depth);
         p.noStroke();
         p.fill(pal.accentFaint);
-        p.rect(x0, yOf(plan.freq + plan.depth), x1 - x0, yOf(plan.freq - plan.depth) - yOf(plan.freq + plan.depth));
+        p.rect(x0, yTop, x1 - x0, motionY(plan.freq - plan.depth) - yTop);
         p.stroke(pal.accent);
-        p.line(x0, yOf(plan.freq), x1, yOf(plan.freq));
-        label('modulation faster than the display: deviation band shown', x0 + 6, y0 + 12, pal.muted, 9);
+        p.line(x0, motionY(plan.freq), x1, motionY(plan.freq));
+        label('modulation faster than the display: deviation band shown', x0 + 6, mY0 + 12, pal.muted, 9);
         return;
       }
       const cols = Math.floor(x1 - x0);
@@ -4485,7 +4775,7 @@ function createSketch(container) {
           const f = planFreqAt(plan, t);
           if (f == null) { if (drawing) { p.endShape(); drawing = false; } continue; }
           if (!drawing) { p.beginShape(); drawing = true; }
-          p.vertex(x0 + c, yOf(f));
+          p.vertex(x0 + c, motionY(f));
         }
         if (drawing) p.endShape();
       }
@@ -4493,38 +4783,51 @@ function createSketch(container) {
         const x = x0 + clamp(elapsed / span, 0, 1) * (x1 - x0);
         p.stroke(pal.accent2);
         p.strokeWeight(1);
-        p.line(x, y0, x, y1);
+        p.line(x, mY0, x, mY1);
       }
-      label(voice ? 'live' : 'planned trajectory (not playing)', x0 + 6, y1 - 6, voice ? pal.accent : pal.muted, 9);
+      label(voice ? 'live' : 'planned trajectory (not playing)', x0 + 6, mY1 - 6, voice ? pal.accent : pal.muted, 9);
     }
 
     // ---------------------------------------------------------------- SIGNAL PATH
+    /** Top-left corner of node i in the snake layout, written into pPos. */
+    function pathPos(i) {
+      const r = Math.floor(i / pCols);
+      let c = i % pCols;
+      if (r % 2 === 1) c = pCols - 1 - c; // snake layout keeps arrows short
+      pPos[0] = 12 + c * (pBw + PATH_GAP_X);
+      pPos[1] = pTop + r * (pBh + PATH_GAP_Y);
+    }
+    /** Subtitles truncated to the box width; rebuilt only when the nodes or the width change. */
+    function ensurePathSubs(nodes) {
+      if (nodes === pathSubsNodes && pBw === pathSubsBw) return;
+      const maxChars = Math.max(4, Math.floor(pBw / 5.2) - 1);
+      pathSubs = nodes.map((n) => (n.sub.length * 5.2 > pBw ? `${n.sub.slice(0, maxChars)}…` : n.sub));
+      pathSubsNodes = nodes;
+      pathSubsBw = pBw;
+    }
     function drawPath(st, now) {
       const nodes = st.pathNodes;
       if (!nodes.length) return;
-      const cols = W >= 760 ? 7 : W >= 430 ? 4 : 3;
-      const rows = Math.ceil(nodes.length / cols);
-      const gapX = 14;
-      const gapY = 20;
-      const bw = (W - 24 - gapX * (cols - 1)) / cols;
-      const bh = Math.min(58, (H - 24 - gapY * (rows - 1)) / rows);
-      const top = (H - (rows * bh + (rows - 1) * gapY)) / 2;
-      const pos = (i) => {
-        const r = Math.floor(i / cols);
-        let c = i % cols;
-        if (r % 2 === 1) c = cols - 1 - c; // snake layout keeps arrows short
-        return [12 + c * (bw + gapX), top + r * (bh + gapY)];
-      };
-      const playing = st.playing && !!engine.voice;
+      pCols = W >= 760 ? 7 : W >= 430 ? 4 : 3;
+      const rows = Math.ceil(nodes.length / pCols);
+      pBw = (W - 24 - PATH_GAP_X * (pCols - 1)) / pCols;
+      pBh = Math.min(58, (H - 24 - PATH_GAP_Y * (rows - 1)) / rows);
+      pTop = (H - (rows * pBh + (rows - 1) * PATH_GAP_Y)) / 2;
+      ensurePathSubs(nodes);
+      const playing = st.playing && st.live.voice;
       const t = (now / 1000) * 0.6;
       for (let i = 0; i < nodes.length - 1; i++) {
-        const [ax, ay] = pos(i);
-        const [bx, by] = pos(i + 1);
+        pathPos(i);
+        const ax = pPos[0];
+        const ay = pPos[1];
+        pathPos(i + 1);
+        const bx = pPos[0];
+        const by = pPos[1];
         const sameRow = Math.abs(ay - by) < 1;
-        const x1 = sameRow ? (bx > ax ? ax + bw : ax) : ax + bw / 2;
-        const y1 = sameRow ? ay + bh / 2 : ay + bh;
-        const x2 = sameRow ? (bx > ax ? bx : bx + bw) : bx + bw / 2;
-        const y2 = sameRow ? by + bh / 2 : by;
+        const x1 = sameRow ? (bx > ax ? ax + pBw : ax) : ax + pBw / 2;
+        const y1 = sameRow ? ay + pBh / 2 : ay + pBh;
+        const x2 = sameRow ? (bx > ax ? bx : bx + pBw) : bx + pBw / 2;
+        const y2 = sameRow ? by + pBh / 2 : by;
         const active = playing && (nodes[i + 1].mod ? nodes[i + 1].enabled : true);
         p.stroke(active ? pal.accent : pal.grid);
         p.strokeWeight(active ? 1.5 : 1);
@@ -4538,58 +4841,64 @@ function createSketch(container) {
       }
       for (let i = 0; i < nodes.length; i++) {
         const n = nodes[i];
-        const [x, y] = pos(i);
+        pathPos(i);
+        const x = pPos[0];
+        const y = pPos[1];
         const on = playing && (!n.mod || n.enabled);
         const pulse = on && !st.reducedMotion ? 0.5 + 0.5 * Math.sin(now / 600 + i) : 0;
         p.fill(pal.bg);
         p.stroke(on ? pal.accent : n.mod && !n.enabled ? pal.gridSoft : pal.grid);
         p.strokeWeight(on ? 1.5 + pulse * 0.8 : 1);
-        p.rect(x, y, bw, bh, 6);
-        const titleSize = bw < 90 ? 8 : 10;
-        label(n.title, x + 7, y + 16, on ? pal.fg : pal.muted, titleSize);
-        if (bh > 34) label(n.sub.length * 5.2 > bw ? `${n.sub.slice(0, Math.max(4, Math.floor(bw / 5.2) - 1))}…` : n.sub, x + 7, y + 31, pal.muted, 8);
+        p.rect(x, y, pBw, pBh, 6);
+        label(n.title, x + 7, y + 16, on ? pal.fg : pal.muted, pBw < 90 ? 8 : 10);
+        if (pBh > 34) label(pathSubs[i], x + 7, y + 31, pal.muted, 8);
       }
       label(playing ? 'active path' : 'idle — subdued nodes are not processing', 12, H - 6, pal.muted, 9);
     }
 
     // ---------------------------------------------------------------- HARMONICS
+    function drawHarmSet(set, col, offset, labelled, fmin, fmax, x0, x1, y0, y1) {
+      const list = set.list;
+      for (let i = 0; i < list.length; i++) {
+        const hm = list[i];
+        const x = logX(hm.f, fmin, fmax, x0, x1) + offset;
+        const y = y0 + (-hm.db / 60) * (y1 - y0);
+        if (hm.below) {
+          p.noStroke();
+          p.fill(col);
+          p.rect(x - 2, y, 4, y1 - y);
+        } else {
+          p.noFill();
+          p.stroke(pal.muted);
+          p.strokeWeight(1);
+          for (let yy = y; yy < y1; yy += 5) p.line(x, yy, x, Math.min(yy + 2, y1));
+        }
+        if (labelled && hm.n < HARMONIC_N_LABELS.length) label(HARMONIC_N_LABELS[hm.n], x, y - 4, pal.muted, 8, p.CENTER);
+      }
+    }
     function drawHarmonics(st) {
       const x0 = 40;
       const x1 = W - 12;
-      const y0 = 36;
+      const narrow = W < 600;
+      const y0 = narrow ? 52 : 46;
       const y1 = H - 26;
       const h = st.harm;
+      const hb = st.harmB;
       label('THEORETICAL OSCILLATOR SPECTRUM', x0, 13, pal.fg, 10);
       label(W < 520 ? 'theoretical · speaker output unknown' : 'digitally representable below Nyquist · actual speaker output unknown', x0, 26, pal.muted, 9);
       if (!h.list.length) return;
-      const base = h.list[0].f;
-      const fmin = Math.max(1, base / 2);
-      const fmax = Math.max(st.nyquist * 1.6, h.list[h.list.length - 1].f * 1.1);
-      for (const db of [0, -20, -40, -60]) {
-        const y = y0 + (-db / 60) * (y1 - y0);
+      const fmin = Math.max(1, h.list[0].f / 2);
+      let fmax = Math.max(h.axisMax, h.list[h.list.length - 1].f * 1.1);
+      if (hb.list.length) fmax = Math.max(fmax, hb.list[hb.list.length - 1].f * 1.1);
+      for (let i = 0; i < HARMONIC_DB_GRID.length; i++) {
+        const y = y0 + (-HARMONIC_DB_GRID[i] / 60) * (y1 - y0);
         p.stroke(pal.gridSoft);
+        p.strokeWeight(1);
         p.line(x0, y, x1, y);
-        label(`${db}`, x0 - 4, y + 3, pal.muted, 8, p.RIGHT);
+        label(HARMONIC_DB_LABELS[i], x0 - 4, y + 3, pal.muted, 8, p.RIGHT);
       }
-      const drawSet = (set, col, offset) => {
-        for (const hm of set.list) {
-          const x = logX(hm.f, fmin, fmax, x0, x1) + offset;
-          const y = y0 + (-hm.db / 60) * (y1 - y0);
-          if (hm.below) {
-            p.noStroke();
-            p.fill(col);
-            p.rect(x - 2, y, 4, y1 - y);
-          } else {
-            p.noFill();
-            p.stroke(pal.muted);
-            p.strokeWeight(1);
-            for (let yy = y; yy < y1; yy += 5) p.line(x, yy, x, Math.min(yy + 2, y1));
-          }
-          if (hm.n <= 7 && set === st.harm) label(hm.n === 1 ? 'f' : `${hm.n}f`, x, y - 4, pal.muted, 8, p.CENTER);
-        }
-      };
-      drawSet(st.harm, pal.accent, 0);
-      if (st.harmB.list.length) drawSet(st.harmB, pal.accent2, 3);
+      drawHarmSet(h, pal.accent, 0, true, fmin, fmax, x0, x1, y0, y1);
+      if (hb.list.length) drawHarmSet(hb, pal.accent2, 3, false, fmin, fmax, x0, x1, y0, y1);
       const xn = logX(st.nyquist, fmin, fmax, x0, x1);
       p.stroke(pal.danger);
       p.strokeWeight(1.5);
@@ -4597,42 +4906,45 @@ function createSketch(container) {
       const nearRight = xn > x1 - 120;
       label('NYQUIST', nearRight ? xn - 4 : xn + 4, y0 + 10, pal.danger, 9, nearRight ? p.RIGHT : p.LEFT);
       label(nearRight ? '← representable' : 'not representable →', nearRight ? xn - 4 : xn + 4, y0 + 22, pal.muted, 8, nearRight ? p.RIGHT : p.LEFT);
-      for (const f of SPECTRUM_MARKERS) {
+      for (let i = 0; i < SPECTRUM_MARKERS.length; i++) {
+        const f = SPECTRUM_MARKERS[i];
         if (f < fmin || f > fmax) continue;
-        label(formatFrequencyShort(f), logX(f, fmin, fmax, x0, x1), y1 + 14, pal.muted, 9, p.CENTER);
+        label(SPECTRUM_MARKER_LABELS[i], logX(f, fmin, fmax, x0, x1), y1 + 14, pal.muted, 9, p.CENTER);
       }
-      label(`${h.below} of ${h.total} harmonics ≥ −60 dB below Nyquist`, x1, 13, pal.muted, 9, p.RIGHT);
+      if (narrow) label(h.summaryShort, x0, 38, pal.muted, 9);
+      else label(h.summary, x1, 13, pal.muted, 9, p.RIGHT);
     }
 
     // ---------------------------------------------------------------- INTERFERENCE
+    function legendItem(txt, x, col) {
+      label(txt, x, 26, col, 9);
+      return x + p.textWidth(txt) + 10;
+    }
     function drawInterference(st, now) {
       const d = st.dual;
+      const lb = st.labels;
       const delta = Math.abs(d.fa - d.fb);
       const narrow = W < 520;
       const x0 = 12;
       const x1 = W - 12;
-      const top = 34;
+      const top = narrow ? 44 : 34;
       const bottom = H - 16;
       const avail = bottom - top;
       // A and B lanes are thin; the sum lane gets most of the height.
-      const lanes = [
-        { y: top + avail * 0.11, hh: avail * 0.09, col: pal.accent },
-        { y: top + avail * 0.33, hh: avail * 0.09, col: pal.accent2 },
-        { y: top + avail * 0.72, hh: avail * 0.26, col: pal.fg },
-      ];
-      const real = delta > 0.005
-        ? `Δf ${sig(delta, 3)} Hz → beat rate ≈ ${sig(delta, 3)} Hz (period ${formatPeriod(delta)})`
-        : 'equal frequencies: no beating';
-      label(real, x0, 13, pal.fg, narrow ? 9 : 10);
+      laneY[0] = top + avail * 0.11;
+      laneY[1] = top + avail * 0.33;
+      laneY[2] = top + avail * 0.72;
+      laneH[0] = avail * 0.09;
+      laneH[1] = avail * 0.09;
+      laneH[2] = avail * 0.26;
+      label(lb.beat, x0, 13, pal.fg, narrow ? 9 : 10);
       // legend instead of per-lane titles, so labels never overlap the traces
-      let lx = x0;
-      const legend = [[`A ${formatFrequency(d.fa)}`, pal.accent], [`B ${formatFrequency(d.fb)}`, pal.accent2], ['A+B', pal.fg], ['envelope', pal.warn]];
-      p.textSize(9);
-      for (const [txt, col] of legend) {
-        label(txt, lx, 26, col, 9);
-        lx += p.textWidth(txt) + 10;
-      }
-      if (!narrow) label('carriers slowed', x1, 26, pal.muted, 9, p.RIGHT);
+      let lx = legendItem(lb.legendA, x0, pal.accent);
+      lx = legendItem(lb.legendB, lx, pal.accent2);
+      lx = legendItem('A+B', lx, pal.fg);
+      legendItem('envelope', lx, pal.warn);
+      if (narrow) label('carriers slowed — visual representation', x0, 37, pal.muted, 8);
+      else label('carriers slowed — visual representation', x1, 26, pal.muted, 9, p.RIGHT);
       // Visual model: two beats across the width, carriers ~10 cycles per beat.
       const beatsShown = 2;
       const k = 10 * beatsShown;
@@ -4642,13 +4954,13 @@ function createSketch(container) {
       const amax = Math.max(d.la + d.lb, 1e-3);
       const n = Math.min(600, Math.floor(x1 - x0));
       for (let li = 0; li < 3; li++) {
-        const lane = lanes[li];
-        const hh = lane.hh;
+        const ly = laneY[li];
+        const hh = laneH[li];
         p.stroke(pal.gridSoft);
         p.strokeWeight(1);
-        p.line(x0, lane.y, x1, lane.y);
+        p.line(x0, ly, x1, ly);
         p.noFill();
-        p.stroke(lane.col);
+        p.stroke(li === 0 ? pal.accent : li === 1 ? pal.accent2 : pal.fg);
         p.strokeWeight(li === 2 ? 1.5 : 1.25);
         p.beginShape();
         for (let i = 0; i <= n; i++) {
@@ -4656,28 +4968,24 @@ function createSketch(container) {
           const a = d.la * Math.sin(2 * Math.PI * k * x);
           const b = d.lb * Math.sin(2 * Math.PI * (delta > 0.005 ? kb : k) * x);
           const y = li === 0 ? a / Math.max(d.la, 1e-3) : li === 1 ? b / Math.max(d.lb, 1e-3) : (a + b) / amax;
-          p.vertex(x0 + (i / n) * (x1 - x0), lane.y - y * hh);
+          p.vertex(x0 + (i / n) * (x1 - x0), ly - y * hh);
         }
         p.endShape();
         if (li === 2 && delta > 0.005) {
           p.stroke(pal.warn);
           p.strokeWeight(1.5);
-          for (const sgn of [1, -1]) {
+          for (let sgn = 1; sgn >= -1; sgn -= 2) {
             p.beginShape();
             for (let i = 0; i <= n; i += 2) {
               const x = i / n + offset;
               const env = Math.sqrt(d.la * d.la + d.lb * d.lb + 2 * d.la * d.lb * Math.cos(2 * Math.PI * (kb - k) * x)) / amax;
-              p.vertex(x0 + (i / n) * (x1 - x0), lane.y - sgn * env * hh);
+              p.vertex(x0 + (i / n) * (x1 - x0), ly - sgn * env * hh);
             }
             p.endShape();
           }
         }
       }
-      let note = narrow ? 'Envelope moves at the real beat rate.' : 'Carriers slowed for display; the envelope moves at the real beat rate.';
-      if (delta > 12) note = narrow ? 'Beat rate > 12 Hz: animation capped.' : 'Beat rate above 12 Hz: animation capped; heard as roughness rather than distinct beats.';
-      if (st.source !== 'dual') note = narrow ? 'Showing DUAL OSC settings.' : 'Showing DUAL OSC settings — open DUAL OSC to play them.';
-      else if (d.stereo) note = narrow ? 'Stereo split: one tone per ear.' : 'Stereo split: each ear receives one tone; the bottom lane shows the acoustic mix of one speaker.';
-      label(note, x0, H - 4, pal.muted, 9);
+      label(narrow ? lb.interNoteNarrow : lb.interNote, x0, H - 4, pal.muted, 9);
     }
   };
 }
