@@ -1,0 +1,14 @@
+id: M002
+title: "Visualization"
+slug: visualization
+order: 2
+priority: p1
+problem: "Sound without coupled visuals teaches little."
+outcome: "Six p5 visualization modes and an interactive log frequency map tied to the engine."
+acceptance_criteria:
+  - "Six p5 visualization modes and an interactive log frequency map tied to the engine."
+validation:
+  - "node tests/smoke.cjs"
+evidence_required:
+  - "milestone_verified"
+created_at: 2026-10-01

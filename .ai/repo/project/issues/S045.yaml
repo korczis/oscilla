@@ -1,0 +1,19 @@
+id: S045
+milestone: M003
+title: "§45 Contextual education"
+slug: contextual-education
+priority: p1
+profile: implementation
+objective: "Optional Explore hints that never obstruct the instrument."
+scope:
+  - "index.html"
+  - "tests"
+depends_on:
+  - "S044"
+acceptance_criteria:
+  - "Optional Explore hints that never obstruct the instrument."
+validation:
+  - "node tests/smoke.cjs"
+evidence_required:
+  - "verified"
+created_at: 2026-10-01

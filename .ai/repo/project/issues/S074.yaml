@@ -1,0 +1,19 @@
+id: S074
+milestone: M005
+title: "§74 Specification section 74 (not received)"
+slug: specification-section-74-not-received
+priority: p1
+profile: implementation
+objective: "The pasted specification was truncated inside section 63; this section's text was never delivered. Blocked until the text is supplied."
+scope:
+  - "index.html"
+  - "tests"
+depends_on:
+  - "S000"
+acceptance_criteria:
+  - "The pasted specification was truncated inside section 63; this section's text was never delivered. Blocked until the text is supplied."
+validation:
+  - "node tests/smoke.cjs"
+evidence_required:
+  - "verified"
+created_at: 2026-10-01

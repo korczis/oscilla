@@ -1,0 +1,14 @@
+id: M004
+title: "Quality, design and accessibility"
+slug: quality
+order: 4
+priority: p1
+problem: "Unreviewed UI and robustness."
+outcome: "Responsive, accessible, themed, robust, debuggable and performant application."
+acceptance_criteria:
+  - "Responsive, accessible, themed, robust, debuggable and performant application."
+validation:
+  - "node tests/smoke.cjs"
+evidence_required:
+  - "milestone_verified"
+created_at: 2026-10-01

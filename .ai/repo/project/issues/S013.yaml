@@ -1,0 +1,20 @@
+id: S013
+milestone: M001
+title: "§13 Pattern engine"
+slug: pattern-engine
+priority: p1
+profile: implementation
+objective: "All 16 patterns implemented with configurable parameters."
+scope:
+  - "index.html"
+  - "tests"
+depends_on:
+  - "S015"
+  - "S016"
+acceptance_criteria:
+  - "All 16 patterns implemented with configurable parameters."
+validation:
+  - "node tests/smoke.cjs"
+evidence_required:
+  - "verified"
+created_at: 2026-10-01

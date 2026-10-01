@@ -1,0 +1,19 @@
+id: S011
+milestone: M001
+title: "§11 Musical note mode"
+slug: musical-note-mode
+priority: p1
+profile: implementation
+objective: "Nearest equal-tempered note, cents, A4 432-445, note buttons C2-C7, semitone/octave/cents stepping."
+scope:
+  - "index.html"
+  - "tests"
+depends_on:
+  - "S009"
+acceptance_criteria:
+  - "Nearest equal-tempered note, cents, A4 432-445, note buttons C2-C7, semitone/octave/cents stepping."
+validation:
+  - "node tests/smoke.cjs"
+evidence_required:
+  - "verified"
+created_at: 2026-10-01

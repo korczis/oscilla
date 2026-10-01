@@ -1,0 +1,20 @@
+id: S053
+milestone: M004
+title: "§53 Debug mode"
+slug: debug-mode
+priority: p1
+profile: implementation
+objective: "?debug=1 developer panel with engine, playback, p5 FPS and error state."
+scope:
+  - "index.html"
+  - "tests"
+depends_on:
+  - "S015"
+  - "S025"
+acceptance_criteria:
+  - "?debug=1 developer panel with engine, playback, p5 FPS and error state."
+validation:
+  - "node tests/smoke.cjs"
+evidence_required:
+  - "verified"
+created_at: 2026-10-01

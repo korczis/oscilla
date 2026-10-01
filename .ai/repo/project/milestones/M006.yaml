@@ -1,0 +1,14 @@
+id: M006
+title: "Verified public deployment"
+slug: deployment
+order: 6
+priority: p1
+problem: "Nothing is published."
+outcome: "Cross-model reviewed build deployed to GitHub Pages and smoke-tested at its public URL."
+acceptance_criteria:
+  - "Cross-model reviewed build deployed to GitHub Pages and smoke-tested at its public URL."
+validation:
+  - "node tests/smoke.cjs"
+evidence_required:
+  - "milestone_verified"
+created_at: 2026-10-01

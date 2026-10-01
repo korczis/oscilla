@@ -1,0 +1,19 @@
+id: S050
+milestone: M004
+title: "§50 Live technical metrics"
+slug: live-technical-metrics
+priority: p1
+profile: implementation
+objective: "Compact metrics plus collapsible advanced metrics incl. instantaneous frequency."
+scope:
+  - "index.html"
+  - "tests"
+depends_on:
+  - "S015"
+acceptance_criteria:
+  - "Compact metrics plus collapsible advanced metrics incl. instantaneous frequency."
+validation:
+  - "node tests/smoke.cjs"
+evidence_required:
+  - "verified"
+created_at: 2026-10-01

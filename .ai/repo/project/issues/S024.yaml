@@ -1,0 +1,19 @@
+id: S024
+milestone: M001
+title: "§24 No fake science"
+slug: no-fake-science
+priority: p1
+profile: implementation
+objective: "No banned claims; 15.5 kHz is not ultrasound; digital generation does not imply acoustic reproduction."
+scope:
+  - "index.html"
+  - "tests"
+depends_on:
+  - "S003"
+acceptance_criteria:
+  - "No banned claims; 15.5 kHz is not ultrasound; digital generation does not imply acoustic reproduction."
+validation:
+  - "node tests/smoke.cjs"
+evidence_required:
+  - "verified"
+created_at: 2026-10-01

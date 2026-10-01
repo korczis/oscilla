@@ -1,0 +1,19 @@
+id: S018
+milestone: M001
+title: "§18 Stop semantics"
+slug: stop-semantics
+priority: p1
+profile: implementation
+objective: "stop() ramps down, cancels automation and schedules, stops and disconnects nodes, updates state; PLAY-STOP-PLAY indefinitely without accumulation."
+scope:
+  - "index.html"
+  - "tests"
+depends_on:
+  - "S015"
+acceptance_criteria:
+  - "stop() ramps down, cancels automation and schedules, stops and disconnects nodes, updates state; PLAY-STOP-PLAY indefinitely without accumulation."
+validation:
+  - "node tests/smoke.cjs"
+evidence_required:
+  - "verified"
+created_at: 2026-10-01

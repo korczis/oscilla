@@ -1,0 +1,19 @@
+id: S027
+milestone: M002
+title: "§27 Spectrum mode"
+slug: spectrum-mode
+priority: p1
+profile: implementation
+objective: "AnalyserNode spectrum, LOG/LINEAR axis, markers, carrier and Nyquist markers, overlays, relative level axis."
+scope:
+  - "index.html"
+  - "tests"
+depends_on:
+  - "S025"
+acceptance_criteria:
+  - "AnalyserNode spectrum, LOG/LINEAR axis, markers, carrier and Nyquist markers, overlays, relative level axis."
+validation:
+  - "node tests/smoke.cjs"
+evidence_required:
+  - "verified"
+created_at: 2026-10-01

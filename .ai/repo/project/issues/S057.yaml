@@ -1,0 +1,19 @@
+id: S057
+milestone: M004
+title: "§57 Performance"
+slug: performance
+priority: p1
+profile: implementation
+objective: "No per-frame allocations, reused buffers, pause when hidden, no DOM rebuild per frame, passive listeners."
+scope:
+  - "index.html"
+  - "tests"
+depends_on:
+  - "S025"
+acceptance_criteria:
+  - "No per-frame allocations, reused buffers, pause when hidden, no DOM rebuild per frame, passive listeners."
+validation:
+  - "node tests/smoke.cjs"
+evidence_required:
+  - "verified"
+created_at: 2026-10-01

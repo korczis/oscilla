@@ -1,0 +1,20 @@
+id: S005
+milestone: M001
+title: "§5 Playground mode"
+slug: playground-mode
+priority: p1
+profile: implementation
+objective: "Single-source direct manipulation: big readout, frequency map, visualization, large playback control; usable in first viewport on mobile."
+scope:
+  - "index.html"
+  - "tests"
+depends_on:
+  - "S004"
+  - "S015"
+acceptance_criteria:
+  - "Single-source direct manipulation: big readout, frequency map, visualization, large playback control; usable in first viewport on mobile."
+validation:
+  - "node tests/smoke.cjs"
+evidence_required:
+  - "verified"
+created_at: 2026-10-01

@@ -1,0 +1,14 @@
+id: M001
+title: "Instrument core"
+slug: instrument-core
+order: 1
+priority: p1
+problem: "No application exists."
+outcome: "Playground instrument with correct, click-free, safe audio engine and pattern engine."
+acceptance_criteria:
+  - "Playground instrument with correct, click-free, safe audio engine and pattern engine."
+validation:
+  - "node tests/smoke.cjs"
+evidence_required:
+  - "milestone_verified"
+created_at: 2026-10-01

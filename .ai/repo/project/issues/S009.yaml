@@ -1,0 +1,19 @@
+id: S009
+milestone: M001
+title: "§9 Flexible frequency entry"
+slug: flexible-frequency-entry
+priority: p1
+profile: implementation
+objective: "Parse 440, 440hz, 1k, 15.5k, 20khz; format Hz/kHz; reject malformed input without NaN."
+scope:
+  - "index.html"
+  - "tests"
+depends_on:
+  - "S001"
+acceptance_criteria:
+  - "Parse 440, 440hz, 1k, 15.5k, 20khz; format Hz/kHz; reject malformed input without NaN."
+validation:
+  - "node tests/smoke.cjs"
+evidence_required:
+  - "verified"
+created_at: 2026-10-01

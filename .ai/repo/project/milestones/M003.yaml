@@ -1,0 +1,14 @@
+id: M003
+title: "Modes and content"
+slug: modes-content
+order: 3
+priority: p1
+problem: "Single-mode instrument only."
+outcome: "Sweep, Dual Osc, Presets, Learn, history and shareable state."
+acceptance_criteria:
+  - "Sweep, Dual Osc, Presets, Learn, history and shareable state."
+validation:
+  - "node tests/smoke.cjs"
+evidence_required:
+  - "milestone_verified"
+created_at: 2026-10-01

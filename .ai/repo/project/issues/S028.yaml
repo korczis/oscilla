@@ -1,0 +1,20 @@
+id: S028
+milestone: M002
+title: "§28 Frequency motion mode"
+slug: frequency-motion-mode
+priority: p1
+profile: implementation
+objective: "Requested instantaneous frequency over time for sweeps, siren, chirp, wobble, FM, random."
+scope:
+  - "index.html"
+  - "tests"
+depends_on:
+  - "S025"
+  - "S013"
+acceptance_criteria:
+  - "Requested instantaneous frequency over time for sweeps, siren, chirp, wobble, FM, random."
+validation:
+  - "node tests/smoke.cjs"
+evidence_required:
+  - "verified"
+created_at: 2026-10-01

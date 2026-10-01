@@ -1,0 +1,19 @@
+id: S006
+milestone: M001
+title: "§6 Frequency range"
+slug: frequency-range
+priority: p1
+profile: implementation
+objective: "Human, High, Custom, Advanced ranges; Nyquist from AudioContext.sampleRate, safe max 0.95*Nyquist, provisional before init."
+scope:
+  - "index.html"
+  - "tests"
+depends_on:
+  - "S015"
+acceptance_criteria:
+  - "Human, High, Custom, Advanced ranges; Nyquist from AudioContext.sampleRate, safe max 0.95*Nyquist, provisional before init."
+validation:
+  - "node tests/smoke.cjs"
+evidence_required:
+  - "verified"
+created_at: 2026-10-01

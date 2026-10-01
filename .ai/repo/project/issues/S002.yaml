@@ -1,0 +1,19 @@
+id: S002
+milestone: M001
+title: "§2 Tech stack"
+slug: tech-stack
+priority: p1
+profile: implementation
+objective: "Tailwind CDN, Flowbite, Alpine.js, p5.js and native Web Audio; no audio framework."
+scope:
+  - "index.html"
+  - "tests"
+depends_on:
+  - "S001"
+acceptance_criteria:
+  - "Tailwind CDN, Flowbite, Alpine.js, p5.js and native Web Audio; no audio framework."
+validation:
+  - "node tests/smoke.cjs"
+evidence_required:
+  - "verified"
+created_at: 2026-10-01

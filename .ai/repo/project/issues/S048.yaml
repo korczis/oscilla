@@ -1,0 +1,19 @@
+id: S048
+milestone: M004
+title: "§48 Responsive design"
+slug: responsive-design
+priority: p1
+profile: implementation
+objective: "320-1440 px without horizontal scroll; 44 px touch targets."
+scope:
+  - "index.html"
+  - "tests"
+depends_on:
+  - "S005"
+acceptance_criteria:
+  - "320-1440 px without horizontal scroll; 44 px touch targets."
+validation:
+  - "node tests/smoke.cjs"
+evidence_required:
+  - "verified"
+created_at: 2026-10-01

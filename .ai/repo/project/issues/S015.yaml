@@ -1,0 +1,19 @@
+id: S015
+milestone: M001
+title: "§15 Web Audio architecture"
+slug: web-audio-architecture
+priority: p1
+profile: implementation
+objective: "AudioEngine class: context, nodes, envelope, modulation, analyser, Nyquist, node accounting, cleanup, errors; chain to compressor/analyser/destination."
+scope:
+  - "index.html"
+  - "tests"
+depends_on:
+  - "S056"
+acceptance_criteria:
+  - "AudioEngine class: context, nodes, envelope, modulation, analyser, Nyquist, node accounting, cleanup, errors; chain to compressor/analyser/destination."
+validation:
+  - "node tests/smoke.cjs"
+evidence_required:
+  - "verified"
+created_at: 2026-10-01

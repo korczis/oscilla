@@ -1,0 +1,19 @@
+id: S035
+milestone: M003
+title: "§35 Dual osc mode"
+slug: dual-osc-mode
+priority: p1
+profile: implementation
+objective: "Two oscillators with freq/wave/gain/detune, mixer, mono mix and stereo split via StereoPannerNode."
+scope:
+  - "index.html"
+  - "tests"
+depends_on:
+  - "S015"
+acceptance_criteria:
+  - "Two oscillators with freq/wave/gain/detune, mixer, mono mix and stereo split via StereoPannerNode."
+validation:
+  - "node tests/smoke.cjs"
+evidence_required:
+  - "verified"
+created_at: 2026-10-01

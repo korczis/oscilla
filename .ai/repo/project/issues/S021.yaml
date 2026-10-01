@@ -1,0 +1,19 @@
+id: S021
+milestone: M001
+title: "§21 Gain / output"
+slug: gain-output
+priority: p1
+profile: implementation
+objective: "Conservative gain mapping with max output cap, LOW/MEDIUM/HIGH labels, no SPL claims."
+scope:
+  - "index.html"
+  - "tests"
+depends_on:
+  - "S015"
+acceptance_criteria:
+  - "Conservative gain mapping with max output cap, LOW/MEDIUM/HIGH labels, no SPL claims."
+validation:
+  - "node tests/smoke.cjs"
+evidence_required:
+  - "verified"
+created_at: 2026-10-01

@@ -1,0 +1,19 @@
+id: S034
+milestone: M003
+title: "§34 Sweep presets"
+slug: sweep-presets
+priority: p1
+profile: implementation
+objective: "Human spectrum, speech, presence, high, upper, sub-bass, bass sweeps."
+scope:
+  - "index.html"
+  - "tests"
+depends_on:
+  - "S033"
+acceptance_criteria:
+  - "Human spectrum, speech, presence, high, upper, sub-bass, bass sweeps."
+validation:
+  - "node tests/smoke.cjs"
+evidence_required:
+  - "verified"
+created_at: 2026-10-01

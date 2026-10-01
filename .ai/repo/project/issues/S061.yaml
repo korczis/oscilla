@@ -1,0 +1,19 @@
+id: S061
+milestone: M004
+title: "§61 Safety alert"
+slug: safety-alert
+priority: p1
+profile: implementation
+objective: "Visible non-obnoxious safety notice with both required statements."
+scope:
+  - "index.html"
+  - "tests"
+depends_on:
+  - "S046"
+acceptance_criteria:
+  - "Visible non-obnoxious safety notice with both required statements."
+validation:
+  - "node tests/smoke.cjs"
+evidence_required:
+  - "verified"
+created_at: 2026-10-01

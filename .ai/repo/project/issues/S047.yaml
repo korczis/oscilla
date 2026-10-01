@@ -1,0 +1,19 @@
+id: S047
+milestone: M004
+title: "§47 Theme"
+slug: theme
+priority: p1
+profile: implementation
+objective: "Light/dark/system with persisted explicit choice; visualizations readable in both."
+scope:
+  - "index.html"
+  - "tests"
+depends_on:
+  - "S025"
+acceptance_criteria:
+  - "Light/dark/system with persisted explicit choice; visualizations readable in both."
+validation:
+  - "node tests/smoke.cjs"
+evidence_required:
+  - "verified"
+created_at: 2026-10-01

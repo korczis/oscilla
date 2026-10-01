@@ -1,0 +1,17 @@
+id: S000
+milestone: M005
+title: "Receive specification sections 64-95"
+slug: receive-spec-tail
+priority: p1
+profile: routine
+objective: "Obtain the full text of specification sections 64-95 from the requester; the paste ended mid-sentence in section 63."
+scope:
+  - ".ai/repo/project"
+depends_on: []
+acceptance_criteria:
+  - "The text of sections 64-95 is present in the conversation or repository"
+validation:
+  - "manual"
+evidence_required:
+  - "spec_received"
+created_at: 2026-10-01

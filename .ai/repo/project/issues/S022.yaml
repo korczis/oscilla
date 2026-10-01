@@ -1,0 +1,19 @@
+id: S022
+milestone: M001
+title: "§22 Low-frequency safety"
+slug: low-frequency-safety
+priority: p1
+profile: implementation
+objective: "Contextual warning below ~40 Hz."
+scope:
+  - "index.html"
+  - "tests"
+depends_on:
+  - "S005"
+acceptance_criteria:
+  - "Contextual warning below ~40 Hz."
+validation:
+  - "node tests/smoke.cjs"
+evidence_required:
+  - "verified"
+created_at: 2026-10-01

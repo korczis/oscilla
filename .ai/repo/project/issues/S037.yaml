@@ -1,0 +1,19 @@
+id: S037
+milestone: M003
+title: "§37 Binaural demo"
+slug: binaural-demo
+priority: p1
+profile: implementation
+objective: "Optional stereo binaural mode, default off, headphones warning, no wellness claims."
+scope:
+  - "index.html"
+  - "tests"
+depends_on:
+  - "S035"
+acceptance_criteria:
+  - "Optional stereo binaural mode, default off, headphones warning, no wellness claims."
+validation:
+  - "node tests/smoke.cjs"
+evidence_required:
+  - "verified"
+created_at: 2026-10-01

@@ -1,0 +1,19 @@
+id: S019
+milestone: M001
+title: "§19 Playback UX"
+slug: playback-ux
+priority: p1
+profile: implementation
+objective: "Hold-to-play via pointer events, Trigger for finite patterns, Space/Escape keyboard excluding form controls."
+scope:
+  - "index.html"
+  - "tests"
+depends_on:
+  - "S018"
+acceptance_criteria:
+  - "Hold-to-play via pointer events, Trigger for finite patterns, Space/Escape keyboard excluding form controls."
+validation:
+  - "node tests/smoke.cjs"
+evidence_required:
+  - "verified"
+created_at: 2026-10-01

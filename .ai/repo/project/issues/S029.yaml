@@ -1,0 +1,19 @@
+id: S029
+milestone: M002
+title: "§29 Signal path mode"
+slug: signal-path-mode
+priority: p1
+profile: implementation
+objective: "Processing graph with subtle active-node animation, inactive subdued."
+scope:
+  - "index.html"
+  - "tests"
+depends_on:
+  - "S025"
+acceptance_criteria:
+  - "Processing graph with subtle active-node animation, inactive subdued."
+validation:
+  - "node tests/smoke.cjs"
+evidence_required:
+  - "verified"
+created_at: 2026-10-01

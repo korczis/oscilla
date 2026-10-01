@@ -1,0 +1,18 @@
+id: S001
+milestone: M001
+title: "§1 Primary deliverable"
+slug: primary-deliverable
+priority: p1
+profile: implementation
+objective: "Single self-contained index.html runnable from file:// with CDN libraries only; no build, no backend, no local assets."
+scope:
+  - "index.html"
+  - "tests"
+depends_on: []
+acceptance_criteria:
+  - "Single self-contained index.html runnable from file:// with CDN libraries only; no build, no backend, no local assets."
+validation:
+  - "node tests/smoke.cjs"
+evidence_required:
+  - "verified"
+created_at: 2026-10-01

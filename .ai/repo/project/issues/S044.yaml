@@ -1,0 +1,19 @@
+id: S044
+milestone: M003
+title: "§44 Learn mode"
+slug: learn-mode
+priority: p1
+profile: implementation
+objective: "Concise interactive topics from frequency to speaker limitations."
+scope:
+  - "index.html"
+  - "tests"
+depends_on:
+  - "S004"
+acceptance_criteria:
+  - "Concise interactive topics from frequency to speaker limitations."
+validation:
+  - "node tests/smoke.cjs"
+evidence_required:
+  - "verified"
+created_at: 2026-10-01

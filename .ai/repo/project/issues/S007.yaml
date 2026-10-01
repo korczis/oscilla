@@ -1,0 +1,19 @@
+id: S007
+milestone: M001
+title: "§7 Logarithmic frequency control"
+slug: logarithmic-frequency-control
+priority: p1
+profile: implementation
+objective: "frequencyToNormalized / normalizedToFrequency helpers; all wide-range controls log-mapped."
+scope:
+  - "index.html"
+  - "tests"
+depends_on:
+  - "S001"
+acceptance_criteria:
+  - "frequencyToNormalized / normalizedToFrequency helpers; all wide-range controls log-mapped."
+validation:
+  - "node tests/smoke.cjs"
+evidence_required:
+  - "verified"
+created_at: 2026-10-01

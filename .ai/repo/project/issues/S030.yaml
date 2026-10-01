@@ -1,0 +1,19 @@
+id: S030
+milestone: M002
+title: "§30 Harmonics mode"
+slug: harmonics-mode
+priority: p1
+profile: implementation
+objective: "Theoretical harmonic bars per waveform, Nyquist-limited, labeled theoretical vs speaker output."
+scope:
+  - "index.html"
+  - "tests"
+depends_on:
+  - "S025"
+acceptance_criteria:
+  - "Theoretical harmonic bars per waveform, Nyquist-limited, labeled theoretical vs speaker output."
+validation:
+  - "node tests/smoke.cjs"
+evidence_required:
+  - "verified"
+created_at: 2026-10-01

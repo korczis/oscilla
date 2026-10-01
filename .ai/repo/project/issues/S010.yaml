@@ -1,0 +1,19 @@
+id: S010
+milestone: M001
+title: "§10 Fine frequency controls"
+slug: fine-frequency-controls
+priority: p1
+profile: implementation
+objective: "Octave, semitone, 10 Hz and 1 Hz steps; Shift/Alt fine modifiers only on focused control."
+scope:
+  - "index.html"
+  - "tests"
+depends_on:
+  - "S009"
+acceptance_criteria:
+  - "Octave, semitone, 10 Hz and 1 Hz steps; Shift/Alt fine modifiers only on focused control."
+validation:
+  - "node tests/smoke.cjs"
+evidence_required:
+  - "verified"
+created_at: 2026-10-01

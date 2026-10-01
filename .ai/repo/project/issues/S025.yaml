@@ -1,0 +1,19 @@
+id: S025
+milestone: M002
+title: "§25 p5.js visualization"
+slug: p5-js-visualization
+priority: p1
+profile: implementation
+objective: "Six visualization modes with compact selector."
+scope:
+  - "index.html"
+  - "tests"
+depends_on:
+  - "S015"
+acceptance_criteria:
+  - "Six visualization modes with compact selector."
+validation:
+  - "node tests/smoke.cjs"
+evidence_required:
+  - "verified"
+created_at: 2026-10-01

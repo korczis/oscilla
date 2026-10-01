@@ -1,0 +1,19 @@
+id: S020
+milestone: M001
+title: "§20 Continuous playback"
+slug: continuous-playback
+priority: p1
+profile: implementation
+objective: "Off by default; safety limit 0.5-5 s default 2 s; never persisted to storage or URL."
+scope:
+  - "index.html"
+  - "tests"
+depends_on:
+  - "S019"
+acceptance_criteria:
+  - "Off by default; safety limit 0.5-5 s default 2 s; never persisted to storage or URL."
+validation:
+  - "node tests/smoke.cjs"
+evidence_required:
+  - "verified"
+created_at: 2026-10-01

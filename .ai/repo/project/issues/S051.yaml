@@ -1,0 +1,19 @@
+id: S051
+milestone: M004
+title: "§51 Device limits panel"
+slug: device-limits-panel
+priority: p1
+profile: implementation
+objective: "Flowbite accordion with sample rate, Nyquist, browser, platform, representability and disclaimer."
+scope:
+  - "index.html"
+  - "tests"
+depends_on:
+  - "S015"
+acceptance_criteria:
+  - "Flowbite accordion with sample rate, Nyquist, browser, platform, representability and disclaimer."
+validation:
+  - "node tests/smoke.cjs"
+evidence_required:
+  - "verified"
+created_at: 2026-10-01

@@ -1,0 +1,20 @@
+id: S032
+milestone: M002
+title: "§32 Interactive frequency map"
+slug: interactive-frequency-map
+priority: p1
+profile: implementation
+objective: "Log map with click/drag marker, region background, range-adaptive, accessible input equivalent."
+scope:
+  - "index.html"
+  - "tests"
+depends_on:
+  - "S007"
+  - "S008"
+acceptance_criteria:
+  - "Log map with click/drag marker, region background, range-adaptive, accessible input equivalent."
+validation:
+  - "node tests/smoke.cjs"
+evidence_required:
+  - "verified"
+created_at: 2026-10-01

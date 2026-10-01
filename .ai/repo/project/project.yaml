@@ -1,0 +1,5 @@
+# OSCILLA plan. One issue per numbered specification section (S001-S095).
+schema_version: 1
+name: OSCILLA
+repository: korczis/oscilla
+default_branch: main

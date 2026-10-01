@@ -1,0 +1,19 @@
+id: S043
+milestone: M003
+title: "§43 Shareable URL state"
+slug: shareable-url-state
+priority: p1
+profile: implementation
+objective: "Copy config link via URL hash; restore on load without autoplay or continuous authorization."
+scope:
+  - "index.html"
+  - "tests"
+depends_on:
+  - "S013"
+acceptance_criteria:
+  - "Copy config link via URL hash; restore on load without autoplay or continuous authorization."
+validation:
+  - "node tests/smoke.cjs"
+evidence_required:
+  - "verified"
+created_at: 2026-10-01

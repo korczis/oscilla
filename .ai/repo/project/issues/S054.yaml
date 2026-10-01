@@ -1,0 +1,19 @@
+id: S054
+milestone: M004
+title: "§54 Error handling"
+slug: error-handling
+priority: p1
+profile: implementation
+objective: "Graceful handling of all listed failure classes with Flowbite alerts; no uncaught exceptions."
+scope:
+  - "index.html"
+  - "tests"
+depends_on:
+  - "S015"
+acceptance_criteria:
+  - "Graceful handling of all listed failure classes with Flowbite alerts; no uncaught exceptions."
+validation:
+  - "node tests/smoke.cjs"
+evidence_required:
+  - "verified"
+created_at: 2026-10-01

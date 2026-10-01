@@ -1,0 +1,19 @@
+id: S058
+milestone: M004
+title: "§58 Retina / canvas"
+slug: retina-canvas
+priority: p1
+profile: implementation
+objective: "High-DPI crisp canvas, no overflow, resize handling."
+scope:
+  - "index.html"
+  - "tests"
+depends_on:
+  - "S025"
+acceptance_criteria:
+  - "High-DPI crisp canvas, no overflow, resize handling."
+validation:
+  - "node tests/smoke.cjs"
+evidence_required:
+  - "verified"
+created_at: 2026-10-01

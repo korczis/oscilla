@@ -1,0 +1,20 @@
+id: S036
+milestone: M003
+title: "§36 Beating / interference"
+slug: beating-interference
+priority: p1
+profile: implementation
+objective: "Beating demo with A/B/envelope/difference visualization and presets."
+scope:
+  - "index.html"
+  - "tests"
+depends_on:
+  - "S035"
+  - "S025"
+acceptance_criteria:
+  - "Beating demo with A/B/envelope/difference visualization and presets."
+validation:
+  - "node tests/smoke.cjs"
+evidence_required:
+  - "verified"
+created_at: 2026-10-01

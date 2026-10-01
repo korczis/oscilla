@@ -1,0 +1,19 @@
+id: S017
+milestone: M001
+title: "§17 Click-free playback"
+slug: click-free-playback
+priority: p1
+profile: implementation
+objective: "Attack/release envelopes (10/30 ms default), no hard gain switches, no exponential ramp to 0."
+scope:
+  - "index.html"
+  - "tests"
+depends_on:
+  - "S015"
+acceptance_criteria:
+  - "Attack/release envelopes (10/30 ms default), no hard gain switches, no exponential ramp to 0."
+validation:
+  - "node tests/smoke.cjs"
+evidence_required:
+  - "verified"
+created_at: 2026-10-01

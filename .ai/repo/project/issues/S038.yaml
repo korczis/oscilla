@@ -1,0 +1,19 @@
+id: S038
+milestone: M003
+title: "§38 Presets mode"
+slug: presets-mode
+priority: p1
+profile: implementation
+objective: "Categories and reference presets disabled above Nyquist."
+scope:
+  - "index.html"
+  - "tests"
+depends_on:
+  - "S013"
+acceptance_criteria:
+  - "Categories and reference presets disabled above Nyquist."
+validation:
+  - "node tests/smoke.cjs"
+evidence_required:
+  - "verified"
+created_at: 2026-10-01

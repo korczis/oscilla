@@ -1,0 +1,14 @@
+id: M005
+title: "Specification tail"
+slug: spec-tail
+order: 5
+priority: p1
+problem: "Sections 64-95 of the specification were never received."
+outcome: "Sections 64-95 implemented once their text is supplied."
+acceptance_criteria:
+  - "Sections 64-95 implemented once their text is supplied."
+validation:
+  - "node tests/smoke.cjs"
+evidence_required:
+  - "milestone_verified"
+created_at: 2026-10-01

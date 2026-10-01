@@ -1,0 +1,19 @@
+id: S060
+milestone: M004
+title: "§60 Content / terminology quality"
+slug: content-terminology-quality
+priority: p1
+profile: implementation
+objective: "Precise terminology; banned phrasing absent."
+scope:
+  - "index.html"
+  - "tests"
+depends_on:
+  - "S024"
+acceptance_criteria:
+  - "Precise terminology; banned phrasing absent."
+validation:
+  - "node tests/smoke.cjs"
+evidence_required:
+  - "verified"
+created_at: 2026-10-01

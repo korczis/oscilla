@@ -1,0 +1,19 @@
+id: S056
+milestone: M001
+title: "§56 Code organization"
+slug: code-organization
+priority: p1
+profile: implementation
+objective: "Ten clearly commented JS sections in order."
+scope:
+  - "index.html"
+  - "tests"
+depends_on:
+  - "S001"
+acceptance_criteria:
+  - "Ten clearly commented JS sections in order."
+validation:
+  - "node tests/smoke.cjs"
+evidence_required:
+  - "verified"
+created_at: 2026-10-01

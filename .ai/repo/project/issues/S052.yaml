@@ -1,0 +1,19 @@
+id: S052
+milestone: M004
+title: "§52 Optional microphone analysis"
+slug: optional-microphone-analysis
+priority: p1
+profile: implementation
+objective: "Explicit opt-in mic analysis with indicator, track stop, graceful denial, no recording/upload."
+scope:
+  - "index.html"
+  - "tests"
+depends_on:
+  - "S025"
+acceptance_criteria:
+  - "Explicit opt-in mic analysis with indicator, track stop, graceful denial, no recording/upload."
+validation:
+  - "node tests/smoke.cjs"
+evidence_required:
+  - "verified"
+created_at: 2026-10-01

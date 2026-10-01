@@ -1,0 +1,19 @@
+id: S062
+milestone: M004
+title: "§62 Preset description quality"
+slug: preset-description-quality
+priority: p1
+profile: implementation
+objective: "Every built-in preset has name, technical description, parameters; no calibration claims."
+scope:
+  - "index.html"
+  - "tests"
+depends_on:
+  - "S038"
+acceptance_criteria:
+  - "Every built-in preset has name, technical description, parameters; no calibration claims."
+validation:
+  - "node tests/smoke.cjs"
+evidence_required:
+  - "verified"
+created_at: 2026-10-01

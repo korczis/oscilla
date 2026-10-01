@@ -1,0 +1,19 @@
+id: S023
+milestone: M001
+title: "§23 High-frequency safety"
+slug: high-frequency-safety
+priority: p1
+profile: implementation
+objective: "Contextual warning above ~12 kHz."
+scope:
+  - "index.html"
+  - "tests"
+depends_on:
+  - "S005"
+acceptance_criteria:
+  - "Contextual warning above ~12 kHz."
+validation:
+  - "node tests/smoke.cjs"
+evidence_required:
+  - "verified"
+created_at: 2026-10-01

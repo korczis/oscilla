@@ -1,0 +1,19 @@
+id: S033
+milestone: M003
+title: "§33 Sweep mode"
+slug: sweep-mode
+priority: p1
+profile: implementation
+objective: "Start/end/duration, linear/log curve (log default), up/down/ping-pong, repeat once/N/continuous, Hz/s and oct/s."
+scope:
+  - "index.html"
+  - "tests"
+depends_on:
+  - "S013"
+acceptance_criteria:
+  - "Start/end/duration, linear/log curve (log default), up/down/ping-pong, repeat once/N/continuous, Hz/s and oct/s."
+validation:
+  - "node tests/smoke.cjs"
+evidence_required:
+  - "verified"
+created_at: 2026-10-01

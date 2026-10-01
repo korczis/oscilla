@@ -1,0 +1,19 @@
+id: S055
+milestone: M001
+title: "§55 State architecture"
+slug: state-architecture
+priority: p1
+profile: implementation
+objective: "Alpine oscillaApp component owning UI state; short directives."
+scope:
+  - "index.html"
+  - "tests"
+depends_on:
+  - "S056"
+acceptance_criteria:
+  - "Alpine oscillaApp component owning UI state; short directives."
+validation:
+  - "node tests/smoke.cjs"
+evidence_required:
+  - "verified"
+created_at: 2026-10-01

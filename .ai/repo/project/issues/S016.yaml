@@ -1,0 +1,19 @@
+id: S016
+milestone: M001
+title: "§16 Audio scheduling"
+slug: audio-scheduling
+priority: p1
+profile: implementation
+objective: "All audio timing on audioContext.currentTime with AudioParam automation; no setTimeout/setInterval for audio."
+scope:
+  - "index.html"
+  - "tests"
+depends_on:
+  - "S015"
+acceptance_criteria:
+  - "All audio timing on audioContext.currentTime with AudioParam automation; no setTimeout/setInterval for audio."
+validation:
+  - "node tests/smoke.cjs"
+evidence_required:
+  - "verified"
+created_at: 2026-10-01

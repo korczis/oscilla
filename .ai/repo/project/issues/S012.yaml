@@ -1,0 +1,19 @@
+id: S012
+milestone: M001
+title: "§12 Waveforms"
+slug: waveforms
+priority: p1
+profile: implementation
+objective: "Sine/square/triangle/sawtooth with SVG icons; harmonic warning for non-sine at high frequency."
+scope:
+  - "index.html"
+  - "tests"
+depends_on:
+  - "S005"
+acceptance_criteria:
+  - "Sine/square/triangle/sawtooth with SVG icons; harmonic warning for non-sine at high frequency."
+validation:
+  - "node tests/smoke.cjs"
+evidence_required:
+  - "verified"
+created_at: 2026-10-01

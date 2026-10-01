@@ -1,0 +1,19 @@
+id: S063
+milestone: M004
+title: "§63 Progressive disclosure"
+slug: progressive-disclosure
+priority: p1
+profile: implementation
+objective: "Section text truncated after 'The initial UI'. Implement progressive disclosure as inferable: primary instrument first, advanced controls collapsed."
+scope:
+  - "index.html"
+  - "tests"
+depends_on:
+  - "S005"
+acceptance_criteria:
+  - "Section text truncated after 'The initial UI'. Implement progressive disclosure as inferable: primary instrument first, advanced controls collapsed."
+validation:
+  - "node tests/smoke.cjs"
+evidence_required:
+  - "verified"
+created_at: 2026-10-01

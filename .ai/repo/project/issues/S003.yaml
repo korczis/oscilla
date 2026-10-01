@@ -1,0 +1,19 @@
+id: S003
+milestone: M001
+title: "§3 Product identity"
+slug: product-identity
+priority: p1
+profile: implementation
+objective: "OSCILLA / Interactive Sound & Frequency Lab / See sound. Shape frequency. Scientific-instrument tone, not gadget or dashboard."
+scope:
+  - "index.html"
+  - "tests"
+depends_on:
+  - "S001"
+acceptance_criteria:
+  - "OSCILLA / Interactive Sound & Frequency Lab / See sound. Shape frequency. Scientific-instrument tone, not gadget or dashboard."
+validation:
+  - "node tests/smoke.cjs"
+evidence_required:
+  - "verified"
+created_at: 2026-10-01

@@ -1,0 +1,19 @@
+id: S031
+milestone: M002
+title: "§31 Wavelength and period"
+slug: wavelength-and-period
+priority: p1
+profile: implementation
+objective: "343 m/s, dynamic units matching the spec examples."
+scope:
+  - "index.html"
+  - "tests"
+depends_on:
+  - "S009"
+acceptance_criteria:
+  - "343 m/s, dynamic units matching the spec examples."
+validation:
+  - "node tests/smoke.cjs"
+evidence_required:
+  - "verified"
+created_at: 2026-10-01
