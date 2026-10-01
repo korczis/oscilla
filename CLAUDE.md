@@ -4,54 +4,46 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-OSCILLA — Interactive Sound & Frequency Lab. A browser-based acoustic laboratory and
-synthesizer-like frequency playground. The whole application is **one file: `index.html`**.
+OSCILLA — Interactive Sound & Frequency Lab: a browser-based acoustic laboratory and
+synthesizer-like frequency playground. The whole application is one file, `index.html`, built
+with Tailwind (Play CDN), Flowbite, Alpine.js, p5.js and the native Web Audio API. It must run
+from `file://` and from GitHub Pages.
 
-- No build step, no npm for the app, no backend, no local assets, no separate JS/CSS files.
-- Libraries come from CDNs only: Tailwind CSS (Play CDN), Flowbite, Alpine.js, p5.js.
-- Audio is the native Web Audio API. Do not add Tone.js, Howler.js or another audio library.
-- It must run from `file://` and from GitHub Pages. Anything that needs a server (ES module
-  imports of local files, `fetch` of local JSON, service workers) is out.
+The binding constraints are project rules under `.ai/repo/rules/project/`:
+`project.single-file-deliverable`, `project.audio-engine-discipline` and `project.no-fake-science`.
+Read them before changing `index.html`.
 
 ## Commands
 
 ```bash
-open index.html                            # run it (file://)
-python3 -m http.server 8000                # optional: serve it the way Pages does
-npm --prefix tests install                 # once: Playwright for the smoke tests
-node tests/smoke.cjs                       # headless smoke test (file://, viewports, audio engine)
-node tests/smoke.cjs --url https://korczis.github.io/oscilla/   # same checks against the deployed site
+open index.html                    # run it (file://)
+python3 -m http.server 8000        # serve it the way GitHub Pages does
+majordomus plan next               # the spec section to implement now
+majordomus plan status             # milestone progress
 ```
 
-Deployment is GitHub Pages via `.github/workflows/pages.yml`, which publishes **only**
-`index.html` — repository tooling (`.ai/`, `tests/`, these Markdown files) is never served.
+Planned, not yet in the repository: `tests/smoke.cjs` (Playwright smoke test, installed with
+`npm --prefix tests install`, run with `node tests/smoke.cjs [--url <deployed-url>]`) and
+`.github/workflows/pages.yml` (GitHub Pages deployment publishing only `index.html`).
+
+## Plan
+
+Each numbered section of the specification is one Majordomus issue in
+`.ai/repo/project/issues/`: `S001`–`S063` across milestones `M001`–`M004`. The specification
+paste ended mid-sentence in section 63, so `S064`–`S095` depend on `S000` (receive the remaining
+text) and are blocked. `D001`–`D003` are the cross-model review, the file:// and responsive
+verification, and the Pages deployment. Status is derived from recorded evidence:
+`majordomus plan evidence <id> ...` then `majordomus plan done <id>`.
 
 ## Architecture of `index.html`
 
-The script is organised in numbered sections with `// ====` banner comments, in this order:
-constants → helpers → frequency helpers → musical-note helpers → preset definitions →
-`AudioEngine` class → visualization bridge → Alpine component (`oscillaApp`) → p5 sketch →
-bootstrapping. Keep that order; add code to the section it belongs to.
+The script is organised in banner-commented sections, in this order: constants, helpers,
+frequency helpers, musical-note helpers, preset definitions, the `AudioEngine` class, the
+visualization bridge, the Alpine component `oscillaApp`, the p5 sketch, bootstrapping. Add code
+to the section it belongs to. `AudioEngine` lives outside Alpine's reactive state; Alpine talks
+to it through methods, and p5 reads engine and UI state only through the visualization bridge.
 
-- **`AudioEngine`** owns every Web Audio node. Alpine never creates nodes. All audio timing
-  uses `audioContext.currentTime` and AudioParam automation — `setTimeout`/`setInterval` are
-  allowed only for UI bookkeeping. `stop()` must ramp down, cancel automation, stop and
-  disconnect every node, and leave the active-node count at zero (PLAY→STOP→PLAY forever).
-- **Envelopes** never hard-switch nonzero gain to zero and never exponential-ramp to 0.
-- **Frequencies** are clamped to `safeMaximum = sampleRate / 2 * 0.95`; never assume 48 kHz.
-- **Wide-range frequency controls are logarithmic** via `frequencyToNormalized` /
-  `normalizedToFrequency`.
-- **Alpine directives stay short**; logic lives in `oscillaApp` methods.
-- **Visualization bridge** is the read-only seam p5 uses to see engine and UI state; the p5
-  draw loop must not allocate per frame or touch the DOM.
-
-## Content rules (non-negotiable)
-
-No wellness, therapy, focus/sleep, "dogs only", "inaudible", "safe frequency" or SPL claims.
-15.5 kHz is not ultrasound; nominal ultrasound starts above ~20 kHz; digital generation does not
-imply acoustic reproduction. Continuous playback is opt-in per session and never persisted.
-
-<!-- majordomus:begin ca779e02f878 c99ef4280d2c8948 -->
+<!-- majordomus:begin 9535da72e6a6 c99ef4280d2c8948 -->
 # CLAUDE.md
 
 Claude Code bootstrap. The repository's provider-neutral AI context lives under

@@ -18,5 +18,6 @@ reproduces the requested frequency accurately.
 
 ## Development
 
-No build step. See [`CLAUDE.md`](CLAUDE.md) for architecture and commands, and [`.ai/`](.ai/) for
-the Majordomus-supervised plan (`majordomus plan status`).
+No build step. AI workers start at [`AGENTS.md`](AGENTS.md) (Claude Code: [`CLAUDE.md`](CLAUDE.md)),
+which lead into the Majordomus layer under [`.ai/`](.ai/) — rules, plan (`majordomus plan status`)
+and workflows.

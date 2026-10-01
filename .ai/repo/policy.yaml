@@ -66,7 +66,7 @@ session:
                                          # same reason: both are moments at which what the
                                          # episode knows stops being reachable
   handover_on_end: true
-  ensure_server_on_start: true           # the start event converges on a ready shared server
+  ensure_server_on_start: false          # 0.10.0 packaged installs: mj_rust_bin resolves libexec/ under the repo root, not the install; see decisions
   stranded_after: 12h                    # an open episode silent this long may be recovered
   # How old a continuation record may be before it stops being current. Divergence
   # (exact/advanced/diverged/different_context) is a fact about git topology and says
