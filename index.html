@@ -283,7 +283,7 @@
             <div class="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 left-1/2 w-4 h-4 rounded-full bg-accent ring-4 ring-accent/20"></div>
           </div>
         </div>
-        <p id="fmap-help" class="sr-only sm:not-sr-only sm:mt-1 sm:block text-[11px] text-muted">Tap or drag. Focused: arrows ±1 semitone, Shift fine (10 cents), Alt very fine (1 cent), PageUp/Down ±1 octave, wheel when focused.</p>
+        <p id="fmap-help" class="sr-only sm:not-sr-only sm:mt-1 sm:block text-[11px] text-muted">Background bands are approximate educational regions. Tap or drag. Focused: arrows ±1 semitone, Shift fine (10 cents), Alt very fine (1 cent), PageUp/Down ±1 octave, wheel when focused.</p>
       </div>
 
       <div class="mt-2 sm:mt-3" role="radiogroup" aria-label="Waveform">
@@ -488,7 +488,7 @@
       <button type="button" class="hold-btn flex-1 min-h-[72px] sm:min-h-[84px] rounded-xl font-semibold transition-colors"
               :class="playing ? 'bg-accent text-surface' : 'bg-fg text-surface'"
               :aria-pressed="holding || latched" aria-describedby="transport-desc"
-              @pointerdown="holdStart($event)" @pointerup="holdEnd()" @pointercancel="holdEnd()" @lostpointercapture="holdEnd()"
+              @pointerdown="holdStart($event)" @pointerup="holdEnd()" @pointercancel="holdEnd()" @lostpointercapture="holdEnd()" @pointerleave="holdLeave($event)"
               @keydown.space.prevent="holdKey($event)" @keyup.space.prevent="holdEnd()" @keydown.enter.prevent="trigger()" @contextmenu.prevent>
         <span class="block text-sm sm:text-base tracking-[0.22em]" x-text="playing ? (releasing ? 'RELEASING' : 'PLAYING') : 'HOLD TO PLAY'">HOLD TO PLAY</span>
         <span class="block text-[11px] font-normal opacity-80 mt-0.5">press &amp; hold · or Space</span>
@@ -1658,10 +1658,13 @@ function buildPlan(cfg, env) {
   try {
     if (cfg.source === 'dual') {
       const d = cfg.dual;
-      const osc = (o, label) => ({
-        freq: cf(o.freq, label), wave: pick(o.wave, WAVEFORMS, 'sine'),
-        gain: toNumber(o.gain, 100, 0, 100) / 100, detune: toNumber(o.detune, 0, -1200, 1200),
-      });
+      const osc = (o, label) => {
+        const detune = toNumber(o.detune, 0, -1200, 1200);
+        const ratio = Math.pow(2, detune / 1200);
+        // Clamp the sounding (detuned) frequency, not just the nominal one.
+        const sounding = cf(toNumber(o.freq, 440) * ratio, label);
+        return { freq: sounding / ratio, wave: pick(o.wave, WAVEFORMS, 'sine'), gain: toNumber(o.gain, 100, 0, 100) / 100, detune };
+      };
       const a = osc(d.a, 'Osc A');
       const b = osc(d.b, 'Osc B');
       const plan = {
@@ -1679,9 +1682,10 @@ function buildPlan(cfg, env) {
       const f1 = cf(toNumber(s.end, 20000), 'End');
       const lo = Math.min(f0, f1);
       const hi = Math.max(f0, f1);
-      const passS = sec(s.durationMs, 0.02, MAX_PROGRAMMED_S);
       const curve = pick(s.curve, ['log', 'linear'], 'log');
       const direction = pick(s.direction, ['up', 'down', 'pingpong'], 'up');
+      // A ping-pong cycle is two passes, so one pass may use at most half the programmed cap.
+      const passS = sec(s.durationMs, 0.02, direction === 'pingpong' ? MAX_PROGRAMMED_S / 2 : MAX_PROGRAMMED_S);
       const cycleS = direction === 'pingpong' ? 2 * passS : passS + 0.03;
       let cycles = 1;
       let cap = MAX_PROGRAMMED_S;
@@ -1855,17 +1859,6 @@ function buildPlan(cfg, env) {
     return { ok: true, plan, warnings };
   } catch (e) {
     return { ok: false, error: e && e.message ? e.message : 'The configuration could not be played.' };
-  }
-}
-
-/** Freeze an AudioParam at its current value so later ramps start from there. */
-function holdParam(param, t) {
-  if (typeof param.cancelAndHoldAtTime === 'function') {
-    param.cancelAndHoldAtTime(t);
-  } else {
-    const v = param.value;
-    param.cancelScheduledValues(t);
-    param.setValueAtTime(v, t);
   }
 }
 
@@ -2201,7 +2194,7 @@ class AudioEngine {
       if (v.ended) return;
       const ctx = this.ctx;
       if (ctx.state === 'running' && ctx.currentTime >= v.endTime + 0.05) { this._cleanup(v); return; }
-      if (ctx.state === 'closed') { this._cleanup(v); return; }
+      if (ctx.state === 'closed' || (v.releasing && ctx.state !== 'running')) { this._cleanup(v); return; }
       const wait = ctx.state === 'running' ? Math.max(100, (v.endTime - ctx.currentTime) * 1000 + 200) : 500;
       v.timers.push(setTimeout(check, wait));
     };
@@ -2217,10 +2210,20 @@ class AudioEngine {
     v.releasing = true;
     try {
       const g = v.env.gain;
-      holdParam(g, now);
-      g.linearRampToValueAtTime(GAIN_FLOOR, now + rel);
-      for (const p of v.freqParams) holdParam(p, now);
-      const stopAt = now + rel + 0.01;
+      let stopAt;
+      if (typeof g.cancelAndHoldAtTime === 'function') {
+        // Chromium / WebKit: freeze the envelope where it is, then ramp linearly to the floor.
+        g.cancelAndHoldAtTime(now);
+        g.linearRampToValueAtTime(GAIN_FLOOR, now + rel);
+        for (const p of v.freqParams) p.cancelAndHoldAtTime(now);
+        stopAt = now + rel + 0.01;
+      } else {
+        // Firefox: no cancelAndHoldAtTime, and AudioParam.value is not reliable mid-automation,
+        // so decay exponentially from whatever the envelope is doing; stop after ~8 time constants.
+        g.cancelScheduledValues(now);
+        g.setTargetAtTime(GAIN_FLOOR, now, rel / 5);
+        stopAt = now + rel * 1.6 + 0.01;
+      }
       for (const s of v.sources) {
         try { s.stop(stopAt); } catch (e) { /* already stopped */ }
       }
@@ -2231,6 +2234,8 @@ class AudioEngine {
       return false;
     }
     if (this.voice === v) this._emit('release', { id: v.id, natural: false });
+    // A suspended context renders nothing, so its scheduled stops would never fire: free now.
+    if (ctx.state !== 'running') { this._cleanup(v); return true; }
     this._armFallback(v);
     return true;
   }
@@ -2460,6 +2465,7 @@ function pathNodesFor(plan, st) {
 // module scope (never inside Alpine's reactive proxies).
 
 const modalInstances = {};
+let uiNotify = null; // set by oscillaApp.init so global error handlers can surface problems
 let focusBeforeModal = null;
 let alertSeq = 0;
 
@@ -2543,6 +2549,7 @@ function oscillaApp() {
     saveName: '',
     saveError: '',
     pendingPreset: null,
+    pendingHashConfig: null,
     copyUrl: '',
     learnTopic: 'frequency',
     alerts: [],
@@ -2584,6 +2591,7 @@ function oscillaApp() {
       this.safetyCollapsed = sessionStore.get(STORAGE_KEYS.safetySeen) === '1';
       this.restoreFromHash();
       engine.on((type, detail) => this.onEngine(type, detail));
+      uiNotify = (title, message) => this.notify('error', title, message);
       if (!AudioEngine.isSupported()) {
         this.status = 'ERROR';
         this.notify('error', 'Web Audio unavailable', 'This browser does not provide the Web Audio API, so no sound can be generated. Theoretical visualizations still work.');
@@ -2752,6 +2760,10 @@ function oscillaApp() {
       this.audioState = engine.state;
       if (first) {
         engine.setMasterGain(this.gainLevel);
+        if (this.pendingHashConfig) {
+          this.applyConfig(this.pendingHashConfig, 'hash');
+          this.pendingHashConfig = null;
+        }
         if (this.frequency > this.rangeMax) this.setFrequency(this.frequency);
       }
       if (engine.state !== 'running') {
@@ -2801,6 +2813,11 @@ function oscillaApp() {
       if (!this.holding) return;
       this.holding = false;
       engine.release();
+    },
+    /** Leaving the button releases only when the pointer is not captured (capture keeps touch holds alive). */
+    holdLeave(e) {
+      try { if (e.currentTarget.hasPointerCapture(e.pointerId)) return; } catch (err) { /* no capture API */ }
+      this.holdEnd();
     },
     holdKey(e) {
       if (e.repeat) return;
@@ -3371,6 +3388,8 @@ function oscillaApp() {
           if (extra.range && q.has('rm')) cfg.range = { ...extra.range, mode: q.get('rm') };
         }
         const issues = this.applyConfig(cfg, 'hash');
+        // Values above the provisional safe maximum are re-applied once the real rate is known.
+        if (this.provisional && this.presetMaxFrequency(cfg) > this.safeMax) this.pendingHashConfig = cfg;
         const m = q.get('m');
         if (APP_MODES.some((x) => x.id === m)) this.mode = m;
         if (issues) this.notify('warning', 'Link partly restored', `${issues} value(s) in the link were invalid and replaced by defaults.`);
@@ -3576,6 +3595,8 @@ function oscillaApp() {
       if (el) { // Flowbite unavailable: minimal fallback
         el.classList.remove('hidden');
         el.classList.add('flex');
+        el.removeAttribute('aria-hidden');
+        el.setAttribute('role', 'dialog');
         el.setAttribute('aria-modal', 'true');
         el.querySelector('input, button')?.focus();
       }
@@ -3587,6 +3608,7 @@ function oscillaApp() {
       if (el) {
         el.classList.add('hidden');
         el.classList.remove('flex');
+        el.setAttribute('aria-hidden', 'true');
         el.removeAttribute('aria-modal');
         focusBeforeModal?.focus?.();
       }
@@ -4369,9 +4391,11 @@ document.addEventListener('alpine:init', () => {
 // Last-resort reporting: surface unexpected errors in the UI instead of failing silently.
 window.addEventListener('error', (e) => {
   engine.lastError = { message: e.message || 'Script error', context: 'window' };
+  if (uiNotify) uiNotify('Unexpected error', engine.lastError.message);
 });
 window.addEventListener('unhandledrejection', (e) => {
   engine.lastError = { message: String((e.reason && e.reason.message) || e.reason || 'Unhandled rejection'), context: 'promise' };
+  if (uiNotify) uiNotify('Unexpected error', engine.lastError.message);
   e.preventDefault();
 });
 

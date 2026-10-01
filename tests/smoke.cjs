@@ -5,21 +5,28 @@
 //   node tests/smoke.cjs                         # file:// index.html next to this folder
 //   node tests/smoke.cjs --url https://korczis.github.io/oscilla/
 //   node tests/smoke.cjs --shots                 # also write screenshots to tests/screenshots/
+//   node tests/smoke.cjs --browser firefox       # chromium (default) | firefox | webkit
 //
 // Exit code 0 only when every check passes.
 'use strict';
 
 const path = require('path');
 const fs = require('fs');
-const { chromium } = require('playwright');
+const playwright = require('playwright');
 
 const args = process.argv.slice(2);
 const urlArg = args.includes('--url') ? args[args.indexOf('--url') + 1] : null;
 const SHOTS = args.includes('--shots');
+const ENGINE = args.includes('--browser') ? args[args.indexOf('--browser') + 1] : 'chromium';
 const BASE = urlArg || `file://${path.resolve(__dirname, '..', 'index.html')}`;
 const SHOT_DIR = path.join(__dirname, 'screenshots');
 const VIEWPORTS = [[320, 640], [375, 667], [390, 844], [430, 932], [768, 1024], [1024, 768], [1280, 800], [1440, 900]];
-const IGNORED_CONSOLE = [/cdn\.tailwindcss\.com should not be used in production/];
+// Known third-party noise, not application errors: Tailwind Play CDN's production notice and
+// p5.js 1.x registering device-sensor listeners, which Firefox reports as deprecated.
+const IGNORED_CONSOLE = [
+  /cdn\.tailwindcss\.com should not be used in production/,
+  /Use of the (orientation|motion) sensor is deprecated/,
+];
 
 let passed = 0;
 let failed = 0;
@@ -30,7 +37,7 @@ function check(name, ok, detail = '') {
 }
 
 async function openPage(browser, { width = 1280, height = 900, hash = '', query = '', init = null, scheme = 'light' } = {}) {
-  const context = await browser.newContext({ viewport: { width, height }, colorScheme: scheme, hasTouch: width < 768 });
+  const context = await browser.newContext({ viewport: { width, height }, colorScheme: scheme, hasTouch: width < 768 && ENGINE !== 'firefox' });
   if (init) await context.addInitScript(init);
   const page = await context.newPage();
   const problems = [];
@@ -59,11 +66,14 @@ async function holdFor(page, ms) {
 }
 
 async function main() {
-  console.log(`OSCILLA smoke test → ${BASE}`);
+  console.log(`OSCILLA smoke test → ${BASE} (${ENGINE})`);
   if (SHOTS) fs.mkdirSync(SHOT_DIR, { recursive: true });
-  const browser = await chromium.launch({
-    args: ['--autoplay-policy=no-user-gesture-required', '--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream'],
-  });
+  const launch = {
+    chromium: { args: ['--autoplay-policy=no-user-gesture-required', '--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream'] },
+    firefox: { firefoxUserPrefs: { 'media.autoplay.default': 0, 'media.autoplay.block-webaudio': false, 'media.navigator.streams.fake': true, 'media.navigator.permission.disabled': true } },
+    webkit: {},
+  }[ENGINE];
+  const browser = await playwright[ENGINE].launch(launch);
 
   // ------------------------------------------------------------------ helpers (pure)
   console.log('helpers');
@@ -384,11 +394,13 @@ async function main() {
     check('debug panel hidden by default', !(await nodbg.page.locator('aside[aria-label="Debug panel"]').isVisible()));
     await nodbg.context.close();
 
+    if (ENGINE !== 'webkit') {
     const mic = await openPage(browser);
     await mic.page.locator('#tab-playground').click();
     const micState = await app(mic.page, async (a, e) => { await a.toggleMic(); const on = a.micActive && !!e.mic; await a.toggleMic(); return { on, off: !a.micActive && !e.mic }; });
     check('microphone opt-in starts and stops tracks', micState.on && micState.off, JSON.stringify(micState));
     await mic.context.close();
+    }
   }
 
   // ------------------------------------------------------------------ responsive + touch targets + themes
