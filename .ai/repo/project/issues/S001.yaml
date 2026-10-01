@@ -17,4 +17,14 @@ evidence_required:
   - "verified"
 created_at: 2026-10-01
 started_at: 2026-10-01T21:26:01Z
-updated_at: 2026-10-01T21:26:01Z
+updated_at: 2026-10-01T22:18:32Z
+verified_at: 2026-10-01T22:18:28Z
+completed_at: 2026-10-01T22:18:32Z
+evidence:
+  - covers: verified
+    type: test
+    command: "node tests/smoke.cjs; node tests/smoke.cjs --browser firefox; node tests/smoke.cjs --browser webkit"
+    result: "file:// index.html: chromium 95/95, firefox 95/95, webkit 94/94 (mic skipped); only CDN (jsdelivr, cdnjs, tailwind) and data: references"
+    artifact: "41a6a48"
+    commit: 41a6a48c5e874f2e17991e3bb6b79e8f0f60bbe1
+    recorded_at: 2026-10-01T22:18:26Z
