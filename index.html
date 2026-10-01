@@ -275,12 +275,13 @@
     <div x-show="mode === 'playground'">
       <div class="flex items-start justify-between gap-3">
         <div class="min-w-0">
-          <div class="eyebrow">Requested digital frequency</div>
-          <div class="readout font-mono font-light text-[2.4rem] leading-none sm:text-6xl mt-1" x-text="freqDisplay">440 Hz</div>
-          <div class="mt-1.5 text-[11px] font-semibold tracking-[0.18em] text-accent" x-text="regionLabel"></div>
-          <div class="mt-1 text-xs text-muted font-mono">
+          <div class="eyebrow" x-text="usesGlobalFrequency ? 'Requested digital frequency' : 'Pattern frequency range'"></div>
+          <div class="readout font-mono font-light leading-none mt-1" :class="usesGlobalFrequency ? 'text-[2.4rem] sm:text-6xl' : 'text-[1.6rem] sm:text-4xl'" x-text="readoutText">440 Hz</div>
+          <div class="mt-1.5 text-[11px] font-semibold tracking-[0.18em] text-accent" x-text="readoutRegion"></div>
+          <div class="mt-1 text-xs text-muted font-mono" x-show="usesGlobalFrequency">
             T <span x-text="formatPeriod(frequency)"></span> · λ ≈ <span x-text="formatWavelength(frequency)"></span><template x-if="noteMode"><span> · <span class="text-fg" x-text="noteText"></span></span></template>
           </div>
+          <div class="mt-1 text-xs text-muted" x-show="!usesGlobalFrequency">Set in the pattern parameters below.</div>
         </div>
         <label class="inline-flex flex-col items-end gap-1 cursor-pointer shrink-0">
           <span class="eyebrow">Note mode</span>
@@ -290,7 +291,8 @@
       </div>
 
       <div class="mt-2 sm:mt-4">
-        <div x-ref="fmap" class="fmap relative h-[60px] sm:h-[68px] rounded-lg border border-line overflow-hidden bg-surface2" role="slider" tabindex="0"
+        <div x-ref="fmap" class="fmap relative h-[60px] sm:h-[68px] rounded-lg border border-line overflow-hidden bg-surface2" role="slider"
+             :tabindex="usesGlobalFrequency ? 0 : -1" :aria-disabled="!usesGlobalFrequency" :class="usesGlobalFrequency ? '' : 'opacity-60'"
              aria-label="Frequency, logarithmic map" :aria-valuemin="Math.round(rangeMin)" :aria-valuemax="Math.round(rangeMax)"
              :aria-valuenow="Math.round(frequency)" :aria-valuetext="formatFrequency(frequency) + ', ' + regionLabel.toLowerCase()"
              aria-describedby="fmap-help"
@@ -305,7 +307,8 @@
               <span class="absolute top-2.5 text-[9px] font-mono text-muted" :class="t.pct < 4 ? 'left-0.5' : t.pct > 96 ? 'right-0.5' : '-translate-x-1/2'" x-text="t.label"></span>
             </div>
           </template>
-          <div class="absolute top-0 bottom-0 w-0.5 bg-accent pointer-events-none" :style="`left:calc(${mapMarkerPct}% - 1px)`">
+          <div class="absolute top-0 bottom-0 bg-accent/25 border-x border-accent pointer-events-none" x-show="!usesGlobalFrequency" :style="mapRangeStyle"></div>
+          <div class="absolute top-0 bottom-0 w-0.5 bg-accent pointer-events-none" x-show="usesGlobalFrequency" :style="`left:calc(${mapMarkerPct}% - 1px)`">
             <div class="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 left-1/2 w-4 h-4 rounded-full bg-accent ring-4 ring-accent/20"></div>
           </div>
         </div>
@@ -448,7 +451,7 @@
                     <p class="text-[11px] text-warn" x-show="p.requiresHeadphones">Headphones required — you will be asked to confirm.</p>
                   </div>
                   <button type="button" class="chip text-xs shrink-0" @click="loadPreset(p)" :disabled="presetDisabled(p)" :aria-label="'Load ' + p.name">Load</button>
-                  <button type="button" class="chip text-xs shrink-0 w-11 px-0" x-show="p.custom" @click="deletePreset(p.id)" :aria-label="'Delete ' + p.name">✕</button>
+                  <button type="button" class="chip text-xs shrink-0 px-0" :class="pendingDelete === p.id ? 'px-2 !border-danger text-danger' : 'w-11'" x-show="p.custom" @click="requestDelete(p.id)" @blur="cancelDelete(p.id)" :aria-label="pendingDelete === p.id ? 'Confirm: delete ' + p.name : 'Delete ' + p.name" x-text="pendingDelete === p.id ? 'Delete?' : '✕'"></button>
                 </li>
               </template>
             </ul>
@@ -739,7 +742,7 @@
       </template>
     </div>
     <p class="text-[11px] text-muted mt-2" x-show="pattern === 'sequence'" x-text="sequenceInfo"></p>
-    <p class="text-[11px] text-muted mt-2" x-show="pattern === 'octave'">125, 250, 500, 1 k, 2 k, 4 k, 8 k, 16 kHz — steps above the safe maximum are skipped.</p>
+    <p class="text-[11px] text-muted mt-2" x-show="pattern === 'octave'">125, 250, 500, 1 k, 2 k, 4 k, 8 k, 16 kHz — steps above the digital limit are skipped.</p>
     <p class="text-[11px] text-muted mt-2" x-show="currentPattern.kind === 'open'">Open-ended pattern: hold to play (safety limit applies) or TRIGGER for the set duration. Changes apply live while playing.</p>
     <p class="text-[11px] text-muted mt-2" x-show="currentPattern.kind === 'finite'">Programmed pattern: TRIGGER plays it to the end; holding plays until release. Changes apply to the next play.</p>
   </section>
@@ -765,7 +768,7 @@
           <svg data-accordion-icon class="w-3 h-3 rotate-180 shrink-0" viewBox="0 0 10 6" fill="none" aria-hidden="true"><path stroke="currentColor" stroke-width="2" d="M9 5 5 1 1 5"/></svg>
         </button>
       </h2>
-      <div id="acc-env" class="hidden" aria-labelledby="acc-env-h">
+      <div id="acc-env" class="hidden" role="region" aria-labelledby="acc-env-h">
         <div class="p-4 grid grid-cols-1 sm:grid-cols-3 gap-3 border-b border-line">
           <div><label for="env-a" class="block text-xs text-muted mb-1">Attack (ms)</label>
             <input id="env-a" type="number" min="1" max="2000" class="field font-mono" :value="attack" @change="setEnv('attack', $event.target.value)"></div>
@@ -784,7 +787,7 @@
           <svg data-accordion-icon class="w-3 h-3 rotate-180 shrink-0" viewBox="0 0 10 6" fill="none" aria-hidden="true"><path stroke="currentColor" stroke-width="2" d="M9 5 5 1 1 5"/></svg>
         </button>
       </h2>
-      <div id="acc-safe" class="hidden" aria-labelledby="acc-safe-h">
+      <div id="acc-safe" class="hidden" role="region" aria-labelledby="acc-safe-h">
         <div class="p-4 space-y-3 border-b border-line">
           <div>
             <span class="block text-xs text-muted mb-1" id="limit-label">Hard playback limit for held and open-ended signals</span>
@@ -811,7 +814,7 @@
           <svg data-accordion-icon class="w-3 h-3 rotate-180 shrink-0" viewBox="0 0 10 6" fill="none" aria-hidden="true"><path stroke="currentColor" stroke-width="2" d="M9 5 5 1 1 5"/></svg>
         </button>
       </h2>
-      <div id="acc-metrics" class="hidden" aria-labelledby="acc-metrics-h">
+      <div id="acc-metrics" class="hidden" role="region" aria-labelledby="acc-metrics-h">
         <dl class="p-4 grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-2 text-xs border-b border-line">
           <div><dt class="eyebrow">Requested frequency</dt><dd class="font-mono" x-text="requestedText"></dd></div>
           <div><dt class="eyebrow">Instantaneous</dt><dd class="font-mono" x-text="instFreqText"></dd></div>
@@ -836,12 +839,12 @@
           <svg data-accordion-icon class="w-3 h-3 rotate-180 shrink-0" viewBox="0 0 10 6" fill="none" aria-hidden="true"><path stroke="currentColor" stroke-width="2" d="M9 5 5 1 1 5"/></svg>
         </button>
       </h2>
-      <div id="acc-device" class="hidden" aria-labelledby="acc-device-h">
+      <div id="acc-device" class="hidden" role="region" aria-labelledby="acc-device-h">
         <div class="p-4 text-xs border-b border-line">
           <dl class="grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-2">
             <div><dt class="eyebrow">AudioContext sample rate</dt><dd class="font-mono" x-text="provisional ? 'not started (UI assumes ' + effectiveSampleRate + ' Hz)' : sampleRate + ' Hz'"></dd></div>
             <div><dt class="eyebrow">Nyquist frequency</dt><dd class="font-mono" x-text="formatFrequency(nyquist)"></dd></div>
-            <div><dt class="eyebrow">Digital safe maximum (95 % of Nyquist)</dt><dd class="font-mono" x-text="formatFrequency(safeMax)"></dd></div>
+            <div><dt class="eyebrow">Digital limit (95 % of Nyquist)</dt><dd class="font-mono" x-text="formatFrequency(safeMax)"></dd></div>
             <div><dt class="eyebrow">Browser</dt><dd class="font-mono" x-text="browserText"></dd></div>
             <div><dt class="eyebrow">Platform</dt><dd class="font-mono" x-text="platformText"></dd></div>
             <div><dt class="eyebrow">Requested frequency</dt><dd class="font-mono" x-text="requestedText"></dd></div>
@@ -859,7 +862,7 @@
           <svg data-accordion-icon class="w-3 h-3 rotate-180 shrink-0" viewBox="0 0 10 6" fill="none" aria-hidden="true"><path stroke="currentColor" stroke-width="2" d="M9 5 5 1 1 5"/></svg>
         </button>
       </h2>
-      <div id="acc-share" class="hidden" aria-labelledby="acc-share-h">
+      <div id="acc-share" class="hidden" role="region" aria-labelledby="acc-share-h">
         <div class="p-4 border-t border-line">
           <div class="grid grid-cols-1 sm:grid-cols-4 gap-1">
             <button type="button" class="chip text-xs" @click="copyConfigLink()">Copy config link</button>
@@ -1005,9 +1008,9 @@ const WAVEFORM_LABELS = { sine: 'Sine', triangle: 'Triangle', sawtooth: 'Saw', s
 
 const RANGE_MODES = [
   { id: 'human', label: 'Human', hint: '20 Hz – 20 kHz' },
-  { id: 'high', label: 'High', hint: '8 kHz – safe max' },
+  { id: 'high', label: 'High', hint: '8 kHz – digital limit' },
   { id: 'custom', label: 'Custom', hint: 'user-defined' },
-  { id: 'advanced', label: 'Advanced', hint: '1 Hz – safe max' },
+  { id: 'advanced', label: 'Advanced', hint: '1 Hz – digital limit' },
 ];
 
 // Approximate educational categories, not biological thresholds.
@@ -1126,7 +1129,7 @@ const PATTERNS = [
     params: [F('min', 'Minimum frequency'), F('max', 'Maximum frequency'), MS('toneMs', 'Tone duration', 10, 5000),
       MS('gapMs', 'Gap', 0, 5000), INT('count', 'Count', 1, 200)] },
   { id: 'octave', label: 'Octave steps', group: 'Sequences', kind: 'finite',
-    desc: 'Octave steps, by default 125 Hz to 16 kHz; steps above the safe maximum are skipped.',
+    desc: 'Octave steps, by default 125 Hz to 16 kHz; steps above the digital limit are skipped.',
     params: [{ key: 'text', label: 'Steps (Hz)', type: 'text', obj: 'pp' }, MS('toneMs', 'Tone duration', 10, 5000),
       MS('gapMs', 'Gap', 0, 5000)] },
   { id: 'sequence', label: 'User sequence', group: 'Sequences', kind: 'finite',
@@ -1495,8 +1498,8 @@ const PRESET_CATEGORIES = [
 
 const REFERENCE_NOTES = {
   20: 'Nominal lower edge of human hearing. Many speakers reproduce it weakly or not at all.',
-  40: 'Deep sub-bass. Small speakers mostly produce harmonics rather than the fundamental.',
-  60: 'Upper sub-bass; close to mains-hum frequencies (50/60 Hz).',
+  40: 'Deep sub-bass. Small speakers may reproduce mainly harmonic distortion rather than the fundamental.',
+  60: 'Lower edge of the bass region; close to mains-hum frequencies (50/60 Hz).',
   100: 'Low bass. Wavelength ≈ 3.4 m — comparable to room dimensions.',
   250: 'Boundary between bass and low mids.',
   440: 'Concert pitch A4 in common tuning practice.',
@@ -1509,7 +1512,7 @@ const REFERENCE_NOTES = {
   15500: 'High-frequency signal — not ultrasound. Speakers may attenuate it strongly.',
   17000: 'Upper hearing range. Many adults perceive it weakly or not at all; the digital signal is generated regardless, and speaker output is unknown.',
   18000: 'Upper hearing range. Phone speakers and some codecs may attenuate it.',
-  20000: 'Nominal upper edge of human hearing. Needs a sample rate of about 42.1 kHz or more, so that 20 kHz stays below the 95 % safe maximum.',
+  20000: 'Nominal upper edge of human hearing. Needs a sample rate of about 42.1 kHz or more, so that 20 kHz stays below the digital limit (95 % of Nyquist).',
 };
 
 function refPreset(f) {
@@ -1576,8 +1579,8 @@ const BUILTIN_PRESETS = [
     params: '2 kHz → 6 kHz · 3 s · log', cfg: { source: 'sweep', sweep: { start: 2000, end: 6000, durationMs: 3000, curve: 'log', direction: 'up', repeat: 'once' } } },
   { id: 'sw-high', cat: 'sweeps', name: 'High range', desc: 'Brilliance into the upper hearing range.',
     params: '8 kHz → 18 kHz · 4 s · log', cfg: { source: 'sweep', sweep: { start: 8000, end: 18000, durationMs: 4000, curve: 'log', direction: 'up', repeat: 'once' } } },
-  { id: 'sw-upper', cat: 'sweeps', name: 'Upper range', desc: 'From 12 kHz to the digital safe maximum of this device.',
-    params: '12 kHz → safe max · 4 s · log', cfg: { source: 'sweep', sweep: { start: 12000, end: 'max', durationMs: 4000, curve: 'log', direction: 'up', repeat: 'once' } } },
+  { id: 'sw-upper', cat: 'sweeps', name: 'Upper range', desc: 'From 12 kHz to the digital limit of this device (95 % of Nyquist).',
+    params: '12 kHz → digital limit · 4 s · log', cfg: { source: 'sweep', sweep: { start: 12000, end: 'max', durationMs: 4000, curve: 'log', direction: 'up', repeat: 'once' } } },
   { id: 'sw-sub', cat: 'sweeps', name: 'Sub-bass', desc: 'Low end; watch speaker excursion and start at low gain.',
     params: '20 Hz → 100 Hz · 4 s · log', cfg: { source: 'sweep', sweep: { start: 20, end: 100, durationMs: 4000, curve: 'log', direction: 'up', repeat: 'once' } } },
   { id: 'sw-bass', cat: 'sweeps', name: 'Bass', desc: 'Bass region of most music.',
@@ -1608,12 +1611,12 @@ const BUILTIN_PRESETS = [
   { id: 'pt-20-pulse', cat: 'patterns', name: '20 Hz pulse', desc: 'Very low pulses; each lasts 10 cycles. Start at low gain.',
     params: '20 Hz · 500 ms × 3', cfg: { source: 'single', pattern: 'pulse', waveform: 'sine', frequency: 20,
       pp: { pulse: { pulseMs: 500, pauseMs: 400, reps: 3 } } } },
-  { id: 'pt-40-sub', cat: 'patterns', name: '40 Hz sub-bass', desc: 'Sustained sub-bass tone. Small speakers reproduce it poorly.',
+  { id: 'pt-40-sub', cat: 'patterns', name: '40 Hz sub-bass', desc: 'Sustained sub-bass tone. Small speakers may reproduce it poorly.',
     params: '40 Hz · sine · 2 s', cfg: { source: 'single', pattern: 'finite', waveform: 'sine', frequency: 40, duration: 2000 } },
   { id: 'pt-octaves', cat: 'patterns', name: 'Octave stepping', desc: '125 Hz to 16 kHz in octave steps.',
     params: '8 steps × 400 ms', cfg: { source: 'single', pattern: 'octave', waveform: 'sine',
       pp: { octave: { toneMs: 400, gapMs: 100 } } } },
-  { id: 'pt-third', cat: 'patterns', name: 'Third-octave demonstration', desc: 'Nominal third-octave center frequencies, 20 Hz to 20 kHz; values above the safe maximum are skipped.',
+  { id: 'pt-third', cat: 'patterns', name: 'Third-octave demonstration', desc: 'Nominal third-octave center frequencies, 20 Hz to 20 kHz; values above the digital limit are skipped.',
     params: 'up to 31 steps × 250 ms', cfg: { source: 'single', pattern: 'sequence', waveform: 'sine',
       pp: { sequence: { text: THIRD_OCTAVE_FREQUENCIES.join(', '), toneMs: 250, gapMs: 50, repeats: 1 } } } },
 
@@ -1667,16 +1670,16 @@ const LEARN_TOPICS = [
   { id: 'fm', title: 'FM', body: 'Frequency modulation varies the frequency. Slow FM is vibrato; audio-rate FM creates many sidebands spaced by the modulation frequency.',
     demo: { label: 'Audio-rate FM', viz: 'spectrum', cfg: { source: 'single', pattern: 'fm', waveform: 'sine', frequency: 1000, pp: { fm: { modFreq: 200, depthHz: 400 } } } } },
   { id: 'interference', title: 'Interference', body: 'When two waves add, they reinforce where they are in phase and cancel where they are out of phase.',
-    demo: { label: '440 + 445 Hz', viz: 'interference', mode: 'dual', cfg: { source: 'dual', dual: { a: { freq: 440 }, b: { freq: 445 }, stereo: false, binaural: false } } } },
+    demo: { label: '440 + 445 Hz', viz: 'interference', mode: 'dual', cfg: { source: 'dual', dual: { a: { freq: 440, wave: 'sine', gain: 100, detune: 0 }, b: { freq: 445, wave: 'sine', gain: 100, detune: 0 }, levelA: 80, levelB: 80, stereo: false, binaural: false } } } },
   { id: 'beating', title: 'Beating', body: 'Two close frequencies produce a level that rises and falls at their difference: 440 Hz and 442 Hz beat at about 2 Hz.',
-    demo: { label: '440 + 442 Hz', viz: 'interference', mode: 'dual', cfg: { source: 'dual', dual: { a: { freq: 440 }, b: { freq: 442 }, stereo: false, binaural: false } } } },
+    demo: { label: '440 + 442 Hz', viz: 'interference', mode: 'dual', cfg: { source: 'dual', dual: { a: { freq: 440, wave: 'sine', gain: 100, detune: 0 }, b: { freq: 442, wave: 'sine', gain: 100, detune: 0 }, levelA: 80, levelB: 80, stereo: false, binaural: false } } } },
   { id: 'logscale', title: 'Logarithmic perception', body: 'Pitch is perceived roughly by ratios: 100→200 Hz and 1→2 kHz are both one octave and sound like a similar step. That is why sweeps and maps here are logarithmic.',
     demo: { label: 'Log sweep 20 Hz → 20 kHz', viz: 'motion', cfg: { source: 'sweep', sweep: { start: 20, end: 20000, durationMs: 10000, curve: 'log', direction: 'up', repeat: 'once' } } } },
   { id: 'hearing', title: 'Human hearing range', body: 'Nominally 20 Hz – 20 kHz. The upper limit commonly falls with age and noise exposure; individual hearing varies widely.',
     demo: { label: 'Octave steps 125 Hz – 16 kHz', viz: 'motion', cfg: { source: 'single', pattern: 'octave', waveform: 'sine' } } },
   { id: 'ultrasound', title: 'Ultrasound', body: 'Nominal ultrasound begins above about 20 kHz. 15.5 kHz is a high-frequency signal, not ultrasound. Generating >20 kHz digitally does not mean a speaker emits it.',
     demo: { label: 'High range sweep', viz: 'spectrum', cfg: { source: 'sweep', sweep: { start: 8000, end: 'max', durationMs: 4000, curve: 'log', direction: 'up', repeat: 'once' } } } },
-  { id: 'speakers', title: 'Speaker limitations', body: 'Speakers, headphones, DACs and amplifiers attenuate or distort very low and very high frequencies. Perceived loudness is not a measure of acoustic output.',
+  { id: 'speakers', title: 'Speaker limitations', body: 'Speakers, headphones, DACs and amplifiers can attenuate or distort very low and very high frequencies. Perceived loudness is not a measure of acoustic output.',
     demo: { label: '40 Hz sub-bass', viz: 'spectrum', cfg: { source: 'single', pattern: 'finite', waveform: 'sine', frequency: 40, duration: 2000 } } },
 ];
 
@@ -2891,6 +2894,7 @@ function oscillaApp() {
     saveError: '',
     pendingPreset: null,
     pendingHashConfig: null,
+    pendingDelete: null,
     copyUrl: '',
     learnTopic: 'frequency',
     alerts: [],
@@ -2982,6 +2986,24 @@ function oscillaApp() {
       return this.safeMax;
     },
     get regionLabel() { return regionFor(this.frequency).label; },
+    /** The big readout: the playground frequency, or the range a pattern sets in its own parameters. */
+    get readoutText() {
+      if (this.usesGlobalFrequency) return this.freqDisplay;
+      const lo = this.freqMinInvolved;
+      const hi = this.freqMaxInvolved;
+      return lo === hi ? formatFrequency(lo) : `${formatFrequency(lo)} – ${formatFrequency(hi)}`;
+    },
+    get readoutRegion() {
+      if (this.usesGlobalFrequency) return this.regionLabel;
+      const a = regionFor(this.freqMinInvolved).label;
+      const b = regionFor(this.freqMaxInvolved).label;
+      return a === b ? a : `${a} → ${b}`;
+    },
+    get mapRangeStyle() {
+      const n = (f) => clamp(frequencyToNormalized(clamp(f, this.rangeMin, this.rangeMax), this.rangeMin, this.rangeMax), 0, 1) * 100;
+      const lo = n(this.freqMinInvolved);
+      return `left:${lo}%;width:${Math.max(0.6, n(this.freqMaxInvolved) - lo)}%`;
+    },
     get note() { return nearestNote(this.frequency, this.a4); },
     get noteText() { const n = this.note; return n ? `${n.name} · ${formatCents(n.cents)}` : '—'; },
     get freqDisplay() { return formatFrequency(this.frequency, this.noteMode); },
@@ -3016,7 +3038,8 @@ function oscillaApp() {
         : `trigger ${formatMs(Math.min(this.duration, this.safetyLimit * 1000))} · hold ≤ ${this.safetyLimit} s`;
     },
     get gainPct() { return Math.round(Math.sqrt(this.gainLevel / MAX_OUTPUT_GAIN) * 100); },
-    get gainLabel() { return this.gainPct < 40 ? 'LOW' : this.gainPct < 75 ? 'MEDIUM' : 'HIGH'; },
+    // The conservative default (0.08 ≈ 57 %) reads LOW, next to the safety advice to start low.
+    get gainLabel() { return this.gainPct < 60 ? 'LOW' : this.gainPct < 80 ? 'MEDIUM' : 'HIGH'; },
     get currentPattern() { return PATTERN_BY_ID[this.pattern] || PATTERNS[0]; },
     get isProgrammed() {
       return this.source === 'sweep' || (this.source === 'single' && this.currentPattern.kind === 'finite');
@@ -3096,7 +3119,7 @@ function oscillaApp() {
     get representability() {
       const f = this.source === 'dual' ? Math.max(this.dualFa, this.dualFb) : this.freqMaxInvolved;
       if (f < this.safeMax) return `Requested ${formatFrequency(f)} is below the digital Nyquist limit (${formatFrequency(this.nyquist)}): digitally representable.`;
-      if (f < this.nyquist) return `Requested ${formatFrequency(f)} is above the 95 % safe maximum; it is clamped to ${formatFrequency(this.safeMax)}.`;
+      if (f < this.nyquist) return `Requested ${formatFrequency(f)} is above the digital limit (95 % of Nyquist); it is clamped to ${formatFrequency(this.safeMax)}.`;
       return `Requested ${formatFrequency(f)} is at or above Nyquist (${formatFrequency(this.nyquist)}): not representable; clamped.`;
     },
     get instFreqText() {
@@ -3105,7 +3128,7 @@ function oscillaApp() {
     },
     get hints() {
       // The frequency the hint talks about is the one that will actually sound.
-      const f = this.source === 'dual' ? this.dualFa : this.source === 'sweep' ? this.freqMaxInvolved : this.frequency;
+      const f = this.source === 'dual' ? this.dualFa : this.metricFrequencyIdle;
       const waves = this.source === 'dual' ? [this.dual.a.wave, this.dual.b.wave] : [this.waveform];
       // Ordered by importance: device and digital-limit caveats first, so they are never cut.
       const out = [];
@@ -3123,7 +3146,7 @@ function oscillaApp() {
     },
     get currentTopic() { return LEARN_TOPICS.find((t) => t.id === this.learnTopic) || LEARN_TOPICS[0]; },
     get topicExample() {
-      const f = this.frequency;
+      const f = this.metricFrequencyIdle;
       switch (this.learnTopic) {
         case 'frequency': return `Now: ${formatFrequency(f)} = ${sig(f, 4)} cycles per second.`;
         case 'period': return `Now: ${formatFrequency(f)} → T = ${formatPeriod(f)}.`;
@@ -3367,6 +3390,7 @@ function oscillaApp() {
     },
 
     mapDown(e) {
+      if (!this.usesGlobalFrequency) return; // the pattern sets its frequencies in its own parameters
       if (e.pointerType === 'mouse' && e.button !== 0) return;
       this.mapDragging = true;
       try { e.currentTarget.setPointerCapture(e.pointerId); } catch (err) { /* ignore */ }
@@ -3382,6 +3406,7 @@ function oscillaApp() {
       this.setFrequency(normalizedToFrequency(x, this.rangeMin, this.rangeMax), { silent: true });
     },
     mapKey(e) {
+      if (!this.usesGlobalFrequency) return;
       let semis = 0;
       switch (e.key) {
         case 'ArrowRight': case 'ArrowUp': semis = 1; break;
@@ -3423,7 +3448,7 @@ function oscillaApp() {
         this.customMin = round(v, 2);
       } else {
         if (v < this.customMin * 2) { this.rangeError = 'Maximum must be at least one octave above the minimum.'; v = this.customMin * 2; } else this.rangeError = '';
-        if (r.value > this.safeMax) this.rangeError = `Limited to the digital safe maximum ${formatFrequency(this.safeMax)}.`;
+        if (r.value > this.safeMax) this.rangeError = `Limited to the digital limit ${formatFrequency(this.safeMax)}.`;
         this.customMax = round(v, 2);
       }
       this.customMinText = formatFrequency(this.customMin);
@@ -3462,6 +3487,7 @@ function oscillaApp() {
       this.paramErrors = next;
     },
     setParam(d, raw) {
+      this.loadedLabel = ''; // an edited preset is no longer the preset
       const id = this.paramId(d);
       const o = this.paramTarget(d);
       if (d.type === 'freq') {
@@ -3469,7 +3495,7 @@ function oscillaApp() {
         if (!r.ok) { this.setParamError(id, r.error); return; }
         let v = r.value;
         let msg = '';
-        if (v > this.safeMax) { msg = `Above the digital safe maximum; limited to ${formatFrequency(this.safeMax)}.`; v = this.safeMax; }
+        if (v > this.safeMax) { msg = `Above the digital limit; limited to ${formatFrequency(this.safeMax)}.`; v = this.safeMax; }
         if (d.obj === 'global' && d.key === 'frequency') { this.fitRange(v, v); this.setFrequency(v); } else o[d.key] = round(v, 3);
         this.setParamError(id, msg);
         return;
@@ -3496,7 +3522,7 @@ function oscillaApp() {
     },
     get sequenceInfo() {
       const parsed = parseFrequencyList(this.pp.sequence.text);
-      return `${parsed.values.length} valid · ${parsed.values.filter((f) => f > this.safeMax).length} above safe max`;
+      return `${parsed.values.length} valid · ${parsed.values.filter((f) => f > this.safeMax).length} above the digital limit`;
     },
 
     // ============================== sweep mode
@@ -3504,7 +3530,7 @@ function oscillaApp() {
       const r = parseFrequency(raw);
       if (!r.ok) { this.setParamError(`sweep-${key}`, r.error); return; }
       this.sweep[key] = round(clamp(r.value, MIN_FREQUENCY, this.safeMax), 3);
-      this.setParamError(`sweep-${key}`, r.value > this.safeMax ? `Limited to the safe maximum ${formatFrequency(this.safeMax)}.` : '');
+      this.setParamError(`sweep-${key}`, r.value > this.safeMax ? `Limited to the digital limit ${formatFrequency(this.safeMax)}.` : '');
     },
     sweepSlider(key) { return Math.round(frequencyToNormalized(this.sweep[key], 10, this.safeMax) * 1000); },
     setSweepSlider(key, v) { this.sweep[key] = round(normalizedToFrequency(Number(v) / 1000, 10, this.safeMax), 2); },
@@ -3536,7 +3562,7 @@ function oscillaApp() {
       const r = parseFrequency(raw);
       if (!r.ok) { this.setParamError(`dual-${side}`, r.error); return; }
       this.dual[side].freq = round(clamp(r.value, MIN_FREQUENCY, this.safeMax), 3);
-      this.setParamError(`dual-${side}`, r.value > this.safeMax ? `Limited to the safe maximum ${formatFrequency(this.safeMax)}.` : '');
+      this.setParamError(`dual-${side}`, r.value > this.safeMax ? `Limited to the digital limit ${formatFrequency(this.safeMax)}.` : '');
     },
     dualSlider(side) { return Math.round(frequencyToNormalized(this.dual[side].freq, 20, Math.min(20000, this.safeMax)) * 1000); },
     setDualSlider(side, v) { this.dual[side].freq = round(normalizedToFrequency(Number(v) / 1000, 20, Math.min(20000, this.safeMax)), 2); },
@@ -3572,7 +3598,11 @@ function oscillaApp() {
       if (p) this.applyPreset(p, true);
       this.dual.binaural = true;
       this.dual.stereo = true;
-      if (!p && (this.dualDelta < 0.5 || this.dualDelta > 30)) { this.dual.a.freq = 440; this.dual.b.freq = 446; }
+      if (!p && (this.dualDelta < 0.5 || this.dualDelta > 30)) {
+        this.dual.a.freq = 440;
+        this.dual.b.freq = 446;
+        this.notify('info', 'Binaural frequencies set', 'A and B were set to 440 / 446 Hz: the demo needs a difference of 0.5–30 Hz.');
+      }
       this.pendingPreset = null;
       this.source = 'dual';
     },
@@ -3611,7 +3641,7 @@ function oscillaApp() {
     },
     presetDisabled(p) { return this.presetMaxFrequency(p.cfg) >= this.safeMax; },
     presetDisabledReason(p) {
-      return `Needs ${formatFrequency(this.presetMaxFrequency(p.cfg))}; this device's safe maximum is ${formatFrequency(this.safeMax)}${this.provisional ? ' (provisional until audio starts)' : ''}.`;
+      return `Needs ${formatFrequency(this.presetMaxFrequency(p.cfg))}; this device's digital limit (95 % of Nyquist) is ${formatFrequency(this.safeMax)}${this.provisional ? ' (provisional until audio starts)' : ''}.`;
     },
     loadPreset(p) {
       if (this.presetDisabled(p)) { this.notify('warning', 'Preset unavailable', this.presetDisabledReason(p)); return; }
@@ -3690,6 +3720,12 @@ function oscillaApp() {
       this.presetTab = 'custom';
       this.notify('success', 'Preset saved', `“${name}” is in Presets → Custom.`);
     },
+    /** Deleting is two taps: the first arms the button, the second deletes. */
+    requestDelete(id) {
+      if (this.pendingDelete === id) { this.pendingDelete = null; this.deletePreset(id); return; }
+      this.pendingDelete = id;
+    },
+    cancelDelete(id) { if (this.pendingDelete === id) this.pendingDelete = null; },
     deletePreset(id) {
       this.customPresets = this.customPresets.filter((p) => p.id !== id);
       this.persistPresets();
@@ -3796,7 +3832,11 @@ function oscillaApp() {
           Object.assign(cfg, extra);
           if (extra.range && q.has('rm')) cfg.range = { ...extra.range, mode: q.get('rm') };
         }
+        // A link never raises the receiver's output level above the conservative default.
+        let gainCapped = false;
+        if (isNum(cfg.gain) && cfg.gain > DEFAULT_GAIN) { cfg.gain = DEFAULT_GAIN; gainCapped = true; }
         const issues = this.applyConfig(cfg, 'hash');
+        if (gainCapped) this.notify('info', 'Gain kept at the default', 'The link asked for a higher gain; raise it yourself if you want it louder.');
         // Values above the provisional safe maximum are re-applied once the real rate is known.
         if (this.provisional && this.presetMaxFrequency(cfg) > this.safeMax) this.pendingHashConfig = cfg;
         const m = q.get('m');
@@ -3936,6 +3976,7 @@ function oscillaApp() {
     // ============================== modes, learn, explore
     setMode(m) {
       if (!APP_MODES.some((x) => x.id === m)) return;
+      if (m !== this.mode && m !== 'learn' && m !== 'presets') this.loadedLabel = '';
       this.mode = m;
       if (m === 'playground') this.source = 'single';
       if (m === 'sweep') { this.source = 'sweep'; if (this.vizMode === 'wave' || this.vizMode === 'interference') this.vizMode = 'motion'; }
@@ -3955,6 +3996,8 @@ function oscillaApp() {
     },
     runDemo(topic) {
       const d = topic.demo;
+      // A demo that needs another mode's source sets it fully, so earlier settings cannot skew it.
+      if (d.cfg && d.cfg.source === 'dual') this.source = 'dual';
       this.applyConfig(d.cfg, 'learn');
       if (d.viz) this.vizMode = d.viz;
       this.loadedLabel = d.label;
