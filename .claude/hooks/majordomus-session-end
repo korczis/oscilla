@@ -1,0 +1,17 @@
+#!/bin/sh
+# The SessionEnd hook: it runs where the provider fires that event, and hands the payload
+# to `majordomus capture session --provider claude-code --event end`. Written by `majordomus capture install`.
+#
+# The repository is derived from this file: the provider substitutes its project
+# directory into the command string textually, so nothing in the environment names
+# the repository here, and the working directory is not contracted.
+#
+# It must never reject what the person is doing, so every path out of it is exit 0
+# or the exit of a command that is itself contracted never to return 2.
+root=$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd) || exit 0
+for mj in "$root/bin/majordomus" "$root/.majordomus/bin/majordomus"; do
+  [ -x "$mj" ] && break
+  mj=
+done
+[ -n "$mj" ] || mj=$(command -v majordomus) || exit 0
+exec "$mj" --repo "$root" capture session --provider claude-code --event end
