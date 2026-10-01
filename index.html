@@ -4141,7 +4141,7 @@ function oscillaApp() {
       if (!el || typeof window.Modal !== 'function') return null;
       modalInstances[id] = new window.Modal(el, {
         backdrop: 'dynamic', closable: true,
-        onShow: () => setTimeout(() => el.querySelector('[data-autofocus], input, button')?.focus(), 30),
+        onShow: () => setTimeout(() => (el.querySelector('[data-autofocus]') || el.querySelector('input, button'))?.focus(), 30),
         onHide: () => { if (focusBeforeModal && focusBeforeModal.focus) focusBeforeModal.focus(); },
       }, { id, override: true });
       return modalInstances[id];
@@ -4181,12 +4181,16 @@ function oscillaApp() {
       const items = [...root.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])')]
         .filter((el) => !el.disabled && el.offsetParent !== null);
       if (!items.length) return;
-      const first = items[0];
-      const last = items[items.length - 1];
-      if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
-      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+      // Move focus ourselves on every Tab: WebKit's default order skips buttons, so waiting for
+      // focus to reach the last item would let it escape the dialog.
+      e.preventDefault();
+      const i = items.indexOf(document.activeElement);
+      const n = items.length;
+      const next = i < 0 ? (e.shiftKey ? n - 1 : 0) : (i + (e.shiftKey ? -1 : 1) + n) % n;
+      items[next].focus();
     },
     async toggleMic() {
+      if (this.micPending) return; // a second tap before :disabled renders would open a second stream
       if (this.micActive) {
         engine.stopMic();
         this.micActive = false;
