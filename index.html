@@ -253,7 +253,7 @@
           <div class="readout font-mono font-light text-[2.4rem] leading-none sm:text-6xl mt-1" x-text="freqDisplay">440 Hz</div>
           <div class="mt-1.5 text-[11px] font-semibold tracking-[0.18em] text-accent" x-text="regionLabel"></div>
           <div class="mt-1 text-xs text-muted font-mono">
-            T <span x-text="periodText"></span> · λ ≈ <span x-text="wavelengthText"></span><template x-if="noteMode"><span> · <span class="text-fg" x-text="noteText"></span></span></template>
+            T <span x-text="formatPeriod(frequency)"></span> · λ ≈ <span x-text="formatWavelength(frequency)"></span><template x-if="noteMode"><span> · <span class="text-fg" x-text="noteText"></span></span></template>
           </div>
         </div>
         <label class="inline-flex flex-col items-end gap-1 cursor-pointer shrink-0">
@@ -783,15 +783,15 @@
       </h2>
       <div id="acc-metrics" class="hidden" aria-labelledby="acc-metrics-h">
         <dl class="p-4 grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-2 text-xs border-b border-line">
-          <div><dt class="eyebrow">Requested frequency</dt><dd class="font-mono" x-text="formatFrequency(frequency)"></dd></div>
+          <div><dt class="eyebrow">Requested frequency</dt><dd class="font-mono" x-text="requestedText"></dd></div>
           <div><dt class="eyebrow">Instantaneous</dt><dd class="font-mono" x-text="instFreqText"></dd></div>
           <div><dt class="eyebrow">Pattern</dt><dd class="font-mono" x-text="source === 'single' ? currentPattern.label : source"></dd></div>
           <div><dt class="eyebrow">Waveform</dt><dd class="font-mono" x-text="source === 'dual' ? dual.a.wave + ' / ' + dual.b.wave : waveform"></dd></div>
-          <div><dt class="eyebrow">Duration</dt><dd class="font-mono" x-text="formatMs(duration)"></dd></div>
+          <div><dt class="eyebrow">Duration</dt><dd class="font-mono" x-text="durationText"></dd></div>
           <div><dt class="eyebrow">Gain</dt><dd class="font-mono" x-text="gainLevel.toFixed(3) + ' · ' + gainLabel"></dd></div>
           <div><dt class="eyebrow">Period</dt><dd class="font-mono" x-text="periodText"></dd></div>
           <div><dt class="eyebrow">Wavelength ≈</dt><dd class="font-mono" x-text="wavelengthText"></dd></div>
-          <div><dt class="eyebrow">Nearest note</dt><dd class="font-mono" x-text="noteText"></dd></div>
+          <div><dt class="eyebrow">Nearest note</dt><dd class="font-mono" x-text="metricNoteText"></dd></div>
           <div><dt class="eyebrow">Sample rate</dt><dd class="font-mono" x-text="provisional ? 'not started' : sampleRate + ' Hz'"></dd></div>
           <div><dt class="eyebrow">Nyquist</dt><dd class="font-mono" x-text="formatFrequency(nyquist) + (provisional ? ' (prov.)' : '')"></dd></div>
           <div><dt class="eyebrow">AudioContext</dt><dd class="font-mono" x-text="audioState"></dd></div>
@@ -811,10 +811,10 @@
           <dl class="grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-2">
             <div><dt class="eyebrow">AudioContext sample rate</dt><dd class="font-mono" x-text="provisional ? 'not started (UI assumes ' + effectiveSampleRate + ' Hz)' : sampleRate + ' Hz'"></dd></div>
             <div><dt class="eyebrow">Nyquist frequency</dt><dd class="font-mono" x-text="formatFrequency(nyquist)"></dd></div>
-            <div><dt class="eyebrow">Safe maximum (95 %)</dt><dd class="font-mono" x-text="formatFrequency(safeMax)"></dd></div>
+            <div><dt class="eyebrow">Digital safe maximum (95 % of Nyquist)</dt><dd class="font-mono" x-text="formatFrequency(safeMax)"></dd></div>
             <div><dt class="eyebrow">Browser</dt><dd class="font-mono" x-text="browserText"></dd></div>
             <div><dt class="eyebrow">Platform</dt><dd class="font-mono" x-text="platformText"></dd></div>
-            <div><dt class="eyebrow">Requested frequency</dt><dd class="font-mono" x-text="formatFrequency(frequency)"></dd></div>
+            <div><dt class="eyebrow">Requested frequency</dt><dd class="font-mono" x-text="requestedText"></dd></div>
           </dl>
           <p class="mt-3"><span class="eyebrow block">Digital representability</span><span x-text="representability"></span></p>
           <p class="mt-3 text-muted">The Web Audio engine can mathematically generate a requested signal within digital limits, but the physical speaker/headphones may attenuate, distort, or fail to reproduce it. OSCILLA cannot detect actual acoustic output.</p>
@@ -2677,8 +2677,36 @@ function oscillaApp() {
     get note() { return nearestNote(this.frequency, this.a4); },
     get noteText() { const n = this.note; return n ? `${n.name} · ${formatCents(n.cents)}` : '—'; },
     get freqDisplay() { return formatFrequency(this.frequency, this.noteMode); },
-    get periodText() { return formatPeriod(this.frequency); },
-    get wavelengthText() { return formatWavelength(this.frequency); },
+    get periodText() { return formatPeriod(this.metricFrequency); },
+    get wavelengthText() { return formatWavelength(this.metricFrequency); },
+    get usesGlobalFrequency() {
+      return this.source === 'single' && this.currentPattern.params.some((p) => p.obj === 'global' && p.key === 'frequency');
+    },
+    /** The frequency the metrics describe: live while playing, else what the configuration starts with. */
+    get metricFrequency() {
+      if (this.playing && this.instFreq != null) return this.instFreq;
+      if (this.source === 'dual') return this.dualFa;
+      return this.usesGlobalFrequency || !this.planFreqs.length ? this.frequency : this.planFreqs[0];
+    },
+    get metricNoteText() {
+      const n = nearestNote(this.metricFrequency, this.a4);
+      return n ? `${n.name} · ${formatCents(n.cents)}` : '—';
+    },
+    /** What is requested, per source: one frequency, A / B, or the planned range. */
+    get requestedText() {
+      if (this.source === 'dual') return `A ${formatFrequency(this.dualFa)} / B ${formatFrequency(this.dualFb)}`;
+      if (this.usesGlobalFrequency || this.planFreqs.length < 2) return formatFrequency(this.metricFrequencyIdle);
+      return `${formatFrequency(this.freqMinInvolved)} – ${formatFrequency(this.freqMaxInvolved)}`;
+    },
+    get metricFrequencyIdle() {
+      return this.usesGlobalFrequency || !this.planFreqs.length ? this.frequency : this.planFreqs[0];
+    },
+    get durationText() {
+      const p = this.planSummary;
+      if (p && p.kind === 'finite') return `${formatMs(p.dur * 1000)} programmed`;
+      return this.continuousAllowed ? `trigger ${formatMs(this.duration)} · hold unlimited`
+        : `trigger ${formatMs(Math.min(this.duration, this.safetyLimit * 1000))} · hold ≤ ${this.safetyLimit} s`;
+    },
     get gainPct() { return Math.round(Math.sqrt(this.gainLevel / MAX_OUTPUT_GAIN) * 100); },
     get gainLabel() { return this.gainPct < 40 ? 'LOW' : this.gainPct < 75 ? 'MEDIUM' : 'HIGH'; },
     get currentPattern() { return PATTERN_BY_ID[this.pattern] || PATTERNS[0]; },
@@ -3005,6 +3033,8 @@ function oscillaApp() {
     applyFreqText() {
       const r = parseFrequency(this.freqText);
       if (!r.ok) { this.freqError = r.error; return; }
+      // Enter and change both fire: re-applying the already clamped value must keep its message.
+      if (r.value === this.frequency) return;
       this.setFrequency(r.value);
     },
     stepOctave(n) { this.setFrequency(this.frequency * Math.pow(2, n)); },
@@ -3307,7 +3337,11 @@ function oscillaApp() {
         // Pre-versioned shape: { name, frequency, waveform } — upgrade to schema 1.
         const f = parseFrequency(p.frequency);
         if (!f.ok) return null;
-        cfg = { source: 'single', pattern: 'tone', frequency: f.value, waveform: pick(p.waveform, WAVEFORMS, 'sine') };
+        const d = defaultInstrumentState();
+        cfg = {
+          source: 'single', pattern: 'tone', frequency: f.value, waveform: pick(p.waveform, WAVEFORMS, 'sine'),
+          duration: d.duration, attack: d.attack, release: d.release, gain: d.gainLevel, range: { mode: d.rangeMode },
+        };
       }
       if (!cfg || typeof cfg !== 'object') return null;
       return presetRecord({
@@ -3511,7 +3545,9 @@ function oscillaApp() {
             if (!(key in defaults)) { issues++; continue; }
             const desc = paramDescriptor(pid, key);
             const [ok, value] = coerceLike(defaults[key], incoming[key], desc);
-            if (ok) this.pp[pid][key] = value; else issues++;
+            // Frequency lists must parse completely, or the link would only fail at play time.
+            const badList = ok && desc && desc.type === 'text' && parseFrequencyList(value).invalid.length > 0;
+            if (ok && !badList) this.pp[pid][key] = value; else issues++;
           }
         }
       }
@@ -3528,7 +3564,7 @@ function oscillaApp() {
         for (const key of ['start', 'end']) {
           if (s[key] === undefined) continue;
           if (s[key] === 'max') this.sweep[key] = round(this.safeMax, 2);
-          else if (isNum(s[key]) && s[key] > 0) this.sweep[key] = Math.min(s[key], round(this.safeMax, 2));
+          else if (isNum(s[key]) && s[key] >= MIN_FREQUENCY) this.sweep[key] = Math.min(s[key], round(this.safeMax, 2));
           else issues++;
         }
         if (s.durationMs !== undefined) { const v = num(s.durationMs, 20, MAX_PROGRAMMED_S * 1000); if (v == null) issues++; else this.sweep.durationMs = v; }
@@ -3547,7 +3583,7 @@ function oscillaApp() {
           const o = d[side];
           if (o === undefined) continue;
           if (!o || typeof o !== 'object') { issues++; continue; }
-          if (o.freq !== undefined) { if (isNum(o.freq) && o.freq > 0) this.dual[side].freq = Math.min(o.freq, round(this.safeMax, 2)); else issues++; }
+          if (o.freq !== undefined) { if (isNum(o.freq) && o.freq >= MIN_FREQUENCY) this.dual[side].freq = Math.min(o.freq, round(this.safeMax, 2)); else issues++; }
           if (o.wave !== undefined) { if (WAVEFORMS.includes(o.wave)) this.dual[side].wave = o.wave; else issues++; }
           if (o.gain !== undefined) { const v = num(o.gain, 0, 100); if (v == null) issues++; else this.dual[side].gain = v; }
           if (o.detune !== undefined) { const v = num(o.detune, -1200, 1200); if (v == null) issues++; else this.dual[side].detune = v; }
@@ -3628,6 +3664,7 @@ function oscillaApp() {
       const id = ++alertSeq;
       this.alerts = [...this.alerts, { id, level, title, message }].slice(-4);
       if (level === 'success' || level === 'info') setTimeout(() => this.dismissAlert(id), 6000);
+      if (level === 'error') engine.lastError = { message: `${title}: ${message}`, context: 'ui' };
     },
     dismissAlert(id) { this.alerts = this.alerts.filter((a) => a.id !== id); },
     showSafety() {
