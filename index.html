@@ -105,11 +105,11 @@
 <!-- ============================== HEADER -->
 <header class="sticky top-0 z-30 border-b border-line bg-bg/95 backdrop-blur supports-[backdrop-filter]:bg-bg/80">
   <div class="mx-auto max-w-[1440px] px-3 sm:px-5 flex flex-wrap items-center gap-x-3">
-    <div class="flex items-center gap-2 h-12 sm:h-14 min-w-0">
+    <div class="flex items-center gap-2 h-12 sm:h-14 min-w-0 grow basis-0 md:grow-0 md:basis-auto">
       <svg class="w-7 h-7 shrink-0" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="8" class="fill-accent"/><path d="M4 16 Q8 4 12 16 T20 16 T28 16" fill="none" stroke="rgb(var(--c-surface))" stroke-width="2.6" stroke-linecap="round"/></svg>
       <div class="leading-tight min-w-0">
         <h1 class="font-semibold tracking-[0.22em] text-sm sm:text-base">OSCILLA</h1>
-        <p class="hidden sm:block text-[11px] text-muted truncate">Interactive Sound &amp; Frequency Lab · See sound. Shape frequency.</p>
+        <p class="text-[10px] sm:text-[11px] text-muted truncate">Interactive Sound &amp; Frequency Lab<span class="hidden sm:inline"> · See sound. Shape frequency.</span></p>
       </div>
     </div>
 
@@ -301,9 +301,9 @@
     <!-- SWEEP -->
     <div x-show="mode === 'sweep'" x-cloak>
       <h2 class="eyebrow">Sweep exploration</h2>
-      <div class="readout font-mono text-2xl sm:text-3xl mt-1" x-text="(sweep.direction === 'down' ? formatFrequency(Math.max(sweep.start, sweep.end)) : formatFrequency(Math.min(sweep.start, sweep.end))) + (sweep.direction === 'pingpong' ? ' ↔ ' : ' → ') + (sweep.direction === 'down' ? formatFrequency(Math.min(sweep.start, sweep.end)) : formatFrequency(Math.max(sweep.start, sweep.end)))"></div>
+      <div class="readout font-mono text-2xl sm:text-3xl mt-1" x-text="sweepReadout"></div>
       <div class="relative mt-2 h-3 rounded-full bg-surface2 border border-line overflow-hidden" aria-hidden="true">
-        <div class="absolute top-0 bottom-0 bg-accent/60" :style="`left:${frequencyToNormalized(Math.min(sweep.start, sweep.end), 10, safeMax) * 100}%;width:${(frequencyToNormalized(Math.max(sweep.start, sweep.end), 10, safeMax) - frequencyToNormalized(Math.min(sweep.start, sweep.end), 10, safeMax)) * 100}%`"></div>
+        <div class="absolute top-0 bottom-0 bg-accent/60" :style="sweepBarStyle"></div>
       </div>
       <div class="grid sm:grid-cols-2 gap-3 mt-3">
         <template x-for="k in ['start', 'end']" :key="k">
@@ -629,6 +629,7 @@
         <button type="button" role="radio" class="chip text-xs" :aria-checked="!dual.stereo" @click="setStereo(false)">MONO MIX</button>
         <button type="button" role="radio" class="chip text-xs" :aria-checked="dual.stereo" @click="setStereo(true)">STEREO SPLIT</button>
       </div>
+      <p class="text-[11px] text-warn mt-1" x-show="stereoBinauralCondition" role="note">Stereo split with nearby frequencies sends a different tone to each ear on headphones — the binaural condition. Keep the volume low; on speakers both tones mix in the room.</p>
       <span class="eyebrow block mt-3">Beating demos (mono mix)</span>
       <div class="grid grid-cols-3 sm:grid-cols-5 gap-1 mt-1">
         <template x-for="p in presetsFor('dual').filter((x) => !x.requiresHeadphones)" :key="p.id">
@@ -638,7 +639,7 @@
       <div class="mt-3 rounded-lg border border-line p-3">
         <label class="flex items-center justify-between gap-3 cursor-pointer">
           <span><span class="text-sm font-medium">Binaural demo</span> <span class="text-[11px] text-muted">(advanced · off by default)</span></span>
-          <input type="checkbox" class="sr-only peer" :checked="dual.binaural" @change="requestBinaural($event.target.checked); $event.target.checked = dual.binaural">
+          <input type="checkbox" class="sr-only peer" :checked="dual.binaural" @change="onBinauralToggle($event)">
           <span class="relative shrink-0 w-11 h-6 bg-surface2 border border-line rounded-full peer-focus-visible:ring-2 peer-focus-visible:ring-accent peer-checked:bg-accent after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-surface after:border after:border-line after:rounded-full after:h-[18px] after:w-[18px] after:transition-all peer-checked:after:translate-x-5"></span>
         </label>
         <p class="text-xs text-muted mt-2">When different nearby frequencies are delivered separately to each ear, some listeners perceive a binaural-beat phenomenon. Use headphones. This demonstrates a perceptual effect only; it makes no claim about focus, sleep, therapy or any health effect.</p>
@@ -737,11 +738,11 @@
       <div id="acc-env" class="hidden" aria-labelledby="acc-env-h">
         <div class="p-4 grid grid-cols-1 sm:grid-cols-3 gap-3 border-b border-line">
           <div><label for="env-a" class="block text-xs text-muted mb-1">Attack (ms)</label>
-            <input id="env-a" type="number" min="1" max="2000" class="field font-mono" :value="attack" @change="setParam({ obj: 'global', key: 'attack', type: 'ms', min: 1, max: 2000 }, $event.target.value)"></div>
+            <input id="env-a" type="number" min="1" max="2000" class="field font-mono" :value="attack" @change="setEnv('attack', $event.target.value)"></div>
           <div><label for="env-r" class="block text-xs text-muted mb-1">Release (ms)</label>
-            <input id="env-r" type="number" min="5" max="3000" class="field font-mono" :value="release" @change="setParam({ obj: 'global', key: 'release', type: 'ms', min: 5, max: 3000 }, $event.target.value)"></div>
+            <input id="env-r" type="number" min="5" max="3000" class="field font-mono" :value="release" @change="setEnv('release', $event.target.value)"></div>
           <div><label for="env-d" class="block text-xs text-muted mb-1">Duration (ms) — finite tone and TRIGGER</label>
-            <input id="env-d" type="number" min="10" max="10000" class="field font-mono" :value="duration" @change="setParam({ obj: 'global', key: 'duration', type: 'ms', min: 10, max: 10000 }, $event.target.value)"></div>
+            <input id="env-d" type="number" min="10" max="10000" class="field font-mono" :value="duration" @change="setEnv('duration', $event.target.value)"></div>
           <p class="sm:col-span-3 text-[11px] text-muted">Every start and stop is ramped (linear attack, exponential release to a −80 dB floor), so playback never switches a nonzero level off abruptly.</p>
         </div>
       </div>
@@ -990,7 +991,7 @@ const FREQUENCY_REGIONS = [
   { min: 4000, max: 6000, label: 'PRESENCE', short: 'PRES' },
   { min: 6000, max: 12000, label: 'BRILLIANCE', short: 'BRIL' },
   { min: 12000, max: 16000, label: 'VERY HIGH FREQUENCY', short: 'V.HIGH' },
-  { min: 16000, max: 20000, label: 'UPPER HEARING RANGE', short: 'UPPER' },
+  { min: 16000, max: 20000, label: 'UPPER HEARING RANGE', short: 'UPPER', closed: true }, // includes 20 kHz
   { min: 20000, max: Infinity, label: 'NOMINAL ULTRASONIC REGION', short: 'ULTRA' },
 ];
 
@@ -1028,16 +1029,25 @@ const INT = (key, label, min, max) => ({ key, label, type: 'int', min, max, obj:
 const HZ = (key, label, min, max) => ({ key, label, type: 'hz', min, max, obj: 'pp' });
 const SEL = (key, label, options, obj = 'pp') => ({ key, label, type: 'select', options, obj });
 const GLOBAL_FREQ = F('frequency', 'Frequency', 'global');
+// The Playground sweep patterns keep their own parameters (pp.sweepUp / pp.sweepDown), so a
+// pattern preset never rewrites the settings of SWEEP mode.
+// Envelope and duration live on the instrument itself (obj 'global'), shared by every pattern.
+const ENV_PARAMS = {
+  attack: MS('attack', 'Attack', 1, 2000, 'global'),
+  release: MS('release', 'Release', 5, 3000, 'global'),
+  duration: MS('duration', 'Duration', 10, 10000, 'global'),
+};
+
 const SWEEP_PARAMS = [
-  F('start', 'Start frequency', 'sweep'), F('end', 'End frequency', 'sweep'),
-  MS('durationMs', 'Duration', 20, MAX_PROGRAMMED_S * 1000, 'sweep'),
-  SEL('curve', 'Curve', [['log', 'Logarithmic'], ['linear', 'Linear']], 'sweep'),
+  F('start', 'Start frequency'), F('end', 'End frequency'),
+  MS('durationMs', 'Duration', 20, MAX_PROGRAMMED_S * 1000),
+  SEL('curve', 'Curve', [['log', 'Logarithmic'], ['linear', 'Linear']]),
 ];
 
 const PATTERNS = [
   { id: 'tone', label: 'Continuous tone', group: 'Tones', kind: 'open',
     desc: 'Sustained tone while held. Frequency, waveform and gain respond live.',
-    params: [GLOBAL_FREQ] },
+    params: [GLOBAL_FREQ, MS('duration', 'Trigger duration', 10, 10000, 'global'), ENV_PARAMS.attack, ENV_PARAMS.release] },
   { id: 'finite', label: 'Finite tone', group: 'Tones', kind: 'finite',
     desc: 'One tone of programmed duration with attack and release ramps.',
     params: [GLOBAL_FREQ, MS('duration', 'Duration', 10, 10000, 'global'),
@@ -1086,8 +1096,9 @@ const PATTERNS = [
     params: [F('min', 'Minimum frequency'), F('max', 'Maximum frequency'), MS('toneMs', 'Tone duration', 10, 5000),
       MS('gapMs', 'Gap', 0, 5000), INT('count', 'Count', 1, 200)] },
   { id: 'octave', label: 'Octave steps', group: 'Sequences', kind: 'finite',
-    desc: '125 Hz to 16 kHz in octave steps; steps above the safe maximum are skipped.',
-    params: [MS('toneMs', 'Tone duration', 10, 5000), MS('gapMs', 'Gap', 0, 5000)] },
+    desc: 'Octave steps, by default 125 Hz to 16 kHz; steps above the safe maximum are skipped.',
+    params: [{ key: 'text', label: 'Steps (Hz)', type: 'text', obj: 'pp' }, MS('toneMs', 'Tone duration', 10, 5000),
+      MS('gapMs', 'Gap', 0, 5000)] },
   { id: 'sequence', label: 'User sequence', group: 'Sequences', kind: 'finite',
     desc: 'Your own comma-separated frequencies, e.g. 440, 880, 660, 1.32k.',
     params: [{ key: 'text', label: 'Frequencies', type: 'text', obj: 'pp' }, MS('toneMs', 'Tone duration', 10, 5000),
@@ -1099,6 +1110,8 @@ const PATTERN_GROUPS = ['Tones', 'Rhythmic', 'Sweeps', 'Modulated', 'Sequences']
 const DEFAULT_PATTERN_PARAMS = {
   pulse: { pulseMs: 150, pauseMs: 150, reps: 4 },
   burst: { burstMs: 30, intervalMs: 200, count: 6 },
+  sweepUp: { start: 20, end: 20000, durationMs: 10000, curve: 'log' },
+  sweepDown: { start: 20, end: 20000, durationMs: 10000, curve: 'log' },
   pingpong: { min: 200, max: 4000, cycleMs: 2000, repeats: 2, curve: 'log' },
   chirp: { start: 2000, end: 8000, durationMs: 300, ramp: 'exponential' },
   siren: { min: 600, max: 1200, rate: 0.5, shape: 'sine' },
@@ -1107,7 +1120,7 @@ const DEFAULT_PATTERN_PARAMS = {
   am: { modFreq: 4, depth: 80 },
   fm: { modFreq: 5, depthHz: 60 },
   random: { min: 200, max: 4000, toneMs: 150, gapMs: 50, count: 12, seed: 20261001 },
-  octave: { toneMs: 400, gapMs: 100 },
+  octave: { text: OCTAVE_STEP_FREQUENCIES.join(', '), toneMs: 400, gapMs: 100 },
   sequence: { text: '440, 880, 660, 1320', toneMs: 300, gapMs: 50, repeats: 1 },
 };
 const DEFAULT_SWEEP = {
@@ -1312,7 +1325,8 @@ function formatMs(ms) {
   return ms >= 1000 ? `${sig(ms / 1000, 3)} s` : `${sig(ms, 3)} ms`;
 }
 function regionFor(f) {
-  return FREQUENCY_REGIONS.find((r) => f >= r.min && f < r.max) || FREQUENCY_REGIONS[0];
+  // Nominal ultrasound begins *above* about 20 kHz, so 20 kHz itself is still upper hearing range.
+  return FREQUENCY_REGIONS.find((r) => f >= r.min && (f < r.max || (r.closed && f === r.max))) || FREQUENCY_REGIONS[0];
 }
 
 // ============================================================
@@ -1382,9 +1396,9 @@ const REFERENCE_NOTES = {
   10000: 'High-frequency signal; wavelength ≈ 3.4 cm.',
   12000: 'Very high frequency. Perceived loudness often falls with age and playback hardware.',
   15500: 'High-frequency signal — not ultrasound. Speakers may attenuate it strongly.',
-  17000: 'Upper hearing range. Many adults perceive it weakly or not at all; output still exists.',
+  17000: 'Upper hearing range. Many adults perceive it weakly or not at all; the digital signal is generated regardless, and speaker output is unknown.',
   18000: 'Upper hearing range. Phone speakers and some codecs may attenuate it.',
-  20000: 'Nominal upper edge of human hearing. Requires a sample rate above 40 kHz.',
+  20000: 'Nominal upper edge of human hearing. Needs a sample rate of about 42.1 kHz or more, so that 20 kHz stays below the 95 % safe maximum.',
 };
 
 function refPreset(f) {
@@ -1393,6 +1407,30 @@ function refPreset(f) {
     desc: REFERENCE_NOTES[f] || 'Reference tone.',
     params: 'Sine · finite tone 1 s',
     cfg: { source: 'single', pattern: 'finite', waveform: 'sine', frequency: f, duration: 1000 },
+  };
+}
+
+/** A fresh id for a custom preset. */
+function newPresetId() {
+  return `c${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+}
+
+/**
+ * The stored shape of a custom preset (schema PRESET_SCHEMA_VERSION). Every descriptive field is
+ * derived from cfg, the reproducible configuration, so saving and migrating produce the same record.
+ */
+function presetRecord(meta, cfg) {
+  const source = cfg.source || 'single';
+  const range = cfg.range && typeof cfg.range === 'object' ? cfg.range : { mode: 'human' };
+  return {
+    version: PRESET_SCHEMA_VERSION, id: meta.id, name: meta.name, created: meta.created,
+    mode: source, pattern: cfg.pattern || 'tone', waveform: cfg.waveform || 'sine',
+    frequency: cfg.frequency, gain: cfg.gain, duration: cfg.duration,
+    envelope: { attack: cfg.attack, release: cfg.release },
+    range: deepCopy(range),
+    params: source === 'sweep' ? deepCopy(cfg.sweep || {}) : deepCopy((cfg.pp && cfg.pp[cfg.pattern]) || {}),
+    dual: source === 'dual' ? deepCopy(cfg.dual || null) : null,
+    cfg,
   };
 }
 
@@ -1442,7 +1480,7 @@ const BUILTIN_PRESETS = [
       pp: { pulse: { pulseMs: 150, pauseMs: 150, reps: 2 } } } },
   { id: 'pt-high-sweep', cat: 'patterns', name: 'High sweep', desc: 'Fast logarithmic sweep in the high-frequency region.',
     params: '12 → 18 kHz · 800 ms', cfg: { source: 'single', pattern: 'sweepUp', waveform: 'sine',
-      sweep: { start: 12000, end: 18000, durationMs: 800, curve: 'log' } } },
+      pp: { sweepUp: { start: 12000, end: 18000, durationMs: 800, curve: 'log' } } } },
   { id: 'pt-siren', cat: 'patterns', name: 'Fast siren', desc: 'Sinusoidal LFO between two high frequencies.',
     params: '13 ↔ 17 kHz · 3 Hz LFO', cfg: { source: 'single', pattern: 'siren', waveform: 'sine',
       pp: { siren: { min: 13000, max: 17000, rate: 3, shape: 'sine' } } } },
@@ -1465,7 +1503,7 @@ const BUILTIN_PRESETS = [
     params: '8 steps × 400 ms', cfg: { source: 'single', pattern: 'octave', waveform: 'sine',
       pp: { octave: { toneMs: 400, gapMs: 100 } } } },
   { id: 'pt-third', cat: 'patterns', name: 'Third-octave demonstration', desc: 'Nominal third-octave center frequencies, 20 Hz to 20 kHz; values above the safe maximum are skipped.',
-    params: '31 steps × 250 ms', cfg: { source: 'single', pattern: 'sequence', waveform: 'sine',
+    params: 'up to 31 steps × 250 ms', cfg: { source: 'single', pattern: 'sequence', waveform: 'sine',
       pp: { sequence: { text: THIRD_OCTAVE_FREQUENCIES.join(', '), toneMs: 250, gapMs: 50, repeats: 1 } } } },
 
   // HIGH FREQUENCY
@@ -1507,7 +1545,7 @@ const LEARN_TOPICS = [
     demo: { label: 'Square at 220 Hz', viz: 'harmonics', cfg: { source: 'single', pattern: 'tone', waveform: 'square', frequency: 220 } } },
   { id: 'nyquist', title: 'Nyquist limit', body: 'A digital system can represent frequencies only below half its sample rate. Nyquist is a digital limit, not a guarantee of speaker performance.',
     demo: { label: 'Square at 5 kHz', viz: 'harmonics', cfg: { source: 'single', pattern: 'tone', waveform: 'square', frequency: 5000 } } },
-  { id: 'samplerate', title: 'Sample rate', body: 'The sample rate is how many values per second the audio system produces. This device reports its own rate; OSCILLA never assumes 48 kHz.',
+  { id: 'samplerate', title: 'Sample rate', body: 'The sample rate is how many values per second the audio system produces. Once audio starts, OSCILLA uses the rate this device reports; until then the display assumes 44.1 kHz provisionally and marks it as such.',
     demo: { label: 'Open the spectrum', viz: 'spectrum', cfg: { source: 'single', pattern: 'tone', waveform: 'sine', frequency: 1000 } } },
   { id: 'aliasing', title: 'Aliasing', body: 'Content above Nyquist folds back to wrong, lower frequencies. Web Audio oscillators are band-limited, so they omit harmonics above Nyquist instead.',
     demo: { label: 'Saw at 8 kHz: few harmonics fit', viz: 'harmonics', cfg: { source: 'single', pattern: 'tone', waveform: 'sawtooth', frequency: 8000 } } },
@@ -1521,7 +1559,7 @@ const LEARN_TOPICS = [
     demo: { label: '440 + 445 Hz', viz: 'interference', mode: 'dual', cfg: { source: 'dual', dual: { a: { freq: 440 }, b: { freq: 445 }, stereo: false, binaural: false } } } },
   { id: 'beating', title: 'Beating', body: 'Two close frequencies produce a level that rises and falls at their difference: 440 Hz and 442 Hz beat at about 2 Hz.',
     demo: { label: '440 + 442 Hz', viz: 'interference', mode: 'dual', cfg: { source: 'dual', dual: { a: { freq: 440 }, b: { freq: 442 }, stereo: false, binaural: false } } } },
-  { id: 'logscale', title: 'Logarithmic perception', body: 'Pitch is perceived by ratios: 100→200 Hz sounds like the same step as 1→2 kHz. That is why sweeps and maps here are logarithmic.',
+  { id: 'logscale', title: 'Logarithmic perception', body: 'Pitch is perceived roughly by ratios: 100→200 Hz and 1→2 kHz are both one octave and sound like a similar step. That is why sweeps and maps here are logarithmic.',
     demo: { label: 'Log sweep 20 Hz → 20 kHz', viz: 'motion', cfg: { source: 'sweep', sweep: { start: 20, end: 20000, durationMs: 10000, curve: 'log', direction: 'up', repeat: 'once' } } } },
   { id: 'hearing', title: 'Human hearing range', body: 'Nominally 20 Hz – 20 kHz. The upper limit commonly falls with age and noise exposure; individual hearing varies widely.',
     demo: { label: 'Octave steps 125 Hz – 16 kHz', viz: 'motion', cfg: { source: 'single', pattern: 'octave', waveform: 'sine' } } },
@@ -1764,25 +1802,23 @@ function buildPlan(cfg, env) {
         plan = stepsPlan(list, p.toneMs, p.gapMs, 1);
         break;
       }
-      case 'octave': {
-        const list = OCTAVE_STEP_FREQUENCIES.filter((f) => f <= safeMax);
-        if (list.length < OCTAVE_STEP_FREQUENCIES.length) warnings.push('Steps above the safe maximum are skipped.');
-        plan = stepsPlan(list, p.toneMs, p.gapMs, 1);
-        break;
-      }
-      case 'sequence': {
+      case 'octave': case 'sequence': {
         const parsed = parseFrequencyList(p.text);
         if (parsed.invalid.length) {
           return { ok: false, error: `Sequence contains invalid entries: ${parsed.invalid.slice(0, 5).join(', ')}.` };
         }
+        const low = parsed.values.filter((f) => f < MIN_FREQUENCY).length;
+        const high = parsed.values.filter((f) => f > safeMax).length;
         const usable = parsed.values.filter((f) => f >= MIN_FREQUENCY && f <= safeMax);
-        if (usable.length < parsed.values.length) warnings.push(`${parsed.values.length - usable.length} value(s) above the safe maximum skipped.`);
-        if (!usable.length) return { ok: false, error: 'The sequence has no frequencies below the safe maximum.' };
-        plan = stepsPlan(usable, p.toneMs, p.gapMs, toInt(p.repeats, 1, 1, 50));
+        if (low) warnings.push(`${low} value(s) below ${formatFrequency(MIN_FREQUENCY)} skipped.`);
+        if (high) warnings.push(`${high} value(s) above the safe maximum skipped.`);
+        if (!usable.length) return { ok: false, error: 'The sequence has no frequencies within the allowed range.' };
+        plan = stepsPlan(usable, p.toneMs, p.gapMs, pattern === 'octave' ? 1 : toInt(p.repeats, 1, 1, 50));
         break;
       }
       case 'sweepUp': case 'sweepDown': {
-        const s = { ...DEFAULT_SWEEP, ...(cfg.sweep || {}) };
+        // Before schema-compatible pattern params existed, these patterns read cfg.sweep.
+        const s = pp[pattern] ? p : { ...p, ...(cfg.sweep || {}) };
         const a = cf(toNumber(s.start, 20), 'Start');
         const b = cf(toNumber(s.end, 20000), 'End');
         const lo = Math.min(a, b);
@@ -2677,6 +2713,9 @@ function oscillaApp() {
         : this.waveform !== 'sine';
       return nonSine && this.freqMaxInvolved >= 4000;
     },
+    get stereoBinauralCondition() {
+      return this.source === 'dual' && this.dual.stereo && !this.dual.binaural && this.dualDelta > 0 && this.dualDelta <= 30;
+    },
     get dualFa() { return this.dual.a.freq * Math.pow(2, this.dual.a.detune / 1200); },
     get dualFb() { return this.dual.b.freq * Math.pow(2, this.dual.b.detune / 1200); },
     get dualDelta() { return Math.abs(this.dualFa - this.dualFb); },
@@ -2692,6 +2731,18 @@ function oscillaApp() {
     },
     get sweepHzPerSec() {
       return Math.abs(toNumber(this.sweep.end, 0) - toNumber(this.sweep.start, 0)) / (this.sweep.durationMs / 1000);
+    },
+    /** The sweep as it will sound: lower → upper, upper → lower, or ping-pong between them. */
+    get sweepReadout() {
+      const lo = formatFrequency(Math.min(this.sweep.start, this.sweep.end));
+      const hi = formatFrequency(Math.max(this.sweep.start, this.sweep.end));
+      if (this.sweep.direction === 'pingpong') return `${lo} ↔ ${hi}`;
+      return this.sweep.direction === 'down' ? `${hi} → ${lo}` : `${lo} → ${hi}`;
+    },
+    get sweepBarStyle() {
+      const n = (f) => frequencyToNormalized(f, 10, this.safeMax) * 100;
+      const lo = n(Math.min(this.sweep.start, this.sweep.end));
+      return `left:${lo}%;width:${n(Math.max(this.sweep.start, this.sweep.end)) - lo}%`;
     },
     get sweepOctPerSec() { return this.sweepSpanOct / (this.sweep.durationMs / 1000); },
     get transportText() {
@@ -2717,17 +2768,22 @@ function oscillaApp() {
       return formatFrequency(this.instFreq);
     },
     get hints() {
-      const f = this.frequency;
-      const out = ['Frequency is the number of cycles per second.', `At ${formatFrequency(f)}, one cycle lasts about ${formatPeriod(f)}.`];
+      // The frequency the hint talks about is the one that will actually sound.
+      const f = this.source === 'dual' ? this.dualFa : this.source === 'sweep' ? this.freqMaxInvolved : this.frequency;
+      const waves = this.source === 'dual' ? [this.dual.a.wave, this.dual.b.wave] : [this.waveform];
+      // Ordered by importance: device and digital-limit caveats first, so they are never cut.
+      const out = [];
+      if (this.freqMaxInvolved > this.nyquist * 0.6) out.push('Nyquist is a digital limit, not a guarantee of speaker performance.');
+      if (this.freqMaxInvolved > 12000) out.push('Your browser may generate this signal mathematically, while your speaker may reproduce it poorly.');
+      if (waves.some((w) => w !== 'sine')) out.push('Square and sawtooth waves contain harmonic frequencies; triangle has weak odd harmonics.');
       if (this.source === 'dual') out.push('Two close frequencies add up to a level that rises and falls at their difference.');
       if (this.source === 'sweep' || ['sweepUp', 'sweepDown', 'pingpong', 'chirp'].includes(this.pattern)) {
         out.push('A logarithmic sweep spends equal time in every octave; a linear one rushes through the low end.');
       }
-      if (this.waveform !== 'sine') out.push('Square and sawtooth waves contain harmonic frequencies; triangle has weak odd harmonics.');
-      if (this.freqMaxInvolved > 12000) out.push('Your browser may generate this signal mathematically, while your speaker may reproduce it poorly.');
-      if (this.freqMaxInvolved > this.nyquist * 0.6) out.push('Nyquist is a digital limit, not a guarantee of speaker performance.');
+      out.push(`At ${formatFrequency(f)}, one cycle lasts about ${formatPeriod(f)}.`);
       if (this.freqMinInvolved < 60) out.push(`Approximate wavelength at ${formatFrequency(this.freqMinInvolved)}: ${formatWavelength(this.freqMinInvolved)}.`);
-      return out.slice(0, 4);
+      out.push('Frequency is the number of cycles per second.');
+      return out.slice(0, 5);
     },
     get currentTopic() { return LEARN_TOPICS.find((t) => t.id === this.learnTopic) || LEARN_TOPICS[0]; },
     get topicExample() {
@@ -3148,6 +3204,12 @@ function oscillaApp() {
       this.dual.stereo = !!on;
       if (!on) this.dual.binaural = false;
     },
+    setEnv(key, v) { this.setParam(ENV_PARAMS[key], v); },
+    /** The toggle only reflects confirmed state: turning it on opens the headphones dialog first. */
+    onBinauralToggle(e) {
+      this.requestBinaural(e.target.checked);
+      e.target.checked = this.dual.binaural;
+    },
     requestBinaural(on) {
       if (!on) { this.dual.binaural = false; return; }
       this.pendingPreset = null;
@@ -3185,7 +3247,10 @@ function oscillaApp() {
       if (cfg.source === 'sweep' && cfg.sweep) return Math.max(n(cfg.sweep.start), cfg.sweep.end === 'max' ? 0 : n(cfg.sweep.end));
       const p = (cfg.pp && cfg.pp[cfg.pattern]) || {};
       switch (cfg.pattern) {
-        case 'sweepUp': case 'sweepDown': return Math.max(n(cfg.sweep?.start), cfg.sweep?.end === 'max' ? 0 : n(cfg.sweep?.end));
+        case 'sweepUp': case 'sweepDown': {
+          const s = cfg.pp?.[cfg.pattern] || cfg.sweep || {};
+          return Math.max(n(s.start), n(s.end));
+        }
         case 'pingpong': case 'siren': case 'random': return n(p.max);
         case 'chirp': return Math.max(n(p.start), n(p.end));
         case 'alternating': return Math.max(n(p.fA), n(p.fB));
@@ -3245,10 +3310,10 @@ function oscillaApp() {
         cfg = { source: 'single', pattern: 'tone', frequency: f.value, waveform: pick(p.waveform, WAVEFORMS, 'sine') };
       }
       if (!cfg || typeof cfg !== 'object') return null;
-      return {
-        version: PRESET_SCHEMA_VERSION, id: typeof p.id === 'string' ? p.id : `c${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`,
-        name, created: isNum(p.created) ? p.created : Date.now(), mode: p.mode || cfg.source || 'single', cfg,
-      };
+      return presetRecord({
+        id: typeof p.id === 'string' ? p.id : newPresetId(),
+        name, created: isNum(p.created) ? p.created : Date.now(),
+      }, cfg);
     },
     persistPresets() {
       const ok = localStore.set(STORAGE_KEYS.presets, JSON.stringify({ version: PRESET_SCHEMA_VERSION, presets: this.customPresets }));
@@ -3263,18 +3328,7 @@ function oscillaApp() {
     savePreset() {
       const name = String(this.saveName || '').trim().slice(0, 60);
       if (!name) { this.saveError = 'Enter a name.'; return; }
-      const cfg = this.serializeConfig();
-      const preset = {
-        version: PRESET_SCHEMA_VERSION,
-        id: `c${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`,
-        name, created: Date.now(), mode: this.source, pattern: this.pattern, waveform: this.waveform,
-        frequency: this.frequency, gain: this.gainLevel, duration: this.duration,
-        envelope: { attack: this.attack, release: this.release },
-        range: { mode: this.rangeMode, min: this.rangeMin, max: this.rangeMax },
-        params: this.source === 'sweep' ? deepCopy(this.sweep) : deepCopy(this.pp[this.pattern] || {}),
-        dual: this.source === 'dual' ? deepCopy(this.dual) : null,
-        cfg,
-      };
+      const preset = presetRecord({ id: newPresetId(), name, created: Date.now() }, this.serializeConfig());
       this.customPresets = [preset, ...this.customPresets].slice(0, 200);
       this.persistPresets();
       this.closeModal('saveModal');
@@ -3340,7 +3394,7 @@ function oscillaApp() {
         range: { mode: this.rangeMode, min: this.customMin, max: this.customMax },
       };
       if (this.source === 'single' && this.pp[this.pattern]) cfg.pp = { [this.pattern]: deepCopy(this.pp[this.pattern]) };
-      if (this.source === 'sweep' || ['sweepUp', 'sweepDown'].includes(this.pattern)) cfg.sweep = deepCopy(this.sweep);
+      if (this.source === 'sweep') cfg.sweep = deepCopy(this.sweep);
       if (this.source === 'dual') cfg.dual = deepCopy(this.dual);
       return cfg;
     },
@@ -3461,7 +3515,15 @@ function oscillaApp() {
           }
         }
       }
-      if (cfg.sweep && typeof cfg.sweep === 'object') {
+      const legacyPatternSweep = ['sweepUp', 'sweepDown'].includes(cfg.pattern) && cfg.source !== 'sweep';
+      if (legacyPatternSweep && cfg.sweep && typeof cfg.sweep === 'object' && !cfg.pp?.[cfg.pattern]) {
+        // Older links and presets stored these patterns' parameters in cfg.sweep.
+        for (const key of ['start', 'end', 'durationMs', 'curve']) {
+          if (cfg.sweep[key] === undefined) continue;
+          const [ok, value] = coerceLike(DEFAULT_PATTERN_PARAMS[cfg.pattern][key], cfg.sweep[key], paramDescriptor(cfg.pattern, key));
+          if (ok) this.pp[cfg.pattern][key] = value; else issues++;
+        }
+      } else if (cfg.sweep && typeof cfg.sweep === 'object') {
         const s = cfg.sweep;
         for (const key of ['start', 'end']) {
           if (s[key] === undefined) continue;

@@ -1,2 +1,3 @@
 .ai/local/
 .ai/repo/**/.tmp.*
+.claude/worktrees/
