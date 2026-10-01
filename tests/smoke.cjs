@@ -160,7 +160,8 @@ async function main() {
       return { maxNodes, nodes: e.activeNodeCount, sources: e.activeSourceCount, voices: e.voices.size };
     });
     check('40 rapid play/stop cycles leave zero nodes', cycles.nodes === 0 && cycles.sources === 0 && cycles.voices === 0, JSON.stringify(cycles));
-    check('no oscillator accumulation during cycles', cycles.maxNodes <= 10, JSON.stringify(cycles));
+    // A tone voice is 3 nodes (oscillator, envelope, release gain); at most 5 voices overlap.
+    check('no oscillator accumulation during cycles', cycles.maxNodes <= 15, JSON.stringify(cycles));
 
     // safety limit on the audio clock
     await app(page, (a) => { a.safetyLimit = 0.5; });
@@ -274,7 +275,90 @@ async function main() {
     await page.waitForTimeout(150);
     const spaceStop = await app(page, (a, e) => e.activeNodeCount);
     check('Space hold plays and release stops', spacePlay && spaceStop === 0, `${spacePlay} ${spaceStop}`);
+
+    // TRIGGER on an open pattern obeys the hard safety limit (duration 10 s, limit 2 s)
+    const capped = await page.evaluate(async () => {
+      const a = window.Alpine.$data(document.body);
+      const e = window.OSCILLA.engine;
+      a.setPattern('tone');
+      a.duration = 10000;
+      a.safetyLimit = 2;
+      const text = a.transportText;
+      const t0 = e.ctx.currentTime;
+      a.trigger();
+      while (e.voice && e.ctx.currentTime - t0 < 4) await new Promise((r) => setTimeout(r, 20));
+      const elapsed = e.ctx.currentTime - t0;
+      a.duration = 500;
+      return { elapsed, text, nodes: e.activeNodeCount };
+    });
+    check('TRIGGER of an open tone stops at the 2 s safety limit', capped.elapsed > 1.9 && capped.elapsed < 2.15 && capped.nodes === 0, JSON.stringify(capped));
+    check('transport text shows the effective trigger length', /trigger 2(\.00)? s/.test(capped.text), capped.text);
     check('no console problems in audio tests', problems.length === 0, problems.join(' | '));
+    await context.close();
+  }
+
+  // Stopping mid-attack or mid-release never raises the level, with and without
+  // AudioParam.cancelAndHoldAtTime (deleted here to emulate Firefox).
+  for (const emulate of [false, true]) {
+    const init = emulate ? () => { delete AudioParam.prototype.cancelAndHoldAtTime; } : null;
+    const { page, problems, context } = await openPage(browser, { init });
+    await app(page, (a) => a.ensureAudio());
+    const tag = emulate ? 'without cancelAndHoldAtTime' : 'native';
+    for (const [label, setup, waitMs] of [
+      ['mid-attack', { pattern: 'tone', attack: 400, release: 150, mode: 'hold' }, 150],
+      ['mid-release', { pattern: 'finite', duration: 600, attack: 10, release: 400, mode: 'trigger' }, 350],
+    ]) {
+      const r = await page.evaluate(async ([cfg, wait]) => {
+        const a = window.Alpine.$data(document.body);
+        const e = window.OSCILLA.engine;
+        // Test-only probe on the master bus: 256-sample peak windows (≈ 5 ms).
+        const probe = e.ctx.createAnalyser();
+        probe.fftSize = 256;
+        const buf = new Float32Array(probe.fftSize);
+        e.master.connect(probe);
+        const peak = () => {
+          probe.getFloatTimeDomainData(buf);
+          let p = 0;
+          for (const x of buf) p = Math.max(p, Math.abs(x));
+          return p;
+        };
+        a.setPattern(cfg.pattern);
+        if (cfg.duration) a.duration = cfg.duration;
+        a.attack = cfg.attack;
+        a.release = cfg.release;
+        a.play(cfg.mode);
+        const tPlay = e.ctx.currentTime;
+        while (e.ctx.currentTime - tPlay < wait / 1000) await new Promise((res) => setTimeout(res, 2));
+        const before = peak();
+        a.stop();
+        const tStop = e.ctx.currentTime;
+        const samples = [];
+        while (e.ctx.currentTime - tStop < 0.12) {
+          await new Promise((res) => setTimeout(res, 2));
+          samples.push([e.ctx.currentTime - tStop, peak()]);
+        }
+        // Each window must stay at or below the lowest level seen since (and just before) stop.
+        let rises = 0;
+        let worst = 0;
+        let low = before;
+        for (const [, p] of samples) {
+          if (p > low * 1.08 + 0.002) { rises++; worst = Math.max(worst, p / Math.max(low, 1e-6)); }
+          low = Math.min(low, p);
+        }
+        // First level 5–40 ms after stop: still near the pre-stop level (no drop to the floor).
+        const early = samples.filter((s) => s[0] >= 0.005 && s[0] <= 0.04).map((s) => s[1]);
+        await new Promise((res) => setTimeout(res, cfg.release + 200));
+        e.master.disconnect(probe);
+        a.duration = 500;
+        a.attack = 10;
+        a.release = 30;
+        return { before, early: early.length ? early[0] : null, n: samples.length, rises, worst, nodes: e.activeNodeCount };
+      }, [setup, waitMs]);
+      check(`${tag}: stop ${label} never raises the level`, r.n >= 5 && r.rises === 0 && r.before > 0.005, JSON.stringify(r));
+      check(`${tag}: stop ${label} starts from the held level (no jump to the floor)`, r.early != null && r.early > r.before * 0.5, JSON.stringify(r));
+      check(`${tag}: stop ${label} frees every node`, r.nodes === 0, JSON.stringify(r));
+    }
+    check(`${tag}: no console problems in release tests`, problems.length === 0, problems.join(' | '));
     await context.close();
   }
 

@@ -743,7 +743,7 @@
             <input id="env-r" type="number" min="5" max="3000" class="field font-mono" :value="release" @change="setEnv('release', $event.target.value)"></div>
           <div><label for="env-d" class="block text-xs text-muted mb-1">Duration (ms) — finite tone and TRIGGER</label>
             <input id="env-d" type="number" min="10" max="10000" class="field font-mono" :value="duration" @change="setEnv('duration', $event.target.value)"></div>
-          <p class="sm:col-span-3 text-[11px] text-muted">Every start and stop is ramped (linear attack, exponential release to a −80 dB floor), so playback never switches a nonzero level off abruptly.</p>
+          <p class="sm:col-span-3 text-[11px] text-muted">Every start and stop is ramped (linear attack; a ramped release down to a −80 dB floor, also when you stop early), so playback never switches a nonzero level off abruptly.</p>
         </div>
       </div>
 
@@ -2029,6 +2029,43 @@ class AudioEngine {
     param.exponentialRampToValueAtTime(GAIN_FLOOR, t + dur);
   }
 
+  /** Envelope gain param that records its schedule, so _holdEnv can freeze it anywhere. */
+  _loggedParam(param, log) {
+    const rec = (kind) => (value, time) => {
+      log.push({ kind, value, time });
+      param[kind](value, time);
+    };
+    return {
+      setValueAtTime: rec('setValueAtTime'),
+      linearRampToValueAtTime: rec('linearRampToValueAtTime'),
+      exponentialRampToValueAtTime: rec('exponentialRampToValueAtTime'),
+    };
+  }
+
+  /**
+   * Freeze the envelope at time t. Without cancelAndHoldAtTime (Firefox), cancelScheduledValues
+   * alone would drop an in-progress ramp and jump back to the previous event's value, so the
+   * in-progress segment is re-ended at t with the value it has there (same curve, no step).
+   */
+  _holdEnv(v, t) {
+    const g = v.env.gain;
+    if (typeof g.cancelAndHoldAtTime === 'function') { g.cancelAndHoldAtTime(t); return; }
+    let prev = null;
+    let next = null;
+    for (const e of v.envLog) {
+      if (e.time <= t) { if (!prev || e.time >= prev.time) prev = e; }
+      else if (!next || e.time < next.time) next = e;
+    }
+    g.cancelScheduledValues(t);
+    if (!prev || !next || next.kind === 'setValueAtTime') return; // constant segment: already held
+    const k = (t - prev.time) / (next.time - prev.time);
+    if (next.kind === 'linearRampToValueAtTime') {
+      g.linearRampToValueAtTime(prev.value + (next.value - prev.value) * k, t);
+    } else {
+      g.exponentialRampToValueAtTime(prev.value * Math.pow(next.value / prev.value, k), t);
+    }
+  }
+
   /**
    * Start a plan. Any current voice is released first (fast), so oscillators never accumulate.
    * o = { mode: 'hold' | 'trigger' | 'latch', continuous, limitS, durationS, attackS, releaseS }
@@ -2039,17 +2076,23 @@ class AudioEngine {
     this._releaseAll(0.012);
     const v = {
       id: ++this._seq, plan, t0: ctx.currentTime + START_OFFSET_S, nodes: [], sources: [], freqParams: [],
-      env: null, carrier: null, live: {}, endTime: Infinity, releasing: false, ended: false, timers: [],
+      env: null, envLog: [], releaseGain: null, carrier: null, live: {},
+      endTime: Infinity, releasing: false, ended: false, timers: [],
       attack: Math.max(0.001, o.attackS), release: Math.max(0.005, o.releaseS), limited: false,
     };
     const t0 = v.t0;
     const track = (n) => { v.nodes.push(n); this.nodes.add(n); return n; };
     const source = (n) => { track(n); v.sources.push(n); this.sources.add(n); return n; };
     try {
+      // env (programmed envelope) → releaseGain (held at 1, automated only by a release) → master
       const env = track(ctx.createGain());
-      env.gain.setValueAtTime(GAIN_FLOOR, ctx.currentTime);
-      env.connect(this.master);
+      const eg = this._loggedParam(env.gain, v.envLog);
+      eg.setValueAtTime(GAIN_FLOOR, ctx.currentTime);
+      const releaseGain = track(ctx.createGain());
+      env.connect(releaseGain);
+      releaseGain.connect(this.master);
       v.env = env;
+      v.releaseGain = releaseGain;
       const a = v.attack;
       const r = v.release;
       let programmedEnd = null;
@@ -2060,7 +2103,7 @@ class AudioEngine {
           v.carrier = osc;
           v.freqParams.push(osc.frequency);
           if (plan.kind === 'finite') {
-            this._stepEnv(env.gain, t0, plan.dur, a, r);
+            this._stepEnv(eg, t0, plan.dur, a, r);
             programmedEnd = t0 + plan.dur;
           }
           break;
@@ -2072,7 +2115,7 @@ class AudioEngine {
           v.freqParams.push(osc.frequency);
           for (const s of plan.steps) {
             osc.frequency.setValueAtTime(s.f, t0 + s.t);
-            this._stepEnv(env.gain, t0 + s.t, s.dur, a, r);
+            this._stepEnv(eg, t0 + s.t, s.dur, a, r);
           }
           programmedEnd = t0 + plan.dur;
           break;
@@ -2088,9 +2131,9 @@ class AudioEngine {
             f.setValueAtTime(s.f0, t0 + s.t);
             if (s.curve === 'log') f.exponentialRampToValueAtTime(s.f1, t0 + s.t + s.dur);
             else f.linearRampToValueAtTime(s.f1, t0 + s.t + s.dur);
-            if (plan.envelope === 'segment') this._stepEnv(env.gain, t0 + s.t, s.dur, short, r);
+            if (plan.envelope === 'segment') this._stepEnv(eg, t0 + s.t, s.dur, short, r);
           }
-          if (plan.envelope !== 'segment') this._stepEnv(env.gain, t0, plan.dur, a, r);
+          if (plan.envelope !== 'segment') this._stepEnv(eg, t0, plan.dur, a, r);
           programmedEnd = t0 + plan.dur;
           break;
         }
@@ -2144,16 +2187,19 @@ class AudioEngine {
       if (programmedEnd != null) {
         end = programmedEnd;
       } else {
-        env.gain.setValueAtTime(GAIN_FLOOR, t0);
-        env.gain.linearRampToValueAtTime(1, t0 + a);
-        let len = Infinity;
-        if (o.mode === 'trigger') len = o.durationS;
-        else if (!o.continuous) { len = o.limitS; v.limited = true; }
+        // Open patterns: TRIGGER plays the set duration, HOLD until released; without the
+        // continuous permission both are capped by the hard safety limit.
+        let len = o.mode === 'trigger' ? o.durationS : Infinity;
+        if (!o.continuous && !(len <= o.limitS)) { len = o.limitS; v.limited = true; }
+        // A finite length shortens the attack rather than stretching past the limit.
+        const atk = Number.isFinite(len) ? Math.min(a, len * 0.4) : a;
+        eg.setValueAtTime(GAIN_FLOOR, t0);
+        eg.linearRampToValueAtTime(1, t0 + atk);
         if (Number.isFinite(len)) {
           const rel = Math.min(r, Math.max(0.005, len * 0.5));
-          len = Math.max(len, a + rel + 0.005);
-          env.gain.setValueAtTime(1, t0 + len - rel);
-          env.gain.exponentialRampToValueAtTime(GAIN_FLOOR, t0 + len);
+          len = Math.max(len, atk + rel + 0.005);
+          eg.setValueAtTime(1, t0 + len - rel);
+          eg.exponentialRampToValueAtTime(GAIN_FLOOR, t0 + len);
           end = t0 + len;
         }
       }
@@ -2245,21 +2291,16 @@ class AudioEngine {
     const rel = Math.max(0.005, releaseS);
     v.releasing = true;
     try {
-      const g = v.env.gain;
-      let stopAt;
-      if (typeof g.cancelAndHoldAtTime === 'function') {
-        // Chromium / WebKit: freeze the envelope where it is, then ramp linearly to the floor.
-        g.cancelAndHoldAtTime(now);
-        g.linearRampToValueAtTime(GAIN_FLOOR, now + rel);
-        for (const p of v.freqParams) p.cancelAndHoldAtTime(now);
-        stopAt = now + rel + 0.01;
-      } else {
-        // Firefox: no cancelAndHoldAtTime, and AudioParam.value is not reliable mid-automation,
-        // so decay exponentially from whatever the envelope is doing; stop after ~8 time constants.
-        g.cancelScheduledValues(now);
-        g.setTargetAtTime(GAIN_FLOOR, now, rel / 5);
-        stopAt = now + rel * 1.6 + 0.01;
+      // Freeze the envelope where it is (no step, no later attack), then fade on the dedicated
+      // release node, which has no other automation to cancel.
+      this._holdEnv(v, now);
+      const rg = v.releaseGain.gain;
+      rg.setValueAtTime(1, now);
+      rg.linearRampToValueAtTime(GAIN_FLOOR, now + rel);
+      for (const p of v.freqParams) {
+        if (typeof p.cancelAndHoldAtTime === 'function') p.cancelAndHoldAtTime(now);
       }
+      const stopAt = now + rel + 0.01;
       for (const s of v.sources) {
         try { s.stop(stopAt); } catch (e) { /* already stopped */ }
       }
@@ -2311,6 +2352,8 @@ class AudioEngine {
     v.live = {};
     v.carrier = null;
     v.env = null;
+    v.envLog.length = 0;
+    v.releaseGain = null;
     this.voices.delete(v);
     if (this.voice === v) {
       this.voice = null;
@@ -2780,7 +2823,7 @@ function oscillaApp() {
       let tail;
       if (p.kind === 'finite') tail = `programmed ${formatMs(p.dur * 1000)}`;
       else if (this.continuousAllowed) tail = 'hold or latch · no time limit';
-      else tail = `hold up to ${this.safetyLimit} s · trigger ${formatMs(this.duration)}`;
+      else tail = `hold up to ${this.safetyLimit} s · trigger ${formatMs(Math.min(this.duration, this.safetyLimit * 1000))}`;
       return `${p.label} · ${tail}`;
     },
     get browserText() { return browserName(); },
