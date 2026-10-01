@@ -19,6 +19,18 @@
       if (dark) document.documentElement.classList.add('dark');
     } catch (e) { /* storage or matchMedia unavailable: light theme */ }
   })();
+  // If Alpine.js never starts (CDN blocked, SRI mismatch, offline), reveal #boot-error instead of
+  // leaving the raw, non-functional template on screen.
+  (function () {
+    function banner(show) {
+      var el = document.getElementById('boot-error');
+      if (el) el.hidden = !show;
+    }
+    document.addEventListener('DOMContentLoaded', function () {
+      setTimeout(function () { if (!window.Alpine) banner(true); }, 4000);
+    });
+    document.addEventListener('alpine:initialized', function () { banner(false); });
+  })();
 </script>
 <script src="https://cdn.tailwindcss.com/3.4.17"></script>
 <script>
@@ -104,6 +116,12 @@
 <body class="min-h-full bg-bg text-fg font-sans antialiased" x-data="oscillaApp">
 <a href="#instrument" class="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-[60] focus:px-3 focus:py-2 focus:rounded-md focus:bg-surface">Skip to instrument</a>
 <noscript><p style="padding:1rem">OSCILLA needs JavaScript (Web Audio, Alpine.js and p5.js).</p></noscript>
+<div id="boot-error" role="alert" hidden
+     style="position:sticky;top:0;z-index:70;padding:12px 16px;border-bottom:2px solid rgb(var(--c-danger));background:rgb(var(--c-surface));color:rgb(var(--c-fg));font:14px/1.45 system-ui,-apple-system,'Segoe UI',sans-serif">
+  <strong style="color:rgb(var(--c-danger))">OSCILLA could not start.</strong>
+  A required library (Alpine.js) failed to load, so the controls below do not work.
+  Check your connection or content blocker, then reload the page.
+</div>
 
 <!-- ============================== HEADER -->
 <header class="sticky top-0 z-30 border-b border-line bg-bg/95 backdrop-blur supports-[backdrop-filter]:bg-bg/80">
@@ -139,17 +157,20 @@
         <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .9-1 1.6V14"/><circle cx="12" cy="17.2" r=".6" fill="currentColor"/></svg>
       </button>
       <div id="tip-explore" role="tooltip" class="absolute z-50 invisible inline-block px-2 py-1 text-xs text-surface bg-fg rounded-md opacity-0 transition-opacity">Explore: contextual hints<div class="tooltip-arrow" data-popper-arrow></div></div>
-      <button type="button" id="themeButton" data-dropdown-toggle="themeMenu" class="chip chip-sm w-11 px-0 flex items-center justify-center" aria-label="Theme" aria-haspopup="true">
-        <svg x-show="!isDark" class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M20 14.5A8 8 0 0 1 9.5 4 8 8 0 1 0 20 14.5Z"/></svg>
-        <svg x-show="isDark" x-cloak class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
-      </button>
-      <div id="themeMenu" class="z-50 hidden w-40 rounded-lg border border-line bg-surface shadow-sm">
-        <ul class="py-1 text-sm" aria-labelledby="themeButton">
-          <template x-for="t in ['light','dark','system']" :key="t">
-            <li><button type="button" class="w-full text-left px-4 h-11 hover:bg-surface2 capitalize flex items-center justify-between"
-                        @click="setTheme(t)" :aria-current="theme === t"><span x-text="t"></span><span x-show="theme === t" aria-hidden="true">✓</span></button></li>
-          </template>
-        </ul>
+      <div class="relative" @keydown.escape="closeThemeMenu(true)" @click.outside="closeThemeMenu(false)">
+        <button type="button" id="themeButton" class="chip chip-sm w-11 px-0 flex items-center justify-center" aria-label="Theme"
+                aria-haspopup="menu" aria-controls="themeMenu" :aria-expanded="themeMenuOpen" @click="toggleThemeMenu()">
+          <svg x-show="!isDark" class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M20 14.5A8 8 0 0 1 9.5 4 8 8 0 1 0 20 14.5Z"/></svg>
+          <svg x-show="isDark" x-cloak class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+        </button>
+        <div id="themeMenu" class="absolute right-0 top-full mt-1.5 z-50 hidden w-40 rounded-lg border border-line bg-surface shadow-sm">
+          <ul class="py-1 text-sm" role="menu" aria-labelledby="themeButton" @keydown="themeMenuKey($event)">
+            <template x-for="t in ['light','dark','system']" :key="t">
+              <li role="none"><button type="button" role="menuitemradio" tabindex="-1" class="w-full text-left px-4 h-11 hover:bg-surface2 capitalize flex items-center justify-between"
+                          @click="setTheme(t)" :aria-checked="theme === t"><span x-text="t"></span><span x-show="theme === t" aria-hidden="true">✓</span></button></li>
+            </template>
+          </ul>
+        </div>
       </div>
       <button type="button" class="chip chip-sm w-11 px-0 flex items-center justify-center" @click="openModal('aboutModal')" aria-label="About OSCILLA and safety information">
         <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v6"/><circle cx="12" cy="7.6" r=".7" fill="currentColor"/></svg>
@@ -159,9 +180,10 @@
 </header>
 
 <!-- ============================== ALERTS (Flowbite alert markup, Alpine-managed) -->
-<div class="fixed z-50 top-28 md:top-16 right-3 left-3 sm:left-auto sm:w-[380px] space-y-2" aria-live="polite">
+<!-- Below md the stack sits at the bottom (clear of the header's mode tabs), above the home indicator. -->
+<div class="fixed z-50 right-3 left-3 bottom-[calc(0.75rem+env(safe-area-inset-bottom))] md:bottom-auto md:top-16 sm:left-auto sm:w-[380px] space-y-2 pointer-events-none" aria-live="polite">
   <template x-for="a in alerts" :key="a.id">
-    <div class="flex items-start p-3 text-sm rounded-lg border shadow-sm bg-surface"
+    <div class="flex items-start p-3 text-sm rounded-lg border shadow-sm bg-surface pointer-events-auto"
          :role="a.level === 'error' ? 'alert' : 'status'"
          :class="{ 'border-danger text-danger': a.level === 'error', 'border-warn text-warn': a.level === 'warning', 'border-accent text-accent': a.level === 'success', 'border-line text-fg': a.level === 'info' }">
       <svg class="shrink-0 w-4 h-4 mt-0.5 me-2" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path d="M10 .5a9.5 9.5 0 1 0 9.5 9.5A9.51 9.51 0 0 0 10 .5ZM9.5 4a1.5 1.5 0 1 1 0 3 1.5 1.5 0 0 1 0-3ZM12 15H8a1 1 0 0 1 0-2h1v-3H8a1 1 0 0 1 0-2h2a1 1 0 0 1 1 1v4h1a1 1 0 0 1 0 2Z"/></svg>
@@ -169,7 +191,7 @@
         <span class="font-semibold" x-text="a.title"></span>
         <div class="text-fg/90 text-[13px]" x-text="a.message"></div>
       </div>
-      <button type="button" class="ms-2 -my-1 -me-1 w-9 h-9 rounded-lg inline-flex items-center justify-center hover:bg-surface2" @click="dismissAlert(a.id)" aria-label="Dismiss">
+      <button type="button" class="ms-1 -my-2.5 -me-2 w-11 h-11 shrink-0 rounded-lg inline-flex items-center justify-center hover:bg-surface2" @click="dismissAlert(a.id)" aria-label="Dismiss">
         <svg class="w-3 h-3" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m1 1 12 12M13 1 1 13"/></svg>
       </button>
     </div>
@@ -177,8 +199,8 @@
 </div>
 
 <!-- ============================== SAFETY NOTICE -->
-<div class="mx-auto max-w-[1440px] px-3 sm:px-5 pt-1 sm:pt-3">
-  <div x-show="!safetyCollapsed || safetyExpanded" class="items-start gap-3 p-3 text-[13px] rounded-lg border border-warn/40 bg-warn/5" :class="safetyExpanded ? 'flex' : 'hidden sm:flex'" role="note" aria-label="Safety notice">
+<aside class="block mx-auto max-w-[1440px] px-3 sm:px-5 pt-1 sm:pt-3" aria-label="Safety notice">
+  <div x-show="!safetyCollapsed || safetyExpanded" class="items-start gap-3 p-3 text-[13px] rounded-lg border border-warn/40 bg-warn/5" :class="safetyExpanded ? 'flex' : 'hidden sm:flex'">
     <svg class="shrink-0 w-4 h-4 mt-0.5 text-warn" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path d="M10 1.5 19 18H1L10 1.5Zm-1 6v5h2v-5H9Zm0 6.5v2h2v-2H9Z"/></svg>
     <div class="flex-1">
       <p>Audio signals can be uncomfortable or harmful at excessive output levels. Start low, especially with headphones. Perceived loudness is not a reliable measure of acoustic output, particularly at very low or very high frequencies.</p>
@@ -187,11 +209,11 @@
     <button type="button" class="chip chip-sm text-xs" @click="collapseSafety()">Got it</button>
   </div>
   <p x-show="!safetyExpanded" class="text-[11px] text-muted items-center gap-2" :class="safetyCollapsed ? 'flex' : 'flex sm:hidden'">
-    <svg class="w-3.5 h-3.5 text-warn" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path d="M10 1.5 19 18H1L10 1.5Zm-1 6v5h2v-5H9Zm0 6.5v2h2v-2H9Z"/></svg>
-    Start low, especially with headphones. Perceived loudness is not a measure of acoustic output.
+    <svg class="w-3.5 h-3.5 shrink-0 text-warn" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path d="M10 1.5 19 18H1L10 1.5Zm-1 6v5h2v-5H9Zm0 6.5v2h2v-2H9Z"/></svg>
+    <span>Audio can be uncomfortable or harmful at excessive levels — start low, especially with headphones.</span>
     <button type="button" class="underline min-h-[44px] min-w-[44px] sm:min-h-0 shrink-0" @click="showSafety()">Full notice</button>
   </p>
-</div>
+</aside>
 
 <!-- ============================== INSTRUMENT -->
 <main id="instrument" class="mx-auto max-w-[1440px] px-3 sm:px-5 pt-1 pb-3 sm:py-3 grid gap-2 sm:gap-3 lg:gap-4 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]">
@@ -289,7 +311,7 @@
         <p id="fmap-help" class="sr-only sm:not-sr-only sm:mt-1 sm:block text-[11px] text-muted">Background bands are approximate educational regions. Tap or drag. Focused: arrows ±1 semitone, Shift fine (10 cents), Alt very fine (1 cent), PageUp/Down ±1 octave, wheel when focused.</p>
       </div>
 
-      <div class="mt-2 sm:mt-3" role="radiogroup" aria-label="Waveform">
+      <div class="mt-2 sm:mt-3" role="radiogroup" aria-label="Waveform" x-roving>
         <div class="grid grid-cols-4 gap-1.5">
           <template x-for="w in WAVEFORMS" :key="w">
             <button type="button" role="radio" class="chip flex flex-col items-center justify-center gap-0.5 py-1" :aria-checked="waveform === w" @click="setWaveform(w)">
@@ -312,22 +334,22 @@
         <template x-for="k in ['start', 'end']" :key="k">
           <div>
             <label :for="'sweep-' + k" class="block text-xs text-muted mb-1" x-text="k === 'start' ? 'Start frequency' : 'End frequency'"></label>
-            <input :id="'sweep-' + k" type="text" inputmode="decimal" class="field font-mono" :value="formatFrequency(sweep[k])" @change="setSweepFreq(k, $event.target.value)" :aria-invalid="!!paramErrors['sweep-' + k]">
+            <input :id="'sweep-' + k" type="text" inputmode="decimal" class="field font-mono" :value="formatFrequency(sweep[k])" @change="setSweepFreq(k, $event.target.value)" :aria-invalid="!!paramErrors['sweep-' + k]" :aria-describedby="'sweep-' + k + '-err'">
             <label :for="'sweep-' + k + '-range'" class="sr-only" x-text="(k === 'start' ? 'Start' : 'End') + ' frequency, logarithmic slider'"></label>
             <input :id="'sweep-' + k + '-range'" type="range" min="0" max="1000" step="1" :value="sweepSlider(k)" @input="setSweepSlider(k, $event.target.value)" :aria-valuetext="formatFrequency(sweep[k])">
-            <p class="text-[11px] text-warn" x-show="paramErrors['sweep-' + k]" x-text="paramErrors['sweep-' + k]"></p>
+            <p :id="'sweep-' + k + '-err'" class="text-[11px] text-warn" role="status" x-text="paramErrors['sweep-' + k]"></p>
           </div>
         </template>
       </div>
       <div class="grid grid-cols-2 gap-3 mt-1">
         <div>
           <label for="sweep-duration" class="block text-xs text-muted mb-1">Duration per pass (s)</label>
-          <input id="sweep-duration" type="number" min="0.02" max="30" step="any" class="field font-mono" :value="sweep.durationMs / 1000" @change="setSweepDuration($event.target.value)">
-          <p class="text-[11px] text-warn" x-show="paramErrors['sweep-duration']" x-text="paramErrors['sweep-duration']"></p>
+          <input id="sweep-duration" type="number" min="0.02" max="30" step="any" class="field font-mono" :value="sweep.durationMs / 1000" @change="setSweepDuration($event.target.value)" :aria-invalid="!!paramErrors['sweep-duration']" aria-describedby="sweep-duration-err">
+          <p id="sweep-duration-err" class="text-[11px] text-warn" role="status" x-text="paramErrors['sweep-duration']"></p>
         </div>
         <div>
           <span class="block text-xs text-muted mb-1" id="curve-label">Curve</span>
-          <div class="grid grid-cols-2 gap-1" role="radiogroup" aria-labelledby="curve-label">
+          <div class="grid grid-cols-2 gap-1" role="radiogroup" aria-labelledby="curve-label" x-roving>
             <button type="button" role="radio" class="chip text-xs" :aria-checked="sweep.curve === 'log'" @click="sweep.curve = 'log'">Log</button>
             <button type="button" role="radio" class="chip text-xs" :aria-checked="sweep.curve === 'linear'" @click="sweep.curve = 'linear'">Linear</button>
           </div>
@@ -336,7 +358,7 @@
       <p class="text-[11px] text-muted mt-1" x-show="sweep.curve === 'linear' && sweepSpanOct > 4">A linear sweep over many octaves spends most of its time in the upper frequencies; logarithmic is the default for wide sweeps.</p>
       <div class="mt-3">
         <span class="block text-xs text-muted mb-1" id="dir-label">Direction</span>
-        <div class="grid grid-cols-3 gap-1" role="radiogroup" aria-labelledby="dir-label">
+        <div class="grid grid-cols-3 gap-1" role="radiogroup" aria-labelledby="dir-label" x-roving>
           <button type="button" role="radio" class="chip text-xs" :aria-checked="sweep.direction === 'up'" @click="sweep.direction = 'up'">Up</button>
           <button type="button" role="radio" class="chip text-xs" :aria-checked="sweep.direction === 'down'" @click="sweep.direction = 'down'">Down</button>
           <button type="button" role="radio" class="chip text-xs" :aria-checked="sweep.direction === 'pingpong'" @click="sweep.direction = 'pingpong'">Ping-pong</button>
@@ -344,11 +366,12 @@
       </div>
       <div class="mt-3">
         <span class="block text-xs text-muted mb-1" id="rep-label">Repeat</span>
-        <div class="grid grid-cols-3 gap-1" role="radiogroup" aria-labelledby="rep-label">
+        <div class="grid grid-cols-3 gap-1" role="radiogroup" aria-labelledby="rep-label" x-roving>
           <button type="button" role="radio" class="chip text-xs" :aria-checked="sweep.repeat === 'once'" @click="setSweepRepeat('once')">Once</button>
           <button type="button" role="radio" class="chip text-xs" :aria-checked="sweep.repeat === 'n'" @click="setSweepRepeat('n')">N times</button>
-          <button type="button" role="radio" class="chip text-xs" :aria-checked="sweep.repeat === 'continuous'" @click="setSweepRepeat('continuous')" :aria-disabled="!continuousAllowed">
-            <span x-text="continuousAllowed ? 'Continuous' : 'Continuous 🔒'"></span>
+          <button type="button" role="radio" class="chip text-xs flex items-center justify-center gap-1" :aria-checked="sweep.repeat === 'continuous'" @click="setSweepRepeat('continuous')" :aria-disabled="!continuousAllowed">
+            <span>Continuous</span>
+            <svg x-show="!continuousAllowed" class="w-3 h-3 shrink-0" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M4.5 7V5a3.5 3.5 0 0 1 7 0v2h.5A1 1 0 0 1 13 8v6a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V8a1 1 0 0 1 1-1h.5ZM6 7h4V5a2 2 0 1 0-4 0v2Z"/></svg>
           </button>
         </div>
         <div class="mt-2 max-w-[10rem]" x-show="sweep.repeat === 'n'">
@@ -368,13 +391,13 @@
             <label :for="'dual-' + side" class="block text-xs text-muted mb-1">Frequency</label>
             <div class="flex gap-1">
               <button type="button" class="chip w-11 px-0" @click="nudgeDual(side, -1)" :aria-label="'Osc ' + side.toUpperCase() + ' minus 1 Hz'">−1</button>
-              <input :id="'dual-' + side" type="text" inputmode="decimal" class="field font-mono text-center" :value="formatFrequency(dual[side].freq, true)" @change="setDualFreq(side, $event.target.value)">
+              <input :id="'dual-' + side" type="text" inputmode="decimal" class="field font-mono text-center" :value="formatFrequency(dual[side].freq, true)" @change="setDualFreq(side, $event.target.value)" :aria-invalid="!!paramErrors['dual-' + side]" :aria-describedby="'dual-' + side + '-err'">
               <button type="button" class="chip w-11 px-0" @click="nudgeDual(side, 1)" :aria-label="'Osc ' + side.toUpperCase() + ' plus 1 Hz'">+1</button>
             </div>
             <label :for="'dual-' + side + '-range'" class="sr-only">Frequency, logarithmic slider</label>
             <input :id="'dual-' + side + '-range'" type="range" min="0" max="1000" step="1" :value="dualSlider(side)" @input="setDualSlider(side, $event.target.value)" :aria-valuetext="formatFrequency(dual[side].freq)">
-            <p class="text-[11px] text-warn" x-show="paramErrors['dual-' + side]" x-text="paramErrors['dual-' + side]"></p>
-            <div class="grid grid-cols-4 gap-1 mt-1" role="radiogroup" :aria-label="'Osc ' + side.toUpperCase() + ' waveform'">
+            <p :id="'dual-' + side + '-err'" class="text-[11px] text-warn" role="status" x-text="paramErrors['dual-' + side]"></p>
+            <div class="grid grid-cols-4 gap-1 mt-1" role="radiogroup" :aria-label="'Osc ' + side.toUpperCase() + ' waveform'" x-roving>
               <template x-for="w in WAVEFORMS" :key="w">
                 <button type="button" role="radio" class="chip px-0 flex items-center justify-center" :aria-checked="dual[side].wave === w" @click="dual[side].wave = w" :aria-label="WAVEFORM_LABELS[w]">
                   <svg class="w-7 h-4" viewBox="0 0 32 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><path :d="WAVE_PATHS[w]"/></svg>
@@ -400,7 +423,7 @@
     <!-- PRESETS -->
     <div x-show="mode === 'presets'" x-cloak>
       <h2 class="eyebrow mb-2">Presets</h2>
-      <ul id="preset-tabs" class="flex flex-wrap gap-1 text-xs" role="tablist" data-tabs-toggle="#preset-tab-content"
+      <ul id="preset-tabs" class="flex flex-wrap gap-1 text-xs" role="tablist" aria-label="Preset categories" x-roving data-tabs-toggle="#preset-tab-content"
           data-tabs-active-classes="!bg-fg !text-surface !border-fg" data-tabs-inactive-classes="bg-surface text-fg">
         <template x-for="c in PRESET_CATEGORIES" :key="c.id">
           <li role="presentation">
@@ -546,7 +569,7 @@
                  x-model="freqText" @change="applyFreqText()" @keydown.enter="applyFreqText()"
                  :aria-invalid="!!freqError" aria-describedby="freq-help freq-error">
           <p id="freq-help" class="text-[11px] text-muted mt-1">Accepts 440, 440hz, 1k, 1khz, 15.5k, 20 kHz.</p>
-          <p id="freq-error" class="text-[11px] text-warn" x-show="freqError" x-text="freqError"></p>
+          <p id="freq-error" class="text-[11px] text-warn" role="status" x-text="freqError"></p>
         </div>
         <button type="button" class="chip mt-5 text-xs" @click="applyFreqText()">Set</button>
       </div>
@@ -563,17 +586,19 @@
 
       <div class="mt-3">
         <span class="block text-xs text-muted mb-1" id="range-label">Range · <span class="font-mono" x-text="formatFrequency(rangeMin) + ' – ' + formatFrequency(rangeMax)"></span><span class="text-warn" x-show="provisional"> (provisional until audio starts)</span></span>
-        <div class="grid grid-cols-4 gap-1" role="radiogroup" aria-labelledby="range-label">
+        <div class="grid grid-cols-4 gap-1" role="radiogroup" aria-labelledby="range-label" x-roving>
           <template x-for="r in RANGE_MODES" :key="r.id">
             <button type="button" role="radio" class="chip px-1 text-xs" :aria-checked="rangeMode === r.id" @click="setRangeMode(r.id)" :title="r.hint" x-text="r.label"></button>
           </template>
         </div>
-        <div class="grid grid-cols-2 gap-2 mt-2" x-show="rangeMode === 'custom'" x-cloak>
-          <div><label for="cmin" class="block text-xs text-muted mb-1">Custom minimum</label>
-            <input id="cmin" type="text" inputmode="decimal" class="field font-mono" x-model="customMinText" @change="setCustomBound('min', customMinText)"></div>
-          <div><label for="cmax" class="block text-xs text-muted mb-1">Custom maximum</label>
-            <input id="cmax" type="text" inputmode="decimal" class="field font-mono" x-model="customMaxText" @change="setCustomBound('max', customMaxText)"></div>
-          <p class="col-span-2 text-[11px] text-warn" x-show="rangeError" x-text="rangeError"></p>
+        <div x-show="rangeMode === 'custom'" x-cloak>
+          <div class="grid grid-cols-2 gap-2 mt-2">
+            <div><label for="cmin" class="block text-xs text-muted mb-1">Custom minimum</label>
+              <input id="cmin" type="text" inputmode="decimal" class="field font-mono" x-model="customMinText" @change="setCustomBound('min', customMinText)" aria-describedby="range-err"></div>
+            <div><label for="cmax" class="block text-xs text-muted mb-1">Custom maximum</label>
+              <input id="cmax" type="text" inputmode="decimal" class="field font-mono" x-model="customMaxText" @change="setCustomBound('max', customMaxText)" aria-describedby="range-err"></div>
+          </div>
+          <p id="range-err" class="text-[11px] text-warn mt-2 empty:mt-0" role="status" x-text="rangeError"></p>
         </div>
       </div>
 
@@ -603,12 +628,12 @@
       <span class="eyebrow">Sweep rate</span>
       <div class="grid grid-cols-2 gap-2 mt-1">
         <div><label for="rate-oct" class="block text-xs text-muted mb-1">Octaves / second</label>
-          <input id="rate-oct" type="number" step="any" min="0.001" class="field font-mono" :value="sig(sweepOctPerSec, 4)" @change="setSweepRate('oct', $event.target.value)"></div>
+          <input id="rate-oct" type="number" step="any" min="0.001" class="field font-mono" :value="sig(sweepOctPerSec, 4)" @change="setSweepRate('oct', $event.target.value)" aria-describedby="sweep-rate-err"></div>
         <div><label for="rate-hz" class="block text-xs text-muted mb-1">Hz / second</label>
-          <input id="rate-hz" type="number" step="any" min="0.001" class="field font-mono" :value="sig(sweepHzPerSec, 4)" @change="setSweepRate('hz', $event.target.value)"></div>
+          <input id="rate-hz" type="number" step="any" min="0.001" class="field font-mono" :value="sig(sweepHzPerSec, 4)" @change="setSweepRate('hz', $event.target.value)" aria-describedby="sweep-rate-err"></div>
       </div>
       <p class="text-[11px] text-muted mt-1">Editing a rate recomputes the duration. Octaves/s is constant on a log sweep; Hz/s is constant on a linear sweep.</p>
-      <p class="text-[11px] text-warn" x-show="paramErrors['sweep-rate']" x-text="paramErrors['sweep-rate']"></p>
+      <p id="sweep-rate-err" class="text-[11px] text-warn" role="status" x-text="paramErrors['sweep-rate']"></p>
       <span class="eyebrow block mt-3">Sweep presets</span>
       <div class="grid sm:grid-cols-2 gap-1 mt-1">
         <template x-for="p in presetsFor('sweeps')" :key="p.id">
@@ -629,7 +654,7 @@
           <input id="lvl-b" type="range" min="0" max="100" step="1" x-model.number="dual.levelB" :aria-valuetext="dual.levelB + ' percent'"></div>
       </div>
       <p class="text-[11px] text-muted">Master gain is the Gain control next to the play button.</p>
-      <div class="grid grid-cols-2 gap-1 mt-2" role="radiogroup" aria-label="Output mode">
+      <div class="grid grid-cols-2 gap-1 mt-2" role="radiogroup" aria-label="Output mode" x-roving>
         <button type="button" role="radio" class="chip text-xs" :aria-checked="!dual.stereo" @click="setStereo(false)">MONO MIX</button>
         <button type="button" role="radio" class="chip text-xs" :aria-checked="dual.stereo" @click="setStereo(true)">STEREO SPLIT</button>
       </div>
@@ -708,7 +733,7 @@
               <span class="absolute right-2.5 top-1/2 -translate-y-1/2 text-[11px] text-muted pointer-events-none" x-text="d.type === 'ms' ? 'ms' : d.type === 'hz' ? 'Hz' : ''"></span>
             </div>
           </template>
-          <p :id="paramId(d) + '-err'" class="text-[11px] text-warn mt-0.5" x-show="paramErrors[paramId(d)]" x-text="paramErrors[paramId(d)]"></p>
+          <p :id="paramId(d) + '-err'" class="text-[11px] text-warn mt-0.5 empty:mt-0" role="status" x-text="paramErrors[paramId(d)]"></p>
         </div>
       </template>
     </div>
@@ -762,7 +787,7 @@
         <div class="p-4 space-y-3 border-b border-line">
           <div>
             <span class="block text-xs text-muted mb-1" id="limit-label">Hard playback limit for held and open-ended signals</span>
-            <div class="grid grid-cols-5 gap-1 max-w-md" role="radiogroup" aria-labelledby="limit-label">
+            <div class="grid grid-cols-5 gap-1 max-w-md" role="radiogroup" aria-labelledby="limit-label" x-roving>
               <template x-for="s in SAFETY_LIMIT_OPTIONS" :key="s">
                 <button type="button" role="radio" class="chip px-1 text-xs font-mono" :aria-checked="safetyLimit === s" @click="safetyLimit = s" x-text="s + ' s'"></button>
               </template>
@@ -875,7 +900,7 @@
       <div class="p-4">
         <label for="preset-name" class="block text-xs text-muted mb-1">Name</label>
         <input id="preset-name" data-autofocus type="text" maxlength="60" class="field" x-model="saveName" :aria-invalid="!!saveError" aria-describedby="save-err">
-        <p id="save-err" class="text-[11px] text-warn mt-1" x-show="saveError" x-text="saveError"></p>
+        <p id="save-err" class="text-[11px] text-warn mt-1 empty:mt-0" role="status" x-text="saveError"></p>
         <p class="text-[11px] text-muted mt-2">Stored in this browser (localStorage, schema version 1). Includes mode, pattern, waveform, frequency, gain, duration, envelope, range and parameters.</p>
       </div>
       <div class="flex justify-end gap-2 p-4 border-t border-line">
@@ -1247,6 +1272,87 @@ function isTypingTarget(el) {
   if (['INPUT', 'TEXTAREA', 'SELECT', 'BUTTON', 'A', 'SUMMARY'].includes(tag)) return true;
   const role = el.getAttribute && el.getAttribute('role');
   return ['slider', 'tab', 'radio', 'button', 'switch', 'checkbox', 'menuitem'].includes(role);
+}
+
+// Roving focus for role="radiogroup" and role="tablist" containers marked x-roving (ARIA radio
+// group and tabs patterns): only the checked/selected item is a Tab stop; arrows, Home and End
+// move focus and activate the target by clicking it, so each item's own @click (or Flowbite's
+// tab handler) stays the single source of behavior. Radios take all four arrows, a horizontal
+// tablist only Left/Right.
+const ROVING_STEP = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 };
+
+function rovingItems(group) {
+  const role = group.getAttribute('role') === 'tablist' ? 'tab' : 'radio';
+  return [...group.querySelectorAll(`[role="${role}"]`)].filter((el) => !el.disabled);
+}
+
+function rovingSync(group) {
+  const items = rovingItems(group);
+  const attr = group.getAttribute('role') === 'tablist' ? 'aria-selected' : 'aria-checked';
+  const current = items.find((el) => el.getAttribute(attr) === 'true') || items[0];
+  items.forEach((el) => el.setAttribute('tabindex', el === current ? '0' : '-1'));
+}
+
+function rovingKey(e) {
+  if (e.altKey || e.ctrlKey || e.metaKey) return;
+  const group = e.currentTarget;
+  const tabs = group.getAttribute('role') === 'tablist';
+  const step = ROVING_STEP[e.key];
+  if (!step && e.key !== 'Home' && e.key !== 'End') return;
+  if (tabs && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) return;
+  const items = rovingItems(group).filter((el) => el.offsetParent !== null);
+  const i = items.indexOf(e.target.closest('[role="radio"], [role="tab"]'));
+  if (i < 0) return;
+  e.preventDefault();
+  const n = items.length;
+  const next = items[e.key === 'Home' ? 0 : e.key === 'End' ? n - 1 : (i + step + n) % n];
+  next.focus();
+  next.click();
+}
+
+/** Alpine directive body for x-roving. */
+function rovingDirective(el, _directive, { cleanup }) {
+  const observer = new MutationObserver(() => rovingSync(el));
+  observer.observe(el, { subtree: true, childList: true, attributes: true, attributeFilter: ['aria-checked', 'aria-selected'] });
+  el.addEventListener('keydown', rovingKey);
+  queueMicrotask(() => rovingSync(el));
+  cleanup(() => {
+    observer.disconnect();
+    el.removeEventListener('keydown', rovingKey);
+  });
+}
+
+// Without Flowbite's JS (CDN blocked or failed) the accordion headers and the preset tabs would
+// be dead; these delegated handlers reproduce the minimal behavior on the same markup.
+function installFlowbiteFallbacks() {
+  if (typeof window.Accordion === 'function') return false;
+  document.addEventListener('click', (e) => {
+    const head = e.target.closest('[data-accordion-target]');
+    if (head) {
+      const panel = document.querySelector(head.getAttribute('data-accordion-target'));
+      if (!panel) return;
+      const open = head.getAttribute('aria-expanded') !== 'true';
+      head.setAttribute('aria-expanded', String(open));
+      panel.classList.toggle('hidden', !open);
+      head.querySelector('[data-accordion-icon]')?.classList.toggle('rotate-180', !open);
+      return;
+    }
+    const tab = e.target.closest('[role="tab"][data-tabs-target]');
+    if (tab) showFallbackTab(tab);
+  });
+  const first = document.querySelector('#preset-tabs [role="tab"]');
+  if (first) showFallbackTab(first);
+  return true;
+}
+
+function showFallbackTab(tab) {
+  const list = tab.closest('[role="tablist"]');
+  const panel = document.querySelector(tab.getAttribute('data-tabs-target'));
+  if (!list || !panel) return;
+  for (const t of list.querySelectorAll('[role="tab"]')) {
+    t.setAttribute('aria-selected', String(t === tab));
+    document.querySelector(t.getAttribute('data-tabs-target'))?.classList.toggle('hidden', t !== tab);
+  }
 }
 
 // ============================================================
@@ -2548,6 +2654,7 @@ function pathNodesFor(plan, st) {
 // module scope (never inside Alpine's reactive proxies).
 
 const modalInstances = {};
+let themeDropdown; // Flowbite Dropdown for #themeMenu; null when Flowbite is unavailable
 let uiNotify = null; // set by oscillaApp.init so global error handlers can surface problems
 let focusBeforeModal = null;
 let alertSeq = 0;
@@ -2648,6 +2755,7 @@ function oscillaApp() {
     storage: { local: true, session: true },
     safetyCollapsed: false,
     safetyExpanded: false,
+    themeMenuOpen: false,
     mapDragging: false,
     customMinText: '100 Hz',
     customMaxText: '10.00 kHz',
@@ -2700,6 +2808,7 @@ function oscillaApp() {
       this.$nextTick(() => {
         this.initVisualizer();
         this.initFrequencyMapWheel();
+        installFlowbiteFallbacks();
       });
       if (this.debug) setInterval(() => this.refreshDebug(), 250);
       this.initialized = true;
@@ -3708,7 +3817,50 @@ function oscillaApp() {
         this.notify('warning', 'Theme not saved', 'localStorage refused the write.');
       }
       this.applyTheme();
-      try { window.FlowbiteInstances?.getInstance('Dropdown', 'themeMenu')?.hide(); } catch (e) { /* ignore */ }
+      this.closeThemeMenu(true);
+    },
+    themeMenu() {
+      if (themeDropdown !== undefined) return themeDropdown;
+      const menu = document.getElementById('themeMenu');
+      const button = document.getElementById('themeButton');
+      themeDropdown = typeof window.Dropdown === 'function' && menu && button
+        ? new window.Dropdown(menu, button, {
+          placement: 'bottom-end', triggerType: 'none', offsetDistance: 6,
+          onShow: () => this.onThemeMenu(true), onHide: () => this.onThemeMenu(false),
+        }, { id: 'themeMenu', override: true })
+        : null;
+      return themeDropdown;
+    },
+    onThemeMenu(open) {
+      this.themeMenuOpen = open;
+      if (open) document.querySelector('#themeMenu [role="menuitemradio"]')?.focus();
+    },
+    toggleThemeMenu() {
+      const dd = this.themeMenu();
+      if (dd) { dd.toggle(); return; }
+      // Flowbite unavailable: the menu is CSS-positioned under the trigger; toggle it directly.
+      const open = !this.themeMenuOpen;
+      document.getElementById('themeMenu')?.classList.toggle('hidden', !open);
+      this.onThemeMenu(open);
+    },
+    closeThemeMenu(refocus) {
+      if (!this.themeMenuOpen) return;
+      const dd = this.themeMenu();
+      if (dd) dd.hide(); else { document.getElementById('themeMenu')?.classList.add('hidden'); this.onThemeMenu(false); }
+      if (refocus) document.getElementById('themeButton')?.focus();
+    },
+    themeMenuKey(e) {
+      const items = [...e.currentTarget.querySelectorAll('[role="menuitemradio"]')];
+      const i = items.indexOf(document.activeElement);
+      let next = null;
+      if (e.key === 'ArrowDown') next = (i + 1) % items.length;
+      if (e.key === 'ArrowUp') next = (i - 1 + items.length) % items.length;
+      if (e.key === 'Home') next = 0;
+      if (e.key === 'End') next = items.length - 1;
+      if (e.key === 'Tab') this.closeThemeMenu(false);
+      if (next == null) return;
+      e.preventDefault();
+      items[next].focus();
     },
     applyTheme() {
       let dark = this.theme === 'dark';
@@ -3758,7 +3910,10 @@ function oscillaApp() {
         el.removeAttribute('aria-hidden');
         el.setAttribute('role', 'dialog');
         el.setAttribute('aria-modal', 'true');
-        el.querySelector('input, button')?.focus();
+        el.classList.add('bg-black/50');
+        // Escape closes; Tab is already trapped by the modal's @keydown.tab="trapFocus".
+        el.onkeydown = (e) => { if (e.key === 'Escape') this.closeModal(id); };
+        (el.querySelector('[data-autofocus]') || el.querySelector('input, button'))?.focus();
       }
     },
     closeModal(id) {
@@ -3770,6 +3925,7 @@ function oscillaApp() {
         el.classList.remove('flex');
         el.setAttribute('aria-hidden', 'true');
         el.removeAttribute('aria-modal');
+        el.onkeydown = null;
         focusBeforeModal?.focus?.();
       }
     },
@@ -4546,6 +4702,7 @@ function startVisualizer(container) {
 
 document.addEventListener('alpine:init', () => {
   window.Alpine.data('oscillaApp', oscillaApp);
+  window.Alpine.directive('roving', rovingDirective);
 });
 
 // Last-resort reporting: surface unexpected errors in the UI instead of failing silently.
