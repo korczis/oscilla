@@ -36,9 +36,19 @@
 // the one zero-power encoding of stored results (as rta.js rtaResult does). A NaN spread (a
 // point where some runs had zero power and others not) has no JSON-safe value and throws:
 // floor the run levels at ZERO_POWER_DB first, as transfer.js magnitudes already are.
+//
+// Storage rule for repeated measurements (G20): the aggregate is the primary response. With
+// runs ≥ 2, results.aggregate holds it and results.transfer is NOT one run's transfer: it is
+// transferFromAggregate(stored, transfers), a TransferResult marked derivedFrom: 'aggregate'
+// whose magnitudeDb is exactly the stored centreDb (the same bits, on the same grid), whose
+// snrDb is the lowest run SNR per point and validRange the range where every run is valid
+// (both conservative, neither is in the aggregate), phaseDeg null with phaseReason AGGREGATED
+// (phases of separate runs are not averaged, §27) and alignment null (each run has its own).
+// One run's own transfer is stored only on request, in results.runTransfers. A single run
+// stores its TransferResult as results.transfer and no aggregate.
 
 import { ALGORITHMS } from './algorithms.js';
-import { ZERO_POWER_DB } from './transfer.js';
+import { PHASE_REASONS, ZERO_POWER_DB } from './transfer.js';
 
 export const AGGREGATE_ALGORITHM = ALGORITHMS.aggregate;
 const METHODS = ['mean', 'median'];
@@ -215,5 +225,62 @@ export function aggregateResult(aggregate, frequencies) {
     upperDb: envelope('upperDb'),
     spreadDb,
     repeatabilityDb: single || !Number.isFinite(a.repeatabilityDb) ? null : a.repeatabilityDb,
+  };
+}
+
+/** results.transfer.derivedFrom of the aggregate centre of repeated runs (G20). */
+export const DERIVED_FROM_AGGREGATE = 'aggregate';
+
+/**
+ * transferFromAggregate(stored, transfers) → TransferResult (derivedFrom: 'aggregate')
+ *   stored     aggregateResult() of the runs (runs ≥ 2)
+ *   transfers  the runs' TransferResults, on the aggregate's grid
+ * The storable transfer of a repeated measurement (see the header, G20): magnitudeDb is a copy
+ * of stored.centreDb; the other fields follow the first run except snrDb (lowest run per point,
+ * null unless every run has one), validRange (intersection, null if empty or any run has none),
+ * phaseDeg null, phaseReason AGGREGATED and alignment null. Inputs are not modified.
+ */
+export function transferFromAggregate(stored, transfers) {
+  if (!stored || !stored.centreDb || !Number.isInteger(stored.runs) || stored.runs < 2)
+    throw new TypeError('transferFromAggregate needs an aggregateResult() of at least two runs');
+  if (!Array.isArray(transfers) || transfers.length !== stored.runs)
+    throw new RangeError(`expected ${stored.runs} run transfers`);
+  const first = transfers[0];
+  const n = stored.frequencies.length;
+  for (const t of transfers) {
+    if (!t || !t.frequencies || t.frequencies.length !== n
+      || t.frequencies.some((f, i) => f !== stored.frequencies[i]))
+      throw new RangeError('every run transfer must be on the aggregate grid');
+  }
+  let snrDb = null;
+  if (transfers.every((t) => t.snrDb)) {
+    snrDb = new Float64Array(n);
+    for (let i = 0; i < n; i++) {
+      let m = Infinity;
+      for (const t of transfers) m = Math.min(m, t.snrDb[i]);
+      snrDb[i] = m;
+    }
+  }
+  let validRange = null;
+  if (transfers.every((t) => t.validRange)) {
+    const lo = Math.max(...transfers.map((t) => t.validRange[0]));
+    const hi = Math.min(...transfers.map((t) => t.validRange[1]));
+    validRange = hi > lo ? [lo, hi] : null;
+  }
+  return {
+    algorithm: first.algorithm,
+    sampleRate: first.sampleRate,
+    frequencies: Float64Array.from(stored.frequencies),
+    magnitudeDb: Float64Array.from(stored.centreDb),
+    phaseDeg: null,
+    snrDb,
+    validRange,
+    requestedRange: first.requestedRange ? [first.requestedRange[0], first.requestedRange[1]]
+      : first.requestedRange,
+    fftSize: first.fftSize,
+    binHz: first.binHz,
+    phaseReason: PHASE_REASONS.AGGREGATED,
+    alignment: null,
+    derivedFrom: DERIVED_FROM_AGGREGATE,
   };
 }

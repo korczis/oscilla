@@ -61,6 +61,19 @@ Worker that echoes a message):
   10.1 frames. **Capture start relative to the scheduled stimulus is therefore sample-exact and
   identical from run to run in every engine.** The recorder arms `[startFrame, endFrame)` on
   `currentFrame`; no timer is involved.
+- **Stale `currentFrame` under load (found later, fixed in `capture.js`).** Chromium 153 with
+  the machine under heavy CPU load (three copies of `tests/browser/v3-measure.cjs` at once)
+  occasionally reports the previous quantum's `currentFrame` in `process()`: the processor saw
+  `F, F, F + 256` over three calls, each with fresh input. Indexed by the raw value, the second
+  quantum overwrote the first and left a 128-frame hole: the run was INVALID with
+  `FRAMES_MISSING` ("128 frames missing, 2 discontinuities"; once also `DISCONTINUITY`), 6 of 12
+  stressed page runs failed this way (the capture had been armed on time:
+  `armedAtFrame = scheduledAtFrame`, start 4864 frames later). The processor now counts its own
+  quanta and only moves forward to `currentFrame` when the clock is ahead (a quantum it did not
+  process stays a reported gap). After the change: 0 failures in 14 stressed page runs (3 and
+  4 concurrent copies) and one unstressed three-browser run; corrections did occur (reported
+  306560, expected 306688; 846208 → 846336 in the G12 transparent-limit pre-limiter capture)
+  and those captures were sample-exact against gain × stimulus (max error 0).
 - **Frame integrity.** Every frame is counted against its index.
   - 3 × 132 032 frames per sweep measurement: 0 missing, 0 discontinuities in every browser
     and origin.
@@ -196,6 +209,9 @@ below threshold. The WaveShaper ceiling is exact (identity) in all three engines
   the worklet) and loaded from a `data:` URL. That requires a build step that bundles the
   analysis modules into a string: an esbuild sub-build or a `?raw` import of a pre-bundled
   file, which is a `scripts/build.mjs` change. Until then, analysis runs on the main thread
-  with yields between steps, and the UI should show progress (§170).
+  with yields between steps, and the UI should show progress (§170). Since G21 the boundary
+  exists: `measurement/analysis-task.js` `runAnalysis(message)` is the whole analysis as one
+  structured-cloneable task, called by the engine through its injected `analyze`, so the
+  Worker is that module's bundle plus an `analyze` that posts the message.
 - **WASM: not needed.** In the slowest engine, a full 2²¹-point analysis takes 1.0 s off the
   main thread (§83).

@@ -28,8 +28,9 @@
 // The bins are rotated by e^(+j2πk·lag/N) to remove the aligned delay (lag = lagSamples when
 // given, else alignment.lagSamples), complex-averaged over the band, and reported as the
 // wrapped angle in (−180°, 180°]. Otherwise phaseDeg is null and phaseReason says why
-// (PHASE_REASONS: NOT_REQUESTED, NO_ALIGNMENT, ALIGNMENT_NOT_ROBUST); a bare lagSamples is not
-// evidence of a robust alignment and no longer yields a phase by itself. Why 0.5: ρ² is the
+// (PHASE_REASONS: NOT_REQUESTED, NO_ALIGNMENT, ALIGNMENT_NOT_ROBUST; AGGREGATED marks the
+// aggregate centre of repeated runs, aggregate.js transferFromAggregate); a bare lagSamples is
+// not evidence of a robust alignment and no longer yields a phase by itself. Why 0.5: ρ² is the
 // fraction of the capture's energy in the stimulus window that one scaled, delayed copy of the
 // stimulus explains (ρ = 1/√2 at 0 dB broadband SNR for a flat system). Below ρ = 0.5 most of
 // that energy is noise, reverberation or filtering the delay model does not describe, so "the"
@@ -91,6 +92,9 @@ export const PHASE_REASONS = Object.freeze({
   NOT_REQUESTED: 'NOT_REQUESTED',
   NO_ALIGNMENT: 'NO_ALIGNMENT',
   ALIGNMENT_NOT_ROBUST: 'ALIGNMENT_NOT_ROBUST',
+  // The aggregate centre of repeated runs (derivedFrom 'aggregate', G20): the phases of
+  // separate runs are not averaged (§27); each run's own phase is in its run transfer.
+  AGGREGATED: 'AGGREGATED',
 });
 
 export function nextPowerOfTwo(n) {

@@ -26,6 +26,14 @@
 // `results.aggregate` is optional and keeps its presence: files written before it existed
 // validate, hash and re-export unchanged.
 //
+// Repeated measurements (G20, aggregate.js "Storage rule"): with an aggregate of ≥ 2 runs,
+// results.transfer is null or the aggregate centre marked derivedFrom: 'aggregate' — on the
+// aggregate's grid, magnitudeDb bit-identical to centreDb, phaseDeg null, alignment null — and
+// never one run's transfer; a derivedFrom transfer without such an aggregate is rejected. The
+// optional results.runTransfers ([{ run, transfer }], at most LIMITS.runTransfers entries, run
+// indices strictly increasing and below aggregate.runs, each an ordinary TransferResult on the
+// aggregate grid) holds individual runs when they were asked for; it needs such an aggregate.
+//
 // Result hash (spec §101): when provenance.resultHash is a hash, it is recomputed (hash.js
 // resultHash) over the decoded results; a mismatch is the error
 // { path: 'provenance.resultHash', code: 'corrupt' }. opts.sha256Hex may inject SHA-256.
@@ -45,7 +53,7 @@ import { migrateExperiment } from './migrate.js';
 import { resultHash } from './hash.js';
 import { PHASE_REASONS } from '../measurement/transfer.js';
 import { IR_ALGORITHMS } from '../measurement/impulse-response.js';
-import { AGGREGATE_DISPERSION } from '../measurement/aggregate.js';
+import { AGGREGATE_DISPERSION, DERIVED_FROM_AGGREGATE } from '../measurement/aggregate.js';
 
 export const DEFAULT_MAX_BYTES = 32 * 1024 * 1024;
 export const DEFAULT_MAX_ARRAY = 4_000_000;
@@ -395,9 +403,10 @@ function checkAlgorithms(c, a, path, ctx) {
 }
 
 function checkResults(c, r, path, ctx) {
-  if (!c.keys(r, path, ['transfer', 'ir', 'rta'], ['aggregate'])) return null;
+  if (!c.keys(r, path, ['transfer', 'ir', 'rta'], ['aggregate', 'runTransfers'])) return null;
   const out = {
-    transfer: r.transfer === null ? null : checkTransfer(c, r.transfer, `${path}.transfer`, ctx),
+    transfer: r.transfer === null ? null : checkTransfer(c, r.transfer, `${path}.transfer`, ctx,
+      { derived: true }),
     ir: r.ir === null ? null : checkIr(c, r.ir, `${path}.ir`, ctx),
     rta: r.rta === null ? null : checkRta(c, r.rta, `${path}.rta`, ctx),
   };
@@ -405,6 +414,78 @@ function checkResults(c, r, path, ctx) {
     out.aggregate = r.aggregate === null ? null
       : checkAggregate(c, r.aggregate, `${path}.aggregate`, ctx);
   }
+  const agg = out.aggregate || null;
+  const repeated = !!agg && agg.runs >= 2;
+  const onGrid = (t) => t.frequencies.length === agg.frequencies.length
+    && t.frequencies.every((f, i) => f === agg.frequencies[i]);
+  // G20: the transfer of a repeated measurement is the marked aggregate centre or null.
+  const t = out.transfer;
+  if (t && has(t, 'derivedFrom')) {
+    if (!repeated) {
+      c.add(`${path}.transfer.derivedFrom`, 'needs results.aggregate of at least two runs');
+    } else if (!onGrid(t)) {
+      c.add(`${path}.transfer.frequencies`, 'must equal results.aggregate.frequencies');
+    } else if (t.magnitudeDb && agg.centreDb) {
+      const bad = t.magnitudeDb.findIndex((v, i) => v !== agg.centreDb[i]);
+      if (bad >= 0) {
+        c.add(`${path}.transfer.magnitudeDb[${bad}]`, 'must equal results.aggregate.centreDb '
+          + '(derivedFrom "aggregate")');
+      }
+    }
+    if (t.phaseDeg) c.add(`${path}.transfer.phaseDeg`, 'must be null for the aggregate '
+      + 'centre (phases of separate runs are not averaged)');
+    if (has(t, 'alignment') && t.alignment !== null) {
+      c.add(`${path}.transfer.alignment`, 'must be null for the aggregate centre');
+    }
+  } else if (t && repeated) {
+    c.add(`${path}.transfer`, `a repeated measurement (${agg.runs} runs) stores the aggregate `
+      + 'centre (derivedFrom "aggregate") or null here; one run\'s transfer belongs in '
+      + 'results.runTransfers');
+  }
+  if (has(r, 'runTransfers')) {
+    const list = checkRunTransfers(c, r.runTransfers, `${path}.runTransfers`, ctx, agg);
+    if (list !== undefined) out.runTransfers = list;
+    if (list && !repeated) {
+      c.add(`${path}.runTransfers`, 'needs results.aggregate of at least two runs');
+    } else if (list) {
+      list.forEach((x, i) => {
+        if (x.transfer && !onGrid(x.transfer)) {
+          c.add(`${path}.runTransfers[${i}].transfer.frequencies`,
+            'must equal results.aggregate.frequencies');
+        }
+      });
+    }
+  }
+  return out;
+}
+
+/** results.runTransfers: [{ run, transfer }] of individual runs of a repeated measurement. */
+function checkRunTransfers(c, list, path, ctx, agg) {
+  if (!Array.isArray(list)) {
+    c.add(path, 'must be an array of { run, transfer }');
+    return undefined;
+  }
+  if (list.length < 1 || list.length > LIMITS.runTransfers) {
+    c.add(path, `must hold 1-${LIMITS.runTransfers} run transfers`);
+    return undefined;
+  }
+  const runs = agg && agg.runs >= 2 ? agg.runs : LIMITS.runs;
+  const out = [];
+  let prev = -1;
+  list.forEach((x, i) => {
+    const p = `${path}[${i}]`;
+    if (!c.keys(x, p, ['run', 'transfer'])) return;
+    if (c.num(x.run, `${p}.run`, 0, runs - 1, { integer: true }) && !(x.run > prev)) {
+      c.add(`${p}.run`, 'run indices must be strictly increasing');
+    }
+    if (typeof x.run === 'number') prev = x.run;
+    if (!c.obj(x.transfer, `${p}.transfer`)) return;
+    if (has(x.transfer, 'derivedFrom')) {
+      c.add(`${p}.transfer.derivedFrom`, 'a run transfer is one run, never derived');
+      return;
+    }
+    out.push({ run: x.run, transfer: checkTransfer(c, x.transfer, `${p}.transfer`, ctx) });
+  });
   return out;
 }
 
@@ -517,10 +598,15 @@ function resultArray(c, v, path, dtype, ctx, o = {}) {
   return out;
 }
 
-function checkTransfer(c, t, path, ctx) {
+function checkTransfer(c, t, path, ctx, { derived = false } = {}) {
   const keys = ['algorithm', 'sampleRate', 'frequencies', 'magnitudeDb', 'phaseDeg', 'snrDb',
     'validRange', 'requestedRange', 'fftSize', 'binHz'];
-  if (!c.keys(t, path, keys, ['phaseReason', 'alignment'])) return null;
+  const optional = derived ? ['phaseReason', 'alignment', 'derivedFrom']
+    : ['phaseReason', 'alignment'];
+  if (!c.keys(t, path, keys, optional)) return null;
+  if (derived && has(t, 'derivedFrom')) {
+    c.oneOf(t.derivedFrom, `${path}.derivedFrom`, [DERIVED_FROM_AGGREGATE]);
+  }
   algorithmId(c, t.algorithm, `${path}.algorithm`, ctx);
   if (!c.num(t.sampleRate, `${path}.sampleRate`, ...LIMITS.sampleRate)) return null;
   const nyq = t.sampleRate / 2;
@@ -553,6 +639,7 @@ function checkTransfer(c, t, path, ctx) {
   };
   if (has(t, 'phaseReason')) out.phaseReason = t.phaseReason;
   if (has(t, 'alignment')) out.alignment = alignment;
+  if (derived && has(t, 'derivedFrom')) out.derivedFrom = t.derivedFrom;
   return out;
 }
 

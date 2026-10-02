@@ -64,6 +64,11 @@ const SRC = path.resolve(__dirname, '..', '..', 'src', 'js');
 // between engines cancel. 0.1 dB leaves margin for an engine's internal biquad precision.
 const TOLERANCE_DB = 0.1;
 const G12_TOLERANCE_DB = 0.05;
+// Pure-gain loopback, pre-limiter tap: the capture is g · stimulus in Float32 graph arithmetic.
+// g · s computed in double here differs from the Float32 product by ≤ 1 ulp of |s| ≤ 0.25
+// (1.5e-8) plus the Float32 rounding of g (≤ 6e-8 relative): ≤ 1e-7. A quantum written at the
+// wrong frame leaves an error of the order of the signal itself (≥ 1e-3 over a sweep).
+const SAMPLE_EXACT_TOLERANCE = 1e-6;
 
 const LAUNCH = {
   chromium: { args: ['--autoplay-policy=no-user-gesture-required',
@@ -169,7 +174,7 @@ T.loopback = async (o = {}) => {
   let result = null;
   let error = null;
   try {
-    result = await eng.measure(recipe(o));
+    result = await eng.measure(recipe(o), { keepRaw: !!o.residual });
   } catch (err) {
     error = { code: err.code, message: err.message };
   }
@@ -237,11 +242,41 @@ T.loopback = async (o = {}) => {
       checks: result.captureChecks.map((c) => c.reasons.map((x) => x.code)),
       validRange: tr.validRange,
       analysis: result.timeline.analysis,
+      // Sample-exactness of a pure-gain loopback: max |capture[lag + i] − g · stimulus[i]| at
+      // the integer lag, with each run's stale-clock corrections. Any misplaced quantum makes
+      // it the size of the signal; Float32 arithmetic keeps it near 1e-8.
+      residual: o.residual && system.type === 'gain' ? result.runs.map((r) => {
+        const st = renderStimulus(result.stimulus.spec).samples;
+        const lag = Math.round(r.alignment.lagSamples);
+        const g = chainGain * system.gain;
+        let m = 0;
+        for (let i = 0; i < st.length; i++) {
+          const d = Math.abs(r.raw[lag + i] - g * st[i]);
+          if (!(d <= m)) m = d;
+        }
+        return { maxAbs: m, lagFrames: lag, clockCorrections: r.checks.integrity
+          && r.checks.integrity.timing ? r.checks.integrity.timing.clockCorrections : null };
+      }) : undefined,
       actual: result.timeline.actual,
     };
   } else if (result) {
-    out.result = { state: result.state, reasons: result.reasons };
+    // INVALID without a transfer: everything needed to say WHY (printed by the runner).
+    const sr = result.sampleRate || e.sampleRate;
+    const preF = Math.ceil((0.25 * sr) / 128 - 1e-9) * 128;
+    out.result = {
+      state: result.state,
+      reasons: (result.reasons || []).map((x) => ({ code: x.code, text: x.text,
+        run: x.run, value: x.value })),
+      runs: (result.runs || []).length,
+      frames: (result.runs || []).map((r) => r.frames),
+      integrity: (result.runs || []).map((r) => r.checks && r.checks.integrity),
+      lags: undefined,
+      lagsInvalid: (result.runs || []).map((r) => (r.alignment
+        && r.alignment.lagSamples !== null ? r.alignment.lagSamples - preF : null)),
+      actual: result.timeline && result.timeline.actual,
+    };
   }
+  out.diag = io.diagnostics ? io.diagnostics() : null;
   io.dispose();
   return out;
 };
@@ -463,6 +498,37 @@ function check(key, name, ok, detail = '') {
   return ok;
 }
 const f = (x, d = 3) => (x == null || Number.isNaN(x) ? 'null' : Number(x).toFixed(d));
+/**
+ * Stale-clock corrections of the capture worklet (capture.js CAPTURE_WORKLET_SOURCE): printed
+ * whenever a capture window needed one, with the outcome, as evidence that the corrected index
+ * yields a complete, valid capture.
+ */
+function noteClock(key, label, lb) {
+  const notes = (lb && lb.diag && lb.diag.clock) || [];
+  const armed = notes.filter((x) => x.id >= 0);
+  if (armed.length) {
+    console.log(`  INFO [${key}] clock: ${label}: ${armed.length} stale currentFrame reading(s) `
+      + `corrected inside capture windows (${JSON.stringify(armed.slice(0, 3))}); result `
+      + `${lb.result ? lb.result.state : lb.state}`);
+  }
+  return armed.length;
+}
+
+/** Why a loopback produced no transfer: the error, or the INVALID reasons with frame counts. */
+function whyNoTransfer(lb) {
+  if (!lb) return 'no result';
+  if (lb.result && lb.result.points !== undefined) return 'transfer present';
+  const r = lb.result || {};
+  const parts = [`state ${lb.state}`];
+  if (lb.error) parts.push(`error ${lb.error.code}: ${lb.error.message}`);
+  if (r.reasons) parts.push(`reasons ${r.reasons.map((x) => `${x.code} (${x.text})`).join('; ')}`);
+  if (r.integrity) parts.push(`integrity ${JSON.stringify(r.integrity)}`);
+  if (r.frames) parts.push(`frames ${JSON.stringify(r.frames)}`);
+  if (r.lagsInvalid) parts.push(`lag ${JSON.stringify(r.lagsInvalid)}`);
+  if (r.actual) parts.push(`timeline ${JSON.stringify(r.actual)}`);
+  if (lb.diag) parts.push(`io ${JSON.stringify(lb.diag)}`);
+  return parts.join(', ');
+}
 const stats = (xs) => {
   const n = xs.length;
   const mean = xs.reduce((a, b) => a + b, 0) / n;
@@ -499,8 +565,10 @@ async function runOne(browserName, origin, url, workerSource, micDone) {
     const lb = (rec.loopback = await page.evaluate(() => window.T.loopback({ seconds: 2,
       repeats: 3 })));
     const r = lb.result || {};
+    noteClock(key, 'loopback 3 runs', lb);
     check(key, 'loopback measurement COMPLETE with 3 runs', r.state === 'COMPLETE'
-      && r.runs === 3, `${lb.state} ${JSON.stringify(lb.error || r.reasons || '')}`);
+      && r.runs === 3,
+    r.state === 'COMPLETE' ? `${lb.state}, ${r.runs} runs` : whyNoTransfer(lb));
     check(key, `capture mode ${lb.mode}`, lb.mode === 'audioworklet'
       || (lb.mode === 'scriptprocessor' && !!lb.workletError),
     lb.workletError ? `worklet: ${lb.workletError}` : 'data: URL worklet');
@@ -534,9 +602,12 @@ async function runOne(browserName, origin, url, workerSource, micDone) {
     for (const [label, level, masterGain, asserted] of G12_CASES) {
       const sys = { type: 'gain', gain: 1 };
       const pre = await page.evaluate((o) => window.T.loopback(o), { seconds: 2, level,
-        masterGain, tap: 'pre-limiter', system: sys, noiseCheckS: 0, keepCurve: true });
+        masterGain, tap: 'pre-limiter', system: sys, noiseCheckS: 0, keepCurve: true,
+        residual: true });
       const post = await page.evaluate((o) => window.T.loopback(o), { seconds: 2, level,
         masterGain, tap: 'post-chain', system: sys, noiseCheckS: 0, keepCurve: true });
+      noteClock(key, `G12 ${label} pre-limiter`, pre);
+      noteClock(key, `G12 ${label} post-chain`, post);
       const a = pre.result;
       const b = post.result;
       const worstIn = (lo, hi) => {
@@ -558,7 +629,8 @@ async function runOne(browserName, origin, url, workerSource, micDone) {
         lagPre: a && a.lags, lagPost: b && b.lags };
       const detail = `20 Hz-18 kHz worst ${f(band.db, 5)} dB at ${f(band.at, 0)} Hz; 18-20 kHz `
         + `worst ${f(top.db, 3)} dB at ${f(top.at, 0)} Hz; lag pre ${a && a.lags
-          && f(a.lags[0], 1)} post ${b && b.lags && f(b.lags[0], 1)} frames`;
+          && f(a.lags[0], 1)} post ${b && b.lags && f(b.lags[0], 1)} frames`
+        + (band.db === null ? `; pre: ${whyNoTransfer(pre)}; post: ${whyNoTransfer(post)}` : '');
       if (asserted) {
         check(key, `G12 ${label} (peak ${f(level * masterGain, 3)}): post-chain − pre-limiter `
           + `< ${G12_TOLERANCE_DB} dB (20 Hz-18 kHz)`, band.db !== null
@@ -566,6 +638,12 @@ async function runOne(browserName, origin, url, workerSource, micDone) {
       } else {
         console.log(`  INFO [${key}] G12 ${label} (peak ${f(level * masterGain, 3)}): ${detail}`);
       }
+      // The pre-limiter tap is the master gain alone: the capture must equal gain × stimulus
+      // sample for sample, including captures whose worklet clock needed a correction.
+      const res = a && a.residual;
+      check(key, `G12 ${label}: pre-limiter capture sample-exact (|capture − g·stimulus| ≤ `
+        + `${SAMPLE_EXACT_TOLERANCE})`, !!res && res.every((x) => x.maxAbs
+        <= SAMPLE_EXACT_TOLERANCE), res ? JSON.stringify(res) : whyNoTransfer(pre));
     }
 
     // 3. Abort in the middle of the sweep.

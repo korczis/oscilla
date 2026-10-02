@@ -563,7 +563,8 @@ Bit-identical savings also in the separate paths:
 
 `engine.js` uses one plan and one noise spectrum per measurement, `computeTransfer` for the
 other runs and `computeTransferAndIr` for the representative run (analysis step
-`transfer+impulse-response`). Cost per 2²¹ deconvolution is dominated by the N-point FFTs
+`transfer+impulse-response`); since G21 these calls live in `analysis-task.js`
+(`analysisSteps`), unchanged and in the same order. Cost per 2²¹ deconvolution is dominated by the N-point FFTs
 (≈ 115-190 ms each in Node 22 here, depending on machine load): one run with noise needed 4
 FFTs and 2 plans, now 3 FFTs and 1 plan; each further run 2 FFTs and 1 plan, now 1 FFT.
 
@@ -885,6 +886,42 @@ descriptive) with a `# repeatability_db` line. `v3-pipeline.test.mjs` stores the
 its three runs instead of run 1's TransferResult and round-trips it byte for byte; a flipped
 digit in `centreDb` is rejected as corrupt.
 
+### Storage rule for repeated measurements — **Changed (G20)**
+
+The aggregate is the primary response of a repeated measurement. With `runs ≥ 2`:
+
+- `results.aggregate` = `aggregateResult(aggregate, frequencies)` (above);
+- `results.transfer` = `transferFromAggregate(stored, transfers)` (`aggregate.js`) or `null`,
+  **never one run's transfer**. It is a TransferResult marked `derivedFrom: 'aggregate'`:
+  `magnitudeDb` is a copy of `stored.centreDb` (the same bits, on the same grid, so the floor
+  at −300 dB is the stored one), `snrDb` the lowest run SNR per point (null unless every run
+  has one), `validRange` the intersection of the runs' valid ranges (null if empty), `phaseDeg`
+  null with `phaseReason: 'AGGREGATED'` (phases of separate runs are not averaged, §27),
+  `alignment` null (each run has its own), the other fields from run 1. Why a marked transfer
+  rather than null: the aggregate has no valid range and no SNR, and both are what make its
+  centre usable (quality, `responseDelta`); keeping them conservative (worst run, common range)
+  never claims more than every run supports;
+- `results.runTransfers` (optional) = `[{ run, transfer }]`, individual runs' own
+  TransferResults (with their phase), **only when requested**, at most `LIMITS.runTransfers`
+  (10, one per repeat), run indices strictly increasing and below `aggregate.runs`, each on the
+  aggregate grid and never derived.
+
+A single run stores its own TransferResult as `results.transfer` and no aggregate, exactly as
+before G20. `engine.js` `measure()` returns that transfer (`result.transfer`; each run's own in
+`result.runs[i].transfer`), and `schema.js` `resultsFromMeasurement(result, { runTransfers })`
+(false, true or an array of run indices) turns an engine result into the stored `results`
+block (dropping the engine's `ir.run` index). `validate.js` enforces the rule with paths:
+a non-derived transfer next to an aggregate of ≥ 2 runs, a `derivedFrom` without such an
+aggregate or with another value, a grid or a single centre bit that differs, a phase or an
+alignment on the centre, and malformed, unordered, out-of-range, derived, off-grid or too many
+run transfers are rejected. The result hash covers `derivedFrom` and `runTransfers` like any
+other result field; files without them hash as before. `transferCsv` writes a
+`# derived_from: aggregate …` line, a title and column units naming the centre ("lowest of the
+runs" for snr_db), and `# run: k` for one run (option `run`). `compare.js` compares the
+aggregate when present (`responseOf`): see [Experiments](#experiments).
+Tests: `tests/unit/v3-storage.test.mjs` (engine → results → experiment → hash → JSON →
+validate byte for byte, every rejection by path, CSV lines, comparisons).
+
 Tests (`v3-rta-aggregate.test.mjs`, all 1e-12 or exact): identical runs give zero spread for both
 methods; mean centre of [0, 2, 4] dB is the power mean (> 2 dB), spread 2 dB and √12 dB; median
 of [0, 1, 2, 3, 10] gives p10 0.4, p90 7.2, MAD 1, and the outlier widens the mean envelope more
@@ -1187,6 +1224,22 @@ relative band level) + offset, its unit line naming the base column and the offs
 The specification's column list (§164, "magnitude_db_calibrated") predates this split; it is not
 edited here.
 
+### Comparison of repeated measurements (`compare.js`) — **Changed (G20)**
+
+`responseDelta(a, b)` compares *responses* (`responseOf`): for an experiment the aggregate when
+`results.aggregate` holds ≥ 2 runs (centre on its grid; valid range from the `derivedFrom`
+transfer, else the whole grid), otherwise `results.transfer`; a bare TransferResult (kind
+`transfer`, or `aggregate-centre` when derived) or AggregateResult (kind `aggregate`) is
+accepted too. The delta is computed as before (log-frequency interpolation over the overlap of
+the valid ranges, raw dB) and now also returns `sources`, `equivalent` and `warnings`: a single
+run against an aggregate or its centre is **not equivalent** (a single run carries the
+run-to-run scatter the aggregate averages out), and neither are aggregates of different
+methods. When both responses carry an envelope, `envelope` holds both bounds on the common grid,
+`overlap` (1 where the intervals intersect) and `overlapFraction`; envelopes of different
+dispersion measures (`std` vs `p10-p90`) are marked `comparable: false` with a warning.
+`compareExperiments` adds `results.response` ('single run' | 'aggregate (<method>)', a `warn`
+difference), `results.aggregate.runs` (`info`) and `results.aggregate.algorithm`.
+
 <a id="golden"></a>
 ### Golden outputs per algorithm ID — **New (gaps)** (was G18)
 
@@ -1453,13 +1506,31 @@ reason `scope`; found by the pipeline test).
 - **G19 Calibrated transfer column.** `magnitude_db_corrected` is a ratio; dB SPL only in
   `rtaCsv` level_db_spl under a valid level calibration.
 
+**Closed** on top of d689631:
+
+- **G20 Stored transfer vs aggregate.** The storage rule is in
+  [Aggregation](#aggregate) ("Storage rule for repeated measurements"): aggregate primary,
+  `results.transfer` the marked centre (`derivedFrom: 'aggregate'`) or null, individual runs
+  only on request in `results.runTransfers`; one rule in `engine.js`, `schema.js`
+  (`resultsFromMeasurement`), `validate.js`, `hash.js`, `csv.js` and `compare.js`.
+- **Capture clock (found while hardening the V3 browser test).** Chromium 153 under CPU load
+  reports a stale `currentFrame` in the capture worklet for one render quantum (`F, F, F + 256`
+  over three `process()` calls, each with fresh input), which wrote one quantum over the
+  previous one and left a 128-frame hole (`FRAMES_MISSING`, sometimes `DISCONTINUITY`): the
+  intermittent INVALID loopback in `tests/browser/v3-measure.cjs`. The processor now indexes
+  frames by its own quantum count, moved forward to `currentFrame` only when the clock is
+  ahead (`capture.js` `CAPTURE_WORKLET_SOURCE`); a pure-gain pre-limiter loopback is
+  sample-exact (max |capture − g·stimulus| = 0) including captures that needed a correction,
+  and the browser test asserts that.
+
 Remaining:
 
-- **G20 Stored transfer vs aggregate.** With repeats an experiment can now store the aggregate,
-  but `compare.js` compares only `results.transfer`, and the engine's combined transfer (with
-  `runs`, `aggregation` fields) is not itself a storable TransferResult; the builder that turns
-  an engine result into an experiment (UI layer) must choose `transfer: null` + `aggregate`, or
-  one run's transfer + `aggregate`.
 - **G21 Longest analysis block.** `transfer+impulse-response` is one engine step (≈ 360-520 ms
   in Node for a 10 s sweep at 48 kHz), longer than either step was; the Worker integration of the
-  spike is still the remedy.
+  spike is still the remedy. **Prepared (G21):** the whole analysis is one serializable task,
+  `measurement/analysis-task.js` `runAnalysis(message) → result` (plain data and transferable
+  typed arrays in and out, bit-identical to the previous engine analysis:
+  `tests/unit/v3-analysis-task.test.mjs`), which `engine.js` calls through the injected
+  `analyze` (default `analyzeInline`, yields between steps as before). Moving it into a
+  `data:` Worker needs only the bundled Worker source (a `scripts/build.mjs` sub-build) and an
+  `analyze` that posts the message with `analysisTransferList(message, { keepRaw })`.

@@ -8,8 +8,11 @@
 // must say how it was derived and is labelled as not raw.
 //
 //   csvMeta(experiment) -> meta
-//   transferCsv(result, meta, { view, derivation, correctedDb, reliable })
+//   transferCsv(result, meta, { view, derivation, correctedDb, reliable, run })
 //     columns frequency_hz, magnitude_db_relative, magnitude_db_corrected, snr_db, reliable
+//     A transfer marked derivedFrom 'aggregate' (G20: the centre of repeated runs) says so in a
+//     `# derived_from:` line and in its column units; `run` (an index of results.runTransfers)
+//     adds `# run:` for one run of a repeated measurement.
 //   aggregateCsv(aggregate, meta, { view, derivation })
 //     columns frequency_hz, centre_db_relative, lower_db_relative, upper_db_relative, spread_db
 //   irCsv(ir, meta, { view, derivation })            columns time_s, amplitude
@@ -132,17 +135,41 @@ export function transferCsv(result, meta, opts = {}) {
   checkLength(corrected, n, 'correctedDb');
   checkLength(opts.reliable, n, 'reliable');
   const [vLo, vHi] = r.validRange || [NaN, NaN];
-  const lines = header('transfer function (frequency response)', meta, r.algorithm, r.sampleRate,
+  const derived = r.derivedFrom === 'aggregate';
+  if (r.derivedFrom !== undefined && !derived) {
+    throw new RangeError(`unknown derivedFrom ${r.derivedFrom}`);
+  }
+  if (derived && opts.run !== undefined) {
+    throw new RangeError('a run index belongs to one run\'s transfer, not the aggregate centre');
+  }
+  if (opts.run !== undefined && !(Number.isInteger(opts.run) && opts.run >= 0)) {
+    throw new RangeError('run must be a run index (integer ≥ 0)');
+  }
+  const centre = derived ? ', centre of the repeated runs (aggregate; envelope in the aggregate '
+    + 'CSV)' : '';
+  const title = `transfer function (frequency response)${derived
+    ? ', aggregate centre of repeated runs' : ''}`;
+  const lines = header(title, meta, r.algorithm, r.sampleRate,
     opts, [
       ['frequency_hz', 'Hz'],
-      ['magnitude_db_relative', `${TRANSFER_RATIO_UNIT}, uncorrected`],
+      ['magnitude_db_relative', `${TRANSFER_RATIO_UNIT}, uncorrected${centre}`],
       ['magnitude_db_corrected', corrected
         ? `${TRANSFER_RATIO_UNIT}, frequency-profile corrected (microphone deviation removed)`
         : 'empty (no frequency calibration applied)'],
-      ['snr_db', r.snrDb ? 'dB, ESTIMATED signal-to-noise ratio' : 'empty (not estimated)'],
+      ['snr_db', r.snrDb ? `dB, ESTIMATED signal-to-noise ratio${derived
+        ? ', lowest of the runs' : ''}` : 'empty (not estimated)'],
       ['reliable', opts.reliable ? '1 = reliable, 0 = not (quality assessment)'
-        : `1 = inside the valid range ${num(vLo)}-${num(vHi)} Hz, 0 = outside`],
+        : `1 = inside the valid range ${num(vLo)}-${num(vHi)} Hz${derived
+          ? ' (where every run is valid)' : ''}, 0 = outside`],
     ]);
+  const at = lines.findIndex((l) => l.startsWith('# column '));
+  if (derived) {
+    lines.splice(at, 0, '# derived_from: aggregate (magnitude = results.aggregate centre of the '
+      + 'repeated runs; no phase: the runs\' phases are not averaged)');
+  } else if (opts.run !== undefined) {
+    lines.splice(at, 0, `# run: ${opts.run} (one run of a repeated measurement, not the `
+      + 'aggregate)');
+  }
   for (let i = 0; i < n; i++) {
     const f = r.frequencies[i];
     const rel = opts.reliable ? (opts.reliable[i] ? 1 : 0) : (f >= vLo && f <= vHi ? 1 : 0);

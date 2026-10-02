@@ -23,6 +23,11 @@
 // spread, repeatability of repeated runs on their grid), added with withResults({ results:
 // { aggregate } }); createExperiment leaves it absent, so experiments without repeats and files
 // written before it existed keep their exact form and result hash.
+// Repeated measurements (G20, aggregate.js "Storage rule"): results.aggregate is the primary
+// response; results.transfer is the aggregate centre marked derivedFrom: 'aggregate' (or null),
+// never one run's transfer; individual runs only on request in the optional
+// results.runTransfers [{ run, transfer }] (≤ LIMITS.runTransfers). resultsFromMeasurement()
+// turns an engine result into exactly that block.
 // Unknown values are null, never guessed (§52). Result arrays are typed arrays in memory and
 // EncodedArray objects (encode.js) in a file; serializeExperiment converts.
 //
@@ -31,6 +36,8 @@
 //     environment, algorithms }) -> Experiment
 //   withResults(experiment, { startedAt, sampleRate, runs, quality, algorithms, results })
 //   repeatExperiment(experiment, { now, id, build, sampleRate }) -> a NEW Experiment (§104)
+//   resultsFromMeasurement(result, { runTransfers }) -> { transfer, ir, rta, aggregate?,
+//     runTransfers? }                                (an engine.js measure() result, G20)
 //   newExperimentId(randomBytes16) -> UUIDv4 string
 //   serializeExperiment(e) -> JSON-safe object;  experimentToJson(e, space?) -> string
 //   summarizeExperiment(e) -> string[]               (§161)
@@ -47,6 +54,7 @@ import {
 import {
   RELATIVE_SCALE_LABEL, RELATIVE_UNIT, isValidLevelCalibration,
 } from '../calibration/level.js';
+import { aggregateResult, transferFromAggregate } from '../measurement/aggregate.js';
 
 /** Experiment file schema (§131-§132: V3.0 starts at 1, independent of the product version). */
 export const EXPERIMENT_SCHEMA_VERSION = 1;
@@ -76,6 +84,8 @@ export const LIMITS = Object.freeze({
     Math.max(...durations.map((d) => d[1]))]),
   repeats: Object.freeze([1, 10]),
   runs: 64,
+  /** results.runTransfers entries (G20): at most one per repeat. */
+  runTransfers: 10,
   frequencyHz: Object.freeze([0, 192000]),
   levelDigital: Object.freeze([0, 1]),
   dbAbs: 400,
@@ -476,6 +486,58 @@ export function withResults(experiment, patch = {}) {
     results: patch.results !== undefined ? { ...e.results, ...patch.results } : e.results,
     provenance,
   };
+}
+
+/**
+ * resultsFromMeasurement(result, { runTransfers = false }) → the `results` block of an
+ * engine.js measure() result under the G20 storage rule:
+ *   one run      { transfer: that run's TransferResult, ir, rta: null }   (no aggregate)
+ *   ≥ 2 runs     { transfer: transferFromAggregate(aggregate, run transfers) (derivedFrom
+ *                'aggregate'), ir, rta: null, aggregate: aggregateResult(...),
+ *                runTransfers?: [{ run, transfer }] }
+ * runTransfers: false (none), true (every run) or an array of run indices (strictly
+ * increasing, each below the run count; at most LIMITS.runTransfers); ignored for one run,
+ * whose transfer IS results.transfer. The IR is the representative run's, without the engine's
+ * `run` bookkeeping field. A result without a transfer (INVALID before analysis) gives null
+ * results. Typed arrays of the run transfers and the IR are referenced, not copied.
+ */
+export function resultsFromMeasurement(result, { runTransfers = false } = {}) {
+  if (!result || typeof result !== 'object') {
+    throw new TypeError('resultsFromMeasurement needs an engine measure() result');
+  }
+  let ir = null;
+  if (result.ir) {
+    ir = { ...result.ir };
+    delete ir.run; // the engine's representative-run index, not part of an IrResult
+  }
+  const runs = Array.isArray(result.runs) ? result.runs : [];
+  if (!result.transfer) return { transfer: null, ir, rta: null };
+  if (runs.length < 2) return { transfer: result.transfer, ir, rta: null };
+  const transfers = runs.map((r, i) => {
+    if (!r || !r.transfer) throw new RangeError(`run ${i} has no transfer`);
+    return r.transfer;
+  });
+  const aggregate = aggregateResult(result.aggregate, transfers[0].frequencies);
+  const out = { transfer: transferFromAggregate(aggregate, transfers), ir, rta: null, aggregate };
+  let picked = null;
+  if (runTransfers === true) picked = runs.map((_, i) => i);
+  else if (Array.isArray(runTransfers)) picked = runTransfers;
+  else if (runTransfers !== false && runTransfers != null) {
+    throw new TypeError('runTransfers must be false, true or an array of run indices');
+  }
+  if (picked && picked.length) {
+    if (picked.length > LIMITS.runTransfers) {
+      throw new RangeError(`at most ${LIMITS.runTransfers} run transfers are stored`);
+    }
+    picked.forEach((k, i) => {
+      if (!Number.isInteger(k) || k < 0 || k >= runs.length || (i > 0 && !(k > picked[i - 1]))) {
+        throw new RangeError('runTransfers: run indices must be strictly increasing integers '
+          + `0-${runs.length - 1}`);
+      }
+    });
+    out.runTransfers = picked.map((k) => ({ run: k, transfer: transfers[k] }));
+  }
+  return out;
 }
 
 /**
