@@ -121,7 +121,26 @@ function measureTouch(min) {
     }
     tested++;
     const range = el.type === 'range';
-    if (b.height < min - 0.5 || (!range && b.width < min - 0.5)) {
+    // A control may keep a small visual box and extend its hit area (padding, a ::before on its
+    // wrapper). What a finger hits is what counts: probe the corners of a 44 px square centred
+    // on the control; they must land on the control, inside it, or on its own label/switch.
+    const hitsTarget = () => {
+      el.scrollIntoView({ block: 'center', inline: 'nearest' });
+      const r = el.getBoundingClientRect();
+      const cx = r.left + r.width / 2;
+      const cy = r.top + r.height / 2;
+      const h = min / 2 - 1;
+      const pts = range ? [[cx, cy - h], [cx, cy + h]]
+        : [[cx - h, cy - h], [cx + h, cy - h], [cx - h, cy + h], [cx + h, cy + h]];
+      return pts.every(([x, y]) => {
+        const hit = document.elementFromPoint(x, y);
+        if (!hit) return false;
+        if (hit === el || el.contains(hit)) return true;
+        const wrap = hit.closest('label, .osc-toggle');
+        return !!(wrap && wrap.contains(el));
+      });
+    };
+    if ((b.height < min - 0.5 || (!range && b.width < min - 0.5)) && !hitsTarget()) {
       // Anonymous elements are keyed by their nearest identified ancestor, so the known list
       // stays precise (e.g. "osc-bio-sources>A" rather than every link on the page).
       const anchor = el.parentElement && el.parentElement.closest('[id]');
