@@ -1095,6 +1095,84 @@ async function runBrowser() {
     await context.close();
   }
 
+  // ------------------------------------------------------------------ limiter look-ahead
+  // Not part of V1's suite. The limiter (DynamicsCompressorNode) delays its signal by a 6 ms
+  // look-ahead (288 frames at 48 kHz). Firefox 155 does not run that delay line while the
+  // limiter's input is silent (null), so the last 6 ms of one sound came out when the next one
+  // started (audio-engine.js feedLimiter keeps the input non-null). Measured on the output tap
+  // over the 50 ms of silence before the next sound's onset t0 and the look-ahead after it
+  // (floor(6 ms * sampleRate) frames): the next sound itself leaves the limiter only one
+  // look-ahead after t0, so in a correct chain that whole window is the silent gap, exactly 0
+  // (measured in Chromium and in fixed Firefox). Every release here ends on the GAIN_FLOOR
+  // (-80 dB) of the sound, held through the 10 ms stop margin, so what the frozen line replays
+  // is that floor: gain 0.25 (UI 100 %) x 1e-4 = 2.5e-5. Threshold 1e-6 (-120 dBFS): 28 dB
+  // under the smallest replay and above the exact 0 of a correct chain.
+  console.log('limiter look-ahead: no replay of the previous sound at the next onset');
+  {
+    const { page, problems, context } = await openPage(browser);
+    await startAudio(page);
+    const r = await app(page, async (a, e, O, T) => {
+      const lookAhead = Math.floor(0.006 * e.sampleRate) / e.sampleRate;
+      const SILENT = 1e-6;
+      a.gainLevel = 0.25;
+      const tone = () => {
+        a.setMode('playground'); a.setPattern('tone'); a.setWaveform('sine'); a.setFrequency(220);
+        a.attack = 10; a.release = 30;
+      };
+      // The next sound after 250 ms of silence: the window before its onset and its first 6 ms.
+      const next = async () => {
+        tone();
+        await sleep(250);
+        a.play('hold');
+        const t0 = e.voice.t0;
+        await untilAudio(t0 + 0.1);
+        a.stopNow();
+        await gone(e.ctx.currentTime, 0.5);
+        await T.waitRec(t0 + 0.1);
+        const s = T.stats(t0 - 0.05, t0 + lookAhead);
+        // diagnostic: the first output sample above the threshold, relative to the onset (a
+        // replay starts with the render quantum that holds t0, the next sound at the look-ahead)
+        const { t, data } = T.samples(t0 - 0.05, t0 + 0.1);
+        let firstMs = null;
+        for (let i = 0; i < data.length; i++) {
+          if (Math.abs(data[i]) <= SILENT) continue;
+          firstMs = +((t + i / T.rec.sr - t0) * 1000).toFixed(2);
+          break;
+        }
+        return { peak: s.peak, n: s.n, runs: s.runs, firstMs, silent: s.peak < SILENT };
+      };
+      const out = { sr: e.sampleRate };
+      // a complete 20 Hz -> 20 kHz sweep (it ends on its 20 kHz fade-out), then the next sound
+      const sweep = (durationMs) => {
+        a.setMode('sweep');
+        Object.assign(a.sweep,
+          { start: 20, end: 20000, durationMs, repeat: 'once', direction: 'up' });
+        a.trigger();
+      };
+      sweep(500);
+      out.sweep = await gone(e.voice.t0, 2);
+      out.afterSweep = await next();
+      // a 2 s sweep aborted after 800 ms (stopNow: the fast abort fade), then the next sound
+      sweep(2000);
+      await untilAudio(e.voice.t0 + 0.8);
+      a.stopNow();
+      out.abort = await gone(e.ctx.currentTime, 0.5);
+      out.afterAbort = await next();
+      tone();
+      return out;
+    });
+    const minN = 0.05 * r.sr; // the window was recorded without a gap
+    const cases = { afterSweep: 'after a complete sweep', afterAbort: 'after an abort mid-sweep' };
+    for (const [k, what] of Object.entries(cases)) {
+      check(`limiter look-ahead: ${what}, no energy of it before or in the first 6 ms of the next `
+        + 'onset (peak < 1e-6)', r[k].n >= minN && r[k].silent, JSON.stringify(r[k]));
+    }
+    check('limiter look-ahead: both sweeps ended with 0 oscillators',
+      r.sweep.oscs === 0 && r.abort.oscs === 0, JSON.stringify({ sweep: r.sweep, abort: r.abort }));
+    check('no console problems (limiter look-ahead)', problems.length === 0, problems.join(' | '));
+    await context.close();
+  }
+
   // ------------------------------------------------------------------ V2 extension points
   // Not part of V1's suite: the V2 hooks on the ported engine, measured the same way (click
   // ratio from the output tap, oscillator accounting).

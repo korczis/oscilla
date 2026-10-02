@@ -606,3 +606,72 @@ test('V249: clock readings are dropped when the context changes state', { skip }
   const fade = eng.voice.nodes[2].gain.events;
   assert.strictEqual(fade[0][2], Math.ceil(0.52 / q) * q, 'no reading from before the suspension');
 });
+
+/** Mock ConstantSourceNode (the freeze mock has none): records start/stop, offset is a param. */
+function withConstantSource(audio) {
+  const created = [];
+  audio.AudioContext.prototype.createConstantSource = function () {
+    const n = this.createGain();
+    n.kind = 'constantSource';
+    n.offset = n.gain;
+    n.started = null;
+    n.stopped = false;
+    n.start = (t = 0) => { n.started = t; };
+    n.stop = () => { n.stopped = true; };
+    created.push(n);
+    return n;
+  };
+  return created;
+}
+
+test('limiter feed: constant 0 into the limiter for the context lifetime, gone on discard',
+  { skip }, () => {
+    const { eng, audio, advance } = setup();
+    const created = withConstantSource(audio);
+    assert.ok(eng.init());
+    const feed = eng.limiterFeed;
+    assert.strictEqual(created.length, 1);
+    assert.strictEqual(feed, created[0]);
+    assert.strictEqual(feed.offset.value, 0);
+    assert.strictEqual(feed.offset.events.length, 0, 'offset never automated');
+    assert.strictEqual(feed.started, 0);
+    assert.deepStrictEqual(feed.out, [`node:${eng.limiter.id}`]);
+    // Master-chain infrastructure, not a voice node: the zero-leak accounting is unaffected.
+    assert.strictEqual(eng.activeNodeCount, 0);
+    assert.strictEqual(eng.activeSourceCount, 0);
+    assert.strictEqual(eng.micNodeCount, 0);
+    assert.ok(!eng.nodes.has(feed) && !eng.sources.has(feed));
+    // A voice played, retriggered and stopped: the counts return to 0, the feed keeps running.
+    eng.play(plan({ pattern: 'tone', frequency: 440 }), opt());
+    advance(0.3);
+    assert.ok(eng.activeNodeCount > 0);
+    assert.ok(!eng.nodes.has(feed) && !eng.sources.has(feed));
+    eng.play(plan({ pattern: 'tone', frequency: 660 }), opt());
+    advance(0.6);
+    eng.stopAll();
+    advance(2);
+    assert.strictEqual(eng.activeNodeCount, 0);
+    assert.strictEqual(eng.activeSourceCount, 0);
+    assert.strictEqual(eng.voices.size, 0);
+    assert.strictEqual(created.length, 1, 'one feed per context, never per voice');
+    assert.strictEqual(eng.limiterFeed, feed);
+    assert.ok(!feed.stopped);
+    assert.strictEqual(feed.disconnected, 0);
+    // The context closed from outside: the feed is stopped and disconnected with the chain.
+    eng.ctx.externalState('closed');
+    assert.strictEqual(eng.limiterFeed, null);
+    assert.ok(feed.stopped);
+    assert.ok(feed.disconnected > 0);
+    // The rebuilt context gets its own feed.
+    assert.ok(eng.init());
+    assert.strictEqual(created.length, 2);
+    assert.strictEqual(eng.limiterFeed, created[1]);
+    assert.deepStrictEqual(created[1].out, [`node:${eng.limiter.id}`]);
+  });
+
+test('limiter feed: none where the context has no ConstantSourceNode', { skip }, () => {
+  const { eng } = setup();
+  assert.ok(eng.init());
+  assert.strictEqual(eng.limiterFeed, null);
+  assert.ok(eng.ctx.trace().every((n) => n.kind !== 'constantSource'));
+});
