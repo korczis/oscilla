@@ -68,7 +68,7 @@ export function createAdditiveChart(host, options = {}) {
       ctx.fillText(formatDbTick(v, 'plain'), p.x - 8, y);
     }
     const slot = p.w / o.count;
-    const bw = Math.max(2, Math.min(8, slot * 0.36));
+    const bw = Math.max(2, Math.min(10, Math.round(slot * 0.44)));
     ctx.textAlign = 'center';
     for (let i = 0; i < o.count; i++) {
       const n = i + 1;
@@ -87,10 +87,11 @@ export function createAdditiveChart(host, options = {}) {
           ctx.strokeRect(x + 0.5, top + 0.5, bw - 1, h - 1);
           ctx.setLineDash([]);
         } else {
-          ctx.fillStyle = isSel ? theme.blue : withAlpha(theme.blue, 0.82);
+          ctx.fillStyle = isSel ? theme.blue : withAlpha(theme.blue, 0.88);
           ctx.fillRect(x, top, bw, h);
           if (isSel) {
-            ctx.strokeStyle = withAlpha(theme.text, 0.75);
+            // Selection: a thin outline (not colour alone) plus the highlighted number.
+            ctx.strokeStyle = withAlpha(theme.text, 0.55);
             ctx.lineWidth = 1;
             ctx.strokeRect(x - 1.5, top - 1.5, bw + 3, h + 1.5);
           }

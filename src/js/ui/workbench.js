@@ -17,6 +17,7 @@ import { SWEEP_PARAMS } from '../audio/patterns.js';
 import { LEARN_VIZ_TARGETS } from '../data/learn.js';
 import { harmonicTable } from '../visualization/harmonics.js';
 import { OSCILLA_VERSION } from './version.js';
+import { formatHz } from '../charts/axes.js';
 import { rovingKeydown } from './app.js';
 import { parseConfigImport, exportFileName } from './config-file.js';
 import { downloadBlob, readFileText } from './exporters.js';
@@ -78,8 +79,9 @@ export function createWorkbench(svc) {
         this.rangeMax), this.rangeMin, this.rangeMax), 0, 1) * 1000);
     },
     get freqSliderFill() { return `${(this.freqSliderValue / 10).toFixed(1)}%`; },
-    get rangeMinText() { return formatFrequency(this.rangeMin); },
-    get rangeMaxText() { return formatFrequency(this.rangeMax); },
+    // Slider end labels: compact ("20 Hz", "20 kHz", "22.8 kHz"), like the chart axes.
+    get rangeMinText() { return formatHz(this.rangeMin); },
+    get rangeMaxText() { return formatHz(this.rangeMax); },
     get gainDb() { return gainLevelDb(this.gainLevel); },
     get gainDbText() {
       const db = this.gainDb;
@@ -137,6 +139,35 @@ export function createWorkbench(svc) {
       const wave = this.source === 'dual' ? this.dual.a.wave : this.waveform;
       const f = this.source === 'dual' ? this.dualFa : this.metricFrequencyIdle;
       return harmonicTable(wave, f, this.nyquist).summary || 'unavailable';
+    },
+    /**
+     * Accessible description of the primary analysis canvas (there is no visible caption: the
+     * V1 vizCaption describes V1's slowed wave model, which V2 does not draw). It says what the
+     * view actually renders, including the min/max band the scope switches to when a tone has
+     * fewer than 4 samples per cycle (V1 rule).
+     */
+    get analysisCanvasLabel() {
+      const tab = this.tabs.analysis;
+      if (tab === 'harmonics') {
+        return `Theoretical oscillator spectrum, computed from the waveform, not measured: ${
+          this.vizSummaryHarm}. Actual speaker output is unknown.`;
+      }
+      if (tab === 'signalPath') {
+        return 'Active Web Audio processing graph. Speaker output is outside what the browser '
+          + 'can observe.';
+      }
+      const w = `${this.timeWindowMs} ms window`;
+      const f = this.source === 'dual' ? this.dualFa : this.metricFrequency;
+      const sr = this.effectiveSampleRate;
+      if (!this.playing) {
+        const wave = this.source === 'dual' ? this.dual.a.wave : this.waveform;
+        return `Waveform, not playing: computed ${wave} at ${formatFrequency(f)} over a ${w}. `
+          + 'Hold to Play shows the live output analyser trace.';
+      }
+      const sparse = f > 0 && sr > 0 && sr / f < 4;
+      return `Live output analyser waveform over a ${w}, scaled to the set gain${sparse
+        ? `; drawn as a min/max band because ${formatFrequency(f)} has fewer than 4 samples `
+          + `per cycle at ${sr} Hz` : ''}.`;
     },
     get patternSelectValue() { return this.source === 'sweep' ? '__sweep' : this.pattern; },
     get additiveOn() { return !!this.labFlags.additive; },

@@ -15,6 +15,7 @@ import { createPhaseStereoView } from '../charts/phase-view.js';
 import {
   modelWaves,
   modelLissajous,
+  lissajousCycles,
   risingZeroCrossing,
   commonPeak,
 } from '../charts/phase-model.js';
@@ -125,7 +126,7 @@ export function mount(rootEl, adapter) {
     const w = modelWaves({ fA: cfg.freqA, fB: cfg.freqB, phaseDeg: cfg.phaseDeg, elapsedS,
       points: 240, cycles: 2 }, model.waves);
     const l = modelLissajous({ fA: cfg.freqA, fB: cfg.freqB, phaseDeg: cfg.phaseDeg, elapsedS,
-      points: 480 }, model.liss);
+      points: 480, cycles: lissajousCycles(cfg.freqA, cfg.freqB) }, model.liss);
     model.waves = w;
     model.liss = l;
     return {

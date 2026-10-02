@@ -12,7 +12,15 @@ export const BIO_AXIS = Object.freeze({ min: 10, max: 100000 });
 const ROW_H = 21;
 const AXIS_H = 16;
 const NAME_W = 50;
-const RANGE_W = 66;
+const RANGE_W = 60; // minimum range-label column; widened to the dataset's longest label
+const RANGE_FONT = 9.5;
+// Room right of the 100 kHz end of the track for half of its label, so every decade label
+// (10 Hz … 100 kHz) is shown centred on its position.
+const TRACK_RIGHT = 17;
+const AXIS_LABELS = [
+  [[10, '10 Hz'], [100, '100 Hz'], [1000, '1 kHz'], [10000, '10 kHz'], [100000, '100 kHz']],
+  [[10, '10 Hz'], [100, '100'], [1000, '1k'], [10000, '10k'], [100000, '100k']],
+];
 
 const SHORT_CALL_NAMES = {
   bigBrownBatFm1: 'Bat FM1',
@@ -81,9 +89,19 @@ export function createBioChart(host, options = {}) {
     return dataset === 'calls' ? CALL_EXAMPLES : HEARING_RANGES;
   }
 
+  // The track starts after the widest range label of the dataset (sourced strings such as
+  // "850 Hz – 120 kHz" are longer than a fixed column), so text never runs under a bar.
+  let rangeW = RANGE_W;
+
+  function measureRanges(ctx) {
+    ctx.font = canvasFont(theme, RANGE_FONT);
+    rangeW = RANGE_W;
+    for (const e of entries()) rangeW = Math.max(rangeW, ctx.measureText(rangeLabel(e)).width + 6);
+  }
+
   function track() {
-    const x = NAME_W + RANGE_W;
-    return { x, w: Math.max(20, size.w - x - 4) };
+    const x = NAME_W + Math.ceil(rangeW);
+    return { x, w: Math.max(20, size.w - x - TRACK_RIGHT) };
   }
 
   function layoutRows() {
@@ -106,6 +124,7 @@ export function createBioChart(host, options = {}) {
     size = fitCanvas(canvas, host.clientWidth, host.clientHeight);
     const ctx = canvas.getContext('2d');
     ctx.clearRect(0, 0, size.w, size.h);
+    measureRanges(ctx);
     layoutRows();
     const t = track();
     ctx.textBaseline = 'middle';
@@ -119,7 +138,7 @@ export function createBioChart(host, options = {}) {
       ctx.font = canvasFont(theme, 10, 500);
       ctx.fillStyle = theme.text;
       ctx.fillText(shortName(r.entry), 2, cy);
-      ctx.font = canvasFont(theme, 9.5);
+      ctx.font = canvasFont(theme, RANGE_FONT);
       ctx.fillStyle = theme.textMuted;
       ctx.fillText(rangeLabel(r.entry), NAME_W, cy);
       if (r.start == null) {
@@ -131,24 +150,32 @@ export function createBioChart(host, options = {}) {
       roundRect(ctx, r.start, cy - 5.5, Math.max(2, r.end - r.start), 11, 2);
       ctx.fill();
     });
-    // Axis labels (decades); a label that would collide with the previous one is skipped,
-    // the last one is right-aligned to the edge.
+    // Axis labels (decades), centred on their positions. When the full set ("10 Hz" …
+    // "100 kHz") would collide at this width, the compact set ("10 Hz", "100", "1k" … "100k")
+    // is used; a label that still collides is skipped, the last one is kept inside the edge.
     ctx.font = canvasFont(theme, 8.5);
     ctx.fillStyle = theme.text2;
     ctx.textAlign = 'left';
     const ay = size.h - AXIS_H / 2;
-    const ticks = [[10, '10 Hz'], [100, '100 Hz'], [1000, '1 kHz'], [10000, '10 kHz'],
-      [100000, '100 kHz']];
+    const placed = AXIS_LABELS.map((set) => placeLabels(ctx, set, t)).find((p) => p.fits)
+      || placeLabels(ctx, AXIS_LABELS[AXIS_LABELS.length - 1], t);
+    for (const l of placed.labels) if (l.show) ctx.fillText(l.text, l.x, ay);
+  }
+
+  function placeLabels(ctx, set, t) {
     let lastRight = -Infinity;
-    ticks.forEach(([f, label], i) => {
+    let fits = true;
+    const labels = set.map(([f, text], i) => {
       const g = Math.log(f / BIO_AXIS.min) / Math.log(BIO_AXIS.max / BIO_AXIS.min);
-      const w = ctx.measureText(label).width;
+      const w = ctx.measureText(text).width;
       let x = t.x + g * t.w - w / 2;
-      if (i === ticks.length - 1) x = Math.min(x, size.w - w - 1);
-      if (x < lastRight + 3) return;
-      ctx.fillText(label, x, ay);
-      lastRight = x + w;
+      if (i === set.length - 1) x = Math.min(x, size.w - w - 1);
+      const show = x >= lastRight + 3;
+      if (show) lastRight = x + w;
+      else fits = false;
+      return { text, x, show };
     });
+    return { labels, fits };
   }
 
   function rowAt(y) {
