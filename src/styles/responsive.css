@@ -553,14 +553,14 @@
 
   /* The large switches keep their 25 px track; a centred 44 px pseudo-element is the hit area
      (the panel headers leave at least 10 px free on either side of the switch). */
-  .osc-toggle--lg::before {
-    content: "";
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    width: 44px;
-    height: 44px;
-    transform: translate(-50%, -50%);
+  /* A real 44 px box with the track centred in it: WebKit clips a button's overflow, so a
+     hit area drawn outside the button with ::before would not receive taps there. */
+  .osc-toggle--lg {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 44px;
+    min-height: 44px;
   }
 
   /* The fixed desktop heights of these field boxes squeezed their sliders to the 5 px track and
