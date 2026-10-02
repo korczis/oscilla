@@ -1,0 +1,21 @@
+id: V244
+milestone: M010
+title: "Open Graph tags"
+slug: open-graph-tags
+priority: p1
+profile: implementation
+objective: "Shared links render a rich card: og:type, og:site_name, og:title, og:description, og:url, og:locale and og:image with width, height, type and alt, all absolute to the Pages URL."
+scope:
+  - "src"
+  - "dist"
+  - "tests"
+depends_on: []
+acceptance_criteria:
+  - "Every og: property listed in the objective is present exactly once, with absolute https URLs under https://korczis.github.io/oscilla/."
+  - "og:description states what the app does without health or performance claims (project.no-fake-science)."
+validation:
+  - "npm test"
+  - "npm run verify-dist"
+evidence_required:
+  - "verified"
+created_at: 2026-10-02

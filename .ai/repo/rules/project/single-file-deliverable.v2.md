@@ -30,6 +30,11 @@ the runtime may not.
   remote fonts and no root-relative asset paths.
 - GitHub Pages deploys `dist/` only. Repository tooling (`.ai/`, `.claude/`, `src/`, `tests/`,
   Markdown) is never published.
+- Exception, crawler-only share assets: the Pages workflow also publishes `site/og-image.png`
+  (the 1200x630 link preview that `og:image` and `twitter:image` must reference by absolute
+  URL) and `site/apple-touch-icon.png`. The page never loads them, works identically without
+  them from `file://`, and carries its own favicon and touch icon inline as `data:` URLs.
+  `npm run social` regenerates them from the built app; `dist/` still holds only `index.html`.
 
 # Failure behaviour
 
