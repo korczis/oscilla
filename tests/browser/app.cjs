@@ -113,6 +113,17 @@ const H = {
     return { hz: (k * e.ctx.sampleRate) / e.analyser.fftSize, db: f[k] };
   }),
   nodes: (page) => page.evaluate(() => window.OSCILLA.engine.activeNodeCount),
+  // Deadline poll: resolves to the first value of fn() that passes test(), or to the last value
+  // once ms expired. Checks assert on the result instead of sleeping a fixed time first.
+  until: async (fn, test, ms = 2000, step = 40) => {
+    const t0 = Date.now();
+    let v = await fn();
+    while (!test(v) && Date.now() - t0 < ms) {
+      await sleep(step);
+      v = await fn();
+    }
+    return v;
+  },
   waitNodes0: async (page, ms = 1500) => {
     const t0 = Date.now();
     while (Date.now() - t0 < ms) {
@@ -451,15 +462,15 @@ function defineChecks() {
     const hold = await page.locator('#osc-hold-play').boundingBox();
     await page.mouse.move(hold.x + hold.width / 2, hold.y + hold.height / 2);
     await page.mouse.down();
-    await sleep(500);
     const gain = await page.evaluate(() => window.OSCILLA.app.gainLevel);
-    const peak = await H.peak(page);
+    // the attack is a few ms; allow the analyser a generous 2 s to show the full level
+    const peak = await H.until(() => H.peak(page), (p) => Math.abs(p - gain) < 0.01);
     const nodes = await H.nodes(page);
-    const status = await page.evaluate(() => ({
+    const status = await H.until(() => page.evaluate(() => ({
       label: document.querySelector('[data-osc="status.label"]').textContent,
       green: document.querySelector('#osc-status').classList.contains('is-playing'),
       dot: getComputedStyle(document.querySelector('.osc-status-dot')).backgroundColor,
-    }));
+    })), (st) => st.label === 'PLAYING' && st.green, 1000);
     await page.mouse.up();
     const zero = await H.waitNodes0(page);
     const ok = Math.abs(peak - gain) < 0.01 && nodes > 0 && zero && status.label === 'PLAYING'
@@ -474,21 +485,21 @@ function defineChecks() {
     await sleep(300);
     const before = await page.evaluate(() => window.OSCILLA.engine.voice?.carrier?.type);
     await page.click('#osc-wave-square');
-    await sleep(250);
-    const after = await page.evaluate(() => ({
+    const after = await H.until(() => page.evaluate(() => ({
       type: window.OSCILLA.engine.voice?.carrier?.type,
       playing: window.OSCILLA.app.playing,
       app: window.OSCILLA.app.waveform,
-    }));
-    // a square wave's crest factor is ~1 (peak ≈ RMS); a sine's is √2
-    const crest = await page.evaluate(() => {
+    })), (v) => v.type === 'square');
+    // a square wave's crest factor is ~1 (peak ≈ RMS); a sine's is √2. Poll until the analyser
+    // window holds only the new wave (2 s deadline).
+    const crest = await H.until(() => page.evaluate(() => {
       const e = window.OSCILLA.engine;
       const d = new Float32Array(e.analyser.fftSize);
       e.analyser.getFloatTimeDomainData(d);
       let pk = 0; let s = 0;
       for (const v of d) { pk = Math.max(pk, Math.abs(v)); s += v * v; }
       return pk / Math.sqrt(s / d.length);
-    });
+    }), (c) => c < 1.25);
     await page.keyboard.up(' ');
     const zero = await H.waitNodes0(page);
     await page.click('#osc-wave-sine');

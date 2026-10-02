@@ -1,5 +1,15 @@
 # Release gate for every pull request. Branch protection requires the `gate` job, so a PR
 # with auto-merge enabled lands on main (and redeploys Pages) only after this passes.
+#
+# The suites of `npm run release-gate` run as parallel jobs and `gate` aggregates them: the
+# serial gate measured 519 s (engine 167 s + browser 287 s + browser install 43 s), and the dsp,
+# labs, sequencer and visual suites add about 100 s more; split, the wall time is the slowest
+# job (about 4 min). Every job runs the same npm scripts as the local release-gate; matrix legs
+# narrow the browsers with OSC_BROWSERS. A failed job names the suite; `gate` names the job.
+#
+# Playwright browsers are not cached: in the measured install step the apt dependencies took
+# 28 s (not cacheable by a browser cache) and the downloads of all three browsers 13 s, about
+# what restoring a 600 MB cache costs, so a cache would not measurably help.
 name: CI
 
 on:
@@ -9,14 +19,20 @@ on:
 permissions:
   contents: read
 
+# `shell: bash` runs with -eo pipefail, so a suite piped through tee still fails its step.
+defaults:
+  run:
+    shell: bash
+
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  gate:
+  unit:
+    name: unit, build, artifact rules
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
@@ -30,15 +46,150 @@ jobs:
         run: npm run build:check
       - name: Artifact rules (single file, no runtime fetch, licence notices, budget)
         run: npm run verify-dist
-      - name: Install browsers
-        run: npx playwright install --with-deps chromium firefox webkit
+
+  engine:
+    name: V1 engine checks (${{ matrix.browser }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        browser: [chromium, firefox]
+    env:
+      OSC_BROWSERS: ${{ matrix.browser }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Install ${{ matrix.browser }}
+        run: npx playwright install --with-deps ${{ matrix.browser }}
       - name: Audio sink for headless Firefox (no sound server on the runner)
+        if: matrix.browser == 'firefox'
         run: |
           sudo apt-get update -q && sudo apt-get install -y --no-install-recommends pulseaudio
           pulseaudio --start --exit-idle-time=-1
           pactl load-module module-null-sink sink_name=ci_null
           pactl set-default-sink ci_null
       - name: V1 engine checks against the V2 engine
-        run: npm run test:engine
-      - name: Browser gate (file:// and /oscilla/ sub-path; chromium, firefox, webkit)
-        run: npm run test:browser
+        run: mkdir -p logs && npm run test:engine 2>&1 | tee logs/engine-${{ matrix.browser }}.log
+      - name: Upload the log on failure
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: logs-engine-${{ matrix.browser }}
+          path: logs/
+          retention-days: 14
+
+  suites:
+    name: DSP, labs, sequencer
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Install browsers
+        run: npx playwright install --with-deps chromium firefox
+      - name: Audio sink for headless Firefox (no sound server on the runner)
+        run: |
+          sudo apt-get update -q && sudo apt-get install -y --no-install-recommends pulseaudio
+          pulseaudio --start --exit-idle-time=-1
+          pactl load-module module-null-sink sink_name=ci_null
+          pactl set-default-sink ci_null
+      - name: DSP modules (chromium, firefox)
+        run: mkdir -p logs && npm run test:dsp 2>&1 | tee logs/dsp.log
+      - name: Chart renderers and lab controllers (chromium, firefox)
+        run: npm run test:labs 2>&1 | tee logs/labs.log
+      - name: Pattern sequencer on real Web Audio (chromium, firefox)
+        run: npm run test:sequencer 2>&1 | tee logs/sequencer.log
+      - name: Upload the logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: logs-suites
+          path: logs/
+          retention-days: 14
+
+  browser:
+    name: Browser gate (${{ matrix.browser }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        browser: [chromium, firefox, webkit]
+    env:
+      OSC_BROWSERS: ${{ matrix.browser }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Install ${{ matrix.browser }}
+        run: npx playwright install --with-deps ${{ matrix.browser }}
+      - name: Audio sink for headless Firefox (no sound server on the runner)
+        if: matrix.browser == 'firefox'
+        run: |
+          sudo apt-get update -q && sudo apt-get install -y --no-install-recommends pulseaudio
+          pulseaudio --start --exit-idle-time=-1
+          pactl load-module module-null-sink sink_name=ci_null
+          pactl set-default-sink ci_null
+      - name: dist from file:// and the /oscilla/ sub-path; layout, touch targets, stop
+        run: mkdir -p logs && npm run test:browser 2>&1 | tee logs/browser-${{ matrix.browser }}.log
+      - name: Upload the log on failure
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: logs-browser-${{ matrix.browser }}
+          path: logs/
+          retention-days: 14
+
+  visual:
+    name: Visual regression gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # The accepted linux-x64 values in tests/visual/baseline.json were measured in this image
+    # (system-ui renders differently on a bare runner). Its tag must equal the lockfile's
+    # Playwright version (checked below); bump both together and re-accept the baseline.
+    container:
+      image: mcr.microsoft.com/playwright:v1.63.0-noble
+      options: --ipc=host
+    steps:
+      - uses: actions/checkout@v7
+      - run: npm ci
+      - name: Container image matches the lockfile's Playwright
+        run: |
+          want="$(node -p "require('./package-lock.json').packages['node_modules/playwright'].version")"
+          test "$want" = "1.63.0" || { echo "lockfile playwright $want, image v1.63.0"; exit 1; }
+      - name: 1536x1024 --play scene against the accepted baseline
+        run: npm run test:visual
+      - name: Upload current, reference, diff and report on failure
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: visual-gate
+          path: tests/visual/out-gate/
+          retention-days: 14
+
+  gate:
+    name: gate
+    if: always()
+    needs: [unit, engine, suites, browser, visual]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Every release-gate job passed
+        env:
+          RESULTS: ${{ toJSON(needs) }}
+        run: |
+          echo "$RESULTS" | jq -r 'to_entries[] | "\(.key): \(.value.result)"'
+          echo "$RESULTS" | jq -e 'to_entries | all(.value.result == "success")' > /dev/null \
+            || { echo "::error::release gate failed: a required job did not succeed"; exit 1; }
