@@ -30,9 +30,12 @@ export const GATE_COMMANDS = [
   ['majordomus', ['doctor']],
 ];
 
-/** Absolute path of the gate receipt inside the git directory (worktree-aware). */
+/** Absolute path of the gate receipt in the COMMON git directory, so a receipt written by
+ *  release:prepare in a linked worktree is found by release:publish in any checkout of the
+ *  same repository (the receipt is bound to version, source digest and dist sha, not to a
+ *  worktree). */
 export function receiptPath(run = gitRunner(), root = ROOT) {
-  return path.resolve(root, run(['rev-parse', '--git-path', RECEIPT_NAME]));
+  return path.resolve(root, run(['rev-parse', '--git-common-dir']), RECEIPT_NAME);
 }
 
 /** What the receipt must say for the checkout as it is now. */
