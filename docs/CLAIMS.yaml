@@ -190,6 +190,22 @@ claims:
     test: tests/browser/app.cjs
     status: guaranteed
 
+  - id: about-is-last-workspace
+    claim: About is the last primary navigation item; it opens a full-width view that explains OSCILLA, with exact source, Majordomus and contact links, laid out without overflow from 320 to 1536 px
+    source: .ai/repo/project/issues/V248.yaml
+    implementation: src/index.html
+    test: tests/browser/app.cjs
+    status: guaranteed
+    note: Check about-page, in Chromium, Firefox and WebKit, from file:// and from a /oscilla/ sub-path; tests/browser/layout.cjs keeps the view's content inside its box.
+
+  - id: about-provenance-matches-git
+    claim: The development times the About view states are the commit times of the commits it names
+    source: .ai/repo/project/issues/V248.yaml
+    implementation: src/index.html
+    test: tests/unit/about.test.mjs
+    status: guaranteed
+    note: Checked against git history where it is complete; a shallow clone skips the comparison and still checks the stated duration against the stated times.
+
   # ---- V3 MEASURE, planned (milestones M012-M020); nothing on main implements these
   - id: measurement-workbench
     claim: OSCILLA will offer a Measure workspace, separate from the Playground, that runs a measurement from preflight to a stored result

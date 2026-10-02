@@ -54,7 +54,8 @@
   .osc-view { order: 13; grid-column: 1 / -1; }
 
   .osc-app[data-mode="learn"] .osc-panel,
-  .osc-app[data-mode="presets"] .osc-panel {
+  .osc-app[data-mode="presets"] .osc-panel,
+  .osc-app[data-mode="about"] .osc-panel {
     display: none;
   }
 
@@ -269,7 +270,9 @@
   .osc-app[data-mode="learn"] .osc-panel.osc-p-source,
   .osc-app[data-mode="learn"] .osc-panel.osc-p-analysis,
   .osc-app[data-mode="presets"] .osc-panel.osc-p-source,
-  .osc-app[data-mode="presets"] .osc-panel.osc-p-analysis {
+  .osc-app[data-mode="presets"] .osc-panel.osc-p-analysis,
+  .osc-app[data-mode="about"] .osc-panel.osc-p-source,
+  .osc-app[data-mode="about"] .osc-panel.osc-p-analysis {
     display: none;
   }
 
