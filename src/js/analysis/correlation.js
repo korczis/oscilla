@@ -88,3 +88,37 @@ export function createCorrelationMeter(options = {}) {
     },
   };
 }
+
+/**
+ * Correlation display for a state → { text, basis, title, meterPct, meterNow, valueText }.
+ *   'live'   a measured value (two analysers read one after the other: "est.")
+ *   'mono'   a mono output is playing: L = R by construction, +1 without a measurement
+ *   'silent' the stereo router is there but carries no signal (yet)
+ *   'idle'   nothing is playing
+ * A non-finite live value is shown as 'silent'.
+ */
+export function correlationDisplay(value, state = value == null ? 'idle' : 'live') {
+  if (state === 'mono') {
+    return { text: '1.00', basis: 'mono', title: 'Mono output: left and right are identical',
+      meterPct: 100, meterNow: 1,
+      valueText: '1.00, mono output: left and right are the same signal (by construction, '
+        + 'not measured)' };
+  }
+  if (state === 'live' && value != null && Number.isFinite(value)) {
+    const v = Math.max(-1, Math.min(1, value));
+    return {
+      text: v.toFixed(2),
+      basis: 'est.',
+      title: 'Estimated from the left and right analysers',
+      meterPct: ((v + 1) / 2) * 100,
+      meterNow: v,
+      valueText: `${v.toFixed(2)} (estimated from the L/R analysers)`,
+    };
+  }
+  if (state === 'live' || state === 'silent') {
+    return { text: '—', basis: '', title: 'Unavailable: no signal on the stereo router yet',
+      meterPct: 0, meterNow: 0, valueText: 'Unavailable (no signal on the stereo router yet)' };
+  }
+  return { text: '—', basis: '', title: 'Unavailable: nothing is playing', meterPct: 0,
+    meterNow: 0, valueText: 'Unavailable (nothing playing)' };
+}

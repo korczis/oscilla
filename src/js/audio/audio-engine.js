@@ -42,6 +42,11 @@
 //                    voice's rel gain and the master (stereo/dual output stage).
 //     o.dualRouter   (ctx, track, plan, source) => { inputA, inputB, output, update(plan),
 //                    dispose() } replaces the dual plan's panners (Phase & Stereo routing).
+//     o.dualPhaseDeg phase of the dual plan's B against A at the voice start (degrees; B starts
+//                    later by less than one period, modulation.js phaseStartDelay).
+//                    engine.setDualPhase(deg) applies a change by a click-free restart.
+//   attachMicrophone(stream, opts) / detachMicrophone(): the analysis graph of a stream the
+//   caller opened (mic lab), built through the engine's mic accounting (micNodeCount).
 //   A replacement voice (_restart) is started through this.play with the voice's own options,
 //   so a wrapper installed on the instance (main.js) re-applies the V2 options.
 //   snapshot(out?)   plain read-only engine state for the visualization (risk 3).
@@ -60,7 +65,9 @@ import {
   ESCAPE_RELEASE_S, FAST_RELEASE_S, SCHEDULE_LEAD_S, WAVE_DIP_S, armTopUp, rampSegments,
   scheduleConst, scheduleCycles, scheduleRamps, scheduleSteps,
 } from './scheduler.js';
-import { buildAm, buildDual, buildFm, buildLfo } from './modulation.js';
+import {
+  buildAm, buildDual, buildFm, buildLfo, normalizePhaseDeg,
+} from './modulation.js';
 import {
   MIC_UNAVAILABLE_TEXT, buildMicrophoneGraph, closeMicrophone, hasMicrophoneApi,
   requestMicrophoneStream, stopStreamTracks,
@@ -114,6 +121,8 @@ export class AudioEngine {
     this.sources = new Set();    // every scheduled source owned by a voice
     this.lastError = null;
     this.mic = null;
+    this.micAttachment = null;   // a caller-opened stream's analysis graph (attachMicrophone)
+    this.micNodes = new Set();   // nodes of micAttachment (accounted apart from voice nodes)
     this._listeners = new Set();
     this._seq = 0;
     this._env = options.env || defaultEnv();
@@ -142,6 +151,8 @@ export class AudioEngine {
   get running() { return !!this.ctx && this.ctx.state === 'running'; }
   get activeNodeCount() { return this.nodes.size; }
   get activeSourceCount() { return this.sources.size; }
+  /** Nodes of an attached microphone stream (attachMicrophone); 0 once detached. */
+  get micNodeCount() { return this.micNodes.size; }
 
   /**
    * Voices that are sounding or scheduled to sound (V2 accounting): not freed, and the audio
@@ -243,6 +254,7 @@ export class AudioEngine {
     const ctx = this.ctx;
     for (const v of [...this.voices]) this._cleanup(v);
     this.stopMic('closed');
+    this.detachMicrophone('closed');
     this.ctx = null;
     this.master = this.limiter = this.trim = this.ceiling = this.analyser = null;
     if (ctx) {
@@ -735,6 +747,54 @@ export class AudioEngine {
   }
 
   // ---------------------------------------------------------------- V2 additions
+
+  /**
+   * Change the dual voice's phase offset of B (degrees). The offset is a start time, so a
+   * sounding dual voice is replaced (FAST_RELEASE_S fade, then the new voice: click-free) with
+   * the same plan, options and deadline. Returns 'same' | 'restarted' | false (no dual voice).
+   */
+  setDualPhase(deg) {
+    const v = this.voice;
+    if (!v || v.ended || v.releasing || !v.plan || v.plan.type !== 'dual') return false;
+    const want = normalizePhaseDeg(deg);
+    if (Math.abs(normalizePhaseDeg(v.opts.dualPhaseDeg) - want) < 1e-9) return 'same';
+    v.opts = { ...v.opts, dualPhaseDeg: want };
+    return this._restart(v, v.plan);
+  }
+
+  /**
+   * Analysis graph for a microphone stream the caller opened (the mic lab asks for the stream
+   * itself): MediaStreamSource → Analyser, never connected to the output. Every node is tracked
+   * in micNodes. Replaces an earlier attachment. Returns the AnalyserNode, or null without a
+   * context. The caller keeps the stream: detachMicrophone() disconnects, and stops the tracks.
+   */
+  attachMicrophone(stream, opts = {}) {
+    if (!stream || !this.init()) return null;
+    this.detachMicrophone('replaced');
+    const track = (n) => { this.micNodes.add(n); return n; };
+    let mic;
+    try {
+      mic = buildMicrophoneGraph(this.ctx, stream, { ...opts, track });
+    } catch (e) {
+      for (const n of this.micNodes) { try { n.disconnect(); } catch (e2) { /* ignore */ } }
+      this.micNodes.clear();
+      throw e;
+    }
+    this.micAttachment = mic;
+    this.resume();
+    return mic.analyser;
+  }
+
+  /** Disconnect the attached microphone graph and stop its tracks (idempotent). */
+  detachMicrophone(reason = 'user') {
+    const m = this.micAttachment;
+    if (!m) return false;
+    this.micAttachment = null;
+    closeMicrophone(m);
+    this.micNodes.clear();
+    this._emit('micAttachment', { attached: false, reason });
+    return true;
+  }
 
   /** Update the sounding voice's insert stages: cfgs[i] goes to inserts[i].update (if given). */
   updateInserts(cfgs) {

@@ -109,6 +109,9 @@ const adapter = {
   },
   getDestination: () => engine.master,
   getStereoRouter: () => (liveRouter ? liveRouter.router : null),
+  // The mic lab's nodes are built and accounted by the engine (audio-engine-discipline).
+  attachMicrophone: (stream, opts) => engine.attachMicrophone(stream, opts),
+  detachMicrophone: () => engine.detachMicrophone(),
   ensureContext: () => {
     if (app) app.ensureAudio(); else engine.init();
     return engine.resume().then(() => engine.ctx);
@@ -163,8 +166,29 @@ function v2PlayOptions(plan, ctx, live) {
     if (wave) o.periodicWave = wave;
   }
   if (plan.type === 'dual' && needsRouter(plan)) o.dualRouter = dualRouterFactory(live);
+  if (plan.type === 'dual' && labs.phase) o.dualPhaseDeg = labs.phase.config.phaseDeg;
   return o;
 }
+
+/**
+ * What the visualization bridge shows of the labs (Harmonics tab, signal path): read on every
+ * bridge sync, never per frame. Plain values only.
+ */
+function labVizInputs(plan) {
+  const add = labs.additive;
+  const additive = add && add.enabled && plan && plan.type !== 'dual' ? add.coefficients() : null;
+  const env = labs.envelope;
+  const filter = labs.filter ? labs.filter.config : null;
+  const dual = plan && plan.type === 'dual';
+  return {
+    additive,
+    adsr: env && env.enabled ? { ...env.adsr } : null,
+    filter: filter && filter.enabled ? { ...filter } : null,
+    router: dual && needsRouter(plan) ? routerConfigFor(plan) : null,
+    phaseDeg: dual && labs.phase ? labs.phase.config.phaseDeg : 0,
+  };
+}
+bridge.labInputs = labVizInputs;
 
 const basePlay = engine.play.bind(engine);
 engine.play = (plan, o = {}) => basePlay(plan, { ...o, ...v2PlayOptions(plan, engine.ctx, true) });
@@ -308,6 +332,13 @@ function repairCharts() {
   });
 }
 
+/** A lab that shapes the voice changed: refresh the bridge (signal path, harmonics) and labels. */
+function vizLabsChanged() {
+  if (!app) return;
+  app.labRev += 1;
+  app.syncViz();
+}
+
 function syncLabFlags() {
   if (!app) return;
   app.labFlags.additive = !!(labs.additive && labs.additive.enabled);
@@ -369,6 +400,7 @@ function mountLabs(root) {
   if (labs.additive) {
     labs.additive.onChange(() => {
       syncLabFlags();
+      vizLabsChanged(); // Harmonics tab and signal path show the additive table
       if (!engine.voice || engine.voice.ended) return;
       if (labs.additive.enabled) {
         const wave = labs.additive.periodicWave(engine.ctx);
@@ -376,9 +408,11 @@ function mountLabs(root) {
       } else clearPeriodicWave();
     });
   }
-  if (labs.envelope) labs.envelope.onChange(syncLabFlags);
-  if (labs.filter) labs.filter.onChange(syncLabFlags);
+  const labChanged = () => { syncLabFlags(); vizLabsChanged(); };
+  if (labs.envelope) labs.envelope.onChange(labChanged);
+  if (labs.filter) labs.filter.onChange(labChanged);
   if (labs.phase) {
+    let lastPhaseDeg = labs.phase.config.phaseDeg;
     labs.phase.onChange((cfg) => {
       if (!app) return;
       if (Math.abs(app.dual.a.freq - cfg.freqA) > 1e-6) app.setDualFreq('a', String(cfg.freqA));
@@ -386,6 +420,12 @@ function mountLabs(root) {
       const stereo = cfg.route === 'stereo';
       if (app.dual.stereo !== stereo) app.setStereo(stereo);
       if (liveRouter) liveRouter.wrapper.refresh();
+      if (cfg.phaseDeg !== lastPhaseDeg) {
+        // B's phase offset is a start time: a sounding dual voice restarts click-free with it.
+        lastPhaseDeg = cfg.phaseDeg;
+        engine.setDualPhase(cfg.phaseDeg);
+        vizLabsChanged();
+      }
     });
   }
   if (labs.sequencer) syncSequencerIcon(root);

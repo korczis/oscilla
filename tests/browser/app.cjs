@@ -358,9 +358,7 @@ function phoneBars() {
 // Checks that fail because of a defect already tracked in the Majordomus plan. They still run
 // and are reported on every run; they do not fail the gate, and one that starts passing does,
 // so the entry cannot outlive its fix.
-const KNOWN_DEFECTS = Object.freeze({
-  'a11y-safety-notice-focus-handoff': 'plan issue V247 (V2 renders no safety notice)',
-});
+const KNOWN_DEFECTS = Object.freeze({});
 
 function defineChecks() {
   const checks = [];

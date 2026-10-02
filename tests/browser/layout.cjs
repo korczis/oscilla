@@ -18,6 +18,9 @@ const arg = (name, def) => {
   return i >= 0 ? args[i + 1] : def;
 };
 const BROWSERS = arg('browsers', 'chromium,firefox,webkit').split(',');
+// --stress-font <family>: render with a wider font (e.g. Verdana) to reproduce the metrics
+// of Linux and Windows system-ui fonts on a macOS machine.
+const STRESS_FONT = arg('stress-font', null);
 const URL = pathToFileURL(path.resolve(__dirname, '../../dist/index.html')).href;
 const LAUNCH = {
   chromium: { args: ['--autoplay-policy=no-user-gesture-required'] },
@@ -88,6 +91,9 @@ async function runOne(name) {
       const page = await browser.newPage({ viewport: { width: w, height: h } });
       await page.goto(URL);
       await page.waitForFunction(() => window.OSCILLA && window.OSCILLA.app, null, { timeout: 15000 });
+      if (STRESS_FONT) {
+        await page.addStyleTag({ content: `*{font-family:${JSON.stringify(STRESS_FONT)} !important}` });
+      }
       for (const ws of WORKSPACES) {
         await setWorkspace(page, ws);
         const m = await page.evaluate(measure);

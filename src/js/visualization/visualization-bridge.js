@@ -15,7 +15,7 @@ import {
 import { isNum, sig } from '../core/math.js';
 import { formatFrequency, formatMs, formatPeriod, formatWavelength } from '../core/frequency.js';
 import { planFreqAt } from '../audio/patterns.js';
-import { harmonicTable } from './harmonics.js';
+import { additiveHarmonicTable, harmonicTable } from './harmonics.js';
 import { pathNodesFor } from './signal-path.js';
 
 const defaultEnv = () => (typeof window !== 'undefined' ? window : globalThis);
@@ -109,6 +109,7 @@ export class VisualizationBridge {
         interNote: '', interNoteNarrow: '',
       },
       pathNodes: [],
+      lab: null,
       harm: { list: [], below: 0, total: 0, shown: 0, capped: false, axisMax: 0, summary: '', summaryShort: '', summaryTiny: '' },
       harmB: { list: [], below: 0, total: 0, shown: 0, capped: false, axisMax: 0, summary: '', summaryShort: '', summaryTiny: '' },
     },
@@ -326,9 +327,14 @@ export class VisualizationBridge {
     s.labels.release = formatMs(u.release);
     s.labels.gain = u.gain.toFixed(3);
     s.plan = u.plan;
-    s.pathNodes = pathNodesFor(s.plan, s);
+    // V2: the labs that shape the sounding voice (main.js labVizInputs), read on sync only.
+    const lab = typeof this.labInputs === 'function' ? this.labInputs(u.plan) : null;
+    s.lab = lab;
+    s.pathNodes = pathNodesFor(s.plan, s, lab);
     const hf = u.source === 'dual' ? s.dual.fa : u.usesGlobal || !u.plan ? u.frequency : u.plan.freqs[0];
-    s.harm = harmonicTable(u.source === 'dual' ? d.a.wave : u.waveform, hf, u.nyquist);
+    s.harm = lab && lab.additive && u.source !== 'dual'
+      ? additiveHarmonicTable(lab.additive, hf, u.nyquist)
+      : harmonicTable(u.source === 'dual' ? d.a.wave : u.waveform, hf, u.nyquist);
     s.harmB = harmonicTable(u.source === 'dual' ? d.b.wave : 'sine', u.source === 'dual' ? s.dual.fb : 0, u.nyquist);
     s.mic = u.micActive;
     s.paused = !!u.paused;

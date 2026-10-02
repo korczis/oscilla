@@ -6,6 +6,9 @@
 // this._carrier(v, …) so options.periodicWave applies. Every node goes through track()/source().
 // v.live keeps the V1 shape updateLive() relies on: lfo {lfo, depth}, am {lfo, lfoGain, amGain},
 // fm {mod, modGain}, dual {A, B} with A/B = {osc, g, panner} (+ router with a dual router hook).
+// V2 dual phase offset (play option dualPhaseDeg): B starts later by phaseStartDelay(), so its
+// phase leads A's by φ at the voice start. Every built-in OscillatorNode wave is a sine series
+// (value 0 at phase 0), so the delayed start adds no step; the envelope is already ramping.
 
 /** V1: AudioEngine.play case 'lfo' (index.html@a7b7a23) */
 export function buildLfo(v, plan, b) {
@@ -52,6 +55,24 @@ export function buildFm(v, plan, b) {
   v.live = { mod, modGain };
 }
 
+/** Normalised phase in [0, 360) degrees (non-finite → 0). */
+export function normalizePhaseDeg(deg) {
+  const d = Number(deg);
+  if (!Number.isFinite(d)) return 0;
+  return ((d % 360) + 360) % 360;
+}
+
+/**
+ * Start delay (s) that gives an oscillator of freqHz the phase phaseDeg relative to one started
+ * at the same time: B(t) = sin(2π f (t − d)) = sin(2π f t + φ) with d = ((360 − φ) mod 360) /
+ * 360 / f. 0 for φ = 0 (or an unusable frequency), always below one period.
+ */
+export function phaseStartDelay(freqHz, phaseDeg) {
+  const phi = normalizePhaseDeg(phaseDeg);
+  if (!(freqHz > 0) || phi === 0) return 0;
+  return ((360 - phi) % 360) / 360 / freqHz;
+}
+
 /**
  * Two oscillators, mono mix or stereo split (StereoPanner, or a ChannelMerger fallback).
  * V1: AudioEngine._buildDual (index.html@a7b7a23).
@@ -63,10 +84,10 @@ export function buildFm(v, plan, b) {
 export function buildDual(v, plan, t0, track, source, env, router = null) {
   const ctx = this.ctx;
   const canPan = !router && typeof ctx.createStereoPanner === 'function';
-  const make = (o, level, pan) => {
+  const make = (o, level, pan, startAt = t0) => {
     // o.freq is the sounding frequency (detune already folded in), so detune stays 0 and no
     // intermediate value of a live change can exceed the clamp.
-    const osc = source(this._osc(o.wave, o.freq, t0));
+    const osc = source(this._osc(o.wave, o.freq, startAt));
     const g = track(ctx.createGain());
     g.gain.value = o.gain * level * 0.5;
     osc.connect(g);
@@ -81,7 +102,11 @@ export function buildDual(v, plan, t0, track, source, env, router = null) {
     return { osc, g, panner };
   };
   const A = make(plan.a, plan.levelA, plan.stereo ? -1 : 0);
-  const B = make(plan.b, plan.levelB, plan.stereo ? 1 : 0);
+  // B's phase offset against A (V2): a start delay below one period of B's clamped frequency.
+  const phaseDeg = normalizePhaseDeg(v.opts && v.opts.dualPhaseDeg);
+  v.phaseDeg = phaseDeg;
+  const B = make(plan.b, plan.levelB, plan.stereo ? 1 : 0,
+    t0 + phaseStartDelay(this._f(plan.b.freq), phaseDeg));
   if (router) {
     const R = router(ctx, track, plan, source);
     A.g.connect(R.inputA);

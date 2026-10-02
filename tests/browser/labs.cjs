@@ -439,12 +439,15 @@ async function runEngine(engine, base) {
       && range.min === 67 && range.max === 45000,
     `${bio.map((r) => `${r.label} ${r.range}`).join('; ')} | click → ${JSON.stringify(range)}`);
 
-  // (9) Phase & Stereo idle: model plot, correlation unavailable.
+  // (9) Phase & Stereo without a stereo router: model plot; the fixture's tone plays mono, so
+  // the correlation says "1.00 mono" (identical channels by construction), not "nothing playing".
   const ph = await page.evaluate(() => ({ source: window.__labs.labs.phase.source,
     corr: document.querySelector('#osc-corr-value').textContent,
+    basis: document.querySelector('#osc-corr-basis').textContent,
     canvas: !!document.querySelector('#osc-chart-phase canvas') }));
-  check('phase view idle: analytic model, correlation "—"',
-    ph.source === 'model' && ph.corr === '—' && ph.canvas, JSON.stringify(ph));
+  check('phase view without router: analytic model, correlation "1.00 mono"',
+    ph.source === 'model' && ph.corr === '1.00' && ph.basis === 'mono' && ph.canvas,
+    JSON.stringify(ph));
 
   // (10) Microphone with the fake capture device.
   const micBefore = await page.evaluate(() =>

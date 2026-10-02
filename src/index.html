@@ -50,6 +50,7 @@
     <symbol id="i-record" viewBox="0 0 24 24"><circle cx="12" cy="12" r="7.5" fill="currentColor" stroke="none"/></symbol>
     <symbol id="i-skip" viewBox="0 0 24 24"><path d="M3.5 6v12l8-6zM12.5 6v12l8-6z" fill="currentColor" stroke="none"/></symbol>
     <symbol id="i-gear" viewBox="0 0 24 24"><path d="M19.08 10.24L21.5 10.65V13.35L19.08 13.76L18.25 15.77L19.68 17.76L17.76 19.68L15.77 18.25L13.76 19.08L13.35 21.5H10.65L10.24 19.08L8.23 18.25L6.24 19.68L4.32 17.76L5.75 15.77L4.92 13.76L2.5 13.35V10.65L4.92 10.24L5.75 8.23L4.32 6.24L6.24 4.32L8.23 5.75L10.24 4.92L10.65 2.5H13.35L13.76 4.92L15.77 5.75L17.76 4.32L19.68 6.24L18.25 8.23Z" stroke-linejoin="round"/><circle cx="12" cy="12" r="3.2"/></symbol>
+    <symbol id="i-headphones" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 14v-2a9 9 0 0 1 18 0v2"/><path d="M3 14h3v6H4a1 1 0 0 1-1-1zM21 14h-3v6h2a1 1 0 0 0 1-1z"/></symbol>
     <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="currentColor" stroke="none"/><path d="M12 11v6M12 7.5v.5" stroke="var(--osc-info-bg)" stroke-width="2.2"/></symbol>
     <symbol id="i-close" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></symbol>
     <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
@@ -144,6 +145,7 @@
           <button type="button" class="osc-menu-item" role="menuitem" data-osc="header.settings" @click="openDialog('settings')">Settings…</button>
           <button type="button" class="osc-menu-item" role="menuitem" data-osc="header.shortcuts" @click="openDialog('help')">Keyboard shortcuts</button>
           <button type="button" class="osc-menu-item" role="menuitem" data-osc="header.about" @click="openDialog('about')">About OSCILLA</button>
+          <button type="button" class="osc-menu-item" role="menuitem" data-osc="safety.reopenMenu" @click="reopenSafety()">Safety notice</button>
         </div>
       </div>
       <div class="osc-menu-anchor">
@@ -195,6 +197,29 @@
     </button>
   </section>
 
+  <!-- ================= First-run safety notice (in flow: never covers a control) ========= -->
+  <section class="osc-safety" id="osc-safety" data-osc="safety" aria-labelledby="osc-safety-title"
+    x-show="!safetyCollapsed" style="display: none">
+    <svg class="osc-safety-icon" aria-hidden="true"><use href="#i-info"/></svg>
+    <p class="osc-safety-text">
+      <strong id="osc-safety-title">Listening safety.</strong>
+      <span class="osc-safety-more" :class="{ 'is-open': safetyExpanded }">Audio can be
+        uncomfortable or harmful at excessive output levels.</span>
+      <span>Start low, especially with headphones.</span>
+      <span class="osc-safety-more" id="osc-safety-more" :class="{ 'is-open': safetyExpanded }">
+        Perceived loudness is not a reliable measure of acoustic output. Digital signal generation
+        does not guarantee that your hardware reproduces the requested frequency.</span>
+      <button type="button" class="osc-safety-toggle" aria-controls="osc-safety"
+        aria-expanded="false" :aria-expanded="String(safetyExpanded)"
+        @click="safetyExpanded = !safetyExpanded" x-text="safetyExpanded ? 'Less' : 'More'">More</button>
+    </p>
+    <button type="button" class="osc-icon-btn osc-icon-btn--ghost osc-icon-btn--sm"
+      id="osc-safety-dismiss" data-osc="safety.dismiss" aria-label="Dismiss the safety notice"
+      @click="dismissSafety()">
+      <svg aria-hidden="true"><use href="#i-close"/></svg>
+    </button>
+  </section>
+
   <!-- ================= Main grid ================= -->
   <main class="osc-main" id="osc-main" tabindex="-1">
     <h1 class="osc-sr-only">OSCILLA playground</h1>
@@ -208,6 +233,15 @@
             data-osc-modes="playground sequencer synthesis" aria-labelledby="osc-source-title">
             <div class="osc-panel-header">
               <h2 class="osc-panel-title" id="osc-source-title">Source &amp; Pattern</h2>
+              <span class="osc-spacer"></span>
+              <!-- Phones hide Device & Limits, so the safety notice reopens from here below 768 px. -->
+              <button type="button" class="osc-icon-btn osc-icon-btn--ghost osc-icon-btn--sm
+                osc-safety-reopen osc-safety-reopen--phone" id="osc-safety-reopen-phone"
+                data-osc="safety.reopen" aria-controls="osc-safety"
+                :aria-expanded="String(!safetyCollapsed)" aria-label="Show the listening safety notice"
+                title="Listening safety notice" @click="reopenSafety()">
+                <svg aria-hidden="true"><use href="#i-headphones"/></svg>
+              </button>
             </div>
 
             <div class="osc-seg osc-seg--split osc-source-kind" role="radiogroup"
@@ -442,6 +476,7 @@
                   id="osc-atab-signalpath" aria-controls="osc-analysis-view" data-osc="analysis.tab"
                   data-value="signalPath" x-bind="tab('analysis', 'signalPath')">Signal Path</button>
               </div>
+              <div class="osc-analysis-tools">
               <button type="button" class="osc-icon-btn osc-icon-btn--ghost osc-viz-pause"
                 id="osc-viz-pause" data-osc="analysis.pause" aria-label="Pause animation"
                 title="Pause animation (the view still redraws when something changes)"
@@ -465,6 +500,7 @@
                 @click="toggleFullscreen('osc-panel-analysis')">
                 <svg aria-hidden="true"><use href="#i-expand"/></svg>
               </button>
+              </div>
             </div>
             <hr class="osc-divider osc-analysis-sep">
 
@@ -614,6 +650,12 @@
             <div class="osc-panel-header">
               <h2 class="osc-panel-title" id="osc-dev-title">Device &amp; Limits</h2>
               <span class="osc-spacer"></span>
+              <button type="button" class="osc-icon-btn osc-icon-btn--ghost osc-icon-btn--sm osc-safety-reopen"
+                id="osc-safety-reopen" data-osc="safety.reopen" aria-controls="osc-safety"
+                :aria-expanded="String(!safetyCollapsed)" aria-label="Show the listening safety notice"
+                title="Listening safety notice" @click="reopenSafety()">
+                <svg aria-hidden="true"><use href="#i-headphones"/></svg>
+              </button>
               <button type="button" class="osc-icon-btn osc-icon-btn--ghost osc-icon-btn--sm"
                 id="osc-dev-collapse" data-osc="device.collapse" aria-expanded="true"
                 aria-controls="osc-dev-body" aria-label="Hide Device and Limits details"
@@ -1022,14 +1064,16 @@
               hidden :hidden="tabs.phase !== 'stereo'" role="group" aria-label="Stereo routing">
               <label class="osc-label" for="osc-stereo-fa">A</label>
               <div class="osc-unit" data-unit="Hz">
-                <input class="osc-number" id="osc-stereo-fa" type="number" min="20" max="22800"
+                <input class="osc-number" id="osc-stereo-fa" type="number" min="20"
+                  :max="Math.floor(safeMax)"
                   step="1" value="440" inputmode="decimal" data-osc="stereo.freqA" :value="dual.a.freq"
                   aria-label="Oscillator A frequency">
                 <span class="osc-unit-suffix" aria-hidden="true">Hz</span>
               </div>
               <label class="osc-label" for="osc-stereo-fb">B</label>
               <div class="osc-unit" data-unit="Hz">
-                <input class="osc-number" id="osc-stereo-fb" type="number" min="20" max="22800"
+                <input class="osc-number" id="osc-stereo-fb" type="number" min="20"
+                  :max="Math.floor(safeMax)"
                   step="1" value="442" inputmode="decimal" data-osc="stereo.freqB" :value="dual.b.freq"
                   aria-label="Oscillator B frequency">
                 <span class="osc-unit-suffix" aria-hidden="true">Hz</span>
@@ -1057,8 +1101,11 @@
               aria-valuenow="0" aria-valuetext="Unavailable" style="--osc-meter-value: 0%">
               <span class="osc-meter-fill"></span>
             </div>
-            <output class="osc-corr-value osc-num" id="osc-corr-value"
-              data-osc="phase.correlation">—</output>
+            <span class="osc-corr-readout">
+              <output class="osc-corr-value osc-num" id="osc-corr-value"
+                data-osc="phase.correlation">—</output><span class="osc-corr-basis"
+                id="osc-corr-basis" data-osc="phase.correlationBasis"></span>
+            </span>
           </div>
         </div>
       </section>
@@ -1092,6 +1139,11 @@
               aria-label="Approximate hearing ranges by species"></div>
           </div>
           <p class="osc-bio-note">Ranges are approximate and vary by source and individual.</p>
+          <details class="osc-bio-sources" id="osc-bio-sources">
+            <summary class="osc-bio-sources-toggle">Sources</summary>
+            <ol class="osc-bio-source-list" id="osc-bio-source-list"
+              aria-label="Sources of the bars shown"></ol>
+          </details>
         </div>
       </section>
     </div>

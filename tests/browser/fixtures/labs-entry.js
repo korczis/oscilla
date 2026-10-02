@@ -12,6 +12,7 @@ import { HEARING_RANGES } from '../../../src/js/data/bioacoustics.js';
 import { buildColorLut } from '../../../src/js/analysis/spectrogram.js';
 import { lutStopsFromTheme } from '../../../src/js/charts/spectrogram-view.js';
 import { chartTheme } from '../../../src/js/charts/chart-theme.js';
+import { buildMicrophoneGraph, closeMicrophone } from '../../../src/js/audio/microphone.js';
 
 const cfg = { frequency: 1000, gain: 0.5, fftSize: 8192, stereo: false, warmupMs: 0,
   ...(window.__LABS_CONFIG__ || {}) };
@@ -74,6 +75,9 @@ function createFakeAdapter() {
 
   const listeners = new Set();
   let requested = cfg.frequency;
+  // The mic lab needs an engine-owned microphone graph (attachMicrophone); the fake engine
+  // builds it with the same builder the real engine uses.
+  let mic = null;
   return {
     ctx,
     osc,
@@ -87,6 +91,15 @@ function createFakeAdapter() {
       isPlaying: () => true,
       getDestination: () => master,
       getStereoRouter: () => router,
+      attachMicrophone(stream, opts) {
+        if (mic) closeMicrophone(mic);
+        mic = buildMicrophoneGraph(ctx, stream, opts);
+        return mic.analyser;
+      },
+      detachMicrophone() {
+        if (mic) closeMicrophone(mic);
+        mic = null;
+      },
       onChange(cb) {
         listeners.add(cb);
         return () => listeners.delete(cb);
