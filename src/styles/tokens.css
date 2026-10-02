@@ -42,6 +42,11 @@
   --osc-blue: #007afd;             /* primary buttons, Export, Oscillator segment, Log */
   --osc-blue-hover: #1a88ff;
   --osc-blue-press: #0067d6;
+  /* Blue under white text (primary buttons, Export, Oscillator segment, Log, active primary
+     tabs): #007afd carries white at only 4.0:1, so text-bearing fills use a slightly deeper
+     blue (white 4.8:1; hover 4.6:1). Thin or text-free blue (toggles, sliders) keeps --osc-blue. */
+  --osc-blue-fill: #006ee6;
+  --osc-blue-fill-hover: #0a72e2;
   --osc-blue-deep: #00468c;        /* filled active tab (Waveform, Live Spectrum, Low-pass) */
   --osc-blue-mid: #005dc5;         /* filled active tab, mid variant (Phase) */
   --osc-blue-deep-border: #0169b8; /* active waveform tile outline */
@@ -53,7 +58,9 @@
   --osc-green: #34db7b;            /* Use microphone, PLAYING, sustain */
   --osc-green-2: #3dd786;          /* tone block, correlation fill */
   --osc-green-deep: #1e7a4c;
+  --osc-green-fill: var(--osc-green); /* "Use microphone" button fill (dark text on it) */
   --osc-cyan: #19b8f0;
+  --osc-cyan-text: var(--osc-cyan); /* cyan used as body text (Learn examples) */
   --osc-purple: #a164fa;           /* chirp block, spectrum legend */
   --osc-purple-deep: #3b2496;      /* selected sweep block fill */
   --osc-purple-border: #a567ed;    /* selected sweep block outline */
@@ -179,11 +186,14 @@
   /* Accents used as text or thin traces on white (phase A/B labels, Lissajous, ADSR) are
      darkened to >= 4.5:1; the dark-theme values are under 3.3:1 on white. */
   --osc-cyan: #0a7fb0;
+  --osc-cyan-text: #076f9a;        /* 5.0:1 on --osc-surface-2 (#0a7fb0 is 4.0:1 there) */
   --osc-magenta: #c2268f;
   --osc-purple: #7a45d8;
   --osc-blue: #0067d6;
   --osc-blue-hover: #0a74e6;
   --osc-blue-press: #0057b5;
+  --osc-blue-fill: #0067d6;        /* white 5.4:1 */
+  --osc-blue-fill-hover: #0a74e6;  /* white 4.5:1 */
   --osc-blue-deep: #d7e8fd;
   --osc-blue-mid: #c4dcfb;
   --osc-blue-deep-border: #7fb2ef;
@@ -192,6 +202,7 @@
   --osc-focus: #0067d6;
   --osc-green: #13a356;
   --osc-green-2: #1fb36a;
+  --osc-green-fill: #0b7a3e;       /* white 5.4:1 (#13a356 carries white at 3.3:1) */
   --osc-text-on-green: #ffffff;
   --osc-info-bg: #e3f0ff;
   --osc-info-border: #a9cdf5;

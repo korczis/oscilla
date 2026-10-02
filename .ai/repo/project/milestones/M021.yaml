@@ -1,0 +1,15 @@
+id: M021
+title: "V3.1 Studio architecture"
+slug: v31-studio-architecture
+order: 21
+priority: p0
+problem: "Studio is an idea; nothing in the repository says what it is, which state is canonical or which decisions govern it."
+outcome: "The current sequencer, Signal Path, audio lifecycle and measurement code are audited, the Studio ADRs, features, use cases, rules, decisions and questions exist, and a library-vs-custom editor evaluation is recorded."
+acceptance_criteria:
+  - "The current sequencer, Signal Path, audio lifecycle and measurement code are audited, the Studio ADRs, features, use cases, rules, decisions and questions exist, and a library-vs-custom editor evaluation is recorded."
+  - "Specification: docs/specs/oscilla-v3.1-studio.md. Visual identity lock in the same file applies."
+validation:
+  - "npm run release-gate"
+evidence_required:
+  - "milestone_verified"
+created_at: 2026-10-02

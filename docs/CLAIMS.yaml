@@ -1,0 +1,248 @@
+# Claims matrix: what OSCILLA does today, and what it is planned to do, one sentence each,
+# with the file that defines the behaviour, the file that implements it and the test that
+# proves it. The product features under .ai/repo/features/ and the use cases under
+# .ai/repo/use-cases/ name these claims by id; `majordomus knowledge edges` resolves every
+# path below to a tracked node (specified_by, implemented_by, tested_by) and fails on a path
+# the repository does not contain.
+#
+# fields (claim/v1):
+#   claim           one sentence, present tense for guaranteed, plain future for planned
+#   source          the file that defines the behaviour (an ADR, a rule, a specification)
+#   implementation  the file that implements it, or "-" when nothing does
+#   test            the test that proves it, or "-" when none does
+#   status          one of the statuses below
+#
+# Every guaranteed claim names a test that a release-gate script runs (`npm test`,
+# `npm run test:engine` or `npm run test:browser`), and CI blocks a merge on its failure.
+# Majordomus's evidence ledger records only its own runners (test/run.sh, cargo test), so
+# `majordomus-cli evidence show` reports these claims `unrunnable`: the proof is the CI run,
+# not the ledger. That is a limit of the tool, stated here rather than hidden.
+version: 1
+
+statuses:
+  - id: guaranteed
+    meaning: Implemented, and a test in the release gate proves it; CI blocks a merge when it fails.
+  - id: planned
+    meaning: Specified and not implemented on main. Named so the omission is visible.
+
+claims:
+  # ---- V2, shipped
+  - id: tone-plays-and-releases
+    claim: Holding play sounds the tone at the set relative gain, and releasing it leaves no audio node running
+    source: .ai/repo/adrs/0015-native-web-audio-engine-extended-in-place.md
+    implementation: src/js/audio/audio-engine.js
+    test: tests/browser/app.cjs
+    status: guaranteed
+    note: Check hold-plays-release-zero-nodes, in Chromium, Firefox and WebKit, from file:// and from a /oscilla/ sub-path.
+
+  - id: patterns-match-v1
+    claim: Every V1 signal pattern plans exactly the automation the frozen V1 file planned
+    source: .ai/repo/adrs/0014-v1-behaviour-frozen-by-golden-vectors.md
+    implementation: src/js/audio/patterns.js
+    test: tests/unit/freeze.test.mjs
+    status: guaranteed
+    note: Golden vectors from index.html@a7b7a23 (tests/freeze/golden-a7b7a23.json) replayed against the V2 modules.
+
+  - id: sweep-rises-through-range
+    claim: A sweep pattern plays a frequency that rises through the requested range, and stopping it leaves no audio node running
+    source: .ai/repo/adrs/0004-continuous-repeat-schedule-window.md
+    implementation: src/js/audio/scheduler.js
+    test: tests/browser/app.cjs
+    status: guaranteed
+    note: Check pattern-select-plays-sweep (200 Hz to 4 kHz in 2 s, so the run stays short); the default sweep is 20 Hz to 20 kHz log over 10 s.
+
+  - id: dual-oscillator-beats
+    claim: Two oscillators at 440 Hz and 442 Hz mixed to mono produce a level envelope beating at 2 Hz, and the stereo split puts one on each channel
+    source: .ai/repo/adrs/0015-native-web-audio-engine-extended-in-place.md
+    implementation: src/js/audio/modulation.js
+    test: tests/browser/engine-v1port.cjs
+    status: guaranteed
+
+  - id: spectrum-peak-accuracy
+    claim: The spectrum reads a bin-centred full-scale sine at 0 dB relative to full scale and interpolates the peak frequency between bins
+    source: .ai/repo/adrs/0017-relative-levels-spl-only-when-calibrated.md
+    implementation: src/js/analysis/peak-detector.js
+    test: tests/unit/analysis-peak.test.mjs
+    status: guaranteed
+
+  - id: spectrogram-mapping
+    claim: The spectrogram maps relative level to colour through a monotone lookup table on a log or linear frequency axis
+    source: .ai/repo/adrs/0016-renderer-split.md
+    implementation: src/js/analysis/spectrogram.js
+    test: tests/unit/analysis-spectrogram.test.mjs
+    status: guaranteed
+
+  - id: microphone-analysis-only
+    claim: Starting the microphone requests audio with echo cancellation, noise suppression and automatic gain control off, feeds it to an analyser and never to the output, and stopping it ends every track
+    source: .ai/repo/rules/project/no-fake-science.v1.md
+    implementation: src/js/audio/microphone.js
+    test: tests/unit/engine.test.mjs
+    status: guaranteed
+
+  - id: generator-mic-compare
+    claim: The generator-versus-microphone comparison reports the frequency difference in hertz and cents and flags a match, a harmonic, a mismatch or no signal
+    source: .ai/repo/rules/project/no-fake-science.v1.md
+    implementation: src/js/analysis/compare.js
+    test: tests/unit/analysis-misc.test.mjs
+    status: guaranteed
+    note: Uncalibrated by design; the level is a relative analyser level.
+
+  - id: sequencer-safe-automation
+    claim: The sequencer compiles a block timeline into sorted Web Audio automation whose gain never reaches zero and whose frequencies stay inside 20 Hz and the safe maximum
+    source: .ai/repo/rules/project/audio-engine-discipline.v2.md
+    implementation: src/js/sequencer/compiler.js
+    test: tests/unit/sequencer-compiler.test.mjs
+    status: guaranteed
+
+  - id: lowpass-attenuates
+    claim: An enabled 500 Hz low-pass attenuates a 5 kHz tone below a fifth of its level, and bypassing it restores the level
+    source: .ai/repo/adrs/0015-native-web-audio-engine-extended-in-place.md
+    implementation: src/js/audio/filters.js
+    test: tests/browser/app.cjs
+    status: guaranteed
+    note: Check labs-basic; the filter response curve is also compared with getFrequencyResponse in tests/browser/labs.cjs, not yet in the gate.
+
+  - id: adsr-envelope-semantics
+    claim: The ADSR envelope schedules attack, decay, sustain and release with Web Audio set, linear and exponential semantics, and a release mid-segment continues from the current value
+    source: .ai/repo/adrs/0015-native-web-audio-engine-extended-in-place.md
+    implementation: src/js/audio/envelope.js
+    test: tests/unit/audio-envelope.test.mjs
+    status: guaranteed
+
+  - id: additive-coefficients-play
+    claim: Additive synthesis plays a PeriodicWave whose harmonic coefficients are exactly the ones the harmonic bars draw
+    source: .ai/repo/adrs/0015-native-web-audio-engine-extended-in-place.md
+    implementation: src/js/audio/additive.js
+    test: tests/unit/audio-synthesis.test.mjs
+    status: guaranteed
+
+  - id: phase-and-lissajous-model
+    claim: The phase view and the Lissajous figure are computed from the two frequencies and phases, one period for near-unison pairs
+    source: .ai/repo/adrs/0016-renderer-split.md
+    implementation: src/js/charts/phase-model.js
+    test: tests/unit/charts.test.mjs
+    status: guaranteed
+
+  - id: stereo-correlation-meter
+    claim: The stereo correlation meter reads +1 in phase, -1 inverted and about 0 in quadrature, and resets on silence
+    source: .ai/repo/adrs/0015-native-web-audio-engine-extended-in-place.md
+    implementation: src/js/analysis/correlation.js
+    test: tests/unit/analysis-misc.test.mjs
+    status: guaranteed
+
+  - id: bioacoustics-cited
+    claim: Every hearing range and call band shown comes from a cited publication, carries its criterion, and is shown with a disclaimer
+    source: .ai/repo/rules/project/no-fake-science.v1.md
+    implementation: src/js/data/bioacoustics.js
+    test: tests/unit/bioacoustics.test.mjs
+    status: guaranteed
+
+  - id: link-restores-configuration
+    claim: A copied link restores the instrument configuration through the validated path, with the gain capped
+    source: .ai/repo/adrs/0023-schema-versions-independent-of-product-version.md
+    implementation: src/js/core/url-state.js
+    test: tests/unit/core.test.mjs
+    status: guaranteed
+    note: The browser round trip is check url-copy-round-trip in tests/browser/app.cjs.
+
+  - id: presets-save-and-load
+    claim: A saved preset is stored locally and loading it restores the same configuration; blocked storage never throws
+    source: .ai/repo/adrs/0023-schema-versions-independent-of-product-version.md
+    implementation: src/js/core/storage.js
+    test: tests/browser/app.cjs
+    status: guaranteed
+    note: Check presets-save-load; storage migration and blocked storage in tests/unit/core.test.mjs.
+
+  - id: wav-export-valid
+    claim: WAV export writes a valid RIFF/WAVE file (16-bit PCM or 32-bit float) of the current signal that parses back to the same samples
+    source: .ai/repo/adrs/0015-native-web-audio-engine-extended-in-place.md
+    implementation: src/js/audio/wav.js
+    test: tests/unit/audio-wav.test.mjs
+    status: guaranteed
+    note: The exported file from the running app is checked by wav-export-valid in tests/browser/app.cjs (format 1, 16 bits, 2 channels).
+
+  - id: config-file-round-trip
+    claim: An exported configuration file carries every specified key and no runtime objects, and importing it restores the configuration through the validated path
+    source: .ai/repo/adrs/0023-schema-versions-independent-of-product-version.md
+    implementation: src/js/ui/config-file.js
+    test: tests/unit/integration-ui.test.mjs
+    status: guaranteed
+    note: The browser round trip is check config-export-import-round-trip in tests/browser/app.cjs.
+
+  - id: single-file-build
+    claim: The build packs the modular source into one dist/index.html deterministically, inlining styles, vendor scripts and the application as classic scripts
+    source: .ai/repo/adrs/0011-modular-source-one-committed-dist.md
+    implementation: scripts/pack-single-file.mjs
+    test: tests/unit/pack-single-file.test.mjs
+    status: guaranteed
+
+  - id: dist-self-contained
+    claim: The committed dist/index.html loads nothing at runtime; module scripts, import maps, external scripts and runtime fetches are refused
+    source: .ai/repo/rules/project/single-file-deliverable.v2.md
+    implementation: scripts/verify-dist.mjs
+    test: tests/unit/verify-dist.test.mjs
+    status: guaranteed
+
+  - id: opens-from-file-and-subpath
+    claim: The built page boots without console errors and plays in Chromium, Firefox and WebKit, both from file:// and from a /oscilla/ sub-path as GitHub Pages serves it
+    source: .ai/repo/adrs/0012-self-contained-runtime.md
+    implementation: src/index.html
+    test: tests/browser/app.cjs
+    status: guaranteed
+
+  # ---- V3 MEASURE, planned (milestones M012-M020); nothing on main implements these
+  - id: measurement-workbench
+    claim: OSCILLA will offer a Measure workspace, separate from the Playground, that runs a measurement from preflight to a stored result
+    source: docs/specs/oscilla-v3-measure.md
+    implementation: "-"
+    test: "-"
+    status: planned
+
+  - id: calibration-profiles
+    claim: OSCILLA will apply frequency-response and absolute-level calibration profiles, interpolated in log frequency and never extrapolated, and label dB SPL only under a valid absolute calibration
+    source: .ai/repo/adrs/0020-calibration-semantics.md
+    implementation: "-"
+    test: "-"
+    status: planned
+
+  - id: transfer-function
+    claim: OSCILLA will measure the transfer function of the playback, room and microphone chain from a captured log sweep
+    source: .ai/repo/adrs/0021-sweep-deconvolution-method.md
+    implementation: "-"
+    test: "-"
+    status: planned
+
+  - id: impulse-response
+    claim: OSCILLA will derive the impulse response by regularised deconvolution of the captured sweep, windowed and normalised, with its algorithm ID recorded
+    source: .ai/repo/adrs/0021-sweep-deconvolution-method.md
+    implementation: "-"
+    test: "-"
+    status: planned
+
+  - id: rta-bands
+    claim: OSCILLA will show a real-time analyzer as FFT, octave and third-octave band power with documented averaging constants
+    source: docs/specs/oscilla-v3-measure.md
+    implementation: "-"
+    test: "-"
+    status: planned
+
+  - id: reproducible-experiments
+    claim: OSCILLA will record every measurement as an experiment with its stimulus, calibration, device, algorithm IDs and product version, persisted and exportable
+    source: .ai/repo/adrs/0019-recipe-versus-experiment.md
+    implementation: "-"
+    test: "-"
+    status: planned
+
+  - id: measurement-comparison
+    claim: OSCILLA will compare two or more experiments and aggregate repeated measurements with their dispersion
+    source: docs/specs/oscilla-v3-measure.md
+    implementation: "-"
+    test: "-"
+    status: planned
+
+  - id: measurement-quality
+    claim: OSCILLA will rate every measurement GOOD, USABLE, POOR or INVALID from named metrics, always with its reasons
+    source: .ai/repo/adrs/0025-data-driven-quality-with-reasons.md
+    implementation: "-"
+    test: "-"
+    status: planned

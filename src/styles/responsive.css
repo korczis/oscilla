@@ -368,8 +368,8 @@
     grid-column: 1;
     width: 44px;
     height: 44px;
-    border-color: var(--osc-blue);
-    background: var(--osc-blue);
+    border-color: var(--osc-blue-fill);
+    background: var(--osc-blue-fill);
     color: var(--osc-text-on-accent);
   }
 
@@ -426,6 +426,13 @@
 
 @media (max-width: 359.98px) {
   .osc-brand-text {
+    display: none;
+  }
+
+  /* The status bar keeps frequency and state; the waveform is in the source panel. On CI fonts
+     it did not fit next to RELEASING at 320 px. */
+  [data-osc="status.waveform"],
+  [data-osc="status.readout"] > .osc-sb-dot:not(.osc-sb-extra) {
     display: none;
   }
 }
@@ -550,5 +557,15 @@
   .osc-tabs--underline .osc-tab.is-active::after {
     bottom: 4px;
     height: 3px;
+  }
+}
+
+/* 768-1279: every panel stays visible (no focus layout), so the nav rings the workspace's
+   panels and scrolls the first of them to the top (ui/app.js focusWorkspace). */
+@media (min-width: 768px) and (max-width: 1279.98px) {
+  .osc-panel.is-focused {
+    border-color: var(--osc-blue-underline);
+    box-shadow: 0 0 0 1px var(--osc-blue-underline), var(--osc-shadow-panel);
+    scroll-margin-top: 10px;
   }
 }

@@ -93,7 +93,7 @@ svg {
   z-index: 1000;
   padding: 8px 12px;
   border-radius: var(--osc-radius-control);
-  background: var(--osc-blue);
+  background: var(--osc-blue-fill);
   color: var(--osc-text-on-accent);
   font-weight: var(--osc-fw-semibold);
   text-decoration: none;

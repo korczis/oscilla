@@ -1,0 +1,21 @@
+id: V422
+milestone: M028
+title: "Full Studio workspace and navigation"
+slug: full-studio-workspace-and-navigation
+priority: p1
+profile: implementation
+objective: "Toolbar, library | graph | Inspector over timeline, maximized mode without the Fullscreen API, optional fullscreen, Studio in top-level navigation, deep link to Studio/template (§131-§135, §198-§201)."
+scope:
+  - "src"
+  - "tests"
+depends_on:
+  - "V413"
+  - "V417"
+acceptance_criteria:
+  - "Toolbar, library | graph | Inspector over timeline, maximized mode without the Fullscreen API, optional fullscreen, Studio in top-level navigation, deep link to Studio/template (§131-§135, §198-§201)."
+  - "Specification: docs/specs/oscilla-v3.1-studio.md. Visual identity lock in the same file applies."
+validation:
+  - "npm run release-gate"
+evidence_required:
+  - "verified"
+created_at: 2026-10-02

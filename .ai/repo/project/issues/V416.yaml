@@ -1,0 +1,20 @@
+id: V416
+milestone: M025
+title: "Timeline model and sequencer migration"
+slug: timeline-model-and-sequencer-migration
+priority: p1
+profile: implementation
+objective: "Tracks, clips (pattern, event, automation, measurement), seconds and optional musical time, tempo semantics, backward-compatible sequence import (§81-§85, §90-§91)."
+scope:
+  - "src"
+  - "tests"
+depends_on:
+  - "V404"
+acceptance_criteria:
+  - "Tracks, clips (pattern, event, automation, measurement), seconds and optional musical time, tempo semantics, backward-compatible sequence import (§81-§85, §90-§91)."
+  - "Specification: docs/specs/oscilla-v3.1-studio.md. Visual identity lock in the same file applies."
+validation:
+  - "npm run release-gate"
+evidence_required:
+  - "verified"
+created_at: 2026-10-02

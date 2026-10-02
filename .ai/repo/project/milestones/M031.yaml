@@ -1,0 +1,15 @@
+id: M031
+title: "V3.1 Studio accessibility and mobile"
+slug: v31-studio-a11y-mobile
+order: 31
+priority: p0
+problem: "Graph editors usually exclude keyboard, screen-reader and phone users."
+outcome: "Every Studio operation has a non-drag path, phones get a GRAPH/TIMELINE/INSPECTOR flow, and summaries and announcements are meaningful."
+acceptance_criteria:
+  - "Every Studio operation has a non-drag path, phones get a GRAPH/TIMELINE/INSPECTOR flow, and summaries and announcements are meaningful."
+  - "Specification: docs/specs/oscilla-v3.1-studio.md. Visual identity lock in the same file applies."
+validation:
+  - "npm run release-gate"
+evidence_required:
+  - "milestone_verified"
+created_at: 2026-10-02

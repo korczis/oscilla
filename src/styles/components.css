@@ -97,14 +97,14 @@
 }
 
 .osc-btn-primary {
-  border-color: var(--osc-blue);
-  background: var(--osc-blue);
+  border-color: var(--osc-blue-fill);
+  background: var(--osc-blue-fill);
   color: var(--osc-text-on-accent);
   font-weight: var(--osc-fw-semibold);
 }
 
 .osc-btn-primary:hover {
-  background: var(--osc-blue-hover);
+  background: var(--osc-blue-fill-hover);
 }
 
 .osc-btn-primary:active,
@@ -128,8 +128,8 @@
 }
 
 .osc-btn-success {
-  border-color: var(--osc-green);
-  background: var(--osc-green);
+  border-color: var(--osc-green-fill);
+  background: var(--osc-green-fill);
   color: var(--osc-text-on-green);
   font-weight: var(--osc-fw-medium);
 }
@@ -245,7 +245,7 @@
 }
 
 .osc-tabs--primary .osc-tab.is-active {
-  background: var(--osc-blue);
+  background: var(--osc-blue-fill);
   color: var(--osc-text-on-accent);
 }
 
@@ -316,7 +316,7 @@
 }
 
 .osc-seg--primary .osc-seg-btn.is-active {
-  background: var(--osc-blue);
+  background: var(--osc-blue-fill);
   color: var(--osc-text-on-accent);
 }
 
@@ -332,8 +332,8 @@
 }
 
 .osc-seg--split .osc-seg-btn.is-active {
-  border-color: var(--osc-blue);
-  background: var(--osc-blue);
+  border-color: var(--osc-blue-fill);
+  background: var(--osc-blue-fill);
   color: var(--osc-text-on-accent);
 }
 
@@ -783,6 +783,8 @@
 
 .osc-block-name { font-weight: var(--osc-fw-medium); }
 .osc-block-detail { font-variant-numeric: tabular-nums; opacity: 0.9; }
+/* Purple carries its dark label at 4.9:1; the 0.9 opacity would drop it to 4.4:1. */
+.osc-block--chirp .osc-block-detail { opacity: 1; }
 
 .osc-block--tone { background: var(--osc-block-tone); color: var(--osc-block-tone-text); }
 .osc-block--sweep { background: var(--osc-block-sweep); color: var(--osc-block-sweep-text); }

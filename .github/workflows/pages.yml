@@ -1,5 +1,7 @@
-# Publish OSCILLA to GitHub Pages. The site is exactly dist/index.html, the same file that is
-# committed and that CI gated on the pull request; repository tooling is never served.
+# Publish OSCILLA to GitHub Pages. The site is dist/index.html, the same file that is committed
+# and that CI gated on the pull request, with only its metadata region stamped with this commit
+# (scripts/stamp-build.mjs); repository tooling is never served. The deployment is verified
+# after deploy-pages and any mismatch fails the workflow (scripts/verify-deploy.mjs).
 name: Deploy to GitHub Pages
 
 on:
@@ -32,10 +34,14 @@ jobs:
       - name: Committed dist/index.html matches a clean rebuild
         run: npm run build:check
       - run: npm run verify-dist
-      - name: Stage the single-file site
+      - name: Product version and its projections agree
+        run: npm run version:check
+      - name: Stage the single-file site, stamped with this commit
         run: |
           mkdir -p _site
-          cp dist/index.html _site/index.html
+          # Rewrites ONLY the metadata region (commit, channel production, sourceDate,
+          # artifactSha256 of the committed dist); verify-deploy reverses it byte for byte.
+          node scripts/stamp-build.mjs dist/index.html _site/index.html --commit "$GITHUB_SHA"
           # Crawler-only share assets: the page never loads them (project.single-file-deliverable).
           cp site/og-image.png site/apple-touch-icon.png _site/
           touch _site/.nojekyll
@@ -45,14 +51,10 @@ jobs:
           path: _site
       - id: deployment
         uses: actions/deploy-pages@v5
-      - name: Smoke-test the live sub-path
-        run: |
-          url="${{ steps.deployment.outputs.page_url }}"
-          sleep 20
-          curl -fsSL --retry 5 --retry-delay 10 -o live.html "$url"
-          grep -q 'data-vendor="p5@' live.html
-          ! grep -q 'type="module"' live.html
-          cmp -s live.html dist/index.html || echo "::warning::live page differs from dist (CDN propagation?)"
-          grep -q "<meta property=\"og:image\" content=\"${url}og-image.png\">" live.html
-          curl -fsSL --retry 5 --retry-delay 10 -o og.png -w '%{content_type}\n' "${url}og-image.png" | grep -q '^image/png'
-          cmp -s og.png site/og-image.png || echo "::warning::live preview differs from site/og-image.png"
+      - name: Verify the live deployment (fatal)
+        # 10 attempts, 10 s apart: normalised live == committed dist, commit == GITHUB_SHA,
+        # version == package.json, digest == recomputed, p5 vendor marker, no module script,
+        # og:image meta, og-image.png and apple-touch-icon.png byte-equal to site/.
+        run: >-
+          node scripts/verify-deploy.mjs --url "${{ steps.deployment.outputs.page_url }}"
+          --commit "$GITHUB_SHA" --attempts 10 --delay 10

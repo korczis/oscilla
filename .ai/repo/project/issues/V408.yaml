@@ -1,0 +1,20 @@
+id: V408
+milestone: M022
+title: "Action layer and history"
+slug: action-layer-and-history
+priority: p1
+profile: implementation
+objective: "All mutations via dispatch; undo/redo for every listed operation; gesture coalescing; redo cleared by new edits; exact semantic round-trip test (§47-§52, §208)."
+scope:
+  - "src"
+  - "tests"
+depends_on:
+  - "V404"
+acceptance_criteria:
+  - "All mutations via dispatch; undo/redo for every listed operation; gesture coalescing; redo cleared by new edits; exact semantic round-trip test (§47-§52, §208)."
+  - "Specification: docs/specs/oscilla-v3.1-studio.md. Visual identity lock in the same file applies."
+validation:
+  - "npm run release-gate"
+evidence_required:
+  - "verified"
+created_at: 2026-10-02

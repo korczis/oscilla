@@ -189,13 +189,23 @@ export function createOscillaUi({ storedAnalysisTab = storageGet(ANALYSIS_TAB_KE
         const on = mode !== 'playground' && p.dataset.oscModes.split(/\s+/).includes(mode);
         p.classList.toggle('is-focused', on && p.classList.contains('osc-panel'));
       });
-      if (mode === 'playground') return;
-      const target = panels.find((p) => p.dataset.oscModes.split(/\s+/).includes(mode)
-        && p.offsetParent !== null && !p.matches('.osc-p-source, .osc-p-analysis'));
-      if (target) {
-        const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-        target.scrollIntoView({ block: 'nearest', behavior: reduce ? 'auto' : 'smooth' });
+      const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      const behavior = reduce ? 'auto' : 'smooth';
+      // 768-1279 px shows every panel in two columns (no focus layout): the nav brings the
+      // workspace's first panel to the top and rings its panels (CSS .is-focused).
+      const tablet = window.matchMedia('(min-width: 768px) and (max-width: 1279.98px)').matches;
+      if (mode === 'playground') {
+        if (tablet) {
+          const main = this.$root.querySelector('.osc-main');
+          if (main && main.scrollTop > 0) main.scrollTo({ top: 0, behavior });
+        }
+        return;
       }
+      // The visually first of the workspace's own panels (CSS order differs from DOM order).
+      const target = panels.filter((p) => p.dataset.oscModes.split(/\s+/).includes(mode)
+        && p.offsetParent !== null && !p.matches('.osc-p-source, .osc-p-analysis'))
+        .sort((a, b) => a.getBoundingClientRect().top - b.getBoundingClientRect().top)[0];
+      if (target) target.scrollIntoView({ block: tablet ? 'start' : 'nearest', behavior });
     },
     navItem(mode) {
       return {

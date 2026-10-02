@@ -542,8 +542,11 @@ export function mount(rootEl, adapter) {
         ph.x = scale.secToPx(ph.t);
       }
     }
-    playhead.hidden = !ph.visible;
-    if (ph.visible) playhead.style.transform = `translateX(${Math.round(ph.x)}px)`;
+    if (playhead.hidden !== !ph.visible) playhead.hidden = !ph.visible;
+    if (ph.visible) {
+      const tf = `translateX(${Math.round(ph.x)}px)`;
+      if (playhead.style.transform !== tf) playhead.style.transform = tf;
+    }
     if (editor.playing !== wasPlaying) {
       wasPlaying = editor.playing;
       renderTransport();

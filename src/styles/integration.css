@@ -370,6 +370,78 @@
   font-size: var(--osc-fs-xs);
 }
 
+/* About: build provenance (version, commit, channel, source digest). */
+.osc-about-build {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  font-size: var(--osc-fs-sm);
+}
+
+.osc-about-build > div {
+  display: grid;
+  grid-template-columns: 110px minmax(0, 1fr);
+  gap: 10px;
+}
+
+.osc-about-build dt {
+  color: var(--osc-text-2);
+}
+
+.osc-about-build dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.osc-about-digest {
+  font-family: var(--osc-font-mono);
+  font-size: var(--osc-fs-xs);
+}
+
+/* ?debug=1 only: provenance and live engine state, above the status bar. */
+.osc-debug-panel {
+  position: fixed;
+  right: 8px;
+  bottom: calc(var(--osc-statusbar-h) + 8px);
+  z-index: 40;
+  width: min(380px, calc(100vw - 16px));
+  max-height: 60vh;
+  padding: 8px 10px;
+  overflow: auto;
+  border: 1px solid var(--osc-border-strong);
+  border-radius: var(--osc-radius-sm);
+  background: var(--osc-surface-1);
+  color: var(--osc-text);
+  font-size: var(--osc-fs-xs);
+}
+
+.osc-debug-title {
+  margin: 0 0 4px;
+  font-size: var(--osc-fs-sm);
+  font-weight: var(--osc-fw-semibold);
+}
+
+.osc-debug-list {
+  margin: 0;
+}
+
+.osc-debug-list > div {
+  display: grid;
+  grid-template-columns: 120px minmax(0, 1fr);
+  gap: 8px;
+}
+
+.osc-debug-list dt {
+  color: var(--osc-text-2);
+}
+
+.osc-debug-list dd {
+  margin: 0;
+  font-family: var(--osc-font-mono);
+  overflow-wrap: anywhere;
+}
+
 .osc-settings-grid {
   display: grid;
   grid-template-columns: minmax(0, 190px) minmax(0, 1fr);
@@ -436,7 +508,7 @@
 }
 
 .osc-learn-example {
-  color: var(--osc-cyan);
+  color: var(--osc-cyan-text);
 }
 
 .osc-learn-actions,
@@ -643,6 +715,83 @@
   list-style: none;
 }
 
+/* First-run safety notice: one slim in-flow strip below the header (never over a control).
+   Phones show the first two sentences and a More toggle; wider screens show all of it. */
+.osc-safety {
+  display: flex;
+  flex: none;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 6px 9px 0 11px;
+  padding: 5px 4px 5px 10px;
+  border: 1px solid var(--osc-warn-border);
+  border-radius: var(--osc-radius-control);
+  background: var(--osc-warn-bg);
+  color: var(--osc-text);
+  font-size: var(--osc-fs-sm);
+  line-height: 1.45;
+}
+
+.osc-safety-icon {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  margin-top: 2px;
+  color: var(--osc-orange);
+}
+
+.osc-safety-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin: 1px 0 0;
+}
+
+.osc-safety-toggle {
+  display: none;
+  margin-left: 4px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+@media (max-width: 767.98px) {
+  .osc-safety {
+    padding-block: 2px;
+    font-size: var(--osc-fs-xs);
+  }
+
+  .osc-safety-more:not(.is-open) {
+    display: none;
+  }
+
+  .osc-safety-toggle {
+    display: inline;
+  }
+}
+
+/* Text-style button. */
+.osc-link-btn {
+  padding: 2px 0;
+  border: 0;
+  background: none;
+  color: var(--osc-text-2);
+  font: inherit;
+  font-size: var(--osc-fs-xs);
+  text-align: left;
+  text-decoration: underline dotted;
+  cursor: pointer;
+}
+
+@media (pointer: coarse) {
+  .osc-link-btn {
+    min-height: 44px;
+  }
+}
+
 .osc-settings-wide {
   grid-column: 1 / -1;
 }
@@ -679,5 +828,16 @@
 
   .osc-app[data-mode="playground"] :is(.osc-top-left, .osc-top-right) {
     grid-template-rows: max-content max-content;
+  }
+}
+
+/* The phone reopen control lives in the Source header; Device & Limits carries it elsewhere. */
+.osc-safety-reopen--phone {
+  display: none;
+}
+
+@media (max-width: 767.98px) {
+  .osc-safety-reopen--phone {
+    display: inline-flex;
   }
 }

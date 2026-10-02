@@ -1,0 +1,21 @@
+id: V421
+milestone: M027
+title: "Compact Studio widget"
+slug: compact-studio-widget
+priority: p1
+profile: implementation
+objective: "Transport, time, clips, simplified signal path from the canonical graph, quick Inspector, expand; Playground Signal Path renders from StudioGraph; same-model-identity test (§127-§130, §164-§165, §197, §214)."
+scope:
+  - "src"
+  - "tests"
+depends_on:
+  - "V414"
+  - "V416"
+acceptance_criteria:
+  - "Transport, time, clips, simplified signal path from the canonical graph, quick Inspector, expand; Playground Signal Path renders from StudioGraph; same-model-identity test (§127-§130, §164-§165, §197, §214)."
+  - "Specification: docs/specs/oscilla-v3.1-studio.md. Visual identity lock in the same file applies."
+validation:
+  - "npm run release-gate"
+evidence_required:
+  - "verified"
+created_at: 2026-10-02

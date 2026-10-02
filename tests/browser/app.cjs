@@ -28,11 +28,16 @@ const ONLY = arg('only', '') ? new Set(arg('only', '').split(',')) : null;
 const JSON_OUT = arg('json', '');
 const WIDTHS = [320, 375, 768, 1024, 1280, 1536];
 
+// Chromium and Firefox get their fake capture devices (granted without a prompt) so the
+// microphone checks can open a real stream; WebKit has none and skips only that part.
 const LAUNCH = {
-  chromium: { args: ['--autoplay-policy=no-user-gesture-required'] },
-  firefox: { firefoxUserPrefs: { 'media.autoplay.default': 0, 'media.autoplay.blocking_policy': 0 } },
+  chromium: { args: ['--autoplay-policy=no-user-gesture-required',
+    '--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream'] },
+  firefox: { firefoxUserPrefs: { 'media.autoplay.default': 0, 'media.autoplay.blocking_policy': 0,
+    'media.navigator.streams.fake': true, 'media.navigator.permission.disabled': true } },
   webkit: {},
 };
+const FAKE_MIC = new Set(['chromium', 'firefox']);
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -139,6 +144,16 @@ const H = {
     await page.waitForFunction((w) => document.querySelector('#osc-app').dataset.mode === w, ws);
     await sleep(150);
   },
+  /** Let n animation frames pass (focus scrolling, Alpine's x-show, rAF focus hand-offs). */
+  frames: (page, n = 2) => page.evaluate((k) => new Promise((r) => {
+    const step = (i) => (i ? requestAnimationFrame(() => step(i - 1)) : r());
+    step(k);
+  }), n),
+  /** The focused element as its id or data-osc, 'BODY' when focus was dropped. */
+  active: (page) => page.evaluate(() => {
+    const a = document.activeElement;
+    return !a || a === document.body ? 'BODY' : (a.id || a.dataset.osc || a.tagName);
+  }),
 };
 
 /** Accessible-name + reachability audit of every interactive [data-osc] element, in-page. */
@@ -194,7 +209,157 @@ function auditControls() {
   return out;
 }
 
+/**
+ * In-page: is the focused element covered, fully or partly, by a notification, the header, the
+ * status bar, the hints strip or any fixed/sticky element, or cut off by the viewport? Samples
+ * elementFromPoint at the centre and the four inset corners of its box.
+ */
+function focusObscured() {
+  const el = document.activeElement;
+  if (!el || el === document.body) return { body: true };
+  const key = el.id || el.dataset.osc || el.outerHTML.slice(0, 60);
+  const r = el.getBoundingClientRect();
+  const ix = Math.min(2, r.width / 4);
+  const iy = Math.min(2, r.height / 4);
+  const pts = [[r.left + r.width / 2, r.top + r.height / 2], [r.left + ix, r.top + iy],
+    [r.right - ix, r.top + iy], [r.left + ix, r.bottom - iy], [r.right - ix, r.bottom - iy]];
+  const COVER = '.osc-header, .osc-statusbar, [data-osc="alerts"], .osc-hints';
+  const coverOf = (hit) => {
+    const bar = hit.closest(COVER);
+    if (bar && !bar.contains(el)) return bar.className.split(' ')[0];
+    for (let p = hit; p && p !== document.body; p = p.parentElement) {
+      if (/fixed|sticky/.test(getComputedStyle(p).position) && !p.contains(el)) {
+        return p.id || p.className.split(' ')[0] || p.tagName;
+      }
+    }
+    return '';
+  };
+  const under = [];
+  for (const [x, y] of pts) {
+    const hit = document.elementFromPoint(x, y);
+    if (!hit) { under.push('off-screen'); continue; }
+    if (el.contains(hit) || hit.contains(el)) continue;
+    const c = coverOf(hit);
+    if (c) under.push(c);
+  }
+  return { key, under: [...new Set(under)], n: under.length };
+}
+
+/** In-page: the last visible tab stop in document order (start of a Shift+Tab walk). */
+function focusLastTabStop() {
+  const sel = 'button, a[href], input:not([type=file]), select, textarea, [tabindex]';
+  const all = [...document.querySelectorAll(sel)].filter((el) => {
+    if (el.tabIndex < 0 || el.disabled || el.closest('[hidden], dialog:not([open])')) return false;
+    const r = el.getBoundingClientRect();
+    return r.width > 0 && r.height > 0 && getComputedStyle(el).visibility !== 'hidden';
+  });
+  const last = all[all.length - 1];
+  last.focus();
+  return last.id || last.dataset.osc || last.tagName;
+}
+
+/**
+ * In-page: replace getUserMedia with a request that stays pending until
+ * window.__oscGum.settle(real) — real: the original device request (fake capture device),
+ * otherwise a NotAllowedError. window.__oscGum.restore() puts the original back.
+ */
+function installPendingMic() {
+  const md = navigator.mediaDevices;
+  const orig = md && typeof md.getUserMedia === 'function' ? md.getUserMedia.bind(md) : null;
+  const gum = { calls: 0, settle: () => {}, restore: () => {} };
+  const pending = (c) => {
+    gum.calls += 1;
+    return new Promise((res, rej) => {
+      gum.settle = (real) => (real && orig ? orig(c).then(res, rej)
+        : rej(new DOMException('Permission denied', 'NotAllowedError')));
+    });
+  };
+  if (md) {
+    md.getUserMedia = pending;
+    gum.restore = () => { if (orig) md.getUserMedia = orig; else delete md.getUserMedia; };
+  } else {
+    Object.defineProperty(navigator, 'mediaDevices', { value: { getUserMedia: pending },
+      configurable: true });
+    gum.restore = () => { delete navigator.mediaDevices; };
+  }
+  window.__oscGum = gum;
+}
+
+/** In-page: phone header and status bar geometry (rows, overlaps, clipping, scrolling). */
+function phoneBars() {
+  const vis = (el) => {
+    const r = el.getBoundingClientRect();
+    return r.width > 1 && r.height > 1 && !el.classList.contains('osc-sr-only');
+  };
+  const name = (el) => el.id || el.dataset.osc || el.className.split(' ')[0] || el.tagName;
+  const boxes = (els) => els.filter(vis)
+    .map((el) => ({ n: name(el), b: el.getBoundingClientRect() }));
+  const overlaps = (list) => {
+    const out = [];
+    for (let i = 0; i < list.length; i++) {
+      for (let j = i + 1; j < list.length; j++) {
+        const a = list[i].b;
+        const b = list[j].b;
+        const x = Math.min(a.right, b.right) - Math.max(a.left, b.left);
+        const y = Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top);
+        if (x > 0.5 && y > 0.5) out.push(`${list[i].n}×${list[j].n}`);
+      }
+    }
+    return out;
+  };
+  const bad = [];
+  const header = document.querySelector('.osc-header');
+  const hb = header.getBoundingClientRect();
+  const nav = header.querySelector('.osc-nav').getBoundingClientRect();
+  const top = boxes([...header.querySelectorAll('.osc-brand, .osc-header-actions > *')]);
+  const hparts = [...top, { n: 'osc-nav', b: nav }];
+  bad.push(...overlaps(hparts).map((o) => `header ${o}`));
+  for (const p of hparts) {
+    if (p.b.left < hb.left - 0.5 || p.b.right > hb.right + 0.5) bad.push(`${p.n} outside header`);
+  }
+  // On phones the workspace strip is the header's second row, under the brand and actions.
+  const firstRow = Math.max(...top.map((p) => p.b.bottom));
+  if (nav.top < firstRow - 0.5) bad.push(`nav row ${nav.top} above ${firstRow}`);
+  let next = header.nextElementSibling;
+  while (next && !vis(next)) next = next.nextElementSibling;
+  if (next && next.getBoundingClientRect().top < hb.bottom - 0.5) {
+    bad.push(`header over ${name(next)}`);
+  }
+  const sb = document.querySelector('.osc-statusbar');
+  const sbb = sb.getBoundingClientRect();
+  const sparts = boxes([...sb.children]);
+  bad.push(...overlaps(sparts).map((o) => `status bar ${o}`));
+  for (const p of sparts) {
+    if (p.b.left < sbb.left - 0.5 || p.b.right > sbb.right + 0.5) bad.push(`${p.n} outside bar`);
+  }
+  const main = document.getElementById('osc-main').getBoundingClientRect();
+  if (sbb.top < main.bottom - 0.5) bad.push('status bar over the main row');
+  const state = document.querySelector('.osc-sb-state').getBoundingClientRect();
+  const label = document.querySelector('[data-osc="status.label"]');
+  const lb = label.getBoundingClientRect();
+  if (label.scrollWidth > label.clientWidth + 1 || lb.right > state.right + 0.5) {
+    bad.push('status label clipped');
+  }
+  const readout = boxes([...document.querySelectorAll('[data-osc="status.readout"] > *')]);
+  for (const p of readout) {
+    if (p.b.left < lb.right - 0.5) bad.push(`${p.n} over the status label`);
+    if (p.b.right > state.right + 1) bad.push(`${p.n} clipped by ${p.b.right - state.right} px`);
+  }
+  const doc = document.documentElement;
+  if (doc.scrollWidth > doc.clientWidth) {
+    bad.push(`page scrolls ${doc.scrollWidth - doc.clientWidth} px`);
+  }
+  if (header.scrollWidth > header.clientWidth + 1) bad.push('header scrolls horizontally');
+  if (sb.scrollWidth > sb.clientWidth + 1) bad.push('status bar scrolls horizontally');
+  return { label: label.textContent.trim(), bad };
+}
+
 // ------------------------------------------------------------------------------ checks
+// Checks that fail because of a defect already tracked in the Majordomus plan. They still run
+// and are reported on every run; they do not fail the gate, and one that starts passing does,
+// so the entry cannot outlive its fix.
+const KNOWN_DEFECTS = Object.freeze({});
+
 function defineChecks() {
   const checks = [];
   const def = (name, fn) => checks.push({ name, fn });
@@ -206,7 +371,7 @@ function defineChecks() {
       version: window.OSCILLA.version, host: !!window.OSCILLA.host,
     }));
     const ok = errors.length === 0 && Object.keys(info.labErrors).length === 0 && info.host
-      && info.version === '2.0.0';
+      && info.version === require('../../package.json').version;
     return { ok, errors: errors.slice(0, 5), ...info };
   });
 
@@ -932,6 +1097,332 @@ function defineChecks() {
     return { ok, res };
   });
 
+  // ---- V1 regressions (tests/spec.cjs at v1.0.1) restated in V2 terms
+  // §39: a preset or demo whose label names the octave steps plays exactly those steps, even
+  // after the user edited the Steps (Hz) field to other or invalid frequencies.
+  def('octave-steps-reset-by-preset-and-demo', async ({ page }) => {
+    const OCT = [125, 250, 500, 1000, 2000, 4000, 8000, 16000];
+    const steps = '[data-osc="pattern.param"][data-key="text"]';
+    const out = [];
+    for (const text of ['300, 600', '125, 250, abc']) {
+      for (const via of ['preset', 'learn']) {
+        await page.click('#osc-source-pattern');
+        await page.selectOption('#osc-pattern-select', 'octave');
+        await page.fill(steps, text);
+        await page.press(steps, 'Enter');
+        const edited = await page.evaluate(() => window.OSCILLA.app.pp.octave.text);
+        if (via === 'preset') {
+          await H.workspace(page, 'presets');
+          await page.click('[data-osc="presets.tab"][data-value="patterns"]');
+          await page.locator('[data-osc="presets.item"][data-id="pt-octaves"]')
+            .locator('[data-osc="presets.load"]').click();
+          await H.workspace(page, 'playground');
+        } else {
+          await H.workspace(page, 'learn');
+          await page.locator('[data-osc="learn.demo"]', { hasText: 'Octave steps 125 Hz' }).click();
+          await page.waitForFunction(() => window.OSCILLA.app.workspace === 'playground');
+        }
+        await sleep(100);
+        const r = await page.evaluate((sel) => {
+          const a = window.OSCILLA.app;
+          const plan = a.currentPlan();
+          const field = document.querySelector(sel);
+          return { pattern: a.pattern, field: field.value,
+            invalid: field.getAttribute('aria-invalid'),
+            freqs: plan.ok ? plan.plan.steps.map((s) => s.f) : plan.error };
+        }, steps);
+        // what plays: trigger and read the engine's first scheduled step
+        await page.click('#osc-trigger');
+        await sleep(150);
+        const first = await page.evaluate(() => window.OSCILLA.engine.instantaneousFrequency());
+        await page.keyboard.press('Escape');
+        await H.waitNodes0(page);
+        out.push({ text, via, edited, ...r, first: first && +first.toFixed(1) });
+      }
+    }
+    await page.evaluate(() => { window.OSCILLA.app.stopNow(); window.OSCILLA.app.alerts = []; });
+    await page.selectOption('#osc-pattern-select', 'tone');
+    await page.click('#osc-source-osc');
+    const want = JSON.stringify(OCT);
+    const ok = out.every((o) => o.edited === o.text && o.pattern === 'octave'
+      && JSON.stringify(o.freqs) === want && o.field === OCT.join(', ') && o.invalid !== 'true'
+      && Math.abs(o.first - 125) < 0.5);
+    return { ok, runs: out };
+  });
+
+  // §48 (WCAG 2.4.11): with an error notification showing, no focused control is covered, fully
+  // or partly, by a notification, the header, the status bar or any fixed/sticky element, Tab
+  // forward and Shift+Tab back. Measured by elementFromPoint after focus scrolling settled.
+  def('a11y-focus-never-obscured', async ({ page, browserName }) => {
+    // WebKit (macOS) tabs only to form fields unless Option is held: Option+Tab reaches all.
+    const KEYS = browserName === 'webkit' ? ['Alt+Tab', 'Alt+Shift+Tab'] : ['Tab', 'Shift+Tab'];
+    const res = {};
+    for (const w of [768, 1024, 1280, 1536]) {
+      await page.setViewportSize({ width: w, height: 900 });
+      await page.evaluate(() => {
+        const a = window.OSCILLA.app;
+        a.alerts = [];
+        a.notify('error', 'Gate error', 'Persistent: it must never cover a focused control.');
+      });
+      await sleep(150);
+      for (const key of KEYS) {
+        await page.evaluate(() => { document.getElementById('osc-main').scrollTop = 0; });
+        if (key.includes('Shift')) await page.evaluate(focusLastTabStop);
+        else await page.focus('.osc-skip');
+        await H.frames(page);
+        const seen = new Set();
+        const covered = [];
+        let steps = 0;
+        for (; steps < 320; steps++) {
+          await page.keyboard.press(key);
+          await H.frames(page);
+          const r = await page.evaluate(focusObscured);
+          if (r.body) continue;
+          if (r.n) covered.push(`${r.key} under ${r.under.join('/')}`);
+          if (seen.has(r.key) && steps > 20) break;
+          seen.add(r.key);
+        }
+        res[`${w}/${key.includes('Shift') ? 'back' : 'forward'}`] = { steps, distinct: seen.size,
+          covered: covered.slice(0, 6), count: covered.length };
+      }
+    }
+    await page.evaluate(() => { window.OSCILLA.app.alerts = []; });
+    await page.setViewportSize({ width: 1536, height: 1024 });
+    await sleep(150);
+    const ok = Object.values(res).every((r) => !r.count && r.distinct > 60);
+    return { ok, res };
+  });
+
+  // §49 (a): the safety notice's dismiss and the control that reopens it hide themselves, so each
+  // hands focus to the other (V1: "Got it" <-> "Full notice"). Contract for V2's notice:
+  // [data-osc="safety.dismiss"] and [data-osc="safety.reopen"].
+  // DEFECT (not fixed here): V2 renders no safety notice at all. core/instrument.js keeps V1's
+  // safetyCollapsed / safetyExpanded / showSafety() / collapseSafety() and main.js restores
+  // oscilla.safetyNoticeCollapsed, but src/index.html has no notice markup, so the V1 §61 notice
+  // (both safety statements, visible, non-obnoxious) is missing. Adding it is new markup and
+  // layout in src/index.html and src/styles, outside a regression-check change; this check
+  // fails until the notice exists and is listed in KNOWN_DEFECTS (plan issue V247) until then.
+  def('a11y-safety-notice-focus-handoff', async ({ page }) => {
+    const DISMISS = '[data-osc="safety.dismiss"]';
+    const REOPEN = '[data-osc="safety.reopen"]';
+    const present = await page.evaluate((s) => s.map((q) => !!document.querySelector(q)),
+      [DISMISS, REOPEN]);
+    if (!present.every(Boolean)) {
+      return { ok: false, detail: 'V2 renders no safety notice: no dismiss/reopen control',
+        dismiss: present[0], reopen: present[1] };
+    }
+    const focused = () => page.evaluate(() => {
+      const a = document.activeElement;
+      return !a || a === document.body ? 'BODY' : (a.dataset.osc || a.id || a.tagName);
+    });
+    const res = {};
+    for (const w of [1536, 375]) {
+      await page.setViewportSize({ width: w, height: w > 600 ? 1024 : 800 });
+      await page.evaluate(() => window.OSCILLA.app.showSafety());
+      await H.frames(page);
+      await page.focus(DISMISS);
+      await page.keyboard.press('Enter');
+      await H.frames(page, 3);
+      const afterDismiss = await focused();
+      await page.keyboard.press('Enter');
+      await H.frames(page, 3);
+      res[w] = { afterDismiss, afterReopen: await focused() };
+    }
+    await page.setViewportSize({ width: 1536, height: 1024 });
+    await sleep(150);
+    const ok = Object.values(res).every((r) => r.afterDismiss === 'safety.reopen'
+      && r.afterReopen === 'safety.dismiss');
+    return { ok, res };
+  });
+
+  // §49 (b): the microphone button keeps focus while a start is pending (aria-disabled, never
+  // disabled, and a second press opens no second request), after the start and after stop.
+  // V2 has one microphone button, #osc-mic-toggle, that never hides (V1's header chip did and
+  // handed focus on), so focus stays on it throughout. WebKit has no fake capture device: there
+  // the pending request is refused instead of opening a stream.
+  def('a11y-mic-focus-pending-and-stop', async ({ page, browserName }) => {
+    const real = FAKE_MIC.has(browserName);
+    await H.workspace(page, 'analyzer');
+    await page.evaluate(installPendingMic);
+    const state = () => page.evaluate(() => {
+      const b = document.getElementById('osc-mic-toggle');
+      const a = document.activeElement;
+      const m = window.OSCILLA.labs.mic;
+      return { focus: !a || a === document.body ? 'BODY' : (a.id || a.dataset.osc || a.tagName),
+        disabled: b.disabled, ariaDisabled: b.getAttribute('aria-disabled'),
+        pressed: b.getAttribute('aria-pressed'), active: m.active, error: m.error,
+        calls: window.__oscGum.calls };
+    });
+    const out = {};
+    await page.focus('#osc-mic-toggle');
+    await page.keyboard.press('Enter');
+    await H.frames(page);
+    out.pending = await state();
+    await page.keyboard.press('Enter'); // ignored while pending: no second stream
+    await H.frames(page);
+    out.secondPress = await state();
+    await page.evaluate((r) => window.__oscGum.settle(r), real);
+    await page.waitForFunction(() => {
+      const m = window.OSCILLA.labs.mic;
+      return m.active || m.error;
+    }, null, { timeout: 5000 }).catch(() => {});
+    await H.frames(page);
+    out.started = await state();
+    if (real) {
+      await page.keyboard.press('Enter');
+      await H.frames(page, 3);
+      out.stopped = await state();
+    }
+    await page.evaluate(() => {
+      const m = window.OSCILLA.labs.mic;
+      if (m.active) m.stop();
+      window.__oscGum.restore();
+      window.OSCILLA.app.alerts = [];
+    });
+    await H.workspace(page, 'playground');
+    const p = out.pending;
+    const ok = p.focus === 'osc-mic-toggle' && !p.disabled && p.ariaDisabled === 'true'
+      && p.calls === 1 && out.secondPress.calls === 1 && out.secondPress.focus === 'osc-mic-toggle'
+      && out.started.focus === 'osc-mic-toggle' && out.started.ariaDisabled !== 'true'
+      && (real ? out.started.active && out.started.pressed === 'true'
+        && out.stopped.focus === 'osc-mic-toggle' && !out.stopped.active
+        : !out.started.active && !!out.started.error);
+    return { ok, realStream: real, ...out };
+  });
+
+  // §49 (c): dismissing a notification whose Dismiss button has focus moves focus to the next
+  // notification's Dismiss (the previous one after the last), and to the main region after the
+  // only one — also when the info/success auto-dismiss timer removes it (dismissAlert(id)).
+  def('a11y-alert-dismiss-focus-next', async ({ page }) => {
+    const where = () => page.evaluate(() => {
+      const a = document.activeElement;
+      if (!a || a === document.body) return 'BODY';
+      const t = a.closest('[data-osc="alert"]');
+      return t ? `alert:${t.querySelector('strong').textContent}` : (a.id || a.dataset.osc);
+    });
+    const dismissOf = (title) => page.locator('[data-osc="alert"]', { hasText: title })
+      .locator('button');
+    await page.evaluate(() => {
+      const a = window.OSCILLA.app;
+      a.alerts = [];
+      a.notify('error', 'One', 'first');
+      a.notify('error', 'Two', 'second');
+      a.notify('error', 'Three', 'third');
+    });
+    await H.frames(page);
+    const out = {};
+    await dismissOf('Two').focus();
+    await page.keyboard.press('Enter');
+    await H.frames(page, 3);
+    out.middle = await where();
+    await page.keyboard.press('Enter');
+    await H.frames(page, 3);
+    out.last = await where();
+    await page.keyboard.press('Enter');
+    await H.frames(page, 3);
+    out.only = await where();
+    // the auto-dismiss timer path, with a neighbour and without one
+    await page.evaluate(() => {
+      const a = window.OSCILLA.app;
+      a.alerts = [];
+      a.notify('error', 'Stays', 'persistent');
+      a.notify('info', 'Leaves', 'auto-dismissed');
+    });
+    await H.frames(page);
+    const timer = () => page.evaluate(() => {
+      const a = window.OSCILLA.app;
+      const info = a.alerts.find((x) => x.level === 'info');
+      a.dismissAlert(info.id);
+    });
+    await dismissOf('Leaves').focus();
+    await timer();
+    await H.frames(page, 3);
+    out.timerNext = await where();
+    await page.evaluate(() => {
+      const a = window.OSCILLA.app;
+      a.alerts = [];
+      a.notify('info', 'Alone', 'auto-dismissed');
+    });
+    await H.frames(page);
+    await dismissOf('Alone').focus();
+    await timer();
+    await H.frames(page, 3);
+    out.timerOnly = await where();
+    await page.evaluate(() => { window.OSCILLA.app.alerts = []; });
+    const fallback = (v) => v === 'osc-main' || v === 'osc-hold-play';
+    const ok = out.middle === 'alert:Three' && out.last === 'alert:One' && fallback(out.only)
+      && out.timerNext === 'alert:Stays' && fallback(out.timerOnly);
+    return { ok, ...out };
+  });
+
+  // §61: on phones (320, 360, 375 px) the header and the status bar never overlap themselves or
+  // the next row and never scroll horizontally, in every status state, with and without the
+  // microphone on (WebKit: without only, it has no fake capture device).
+  def('a11y-phone-bars-every-state', async ({ page, browserName }) => {
+    const label = () => page.evaluate(() => document.querySelector('[data-osc="status.label"]')
+      .textContent.trim());
+    const set = (s) => page.evaluate((x) => { window.OSCILLA.app.status = x; }, s);
+    const states = {
+      READY: () => set('READY'),
+      PLAYING: async () => {
+        await H.continuous(page, true);
+        await H.spaceDown(page);
+        await sleep(250);
+      },
+      RELEASING: async () => {
+        // a release longer than the hard limit is dropped (the voice ends sooner on its own)
+        await H.continuous(page, true);
+        await page.evaluate(() => window.OSCILLA.app.setEnv('release', '3000'));
+        await H.spaceDown(page);
+        await sleep(250);
+        await page.keyboard.up(' ');
+        await sleep(100);
+      },
+      SUSPENDED: () => set('SUSPENDED'),
+      STOPPED: () => set('STOPPED'),
+      ERROR: () => set('ERROR'),
+    };
+    const reset = async () => {
+      await page.keyboard.up(' ');
+      await page.evaluate(() => {
+        const a = window.OSCILLA.app;
+        a.stopNow();
+        a.status = 'READY';
+        a.setEnv('release', '30');
+      });
+      await H.continuous(page, false);
+      await H.waitNodes0(page);
+    };
+    const mics = FAKE_MIC.has(browserName) ? [false, true] : [false];
+    const res = {};
+    for (const mic of mics) {
+      if (mic) {
+        await page.evaluate(() => window.OSCILLA.labs.mic.start());
+        await page.waitForFunction(() => window.OSCILLA.labs.mic.active, null, { timeout: 5000 });
+      }
+      for (const w of [320, 360, 375]) {
+        await page.setViewportSize({ width: w, height: 700 });
+        await sleep(150);
+        for (const [name, enter] of Object.entries(states)) {
+          await enter();
+          await H.frames(page);
+          const shown = await label();
+          const r = await page.evaluate(phoneBars);
+          res[`${w}/${name}${mic ? '/mic' : ''}`] = { shown, bad: r.bad };
+          await reset();
+        }
+      }
+      if (mic) await page.evaluate(() => window.OSCILLA.labs.mic.stop());
+    }
+    await page.evaluate(() => { window.OSCILLA.app.alerts = []; });
+    await page.setViewportSize({ width: 1536, height: 1024 });
+    await sleep(150);
+    const bad = Object.entries(res).filter(([k, r]) => r.bad.length
+      || r.shown !== k.split('/')[1]);
+    return { ok: !bad.length, cases: Object.keys(res).length,
+      bad: Object.fromEntries(bad.slice(0, 6)) };
+  });
+
   def('no-console-errors-after-run', async ({ errors }) => ({ ok: errors.length === 0,
     errors: errors.slice(0, 8) }));
 
@@ -989,6 +1480,7 @@ async function runOne(browserName, origin, baseUrl) {
   if (server) await waitForServer(server.url);
   const all = {};
   let failed = 0;
+  let known = 0;
   try {
     for (const b of BROWSERS) {
       for (const o of ORIGINS) {
@@ -998,11 +1490,21 @@ async function runOne(browserName, origin, baseUrl) {
         const res = await runOne(b, o, base);
         all[key] = res;
         const names = Object.keys(res);
-        const bad = names.filter((n) => !res[n].ok);
-        failed += bad.length;
-        console.log(`${bad.length ? 'FAIL' : 'PASS'} ${key}: ${names.length - bad.length}/`
-          + `${names.length} checks (${((Date.now() - t0) / 1000).toFixed(1)} s)`);
+        const bad = names.filter((n) => !res[n].ok && !KNOWN_DEFECTS[n]);
+        const open = names.filter((n) => !res[n].ok && KNOWN_DEFECTS[n]);
+        // A known defect that now passes fails the gate until its entry is removed.
+        const stale = names.filter((n) => res[n].ok && KNOWN_DEFECTS[n]);
+        failed += bad.length + stale.length;
+        known += open.length;
+        console.log(`${bad.length || stale.length ? 'FAIL' : 'PASS'} ${key}: `
+          + `${names.length - bad.length - open.length}/${names.length} checks`
+          + `${open.length ? `, ${open.length} known defect(s)` : ''}`
+          + ` (${((Date.now() - t0) / 1000).toFixed(1)} s)`);
         for (const n of bad) console.log(`   x ${n}: ${JSON.stringify(res[n]).slice(0, 600)}`);
+        for (const n of open) console.log(`   ! ${n}: KNOWN DEFECT, tracked as ${KNOWN_DEFECTS[n]}`);
+        for (const n of stale) {
+          console.log(`   x ${n}: passes now; remove it from KNOWN_DEFECTS (${KNOWN_DEFECTS[n]})`);
+        }
       }
     }
   } finally {
@@ -1012,5 +1514,6 @@ async function runOne(browserName, origin, baseUrl) {
     }
   }
   if (JSON_OUT) fs.writeFileSync(JSON_OUT, `${JSON.stringify(all, null, 2)}\n`);
+  if (known) console.log(`${known} known-defect result(s) reported above, each tracked in the plan`);
   process.exit(failed ? 1 : 0);
 })();

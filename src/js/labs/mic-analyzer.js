@@ -1,9 +1,10 @@
 // Microphone analyzer controller.
 //
 // The microphone is requested ONLY when the user presses "Use microphone" (getUserMedia with
-// echo cancellation, noise suppression and AGC off). On failure the panel says so plainly
-// ("Microphone unavailable here (file:// or permission)"). Toggling off, or the track ending
-// (device unplugged, permission revoked), stops every track and disconnects the nodes.
+// echo cancellation, noise suppression and AGC off). On failure the panel says why, as far as
+// the browser tells (micUnavailableText: no secure context, no API, permission denied, no
+// device). Toggling off, or the track ending (device unplugged, permission revoked), stops every
+// track and disconnects the nodes.
 //
 // Views (shell tab 'mic'): Live Spectrum (mic in green vs generator target in blue, requested
 // marker, peak marker), Spectrogram (of the mic), Compare (the same overlay with freeze,
@@ -13,10 +14,10 @@
 // resolution; the relative (dBFS-like, uncalibrated) level; in Compare, the difference and
 // verdict from compareFrequencies(). Nothing here is a calibrated measurement.
 //
-// Audio nodes: if the engine offers adapter.attachMicrophone(stream) → AnalyserNode (and
-// detachMicrophone()), the engine owns the graph; otherwise the controller creates a
-// MediaStreamAudioSourceNode → AnalyserNode on the engine's context (never connected to the
-// output, so there is no feedback path).
+// Audio nodes: the engine owns them (audio-engine-discipline). adapter.attachMicrophone(stream)
+// builds MediaStreamSource → Analyser inside the engine's accounting and returns the analyser;
+// detachMicrophone() disconnects it. The graph is never connected to the output, so there is
+// no feedback path. Without attachMicrophone the microphone is reported unavailable.
 
 import { createSpectrumChart } from '../charts/spectrum-chart.js';
 import { createSpectrogramView } from '../charts/spectrogram-view.js';
@@ -30,7 +31,35 @@ import { formatHz, formatHzStep, formatUncertainty } from '../charts/axes.js';
 import { onFrame } from '../charts/frame-loop.js';
 import { on, onUi, setText, setAttr, activeValue } from './dom.js';
 
-export const MIC_UNAVAILABLE = 'Microphone unavailable here (file:// or permission)';
+export const MIC_UNAVAILABLE = 'Microphone unavailable here';
+
+/**
+ * The unavailable text for a failed start, from what the browser reports: e (the error, if
+ * any) and env { secure (window.isSecureContext), hasApi (getUserMedia exists),
+ * protocol (location.protocol) }.
+ */
+export function micUnavailableText(e, env = {}) {
+  const name = e && e.name;
+  if (name === 'NotAllowedError' || name === 'SecurityError') {
+    return `${MIC_UNAVAILABLE} (permission denied)`;
+  }
+  if (name === 'NotFoundError' || name === 'OverconstrainedError') {
+    return `${MIC_UNAVAILABLE} (no microphone found)`;
+  }
+  if (name === 'NotReadableError' || name === 'AbortError') {
+    return `${MIC_UNAVAILABLE} (the device is busy or failed)`;
+  }
+  if (!env.hasApi) {
+    if (env.secure === false) {
+      return `${MIC_UNAVAILABLE} (needs a secure page, such as HTTPS)`;
+    }
+    if (env.protocol === 'file:') {
+      return `${MIC_UNAVAILABLE} (this browser offers no microphone to local files)`;
+    }
+    return `${MIC_UNAVAILABLE} (this browser offers no microphone API)`;
+  }
+  return `${MIC_UNAVAILABLE} (the microphone could not be opened)`;
+}
 export const MIC_OFF = 'UNAVAILABLE (microphone off)';
 export const MIC_NOTE = 'Not a calibrated measurement. Microphone frequency response varies.';
 const READOUT_INTERVAL_MS = 100;
@@ -100,8 +129,6 @@ export function mount(rootEl, adapter) {
   setText(q('.osc-mic-note'), MIC_NOTE);
   let tab = activeValue(rootEl, '[data-osc="mic.tab"]') || 'live';
   let stream = null;
-  let source = null;
-  let ownAnalyser = null;
   let attached = null;
   let starting = false;
   let error = '';
@@ -111,7 +138,7 @@ export function mount(rootEl, adapter) {
   let comparison = null;
   const opts = { freeze: false, average: false, peakHold: false };
 
-  const micAnalyser = () => (stream ? attached || ownAnalyser : null);
+  const micAnalyser = () => (stream ? attached : null);
   const spectrumLayer = host ? layer(host) : null;
   const spgLayer = host ? layer(host) : null;
   if (spgLayer) spgLayer.hidden = true;
@@ -163,20 +190,6 @@ export function mount(rootEl, adapter) {
   }
 
   function releaseNodes() {
-    if (source) {
-      try {
-        source.disconnect();
-      } catch (e) {
-        /* already */
-      }
-    }
-    if (ownAnalyser) {
-      try {
-        ownAnalyser.disconnect();
-      } catch (e) {
-        /* already */
-      }
-    }
     if (attached && adapter.detachMicrophone) {
       try {
         adapter.detachMicrophone();
@@ -184,8 +197,6 @@ export function mount(rootEl, adapter) {
         /* engine reports its own errors */
       }
     }
-    source = null;
-    ownAnalyser = null;
     attached = null;
   }
 
@@ -209,10 +220,19 @@ export function mount(rootEl, adapter) {
   async function start() {
     if (starting || stream) return;
     starting = true;
+    // Pending: aria-disabled, never disabled, so a keyboard user keeps focus on the button.
+    setAttr(toggle, 'aria-disabled', 'true');
     error = '';
+    const md = typeof navigator !== 'undefined' ? navigator.mediaDevices : null;
+    const env = {
+      hasApi: !!(md && typeof md.getUserMedia === 'function'),
+      secure: typeof window !== 'undefined' && 'isSecureContext' in window
+        ? window.isSecureContext : undefined,
+      protocol: typeof location !== 'undefined' ? location.protocol : '',
+    };
     try {
-      const md = typeof navigator !== 'undefined' ? navigator.mediaDevices : null;
-      if (!md || typeof md.getUserMedia !== 'function') throw new Error('getUserMedia unavailable');
+      if (!env.hasApi) throw new Error('getUserMedia unavailable');
+      if (!adapter.attachMicrophone) throw new Error('no engine microphone support');
       let ctx = adapter.getContext ? adapter.getContext() : null;
       if (!ctx && adapter.ensureContext) ctx = await adapter.ensureContext();
       if (!ctx) throw new Error('no AudioContext');
@@ -221,24 +241,22 @@ export function mount(rootEl, adapter) {
       });
       stream = s;
       for (const t of s.getAudioTracks()) t.onended = () => stop();
-      if (adapter.attachMicrophone) attached = adapter.attachMicrophone(s) || null;
-      if (!attached) {
-        source = ctx.createMediaStreamSource(s);
-        ownAnalyser = ctx.createAnalyser();
-        ownAnalyser.fftSize = MIC_FFT_SIZE;
-        ownAnalyser.smoothingTimeConstant = 0.5;
-        source.connect(ownAnalyser);
-      }
+      // The engine builds and accounts the nodes (MediaStreamSource → Analyser, no output).
+      attached = adapter.attachMicrophone(s, {
+        fftSize: MIC_FFT_SIZE, smoothingTimeConstant: 0.5,
+      }) || null;
+      if (!attached) throw new Error('the engine could not attach the microphone');
       if (ctx.state === 'suspended' && typeof ctx.resume === 'function') {
         ctx.resume().catch(() => {});
       }
       setButton(true);
     } catch (e) {
       if (stream) stop();
-      error = MIC_UNAVAILABLE;
+      error = micUnavailableText(e, env);
       setButton(false);
     } finally {
       starting = false;
+      setAttr(toggle, 'aria-disabled', 'false');
       renderReadout(true);
     }
   }

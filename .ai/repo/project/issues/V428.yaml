@@ -1,0 +1,21 @@
+id: V428
+milestone: M031
+title: "Non-drag and keyboard operation"
+slug: non-drag-and-keyboard-operation
+priority: p1
+profile: implementation
+objective: "Tap/keyboard connection mode, accessible connection dialog, arrow-key node moves, Inspector position and clip fields, focus management, ARIA labels, live-region announcements, graph text summary, search (§138-§144, §249-§251)."
+scope:
+  - "src"
+  - "tests"
+depends_on:
+  - "V411"
+  - "V413"
+acceptance_criteria:
+  - "Tap/keyboard connection mode, accessible connection dialog, arrow-key node moves, Inspector position and clip fields, focus management, ARIA labels, live-region announcements, graph text summary, search (§138-§144, §249-§251)."
+  - "Specification: docs/specs/oscilla-v3.1-studio.md. Visual identity lock in the same file applies."
+validation:
+  - "npm run release-gate"
+evidence_required:
+  - "verified"
+created_at: 2026-10-02

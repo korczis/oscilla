@@ -52,12 +52,12 @@ import { LEARN_TOPICS } from './data/learn.js';
 import { serializeSequence } from './sequencer/model.js';
 
 import { registerOscillaUi } from './ui/app.js';
-import { keyGuard, openModal, closeModal, watchDialogs } from './ui/dialogs.js';
+import { keyGuard, openModal, closeModal, watchDialogs, focusSafely } from './ui/dialogs.js';
 import { createWorkbench, v1ModeFor, workspaceForV1Mode } from './ui/workbench.js';
 import { createScopeView, createHarmonicBarsView } from './ui/p5-views.js';
-import { buildConfigExport, parseConfigImport } from './ui/config-file.js';
+import { buildConfigExport, parseConfigImport, CONFIG_FILE_VERSION } from './ui/config-file.js';
 import { renderPlanToWav, renderSequenceToWav, screenshotCanvases } from './ui/exporters.js';
-import { OSCILLA_VERSION } from './ui/version.js';
+import { BUILD } from './core/build-info.js';
 
 import { mount as mountAnalysis } from './labs/analysis.js';
 import { mount as mountFilter } from './labs/filter-lab.js';
@@ -109,6 +109,9 @@ const adapter = {
   },
   getDestination: () => engine.master,
   getStereoRouter: () => (liveRouter ? liveRouter.router : null),
+  // The mic lab's nodes are built and accounted by the engine (audio-engine-discipline).
+  attachMicrophone: (stream, opts) => engine.attachMicrophone(stream, opts),
+  detachMicrophone: () => engine.detachMicrophone(),
   ensureContext: () => {
     if (app) app.ensureAudio(); else engine.init();
     return engine.resume().then(() => engine.ctx);
@@ -163,8 +166,29 @@ function v2PlayOptions(plan, ctx, live) {
     if (wave) o.periodicWave = wave;
   }
   if (plan.type === 'dual' && needsRouter(plan)) o.dualRouter = dualRouterFactory(live);
+  if (plan.type === 'dual' && labs.phase) o.dualPhaseDeg = labs.phase.config.phaseDeg;
   return o;
 }
+
+/**
+ * What the visualization bridge shows of the labs (Harmonics tab, signal path): read on every
+ * bridge sync, never per frame. Plain values only.
+ */
+function labVizInputs(plan) {
+  const add = labs.additive;
+  const additive = add && add.enabled && plan && plan.type !== 'dual' ? add.coefficients() : null;
+  const env = labs.envelope;
+  const filter = labs.filter ? labs.filter.config : null;
+  const dual = plan && plan.type === 'dual';
+  return {
+    additive,
+    adsr: env && env.enabled ? { ...env.adsr } : null,
+    filter: filter && filter.enabled ? { ...filter } : null,
+    router: dual && needsRouter(plan) ? routerConfigFor(plan) : null,
+    phaseDeg: dual && labs.phase ? labs.phase.config.phaseDeg : 0,
+  };
+}
+bridge.labInputs = labVizInputs;
 
 const basePlay = engine.play.bind(engine);
 engine.play = (plan, o = {}) => basePlay(plan, { ...o, ...v2PlayOptions(plan, engine.ctx, true) });
@@ -181,7 +205,7 @@ function exportConfigDoc(cmp) {
   instrument.dual.binaural = false;
   if (!instrument.sweep) instrument.sweep = deepCopy(cmp.sweep);
   return buildConfigExport({
-    oscillaVersion: OSCILLA_VERSION,
+    oscillaVersion: BUILD.version, // product version; the schema stays "version": 1
     sampleRate: engine.sampleRate,
     mode: v1ModeFor(cmp.workspace, cmp.source),
     workspace: cmp.workspace,
@@ -256,7 +280,7 @@ function screenshot(cmp) {
   const bg = getComputedStyle(document.documentElement).getPropertyValue('--osc-surface-1').trim();
   return screenshotCanvases(root, {
     background: bg || '#06111d',
-    title: `OSCILLA ${OSCILLA_VERSION} · ${cmp.statusFreqText} · ${cmp.statusWaveText}`,
+    title: `OSCILLA v${BUILD.version} · ${cmp.statusFreqText} · ${cmp.statusWaveText}`,
   });
 }
 
@@ -306,6 +330,13 @@ function repairCharts() {
       if (root && root.clientWidth > 0 && root.clientHeight > 0) chart.refreshTheme();
     }
   });
+}
+
+/** A lab that shapes the voice changed: refresh the bridge (signal path, harmonics) and labels. */
+function vizLabsChanged() {
+  if (!app) return;
+  app.labRev += 1;
+  app.syncViz();
 }
 
 function syncLabFlags() {
@@ -369,6 +400,7 @@ function mountLabs(root) {
   if (labs.additive) {
     labs.additive.onChange(() => {
       syncLabFlags();
+      vizLabsChanged(); // Harmonics tab and signal path show the additive table
       if (!engine.voice || engine.voice.ended) return;
       if (labs.additive.enabled) {
         const wave = labs.additive.periodicWave(engine.ctx);
@@ -376,9 +408,11 @@ function mountLabs(root) {
       } else clearPeriodicWave();
     });
   }
-  if (labs.envelope) labs.envelope.onChange(syncLabFlags);
-  if (labs.filter) labs.filter.onChange(syncLabFlags);
+  const labChanged = () => { syncLabFlags(); vizLabsChanged(); };
+  if (labs.envelope) labs.envelope.onChange(labChanged);
+  if (labs.filter) labs.filter.onChange(labChanged);
   if (labs.phase) {
+    let lastPhaseDeg = labs.phase.config.phaseDeg;
     labs.phase.onChange((cfg) => {
       if (!app) return;
       if (Math.abs(app.dual.a.freq - cfg.freqA) > 1e-6) app.setDualFreq('a', String(cfg.freqA));
@@ -386,6 +420,12 @@ function mountLabs(root) {
       const stereo = cfg.route === 'stereo';
       if (app.dual.stereo !== stereo) app.setStereo(stereo);
       if (liveRouter) liveRouter.wrapper.refresh();
+      if (cfg.phaseDeg !== lastPhaseDeg) {
+        // B's phase offset is a start time: a sounding dual voice restarts click-free with it.
+        lastPhaseDeg = cfg.phaseDeg;
+        engine.setDualPhase(cfg.phaseDeg);
+        vizLabsChanged();
+      }
     });
   }
   if (labs.sequencer) syncSequencerIcon(root);
@@ -512,6 +552,7 @@ function integrationInit() {
   });
 
   watchDialogs(document);
+  keepFocusInView(document.getElementById('osc-main'));
   bridge.readPalette();
   // V1 initVisualizer: the primary host reports the wave layout (V2's primary view is the scope,
   // which labels itself in the canvas; the layout is still forwarded for the V1 views).
@@ -555,6 +596,49 @@ function integrationInit() {
   });
 }
 
+/**
+ * Firefox and WebKit do not scroll a keyboard-focused control that is already partly inside
+ * the #osc-main scroller, so its edge (the status bar below it) can cut the control (WCAG
+ * 2.4.11). After the browser's own focus scroll, nudge #osc-main until it is fully visible.
+ */
+function keepFocusInView(main) {
+  if (!main) return;
+  document.addEventListener('focusin', (e) => {
+    const el = e.target;
+    if (!(el instanceof Element) || el === main || !main.contains(el)) return;
+    requestAnimationFrame(() => {
+      let keyboard = true;
+      try { keyboard = el.matches(':focus-visible'); } catch (err) { /* no :focus-visible */ }
+      if (document.activeElement !== el || !keyboard) return;
+      const r = el.getBoundingClientRect();
+      if (!r.height) return;
+      const top = main.getBoundingClientRect().top + main.clientTop + 4;
+      const bottom = top + main.clientHeight - 8;
+      if (r.top < top) main.scrollTop -= top - r.top;
+      else if (r.bottom > bottom) main.scrollTop += Math.min(r.bottom - bottom, r.top - top);
+    });
+  });
+}
+
+/**
+ * The info/success auto-dismiss timer (core notify) removes a notification through
+ * dismissAlert(). When that notification holds focus, hand focus to its neighbour's Dismiss
+ * button, else #osc-main, as dismissAlertFocus does for a pressed Dismiss: never <body>.
+ */
+function focusSafeDismiss(coreDismiss) {
+  return function dismissAlert(id) {
+    const i = this.alerts.findIndex((a) => a.id === id);
+    const toasts = [...document.querySelectorAll('[data-osc="alerts"] .osc-toast')];
+    const item = i >= 0 ? toasts[i] : null;
+    const hadFocus = !!item && item.contains(document.activeElement);
+    const next = hadFocus ? toasts[i + 1] || toasts[i - 1] || null : null;
+    coreDismiss.call(this, id);
+    if (!hadFocus) return;
+    this.$nextTick(() => focusSafely(next && next.isConnected ? next.querySelector('button')
+      : null));
+  };
+}
+
 function createOscillaComponent(ui) {
   const instrument = createInstrument({
     engine, bridge, keyGuard: (e) => keyGuard(e), openModal: (id) => openModal(id),
@@ -565,7 +649,18 @@ function createOscillaComponent(ui) {
     engine, bridge, labs, exportConfigDoc, applyImport, renderWav, screenshot,
     relayout: () => { if (host) host.resize(); repairCharts(); },
   });
-  const cmp = compose(instrument, ui, workbench, TEMPLATE_HELPERS);
+  const cmp = compose(instrument, ui, workbench, provenancePart(), TEMPLATE_HELPERS);
+  cmp.dismissAlert = focusSafeDismiss(cmp.dismissAlert);
+  const baseRefreshDebug = cmp.refreshDebug;
+  Object.defineProperty(cmp, 'refreshDebug', {
+    value() {
+      baseRefreshDebug.call(this);
+      this.debugInfo = { ...provenanceDebug(), ...this.debugInfo, ...runtimeDebug() };
+    },
+    enumerable: true,
+    configurable: true,
+    writable: true,
+  });
   Object.defineProperty(cmp, 'init', {
     value() {
       shellInit.call(this);
@@ -576,6 +671,44 @@ function createOscillaComponent(ui) {
     writable: true,
   });
   return cmp;
+}
+
+// ------------------------------------------------------------------------------ provenance
+// BUILD (core/build-info.js) is the runtime projection of package.json "version" and of the
+// build/deploy metadata region. The About dialog, the status bar and ?debug=1 read it here.
+function provenancePart() {
+  return {
+    BUILD,
+    get buildCommitText() { return BUILD.shortCommit || 'source build'; },
+    get buildDigestText() { return BUILD.sourceDigest || 'unknown (unbundled build)'; },
+  };
+}
+
+function provenanceDebug() {
+  return {
+    version: BUILD.version,
+    channel: BUILD.channel,
+    commit: BUILD.commit || 'none (source build)',
+    'source date': BUILD.sourceDate || '— (source build)',
+    'source digest': BUILD.sourceDigest || '—',
+    'artifact sha256': BUILD.artifactSha256 || '— (unstamped)',
+    'build metadata': `${BUILD.origin}${BUILD.consistent ? '' : ' (region != compiled defines)'}`
+      + `${BUILD.regionError ? ` (${BUILD.regionError})` : ''}`,
+    'config schema': CONFIG_FILE_VERSION,
+  };
+}
+
+function runtimeDebug() {
+  const mic = labs.mic;
+  let micState = 'unavailable';
+  if (mic) micState = mic.active ? 'live' : (mic.error ? `off (${mic.error})` : 'off');
+  const err = engine.lastError;
+  return {
+    'audible voices': engine.audibleVoiceCount,
+    'active voices': engine.voices ? engine.voices.size : '—',
+    microphone: micState,
+    'last error': err ? `${err.message}${err.context ? ` [${err.context}]` : ''}` : '—',
+  };
 }
 
 // ------------------------------------------------------------------------------ errors
@@ -594,8 +727,6 @@ window.addEventListener('unhandledrejection', (e) => {
 
 // ------------------------------------------------------------------------------ test seam
 window.OSCILLA = {
-  version: OSCILLA_VERSION,
-  appVersion: APP_VERSION,
   engine,
   viz: bridge,
   adapter,
@@ -624,6 +755,13 @@ window.OSCILLA = {
   buildConfigExport,
   parseConfigImport,
 };
+// Read-only provenance: version === BUILD.version (package.json), build is the frozen record.
+// APP_VERSION is the frozen legacy V1 stamp, deliberately not called a "version" here.
+Object.defineProperties(window.OSCILLA, {
+  version: { value: BUILD.version, enumerable: true, writable: false, configurable: false },
+  build: { value: BUILD, enumerable: true, writable: false, configurable: false },
+  legacyV1Stamp: { value: APP_VERSION, enumerable: true, writable: false, configurable: false },
+});
 
 // ------------------------------------------------------------------------------ start
 registerOscillaUi(Alpine, { compose: createOscillaComponent });
