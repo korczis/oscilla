@@ -133,6 +133,11 @@ npm run release-gate    # full gate, including the Playwright browser suites
 npm run visual          # compare a screenshot with the visual reference at 1536x1024
 ```
 
+`dist/index.html` embeds a digest of every build input (`src/`, `package.json`, the lockfile,
+the build scripts), so any change to them, including a merge from `main` into a long-lived
+branch, makes it stale by design: run `npm run build` and commit the result, or `build:check`
+and CI fail.
+
 The browser suites need Playwright's browsers (`npx playwright install chromium firefox
 webkit`). Work lands through small pull requests. CI runs the gate on every pull request,
 branch protection requires the `gate` check, and a merge to `main` redeploys Pages.
