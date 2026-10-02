@@ -690,9 +690,9 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 5px;
+  gap: 7px;
   min-width: 0;
-  padding: 0;
+  padding: 2px 0 0;
   border: 1px solid var(--osc-border-strong);
   border-radius: var(--osc-radius-control);
   background: var(--osc-surface-2);
@@ -761,7 +761,7 @@
   justify-content: center;
   min-width: 0;
   height: 40px;
-  padding: 0 9px;
+  padding: 0 7px;
   border: 1px solid transparent;
   border-radius: var(--osc-radius-sm);
   background: var(--osc-block-silence);
@@ -771,6 +771,14 @@
   text-align: left;
   white-space: nowrap;
   overflow: hidden;
+}
+
+.osc-block-name,
+.osc-block-detail {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .osc-block-name { font-weight: var(--osc-fw-medium); }

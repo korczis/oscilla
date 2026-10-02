@@ -8,11 +8,18 @@
 // duplicates, Escape cancels a drag); the move/delete buttons and the "Add block" menu edit;
 // play/stop/loop and "play from the start" use the adapter's context and destination. The
 // audio clock (ctx.currentTime) drives the playhead; no timer ever times audio.
+//
+// Scrolling: the lane shows at least minSpanS (the reference's ~4 s axis) and never packs a
+// long sequence tighter than minPxPerS; beyond that the timeline scrolls horizontally. The bar
+// under the lane ([data-osc="seq.scroll"]) shows and drives the visible window (thumb drag,
+// track click, horizontal or Shift+wheel on the lane); keyboard selection, added blocks and
+// the playhead are kept in view, so the keyboard needs no separate scroll control.
 
 import { createSequencerEditor } from '../sequencer/editor.js';
 import { BLOCK_SCHEMA, totalDuration } from '../sequencer/model.js';
 import {
   createTimeScale,
+  chooseTickStep,
   generateTicks,
   layoutBlocks,
   playheadPosition,
@@ -24,7 +31,21 @@ import { observeSize } from '../charts/chart-theme.js';
 import { on, setText, setAttr } from './dom.js';
 
 export const TIMELINE_OPTIONS = Object.freeze({ minSpanS: 3.75, headroomRatio: 0.1, blockY: 5,
-  blockH: 40, gapPx: 4 });
+  blockH: 40, gapPx: 4, minPxPerS: 66 });
+
+/**
+ * Horizontal window of the lane: { spanS, contentPx, maxScrollPx }. The whole sequence (plus
+ * headroom) fits the lane until it would need fewer than minPxPerS; then the content is wider
+ * than the lane by the factor the extra duration needs.
+ */
+export function timelineWindow({ durationS, laneW, minSpanS = TIMELINE_OPTIONS.minSpanS,
+  headroomRatio = TIMELINE_OPTIONS.headroomRatio, minPxPerS = TIMELINE_OPTIONS.minPxPerS }) {
+  const w = Math.max(1, laneW || 1);
+  const spanS = Math.max(minSpanS, (durationS > 0 ? durationS : 0) * (1 + headroomRatio));
+  const visibleS = Math.min(spanS, Math.max(minSpanS, w / minPxPerS));
+  const contentPx = (w * spanS) / visibleS;
+  return { spanS, contentPx, maxScrollPx: Math.max(0, contentPx - w) };
+}
 const DRAG_THRESHOLD_PX = 4;
 
 /** Ids kept from the shell markup for the Sweep fields (status/visual-idmap.tsv). */
@@ -119,6 +140,8 @@ export function mount(rootEl, adapter) {
   const playBtn = q('#osc-seq-play');
   const loopBtn = q('#osc-seq-record');
   const tempoSel = q('#osc-seq-tempo');
+  const scrollEl = q('[data-osc="seq.scroll"]');
+  const thumbEl = scrollEl ? scrollEl.querySelector('.osc-seq-scroll-thumb') : null;
   const msgEl = q('[data-osc="seq.message"]'); // optional (requested markup), role=status
   const getCtx = () => (adapter.getContext ? adapter.getContext() : null);
   const editor = createSequencerEditor({
@@ -161,6 +184,9 @@ export function mount(rootEl, adapter) {
 
   let scale = null;
   let rects = [];
+  let scrollPx = 0;
+  let win = { spanS: 0, contentPx: 0, maxScrollPx: 0 };
+  let scrollDrag = null;
   let fieldsFor = '';
   let rulerKey = '';
   let drag = null;
@@ -172,7 +198,10 @@ export function mount(rootEl, adapter) {
   function renderBlocks() {
     if (!timeline) return;
     const w = timeline.clientWidth || 400;
-    scale = createTimeScale({ durationS: totalDuration(editor.model), widthPx: w,
+    const durationS = totalDuration(editor.model);
+    win = timelineWindow({ durationS, laneW: w });
+    scrollPx = Math.min(win.maxScrollPx, Math.max(0, scrollPx));
+    scale = createTimeScale({ durationS, widthPx: win.contentPx, originPx: -scrollPx,
       minSpanS: TIMELINE_OPTIONS.minSpanS, headroomRatio: TIMELINE_OPTIONS.headroomRatio });
     rects = layoutBlocks(editor.model, scale, { y: TIMELINE_OPTIONS.blockY,
       height: TIMELINE_OPTIONS.blockH, gapPx: TIMELINE_OPTIONS.gapPx });
@@ -206,6 +235,8 @@ export function mount(rootEl, adapter) {
       setText(b.children[1], r.detail);
       setAttr(b, 'aria-selected', r.id === editor.selectedId ? 'true' : 'false');
       setAttr(b, 'aria-label', `${r.label} ${r.detail}, ${(r.endS - r.startS).toFixed(2)} s`);
+      // A narrow block truncates its text with an ellipsis; the tooltip keeps all of it.
+      setAttr(b, 'title', `${r.label} ${r.detail} · ${(r.endS - r.startS).toFixed(2)} s`);
       // Keep DOM (reading) order = sequence order.
       const want = prev ? prev.nextSibling : timeline.firstChild;
       if (b !== want) timeline.insertBefore(b, want);
@@ -226,13 +257,21 @@ export function mount(rootEl, adapter) {
   function renderRuler() {
     if (!ruler || !scale || !timeline) return;
     const offset = timeline.getBoundingClientRect().left - ruler.getBoundingClientRect().left;
-    // The last tick sits on the right edge, where its label cannot be shown whole.
-    const ticks = generateTicks(scale).filter((t) => t.t < scale.spanS - 1e-9);
+    const laneW = timeline.clientWidth || 400;
+    // Ticks inside the visible window; the last tick of the span sits on the right edge, where
+    // its label cannot be shown whole.
+    const ticks = generateTicks(scale).filter((t) => t.t < scale.spanS - 1e-9
+      && t.x >= -0.5 && t.x <= laneW - 14);
     const key = `${offset}:${ticks.map((t) => `${t.label}@${t.x}`).join(',')}`;
     if (key === rulerKey) return;
     rulerKey = key;
+    // Tick lines through the lane (CSS background on the timeline) at the ruler's step.
+    const stepPx = chooseTickStep(scale) * scale.pxPerSecond;
+    const phase = ((scale.originPx % stepPx) + stepPx) % stepPx;
+    timeline.style.setProperty('--osc-seq-tick-step', `${stepPx.toFixed(2)}px`);
+    timeline.style.setProperty('--osc-seq-tick-offset', `${phase.toFixed(2)}px`);
     ruler.textContent = '';
-    ticks.forEach((t, i) => {
+    ticks.forEach((t) => {
       const s = document.createElement('span');
       s.className = 'osc-num';
       s.textContent = t.label;
@@ -240,7 +279,7 @@ export function mount(rootEl, adapter) {
         position: 'absolute',
         top: '2px',
         left: `${Math.round(offset + t.x)}px`,
-        transform: i === 0 ? 'none' : 'translateX(-50%)',
+        transform: t.x < 12 ? 'none' : 'translateX(-50%)',
         fontSize: 'var(--osc-fs-xs)',
         color: 'var(--osc-text-muted)',
         whiteSpace: 'nowrap',
@@ -293,11 +332,42 @@ export function mount(rootEl, adapter) {
     setText(msgEl, editor.error || (editor.warnings || []).join(' '));
   }
 
+  function renderScrollbar() {
+    if (!scrollEl || !thumbEl) return;
+    const scrollable = win.maxScrollPx > 0.5;
+    setAttr(scrollEl, 'data-scrollable', scrollable ? 'true' : 'false');
+    const widthPct = scrollable ? (100 * (win.contentPx - win.maxScrollPx)) / win.contentPx : 100;
+    const leftPct = scrollable ? (100 * scrollPx) / win.contentPx : 0;
+    thumbEl.style.width = `${widthPct.toFixed(3)}%`;
+    thumbEl.style.left = `${leftPct.toFixed(3)}%`;
+  }
+
   function render() {
     renderBlocks();
     renderRuler();
+    renderScrollbar();
     renderEditor();
     renderTransport();
+  }
+
+  /** Scroll the lane to px (clamped); true when the position changed. */
+  function scrollTo(px) {
+    const next = Math.min(win.maxScrollPx, Math.max(0, px));
+    if (Math.abs(next - scrollPx) < 0.5) return false;
+    scrollPx = next;
+    render();
+    return true;
+  }
+
+  /** Bring the selected block into the visible window (keyboard, add, move). */
+  function revealSelected() {
+    if (!timeline || win.maxScrollPx <= 0) return;
+    const r = rects.find((x) => x.id === editor.selectedId);
+    if (!r) return;
+    const w = timeline.clientWidth || 400;
+    const margin = 8;
+    if (r.x < margin) scrollTo(scrollPx + r.x - margin);
+    else if (r.x + r.w > w - margin) scrollTo(scrollPx + r.x + r.w - w + margin);
   }
 
   // ---------------------------------------------------------------- pointer: select + drag
@@ -371,7 +441,42 @@ export function mount(rootEl, adapter) {
       if (editor.onKeydown(e)) {
         if (e.key === 'Escape') marker.hidden = true;
         render();
+        revealSelected();
       }
+    }),
+    on(timeline, 'wheel', (e) => {
+      if (win.maxScrollPx <= 0) return;
+      const d = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.shiftKey ? e.deltaY : 0;
+      if (!d) return;
+      e.preventDefault();
+      scrollTo(scrollPx + d);
+    }, { passive: false }),
+    on(scrollEl, 'pointerdown', (e) => {
+      if (win.maxScrollPx <= 0 || e.button > 0) return;
+      const track = scrollEl.getBoundingClientRect();
+      const pxPerTrack = win.contentPx / Math.max(1, track.width);
+      if (e.target !== thumbEl) {
+        // Track click: centre the window on the clicked position.
+        const w = timeline ? timeline.clientWidth : 0;
+        scrollTo((e.clientX - track.left) * pxPerTrack - w / 2);
+      }
+      scrollDrag = { id: e.pointerId, x0: e.clientX, s0: scrollPx, k: pxPerTrack };
+      try {
+        scrollEl.setPointerCapture(e.pointerId);
+      } catch (err) {
+        /* optional */
+      }
+      e.preventDefault();
+    }),
+    on(scrollEl, 'pointermove', (e) => {
+      if (!scrollDrag || e.pointerId !== scrollDrag.id) return;
+      scrollTo(scrollDrag.s0 + (e.clientX - scrollDrag.x0) * scrollDrag.k);
+    }),
+    on(scrollEl, 'pointerup', () => {
+      scrollDrag = null;
+    }),
+    on(scrollEl, 'pointercancel', () => {
+      scrollDrag = null;
     }),
     on(fieldsEl, 'change', onFieldChange),
     on(playBtn, 'click', () => {
@@ -397,10 +502,12 @@ export function mount(rootEl, adapter) {
     on(q('#osc-seq-move-earlier'), 'click', () => {
       editor.moveSelected(-1);
       render();
+      revealSelected();
     }),
     on(q('#osc-seq-move-later'), 'click', () => {
       editor.moveSelected(1);
       render();
+      revealSelected();
     }),
     on(q('#osc-seq-delete'), 'click', () => {
       editor.deleteSelected();
@@ -411,6 +518,7 @@ export function mount(rootEl, adapter) {
     offs.push(on(b, 'click', () => {
       editor.addBlock(b.dataset.value);
       render();
+      revealSelected();
     }));
   });
   if (tempoSel) editor.setTempo(Number(tempoSel.value) || editor.model.tempoBpm);
@@ -426,6 +534,14 @@ export function mount(rootEl, adapter) {
       ? playheadPosition({ ctxTime: ctx.currentTime, t0: timing.t0, durationS: timing.duration,
         loop: editor.model.loop, scale })
       : { visible: false };
+    if (ph.visible && win.maxScrollPx > 0 && !scrollDrag && timeline) {
+      // Page the window so the playhead stays visible while the sequence plays.
+      const w = timeline.clientWidth || 400;
+      if (ph.x < 0 || ph.x > w - 4) {
+        scrollTo(scrollPx + ph.x - 16);
+        ph.x = scale.secToPx(ph.t);
+      }
+    }
     playhead.hidden = !ph.visible;
     if (ph.visible) playhead.style.transform = `translateX(${Math.round(ph.x)}px)`;
     if (editor.playing !== wasPlaying) {
@@ -445,6 +561,11 @@ export function mount(rootEl, adapter) {
     get rects() {
       return rects.map((r) => ({ ...r }));
     },
+    /** Visible window: { scrollPx, contentPx, maxScrollPx, spanS } (tests). */
+    get scroll() {
+      return { scrollPx, ...win };
+    },
+    scrollTo,
     update(state = {}) {
       if (state.sequence) editor.load(state.sequence);
       if (state.tempoBpm) editor.setTempo(state.tempoBpm);

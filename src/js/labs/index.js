@@ -13,6 +13,7 @@
 //   getStereoRouter()     → audio/stereo.js router while stereo plays (Phase & Stereo live data)
 //   ensureContext()       → Promise<AudioContext> created in the current user gesture (mic)
 //   attachMicrophone(stream) → AnalyserNode, detachMicrophone()   engine-owned mic graph
+//   getA4()               → A4 tuning in Hz (octave-C markers of the spectrum; default 440)
 //
 // Controllers share state with Alpine only through plain objects and the shell's `osc:ui`
 // events; each exposes { update(state), dispose() } plus its own API.

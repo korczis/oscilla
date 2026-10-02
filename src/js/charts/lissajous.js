@@ -17,7 +17,8 @@ export function drawLissajous(p, rect, liss, theme) {
   p.strokeWeight(1);
   p.circle(cx, cy, r * 2);
   if (!liss || !liss.x || !(liss.length > 1)) return;
-  const k = (r - 6) * (liss.scale || 1);
+  // |x|, |y| <= 1 spans a square whose corners sit at radius √2: scale it inside the frame.
+  const k = ((r - 4) / Math.SQRT2) * (liss.scale || 1);
   p.stroke(theme.cyan);
   p.strokeWeight(1.5);
   p.beginShape();

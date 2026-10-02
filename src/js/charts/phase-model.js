@@ -61,6 +61,23 @@ export function modelLissajous({ fA, fB, phaseDeg = 0, elapsedS = 0, points = 51
   return { x, y };
 }
 
+/**
+ * Periods of the lower frequency after which the figure x = A(t), y = B(t) closes: the
+ * smallest n <= maxN for which the higher frequency also completes (within `tol` of) a whole
+ * number of periods; `fallback` when the ratio is not close to a small rational. A near-unison
+ * pair (440 / 442 Hz) closes after 1 period, so the trace shows the current phase relation
+ * instead of several drifting loops drawn on top of each other.
+ */
+export function lissajousCycles(fA, fB, { maxN = 8, tol = 0.02, fallback = 4 } = {}) {
+  if (!(fA > 0) || !(fB > 0)) return fallback;
+  const r = Math.max(fA, fB) / Math.min(fA, fB);
+  for (let n = 1; n <= maxN; n++) {
+    const m = r * n;
+    if (Math.abs(m - Math.round(m)) <= tol) return n;
+  }
+  return fallback;
+}
+
 /** Index of the first rising zero crossing in buf[0 … limit), or 0 when there is none. */
 export function risingZeroCrossing(buf, limit = buf.length) {
   const end = Math.min(limit, buf.length) - 1;

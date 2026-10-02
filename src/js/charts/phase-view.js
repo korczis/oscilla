@@ -4,7 +4,7 @@
 // rendering follows the same rAF/visibility rules as every other chart.
 //
 // Modes: 'phase' (waves left, Lissajous right, as in the reference) and 'lissajous' (figure
-// only, larger). The data source label ("model" or "live L/R") is drawn in the top-right
+// only, larger). The data source label ("model" or "live L/R") is drawn in the bottom-left
 // corner so an analytic plot is never mistaken for a measurement.
 
 import p5 from 'p5';
@@ -18,14 +18,16 @@ export function drawPhaseWaves(p, rect, waves, theme) {
   const x0 = rect.x + labelW;
   const w = Math.max(4, rect.w - labelW);
   const rowH = rect.h / 2;
-  const amp = rowH * 0.36;
+  const amp = rowH * 0.42;
   p.noStroke();
-  p.textSize(12);
+  p.textSize(13);
+  p.textStyle(p.BOLD);
   p.textAlign(p.LEFT, p.CENTER);
   p.fill(theme.cyan);
   p.text('A', rect.x + 2, rect.y + rowH * 0.5);
   p.fill(theme.magenta);
   p.text('B', rect.x + 2, rect.y + rowH * 1.5);
+  p.textStyle(p.NORMAL);
   if (!waves || !waves.a || !(waves.length > 1)) return;
   const start = waves.start || 0;
   const n = waves.length;
@@ -40,9 +42,10 @@ export function drawPhaseWaves(p, rect, waves, theme) {
   };
   const yA = rect.y + rowH * 0.5;
   const yB = rect.y + rowH * 1.5;
-  trace(waves.b, yA, withAlpha(theme.magenta, 0.45), 1);
+  // Each row: its own signal bright, the other one overlaid for the phase comparison.
+  trace(waves.b, yA, withAlpha(theme.magenta, 0.6), 1.25);
   trace(waves.a, yA, theme.cyan, 1.5);
-  trace(waves.a, yB, withAlpha(theme.cyan, 0.45), 1);
+  trace(waves.a, yB, withAlpha(theme.cyan, 0.6), 1.25);
   trace(waves.b, yB, theme.magenta, 1.5);
 }
 
@@ -72,19 +75,24 @@ export function createPhaseStereoView(host, options = {}) {
       p.clear();
       const data = options.getData ? options.getData() : null;
       const mode = options.getMode ? options.getMode() : 'phase';
+      // The top-left strip (TOP px) holds the shell's phase-offset field; the data source label
+      // ("model" / "live L/R") sits at the bottom left, so neither covers a trace.
+      const TOP = 22;
+      const BOTTOM = 11;
       if (mode === 'lissajous') {
         drawLissajous(p, { x: 0, y: 2, w, h: h - 4 }, data && data.liss, theme);
       } else {
         const lw = Math.min(w * 0.45, h);
-        drawPhaseWaves(p, { x: 4, y: 4, w: w - lw - 18, h: h - 8 }, data && data.waves, theme);
+        drawPhaseWaves(p, { x: 4, y: TOP, w: w - lw - 18, h: h - TOP - BOTTOM },
+          data && data.waves, theme);
         drawLissajous(p, { x: w - lw, y: 2, w: lw, h: h - 4 }, data && data.liss, theme);
       }
       if (data && data.label) {
         p.noStroke();
         p.fill(theme.textDim);
         p.textSize(9);
-        p.textAlign(p.LEFT, p.TOP);
-        p.text(data.label, 2, 0);
+        p.textAlign(p.LEFT, p.BOTTOM);
+        p.text(data.label, 4, h);
       }
     };
   };

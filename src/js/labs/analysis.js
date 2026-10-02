@@ -26,6 +26,7 @@ export function mount(rootEl, adapter) {
     maxHz: maxFrequencyFor(maxSel ? maxSel.value : 20000, rate()) || 20000,
     getAnalyser: () => adapter.getAnalyser(),
     getRequested: () => adapter.requestedFrequency(),
+    getA4: () => (adapter.getA4 ? adapter.getA4() : 440),
   });
   let lastRate = rate();
   const applyMax = () => {

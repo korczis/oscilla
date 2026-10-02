@@ -49,7 +49,7 @@
     <symbol id="i-stop" viewBox="0 0 24 24"><rect x="5.5" y="5.5" width="13" height="13" rx="1.5" fill="currentColor" stroke="none"/></symbol>
     <symbol id="i-record" viewBox="0 0 24 24"><circle cx="12" cy="12" r="7.5" fill="currentColor" stroke="none"/></symbol>
     <symbol id="i-skip" viewBox="0 0 24 24"><path d="M3.5 6v12l8-6zM12.5 6v12l8-6z" fill="currentColor" stroke="none"/></symbol>
-    <symbol id="i-gear" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><circle cx="12" cy="12" r="6.5"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M5.3 18.7l2.1-2.1M16.6 7.4l2.1-2.1"/></symbol>
+    <symbol id="i-gear" viewBox="0 0 24 24"><path d="M19.08 10.24L21.5 10.65V13.35L19.08 13.76L18.25 15.77L19.68 17.76L17.76 19.68L15.77 18.25L13.76 19.08L13.35 21.5H10.65L10.24 19.08L8.23 18.25L6.24 19.68L4.32 17.76L5.75 15.77L4.92 13.76L2.5 13.35V10.65L4.92 10.24L5.75 8.23L4.32 6.24L6.24 4.32L8.23 5.75L10.24 4.92L10.65 2.5H13.35L13.76 4.92L15.77 5.75L17.76 4.32L19.68 6.24L18.25 8.23Z" stroke-linejoin="round"/><circle cx="12" cy="12" r="3.2"/></symbol>
     <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="currentColor" stroke="none"/><path d="M12 11v6M12 7.5v.5" stroke="var(--osc-info-bg)" stroke-width="2.2"/></symbol>
     <symbol id="i-close" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></symbol>
     <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
@@ -91,13 +91,14 @@
         <defs>
           <linearGradient id="osc-logo-grad" x1="0" y1="0" x2="1" y2="0">
             <stop offset="0" style="stop-color: var(--osc-cyan)"/>
-            <stop offset="0.3" style="stop-color: var(--osc-blue)"/>
-            <stop offset="0.5" style="stop-color: var(--osc-purple)"/>
-            <stop offset="0.72" style="stop-color: var(--osc-magenta)"/>
+            <stop offset="0.22" style="stop-color: var(--osc-blue)"/>
+            <stop offset="0.38" style="stop-color: var(--osc-purple)"/>
+            <stop offset="0.52" style="stop-color: var(--osc-magenta)"/>
+            <stop offset="0.72" style="stop-color: var(--osc-orange)"/>
             <stop offset="1" style="stop-color: var(--osc-orange)"/>
           </linearGradient>
         </defs>
-        <path d="M3 18h1.5c1.4 0 1.8-5 3.2-5s1.9 10 3.3 10 2-17 3.5-17 2.1 25 3.6 25 2.1-31 3.6-31 2.1 27 3.6 27 2-19 3.4-19 1.9 11 3.3 11 1.6-5 3-5H47" fill="none" stroke="url(#osc-logo-grad)" stroke-width="3.8" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M1.5 18C2.7 18 3.4 15.5 4.5 15.5S6.3 22 7.5 22C9.5 22 10.5 8 12.5 8C15 8 16.5 31.5 19 31.5S23.5 3 26 3C28.5 3 30 32.5 32.5 32.5S36.2 11 38.5 11C40.5 11 41.2 21.5 43 21.5S46.3 16.5 48 16.5" fill="none" stroke="url(#osc-logo-grad)" stroke-width="3.8" stroke-linecap="round" stroke-linejoin="round"/>
       </svg>
       <span class="osc-brand-text">
         <span class="osc-brand-name">OSCILLA</span>
@@ -471,10 +472,8 @@
               :data-tab="tabs.analysis" aria-labelledby="osc-atab-waveform"
               :aria-labelledby="'osc-atab-' + tabs.analysis.toLowerCase()">
               <div class="osc-chart-host osc-chart-inset osc-h-waveform" id="osc-chart-waveform"
-                data-osc-chart="waveform" role="img" aria-label="Live waveform"
-                :aria-label="tabs.analysis === 'harmonics' ? 'Theoretical harmonics of the oscillator: ' + vizSummaryHarm
-                  : tabs.analysis === 'signalPath' ? 'Active Web Audio signal path'
-                  : 'Live waveform, ' + timeWindowMs + ' ms window' + (playing ? '' : ' (not playing)')"></div>
+                data-osc-chart="waveform" role="img" aria-label="Waveform"
+                :aria-label="analysisCanvasLabel"></div>
               <div class="osc-chart-host osc-h-spectrum" id="osc-chart-spectrum"
                 data-osc-chart="spectrum" role="img"
                 aria-label="Live spectrum, relative level (dBFS-like analyser level)"></div>
@@ -1317,7 +1316,9 @@
   <footer class="osc-statusbar" aria-label="Status and actions">
     <div class="osc-sb-brand">
       <span class="osc-sb-name">OSCILLA</span>
-      <span class="osc-sb-version" data-osc="status.version" x-text="'v' + OSCILLA_VERSION">v2.0.0</span>
+      <span class="osc-sb-version" data-osc="status.version"
+        x-text="'v' + OSCILLA_VERSION.split('.').slice(0, 2).join('.')"
+        :title="'OSCILLA ' + OSCILLA_VERSION" title="OSCILLA 2.0.0">v2.0</span>
       <span class="osc-sb-div" aria-hidden="true"></span>
       <span class="osc-sb-sub">Interactive Sound &amp; Frequency Lab</span>
     </div>

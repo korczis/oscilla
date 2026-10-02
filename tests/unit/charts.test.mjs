@@ -50,6 +50,7 @@ import {
   relativePhase,
   modelWaves,
   modelLissajous,
+  lissajousCycles,
   risingZeroCrossing,
   commonPeak,
 } from '../../src/js/charts/phase-model.js';
@@ -60,7 +61,7 @@ import {
 } from '../../src/js/charts/device-panel.js';
 import { barSlotAt } from '../../src/js/charts/additive-chart.js';
 import { shortName, rangeLabel } from '../../src/js/charts/bio-chart.js';
-import { fieldsForType } from '../../src/js/labs/sequencer-panel.js';
+import { fieldsForType, timelineWindow } from '../../src/js/labs/sequencer-panel.js';
 import { defaultCustomPartials, presetPartials } from '../../src/js/labs/additive.js';
 import { formatQ } from '../../src/js/labs/filter-lab.js';
 import { HEARING_RANGES, CALL_EXAMPLES } from '../../src/js/data/bioacoustics.js';
@@ -397,4 +398,26 @@ test('filter Q display', () => {
   assert.equal(formatQ(Math.SQRT1_2), '0.707');
   assert.equal(formatQ(1.414), '1.41');
   assert.equal(formatQ(12.34), '12.3');
+});
+
+test('Lissajous closes after the smallest whole number of periods', () => {
+  assert.equal(lissajousCycles(440, 440), 1);
+  assert.equal(lissajousCycles(440, 442), 1, 'near unison: one period, no drifting loops');
+  assert.equal(lissajousCycles(440, 660), 2, '3:2 closes after 2 periods of the lower');
+  assert.equal(lissajousCycles(300, 400), 3, '4:3');
+  assert.equal(lissajousCycles(440, 440 * Math.SQRT2), 4, 'no small-rational ratio: fallback');
+  assert.equal(lissajousCycles(100, 100 * Math.PI), 7, 'pi ~ 22/7 closes within 0.02 periods');
+  assert.equal(lissajousCycles(0, 440), 4);
+});
+
+test('sequencer timeline window: fits until minPxPerS, then scrolls', () => {
+  const short = timelineWindow({ durationS: 2.25, laneW: 500 });
+  assert.equal(short.spanS, 3.75);
+  assert.equal(short.contentPx, 500);
+  assert.equal(short.maxScrollPx, 0);
+  // 20 s * 1.1 = 22 s span; 500 px at >= 66 px/s shows at most 7.58 s
+  const long = timelineWindow({ durationS: 20, laneW: 500 });
+  assert.ok(Math.abs(long.contentPx / long.spanS - 66) < 1e-9, 'packed at minPxPerS');
+  assert.ok(Math.abs(long.maxScrollPx - (long.contentPx - 500)) < 1e-9);
+  assert.equal(timelineWindow({ durationS: 0, laneW: 0 }).maxScrollPx, 0);
 });
