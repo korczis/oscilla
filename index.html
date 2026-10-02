@@ -79,7 +79,7 @@
   .panel { background: rgb(var(--c-surface)); border: 1px solid rgb(var(--c-line)); border-radius: 0.75rem; }
   :focus-visible { outline: 2px solid rgb(var(--c-accent)); outline-offset: 2px; }
   /* Focused and scrolled-to elements stay clear of the sticky header (height measured at runtime). */
-  html { scroll-padding-top: calc(var(--header-h, 150px) + 8px); }
+  html { scroll-padding-top: calc(var(--header-h, 150px) + 8px); scroll-padding-bottom: calc(var(--alerts-h, 0px) + 8px); }
   .field {
     display: block; width: 100%; min-height: 44px; padding: 0.5rem 0.75rem; border-radius: 0.5rem;
     background: rgb(var(--c-surface2)); border: 1px solid rgb(var(--c-muted) / 0.75); color: rgb(var(--c-fg));
@@ -97,6 +97,24 @@
   .chip:disabled { opacity: 0.45; cursor: not-allowed; }
   /* Compact chips only where the pointer is precise; touch keeps 44 px targets. */
   @media (min-width: 640px) and (pointer: fine) { .chip-sm { min-height: 36px; } }
+  /* Visualization box: viewport-aware so HOLD TO PLAY stays in the first viewport (spec §5).
+     Each offset is the measured height of everything above and below the canvas down to the
+     hold button's bottom, minus the sticky header (--header-h, measured at runtime). The vh
+     declaration is the fallback for browsers without small-viewport units. */
+  .viz-box { height: clamp(88px, calc(100vh - var(--header-h, 95px) - 449px), 148px); }
+  .viz-box { height: clamp(88px, calc(100svh - var(--header-h, 95px) - 449px), 148px); }
+  @media (min-width: 640px) {
+    .viz-box { height: clamp(120px, calc(100vh - var(--header-h, 113px) - 794px), 250px); }
+    .viz-box { height: clamp(120px, calc(100svh - var(--header-h, 113px) - 794px), 250px); }
+  }
+  @media (min-width: 1024px) {
+    .viz-box { height: clamp(180px, calc(100vh - var(--header-h, 57px) - 446px), 330px); }
+    .viz-box { height: clamp(180px, calc(100svh - var(--header-h, 57px) - 446px), 330px); }
+  }
+  @media (min-width: 1280px) {
+    .viz-box { height: clamp(180px, calc(100vh - var(--header-h, 57px) - 414px), 360px); }
+    .viz-box { height: clamp(180px, calc(100svh - var(--header-h, 57px) - 414px), 360px); }
+  }
   .hold-btn { touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
   .fmap { touch-action: pan-y; user-select: none; -webkit-user-select: none; cursor: ew-resize; }
   input[type="range"] { accent-color: rgb(var(--c-accent)); width: 100%; height: 44px; cursor: pointer; }
@@ -126,15 +144,17 @@
 <!-- ============================== HEADER -->
 <header class="sticky top-0 z-30 border-b border-line bg-bg/95 backdrop-blur supports-[backdrop-filter]:bg-bg/80">
   <div class="mx-auto max-w-[1440px] px-3 sm:px-5 flex flex-wrap items-center gap-x-3">
-    <div class="flex items-center gap-2 h-12 sm:h-14 min-w-0 grow basis-0 md:grow-0 md:basis-auto">
-      <svg class="w-7 h-7 shrink-0" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="8" class="fill-accent"/><path d="M4 16 Q8 4 12 16 T20 16 T28 16" fill="none" stroke="rgb(var(--c-surface))" stroke-width="2.6" stroke-linecap="round"/></svg>
+    <div class="flex items-center gap-2 h-11 sm:h-14 min-w-0 grow basis-0 md:grow-0 md:basis-auto">
+      <!-- Below 1024 px the subtitle wraps to two short lines beside the wordmark (three lines fit
+           the row) and is never truncated; the decorative logo gives way to the mic chip on phones. -->
+      <svg class="w-7 h-7 shrink-0" :class="micActive ? 'max-sm:hidden' : ''" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="8" class="fill-accent"/><path d="M4 16 Q8 4 12 16 T20 16 T28 16" fill="none" stroke="rgb(var(--c-surface))" stroke-width="2.6" stroke-linecap="round"/></svg>
       <div class="leading-tight min-w-0">
-        <h1 class="font-semibold tracking-[0.22em] text-sm sm:text-base">OSCILLA</h1>
-        <p class="text-[10px] sm:text-[11px] text-muted truncate">Interactive Sound &amp; Frequency Lab<span class="hidden sm:inline"> · See sound. Shape frequency.</span></p>
+        <h1 class="font-semibold tracking-[0.14em] sm:tracking-[0.22em] text-[13px] sm:text-base">OSCILLA</h1>
+        <p class="text-[10px] sm:text-[11px] text-muted max-w-[7.5rem] sm:max-w-[11rem] lg:max-w-none">Interactive Sound &amp; Frequency Lab<span class="hidden lg:inline"> · See sound. Shape frequency.</span></p>
       </div>
     </div>
 
-    <nav class="order-last w-full md:order-none md:w-auto md:ml-4 pb-2 md:pb-0" aria-label="Modes">
+    <nav class="order-last w-full md:order-none md:w-auto md:ml-4 pb-1.5 md:pb-0" aria-label="Modes">
       <div role="tablist" aria-label="Application mode" class="grid grid-cols-5 gap-1 md:flex">
         <template x-for="(m, i) in APP_MODES" :key="m.id">
           <button type="button" role="tab" class="chip chip-sm px-1 sm:px-3 text-[12px] sm:text-[13px] font-medium" :id="'tab-' + m.id"
@@ -146,25 +166,51 @@
       </div>
     </nav>
 
-    <div class="ml-auto flex items-center gap-1.5 h-12 sm:h-14">
-      <div role="status" aria-live="polite" aria-atomic="true"
-           class="flex items-center gap-1.5 h-8 px-2.5 rounded-full border text-[11px] font-semibold tracking-widest"
-           :class="{ 'border-accent text-accent': status === 'PLAYING', 'border-warn text-warn': status === 'RELEASING', 'border-danger text-danger': status === 'ERROR', 'border-line text-muted': ['READY','STOPPED'].includes(status) }">
+    <div class="ml-auto flex items-center gap-1 sm:gap-1.5 h-11 sm:h-14 shrink-0">
+      <!-- Status: a STOP button while sound is playing or releasing, otherwise a plain label. Only
+           PLAYING, STOPPED and ERROR are announced, through the separate live region below. -->
+      <button type="button" x-show="status === 'PLAYING' || status === 'RELEASING'" x-cloak @click="stopNow()"
+              class="chip chip-sm rounded-full flex items-center justify-center gap-1.5 px-2.5 text-[11px] font-semibold tracking-wider sm:tracking-widest"
+              :class="status === 'RELEASING' ? 'border-warn text-warn' : 'border-accent text-accent'" aria-label="Stop playback" title="Stop playback">
+        <span class="w-2 h-2 bg-current" aria-hidden="true"></span><span aria-hidden="true"><span class="hidden sm:inline">STOP · </span><span x-text="status"></span></span>
+      </button>
+      <div x-show="status !== 'PLAYING' && status !== 'RELEASING'"
+           class="flex items-center gap-1.5 h-8 px-2 sm:px-2.5 rounded-full border text-[11px] font-semibold tracking-wider sm:tracking-widest"
+           :class="status === 'ERROR' ? 'border-danger text-danger' : 'border-line text-muted'">
         <span aria-hidden="true" x-text="statusIcon"></span><span class="sr-only">Playback state:</span><span x-text="status">READY</span>
       </div>
-      <button type="button" class="chip chip-sm w-11 px-0 flex items-center justify-center" @click="explore = !explore" :aria-pressed="explore"
+      <span class="sr-only" role="status" aria-live="polite" aria-atomic="true" x-data="{ said: '' }"
+            x-effect="if (['PLAYING', 'STOPPED', 'ERROR'].includes(status)) said = `Playback ${status}`" x-text="said"></span>
+      <!-- Persistent microphone indicator: visible in every mode and view while the mic is open. -->
+      <button type="button" x-show="micActive" x-cloak @click="toggleMic()" :disabled="micPending"
+              class="chip chip-sm w-11 px-0 sm:w-auto sm:px-2.5 flex items-center justify-center gap-1 border-danger text-danger text-[11px] font-semibold tracking-widest"
+              aria-label="Microphone on — stop the microphone">
+        <svg class="w-4 h-4 sm:hidden" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3" fill="currentColor"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21"/></svg>
+        <span class="hidden sm:inline-block w-2 h-2 rounded-full bg-danger" aria-hidden="true"></span>
+        <span class="hidden sm:inline" aria-hidden="true">MIC ON</span>
+        <svg class="hidden sm:block w-3 h-3" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m2 2 10 10M12 2 2 12"/></svg>
+      </button>
+      <button type="button" class="chip chip-sm w-11 px-0 hidden sm:flex items-center justify-center" @click="explore = !explore" :aria-pressed="explore"
               aria-label="Explore mode: contextual hints" data-tooltip-target="tip-explore">
         <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .9-1 1.6V14"/><circle cx="12" cy="17.2" r=".6" fill="currentColor"/></svg>
       </button>
       <div id="tip-explore" role="tooltip" class="absolute z-50 invisible inline-block px-2 py-1 text-xs text-surface bg-fg rounded-md opacity-0 transition-opacity">Explore: contextual hints<div class="tooltip-arrow" data-popper-arrow></div></div>
       <div class="relative" @keydown.escape="closeThemeMenu(true)" @click.outside="closeThemeMenu(false)">
-        <button type="button" id="themeButton" class="chip chip-sm w-11 px-0 flex items-center justify-center" aria-label="Theme"
+        <!-- Below 640 px this menu also carries Explore and About, whose header buttons are hidden
+             there to leave the wordmark and subtitle room. -->
+        <button type="button" id="themeButton" class="chip chip-sm w-11 px-0 flex items-center justify-center" aria-label="Theme and options"
                 aria-haspopup="menu" aria-controls="themeMenu" :aria-expanded="themeMenuOpen" @click="toggleThemeMenu()">
-          <svg x-show="!isDark" class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M20 14.5A8 8 0 0 1 9.5 4 8 8 0 1 0 20 14.5Z"/></svg>
-          <svg x-show="isDark" x-cloak class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+          <svg class="w-5 h-5 sm:hidden" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="12" cy="5" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="12" cy="19" r="1.8"/></svg>
+          <svg x-show="!isDark" class="w-5 h-5 max-sm:!hidden" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M20 14.5A8 8 0 0 1 9.5 4 8 8 0 1 0 20 14.5Z"/></svg>
+          <svg x-show="isDark" x-cloak class="w-5 h-5 max-sm:!hidden" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
         </button>
-        <div id="themeMenu" class="absolute right-0 top-full mt-1.5 z-50 hidden w-40 rounded-lg border border-line bg-surface shadow-sm">
+        <div id="themeMenu" class="absolute right-0 top-full mt-1.5 z-50 hidden w-48 sm:w-40 rounded-lg border border-line bg-surface shadow-sm">
           <ul class="py-1 text-sm" role="menu" aria-labelledby="themeButton" @keydown="themeMenuKey($event)">
+            <li role="none" class="sm:hidden"><button type="button" role="menuitemcheckbox" tabindex="-1" class="w-full text-left px-4 h-11 hover:bg-surface2 flex items-center justify-between"
+                        @click="menuExplore()" :aria-checked="explore"><span>Explore hints</span><span x-show="explore" aria-hidden="true">✓</span></button></li>
+            <li role="none" class="sm:hidden"><button type="button" role="menuitem" tabindex="-1" class="w-full text-left px-4 h-11 hover:bg-surface2"
+                        @click="menuAbout()">About &amp; safety</button></li>
+            <li role="separator" class="sm:hidden my-1 border-t border-line"></li>
             <template x-for="t in ['light','dark','system']" :key="t">
               <li role="none"><button type="button" role="menuitemradio" tabindex="-1" class="w-full text-left px-4 h-11 hover:bg-surface2 capitalize flex items-center justify-between"
                           @click="setTheme(t)" :aria-checked="theme === t"><span x-text="t"></span><span x-show="theme === t" aria-hidden="true">✓</span></button></li>
@@ -172,7 +218,7 @@
           </ul>
         </div>
       </div>
-      <button type="button" class="chip chip-sm w-11 px-0 flex items-center justify-center" @click="openModal('aboutModal')" aria-label="About OSCILLA and safety information">
+      <button type="button" class="chip chip-sm w-11 px-0 hidden sm:flex items-center justify-center" @click="openModal('aboutModal')" aria-label="About OSCILLA and safety information">
         <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v6"/><circle cx="12" cy="7.6" r=".7" fill="currentColor"/></svg>
       </button>
     </div>
@@ -181,7 +227,7 @@
 
 <!-- ============================== ALERTS (Flowbite alert markup, Alpine-managed) -->
 <!-- Below md the stack sits at the bottom (clear of the header's mode tabs), above the home indicator. -->
-<div class="fixed z-50 right-3 left-3 bottom-[calc(0.75rem+env(safe-area-inset-bottom))] md:bottom-auto md:top-16 sm:left-auto sm:w-[380px] space-y-2 pointer-events-none" aria-live="polite">
+<div id="alert-stack" class="fixed z-50 right-3 left-3 bottom-[calc(0.75rem+env(safe-area-inset-bottom))] md:bottom-auto md:top-[calc(var(--header-h,113px)+0.5rem)] sm:left-auto sm:w-[380px] space-y-2 pointer-events-none" aria-live="polite">
   <template x-for="a in alerts" :key="a.id">
     <div class="flex items-start p-3 text-sm rounded-lg border shadow-sm bg-surface pointer-events-auto"
          :role="a.level === 'error' ? 'alert' : 'status'"
@@ -210,39 +256,55 @@
   </div>
   <p x-show="!safetyExpanded" class="text-[11px] text-muted items-center gap-2" :class="safetyCollapsed ? 'flex' : 'flex sm:hidden'">
     <svg class="w-3.5 h-3.5 shrink-0 text-warn" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path d="M10 1.5 19 18H1L10 1.5Zm-1 6v5h2v-5H9Zm0 6.5v2h2v-2H9Z"/></svg>
-    <span>Audio can be uncomfortable or harmful at excessive levels — start low, especially with headphones.</span>
-    <button type="button" class="underline min-h-[44px] min-w-[44px] sm:min-h-0 shrink-0" @click="showSafety()">Full notice</button>
+    <!-- One line on phones (spec §5 first viewport): the short form, with the full notice one tap away.
+         The button is a 44 px target whose negative margins keep the line 24 px tall. -->
+    <span class="min-w-0 truncate sm:hidden">Loud audio can be harmful — start low.</span>
+    <span class="hidden sm:inline">Audio can be uncomfortable or harmful at excessive levels — start low, especially with headphones.</span>
+    <button type="button" class="underline min-w-[44px] min-h-[44px] -my-2.5 px-1 whitespace-nowrap shrink-0" @click="showSafety()">Full notice</button>
   </p>
 </aside>
 
 <!-- ============================== INSTRUMENT -->
-<main id="instrument" class="mx-auto max-w-[1440px] px-3 sm:px-5 pt-1 pb-3 sm:py-3 grid gap-2 sm:gap-3 lg:gap-4 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]">
+<main id="instrument" class="mx-auto max-w-[1440px] px-3 sm:px-5 pt-1 pb-3 sm:py-3 grid gap-1.5 sm:gap-3 lg:gap-4 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]">
 
   <!-- ---------- VISUALIZATION -->
   <section class="panel min-w-0 lg:col-start-1 lg:row-start-1" aria-labelledby="viz-heading">
     <h2 id="viz-heading" class="sr-only">Visualization</h2>
-    <div class="flex flex-wrap items-center gap-2 px-2 pt-2 sm:px-3 sm:pt-3">
+    <div class="flex flex-wrap items-center gap-2 px-2 pt-1.5 sm:px-3 sm:pt-3">
       <label for="viz-select" class="sr-only">Visualization mode</label>
       <select id="viz-select" class="field sm:hidden w-auto flex-1 py-1" :value="vizMode" @change="vizMode = $event.target.value">
         <template x-for="v in VIZ_MODES" :key="v.id"><option :value="v.id" x-text="v.label" :selected="vizMode === v.id"></option></template>
       </select>
-      <div role="radiogroup" aria-label="Visualization mode" class="hidden sm:flex flex-wrap gap-1">
+      <div role="radiogroup" aria-label="Visualization mode" class="hidden sm:flex flex-wrap gap-1" x-roving>
         <template x-for="v in VIZ_MODES" :key="v.id">
           <button type="button" role="radio" class="chip chip-sm text-xs" :aria-checked="vizMode === v.id" @click="vizMode = v.id" x-text="v.label"></button>
         </template>
       </div>
+      <button type="button" class="chip chip-sm w-11 px-0 flex items-center justify-center sm:order-last" @click="vizPaused = !vizPaused"
+              :class="vizMode === 'spectrum' ? '' : 'ml-auto'" :aria-pressed="vizPaused" aria-label="Pause animation"
+              title="Pause animation (the view still redraws when something changes)">
+        <svg x-show="!vizPaused" class="w-4 h-4" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M4 3h3v10H4zM9 3h3v10H9z"/></svg>
+        <svg x-show="vizPaused" x-cloak class="w-4 h-4" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M4.5 2.5v11l9-5.5-9-5.5Z"/></svg>
+      </button>
       <div class="flex items-center gap-1 ml-auto" x-show="vizMode === 'spectrum'" x-cloak>
-        <div role="radiogroup" aria-label="Frequency axis" class="flex gap-1">
+        <div role="radiogroup" aria-label="Frequency axis" class="flex gap-1" x-roving>
           <button type="button" role="radio" class="chip chip-sm text-xs" :aria-checked="spectrumScale === 'log'" @click="spectrumScale = 'log'">LOG</button>
           <button type="button" role="radio" class="chip chip-sm text-xs" :aria-checked="spectrumScale === 'linear'" @click="spectrumScale = 'linear'">LIN</button>
         </div>
-        <button type="button" id="overlayButton" data-dropdown-toggle="overlayMenu" class="chip chip-sm text-xs" aria-haspopup="true">Overlays</button>
-        <div id="overlayMenu" class="z-40 hidden w-52 rounded-lg border border-line bg-surface p-2 shadow-sm">
-          <fieldset><legend class="eyebrow px-2 pb-1">Spectrum overlays</legend>
-            <label class="flex items-center gap-2 px-2 h-11 text-sm"><input type="checkbox" class="w-4 h-4" x-model="overlays.regions"> Frequency regions</label>
-            <label class="flex items-center gap-2 px-2 h-11 text-sm"><input type="checkbox" class="w-4 h-4" x-model="overlays.notes"> Musical notes (C)</label>
-            <label class="flex items-center gap-2 px-2 h-11 text-sm"><input type="checkbox" class="w-4 h-4" x-model="overlays.thirds"> Third-octave bands</label>
-          </fieldset>
+        <div class="relative" @keydown.escape="closeOverlayMenu(true)" @click.outside="closeOverlayMenu(false)">
+          <button type="button" id="overlayButton" class="chip chip-sm text-xs" aria-haspopup="menu" aria-controls="overlayMenu"
+                  :aria-expanded="overlayMenuOpen" @click="toggleOverlayMenu()">Overlays</button>
+          <div id="overlayMenu" class="absolute right-0 top-full mt-1.5 z-40 hidden w-56 rounded-lg border border-line bg-surface shadow-sm">
+            <ul class="py-1 text-sm" role="menu" aria-label="Spectrum overlays" @keydown="overlayMenuKey($event)">
+              <template x-for="o in [['regions', 'Frequency regions'], ['notes', 'Musical notes (C)'], ['thirds', 'Third-octave bands']]" :key="o[0]">
+                <li role="none"><button type="button" role="menuitemcheckbox" tabindex="-1" class="w-full text-left px-3 h-11 hover:bg-surface2 flex items-center gap-2"
+                            :aria-checked="!!overlays[o[0]]" @click="overlays[o[0]] = !overlays[o[0]]">
+                  <span class="w-4 h-4 shrink-0 rounded border border-muted flex items-center justify-center text-[11px] leading-none" :class="overlays[o[0]] ? 'bg-accent border-accent text-surface' : ''" aria-hidden="true" x-text="overlays[o[0]] ? '✓' : ''"></span>
+                  <span x-text="o[1]"></span>
+                </button></li>
+              </template>
+            </ul>
+          </div>
         </div>
         <button type="button" class="chip chip-sm text-xs flex items-center gap-1" @click="toggleMic()" :aria-pressed="micActive" :disabled="micPending">
           <span class="w-2 h-2 rounded-full" :class="micActive ? 'bg-danger' : 'bg-line'" aria-hidden="true"></span>
@@ -250,39 +312,44 @@
         </button>
       </div>
     </div>
-    <div class="relative mx-2 sm:mx-3 mt-2 rounded-lg border border-line overflow-hidden h-[148px] sm:h-[250px] lg:h-[330px] xl:h-[360px]" x-ref="vizCanvas"
-         role="img" :aria-label="vizFailed ? 'Visualization unavailable' : `${vizMode} visualization. ${vizCaption}`">
+    <div class="viz-box relative mx-2 sm:mx-3 mt-1.5 sm:mt-2 rounded-lg border border-line overflow-hidden" x-ref="vizCanvas"
+         role="img" aria-describedby="viz-caption"
+         :aria-label="vizFailed ? 'Visualization unavailable' : `${(VIZ_MODES.find((v) => v.id === vizMode) || VIZ_MODES[0]).label} visualization`">
       <template x-if="vizFailed">
         <div class="absolute inset-0 flex items-center justify-center p-4 text-center text-sm text-muted">Visualization unavailable (p5.js did not load). Audio and controls still work.</div>
       </template>
     </div>
-    <p class="hidden sm:block px-3 pt-2 text-[11px] text-muted" x-text="vizCaption"></p>
-    <dl class="hidden sm:grid grid-cols-3 md:grid-cols-6 gap-px m-3 mt-2 rounded-lg overflow-hidden border border-line bg-line text-[11px]">
+    <p id="viz-caption" class="sr-only sm:not-sr-only sm:block sm:px-3 sm:pt-2 text-[11px] text-muted" x-text="vizCaption"></p>
+    <dl class="hidden sm:grid grid-cols-3 md:grid-cols-6 gap-px m-3 mt-2 rounded-lg overflow-hidden border border-line bg-line text-[11px] [&_dt]:!tracking-[0.06em]">
       <div class="bg-surface px-2 py-1.5"><dt class="eyebrow">Requested</dt><dd class="font-mono" x-text="formatFrequency(frequency)"></dd></div>
       <div class="bg-surface px-2 py-1.5"><dt class="eyebrow">Instantaneous</dt><dd class="font-mono" x-text="instFreqText"></dd></div>
       <div class="bg-surface px-2 py-1.5"><dt class="eyebrow">Period</dt><dd class="font-mono" x-text="periodText"></dd></div>
       <div class="bg-surface px-2 py-1.5"><dt class="eyebrow">Wavelength ≈</dt><dd class="font-mono" x-text="wavelengthText"></dd></div>
-      <div class="bg-surface px-2 py-1.5"><dt class="eyebrow">Nearest note</dt><dd class="font-mono" x-text="noteText"></dd></div>
+      <div class="bg-surface px-2 py-1.5"><dt class="eyebrow">Nearest note</dt><dd class="font-mono" x-text="metricNoteText"></dd></div>
       <div class="bg-surface px-2 py-1.5"><dt class="eyebrow">Nyquist</dt><dd class="font-mono"><span x-text="formatFrequency(nyquist)"></span><span x-show="provisional" class="text-warn"> (prov.)</span></dd></div>
     </dl>
-    <div class="h-2 sm:hidden"></div>
+    <div class="h-1.5 sm:hidden"></div>
   </section>
 
   <!-- ---------- MODE PANEL -->
-  <section id="mode-panel" role="tabpanel" :aria-labelledby="'tab-' + mode" class="panel min-w-0 px-3 py-2.5 sm:p-4 lg:col-start-2 lg:row-start-1">
+  <!-- Mode panels switch with a class binding, not x-show: Alpine applies x-show on the next
+       animation frame, so for one frame after a tab click the previous panel was still laid out
+       (and anything measured in that frame, like the HOLD TO PLAY position, saw the wrong mode). -->
+  <section id="mode-panel" role="tabpanel" :aria-labelledby="'tab-' + mode" class="panel min-w-0 px-3 py-2 sm:p-4 lg:col-start-2 lg:row-start-1">
 
     <!-- PLAYGROUND -->
-    <div x-show="mode === 'playground'">
+    <div :class="mode === 'playground' ? '' : 'hidden'">
       <div class="flex items-start justify-between gap-3">
         <div class="min-w-0">
-          <div class="eyebrow">Requested digital frequency</div>
-          <div class="readout font-mono font-light text-[2.4rem] leading-none sm:text-6xl mt-1" x-text="freqDisplay">440 Hz</div>
-          <div class="mt-1.5 text-[11px] font-semibold tracking-[0.18em] text-accent" x-text="regionLabel"></div>
-          <div class="mt-1 text-xs text-muted font-mono">
+          <div class="eyebrow max-sm:!tracking-[0.06em]" x-text="usesGlobalFrequency ? 'Requested digital frequency' : 'Pattern frequency range'"></div>
+          <div class="readout font-mono font-light leading-none mt-1" :class="usesGlobalFrequency ? 'text-[2.4rem] sm:text-6xl' : 'text-[1.6rem] sm:text-4xl'" x-text="readoutText">440 Hz</div>
+          <div class="mt-1.5 text-[11px] font-semibold tracking-[0.18em] text-accent" x-text="readoutRegion"></div>
+          <div class="mt-1 text-xs text-muted font-mono" x-show="usesGlobalFrequency">
             T <span x-text="formatPeriod(frequency)"></span> · λ ≈ <span x-text="formatWavelength(frequency)"></span><template x-if="noteMode"><span> · <span class="text-fg" x-text="noteText"></span></span></template>
           </div>
+          <div class="mt-1 text-xs text-muted" x-show="!usesGlobalFrequency">Set in the pattern parameters below.</div>
         </div>
-        <label class="inline-flex flex-col items-end gap-1 cursor-pointer shrink-0">
+        <label class="inline-flex flex-col items-end justify-center gap-1 min-h-11 min-w-11 cursor-pointer shrink-0">
           <span class="eyebrow">Note mode</span>
           <input type="checkbox" class="sr-only peer" x-model="noteMode">
           <span class="relative w-11 h-6 bg-surface2 border border-muted rounded-full peer-focus-visible:ring-2 peer-focus-visible:ring-accent peer-checked:bg-accent after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-surface after:border after:border-muted after:rounded-full after:h-[18px] after:w-[18px] after:transition-all peer-checked:after:translate-x-5"></span>
@@ -290,7 +357,8 @@
       </div>
 
       <div class="mt-2 sm:mt-4">
-        <div x-ref="fmap" class="fmap relative h-[60px] sm:h-[68px] rounded-lg border border-line overflow-hidden bg-surface2" role="slider" tabindex="0"
+        <div x-ref="fmap" class="fmap relative h-[52px] sm:h-[68px] rounded-lg border border-line overflow-hidden bg-surface2" role="slider"
+             :tabindex="usesGlobalFrequency ? 0 : -1" :aria-disabled="!usesGlobalFrequency" :class="usesGlobalFrequency ? '' : 'opacity-60'"
              aria-label="Frequency, logarithmic map" :aria-valuemin="Math.round(rangeMin)" :aria-valuemax="Math.round(rangeMax)"
              :aria-valuenow="Math.round(frequency)" :aria-valuetext="formatFrequency(frequency) + ', ' + regionLabel.toLowerCase()"
              aria-describedby="fmap-help"
@@ -305,7 +373,8 @@
               <span class="absolute top-2.5 text-[9px] font-mono text-muted" :class="t.pct < 4 ? 'left-0.5' : t.pct > 96 ? 'right-0.5' : '-translate-x-1/2'" x-text="t.label"></span>
             </div>
           </template>
-          <div class="absolute top-0 bottom-0 w-0.5 bg-accent pointer-events-none" :style="`left:calc(${mapMarkerPct}% - 1px)`">
+          <div class="absolute top-0 bottom-0 bg-accent/25 border-x border-accent pointer-events-none" x-show="!usesGlobalFrequency" :style="mapRangeStyle"></div>
+          <div class="absolute top-0 bottom-0 w-0.5 bg-accent pointer-events-none" x-show="usesGlobalFrequency" :style="`left:calc(${mapMarkerPct}% - 1px)`">
             <div class="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 left-1/2 w-4 h-4 rounded-full bg-accent ring-4 ring-accent/20"></div>
           </div>
         </div>
@@ -325,7 +394,7 @@
     </div>
 
     <!-- SWEEP -->
-    <div x-show="mode === 'sweep'" x-cloak>
+    <div :class="mode === 'sweep' ? '' : 'hidden'" x-cloak>
       <h2 class="eyebrow">Sweep exploration</h2>
       <div class="readout font-mono text-2xl sm:text-3xl mt-1" x-text="sweepReadout"></div>
       <div class="relative mt-2 h-3 rounded-full bg-surface2 border border-line overflow-hidden" aria-hidden="true">
@@ -383,7 +452,7 @@
     </div>
 
     <!-- DUAL OSC -->
-    <div x-show="mode === 'dual'" x-cloak>
+    <div :class="mode === 'dual' ? '' : 'hidden'" x-cloak>
       <h2 class="eyebrow">Two independent oscillators</h2>
       <div class="grid sm:grid-cols-2 gap-4 mt-2">
         <template x-for="side in ['a', 'b']" :key="side">
@@ -422,7 +491,7 @@
     </div>
 
     <!-- PRESETS -->
-    <div x-show="mode === 'presets'" x-cloak>
+    <div :class="mode === 'presets' ? '' : 'hidden'" x-cloak>
       <h2 class="eyebrow mb-2">Presets</h2>
       <ul id="preset-tabs" class="flex flex-wrap gap-1 text-xs" role="tablist" aria-label="Preset categories" x-roving data-tabs-toggle="#preset-tab-content"
           data-tabs-active-classes="!bg-fg !text-surface !border-fg" data-tabs-inactive-classes="bg-surface text-fg">
@@ -448,7 +517,7 @@
                     <p class="text-[11px] text-warn" x-show="p.requiresHeadphones">Headphones required — you will be asked to confirm.</p>
                   </div>
                   <button type="button" class="chip text-xs shrink-0" @click="loadPreset(p)" :disabled="presetDisabled(p)" :aria-label="'Load ' + p.name">Load</button>
-                  <button type="button" class="chip text-xs shrink-0 w-11 px-0" x-show="p.custom" @click="deletePreset(p.id)" :aria-label="'Delete ' + p.name">✕</button>
+                  <button type="button" class="chip text-xs shrink-0 px-0" :class="pendingDelete === p.id ? 'px-2 !border-danger text-danger' : 'w-11'" x-show="p.custom" @click="requestDelete(p.id)" @blur="cancelDelete(p.id)" :aria-label="pendingDelete === p.id ? 'Confirm: delete ' + p.name : 'Delete ' + p.name" x-text="pendingDelete === p.id ? 'Delete?' : '✕'"></button>
                 </li>
               </template>
             </ul>
@@ -479,7 +548,7 @@
     </div>
 
     <!-- LEARN -->
-    <div x-show="mode === 'learn'" x-cloak>
+    <div :class="mode === 'learn' ? '' : 'hidden'" x-cloak>
       <h2 class="eyebrow mb-2">Learn by touching parameters</h2>
       <label for="learn-select" class="sr-only">Topic</label>
       <select id="learn-select" class="field sm:hidden" x-model="learnTopic">
@@ -509,7 +578,7 @@
   </section>
 
   <!-- ---------- TRANSPORT -->
-  <section class="panel min-w-0 px-3 py-2.5 sm:p-4 lg:col-start-1 lg:row-start-2 lg:self-start" aria-labelledby="transport-heading">
+  <section class="panel min-w-0 px-3 py-2 sm:p-4 lg:col-start-1 lg:row-start-2 lg:self-start" aria-labelledby="transport-heading">
     <h2 id="transport-heading" class="sr-only">Playback</h2>
     <div class="flex gap-2">
       <button type="button" class="hold-btn flex-1 min-h-[72px] sm:min-h-[84px] rounded-xl font-semibold transition-colors"
@@ -562,7 +631,7 @@
   <section class="panel min-w-0 p-3 sm:p-4 lg:col-start-2 lg:row-start-2 lg:self-start" aria-label="Secondary controls"
            x-show="['playground','sweep','dual','presets'].includes(mode)">
     <!-- playground: tuning -->
-    <div x-show="mode === 'playground'">
+    <div :class="mode === 'playground' ? '' : 'hidden'">
       <div class="grid grid-cols-[minmax(0,1fr)_auto] gap-2 items-start">
         <div>
           <label for="freq-input" class="block text-xs text-muted mb-1">Exact frequency</label>
@@ -625,7 +694,7 @@
     </div>
 
     <!-- sweep: rates + presets -->
-    <div x-show="mode === 'sweep'" x-cloak>
+    <div :class="mode === 'sweep' ? '' : 'hidden'" x-cloak>
       <span class="eyebrow">Sweep rate</span>
       <div class="grid grid-cols-2 gap-2 mt-1">
         <div><label for="rate-oct" class="block text-xs text-muted mb-1">Octaves / second</label>
@@ -646,7 +715,7 @@
     </div>
 
     <!-- dual: mixer + beating presets + binaural -->
-    <div x-show="mode === 'dual'" x-cloak>
+    <div :class="mode === 'dual' ? '' : 'hidden'" x-cloak>
       <span class="eyebrow">Mixer</span>
       <div class="grid grid-cols-2 gap-2">
         <div><label for="lvl-a" class="block text-xs text-muted">A level <span class="font-mono" aria-hidden="true" x-text="dual.levelA + ' %'"></span></label>
@@ -667,7 +736,7 @@
         </template>
       </div>
       <div class="mt-3 rounded-lg border border-line p-3">
-        <label class="flex items-center justify-between gap-3 cursor-pointer">
+        <label class="flex items-center justify-between gap-3 min-h-11 cursor-pointer">
           <span><span class="text-sm font-medium">Binaural demo</span> <span class="text-[11px] text-muted">(advanced · off by default)</span></span>
           <input type="checkbox" class="sr-only peer" :checked="dual.binaural" @change="onBinauralToggle($event)">
           <span class="relative shrink-0 w-11 h-6 bg-surface2 border border-muted rounded-full peer-focus-visible:ring-2 peer-focus-visible:ring-accent peer-checked:bg-accent after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-surface after:border after:border-muted after:rounded-full after:h-[18px] after:w-[18px] after:transition-all peer-checked:after:translate-x-5"></span>
@@ -678,7 +747,7 @@
     </div>
 
     <!-- presets: actions -->
-    <div x-show="mode === 'presets'" x-cloak>
+    <div :class="mode === 'presets' ? '' : 'hidden'" x-cloak>
       <span class="eyebrow">Your configuration</span>
       <p class="text-xs text-muted mt-1" x-text="describeConfig(serializeConfig())"></p>
       <div class="grid grid-cols-1 sm:grid-cols-3 gap-1 mt-2">
@@ -739,7 +808,7 @@
       </template>
     </div>
     <p class="text-[11px] text-muted mt-2" x-show="pattern === 'sequence'" x-text="sequenceInfo"></p>
-    <p class="text-[11px] text-muted mt-2" x-show="pattern === 'octave'">125, 250, 500, 1 k, 2 k, 4 k, 8 k, 16 kHz — steps above the safe maximum are skipped.</p>
+    <p class="text-[11px] text-muted mt-2" x-show="pattern === 'octave'">125, 250, 500, 1 k, 2 k, 4 k, 8 k, 16 kHz — steps above the digital limit are skipped.</p>
     <p class="text-[11px] text-muted mt-2" x-show="currentPattern.kind === 'open'">Open-ended pattern: hold to play (safety limit applies) or TRIGGER for the set duration. Changes apply live while playing.</p>
     <p class="text-[11px] text-muted mt-2" x-show="currentPattern.kind === 'finite'">Programmed pattern: TRIGGER plays it to the end; holding plays until release. Changes apply to the next play.</p>
   </section>
@@ -765,7 +834,7 @@
           <svg data-accordion-icon class="w-3 h-3 rotate-180 shrink-0" viewBox="0 0 10 6" fill="none" aria-hidden="true"><path stroke="currentColor" stroke-width="2" d="M9 5 5 1 1 5"/></svg>
         </button>
       </h2>
-      <div id="acc-env" class="hidden" aria-labelledby="acc-env-h">
+      <div id="acc-env" class="hidden" role="region" aria-labelledby="acc-env-h">
         <div class="p-4 grid grid-cols-1 sm:grid-cols-3 gap-3 border-b border-line">
           <div><label for="env-a" class="block text-xs text-muted mb-1">Attack (ms)</label>
             <input id="env-a" type="number" min="1" max="2000" class="field font-mono" :value="attack" @change="setEnv('attack', $event.target.value)"></div>
@@ -784,7 +853,7 @@
           <svg data-accordion-icon class="w-3 h-3 rotate-180 shrink-0" viewBox="0 0 10 6" fill="none" aria-hidden="true"><path stroke="currentColor" stroke-width="2" d="M9 5 5 1 1 5"/></svg>
         </button>
       </h2>
-      <div id="acc-safe" class="hidden" aria-labelledby="acc-safe-h">
+      <div id="acc-safe" class="hidden" role="region" aria-labelledby="acc-safe-h">
         <div class="p-4 space-y-3 border-b border-line">
           <div>
             <span class="block text-xs text-muted mb-1" id="limit-label">Hard playback limit for held and open-ended signals</span>
@@ -811,7 +880,7 @@
           <svg data-accordion-icon class="w-3 h-3 rotate-180 shrink-0" viewBox="0 0 10 6" fill="none" aria-hidden="true"><path stroke="currentColor" stroke-width="2" d="M9 5 5 1 1 5"/></svg>
         </button>
       </h2>
-      <div id="acc-metrics" class="hidden" aria-labelledby="acc-metrics-h">
+      <div id="acc-metrics" class="hidden" role="region" aria-labelledby="acc-metrics-h">
         <dl class="p-4 grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-2 text-xs border-b border-line">
           <div><dt class="eyebrow">Requested frequency</dt><dd class="font-mono" x-text="requestedText"></dd></div>
           <div><dt class="eyebrow">Instantaneous</dt><dd class="font-mono" x-text="instFreqText"></dd></div>
@@ -836,12 +905,12 @@
           <svg data-accordion-icon class="w-3 h-3 rotate-180 shrink-0" viewBox="0 0 10 6" fill="none" aria-hidden="true"><path stroke="currentColor" stroke-width="2" d="M9 5 5 1 1 5"/></svg>
         </button>
       </h2>
-      <div id="acc-device" class="hidden" aria-labelledby="acc-device-h">
+      <div id="acc-device" class="hidden" role="region" aria-labelledby="acc-device-h">
         <div class="p-4 text-xs border-b border-line">
           <dl class="grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-2">
             <div><dt class="eyebrow">AudioContext sample rate</dt><dd class="font-mono" x-text="provisional ? 'not started (UI assumes ' + effectiveSampleRate + ' Hz)' : sampleRate + ' Hz'"></dd></div>
             <div><dt class="eyebrow">Nyquist frequency</dt><dd class="font-mono" x-text="formatFrequency(nyquist)"></dd></div>
-            <div><dt class="eyebrow">Digital safe maximum (95 % of Nyquist)</dt><dd class="font-mono" x-text="formatFrequency(safeMax)"></dd></div>
+            <div><dt class="eyebrow">Digital limit (95 % of Nyquist)</dt><dd class="font-mono" x-text="formatFrequency(safeMax)"></dd></div>
             <div><dt class="eyebrow">Browser</dt><dd class="font-mono" x-text="browserText"></dd></div>
             <div><dt class="eyebrow">Platform</dt><dd class="font-mono" x-text="platformText"></dd></div>
             <div><dt class="eyebrow">Requested frequency</dt><dd class="font-mono" x-text="requestedText"></dd></div>
@@ -859,7 +928,7 @@
           <svg data-accordion-icon class="w-3 h-3 rotate-180 shrink-0" viewBox="0 0 10 6" fill="none" aria-hidden="true"><path stroke="currentColor" stroke-width="2" d="M9 5 5 1 1 5"/></svg>
         </button>
       </h2>
-      <div id="acc-share" class="hidden" aria-labelledby="acc-share-h">
+      <div id="acc-share" class="hidden" role="region" aria-labelledby="acc-share-h">
         <div class="p-4 border-t border-line">
           <div class="grid grid-cols-1 sm:grid-cols-4 gap-1">
             <button type="button" class="chip text-xs" @click="copyConfigLink()">Copy config link</button>
@@ -1005,9 +1074,9 @@ const WAVEFORM_LABELS = { sine: 'Sine', triangle: 'Triangle', sawtooth: 'Saw', s
 
 const RANGE_MODES = [
   { id: 'human', label: 'Human', hint: '20 Hz – 20 kHz' },
-  { id: 'high', label: 'High', hint: '8 kHz – safe max' },
+  { id: 'high', label: 'High', hint: '8 kHz – digital limit' },
   { id: 'custom', label: 'Custom', hint: 'user-defined' },
-  { id: 'advanced', label: 'Advanced', hint: '1 Hz – safe max' },
+  { id: 'advanced', label: 'Advanced', hint: '1 Hz – digital limit' },
 ];
 
 // Approximate educational categories, not biological thresholds.
@@ -1126,7 +1195,7 @@ const PATTERNS = [
     params: [F('min', 'Minimum frequency'), F('max', 'Maximum frequency'), MS('toneMs', 'Tone duration', 10, 5000),
       MS('gapMs', 'Gap', 0, 5000), INT('count', 'Count', 1, 200)] },
   { id: 'octave', label: 'Octave steps', group: 'Sequences', kind: 'finite',
-    desc: 'Octave steps, by default 125 Hz to 16 kHz; steps above the safe maximum are skipped.',
+    desc: 'Octave steps, by default 125 Hz to 16 kHz; steps above the digital limit are skipped.',
     params: [{ key: 'text', label: 'Steps (Hz)', type: 'text', obj: 'pp' }, MS('toneMs', 'Tone duration', 10, 5000),
       MS('gapMs', 'Gap', 0, 5000)] },
   { id: 'sequence', label: 'User sequence', group: 'Sequences', kind: 'finite',
@@ -1495,8 +1564,8 @@ const PRESET_CATEGORIES = [
 
 const REFERENCE_NOTES = {
   20: 'Nominal lower edge of human hearing. Many speakers reproduce it weakly or not at all.',
-  40: 'Deep sub-bass. Small speakers mostly produce harmonics rather than the fundamental.',
-  60: 'Upper sub-bass; close to mains-hum frequencies (50/60 Hz).',
+  40: 'Deep sub-bass. Small speakers may reproduce mainly harmonic distortion rather than the fundamental.',
+  60: 'Lower edge of the bass region; close to mains-hum frequencies (50/60 Hz).',
   100: 'Low bass. Wavelength ≈ 3.4 m — comparable to room dimensions.',
   250: 'Boundary between bass and low mids.',
   440: 'Concert pitch A4 in common tuning practice.',
@@ -1509,7 +1578,7 @@ const REFERENCE_NOTES = {
   15500: 'High-frequency signal — not ultrasound. Speakers may attenuate it strongly.',
   17000: 'Upper hearing range. Many adults perceive it weakly or not at all; the digital signal is generated regardless, and speaker output is unknown.',
   18000: 'Upper hearing range. Phone speakers and some codecs may attenuate it.',
-  20000: 'Nominal upper edge of human hearing. Needs a sample rate of about 42.1 kHz or more, so that 20 kHz stays below the 95 % safe maximum.',
+  20000: 'Nominal upper edge of human hearing. Needs a sample rate of about 42.1 kHz or more, so that 20 kHz stays below the digital limit (95 % of Nyquist).',
 };
 
 function refPreset(f) {
@@ -1576,8 +1645,8 @@ const BUILTIN_PRESETS = [
     params: '2 kHz → 6 kHz · 3 s · log', cfg: { source: 'sweep', sweep: { start: 2000, end: 6000, durationMs: 3000, curve: 'log', direction: 'up', repeat: 'once' } } },
   { id: 'sw-high', cat: 'sweeps', name: 'High range', desc: 'Brilliance into the upper hearing range.',
     params: '8 kHz → 18 kHz · 4 s · log', cfg: { source: 'sweep', sweep: { start: 8000, end: 18000, durationMs: 4000, curve: 'log', direction: 'up', repeat: 'once' } } },
-  { id: 'sw-upper', cat: 'sweeps', name: 'Upper range', desc: 'From 12 kHz to the digital safe maximum of this device.',
-    params: '12 kHz → safe max · 4 s · log', cfg: { source: 'sweep', sweep: { start: 12000, end: 'max', durationMs: 4000, curve: 'log', direction: 'up', repeat: 'once' } } },
+  { id: 'sw-upper', cat: 'sweeps', name: 'Upper range', desc: 'From 12 kHz to the digital limit of this device (95 % of Nyquist).',
+    params: '12 kHz → digital limit · 4 s · log', cfg: { source: 'sweep', sweep: { start: 12000, end: 'max', durationMs: 4000, curve: 'log', direction: 'up', repeat: 'once' } } },
   { id: 'sw-sub', cat: 'sweeps', name: 'Sub-bass', desc: 'Low end; watch speaker excursion and start at low gain.',
     params: '20 Hz → 100 Hz · 4 s · log', cfg: { source: 'sweep', sweep: { start: 20, end: 100, durationMs: 4000, curve: 'log', direction: 'up', repeat: 'once' } } },
   { id: 'sw-bass', cat: 'sweeps', name: 'Bass', desc: 'Bass region of most music.',
@@ -1608,12 +1677,12 @@ const BUILTIN_PRESETS = [
   { id: 'pt-20-pulse', cat: 'patterns', name: '20 Hz pulse', desc: 'Very low pulses; each lasts 10 cycles. Start at low gain.',
     params: '20 Hz · 500 ms × 3', cfg: { source: 'single', pattern: 'pulse', waveform: 'sine', frequency: 20,
       pp: { pulse: { pulseMs: 500, pauseMs: 400, reps: 3 } } } },
-  { id: 'pt-40-sub', cat: 'patterns', name: '40 Hz sub-bass', desc: 'Sustained sub-bass tone. Small speakers reproduce it poorly.',
+  { id: 'pt-40-sub', cat: 'patterns', name: '40 Hz sub-bass', desc: 'Sustained sub-bass tone. Small speakers may reproduce it poorly.',
     params: '40 Hz · sine · 2 s', cfg: { source: 'single', pattern: 'finite', waveform: 'sine', frequency: 40, duration: 2000 } },
   { id: 'pt-octaves', cat: 'patterns', name: 'Octave stepping', desc: '125 Hz to 16 kHz in octave steps.',
     params: '8 steps × 400 ms', cfg: { source: 'single', pattern: 'octave', waveform: 'sine',
       pp: { octave: { toneMs: 400, gapMs: 100 } } } },
-  { id: 'pt-third', cat: 'patterns', name: 'Third-octave demonstration', desc: 'Nominal third-octave center frequencies, 20 Hz to 20 kHz; values above the safe maximum are skipped.',
+  { id: 'pt-third', cat: 'patterns', name: 'Third-octave demonstration', desc: 'Nominal third-octave center frequencies, 20 Hz to 20 kHz; values above the digital limit are skipped.',
     params: 'up to 31 steps × 250 ms', cfg: { source: 'single', pattern: 'sequence', waveform: 'sine',
       pp: { sequence: { text: THIRD_OCTAVE_FREQUENCIES.join(', '), toneMs: 250, gapMs: 50, repeats: 1 } } } },
 
@@ -1667,16 +1736,16 @@ const LEARN_TOPICS = [
   { id: 'fm', title: 'FM', body: 'Frequency modulation varies the frequency. Slow FM is vibrato; audio-rate FM creates many sidebands spaced by the modulation frequency.',
     demo: { label: 'Audio-rate FM', viz: 'spectrum', cfg: { source: 'single', pattern: 'fm', waveform: 'sine', frequency: 1000, pp: { fm: { modFreq: 200, depthHz: 400 } } } } },
   { id: 'interference', title: 'Interference', body: 'When two waves add, they reinforce where they are in phase and cancel where they are out of phase.',
-    demo: { label: '440 + 445 Hz', viz: 'interference', mode: 'dual', cfg: { source: 'dual', dual: { a: { freq: 440 }, b: { freq: 445 }, stereo: false, binaural: false } } } },
+    demo: { label: '440 + 445 Hz', viz: 'interference', mode: 'dual', cfg: { source: 'dual', dual: { a: { freq: 440, wave: 'sine', gain: 100, detune: 0 }, b: { freq: 445, wave: 'sine', gain: 100, detune: 0 }, levelA: 80, levelB: 80, stereo: false, binaural: false } } } },
   { id: 'beating', title: 'Beating', body: 'Two close frequencies produce a level that rises and falls at their difference: 440 Hz and 442 Hz beat at about 2 Hz.',
-    demo: { label: '440 + 442 Hz', viz: 'interference', mode: 'dual', cfg: { source: 'dual', dual: { a: { freq: 440 }, b: { freq: 442 }, stereo: false, binaural: false } } } },
+    demo: { label: '440 + 442 Hz', viz: 'interference', mode: 'dual', cfg: { source: 'dual', dual: { a: { freq: 440, wave: 'sine', gain: 100, detune: 0 }, b: { freq: 442, wave: 'sine', gain: 100, detune: 0 }, levelA: 80, levelB: 80, stereo: false, binaural: false } } } },
   { id: 'logscale', title: 'Logarithmic perception', body: 'Pitch is perceived roughly by ratios: 100→200 Hz and 1→2 kHz are both one octave and sound like a similar step. That is why sweeps and maps here are logarithmic.',
     demo: { label: 'Log sweep 20 Hz → 20 kHz', viz: 'motion', cfg: { source: 'sweep', sweep: { start: 20, end: 20000, durationMs: 10000, curve: 'log', direction: 'up', repeat: 'once' } } } },
   { id: 'hearing', title: 'Human hearing range', body: 'Nominally 20 Hz – 20 kHz. The upper limit commonly falls with age and noise exposure; individual hearing varies widely.',
     demo: { label: 'Octave steps 125 Hz – 16 kHz', viz: 'motion', cfg: { source: 'single', pattern: 'octave', waveform: 'sine' } } },
   { id: 'ultrasound', title: 'Ultrasound', body: 'Nominal ultrasound begins above about 20 kHz. 15.5 kHz is a high-frequency signal, not ultrasound. Generating >20 kHz digitally does not mean a speaker emits it.',
     demo: { label: 'High range sweep', viz: 'spectrum', cfg: { source: 'sweep', sweep: { start: 8000, end: 'max', durationMs: 4000, curve: 'log', direction: 'up', repeat: 'once' } } } },
-  { id: 'speakers', title: 'Speaker limitations', body: 'Speakers, headphones, DACs and amplifiers attenuate or distort very low and very high frequencies. Perceived loudness is not a measure of acoustic output.',
+  { id: 'speakers', title: 'Speaker limitations', body: 'Speakers, headphones, DACs and amplifiers can attenuate or distort very low and very high frequencies. Perceived loudness is not a measure of acoustic output.',
     demo: { label: '40 Hz sub-bass', viz: 'spectrum', cfg: { source: 'single', pattern: 'finite', waveform: 'sine', frequency: 40, duration: 2000 } } },
 ];
 
@@ -2582,11 +2651,15 @@ const viz = {
   redrawQueued: 0,
   labelTimer: 0,
   labelledPlan: undefined,
+  // Wave layout the sketch chose for the current canvas size ('side' | 'compact'); set on resize,
+  // never per frame. The caption reads it through onWaveLayout.
+  waveLayout: 'side',
+  onWaveLayout: null,
   state: {
     vizMode: 'wave', frequency: 440, waveform: 'sine', gain: DEFAULT_GAIN, rangeMin: 20, rangeMax: 20000,
     nyquist: PROVISIONAL_SAMPLE_RATE / 2, safeMax: (PROVISIONAL_SAMPLE_RATE / 2) * SAFE_NYQUIST_FACTOR,
     provisional: true, spectrumScale: 'log', overlays: { regions: true, notes: false, thirds: false },
-    plan: null, playing: false, status: 'READY', a4: 440, source: 'single', reducedMotion: false, mic: false,
+    plan: null, playing: false, status: 'READY', a4: 440, source: 'single', reducedMotion: false, mic: false, paused: false,
     dual: { fa: 440, fb: 442, la: 0.8, lb: 0.8, stereo: false, waveA: 'sine', waveB: 'sine' },
     // Engine scalars copied by viz.pull() once per frame without allocating: the sketch reads
     // these and the analyser buffers, never the engine object graph.
@@ -2603,8 +2676,8 @@ const viz = {
       interNote: '', interNoteNarrow: '',
     },
     pathNodes: [],
-    harm: { list: [], below: 0, total: 0, shown: 0, capped: false, axisMax: 0, summary: '', summaryShort: '' },
-    harmB: { list: [], below: 0, total: 0, shown: 0, capped: false, axisMax: 0, summary: '', summaryShort: '' },
+    harm: { list: [], below: 0, total: 0, shown: 0, capped: false, axisMax: 0, summary: '', summaryShort: '', summaryTiny: '' },
+    harmB: { list: [], below: 0, total: 0, shown: 0, capped: false, axisMax: 0, summary: '', summaryShort: '', summaryTiny: '' },
   },
 
   readPalette() {
@@ -2700,18 +2773,28 @@ const viz = {
     if (!on && this.labelTimer) { clearInterval(this.labelTimer); this.labelTimer = 0; }
   },
 
-  /** Loop only while something moves: idle under prefers-reduced-motion redraws on change only. */
+  /** Loop only while something moves: paused, or idle under prefers-reduced-motion, redraws on
+   *  change only. */
   updateLoop() {
     const p = this.p5;
     if (!p || !p.canvas) return;
     const s = this.state;
-    const want = !this.hidden && !(s.reducedMotion && !s.playing && !s.mic);
+    // the visible pause toggle and reduced motion (when idle) both stop the loop; a stopped loop
+    // still redraws once per state change and on resize
+    const want = !this.hidden && !s.paused && !(s.reducedMotion && !s.playing && !s.mic);
     if (want !== this.looping) {
       this.looping = want;
       if (want) p.loop(); else p.noLoop();
     }
-    this.sketchState = this.hidden ? 'paused (tab hidden)' : want ? 'running' : 'idle (reduced motion: redraw on change)';
+    this.sketchState = this.hidden ? 'paused (tab hidden)' : want ? 'running'
+      : s.paused ? 'paused (animation toggle: redraw on change)' : 'idle (reduced motion: redraw on change)';
     this.requestRedraw();
+  },
+
+  setWaveLayout(layout) {
+    if (layout === this.waveLayout) return;
+    this.waveLayout = layout;
+    if (this.onWaveLayout) this.onWaveLayout(layout);
   },
 
   /** One redraw on the next animation frame while the loop is stopped. */
@@ -2749,7 +2832,7 @@ function partialCount(wave, nMax) {
 function harmonicTable(wave, f, nyquist) {
   const list = [];
   if (!(f > 0) || !(nyquist > 0)) {
-    return { list, below: 0, total: 0, shown: 0, capped: false, axisMax: 0, summary: '', summaryShort: '' };
+    return { list, below: 0, total: 0, shown: 0, capped: false, axisMax: 0, summary: '', summaryShort: '', summaryTiny: '' };
   }
   const nLim = harmonicLimit(wave);
   const step = wave === 'sawtooth' ? 1 : 2;
@@ -2771,6 +2854,7 @@ function harmonicTable(wave, f, nyquist) {
     list, below, total, shown, capped, axisMax,
     summary: `${below} of ${total} harmonics ≥ −60 dB below Nyquist${more}`,
     summaryShort: `${below}/${total} below Nyquist${more}`,
+    summaryTiny: `${below}/${total} below Nyquist`,
   };
 }
 
@@ -2806,6 +2890,7 @@ function pathNodesFor(plan, st) {
 
 const modalInstances = {};
 let themeDropdown; // Flowbite Dropdown for #themeMenu; null when Flowbite is unavailable
+let overlayDropdown; // Flowbite Dropdown for #overlayMenu; null when Flowbite is unavailable
 let uiNotify = null; // set by oscillaApp.init so global error handlers can surface problems
 let focusBeforeModal = null;
 let alertSeq = 0;
@@ -2891,6 +2976,7 @@ function oscillaApp() {
     saveError: '',
     pendingPreset: null,
     pendingHashConfig: null,
+    pendingDelete: null,
     copyUrl: '',
     learnTopic: 'frequency',
     alerts: [],
@@ -2907,6 +2993,9 @@ function oscillaApp() {
     safetyCollapsed: false,
     safetyExpanded: false,
     themeMenuOpen: false,
+    overlayMenuOpen: false,
+    vizPaused: false,
+    waveLayout: 'side',
     mapDragging: false,
     customMinText: '100 Hz',
     customMaxText: '10.00 kHz',
@@ -2982,6 +3071,24 @@ function oscillaApp() {
       return this.safeMax;
     },
     get regionLabel() { return regionFor(this.frequency).label; },
+    /** The big readout: the playground frequency, or the range a pattern sets in its own parameters. */
+    get readoutText() {
+      if (this.usesGlobalFrequency) return this.freqDisplay;
+      const lo = this.freqMinInvolved;
+      const hi = this.freqMaxInvolved;
+      return lo === hi ? formatFrequency(lo) : `${formatFrequency(lo)} – ${formatFrequency(hi)}`;
+    },
+    get readoutRegion() {
+      if (this.usesGlobalFrequency) return this.regionLabel;
+      const a = regionFor(this.freqMinInvolved).label;
+      const b = regionFor(this.freqMaxInvolved).label;
+      return a === b ? a : `${a} → ${b}`;
+    },
+    get mapRangeStyle() {
+      const n = (f) => clamp(frequencyToNormalized(clamp(f, this.rangeMin, this.rangeMax), this.rangeMin, this.rangeMax), 0, 1) * 100;
+      const lo = n(this.freqMinInvolved);
+      return `left:${lo}%;width:${Math.max(0.6, n(this.freqMaxInvolved) - lo)}%`;
+    },
     get note() { return nearestNote(this.frequency, this.a4); },
     get noteText() { const n = this.note; return n ? `${n.name} · ${formatCents(n.cents)}` : '—'; },
     get freqDisplay() { return formatFrequency(this.frequency, this.noteMode); },
@@ -3016,7 +3123,8 @@ function oscillaApp() {
         : `trigger ${formatMs(Math.min(this.duration, this.safetyLimit * 1000))} · hold ≤ ${this.safetyLimit} s`;
     },
     get gainPct() { return Math.round(Math.sqrt(this.gainLevel / MAX_OUTPUT_GAIN) * 100); },
-    get gainLabel() { return this.gainPct < 40 ? 'LOW' : this.gainPct < 75 ? 'MEDIUM' : 'HIGH'; },
+    // The conservative default (0.08 ≈ 57 %) reads LOW, next to the safety advice to start low.
+    get gainLabel() { return this.gainPct < 60 ? 'LOW' : this.gainPct < 80 ? 'MEDIUM' : 'HIGH'; },
     get currentPattern() { return PATTERN_BY_ID[this.pattern] || PATTERNS[0]; },
     get isProgrammed() {
       return this.source === 'sweep' || (this.source === 'single' && this.currentPattern.kind === 'finite');
@@ -3096,7 +3204,7 @@ function oscillaApp() {
     get representability() {
       const f = this.source === 'dual' ? Math.max(this.dualFa, this.dualFb) : this.freqMaxInvolved;
       if (f < this.safeMax) return `Requested ${formatFrequency(f)} is below the digital Nyquist limit (${formatFrequency(this.nyquist)}): digitally representable.`;
-      if (f < this.nyquist) return `Requested ${formatFrequency(f)} is above the 95 % safe maximum; it is clamped to ${formatFrequency(this.safeMax)}.`;
+      if (f < this.nyquist) return `Requested ${formatFrequency(f)} is above the digital limit (95 % of Nyquist); it is clamped to ${formatFrequency(this.safeMax)}.`;
       return `Requested ${formatFrequency(f)} is at or above Nyquist (${formatFrequency(this.nyquist)}): not representable; clamped.`;
     },
     get instFreqText() {
@@ -3105,7 +3213,7 @@ function oscillaApp() {
     },
     get hints() {
       // The frequency the hint talks about is the one that will actually sound.
-      const f = this.source === 'dual' ? this.dualFa : this.source === 'sweep' ? this.freqMaxInvolved : this.frequency;
+      const f = this.source === 'dual' ? this.dualFa : this.metricFrequencyIdle;
       const waves = this.source === 'dual' ? [this.dual.a.wave, this.dual.b.wave] : [this.waveform];
       // Ordered by importance: device and digital-limit caveats first, so they are never cut.
       const out = [];
@@ -3123,7 +3231,7 @@ function oscillaApp() {
     },
     get currentTopic() { return LEARN_TOPICS.find((t) => t.id === this.learnTopic) || LEARN_TOPICS[0]; },
     get topicExample() {
-      const f = this.frequency;
+      const f = this.metricFrequencyIdle;
       switch (this.learnTopic) {
         case 'frequency': return `Now: ${formatFrequency(f)} = ${sig(f, 4)} cycles per second.`;
         case 'period': return `Now: ${formatFrequency(f)} → T = ${formatPeriod(f)}.`;
@@ -3367,6 +3475,7 @@ function oscillaApp() {
     },
 
     mapDown(e) {
+      if (!this.usesGlobalFrequency) return; // the pattern sets its frequencies in its own parameters
       if (e.pointerType === 'mouse' && e.button !== 0) return;
       this.mapDragging = true;
       try { e.currentTarget.setPointerCapture(e.pointerId); } catch (err) { /* ignore */ }
@@ -3382,6 +3491,7 @@ function oscillaApp() {
       this.setFrequency(normalizedToFrequency(x, this.rangeMin, this.rangeMax), { silent: true });
     },
     mapKey(e) {
+      if (!this.usesGlobalFrequency) return;
       let semis = 0;
       switch (e.key) {
         case 'ArrowRight': case 'ArrowUp': semis = 1; break;
@@ -3423,7 +3533,7 @@ function oscillaApp() {
         this.customMin = round(v, 2);
       } else {
         if (v < this.customMin * 2) { this.rangeError = 'Maximum must be at least one octave above the minimum.'; v = this.customMin * 2; } else this.rangeError = '';
-        if (r.value > this.safeMax) this.rangeError = `Limited to the digital safe maximum ${formatFrequency(this.safeMax)}.`;
+        if (r.value > this.safeMax) this.rangeError = `Limited to the digital limit ${formatFrequency(this.safeMax)}.`;
         this.customMax = round(v, 2);
       }
       this.customMinText = formatFrequency(this.customMin);
@@ -3462,6 +3572,7 @@ function oscillaApp() {
       this.paramErrors = next;
     },
     setParam(d, raw) {
+      this.loadedLabel = ''; // an edited preset is no longer the preset
       const id = this.paramId(d);
       const o = this.paramTarget(d);
       if (d.type === 'freq') {
@@ -3469,7 +3580,7 @@ function oscillaApp() {
         if (!r.ok) { this.setParamError(id, r.error); return; }
         let v = r.value;
         let msg = '';
-        if (v > this.safeMax) { msg = `Above the digital safe maximum; limited to ${formatFrequency(this.safeMax)}.`; v = this.safeMax; }
+        if (v > this.safeMax) { msg = `Above the digital limit; limited to ${formatFrequency(this.safeMax)}.`; v = this.safeMax; }
         if (d.obj === 'global' && d.key === 'frequency') { this.fitRange(v, v); this.setFrequency(v); } else o[d.key] = round(v, 3);
         this.setParamError(id, msg);
         return;
@@ -3496,7 +3607,7 @@ function oscillaApp() {
     },
     get sequenceInfo() {
       const parsed = parseFrequencyList(this.pp.sequence.text);
-      return `${parsed.values.length} valid · ${parsed.values.filter((f) => f > this.safeMax).length} above safe max`;
+      return `${parsed.values.length} valid · ${parsed.values.filter((f) => f > this.safeMax).length} above the digital limit`;
     },
 
     // ============================== sweep mode
@@ -3504,7 +3615,7 @@ function oscillaApp() {
       const r = parseFrequency(raw);
       if (!r.ok) { this.setParamError(`sweep-${key}`, r.error); return; }
       this.sweep[key] = round(clamp(r.value, MIN_FREQUENCY, this.safeMax), 3);
-      this.setParamError(`sweep-${key}`, r.value > this.safeMax ? `Limited to the safe maximum ${formatFrequency(this.safeMax)}.` : '');
+      this.setParamError(`sweep-${key}`, r.value > this.safeMax ? `Limited to the digital limit ${formatFrequency(this.safeMax)}.` : '');
     },
     sweepSlider(key) { return Math.round(frequencyToNormalized(this.sweep[key], 10, this.safeMax) * 1000); },
     setSweepSlider(key, v) { this.sweep[key] = round(normalizedToFrequency(Number(v) / 1000, 10, this.safeMax), 2); },
@@ -3536,7 +3647,7 @@ function oscillaApp() {
       const r = parseFrequency(raw);
       if (!r.ok) { this.setParamError(`dual-${side}`, r.error); return; }
       this.dual[side].freq = round(clamp(r.value, MIN_FREQUENCY, this.safeMax), 3);
-      this.setParamError(`dual-${side}`, r.value > this.safeMax ? `Limited to the safe maximum ${formatFrequency(this.safeMax)}.` : '');
+      this.setParamError(`dual-${side}`, r.value > this.safeMax ? `Limited to the digital limit ${formatFrequency(this.safeMax)}.` : '');
     },
     dualSlider(side) { return Math.round(frequencyToNormalized(this.dual[side].freq, 20, Math.min(20000, this.safeMax)) * 1000); },
     setDualSlider(side, v) { this.dual[side].freq = round(normalizedToFrequency(Number(v) / 1000, 20, Math.min(20000, this.safeMax)), 2); },
@@ -3553,8 +3664,23 @@ function oscillaApp() {
       set();
       if (typeof ResizeObserver === 'function') new ResizeObserver(set).observe(header);
       else window.addEventListener('resize', set, { passive: true });
+      // Below md the alert stack sits at the bottom: keep focused controls clear of it.
+      const stack = document.getElementById('alert-stack');
+      if (!stack) return;
+      const setStack = () => {
+        const r = stack.getBoundingClientRect();
+        const atBottom = r.height > 0 && r.top > window.innerHeight / 2;
+        document.documentElement.style.setProperty('--alerts-h', `${atBottom ? Math.ceil(r.height) : 0}px`);
+      };
+      setStack();
+      if (typeof ResizeObserver === 'function') new ResizeObserver(setStack).observe(stack);
+      window.addEventListener('resize', setStack, { passive: true });
     },
-    paramUnit(d) { return d.type === 'ms' ? ' (milliseconds)' : d.type === 'hz' ? ' (hertz)' : d.type === 'freq' ? ' (frequency)' : ''; },
+    /** Spoken unit for a parameter label, unless the visible label already names it. */
+    paramUnit(d) {
+      if (/\((?:[^)]*\b(?:Hz|kHz|ms|s|dB|%))\)/.test(d.label)) return '';
+      return d.type === 'ms' ? ' (milliseconds)' : (d.type === 'hz' || d.type === 'freq') ? ' (hertz)' : '';
+    },
     setEnv(key, v) { this.setParam(ENV_PARAMS[key], v); },
     /** The toggle only reflects confirmed state: turning it on opens the headphones dialog first. */
     onBinauralToggle(e) {
@@ -3572,7 +3698,11 @@ function oscillaApp() {
       if (p) this.applyPreset(p, true);
       this.dual.binaural = true;
       this.dual.stereo = true;
-      if (!p && (this.dualDelta < 0.5 || this.dualDelta > 30)) { this.dual.a.freq = 440; this.dual.b.freq = 446; }
+      if (!p && (this.dualDelta < 0.5 || this.dualDelta > 30)) {
+        this.dual.a.freq = 440;
+        this.dual.b.freq = 446;
+        this.notify('info', 'Binaural frequencies set', 'A and B were set to 440 / 446 Hz: the demo needs a difference of 0.5–30 Hz.');
+      }
       this.pendingPreset = null;
       this.source = 'dual';
     },
@@ -3611,7 +3741,7 @@ function oscillaApp() {
     },
     presetDisabled(p) { return this.presetMaxFrequency(p.cfg) >= this.safeMax; },
     presetDisabledReason(p) {
-      return `Needs ${formatFrequency(this.presetMaxFrequency(p.cfg))}; this device's safe maximum is ${formatFrequency(this.safeMax)}${this.provisional ? ' (provisional until audio starts)' : ''}.`;
+      return `Needs ${formatFrequency(this.presetMaxFrequency(p.cfg))}; this device's digital limit (95 % of Nyquist) is ${formatFrequency(this.safeMax)}${this.provisional ? ' (provisional until audio starts)' : ''}.`;
     },
     loadPreset(p) {
       if (this.presetDisabled(p)) { this.notify('warning', 'Preset unavailable', this.presetDisabledReason(p)); return; }
@@ -3690,6 +3820,12 @@ function oscillaApp() {
       this.presetTab = 'custom';
       this.notify('success', 'Preset saved', `“${name}” is in Presets → Custom.`);
     },
+    /** Deleting is two taps: the first arms the button, the second deletes. */
+    requestDelete(id) {
+      if (this.pendingDelete === id) { this.pendingDelete = null; this.deletePreset(id); return; }
+      this.pendingDelete = id;
+    },
+    cancelDelete(id) { if (this.pendingDelete === id) this.pendingDelete = null; },
     deletePreset(id) {
       this.customPresets = this.customPresets.filter((p) => p.id !== id);
       this.persistPresets();
@@ -3796,7 +3932,11 @@ function oscillaApp() {
           Object.assign(cfg, extra);
           if (extra.range && q.has('rm')) cfg.range = { ...extra.range, mode: q.get('rm') };
         }
+        // A link never raises the receiver's output level above the conservative default.
+        let gainCapped = false;
+        if (isNum(cfg.gain) && cfg.gain > DEFAULT_GAIN) { cfg.gain = DEFAULT_GAIN; gainCapped = true; }
         const issues = this.applyConfig(cfg, 'hash');
+        if (gainCapped) this.notify('info', 'Gain kept at the default', 'The link asked for a higher gain; raise it yourself if you want it louder.');
         // Values above the provisional safe maximum are re-applied once the real rate is known.
         if (this.provisional && this.presetMaxFrequency(cfg) > this.safeMax) this.pendingHashConfig = cfg;
         const m = q.get('m');
@@ -3936,6 +4076,7 @@ function oscillaApp() {
     // ============================== modes, learn, explore
     setMode(m) {
       if (!APP_MODES.some((x) => x.id === m)) return;
+      if (m !== this.mode && m !== 'learn' && m !== 'presets') this.loadedLabel = '';
       this.mode = m;
       if (m === 'playground') this.source = 'single';
       if (m === 'sweep') { this.source = 'sweep'; if (this.vizMode === 'wave' || this.vizMode === 'interference') this.vizMode = 'motion'; }
@@ -3955,6 +4096,8 @@ function oscillaApp() {
     },
     runDemo(topic) {
       const d = topic.demo;
+      // A demo that needs another mode's source sets it fully, so earlier settings cannot skew it.
+      if (d.cfg && d.cfg.source === 'dual') this.source = 'dual';
       this.applyConfig(d.cfg, 'learn');
       if (d.viz) this.vizMode = d.viz;
       this.loadedLabel = d.label;
@@ -3984,7 +4127,7 @@ function oscillaApp() {
     },
     onThemeMenu(open) {
       this.themeMenuOpen = open;
-      if (open) document.querySelector('#themeMenu [role="menuitemradio"]')?.focus();
+      if (open) [...document.querySelectorAll('#themeMenu [role^="menuitem"]')].find((el) => el.offsetParent)?.focus();
     },
     toggleThemeMenu() {
       const dd = this.themeMenu();
@@ -4000,8 +4143,17 @@ function oscillaApp() {
       if (dd) dd.hide(); else { document.getElementById('themeMenu')?.classList.add('hidden'); this.onThemeMenu(false); }
       if (refocus) document.getElementById('themeButton')?.focus();
     },
+    /** Phone-only items of the theme menu (Explore and About have no header buttons there). */
+    menuExplore() {
+      this.explore = !this.explore;
+      this.closeThemeMenu(true);
+    },
+    menuAbout() {
+      this.closeThemeMenu(true); // focus returns to the menu button, so the dialog restores it there
+      this.openModal('aboutModal');
+    },
     themeMenuKey(e) {
-      const items = [...e.currentTarget.querySelectorAll('[role="menuitemradio"]')];
+      const items = [...e.currentTarget.querySelectorAll('[role^="menuitem"]')].filter((el) => el.offsetParent);
       const i = items.indexOf(document.activeElement);
       let next = null;
       if (e.key === 'ArrowDown') next = (i + 1) % items.length;
@@ -4045,7 +4197,7 @@ function oscillaApp() {
       if (!el || typeof window.Modal !== 'function') return null;
       modalInstances[id] = new window.Modal(el, {
         backdrop: 'dynamic', closable: true,
-        onShow: () => setTimeout(() => el.querySelector('[data-autofocus], input, button')?.focus(), 30),
+        onShow: () => setTimeout(() => (el.querySelector('[data-autofocus]') || el.querySelector('input, button'))?.focus(), 30),
         onHide: () => { if (focusBeforeModal && focusBeforeModal.focus) focusBeforeModal.focus(); },
       }, { id, override: true });
       return modalInstances[id];
@@ -4085,12 +4237,16 @@ function oscillaApp() {
       const items = [...root.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])')]
         .filter((el) => !el.disabled && el.offsetParent !== null);
       if (!items.length) return;
-      const first = items[0];
-      const last = items[items.length - 1];
-      if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
-      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+      // Move focus ourselves on every Tab: WebKit's default order skips buttons, so waiting for
+      // focus to reach the last item would let it escape the dialog.
+      e.preventDefault();
+      const i = items.indexOf(document.activeElement);
+      const n = items.length;
+      const next = i < 0 ? (e.shiftKey ? n - 1 : 0) : (i + (e.shiftKey ? -1 : 1) + n) % n;
+      items[next].focus();
     },
     async toggleMic() {
+      if (this.micPending) return; // a second tap before :disabled renders would open a second stream
       if (this.micActive) {
         engine.stopMic();
         this.micActive = false;
@@ -4116,6 +4272,50 @@ function oscillaApp() {
     },
 
     // ============================== visualization + debug
+    /** Spectrum overlays menu: the same Flowbite Dropdown pattern as the theme menu. */
+    overlayMenu() {
+      if (overlayDropdown !== undefined) return overlayDropdown;
+      const menu = document.getElementById('overlayMenu');
+      const button = document.getElementById('overlayButton');
+      overlayDropdown = typeof window.Dropdown === 'function' && menu && button
+        ? new window.Dropdown(menu, button, {
+          placement: 'bottom-end', triggerType: 'none', offsetDistance: 6,
+          onShow: () => this.onOverlayMenu(true), onHide: () => this.onOverlayMenu(false),
+        }, { id: 'overlayMenu', override: true })
+        : null;
+      return overlayDropdown;
+    },
+    onOverlayMenu(open) {
+      this.overlayMenuOpen = open;
+      if (open) document.querySelector('#overlayMenu [role="menuitemcheckbox"]')?.focus();
+    },
+    toggleOverlayMenu() {
+      const dd = this.overlayMenu();
+      if (dd) { dd.toggle(); return; }
+      // Flowbite unavailable: the menu is CSS-positioned under the trigger; toggle it directly.
+      const open = !this.overlayMenuOpen;
+      document.getElementById('overlayMenu')?.classList.toggle('hidden', !open);
+      this.onOverlayMenu(open);
+    },
+    closeOverlayMenu(refocus) {
+      if (!this.overlayMenuOpen) return;
+      const dd = this.overlayMenu();
+      if (dd) dd.hide(); else { document.getElementById('overlayMenu')?.classList.add('hidden'); this.onOverlayMenu(false); }
+      if (refocus) document.getElementById('overlayButton')?.focus();
+    },
+    overlayMenuKey(e) {
+      const items = [...e.currentTarget.querySelectorAll('[role="menuitemcheckbox"]')];
+      const i = items.indexOf(document.activeElement);
+      let next = null;
+      if (e.key === 'ArrowDown') next = (i + 1) % items.length;
+      if (e.key === 'ArrowUp') next = (i - 1 + items.length) % items.length;
+      if (e.key === 'Home') next = 0;
+      if (e.key === 'End') next = items.length - 1;
+      if (e.key === 'Tab') this.closeOverlayMenu(false);
+      if (next == null) return;
+      e.preventDefault();
+      items[next].focus();
+    },
     syncViz() {
       const s = viz.state;
       s.vizMode = this.vizMode;
@@ -4162,6 +4362,7 @@ function oscillaApp() {
       s.harm = harmonicTable(this.source === 'dual' ? d.a.wave : this.waveform, hf, this.nyquist);
       s.harmB = harmonicTable(this.source === 'dual' ? d.b.wave : 'sine', this.source === 'dual' ? s.dual.fb : 0, this.nyquist);
       s.mic = this.micActive;
+      s.paused = this.vizPaused;
       // interference labels (drawn every frame, built here)
       const delta = Math.abs(s.dual.fa - s.dual.fb);
       s.labels.beat = delta > 0.005
@@ -4193,6 +4394,7 @@ function oscillaApp() {
       const el = this.$refs.vizCanvas;
       if (!el) return;
       viz.readPalette();
+      viz.onWaveLayout = (layout) => { this.waveLayout = layout; };
       if (!startVisualizer(el)) {
         this.vizFailed = true;
         this.notify('warning', 'Visualization unavailable', 'p5.js could not start, so canvas visualizations are disabled. Audio and controls still work.');
@@ -4200,7 +4402,10 @@ function oscillaApp() {
     },
     get vizCaption() {
       switch (this.vizMode) {
-        case 'wave': return 'Top: slowed visual model — visual representation, not real-time physical scale. Bottom: analyser output.';
+        // both wave layouts are side by side; they differ in where the real-signal readout sits
+        case 'wave': return this.waveLayout === 'compact'
+          ? 'Left: slowed visual model — visual representation, not real-time physical scale. Right: analyser output. Bottom: signal readout.'
+          : 'Left: slowed visual model — visual representation, not real-time physical scale. Right: analyser output.';
         case 'spectrum': return 'Analyser spectrum of the digital output. Vertical axis: relative level in dB, uncalibrated — not SPL.';
         case 'motion': return 'Requested instantaneous frequency over time (logarithmic axis).';
         case 'path': return 'Active Web Audio processing graph. Speaker output is outside what the browser can observe.';
@@ -4258,6 +4463,23 @@ const THIRD_OCTAVE_HALF_BAND = 2 ** (1 / 6);
 const SMALL_CANVAS_AREA = 420 * 260; // CSS px²: small canvases may use 3× backing pixels
 const PATH_GAP_X = 14;
 const PATH_GAP_Y = 20;
+const WAVE_TITLE = 'SLOWED VISUAL MODEL';
+const WAVE_DISCLAIMER = 'Visual representation — not real-time physical scale.';
+const WAVE_DISCLAIMER_A = 'Visual representation —';
+const WAVE_DISCLAIMER_B = 'not real-time physical scale.';
+// Longest first; the sketch draws the first variant that fits the space it has.
+const DENSE_NOTES = ['cycles too dense to draw — band shows the min/max envelope', 'cycles too dense: min/max band', 'min/max band'];
+const CAPTIONS_AM = ['AM: level follows the modulator', 'AM: level', 'AM'];
+const CAPTIONS_FM = ['FM: cycle spacing follows the modulator', 'FM: spacing follows the modulator', 'FM: spacing', 'FM'];
+const CAPTIONS_LFO = ['LFO: cycle spacing glides with the LFO', 'LFO: frequency glides with the LFO', 'LFO: glide', 'LFO'];
+const MIC_LEGENDS = ['● microphone (relative)', '● mic'];
+const DIGITAL_LIMIT_LABEL = 'digital limit 95 %';
+const SPECTRUM_IDLE_NOTES = ['The measured spectrum appears once audio starts — press HOLD TO PLAY.', 'Spectrum appears once audio starts.', 'press HOLD TO PLAY'];
+const FAST_FM_NOTES = ['modulation faster than the display: deviation band shown', 'too fast to draw: deviation band', 'deviation band'];
+const HARMONIC_TITLE = 'THEORETICAL OSCILLATOR SPECTRUM';
+const HARMONIC_DISCLAIMERS = ['digitally representable below Nyquist · actual speaker output unknown', 'theoretical · speaker output unknown', 'speaker output unknown'];
+const INTERFERENCE_SLOWED = 'carriers slowed — visual representation';
+const DENSE_CYCLES = 60; // more cycles than this in the analyser window cannot be drawn as a line
 
 function waveSample(shape, phase) {
   const p = phase - Math.floor(phase);
@@ -4268,6 +4490,9 @@ function waveSample(shape, phase) {
     default: return Math.sin(2 * Math.PI * p);
   }
 }
+
+/** The wave view's compact layout (one-line labels, readout row) below 300 × 200 CSS px. */
+function waveCompact(w, h) { return w < 300 || h < 200; }
 
 function createSketch(container) {
   return (p) => {
@@ -4306,9 +4531,29 @@ function createSketch(container) {
     let pathSubs = [];
     let pathSubsNodes = null;
     let pathSubsBw = -1;
+    let pathTitles = [];
+    let pathSubsSize = -1;
+    let pathGapX = PATH_GAP_X;
+    let pathGapY = PATH_GAP_Y;
+    let pathFooter = 14;
     // interference lane geometry
     const laneY = new Float64Array(3);
     const laneH = new Float64Array(3);
+    // monospace advance per text size (index = px size), measured when the geometry changes
+    const charW = new Float64Array(16);
+    let geoW = -1;
+    let geoH = -1;
+    // wave layout, rebuilt by layoutWave() only when the canvas size changes
+    const WV = {
+      compact: false, ts: 10, t1: 16, discLines: 1, discSize: 9, discY: 29,
+      mx0: 12, mx1: 100, my0: 40, my1: 100, ey0: 0, ey1: 0, envLabel: '', envX: 12, envLabelY: 0,
+      rx0: 0, rx1: 0, ry0: 0, ry1: 0, rTitle: '', rTitleDense: '', rTitleSize: 10, rTitleY: 16,
+      denseNote: '', denseY: 0, infoTitle: '', infoTitleSize: 10, infoTitleY: 0, infoRows: 1,
+      infoSize: 9, infoY0: 0, infoStep: 12, infoValX: 0,
+    };
+    // per-column min/max of the analyser trace (resized with the canvas)
+    let bandMin = new Float32Array(1);
+    let bandMax = new Float32Array(1);
 
     const C = (rgb, a = 255) => p.color(rgb[0], rgb[1], rgb[2], a);
     const ensurePalette = () => {
@@ -4365,12 +4610,18 @@ function createSketch(container) {
       c.elt.style.display = 'block';
       p.textFont('monospace'); // p5 quotes the name, so a CSS font stack would be invalid
       p.frameRate(30);
+      viz.setWaveLayout(waveCompact(W, H) ? 'compact' : 'side');
       viz.resize = () => {
         measure();
         const d = densityFor(mW, mH);
         const densityChanged = d !== density;
         if (densityChanged) { density = d; p.pixelDensity(d); }
-        if (mW !== W || mH !== H) { W = mW; H = mH; p.resizeCanvas(W, H); } else if (densityChanged) viz.requestRedraw();
+        if (mW !== W || mH !== H) {
+          W = mW;
+          H = mH;
+          p.resizeCanvas(W, H); // redraws once even while the loop is stopped
+          viz.setWaveLayout(waveCompact(W, H) ? 'compact' : 'side');
+        } else if (densityChanged) viz.requestRedraw();
       };
       if (typeof ResizeObserver === 'function') new ResizeObserver(() => viz.resize()).observe(container);
       else window.addEventListener('resize', () => viz.resize(), { passive: true });
@@ -4400,6 +4651,7 @@ function createSketch(container) {
       viz.fps = fpsSmoothed;
       p.frameRate(st.playing ? 60 : 30);
       if (!st.reducedMotion) modelPhase += dt * 0.5;
+      ensureGeometry();
       updateEnvelope(st);
       p.background(pal.bg);
       switch (st.vizMode) {
@@ -4413,12 +4665,32 @@ function createSketch(container) {
     };
 
     // ---------------------------------------------------------------- shared helpers
+    /** Text metrics and the size-dependent layouts; runs only when the canvas size changes. */
+    function ensureGeometry() {
+      if (geoW === W && geoH === H) return;
+      geoW = W;
+      geoH = H;
+      for (let s = 6; s < charW.length; s++) { p.textSize(s); charW[s] = p.textWidth('0'); }
+      const cols = Math.max(1, Math.floor(W));
+      if (bandMin.length < cols) { bandMin = new Float32Array(cols); bandMax = new Float32Array(cols); }
+      layoutWave();
+    }
+    /** Width of a string in the monospace canvas font (arithmetic only — no measuring per frame). */
+    function tw(txt, size) { return txt.length * charW[size]; }
+    function fits(txt, size, w) { return txt.length * charW[size] <= w; }
+    /** The first (longest) variant that fits, or '' when none does. */
+    function pickFit(list, size, w) {
+      for (let i = 0; i < list.length; i++) if (fits(list[i], size, w)) return list[i];
+      return '';
+    }
+
     function updateEnvelope(st) {
       let level = 0;
       const d = st.live.timeData;
       if (d) {
+        // every sample: a decimated read aliases with tones whose period divides the stride
         let peak = 0;
-        for (let i = 0; i < d.length; i += 4) { const a = Math.abs(d[i]); if (a > peak) peak = a; }
+        for (let i = 0; i < d.length; i++) { const a = Math.abs(d[i]); if (a > peak) peak = a; }
         level = clamp(peak / Math.max(st.gain, 1e-4), 0, 1.2);
       }
       viz.envLevel = level;
@@ -4434,8 +4706,6 @@ function createSketch(container) {
       p.text(txt, x, y);
     }
 
-    function hLine(y, col, w = 1) { p.stroke(col); p.strokeWeight(w); p.line(0, y, W, y); }
-
     function logX(f, fmin, fmax, x0, x1) {
       return x0 + frequencyToNormalized(f, fmin, fmax) * (x1 - x0);
     }
@@ -4447,22 +4717,106 @@ function createSketch(container) {
     }
 
     // ---------------------------------------------------------------- WAVE
+    /** Two layouts: 'side' (model left, analyser and real-signal block right) when the canvas
+     *  is at least 300 × 200 px, else 'compact' (side-by-side columns, one-line labels, readout
+     *  row at the bottom). Every box is laid out bottom-up from H, so none can invert. */
+    function layoutWave() {
+      const compact = waveCompact(W, H);
+      WV.compact = compact;
+      if (compact) {
+        const ts = H >= 130 ? 9 : 8;
+        const split = Math.round(W * (W >= 600 ? 0.6 : 0.55));
+        WV.ts = ts;
+        WV.t1 = ts + 2;
+        WV.mx0 = 8;
+        WV.mx1 = split - 6;
+        WV.rx0 = split + 6;
+        WV.rx1 = W - 8;
+        WV.discSize = 8;
+        WV.discLines = fits(WAVE_DISCLAIMER, 8, W - 16) ? 1 : 2;
+        WV.discY = WV.t1 + 10;
+        const top = WV.t1 + 10 * WV.discLines + 4;
+        const bottom = H - 15;
+        WV.ey1 = bottom;
+        WV.ey0 = bottom - (H >= 150 ? 10 : 6);
+        WV.envLabel = fits('ENVELOPE', 8, (WV.mx1 - WV.mx0) * 0.3) ? 'ENVELOPE' : 'ENV';
+        WV.envX = WV.mx0 + tw(WV.envLabel, 8) + 4;
+        WV.envLabelY = bottom;
+        WV.my0 = top + 2;
+        WV.my1 = WV.ey0 - 4;
+        WV.ry0 = top + 2;
+        WV.ry1 = Math.max(WV.ry0 + 8, bottom);
+        const rw = WV.rx1 - WV.rx0;
+        WV.rTitleSize = ts;
+        WV.rTitleY = WV.t1;
+        WV.rTitle = fits('ANALYSER OUTPUT', ts, rw) ? 'ANALYSER OUTPUT' : 'ANALYSER';
+        WV.rTitleDense = 'ANALYSER';
+        // compact: the density note shares the analyser title row
+        WV.denseNote = pickFit(DENSE_NOTES, 8, rw - tw(WV.rTitleDense, ts) - 6);
+        WV.denseY = WV.t1;
+        WV.infoTitle = 'REAL SIGNAL';
+        WV.infoTitleSize = 8;
+        WV.infoTitleY = H - 4;
+        WV.infoRows = 1;
+        WV.infoSize = 8;
+        WV.infoY0 = H - 4;
+        WV.infoStep = 0;
+        WV.infoValX = 8 + tw('REAL SIGNAL ', 8);
+        return;
+      }
+      WV.ts = 10;
+      WV.t1 = 16;
+      WV.mx0 = 12;
+      WV.mx1 = W * 0.62;
+      WV.rx0 = W * 0.66;
+      WV.rx1 = W - 12;
+      const oneLine = 12 + tw(WAVE_DISCLAIMER, 9) <= WV.rx0 - 8;
+      WV.discLines = oneLine ? 1 : 2;
+      WV.discSize = oneLine ? 9 : 8;
+      WV.discY = oneLine ? 29 : 28;
+      WV.ey1 = H - 6;
+      WV.ey0 = WV.ey1 - 16;
+      WV.envLabel = 'ENVELOPE (relative level)';
+      WV.envX = WV.mx0;
+      WV.envLabelY = WV.ey0 - 3;
+      WV.my0 = oneLine ? 40 : 46;
+      WV.my1 = H - 34;
+      const rw = WV.rx1 - WV.rx0;
+      WV.rTitleSize = 10;
+      WV.rTitleY = 16;
+      WV.rTitle = fits('ANALYSER OUTPUT', 10, rw) ? 'ANALYSER OUTPUT' : 'ANALYSER';
+      WV.rTitleDense = WV.rTitle;
+      // real-signal block, bottom-up: rows, title, density note, then the analyser box
+      const wideRows = H >= 280 && fits('frequency  15.50 kHz (start)', 10, rw);
+      WV.infoRows = wideRows ? 3 : 2;
+      WV.infoSize = wideRows ? 10 : fits('15.50 kHz · T 64.5 µs', 9, rw) ? 9 : 8;
+      WV.infoStep = WV.infoSize + 4;
+      WV.infoY0 = H - 8 - (WV.infoRows - 1) * WV.infoStep;
+      WV.infoTitleSize = wideRows ? 10 : 9;
+      WV.infoTitleY = WV.infoY0 - WV.infoStep - 2;
+      WV.infoTitle = fits('REAL SIGNAL INFORMATION', WV.infoTitleSize, rw) ? 'REAL SIGNAL INFORMATION' : 'REAL SIGNAL';
+      WV.denseNote = pickFit(DENSE_NOTES, 8, rw);
+      WV.denseY = WV.infoTitleY - 14;
+      WV.ry0 = 28;
+      WV.ry1 = Math.max(WV.ry0 + 8, WV.denseY - 10);
+      WV.infoValX = WV.rx0;
+    }
+
     function drawWave(st) {
       const L = st.live;
       const lb = st.labels;
-      const wide = W >= 300;
-      const short = H < 220;
-      const mx0 = 12;
-      const mx1 = wide ? W * 0.62 : W - 12;
+      const compact = WV.compact;
+      const mx0 = WV.mx0;
+      const mx1 = WV.mx1;
       const plan = L.plan;
       const am = plan && plan.type === 'am' ? plan.depth : 0;
       const fm = plan && plan.type === 'fm' ? Math.min(6, plan.depth / Math.max(1, plan.modFreq)) : 0;
       const lfo = plan && plan.type === 'lfo';
-      const roomy = mx1 - mx0 >= 380;
-      // on a narrow model the modulation caption gets its own row under the disclaimer
-      const capRow = !roomy && (am || fm || lfo);
-      const my0 = (W < 560 ? 46 : 40) + (capRow ? 10 : 0);
-      const my1 = wide ? H - 34 : H * 0.55;
+      const roomy = !compact && mx1 - mx0 >= 380;
+      // on a narrow side layout the modulation caption gets its own row under the disclaimer
+      const capRow = !compact && !roomy && (am || fm || lfo);
+      const my0 = WV.my0 + (capRow ? 10 : 0);
+      const my1 = WV.my1;
       let f = L.voice ? L.inst : planFreqAt(plan, modelPhase);
       if (!isNum(f)) f = L.refFreq;
       const shape = plan && plan.type === 'dual' ? plan.a.wave : st.waveform;
@@ -4470,20 +4824,22 @@ function createSketch(container) {
       const cycles = 1.5 + 12.5 * frequencyToNormalized(clamp(f, 20, 20000), 20, 20000);
       const amp = st.playing ? Math.max(0.12, Math.min(1, viz.envLevel)) : 0.55;
       const midY = (my0 + my1) / 2;
-      const halfH = (my1 - my0) / 2 - 4;
-      hLine(midY, pal.gridSoft);
-      label('SLOWED VISUAL MODEL', mx0, 16, pal.fg, 10);
-      if (W < 560) {
-        label('Visual representation —', mx0, 28, pal.muted, 8);
-        label('not real-time physical scale.', mx0, 38, pal.muted, 8);
+      const halfH = Math.max(1, (my1 - my0) / 2 - 2);
+      p.stroke(pal.gridSoft);
+      p.strokeWeight(1);
+      p.line(mx0, midY, mx1, midY);
+      label(WAVE_TITLE, mx0, WV.t1, pal.fg, WV.ts);
+      if (WV.discLines === 1) {
+        label(WAVE_DISCLAIMER, mx0, WV.discY, pal.muted, WV.discSize);
       } else {
-        label('Visual representation — not real-time physical scale.', mx0, 29, pal.muted, 9);
+        label(WAVE_DISCLAIMER_A, mx0, WV.discY, pal.muted, WV.discSize);
+        label(WAVE_DISCLAIMER_B, mx0, WV.discY + 10, pal.muted, WV.discSize);
       }
       p.noFill();
       p.stroke(st.playing ? pal.accent : pal.dim);
       p.strokeWeight(2);
       p.beginShape();
-      const n = Math.min(480, Math.floor(mx1 - mx0));
+      const n = Math.max(1, Math.min(480, Math.floor(mx1 - mx0)));
       for (let i = 0; i <= n; i++) {
         const x = i / n;
         let ph = x * cycles - modelPhase * 2;
@@ -4494,69 +4850,115 @@ function createSketch(container) {
       }
       p.endShape();
       if (am || fm || lfo) {
-        let cap = roomy ? 'LFO: cycle spacing glides with the LFO' : 'LFO: frequency glides with the LFO';
-        if (am) cap = 'AM: level follows the modulator';
-        else if (fm) cap = roomy ? 'FM: cycle spacing follows the modulator' : 'FM: spacing follows the modulator';
-        if (capRow) label(cap, mx0, my0 - 4, pal.accent2, 8);
-        else label(cap, mx1, 16, pal.accent2, 9, p.RIGHT);
+        const caps = am ? CAPTIONS_AM : fm ? CAPTIONS_FM : CAPTIONS_LFO;
+        if (compact) {
+          // inline after the title, in whatever room the left column has
+          const cx = mx0 + tw(WAVE_TITLE, WV.ts) + 6;
+          const cap = pickFit(caps, 8, mx1 - cx);
+          if (cap) label(cap, cx, WV.t1, pal.accent2, 8);
+        } else if (capRow) {
+          const cap = pickFit(caps, 8, mx1 - mx0);
+          if (cap) label(cap, mx0, my0 - 4, pal.accent2, 8);
+        } else {
+          const cap = pickFit(caps, 9, mx1 - mx0 - tw(WAVE_TITLE, 10) - 12);
+          if (cap) label(cap, mx1, 16, pal.accent2, 9, p.RIGHT);
+        }
       }
 
       // envelope strip (relative level history)
-      const ey1 = wide ? H - 6 : my1 + 30;
-      const ey0 = ey1 - 16;
-      label('ENVELOPE (relative level)', mx0, ey0 - 3, pal.muted, 8);
+      const ey0 = WV.ey0;
+      const ey1 = WV.ey1;
+      label(WV.envLabel, mx0, WV.envLabelY, pal.muted, 8);
       p.noStroke();
       p.fill(pal.accentSoft);
       const len = viz.envHistory.length;
-      const bw = (mx1 - mx0) / len;
+      const ex0 = WV.envX;
+      const bw = (mx1 - ex0) / len;
       for (let i = 0; i < len; i++) {
         const v = viz.envHistory[(viz.envIndex + i) % len];
-        if (v > 0.002) p.rect(mx0 + i * bw, ey1 - v * (ey1 - ey0), Math.max(1, bw), v * (ey1 - ey0));
+        if (v > 0.002) p.rect(ex0 + i * bw, ey1 - Math.min(1, v) * (ey1 - ey0), Math.max(1, bw), Math.min(1, v) * (ey1 - ey0));
       }
 
       // real analyser trace + real signal info
-      const rx0 = wide ? W * 0.66 : 12;
-      const rx1 = W - 12;
-      const ry0 = wide ? 28 : ey1 + 22;
-      const ry1 = wide ? (short ? H - 44 : H * 0.58) : H - 40;
-      label('ANALYSER OUTPUT', rx0, ry0 - 12, pal.fg, 10);
+      const rx0 = WV.rx0;
+      const rx1 = WV.rx1;
+      const ry0 = WV.ry0;
+      const ry1 = WV.ry1;
       p.noFill();
       p.stroke(pal.grid);
       p.strokeWeight(1);
       p.rect(rx0, ry0, rx1 - rx0, ry1 - ry0);
       const d = L.timeData;
+      let dense = false;
       if (d && st.playing && L.sampleRate > 0) {
         const win = Math.min(1024, d.length >> 1);
         let start = 0;
         for (let i = 1; i < d.length - win; i++) { if (d[i - 1] < 0 && d[i] >= 0) { start = i; break; } }
         const g = Math.max(st.gain, 1e-4);
         const ymid = (ry0 + ry1) / 2;
-        const hh = (ry1 - ry0) / 2 - 3;
-        p.stroke(pal.accent);
-        p.strokeWeight(1.25);
-        p.beginShape();
-        const step = Math.max(1, Math.floor(win / (rx1 - rx0)));
-        for (let i = 0; i < win; i += step) {
-          p.vertex(rx0 + (i / win) * (rx1 - rx0), ymid - clamp(d[start + i] / g, -1.1, 1.1) * hh);
+        const hh = Math.max(1, (ry1 - ry0) / 2 - 3);
+        const cols = Math.max(1, Math.min(bandMin.length, Math.floor(rx1 - rx0)));
+        const spc = win / cols; // samples per pixel column
+        // fewer than two columns per cycle, or more cycles than a line can show: draw the band
+        dense = f > L.sampleRate / (2 * Math.max(1, spc)) || f * (win / L.sampleRate) > DENSE_CYCLES;
+        if (!dense) {
+          // resolvable: every sample of the window (a decimated polyline would alias)
+          p.stroke(pal.accent);
+          p.strokeWeight(1.25);
+          p.beginShape();
+          for (let i = 0; i < win; i++) p.vertex(rx0 + (i / win) * (rx1 - rx0), ymid - clamp(d[start + i] / g, -1.1, 1.1) * hh);
+          p.endShape();
         }
-        p.endShape();
-        if (f * (win / L.sampleRate) > 60) label('cycles too dense to resolve here', rx0 + 4, ry1 - 4, pal.warn, 9);
-        if (rx1 - rx0 >= 150) label(lb.winMs, rx1, ry0 - 12, pal.muted, 9, p.RIGHT);
+        // too dense: the sample min/max around each pixel column as a filled band instead of a
+        // false slow wave. The window is widened to ~2 ms so the band's edges do not ripple with
+        // the beat between the tone and the sample grid (15.5 kHz at 48 kHz beats at 500 Hz).
+        const pad = Math.ceil(L.sampleRate * 0.001);
+        for (let c = 0; dense && c < cols; c++) {
+          const a0 = Math.max(0, start + Math.floor(c * spc) - pad);
+          const a1 = Math.min(d.length, start + Math.max(Math.floor((c + 1) * spc), Math.floor(c * spc) + 1) + pad);
+          let lo = Infinity;
+          let hi = -Infinity;
+          for (let i = a0; i < a1; i++) {
+            const v = d[i];
+            if (v < lo) lo = v;
+            if (v > hi) hi = v;
+          }
+          if (lo > hi) { lo = 0; hi = 0; }
+          bandMin[c] = ymid - clamp(lo / g, -1.1, 1.1) * hh;
+          bandMax[c] = ymid - clamp(hi / g, -1.1, 1.1) * hh;
+        }
+        if (dense) {
+          p.fill(pal.accentSoft);
+          p.stroke(pal.accent);
+          p.strokeWeight(1);
+          p.beginShape();
+          for (let c = 0; c < cols; c++) p.vertex(rx0 + c + 0.5, bandMax[c]);
+          for (let c = cols - 1; c >= 0; c--) p.vertex(rx0 + c + 0.5, bandMin[c]);
+          p.endShape(p.CLOSE);
+        }
       } else {
-        label(L.hasCtx ? 'press HOLD TO PLAY' : 'starts with audio', rx0 + 6, (ry0 + ry1) / 2, pal.muted, 9);
+        label(L.hasCtx ? 'press HOLD TO PLAY' : 'starts with audio', rx0 + 6, (ry0 + ry1) / 2 + 3, pal.muted, compact ? 8 : 9);
       }
-      const ix = rx0;
-      const iy = wide ? ry1 + (short ? 14 : 20) : H - 24;
-      label(rx1 - rx0 >= 150 ? 'REAL SIGNAL INFORMATION' : 'REAL SIGNAL', ix, iy, pal.fg, short ? 9 : 10);
-      if (short) {
-        label(lb.realShort1, ix, iy + 12, pal.muted, 9);
-        label(lb.realShort2, ix, iy + 24, pal.muted, 9);
-      } else if (wide) {
-        label(lb.realWide1, ix, iy + 15, pal.muted, 10);
-        label(lb.realWide2, ix, iy + 29, pal.muted, 10);
-        label(lb.realWide3, ix, iy + 43, pal.muted, 10);
+      const rw = rx1 - rx0;
+      if (compact && dense && WV.denseNote) {
+        label(WV.rTitleDense, rx0, WV.rTitleY, pal.fg, WV.rTitleSize);
+        label(WV.denseNote, rx1, WV.denseY, pal.warn, 8, p.RIGHT);
       } else {
-        label(lb.realCompact, ix, iy + 14, pal.muted, 9);
+        label(WV.rTitle, rx0, WV.rTitleY, pal.fg, WV.rTitleSize);
+        if (d && st.playing && tw(WV.rTitle, WV.rTitleSize) + tw(lb.winMs, 9) + 8 <= rw) label(lb.winMs, rx1, WV.rTitleY, pal.muted, 9, p.RIGHT);
+        if (!compact && dense && WV.denseNote) label(WV.denseNote, rx0, WV.denseY, pal.warn, 8);
+      }
+      label(WV.infoTitle, compact ? 8 : rx0, WV.infoTitleY, pal.fg, WV.infoTitleSize);
+      if (compact) {
+        const room = W - 8 - WV.infoValX;
+        label(fits(lb.realCompact, 8, room) ? lb.realCompact : lb.realShort1, WV.infoValX, WV.infoY0, pal.muted, 8);
+      } else if (WV.infoRows === 3) {
+        label(lb.realWide1, rx0, WV.infoY0, pal.muted, WV.infoSize);
+        label(lb.realWide2, rx0, WV.infoY0 + WV.infoStep, pal.muted, WV.infoSize);
+        label(lb.realWide3, rx0, WV.infoY0 + 2 * WV.infoStep, pal.muted, WV.infoSize);
+      } else {
+        label(lb.realShort1, rx0, WV.infoY0, pal.muted, WV.infoSize);
+        label(lb.realShort2, rx0, WV.infoY0 + WV.infoStep, pal.muted, WV.infoSize);
       }
     }
 
@@ -4573,15 +4975,19 @@ function createSketch(container) {
     function rebuildColumns(bins, x0, x1) {
       const cols = Math.max(1, Math.floor(x1 - x0));
       if (cols === colCols && axLog === colLog && axFmin === colFmin && axFmax === colFmax && bins === colBins) return;
+      // Bin k is centred on k · binHz. A column spanning [fa, fb) takes the bins whose centres
+      // fall inside it; a column narrower than a bin takes the bin nearest its centre. Both keep
+      // a pure tone's peak on the column of its frequency marker (floor() shifted it half a bin).
       const binHz = axFmax / bins;
+      const at = (u) => (axLog ? normalizedToFrequency(u, axFmin, axFmax) : u * axFmax);
       colLo = new Int32Array(cols);
       colHi = new Int32Array(cols);
       for (let c = 0; c < cols; c++) {
-        const fa = axLog ? normalizedToFrequency(c / cols, axFmin, axFmax) : (c / cols) * axFmax;
-        const fb = axLog ? normalizedToFrequency((c + 1) / cols, axFmin, axFmax) : ((c + 1) / cols) * axFmax;
-        const lo = clamp(Math.floor(fa / binHz), 0, bins - 1);
-        colLo[c] = lo;
-        colHi[c] = clamp(Math.max(lo, Math.ceil(fb / binHz) - 1), 0, bins - 1);
+        let lo = Math.ceil(at(c / cols) / binHz - 1e-9);
+        let hi = Math.ceil(at((c + 1) / cols) / binHz - 1e-9) - 1;
+        if (hi < lo) { lo = Math.round(at((c + 0.5) / cols) / binHz); hi = lo; }
+        colLo[c] = clamp(lo, 0, bins - 1);
+        colHi[c] = clamp(hi, colLo[c], bins - 1);
       }
       colCols = cols;
       colLog = axLog;
@@ -4601,27 +5007,35 @@ function createSketch(container) {
         const hi = Math.min(colHi[c], data.length - 1);
         for (let b = colLo[c]; b <= hi; b++) if (data[b] > v) v = data[b];
         if (!Number.isFinite(v)) v = dbMin;
-        p.vertex(x0 + c, y1 - ((clamp(v, dbMin, dbMax) - dbMin) / (dbMax - dbMin)) * (y1 - y0));
+        p.vertex(x0 + c + 0.5, y1 - ((clamp(v, dbMin, dbMax) - dbMin) / (dbMax - dbMin)) * (y1 - y0));
       }
       p.endShape();
     }
     function drawSpectrum(st) {
       const L = st.live;
+      const short = H < 160;
+      const ts = short ? 8 : 9;
       const x0 = 40;
       const x1 = W - 10;
-      const y0 = 22;
-      const y1 = H - 24;
+      const y0 = short ? 18 : 22;
+      const y1 = H - (short ? 20 : 24);
+      // label rows inside the plot, top-down: region names, requested, Nyquist, digital limit
+      const row = short ? 10 : 11;
       updateSpectrumAxis(st);
-      // dB grid
+      // dB grid: label every row only when the rows are at least 10 px apart
+      const gap = (y1 - y0) / (SPECTRUM_DB_GRID.length - 1);
+      const stride = gap >= 10 ? 1 : gap >= 5 ? 2 : 4;
       for (let i = 0; i < SPECTRUM_DB_GRID.length; i++) {
         const y = y1 - ((SPECTRUM_DB_GRID[i] + 140) / 140) * (y1 - y0);
         p.stroke(pal.gridSoft);
         p.strokeWeight(1);
         p.line(x0, y, x1, y);
-        label(SPECTRUM_DB_LABELS[i], x0 - 4, y + 3, pal.muted, 8, p.RIGHT);
+        if (i % stride === 0) label(SPECTRUM_DB_LABELS[i], x0 - 4, y + 3, pal.muted, 8, p.RIGHT);
       }
-      label('RELATIVE LEVEL (dB, uncalibrated)', x0, 13, pal.muted, 9);
-      label(axLog ? 'LOG' : 'LINEAR', x1, 13, pal.muted, 9, p.RIGHT);
+      const title = 'RELATIVE LEVEL (dB, uncalibrated)';
+      const scaleLabel = axLog ? 'LOG' : 'LINEAR';
+      label(title, x0, y0 - 9, pal.muted, ts);
+      label(scaleLabel, x1, y0 - 9, pal.muted, ts, p.RIGHT);
       // overlays
       if (st.overlays.regions) {
         for (let i = 0; i < FREQUENCY_REGIONS.length; i++) {
@@ -4632,7 +5046,7 @@ function createSketch(container) {
           p.noStroke();
           p.fill(i % 2 ? pal.bandAlt : pal.band);
           p.rect(a, y0, b - a, y1 - y0);
-          if (b - a > 34) label(r.short, a + 3, y0 + 10, pal.muted, 8);
+          if (b - a > tw(r.short, 8) + 6) label(r.short, a + 3, y0 + row - 1, pal.muted, 8);
         }
       }
       if (st.overlays.thirds) {
@@ -4649,6 +5063,7 @@ function createSketch(container) {
         }
       }
       if (st.overlays.notes) {
+        let lastRight = -Infinity;
         for (let oct = 0; oct <= 10; oct++) {
           const f = midiToFrequency((oct + 1) * 12, st.a4);
           if (f < Math.max(axFmin, 1) || f > axFmax) continue;
@@ -4656,12 +5071,19 @@ function createSketch(container) {
           p.stroke(pal.accent2Soft);
           p.strokeWeight(1);
           p.line(x, y1 - 14, x, y1);
-          label(OCTAVE_C_LABELS[oct], x + 2, y1 - 4, pal.accent2, 8);
+          // right of its line, or left of it where the plot edge would clip it (C10 at 320 px)
+          const lw = tw(OCTAVE_C_LABELS[oct], 8);
+          const lx = x + 2 + lw <= x1 - 2 ? x + 2 : x - 2 - lw;
+          if (lx > lastRight + 2) {
+            label(OCTAVE_C_LABELS[oct], lx, y1 - 4, pal.accent2, 8);
+            lastRight = lx + lw;
+          }
         }
       }
-      // frequency ticks
+      // frequency ticks; a label that would overlap its left neighbour is skipped
       const ticks = axLog ? SPECTRUM_MARKERS : LINEAR_TICKS;
       const tickLabels = axLog ? SPECTRUM_MARKER_LABELS : LINEAR_TICK_LABELS;
+      let tickRight = -Infinity;
       for (let i = 0; i < ticks.length; i++) {
         const f = ticks[i];
         if (f < axFmin || f > axFmax) continue;
@@ -4669,7 +5091,10 @@ function createSketch(container) {
         p.stroke(pal.grid);
         p.strokeWeight(1);
         p.line(x, y1, x, y1 + 4);
-        label(tickLabels[i], x, y1 + 15, pal.muted, 9, p.CENTER);
+        const half = tw(tickLabels[i], ts) / 2;
+        if (x - half < tickRight + 4 || x + half > W) continue;
+        label(tickLabels[i], x, y1 + (short ? 13 : 15), pal.muted, ts, p.CENTER);
+        tickRight = x + half;
       }
       // data
       const data = L.analyser ? viz.outputSpectrum() : null;
@@ -4679,10 +5104,17 @@ function createSketch(container) {
         const mic = L.mic ? viz.micSpectrum() : null;
         if (mic) {
           plotSpectrum(mic, x0, y0, y1, pal.accent2, 1.25);
-          label('● microphone (relative)', x0 + 6, y1 - 6, pal.accent2, 9);
+          // legend in the title row, between the title and the scale name
+          const room = x1 - tw(scaleLabel, ts) - 8 - (x0 + tw(title, ts) + 8);
+          const legend = pickFit(MIC_LEGENDS, ts, room);
+          if (legend) label(legend, x1 - tw(scaleLabel, ts) - 8, y0 - 9, pal.accent2, ts, p.RIGHT);
         }
       } else {
-        label('The measured spectrum appears once audio starts — press HOLD TO PLAY.', x0 + 8, (y0 + y1) / 2, pal.muted, 10);
+        // bottom-left, clear of the label rows; on a short plot also clear of the digital-limit label
+        const ns = short ? 9 : 10;
+        const xl = freqToX(axFmax * SAFE_NYQUIST_FACTOR, x0, x1);
+        const room = y1 - 6 - (y0 + 4 * row) < 12 ? xl - 12 - tw(DIGITAL_LIMIT_LABEL, 8) - (x0 + 8) : x1 - x0 - 16;
+        label(pickFit(SPECTRUM_IDLE_NOTES, ns, room), x0 + 8, y1 - 6, pal.muted, ns);
       }
       // requested carrier marker: instantaneous while playing, the plan's start frequency idle
       const fc = L.voice ? L.inst : L.refFreq;
@@ -4690,29 +5122,32 @@ function createSketch(container) {
         const x = freqToX(fc, x0, x1);
         dashedV(x, y0, y1, pal.accent2);
         const right = x > (x0 + x1) / 2;
-        label(st.labels.requested, x + (right ? -4 : 4), y0 + 22, pal.accent2, 9, right ? p.RIGHT : p.LEFT);
+        label(st.labels.requested, x + (right ? -4 : 4), y0 + 2 * row, pal.accent2, ts, right ? p.RIGHT : p.LEFT);
       }
       if (st.source === 'dual' && st.dual.fb >= axFmin && st.dual.fb <= axFmax) dashedV(freqToX(st.dual.fb, x0, x1), y0, y1, pal.accent2Soft);
-      // Nyquist + safe maximum
+      // Nyquist, and the 95 % digital limit the engine clamps requested frequencies to
       const xn = freqToX(axFmax, x0, x1);
       p.stroke(pal.danger);
       p.strokeWeight(1.5);
       p.line(xn, y0, xn, y1);
-      label(st.labels.nyquist, xn - 4, y0 + 36, pal.danger, 9, p.RIGHT);
-      dashedV(freqToX(axFmax * SAFE_NYQUIST_FACTOR, x0, x1), y0 + 40, y1, pal.warn);
+      label(st.labels.nyquist, xn - 4, y0 + 3 * row, pal.danger, ts, p.RIGHT);
+      const xl = freqToX(axFmax * SAFE_NYQUIST_FACTOR, x0, x1);
+      label(DIGITAL_LIMIT_LABEL, Math.min(xl, xn - 2) - 4, y0 + 4 * row, pal.warn, 8, p.RIGHT);
+      dashedV(xl, y0 + 4 * row + 3, y1, pal.warn);
     }
 
     // ---------------------------------------------------------------- FREQUENCY MOTION
     function motionY(f) { return mY1 - frequencyToNormalized(f, mLo, mHi) * (mY1 - mY0); }
     function drawMotion(st) {
       const L = st.live;
+      const short = H < 160;
       const x0 = 46;
       const x1 = W - 12;
-      mY0 = 24;
-      mY1 = H - 24;
+      mY0 = short ? 18 : 24;
+      mY1 = H - (short ? 18 : 24);
       const voice = L.voice;
       const plan = L.plan;
-      label('REQUESTED INSTANTANEOUS FREQUENCY', x0, 14, pal.fg, 10);
+      label('REQUESTED INSTANTANEOUS FREQUENCY', x0, short ? 11 : 14, pal.fg, short ? 9 : 10);
       if (!plan) { label('No playable configuration.', x0, (mY0 + mY1) / 2, pal.warn, 10); return; }
       const elapsed = L.elapsed;
       const finite = plan.kind === 'finite';
@@ -4727,6 +5162,7 @@ function createSketch(container) {
       if (plan.type === 'dual') { lo = Math.min(plan.a.freq, plan.b.freq); hi = Math.max(plan.a.freq, plan.b.freq); }
       mLo = Math.max(1, lo / 1.5);
       mHi = Math.min(st.nyquist, Math.max(hi * 1.5, mLo * 4));
+      let lastTickY = Infinity; // ticks run upwards; a label closer than 10 px to the last is skipped
       for (let i = 0; i < MOTION_TICKS.length; i++) {
         const f = MOTION_TICKS[i];
         if (f < mLo || f > mHi) continue;
@@ -4734,9 +5170,12 @@ function createSketch(container) {
         p.stroke(pal.gridSoft);
         p.strokeWeight(1);
         p.line(x0, y, x1, y);
+        if (lastTickY - y < 10) continue;
         label(MOTION_TICK_LABELS[i], x0 - 5, y + 3, pal.muted, 9, p.RIGHT);
+        lastTickY = y;
       }
-      label(finite ? st.labels.motionSpan : voice ? 'last 6 s' : 'next 6 s (planned)', x1, mY1 + 16, pal.muted, 9, p.RIGHT);
+      // idle, a continuous plan is drawn from its start: the first 6 s, not "the next"
+      label(finite ? st.labels.motionSpan : voice ? 'last 6 s' : 'first 6 s (planned)', x1, mY1 + (short ? 13 : 16), pal.muted, 9, p.RIGHT);
       if (plan.type === 'dual') {
         p.stroke(pal.accent);
         p.strokeWeight(2);
@@ -4758,7 +5197,7 @@ function createSketch(container) {
         p.rect(x0, yTop, x1 - x0, motionY(plan.freq - plan.depth) - yTop);
         p.stroke(pal.accent);
         p.line(x0, motionY(plan.freq), x1, motionY(plan.freq));
-        label('modulation faster than the display: deviation band shown', x0 + 6, mY0 + 12, pal.muted, 9);
+        label(pickFit(FAST_FM_NOTES, 9, x1 - x0 - 12), x0 + 6, mY0 + 12, pal.muted, 9);
         return;
       }
       const cols = Math.floor(x1 - x0);
@@ -4794,26 +5233,42 @@ function createSketch(container) {
       const r = Math.floor(i / pCols);
       let c = i % pCols;
       if (r % 2 === 1) c = pCols - 1 - c; // snake layout keeps arrows short
-      pPos[0] = 12 + c * (pBw + PATH_GAP_X);
-      pPos[1] = pTop + r * (pBh + PATH_GAP_Y);
+      pPos[0] = 12 + c * (pBw + pathGapX);
+      pPos[1] = pTop + r * (pBh + pathGapY);
     }
-    /** Subtitles truncated to the box width; rebuilt only when the nodes or the width change. */
-    function ensurePathSubs(nodes) {
-      if (nodes === pathSubsNodes && pBw === pathSubsBw) return;
-      const maxChars = Math.max(4, Math.floor(pBw / 5.2) - 1);
-      pathSubs = nodes.map((n) => (n.sub.length * 5.2 > pBw ? `${n.sub.slice(0, maxChars)}…` : n.sub));
+    /** Titles and subtitles truncated to the box width; rebuilt only when the nodes or the
+     *  width change. */
+    function ensurePathSubs(nodes, titleSize) {
+      if (nodes === pathSubsNodes && pBw === pathSubsBw && titleSize === pathSubsSize) return;
+      const room = pBw - 9;
+      const fit = (t, size) => {
+        if (fits(t, size, room)) return t;
+        return `${t.slice(0, Math.max(3, Math.floor(room / charW[size]) - 1))}…`;
+      };
+      pathTitles = nodes.map((n) => fit(n.title, titleSize));
+      pathSubs = nodes.map((n) => fit(n.sub, 8));
       pathSubsNodes = nodes;
       pathSubsBw = pBw;
+      pathSubsSize = titleSize;
     }
     function drawPath(st, now) {
       const nodes = st.pathNodes;
       if (!nodes.length) return;
       pCols = W >= 760 ? 7 : W >= 430 ? 4 : 3;
       const rows = Math.ceil(nodes.length / pCols);
-      pBw = (W - 24 - PATH_GAP_X * (pCols - 1)) / pCols;
-      pBh = Math.min(58, (H - 24 - PATH_GAP_Y * (rows - 1)) / rows);
-      pTop = (H - (rows * pBh + (rows - 1) * PATH_GAP_Y)) / 2;
-      ensurePathSubs(nodes);
+      pathGapX = W < 430 ? 10 : PATH_GAP_X;
+      pathGapY = H < 160 ? 8 : PATH_GAP_Y;
+      pathFooter = H < 140 ? 0 : 14;
+      // an unmodulated source skips the modulation stage: OSC → ENVELOPE runs over a bypass arc
+      // above the first row (the first three nodes always share it)
+      const bypass = nodes.length > 2 && nodes[1].mod && !nodes[1].enabled;
+      const arcRoom = bypass ? 12 : 0;
+      const avail = H - pathFooter - arcRoom - 8;
+      pBw = (W - 24 - pathGapX * (pCols - 1)) / pCols;
+      pBh = Math.max(12, Math.min(58, (avail - pathGapY * (rows - 1)) / rows));
+      pTop = arcRoom + 4 + Math.max(0, (avail - (rows * pBh + (rows - 1) * pathGapY)) / 2);
+      const titleSize = pBw < 90 || pBh < 26 ? 8 : 10;
+      ensurePathSubs(nodes, titleSize);
       const playing = st.playing && st.live.voice;
       const t = (now / 1000) * 0.6;
       for (let i = 0; i < nodes.length - 1; i++) {
@@ -4828,8 +5283,10 @@ function createSketch(container) {
         const y1 = sameRow ? ay + pBh / 2 : ay + pBh;
         const x2 = sameRow ? (bx > ax ? bx : bx + pBw) : bx + pBw / 2;
         const y2 = sameRow ? by + pBh / 2 : by;
-        const active = playing && (nodes[i + 1].mod ? nodes[i + 1].enabled : true);
-        p.stroke(active ? pal.accent : pal.grid);
+        // OSC → MODULATION and MODULATION → ENVELOPE carry nothing while bypassed
+        const bypassed = bypass && i < 2;
+        const active = playing && !bypassed && (nodes[i + 1].mod ? nodes[i + 1].enabled : true);
+        p.stroke(active ? pal.accent : bypassed ? pal.gridSoft : pal.grid);
         p.strokeWeight(active ? 1.5 : 1);
         p.line(x1, y1, x2, y2);
         if (active && !st.reducedMotion) {
@@ -4837,6 +5294,24 @@ function createSketch(container) {
           p.noStroke();
           p.fill(pal.accent);
           p.circle(x1 + (x2 - x1) * k, y1 + (y2 - y1) * k, 4);
+        }
+      }
+      if (bypass) {
+        pathPos(0);
+        const ax = pPos[0] + pBw / 2;
+        const ay = pPos[1];
+        pathPos(2);
+        const bx = pPos[0] + pBw / 2;
+        const h = (arcRoom * 4) / 3; // a cubic with both handles at h peaks at 0.75 h
+        p.noFill();
+        p.stroke(playing ? pal.accent : pal.grid);
+        p.strokeWeight(playing ? 1.5 : 1);
+        p.bezier(ax, ay, ax, ay - h, bx, ay - h, bx, ay);
+        if (playing && !st.reducedMotion) {
+          const k = t % 1;
+          p.noStroke();
+          p.fill(pal.accent);
+          p.circle(p.bezierPoint(ax, ax, bx, bx, k), p.bezierPoint(ay, ay - h, ay - h, ay, k), 4);
         }
       }
       for (let i = 0; i < nodes.length; i++) {
@@ -4849,11 +5324,11 @@ function createSketch(container) {
         p.fill(pal.bg);
         p.stroke(on ? pal.accent : n.mod && !n.enabled ? pal.gridSoft : pal.grid);
         p.strokeWeight(on ? 1.5 + pulse * 0.8 : 1);
-        p.rect(x, y, pBw, pBh, 6);
-        label(n.title, x + 7, y + 16, on ? pal.fg : pal.muted, pBw < 90 ? 8 : 10);
+        p.rect(x, y, pBw, pBh, Math.min(6, pBh / 3));
+        label(pathTitles[i], x + 7, pBh >= 26 ? y + 16 : y + pBh / 2 + 3, on ? pal.fg : pal.muted, titleSize);
         if (pBh > 34) label(pathSubs[i], x + 7, y + 31, pal.muted, 8);
       }
-      label(playing ? 'active path' : 'idle — subdued nodes are not processing', 12, H - 6, pal.muted, 9);
+      if (pathFooter) label(playing ? 'active path' : 'idle — subdued nodes are not processing', 12, H - 6, pal.muted, 9);
     }
 
     // ---------------------------------------------------------------- HARMONICS
@@ -4877,15 +5352,28 @@ function createSketch(container) {
       }
     }
     function drawHarmonics(st) {
+      const compact = H < 160;
+      const narrow = W < 600;
       const x0 = 40;
       const x1 = W - 12;
-      const narrow = W < 600;
-      const y0 = narrow ? 52 : 46;
-      const y1 = H - 26;
+      const y0 = compact ? 32 : narrow ? 52 : 46;
+      const y1 = H - (compact ? 16 : 26);
       const h = st.harm;
       const hb = st.harmB;
-      label('THEORETICAL OSCILLATOR SPECTRUM', x0, 13, pal.fg, 10);
-      label(W < 520 ? 'theoretical · speaker output unknown' : 'digitally representable below Nyquist · actual speaker output unknown', x0, 26, pal.muted, 9);
+      if (compact) {
+        // two rows: title, then the disclaimer with the summary right-aligned when it fits
+        label(HARMONIC_TITLE, 8, 10, pal.fg, fits(HARMONIC_TITLE, 9, W - 16) ? 9 : 8);
+        const disc = pickFit(HARMONIC_DISCLAIMERS, 8, W - 24 - tw(h.summaryTiny, 8));
+        label(disc, 8, 20, pal.muted, 8);
+        const room = W - 16 - tw(disc, 8) - 8;
+        const sum = fits(h.summary, 8, room) ? h.summary : fits(h.summaryShort, 8, room) ? h.summaryShort : fits(h.summaryTiny, 8, room) ? h.summaryTiny : '';
+        if (sum) label(sum, W - 8, 20, pal.muted, 8, p.RIGHT);
+      } else {
+        label(HARMONIC_TITLE, x0, 13, pal.fg, 10);
+        label(W < 520 ? HARMONIC_DISCLAIMERS[1] : HARMONIC_DISCLAIMERS[0], x0, 26, pal.muted, 9);
+        if (narrow) label(fits(h.summaryShort, 9, x1 - x0) ? h.summaryShort : h.summaryTiny, x0, 38, pal.muted, 9);
+        else label(h.summary, x1, 13, pal.muted, 9, p.RIGHT);
+      }
       if (!h.list.length) return;
       const fmin = Math.max(1, h.list[0].f / 2);
       let fmax = Math.max(h.axisMax, h.list[h.list.length - 1].f * 1.1);
@@ -4906,29 +5394,34 @@ function createSketch(container) {
       const nearRight = xn > x1 - 120;
       label('NYQUIST', nearRight ? xn - 4 : xn + 4, y0 + 10, pal.danger, 9, nearRight ? p.RIGHT : p.LEFT);
       label(nearRight ? '← representable' : 'not representable →', nearRight ? xn - 4 : xn + 4, y0 + 22, pal.muted, 8, nearRight ? p.RIGHT : p.LEFT);
+      const ts = compact ? 8 : 9;
+      let tickRight = -Infinity;
       for (let i = 0; i < SPECTRUM_MARKERS.length; i++) {
         const f = SPECTRUM_MARKERS[i];
         if (f < fmin || f > fmax) continue;
-        label(SPECTRUM_MARKER_LABELS[i], logX(f, fmin, fmax, x0, x1), y1 + 14, pal.muted, 9, p.CENTER);
+        const x = logX(f, fmin, fmax, x0, x1);
+        const half = tw(SPECTRUM_MARKER_LABELS[i], ts) / 2;
+        if (x - half < tickRight + 4 || x + half > W) continue;
+        label(SPECTRUM_MARKER_LABELS[i], x, y1 + (compact ? 12 : 14), pal.muted, ts, p.CENTER);
+        tickRight = x + half;
       }
-      if (narrow) label(h.summaryShort, x0, 38, pal.muted, 9);
-      else label(h.summary, x1, 13, pal.muted, 9, p.RIGHT);
     }
 
     // ---------------------------------------------------------------- INTERFERENCE
-    function legendItem(txt, x, col) {
-      label(txt, x, 26, col, 9);
-      return x + p.textWidth(txt) + 10;
+    function legendItem(txt, x, y, col, size) {
+      label(txt, x, y, col, size);
+      return x + tw(txt, size) + 10;
     }
     function drawInterference(st, now) {
       const d = st.dual;
       const lb = st.labels;
       const delta = Math.abs(d.fa - d.fb);
+      const compact = H < 160;
       const narrow = W < 520;
       const x0 = 12;
       const x1 = W - 12;
-      const top = narrow ? 44 : 34;
-      const bottom = H - 16;
+      const top = compact ? 26 : narrow ? 44 : 34;
+      const bottom = H - (compact ? 12 : 16);
       const avail = bottom - top;
       // A and B lanes are thin; the sum lane gets most of the height.
       laneY[0] = top + avail * 0.11;
@@ -4937,14 +5430,19 @@ function createSketch(container) {
       laneH[0] = avail * 0.09;
       laneH[1] = avail * 0.09;
       laneH[2] = avail * 0.26;
-      label(lb.beat, x0, 13, pal.fg, narrow ? 9 : 10);
+      label(lb.beat, x0, compact ? 10 : 13, pal.fg, compact ? 8 : narrow ? 9 : 10);
       // legend instead of per-lane titles, so labels never overlap the traces
-      let lx = legendItem(lb.legendA, x0, pal.accent);
-      lx = legendItem(lb.legendB, lx, pal.accent2);
-      lx = legendItem('A+B', lx, pal.fg);
-      legendItem('envelope', lx, pal.warn);
-      if (narrow) label('carriers slowed — visual representation', x0, 37, pal.muted, 8);
-      else label('carriers slowed — visual representation', x1, 26, pal.muted, 9, p.RIGHT);
+      const ly0 = compact ? 20 : 26;
+      const ls = compact ? 8 : 9;
+      let lx = legendItem(lb.legendA, x0, ly0, pal.accent, ls);
+      lx = legendItem(lb.legendB, lx, ly0, pal.accent2, ls);
+      lx = legendItem('A+B', lx, ly0, pal.fg, ls);
+      lx = legendItem('envelope', lx, ly0, pal.warn, ls);
+      if (compact) {
+        // no row of its own: shares the legend row when there is room (the caption says it too)
+        if (fits(INTERFERENCE_SLOWED, 8, x1 - lx)) label(INTERFERENCE_SLOWED, x1, ly0, pal.muted, 8, p.RIGHT);
+      } else if (narrow) label(INTERFERENCE_SLOWED, x0, 37, pal.muted, 8);
+      else label(INTERFERENCE_SLOWED, x1, 26, pal.muted, 9, p.RIGHT);
       // Visual model: two beats across the width, carriers ~10 cycles per beat.
       const beatsShown = 2;
       const k = 10 * beatsShown;
@@ -4985,7 +5483,8 @@ function createSketch(container) {
           }
         }
       }
-      label(narrow ? lb.interNoteNarrow : lb.interNote, x0, H - 4, pal.muted, 9);
+      const ns = compact ? 8 : 9;
+      label(fits(lb.interNote, ns, x1 - x0) ? lb.interNote : lb.interNoteNarrow, x0, H - (compact ? 3 : 4), pal.muted, ns);
     }
   };
 }

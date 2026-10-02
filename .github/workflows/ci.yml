@@ -1,0 +1,34 @@
+# Release gate for every pull request. Branch protection requires the `gate` job, so a PR
+# with auto-merge enabled lands on main (and redeploys Pages) only after this passes.
+name: CI
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+      - name: Install test tooling
+        working-directory: tests
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+      - name: Smoke test (file://, chromium)
+        run: node tests/smoke.cjs
+      - name: Spec checks (file://, chromium)
+        run: |
+          if [ -f tests/spec.cjs ]; then node tests/spec.cjs; fi
