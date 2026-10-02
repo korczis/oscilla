@@ -1,0 +1,21 @@
+id: V373
+milestone: M019
+title: "Live quality bar, progress, abort, errors"
+slug: live-quality-bar-progress-abort-errors
+priority: p1
+profile: implementation
+objective: "INPUT/NOISE/CLIPPING/SIGNAL/CAPTURE from data; ESC/STOP and page-leave cleanup at every stage; every error state handled (§109-§112, §169, §218)."
+scope:
+  - "src"
+  - "tests"
+depends_on:
+  - "V371"
+  - "V364"
+acceptance_criteria:
+  - "INPUT/NOISE/CLIPPING/SIGNAL/CAPTURE from data; ESC/STOP and page-leave cleanup at every stage; every error state handled (§109-§112, §169, §218)."
+  - "Specification: docs/specs/oscilla-v3-measure.md"
+validation:
+  - "npm run release-gate"
+evidence_required:
+  - "verified"
+created_at: 2026-10-02

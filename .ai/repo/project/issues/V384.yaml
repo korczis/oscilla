@@ -1,0 +1,20 @@
+id: V384
+milestone: M020
+title: "V3 documentation"
+slug: v3-documentation
+priority: p1
+profile: implementation
+objective: "README V3 section, measurement guide, architecture doc with diagram, algorithm notes with references (§137, §190-§193)."
+scope:
+  - "docs"
+  - "README.md"
+depends_on:
+  - "V382"
+acceptance_criteria:
+  - "README V3 section, measurement guide, architecture doc with diagram, algorithm notes with references (§137, §190-§193)."
+  - "Specification: docs/specs/oscilla-v3-measure.md"
+validation:
+  - "npm run release-gate"
+evidence_required:
+  - "verified"
+created_at: 2026-10-02

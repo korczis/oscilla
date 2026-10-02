@@ -1,0 +1,20 @@
+id: V363
+milestone: M018
+title: "Repeats and aggregation"
+slug: repeats-and-aggregation
+priority: p1
+profile: implementation
+objective: "N runs with gaps, mean/median, standard deviation or percentile envelope, median absolute deviation summary (§61-§63, §71, §108, §219)."
+scope:
+  - "src"
+  - "tests"
+depends_on:
+  - "V321"
+acceptance_criteria:
+  - "N runs with gaps, mean/median, standard deviation or percentile envelope, median absolute deviation summary (§61-§63, §71, §108, §219)."
+  - "Specification: docs/specs/oscilla-v3-measure.md"
+validation:
+  - "npm run release-gate"
+evidence_required:
+  - "verified"
+created_at: 2026-10-02

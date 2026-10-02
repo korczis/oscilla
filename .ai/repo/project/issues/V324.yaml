@@ -1,0 +1,20 @@
+id: V324
+milestone: M014
+title: "Response chart"
+slug: response-chart
+priority: p1
+profile: implementation
+objective: "uPlot log-Hz/dB chart with raw/calibrated, smoothing, confidence envelope, unreliable regions drawn differently, cursor with frequency, magnitudes, confidence, SNR (§33, §36, §120, §156-§157)."
+scope:
+  - "src"
+  - "tests"
+depends_on:
+  - "V321"
+acceptance_criteria:
+  - "uPlot log-Hz/dB chart with raw/calibrated, smoothing, confidence envelope, unreliable regions drawn differently, cursor with frequency, magnitudes, confidence, SNR (§33, §36, §120, §156-§157)."
+  - "Specification: docs/specs/oscilla-v3-measure.md"
+validation:
+  - "npm run release-gate"
+evidence_required:
+  - "verified"
+created_at: 2026-10-02

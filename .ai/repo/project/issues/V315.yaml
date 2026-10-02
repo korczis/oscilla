@@ -1,0 +1,22 @@
+id: V315
+milestone: M013
+title: "Calibration UI"
+slug: calibration-ui
+priority: p1
+profile: implementation
+objective: "UNCALIBRATED / CALIBRATED indicator, profile name, frequency and SPL toggles, import/export (§22)."
+scope:
+  - "src"
+  - "tests"
+depends_on:
+  - "V312"
+  - "V313"
+  - "V314"
+acceptance_criteria:
+  - "UNCALIBRATED / CALIBRATED indicator, profile name, frequency and SPL toggles, import/export (§22)."
+  - "Specification: docs/specs/oscilla-v3-measure.md"
+validation:
+  - "npm run release-gate"
+evidence_required:
+  - "verified"
+created_at: 2026-10-02

@@ -1,0 +1,20 @@
+id: V312
+milestone: M013
+title: "Calibration import"
+slug: calibration-import
+priority: p1
+profile: implementation
+objective: "CSV (and JSON) tolerant of separators, headers, comments; rejects malformed, duplicate, unsorted-ambiguous, NaN, infinite and oversized profiles clearly (§20, §142)."
+scope:
+  - "src"
+  - "tests"
+depends_on:
+  - "V311"
+acceptance_criteria:
+  - "CSV (and JSON) tolerant of separators, headers, comments; rejects malformed, duplicate, unsorted-ambiguous, NaN, infinite and oversized profiles clearly (§20, §142)."
+  - "Specification: docs/specs/oscilla-v3-measure.md"
+validation:
+  - "npm run release-gate"
+evidence_required:
+  - "verified"
+created_at: 2026-10-02

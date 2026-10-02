@@ -1,0 +1,20 @@
+id: V343
+milestone: M016
+title: "RTA averaging"
+slug: rta-averaging
+priority: p1
+profile: implementation
+objective: "Instant, fast, slow with documented constants; no IEC claim (§49, §189)."
+scope:
+  - "src"
+  - "tests"
+depends_on:
+  - "V342"
+acceptance_criteria:
+  - "Instant, fast, slow with documented constants; no IEC claim (§49, §189)."
+  - "Specification: docs/specs/oscilla-v3-measure.md"
+validation:
+  - "npm run release-gate"
+evidence_required:
+  - "verified"
+created_at: 2026-10-02

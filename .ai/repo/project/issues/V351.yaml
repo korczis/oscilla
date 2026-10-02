@@ -1,0 +1,21 @@
+id: V351
+milestone: M017
+title: "Experiment schema and migrations"
+slug: experiment-schema-and-migrations
+priority: p1
+profile: implementation
+objective: "Schema 1 with separate product, experiment, calibration and config versions; explicit migration pipeline; no Web Audio nodes serialized (§50, §131-§132)."
+scope:
+  - "src"
+  - "tests"
+depends_on:
+  - "V308"
+  - "V311"
+acceptance_criteria:
+  - "Schema 1 with separate product, experiment, calibration and config versions; explicit migration pipeline; no Web Audio nodes serialized (§50, §131-§132)."
+  - "Specification: docs/specs/oscilla-v3-measure.md"
+validation:
+  - "npm run release-gate"
+evidence_required:
+  - "verified"
+created_at: 2026-10-02

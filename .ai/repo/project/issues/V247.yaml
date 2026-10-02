@@ -1,0 +1,20 @@
+id: V247
+milestone: M010
+title: "Restore the safety notice"
+slug: restore-the-safety-notice
+priority: p0
+profile: implementation
+objective: "V2 renders no safety notice although core/instrument.js keeps V1's safetyCollapsed/safetyExpanded/showSafety()/collapseSafety(); restore the V1 notice (both safety statements, visible, non-obnoxious, dismissible and reopenable) with [data-osc=\"safety.dismiss\"] and [data-osc=\"safety.reopen\"] handing focus to each other."
+scope:
+  - "src"
+  - "dist"
+  - "tests"
+depends_on: []
+acceptance_criteria:
+  - "The notice is visible on first load at 320-1536 px with both safety statements and can be dismissed and reopened without losing focus."
+  - "tests/browser/app.cjs a11y-safety-notice-focus-handoff passes in chromium, firefox and webkit over file:// and http, and is removed from KNOWN_DEFECTS."
+validation:
+  - "npm run test:browser"
+evidence_required:
+  - "verified"
+created_at: 2026-10-02

@@ -1,0 +1,20 @@
+id: V365
+milestone: M018
+title: "Resolution-aware precision"
+slug: resolution-aware-precision
+priority: p1
+profile: implementation
+objective: "Δf shown; peak interpolation reported as an estimate; formatting by uncertainty (§69-§70, §97)."
+scope:
+  - "src"
+  - "tests"
+depends_on:
+  - "V306"
+acceptance_criteria:
+  - "Δf shown; peak interpolation reported as an estimate; formatting by uncertainty (§69-§70, §97)."
+  - "Specification: docs/specs/oscilla-v3-measure.md"
+validation:
+  - "npm run release-gate"
+evidence_required:
+  - "verified"
+created_at: 2026-10-02

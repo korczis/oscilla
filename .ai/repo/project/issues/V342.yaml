@@ -1,0 +1,20 @@
+id: V342
+milestone: M016
+title: "Octave and third-octave band power"
+slug: octave-and-third-octave-band-power
+priority: p1
+profile: implementation
+objective: "Standards-style centres with derived band edges; power integrated over bins, never averaged dB; band-centre and two-tone tests (§46-§48, §141)."
+scope:
+  - "src"
+  - "tests"
+depends_on:
+  - "V306"
+acceptance_criteria:
+  - "Standards-style centres with derived band edges; power integrated over bins, never averaged dB; band-centre and two-tone tests (§46-§48, §141)."
+  - "Specification: docs/specs/oscilla-v3-measure.md"
+validation:
+  - "npm run release-gate"
+evidence_required:
+  - "verified"
+created_at: 2026-10-02

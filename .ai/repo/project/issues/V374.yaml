@@ -1,0 +1,20 @@
+id: V374
+milestone: M019
+title: "Responsive layout"
+slug: responsive-layout
+priority: p1
+profile: implementation
+objective: "Guided measurement first on phones; dense lab on desktop (§115-§116)."
+scope:
+  - "src"
+  - "tests"
+depends_on:
+  - "V371"
+acceptance_criteria:
+  - "Guided measurement first on phones; dense lab on desktop (§115-§116)."
+  - "Specification: docs/specs/oscilla-v3-measure.md"
+validation:
+  - "npm run release-gate"
+evidence_required:
+  - "verified"
+created_at: 2026-10-02

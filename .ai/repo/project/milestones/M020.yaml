@@ -1,0 +1,15 @@
+id: M020
+title: "V3 verification and release"
+slug: v3-release
+order: 20
+priority: p0
+problem: "V3 is not done until it is verified, reviewed, documented, released and publicly checked."
+outcome: "OSCILLA 3.0.0 deployed to Pages from the gated release workflow, with V1/V2 regressions green, V3 suites green, audits closed and public version and commit verified."
+acceptance_criteria:
+  - "OSCILLA 3.0.0 deployed to Pages from the gated release workflow, with V1/V2 regressions green, V3 suites green, audits closed and public version and commit verified."
+  - "Specification: docs/specs/oscilla-v3-measure.md"
+validation:
+  - "npm run release-gate"
+evidence_required:
+  - "milestone_verified"
+created_at: 2026-10-02

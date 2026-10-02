@@ -1,0 +1,22 @@
+id: V364
+milestone: M018
+title: "Quality assessment and reasons"
+slug: quality-assessment-and-reasons
+priority: p1
+profile: implementation
+objective: "Named, documented thresholds; versioned oscilla.confidence.v1; every status carries reasons matching the data; synthetic clean/low-SNR/clipped/high-variance/uncalibrated/partial cases (§64-§66, §143, §198-§199)."
+scope:
+  - "src"
+  - "tests"
+depends_on:
+  - "V361"
+  - "V362"
+  - "V363"
+acceptance_criteria:
+  - "Named, documented thresholds; versioned oscilla.confidence.v1; every status carries reasons matching the data; synthetic clean/low-SNR/clipped/high-variance/uncalibrated/partial cases (§64-§66, §143, §198-§199)."
+  - "Specification: docs/specs/oscilla-v3-measure.md"
+validation:
+  - "npm run release-gate"
+evidence_required:
+  - "verified"
+created_at: 2026-10-02

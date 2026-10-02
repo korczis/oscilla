@@ -19,3 +19,15 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-02
+started_at: 2026-10-02T03:27:24Z
+updated_at: 2026-10-02T03:27:30Z
+verified_at: 2026-10-02T03:27:27Z
+completed_at: 2026-10-02T03:27:30Z
+evidence:
+  - covers: verified
+    type: test
+    command: "npm test (tests/unit/social-meta.test.mjs); npm run verify-dist; node tests/browser/app.cjs; curl https://korczis.github.io/oscilla/ and og-image.png"
+    result: "Live at c367cdb (PR #7, Pages run 36959851459 success): favicon (inline SVG wave mark), apple-touch-icon 180 px, 2 theme-color, 11 og: and 5 twitter: tags with absolute URLs; og-image.png HTTP 200 image/png 1200x630 186215 B; unit 1388/1388; app.cjs 21/21 chromium/firefox/webkit x file/http; dist single file."
+    artifact: "c367cdb"
+    commit: c367cdb080a8f6b812622e07d9a0b0a2f7b81651
+    recorded_at: 2026-10-02T03:27:29Z

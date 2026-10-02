@@ -1,0 +1,20 @@
+id: V383
+milestone: M020
+title: "Science, UX, expert, performance and memory audits"
+slug: science-ux-expert-performance-and-memory-audits
+priority: p1
+profile: implementation
+objective: "Final audits per §237-§242, including no SPL without calibration and no unlabelled smoothing/normalization."
+scope:
+  - "src"
+  - "tests"
+depends_on:
+  - "V381"
+acceptance_criteria:
+  - "Final audits per §237-§242, including no SPL without calibration and no unlabelled smoothing/normalization."
+  - "Specification: docs/specs/oscilla-v3-measure.md"
+validation:
+  - "npm run release-gate"
+evidence_required:
+  - "verified"
+created_at: 2026-10-02
