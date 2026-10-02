@@ -16,3 +16,14 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-02
+started_at: 2026-10-02T09:33:44Z
+updated_at: 2026-10-02T09:33:49Z
+completed_at: 2026-10-02T09:33:49Z
+evidence:
+  - covers: verified
+    type: test
+    command: "node tests/browser/sequencer.cjs"
+    result: "Block sequencer compiled to scheduled Web Audio events; dominant frequency per segment, click-free boundaries, 0 live sources after stop and 20 restarts"
+    artifact: "b08ed34"
+    commit: 5fbf451eeebf6618f3abb12b9eb7047adb98903f
+    recorded_at: 2026-10-02T09:33:47Z

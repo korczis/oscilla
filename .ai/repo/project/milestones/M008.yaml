@@ -12,3 +12,12 @@ validation:
 evidence_required:
   - "milestone_verified"
 created_at: 2026-10-02
+updated_at: 2026-10-02T09:35:37Z
+evidence:
+  - covers: milestone_verified
+    type: ci
+    command: "npm run release-gate"
+    result: "every issue of the milestone done with recorded evidence; V2 merged (PR #3) and extended (PRs #8, #10, #12, #15, #18); release gate and Pages verify-deploy green at 5fbf451"
+    artifact: "5fbf451"
+    commit: 5fbf451eeebf6618f3abb12b9eb7047adb98903f
+    recorded_at: 2026-10-02T09:35:37Z
