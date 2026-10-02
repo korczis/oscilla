@@ -423,10 +423,15 @@ const observeMargin = (g) => Math.min(g.tick, MAX_TICK_S) + POLL_S;
 /**
  * The audio graph torn down within `bound` seconds of audio time: nothing left (oscillators,
  * voices, nodes), every oscillator's stop() taking effect at or before the bound on the audio
- * clock (exact), and the empty graph observed no later than the bound plus the margin above.
+ * clock, and the empty graph observed no later than the bound plus the margin above.
+ * stopAt is measured from the currentTime read when the request was made. Firefox does not
+ * advance currentTime within a task, so that reading can be up to one clock tick behind the
+ * audio already rendered; V249 anchors the release on the rendered time, which can therefore
+ * land up to one tick (at most MAX_TICK_S) after the stale reference. Nothing else is relaxed.
  */
+const scheduleMargin = (g) => Math.min(g.tick, MAX_TICK_S);
 const tornDown = (g, bound) => g.oscs === 0 && g.voices === 0 && g.nodes === 0
-  && g.stopAt <= bound + 1e-6 && g.after <= bound + observeMargin(g);
+  && g.stopAt <= bound + scheduleMargin(g) + 1e-6 && g.after <= bound + observeMargin(g);
 /** Ended at `at` +- tol seconds of audio time: scheduled there, and observed no later. */
 const endsAt = (g, at, tol) => g.oscs === 0 && Math.abs(g.stopAt - at) < tol
   && g.after <= at + tol + observeMargin(g);
