@@ -1,0 +1,16 @@
+id: M011
+title: "Release engineering, provenance and product graph"
+slug: release-engineering
+order: 11
+priority: p0
+problem: "V2 is public but its version has several authorities, the deployed page cannot prove which commit produced it, a Pages mismatch only warns, visual and specialised suites are not gated, and Majordomus does not model the product."
+outcome: "One canonical product version; every public page proves its version, source digest and commit; deployment mismatch is fatal; the release gate runs every authoritative suite including visual; Majordomus answers what OSCILLA is and why; v2.0.0 tagged, released and verified at the public URL."
+acceptance_criteria:
+  - "One canonical product version; every public page proves its version, source digest and commit; deployment mismatch is fatal; the release gate runs every authoritative suite including visual; Majordomus answers what OSCILLA is and why; v2.0.0 tagged, released and verified at the public URL."
+validation:
+  - "npm run release-gate"
+  - "majordomus doctor"
+  - "majordomus plan validate"
+evidence_required:
+  - "milestone_verified"
+created_at: 2026-10-02

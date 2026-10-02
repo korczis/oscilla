@@ -1,0 +1,22 @@
+id: R003
+milestone: M011
+title: "Deterministic build provenance"
+slug: deterministic-build-provenance
+priority: p0
+profile: implementation
+objective: "One release-metadata helper projects version and a source digest into the build via esbuild define; the committed dist stays byte-reproducible; a delimited metadata region carries commit and channel stamped at deploy; UI shows the version, About/debug show commit, digest and channel."
+scope:
+  - "scripts"
+  - "src"
+  - "dist"
+depends_on:
+  - "R002"
+acceptance_criteria:
+  - "One release-metadata helper projects version and a source digest into the build via esbuild define; the committed dist stays byte-reproducible; a delimited metadata region carries commit and channel stamped at deploy; UI shows the version, About/debug show commit, digest and channel."
+validation:
+  - "npm run release-gate"
+  - "majordomus doctor"
+  - "majordomus plan validate"
+evidence_required:
+  - "verified"
+created_at: 2026-10-02

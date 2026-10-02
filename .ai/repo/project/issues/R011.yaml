@@ -1,0 +1,20 @@
+id: R011
+milestone: M011
+title: "Release and deployment records"
+slug: release-and-deployment-records
+priority: p0
+profile: implementation
+objective: "Release and deployment records for the public Pages deployment where Majordomus supports them."
+scope:
+  - ".ai/repo"
+depends_on:
+  - "R016"
+acceptance_criteria:
+  - "Release and deployment records for the public Pages deployment where Majordomus supports them."
+validation:
+  - "npm run release-gate"
+  - "majordomus doctor"
+  - "majordomus plan validate"
+evidence_required:
+  - "verified"
+created_at: 2026-10-02

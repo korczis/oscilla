@@ -1,0 +1,22 @@
+id: R007
+milestone: M011
+title: "Browser test consolidation"
+slug: browser-test-consolidation
+priority: p0
+profile: implementation
+objective: "Every browser suite is classified; authoritative suites (dsp, labs, sequencer, app, layout, engine) run in the release gate; the stale skeleton dist-gate is removed; fast verify is separated from the full gate."
+scope:
+  - "tests"
+  - "package.json"
+  - ".github"
+depends_on:
+  - "R001"
+acceptance_criteria:
+  - "Every browser suite is classified; authoritative suites (dsp, labs, sequencer, app, layout, engine) run in the release gate; the stale skeleton dist-gate is removed; fast verify is separated from the full gate."
+validation:
+  - "npm run release-gate"
+  - "majordomus doctor"
+  - "majordomus plan validate"
+evidence_required:
+  - "verified"
+created_at: 2026-10-02
