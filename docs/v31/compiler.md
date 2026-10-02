@@ -212,3 +212,12 @@ method (an engine change, out of this issue's scope):
   `info.accounting`, and gates envelopes through `handle.gate(t, durS)`.
 - Microphone permission: `runtime.setOptions({ inputPermission: true })` re-applies the model;
   degraded microphones become `node-replace`d and open the input.
+
+## Decisions (recorded with `majordomus decision add`, 2026-10-02)
+
+- **Studio output and the Playground voice are exclusive.** Starting one stops the other through
+  the normal release path; both pass the same master safety chain. Summing them would make the
+  heard topology differ from either view (V3.1 spec §1) and double the level.
+- **Automated parameters belong to their lane.** For a parameter with an automation lane the
+  runtime does not glide its base value; the lane owns the AudioParam and modulation edges add on
+  top (`automation.js` `combineAutomationAndModulation`).
