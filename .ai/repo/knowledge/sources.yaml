@@ -186,3 +186,32 @@ sources:
     discovery: vcs
     pathspec: ':(glob)docs/claims/*.md'
     required: false
+
+  # What the claims of docs/CLAIMS.yaml point at: an implementation file, a test case and
+  # the document that defines the behaviour are graph nodes only when a class discovers
+  # them; a tracked path no class names gives the claim no edge at all. OSCILLA Studio
+  # (V3.1) claims name src/js/studio/, tests/unit/ and the Studio model and specification
+  # documents.
+  - id: implementation
+    kind: implementation
+    discovery: vcs
+    pathspec: ':(glob)src/js/**/*.js'
+    required: false
+
+  - id: unit_test
+    kind: test
+    discovery: vcs
+    pathspec: ':(glob)tests/unit/*.test.mjs'
+    required: false
+
+  - id: specification
+    kind: document
+    discovery: vcs
+    pathspec: ':(glob)docs/specs/*.md'
+    required: false
+
+  - id: design_note
+    kind: document
+    discovery: vcs
+    pathspec: ':(glob)docs/v31/*.md'
+    required: false

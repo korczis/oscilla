@@ -32,6 +32,14 @@ categories:
     title: Repository knowledge
     summary: What the repository declares about itself, and the plan, searched and validated.
     order: 70
+  # OSCILLA Studio (V3.1) acceptance, specification section 14 UC1-UC14. Each use case
+  # names the claims of docs/CLAIMS.yaml that prove it; its live scenario checks that a
+  # guaranteed claim's implementation and test, or a planned claim's specification, are
+  # tracked and wired.
+  - id: studio
+    title: Studio signal programming
+    summary: Building, sequencing, automating and measuring with the OSCILLA Studio graph and timeline.
+    order: 250
   - id: extension
     title: Extension
     summary: Adding a rule, a command or a use case as data, with the checks that follow from it.
