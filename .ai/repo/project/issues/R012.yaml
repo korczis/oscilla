@@ -1,0 +1,21 @@
+id: R012
+milestone: M011
+title: "Knowledge graph validation"
+slug: knowledge-graph-validation
+priority: p0
+profile: implementation
+objective: "Majordomus knowledge discovers the new objects and answers what OSCILLA is, why one file, why native Web Audio, how versions are chosen, and what is public."
+scope:
+  - ".ai/repo/knowledge"
+depends_on:
+  - "R009"
+  - "R010"
+acceptance_criteria:
+  - "Majordomus knowledge discovers the new objects and answers what OSCILLA is, why one file, why native Web Audio, how versions are chosen, and what is public."
+validation:
+  - "npm run release-gate"
+  - "majordomus doctor"
+  - "majordomus plan validate"
+evidence_required:
+  - "verified"
+created_at: 2026-10-02

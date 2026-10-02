@@ -1,0 +1,22 @@
+id: R006
+milestone: M011
+title: "Visual regression gate"
+slug: visual-regression-gate
+priority: p0
+profile: implementation
+objective: "The 1536x1024 reference comparison runs in the release gate and CI with per-region thresholds measured from run-to-run variance; failures upload current, reference, diff and report."
+scope:
+  - "scripts"
+  - "tests/visual"
+  - ".github"
+depends_on:
+  - "R001"
+acceptance_criteria:
+  - "The 1536x1024 reference comparison runs in the release gate and CI with per-region thresholds measured from run-to-run variance; failures upload current, reference, diff and report."
+validation:
+  - "npm run release-gate"
+  - "majordomus doctor"
+  - "majordomus plan validate"
+evidence_required:
+  - "verified"
+created_at: 2026-10-02
