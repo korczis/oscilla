@@ -32,3 +32,6 @@ jobs:
       - name: Spec checks (file://, chromium)
         run: |
           if [ -f tests/spec.cjs ]; then node tests/spec.cjs; fi
+      - name: Engine checks (file://, chromium)
+        run: |
+          if [ -f tests/engine.cjs ]; then node tests/engine.cjs; fi

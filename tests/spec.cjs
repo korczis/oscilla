@@ -3271,7 +3271,7 @@ async function main() {
     });
     await waitTrue(page, () => window.Alpine.$data(document.body).status === 'READY', null, 3000);
     const statusInfo = await page.evaluate(() => {
-      const re = /\b(READY|PLAYING|RELEASING|STOPPED|ERROR)\b/;
+      const re = /\b(READY|PLAYING|RELEASING|SUSPENDED|STOPPED|ERROR)\b/;
       const header = document.querySelector('header');
       // Announced: the header live region, which speaks only PLAYING, STOPPED and ERROR.
       const el = header.querySelector('[role=status]');
