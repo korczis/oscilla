@@ -20,7 +20,8 @@ when opened straight from disk.
 ## The V2 laboratory
 
 - **Generator:** sine, triangle, sawtooth and square sources, set by frequency or by note, with
-  tone, pulse, burst, sweep, chirp, siren, wobble, AM, FM, random and step patterns, plus a dual
+  continuous and finite tone, pulse, burst, sweep up/down, ping-pong, chirp, siren, wobble, AM,
+  FM, random, alternating, octave-stepping and user-defined step sequences, plus a dual
   oscillator.
 - **Analyzer:** a live spectrum on log or linear frequency axes, with the requested frequency
   marked.
@@ -60,7 +61,7 @@ when opened straight from disk.
   individual. Each entry cites its source (for example Heffner & Heffner 2007) and lists
   differing published values.
 
-The reasoning is in [ADR 0017](.ai/repo/adrs/0017-relative-levels-spl-only-when-calibrated.md)
+The reasoning is in the proposed [ADR 0017](.ai/repo/adrs/0017-relative-levels-spl-only-when-calibrated.md)
 and the rule [`project.no-fake-science`](.ai/repo/rules/project/no-fake-science.v1.md).
 
 ## Architecture
@@ -183,7 +184,8 @@ GitHub-Pages-like `/oscilla/` sub-path, and the run must produce zero console er
   3. `npm run release:publish` is a dry run by default. With `-- --yes`, on `main`, it creates
      the annotated tag `vX.Y.Z`, pushes it, waits for the Pages deployment, verifies it, and
      creates the GitHub Release with notes generated from the commits since the previous tag.
-- **Tags** are `vX.Y.Z`. V1, the original hand-written single file, is `v1.0.0`.
+- **Tags** are `vX.Y.Z`. V1, the original hand-written single file, is `v1.0.0` (deployed) and
+  `v1.0.1` (a maintenance tag that was never deployed).
 - **In the app.** The About dialog shows the version, the commit (linked to GitHub, or
   "source build" for a local build), the channel and the source digest. Opening the page with
   `?debug=1` adds the full commit SHA, the source date, the artifact hash, the config schema
@@ -204,6 +206,10 @@ issues in [`.ai/repo/project/`](.ai/repo/project/)), the architecture decisions
 ([`.ai/repo/adrs/`](.ai/repo/adrs/)), features, use cases, workflows and knowledge notes.
 `majordomus plan status` shows milestone progress. AI workers start at
 [`AGENTS.md`](AGENTS.md) (Claude Code: [`CLAUDE.md`](CLAUDE.md)).
+
+Planned, not shipped: OSCILLA V3 Measure ([`docs/specs/oscilla-v3-measure.md`](docs/specs/oscilla-v3-measure.md))
+and V3.1 Studio ([`docs/specs/oscilla-v3.1-studio.md`](docs/specs/oscilla-v3.1-studio.md)),
+milestones M012-M033.
 
 ## Privacy
 
