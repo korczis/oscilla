@@ -1,0 +1,20 @@
+id: V362
+milestone: M018
+title: "SNR and reliability masks"
+slug: snr-and-reliability-masks
+priority: p1
+profile: implementation
+objective: "Frequency-dependent SNR against the preflight noise floor; per-band reliability mask (§31-§32, §221)."
+scope:
+  - "src"
+  - "tests"
+depends_on:
+  - "V321"
+acceptance_criteria:
+  - "Frequency-dependent SNR against the preflight noise floor; per-band reliability mask (§31-§32, §221)."
+  - "Specification: docs/specs/oscilla-v3-measure.md"
+validation:
+  - "npm run release-gate"
+evidence_required:
+  - "verified"
+created_at: 2026-10-02

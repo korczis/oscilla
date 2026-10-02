@@ -1,0 +1,20 @@
+id: R017
+milestone: M011
+title: "Post-deploy audit"
+slug: post-deploy-audit
+priority: p0
+profile: implementation
+objective: "The public page is proven to carry the release version and commit, matches the artifact, boots and plays in a browser; evidence recorded."
+scope:
+  - ".ai/repo"
+depends_on:
+  - "R016"
+acceptance_criteria:
+  - "The public page is proven to carry the release version and commit, matches the artifact, boots and plays in a browser; evidence recorded."
+validation:
+  - "npm run release-gate"
+  - "majordomus doctor"
+  - "majordomus plan validate"
+evidence_required:
+  - "verified"
+created_at: 2026-10-02

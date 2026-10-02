@@ -17,7 +17,62 @@ import {
   HARMONIC_DB_GRID, harmonicAxis, harmonicBarFraction,
 } from '../visualization/harmonics.js';
 
-const GUTTER = { l: 30, r: 6, t: 16, b: 15 };
+const GUTTER = { l: 24, r: 6, t: 16, b: 14 };
+const FALLBACK_FONT = 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+let uiFont = '';
+
+/** The UI font stack (--osc-font), read once: p5's textFont() cannot take a CSS stack. */
+function fontStack() {
+  if (!uiFont) {
+    let v = '';
+    try {
+      v = getComputedStyle(document.documentElement).getPropertyValue('--osc-font').trim();
+    } catch (e) { /* no DOM (tests) */ }
+    uiFont = v || FALLBACK_FONT;
+  }
+  return uiFont;
+}
+
+/**
+ * Text in the UI font straight on the 2D context (the host's label() uses the V1 monospace
+ * font, whose fixed advance the V1 views rely on). col is a p5.Color.
+ */
+function uiLabel(p, txt, x, y, col, size, align) {
+  const ctx = p.drawingContext;
+  ctx.save();
+  ctx.font = `${size}px ${fontStack()}`;
+  ctx.fillStyle = col.toString();
+  ctx.textAlign = align === p.RIGHT ? 'right' : align === p.CENTER ? 'center' : 'left';
+  ctx.textBaseline = 'alphabetic';
+  ctx.fillText(txt, x, y);
+  ctx.restore();
+}
+
+let bandPal = null;
+let bandColor = null;
+
+/** The live band's fill: the trace colour at ~22 % (cached per palette object). */
+function bandFill(p, pal) {
+  if (bandPal !== pal) {
+    bandColor = p.color(pal.accent.toString());
+    bandColor.setAlpha(56);
+    bandPal = pal;
+  }
+  return bandColor;
+}
+
+/** The first (longest) text that fits `w` px in the UI font, or ''. */
+function uiPickFit(p, list, size, w) {
+  const ctx = p.drawingContext;
+  ctx.save();
+  ctx.font = `${size}px ${fontStack()}`;
+  let out = '';
+  for (let i = 0; i < list.length; i++) {
+    if (ctx.measureText(list[i]).width <= w) { out = list[i]; break; }
+  }
+  ctx.restore();
+  return out;
+}
 
 function msLabel(ms) {
   return ms >= 10 ? `${Math.round(ms)} ms` : `${sig(ms, 2)} ms`;
@@ -37,7 +92,7 @@ export function createScopeView({ getWindowMs }) {
   return {
     id: 'scope',
     draw(h, st) {
-      const { p, W, H, pal, label, bandMin, bandMax } = h;
+      const { p, W, H, pal, bandMin, bandMax } = h;
       const L = st.live;
       const x0 = GUTTER.l;
       const x1 = W - GUTTER.r;
@@ -56,15 +111,15 @@ export function createScopeView({ getWindowMs }) {
         const x = x0 + (t / windowMs) * (x1 - x0);
         p.line(x, y0, x, y1);
         const last = t > windowMs - step / 2;
-        label(t === 0 ? '0' : msLabel(t), last ? x1 : x, H - 3, pal.muted, 9,
+        uiLabel(p, t === 0 ? '0' : msLabel(t), last ? x1 : x, H - 3, pal.muted, 8.5,
           t === 0 ? p.LEFT : last ? p.RIGHT : p.CENTER);
       }
       p.line(x0, ymid, x1, ymid);
       p.line(x0, ymid - hh, x1, ymid - hh);
       p.line(x0, ymid + hh, x1, ymid + hh);
-      label('+1', x0 - 4, ymid - hh + 3, pal.muted, 9, p.RIGHT);
-      label('0', x0 - 4, ymid + 3, pal.muted, 9, p.RIGHT);
-      label('-1', x0 - 4, ymid + hh + 3, pal.muted, 9, p.RIGHT);
+      uiLabel(p, '+1', x0 - 4, ymid - hh + 3, pal.muted, 8.5, p.RIGHT);
+      uiLabel(p, '0', x0 - 4, ymid + 3, pal.muted, 8.5, p.RIGHT);
+      uiLabel(p, '-1', x0 - 4, ymid + hh + 3, pal.muted, 8.5, p.RIGHT);
 
       const d = L.timeData;
       const sr = L.sampleRate;
@@ -106,11 +161,11 @@ export function createScopeView({ getWindowMs }) {
             bandMin[c] = ymid - clamp(lo / g, -1.15, 1.15) * hh;
             bandMax[c] = ymid - clamp(hi / g, -1.15, 1.15) * hh;
           }
-          drawBand(p, pal, x0, cols, bandMin, bandMax, pal.accent, pal.accentSoft);
+          drawBand(p, pal, x0, cols, bandMin, bandMax, pal.accent, bandFill(p, pal));
         }
         const room = x1 - x0 - 4;
         const head = `output analyser · ${msLabel(windowMs)} window`;
-        label(h.pickFit([
+        uiLabel(p, uiPickFit(p, [
           `${head} · relative to set gain${sparse ? ' · < 4 samples per cycle: min/max band' : ''}`,
           `${head}${sparse ? ' · min/max band' : ''}`, head, 'output analyser'], 9, room),
         x0 + 2, 11, pal.muted, 9);
@@ -143,7 +198,7 @@ export function createScopeView({ getWindowMs }) {
       }
       const state = L.hasCtx ? 'not playing' : 'audio not started';
       const what = `computed ${formatFrequency(f)} ${shape}`;
-      label(h.pickFit([
+      uiLabel(p, uiPickFit(p, [
         `${state} · ${what} over ${msLabel(windowMs)} · press Hold to Play for the live trace`,
         `${state} · ${what} over ${msLabel(windowMs)}`, `${state} · ${what}`, state],
       9, x1 - x0 - 4), x0 + 2, 11, pal.muted, 9);
@@ -152,9 +207,9 @@ export function createScopeView({ getWindowMs }) {
 }
 
 function drawBand(p, pal, x0, cols, bandMin, bandMax, stroke, fill) {
-  p.fill(fill);
+  p.fill(fill || pal.accentSoft);
   p.stroke(stroke);
-  p.strokeWeight(1);
+  p.strokeWeight(1.5);
   p.beginShape();
   for (let c = 0; c < cols; c++) p.vertex(x0 + c + 0.5, bandMax[c]);
   for (let c = cols - 1; c >= 0; c--) p.vertex(x0 + c + 0.5, bandMin[c]);
@@ -166,37 +221,37 @@ export function createHarmonicBarsView() {
   return {
     id: 'harmonicBars',
     draw(h, st) {
-      const { p, W, H, pal, label, logX, dashedV } = h;
+      const { p, W, H, pal, logX, dashedV } = h;
       const hm = st.harm;
       const hb = st.source === 'dual' ? st.harmB : null;
       const x0 = 34;
       const x1 = W - 10;
       const y0 = 22;
       const y1 = H - 18;
-      label('THEORETICAL OSCILLATOR SPECTRUM (computed from the waveform, not measured)',
+      uiLabel(p, 'THEORETICAL OSCILLATOR SPECTRUM (computed from the waveform, not measured)',
         x0, 13, pal.fg, 10);
       p.stroke(pal.gridSoft);
       p.strokeWeight(1);
       for (const db of HARMONIC_DB_GRID) {
         const y = y1 - harmonicBarFraction(db) * (y1 - y0);
         p.line(x0, y, x1, y);
-        label(`${db}`, x0 - 4, y + 3, pal.muted, 9, p.RIGHT);
+        uiLabel(p, `${db}`, x0 - 4, y + 3, pal.muted, 9, p.RIGHT);
       }
       const axis = harmonicAxis(hm, hb);
       if (!axis) {
-        label('UNAVAILABLE', x0 + 4, (y0 + y1) / 2, pal.muted, 10);
+        uiLabel(p, 'UNAVAILABLE', x0 + 4, (y0 + y1) / 2, pal.muted, 10);
         return;
       }
       const ny = st.nyquist;
       if (ny > axis.fmin && ny < axis.fmax) {
         const nx = logX(ny, axis.fmin, axis.fmax, x0, x1);
         dashedV(nx, y0, y1, pal.warn);
-        label(`Nyquist ${formatFrequency(ny)}${st.provisional ? ' (provisional)' : ''}`,
+        uiLabel(p, `Nyquist ${formatFrequency(ny)}${st.provisional ? ' (provisional)' : ''}`,
           Math.min(nx - 4, x1 - 4), y0 + 9, pal.warn, 9, p.RIGHT);
       }
       drawSet(hm, pal.accent, -2);
       if (hb && hb.list.length) drawSet(hb, pal.accent2, 2);
-      label(hm.summary, x0, H - 4, pal.muted, 9);
+      uiLabel(p, hm.summary, x0, H - 4, pal.muted, 9);
 
       function drawSet(table, col, dx) {
         for (let i = 0; i < table.list.length; i++) {

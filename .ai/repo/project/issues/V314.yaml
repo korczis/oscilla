@@ -1,0 +1,20 @@
+id: V314
+milestone: M013
+title: "Absolute level calibration and SPL labels"
+slug: absolute-level-calibration-and-spl-labels
+priority: p1
+profile: implementation
+objective: "Optional 94 dB SPL @ 1 kHz style reference with stored offset and conditions; "Relative level, dBFS-like" everywhere else; no default SPL (§23-§24, §96, §98)."
+scope:
+  - "src"
+  - "tests"
+depends_on:
+  - "V311"
+acceptance_criteria:
+  - "Optional 94 dB SPL @ 1 kHz style reference with stored offset and conditions; "Relative level, dBFS-like" everywhere else; no default SPL (§23-§24, §96, §98)."
+  - "Specification: docs/specs/oscilla-v3-measure.md"
+validation:
+  - "npm run release-gate"
+evidence_required:
+  - "verified"
+created_at: 2026-10-02

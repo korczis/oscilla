@@ -26,12 +26,14 @@
   --osc-border-strong: #1b2a3b;    /* control outline (Trigger, tiles) */
   --osc-border-soft: #0d1926;      /* inner separators, chart frames */
   --osc-grid: rgb(120 150 180 / 10%); /* chart grid lines */
+  --osc-seq-grid: rgb(120 150 180 / 14%); /* sequencer tick lines (x=1080, y=515) */
 
   /* Text */
   --osc-text: #f3f6f9;             /* titles, values, active labels */
   --osc-text-2: #c4d2df;           /* nav, tabs, body labels */
   --osc-text-muted: #94a9bd;       /* secondary readouts (15.50 kHz, 20 Hz) */
   --osc-text-dim: #66798d;         /* axis ticks, disabled */
+  --osc-text-unit: #b8d4f0;        /* big readout unit ("Hz" at x=186, y=245) */
   --osc-text-on-accent: #ffffff;
   --osc-text-on-green: #04261a;    /* "Use microphone" label */
   --osc-text-on-warm: #2a1600;     /* text on orange/green sequencer blocks */
@@ -168,10 +170,17 @@
   --osc-border-strong: #c3cddb;
   --osc-border-soft: #e2e8f0;
   --osc-grid: rgb(40 60 90 / 10%);
+  --osc-seq-grid: rgb(40 60 90 / 14%);
   --osc-text: #0b1726;
   --osc-text-2: #2b3b50;
   --osc-text-muted: #55677d;
-  --osc-text-dim: #7d8ea3;
+  --osc-text-dim: #687a90;         /* 4.4:1 on white (axis ticks stay legible) */
+  --osc-text-unit: #2f5f93;
+  /* Accents used as text or thin traces on white (phase A/B labels, Lissajous, ADSR) are
+     darkened to >= 4.5:1; the dark-theme values are under 3.3:1 on white. */
+  --osc-cyan: #0a7fb0;
+  --osc-magenta: #c2268f;
+  --osc-purple: #7a45d8;
   --osc-blue: #0067d6;
   --osc-blue-hover: #0a74e6;
   --osc-blue-press: #0057b5;

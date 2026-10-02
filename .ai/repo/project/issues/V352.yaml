@@ -1,0 +1,20 @@
+id: V352
+milestone: M017
+title: "Provenance, hashes and metadata"
+slug: provenance-hashes-and-metadata
+priority: p1
+profile: implementation
+objective: "Version, commit, schema, algorithm IDs, sample rate, exposed device metadata only, calibration identity, parameters, timestamp; SHA-256 configuration hash; manual environment notes (§51-§53, §99-§101, §176-§177)."
+scope:
+  - "src"
+  - "tests"
+depends_on:
+  - "V351"
+acceptance_criteria:
+  - "Version, commit, schema, algorithm IDs, sample rate, exposed device metadata only, calibration identity, parameters, timestamp; SHA-256 configuration hash; manual environment notes (§51-§53, §99-§101, §176-§177)."
+  - "Specification: docs/specs/oscilla-v3-measure.md"
+validation:
+  - "npm run release-gate"
+evidence_required:
+  - "verified"
+created_at: 2026-10-02

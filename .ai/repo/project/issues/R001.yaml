@@ -1,0 +1,29 @@
+id: R001
+milestone: M011
+title: "Baseline audit"
+slug: baseline-audit
+priority: p0
+profile: implementation
+objective: "Verified baseline of versions, tags, deployment, build, workflows, tests, Majordomus state and licences, with confirmed and refuted hypotheses."
+scope:
+  - ".ai/repo"
+acceptance_criteria:
+  - "Verified baseline of versions, tags, deployment, build, workflows, tests, Majordomus state and licences, with confirmed and refuted hypotheses."
+validation:
+  - "npm run release-gate"
+  - "majordomus doctor"
+  - "majordomus plan validate"
+evidence_required:
+  - "verified"
+created_at: 2026-10-02
+started_at: 2026-10-02T03:40:49Z
+updated_at: 2026-10-02T03:40:54Z
+completed_at: 2026-10-02T03:40:54Z
+evidence:
+  - covers: verified
+    type: manual
+    command: "read-only baseline audit of origin/main f187f66 (git, gh, curl, npm audit, majordomus doctor/plan/usecase/adr, visual-compare x3)"
+    result: "confirmed: version drift (package.json 2.0.0-dev vs version.js 2.0.0 vs tests), no commit provenance, empty features/use-cases, no V2 ADRs, visual compare and dsp/labs/sequencer suites ungated, dist-gate stale, Pages mismatch only warns, repo description outdated, licence undecided; refuted: live Pages currently byte-identical to dist"
+    artifact: "f187f66"
+    commit: f187f664893ce0444c03629b0d8afa66d6d9f715
+    recorded_at: 2026-10-02T03:40:52Z

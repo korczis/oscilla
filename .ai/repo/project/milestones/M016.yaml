@@ -1,0 +1,15 @@
+id: M016
+title: "V3 RTA"
+slug: v3-rta
+order: 16
+priority: p0
+problem: "The V2 analyzer shows an FFT but no band analysis with correct power aggregation."
+outcome: "FFT, octave and third-octave RTA with power-integrated bands, documented instant/fast/slow averaging, peak hold and freeze."
+acceptance_criteria:
+  - "FFT, octave and third-octave RTA with power-integrated bands, documented instant/fast/slow averaging, peak hold and freeze."
+  - "Specification: docs/specs/oscilla-v3-measure.md"
+validation:
+  - "npm run release-gate"
+evidence_required:
+  - "milestone_verified"
+created_at: 2026-10-02

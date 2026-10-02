@@ -1,0 +1,20 @@
+id: V375
+milestone: M019
+title: "Accessibility"
+slug: accessibility
+priority: p1
+profile: implementation
+objective: "Keyboard control, textual chart summaries, sparse aria-live measurement announcements, no colour-only meaning (§118, §150-§151)."
+scope:
+  - "src"
+  - "tests"
+depends_on:
+  - "V371"
+acceptance_criteria:
+  - "Keyboard control, textual chart summaries, sparse aria-live measurement announcements, no colour-only meaning (§118, §150-§151)."
+  - "Specification: docs/specs/oscilla-v3-measure.md"
+validation:
+  - "npm run release-gate"
+evidence_required:
+  - "verified"
+created_at: 2026-10-02

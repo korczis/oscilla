@@ -22,6 +22,7 @@ import {
 import { buildPixelMap, sampleSpectrum, levelNear } from './spectrum-data.js';
 import { chartTheme, withAlpha, uplotAxis, canvasFont, observeSize } from './chart-theme.js';
 import { onFrame } from './frame-loop.js';
+import { octaveCMarkers, layoutMarkerLabels } from '../visualization/spectrum-data.js';
 
 export const SPECTRUM_Y_LABEL = 'RELATIVE LEVEL (dBFS-like, uncalibrated)';
 
@@ -42,6 +43,8 @@ const DEFAULTS = {
   yAxisGap: 10,
   padding: [16, 8, 0, 0],
   legend: false, // draw an in-chart legend (dual mode, reference mic panel)
+  octaveMarkers: true, // single mode: C1…C10 ticks + labels along the plot floor (getA4())
+  getA4: null, // () => A4 tuning in Hz (default 440)
   autoFrame: true, // subscribe to the shared rAF loop
 };
 
@@ -178,6 +181,9 @@ export function createSpectrumChart(host, options = {}) {
       ctx.fill();
       ctx.stroke();
     }
+    // Octave-C markers (single mode): short ticks on the plot floor, labels laid out by
+    // layoutMarkerLabels so they never overlap (a label that would is hidden).
+    if (!dual && o.octaveMarkers) drawOctaveMarkers(self, ctx, dpr, markerX);
     // Level-scale caption (no calibrated unit is implied).
     if (o.yLabel) {
       ctx.font = canvasFont(theme, 8.5 * dpr);
@@ -213,6 +219,34 @@ export function createSpectrumChart(host, options = {}) {
 
   function xMin() {
     return o.scale === 'log' ? o.minHz : 0;
+  }
+
+  function drawOctaveMarkers(self, ctx, dpr, requestedX) {
+    const { left, top, width, height } = self.bbox;
+    const a4 = (o.getA4 && Number(o.getA4())) || 440;
+    const markers = octaveCMarkers(a4, { fmin: Math.max(xMin(), 1), fmax: o.maxHz });
+    if (!markers.length) return;
+    ctx.font = canvasFont(theme, 8 * dpr);
+    const placed = layoutMarkerLabels(markers, (f) => self.valToPos(f, 'x', true),
+      (label) => ctx.measureText(label).width, left + width);
+    const floor = top + height;
+    ctx.strokeStyle = withAlpha(theme.textMuted, 0.5);
+    ctx.lineWidth = dpr;
+    ctx.fillStyle = theme.textDim;
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'bottom';
+    for (const m of placed) {
+      const x = Math.round(m.x) + 0.5;
+      ctx.beginPath();
+      ctx.moveTo(x, floor - 4 * dpr);
+      ctx.lineTo(x, floor);
+      ctx.stroke();
+      // A label never covers the requested-frequency marker line either.
+      const w = ctx.measureText(m.label).width;
+      const onMarker = requestedX != null && requestedX >= m.lx - 3 * dpr
+        && requestedX <= m.lx + w + 3 * dpr;
+      if (m.show && !onMarker) ctx.fillText(m.label, m.lx, floor - 3 * dpr);
+    }
   }
 
   function chipLevelText(db) {

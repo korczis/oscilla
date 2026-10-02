@@ -1,0 +1,15 @@
+id: M018
+title: "V3 measurement quality"
+slug: v3-quality
+order: 18
+priority: p0
+problem: "Nothing tells the user how much to trust a reading."
+outcome: "A data-driven GOOD/USABLE/POOR/INVALID assessment with explicit reasons, masks and dispersion from repeated runs."
+acceptance_criteria:
+  - "A data-driven GOOD/USABLE/POOR/INVALID assessment with explicit reasons, masks and dispersion from repeated runs."
+  - "Specification: docs/specs/oscilla-v3-measure.md"
+validation:
+  - "npm run release-gate"
+evidence_required:
+  - "milestone_verified"
+created_at: 2026-10-02

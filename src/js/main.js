@@ -102,6 +102,7 @@ const adapter = {
     return app.source === 'dual' ? app.dualFa : app.metricFrequency;
   },
   isPlaying: () => !!(app && (app.playing || app.seqPlaying)),
+  getA4: () => (app && app.a4) || 440,
   onChange(fn) {
     adapterListeners.add(fn);
     return () => adapterListeners.delete(fn);
@@ -447,12 +448,19 @@ function integrationInit() {
   const unlock = () => { if (engine.isSupported()) cmp.ensureAudio(); };
   window.addEventListener('pointerdown', unlock, { capture: true });
   window.addEventListener('keydown', unlock, { capture: true });
-  window.addEventListener('keydown', (e) => cmp.onKeyDown(e));
+  const stopSequencer = () => {
+    if (cmp.seqPlaying && labs.sequencer) labs.sequencer.editor.stop();
+  };
+  window.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') stopSequencer();
+    cmp.onKeyDown(e);
+  });
   window.addEventListener('keyup', (e) => cmp.onKeyUp(e));
   window.addEventListener('blur', () => cmp.releaseHold());
   window.addEventListener('hashchange', () => cmp.restoreFromHash());
   const hide = () => {
     cmp.releaseHold();
+    stopSequencer();
     if (!cmp.latched) return;
     cmp.stop();
   };

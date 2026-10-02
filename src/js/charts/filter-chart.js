@@ -68,7 +68,7 @@ export function createFilterChart(host, options = {}) {
     const y = self.valToPos(db, 'y', true);
     ctx.save();
     ctx.lineWidth = 1.5 * dpr;
-    ctx.strokeStyle = enabled ? theme.trace : theme.textDim;
+    ctx.strokeStyle = curveColour();
     ctx.fillStyle = theme.surface1;
     ctx.beginPath();
     ctx.arc(x, y, o.handleRadius * dpr, 0, Math.PI * 2);
@@ -77,12 +77,18 @@ export function createFilterChart(host, options = {}) {
     const note = !enabled ? 'BYPASSED' : o.getNote ? o.getNote() : null;
     if (note) {
       ctx.font = canvasFont(theme, theme.fs2xs * dpr);
-      ctx.fillStyle = theme.textDim;
+      ctx.fillStyle = theme.textMuted;
       ctx.textAlign = 'right';
       ctx.textBaseline = 'top';
       ctx.fillText(note, self.bbox.left + self.bbox.width - 4 * dpr, self.bbox.top + 4 * dpr);
     }
     ctx.restore();
+  }
+
+  // Bypassed: the same response (what enabling would apply) in the trace colour at reduced
+  // opacity, labelled BYPASSED; never a different curve.
+  function curveColour() {
+    return enabled ? theme.trace : withAlpha(theme.trace, 0.45);
   }
 
   function build() {
@@ -123,16 +129,16 @@ export function createFilterChart(host, options = {}) {
         {},
         {
           label: 'Response',
-          width: 1.5,
+          width: 2,
           points: { show: false },
-          stroke: () => (enabled ? theme.trace : theme.textDim),
+          stroke: () => curveColour(),
           fillTo: () => o.minDb,
           fill: (self) => {
             const { top, height } = self.bbox;
             if (!fill || fill.key !== `${top}:${height}:${enabled}`) {
               const g = self.ctx.createLinearGradient(0, top, 0, top + height);
-              g.addColorStop(0, withAlpha(enabled ? theme.trace : theme.textDim, 0.28));
-              g.addColorStop(1, withAlpha(enabled ? theme.trace : theme.textDim, 0.02));
+              g.addColorStop(0, withAlpha(theme.trace, enabled ? 0.34 : 0.12));
+              g.addColorStop(1, withAlpha(theme.trace, enabled ? 0.04 : 0.01));
               fill = { key: `${top}:${height}:${enabled}`, g };
             }
             return fill.g;

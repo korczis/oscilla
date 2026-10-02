@@ -1,0 +1,15 @@
+id: M015
+title: "V3 impulse response"
+slug: v3-impulse-response
+order: 15
+priority: p0
+problem: "No impulse-response measurement exists."
+outcome: "Log-sweep deconvolution recovers the impulse response with metadata, non-destructive windowing and labelled normalization."
+acceptance_criteria:
+  - "Log-sweep deconvolution recovers the impulse response with metadata, non-destructive windowing and labelled normalization."
+  - "Specification: docs/specs/oscilla-v3-measure.md"
+validation:
+  - "npm run release-gate"
+evidence_required:
+  - "milestone_verified"
+created_at: 2026-10-02
