@@ -2,7 +2,7 @@
 schema: knowledge/v1
 id: majordomus-0-10-0-quirks
 kind: knowledge
-class: observation
+class: lesson
 title: Majordomus 0.10.0 behaviours that shape how this repository is worked
 description: Missing worktree command, branch-bound finish check, linked-worktree hooks path, and plan evidence flow.
 status: verified
