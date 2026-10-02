@@ -406,7 +406,7 @@ function defineChecks() {
     await page.click('#osc-ftype-peaking');
     await collect();
     await page.click('#osc-ftype-lowpass');
-    for (const id of ['saveModal', 'headphonesModal', 'copyModal', 'settings', 'help', 'about',
+    for (const id of ['saveModal', 'headphonesModal', 'copyModal', 'settings', 'help',
       'osc-dlg-mic']) {
       await page.evaluate((d) => window.OSCILLA.app.openModal(d), id);
       await sleep(120);
@@ -429,6 +429,8 @@ function defineChecks() {
     await sleep(80);
     await collect();
     await page.evaluate(() => { window.OSCILLA.app.customPresets = []; window.OSCILLA.app.presetTab = 'reference'; });
+    await H.workspace(page, 'about');
+    await collect();
     await H.workspace(page, 'playground');
     await page.setViewportSize({ width: 375, height: 800 });
     await sleep(200);
@@ -695,7 +697,7 @@ function defineChecks() {
       sequencer: ['#osc-panel-sequencer'], analyzer: ['#osc-panel-mic', '#osc-panel-spectrogram'],
       filter: ['#osc-panel-filter'], synthesis: ['#osc-panel-dual', '#osc-panel-envelope'],
       compare: ['#osc-panel-bio', '#osc-panel-mic'], learn: ['#osc-view-learn'],
-      presets: ['#osc-view-presets'],
+      presets: ['#osc-view-presets'], about: ['#osc-view-about'],
     };
     const res = {};
     for (const [ws, sels] of Object.entries(expect)) {
@@ -1421,6 +1423,101 @@ function defineChecks() {
       || r.shown !== k.split('/')[1]);
     return { ok: !bad.length, cases: Object.keys(res).length,
       bad: Object.fromEntries(bad.slice(0, 6)) };
+  });
+
+  // About: the last primary nav item, keyboard-operable, a native full-width view whose links
+  // go exactly where they say, laid out without overflow or clipping at every tested width.
+  def('about-page', async ({ page, browserName }) => {
+    const res = {};
+    res.nav = await page.evaluate(() => {
+      const items = [...document.querySelectorAll('#osc-nav > li > a')].map((a) => a.dataset.osc);
+      return { last: items.at(-1), count: items.length };
+    });
+    // Tab order: Presets -> About (Safari/WebKit skips links on Tab unless the user opts in).
+    await page.focus('[data-osc="nav.presets"]');
+    await page.keyboard.press('Tab');
+    res.tabbedTo = await page.evaluate(() => document.activeElement && document.activeElement.dataset.osc);
+    await page.focus('[data-osc="nav.about"]');
+    await page.keyboard.press('Enter');
+    await page.waitForFunction(() => document.querySelector('#osc-app').dataset.mode === 'about');
+    await sleep(200);
+    res.view = await page.evaluate(() => {
+      const q = (s) => document.querySelector(s);
+      const view = q('#osc-view-about');
+      const shown = (el) => { const r = el && el.getBoundingClientRect(); return !!(r && r.width > 0 && r.height > 0); };
+      const link = (osc) => { const el = q(`[data-osc="${osc}"]`); return el && { href: el.getAttribute('href'), target: el.target, rel: el.rel, h: Math.round(el.getBoundingClientRect().height) }; };
+      const text = view.innerText;
+      return {
+        shown: shown(view), current: q('[data-osc^="nav."][aria-current="page"]')?.dataset.osc,
+        title: document.title, h2: view.querySelectorAll('h2').length,
+        heading: q('#osc-about-title').textContent.replace(/\s+/g, ' ').trim(),
+        anchors: ['OSCILLA', 'Majordomus', 'github.com/korczis/oscilla', 'korczis@gmail.com', 'majordomus.dev']
+          .filter((t) => !text.includes(t)),
+        source: link('about.source'), majordomus: link('about.majordomus'), email: link('about.email'),
+        traceHidden: q('.osc-about-trace').getAttribute('aria-hidden') === 'true',
+        othersHidden: ['#osc-view-learn', '#osc-view-presets', '#osc-panel-source', '#osc-panel-analysis']
+          .every((s) => !shown(q(s))),
+      };
+    });
+    const v = res.view;
+    // Reduced motion: the one-shot trace draw collapses to (near) zero duration.
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    res.reducedMotionS = await page.evaluate(() => parseFloat(getComputedStyle(document.querySelector('.osc-about-trace')).animationDuration));
+    await page.emulateMedia({ reducedMotion: null });
+    // Layout at every tested width: no page overflow, nothing leaves the view, no clipped text,
+    // the evolution stations never overlap, and the links stay at least 24 px tall.
+    res.widths = {};
+    for (const w of WIDTHS) {
+      await page.setViewportSize({ width: w, height: 900 });
+      await sleep(200);
+      res.widths[w] = await page.evaluate(() => {
+        const view = document.getElementById('osc-view-about');
+        const vr = view.getBoundingClientRect();
+        const bad = [];
+        if (document.documentElement.scrollWidth > document.documentElement.clientWidth + 1) bad.push('page overflow');
+        for (const el of view.querySelectorAll('*')) {
+          if (el.closest('svg') || el.classList.contains('osc-sr-only') || el.closest('.osc-sr-only')) continue;
+          const r = el.getBoundingClientRect();
+          if (!r.width || !r.height) continue;
+          if (r.left < vr.left - 1 || r.right > vr.right + 1) bad.push(`outside: ${el.tagName}.${el.className}`);
+          if (/^(H2|H3|P|DD|DT|LI|A|STRONG|EM|B|SPAN)$/.test(el.tagName) && el.scrollWidth > el.clientWidth + 1
+            && getComputedStyle(el).overflowX !== 'visible') bad.push(`clipped: ${el.tagName}.${el.className}`);
+        }
+        const st = [...view.querySelectorAll('.osc-about-timeline > li')].map((li) => li.getBoundingClientRect());
+        for (let i = 0; i < st.length; i++) for (let j = i + 1; j < st.length; j++) {
+          const a = st[i]; const b = st[j];
+          if (Math.min(a.right, b.right) - Math.max(a.left, b.left) > 1
+            && Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top) > 1) bad.push(`stations ${i + 1}/${j + 1} overlap`);
+        }
+        for (const a of view.querySelectorAll('a[href]')) {
+          if (a.getBoundingClientRect().height < 23.5) bad.push(`small target ${a.dataset.osc}`);
+        }
+        return bad.slice(0, 6);
+      });
+    }
+    await page.setViewportSize({ width: 1536, height: 1024 });
+    await sleep(150);
+    // The overflow-menu entry opens the same workspace; leaving restores the product title.
+    await H.workspace(page, 'playground');
+    res.baseTitle = await page.evaluate(() => document.title);
+    await page.click('#osc-overflow');
+    await page.click('[data-osc="header.about"]');
+    await sleep(150);
+    res.menuMode = await page.evaluate(() => document.querySelector('#osc-app').dataset.mode);
+    await H.workspace(page, 'playground');
+    const external = (l, href) => l && l.href === href && l.target === '_blank'
+      && /noopener/.test(l.rel) && /noreferrer/.test(l.rel);
+    const ok = res.nav.last === 'nav.about'
+      && (res.tabbedTo === 'nav.about' || browserName === 'webkit')
+      && v.shown && v.current === 'nav.about' && v.title === 'OSCILLA · About' && v.h2 === 1
+      && v.heading === 'About OSCILLA' && !v.anchors.length && v.traceHidden && v.othersHidden
+      && external(v.source, 'https://github.com/korczis/oscilla')
+      && external(v.majordomus, 'https://majordomus.dev/')
+      && v.email && v.email.href === 'mailto:korczis@gmail.com'
+      && res.reducedMotionS < 0.01
+      && Object.values(res.widths).every((b) => !b.length)
+      && res.menuMode === 'about' && !/About/.test(res.baseTitle);
+    return { ok, ...res };
   });
 
   def('no-console-errors-after-run', async ({ errors }) => ({ ok: errors.length === 0,
