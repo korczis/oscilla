@@ -306,9 +306,13 @@ async function realtimeStopCapture(runs, { forceFallback = false } = {}) {
     await until(() => {
       if (voice.ended && endedAudio === null) endedAudio = ctx.currentTime;
       const last = rt.recorder.chunks[rt.recorder.chunks.length - 1];
+      // Also wait for at least 100 ms of captured audio: on a busy runner worklet chunks can
+      // arrive late, and the check needs a meaningful capture, not just the last chunk.
+      const total = rt.recorder.chunks.reduce((n, c) => n + c.data.length, 0);
       return voice.ended && voice.activeNodeCount === 0 && last
-        && (last.frame + last.data.length) / ctx.sampleRate >= voice.stopTime + 0.1;
-    }, 1000);
+        && (last.frame + last.data.length) / ctx.sampleRate >= voice.stopTime + 0.1
+        && total > 0.1 * ctx.sampleRate;
+    }, 2000);
     const chunks = rt.recorder.chunks;
     let maxStep = 0;
     let gaps = 0;

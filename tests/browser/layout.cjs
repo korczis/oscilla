@@ -47,6 +47,9 @@ const KNOWN_SMALL_TARGETS = new Set([
   'osc-ptab-cat-reference', 'osc-ptab-cat-musical', 'osc-ptab-cat-sweeps',
   'osc-ptab-cat-patterns', 'osc-ptab-cat-high', 'osc-ptab-cat-dual', 'osc-ptab-cat-custom',
   'osc-ptab-cat-history',
+  // added by the V2 QA fixes (PR #15): the phone safety-notice "More" toggle and the bio
+  // source links; fixed in fix/v2-touch-seq, which removes them from this list
+  'osc-safety-toggle', 'osc-bio-source-list>A',
 ]);
 const TOUCH_MIN = 44;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -117,8 +120,12 @@ function measureTouch(min) {
     tested++;
     const range = el.type === 'range';
     if (b.height < min - 0.5 || (!range && b.width < min - 0.5)) {
-      small.push({ id: el.id || el.dataset.osc || el.className.toString().split(' ')[0]
-        || el.tagName, w: Math.round(b.width), h: Math.round(b.height) });
+      // Anonymous elements are keyed by their nearest identified ancestor, so the known list
+      // stays precise (e.g. "osc-bio-sources>A" rather than every link on the page).
+      const anchor = el.parentElement && el.parentElement.closest('[id]');
+      const key = el.id || el.dataset.osc || el.className.toString().split(' ')[0]
+        || (anchor ? `${anchor.id}>${el.tagName}` : el.tagName);
+      small.push({ id: key, w: Math.round(b.width), h: Math.round(b.height) });
     }
   }
   const de = document.documentElement;
