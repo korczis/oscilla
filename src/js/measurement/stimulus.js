@@ -67,6 +67,15 @@ export const DURATION_LIMITS = Object.freeze({
   'band-noise': Object.freeze([0.05, 30]),
   chirp: Object.freeze([0.005, 1]),
 });
+/**
+ * Highest frequency generated at `sampleRate`: SAFE_NYQUIST_FRACTION × Nyquist. The one
+ * expression for the clamp, shared with experiments/schema.js so a clamped spec is accepted
+ * there bit for bit.
+ */
+export function safeMaxFrequency(sampleRate) {
+  return (sampleRate / 2) * SAFE_NYQUIST_FRACTION;
+}
+
 /** Raised-cosine edge width of band-noise, octaves (capped at a quarter of the band). */
 export const BAND_EDGE_TAPER_OCT = 1 / 12;
 
@@ -133,7 +142,7 @@ export function normalizeStimulus(input) {
   if (!finite(seedIn)) throw new StimulusError('BAD_SEED', 'seed must be a finite number');
   const seed = Math.round(seedIn) >>> 0;
 
-  const safeMax = (sampleRate / 2) * SAFE_NYQUIST_FRACTION;
+  const safeMax = safeMaxFrequency(sampleRate);
   let clampedTo = null;
   const clampHz = (v, what) => {
     requireNumber(v, 'BAD_FREQUENCY', what);

@@ -4,6 +4,7 @@ import { createFft } from '../../src/js/analysis/fft.js';
 import { mulberry32 } from '../../src/js/audio/noise.js';
 import {
   ALGORITHMS,
+  VARIANT_OF,
   describeAlgorithm,
   isKnownAlgorithm,
 } from '../../src/js/measurement/algorithms.js';
@@ -133,11 +134,15 @@ function meanPowerDb(power, sr, fftSize, inBand) {
 test('algorithms: frozen contract IDs, known/unknown, described by family and version', () => {
   assert.ok(Object.isFrozen(ALGORITHMS));
   assert.equal(ALGORITHMS.ir, 'oscilla.ir.log-sweep.v1');
-  for (const [family, id] of Object.entries(ALGORITHMS)) {
+  for (const [role, id] of Object.entries(ALGORITHMS)) {
     assert.ok(isKnownAlgorithm(id), id);
+    const family = VARIANT_OF[role] || role;
     assert.deepEqual({ ...describeAlgorithm(id) }, { id, family, version: 1 });
   }
   assert.equal(describeAlgorithm('oscilla.confidence.v1').family, 'quality');
+  // A variant reports the role it is an alternative for (ADR 0024: distinct IDs per method).
+  assert.equal(describeAlgorithm('oscilla.ir.farina-inverse.v1').family, 'ir');
+  assert.equal(describeAlgorithm('oscilla.window.blackman-harris.v1').family, 'window');
   assert.equal(isKnownAlgorithm('oscilla.transfer.v2'), false);
   assert.deepEqual(
     { ...describeAlgorithm('oscilla.transfer.v2') },

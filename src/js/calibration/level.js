@@ -9,7 +9,11 @@
 //
 // Labeling (spec §24): only a valid LevelCalibration produces the unit 'dB SPL' with a
 // CALIBRATED indicator. Anything else — null, a malformed object, an offset that does not match
-// its own inputs — displays 'dB relative (dBFS-like)', UNCALIBRATED. There is no default SPL
+// its own inputs — displays RELATIVE_UNIT 'dB relative (dBFS-like)', UNCALIBRATED, on the scale
+// RELATIVE_SCALE_LABEL 'Relative level · dBFS-like / analyser-relative scale' (the spec §24
+// wording). These two constants are the ONE label of the uncalibrated scale: format.js,
+// quality.js, experiments/csv.js and experiments/schema.js import them, and no uncalibrated
+// output of those modules contains "SPL" (asserted in tests). There is no default SPL
 // calibration anywhere in this module (spec §23).
 //
 // Limits: the offset is only valid for the device, input gain, browser processing constraints
@@ -21,7 +25,10 @@
 export const LEVEL_SCHEMA_VERSION = 1;
 export const LEVEL_KIND = 'level';
 export const SPL_UNIT = 'dB SPL';
+/** Unit printed after an uncalibrated level value (the one uncalibrated unit label). */
 export const RELATIVE_UNIT = 'dB relative (dBFS-like)';
+/** Name of the uncalibrated scale for axes, legends and file metadata (spec §24 wording). */
+export const RELATIVE_SCALE_LABEL = 'Relative level · dBFS-like / analyser-relative scale';
 
 export const LEVEL_LIMITS = Object.freeze({
   minReferenceHz: 20,

@@ -1,5 +1,7 @@
-// Impulse response from a log-sweep measurement (spec §37-§42, §214). Algorithm ID:
-// 'oscilla.ir.log-sweep.v1'.
+// Impulse response from a log-sweep measurement (spec §37-§42, §214). Algorithm IDs, one per
+// method because their outputs differ (ADR 0024; IR_ALGORITHMS): 'spectral' →
+// 'oscilla.ir.log-sweep.v1', 'farina-inverse' → 'oscilla.ir.farina-inverse.v1'. The result's
+// `algorithm` is the ID of the method that produced it; `method` repeats it in words.
 //
 // Primary method, 'spectral' (default): h = IDFT(H), H the regularized spectral division of
 // transfer.js (Müller & Massarani 2001, JAES 49(6), §5), so the IR and the transfer function
@@ -32,11 +34,22 @@
 // the late-tail energy relative to the peak, floored at −300 dB.
 //
 // irWindow and normalizeIr never modify an IrResult: they return new objects (§40, §41).
+// normalizeIr's view carries algorithm 'oscilla.normalization.v1' (smoothing.js
+// NORMALIZATION_ALGORITHM) and its mode.
 
 import { powerToDb, realPairSpectra, spectralDeconvolution, ZERO_POWER_DB } from './transfer.js';
 import { ALGORITHMS } from './algorithms.js';
+import { NORMALIZATION_ALGORITHM } from './smoothing.js';
 
+/** ID of the default ('spectral') method; kept for callers that import it. */
 export const IR_ALGORITHM = ALGORITHMS.ir;
+/** ID of the 'farina-inverse' method. */
+export const IR_FARINA_ALGORITHM = ALGORITHMS.irFarina;
+/** Algorithm ID by IR method. */
+export const IR_ALGORITHMS = Object.freeze({
+  spectral: IR_ALGORITHM,
+  'farina-inverse': IR_FARINA_ALGORITHM,
+});
 export const IR_PRE_GUARD_S = 0.005;
 export const IR_TAIL_FRACTION = 0.1;
 
@@ -94,7 +107,8 @@ function farinaDeconvolution({ stimulus, captured, sampleRate, f1, f2, inverse }
 
 /**
  * computeImpulseResponse({ stimulus, captured, sampleRate, f1, f2, inverse, method,
- *   lagSamples }) -> IrResult (docs/v3/architecture.md) plus `method` and `fftSize`.
+ *   lagSamples }) -> IrResult (docs/v3/architecture.md, with `method` and `fftSize`);
+ *   algorithm is IR_ALGORITHMS[method].
  *   method      'spectral' (default) | 'farina-inverse' (requires `inverse`)
  *   lagSamples  optional alignment of the stimulus start in the capture (align().lagSamples)
  */
@@ -142,7 +156,7 @@ export function computeImpulseResponse({
     }
   }
   return {
-    algorithm: IR_ALGORITHM,
+    algorithm: IR_ALGORITHMS[method],
     method,
     sampleRate,
     samples,
@@ -200,7 +214,8 @@ export function normalizeIr(ir, mode) {
       values[i] = powerToDb(r * r);
     }
     return {
-      kind: 'normalized', mode, label: 'NORMALIZED: dB re IR peak (peak = 0 dB)',
+      kind: 'normalized', algorithm: NORMALIZATION_ALGORITHM, mode,
+      label: 'NORMALIZED: dB re IR peak (peak = 0 dB)',
       unit: 'dB re peak', referenceValue: ref, values,
     };
   }
@@ -208,7 +223,8 @@ export function normalizeIr(ir, mode) {
     const values = new Float64Array(n);
     for (let i = 0; i < n; i++) values[i] = ref > 0 ? ir.samples[i] / ref : 0;
     return {
-      kind: 'normalized', mode, label: 'NORMALIZED: relative amplitude (peak = 1.0)',
+      kind: 'normalized', algorithm: NORMALIZATION_ALGORITHM, mode,
+      label: 'NORMALIZED: relative amplitude (peak = 1.0)',
       unit: 'relative', referenceValue: ref, values,
     };
   }

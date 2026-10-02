@@ -19,14 +19,18 @@
 // this capture buffer, which includes the output and input pipeline delays of the browser and
 // device, unknown and not separable from the acoustic path without a loopback reference.
 // Cost: one FFT pair of size nextPow2(Nref + min(Ncap, maxLag + Nref) − 1).
+// The result carries its algorithm ID, ALIGN_ALGORITHM = 'oscilla.align.xcorr.v1'.
 
 import { createFft } from '../analysis/fft.js';
+import { ALGORITHMS } from './algorithms.js';
 import { parabolicPeak } from '../analysis/peak-detector.js';
 import { nextPow2 } from './spectrum.js';
 
+export const ALIGN_ALGORITHM = ALGORITHMS.align;
+
 /**
  * align(reference, captured, sampleRate, { maxLagS, minLagS = 0 })
- *   → { lagSamples, lagSeconds, peakCorrelation, polarity }
+ *   → { algorithm, lagSamples, lagSeconds, peakCorrelation, polarity }
  * lagSamples is fractional (parabolic refinement). maxLagS defaults to the whole capture. When
  * either input has no energy the lag is null and peakCorrelation 0 (nothing to align).
  * polarity is +1, or −1 when the best match is the inverted reference.
@@ -43,7 +47,8 @@ export function align(reference, captured, sampleRate, options = {}) {
     options.maxLagS != null ? Math.round(options.maxLagS * sampleRate) : nc - 1,
   );
   if (maxLag < minLag) throw new RangeError('align: empty lag range');
-  const none = { lagSamples: null, lagSeconds: null, peakCorrelation: 0, polarity: null };
+  const none = { algorithm: ALIGN_ALGORITHM, lagSamples: null, lagSeconds: null,
+    peakCorrelation: 0, polarity: null };
 
   let eRef = 0;
   for (let i = 0; i < nr; i++) eRef += reference[i] * reference[i];
@@ -99,5 +104,6 @@ export function align(reference, captured, sampleRate, options = {}) {
   const eWin = w1 > w0 ? prefix[w1] - prefix[w0] : 0;
   const peakCorrelation = eWin > 0 ? Math.min(1, bestAbs / Math.sqrt(eRef * eWin)) : 0;
   const lagSamples = best + offset;
-  return { lagSamples, lagSeconds: lagSamples / sampleRate, peakCorrelation, polarity };
+  return { algorithm: ALIGN_ALGORITHM, lagSamples, lagSeconds: lagSamples / sampleRate,
+    peakCorrelation, polarity };
 }

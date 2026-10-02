@@ -2,15 +2,29 @@
 // text or an already parsed object. Pure; never evals, never throws, no DOM, no globals.
 //
 //   validateExperiment(json, { maxBytes = 32 MiB, maxArray = 4_000_000, knownAlgorithms,
-//     migrations, maxErrors = 50 }) ->
-//     { ok: true, experiment, migratedFrom: n|null } | { ok: false, errors: [{ path, text }] }
+//     migrations, maxErrors = 50, sha256Hex }) ->
+//     { ok: true, experiment, migratedFrom: n|null }
+//     | { ok: false, errors: [{ path, text, code? }] }
 //
 // Pipeline: size cap (before JSON.parse) -> structural scan (depth, plain objects only, no
 // `__proto__` / `constructor` / `prototype` keys, finite numbers) -> schema migration
 // (migrate.js) -> strict schema check (unknown fields rejected, types, numeric bounds, string
 // caps, algorithm IDs, calibration shape, array dtypes and declared vs decoded lengths). The
 // returned experiment is a normalized deep copy with result arrays decoded to typed arrays;
-// nothing of the input object is reused or modified.
+// nothing of the input object is reused or modified. Optional fields keep their presence (a
+// field absent in the input is absent in the output), so a validated experiment re-exports
+// byte for byte.
+//
+// Accepted result shapes are exactly what the analysis modules produce: TransferResult
+// (validRange may be null; optional phaseReason and alignment), IrResult (optional method and
+// fftSize; method must match the IR algorithm ID), RtaResult (rta.js rtaResult: optional
+// windowAlgorithm; zero power is stored as −300 dB, non-finite levels are rejected) and
+// QualityAssessment (quality.js: reasons with optional scope, optional mask
+// { frequencies f64, reliable u8, calibrated u8 }).
+//
+// Result hash (spec §101): when provenance.resultHash is a hash, it is recomputed (hash.js
+// resultHash) over the decoded results; a mismatch is the error
+// { path: 'provenance.resultHash', code: 'corrupt' }. opts.sha256Hex may inject SHA-256.
 //
 // knownAlgorithms: the allowed algorithm IDs (array, Set or an object such as ALGORITHMS whose
 // values are IDs). Without it only the ID format (oscilla.<name>.v<n>) is checked.
@@ -22,6 +36,9 @@ import {
 } from './schema.js';
 import { DTYPES, decodeArray, dtypeOf, isEncodedArray } from './encode.js';
 import { migrateExperiment } from './migrate.js';
+import { resultHash } from './hash.js';
+import { PHASE_REASONS } from '../measurement/transfer.js';
+import { IR_ALGORITHMS } from '../measurement/impulse-response.js';
 
 export const DEFAULT_MAX_BYTES = 32 * 1024 * 1024;
 export const DEFAULT_MAX_ARRAY = 4_000_000;
@@ -33,7 +50,9 @@ const ROLE_PATTERN = /^[a-z][A-Za-z0-9]{0,31}$/;
 const CODE_PATTERN = /^[A-Za-z0-9_.-]{1,64}$/;
 const STATUSES = ['GOOD', 'USABLE', 'POOR', 'INVALID'];
 const SEVERITIES = ['ok', 'warn', 'fail'];
+const SCOPES = ['quality', 'calibration'];
 const BIG = Number.MAX_VALUE;
+const has = (o, k) => Object.prototype.hasOwnProperty.call(o, k);
 
 /** Validate an untrusted experiment document. Never throws. */
 export function validateExperiment(json, opts = {}) {
@@ -72,7 +91,7 @@ export function validateExperiment(json, opts = {}) {
   }
   if (!migrated.ok) return { ok: false, errors: migrated.errors };
   const c = createChecker(maxErrors);
-  const ctx = { maxArray, known: knownSet(opts.knownAlgorithms) };
+  const ctx = { maxArray, known: knownSet(opts.knownAlgorithms), sha256Hex: opts.sha256Hex };
   let experiment;
   try {
     experiment = checkExperiment(c, migrated.experiment, ctx);
@@ -211,6 +230,15 @@ function checkExperiment(c, e, ctx) {
       { nullable: true, multiline: true });
     out.environment = { notes: e.environment.notes };
   }
+  if (!c.errors.length && out.provenance && typeof out.provenance.resultHash === 'string') {
+    const opts = ctx.sha256Hex ? { sha256Hex: ctx.sha256Hex } : undefined;
+    const actual = resultHash(out, opts);
+    if (actual !== out.provenance.resultHash) {
+      c.add('provenance.resultHash', 'corrupt: the results do not match their stored hash '
+        + `(stored ${out.provenance.resultHash.slice(0, 12)}…, computed ${actual.slice(0, 12)}…)`,
+      'corrupt');
+    }
+  }
   return c.errors.length ? null : out;
 }
 
@@ -288,7 +316,7 @@ function checkMeasurement(c, v, path) {
 }
 
 function checkQuality(c, q, path, ctx) {
-  if (!c.keys(q, path, ['algorithm', 'status', 'reasons', 'metrics'])) return null;
+  if (!c.keys(q, path, ['algorithm', 'status', 'reasons', 'metrics'], ['mask'])) return null;
   algorithmId(c, q.algorithm, `${path}.algorithm`, ctx);
   c.oneOf(q.status, `${path}.status`, STATUSES);
   const reasons = [];
@@ -298,8 +326,9 @@ function checkQuality(c, q, path, ctx) {
   } else {
     q.reasons.forEach((r, i) => {
       const p = `${path}.reasons[${i}]`;
-      if (!c.keys(r, p, ['code', 'severity', 'text', 'value', 'unit'], ['range'])) return;
+      if (!c.keys(r, p, ['code', 'severity', 'text', 'value', 'unit'], ['scope', 'range'])) return;
       c.str(r.code, `${p}.code`, 64, { pattern: CODE_PATTERN });
+      if (has(r, 'scope')) c.oneOf(r.scope, `${p}.scope`, SCOPES);
       c.oneOf(r.severity, `${p}.severity`, SEVERITIES);
       c.str(r.text, `${p}.text`, 500);
       const val = r.value;
@@ -309,8 +338,9 @@ function checkQuality(c, q, path, ctx) {
         c.add(`${p}.value`, 'must be a number, string, boolean or null');
       }
       c.str(r.unit, `${p}.unit`, 32, { nullable: true });
-      const reason = { code: r.code, severity: r.severity, text: r.text, value: r.value,
-        unit: r.unit };
+      const reason = { code: r.code };
+      if (has(r, 'scope')) reason.scope = r.scope;
+      Object.assign(reason, { severity: r.severity, text: r.text, value: r.value, unit: r.unit });
       if (r.range !== undefined) {
         c.range(r.range, `${p}.range`, -BIG, BIG, { strict: false });
         reason.range = Array.isArray(r.range) ? [r.range[0], r.range[1]] : null;
@@ -320,9 +350,26 @@ function checkQuality(c, q, path, ctx) {
   }
   let metrics = null;
   if (c.obj(q.metrics, `${path}.metrics`)) {
-    metrics = c.json(q.metrics, `${path}.metrics`, { depth: 3, keys: 64, array: 64, string: 200 });
+    // 1024 elements: the reliable/unreliable range lists of a 48-point-per-octave grid over the
+    // widest band (13 octaves, 625 points) have at most 313 runs each.
+    metrics = c.json(q.metrics, `${path}.metrics`,
+      { depth: 3, keys: 64, array: 1024, string: 200 });
   }
-  return { algorithm: q.algorithm, status: q.status, reasons, metrics };
+  const out = { algorithm: q.algorithm, status: q.status, reasons, metrics };
+  if (has(q, 'mask')) out.mask = checkMask(c, q.mask, `${path}.mask`, ctx);
+  return out;
+}
+
+/** quality.js mask: { frequencies f64, reliable u8, calibrated u8 } on one grid. */
+function checkMask(c, m, path, ctx) {
+  if (!c.keys(m, path, ['frequencies', 'reliable', 'calibrated'])) return null;
+  const frequencies = resultArray(c, m.frequencies, `${path}.frequencies`, 'f64', ctx,
+    { lo: 0, hi: LIMITS.frequencyHz[1], increasing: true });
+  if (!frequencies) return null;
+  const n = frequencies.length;
+  const flags = (k) => resultArray(c, m[k], `${path}.${k}`, 'u8', ctx,
+    { length: n, lo: 0, hi: 1 });
+  return { frequencies, reliable: flags('reliable'), calibrated: flags('calibrated') };
 }
 
 function checkAlgorithms(c, a, path, ctx) {
@@ -417,13 +464,20 @@ function resultArray(c, v, path, dtype, ctx, o = {}) {
 function checkTransfer(c, t, path, ctx) {
   const keys = ['algorithm', 'sampleRate', 'frequencies', 'magnitudeDb', 'phaseDeg', 'snrDb',
     'validRange', 'requestedRange', 'fftSize', 'binHz'];
-  if (!c.keys(t, path, keys)) return null;
+  if (!c.keys(t, path, keys, ['phaseReason', 'alignment'])) return null;
   algorithmId(c, t.algorithm, `${path}.algorithm`, ctx);
   if (!c.num(t.sampleRate, `${path}.sampleRate`, ...LIMITS.sampleRate)) return null;
   const nyq = t.sampleRate / 2;
   c.num(t.fftSize, `${path}.fftSize`, 1, 2 ** 25, { integer: true, nullable: true });
   c.num(t.binHz, `${path}.binHz`, 0, nyq, { nullable: true });
-  c.range(t.validRange, `${path}.validRange`, 0, nyq);
+  // null: no grid point qualified (transfer.js); quality.js then reports NO_VALID_RANGE.
+  c.range(t.validRange, `${path}.validRange`, 0, nyq, { nullable: true });
+  if (has(t, 'phaseReason')) {
+    c.oneOf(t.phaseReason, `${path}.phaseReason`, Object.values(PHASE_REASONS),
+      { nullable: true });
+  }
+  let alignment;
+  if (has(t, 'alignment')) alignment = checkAlignment(c, t.alignment, `${path}.alignment`, ctx);
   c.range(t.requestedRange, `${path}.requestedRange`, 0, LIMITS.frequencyHz[1]);
   const db = LIMITS.dbAbs;
   const frequencies = resultArray(c, t.frequencies, `${path}.frequencies`, 'f64', ctx,
@@ -436,18 +490,41 @@ function checkTransfer(c, t, path, ctx) {
     { length: n, lo: -1e7, hi: 1e7, nullable: true });
   const snrDb = resultArray(c, t.snrDb, `${path}.snrDb`, 'f64', ctx,
     { length: n, lo: -db, hi: db, nullable: true });
-  return {
+  const out = {
     algorithm: t.algorithm, sampleRate: t.sampleRate, frequencies, magnitudeDb, phaseDeg, snrDb,
     validRange: pair(t.validRange), requestedRange: pair(t.requestedRange), fftSize: t.fftSize,
     binHz: t.binHz,
   };
+  if (has(t, 'phaseReason')) out.phaseReason = t.phaseReason;
+  if (has(t, 'alignment')) out.alignment = alignment;
+  return out;
+}
+
+/** transfer.js alignment summary { algorithm, lagSamples, peakCorrelation, polarity } | null. */
+function checkAlignment(c, a, path, ctx) {
+  if (a === null) return null;
+  if (!c.keys(a, path, ['algorithm', 'lagSamples', 'peakCorrelation', 'polarity'])) return null;
+  if (a.algorithm !== null) algorithmId(c, a.algorithm, `${path}.algorithm`, ctx);
+  c.num(a.lagSamples, `${path}.lagSamples`, -1e9, 1e9, { nullable: true });
+  c.num(a.peakCorrelation, `${path}.peakCorrelation`, 0, 1);
+  c.oneOf(a.polarity, `${path}.polarity`, [1, -1], { nullable: true });
+  return { algorithm: a.algorithm, lagSamples: a.lagSamples, peakCorrelation: a.peakCorrelation,
+    polarity: a.polarity };
 }
 
 function checkIr(c, ir, path, ctx) {
   const keys = ['algorithm', 'sampleRate', 'samples', 'peakIndex', 'peakTimeS', 'captureOffsetS',
     'noiseFloorDb', 'window'];
-  if (!c.keys(ir, path, keys)) return null;
+  if (!c.keys(ir, path, keys, ['method', 'fftSize'])) return null;
   algorithmId(c, ir.algorithm, `${path}.algorithm`, ctx);
+  if (has(ir, 'method') && c.oneOf(ir.method, `${path}.method`, Object.keys(IR_ALGORITHMS))
+    && Object.values(IR_ALGORITHMS).includes(ir.algorithm)
+    && IR_ALGORITHMS[ir.method] !== ir.algorithm) {
+    c.add(`${path}.method`, `does not match algorithm "${ir.algorithm}"`);
+  }
+  if (has(ir, 'fftSize')) {
+    c.num(ir.fftSize, `${path}.fftSize`, 1, 2 ** 25, { integer: true, nullable: true });
+  }
   c.num(ir.sampleRate, `${path}.sampleRate`, ...LIMITS.sampleRate);
   const samples = resultArray(c, ir.samples, `${path}.samples`, 'f32', ctx,
     { lo: -1e9, hi: 1e9, minLength: 1 });
@@ -457,18 +534,26 @@ function checkIr(c, ir, path, ctx) {
   c.num(ir.captureOffsetS, `${path}.captureOffsetS`, -LIMITS.timeS, LIMITS.timeS);
   c.num(ir.noiseFloorDb, `${path}.noiseFloorDb`, -LIMITS.dbAbs, LIMITS.dbAbs, { nullable: true });
   c.range(ir.window, `${path}.window`, -LIMITS.timeS, LIMITS.timeS, { nullable: true });
-  return {
-    algorithm: ir.algorithm, sampleRate: ir.sampleRate, samples, peakIndex: ir.peakIndex,
+  const out = { algorithm: ir.algorithm };
+  if (has(ir, 'method')) out.method = ir.method;
+  Object.assign(out, {
+    sampleRate: ir.sampleRate, samples, peakIndex: ir.peakIndex,
     peakTimeS: ir.peakTimeS, captureOffsetS: ir.captureOffsetS, noiseFloorDb: ir.noiseFloorDb,
     window: ir.window === null ? null : pair(ir.window),
-  };
+  });
+  if (has(ir, 'fftSize')) out.fftSize = ir.fftSize;
+  return out;
 }
 
 function checkRta(c, r, path, ctx) {
-  if (!c.keys(r, path, ['algorithm', 'sampleRate', 'resolution', 'bands', 'levelsDb', 'fftSize'])) {
+  if (!c.keys(r, path, ['algorithm', 'sampleRate', 'resolution', 'bands', 'levelsDb', 'fftSize'],
+    ['windowAlgorithm'])) {
     return null;
   }
   algorithmId(c, r.algorithm, `${path}.algorithm`, ctx);
+  if (has(r, 'windowAlgorithm') && r.windowAlgorithm !== null) {
+    algorithmId(c, r.windowAlgorithm, `${path}.windowAlgorithm`, ctx);
+  }
   c.num(r.sampleRate, `${path}.sampleRate`, ...LIMITS.sampleRate);
   c.oneOf(r.resolution, `${path}.resolution`, ['octave', 'third']);
   c.num(r.fftSize, `${path}.fftSize`, 1, 2 ** 25, { integer: true, nullable: true });
@@ -490,15 +575,22 @@ function checkRta(c, r, path, ctx) {
   });
   const levelsDb = resultArray(c, r.levelsDb, `${path}.levelsDb`, 'f64', ctx,
     { length: r.bands.length, lo: -LIMITS.dbAbs, hi: LIMITS.dbAbs });
-  return {
+  const out = {
     algorithm: r.algorithm, sampleRate: r.sampleRate, resolution: r.resolution, bands, levelsDb,
     fftSize: r.fftSize,
   };
+  if (has(r, 'windowAlgorithm')) out.windowAlgorithm = r.windowAlgorithm;
+  return out;
 }
 
 function checkProvenance(c, p, path) {
-  if (!c.keys(p, path, ['configHash', 'createdAt', 'repeatOf', 'build'])) return null;
+  if (!c.keys(p, path, ['configHash', 'createdAt', 'repeatOf', 'build'], ['resultHash'])) {
+    return null;
+  }
   c.str(p.configHash, `${path}.configHash`, 64, { nullable: true, pattern: HEX64_PATTERN });
+  if (has(p, 'resultHash')) {
+    c.str(p.resultHash, `${path}.resultHash`, 64, { nullable: true, pattern: HEX64_PATTERN });
+  }
   c.iso(p.createdAt, `${path}.createdAt`);
   c.str(p.repeatOf, `${path}.repeatOf`, LIMITS.idChars, { nullable: true, pattern: ID_PATTERN });
   let build = null;
@@ -518,7 +610,9 @@ function checkProvenance(c, p, path) {
     c.str(b.repository, `${bp}.repository`, LIMITS.labelChars, { nullable: true });
     build = { ...b };
   }
-  return { configHash: p.configHash, createdAt: p.createdAt, repeatOf: p.repeatOf, build };
+  const out = { configHash: p.configHash };
+  if (has(p, 'resultHash')) out.resultHash = p.resultHash;
+  return Object.assign(out, { createdAt: p.createdAt, repeatOf: p.repeatOf, build });
 }
 
 const pair = (v) => (Array.isArray(v) ? [v[0], v[1]] : null);

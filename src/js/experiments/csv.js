@@ -15,15 +15,23 @@
 //     columns band_nominal_hz, band_lo_hz, band_hi_hz, level_db_relative
 // meta: { oscillaVersion, oscillaCommit, experimentId, algorithm, sampleRate, calibration }
 // (calibration as in an experiment: { frequency: { id, name }|null, level|null }).
+//
+// Level labels come from calibration/level.js (spec §24): uncalibrated level columns carry
+// RELATIVE_UNIT and the calibration line names RELATIVE_SCALE_LABEL; "dB SPL" appears only
+// when the metadata holds a VALID LevelCalibration (isValidLevelCalibration), so no
+// uncalibrated export contains the string "SPL".
 
 import { UNKNOWN, describeCalibration } from './schema.js';
+import {
+  RELATIVE_SCALE_LABEL, RELATIVE_UNIT, SPL_UNIT, isValidLevelCalibration,
+} from '../calibration/level.js';
 
 export const TRANSFER_COLUMNS = Object.freeze(['frequency_hz', 'magnitude_db_relative',
   'magnitude_db_calibrated', 'snr_db', 'reliable']);
 export const IR_COLUMNS = Object.freeze(['time_s', 'amplitude']);
 export const RTA_COLUMNS = Object.freeze(['band_nominal_hz', 'band_lo_hz', 'band_hi_hz',
   'level_db_relative']);
-const DB_RELATIVE = 'dB relative (dBFS-like), not SPL';
+const DB_RELATIVE = RELATIVE_UNIT;
 
 /** CSV metadata from an experiment. */
 export function csvMeta(e) {
@@ -41,7 +49,7 @@ const clean = (v) => (v === null || v === undefined || v === ''
   ? UNKNOWN : String(v).replace(/[\u0000-\u001f\u007f]+/g, ' ').slice(0, 300));
 const num = (v) => (typeof v === 'number' && Number.isFinite(v) ? String(Object.is(v, -0) ? 0 : v)
   : '');
-const hasLevelCal = (cal) => !!(cal && cal.level && typeof cal.level.offsetDb === 'number');
+const hasLevelCal = (cal) => !!(cal && isValidLevelCalibration(cal.level));
 const hasAnyCal = (cal) => !!(cal && (cal.frequency || hasLevelCal(cal)));
 
 function viewLine(opts) {
@@ -68,7 +76,7 @@ function header(title, meta, algorithm, sampleRate, opts, columns) {
     `# algorithm: ${clean(m.algorithm || algorithm)}`,
     `# sample_rate_hz: ${clean(m.sampleRate ?? sampleRate)}`,
     `# calibration: ${hasAnyCal(m.calibration) ? clean(describeCalibration(m.calibration))
-      : 'UNCALIBRATED (frequency profile none, SPL UNCALIBRATED)'}`,
+      : `UNCALIBRATED (frequency profile none; levels: ${RELATIVE_SCALE_LABEL})`}`,
     viewLine(opts),
   ];
   for (const [name, unit] of columns) lines.push(`# column ${name}: ${unit}`);
@@ -97,7 +105,8 @@ export function transferCsv(result, meta, opts = {}) {
   checkLength(opts.reliable, n, 'reliable');
   const [vLo, vHi] = r.validRange || [NaN, NaN];
   const calUnit = opts.calibratedUnit
-    || (hasLevelCal(cal) ? 'dB SPL (CALIBRATED)' : 'dB relative, frequency-profile corrected');
+    || (hasLevelCal(cal) ? `${SPL_UNIT} (CALIBRATED)`
+      : `${RELATIVE_UNIT}, frequency-profile corrected`);
   const lines = header('transfer function (frequency response)', meta, r.algorithm, r.sampleRate,
     opts, [
       ['frequency_hz', 'Hz'],

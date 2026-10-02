@@ -23,8 +23,13 @@
 //
 // Limits: assumes a normalized FrequencyProfile from profile.js (sorted, unique, finite).
 // Pure; inputs are never mutated. Magnitude only — phase calibration is out of scope.
+//
+// RTA bands: applyFrequencyCorrectionToBands (end of file) applies a profile to band levels as a
+// power-weighted correction across each band, flags uncovered bands and never extrapolates.
 
 import { ALGORITHMS } from '../measurement/algorithms.js';
+import { meanSquarePower } from '../measurement/rta.js';
+import { ZERO_POWER_DB } from '../measurement/transfer.js';
 
 export const CALIBRATION_ALGORITHM = ALGORITHMS.calibration;
 export const CORRECTION_SIGN = -1;
@@ -125,5 +130,105 @@ export function applyFrequencyCorrection(magnitudeDb, frequencies, profile, opts
     covered,
     coverage: coverage(profile),
     extrapolate: policy,
+  };
+}
+
+// ---------------------------------------------------------------- RTA bands (spec §45)
+//
+// A band level is a sum of power over the band, so a frequency correction that varies inside
+// the band must be applied to the power before summing, never as one value at the centre:
+//   corrected band power = Σ_k W_k · 10^(−c(f_k)/10),   gain = that / Σ_k W_k
+//   correctedDb = levelDb + 10·log10(gain)          (CORRECTION_SIGN: observed − correction)
+// with c(f) the log-interpolated profile above. Weights W_k:
+//   'spectrum'  given the per-bin power spectrum the band was integrated from (`power`, a
+//               mean-square array or a spectrum.js welch() result, and `binHz`): W_k = P[k]·w[k],
+//               w[k] the fraction of bin k inside the band (rta.js bin cells), f_k the bin centre
+//               clamped into the band, so the correction is weighted by where the band's power
+//               actually is. A band whose power is all zero falls back to 'flat'.
+//   'flat'      without a spectrum: power assumed uniform in Hz across the band, the band split
+//               into BAND_CORRECTION_STEPS equal sub-bands evaluated at their centres (midpoint
+//               rule). For a correction linear in log-frequency the midpoint error (∝ 1/M²) over a
+//               one-octave band at 12 dB/octave is 3.6e-5 dB with M = 256 (5.8e-4 dB at M = 64),
+//               below the 1e-4 dB the tests require.
+// A band is covered only when [lo, hi] lies inside the profile coverage; any other band is left
+// uncorrected and flagged covered = 0 (never extrapolated, whatever the band overlap). Zero
+// power (levels ≤ −300 dB, or −Infinity) stays as it is.
+
+/** Sub-bands of the 'flat' weighting (see above). */
+export const BAND_CORRECTION_STEPS = 256;
+
+function bandGainFlat(pts, lo, hi) {
+  let s = 0;
+  for (let j = 0; j < BAND_CORRECTION_STEPS; j++) {
+    const f = lo + ((j + 0.5) * (hi - lo)) / BAND_CORRECTION_STEPS;
+    s += 10 ** ((CORRECTION_SIGN * evaluate(pts, f, 'none').db) / 10);
+  }
+  return s / BAND_CORRECTION_STEPS;
+}
+
+function bandGainSpectrum(pts, power, binHz, lo, hi) {
+  const a = lo / binHz + 0.5; // band edges in bin-cell units, cell k = [k, k + 1) (rta.js)
+  const b = hi / binHz + 0.5;
+  const k0 = Math.max(0, Math.floor(a));
+  const k1 = Math.min(power.length - 1, Math.ceil(b) - 1);
+  let num = 0;
+  let den = 0;
+  for (let k = k0; k <= k1; k++) {
+    const w = (Math.min(b, k + 1) - Math.max(a, k)) * power[k];
+    if (!(w > 0)) continue;
+    const f = Math.min(hi, Math.max(lo, k * binHz));
+    num += w * 10 ** ((CORRECTION_SIGN * evaluate(pts, f, 'none').db) / 10);
+    den += w;
+  }
+  return den > 0 ? num / den : null;
+}
+
+/**
+ * applyFrequencyCorrectionToBands(rta, profile, { power, binHz }) → { algorithm, profileId,
+ *   correctedDb: Float64Array, correctionDb: Float64Array, covered: Uint8Array, coverage,
+ *   weighting: 'spectrum'|'flat' }
+ * rta: { bands: [{ lo, hi, ... }], levelsDb } (an RtaResult or bandAnalysis() plus its bands).
+ * correctionDb is the dB added to each covered band (NaN where uncovered). Inputs are not
+ * modified; the raw levels stay available beside the corrected ones (§18 overlay).
+ */
+export function applyFrequencyCorrectionToBands(rta, profile, opts = {}) {
+  const pts = pointsOf(profile);
+  if (!rta || !Array.isArray(rta.bands) || !rta.levelsDb
+    || rta.levelsDb.length !== rta.bands.length) {
+    throw new RangeError('rta needs bands and one level per band');
+  }
+  const useSpectrum = opts.power !== undefined && opts.power !== null;
+  let power = null;
+  if (useSpectrum) {
+    if (!(opts.binHz > 0) || !Number.isFinite(opts.binHz)) {
+      throw new RangeError('binHz must be positive when power is given');
+    }
+    power = meanSquarePower(opts.power);
+  }
+  const [fLo, fHi] = coverage(profile);
+  const n = rta.bands.length;
+  const correctedDb = new Float64Array(n);
+  const correctionDb = new Float64Array(n);
+  const covered = new Uint8Array(n);
+  for (let i = 0; i < n; i++) {
+    const { lo, hi } = rta.bands[i];
+    const level = rta.levelsDb[i];
+    correctedDb[i] = level;
+    correctionDb[i] = NaN;
+    if (!(lo >= fLo && hi <= fHi && hi > lo)) continue;
+    covered[i] = 1;
+    let gain = useSpectrum ? bandGainSpectrum(pts, power, opts.binHz, lo, hi) : null;
+    if (gain === null) gain = bandGainFlat(pts, lo, hi);
+    correctionDb[i] = 10 * Math.log10(gain);
+    if (level > ZERO_POWER_DB) correctedDb[i] = level + correctionDb[i];
+  }
+  return {
+    algorithm: CALIBRATION_ALGORITHM,
+    profileId: profile.id ?? null,
+    correctedDb,
+    correctionDb,
+    covered,
+    coverage: [fLo, fHi],
+    weighting: useSpectrum ? 'spectrum' : 'flat',
   };
 }

@@ -12,12 +12,25 @@
 //
 // sha256Hex defaults to the bundled synchronous calibration/sha256.js (WebCrypto is async and
 // missing in some file:// contexts); callers may inject another implementation.
+//
+// Result hash (spec §101): resultHash = SHA-256 (lowercase hex) of the canonical JSON of
+//   { v: 1, results: serializeExperiment(e.results) }
+// i.e. the results block { transfer, ir, rta } with every typed array in its EncodedArray form
+// (dtype + little-endian bytes, encode.js), so the hash covers the exact stored bits and the
+// dtype, and does not depend on key order. It detects corruption of a stored or exported file;
+// it is not a signature (anyone can recompute it). withResultHash stamps
+// provenance.resultHash; schema.js withResults clears it when results change; validate.js
+// recomputes it over the decoded results on import and rejects a mismatch as 'corrupt'.
+//
+//   resultCanonical(e) -> string;  resultHash(e, { sha256Hex }) -> hex
+//   withResultHash(e, hex) -> a copy with provenance.resultHash set
 
 import { canonicalJson } from './canonical-json.js';
 import { sha256Hex as defaultSha256Hex } from '../calibration/sha256.js';
-import { HEX64_PATTERN } from './schema.js';
+import { HEX64_PATTERN, serializeExperiment } from './schema.js';
 
 export const CONFIG_HASH_VERSION = 1;
+export const RESULT_HASH_VERSION = 1;
 
 /** The configuration subset that the hash covers. */
 export function configSelection(e) {
@@ -60,4 +73,26 @@ export function withConfigHash(e, hex) {
     throw new TypeError('withConfigHash: expected a 64-digit lowercase hex SHA-256');
   }
   return { ...e, provenance: { ...e.provenance, configHash: hex } };
+}
+
+/** Canonical JSON of the encoded results block (see the header). */
+export function resultCanonical(e) {
+  const results = e && e.results ? e.results : { transfer: null, ir: null, rta: null };
+  return canonicalJson({ v: RESULT_HASH_VERSION, results: serializeExperiment(results) });
+}
+
+/** SHA-256 hex of the canonical encoded results block (spec §101). */
+export function resultHash(e, { sha256Hex = defaultSha256Hex } = {}) {
+  if (typeof sha256Hex !== 'function') {
+    throw new TypeError('resultHash: sha256Hex must be a function');
+  }
+  return sha256Hex(resultCanonical(e));
+}
+
+/** A copy of e with provenance.resultHash = hex (validated as 64 lowercase hex digits). */
+export function withResultHash(e, hex) {
+  if (typeof hex !== 'string' || !HEX64_PATTERN.test(hex)) {
+    throw new TypeError('withResultHash: expected a 64-digit lowercase hex SHA-256');
+  }
+  return { ...e, provenance: { ...e.provenance, resultHash: hex } };
 }
