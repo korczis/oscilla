@@ -25,3 +25,14 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-02
+started_at: 2026-10-02T13:30:16Z
+updated_at: 2026-10-02T13:30:31Z
+completed_at: 2026-10-02T13:30:31Z
+evidence:
+  - covers: verified
+    type: test
+    command: "npm run release:prepare"
+    result: "RC v2.0.0 at 66c5fac passed the full gate: unit 1451, engine 83/83 x2, dsp 75, labs, sequencer 56/56, app 28/28 x6, layout 72/72 x3, qa, visual, doctor 0 failures; source 9c6fb47bec68, dist 464f5608a422 (1712002 bytes)"
+    artifact: "66c5fac"
+    commit: 66c5fac5a2515418c81c2533c5500d3574c92728
+    recorded_at: 2026-10-02T13:30:27Z

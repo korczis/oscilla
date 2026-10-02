@@ -17,3 +17,14 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-02
+started_at: 2026-10-02T13:31:50Z
+updated_at: 2026-10-02T13:32:10Z
+completed_at: 2026-10-02T13:32:10Z
+evidence:
+  - covers: verified
+    type: ci
+    command: "node scripts/verify-deploy.mjs --commit 66c5fac5a2515418c81c2533c5500d3574c92728"
+    result: "V2 deployed to GitHub Pages from 66c5fac and verified at the public URL with the revision embedded and checked"
+    artifact: "https://korczis.github.io/oscilla/"
+    commit: 66c5fac5a2515418c81c2533c5500d3574c92728
+    recorded_at: 2026-10-02T13:32:03Z
