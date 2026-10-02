@@ -15,7 +15,8 @@
 //
 // Result hash (spec §101): resultHash = SHA-256 (lowercase hex) of the canonical JSON of
 //   { v: 1, results: serializeExperiment(e.results) }
-// i.e. the results block { transfer, ir, rta } with every typed array in its EncodedArray form
+// i.e. the results block { transfer, ir, rta, aggregate? } (aggregate only when present, so a
+// result without it hashes as before) with every typed array in its EncodedArray form
 // (dtype + little-endian bytes, encode.js), so the hash covers the exact stored bits and the
 // dtype, and does not depend on key order. It detects corruption of a stored or exported file;
 // it is not a signature (anyone can recompute it). withResultHash stamps

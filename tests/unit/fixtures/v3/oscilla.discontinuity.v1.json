@@ -1,0 +1,37 @@
+{
+ "id": "oscilla.discontinuity.v1",
+ "digits": 10,
+ "output": {
+  "discontinuities": [
+   {
+    "start": 2999,
+    "end": 3001,
+    "jump": 0.5464141294,
+    "ratio": 16.80375242
+   },
+   {
+    "start": 3099,
+    "end": 3101,
+    "jump": 0.5477975258,
+    "ratio": 16.83537108
+   }
+  ],
+  "sweepChecks": [
+   [],
+   [
+    {
+     "start": 10436,
+     "end": 10438,
+     "jump": 0.04886038387,
+     "ratio": 65.41080057
+    },
+    {
+     "start": 10636,
+     "end": 10638,
+     "jump": 0.04951941283,
+     "ratio": 61.51961088
+    }
+   ]
+  ]
+ }
+}

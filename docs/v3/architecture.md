@@ -55,10 +55,12 @@ ALGORITHMS = { transfer: 'oscilla.transfer.v1', ir: 'oscilla.ir.log-sweep.v1',
   irFarina: 'oscilla.ir.farina-inverse.v1', rta: 'oscilla.rta.v1',
   smoothing: 'oscilla.smoothing.fractional-octave.v1', normalization: 'oscilla.normalization.v1',
   align: 'oscilla.align.xcorr.v1', clip: 'oscilla.clip.v1',
-  discontinuity: 'oscilla.discontinuity.v1', quality: 'oscilla.confidence.v1',
+  discontinuity: 'oscilla.discontinuity.v1', quality: 'oscilla.confidence.v2',
   calibration: 'oscilla.calibration.log-interp.v1', window: 'oscilla.window.hann.v1',
-  windowBlackmanHarris: 'oscilla.window.blackman-harris.v1' }
+  windowBlackmanHarris: 'oscilla.window.blackman-harris.v1', aggregate: 'oscilla.aggregate.v1' }
 VARIANT_OF = { irFarina: 'ir', windowBlackmanHarris: 'window' }   // describeAlgorithm family
+RETAINED_ALGORITHMS = { quality: ['oscilla.confidence.v1'] }      // superseded, still implemented
+KNOWN_ALGORITHM_IDS = [...ALGORITHMS values, ...retained]         // the import allow-list
 
 // stimulus.js
 StimulusSpec = { kind: 'sine'|'log-sweep'|'white'|'pink'|'band-noise'|'chirp',
@@ -120,6 +122,9 @@ IrResult = { algorithm /* IR_ALGORITHMS[method]: spectral 'oscilla.ir.log-sweep.
 irWindow(ir, t0, t1) -> { ...ir, window: [t0, t1], view: { startIndex, endIndex, samples } }
 normalizeIr(ir, 'peak-db'|'peak-linear') -> { kind: 'normalized', algorithm /* normalization */,
   mode, label, unit, referenceValue, values: Float64Array }
+// one spectral division for both (bit-identical to the two calls); fft / noiseSpectrum reuse
+computeTransferAndIr({ ...computeTransfer args, irLagSamples, method, inverse, fft,
+  noiseSpectrum }) -> { transfer: TransferResult, ir: IrResult }
 
 // smoothing.js — derived views; the raw response is never modified
 smoothFractionalOctave(frequencies, magnitudeDb, fraction /* 0 = none, N = 1/N octave */)
@@ -146,20 +151,27 @@ RtaResult = { algorithm, sampleRate, resolution: 'octave'|'third',
   windowAlgorithm|null }
 
 // aggregate.js — repeated runs on one frequency grid
-aggregateRuns(runs: Float64Array[] /* dB */, { method: 'mean'|'median' }) -> { method, runs,
-  points, centreDb, lowerDb, upperDb, spreadDb, dispersion: 'std'|'p10-p90'|null,
+aggregateRuns(runs: Float64Array[] /* dB */, { method: 'mean'|'median' }) -> { algorithm,
+  method, runs, points, centreDb, lowerDb, upperDb, spreadDb, dispersion: 'std'|'p10-p90'|null,
   repeatabilityDb }   // envelope fields null for one run
+aggregateResult(aggregate, frequencies) -> AggregateResult   // the stored results.aggregate
+AggregateResult = { algorithm, method, dispersion, runs, frequencies: Float64Array,
+  centreDb: Float64Array, lowerDb|null, upperDb|null, spreadDb|null, repeatabilityDb|null }
+  // zero power −300 dB; validated lowerDb ≤ centreDb ≤ upperDb
 
 // quality.js
-assessQuality({ capture, transfer, aggregate, calibration, requestedRange, resolutionHz,
-  sweepWindow }) -> QualityAssessment
+assessQuality({ capture, transfer, aggregate /* aggregateRuns() or AggregateResult */,
+  calibration, requestedRange, resolutionHz, sweepWindow,
+  chainNotes /* v2: { limiterDeviationAboveHz }|null */,
+  algorithm /* 'oscilla.confidence.v2' (default) | 'oscilla.confidence.v1' */ })
+  -> QualityAssessment
 QualityAssessment = { algorithm, status: 'GOOD'|'USABLE'|'POOR'|'INVALID',
   reasons: [{ code, scope: 'quality'|'calibration', severity: 'ok'|'warn'|'fail', text, value,
     unit, range? }],
   metrics: { snrMedianDb, snrMinDb, clippingRatio, clippingRegions, dropouts,
     repeatabilityDb, runs, requestedRange, coverage: [fLo, fHi]|null, coverageFraction,
     reliableRanges, unreliableRanges, calibratedRange, frequencyCalibrated, levelCalibrated,
-    resolutionHz },
+    resolutionHz /* v2 also: discontinuities, outputChainLimitHz */ },
   mask: { frequencies: Float64Array, reliable: Uint8Array, calibrated: Uint8Array } }
 
 // calibration/profile.js — two kinds, never conflated (spec §17)
@@ -190,7 +202,8 @@ Experiment = { kind: 'oscilla-experiment', schemaVersion: 1, oscillaVersion, osc
   input: { device: { label, id }, constraints: { requested, applied } },
   calibration: { frequency: { id, name }|null, level: {...}|null },
   environment: { notes }, measurement: { startedAt, sampleRate, runs },
-  quality, algorithms: { role: id }, results: { transfer, ir, rta /* RtaResult */ },
+  quality, algorithms: { role: id }, results: { transfer, ir, rta /* RtaResult */,
+    aggregate? /* AggregateResult, optional, presence kept */ },
   provenance: { configHash, resultHash /* SHA-256 of the encoded results, §101 */,
     createdAt, repeatOf /* source experimentId|null */,
     build /* { version, commit, shortCommit, sourceDate, channel, dirty, repository }|null */ } }
@@ -202,10 +215,14 @@ configHash(e) -> hex;  withConfigHash(e, hex);  resultHash(e) -> hex;  withResul
 ```
 
 The shapes above are what the modules produce and what `validate.js` accepts (the former
-mismatches G1-G4 are closed). Remaining gaps (`docs/v3/algorithms.md`, "Gaps"): the output
-limiter (G12), quality not reading `DISCONTINUITY` (G15), no stored form for an aggregate of
-repeats (G16), the phase threshold being an engineering choice (G17), no golden fixture per
-algorithm ID (G18), and the meaning of the calibrated transfer CSV column (G19).
+mismatches G1-G4 are closed). G12 and G15-G19 are closed as described in
+`docs/v3/algorithms.md` ("Gaps"); open there: G20 (storing a repeated measurement: aggregate vs
+one run's transfer, `compare.js` reads only `results.transfer`) and G21 (the combined
+transfer + IR step is the longest main-thread block until the Worker lands). The engine's
+`PreflightFacts` may carry `chainNotes` (pure data, e.g. `{ limiterDeviationAboveHz: 18000 }`),
+recorded as `result.chainNotes`; `assessMeasurement(result, ctx)` (engine.js) is the standard
+`assess`. CSV transfer columns are ratios (`magnitude_db_relative`, `magnitude_db_corrected`);
+`level_db_spl` appears only in RTA CSVs under a valid level calibration.
 
 ## Labels (spec §24, §98)
 

@@ -196,7 +196,7 @@ function assertWellFormed(q) {
 // ----------------------------------------------------------------------------- thresholds
 
 test('thresholds are frozen, named, and consistent with transfer.js validity', () => {
-  assert.equal(QUALITY_ALGORITHM, 'oscilla.confidence.v1');
+  assert.equal(QUALITY_ALGORITHM, 'oscilla.confidence.v2');
   assert.ok(Object.isFrozen(QUALITY_THRESHOLDS));
   assert.ok(Object.isFrozen(REASON_CODES));
   for (const [k, v] of Object.entries(QUALITY_THRESHOLDS))

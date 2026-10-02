@@ -866,39 +866,52 @@ test('transferCsv: metadata header, explicit unit columns, raw by default', () =
       + '/ analyser-relative scale)',
     '# view: RAW (unsmoothed, not normalized)',
     '# column frequency_hz: Hz',
-    '# column magnitude_db_relative: dB relative (dBFS-like)',
-    '# column magnitude_db_calibrated: empty (no calibration applied)',
+    '# column magnitude_db_relative: dB re unity digital transfer (capture/stimulus ratio), '
+      + 'uncorrected',
+    '# column magnitude_db_corrected: empty (no frequency calibration applied)',
     '# column snr_db: dB, ESTIMATED signal-to-noise ratio',
     '# column reliable: 1 = inside the valid range 20-20000 Hz, 0 = outside',
-    'frequency_hz,magnitude_db_relative,magnitude_db_calibrated,snr_db,reliable',
+    'frequency_hz,magnitude_db_relative,magnitude_db_corrected,snr_db,reliable',
     '10,-3,,5,0',
     '1000,1.5,,30,1',
     '20000,-0.25,,12.5,1',
     '',
   ].join('\n'));
   assert.ok(!/(^|\n)x,y/.test(csv));
-  assert.throws(() => transferCsv(SHORT(), META, { calibratedDb: [1, 2, 3] }), /no calibration/);
+  assert.throws(() => transferCsv(SHORT(), META, { correctedDb: [1, 2, 3] }),
+    /no frequency calibration/);
   assert.throws(() => transferCsv(SHORT(), META, { view: 'pretty' }), RangeError);
 });
 
-test('transferCsv: calibrated column and labelled derived view', () => {
+test('transferCsv: corrected column and labelled derived view', () => {
   const meta = csvMeta(fullExperiment());
   const csv = transferCsv(SHORT(), meta, {
     view: 'derived', derivation: { smoothing: '1/6 octave (oscilla.smoothing.fractional-octave.v1)',
       normalization: null },
-    calibratedDb: Float64Array.from([90, 95.5, 94]), reliable: [1, 1, 0],
+    correctedDb: Float64Array.from([-2, 1, 0.5]), reliable: [1, 1, 0],
   });
   const lines = csv.split('\n');
   assert.strictEqual(lines[6], '# calibration: frequency profile "UMIK-1 #7001", '
     + 'SPL CALIBRATED (94 dB SPL at 1 kHz)');
   assert.strictEqual(lines[7], '# view: DERIVED, not raw data (smoothing: 1/6 octave '
     + '(oscilla.smoothing.fractional-octave.v1); normalization: none)');
-  assert.strictEqual(lines[10], '# column magnitude_db_calibrated: dB SPL (CALIBRATED)');
+  // G19: under a valid level calibration the transfer columns stay ratios, never dB SPL.
+  assert.strictEqual(lines[10], '# column magnitude_db_corrected: dB re unity digital transfer '
+    + '(capture/stimulus ratio), frequency-profile corrected (microphone deviation removed)');
   assert.strictEqual(lines[12], '# column reliable: 1 = reliable, 0 = not (quality assessment)');
-  assert.deepStrictEqual(lines.slice(14, 17), ['10,-3,90,5,1', '1000,1.5,95.5,30,1',
-    '20000,-0.25,94,12.5,0']);
+  assert.strictEqual(lines[13],
+    'frequency_hz,magnitude_db_relative,magnitude_db_corrected,snr_db,reliable');
+  assert.deepStrictEqual(lines.slice(14, 17), ['10,-3,-2,5,1', '1000,1.5,1,30,1',
+    '20000,-0.25,0.5,12.5,0']);
+  assert.ok(lines.slice(8).every((l) => !/SPL/.test(l)), 'no SPL in transfer columns or rows');
   assert.throws(() => transferCsv(SHORT(), meta, { view: 'derived' }), /derived view needs/);
-  assert.throws(() => transferCsv(SHORT(), meta, { calibratedDb: [1] }), /expected 3/);
+  assert.throws(() => transferCsv(SHORT(), meta, { correctedDb: [1] }), /expected 3/);
+  assert.throws(() => transferCsv(SHORT(), meta, { calibratedDb: [1, 2, 3] }),
+    /replaced by correctedDb/);
+  // A level calibration alone (no frequency profile) does not allow a corrected column.
+  const levelOnly = { ...meta, calibration: { ...meta.calibration, frequency: null } };
+  assert.throws(() => transferCsv(SHORT(), levelOnly, { correctedDb: [1, 2, 3] }),
+    /no frequency calibration/);
   const unknown = transferCsv(SHORT(), {});
   assert.match(unknown, /# oscilla_version: Unknown\n# oscilla_commit: Unknown\n/);
   assert.match(unknown, /# sample_rate_hz: 48000\n/);

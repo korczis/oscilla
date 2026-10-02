@@ -37,7 +37,10 @@
 // normalizeIr's view carries algorithm 'oscilla.normalization.v1' (smoothing.js
 // NORMALIZATION_ALGORITHM) and its mode.
 
-import { powerToDb, realPairSpectra, spectralDeconvolution, ZERO_POWER_DB } from './transfer.js';
+import {
+  checkTransferArgs, powerToDb, realPairSpectra, spectralDeconvolution, transferFromDeconvolution,
+  workBuffers, ZERO_POWER_DB,
+} from './transfer.js';
 import { ALGORITHMS } from './algorithms.js';
 import { NORMALIZATION_ALGORITHM } from './smoothing.js';
 
@@ -53,12 +56,15 @@ export const IR_ALGORITHMS = Object.freeze({
 export const IR_PRE_GUARD_S = 0.005;
 export const IR_TAIL_FRACTION = 0.1;
 
-/** Real time signal from a Hermitian half spectrum: x = Re(DFT(conj(H))) / N. */
-function inverseReal(fft, hRe, hIm) {
+/**
+ * N·x for the real time signal x of a Hermitian half spectrum: Re(DFT(conj(H))), NOT yet
+ * divided by N (the caller divides only the samples it keeps, which gives the same doubles as
+ * dividing the whole buffer). Overwrites and returns `work.re` when scratch buffers are given.
+ */
+function inverseRealScaled(fft, hRe, hIm, work = null) {
   const n = fft.size;
   const half = n / 2;
-  const re = new Float64Array(n);
-  const im = new Float64Array(n);
+  const { re, im } = workBuffers(n, work);
   for (let k = 0; k <= half; k++) {
     re[k] = hRe[k];
     im[k] = -hIm[k];
@@ -68,7 +74,6 @@ function inverseReal(fft, hRe, hIm) {
     im[n - k] = hIm[k];
   }
   fft.forward(re, im);
-  for (let i = 0; i < n; i++) re[i] /= n;
   return re;
 }
 
@@ -78,15 +83,9 @@ function median(values) {
   return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
 }
 
-function farinaDeconvolution({ stimulus, captured, sampleRate, f1, f2, inverse }) {
-  if (!(inverse instanceof Float32Array) && !(inverse instanceof Float64Array))
-    throw new TypeError("method 'farina-inverse' needs inverse: Float32Array");
-  // Reuse the spectral path for validation, X and the FFT plan.
-  const base = spectralDeconvolution({ stimulus, captured, sampleRate, f1, f2 });
-  const { fft, fftSize, binHz, half, xRe, xIm, yRe, yIm } = base;
-  if (inverse.length !== stimulus.length)
-    throw new RangeError('inverse must have the stimulus length (time-reversed sweep)');
-  const { aRe: fRe, aIm: fIm } = realPairSpectra(fft, inverse, null);
+function farinaDeconvolution(base, { stimulus, sampleRate, f1, f2, inverse }) {
+  const { fft, binHz, half, xRe, xIm, yRe, yIm } = base;
+  const { aRe: fRe, aIm: fIm } = realPairSpectra(fft, inverse, null, base.work);
   const lo = Math.ceil((f1 * Math.SQRT2) / binHz);
   const hi = Math.min(half, Math.floor(Math.min(f2, sampleRate / 2) / Math.SQRT2 / binHz));
   const mags = [];
@@ -101,43 +100,38 @@ function farinaDeconvolution({ stimulus, captured, sampleRate, f1, f2, inverse }
     hRe[k] = (yRe[k] * fRe[k] - yIm[k] * fIm[k]) / g;
     hIm[k] = (yRe[k] * fIm[k] + yIm[k] * fRe[k]) / g;
   }
-  const full = inverseReal(fft, hRe, hIm);
-  return { full, shift: stimulus.length - 1, fftSize };
+  return { scaled: inverseRealScaled(fft, hRe, hIm, base.work), shift: stimulus.length - 1 };
+}
+
+/** Argument checks of computeImpulseResponse that need no spectra (same order as before). */
+function checkIrArgs({ stimulus, inverse, method, lagSamples }) {
+  if (lagSamples !== undefined && !(Number.isFinite(lagSamples) && lagSamples >= 0))
+    throw new RangeError(`lagSamples must be a finite number ≥ 0, got ${lagSamples}`);
+  if (method !== 'spectral' && method !== 'farina-inverse')
+    throw new RangeError(`unknown IR method '${method}'`);
+  if (method === 'farina-inverse'
+    && !(inverse instanceof Float32Array) && !(inverse instanceof Float64Array))
+    throw new TypeError("method 'farina-inverse' needs inverse: Float32Array");
+  return { stimulus };
 }
 
 /**
- * computeImpulseResponse({ stimulus, captured, sampleRate, f1, f2, inverse, method,
- *   lagSamples }) -> IrResult (docs/v3/architecture.md, with `method` and `fftSize`);
- *   algorithm is IR_ALGORITHMS[method].
- *   method      'spectral' (default) | 'farina-inverse' (requires `inverse`)
- *   lagSamples  optional alignment of the stimulus start in the capture (align().lagSamples)
+ * IrResult from a spectralDeconvolution() result (the second half of computeImpulseResponse).
+ * Uses dec.work as scratch for the inverse transform.
  */
-export function computeImpulseResponse({
-  stimulus,
-  captured,
-  sampleRate,
-  f1,
-  f2,
-  inverse = null,
-  method = 'spectral',
-  lagSamples,
+export function irFromDeconvolution(dec, {
+  stimulus, captured, sampleRate, f1, f2, inverse = null, method = 'spectral', lagSamples,
 }) {
-  if (lagSamples !== undefined && !(Number.isFinite(lagSamples) && lagSamples >= 0))
-    throw new RangeError(`lagSamples must be a finite number ≥ 0, got ${lagSamples}`);
-  let full;
+  let scaled;
   let shift = 0;
-  let fftSize;
   if (method === 'spectral') {
-    const dec = spectralDeconvolution({ stimulus, captured, sampleRate, f1, f2 });
-    full = inverseReal(dec.fft, dec.hRe, dec.hIm);
-    fftSize = dec.fftSize;
-  } else if (method === 'farina-inverse') {
-    ({ full, shift, fftSize } = farinaDeconvolution({
-      stimulus, captured, sampleRate, f1, f2, inverse,
-    }));
+    scaled = inverseRealScaled(dec.fft, dec.hRe, dec.hIm, dec.work);
   } else {
-    throw new RangeError(`unknown IR method '${method}'`);
+    if (inverse.length !== stimulus.length)
+      throw new RangeError('inverse must have the stimulus length (time-reversed sweep)');
+    ({ scaled, shift } = farinaDeconvolution(dec, { stimulus, sampleRate, f1, f2, inverse }));
   }
+  const n = dec.fftSize;
   const guard = Math.round(IR_PRE_GUARD_S * sampleRate);
   const start = lagSamples === undefined
     ? 0
@@ -147,7 +141,7 @@ export function computeImpulseResponse({
   let peakIndex = 0;
   let peakAbs = -1;
   for (let i = 0; i < length; i++) {
-    const v = full[start + i + shift];
+    const v = scaled[start + i + shift] / n;
     samples[i] = v;
     const a = Math.abs(v);
     if (a > peakAbs) {
@@ -165,8 +159,77 @@ export function computeImpulseResponse({
     captureOffsetS: start / sampleRate,
     noiseFloorDb: tailFloorDb(samples, peakIndex),
     window: null,
-    fftSize,
+    fftSize: dec.fftSize,
   };
+}
+
+/**
+ * computeImpulseResponse({ stimulus, captured, sampleRate, f1, f2, inverse, method,
+ *   lagSamples, fft }) -> IrResult (docs/v3/architecture.md, with `method` and `fftSize`);
+ *   algorithm is IR_ALGORITHMS[method].
+ *   method      'spectral' (default) | 'farina-inverse' (requires `inverse`)
+ *   lagSamples  optional alignment of the stimulus start in the capture (align().lagSamples)
+ *   fft         optional FFT plan of the deconvolution size (transfer.js fftPlan)
+ */
+export function computeImpulseResponse({
+  stimulus,
+  captured,
+  sampleRate,
+  f1,
+  f2,
+  inverse = null,
+  method = 'spectral',
+  lagSamples,
+  fft = null,
+}) {
+  checkIrArgs({ stimulus, inverse, method, lagSamples });
+  const dec = spectralDeconvolution({ stimulus, captured, sampleRate, f1, f2, fft });
+  return irFromDeconvolution(dec, { stimulus, captured, sampleRate, f1, f2, inverse, method,
+    lagSamples });
+}
+
+/**
+ * computeTransferAndIr({ stimulus, captured, sampleRate, f1, f2, lagSamples, alignment, noise,
+ *   options, irLagSamples, method, inverse, fft, noiseSpectrum }) → { transfer, ir }
+ * ONE regularized spectral division (spectralDeconvolution) for both results instead of one
+ * each: `transfer` is exactly computeTransfer({ stimulus, captured, sampleRate, f1, f2,
+ * lagSamples, alignment, noise, options }) and `ir` exactly computeImpulseResponse({ stimulus,
+ * captured, sampleRate, f1, f2, inverse, method, lagSamples: irLagSamples }), bit for bit
+ * (v3-transfer-ir.test.mjs "computeTransferAndIr"). irLagSamples defaults to max(0, lag) with
+ * lag = lagSamples ?? alignment.lagSamples (the IR needs a non-negative start), else none.
+ * Saves one FFT plan, two N-point FFTs, one regularization profile and 2·N doubles of scratch
+ * per run (docs/v3/algorithms.md, "Impulse response").
+ */
+export function computeTransferAndIr({
+  stimulus,
+  captured,
+  sampleRate,
+  f1,
+  f2,
+  lagSamples,
+  alignment = null,
+  noise = null,
+  options = {},
+  irLagSamples,
+  method = 'spectral',
+  inverse = null,
+  fft = null,
+  noiseSpectrum = null,
+}) {
+  const checked = checkTransferArgs({ lagSamples, alignment, noise, options });
+  let irLag = irLagSamples;
+  if (irLag === undefined) {
+    const lag = lagSamples !== undefined ? lagSamples
+      : checked.aligned && checked.aligned.lagSamples;
+    irLag = Number.isFinite(lag) ? Math.max(0, lag) : undefined;
+  }
+  checkIrArgs({ stimulus, inverse, method, lagSamples: irLag });
+  const dec = spectralDeconvolution({ stimulus, captured, sampleRate, f1, f2, fft });
+  const transfer = transferFromDeconvolution(dec, { captured, sampleRate, f1, f2, lagSamples,
+    noise, noiseSpectrum, ...checked });
+  const ir = irFromDeconvolution(dec, { stimulus, captured, sampleRate, f1, f2, inverse, method,
+    lagSamples: irLag });
+  return { transfer, ir };
 }
 
 function tailFloorDb(samples, peakIndex) {

@@ -1,5 +1,6 @@
 // Data-driven measurement quality assessment (spec §64-§71, §143, §156-§158, §198-§199,
-// §220-§222, §237, §249; ADR 0025). Algorithm ID: 'oscilla.confidence.v1'.
+// §220-§222, §237, §249; ADR 0025). Algorithm IDs: 'oscilla.confidence.v2' (default) and
+// 'oscilla.confidence.v1' (retained, reproduced exactly for stored assessments; ADR 0024).
 //
 // Method. A pure rule table maps measured metrics to one of four statuses and ALWAYS returns
 // the reasons, passing and failing alike, each backed by the number it was derived from. There
@@ -9,8 +10,21 @@
 // state (calibration/interpolate.js coverage, calibration/level.js) — never raw guesses.
 //
 // Versioning (§199). Every threshold in QUALITY_THRESHOLDS and every rule in this header belong
-// to ALGORITHMS.quality = 'oscilla.confidence.v1'. Changing any threshold, a rule, or which
-// codes invalidate mints a new ID (oscilla.confidence.v2); a stored status stays as assessed.
+// to a rule set named by its algorithm ID (QUALITY_RULESETS). Changing any threshold, a rule, or
+// which codes invalidate mints a new ID; a stored status stays as assessed, and
+// assessQuality({ algorithm }) recomputes it under the rule set it names.
+//   v1  the rules below without the two v2 additions.
+//   v2  v1 plus (a) DISCONTINUITY (capture-checks.js oscilla.discontinuity.v1): a sample
+//       discontinuity inside the sweep window invalidates (DISCONTINUITY_IN_SWEEP, like a
+//       dropout there: the samples are not the system's response), one outside it warns, none
+//       is 'ok', and a capture check without a `discontinuities` list is NOT MEASURED (warn);
+//       without a sweepWindow every discontinuity counts as inside. (b) OUTPUT CHAIN NOTES:
+//       `chainNotes` is pure data about the playback chain reported by the platform layer (no
+//       browser sniffing here), currently { limiterDeviationAboveHz }: every grid point above
+//       that frequency is marked unreliable and OUTPUT_CHAIN_DEVIATION (dimension range) warns
+//       when the measured or requested range reaches above it (ok when it does not). Measured
+//       for Firefox 155's DynamicsCompressor in the master chain, which deviates above 18 kHz
+//       at every level (docs/v3/spike-audioworklet-worker.md, G12). Thresholds are unchanged.
 //
 // Reasons: { code, scope, severity: 'ok'|'warn'|'fail', text, value, unit, range? }.
 //   scope 'quality'      integrity and precision of the measurement; decides the status.
@@ -33,7 +47,7 @@
 //
 //   | status  | rule                                                                          |
 //   |---------|-------------------------------------------------------------------------------|
-//   | INVALID | any invalidating code (INVALIDATING_CODES, always severity 'fail')            |
+//   | INVALID | any invalidating code (the rule set's invalidating codes, always 'fail')      |
 //   | POOR    | not INVALID, and any other 'fail', or measured warns in ≥ poorWarnCount       |
 //   |         | distinct dimensions                                                           |
 //   | USABLE  | not POOR, and at least one 'warn' (NOT_MEASURED included)                     |
@@ -49,8 +63,9 @@
 // Invalidating conditions (§220): no capture checks, no samples, invalid sample rate, NaN or
 // infinite samples, no captured signal (RMS below capture-checks EMPTY_RMS_DBFS), severe
 // clipping (ratio ≥ clipInvalidRatio), a dropout inside the sweep window (capture underrun;
-// without a sweepWindow every interior dropout is treated as inside), non-finite analysis
-// output (transfer grid, magnitude, SNR, phase or the aggregate centre), and an empty validRange.
+// without a sweepWindow every interior dropout is treated as inside), in v2 a sample
+// discontinuity inside the sweep window (same window rule), non-finite analysis output
+// (transfer grid, magnitude, SNR, phase or the aggregate centre), and an empty validRange.
 // An INVALID assessment keeps only its 'fail' reasons (no passing reason is offered as evidence
 // for a meaningless result), and its reliable mask is all zero: it must not be drawn as
 // authoritative.
@@ -95,7 +110,10 @@ import { smoothFractionalOctave } from './smoothing.js';
 import { SAFE_NYQUIST_FRACTION } from './stimulus.js';
 import { RELATIVE_UNIT, isValidLevelCalibration } from '../calibration/level.js';
 
+/** The default rule set for new assessments: 'oscilla.confidence.v2'. */
 export const QUALITY_ALGORITHM = ALGORITHMS.quality;
+/** The retained first rule set (no discontinuity rule, no chain notes). */
+export const QUALITY_ALGORITHM_V1 = 'oscilla.confidence.v1';
 
 export const QUALITY_THRESHOLDS = Object.freeze({
   /** Rail-sample ratio at or above which the run is INVALID: with mild overdrive only ~20-25 %
@@ -153,13 +171,12 @@ export const QUALITY_THRESHOLDS = Object.freeze({
 const Q = 'quality';
 const C = 'calibration';
 
-/** Every reason code, its scope and whether it invalidates (part of the v1 rule set). */
+/** Reason-code definition: scope, status dimension, invalidating, reports a NOT MEASURED. */
 const code = (scope, dimension, invalidating = false, notMeasured = false) =>
   Object.freeze({ scope, dimension, invalidating, notMeasured });
 
-/** Every reason code: scope, status dimension, whether it invalidates, whether it reports a
- *  quantity that was not measured (part of the v1 rule set). */
-export const REASON_CODES = Object.freeze({
+/** The v1 reason codes. */
+const V1_CODES = Object.freeze({
   CAPTURE_MISSING: code(Q, 'capture', true),
   NO_SAMPLES: code(Q, 'capture', true),
   BAD_SAMPLE_RATE: code(Q, 'capture', true),
@@ -182,9 +199,63 @@ export const REASON_CODES = Object.freeze({
   LEVEL_CALIBRATION: code(C, 'calibration'),
 });
 
-export const INVALIDATING_CODES = Object.freeze(
-  Object.keys(REASON_CODES).filter((code) => REASON_CODES[code].invalidating),
+/** The v2 reason codes: v1 plus discontinuities and the output-chain note. */
+const V2_CODES = Object.freeze({
+  ...V1_CODES,
+  DISCONTINUITY_IN_SWEEP: code(Q, 'capture', true),
+  DISCONTINUITY: code(Q, 'capture'),
+  DISCONTINUITY_NOT_MEASURED: code(Q, 'capture', false, true),
+  OUTPUT_CHAIN_DEVIATION: code(Q, 'range'),
+});
+
+const invalidating = (codes) => Object.freeze(
+  Object.keys(codes).filter((k) => codes[k].invalidating),
 );
+
+/**
+ * Rule sets by algorithm ID (ADR 0024: an ID names one fixed set of rules). Each holds its
+ * thresholds, reason codes (scope, dimension, invalidating, not-measured), invalidating codes
+ * and which v2 inputs it reads.
+ */
+export const QUALITY_RULESETS = Object.freeze({
+  [QUALITY_ALGORITHM_V1]: Object.freeze({
+    algorithm: QUALITY_ALGORITHM_V1, thresholds: QUALITY_THRESHOLDS, reasonCodes: V1_CODES,
+    invalidatingCodes: invalidating(V1_CODES), discontinuity: false, chainNotes: false,
+  }),
+  'oscilla.confidence.v2': Object.freeze({
+    algorithm: 'oscilla.confidence.v2', thresholds: QUALITY_THRESHOLDS, reasonCodes: V2_CODES,
+    invalidatingCodes: invalidating(V2_CODES), discontinuity: true, chainNotes: true,
+  }),
+});
+
+/** Every reason code of the default rule set (QUALITY_ALGORITHM): scope, status dimension,
+ *  whether it invalidates, whether it reports a quantity that was not measured. */
+export const REASON_CODES = QUALITY_RULESETS[QUALITY_ALGORITHM].reasonCodes;
+
+export const INVALIDATING_CODES = QUALITY_RULESETS[QUALITY_ALGORITHM].invalidatingCodes;
+
+/** The output-chain note fields assessQuality understands (pure data, see the header). */
+export const CHAIN_NOTE_FIELDS = Object.freeze(['limiterDeviationAboveHz']);
+
+/**
+ * normalizeChainNotes(notes) → null | { limiterDeviationAboveHz }
+ * null/undefined (or no field set) → null. A plain object with only CHAIN_NOTE_FIELDS;
+ * limiterDeviationAboveHz is null or a finite frequency > 0 Hz. Anything else throws, so a
+ * misspelt note is never silently dropped.
+ */
+export function normalizeChainNotes(notes) {
+  if (notes === null || notes === undefined) return null;
+  if (typeof notes !== 'object' || Array.isArray(notes))
+    throw new TypeError('chainNotes must be an object such as { limiterDeviationAboveHz }');
+  for (const k of Object.keys(notes)) {
+    if (!CHAIN_NOTE_FIELDS.includes(k)) throw new RangeError(`unknown chain note '${k}'`);
+  }
+  const hz = notes.limiterDeviationAboveHz ?? null;
+  if (hz !== null && !(typeof hz === 'number' && Number.isFinite(hz) && hz > 0))
+    throw new RangeError('chainNotes.limiterDeviationAboveHz must be a frequency > 0 Hz, '
+      + `got ${hz}`);
+  return hz === null ? null : Object.freeze({ limiterDeviationAboveHz: hz });
+}
 
 export const QUALITY_STATUSES = Object.freeze(['GOOD', 'USABLE', 'POOR', 'INVALID']);
 
@@ -343,10 +414,11 @@ function countNonFiniteAggregate(a) {
 
 // ----------------------------------------------------------------------------- assessment
 
-function assessCaptures(captures, sweepWindow, add) {
+function assessCaptures(captures, sweepWindow, add, rules) {
   const T = QUALITY_THRESHOLDS;
   const n = captures.length;
   const metrics = { clippingRatio: null, clippingRegions: null, dropouts: null };
+  if (rules.discontinuity) metrics.discontinuities = null;
   if (!n) {
     add('CAPTURE_MISSING', 'fail', 'no capture checks: capture integrity not measured', 0,
       'runs');
@@ -437,7 +509,84 @@ function assessCaptures(captures, sweepWindow, add) {
     add('DROPOUT', 'warn', `${plural(outside, 'dropout')} outside the sweep window`, outside,
       'dropouts');
   if (!inside && !outside) add('DROPOUT', 'ok', 'no dropouts', 0, 'dropouts');
+  if (rules.discontinuity) metrics.discontinuities = assessDiscontinuities(captures, sweepWindow,
+    who, add);
   return metrics;
+}
+
+/** v2: sample discontinuities (capture-checks.js) against the sweep window, like dropouts. */
+function assessDiscontinuities(captures, sweepWindow, who, add) {
+  let inside = 0;
+  let outside = 0;
+  let largest = 0;
+  const insideRuns = [];
+  const unmeasured = [];
+  captures.forEach((c, i) => {
+    if (!Array.isArray(c.discontinuities)) {
+      unmeasured.push(i);
+      return;
+    }
+    const w = windowFor(sweepWindow, i);
+    let runInside = 0;
+    for (const d of c.discontinuities) {
+      if (!w || (d.start < w[1] && d.end > w[0])) {
+        runInside++;
+        if (Math.abs(d.jump) > largest) largest = Math.abs(d.jump);
+      } else outside++;
+    }
+    if (runInside) insideRuns.push(i);
+    inside += runInside;
+  });
+  const count = (k) => `${k} discontinuit${k === 1 ? 'y' : 'ies'}`;
+  if (inside) {
+    const scope = sweepWindow ? 'inside the sweep window' : 'inside the capture (no sweep window '
+      + 'given, so treated as inside the sweep)';
+    add('DISCONTINUITY_IN_SWEEP', 'fail',
+      `sample discontinuity: ${count(inside)} ${scope} in ${who(insideRuns)} (largest step ` +
+        `${Number(largest.toPrecision(2))} of full scale): the samples there are not the ` +
+        "system's response", inside, 'discontinuities');
+  }
+  if (outside)
+    add('DISCONTINUITY', 'warn', `${count(outside)} outside the sweep window`, outside,
+      'discontinuities');
+  if (unmeasured.length)
+    add('DISCONTINUITY_NOT_MEASURED', 'warn',
+      `discontinuities not checked in ${who(unmeasured)}: capture checks without a ` +
+        'discontinuity list', unmeasured.length, 'runs');
+  if (!inside && !outside && !unmeasured.length)
+    add('DISCONTINUITY', 'ok', 'no discontinuities', 0, 'discontinuities');
+  return unmeasured.length === captures.length ? null : inside + outside;
+}
+
+/**
+ * v2: mark grid points above an output-chain deviation unreliable (in place) and report it.
+ * `top` is the highest frequency the measurement covers (last grid point, else the requested
+ * upper edge); returns metrics.outputChainLimitHz.
+ */
+function assessChainNotes(chain, frequencies, reliable, requested, fmt, add) {
+  const lim = chain.limiterDeviationAboveHz;
+  const n = frequencies.length;
+  const limText = resolutionText(lim);
+  let first = -1;
+  for (let i = 0; i < n; i++) {
+    if (frequencies[i] > lim) {
+      if (first < 0) first = i;
+      reliable[i] = 0;
+    }
+  }
+  const head = `output chain deviates above ${limText} in this browser`;
+  if (n && first >= 0) {
+    add('OUTPUT_CHAIN_DEVIATION', 'warn',
+      `${head}: ${rangeText(fmt, frequencies[first], frequencies[n - 1])} marked unreliable`,
+      lim, 'Hz', [frequencies[first], frequencies[n - 1]]);
+  } else if (!n && requested && requested[1] > lim) {
+    add('OUTPUT_CHAIN_DEVIATION', 'warn',
+      `${head}: the requested range above it (${rangeText(fmt, lim, requested[1])}) is not ` +
+        'reliable', lim, 'Hz', [lim, requested[1]]);
+  } else {
+    add('OUTPUT_CHAIN_DEVIATION', 'ok', `${head}, outside the measured range`, lim, 'Hz');
+  }
+  return lim;
 }
 
 function assessSnr(transfer, fmt, add) {
@@ -661,16 +810,16 @@ function assessLevelCalibration(level, add) {
   return false;
 }
 
-function decideStatus(reasons) {
+function decideStatus(reasons, codes) {
   const T = QUALITY_THRESHOLDS;
-  const quality = reasons.filter((r) => REASON_CODES[r.code].scope === Q);
-  if (quality.some((r) => r.severity === 'fail' && REASON_CODES[r.code].invalidating))
+  const quality = reasons.filter((r) => codes[r.code].scope === Q);
+  if (quality.some((r) => r.severity === 'fail' && codes[r.code].invalidating))
     return 'INVALID';
   const warns = quality.filter((r) => r.severity === 'warn');
   const measured = new Set(
     warns
-      .filter((r) => !REASON_CODES[r.code].notMeasured)
-      .map((r) => REASON_CODES[r.code].dimension),
+      .filter((r) => !codes[r.code].notMeasured)
+      .map((r) => codes[r.code].dimension),
   );
   if (quality.some((r) => r.severity === 'fail') || measured.size >= T.poorWarnCount)
     return 'POOR';
@@ -680,7 +829,7 @@ function decideStatus(reasons) {
 
 /**
  * assessQuality({ capture, transfer, aggregate, calibration, requestedRange, resolutionHz,
- *   sweepWindow }) → QualityAssessment (docs/v3/architecture.md)
+ *   sweepWindow, chainNotes, algorithm }) → QualityAssessment (docs/v3/architecture.md)
  *   capture         checkCapture() result, or an array of them (one per run)
  *   transfer        computeTransfer() result or null (e.g. an RTA-only measurement)
  *   aggregate       aggregateRuns() result or null
@@ -689,8 +838,13 @@ function decideStatus(reasons) {
  *   requestedRange  [f1, f2] in Hz; default transfer.requestedRange
  *   resolutionHz    bin resolution Δf; default transfer.binHz
  *   sweepWindow     optional [start, end) samples of the stimulus inside the capture (or one per
- *                   run); dropouts outside it only warn. Without it every interior dropout
- *                   invalidates.
+ *                   run); dropouts (and in v2 discontinuities) outside it only warn. Without
+ *                   it every interior dropout (discontinuity) invalidates.
+ *   chainNotes      v2: optional output-chain facts, { limiterDeviationAboveHz } (see
+ *                   normalizeChainNotes); grid points above it are marked unreliable
+ *   algorithm       rule set: QUALITY_ALGORITHM (v2, default) or QUALITY_ALGORITHM_V1, which
+ *                   reproduces a v1 assessment exactly (it reads neither discontinuities nor
+ *                   chainNotes)
  */
 export function assessQuality({
   capture,
@@ -700,7 +854,15 @@ export function assessQuality({
   requestedRange = null,
   resolutionHz = null,
   sweepWindow = null,
+  chainNotes = null,
+  algorithm = QUALITY_ALGORITHM,
 } = {}) {
+  const rules = QUALITY_RULESETS[algorithm];
+  if (!rules || !Object.prototype.hasOwnProperty.call(QUALITY_RULESETS, algorithm))
+    throw new RangeError(`unknown quality rule set '${algorithm}' (known: ` +
+      `${Object.keys(QUALITY_RULESETS).join(', ')})`);
+  const codes = rules.reasonCodes;
+  const chain = rules.chainNotes ? normalizeChainNotes(chainNotes) : null;
   const captures = normalizeCaptures(capture);
   if (transfer !== null) validateTransfer(transfer);
   const freqCal = calibration && calibration.frequency ? calibration.frequency : null;
@@ -718,12 +880,12 @@ export function assessQuality({
   const fmt = frequencyFormatter(frequencies, resolution);
   const reasons = [];
   const add = (code, severity, text, value, unit, range) => {
-    const r = { code, scope: REASON_CODES[code].scope, severity, text, value, unit };
+    const r = { code, scope: codes[code].scope, severity, text, value, unit };
     if (range) r.range = range;
     reasons.push(r);
   };
 
-  const cap = assessCaptures(captures, sweepWindow, add);
+  const cap = assessCaptures(captures, sweepWindow, add, rules);
 
   const nonFinite = (transfer ? countNonFiniteTransfer(transfer) : 0)
     + countNonFiniteAggregate(aggregate);
@@ -753,6 +915,10 @@ export function assessQuality({
     add('SNR_NOT_MEASURED', 'warn', 'SNR not measured: no transfer function', null, 'dB');
   }
 
+  const outputChainLimitHz = chain
+    ? assessChainNotes(chain, frequencies, reliable, requested, fmt, add)
+    : null;
+
   const repeatabilityDb = assessRepeatability(aggregate, captures.length, add);
 
   if (resolution !== null) {
@@ -769,7 +935,7 @@ export function assessQuality({
     add);
   const levelCalibrated = assessLevelCalibration(levelCal, add);
 
-  const status = decideStatus(reasons);
+  const status = decideStatus(reasons, codes);
   if (status === 'INVALID') reliable = new Uint8Array(n);
   const ordered = reasons
     .map((r, i) => ({ r, i }))
@@ -777,28 +943,33 @@ export function assessQuality({
     .sort((a, b) => SEVERITY_ORDER[a.r.severity] - SEVERITY_ORDER[b.r.severity] || a.i - b.i)
     .map(({ r }) => r);
 
+  const metrics = {
+    snrMedianDb: snr.snrMedianDb,
+    snrMinDb: snr.snrMinDb,
+    clippingRatio: cap.clippingRatio,
+    clippingRegions: cap.clippingRegions,
+    dropouts: cap.dropouts,
+  };
+  if (rules.discontinuity) metrics.discontinuities = cap.discontinuities;
+  Object.assign(metrics, {
+    repeatabilityDb,
+    runs: aggregate && Number.isInteger(aggregate.runs) ? aggregate.runs : captures.length,
+    requestedRange: requested ? [requested[0], requested[1]] : null,
+    coverage: cov.coverage,
+    coverageFraction: cov.coverageFraction,
+    reliableRanges: maskRanges(frequencies, reliable),
+    unreliableRanges: maskRanges(frequencies, invertMask(reliable)),
+    calibratedRange: fc.calibratedRange,
+    frequencyCalibrated: fc.frequencyCalibrated,
+    levelCalibrated,
+    resolutionHz: resolution,
+  });
+  if (rules.chainNotes) metrics.outputChainLimitHz = outputChainLimitHz;
   return {
-    algorithm: QUALITY_ALGORITHM,
+    algorithm: rules.algorithm,
     status,
     reasons: ordered,
-    metrics: {
-      snrMedianDb: snr.snrMedianDb,
-      snrMinDb: snr.snrMinDb,
-      clippingRatio: cap.clippingRatio,
-      clippingRegions: cap.clippingRegions,
-      dropouts: cap.dropouts,
-      repeatabilityDb,
-      runs: aggregate && Number.isInteger(aggregate.runs) ? aggregate.runs : captures.length,
-      requestedRange: requested ? [requested[0], requested[1]] : null,
-      coverage: cov.coverage,
-      coverageFraction: cov.coverageFraction,
-      reliableRanges: maskRanges(frequencies, reliable),
-      unreliableRanges: maskRanges(frequencies, invertMask(reliable)),
-      calibratedRange: fc.calibratedRange,
-      frequencyCalibrated: fc.frequencyCalibrated,
-      levelCalibrated,
-      resolutionHz: resolution,
-    },
+    metrics,
     mask: { frequencies, reliable, calibrated: calMask },
   };
 }

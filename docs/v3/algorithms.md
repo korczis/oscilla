@@ -11,7 +11,8 @@ the test diagnostics (`node --test tests/unit/v3-*.test.mjs`) or by re-running t
 computation with the same seeds; they describe the code at `origin/feature/v3` (b650281) and
 will drift if the code changes. The integration fixes on top of 88c0daf closed gaps G1-G11 and
 G13 and documented G14; sections they changed are marked **Changed (integration)** and give
-their own margins. `tests/unit/v3-integration.test.mjs` has one test group per closed gap and
+their own margins. The gap fixes on top of 8628438 closed G12 and G15-G19 (sections marked
+**Changed (gaps)**; tests in `tests/unit/v3-gaps.test.mjs` and `tests/unit/v3-golden.test.mjs`). `tests/unit/v3-integration.test.mjs` has one test group per closed gap and
 `tests/unit/v3-pipeline.test.mjs` runs the whole chain (stimulus → capture checks → alignment
 → transfer and IR → aggregation → quality → experiment → hashes → JSON → validation) on the
 real result objects. Where the code and the specification still disagree, the disagreement is
@@ -29,12 +30,13 @@ listed under [Gaps](#gaps), not resolved here.
 | `oscilla.ir.log-sweep.v1` (spectral), `oscilla.ir.farina-inverse.v1` | `measurement/impulse-response.js` | [Impulse response](#ir) |
 | `oscilla.smoothing.fractional-octave.v1`, `oscilla.normalization.v1` | `measurement/smoothing.js` | [Smoothing](#smoothing) |
 | `oscilla.rta.v1` | `measurement/rta.js` | [RTA bands](#rta) |
-| (none) | `measurement/aggregate.js` | [Aggregation of repeats](#aggregate) |
+| `oscilla.aggregate.v1` | `measurement/aggregate.js` | [Aggregation of repeats](#aggregate) |
 | `oscilla.calibration.log-interp.v1` | `calibration/*.js` | [Frequency calibration](#calibration) |
 | (none) | `calibration/level.js` | [Level calibration, SPL](#level) |
 | (none) | `measurement/format.js` | [Resolution-aware formatting](#format) |
 | (none) | `experiments/*.js` | [Experiment hashing, encoding](#experiments) |
-| `oscilla.confidence.v1` | `measurement/quality.js` | [Quality](#quality) |
+| `oscilla.confidence.v2` (default), `oscilla.confidence.v1` (retained) | `measurement/quality.js` | [Quality](#quality) |
+| (all IDs) | `tests/unit/fixtures/v3/*.json` | [Golden outputs per ID](#golden) |
 
 ## Conventions
 
@@ -90,11 +92,22 @@ Every result object now carries the IDs it used:
 | `bandAnalysis`, `rtaResult` | `algorithm`; `windowAlgorithm` (RtaResult) | rta; window |
 | `smoothResponse` | `algorithm` | smoothing |
 | `normalizeResponse`, `normalizeIr` | `algorithm` (+ `mode`) | normalization |
-| `assessQuality` | `algorithm` | quality |
+| `assessQuality` | `algorithm` | quality (the rule set used: v2 by default, v1 on request) |
+| `aggregateRuns`, `aggregateResult` | `algorithm` (+ `method`) | aggregate |
 | `applyFrequencyCorrection`, `applyFrequencyCorrectionToBands` | `algorithm` | calibration |
 
 `smoothFractionalOctave` still returns a bare array (used internally by `transfer.js` and
 `quality.js`); `smoothResponse` is its labelled, ID-carrying view.
+
+**Changed (gaps)** (G15, G16). `quality` is now `oscilla.confidence.v2`; the superseded
+`oscilla.confidence.v1` stays implemented and registered in `RETAINED_ALGORITHMS` (`{ quality:
+['oscilla.confidence.v1'] }`, ADR 0024 "old IDs stay in the registry as long as stored data may
+carry them"). `isKnownAlgorithm()` is true for current and retained IDs, and
+`KNOWN_ALGORITHM_IDS` (both) is the allow-list to pass to `validateExperiment` /
+`openExperimentStore` as `knownAlgorithms`: `ALGORITHMS` alone names only the defaults and
+would reject a stored v1 assessment. New role `aggregate` (`oscilla.aggregate.v1`): the
+aggregate became a stored result, so it carries an ID (`aggregateRuns().algorithm`,
+`aggregateResult().algorithm`); mean or median is its recorded `method` parameter.
 
 Tests: `v3-measurement-core.test.mjs` "algorithms: frozen contract IDs ..." (exact equality,
 variants report their family); `v3-integration.test.mjs` "G6/G7/G9" pins every ID string and
@@ -319,8 +332,9 @@ only; a capture that passes can still be acoustically wrong. Regions are half-op
   `DISCONTINUITY`; `invalid` is true exactly when `reasons` is non-empty. All thresholds are
   overridable through `opts`.
 
-Limits: RMS and peak are digital (dBFS), not acoustic. `quality.js` (`oscilla.confidence.v1`)
-does not read `DISCONTINUITY`; see [Gaps](#gaps), G15.
+Limits: RMS and peak are digital (dBFS), not acoustic. **Changed (gaps)** (was G15):
+`quality.js` reads `discontinuities` from `oscilla.confidence.v2` on (inside the sweep window
+invalidating, outside warning; see [Quality](#quality)); `oscilla.confidence.v1` does not.
 
 Tests (`v3-measurement-core.test.mjs`, all exact): clipped sine gives one merged region equal to
 an independent rail-run reference and the exact ratio; one or two 0.99 samples are not clipping,
@@ -431,13 +445,37 @@ yields `phaseReason: 'NO_ALIGNMENT'`. The lag removed is `lagSamples` when given
 are averaged over the grid band, and the angle is reported wrapped to (−180°, 180°]. The
 result records `alignment: { algorithm, lagSamples, peakCorrelation, polarity }` (or null).
 
-Why 0.5: ρ² is the fraction of the capture's energy in the stimulus window that one scaled,
-delayed copy of the stimulus explains (ρ = 1/√2 at 0 dB broadband SNR for a flat system).
-Below ρ = 0.5 most of that energy is noise, reverberation or filtering that a pure delay does
-not describe, so the delay removed from the phase is ill defined, while the lag estimate
-itself stays sub-sample accurate down to ρ ≈ 0.7 (alignment tests). It is an engineering
-threshold, not a derived uncertainty: phase accuracy also depends on the per-point SNR, which
-`snrDb` reports.
+Why 0.5 — **Changed (gaps)** (was G17): an **engineering choice**, now with the relation it
+rests on measured. ρ² is the fraction of the capture's energy in the stimulus window that one
+scaled, delayed copy of the stimulus explains. For a flat system in white noise of broadband
+SNR s (signal over noise power in the sweep window) Σcap² = (1 + 1/s)·Σsig² and the correlation
+peak is Σsig², so
+
+```
+ρ = 1 / √(1 + 1/s)        ρ = 0.5  ⇔  s = 1/3 (−4.77 dB)
+```
+
+Measured (1 s, 48 kHz, 20 Hz-20 kHz sweep, Gaussian noise, 3 seeds; phase error after removing
+the alignment lag, 1/48-octave points in 100 Hz-10 kHz):
+
+| broadband SNR | ρ predicted | ρ measured | max lag error | median / max phase error |
+| --- | --- | --- | --- | --- |
+| 20 dB | 0.995 | 0.9951 | 0.0003 samples | 0.39° / 2.2° |
+| 10 dB | 0.954 | 0.9537 | 0.0009 | 1.2° / 6.7° |
+| 0 dB | 0.707 | 0.7092 | 0.0029 | 3.9° / 19.4° |
+| −4.77 dB | 0.500 | 0.5035 | 0.005 | 6.8° / 30.6° |
+| −10 dB | 0.302 | 0.3058 | 0.0092 | 12.4° / 63.2° |
+
+Without noise, a 2nd-order low-pass lowers ρ by spectral mismatch alone: 0.953 at 8 kHz, 0.80
+at 1 kHz, 0.68 at 300 Hz, 0.56 at 100 Hz, 0.46 at 50 Hz (the lag is then the group delay, 200
+samples at 50 Hz). So the threshold is not where alignment fails — the lag is accurate to
+0.005 samples at ρ = 0.5 for a 1 s sweep — nor a phase-error bound: in noise the phase error is
+set by the per-point SNR (`snrDb`), not by ρ. The cut withholds a phase when less than a quarter
+of the captured energy is a delayed copy of the stimulus (noise below −4.8 dB broadband SNR, a
+system band-limited to well under 100 Hz on a 20 Hz-20 kHz sweep, or mostly reverberant
+energy), where the single delay removed from the phase is not a meaningful reference.
+`v3-gaps.test.mjs` "G17" pins ρ = 1/√(1 + 1/s) within ±0.01 at 0, −4.77 and −10 dB and the
+withheld phase for the noise-free 50 Hz low-pass. No per-point phase uncertainty is reported.
 
 ### SNR (when a stimulus-free capture `noise` is given)
 
@@ -502,6 +540,56 @@ The realistic case is a 20 Hz-20 kHz, 10 s sweep at 48 kHz through a 2nd-order h
 60 Hz, a +4 dB peak at 2.5 kHz (Q 1.5) and a 2nd-order low-pass at 16 kHz, with 2.9 ms delay and
 white noise at 40 dB broadband SNR (FFT size 2^21); the time is the analysis wall time of
 transfer plus IR on the test machine.
+
+### One deconvolution for transfer and IR — **Changed (gaps)** (performance)
+
+`computeTransferAndIr({ ...computeTransfer args, irLagSamples, method, inverse, fft,
+noiseSpectrum }) → { transfer, ir }` (`impulse-response.js`) runs `spectralDeconvolution` once
+and derives both results from it (`transferFromDeconvolution`, `irFromDeconvolution`).
+`transfer` equals `computeTransfer(...)` and `ir` equals `computeImpulseResponse({ ..., lagSamples:
+irLagSamples })` **bit for bit** (default `irLagSamples` = max(0, lag)); the separate functions
+are unchanged in output and now share the same code. No ID changes: every output is
+bit-identical to 8628438 (checked on 44.1/48/96 kHz sweeps with noise, phase, both IR methods).
+Bit-identical savings also in the separate paths:
+
+- the FFT scratch (2·N doubles) is reused for the noise spectrum and the inverse transform
+  instead of allocating new 32 MB (2²¹) buffers; the inverse is divided by N only for the kept
+  samples;
+- `regularizationProfile` computes the in-band and out-of-band ε once (same expression), so
+  only transition bins call `10 **`;
+- optional `fft` (`fftPlan(size)`) and `noiseSpectrum` (`noiseSpectrum(noise, fftSize)`)
+  arguments let a caller reuse the plan and the noise FFT across runs; each is used only when it
+  matches (plan size; the very same noise array and FFT size), else recomputed.
+
+`engine.js` uses one plan and one noise spectrum per measurement, `computeTransfer` for the
+other runs and `computeTransferAndIr` for the representative run (analysis step
+`transfer+impulse-response`). Cost per 2²¹ deconvolution is dominated by the N-point FFTs
+(≈ 115-190 ms each in Node 22 here, depending on machine load): one run with noise needed 4
+FFTs and 2 plans, now 3 FFTs and 1 plan; each further run 2 FFTs and 1 plan, now 1 FFT.
+
+Measured, Node 22.20, Apple M5 Pro under concurrent load, 10 s / 48 kHz sweep with a noise
+capture and phase, 8628438 vs this change alternated in one process (medians):
+
+| Analysis | before | after |
+| --- | --- | --- |
+| 1 run: transfer + IR | 549 ms (longest block 276) | 358 ms (one block) |
+| 1 run, second session (heavier load) | 740 ms (384) | 519 ms |
+| 3 runs: 3 transfers + IR | 1171 ms (longest 307) | 701 ms (longest 406) |
+| 3 runs, second session | 1560 ms (415) | 914 ms (519) |
+
+The total drops 30-41 %; the longest single main-thread block grows (transfer and IR are now one
+step), which matters until the analysis moves to a Worker
+([spike](spike-audioworklet-worker.md)). In headless browsers (same machine, 10 s sweep, separate
+functions vs combined, both on this code): Chromium 153 ≈ 282 → 200 ms, Firefox 155 ≈ 370 →
+262 ms, WebKit 26.6 ≈ 245 → 173 ms.
+
+**Chromium-slow IR step (spike note).** Not reproduced. Standalone in Chromium 153 the spectral
+IR of a 2 s sweep (N = 2¹⁸) took 22-36 ms, the same as the transfer (23-46 ms), and of a 10 s
+sweep 97-148 ms (transfer 101-143 ms); in `tests/browser/v3-measure.cjs` the longest analysis
+step in Chromium is 29-34 ms for 2 s sweeps. The IR path has no non-power-of-two FFT
+(`createFft` accepts only powers of two) and no allocation the transfer lacks except the
+2·N inverse buffers, which are now reused. The 160-264 ms in the spike were most likely garbage
+collection or tier-up during the live loopback; nothing in the pure module explains them.
 
 <a id="ir"></a>
 ## Impulse response — `oscilla.ir.log-sweep.v1`, `oscilla.ir.farina-inverse.v1` (`measurement/impulse-response.js`)
@@ -773,7 +861,29 @@ point i; all runs on one grid. `−Infinity` (zero power) is accepted; NaN and `
 
 The envelope is a descriptive dispersion of the runs, not an expanded uncertainty in the GUM
 sense (no coverage factor, no Type B components). Sorting is insertion sort, sized for the
-1-10 repeat limit.
+1-10 repeat limit. The result carries `algorithm: 'oscilla.aggregate.v1'`.
+
+### Stored form: `aggregateResult(aggregate, frequencies)` — **Changed (gaps)** (was G16)
+
+`AggregateResult = { algorithm, method, dispersion, runs, frequencies, centreDb, lowerDb,
+upperDb, spreadDb, repeatabilityDb }` is the optional `results.aggregate` of an experiment:
+the `aggregateRuns()` output with its grid (e.g. the runs' `TransferResult.frequencies`, which
+must be finite, positive and strictly increasing), new `Float64Array`s, `points` dropped (=
+`frequencies.length`), and −Infinity or anything below −300 dB stored as `ZERO_POWER_DB` (as
+`rtaResult`). One run: the three envelope arrays, `dispersion` and `repeatabilityDb` are null. A
+NaN spread (some runs zero power, others not) has no JSON-safe value and throws; transfer
+magnitudes are already floored at −300 dB, so this cannot happen on the engine path.
+`assessQuality` accepts the stored form like the in-memory one (identical assessment).
+Validation (`validate.js`): exact keys, known method, `dispersion` = `std`/`p10-p90` by method
+(null for one run), runs 1-64, envelope arrays null for one run and of the grid's length
+otherwise, `spreadDb ≥ 0`, `repeatabilityDb` null or 0-400, and `lowerDb ≤ centreDb ≤ upperDb`
+at every point. `results.aggregate` keeps its presence: `createExperiment` leaves it absent, so
+files and result hashes without it are unchanged; with it the result hash covers its encoded
+arrays. `csv.js` `aggregateCsv` exports frequency_hz, centre_db_relative, lower_db_relative,
+upper_db_relative, spread_db (transfer ratios in dB; the spread is a dB difference, labelled
+descriptive) with a `# repeatability_db` line. `v3-pipeline.test.mjs` stores the aggregate of
+its three runs instead of run 1's TransferResult and round-trips it byte for byte; a flipped
+digit in `centreDb` is rejected as corrupt.
 
 Tests (`v3-rta-aggregate.test.mjs`, all 1e-12 or exact): identical runs give zero spread for both
 methods; mean centre of [0, 2, 4] dB is the power mean (> 2 dB), spread 2 dB and √12 dB; median
@@ -999,9 +1109,12 @@ not the same result. `sha256Hex` defaults to `calibration/sha256.js` and may be 
 
 ```
 resultHash = SHA-256 hex( canonicalJson({ v: 1,             RESULT_HASH_VERSION
-  results: serializeExperiment(results) }) )                 { transfer, ir, rta }, typed
-                                                             arrays as EncodedArray
+  results: serializeExperiment(results) }) )                 { transfer, ir, rta,
+                                                             aggregate? }, typed arrays as
+                                                             EncodedArray
 ```
+
+(`aggregate` only when present: a results block without it hashes as before.)
 
 The typed arrays enter in their encoded form (dtype + little-endian bytes), so the hash covers
 the exact stored bits and the dtype; key order does not matter. `withResultHash(e, hex)` stamps
@@ -1057,6 +1170,40 @@ schemas with a clear message, and never modifies its input.
 `newExperimentId(bytes16)` formats caller-supplied random bytes as a UUIDv4 (version and variant
 bits set); the module uses no randomness or clock of its own.
 
+### CSV columns (`csv.js`) — **Changed (gaps)** (was G19)
+
+A transfer magnitude is a ratio (capture / stimulus), never a level. `transferCsv` columns are
+frequency_hz, magnitude_db_relative ("dB re unity digital transfer (capture/stimulus ratio),
+uncorrected"), **magnitude_db_corrected** (option `correctedDb` =
+`applyFrequencyCorrection().correctedDb`, "…, frequency-profile corrected (microphone deviation
+removed)"; requires a frequency profile in the metadata), snr_db, reliable. A level
+calibration never turns a transfer column into "dB SPL" (with the offset added |H| would be the
+SPL a full-scale digital stimulus would produce, which the file does not claim); the old
+`calibratedDb`/`calibratedUnit` options throw a TypeError naming the replacement. Absolute
+level belongs to level outputs: `rtaCsv` adds level_db_corrected (option `correctedDb`, needs a
+frequency profile) and, only under a VALID LevelCalibration, level_db_spl = (corrected or
+relative band level) + offset, its unit line naming the base column and the offset; zero power
+(−300 dB) has an empty SPL field. `aggregateCsv` is described under [Aggregation](#aggregate).
+The specification's column list (§164, "magnitude_db_calibrated") predates this split; it is not
+edited here.
+
+<a id="golden"></a>
+### Golden outputs per algorithm ID — **New (gaps)** (was G18)
+
+`tests/unit/v3-golden.test.mjs` has one case per ID in `KNOWN_ALGORITHM_IDS` (15: every current
+default and the retained `oscilla.confidence.v1`) and one fixture per ID,
+`tests/unit/fixtures/v3/<id>.json` (24.5 KB in all): a small deterministic input (8 kHz, 1 s
+50 Hz-3 kHz sweep through a one-pole low-pass with mulberry32 noise; a clipped/dropped/stepped
+capture; closed-form curves; a fixed profile and level calibration) run through the module, its
+output reduced to plain numbers (long arrays to a 12-32-value window plus order-sensitive sums)
+and rounded to 10 significant digits. The test fails when an output moves by more than
+1e-8·max(1, |value|) (rounding and last-ulp Math differences between engines stay below; the
+smallest documented effect, 0.004 dB, is 4·10⁵ times larger), when any reason text, code or
+label changes, when a known ID has no fixture, or when the output does not carry the ID it is
+filed under. A self-check shows a 0.001 dB shift — inside every analytic tolerance — fails.
+Regenerate only after announcing an ID change: `OSCILLA_UPDATE_GOLDEN=1 node --test
+tests/unit/v3-golden.test.mjs`.
+
 ### Tests (`v3-experiments.test.mjs`)
 
 Encoding round trip is bitwise (including a float32 subnormal and `−0`); base64 matches `Buffer`
@@ -1075,14 +1222,41 @@ non-result fields and key order, changes with one flipped bit or a dtype change,
 modified result in a stamped file is rejected as `corrupt`.
 
 <a id="quality"></a>
-## Measurement quality — `oscilla.confidence.v1` (`measurement/quality.js`)
+## Measurement quality — `oscilla.confidence.v2`, `oscilla.confidence.v1` (`measurement/quality.js`)
 
 Documented from the code that landed in e89ff9f (was G14). ADR 0025: a pure rule table maps
 measured metrics to one of four statuses and always returns the reasons, passing and failing,
 each backed by the number it came from. There is no score and no "confidence" percentage.
 
 `assessQuality({ capture, transfer, aggregate, calibration, requestedRange, resolutionHz,
-sweepWindow }) → { algorithm, status, reasons, metrics, mask }`
+sweepWindow, chainNotes, algorithm }) → { algorithm, status, reasons, metrics, mask }`
+
+**Changed (gaps)** (was G15, G12). Each ID is one rule set (`QUALITY_RULESETS`):
+`algorithm` defaults to `QUALITY_ALGORITHM` = `oscilla.confidence.v2`; `QUALITY_ALGORITHM_V1`
+reproduces a v1 assessment exactly (verified against the 8628438 implementation in 45 input
+combinations, and by its golden fixture) and reads neither discontinuities nor chain notes.
+An unknown ID throws. Thresholds are the same object in both. v2 adds four codes, nothing else:
+
+| Code (v2) | Dimension | Rule |
+| --- | --- | --- |
+| `DISCONTINUITY_IN_SWEEP` | capture | a `checkCapture` discontinuity overlapping the sweep window (every one without a window): fail, invalidating — the samples there are not the system's response |
+| `DISCONTINUITY` | capture | discontinuities only outside the window: warn with their count; none in any run: ok (value 0) |
+| `DISCONTINUITY_NOT_MEASURED` | capture | a capture check without a `discontinuities` list (pre-`oscilla.discontinuity.v1`): warn, not measured |
+| `OUTPUT_CHAIN_DEVIATION` | range | `chainNotes.limiterDeviationAboveHz` = L: every grid point above L is set unreliable; warn "output chain deviates above L in this browser: … marked unreliable" (range = those points) when the grid (or, without a transfer, the requested range) reaches above L, else ok |
+
+`chainNotes` is pure data reported by the platform layer, validated by `normalizeChainNotes`
+(plain object, only `limiterDeviationAboveHz`, null or a finite frequency > 0; anything else
+throws). quality.js does no browser sniffing. The case it exists for is the G12 measurement:
+Firefox 155's DynamicsCompressor in the master chain deviates above 18 kHz at every level
+([spike](spike-audioworklet-worker.md)). `engine.js` reads an optional `chainNotes` from the
+io's PreflightFacts, warns in preflight (`OUTPUT_CHAIN_DEVIATION`) when the sweep reaches above
+it, ignores an invalid note with `CHAIN_NOTES_IGNORED`, records it as `result.chainNotes` and
+passes it to `assess` (context `chainNotes`); `assessMeasurement(result, ctx)` (engine.js) is the
+standard `assess` — all runs' checks, the combined transfer, the aggregate, the applied
+frequency calibration, the context's level calibration, per-run sweep windows from the
+alignment lags, and the chain note. `capture.js` does not set the note yet; it is to come from a
+measured probe. v2 metrics add `discontinuities` (count, null when no run was checked) after
+`dropouts` and `outputChainLimitHz` (null without a note) at the end; v1 metrics are unchanged.
 
 - `capture`: one `checkCapture()` result or one per run; `transfer`: a `computeTransfer()`
   result or null (RTA-only); `aggregate`: an `aggregateRuns()` result or null;
@@ -1092,7 +1266,7 @@ sweepWindow }) → { algorithm, status, reasons, metrics, mask }`
   `[start, end)` sample range of the stimulus in the capture (or one per run).
 - `summarizeQuality(assessment)` gives one or two sentences for screen readers (§150).
 
-### Thresholds (`QUALITY_THRESHOLDS`, part of the v1 rule set)
+### Thresholds (`QUALITY_THRESHOLDS`, shared by the v1 and v2 rule sets)
 
 | Name | Value | Rationale (from the code) |
 | --- | --- | --- |
@@ -1139,7 +1313,7 @@ Status (`decideStatus`):
 
 | Status | Rule |
 | --- | --- |
-| INVALID | any invalidating code (always `fail`) |
+| INVALID | any invalidating code of the rule set (always `fail`) |
 | POOR | not INVALID, and any other `fail`, or measured warns (not the NOT_MEASURED codes) in ≥ 3 distinct dimensions |
 | USABLE | not POOR, and at least one `warn` (NOT_MEASURED included) |
 | GOOD | every `quality` reason is `ok` |
@@ -1167,10 +1341,11 @@ to POOR. An INVALID assessment keeps only its `fail` reasons and an all-zero rel
 ### Assumptions and limits
 
 Thresholds are engineering choices with stated rationale, versioned by the ID (§199): changing
-any threshold, rule or invalidating code mints `oscilla.confidence.v2`. SNR, coverage and the
-masks come from the one `transfer` passed (with repeats, the caller chooses which run; the
-aggregate contributes only `repeatabilityDb`). `checkCapture`'s `DISCONTINUITY` is not read
-(G15).
+any threshold, rule or invalidating code mints the next ID (v2 did, for the discontinuity rule
+and the chain note). SNR, coverage and the masks come from the one `transfer` passed (with
+repeats, the caller chooses which run; the aggregate contributes only `repeatabilityDb`). The
+chain note caps the reliable mask, not `validRange`/`COVERAGE`. The engine's own capture checks
+still stop a run on any `DISCONTINUITY` (stricter than v2's window rule).
 
 ### Tests (`v3-quality.test.mjs`)
 
@@ -1198,7 +1373,16 @@ inputs they came from):
 | inputs not mutated, deterministic output | exact |
 
 `v3-integration.test.mjs` "G4" and `v3-pipeline.test.mjs` check that a real assessment (with
-`scope` and `mask`) is stored, validated and re-exported unchanged.
+`scope` and `mask`) is stored, validated and re-exported unchanged. `v3-gaps.test.mjs` (exact):
+the rule sets (v2 = v1 + four codes, shared thresholds, unknown IDs rejected); a 0.2 step at
+75 Hz in the sweep (both edges found by `checkCapture`) is INVALID under v2 and not under v1;
+outside the window it warns, without a window it invalidates, per-run windows apply per run, a
+clean pair is GOOD under both with identical other reasons; a check without a discontinuity
+list caps at USABLE; chain notes at 2 kHz zero every point above it with the documented reason
+and range, at 18 kHz (above the grid) give an ok reason and an unchanged mask, RTA-only uses the
+requested range, v1 ignores them, invalid notes throw; through the engine a note reaches
+preflight, `result.chainNotes`, the assess context and the mask, and an invalid one is ignored
+with a warning.
 
 ## Measurement state machine (`measurement/state-machine.js`)
 
@@ -1241,36 +1425,41 @@ every active state, and bounded history over 256 repeat loops.
 
 ## Gaps
 
-Differences between the specification, the contract or the ADRs and what the code does after the
-integration fixes on top of 88c0daf. **Closed** by those fixes (see the sections marked
-"Changed (integration)"): G1 power scales, G2 recipe stimulus, G3 IR validation, G4 null valid
-range / zero-power encoding / `rtaResult`, G5 discontinuities, G6 Blackman-Harris ID, G7 IDs
-stamped, G8 phase robustness, G9 Farina ID (the ε deviation from ADR 0021 is documented in
-[Impulse response](#ir)), G10 one uncalibrated label, G11 calibration of RTA bands, G13 result
-hash; G14 is documented in [Quality](#quality). Also closed: `assessQuality()` output was
-rejected by validation (`mask`, reason `scope`; found by the pipeline test). The remaining
-gaps are stated, not fixed:
+Differences between the specification, the contract or the ADRs and what the code does.
+**Closed** by the integration fixes on top of 88c0daf (sections marked "Changed (integration)"):
+G1 power scales, G2 recipe stimulus, G3 IR validation, G4 null valid range / zero-power encoding
+/ `rtaResult`, G5 discontinuities, G6 Blackman-Harris ID, G7 IDs stamped, G8 phase robustness,
+G9 Farina ID (the ε deviation from ADR 0021 is documented in [Impulse response](#ir)), G10 one
+uncalibrated label, G11 calibration of RTA bands, G13 result hash; G14 is documented in
+[Quality](#quality). Also closed: `assessQuality()` output was rejected by validation (`mask`,
+reason `scope`; found by the pipeline test).
 
-- **G12 Output limiter (§207).** Whether measurement playback passes through the V2 master
-  limiter/ceiling is decided by the not-yet-written engine; if it does, the limiter is part of the
-  measured chain and is not compensated.
-- **G15 Quality ignores discontinuities.** `checkCapture` reports `DISCONTINUITY` (and
-  `invalid: true`), but `quality.js` maps only its listed codes, so a spliced capture can still
-  be assessed GOOD. Making `DISCONTINUITY` a quality reason (invalidating inside the sweep
-  window, like a dropout) changes the v1 rule set and must mint `oscilla.confidence.v2`
-  (§199). Until then the engine must not treat the quality status as covering
-  `checkCapture().invalid`.
-- **G16 No stored form for an aggregate.** `aggregateRuns()` (centre, envelope,
-  `repeatabilityDb`) feeds `assessQuality`, but `Experiment.results` is `{ transfer, ir, rta }`:
-  with repeats the engine must choose which run's TransferResult to store (the pipeline test
-  stores run 1) and the envelope is not stored. A builder for an aggregated TransferResult (and
-  its validation) should be defined in the contract first.
-- **G17 Phase threshold.** `PHASE_MIN_CORRELATION = 0.5` is reasoned (ρ² = explained energy),
-  not derived from a phase-uncertainty model; no per-point phase uncertainty is reported.
-- **G18 Fixture per ID (ADR 0024 confirmation).** IDs are pinned as strings and outputs by
-  analytic tolerances, but no golden-output fixture per ID fails on an unannounced numeric
-  change that stays inside a tolerance.
-- **G19 Calibrated transfer column.** `transferCsv` labels the calibrated magnitude column
-  "dB SPL (CALIBRATED)" under a valid level calibration, but |H| is a ratio (capture /
-  stimulus); with the offset added it is the SPL a full-scale digital stimulus would produce at
-  that frequency, which the label does not say.
+**Closed** by the gap fixes on top of 8628438 (sections marked "Changed (gaps)"):
+
+- **G12 Output limiter (§207).** Decided by the spike: playback always passes the master chain,
+  which is part of the measured system. The one measured non-transparency (Firefox above 18 kHz)
+  is now expressible as data: `chainNotes.limiterDeviationAboveHz` from the io's preflight facts
+  marks the bins above it unreliable with `OUTPUT_CHAIN_DEVIATION` ([Quality](#quality)).
+  Open: `capture.js` does not set the note yet (it needs a measured probe, not browser
+  sniffing).
+- **G15 Quality ignores discontinuities.** `oscilla.confidence.v2` reads them
+  (`DISCONTINUITY_IN_SWEEP` invalidating); v1 is retained and reproducible.
+- **G16 No stored form for an aggregate.** `aggregateResult()` → optional `results.aggregate`,
+  validated, hashed, exported (`aggregateCsv`), ID `oscilla.aggregate.v1`.
+- **G17 Phase threshold.** Documented as an engineering choice with the measured relation
+  ρ = 1/√(1 + 1/SNR) and phase errors ([Transfer function](#transfer)). Still not reported: a
+  per-point phase uncertainty.
+- **G18 Fixture per ID.** [Golden outputs per ID](#golden).
+- **G19 Calibrated transfer column.** `magnitude_db_corrected` is a ratio; dB SPL only in
+  `rtaCsv` level_db_spl under a valid level calibration.
+
+Remaining:
+
+- **G20 Stored transfer vs aggregate.** With repeats an experiment can now store the aggregate,
+  but `compare.js` compares only `results.transfer`, and the engine's combined transfer (with
+  `runs`, `aggregation` fields) is not itself a storable TransferResult; the builder that turns
+  an engine result into an experiment (UI layer) must choose `transfer: null` + `aggregate`, or
+  one run's transfer + `aggregate`.
+- **G21 Longest analysis block.** `transfer+impulse-response` is one engine step (≈ 360-520 ms
+  in Node for a 10 s sweep at 48 kHz), longer than either step was; the Worker integration of the
+  spike is still the remedy.

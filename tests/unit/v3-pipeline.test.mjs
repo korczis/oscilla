@@ -7,7 +7,9 @@
 //     SNR, with a separate stimulus-free noise capture of the same length and σ
 //   → checkCapture → align → computeTransfer + computeImpulseResponse   (× 3 runs)
 //   → aggregateRuns → assessQuality
-//   → createRecipe(renderStimulus().spec) / createExperiment / withResults
+//   → createRecipe(renderStimulus().spec) / createExperiment / withResults, storing the
+//     aggregate of the three runs (aggregateResult, results.aggregate; G16) rather than one
+//     run's TransferResult, with run 1's IR as the representative impulse response
 //   → configHash + resultHash → JSON → validateExperiment → identical round trip
 // plus an RTA path (pink noise → welch → bands → rtaResult → experiment → validate) and a
 // calibrated path (frequency profile applied to the transfer and to RTA bands, level
@@ -186,12 +188,13 @@ function sweepExperiment({ calibration = null, quality = QUALITY, id = 1 } = {})
     algorithms: {
       transfer: t.algorithm, ir: ir.algorithm, align: RUN[0].alignment.algorithm,
       clip: RUN[0].check.algorithms.clip, discontinuity: RUN[0].check.algorithms.discontinuity,
-      quality: quality.algorithm,
+      quality: quality.algorithm, aggregate: AGGREGATE.algorithm,
     },
   });
   const measured = schemaMod.withResults(created, {
     startedAt: '2026-10-02T10:00:01.000Z', runs: RUN.map(runRecord), quality,
-    results: { transfer: t, ir, rta: null },
+    results: { transfer: null, ir, rta: null,
+      aggregate: aggregateMod.aggregateResult(AGGREGATE, t.frequencies) },
   });
   const configured = hashMod.withConfigHash(measured, hashMod.configHash(measured));
   return hashMod.withResultHash(configured, hashMod.resultHash(configured));
@@ -311,17 +314,26 @@ test('pipeline: the rendered stimulus spec is the recipe stimulus, unchanged', (
 
 test('pipeline: sweep experiment → hashes → JSON → validate → identical', () => {
   const e = sweepExperiment();
+  // G16: the stored magnitude is the aggregate of all runs, on run 1's grid.
+  const stored = e.results.aggregate;
+  assert.equal(e.results.transfer, null);
+  assert.equal(stored.algorithm, ALGORITHMS.aggregate);
+  assert.equal(stored.runs, RUNS);
+  assert.deepEqual(stored.frequencies, RUN[0].transfer.frequencies);
+  assert.deepEqual(stored.centreDb, AGGREGATE.centreDb);
+  assert.deepEqual(stored.spreadDb, AGGREGATE.spreadDb);
+  assert.equal(stored.repeatabilityDb, AGGREGATE.repeatabilityDb);
   assert.match(e.provenance.configHash, /^[0-9a-f]{64}$/);
   assert.match(e.provenance.resultHash, /^[0-9a-f]{64}$/);
   const { json, imported } = roundTrip(e);
   assert.equal(hashMod.configHash(imported), e.provenance.configHash);
   assert.equal(hashMod.resultHash(imported), e.provenance.resultHash);
-  // One flipped base64 digit inside the transfer magnitude: still a well-formed array, but the
+  // One flipped base64 digit inside the aggregate centre: still a well-formed array, but the
   // result hash no longer matches, so the import is rejected as corrupt.
   const doc = JSON.parse(json);
-  const data = doc.results.transfer.magnitudeDb.data;
+  const data = doc.results.aggregate.centreDb.data;
   const at = data.length >> 1;
-  doc.results.transfer.magnitudeDb.data = data.slice(0, at) + (data[at] === 'A' ? 'B' : 'A')
+  doc.results.aggregate.centreDb.data = data.slice(0, at) + (data[at] === 'A' ? 'B' : 'A')
     + data.slice(at + 1);
   const v = validateMod.validateExperiment(JSON.stringify(doc), OPTS);
   assert.equal(v.ok, false);
@@ -400,7 +412,8 @@ function texts(e, quality, rtaE, display) {
     ...schemaMod.summarizeExperiment(e),
     qualityMod.summarizeQuality(quality),
     ...quality.reasons.map((x) => `${x.text} ${x.unit}`),
-    csvMod.transferCsv(e.results.transfer, meta, display.csv),
+    csvMod.transferCsv(RUN[0].transfer, meta, display.csv),
+    csvMod.aggregateCsv(e.results.aggregate, meta),
     csvMod.irCsv(e.results.ir, meta),
     csvMod.rtaCsv(rtaE.results.rta, csvMod.csvMeta(rtaE)),
     display.level,
@@ -429,9 +442,8 @@ test('pipeline calibrated: profile applied to transfer and bands; SPL only when 
   const calE = sweepExperiment({ calibration: { frequency: PROFILE, level: LEVEL },
     quality: calibrated, id: 2 });
   roundTrip(calE);
-  const splDb = Float64Array.from(corrected.correctedDb, (v) => v + LEVEL.offsetDb);
   const calText = texts(calE, calibrated, rtaE, {
-    csv: { calibratedDb: splDb },
+    csv: { correctedDb: corrected.correctedDb },
     level: formatMod.formatDb(levelMod.toDisplayLevel(rta.levelsDb[10], LEVEL).value,
       { kind: levelMod.levelLabel(LEVEL).calibrated ? 'spl' : 'relative' }),
   });

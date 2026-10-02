@@ -18,16 +18,22 @@
 // Accepted result shapes are exactly what the analysis modules produce: TransferResult
 // (validRange may be null; optional phaseReason and alignment), IrResult (optional method and
 // fftSize; method must match the IR algorithm ID), RtaResult (rta.js rtaResult: optional
-// windowAlgorithm; zero power is stored as −300 dB, non-finite levels are rejected) and
-// QualityAssessment (quality.js: reasons with optional scope, optional mask
-// { frequencies f64, reliable u8, calibrated u8 }).
+// windowAlgorithm; zero power is stored as −300 dB, non-finite levels are rejected),
+// AggregateResult (aggregate.js aggregateResult, the optional `results.aggregate`: dispersion
+// consistent with method and runs, envelope arrays and repeatabilityDb null for one run,
+// lowerDb ≤ centreDb ≤ upperDb, spreadDb ≥ 0) and QualityAssessment (quality.js: reasons with
+// optional scope, optional mask { frequencies f64, reliable u8, calibrated u8 }).
+// `results.aggregate` is optional and keeps its presence: files written before it existed
+// validate, hash and re-export unchanged.
 //
 // Result hash (spec §101): when provenance.resultHash is a hash, it is recomputed (hash.js
 // resultHash) over the decoded results; a mismatch is the error
 // { path: 'provenance.resultHash', code: 'corrupt' }. opts.sha256Hex may inject SHA-256.
 //
 // knownAlgorithms: the allowed algorithm IDs (array, Set or an object such as ALGORITHMS whose
-// values are IDs). Without it only the ID format (oscilla.<name>.v<n>) is checked.
+// values are IDs). Without it only the ID format (oscilla.<name>.v<n>) is checked. For imports
+// pass algorithms.js KNOWN_ALGORITHM_IDS (current and retained IDs): ALGORITHMS alone names only
+// the current defaults and would reject a stored 'oscilla.confidence.v1' assessment.
 
 import {
   ALGORITHM_ID_PATTERN, CALIBRATION_SCHEMA_VERSION, COMMIT_PATTERN, EXPERIMENT_KIND,
@@ -39,6 +45,7 @@ import { migrateExperiment } from './migrate.js';
 import { resultHash } from './hash.js';
 import { PHASE_REASONS } from '../measurement/transfer.js';
 import { IR_ALGORITHMS } from '../measurement/impulse-response.js';
+import { AGGREGATE_DISPERSION } from '../measurement/aggregate.js';
 
 export const DEFAULT_MAX_BYTES = 32 * 1024 * 1024;
 export const DEFAULT_MAX_ARRAY = 4_000_000;
@@ -388,11 +395,60 @@ function checkAlgorithms(c, a, path, ctx) {
 }
 
 function checkResults(c, r, path, ctx) {
-  if (!c.keys(r, path, ['transfer', 'ir', 'rta'])) return null;
-  return {
+  if (!c.keys(r, path, ['transfer', 'ir', 'rta'], ['aggregate'])) return null;
+  const out = {
     transfer: r.transfer === null ? null : checkTransfer(c, r.transfer, `${path}.transfer`, ctx),
     ir: r.ir === null ? null : checkIr(c, r.ir, `${path}.ir`, ctx),
     rta: r.rta === null ? null : checkRta(c, r.rta, `${path}.rta`, ctx),
+  };
+  if (has(r, 'aggregate')) {
+    out.aggregate = r.aggregate === null ? null
+      : checkAggregate(c, r.aggregate, `${path}.aggregate`, ctx);
+  }
+  return out;
+}
+
+/** aggregate.js aggregateResult(): the stored envelope of repeated runs (G16). */
+function checkAggregate(c, a, path, ctx) {
+  const keys = ['algorithm', 'method', 'dispersion', 'runs', 'frequencies', 'centreDb',
+    'lowerDb', 'upperDb', 'spreadDb', 'repeatabilityDb'];
+  if (!c.keys(a, path, keys)) return null;
+  algorithmId(c, a.algorithm, `${path}.algorithm`, ctx);
+  const okMethod = c.oneOf(a.method, `${path}.method`, Object.keys(AGGREGATE_DISPERSION));
+  if (!c.num(a.runs, `${path}.runs`, 1, LIMITS.runs, { integer: true }) || !okMethod) return null;
+  const single = a.runs === 1;
+  const dispersion = single ? null : AGGREGATE_DISPERSION[a.method];
+  if (a.dispersion !== dispersion) {
+    c.add(`${path}.dispersion`, single ? 'must be null for one run'
+      : `must be "${dispersion}" for method "${a.method}"`);
+  }
+  const db = LIMITS.dbAbs;
+  const frequencies = resultArray(c, a.frequencies, `${path}.frequencies`, 'f64', ctx,
+    { lo: 0, hi: LIMITS.frequencyHz[1], increasing: true, minLength: 1 });
+  if (!frequencies) return null;
+  const n = frequencies.length;
+  const centreDb = resultArray(c, a.centreDb, `${path}.centreDb`, 'f64', ctx,
+    { length: n, lo: -db, hi: db });
+  const envelope = (k, lo) => {
+    if (!single) return resultArray(c, a[k], `${path}.${k}`, 'f64', ctx, { length: n, lo, hi: db });
+    if (a[k] !== null) c.add(`${path}.${k}`, 'must be null for one run');
+    return null;
+  };
+  const lowerDb = envelope('lowerDb', -db);
+  const upperDb = envelope('upperDb', -db);
+  const spreadDb = envelope('spreadDb', 0);
+  if (single) {
+    if (a.repeatabilityDb !== null) c.add(`${path}.repeatabilityDb`, 'must be null for one run');
+  } else {
+    c.num(a.repeatabilityDb, `${path}.repeatabilityDb`, 0, db, { nullable: true });
+  }
+  if (centreDb && lowerDb && upperDb) {
+    const bad = centreDb.findIndex((v, i) => !(lowerDb[i] <= v && v <= upperDb[i]));
+    if (bad >= 0) c.add(`${path}.centreDb[${bad}]`, 'must lie between lowerDb and upperDb');
+  }
+  return {
+    algorithm: a.algorithm, method: a.method, dispersion: a.dispersion, runs: a.runs,
+    frequencies, centreDb, lowerDb, upperDb, spreadDb, repeatabilityDb: a.repeatabilityDb,
   };
 }
 

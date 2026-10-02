@@ -4,6 +4,8 @@ import { createFft } from '../../src/js/analysis/fft.js';
 import { mulberry32 } from '../../src/js/audio/noise.js';
 import {
   ALGORITHMS,
+  KNOWN_ALGORITHM_IDS,
+  RETAINED_ALGORITHMS,
   VARIANT_OF,
   describeAlgorithm,
   isKnownAlgorithm,
@@ -137,8 +139,19 @@ test('algorithms: frozen contract IDs, known/unknown, described by family and ve
   for (const [role, id] of Object.entries(ALGORITHMS)) {
     assert.ok(isKnownAlgorithm(id), id);
     const family = VARIANT_OF[role] || role;
-    assert.deepEqual({ ...describeAlgorithm(id) }, { id, family, version: 1 });
+    const version = Number(id.slice(id.lastIndexOf('.v') + 2));
+    assert.deepEqual({ ...describeAlgorithm(id) }, { id, family, version });
   }
+  // Superseded IDs stay known and keep their family (ADR 0024).
+  for (const [role, ids] of Object.entries(RETAINED_ALGORITHMS)) {
+    for (const id of ids) {
+      assert.ok(isKnownAlgorithm(id), id);
+      assert.ok(KNOWN_ALGORITHM_IDS.includes(id), id);
+      assert.equal(describeAlgorithm(id).family, role);
+      assert.ok(describeAlgorithm(id).version < describeAlgorithm(ALGORITHMS[role]).version);
+    }
+  }
+  assert.equal(ALGORITHMS.quality, 'oscilla.confidence.v2');
   assert.equal(describeAlgorithm('oscilla.confidence.v1').family, 'quality');
   // A variant reports the role it is an alternative for (ADR 0024: distinct IDs per method).
   assert.equal(describeAlgorithm('oscilla.ir.farina-inverse.v1').family, 'ir');
