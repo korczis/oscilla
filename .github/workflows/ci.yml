@@ -42,6 +42,8 @@ jobs:
       - run: npm ci
       - name: Unit and freeze suites
         run: npm test
+      - name: One product version (package.json) everywhere, no hard-coded copies
+        run: npm run version:check
       - name: Committed dist/index.html matches a clean rebuild
         run: npm run build:check
       - name: Artifact rules (single file, no runtime fetch, licence notices, budget)

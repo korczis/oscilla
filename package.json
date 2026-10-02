@@ -28,7 +28,7 @@
     "test:visual": "node scripts/visual-gate.mjs dist",
     "test:live": "node tests/browser/live-smoke.cjs",
     "test:release": "npm run test:engine && npm run test:dsp && npm run test:labs && npm run test:sequencer && npm run test:browser && npm run test:visual",
-    "release-gate": "npm test && npm run build:check && npm run verify-dist && npm run test:release",
+    "release-gate": "npm run verify && npm run test:release",
     "visual": "node scripts/visual-compare.mjs dist --play --out tests/visual/out-integration",
     "test:engine": "node tests/browser/engine-v1port.cjs",
     "social": "node scripts/social-assets.mjs"
