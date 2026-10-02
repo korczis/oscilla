@@ -1,0 +1,20 @@
+id: V372
+milestone: M019
+title: "Guided and expert modes"
+slug: guided-and-expert-modes
+priority: p1
+profile: implementation
+objective: "Seven-step guided flow, bypassable; expert controls with progressive disclosure; characterize-playback-chain workflow with honest chain wording (§77-§78, §106-§107)."
+scope:
+  - "src"
+  - "tests"
+depends_on:
+  - "V371"
+acceptance_criteria:
+  - "Seven-step guided flow, bypassable; expert controls with progressive disclosure; characterize-playback-chain workflow with honest chain wording (§77-§78, §106-§107)."
+  - "Specification: docs/specs/oscilla-v3-measure.md"
+validation:
+  - "npm run release-gate"
+evidence_required:
+  - "verified"
+created_at: 2026-10-02

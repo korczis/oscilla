@@ -1,0 +1,20 @@
+id: V344
+milestone: M016
+title: "RTA chart"
+slug: rta-chart
+priority: p1
+profile: implementation
+objective: "Bars equal calculated band power (§122)."
+scope:
+  - "src"
+  - "tests"
+depends_on:
+  - "V342"
+acceptance_criteria:
+  - "Bars equal calculated band power (§122)."
+  - "Specification: docs/specs/oscilla-v3-measure.md"
+validation:
+  - "npm run release-gate"
+evidence_required:
+  - "verified"
+created_at: 2026-10-02

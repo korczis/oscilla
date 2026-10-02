@@ -1,0 +1,15 @@
+id: M013
+title: "V3 calibration"
+slug: v3-calibration
+order: 13
+priority: p0
+problem: "Every V2 level is relative and uncalibrated; there is no way to apply a microphone correction or an explicit SPL reference."
+outcome: "Frequency-response and absolute-level calibration are separate, validated, interpolated in log frequency, hashed for provenance, and SPL appears only with valid absolute calibration."
+acceptance_criteria:
+  - "Frequency-response and absolute-level calibration are separate, validated, interpolated in log frequency, hashed for provenance, and SPL appears only with valid absolute calibration."
+  - "Specification: docs/specs/oscilla-v3-measure.md"
+validation:
+  - "npm run release-gate"
+evidence_required:
+  - "milestone_verified"
+created_at: 2026-10-02

@@ -1,0 +1,20 @@
+id: V313
+milestone: M013
+title: "Log-frequency interpolation and coverage"
+slug: log-frequency-interpolation-and-coverage
+priority: p1
+profile: implementation
+objective: "Interpolation linear in dB over log frequency, explicit extrapolation policy, calibrated-range mask (§19, §158, §222)."
+scope:
+  - "src"
+  - "tests"
+depends_on:
+  - "V311"
+acceptance_criteria:
+  - "Interpolation linear in dB over log frequency, explicit extrapolation policy, calibrated-range mask (§19, §158, §222)."
+  - "Specification: docs/specs/oscilla-v3-measure.md"
+validation:
+  - "npm run release-gate"
+evidence_required:
+  - "verified"
+created_at: 2026-10-02

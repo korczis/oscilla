@@ -1,0 +1,15 @@
+id: M014
+title: "V3 transfer function"
+slug: v3-transfer-function
+order: 14
+priority: p0
+problem: "OSCILLA cannot report the observed frequency response of a playback/capture chain."
+outcome: "A guided log-sweep measurement yields a robust magnitude response with raw, calibrated, normalized and smoothed views, reliability masks and a cursor."
+acceptance_criteria:
+  - "A guided log-sweep measurement yields a robust magnitude response with raw, calibrated, normalized and smoothed views, reliability masks and a cursor."
+  - "Specification: docs/specs/oscilla-v3-measure.md"
+validation:
+  - "npm run release-gate"
+evidence_required:
+  - "milestone_verified"
+created_at: 2026-10-02

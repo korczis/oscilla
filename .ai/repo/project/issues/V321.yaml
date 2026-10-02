@@ -1,0 +1,22 @@
+id: V321
+milestone: M014
+title: "Transfer-function DSP"
+slug: transfer-function-dsp
+priority: p1
+profile: implementation
+objective: "H(f) = Y(f)/X(f) magnitude (phase only if robust); synthetic flat, −6 dB, low-pass, high-pass and EQ systems recovered within justified tolerances at 44.1/48/96 kHz (§26-§27, §138, §203-§204)."
+scope:
+  - "src"
+  - "tests"
+depends_on:
+  - "V304"
+  - "V305"
+  - "V306"
+acceptance_criteria:
+  - "H(f) = Y(f)/X(f) magnitude (phase only if robust); synthetic flat, −6 dB, low-pass, high-pass and EQ systems recovered within justified tolerances at 44.1/48/96 kHz (§26-§27, §138, §203-§204)."
+  - "Specification: docs/specs/oscilla-v3-measure.md"
+validation:
+  - "npm run release-gate"
+evidence_required:
+  - "verified"
+created_at: 2026-10-02

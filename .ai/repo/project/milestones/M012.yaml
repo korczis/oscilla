@@ -1,0 +1,15 @@
+id: M012
+title: "V3 measurement architecture"
+slug: v3-measurement-architecture
+order: 12
+priority: p0
+problem: "V2 can generate and visualize but has no measurement layer: no PCM capture session, no offline DSP, no structured result."
+outcome: "Stimulus, capture, offline analysis and result layers exist as pure, tested modules behind an explicit measurement state machine, with versioned algorithm IDs."
+acceptance_criteria:
+  - "Stimulus, capture, offline analysis and result layers exist as pure, tested modules behind an explicit measurement state machine, with versioned algorithm IDs."
+  - "Specification: docs/specs/oscilla-v3-measure.md"
+validation:
+  - "npm run release-gate"
+evidence_required:
+  - "milestone_verified"
+created_at: 2026-10-02

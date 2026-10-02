@@ -1,0 +1,21 @@
+id: V341
+milestone: M016
+title: "FFT RTA"
+slug: fft-rta
+priority: p1
+profile: implementation
+objective: "Live relative spectrum reusing the V2 analyzer, averaging, peak hold, freeze, log axis, calibration when enabled (§44-§45)."
+scope:
+  - "src"
+  - "tests"
+depends_on:
+  - "V306"
+  - "V313"
+acceptance_criteria:
+  - "Live relative spectrum reusing the V2 analyzer, averaging, peak hold, freeze, log axis, calibration when enabled (§44-§45)."
+  - "Specification: docs/specs/oscilla-v3-measure.md"
+validation:
+  - "npm run release-gate"
+evidence_required:
+  - "verified"
+created_at: 2026-10-02

@@ -91,7 +91,7 @@
 }
 
 .osc-nav .osc-tab {
-  padding: 0 14px;
+  padding: 0 13px;
   color: var(--osc-text-2);
   text-decoration: none;
 }
@@ -368,7 +368,7 @@
 
 .osc-freq-unit {
   margin-left: 12px;
-  color: var(--osc-text-2);
+  color: var(--osc-text-unit);
   font-size: var(--osc-fs-readout-unit);
   font-weight: var(--osc-fw-regular);
 }
@@ -862,6 +862,17 @@
   background: var(--osc-surface-4);
 }
 
+/* The bar drives the timeline window once the sequence is longer than the lane shows. */
+.osc-seq-scroll[data-scrollable="true"] {
+  cursor: pointer;
+  touch-action: none;
+}
+
+.osc-seq-scroll[data-scrollable="true"] .osc-seq-scroll-thumb {
+  cursor: grab;
+  background: var(--osc-border-strong);
+}
+
 .osc-seq-add {
   width: 108px;
   height: 30px;
@@ -1178,7 +1189,7 @@
 }
 
 .osc-bio-view {
-  margin: 8px -3px 0 -4px;
+  margin: 5px -3px 0 -4px;
 }
 
 .osc-bio-note {
@@ -1319,7 +1330,7 @@
 .osc-sb-actions {
   display: flex;
   align-items: center;
-  gap: 30px;
+  gap: 32px;
 }
 
 .osc-sb-action {
@@ -1331,7 +1342,7 @@
   border: 0;
   background: none;
   color: var(--osc-text-2);
-  font-size: 12.5px;
+  font-size: 11.5px;
   white-space: nowrap;
 }
 
@@ -1369,12 +1380,12 @@
 
 .osc-logo,
 .osc-logo * {
-  stroke-width: 3;
+  stroke-width: 3.5;
 }
 
 .osc-wave-tile svg,
 .osc-wave-tile svg use {
-  stroke-width: 1.35;
+  stroke-width: 1.2;
 }
 
 .osc-add-field > .osc-number {

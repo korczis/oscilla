@@ -1,0 +1,20 @@
+id: V354
+milestone: M017
+title: "Import, export and CSV"
+slug: import-export-and-csv
+priority: p1
+profile: implementation
+objective: ".oscilla.json round trip without mutation; untrusted-input validation with size caps; CSV with explicit unit columns and metadata; optional printable HTML report (§56-§58, §144-§145, §162-§164, §223-§224)."
+scope:
+  - "src"
+  - "tests"
+depends_on:
+  - "V351"
+acceptance_criteria:
+  - ".oscilla.json round trip without mutation; untrusted-input validation with size caps; CSV with explicit unit columns and metadata; optional printable HTML report (§56-§58, §144-§145, §162-§164, §223-§224)."
+  - "Specification: docs/specs/oscilla-v3-measure.md"
+validation:
+  - "npm run release-gate"
+evidence_required:
+  - "verified"
+created_at: 2026-10-02

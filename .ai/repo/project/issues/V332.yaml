@@ -1,0 +1,20 @@
+id: V332
+milestone: M015
+title: "IR result, windowing and metadata"
+slug: ir-result-windowing-and-metadata
+priority: p1
+profile: implementation
+objective: "Time axis, direct peak, reflections, noise tail; non-destructive window; labelled peak normalization; sample rate, stimulus, algorithm, calibration, device metadata; future RT60/ETC-ready representation (§39-§42, §90-§91, §214)."
+scope:
+  - "src"
+  - "tests"
+depends_on:
+  - "V331"
+acceptance_criteria:
+  - "Time axis, direct peak, reflections, noise tail; non-destructive window; labelled peak normalization; sample rate, stimulus, algorithm, calibration, device metadata; future RT60/ETC-ready representation (§39-§42, §90-§91, §214)."
+  - "Specification: docs/specs/oscilla-v3-measure.md"
+validation:
+  - "npm run release-gate"
+evidence_required:
+  - "verified"
+created_at: 2026-10-02

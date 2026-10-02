@@ -1,0 +1,20 @@
+id: V331
+milestone: M015
+title: "Sweep deconvolution"
+slug: sweep-deconvolution
+priority: p1
+profile: implementation
+objective: "Mathematically correct inverse-filter or frequency-domain deconvolution from the canonical emitted stimulus; synthetic impulse, delayed impulse and echo recovered (§37-§38, §139, §206)."
+scope:
+  - "src"
+  - "tests"
+depends_on:
+  - "V321"
+acceptance_criteria:
+  - "Mathematically correct inverse-filter or frequency-domain deconvolution from the canonical emitted stimulus; synthetic impulse, delayed impulse and echo recovered (§37-§38, §139, §206)."
+  - "Specification: docs/specs/oscilla-v3-measure.md"
+validation:
+  - "npm run release-gate"
+evidence_required:
+  - "verified"
+created_at: 2026-10-02

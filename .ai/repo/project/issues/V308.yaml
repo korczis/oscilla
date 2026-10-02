@@ -1,0 +1,20 @@
+id: V308
+milestone: M012
+title: "Algorithm registry"
+slug: algorithm-registry
+priority: p1
+profile: implementation
+objective: "Stable algorithm IDs (oscilla.transfer.v1, oscilla.ir.log-sweep.v1, oscilla.rta.v1, oscilla.confidence.v1 ...) persisted in results; rule changes bump the ID (§43, §199)."
+scope:
+  - "src"
+  - "tests"
+depends_on:
+  - "V302"
+acceptance_criteria:
+  - "Stable algorithm IDs (oscilla.transfer.v1, oscilla.ir.log-sweep.v1, oscilla.rta.v1, oscilla.confidence.v1 ...) persisted in results; rule changes bump the ID (§43, §199)."
+  - "Specification: docs/specs/oscilla-v3-measure.md"
+validation:
+  - "npm run release-gate"
+evidence_required:
+  - "verified"
+created_at: 2026-10-02

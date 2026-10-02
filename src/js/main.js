@@ -102,6 +102,7 @@ const adapter = {
     return app.source === 'dual' ? app.dualFa : app.metricFrequency;
   },
   isPlaying: () => !!(app && (app.playing || app.seqPlaying)),
+  getA4: () => (app && app.a4) || 440,
   onChange(fn) {
     adapterListeners.add(fn);
     return () => adapterListeners.delete(fn);

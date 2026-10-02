@@ -1,0 +1,20 @@
+id: V311
+milestone: M013
+title: "Calibration profile model"
+slug: calibration-profile-model
+priority: p1
+profile: implementation
+objective: "Frequency/correction pairs, normalized export format with schema version, deterministic profile hash; frequency and absolute calibration never conflated (§17-§18, §21, §25, §93, §200)."
+scope:
+  - "src"
+  - "tests"
+depends_on:
+  - "V302"
+acceptance_criteria:
+  - "Frequency/correction pairs, normalized export format with schema version, deterministic profile hash; frequency and absolute calibration never conflated (§17-§18, §21, §25, §93, §200)."
+  - "Specification: docs/specs/oscilla-v3-measure.md"
+validation:
+  - "npm run release-gate"
+evidence_required:
+  - "verified"
+created_at: 2026-10-02

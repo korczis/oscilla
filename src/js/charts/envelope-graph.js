@@ -1,6 +1,6 @@
 // ADSR envelope graph (Canvas 2D). The curve is envelopePoints(adsr) from audio/envelope.js —
 // the same closed-form automation the voice schedules — on a linear time axis. Handles: A
-// (orange, peak), D (green, decay end: time and sustain level), S (green, sustain level) and R
+// (orange, peak), D (orange, decay end: time and sustain level), S (green, sustain end) and R
 // (magenta, release end). Dragging a handle emits onChange(adsr); the time scale is frozen for
 // the duration of a drag so the axis does not move under the pointer. The shell's sliders and
 // fields are the keyboard alternative.
@@ -72,13 +72,28 @@ export function createEnvelopeGraph(host, options = {}) {
     ctx.save();
     roundRect(ctx, inset.x, inset.y, inset.w, inset.h, 4);
     ctx.clip();
-    // Faint fill under the whole curve.
+    // A disabled envelope keeps its colours at reduced opacity (it still shows the shape the
+    // next enabled note would get); the power toggle carries the state.
+    ctx.globalAlpha = enabled ? 1 : 0.6;
+    // Guides from the attack peak and the release start down to the floor (real positions).
+    ctx.strokeStyle = withAlpha(theme.textMuted, 0.45);
+    ctx.lineWidth = 1;
+    ctx.setLineDash([2, 3]);
+    for (const hx of [handles.attack.x, handles.sustain.x]) {
+      const x = Math.round(hx) + 0.5;
+      line(ctx, x, toY(1), x, toY(0));
+    }
+    ctx.setLineDash([]);
+    // Fill under the whole curve: green, fading towards the floor.
     ctx.beginPath();
     ctx.moveTo(toX(0), toY(0));
     for (let i = 0; i < pts.t.length; i++) ctx.lineTo(toX(pts.t[i]), toY(pts.v[i]));
     ctx.lineTo(toX(pts.totalS), toY(0));
     ctx.closePath();
-    ctx.fillStyle = withAlpha(theme.green, enabled ? 0.07 : 0.03);
+    const fill = ctx.createLinearGradient(0, toY(1), 0, toY(0));
+    fill.addColorStop(0, withAlpha(theme.green, 0.16));
+    fill.addColorStop(1, withAlpha(theme.green, 0.02));
+    ctx.fillStyle = fill;
     ctx.fill();
 
     // Segment strokes.
@@ -98,33 +113,34 @@ export function createEnvelopeGraph(host, options = {}) {
       ctx.strokeStyle = style;
       ctx.stroke();
     };
-    ctx.lineWidth = 1.75;
+    ctx.lineWidth = 2;
     ctx.lineJoin = 'round';
-    const dim = (c) => (enabled ? c : theme.textDim);
-    seg(0, tA, dim(vGradient(ctx, toY(0), toY(1), theme.magenta, theme.orange)));
-    seg(tA, tS, dim(theme.green));
-    seg(tS, pts.totalS, dim(vGradient(ctx, toY(adsr.s), toY(0), theme.trace, theme.magenta)));
+    ctx.lineCap = 'round';
+    seg(0, tA, vGradient(ctx, toY(0), toY(1), theme.magenta, theme.orange));
+    seg(tA, tS, theme.green);
+    seg(tS, pts.totalS, vGradient(ctx, toY(adsr.s), toY(0), theme.trace, theme.magenta));
 
     // Handles.
     const dot = (p, c) => {
       ctx.beginPath();
-      ctx.arc(p.x, p.y, 4.25, 0, Math.PI * 2);
-      ctx.fillStyle = dim(c);
+      ctx.arc(p.x, p.y, 4.5, 0, Math.PI * 2);
+      ctx.fillStyle = c;
       ctx.fill();
-      ctx.lineWidth = 1.25;
+      ctx.lineWidth = 1.5;
       ctx.strokeStyle = theme.surface0;
       ctx.stroke();
     };
     dot({ x: toX(0), y: toY(0) }, theme.magenta); // start (not draggable)
     dot(handles.attack, theme.orange);
-    dot(handles.decay, theme.green);
+    dot(handles.decay, theme.orange);
     dot(handles.sustain, theme.green);
     dot(handles.release, theme.magenta);
+    ctx.globalAlpha = 1;
     ctx.restore();
 
     // Segment labels under the inset: A at the attack start, D at the decay start, S at the
     // sustain mid-point, R at the release start (reference shows A, D, R).
-    ctx.font = canvasFont(theme, theme.fs2xs);
+    ctx.font = canvasFont(theme, theme.fsXs);
     ctx.fillStyle = theme.text2;
     ctx.textBaseline = 'middle';
     ctx.textAlign = 'center';
@@ -136,7 +152,7 @@ export function createEnvelopeGraph(host, options = {}) {
     ];
     let lastRight = -Infinity;
     for (const [text, x] of labels) {
-      const lx = Math.max(x, lastRight + 9);
+      const lx = Math.max(x, lastRight + 12);
       ctx.fillText(text, lx, ly);
       lastRight = lx;
     }

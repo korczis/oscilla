@@ -1,0 +1,20 @@
+id: V353
+milestone: M017
+title: "Persistence"
+slug: persistence
+priority: p1
+profile: implementation
+objective: "Storage layer on IndexedDB with tested file:// behaviour per browser and import/export fallback; quota handling; explicit deletion; migration tests; Playground never depends on it (§54-§55, §174-§175, §225-§227)."
+scope:
+  - "src"
+  - "tests"
+depends_on:
+  - "V351"
+acceptance_criteria:
+  - "Storage layer on IndexedDB with tested file:// behaviour per browser and import/export fallback; quota handling; explicit deletion; migration tests; Playground never depends on it (§54-§55, §174-§175, §225-§227)."
+  - "Specification: docs/specs/oscilla-v3-measure.md"
+validation:
+  - "npm run release-gate"
+evidence_required:
+  - "verified"
+created_at: 2026-10-02

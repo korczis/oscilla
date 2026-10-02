@@ -42,6 +42,10 @@
 /* The timeline element is #osc-seq-timeline.osc-timeline (status/labs.txt request 1). */
 #osc-seq-timeline {
   height: 50px;
+  /* Ruler tick lines; the step and phase come from the sequencer's time scale. */
+  background-image: repeating-linear-gradient(90deg, var(--osc-seq-grid) 0 1px,
+    transparent 1px var(--osc-seq-tick-step, 66px));
+  background-position-x: var(--osc-seq-tick-offset, 0px);
 }
 
 /* Row 3 */
@@ -62,7 +66,7 @@
 }
 
 .osc-h-bio {
-  height: 124px;
+  height: 127px;
 }
 
 /* Readout chip a renderer may overlay on a chart ("15.5 kHz / -12 dB"). */
