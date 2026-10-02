@@ -114,6 +114,9 @@ export function findPeak(spectrumDb, options = {}) {
   let best = -Infinity;
   for (let i = b0; i <= b1; i++) {
     const v = spectrumDb[i];
+    // A DC or low-frequency skirt falls monotonically into the band edge; without this test its
+    // edge bin would be reported as a confident peak at minHz.
+    if (!(v > spectrumDb[i - 1] && v >= spectrumDb[i + 1])) continue;
     if (v > best) {
       best = v;
       k = i;

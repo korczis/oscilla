@@ -226,6 +226,9 @@
   min-height: 0;
   overflow: auto;
   overscroll-behavior: contain;
+  /* .osc-main is a fixed-height scroller and panels carry min-height: 0, so implicit auto rows
+     would share its height and squash panels onto each other below 1280 px. */
+  grid-auto-rows: max-content;
 }
 
 .osc-statusbar {
@@ -510,7 +513,7 @@
     [data-mode="synthesis"], [data-mode="compare"]) .osc-main {
     grid-template-rows: none;
     grid-template-columns: repeat(12, minmax(0, 1fr));
-    grid-auto-rows: auto;
+    grid-auto-rows: max-content;
     grid-auto-flow: row dense;
     align-items: start;
     gap: 9px;
@@ -663,5 +666,18 @@
   .osc-p-dual .osc-toggle {
     min-width: 44px;
     min-height: 44px;
+  }
+}
+
+/* Between 1280 and 1535 px the lab keeps the reference arrangement, but panels are narrower than
+   the 1536 px reference, so their text wraps taller than the reference's fixed row heights. Let
+   the rows follow the content there; from 1536 px the exact reference geometry applies. */
+@media (min-width: 1280px) and (max-width: 1535.98px) {
+  .osc-app[data-mode="playground"] .osc-main {
+    grid-template-rows: max-content max-content;
+  }
+
+  .osc-app[data-mode="playground"] :is(.osc-top-left, .osc-top-right) {
+    grid-template-rows: max-content max-content;
   }
 }

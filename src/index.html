@@ -602,7 +602,7 @@
             </div>
             <div class="osc-mic-readout" aria-live="polite">
               <p><span class="osc-mic-k">Requested:</span>
-                <output class="osc-num" id="osc-mic-requested" data-osc="mic.requested">15.5 kHz</output></p>
+                <output class="osc-num" id="osc-mic-requested" data-osc="mic.requested">—</output></p>
               <p><span class="osc-mic-k">Microphone detected:</span>
                 <output class="osc-num" id="osc-mic-detected" data-osc="mic.detected">UNAVAILABLE (microphone off)</output></p>
               <p class="osc-mic-note">Not a calibrated measurement. Microphone frequency response varies.</p>
@@ -1089,7 +1089,8 @@
           <div class="osc-bio-view" id="osc-bio-view" role="tabpanel" aria-labelledby="osc-btab-ranges"
             :aria-labelledby="'osc-btab-' + tabs.bio">
             <div class="osc-chart-host osc-h-bio" id="osc-chart-bio" data-osc-chart="bio"
-              data-osc="bio.ranges" aria-label="Approximate hearing ranges by species"></div>
+              data-osc="bio.ranges" role="img"
+              aria-label="Approximate hearing ranges by species"></div>
           </div>
           <p class="osc-bio-note">Ranges are approximate and vary by source and individual.</p>
         </div>
