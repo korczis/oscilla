@@ -1,0 +1,20 @@
+id: V405
+milestone: M022
+title: "Node-type registry and initial library"
+slug: node-type-registry-and-initial-library
+priority: p1
+profile: implementation
+objective: "Canonical registry (ports, parameter schema, defaults, compact summary, compiler adapter, Inspector schema, capability metadata) and definitions for the §29 library with search metadata and help text (§28-§30, §173-§176, §193)."
+scope:
+  - "src"
+  - "tests"
+depends_on:
+  - "V404"
+acceptance_criteria:
+  - "Canonical registry (ports, parameter schema, defaults, compact summary, compiler adapter, Inspector schema, capability metadata) and definitions for the §29 library with search metadata and help text (§28-§30, §173-§176, §193)."
+  - "Specification: docs/specs/oscilla-v3.1-studio.md. Visual identity lock in the same file applies."
+validation:
+  - "npm run release-gate"
+evidence_required:
+  - "verified"
+created_at: 2026-10-02

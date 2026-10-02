@@ -1,0 +1,20 @@
+id: V401
+milestone: M021
+title: "Studio current-state audit"
+slug: studio-current-state-audit
+priority: p1
+profile: implementation
+objective: "Inspect HEAD, release state, sequencer, Signal Path, audio graph abstractions, measurement and experiment architecture, persistence, visual gate and Majordomus state; map sequencer concepts to KEEP/REFACTOR/SUPERSEDE/MIGRATE; evaluate custom HTML/SVG editor vs lightweight libraries (§3, §6, §55, §85)."
+scope:
+  - "docs"
+  - ".ai/repo"
+depends_on:
+  - "V302"
+acceptance_criteria:
+  - "Inspect HEAD, release state, sequencer, Signal Path, audio graph abstractions, measurement and experiment architecture, persistence, visual gate and Majordomus state; map sequencer concepts to KEEP/REFACTOR/SUPERSEDE/MIGRATE; evaluate custom HTML/SVG editor vs lightweight libraries (§3, §6, §55, §85)."
+  - "Specification: docs/specs/oscilla-v3.1-studio.md. Visual identity lock in the same file applies."
+validation:
+  - "npm run release-gate"
+evidence_required:
+  - "verified"
+created_at: 2026-10-02

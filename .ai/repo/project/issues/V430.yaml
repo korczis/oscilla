@@ -1,0 +1,28 @@
+id: V430
+milestone: M032
+title: "Studio test suites and visual gate"
+slug: studio-test-suites-and-visual-gate
+priority: p1
+profile: implementation
+objective: "Graph model, history, audio graph, modulation, automation, timeline, leak, compact/full and file:// tests; the Playwright scenarios of §206; deterministic compact/full/mobile visual references in the gate; fast verify stays fast (§203-§215, §232-§234)."
+scope:
+  - "tests"
+  - ".github"
+depends_on:
+  - "V415"
+  - "V418"
+  - "V420"
+  - "V421"
+  - "V423"
+  - "V425"
+  - "V426"
+  - "V428"
+  - "V429"
+acceptance_criteria:
+  - "Graph model, history, audio graph, modulation, automation, timeline, leak, compact/full and file:// tests; the Playwright scenarios of §206; deterministic compact/full/mobile visual references in the gate; fast verify stays fast (§203-§215, §232-§234)."
+  - "Specification: docs/specs/oscilla-v3.1-studio.md. Visual identity lock in the same file applies."
+validation:
+  - "npm run release-gate"
+evidence_required:
+  - "verified"
+created_at: 2026-10-02

@@ -1,0 +1,15 @@
+id: M022
+title: "V3.1 Studio graph model"
+slug: v31-studio-graph-model
+order: 22
+priority: p0
+problem: "There is no canonical, serializable representation of a signal graph and timeline."
+outcome: "One versioned StudioModel with a node-type registry, typed ports, pure validation and an undoable action layer, with no runtime objects inside."
+acceptance_criteria:
+  - "One versioned StudioModel with a node-type registry, typed ports, pure validation and an undoable action layer, with no runtime objects inside."
+  - "Specification: docs/specs/oscilla-v3.1-studio.md. Visual identity lock in the same file applies."
+validation:
+  - "npm run release-gate"
+evidence_required:
+  - "milestone_verified"
+created_at: 2026-10-02

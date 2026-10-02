@@ -1,0 +1,20 @@
+id: V429
+milestone: M031
+title: "Mobile Studio and responsive layout"
+slug: mobile-studio-and-responsive-layout
+priority: p1
+profile: implementation
+objective: "GRAPH/TIMELINE/INSPECTOR switching, tap selection, pan/pinch, large invisible hit areas, responsive at 320-1536 with no horizontal overflow, light/dark themes (§136-§137, §243-§245)."
+scope:
+  - "src"
+  - "tests"
+depends_on:
+  - "V422"
+acceptance_criteria:
+  - "GRAPH/TIMELINE/INSPECTOR switching, tap selection, pan/pinch, large invisible hit areas, responsive at 320-1536 with no horizontal overflow, light/dark themes (§136-§137, §243-§245)."
+  - "Specification: docs/specs/oscilla-v3.1-studio.md. Visual identity lock in the same file applies."
+validation:
+  - "npm run release-gate"
+evidence_required:
+  - "verified"
+created_at: 2026-10-02

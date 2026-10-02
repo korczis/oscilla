@@ -1,0 +1,20 @@
+id: V404
+milestone: M022
+title: "StudioModel schema"
+slug: studiomodel-schema
+priority: p1
+profile: implementation
+objective: "Versioned serializable model (graph, timeline, transport, view, metadata), schema version independent of product version, deterministic normalized serialization, SHA-256 studio hash excluding view state; no AudioContext/AudioNode/DOM/p5/uPlot objects (§9-§11, §27, §161-§163, §172, §252-§255)."
+scope:
+  - "src"
+  - "tests"
+depends_on:
+  - "V401"
+acceptance_criteria:
+  - "Versioned serializable model (graph, timeline, transport, view, metadata), schema version independent of product version, deterministic normalized serialization, SHA-256 studio hash excluding view state; no AudioContext/AudioNode/DOM/p5/uPlot objects (§9-§11, §27, §161-§163, §172, §252-§255)."
+  - "Specification: docs/specs/oscilla-v3.1-studio.md. Visual identity lock in the same file applies."
+validation:
+  - "npm run release-gate"
+evidence_required:
+  - "verified"
+created_at: 2026-10-02

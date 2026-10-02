@@ -1,0 +1,15 @@
+id: M026
+title: "V3.1 Studio automation"
+slug: v31-studio-automation
+order: 26
+priority: p0
+problem: "Parameters cannot change over time except by hand."
+outcome: "Automation lanes compiled to AudioParam schedules, distinct from modulation and combined with it by a defined rule."
+acceptance_criteria:
+  - "Automation lanes compiled to AudioParam schedules, distinct from modulation and combined with it by a defined rule."
+  - "Specification: docs/specs/oscilla-v3.1-studio.md. Visual identity lock in the same file applies."
+validation:
+  - "npm run release-gate"
+evidence_required:
+  - "milestone_verified"
+created_at: 2026-10-02

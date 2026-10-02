@@ -1,0 +1,21 @@
+id: V425
+milestone: M029
+title: "Studio in experiment provenance"
+slug: studio-in-experiment-provenance
+priority: p1
+profile: implementation
+objective: "Experiments include or reference Studio schema version, studio hash, graph, timeline, automation and algorithm IDs; relationship to the V3 recipe defined without a competing schema (§109-§110)."
+scope:
+  - "src"
+  - "tests"
+depends_on:
+  - "V424"
+  - "V352"
+acceptance_criteria:
+  - "Experiments include or reference Studio schema version, studio hash, graph, timeline, automation and algorithm IDs; relationship to the V3 recipe defined without a competing schema (§109-§110)."
+  - "Specification: docs/specs/oscilla-v3.1-studio.md. Visual identity lock in the same file applies."
+validation:
+  - "npm run release-gate"
+evidence_required:
+  - "verified"
+created_at: 2026-10-02

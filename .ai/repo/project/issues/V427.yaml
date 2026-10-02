@@ -1,0 +1,21 @@
+id: V427
+milestone: M030
+title: "Offline rendering of Studio sequences"
+slug: offline-rendering-of-studio-sequences
+priority: p1
+profile: implementation
+objective: "Compile graph and timeline into OfflineAudioContext for WAV export where nodes support it; explicit limitation for live-only nodes (§105)."
+scope:
+  - "src"
+  - "tests"
+depends_on:
+  - "V414"
+  - "V416"
+acceptance_criteria:
+  - "Compile graph and timeline into OfflineAudioContext for WAV export where nodes support it; explicit limitation for live-only nodes (§105)."
+  - "Specification: docs/specs/oscilla-v3.1-studio.md. Visual identity lock in the same file applies."
+validation:
+  - "npm run release-gate"
+evidence_required:
+  - "verified"
+created_at: 2026-10-02

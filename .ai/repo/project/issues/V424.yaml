@@ -1,0 +1,22 @@
+id: V424
+milestone: M029
+title: "Measurement nodes and timeline"
+slug: measurement-nodes-and-timeline
+priority: p1
+profile: implementation
+objective: "Capture, Calibration, Transfer Analyzer, RTA, Measurement Result nodes adapting MeasurementEngine; measurement clips for noise check, pre-roll, stimulus, capture, tail, analysis using the same state machine (§106-§108)."
+scope:
+  - "src"
+  - "tests"
+depends_on:
+  - "V414"
+  - "V418"
+  - "V322"
+acceptance_criteria:
+  - "Capture, Calibration, Transfer Analyzer, RTA, Measurement Result nodes adapting MeasurementEngine; measurement clips for noise check, pre-roll, stimulus, capture, tail, analysis using the same state machine (§106-§108)."
+  - "Specification: docs/specs/oscilla-v3.1-studio.md. Visual identity lock in the same file applies."
+validation:
+  - "npm run release-gate"
+evidence_required:
+  - "verified"
+created_at: 2026-10-02

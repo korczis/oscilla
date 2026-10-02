@@ -1,0 +1,21 @@
+id: V409
+milestone: M023
+title: "Graph viewport"
+slug: graph-viewport
+priority: p1
+profile: implementation
+objective: "Logical coordinates, pan, zoom around the pointer with tested bounds, frame all, frame selection (§56-§60)."
+scope:
+  - "src"
+  - "tests"
+depends_on:
+  - "V404"
+  - "V408"
+acceptance_criteria:
+  - "Logical coordinates, pan, zoom around the pointer with tested bounds, frame all, frame selection (§56-§60)."
+  - "Specification: docs/specs/oscilla-v3.1-studio.md. Visual identity lock in the same file applies."
+validation:
+  - "npm run release-gate"
+evidence_required:
+  - "verified"
+created_at: 2026-10-02

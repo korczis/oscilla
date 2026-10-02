@@ -209,6 +209,8 @@ export function mount(rootEl, adapter) {
   async function start() {
     if (starting || stream) return;
     starting = true;
+    // Pending: aria-disabled, never disabled, so a keyboard user keeps focus on the button.
+    setAttr(toggle, 'aria-disabled', 'true');
     error = '';
     try {
       const md = typeof navigator !== 'undefined' ? navigator.mediaDevices : null;
@@ -239,6 +241,7 @@ export function mount(rootEl, adapter) {
       setButton(false);
     } finally {
       starting = false;
+      setAttr(toggle, 'aria-disabled', 'false');
       renderReadout(true);
     }
   }

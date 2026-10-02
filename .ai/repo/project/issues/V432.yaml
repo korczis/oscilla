@@ -1,0 +1,21 @@
+id: V432
+milestone: M032
+title: "Studio documentation and self-knowledge"
+slug: studio-documentation-and-self-knowledge
+priority: p1
+profile: implementation
+objective: "README Studio section, architecture doc, user guide, canonical shortcut table, Majordomus knowledge/evidence audit, repository self-knowledge test (§221-§226, §266)."
+scope:
+  - "docs"
+  - "README.md"
+  - ".ai/repo"
+depends_on:
+  - "V431"
+acceptance_criteria:
+  - "README Studio section, architecture doc, user guide, canonical shortcut table, Majordomus knowledge/evidence audit, repository self-knowledge test (§221-§226, §266)."
+  - "Specification: docs/specs/oscilla-v3.1-studio.md. Visual identity lock in the same file applies."
+validation:
+  - "npm run release-gate"
+evidence_required:
+  - "verified"
+created_at: 2026-10-02

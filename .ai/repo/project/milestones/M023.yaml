@@ -1,0 +1,15 @@
+id: M023
+title: "V3.1 Studio graph editor"
+slug: v31-studio-graph-editor
+order: 23
+priority: p0
+problem: "Signal Path is a passive picture."
+outcome: "An editable HTML/SVG graph in the OSCILLA visual language: viewport, node drag, library, cables, selection, clipboard, keyboard shortcuts and an Inspector, all through the action layer."
+acceptance_criteria:
+  - "An editable HTML/SVG graph in the OSCILLA visual language: viewport, node drag, library, cables, selection, clipboard, keyboard shortcuts and an Inspector, all through the action layer."
+  - "Specification: docs/specs/oscilla-v3.1-studio.md. Visual identity lock in the same file applies."
+validation:
+  - "npm run release-gate"
+evidence_required:
+  - "milestone_verified"
+created_at: 2026-10-02
