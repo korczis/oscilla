@@ -1,0 +1,15 @@
+id: M025
+title: "V3.1 Studio timeline"
+slug: v31-studio-timeline
+order: 25
+priority: p0
+problem: "The sequencer is a single lane of blocks."
+outcome: "A multi-track event/control timeline migrated from the sequencer, with clips, snapping, transport, loop and markers on the audio clock."
+acceptance_criteria:
+  - "A multi-track event/control timeline migrated from the sequencer, with clips, snapping, transport, loop and markers on the audio clock."
+  - "Specification: docs/specs/oscilla-v3.1-studio.md. Visual identity lock in the same file applies."
+validation:
+  - "npm run release-gate"
+evidence_required:
+  - "milestone_verified"
+created_at: 2026-10-02

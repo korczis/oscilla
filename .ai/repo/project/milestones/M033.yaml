@@ -1,0 +1,15 @@
+id: M033
+title: "V3.1 release and deployment"
+slug: v31-release
+order: 33
+priority: p0
+problem: "V3.1 is not done until it is public and verified."
+outcome: "OSCILLA 3.1.x released through the established single-source version and Pages workflow, publicly smoke-tested, with deployment evidence recorded."
+acceptance_criteria:
+  - "OSCILLA 3.1.x released through the established single-source version and Pages workflow, publicly smoke-tested, with deployment evidence recorded."
+  - "Specification: docs/specs/oscilla-v3.1-studio.md. Visual identity lock in the same file applies."
+validation:
+  - "npm run release-gate"
+evidence_required:
+  - "milestone_verified"
+created_at: 2026-10-02

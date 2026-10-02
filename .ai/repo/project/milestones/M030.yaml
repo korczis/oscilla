@@ -1,0 +1,15 @@
+id: M030
+title: "V3.1 Studio persistence and patches"
+slug: v31-studio-patches
+order: 30
+priority: p0
+problem: "Work in Studio cannot be kept, reused or exported."
+outcome: "Patches and projects saved through the existing persistence layer, exported and imported with strict validation and migrations, and Studio sequences rendered offline where supported."
+acceptance_criteria:
+  - "Patches and projects saved through the existing persistence layer, exported and imported with strict validation and migrations, and Studio sequences rendered offline where supported."
+  - "Specification: docs/specs/oscilla-v3.1-studio.md. Visual identity lock in the same file applies."
+validation:
+  - "npm run release-gate"
+evidence_required:
+  - "milestone_verified"
+created_at: 2026-10-02

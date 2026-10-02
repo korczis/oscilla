@@ -1,0 +1,19 @@
+id: V402
+milestone: M021
+title: "Studio ADRs"
+slug: studio-adrs
+priority: p1
+profile: implementation
+objective: "ADR gap analysis and proposed ADRs for genuinely durable Studio decisions (canonical model vs runtime, typed ports, HTML nodes + SVG cables, compiled into AudioEngine, incremental patching, audio-clock timeline, automation vs modulation, command history, schema independence, measurement topology, feedback policy, single-file compatibility) (§16-§18)."
+scope:
+  - ".ai/repo/adrs"
+depends_on:
+  - "V401"
+acceptance_criteria:
+  - "ADR gap analysis and proposed ADRs for genuinely durable Studio decisions (canonical model vs runtime, typed ports, HTML nodes + SVG cables, compiled into AudioEngine, incremental patching, audio-clock timeline, automation vs modulation, command history, schema independence, measurement topology, feedback policy, single-file compatibility) (§16-§18)."
+  - "Specification: docs/specs/oscilla-v3.1-studio.md. Visual identity lock in the same file applies."
+validation:
+  - "npm run release-gate"
+evidence_required:
+  - "verified"
+created_at: 2026-10-02

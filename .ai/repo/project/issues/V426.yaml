@@ -1,0 +1,21 @@
+id: V426
+milestone: M030
+title: "Patches, save, load, import and export"
+slug: patches-save-load-import-and-export
+priority: p1
+profile: implementation
+objective: "Patch schema, save/load (replace or insert), JSON export/import, untrusted-input limits, parse-validate-normalize-migrate, dirty state separate from view state, optional autosave/recovery (§111-§117, §154-§160, §238)."
+scope:
+  - "src"
+  - "tests"
+depends_on:
+  - "V404"
+  - "V353"
+acceptance_criteria:
+  - "Patch schema, save/load (replace or insert), JSON export/import, untrusted-input limits, parse-validate-normalize-migrate, dirty state separate from view state, optional autosave/recovery (§111-§117, §154-§160, §238)."
+  - "Specification: docs/specs/oscilla-v3.1-studio.md. Visual identity lock in the same file applies."
+validation:
+  - "npm run release-gate"
+evidence_required:
+  - "verified"
+created_at: 2026-10-02

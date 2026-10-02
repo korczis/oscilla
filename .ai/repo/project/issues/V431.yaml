@@ -1,0 +1,21 @@
+id: V431
+milestone: M032
+title: "Reviews, performance and bundle audit"
+slug: reviews-performance-and-bundle-audit
+priority: p1
+profile: implementation
+objective: "Cross-model architecture, UX and adversarial reviews with fixes; 100-node/200-edge performance target; bundle and dependency audit; licence notices; no runtime network (§145, §216-§220, §235-§237, §272)."
+scope:
+  - "src"
+  - "tests"
+  - "docs"
+depends_on:
+  - "V430"
+acceptance_criteria:
+  - "Cross-model architecture, UX and adversarial reviews with fixes; 100-node/200-edge performance target; bundle and dependency audit; licence notices; no runtime network (§145, §216-§220, §235-§237, §272)."
+  - "Specification: docs/specs/oscilla-v3.1-studio.md. Visual identity lock in the same file applies."
+validation:
+  - "npm run release-gate"
+evidence_required:
+  - "verified"
+created_at: 2026-10-02

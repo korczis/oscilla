@@ -1,0 +1,20 @@
+id: V423
+milestone: M028
+title: "Templates and Learn examples"
+slug: templates-and-learn-examples
+priority: p1
+profile: implementation
+objective: "Basic Tone, Subtractive Synth, Sweep Sequence, Stereo Beat, Filter Automation, Measurement Sweep as versioned validated data used by tests; short Learn examples (§194-§196, §256-§258)."
+scope:
+  - "src"
+  - "tests"
+depends_on:
+  - "V422"
+acceptance_criteria:
+  - "Basic Tone, Subtractive Synth, Sweep Sequence, Stereo Beat, Filter Automation, Measurement Sweep as versioned validated data used by tests; short Learn examples (§194-§196, §256-§258)."
+  - "Specification: docs/specs/oscilla-v3.1-studio.md. Visual identity lock in the same file applies."
+validation:
+  - "npm run release-gate"
+evidence_required:
+  - "verified"
+created_at: 2026-10-02

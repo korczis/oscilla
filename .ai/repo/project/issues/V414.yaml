@@ -1,0 +1,21 @@
+id: V414
+milestone: M024
+title: "Graph compiler"
+slug: graph-compiler
+priority: p1
+profile: implementation
+objective: "Validate, resolve, order, instantiate through existing builders, connect, bind parameters and analyzers, register with AudioEngine accounting, dispose; Master Output maps into the safe output chain; one canonical output, explicit fan-out, side-chain analysis (§41-§43, §186-§190, §240, §242)."
+scope:
+  - "src"
+  - "tests"
+depends_on:
+  - "V407"
+  - "V405"
+acceptance_criteria:
+  - "Validate, resolve, order, instantiate through existing builders, connect, bind parameters and analyzers, register with AudioEngine accounting, dispose; Master Output maps into the safe output chain; one canonical output, explicit fan-out, side-chain analysis (§41-§43, §186-§190, §240, §242)."
+  - "Specification: docs/specs/oscilla-v3.1-studio.md. Visual identity lock in the same file applies."
+validation:
+  - "npm run release-gate"
+evidence_required:
+  - "verified"
+created_at: 2026-10-02

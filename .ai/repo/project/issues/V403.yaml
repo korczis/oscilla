@@ -1,0 +1,19 @@
+id: V403
+milestone: M021
+title: "Studio in the Majordomus product graph"
+slug: studio-in-the-majordomus-product-graph
+priority: p1
+profile: implementation
+objective: "Studio feature and subordinate features, executable or evidence-backed use cases UC1-UC14, project rules for permanent invariants including the visual identity lock, decisions and questions, claims only with evidence (§5, §12-§15, §19-§26)."
+scope:
+  - ".ai/repo"
+depends_on:
+  - "V401"
+acceptance_criteria:
+  - "Studio feature and subordinate features, executable or evidence-backed use cases UC1-UC14, project rules for permanent invariants including the visual identity lock, decisions and questions, claims only with evidence (§5, §12-§15, §19-§26)."
+  - "Specification: docs/specs/oscilla-v3.1-studio.md. Visual identity lock in the same file applies."
+validation:
+  - "npm run release-gate"
+evidence_required:
+  - "verified"
+created_at: 2026-10-02

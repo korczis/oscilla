@@ -1,0 +1,20 @@
+id: V412
+milestone: M023
+title: "Selection, clipboard and shortcuts"
+slug: selection-clipboard-and-shortcuts
+priority: p1
+profile: implementation
+objective: "Multi-select, rectangle select, copy/paste with new IDs and internal edges, duplicate, delete cascade, keyboard shortcuts that do not hijack the browser (§118-§125)."
+scope:
+  - "src"
+  - "tests"
+depends_on:
+  - "V410"
+acceptance_criteria:
+  - "Multi-select, rectangle select, copy/paste with new IDs and internal edges, duplicate, delete cascade, keyboard shortcuts that do not hijack the browser (§118-§125)."
+  - "Specification: docs/specs/oscilla-v3.1-studio.md. Visual identity lock in the same file applies."
+validation:
+  - "npm run release-gate"
+evidence_required:
+  - "verified"
+created_at: 2026-10-02

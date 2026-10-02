@@ -1,0 +1,23 @@
+id: V433
+milestone: M033
+title: "Release 3.1 and public verification"
+slug: release-3-1-and-public-verification
+priority: p1
+profile: implementation
+objective: "SemVer from actual history (likely 3.1.0 after 3.0.0), full release gate, Pages deploy of the verified artifact, post-deploy verification with bounded retry, public Studio smoke, release notes from landed work, deployment evidence (§227-§231, §259, §261, §267-§271)."
+scope:
+  - ".github"
+  - "dist"
+  - "package.json"
+  - ".ai/repo"
+depends_on:
+  - "V432"
+  - "V386"
+acceptance_criteria:
+  - "SemVer from actual history (likely 3.1.0 after 3.0.0), full release gate, Pages deploy of the verified artifact, post-deploy verification with bounded retry, public Studio smoke, release notes from landed work, deployment evidence (§227-§231, §259, §261, §267-§271)."
+  - "Specification: docs/specs/oscilla-v3.1-studio.md. Visual identity lock in the same file applies."
+validation:
+  - "npm run release-gate"
+evidence_required:
+  - "verified"
+created_at: 2026-10-02

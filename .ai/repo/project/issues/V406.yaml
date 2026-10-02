@@ -1,0 +1,20 @@
+id: V406
+milestone: M022
+title: "Typed ports and compatibility"
+slug: typed-ports-and-compatibility
+priority: p1
+profile: implementation
+objective: "AUDIO/CONTROL/TRIGGER/ANALYSIS with roles (REFERENCE/OBSERVED), parameter target ports, pure canConnect with reasons, first-class edges with modulation properties (§31-§36, §191-§192)."
+scope:
+  - "src"
+  - "tests"
+depends_on:
+  - "V405"
+acceptance_criteria:
+  - "AUDIO/CONTROL/TRIGGER/ANALYSIS with roles (REFERENCE/OBSERVED), parameter target ports, pure canConnect with reasons, first-class edges with modulation properties (§31-§36, §191-§192)."
+  - "Specification: docs/specs/oscilla-v3.1-studio.md. Visual identity lock in the same file applies."
+validation:
+  - "npm run release-gate"
+evidence_required:
+  - "verified"
+created_at: 2026-10-02

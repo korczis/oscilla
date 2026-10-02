@@ -1,0 +1,21 @@
+id: V415
+milestone: M024
+title: "Incremental runtime patching"
+slug: incremental-runtime-patching
+priority: p1
+profile: implementation
+objective: "Diff/patch for param, node and edge changes; transactional apply that keeps the last valid runtime on failure; crossfaded route changes; degraded nodes; graph revision; 20-edit leak test (§44-§46, §170-§171, §177-§179, §209-§210, §213)."
+scope:
+  - "src"
+  - "tests"
+depends_on:
+  - "V414"
+  - "V408"
+acceptance_criteria:
+  - "Diff/patch for param, node and edge changes; transactional apply that keeps the last valid runtime on failure; crossfaded route changes; degraded nodes; graph revision; 20-edit leak test (§44-§46, §170-§171, §177-§179, §209-§210, §213)."
+  - "Specification: docs/specs/oscilla-v3.1-studio.md. Visual identity lock in the same file applies."
+validation:
+  - "npm run release-gate"
+evidence_required:
+  - "verified"
+created_at: 2026-10-02
