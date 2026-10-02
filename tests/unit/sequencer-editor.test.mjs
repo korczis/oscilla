@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createSequencerEditor } from '../../src/js/sequencer/editor.js';
-import { STOP_RAMP_S, STOP_PAD_S } from '../../src/js/sequencer/compiler.js';
+import { STOP_RAMP_S, STOP_PAD_S, STOP_LEAD_S } from '../../src/js/sequencer/compiler.js';
 import { FakeContext, fakeTimers } from './sequencer-fake-audio.mjs';
 
 const ids = (ed) => ed.model.blocks.map((b) => b.id);
@@ -183,7 +183,8 @@ test('stop mid-play fades out and releases every node', () => {
   ctx.currentTime += 0.6;
   assert.equal(ed.stop(), true);
   assert.equal(ed.playing, false);
-  ctx.advance(ctx.currentTime + 256 / 48000 + STOP_RAMP_S + STOP_PAD_S + 1e-6);
+  const fade = STOP_LEAD_S + 128 / 48000 + STOP_RAMP_S + STOP_PAD_S;
+  ctx.advance(ctx.currentTime + fade + 1e-6);
   assert.deepEqual(ed.stats(), { voices: 0, activeSourceCount: 0, activeNodeCount: 0 });
   assert.equal(ctx.liveSources, 0);
   assert.deepEqual(log[log.length - 1], ['ended', { stopped: true }]);

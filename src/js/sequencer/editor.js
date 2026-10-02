@@ -51,7 +51,7 @@ import {
   createSequence,
   describeBlock,
 } from './model.js';
-import { compileSequence, START_OFFSET_S } from './compiler.js';
+import { compileSequence, observeClock, START_OFFSET_S } from './compiler.js';
 import { reorderTarget } from './timeline.js';
 
 export const LOOKAHEAD_S = 1.0; // compile the next loop pass this far ahead of its start
@@ -438,6 +438,7 @@ export function createSequencerEditor(options = {}) {
     playheadTime() {
       const ctx = getCtx();
       if (!ctx || !this.playing || !priv.passes.length) return null;
+      observeClock(ctx);
       const now = ctx.currentTime;
       const p = currentPass(now);
       if (!p) return null;
@@ -447,6 +448,7 @@ export function createSequencerEditor(options = {}) {
     currentPassTiming() {
       const ctx = getCtx();
       if (!ctx || !priv.passes.length) return null;
+      observeClock(ctx); // a fresh clock reading for stop() (compiler.js renderedTimeAtLeast)
       const p = currentPass(ctx.currentTime);
       return p ? { t0: p.t0, duration: p.end - p.t0 } : null;
     },

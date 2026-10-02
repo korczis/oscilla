@@ -41,7 +41,7 @@ const arg = (name, fallback) => {
 };
 const ROOT = path.resolve(__dirname, '..', '..');
 const DIST = path.resolve(arg('dist', path.join(ROOT, 'dist', 'index.html')));
-const BROWSERS = arg('browsers', 'chromium,firefox,webkit').split(',');
+const BROWSERS = arg('browsers', process.env.OSC_BROWSERS || 'chromium,firefox,webkit').split(',');
 const ONLY = arg('only', '') ? new Set(arg('only', '').split(',')) : null;
 
 const LAUNCH = {

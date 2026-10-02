@@ -1389,7 +1389,8 @@
           <div data-osc="about.build"><dt>Commit</dt><dd class="osc-num" data-osc="about.commit">
             <template x-if="BUILD.commitUrl">
               <a :href="BUILD.commitUrl" target="_blank" rel="noopener noreferrer"
-                :title="BUILD.commit" x-text="BUILD.shortCommit"></a>
+                :title="BUILD.commit"><span x-text="BUILD.shortCommit"></span><span
+                class="osc-sr-only"> (opens in a new tab)</span></a>
             </template>
             <span x-show="!BUILD.commitUrl">source build</span>
           </dd></div>

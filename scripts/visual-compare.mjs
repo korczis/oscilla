@@ -20,6 +20,8 @@
 // Prints per-region mismatch % and each region's DOM box next to the reference box.
 //
 // pngjs and pixelmatch are pinned devDependencies; OSC_VISUAL_TOOLS may point elsewhere.
+// Also a module: compare(options) is the capture scripts/visual-gate.mjs judges (the gate is
+// `npm run test:visual`; this script only reports).
 import { createServer } from 'node:http';
 import { createRequire } from 'node:module';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
@@ -27,23 +29,9 @@ import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const outArg = (() => {
-  const i = process.argv.indexOf('--out');
-  return i >= 0 ? process.argv[i + 1] : null;
-})();
-const OUT = outArg ? path.resolve(outArg) : path.join(ROOT, 'tests/visual/out');
-const REGIONS_FILE = path.join(ROOT, 'tests/visual/regions.json');
+export const REGIONS_FILE = path.join(ROOT, 'tests/visual/regions.json');
 const TOOLS = process.env.OSC_VISUAL_TOOLS || ROOT;
 const RESPONSIVE_WIDTHS = [320, 375, 768, 1024, 1280, 1536];
-
-const args = process.argv.slice(2);
-const flag = (name) => args.includes(name);
-const option = (name) => {
-  const i = args.indexOf(name);
-  return i >= 0 ? args[i + 1] : undefined;
-};
-const positional = args.filter((a, i) => !a.startsWith('--') && args[i - 1] !== '--label'
-  && args[i - 1] !== '--out');
 
 // Playwright honours NODE_PATH through require(); the image tools come from TOOLS.
 const requireHere = createRequire(import.meta.url);
@@ -81,7 +69,7 @@ function serve(root) {
 }
 
 /** Turn the build template into a dev page: real CSS files + the dev Alpine boot. */
-function writePreview() {
+function writePreview(OUT) {
   const src = readFileSync(path.join(ROOT, 'src/index.html'), 'utf8');
   const html = src
     .replace('<!-- @inline-css -->', '<link rel="stylesheet" href="/src/styles/main.css">')
@@ -89,7 +77,7 @@ function writePreview() {
       '<script type="module" src="/tests/visual/preview-boot.mjs"></script>');
   const file = path.join(OUT, 'preview.html');
   writeFileSync(file, html);
-  return '/tests/visual/out/preview.html';
+  return `/${path.relative(ROOT, file).split(path.sep).join('/')}`;
 }
 
 function readPng(file) {
@@ -162,7 +150,13 @@ async function playScene(page, errors) {
   return async () => { await page.mouse.up(); };
 }
 
-async function main() {
+/**
+ * One capture and comparison. Options: target (undefined | 'dist' | path | URL), out (dir),
+ * play, mock, responsive, crops, label, quiet. Returns { report, lines, out }.
+ */
+export async function compare(options = {}) {
+  const OUT = options.out ? path.resolve(options.out) : path.join(ROOT, 'tests/visual/out');
+  const flag = (name) => !!options[name.replace(/^--/, '')];
   mkdirSync(OUT, { recursive: true });
   const cfg = JSON.parse(readFileSync(REGIONS_FILE, 'utf8'));
   const refFile = path.resolve(path.dirname(REGIONS_FILE), cfg.reference);
@@ -171,10 +165,10 @@ async function main() {
 
   let server = null;
   let url;
-  const target = positional[0];
+  const target = options.target;
   if (!target) {
     server = await serve(ROOT);
-    url = `http://127.0.0.1:${server.address().port}${writePreview()}`;
+    url = `http://127.0.0.1:${server.address().port}${writePreview(OUT)}`;
   } else if (target === 'dist') {
     url = pathToFileURL(path.join(ROOT, 'dist/index.html')).href;
   } else if (/^https?:/.test(target)) {
@@ -258,7 +252,11 @@ async function main() {
     }
   }
 
-  const report = { url, regions: {}, controls: {}, total: 0, errors };
+  const report = {
+    url, viewport: { width: W, height: H }, platform: `${process.platform}-${process.arch}`,
+    browser: { name: 'chromium', version: browser.version() }, play: PLAY,
+    regions: {}, controls: {}, total: 0, errors,
+  };
   let totalDiff = 0;
   for (let i = 0; i < W * H; i++) if (diff.data[i * 4 + 3] > 0) totalDiff++;
   report.total = +(100 * totalDiff / (W * H)).toFixed(2);
@@ -390,14 +388,33 @@ async function main() {
   }
 
   writeFileSync(path.join(OUT, 'report.json'), JSON.stringify(report, null, 2));
-  const label = option('--label');
+  const label = options.label;
   if (label) writeFileSync(path.join(OUT, `report-${label}.json`), JSON.stringify(report, null, 2));
-  console.log(lines.join('\n'));
+  if (!options.quiet) console.log(lines.join('\n'));
   await browser.close();
   if (server) server.close();
+  return { report, lines, out: OUT };
 }
 
-main().catch((e) => {
-  console.error(e);
-  process.exit(1);
-});
+const isMain = process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+if (isMain) {
+  const args = process.argv.slice(2);
+  const option = (name) => {
+    const i = args.indexOf(name);
+    return i >= 0 ? args[i + 1] : undefined;
+  };
+  const positional = args.filter((a, i) => !a.startsWith('--') && args[i - 1] !== '--label'
+    && args[i - 1] !== '--out');
+  compare({
+    target: positional[0],
+    out: option('--out'),
+    label: option('--label'),
+    play: args.includes('--play'),
+    mock: args.includes('--mock'),
+    responsive: args.includes('--responsive'),
+    crops: args.includes('--crops'),
+  }).catch((e) => {
+    console.error(e);
+    process.exit(1);
+  });
+}

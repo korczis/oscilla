@@ -279,7 +279,8 @@ async function runBrowser(name, type, js) {
   const targets = [
     ['chromium', chromium],
     ['firefox', firefox],
-  ].filter(([n]) => !only || n === only);
+  ].filter(([n]) => (only ? n === only
+    : !process.env.OSC_BROWSERS || process.env.OSC_BROWSERS.split(',').includes(n)));
   for (const [name, type] of targets) {
     try {
       await runBrowser(name, type, js);

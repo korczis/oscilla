@@ -14,6 +14,12 @@ import {
 import { createSequencerEditor } from '../../../src/js/sequencer/editor.js';
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+/** Deadline poll: wait until cond() holds or ms pass; returns the wall time waited (ms). */
+async function until(cond, ms) {
+  const t0 = performance.now();
+  while (!cond() && performance.now() - t0 < ms) await sleep(5);
+  return Math.round(performance.now() - t0);
+}
 
 // ---------------------------------------------------------------- source instrumentation
 // Wrap OscillatorNode start/stop and count `ended`: a source is live from start() until ended.
@@ -176,6 +182,12 @@ async function realtimeSetup() {
   return { state: ctx.state, sampleRate: ctx.sampleRate };
 }
 
+/** Everything the editor started is gone: no live source, no voice, no node, not playing. */
+function torn(editor) {
+  const st = editor.stats();
+  return probe.live.size === 0 && st.voices === 0 && st.activeNodeCount === 0 && !editor.playing;
+}
+
 async function stopMidPlay(playMs) {
   const { editor, ctx } = rt;
   resetProbe();
@@ -185,8 +197,8 @@ async function stopMidPlay(playMs) {
   await sleep(playMs);
   const during = { ...probeSnapshot(), stats: editor.stats(), ctxAdvanced: ctx.currentTime - t0 };
   editor.stop();
-  await sleep(400);
-  return { during, after: { ...probeSnapshot(), stats: editor.stats(), playing: editor.playing } };
+  const waitedMs = await until(() => torn(editor), 400);
+  return { during, after: { ...probeSnapshot(), stats: editor.stats(), playing: editor.playing, waitedMs } };
 }
 
 async function restartMany(n, gapMs) {
@@ -200,8 +212,8 @@ async function restartMany(n, gapMs) {
   }
   const beforeStop = probeSnapshot();
   editor.stop();
-  await sleep(400);
-  return { perRestart, beforeStop, after: { ...probeSnapshot(), stats: editor.stats() } };
+  const waitedMs = await until(() => torn(editor), 400);
+  return { perRestart, beforeStop, after: { ...probeSnapshot(), stats: editor.stats(), waitedMs } };
 }
 
 async function loopThenStop(waitMs) {
@@ -225,17 +237,22 @@ async function loopThenStop(waitMs) {
   await sleep(waitMs);
   const during = { ...probeSnapshot(), stats: editor.stats(), playing: editor.playing };
   editor.stop();
-  await sleep(400);
-  const after = { ...probeSnapshot(), stats: editor.stats(), playing: editor.playing };
+  const waitedMs = await until(() => torn(editor), 400);
+  const after = { ...probeSnapshot(), stats: editor.stats(), playing: editor.playing, waitedMs };
   editor.load(saved);
   return { during, after };
 }
 
 const RECORDER = `
 class SeqRecorder extends AudioWorkletProcessor {
+  // Under load Chromium can report a stale currentFrame (F, F, F+256 over three calls, each
+  // with fresh input); count quanta independently so no chunk overwrites another.
+  constructor() { super(); this.next = -1; }
   process(inputs) {
     const ch = inputs[0] && inputs[0][0];
-    if (ch) this.port.postMessage({ frame: currentFrame, data: ch.slice(0) });
+    const frame = this.next < 0 ? currentFrame : Math.max(currentFrame, this.next);
+    this.next = frame + (ch ? ch.length : 128);
+    if (ch) this.port.postMessage({ frame, data: ch.slice(0) });
     return true;
   }
 }
@@ -287,7 +304,20 @@ async function realtimeStopCapture(runs, { forceFallback = false } = {}) {
     }
     const env = voice.events.filter((e) => e.kind === 'gain');
     const envAtStop = automationValueAt(env, voice.stopTime - voice.t0, 1);
-    await sleep(150);
+    // Deadline poll instead of a fixed sleep: wait until the voice has ended, its nodes are
+    // gone and the capture covers 100 ms past the stop (1 s deadline). endedAfter is the audio
+    // time from the stop to the moment the end was observed.
+    let endedAudio = null;
+    await until(() => {
+      if (voice.ended && endedAudio === null) endedAudio = ctx.currentTime;
+      const last = rt.recorder.chunks[rt.recorder.chunks.length - 1];
+      // Also wait for at least 100 ms of captured audio: on a busy runner worklet chunks can
+      // arrive late, and the check needs a meaningful capture, not just the last chunk.
+      const total = rt.recorder.chunks.reduce((n, c) => n + c.data.length, 0);
+      return voice.ended && voice.activeNodeCount === 0 && last
+        && (last.frame + last.data.length) / ctx.sampleRate >= voice.stopTime + 0.1
+        && total > 0.1 * ctx.sampleRate;
+    }, 2000);
     const chunks = rt.recorder.chunks;
     let maxStep = 0;
     let gaps = 0;
@@ -311,6 +341,7 @@ async function realtimeStopCapture(runs, { forceFallback = false } = {}) {
       frames,
       envAtStop,
       ended: voice.ended,
+      endedAfter: endedAudio === null ? null : endedAudio - voice.stopTime,
       nodes: voice.activeNodeCount,
       usedFallback: forceFallback || !native,
     });
