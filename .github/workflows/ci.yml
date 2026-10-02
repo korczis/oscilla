@@ -32,6 +32,12 @@ jobs:
         run: npm run verify-dist
       - name: Install browsers
         run: npx playwright install --with-deps chromium firefox webkit
+      - name: Audio sink for headless Firefox (no sound server on the runner)
+        run: |
+          sudo apt-get update -q && sudo apt-get install -y --no-install-recommends pulseaudio
+          pulseaudio --start --exit-idle-time=-1
+          pactl load-module module-null-sink sink_name=ci_null
+          pactl set-default-sink ci_null
       - name: V1 engine checks against the V2 engine
         run: npm run test:engine
       - name: Browser gate (file:// and /oscilla/ sub-path; chromium, firefox, webkit)
