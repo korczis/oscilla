@@ -23,7 +23,8 @@ const playwright = require('playwright');
 
 const args = process.argv.slice(2);
 const only = args.includes('--browser') ? args[args.indexOf('--browser') + 1] : null;
-const ENGINES = only ? [only] : ['chromium', 'firefox'];
+const ENGINES = only ? [only]
+  : (process.env.OSC_BROWSERS ? process.env.OSC_BROWSERS.split(',') : ['chromium', 'firefox']);
 const FIXTURE = path.join(__dirname, 'fixtures', 'sequencer-fixture.js');
 const SR = 48000;
 // The spec's shortest allowed edge ramp (2-5 ms). Bounds use this fixed value, never the

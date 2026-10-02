@@ -86,9 +86,17 @@ jobs:
           retention-days: 14
 
   suites:
-    name: DSP, labs, sequencer
+    # Per browser: Firefox needs a PulseAudio null sink to run an AudioContext on the runner,
+    # while Chromium's realtime clock stalls behind that sink, so each gets its own job.
+    name: DSP, labs, sequencer (${{ matrix.browser }})
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        browser: [chromium, firefox]
+    env:
+      OSC_BROWSERS: ${{ matrix.browser }}
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
@@ -96,25 +104,29 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      - name: Install browsers
-        run: npx playwright install --with-deps chromium firefox
+      - name: Install the browser
+        run: npx playwright install --with-deps ${{ matrix.browser }}
       - name: Audio sink for headless Firefox (no sound server on the runner)
+        if: matrix.browser == 'firefox'
         run: |
           sudo apt-get update -q && sudo apt-get install -y --no-install-recommends pulseaudio
           pulseaudio --start --exit-idle-time=-1
           pactl load-module module-null-sink sink_name=ci_null
           pactl set-default-sink ci_null
-      - name: DSP modules (chromium, firefox)
+      - name: DSP modules
+        shell: bash
         run: mkdir -p logs && npm run test:dsp 2>&1 | tee logs/dsp.log
-      - name: Chart renderers and lab controllers (chromium, firefox)
+      - name: Chart renderers and lab controllers
+        shell: bash
         run: npm run test:labs 2>&1 | tee logs/labs.log
-      - name: Pattern sequencer on real Web Audio (chromium, firefox)
+      - name: Pattern sequencer on real Web Audio
+        shell: bash
         run: npm run test:sequencer 2>&1 | tee logs/sequencer.log
       - name: Upload the logs on failure
         if: failure()
         uses: actions/upload-artifact@v7
         with:
-          name: logs-suites
+          name: logs-suites-${{ matrix.browser }}
           path: logs/
           retention-days: 14
 

@@ -23,7 +23,8 @@ const playwright = require('playwright');
 const ROOT = path.resolve(__dirname, '..', '..');
 const args = process.argv.slice(2);
 const opt = (name) => (args.includes(name) ? args[args.indexOf(name) + 1] : null);
-const ENGINES = opt('--browser') ? [opt('--browser')] : ['chromium', 'firefox'];
+const ENGINES = opt('--browser') ? [opt('--browser')]
+  : (process.env.OSC_BROWSERS ? process.env.OSC_BROWSERS.split(',') : ['chromium', 'firefox']);
 
 // ---------------------------------------------------------------- fixture build
 
