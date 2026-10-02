@@ -78,6 +78,14 @@
     <symbol id="i-block-am" viewBox="0 0 24 24"><path d="M2.5 12c1-2 1.5-2 2 0s1 2 2 0 1.5-5 2.5 0 1.5 6 2.5 0 1.5-6 2.5 0 1.5 5 2.5 0 1-2 2 0 1 2 2 0"/></symbol>
     <symbol id="i-block-fm" viewBox="0 0 24 24"><path d="M2.5 12c1-6 2-6 3 0s1.5 6 2.5 0 1-6 1.5 0 .6 6 1 0 .6-6 1 0 1 6 1.5 0 1.5-6 2.5 0 2 6 3 0"/></symbol>
     <symbol id="i-block-random" viewBox="0 0 24 24"><path d="M3 15h3V9h3v8h3V6h3v7h3V8h3"/></symbol>
+    <!-- Measurement status icons (lucide, inlined at build time): text + icon + shape, never
+         colour alone (spec §118). -->
+    <symbol id="q-ok" viewBox="0 0 24 24"><!-- @icon:circle-check --></symbol>
+    <symbol id="q-warn" viewBox="0 0 24 24"><!-- @icon:triangle-alert --></symbol>
+    <symbol id="q-fail" viewBox="0 0 24 24"><!-- @icon:circle-x --></symbol>
+    <symbol id="q-pending" viewBox="0 0 24 24"><!-- @icon:loader-circle --></symbol>
+    <symbol id="q-unknown" viewBox="0 0 24 24"><!-- @icon:circle-dashed --></symbol>
+    <symbol id="q-info" viewBox="0 0 24 24"><!-- @icon:info --></symbol>
     <symbol id="w-sine" viewBox="0 0 24 18"><path d="M1.5 9c2.4-8.5 4.8-8.5 7 0s4.6 8.5 7 0 4.7-8.5 7 0"/></symbol>
     <symbol id="w-square" viewBox="0 0 24 18"><path d="M1.5 15.5h3.5v-13h14v13h3.5"/></symbol>
     <symbol id="w-triangle" viewBox="0 0 24 18"><path d="M1.5 15.5l10.5-13 10.5 13"/></symbol>
@@ -112,6 +120,8 @@
     <nav class="osc-nav" aria-label="Workspace">
       <ul class="osc-tabs osc-tabs--underline" id="osc-nav">
         <li><a class="osc-tab is-active" href="#osc-main" aria-current="page" data-osc="nav.playground" x-bind="navItem('playground')">Playground</a></li>
+        <li><a class="osc-tab" href="#osc-view-measure" data-osc="nav.measure" x-bind="navItem('measure')">Measure</a></li>
+        <li><a class="osc-tab" href="#osc-view-experiments" data-osc="nav.experiments" x-bind="navItem('experiments')">Experiments</a></li>
         <li><a class="osc-tab" href="#osc-panel-sequencer" data-osc="nav.sequencer" x-bind="navItem('sequencer')">Sequencer</a></li>
         <li><a class="osc-tab" href="#osc-panel-mic" data-osc="nav.analyzer" x-bind="navItem('analyzer')">Analyzer</a></li>
         <li><a class="osc-tab" href="#osc-panel-filter" data-osc="nav.filter" x-bind="navItem('filter')">Filter Lab</a></li>
@@ -1280,6 +1290,559 @@
     </div>
 
     <!-- ================= Full-width workspace views ================= -->
+    <!-- ================= MEASURE (V3): structured stimulus, capture, analysis =================
+         Thin bindings over src/js/ui/measure.js, which renders the pure view models of
+         src/js/measurement/views. Panels: guided flow, Stimulus, Live input, Quality,
+         Measurement result, Measurement setup, Experiment (docs/v3/ui-integration.md). -->
+    <section class="osc-view osc-view--measure" id="osc-view-measure" data-osc="measure-view"
+      data-osc-modes="measure" hidden :hidden="workspace !== 'measure'"
+      aria-labelledby="osc-measure-title" tabindex="-1">
+      <h2 class="osc-sr-only" id="osc-measure-title">Measure</h2>
+      <p class="osc-sr-only" role="status" aria-live="polite" aria-atomic="true"
+        data-osc="measure.live" x-text="meas.live.polite"></p>
+      <p class="osc-sr-only" aria-live="assertive" aria-atomic="true" data-osc="measure.alert"
+        x-text="meas.live.assertive"></p>
+      <div class="osc-measure">
+
+        <!-- ---------- Guided flow: status, the seven steps, primary action, STOP ---------- -->
+        <section class="osc-panel osc-m-flow" id="osc-measure-flow" aria-labelledby="osc-m-flow-title">
+          <div class="osc-panel-header osc-m-head">
+            <h3 class="osc-panel-title" id="osc-m-flow-title"
+              x-text="meas.expert ? 'Measurement · expert' : 'Guided measurement'">Guided measurement</h3>
+            <span class="osc-m-preset" x-text="CHARACTERIZE_PLAYBACK_CHAIN.label"></span>
+            <span class="osc-spacer"></span>
+            <span class="osc-m-ind" data-osc="measure.freqIndicator"
+              :class="{ 'is-on': measureFreqIndicator === 'CALIBRATED' }">
+              <span class="osc-m-ind-k">Frequency</span>
+              <span x-text="measureFreqIndicator">UNCALIBRATED</span></span>
+            <span class="osc-m-ind" data-osc="measure.levelIndicator"
+              :class="{ 'is-on': measureCalIndicator === 'CALIBRATED' }">
+              <span class="osc-m-ind-k">Level</span>
+              <span x-text="measureCalIndicator">UNCALIBRATED</span></span>
+            <button type="button" class="osc-toggle osc-m-expert" role="switch" aria-checked="false"
+              data-osc="measure.expert" :aria-checked="String(meas.expert)" :disabled="meas.busy"
+              @click="measureSetExpert(!meas.expert)">
+              <span>Expert</span><span class="osc-toggle-track" aria-hidden="true"></span>
+            </button>
+          </div>
+          <div class="osc-warning osc-m-testctx" role="note" data-osc="measure.testContext"
+            x-show="meas.loopback || meas.testContext" style="display: none">
+            <svg aria-hidden="true"><use href="#q-warn"/></svg>
+            <p><strong x-show="!meas.testContext">TEST CONTEXT.</strong>
+              <span x-text="meas.testContext || 'Digital loopback through a known synthetic system: no microphone and no acoustic path. Results test the software, not a physical setup.'"></span></p>
+          </div>
+          <ol class="osc-m-steps" aria-label="Measurement steps">
+            <template x-for="s in meas.flow.steps" :key="s.id">
+              <li class="osc-m-step" :class="'is-' + s.status" data-osc="measure.step"
+                :data-step="s.id" :aria-current="s.status === 'current' ? 'step' : false">
+                <span class="osc-m-step-n" aria-hidden="true">
+                  <svg class="osc-m-step-icon" x-show="s.status !== 'todo' && s.status !== 'current'"><use :href="'#q-' + ({ done: 'ok', warn: 'warn', blocked: 'fail' }[s.status] || 'unknown')"/></svg>
+                  <span x-show="s.status === 'todo' || s.status === 'current'" x-text="s.n"></span>
+                </span>
+                <span class="osc-m-step-text">
+                  <span class="osc-m-step-label" x-text="s.label"></span>
+                  <span class="osc-sr-only" x-text="', ' + ({ done: 'done', warn: 'done with warnings', blocked: 'blocked', current: 'current step', todo: 'not started' }[s.status] || s.status) + ': '"></span>
+                  <span class="osc-m-step-detail" x-text="s.detail"></span>
+                </span>
+              </li>
+            </template>
+          </ol>
+          <div class="osc-m-actions">
+            <button type="button" class="osc-btn osc-btn-primary osc-m-primary" id="osc-measure-primary"
+              data-osc="measure.primary" :disabled="!meas.flow.primaryAction.enabled"
+              :title="meas.flow.primaryAction.reason || ''" @click="measureRunPrimary()"
+              x-text="meas.flow.primaryAction.label">Check setup</button>
+            <template x-for="a in meas.flow.secondaryActions.filter((x) => x.id !== 'expert')" :key="a.id">
+              <button type="button" class="osc-btn osc-btn-secondary" data-osc="measure.secondary"
+                :data-action="a.id" @click="measureRunSecondary(a.id)" x-text="a.label"></button>
+            </template>
+            <button type="button" class="osc-btn osc-btn-secondary osc-m-stop" id="osc-measure-stop"
+              data-osc="measure.stop" :disabled="!meas.active" aria-keyshortcuts="Escape"
+              @click="measureStop()">
+              <svg aria-hidden="true"><use href="#i-stop"/></svg><span>Stop</span>
+            </button>
+            <div class="osc-m-progress" role="progressbar" aria-label="Measurement progress"
+              aria-valuemin="0" aria-valuemax="100" :aria-valuenow="meas.progressPct ?? 0"
+              x-show="meas.progressPct !== null" style="display: none">
+              <div class="osc-meter"><div class="osc-meter-fill" :style="'--osc-meter-value: ' + (meas.progressPct ?? 0) + '%'"></div></div>
+              <span class="osc-num" x-text="(meas.runText ? meas.runText + ' · ' : '') + (meas.progressPct ?? 0) + ' %'"></span>
+            </div>
+          </div>
+          <p class="osc-m-error" role="alert" x-show="meas.error" x-text="meas.error ? meas.error.message : ''"
+            style="display: none"></p>
+        </section>
+
+        <!-- ---------- Stimulus ---------- -->
+        <section class="osc-panel osc-m-stimulus" id="osc-measure-stimulus" aria-labelledby="osc-m-stim-title">
+          <div class="osc-panel-header"><h3 class="osc-panel-title" id="osc-m-stim-title">Stimulus</h3></div>
+          <p class="osc-m-big osc-num" data-osc="measure.stimulusText" x-text="meas.stimulusText"></p>
+          <dl class="osc-m-rows">
+            <div class="osc-metric"><dt>Runs</dt><dd class="osc-num" x-text="meas.values.repeats + ' (averaged: ' + meas.values.aggregation + ')'"></dd></div>
+            <div class="osc-metric"><dt>Noise check</dt><dd class="osc-num" x-text="meas.values.noiseCheckS > 0 ? meas.values.noiseCheckS + ' s before the sweep' : 'skipped (SNR NOT MEASURED)'"></dd></div>
+          </dl>
+          <div class="osc-m-field">
+            <span class="osc-label" id="osc-m-level-label">Output level (digital)</span>
+            <div class="osc-seg osc-m-level" role="radiogroup" aria-labelledby="osc-m-level-label">
+              <template x-for="c in OUTPUT_LEVEL_CHOICES" :key="c.id">
+                <button type="button" class="osc-seg-btn" role="radio" data-osc="measure.level"
+                  :data-value="c.id" :class="{ 'is-active': measureLevelId === c.id }"
+                  :aria-checked="String(measureLevelId === c.id)"
+                  :tabindex="measureLevelId === c.id ? 0 : -1" :disabled="meas.busy"
+                  @click="measureSetLevel(c.id)" @keydown="rovingKeydown($event)" x-text="c.label"></button>
+              </template>
+            </div>
+            <p class="osc-m-hint" x-text="(OUTPUT_LEVEL_CHOICES.find((c) => c.id === measureLevelId) || {}).detail || ''"></p>
+          </div>
+          <ul class="osc-m-notes" aria-label="Safety notes">
+            <template x-for="n in meas.safety" :key="n.id">
+              <li class="osc-m-note" :class="'is-' + n.severity">
+                <svg aria-hidden="true"><use :href="n.severity === 'warn' ? '#q-warn' : '#q-info'"/></svg>
+                <span x-text="n.text"></span>
+              </li>
+            </template>
+          </ul>
+        </section>
+
+        <!-- ---------- Live input ---------- -->
+        <section class="osc-panel osc-m-input" id="osc-measure-input" aria-labelledby="osc-m-input-title">
+          <div class="osc-panel-header">
+            <h3 class="osc-panel-title" id="osc-m-input-title">Live input</h3>
+            <span class="osc-spacer"></span>
+            <span class="osc-m-chip" x-text="meas.loopback ? 'TEST CONTEXT loopback' : 'Microphone'"></span>
+          </div>
+          <dl class="osc-m-rows" data-osc="measure.inputFacts">
+            <template x-for="r in meas.inputRows" :key="r.id">
+              <div class="osc-metric"><dt x-text="r.label"></dt><dd class="osc-num" x-text="r.text"></dd></div>
+            </template>
+            <div class="osc-metric"><dt>Frequency profile</dt><dd x-text="meas.cal.profile && meas.cal.useFrequency ? meas.cal.profile.name : 'none (UNCALIBRATED)'"></dd></div>
+            <div class="osc-metric"><dt>Levels</dt><dd x-text="meas.cal.level && meas.cal.useLevel ? 'CALIBRATED (reference offset applied)' : 'relative (dBFS-like)'"></dd></div>
+          </dl>
+          <p class="osc-m-hint" x-show="!meas.inputRows.length || meas.inputRows[0].text === 'UNKNOWN'">Run the setup check to read the input device, its sample rate and the processing the browser applies.</p>
+          <p class="osc-m-hint">The microphone opens only for the setup check and the measurement, and is released when they end. Audio stays in this page.</p>
+        </section>
+
+        <!-- ---------- Quality: live checks, then the assessment with its reasons ---------- -->
+        <section class="osc-panel osc-m-quality" id="osc-measure-quality" aria-labelledby="osc-m-q-title">
+          <div class="osc-panel-header">
+            <h3 class="osc-panel-title" id="osc-m-q-title">Quality</h3>
+            <span class="osc-spacer"></span>
+            <span class="osc-q osc-m-qstatus" data-osc="measure.quality" :class="[meas.quality.className, meas.quality.shape]">
+              <svg class="osc-q-icon" aria-hidden="true"><use :href="'#q-' + meas.quality.className.slice(7)"/></svg>
+              <span x-text="meas.quality.statusText"></span>
+            </span>
+          </div>
+          <ul class="osc-m-bar" aria-label="Live checks" data-osc="measure.bar">
+            <template x-for="it in meas.bar.items" :key="it.id">
+              <li class="osc-q" :class="[it.className, it.shape]" :title="it.detail || ''">
+                <svg class="osc-q-icon" aria-hidden="true"><use :href="'#q-' + it.status"/></svg>
+                <span class="osc-q-text" x-text="it.text"></span>
+              </li>
+            </template>
+          </ul>
+          <p class="osc-m-summary" x-text="meas.quality.summary"></p>
+          <ul class="osc-m-reasons" aria-label="Quality reasons" x-show="meas.quality.reasons.length">
+            <template x-for="(r, i) in meas.quality.reasons" :key="r.code + i">
+              <li class="osc-q-reason" :class="r.className">
+                <svg class="osc-q-icon" aria-hidden="true"><use :href="'#q-' + r.className.slice(7)"/></svg>
+                <span x-text="r.text"></span>
+              </li>
+            </template>
+          </ul>
+          <dl class="osc-m-rows osc-m-metrics" x-show="meas.expert && meas.quality.metrics.length" aria-label="Quality metrics">
+            <template x-for="mt in meas.quality.metrics" :key="mt.id">
+              <div class="osc-metric"><dt x-text="mt.label"></dt><dd class="osc-num" x-text="mt.text"></dd></div>
+            </template>
+          </dl>
+        </section>
+
+        <!-- ---------- Measurement result: frequency response, impulse response, RTA ---------- -->
+        <section class="osc-panel osc-m-result" id="osc-measure-result" aria-labelledby="osc-m-result-title">
+          <div class="osc-panel-header osc-m-result-head">
+            <h3 class="osc-panel-title" id="osc-m-result-title">Measurement result</h3>
+            <span class="osc-m-chip" data-osc="measure.shown" x-text="meas.shownTitle || 'NOT MEASURED'"></span>
+            <span class="osc-spacer"></span>
+            <div class="osc-tabs osc-tabs--auto osc-m-tabs" role="tablist" aria-label="Result view">
+              <template x-for="t in MEASURE_RESULT_TABS" :key="t.id">
+                <button type="button" class="osc-tab" role="tab" data-osc="measure.tab" :data-value="t.id"
+                  :id="'osc-m-tab-' + t.id" :aria-controls="'osc-m-pane-' + t.id"
+                  :class="{ 'is-active': meas.tab === t.id }" :aria-selected="String(meas.tab === t.id)"
+                  :tabindex="meas.tab === t.id ? 0 : -1" @click="measureSetTab(t.id)"
+                  @keydown="rovingKeydown($event)" x-text="t.label"></button>
+              </template>
+            </div>
+          </div>
+
+          <div class="osc-m-pane" id="osc-m-pane-response" role="tabpanel" aria-labelledby="osc-m-tab-response"
+            x-show="meas.tab === 'response'">
+            <div class="osc-m-toolbar">
+              <label class="osc-label" for="osc-m-smoothing">Smoothing</label>
+              <div class="osc-select"><select id="osc-m-smoothing" data-osc="measure.smoothing"
+                @change="measureSetView('smoothing', Number($event.target.value))">
+                <option value="0" :selected="meas.view.smoothing === 0">None (RAW)</option>
+                <option value="24" :selected="meas.view.smoothing === 24">1/24 octave</option>
+                <option value="12" :selected="meas.view.smoothing === 12">1/12 octave</option>
+                <option value="6" :selected="meas.view.smoothing === 6">1/6 octave</option>
+                <option value="3" :selected="meas.view.smoothing === 3">1/3 octave</option>
+              </select></div>
+              <label class="osc-label" for="osc-m-normalization">Normalization</label>
+              <div class="osc-select"><select id="osc-m-normalization" data-osc="measure.normalization"
+                @change="measureSetView('normalization', $event.target.value)">
+                <option value="none" :selected="meas.view.normalization === 'none'">None</option>
+                <option value="1k" :selected="meas.view.normalization === '1k'">0 dB at 1 kHz</option>
+                <option value="band" :selected="meas.view.normalization === 'band'">0 dB = mean 500 Hz–2 kHz</option>
+              </select></div>
+              <span class="osc-spacer"></span>
+              <template x-for="b in (meas.response ? meas.response.badges : [])" :key="b">
+                <span class="osc-m-badge" x-text="b"></span>
+              </template>
+            </div>
+            <p class="osc-m-axis" x-text="meas.response ? meas.response.yLabel : ''"></p>
+            <div class="osc-chart-host osc-m-chart" id="osc-measure-chart-response" role="img"
+              aria-label="Frequency response chart" aria-describedby="osc-m-sum-response"></div>
+            <p class="osc-m-summary" id="osc-m-sum-response" data-osc="measure.responseSummary"
+              x-text="meas.response ? meas.response.summary : 'Frequency response: NOT MEASURED.'"></p>
+            <ul class="osc-m-legend" x-show="meas.response" aria-label="Curves">
+              <template x-for="s in (meas.response ? meas.response.legend : [])" :key="s.id">
+                <li><span class="osc-m-swatch" :class="['is-' + s.role, s.faded ? 'is-faded' : '']" aria-hidden="true"></span><span x-text="s.label"></span></li>
+              </template>
+              <li x-show="meas.response && meas.response.envelope"><span class="osc-m-swatch is-band" aria-hidden="true"></span><span x-text="meas.response ? meas.response.envelope : ''"></span></li>
+            </ul>
+            <ul class="osc-m-notes osc-m-notes--plain">
+              <template x-for="(n, i) in (meas.response ? meas.response.notes : [])" :key="i">
+                <li x-text="n"></li>
+              </template>
+            </ul>
+          </div>
+
+          <div class="osc-m-pane" id="osc-m-pane-ir" role="tabpanel" aria-labelledby="osc-m-tab-ir"
+            x-show="meas.tab === 'ir'" style="display: none">
+            <div class="osc-m-toolbar">
+              <div class="osc-seg osc-m-seg" role="radiogroup" aria-label="Impulse response scale">
+                <button type="button" class="osc-seg-btn" role="radio" data-osc="measure.irScale" data-value="linear"
+                  :class="{ 'is-active': meas.view.irScale === 'linear' }" :aria-checked="String(meas.view.irScale === 'linear')"
+                  :tabindex="meas.view.irScale === 'linear' ? 0 : -1" @click="measureSetView('irScale', 'linear')"
+                  @keydown="rovingKeydown($event)">Linear</button>
+                <button type="button" class="osc-seg-btn" role="radio" data-osc="measure.irScale" data-value="db"
+                  :class="{ 'is-active': meas.view.irScale === 'db' }" :aria-checked="String(meas.view.irScale === 'db')"
+                  :tabindex="meas.view.irScale === 'db' ? 0 : -1" @click="measureSetView('irScale', 'db')"
+                  @keydown="rovingKeydown($event)">dB</button>
+              </div>
+              <div class="osc-seg osc-m-seg" role="radiogroup" aria-label="Impulse response time span">
+                <template x-for="sp in IR_SPANS" :key="sp.id">
+                  <button type="button" class="osc-seg-btn" role="radio" data-osc="measure.irSpan" :data-value="sp.id"
+                    :class="{ 'is-active': meas.view.irSpan === sp.id }" :aria-checked="String(meas.view.irSpan === sp.id)"
+                    :tabindex="meas.view.irSpan === sp.id ? 0 : -1" @click="measureSetView('irSpan', sp.id)"
+                    @keydown="rovingKeydown($event)" x-text="sp.label"></button>
+                </template>
+              </div>
+              <button type="button" class="osc-toggle" role="switch" aria-checked="false" data-osc="measure.irNormalize"
+                :aria-checked="String(meas.view.irNormalize)" @click="measureSetView('irNormalize', !meas.view.irNormalize)">
+                <span>Normalize</span><span class="osc-toggle-track" aria-hidden="true"></span></button>
+              <button type="button" class="osc-toggle" role="switch" aria-checked="false" data-osc="measure.irWindow"
+                :aria-checked="String(meas.view.irWindow)" @click="measureSetView('irWindow', !meas.view.irWindow)">
+                <span>Window</span><span class="osc-toggle-track" aria-hidden="true"></span></button>
+              <span class="osc-spacer"></span>
+              <template x-for="b in (meas.ir ? meas.ir.badges : [])" :key="b">
+                <span class="osc-m-badge" x-text="b"></span>
+              </template>
+            </div>
+            <p class="osc-m-axis" x-text="meas.ir ? meas.ir.yLabel + ' over time re the direct peak (ms)' : ''"></p>
+            <div class="osc-chart-host osc-m-chart" id="osc-measure-chart-ir" role="img"
+              aria-label="Impulse response chart" aria-describedby="osc-m-sum-ir"></div>
+            <p class="osc-m-summary" id="osc-m-sum-ir" data-osc="measure.irSummary"
+              x-text="meas.ir ? meas.ir.summary : 'Impulse response: NOT MEASURED.'"></p>
+            <ul class="osc-m-notes osc-m-notes--plain">
+              <template x-for="(n, i) in (meas.ir ? meas.ir.notes : [])" :key="i"><li x-text="n"></li></template>
+              <li x-show="meas.ir && meas.ir.window" x-text="meas.ir ? meas.ir.window : ''"></li>
+            </ul>
+          </div>
+
+          <div class="osc-m-pane" id="osc-m-pane-rta" role="tabpanel" aria-labelledby="osc-m-tab-rta"
+            x-show="meas.tab === 'rta'" style="display: none">
+            <div class="osc-m-toolbar">
+              <span class="osc-m-chip" x-text="meas.rta ? meas.rta.mode : '1/3 OCTAVE'"></span>
+              <button type="button" class="osc-toggle" role="switch" aria-checked="false" data-osc="measure.rtaPeak"
+                :aria-checked="String(meas.view.rtaPeakHold)" @click="measureSetView('rtaPeakHold', !meas.view.rtaPeakHold)">
+                <span>Peak hold</span><span class="osc-toggle-track" aria-hidden="true"></span></button>
+              <button type="button" class="osc-toggle" role="switch" aria-checked="false" data-osc="measure.rtaFreeze"
+                :aria-checked="String(meas.rtaFrozen)" @click="measureRtaFreeze()">
+                <span>Freeze</span><span class="osc-toggle-track" aria-hidden="true"></span></button>
+              <button type="button" class="osc-btn osc-btn-secondary osc-m-small" data-osc="measure.rtaReset"
+                @click="measureRtaReset()">Reset peaks</button>
+              <span class="osc-spacer"></span>
+              <template x-for="b in (meas.rta ? meas.rta.badges : [])" :key="b">
+                <span class="osc-m-badge" x-text="b"></span>
+              </template>
+            </div>
+            <p class="osc-m-axis" x-text="meas.rta ? meas.rta.source + ' · ' + meas.rta.yLabel : 'Background noise band levels appear after a measurement with a noise check.'"></p>
+            <div class="osc-chart-host osc-m-chart" id="osc-measure-chart-rta" role="img"
+              aria-label="Band level chart of the background noise" aria-describedby="osc-m-sum-rta"></div>
+            <p class="osc-m-summary" id="osc-m-sum-rta" data-osc="measure.rtaSummary"
+              x-text="meas.rta ? meas.rta.summary : 'RTA: NOT MEASURED.'"></p>
+            <ul class="osc-m-notes osc-m-notes--plain">
+              <template x-for="(n, i) in (meas.rta ? meas.rta.notes : [])" :key="i"><li x-text="n"></li></template>
+            </ul>
+          </div>
+        </section>
+
+        <!-- ---------- Measurement setup: recipe fields (progressive disclosure), calibration ---------- -->
+        <section class="osc-panel osc-m-setup" id="osc-measure-setup" aria-labelledby="osc-m-setup-title">
+          <div class="osc-panel-header">
+            <h3 class="osc-panel-title" id="osc-m-setup-title">Measurement setup</h3>
+            <span class="osc-spacer"></span>
+            <button type="button" class="osc-icon-btn osc-icon-btn--ghost osc-icon-btn--sm osc-m-setup-toggle"
+              data-osc="measure.setupToggle" aria-controls="osc-m-setup-body"
+              :aria-expanded="String(meas.setupOpen)" aria-expanded="false"
+              :aria-label="meas.setupOpen ? 'Hide measurement setup' : 'Show measurement setup'"
+              @click="meas.setupOpen = !meas.setupOpen">
+              <svg aria-hidden="true"><use :href="meas.setupOpen ? '#i-up' : '#i-down'"/></svg>
+            </button>
+          </div>
+          <div class="osc-m-setup-body" id="osc-m-setup-body" :class="{ 'is-open': meas.setupOpen }">
+            <template x-for="g in measureExpertGroups" :key="g.id">
+              <fieldset class="osc-m-group">
+                <legend x-text="g.label"></legend>
+                <template x-for="f in g.fields.filter((x) => x.path || x.kind === 'readonly')" :key="f.id">
+                  <div class="osc-m-fieldrow">
+                    <label class="osc-label" :for="'osc-mf-' + f.id" x-text="f.label + (f.unit ? ' (' + f.unit + ')' : '')"></label>
+                    <input class="osc-number" type="number" x-show="f.kind === 'number'" :id="f.kind === 'number' ? 'osc-mf-' + f.id : null"
+                      :aria-label="f.label + (f.unit ? ' (' + f.unit + ')' : '')"
+                      data-osc="measure.field" :data-field="f.id" :min="f.min" :max="f.max" :step="f.step"
+                      :value="meas.values[f.id]" :disabled="meas.busy"
+                      @change="measureSetValue(f.id, $event.target.value, 'number')">
+                    <div class="osc-select" x-show="f.kind === 'choice'">
+                      <select :id="f.kind === 'choice' ? 'osc-mf-' + f.id : null" data-osc="measure.choice"
+                        :aria-label="f.label"
+                        :data-field="f.id" :disabled="meas.busy"
+                        @change="measureSetValue(f.id, $event.target.value, 'choice')">
+                        <template x-for="c in (f.choices || [])" :key="String(c.value)">
+                          <option :value="c.value" x-text="c.label" :selected="String(meas.values[f.id]) === String(c.value)"></option>
+                        </template>
+                      </select>
+                    </div>
+                    <button type="button" class="osc-toggle" role="switch" x-show="f.kind === 'toggle'"
+                      :id="f.kind === 'toggle' ? 'osc-mf-' + f.id : null" data-osc="measure.switch" :data-field="f.id"
+                      :aria-label="f.label"
+                      :aria-checked="String(!!meas.values[f.id])" :disabled="meas.busy"
+                      @click="measureSetValue(f.id, !meas.values[f.id], 'toggle')">
+                      <span class="osc-toggle-track" aria-hidden="true"></span></button>
+                    <output class="osc-num osc-m-readonly" x-show="f.kind === 'readonly'"
+                      :id="f.kind === 'readonly' ? 'osc-mf-' + f.id : null" x-text="f.default + (f.unit && f.default !== 'UNKNOWN' ? ' ' + f.unit : '')"></output>
+                    <p class="osc-m-hint osc-m-fieldhelp" x-show="f.help" x-text="f.help"></p>
+                  </div>
+                </template>
+              </fieldset>
+            </template>
+
+            <fieldset class="osc-m-group osc-m-cal" aria-describedby="osc-m-cal-note">
+              <legend>Calibration</legend>
+              <p class="osc-m-calrow"><span class="osc-label">Microphone frequency profile</span>
+                <strong data-osc="measure.calName" x-text="meas.cal.profile ? meas.cal.profile.name : 'none (UNCALIBRATED)'"></strong>
+                <span class="osc-m-hint" x-show="meas.cal.profile" x-text="meas.cal.profile ? meas.cal.profile.points + ' points, applied only inside ' + meas.cal.profile.coverageText : ''"></span></p>
+              <div class="osc-m-btnrow">
+                <button type="button" class="osc-btn osc-btn-secondary osc-m-small" data-osc="measure.calImport"
+                  :disabled="meas.busy" @click="measureImportCalibrationClick()">Import profile (CSV / JSON)…</button>
+                <button type="button" class="osc-btn osc-btn-secondary osc-m-small" data-osc="measure.calRemove"
+                  x-show="meas.cal.profile" :disabled="meas.busy" @click="measureClearCalibration()">Remove profile</button>
+                <button type="button" class="osc-toggle" role="switch" aria-checked="true" data-osc="measure.calUse"
+                  :aria-checked="String(meas.cal.useFrequency)" :disabled="meas.busy || !meas.cal.profile"
+                  @click="measureToggleCalibration('useFrequency')">
+                  <span>Frequency correction</span><span class="osc-toggle-track" aria-hidden="true"></span></button>
+              </div>
+              <p class="osc-m-calrow"><span class="osc-label">Absolute level</span>
+                <strong data-osc="measure.levelState" x-text="meas.cal.level ? 'reference reading stored (offset ' + (meas.cal.level.offsetDb >= 0 ? '+' : '−') + Math.abs(meas.cal.level.offsetDb).toFixed(1) + ' dB at ' + meas.cal.level.referenceHz + ' Hz)' : 'none: levels are relative (dBFS-like)'"></strong></p>
+              <div class="osc-m-btnrow">
+                <button type="button" class="osc-btn osc-btn-secondary osc-m-small" data-osc="measure.levelCal"
+                  :disabled="meas.busy" @click="measureOpenLevelCalibration()">Level calibration…</button>
+                <button type="button" class="osc-btn osc-btn-secondary osc-m-small" data-osc="measure.levelRemove"
+                  x-show="meas.cal.level" :disabled="meas.busy" @click="measureClearLevelCalibration()">Remove</button>
+                <button type="button" class="osc-toggle" role="switch" aria-checked="false" data-osc="measure.levelUse"
+                  :aria-checked="String(meas.cal.useLevel)" :disabled="meas.busy || !meas.cal.level"
+                  @click="measureToggleCalibration('useLevel')">
+                  <span>Use level calibration</span><span class="osc-toggle-track" aria-hidden="true"></span></button>
+              </div>
+              <ul class="osc-m-notes osc-m-notes--plain" x-show="meas.cal.errors.length || meas.cal.warnings.length">
+                <template x-for="(t, i) in meas.cal.errors.concat(meas.cal.warnings)" :key="i"><li x-text="t"></li></template>
+              </ul>
+              <p class="osc-m-hint" id="osc-m-cal-note">A frequency profile corrects only between its first and last frequency; outside it the response stays uncalibrated. The raw result is always kept. A frequency profile alone never gives absolute levels.</p>
+            </fieldset>
+            <ul class="osc-m-notes osc-m-notes--plain" aria-label="Room and repeat notes">
+              <template x-for="n in ROOM_NOTES" :key="n.id"><li x-text="n.text"></li></template>
+            </ul>
+          </div>
+        </section>
+
+        <!-- ---------- Experiment: name, notes, save, repeat ---------- -->
+        <section class="osc-panel osc-m-experiment" id="osc-measure-experiment" aria-labelledby="osc-m-exp-title">
+          <div class="osc-panel-header"><h3 class="osc-panel-title" id="osc-m-exp-title">Experiment</h3></div>
+          <div class="osc-m-form">
+            <label class="osc-label" for="osc-m-name">Name</label>
+            <input class="osc-number osc-m-text" id="osc-m-name" type="text" maxlength="200" autocomplete="off"
+              data-osc="measure.name" x-model="meas.name" placeholder="e.g. Laptop speakers, desk">
+            <label class="osc-label" for="osc-m-notes">Location and distance notes</label>
+            <textarea class="osc-number osc-m-text osc-m-textarea" id="osc-m-notes" rows="2" maxlength="10000"
+              data-osc="measure.notes" x-model="meas.notes"
+              placeholder="Room, microphone distance and angle, loudspeaker"></textarea>
+          </div>
+          <div class="osc-m-btnrow">
+            <button type="button" class="osc-btn osc-btn-primary" id="osc-measure-save" data-osc="measure.save"
+              :disabled="meas.state !== 'COMPLETE' || meas.saved || meas.saving" @click="measureSave()">Save experiment</button>
+            <button type="button" class="osc-btn osc-btn-secondary" data-osc="measure.repeat"
+              :disabled="meas.state !== 'COMPLETE'" @click="measureRepeat()">Repeat (new experiment)</button>
+            <button type="button" class="osc-btn osc-btn-secondary" data-osc="measure.toExperiments"
+              @click="setWorkspace('experiments')">Experiments</button>
+          </div>
+          <p class="osc-m-hint" data-osc="measure.savedText"
+            x-text="meas.saved ? 'Saved as an experiment' + (exps.persistent ? ' in this browser.' : ' in memory for this page view.') : 'Saved experiments stay in this browser only (no cloud).'"></p>
+          <p class="osc-m-hint" x-show="exps.storeNote" x-text="exps.storeNote"></p>
+        </section>
+      </div>
+    </section>
+
+    <!-- ================= EXPERIMENTS (V3): local experiment management ================= -->
+    <section class="osc-view osc-view--experiments" id="osc-view-experiments" data-osc="experiments-view"
+      data-osc-modes="experiments" hidden :hidden="workspace !== 'experiments'"
+      aria-labelledby="osc-exp-title" tabindex="-1">
+      <h2 class="osc-sr-only" id="osc-exp-title">Experiments</h2>
+      <div class="osc-experiments">
+        <section class="osc-panel osc-x-list" id="osc-exp-list" aria-labelledby="osc-x-list-title">
+          <div class="osc-panel-header osc-x-head">
+            <h3 class="osc-panel-title" id="osc-x-list-title">Saved experiments</h3>
+            <span class="osc-m-chip osc-num" x-text="exps.rows.length"></span>
+            <span class="osc-spacer"></span>
+            <button type="button" class="osc-btn osc-btn-secondary osc-m-small" data-osc="exp.import"
+              @click="experimentsImportClick()">Import .oscilla.json…</button>
+            <button type="button" class="osc-btn osc-btn-primary osc-m-small" data-osc="exp.compare"
+              :disabled="!exps.canCompare" @click="experimentsCompare()">Compare selected</button>
+          </div>
+          <div class="osc-warning osc-x-store" role="note" x-show="exps.storeNote" style="display: none">
+            <svg aria-hidden="true"><use href="#q-warn"/></svg><p x-text="exps.storeNote"></p>
+          </div>
+          <ul class="osc-m-notes osc-m-notes--plain" role="alert" x-show="exps.importErrors.length" style="display: none">
+            <template x-for="(t, i) in exps.importErrors" :key="i"><li x-text="t"></li></template>
+          </ul>
+          <ul class="osc-x-rows" role="list">
+            <template x-for="r in exps.rows" :key="r.id">
+              <li class="osc-x-row" :class="{ 'is-open': exps.detail && exps.detail.id === r.id }"
+                data-osc="exp.row" :data-id="r.id">
+                <input type="checkbox" class="osc-x-check" data-osc="exp.select" :checked="r.selected"
+                  :aria-label="'Select ' + r.name + ' for comparison'" @change="experimentsToggleSelect(r.id)">
+                <div class="osc-x-main">
+                  <span class="osc-x-name" x-text="r.name"></span>
+                  <span class="osc-x-meta osc-num" x-text="r.createdText + ' · ' + r.sizeText + ' · ' + r.versionText"></span>
+                </div>
+                <span class="osc-q" :class="[r.className, r.shape]">
+                  <svg class="osc-q-icon" aria-hidden="true"><use :href="'#q-' + r.className.slice(7)"/></svg>
+                  <span x-text="r.statusText"></span>
+                </span>
+                <button type="button" class="osc-btn osc-btn-secondary osc-m-small" data-osc="exp.open"
+                  :aria-label="'Open ' + r.name" @click="experimentsOpen(r.id)">Open</button>
+              </li>
+            </template>
+            <li class="osc-x-empty" x-show="exps.loaded && !exps.rows.length" x-text="exps.empty"></li>
+          </ul>
+        </section>
+
+        <section class="osc-panel osc-x-detail" id="osc-exp-detail" aria-labelledby="osc-x-detail-title"
+          x-show="exps.panel === 'detail'">
+          <div class="osc-panel-header">
+            <h3 class="osc-panel-title" id="osc-x-detail-title"
+              x-text="exps.detail ? exps.detail.title : 'Experiment'">Experiment</h3>
+            <span class="osc-m-chip" x-show="exps.detail && exps.detail.testContext" style="display: none">TEST CONTEXT</span>
+            <span class="osc-spacer"></span>
+            <span class="osc-q" x-show="exps.detail" :class="exps.detail ? [exps.detail.quality.className, exps.detail.quality.shape] : []">
+              <svg class="osc-q-icon" aria-hidden="true"><use :href="exps.detail ? '#q-' + exps.detail.quality.className.slice(7) : '#q-unknown'"/></svg>
+              <span x-text="exps.detail ? exps.detail.quality.text : ''"></span>
+            </span>
+          </div>
+          <p class="osc-m-hint" x-show="!exps.detail">Open an experiment from the list to see its summary, provenance and response.</p>
+          <div x-show="exps.detail" class="osc-x-body">
+            <p class="osc-m-summary osc-num" data-osc="exp.compact" x-text="exps.detail ? exps.detail.compact : ''"></p>
+            <div class="osc-m-btnrow">
+              <button type="button" class="osc-btn osc-btn-secondary osc-m-small" data-osc="exp.rename"
+                @click="experimentsAskRename({ id: exps.detail.id, name: exps.detail.title })">Rename…</button>
+              <button type="button" class="osc-btn osc-btn-secondary osc-m-small" data-osc="exp.duplicate"
+                @click="experimentsDuplicate(exps.detail.id)">Duplicate</button>
+              <button type="button" class="osc-btn osc-btn-secondary osc-m-small" data-osc="exp.repeat"
+                @click="experimentsRepeat(exps.detail.id)">Repeat (new experiment)</button>
+              <button type="button" class="osc-btn osc-btn-secondary osc-m-small" data-osc="exp.inspect"
+                @click="experimentsShowInMeasure(exps.detail.id)">Show in Measure</button>
+              <button type="button" class="osc-btn osc-btn-secondary osc-m-small" data-osc="exp.export"
+                @click="experimentsExport(exps.detail.id)">Export .oscilla.json</button>
+              <button type="button" class="osc-btn osc-btn-secondary osc-m-small" data-osc="exp.csvTransfer"
+                x-show="exps.detail && exps.detail.hasTransfer" @click="experimentsExportCsv(exps.detail.id, 'transfer')">Response CSV</button>
+              <button type="button" class="osc-btn osc-btn-secondary osc-m-small" data-osc="exp.csvAggregate"
+                x-show="exps.detail && exps.detail.hasAggregate" @click="experimentsExportCsv(exps.detail.id, 'aggregate')">Runs CSV</button>
+              <button type="button" class="osc-btn osc-btn-secondary osc-m-small" data-osc="exp.csvIr"
+                x-show="exps.detail && exps.detail.hasIr" @click="experimentsExportCsv(exps.detail.id, 'ir')">IR CSV</button>
+              <button type="button" class="osc-btn osc-btn-secondary osc-m-small osc-x-delete" data-osc="exp.delete"
+                @click="experimentsAskDelete({ id: exps.detail.id, name: exps.detail.title })">Delete…</button>
+            </div>
+            <div class="osc-chart-host osc-x-chart" id="osc-exp-chart-detail" role="img"
+              aria-label="Frequency response of the experiment" aria-describedby="osc-x-sum-detail"></div>
+            <p class="osc-m-summary" id="osc-x-sum-detail" x-text="exps.detail && exps.detail.response ? exps.detail.response.summary : 'Frequency response: NOT MEASURED.'"></p>
+            <div class="osc-x-cols">
+              <ul class="osc-x-lines" aria-label="Summary">
+                <template x-for="(l, i) in (exps.detail ? exps.detail.lines : [])" :key="i"><li x-text="l"></li></template>
+                <li x-text="exps.detail ? 'Notes: ' + exps.detail.environment : ''"></li>
+              </ul>
+              <dl class="osc-m-rows osc-x-prov" aria-label="Provenance">
+                <template x-for="p in (exps.detail ? exps.detail.provenance : [])" :key="p.label">
+                  <div class="osc-metric"><dt x-text="p.label"></dt><dd class="osc-num" x-text="p.text"></dd></div>
+                </template>
+              </dl>
+            </div>
+          </div>
+        </section>
+
+        <section class="osc-panel osc-x-compare" id="osc-exp-compare" aria-labelledby="osc-x-compare-title"
+          x-show="exps.panel === 'compare'" style="display: none">
+          <div class="osc-panel-header">
+            <h3 class="osc-panel-title" id="osc-x-compare-title">Compare</h3>
+            <span class="osc-m-chip" x-show="exps.compare" x-text="exps.compare && exps.compare.compatible ? 'EQUIVALENT' : 'NOT EQUIVALENT'"></span>
+            <span class="osc-spacer"></span>
+            <button type="button" class="osc-btn osc-btn-secondary osc-m-small" data-osc="exp.backToDetail"
+              @click="exps.panel = 'detail'">Back to detail</button>
+          </div>
+          <ul class="osc-x-entries" aria-label="Compared experiments">
+            <template x-for="en in (exps.compare ? exps.compare.entries : [])" :key="en.label">
+              <li><span class="osc-m-swatch" :class="'is-' + en.role" aria-hidden="true"></span>
+                <strong x-text="en.label"></strong> <span x-text="en.compact"></span></li>
+            </template>
+          </ul>
+          <p class="osc-m-summary" data-osc="exp.compareSummary" x-text="exps.compare ? exps.compare.summary : ''"></p>
+          <div class="osc-warning osc-x-warn" role="note" x-show="exps.compare && exps.compare.warnings.length" style="display: none">
+            <svg aria-hidden="true"><use href="#q-warn"/></svg>
+            <p x-text="exps.compare ? 'Not equivalent: ' + exps.compare.warnings.join(' ') : ''"></p>
+          </div>
+          <p class="osc-m-axis">Overlay: raw magnitudes as measured (dB relative, capture/stimulus ratio)</p>
+          <div class="osc-chart-host osc-x-chart" id="osc-exp-chart-overlay" role="img"
+            aria-label="Overlay of the compared responses" aria-describedby="osc-x-sum-overlay"></div>
+          <p class="osc-m-summary" id="osc-x-sum-overlay" x-text="exps.compare ? exps.compare.overlaySummary : ''"></p>
+          <p class="osc-m-axis" x-text="exps.compare && exps.compare.delta.ok ? exps.compare.delta.label : 'A − B: not shown'"></p>
+          <div class="osc-chart-host osc-x-chart osc-x-chart--delta" id="osc-exp-chart-delta" role="img"
+            aria-label="Difference A − B" aria-describedby="osc-x-sum-delta"
+            x-show="exps.compare && exps.compare.delta.ok"></div>
+          <p class="osc-m-summary" id="osc-x-sum-delta" data-osc="exp.delta"
+            x-text="exps.compare ? (exps.compare.delta.ok ? exps.compare.delta.summary : 'A − B not shown: ' + exps.compare.delta.reason) : ''"></p>
+          <div class="osc-x-cols">
+            <dl class="osc-m-rows" aria-label="Common configuration">
+              <template x-for="c in (exps.compare ? exps.compare.common : [])" :key="c.field">
+                <div class="osc-metric"><dt x-text="c.label"></dt><dd x-text="c.text"></dd></div>
+              </template>
+            </dl>
+            <ul class="osc-x-diffs" aria-label="Differences">
+              <template x-for="d in (exps.compare ? exps.compare.differences : [])" :key="d.field">
+                <li class="osc-q-reason" :class="d.className">
+                  <svg class="osc-q-icon" aria-hidden="true"><use :href="'#q-' + d.className.slice(7)"/></svg>
+                  <span><strong x-text="d.label"></strong>: <span x-text="d.values.map((v) => v.label + ' ' + v.text).join(' · ')"></span></span>
+                </li>
+              </template>
+            </ul>
+          </div>
+        </section>
+      </div>
+    </section>
     <section class="osc-view osc-view--learn" id="osc-view-learn" data-osc="learn-view"
       data-osc-modes="learn" hidden :hidden="mode !== 'learn'" aria-labelledby="osc-learn-title"
       tabindex="-1">
@@ -1630,6 +2193,11 @@
 
   <input type="file" id="osc-import-file" class="osc-sr-only" accept="application/json,.json"
     tabindex="-1" aria-hidden="true" data-osc="config.importFile" @change="importConfigFile($event)">
+  <input type="file" id="osc-measure-cal-file" class="osc-sr-only"
+    accept=".csv,.txt,.tsv,.json,text/csv,text/plain,application/json" tabindex="-1" aria-hidden="true"
+    @change="measureImportCalibrationFile($event)">
+  <input type="file" id="osc-exp-import-file" class="osc-sr-only" accept=".json,application/json"
+    tabindex="-1" aria-hidden="true" @change="experimentsImportFile($event)">
 
   <!-- ================= Dialogs (native <dialog>) ================= -->
   <dialog class="osc-dialog" id="osc-dlg-save" data-oscilla-modal aria-labelledby="osc-dlg-save-title">
@@ -1761,6 +2329,65 @@
         <button type="button" class="osc-btn osc-btn-secondary" data-osc="settings.reset"
           @click="resetDefaults()">Reset instrument</button>
         <button type="button" class="osc-btn osc-btn-primary" @click="closeDialog('settings')">Close</button>
+      </div>
+    </div>
+  </dialog>
+
+  <!-- MEASURE: absolute level calibration (spec §23): one explicit external reference reading.
+       There is no default; the values are the user's. -->
+  <dialog class="osc-dialog osc-dialog--wide" id="osc-dlg-level-cal" data-oscilla-modal
+    aria-labelledby="osc-dlg-level-title">
+    <form method="dialog" class="osc-dialog-body" @submit.prevent="measureSaveLevelCalibration()">
+      <h2 class="osc-dialog-title" id="osc-dlg-level-title">Level calibration</h2>
+      <p>Put a known external acoustic reference on the microphone (typically a calibrator that
+        produces 94 dB re 20 µPa at 1 kHz), read its relative level in OSCILLA, and enter both. The
+        offset is the reference minus the reading. It is valid only for this microphone, input
+        gain, browser settings and position.</p>
+      <div class="osc-settings-grid">
+        <label class="osc-label" for="osc-lc-hz">Reference frequency (Hz)</label>
+        <input class="osc-number" id="osc-lc-hz" type="number" min="20" max="20000" step="1"
+          data-osc="levelCal.hz" x-model="meas.levelForm.referenceHz">
+        <label class="osc-label" for="osc-lc-ref">Reference sound pressure (dB re 20 µPa)</label>
+        <input class="osc-number" id="osc-lc-ref" type="number" min="40" max="140" step="0.1"
+          data-osc="levelCal.ref" x-model="meas.levelForm.referenceDb">
+        <label class="osc-label" for="osc-lc-obs">Observed reading (dB relative, dBFS-like)</label>
+        <input class="osc-number" id="osc-lc-obs" type="number" step="0.1" data-osc="levelCal.observed"
+          x-model="meas.levelForm.observedDb" placeholder="e.g. -32.5">
+        <label class="osc-label" for="osc-lc-cond">Conditions (device, gain, position)</label>
+        <input class="osc-number" id="osc-lc-cond" type="text" maxlength="2000" autocomplete="off"
+          data-osc="levelCal.conditions" x-model="meas.levelForm.conditions">
+      </div>
+      <p class="osc-pp-error" role="alert" x-show="meas.levelForm.error" x-text="meas.levelForm.error"></p>
+      <div class="osc-dialog-actions">
+        <button type="button" class="osc-btn osc-btn-secondary" @click="closeDialog('osc-dlg-level-cal')">Cancel</button>
+        <button type="submit" class="osc-btn osc-btn-primary" data-osc="levelCal.save">Store calibration</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- EXPERIMENTS: rename and the explicit delete confirmation (spec §225). -->
+  <dialog class="osc-dialog" id="osc-dlg-exp-rename" data-oscilla-modal aria-labelledby="osc-dlg-rename-title">
+    <form method="dialog" class="osc-dialog-body" @submit.prevent="experimentsRename()">
+      <h2 class="osc-dialog-title" id="osc-dlg-rename-title">Rename experiment</h2>
+      <label class="osc-label" for="osc-exp-rename-name">Name</label>
+      <input class="osc-number osc-dialog-input" id="osc-exp-rename-name" type="text" maxlength="200"
+        autocomplete="off" data-osc="exp.renameName" x-model="exps.renameName">
+      <div class="osc-dialog-actions">
+        <button type="button" class="osc-btn osc-btn-secondary" @click="closeDialog('osc-dlg-exp-rename')">Cancel</button>
+        <button type="submit" class="osc-btn osc-btn-primary" data-osc="exp.renameSave">Rename</button>
+      </div>
+    </form>
+  </dialog>
+  <dialog class="osc-dialog" id="osc-dlg-exp-delete" data-oscilla-modal aria-labelledby="osc-dlg-delete-title">
+    <div class="osc-dialog-body">
+      <h2 class="osc-dialog-title" id="osc-dlg-delete-title">Delete experiment?</h2>
+      <p>“<span x-text="exps.deleteName"></span>” is removed from this browser. This cannot be
+        undone; export it as .oscilla.json first to keep a copy.</p>
+      <div class="osc-dialog-actions">
+        <button type="button" class="osc-btn osc-btn-secondary" data-osc="exp.deleteCancel"
+          @click="closeDialog('osc-dlg-exp-delete')">Cancel</button>
+        <button type="button" class="osc-btn osc-btn-primary osc-x-delete" data-osc="exp.deleteConfirm"
+          @click="experimentsDelete()">Delete</button>
       </div>
     </div>
   </dialog>

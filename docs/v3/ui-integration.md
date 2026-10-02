@@ -6,9 +6,12 @@ engine events, `MeasurementResult`s, `QualityAssessment`s and `Experiment`s into
 descriptors; the integration step only renders them. Nothing in the UI computes a level, a
 mask, a range or a label: if a value is not in a view model, it is not shown.
 
-Status: the view models and their unit tests (`tests/unit/v3-views.test.mjs`) exist; the DOM
-integration described below does not yet. Nothing in `src/index.html`, `src/styles`,
-`src/js/ui` or `src/js/charts` uses these modules yet.
+Status: integrated. `src/js/ui/measure.js` and `src/js/ui/experiments.js` bind these view
+models (with `src/js/ui/measure-experiment.js`, the pure experiment builder),
+`src/js/charts/measure-charts.js` draws them with uPlot, `src/styles/measure.css` lays the
+workspaces out; gated by `tests/browser/v3-ui.cjs`, `tests/unit/v3-ui.test.mjs` and
+`scripts/visual-measure.mjs`. Where the integration differs from the plan below it says so in
+"Integration notes" at the end.
 
 ## Modules
 
@@ -180,3 +183,22 @@ on white is about 1.9:1, so in the light theme warning text is `--osc-text` on
 `--osc-warn-bg` and orange is used for icons and strokes beside a glyph. A light value for
 `--osc-orange` is a proposed extension of the existing token (not a new family), to be decided
 in the integration step.
+
+## Integration notes
+
+- Each workspace is ONE full-width view (`#osc-view-measure`, `#osc-view-experiments`, keyed on
+  `workspace`) that holds its own `.osc-panel`s in a 12-column grid, instead of loose panels in
+  the V2 focus grid: the V2 panels are hidden in these workspaces at every width, and the V2
+  focus/tablet rules stay untouched. The spans are the ones proposed above.
+- RTA: the stored data is the noise check's one-third-octave band power (engine
+  `summarizeNoise`); the averager (`createRtaAverager`, instant) gives peak hold and freeze over
+  successive noise checks. A live input RTA needs an input analyser tap in `capture.js` and is
+  not built; FFT and octave modes are therefore not offered for stored data.
+- Expert fields without a recipe path (RTA mode, FFT size, window, averaging) are not shown:
+  they would not change the measurement. The output level is the Stimulus panel's LOW / MEDIUM /
+  HIGH control only.
+- Light theme: no new token values; warning text is `--osc-text` on `--osc-warn-bg`, orange and
+  red are icons, strokes and the 3 px leading edge of status chips only.
+- Status chips: text + lucide icon (the shape differs per status) + the V2 toast convention of a
+  coloured 3 px leading edge; the `osc-q-shape--*` classes set the outline (dotted ring, dashed
+  unknown).

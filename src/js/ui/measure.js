@@ -1,0 +1,881 @@
+// MEASURE workspace: the DOM/Alpine adapter over the V3 measurement layer (spec §29-§36,
+// §72-§78, §106-§112, §115-§118, §150-§158; docs/v3/ui-integration.md). Composed into the ONE
+// OSCILLA component by main.js (Object.defineProperties, never spread).
+//
+// This layer renders view models; it computes no level, mask, range or label. Engine events go
+// through the pure reducers of src/js/measurement/views (quality-bar, announcements) and the
+// result through the pure view builders (measure-flow, response-chart, ir-chart, rta-chart);
+// the charts (src/js/charts/measure-charts.js) draw those descriptors with the existing uPlot
+// conventions. The measurement engine, its io, the result with its typed arrays, the
+// calibration objects and the chart instances live in the closure `ctx`, never in Alpine's
+// reactive state (rule project.audio-engine-discipline: Alpine never wraps engine objects).
+//
+// Output exclusivity (spec §74): while a measurement is in progress the instrument cannot play
+// (main.js refuses engine.play and notifies), and starting a measurement stops the instrument,
+// the sequencer and every voice. Escape and STOP abort through engine.abort (§111); page hide
+// aborts through the capture io's own pagehide/visibility handling and main.js (§169); leaving
+// the MEASURE workspace aborts a measurement in progress.
+//
+// TEST CONTEXT (§146, §249): `?measure=loopback` (or OSCILLA.measure.useLoopback()) replaces
+// the microphone with capture.js createLoopbackIo, a known synthetic digital system. The
+// workspace then says so in a banner and in every saved experiment; it is never presented as a
+// measurement of a physical system.
+
+import { MEASUREMENT_STATES as S, isActiveState } from '../measurement/state-machine.js';
+import {
+  createMeasurementEngine, assessMeasurement, MEASUREMENT_LEVELS,
+} from '../measurement/engine.js';
+import { createCaptureIo, createLoopbackIo, LOOPBACK_LABEL } from '../measurement/capture.js';
+import { bandCenters, createRtaAverager, rtaResult } from '../measurement/rta.js';
+import {
+  measureFlow, expertFields, recipeFromFields, CHARACTERIZE_PLAYBACK_CHAIN, OUTPUT_LEVEL_CHOICES,
+  safetyNotes, ROOM_NOTES,
+} from '../measurement/views/measure-flow.js';
+import {
+  initialQualityBar, reduceQualityBar, qualityBarView, qualityPanel,
+} from '../measurement/views/quality-bar.js';
+import { initialAnnouncements, reduceAnnouncements } from '../measurement/views/announcements.js';
+import { buildResponseView } from '../measurement/views/response-chart.js';
+import { buildIrView } from '../measurement/views/ir-chart.js';
+import { buildRtaView, RTA_MODE_LABELS } from '../measurement/views/rta-chart.js';
+import { UNAVAILABLE } from '../measurement/views/common.js';
+import { parseCalibrationText } from '../calibration/parse.js';
+import { coverage as profileCoverage } from '../calibration/interpolate.js';
+import {
+  createLevelCalibration, isValidLevelCalibration, levelLabel, LEVEL_LIMITS,
+} from '../calibration/level.js';
+import { newExperimentId, describeStimulus } from '../experiments/schema.js';
+import { experimentFromResult, experimentTestContext } from './measure-experiment.js';
+import { formatHz } from '../charts/axes.js';
+import { createResponseChart, createIrChart, createRtaChart } from '../charts/measure-charts.js';
+import { readFileText } from './exporters.js';
+
+/** Result tabs (role=tab via the shell's tab binding is not used: these are measure-local). */
+export const MEASURE_RESULT_TABS = Object.freeze([
+  Object.freeze({ id: 'response', label: 'Frequency response' }),
+  Object.freeze({ id: 'ir', label: 'Impulse response' }),
+  Object.freeze({ id: 'rta', label: 'RTA' }),
+]);
+
+/** IR zoom spans in ms re the direct peak (view only; the IR is kept whole). */
+export const IR_SPANS = Object.freeze([
+  Object.freeze({ id: 'direct', label: 'Direct', range: Object.freeze([-2, 20]) }),
+  Object.freeze({ id: 'early', label: 'Early', range: Object.freeze([-5, 200]) }),
+  Object.freeze({ id: 'full', label: 'Full', range: null }),
+]);
+
+/** Window region shown on the IR chart (view only) when enabled, ms re the direct peak. */
+export const IR_WINDOW_MS = Object.freeze([-1, 10]);
+
+const NORMALIZATIONS = Object.freeze({
+  none: null,
+  '1k': Object.freeze({ mode: 'at-frequency', hz: 1000 }),
+  band: Object.freeze({ mode: 'band-mean', lo: 500, hi: 2000 }),
+});
+
+const FIELD_DEFAULTS = (() => {
+  const out = {};
+  for (const g of expertFields({ disclosure: 'advanced' }).groups) {
+    for (const f of g.fields) if (f.path) out[f.id] = f.default;
+  }
+  // The preset is the starting point (its recipe overrides the generic field defaults).
+  const r = CHARACTERIZE_PLAYBACK_CHAIN.recipe;
+  Object.assign(out, { f1: r.stimulus.f1, f2: r.stimulus.f2, duration: r.stimulus.duration,
+    level: r.stimulus.level, repeats: r.repeats, aggregation: r.analysis.aggregation,
+    noiseCheckS: r.analysis.noiseCheckS, preRollS: r.analysis.preRollS,
+    postRollS: r.analysis.postRollS, gapS: r.analysis.gapS, phase: r.analysis.phase });
+  return Object.freeze(out);
+})();
+
+function randomBytes16() {
+  const b = new Uint8Array(16);
+  const c = typeof crypto !== 'undefined' ? crypto : null;
+  if (c && typeof c.getRandomValues === 'function') c.getRandomValues(b);
+  else for (let i = 0; i < 16; i++) b[i] = Math.floor(Math.random() * 256);
+  return b;
+}
+
+/** A plain, JSON-safe copy (Alpine state never holds engine objects or typed arrays). */
+const plain = (v) => (v == null ? null : JSON.parse(JSON.stringify(v)));
+
+function levelId(level) {
+  if (typeof level === 'string') return level;
+  const c = OUTPUT_LEVEL_CHOICES.find((x) => x.value === level);
+  return c ? c.id : null;
+}
+
+function calText(cal) {
+  const f = cal.profile;
+  return f ? `${f.name}` : UNAVAILABLE.UNCALIBRATED;
+}
+
+/**
+ * createMeasureUi(svc) → the MEASURE part of the component.
+ * svc: { engine (AudioEngine), stopPlayback(cmp) (instrument, sequencer, voices),
+ *        loopback: boolean (TEST CONTEXT from the URL) }
+ */
+export function createMeasureUi(svc) {
+  const ctx = {
+    cmp: null,
+    me: null,              // measurement engine
+    io: null,
+    ioKind: null,          // 'microphone' | 'loopback'
+    loopback: !!svc.loopback,
+    loopbackSystem: { type: 'biquad', filter: 'lowpass', frequency: 1000, Q: Math.SQRT1_2 },
+    result: null,          // last engine result (COMPLETE or INVALID)
+    shown: null,           // what the result panel shows: { kind: 'result'|'experiment', src }
+    preflight: null,
+    noise: null,
+    progress: null,
+    error: null,
+    bar: initialQualityBar(),
+    said: initialAnnouncements(),
+    profile: null,         // FrequencyProfile
+    levelCal: null,        // LevelCalibration
+    calibrationObj: null,  // the object identity the engine compares between preflight/measure
+    repeatOf: null,
+    charts: { response: null, ir: null, rta: null },
+    rta: null,             // { averager, bands, power, sampleRate }
+    rtaView: null,
+    pending: null,         // the running measure()/preflight() promise
+    lastRecipe: null,
+    onStateHook: null,     // test seam only (onceInState)
+  };
+
+  function announce(message) {
+    const m = ctx.cmp.meas.live;
+    const key = message.politeness === 'assertive' ? 'assertive' : 'polite';
+    // Re-announce the same words: clear first, then set on the next task.
+    m[key] = '';
+    setTimeout(() => { m[key] = message.text; }, 30);
+  }
+
+  function calibrationInput() {
+    const cmp = ctx.cmp;
+    const frequency = cmp.meas.cal.useFrequency && ctx.profile ? ctx.profile : null;
+    const level = cmp.meas.cal.useLevel && isValidLevelCalibration(ctx.levelCal) ? ctx.levelCal
+      : null;
+    const prev = ctx.calibrationObj;
+    if (prev && prev.frequency === frequency && prev.level === level) return prev;
+    ctx.calibrationObj = frequency || level ? { frequency, level } : null;
+    if (!ctx.calibrationObj) ctx.calibrationObj = { frequency: null, level: null };
+    return ctx.calibrationObj;
+  }
+
+  function recipeNow() {
+    return recipeFromFields(ctx.cmp.meas.values);
+  }
+
+  function onEvent(e) {
+    const cmp = ctx.cmp;
+    if (!cmp) return;
+    ctx.bar = reduceQualityBar(ctx.bar, e);
+    const a = reduceAnnouncements(ctx.said, e);
+    ctx.said = a.state;
+    if (a.message) announce(a.message);
+    switch (e.type) {
+      case 'preflight':
+        ctx.preflight = { ready: e.ready, warnings: e.warnings, blockers: e.blockers,
+          facts: e.facts, sampleRate: e.sampleRate };
+        break;
+      case 'noise':
+        ctx.noise = { rmsDb: e.rmsDb, peak: e.peak, reasons: e.reasons };
+        break;
+      case 'progress':
+        ctx.progress = { phase: e.phase, run: e.run, overall: e.overall };
+        break;
+      case 'error':
+        ctx.error = { code: e.code, message: e.message };
+        break;
+      case 'state':
+        if (e.to === S.PREFLIGHT && (e.from === S.IDLE || [S.COMPLETE, S.INVALID, S.ABORTED]
+          .includes(e.from))) {
+          ctx.preflight = null;
+          ctx.noise = null;
+          ctx.progress = null;
+          ctx.error = null;
+        }
+        break;
+      default:
+        break;
+    }
+    refresh({ lite: e.type === 'progress' });
+    if (ctx.onStateHook && e.type === 'state') ctx.onStateHook(e.to);
+  }
+
+  function ensureEngine() {
+    if (ctx.me) return ctx.me;
+    const kind = ctx.loopback ? 'loopback' : 'microphone';
+    ctx.io = kind === 'loopback'
+      ? createLoopbackIo({ engine: svc.engine, system: ctx.loopbackSystem })
+      : createCaptureIo({ engine: svc.engine });
+    ctx.ioKind = kind;
+    ctx.me = createMeasurementEngine({ io: ctx.io, assess: assessMeasurement, onEvent });
+    return ctx.me;
+  }
+
+  function disposeEngine() {
+    if (ctx.me) ctx.me.dispose();
+    ctx.me = null;
+    ctx.io = null;
+    ctx.ioKind = null;
+  }
+
+  // ---------------------------------------------------------------- view refresh
+  function inputFacts() {
+    const p = ctx.preflight;
+    const f = p && p.facts ? p.facts : null;
+    const rows = [];
+    const label = f && f.input && f.input.device ? f.input.device.label : null;
+    rows.push({ id: 'device', label: 'Input', text: f ? (label || (ctx.ioKind === 'loopback'
+      ? 'TEST CONTEXT loopback (no device)' : 'Device label not exposed by the browser'))
+      : UNAVAILABLE.UNKNOWN });
+    rows.push({ id: 'rate', label: 'Sample rate', text: p && p.sampleRate ? `${p.sampleRate} Hz`
+      : UNAVAILABLE.UNKNOWN });
+    const applied = f && f.input && f.input.constraints ? f.input.constraints.applied : null;
+    const proc = (k) => (applied && typeof applied[k] === 'boolean' ? (applied[k] ? 'on' : 'off')
+      : UNAVAILABLE.UNKNOWN);
+    rows.push({ id: 'processing', label: 'Echo / noise / AGC', text: f ? (ctx.ioKind === 'loopback'
+      ? 'not applicable (loopback)' : `${proc('echoCancellation')} / ${proc('noiseSuppression')}`
+        + ` / ${proc('autoGainControl')}`) : UNAVAILABLE.UNKNOWN });
+    rows.push({ id: 'capture', label: 'Capture', text: f && f.worklet ? (f.worklet.supported
+      ? (f.worklet.mode === 'audioworklet' ? 'AudioWorklet' : 'ScriptProcessor (fallback)')
+      : 'unsupported') : UNAVAILABLE.UNKNOWN });
+    return rows;
+  }
+
+  function refresh({ lite = false } = {}) {
+    const cmp = ctx.cmp;
+    if (!cmp) return;
+    const m = cmp.meas;
+    const state = ctx.me ? ctx.me.state : S.IDLE;
+    m.state = state;
+    m.active = isActiveState(state);
+    m.busy = m.active && state !== S.READY;
+    const recipe = recipeNow();
+    m.flow = plain(measureFlow({
+      state, preflight: ctx.preflight, recipe, calibration: calibrationInput(),
+      result: ctx.result && ctx.result.state ? { state: ctx.result.state,
+        reasons: ctx.result.reasons, runs: ctx.result.runs, quality: ctx.result.quality,
+        preflight: ctx.result.preflight, noise: ctx.result.noise } : null,
+      progress: ctx.progress, saved: m.saved, expert: m.expert, noise: ctx.noise,
+      error: ctx.error,
+    }));
+    m.bar = plain(qualityBarView(ctx.bar));
+    const p = ctx.progress;
+    m.progressPct = p && m.busy && Number.isFinite(p.overall) ? Math.floor(p.overall * 100) : null;
+    m.runText = m.flow.runText;
+    if (lite) return;
+    m.inputRows = inputFacts();
+    m.safety = safetyNotes({ recipe, preflight: ctx.preflight });
+    m.stimulusText = describeStimulus({ ...recipe.stimulus, kind: 'log-sweep' });
+    m.error = ctx.error ? { ...ctx.error } : null;
+  }
+
+  // ---------------------------------------------------------------- result presentation
+  function shownSource() {
+    return ctx.shown ? ctx.shown.src : null;
+  }
+
+  function rebuildResponse() {
+    const cmp = ctx.cmp;
+    const m = cmp.meas;
+    const src = shownSource();
+    let view = null;
+    if (src && (src.transfer || (src.results && (src.results.transfer || src.results.aggregate)))) {
+      view = buildResponseView(src, {
+        smoothing: m.view.smoothing,
+        normalization: NORMALIZATIONS[m.view.normalization] || null,
+        useCalibration: true,
+        showEnvelope: true,
+        profile: ctx.profile,
+        levelCalibration: m.cal.useLevel ? ctx.levelCal : null,
+      });
+    }
+    m.response = view ? {
+      summary: view.summary,
+      badges: view.badges.slice(),
+      notes: view.notes.slice(),
+      quality: { text: view.quality.text, className: view.quality.className,
+        icon: view.quality.icon, shape: view.quality.shape, severity: view.quality.severity },
+      yLabel: `${view.axes.y.label} (${view.axes.y.unit})`,
+      legend: view.series.filter((d) => !/^envelope-/.test(d.id) && !/-unreliable$/.test(d.id))
+        .map((d) => ({ id: d.id, label: d.label, role: d.role, faded: d.alpha < 1 })),
+      envelope: view.bands.length ? view.bands[0].label : null,
+      authoritative: view.authoritative,
+    } : null;
+    if (ctx.charts.response) ctx.charts.response.setView(view);
+    return view;
+  }
+
+  function rebuildIr() {
+    const cmp = ctx.cmp;
+    const m = cmp.meas;
+    const src = shownSource();
+    const ir = src ? (src.ir || (src.results && src.results.ir) || null) : null;
+    const span = IR_SPANS.find((s) => s.id === m.view.irSpan) || IR_SPANS[1];
+    let view = null;
+    if (ir) {
+      view = buildIrView(ir, { scale: m.view.irScale, normalize: m.view.irNormalize,
+        window: m.view.irWindow ? IR_WINDOW_MS : null,
+        range: span.range ? [span.range[0], span.range[1]] : null });
+      if (!span.range) {
+        // "Full": the whole response (first to last sample), not the default early view.
+        const last = view.x[view.x.length - 1];
+        view = buildIrView(ir, { scale: m.view.irScale, normalize: m.view.irNormalize,
+          window: m.view.irWindow ? IR_WINDOW_MS : null, range: [view.x[0], last] });
+      }
+    }
+    m.ir = view ? { summary: view.summary, badges: view.badges.slice(), notes: view.notes.slice(),
+      yLabel: `${view.axes.y.label}`, window: view.windowRegion ? view.windowRegion.label : null }
+      : null;
+    if (ctx.charts.ir) ctx.charts.ir.setView(view);
+    return view;
+  }
+
+  function noiseRta(result) {
+    const n = result && result.noise;
+    if (!n || !n.bands || !Array.isArray(n.bands.levelsDb)) return null;
+    const sr = result.sampleRate || (result.preflight && result.preflight.sampleRate);
+    if (!(sr > 0)) return null;
+    const bands = bandCenters('third', 20, 20000, sr);
+    if (bands.length !== n.bands.levelsDb.length) return null;
+    const levelsDb = Float64Array.from(n.bands.levelsDb);
+    return { sampleRate: sr, rta: rtaResult({ sampleRate: sr, resolution: 'third', bands,
+      levelsDb }) };
+  }
+
+  function rebuildRta() {
+    const cmp = ctx.cmp;
+    const m = cmp.meas;
+    let view = null;
+    const st = ctx.rta;
+    if (st && st.last) {
+      view = buildRtaView({
+        rta: { resolution: 'third', bands: st.bands, levelsDb: st.last.levelsDb },
+        peakDb: m.view.rtaPeakHold && st.last.peakDb ? st.last.peakDb : null,
+        frozen: st.averager.frozen,
+        averaging: { mode: 'instant' },
+        levelCalibration: m.cal.useLevel ? ctx.levelCal : null,
+      });
+    }
+    m.rta = view ? { summary: view.summary, badges: view.badges.slice(), notes: view.notes.slice(),
+      yLabel: `${view.axes.y.label}`, mode: RTA_MODE_LABELS[view.mode],
+      source: 'Background (noise check), one-third-octave band power' } : null;
+    if (ctx.charts.rta) ctx.charts.rta.setView(view);
+    return view;
+  }
+
+  function updateRtaFrame() {
+    const st = ctx.rta;
+    if (!st) return;
+    // The averager returns the same buffers; keep a copy for the view (frozen keeps the last).
+    const res = st.averager.push(st.lastPower, 0);
+    st.last = { levelsDb: Float64Array.from(res.levelsDb),
+      peakDb: res.peakDb ? Float64Array.from(res.peakDb) : null };
+  }
+
+  function acceptResultForRta(result) {
+    const r = noiseRta(result);
+    if (!r) return;
+    const n = r.rta.bands.length;
+    if (!ctx.rta || ctx.rta.size !== n) {
+      ctx.rta = { size: n,
+        averager: createRtaAverager({ mode: 'instant', peakHold: true, size: n }),
+        bands: r.rta.bands, sampleRate: r.sampleRate, last: null, lastPower: null };
+    }
+    ctx.rta.lastPower = Float64Array.from(r.rta.levelsDb, (db) => (db > -300 ? 10 ** (db / 10)
+      : 0));
+    updateRtaFrame();
+  }
+  function rebuildAll() {
+    rebuildResponse();
+    rebuildIr();
+    rebuildRta();
+    const cmp = ctx.cmp;
+    const src = shownSource();
+    const q = src ? src.quality || null : null;
+    cmp.meas.quality = plain(qualityPanel(q));
+    cmp.meas.shownKind = ctx.shown ? ctx.shown.kind : null;
+    cmp.meas.shownTitle = ctx.shown ? ctx.shown.title : null;
+    cmp.meas.testContext = ctx.shown && ctx.shown.testContext ? ctx.shown.testContext : null;
+  }
+
+  function showResult(result) {
+    ctx.result = result;
+    if (result && (result.transfer || result.ir)) {
+      const tc = result.testContext ? result.testContext.label || LOOPBACK_LABEL : null;
+      ctx.shown = { kind: 'result', src: result, title: tc ? 'TEST CONTEXT result' : 'Latest '
+        + 'measurement', testContext: tc };
+    } else if (result && result.state === S.INVALID) {
+      ctx.shown = null;
+    }
+    acceptResultForRta(result);
+    rebuildAll();
+  }
+
+  // ---------------------------------------------------------------- experiment building
+  function experimentOf(result, cmp) {
+    const m = cmp.meas;
+    return experimentFromResult(result, {
+      now: Date.now(), id: newExperimentId(randomBytes16()), build: svc.build,
+      name: m.name, notes: m.notes, profile: ctx.profile,
+      levelCalibration: m.cal.useLevel ? ctx.levelCal : null, repeatOf: ctx.repeatOf,
+    });
+  }
+
+  // ---------------------------------------------------------------- actions
+  async function runPreflight(cmp) {
+    const me = ensureEngine();
+    if (ctx.me.state !== S.IDLE && !isActiveState(ctx.me.state)) me.reset();
+    svc.engine.init();
+    ctx.result = null;
+    ctx.shown = null;
+    cmp.meas.saved = false;
+    cmp.meas.savedId = null;
+    rebuildAll();
+    try {
+      ctx.pending = me.preflight(recipeNow(), { calibration: calibrationInput() });
+      await ctx.pending;
+    } catch (e) {
+      if (!(e && e.code === 'ABORTED')) {
+        cmp.notify('error', 'Setup check failed', e.message || String(e));
+      }
+    } finally {
+      ctx.pending = null;
+      refresh();
+    }
+  }
+
+  async function runMeasure(cmp) {
+    const me = ensureEngine();
+    svc.engine.init();
+    svc.stopPlayback(cmp);
+    if ([S.COMPLETE, S.INVALID, S.ABORTED].includes(me.state)) me.reset();
+    cmp.meas.saved = false;
+    cmp.meas.savedId = null;
+    ctx.result = null;
+    if (ctx.shown && ctx.shown.kind === 'result') ctx.shown = null;
+    rebuildAll();
+    const recipe = recipeNow();
+    ctx.lastRecipe = recipe;
+    try {
+      ctx.pending = me.measure(recipe, { calibration: calibrationInput() });
+      const result = await ctx.pending;
+      showResult(result);
+    } catch (e) {
+      if (!(e && e.code === 'ABORTED')) {
+        cmp.notify('error', 'Measurement failed', e.message || String(e));
+      }
+    } finally {
+      ctx.pending = null;
+      refresh();
+    }
+  }
+
+  return {
+    MEASURE_RESULT_TABS,
+    IR_SPANS,
+    OUTPUT_LEVEL_CHOICES,
+    ROOM_NOTES,
+    CHARACTERIZE_PLAYBACK_CHAIN,
+    LEVEL_LIMITS,
+    meas: {
+      state: S.IDLE,
+      active: false,
+      busy: false,
+      expert: false,
+      values: { ...FIELD_DEFAULTS },
+      flow: plain(measureFlow({ state: S.IDLE, recipe: recipeFromFields(FIELD_DEFAULTS) })),
+      bar: plain(qualityBarView(initialQualityBar())),
+      quality: plain(qualityPanel(null)),
+      progressPct: null,
+      runText: null,
+      inputRows: [],
+      safety: safetyNotes({ recipe: recipeFromFields(FIELD_DEFAULTS) }),
+      stimulusText: describeStimulus({ ...recipeFromFields(FIELD_DEFAULTS).stimulus,
+        kind: 'log-sweep' }),
+      live: { polite: '', assertive: '' },
+      tab: 'response',
+      view: { smoothing: 0, normalization: 'none', irScale: 'linear', irNormalize: false,
+        irWindow: false, irSpan: 'early', rtaPeakHold: false },
+      response: null,
+      ir: null,
+      rta: null,
+      shownKind: null,
+      shownTitle: null,
+      testContext: null,
+      loopback: !!svc.loopback,
+      cal: { useFrequency: true, useLevel: false, profile: null, level: null, errors: [],
+        warnings: [] },
+      levelForm: { referenceHz: '1000', referenceDb: '94', observedDb: '', conditions: '',
+        error: '' },
+      name: '',
+      notes: '',
+      saved: false,
+      savedId: null,
+      saving: false,
+      error: null,
+      setupOpen: false,
+      readout: null,
+      rtaFrozen: false,
+    },
+
+    // ------------------------------------------------------------------ derived
+    get measureExpertGroups() {
+      return expertFields({ disclosure: this.meas.expert ? 'advanced' : 'basic',
+        sampleRate: ctx.preflight ? ctx.preflight.sampleRate : null }).groups
+        .filter((g) => g.id !== 'calibration' && g.id !== 'view')
+        // The output level has its own LOW / MEDIUM / HIGH control in the Stimulus panel.
+        .map((g) => ({ ...g, fields: g.fields.filter((f) => f.id !== 'level') }));
+    },
+    get measureCalIndicator() {
+      const lvl = this.meas.cal.useLevel && this.meas.cal.level ? ctx.levelCal : null;
+      return levelLabel(lvl).indicator;
+    },
+    get measureFreqIndicator() {
+      return this.meas.cal.useFrequency && this.meas.cal.profile ? 'CALIBRATED' : 'UNCALIBRATED';
+    },
+    get measureLevelId() { return levelId(this.meas.values.level); },
+    get measurePrimary() { return this.meas.flow.primaryAction; },
+    get measureCanStop() { return this.meas.active; },
+
+    // ------------------------------------------------------------------ lifecycle
+    measureInit() {
+      ctx.cmp = this;
+      refresh();
+    },
+    /** Mount the charts once the view exists (main.js, after the labs). */
+    measureMountCharts(root) {
+      const host = (id) => root.querySelector(`#${id}`);
+      const onReadout = (key) => (lines) => { this.meas.readout = { key, lines: lines || null }; };
+      try {
+        ctx.charts.response = createResponseChart(host('osc-measure-chart-response'),
+          { onReadout: onReadout('response') });
+        ctx.charts.ir = createIrChart(host('osc-measure-chart-ir'));
+        ctx.charts.rta = createRtaChart(host('osc-measure-chart-rta'),
+          { onReadout: onReadout('rta') });
+      } catch (e) {
+        console.error('OSCILLA measure charts failed:', e);
+      }
+      rebuildAll();
+    },
+    measureRefreshCharts() {
+      for (const c of Object.values(ctx.charts)) if (c) c.refreshTheme();
+    },
+    /** The visible result chart after a layout change (it may have been hidden). */
+    measureRelayout() {
+      const c = ctx.charts[this.meas.tab];
+      if (c) c.relayout();
+    },
+    /** True while a measurement owns the output (main.js refuses instrument playback). */
+    measureOwnsOutput() {
+      return !!ctx.me && isActiveState(ctx.me.state) && ctx.me.state !== S.READY;
+    },
+    /** Abort from Escape, page hide or leaving the workspace; false when nothing ran. */
+    measureAbort(reason = 'user') {
+      if (!ctx.me || !isActiveState(ctx.me.state)) return false;
+      const ok = ctx.me.abort(reason);
+      refresh();
+      return ok;
+    },
+
+    // ------------------------------------------------------------------ flow actions
+    async measureRunPrimary() {
+      const a = this.meas.flow.primaryAction;
+      if (!a || !a.enabled) return;
+      switch (a.id) {
+        case 'preflight': await runPreflight(this); break;
+        case 'measure': await runMeasure(this); break;
+        case 'stop': this.measureAbort('user'); break;
+        case 'save': await this.measureSave(); break;
+        case 'repeat': await this.measureRepeat(); break;
+        case 'acknowledge':
+          if (ctx.me) ctx.me.reset();
+          ctx.error = null;
+          refresh();
+          break;
+        default: break;
+      }
+    },
+    async measureRunSecondary(id) {
+      if (id === 'stop') this.measureAbort('user');
+      else if (id === 'repeat') await this.measureRepeat();
+      else if (id === 'expert') this.measureSetExpert(!this.meas.expert);
+    },
+    measureStop() {
+      this.measureAbort('user');
+    },
+    async measureStart() {
+      await runMeasure(this);
+    },
+    async measureCheck() {
+      await runPreflight(this);
+    },
+    /** REPEAT (§104): the same recipe again; the saved result is a NEW experiment. */
+    async measureRepeat() {
+      if (this.meas.savedId) ctx.repeatOf = this.meas.savedId;
+      await runMeasure(this);
+    },
+    measureSetExpert(on) {
+      this.meas.expert = !!on;
+      refresh();
+    },
+    measureSetValue(id, raw, kind) {
+      let v = raw;
+      if (kind === 'number') {
+        v = Number(raw);
+        if (!Number.isFinite(v)) return;
+      } else if (kind === 'toggle') v = !!raw;
+      this.meas.values[id] = v;
+      // A changed recipe invalidates a READY preflight (the engine compares the recipe).
+      if (ctx.me && ctx.me.state === S.READY) ctx.me.reset();
+      refresh();
+    },
+    measureSetLevel(id) {
+      if (!Object.hasOwn(MEASUREMENT_LEVELS, id)) return;
+      this.measureSetValue('level', id, 'choice');
+    },
+    measureLevelKeydown(e) { this.rovingKeydown(e); },
+    measureSetTab(tab) {
+      if (!MEASURE_RESULT_TABS.some((t) => t.id === tab)) return;
+      this.meas.tab = tab;
+      this.meas.readout = null;
+      this.$nextTick(() => {
+        const c = ctx.charts[tab];
+        if (c) c.relayout();
+      });
+    },
+    measureSetView(key, value) {
+      this.meas.view[key] = value;
+      if (['smoothing', 'normalization'].includes(key)) rebuildResponse();
+      else if (key.startsWith('ir')) rebuildIr();
+      else if (key.startsWith('rta')) rebuildRta();
+    },
+    measureRtaFreeze() {
+      const st = ctx.rta;
+      if (!st) return;
+      if (st.averager.frozen) st.averager.unfreeze();
+      else st.averager.freeze();
+      this.meas.rtaFrozen = st.averager.frozen;
+      rebuildRta();
+    },
+    measureRtaReset() {
+      const st = ctx.rta;
+      if (!st) return;
+      st.averager.reset();
+      if (st.lastPower) updateRtaFrame();
+      rebuildRta();
+    },
+
+    // ------------------------------------------------------------------ calibration
+    measureImportCalibrationClick() {
+      const input = document.getElementById('osc-measure-cal-file');
+      if (input) { input.value = ''; input.click(); }
+    },
+    async measureImportCalibrationFile(e) {
+      const file = e && e.target && e.target.files && e.target.files[0];
+      if (!file) return false;
+      try {
+        return this.measureImportCalibrationText(await readFileText(file), file.name);
+      } catch (err) {
+        this.notify('error', 'Calibration not imported', err.message || String(err));
+        return false;
+      }
+    },
+    /** Parse a CSV/TXT or JSON frequency profile (calibration/parse.js); never extrapolated. */
+    measureImportCalibrationText(text, fileName = 'profile') {
+      const r = parseCalibrationText(text, { name: String(fileName).replace(/\.[^.]+$/, ''),
+        importedAt: new Date().toISOString() });
+      if (!r.ok) {
+        this.meas.cal.errors = r.errors.slice(0, 5).map((x) => (x.line ? `line ${x.line}: `
+          : '') + x.text);
+        this.notify('error', 'Calibration not imported', this.meas.cal.errors.join(' '));
+        return false;
+      }
+      ctx.profile = r.profile;
+      const cov = profileCoverage(r.profile);
+      this.meas.cal.errors = [];
+      this.meas.cal.warnings = r.warnings.slice(0, 5).map((x) => (x.line ? `line ${x.line}: `
+        : '') + x.text);
+      this.meas.cal.profile = { name: r.profile.name, id: r.profile.id, points:
+        r.profile.points.length, coverageText: cov ? `${formatHz(cov[0])}–${formatHz(cov[1])}`
+          : UNAVAILABLE.UNKNOWN };
+      this.meas.cal.useFrequency = true;
+      if (ctx.me && ctx.me.state === S.READY) ctx.me.reset();
+      refresh();
+      rebuildAll();
+      this.notify('success', 'Frequency profile loaded', `"${r.profile.name}", `
+        + `${r.profile.points.length} points; applied only inside ${this.meas.cal.profile
+          .coverageText} (no extrapolation).`);
+      return true;
+    },
+    measureClearCalibration() {
+      ctx.profile = null;
+      this.meas.cal.profile = null;
+      if (ctx.me && ctx.me.state === S.READY) ctx.me.reset();
+      refresh();
+      rebuildAll();
+    },
+    measureToggleCalibration(key) {
+      this.meas.cal[key] = !this.meas.cal[key];
+      if (ctx.me && ctx.me.state === S.READY) ctx.me.reset();
+      refresh();
+      rebuildAll();
+    },
+    measureOpenLevelCalibration() {
+      this.meas.levelForm.error = '';
+      this.openModal('osc-dlg-level-cal');
+    },
+    /** Absolute level calibration (§23): an explicit external reference; no default exists. */
+    measureSaveLevelCalibration() {
+      const f = this.meas.levelForm;
+      try {
+        const cal = createLevelCalibration({
+          referenceHz: Number(f.referenceHz),
+          referenceDbSpl: Number(f.referenceDb),
+          observedDbRelative: Number(f.observedDb === '' ? NaN : f.observedDb),
+          conditions: f.conditions,
+          createdAt: new Date().toISOString(),
+        });
+        ctx.levelCal = cal;
+        this.meas.cal.level = { referenceHz: cal.referenceHz, referenceDb: cal.referenceDbSpl,
+          observedDb: cal.observedDbRelative, offsetDb: cal.offsetDb, conditions: cal.conditions };
+        this.meas.cal.useLevel = true;
+        f.error = '';
+        this.closeModal('osc-dlg-level-cal');
+        if (ctx.me && ctx.me.state === S.READY) ctx.me.reset();
+        refresh();
+        rebuildAll();
+        return true;
+      } catch (err) {
+        f.error = err.message || String(err);
+        return false;
+      }
+    },
+    measureClearLevelCalibration() {
+      ctx.levelCal = null;
+      this.meas.cal.level = null;
+      this.meas.cal.useLevel = false;
+      refresh();
+      rebuildAll();
+    },
+    get measureFreqCalText() { return calText({ profile: this.meas.cal.profile }); },
+    /** The loaded FrequencyProfile (closure object, not reactive) for experiment views. */
+    measureCurrentProfile() { return ctx.profile; },
+
+    // ------------------------------------------------------------------ experiment actions
+    async measureSave() {
+      const result = ctx.result;
+      if (!result || result.state !== S.COMPLETE || this.meas.saving) return null;
+      this.meas.saving = true;
+      try {
+        const e = experimentOf(result, this);
+        const id = await this.experimentsPut(e);
+        this.meas.saved = true;
+        this.meas.savedId = id;
+        ctx.repeatOf = null;
+        refresh();
+        this.notify('success', 'Experiment saved', `"${e.name}" (${this.exps.persistent
+          ? 'stored in this browser' : 'kept in memory for this page view only: export it to keep '
+          + 'it'}).`);
+        return id;
+      } catch (err) {
+        this.notify('error', 'Experiment not saved', err.message || String(err));
+        return null;
+      } finally {
+        this.meas.saving = false;
+      }
+    },
+    /** Show a saved experiment's result in the result panel (inspection, §75). */
+    measureShowExperiment(e, title) {
+      ctx.shown = { kind: 'experiment', src: e, title: title || `Saved experiment "${e.name
+        || '(unnamed)'}"`, testContext: experimentTestContext(e) };
+      rebuildAll();
+    },
+    /** Load a recipe (an experiment's) into the setup; the next save is a NEW experiment. */
+    measureLoadRecipe(recipe, { repeatOf = null } = {}) {
+      const st = recipe.stimulus || {};
+      const a = recipe.analysis || {};
+      const v = this.meas.values;
+      for (const [k, val] of Object.entries({ f1: st.f1, f2: st.f2, duration: st.duration,
+        level: levelId(st.level) || st.level, repeats: recipe.repeats,
+        aggregation: a.aggregation, noiseCheckS: a.noiseCheckS, preRollS: a.preRollS,
+        postRollS: a.postRollS, gapS: a.gapS, phase: a.phase })) {
+        if (val !== undefined && val !== null) v[k] = val;
+      }
+      ctx.repeatOf = repeatOf;
+      this.meas.saved = false;
+      this.meas.savedId = null;
+      if (ctx.me && !isActiveState(ctx.me.state)) ctx.me.reset();
+      refresh();
+    },
+
+    // ------------------------------------------------------------------ test seam
+    measureTestSeam() {
+      const self = this;
+      return {
+        get state() { return ctx.me ? ctx.me.state : S.IDLE; },
+        get engine() { return ctx.me; },
+        get io() { return ctx.io; },
+        get ioKind() { return ctx.ioKind; },
+        get result() { return ctx.result; },
+        get history() { return ctx.me ? ctx.me.history.map((h) => h.to) : []; },
+        /** TEST CONTEXT: replace the microphone with a known synthetic system. */
+        useLoopback(system = null) {
+          if (ctx.me && isActiveState(ctx.me.state)) return false;
+          disposeEngine();
+          ctx.loopback = true;
+          if (system) ctx.loopbackSystem = system;
+          self.meas.loopback = true;
+          refresh();
+          return true;
+        },
+        useMicrophone() {
+          if (ctx.me && isActiveState(ctx.me.state)) return false;
+          disposeEngine();
+          ctx.loopback = false;
+          self.meas.loopback = false;
+          refresh();
+          return true;
+        },
+        /**
+         * Test hook: run `fn` once, synchronously, when the engine enters `state` (abort at an
+         * exact stage without timing races). Returns a promise of { state, ran }.
+         */
+        onceInState(state, fn) {
+          return new Promise((resolve) => {
+            ctx.onStateHook = (to) => {
+              if (to !== state) return;
+              ctx.onStateHook = null;
+              // After the engine's own transition has finished (no re-entrant abort).
+              queueMicrotask(() => {
+                let ran = true;
+                try { fn(); } catch (err) { ran = String(err && err.message); }
+                resolve({ state: to, ran, now: ctx.me ? ctx.me.state : null });
+              });
+            };
+          });
+        },
+        clearStateHook() { ctx.onStateHook = null; },
+        get live() { return { ...self.meas.live }; },
+        setValues(values) {
+          Object.assign(self.meas.values, values);
+          refresh();
+        },
+        counts() {
+          const io = ctx.io;
+          return {
+            engineNodes: svc.engine.activeNodeCount,
+            ioNodes: io ? io.activeNodeCount : 0,
+            ioSources: io ? io.activeSourceCount : 0,
+            captures: io ? io.activeCaptureCount : 0,
+            ports: io ? io.openPortCount : 0,
+            tracks: io ? io.openTrackCount : 0,
+          };
+        },
+        experimentFromResult: () => (ctx.result ? experimentOf(ctx.result, self) : null),
+      };
+    },
+  };
+}

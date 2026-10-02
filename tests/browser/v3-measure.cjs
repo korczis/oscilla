@@ -4,6 +4,7 @@
 // file:// AND from a GitHub-Pages-like sub-path (http://127.0.0.1:<port>/oscilla/).
 //
 //   node tests/browser/v3-measure.cjs [--browsers chromium,firefox,webkit] [--origins file,http]
+//                                     (or OSC_BROWSERS=chromium,firefox)
 //                                     [--spike] [--long-s 40] [--json out.json]
 //
 // The application UI does not use these modules yet, so a fixture page is built: an esbuild IIFE
@@ -49,7 +50,7 @@ const arg = (name, fallback) => {
   const i = argv.indexOf(`--${name}`);
   return i >= 0 && argv[i + 1] ? argv[i + 1] : fallback;
 };
-const BROWSERS = arg('browsers', 'chromium,firefox,webkit').split(',');
+const BROWSERS = arg('browsers', process.env.OSC_BROWSERS || 'chromium,firefox,webkit').split(',');
 const ORIGINS = arg('origins', 'file,http').split(',');
 const SPIKE = argv.includes('--spike');
 const LONG_S = Number(arg('long-s', '40'));

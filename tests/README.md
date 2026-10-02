@@ -1,8 +1,8 @@
 # Tests
 
 `npm run release-gate` runs, in order: `npm test`, `build:check`, `verify-dist`, then
-`test:release` (`test:engine`, `test:dsp`, `test:labs`, `test:sequencer`, `test:browser`,
-`test:visual`). CI runs the same scripts as parallel jobs aggregated by the required `gate` job.
+`test:release` (`test:engine`, `test:dsp`, `test:labs`, `test:sequencer`, `test:measure`,
+`test:browser`, `test:visual`). CI runs the same scripts as parallel jobs aggregated by the required `gate` job.
 `OSC_BROWSERS=chromium,firefox` narrows the multi-browser suites. `test:live` (post-deploy, needs
 the network) is run by the Pages workflow, not by release-gate.
 
@@ -40,6 +40,11 @@ for people, never gating · **DELETED** removed, with its replacement.
 | `browser/dsp.cjs` | GATE | DSP modules in real browsers: analyser calibration, filter responses, panning, noise |
 | `browser/labs.cjs` | GATE | chart renderers and lab controllers against a fake engine adapter, fake mic device |
 | `browser/sequencer.cjs` | GATE | rendered sequence frequencies, click-free block edges and stops, 0 live sources after stop |
+| `browser/v3-measure.cjs` | GATE | the MeasurementEngine and capture io on real Web Audio (TEST CONTEXT loopback), file:// and /oscilla/: recovered loopback response, limiter transparency (G12), 0 nodes after finish and abort, fake-microphone capture path |
+| `browser/v3-ui.cjs` | GATE | MEASURE and EXPERIMENTS of dist in chromium, firefox, webkit, file:// and /oscilla/: guided flow through the UI on a TEST CONTEXT loopback, stage announcements, abort at every stage (Escape, STOP, page hide, leaving the workspace) with 0 nodes after, output exclusivity, fake-microphone setup check, calibration import and level calibration, experiment import/compare/rename/duplicate/export/CSV/delete, no "SPL" without a valid level calibration |
+| `browser/fixtures/v3-experiments.mjs` | SUPPORTING | deterministic TEST CONTEXT experiments (the real engine on a synthetic io) for `v3-ui.cjs` and the MEASURE visual reference |
+| `unit/v3-ui.test.mjs` | GATE | navigation order (About last), the workspaces' static markup rules, the pure experiment builder of MEASURE |
+| `../scripts/visual-measure.mjs` + `visual/measure/*` | GATE | MEASURE at 1536x1024 and 390x844 showing a deterministic TEST CONTEXT experiment, against the accepted reference per environment (≤ 0.5 % differing pixels) |
 | `browser/live-smoke.cjs` | GATE (post-deploy) | the public site boots, its provenance region matches the runtime, HOLD sounds and cleans up |
 | `browser/fixtures/*` | SUPPORTING | in-memory esbuild entries and pages for dsp, labs, sequencer |
 | `../scripts/visual-gate.mjs` + `visual/baseline.json` | GATE | 1536x1024 `--play` scene vs accepted values per environment: per-region chrome (+0.5 pp) and data (+measured variance) mismatch, panel and control geometry within 2 px, totals |
@@ -51,4 +56,5 @@ Visual baseline: `node scripts/visual-gate.mjs --update-baseline` re-accepts the
 environment deliberately (3 runs; it refuses an unstable chrome). The CI environment
 (`linux-x64`) is the Playwright container: `docker run --rm --platform linux/amd64 --ipc=host -v
 "$PWD":/work -w /work mcr.microsoft.com/playwright:v1.63.0-noble node scripts/visual-gate.mjs
---update-baseline`.
+--update-baseline`. The MEASURE references are re-accepted the same way with
+`node scripts/visual-measure.mjs --update-reference` (same container command for linux-x64).

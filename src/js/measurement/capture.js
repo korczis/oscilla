@@ -562,10 +562,15 @@ function createIoCore({ engine, env = defaultEnv(), mode = 'auto', openInput, ki
   }
 
   // ---- input
-  async function ensureInput(ctx) {
+  // `since` is the session epoch the caller started in: a cancel() (release) while the caller
+  // was awaiting the context or the worklet module bumps the epoch, and nothing may be opened
+  // for a session that was already released (the input and the recorder would leak).
+  const abortedSince = (since) => since !== epoch || disposed;
+  async function ensureInput(ctx, since = epoch) {
+    if (abortedSince(since)) throw new MeasurementError('ABORTED');
     if (input) return input;
     if (inputPending) return inputPending;
-    const my = epoch;
+    const my = since;
     inputPending = (async () => {
       const opened = await openInput(ctx, { register, unregister });
       if (my !== epoch || disposed) {
@@ -583,10 +588,12 @@ function createIoCore({ engine, env = defaultEnv(), mode = 'auto', openInput, ki
     }
   }
 
-  async function ensureReady({ requireRunning = true } = {}) {
+  async function ensureReady({ requireRunning = true, since = epoch } = {}) {
     const ctx = await ensureContext({ requireRunning });
+    if (abortedSince(since)) throw new MeasurementError('ABORTED');
     await ensureRecorderMode(ctx);
-    const inp = await ensureInput(ctx);
+    const inp = await ensureInput(ctx, since);
+    if (abortedSince(since)) throw new MeasurementError('ABORTED');
     if (!recorder) recorder = buildRecorder(ctx, inp.node);
     wrapStopAll();
     return ctx;
@@ -688,6 +695,7 @@ function createIoCore({ engine, env = defaultEnv(), mode = 'auto', openInput, ki
       clock: clockNotes.slice() }; },
 
     async preflight() {
+      const since = epoch;
       const facts = {
         audioContext: { available: true, state: null },
         sampleRate: null,
@@ -718,7 +726,7 @@ function createIoCore({ engine, env = defaultEnv(), mode = 'auto', openInput, ki
         return facts;
       }
       try {
-        const inp = await ensureInput(ctx);
+        const inp = await ensureInput(ctx, since);
         facts.input = { ok: true, device: inp.device, constraints: inp.constraints };
       } catch (e) {
         const me = mapError(e, 'NO_INPUT');
@@ -729,7 +737,7 @@ function createIoCore({ engine, env = defaultEnv(), mode = 'auto', openInput, ki
       }
       if (ctx.state === 'running') {
         try {
-          await ensureReady();
+          await ensureReady({ since });
           const sr = ctx.sampleRate;
           const start = ceilFrame(ctx.currentTime + SCHEDULE_LEAD_S, sr);
           const w = await openWindow(ctx, start, Math.round(PREFLIGHT_LEVEL_S * sr), null);

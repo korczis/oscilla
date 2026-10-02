@@ -54,6 +54,8 @@ import { serializeSequence } from './sequencer/model.js';
 import { registerOscillaUi, workspaceTitle } from './ui/app.js';
 import { keyGuard, openModal, closeModal, watchDialogs, focusSafely } from './ui/dialogs.js';
 import { createWorkbench, v1ModeFor, workspaceForV1Mode } from './ui/workbench.js';
+import { createMeasureUi } from './ui/measure.js';
+import { createExperimentsUi } from './ui/experiments.js';
 import { createScopeView, createHarmonicBarsView } from './ui/p5-views.js';
 import { buildConfigExport, parseConfigImport, CONFIG_FILE_VERSION } from './ui/config-file.js';
 import { renderPlanToWav, renderSequenceToWav, screenshotCanvases } from './ui/exporters.js';
@@ -191,7 +193,22 @@ function labVizInputs(plan) {
 bridge.labInputs = labVizInputs;
 
 const basePlay = engine.play.bind(engine);
-engine.play = (plan, o = {}) => basePlay(plan, { ...o, ...v2PlayOptions(plan, engine.ctx, true) });
+engine.play = (plan, o = {}) => {
+  // Playground and Measure share one output (spec §74): no instrument voice while a measurement
+  // owns it. The measurement itself never calls play (capture.js schedules its own source).
+  if (app && app.measureOwnsOutput()) {
+    app.notify('info', 'Measurement in progress', 'The output belongs to the measurement: stop '
+      + 'it (Esc) before playing.');
+    return null;
+  }
+  return basePlay(plan, { ...o, ...v2PlayOptions(plan, engine.ctx, true) });
+};
+
+/** Measure takes the output: stop the instrument and the sequencer (their voices fade). */
+function stopPlayback(cmp) {
+  if (cmp.seqPlaying && labs.sequencer) labs.sequencer.editor.stop();
+  if (cmp.playing) cmp.stopNow();
+}
 
 /** Revert the sounding voice from a PeriodicWave to its oscillator type (additive off). */
 function clearPeriodicWave() {
@@ -322,6 +339,8 @@ function setAnalysisTab(tab) {
  */
 function repairCharts() {
   requestAnimationFrame(() => {
+    if (app && app.workspace === 'measure') app.measureRelayout();
+    if (app && app.workspace === 'experiments') app.experimentsRelayout();
     for (const lab of [labs.analysis, labs.mic, labs.filter]) {
       const chart = lab && lab.chart;
       const u = chart && chart.uplot;
@@ -492,7 +511,10 @@ function integrationInit() {
     if (cmp.seqPlaying && labs.sequencer) labs.sequencer.editor.stop();
   };
   window.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') stopSequencer();
+    if (e.key === 'Escape') {
+      stopSequencer();
+      cmp.measureAbort('escape'); // spec §111: Escape aborts a measurement (after the sequencer)
+    }
     cmp.onKeyDown(e);
   });
   window.addEventListener('keyup', (e) => cmp.onKeyUp(e));
@@ -501,6 +523,7 @@ function integrationInit() {
   const hide = () => {
     cmp.releaseHold();
     stopSequencer();
+    cmp.measureAbort('pagehide'); // spec §169 (the capture io also aborts on its own)
     if (!cmp.latched) return;
     cmp.stop();
   };
@@ -534,9 +557,23 @@ function integrationInit() {
     notifyAdapter();
   });
   cmp.$watch('gainLevel', (g) => engine.setMasterGain(g));
-  cmp.$watch('theme', () => { bridge.readPalette(); });
+  cmp.$watch('theme', () => {
+    bridge.readPalette();
+    requestAnimationFrame(() => {
+      cmp.measureRefreshCharts();
+      cmp.experimentsRefreshCharts();
+    });
+  });
   cmp.$watch('tabs.analysis', (tab) => setAnalysisTab(tab));
-  cmp.$watch('workspace', () => repairCharts());
+  cmp.$watch('workspace', (ws) => {
+    // A measurement does not keep running unseen: leaving MEASURE stops it.
+    if (ws !== 'measure') cmp.measureAbort('workspace');
+    if (ws === 'experiments' && !cmp.exps.loaded) {
+      cmp.experimentsRefresh().catch((err) => cmp.notify('error', 'Experiments unavailable',
+        err.message || String(err)));
+    }
+    repairCharts();
+  });
   const baseTitle = document.title;
   cmp.$watch('workspace', (ws) => { document.title = workspaceTitle(ws, baseTitle); });
   // R3: Pause animation. The p5 views pause through bridge.state.paused (syncViz); the uPlot
@@ -575,6 +612,8 @@ function integrationInit() {
       host = null;
     }
     mountLabs(root);
+    cmp.measureMountCharts(root);
+    cmp.experimentsMountCharts(root);
     if (labs.phase) {
       // dual oscillator -> Phase & Stereo panel (A/B and the route are the dual's)
       Alpine.effect(() => {
@@ -651,7 +690,13 @@ function createOscillaComponent(ui) {
     engine, bridge, labs, exportConfigDoc, applyImport, renderWav, screenshot,
     relayout: () => { if (host) host.resize(); repairCharts(); },
   });
-  const cmp = compose(instrument, ui, workbench, provenancePart(), TEMPLATE_HELPERS);
+  const measure = createMeasureUi({
+    engine, build: BUILD, stopPlayback,
+    loopback: new URLSearchParams(window.location.search).get('measure') === 'loopback',
+  });
+  const experiments = createExperimentsUi();
+  const cmp = compose(instrument, ui, workbench, measure, experiments, provenancePart(),
+    TEMPLATE_HELPERS);
   cmp.dismissAlert = focusSafeDismiss(cmp.dismissAlert);
   const baseRefreshDebug = cmp.refreshDebug;
   Object.defineProperty(cmp, 'refreshDebug', {
@@ -666,6 +711,8 @@ function createOscillaComponent(ui) {
   Object.defineProperty(cmp, 'init', {
     value() {
       shellInit.call(this);
+      this.measureInit();
+      this.experimentsInit();
       integrationInit.call(this);
     },
     enumerable: true,
@@ -736,6 +783,8 @@ window.OSCILLA = {
   labErrors,
   get app() { return app; },
   get host() { return host; },
+  get measure() { return app ? app.measureTestSeam() : null; },
+  get experiments() { return app ? app.experimentsTestSeam() : null; },
   buildPlan,
   planFreqAt,
   parseFrequency,

@@ -442,8 +442,81 @@ function defineChecks() {
     await page.evaluate(() => { window.OSCILLA.app.customPresets = []; window.OSCILLA.app.presetTab = 'reference'; });
     await H.workspace(page, 'about');
     await collect();
+    // MEASURE and EXPERIMENTS: every state that shows a control. A TEST CONTEXT loopback
+    // measurement (2 runs) gives the result tabs, Save/Repeat and, saved twice, two experiments
+    // for the detail, compare and dialog controls.
+    await H.workspace(page, 'measure');
+    await page.evaluate(() => {
+      const m = window.OSCILLA.measure;
+      m.useLoopback();
+      m.setValues({ duration: 1, repeats: 2, noiseCheckS: 0.5, preRollS: 0.25, postRollS: 0.5,
+        gapS: 0.2 });
+      window.OSCILLA.app.measureSetExpert(true);
+    });
+    await collect();
+    await page.evaluate(() => window.OSCILLA.app.measureStart());
+    await page.waitForFunction(() => ['COMPLETE', 'INVALID', 'ABORTED', 'ERROR']
+      .includes(window.OSCILLA.measure.state), null, { timeout: 45000 });
+    const measureState = await page.evaluate(() => [window.OSCILLA.measure.state,
+      window.OSCILLA.app.meas.error && window.OSCILLA.app.meas.error.message,
+      window.OSCILLA.measure.history.join('>')]);
+    await page.evaluate(() => window.OSCILLA.app.measureImportCalibrationText('20,0\n20000,0\n',
+      'audit.csv'));
+    for (const tab of ['ir', 'rta', 'response']) {
+      await page.click(`[data-osc="measure.tab"][data-value="${tab}"]`);
+      await page.waitForSelector(`#osc-m-pane-${tab}`, { state: 'visible', timeout: 5000 });
+      await collect();
+    }
+    await page.click('[data-osc="measure.levelCal"]');
+    await page.fill('#osc-lc-obs', '-30');
+    await collect();
+    await page.click('[data-osc="levelCal.save"]');
+    await page.waitForSelector('[data-osc="measure.levelRemove"]', { state: 'visible',
+      timeout: 5000 }).catch(() => {});
+    await collect();
+    await page.evaluate(async () => {
+      const a = window.OSCILLA.app;
+      if (window.OSCILLA.measure.state === 'COMPLETE') {
+        const id = await a.measureSave();
+        if (id) await a.experimentsDuplicate(id);
+      }
+      a.measureClearLevelCalibration();
+      a.measureClearCalibration();
+      a.measureSetExpert(false);
+      a.alerts = [];
+    });
+    await H.workspace(page, 'experiments');
+    await page.evaluate(async () => {
+      const a = window.OSCILLA.app;
+      await a.experimentsRefresh();
+      a.exps.rows.forEach((r) => a.experimentsToggleSelect(r.id));
+      if (a.exps.rows[0]) await a.experimentsOpen(a.exps.rows[0].id);
+    });
+    await collect();
+    await page.click('[data-osc="exp.rename"]');
+    await collect();
+    await page.evaluate(() => window.OSCILLA.app.closeModal('osc-dlg-exp-rename'));
+    await page.click('[data-osc="exp.delete"]');
+    await collect();
+    await page.click('[data-osc="exp.deleteCancel"]');
+    await page.click('[data-osc="exp.compare"]');
+    await page.waitForSelector('[data-osc="exp.backToDetail"]', { state: 'visible', timeout: 5000 })
+      .catch(() => {});
+    await collect();
+    await page.evaluate(async () => {
+      const a = window.OSCILLA.app;
+      for (const r of a.exps.rows.slice()) {
+        a.exps.deleteId = r.id;
+        await a.experimentsDelete();
+      }
+      a.exps.panel = 'detail';
+      a.alerts = [];
+    });
     await H.workspace(page, 'playground');
     await page.setViewportSize({ width: 375, height: 800 });
+    await H.workspace(page, 'measure');
+    await collect();
+    await H.workspace(page, 'playground');
     await sleep(200);
     await page.click('#osc-sb-actions-toggle');
     await collect();
@@ -455,7 +528,7 @@ function defineChecks() {
     const unreachable = list.filter((c) => !c.reachable).map((c) => c.osc);
     const neverVisible = list.filter((c) => !c.visible).map((c) => c.osc);
     return { ok: !unlabelled.length && !unreachable.length && !neverVisible.length,
-      controls: list.length, unlabelled, unreachable, neverVisible };
+      controls: list.length, unlabelled, unreachable, neverVisible, measureState };
   });
 
   def('hold-plays-release-zero-nodes', async ({ page }) => {

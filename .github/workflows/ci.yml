@@ -130,6 +130,44 @@ jobs:
           path: logs/
           retention-days: 14
 
+  measure:
+    # V3: the measurement engine on real Web Audio (v3-measure.cjs) and the MEASURE /
+    # EXPERIMENTS workspaces of dist (v3-ui.cjs), one browser per job like the browser gate.
+    name: V3 measurement and UI (${{ matrix.browser }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        browser: [chromium, firefox, webkit]
+    env:
+      OSC_BROWSERS: ${{ matrix.browser }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Install ${{ matrix.browser }}
+        run: npx playwright install --with-deps ${{ matrix.browser }}
+      - name: Audio sink for headless Firefox (no sound server on the runner)
+        if: matrix.browser == 'firefox'
+        run: |
+          sudo apt-get update -q && sudo apt-get install -y --no-install-recommends pulseaudio
+          pulseaudio --start --exit-idle-time=-1
+          pactl load-module module-null-sink sink_name=ci_null
+          pactl set-default-sink ci_null
+      - name: Measurement engine and MEASURE / EXPERIMENTS UI, file:// and /oscilla/
+        run: mkdir -p logs && npm run test:measure 2>&1 | tee logs/measure-${{ matrix.browser }}.log
+      - name: Upload the log on failure
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: logs-measure-${{ matrix.browser }}
+          path: logs/
+          retention-days: 14
+
   browser:
     name: Browser gate (${{ matrix.browser }})
     runs-on: ubuntu-latest
@@ -183,20 +221,22 @@ jobs:
         run: |
           want="$(node -p "require('./package-lock.json').packages['node_modules/playwright'].version")"
           test "$want" = "1.63.0" || { echo "lockfile playwright $want, image v1.63.0"; exit 1; }
-      - name: 1536x1024 --play scene against the accepted baseline
+      - name: 1536x1024 --play scene and the MEASURE reference against the accepted baselines
         run: npm run test:visual
       - name: Upload current, reference, diff and report on failure
         if: failure()
         uses: actions/upload-artifact@v7
         with:
           name: visual-gate
-          path: tests/visual/out-gate/
+          path: |
+            tests/visual/out-gate/
+            tests/visual/out-measure/
           retention-days: 14
 
   gate:
     name: gate
     if: always()
-    needs: [unit, engine, suites, browser, visual]
+    needs: [unit, engine, suites, measure, browser, visual]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
