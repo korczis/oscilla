@@ -4,44 +4,49 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-OSCILLA — Interactive Sound & Frequency Lab: a browser-based acoustic laboratory and
-synthesizer-like frequency playground. The whole application is one file, `index.html`, built
-with Tailwind (Play CDN), Flowbite, Alpine.js, p5.js and the native Web Audio API. It must run
-from `file://` and from GitHub Pages.
+OSCILLA — Interactive Sound & Frequency Lab: a dense browser-based acoustic laboratory (V2).
+Modular source in `src/` (ES modules, plain token-based CSS, Alpine.js, p5.js, uPlot, native
+Web Audio API) builds with esbuild and a custom packer into ONE static `dist/index.html`, which
+is committed and is exactly what GitHub Pages serves. It must run from `file://` and from the
+Pages sub-path. V1, the hand-written single file, is tagged `v1.0.0`.
 
 The binding constraints are project rules under `.ai/repo/rules/project/`:
-`project.single-file-deliverable`, `project.audio-engine-discipline` and `project.no-fake-science`.
-Read them before changing `index.html`.
+`project.single-file-deliverable` (v2), `project.audio-engine-discipline` (v2) and
+`project.no-fake-science`. Read them before changing `src/`.
 
 ## Commands
 
 ```bash
-open index.html                    # run it (file://)
-python3 -m http.server 8000        # serve it the way GitHub Pages does
-majordomus plan next               # the spec section to implement now
-majordomus plan status             # milestone progress
+npm ci && npm run build            # src/ -> dist/index.html; commit dist/ with the change
+npm test                           # unit + V1 freeze suites (node --test)
+npm run release-gate               # what CI's required `gate` job runs
+npm run visual                     # compare against the visual reference at 1536x1024
+open dist/index.html               # run it (file://)
+majordomus plan status             # milestone progress (V2: M007-M010)
 ```
 
-Planned, not yet in the repository: `tests/smoke.cjs` (Playwright smoke test, installed with
-`npm --prefix tests install`, run with `node tests/smoke.cjs [--url <deployed-url>]`) and
-`.github/workflows/pages.yml` (GitHub Pages deployment publishing only `index.html`).
+Ship through small PRs with `gh pr merge --auto --squash`; the `gate` check is required on main.
 
 ## Plan
 
-Each numbered section of the specification is one Majordomus issue in
-`.ai/repo/project/issues/`: `S001`–`S063` across milestones `M001`–`M004`. The specification
-paste ended mid-sentence in section 63, so `S064`–`S095` depend on `S000` (receive the remaining
-text) and are blocked. `D001`–`D003` are the cross-model review, the file:// and responsive
-verification, and the Pages deployment. Status is derived from recorded evidence:
+V1 issues `S001`–`S063` (M001–M004) and `D001`–`D003` are done; `S064`–`S095` stay blocked on
+`S000`. V2 is `V201`–`V242` across `M007`–`M010`. Status is derived from recorded evidence:
 `majordomus plan evidence <id> ...` then `majordomus plan done <id>`.
 
-## Architecture of `index.html`
+## Architecture of `src/`
 
-The script is organised in banner-commented sections, in this order: constants, helpers,
-frequency helpers, musical-note helpers, preset definitions, the `AudioEngine` class, the
-visualization bridge, the Alpine component `oscillaApp`, the p5 sketch, bootstrapping. Add code
-to the section it belongs to. `AudioEngine` lives outside Alpine's reactive state; Alpine talks
-to it through methods, and p5 reads engine and UI state only through the visualization bridge.
+- `js/core/` — constants, frequency/music maths, safety rules, storage, URL state, pure config,
+  and `instrument.js` (the V1 component logic without its DOM).
+- `js/audio/` — `audio-engine.js` (owns the context, voices, master chain; V2 hooks `inserts`,
+  `periodicWave`, `adsr`, `dualRouter`), `voice/scheduler/modulation/patterns`, plus graph
+  builders (`filters`, `stereo`, `additive`, `envelope`, `noise`) and `wav`/`offline-renderer`.
+- `js/analysis/` — analyser reader, peak/pitch estimation, correlation, compare, spectrogram.
+- `js/sequencer/` — block model, compiler to scheduled Web Audio events, timeline, editor.
+- `js/visualization/` (p5 views via the bridge and `engine.snapshot()`), `js/charts/` (uPlot and
+  canvas renderers on one frame loop), `js/labs/` (panel controllers), `js/ui/` (Alpine shell,
+  dialogs, workbench, exporters), `js/main.js` (composition and bootstrapping).
+- Tests: `tests/unit/` (including the V1 freeze in `tests/freeze/`), `tests/browser/` (release
+  gate, V1 engine port, DSP, sequencer, labs), `tests/visual/` (regions of the reference).
 
 <!-- majordomus:begin 9535da72e6a6 c99ef4280d2c8948 -->
 # CLAUDE.md

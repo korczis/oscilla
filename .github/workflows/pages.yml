@@ -1,5 +1,5 @@
-# Publish OSCILLA to GitHub Pages. The site is exactly index.html: repository tooling
-# (.ai/, .claude/, tests/, Markdown) is never served.
+# Publish OSCILLA to GitHub Pages. The site is exactly dist/index.html, the same file that is
+# committed and that CI gated on the pull request; repository tooling is never served.
 name: Deploy to GitHub Pages
 
 on:
@@ -24,10 +24,18 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Committed dist/index.html matches a clean rebuild
+        run: npm run build:check
+      - run: npm run verify-dist
       - name: Stage the single-file site
         run: |
           mkdir -p _site
-          cp index.html _site/index.html
+          cp dist/index.html _site/index.html
           touch _site/.nojekyll
       - uses: actions/configure-pages@v6
       - uses: actions/upload-pages-artifact@v5
@@ -35,3 +43,11 @@ jobs:
           path: _site
       - id: deployment
         uses: actions/deploy-pages@v5
+      - name: Smoke-test the live sub-path
+        run: |
+          url="${{ steps.deployment.outputs.page_url }}"
+          sleep 20
+          curl -fsSL --retry 5 --retry-delay 10 -o live.html "$url"
+          grep -q 'data-vendor="p5@' live.html
+          ! grep -q 'type="module"' live.html
+          cmp -s live.html dist/index.html || echo "::warning::live page differs from dist (CDN propagation?)"
