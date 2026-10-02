@@ -21,6 +21,8 @@
 // INVARIANTS (inventory K4/K5, risks 4/5):
 //   - every node of a voice goes through track() (sources through source()), so
 //     activeNodeCount/activeSourceCount stay exact and stop/cleanup leaves zero nodes;
+//   - the output chain (master, limiter and its zero feed, trim, ceiling, analyser) belongs to
+//     the context, not to a voice, and is outside that accounting (see feedLimiter);
 //   - every automation of the envelope, dip and fade gains goes through the recorded params
 //     (v.env / v.rel / v.fade / v.cut, envelope functions through the `eg` wrapper), so their
 //     scheduled value is known at any time in every browser (_freeze holds rel for a dip);
@@ -91,6 +93,33 @@ export function planKey(plan, ignoreWave = false) {
   return JSON.stringify(plan, (k, v) => (k === 'label' || (ignoreWave && k === 'wave') ? undefined : v));
 }
 
+/**
+ * A ConstantSourceNode at offset 0 connected to the limiter for the context's lifetime, so the
+ * limiter's input is never "silent" (null) in Gecko. Firefox 155's DynamicsCompressorNode
+ * returns silence for a null input block WITHOUT running its look-ahead delay line (6 ms,
+ * 288 frames at 48 kHz): the last 6 ms of every sound stay in the line and are emitted when the
+ * next sound starts (from the render quantum of its onset, one look-ahead before the sound
+ * itself). Here a release ends on GAIN_FLOOR held through the stop margin, so what replays is
+ * that floor (gain x 1e-4: 2.5e-5 at UI 100 %, tests/browser/engine-v1port.cjs "limiter
+ * look-ahead"); a sound whose input goes silent while still sounding replays at full level (a
+ * 20 kHz sweep tail of 0.013 was measured in loopback), and an offline render can lose its last
+ * 6 ms. Chromium shows nothing there. With the zero feed the line always advances, so a sound's
+ * tail plays out right after it and the output equals the other engines'. Adding 0 changes no
+ * sample.
+ * Accounting: the feed is master-chain infrastructure (like master and limiter), created once
+ * per context and never per voice, so it is outside the voice accounting (nodes / sources /
+ * micNodes): activeNodeCount and activeSourceCount stay 0 when nothing sounds. Contexts without
+ * ConstantSourceNode (old WebKit, the recording mock of the freeze suite) get no feed: null.
+ */
+export function feedLimiter(ctx, limiter) {
+  if (typeof ctx.createConstantSource !== 'function') return null;
+  const feed = ctx.createConstantSource();
+  feed.offset.value = 0;
+  feed.connect(limiter);
+  feed.start();
+  return feed;
+}
+
 /** Waveshaper curve: identity up to ±cap, flat beyond (exact under linear interpolation). */
 export function ceilingCurve(cap) {
   // V1: ceilingCurve (index.html@a7b7a23)
@@ -110,6 +139,7 @@ export class AudioEngine {
     this.ctx = null;
     this.master = null;
     this.limiter = null;
+    this.limiterFeed = null;     // constant 0 into the limiter (see feedLimiter)
     this.trim = null;
     this.ceiling = null;
     this.analyser = null;
@@ -233,6 +263,7 @@ export class AudioEngine {
       this.analyser.minDecibels = -140;
       this.analyser.maxDecibels = 0;
       this.master.connect(this.limiter);
+      this.limiterFeed = feedLimiter(ctx, this.limiter);
       this.limiter.connect(this.trim);
       this.trim.connect(this.ceiling);
       this.ceiling.connect(this.analyser);
@@ -262,6 +293,11 @@ export class AudioEngine {
     this.stopMic('closed');
     this.detachMicrophone('closed');
     this.ctx = null;
+    if (this.limiterFeed) {
+      try { this.limiterFeed.stop(); } catch (e) { /* not started / stopped */ }
+      try { this.limiterFeed.disconnect(); } catch (e) { /* gone */ }
+    }
+    this.limiterFeed = null;
     this.master = this.limiter = this.trim = this.ceiling = this.analyser = null;
     if (ctx) {
       ctx.onstatechange = null;
