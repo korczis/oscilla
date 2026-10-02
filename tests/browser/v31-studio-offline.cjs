@@ -11,8 +11,10 @@
 //     silence before the runtime's click-free start time; the end fades to < 1e-3.
 //   Sweep Sequence: the silence clip (2.0-2.5 s) is > 40 dB below the sweep (pattern clips
 //     render through the Sequence node and the existing sequencer).
-//   Subtractive Synth renders (non-silent) and lists its pattern clips on the Oscillator as
-//     limitations; Measurement Sweep is refused (live Microphone) with that limitation.
+//   Subtractive Synth renders what the live transport plays, with no limitation: the Tone clip
+//     (220 Hz dominant, a non-harmonic 311 Hz probe < −30 dB) then the Sweep (311 Hz dominant
+//     at 1.5 s, 440 Hz at 2.0 s, the free-running 220 Hz carrier < −30 dB: pattern-played);
+//     Measurement Sweep is refused (live Microphone) with that limitation.
 //   no console error or page error.
 'use strict';
 
@@ -71,10 +73,20 @@ async function runOne(name, url) {
       s.ok && s.rmsSweep > 1e-3 && 20 * Math.log10(s.rmsGap / s.rmsSweep) < -40,
       JSON.stringify({ sweep: s.rmsSweep, gap: s.rmsGap }));
 
-    const syn = await page.evaluate(() => window.T.render('subtractive-synth'));
-    check(name, 'Subtractive Synth renders with its limitations listed',
-      syn.ok && syn.stats.peak > 1e-3 && syn.limitations.length === 2,
+    const syn = await page.evaluate(() => window.T.render('subtractive-synth',
+      { probe: 'synth' }));
+    check(name, 'Subtractive Synth renders with no limitations',
+      syn.ok && syn.stats.peak > 1e-3 && syn.limitations.length === 0,
       JSON.stringify({ peak: syn.stats && syn.stats.peak, limitations: syn.limitations }));
+    const y = syn.synth || {};
+    const rel = (a, ref) => 20 * Math.log10(Math.max(1e-12, a) / Math.max(1e-12, ref));
+    check(name, 'Subtractive Synth: the Tone clip (220 Hz) sounds from the start',
+      y.tone220 > 1e-3 && rel(y.tone311, y.tone220) < -30,
+      `220 Hz ${y.tone220}, 311 Hz ${rel(y.tone311, y.tone220).toFixed(1)} dB re 220 Hz`);
+    check(name, 'Subtractive Synth: then the Sweep (311 Hz at 1.5 s, 440 Hz at 2.0 s)',
+      rel(y.s15f220, y.s15f311) < -20 && rel(y.s20f220, y.s20f440) < -30,
+      `1.5 s: 220 Hz ${rel(y.s15f220, y.s15f311).toFixed(1)} dB re 311 Hz; 2.0 s: 220 Hz `
+        + `${rel(y.s20f220, y.s20f440).toFixed(1)} dB re 440 Hz (no free-running carrier)`);
 
     const m = await page.evaluate(() => window.T.render('measurement-sweep'));
     check(name, 'Measurement Sweep refused: live Microphone',

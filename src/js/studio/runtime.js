@@ -46,15 +46,16 @@
 // through the Master Output bus into engine.master, and that bus is faded, not cut.
 //
 // Owned parameters (docs/v31/compiler.md decision "Automated parameters belong to their lane").
-// An adapter writes all of its node's parameters in applyBase / update (createFilterStage.update
-// re-glides frequency, Q and gain even for a bypass change), so the skip is done on the
-// AudioParam: while the runtime calls applyBase(base, false) or update(changed) on a node with
-// owned keys, the scheduling methods of each owned AudioParam (handle.modTarget(key, 'linear')
-// .param, the one the owner automates) are shadowed by no-ops on that instance and restored
-// right after, synchronously. Every other parameter of the node (its detune, which carries
-// log-mapped modulation offsets, its Q, ...) is applied as before. A node's first applyBase
-// (immediate, the node is still silent) is not skipped: it gives the parameter its initial value
-// and the owner schedules from there.
+// An explicit adapter contract (adapters/nodes.js header): the runtime calls
+// applyBase(base, false, owned) and update(changed, owned) with `owned`, the Set of the node's
+// owned keys whose handle.modTarget(key, 'linear') is an AudioParam (the one the owner
+// automates), and the adapter does not write those AudioParams. Every other parameter of the node
+// (its detune, which carries log-mapped modulation offsets, its Q, ...) is applied as before. A
+// node's first applyBase (immediate, the node is still silent) gets no owned keys: it gives the
+// parameter its initial value and the owner schedules from there. diffPlans receives the same
+// map, so a key whose builder update cannot skip an owned parameter (an adapter's
+// `rebuildWhenOwned`, the filter bypass) rebuilds the node instead. No AudioParam method is ever
+// reassigned.
 
 import { NODE_REGISTRY } from './registry.js';
 import { NODE_ADAPTERS } from './adapters/nodes.js';
@@ -68,11 +69,8 @@ import {
 /** Escape-speed stop (scheduler.js ESCAPE_RELEASE_S). */
 export const STUDIO_FAST_STOP_S = 0.008;
 
-/** AudioParam methods shadowed on an owned parameter while the runtime writes its node. */
-const PARAM_WRITE_METHODS = Object.freeze(['setValueAtTime', 'linearRampToValueAtTime',
-  'exponentialRampToValueAtTime', 'setTargetAtTime', 'setValueCurveAtTime',
-  'cancelScheduledValues', 'cancelAndHoldAtTime']);
-const noop = () => {};
+/** The owned keys of a node no other owner drives (shared, never mutated). */
+const NONE_OWNED = Object.freeze(new Set());
 
 const readOnlyMap = (map) => Object.freeze({
   get: (id) => map.get(id),
@@ -199,31 +197,30 @@ export function createStudioRuntime({
 
   // ------------------------------------------------------------ owned parameters
 
-  /** Run fn with the owned AudioParams of handle `h` unwritable (see the header). */
-  function withOwned(h, fn) {
+  /**
+   * The owned keys of handle `h` that the adapter must not write: those with an AudioParam
+   * (modTarget(key, 'linear').param). A key without one has nothing another owner could drive.
+   */
+  function ownedKeys(h) {
     const keys = h && owned.get(h.id);
-    if (!keys || !keys.size) return fn();
-    const shadowed = [];
+    if (!keys || !keys.size) return NONE_OWNED;
+    const out = new Set();
     for (const key of keys) {
       let target = null;
       try { target = h.modTarget(key, 'linear'); } catch (e) { target = null; }
-      const param = target && target.param;
-      if (!param) continue;
-      for (const m of PARAM_WRITE_METHODS) {
-        if (typeof param[m] !== 'function') continue;
-        const own = Object.prototype.hasOwnProperty.call(param, m);
-        shadowed.push({ param, m, own, prev: own ? param[m] : null });
-        param[m] = noop;
-      }
+      if (target && target.param) out.add(key);
     }
-    try {
-      return fn();
-    } finally {
-      for (const { param, m, own, prev } of shadowed.reverse()) {
-        if (own) param[m] = prev;
-        else delete param[m];
-      }
+    return out.size ? out : NONE_OWNED;
+  }
+
+  /** ownedKeys of every running node, for diffPlans (`rebuildWhenOwned`). */
+  function ownedMap() {
+    const out = new Map();
+    for (const id of owned.keys()) {
+      const keys = ownedKeys(handles.get(id));
+      if (keys.size) out.set(id, keys);
     }
+    return out;
   }
 
   function setOwnedParams(list = []) {
@@ -293,7 +290,7 @@ export function createStudioRuntime({
       for (const [id, h] of created.handles) {
         if (h.status !== 'ready' && h.status !== 'pending') continue;
         const cb = computeBases(next.nodes.get(id), incomingControl(next, id, edgeOf), hooks);
-        h.applyBase(cb.base, true);
+        h.applyBase(cb.base, true, NONE_OWNED);
       }
     } catch (err) {
       for (const eh of created.edges.values()) {
@@ -331,7 +328,7 @@ export function createStudioRuntime({
         if (live.length && h) {
           const changed = {};
           for (const k of live) changed[k] = pn.params[k];
-          guard(`update ${o.id}`, () => withOwned(h, () => h.update(changed)));
+          guard(`update ${o.id}`, () => h.update(changed, ownedKeys(h)));
         }
         if (live.length < o.keys.length) affected.add(o.id);
       } else if (o.op.startsWith('edge-')) {
@@ -348,7 +345,7 @@ export function createStudioRuntime({
       const cb = computeBases(next.nodes.get(id), incomingControl(next, id, edgeOf), hooks);
       bases.set(id, cb);
       if (!created.handles.has(id)) {
-        guard(`parameters ${id}`, () => withOwned(h, () => h.applyBase(cb.base, false)));
+        guard(`parameters ${id}`, () => h.applyBase(cb.base, false, ownedKeys(h)));
       }
       for (const [eid, g] of cb.gains) {
         const eh = edges.get(eid);
@@ -395,7 +392,7 @@ export function createStudioRuntime({
     if (disposed) return fail('validate', 'The Studio runtime is disposed.');
     const next = compileStudio(model, { engine, registry, adapters, options: opts });
     if (!next.ok) return fail('validate', next.errors, { kept: true });
-    const ops = diffPlans(plan, next);
+    const ops = diffPlans(plan, next, { owned: ownedMap() });
     const rev = revision != null ? revision : (compiledRevision == null ? 1 : compiledRevision + 1);
     if (state !== 'running' || !hooks.ctx) {
       plan = next;

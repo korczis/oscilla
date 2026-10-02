@@ -224,18 +224,26 @@ schema version.
 
 | Timeline item | Rendered when |
 | --- | --- |
-| pattern clip | its target is a Sequence node (`compileSequence` into the node's bus) |
+| pattern clip | the live transport plays it (`transport.js clipPlayReason`): on a Sequence (into its bus) or on an Oscillator (pattern-played: carrier held at `ROUTE_FLOOR`, voices into a pattern bus feeding the oscillator's AUDIO routes) |
 | event clip | a gate on an Envelope (the adapter's `gate`) |
-| automation lane | its node is rendered (`applyAutomation` on the lane's AudioParam, the lane owning the base value as decided for live playback) |
+| automation lane | its node is rendered (the lane's AudioParam, owned by the lane, with the modulation edges' constant offsets added, as in live playback) |
 | measurement clip | never: measurements run live through the measurement engine |
+
+The reasons are the transport's (`OFFLINE_TEXT.patternTarget` / `eventTarget` are
+`TRANSPORT_TEXT`'s): a render plays what live playback plays. The Subtractive Synth lists no
+limitation.
 
 Everything not rendered is listed in `limitations`. The duration is explicit or the timeline end
 (`timelineEnd`), at most `DEFAULT_RENDER.maxDuration` (120 s).
 
-`renderStudioOffline(model, opts)` runs the plan's model through the SAME compiler, runtime and
-adapters (`createStudioRuntime`) on `offlineEngine(ctx, master)` — the AudioEngine surface the
-engine hooks use, backed by the OfflineAudioContext and the master gain of
-`audio/offline-renderer.js render()`; `encodeWav` gives the WAV. The Master Output level is the
+`renderStudioOffline(model, opts)` runs the plan's model through the SAME compiler, runtime,
+adapters and transport (`createStudioRuntime`, `createStudioTransport` with a fixed store and
+`lookAheadS` = the render duration, then one `start()`) on `offlineEngine(ctx, master)` — the
+AudioEngine surface the engine hooks use, backed by the OfflineAudioContext and the master gain
+of `audio/offline-renderer.js render()`; `encodeWav` gives the WAV. The scheduled Web Audio trace
+equals live playback's at exact times (`tests/unit/v31-studio-parity.test.mjs`); the result
+carries `debug: { transport, runtime }` (their `debugInfo()` after scheduling) and lists in
+`warnings` anything the transport did not play that the plan did not foresee. The Master Output level is the
 render's output gain, as the sequencer export uses the master gain; the live limiter and ceiling
 are not in the offline chain, so `stats` (`bufferStats`) reports peak and clipping. The graph
 starts at the runtime's click-free start time (scheduling lead + render-quantum boundary,
@@ -281,7 +289,7 @@ controls Filter 1 cutoff. Analysis: Spectrum 1 observes Filter 1 output."
   an unknown field either way. Studio state stays out of `configHash`.
 - `recipeFromStudio` mapping (above), including the engine defaults for `gapS` and aggregation.
 - Offline: a Microphone refuses the whole render (not silently dropped); the Master Output level
-  is the offline output gain; pattern clips render only on Sequence nodes.
+  is the offline output gain; the render plays exactly what the live transport plays.
 - Template hashes pinned in the data; any executed change needs a version bump.
 
 ## What remains
@@ -289,14 +297,11 @@ controls Filter 1 cutoff. Analysis: Spectrum 1 observes Filter 1 output."
 - **Browser verification pending**: `node tests/browser/v31-studio-offline.cjs` (chromium,
   firefox, webkit, file://) was written but not run in this change (the machine was reserved for
   other realtime gates). It asserts the Basic Tone level and frequency, frames, fades, the Sweep
-  Sequence silence and the Measurement Sweep refusal. The unit tests cover the plan and the
+  Sequence silence, the Subtractive Synth's Tone then Sweep content and the Measurement Sweep
+  refusal. The unit tests cover the plan and the
   refusal paths; the render path itself is verified only by that browser test.
 - UI integration: Save/Load/Insert/Replace dialogs, file pickers, the dirty indicator, the
   template picker with Learn text, live-region and aria-label wiring (`src/js/ui`, out of scope).
-- The live runtime does not yet play timeline clips (docs/v31/compiler.md "Integration
-  notes"); pattern clips on an Oscillator (the Subtractive Synth's Tone and Sweep) are therefore
-  a listed offline limitation too. Once the live semantics exist, offline.js should play them
-  the same way.
 - `ports.js portAccessibleLabel` lower-cases every label, so the Q input reads "Filter 1 q
   control input"; a fix belongs in ports.js (all-capital labels should keep their case).
 - Autosave and crash recovery (§155, §157), graph groups (§116-§117), Studio search (§251).

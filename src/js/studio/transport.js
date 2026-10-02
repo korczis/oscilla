@@ -1,7 +1,11 @@
 // The OSCILLA Studio transport (spec §93-§104, §180-§185; V3.1): live timeline playback on the
 // Studio runtime. It plays the store's model — graph and timeline — on the ONE AudioEngine:
 //
-//   createStudioTransport({ runtime, engine, store, onClaimOutput, onMeasurement, registry })
+//   createStudioTransport({ runtime, engine, store, onClaimOutput, onMeasurement, registry,
+//                           lookAheadS })   lookAheadS: the scheduler's window (default
+//                                           TIMELINE_LOOKAHEAD_S); offline.js passes the render
+//                                           length, so one start() schedules the whole render
+//   clipPlayReason(model, clip) -> reason | null   what the transport plays, from the model
 //   transport.start({ position }) -> result     PLAY from `position` (default: the return point)
 //   transport.stop({ fast }) -> Promise<counts>  STOP (§184): release, cancel, hold automation,
 //                                                stop the Studio output; resolves once released
@@ -32,9 +36,12 @@
 //   pattern clip on an Oscillator  the oscillator is pattern-played: its free-running carrier
 //                                is held at ROUTE_FLOOR (its `level` AudioParam is owned by the
 //                                transport) and the voices play into a pattern bus (gain = the
-//                                oscillator's level) connected to every AUDIO route leaving the
-//                                oscillator, so they pass its routes and everything downstream
-//                                (OSC → ADSR → FILTER → MASTER in the Basic Synth)
+//                                oscillator's level + runtime.baseOffset) connected to every
+//                                AUDIO route leaving the oscillator, so they pass its routes and
+//                                everything downstream (OSC → ADSR → FILTER → MASTER in the
+//                                Basic Synth). Modulation edges into its `level` are re-routed
+//                                onto the pattern bus gain (levelMods), so they modulate the
+//                                voices, not the silenced carrier
 //   gate event clip on an Envelope  handle.gate(startTime, duration); an Envelope the timeline
 //                                gates is closed at PLAY (the timeline owns its gate)
 //   automation lane              applyAutomation on handle.modTarget(key, 'linear').param, the
@@ -46,6 +53,9 @@
 // Anything else (an event clip on a source, a trigger event, a node that is not ready) is not
 // played and listed with its reason in debugInfo().unplayed.
 //
+// Offline rendering (offline.js renderStudioOffline) runs THIS transport on the offline context,
+// so a render is what live playback plays: same routing, ownership, gates, lanes and offsets.
+//
 // Exclusivity (decision "Studio output and the Playground voice are exclusive",
 // docs/v31/compiler.md): start() calls onClaimOutput({ owner: 'studio' }) first; the UI stops
 // the Playground voice there through its normal release path. A hook returning false refuses
@@ -55,6 +65,7 @@ import { STOP_PAD_S, compileSequence } from '../sequencer/compiler.js';
 import { NODE_REGISTRY } from './registry.js';
 import { createEngineHooks } from './adapters/engine-hooks.js';
 import { PARAM_TAU_S } from './adapters/nodes.js';
+import { createRamp } from './adapters/ramp.js';
 import { CLEANUP_MARGIN_S, ROUTE_FLOOR, STUDIO_XFADE_S } from './compiler.js';
 import { applyAutomation, paramBounds, scheduledValueAt } from './automation.js';
 import {
@@ -81,9 +92,32 @@ const finite = (v) => typeof v === 'number' && Number.isFinite(v);
 const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 const messageOf = (e) => (e && e.message) || String(e);
 
+const PATTERN_TARGETS = Object.freeze(['sequence', 'oscillator']);
+
+/**
+ * Why the transport does not play a timeline clip, from the model alone (pure): null when it
+ * plays it (a pattern clip on a Sequence or an Oscillator, a gate event on an Envelope, a
+ * measurement clip as data), else the TRANSPORT_TEXT reason. At play time a target that is not
+ * ready is reported too (debugInfo().unplayed). Offline rendering (offline.js) plans with it.
+ */
+export function clipPlayReason(model, clip) {
+  if (clip.kind === 'measurement') return null;
+  const id = effectiveTarget(model, clip);
+  const n = id ? model.graph.nodes.find((x) => x.id === id) || null : null;
+  if (!n) return TRANSPORT_TEXT.noTarget;
+  if (clip.kind === 'pattern') {
+    return PATTERN_TARGETS.includes(n.type) ? null : TRANSPORT_TEXT.patternTarget(n.metadata.name);
+  }
+  if (clip.kind === 'event') {
+    return n.type === 'envelope' && (clip.payload.action || 'gate') === 'gate' ? null
+      : TRANSPORT_TEXT.eventTarget(n.metadata.name);
+  }
+  return null;
+}
+
 export function createStudioTransport({
   runtime, engine, store, onClaimOutput = null, onMeasurement = null,
-  registry = NODE_REGISTRY,
+  registry = NODE_REGISTRY, lookAheadS = null,
 } = {}) {
   if (!runtime || typeof runtime.apply !== 'function') {
     throw new TypeError('createStudioTransport: a Studio runtime is required');
@@ -98,6 +132,9 @@ export function createStudioTransport({
   const measures = new Map(); // item key → measurement data
   const lanes = new Map(); // lane id → { laneId, target, param, handle, events (as applied) }
   const claims = new Map(); // oscillator id → { id, handle, bus, param, level, routes }
+  // Modulation edge gain → { id, handle, toBus, toCarrier, retiredAt }: a CONTROL edge into a
+  // pattern-played oscillator's level, re-routed onto its pattern bus (levelMods).
+  const levelTaps = new Map();
   const gateOwned = new Map(); // envelope id → handle (closed at PLAY, gated by the timeline)
   const unplayed = new Map(); // clip or lane id → reason
   const decisions = [];
@@ -225,6 +262,84 @@ export function createStudioTransport({
     }
   }
 
+  /**
+   * The base level of a pattern-played oscillator: its `level` plus the constant part its
+   * modulation edges add (runtime.baseOffset), as the runtime would apply it to the carrier.
+   */
+  function patternLevel(id) {
+    const n = nodeOf(model, id);
+    const level = n ? n.params.level : 1;
+    const off = typeof runtime.baseOffset === 'function' ? runtime.baseOffset(id, 'level') : 0;
+    return level + off;
+  }
+
+  /**
+   * A path gain with a click-free ramp (adapters/ramp.js): at `from`, ramped to `to` over the
+   * runtime crossfade from `at`; with `at` null (nothing sounds yet) it starts at `to`.
+   */
+  function pathGain(acct, from, to, at) {
+    const ctx = hooks.ctx;
+    const node = acct.track(ctx.createGain());
+    const ramp = createRamp(node.gain, at === null ? to : from, ctx.currentTime, ctx.sampleRate);
+    if (at !== null && from !== to) ramp.to(to, at, STUDIO_XFADE_S);
+    return { node, ramp };
+  }
+
+  /**
+   * Modulation into a pattern-played oscillator's level (docs/v31/timeline.md "Transport
+   * integration"): every active CONTROL edge into its `level` is re-routed from the carrier's
+   * level AudioParam (held at ROUTE_FLOOR) onto the pattern bus gain, so it modulates the voices.
+   * The edge's depth gain feeds two path gains: toBus → bus.gain (1) and toCarrier → the
+   * carrier's level (0). `fadeAt` (a sounding oscillator claimed now): toCarrier ramps 1 → 0 with
+   * the carrier's own fade, so the move is click-free; edges built in this transaction are silent
+   * (their ramp starts at the crossfade time) and move at once. Taps of retired edges leave
+   * after the runtime's crossfade, like the bus routes.
+   */
+  function levelMods(claim, fadeAt = null) {
+    const now = ctxNow();
+    const live = new Set();
+    for (const eh of runtime.edges.values()) {
+      if (eh.toNode !== claim.id || eh.kind !== 'control' || eh.toPort !== 'level'
+        || eh.status !== 'active' || !eh.gain) continue;
+      live.add(eh.gain);
+      let tap = levelTaps.get(eh.gain);
+      if (tap && tap.handle !== claim.handle) tap = null;
+      if (!tap) {
+        const toCarrier = pathGain(claim.handle.acct, 1, 0, fadeAt);
+        const toBus = pathGain(claim.handle.acct, 1, 1, null);
+        eh.gain.connect(toCarrier.node);
+        toCarrier.node.connect(claim.param);
+        try { eh.gain.disconnect(claim.param); } catch (e) { /* not connected directly */ }
+        eh.gain.connect(toBus.node);
+        toBus.node.connect(claim.bus.gain);
+        tap = { id: claim.id, handle: claim.handle, toBus, toCarrier, bus: claim.bus,
+          retiredAt: null };
+        levelTaps.set(eh.gain, tap);
+      } else if (tap.bus !== claim.bus) {
+        // Claimed again: the voices play into a new bus; the carrier path fades out again.
+        try { tap.toBus.node.disconnect(); } catch (e) { /* already disconnected */ }
+        tap.toBus.node.connect(claim.bus.gain);
+        tap.bus = claim.bus;
+        tap.toCarrier.ramp.to(0, fadeAt === null ? hooks.soon() : fadeAt, STUDIO_XFADE_S);
+      }
+      tap.retiredAt = null;
+    }
+    for (const [g, tap] of levelTaps) {
+      if (tap.id !== claim.id || live.has(g)) continue;
+      if (tap.handle !== claim.handle) {
+        levelTaps.delete(g); // the replaced node's taps are disposed with it
+      } else if (tap.retiredAt === null) {
+        tap.retiredAt = now; // the runtime fades the retired edge out, then disposes it
+      } else if (now - tap.retiredAt > STUDIO_XFADE_S + CLEANUP_MARGIN_S) {
+        for (const x of [tap.toBus.node, tap.toCarrier.node]) {
+          try { x.disconnect(); } catch (e) { /* already disconnected */ }
+          tap.handle.acct.untrack(x);
+        }
+        levelTaps.delete(g);
+      }
+    }
+  }
+
   function claimOscillator(id, fresh) {
     const h = ready(id);
     const n = nodeOf(model, id);
@@ -233,16 +348,18 @@ export function createStudioTransport({
     if (!t || !t.param) return null;
     const ctx = hooks.ctx;
     const now = ctx.currentTime;
-    const level = n.params.level;
+    const level = patternLevel(id);
     const bus = h.acct.track(ctx.createGain());
     bus.gain.value = level;
     bus.gain.setValueAtTime(level, now);
     const param = t.param;
+    let fadeAt = null;
     if (fresh) {
       // Built in this transaction: its source starts at the crossfade time, nothing rendered.
       param.setValueAtTime(ROUTE_FLOOR, now);
     } else {
       const s = hooks.soon();
+      fadeAt = s;
       if (typeof param.cancelAndHoldAtTime === 'function') param.cancelAndHoldAtTime(s);
       else param.cancelScheduledValues(s);
       param.setValueAtTime(level, s);
@@ -251,6 +368,7 @@ export function createStudioTransport({
     const claim = { id, handle: h, bus, param, level, routes: new Map() };
     claims.set(id, claim);
     connectRoutes(claim);
+    levelMods(claim, fadeAt);
     return claim;
   }
 
@@ -258,11 +376,14 @@ export function createStudioTransport({
     const c = claims.get(id);
     claims.delete(id);
     if (!c || ready(id) !== c.handle) return; // replaced or gone: its bus went with it
-    const n = nodeOf(model, id);
     const s = hooks.soon();
     c.param.cancelScheduledValues(s);
     c.param.setValueAtTime(ROUTE_FLOOR, s);
-    c.param.linearRampToValueAtTime(n ? n.params.level : c.level, s + STUDIO_XFADE_S);
+    c.param.linearRampToValueAtTime(patternLevel(id), s + STUDIO_XFADE_S);
+    // The modulation returns to the carrier with its level.
+    for (const tap of levelTaps.values()) {
+      if (tap.id === id && tap.handle === c.handle) tap.toCarrier.ramp.to(1, s, STUDIO_XFADE_S);
+    }
   }
 
   function ownEnvelope(id, fresh) {
@@ -396,9 +517,14 @@ export function createStudioTransport({
       unplayed.set(reasonKey, TRANSPORT_TEXT.unavailable(n ? n.metadata.name : target.node));
       return null;
     }
+    const def = registry.param(n.type, target.param);
+    const offset = typeof runtime.baseOffset === 'function'
+      ? runtime.baseOffset(target.node, target.param) : 0;
+    const bounds = def ? paramBounds(def, hooks.ctx.sampleRate) : null;
     const c = claims.get(target.node);
     if (c && c.handle === h && target.param === 'level') {
-      return { param: c.bus.gain, handle: h, offset: 0, bounds: null };
+      // A pattern-played oscillator: its level is the pattern bus (the voices).
+      return { param: c.bus.gain, handle: h, offset, bounds };
     }
     let t = null;
     try { t = h.modTarget(target.param, 'linear'); } catch (e) { t = null; }
@@ -407,11 +533,7 @@ export function createStudioTransport({
         || TRANSPORT_TEXT.noParameter(n.metadata.name, target.param));
       return null;
     }
-    const def = registry.param(n.type, target.param);
-    const offset = typeof runtime.baseOffset === 'function'
-      ? runtime.baseOffset(target.node, target.param) : 0;
-    return { param: t.param, handle: h, offset,
-      bounds: def ? paramBounds(def, hooks.ctx.sampleRate) : null };
+    return { param: t.param, handle: h, offset, bounds };
   }
 
   /** Lane values + the modulation edges' constant offset (exact when there is none). */
@@ -592,10 +714,11 @@ export function createStudioTransport({
         if (h) claimOscillator(id, fresh.has(id));
       } else {
         connectRoutes(c);
-        const n = nodeOf(model, id);
-        if (n && n.params.level !== c.level && !laneOn(id, 'level')) {
-          c.bus.gain.setTargetAtTime(n.params.level, ctxNow(), PARAM_TAU_S);
-          c.level = n.params.level;
+        levelMods(c);
+        const level = patternLevel(id);
+        if (level !== c.level && !laneOn(id, 'level')) {
+          c.bus.gain.setTargetAtTime(level, ctxNow(), PARAM_TAU_S);
+          c.level = level;
         }
       }
     }
@@ -657,7 +780,11 @@ export function createStudioTransport({
     }
     for (const w of r.warnings) warn(w);
     prune(now);
-    for (const c of claims.values()) if (ready(c.id) === c.handle) connectRoutes(c);
+    for (const c of claims.values()) {
+      if (ready(c.id) !== c.handle) continue;
+      connectRoutes(c);
+      levelMods(c);
+    }
     const wake = scheduler.nextWakeMs(now);
     if (wake !== null) {
       arm(wake);
@@ -748,7 +875,7 @@ export function createStudioTransport({
     unplayed.clear();
     playing = true;
     scheduler = createTimelineScheduler(m, { sampleRate: hooks.ctx.sampleRate, baseTime,
-      startPosition: pos, registry });
+      startPosition: pos, registry, lookAheadS });
     afterApply(fresh);
     emit('state', { playing: true });
     tick();
@@ -768,6 +895,7 @@ export function createStudioTransport({
     measures.clear();
     lanes.clear();
     claims.clear();
+    levelTaps.clear();
     gateOwned.clear();
     try { runtime.setOwnedParams([]); } catch (e) { /* disposed */ }
     record({ key: null, decision: 'abort', reason });
@@ -784,6 +912,7 @@ export function createStudioTransport({
     playing = false;
     lanes.clear();
     claims.clear();
+    levelTaps.clear();
     gateOwned.clear();
     runtime.setOwnedParams([]);
     emit('state', { playing: false, reason });
@@ -805,7 +934,7 @@ export function createStudioTransport({
     clearTimer();
     applyStop(scheduler.stop(ctxNow()));
     scheduler = createTimelineScheduler(model, { sampleRate: hooks.ctx.sampleRate,
-      baseTime: hooks.soon(), startPosition: pos, registry });
+      baseTime: hooks.soon(), startPosition: pos, registry, lookAheadS });
     record({ key: null, decision: 'locate', position: pos });
     tick();
     return playhead();

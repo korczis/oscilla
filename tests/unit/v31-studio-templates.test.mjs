@@ -20,6 +20,7 @@ import {
 import {
   OFFLINE_TEXT, offlineEngine, planOfflineRender, renderStudioOffline,
 } from '../../src/js/studio/offline.js';
+import { TRANSPORT_TEXT, clipPlayReason } from '../../src/js/studio/transport.js';
 import { compileStudio } from '../../src/js/studio/compiler.js';
 import { createIdGenerator, createStudioStore } from '../../src/js/studio/actions.js';
 import {
@@ -375,14 +376,18 @@ test('§105 offline plan: live-only Microphone refuses with an explicit limitati
   assert.ok(p.clips.every((c) => !c.rendered && c.reason === OFFLINE_TEXT.measurementClip));
 });
 
-test('§105 offline plan: unsupported clips are listed, the rest still renders', () => {
+test('§105 offline plan: what the transport plays renders, the rest is listed', () => {
+  // The Subtractive Synth (Basic Synth): Tone and Sweep on the pattern-played Oscillator and the
+  // cutoff lane render as the live transport plays them; nothing is listed.
   const p = planOfflineRender(templateModel('subtractive-synth'));
   assert.strictEqual(p.ok, true);
   assert.strictEqual(p.duration, 3);
-  assert.deepStrictEqual(p.limitations, [
-    `Clip clip-1: ${OFFLINE_TEXT.patternTarget('Oscillator 1')}`,
-    `Clip clip-2: ${OFFLINE_TEXT.patternTarget('Oscillator 1')}`]);
+  assert.deepStrictEqual(p.limitations, []);
+  assert.deepStrictEqual(p.clips.map((c) => [c.id, c.target, c.rendered, c.reason]), [
+    ['clip-1', 'osc-1', true, null], ['clip-2', 'osc-1', true, null]]);
   assert.strictEqual(p.automation[0].rendered, true);
+  assert.strictEqual(OFFLINE_TEXT.patternTarget, TRANSPORT_TEXT.patternTarget,
+    'the transport\'s reasons');
   // A gate event on an Envelope renders; a Recorder sets the format; late clips are noted.
   const m = raw([n('osc-1', 'oscillator'), n('env-1', 'envelope'), n('master-1', 'master'),
     n('rec-1', 'recorder', { sampleRate: 44100, channels: 1 })], [
@@ -392,13 +397,18 @@ test('§105 offline plan: unsupported clips are listed, the rest still renders',
     tracks: [{ id: 'track-1', kind: 'event', name: 'Gates', target: 'env-1' }],
     clips: [{ id: 'clip-1', trackId: 'track-1', kind: 'event', start: 0, duration: 0.5,
       payload: { action: 'gate' } }, { id: 'clip-2', trackId: 'track-1', kind: 'event',
-      start: 3, duration: 0.5, payload: { action: 'gate' } }] });
+      start: 3, duration: 0.5, payload: { action: 'gate' } }, { id: 'clip-3',
+      trackId: 'track-1', kind: 'event', start: 1, duration: 0.1,
+      payload: { action: 'trigger' } }] });
   const q = planOfflineRender(m, { duration: 2 });
   assert.strictEqual(q.ok, true);
   assert.deepStrictEqual(q.render, { sampleRate: 44100, channels: 1 });
+  const trigger = TRANSPORT_TEXT.eventTarget('Envelope 1');
   assert.deepStrictEqual(q.clips.map((c) => [c.id, c.rendered, c.reason]), [
-    ['clip-1', true, null], ['clip-2', false, OFFLINE_TEXT.afterEnd]]);
-  assert.deepStrictEqual(q.limitations, []);
+    ['clip-1', true, null], ['clip-2', false, OFFLINE_TEXT.afterEnd],
+    ['clip-3', false, trigger]]);
+  assert.deepStrictEqual(q.limitations, [`Clip clip-3: ${trigger}`]);
+  assert.strictEqual(clipPlayReason(m, m.timeline.clips[2]), trigger, 'as the transport says');
   assert.strictEqual(q.nodes.find((x) => x.id === 'rec-1').reason, OFFLINE_TEXT.format);
 });
 

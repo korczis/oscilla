@@ -17,11 +17,15 @@
 //     PlanEdge = { id, kind: 'audio' | 'control' | 'trigger' | 'analysis', from, to, fromPort,
 //                  toPort, paramDef, props (complete), status: 'active' | 'inactive' |
 //                  'logical' | 'data', reason }
-//   diffPlans(prev, next) -> [op]              the minimal patch (§44), deterministic order
+//   diffPlans(prev, next, { owned }) -> [op]   the minimal patch (§44), deterministic order;
+//     owned: Map<node id, Set<param key>> of parameters another owner drives (runtime
+//     setOwnedParams): a change of an adapter's `rebuildWhenOwned` key on such a node is a
+//     node-replace (see diffPlans)
 //     op = { op: 'node-add' | 'node-remove' | 'node-replace' | 'node-params', id, keys? }
 //        | { op: 'edge-add' | 'edge-remove' | 'edge-rewire' | 'edge-props', id, keys? }
 //   instantiateNode(planNode, ctxEnv) -> handle      (adapters/nodes.js handle + bookkeeping)
-//   createEdgeHandle(planEdge, fromHandle, toHandle, ctxEnv) -> edge handle (gain at 0)
+//   createEdgeHandle(planEdge, fromHandle, toHandle, ctxEnv) -> edge handle (gain at 0;
+//                                                      fromNode, toNode, toPort, kind, gain)
 //   computeBases(planNode, incoming, hooks) -> { base, gains, limited, exceeds }
 //   disposeHandle(handle, acct)                       stop, disconnect, untrack
 //
@@ -196,9 +200,12 @@ const changedKeys = (a, b) => [...new Set([...Object.keys(a), ...Object.keys(b)]
  * is `node-params` unless it touches a structural key of its adapter (`node-replace`); edges of
  * a replaced node are `edge-rewire` (rebuilt and crossfaded); a modulation edge whose mapping
  * changes is rewired (it targets another AudioParam); other edge property changes are
- * `edge-props`.
+ * `edge-props`. `owned` (Map node id → Set of owned parameter keys): on a node with an owned
+ * parameter, a change of one of its adapter's `rebuildWhenOwned` keys is a `node-replace` too —
+ * the builder's live update for that key rewrites every parameter and cannot skip an owned one
+ * (adapters/nodes.js, the owned-parameter contract).
  */
-export function diffPlans(prev, next) {
+export function diffPlans(prev, next, { owned = null } = {}) {
   const ops = [];
   const replaced = new Set();
   const removed = new Set();
@@ -212,7 +219,10 @@ export function diffPlans(prev, next) {
     }
     const keys = changedKeys(p.params, n.params);
     if (!keys.length) continue;
-    const structural = n.adapter ? keys.filter((k) => n.adapter.structural.includes(k)) : keys;
+    const ownedHere = !!(owned && owned.get(id) && owned.get(id).size);
+    const rebuild = ownedHere && n.adapter ? n.adapter.rebuildWhenOwned || [] : [];
+    const structural = n.adapter ? keys.filter((k) => n.adapter.structural.includes(k)
+      || rebuild.includes(k)) : keys;
     if (structural.length) {
       replaced.add(id);
       ops.push({ op: 'node-replace', id, keys });
@@ -299,7 +309,8 @@ export function disposeHandle(handle) {
  */
 export function createEdgeHandle(planEdge, fromHandle, toHandle, ctxEnv) {
   const base = { id: planEdge.id, kind: planEdge.kind, fromNode: planEdge.from.node,
-    toNode: planEdge.to.node, gain: null, ramp: null, scale: 1, range: null, dispose() {} };
+    toNode: planEdge.to.node, toPort: planEdge.to.port, gain: null, ramp: null, scale: 1,
+    range: null, dispose() {} };
   if (planEdge.status !== 'active') {
     return { ...base, status: planEdge.status, reason: planEdge.reason };
   }

@@ -17,7 +17,8 @@ The first four are pure: no DOM, no Web Audio objects, no clock, no timers. The 
 the runtime own the AudioContext side and apply what they return; `AudioContext.currentTime` is
 the only time authority (§94, §181, project rule `audio-engine-discipline`). Tests:
 `tests/unit/v31-studio-transport.test.mjs` (fake AudioContext under the real AudioEngine, one
-virtual clock) and `tests/browser/v31-studio-transport.cjs` (real Web Audio).
+virtual clock), `tests/unit/v31-studio-parity.test.mjs` (offline/live parity, owned parameters,
+modulation into a pattern level) and `tests/browser/v31-studio-transport.cjs` (real Web Audio).
 
 ## Tracks and clips (§81-§84)
 
@@ -308,9 +309,9 @@ What plays where:
 | Timeline content | Played as |
 | --- | --- |
 | pattern clip on a Sequence | `compileSequence(item.sequence, ctx, handle.info.destination, item.startTime, { track, source, timers })` with the node's accounting; a finished voice untracks its nodes at once (`onEnded`), so a long loop never accumulates. The Sequence's TRIGGER edges into an Envelope `gate` gate that envelope for the clip |
-| pattern clip on an Oscillator | the oscillator is **pattern-played**: its free-running carrier is held at `ROUTE_FLOOR` (its `level` AudioParam is owned by the transport; built in this transaction → set at once, already sounding → 20 ms ramp) and the voices (the oscillator's waveform, `clipSequence`) play into a pattern bus (gain = the oscillator's level) connected to every AUDIO route leaving the oscillator. They pass its routes, crossfades included, and everything downstream (OSC → ADSR → FILTER → MASTER in the Basic Synth). A level change glides the bus; a lane on the oscillator's level drives the bus |
+| pattern clip on an Oscillator | the oscillator is **pattern-played**: its free-running carrier is held at `ROUTE_FLOOR` (its `level` AudioParam is owned by the transport; built in this transaction → set at once, already sounding → 20 ms ramp) and the voices (the oscillator's waveform, `clipSequence`) play into a pattern bus (gain = the oscillator's level + `runtime.baseOffset(id, 'level')`, the base the runtime would give the carrier) connected to every AUDIO route leaving the oscillator. They pass its routes, crossfades included, and everything downstream (OSC → ADSR → FILTER → MASTER in the Basic Synth). A level change glides the bus; a lane on the oscillator's level drives the bus (offsets added). **Modulation into its `level`** reaches the voices: every active CONTROL edge into `level` is re-routed from the carrier's level AudioParam onto the pattern bus gain — the edge's depth gain feeds a path gain into the bus (1) and one into the carrier's level (0). Claiming an oscillator that already sounds ramps the carrier path 1 → 0 together with the carrier's own 20 ms fade, releasing it ramps it 0 → 1 with the carrier's fade-in (click-free both ways); edges built during playback are silent when they are re-routed. Depth, polarity and offset edits keep acting on the edge (its gain, the bus base) |
 | gate event clip on an Envelope | `handle.gate(startTime, duration)`; an envelope the timeline gates is closed at PLAY (`release`) and opened again when no gate clip targets it any more |
-| automation lane | `applyAutomation(handle.modTarget(param, 'linear').param, events)`; the parameter is owned (`runtime.setOwnedParams`), so the runtime's base glide and live updates skip it; `runtime.baseOffset` (linear modulation offsets) is added to the scheduled values (none in the templates: exact events) |
+| automation lane | `applyAutomation(handle.modTarget(param, 'linear').param, events)`; the parameter is owned (`runtime.setOwnedParams`), so the runtime's base glide and live updates skip it (the adapters' explicit `owned` argument, `docs/v31/compiler.md` "Owned parameters"); `runtime.baseOffset` (linear modulation offsets) is added to the scheduled values (none in the templates: exact events) |
 | measurement clip | data only: `onMeasurement({ type: 'schedule', key, clipId, action, target, trackId, pass, position, startTime, endTime, duration, truncated })`, then `cancel` / `release` / `retime` / `stop` events; the V3 measurement engine integration is a later UI step |
 | anything else | not played; listed in `debugInfo().unplayed` with its reason (`TRANSPORT_TEXT`): an event clip on a source, a `trigger` event clip, a target that is not ready |
 
@@ -327,13 +328,28 @@ through `runtime.apply` first; then:
   the new node by the edit (future items are always rescheduled), with its new waveform;
 - an envelope whose gates changed is re-rendered from the horizon: held (or released when no
   gate is sounding), the sounding gate's release, every later gate again. A gate interrupted in
-  its attack by such an edit is held at its value at the horizon (a flattened attack, no step).
+  its attack by such an edit is held at its value at the horizon (a flattened attack, no step);
+- a filter bypass (`enabled`) change while one of its parameters is owned rebuilds the filter
+  (`rebuildWhenOwned`: `createFilterStage.update` would re-glide the owned cutoff); the bypass
+  is then the runtime's 20 ms route crossfade instead of the stage's internal one, and the lane
+  continues on the new biquad from the horizon (`rebind`).
 
-Known limitations: offline rendering (`offline.js`) does not play pattern clips on an
-Oscillator yet (it lists them as limitations), so the live and the rendered result of the Basic
-Synth template differ until it reuses the same claim; a modulation edge into a pattern-played
-oscillator's `level` modulates the silenced carrier, not the voices; `baseOffset` is read when
-events are scheduled, so a changed edge offset reaches the lane within one look-ahead (1 s).
+**Offline rendering is this transport.** `renderStudioOffline` (`offline.js`) builds the
+runtime on the offline engine, creates the transport with a fixed store and `lookAheadS` = the
+render duration, and calls `start()`: the one start schedules every item and automation event
+that begins inside the render, with the same anchor (the runtime's start time) and the same
+routing as live playback — pattern-played oscillators, gates, owned lanes, constant modulation
+offsets, modulation into a pattern level. `planOfflineRender` classifies clips with the
+transport's `clipPlayReason`, so the plan lists exactly what the transport would not play (the
+Basic Synth / Subtractive Synth lists nothing). `tests/unit/v31-studio-parity.test.mjs` compares
+the complete scheduled Web Audio trace of the Subtractive Synth, live and offline, at exact
+times.
+
+Known limitations: `baseOffset` is read when events are scheduled, so a changed edge offset
+reaches the lane within one look-ahead (1 s); a lane on an Oscillator's `detune` owns the
+oscillator's `detune` AudioParam, which also carries the log-mapped frequency modulation's
+constant cents (the runtime does not rewrite it while the lane plays); an offline render of a
+looping timeline compiles at most `MAX_PASSES_PER_WINDOW` (4096) loop passes.
 
 ## Model and action additions
 

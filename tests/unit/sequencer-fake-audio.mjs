@@ -71,6 +71,7 @@ class FakeNode {
     this.channelCount = 2;
     this.channelCountMode = 'max';
     this.channelInterpretation = 'speakers';
+    this.createdAt = ctx.currentTime; // the context clock when the node was built
     ctx.created.push(this);
   }
 

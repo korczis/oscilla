@@ -1,7 +1,8 @@
 // Offline rendering of a Studio (spec §105, §175-§176; plan issue V427). The plan is pure;
-// the renderer runs the SAME Studio compiler, runtime and node adapters on an
-// OfflineAudioContext through the existing audio/offline-renderer.js path, so a WAV export is
-// the compiled graph, rendered — never a second engine (§42).
+// the renderer runs the SAME Studio compiler, runtime, node adapters AND transport
+// (transport.js) on an OfflineAudioContext through the existing audio/offline-renderer.js path,
+// so a WAV export is what live playback plays, rendered — never a second engine (§42) and never
+// a second copy of the timeline routing.
 //
 //   planOfflineRender(model, { duration, registry }) -> plan
 //     plan = { ok, refused, duration, render: { sampleRate, channels }, errors: [Diagnostic],
@@ -14,13 +15,20 @@
 //     a render without them would not be the graph the user built. Analysis views and
 //     measurement data nodes are skipped (they observe, they do not sound). The Recorder sets
 //     the render format (its sample rate and channels; DEFAULT_RENDER otherwise).
-//     Timeline: pattern clips render on Sequence nodes (sequencer/compiler.js compileSequence),
-//     gate events on Envelopes (adapter gate), automation lanes on their AudioParam
-//     (automation.js applyAutomation). Pattern clips on other targets and measurement clips are
-//     listed as limitations: the runtime does not play them either.
+//     Timeline: exactly what the live transport plays (transport.js clipPlayReason): pattern
+//     clips on a Sequence (into its bus) or on an Oscillator (pattern-played: carrier held at
+//     ROUTE_FLOOR, voices into a pattern bus feeding the oscillator's AUDIO routes), gate events
+//     on Envelopes, automation lanes on their AudioParam with the parameter owned by the lane and
+//     the modulation edges' constant offsets added. Everything else is listed as a limitation
+//     with the transport's reason; measurement clips run live through the measurement engine.
 //   renderStudioOffline(model, { duration, sampleRate, channels, OfflineAudioContext, wav })
-//     -> Promise<{ ok: true, plan, buffer, stats, wav, warnings, startTime }>
+//     -> Promise<{ ok: true, plan, buffer, stats, wav, warnings, startTime,
+//                  debug: { transport, runtime } (their debugInfo() after scheduling) }>
 //        | { ok: false, plan, errors, limitations }
+//     Playback: createStudioTransport on the offline engine with a fixed store and
+//     lookAheadS = the render duration, then transport.start(): the one start schedules every
+//     item and automation event that begins inside the render, in one pass, with the times the
+//     live transport schedules them at (the anchor is the runtime's start time in both).
 //     Level: the Master Output level is the render's output gain (as the sequencer export uses
 //     the master gain, sequencer/compiler.js renderSequenceOffline); the live limiter and
 //     ceiling are not in the offline chain, so `stats` reports peak and clipping instead
@@ -31,14 +39,12 @@
 import { DEFAULT_RENDER, bufferStats, normalizeRenderOptions, render } from
   '../audio/offline-renderer.js';
 import { encodeWav } from '../audio/wav.js';
-import { compileSequence } from '../sequencer/compiler.js';
 import { MAX_OUTPUT_GAIN } from '../core/constants.js';
 import { NODE_REGISTRY } from './registry.js';
 import { validateStudioModel } from './validate.js';
 import { createStudioRuntime } from './runtime.js';
 import { STUDIO_STOP_S } from './compiler.js';
-import { compileTimeline } from './timeline-compiler.js';
-import { applyAutomation } from './automation.js';
+import { TRANSPORT_TEXT, clipPlayReason, createStudioTransport } from './transport.js';
 import { effectiveTarget, timelineEnd } from './timeline.js';
 
 /** Reasons, as shown to the user. */
@@ -50,10 +56,10 @@ export const OFFLINE_TEXT = Object.freeze({
   format: 'Sets the format of the rendered file.',
   noDuration: 'Give a render duration: the Studio has no timeline to measure it from.',
   tooLong: (max) => `A render is limited to ${max} s.`,
-  patternTarget: (name) => `Pattern clips play through a Sequence node; this clip on ${name} is `
-    + 'not rendered.',
-  eventTarget: (name) => `Only gate events on an Envelope are rendered; this clip on ${name} is `
-    + 'not.',
+  // The transport's own reasons: a render plays what live playback plays.
+  noTarget: TRANSPORT_TEXT.noTarget,
+  patternTarget: TRANSPORT_TEXT.patternTarget,
+  eventTarget: TRANSPORT_TEXT.eventTarget,
   measurementClip: 'Measurement clips run live through the measurement engine; not rendered.',
   afterEnd: 'Starts after the end of the render.',
   nodeNotRendered: (name) => `${name} is not rendered.`,
@@ -121,15 +127,13 @@ export function planOfflineRender(model, { duration = null, registry = NODE_REGI
     const targetId = effectiveTarget(model, c);
     const target = targetId ? byId.get(targetId) : null;
     const name = target ? target.metadata.name : 'no target';
-    let reason = null;
-    if (c.kind === 'measurement') reason = OFFLINE_TEXT.measurementClip;
-    else if (c.kind === 'pattern' && (!target || target.type !== 'sequence')) {
-      reason = OFFLINE_TEXT.patternTarget(name);
-    } else if (c.kind === 'event' && (!target || target.type !== 'envelope'
-      || (c.payload.action || 'gate') !== 'gate')) {
-      reason = OFFLINE_TEXT.eventTarget(name);
-    } else if (!rendered.has(targetId)) reason = OFFLINE_TEXT.nodeNotRendered(name);
-    else if (plan.duration != null && c.start >= plan.duration) reason = OFFLINE_TEXT.afterEnd;
+    // What the live transport does not play is not rendered either, with the same reason.
+    let reason = c.kind === 'measurement' ? OFFLINE_TEXT.measurementClip
+      : clipPlayReason(model, c);
+    if (!reason && !rendered.has(targetId)) reason = OFFLINE_TEXT.nodeNotRendered(name);
+    if (!reason && plan.duration != null && c.start >= plan.duration) {
+      reason = OFFLINE_TEXT.afterEnd;
+    }
     plan.clips.push({ id: c.id, kind: c.kind, target: targetId, rendered: !reason, reason });
     if (reason && reason !== OFFLINE_TEXT.afterEnd) {
       plan.limitations.push(`Clip ${c.id}: ${reason}`);
@@ -151,7 +155,8 @@ export function planOfflineRender(model, { duration = null, registry = NODE_REGI
 /**
  * The AudioEngine surface the Studio runtime uses (adapters/engine-hooks.js), backed by an
  * OfflineAudioContext and the offline renderer's master gain. Timers run nothing: offline,
- * deferred disposal is unnecessary (the context is discarded after rendering).
+ * deferred disposal is unnecessary (the context is discarded after rendering), and the
+ * transport's bookkeeping wake-up is never needed (its first window covers the render).
  */
 export function offlineEngine(ctx, master) {
   const nodes = new Set();
@@ -176,6 +181,16 @@ export function offlineEngine(ctx, master) {
   };
 }
 
+/** A read-only Studio store holding one model (the transport's store surface). */
+function fixedStore(model) {
+  return Object.freeze({
+    getModel: () => model,
+    getRevision: () => 0,
+    dispatch: () => ({ ok: false, errors: [{ code: 'read-only', severity: 'error', path: '',
+      message: 'An offline render does not change the model.' }] }),
+  });
+}
+
 /** Render `model` offline (see the header). Rejects only on a browser/render failure. */
 export async function renderStudioOffline(model, opts = {}) {
   const plan = planOfflineRender(model, { duration: opts.duration ?? null,
@@ -187,44 +202,30 @@ export async function renderStudioOffline(model, opts = {}) {
   const o = normalizeRenderOptions({ duration: plan.duration,
     sampleRate: opts.sampleRate ?? plan.render.sampleRate,
     channels: opts.channels ?? plan.render.channels });
-  const renderedClips = new Set(plan.clips.filter((c) => c.rendered).map((c) => c.id));
-  const renderedLanes = new Set(plan.automation.filter((a) => a.rendered).map((a) => a.id));
   const warnings = [...plan.warnings];
+  const planned = new Set(plan.limitations);
   let startTime = null;
+  let debug = null;
   const build = (ctx, master, { duration }) => {
     const engine = offlineEngine(ctx, master);
     const runtime = createStudioRuntime({ engine, registry: opts.registry });
-    const applied = runtime.apply(model);
-    if (!applied.ok) throw new Error(applied.errors[0].message);
-    const started = runtime.start();
-    if (!started.ok) throw new Error(started.errors[0].message);
-    warnings.push(...(started.warnings || []));
-    const t0 = started.at;
+    // The live transport, on the offline context: one start schedules the whole render.
+    const transport = createStudioTransport({ runtime, engine, store: fixedStore(model),
+      registry: opts.registry, lookAheadS: duration });
+    transport.on((type, detail) => { if (type === 'warning') warnings.push(detail); });
+    const started = transport.start();
+    if (!started.ok) throw new Error(started.reason);
+    const t0 = started.baseTime;
     startTime = t0;
-    const tl = compileTimeline(model, { sampleRate: ctx.sampleRate, baseTime: t0 });
-    warnings.push(...tl.warnings);
-    for (const item of tl.items) {
-      if (!renderedClips.has(item.clipId) || item.startTime >= duration) continue;
-      const h = runtime.nodes.get(item.target);
-      if (!h || h.status !== 'ready') continue;
-      if (item.type === 'pattern' && h.info && h.info.destination) {
-        compileSequence(item.sequence, ctx, h.info.destination, item.startTime,
-          { timers: null, waveform: h.info.waveform });
-      } else if (item.type === 'event' && typeof h.gate === 'function') {
-        h.gate(item.startTime, item.duration);
-      }
+    const rd = runtime.debugInfo();
+    warnings.push(...rd.warnings);
+    const td = transport.debugInfo();
+    for (const { id, reason } of td.unplayed) {
+      const line = model.timeline.automation.some((l) => l.id === id)
+        ? `Automation ${id}: ${reason}` : `Clip ${id}: ${reason}`;
+      if (!planned.has(line)) warnings.push(line);
     }
-    for (const lane of tl.automation) {
-      if (!renderedLanes.has(lane.laneId)) continue;
-      const h = runtime.nodes.get(lane.target.node);
-      const t = h && h.status === 'ready' ? h.modTarget(lane.target.param, 'linear') : null;
-      if (!t || !t.param) {
-        warnings.push(`Automation ${lane.laneId}: ${t && t.reason ? t.reason
-          : 'no parameter to automate'}`);
-        continue;
-      }
-      applyAutomation(t.param, lane.events.filter((e) => e.time < duration), { cancelFrom: t0 });
-    }
+    debug = { transport: td, runtime: rd };
     // Fade the output out before the end of the buffer (no truncation click).
     const level = master.gain.value;
     const fadeAt = Math.max(t0, duration - STUDIO_STOP_S);
@@ -234,5 +235,6 @@ export async function renderStudioOffline(model, opts = {}) {
   const buffer = await render(build, { duration: o.duration, sampleRate: o.sampleRate,
     channels: o.channels, OfflineAudioContext: opts.OfflineAudioContext });
   return { ok: true, plan, buffer, stats: bufferStats(buffer),
-    wav: opts.wav ? encodeWav(buffer) : null, warnings: [...new Set(warnings)], startTime };
+    wav: opts.wav ? encodeWav(buffer) : null, warnings: [...new Set(warnings)], startTime,
+    debug };
 }

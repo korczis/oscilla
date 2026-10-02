@@ -51,6 +51,21 @@ window.T = {
       channels: b.numberOfChannels, stats: r.stats, startTime: r.startTime, firstSample: first,
       tailMax, limitations: r.plan.limitations, wavBytes: r.wav ? r.wav.byteLength : null };
     if (opts.probe === 'tone') out.a440 = amplitudeAt(slice(b, 0.2, 0.8), 440, b.sampleRate);
+    if (opts.probe === 'synth') {
+      // Subtractive Synth: Tone 220 Hz at 0-1 s, then the log Sweep 220 → 880 Hz at 1-3 s
+      // (f(p) = 220·4^((p − 1)/2): 311 Hz at 1.5 s, 440 Hz at 2.0 s), positions from the
+      // render's start time. 50 ms windows inside the sweep (its frequency moves ±11 Hz there).
+      const st = r.startTime;
+      const sr = b.sampleRate;
+      const tone = slice(b, st + 0.2, st + 0.8);
+      const s15 = slice(b, st + 1.475, st + 1.525);
+      const s20 = slice(b, st + 1.975, st + 2.025);
+      out.synth = {
+        tone220: amplitudeAt(tone, 220, sr), tone311: amplitudeAt(tone, 311, sr),
+        s15f311: amplitudeAt(s15, 311, sr), s15f220: amplitudeAt(s15, 220, sr),
+        s20f440: amplitudeAt(s20, 440, sr), s20f220: amplitudeAt(s20, 220, sr),
+      };
+    }
     if (opts.probe === 'gap') {
       out.rmsSweep = rms(slice(b, 0.5, 1.5));
       out.rmsGap = rms(slice(b, 2.15, 2.35));

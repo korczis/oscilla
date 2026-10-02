@@ -120,6 +120,7 @@ never stored in it or in Alpine state.
 | --- | --- | --- |
 | parameter value | `node-params` | modulatable keys: base re-computed and glided (`setTargetAtTime`, τ 15 ms, as `engine.updateLive`); other keys: the builder's own `update` (filter bypass crossfade, noise colour crossfade, router glide, analyser size, engine master gain) |
 | structural key (`waveform`, LFO `shape`, filter `type`, every sweep parameter, Random `seed`/`smooth`, Steps `steps`/`playback`, RTA averaging) or status change | `node-replace` | a new node is built and its edges are `edge-rewire`d: crossfade old → new |
+| an adapter's `rebuildWhenOwned` key (filter `enabled`) on a node with an owned parameter | `node-replace` | as above: the builder's live update cannot skip the owned parameter |
 | node added / removed | `node-add` / `node-remove` | built silent and faded in / routes faded out, sources stopped after the fade, disposed |
 | edge added / removed | `edge-add` / `edge-remove` | route gain 0 → 1 / → floor, then disconnected |
 | edge endpoints moved | `edge-remove` + `edge-add` | crossfade |
@@ -212,17 +213,28 @@ method (an engine change, out of this issue's scope):
 - **Owned parameters** (the decision "Automated parameters belong to their lane", wired):
   `runtime.setOwnedParams([{ node, param }])` names the parameters another owner drives (the
   transport: every automation lane's target, and the `level` of a pattern-played Oscillator);
-  `runtime.ownedParams()` lists them and `debugInfo().ownedParams` shows them. An adapter writes
-  all of its node's parameters in `applyBase` / `update` (`createFilterStage.update` re-glides
-  frequency, Q and gain even for a bypass toggle), so the skip is done on the AudioParam: while
-  the runtime calls `applyBase(base, false)` or `update(changed)` on a node with owned keys, the
-  scheduling methods of each owned AudioParam (`handle.modTarget(key, 'linear').param`, the one
-  the lane automates) are shadowed by no-ops on that instance and restored right after,
-  synchronously. The node's other parameters (its `detune`, which carries log-mapped
-  modulation offsets; its Q) are applied as before. A node's first `applyBase` (immediate, the
-  node is still silent) is not skipped: it gives the parameter its initial value and the lane
-  schedules from there. Additive: with no owned parameters the runtime behaves exactly as
-  before.
+  `runtime.ownedParams()` lists them and `debugInfo().ownedParams` shows them. The skip is an
+  explicit adapter contract (`adapters/nodes.js` header), no AudioParam method is ever
+  reassigned:
+  - the runtime calls `applyBase(base, false, owned)` and `update(changed, owned)`, where
+    `owned` is the Set of the node's owned keys whose `handle.modTarget(key, 'linear').param`
+    exists (the AudioParam the owner automates; a key without one has nothing to own, e.g. the
+    Q of a low-pass filter);
+  - the adapter does not write that AudioParam and writes every other parameter as before (an
+    Oscillator's `detune`, which carries log-mapped modulation offsets, stays written while its
+    `frequency` is owned; an owned `detune` owns them too). A node's first `applyBase`
+    (immediate, the node is still silent) gets no owned keys: it gives the parameter its initial
+    value and the lane schedules from there;
+  - the Filter's `createFilterStage.update` writes frequency, Q and gain together: with an owned
+    key the adapter applies the others itself with the stage's glide (τ 10 ms), clamp
+    (`normalizeFilter`) and Q conversion (`nodeQ`), and always hands the stage the full base
+    later, so its config catches up. The bypass (`update({ enabled })`) cannot be applied
+    without re-gliding all three, so the adapter names `enabled` in `rebuildWhenOwned` and
+    `diffPlans(prev, next, { owned })` turns a bypass change on a filter with an owned parameter
+    into a `node-replace` (graph crossfade; the transport rebinds the lane on the new biquad);
+  - additive: with no owned parameters every adapter writes exactly what it wrote before.
+  `tests/unit/v31-studio-parity.test.mjs` asserts that no AudioParam method is reassigned
+  during playback with edits on owned nodes.
 - `runtime.baseOffset(id, key)` is the constant part the modulation edges add to a parameter's
   base (linear edges: unipolar polarity, `offset`), in the parameter's unit. The lane owns the
   intrinsic value, so the transport adds it to the values it schedules (actual = base +
@@ -231,6 +243,10 @@ method (an engine change, out of this issue's scope):
 - Pattern clips play into `nodes.get(sequenceId).info.destination` with the handle's accounting
   (`handle.acct`, whose `track` / `source` are `info.accounting`), or, on an Oscillator, into a
   pattern bus routed into the oscillator's AUDIO routes (`runtime.edges`, `fromNode`, `gain`).
+  CONTROL edges into a pattern-played oscillator's `level` (`toNode`, `toPort`, `gain`) are
+  re-routed by the transport onto that bus gain (docs/v31/timeline.md "Transport integration").
+- Offline rendering (`offline.js`) runs the same runtime AND transport on the offline engine
+  (`lookAheadS` = the render duration), so a render schedules exactly what live playback does.
   Envelopes are gated through `handle.gate(t, durS)`; the Envelope adapter additionally exposes
   `release(t)` (gate off from the current contour, `envelope.js releaseAt`) and `hold(t)`
   (`holdAt`: drop everything after t), which the transport uses to close a timeline-gated
@@ -239,6 +255,20 @@ method (an engine change, out of this issue's scope):
   degraded microphones become `node-replace`d and open the input.
 - Output exclusivity is the transport's `onClaimOutput` hook (below); `engine.stopAll()` still
   does not reach the Studio graph, so the UI's Escape goes through `transport.escape()`.
+
+## Known limitations
+
+- Resolved: owned parameters no longer shadow AudioParam methods (explicit `owned` argument,
+  above); offline rendering no longer differs from live playback (pattern clips on an
+  Oscillator, gate events, lanes, owned parameters and constant modulation offsets all render
+  through the transport); modulation into a pattern-played oscillator's `level` modulates the
+  voices, not the silenced carrier.
+- A Filter's stage config (`stage.config`, `getResponse`'s probe) keeps the last base the
+  runtime applied through `createFilterStage.update` while an owner drives one of its
+  parameters; it catches up at the next stage update. The Studio does not read it.
+- A filter bypass change under an owned parameter is a graph crossfade (rebuild, 20 ms linear)
+  rather than the stage's own dry/wet crossfade.
+- `engine.stopAll()` does not reach the Studio graph (Engine hooks, above).
 
 ## Decisions (recorded with `majordomus decision add`, 2026-10-02)
 
