@@ -370,6 +370,78 @@
   font-size: var(--osc-fs-xs);
 }
 
+/* About: build provenance (version, commit, channel, source digest). */
+.osc-about-build {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  font-size: var(--osc-fs-sm);
+}
+
+.osc-about-build > div {
+  display: grid;
+  grid-template-columns: 110px minmax(0, 1fr);
+  gap: 10px;
+}
+
+.osc-about-build dt {
+  color: var(--osc-text-2);
+}
+
+.osc-about-build dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.osc-about-digest {
+  font-family: var(--osc-font-mono);
+  font-size: var(--osc-fs-xs);
+}
+
+/* ?debug=1 only: provenance and live engine state, above the status bar. */
+.osc-debug-panel {
+  position: fixed;
+  right: 8px;
+  bottom: calc(var(--osc-statusbar-h) + 8px);
+  z-index: 40;
+  width: min(380px, calc(100vw - 16px));
+  max-height: 60vh;
+  padding: 8px 10px;
+  overflow: auto;
+  border: 1px solid var(--osc-border-strong);
+  border-radius: var(--osc-radius-sm);
+  background: var(--osc-surface-1);
+  color: var(--osc-text);
+  font-size: var(--osc-fs-xs);
+}
+
+.osc-debug-title {
+  margin: 0 0 4px;
+  font-size: var(--osc-fs-sm);
+  font-weight: var(--osc-fw-semibold);
+}
+
+.osc-debug-list {
+  margin: 0;
+}
+
+.osc-debug-list > div {
+  display: grid;
+  grid-template-columns: 120px minmax(0, 1fr);
+  gap: 8px;
+}
+
+.osc-debug-list dt {
+  color: var(--osc-text-2);
+}
+
+.osc-debug-list dd {
+  margin: 0;
+  font-family: var(--osc-font-mono);
+  overflow-wrap: anywhere;
+}
+
 .osc-settings-grid {
   display: grid;
   grid-template-columns: minmax(0, 190px) minmax(0, 1fr);

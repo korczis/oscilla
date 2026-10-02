@@ -13,7 +13,10 @@
 //   - carries a source map reference,
 //   - embeds a vendor script that is not byte-identical to the pinned package file,
 //   - lacks the third-party notice for every vendor,
-//   - exceeds the raw or gzip size budget.
+//   - exceeds the raw or gzip size budget,
+//   - (provenance, verifyProvenance) lacks the top-of-file banner or the ONE metadata region,
+//     or the region does not parse, is not a build-time "source" record, or names a version or
+//     source digest other than package.json and the recomputed digest of the build inputs.
 //
 //   node scripts/verify-dist.mjs [--dist path/to/index.html]
 import { readdirSync, readFileSync } from 'node:fs';
@@ -23,6 +26,9 @@ import { fileURLToPath } from 'node:url';
 import { gzipSync } from 'node:zlib';
 import { guardRawText } from './pack-single-file.mjs';
 import { BUDGET, DIST_HTML, VENDOR_SCRIPTS } from './build-config.mjs';
+import {
+  computeSourceDigest, findRegion, readBanner, readVersion, validateRecord,
+} from './release-metadata.mjs';
 
 const require = createRequire(import.meta.url);
 
@@ -170,7 +176,8 @@ export function verifyHtml(html, { vendors = new Map(), budget = BUDGET } = {}) 
   for (const id of vendors.keys()) {
     if (!seenVendors.has(id)) problems.push(`vendor script ${id} missing`);
     const [pkg, version] = [id.slice(0, id.lastIndexOf('@')), id.slice(id.lastIndexOf('@') + 1)];
-    const head = html.slice(0, html.indexOf('-->') + 3);
+    const htmlTag = html.search(/<html[\s>]/i);
+    const head = htmlTag < 0 ? html.slice(0, html.indexOf('-->') + 3) : html.slice(0, htmlTag);
     if (!head.includes(`== ${pkg}@${version} - `)) {
       problems.push(`third-party notice for ${id} missing`);
     }
@@ -183,6 +190,37 @@ export function verifyHtml(html, { vendors = new Map(), budget = BUDGET } = {}) 
     problems.push(`gzip size ${gzip} B exceeds budget ${budget.gzipBytes} B`);
   }
   return { problems, raw, gzip, appScripts, vendors: [...seenVendors] };
+}
+
+/**
+ * Provenance of a built (unstamped) dist: banner and metadata region against the expected
+ * product version and source digest. Returns a list of problems (empty = pass).
+ * @param {string} html
+ * @param {{ version: string, sourceDigest: string, allowStamped?: boolean }} expected
+ */
+export function verifyProvenance(html, { version, sourceDigest, allowStamped = false }) {
+  const problems = [];
+  const banner = readBanner(html);
+  if (banner === null) problems.push('top-of-file banner comment missing');
+  else if (banner !== version) problems.push(`banner names v${banner}, package.json is ${version}`);
+  let record;
+  try {
+    ({ record } = findRegion(html));
+  } catch (e) {
+    problems.push(e.message);
+    return problems;
+  }
+  problems.push(...validateRecord(record));
+  if (record.version !== version) {
+    problems.push(`region version ${record.version} != package.json ${version}`);
+  }
+  if (record.sourceDigest !== sourceDigest) {
+    problems.push(`region sourceDigest ${record.sourceDigest} != recomputed ${sourceDigest}`);
+  }
+  if (!allowStamped && record.channel !== 'source') {
+    problems.push(`committed dist must be unstamped (channel "source"), found "${record.channel}"`);
+  }
+  return problems;
 }
 
 export function pinnedVendors(resolve = require.resolve) {
@@ -208,6 +246,9 @@ function main() {
   const html = readFileSync(file, 'utf8');
   const result = verifyHtml(html, { vendors: pinnedVendors() });
   problems.push(...result.problems);
+  const version = readVersion(root);
+  const sourceDigest = computeSourceDigest(root);
+  problems.push(...verifyProvenance(html, { version, sourceDigest }));
   const kib = (n) => `${(n / 1024).toFixed(1)} KiB`;
   console.log(`${path.relative(root, file)}: raw ${kib(result.raw)} / ${kib(BUDGET.rawBytes)}, `
     + `gzip ${kib(result.gzip)} / ${kib(BUDGET.gzipBytes)}; app scripts ${result.appScripts}; `
@@ -218,6 +259,8 @@ function main() {
   }
   console.log('  PASS no file/remote references, no module/fetch/import()/service worker; '
     + 'budget ok');
+  console.log(`  PASS provenance: banner and metadata region name v${version}, `
+    + `source digest ${sourceDigest} (recomputed), channel "source"`);
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) main();

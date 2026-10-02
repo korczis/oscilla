@@ -8,12 +8,22 @@
 //
 // Deterministic by construction: pinned esbuild, no timestamps, no absolute paths, sorted
 // notices, LF output. dist/index.html is committed, so CI runs --check on every push.
+//
+// Provenance (scripts/release-metadata.mjs): the product version (package.json) and the source
+// digest (sha256 over the build inputs) are compiled into the bundle as esbuild defines
+// (__OSCILLA_VERSION__, __OSCILLA_SOURCE_DIGEST__, read by src/js/core/build-info.js) and
+// written into ONE inline metadata region with commit null and channel "source", plus the
+// top-of-file banner. No git state and no clock enter the file; the deploy stamp adds the
+// commit later (scripts/stamp-build.mjs).
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import * as esbuild from 'esbuild';
 import { pack } from './pack-single-file.mjs';
+import {
+  bannerComment, computeSourceDigest, readVersion, renderRegion, sourceRecord,
+} from './release-metadata.mjs';
 import {
   BUILD_TIME_ASSETS, CSS_ENTRY, DIST_HTML, JS_ENTRY, SRC_HTML, TARGETS, VENDOR_SCRIPTS,
 } from './build-config.mjs';
@@ -23,6 +33,8 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const CHECK = process.argv.includes('--check');
 const DEBUG = process.argv.includes('--debug');
 const OUT = path.join(ROOT, DEBUG ? '.debug/index.html' : DIST_HTML);
+const VERSION = readVersion(ROOT);
+const SOURCE_DIGEST = computeSourceDigest(ROOT);
 
 // ------------------------------------------------------------------------------- plugins
 // `import text from './x.worklet.js?raw'` -> the file's text (minified when it is JS). Used for
@@ -140,7 +152,11 @@ async function buildJs() {
     format: 'iife',
     platform: 'browser',
     // An IIFE has no import.meta: fail instead of silently getting `{}`.
-    define: { 'process.env.NODE_ENV': DEBUG ? '"development"' : '"production"' },
+    define: {
+      'process.env.NODE_ENV': DEBUG ? '"development"' : '"production"',
+      __OSCILLA_VERSION__: JSON.stringify(VERSION),
+      __OSCILLA_SOURCE_DIGEST__: JSON.stringify(SOURCE_DIGEST),
+    },
     plugins: [rawPlugin, vendorGlobalsPlugin],
   });
   const warnings = result.warnings.filter((w) => /import\.meta/.test(w.text));
@@ -166,6 +182,8 @@ async function main() {
     js: js.code,
     vendors,
     notice: notice(pkgs),
+    banner: bannerComment(VERSION),
+    buildInfo: renderRegion(sourceRecord({ version: VERSION, sourceDigest: SOURCE_DIGEST })),
   });
 
   const rel = path.relative(ROOT, OUT);
@@ -175,14 +193,16 @@ async function main() {
       console.error(`${rel} is stale or not reproducible: run "npm run build" and commit it`);
       process.exit(1);
     }
-    console.log(`${rel} is up to date (${html.length} bytes)`);
+    console.log(`${rel} is up to date (${html.length} bytes; v${VERSION}, `
+      + `source ${SOURCE_DIGEST.slice(0, 12)})`);
     return;
   }
   rmSync(path.dirname(OUT), { recursive: true, force: true });
   mkdirSync(path.dirname(OUT), { recursive: true });
   writeFileSync(OUT, html);
   console.log(`built ${rel}: ${(Buffer.byteLength(html) / 1024).toFixed(1)} KiB in `
-    + `${(performance.now() - t0).toFixed(0)} ms; contains ${[...pkgs].sort().join(', ')}`);
+    + `${(performance.now() - t0).toFixed(0)} ms; v${VERSION}, source ${SOURCE_DIGEST}; `
+    + `contains ${[...pkgs].sort().join(', ')}`);
 }
 
 main().catch((err) => {
