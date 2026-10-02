@@ -3272,20 +3272,30 @@ async function main() {
     await waitTrue(page, () => window.Alpine.$data(document.body).status === 'READY', null, 3000);
     const statusInfo = await page.evaluate(() => {
       const re = /\b(READY|PLAYING|RELEASING|STOPPED|ERROR)\b/;
-      const el = [...document.querySelectorAll('[role=status]')].find((x) =>
-        re.test(x.textContent),
-      );
+      const header = document.querySelector('header');
+      // Announced: the header live region, which speaks only PLAYING, STOPPED and ERROR.
+      const el = header.querySelector('[role=status]');
+      // Shown: the visible status word (a STOP button while playing or releasing).
+      const shown = () => {
+        const app = window.Alpine.$data(document.body);
+        return [...header.querySelectorAll('button, div')].some(
+          (x) => x.offsetParent !== null && !x.closest('.sr-only') && x.textContent.includes(app.status),
+        ) ? app.status : null;
+      };
       window.__statusSeq = [];
+      window.__shownSeq = [];
+      const push = (arr, v) => { if (v && arr[arr.length - 1] !== v) arr.push(v); };
       const rec = () => {
         const m = el.textContent.match(re);
-        const s = window.__statusSeq;
-        if (m && s[s.length - 1] !== m[1]) s.push(m[1]);
+        push(window.__statusSeq, m && m[1]);
+        push(window.__shownSeq, shown());
       };
       rec();
-      new MutationObserver(rec).observe(el, {
+      new MutationObserver(rec).observe(header, {
         subtree: true,
         childList: true,
         characterData: true,
+        attributes: true,
       });
       return {
         live: el.getAttribute('aria-live') || 'polite (role=status)',
@@ -3294,15 +3304,21 @@ async function main() {
     });
     const triggerBtn = page.locator('button', { hasText: /^\s*TRIGGER\s*$/ });
     await triggerBtn.click();
-    await waitTrue(page, () => window.__statusSeq.slice(1).includes('READY'), null, 5000);
+    await waitTrue(page, () => window.__shownSeq.slice(1).includes('READY'), null, 5000);
     const statusSeq = await page.evaluate(() => window.__statusSeq);
-    const want = ['PLAYING', 'RELEASING', 'STOPPED', 'READY'];
-    let wi = 0;
-    for (const s of statusSeq) if (s === want[wi]) wi++;
+    const shownSeq = await page.evaluate(() => window.__shownSeq);
+    const inOrder = (seq, want) => {
+      let wi = 0;
+      for (const s of seq) if (s === want[wi]) wi++;
+      return wi === want.length;
+    };
     check(
-      '[role=status] announces PLAYING → RELEASING → STOPPED → READY for a triggered tone',
-      wi === want.length,
-      JSON.stringify({ statusSeq, ...statusInfo }),
+      '[role=status] announces PLAYING → STOPPED only; the header shows PLAYING → RELEASING → ' +
+        'STOPPED → READY for a triggered tone',
+      inOrder(statusSeq, ['PLAYING', 'STOPPED']) &&
+        !statusSeq.some((x) => x === 'RELEASING' || x === 'READY') &&
+        inOrder(shownSeq, ['PLAYING', 'RELEASING', 'STOPPED', 'READY']),
+      JSON.stringify({ statusSeq, shownSeq, ...statusInfo }),
     );
     await app(page, (a) => {
       a.setPattern('sequence');
