@@ -371,7 +371,7 @@ function defineChecks() {
       version: window.OSCILLA.version, host: !!window.OSCILLA.host,
     }));
     const ok = errors.length === 0 && Object.keys(info.labErrors).length === 0 && info.host
-      && info.version === '2.0.0';
+      && info.version === require('../../package.json').version;
     return { ok, errors: errors.slice(0, 5), ...info };
   });
 

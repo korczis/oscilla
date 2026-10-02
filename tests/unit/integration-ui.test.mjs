@@ -2,6 +2,7 @@
 // the typing guard and the render-length rule of the WAV export.
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import {
   buildConfigExport, parseConfigImport, exportFileName, CONFIG_FILE_VERSION,
 } from '../../src/js/ui/config-file.js';
@@ -10,9 +11,13 @@ import { scopeTickStep } from '../../src/js/ui/p5-views.js';
 import { isTypingTarget } from '../../src/js/ui/dialogs.js';
 import { renderLengthFor, EXPORT_MAX_S } from '../../src/js/ui/exporters.js';
 import { OSCILLA_VERSION } from '../../src/js/ui/version.js';
+import { BUILD } from '../../src/js/core/build-info.js';
 import { APP_VERSION } from '../../src/js/core/constants.js';
 import { applyConfig, defaultInstrumentState } from '../../src/js/core/config.js';
 import { serializeConfig } from '../../src/js/core/url-state.js';
+
+const PKG_VERSION = JSON.parse(
+  readFileSync(new URL('../../package.json', import.meta.url), 'utf8')).version;
 
 const instrumentCfg = () => {
   const s = { ...defaultInstrumentState(), frequency: 15500, waveform: 'square', gainLevel: 0.05 };
@@ -22,8 +27,12 @@ const instrumentCfg = () => {
   return cfg;
 };
 
-test('versions: V2 version is separate from the frozen V1 APP_VERSION', () => {
-  assert.equal(OSCILLA_VERSION, '2.0.0');
+test('versions: the product version comes from build-info, apart from the V1 APP_VERSION', () => {
+  // Under node there is no metadata region and no esbuild define: the dev fallback applies.
+  // tests/unit/version-authority.test.mjs proves the region/define path against package.json.
+  assert.equal(OSCILLA_VERSION, BUILD.version);
+  assert.equal(BUILD.origin, 'fallback');
+  assert.notEqual(OSCILLA_VERSION, APP_VERSION);
   assert.equal(APP_VERSION, '1.0.0');
 });
 
@@ -49,7 +58,7 @@ test('config export carries every spec key and no runtime objects', () => {
 });
 
 test('config import round-trips through the validated V1 path', () => {
-  const doc = buildConfigExport({ oscillaVersion: '2.0.0', sampleRate: null, mode: 'playground',
+  const doc = buildConfigExport({ oscillaVersion: PKG_VERSION, sampleRate: null, mode: 'playground',
     instrument: instrumentCfg(), now: new Date(0) });
   const parsed = parseConfigImport(JSON.stringify(doc));
   assert.equal(parsed.ok, true);

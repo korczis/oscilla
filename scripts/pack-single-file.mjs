@@ -5,6 +5,8 @@
 //   <!-- @inline-css -->    -> <style>…</style>
 //   <!-- @inline-js -->     -> vendor <script>s in order, then the app <script>
 //   <!-- @icon:<name> -->   -> inline SVG from lucide-static/icons/<name>.svg
+//   <!-- @build-info -->    -> the one metadata region (o.buildInfo, rendered by
+//                              release-metadata.mjs renderRegion); required when given
 //
 // Every script is a CLASSIC script (never type=module) placed where the marker is (end of
 // <body>), so it runs synchronously after the DOM it needs, from file:// and from any sub-path.
@@ -53,10 +55,14 @@ function replaceOnce(html, marker, replacement) {
  * @param {string} o.js        app bundle (IIFE)
  * @param {{id: string, code: string}[]} [o.vendors]  verbatim vendor scripts, in load order
  * @param {string} [o.notice]  third-party notice, emitted as an HTML comment after the doctype
+ * @param {string} [o.banner]  one-line HTML comment emitted first after the doctype
+ * @param {string} [o.buildInfo]  complete metadata <script type="application/json"> element
  * @param {(name: string) => string} [o.icon]  icon resolver (injectable for tests)
  * @returns {string} the complete HTML document
  */
-export function pack({ template, css, js, vendors = [], notice = '', icon = inlineIcon }) {
+export function pack({
+  template, css, js, vendors = [], notice = '', banner = '', buildInfo = '', icon = inlineIcon,
+}) {
   if (!/^<!doctype html>/i.test(template)) throw new Error('template must start with a doctype');
   let html = template.replace(/<!-- @icon:([a-z0-9-]+) -->/g, (_, name) => icon(name));
   if (html.includes('<!-- @icon:')) throw new Error('malformed icon marker');
@@ -71,10 +77,26 @@ export function pack({ template, css, js, vendors = [], notice = '', icon = inli
   scripts.push(`<script data-app>${guardRawText(js, 'script', 'app bundle')}</script>`);
   html = replaceOnce(html, '<!-- @inline-js -->', scripts.join('\n'));
 
+  if (buildInfo) {
+    if (!/^<script type="application\/json" id="[\w-]+">[^<]*<\/script>$/.test(buildInfo)) {
+      throw new Error('buildInfo must be one inert application/json <script> element');
+    }
+    html = replaceOnce(html, '<!-- @build-info -->', buildInfo);
+  } else if (html.includes('<!-- @build-info -->')) {
+    throw new Error('template has a <!-- @build-info --> marker but no buildInfo was given');
+  }
+
   if (notice) {
     // HTML comments may contain "--" but never "-->", "--!>" or "<!--".
     if (/-->|--!>|<!--/.test(notice)) throw new Error('notice text would break the HTML comment');
     html = html.replace(/^<!doctype html>\r?\n?/i, (m) => `${m.trimEnd()}\n<!--\n${notice}\n-->\n`);
+  }
+  if (banner) {
+    const inner = banner.slice(4, -3);
+    if (!/^<!-- [^\n]* -->$/.test(banner) || /-->|--!>|<!--/.test(inner)) {
+      throw new Error('banner must be a single-line HTML comment');
+    }
+    html = html.replace(/^<!doctype html>\r?\n?/i, (m) => `${m.trimEnd()}\n${banner}\n`);
   }
   return html.endsWith('\n') ? html : `${html}\n`;
 }

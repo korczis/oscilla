@@ -55,9 +55,9 @@ import { registerOscillaUi } from './ui/app.js';
 import { keyGuard, openModal, closeModal, watchDialogs, focusSafely } from './ui/dialogs.js';
 import { createWorkbench, v1ModeFor, workspaceForV1Mode } from './ui/workbench.js';
 import { createScopeView, createHarmonicBarsView } from './ui/p5-views.js';
-import { buildConfigExport, parseConfigImport } from './ui/config-file.js';
+import { buildConfigExport, parseConfigImport, CONFIG_FILE_VERSION } from './ui/config-file.js';
 import { renderPlanToWav, renderSequenceToWav, screenshotCanvases } from './ui/exporters.js';
-import { OSCILLA_VERSION } from './ui/version.js';
+import { BUILD } from './core/build-info.js';
 
 import { mount as mountAnalysis } from './labs/analysis.js';
 import { mount as mountFilter } from './labs/filter-lab.js';
@@ -205,7 +205,7 @@ function exportConfigDoc(cmp) {
   instrument.dual.binaural = false;
   if (!instrument.sweep) instrument.sweep = deepCopy(cmp.sweep);
   return buildConfigExport({
-    oscillaVersion: OSCILLA_VERSION,
+    oscillaVersion: BUILD.version, // product version; the schema stays "version": 1
     sampleRate: engine.sampleRate,
     mode: v1ModeFor(cmp.workspace, cmp.source),
     workspace: cmp.workspace,
@@ -280,7 +280,7 @@ function screenshot(cmp) {
   const bg = getComputedStyle(document.documentElement).getPropertyValue('--osc-surface-1').trim();
   return screenshotCanvases(root, {
     background: bg || '#06111d',
-    title: `OSCILLA ${OSCILLA_VERSION} · ${cmp.statusFreqText} · ${cmp.statusWaveText}`,
+    title: `OSCILLA v${BUILD.version} · ${cmp.statusFreqText} · ${cmp.statusWaveText}`,
   });
 }
 
@@ -649,8 +649,18 @@ function createOscillaComponent(ui) {
     engine, bridge, labs, exportConfigDoc, applyImport, renderWav, screenshot,
     relayout: () => { if (host) host.resize(); repairCharts(); },
   });
-  const cmp = compose(instrument, ui, workbench, TEMPLATE_HELPERS);
+  const cmp = compose(instrument, ui, workbench, provenancePart(), TEMPLATE_HELPERS);
   cmp.dismissAlert = focusSafeDismiss(cmp.dismissAlert);
+  const baseRefreshDebug = cmp.refreshDebug;
+  Object.defineProperty(cmp, 'refreshDebug', {
+    value() {
+      baseRefreshDebug.call(this);
+      this.debugInfo = { ...provenanceDebug(), ...this.debugInfo, ...runtimeDebug() };
+    },
+    enumerable: true,
+    configurable: true,
+    writable: true,
+  });
   Object.defineProperty(cmp, 'init', {
     value() {
       shellInit.call(this);
@@ -661,6 +671,44 @@ function createOscillaComponent(ui) {
     writable: true,
   });
   return cmp;
+}
+
+// ------------------------------------------------------------------------------ provenance
+// BUILD (core/build-info.js) is the runtime projection of package.json "version" and of the
+// build/deploy metadata region. The About dialog, the status bar and ?debug=1 read it here.
+function provenancePart() {
+  return {
+    BUILD,
+    get buildCommitText() { return BUILD.shortCommit || 'source build'; },
+    get buildDigestText() { return BUILD.sourceDigest || 'unknown (unbundled build)'; },
+  };
+}
+
+function provenanceDebug() {
+  return {
+    version: BUILD.version,
+    channel: BUILD.channel,
+    commit: BUILD.commit || 'none (source build)',
+    'source date': BUILD.sourceDate || '— (source build)',
+    'source digest': BUILD.sourceDigest || '—',
+    'artifact sha256': BUILD.artifactSha256 || '— (unstamped)',
+    'build metadata': `${BUILD.origin}${BUILD.consistent ? '' : ' (region != compiled defines)'}`
+      + `${BUILD.regionError ? ` (${BUILD.regionError})` : ''}`,
+    'config schema': CONFIG_FILE_VERSION,
+  };
+}
+
+function runtimeDebug() {
+  const mic = labs.mic;
+  let micState = 'unavailable';
+  if (mic) micState = mic.active ? 'live' : (mic.error ? `off (${mic.error})` : 'off');
+  const err = engine.lastError;
+  return {
+    'audible voices': engine.audibleVoiceCount,
+    'active voices': engine.voices ? engine.voices.size : '—',
+    microphone: micState,
+    'last error': err ? `${err.message}${err.context ? ` [${err.context}]` : ''}` : '—',
+  };
 }
 
 // ------------------------------------------------------------------------------ errors
@@ -679,8 +727,6 @@ window.addEventListener('unhandledrejection', (e) => {
 
 // ------------------------------------------------------------------------------ test seam
 window.OSCILLA = {
-  version: OSCILLA_VERSION,
-  appVersion: APP_VERSION,
   engine,
   viz: bridge,
   adapter,
@@ -709,6 +755,13 @@ window.OSCILLA = {
   buildConfigExport,
   parseConfigImport,
 };
+// Read-only provenance: version === BUILD.version (package.json), build is the frozen record.
+// APP_VERSION is the frozen legacy V1 stamp, deliberately not called a "version" here.
+Object.defineProperties(window.OSCILLA, {
+  version: { value: BUILD.version, enumerable: true, writable: false, configurable: false },
+  build: { value: BUILD, enumerable: true, writable: false, configurable: false },
+  legacyV1Stamp: { value: APP_VERSION, enumerable: true, writable: false, configurable: false },
+});
 
 // ------------------------------------------------------------------------------ start
 registerOscillaUi(Alpine, { compose: createOscillaComponent });
