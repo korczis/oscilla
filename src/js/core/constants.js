@@ -7,7 +7,11 @@
 
 // V1: APP_VERSION … LIMITER_RATIO (index.html@a7b7a23; CONTINUOUS_SCHEDULE_S was removed there,
 // the continuous sweep is scheduled ahead in slices by the engine, see audio/scheduler.js).
-// APP_VERSION stays '1.0.0' (frozen by the golden vectors); bump it at release time.
+// APP_VERSION is the LEGACY V1 STAMP, not the product version: the value V1 wrote into its
+// configuration and preset data. It is frozen at '1.0.0' by the V1 golden vectors
+// (tests/freeze/golden-a7b7a23.json) and is never bumped. The product version is package.json
+// "version", projected at build time into core/build-info.js (BUILD.version); window.OSCILLA
+// exposes this constant only as `legacyV1Stamp`.
 export const APP_VERSION = '1.0.0';
 export const SPEED_OF_SOUND = 343;            // m/s, used for approximate wavelength
 export const SAFE_NYQUIST_FACTOR = 0.95;      // safeMaximum = nyquist * 0.95
