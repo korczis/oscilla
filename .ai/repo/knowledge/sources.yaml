@@ -173,6 +173,14 @@ sources:
     pathspec: ':(glob)*.md'
     required: false
 
+  # The product specifications (docs/specs/), which `docs/*.md` does not reach: the planned
+  # V3 features and claims name the V3 MEASURE specification as the document that defines them.
+  - id: spec
+    kind: document
+    discovery: vcs
+    pathspec: ':(glob)docs/specs/*.md'
+    required: false
+
   # The claims matrix and its detail pages: doctrines and milestones name claims by id, so
   # a repository that keeps one has its claims as nodes the rest of the graph can reach.
   - id: claims
@@ -185,4 +193,39 @@ sources:
     kind: document
     discovery: vcs
     pathspec: ':(glob)docs/claims/*.md'
+    required: false
+
+  # The implementation and test classes exist so that the chain a claim of docs/CLAIMS.yaml
+  # declares (claim -> the file that implements it -> the test that proves it) resolves to
+  # real nodes instead of three strings. The product's source modules, its single-file
+  # build pipeline, and the suites `npm test`, `npm run test:engine` and
+  # `npm run test:browser` run (plus the browser suites not yet in the gate).
+  - id: source
+    kind: implementation
+    discovery: vcs
+    pathspec: ':(glob)src/js/**/*.js'
+    required: false
+
+  - id: shell
+    kind: implementation
+    discovery: vcs
+    pathspec: ':(glob)src/index.html'
+    required: false
+
+  - id: build
+    kind: implementation
+    discovery: vcs
+    pathspec: ':(glob)scripts/*.mjs'
+    required: false
+
+  - id: unit_test
+    kind: test
+    discovery: vcs
+    pathspec: ':(glob)tests/unit/*.test.mjs'
+    required: false
+
+  - id: browser_test
+    kind: test
+    discovery: vcs
+    pathspec: ':(glob)tests/browser/*.cjs'
     required: false

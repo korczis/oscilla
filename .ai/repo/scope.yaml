@@ -20,6 +20,9 @@ in:
   - .ai/README.md
   - .ai/repo/**
   - src/**
+  # the build that turns src/ into the one dist/index.html (ADR 0011); docs/CLAIMS.yaml
+  # names its packer and its verifier as implementations
+  - scripts/**
   - lib/**
   - apps/**/lib/**
   - apps/**/src/**
