@@ -167,20 +167,21 @@
     </nav>
 
     <div class="ml-auto flex items-center gap-1 sm:gap-1.5 h-11 sm:h-14 shrink-0">
-      <!-- Status: a STOP button while sound is playing or releasing, otherwise a plain label. Only
-           PLAYING, STOPPED and ERROR are announced, through the separate live region below. -->
-      <button type="button" x-show="status === 'PLAYING' || status === 'RELEASING'" x-cloak @click="stopNow()"
+      <!-- Status: a STOP button while a voice is scheduled (playing, releasing, or waiting on a
+           suspended context), otherwise a plain label. Only PLAYING, SUSPENDED, STOPPED and ERROR
+           are announced, through the separate live region below. -->
+      <button type="button" x-show="['PLAYING', 'RELEASING', 'SUSPENDED'].includes(status)" x-cloak @click="stopNow()"
               class="chip chip-sm rounded-full flex items-center justify-center gap-1.5 px-2.5 text-[11px] font-semibold tracking-wider sm:tracking-widest"
-              :class="status === 'RELEASING' ? 'border-warn text-warn' : 'border-accent text-accent'" aria-label="Stop playback" title="Stop playback">
+              :class="status === 'PLAYING' ? 'border-accent text-accent' : 'border-warn text-warn'" aria-label="Stop playback" title="Stop playback">
         <span class="w-2 h-2 bg-current" aria-hidden="true"></span><span aria-hidden="true"><span class="hidden sm:inline">STOP · </span><span x-text="status"></span></span>
       </button>
-      <div x-show="status !== 'PLAYING' && status !== 'RELEASING'"
+      <div x-show="!['PLAYING', 'RELEASING', 'SUSPENDED'].includes(status)"
            class="flex items-center gap-1.5 h-8 px-2 sm:px-2.5 rounded-full border text-[11px] font-semibold tracking-wider sm:tracking-widest"
            :class="status === 'ERROR' ? 'border-danger text-danger' : 'border-line text-muted'">
         <span aria-hidden="true" x-text="statusIcon"></span><span class="sr-only">Playback state:</span><span x-text="status">READY</span>
       </div>
       <span class="sr-only" role="status" aria-live="polite" aria-atomic="true" x-data="{ said: '' }"
-            x-effect="if (['PLAYING', 'STOPPED', 'ERROR'].includes(status)) said = `Playback ${status}`" x-text="said"></span>
+            x-effect="if (['PLAYING', 'SUSPENDED', 'STOPPED', 'ERROR'].includes(status)) said = status === 'SUSPENDED' ? 'Playback SUSPENDED: tap or press a key to start audio' : `Playback ${status}`" x-text="said"></span>
       <!-- Persistent microphone indicator: visible in every mode and view while the mic is open. -->
       <button type="button" x-show="micActive" x-cloak @click="toggleMic()" :disabled="micPending"
               class="chip chip-sm w-11 px-0 sm:w-auto sm:px-2.5 flex items-center justify-center gap-1 border-danger text-danger text-[11px] font-semibold tracking-widest"
@@ -595,7 +596,7 @@
         <button type="button" class="chip flex-1 font-semibold tracking-widest text-xs" @click="stopNow()" :disabled="!playing" aria-label="Stop immediately (Escape)">STOP</button>
       </div>
     </div>
-    <button type="button" x-show="continuousAllowed" x-cloak class="chip w-full mt-2 text-xs font-semibold tracking-widest" :aria-pressed="latched" @click="toggleLatch()"
+    <button type="button" x-show="continuousAllowed" x-cloak class="chip w-full mt-2 text-xs font-semibold tracking-widest" :aria-pressed="latched" @click="toggleLatch()" @keydown.enter="latchKey($event)"
             x-text="latched && playing ? 'STOP CONTINUOUS PLAYBACK' : 'PLAY CONTINUOUSLY (until stopped)'"></button>
     <p id="transport-desc" class="mt-2 text-xs text-muted" :class="planError ? '!text-danger' : ''" x-text="transportText"></p>
     <p class="text-xs text-accent" x-show="loadedLabel" x-text="'Loaded: ' + loadedLabel"></p>
@@ -862,7 +863,7 @@
                 <button type="button" role="radio" class="chip px-1 text-xs font-mono" :aria-checked="safetyLimit === s" @click="safetyLimit = s" x-text="s + ' s'"></button>
               </template>
             </div>
-            <p class="text-[11px] text-muted mt-1">The limit is scheduled on the audio clock, so it holds even if the page stalls. Programmed patterns stop at their own end (max 30 s).</p>
+            <p class="text-[11px] text-muted mt-1">The limit is scheduled on the audio clock, so it holds even if the page stalls. It also caps the Finite tone. Other programmed patterns stop at their own end (max 30 s); a continuous sweep repeat needs “Allow continuous playback”.</p>
           </div>
           <label class="flex items-center gap-3 cursor-pointer w-fit min-h-[44px]">
             <input type="checkbox" class="sr-only peer" :checked="continuousAllowed" @change="setContinuous($event.target.checked)">
@@ -1055,7 +1056,6 @@ const DEFAULT_GAIN = 0.08;
 const GAIN_FLOOR = 0.0001;             // positive floor for exponential ramps (-80 dB)
 const START_OFFSET_S = 0.02;           // schedule slightly ahead of currentTime
 const MAX_PROGRAMMED_S = 30;           // longest programmed pattern
-const CONTINUOUS_SCHEDULE_S = 600;     // continuous sweep repeat: audio scheduled ahead
 const SAFETY_LIMIT_OPTIONS = [0.5, 1, 2, 3, 5];
 const HISTORY_MAX = 50;
 const PRESET_SCHEMA_VERSION = 1;
@@ -1762,6 +1762,10 @@ const LEARN_TOPICS = [
 //   am     — oscillator level modulated by an LFO
 //   fm     — oscillator frequency modulated by an audio- or sub-audio-rate oscillator
 //   dual   — two oscillators, mono mix or stereo split
+// kind: 'open' (held / latched / triggered for a duration), 'finite' (programmed end) or
+// 'continuous' (a repeating cycle of `period` seconds with no end; the engine schedules it a
+// few seconds ahead and tops it up). plan.freqs lists every frequency involved, including
+// modulation extremes, so range warnings see what can actually sound.
 
 function lfoShape(shape, phase) {
   const p = phase - Math.floor(phase);
@@ -1782,9 +1786,15 @@ function findTimed(list, t) {
   return t <= item.t + item.dur ? item : null;
 }
 
+/** Time within the plan's own schedule: a continuous plan repeats every plan.period seconds. */
+function planTime(plan, t) {
+  return plan.period > 0 ? t % plan.period : t;
+}
+
 /** Requested instantaneous frequency of a plan at t seconds after its start; null in gaps. */
 function planFreqAt(plan, t) {
   if (!plan) return null;
+  t = planTime(plan, t);
   switch (plan.type) {
     case 'const': case 'am': return plan.freq;
     case 'dual': return plan.a.freq;
@@ -1804,6 +1814,7 @@ function planFreqAt(plan, t) {
 /** Relative programmed level (0..1) ignoring attack/release ramps. */
 function planAmpAt(plan, t) {
   if (!plan) return 0;
+  t = planTime(plan, t);
   if (plan.type === 'am') return 1 - plan.depth / 2 + (plan.depth / 2) * Math.sin(2 * Math.PI * plan.modFreq * t);
   if (plan.type === 'steps') return findTimed(plan.steps, t) ? 1 : 0;
   if (plan.type === 'ramps') return findTimed(plan.segments, t) ? 1 : 0;
@@ -1879,9 +1890,11 @@ function buildPlan(cfg, env) {
       const osc = (o, label) => {
         const detune = toNumber(o.detune, 0, -1200, 1200);
         const ratio = Math.pow(2, detune / 1200);
-        // Clamp the sounding (detuned) frequency, not just the nominal one.
+        // freq is the sounding (detuned, clamped) frequency and detune is 0: the engine plays
+        // exactly freq, and planFreqAt / the readouts report what is heard. The requested
+        // nominal frequency and cents are kept for reference.
         const sounding = cf(toNumber(o.freq, 440) * ratio, label);
-        return { freq: sounding / ratio, wave: pick(o.wave, WAVEFORMS, 'sine'), gain: toNumber(o.gain, 100, 0, 100) / 100, detune };
+        return { freq: sounding, detune: 0, nominal: sounding / ratio, cents: detune, wave: pick(o.wave, WAVEFORMS, 'sine'), gain: toNumber(o.gain, 100, 0, 100) / 100 };
       };
       const a = osc(d.a, 'Osc A');
       const b = osc(d.b, 'Osc B');
@@ -1906,28 +1919,26 @@ function buildPlan(cfg, env) {
       const passS = sec(s.durationMs, 0.02, direction === 'pingpong' ? MAX_PROGRAMMED_S / 2 : MAX_PROGRAMMED_S);
       const cycleS = direction === 'pingpong' ? 2 * passS : passS + 0.03;
       let cycles = 1;
-      let cap = MAX_PROGRAMMED_S;
+      let continuous = false;
       if (s.repeat === 'n') cycles = toInt(s.repeatCount, 3, 1, 1000);
       if (s.repeat === 'continuous') {
-        if (env.continuous) {
-          cap = CONTINUOUS_SCHEDULE_S;
-          cycles = Math.min(20000, Math.ceil(CONTINUOUS_SCHEDULE_S / cycleS));
-        } else {
-          warnings.push('Continuous repeat needs “Allow continuous playback”; playing once.');
-        }
+        if (env.continuous) continuous = true;
+        else warnings.push('Continuous repeat needs “Allow continuous playback”; playing once.');
       }
-      const maxCycles = Math.max(1, Math.floor(cap / cycleS));
-      if (cycles > maxCycles) {
-        if (s.repeat !== 'continuous') warnings.push(`Repeats limited to ${maxCycles} (${MAX_PROGRAMMED_S} s maximum).`);
+      const maxCycles = Math.max(1, Math.floor(MAX_PROGRAMMED_S / cycleS));
+      if (!continuous && cycles > maxCycles) {
+        warnings.push(`Repeats limited to ${maxCycles} (${MAX_PROGRAMMED_S} s maximum).`);
         cycles = maxCycles;
       }
-      const segments = sweepSegments(lo, hi, passS, curve, direction, cycles, 0.03);
+      // A continuous repeat is one cycle plus its period; the engine repeats it until stopped.
+      const segments = sweepSegments(lo, hi, passS, curve, direction, continuous ? 1 : cycles, 0.03);
       const last = segments[segments.length - 1];
       const arrow = direction === 'pingpong' ? '↔' : '→';
       const [from, to] = direction === 'down' ? [hi, lo] : [lo, hi];
       return {
         ok: true, warnings, plan: {
-          type: 'ramps', kind: 'finite', wave, segments, dur: last.t + last.dur,
+          type: 'ramps', kind: continuous ? 'continuous' : 'finite', wave, segments,
+          dur: continuous ? Infinity : last.t + last.dur, period: continuous ? cycleS : 0,
           envelope: direction === 'pingpong' ? 'whole' : 'segment',
           label: `Sweep ${formatFrequency(from)} ${arrow} ${formatFrequency(to)} · ${curve}`,
           freqs: [from, to], modulated: true,
@@ -1956,7 +1967,8 @@ function buildPlan(cfg, env) {
         plan.freqs = [plan.freq];
         break;
       case 'finite':
-        plan = { type: 'const', kind: 'finite', wave, freq: freq(), dur: sec(cfg.duration, 0.01, 10), label, modulated: false };
+        // limitable: the hard safety limit also caps this tone unless continuous playback is allowed.
+        plan = { type: 'const', kind: 'finite', wave, freq: freq(), dur: sec(cfg.duration, 0.01, 10), label, modulated: false, limitable: true };
         plan.freqs = [plan.freq];
         break;
       case 'pulse':
@@ -2049,7 +2061,7 @@ function buildPlan(cfg, env) {
         let depth = toNumber(p.depth, 40, 0, 5000);
         if (depth > maxDepth) { warnings.push(`Depth limited to ±${sig(maxDepth, 3)} Hz to stay inside 1 Hz … safe maximum.`); depth = maxDepth; }
         plan = { type: 'lfo', kind: 'open', wave, center, depth, rate: toNumber(p.rate, 5, 0.05, 30), shape: 'sine',
-          label, freqs: [center], modulated: true, liveCenter: true };
+          label, freqs: summarizeFrequencies([center, center - depth, center + depth]), modulated: true, liveCenter: true };
         break;
       }
       case 'am':
@@ -2061,12 +2073,15 @@ function buildPlan(cfg, env) {
         const carrier = freq();
         const modFreq = toNumber(p.modFreq, 5, 0.1, 2000);
         let depth = toNumber(p.depthHz, 60, 0, 10000);
-        const maxDepth = Math.max(0, safeMax - carrier);
-        if (depth > maxDepth) { warnings.push(`Depth limited to ±${sig(maxDepth, 3)} Hz so the peak stays below the safe maximum.`); depth = maxDepth; }
+        // Bounded on both sides: the instantaneous frequency never passes through zero (no
+        // through-zero FM) and never exceeds the safe maximum.
+        const maxDepth = Math.max(0, Math.min(safeMax - carrier, carrier - MIN_FREQUENCY));
+        if (depth > maxDepth) { warnings.push(`Depth limited to ±${sig(maxDepth, 3)} Hz to stay inside 1 Hz … safe maximum.`); depth = maxDepth; }
         if (carrier + depth + 2 * modFreq > safeMax / SAFE_NYQUIST_FACTOR) {
           warnings.push('Sidebands may extend beyond Nyquist and fold back (alias).');
         }
-        plan = { type: 'fm', kind: 'open', wave, freq: carrier, modFreq, depth, label, freqs: [carrier], modulated: true };
+        plan = { type: 'fm', kind: 'open', wave, freq: carrier, modFreq, depth, label,
+          freqs: summarizeFrequencies([carrier, carrier - depth, carrier + depth]), modulated: true };
         break;
       }
       default:
@@ -2078,15 +2093,40 @@ function buildPlan(cfg, env) {
   }
 }
 
+// Engine timing. Every change to a sounding voice is scheduled SCHEDULE_LEAD_S ahead of the
+// main thread's currentTime, which can trail the render position (measured in Firefox under
+// load: up to ~15 ms): an event that lands in the past applies as a step (a click).
+const SCHEDULE_LEAD_S = 0.02;
+const FAST_RELEASE_S = 0.015;    // a new voice fades every earlier one out this fast
+const ESCAPE_RELEASE_S = 0.008;  // Escape / STOP: everything fades within a few milliseconds
+const WAVE_DIP_S = 0.005;        // waveform change: fade to the floor, switch, fade back in
+const SCHEDULE_AHEAD_S = 10;     // continuous repeat: audio scheduled this far ahead …
+const TOP_UP_EVERY_MS = 1000;    // … and topped up by this UI bookkeeping timer
+
+/** Plan identity for live updates; the label is presentation, and waveforms can be ignored. */
+function planKey(plan, ignoreWave = false) {
+  return JSON.stringify(plan, (k, v) => (k === 'label' || (ignoreWave && k === 'wave') ? undefined : v));
+}
+
+/** Waveshaper curve: identity up to ±cap, flat beyond (exact under linear interpolation). */
+function ceilingCurve(cap) {
+  const n = 4097;
+  const curve = new Float32Array(n);
+  for (let i = 0; i < n; i++) curve[i] = clamp((2 * i) / (n - 1) - 1, -cap, cap);
+  return curve;
+}
+
 class AudioEngine {
   constructor() {
     this.ctx = null;
     this.master = null;
     this.limiter = null;
     this.trim = null;
+    this.ceiling = null;
     this.analyser = null;
     this.timeData = null;
     this.freqData = null;
+    this.gainLevel = DEFAULT_GAIN; // requested master level, applied when a context is built
     this.voice = null;           // the current voice
     this.voices = new Set();     // current + any still releasing
     this.nodes = new Set();      // every node owned by a voice
@@ -2105,6 +2145,7 @@ class AudioEngine {
   get nyquist() { return this.ctx ? this.ctx.sampleRate / 2 : null; }
   get safeMaximum() { return this.ctx ? (this.ctx.sampleRate / 2) * SAFE_NYQUIST_FACTOR : null; }
   get state() { return this.ctx ? this.ctx.state : 'not started'; }
+  get running() { return !!this.ctx && this.ctx.state === 'running'; }
   get activeNodeCount() { return this.nodes.size; }
   get activeSourceCount() { return this.sources.size; }
 
@@ -2126,9 +2167,13 @@ class AudioEngine {
     return false;
   }
 
-  /** Create the context and the shared output chain. Synchronous so it runs inside the gesture. */
+  /**
+   * Create the context and the shared output chain. Synchronous so it runs inside the gesture.
+   * A context closed from outside is discarded and rebuilt.
+   */
   init() {
-    if (this.ctx) return true;
+    if (this.ctx && this.ctx.state !== 'closed') return true;
+    if (this.ctx) this._discardContext();
     if (!AudioEngine.isSupported()) return this._fail('The Web Audio API is not available in this browser.', 'init');
     let ctx;
     try {
@@ -2139,7 +2184,7 @@ class AudioEngine {
     }
     try {
       this.master = ctx.createGain();
-      this.master.gain.value = DEFAULT_GAIN;
+      this.master.gain.value = this.gainLevel; // the requested level from the first sample
       // Conservative limiter. DynamicsCompressorNode applies automatic makeup gain
       // ((1 / fullRangeGain) ^ 0.6 per the Web Audio spec); `trim` removes it so the
       // logical gain shown in the UI is the level that reaches the output.
@@ -2153,6 +2198,11 @@ class AudioEngine {
       const makeup = Math.pow(1 / Math.pow(10, fullRangeDb / 20), 0.6);
       this.trim = ctx.createGain();
       this.trim.gain.value = 1 / makeup;
+      // Hard ceiling at MAX_OUTPUT_GAIN: transparent for one voice at UI 100 %, it bounds any
+      // momentary sum (a replaced voice fading under its successor, waveform overshoot).
+      this.ceiling = ctx.createWaveShaper();
+      this.ceiling.curve = ceilingCurve(MAX_OUTPUT_GAIN);
+      this.ceiling.oversample = 'none';
       this.analyser = ctx.createAnalyser();
       this.analyser.fftSize = 8192;
       this.analyser.smoothingTimeConstant = 0.55;
@@ -2160,12 +2210,16 @@ class AudioEngine {
       this.analyser.maxDecibels = 0;
       this.master.connect(this.limiter);
       this.limiter.connect(this.trim);
-      this.trim.connect(this.analyser);
+      this.trim.connect(this.ceiling);
+      this.ceiling.connect(this.analyser);
       this.analyser.connect(ctx.destination);
       this.timeData = new Float32Array(this.analyser.fftSize);
       this.freqData = new Float32Array(this.analyser.frequencyBinCount);
       this.ctx = ctx;
-      ctx.onstatechange = () => this._emit('context', ctx.state);
+      ctx.onstatechange = () => {
+        this._emit('context', ctx.state);
+        if (ctx.state === 'closed' && this.ctx === ctx) this._discardContext();
+      };
       this._emit('context', ctx.state);
       return true;
     } catch (e) {
@@ -2175,146 +2229,249 @@ class AudioEngine {
     }
   }
 
+  /** Drop a context (closed from outside, or failed): free every voice and the microphone. */
+  _discardContext() {
+    const ctx = this.ctx;
+    for (const v of [...this.voices]) this._cleanup(v);
+    this.stopMic('closed');
+    this.ctx = null;
+    this.master = this.limiter = this.trim = this.ceiling = this.analyser = null;
+    if (ctx) {
+      ctx.onstatechange = null;
+      if (ctx.state !== 'closed') { try { ctx.close(); } catch (e) { /* ignore */ } }
+    }
+    this._emit('context', 'closed');
+  }
+
   resume() {
-    if (!this.ctx) return Promise.resolve(false);
+    if (!this.ctx || this.ctx.state === 'closed') return Promise.resolve(false);
     if (this.ctx.state === 'running') return Promise.resolve(true);
     try {
-      return this.ctx.resume().then(() => this.ctx.state === 'running', (e) => this._fail(e, 'resume'));
+      const ctx = this.ctx;
+      return ctx.resume().then(() => ctx.state === 'running', (e) => this._fail(e, 'resume'));
     } catch (e) {
       return Promise.resolve(this._fail(e, 'resume'));
     }
   }
 
   setMasterGain(g) {
-    if (!this.master) return;
-    const v = clamp(toNumber(g, DEFAULT_GAIN), 0, MAX_OUTPUT_GAIN);
-    this.master.gain.setTargetAtTime(v, this.ctx.currentTime, 0.02);
+    this.gainLevel = clamp(toNumber(g, DEFAULT_GAIN), 0, MAX_OUTPUT_GAIN);
+    if (this.master) this.master.gain.setTargetAtTime(this.gainLevel, this.ctx.currentTime, 0.02);
   }
+
+  /** The earliest time a change to a sounding voice can be scheduled without a step. */
+  _soon(ctx) {
+    // On a render-quantum boundary: Firefox starts a ramp anchored mid-quantum at the quantum's
+    // edge, which steps by up to 128 frames' worth of the ramp.
+    const q = 128 / ctx.sampleRate;
+    return Math.ceil((ctx.currentTime + Math.max(SCHEDULE_LEAD_S, 2 * q)) / q) * q;
+  }
+
+  /** Frequencies are clamped once more here, against the running context. */
+  _f(freq) { return clamp(freq, 0.01, this.safeMaximum); }
 
   _osc(type, freq, startAt) {
     const o = this.ctx.createOscillator();
     o.type = type;
-    o.frequency.setValueAtTime(freq, this.ctx.currentTime);
+    o.frequency.setValueAtTime(this._f(freq), this.ctx.currentTime);
     o.start(startAt);
     return o;
   }
 
+  // ---- recorded automation
+  // Envelope and release gains go through _ev, which records every event, so the value of the
+  // param at any time follows from its schedule (_valueAt) and it can be frozen there without
+  // cancelAndHoldAtTime (which Firefox lacks) and without cancelling an in-progress ramp.
+
+  _track(param, initial) { return { param, ev: [], initial }; }
+
+  _ev(pt, kind, value, time) {
+    pt.ev.push({ kind, value, time });
+    pt.param[kind](value, time);
+  }
+
+  _valueAt(pt, t) {
+    const ev = pt.ev;
+    let lo = 0;
+    let hi = ev.length - 1;
+    let i = -1;
+    while (lo <= hi) {
+      const mid = (lo + hi) >> 1;
+      if (ev[mid].time <= t) { i = mid; lo = mid + 1; } else { hi = mid - 1; }
+    }
+    if (i < 0) return pt.initial;
+    const prev = ev[i];
+    const next = ev[i + 1];
+    if (!next || next.kind === 'setValueAtTime') return prev.value;
+    const k = clamp((t - prev.time) / Math.max(1e-9, next.time - prev.time), 0, 1);
+    if (next.kind === 'linearRampToValueAtTime') return prev.value + (next.value - prev.value) * k;
+    return prev.value * Math.pow(next.value / prev.value, k);
+  }
+
+  /**
+   * Hold a recorded param at its scheduled value from time t on. An in-progress ramp is re-ended
+   * at t on its own curve (inserted first, so the segment sounding now never loses its end),
+   * then everything after t is cancelled. The same code runs in every browser.
+   */
+  _freeze(pt, t) {
+    const value = this._valueAt(pt, t);
+    const ev = pt.ev;
+    let i = ev.findIndex((e) => e.time > t);
+    if (i < 0) i = ev.length;
+    const next = ev[i];
+    const kind = next && next.kind !== 'setValueAtTime' ? next.kind : 'setValueAtTime';
+    pt.param[kind](value, t);
+    if (next) pt.param.cancelScheduledValues(next.time);
+    ev.length = i;
+    ev.push({ kind, value, time: t });
+    return value;
+  }
+
+  /** Forget events no longer needed to compute values at or after t. */
+  _prune(pt, t) {
+    let i = 0;
+    while (i + 1 < pt.ev.length && pt.ev[i + 1].time <= t) i++;
+    if (i > 0) pt.ev.splice(0, i);
+  }
+
   /** One click-free envelope step: linear attack, hold, exponential release to the floor. */
-  _stepEnv(param, t, dur, attack, release) {
+  _stepEnv(pt, t, dur, attack, release) {
     const a = Math.max(0.001, Math.min(attack, dur * 0.4));
     const r = Math.max(0.001, Math.min(release, dur * 0.5));
-    param.setValueAtTime(GAIN_FLOOR, t);
-    param.linearRampToValueAtTime(1, t + a);
-    if (dur - r > a) param.setValueAtTime(1, t + dur - r);
-    param.exponentialRampToValueAtTime(GAIN_FLOOR, t + dur);
+    this._ev(pt, 'setValueAtTime', GAIN_FLOOR, t);
+    this._ev(pt, 'linearRampToValueAtTime', 1, t + a);
+    if (dur - r > a) this._ev(pt, 'setValueAtTime', 1, t + dur - r);
+    this._ev(pt, 'exponentialRampToValueAtTime', GAIN_FLOOR, t + dur);
   }
 
-  /** Envelope gain param that records its schedule, so _holdEnv can freeze it anywhere. */
-  _loggedParam(param, log) {
-    const rec = (kind) => (value, time) => {
-      log.push({ kind, value, time });
-      param[kind](value, time);
-    };
-    return {
-      setValueAtTime: rec('setValueAtTime'),
-      linearRampToValueAtTime: rec('linearRampToValueAtTime'),
-      exponentialRampToValueAtTime: rec('exponentialRampToValueAtTime'),
-    };
+  /** Frequency ramps (and per-segment envelopes) of one pass of a ramps plan, from `at`. */
+  _rampSegments(v, at) {
+    const plan = v.plan;
+    const f = v.carrier.frequency;
+    const short = plan.chirp ? Math.min(v.attack, plan.dur * 0.1) : v.attack;
+    for (const s of plan.segments) {
+      f.setValueAtTime(this._f(s.f0), at + s.t);
+      if (s.curve === 'log') f.exponentialRampToValueAtTime(this._f(s.f1), at + s.t + s.dur);
+      else f.linearRampToValueAtTime(this._f(s.f1), at + s.t + s.dur);
+      if (plan.envelope === 'segment') this._stepEnv(v.env, at + s.t, s.dur, short, v.release);
+    }
   }
 
   /**
-   * Freeze the envelope at time t. Without cancelAndHoldAtTime (Firefox), cancelScheduledValues
-   * alone would drop an in-progress ramp and jump back to the previous event's value, so the
-   * in-progress segment is re-ended at t with the value it has there (same curve, no step).
+   * Continuous repeat: schedule whole cycles up to SCHEDULE_AHEAD_S ahead on the audio clock.
+   * After a stall (throttled timer) cycles already in the past are skipped, keeping the grid.
    */
-  _holdEnv(v, t) {
-    const g = v.env.gain;
-    if (typeof g.cancelAndHoldAtTime === 'function') { g.cancelAndHoldAtTime(t); return; }
-    let prev = null;
-    let next = null;
-    for (const e of v.envLog) {
-      if (e.time <= t) { if (!prev || e.time >= prev.time) prev = e; }
-      else if (!next || e.time < next.time) next = e;
+  _scheduleCycles(v) {
+    const ctx = v.ctx;
+    const period = v.plan.period;
+    const now = ctx.currentTime;
+    const first = Math.max(0, Math.ceil((this._soon(ctx) - v.t0) / period));
+    if (v.cycle < first) v.cycle = first;
+    while (v.t0 + v.cycle * period < now + SCHEDULE_AHEAD_S) {
+      this._rampSegments(v, v.t0 + v.cycle * period);
+      v.cycle++;
     }
-    g.cancelScheduledValues(t);
-    if (!prev || !next || next.kind === 'setValueAtTime') return; // constant segment: already held
-    const k = (t - prev.time) / (next.time - prev.time);
-    if (next.kind === 'linearRampToValueAtTime') {
-      g.linearRampToValueAtTime(prev.value + (next.value - prev.value) * k, t);
-    } else {
-      g.exponentialRampToValueAtTime(prev.value * Math.pow(next.value / prev.value, k), t);
-    }
+    this._prune(v.env, now);
+  }
+
+  _armTopUp(v) {
+    const tick = () => {
+      if (v.ended || v.releasing) return;
+      if (v.ctx.state === 'running') {
+        try { this._scheduleCycles(v); } catch (e) { this._fail(e, 'schedule'); }
+      }
+      v.topUp = setTimeout(tick, TOP_UP_EVERY_MS);
+    };
+    v.topUp = setTimeout(tick, TOP_UP_EVERY_MS);
   }
 
   /**
-   * Start a plan. Any current voice is released first (fast), so oscillators never accumulate.
-   * o = { mode: 'hold' | 'trigger' | 'latch', continuous, limitS, durationS, attackS, releaseS }
+   * Start a plan. Every earlier voice — sounding or still in a long release — fades out within
+   * FAST_RELEASE_S, so oscillators never accumulate and at most two voices overlap, briefly.
+   * o = { mode: 'hold' | 'trigger' | 'latch', continuous, limitS, durationS, attackS, releaseS,
+   *       until?: absolute deadline inherited by a replacement voice }
    */
   play(plan, o) {
-    if (!this.ctx && !this.init()) return null;
+    if (!this.init()) return null;
     const ctx = this.ctx;
-    this._releaseAll(0.012);
+    // The replaced voice stops being current before it is released, so its end (immediate on a
+    // suspended context) is not reported as the end of playback.
+    const prev = this.voice;
+    this.voice = null;
+    const replacing = this.voices.size > 0;
+    this._releaseAll(FAST_RELEASE_S, true);
+    // A replacement starts once its predecessors have faded: no overlap, so no momentary sum
+    // above the single-voice level (the output ceiling is only a backstop).
+    const startAt = replacing ? this._soon(ctx) + FAST_RELEASE_S : ctx.currentTime + START_OFFSET_S;
     const v = {
-      id: ++this._seq, plan, t0: ctx.currentTime + START_OFFSET_S, nodes: [], sources: [], freqParams: [],
-      env: null, envLog: [], releaseGain: null, carrier: null, live: {},
-      endTime: Infinity, releasing: false, ended: false, timers: [],
-      attack: Math.max(0.001, o.attackS), release: Math.max(0.005, o.releaseS), limited: false,
+      id: ++this._seq, ctx, plan, opts: o, t0: startAt, nodes: [], sources: [],
+      freqParams: [], env: null, rel: null, carrier: null, live: {}, cycle: 0, topUp: null,
+      endTime: Infinity, deadline: Infinity, releasing: false, ended: false, timers: [], dipping: false,
+      attack: Math.max(0.001, o.attackS), release: Math.max(0.005, o.releaseS),
+      limited: !!o.limited, extended: false,
     };
     const t0 = v.t0;
     const track = (n) => { v.nodes.push(n); this.nodes.add(n); return n; };
     const source = (n) => { track(n); v.sources.push(n); this.sources.add(n); return n; };
     try {
-      // env (programmed envelope) → releaseGain (held at 1, automated only by a release) → master
-      const env = track(ctx.createGain());
-      const eg = this._loggedParam(env.gain, v.envLog);
-      eg.setValueAtTime(GAIN_FLOOR, ctx.currentTime);
-      const releaseGain = track(ctx.createGain());
-      env.connect(releaseGain);
-      releaseGain.connect(this.master);
-      v.env = env;
-      v.releaseGain = releaseGain;
+      // env (programmed envelope) → rel (release and waveform dips only) → master
+      const envNode = track(ctx.createGain());
+      v.env = this._track(envNode.gain, 1);
+      this._ev(v.env, 'setValueAtTime', GAIN_FLOOR, ctx.currentTime);
+      const relNode = track(ctx.createGain());
+      v.rel = this._track(relNode.gain, 1);
+      envNode.connect(relNode);
+      relNode.connect(this.master);
       const a = v.attack;
       const r = v.release;
       let programmedEnd = null;
       switch (plan.type) {
         case 'const': {
           const osc = source(this._osc(plan.wave, plan.freq, t0));
-          osc.connect(env);
+          osc.connect(envNode);
           v.carrier = osc;
           v.freqParams.push(osc.frequency);
           if (plan.kind === 'finite') {
-            this._stepEnv(eg, t0, plan.dur, a, r);
-            programmedEnd = t0 + plan.dur;
+            // The finite tone obeys the hard limit unless continuous playback is allowed.
+            let dur = plan.dur;
+            if (plan.limitable && dur > o.limitS) {
+              if (o.continuous) v.extended = true; else { dur = o.limitS; v.limited = true; }
+            }
+            this._stepEnv(v.env, t0, dur, a, r);
+            programmedEnd = t0 + dur;
           }
           break;
         }
         case 'steps': {
           const osc = source(this._osc(plan.wave, plan.steps[0].f, t0));
-          osc.connect(env);
+          osc.connect(envNode);
           v.carrier = osc;
           v.freqParams.push(osc.frequency);
           for (const s of plan.steps) {
-            osc.frequency.setValueAtTime(s.f, t0 + s.t);
-            this._stepEnv(eg, t0 + s.t, s.dur, a, r);
+            osc.frequency.setValueAtTime(this._f(s.f), t0 + s.t);
+            this._stepEnv(v.env, t0 + s.t, s.dur, a, r);
           }
           programmedEnd = t0 + plan.dur;
           break;
         }
         case 'ramps': {
           const osc = source(this._osc(plan.wave, plan.segments[0].f0, t0));
-          osc.connect(env);
+          osc.connect(envNode);
           v.carrier = osc;
           v.freqParams.push(osc.frequency);
-          const f = osc.frequency;
-          const short = plan.chirp ? Math.min(a, plan.dur * 0.1) : a;
-          for (const s of plan.segments) {
-            f.setValueAtTime(s.f0, t0 + s.t);
-            if (s.curve === 'log') f.exponentialRampToValueAtTime(s.f1, t0 + s.t + s.dur);
-            else f.linearRampToValueAtTime(s.f1, t0 + s.t + s.dur);
-            if (plan.envelope === 'segment') this._stepEnv(eg, t0 + s.t, s.dur, short, r);
+          if (plan.kind === 'continuous') {
+            v.extended = true;
+            if (plan.envelope !== 'segment') {
+              this._ev(v.env, 'setValueAtTime', GAIN_FLOOR, t0);
+              this._ev(v.env, 'linearRampToValueAtTime', 1, t0 + a);
+            }
+            this._scheduleCycles(v);
+            programmedEnd = Infinity;
+          } else {
+            this._rampSegments(v, t0);
+            if (plan.envelope !== 'segment') this._stepEnv(v.env, t0, plan.dur, a, r);
+            programmedEnd = t0 + plan.dur;
           }
-          if (plan.envelope !== 'segment') this._stepEnv(eg, t0, plan.dur, a, r);
-          programmedEnd = t0 + plan.dur;
           break;
         }
         case 'lfo': {
@@ -2324,7 +2481,7 @@ class AudioEngine {
           depth.gain.value = plan.depth;
           lfo.connect(depth);
           depth.connect(osc.frequency);
-          osc.connect(env);
+          osc.connect(envNode);
           v.carrier = osc;
           v.live = { lfo, depth };
           break;
@@ -2339,7 +2496,7 @@ class AudioEngine {
           lfo.connect(lfoGain);
           lfoGain.connect(amGain.gain);
           osc.connect(amGain);
-          amGain.connect(env);
+          amGain.connect(envNode);
           v.carrier = osc;
           v.live = { lfo, lfoGain, amGain };
           break;
@@ -2351,13 +2508,13 @@ class AudioEngine {
           modGain.gain.value = plan.depth;
           mod.connect(modGain);
           modGain.connect(osc.frequency);
-          osc.connect(env);
+          osc.connect(envNode);
           v.carrier = osc;
           v.live = { mod, modGain };
           break;
         }
         case 'dual':
-          this._buildDual(v, plan, t0, track, source, env);
+          this._buildDual(v, plan, t0, track, source, envNode);
           break;
         default:
           throw new Error(`Unknown signal type “${plan.type}”.`);
@@ -2367,20 +2524,25 @@ class AudioEngine {
       if (programmedEnd != null) {
         end = programmedEnd;
       } else {
-        // Open patterns: TRIGGER plays the set duration, HOLD until released; without the
-        // continuous permission both are capped by the hard safety limit.
+        // Open patterns: TRIGGER plays the set duration, HOLD / latch until released; without the
+        // continuous permission both are capped by the hard safety limit. A replacement voice
+        // keeps its predecessor's deadline, so changing the pattern never extends playback.
         let len = o.mode === 'trigger' ? o.durationS : Infinity;
-        if (!o.continuous && !(len <= o.limitS)) { len = o.limitS; v.limited = true; }
+        if (o.until != null) len = Math.min(len, o.until - t0);
+        if (!(len <= o.limitS)) {
+          if (o.continuous) v.extended = true; else { len = o.limitS; v.limited = true; }
+        }
         // A finite length shortens the attack rather than stretching past the limit.
         const atk = Number.isFinite(len) ? Math.min(a, len * 0.4) : a;
-        eg.setValueAtTime(GAIN_FLOOR, t0);
-        eg.linearRampToValueAtTime(1, t0 + atk);
+        this._ev(v.env, 'setValueAtTime', GAIN_FLOOR, t0);
+        this._ev(v.env, 'linearRampToValueAtTime', 1, t0 + atk);
         if (Number.isFinite(len)) {
           const rel = Math.min(r, Math.max(0.005, len * 0.5));
           len = Math.max(len, atk + rel + 0.005);
-          eg.setValueAtTime(1, t0 + len - rel);
-          eg.exponentialRampToValueAtTime(GAIN_FLOOR, t0 + len);
+          this._ev(v.env, 'setValueAtTime', 1, t0 + len - rel);
+          this._ev(v.env, 'exponentialRampToValueAtTime', GAIN_FLOOR, t0 + len);
           end = t0 + len;
+          v.deadline = end;
         }
       }
       if (Number.isFinite(end)) {
@@ -2390,12 +2552,14 @@ class AudioEngine {
       v.sources[0].onended = () => this._cleanup(v);
       this.voice = v;
       this.voices.add(v);
-      this._armTimers(v);
-      const info = { id: v.id, kind: plan.kind, start: t0, end: v.endTime, limited: v.limited };
+      const info = { id: v.id, kind: plan.kind, start: t0, end: v.endTime, limited: v.limited, running: this.running };
       this._emit('play', info);
+      this._armTimers(v);
+      if (plan.kind === 'continuous') this._armTopUp(v);
       return info;
     } catch (e) {
       this._cleanup(v);
+      if (prev) this._emit('ended', { id: prev.id });
       this._fail(e, 'play');
       return null;
     }
@@ -2405,8 +2569,9 @@ class AudioEngine {
     const ctx = this.ctx;
     const canPan = typeof ctx.createStereoPanner === 'function';
     const make = (o, level, pan) => {
+      // o.freq is the sounding frequency (detune already folded in), so detune stays 0 and no
+      // intermediate value of a live change can exceed the clamp.
       const osc = source(this._osc(o.wave, o.freq, t0));
-      osc.detune.setValueAtTime(o.detune, ctx.currentTime);
       const g = track(ctx.createGain());
       g.gain.value = o.gain * level * 0.5;
       osc.connect(g);
@@ -2437,52 +2602,66 @@ class AudioEngine {
     v.live = { A, B };
   }
 
-  /** UI bookkeeping only: a RELEASING notice before a programmed end, and a cleanup fallback. */
+  /**
+   * UI bookkeeping only: a RELEASING notice before a programmed end, and a cleanup fallback.
+   * The notice is keyed on the audio clock, so a suspended context never shows RELEASING.
+   */
   _armTimers(v) {
     if (!Number.isFinite(v.endTime)) return;
-    const ctx = this.ctx;
+    const ctx = v.ctx;
     const relAt = v.endTime - 0.01 - Math.min(v.release, 0.25);
-    const msToRelease = (relAt - ctx.currentTime) * 1000;
-    if (msToRelease > 0) {
-      v.timers.push(setTimeout(() => {
-        if (!v.ended && !v.releasing && this.voice === v) this._emit('release', { id: v.id, natural: true });
-      }, msToRelease));
-    }
+    const notice = () => {
+      if (v.ended || v.releasing || this.voice !== v) return;
+      const left = relAt - ctx.currentTime;
+      if (ctx.state === 'running' && left <= 0.005) {
+        this._emit('release', { id: v.id, natural: true });
+        return;
+      }
+      v.timers.push(setTimeout(notice, ctx.state === 'running' ? Math.max(10, left * 1000) : 250));
+    };
+    v.timers.push(setTimeout(notice, Math.max(10, (relAt - ctx.currentTime) * 1000)));
     this._armFallback(v);
   }
 
   _armFallback(v) {
+    const ctx = v.ctx;
     const check = () => {
       if (v.ended) return;
-      const ctx = this.ctx;
       if (ctx.state === 'running' && ctx.currentTime >= v.endTime + 0.05) { this._cleanup(v); return; }
       if (ctx.state === 'closed' || (v.releasing && ctx.state !== 'running')) { this._cleanup(v); return; }
       const wait = ctx.state === 'running' ? Math.max(100, (v.endTime - ctx.currentTime) * 1000 + 200) : 500;
       v.timers.push(setTimeout(check, wait));
     };
-    v.timers.push(setTimeout(check, Math.max(100, (v.endTime - this.ctx.currentTime) * 1000 + 250)));
+    v.timers.push(setTimeout(check, Math.max(100, (v.endTime - ctx.currentTime) * 1000 + 250)));
   }
 
-  _releaseVoice(v, releaseS) {
-    if (!v || v.ended || v.releasing) return false;
-    const ctx = this.ctx;
-    const now = ctx.currentTime;
-    if (now >= v.endTime - 0.002) return false;
+  /**
+   * Fade a voice out over releaseS, starting slightly ahead (see SCHEDULE_LEAD_S). A voice that
+   * is already releasing is re-released when the new fade ends earlier (Escape during a long
+   * release): both gains are frozen at their scheduled values and fade from there.
+   */
+  _releaseVoice(v, releaseS, silent = false) {
+    if (!v || v.ended) return false;
+    const ctx = v.ctx;
+    if (ctx.state === 'closed') { this._cleanup(v); return true; }
+    const t = this._soon(ctx);
     const rel = Math.max(0.005, releaseS);
+    const stopAt = Math.max(t + rel + 0.01, v.t0 + 0.005);
+    if (t >= v.endTime - 0.002 || stopAt >= v.endTime) return false; // ends sooner on its own
     v.releasing = true;
+    clearTimeout(v.topUp);
     try {
-      // Freeze the envelope where it is (no step, no later attack), then fade on the dedicated
-      // release node, which has no other automation to cancel.
-      this._holdEnv(v, now);
-      const rg = v.releaseGain.gain;
-      rg.setValueAtTime(1, now);
-      rg.linearRampToValueAtTime(GAIN_FLOOR, now + rel);
-      for (const p of v.freqParams) {
-        if (typeof p.cancelAndHoldAtTime === 'function') p.cancelAndHoldAtTime(now);
-      }
-      const stopAt = now + rel + 0.01;
+      // Freeze the envelope where it will be (no step, no later attack), then fade on the
+      // release gain from its own current value.
+      this._freeze(v.env, t);
+      this._freeze(v.rel, t);
+      this._ev(v.rel, 'linearRampToValueAtTime', GAIN_FLOOR, t + rel);
       for (const s of v.sources) {
         try { s.stop(stopAt); } catch (e) { /* already stopped */ }
+      }
+      // Automation after the stop can never sound: cancel it.
+      for (const p of v.freqParams) {
+        try { p.cancelScheduledValues(stopAt); } catch (e) { /* ignore */ }
       }
       v.endTime = stopAt;
     } catch (e) {
@@ -2490,15 +2669,15 @@ class AudioEngine {
       this._cleanup(v);
       return false;
     }
-    if (this.voice === v) this._emit('release', { id: v.id, natural: false });
+    if (this.voice === v && !silent) this._emit('release', { id: v.id, natural: false });
     // A suspended context renders nothing, so its scheduled stops would never fire: free now.
     if (ctx.state !== 'running') { this._cleanup(v); return true; }
     this._armFallback(v);
     return true;
   }
 
-  _releaseAll(releaseS) {
-    for (const v of [...this.voices]) this._releaseVoice(v, releaseS);
+  _releaseAll(releaseS, silent = false) {
+    for (const v of [...this.voices]) this._releaseVoice(v, releaseS, silent);
   }
 
   /** Graceful stop of the current voice with its own release time (or a fast one). */
@@ -2508,18 +2687,29 @@ class AudioEngine {
     return this._releaseVoice(v, fast ? 0.008 : v.release);
   }
 
-  /** Escape: ramp everything down within a few milliseconds. */
+  /** Escape: ramp everything down within a few milliseconds, long releases included. */
   stopAll() {
-    this._releaseAll(0.006);
+    this._releaseAll(ESCAPE_RELEASE_S);
+  }
+
+  /** Continuous permission withdrawn: every voice it lengthened fades out now. */
+  revokeContinuous() {
+    let n = 0;
+    for (const v of [...this.voices]) {
+      if (v.extended && this._releaseVoice(v, FAST_RELEASE_S)) n++;
+    }
+    return n;
   }
 
   _cleanup(v) {
     if (!v || v.ended) return;
     v.ended = true;
     for (const id of v.timers) clearTimeout(id);
+    clearTimeout(v.topUp);
     v.timers.length = 0;
     for (const s of v.sources) {
       s.onended = null;
+      try { s.stop(); } catch (e) { /* never started or already stopped */ }
       this.sources.delete(s);
     }
     for (const n of v.nodes) {
@@ -2532,8 +2722,7 @@ class AudioEngine {
     v.live = {};
     v.carrier = null;
     v.env = null;
-    v.envLog.length = 0;
-    v.releaseGain = null;
+    v.rel = null;
     this.voices.delete(v);
     if (this.voice === v) {
       this.voice = null;
@@ -2541,55 +2730,108 @@ class AudioEngine {
     }
   }
 
-  /** Apply a re-built plan of the same open type to the sounding voice (live controls). */
+  /**
+   * Bring the sounding voice in line with a re-built plan (called on every UI change while
+   * playing). Same open signal type: parameters glide. Only waveforms differ: a short dip
+   * around the switch. Anything else (another pattern or source, a changed programmed
+   * pattern): a seamless restart with the new plan. Returns 'same' | 'live' | 'restarted' | false.
+   */
   updateLive(np) {
     const v = this.voice;
-    if (!v || v.releasing || v.ended || !np) return false;
+    if (!v || v.releasing || v.ended || !np || v.ctx !== this.ctx) return false;
     const p = v.plan;
-    if (np.type !== p.type || np.kind !== 'open' || p.kind !== 'open') return false;
-    const now = this.ctx.currentTime;
+    if (planKey(np) === planKey(p)) return 'same';
+    const sameShape = planKey(np, true) === planKey(p, true);
+    // Glide in place: open signals of the same type, or a finite tone whose length is unchanged.
+    const liveTopology = np.type === p.type && np.kind === p.kind
+      && (np.kind === 'open' || (np.type === 'const' && np.dur === p.dur))
+      && !(np.type === 'dual' && !v.live.A.panner && np.stereo !== p.stereo);
+    if (!sameShape && !liveTopology) return this._restart(v, np);
+    const now = v.ctx.currentTime;
     const T = (param, value) => param.setTargetAtTime(value, now, 0.015);
     try {
-      switch (np.type) {
-        case 'const': T(v.carrier.frequency, np.freq); break;
-        case 'lfo':
-          T(v.carrier.frequency, np.center);
-          T(v.live.depth.gain, np.depth);
-          T(v.live.lfo.frequency, np.rate);
-          if (np.shape !== p.shape) v.live.lfo.type = np.shape;
-          break;
-        case 'am':
-          T(v.carrier.frequency, np.freq);
-          T(v.live.amGain.gain, 1 - np.depth / 2);
-          T(v.live.lfoGain.gain, np.depth / 2);
-          T(v.live.lfo.frequency, np.modFreq);
-          break;
-        case 'fm':
-          T(v.carrier.frequency, np.freq);
-          T(v.live.modGain.gain, np.depth);
-          T(v.live.mod.frequency, np.modFreq);
-          break;
-        case 'dual': {
-          const set = (side, o, level, pan) => {
-            T(side.osc.frequency, o.freq);
-            T(side.osc.detune, o.detune);
-            T(side.g.gain, o.gain * level * 0.5);
-            if (side.panner) T(side.panner.pan, pan);
-            if (side.osc.type !== o.wave) side.osc.type = o.wave;
-          };
-          set(v.live.A, np.a, np.levelA, np.stereo ? -1 : 0);
-          set(v.live.B, np.b, np.levelB, np.stereo ? 1 : 0);
-          break;
+      if (!sameShape) {
+        switch (np.type) {
+          case 'const': T(v.carrier.frequency, this._f(np.freq)); break;
+          case 'lfo':
+            T(v.carrier.frequency, this._f(np.center));
+            T(v.live.depth.gain, np.depth);
+            T(v.live.lfo.frequency, np.rate);
+            if (np.shape !== p.shape) v.live.lfo.type = np.shape;
+            break;
+          case 'am':
+            T(v.carrier.frequency, this._f(np.freq));
+            T(v.live.amGain.gain, 1 - np.depth / 2);
+            T(v.live.lfoGain.gain, np.depth / 2);
+            T(v.live.lfo.frequency, np.modFreq);
+            break;
+          case 'fm':
+            T(v.carrier.frequency, this._f(np.freq));
+            T(v.live.modGain.gain, np.depth);
+            T(v.live.mod.frequency, np.modFreq);
+            break;
+          case 'dual': {
+            // One glide per oscillator to the sounding frequency (detune is folded in): no
+            // intermediate value can pass the clamp.
+            const set = (side, o, level, pan) => {
+              T(side.osc.frequency, this._f(o.freq));
+              T(side.g.gain, o.gain * level * 0.5);
+              if (side.panner) T(side.panner.pan, pan);
+            };
+            set(v.live.A, np.a, np.levelA, np.stereo ? -1 : 0);
+            set(v.live.B, np.b, np.levelB, np.stereo ? 1 : 0);
+            break;
+          }
+          default: return this._restart(v, np);
         }
-        default: return false;
       }
-      if (np.type !== 'dual' && v.carrier.type !== np.wave) v.carrier.type = np.wave;
       v.plan = np;
-      return true;
+      this._switchWaves(v);
+      return 'live';
     } catch (e) {
       this._fail(e, 'live update');
       return false;
     }
+  }
+
+  /** Replace the current voice with a new plan, keeping its play options and deadline. */
+  _restart(v, np) {
+    const o = { ...v.opts, limited: v.limited };
+    delete o.until;
+    if (Number.isFinite(v.deadline)) {
+      if (v.deadline - v.ctx.currentTime < 0.03) return false; // about to end anyway
+      o.until = v.deadline;
+    }
+    return this.play(np, o) ? 'restarted' : false;
+  }
+
+  /**
+   * Waveform change without a click: OscillatorNode.type cannot be scheduled, so the voice dips
+   * to the floor on its release gain (audio clock), the type is switched once the main thread
+   * sees the dip complete, and the level comes back. Waves are read from v.plan when switching.
+   */
+  _switchWaves(v) {
+    const want = (o) => (v.plan.type === 'dual' ? [[v.live.A.osc, v.plan.a.wave], [v.live.B.osc, v.plan.b.wave]] : [[o, v.plan.wave]]);
+    if (v.dipping || want(v.carrier).every(([osc, w]) => osc.type === w)) return;
+    const ctx = v.ctx;
+    v.dipping = true;
+    const t = this._soon(ctx);
+    this._prune(v.rel, ctx.currentTime);
+    this._freeze(v.rel, t);
+    this._ev(v.rel, 'linearRampToValueAtTime', GAIN_FLOOR, t + WAVE_DIP_S);
+    const swap = () => {
+      if (v.ended || v.releasing) return;
+      if (ctx.state === 'running' && ctx.currentTime < t + WAVE_DIP_S) {
+        v.timers.push(setTimeout(swap, 2));
+        return;
+      }
+      for (const [osc, w] of want(v.carrier)) if (osc.type !== w) osc.type = w;
+      const t2 = this._soon(ctx);
+      this._freeze(v.rel, t2);
+      this._ev(v.rel, 'linearRampToValueAtTime', 1, t2 + WAVE_DIP_S);
+      v.dipping = false;
+    };
+    v.timers.push(setTimeout(swap, Math.max(1, (t + WAVE_DIP_S - ctx.currentTime) * 1000 + 1)));
   }
 
   instantaneousFrequency() {
@@ -2598,32 +2840,51 @@ class AudioEngine {
     return planFreqAt(v.plan, Math.max(0, this.ctx.currentTime - v.t0));
   }
 
+  /**
+   * Microphone analysis (opt-in). If building the graph fails, every track is stopped before
+   * the error propagates; a track that ends by itself (permission revoked, device unplugged)
+   * stops the microphone and emits 'mic' so the UI clears its indicator.
+   */
   async startMic() {
     if (this.mic) return true;
     if (!navigator.mediaDevices || typeof navigator.mediaDevices.getUserMedia !== 'function') {
       throw new Error('Microphone input is not available here (it needs HTTPS or a local file in a supporting browser).');
     }
-    if (!this.ctx && !this.init()) throw new Error('Audio could not start.');
+    if (!this.init()) throw new Error('Audio could not start.');
     const stream = await navigator.mediaDevices.getUserMedia({
       audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false },
     });
-    const source = this.ctx.createMediaStreamSource(stream);
-    const analyser = this.ctx.createAnalyser();
-    analyser.fftSize = 8192;
-    analyser.smoothingTimeConstant = 0.6;
-    analyser.minDecibels = -140;
-    analyser.maxDecibels = 0;
-    source.connect(analyser); // analysis only: never connected to the destination, never recorded
-    this.mic = { stream, source, analyser, freqData: new Float32Array(analyser.frequencyBinCount) };
+    try {
+      if (!this.init()) throw new Error('Audio could not start.');
+      const source = this.ctx.createMediaStreamSource(stream);
+      const analyser = this.ctx.createAnalyser();
+      analyser.fftSize = 8192;
+      analyser.smoothingTimeConstant = 0.6;
+      analyser.minDecibels = -140;
+      analyser.maxDecibels = 0;
+      source.connect(analyser); // analysis only: never connected to the destination, never recorded
+      const mic = { stream, source, analyser, freqData: new Float32Array(analyser.frequencyBinCount) };
+      for (const t of stream.getTracks()) t.onended = () => { if (this.mic === mic) this.stopMic('ended'); };
+      this.mic = mic;
+    } catch (e) {
+      for (const t of stream.getTracks()) { try { t.stop(); } catch (e2) { /* ignore */ } }
+      throw e;
+    }
     this.resume();
     return true;
   }
 
-  stopMic() {
-    if (!this.mic) return;
-    for (const t of this.mic.stream.getTracks()) t.stop();
-    try { this.mic.source.disconnect(); } catch (e) { /* ignore */ }
+  stopMic(reason = 'user') {
+    const m = this.mic;
+    if (!m) return;
     this.mic = null;
+    for (const t of m.stream.getTracks()) {
+      t.onended = null;
+      try { t.stop(); } catch (e) { /* ignore */ }
+    }
+    try { m.source.disconnect(); } catch (e) { /* ignore */ }
+    try { m.analyser.disconnect(); } catch (e) { /* ignore */ }
+    this._emit('mic', { active: false, reason });
   }
 }
 
@@ -3118,6 +3379,11 @@ function oscillaApp() {
     },
     get durationText() {
       const p = this.planSummary;
+      if (p && p.kind === 'continuous') return 'repeats until stopped';
+      if (p && p.kind === 'finite' && this.source === 'single' && this.pattern === 'finite'
+        && !this.continuousAllowed && p.dur > this.safetyLimit) {
+        return `${this.safetyLimit} s (limited; programmed ${formatMs(p.dur * 1000)})`;
+      }
       if (p && p.kind === 'finite') return `${formatMs(p.dur * 1000)} programmed`;
       return this.continuousAllowed ? `trigger ${formatMs(this.duration)} · hold unlimited`
         : `trigger ${formatMs(Math.min(this.duration, this.safetyLimit * 1000))} · hold ≤ ${this.safetyLimit} s`;
@@ -3193,10 +3459,17 @@ function oscillaApp() {
       if (this.planError) return this.planError;
       const p = this.planSummary;
       if (!p) return '';
+      const lim = this.safetyLimit;
       let tail;
-      if (p.kind === 'finite') tail = `programmed ${formatMs(p.dur * 1000)}`;
-      else if (this.continuousAllowed) tail = 'hold or latch · no time limit';
-      else tail = `hold up to ${this.safetyLimit} s · trigger ${formatMs(Math.min(this.duration, this.safetyLimit * 1000))}`;
+      if (p.kind === 'continuous') tail = 'repeats until stopped';
+      else if (p.kind === 'finite' && this.source === 'single' && this.pattern === 'finite') {
+        // The finite tone is the one programmed signal the hard limit also caps.
+        tail = this.continuousAllowed || p.dur <= lim ? `programmed ${formatMs(p.dur * 1000)}`
+          : `programmed ${formatMs(p.dur * 1000)} · limited to ${lim} s`;
+      } else if (p.kind === 'finite') {
+        tail = `programmed ${formatMs(p.dur * 1000)} (patterns are exempt from the hold limit, max ${MAX_PROGRAMMED_S} s)`;
+      } else if (this.continuousAllowed) tail = 'hold or latch · no time limit';
+      else tail = `hold up to ${lim} s · trigger ${formatMs(Math.min(this.duration, lim * 1000))}`;
       return `${p.label} · ${tail}`;
     },
     get browserText() { return browserName(); },
@@ -3248,18 +3521,19 @@ function oscillaApp() {
       }
     },
     get statusIcon() {
-      return { READY: '○', PLAYING: '▶', RELEASING: '◢', STOPPED: '■', ERROR: '!' }[this.status] || '○';
+      return { READY: '○', PLAYING: '▶', RELEASING: '◢', SUSPENDED: '‖', STOPPED: '■', ERROR: '!' }[this.status] || '○';
     },
 
     // ============================== audio + transport
     ensureAudio() {
       if (!AudioEngine.isSupported()) { this.status = 'ERROR'; return false; }
-      const first = !engine.ctx;
+      // A context closed from outside is rebuilt by init(); treat that like a first start.
+      const first = !engine.ctx || engine.state === 'closed';
+      engine.setMasterGain(this.gainLevel); // a new context starts at the requested level
       if (!engine.init()) { this.status = 'ERROR'; return false; }
       this.sampleRate = engine.sampleRate;
       this.audioState = engine.state;
       if (first) {
-        engine.setMasterGain(this.gainLevel);
         if (this.pendingHashConfig) {
           this.applyConfig(this.pendingHashConfig, 'hash');
           this.pendingHashConfig = null;
@@ -3267,6 +3541,21 @@ function oscillaApp() {
         if (this.frequency > this.rangeMax) this.setFrequency(this.frequency);
       }
       if (engine.state !== 'running') {
+        // On touch devices pointerdown is not a user activation, so a resume() made there can
+        // stay pending; retry on the next activating event (pointerup, touchend, click, key).
+        if (!this._resumeArmed) {
+          this._resumeArmed = true;
+          const evs = ['pointerup', 'touchend', 'click', 'keyup'];
+          const retry = () => {
+            engine.resume().then((ok) => {
+              this.audioState = engine.state;
+              if (!ok) return;
+              this._resumeArmed = false;
+              for (const t of evs) document.removeEventListener(t, retry, true);
+            });
+          };
+          for (const t of evs) document.addEventListener(t, retry, { capture: true, passive: true });
+        }
         engine.resume().then((ok) => {
           this.audioState = engine.state;
           if (!ok && this.playing) {
@@ -3310,6 +3599,8 @@ function oscillaApp() {
       this.play('hold');
     },
     holdEnd() {
+      // pointerup is a user activation on touch devices (pointerdown is not): resume here too.
+      if (engine.ctx && engine.state === 'suspended') engine.resume();
       if (!this.holding) return;
       this.holding = false;
       engine.release();
@@ -3339,6 +3630,8 @@ function oscillaApp() {
       this.latched = false;
       this.play('trigger');
     },
+    /** Held Enter auto-repeats keydown; only the first press may toggle the latch. */
+    latchKey(e) { if (e.repeat) e.preventDefault(); },
     toggleLatch() {
       if (!this.continuousAllowed) return;
       if (this.latched && this.playing) { this.stop(); return; }
@@ -3358,8 +3651,13 @@ function oscillaApp() {
     },
     setContinuous(on) {
       this.continuousAllowed = !!on;
-      if (!on && this.latched) this.stop();
-      if (!on && this.sweep.repeat === 'continuous') this.sweep.repeat = 'once';
+      if (on) return;
+      // Withdrawn: every voice the permission lengthened (latched, unlimited hold, continuous
+      // sweep, finite tone beyond the limit) fades out now — before the sweep repeat is reset,
+      // so the live update cannot restart it as a one-shot.
+      engine.revokeContinuous();
+      this.latched = false;
+      if (this.sweep.repeat === 'continuous') this.sweep.repeat = 'once';
     },
 
     onEngine(type, d) {
@@ -3368,7 +3666,8 @@ function oscillaApp() {
           clearTimeout(this._readyTimer);
           this.playing = true;
           this.releasing = false;
-          this.status = 'PLAYING';
+          // Honest status: a voice scheduled on a suspended context is silent until it resumes.
+          this.status = engine.running ? 'PLAYING' : 'SUSPENDED';
           clearInterval(this._metricTimer);
           this._metricTimer = setInterval(() => { this.instFreq = engine.instantaneousFrequency(); }, 100);
           break;
@@ -3389,7 +3688,14 @@ function oscillaApp() {
           break;
         case 'context':
           this.audioState = d;
-          this.sampleRate = engine.sampleRate;
+          if (engine.sampleRate) this.sampleRate = engine.sampleRate;
+          if (this.playing && !this.releasing) this.status = d === 'running' ? 'PLAYING' : 'SUSPENDED';
+          break;
+        case 'mic':
+          if (this.micActive && d.reason === 'ended') {
+            this.notify('warning', 'Microphone stopped', 'The microphone was disconnected or its permission was revoked.');
+          }
+          this.micActive = false;
           break;
         case 'error':
           this.status = 'ERROR';
@@ -4247,8 +4553,8 @@ function oscillaApp() {
     },
     async toggleMic() {
       if (this.micPending) return; // a second tap before :disabled renders would open a second stream
-      if (this.micActive) {
-        engine.stopMic();
+      if (this.micActive || engine.mic) {
+        engine.stopMic('user');
         this.micActive = false;
         return;
       }

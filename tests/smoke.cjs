@@ -13,6 +13,7 @@
 const path = require('path');
 const fs = require('fs');
 const playwright = require('playwright');
+const { instrument } = require('./engine.cjs');
 
 const args = process.argv.slice(2);
 const urlArg = args.includes('--url') ? args[args.indexOf('--url') + 1] : null;
@@ -36,8 +37,10 @@ function check(name, ok, detail = '') {
   else { failed++; failures.push(`${name} ${detail}`); console.log(`  FAIL ${name} ${detail}`); }
 }
 
-async function openPage(browser, { width = 1280, height = 900, hash = '', query = '', init = null, scheme = 'light' } = {}) {
+async function openPage(browser, { width = 1280, height = 900, hash = '', query = '', init = null, scheme = 'light', tap = false } = {}) {
   const context = await browser.newContext({ viewport: { width, height }, colorScheme: scheme, hasTouch: width < 768 && ENGINE !== 'firefox' });
+  // tap: sample-accurate output recorder + oscillator accounting from tests/engine.cjs (window.__T)
+  if (tap) await context.addInitScript(instrument, {});
   if (init) await context.addInitScript(init);
   const page = await context.newPage();
   const problems = [];
@@ -163,23 +166,64 @@ async function main() {
     // A tone voice is 3 nodes (oscillator, envelope, release gain); at most 5 voices overlap.
     check('no oscillator accumulation during cycles', cycles.maxNodes <= 15, JSON.stringify(cycles));
 
-    // safety limit on the audio clock
+    // safety limit on the audio clock: the held voice ends ≈ 0.5 s after it starts, measured on
+    // ctx.currentTime (a wall-clock wait would pass even if the limit were 0.9 s)
     await app(page, (a) => { a.safetyLimit = 0.5; });
-    await holdFor(page, 900);
-    const limited = await app(page, (a, e) => ({ voice: !!e.voice, status: a.status, nodes: e.activeNodeCount }));
+    await holdFor(page, 50);
+    const limited = await app(page, async (a, e) => {
+      const v = e.voice;
+      if (!v) return { voice: false };
+      while (e.voice === v && e.ctx.currentTime - v.t0 < 2) await new Promise((r) => setTimeout(r, 5));
+      return { voice: true, endedAfter: e.ctx.currentTime - v.t0, nodes: e.activeNodeCount, status: a.status };
+    });
     await page.mouse.up();
-    check('safety limit ends a held tone (0.5 s)', !limited.voice && limited.nodes === 0, JSON.stringify(limited));
+    check('safety limit ends a held tone at 0.5 s (audio clock)', limited.voice && limited.endedAfter > 0.49 && limited.endedAfter < 0.6 && limited.nodes === 0, JSON.stringify(limited));
     await app(page, (a) => { a.safetyLimit = 2; });
 
-    // continuous permission never persisted
+    // continuous permission never persisted: decode the hash (including its base64url JSON
+    // payload) and every localStorage value, and look for any key that could carry it
     const persisted = await app(page, (a) => {
       a.setContinuous(true);
+      // a sweep with continuous repeat: the configuration most tied to the permission, and one
+      // that always carries a JSON payload
+      a.setMode('sweep');
+      a.setSweepRepeat('continuous');
+      a.saveName = 'perm-test';
+      a.savePreset();
       const hash = a.serializeHash();
-      const ls = JSON.stringify(Object.assign({}, localStorage));
+      const q = new URLSearchParams(hash);
+      const keys = [...q.keys()];
+      const values = [...q.values()];
+      const decode = (t) => {
+        let b = String(t).replace(/-/g, '+').replace(/_/g, '/');
+        while (b.length % 4) b += '=';
+        return new TextDecoder().decode(Uint8Array.from(atob(b), (c) => c.charCodeAt(0)));
+      };
+      let payload = null;
+      try { payload = q.get('x') ? JSON.parse(decode(q.get('x'))) : null; } catch (e) { payload = 'undecodable'; }
+      const ls = {};
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        try { ls[k] = JSON.parse(localStorage.getItem(k)); } catch (e) { ls[k] = localStorage.getItem(k); }
+      }
+      const found = [];
+      const walk = (o, where) => {
+        if (!o || typeof o !== 'object') return;
+        for (const [k, v] of Object.entries(o)) {
+          if (/allow|permi|continuousAllowed|^continuous$/i.test(k) || v === true && /continu/i.test(k)) found.push(`${where}.${k}`);
+          walk(v, `${where}.${k}`);
+        }
+      };
+      walk(payload, 'hash.x');
+      walk(ls, 'localStorage');
+      for (const k of keys) if (/allow|perm|continu/i.test(k)) found.push(`hash.${k}`);
       a.setContinuous(false);
-      return { hash, ls };
+      a.setMode('playground');
+      const saved = a.customPresets.find((p) => p.name === 'perm-test');
+      if (saved) a.deletePreset(saved.id);
+      return { payloadDecoded: payload && typeof payload === 'object', keys, nValues: values.length, lsKeys: Object.keys(ls), found };
     });
-    check('continuous permission not in URL or localStorage', !/continu/i.test(persisted.hash + persisted.ls) || !/continuousAllowed/.test(persisted.hash + persisted.ls), JSON.stringify(persisted).slice(0, 200));
+    check('continuous permission not in URL (decoded) or localStorage', persisted.payloadDecoded && persisted.found.length === 0, JSON.stringify(persisted));
 
     // every pattern: trigger, let it run briefly, frequency stays below Nyquist, stops clean
     const patterns = await page.evaluate(async () => {
@@ -297,66 +341,91 @@ async function main() {
     await context.close();
   }
 
-  // Stopping mid-attack or mid-release never raises the level, with and without
-  // AudioParam.cancelAndHoldAtTime (deleted here to emulate Firefox).
+  // Stopping mid-attack or mid-release never raises the level, never jumps to the floor and never
+  // steps, with and without AudioParam.cancelAndHoldAtTime (deleted here to emulate Firefox).
+  // Measured on the sample-accurate output tap (every sample with its frame index), not by
+  // polling an analyser from the main thread.
   for (const emulate of [false, true]) {
     const init = emulate ? () => { delete AudioParam.prototype.cancelAndHoldAtTime; } : null;
-    const { page, problems, context } = await openPage(browser, { init });
-    await app(page, (a) => a.ensureAudio());
+    const { page, problems, context } = await openPage(browser, { init, tap: true });
     const tag = emulate ? 'without cancelAndHoldAtTime' : 'native';
+    const tapState = await app(page, async (a, e) => {
+      a.ensureAudio();
+      const T = window.__T;
+      const start = Date.now();
+      while (!(T.rec && T.rec.ready && T.rec.chunks.length > 2 && e.state === 'running') && Date.now() - start < 6000) {
+        await new Promise((r) => setTimeout(r, 20));
+      }
+      return { chunks: T.rec ? T.rec.chunks.length : 0, kind: T.rec && T.rec.kind, state: e.state };
+    });
+    check(`${tag}: output tap captures samples`, tapState.chunks > 2, `no samples captured ${JSON.stringify(tapState)}`);
     for (const [label, setup, waitMs] of [
       ['mid-attack', { pattern: 'tone', attack: 400, release: 150, mode: 'hold' }, 150],
       ['mid-release', { pattern: 'finite', duration: 600, attack: 10, release: 400, mode: 'trigger' }, 350],
     ]) {
-      const r = await page.evaluate(async ([cfg, wait]) => {
+      // Three takes, each criterion judged by majority: a systematic fault fails every take,
+      // while Firefox under heavy CPU load occasionally applies an event late.
+      const takes = [];
+      for (let take = 0; take < 3; take++) takes.push(await page.evaluate(async ([cfg, wait]) => {
         const a = window.Alpine.$data(document.body);
         const e = window.OSCILLA.engine;
-        // Test-only probe on the master bus: 256-sample peak windows (≈ 5 ms).
-        const probe = e.ctx.createAnalyser();
-        probe.fftSize = 256;
-        const buf = new Float32Array(probe.fftSize);
-        e.master.connect(probe);
-        const peak = () => {
-          probe.getFloatTimeDomainData(buf);
-          let p = 0;
-          for (const x of buf) p = Math.max(p, Math.abs(x));
-          return p;
-        };
+        const T = window.__T;
+        const sleep = (ms) => new Promise((res) => setTimeout(res, ms));
         a.setPattern(cfg.pattern);
+        a.setWaveform('sine');
+        a.setFrequency(440);
         if (cfg.duration) a.duration = cfg.duration;
         a.attack = cfg.attack;
         a.release = cfg.release;
+        await sleep(30);
         a.play(cfg.mode);
-        const tPlay = e.ctx.currentTime;
-        while (e.ctx.currentTime - tPlay < wait / 1000) await new Promise((res) => setTimeout(res, 2));
-        const before = peak();
-        a.stop();
+        const t0 = e.voice.t0;
+        while (e.ctx.currentTime < t0 + wait / 1000) await sleep(2);
         const tStop = e.ctx.currentTime;
-        const samples = [];
-        while (e.ctx.currentTime - tStop < 0.12) {
-          await new Promise((res) => setTimeout(res, 2));
-          samples.push([e.ctx.currentTime - tStop, peak()]);
+        a.stop();
+        await sleep(cfg.release + 250);
+        const recorded = await T.waitRec(tStop + 0.15);
+        // 5 ms peak windows. The engine schedules the release ~20 ms ahead of the stop call (and
+        // the limiter delays the output by ~6 ms), so an attack may rise a little in the first
+        // 30 ms (bounded below); from there every window stays at or below the lowest seen.
+        const before = T.stats(tStop - 0.01, tStop).peak;
+        const windows = [];
+        for (let k = 0; k < 24; k++) windows.push(T.stats(tStop + k * 0.005, tStop + (k + 1) * 0.005));
+        const n = windows.reduce((s, w) => s + w.n, 0);
+        const leadMax = Math.max(...windows.slice(0, 6).map((w) => w.peak));
+        let rises = leadMax > before * 1.2 + 1e-4 ? 1 : 0;
+        let worst = leadMax / Math.max(before, 1e-6);
+        let low = windows[5].peak;
+        for (const w of windows.slice(6)) {
+          if (w.peak > low * 1.08 + 1e-4) { rises++; worst = Math.max(worst, w.peak / Math.max(low, 1e-6)); }
+          low = Math.min(low, w.peak);
         }
-        // Each window must stay at or below the lowest level seen since (and just before) stop.
-        let rises = 0;
-        let worst = 0;
-        let low = before;
-        for (const [, p] of samples) {
-          if (p > low * 1.08 + 0.002) { rises++; worst = Math.max(worst, p / Math.max(low, 1e-6)); }
-          low = Math.min(low, p);
+        // no sudden drop (a jump towards the floor): consecutive 5 ms windows fall by < 2x
+        let drop = 1;
+        for (let k = 1; k < windows.length; k++) {
+          if (windows[k - 1].peak > 2e-3) drop = Math.min(drop, windows[k].peak / windows[k - 1].peak);
         }
-        // First level 5–40 ms after stop: still near the pre-stop level (no drop to the floor).
-        const early = samples.filter((s) => s[0] >= 0.005 && s[0] <= 0.04).map((s) => s[1]);
-        await new Promise((res) => setTimeout(res, cfg.release + 200));
-        e.master.disconnect(probe);
+        // largest one-sample step around the stop, relative to the 440 Hz sine's largest slope
+        const slope = (2 * Math.PI * 440 * a.gainLevel) / e.ctx.sampleRate;
+        const span = T.stats(tStop - 0.05, tStop + 0.15);
         a.duration = 500;
         a.attack = 10;
         a.release = 30;
-        return { before, early: early.length ? early[0] : null, n: samples.length, rises, worst, nodes: e.activeNodeCount };
-      }, [setup, waitMs]);
-      check(`${tag}: stop ${label} never raises the level`, r.n >= 5 && r.rises === 0 && r.before > 0.005, JSON.stringify(r));
-      check(`${tag}: stop ${label} starts from the held level (no jump to the floor)`, r.early != null && r.early > r.before * 0.5, JSON.stringify(r));
-      check(`${tag}: stop ${label} frees every node`, r.nodes === 0, JSON.stringify(r));
+        return {
+          recorded, n, before: +before.toFixed(4), drop: +drop.toFixed(3), rises, worst: +worst.toFixed(2),
+          ratio: +(span.maxStep / slope).toFixed(2), nodes: e.activeNodeCount, oscs: T.liveOscs(),
+        };
+      }, [setup, waitMs]));
+      if (takes.some((r) => !r.recorded || r.n < 1000)) {
+        check(`${tag}: stop ${label} — samples captured around the stop`, false, `no samples captured ${JSON.stringify(takes)}`);
+        continue;
+      }
+      const most = (ok) => takes.filter(ok).length >= 2;
+      const detail = JSON.stringify(takes);
+      check(`${tag}: stop ${label} never raises the level`, most((r) => r.rises === 0 && r.before > 0.005), detail);
+      check(`${tag}: stop ${label} starts from the held level (no jump to the floor)`, most((r) => r.drop > 0.5), detail);
+      check(`${tag}: stop ${label} has no step (click ratio < 3)`, most((r) => r.ratio < 3), detail);
+      check(`${tag}: stop ${label} frees every node and oscillator`, takes.every((r) => r.nodes === 0 && r.oscs === 0), detail);
     }
     check(`${tag}: no console problems in release tests`, problems.length === 0, problems.join(' | '));
     await context.close();
