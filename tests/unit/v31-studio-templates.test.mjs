@@ -281,7 +281,7 @@ test('§143 node, connection and port labels', () => {
   assert.strictEqual(describePortLabel(m, 'osc-1', 'audio', 'out'),
     'Oscillator 1 audio output, connected to Envelope 1');
   assert.strictEqual(describePortLabel(m, 'filter-1', 'Q', 'in'),
-    'Filter 1 q control input, available'); // ports.js lower-cases every label
+    'Filter 1 Q control input, available'); // a capitalised display name keeps its case
   assert.strictEqual(describePortLabel(m, 'filter-1', 'frequency', 'in'),
     'Filter 1 cutoff control input, connected to LFO 1');
   const lin = raw([n('lfo-1', 'lfo'), n('filter-1', 'filter'), n('osc-1', 'oscillator')], [

@@ -11,10 +11,13 @@ extends is `docs/v31/studio-model.md`, the sequencer concept map is
 | `src/js/studio/timeline-compiler.js` | Transport anchor and loop passes, per-clip compilation through the sequencer compiler, look-ahead scheduler, edit-during-playback rebuild, STOP plan, Escape priority |
 | `src/js/studio/automation.js` | Lane value, AudioParam event compilation, the thin `applyAutomation` applier, holds, parameter scales, automation + modulation rule, editor actions |
 | `src/js/studio/sequence-import.js` | V2 sequence import and export |
+| `src/js/studio/transport.js` | Live playback: applies the scheduler's output to the Studio runtime (see "Transport integration") |
 
-All four are pure: no DOM, no Web Audio objects, no clock, no timers. The runtime owns the
-AudioContext and applies what they return; `AudioContext.currentTime` is the only time authority
-(§94, §181, project rule `audio-engine-discipline`).
+The first four are pure: no DOM, no Web Audio objects, no clock, no timers. The transport and
+the runtime own the AudioContext side and apply what they return; `AudioContext.currentTime` is
+the only time authority (§94, §181, project rule `audio-engine-discipline`). Tests:
+`tests/unit/v31-studio-transport.test.mjs` (fake AudioContext under the real AudioEngine, one
+virtual clock) and `tests/browser/v31-studio-transport.cjs` (real Web Audio).
 
 ## Tracks and clips (§81-§84)
 
@@ -276,6 +279,61 @@ nothing; the clamp is the parameter range (frequencies also 0.95 × Nyquist). Ex
 editor can draw around the automation curve. The graph runtime realises the rule with AudioParam
 summing: the base value is automated on the parameter and the modulator reaches the same
 parameter through its depth gain.
+
+## Transport integration (§93-§95, §180-§185)
+
+`createStudioTransport({ runtime, engine, store, onClaimOutput, onMeasurement })` plays the
+store's model, graph and timeline, on the ONE AudioEngine. It is the only module here that
+touches Web Audio objects, and it does so only through the runtime's handles.
+
+| Call | Effect |
+| --- | --- |
+| `start({ position })` | `onClaimOutput({ owner: 'studio', position })` (false refuses), `runtime.setOwnedParams`, `runtime.apply`, `runtime.start()`; the start's crossfade time is the anchor's `baseTime`, so a clip at position p sounds at `baseTime + p` on whole frames; then the first scheduler window |
+| `stop({ fast })` | `scheduler.stop(now)` applied (sounding voices `voice.stop(at)`, pending ones disposed unheard, every lane held at its exact value, gate-owned envelopes released), owned parameters released, `runtime.stop({ fast })`; resolves with the counts once released (0 nodes, 0 sources); the model is never touched; the playhead returns to the play start |
+| `returnToStart()` / `locate(p)` | the return point becomes p; while playing, the current schedule is stopped as above (without stopping the graph) and a new anchor starts at `hooks.soon()` from p |
+| `setLoop({ enabled, start, end })` | `LOOP_SET` through the store, then `sync()` (the scheduler re-anchors, `EDIT_POLICY.loopChange`) |
+| `sync()` | the store's model now: owned parameters, `runtime.apply`, ownership and node rebinds, `scheduler.edit(model, now)` applied. The UI's store `onChange` calls it; every wake-up also compares the store revision |
+| `escape({ gesture, popup, selectionMode })` | `resolveEscape` with `audioActive` = playing or the runtime running; `stop-audio` stops fast (8 ms, `STUDIO_FAST_STOP_S`) |
+| `playhead()` | `positionAt(anchor, ctx.currentTime)` while playing, else the return point |
+| `debugInfo()` | playing, anchor, voices, gates, lanes, claims, gated envelopes, owned parameters, `unplayed` (id + reason), late skips, decisions, warnings |
+
+Timing. There is one timer, the bookkeeping wake-up: it is armed with `scheduler.nextWakeMs`
+(half a look-ahead before the scheduled horizon, at most `TOP_UP_EVERY_MS`), calls
+`advance(ctx.currentTime)` and applies what it returns. It decides when to compile, never when a
+sound happens; every time comes from the scheduler. After the last window of a non-looping
+timeline the wake-up waits until the end (+ `STOP_PAD_S`) and stops the transport ('ended').
+
+What plays where:
+
+| Timeline content | Played as |
+| --- | --- |
+| pattern clip on a Sequence | `compileSequence(item.sequence, ctx, handle.info.destination, item.startTime, { track, source, timers })` with the node's accounting; a finished voice untracks its nodes at once (`onEnded`), so a long loop never accumulates. The Sequence's TRIGGER edges into an Envelope `gate` gate that envelope for the clip |
+| pattern clip on an Oscillator | the oscillator is **pattern-played**: its free-running carrier is held at `ROUTE_FLOOR` (its `level` AudioParam is owned by the transport; built in this transaction → set at once, already sounding → 20 ms ramp) and the voices (the oscillator's waveform, `clipSequence`) play into a pattern bus (gain = the oscillator's level) connected to every AUDIO route leaving the oscillator. They pass its routes, crossfades included, and everything downstream (OSC → ADSR → FILTER → MASTER in the Basic Synth). A level change glides the bus; a lane on the oscillator's level drives the bus |
+| gate event clip on an Envelope | `handle.gate(startTime, duration)`; an envelope the timeline gates is closed at PLAY (`release`) and opened again when no gate clip targets it any more |
+| automation lane | `applyAutomation(handle.modTarget(param, 'linear').param, events)`; the parameter is owned (`runtime.setOwnedParams`), so the runtime's base glide and live updates skip it; `runtime.baseOffset` (linear modulation offsets) is added to the scheduled values (none in the templates: exact events) |
+| measurement clip | data only: `onMeasurement({ type: 'schedule', key, clipId, action, target, trackId, pass, position, startTime, endTime, duration, truncated })`, then `cancel` / `release` / `retime` / `stop` events; the V3 measurement engine integration is a later UI step |
+| anything else | not played; listed in `debugInfo().unplayed` with its reason (`TRANSPORT_TEXT`): an event clip on a source, a `trigger` event clip, a target that is not ready |
+
+Edits during playback apply `scheduler.edit`'s plan as `EDIT_POLICY` says: `cancel` disposes the
+not-yet-started voice, `schedule` plays the rebuilt item, `release` / `retime-end` call
+`voice.stop(at)`, lanes are held at the horizon and continue (`applyAutomation` with
+`cancelFrom`); a removed lane is held, then glides back to the parameter's base. Graph edits go
+through `runtime.apply` first; then:
+
+- a node rebuilt by the runtime (`node-replace`): its lane continues on the new AudioParam from
+  the horizon with the exact value there (`rebind`); a pattern-played oscillator is claimed
+  again (built silent, so at once); voices sounding into the old node fade with the runtime's
+  crossfade (recorded as `release`, reason `node-replaced`) and the future ones are rebuilt on
+  the new node by the edit (future items are always rescheduled), with its new waveform;
+- an envelope whose gates changed is re-rendered from the horizon: held (or released when no
+  gate is sounding), the sounding gate's release, every later gate again. A gate interrupted in
+  its attack by such an edit is held at its value at the horizon (a flattened attack, no step).
+
+Known limitations: offline rendering (`offline.js`) does not play pattern clips on an
+Oscillator yet (it lists them as limitations), so the live and the rendered result of the Basic
+Synth template differ until it reuses the same claim; a modulation edge into a pattern-played
+oscillator's `level` modulates the silenced carrier, not the voices; `baseOffset` is read when
+events are scheduled, so a changed edge offset reaches the lane within one look-ahead (1 s).
 
 ## Model and action additions
 

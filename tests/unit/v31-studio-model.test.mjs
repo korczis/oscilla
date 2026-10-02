@@ -330,6 +330,9 @@ test('port visuals are distinguishable without colour; labels are accessible (§
     { connections: ['Filter 1'] }), 'Audio output port, connected to Filter 1');
   assert.strictEqual(portAccessibleLabel(port('filter', 'frequency', 'in'),
     { nodeName: 'Filter 1' }), 'Filter 1 cutoff control input, available');
+  // A display name written in capitals keeps its case after the node name.
+  assert.strictEqual(portAccessibleLabel(port('filter', 'Q', 'in'), { nodeName: 'Filter 1' }),
+    'Filter 1 Q control input, available');
   assert.strictEqual(describePort(port('transfer-analyzer', 'reference', 'in')),
     'Reference analysis input');
   assert.strictEqual(describePort(port('envelope', 'gate', 'in')), 'Gate trigger input');

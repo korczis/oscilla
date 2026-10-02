@@ -33,7 +33,7 @@ import { MIC_UNAVAILABLE_TEXT, closeMicrophone, hasMicrophoneApi, micErrorMessag
 import { createFilterStage } from '../../audio/filters.js';
 import { createStereoRouter } from '../../audio/stereo.js';
 import { createNoiseSource, mulberry32 } from '../../audio/noise.js';
-import { applyAdsr, forgetParam, releaseAt } from '../../audio/envelope.js';
+import { applyAdsr, forgetParam, holdAt, releaseAt } from '../../audio/envelope.js';
 import { renderStimulus } from '../../measurement/stimulus.js';
 import { createAnalyserReader } from '../../analysis/analyser.js';
 import { createRamp } from './ramp.js';
@@ -352,6 +352,14 @@ const envelope = {
           applyAdsr(p, t, adsr, 1, { retrigger: true });
           if (durS != null) releaseAt(p, t + durS, adsr.r);
         }
+      },
+      /** Gate off at t: release from the value the contour has there (timeline hook). */
+      release(t) {
+        for (const p of params2()) releaseAt(p, t, adsr.r);
+      },
+      /** Hold the contour at t, dropping everything scheduled after it (timeline edits). */
+      hold(t) {
+        for (const p of params2()) holdAt(p, t);
       },
       stop(t) { if (contour) { try { contour.stop(t); } catch (e) { /* stopped */ } } },
       dispose() { for (const p of params2()) forgetParam(p); },

@@ -146,8 +146,10 @@ export function describePort(port) {
 
 /**
  * Screen-reader label for a port (§143): "Audio output port, connected to Filter 1",
- * "Filter 1 cutoff control input, available". `connections` are display names of the nodes at
- * the other end.
+ * "Filter 1 cutoff control input, available", "Filter 1 Q control input, available". After a
+ * node name the description's first word is lower-cased only when it is an ordinary word: a
+ * display name written in capitals ("Q", "LFO", "RTA") keeps its case. `connections` are
+ * display names of the nodes at the other end.
  */
 export function portAccessibleLabel(port, { nodeName = '', connections = [] } = {}) {
   const base = describePort(port);
@@ -315,6 +317,14 @@ function cap(s) {
   return s ? s[0].toUpperCase() + s.slice(1) : s;
 }
 
+/**
+ * Lower-case the first letter of a sentence-initial word, unless that word is an acronym or a
+ * symbol written in capitals (a single capital letter, or an upper-case letter after the first):
+ * "Cutoff control input" -> "cutoff control input", "Q control input" stays.
+ */
 function lower(s) {
-  return s ? s[0].toLowerCase() + s.slice(1) : s;
+  if (!s) return s;
+  const word = s.split(/\s/, 1)[0];
+  const keep = /[A-Z]/.test(word.slice(1)) || /^[A-Z]$/.test(word);
+  return keep ? s : s[0].toLowerCase() + s.slice(1);
 }

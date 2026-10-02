@@ -20,6 +20,15 @@
 //   runtime.flush({ force })       run due (or all) deferred disposals now
 //   runtime.debugInfo()            runtime node count, compiled revision, last error, ... (§177)
 //   runtime.on(fn) -> off          fn(type, detail): 'applied' | 'error' | 'state'
+//   runtime.setOwnedParams([{ node, param }]) -> list   parameters another owner drives (the
+//                                  transport: automation lanes, pattern-played oscillator
+//                                  levels). The runtime never glides their base value nor lets
+//                                  a live update rewrite them; [] releases every claim
+//   runtime.ownedParams()          the current claims, [{ node, param }]
+//   runtime.baseOffset(id, key)    the constant part the modulation edges add to a parameter's
+//                                  base (linear edges: unipolar polarity, offset), in its unit;
+//                                  an owner adds it to the values it schedules (automation.js
+//                                  combineAutomationAndModulation: actual = base + Σ edges)
 //
 // Transaction (§46), for every apply while running:
 //   1. validate   compileStudio refuses an invalid model: nothing is touched (§179)
@@ -35,6 +44,17 @@
 //                 routes and nodes are disconnected, disposed and untracked
 // The master graph is never disconnected while sounding (§45): Studio output leaves only
 // through the Master Output bus into engine.master, and that bus is faded, not cut.
+//
+// Owned parameters (docs/v31/compiler.md decision "Automated parameters belong to their lane").
+// An adapter writes all of its node's parameters in applyBase / update (createFilterStage.update
+// re-glides frequency, Q and gain even for a bypass change), so the skip is done on the
+// AudioParam: while the runtime calls applyBase(base, false) or update(changed) on a node with
+// owned keys, the scheduling methods of each owned AudioParam (handle.modTarget(key, 'linear')
+// .param, the one the owner automates) are shadowed by no-ops on that instance and restored
+// right after, synchronously. Every other parameter of the node (its detune, which carries
+// log-mapped modulation offsets, its Q, ...) is applied as before. A node's first applyBase
+// (immediate, the node is still silent) is not skipped: it gives the parameter its initial value
+// and the owner schedules from there.
 
 import { NODE_REGISTRY } from './registry.js';
 import { NODE_ADAPTERS } from './adapters/nodes.js';
@@ -47,6 +67,12 @@ import {
 
 /** Escape-speed stop (scheduler.js ESCAPE_RELEASE_S). */
 export const STUDIO_FAST_STOP_S = 0.008;
+
+/** AudioParam methods shadowed on an owned parameter while the runtime writes its node. */
+const PARAM_WRITE_METHODS = Object.freeze(['setValueAtTime', 'linearRampToValueAtTime',
+  'exponentialRampToValueAtTime', 'setTargetAtTime', 'setValueCurveAtTime',
+  'cancelScheduledValues', 'cancelAndHoldAtTime']);
+const noop = () => {};
 
 const readOnlyMap = (map) => Object.freeze({
   get: (id) => map.get(id),
@@ -73,6 +99,7 @@ export function createStudioRuntime({
   const pending = new Set();
   const listeners = new Set();
   const bases = new Map(); // node id → last computeBases result (debug)
+  const owned = new Map(); // node id → Set of parameter keys driven by another owner
   let plan = EMPTY_PLAN;
   let state = 'idle';
   let compiledRevision = null;
@@ -170,6 +197,59 @@ export function createStudioRuntime({
     return n;
   }
 
+  // ------------------------------------------------------------ owned parameters
+
+  /** Run fn with the owned AudioParams of handle `h` unwritable (see the header). */
+  function withOwned(h, fn) {
+    const keys = h && owned.get(h.id);
+    if (!keys || !keys.size) return fn();
+    const shadowed = [];
+    for (const key of keys) {
+      let target = null;
+      try { target = h.modTarget(key, 'linear'); } catch (e) { target = null; }
+      const param = target && target.param;
+      if (!param) continue;
+      for (const m of PARAM_WRITE_METHODS) {
+        if (typeof param[m] !== 'function') continue;
+        const own = Object.prototype.hasOwnProperty.call(param, m);
+        shadowed.push({ param, m, own, prev: own ? param[m] : null });
+        param[m] = noop;
+      }
+    }
+    try {
+      return fn();
+    } finally {
+      for (const { param, m, own, prev } of shadowed.reverse()) {
+        if (own) param[m] = prev;
+        else delete param[m];
+      }
+    }
+  }
+
+  function setOwnedParams(list = []) {
+    owned.clear();
+    for (const e of Array.isArray(list) ? list : []) {
+      if (!e || typeof e.node !== 'string' || typeof e.param !== 'string') continue;
+      if (!owned.has(e.node)) owned.set(e.node, new Set());
+      owned.get(e.node).add(e.param);
+    }
+    return ownedParams();
+  }
+
+  function ownedParams() {
+    const out = [];
+    for (const [node, keys] of owned) for (const param of keys) out.push({ node, param });
+    return out;
+  }
+
+  function baseOffset(id, key) {
+    const cb = bases.get(id);
+    const pn = plan.nodes.get(id);
+    if (!cb || !pn || !cb.base[key] || typeof pn.params[key] !== 'number') return 0;
+    const d = cb.base[key].value - pn.params[key];
+    return Number.isFinite(d) ? d : 0;
+  }
+
   // ------------------------------------------------------------ transaction
 
   function incomingControl(next, id, edgeOf) {
@@ -251,7 +331,7 @@ export function createStudioRuntime({
         if (live.length && h) {
           const changed = {};
           for (const k of live) changed[k] = pn.params[k];
-          guard(`update ${o.id}`, () => h.update(changed));
+          guard(`update ${o.id}`, () => withOwned(h, () => h.update(changed)));
         }
         if (live.length < o.keys.length) affected.add(o.id);
       } else if (o.op.startsWith('edge-')) {
@@ -267,7 +347,9 @@ export function createStudioRuntime({
       if (!h || (h.status !== 'ready' && h.status !== 'pending')) continue;
       const cb = computeBases(next.nodes.get(id), incomingControl(next, id, edgeOf), hooks);
       bases.set(id, cb);
-      if (!created.handles.has(id)) guard(`parameters ${id}`, () => h.applyBase(cb.base, false));
+      if (!created.handles.has(id)) {
+        guard(`parameters ${id}`, () => withOwned(h, () => h.applyBase(cb.base, false)));
+      }
       for (const [eid, g] of cb.gains) {
         const eh = edges.get(eid);
         if (eh && eh.ramp && eh.ramp.target !== g) guard(`route ${eid}`, () => eh.ramp.to(g, t, X));
@@ -449,6 +531,7 @@ export function createStudioRuntime({
       warnings: [...plan.warnings.map((w) => w.message), ...lastWarnings],
       lastOps,
       lastError,
+      ownedParams: ownedParams(),
     };
   }
 
@@ -461,6 +544,9 @@ export function createStudioRuntime({
     setOptions,
     bindings,
     debugInfo,
+    setOwnedParams,
+    ownedParams,
+    baseOffset,
     on(fn) {
       listeners.add(fn);
       return () => listeners.delete(fn);

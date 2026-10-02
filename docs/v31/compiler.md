@@ -7,7 +7,7 @@ runtime patching). ADR 0035 says why; this document says how. Code:
 | File | Role |
 | --- | --- |
 | `src/js/studio/compiler.js` | `compileStudio` (model → plan), `diffPlans`, `instantiateNode`, `createEdgeHandle`, `computeBases`, `disposeHandle` |
-| `src/js/studio/runtime.js` | `createStudioRuntime`: id → handle map, transactional `apply`, `start` / `stop` / `dispose`, `debugInfo` |
+| `src/js/studio/runtime.js` | `createStudioRuntime`: id → handle map, transactional `apply`, `start` / `stop` / `dispose`, `debugInfo`, owned parameters (`setOwnedParams`, `baseOffset`) |
 | `src/js/studio/adapters/nodes.js` | one adapter per registry node type, built only from existing builders |
 | `src/js/studio/adapters/engine-hooks.js` | the single place that touches the AudioEngine instance; accounting closures |
 | `src/js/studio/adapters/ramp.js` | click-free route ramps (ADR 0001 applied to edge gains) |
@@ -108,8 +108,8 @@ The runtime then instantiates the plan in order and routes it:
 `runtime.nodes.get('filter-1')` is the handle of that node: `{ id, type, name, status, reason,
 inputs, outputs, info, nodes, sources, modTarget(key, mapping), applyBase, update, stop,
 dispose }` plus type-specific `info` (`info.stage` of a filter, `info.analyser` / `info.reader`
-of an analyzer, `info.reference` of a sweep, `info.destination` of a Sequence, `gate(t, durS)`
-of an Envelope). `runtime.edges.get(id)` is the route. The model stays plain data; handles are
+of an analyzer, `info.reference` of a sweep, `info.destination` of a Sequence, `gate(t, durS)`,
+`release(t)` and `hold(t)` of an Envelope). `runtime.edges.get(id)` is the route. The model stays plain data; handles are
 never stored in it or in Alpine state.
 
 ## Diffing (§44)
@@ -200,24 +200,55 @@ method (an engine change, out of this issue's scope):
 | `buildLfo` needs a voice record | `buildModulator(ctx, { shape, rate }, account)` in `modulation.js` | an LFO as a standalone control source, reused by voices and Studio |
 | none (Random/Steps use `steppedControl` in the adapter) | a looping control-buffer builder in `audio/` | the registry names `noise.js#mulberry32` and `scheduler.js#scheduleSteps`, which only produce values or voice schedules |
 | `engine.stopAll()` does not reach Studio | an `'escape'` engine event or a stop hook list | Escape / STOP must also stop the Studio graph (§185); today the UI must call `runtime.stop({ fast: true })` |
-| — | `engine.on('voice')` arbitration | an engine voice and a running Studio graph both feed `engine.master`; the product decision (exclusive or summed) belongs to the integration |
+| — (the transport's `onClaimOutput` hook) | `engine.on('voice')` arbitration | decided: exclusive (below); a voice event on the engine would let the transport stop itself without the UI relaying it |
 
 ## Integration notes
 
-- Automation (automation.js, timeline-compiler.js) authors the base value on the same
-  AudioParam that `applyBase` glides; when a lane drives a parameter the runtime should skip
-  `applyBase` for that key and let the lane's events own it (`handle.modTarget(key,
-  'linear').param` is that AudioParam). Not wired yet.
-- The timeline plays pattern clips into `nodes.get(sequenceId).info.destination` with
-  `info.accounting`, and gates envelopes through `handle.gate(t, durS)`.
+- **Timeline playback** is `src/js/studio/transport.js` (`createStudioTransport`, documented in
+  `docs/v31/timeline.md` "Transport integration"). It starts the graph with `runtime.start()`
+  and uses the start's crossfade time as the timeline's `baseTime`, applies every model change
+  with `runtime.apply` before `scheduler.edit`, and stops the Studio output with
+  `runtime.stop()`.
+- **Owned parameters** (the decision "Automated parameters belong to their lane", wired):
+  `runtime.setOwnedParams([{ node, param }])` names the parameters another owner drives (the
+  transport: every automation lane's target, and the `level` of a pattern-played Oscillator);
+  `runtime.ownedParams()` lists them and `debugInfo().ownedParams` shows them. An adapter writes
+  all of its node's parameters in `applyBase` / `update` (`createFilterStage.update` re-glides
+  frequency, Q and gain even for a bypass toggle), so the skip is done on the AudioParam: while
+  the runtime calls `applyBase(base, false)` or `update(changed)` on a node with owned keys, the
+  scheduling methods of each owned AudioParam (`handle.modTarget(key, 'linear').param`, the one
+  the lane automates) are shadowed by no-ops on that instance and restored right after,
+  synchronously. The node's other parameters (its `detune`, which carries log-mapped
+  modulation offsets; its Q) are applied as before. A node's first `applyBase` (immediate, the
+  node is still silent) is not skipped: it gives the parameter its initial value and the lane
+  schedules from there. Additive: with no owned parameters the runtime behaves exactly as
+  before.
+- `runtime.baseOffset(id, key)` is the constant part the modulation edges add to a parameter's
+  base (linear edges: unipolar polarity, `offset`), in the parameter's unit. The lane owns the
+  intrinsic value, so the transport adds it to the values it schedules (actual = base +
+  Σ edges, `combineAutomationAndModulation`); log-mapped edges stay on `detune`, which the
+  runtime keeps writing.
+- Pattern clips play into `nodes.get(sequenceId).info.destination` with the handle's accounting
+  (`handle.acct`, whose `track` / `source` are `info.accounting`), or, on an Oscillator, into a
+  pattern bus routed into the oscillator's AUDIO routes (`runtime.edges`, `fromNode`, `gain`).
+  Envelopes are gated through `handle.gate(t, durS)`; the Envelope adapter additionally exposes
+  `release(t)` (gate off from the current contour, `envelope.js releaseAt`) and `hold(t)`
+  (`holdAt`: drop everything after t), which the transport uses to close a timeline-gated
+  envelope at PLAY and to re-render its gates after an edit or a STOP.
 - Microphone permission: `runtime.setOptions({ inputPermission: true })` re-applies the model;
   degraded microphones become `node-replace`d and open the input.
+- Output exclusivity is the transport's `onClaimOutput` hook (below); `engine.stopAll()` still
+  does not reach the Studio graph, so the UI's Escape goes through `transport.escape()`.
 
 ## Decisions (recorded with `majordomus decision add`, 2026-10-02)
 
 - **Studio output and the Playground voice are exclusive.** Starting one stops the other through
   the normal release path; both pass the same master safety chain. Summing them would make the
-  heard topology differ from either view (V3.1 spec §1) and double the level.
+  heard topology differ from either view (V3.1 spec §1) and double the level. Wiring:
+  `transport.start()` calls the injected `onClaimOutput({ owner: 'studio', position })` before
+  anything is built; the UI stops the Playground voice there (`engine.release()` /
+  `stopAll()`), and a hook returning `false` refuses PLAY. When the Playground starts a voice,
+  the UI calls `transport.stop()`. `audio-engine.js` is unchanged.
 - **Automated parameters belong to their lane.** For a parameter with an automation lane the
   runtime does not glide its base value; the lane owns the AudioParam and modulation edges add on
   top (`automation.js` `combineAutomationAndModulation`).

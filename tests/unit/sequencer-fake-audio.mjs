@@ -1,6 +1,13 @@
 // Minimal fake Web Audio context for node:test (no dependencies). It records every scheduling
 // call so the compiler's automation, source lifetimes and cleanup can be asserted without a
 // browser. Real rendering is covered by tests/browser/sequencer.cjs.
+//
+// FakeContext (gain + oscillator) is what the sequencer tests use. StudioFakeContext extends it
+// with every node type the Studio adapters and the real AudioEngine build (biquad, constant
+// source, buffer source, analyser, compressor, wave shaper, panner, ...), and
+// createFakeAudioEnv() gives the AudioEngine an `env` whose timers share one virtual clock with
+// the context (tests/unit/v31-studio-transport.test.mjs). Everything added is additive: the
+// FakeContext surface and its recordings are unchanged.
 
 export class FakeParam {
   constructor(value, { holdSupported = false } = {}) {
@@ -35,6 +42,13 @@ export class FakeParam {
     this.events.push({ t, value: v, ramp: 'exponential' });
   }
 
+  setTargetAtTime(v, t, tau) {
+    this._check(v, t);
+    if (!(tau > 0)) throw new RangeError(`time constant ${tau}`);
+    this.calls.push(['setTargetAtTime', v, t, tau]);
+    this.events.push({ t, value: v, ramp: 'target', tau });
+  }
+
   cancelScheduledValues(t) {
     this.calls.push(['cancelScheduledValues', t]);
     this.events = this.events.filter((e) => e.t < t);
@@ -50,20 +64,33 @@ export class FakeParam {
 class FakeNode {
   constructor(ctx, kind) {
     this.ctx = ctx;
+    this.context = ctx;
     this.kind = kind;
     this.outputs = [];
     this.disconnected = false;
+    this.channelCount = 2;
+    this.channelCountMode = 'max';
+    this.channelInterpretation = 'speakers';
     ctx.created.push(this);
   }
 
   connect(dest) {
+    if (!dest) throw new TypeError('connect to nothing');
     this.outputs.push(dest);
     return dest;
   }
 
-  disconnect() {
-    this.disconnected = true;
-    this.outputs = [];
+  /** disconnect() drops every output; disconnect(dest) only that one (Web Audio semantics). */
+  disconnect(dest) {
+    if (dest === undefined) {
+      this.disconnected = true;
+      this.outputs = [];
+      return;
+    }
+    const i = this.outputs.indexOf(dest);
+    if (i < 0) throw new Error('InvalidAccessError: not connected');
+    this.outputs = this.outputs.filter((d) => d !== dest);
+    if (!this.outputs.length) this.disconnected = true;
   }
 }
 
@@ -74,11 +101,10 @@ export class FakeGain extends FakeNode {
   }
 }
 
-export class FakeOscillator extends FakeNode {
-  constructor(ctx) {
-    super(ctx, 'oscillator');
-    this.type = 'sine';
-    this.frequency = new FakeParam(440, { holdSupported: ctx.holdSupported });
+/** A scheduled source: start/stop once, `ended` fired by the context clock. */
+export class FakeSource extends FakeNode {
+  constructor(ctx, kind) {
+    super(ctx, kind);
     this.startAt = null;
     this.stopAt = null;
     this.endedFired = false;
@@ -101,6 +127,25 @@ export class FakeOscillator extends FakeNode {
 
   removeEventListener(type, fn) {
     this.listeners = this.listeners.filter((f) => f !== fn);
+  }
+
+  fireEnded() {
+    if (this.endedFired) return;
+    this.endedFired = true;
+    for (const fn of [...this.listeners]) fn({ type: 'ended', target: this });
+  }
+}
+
+export class FakeOscillator extends FakeSource {
+  constructor(ctx) {
+    super(ctx, 'oscillator');
+    this.type = 'sine';
+    this.frequency = new FakeParam(440, { holdSupported: ctx.holdSupported });
+    this.detune = new FakeParam(0, { holdSupported: ctx.holdSupported });
+  }
+
+  setPeriodicWave(w) {
+    this.wave = w;
   }
 }
 
@@ -140,10 +185,130 @@ export class FakeContext {
   advance(toTime) {
     this.currentTime = toTime;
     for (const o of this.oscillators) {
-      if (!o.endedFired && o.stopAt !== null && o.stopAt <= toTime) {
-        o.endedFired = true;
-        for (const fn of [...o.listeners]) fn({ type: 'ended', target: o });
-      }
+      if (!o.endedFired && o.stopAt !== null && o.stopAt <= toTime) o.fireEnded();
+    }
+  }
+}
+
+/** Every node type the Studio adapters and the AudioEngine's output chain create. */
+export class StudioFakeContext extends FakeContext {
+  constructor(opts = {}) {
+    super(opts);
+    this.onstatechange = null;
+  }
+
+  _param(value) {
+    return new FakeParam(value, { holdSupported: this.holdSupported });
+  }
+
+  createBiquadFilter() {
+    const n = new FakeNode(this, 'biquad');
+    n.type = 'lowpass';
+    n.frequency = this._param(350);
+    n.Q = this._param(1);
+    n.gain = this._param(0);
+    n.detune = this._param(0);
+    n.getFrequencyResponse = (f, mag, ph) => {
+      mag.fill(1);
+      ph.fill(0);
+    };
+    return n;
+  }
+
+  createConstantSource() {
+    const n = new FakeSource(this, 'constant-source');
+    n.offset = this._param(1);
+    return n;
+  }
+
+  createBufferSource() {
+    const n = new FakeSource(this, 'buffer-source');
+    n.buffer = null;
+    n.loop = false;
+    n.loopStart = 0;
+    n.loopEnd = 0;
+    n.playbackRate = this._param(1);
+    n.detune = this._param(0);
+    return n;
+  }
+
+  createBuffer(channels, length, sampleRate) {
+    const data = Array.from({ length: channels }, () => new Float32Array(length));
+    return { numberOfChannels: channels, length, sampleRate, duration: length / sampleRate,
+      getChannelData: (c) => data[c], copyToChannel: (src, c) => data[c].set(src) };
+  }
+
+  createAnalyser() {
+    const n = new FakeNode(this, 'analyser');
+    n.fftSize = 2048;
+    Object.defineProperty(n, 'frequencyBinCount', { get: () => n.fftSize / 2 });
+    n.smoothingTimeConstant = 0.8;
+    n.minDecibels = -100;
+    n.maxDecibels = -30;
+    n.getFloatFrequencyData = (a) => a.fill(-100);
+    n.getFloatTimeDomainData = (a) => a.fill(0);
+    return n;
+  }
+
+  createDynamicsCompressor() {
+    const n = new FakeNode(this, 'compressor');
+    for (const k of ['threshold', 'knee', 'ratio', 'attack', 'release']) n[k] = this._param(0);
+    return n;
+  }
+
+  createWaveShaper() {
+    const n = new FakeNode(this, 'waveshaper');
+    n.curve = null;
+    n.oversample = 'none';
+    return n;
+  }
+
+  createStereoPanner() {
+    const n = new FakeNode(this, 'panner');
+    n.pan = this._param(0);
+    return n;
+  }
+
+  createChannelMerger() {
+    return new FakeNode(this, 'merger');
+  }
+
+  createChannelSplitter() {
+    return new FakeNode(this, 'splitter');
+  }
+
+  createPeriodicWave(real, imag) {
+    return { real, imag };
+  }
+
+  resume() {
+    this.state = 'running';
+    return Promise.resolve();
+  }
+
+  close() {
+    this.state = 'closed';
+    if (this.onstatechange) this.onstatechange();
+    return Promise.resolve();
+  }
+
+  /** Every scheduled source (oscillators, constant and buffer sources). */
+  get sources() {
+    return this.created.filter((n) => n instanceof FakeSource);
+  }
+
+  get liveAllSources() {
+    return this.sources.filter((s) => s.startAt !== null && !s.endedFired).length;
+  }
+
+  of(kind) {
+    return this.created.filter((n) => n.kind === kind);
+  }
+
+  advance(toTime) {
+    this.currentTime = toTime;
+    for (const s of this.sources) {
+      if (!s.endedFired && s.stopAt !== null && s.stopAt <= toTime) s.fireEnded();
     }
   }
 }
@@ -179,5 +344,63 @@ export function fakeTimers() {
         }
       }
     },
+  };
+}
+
+/**
+ * An AudioEngine environment on a StudioFakeContext with ONE virtual clock: timers (ms) are due
+ * against the context's currentTime (s). advance(seconds) moves the clock in `step` increments,
+ * firing `ended` and every due timer at each step, in time order — no real time passes.
+ *   createFakeAudioEnv({ sampleRate, holdSupported, step = 0.005, navigator })
+ *   -> { env, advance(seconds), advanceTo(time), ctx, timers: Map }
+ */
+export function createFakeAudioEnv(opts = {}) {
+  let id = 0;
+  const pending = new Map();
+  let ctx = null;
+  const step = opts.step || 0.005;
+  const env = {
+    AudioContext: class extends StudioFakeContext {
+      constructor() {
+        super({ sampleRate: opts.sampleRate || 48000, holdSupported: !!opts.holdSupported });
+        ctx = this; // eslint-disable-line consistent-this
+      }
+    },
+    setTimeout(fn, ms) {
+      id += 1;
+      pending.set(id, { fn, at: (ctx ? ctx.currentTime * 1000 : 0) + Math.max(0, ms) });
+      return id;
+    },
+    clearTimeout(i) {
+      pending.delete(i);
+    },
+    navigator: opts.navigator || {},
+  };
+  const runDue = () => {
+    let fired = true;
+    while (fired) {
+      fired = false;
+      const due = [...pending].filter(([, p]) => p.at <= ctx.currentTime * 1000 + 1e-6)
+        .sort((a, b) => a[1].at - b[1].at || a[0] - b[0]);
+      for (const [i, p] of due) {
+        if (!pending.has(i)) continue;
+        pending.delete(i);
+        p.fn();
+        fired = true;
+      }
+    }
+  };
+  const advanceTo = (end) => {
+    while (ctx.currentTime < end - 1e-12) {
+      ctx.advance(Math.min(end, ctx.currentTime + step));
+      runDue();
+    }
+  };
+  return {
+    env,
+    advance: (seconds) => advanceTo(ctx.currentTime + seconds),
+    advanceTo,
+    get ctx() { return ctx; },
+    timers: pending,
   };
 }
