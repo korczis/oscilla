@@ -1,0 +1,17 @@
+id: V249
+milestone: M034
+title: "Engine releases must not edit a sounding ramping param"
+slug: engine-releases-must-not-edit-a-sounding-ramping-param
+priority: p2
+profile: implementation
+objective: "Chromium can glitch one render quantum when the automation of a param that is ramping is edited (proven during the sequencer stop fix, PR #20). The engine's release path (freezeParam / cancelAndHoldAtTime on the envelope) edits such params; no test has caught a click there, but it is exposed in principle. Move engine releases to a dedicated output-stage fade, as the sequencer now does, and prove click-free stops under injected main-thread lateness in chromium, firefox and webkit."
+scope:
+  - "src/js/audio"
+  - "tests"
+acceptance_criteria:
+  - "Engine stop/release edits no param that is sounding; a stress run with injected main-thread lateness shows 0 stops over the click bound in chromium and firefox, against a reproduced failure on the old path."
+validation:
+  - "npm run release-gate"
+evidence_required:
+  - "verified"
+created_at: 2026-10-02

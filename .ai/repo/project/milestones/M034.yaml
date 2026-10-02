@@ -1,0 +1,14 @@
+id: M034
+title: "V2 maintenance"
+slug: v2-maintenance
+order: 34
+priority: p2
+problem: "Known limitations recorded at the v2.0.0 release need tracked follow-up."
+outcome: "Each known v2.0.0 limitation is fixed and proven, or documented as accepted with evidence."
+acceptance_criteria:
+  - "Each known v2.0.0 limitation is fixed and proven, or documented as accepted with evidence."
+validation:
+  - "npm run release-gate"
+evidence_required:
+  - "milestone_verified"
+created_at: 2026-10-02
