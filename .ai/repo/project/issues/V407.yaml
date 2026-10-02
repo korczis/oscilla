@@ -1,0 +1,20 @@
+id: V407
+milestone: M022
+title: "Graph validation and cycle policy"
+slug: graph-validation-and-cycle-policy
+priority: p1
+profile: implementation
+objective: "Structured diagnostics, cycle detection, topological order, instantaneous audio feedback rejected, control-cycle semantics defined and tested (§37-§40, §241)."
+scope:
+  - "src"
+  - "tests"
+depends_on:
+  - "V406"
+acceptance_criteria:
+  - "Structured diagnostics, cycle detection, topological order, instantaneous audio feedback rejected, control-cycle semantics defined and tested (§37-§40, §241)."
+  - "Specification: docs/specs/oscilla-v3.1-studio.md. Visual identity lock in the same file applies."
+validation:
+  - "npm run release-gate"
+evidence_required:
+  - "verified"
+created_at: 2026-10-02

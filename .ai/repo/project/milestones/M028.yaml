@@ -1,0 +1,15 @@
+id: M028
+title: "V3.1 full Studio workspace"
+slug: v31-full-studio
+order: 28
+priority: p0
+problem: "There is no place to author graphs and timelines together."
+outcome: "A maximizable Studio workspace with library, graph, Inspector, timeline, toolbar, navigation entry, deep link and shipped templates."
+acceptance_criteria:
+  - "A maximizable Studio workspace with library, graph, Inspector, timeline, toolbar, navigation entry, deep link and shipped templates."
+  - "Specification: docs/specs/oscilla-v3.1-studio.md. Visual identity lock in the same file applies."
+validation:
+  - "npm run release-gate"
+evidence_required:
+  - "milestone_verified"
+created_at: 2026-10-02

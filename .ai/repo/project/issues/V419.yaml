@@ -1,0 +1,21 @@
+id: V419
+milestone: M026
+title: "Automation model and compiler"
+slug: automation-model-and-compiler
+priority: p1
+profile: implementation
+objective: "Target/parameter/points with step, linear and legal exponential curves compiled to AudioParam events; base automation + modulation within bounds; schedule test (§97-§99, §103-§104, §211)."
+scope:
+  - "src"
+  - "tests"
+depends_on:
+  - "V416"
+  - "V414"
+acceptance_criteria:
+  - "Target/parameter/points with step, linear and legal exponential curves compiled to AudioParam events; base automation + modulation within bounds; schedule test (§97-§99, §103-§104, §211)."
+  - "Specification: docs/specs/oscilla-v3.1-studio.md. Visual identity lock in the same file applies."
+validation:
+  - "npm run release-gate"
+evidence_required:
+  - "verified"
+created_at: 2026-10-02

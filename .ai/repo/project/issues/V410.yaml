@@ -1,0 +1,21 @@
+id: V410
+milestone: M023
+title: "Nodes, node drag and library"
+slug: nodes-node-drag-and-library
+priority: p1
+profile: implementation
+objective: "Signal-Path-descended node cards with compact summaries and status, Pointer-Events drag with capture and rAF coalescing, library drag and click-insert, quick add, ResizeObserver port geometry, z-order, blur and pointercancel cleanup (§61-§64, §74-§77, §146, §148-§149, §152, §245-§247)."
+scope:
+  - "src"
+  - "tests"
+depends_on:
+  - "V409"
+  - "V405"
+acceptance_criteria:
+  - "Signal-Path-descended node cards with compact summaries and status, Pointer-Events drag with capture and rAF coalescing, library drag and click-insert, quick add, ResizeObserver port geometry, z-order, blur and pointercancel cleanup (§61-§64, §74-§77, §146, §148-§149, §152, §245-§247)."
+  - "Specification: docs/specs/oscilla-v3.1-studio.md. Visual identity lock in the same file applies."
+validation:
+  - "npm run release-gate"
+evidence_required:
+  - "verified"
+created_at: 2026-10-02

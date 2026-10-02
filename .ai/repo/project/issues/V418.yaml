@@ -1,0 +1,21 @@
+id: V418
+milestone: M025
+title: "Transport, playhead, loop and markers"
+slug: transport-playhead-loop-and-markers
+priority: p1
+profile: implementation
+objective: "Play/stop/return/loop on the audio clock, playhead observing the scheduler, loop region, markers, defined edit-during-playback semantics, STOP cleanup, Escape priority; timeline scheduling test (§93-§96, §180-§185, §212)."
+scope:
+  - "src"
+  - "tests"
+depends_on:
+  - "V416"
+  - "V414"
+acceptance_criteria:
+  - "Play/stop/return/loop on the audio clock, playhead observing the scheduler, loop region, markers, defined edit-during-playback semantics, STOP cleanup, Escape priority; timeline scheduling test (§93-§96, §180-§185, §212)."
+  - "Specification: docs/specs/oscilla-v3.1-studio.md. Visual identity lock in the same file applies."
+validation:
+  - "npm run release-gate"
+evidence_required:
+  - "verified"
+created_at: 2026-10-02

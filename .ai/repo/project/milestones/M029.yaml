@@ -1,0 +1,15 @@
+id: M029
+title: "V3.1 Studio measurement integration"
+slug: v31-studio-measurement
+order: 29
+priority: p0
+problem: "Studio and the V3 measurement engine would otherwise be two orchestration systems."
+outcome: "Measurement nodes and clips drive the canonical V3 measurement workflow, and the Studio definition enters experiment provenance."
+acceptance_criteria:
+  - "Measurement nodes and clips drive the canonical V3 measurement workflow, and the Studio definition enters experiment provenance."
+  - "Specification: docs/specs/oscilla-v3.1-studio.md. Visual identity lock in the same file applies."
+validation:
+  - "npm run release-gate"
+evidence_required:
+  - "milestone_verified"
+created_at: 2026-10-02

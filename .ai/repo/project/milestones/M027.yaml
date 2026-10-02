@@ -1,0 +1,15 @@
+id: M027
+title: "V3.1 compact Studio"
+slug: v31-compact-studio
+order: 27
+priority: p0
+problem: "The cockpit has no summary of the Studio state."
+outcome: "A compact Studio widget showing transport, clips and signal path from the same StudioModel as Full Studio."
+acceptance_criteria:
+  - "A compact Studio widget showing transport, clips and signal path from the same StudioModel as Full Studio."
+  - "Specification: docs/specs/oscilla-v3.1-studio.md. Visual identity lock in the same file applies."
+validation:
+  - "npm run release-gate"
+evidence_required:
+  - "milestone_verified"
+created_at: 2026-10-02

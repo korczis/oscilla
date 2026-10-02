@@ -1,0 +1,21 @@
+id: V411
+milestone: M023
+title: "Cables"
+slug: cables
+priority: p1
+profile: implementation
+objective: "Cable drag with compatible-target emphasis, cubic Bezier SVG, wide hit paths, style by port type without colour-only meaning, honest activity, reduced motion, selection and Inspector, optional create-from-cable (§65-§73, §147, §168-§169, §248)."
+scope:
+  - "src"
+  - "tests"
+depends_on:
+  - "V410"
+  - "V406"
+acceptance_criteria:
+  - "Cable drag with compatible-target emphasis, cubic Bezier SVG, wide hit paths, style by port type without colour-only meaning, honest activity, reduced motion, selection and Inspector, optional create-from-cable (§65-§73, §147, §168-§169, §248)."
+  - "Specification: docs/specs/oscilla-v3.1-studio.md. Visual identity lock in the same file applies."
+validation:
+  - "npm run release-gate"
+evidence_required:
+  - "verified"
+created_at: 2026-10-02

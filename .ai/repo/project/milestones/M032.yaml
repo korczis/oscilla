@@ -1,0 +1,15 @@
+id: M032
+title: "V3.1 Studio verification"
+slug: v31-studio-verification
+order: 32
+priority: p0
+problem: "Nothing ships on screenshots alone."
+outcome: "Studio unit, audio, timeline, interaction, accessibility, file:// and visual suites run in the release gate; independent reviews done and findings fixed; performance and bundle audited; documentation and self-knowledge complete."
+acceptance_criteria:
+  - "Studio unit, audio, timeline, interaction, accessibility, file:// and visual suites run in the release gate; independent reviews done and findings fixed; performance and bundle audited; documentation and self-knowledge complete."
+  - "Specification: docs/specs/oscilla-v3.1-studio.md. Visual identity lock in the same file applies."
+validation:
+  - "npm run release-gate"
+evidence_required:
+  - "milestone_verified"
+created_at: 2026-10-02

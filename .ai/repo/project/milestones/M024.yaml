@@ -1,0 +1,15 @@
+id: M024
+title: "V3.1 Studio audio graph compiler"
+slug: v31-studio-compiler
+order: 24
+priority: p0
+problem: "A model that does not drive the sound would be decoration."
+outcome: "StudioModel compiles into the existing AudioEngine with incremental, transactional, click-free runtime patching and no leaks; the screen never shows a topology the runtime does not have."
+acceptance_criteria:
+  - "StudioModel compiles into the existing AudioEngine with incremental, transactional, click-free runtime patching and no leaks; the screen never shows a topology the runtime does not have."
+  - "Specification: docs/specs/oscilla-v3.1-studio.md. Visual identity lock in the same file applies."
+validation:
+  - "npm run release-gate"
+evidence_required:
+  - "milestone_verified"
+created_at: 2026-10-02
