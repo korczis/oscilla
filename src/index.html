@@ -233,6 +233,15 @@
             data-osc-modes="playground sequencer synthesis" aria-labelledby="osc-source-title">
             <div class="osc-panel-header">
               <h2 class="osc-panel-title" id="osc-source-title">Source &amp; Pattern</h2>
+              <span class="osc-spacer"></span>
+              <!-- Phones hide Device & Limits, so the safety notice reopens from here below 768 px. -->
+              <button type="button" class="osc-icon-btn osc-icon-btn--ghost osc-icon-btn--sm
+                osc-safety-reopen osc-safety-reopen--phone" id="osc-safety-reopen-phone"
+                data-osc="safety.reopen" aria-controls="osc-safety"
+                :aria-expanded="String(!safetyCollapsed)" aria-label="Show the listening safety notice"
+                title="Listening safety notice" @click="reopenSafety()">
+                <svg aria-hidden="true"><use href="#i-headphones"/></svg>
+              </button>
             </div>
 
             <div class="osc-seg osc-seg--split osc-source-kind" role="radiogroup"

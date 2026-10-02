@@ -302,8 +302,11 @@ export function createWorkbench(svc) {
     dismissSafety() {
       this.collapseSafety();
       this.$nextTick(() => {
-        const reopen = document.querySelector('[data-osc="safety.reopen"]');
-        focusSafely(isFocusable(reopen) ? reopen : document.getElementById('osc-overflow'));
+        // One reopen control per layout (Device & Limits header; Source header on phones):
+        // hand focus to whichever is visible.
+        const reopen = [...document.querySelectorAll('[data-osc="safety.reopen"]')]
+          .find((el) => isFocusable(el));
+        focusSafely(reopen || document.getElementById('osc-overflow'));
       });
     },
     /** Show the safety notice again and focus its dismiss button. */

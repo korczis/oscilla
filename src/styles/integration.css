@@ -758,3 +758,14 @@
     grid-template-rows: max-content max-content;
   }
 }
+
+/* The phone reopen control lives in the Source header; Device & Limits carries it elsewhere. */
+.osc-safety-reopen--phone {
+  display: none;
+}
+
+@media (max-width: 767.98px) {
+  .osc-safety-reopen--phone {
+    display: inline-flex;
+  }
+}
