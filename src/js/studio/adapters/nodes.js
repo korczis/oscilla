@@ -45,7 +45,8 @@ export const PARAM_TAU_S = 0.015;
 export const CONTROL_STEP_SAMPLES = 480;
 /** Values in one Random loop (deterministic for the seed; the sequence repeats after them). */
 export const RANDOM_LOOP_VALUES = 64;
-const SWEEP_FADE_S = 0.01;
+/** Fade of a rendered Studio sweep: min(SWEEP_FADE_S, duration / 4) (recipeFromStudio too). */
+export const SWEEP_FADE_S = 0.01;
 const CENTS_PER_OCTAVE = 1200;
 
 const BIPOLAR = Object.freeze([-1, 1]);

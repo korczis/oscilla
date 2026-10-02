@@ -25,6 +25,15 @@
 //
 //   resultCanonical(e) -> string;  resultHash(e, { sha256Hex }) -> hex
 //   withResultHash(e, hex) -> a copy with provenance.resultHash set
+//
+// Studio provenance hash (V3.1 spec §109, §162, ADR 0038): studioExecutionHash(execution) =
+// SHA-256 (lowercase hex) of the canonical JSON of an experiment's studio.execution, which is
+// studio/schema.js executionState(model); it therefore equals studio/schema.js studioHash(model)
+// of the model that ran. It is NOT part of configHash: the recipe alone identifies "the same
+// experiment setup" (ADR 0019), so a measurement run from Studio and the same measurement run
+// from the Measure workspace share a configHash; the Studio block is provenance beside it.
+//
+//   studioExecutionHash(execution, { sha256Hex }) -> hex
 
 import { canonicalJson } from './canonical-json.js';
 import { sha256Hex as defaultSha256Hex } from '../calibration/sha256.js';
@@ -96,4 +105,12 @@ export function withResultHash(e, hex) {
     throw new TypeError('withResultHash: expected a 64-digit lowercase hex SHA-256');
   }
   return { ...e, provenance: { ...e.provenance, resultHash: hex } };
+}
+
+/** SHA-256 hex of the canonical JSON of a Studio execution state (see the header). */
+export function studioExecutionHash(execution, { sha256Hex = defaultSha256Hex } = {}) {
+  if (typeof sha256Hex !== 'function') {
+    throw new TypeError('studioExecutionHash: sha256Hex must be a function');
+  }
+  return sha256Hex(canonicalJson(execution));
 }

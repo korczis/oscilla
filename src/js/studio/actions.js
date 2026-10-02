@@ -16,7 +16,9 @@
 // EDGE_ADD, EDGE_REMOVE, EDGE_UPDATE, TRACK_ADD, TRACK_REMOVE, CLIP_ADD, CLIP_REMOVE, CLIP_MOVE,
 // CLIP_RESIZE, AUTOMATION_POINT_ADD, AUTOMATION_POINT_MOVE, AUTOMATION_POINT_REMOVE, MARKER_ADD,
 // MARKER_REMOVE, LOOP_SET, TRANSPORT_SET, METADATA_SET, PASTE, DUPLICATE; timeline additions
-// (V416-V420): CLIP_UPDATE, CLIP_SET_TIME_BASE, MARKER_MOVE.
+// (V416-V420): CLIP_UPDATE, CLIP_SET_TIME_BASE, MARKER_MOVE; patch additions (V426, patches.js):
+// PATCH_INSERT { patch, at? } ("Insert <name>") and PATCH_REPLACE { patch, at? } ("Replace
+// graph with <name>"), the explicit insert-or-replace intent of §114.
 // Tempo-linked clips (§90-§91, `clip.musical`): CLIP_ADD with timeBase 'tempo' (or startBeats /
 // durationBeats) creates one; CLIP_MOVE / CLIP_RESIZE keep it linked and re-derive its beats from
 // the new seconds; TRANSPORT_SET with a new tempo rescales every tempo-linked clip (absolute
@@ -50,6 +52,7 @@ import {
 } from './schema.js';
 import { validateStudioModel } from './validate.js';
 import { createHistory, STUDIO_HISTORY_LIMIT } from './history.js';
+import { PatchError, insertPatch, replaceWithPatch } from './patches.js';
 
 export { STUDIO_HISTORY_LIMIT };
 export const CLIPBOARD_KIND = 'oscilla-studio-clipboard';
@@ -719,6 +722,33 @@ const REDUCERS = {
         : `Duplicate ${total} items`;
     return { model: next, label, created, skipped,
       select: { nodes: created.nodes, edges: created.edges, clips: created.clips } };
+  },
+
+  // Patches (V426, patches.js): one undoable entry each; ids from the store's allocator.
+  PATCH_INSERT(model, a, ctx) {
+    let r;
+    try {
+      r = insertPatch(model, a.patch, a.at || null, { newId: ctx.newId, registry: ctx.registry });
+    } catch (err) {
+      if (err instanceof PatchError) reject(err.message);
+      throw err;
+    }
+    return { model: r.model, label: `Insert ${a.patch.name}`, created: r.created,
+      skipped: r.skipped,
+      select: { nodes: r.created.nodes, edges: r.created.edges } };
+  },
+
+  PATCH_REPLACE(model, a, ctx) {
+    let r;
+    try {
+      r = replaceWithPatch(model, a.patch, { newId: ctx.newId, registry: ctx.registry,
+        at: a.at || { x: 0, y: 0 } });
+    } catch (err) {
+      if (err instanceof PatchError) reject(err.message);
+      throw err;
+    }
+    return { model: r.model, label: `Replace graph with ${a.patch.name}`, created: r.created,
+      skipped: r.skipped, select: { nodes: r.created.nodes, edges: r.created.edges } };
   },
 };
 
