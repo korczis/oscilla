@@ -50,6 +50,7 @@
     <symbol id="i-record" viewBox="0 0 24 24"><circle cx="12" cy="12" r="7.5" fill="currentColor" stroke="none"/></symbol>
     <symbol id="i-skip" viewBox="0 0 24 24"><path d="M3.5 6v12l8-6zM12.5 6v12l8-6z" fill="currentColor" stroke="none"/></symbol>
     <symbol id="i-gear" viewBox="0 0 24 24"><path d="M19.08 10.24L21.5 10.65V13.35L19.08 13.76L18.25 15.77L19.68 17.76L17.76 19.68L15.77 18.25L13.76 19.08L13.35 21.5H10.65L10.24 19.08L8.23 18.25L6.24 19.68L4.32 17.76L5.75 15.77L4.92 13.76L2.5 13.35V10.65L4.92 10.24L5.75 8.23L4.32 6.24L6.24 4.32L8.23 5.75L10.24 4.92L10.65 2.5H13.35L13.76 4.92L15.77 5.75L17.76 4.32L19.68 6.24L18.25 8.23Z" stroke-linejoin="round"/><circle cx="12" cy="12" r="3.2"/></symbol>
+    <symbol id="i-headphones" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 14v-2a9 9 0 0 1 18 0v2"/><path d="M3 14h3v6H4a1 1 0 0 1-1-1zM21 14h-3v6h2a1 1 0 0 0 1-1z"/></symbol>
     <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="currentColor" stroke="none"/><path d="M12 11v6M12 7.5v.5" stroke="var(--osc-info-bg)" stroke-width="2.2"/></symbol>
     <symbol id="i-close" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></symbol>
     <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
@@ -640,6 +641,12 @@
             <div class="osc-panel-header">
               <h2 class="osc-panel-title" id="osc-dev-title">Device &amp; Limits</h2>
               <span class="osc-spacer"></span>
+              <button type="button" class="osc-icon-btn osc-icon-btn--ghost osc-icon-btn--sm osc-safety-reopen"
+                id="osc-safety-reopen" data-osc="safety.reopen" aria-controls="osc-safety"
+                :aria-expanded="String(!safetyCollapsed)" aria-label="Show the listening safety notice"
+                title="Listening safety notice" @click="reopenSafety()">
+                <svg aria-hidden="true"><use href="#i-headphones"/></svg>
+              </button>
               <button type="button" class="osc-icon-btn osc-icon-btn--ghost osc-icon-btn--sm"
                 id="osc-dev-collapse" data-osc="device.collapse" aria-expanded="true"
                 aria-controls="osc-dev-body" aria-label="Hide Device and Limits details"
@@ -685,9 +692,6 @@
                 <svg aria-hidden="true"><use href="#i-info"/></svg>
                 <p>Web Audio can generate digital signals within sampling limits. Actual speaker output is unknown.</p>
               </div>
-              <button type="button" class="osc-link-btn osc-safety-reopen" id="osc-safety-reopen"
-                data-osc="safety.reopen" aria-controls="osc-safety"
-                :aria-expanded="String(!safetyCollapsed)" @click="reopenSafety()">Safety notice</button>
             </div>
           </section>
         </div>

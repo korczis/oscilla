@@ -523,7 +523,9 @@
 
 .osc-analysis-tabs .osc-tab {
   min-width: 83px;
-  padding: 0 15px;
+  /* 13 px (reference ~15) leaves the 1536 px header ~20 px of slack, so tabs and tools stay on
+     one row with wider Linux/Windows system fonts instead of wrapping into the waveform. */
+  padding: 0 13px;
 }
 
 .osc-analysis-tabs .osc-tab:first-child {

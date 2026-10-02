@@ -701,7 +701,7 @@
   }
 }
 
-/* Text-style button (reopen the safety notice from Device & Limits). */
+/* Text-style button. */
 .osc-link-btn {
   padding: 2px 0;
   border: 0;
@@ -712,10 +712,6 @@
   text-align: left;
   text-decoration: underline dotted;
   cursor: pointer;
-}
-
-.osc-safety-reopen {
-  margin-top: 8px;
 }
 
 @media (pointer: coarse) {
