@@ -14,10 +14,10 @@ import assert from 'node:assert/strict';
 
 import { AudioEngine } from '../../src/js/audio/audio-engine.js';
 import {
-  GAIN_FLOOR, STOP_LEAD_S, STOP_PAD_S, STOP_RAMP_S,
+  EDGE_S, GAIN_FLOOR, STOP_LEAD_S, STOP_PAD_S, STOP_RAMP_S,
 } from '../../src/js/sequencer/compiler.js';
 import { createIdGenerator, createStudioStore } from '../../src/js/studio/actions.js';
-import { ROUTE_FLOOR } from '../../src/js/studio/compiler.js';
+import { ROUTE_FLOOR, STUDIO_XFADE_S } from '../../src/js/studio/compiler.js';
 import { createStudioRuntime } from '../../src/js/studio/runtime.js';
 import {
   ESCAPE_PRIORITY, SAFE_HORIZON_S, frameCeil, stopTime,
@@ -85,6 +85,38 @@ const callsFrom = (param, t0) => param.calls.filter((c) => c[0] === 'cancelSched
 const near = (a, b, tol = EPS) => assert.ok(Math.abs(a - b) <= tol, `${a} vs ${b}`);
 
 // ---------------------------------------------------------------- Basic Synth (§257)
+
+test('PLAY keeps the first clip when the audio clock moves during start()', () => {
+  // A fresh browser context advanced two render quanta between runtime.start() choosing
+  // baseTime (hooks.soon()) and the scheduler's first advance (measured in chromium: baseTime
+  // 0.021333, first advance at 0.005333): the Tone clip at baseTime was skipped as late.
+  const s = setup();
+  // The runtime is frozen: a view of it whose start() moves the clock (only, no timers) after
+  // choosing baseTime.
+  const runtime = Object.create(s.runtime, { start: { value: () => {
+    const r = s.runtime.start();
+    s.ctx.advance(s.ctx.currentTime + (2 * 128) / SR);
+    return r;
+  } } });
+  const transport = createStudioTransport({ runtime, engine: s.engine, store: s.store });
+  const r = ok(transport.start());
+  const b = r.baseTime;
+  const bF = Math.round(b * SR);
+  assert.ok(b - s.ctx.currentTime < SAFE_HORIZON_S, 'the clock is inside the safe horizon');
+  assert.equal(transport.debugInfo().skippedLate, 0);
+  s.fx.advance(0.2);
+  const carriers = voiceCarriers(s, 'sawtooth');
+  assert.deepEqual(carriers.map((o) => o.startAt), [at(bF, 0)], 'the Tone voice starts at b');
+  // §212: the clip starts where its voice envelope leaves the floor — on the baseTime frame,
+  // together with the graph's start ramps (routes 0 → 1, the ADSR attack).
+  const env = carriers[0].outputs[0].outputs[0].gain;
+  const attack = env.scheduled.findIndex((e) => e.ramp === 'linear' && e.value === 1);
+  assert.deepEqual([env.scheduled[attack - 1].t, env.scheduled[attack - 1].value], [b, GAIN_FLOOR]);
+  near(env.scheduled[attack].t, b + EDGE_S);
+  const route = s.runtime.edges.get('edge-1').gain.gain;
+  assert.deepEqual(route.calls.filter((c) => c[2] >= b).slice(0, 2).map((c) => [c[0], c[1], c[2]]),
+    [['setValueAtTime', 0, b], ['linearRampToValueAtTime', 1, b + STUDIO_XFADE_S]]);
+});
 
 test('Basic Synth: Tone and Sweep clips play on the oscillator at exact audio-clock times', () => {
   const s = setup();

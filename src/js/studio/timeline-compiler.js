@@ -33,6 +33,9 @@
 // TOP_UP_EVERY_MS, so the existing look-ahead behaviour is kept. After a stall, items that would
 // start less than SCHEDULE_LEAD_S from now are skipped (the grid is kept, as
 // audio/scheduler.js scheduleCycles does) and automation is re-anchored at the safe horizon.
+// The first window of an anchor caps that horizon at baseTime while baseTime is ahead of the
+// clock: baseTime already carries the lead (hooks.soon()), so a clock that moved a few quanta
+// during PLAY does not drop the clip at baseTime.
 //
 // Edit during playback (§182-§183): EDIT_POLICY below, implemented by scheduler.edit(); STOP
 // (§184): STOP_POLICY, scheduler.stop(); Escape (§185): resolveEscape(). docs/v31/timeline.md
@@ -443,6 +446,7 @@ export function createTimelineScheduler(initialModel, opts = {}) {
   let anchor = createAnchor(model, { baseTime: opts.baseTime || 0, startPosition: playStart,
     sampleRate: sr });
   let scheduledUntil = anchor.baseTime;
+  let firstWindow = true;
   let stopped = false;
   const active = new Map(); // key -> item (scheduled, not yet ended)
   const laneEvents = new Map(); // laneId -> scheduled events (in scheduling order)
@@ -476,7 +480,17 @@ export function createTimelineScheduler(initialModel, opts = {}) {
     const from = scheduledUntil;
     const until = Math.max(from, now + lookAheadS);
     const w = compileWindow(model, anchor, from, until, { passCache });
-    const late = now + SAFE_HORIZON_S - 1e-9;
+    // Lateness horizon: now + SAFE_HORIZON_S. In the first window, while baseTime is still
+    // ahead of the clock, it is capped at baseTime: the anchor was chosen at least
+    // SAFE_HORIZON_S after the clock reading it came from (hooks.soon(), the runtime's crossfade
+    // time), in the same synchronous PLAY / locate that schedules the graph's start there, and
+    // the clock may have moved on since (two render quanta measured in a fresh chromium
+    // context, which skipped the clip at baseTime). Items at baseTime are as safe as that graph
+    // start; a stall past baseTime itself is handled as any other stall.
+    const horizon = firstWindow && now < anchor.baseTime
+      ? Math.min(now + SAFE_HORIZON_S, anchor.baseTime) : now + SAFE_HORIZON_S;
+    firstWindow = false;
+    const late = horizon - 1e-9;
     const items = [];
     const skipped = [];
     for (const it of w.items) {
@@ -489,7 +503,7 @@ export function createTimelineScheduler(initialModel, opts = {}) {
     const automation = w.automation.map((a) => {
       let events = a.events;
       if (events.some((e) => e.scheduleAt < late)) {
-        const at = frameCeil(now + SAFE_HORIZON_S, sr);
+        const at = frameCeil(horizon, sr);
         const prior = [...(laneEvents.get(a.laneId) || []), ...events.filter((e) => e.time < at)];
         const v = scheduledValueAt(prior, at, null);
         events = [...(v === null ? [] : [{ method: 'setValueAtTime', value: v, time: at,

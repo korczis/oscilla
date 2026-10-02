@@ -232,6 +232,28 @@ test('scheduler wake-up keeps the engine look-ahead cadence; a stall skips late 
   assert.deepEqual(r.items.map((i) => i.startTime), [13.5]);
 });
 
+test('the first window keeps the clip at baseTime although the clock moved since the anchor',
+  () => {
+  // baseTime comes from hooks.soon() (>= SAFE_HORIZON_S after the clock reading), but the first
+  // advance reads the clock again: in a fresh browser context it had moved two render quanta
+  // (measured in chromium: baseTime 0.021333, first advance at 0.005333), and the Tone clip at
+  // baseTime was skipped as late — PLAY without its first clip.
+  const { store } = spec212();
+  const q = 128 / SR;
+  const s = createTimelineScheduler(store.getModel(), { sampleRate: SR, baseTime: 10 });
+  const r = s.advance(10 - SAFE_HORIZON_S + 2 * q);
+  assert.deepEqual(r.skipped, [], 'nothing skipped: baseTime is still ahead of the clock');
+  assert.deepEqual(r.items.map((i) => i.startTime), [10]);
+  // A stall past baseTime itself still skips (the grid is kept).
+  const late = createTimelineScheduler(store.getModel(), { sampleRate: SR, baseTime: 10 });
+  const r2 = late.advance(10.5);
+  assert.deepEqual(r2.skipped.map((i) => i.startTime), [10]);
+  assert.deepEqual(r2.items.map((i) => i.startTime), [11]);
+  // Later windows keep the full safe horizon.
+  const r3 = s.advance(11 - SAFE_HORIZON_S + q);
+  assert.deepEqual(r3.skipped.map((i) => i.startTime), [11]);
+});
+
 // ---------------------------------------------------------------- §211 automation
 
 test('§211 automation produces the exact AudioParam event list (linear, step, exponential)', () => {

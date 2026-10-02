@@ -156,6 +156,28 @@ to pattern items starting at exactly 10, 11, 13 and 13.5 s and ending at 11, 13,
 14.5 s; played through the fake scheduler, the carriers start and stop at those times
 (+ `STOP_PAD_S`).
 
+### Clip start
+
+A clip's start is the **envelope start**, not the first audible sample, as for a V2 block: the
+frame `baseTime + position` (whole frames, pass grid above) at which its voice's envelope leaves
+`GAIN_FLOOR` and its carrier starts. The voice ramps to full level over `EDGE_S` (3 ms) from
+there, and its release edge ends on the clip's end frame, so contiguous clips meet at the floor
+exactly on the boundary frame ("Tone 0.0-1.0" is the frames [b, b + 1 s), the Sweep's attack
+starting on b + 1 s). V2 does the same: `START_OFFSET_S` (20 ms) is the scheduling lead the
+sequencer editor adds before it chooses the voice's `t0`, and the block starts at `t0`; the
+Studio's lead is in `baseTime` (`hooks.soon()`), never added after it.
+
+The first audible sample depends on what follows the voice, not on the clip:
+
+- PLAY from a stopped runtime starts the graph at `baseTime` too: every route ramps 0 → 1 over
+  `STUDIO_XFADE_S` and an ungated Envelope starts its attack. In the Basic Synth (three routes
+  plus the Master Output fade, a 10 ms attack) the level rises like t^6: the first non-zero sample
+  is 2.75 ms after `baseTime` and −40 dB of the Tone is reached at 6.5 ms (measured identically in
+  chromium, firefox and webkit; `tests/browser/v31-studio-transport.cjs` derives that window from
+  the constants).
+- The engine's limiter (a DynamicsCompressorNode) delays what reaches the destination by its
+  look-ahead, 6 ms in all three engines: the analyser sees the boundary at b + 1.006 s.
+
 ### Look-ahead
 
 `createTimelineScheduler(model, { sampleRate, baseTime, startPosition })`:
@@ -171,6 +193,12 @@ to pattern items starting at exactly 10, 11, 13 and 13.5 s and ending at 11, 13,
 - After a stall, items that would start less than `SCHEDULE_LEAD_S` from now are skipped (the
   grid is kept, as `audio/scheduler.js scheduleCycles` does) and automation is re-anchored at the
   safe horizon with its authored value there.
+- The first window of an anchor caps that horizon at `baseTime` while `baseTime` is still ahead
+  of the clock. `baseTime` is `hooks.soon()` — already `SCHEDULE_LEAD_S` after the clock reading
+  it came from, and the time the runtime starts the graph — but the first `advance(now)` reads
+  the clock again; a fresh browser context had moved two render quanta by then (chromium:
+  `baseTime` 0.021333 s, first advance at 0.005333 s) and PLAY skipped its first clip as late.
+  A stall past `baseTime` itself is handled as any other stall.
 
 ## Edit during playback (§182-§183)
 

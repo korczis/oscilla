@@ -10,9 +10,13 @@
 // into ONE classic <script> of a single HTML file, the constraints of dist/index.html.
 //
 // Checks per browser (asserted):
-//   clips on the audio clock: the Tone clip is audible from baseTime (onset within ONSET_S),
-//        the Tone → Sweep boundary dips at baseTime + 1 s (within BOUNDARY_S), the Sweep ends at
-//        baseTime + 3 s (within ONSET_S) and the output is silent after it (< −50 dB);
+//   clips on the audio clock, measured on the Studio's output at engine.master (before the
+//        engine's limiter): no clip skipped as late (the first window of a PLAY on a fresh
+//        context, timeline-compiler.js); nothing before baseTime; the Tone's onset in the window
+//        the start ramps predict (fixture predictedOnset); the Tone → Sweep boundary dips at
+//        baseTime + 1 s (within BOUNDARY_S); the Sweep ends at baseTime + 3 s (within END_S);
+//   the engine's limiter: what reaches the destination is the same boundary and end, delayed
+//        by LIMITER_LOOKAHEAD_S; it is silent after the timeline (< −50 dB);
 //   pattern-played oscillator: inside the sweep (clip time 1.0 s, 440 Hz) the free-running
 //        220 Hz carrier is absent (< −30 dB relative to 440 Hz);
 //   cutoff automation changes the spectrum: the 8th harmonic of the 220 Hz Tone, relative to
@@ -42,12 +46,34 @@ const BROWSERS = arg('browsers', 'chromium,firefox,webkit').split(',');
 const JSON_OUT = arg('json', '');
 const ENTRY = path.join(__dirname, 'fixtures', 'v31-studio-transport-entry.js');
 
-// Onset / end: 2 ms RMS windows against −40 dB of the Tone's level; the voice edges are 3 ms
-// (sequencer EDGE_S) and the graph's route fade-in 20 ms, so the first window above −40 dB lies
-// within a few ms of the clip start. 10 ms bounds both plus one window.
-const ONSET_S = 0.01;
-// The block boundary sits at the envelope floor for one edge (3 ms each side).
+// Timing semantics (§212, docs/v31/timeline.md "Clip start"): a clip starts at the frame where
+// its voice envelope leaves GAIN_FLOOR — baseTime + position, as the V2 sequencer's block start
+// is the voice's t0. The detector (fixture: 2 ms RMS windows, −40 dB of the Tone's level) sees
+// that frame through what follows the voice, so each expectation is derived, not widened:
+//   onset     PLAY from a stopped runtime starts the whole graph at baseTime: four 0 → 1 route
+//             ramps (STUDIO_XFADE_S), the ADSR attack and the voice edge (EDGE_S) multiply, so
+//             the level rises like t^6 and first exceeds −40 dB 6 ms after baseTime at 48 kHz
+//             (the fixture computes the window from those constants: predicted.onset). Measured:
+//             6.0 ms (2 ms windows), first sample above −40 dB 6.5 ms, first non-zero sample
+//             2.75 ms, in all three browsers. Allowed: one detector window around the prediction
+//             (a 2 ms window holds under half a period of the 220 Hz sawtooth).
+//   boundary  the Tone's release edge and the Sweep's attack edge meet at the floor on the
+//             boundary frame (EDGE_S each side), so the quietest window starts there: in 2 ms
+//             windows within BOUNDARY_S (the two windows either side of the frame are equally
+//             quiet in theory), in 0.5 ms windows on a grid from baseTime exactly the window
+//             [1.0000, 1.0005) (the low-pass delays the minimum by its group delay, well under
+//             half a window). A voice one render quantum late (2.67 ms) misses it by 5 windows.
+//   end       the last window above −40 dB ends with the Sweep's release edge, on the clip end
+//             frame: 3.0000 s in 2 ms and in 0.5 ms windows.
+// All five values were measured identically in chromium, firefox and webkit.
+// The engine's limiter (DynamicsCompressorNode) delays the destination by its look-ahead: 6 ms in
+// Blink, Gecko and WebKit (measured 288 frames at 48 kHz in each), which is why the analyser tap
+// read the onset at 14 ms and the boundary at 1.006 s. Firefox's limiter also lags the first
+// few ms after silence (analyser onset 16 ms), so the onset is asserted on the Studio side only.
+const ONSET_WINDOWS = 1;
 const BOUNDARY_S = 0.004;
+const END_S = 0.004;
+const LIMITER_LOOKAHEAD_S = 0.006;
 // The cutoff moves within the 50 ms analysis window (automation ±2.4 %, LFO ≤ ±5 % around
 // these phases); 2 dB covers the window average against the instantaneous prediction.
 const SPECTRUM_TOL_DB = 2;
@@ -98,12 +124,34 @@ async function runOne(browserName, url) {
     check(key, 'AudioContext running', rec.start.state === 'running', JSON.stringify(rec.start));
 
     const s = (rec.basicSynth = await page.evaluate(() => window.T.basicSynth()));
-    check(key, 'the Tone clip sounds from baseTime', s.onset !== null
-      && s.onset >= -0.002 && s.onset < ONSET_S, `onset ${f(s.onset, 4)} s after baseTime`);
+    const st = s.studio;
+    const p = s.predicted;
+    check(key, 'no clip skipped as late (PLAY on a fresh context)', s.skippedLate === 0,
+      `${s.skippedLate}`);
+    check(key, 'nothing sounds before baseTime (< −100 dB)', st.beforeDb < -100,
+      `${f(st.beforeDb, 1)} dB`);
+    check(key, 'the Tone clip sounds from baseTime (onset where the start ramps put it)',
+      st.onset !== null && p.onset !== null
+      && Math.abs(st.onset - p.onset) <= ONSET_WINDOWS * s.detectStepS + 1e-9,
+      `onset ${f(st.onset, 4)} s after baseTime, predicted ${f(p.onset, 4)} s (${p.ramps} route `
+      + 'ramps × ADSR attack × voice edge)');
     check(key, 'the Tone → Sweep boundary is at baseTime + 1 s',
-      Math.abs(s.dip - 1) < BOUNDARY_S, `dip at ${f(s.dip, 4)} s (${f(s.dipDb, 1)} dB)`);
-    check(key, 'the Sweep clip ends at baseTime + 3 s', s.end !== null
-      && Math.abs(s.end - 3) < ONSET_S, `end ${f(s.end, 4)} s`);
+      Math.abs(st.dip - 1) < BOUNDARY_S, `dip at ${f(st.dip, 4)} s (${f(st.dipDb, 1)} dB)`);
+    check(key, 'the boundary frame is the quietest 0.5 ms window (exact to the window)',
+      Math.abs(st.fineDip - 1) < s.fineStepS / 2,
+      `quietest window starts at ${f(st.fineDip, 5)} s`);
+    check(key, 'the Sweep clip ends at baseTime + 3 s', st.end !== null
+      && Math.abs(st.end - 3) < END_S, `end ${f(st.end, 4)} s`);
+    check(key, 'the Sweep release ends on the clip end frame (exact to the 0.5 ms window)',
+      st.fineEnd !== null && Math.abs(st.fineEnd - 3) < s.fineStepS / 2,
+      `last window above −40 dB ends at ${f(st.fineEnd, 5)} s`);
+    const o = s.out;
+    check(key, 'limiter look-ahead: the destination has the same boundary, 6 ms later',
+      Math.abs(o.dip - st.dip - LIMITER_LOOKAHEAD_S) < s.detectStepS / 2,
+      `dip at ${f(o.dip, 4)} s (${f(o.dipDb, 1)} dB), onset ${f(o.onset, 4)} s`);
+    check(key, 'limiter look-ahead: the destination has the same end, 6 ms later',
+      o.end !== null && Math.abs(o.end - st.end - LIMITER_LOOKAHEAD_S) < s.detectStepS / 2,
+      `end ${f(o.end, 4)} s`);
     check(key, 'silent after the timeline (< −50 dB)', s.tailDb < -50, `${f(s.tailDb, 1)} dB`);
     check(key, 'pattern-played oscillator: no free-running 220 Hz carrier inside the sweep',
       20 * Math.log10(s.sweepAt.f220 / s.sweepAt.f440) < -30,
