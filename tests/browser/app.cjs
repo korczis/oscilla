@@ -22,7 +22,7 @@ const arg = (name, fallback) => {
   return i >= 0 && argv[i + 1] ? argv[i + 1] : fallback;
 };
 const DIST = path.resolve(arg('dist', path.join(__dirname, '..', '..', 'dist', 'index.html')));
-const BROWSERS = arg('browsers', 'chromium,firefox,webkit').split(',');
+const BROWSERS = arg('browsers', process.env.OSC_BROWSERS || 'chromium,firefox,webkit').split(',');
 const ORIGINS = arg('origins', 'file,http').split(',');
 const ONLY = arg('only', '') ? new Set(arg('only', '').split(',')) : null;
 const JSON_OUT = arg('json', '');
