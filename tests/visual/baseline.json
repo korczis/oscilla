@@ -1,0 +1,573 @@
+{
+  "schema": 1,
+  "environments": {
+    "darwin-arm64": {
+      "browser": {
+        "name": "chromium",
+        "version": "153.0.8010.12"
+      },
+      "viewport": {
+        "width": 1536,
+        "height": 1024
+      },
+      "runs": 3,
+      "total": 15.86,
+      "totalExclData": 6.93,
+      "regions": {
+        "header": {
+          "mismatch": 5.22,
+          "mismatchExclData": 5.22,
+          "runToRunPct": 0,
+          "dataPp": 0.5
+        },
+        "source": {
+          "mismatch": 8.02,
+          "mismatchExclData": 8.02,
+          "runToRunPct": 0,
+          "dataPp": 0.5
+        },
+        "analysis": {
+          "mismatch": 15.46,
+          "mismatchExclData": 4.65,
+          "runToRunPct": 0,
+          "dataPp": 0.5
+        },
+        "mic": {
+          "mismatch": 11.76,
+          "mismatchExclData": 10.5,
+          "runToRunPct": 0,
+          "dataPp": 0.5
+        },
+        "device": {
+          "mismatch": 18.37,
+          "mismatchExclData": 18.37,
+          "runToRunPct": 0,
+          "dataPp": 0.5
+        },
+        "spectrogram": {
+          "mismatch": 46.96,
+          "mismatchExclData": 4.19,
+          "runToRunPct": 0.08,
+          "dataPp": 1
+        },
+        "sequencer": {
+          "mismatch": 14.17,
+          "mismatchExclData": 4.25,
+          "runToRunPct": 0,
+          "dataPp": 0.5
+        },
+        "filter": {
+          "mismatch": 7.74,
+          "mismatchExclData": 7.03,
+          "runToRunPct": 0,
+          "dataPp": 0.5
+        },
+        "envelope": {
+          "mismatch": 8.89,
+          "mismatchExclData": 8.23,
+          "runToRunPct": 0,
+          "dataPp": 0.5
+        },
+        "additive": {
+          "mismatch": 11.23,
+          "mismatchExclData": 9.21,
+          "runToRunPct": 0,
+          "dataPp": 0.5
+        },
+        "phase": {
+          "mismatch": 11.02,
+          "mismatchExclData": 10.21,
+          "runToRunPct": 2.56,
+          "dataPp": 3.5
+        },
+        "bio": {
+          "mismatch": 14.89,
+          "mismatchExclData": 11.81,
+          "runToRunPct": 0,
+          "dataPp": 0.5
+        },
+        "statusbar": {
+          "mismatch": 6.77,
+          "mismatchExclData": 6.77,
+          "runToRunPct": 0,
+          "dataPp": 0.5
+        }
+      },
+      "controls": {
+        "export": [
+          1440,
+          13,
+          81,
+          35
+        ],
+        "theme": [
+          1302,
+          13.5,
+          34,
+          34
+        ],
+        "sourceSeg": [
+          23,
+          111,
+          290,
+          32
+        ],
+        "waveTiles": [
+          23,
+          151,
+          290,
+          55
+        ],
+        "freqSlider": [
+          23,
+          276,
+          290,
+          16
+        ],
+        "fineRow": [
+          23,
+          321,
+          290,
+          27
+        ],
+        "modeSeg": [
+          98,
+          361,
+          215,
+          29
+        ],
+        "playRow": [
+          23,
+          431,
+          290,
+          40
+        ],
+        "analysisTabs": [
+          346,
+          81,
+          427.84,
+          32
+        ],
+        "timeSelect": [
+          821,
+          81,
+          93,
+          32
+        ],
+        "waveformHost": [
+          343,
+          133,
+          610,
+          114
+        ],
+        "spectrumHost": [
+          343,
+          258,
+          617,
+          170
+        ],
+        "scaleSeg": [
+          346,
+          444,
+          125,
+          28
+        ],
+        "maxSelect": [
+          483,
+          444,
+          104,
+          28
+        ],
+        "micUse": [
+          1194,
+          76,
+          110,
+          32
+        ],
+        "micTabs": [
+          990,
+          113,
+          351,
+          33
+        ],
+        "micHost": [
+          984,
+          159,
+          360,
+          185
+        ],
+        "micReadout": [
+          989,
+          352,
+          352,
+          77
+        ],
+        "devAlert": [
+          1366,
+          311.34,
+          154,
+          95
+        ],
+        "spgHost": [
+          23,
+          528,
+          867,
+          190
+        ],
+        "spgColorbar": [
+          900,
+          535,
+          15,
+          159
+        ],
+        "seqTransport": [
+          1186,
+          452,
+          117,
+          32
+        ],
+        "seqTempo": [
+          1409,
+          452,
+          108,
+          32
+        ],
+        "seqAdd": [
+          1409,
+          579,
+          108,
+          30
+        ],
+        "seqEditor": [
+          988,
+          617,
+          529,
+          96
+        ],
+        "filterTabs": [
+          23,
+          765,
+          334,
+          34
+        ],
+        "filterHost": [
+          23,
+          807,
+          224,
+          140
+        ],
+        "envHost": [
+          389,
+          770,
+          143,
+          150
+        ],
+        "addHost": [
+          704,
+          770,
+          261,
+          112
+        ],
+        "phaseTabs": [
+          997,
+          764,
+          238,
+          31
+        ],
+        "bioTabs": [
+          1261,
+          763,
+          257,
+          25
+        ]
+      }
+    },
+    "linux-x64": {
+      "browser": {
+        "name": "chromium",
+        "version": "153.0.8010.12"
+      },
+      "viewport": {
+        "width": 1536,
+        "height": 1024
+      },
+      "runs": 3,
+      "total": 15.89,
+      "totalExclData": 7,
+      "regions": {
+        "header": {
+          "mismatch": 6.62,
+          "mismatchExclData": 6.62,
+          "runToRunPct": 0,
+          "dataPp": 0.5
+        },
+        "source": {
+          "mismatch": 8.11,
+          "mismatchExclData": 8.11,
+          "runToRunPct": 0,
+          "dataPp": 0.5
+        },
+        "analysis": {
+          "mismatch": 15.41,
+          "mismatchExclData": 4.65,
+          "runToRunPct": 0,
+          "dataPp": 0.5
+        },
+        "mic": {
+          "mismatch": 11.29,
+          "mismatchExclData": 9.82,
+          "runToRunPct": 0,
+          "dataPp": 0.5
+        },
+        "device": {
+          "mismatch": 17.79,
+          "mismatchExclData": 17.79,
+          "runToRunPct": 0,
+          "dataPp": 0.5
+        },
+        "spectrogram": {
+          "mismatch": 47.07,
+          "mismatchExclData": 4.3,
+          "runToRunPct": 0.25,
+          "dataPp": 1
+        },
+        "sequencer": {
+          "mismatch": 14.29,
+          "mismatchExclData": 4.35,
+          "runToRunPct": 0,
+          "dataPp": 0.5
+        },
+        "filter": {
+          "mismatch": 7.75,
+          "mismatchExclData": 6.99,
+          "runToRunPct": 0,
+          "dataPp": 0.5
+        },
+        "envelope": {
+          "mismatch": 8.89,
+          "mismatchExclData": 8.21,
+          "runToRunPct": 0,
+          "dataPp": 0.5
+        },
+        "additive": {
+          "mismatch": 11.12,
+          "mismatchExclData": 9.05,
+          "runToRunPct": 0,
+          "dataPp": 0.5
+        },
+        "phase": {
+          "mismatch": 11.03,
+          "mismatchExclData": 10.3,
+          "runToRunPct": 2.57,
+          "dataPp": 3.5
+        },
+        "bio": {
+          "mismatch": 14.42,
+          "mismatchExclData": 11.48,
+          "runToRunPct": 0,
+          "dataPp": 0.5
+        },
+        "statusbar": {
+          "mismatch": 6.74,
+          "mismatchExclData": 6.74,
+          "runToRunPct": 0,
+          "dataPp": 0.5
+        }
+      },
+      "controls": {
+        "export": [
+          1440,
+          13,
+          81,
+          35
+        ],
+        "theme": [
+          1302,
+          13.5,
+          34,
+          34
+        ],
+        "sourceSeg": [
+          23,
+          111,
+          290,
+          32
+        ],
+        "waveTiles": [
+          23,
+          151,
+          290,
+          55
+        ],
+        "freqSlider": [
+          23,
+          276,
+          290,
+          16
+        ],
+        "fineRow": [
+          23,
+          321,
+          290,
+          27
+        ],
+        "modeSeg": [
+          98,
+          361,
+          215,
+          29
+        ],
+        "playRow": [
+          23,
+          431,
+          290,
+          40
+        ],
+        "analysisTabs": [
+          346,
+          81,
+          420.61,
+          32
+        ],
+        "timeSelect": [
+          821,
+          81,
+          93,
+          32
+        ],
+        "waveformHost": [
+          343,
+          133,
+          610,
+          114
+        ],
+        "spectrumHost": [
+          343,
+          258,
+          617,
+          170
+        ],
+        "scaleSeg": [
+          346,
+          444,
+          125,
+          28
+        ],
+        "maxSelect": [
+          483,
+          444,
+          104,
+          28
+        ],
+        "micUse": [
+          1194,
+          76,
+          110,
+          32
+        ],
+        "micTabs": [
+          990,
+          113,
+          351,
+          33
+        ],
+        "micHost": [
+          984,
+          159,
+          360,
+          185
+        ],
+        "micReadout": [
+          989,
+          352,
+          352,
+          77
+        ],
+        "devAlert": [
+          1366,
+          311.34,
+          154,
+          95
+        ],
+        "spgHost": [
+          23,
+          528,
+          867,
+          190
+        ],
+        "spgColorbar": [
+          900,
+          535,
+          15,
+          159
+        ],
+        "seqTransport": [
+          1186,
+          452,
+          117,
+          32
+        ],
+        "seqTempo": [
+          1409,
+          452,
+          108,
+          32
+        ],
+        "seqAdd": [
+          1409,
+          579,
+          108,
+          30
+        ],
+        "seqEditor": [
+          988,
+          617,
+          529,
+          96
+        ],
+        "filterTabs": [
+          23,
+          765,
+          334,
+          34
+        ],
+        "filterHost": [
+          23,
+          807,
+          224,
+          140
+        ],
+        "envHost": [
+          389,
+          770,
+          143,
+          150
+        ],
+        "addHost": [
+          704,
+          770,
+          261,
+          112
+        ],
+        "phaseTabs": [
+          997,
+          764,
+          238,
+          31
+        ],
+        "bioTabs": [
+          1261,
+          763,
+          257,
+          25
+        ]
+      }
+    }
+  },
+  "note": "Accepted visual values per environment, written only by node scripts/visual-gate.mjs --update-baseline. Percentages are pixels that differ from tests/visual/reference.png (pixelmatch threshold 0.12). See scripts/visual-gate.mjs.",
+  "tolerance": {
+    "chromePp": 0.5,
+    "totalPp": 0.5,
+    "geometryPx": 2
+  }
+}

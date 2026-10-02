@@ -527,12 +527,86 @@
     margin-top: calc((var(--osc-slider-track) - 24px) / 2);
   }
 
+  /* Fixed desktop heights that 44 px controls overflowed onto their neighbours: the gain slider
+     onto HOLD TO PLAY (13 px), at 768-1279 px the fine-step buttons onto the Mode row, ... */
+  .osc-gain-row {
+    height: auto;
+  }
+
+  .osc-source-view {
+    height: auto;
+    min-height: 204px;
+  }
+
+  /* ... the spectrogram tools onto the canvas, the block editor's move/delete buttons onto the
+     fields below them, and the 44 px start button onto the first block of the lane. */
+  .osc-p-spectrogram .osc-panel-header,
+  .osc-seq-editor-head {
+    height: auto;
+  }
+
+  .osc-seq-lane {
+    grid-template-columns: 44px minmax(0, 1fr);
+    height: auto;
+    min-height: 50px;
+  }
+
+  /* The large switches keep their 25 px track; a centred 44 px pseudo-element is the hit area
+     (the panel headers leave at least 10 px free on either side of the switch). */
+  /* A real 44 px box with the track centred in it: WebKit clips a button's overflow, so a
+     hit area drawn outside the button with ::before would not receive taps there. */
+  .osc-toggle--lg {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  /* The fixed desktop heights of these field boxes squeezed their sliders to the 5 px track and
+     let the 44 px number overflow: the box follows its content, so the slider gets its 44 px. */
+  .osc-filter-controls .osc-field-box,
+  .osc-add-field .osc-field-box,
+  .osc-add-field .osc-stepper,
+  .osc-add-field .osc-unit {
+    height: auto;
+  }
+
+  /* Stepper keys (tabindex -1 mouse conveniences) cannot reach 44 px in a 44 px field without
+     covering each other or the number: on touch the number field alone sets the value, as native
+     mobile number inputs do (no spin buttons). */
   .osc-stepper-keys {
-    width: 36px;
+    display: none;
   }
 
   .osc-stepper .osc-number {
-    padding-right: 44px;
+    padding-right: 9px;
+  }
+
+  .osc-stepper.osc-unit .osc-number,
+  .osc-seq-f-start .osc-stepper.osc-unit .osc-number {
+    padding-right: 30px;
+  }
+
+  .osc-stepper.osc-unit .osc-unit-suffix,
+  .osc-seq-f-start .osc-unit-suffix {
+    right: 9px;
+  }
+
+  .osc-bio-sources-toggle {
+    display: inline-flex;
+    align-items: center;
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  /* The source links grow in the list's flow (it scrolls), so they cannot cover each other. */
+  .osc-bio-source-list a {
+    display: inline-flex;
+    align-items: center;
+    max-width: 100%;
+    min-width: 44px;
+    min-height: 44px;
   }
 }
 
