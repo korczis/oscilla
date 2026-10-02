@@ -1,0 +1,76 @@
+---
+id: compare-two-responses
+kind: use-case
+title: 'Compare two responses'
+summary: 'Select two saved experiments, see their common configuration and differences, and read A minus B only where the comparison is meaningful.'
+category: experiments
+status: active
+target: advisory
+weight: 180
+difficulty: basic
+commands: [knowledge]
+claims: [measurement-comparison, aggregate-primary-response]
+tags: [oscilla, product-acceptance, v3]
+---
+
+# Situation
+
+Someone measured the same speaker in two positions and saved both. In Experiments they
+select the two and press Compare.
+
+# What proves it
+
+The behaviour is proven by the OSCILLA test named in each claim of `docs/CLAIMS.yaml`, run
+by:
+
+- `npm test` (tests/unit/v3-experiments.test.mjs compareExperiments and responseDelta; tests/unit/v3-views.test.mjs compare view; tests/unit/v3-storage.test.mjs aggregate used when present)
+- `npm run test:measure` (tests/browser/v3-ui.cjs, check experiments: an equivalent pair shows A - B, a non-equivalent pair is refused with the reason)
+
+A use-case/v1 scenario can only invoke `bin/majordomus`, and a live one only its read-only
+commands, so the scenario below does not play or capture audio. It proves the traceability
+instead: each claim's implementation and test are tracked files wired to the claim in the
+knowledge graph, so a renamed or deleted test breaks this use case rather than silently
+orphaning the claim.
+
+# What it cannot prove
+
+The browser check compares deterministic TEST CONTEXT fixtures, not physical measurements.
+
+# Scenario
+
+```yaml
+mode: live
+steps:
+  - id: measurement-comparison-implemented
+    run: ['knowledge', 'edges', '--type', 'implemented_by']
+    note: 'claim measurement-comparison is implemented by src/js/experiments/compare.js, a tracked file'
+    expect:
+      exit: 0
+      stdout_contains: ['claim:measurement-comparison +implementation:src/js/experiments/compare\.js']
+  - id: measurement-comparison-tested
+    run: ['knowledge', 'edges', '--type', 'tested_by']
+    note: 'claim measurement-comparison is proven by tests/unit/v3-experiments.test.mjs'
+    expect:
+      exit: 0
+      stdout_contains: ['claim:measurement-comparison +test:tests/unit/v3-experiments\.test\.mjs']
+  - id: aggregate-primary-response-implemented
+    run: ['knowledge', 'edges', '--type', 'implemented_by']
+    note: 'claim aggregate-primary-response is implemented by src/js/measurement/aggregate.js, a tracked file'
+    expect:
+      exit: 0
+      stdout_contains: ['claim:aggregate-primary-response +implementation:src/js/measurement/aggregate\.js']
+  - id: aggregate-primary-response-tested
+    run: ['knowledge', 'edges', '--type', 'tested_by']
+    note: 'claim aggregate-primary-response is proven by tests/unit/v3-storage.test.mjs'
+    expect:
+      exit: 0
+      stdout_contains: ['claim:aggregate-primary-response +test:tests/unit/v3-storage\.test\.mjs']
+then:
+  - 'every claim this use case names resolves to a tracked implementation and a tracked test'
+```
+
+# Outcome
+
+Both responses are overlaid. Differences in calibration, sample rate, stimulus or algorithm
+are named. A minus B appears only for equivalent experiments and only over their overlapping
+valid range, never normalised; otherwise the view says why it is not shown.

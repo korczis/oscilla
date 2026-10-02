@@ -44,6 +44,20 @@ for people, never gating · **DELETED** removed, with its replacement.
 | `browser/v3-ui.cjs` | GATE | MEASURE and EXPERIMENTS of dist in chromium, firefox, webkit, file:// and /oscilla/: guided flow through the UI on a TEST CONTEXT loopback, stage announcements, abort at every stage (Escape, STOP, page hide, leaving the workspace) with 0 nodes after, output exclusivity, fake-microphone setup check, calibration import and level calibration, experiment import/compare/rename/duplicate/export/CSV/delete, no "SPL" without a valid level calibration |
 | `browser/fixtures/v3-experiments.mjs` | SUPPORTING | deterministic TEST CONTEXT experiments (the real engine on a synthetic io) for `v3-ui.cjs` and the MEASURE visual reference |
 | `unit/v3-ui.test.mjs` | GATE | navigation order (About last), the workspaces' static markup rules, the pure experiment builder of MEASURE |
+| `unit/v3-measurement-core.test.mjs` | GATE | algorithm IDs, every state-machine edge legal or refused, stimulus clamping, sweep inverse, noise spectra, windows and Welch, capture checks, alignment |
+| `unit/v3-transfer-ir.test.mjs` | GATE | transfer function and impulse response recovered from known synthetic systems (flat gain, delay, filters, echo, noise), phase only when robust, valid range, smoothing and normalisation |
+| `unit/v3-rta-aggregate.test.mjs` | GATE | octave and third-octave band layout and power, averager time constants, peak hold and freeze, mean and median aggregation, resolution-aware formatting |
+| `unit/v3-calibration.test.mjs` | GATE | SHA-256 vectors, profile identity, CSV/TXT/JSON parsing with line-numbered errors, log-frequency interpolation without extrapolation, level calibration and the SPL label |
+| `unit/v3-quality.test.mjs` | GATE | GOOD, USABLE, POOR and INVALID from named metrics with reasons, masks, calibration coverage |
+| `unit/v3-experiments.test.mjs` | GATE | experiment schema, round trip, corrupt and future-version imports refused, migrations, hashes, CSV columns, comparison, memory and IndexedDB stores (in-process fake) |
+| `unit/v3-storage.test.mjs` | GATE | repeated runs: the aggregate is the primary stored response (G20) through engine, schema, validation, CSV and comparison |
+| `unit/v3-integration.test.mjs` | GATE | one group per closed integration gap (G1-G13): power scales, recipe stimulus, stored result shapes, algorithm IDs, the result hash |
+| `unit/v3-gaps.test.mjs` | GATE | quality v2 and discontinuities (G15), chain notes, stored aggregate (G16), absolute level only under a level calibration (G19), shared deconvolution |
+| `unit/v3-golden.test.mjs` | GATE | every known algorithm ID reproduces its golden output (`unit/fixtures/v3/`) |
+| `unit/v3-pipeline.test.mjs` | GATE | the whole chain on real result objects: stimulus, capture checks, alignment, transfer and IR, aggregate, quality, experiment, hashes, validation |
+| `unit/v3-engine.test.mjs` | GATE | the MeasurementEngine on a fake io: legal flow, repeats without overlap, abort from every stage, preflight blockers and warnings, typed errors, raw buffers dropped |
+| `unit/v3-analysis-task.test.mjs` | GATE | the analysis as one serializable task, bit-identical to the inline engine analysis (the Worker boundary, G21) |
+| `unit/v3-views.test.mjs` | GATE | MEASURE and EXPERIMENTS view models: labels, masks, cursor readouts, quality bar, announcements, guided flow, compare, no SPL without a level calibration |
 | `../scripts/visual-measure.mjs` + `visual/measure/*` | GATE | MEASURE at 1536x1024 and 390x844 showing a deterministic TEST CONTEXT experiment, against the accepted reference per environment (≤ 0.5 % differing pixels) |
 | `browser/live-smoke.cjs` | GATE (post-deploy) | the public site boots, its provenance region matches the runtime, HOLD sounds and cleans up |
 | `browser/fixtures/*` | SUPPORTING | in-memory esbuild entries and pages for dsp, labs, sequencer |

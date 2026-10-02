@@ -1,50 +1,183 @@
-# OSCILLA V3 measurement architecture (contract)
+# OSCILLA V3 measurement architecture
 
-Specification: `docs/specs/oscilla-v3-measure.md`. Plan: milestones M012-M020. This document says
-*how* the layers fit; the ADRs say *why*. Module names and data shapes below are the contract the
-parallel work is built against; change them here first.
+Specification: `docs/specs/oscilla-v3-measure.md` (milestones M012-M020). This document says
+*how* the measurement layers fit together in the code on this branch. The reasons for each
+choice are in the ADRs it names, and they are not repeated here. The way each algorithm
+computes its result, and which tests pin it, is in `docs/v3/algorithms.md`. The UI binding is
+in `docs/v3/ui-integration.md`. The module names and data shapes below are what the modules
+produce and what `experiments/validate.js` accepts. `tests/unit/v3-pipeline.test.mjs` runs
+the whole chain on the real result objects, so a shape that drifts fails a test. When a shape
+changes, change it here in the same commit.
+
+## The layers
 
 ```
- Recipe ──► StimulusGenerator ──► PlaybackSession ──► output ─┐
-   │            (stimulus.js)                                  │  physical system
-   │                                                           ▼  (speaker, room, mic, ADC)
-   │        CaptureSession ◄── MediaStream input ◄─────────────┘
-   │         (capture.js: bounded PCM, pre/post-roll)
-   ▼                │
- MeasurementEngine  ▼
- (state machine) ─► offline analysis (pure, deterministic, on captured PCM)
-                    alignment → transfer.js / impulse-response.js / rta.js
-                    → calibration (calibration/*.js) → MeasurementResult
-                    → quality.js (QualityAssessment with reasons)
-                    → Experiment (experiments/*.js: schema, provenance, store, compare)
-                    → UI adapters and charts (render result objects; never own data)
+ Recipe: stimulus spec, repeats, analysis settings (recorded in the experiment)
+   │
+   ▼
+ STIMULUS     measurement/stimulus.js   renderStimulus(spec) → samples   inverseSweep(spec)
+   │
+   ▼
+ CAPTURE      measurement/engine.js (state machine, no DOM) ── io ──► measurement/capture.js
+                playback  source → fade → master → limiter → trim → ceiling → output ──┐
+                                                                                       │
+                          physical chain: DAC, amplifier, speaker, room, microphone,   │
+                          preamplifier, ADC, browser input processing                  │
+                                                                                       │
+                capture   getUserMedia → AudioWorklet from a data: URL ◄───────────────┘
+                          (ScriptProcessor fallback) → Capture per run: Float32Array,
+                          pre-roll, post-roll, device, constraints, integrity; no overlap
+   │
+   ▼
+ ANALYSIS     capture-checks.js per run (clipping, dropouts, discontinuities), then
+              measurement/analysis-task.js runAnalysis (pure, offline, on captured PCM):
+                align → transfer + impulse response (one spectral division per run)
+                → aggregate (two or more runs)
+              noise check (engine.js summarizeNoise) → spectrum.js welch → rta.js
+                one-third-octave band power, level, per-frequency noise for the SNR
+   │
+   ▼
+ CALIBRATION  calibration/interpolate.js   frequency profile → separate CALIBRATED curve
+              calibration/level.js         level calibration → the only path to dB SPL
+   │
+   ▼
+ RESULT       measure() result: recipe, input, runs, transfer, ir, aggregate, calibrated,
+              captureChecks, noise, notes, algorithms (raw PCM dropped by default)
+   │
+   ▼
+ QUALITY      measurement/quality.js assessQuality → status, reasons, metrics, masks
+   │
+   ▼
+ EXPERIMENT   ui/measure-experiment.js → experiments/schema.js → hash.js → encode.js
+              → store.js (IndexedDB oscilla-experiments, or memory)
+              ⇄ export / import (validate.js, migrate.js) → compare.js, csv.js
+
+ UI adapters  ui/measure.js, ui/experiments.js: engine events and results → the pure
+              reducers and view builders of measurement/views/ → charts/measure-charts.js.
+              They render view models and compute nothing.
 ```
 
-Rule: **PCM capture → deterministic offline DSP → structured MeasurementResult → quality and
-provenance → chart.** The live AnalyserNode is feedback only; no final result depends on a
-visible frame (spec §84-§85, §248).
+Rule: data flows one way, **PCM capture → deterministic offline DSP → structured result → quality
+and provenance → experiment → chart.** The live AnalyserNode of the V2 engine is feedback
+only. No stored or displayed result depends on a visible frame. Why: ADR 0018.
+
+### 1. Stimulus
+
+`measurement/stimulus.js` normalises a `StimulusSpec`, clamps frequencies to 0.95 of Nyquist
+and renders it deterministically. The kinds are sine, log sweep, white, pink, band noise and
+chirp. The inverse sweep is derived from the same normalised spec that was played. The engine
+renders the stimulus at the running context's sample rate. The recipe stores the normalised
+spec, so a repeat plays the same samples.
+
+### 2. Capture
+
+`measurement/engine.js` never touches Web Audio. Everything platform-specific sits behind the
+injected `io` (`preflight`, `captureNoise`, `runStimulus`, `cancel`, `dispose`, `now`,
+`yield`, `onInterrupt`). `measurement/capture.js` implements `createCaptureIo` on the V2
+`AudioEngine`, and `createLoopbackIo`, the TEST CONTEXT of a known synthetic system. Playback
+passes the whole master safety chain, and that chain is part of the measured system. Capture
+start and stop are frame counts on the audio clock, not timers, and runs never overlap. When
+any stage is cancelled, the stimulus fades over 10 ms, the capture is rejected, the worklet
+port is closed and every node and track is released. The same cleanup runs on engine abort,
+error and completion, on Escape, on a hidden page and on a context that closes. Why
+AudioWorklet with a ScriptProcessor fallback and no Worker yet: ADR 0026 and
+`docs/v3/spike-audioworklet-worker.md`.
+
+### 3. Analysis
+
+The engine runs `measurement/capture-checks.js` (clipping, dropouts, discontinuities) on each
+capture as it returns; a failing capture ends the measurement INVALID before any DSP.
+`measurement/analysis-task.js` then packs the offline analysis into one serializable message
+(stimulus, captures, noise, f1, f2, phase, aggregation). `runAnalysis` turns it into one
+result, in steps that can yield: alignment per run, one spectral division per run for the
+transfer and the impulse response, and aggregation over runs. The engine calls
+it through its injected `analyze`. The default, `analyzeInline`, runs on the main thread and
+yields between steps, so an abort can land between them. A Worker-backed `analyze` would post
+the same message (claim `analysis-off-main-thread`, planned). The noise check produces
+Welch power and one-third-octave band power through `spectrum.js` and `rta.js`. Why the
+sweep deconvolution method: ADR 0021.
+
+### 4. Calibration
+
+`calibration/parse.js` reads CSV, TXT and JSON profiles. `profile.js` normalises a profile and
+identifies it by the SHA-256 of its points (`sha256.js`, so it works without
+`crypto.subtle` on `file://`). `interpolate.js` applies a profile to a transfer grid or to RTA
+bands inside its coverage only, and `level.js` holds the one rule for labelling a level dB
+SPL. The engine applies the frequency profile after the analysis into a separate `calibrated`
+curve, and the raw curve is never modified. Why two separate kinds: ADR 0020. Why SPL only
+under a level calibration: ADR 0017.
+
+### 5. Result
+
+`measure()` resolves with a plain result object that carries no DOM, node or engine
+reference: the recipe, the rendered stimulus spec, the input device and its constraints, one
+entry per run, `transfer`, `ir`, `aggregate`, `calibrated`, `captureChecks`, `noise`,
+`notes`, `timeline` and the `algorithms` used. Raw PCM is dropped unless
+`measure(..., { keepRaw: true })` is called, and the UI never calls it that way. Every result
+object names its algorithm ID from `measurement/algorithms.js`. Why versioned IDs: ADR 0024.
+
+### 6. Quality
+
+`assessMeasurement(result, ctx)` (engine.js) calls `measurement/quality.js` `assessQuality`
+with every run's capture checks, the transfer, the aggregate, the calibration and each run's
+sweep window. The output is a `QualityAssessment` with its status, reasons, metrics and
+frequency masks. An INVALID assessment ends the measurement INVALID with its failing reasons.
+The view models draw the masks: unreliable stretches are dashed and faded, uncalibrated spans
+are hatched. Why rules with reasons: ADR 0025.
+
+### 7. Experiment
+
+`ui/measure-experiment.js` `experimentFromResult` is pure. It builds the `Experiment` from a
+result, stores the frequency profile by name and identity only, and marks a TEST CONTEXT
+capture in every run and in the notes. It then stamps the configuration hash and the result
+hash. With two or more runs, `schema.js` `resultsFromMeasurement` stores the aggregate as the
+primary response and the transfer as its marked centre (the G20 rule, enforced again by
+`validate.js`). `store.js` serialises the experiment to the file form, validates it on every
+put and get, and keeps it in the IndexedDB database `oscilla-experiments` (object stores
+`experiments` and `summaries`). When that database cannot be opened, it falls back to a memory
+store and says so. Export writes the same file form. Import goes through `validate.js` (an
+untrusted input with size, type, finiteness, algorithm-ID and hash checks) and `migrate.js`.
+Why a recipe and an experiment are separate: ADR 0019. Why IndexedDB with export as the
+durable path: ADR 0022. Why schema versions are independent integers: ADR 0023.
+
+### The UI adapters
+
+`src/js/ui/measure.js` and `src/js/ui/experiments.js` are composed into the one Alpine
+component. They keep the measurement engine, its io, results with typed arrays, calibration
+objects and chart instances in a closure, never in Alpine's reactive state. Engine events go
+through the pure reducers of `measurement/views/` (`quality-bar.js`, `announcements.js`), and
+results go through the pure view builders (`measure-flow.js`, `response-chart.js`,
+`ir-chart.js`, `rta-chart.js`, `experiment-summary.js`, `compare-view.js`).
+`charts/measure-charts.js` draws the descriptors with uPlot. The UI computes no level, mask,
+range or label. While a measurement is active the instrument cannot play, and leaving the
+Measure workspace aborts it.
 
 ## Layout
 
 ```
 src/js/measurement/   algorithms.js  state-machine.js  stimulus.js  spectrum.js
-                      capture.js  capture-checks.js  align.js  transfer.js
+                      capture.js (browser io)  capture-checks.js  align.js  transfer.js
                       impulse-response.js  smoothing.js  rta.js  aggregate.js
                       analysis-task.js  quality.js  format.js  engine.js (orchestration; no DOM)
+src/js/measurement/views/   common.js  measure-flow.js  quality-bar.js  response-chart.js
+                      ir-chart.js  rta-chart.js  experiment-summary.js  compare-view.js
+                      announcements.js
 src/js/calibration/   profile.js  parse.js  interpolate.js  level.js  sha256.js
 src/js/experiments/   schema.js  migrate.js  validate.js  hash.js  csv.js  store.js  compare.js
                       canonical-json.js  encode.js
-tests/unit/v3-*.test.mjs   (picked up by `npm test`)
+src/js/ui/            measure.js  measure-experiment.js  experiments.js
+src/js/charts/        measure-charts.js
+tests/unit/v3-*.test.mjs        (npm test)
+tests/browser/v3-measure.cjs, tests/browser/v3-ui.cjs   (npm run test:measure)
+scripts/visual-measure.mjs, tests/visual/measure/       (npm run test:visual)
 ```
 
-Not yet landed: `capture.js`, `engine.js` (being written against the shapes below).
-`quality.js` landed in e89ff9f. How each algorithm computes its result, and the remaining
-mismatches, are in `docs/v3/algorithms.md` (section "Gaps"); `tests/unit/v3-pipeline.test.mjs`
-runs the whole chain on the real result objects and keeps the shapes below consistent.
-
-Every module except `engine.js`, `capture.js` and `store.js` is pure: plain data in, plain data
-out, no DOM, no Web Audio, no globals, no `Date.now()` (callers pass timestamps). Arrays are
-`Float32Array` for signals, `Float64Array` for accumulators; inputs are never mutated.
+Every module under `measurement/`, `calibration/` and `experiments/` except `engine.js`,
+`capture.js` and `store.js` is pure: plain data in, plain data out, no DOM, no Web Audio, no
+globals and no `Date.now()` (callers pass timestamps). `engine.js` is DOM-free but owns the
+session state. `capture.js` and `store.js` talk to the platform, and `store.js` takes
+IndexedDB as an injected dependency. Signals are `Float32Array` and accumulators
+`Float64Array`, and inputs are never mutated.
 
 ## Shared shapes
 
@@ -249,19 +382,25 @@ configHash(e) -> hex;  withConfigHash(e, hex);  resultHash(e) -> hex;  withResul
 // encoding: 'base64-le', data } (experiments/encode.js).
 ```
 
-The shapes above are what the modules produce and what `validate.js` accepts (the former
-mismatches G1-G4 are closed). G12 and G15-G19 are closed as described in
-`docs/v3/algorithms.md` ("Gaps"). G20 is closed: a repeated measurement stores the aggregate
-as its primary response, `results.transfer` is its centre marked `derivedFrom: 'aggregate'` (or
-null), individual runs only on request in `results.runTransfers`, and `compare.js` compares the
-aggregate and flags single run vs aggregate. Open: G21 (the combined transfer + IR step is the
-longest main-thread block until the Worker lands); its boundary is ready — the analysis is one
-serializable task (`analysis-task.js`) behind the engine's injected `analyze`, so the Worker
-is a build change only (a `scripts/build.mjs` sub-build of that module, loaded from `data:`).
-The engine's `PreflightFacts` may carry `chainNotes` (pure data, e.g. `{ limiterDeviationAboveHz: 18000 }`),
-recorded as `result.chainNotes`; `assessMeasurement(result, ctx)` (engine.js) is the standard
-`assess`. CSV transfer columns are ratios (`magnitude_db_relative`, `magnitude_db_corrected`);
-`level_db_spl` appears only in RTA CSVs under a valid level calibration.
+Notes on the shapes:
+
+- **Repeated runs (G20).** A repeated measurement stores the aggregate as its primary
+  response. `results.transfer` is the aggregate's centre, marked `derivedFrom: 'aggregate'`,
+  or null. Individual runs are stored only on request, in `results.runTransfers`.
+  `compare.js` compares the aggregate and flags single run vs aggregate.
+- **Chain notes.** The engine's `PreflightFacts` may carry `chainNotes`, which are pure data
+  (for example `{ limiterDeviationAboveHz: 18000 }`). They are recorded as
+  `result.chainNotes` and passed to `assess`. `capture.js` does not set them yet (open in G12).
+- **RTA in experiments.** An experiment built by the Measure workspace has `results.rta`
+  null. The noise check's band power is shown in the RTA tab but not stored.
+- **CSV.** Transfer columns are ratios (`magnitude_db_relative`, `magnitude_db_corrected`).
+  `level_db_spl` appears only in RTA CSVs under a valid level calibration.
+- **Open: G21.** The combined transfer and IR step is the longest main-thread block. The
+  analysis is already one serializable task behind the engine's injected `analyze`, so moving
+  it into a `data:` Worker is a build change (planned claim `analysis-off-main-thread`).
+
+The remaining differences between the specification and the code are listed under "Gaps" in
+`docs/v3/algorithms.md`.
 
 ## Labels (spec §24, §98)
 

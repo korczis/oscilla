@@ -52,6 +52,14 @@ categories:
     title: Shaping and synthesis
     summary: Sequencer, filters, envelope and additive synthesis.
     order: 220
+  - id: measure
+    title: Measuring the playback and capture chain
+    summary: Calibration, sweep transfer function, impulse response, band levels and repeats in the V3 Measure workspace, with quality and reasons.
+    order: 224
+  - id: experiments
+    title: Experiments
+    summary: Saving, reloading, exporting and comparing recorded measurements in the V3 Experiments workspace.
+    order: 226
   - id: share
     title: Export and sharing
     summary: WAV files, configuration files, links and presets.

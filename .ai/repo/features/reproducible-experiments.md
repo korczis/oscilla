@@ -4,26 +4,33 @@ id: reproducible-experiments
 kind: feature
 title: 'Record every measurement as a reproducible experiment'
 short_title: 'Experiments'
-headline: 'Planned: every measurement is kept with everything needed to reproduce it, and can be exported and imported.'
-summary: 'Planned for V3 (milestone M017): versioned experiments with stimulus, calibration, device, environment, algorithm IDs and product version, persisted locally and exported as files and CSV.'
-status: draft
+headline: 'Every measurement is kept with everything needed to reproduce it, stored in the browser, and exported and imported as a file.'
+summary: 'Versioned experiments with recipe, output level, device and constraints, calibration, runs, quality, algorithm IDs, product version and build, hashed, stored in IndexedDB with a memory fallback, exported as JSON and CSV and validated on import.'
+status: stable
 weight: 350
 featured: false
 rules: [project.no-fake-science]
-docs: [docs/specs/oscilla-v3-measure.md]
+docs: [README.md, docs/v3/algorithms.md, docs/v3/architecture.md]
 adrs: [adr-0019, adr-0022, adr-0023, adr-0024, adr-0027]
-claims: [reproducible-experiments]
+claims: [reproducible-experiments, experiment-round-trip, experiment-import-validated, experiment-persistence, algorithm-ids-on-results]
+use_cases: [save-and-reload-an-experiment, export-an-experiment]
 related: [measurement-comparison, calibration-profiles]
-tags: [planned, v3, measurement]
+tags: [v3, measurement]
 ---
 
 ## What it does
 
-Specified in sections 50 to 58: a recipe says what to do and an experiment records what was
-done (ADR 0019); experiments persist in IndexedDB with an in-memory fallback under file://,
-and file export and import are the durable path (ADR 0022); each format has its own schema
-version (ADR 0023) and the product version comes from package.json (ADR 0027).
+`src/js/experiments/schema.js` builds the experiment (a recipe says what to do, an
+experiment records what was done, ADR 0019), `hash.js` stamps a configuration hash and a
+result hash over canonical JSON, `encode.js` writes typed arrays as little-endian base64,
+`validate.js` treats every import as untrusted and `migrate.js` upgrades older schema
+versions step by step (ADR 0023). `store.js` keeps experiments in the IndexedDB database
+`oscilla-experiments` and falls back to memory, saying so, when IndexedDB is unavailable
+(ADR 0022). The Experiments workspace lists, opens, renames, duplicates, exports (JSON and
+CSV), imports and deletes them, and shows one in the Measure workspace.
 
 ## What it does not do
 
-Nothing of it is on main.
+Raw audio is not stored. Browser storage is not durable: the exported file is what survives
+clearing site data, a private window or a move to another machine. Calibration profile
+points are not embedded, only the profile name and identity.

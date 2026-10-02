@@ -28,4 +28,5 @@ and the main thread is not flooded with events.
 ## What it does not do
 
 A sweep here is a listening and teaching signal. It is not the measurement sweep of the
-planned transfer-function feature, which needs capture and deconvolution (ADR 0021).
+transfer-function feature, which renders its own canonical sweep, captures it and
+deconvolves it in the Measure workspace (ADR 0021).
