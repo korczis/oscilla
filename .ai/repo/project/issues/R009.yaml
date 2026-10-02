@@ -18,3 +18,15 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-02
+started_at: 2026-10-02T13:37:22Z
+updated_at: 2026-10-02T13:37:40Z
+verified_at: 2026-10-02T13:37:28Z
+completed_at: 2026-10-02T13:37:40Z
+evidence:
+  - covers: verified
+    type: test
+    command: "majordomus-cli product validate; majordomus-cli product list"
+    result: "22 features (PR #16, 1a4d708): 14 stable V2 capabilities verified in code, 8 draft V3; plus about (PR #17); product validate: valid, 0 errors (warnings are Majordomus-module floors the schema cannot fill for this product)"
+    artifact: "1a4d708"
+    commit: 66c5fac5a2515418c81c2533c5500d3574c92728
+    recorded_at: 2026-10-02T13:37:36Z

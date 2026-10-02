@@ -11,7 +11,7 @@ for people, never gating · **DELETED** removed, with its replacement.
 
 | File | Class | Unique invariant |
 | --- | --- | --- |
-| `unit/freeze.test.mjs` | GATE | V1 behaviour (1083 vectors, golden from V1 a7b7a23) holds on the V2 modules |
+| `unit/freeze.test.mjs` | GATE | V1 behaviour (1083 vectors, golden from V1 a7b7a23) holds on the V2 modules, except the documented deviations (`DEVIATIONS`, and `V249_CASES`: releases on the output stage, mapped back to V1's schedule) |
 | `unit/engine.test.mjs` | GATE | AudioEngine snapshot and extension points on a recording mock context |
 | `unit/core.test.mjs` | GATE | applyConfig / URL restore, storage migration, safety rules |
 | `unit/core-visualization.test.mjs` | GATE | the bridge reads snapshots only; p5 views render on a stub p5 |
