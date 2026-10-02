@@ -1,0 +1,18 @@
+id: V219
+milestone: M008
+title: "Additive synthesis"
+slug: additive-synthesis
+priority: p0
+profile: implementation
+objective: "Harmonics 1-10 gain/phase, presets, PeriodicWave; bars equal the real coefficients."
+scope:
+  - "src"
+depends_on:
+  - "V205"
+acceptance_criteria:
+  - "Harmonics 1-10 gain/phase, presets, PeriodicWave; bars equal the real coefficients."
+validation:
+  - "npm run release-gate"
+evidence_required:
+  - "verified"
+created_at: 2026-10-02

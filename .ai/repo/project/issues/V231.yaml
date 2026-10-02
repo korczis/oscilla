@@ -1,0 +1,18 @@
+id: V231
+milestone: M009
+title: "Visual tokens and components"
+slug: visual-tokens-and-components
+priority: p0
+profile: implementation
+objective: "Tokens sampled from the reference; OSCILLA component primitives."
+scope:
+  - "src/styles"
+depends_on:
+  - "V204"
+acceptance_criteria:
+  - "Tokens sampled from the reference; OSCILLA component primitives."
+validation:
+  - "node scripts/visual-compare.mjs"
+evidence_required:
+  - "verified"
+created_at: 2026-10-02

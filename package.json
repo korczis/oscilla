@@ -1,0 +1,34 @@
+{
+  "name": "oscilla",
+  "version": "2.0.0-dev",
+  "private": true,
+  "description": "OSCILLA - Interactive Sound & Frequency Lab. Builds into one static dist/index.html.",
+  "license": "UNLICENSED",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "build:check": "node scripts/build.mjs --check",
+    "build:debug": "node scripts/build.mjs --debug",
+    "verify-dist": "node scripts/verify-dist.mjs",
+    "test": "node --test \"tests/unit/**/*.test.mjs\"",
+    "test:browser": "node tests/browser/app.cjs",
+    "release-gate": "npm test && npm run build && npm run verify-dist && npm run test:engine && npm run test:browser",
+    "visual": "node scripts/visual-compare.mjs dist --play --out tests/visual/out-integration",
+    "test:engine": "node tests/browser/engine-v1port.cjs"
+  },
+  "dependencies": {
+    "alpinejs": "3.14.9",
+    "p5": "1.11.3",
+    "uplot": "1.6.32"
+  },
+  "devDependencies": {
+    "esbuild": "0.28.2",
+    "lucide-static": "1.49.0",
+    "pixelmatch": "7.2.0",
+    "playwright": "1.63.0",
+    "pngjs": "7.0.0"
+  }
+}

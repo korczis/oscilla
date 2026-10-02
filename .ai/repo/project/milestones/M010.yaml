@@ -1,0 +1,14 @@
+id: M010
+title: "V2 verified public deployment"
+slug: v2-deploy
+order: 10
+priority: p0
+problem: "V2 is not public."
+outcome: "dist/index.html deployed to GitHub Pages, opened, smoke-tested at the public URL, revision identified."
+acceptance_criteria:
+  - "dist/index.html deployed to GitHub Pages, opened, smoke-tested at the public URL, revision identified."
+validation:
+  - "npm run release-gate"
+evidence_required:
+  - "milestone_verified"
+created_at: 2026-10-02

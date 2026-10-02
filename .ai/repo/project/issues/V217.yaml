@@ -1,0 +1,18 @@
+id: V217
+milestone: M008
+title: "Filter lab"
+slug: filter-lab
+priority: p0
+profile: implementation
+objective: "Biquad LP/HP/BP/notch/peaking with real getFrequencyResponse curve in uPlot; oscillator, noise, mic inputs; on-graph cutoff/Q."
+scope:
+  - "src"
+depends_on:
+  - "V205"
+acceptance_criteria:
+  - "Biquad LP/HP/BP/notch/peaking with real getFrequencyResponse curve in uPlot; oscillator, noise, mic inputs; on-graph cutoff/Q."
+validation:
+  - "npm run release-gate"
+evidence_required:
+  - "verified"
+created_at: 2026-10-02

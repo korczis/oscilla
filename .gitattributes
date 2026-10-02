@@ -1,0 +1,3 @@
+# Byte-identical builds across machines: LF everywhere, the built artifact treated as generated.
+* text=auto eol=lf
+dist/index.html linguist-generated=true -diff

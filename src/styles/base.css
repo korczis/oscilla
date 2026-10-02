@@ -1,0 +1,141 @@
+/* OSCILLA V2 base: reset, document, accessibility helpers, dev mock outlines. */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  background: var(--osc-bg);
+  color: var(--osc-text-2);
+  font-family: var(--osc-font);
+  font-size: var(--osc-fs-sm);
+  line-height: 1.35;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+h1,
+h2,
+h3,
+p,
+dl,
+dd,
+ul,
+ol,
+figure {
+  margin: 0;
+}
+
+ul,
+ol {
+  padding: 0;
+  list-style: none;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: not-allowed;
+}
+
+svg {
+  flex: none;
+}
+
+[hidden] {
+  display: none !important;
+}
+
+[x-cloak] {
+  display: none !important;
+}
+
+.osc-num,
+.osc-tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+.osc-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Skip link: off-screen until focused. */
+.osc-skip {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  z-index: 1000;
+  padding: 8px 12px;
+  border-radius: var(--osc-radius-control);
+  background: var(--osc-blue);
+  color: var(--osc-text-on-accent);
+  font-weight: var(--osc-fw-semibold);
+  text-decoration: none;
+  transform: translateY(-200%);
+}
+
+.osc-skip:focus {
+  transform: none;
+}
+
+/* Visible focus for every interactive element. */
+:focus-visible {
+  outline: 2px solid var(--osc-focus);
+  outline-offset: 2px;
+}
+
+.osc-chart-host:focus-visible {
+  outline-offset: -2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
+}
+
+/* ?mock=1: neutral placeholder outlines on every renderer host. Layout comparison only;
+   never data, never a trace. */
+.osc-mock [data-osc-chart] {
+  outline: 1px dashed var(--osc-text-dim);
+  outline-offset: -1px;
+}
+
+.osc-mock [data-osc-chart]::after {
+  content: attr(data-osc-chart);
+  position: absolute;
+  top: 4px;
+  left: 6px;
+  color: var(--osc-text-dim);
+  font-size: var(--osc-fs-2xs);
+  pointer-events: none;
+}

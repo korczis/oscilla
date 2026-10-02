@@ -1,3 +1,6 @@
 .ai/local/
 .ai/repo/**/.tmp.*
 .claude/worktrees/
+node_modules/
+.debug/
+tests/visual/out*/

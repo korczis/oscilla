@@ -1,0 +1,18 @@
+id: V201
+milestone: M007
+title: "Majordomus bootstrap for V2"
+slug: majordomus-bootstrap-for-v2
+priority: p0
+profile: implementation
+objective: "Majordomus current (0.10.0), doctor clean, V2 plan recorded, project rules revised for a built single-file artifact."
+scope:
+  - ".ai/repo"
+acceptance_criteria:
+  - "Majordomus current (0.10.0), doctor clean, V2 plan recorded, project rules revised for a built single-file artifact."
+validation:
+  - "npm test"
+  - "npm run build:check"
+  - "npm run verify-dist"
+evidence_required:
+  - "verified"
+created_at: 2026-10-02

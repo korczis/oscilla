@@ -1,0 +1,119 @@
+/*
+ * Renderer hosts. Each host is an empty, explicitly sized box; the renderer (uPlot, p5 or a
+ * custom canvas) fills it. Sizes are the reference geometry at 1536x1024. Renderers read the
+ * colours from tokens through src/js/ui/theme.js (readChartTheme), because canvas drawing
+ * cannot see CSS.
+ */
+
+/* Primary analysis */
+.osc-h-waveform {
+  height: 114px;
+  margin: 7px 4px 0 -3px;
+}
+
+.osc-h-spectrum {
+  height: 170px;
+  margin: 11px -3px 0 -3px;
+}
+
+/* Microphone analyzer */
+.osc-h-mic {
+  height: 185px;
+}
+
+/* Spectrogram + colour bar */
+.osc-h-spectrogram {
+  height: 190px;
+}
+
+.osc-h-colorbar {
+  flex: none;
+  width: 15px;
+  height: 159px;
+  border-radius: 1px;
+}
+
+/* Sequencer */
+.osc-seq-ruler {
+  height: 20px;
+  margin-left: 31px;
+}
+
+/* The timeline element is #osc-seq-timeline.osc-timeline (status/labs.txt request 1). */
+#osc-seq-timeline {
+  height: 50px;
+}
+
+/* Row 3 */
+.osc-h-filter {
+  height: 140px;
+}
+
+.osc-h-envelope {
+  height: 150px;
+}
+
+.osc-h-additive {
+  height: 112px;
+}
+
+.osc-h-phase {
+  height: 100%;
+}
+
+.osc-h-bio {
+  height: 124px;
+}
+
+/* Readout chip a renderer may overlay on a chart ("15.5 kHz / -12 dB"). */
+.osc-chip-readout {
+  position: absolute;
+  z-index: 2;
+  padding: 4px 8px;
+  border: 1px solid var(--osc-border-strong);
+  border-radius: var(--osc-radius-sm);
+  background: var(--osc-surface-tooltip);
+  color: var(--osc-text);
+  font-size: var(--osc-fs-xs);
+  line-height: 15px;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+/* Text a renderer may place in the DOM (axis labels, UNAVAILABLE notices). */
+.osc-chart-note {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--osc-text-dim);
+  font-size: var(--osc-fs-xs);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  pointer-events: none;
+}
+
+/* uPlot defaults that leak through when a renderer forgets to style them. */
+.osc-chart-host .uplot {
+  font-family: var(--osc-font);
+}
+
+.osc-chart-host .u-legend {
+  display: none;
+}
+
+.osc-chart-host .u-select {
+  background: rgb(10 134 240 / 12%);
+}
+
+/* Fullscreen: any chart panel can be promoted with the Fullscreen API or this class. */
+.osc-panel.is-fullscreen,
+.osc-panel:fullscreen {
+  position: fixed;
+  inset: 12px;
+  z-index: 80;
+  overflow: auto;
+}

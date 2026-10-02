@@ -16,22 +16,29 @@ concurrency:
 jobs:
   gate:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
         with:
           node-version: 22
-      - name: Install test tooling
-        working-directory: tests
+          cache: npm
+      - run: npm ci
+      - name: Unit and freeze suites
+        run: npm test
+      - name: Committed dist/index.html matches a clean rebuild
+        run: npm run build:check
+      - name: Artifact rules (single file, no runtime fetch, licence notices, budget)
+        run: npm run verify-dist
+      - name: Install browsers
+        run: npx playwright install --with-deps chromium firefox webkit
+      - name: Audio sink for headless Firefox (no sound server on the runner)
         run: |
-          npm ci
-          npx playwright install --with-deps chromium
-      - name: Smoke test (file://, chromium)
-        run: node tests/smoke.cjs
-      - name: Spec checks (file://, chromium)
-        run: |
-          if [ -f tests/spec.cjs ]; then node tests/spec.cjs; fi
-      - name: Engine checks (file://, chromium)
-        run: |
-          if [ -f tests/engine.cjs ]; then node tests/engine.cjs; fi
+          sudo apt-get update -q && sudo apt-get install -y --no-install-recommends pulseaudio
+          pulseaudio --start --exit-idle-time=-1
+          pactl load-module module-null-sink sink_name=ci_null
+          pactl set-default-sink ci_null
+      - name: V1 engine checks against the V2 engine
+        run: npm run test:engine
+      - name: Browser gate (file:// and /oscilla/ sub-path; chromium, firefox, webkit)
+        run: npm run test:browser

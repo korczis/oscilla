@@ -1,0 +1,667 @@
+/*
+ * Integration layer: styles for what the wiring adds to the shell (pattern form, dialogs,
+ * notifications, Learn/Presets views, analysis tab layouts) and the desktop workspace focus
+ * layouts. Desktop playground geometry (instrument.css) is untouched; colours come from
+ * tokens.css only.
+ */
+
+/* ---------- Pattern parameters (generated from PATTERNS[].params) ---------- */
+.osc-pattern-params {
+  display: block;
+}
+
+.osc-pp-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px 8px;
+}
+
+.osc-pp-field {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.osc-pp-field--wide {
+  grid-column: 1 / -1;
+}
+
+.osc-pp-field .osc-label {
+  overflow: hidden;
+  font-size: var(--osc-fs-2xs);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.osc-pp-field .osc-number,
+.osc-pp-field select {
+  width: 100%;
+  height: 26px;
+}
+
+.osc-pp-error,
+.osc-pp-warn {
+  margin-top: 4px;
+  font-size: var(--osc-fs-2xs);
+  line-height: 1.35;
+}
+
+.osc-pp-error {
+  color: var(--osc-red);
+}
+
+.osc-pp-warn {
+  color: var(--osc-orange);
+}
+
+/* ---------- Requests from status/labs.txt ---------- */
+/* 2: siren/random have 5-6 schema fields: wrap to a second row; the editor grows, never clips. */
+.osc-seq-fields {
+  grid-auto-rows: auto;
+  row-gap: 6px;
+}
+
+.osc-seq-editor {
+  height: auto;
+  min-height: 96px;
+  padding-bottom: 7px;
+}
+
+.osc-seq-msg {
+  margin: 2px 0 0 37px;
+  color: var(--osc-orange);
+  font-size: var(--osc-fs-2xs);
+  line-height: 1.3;
+}
+
+.osc-seq-msg:empty {
+  display: none;
+}
+
+/* 6: device metric values white and semibold, as in the reference. */
+.osc-dev-metrics dd {
+  color: var(--osc-text);
+  font-weight: var(--osc-fw-semibold);
+}
+
+/* 4: mic Compare tools and the phase offset sit over their chart, top-right. */
+.osc-mic-view,
+.osc-phase-view {
+  position: relative;
+}
+
+.osc-mic-tools {
+  position: absolute;
+  top: 2px;
+  right: 6px;
+  z-index: 3;
+}
+
+.osc-mic-tools[hidden] {
+  display: none;
+}
+
+.osc-mic-tools .osc-seg-btn {
+  height: 22px;
+  padding: 0 8px;
+  font-size: var(--osc-fs-2xs);
+}
+
+.osc-phase-offset {
+  position: absolute;
+  top: 0;
+  right: 8px;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.osc-phase-offset .osc-number {
+  width: 52px;
+  height: 22px;
+  padding: 0 4px;
+  font-size: var(--osc-fs-2xs);
+}
+
+/* ---------- Transport ---------- */
+.osc-hold {
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.osc-hold.is-playing {
+  background: var(--osc-blue-press);
+  box-shadow: inset 0 0 0 2px var(--osc-green);
+}
+
+.osc-analysis-foot.is-inert {
+  visibility: hidden;
+}
+
+.osc-icon-btn svg[style*="display: none"] {
+  display: none;
+}
+
+/* ---------- Analysis tabs: one view area, renderer per tab ---------- */
+.osc-h-analysis-spg {
+  display: none;
+  position: relative;
+  height: 300px;
+  margin-top: 7px;
+}
+
+.osc-analysis-view[data-tab="spectrum"] .osc-h-waveform {
+  display: none;
+}
+
+.osc-analysis-view[data-tab="spectrum"] .osc-h-spectrum {
+  height: 295px;
+}
+
+.osc-analysis-view[data-tab="spectrogram"] .osc-h-waveform,
+.osc-analysis-view[data-tab="spectrogram"] .osc-h-spectrum {
+  display: none;
+}
+
+.osc-analysis-view[data-tab="spectrogram"] .osc-h-analysis-spg {
+  display: block;
+}
+
+.osc-analysis-view[data-tab="harmonics"] .osc-h-spectrum,
+.osc-analysis-view[data-tab="signalPath"] .osc-h-spectrum {
+  display: none;
+}
+
+.osc-analysis-view[data-tab="harmonics"] .osc-h-waveform,
+.osc-analysis-view[data-tab="signalPath"] .osc-h-waveform {
+  height: 300px;
+}
+
+/* Fullscreen panels: let the chart hosts grow with the panel. */
+.osc-panel.is-fullscreen,
+.osc-panel:fullscreen {
+  display: flex;
+  flex-direction: column;
+  height: auto;
+  background: var(--osc-surface-1);
+}
+
+.osc-panel:fullscreen {
+  inset: 0;
+  padding: 16px;
+}
+
+.osc-panel.is-fullscreen .osc-h-waveform,
+.osc-panel:fullscreen .osc-h-waveform {
+  height: 34vh;
+}
+
+.osc-panel.is-fullscreen .osc-h-spectrum,
+.osc-panel:fullscreen .osc-h-spectrum,
+.osc-panel.is-fullscreen .osc-h-spectrogram,
+.osc-panel:fullscreen .osc-h-spectrogram,
+.osc-panel.is-fullscreen .osc-h-analysis-spg,
+.osc-panel:fullscreen .osc-h-analysis-spg,
+.osc-panel.is-fullscreen .osc-h-envelope,
+.osc-panel:fullscreen .osc-h-envelope {
+  height: 48vh;
+}
+
+/* ---------- App frame: header, notifications, scrolling main, status bar ----------
+ * The main grid is the only scroll container, so the header, the notifications and the
+ * status bar never overlay a control (WCAG 2.4.11): nothing is sticky over scrolled content.
+ */
+.osc-app {
+  height: 100vh;
+  height: 100dvh;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.osc-main {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+.osc-statusbar {
+  position: relative;
+}
+
+/* ---------- Notifications (in flow below the header) ---------- */
+.osc-toasts {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 40vh;
+  padding: 6px 9px 0 11px;
+  overflow: auto;
+}
+
+.osc-toast {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 34px;
+  padding: 3px 4px 3px 12px;
+  border: 1px solid var(--osc-border-strong);
+  border-left: 3px solid var(--osc-blue);
+  border-radius: var(--osc-radius-control);
+  background: var(--osc-surface-tooltip);
+  color: var(--osc-text);
+  font-size: var(--osc-fs-sm);
+  line-height: 1.35;
+}
+
+.osc-toast--success { border-left-color: var(--osc-green); }
+.osc-toast--warning { border-left-color: var(--osc-orange); }
+.osc-toast--error { border-left-color: var(--osc-red); }
+
+.osc-toast-text {
+  display: flex;
+  flex: 1;
+  flex-wrap: wrap;
+  column-gap: 8px;
+  min-width: 0;
+}
+
+.osc-toast-text span {
+  color: var(--osc-text-2);
+}
+
+.osc-toast .osc-icon-btn {
+  flex: none;
+}
+
+[aria-disabled="true"] {
+  opacity: 0.55;
+  cursor: progress;
+}
+
+/* ---------- Dialogs ---------- */
+.osc-dialog {
+  width: min(460px, calc(100vw - 32px));
+  max-height: calc(100vh - 48px);
+  padding: 0;
+  border: 1px solid var(--osc-border-strong);
+  border-radius: var(--osc-radius-panel);
+  background: var(--osc-surface-1);
+  color: var(--osc-text);
+}
+
+.osc-dialog--wide {
+  width: min(620px, calc(100vw - 32px));
+}
+
+.osc-dialog::backdrop {
+  background: var(--osc-overlay);
+}
+
+.osc-dialog-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 18px 20px;
+  font-size: var(--osc-fs-md);
+  line-height: 1.5;
+}
+
+.osc-dialog-title {
+  margin: 0;
+  font-size: var(--osc-fs-xl);
+  font-weight: var(--osc-fw-semibold);
+}
+
+.osc-dialog-input {
+  width: 100%;
+  height: 34px;
+}
+
+.osc-dialog-note {
+  font-size: var(--osc-fs-xs);
+}
+
+.osc-dialog-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.osc-dialog-actions .osc-btn {
+  min-width: 86px;
+  height: 32px;
+  padding: 0 14px;
+}
+
+.osc-shortcuts {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+}
+
+.osc-shortcuts > div {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 10px;
+}
+
+.osc-shortcuts dd {
+  margin: 0;
+  color: var(--osc-text-2);
+}
+
+.osc-shortcuts kbd {
+  padding: 1px 5px;
+  border: 1px solid var(--osc-border-strong);
+  border-radius: var(--osc-radius-sm);
+  background: var(--osc-surface-3);
+  font-family: inherit;
+  font-size: var(--osc-fs-xs);
+}
+
+.osc-settings-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 190px) minmax(0, 1fr);
+  align-items: center;
+  gap: 8px 12px;
+}
+
+.osc-settings-grid > .osc-pp-error,
+.osc-settings-pair {
+  grid-column: 1 / -1;
+}
+
+.osc-settings-pair {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+}
+
+.osc-settings-grid .osc-number,
+.osc-settings-grid select {
+  width: 100%;
+  height: 30px;
+}
+
+/* ---------- Learn / Presets views ---------- */
+.osc-learn-list,
+.osc-preset-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr));
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.osc-learn-item,
+.osc-preset-item {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--osc-border);
+  border-radius: var(--osc-radius-control);
+  background: var(--osc-surface-2);
+}
+
+.osc-learn-item.is-current {
+  border-color: var(--osc-blue-deep-border);
+}
+
+.osc-learn-title {
+  margin: 0;
+  font-size: var(--osc-fs-lg);
+  font-weight: var(--osc-fw-semibold);
+}
+
+.osc-learn-body,
+.osc-learn-example {
+  margin: 0;
+  color: var(--osc-text-2);
+  font-size: var(--osc-fs-sm);
+  line-height: 1.5;
+}
+
+.osc-learn-example {
+  color: var(--osc-cyan);
+}
+
+.osc-learn-actions,
+.osc-preset-actions,
+.osc-preset-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.osc-learn-actions .osc-btn,
+.osc-preset-actions .osc-btn,
+.osc-preset-toolbar .osc-btn {
+  height: 30px;
+  padding: 0 12px;
+}
+
+.osc-preset-tabs {
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+
+.osc-preset-toolbar {
+  margin-bottom: 12px;
+}
+
+.osc-preset-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.osc-preset-name {
+  font-weight: var(--osc-fw-semibold);
+}
+
+.osc-preset-desc,
+.osc-preset-params {
+  color: var(--osc-text-2);
+  font-size: var(--osc-fs-xs);
+}
+
+.osc-preset-disabled {
+  color: var(--osc-orange);
+  font-size: var(--osc-fs-xs);
+}
+
+.osc-preset-empty {
+  color: var(--osc-text-muted);
+  font-size: var(--osc-fs-sm);
+}
+
+/* ---------- Dual oscillator extras ---------- */
+.osc-dual-presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.osc-chip-btn {
+  height: 26px;
+  padding: 0 10px;
+  font-size: var(--osc-fs-xs);
+}
+
+/* ---------- Desktop workspace focus layouts ----------
+ * Playground = the integrated reference grid. Every other workspace re-flows the same panels
+ * (wrappers become display: contents) into a 12-column grid that enlarges the panels the
+ * workspace is about; panels it does not list are hidden.
+ */
+@media (min-width: 1280px) {
+  .osc-app:is([data-mode="sequencer"], [data-mode="analyzer"], [data-mode="filter"],
+    [data-mode="synthesis"], [data-mode="compare"]) .osc-main {
+    grid-template-rows: none;
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+    grid-auto-rows: auto;
+    grid-auto-flow: row dense;
+    align-items: start;
+    gap: 9px;
+  }
+
+  .osc-app:is([data-mode="sequencer"], [data-mode="analyzer"], [data-mode="filter"],
+    [data-mode="synthesis"], [data-mode="compare"]) :is(.osc-top, .osc-top-left, .osc-top-right,
+    .osc-row1-left, .osc-row1-right, .osc-row3, .osc-workspace) {
+    display: contents;
+  }
+
+  .osc-app:is([data-mode="sequencer"], [data-mode="analyzer"], [data-mode="filter"],
+    [data-mode="synthesis"], [data-mode="compare"]) .osc-panel {
+    grid-column: span 12;
+    height: auto;
+    min-height: 0;
+  }
+
+  .osc-app[data-mode="sequencer"] .osc-panel:not([data-osc-modes~="sequencer"]),
+  .osc-app[data-mode="analyzer"] .osc-panel:not([data-osc-modes~="analyzer"]),
+  .osc-app[data-mode="filter"] .osc-panel:not([data-osc-modes~="filter"]),
+  .osc-app[data-mode="synthesis"] .osc-panel:not([data-osc-modes~="synthesis"]),
+  .osc-app[data-mode="compare"] .osc-panel:not([data-osc-modes~="compare"]) {
+    display: none;
+  }
+
+  /* Sequencer: source left, the sequencer large on the right. */
+  .osc-app[data-mode="sequencer"] .osc-p-source { grid-column: 1 / span 4; height: 416px; }
+  .osc-app[data-mode="sequencer"] .osc-p-sequencer { grid-column: 5 / span 8; }
+  .osc-app[data-mode="sequencer"] #osc-seq-timeline { height: 96px; }
+
+  /* Analyzer: analysis + mic on top, device and the spectrogram below. */
+  .osc-app[data-mode="analyzer"] .osc-p-analysis { grid-column: 1 / span 7; }
+  .osc-app[data-mode="analyzer"] .osc-p-mic { grid-column: 8 / span 5; }
+  .osc-app[data-mode="analyzer"] .osc-p-spectrogram { grid-column: 1 / span 9; }
+  .osc-app[data-mode="analyzer"] .osc-p-device { grid-column: 10 / span 3; }
+  .osc-app[data-mode="analyzer"] .osc-h-spectrum { height: 230px; }
+  .osc-app[data-mode="analyzer"] .osc-h-mic { height: 300px; }
+  .osc-app[data-mode="analyzer"] .osc-h-spectrogram { height: 320px; }
+  .osc-app[data-mode="analyzer"] .osc-h-colorbar { height: 290px; }
+
+  /* Filter Lab: the filter panel, full width and tall. */
+  .osc-app[data-mode="filter"] .osc-p-filter { grid-column: 1 / -1; }
+  .osc-app[data-mode="filter"] .osc-h-filter { height: 460px; }
+  .osc-app[data-mode="filter"] .osc-filter-body { grid-template-columns: minmax(0, 1fr) 300px; }
+
+  /* Synthesis: source + analysis, then ADSR, additive and phase, then the dual oscillator. */
+  .osc-app[data-mode="synthesis"] .osc-p-source { grid-column: 1 / span 4; height: 416px; }
+  .osc-app[data-mode="synthesis"] .osc-p-analysis { grid-column: 5 / span 8; height: 416px; }
+  .osc-app[data-mode="synthesis"] .osc-p-envelope { grid-column: 1 / span 4; }
+  .osc-app[data-mode="synthesis"] .osc-p-additive { grid-column: 5 / span 4; }
+  .osc-app[data-mode="synthesis"] .osc-p-phase { grid-column: 9 / span 4; }
+  .osc-app[data-mode="synthesis"] .osc-p-dual { grid-column: 1 / -1; }
+  .osc-app[data-mode="synthesis"] .osc-h-envelope { height: 220px; }
+  .osc-app[data-mode="synthesis"] .osc-env-body { grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); }
+  .osc-app[data-mode="synthesis"] .osc-h-additive { height: 180px; }
+  .osc-app[data-mode="synthesis"] .osc-phase-view { height: 200px; }
+
+  /* Compare: generator vs microphone, human vs animal ranges, two-signal phase. */
+  .osc-app[data-mode="compare"] .osc-p-mic { grid-column: 1 / span 7; }
+  .osc-app[data-mode="compare"] .osc-p-bio { grid-column: 8 / span 5; }
+  .osc-app[data-mode="compare"] .osc-p-phase { grid-column: 1 / span 7; }
+  .osc-app[data-mode="compare"] .osc-h-mic { height: 300px; }
+  .osc-app[data-mode="compare"] .osc-h-bio { height: 240px; }
+  .osc-app[data-mode="compare"] .osc-phase-view { height: 220px; }
+}
+
+/* Dual panel grid inside the synthesis workspace (all widths). */
+.osc-p-dual .osc-dual-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr));
+  gap: 12px;
+}
+
+/* Sequencer editor glyph follows the selected block type (#i-block-<type>). */
+.osc-seq-editor-icon[data-type] { color: var(--osc-block-accent, var(--osc-purple)); }
+.osc-seq-editor-icon[data-type="tone"] { --osc-block-accent: var(--osc-block-tone); }
+.osc-seq-editor-icon[data-type="silence"] { --osc-block-accent: var(--osc-text-muted); }
+.osc-seq-editor-icon[data-type="sweep"] { --osc-block-accent: var(--osc-purple); }
+.osc-seq-editor-icon[data-type="pulse"] { --osc-block-accent: var(--osc-block-pulse); }
+.osc-seq-editor-icon[data-type="chirp"] { --osc-block-accent: var(--osc-block-chirp); }
+.osc-seq-editor-icon[data-type="burst"] { --osc-block-accent: var(--osc-block-burst); }
+.osc-seq-editor-icon[data-type="siren"] { --osc-block-accent: var(--osc-block-siren); }
+.osc-seq-editor-icon[data-type="am"] { --osc-block-accent: var(--osc-block-am); }
+.osc-seq-editor-icon[data-type="fm"] { --osc-block-accent: var(--osc-block-fm); }
+.osc-seq-editor-icon[data-type="random"] { --osc-block-accent: var(--osc-block-random); }
+
+/* ---------- V1 a7b7a23 port requests ---------- */
+/* R3: Pause animation, between the analysis tabs and the time window. */
+.osc-viz-pause {
+  width: 26px;
+  height: 31px;
+  margin-left: auto;
+}
+
+.osc-viz-pause + .osc-time-select {
+  margin-left: 6px;
+}
+
+.osc-viz-pause svg {
+  width: 13px;
+  height: 13px;
+}
+
+/* R15: Explore hints, in flow below the header (never covers a control). */
+.osc-hints {
+  display: flex;
+  flex: none;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 6px 9px 0 11px;
+  padding: 6px 6px 6px 12px;
+  border: 1px solid var(--osc-info-border);
+  border-radius: var(--osc-radius-control);
+  background: var(--osc-info-bg);
+  font-size: var(--osc-fs-sm);
+  line-height: 1.4;
+}
+
+.osc-hints-list {
+  display: flex;
+  flex: 1;
+  flex-wrap: wrap;
+  gap: 2px 18px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.osc-settings-wide {
+  grid-column: 1 / -1;
+}
+
+/* 44 px targets on coarse pointers for the controls the integration adds. */
+@media (pointer: coarse) {
+  .osc-pp-field .osc-number,
+  .osc-pp-field select,
+  .osc-dialog-actions .osc-btn,
+  .osc-learn-actions .osc-btn,
+  .osc-preset-actions .osc-btn,
+  .osc-preset-toolbar .osc-btn,
+  .osc-chip-btn,
+  .osc-mic-tools .osc-seg-btn,
+  .osc-phase-offset .osc-number,
+  .osc-settings-grid .osc-number,
+  .osc-settings-grid select,
+  .osc-toast .osc-icon-btn,
+  .osc-hints .osc-icon-btn,
+  .osc-viz-pause,
+  .osc-p-dual .osc-toggle {
+    min-width: 44px;
+    min-height: 44px;
+  }
+}

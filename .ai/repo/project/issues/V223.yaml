@@ -1,0 +1,18 @@
+id: V223
+milestone: M008
+title: "Audio and graph export"
+slug: audio-and-graph-export
+priority: p0
+profile: implementation
+objective: "WAV via OfflineAudioContext for tone, sweep, sequence; canvas PNG export."
+scope:
+  - "src"
+depends_on:
+  - "V216"
+acceptance_criteria:
+  - "WAV via OfflineAudioContext for tone, sweep, sequence; canvas PNG export."
+validation:
+  - "npm run release-gate"
+evidence_required:
+  - "verified"
+created_at: 2026-10-02

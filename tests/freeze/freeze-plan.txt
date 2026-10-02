@@ -1,0 +1,169 @@
+OSCILLA V1 BEHAVIOUR FREEZE (V2 spec §5)
+========================================
+Files
+  extract.cjs        Loads index.html, pulls the inline application <script>, splits it at the
+                     "// N. TITLE" banners and evaluates §1-§9 in a node:vm context. §10
+                     (bootstrapping) is never evaluated. The context is fully stubbed:
+                     in-memory/throwing Storage, location, navigator, recorded timers that never
+                     fire on their own, fixed Date.now (2026-01-01T12:00Z), seeded Math.random,
+                     and an optional recording mock AudioContext (makeMockAudio). It exports all
+                     134 top-level bindings plus newApp(), a fresh oscillaApp() component object
+                     used without Alpine (no init(), $watch/$nextTick stubbed).
+                       node extract.cjs            list sections + line ranges (works on any index.html)
+                       node extract.cjs --golden   regenerate golden.json
+  vectors.cjs        The input set and how every output is computed (1083 cases, 22 groups).
+  golden.json        Encoded outputs (NaN/Infinity/undefined preserved; arrays > 64 entries frozen
+                     as length + head + tail + sha256). meta.sha256 pins the baseline file.
+  freeze.test.cjs    node:test runner: re-runs each case and compares (numbers rel 1e-9; strings,
+                     structure and digests exact), plus invariant tests. Zero dependencies.
+                       node --test freeze.test.cjs
+                       OSCILLA_HTML=/path/to/index.html node --test freeze.test.cjs
+
+Result at 95dfa81: tests 1109, pass 1109, fail 0, ~0.45 s (Node 22.20.0).
+Mutation check (scratch copies, since deleted):
+  SAFE_NYQUIST_FACTOR 0.95 -> 0.94 ......................... 53 failures (killed)
+  formatFrequency kHz threshold >= -> > .................... 35 failures (killed)
+  restoreFromHash: drop the 'rm' + extra.range merge ........ 3 failures (killed)
+  _cleanup: stop deleting nodes from engine.nodes (leak) ... 42 failures (killed)
+  _releaseVoice: release floor 0.005 -> 0.004 .............. 0 failures (equivalent for current
+                                                                inputs: no path releases < 5 ms)
+
+§5 ITEM -> V1 FUNCTIONS (name, line at 95dfa81, purity) -> golden group (cases)
+  frequency parser        parseFrequency L1379, parseFrequencyList L1398 ........ pure  frequency.parse (65)
+  frequency formatting    formatFrequency L1409, formatFrequencyShort L1417, formatMs L1437,
+                          formatCents L1475, sig L1192, round L1187 ............ pure  frequency.format (91) + helpers
+  log mapping             frequencyToNormalized L1366, normalizedToFrequency L1370  pure  frequency.logmap (84)
+  wavelength              formatWavelength L1428 (SPEED_OF_SOUND L983) .......... pure  frequency.wavelength (17)
+  period                  formatPeriod L1421 .................................... pure  frequency.period (15)
+  note conversion         frequencyToMidi L1450, midiToFrequency L1453, midiToName L1456,
+                          nearestNote L1460, noteToFrequency L1466 ............... pure  music (119)
+  region mapping          regionFor L1441 (+FREQUENCY_REGIONS L1017) ............ pure  region (22); mapRegions getter
+                                                                                         L3048 via ui.mapping
+  Nyquist checks          getters nyquist/safeMax/rangeMin/rangeMax L2975-2987,
+                          representability L3119, presetDisabled L3642,
+                          setFrequency L3344, buildPlan cf() L1800,
+                          AudioEngine.nyquist/safeMaximum L2039-2040 ............ component getters (impure
+                                                                                   this-bound, deterministic) +
+                                                                                   pure buildPlan        nyquist (33)
+  presets                 BUILTIN_PRESETS L1551, refPreset L1518, LEARN_TOPICS L1647,
+                          presetMaxFrequency L3624, describeConfig L3618,
+                          applyConfig L3869, runDemo L3997, loadPreset/confirmHeadphones  data pure; apply via
+                                                                                   component   presets.data (26), presets.apply (4)
+  pattern plan generation buildPlan L1797, stepsFromFrequencies L1748, sweepSegments L1765,
+                          summarizeFrequencies L1782 ........................... pure  plan.build (96)
+  pattern freq progression planFreqAt L1720, planAmpAt L1739, findTimed L1706, lfoShape L1700,
+                          waveSample L4305 ...................................... pure  plan.progression (38)
+  dual calculations       dualFa/dualFb/dualDelta/beatText/stereoBinauralCondition L3075-3085,
+                          buildPlan dual branch L1811, nudgeDual/setDualSlider/setStereo L3561-3573  component + pure  dual (10)
+  harmonics               harmonicLimit L2734, partialCount L2742, harmonicTable L2752  pure  harmonics (202)
+  URL state               serializeConfig L3781, serializeHash L3792, restoreFromHash L3815,
+                          applyConfig L3869, base64UrlEncode/Decode L1224-1237 .. impure (location, notify,
+                                                                                   safeMax) -> component
+                                                                                   facade + stubbed location  url.state (56)
+  storage schema/migration presetRecord L1536, newPresetId L1528, migratePreset L3680,
+                          loadCustomPresets L3663, persistPresets L3703, savePreset L3713,
+                          loadHistory L3747, addHistory L3752, safeStorage L1197, readJSON L1218
+                                                                                 impure (Storage, Date,
+                                                                                   random) -> MemoryStorage,
+                                                                                   fixed clock/seed      storage (38)
+  continuous-play safety  buildPlan sweep continuous L1845-1852, engine.play open-plan limit
+                          L2304-2319, setContinuous L3274, setSweepRepeat L3551, toggleLatch L3257,
+                          applyConfig sweep.repeat L3934-3937, durationText L3034, transportText L3107
+                                                                                 mixed  safety.continuous (13) + url
+                                                                                        invariants + app.transport
+  AudioEngine stop        play L2187, _releaseVoice L2400, _holdEnv L2164, release L2439,
+                          stopAll L2446, _cleanup L2450, updateLive L2479 ....... impure -> recording mock
+                                                                                   AudioContext            engine.stop (37), app.transport (7)
+  (extra) UI mappings     setGainPct/gainPct/gainLabel, sweep rates, readouts, map ticks/regions,
+                          hints, coerceLike/paramDescriptor ..................... component              ui.mapping (37)
+  (extra) viz bridge      syncViz L4162 -> viz.state labels, pathNodesFor L2780, harmonicTable  component+bridge  viz.bridge (10)
+  (extra) helpers         clamp/isNum/toNumber/toInt/pick/round/sig/mulberry32/base64url/deepCopy  pure  helpers (63)
+
+Portability for V2
+  Pure-API groups (838 cases: helpers, frequency.*, music, region, plan.*, harmonics, presets.data)
+  call top-level names only, so they port to src modules with a name map. The component-facade
+  groups (nyquist, presets.apply, dual, viz.bridge, ui.mapping, url.state, storage,
+  safety.continuous, app.transport: 208 cases) call oscillaApp method/getter names. When the
+  component is split, provide a facade with the same names over core/config + url-state +
+  storage, or re-point those cases to the new pure functions and regenerate deliberately. The
+  engine.stop group (37) needs AudioEngine with the same public surface (play/release/stopAll/
+  updateLive/instantaneousFrequency, activeNodeCount, voice/voices) and runs against the same mock.
+  Recommended: move to tests/unit/freeze.test.mjs with an adapter (OSCILLA_IMPL=adapter.mjs
+  exporting { g, newApp, ctx }) so V1 html and V2 src are checked by the same golden.json.
+
+HOW THE NON-PURE ITEMS ARE FROZEN, AND WHAT PLAYWRIGHT ALREADY COVERS
+URL state
+  Node freeze: url.state. 9 configurations x (serialize + round trip) and 19 crafted hashes
+  (malformed base64, out-of-range values, gain above default, continuous repeat, binaural in link,
+  array extra, unknown pattern keys, invalid sequence, legacy sweepUp-in-sweep, custom range with
+  'rm' precedence, invalid octave span, bad a4, unknown mode, foreign continuous keys), each at a
+  provisional rate (null) and at 48 kHz. The state, notices and pendingHashConfig are captured.
+  Existing Playwright: smoke "URL hash restores configuration" (fm/1500/modFreq 7), "URL never
+  restores continuous permission or playback", "malformed URL handled with a visible notice";
+  spec §43 "hash sweep.repeat continuous restores once", "hash never restores continuous
+  permission", "no AudioContext created when loading from a hash".
+  Gaps: the browser does not test the pendingHashConfig re-apply after the first gesture at
+  48 kHz (above-provisional link). Add: open #f=23000&rm=advanced, press, assert frequency =
+  22800. The browser does not test the a4 / custom-range links, and copyConfigLink's clipboard
+  fallback modal is untested.
+Storage schema / migration
+  Node freeze: storage. presetRecord over 6 cfg shapes, migratePreset over 14 inputs (v0, v1,
+  v99, bad names/ids/created), loadCustomPresets over 7 stored payloads, the save/delete/persist
+  flow, blocked (throwing) storage, loadHistory over 5 payloads, addHistory dedupe + 50 cap,
+  safety-notice session key, runtime flags never serialized.
+  Existing Playwright: smoke "custom preset saved with versioned schema", "loads and deletes",
+  "session history recorded", "storage failure handled"; spec §41 (v0 migrated, invalid and v99
+  dropped, warning, full schema keys), §42 session history.
+  Gaps: the theme key write (setTheme needs the DOM) is untested. Migrated v0 presets get a new
+  id and created stamp on EVERY load because migration is not persisted (frozen as-is; likely a
+  defect). There is no test for the 200-preset cap.
+Continuous-play safety
+  Node freeze: buildPlan continuous with/without permission at 3 durations (sweep + ping-pong);
+  app gating (locked repeat notice, applyConfig downgrade, revoke resets repeat, durationText and
+  transportText at limits 0.5/2/5 s); the engine scenarios hold-limited-by-safety,
+  hold-limit-shorter-than-attack, hold-continuous-unlimited, trigger-open-duration(-capped);
+  app.transport latch-requires-permission; and test-level invariants that no serialized config or
+  hash ever carries continuousAllowed or binaural.
+  Existing Playwright: smoke "safety limit ends a held tone (0.5 s)", "continuous permission not
+  in URL or localStorage", "TRIGGER of an open tone stops at the 2 s safety limit"; spec §43.
+AudioEngine stop semantics
+  Node freeze: engine.stop runs 37 scenarios on a recording mock AudioContext (every node, every
+  connection, every AudioParam event, every start/stop time). Covered: the output chain and trim,
+  hold/release while running, release mid-attack and mid-release WITHOUT cancelAndHoldAtTime
+  (the Firefox _holdEnv path, value interpolation checked), natural end, release after the
+  programmed end (no-op), release on a suspended context (immediate free), 20 play/stop cycles,
+  play-while-playing overlap, the safety limit, a limit shorter than the attack, continuous
+  unlimited, trigger durations, the topology of every plan type (dual with and without
+  StereoPanner), updateLive per type incl. rejections, instantaneousFrequency and master gain
+  clamping. Invariants per scenario: no gain hard-set to 0, no non-finite automation times, no
+  oscillator scheduled at or above the safe maximum, zero active nodes and every voice node
+  disconnected after the end. app.transport (7) drives the component + engine: trigger, programmed
+  pattern, latch gate, key hold/repeat/release, Escape, invalid config error, reset while playing.
+  Existing Playwright (real AudioContext): smoke "release stops and frees every node", "40 rapid
+  play/stop cycles leave zero nodes", "no oscillator accumulation", "finite tone ends on its own",
+  "Escape stops playback", "dual osc plays two voices and frees them", "output peak ~ logical gain
+  0.08", "spectrum peak at 440 Hz", and per-browser release-level checks ("stop … never raises
+  the level", "starts from the held level", "frees every node").
+  Gaps: the mock freezes the SCHEDULE, not the rendered audio. Keep the Playwright level checks
+  and run them on Firefox (the _holdEnv fallback) as well as Chromium. Rendered-click detection
+  could use an OfflineAudioContext render of the release scenarios (max |Δsample| below a
+  threshold), which is feasible in the browser with no new dependency. Mic start/stop has only a
+  start/stop track check.
+
+Freezing at the browser level for V2 (recommended)
+  1. Expose the V2 core modules on the test seam (window.OSCILLA.core/audio/data), then run the
+     pure-API vectors IN PAGE against dist/index.html and compare with golden.json. This guards
+     bundler/minifier/scope drift (hazard K1) that the Node harness cannot see.
+  2. Keep the smoke/spec engine checks unchanged in substance; retarget them to dist/ and to the
+     new markup.
+  3. Add explicit browser checks for the gaps above (pendingHashConfig re-apply, Firefox release
+     path, OfflineAudioContext click check, theme storage).
+
+V1 quirks frozen as-is (decide deliberately in V2; do not "fix" silently)
+  - buildPlan: an invalid durationMs ('x') becomes the MINIMUM (20 ms sweep pass), not the default.
+  - buildPlan: frequency NaN silently falls back to 440 Hz, while 0 or negative is an error.
+  - formatFrequency(0.004) -> "0 Hz"; formatFrequency(-1) -> "-1 Hz".
+  - applyConfig clamps a frequency above safeMax with 0 issues (loadPreset blocks disabled presets
+    first, but links do not).
+  - Migrated v0 presets: unstable id/created across reloads (not persisted after migration).
+  - Round trip is lossy by design for gain > 0.08 (capped) and repeat 'continuous' (-> 'once').
