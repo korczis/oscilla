@@ -50,6 +50,8 @@ const KNOWN_SMALL_TARGETS = new Set([
   // added by the V2 QA fixes (PR #15): the phone safety-notice "More" toggle and the bio
   // source links; fixed in fix/v2-touch-seq, which removes them from this list
   'osc-safety-toggle', 'osc-bio-source-list>A',
+  // added by the About workspace (PR #17); fixed in fix/v2-touch-seq
+  'about.majordomus', 'about.email', 'about.source',
 ]);
 const TOUCH_MIN = 44;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
