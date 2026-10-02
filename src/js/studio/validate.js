@@ -36,8 +36,12 @@
 // MIN_CLIP_S, end <= TIMELINE_MAX_S), clip targets (node exists and accepts the clip kind),
 // pattern payloads (sequencer block types and parameter rules, duration within the block
 // bounds), measurement actions, automation targets (parameter exists and is automatable),
-// points (sorted, in range, exponential ramps only between positive values), markers, loop,
-// transport and view values.
+// points (sorted, in range, exponential ramps only between positive values and only on a
+// parameter whose domain is strictly positive, §98), markers, loop (an active loop is at least
+// MIN_CLIP_S long), transport and view values. Tempo-linked clips (`musical`, §90-§91):
+// musical-measurement (a measurement clip is never musical), invalid-musical (beats out of range,
+// or seconds that disagree with the beats at the transport tempo by more than
+// MUSICAL_TOLERANCE_S).
 
 import { utf8Length, scanUntrusted } from '../experiments/validate.js';
 import { ID_PATTERN, createChecker } from '../experiments/schema.js';
@@ -46,7 +50,8 @@ import { SAMPLE_RATE_LIMITS } from '../measurement/stimulus.js';
 import { canConnect, describePort, validateEdgeProps } from './ports.js';
 import { NODE_REGISTRY, validateParamValue } from './registry.js';
 import {
-  AUTOMATION_CURVES, MARKER_KINDS, MEASUREMENT_ACTIONS, MIN_CLIP_S, NAME_MAX_CHARS,
+  AUTOMATION_CURVES, MARKER_KINDS, MEASUREMENT_ACTIONS, MIN_CLIP_S, MUSICAL_TOLERANCE_S,
+  NAME_MAX_CHARS,
   NOTES_MAX_CHARS, POSITION_LIMIT, STUDIO_KIND, STUDIO_SCHEMA_VERSION, TEMPO_RANGE,
   TIMELINE_MAX_S, TIME_MODES, TIME_SIGNATURE_DENOMINATORS, TITLE_MAX_CHARS, TRACK_CLIP_KINDS,
   TRACK_KINDS, CLIP_KINDS, normalizeStudio,
@@ -441,6 +446,34 @@ function checkPattern(clip, path, sink) {
   }
 }
 
+/**
+ * A tempo-linked clip (§90-§91): beats finite and in range, never on a measurement clip (musical
+ * time never enters a measurement experiment), and its seconds equal its beats at the tempo.
+ */
+function checkMusical(clip, transport, path, sink) {
+  const mu = clip.musical;
+  const at = { path: `${path}.musical` };
+  if (clip.kind === 'measurement') {
+    sink.error('musical-measurement', 'A measurement clip is always placed in seconds; musical '
+      + 'time never enters a measurement experiment.', at);
+    return;
+  }
+  if (!mu || !finite(mu.startBeats) || mu.startBeats < 0 || !finite(mu.durationBeats)
+    || !(mu.durationBeats > 0)) {
+    sink.error('invalid-musical', 'A tempo-linked clip needs startBeats >= 0 and durationBeats '
+      + '> 0.', at);
+    return;
+  }
+  const tempo = transport && transport.tempo;
+  if (!finite(tempo) || !(tempo > 0)) return;
+  const spb = 60 / tempo;
+  if (Math.abs(mu.startBeats * spb - clip.start) > MUSICAL_TOLERANCE_S
+    || Math.abs(mu.durationBeats * spb - clip.duration) > MUSICAL_TOLERANCE_S) {
+    sink.error('invalid-musical', 'A tempo-linked clip\'s seconds must equal its beats at the '
+      + 'transport tempo.', at);
+  }
+}
+
 function validateTimeline(model, registry, sink, ids, nodeById) {
   const t = model.timeline;
   const trackById = new Map();
@@ -497,6 +530,7 @@ function validateTimeline(model, registry, sink, ids, nodeById) {
       }
     }
     if (clip.kind === 'pattern' && finite(clip.duration)) checkPattern(clip, path, sink);
+    if (clip.musical !== undefined) checkMusical(clip, model.transport, path, sink);
     if (clip.kind === 'measurement'
       && !MEASUREMENT_ACTIONS.includes(clip.payload && clip.payload.action)) {
       sink.error('invalid-clip', `A measurement clip action must be one of `
@@ -540,7 +574,10 @@ function validateTimeline(model, registry, sink, ids, nodeById) {
       } else if (!finite(pt.value)) {
         sink.error('invalid-automation', 'Value must be a finite number.', { path: `${pp}.value` });
       }
-      if (pt.curve === 'exponential' && !(pt.value > 0 && (!prev || prev.value > 0))) {
+      if (pt.curve === 'exponential' && p && !(p.min > 0)) {
+        sink.error('invalid-automation', `${p.label} can reach zero or below, so it cannot use an `
+          + 'exponential ramp; use a linear ramp.', { path: `${pp}.curve` });
+      } else if (pt.curve === 'exponential' && !(pt.value > 0 && (!prev || prev.value > 0))) {
         sink.error('invalid-automation', 'An exponential ramp needs positive values at both ends '
           + '(never to or from zero); use a linear ramp.', { path: `${pp}.curve` });
       }
@@ -565,6 +602,9 @@ function validateTimeline(model, registry, sink, ids, nodeById) {
     'Loop start') || !checkTime(loop.end, 'timeline.loop.end', sink, 'Loop end')
     || loop.end <= loop.start) {
     sink.error('invalid-loop', 'The loop needs enabled true/false and start < end.',
+      { path: 'timeline.loop' });
+  } else if (loop.enabled && loop.end - loop.start < MIN_CLIP_S) {
+    sink.error('invalid-loop', `An active loop must be at least ${MIN_CLIP_S} s long.`,
       { path: 'timeline.loop' });
   }
 }
@@ -723,8 +763,14 @@ function structure(c, doc, lim, registry) {
   });
   clips.forEach((x, i) => {
     const p = `timeline.clips[${i}]`;
-    if (!c.keys(x, p, ['id', 'trackId', 'kind', 'start', 'duration'], ['target', 'payload'])) {
+    if (!c.keys(x, p, ['id', 'trackId', 'kind', 'start', 'duration'],
+      ['target', 'payload', 'musical'])) {
       return;
+    }
+    if (x.musical !== undefined && c.keys(x.musical, `${p}.musical`,
+      ['startBeats', 'durationBeats'])) {
+      c.num(x.musical.startBeats, `${p}.musical.startBeats`, 0, TIMELINE_MAX_S * 10);
+      c.num(x.musical.durationBeats, `${p}.musical.durationBeats`, 0, TIMELINE_MAX_S * 10);
     }
     id(x.id, `${p}.id`);
     id(x.trackId, `${p}.trackId`);

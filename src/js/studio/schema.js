@@ -74,6 +74,14 @@ export const TEMPO_RANGE = Object.freeze([MIN_TEMPO_BPM, MAX_TEMPO_BPM]);
 export const TIME_SIGNATURE_DENOMINATORS = Object.freeze([1, 2, 4, 8, 16, 32]);
 /** Longest timeline position (s), the experiment time limit (experiments LIMITS.timeS). */
 export const TIMELINE_MAX_S = 3600;
+/**
+ * Clip time bases (§90-§91): 'absolute' clips are positioned in seconds and ignore the tempo;
+ * 'tempo' clips carry `musical: { startBeats, durationBeats }` and follow tempo changes. The
+ * seconds (`start`, `duration`) stay authoritative for playback in both cases.
+ */
+export const CLIP_TIME_BASES = Object.freeze(['absolute', 'tempo']);
+/** Largest allowed disagreement between a tempo-linked clip's seconds and its beats (s). */
+export const MUSICAL_TOLERANCE_S = 1e-6;
 /** Shortest clip (s): the sequencer's MIN_BLOCK_MS. */
 export const MIN_CLIP_S = 0.01;
 /** Largest |coordinate| of a node position, logical units. */
@@ -268,9 +276,17 @@ function normalizeTimeline(raw) {
     clips: arr(t.clips).map((x) => {
       const r = obj(x);
       const kind = str(r.kind, 'pattern');
-      return { id: str(r.id), trackId: str(r.trackId), kind, start: num(r.start, 0),
+      const clip = { id: str(r.id), trackId: str(r.trackId), kind, start: num(r.start, 0),
         duration: num(r.duration, 1), target: strOrNull(r.target),
         payload: normalizeClipPayload(kind, r.payload) };
+      // Tempo-linked clips (§90-§91) carry their musical position; absolute clips omit the
+      // field, so models without musical clips serialize and hash exactly as before.
+      if (isObj(r.musical)) {
+        const mu = obj(r.musical);
+        clip.musical = { startBeats: num(mu.startBeats, 0),
+          durationBeats: num(mu.durationBeats, 0) };
+      }
+      return clip;
     }),
     automation: arr(t.automation).map((x) => {
       const r = obj(x);

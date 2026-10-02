@@ -15,7 +15,13 @@
 // Actions (semantic, undoable): NODE_ADD, NODE_REMOVE, NODE_MOVE, NODE_PARAM_SET, NODE_RENAME,
 // EDGE_ADD, EDGE_REMOVE, EDGE_UPDATE, TRACK_ADD, TRACK_REMOVE, CLIP_ADD, CLIP_REMOVE, CLIP_MOVE,
 // CLIP_RESIZE, AUTOMATION_POINT_ADD, AUTOMATION_POINT_MOVE, AUTOMATION_POINT_REMOVE, MARKER_ADD,
-// MARKER_REMOVE, LOOP_SET, TRANSPORT_SET, METADATA_SET, PASTE, DUPLICATE.
+// MARKER_REMOVE, LOOP_SET, TRANSPORT_SET, METADATA_SET, PASTE, DUPLICATE; timeline additions
+// (V416-V420): CLIP_UPDATE, CLIP_SET_TIME_BASE, MARKER_MOVE.
+// Tempo-linked clips (§90-§91, `clip.musical`): CLIP_ADD with timeBase 'tempo' (or startBeats /
+// durationBeats) creates one; CLIP_MOVE / CLIP_RESIZE keep it linked and re-derive its beats from
+// the new seconds; TRANSPORT_SET with a new tempo rescales every tempo-linked clip (absolute
+// clips stay where they are); DUPLICATE shifts a copy's beats with its seconds and accepts
+// `placements: { [clipId]: { start, trackId? } }` (timeline.js duplicateClipPlacement).
 // View actions (not undoable, no revision bump, never dirty): SELECTION_CHANGE (selection lives in
 // the store, never in the model or a file, §252), VIEW_SET (pan/zoom/timeline scale, §253).
 // Undoing selection would interleave navigation with edits in the history and make "undo"
@@ -38,7 +44,8 @@ import { ID_PATTERN } from '../experiments/schema.js';
 import { canConnect, validateEdgeProps } from './ports.js';
 import { NODE_REGISTRY, projectParams, validateParamValue } from './registry.js';
 import {
-  CLIP_KINDS, MARKER_KINDS, NAME_MAX_CHARS, POSITION_LIMIT, StudioSchemaError, TRACK_CLIP_KINDS,
+  CLIP_KINDS, CLIP_TIME_BASES, MARKER_KINDS, NAME_MAX_CHARS, POSITION_LIMIT, StudioSchemaError,
+  TRACK_CLIP_KINDS,
   collectIds, copyPlain, createStudioModel, normalizeClipPayload, normalizeStudio, sortPoints,
 } from './schema.js';
 import { validateStudioModel } from './validate.js';
@@ -253,6 +260,25 @@ function pasteInto(model, clipboard, offset, ctx) {
 
 const countLabel = (n, one, many) => (n === 1 ? one : `${many.replace('#', n)}`);
 
+// ---------------------------------------------------------------- tempo-linked clips
+
+const roundBeats = (v) => Math.round(v * 1e9) / 1e9;
+
+/** The clip with `musical` re-derived from its seconds at `tempo` (tempo-linked clips only). */
+function relink(clip, tempo) {
+  if (!clip.musical) return clip;
+  return { ...clip, musical: { startBeats: roundBeats(clip.start * tempo / 60),
+    durationBeats: roundBeats(clip.duration * tempo / 60) } };
+}
+
+/** Seconds of a tempo-linked clip at a new tempo: beats are kept, seconds follow (§91). */
+function retempo(clip, tempo) {
+  if (!clip.musical) return clip;
+  const spb = 60 / tempo;
+  return { ...clip, start: clip.musical.startBeats * spb,
+    duration: clip.musical.durationBeats * spb };
+}
+
 // ---------------------------------------------------------------- reducers
 
 const REDUCERS = {
@@ -435,15 +461,27 @@ const REDUCERS = {
     const kind = a.kind || TRACK_CLIP_KINDS[track.kind][0];
     if (!CLIP_KINDS.includes(kind)) reject(`Unknown clip kind "${String(kind)}".`);
     if (a.target != null) requireNode(model, a.target);
-    const clip = {
+    const timeBase = a.timeBase || (a.startBeats != null || a.durationBeats != null ? 'tempo'
+      : 'absolute');
+    if (!CLIP_TIME_BASES.includes(timeBase)) reject(`Unknown time base "${String(timeBase)}".`);
+    const spb = 60 / model.transport.tempo;
+    let clip = {
       id: ctx.newId('clip'),
       trackId: track.id,
       kind,
-      start: a.start,
-      duration: a.duration,
+      start: a.startBeats != null && a.start == null ? a.startBeats * spb : a.start,
+      duration: a.durationBeats != null && a.duration == null ? a.durationBeats * spb
+        : a.duration,
       target: a.target ?? null,
       payload: normalizeClipPayload(kind, a.payload),
     };
+    if (timeBase === 'tempo') {
+      if (kind === 'measurement') {
+        reject('A measurement clip is always placed in seconds; musical time never enters a '
+          + 'measurement experiment.');
+      }
+      clip = relink({ ...clip, musical: {} }, model.transport.tempo);
+    }
     return {
       model: withTimeline(model, { clips: [...model.timeline.clips, clip] }),
       label: `Add ${kind} clip`,
@@ -465,7 +503,7 @@ const REDUCERS = {
     requireIn(model.timeline.tracks, trackId, 'track');
     const start = a.start ?? clip.start;
     if (start === clip.start && trackId === clip.trackId) return { model, label: '' };
-    const updated = { ...clip, start, trackId };
+    const updated = relink({ ...clip, start, trackId }, model.transport.tempo);
     return {
       model: withTimeline(model, { clips: model.timeline.clips.map((c) => (c === clip ? updated
         : c)) }),
@@ -478,11 +516,52 @@ const REDUCERS = {
     const start = a.start ?? clip.start;
     const duration = a.duration ?? clip.duration;
     if (start === clip.start && duration === clip.duration) return { model, label: '' };
-    const updated = { ...clip, start, duration };
+    const updated = relink({ ...clip, start, duration }, model.transport.tempo);
     return {
       model: withTimeline(model, { clips: model.timeline.clips.map((c) => (c === clip ? updated
         : c)) }),
       label: `Resize ${clip.kind} clip`,
+    };
+  },
+
+  CLIP_UPDATE(model, a) {
+    const clip = requireIn(model.timeline.clips, a.clipId, 'clip');
+    if (a.target != null) requireNode(model, a.target);
+    const updated = { ...clip };
+    if (a.target !== undefined) updated.target = a.target ?? null;
+    if (a.payload !== undefined) updated.payload = normalizeClipPayload(clip.kind, a.payload);
+    if (updated.target === clip.target
+      && JSON.stringify(updated.payload) === JSON.stringify(clip.payload)) {
+      return { model, label: '' };
+    }
+    return {
+      model: withTimeline(model, { clips: model.timeline.clips.map((c) => (c === clip ? updated
+        : c)) }),
+      label: `Edit ${clip.kind} clip`,
+    };
+  },
+
+  CLIP_SET_TIME_BASE(model, a) {
+    const clip = requireIn(model.timeline.clips, a.clipId, 'clip');
+    if (!CLIP_TIME_BASES.includes(a.timeBase)) reject(`Unknown time base "${String(a.timeBase)}".`);
+    const linked = !!clip.musical;
+    if ((a.timeBase === 'tempo') === linked) return { model, label: '' };
+    let updated;
+    if (a.timeBase === 'tempo') {
+      if (clip.kind === 'measurement') {
+        reject('A measurement clip is always placed in seconds; musical time never enters a '
+          + 'measurement experiment.');
+      }
+      updated = relink({ ...clip, musical: {} }, model.transport.tempo);
+    } else {
+      updated = { ...clip };
+      delete updated.musical;
+    }
+    return {
+      model: withTimeline(model, { clips: model.timeline.clips.map((c) => (c === clip ? updated
+        : c)) }),
+      label: a.timeBase === 'tempo' ? `Link ${clip.kind} clip to tempo`
+        : `Unlink ${clip.kind} clip from tempo`,
     };
   },
 
@@ -552,6 +631,21 @@ const REDUCERS = {
     };
   },
 
+  MARKER_MOVE(model, a) {
+    const marker = requireIn(model.timeline.markers, a.markerId, 'marker');
+    const kind = a.kind ?? marker.kind;
+    if (!MARKER_KINDS.includes(kind)) reject(`Unknown marker kind "${String(kind)}".`);
+    const updated = { ...marker, time: a.time ?? marker.time, kind,
+      label: typeof a.label === 'string' ? a.label : marker.label };
+    if (updated.time === marker.time && updated.kind === marker.kind
+      && updated.label === marker.label) return { model, label: '' };
+    return {
+      model: withTimeline(model, { markers: model.timeline.markers.map((m) => (m === marker
+        ? updated : m)) }),
+      label: `Move ${marker.kind} marker`,
+    };
+  },
+
   LOOP_SET(model, a) {
     const cur = model.timeline.loop;
     const loop = { enabled: a.enabled ?? cur.enabled, start: a.start ?? cur.start,
@@ -568,7 +662,14 @@ const REDUCERS = {
       timeSignature: a.timeSignature ? [...a.timeSignature] : cur.timeSignature };
     if (transport.timeMode === cur.timeMode && transport.tempo === cur.tempo
       && sameValue(transport.timeSignature, cur.timeSignature)) return { model, label: '' };
-    return { model: { ...model, transport }, label: 'Change transport' };
+    let next = { ...model, transport };
+    if (transport.tempo !== cur.tempo && typeof transport.tempo === 'number'
+      && transport.tempo > 0 && model.timeline.clips.some((c) => c.musical)) {
+      next = withTimeline(next, { clips: model.timeline.clips.map((c) => retempo(c,
+        transport.tempo)) });
+    }
+    return { model: next, label: transport.tempo !== cur.tempo ? 'Change tempo'
+      : 'Change transport' };
   },
 
   METADATA_SET(model, a) {
@@ -597,9 +698,15 @@ const REDUCERS = {
       created.edges = r.created.edges;
       skipped = r.skipped;
     }
+    const placements = a.placements && typeof a.placements === 'object' ? a.placements : {};
     for (const id of a.clipIds || []) {
       const clip = requireIn(model.timeline.clips, id, 'clip');
-      const copy = { ...copyPlain(clip), id: ctx.newId('clip'), start: clip.start + clip.duration };
+      const place = Object.prototype.hasOwnProperty.call(placements, id) ? placements[id] : null;
+      if (place && place.trackId != null) requireIn(model.timeline.tracks, place.trackId, 'track');
+      let copy = { ...copyPlain(clip), id: ctx.newId('clip'),
+        start: place && place.start != null ? place.start : clip.start + clip.duration,
+        trackId: place && place.trackId != null ? place.trackId : clip.trackId };
+      copy = relink(copy, model.transport.tempo);
       next = withTimeline(next, { clips: [...next.timeline.clips, copy] });
       created.clips.push(copy.id);
     }
