@@ -99,8 +99,11 @@ export function mount(rootEl) {
     update(state = {}) {
       if (state.adsr) set(state.adsr);
       if (state.enabled != null) {
+        const changed = !!state.enabled !== enable.value;
         enable.set(!!state.enabled, true);
         if (graph) graph.setEnabled(!!state.enabled);
+        // A programmatic switch (config import) notifies like a click (status flags, path).
+        if (changed) for (const fn of listeners) fn({ ...adsr }, enable.value);
       }
     },
     dispose() {

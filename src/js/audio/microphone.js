@@ -28,12 +28,15 @@ export function requestMicrophoneStream(mediaDevices) {
  * The analysis graph of an open stream on ctx: { stream, source, analyser, freqData }. Throws
  * if the graph cannot be built (the caller stops the tracks).
  * V1: AudioEngine.startMic, graph part (index.html@a7b7a23)
+ * V2 options: { track(node) (engine accounting), fftSize (8192), smoothingTimeConstant (0.6) }.
  */
-export function buildMicrophoneGraph(ctx, stream) {
-  const source = ctx.createMediaStreamSource(stream);
-  const analyser = ctx.createAnalyser();
-  analyser.fftSize = 8192;
-  analyser.smoothingTimeConstant = 0.6;
+export function buildMicrophoneGraph(ctx, stream, options = {}) {
+  const track = options.track || ((n) => n);
+  const source = track(ctx.createMediaStreamSource(stream));
+  const analyser = track(ctx.createAnalyser());
+  analyser.fftSize = options.fftSize || 8192;
+  analyser.smoothingTimeConstant = options.smoothingTimeConstant != null
+    ? options.smoothingTimeConstant : 0.6;
   analyser.minDecibels = -140;
   analyser.maxDecibels = 0;
   source.connect(analyser); // analysis only: never connected to the destination, never recorded

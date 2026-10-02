@@ -486,10 +486,35 @@
 }
 
 /* ================= Primary analysis ================= */
+/* The header wraps (Pause, Time and fullscreen move to a second row) instead of letting them
+   cover the last tabs when the panel is narrower than tabs + tools (1280-1535 px Playground). */
 .osc-analysis-head {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  height: 32px;
+  row-gap: 6px;
+  min-height: 32px;
+}
+
+/* Pause, Time and fullscreen stay together, right-aligned on whichever row they land on. */
+.osc-analysis-tools {
+  display: flex;
+  align-items: center;
+  margin-left: auto;
+}
+
+@media (max-width: 1279.98px) {
+  .osc-analysis-tools {
+    gap: 8px;
+  }
+}
+
+@media (max-width: 1535.98px) {
+  .osc-analysis-tabs {
+    max-width: 100%;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
 }
 
 .osc-analysis-tabs {
@@ -498,7 +523,9 @@
 
 .osc-analysis-tabs .osc-tab {
   min-width: 83px;
-  padding: 0 15px;
+  /* 13 px (reference ~15) leaves the 1536 px header ~20 px of slack, so tabs and tools stay on
+     one row with wider Linux/Windows system fonts instead of wrapping into the waveform. */
+  padding: 0 13px;
 }
 
 .osc-analysis-tabs .osc-tab:first-child {
@@ -1156,7 +1183,7 @@
 
 .osc-phase-corr {
   display: grid;
-  grid-template-columns: 66px minmax(0, 1fr) 34px;
+  grid-template-columns: 66px minmax(0, 1fr) minmax(34px, max-content);
   align-items: center;
   column-gap: 8px;
   margin-top: 10px;
@@ -1169,6 +1196,24 @@
 .osc-corr-value {
   color: var(--osc-text);
   text-align: right;
+}
+
+/* "est." (measured from two analysers) or "mono" (identical by construction) after the value. */
+.osc-corr-readout {
+  display: flex;
+  align-items: baseline;
+  justify-content: flex-end;
+  gap: 3px;
+  white-space: nowrap;
+}
+
+.osc-corr-basis {
+  color: var(--osc-text-muted);
+  font-size: var(--osc-fs-2xs);
+}
+
+.osc-corr-basis:empty {
+  display: none;
 }
 
 /* ================= Bioacoustics ================= */
@@ -1199,6 +1244,58 @@
   color: var(--osc-text-muted);
   font-size: var(--osc-fs-xs);
   line-height: 16px;
+}
+
+/* Sources of the bars (keyboard reachable; the chart tooltip shows the same on hover): a compact
+   toggle in the note's right-hand room, the list opens above it without moving the layout. */
+.osc-bio-body {
+  position: relative;
+}
+
+.osc-bio-sources {
+  position: absolute;
+  right: -4px;
+  bottom: 0;
+  font-size: var(--osc-fs-2xs);
+  line-height: 16px;
+}
+
+.osc-bio-sources-toggle {
+  color: var(--osc-text-2);
+  text-decoration: underline dotted;
+  cursor: pointer;
+  list-style: none;
+}
+
+.osc-bio-sources-toggle::-webkit-details-marker {
+  display: none;
+}
+
+.osc-bio-source-list {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 4px);
+  z-index: 30;
+  width: min(340px, calc(100vw - 32px));
+  max-height: 220px;
+  margin: 0;
+  padding: 8px 10px 8px 26px;
+  overflow: auto;
+  border: 1px solid var(--osc-border-strong);
+  border-radius: var(--osc-radius-control);
+  background: var(--osc-surface-tooltip);
+  box-shadow: var(--osc-shadow-panel);
+  color: var(--osc-text-2);
+  line-height: 1.4;
+}
+
+.osc-bio-source-list li + li {
+  margin-top: 6px;
+}
+
+.osc-bio-source-list a {
+  color: inherit;
+  overflow-wrap: anywhere;
 }
 
 /* ================= Dual oscillator (workspace) ================= */

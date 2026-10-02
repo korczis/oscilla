@@ -2,6 +2,10 @@
 // enable switch, the selected harmonic's number/gain/phase fields, and the harmonic bars
 // (charts/additive-chart.js). The bars are visualCoefficients() of the same table and scale
 // that periodicWave(ctx) hands to createPeriodicWave, so what is drawn is what plays.
+// The gain field and slider show and edit that same played level (after the peak
+// normalisation): an edit solves for the table gain that plays at the requested level
+// (gainForPlayedLevel); the bars are redrawn whenever the fundamental or the sample rate
+// changes, so the above-Nyquist hatching follows them.
 
 import {
   harmonicSeries,
@@ -10,6 +14,8 @@ import {
   buildPeriodicWave,
   visualCoefficients,
   gainToDb,
+  dbToGain,
+  waveformPeak,
   OFF_DB,
 } from '../audio/additive.js';
 import { createAdditiveChart } from '../charts/additive-chart.js';
@@ -35,6 +41,36 @@ export function defaultCustomPartials(count = HARMONIC_COUNT) {
 export function presetPartials(value, current, count = HARMONIC_COUNT) {
   const shape = PRESET_SHAPES[value];
   return shape ? harmonicSeries(shape, count) : current.map((p) => ({ ...p }));
+}
+
+/**
+ * Table gain of harmonic n (≤ 1, i.e. ≤ 0 dB in the table) whose PLAYED level — after the peak
+ * normalisation buildPeriodicWave applies, gain / peak — is targetGain (linear). The played level
+ * g / peak(g) rises monotonically with g, so a bisection finds it. Returns
+ * { gain, playedGain }: when the target is out of reach (above what g = 1 plays) gain is 1;
+ * when harmonic n is the only partial it always plays at full scale, so its gain is kept.
+ */
+export function gainForPlayedLevel(partials, n, targetGain) {
+  const with_ = (g) => setHarmonic(partials, n, { gain: g });
+  const played = (g) => {
+    const pk = waveformPeak(with_(g), 1024);
+    return pk > 0 ? g / pk : 0;
+  };
+  const cur = partials[n - 1] ? partials[n - 1].gain : 0;
+  if (!(targetGain > 0)) return { gain: 0, playedGain: 0 };
+  const others = partials.some((p) => p.n !== n && p.gain > 0);
+  if (!others) {
+    const g = cur > 0 ? cur : 1;
+    return { gain: g, playedGain: played(g) };
+  }
+  if (played(1) <= targetGain) return { gain: 1, playedGain: played(1) };
+  let lo = 0;
+  let hi = 1;
+  for (let i = 0; i < 24; i++) {
+    const mid = (lo + hi) / 2;
+    if (played(mid) < targetGain) lo = mid; else hi = mid;
+  }
+  return { gain: hi, playedGain: played(hi) };
 }
 
 function formatGainDb(db) {
@@ -63,7 +99,7 @@ export function mount(rootEl, adapter) {
       count: HARMONIC_COUNT,
       onSelect: (n) => select(n),
       onAdjust: (n, delta) => {
-        const cur = gainToDb(partials[n - 1].gain);
+        const cur = playedDb(n);
         const base = Number.isFinite(cur) ? cur : GAIN_MIN_DB - 1;
         setGain(n, clamp(base + delta, GAIN_MIN_DB - 1, 0));
       },
@@ -74,13 +110,22 @@ export function mount(rootEl, adapter) {
     return buildPeriodicWave(null, partials).scale;
   }
 
-  function coefficients() {
+  /** Level (dB re full scale) harmonic n plays at: the table gain after normalisation. */
+  function playedDb(n) {
+    const p = partials[n - 1];
+    return p ? gainToDb(p.gain * scale()) : -Infinity;
+  }
+
+  function context() {
     const ctx = adapter.getContext && adapter.getContext();
-    return visualCoefficients(partials, {
-      scale: scale(),
+    return {
       fundamentalHz: adapter.requestedFrequency ? adapter.requestedFrequency() : null,
       sampleRate: ctx ? ctx.sampleRate : (adapter.getSampleRate && adapter.getSampleRate()),
-    });
+    };
+  }
+
+  function coefficients() {
+    return visualCoefficients(partials, { scale: scale(), ...context() });
   }
 
   function render() {
@@ -88,8 +133,8 @@ export function mount(rootEl, adapter) {
     if (chart) chart.setBars(bars, selected);
     const p = partials[selected - 1];
     setField(el.harmonic, String(selected));
-    // The fields edit the table entry (before the peak normalisation the bars include).
-    const db = gainToDb(p.gain);
+    // The fields show the level that plays (after the peak normalisation), like the bars.
+    const db = playedDb(selected);
     setField(el.gainText, formatGainDb(db));
     setSlider(el.gain, Number.isFinite(db) ? clamp(db, GAIN_MIN_DB, 0) : GAIN_MIN_DB,
       formatGainDb(db));
@@ -111,10 +156,24 @@ export function mount(rootEl, adapter) {
     render();
   }
 
+  /** Set harmonic n to PLAY at db (re full scale); below GAIN_MIN_DB switches it off. */
   function setGain(n, db) {
-    partials = setHarmonic(partials, n, { gainDb: db < GAIN_MIN_DB ? -Infinity : db });
+    const target = db < GAIN_MIN_DB ? 0 : dbToGain(db);
+    const { gain } = gainForPlayedLevel(partials, n, target);
+    partials = setHarmonic(partials, n, { gain });
     markCustom();
     changed();
+  }
+
+  // The above-Nyquist hatching depends on the fundamental and the context's sample rate:
+  // redraw the bars when either changes (adapter.onChange fires on both).
+  let lastCtxKey = '';
+  function onAdapterChange() {
+    const c = context();
+    const key = `${c.fundamentalHz}|${c.sampleRate}`;
+    if (key === lastCtxKey) return;
+    lastCtxKey = key;
+    render();
   }
 
   const enable = bindSwitch(q('#osc-add-enable'), () => changed());
@@ -143,6 +202,10 @@ export function mount(rootEl, adapter) {
       if (d.kind === 'theme' && chart) chart.refreshTheme();
     }),
   ];
+  if (adapter.onChange) {
+    const off = adapter.onChange(onAdapterChange);
+    if (typeof off === 'function') offs.push(off);
+  }
   rootEl.querySelectorAll('[data-osc="additive.harmonicStep"]').forEach((b) => {
     offs.push(on(b, 'click', () => select(selected + Number(b.dataset.dir || 0))));
   });
@@ -182,7 +245,13 @@ export function mount(rootEl, adapter) {
     },
     update(state = {}) {
       if (state.partials) this.setPartials(state.partials);
-      if (state.enabled != null) enable.set(!!state.enabled, true);
+      if (state.enabled != null && !!state.enabled !== enable.value) {
+        // A programmatic switch (config import, tests) notifies like a click, so the engine,
+        // the Harmonics tab and the signal path follow it.
+        enable.set(!!state.enabled, true);
+        changed();
+        return;
+      }
       // The fundamental (and thus which harmonics are below Nyquist) may have changed.
       render();
     },

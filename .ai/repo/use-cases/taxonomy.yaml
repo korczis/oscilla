@@ -44,3 +44,27 @@ categories:
     title: Extension
     summary: Adding a rule, a command or a use case as data, with the checks that follow from it.
     order: 100
+
+  # OSCILLA product acceptance. Each use case below names the claims of docs/CLAIMS.yaml
+  # that prove it; its live scenario checks that the claim's implementation and test are
+  # tracked and wired, and the named npm script runs the test itself.
+  - id: generate
+    title: Generating sound
+    summary: Tones, sweeps and two-oscillator signals from the signal generator.
+    order: 200
+  - id: analyse
+    title: Seeing and analysing sound
+    summary: Waveform, spectrum, spectrogram and the microphone analyzer, all relative and uncalibrated.
+    order: 210
+  - id: shape
+    title: Shaping and synthesis
+    summary: Sequencer, filters, envelope and additive synthesis.
+    order: 220
+  - id: share
+    title: Export and sharing
+    summary: WAV files, configuration files, links and presets.
+    order: 230
+  - id: run
+    title: Running OSCILLA
+    summary: The one self-contained page, from file:// or from GitHub Pages.
+    order: 240
