@@ -123,8 +123,8 @@ export function stepEnv(param, t, dur, attack, release) {
  *          limit and by o.until
  *   adsr   play() options.adsr ({ a, d, s, r } in seconds / 0..1) or null
  * The engine stops the voice's sources 10 ms after endTime and records a finite endTime as the
- * voice's deadline; a release while held freezes the tracked envelope and fades the release
- * gain over releaseS (adsr.r when an ADSR is given).
+ * voice's deadline; a release while held leaves the envelope running and fades the voice's
+ * output-stage gain over releaseS (adsr.r when an ADSR is given; V249, engine._releaseVoice).
  * V1: AudioEngine.play, "Open patterns" block (index.html@a7b7a23)
  */
 export function v1OpenEnvelope(eg, t0, len, a, r) {

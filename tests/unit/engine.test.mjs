@@ -222,7 +222,8 @@ test('envelope hook: gets the logged param, len and adsr; release uses adsr.r', 
   assert.ok(eng.voice.env.ev.some((e) => e.kind === 'linearRampToValueAtTime' && e.value === 1));
 });
 
-test('makeAdsrEnvelope + envelope.js: ADSR on the tracked param, frozen on release', { skip }, () => {
+test('makeAdsrEnvelope + envelope.js: ADSR on the tracked param, not edited by a release',
+  { skip }, () => {
   const { eng, advance } = setup({ cancelAndHold: false });
   eng.setEnvelope(makeAdsrEnvelope(envelopeJs));
   const adsr = { a: 0.1, d: 0.2, s: 0.5, r: 0.3 };
@@ -235,16 +236,14 @@ test('makeAdsrEnvelope + envelope.js: ADSR on the tracked param, frozen on relea
   assert.deepStrictEqual(times, [...times].sort((x, y) => x - y), 'recorded in time order');
   advance(0.07); // inside the attack: t0 0.02 … 0.12
   const g = v.nodes[0].gain.events;
+  const before = JSON.stringify(g);
   eng.release();
-  // released SCHEDULE_LEAD_S ahead, on a render-quantum boundary: ceil((0.07 + 0.02) / q) · q
+  // V249: the attack keeps running; the release fades the output stage's `fade` gain from its
+  // exact value 1, SCHEDULE_LEAD_S ahead on a render-quantum boundary: ceil((0.07 + 0.02) / q)·q
+  assert.strictEqual(JSON.stringify(g), before, 'the envelope is not edited by the release');
   const q = 128 / SR;
   const t = Math.ceil(0.09 / q) * q;
-  const held = g.find((e) => e[0] === 'linear' && Math.abs(e[2] - t) < 1e-9);
-  assert.ok(held, 'the in-progress attack is re-ended at the release time on its own curve');
-  const expected = 1e-4 + (1 - 1e-4) * ((t - 0.02) / 0.1);
-  assert.ok(Math.abs(held[1] - expected) < 1e-6, `held ${held} expected ${expected}`);
-  assert.ok(g.some((e) => e[0] === 'cancel' && Math.abs(e[2] - 0.12) < 1e-9),
-    'later events cancelled');
+  assert.deepStrictEqual(v.nodes[2].gain.events, [['set', 1, t], ['linear', 1e-4, t + 0.3]]);
   advance(1);
   assert.strictEqual(eng.activeNodeCount, 0);
   eng.setEnvelope(null);
@@ -286,16 +285,18 @@ test('ADSR with a finite length releases inside the length (safety limit)', { sk
   assert.ok(Math.abs(info.end - (0.02 + 0.5 + 0.01)) < 1e-9, `end ${info.end}`);
 });
 
-test('output hook sits between the rel gain and the master', { skip }, () => {
+test('output hook sits between the rel gain and the output-stage fades', { skip }, () => {
   const { eng, advance } = setup();
   const log = [];
   eng.play(plan({ pattern: 'tone' }), opt({ output: fakeInsert(log) }));
   const v = eng.voice;
-  const rel = v.nodes[1];
+  const [, rel, fade, cut] = v.nodes;
   const stage = v.inserts[0];
   assert.strictEqual(v.rel.param, rel.gain);
   assert.deepStrictEqual(rel.out, [`node:${stage.input.id}`]);
-  assert.ok(stage.output.out.includes(`node:${eng.master.id}`));
+  assert.ok(stage.output.out.includes(`node:${fade.id}`));
+  assert.deepStrictEqual(fade.out, [`node:${cut.id}`]);
+  assert.deepStrictEqual(cut.out, [`node:${eng.master.id}`]);
   eng.stopAll();
   advance(1);
   assert.ok(log.includes('dispose'));
@@ -501,3 +502,107 @@ test('audibleVoiceCount: silent released voices waiting for onended are not coun
     advance(t + 1);
     assert.strictEqual(eng.audibleVoiceCount, 0);
   });
+
+test('V249: releases fade the output stage only, never a sounding param', { skip }, () => {
+  const { eng, advance } = setup({ cancelAndHold: false });
+  const q = 128 / SR;
+  const soon = (now) => Math.ceil((now + 0.02) / q) * q;
+  // a pulse train (the envelope ramps most of the time), a waveform dip on rel, then STOP
+  const pulses = {
+    pattern: 'pulse', frequency: 200, pp: { pulse: { pulseMs: 40, pauseMs: 0, reps: 100 } },
+  };
+  eng.play(plan(pulses), opt({ mode: 'trigger', releaseS: 1 }));
+  const v = eng.voice;
+  const [env, rel, fade, cut] = v.nodes;
+  const osc = v.sources[0];
+  assert.deepStrictEqual([fade.out, cut.out], [[`node:${cut.id}`], [`node:${eng.master.id}`]]);
+  assert.deepStrictEqual(rel.out, [`node:${fade.id}`]);
+  advance(0.1);
+  assert.strictEqual(eng.updateLive(plan({ ...pulses, waveform: 'triangle' })), 'live');
+  assert.strictEqual(v.dipping, true);
+  advance(0.103); // inside the dip's fade-down
+  const sounding = () => JSON.stringify([env.gain.events, rel.gain.events, osc.frequency.events]);
+  const before = sounding();
+  assert.strictEqual(eng.release(), true);
+  const t1 = soon(0.103);
+  assert.strictEqual(sounding(), before, 'release: env, rel and the frequency untouched');
+  assert.deepStrictEqual(fade.gain.events, [['set', 1, t1], ['linear', 1e-4, t1 + 1]]);
+  assert.deepStrictEqual(cut.gain.events, []);
+  assert.deepStrictEqual(osc.stops.slice(-1), [t1 + 1 + 0.01]);
+  // Escape during the 1 s release: the cut fades from its exact 1 over ESCAPE_RELEASE_S
+  advance(0.5);
+  eng.stopAll();
+  const t2 = soon(0.5);
+  assert.strictEqual(sounding(), before, 'override: still untouched');
+  assert.deepStrictEqual(fade.gain.events, [['set', 1, t1], ['linear', 1e-4, t1 + 1]]);
+  assert.deepStrictEqual(cut.gain.events, [['set', 1, t2], ['linear', 1e-4, t2 + 0.008]]);
+  assert.strictEqual(v.endTime, t2 + 0.008 + 0.01);
+  // a third request finds the voice in its fast cut: declined, nothing scheduled
+  advance(0.501);
+  assert.strictEqual(eng.release(true), false);
+  assert.strictEqual(cut.gain.events.length, 2);
+  advance(1);
+  assert.strictEqual(eng.activeNodeCount, 0);
+  assert.strictEqual(eng.voices.size, 0);
+});
+
+test('V249: a retrigger fades the old voice on its fade; Escape cuts it on cut', { skip }, () => {
+  const { eng, advance } = setup();
+  eng.play(plan({ pattern: 'tone', frequency: 440 }), opt({ releaseS: 2 }));
+  const a = eng.voice;
+  advance(0.2);
+  eng.release();
+  advance(0.3);
+  eng.play(plan({ pattern: 'tone', frequency: 660 }), opt());
+  const b = eng.voice;
+  assert.notStrictEqual(a, b);
+  // the old voice: its 2 s release on fade, overridden by the FAST_RELEASE_S fade on cut
+  assert.strictEqual(a.nodes[2].gain.events.length, 2);
+  assert.deepStrictEqual(a.nodes[3].gain.events.map((e) => e[0]), ['set', 'linear']);
+  assert.ok(Math.abs(a.nodes[3].gain.events[1][2] - a.nodes[3].gain.events[0][2] - 0.015) < 1e-12);
+  assert.ok(b.t0 >= a.endTime - 0.01 - 1e-9, 'the new voice starts after the old one has faded');
+  eng.stopAll();
+  assert.deepStrictEqual(b.nodes[2].gain.events.map((e) => e[0]), ['set', 'linear']);
+  advance(2);
+  assert.strictEqual(eng.activeNodeCount, 0);
+});
+
+test('V249: a release is anchored after the audio already rendered (stale currentTime)',
+  { skip }, () => {
+  // Firefox's currentTime stands still within a task: a main thread 30 ms late inside one reads
+  // a time rendered 30 ms ago. A clock reading (play, snapshot) advanced by the real time
+  // elapsed since keeps the fade on frames not rendered yet.
+  let perf = 1000;
+  const { eng, advance } = setup({}, { performance: { now: () => perf } });
+  const q = 128 / SR;
+  eng.play(plan({ pattern: 'tone', frequency: 440 }), opt());
+  advance(0.5);
+  eng.snapshot({}); // the per-frame read: a reading (0.5 s, 1000 ms)
+  perf += 30; // 30 ms of main-thread work; the mock's currentTime stays at 0.5 s
+  eng.release();
+  const t = Math.ceil((0.5 + 0.03 + 0.02) / q) * q;
+  const fade = eng.voice.nodes[2].gain.events;
+  assert.ok(Math.abs(fade[0][2] - t) < 1e-12, `anchored at ${fade[0][2]}, expected ${t}`);
+  // without a performance clock in the environment: V1's currentTime + SCHEDULE_LEAD_S
+  const v1 = setup();
+  v1.eng.play(plan({ pattern: 'tone', frequency: 440 }), opt());
+  v1.advance(0.5);
+  v1.eng.release();
+  assert.strictEqual(v1.eng.voice.nodes[2].gain.events[0][2], Math.ceil(0.52 / q) * q);
+});
+
+test('V249: clock readings are dropped when the context changes state', { skip }, () => {
+  let perf = 1000;
+  const { eng, advance } = setup({}, { performance: { now: () => perf } });
+  const q = 128 / SR;
+  eng.play(plan({ pattern: 'tone', frequency: 440 }), opt());
+  advance(0.5);
+  eng.snapshot({});
+  // suspended for 2 s (the audio clock stands still), then running again
+  eng.ctx.externalState('suspended');
+  perf += 2000;
+  eng.ctx.externalState('running');
+  eng.release();
+  const fade = eng.voice.nodes[2].gain.events;
+  assert.strictEqual(fade[0][2], Math.ceil(0.52 / q) * q, 'no reading from before the suspension');
+});

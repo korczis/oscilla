@@ -49,6 +49,9 @@ import {
   sig,
   WAVEFORMS,
 } from './model.js';
+import { observeClock, renderedTimeAtLeast } from '../audio/clock.js';
+
+export { observeClock };
 
 // ============================================================ constants
 
@@ -61,13 +64,6 @@ const RENDER_QUANTUM = 128; // frames per Web Audio render quantum
 // A realtime stop is scheduled this far ahead of the rendered audio, on a render-quantum boundary:
 // the engine's SCHEDULE_LEAD_S (src/js/audio/scheduler.js), which its releases use.
 export const STOP_LEAD_S = 0.02;
-// Bounds for the rendered-time estimate (renderedTimeAtLeast): how far it may run ahead of
-// ctx.currentTime in all, how far beyond the real time since the newest clock reading, and how
-// long and how many readings are kept.
-const MAX_CLOCK_LAG_S = 0.2;
-const CLOCK_LAG_SLACK_S = 0.05;
-const CLOCK_OBS_MAX_AGE_MS = 2000;
-const CLOCK_OBS_COUNT = 16;
 
 // ============================================================ V1 maths
 
@@ -556,68 +552,8 @@ function loggedParam(param, defaultValue) {
 }
 
 // ============================================================ audio clock (realtime stop anchor)
-
-const clockObs = new WeakMap(); // ctx -> [{ ct, perf }], oldest first
-
-function perfNow() {
-  const p = globalThis.performance;
-  return p && typeof p.now === 'function' ? p.now() : null;
-}
-
-/**
- * Record a reading (ctx.currentTime, performance.now()). Called when a voice is compiled and by
- * the editor's per-frame playhead readouts (UI bookkeeping), so a stop has recent readings.
- */
-export function observeClock(ctx) {
-  if (!ctx || typeof ctx.startRendering === 'function') return;
-  const perf = perfNow();
-  const ct = ctx.currentTime;
-  if (perf === null || !isNum(ct)) return;
-  let list = clockObs.get(ctx);
-  if (!list) clockObs.set(ctx, (list = []));
-  list.push({ ct, perf });
-  const tooOld = () => perf - list[0].perf > CLOCK_OBS_MAX_AGE_MS;
-  while (list.length > CLOCK_OBS_COUNT || (list.length && tooOld())) list.shift();
-}
-
-/**
- * A context time the audio thread has rendered at least up to, for anchoring a realtime stop.
- * ctx.currentTime alone can be stale: Firefox updates it only between tasks (and not at every
- * frame), so a main thread that is late within a task reads a time rendered long ago, and a fade
- * anchored there starts in the past (one or more quanta render unfaded, then the ramp jumps in).
- * Two further estimates, each used only when larger:
- *   - every recent reading advanced by the real time elapsed since (the freshest wins);
- *   - getOutputTimestamp() extrapolated to now plus baseLatency and outputLatency (the output
- *     position plus the latency between rendering and output).
- * An audio clock that stalled since a reading makes the estimate late, never early; so the gain
- * over currentTime is bounded by the real time since the newest reading plus CLOCK_LAG_SLACK_S,
- * and by MAX_CLOCK_LAG_S in all.
- */
-function renderedTimeAtLeast(ctx) {
-  const ct = ctx.currentTime;
-  const now = perfNow();
-  if (now === null) return ct;
-  let t = ct;
-  const list = clockObs.get(ctx) || [];
-  for (const o of list) {
-    if (now - o.perf <= CLOCK_OBS_MAX_AGE_MS) t = Math.max(t, o.ct + (now - o.perf) / 1000);
-  }
-  if (typeof ctx.getOutputTimestamp === 'function') {
-    try {
-      const ts = ctx.getOutputTimestamp();
-      if (ts && ts.contextTime > 0 && ts.performanceTime > 0) {
-        const lat = (isNum(ctx.baseLatency) ? ctx.baseLatency : 0) +
-          (isNum(ctx.outputLatency) ? ctx.outputLatency : 0);
-        t = Math.max(t, ts.contextTime + (now - ts.performanceTime) / 1000 + lat);
-      }
-    } catch (e) {
-      /* no timestamp: currentTime and the readings stand */
-    }
-  }
-  const newest = list.length ? list[list.length - 1].perf : now;
-  const bound = Math.min(MAX_CLOCK_LAG_S, Math.max(0, now - newest) / 1000 + CLOCK_LAG_SLACK_S);
-  return Math.min(t, ct + bound);
-}
+// observeClock / renderedTimeAtLeast live in src/js/audio/clock.js (shared with the engine's
+// releases); observeClock is re-exported for the editor's readouts.
 
 // ============================================================ compiler
 
