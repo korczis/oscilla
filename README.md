@@ -6,7 +6,7 @@ A browser-based acoustic laboratory. Generate tones, sweeps, chirps, modulated, 
 dual-oscillator signals with the Web Audio API; measure them as waveform, live spectrum and
 spectrogram; compare the generator with your microphone; compose block sequences; shape them
 with ADSR and biquad filters; explore phase, Lissajous and stereo; and export WAV, PNG or the
-configuration.
+configuration. The About workspace tells how OSCILLA was built and with what discipline.
 
 Run it: open [`dist/index.html`](dist/index.html) directly (`file://`, no build or server needed),
 or visit the GitHub Pages deployment: https://korczis.github.io/oscilla/

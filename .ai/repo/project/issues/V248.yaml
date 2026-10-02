@@ -1,0 +1,33 @@
+id: V248
+milestone: M010
+title: "About workspace"
+slug: about-workspace
+priority: p1
+profile: implementation
+objective: "A first-class About workspace, the last primary nav item, in which OSCILLA explains itself: what it is, how it started, how fast it evolved (commit-verified), how it is engineered, the AI-assisted method, the role of Majordomus, author, source and Majordomus links. It replaces the modal About dialog; the overflow-menu entry opens the workspace."
+scope:
+  - "src"
+  - "dist"
+  - "tests"
+depends_on: []
+acceptance_criteria:
+  - "About is the final primary nav item, keyboard-operable, with the same active-state semantics as the other workspaces; selecting it shows #osc-view-about and titles the document 'OSCILLA · About'."
+  - "The links go exactly to https://github.com/korczis/oscilla, https://majordomus.dev/ (new tab, noopener noreferrer) and mailto:korczis@gmail.com."
+  - "The timeline times are the commit times of the commits they name, checked against git by tests/unit/about.test.mjs."
+  - "No page overflow, nothing outside the view, no overlapping stations and 24 px link targets at 320-1536 px in chromium, firefox and webkit over file:// and http (tests/browser/app.cjs about-page, tests/browser/layout.cjs)."
+validation:
+  - "npm run release-gate"
+evidence_required:
+  - "verified"
+created_at: 2026-10-02
+started_at: 2026-10-02T04:29:15Z
+updated_at: 2026-10-02T04:44:33Z
+verified_at: 2026-10-02T04:44:31Z
+completed_at: 2026-10-02T04:44:33Z
+evidence:
+  - covers: verified
+    type: test
+    command: "npm run release-gate"
+    result: "exit 0: 1397 unit tests; engine 83/83 chromium+firefox; app 22/22 incl. about-page in chromium/firefox/webkit over file:// and http; layout 44/44 incl. About view at 320-1536 px"
+    commit: 90061f77e4e78b5f3c679a34abaa72c9de9bbeb2
+    recorded_at: 2026-10-02T04:44:29Z

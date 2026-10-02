@@ -15,7 +15,9 @@ const ANALYSIS_TAB_KEY = 'oscilla.v2.analysisTab';
 const ANALYSIS_TABS = ['waveform', 'spectrum', 'spectrogram', 'harmonics', 'signalPath'];
 const MODES = [
   'playground', 'sequencer', 'analyzer', 'filter', 'synthesis', 'compare', 'learn', 'presets',
+  'about',
 ];
+const WORKSPACE_TITLES = { about: 'About' };
 const ROVING_ROLES = ['tab', 'radio'];
 
 /** localStorage can be missing or throw (private mode, file:// policies, quota). */
@@ -93,6 +95,11 @@ export function rovingKeydown(event) {
 
 /** The Alpine component definition (plain object factory, testable without Alpine). */
 export const WORKSPACES = MODES;
+
+/** Document title for a workspace: the product title, or `OSCILLA · <page>` for a page-like one. */
+export function workspaceTitle(mode, base) {
+  return WORKSPACE_TITLES[mode] ? `OSCILLA · ${WORKSPACE_TITLES[mode]}` : base;
+}
 
 export function createOscillaUi({ storedAnalysisTab = storageGet(ANALYSIS_TAB_KEY) } = {}) {
   return {
@@ -184,6 +191,15 @@ export function createOscillaUi({ storedAnalysisTab = storageGet(ANALYSIS_TAB_KE
       this.$nextTick(() => this.focusWorkspace(mode));
     },
     focusWorkspace(mode) {
+      // Below 1280 px the nav scrolls in its own strip: keep the active tab in view (it may
+      // have been chosen elsewhere, e.g. About from the overflow menu).
+      const tab = this.$root.querySelector('.osc-nav .osc-tab.is-active');
+      if (tab && tab.parentElement.offsetParent !== null) {
+        const nav = tab.closest('.osc-nav');
+        const t = tab.getBoundingClientRect();
+        const n = nav.getBoundingClientRect();
+        if (t.left < n.left || t.right > n.right) nav.scrollLeft += t.left - n.left - 8;
+      }
       const panels = [...this.$root.querySelectorAll('[data-osc-modes]')];
       panels.forEach((p) => {
         const on = mode !== 'playground' && p.dataset.oscModes.split(/\s+/).includes(mode);

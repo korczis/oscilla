@@ -19,3 +19,14 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-02
+started_at: 2026-10-02T09:32:51Z
+updated_at: 2026-10-02T09:32:55Z
+completed_at: 2026-10-02T09:32:55Z
+evidence:
+  - covers: verified
+    type: test
+    command: "npm test && npm run test:engine"
+    result: "V1 core, engine, patterns, presets, learn and viz extracted to src/js modules; freeze green; V1 engine suite on the V2 engine 83/83 chromium and firefox"
+    artifact: "9fe0a15"
+    commit: 5fbf451eeebf6618f3abb12b9eb7047adb98903f
+    recorded_at: 2026-10-02T09:32:54Z

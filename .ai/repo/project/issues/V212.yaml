@@ -16,3 +16,14 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-02
+started_at: 2026-10-02T09:33:13Z
+updated_at: 2026-10-02T09:33:18Z
+completed_at: 2026-10-02T09:33:18Z
+evidence:
+  - covers: verified
+    type: test
+    command: "npm run test:browser && node tests/browser/labs.cjs"
+    result: "Live p5 waveform and uPlot FFT from AnalyserNode with log/linear, max frequency, requested marker; spectrum peak read from uPlot data"
+    artifact: "b08ed34"
+    commit: 5fbf451eeebf6618f3abb12b9eb7047adb98903f
+    recorded_at: 2026-10-02T09:33:16Z

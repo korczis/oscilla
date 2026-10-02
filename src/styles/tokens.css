@@ -53,6 +53,7 @@
   --osc-blue-trace: #12a0f5;       /* waveform trace, generator trace, filter curve */
   --osc-blue-underline: #0a86f0;   /* nav underline */
   --osc-focus: #4da3ff;
+  --osc-link: #4da3ff;               /* text links on panel surfaces (About) */
 
   /* Accents */
   --osc-green: #34db7b;            /* Use microphone, PLAYING, sustain */
@@ -200,6 +201,7 @@
   --osc-blue-trace: #0a78d8;
   --osc-blue-underline: #0067d6;
   --osc-focus: #0067d6;
+  --osc-link: #0057b5;             /* >= 4.5:1 on surface-2 */
   --osc-green: #13a356;
   --osc-green-2: #1fb36a;
   --osc-green-fill: #0b7a3e;       /* white 5.4:1 (#13a356 carries white at 3.3:1) */

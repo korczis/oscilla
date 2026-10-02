@@ -16,3 +16,14 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-02
+started_at: 2026-10-02T09:33:52Z
+updated_at: 2026-10-02T09:33:57Z
+completed_at: 2026-10-02T09:33:56Z
+evidence:
+  - covers: verified
+    type: test
+    command: "node tests/browser/labs.cjs && node tests/browser/dsp.cjs"
+    result: "Filter lab response from getFrequencyResponse equals an independent biquad within 1.6e-6 dB; lowpass -3.01 dB at cutoff measured on audio"
+    artifact: "b08ed34"
+    commit: 5fbf451eeebf6618f3abb12b9eb7047adb98903f
+    recorded_at: 2026-10-02T09:33:55Z

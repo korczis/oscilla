@@ -16,3 +16,14 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-02
+started_at: 2026-10-02T09:34:07Z
+updated_at: 2026-10-02T09:34:12Z
+completed_at: 2026-10-02T09:34:12Z
+evidence:
+  - covers: verified
+    type: test
+    command: "node tests/browser/labs.cjs && node tests/browser/qa-regressions.cjs"
+    result: "Additive PeriodicWave: bars equal the coefficients within 4e-7 dB; square harmonics exact 1/n; harmonics tab shows the playing coefficients"
+    artifact: "b08ed34"
+    commit: 5fbf451eeebf6618f3abb12b9eb7047adb98903f
+    recorded_at: 2026-10-02T09:34:10Z

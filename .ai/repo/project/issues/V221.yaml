@@ -16,3 +16,14 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-02
+started_at: 2026-10-02T09:34:22Z
+updated_at: 2026-10-02T09:34:27Z
+completed_at: 2026-10-02T09:34:27Z
+evidence:
+  - covers: verified
+    type: test
+    command: "npm test && node tests/browser/qa-regressions.cjs"
+    result: "Cited hearing ranges and call bands (src/js/data/bioacoustics.js, every entry with DOI/URL); keyboard-reachable sources; disclaimer shown"
+    artifact: "b08ed34"
+    commit: 5fbf451eeebf6618f3abb12b9eb7047adb98903f
+    recorded_at: 2026-10-02T09:34:25Z

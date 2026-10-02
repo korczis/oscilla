@@ -51,7 +51,7 @@ import { BUILTIN_PRESETS } from './data/presets.js';
 import { LEARN_TOPICS } from './data/learn.js';
 import { serializeSequence } from './sequencer/model.js';
 
-import { registerOscillaUi } from './ui/app.js';
+import { registerOscillaUi, workspaceTitle } from './ui/app.js';
 import { keyGuard, openModal, closeModal, watchDialogs, focusSafely } from './ui/dialogs.js';
 import { createWorkbench, v1ModeFor, workspaceForV1Mode } from './ui/workbench.js';
 import { createScopeView, createHarmonicBarsView } from './ui/p5-views.js';
@@ -537,6 +537,8 @@ function integrationInit() {
   cmp.$watch('theme', () => { bridge.readPalette(); });
   cmp.$watch('tabs.analysis', (tab) => setAnalysisTab(tab));
   cmp.$watch('workspace', () => repairCharts());
+  const baseTitle = document.title;
+  cmp.$watch('workspace', (ws) => { document.title = workspaceTitle(ws, baseTitle); });
   // R3: Pause animation. The p5 views pause through bridge.state.paused (syncViz); the uPlot
   // spectrum and the analysis-tab spectrogram hold their last real frame through their public
   // setFreeze(); setFramesPaused() stops every other renderer on the shared frame loop.

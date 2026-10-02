@@ -16,3 +16,14 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-02
+started_at: 2026-10-02T09:33:36Z
+updated_at: 2026-10-02T09:33:41Z
+completed_at: 2026-10-02T09:33:41Z
+evidence:
+  - covers: verified
+    type: test
+    command: "node tests/browser/labs.cjs"
+    result: "Device panel: sample rate, Nyquist, safe max from the running AudioContext; output device only when reported; hard limit and continuous toggle"
+    artifact: "b08ed34"
+    commit: 5fbf451eeebf6618f3abb12b9eb7047adb98903f
+    recorded_at: 2026-10-02T09:33:39Z

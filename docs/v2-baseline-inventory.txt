@@ -1,0 +1,578 @@
+OSCILLA V1 -> V2 BASELINE INVENTORY
+===================================
+Baseline: commit 95dfa81, index.html (5078 lines, 274,746 bytes); `git show 95dfa81:index.html`.
+Specs: the V2 mission specification (architecture/build and visual/functional, reference image
+tests/visual/reference.png). Historical record of the V2 extraction (issue V202).
+Line numbers are a DRAFT against 95dfa81. index.html moves when oscilla-d3 pushes round 2. Re-map
+by NAME; `node freeze/extract.cjs` prints the current section line ranges of any index.html.
+
+Classification legend
+  PRESERVE  move as-is (byte-equivalent logic) into the target module; golden vectors must pass
+  REFACTOR  same behaviour, new shape (split, inject dependencies, de-globalise); golden must pass
+  EXTEND    preserved core plus V2 features layered on top (V1 vectors stay green)
+  REPLACE   superseded by a new V2 implementation (V1 kept only as a behavioural reference)
+  REMOVE    no V2 counterpart
+
+Ownership (CONVENTIONS.md):
+  [X] = V1 extraction (this track): src/js/core/**, src/js/audio/{audio-engine,voice,patterns,
+        scheduler,modulation,microphone}.js, src/js/data/{presets,learn}.js,
+        src/js/visualization/**
+  [S] = visual shell agent: src/index.html, src/styles/**, src/js/ui/**
+  [D] = dsp/analysis agent: src/js/analysis/**, src/js/audio/{envelope,additive,filters,stereo,
+        offline-renderer,wav,noise}.js
+  [Q] = sequencer agent: src/js/sequencer/**
+  [B] = bioacoustics data: src/js/data/bioacoustics.js
+
+Proposed deviations from spec §9 (cohesion; no tiny modules):
+  - src/js/core/config.js: defaultInstrumentState + coerceLike + paramDescriptor + a pure
+    applyConfig/validateConfig + serializeConfig. Today these are spread over the constants, the
+    component and the URL code. url-state.js keeps only the hash <-> config codec.
+  - src/js/visualization/p5-host.js: the shared p5 lifecycle (density, resize, visibility,
+    reduced motion, palette cache, label/axis helpers). V2 runs several p5 views, and duplicating
+    this scaffolding into each one is the alternative.
+  - src/js/core/platform.js: browserName/platformName (Device & Limits). navigator is injected.
+  - No src/js/core/namespace.js or events.js. V1 has no event bus: AudioEngine.on/_emit stays in
+    audio-engine.js. Add a bus only if a second publisher appears.
+
+------------------------------------------------------------------------------------------------
+A. RUNTIME DEPENDENCIES (CDN in V1 -> npm in V2, bundled into dist/index.html)
+------------------------------------------------------------------------------------------------
+dep            V1 load (index.html)                                   npm package (latest seen)          licence   V2 decision
+Tailwind CSS   L35 <script src=cdn.tailwindcss.com/3.4.17> (Play CDN,  tailwindcss@3.4.19 (3.x) / 4.3.3      MIT       REMOVE as runtime. Spec part 2 replaces Tailwind
+               runtime JIT, no SRI) + L36-61 tailwind.config                                                         markup with --osc-* token CSS [S]. If [S] keeps
+                                                                                                                     Tailwind, it must be a build-time compile.
+Flowbite CSS   L62 jsdelivr flowbite@2.5.2/dist/flowbite.min.css (SRI) flowbite@2.5.2 (2.x) / 4.0.2           MIT       REMOVE unless [S] keeps Flowbite components.
+Flowbite JS    L111 jsdelivr flowbite@2.5.2/dist/flowbite.min.js       flowbite@2.5.2 (bundles               MIT       OPTIONAL (spec §14: a11y infra only). Used in V1:
+               (defer, SRI)                                            @popperjs/core 2.11.8, MIT)                     Modal x4, Dropdown (theme + overlays), Accordion
+                                                                                                                     (advanced), Tabs (presets), Tooltip (explore).
+p5.js          L109 cdnjs p5.js/1.11.3/p5.min.js (defer, SRI)          p5@1.11.13 (1.x) / 2.3.4               LGPL-2.1  KEEP 1.11.x. 2.x is a breaking API. Inlining LGPL into
+                                                                                                                     a single file is allowed, but the dist must carry
+                                                                                                                     the LGPL-2.1 text + p5 version + source URL, and
+                                                                                                                     users must be able to replace it. Needs a licence
+                                                                                                                     review. p5 1.x registers device-sensor listeners,
+                                                                                                                     which Firefox reports as deprecated.
+Alpine.js      L113 jsdelivr alpinejs@3.14.9/dist/cdn.min.js (defer,   alpinejs@3.14.9 (pin) / 3.17.4         MIT       KEEP. The npm ESM build does NOT auto-start and does
+               SRI)                                                                                                  NOT fire 'alpine:init' by itself: main.js must set
+                                                                                                                     window.Alpine, call Alpine.data/directive, then
+                                                                                                                     Alpine.start().
+uPlot          (new)                                                   uplot@1.6.32                           MIT       ADD for spectra, filter response, freq/time, harmonics.
+Lucide         (new, optional)                                         lucide@1.49.0                          ISC       OPTIONAL. V1 icons are inline SVG paths.
+Web Audio      native                                                  -                                      -         KEEP. No audio framework.
+
+------------------------------------------------------------------------------------------------
+B. HTML HEAD + CSS (L1-115)
+------------------------------------------------------------------------------------------------
+B1  L1-12     <head> meta, colour-scheme, theme-color, favicon (data-URI SVG), generator meta.
+              Deps: none. REFACTOR -> src/index.html [S]. Keep the data-URI favicon and update
+              generator/version. Risk: low.
+B2  L13-34    Inline pre-paint theme script (localStorage 'oscilla.theme' -> .dark before first paint)
+              plus the boot watchdog (shows #boot-error if window.Alpine is missing after 4 s).
+              Deps: localStorage, matchMedia, DOM #boot-error. REFACTOR -> inline <script> in
+              src/index.html head, plus src/js/ui/app.js [S]. Theme logic is duplicated in
+              oscillaApp.applyTheme. The watchdog relies on window.Alpine existing, which a bundle
+              only provides if main.js assigns it. Risk: medium.
+B3  L35-61    Tailwind Play CDN + tailwind.config (colour names -> rgb(var(--c-*))). REMOVE / REPLACE by
+              src/styles/tokens.css [S]. The Play CDN JIT also styles classes that JS adds at
+              runtime ('bg-black/50' L4107, Flowbite's own runtime classes, data-tabs-*-classes
+              L431). A build-time compile would purge them silently. Risk: medium, only if any
+              V1 markup is kept.
+B4  L62-63    Flowbite CSS. REMOVE (or bundle if Flowbite stays) [S].
+B5  L64-108   Inline <style>: theme tokens --c-* (light + .dark), .panel .field .chip .hold-btn .fmap
+              range .eyebrow .readout, focus-visible, scroll-padding var(--header-h),
+              reduced-motion. REPLACE by src/styles/{tokens,base,components,instrument,responsive}
+              .css [S]. Behaviours to carry over: 44 px touch targets, focus-visible ring,
+              touch-action:none on hold button, pan-y on fmap, tabular-nums readouts,
+              reduced-motion, header scroll-padding. COUPLING: the p5 palette reads --c-* (see
+              V2-bridge readPalette). Risk: high (silent fallback to light colours).
+B6  L109-114  CDN <script defer> tags (order p5 -> flowbite -> alpine). REPLACE by bundled imports
+              in src/js/main.js [X/S]. Init order changes (Flowbite auto-init vs Alpine x-for
+              rendering). Risk: medium.
+
+------------------------------------------------------------------------------------------------
+C. HTML BODY MARKUP (L116-974). Spec part 2 replaces all of it with the dense CSS-Grid lab
+   layout [S]. Every region is REPLACE for markup and CSS. The column "keep" lists the
+   behaviour the new markup must reproduce (and that existing smoke/spec tests assert).
+------------------------------------------------------------------------------------------------
+C1  L116-124  <body x-data="oscillaApp">, skip link, <noscript>, #boot-error.     REFACTOR [S]
+              keep: x-data root (tests use Alpine.$data(document.body)), skip link, noscript,
+              boot-error.
+C2  L126-180  Header: logo, mode tablist (APP_MODES x5, roving keys), status pill (role=status),
+              explore toggle + Flowbite tooltip, theme menu (Flowbite Dropdown, menuitemradio),
+              about button.                                                   REPLACE [S]
+              V2 nav = Playground, Sequencer, Analyzer, Filter Lab, Synthesis, Compare, Learn,
+              Presets, plus Export. keep: status live region, tab keyboard model, theme menu a11y.
+C3  L182-199  Alert stack (Flowbite alert markup, Alpine `alerts`).      REPLACE [S] -> ui/notifications
+              keep: role alert for errors, status for the rest, dedupe, max 4, auto-dismiss 6 s.
+C4  L201-216  Safety notice (collapsible, sessionStorage key).                REFACTOR [S]
+              keep: exact safety wording (no-fake-science), collapse persistence per session.
+C5  L221-269  Visualization panel: viz radios/select, LOG/LIN, overlays dropdown, mic button,
+              canvas container (x-ref=vizCanvas, role=img, reactive aria-label), caption, metric dl.
+                                                       REPLACE [S] (analysis panel + mic analyzer)
+              keep: role=img + aria-label (canvas aria-hidden), captions, provisional Nyquist mark.
+C6  L274-328  Playground: big readout + region, note-mode toggle, frequency map (role=slider, log,
+              pointer capture, keys, wheel-when-focused), waveform radios with SVG glyphs.
+                                                       REPLACE [S] -> Source & Pattern panel
+              keep: map keyboard model (arrows +-1 st, Shift 10 c, Alt 1 c, PgUp/Dn octave,
+              Home/End), aria-valuetext, disabled state when a pattern sets its own frequencies.
+C7  L330-386  SWEEP mode panel (start/end text + log sliders, duration, curve, direction incl.
+              ping-pong, repeat once/N/continuous with lock).                 REPLACE [S]
+              GAP: V2 nav has no Sweep mode. Its functions (ping-pong, repeat N, continuous
+              repeat, oct/s and Hz/s rate editing, sweep presets) need a home (Pattern panel or
+              sequencer Sweep block) or they are lost (spec §0).
+C8  L388-425  DUAL OSC panel (A/B freq, nudge, log slider, waveform, gain, detune, beat text).
+                                                                              REPLACE [S]
+              GAP: V2 nav has no Dual mode. Beating demos, binaural (headphone-gated) and mono/stereo
+              split must land in Phase & Stereo or Compare.
+C9  L427-482  Presets tabs (Flowbite Tabs + x-roving, Alpine x-for), custom list with two-tap
+              delete, session history list.                                   REPLACE [S]
+C10 L484-511  Learn: topic nav/select, body, live example, demo button.       REPLACE [S]
+C11 L514-562  Transport: HOLD TO PLAY (pointerdown/up/cancel/lostcapture/leave, Space, Enter),
+              TRIGGER, STOP, latch button (continuous only), transport text, plan warnings, gain
+              slider (sqrt curve), level warnings (low / high / ultrasonic / harmonics).
+                                                       REPLACE [S] -> Transport + status bar
+              keep: pointer-capture semantics, aria-pressed, every safety text verbatim. V2 shows
+              gain in dB: EXTEND the gain readout (20*log10 of the logical gain), keep the
+              MAX_OUTPUT_GAIN cap.
+C12 L564-694  Secondary controls: exact frequency input, fine steps (+-oct/st/10/1 Hz), range modes
+              + custom bounds, note buttons + A4 + cents; sweep rates + sweep presets; dual
+              mixer, stereo split, beating presets, binaural toggle; preset actions.
+                                                                              REPLACE [S]
+C13 L696-748  Pattern panel: groups + descriptor-driven parameter form (PATTERNS[].params).
+                                                       REPLACE [S]; descriptors PRESERVE (see D3)
+C14 L750-758  Explore hints list.                                             REPLACE [S]
+C15 L760-877  Advanced accordion (Flowbite): envelope A/R/D, playback safety (hard limit
+              0.5-5 s, Allow continuous playback), live metrics, Device & Output limits,
+              sharing.                    REPLACE [S] -> ADSR panel, Device & Limits, status bar
+              GAP: the reference shows no slot for the safety limit and continuous-playback
+              permission. Both are mandatory (no-fake-science + safety rules).
+C16 L880-884  Footer.                                            REPLACE [S] -> bottom status bar
+C17 L886-892  Debug panel (?debug=1, debugInfo).    PRESERVE [S]. smoke asserts visible/hidden.
+C18 L894-974  Modals save / headphones / copy / about (Flowbite Modal, data-oscilla-modal,
+              @keydown.tab=trapFocus, data-autofocus).               REFACTOR [S] -> ui/dialogs
+              keep: data-oscilla-modal + aria-modal. The Space handler (L3325) uses them to
+              suppress playback under a modal. keep the headphone confirmation flow and texts.
+
+------------------------------------------------------------------------------------------------
+D. APPLICATION SCRIPT (L975-5076). Banner sections 1-10.
+------------------------------------------------------------------------------------------------
+§1 CONSTANTS L978-1167
+D1  L982-1004  Scalar constants (APP_VERSION, SPEED_OF_SOUND, SAFE_NYQUIST_FACTOR, PROVISIONAL_
+               SAMPLE_RATE, MIN_FREQUENCY, MAX_OUTPUT_GAIN, DEFAULT_GAIN, GAIN_FLOOR, START_OFFSET_S,
+               MAX_PROGRAMMED_S, CONTINUOUS_SCHEDULE_S, SAFETY_LIMIT_OPTIONS, HISTORY_MAX,
+               PRESET_SCHEMA_VERSION, LIMITER_*) + STORAGE_KEYS.
+               Deps: none. PRESERVE -> core/constants.js [X]. APP_VERSION -> 2.x. Risk: low.
+D2  L1006-1056 Enums/tables: WAVEFORMS(+LABELS), RANGE_MODES, FREQUENCY_REGIONS, NOTE_NAMES,
+               NOTE_BUTTONS, THIRD_OCTAVE_FREQUENCIES, OCTAVE_STEP_FREQUENCIES, SPECTRUM_MARKERS,
+               VIZ_MODES, APP_MODES.
+               PRESERVE -> core/constants.js; FREQUENCY_REGIONS -> core/frequency.js; NOTE_* ->
+               core/music.js [X]. VIZ_MODES/APP_MODES: REPLACE by the V2 nav and analysis tabs [S].
+               LEARN_TOPICS demo.viz ids refer to them (see D9). Risk: low.
+D3  L1057-1141 Parameter-descriptor factories F/MS/INT/HZ/SEL, GLOBAL_FREQ, ENV_PARAMS, SWEEP_PARAMS,
+               PATTERNS (16 patterns: id, group, kind open|finite, desc, params), PATTERN_BY_ID,
+               PATTERN_GROUPS. Drive both the UI form AND validation (paramDescriptor/coerceLike).
+               PRESERVE -> audio/patterns.js [X]; EXTEND: the sequencer blocks (Tone, Sweep,
+               Pulse, Chirp, Burst, Siren, AM, FM, Random) should reuse these descriptors [Q].
+               Risk: low.
+D4  L1143-1166 DEFAULT_PATTERN_PARAMS, DEFAULT_SWEEP, DEFAULT_DUAL.
+               PRESERVE -> audio/patterns.js (defaults) + core/config.js (state defaults) [X].
+
+§2 HELPERS L1168-1361
+D5  L1172-1194 clamp, isNum, deepCopy, toNumber, toInt, pick, round, sig. Pure.
+               PRESERVE -> core/math.js [X]. Risk: low.
+D6  L1196-1222 safeStorage(kind) (never throws), localStore/sessionStore (module-scope instances),
+               readJSON. Deps: window[kind]. PRESERVE -> core/storage.js [X]. Inject the backing
+               store; create lazily, not at import time. Risk: low.
+D7  L1224-1237 base64UrlEncode/Decode (UTF-8 safe). Deps: TextEncoder/Decoder, btoa/atob.
+               PRESERVE -> core/url-state.js [X].
+D8  L1239-1249 mulberry32 (seeded PRNG; the random pattern preview equals what plays next).
+               PRESERVE -> core/math.js [X].
+D8b L1251-1269 browserName, platformName. Deps: navigator. PRESERVE -> core/platform.js [X], consumed
+               by the Device & Limits panel [S]. Spec: never fabricate the output device.
+D8c L1271-1327 isTypingTarget, ROVING_STEP, rovingItems/Sync/Key, rovingDirective (x-roving Alpine
+               directive: ARIA radio-group/tablist roving tabindex). Deps: DOM, MutationObserver,
+               Alpine directive API. PRESERVE -> ui/components.js [S]. Risk: medium (Alpine
+               registration moves to main.js).
+D8d L1329-1360 installFlowbiteFallbacks, showFallbackTab (accordion/tabs when the Flowbite CDN is
+               blocked). REMOVE once Flowbite is bundled (no CDN failure mode). If Flowbite is
+               dropped, the new primitives own this.
+
+§3 FREQUENCY HELPERS L1362-1445   (all pure; golden: frequency.*, region)
+D9a L1366-1373 frequencyToNormalized, normalizedToFrequency (log mapping). PRESERVE -> core/frequency.js
+D9b L1379-1407 parseFrequency ({ok,value}|{ok:false,error}, never NaN), parseFrequencyList.
+               PRESERVE -> core/frequency.js
+D9c L1409-1440 formatFrequency, formatFrequencyShort, formatPeriod, formatWavelength, formatMs.
+               PRESERVE -> core/frequency.js. EXTEND: grouped readout "15,500 Hz" (reference) as
+               a NEW formatter. Do not change formatFrequency: tests, labels, history and URL text
+               depend on it.
+D9d L1441-1444 regionFor. PRESERVE -> core/frequency.js.
+
+§4 MUSICAL-NOTE HELPERS L1446-1480  (pure; golden: music)
+D10 L1450-1479 frequencyToMidi, midiToFrequency, midiToName, nearestNote, noteToFrequency, formatCents.
+               PRESERVE -> core/music.js [X].
+
+§5 PRESET DEFINITIONS L1481-1685  (data; golden: presets.data, presets.apply)
+D11 L1488-1497 PRESET_CATEGORIES.          PRESERVE/EXTEND -> data/presets.js [X]
+D12 L1499-1525 REFERENCE_NOTES, refPreset. PRESERVE -> data/presets.js. Wording is no-fake-science
+               reviewed. Keep it verbatim.
+D13 L1527-1549 newPresetId, presetRecord (stored schema v1, derived fields from cfg).
+               PRESERVE -> core/storage.js [X]; EXTEND: V2 config JSON (version, oscillaVersion,
+               sampleRateRequested, envelope, filter, sequencer, dualOsc, metadata) with a v1->v2
+               migration. Impure: Date.now + Math.random in newPresetId.
+D14 L1551-1645 BUILTIN_PRESETS (16 reference, 7 musical, 7 sweeps, 13 patterns, 9 high, 6 dual).
+               PRESERVE -> data/presets.js [X]. Sweep presets use cfg.source 'sweep', which has no V2
+               mode (see C7). 'end: "max"' resolves at apply time.
+D15 L1647-1684 LEARN_TOPICS (18 topics, body text, demo cfg + demo.viz id).
+               PRESERVE/EXTEND -> data/learn.js [X]. demo.viz uses V1 ids (wave/spectrum/motion/
+               harmonics/interference) -> remap to V2 tabs. Risk: low.
+
+§6 SIGNAL PLANNING + AUDIO ENGINE L1686-2563
+D16 L1700-1746 lfoShape, findTimed (binary search), planFreqAt, planAmpAt. Pure.
+               PRESERVE -> audio/patterns.js [X] ("plan evaluation"). Used by the engine
+               (instantaneousFrequency), the viz bridge (pull) and the p5 motion view. Risk: low.
+D17 L1748-1790 stepsFromFrequencies (mutates the warnings param), sweepSegments,
+               summarizeFrequencies. Pure. PRESERVE -> audio/patterns.js [X].
+D18 L1797-2013 buildPlan(cfg, {safeMax, continuous}) -> {ok, plan, warnings}|{ok:false,error}.
+               Pure. Seven plan types: const/steps/ramps/lfo/am/fm/dual. Clamps every frequency
+               below safeMax, caps at 30 s, caps continuous at 600 s, limits FM/wobble depth,
+               warns about aliasing.
+               PRESERVE -> audio/patterns.js [X]. Split per pattern only with golden parity.
+               EXTEND: the sequencer compiler [Q] should call the same per-pattern builders.
+               COUPLING: plan.label strings (formatFrequency) are UI text produced inside DSP
+               planning, and history, transport text and the status bar use them. Keep them
+               identical. Risk: medium (largest pure unit; 96 + 38 golden cases).
+D19 L2015-2061 class AudioEngine: ctor state (ctx, master, limiter, trim, analyser, timeData,
+               freqData, voice, voices, nodes, sources, lastError, mic), isSupported, getters
+               sampleRate/nyquist/safeMaximum/state/activeNodeCount/activeSourceCount, on/_emit/
+               _fail. Deps: window.AudioContext.
+               PRESERVE -> audio/audio-engine.js [X]. Risk: low.
+D20 L2064-2126 init(): synchronous (runs inside the gesture), output chain master -> limiter
+               (DynamicsCompressor -3 dB, 20:1) -> trim (removes the spec makeup gain) -> analyser
+               (FFT 8192, smoothing 0.55, -140..0 dB) -> destination; resume(); setMasterGain
+               (clamped to 0.25).
+               EXTEND -> audio/audio-engine.js [X]. Add the filter insert point (D/filters.js) and
+               analysis taps (L/R analysers for correlation, the spectrogram source). Keep the trim
+               calculation: smoke asserts output peak = logical gain. Risk: medium.
+D21 L2128-2181 _osc, _stepEnv (linear attack, hold, exponential release to GAIN_FLOOR), _loggedParam
+               (records envelope automation), _holdEnv (cancelAndHoldAtTime, or on Firefox:
+               cancel + re-end the in-progress segment from envLog).
+               PRESERVE -> audio/voice.js (+ scheduler.js for _stepEnv) [X]. EXTEND: ADSR together
+               with [D] audio/envelope.js. HIDDEN COUPLING: _holdEnv is only correct if EVERY
+               envelope automation goes through the logged param. An ADSR scheduler that writes
+               to env.gain directly breaks the Firefox click-free release with no Chromium test
+               failure. Risk: HIGH.
+D22 L2187-2336 play(plan, o): releases the current voice fast (12 ms), builds env -> releaseGain ->
+               master, a per-plan-type graph switch (const/steps/ramps/lfo/am/fm/dual), open-plan
+               envelope with the hard safety limit (o.continuous false -> limitS, v.limited),
+               schedules stops at endTime + 0.01, onended -> _cleanup, timers, 'play' event.
+               REFACTOR -> audio/audio-engine.js (orchestration) + audio/scheduler.js (const/steps/
+               ramps automation) + audio/modulation.js (lfo/am/fm subgraphs) [X]. EXTEND:
+               PeriodicWave (additive [D]), filter insert, stereo routing [D], ADSR.
+               INVARIANT: every node goes through track()/source(), so activeNodeCount and the
+               zero-leak check stay meaningful. V2 builder modules ({input,output,dispose}) must
+               register their nodes with the voice. Risk: HIGH.
+D23 L2338-2372 _buildDual (two oscillators; StereoPanner, or a ChannelMerger fallback; mono sum).
+               EXTEND -> audio/voice.js [X] with [D] stereo.js for Phase & Stereo routing.
+D24 L2374-2476 _armTimers/_armFallback (UI-only setTimeout bookkeeping + leak fallback),
+               _releaseVoice (hold env, linear fade on the dedicated releaseGain, freeze freq
+               params, stop sources, immediate cleanup if the ctx is not running), _releaseAll,
+               release(fast), stopAll (6 ms), _cleanup (disconnect, clear sets, 'ended').
+               PRESERVE -> audio/voice.js [X]. Frozen: engine.stop golden (37 scenarios on a
+               recording mock). Risk: medium.
+D25 L2479-2533 updateLive(np) (same-type open plans: setTargetAtTime 15 ms on freq/depth/rate/gain/
+               pan; waveform swap), instantaneousFrequency(). PRESERVE -> audio/audio-engine.js [X].
+D26 L2535-2561 startMic (getUserMedia with no EC/NS/AGC, MediaStreamSource -> its own analyser,
+               never to the destination), stopMic. EXTEND -> audio/microphone.js [X]. The analysis
+               wrappers [D] (peak detector, compare, spectrogram) consume mic.analyser. Keep the
+               file:// / insecure-context error text and the permission error mapping (toggleMic,
+               L4149-4155).
+
+§7 VISUALIZATION BRIDGE L2564-2803
+D27 L2572      const engine = new AudioEngine() (module singleton shared by the component, viz.pull,
+               the error handlers and window.OSCILLA).
+               REFACTOR -> created in src/js/main.js and injected. Risk: medium.
+D28 L2574-2728 viz bridge object: state (plain values written by syncViz), readPalette (reads CSS
+               --c-* via getComputedStyle), pull() (per-frame, allocation-free copy of engine
+               scalars), outputSpectrum/micSpectrum (fill preallocated buffers), refreshLabels
+               (100 ms label timer while playing), setLiveLabels, updateLoop (reduced motion /
+               hidden tab), requestRedraw.
+               REFACTOR/EXTEND -> visualization/visualization-bridge.js [X]. V2 has several
+               consumers (p5 waveform/phase/lissajous/path, uPlot spectra, spectrogram canvas).
+               HIDDEN COUPLING: pull() reads engine internals (engine.ctx, engine.voice.t0,
+               voice.plan, engine.analyser, engine.timeData, engine.mic). Splitting voice.js changes
+               these shapes, so add an engine.snapshot(out) API first. readPalette must map the new
+               --osc-* tokens, otherwise colours silently fall back to hard-coded light values.
+               Risk: HIGH.
+D29 L2730-2778 HARMONIC_FLOOR_DB, HARMONIC_LIST_CAP, harmonicLimit, partialCount, harmonicTable
+               (analytic partial counts >= -60 dB, Nyquist split). Pure.
+               PRESERVE -> visualization/harmonics.js (data part) [X]. EXTEND: the additive synthesis
+               harmonics must come from the real PeriodicWave coefficients [D].
+D30 L2780-2802 pathNodesFor(plan, st) (signal-path node titles/subtitles; "speaker output unknown").
+               EXTEND -> visualization/signal-path.js [X] (filter, ADSR, additive, stereo nodes).
+
+§8 ALPINE COMPONENT L2804-4276  (oscillaApp; ~1470 lines mixing UI, DSP orchestration, storage,
+                                  URL codec and viz sync)
+D31 L2810-2814 Module state: modalInstances, themeDropdown, uiNotify, focusBeforeModal, alertSeq.
+               REFACTOR -> ui/dialogs.js, ui/notifications.js [S]. uiNotify is a mutable global that
+               init sets for the window error handlers.
+D32 L2816-2848 defaultInstrumentState, coerceLike, paramDescriptor. Pure.
+               PRESERVE -> core/config.js [X].
+D33 L2850-2917 State fields (template constants, serializable instrument state via spread of
+               defaultInstrumentState, ~50 UI fields incl. continuousAllowed "never persisted").
+               REFACTOR -> ui/app.js [S] with instrument state as a plain object from core/config.js.
+D34 L2920-2970 init(): storage probes, theme, header height, matchMedia, custom presets/history load,
+               safety notice, restoreFromHash, engine.on, first-gesture AudioContext, window key/blur/
+               hashchange/visibility listeners, Alpine.effect(syncViz), $watch(gainLevel ->
+               engine.setMasterGain), $watch(mode -> viz.resize), visualizer start, Flowbite
+               fallbacks, debug interval.
+               REFACTOR -> ui/app.js + src/js/main.js [S/X]. Risk: medium (startup ordering).
+D35 L2972-3167 Derived getters: provisional/effectiveSampleRate/nyquist/safeMax, rangeMin/Max,
+               readout/region/map styles, note, period/wavelength (metricFrequency), requestedText,
+               durationText, gainPct/gainLabel, isProgrammed, mapRegions/mapTicks, freqMin/
+               MaxInvolved, warning flags, dualFa/Fb/Delta, beatText, sweep spans/rates/readout,
+               transportText, representability, hints, topicExample, statusIcon.
+               REFACTOR: the numeric parts -> core/frequency.js (range bounds), core/safety.js
+               (nyquist/safeMax/representability/warning flags, continuous gating), audio/patterns.js
+               (dual detune maths); the text parts -> ui/app.js [S]. Frozen through the component
+               facade (nyquist, dual, ui.mapping golden). Risk: medium.
+D36 L3169-3341 Audio + transport: ensureAudio (also applies pendingHashConfig and re-clamps on first
+               context), currentPlan, play, holdStart/End/Leave/Key, triggerKey, releaseHold,
+               trigger, toggleLatch (requires continuousAllowed), stop, stopNow, setContinuous,
+               onEngine (status machine; 100 ms instFreq interval; 'ended' reseeds the random
+               pattern), onKeyDown/Up (Space/Escape; modal check via [data-oscilla-modal]).
+               REFACTOR -> ui/app.js (transport controller) + core/safety.js (permission gating)
+               [S/X]. Frozen: app.transport golden. COUPLING: an engine event mutates pattern state
+               (pp.random.seed). Risk: medium.
+D37 L3343-3465 Frequency control: setFrequency (range clamp + messages), applyFreqText, stepOctave/
+               Semitone/Cents/Hz, setNote, setA4, setWaveform, setGainPct (sqrt curve), map pointer/
+               key/wheel handlers, setRangeMode, setCustomBound, fitRange.
+               REFACTOR: clamp + messages -> core/frequency.js clampToRange() [X]; handlers ->
+               ui/components.js [S]. EXTEND: the V2 fine-step set (+-oct/st/10 Hz), gain in dB.
+D38 L3467-3526 Patterns: setPattern, paramId/Target/Value, setParamError, setParam (per-type
+               validation), sequenceInfo. REFACTOR -> ui/app.js using audio/patterns.js
+               descriptors [S].
+D39 L3528-3558 Sweep mode: setSweepFreq, sweep sliders (log 10 Hz..safeMax), setSweepDuration,
+               setSweepRate (oct/s, Hz/s), setSweepRepeat (continuous locked), applySweepPreset.
+               REFACTOR/EXTEND -> sequencer Sweep block [Q] + ui [S]. See gap C7.
+D40 L3560-3608 Dual: setDualFreq, dual sliders, nudgeDual, setStereo; trackHeaderHeight (misplaced
+               here); paramUnit; setEnv; onBinauralToggle/requestBinaural/confirmHeadphones
+               (headphone gate, 0.5-30 Hz guard).
+               REFACTOR -> ui/app.js [S]; the binaural gate rule -> core/safety.js [X].
+D41 L3610-3744 Presets: presetsFor, describeConfig, presetMaxFrequency, presetDisabled(+Reason),
+               loadPreset, applyPreset, loadCustomPresets, migratePreset, persistPresets, openSave,
+               savePreset, request/cancel/deletePreset, resetDefaults.
+               REFACTOR: migratePreset/loadCustomPresets/persistPresets -> core/storage.js (pure,
+               store + notify injected); presetMaxFrequency/describeConfig -> data/presets.js [X];
+               UI flow -> ui/app.js [S]. Frozen: storage + presets.apply golden.
+D42 L3746-3778 History (sessionStorage, max 50, dedupe on label+cfg): loadHistory, addHistory,
+               recallHistory, clearHistory, historyTime/Freqs. REFACTOR -> core/storage.js + ui.
+D43 L3780-3863 serializeConfig, serializeHash (v=1 short keys + base64url 'x' JSON; binaural forced
+               false), restoreFromHash (gain capped at DEFAULT_GAIN, pendingHashConfig above the
+               provisional safe max, mode restore, notices), copyConfigLink (clipboard -> modal
+               fallback, history.replaceState).
+               REFACTOR -> core/url-state.js (pure encode(config)->string, decode(string)->{cfg,
+               gainCapped}) [X] + ui (clipboard) [S]. EXTEND: V2 config JSON export/import.
+               Frozen: url.state golden (round trips, 19 crafted hashes at 2 sample rates).
+               Risk: medium.
+D44 L3869-3974 applyConfig(cfg, origin): the single validated path for presets, links, history and
+               Learn demos. Returns an issue count. Binaural is never restored. A continuous repeat
+               without permission becomes 'once'. Legacy sweepUp/sweepDown params come from
+               cfg.sweep. Range/frequency fitting depends on this.safeMax (provisional vs real rate).
+               PRESERVE logic, REFACTOR into a pure core/config.js validateConfig(cfg, {safeMax,
+               continuousAllowed, origin}) -> {patch, issues, notices} [X]. EXTEND: filter/envelope/
+               sequencer/additive keys. Risk: HIGH (every restore path goes through it; output
+               depends on the sample rate).
+D45 L3976-4005 setMode, modeKey, runDemo. setMode REPLACE (V2 nav) [S]; runDemo logic PRESERVE ->
+               data/learn.js + ui.
+D46 L4007-4159 setTheme, themeMenu (Flowbite Dropdown) + keys, applyTheme (calls viz.readPalette),
+               notify/dismissAlert (writes engine.lastError on errors), show/collapseSafety, modal()/
+               openModal/closeModal (Flowbite Modal + DOM fallback), trapFocus, toggleMic.
+               REPLACE the markup-bound parts -> ui/dialogs.js, ui/notifications.js [S];
+               PRESERVE the notify semantics, the mic permission error texts and the microphone
+               privacy notice. COUPLING: UI writes engine.lastError.
+D47 L4161-4234 syncViz(): ONE Alpine.effect that (1) copies UI state into viz.state, (2) rebuilds the
+               plan via currentPlan() -> planError/planWarnings/planFreqs/planSummary, (3) computes
+               pathNodes + two harmonic tables + interference labels, (4) refreshes labels/loop, and
+               (5) calls engine.updateLive(plan) while playing.
+               REFACTOR -> split into planState (core), the live-audio sync (audio-engine), and
+               bridge sync (visualization) [X]. HIDDEN COUPLING: live audio control (frequency/
+               waveform/gain changes while playing) runs THROUGH the visualization effect, and
+               planFreqs, which feeds readouts and warnings, is only set here. Throttling or moving
+               viz sync breaks live audio and readouts. Risk: HIGH.
+D48 L4235-4273 initVisualizer, vizCaption, refreshDebug.
+               REFACTOR -> visualization/visualization-bridge.js + ui (captions/debug) [X/S].
+               Keep the caption wording (no-fake-science).
+
+§9 P5 SKETCH L4277-5049
+D49 L4289-4313 Axis/tick label tables (precomputed, allocation-free), waveSample. Pure.
+               PRESERVE -> visualization/p5-host.js (tables) + waveform.js (waveSample) [X].
+D50 L4315-4456 createSketch scaffolding: palette cache (paletteVersion), measure (container
+               getBoundingClientRect), densityFor/watchDensity (dppx media query), setup (canvas
+               aria-hidden, ResizeObserver, visibilitychange, reduced motion), draw dispatcher (60/30
+               fps, modelPhase, envelope history).
+               REFACTOR -> visualization/p5-host.js [X]. COUPLING: setup installs viz.resize onto the
+               bridge, and Alpine $watch(mode) calls it. Risk: medium.
+D51 L4458-4490 updateEnvelope, label, hLine, logX, dashedV. PRESERVE -> p5-host.js [X].
+D52 L4492-4604 drawWave: slowed visual model (cycles grow with log f; AM/FM/LFO captions), envelope
+               strip, real analyser trace with zero-cross trigger, "cycles too dense" notice, real
+               signal info labels.
+               EXTEND -> visualization/waveform.js (p5) [X]. V2 adds a time-window select (5-100 ms)
+               and a waveform that reacts to ADSR and modulation. Keep the "visual representation"
+               disclaimer.
+D53 L4606-4746 Spectrum: axis (log/linear), column->bin max-aggregation lookup (rebuilt only on
+               change), plotSpectrum, region/third-octave/C-note overlays, requested marker,
+               Nyquist + safe-max lines, mic overlay.
+               REPLACE -> visualization/spectrum.js on uPlot [X], fed by [D] analysis/analyser.js.
+               Keep: the bin aggregation (port as data prep), the marker semantics and the
+               "relative level, uncalibrated" label.
+D54 L4748-4832 drawMotion (requested instantaneous frequency over time, planned vs live, fast-FM band).
+               REPLACE -> visualization/motion.js on uPlot (frequency/time graph) [X]; reuse
+               planFreqAt sampling.
+D55 L4834-4900 drawPath (snake-layout node boxes, animated flow, subtitle truncation cache).
+               PRESERVE/EXTEND -> visualization/signal-path.js (p5) [X].
+D56 L4902-4959 drawHarmonics (theoretical bars, Nyquist split).
+               REPLACE -> visualization/harmonics.js on uPlot [X]; data from harmonicTable.
+D57 L4961-5032 drawInterference (A, B, A+B lanes, beat envelope, slowed carriers, capped animation).
+               EXTEND -> visualization/phase.js (Phase tab: phase offset) [X]; lissajous.js is new.
+D58 L5036-5048 startVisualizer (p5 presence check, failure state). REFACTOR -> p5-host.js [X].
+
+§10 BOOTSTRAPPING L5050-5076
+D59 L5054-5057 'alpine:init' -> Alpine.data('oscillaApp'), Alpine.directive('roving').
+               REPLACE -> src/js/main.js explicit registration + Alpine.start() [X].
+D60 L5059-5068 window error / unhandledrejection -> engine.lastError + uiNotify.
+               PRESERVE -> main.js [X] (smoke/spec assert zero console problems).
+D61 L5070-5075 window.OSCILLA test seam (engine, viz, buildPlan, planFreqAt, parse/format helpers,
+               log map, notes, regionFor, harmonicTable, BUILTIN_PRESETS, LEARN_TOPICS, PATTERNS).
+               PRESERVE + EXTEND -> main.js [X]. smoke.cjs/spec.cjs drive the app through it and
+               through Alpine.$data(document.body). Add the V2 modules (analysis, sequencer,
+               filters) for browser tests.
+
+------------------------------------------------------------------------------------------------
+E. REPOSITORY ITEMS
+------------------------------------------------------------------------------------------------
+E1 tests/smoke.cjs (536 lines, Playwright 1.63.0, file:// or --url, 3 engines, 8 viewports).
+   REFACTOR -> tests/browser/. Retarget BASE to dist/index.html. Its pure-helper checks and
+   engine checks stay valid. Selector/markup checks (mode tab ids 'tab-<id>', [x-ref=vizCanvas]
+   canvas, touch targets, overflow, HOLD TO PLAY in the first viewport) must be rewritten
+   against the V2 markup.
+E2 tests/spec.cjs (1106 lines at 95dfa81). Same as E1. NOTE: the live working tree has an
+   UNCOMMITTED +2218-line modification of tests/spec.cjs (git status: M), not part of the baseline.
+E3 tests/package.json (playwright 1.63.0, dev only). Merge into the root package.json devDependencies.
+E4 .github/workflows/pages.yml (copies index.html to _site). REPLACE: npm ci && npm run build &&
+   node scripts/verify-dist.mjs, upload dist/ (index.html + .nojekyll). The file:// and Pages smoke
+   both run on the same dist artifact.
+E5 README.md: EXTEND (build instructions; the committed dist/index.html runs without npm).
+E6 .ai/repo/rules/project/*.v1.md: REVISE.
+   - single-file-deliverable: "no build step" becomes "single-file BUILT artifact".
+   - audio-engine-discipline: "Only AudioEngine creates or connects Web Audio nodes" conflicts
+     with CONVENTIONS.md builder modules (ctx passed in). Proposed v2 wording: nodes are created
+     only by engine-owned builders invoked by the AudioEngine, every node is tracked by the
+     owning voice/insert, and dispose()/stop() leaves zero active nodes.
+   - no-fake-science: unchanged; it now also covers bioacoustics ranges (citations) and the
+     "dBFS-like" analyser label.
+
+------------------------------------------------------------------------------------------------
+F. HIDDEN COUPLING REGISTER (extraction hazards, ordered by severity)
+------------------------------------------------------------------------------------------------
+K1  Templates call script-global helpers directly: formatFrequency (L261, 266, 297, 341, 343,
+    398, 402, 592, 626, 829, 846, 847), formatPeriod/formatWavelength (L282), formatCents (L626),
+    sig (L635, 637, 679). In V1 these are top-level bindings of a classic script.
+    Inside an ES-module bundle they are out of Alpine's expression scope, which gives empty text
+    and ReferenceErrors at runtime that no unit test sees. Fix: expose them on the component
+    (e.g. a `fmt` object) or as Alpine magics. Then check every template expression in the
+    V2 markup.
+K2  syncViz (D47) carries live audio updates (engine.updateLive) and sets planFreqs/planError/
+    planWarnings, so readouts, warnings, transport text and live control depend on the
+    visualization effect running.
+K3  viz.pull (D28) reads engine private structure (ctx, voice.t0, voice.plan, analyser, timeData,
+    mic). A voice.js split breaks the p5 views silently.
+K4  _holdEnv relies on envLog via _loggedParam (D21). A new ADSR/envelope module must schedule
+    through the logged param or provide value-at-time. Otherwise Firefox releases jump (click).
+    Chromium never exercises this path; only the mock-engine golden does.
+K5  Node accounting (D22): only nodes created through track()/source() are counted and
+    disconnected. Filter/additive/stereo builders from [D] must register their nodes, or the
+    "zero active nodes after stop" check stops detecting leaks.
+K6  applyConfig results depend on this.safeMax (provisional 44.1 kHz before the first gesture vs
+    the real rate), and ensureAudio re-applies pendingHashConfig. URL/preset restore order is
+    stateful (golden freezes both @null and @48000).
+K7  Module singletons shared across sections: engine (component, bridge, error handlers, test
+    seam), viz (component, sketch), uiNotify/alertSeq/modalInstances. The UI writes
+    engine.lastError (notify, window handlers).
+K8  The renderer mutates the bridge: p5 setup assigns viz.resize and viz.p5, and the component
+    calls viz.resize on mode change.
+K9  CSS-variable contract: readPalette reads --c-bg/surface/line/fg/muted/accent/accent2/warn/
+    danger. V2 tokens are --osc-*. On a mismatch, readPalette falls back to hard-coded light
+    colours with no error.
+K10 DOM contracts used by logic: [data-oscilla-modal][aria-modal="true"] (Space suppression),
+    #themeMenu/#themeButton, #preset-tabs, header (trackHeaderHeight -> --header-h),
+    x-ref fmap/vizCanvas, document.body x-data (tests), ids 'tab-<mode>' (modeKey focus).
+K11 Engine event -> pattern state: onEngine('ended') reseeds pp.random.seed with Math.random
+    (preview/playback parity depends on it).
+K12 Startup order: CDN defer order (p5, Flowbite, Alpine) + 'alpine:init' + Flowbite auto-init on
+    data-attributes vs Alpine x-for-rendered tabs. Bundling changes all three.
+K13 Plan labels are UI strings built in DSP planning (D18) and reused by history entries (stored
+    in sessionStorage), so changing a label changes stored data.
+
+------------------------------------------------------------------------------------------------
+G. SUMMARY TABLE (unit | lines | class | target | risk)
+------------------------------------------------------------------------------------------------
+B1-B2   head meta, pre-paint theme, boot watchdog       1-34       REFACTOR  src/index.html [S]            M
+B3-B6   Tailwind CDN+config, Flowbite CSS, <style>, CDN 35-114     REPLACE   src/styles/*, main.js [S]     M (K9)
+C1-C18  all body markup regions                         116-974    REPLACE   src/index.html, ui/* [S]      M (K1,K10)
+D1-D4   constants, PATTERNS descriptors, defaults       982-1166   PRESERVE  core/constants, audio/patterns L
+D5,D8   math helpers, mulberry32                        1172-1249  PRESERVE  core/math.js                  L
+D6      safeStorage, readJSON                           1196-1222  PRESERVE  core/storage.js               L
+D7      base64url                                       1224-1237  PRESERVE  core/url-state.js             L
+D8b     browserName/platformName                        1251-1269  PRESERVE  core/platform.js              L
+D8c     roving focus directive, isTypingTarget          1271-1327  PRESERVE  ui/components.js [S]          M
+D8d     Flowbite CDN fallbacks                          1329-1360  REMOVE    -                             L
+D9      frequency helpers                               1366-1444  PRESERVE  core/frequency.js             L
+D10     note helpers                                    1450-1479  PRESERVE  core/music.js                 L
+D11-12  categories, reference notes                     1488-1525  PRESERVE  data/presets.js               L
+D13     presetRecord, newPresetId                       1527-1549  EXTEND    core/storage.js               M
+D14     BUILTIN_PRESETS                                 1551-1645  PRESERVE  data/presets.js               L
+D15     LEARN_TOPICS                                    1647-1684  EXTEND    data/learn.js                 L
+D16-17  plan evaluation, steps/segments                 1700-1790  PRESERVE  audio/patterns.js             L
+D18     buildPlan                                       1797-2013  PRESERVE  audio/patterns.js             M (K13)
+D19     AudioEngine core/getters/events                 2015-2061  PRESERVE  audio/audio-engine.js         L
+D20     init output chain, setMasterGain                2064-2126  EXTEND    audio/audio-engine.js         M
+D21     _stepEnv/_loggedParam/_holdEnv                  2128-2181  PRESERVE+EXTEND audio/voice+scheduler   H (K4)
+D22     play() graph switch + safety limit              2187-2336  REFACTOR+EXTEND engine/scheduler/modulation H (K5)
+D23     _buildDual                                      2338-2372  EXTEND    audio/voice.js (+stereo [D])  M
+D24     release/stop/cleanup                            2374-2476  PRESERVE  audio/voice.js                M
+D25     updateLive, instantaneousFrequency              2479-2533  PRESERVE  audio/audio-engine.js         M (K2)
+D26     startMic/stopMic                                2535-2561  EXTEND    audio/microphone.js           M
+D27     engine singleton                                2572       REFACTOR  main.js                       M (K7)
+D28     viz bridge                                      2574-2728  REFACTOR+EXTEND visualization-bridge.js H (K3,K8,K9)
+D29     harmonic tables                                 2730-2778  PRESERVE  visualization/harmonics.js    L
+D30     pathNodesFor                                    2780-2802  EXTEND    visualization/signal-path.js  L
+D31-34  component globals, state, init                  2810-2970  REFACTOR  ui/app.js, main.js [S/X]      M
+D35     derived getters                                 2972-3167  REFACTOR  core/frequency+safety, ui     M
+D36     transport + engine events + keys                3169-3341  REFACTOR  ui/app.js + core/safety.js    M (K11)
+D37     frequency control                               3343-3465  REFACTOR  core/frequency + ui           M
+D38-40  pattern form, sweep mode, dual mode             3467-3608  REFACTOR  ui, sequencer [Q]             M (gaps C7/C8)
+D41-42  presets + history                               3610-3778  REFACTOR  core/storage, data/presets    M
+D43     URL serialize/restore/copy                      3780-3863  REFACTOR  core/url-state.js             M (K6)
+D44     applyConfig                                     3869-3974  PRESERVE→REFACTOR core/config.js        H (K6)
+D45     modes, learn demos                              3976-4005  REPLACE/PRESERVE ui, data/learn         L
+D46     theme/alerts/modals/mic toggle                  4007-4159  REPLACE   ui/dialogs, notifications [S] M (K7,K10)
+D47     syncViz                                         4161-4234  REFACTOR  core + engine + bridge        H (K2)
+D48     initVisualizer, captions, debug                 4235-4273  REFACTOR  bridge + ui                   L
+D49-51  p5 tables, scaffolding, helpers                 4289-4490  REFACTOR  visualization/p5-host.js      M (K8)
+D52     drawWave                                        4492-4604  EXTEND    visualization/waveform.js     M
+D53     spectrum (p5)                                   4606-4746  REPLACE   visualization/spectrum.js (uPlot) M
+D54     motion (p5)                                     4748-4832  REPLACE   visualization/motion.js (uPlot)   L
+D55     signal path (p5)                                4834-4900  PRESERVE  visualization/signal-path.js  L
+D56     harmonics (p5)                                  4902-4959  REPLACE   visualization/harmonics.js (uPlot) L
+D57     interference (p5)                               4961-5032  EXTEND    visualization/phase.js        L
+D58     startVisualizer                                 5036-5048  REFACTOR  p5-host.js                    L
+D59     alpine:init registration                        5054-5057  REPLACE   main.js                       M (K12)
+D60     window error handlers                           5059-5068  PRESERVE  main.js                       L
+D61     window.OSCILLA seam                             5070-5075  PRESERVE+EXTEND main.js                 M
+E1-E3   smoke/spec tests, test package                  -          REFACTOR  tests/browser/                M
+E4      pages.yml                                       -          REPLACE   build + verify-dist + dist    M
+E6      .ai rules                                       -          REVISE    rules v2                      M
+
+New in V2 with no V1 counterpart (written in parallel by other agents): spectrogram + analysis/*
+[D], filters/envelope(ADSR)/additive/stereo/noise/wav/offline-renderer [D], sequencer/* [Q],
+bioacoustics data [B], uPlot charts, export/import config JSON, Device & Limits output-device
+info, bottom status bar [S].
