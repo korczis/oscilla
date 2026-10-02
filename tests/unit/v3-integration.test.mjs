@@ -386,12 +386,15 @@ test('G6/G7/G9: every result carries the algorithm IDs it used (pinned)', () => 
     irFarina: 'oscilla.ir.farina-inverse.v1', rta: 'oscilla.rta.v1',
     smoothing: 'oscilla.smoothing.fractional-octave.v1', normalization: 'oscilla.normalization.v1',
     align: 'oscilla.align.xcorr.v1', clip: 'oscilla.clip.v1',
-    discontinuity: 'oscilla.discontinuity.v1', quality: 'oscilla.confidence.v1',
+    discontinuity: 'oscilla.discontinuity.v1', quality: 'oscilla.confidence.v2',
     calibration: 'oscilla.calibration.log-interp.v1', window: 'oscilla.window.hann.v1',
     windowBlackmanHarris: 'oscilla.window.blackman-harris.v1',
+    aggregate: 'oscilla.aggregate.v1',
   };
   assert.deepEqual({ ...ALGORITHMS }, ids);
   for (const id of Object.values(ids)) assert.ok(isKnownAlgorithm(id), id);
+  // G15: confidence.v1 is superseded but retained (stored assessments carry it).
+  assert.ok(isKnownAlgorithm('oscilla.confidence.v1'));
   // Windows (G6).
   assert.deepEqual({ ...WINDOW_ALGORITHMS }, { hann: ids.window,
     'blackman-harris': ids.windowBlackmanHarris });
@@ -470,7 +473,7 @@ test('G10: one uncalibrated label; no "SPL" anywhere without a valid level calib
   const tamperedMeta = csvMeta(experiment8({}, { calibration: { frequency: null,
     level: tampered } }));
   assert.throws(() => transferCsv(TRANSFER8, tamperedMeta,
-    { calibratedDb: TRANSFER8.magnitudeDb }), /no calibration/);
+    { correctedDb: TRANSFER8.magnitudeDb }), /no frequency calibration/);
 });
 
 // ----------------------------------------------------------------------------- G11

@@ -15,10 +15,14 @@
 //     name, recipe, output: { level }, input: { device: { label, id }, constraints:
 //     { requested, applied } }, calibration: { frequency: { id, name }|null, level|null },
 //     environment: { notes }, measurement: { startedAt, sampleRate, runs: [] }, quality,
-//     algorithms: { role: id }, results: { transfer, ir, rta },
+//     algorithms: { role: id }, results: { transfer, ir, rta, aggregate? },
 //     provenance: { configHash, resultHash, createdAt, repeatOf, build } }
 // provenance.resultHash (hash.js resultHash, spec §101) is null until stamped and is cleared by
 // withResults whenever the results change; validate.js verifies it on import.
+// results.aggregate (G16) is optional: an aggregate.js aggregateResult() (centre, envelope,
+// spread, repeatability of repeated runs on their grid), added with withResults({ results:
+// { aggregate } }); createExperiment leaves it absent, so experiments without repeats and files
+// written before it existed keep their exact form and result hash.
 // Unknown values are null, never guessed (§52). Result arrays are typed arrays in memory and
 // EncodedArray objects (encode.js) in a file; serializeExperiment converts.
 //

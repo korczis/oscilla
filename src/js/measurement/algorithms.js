@@ -14,6 +14,13 @@
 // (transfer, ir, window, ...) name the default method, variants name the alternative one. Which
 // module stamps which ID into its result is listed in docs/v3/algorithms.md ("Algorithm
 // registry").
+//
+// Superseded versions (ADR 0024: "old IDs stay in the registry as long as stored data may carry
+// them") are listed in RETAINED_ALGORITHMS by role. They are still implemented — e.g.
+// quality.js assessQuality({ algorithm: 'oscilla.confidence.v1' }) reproduces a v1 assessment
+// exactly — so isKnownAlgorithm() is true for them and KNOWN_ALGORITHM_IDS (the allow-list for
+// importing stored experiments) contains them, but ALGORITHMS names only the default each role
+// uses for new results.
 
 export const ALGORITHMS = Object.freeze({
   transfer: 'oscilla.transfer.v1',
@@ -25,10 +32,16 @@ export const ALGORITHMS = Object.freeze({
   align: 'oscilla.align.xcorr.v1',
   clip: 'oscilla.clip.v1',
   discontinuity: 'oscilla.discontinuity.v1',
-  quality: 'oscilla.confidence.v1',
+  quality: 'oscilla.confidence.v2',
   calibration: 'oscilla.calibration.log-interp.v1',
   window: 'oscilla.window.hann.v1',
   windowBlackmanHarris: 'oscilla.window.blackman-harris.v1',
+  aggregate: 'oscilla.aggregate.v1',
+});
+
+/** Superseded IDs by role, still implemented for stored results (newest last). */
+export const RETAINED_ALGORITHMS = Object.freeze({
+  quality: Object.freeze(['oscilla.confidence.v1']),
 });
 
 /** Variant keys of ALGORITHMS and the role (family) whose alternative method they are. */
@@ -45,9 +58,15 @@ function stemOf(id) {
 const FAMILY_BY_STEM = new Map(
   Object.entries(ALGORITHMS).map(([k, id]) => [stemOf(id), VARIANT_OF[k] || k]),
 );
-const KNOWN = new Set(Object.values(ALGORITHMS));
+/** Every ID this build implements: the current defaults and the retained superseded ones. */
+export const KNOWN_ALGORITHM_IDS = Object.freeze([
+  ...Object.values(ALGORITHMS),
+  ...Object.values(RETAINED_ALGORITHMS).flat(),
+]);
+const KNOWN = new Set(KNOWN_ALGORITHM_IDS);
 
-/** True only for an ID this build implements exactly (name and version). */
+/** True only for an ID this build implements exactly (name and version), current or
+ *  retained. */
 export function isKnownAlgorithm(id) {
   return typeof id === 'string' && KNOWN.has(id);
 }

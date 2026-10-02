@@ -1,5 +1,6 @@
 // Aggregation of repeated measurement runs on a common frequency grid: a centre curve, a
-// dispersion envelope and a single repeatability figure for the quality assessment.
+// dispersion envelope and a single repeatability figure for the quality assessment. Algorithm
+// ID: 'oscilla.aggregate.v1' (the method, 'mean' or 'median', is a recorded parameter).
 //
 // Input: runs[r][i] is the level in dB of run r at grid point i (all runs on the same grid).
 // Zero power is −Infinity dB and is accepted; NaN is rejected.
@@ -27,8 +28,22 @@
 // repeatabilityDb = median over grid points of sdDb ('mean') or MAD ('median'): one robust
 // figure that a few narrow notches cannot dominate. With one run there is no dispersion:
 // lowerDb, upperDb, spreadDb, dispersion and repeatabilityDb are null.
+//
+// Stored form (G16): aggregateResult(aggregate, frequencies) -> AggregateResult, the
+// `results.aggregate` of an experiment: { algorithm, method, dispersion, runs, frequencies,
+// centreDb, lowerDb, upperDb, spreadDb, repeatabilityDb }. It adds the grid, drops `points` (=
+// frequencies.length) and maps −Infinity / anything below −300 dB to transfer.js ZERO_POWER_DB,
+// the one zero-power encoding of stored results (as rta.js rtaResult does). A NaN spread (a
+// point where some runs had zero power and others not) has no JSON-safe value and throws:
+// floor the run levels at ZERO_POWER_DB first, as transfer.js magnitudes already are.
 
+import { ALGORITHMS } from './algorithms.js';
+import { ZERO_POWER_DB } from './transfer.js';
+
+export const AGGREGATE_ALGORITHM = ALGORITHMS.aggregate;
 const METHODS = ['mean', 'median'];
+/** Dispersion measure by method (null for a single run). */
+export const AGGREGATE_DISPERSION = Object.freeze({ mean: 'std', median: 'p10-p90' });
 
 /** Hyndman-Fan type-7 quantile of an ascending-sorted array segment sorted[0 … n). */
 export function quantileSorted(sorted, n, p) {
@@ -83,8 +98,8 @@ function validate(runs, method) {
 }
 
 /**
- * aggregateRuns(runs, { method = 'mean' }) → { method, runs, points, centreDb, lowerDb,
- *   upperDb, spreadDb, dispersion: 'std'|'p10-p90'|null, repeatabilityDb }
+ * aggregateRuns(runs, { method = 'mean' }) → { algorithm, method, runs, points, centreDb,
+ *   lowerDb, upperDb, spreadDb, dispersion: 'std'|'p10-p90'|null, repeatabilityDb }
  * All arrays are new Float64Arrays; the input runs are not modified.
  */
 export function aggregateRuns(runs, { method = 'mean' } = {}) {
@@ -94,7 +109,7 @@ export function aggregateRuns(runs, { method = 'mean' } = {}) {
   if (n === 1) {
     centreDb.set(runs[0]);
     return {
-      method, runs: 1, points, centreDb,
+      algorithm: AGGREGATE_ALGORITHM, method, runs: 1, points, centreDb,
       lowerDb: null, upperDb: null, spreadDb: null, dispersion: null, repeatabilityDb: null,
     };
   }
@@ -139,6 +154,7 @@ export function aggregateRuns(runs, { method = 'mean' } = {}) {
     }
   }
   return {
+    algorithm: AGGREGATE_ALGORITHM,
     method,
     runs: n,
     points,
@@ -148,5 +164,56 @@ export function aggregateRuns(runs, { method = 'mean' } = {}) {
     spreadDb,
     dispersion: method === 'mean' ? 'std' : 'p10-p90',
     repeatabilityDb: medianOfFinite(spreadDb),
+  };
+}
+
+function storedDb(values, name, { spread = false } = {}) {
+  const out = new Float64Array(values.length);
+  for (let i = 0; i < values.length; i++) {
+    const v = values[i];
+    if (Number.isNaN(v) || v === Infinity) {
+      throw new RangeError(`${name}[${i}] is ${v}: an undefined ${spread ? 'spread' : 'level'} `
+        + 'cannot be stored (floor the run levels at ZERO_POWER_DB first)');
+    }
+    out[i] = spread ? v : Math.max(v, ZERO_POWER_DB);
+  }
+  return out;
+}
+
+/**
+ * aggregateResult(aggregate, frequencies) → AggregateResult (the stored `results.aggregate`)
+ *   aggregate    an aggregateRuns() result
+ *   frequencies  its grid in Hz (e.g. the runs' TransferResult.frequencies), strictly increasing
+ * Returns { algorithm, method, dispersion, runs, frequencies, centreDb, lowerDb, upperDb,
+ * spreadDb, repeatabilityDb } with new Float64Arrays (envelope arrays and repeatabilityDb null
+ * for one run). See the header for the zero-power encoding. Inputs are not modified.
+ */
+export function aggregateResult(aggregate, frequencies) {
+  const a = aggregate;
+  if (!a || typeof a !== 'object' || !METHODS.includes(a.method) || !a.centreDb
+    || !Number.isInteger(a.runs) || a.runs < 1)
+    throw new TypeError('aggregateResult needs an aggregateRuns() result');
+  const n = a.centreDb.length;
+  if (!frequencies || frequencies.length !== n)
+    throw new RangeError(`frequencies must have the ${n} points of the aggregate`);
+  const grid = Float64Array.from(frequencies);
+  for (let i = 0; i < n; i++) {
+    if (!(Number.isFinite(grid[i]) && grid[i] > 0 && (i === 0 || grid[i] > grid[i - 1])))
+      throw new RangeError('frequencies must be finite, positive and strictly increasing');
+  }
+  const single = a.runs === 1;
+  const envelope = (k, opts) => (single ? null : storedDb(a[k], k, opts));
+  const spreadDb = envelope('spreadDb', { spread: true }); // first: it names an undefined point
+  return {
+    algorithm: AGGREGATE_ALGORITHM,
+    method: a.method,
+    dispersion: single ? null : AGGREGATE_DISPERSION[a.method],
+    runs: a.runs,
+    frequencies: grid,
+    centreDb: storedDb(a.centreDb, 'centreDb'),
+    lowerDb: envelope('lowerDb'),
+    upperDb: envelope('upperDb'),
+    spreadDb,
+    repeatabilityDb: single || !Number.isFinite(a.repeatabilityDb) ? null : a.repeatabilityDb,
   };
 }

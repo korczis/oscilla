@@ -121,17 +121,21 @@ function assertBand(sampleRate, f1, f2) {
 /**
  * Half spectra (bins 0 … N/2) of two real signals from ONE complex FFT of a + j·b:
  * A[k] = (Z[k] + conj Z[N−k]) / 2, B[k] = (Z[k] − conj Z[N−k]) / 2j.
+ * `work` ({ re, im }, two Float64Arrays of the FFT size) is optional scratch space that is
+ * overwritten instead of allocating 2·N doubles; the result is the same either way.
  */
-export function realPairSpectra(fft, a, b) {
+export function realPairSpectra(fft, a, b, work = null) {
   const n = fft.size;
-  const re = new Float64Array(n);
-  const im = new Float64Array(n);
+  const { re, im } = workBuffers(n, work);
   const la = Math.min(a.length, n);
-  for (let i = 0; i < la; i++) re[i] = a[i];
+  re.set(la === a.length ? a : a.subarray(0, la));
+  re.fill(0, la);
+  let lb = 0;
   if (b) {
-    const lb = Math.min(b.length, n);
-    for (let i = 0; i < lb; i++) im[i] = b[i];
+    lb = Math.min(b.length, n);
+    im.set(lb === b.length ? b : b.subarray(0, lb));
   }
+  im.fill(0, lb);
   fft.forward(re, im);
   const half = n / 2;
   const aRe = new Float64Array(half + 1);
@@ -139,7 +143,7 @@ export function realPairSpectra(fft, a, b) {
   const bRe = new Float64Array(half + 1);
   const bIm = new Float64Array(half + 1);
   for (let k = 0; k <= half; k++) {
-    const j = (n - k) % n;
+    const j = k === 0 ? 0 : n - k;
     const zr = re[k];
     const zi = im[k];
     const cr = re[j];
@@ -152,6 +156,23 @@ export function realPairSpectra(fft, a, b) {
   return { aRe, aIm, bRe, bIm };
 }
 
+/** Scratch { re, im } of length n: the given buffers when they fit, else new ones. */
+export function workBuffers(n, work) {
+  if (work && work.re instanceof Float64Array && work.im instanceof Float64Array
+    && work.re.length === n && work.im.length === n) return work;
+  return { re: new Float64Array(n), im: new Float64Array(n) };
+}
+
+/**
+ * The FFT plan for `size`: `fft` when it is a plan of that size (a caller analysing several
+ * captures of one length passes one plan to all of them), else a new createFft(size). The plan
+ * holds only twiddles and the bit-reversal table, so reusing it cannot change a result.
+ */
+export function fftPlan(size, fft = null) {
+  if (fft && fft.size === size && typeof fft.forward === 'function') return fft;
+  return createFft(size);
+}
+
 /** Raised-cosine weight 0 → 1 for t in [0, 1]. */
 function rampWeight(t) {
   if (t <= 0) return 0;
@@ -159,35 +180,46 @@ function rampWeight(t) {
   return (1 - Math.cos(Math.PI * t)) / 2;
 }
 
-/** Regularization ε[k] for bins 0 … N/2 (Float64Array), given max|X|² in band. */
+/**
+ * Regularization ε[k] for bins 0 … N/2 (Float64Array), given max|X|² in band. Inside [f1, f2]
+ * and beyond the transitions ε is one constant each; those two values are computed once by the
+ * same expression the transition bins use, so every bin equals the per-bin formula exactly.
+ */
 export function regularizationProfile(half, binHz, f1, f2, xPowMax, profile = REGULARIZATION) {
   const eps = new Float64Array(half + 1);
   const lo = profile.inBandDb;
   const hi = profile.outOfBandDb;
+  const epsAt = (w) => xPowMax * 10 ** ((lo + (hi - lo) * w) / 10);
+  const epsIn = epsAt(0);
+  const epsOut = epsAt(1);
   for (let k = 0; k <= half; k++) {
     const f = k * binHz;
     let t = 0;
     if (f < f1) t = f > 0 ? Math.log2(f1 / f) / profile.transitionOctaves : 1;
     else if (f > f2) t = Math.log2(f / f2) / profile.transitionOctaves;
-    const db = lo + (hi - lo) * rampWeight(t);
-    eps[k] = xPowMax * 10 ** (db / 10);
+    eps[k] = t <= 0 ? epsIn : t >= 1 ? epsOut : epsAt(rampWeight(t));
   }
   return eps;
 }
 
 /**
  * Regularized spectral division shared by transfer.js and impulse-response.js. Returns the
- * half spectra (bins 0 … N/2) of X, Y and H plus the FFT used, so callers can reuse it.
+ * half spectra (bins 0 … N/2) of X, Y and H plus the FFT plan used and its scratch buffers
+ * (`work`, 2·N doubles), so callers can derive the transfer function, the impulse response
+ * and the noise spectrum from ONE division (computeTransferAndIr) without new allocations.
+ * `fft` optionally supplies a plan of the right size (fftPlan); results do not depend on it.
  */
-export function spectralDeconvolution({ stimulus, captured, sampleRate, f1, f2 }) {
+export function spectralDeconvolution({ stimulus, captured, sampleRate, f1, f2, fft = null }) {
   assertSignal('stimulus', stimulus);
   assertSignal('captured', captured);
   assertBand(sampleRate, f1, f2);
   const fftSize = nextPowerOfTwo(stimulus.length + captured.length);
-  const fft = createFft(fftSize);
+  const plan = fftPlan(fftSize, fft);
   const binHz = sampleRate / fftSize;
   const half = fftSize / 2;
-  const { aRe: xRe, aIm: xIm, bRe: yRe, bIm: yIm } = realPairSpectra(fft, stimulus, captured);
+  const work = workBuffers(fftSize, null);
+  const { aRe: xRe, aIm: xIm, bRe: yRe, bIm: yIm } = realPairSpectra(plan, stimulus, captured,
+    work);
   const xPow = new Float64Array(half + 1);
   for (let k = 0; k <= half; k++) xPow[k] = xRe[k] * xRe[k] + xIm[k] * xIm[k];
   const fTop = Math.min(f2, sampleRate / 2);
@@ -205,7 +237,8 @@ export function spectralDeconvolution({ stimulus, captured, sampleRate, f1, f2 }
     hRe[k] = (yRe[k] * xRe[k] + yIm[k] * xIm[k]) / d;
     hIm[k] = (yIm[k] * xRe[k] - yRe[k] * xIm[k]) / d;
   }
-  return { fft, fftSize, binHz, half, xRe, xIm, xPow, yRe, yIm, hRe, hIm, eps, xPowMax };
+  return { fft: plan, fftSize, binHz, half, xRe, xIm, xPow, yRe, yIm, hRe, hIm, eps, xPowMax,
+    work };
 }
 
 /** Log-spaced grid f1·2^(i/ppo) for every point ≤ fTop. */
@@ -284,8 +317,23 @@ function alignmentSummary(alignment) {
 }
 
 /**
+ * The argument checks of computeTransfer that do not need the spectra (shared with
+ * impulse-response.js computeTransferAndIr so both report the same errors in the same order).
+ * Returns { pointsPerOctave, phase, aligned }.
+ */
+export function checkTransferArgs({ lagSamples, alignment = null, noise = null, options = {} }) {
+  const { phase = false, pointsPerOctave = DEFAULT_POINTS_PER_OCTAVE } = options;
+  if (!(pointsPerOctave > 0)) throw new RangeError('pointsPerOctave must be positive');
+  if (lagSamples !== undefined && !Number.isFinite(lagSamples))
+    throw new RangeError(`lagSamples must be finite, got ${lagSamples}`);
+  const aligned = alignmentSummary(alignment);
+  if (noise !== null) assertSignal('noise', noise);
+  return { pointsPerOctave, phase, aligned };
+}
+
+/**
  * computeTransfer({ stimulus, captured, sampleRate, f1, f2, lagSamples, alignment, noise,
- *   options })
+ *   options, fft })
  *   stimulus    Float32Array, the emitted digital stimulus (e.g. renderStimulus().samples)
  *   captured    Float32Array, mono capture containing the response (pre/post-roll allowed)
  *   alignment   align() result for this capture; required for a phase response, which is
@@ -293,6 +341,9 @@ function alignmentSummary(alignment) {
  *   lagSamples  lag to remove from the phase; defaults to alignment.lagSamples
  *   noise       Float32Array|null, a stimulus-free capture for the SNR estimate
  *   options     { phase = false, pointsPerOctave = 48 }
+ *   fft         optional FFT plan of the deconvolution size (fftPlan); never changes a result
+ *   noiseSpectrum  optional noiseSpectrum(noise, fftSize) of this `noise` (reused across runs);
+ *               never changes a result
  * Returns TransferResult (docs/v3/architecture.md) with phaseReason (null when phaseDeg is
  * reported, else a PHASE_REASONS code) and alignment (the summary used, or null).
  */
@@ -306,14 +357,43 @@ export function computeTransfer({
   alignment = null,
   noise = null,
   options = {},
+  fft = null,
+  noiseSpectrum = null,
 }) {
-  const { phase = false, pointsPerOctave = DEFAULT_POINTS_PER_OCTAVE } = options;
-  if (!(pointsPerOctave > 0)) throw new RangeError('pointsPerOctave must be positive');
-  if (lagSamples !== undefined && !Number.isFinite(lagSamples))
-    throw new RangeError(`lagSamples must be finite, got ${lagSamples}`);
-  const aligned = alignmentSummary(alignment);
-  if (noise !== null) assertSignal('noise', noise);
-  const dec = spectralDeconvolution({ stimulus, captured, sampleRate, f1, f2 });
+  const checked = checkTransferArgs({ lagSamples, alignment, noise, options });
+  const dec = spectralDeconvolution({ stimulus, captured, sampleRate, f1, f2, fft });
+  return transferFromDeconvolution(dec, { captured, sampleRate, f1, f2, lagSamples, noise,
+    noiseSpectrum, ...checked });
+}
+
+/**
+ * noiseSpectrum(noise, fftSize, fft) → { noise, fftSize, used, aRe, aIm }: the half spectrum of
+ * a stimulus-free capture (its first `used` = min(len, fftSize) samples, zero padded) as
+ * computeTransfer uses it for the SNR. It depends only on the noise capture and the FFT size,
+ * so a caller analysing several runs against one noise capture computes it once and passes it
+ * as `noiseSpectrum`; it is used only when its `noise` is the very array passed as `noise` and
+ * its fftSize matches, otherwise recomputed (the result is the same either way).
+ */
+export function noiseSpectrum(noise, fftSize, fft = null) {
+  assertSignal('noise', noise);
+  return computeNoiseSpectrum(noise, fftSize, fftPlan(fftSize, fft), null);
+}
+
+function computeNoiseSpectrum(noise, fftSize, fft, work) {
+  const used = Math.min(noise.length, fftSize);
+  const { aRe, aIm } = realPairSpectra(fft, noise.length > used ? noise.subarray(0, used) : noise,
+    null, work);
+  return { noise, fftSize, used, aRe, aIm };
+}
+
+/**
+ * TransferResult from a spectralDeconvolution() result (the second half of computeTransfer).
+ * `checked` is checkTransferArgs()'s output. Uses dec.work as scratch for the noise spectrum.
+ */
+export function transferFromDeconvolution(dec, {
+  captured, sampleRate, f1, f2, lagSamples, noise = null, noiseSpectrum = null, pointsPerOctave,
+  phase, aligned,
+}) {
   const { fft, fftSize, binHz, half, xPow, yRe, yIm, hRe, hIm } = dec;
   const fTop = Math.min(f2, sampleRate / 2);
   const frequencies = logGrid(f1, fTop, pointsPerOctave);
@@ -357,9 +437,11 @@ export function computeTransfer({
   let snrDb = null;
   let snrValidDb = null;
   if (noise !== null) {
-    const used = Math.min(noise.length, fftSize);
-    const { aRe, aIm } = realPairSpectra(fft, noise.length > used ? noise.subarray(0, used) : noise,
-      null);
+    const spec = noiseSpectrum !== null && noiseSpectrum.noise === noise
+      && noiseSpectrum.fftSize === fftSize
+      ? noiseSpectrum
+      : computeNoiseSpectrum(noise, fftSize, fft, dec.work);
+    const { used, aRe, aIm } = spec;
     const scale = captured.length / used;
     const nPow = new Float64Array(half + 1);
     const yPow = new Float64Array(half + 1);

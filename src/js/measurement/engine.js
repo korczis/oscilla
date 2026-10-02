@@ -6,7 +6,8 @@
 //             warnings /    capture: level,  overlapping, gaps between     and IR from the SAME
 //             blockers)     spectrum, SNR)   runs on the audio clock)      rendered stimulus →
 //                                                                          aggregate → calibration
-//                                                                          → assess (optional)
+//                                                                          → assess (optional,
+//                                                                            assessMeasurement)
 //
 // The engine never touches Web Audio, the DOM or Alpine. Everything platform-specific is behind
 // an injected `io` adapter (capture.js implements it for the browser; the unit tests use a fake):
@@ -28,7 +29,15 @@
 //   PreflightFacts = { audioContext: { available, state }, sampleRate, permission:
 //     'granted'|'denied'|'prompt'|'unknown'|'not-required', input: { ok, device, constraints,
 //     error? }, inputLevel: { peak, rmsDb }|null, output: { gain, maxGain, audibleVoices },
-//     worklet: { supported, mode, error? }, testContext? }
+//     worklet: { supported, mode, error? }, testContext?, chainNotes? }
+//   chainNotes (optional): pure data about the playback chain that the platform layer has
+//     MEASURED or knows from a measured probe, e.g. { limiterDeviationAboveHz: 18000 } when the
+//     master limiter of this browser is not transparent above 18 kHz (Firefox 155,
+//     docs/v3/spike-audioworklet-worker.md G12). The engine never sniffs the browser: it
+//     validates the note (quality.js normalizeChainNotes), warns in preflight when the sweep
+//     reaches above it, records it as result.chainNotes and passes it to `assess` (context
+//     `chainNotes`); assessMeasurement() hands it to assessQuality, which marks the bins above
+//     it unreliable.
 //   Capture: docs/v3/architecture.md, plus optional stimulusStartAt (audio time),
 //     integrity: { expectedFrames, receivedFrames, discontinuities } and testContext.
 //
@@ -67,9 +76,10 @@ import {
 import { normalizeStimulus, renderStimulus, StimulusError } from './stimulus.js';
 import { checkCapture, CLIP_THRESHOLD } from './capture-checks.js';
 import { align } from './align.js';
-import { computeTransfer } from './transfer.js';
-import { computeImpulseResponse } from './impulse-response.js';
+import { computeTransfer, fftPlan, nextPowerOfTwo, noiseSpectrum } from './transfer.js';
+import { computeTransferAndIr } from './impulse-response.js';
 import { aggregateRuns } from './aggregate.js';
+import { assessQuality, normalizeChainNotes } from './quality.js';
 import { ALGORITHMS } from './algorithms.js';
 import { welch, windowFn } from './spectrum.js';
 import { bandCenters, integrateBands } from './rta.js';
@@ -455,6 +465,35 @@ function combineTransfers(transfers, aggregate) {
   };
 }
 
+/**
+ * assessMeasurement(result, { calibration, chainNotes, algorithm }) → QualityAssessment
+ * The standard `assess` for createMeasurementEngine / measure(): quality.js assessQuality over a
+ * COMPLETE result — every run's capture checks, the combined transfer, the aggregate, the
+ * applied frequency calibration (result.calibrated.frequency, on the transfer grid) and the
+ * level calibration from the context, each run's sweep window [round(lag), round(lag) + frames)
+ * from its alignment, and the output-chain note (context chainNotes, else result.chainNotes).
+ * `algorithm` selects the quality rule set (default quality.js QUALITY_ALGORITHM).
+ */
+export function assessMeasurement(result, ctx = {}) {
+  const frames = result.stimulus && result.stimulus.frames;
+  const sweepWindow = (result.runs || []).map((r) => {
+    const lag = r.alignment ? r.alignment.lagSamples : null;
+    return Number.isFinite(lag) && Number.isFinite(frames)
+      ? [Math.round(lag), Math.round(lag) + frames] : null;
+  });
+  const level = ctx.calibration && ctx.calibration.level ? ctx.calibration.level : null;
+  const opts = {
+    capture: result.captureChecks,
+    transfer: result.transfer,
+    aggregate: result.aggregate,
+    calibration: { frequency: result.calibrated ? result.calibrated.frequency : null, level },
+    sweepWindow: sweepWindow.length ? sweepWindow : null,
+    chainNotes: ctx.chainNotes !== undefined ? ctx.chainNotes : result.chainNotes ?? null,
+  };
+  if (ctx.algorithm !== undefined) opts.algorithm = ctx.algorithm;
+  return assessQuality(opts);
+}
+
 function irMeta(ir) {
   const { samples, ...meta } = ir;
   return { ...meta, length: samples.length };
@@ -489,7 +528,8 @@ const clamp01 = (v) => (v < 0 ? 0 : v > 1 ? 1 : v);
  *             'scheduled' | 'progress' | 'noise' | 'run' | 'analysis' | 'result' | 'error'
  *   limits    tightens CONTRACT_LIMITS (maxSweepS, maxRepeats, maxCaptureS, maxNoiseS,
  *             maxRawBytes)
- *   assess    optional (result, { recipe, plan, calibration }) → QualityAssessment (quality.js)
+ *   assess    optional (result, { recipe, plan, calibration, chainNotes }) → QualityAssessment
+ *             (quality.js); assessMeasurement is the standard one
  *
  * engine = { state, history, limits, preflight(recipe, opts), measure(recipe, opts),
  *   abort(reason), progress(), reset(), dispose() }
@@ -728,6 +768,19 @@ export function createMeasurementEngine({ io, clock, onEvent, limits, assess } =
         + '(dBFS-like) is high; expect a low signal-to-noise ratio.',
       { value: lvl.rmsDb, unit: 'dB relative' }));
 
+    let chainNotes = null;
+    try {
+      chainNotes = normalizeChainNotes(facts.chainNotes ?? null);
+    } catch (e) {
+      warnings.push(reason('CHAIN_NOTES_IGNORED', `The audio adapter reported an invalid `
+        + `output-chain note (${e.message}); it was ignored.`));
+    }
+    const chainLimit = chainNotes ? chainNotes.limiterDeviationAboveHz : null;
+    if (chainLimit !== null && plan && plan.stimulusSpec.f2 > chainLimit)
+      warnings.push(reason('OUTPUT_CHAIN_DEVIATION', 'In this browser the output chain is not '
+        + `flat above ${chainLimit} Hz; the response there will be marked unreliable.`,
+      { value: chainLimit, unit: 'Hz' }));
+
     const wk = facts.worklet || null;
     if (wk && wk.supported === false)
       blockers.push(reason('UNSUPPORTED_WORKLET', MEASUREMENT_ERRORS.UNSUPPORTED_WORKLET));
@@ -764,6 +817,7 @@ export function createMeasurementEngine({ io, clock, onEvent, limits, assess } =
       facts,
       plan,
       calibration: cal,
+      chainNotes,
       sampleRate,
     };
   }
@@ -883,7 +937,7 @@ export function createMeasurementEngine({ io, clock, onEvent, limits, assess } =
     const sr = spec.sampleRate;
     const n = stimulus.samples.length;
     const keepRaw = opts.keepRaw === true;
-    s.analysis = { done: 0, total: runs.length * 2 + 2 };
+    s.analysis = { done: 0, total: runs.length * 2 + 1 };
     s.timeline.analysis = { steps: [], startedAtMs: clk.wall(), totalMs: 0, longestMs: 0 };
     const t0 = clk.mono();
     const reasons = [];
@@ -907,23 +961,50 @@ export function createMeasurementEngine({ io, clock, onEvent, limits, assess } =
       if (run.alignment.peakCorrelation > best.alignment.peakCorrelation) best = run;
     }
     const noise = s.noiseCapture ? s.noiseCapture.samples : null;
+    // One FFT plan for every run of equal capture length; the representative run's transfer
+    // and impulse response come from ONE spectral division (computeTransferAndIr), identical
+    // to computing them separately.
+    // The noise capture's spectrum is the same for every run: computed once per FFT size.
+    let shared = null;
+    let noiseSpec = null;
+    const planFor = (captured) => {
+      const size = nextPowerOfTwo(n + captured.length);
+      if (!shared || shared.size !== size) shared = fftPlan(size);
+      return shared;
+    };
+    const noiseFor = (fft) => {
+      if (!noise) return null;
+      if (!noiseSpec || noiseSpec.fftSize !== fft.size)
+        noiseSpec = noiseSpectrum(noise, fft.size, fft);
+      return noiseSpec;
+    };
+    let ir = null;
     for (const run of runs) {
       const captured = s.captures[run.index].samples;
-      run.transfer = await step(s, 'transfer', run.index, () => computeTransfer({
+      const args = {
         stimulus: stimulus.samples, captured, sampleRate: sr, f1: spec.f1, f2: spec.f2,
         lagSamples: run.alignment.lagSamples, alignment: run.alignment, noise,
         options: { phase: plan.phase },
-      }));
-      if (run !== best) {
+      };
+      if (run === best) {
+        const both = await step(s, 'transfer+impulse-response', run.index,
+          () => {
+            const fft = planFor(captured);
+            return computeTransferAndIr({ ...args, fft, noiseSpectrum: noiseFor(fft),
+              irLagSamples: Math.max(0, run.alignment.lagSamples) });
+          });
+        run.transfer = both.transfer;
+        ir = both.ir;
+      } else {
+        run.transfer = await step(s, 'transfer', run.index, () => {
+          const fft = planFor(captured);
+          return computeTransfer({ ...args, fft, noiseSpectrum: noiseFor(fft) });
+        });
         run.raw = keepRaw ? captured : null;
         if (!keepRaw) s.captures[run.index] = null; // released as soon as it is not needed
       }
     }
     const bestCap = s.captures[best.index].samples;
-    const ir = await step(s, 'impulse-response', best.index, () => computeImpulseResponse({
-      stimulus: stimulus.samples, captured: bestCap, sampleRate: sr, f1: spec.f1, f2: spec.f2,
-      lagSamples: Math.max(0, best.alignment.lagSamples),
-    }));
     ir.run = best.index;
     best.raw = keepRaw ? bestCap : null;
     if (!keepRaw) s.captures[best.index] = null;
@@ -1076,6 +1157,7 @@ export function createMeasurementEngine({ io, clock, onEvent, limits, assess } =
           stimulus.samples.length },
         input,
         testContext: first.testContext || null,
+        chainNotes: report.chainNotes || null,
         notes,
         preflight: publicReport(report),
         runs,
@@ -1096,7 +1178,8 @@ export function createMeasurementEngine({ io, clock, onEvent, limits, assess } =
         await guard(s, null);
         let q;
         try {
-          q = assessFn(result, { recipe, plan, calibration: report.calibration });
+          q = assessFn(result, { recipe, plan, calibration: report.calibration,
+            chainNotes: report.chainNotes || null });
         } catch (e) {
           throw mapError(e, 'ANALYSIS_FAILURE');
         }

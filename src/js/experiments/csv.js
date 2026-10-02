@@ -8,30 +8,49 @@
 // must say how it was derived and is labelled as not raw.
 //
 //   csvMeta(experiment) -> meta
-//   transferCsv(result, meta, { view, derivation, calibratedDb, calibratedUnit, reliable })
-//     columns frequency_hz, magnitude_db_relative, magnitude_db_calibrated, snr_db, reliable
+//   transferCsv(result, meta, { view, derivation, correctedDb, reliable })
+//     columns frequency_hz, magnitude_db_relative, magnitude_db_corrected, snr_db, reliable
+//   aggregateCsv(aggregate, meta, { view, derivation })
+//     columns frequency_hz, centre_db_relative, lower_db_relative, upper_db_relative, spread_db
 //   irCsv(ir, meta, { view, derivation })            columns time_s, amplitude
-//   rtaCsv(bands, meta, { view, derivation })
+//   rtaCsv(bands, meta, { view, derivation, correctedDb })
 //     columns band_nominal_hz, band_lo_hz, band_hi_hz, level_db_relative
+//     [, level_db_corrected] [, level_db_spl]
 // meta: { oscillaVersion, oscillaCommit, experimentId, algorithm, sampleRate, calibration }
 // (calibration as in an experiment: { frequency: { id, name }|null, level|null }).
 //
+// Transfer magnitudes are RATIOS (capture / stimulus, dB re a unity digital transfer), never
+// levels (G19): magnitude_db_relative is the raw ratio and magnitude_db_corrected the same
+// ratio with a microphone frequency profile's deviation removed (calibration/interpolate.js
+// applyFrequencyCorrection().correctedDb), allowed only when the metadata names a frequency
+// profile. A level calibration never turns a transfer column into "dB SPL": with its offset
+// added, |H| would be the SPL a full-scale digital stimulus would produce, a quantity the file
+// does not claim. Absolute level is a property of LEVEL outputs: rtaCsv adds level_db_spl
+// (band level + the LevelCalibration offset) only under a VALID LevelCalibration.
+//
 // Level labels come from calibration/level.js (spec §24): uncalibrated level columns carry
 // RELATIVE_UNIT and the calibration line names RELATIVE_SCALE_LABEL; "dB SPL" appears only
-// when the metadata holds a VALID LevelCalibration (isValidLevelCalibration), so no
-// uncalibrated export contains the string "SPL".
+// in the calibration line and the level_db_spl column when the metadata holds a VALID
+// LevelCalibration (isValidLevelCalibration), so no uncalibrated export contains the string
+// "SPL".
 
 import { UNKNOWN, describeCalibration } from './schema.js';
+import { ZERO_POWER_DB } from '../measurement/transfer.js';
 import {
   RELATIVE_SCALE_LABEL, RELATIVE_UNIT, SPL_UNIT, isValidLevelCalibration,
 } from '../calibration/level.js';
 
 export const TRANSFER_COLUMNS = Object.freeze(['frequency_hz', 'magnitude_db_relative',
-  'magnitude_db_calibrated', 'snr_db', 'reliable']);
+  'magnitude_db_corrected', 'snr_db', 'reliable']);
+export const AGGREGATE_COLUMNS = Object.freeze(['frequency_hz', 'centre_db_relative',
+  'lower_db_relative', 'upper_db_relative', 'spread_db']);
 export const IR_COLUMNS = Object.freeze(['time_s', 'amplitude']);
+/** RTA base columns; level_db_corrected and level_db_spl follow when they apply. */
 export const RTA_COLUMNS = Object.freeze(['band_nominal_hz', 'band_lo_hz', 'band_hi_hz',
   'level_db_relative']);
 const DB_RELATIVE = RELATIVE_UNIT;
+/** Unit of a transfer magnitude: a ratio, not a level (G19). */
+export const TRANSFER_RATIO_UNIT = 'dB re unity digital transfer (capture/stimulus ratio)';
 
 /** CSV metadata from an experiment. */
 export function csvMeta(e) {
@@ -50,6 +69,7 @@ const clean = (v) => (v === null || v === undefined || v === ''
 const num = (v) => (typeof v === 'number' && Number.isFinite(v) ? String(Object.is(v, -0) ? 0 : v)
   : '');
 const hasLevelCal = (cal) => !!(cal && isValidLevelCalibration(cal.level));
+const hasFrequencyCal = (cal) => !!(cal && cal.frequency);
 const hasAnyCal = (cal) => !!(cal && (cal.frequency || hasLevelCal(cal)));
 
 function viewLine(opts) {
@@ -90,28 +110,35 @@ function checkLength(arr, n, what) {
   }
 }
 
-/** Frequency response CSV from a TransferResult. */
+/**
+ * Frequency response CSV from a TransferResult. `correctedDb` is the frequency-profile
+ * corrected magnitude (applyFrequencyCorrection().correctedDb); it needs a frequency profile in
+ * the metadata and stays a ratio in dB, whatever the level calibration (G19).
+ */
 export function transferCsv(result, meta, opts = {}) {
   const r = result;
   const n = r.frequencies.length;
   const cal = meta && meta.calibration;
-  const calibrated = opts.calibratedDb ?? null;
-  if (calibrated && !hasAnyCal(cal)) {
-    throw new RangeError('calibrated values given but the metadata carries no calibration');
+  if (opts.calibratedDb !== undefined || opts.calibratedUnit !== undefined) {
+    throw new TypeError('transferCsv: calibratedDb/calibratedUnit were replaced by correctedDb '
+      + '(a transfer magnitude is a ratio, never dB SPL)');
+  }
+  const corrected = opts.correctedDb ?? null;
+  if (corrected && !hasFrequencyCal(cal)) {
+    throw new RangeError('corrected values given but the metadata names no frequency calibration');
   }
   checkLength(r.magnitudeDb, n, 'magnitudeDb');
   checkLength(r.snrDb, n, 'snrDb');
-  checkLength(calibrated, n, 'calibratedDb');
+  checkLength(corrected, n, 'correctedDb');
   checkLength(opts.reliable, n, 'reliable');
   const [vLo, vHi] = r.validRange || [NaN, NaN];
-  const calUnit = opts.calibratedUnit
-    || (hasLevelCal(cal) ? `${SPL_UNIT} (CALIBRATED)`
-      : `${RELATIVE_UNIT}, frequency-profile corrected`);
   const lines = header('transfer function (frequency response)', meta, r.algorithm, r.sampleRate,
     opts, [
       ['frequency_hz', 'Hz'],
-      ['magnitude_db_relative', DB_RELATIVE],
-      ['magnitude_db_calibrated', calibrated ? calUnit : 'empty (no calibration applied)'],
+      ['magnitude_db_relative', `${TRANSFER_RATIO_UNIT}, uncorrected`],
+      ['magnitude_db_corrected', corrected
+        ? `${TRANSFER_RATIO_UNIT}, frequency-profile corrected (microphone deviation removed)`
+        : 'empty (no frequency calibration applied)'],
       ['snr_db', r.snrDb ? 'dB, ESTIMATED signal-to-noise ratio' : 'empty (not estimated)'],
       ['reliable', opts.reliable ? '1 = reliable, 0 = not (quality assessment)'
         : `1 = inside the valid range ${num(vLo)}-${num(vHi)} Hz, 0 = outside`],
@@ -119,8 +146,42 @@ export function transferCsv(result, meta, opts = {}) {
   for (let i = 0; i < n; i++) {
     const f = r.frequencies[i];
     const rel = opts.reliable ? (opts.reliable[i] ? 1 : 0) : (f >= vLo && f <= vHi ? 1 : 0);
-    lines.push([num(f), num(r.magnitudeDb[i]), calibrated ? num(calibrated[i]) : '',
+    lines.push([num(f), num(r.magnitudeDb[i]), corrected ? num(corrected[i]) : '',
       r.snrDb ? num(r.snrDb[i]) : '', rel].join(','));
+  }
+  return `${lines.join('\n')}\n`;
+}
+
+/**
+ * Repeated-run aggregate CSV from an AggregateResult (aggregate.js aggregateResult, the stored
+ * results.aggregate): centre and envelope are transfer ratios in dB like magnitude_db_relative;
+ * the spread is a dB difference. One run: the envelope columns are empty.
+ */
+export function aggregateCsv(aggregate, meta, opts = {}) {
+  const a = aggregate;
+  const n = a.frequencies.length;
+  checkLength(a.centreDb, n, 'centreDb');
+  for (const k of ['lowerDb', 'upperDb', 'spreadDb']) checkLength(a[k], n, k);
+  const env = a.lowerDb !== null && a.upperDb !== null;
+  const bounds = a.dispersion === 'std' ? 'centre ∓ standard deviation of the runs (dB)'
+    : a.dispersion === 'p10-p90' ? '10th / 90th percentile of the runs' : null;
+  const lines = header(`aggregate of ${a.runs} run${a.runs === 1 ? '' : 's'} (${a.method})`,
+    meta, a.algorithm, null, opts, [
+      ['frequency_hz', 'Hz'],
+      ['centre_db_relative', `${TRANSFER_RATIO_UNIT}, ${a.method === 'mean'
+        ? 'power mean' : 'median'} of the runs`],
+      ['lower_db_relative', env ? `${TRANSFER_RATIO_UNIT}, lower bound: ${bounds}`
+        : 'empty (one run, no envelope)'],
+      ['upper_db_relative', env ? `${TRANSFER_RATIO_UNIT}, upper bound: ${bounds}`
+        : 'empty (one run, no envelope)'],
+      ['spread_db', a.spreadDb ? `dB, ${a.dispersion === 'std' ? 'sample standard deviation'
+        : 'median absolute deviation'} across runs (descriptive, not an uncertainty)`
+        : 'empty (one run)'],
+    ]);
+  lines.splice(lines.length - 6, 0, `# repeatability_db: ${num(a.repeatabilityDb) || 'none'}`);
+  for (let i = 0; i < n; i++) {
+    lines.push([num(a.frequencies[i]), num(a.centreDb[i]), env ? num(a.lowerDb[i]) : '',
+      env ? num(a.upperDb[i]) : '', a.spreadDb ? num(a.spreadDb[i]) : ''].join(','));
   }
   return `${lines.join('\n')}\n`;
 }
@@ -143,23 +204,49 @@ export function irCsv(ir, meta, opts = {}) {
 
 /**
  * RTA band CSV. `bands` is an RTA result { algorithm, sampleRate, resolution, bands, levelsDb }
- * or an array of { nominal, lo, hi, levelDb }.
+ * or an array of { nominal, lo, hi, levelDb }. `correctedDb` (frequency-profile corrected band
+ * levels, applyFrequencyCorrectionToBands().correctedDb) adds level_db_corrected and needs a
+ * frequency profile in the metadata. Under a VALID level calibration level_db_spl is added:
+ * the corrected level when given, else the relative level, plus the calibration offset.
  */
 export function rtaCsv(bands, meta, opts = {}) {
   const isResult = !Array.isArray(bands);
   const list = isResult ? bands.bands : bands;
   const levels = isResult ? bands.levelsDb : list.map((b) => b.levelDb);
+  const cal = meta && meta.calibration;
+  const corrected = opts.correctedDb ?? null;
+  if (corrected && !hasFrequencyCal(cal)) {
+    throw new RangeError('corrected values given but the metadata names no frequency calibration');
+  }
   checkLength(levels, list.length, 'levelsDb');
-  const lines = header(`real-time analyzer bands${isResult && bands.resolution
-    ? ` (${bands.resolution === 'third' ? '1/3 octave' : 'octave'})` : ''}`, meta,
-  isResult ? bands.algorithm : null, isResult ? bands.sampleRate : null, opts, [
+  checkLength(corrected, list.length, 'correctedDb');
+  const offset = hasLevelCal(cal) ? cal.level.offsetDb : null;
+  const columns = [
     ['band_nominal_hz', 'Hz (nominal band centre)'],
     ['band_lo_hz', 'Hz (lower band edge)'],
     ['band_hi_hz', 'Hz (upper band edge)'],
     ['level_db_relative', DB_RELATIVE],
-  ]);
+  ];
+  if (corrected) {
+    columns.push(['level_db_corrected', `${DB_RELATIVE}, frequency-profile corrected`]);
+  }
+  if (offset !== null) {
+    columns.push(['level_db_spl', `${SPL_UNIT} (CALIBRATED: ${corrected ? 'level_db_corrected'
+      : 'level_db_relative'} ${offset < 0 ? '−' : '+'} ${num(Math.abs(offset))} dB level `
+      + 'calibration offset)']);
+  }
+  const lines = header(`real-time analyzer bands${isResult && bands.resolution
+    ? ` (${bands.resolution === 'third' ? '1/3 octave' : 'octave'})` : ''}`, meta,
+  isResult ? bands.algorithm : null, isResult ? bands.sampleRate : null, opts, columns);
   list.forEach((b, i) => {
-    lines.push([num(b.nominal), num(b.lo), num(b.hi), num(levels[i])].join(','));
+    const row = [num(b.nominal), num(b.lo), num(b.hi), num(levels[i])];
+    if (corrected) row.push(num(corrected[i]));
+    if (offset !== null) {
+      const base = corrected ? corrected[i] : levels[i];
+      // Zero power (stored as ZERO_POWER_DB) has no sound pressure level: empty field.
+      row.push(Number.isFinite(base) && base > ZERO_POWER_DB ? num(base + offset) : '');
+    }
+    lines.push(row.join(','));
   });
   return `${lines.join('\n')}\n`;
 }
