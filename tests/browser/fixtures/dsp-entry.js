@@ -55,8 +55,15 @@ async function liveTonePeak() {
     const mute = ctx.createGain();
     mute.gain.value = 0;
     osc.connect(g).connect(an).connect(mute).connect(ctx.destination);
+    const t0 = ctx.currentTime;
     osc.start();
-    await sleep(600);
+    // Wait on the audio clock, not the wall clock: a starved CI runner renders far less than
+    // 600 ms of audio in 600 ms, leaving the analyser window mostly silent. Require one full FFT
+    // window plus 100 ms of rendered audio (5 s deadline).
+    const need = t0 + an.fftSize / ctx.sampleRate + 0.1;
+    const deadline = performance.now() + 5000;
+    while (ctx.currentTime < need && performance.now() < deadline) await sleep(50);
+    await sleep(50);
     const reader = createAnalyserReader(an);
     const spec = reader.readFrequency();
     const p = findPeak(spec, {
