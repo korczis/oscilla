@@ -2,11 +2,11 @@
 schema: knowledge/v1
 id: browser-ui-pitfalls
 kind: knowledge
-class: observation
+class: lesson
 title: Browser and Alpine behaviours that broke OSCILLA's UI checks
 description: x-show timing, WebKit Tab order, Tailwind truncation and Linux layout differences found while verifying sections 1-63.
 status: verified
-epistemics: measured
+epistemics: observed
 date: 2026-10-02
 tags:
   - alpine

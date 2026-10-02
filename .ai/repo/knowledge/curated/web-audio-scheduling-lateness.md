@@ -2,11 +2,11 @@
 schema: knowledge/v1
 id: web-audio-scheduling-lateness
 kind: knowledge
-class: observation
+class: fact
 title: How late an AudioParam event scheduled from the main thread can land, per engine
 description: Measured lateness of automation events scheduled at currentTime + lead, and the browser behaviours the engine design depends on.
 status: verified
-epistemics: measured
+epistemics: observed
 date: 2026-10-02
 tags:
   - audio

@@ -6,7 +6,7 @@ class: convention
 title: Measuring the audio output in headless browsers without false clicks or missed windows
 description: Why the tests record the output with a frame-indexed AudioWorklet tap, and the engine quirks that tap has to absorb.
 status: verified
-epistemics: measured
+epistemics: observed
 date: 2026-10-02
 tags:
   - testing
