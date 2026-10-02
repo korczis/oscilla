@@ -1418,7 +1418,7 @@
             <div class="osc-metric"><dt>Levels</dt><dd x-text="meas.cal.level && meas.cal.useLevel ? 'CALIBRATED (reference offset applied)' : 'relative (dBFS-like)'"></dd></div>
           </dl>
           <p class="osc-m-hint" x-show="!meas.inputRows.length || meas.inputRows[0].text === 'UNKNOWN'">Run the setup check to read the input device, its sample rate and the processing the browser applies.</p>
-          <p class="osc-m-hint">The microphone opens only for the setup check and the measurement, and is released when they end. Audio stays in this page.</p>
+          <p class="osc-m-hint">The microphone opens only for the setup check, the measurement and the live RTA, and is released when they end. Audio stays in this page.</p>
         </section>
 
         <!-- ---------- Quality: live checks, then the assessment with its reasons ---------- -->
@@ -1560,7 +1560,29 @@
           <div class="osc-m-pane" id="osc-m-pane-rta" role="tabpanel" aria-labelledby="osc-m-tab-rta"
             x-show="meas.tab === 'rta'" style="display: none">
             <div class="osc-m-toolbar">
-              <span class="osc-m-chip" x-text="meas.rta ? meas.rta.mode : '1/3 OCTAVE'"></span>
+              <button type="button" class="osc-btn osc-btn-secondary osc-m-small" data-osc="measure.rtaLive"
+                aria-pressed="false" :aria-pressed="String(meas.rtaLive.running)"
+                :disabled="!meas.rtaLive.available || meas.busy || meas.rtaLive.starting"
+                :title="!meas.rtaLive.available ? meas.rtaLive.unavailableText : (meas.busy ? 'Not while a measurement is in progress.' : '')"
+                @click="measureRtaLiveToggle()"
+                x-text="meas.rtaLive.running ? 'Stop live RTA' : (meas.rtaLive.starting ? 'Opening input…' : 'Start live RTA')">Start live RTA</button>
+              <div class="osc-seg osc-m-seg" role="radiogroup" aria-label="RTA mode">
+                <template x-for="c in RTA_MODE_CHOICES" :key="c.id">
+                  <button type="button" class="osc-seg-btn" role="radio" data-osc="measure.rtaMode" :data-value="c.id"
+                    :class="{ 'is-active': meas.view.rtaMode === c.id }" :aria-checked="String(meas.view.rtaMode === c.id)"
+                    :tabindex="meas.view.rtaMode === c.id ? 0 : -1" :disabled="!meas.rtaLive.running"
+                    @click="measureSetView('rtaMode', c.id)" @keydown="rovingKeydown($event)" x-text="c.label"></button>
+                </template>
+              </div>
+              <div class="osc-seg osc-m-seg" role="radiogroup" aria-label="RTA averaging">
+                <template x-for="c in RTA_AVERAGING_CHOICES" :key="c.id">
+                  <button type="button" class="osc-seg-btn" role="radio" data-osc="measure.rtaAveraging" :data-value="c.id"
+                    :class="{ 'is-active': meas.view.rtaAveraging === c.id }" :aria-checked="String(meas.view.rtaAveraging === c.id)"
+                    :tabindex="meas.view.rtaAveraging === c.id ? 0 : -1" :disabled="!meas.rtaLive.running" :title="c.detail"
+                    @click="measureSetView('rtaAveraging', c.id)" @keydown="rovingKeydown($event)" x-text="c.label"></button>
+                </template>
+              </div>
+              <span class="osc-m-chip" data-osc="measure.rtaModeChip" x-text="meas.rta ? meas.rta.mode : 'NOT MEASURED'"></span>
               <button type="button" class="osc-toggle" role="switch" aria-checked="false" data-osc="measure.rtaPeak"
                 :aria-checked="String(meas.view.rtaPeakHold)" @click="measureSetView('rtaPeakHold', !meas.view.rtaPeakHold)">
                 <span>Peak hold</span><span class="osc-toggle-track" aria-hidden="true"></span></button>
@@ -1574,9 +1596,12 @@
                 <span class="osc-m-badge" x-text="b"></span>
               </template>
             </div>
-            <p class="osc-m-axis" x-text="meas.rta ? meas.rta.source + ' · ' + meas.rta.yLabel : 'Background noise band levels appear after a measurement with a noise check.'"></p>
+            <p class="osc-m-error" role="alert" data-osc="measure.rtaError"
+              x-show="meas.rtaLive.error || !meas.rtaLive.available" style="display: none"
+              x-text="meas.rtaLive.error || meas.rtaLive.unavailableText"></p>
+            <p class="osc-m-axis" data-osc="measure.rtaSource" x-text="meas.rta ? meas.rta.source + ' · ' + meas.rta.yLabel : 'Start the live RTA, or run a measurement with a noise check for its background band levels.'"></p>
             <div class="osc-chart-host osc-m-chart" id="osc-measure-chart-rta" role="img"
-              aria-label="Band level chart of the background noise" aria-describedby="osc-m-sum-rta"></div>
+              aria-label="RTA chart: band levels of the live input or of the background noise" aria-describedby="osc-m-sum-rta"></div>
             <p class="osc-m-summary" id="osc-m-sum-rta" data-osc="measure.rtaSummary"
               x-text="meas.rta ? meas.rta.summary : 'RTA: NOT MEASURED.'"></p>
             <ul class="osc-m-notes osc-m-notes--plain">
@@ -1602,7 +1627,7 @@
             <template x-for="g in measureExpertGroups" :key="g.id">
               <fieldset class="osc-m-group">
                 <legend x-text="g.label"></legend>
-                <template x-for="f in g.fields.filter((x) => x.path || x.kind === 'readonly')" :key="f.id">
+                <template x-for="f in g.fields.filter((x) => x.path || x.kind === 'readonly' || x.live)" :key="f.id">
                   <div class="osc-m-fieldrow">
                     <label class="osc-label" :for="'osc-mf-' + f.id" x-text="f.label + (f.unit ? ' (' + f.unit + ')' : '')"></label>
                     <input class="osc-number" type="number" x-show="f.kind === 'number'" :id="f.kind === 'number' ? 'osc-mf-' + f.id : null"

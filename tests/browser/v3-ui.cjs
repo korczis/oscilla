@@ -26,6 +26,19 @@
 //   output-exclusive        the instrument cannot play while a measurement owns the output
 //   fake-mic                (chromium, firefox) permission + setup check on the real capture io,
 //                           applied constraints read back, every track stopped after reset
+//   live-rta                (chromium, firefox) the live RTA of the fake microphone's 1 kHz tone
+//                           (amplitude 0.1: Firefox's built-in fake stream; Chromium plays
+//                           FAKE_TONE from a WAV via --use-file-for-fake-audio-capture): 1/3
+//                           octave and octave bands appear, the 1 kHz band dominates (>= 20 dB)
+//                           at 10*log10(0.1^2/2) = -23.01 dB +/- 1 dB (the spectrum.js
+//                           mean-square scale), the FFT peak bin sits at 1 kHz; averaging,
+//                           peak hold, freeze, the rtaResult snapshot IDs; STOP, Escape,
+//                           leaving the tab, leaving the workspace and page hide each stop it
+//                           with 0 nodes and tracks; a setup check takes the input from it
+//                           (exclusive); no "SPL" without a level calibration.
+//                           (webkit: no fake device) the start is refused with the browser's
+//                           reason shown, the mode and averaging controls stay disabled, nothing
+//                           stays open.
 //   calibration             CSV profile import -> Frequency CALIBRATED; level calibration dialog
 //                           (explicit values) -> Level CALIBRATED; invalid input refused
 //   experiments             import of three fixtures, list, open, rename, duplicate, compare
@@ -55,9 +68,32 @@ const ORIGINS = arg('origins', 'file,http').split(',');
 const ONLY = arg('only', '') ? new Set(arg('only', '').split(',')) : null;
 const JSON_OUT = arg('json', '');
 
+// The fake microphone's tone: Firefox's built-in fake stream is a 1 kHz sine of amplitude 0.1
+// (measured: peak 0.100, mean square -23.0 dB); Chromium's default fake device only beeps, so it
+// plays the same tone from a WAV file (written below, looped by Chromium).
+const FAKE_TONE = { hz: 1000, amplitude: 0.1, sampleRate: 48000, seconds: 2 };
+function writeToneWav(file, { hz, amplitude, sampleRate, seconds }) {
+  const n = sampleRate * seconds; // a whole number of cycles: the loop is seamless
+  const b = Buffer.alloc(44 + n * 2);
+  b.write('RIFF', 0); b.writeUInt32LE(36 + n * 2, 4); b.write('WAVE', 8); b.write('fmt ', 12);
+  b.writeUInt32LE(16, 16); b.writeUInt16LE(1, 20); b.writeUInt16LE(1, 22);
+  b.writeUInt32LE(sampleRate, 24); b.writeUInt32LE(sampleRate * 2, 28); b.writeUInt16LE(2, 32);
+  b.writeUInt16LE(16, 34); b.write('data', 36); b.writeUInt32LE(n * 2, 40);
+  for (let i = 0; i < n; i += 1) {
+    b.writeInt16LE(Math.round(32767 * amplitude * Math.sin((2 * Math.PI * hz * i) / sampleRate)),
+      44 + 2 * i);
+  }
+  fs.writeFileSync(file, b);
+}
+const TONE_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'oscilla-v3ui-tone-'));
+const TONE_WAV = path.join(TONE_DIR, 'tone-1k.wav');
+writeToneWav(TONE_WAV, FAKE_TONE);
+process.on('exit', () => fs.rmSync(TONE_DIR, { recursive: true, force: true }));
+
 const LAUNCH = {
   chromium: { args: ['--autoplay-policy=no-user-gesture-required',
-    '--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream'] },
+    '--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream',
+    `--use-file-for-fake-audio-capture=${TONE_WAV}`] },
   firefox: { firefoxUserPrefs: { 'media.autoplay.default': 0, 'media.autoplay.blocking_policy': 0,
     'media.autoplay.block-webaudio': false, 'media.navigator.streams.fake': true,
     'media.navigator.permission.disabled': true } },
@@ -257,6 +293,12 @@ function defineChecks(fixtures) {
       chart: !!document.querySelector('#osc-measure-chart-ir .uplot'),
       tabs: document.querySelector('#osc-m-tab-ir').getAttribute('aria-selected'),
     }));
+    // The stored noise-check band levels are a SNAPSHOT, never badged LIVE; their under-
+    // resolved low bands are flagged (hatched).
+    res.rtaStored = await page.evaluate(() => {
+      const r = window.OSCILLA.app.meas.rta;
+      return r ? { badges: r.badges, live: r.live, notes: r.notes.join(' ') } : null;
+    });
     // Keyboard: arrows move along the result tabs (role=tab roving).
     await page.focus('#osc-m-tab-ir');
     await page.keyboard.press('ArrowRight');
@@ -300,6 +342,9 @@ function defineChecks(fixtures) {
         && d.primary === 'Save experiment' && d.chart,
       ir: /^Impulse response: direct peak/.test(res.ir.text) && res.ir.chart
         && res.ir.tabs === 'true' && res.rtaTab === 'osc-m-tab-rta',
+      rtaStored: !!res.rtaStored && res.rtaStored.badges.includes('NOISE CHECK SNAPSHOT')
+        && !res.rtaStored.badges.includes('LIVE') && res.rtaStored.live === false
+        && /fewer than 2 FFT bins/.test(res.rtaStored.notes),
       announcements: announced.every((t) => res.live.filter((x) => x === t).length === 1)
         && !res.live.some((t) => /%/.test(t)),
       zero: H.zero(res.counts) && H.zero(res.counts2),
@@ -399,6 +444,211 @@ function defineChecks(fixtures) {
     const ok = res.state === 'READY' && res.kind === 'microphone' && res.tracks >= 1
       && res.rows.some((r) => /^Sample rate\s*\d+ Hz$/.test(r)) && H.zero(counts);
     return { ok, ...res, counts };
+  });
+
+  def('live-rta', async ({ page, browserName }) => {
+    await H.workspace(page, 'measure');
+    await page.evaluate(() => window.OSCILLA.measure.useMicrophone());
+    await page.click('[data-osc="measure.tab"][data-value="rta"]');
+    const res = {};
+    const ui = () => page.evaluate(() => {
+      const a = window.OSCILLA.app;
+      const q = (s) => document.querySelector(s);
+      const err = q('[data-osc="measure.rtaError"]');
+      return {
+        running: a.meas.rtaLive.running, starting: a.meas.rtaLive.starting,
+        button: q('[data-osc="measure.rtaLive"]').textContent.trim(),
+        modesDisabled: [...document.querySelectorAll('[data-osc="measure.rtaMode"]')]
+          .every((b) => b.disabled),
+        averagingDisabled: [...document.querySelectorAll('[data-osc="measure.rtaAveraging"]')]
+          .every((b) => b.disabled),
+        error: err && err.offsetParent !== null ? err.textContent.trim() : null,
+        summary: q('[data-osc="measure.rtaSummary"]').textContent,
+        source: q('[data-osc="measure.rtaSource"]').textContent,
+        chip: q('[data-osc="measure.rtaModeChip"]').textContent,
+        chart: !!q('#osc-measure-chart-rta .uplot'),
+      };
+    });
+    const counts = () => H.until(() => H.counts(page), (c) => H.zero(c) && !c.liveTap
+      && c.liveLoop === 0, 3000);
+    const idle = (c) => H.zero(c) && !c.liveTap && c.liveLoop === 0;
+    res.before = await ui();
+    if (!FAKE_MIC.has(browserName)) {
+      // No fake device (WebKit): the start is refused with the browser's reason, nothing stays.
+      await page.click('[data-osc="measure.rtaLive"]');
+      res.refused = await H.until(ui, (u) => !u.starting && (u.error || u.running), 8000);
+      res.counts = await counts();
+      await page.evaluate(() => window.OSCILLA.measure.useLoopback());
+      const v = H.verdict({
+        disabledBefore: res.before.modesDisabled && res.before.averagingDisabled
+          && res.before.button === 'Start live RTA',
+        refused: !res.refused.running && !!res.refused.error && res.refused.modesDisabled
+          && res.refused.averagingDisabled && res.refused.button === 'Start live RTA',
+        zero: idle(res.counts),
+      });
+      return { ...v, ...res };
+    }
+    const live = () => page.evaluate(() => window.OSCILLA.measure.liveRta());
+    /** Live frames of `mode` once `n` more frames were analysed (the average has settled). */
+    const settled = async (mode, n = 40) => {
+      const f0 = await H.until(live, (l) => l && l.mode === mode, 5000);
+      const start = f0 ? f0.frames : 0;
+      return H.until(live, (l) => l && l.mode === mode && l.frames >= start + n, 8000);
+    };
+    const bandCheck = (l) => {
+      if (!l || !l.bands) return { ok: false };
+      const i = l.bands.indexOf(FAKE_TONE.hz);
+      const expect = 10 * Math.log10((FAKE_TONE.amplitude ** 2) / 2);
+      const others = l.values.filter((v, j) => j !== i && v !== null);
+      const next = others.length ? Math.max(...others) : -Infinity;
+      return { ok: i >= 0 && Math.abs(l.values[i] - expect) <= 1 && l.values[i] - next >= 20,
+        level: l.values[i], expect, margin: l.values[i] - next, bands: l.bands.length };
+    };
+    await page.click('[data-osc="measure.rtaLive"]');
+    const third = await settled('third');
+    res.third = bandCheck(third);
+    res.thirdUnder = third ? third.underResolved.filter(Boolean).length : null;
+    res.thirdUi = await H.until(ui, (u) => /highest band 1 kHz/.test(u.summary), 3000);
+    res.snapshot = await page.evaluate(() => window.OSCILLA.measure.liveRtaSnapshot());
+    res.spl = await page.evaluate(splMentions);
+    // Octave bands.
+    await page.click('[data-osc="measure.rtaMode"][data-value="octave"]');
+    res.octave = bandCheck(await settled('octave'));
+    // FFT: the strongest bin sits at the tone; a tone's peak bin reads 1.76-3.2 dB below its
+    // band level (Hann main lobe, mean-square bins).
+    await page.click('[data-osc="measure.rtaMode"][data-value="fft"]');
+    const fft = await settled('fft');
+    if (fft) {
+      let best = 0;
+      for (let k = 1; k < fft.values.length; k += 1) {
+        if (fft.values[k] !== null && fft.values[k] > fft.values[best]) best = k;
+      }
+      const binHz = fft.sampleRate / fft.fftSize;
+      res.fft = { hz: fft.frequencies[best], level: fft.values[best], binHz,
+        ok: Math.abs(fft.frequencies[best] - FAKE_TONE.hz) <= binHz
+          && fft.values[best] <= -23.01 - 1.76 + 1 && fft.values[best] >= -23.01 - 3.2 - 1 };
+    }
+    res.fftUi = await H.until(ui, (u) => /^RTA, FFT/.test(u.summary), 3000);
+    await page.click('[data-osc="measure.rtaMode"][data-value="third"]');
+    await settled('third', 10);
+    // Expert fields (no recipe path) drive the live RTA: FFT size and window.
+    await page.evaluate(() => {
+      const a = window.OSCILLA.app;
+      a.measureSetExpert(true);
+      a.meas.setupOpen = true;
+    });
+    await page.selectOption('[data-osc="measure.choice"][data-field="fftSize"]', '16384');
+    await page.selectOption('[data-osc="measure.choice"][data-field="window"]',
+      'blackman-harris');
+    const ex = await H.until(live, (l) => l && l.fftSize === 16384
+      && l.window === 'blackman-harris' && l.frames > 30, 8000);
+    res.expert = ex ? { ...bandCheck(ex), fftSize: ex.fftSize, analyser: ex.analyserFftSize,
+      window: ex.window, under: ex.underResolved.filter(Boolean).length } : null;
+    res.expertSnapshot = await page.evaluate(() => window.OSCILLA.measure.liveRtaSnapshot());
+    await page.selectOption('[data-osc="measure.choice"][data-field="fftSize"]', '8192');
+    await page.selectOption('[data-osc="measure.choice"][data-field="window"]', 'hann');
+    await page.evaluate(() => {
+      const a = window.OSCILLA.app;
+      a.measureSetExpert(false);
+      a.meas.setupOpen = false;
+    });
+    await settled('third', 10);
+    // Averaging: each choice reaches the analysis and its label.
+    res.averaging = {};
+    for (const a of ['slow', 'instant', 'fast']) {
+      await page.click(`[data-osc="measure.rtaAveraging"][data-value="${a}"]`);
+      const l = await H.until(live, (x) => x && x.averaging === a && x.frames > 5, 4000);
+      const u = await H.until(ui, (x) => new RegExp(a.toUpperCase()).test(x.summary), 3000);
+      res.averaging[a] = !!l && l.averaging === a && new RegExp(a.toUpperCase()).test(u.summary);
+    }
+    // Peak hold: every held peak is at or above its band's level.
+    await page.click('[data-osc="measure.rtaPeak"]');
+    const pk = await settled('third', 10);
+    res.peaks = !!pk && pk.values.every((v, i) => v === null || pk.peaks[i] >= v - 1e-9)
+      && await page.getAttribute('[data-osc="measure.rtaPeak"]', 'aria-checked') === 'true';
+    await page.click('[data-osc="measure.rtaPeak"]');
+    // Freeze: no frame is analysed while frozen; the summary says so.
+    await page.click('[data-osc="measure.rtaFreeze"]');
+    const fz0 = await live();
+    await sleep(400);
+    const fz1 = await live();
+    res.freeze = { frozen: fz1.frozen, held: fz0.frames === fz1.frames
+      && JSON.stringify(fz0.values) === JSON.stringify(fz1.values),
+    ui: (await H.until(ui, (u) => /frozen\.$/.test(u.summary), 3000)).summary };
+    await page.click('[data-osc="measure.rtaFreeze"]');
+    const fz2 = await H.until(live, (l) => l && l.frames > fz1.frames + 5, 3000);
+    res.unfreeze = !!fz2 && !fz2.frozen;
+    // Every way out stops it and releases the tracks and nodes.
+    res.during = await H.counts(page);
+    res.stops = {};
+    const how = {
+      button: () => page.click('[data-osc="measure.rtaLive"]'),
+      escape: () => page.keyboard.press('Escape'),
+      tab: () => page.click('[data-osc="measure.tab"][data-value="response"]'),
+      workspace: () => H.workspace(page, 'experiments'),
+      pagehide: () => page.evaluate(() => window.dispatchEvent(new Event('pagehide'))),
+    };
+    for (const [k, fn] of Object.entries(how)) {
+      await H.workspace(page, 'measure');
+      await page.click('[data-osc="measure.tab"][data-value="rta"]');
+      if ((await ui()).running) await page.click('[data-osc="measure.rtaLive"]'); // stop first
+      await counts();
+      await page.click('[data-osc="measure.rtaLive"]');
+      const on = await H.until(live, (l) => l && l.frames > 3, 8000);
+      await fn();
+      const c = await counts();
+      const u = await ui();
+      res.stops[k] = { on: !!on, zero: idle(c), running: u.running, counts: c };
+    }
+    // Exclusive: a setup check takes the input from the live RTA (one input, one owner).
+    await H.workspace(page, 'measure');
+    await page.click('[data-osc="measure.tab"][data-value="rta"]');
+    await page.click('[data-osc="measure.rtaLive"]');
+    await H.until(live, (l) => l && l.frames > 3, 8000);
+    await page.click('#osc-measure-primary');
+    await H.waitState(page, ['READY', 'INVALID', 'ERROR'], 15000);
+    res.exclusive = await page.evaluate(() => ({ state: window.OSCILLA.measure.state,
+      live: !!window.OSCILLA.measure.liveRta(), tap: window.OSCILLA.measure.counts().liveTap }));
+    // ... and starting the live RTA from READY releases the checked setup first.
+    await page.click('[data-osc="measure.rtaLive"]');
+    await H.until(live, (l) => l && l.frames > 3, 8000);
+    res.fromReady = await page.evaluate(() => ({ state: window.OSCILLA.measure.state,
+      live: !!window.OSCILLA.measure.liveRta() }));
+    await page.click('[data-osc="measure.rtaLive"]');
+    res.after = await counts();
+    await page.evaluate(() => window.OSCILLA.measure.useLoopback());
+    const s = res.stops;
+    const v = H.verdict({
+      disabledBefore: res.before.modesDisabled && res.before.averagingDisabled
+        && res.before.button === 'Start live RTA',
+      third: res.third.ok && res.third.bands === 31,
+      thirdUi: /^RTA, 1\/3 OCTAVE, 31 bands, FAST/.test(res.thirdUi.summary)
+        && /^LIVE · microphone input/.test(res.thirdUi.source)
+        && /dB relative \(dBFS-like\)/.test(res.thirdUi.source) && res.thirdUi.chart
+        && res.thirdUi.chip === '1/3 OCTAVE' && !res.thirdUi.modesDisabled,
+      underResolved: res.thirdUnder > 0,
+      snapshot: !!res.snapshot && res.snapshot.algorithm === 'oscilla.rta.v1'
+        && res.snapshot.windowAlgorithm === 'oscilla.window.hann.v1'
+        && res.snapshot.resolution === 'third' && res.snapshot.fftSize === 8192
+        && res.snapshot.levelsDb.length === 31,
+      noSpl: res.spl.length === 0,
+      octave: res.octave.ok,
+      expert: !!res.expert && res.expert.ok && res.expert.analyser === 16384
+        && res.expert.under < res.thirdUnder && !!res.expertSnapshot
+        && res.expertSnapshot.fftSize === 16384
+        && res.expertSnapshot.windowAlgorithm === 'oscilla.window.blackman-harris.v1',
+      fft: !!res.fft && res.fft.ok && /^RTA, FFT/.test(res.fftUi.summary),
+      averaging: Object.values(res.averaging).every(Boolean),
+      peaks: res.peaks,
+      freeze: res.freeze.frozen && res.freeze.held && /frozen\.$/.test(res.freeze.ui)
+        && res.unfreeze,
+      during: res.during.liveTap && res.during.tracks >= 1 && res.during.liveLoop === 1,
+      stops: Object.values(s).every((x) => x.on && x.zero && !x.running),
+      exclusive: res.exclusive.state === 'READY' && !res.exclusive.live && !res.exclusive.tap,
+      fromReady: res.fromReady.state === 'IDLE' && res.fromReady.live,
+      after: idle(res.after),
+    });
+    return { ...v, ...res };
   });
 
   def('calibration', async ({ page }) => {

@@ -148,6 +148,17 @@ Exported CSV files contain the raw data unless you choose a labelled derived vie
 - The quality bar during the run (INPUT, NOISE, CLIPPING, SIGNAL, CAPTURE) is a warning while
   you measure. The quality status after the analysis is what counts.
 
+## Live RTA
+
+The RTA tab can analyse the microphone live ("Start live RTA"): FFT, octave or one-third-octave
+bands, averaged INSTANT, FAST (125 ms) or SLOW (1 s), with peak hold and freeze. It is feedback
+for setting up, not a measurement: nothing of it is stored. Band levels are the power in each
+band (a tone of full-scale amplitude reads −3 dB relative in its band); in FFT mode a tone's
+strongest bin reads a few dB lower, because the tone's power spreads over neighbouring bins.
+Hatched bands are too narrow for the analysis resolution to resolve (raise the FFT size in
+expert mode). The microphone is released when you stop it, leave the tab or the workspace,
+press Escape or start a setup check or measurement; the two never share the input.
+
 ## Limits of automated testing
 
 OSCILLA's automated tests check the digital pipeline, the analysis mathematics on synthetic

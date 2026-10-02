@@ -22,7 +22,7 @@ workspaces out; gated by `tests/browser/v3-ui.cjs`, `tests/unit/v3-ui.test.mjs` 
 | `views/quality-bar.js` | engine events (incl. progress `capture` chunks) | `reduceQualityBar()` / `qualityBarView()` (INPUT, NOISE, CLIPPING, SIGNAL, CAPTURE); `qualityPanel(assessment)` |
 | `views/response-chart.js` | engine result or Experiment | `buildResponseView()`: x, axes, series, bands, markers, badges, notes, summary, `readout(i)` / `readoutAt(hz)` |
 | `views/ir-chart.js` | IrResult | `buildIrView()`: ms re direct peak, absolute origin, window region, decimated series |
-| `views/rta-chart.js` | RtaResult (or FFT bins), averager state | `buildRtaView()`: bars over band edges, peak ticks, labels, summary |
+| `views/rta-chart.js` | RtaResult (or FFT bins), averager state, a live-rta.js `viewInput()` | `buildRtaView()`: bars over band edges, peak ticks, labels, summary; `live` / `snapshotLabel` badge, fixed live axis (`liveRange`) |
 | `views/experiment-summary.js` | Experiment, store `list()` rows | `experimentSummary()` (§161), `experimentListRows()` |
 | `views/compare-view.js` | 2+ Experiments | `buildCompareView()`: common config, differences, overlay, A − B |
 | `views/announcements.js` | engine events | `reduceAnnouncements()` / `announce()` (§151) |
@@ -118,9 +118,11 @@ loop). From a view model:
   shows `readout.lines`, never a raw float.
 - RTA bars: a `draw` hook (or the custom canvas style of `bio-chart.js`) fills each bar from
   `valToPos(bar.lo)` to `valToPos(bar.hi)`, height `bar.value`; `underResolved` bars hatched;
-  `peaks[]` as dashed horizontal ticks. Live 30 fps RTA rebuilds the view per averager frame
-  (tens of bands); the live FFT stays on the V2 `spectrum-chart.js` path and `buildRtaView({
-  fft })` serves frozen or stored spectra.
+  `peaks[]` as dashed horizontal ticks. The live RTA does not rebuild the view per frame: the
+  chart draws the live frame's arrays in its `draw` hook (`setLive(frame)` + `redraw()`, no
+  rebuild, no allocation; the FFT trace one vertex per pixel column) and the view model is
+  rebuilt 4 times a second (`updateView()` keeps the uPlot when the axes did not change). See
+  "Live RTA" below.
 - every chart has its text summary (`view.summary`) in an associated `aria-describedby`
   element (§150); points are never exposed to assistive technology.
 - views are rebuilt when a result or an option (smoothing, normalization, scale, window)
@@ -184,19 +186,62 @@ on white is about 1.9:1, so in the light theme warning text is `--osc-text` on
 `--osc-orange` is a proposed extension of the existing token (not a new family), to be decided
 in the integration step.
 
+## Live RTA
+
+Spec §44-§49, §122-§123, §150; plan V341-V344. The RTA tab of MEASURE analyses the input live.
+
+- **Input**: "Start live RTA" opens the measurement input through the capture io's own
+  permission path and constraints (`capture.js` `openLiveTap`): one `AnalyserNode` on the
+  `MediaStreamAudioSourceNode` (or the TEST CONTEXT loopback), configured like the V2 microphone
+  analyser (`audio/microphone.js` `configureAnalyser`), never connected to the destination. Its
+  time-domain samples are read with the V2 reader (`analysis/analyser.js`
+  `createAnalyserReader().readTime`) on the shared frame loop (`charts/frame-loop.js`); the
+  analyser's own dB values and smoothing are not used.
+- **Analysis**: `measurement/live-rta.js` (pure): each frame is windowed and transformed on
+  the `spectrum.js` mean-square scale, so band levels equal `welch()` → `bandPowers()` of the
+  same signal (a sine of amplitude A reads 10·log10(A²/2) in its band). Modes FFT / OCTAVE /
+  1/3 OCTAVE (`role="radio"` segmented choice); averaging INSTANT / FAST (τ = 125 ms) / SLOW
+  (τ = 1 s) with `createRtaAverager` (power, conventional constants, not IEC-verified); peak
+  hold, freeze, reset peaks; under-resolved bands (< 2 bins) hatched. Expert fields without a
+  recipe path drive it: RTA mode, FFT size (4096-32768), window (Hann, Blackman-Harris),
+  RTA averaging (`LIVE_RTA_FIELDS` in `ui/measure.js`); they never change the recipe.
+- **Calibration**: the frequency profile per band through `applyFrequencyCorrectionToBands`
+  (that frame's spectrum as in-band weighting, written in place) and per FFT bin through
+  `correctionCurve`; uncovered bands and bins stay raw and are said to be. Levels are "dB
+  relative (dBFS-like)" unless a valid level calibration applies (then dB SPL, CALIBRATED).
+- **Per frame** (§123): read samples, `push()` (no allocation; unit-tested), `chart.redraw()`.
+  No Alpine write per frame; the view model (summary, badges, notes, readout text) every
+  `LIVE_VIEW_INTERVAL_MS` = 250 ms. The axis is fixed (`LIVE_RTA_Y_RANGE`: bands −120 … 0 dB,
+  FFT −150 … 0 dB, shifted by a valid level offset), so it does not jump.
+- **Lifecycle**: exclusive with a measurement: the start is refused (BUSY) while a setup check
+  or measurement runs, a READY setup is released first, and "Check setup" / "Start
+  measurement" stop the live RTA before they capture (`capture.js` also drops the tap before any
+  capture). Leaving the RTA tab or MEASURE, Escape, page hide (`pagehide`, hidden document), a
+  track that ends and a closed context stop it; every stop releases the analyser, the source
+  node and every track (`counts()` all zero, asserted in `tests/browser/v3-ui.cjs` live-rta).
+  "Live RTA started" / "Live RTA stopped" are announced once each (polite).
+- **Not stored**: live RTA is feedback. `snapshot()` gives the `RtaResult` (raw band levels,
+  `oscilla.rta.v1`, the window ID, fftSize) an explicit snapshot would store; saving it into an
+  experiment is not offered yet, because an experiment's recipe requires a stimulus and a live
+  snapshot has none (a schema decision, not taken here).
+- **Browsers**: Chromium and Firefox run it on their fake microphones in the gate (a 1 kHz tone
+  of amplitude 0.1 reads −23.0 dB in its band); WebKit offers no fake device, so the gate checks
+  the refused start, its message and the disabled controls.
+
 ## Integration notes
 
 - Each workspace is ONE full-width view (`#osc-view-measure`, `#osc-view-experiments`, keyed on
   `workspace`) that holds its own `.osc-panel`s in a 12-column grid, instead of loose panels in
   the V2 focus grid: the V2 panels are hidden in these workspaces at every width, and the V2
   focus/tablet rules stay untouched. The spans are the ones proposed above.
-- RTA: the stored data is the noise check's one-third-octave band power (engine
-  `summarizeNoise`); the averager (`createRtaAverager`, instant) gives peak hold and freeze over
-  successive noise checks. A live input RTA needs an input analyser tap in `capture.js` and is
-  not built; FFT and octave modes are therefore not offered for stored data.
-- Expert fields without a recipe path (RTA mode, FFT size, window, averaging) are not shown:
-  they would not change the measurement. The output level is the Stimulus panel's LOW / MEDIUM /
-  HIGH control only.
+- RTA: live input analysis as described in "Live RTA". Without it, the tab shows the noise
+  check's stored one-third-octave band power (engine `summarizeNoise`, binHz from
+  `NOISE_FFT`) badged NOISE CHECK SNAPSHOT (never LIVE), with its Welch averaging described as
+  such; the instant averager gives peak hold and freeze over successive noise checks. FFT and
+  octave modes apply to the live input only (stored data is one-third-octave).
+- Expert fields without a recipe path: RTA mode, FFT size, window and RTA averaging drive the
+  live RTA (help text "Live RTA (RTA tab); not part of the measurement recipe."). The output
+  level is the Stimulus panel's LOW / MEDIUM / HIGH control only.
 - Light theme: no new token values; warning text is `--osc-text` on `--osc-warn-bg`, orange and
   red are icons, strokes and the 3 px leading edge of status chips only.
 - Status chips: text + lucide icon (the shape differs per status) + the V2 toast convention of a

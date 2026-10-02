@@ -16,6 +16,18 @@
 // aborts through the capture io's own pagehide/visibility handling and main.js (§169); leaving
 // the MEASURE workspace aborts a measurement in progress.
 //
+// Live RTA (spec §44-§49, §122-§123, §150; docs/v3/ui-integration.md "Live RTA"): the RTA tab
+// starts a live analysis of the input on request. It opens the input through the capture io's
+// own permission path (capture.js openLiveTap: one AnalyserNode on the measurement input),
+// reads the analyser's time-domain samples with the V2 reader (analysis/analyser.js) on the
+// shared frame loop, and computes the spectrum with measurement/live-rta.js (the spectrum.js
+// mean-square scale of every band level). Per frame it only pushes samples and repaints the
+// chart (no allocation, no Alpine write); the view model (summary, badges, readout text) is
+// rebuilt LIVE_VIEW_INTERVAL_MS apart. Leaving the RTA tab or the workspace, Escape, page hide
+// and starting a setup check or measurement stop it and release the tracks and nodes; it
+// cannot start while a measurement is in progress (exclusive input). Live RTA is feedback:
+// nothing of it is stored.
+//
 // TEST CONTEXT (§146, §249): `?measure=loopback` (or OSCILLA.measure.useLoopback()) replaces
 // the microphone with capture.js createLoopbackIo, a known synthetic digital system. The
 // workspace then says so in a banner and in every saved experiment; it is never presented as a
@@ -23,8 +35,15 @@
 
 import { MEASUREMENT_STATES as S, isActiveState } from '../measurement/state-machine.js';
 import {
-  createMeasurementEngine, assessMeasurement, MEASUREMENT_LEVELS,
+  createMeasurementEngine, assessMeasurement, mapError, MEASUREMENT_ERRORS, MEASUREMENT_LEVELS,
+  NOISE_FFT,
 } from '../measurement/engine.js';
+import {
+  createLiveRta, LIVE_RTA_FFT_SIZES, LIVE_RTA_WINDOWS,
+} from '../measurement/live-rta.js';
+import { createAnalyserReader } from '../analysis/analyser.js';
+import { onFrame } from '../charts/frame-loop.js';
+import { hasMicrophoneApi, MIC_UNAVAILABLE_TEXT } from '../audio/microphone.js';
 import { createCaptureIo, createLoopbackIo, LOOPBACK_LABEL } from '../measurement/capture.js';
 import { bandCenters, createRtaAverager, rtaResult } from '../measurement/rta.js';
 import {
@@ -37,7 +56,7 @@ import {
 import { initialAnnouncements, reduceAnnouncements } from '../measurement/views/announcements.js';
 import { buildResponseView } from '../measurement/views/response-chart.js';
 import { buildIrView } from '../measurement/views/ir-chart.js';
-import { buildRtaView, RTA_MODE_LABELS } from '../measurement/views/rta-chart.js';
+import { buildRtaView, RTA_MODE_LABELS, averagingLabel } from '../measurement/views/rta-chart.js';
 import { UNAVAILABLE } from '../measurement/views/common.js';
 import { parseCalibrationText } from '../calibration/parse.js';
 import { coverage as profileCoverage } from '../calibration/interpolate.js';
@@ -64,6 +83,18 @@ export const IR_SPANS = Object.freeze([
   Object.freeze({ id: 'full', label: 'Full', range: null }),
 ]);
 
+/** RTA modes (segmented choice of the RTA tab; spec §44). */
+export const RTA_MODE_CHOICES = Object.freeze(['fft', 'octave', 'third'].map((id) => Object
+  .freeze({ id, label: RTA_MODE_LABELS[id] })));
+
+/** RTA averaging (segmented choice; time constants from rta.js RTA_MODES, spec §49). */
+export const RTA_AVERAGING_CHOICES = Object.freeze(['instant', 'fast', 'slow'].map((id) => Object
+  .freeze({ id, label: id === 'instant' ? 'Instant' : id === 'fast' ? 'Fast' : 'Slow',
+    detail: averagingLabel({ mode: id }) })));
+
+/** Live RTA view-model rebuild interval (summary, badges, readout text); bars repaint per frame. */
+export const LIVE_VIEW_INTERVAL_MS = 250;
+
 /** Window region shown on the IR chart (view only) when enabled, ms re the direct peak. */
 export const IR_WINDOW_MS = Object.freeze([-1, 10]);
 
@@ -73,10 +104,21 @@ const NORMALIZATIONS = Object.freeze({
   band: Object.freeze({ mode: 'band-mean', lo: 500, hi: 2000 }),
 });
 
+/**
+ * Expert fields without a recipe path that drive the live RTA (spec §78, §239): field id →
+ * meas.view key. They never change the measurement recipe.
+ */
+export const LIVE_RTA_FIELDS = Object.freeze({
+  rtaMode: 'rtaMode', averaging: 'rtaAveraging', fftSize: 'rtaFftSize', window: 'rtaWindow',
+});
+const LIVE_FIELD_HELP = 'Live RTA (RTA tab); not part of the measurement recipe.';
+
 const FIELD_DEFAULTS = (() => {
   const out = {};
   for (const g of expertFields({ disclosure: 'advanced' }).groups) {
-    for (const f of g.fields) if (f.path) out[f.id] = f.default;
+    for (const f of g.fields) {
+      if (f.path || Object.hasOwn(LIVE_RTA_FIELDS, f.id)) out[f.id] = f.default;
+    }
   }
   // The preset is the starting point (its recipe overrides the generic field defaults).
   const r = CHARACTERIZE_PLAYBACK_CHAIN.recipe;
@@ -135,8 +177,11 @@ export function createMeasureUi(svc) {
     calibrationObj: null,  // the object identity the engine compares between preflight/measure
     repeatOf: null,
     charts: { response: null, ir: null, rta: null },
-    rta: null,             // { averager, bands, power, sampleRate }
+    rta: null,             // { averager, bands, power, sampleRate } (stored noise-check bands)
     rtaView: null,
+    live: null,            // { token, tap, rta (live-rta.js), reader, lastAt, nextViewAt, off }
+    liveStarting: false,
+    liveToken: 0,
     pending: null,         // the running measure()/preflight() promise
     lastRecipe: null,
     onStateHook: null,     // test seam only (onceInState)
@@ -341,29 +386,185 @@ export function createMeasureUi(svc) {
     const bands = bandCenters('third', 20, 20000, sr);
     if (bands.length !== n.bands.levelsDb.length) return null;
     const levelsDb = Float64Array.from(n.bands.levelsDb);
-    return { sampleRate: sr, rta: rtaResult({ sampleRate: sr, resolution: 'third', bands,
-      levelsDb }) };
+    return { sampleRate: sr, binHz: sr / NOISE_FFT, rta: rtaResult({ sampleRate: sr,
+      resolution: 'third', bands, levelsDb, fftSize: NOISE_FFT, window: 'hann' }) };
+  }
+
+  function liveSourceText(kind) {
+    return kind === 'loopback'
+      ? 'LIVE · TEST CONTEXT loopback input (the output chain through the synthetic system)'
+      : 'LIVE · microphone input (feedback only, not stored)';
+  }
+
+  function liveCalibration(m) {
+    return { profile: m.cal.useFrequency && ctx.profile ? ctx.profile : null,
+      levelCalibration: m.cal.useLevel && isValidLevelCalibration(ctx.levelCal) ? ctx.levelCal
+        : null };
+  }
+
+  function rebuildLiveRta(m, L) {
+    const cal = liveCalibration(m);
+    if (cal.profile !== L.rta.profile || cal.levelCalibration !== L.rta.levelCalibration) {
+      L.rta.setCalibration(cal); // restarts the analysis (and unfreezes it)
+    }
+    m.rtaFrozen = L.rta.frozen;
+    const view = buildRtaView({ ...L.rta.viewInput(), fixedRange: true });
+    m.rta = view ? { summary: view.summary, badges: view.badges.slice(),
+      notes: view.notes.slice(), yLabel: `${view.axes.y.label} (${view.axes.y.unit})`,
+      mode: RTA_MODE_LABELS[view.mode], source: liveSourceText(L.kind), live: true } : null;
+    const chart = ctx.charts.rta;
+    if (chart) {
+      chart.setLive(L.rta.frame, { showPeaks: m.view.rtaPeakHold });
+      chart.updateView(view);
+    }
+    return view;
   }
 
   function rebuildRta() {
     const cmp = ctx.cmp;
     const m = cmp.meas;
+    if (ctx.live) return rebuildLiveRta(m, ctx.live);
     let view = null;
     const st = ctx.rta;
     if (st && st.last) {
+      // A stored snapshot, never LIVE: the noise check's Welch average (engine summarizeNoise);
+      // peak hold spans successive noise checks.
       view = buildRtaView({
         rta: { resolution: 'third', bands: st.bands, levelsDb: st.last.levelsDb },
         peakDb: m.view.rtaPeakHold && st.last.peakDb ? st.last.peakDb : null,
         frozen: st.averager.frozen,
-        averaging: { mode: 'instant' },
+        snapshotLabel: 'NOISE CHECK SNAPSHOT',
+        averaging: { text: 'Welch average of the whole noise check (Hann, 50 % overlap); peak '
+          + 'hold across successive noise checks' },
+        binHz: st.binHz,
         levelCalibration: m.cal.useLevel ? ctx.levelCal : null,
       });
     }
     m.rta = view ? { summary: view.summary, badges: view.badges.slice(), notes: view.notes.slice(),
-      yLabel: `${view.axes.y.label}`, mode: RTA_MODE_LABELS[view.mode],
-      source: 'Background (noise check), one-third-octave band power' } : null;
-    if (ctx.charts.rta) ctx.charts.rta.setView(view);
+      yLabel: `${view.axes.y.label} (${view.axes.y.unit})`, mode: RTA_MODE_LABELS[view.mode],
+      source: 'Background (noise check), one-third-octave band power', live: false } : null;
+    if (ctx.charts.rta) {
+      ctx.charts.rta.setLive(null);
+      ctx.charts.rta.setView(view);
+    }
     return view;
+  }
+
+  // ---------------------------------------------------------------- live RTA
+  function liveTick(now) {
+    const L = ctx.live;
+    if (!L) return;
+    const dt = L.lastAt === null ? 0 : Math.max(0, (now - L.lastAt) / 1000);
+    L.lastAt = now;
+    if (!L.rta.frozen) L.rta.push(L.reader.readTime(now), dt);
+    if (ctx.charts.rta) ctx.charts.rta.redraw();
+    if (now >= L.nextViewAt) {
+      L.nextViewAt = now + LIVE_VIEW_INTERVAL_MS;
+      rebuildRta();
+    }
+  }
+
+  function endLive(L) {
+    ctx.live = null;
+    if (L.off) L.off();
+    const m = ctx.cmp.meas;
+    m.rtaLive.running = false;
+    m.rtaLive.kind = null;
+    m.rtaFrozen = ctx.rta ? ctx.rta.averager.frozen : false;
+    announce({ politeness: 'polite', text: 'Live RTA stopped' });
+    rebuildRta();
+  }
+
+  /** The io closed the tap by itself (page hide, track ended, a measurement, dispose). */
+  function liveClosed(token, reason) {
+    const L = ctx.live;
+    if (!L || L.token !== token || L.closing) return; // stopLive() is already cleaning up
+    endLive(L);
+    if (reason === 'track-ended') {
+      ctx.cmp.meas.rtaLive.error = 'Live RTA stopped: the input device was disconnected or '
+        + 'stopped.';
+    }
+  }
+
+  /** Stop the live RTA (or its pending start); true when something was stopped. */
+  function stopLive() {
+    let stopped = false;
+    if (ctx.liveStarting) {
+      ctx.liveToken += 1; // the pending start sees a stale token and closes what it opened
+      ctx.liveStarting = false;
+      if (ctx.cmp) ctx.cmp.meas.rtaLive.starting = false;
+      if (ctx.io) ctx.io.cancel();
+      stopped = true;
+    }
+    const L = ctx.live;
+    if (!L) return stopped;
+    L.closing = true;
+    try { L.tap.close(); } catch (e) { /* already released */ }
+    endLive(L);
+    return true;
+  }
+
+  function liveAnalysis(m, sampleRate) {
+    return createLiveRta({ sampleRate, fftSize: m.view.rtaFftSize, window: m.view.rtaWindow,
+      mode: m.view.rtaMode, averaging: m.view.rtaAveraging, ...liveCalibration(m) });
+  }
+
+  /** A new frame length or window: resize the tap's analyser, restart the analysis. */
+  function reconfigureLive(m) {
+    const L = ctx.live;
+    if (!L) return;
+    if (L.tap.analyser.fftSize !== m.view.rtaFftSize) L.tap.analyser.fftSize = m.view.rtaFftSize;
+    L.rta = liveAnalysis(m, L.rta.sampleRate); // the reader follows the analyser's fftSize
+    L.lastAt = null;
+    m.rtaFrozen = false;
+    rebuildRta();
+  }
+
+  async function startLive(cmp) {
+    const m = cmp.meas;
+    if (ctx.live || ctx.liveStarting || !m.rtaLive.available) return false;
+    m.rtaLive.error = null;
+    if (m.busy) {
+      m.rtaLive.error = MEASUREMENT_ERRORS.BUSY;
+      return false;
+    }
+    const me = ensureEngine();
+    if (me.state === S.READY) me.reset(); // a checked setup keeps the input open: release it
+    svc.engine.init(); // in the user gesture (autoplay policy)
+    const token = ++ctx.liveToken;
+    ctx.liveStarting = true;
+    m.rtaLive.starting = true;
+    const kind = ctx.ioKind;
+    try {
+      const tap = await ctx.io.openLiveTap({ fftSize: m.view.rtaFftSize,
+        onClosed: (reason) => liveClosed(token, reason) });
+      if (token !== ctx.liveToken) {
+        tap.close();
+        return false;
+      }
+      const rta = liveAnalysis(m, tap.sampleRate);
+      const L = { token, tap, rta, kind, lastAt: null, nextViewAt: 0, off: null, closing: false,
+        reader: createAnalyserReader(tap.analyser, { sampleRate: tap.sampleRate }) };
+      ctx.live = L;
+      m.rtaLive.running = true;
+      m.rtaLive.kind = kind;
+      m.rtaFrozen = false;
+      announce({ politeness: 'polite', text: 'Live RTA started' });
+      rebuildRta();
+      L.off = onFrame(liveTick);
+      return true;
+    } catch (e) {
+      if (token === ctx.liveToken) {
+        const err = mapError(e, 'NO_INPUT');
+        if (err.code !== 'ABORTED') m.rtaLive.error = err.message;
+      }
+      return false;
+    } finally {
+      if (token === ctx.liveToken) {
+        ctx.liveStarting = false;
+        m.rtaLive.starting = false;
+      }
+    }
   }
 
   function updateRtaFrame() {
@@ -382,7 +583,8 @@ export function createMeasureUi(svc) {
     if (!ctx.rta || ctx.rta.size !== n) {
       ctx.rta = { size: n,
         averager: createRtaAverager({ mode: 'instant', peakHold: true, size: n }),
-        bands: r.rta.bands, sampleRate: r.sampleRate, last: null, lastPower: null };
+        bands: r.rta.bands, sampleRate: r.sampleRate, binHz: r.binHz, last: null,
+        lastPower: null };
     }
     ctx.rta.lastPower = Float64Array.from(r.rta.levelsDb, (db) => (db > -300 ? 10 ** (db / 10)
       : 0));
@@ -426,6 +628,7 @@ export function createMeasureUi(svc) {
 
   // ---------------------------------------------------------------- actions
   async function runPreflight(cmp) {
+    stopLive(); // exclusive input: the live RTA never runs beside a capture
     const me = ensureEngine();
     if (ctx.me.state !== S.IDLE && !isActiveState(ctx.me.state)) me.reset();
     svc.engine.init();
@@ -448,6 +651,7 @@ export function createMeasureUi(svc) {
   }
 
   async function runMeasure(cmp) {
+    stopLive();
     const me = ensureEngine();
     svc.engine.init();
     svc.stopPlayback(cmp);
@@ -476,6 +680,8 @@ export function createMeasureUi(svc) {
   return {
     MEASURE_RESULT_TABS,
     IR_SPANS,
+    RTA_MODE_CHOICES,
+    RTA_AVERAGING_CHOICES,
     OUTPUT_LEVEL_CHOICES,
     ROOM_NOTES,
     CHARACTERIZE_PLAYBACK_CHAIN,
@@ -498,7 +704,12 @@ export function createMeasureUi(svc) {
       live: { polite: '', assertive: '' },
       tab: 'response',
       view: { smoothing: 0, normalization: 'none', irScale: 'linear', irNormalize: false,
-        irWindow: false, irSpan: 'early', rtaPeakHold: false },
+        irWindow: false, irSpan: 'early', rtaPeakHold: false,
+        rtaMode: FIELD_DEFAULTS.rtaMode, rtaAveraging: FIELD_DEFAULTS.averaging,
+        rtaFftSize: FIELD_DEFAULTS.fftSize, rtaWindow: FIELD_DEFAULTS.window },
+      rtaLive: { running: false, starting: false, error: null, kind: null,
+        available: !!svc.loopback || hasMicrophoneApi(typeof navigator !== 'undefined'
+          ? navigator : null), unavailableText: MIC_UNAVAILABLE_TEXT },
       response: null,
       ir: null,
       rta: null,
@@ -527,7 +738,10 @@ export function createMeasureUi(svc) {
         sampleRate: ctx.preflight ? ctx.preflight.sampleRate : null }).groups
         .filter((g) => g.id !== 'calibration' && g.id !== 'view')
         // The output level has its own LOW / MEDIUM / HIGH control in the Stimulus panel.
-        .map((g) => ({ ...g, fields: g.fields.filter((f) => f.id !== 'level') }));
+        // RTA mode, FFT size, window and averaging drive the live RTA (no recipe path).
+        .map((g) => ({ ...g, fields: g.fields.filter((f) => f.id !== 'level')
+          .map((f) => (Object.hasOwn(LIVE_RTA_FIELDS, f.id) ? { ...f, live: true,
+            help: LIVE_FIELD_HELP } : f)) }));
     },
     get measureCalIndicator() {
       const lvl = this.meas.cal.useLevel && this.meas.cal.level ? ctx.levelCal : null;
@@ -572,9 +786,13 @@ export function createMeasureUi(svc) {
     measureOwnsOutput() {
       return !!ctx.me && isActiveState(ctx.me.state) && ctx.me.state !== S.READY;
     },
-    /** Abort from Escape, page hide or leaving the workspace; false when nothing ran. */
+    /**
+     * Abort from Escape, page hide or leaving the workspace (a measurement and the live RTA);
+     * false when nothing ran.
+     */
     measureAbort(reason = 'user') {
-      if (!ctx.me || !isActiveState(ctx.me.state)) return false;
+      const live = stopLive();
+      if (!ctx.me || !isActiveState(ctx.me.state)) return live;
       const ok = ctx.me.abort(reason);
       refresh();
       return ok;
@@ -622,6 +840,10 @@ export function createMeasureUi(svc) {
       refresh();
     },
     measureSetValue(id, raw, kind) {
+      if (Object.hasOwn(LIVE_RTA_FIELDS, id)) {
+        this.measureSetView(LIVE_RTA_FIELDS[id], id === 'fftSize' ? Number(raw) : raw);
+        return;
+      }
       let v = raw;
       if (kind === 'number') {
         v = Number(raw);
@@ -639,6 +861,7 @@ export function createMeasureUi(svc) {
     measureLevelKeydown(e) { this.rovingKeydown(e); },
     measureSetTab(tab) {
       if (!MEASURE_RESULT_TABS.some((t) => t.id === tab)) return;
+      if (tab !== 'rta') stopLive(); // the live RTA runs only while it is seen
       this.meas.tab = tab;
       this.meas.readout = null;
       this.$nextTick(() => {
@@ -647,12 +870,42 @@ export function createMeasureUi(svc) {
       });
     },
     measureSetView(key, value) {
+      if (key === 'rtaMode' && !RTA_MODE_CHOICES.some((c) => c.id === value)) return;
+      if (key === 'rtaAveraging' && !RTA_AVERAGING_CHOICES.some((c) => c.id === value)) return;
+      if (key === 'rtaFftSize' && !LIVE_RTA_FFT_SIZES.includes(value)) return;
+      if (key === 'rtaWindow' && !LIVE_RTA_WINDOWS.includes(value)) return;
       this.meas.view[key] = value;
+      const field = Object.keys(LIVE_RTA_FIELDS).find((f) => LIVE_RTA_FIELDS[f] === key);
+      if (field) this.meas.values[field] = value; // the expert field shows the same choice
+      const L = ctx.live;
+      if (L && key === 'rtaMode') L.rta.setMode(value);
+      if (L && key === 'rtaAveraging') L.rta.setAveraging(value);
+      if (L && (key === 'rtaMode' || key === 'rtaAveraging')) this.meas.rtaFrozen = false;
+      if (L && (key === 'rtaFftSize' || key === 'rtaWindow')) {
+        reconfigureLive(this.meas);
+        return;
+      }
       if (['smoothing', 'normalization'].includes(key)) rebuildResponse();
       else if (key.startsWith('ir')) rebuildIr();
       else if (key.startsWith('rta')) rebuildRta();
     },
+    /** Start or stop the live RTA (the RTA tab's button). */
+    async measureRtaLiveToggle() {
+      if (ctx.live || ctx.liveStarting) {
+        stopLive();
+        return false;
+      }
+      return startLive(this);
+    },
     measureRtaFreeze() {
+      const L = ctx.live;
+      if (L) {
+        if (L.rta.frozen) L.rta.unfreeze();
+        else L.rta.freeze();
+        this.meas.rtaFrozen = L.rta.frozen;
+        rebuildRta();
+        return;
+      }
       const st = ctx.rta;
       if (!st) return;
       if (st.averager.frozen) st.averager.unfreeze();
@@ -661,6 +914,12 @@ export function createMeasureUi(svc) {
       rebuildRta();
     },
     measureRtaReset() {
+      const L = ctx.live;
+      if (L) {
+        L.rta.resetPeaks();
+        rebuildRta();
+        return;
+      }
       const st = ctx.rta;
       if (!st) return;
       st.averager.reset();
@@ -824,6 +1083,7 @@ export function createMeasureUi(svc) {
         /** TEST CONTEXT: replace the microphone with a known synthetic system. */
         useLoopback(system = null) {
           if (ctx.me && isActiveState(ctx.me.state)) return false;
+          stopLive();
           disposeEngine();
           ctx.loopback = true;
           if (system) ctx.loopbackSystem = system;
@@ -833,6 +1093,7 @@ export function createMeasureUi(svc) {
         },
         useMicrophone() {
           if (ctx.me && isActiveState(ctx.me.state)) return false;
+          stopLive();
           disposeEngine();
           ctx.loopback = false;
           self.meas.loopback = false;
@@ -872,7 +1133,29 @@ export function createMeasureUi(svc) {
             captures: io ? io.activeCaptureCount : 0,
             ports: io ? io.openPortCount : 0,
             tracks: io ? io.openTrackCount : 0,
+            liveTap: io ? io.liveTapOpen : false,
+            liveLoop: ctx.live && ctx.live.off ? 1 : 0,
           };
+        },
+        /** The live RTA's current frame as plain data (null when it is not running). */
+        liveRta() {
+          const L = ctx.live;
+          if (!L) return null;
+          const f = L.rta.frame;
+          const fin = (v) => (Number.isFinite(v) ? v : null);
+          return { mode: f.mode, averaging: L.rta.averaging, frozen: L.rta.frozen,
+            frames: f.frames, sampleRate: L.rta.sampleRate, fftSize: L.rta.fftSize,
+            window: L.rta.window, analyserFftSize: L.tap.analyser.fftSize,
+            calibrated: { ...f.calibrated }, kind: L.kind,
+            bands: f.bands ? f.bands.map((b) => b.nominal) : null,
+            frequencies: f.frequencies ? Array.from(f.frequencies) : null,
+            values: Array.from(f.values, fin), peaks: Array.from(f.peaks, fin),
+            underResolved: f.underResolved ? f.underResolved.slice() : null };
+        },
+        /** rta.js rtaResult of the live bands (what an explicit snapshot would store). */
+        liveRtaSnapshot() {
+          const r = ctx.live ? ctx.live.rta.snapshot() : null;
+          return r ? { ...r, levelsDb: Array.from(r.levelsDb) } : null;
         },
         experimentFromResult: () => (ctx.result ? experimentOf(ctx.result, self) : null),
       };

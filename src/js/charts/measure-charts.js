@@ -14,7 +14,14 @@
 //   createResponseChart(host, { onReadout(lines|null) })  response / overlay / delta views
 //   createIrChart(host)                                    IrView (ms re the direct peak)
 //   createRtaChart(host, { onReadout(lines|null) })        RtaView (bars over band edges)
-//   chart = { setView(view|null), refreshTheme(), relayout(), dispose(), uplot, view }
+//   chart = { setView(view|null), refreshTheme(), relayout(), dispose(), uplot, view,
+//             setLive(frame|null), updateView(view), redraw() }
+//
+// Live RTA (spec §123, docs/v3/ui-integration.md "Live RTA"): setLive(frame) hands the chart
+// the live-rta.js frame (its arrays are updated in place on every push); redraw() repaints the
+// existing uPlot from it (bars or the FFT trace, peak ticks) without rebuilding anything or
+// allocating; updateView(view) swaps the view model (labels, readout text, hatching) and only
+// rebuilds when its axes or layout changed. The live axis is fixed (rta-chart.js liveRange).
 
 import uPlot from 'uplot';
 import { chartTheme, withAlpha, uplotAxis, canvasFont, observeSize } from './chart-theme.js';
@@ -74,6 +81,8 @@ function createViewChart(host, { onReadout = null, draw = null } = {}) {
   let theme = chartTheme();
   let u = null;
   let view = null;
+  let live = null; // a live-rta.js frame (drawn by the draw hook; uPlot series stay empty)
+  const liveState = { frame: null, showPeaks: false };
   const empty = document.createElement('div');
   empty.className = 'osc-chart-note';
   empty.textContent = 'NOT MEASURED';
@@ -84,7 +93,7 @@ function createViewChart(host, { onReadout = null, draw = null } = {}) {
 
   function seriesOpts(v) {
     const list = [{}];
-    if (!v.series.length) {
+    if (!v.series.length || live) {
       list.push({ label: 'bars', show: true, stroke: 'transparent', width: 0,
         points: { show: false } });
       return list;
@@ -114,7 +123,7 @@ function createViewChart(host, { onReadout = null, draw = null } = {}) {
 
   function data(v) {
     const x = Array.from(v.x);
-    if (!v.series.length) return [x, x.map(() => null)];
+    if (!v.series.length || live) return [x, x.map(() => null)];
     return [x, ...v.series.map((d) => d.values)];
   }
 
@@ -186,7 +195,7 @@ function createViewChart(host, { onReadout = null, draw = null } = {}) {
       series: seriesOpts(v),
       bands: bandOpts(v),
       hooks: {
-        draw: [(self) => { if (draw) draw(self, v, theme); }],
+        draw: [(self) => { if (draw) draw(self, view || v, theme, live ? liveState : null); }],
         setCursor: [(self) => readout(self)],
       },
     };
@@ -250,12 +259,45 @@ function createViewChart(host, { onReadout = null, draw = null } = {}) {
 
   build();
 
+  // Same axes and layout: the view can be swapped without rebuilding the uPlot.
+  const sameRange = (a, b) => a[0] === b[0] && a[1] === b[1];
+  function compatible(a, b) {
+    return !!a && !!b && a.mode === b.mode && sameRange(a.axes.x.range, b.axes.x.range)
+      && sameRange(a.axes.y.range, b.axes.y.range) && (a.bars || []).length === (b.bars || [])
+      .length && a.series.length === b.series.length && a.x.length === b.x.length;
+  }
+
   return {
     get uplot() { return u; },
     get view() { return view; },
     setView(next) {
       view = next || null;
       build();
+    },
+    /**
+     * Live frame to draw (null: draw the view's own values) and whether its peaks show; call
+     * redraw() or updateView() after.
+     */
+    setLive(frame, { showPeaks = false } = {}) {
+      const was = !!live;
+      live = frame || null;
+      liveState.frame = live;
+      liveState.showPeaks = !!showPeaks;
+      if (was !== !!live && view) build();
+    },
+    /** Swap the view; rebuild only when its axes or layout differ. */
+    updateView(next) {
+      if (u && compatible(view, next)) {
+        view = next;
+        u.redraw(false, false);
+      } else {
+        view = next || null;
+        build();
+      }
+    },
+    /** Repaint from the live frame (no rebuild, no allocation). */
+    redraw() {
+      if (u) u.redraw(false, false);
     },
     refreshTheme() { build(); },
     /** After the host was hidden (display: none), rebuild at its real size. */
@@ -340,9 +382,73 @@ export function createIrChart(host) {
   return createViewChart(host, { draw: drawIrMarkers });
 }
 
+/**
+ * The live FFT trace: one vertex per pixel column (the column's strongest bin), so a dense
+ * spectrum costs one path of plot-width points; −Infinity (zero power) breaks the line.
+ */
+function liveTrace(self, ctx, freqs, values, x0, x1, yPos) {
+  let col = -1;
+  let best = -Infinity;
+  let bestX = 0;
+  let pen = false;
+  ctx.beginPath();
+  const flush = () => {
+    if (best === -Infinity) {
+      pen = false;
+      return;
+    }
+    const y = yPos(best);
+    if (pen) ctx.lineTo(bestX, y);
+    else ctx.moveTo(bestX, y);
+    pen = true;
+  };
+  for (let i = 0; i < freqs.length; i++) {
+    const f = freqs[i];
+    if (f < x0 || f > x1) continue;
+    const x = self.valToPos(f, 'x', true);
+    const c = Math.round(x);
+    if (c !== col) {
+      if (col >= 0) flush();
+      col = c;
+      best = -Infinity;
+      bestX = x;
+    }
+    if (values[i] > best) best = values[i];
+  }
+  if (col >= 0) flush();
+  ctx.stroke();
+}
+
+function drawLiveFft(self, v, theme, ls) {
+  const live = ls.frame;
+  const ctx = self.ctx;
+  const dpr = self.pxRatio || 1;
+  const [x0, x1] = v.axes.x.range;
+  const [y0, y1] = v.axes.y.range;
+  const yPos = (db) => self.valToPos(Math.max(y0, Math.min(y1, db)), 'y', true);
+  const c = roleColour(theme, live.calibrated && live.calibrated.frequency ? 'calibrated'
+    : 'observed');
+  ctx.save();
+  ctx.lineWidth = 1 * dpr;
+  ctx.strokeStyle = withAlpha(c, 0.95);
+  liveTrace(self, ctx, live.frequencies, live.values, x0, x1, yPos);
+  if (ls.showPeaks) {
+    ctx.strokeStyle = withAlpha(c, 0.6);
+    ctx.setLineDash([3 * dpr, 3 * dpr]);
+    liveTrace(self, ctx, live.frequencies, live.peaks, x0, x1, yPos);
+  }
+  ctx.restore();
+}
+
 /** RTA bars: band power from lo to hi edge; hatched when under-resolved; peak-hold ticks. */
-function drawRtaBars(self, v, theme) {
+function drawRtaBars(self, v, theme, ls = null) {
+  const live = ls ? ls.frame : null;
+  if (live && live.mode === 'fft') {
+    drawLiveFft(self, v, theme, ls);
+    return;
+  }
   if (!v.bars || !v.bars.length) return;
+  const useLive = !!live && live.values && live.values.length === v.bars.length;
   const ctx = self.ctx;
   const dpr = self.pxRatio || 1;
   const { top, height } = self.bbox;
@@ -358,8 +464,10 @@ function drawRtaBars(self, v, theme) {
     const w = Math.max(1, z - a - 2 * gap);
     const role = b.covered ? 'calibrated' : 'observed';
     const c = roleColour(theme, role);
-    if (b.value !== null) {
-      const y = yPos(b.value);
+    const value = useLive ? (live.values[b.index] > -Infinity ? live.values[b.index] : null)
+      : b.value;
+    if (value !== null) {
+      const y = yPos(value);
       ctx.fillStyle = withAlpha(c, 0.42);
       ctx.fillRect(x, y, w, yBottom - y);
       ctx.strokeStyle = withAlpha(c, 0.9);
@@ -371,11 +479,15 @@ function drawRtaBars(self, v, theme) {
       if (b.underResolved) hatch(ctx, x, y, w, yBottom - y, withAlpha(theme.text, 0.35), dpr);
     }
   }
-  for (const p of v.peaks || []) {
+  const peakList = useLive ? (ls.showPeaks ? v.bars : []) : v.peaks || [];
+  for (const p of peakList) {
+    const pv = useLive ? live.peaks[p.index] : p.value;
+    if (!(pv > -Infinity)) continue;
     const a = self.valToPos(p.lo, 'x', true);
     const z = self.valToPos(p.hi, 'x', true);
-    const y = yPos(p.value);
-    ctx.strokeStyle = withAlpha(roleColour(theme, p.role), 0.9);
+    const y = yPos(pv);
+    const role = useLive ? (p.covered ? 'calibrated' : 'observed') : p.role;
+    ctx.strokeStyle = withAlpha(roleColour(theme, role), 0.9);
     ctx.lineWidth = 1.25 * dpr;
     ctx.setLineDash((p.dash || [3, 3]).map((d) => d * dpr));
     ctx.beginPath();

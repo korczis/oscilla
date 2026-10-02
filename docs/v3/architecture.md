@@ -97,6 +97,16 @@ the same message (claim `analysis-off-main-thread`, planned). The noise check pr
 Welch power and one-third-octave band power through `spectrum.js` and `rta.js`. Why the
 sweep deconvolution method: ADR 0021.
 
+### Live RTA
+
+`measurement/live-rta.js` is the real-time analyzer: FFT, octave and one-third-octave bands of
+the live input on the same mean-square scale as `spectrum.js`, averaged by `createRtaAverager`
+(instant, fast, slow), with peak hold and freeze, frequency calibration on bands and bins and a
+level offset only under a valid level calibration. Its samples come from the capture io's
+`openLiveTap()` (one AnalyserNode on the measurement input, refused while a capture runs, closed
+by every release path). It is feedback in the sense of the rule above: only its explicit
+`snapshot()` (an `RtaResult` with algorithm and window IDs) could ever be stored.
+
 ### 4. Calibration
 
 `calibration/parse.js` reads CSV, TXT and JSON profiles. `profile.js` normalises a profile and
@@ -281,12 +291,24 @@ bandPowers(power, binHz, bands) -> Float64Array /* dB, −Infinity for zero powe
 bandBinCounts(binHz, bands, binCount?) -> { binCounts: Float64Array, underResolved: bool[] }
 bandAnalysis(power, binHz, bands) -> { algorithm, levelsDb, power, binCounts, underResolved }
 createRtaAverager({ mode: 'instant'|'fast'|'slow', peakHold, size }) -> { push(power, dt)
-  -> { levelsDb, peakDb|null }, reset, freeze, unfreeze, frozen, frames, mode, tau, peakHold }
+  -> { levelsDb, peakDb|null }, reset, resetPeaks, freeze, unfreeze, frozen, frames, mode, tau,
+  peakHold }
 rtaResult({ sampleRate, resolution, bands, levelsDb, fftSize = null, window = null })
   -> RtaResult   // the stored form; −Infinity / < −300 dB stored as −300 dB (zero power)
 RtaResult = { algorithm, sampleRate, resolution: 'octave'|'third',
   bands: [{ nominal, exact, lo, hi }], levelsDb: Float64Array, fftSize|null,
   windowAlgorithm|null }
+
+// live-rta.js — the live input analysis (feedback, never a stored result): frames of the input
+// tap's time-domain samples on the same mean-square scale; push() allocates nothing
+createLiveRta({ sampleRate, fftSize = 8192, window = 'hann', mode: 'fft'|'octave'|'third',
+  averaging: 'instant'|'fast'|'slow', profile, levelCalibration }) -> { push(samples, dt)
+  -> frame { mode, count, values, peaks, frequencies|null, bands|null, covered|null,
+  underResolved|null, calibrated, levelOffsetDb, frames, frozen }, setMode, setAveraging,
+  setCalibration, freeze, unfreeze, reset, resetPeaks, viewInput(), snapshot() -> RtaResult|null }
+// capture.js io — the live input tap on the measurement input (exclusive with a capture)
+io.openLiveTap({ fftSize, onClosed(reason) }) -> { analyser, sampleRate, close() }
+io.closeLiveTap(); io.liveTapOpen
 
 // aggregate.js — repeated runs on one frequency grid
 aggregateRuns(runs: Float64Array[] /* dB */, { method: 'mean'|'median' }) -> { algorithm,

@@ -65,6 +65,18 @@
 // this io's counters AND in engine.nodes / engine.sources, so the engine's own node accounting
 // sees them; after cleanup both are zero (sources once their fade has ended).
 //
+// Live input tap (spec §44-§45, §123; docs/v3/ui-integration.md "Live RTA"): openLiveTap()
+// opens the SAME input as a measurement (getUserMedia through this io's permission path and
+// constraints, or the TEST CONTEXT loopback) into one AnalyserNode, configured as the V2
+// microphone analysis does (audio/microphone.js configureAnalyser), never connected to the
+// destination. The caller reads its time-domain samples (analysis/analyser.js reader) and
+// computes the spectrum itself (measurement/live-rta.js), so the analyser's own dB scaling and
+// smoothing are never used. The tap is EXCLUSIVE with a measurement: it is refused (BUSY) while
+// a capture or stimulus runs, and preflight()/captureNoise()/runStimulus() close it before they
+// start. Every release path (cancel, dispose, Escape through the app, pagehide / hidden
+// document, a track that ends, a closed context) closes it too and calls its onClosed(reason);
+// closeLiveTap() also releases the input, so after it the io owns no node and no live track.
+//
 // Timers: none drives audio or progress. One watchdog setTimeout per capture detects a stalled
 // or suspended audio thread (CAPTURE_TIMEOUT / CONTEXT_SUSPENDED); it reads the audio clock and
 // only ever fails a capture. yield() uses a MessageChannel task between analysis steps.
@@ -76,7 +88,10 @@
 // of a physical system.
 
 import { MAX_OUTPUT_GAIN } from '../core/constants.js';
-import { MIC_UNAVAILABLE_TEXT, hasMicrophoneApi, stopStreamTracks } from '../audio/microphone.js';
+import {
+  MIC_ANALYSER_FFT_SIZE, MIC_UNAVAILABLE_TEXT, configureAnalyser, hasMicrophoneApi,
+  stopStreamTracks,
+} from '../audio/microphone.js';
 import { MeasurementError, mapError } from './engine.js';
 
 export const CAPTURE_PROCESSOR_NAME = 'oscilla-capture-v1';
@@ -289,6 +304,7 @@ function createIoCore({ engine, env = defaultEnv(), mode = 'auto', openInput, ki
   let disposed = false;
   let origStopAll = null;
   let stopAllWrapper = null;
+  let live = null; // the live input tap: { analyser, sampleRate, onClosed }
 
   const io = {};
 
@@ -304,6 +320,17 @@ function createIoCore({ engine, env = defaultEnv(), mode = 'auto', openInput, ki
   };
 
   const busy = () => windows.size > 0 || stims.size > 0;
+
+  // ---- live input tap (see the header): drop it, keeping the input for a measurement.
+  function dropLive(reason) {
+    if (!live) return;
+    const l = live;
+    live = null;
+    unregister(l.analyser);
+    if (typeof l.onClosed === 'function') {
+      try { l.onClosed(reason); } catch (e) { /* the caller's cleanup must not break ours */ }
+    }
+  }
 
   function interrupt(info) {
     if (!busy() && !input) return;
@@ -592,6 +619,7 @@ function createIoCore({ engine, env = defaultEnv(), mode = 'auto', openInput, ki
   }
 
   async function ensureReady({ requireRunning = true, since = epoch } = {}) {
+    dropLive('measurement'); // exclusive: a capture never runs beside the live tap
     const ctx = await ensureContext({ requireRunning });
     if (abortedSince(since)) throw new MeasurementError('ABORTED');
     await ensureRecorderMode(ctx);
@@ -673,6 +701,8 @@ function createIoCore({ engine, env = defaultEnv(), mode = 'auto', openInput, ki
   // ---- release everything of the current session
   function release(err) {
     epoch += 1;
+    const info = err && err.detail;
+    dropLive(info && info.reason ? info.reason : (err && err.code) || 'released');
     const ctx = engine.ctx;
     for (const w of [...windows.values()]) failWindow(w, err || new MeasurementError('ABORTED'));
     if (recorder) {
@@ -705,13 +735,52 @@ function createIoCore({ engine, env = defaultEnv(), mode = 'auto', openInput, ki
     get activeCaptureCount() { return windows.size; },
     get openPortCount() { return recorder && recorder.portOpen ? 1 : 0; },
     get openTrackCount() { return input && input.liveTracks ? input.liveTracks() : 0; },
+    get liveTapOpen() { return !!live; },
     now() { return engine.ctx ? engine.ctx.currentTime : 0; },
     yield: makeYield(env),
     /** Frame timing of the last (≤ 8) capture windows, for test diagnostics. */
     diagnostics() { return { mode: recorderMode, windows: recent.map((x) => ({ ...x })),
       clock: clockNotes.slice() }; },
 
+    /**
+     * openLiveTap({ fftSize, onClosed(reason) }) → { analyser, sampleRate, close() }
+     * The live input tap (see the header). Opens the context and the input like preflight()
+     * (in the user gesture: engine.init() first) and connects one AnalyserNode of fftSize
+     * (default MIC_ANALYSER_FFT_SIZE) to it. BUSY while a capture or stimulus runs; ABORTED
+     * when cancel() ran while the input was opening. A second call returns the open tap.
+     * close() = closeLiveTap().
+     */
+    async openLiveTap({ fftSize = MIC_ANALYSER_FFT_SIZE, onClosed = null } = {}) {
+      if (busy()) throw new MeasurementError('BUSY');
+      const handle = () => ({ analyser: live.analyser, sampleRate: live.sampleRate,
+        close: () => io.closeLiveTap() });
+      if (live) return handle();
+      const since = epoch;
+      const ctx = await ensureContext({ requireRunning: true });
+      if (abortedSince(since)) throw new MeasurementError('ABORTED');
+      const inp = await ensureInput(ctx, since);
+      if (abortedSince(since)) throw new MeasurementError('ABORTED');
+      if (busy()) throw new MeasurementError('BUSY');
+      if (live) return handle();
+      const analyser = register(configureAnalyser(ctx.createAnalyser(), { fftSize }));
+      inp.node.connect(analyser); // analysis only: never connected to the destination
+      live = { analyser, sampleRate: ctx.sampleRate, onClosed };
+      return handle();
+    },
+
+    /** Close the live tap and release the input (idempotent; no-op during a capture). */
+    closeLiveTap() {
+      if (!live) return false;
+      if (busy()) {
+        dropLive('stopped');
+        return true;
+      }
+      release(new MeasurementError('ABORTED', undefined, { detail: { reason: 'stopped' } }));
+      return true;
+    },
+
     async preflight() {
+      dropLive('measurement');
       const since = epoch;
       const facts = {
         audioContext: { available: true, state: null },

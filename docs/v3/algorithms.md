@@ -29,7 +29,7 @@ listed under [Gaps](#gaps), not resolved here.
 | `oscilla.transfer.v1` | `measurement/transfer.js` | [Transfer function](#transfer) |
 | `oscilla.ir.log-sweep.v1` (spectral), `oscilla.ir.farina-inverse.v1` | `measurement/impulse-response.js` | [Impulse response](#ir) |
 | `oscilla.smoothing.fractional-octave.v1`, `oscilla.normalization.v1` | `measurement/smoothing.js` | [Smoothing](#smoothing) |
-| `oscilla.rta.v1` | `measurement/rta.js` | [RTA bands](#rta) |
+| `oscilla.rta.v1` | `measurement/rta.js`, `measurement/live-rta.js` | [RTA bands](#rta), [Live RTA](#live-rta) |
 | `oscilla.aggregate.v1` | `measurement/aggregate.js` | [Aggregation of repeats](#aggregate) |
 | `oscilla.calibration.log-interp.v1` | `calibration/*.js` | [Frequency calibration](#calibration) |
 | (none) | `calibration/level.js` | [Level calibration, SPL](#level) |
@@ -800,7 +800,8 @@ RTA_MODES: instant (τ = null, α = 1), fast (RTA_TAU_FAST_S = 0.125 s), slow (R
 
 The first frame after construction or `reset()` seeds the average (no ramp from silence).
 `levelsDb = 10·log10(y)`; `peakDb` is the running maximum of `levelsDb` when `peakHold`.
-`freeze()` discards pushed frames, `unfreeze()` resumes from the frozen state. Buffers are
+`freeze()` discards pushed frames, `unfreeze()` resumes from the frozen state; `resetPeaks()`
+clears only the peaks (the next push holds from its own level). Buffers are
 allocated once and reused (the same result object is returned on every push). FAST and SLOW
 follow the IEC 61672-1 §5.8 time weightings in name and time constant only: they act per
 analysis frame of a block FFT, not as a continuous detector on the squared signal, and are not
@@ -832,6 +833,70 @@ The tests above feed `bandPowers` a mean-square Welch spectrum built in the test
 noise (third-octave bands 100 Hz-10 kHz within ±1.5 dB of their median, 3σ of a 3 s
 realization). `v3-integration.test.mjs` "G4" pins `rtaResult` (zero-power encoding, copies,
 errors, round trip).
+
+<a id="live-rta"></a>
+### Live RTA: `createLiveRta(…)` (`measurement/live-rta.js`) — New (V341-V344)
+
+The MEASURE RTA tab's live analysis of the input (spec §44-§49, §122-§123). Feedback only: no
+stored result depends on it (only an explicit `snapshot()` would be, see below).
+
+- **Frames**: the last `fftSize` samples of the input tap (`capture.js` `openLiveTap`, an
+  `AnalyserNode` whose `getFloatTimeDomainData` samples are read through
+  `analysis/analyser.js`), read once per display frame (≈ 60 Hz). Default 8192 samples
+  (≈ 171 ms at 48 kHz, the V2 mic analyser size), expert 4096-32768; the frames overlap.
+  The analyser's own `getFloatFrequencyData` (Blackman window, `smoothingTimeConstant`, its
+  own dB scaling) is never used.
+- **Spectrum**: `createPowerSpectrumAnalyzer(fftSize, window, { scale: 'mean-square' })` (Hann
+  by default, Blackman-Harris on request): Σ P[k] is the frame's mean square, the one band-level
+  scale (Conventions). Octave / one-third-octave: `integrateBands` over `bandCenters(kind, 20,
+  20000, sr)`, `bandBinCounts` flags bands under 2 bins (8192 at 48 kHz: the 20-50 Hz thirds).
+  FFT mode shows the bins 20 Hz … min(20 kHz, 0.95 × Nyquist) as they are, so a tone's
+  strongest bin reads below its band level by Σ bins / max bin: Hann 1.76 dB bin-centred
+  (10·log10 1.5) to 3.19 dB half-way between bins; Blackman-Harris 3.02-3.85 dB
+  (`FFT_PEAK_BIN_DEFICIT_DB`, measured with the analyzer).
+- **Averaging**: `createRtaAverager` of linear power per bin or band with α = 1 − e^(−Δt/τ),
+  Δt the wall-clock time between frames; instant / fast (125 ms) / slow (1 s); peak hold of the
+  averaged level. Because frames overlap, INSTANT still spans one window. Not an IEC 61672-1
+  detector. A mode, averaging, FFT size, window or calibration change restarts the average.
+- **Calibration**: frequency profile, band modes — per frame
+  `applyFrequencyCorrectionToBands(…, { power: thisFrame, binHz, out })` ('spectrum'
+  weighting, in place), the corrected band power averaged by its own averager (averaging is
+  linear, so this is the corrected average); uncovered bands stay raw. FFT mode —
+  `correctionCurve` at the bin centres once per profile (observed − correction). Level — the
+  offset of a valid `LevelCalibration` only; otherwise "dB relative (dBFS-like)".
+- **Allocation** (§123): `push()` allocates nothing; buffers and the per-frame call arguments
+  are built on construction or on a change. **Changed (V341)** `interpolate.js` evaluates the
+  profile in its per-bin band loops through a number-returning core (`interpolateDb`, index
+  access instead of array destructuring), the same values as before (calibration tests and
+  golden fixture unchanged): the object per bin made 40 scavenges per 1500 live frames.
+- **Snapshot**: `snapshot()` → `rtaResult({ sampleRate, resolution, bands, levelsDb: raw
+  averaged, fftSize, window })` (`oscilla.rta.v1`, the window ID); null in FFT mode. Not yet
+  saved into an experiment (an experiment recipe requires a stimulus).
+- **View**: `buildRtaView({ ...live.viewInput(), fixedRange: true })` — badge LIVE (stored data
+  is badged its `snapshotLabel`, e.g. NOISE CHECK SNAPSHOT, never LIVE), fixed axis
+  `LIVE_RTA_Y_RANGE` (bands −120 … 0 dB, FFT −150 … 0 dB, shifted by a valid level offset), the
+  corrected peaks as given.
+
+| Test (`v3-live-rta.test.mjs`) | Tolerance | Measured |
+| --- | --- | --- |
+| sine at the band centre, octave + third, 44.1/48/96 kHz, A = 1 and 0.1: `10·log10(A²/2)` | ±0.01 dB | ≤ 0.0023 dB |
+| same: dominance over every other band | ≥ 20 dB | ≥ 34.8 dB |
+| one live frame vs `welch()` → `bandPowers()` of the same stationary three-tone signal | ±0.05 dB | ≤ 3.2e-8 dB |
+| two equal tones in one octave band | +3.0103 ± 0.05 dB | 1.4e-8 dB error |
+| FFT: bin-centred tone's peak bin `−3.0103 − 1.7609` dB; Σ bins = mean square | 1e-6 / 1e-3 dB | pass |
+| FAST step after τ: 63.2 % of the power step; peak hold; `resetPeaks()` | 1e-9 | pass |
+| freeze holds frame and count; a mode change restarts unfrozen | exact | pass |
+| profile per band = `applyFrequencyCorrectionToBands` of that frame; per bin = `correctionCurve`; level offset; invalid level ignored | 1e-6 dB | pass |
+| `applyFrequencyCorrectionToBands({ out })` = without `out` | exact | pass |
+| `push()`: 0 typed arrays constructed, ≤ 2 scavenges in 3000 frames, same frame objects (all modes, with and without calibration) | exact / ≤ 2 | 0 / 0-1 |
+| snapshot IDs, raw levels; FFT size and window keep the band scale (4096-32768, both windows) | ±0.01 dB | pass |
+| view: fixed axis, LIVE vs NOISE CHECK SNAPSHOT badge, under-resolved flagged, no SPL uncalibrated, dB SPL + corrected peaks calibrated | exact | pass |
+
+Browser (`tests/browser/v3-ui.cjs` live-rta, Chromium and Firefox fake microphones, a 1 kHz
+sine of amplitude 0.1): the 1 kHz third-octave band reads −23.06 dB (Chromium) against
+10·log10(0.1²/2) = −23.01 dB (gate ±1 dB), 48 dB above the next band; the octave band
+−23.01 dB; the FFT peak bin 1001.95 Hz at −25.37 dB (an off-centre tone, inside the Hann
+1.76-3.19 dB deficit).
 
 <a id="aggregate"></a>
 ## Aggregation of repeats (`measurement/aggregate.js`)
@@ -995,7 +1060,7 @@ c(f) = c0 + t·(c1 − c0)                                 exact stored value at
   `{ algorithm, profileId, correctedDb, covered, coverage, extrapolate }`; the input is not
   modified, so raw and corrected curves coexist (§18 overlay).
 
-### RTA bands: `applyFrequencyCorrectionToBands(rta, profile, { power, binHz })` — New (integration), was G11
+### RTA bands: `applyFrequencyCorrectionToBands(rta, profile, { power, binHz, out })` — New (integration), was G11
 
 A band level is a sum of power, so a correction that varies inside the band is applied to the
 power before summing, never as one value at the band centre:
@@ -1017,7 +1082,9 @@ correctedDb = levelDb + 10·log10(gain)
   the overlap). Zero power (≤ −300 dB, −Infinity) stays as it is.
 
 Returns `{ algorithm: CALIBRATION_ALGORITHM, profileId, correctedDb, correctionDb, covered,
-coverage, weighting }`; the input is not modified.
+coverage, weighting }`; the input is not modified. With `out` (a previous result of the same
+band count) the values are written into its arrays and it is returned — the same values, no
+allocation (the live RTA corrects every frame this way, [Live RTA](#live-rta)).
 
 Limits: magnitude only (no phase calibration). A single-point profile covers exactly one
 frequency. The calibration's own uncertainty is not represented.

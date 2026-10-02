@@ -368,7 +368,7 @@ function rmsPeak(x) {
   return { rms, peak, rmsDb: rms > 0 ? 20 * Math.log10(rms) : -Infinity };
 }
 
-const NOISE_FFT = 8192;
+export const NOISE_FFT = 8192;
 
 /**
  * summarizeNoise(capture, levelCalibration) → { durationS, rms, peak, rmsDb, level, bands,
