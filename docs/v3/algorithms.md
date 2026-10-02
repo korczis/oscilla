@@ -27,6 +27,7 @@ listed under [Gaps](#gaps), not resolved here.
 | `oscilla.clip.v1`, `oscilla.discontinuity.v1` | `measurement/capture-checks.js` | [Capture checks](#capture-checks) |
 | `oscilla.align.xcorr.v1` | `measurement/align.js` | [Alignment](#alignment) |
 | `oscilla.transfer.v1` | `measurement/transfer.js` | [Transfer function](#transfer) |
+| (none) | `measurement/analysis-task.js`, `analysis-runner.js`, `analysis-worker.js` | [Analysis execution and memory](#analysis-memory) |
 | `oscilla.ir.log-sweep.v1` (spectral), `oscilla.ir.farina-inverse.v1` | `measurement/impulse-response.js` | [Impulse response](#ir) |
 | `oscilla.smoothing.fractional-octave.v1`, `oscilla.normalization.v1` | `measurement/smoothing.js` | [Smoothing](#smoothing) |
 | `oscilla.rta.v1` | `measurement/rta.js`, `measurement/live-rta.js` | [RTA bands](#rta), [Live RTA](#live-rta) |
@@ -592,6 +593,68 @@ step in Chromium is 29-34 ms for 2 s sweeps. The IR path has no non-power-of-two
 2·N inverse buffers, which are now reused. The 160-264 ms in the spike were most likely garbage
 collection or tier-up during the live loopback; nothing in the pure module explains them.
 
+<a id="analysis-memory"></a>
+## Analysis execution and memory — **New (M10)** (`analysis-task.js`, `analysis-runner.js`, `analysis-worker.js`)
+
+No algorithm ID changes: where the analysis runs and how much of it is admitted do not change
+any number it produces. Measurements: [spike, section M10](spike-audioworklet-worker.md).
+
+### Where it runs
+
+`analysisSteps(message)` (align every run → transfer per run, the representative run's transfer
+and IR from one division → aggregate) is the analysis. `analyzeInline` drives it on the calling
+thread with a yield between steps; the Worker (`analysis-worker.js`, bundled by
+`scripts/build-analysis-worker.mjs` into a string in `dist/index.html`, started from a `data:`
+URL by `analysis-runner.js`) drives the same generator and posts every step and the result. The
+engine's default is the Worker when the build embedded it and the platform has `Worker`,
+otherwise inline. Structured cloning copies every value bit for bit, so both give identical
+results (asserted byte for byte in node and in Chromium, Firefox and WebKit).
+
+### Working-set estimate: `estimateAnalysisMemory({ stimulusFrames, captureFrames, runs, noiseFrames })`
+
+```
+N      = nextPow2(stimulusFrames + captureFrames)        deconvolution and correlation size
+bytes  = 64 MiB + 160 · N + 8 · (stimulusFrames + runs · captureFrames + noiseFrames)
+```
+
+Per FFT point, `align` holds 44 bytes (plan 12, four Float64 buffers 32) and the transfer + IR
+division 80 bytes (shared plan 12, scratch 16, X/Y half spectra 16, |X|², ε, H 16, |H|² 4, noise
+and |Y|² power 8, noise spectrum 8); one step's garbage is typically still uncollected when the
+next allocates, so one run needs about 124 · N, and more runs leave more garbage (node: 111 B per
+point for one run, 143-160 B for ten). Inputs count twice (Float32 inputs plus the stimulus copy
+for the Worker or the keepRaw copy, plus the IR samples); 64 MiB covers the heap growth of
+small analyses. Every measured peak (node 22, Chromium 153, Firefox 155; inline and Worker; 1-10
+runs; 2¹⁹-2²³ points) was 42-87 % of the estimate.
+
+`engine.js validateRecipe` computes it into `plan.analysis = { fftSize, bytes }` and refuses the
+recipe with `MEMORY_LIMIT` (preflight blocker; detail `fftSize`, `analysisBytes`,
+`maxAnalysisFftSize`, `maxAnalysisBytes`, `longestSweepS`) when `fftSize >
+CONTRACT_LIMITS.maxAnalysisFftSize` (2²²) or `bytes > maxAnalysisBytes` (1 GiB); preflight warns
+`ANALYSIS_MEMORY` above `PREFLIGHT_THRESHOLDS.analysisMemoryWarnBytes` (512 MiB). Both limits
+can be tightened through the engine's `limits`. With the default 0.5 s pre-roll and 1.5 s
+post-roll, 2²² admits every 44.1/48 kHz recipe (30 s sweep), sweeps up to 20.8 s at 96 kHz and
+9.9 s at 192 kHz; `longestSweepS` = ⌊(2²² − 258 − (pre + post)·sr) / (2·sr)⌋ to 0.1 s.
+
+### Stored impulse-response length: `capIrLength(ir, maxSamples = IR_MAX_SAMPLES)`
+
+`IR_MAX_SAMPLES` = 2²¹ (≥ 10.9 s at 192 kHz, 21.8 s at 96 kHz; longer than any 48 kHz capture).
+A longer IR keeps the window `[shift, shift + maxSamples)` with `shift = max(0, min(peakIndex −
+⌊maxSamples/2⌋, length − maxSamples))` — the IR start, unless the peak lies beyond the first half
+of the window. `peakIndex`, `peakTimeS` and `captureOffsetS` refer to the kept window (absolute
+peak time unchanged); `noiseFloorDb` stays the value of the full IR. `truncation = { maxSamples,
+fullLength, startIndex }` records the cut; it is absent when nothing was cut, so earlier results
+and files are unchanged. A stored IR therefore stays below 8 MiB of Float32 (11.2 MB base64),
+inside `experiments/validate.js`'s 4 000 000-element and 32 MiB limits, which accept
+`truncation` only when it describes the stored samples (`maxSamples` = stored length,
+`fullLength` > it, `startIndex` ≤ `fullLength` − length).
+
+### Float32 spectra: not adopted
+
+The spectra and FFT buffers stay Float64: a Float32 2²²-point FFT has a relative rounding error
+of about log2(N)·2⁻²⁴ ≈ 1.3·10⁻⁶ (−118 dB), which reaches the IR noise floors and the −60 dB
+regularization reported here; adopting it would need new golden outputs and new algorithm IDs
+(ADR 0024).
+
 <a id="ir"></a>
 ## Impulse response — `oscilla.ir.log-sweep.v1`, `oscilla.ir.farina-inverse.v1` (`measurement/impulse-response.js`)
 
@@ -633,7 +696,9 @@ window         = null
 ```
 
 The full causal length is kept for later ETC, Schroeder, RT60 or EDT work (§90); none of those
-are implemented.
+are implemented. **Changed (M10):** a result carries at most `IR_MAX_SAMPLES` = 2²¹ samples
+(`analysis-task.js capIrLength`, see [Analysis execution and memory](#analysis-memory)); a cut
+is recorded as `truncation`.
 
 ### Windowing and normalization (non-destructive, §40-§41)
 

@@ -326,16 +326,22 @@ transferFromAggregate(stored /* AggregateResult, runs ≥ 2 */, transfers) -> Tr
 // analysis-task.js — the offline analysis as ONE serializable task (G21 boundary)
 AnalysisMessage = { type: 'oscilla.analysis-task', version: 1, stimulus: Float32Array,
   sampleRate, f1, f2, captures: Float32Array[] /* run order */, noise: Float32Array|null,
-  phase: bool, aggregation: 'mean'|'median' }
+  phase: bool, aggregation: 'mean'|'median', irMaxSamples? /* default IR_MAX_SAMPLES 2^21 */ }
 runAnalysis(message, { now? }) -> AnalysisResult   // pure, structured-cloneable in and out
 AnalysisResult = { type: 'oscilla.analysis-result', version: 1, invalid, reasons,
   alignments: [align() per run], transfers: [TransferResult]|null, best: run|null,
-  ir: IrResult|null, aggregate: aggregateRuns()|null, steps: [{ name, run, ms|null }] }
+  ir: IrResult|null /* + truncation { maxSamples, fullLength, startIndex } when capped */,
+  aggregate: aggregateRuns()|null, steps: [{ name, run, ms|null }] }
 analysisSteps(message, { now }) /* generator, one step per next() */;
-analyzeInline(message, { now, yield, onStep }) -> Promise<AnalysisResult>  // engine default
+analyzeInline(message, { now, yield, onStep }) -> Promise<AnalysisResult>  // this thread
 analysisTransferList(message, { keepRaw }) / analysisResultTransferList(result) -> buffers
+estimateAnalysisMemory({ stimulusFrames, captureFrames, runs, noiseFrames })
+  -> { fftSize, bytes, model }                     // M10 working-set model
+capIrLength(ir, maxSamples = IR_MAX_SAMPLES) -> IrResult   // M10 stored IR length
+// analysis-runner.js (M10): defaultAnalyze() -> the data: URL Worker (analysis-worker.js,
+// embedded by the build) or analyzeInline; createWorkerAnalyze({ source, WorkerCtor })
 // engine.js: createMeasurementEngine({ ..., analyze /* (message, { now, yield, onStep,
-// keepRaw }) -> Promise<AnalysisResult>, default analyzeInline */ })
+// keepRaw, signal }) -> Promise<AnalysisResult>, default defaultAnalyze() */ })
 
 // quality.js
 assessQuality({ capture, transfer, aggregate /* aggregateRuns() or AggregateResult */,
@@ -417,9 +423,14 @@ Notes on the shapes:
   null. The noise check's band power is shown in the RTA tab but not stored.
 - **CSV.** Transfer columns are ratios (`magnitude_db_relative`, `magnitude_db_corrected`).
   `level_db_spl` appears only in RTA CSVs under a valid level calibration.
-- **Open: G21.** The combined transfer and IR step is the longest main-thread block. The
-  analysis is already one serializable task behind the engine's injected `analyze`, so moving
-  it into a `data:` Worker is a build change (planned claim `analysis-off-main-thread`).
+- **G21 closed.** The analysis runs in a `data:` URL Worker built from `analysis-worker.js`
+  (`scripts/build-analysis-worker.mjs`, embedded via the `__OSCILLA_ANALYSIS_WORKER__` define);
+  `analysis-runner.js` posts the serializable message with transfer lists, relays steps,
+  terminates on abort and falls back inline when no Worker starts. Results are bit-identical.
+- **Memory.** `validateRecipe` estimates the analysis working set (`estimateAnalysisMemory`)
+  and refuses with `MEMORY_LIMIT` above an FFT length of 2^22 or 1 GiB; preflight warns
+  `ANALYSIS_MEMORY` above 512 MiB. Stored impulse responses are capped at 2^21 samples and
+  record `ir.truncation` when cut.
 
 The remaining differences between the specification and the code are listed under "Gaps" in
 `docs/v3/algorithms.md`.
@@ -434,5 +445,8 @@ output contains "SPL". Smoothed and normalized views say so and carry their algo
 
 ## Limits (spec §174)
 
-Sweep 1-30 s; repeats 1-10; capture ≤ 40 s mono per run; calibration ≤ 2000 points; imported
+Sweep 1-30 s; repeats 1-10; capture ≤ 40 s mono per run; raw captures ≤ 128 MiB together;
+analysis FFT ≤ 2²² points and estimated analysis memory ≤ 1 GiB (M10: `MEMORY_LIMIT` in
+preflight; 30 s sweeps at 44.1/48 kHz, about 20 s at 96 kHz, 9.9 s at 192 kHz); stored impulse
+response ≤ 2²¹ samples (`truncation` records a cut); calibration ≤ 2000 points; imported
 experiment ≤ 32 MiB; stored experiments bounded by quota with explicit delete/export.

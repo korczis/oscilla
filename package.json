@@ -25,7 +25,7 @@
     "test:dsp": "node tests/browser/dsp.cjs",
     "test:labs": "node tests/browser/labs.cjs",
     "test:sequencer": "node tests/browser/sequencer.cjs",
-    "test:measure": "node tests/browser/v3-measure.cjs && node tests/browser/v3-ui.cjs",
+    "test:measure": "node tests/browser/v3-measure.cjs && node tests/browser/analysis-worker.cjs && node tests/browser/v3-ui.cjs",
     "test:visual": "node scripts/visual-gate.mjs dist && node scripts/visual-measure.mjs dist",
     "test:live": "node tests/browser/live-smoke.cjs",
     "test:release": "npm run test:engine && npm run test:dsp && npm run test:labs && npm run test:sequencer && npm run test:measure && npm run test:browser && npm run test:visual",

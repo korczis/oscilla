@@ -59,9 +59,19 @@
 // can land between them.
 //
 // Memory (§87-§89, §172-§173): captures are bounded by the contract limits (sweep ≤ 30 s,
-// repeats ≤ 10, capture ≤ 40 s per run) and by limits.maxRawBytes for all runs together. Raw
-// PCM of a run is released as soon as its analysis no longer needs it; the result carries raw
-// buffers only with measure(..., { keepRaw: true }) (the explicit SAVE RAW choice).
+// repeats ≤ 10, capture ≤ 40 s per run) and by limits.maxRawBytes for all runs together. The
+// analysis working set is bounded too (gap M10): validateRecipe estimates it from the FFT size
+// N = nextPow2(stimulus + capture frames) and the runs (analysis-task.js
+// estimateAnalysisMemory) and rejects with MEMORY_LIMIT when N > limits.maxAnalysisFftSize or
+// the estimate > limits.maxAnalysisBytes; preflight warns (ANALYSIS_MEMORY) above
+// PREFLIGHT_THRESHOLDS.analysisMemoryWarnBytes. Raw PCM of a run is released as soon as its
+// analysis no longer needs it (with the Worker it is transferred to the Worker and gone from
+// this thread); the result carries raw buffers only with measure(..., { keepRaw: true }) (the
+// explicit SAVE RAW choice).
+//
+// Analysis thread: the injected `analyze`, default defaultAnalyze() of analysis-runner.js (a
+// data: URL Worker in the built page, analyzeInline under node and in bundles without the
+// embedded Worker script). An abort terminates the Worker (hooks.signal).
 //
 // Results are relative digital quantities: the transfer magnitude is dB re a unity digital
 // transfer (capture/stimulus), noise levels are dB re digital full scale (20·log10 rms, so a
@@ -77,7 +87,8 @@ import {
 import { normalizeStimulus, renderStimulus, StimulusError } from './stimulus.js';
 import { checkCapture, CLIP_THRESHOLD } from './capture-checks.js';
 import { aggregateResult, transferFromAggregate } from './aggregate.js';
-import { analysisMessage, analyzeInline } from './analysis-task.js';
+import { analysisMessage, estimateAnalysisMemory } from './analysis-task.js';
+import { defaultAnalyze } from './analysis-runner.js';
 import { assessQuality, normalizeChainNotes } from './quality.js';
 import { ALGORITHMS } from './algorithms.js';
 import { welch, windowFn } from './spectrum.js';
@@ -116,6 +127,13 @@ export const CONTRACT_LIMITS = Object.freeze({
   // All raw captures of one measurement together (Float32 mono). 10 runs of 32 s at 96 kHz
   // need 123 MB; the cap stops a 192 kHz recipe from asking for a quarter gigabyte.
   maxRawBytes: 128 * 1024 * 1024,
+  // Analysis working set (gap M10, analysis-task.js ANALYSIS_MEMORY_MODEL). 2^22 points admit
+  // every recipe at 44.1/48 kHz (30 s sweep + 10 s of pre/post-roll: 3.36 Mi frames), about
+  // 20 s sweeps at 96 kHz and 9 s at 192 kHz with the default timing; a 2^23-point analysis
+  // peaked at 0.96-1.1 GB. The byte budget bounds the estimate (10 runs of the largest 48 kHz
+  // recipe: about 0.8 GiB).
+  maxAnalysisFftSize: 2 ** 22,
+  maxAnalysisBytes: 1024 * 1024 * 1024,
 });
 
 /** Default capture window and pacing (spec §216, §219, §31). */
@@ -152,6 +170,9 @@ export const PREFLIGHT_THRESHOLDS = Object.freeze({
   limiterTransparentPeak: 0.1,
   // Background RMS above this (dB re full scale) makes a low-SNR measurement likely (§30).
   noisyRmsDb: -40,
+  // Estimated analysis working set above which preflight warns (ANALYSIS_MEMORY): a 30 s sweep
+  // at 48 kHz (2^22 points, about 0.73 GiB estimated) warns, a 10 s sweep (2^21) does not.
+  analysisMemoryWarnBytes: 512 * 1024 * 1024,
   clipPeak: CLIP_THRESHOLD,
 });
 
@@ -235,9 +256,11 @@ function inRange(v, [lo, hi]) {
  *   repeats = 1, analysis: { noiseCheckS, preRollS, postRollS, gapS, phase, aggregation } }
  * `level` may be a number in (0, 1] or 'low' | 'medium' | 'high' (MEASUREMENT_LEVELS); the
  * stimulus is rendered at `sampleRate` (the device rate). Throws MeasurementError
- * INVALID_RECIPE (detail: list of problems) or MEMORY_LIMIT.
+ * INVALID_RECIPE (detail: list of problems) or MEMORY_LIMIT (raw captures above maxRawBytes,
+ * or the analysis above maxAnalysisFftSize / maxAnalysisBytes; detail carries the estimate).
  * plan = { stimulusSpec, clampedTo, requestedSampleRate, repeats, timing: { preRollS,
- *   postRollS, gapS, noiseCheckS }, phase, aggregation, captureS, captureFrames, rawBytes }
+ *   postRollS, gapS, noiseCheckS }, phase, aggregation, captureS, captureFrames, rawBytes,
+ *   analysis: { fftSize, bytes } (estimateAnalysisMemory) }
  */
 export function validateRecipe(recipe, { sampleRate, limits = CONTRACT_LIMITS } = {}) {
   const problems = [];
@@ -317,6 +340,26 @@ export function validateRecipe(recipe, { sampleRate, limits = CONTRACT_LIMITS } 
       + `capture exceeds the ${(limits.maxRawBytes / 2 ** 20).toFixed(0)} MiB limit.`,
     { detail: { rawBytes, maxRawBytes: limits.maxRawBytes } });
   }
+  const stimulusFrames = Math.round(stimulusSpec.duration * sampleRate);
+  const est = estimateAnalysisMemory({ stimulusFrames, captureFrames, runs: repeats,
+    noiseFrames });
+  const maxFft = limits.maxAnalysisFftSize ?? CONTRACT_LIMITS.maxAnalysisFftSize;
+  const maxBytes = limits.maxAnalysisBytes ?? CONTRACT_LIMITS.maxAnalysisBytes;
+  if (est.fftSize > maxFft || est.bytes > maxBytes) {
+    // Longest sweep whose analysis fits maxFft at this rate and timing:
+    // round(d·sr) + ceil((pre + d + post)·sr) + 256 ≤ maxFft.
+    const fixed = (timing.preRollS + timing.postRollS) * sampleRate + 258;
+    const longest = Math.max(0, Math.floor(((maxFft - fixed) / (2 * sampleRate)) * 10) / 10);
+    const mib = (b) => (b / 2 ** 20).toFixed(0);
+    const why = est.fftSize > maxFft
+      ? `a ${est.fftSize}-point analysis (the limit is ${maxFft} points; at ${sampleRate} Hz `
+        + `with this pre/post-roll the sweep can be at most ${longest.toFixed(1)} s)`
+      : `about ${mib(est.bytes)} MiB of analysis memory (the limit is ${mib(maxBytes)} MiB)`;
+    throw new MeasurementError('MEMORY_LIMIT', `This measurement would need ${why}. Shorten `
+      + 'the sweep, reduce repeats or use a lower sample rate.',
+    { detail: { fftSize: est.fftSize, analysisBytes: est.bytes, maxAnalysisFftSize: maxFft,
+      maxAnalysisBytes: maxBytes, longestSweepS: longest } });
+  }
   return Object.freeze({
     stimulusSpec,
     clampedTo,
@@ -328,6 +371,7 @@ export function validateRecipe(recipe, { sampleRate, limits = CONTRACT_LIMITS } 
     captureS,
     captureFrames,
     rawBytes,
+    analysis: Object.freeze({ fftSize: est.fftSize, bytes: est.bytes }),
   });
 }
 
@@ -500,7 +544,7 @@ const clamp01 = (v) => (v < 0 ? 0 : v > 1 ? 1 : v);
 // ------------------------------------------------------------------------------- engine
 
 /**
- * createMeasurementEngine({ io, clock, onEvent, limits, assess }) → engine
+ * createMeasurementEngine({ io, clock, onEvent, limits, assess, analyze }) → engine
  *   io        the adapter described in the header (required)
  *   clock     wall clock for timestamps and step timing: a function returning ms, or
  *             { wall(): ms since epoch, mono(): monotonic ms } (defaults: Date.now,
@@ -508,13 +552,14 @@ const clamp01 = (v) => (v < 0 ? 0 : v > 1 ? 1 : v);
  *   onEvent   (event) => void; events: { type: 'state', from, to, info } | 'preflight' |
  *             'scheduled' | 'progress' | 'noise' | 'run' | 'analysis' | 'result' | 'error'
  *   limits    tightens CONTRACT_LIMITS (maxSweepS, maxRepeats, maxCaptureS, maxNoiseS,
- *             maxRawBytes)
+ *             maxRawBytes, maxAnalysisFftSize, maxAnalysisBytes)
  *   assess    optional (result, { recipe, plan, calibration, chainNotes }) → QualityAssessment
  *             (quality.js); assessMeasurement is the standard one
- *   analyze   optional (message, { now, yield, onStep, keepRaw }) → Promise<AnalysisResult>:
- *             the offline analysis (analysis-task.js). Default analyzeInline (this thread,
- *             yields between steps); a Worker-backed one posts the message with
- *             analysisTransferList(message, { keepRaw }) and resolves with the reply
+ *   analyze   optional (message, { now, yield, onStep, keepRaw, signal }) →
+ *             Promise<AnalysisResult>: the offline analysis (analysis-task.js). Default
+ *             defaultAnalyze() (analysis-runner.js): the data: URL Worker when the build embedded
+ *             it, else analyzeInline (this thread, yields between steps). `signal` is an
+ *             AbortSignal aborted when the measurement is aborted or fails
  *
  * engine = { state, history, limits, preflight(recipe, opts), measure(recipe, opts),
  *   abort(reason), progress(), reset(), dispose() }
@@ -527,7 +572,7 @@ export function createMeasurementEngine({ io, clock, onEvent, limits, assess, an
   const clk = makeClock(clock);
   const emitFn = typeof onEvent === 'function' ? onEvent : null;
   const defaultAssess = typeof assess === 'function' ? assess : null;
-  const analyzeFn = typeof analyze === 'function' ? analyze : analyzeInline;
+  const analyzeFn = typeof analyze === 'function' ? analyze : defaultAnalyze();
   let muted = false;
   let current = null; // the session (one preflight/measure sequence)
   let prepared = null; // { key, plan, report, calibration } after a successful preflight
@@ -730,6 +775,11 @@ export function createMeasurementEngine({ io, clock, onEvent, limits, assess, an
       warnings.push(reason('SAMPLE_RATE_DIFFERS', `The recipe asks for `
         + `${plan.requestedSampleRate} Hz; the device runs at ${sampleRate} Hz and the stimulus `
         + 'is rendered at the device rate.'));
+    if (plan && plan.analysis.bytes > PREFLIGHT_THRESHOLDS.analysisMemoryWarnBytes)
+      warnings.push(reason('ANALYSIS_MEMORY', `The analysis will need about `
+        + `${(plan.analysis.bytes / 2 ** 20).toFixed(0)} MiB of memory (${plan.analysis.fftSize}`
+        + '-point FFT); on a device with little memory shorten the sweep or reduce repeats.',
+      { value: plan.analysis.bytes, unit: 'bytes', detail: { fftSize: plan.analysis.fftSize } }));
     if (plan && plan.clampedTo)
       warnings.push(reason('RANGE_CLAMPED', `The sweep is limited to ${plan.clampedTo.toFixed(0)} `
         + 'Hz (0.95 × Nyquist of the device rate).', { value: plan.clampedTo, unit: 'Hz' }));
@@ -899,7 +949,7 @@ export function createMeasurementEngine({ io, clock, onEvent, limits, assess, an
     };
   }
 
-  // Offline analysis through the injected `analyze` (analysis-task.js; default analyzeInline):
+  // Offline analysis through the injected `analyze` (default defaultAnalyze(): Worker/inline):
   // one serializable message, the engine's hooks between steps (yield = abort point, onStep =
   // timing, progress and the 'analysis' event). An analyze without per-step hooks (a Worker)
   // has its result.steps reported when it resolves.
@@ -923,6 +973,9 @@ export function createMeasurementEngine({ io, clock, onEvent, limits, assess, an
       tick(s, null);
       if (s.dead) throw s.deadError;
     };
+    // Aborted with the session (abort(), fail()): a Worker-backed analyze terminates.
+    const ac = typeof AbortController === 'function' ? new AbortController() : null;
+    if (ac) s.abortPromise.catch(() => ac.abort());
     let out;
     try {
       out = await guard(s, analyzeFn(message, {
@@ -930,6 +983,7 @@ export function createMeasurementEngine({ io, clock, onEvent, limits, assess, an
         yield: () => guard(s, typeof io.yield === 'function' ? io.yield() : null),
         onStep,
         keepRaw,
+        signal: ac ? ac.signal : null,
       }));
     } catch (e) {
       if (s.dead) throw s.deadError;

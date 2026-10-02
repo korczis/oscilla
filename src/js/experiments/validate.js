@@ -17,8 +17,9 @@
 //
 // Accepted result shapes are exactly what the analysis modules produce: TransferResult
 // (validRange may be null; optional phaseReason and alignment), IrResult (optional method and
-// fftSize; method must match the IR algorithm ID), RtaResult (rta.js rtaResult: optional
-// windowAlgorithm; zero power is stored as −300 dB, non-finite levels are rejected),
+// fftSize; method must match the IR algorithm ID; optional truncation { maxSamples, fullLength,
+// startIndex } of an IR capped by analysis-task.js capIrLength), RtaResult (rta.js rtaResult:
+// optional windowAlgorithm; zero power is stored as −300 dB, non-finite levels are rejected),
 // AggregateResult (aggregate.js aggregateResult, the optional `results.aggregate`: dispersion
 // consistent with method and runs, envelope arrays and repeatabilityDb null for one run,
 // lowerDb ≤ centreDb ≤ upperDb, spreadDb ≥ 0) and QualityAssessment (quality.js: reasons with
@@ -658,7 +659,7 @@ function checkAlignment(c, a, path, ctx) {
 function checkIr(c, ir, path, ctx) {
   const keys = ['algorithm', 'sampleRate', 'samples', 'peakIndex', 'peakTimeS', 'captureOffsetS',
     'noiseFloorDb', 'window'];
-  if (!c.keys(ir, path, keys, ['method', 'fftSize'])) return null;
+  if (!c.keys(ir, path, keys, ['method', 'fftSize', 'truncation'])) return null;
   algorithmId(c, ir.algorithm, `${path}.algorithm`, ctx);
   if (has(ir, 'method') && c.oneOf(ir.method, `${path}.method`, Object.keys(IR_ALGORITHMS))
     && Object.values(IR_ALGORITHMS).includes(ir.algorithm)
@@ -677,6 +678,8 @@ function checkIr(c, ir, path, ctx) {
   c.num(ir.captureOffsetS, `${path}.captureOffsetS`, -LIMITS.timeS, LIMITS.timeS);
   c.num(ir.noiseFloorDb, `${path}.noiseFloorDb`, -LIMITS.dbAbs, LIMITS.dbAbs, { nullable: true });
   c.range(ir.window, `${path}.window`, -LIMITS.timeS, LIMITS.timeS, { nullable: true });
+  const truncation = has(ir, 'truncation')
+    ? checkIrTruncation(c, ir.truncation, `${path}.truncation`, samples.length) : undefined;
   const out = { algorithm: ir.algorithm };
   if (has(ir, 'method')) out.method = ir.method;
   Object.assign(out, {
@@ -685,7 +688,20 @@ function checkIr(c, ir, path, ctx) {
     window: ir.window === null ? null : pair(ir.window),
   });
   if (has(ir, 'fftSize')) out.fftSize = ir.fftSize;
+  if (truncation) out.truncation = truncation;
   return out;
+}
+
+// The stored IR is the window [startIndex, startIndex + length) of a longer causal IR.
+function checkIrTruncation(c, t, path, length) {
+  if (!c.keys(t, path, ['maxSamples', 'fullLength', 'startIndex'])) return undefined;
+  const okMax = c.num(t.maxSamples, `${path}.maxSamples`, length, length, { integer: true });
+  const okFull = c.num(t.fullLength, `${path}.fullLength`, length + 1, Number.MAX_SAFE_INTEGER,
+    { integer: true });
+  const okStart = okFull && c.num(t.startIndex, `${path}.startIndex`, 0, t.fullLength - length,
+    { integer: true });
+  if (!okMax || !okFull || !okStart) return undefined;
+  return { maxSamples: t.maxSamples, fullLength: t.fullLength, startIndex: t.startIndex };
 }
 
 function checkRta(c, r, path, ctx) {
