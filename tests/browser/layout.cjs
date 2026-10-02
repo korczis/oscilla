@@ -42,17 +42,8 @@ const TOUCH_WORKSPACES = [...WORKSPACES, 'learn', 'presets', ...VIEWS];
 // Product bugs found when this invariant was added (R007, 2026-10-02), reported, not yet fixed in
 // src/: the .osc-toggle--lg switches are 25 px wide, .osc-slider--sm ranges are 5 px tall, and
 // the preset category tabs are 33-40 px wide at <= 375 px. Remove an entry once it is fixed.
-const KNOWN_SMALL_TARGETS = new Set([
-  'osc-filter-enable', 'osc-add-enable', 'osc-filter-cutoff', 'osc-filter-q', 'osc-add-gain',
-  'osc-ptab-cat-reference', 'osc-ptab-cat-musical', 'osc-ptab-cat-sweeps',
-  'osc-ptab-cat-patterns', 'osc-ptab-cat-high', 'osc-ptab-cat-dual', 'osc-ptab-cat-custom',
-  'osc-ptab-cat-history',
-  // added by the V2 QA fixes (PR #15): the phone safety-notice "More" toggle and the bio
-  // source links; fixed in fix/v2-touch-seq, which removes them from this list
-  'osc-safety-toggle', 'osc-bio-source-list>A',
-  // added by the About workspace (PR #17); fixed in fix/v2-touch-seq
-  'about.majordomus', 'about.email', 'about.source',
-]);
+// Every touch target meets 44 px (the list may only shrink; it is empty since the R007 fixes).
+const KNOWN_SMALL_TARGETS = new Set([]);
 const TOUCH_MIN = 44;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 

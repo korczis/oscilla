@@ -26,6 +26,14 @@
 // EDGE_S (shortened to a quarter of very short windows). Frequency jumps, AM level changes
 // and LFO starts/stops happen only while the envelope is at the floor. Gain is never ramped to
 // or set to 0.
+//
+// Stop: only the out Gain, which carries no automation until then (its value is exactly 1),
+// is held and faded. The block schedules keep running underneath the fade and are cancelled
+// only after every source has ended. Reason: Chromium renders concurrently with the main
+// thread, and a render quantum that meets a param's timeline while the main thread is editing it
+// is rendered at the param's last value. Any edit of a ramping param (cancelAndHoldAtTime, a
+// computed hold, even a no-op event far in the future) can so freeze one quantum of a ramp: a
+// one-sample step of up to a whole edge. The out gain sits at a constant 1, so it is immune.
 
 import {
   clamp,
@@ -50,6 +58,16 @@ export const START_OFFSET_S = 0.02; // from V1 START_OFFSET_S (index.html@95dfa8
 export const STOP_RAMP_S = 0.012; // V1 fast release before a new voice (index.html@95dfa81:2190)
 export const STOP_PAD_S = 0.01; // V1: sources stop 10 ms after the programmed end (:2321)
 const RENDER_QUANTUM = 128; // frames per Web Audio render quantum
+// A realtime stop is scheduled this far ahead of the rendered audio, on a render-quantum boundary:
+// the engine's SCHEDULE_LEAD_S (src/js/audio/scheduler.js), which its releases use.
+export const STOP_LEAD_S = 0.02;
+// Bounds for the rendered-time estimate (renderedTimeAtLeast): how far it may run ahead of
+// ctx.currentTime in all, how far beyond the real time since the newest clock reading, and how
+// long and how many readings are kept.
+const MAX_CLOCK_LAG_S = 0.2;
+const CLOCK_LAG_SLACK_S = 0.05;
+const CLOCK_OBS_MAX_AGE_MS = 2000;
+const CLOCK_OBS_COUNT = 16;
 
 // ============================================================ V1 maths
 
@@ -515,7 +533,7 @@ export function automationValueAt(events, t, defaultValue = null) {
   return prev.value * Math.pow(next.value / prev.value, k);
 }
 
-/** AudioParam wrapper that records its schedule so holdParam() can freeze it anywhere (V1). */
+/** AudioParam wrapper that records its schedule (inspection; cleanup cancels it). */
 function loggedParam(param, defaultValue) {
   const log = [];
   return {
@@ -537,41 +555,68 @@ function loggedParam(param, defaultValue) {
   };
 }
 
-// after V1 AudioEngine._holdEnv (index.html@95dfa81:2164), generalised to any logged param.
+// ============================================================ audio clock (realtime stop anchor)
+
+const clockObs = new WeakMap(); // ctx -> [{ ct, perf }], oldest first
+
+function perfNow() {
+  const p = globalThis.performance;
+  return p && typeof p.now === 'function' ? p.now() : null;
+}
+
 /**
- * Freeze a param at time t and return the held value. With cancelAndHoldAtTime the browser
- * holds it natively. Without it (Firefox), cancelScheduledValues alone would drop the
- * in-progress ramp and snap back to the previous event's value (a click), so the exact value
- * at t is computed from the recorded schedule (automationValueAt), the in-progress ramp is
- * re-ended at t with that value (same curve up to t, as V1 did) and the value is then pinned
- * with setValueAtTime(value, t) before anything ramps out.
+ * Record a reading (ctx.currentTime, performance.now()). Called when a voice is compiled and by
+ * the editor's per-frame playhead readouts (UI bookkeeping), so a stop has recent readings.
  */
-function holdParam(lp, t) {
-  const g = lp.param;
-  const v = automationValueAt(lp.log, t, lp.defaultValue);
-  if (typeof g.cancelAndHoldAtTime === 'function') {
-    g.cancelAndHoldAtTime(t);
-    lp.log = lp.log.filter((e) => e.t < t);
-    lp.log.push({ t, value: v, ramp: 'set' });
-    return v;
+export function observeClock(ctx) {
+  if (!ctx || typeof ctx.startRendering === 'function') return;
+  const perf = perfNow();
+  const ct = ctx.currentTime;
+  if (perf === null || !isNum(ct)) return;
+  let list = clockObs.get(ctx);
+  if (!list) clockObs.set(ctx, (list = []));
+  list.push({ ct, perf });
+  const tooOld = () => perf - list[0].perf > CLOCK_OBS_MAX_AGE_MS;
+  while (list.length > CLOCK_OBS_COUNT || (list.length && tooOld())) list.shift();
+}
+
+/**
+ * A context time the audio thread has rendered at least up to, for anchoring a realtime stop.
+ * ctx.currentTime alone can be stale: Firefox updates it only between tasks (and not at every
+ * frame), so a main thread that is late within a task reads a time rendered long ago, and a fade
+ * anchored there starts in the past (one or more quanta render unfaded, then the ramp jumps in).
+ * Two further estimates, each used only when larger:
+ *   - every recent reading advanced by the real time elapsed since (the freshest wins);
+ *   - getOutputTimestamp() extrapolated to now plus baseLatency and outputLatency (the output
+ *     position plus the latency between rendering and output).
+ * An audio clock that stalled since a reading makes the estimate late, never early; so the gain
+ * over currentTime is bounded by the real time since the newest reading plus CLOCK_LAG_SLACK_S,
+ * and by MAX_CLOCK_LAG_S in all.
+ */
+function renderedTimeAtLeast(ctx) {
+  const ct = ctx.currentTime;
+  const now = perfNow();
+  if (now === null) return ct;
+  let t = ct;
+  const list = clockObs.get(ctx) || [];
+  for (const o of list) {
+    if (now - o.perf <= CLOCK_OBS_MAX_AGE_MS) t = Math.max(t, o.ct + (now - o.perf) / 1000);
   }
-  // cancelScheduledValues(t) removes every event at or after t: find the first of them.
-  let next = null;
-  for (const e of lp.log) if (e.t >= t && (!next || e.t < next.t)) next = e;
-  g.cancelScheduledValues(t);
-  lp.log = lp.log.filter((e) => e.t < t);
-  if (next && next.ramp === 'linear') {
-    g.linearRampToValueAtTime(v, t);
-    lp.log.push({ t, value: v, ramp: 'linear' });
-  } else if (next && next.ramp === 'exponential' && v > 0) {
-    g.exponentialRampToValueAtTime(v, t);
-    lp.log.push({ t, value: v, ramp: 'exponential' });
+  if (typeof ctx.getOutputTimestamp === 'function') {
+    try {
+      const ts = ctx.getOutputTimestamp();
+      if (ts && ts.contextTime > 0 && ts.performanceTime > 0) {
+        const lat = (isNum(ctx.baseLatency) ? ctx.baseLatency : 0) +
+          (isNum(ctx.outputLatency) ? ctx.outputLatency : 0);
+        t = Math.max(t, ts.contextTime + (now - ts.performanceTime) / 1000 + lat);
+      }
+    } catch (e) {
+      /* no timestamp: currentTime and the readings stand */
+    }
   }
-  if (v !== null) {
-    g.setValueAtTime(v, t);
-    lp.log.push({ t, value: v, ramp: 'set' });
-  }
-  return v;
+  const newest = list.length ? list[list.length - 1].perf : now;
+  const bound = Math.min(MAX_CLOCK_LAG_S, Math.max(0, now - newest) / 1000 + CLOCK_LAG_SLACK_S);
+  return Math.min(t, ct + bound);
 }
 
 // ============================================================ compiler
@@ -598,9 +643,11 @@ function defaultTimers() {
  * voice: { t0, endTime, duration, sampleRate, warnings, timeline, events, stopTime,
  *          stop(atTime?) -> boolean, dispose(), freqAt(ctxTime), blockIndexAt(ctxTime),
  *          ended, stopping, activeSourceCount, activeNodeCount }
- * stop(at?): holds every automated param at `at` (default: now + 2 render quanta), fades the
- * output to the floor over STOP_RAMP_S, stops every source after the fade and disconnects every
- * node once all sources have ended (a timer fallback covers browsers that drop `ended`).
+ * stop(at?): from `at` (default on a realtime context: STOP_LEAD_S after the audio rendered so
+ * far, on a render-quantum boundary; see renderedTimeAtLeast) fades the output gain from its
+ * held value 1 to the floor over STOP_RAMP_S without editing the sounding schedules, stops every
+ * source after the fade, and cancels the automation and disconnects every node once all
+ * sources have ended (a timer fallback covers browsers that drop `ended`).
  * Returns false when the voice already ended or was already stopping.
  */
 export function compileSequence(model, ctx, destination, t0, opts = {}) {
@@ -611,6 +658,7 @@ export function compileSequence(model, ctx, destination, t0, opts = {}) {
   const isOffline = typeof ctx.startRendering === 'function';
   const timers = opts.timers === undefined ? (isOffline ? null : defaultTimers()) : opts.timers;
   const now = ctx.currentTime;
+  if (!isOffline) observeClock(ctx);
   const start = Math.ceil(Math.max(toNumber(t0, now), now) * tl.sampleRate - 1e-6) / tl.sampleRate;
 
   const nodes = [];
@@ -651,6 +699,14 @@ export function compileSequence(model, ctx, destination, t0, opts = {}) {
         liveSources--;
       }
       s.node.removeEventListener?.('ended', s.onEnded);
+    }
+    // Every source has ended (or been stopped): the remaining automation can never sound.
+    for (const lp of logged) {
+      try {
+        lp.param.cancelScheduledValues(0);
+      } catch (e) {
+        /* ignore */
+      }
     }
     for (const n of nodes) {
       try {
@@ -742,15 +798,25 @@ export function compileSequence(model, ctx, destination, t0, opts = {}) {
     },
     stop(at) {
       if (ended || stopping) return false;
-      // Default: two render quanta ahead on a realtime context, so the hold lands on frames the
-      // audio thread has not rendered yet (an offline context suspended at t is exact).
-      const guard = isOffline ? 0 : (2 * RENDER_QUANTUM) / tl.sampleRate;
-      const t = isNum(at) ? Math.max(at, ctx.currentTime) : ctx.currentTime + guard;
+      // Default on a realtime context: like the engine's releases (AudioEngine._soon), at least
+      // STOP_LEAD_S after the audio already rendered and on a render-quantum boundary, so the
+      // fade starts on frames the audio thread has not rendered yet even when the main thread is
+      // late, and no ramp starts mid-quantum (Firefox anchors such a ramp at the quantum's edge,
+      // a step of up to 128 frames of it). An offline context suspended at t is exact.
+      let t;
+      if (isNum(at)) t = Math.max(at, ctx.currentTime);
+      else if (isOffline) t = ctx.currentTime;
+      else {
+        const q = RENDER_QUANTUM / tl.sampleRate;
+        const lead = Math.max(STOP_LEAD_S, 2 * q);
+        t = Math.ceil((renderedTimeAtLeast(ctx) + lead) / q - 1e-9) * q;
+      }
       if (t >= voice.endTime) return false; // already ending naturally
       stopping = true;
       voice.stopTime = t;
       try {
-        for (const lp of logged) holdParam(lp, t);
+        // The envelope, frequency and AM schedules are not touched while they sound (see the
+        // header): the exact current value of the out gain is 1, held from t and faded.
         out.gain.setValueAtTime(1, t);
         out.gain.linearRampToValueAtTime(GAIN_FLOOR, t + STOP_RAMP_S);
         const stopAt = t + STOP_RAMP_S + STOP_PAD_S;
@@ -815,6 +881,7 @@ export function compileSequence(model, ctx, destination, t0, opts = {}) {
   const amp = track(ctx.createGain());
   const env = track(ctx.createGain());
   out = track(ctx.createGain());
+  out.gain.setValueAtTime(1, now); // automated from the start; constant until a stop fades it
   carrier.connect(amp);
   amp.connect(env);
   env.connect(out);

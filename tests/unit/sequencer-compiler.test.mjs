@@ -13,6 +13,7 @@ import {
   EDGE_S,
   STOP_RAMP_S,
   STOP_PAD_S,
+  STOP_LEAD_S,
   planSequence,
   buildTimeline,
   freqAt,
@@ -373,64 +374,120 @@ test('natural end: ended events release every node and call onEnded once', () =>
   assert.equal(voice.stop(), false, 'stop after the end is a no-op');
 });
 
-test('stop(at) without cancelAndHoldAtTime holds the exact value mid-ramp (Firefox path)', () => {
-  const { ctx, voice, ended } = compileRef();
-  const env = ctx.created.filter((n) => n.kind === 'gain')[1];
-  const carrier = ctx.oscillators[0];
-  // In the middle of the sweep block's attack edge, and mid-sweep for the frequency.
-  const at = voice.t0 + 0.5 + EDGE_S / 2;
-  const envBefore = automationValueAt(env.gain.events, at, 1);
-  const envEarlier = automationValueAt(env.gain.events, at - 0.0005, 1);
-  const fBefore = automationValueAt(carrier.frequency.events, at, 440);
-  assert.ok(envBefore > 0.4 && envBefore < 0.6, `mid-edge ${envBefore}`);
-  ctx.currentTime = at - 0.001;
-  assert.equal(voice.stop(at), true);
-  assert.equal(voice.stop(at), false, 'a second stop is a no-op');
-  // Same value at `at` afterwards: no snap to the previous event (no click).
-  assertNear(automationValueAt(env.gain.events, at, 1), envBefore, 1e-12);
-  assertNear(automationValueAt(env.gain.events, at - 0.0005, 1), envEarlier, 1e-12);
-  assertNear(automationValueAt(carrier.frequency.events, at, 440), fBefore, 1e-12);
-  // The held value is pinned with setValueAtTime and nothing is scheduled after it.
-  const last = env.gain.events[env.gain.events.length - 1];
-  assert.deepEqual(last, { t: at, value: envBefore, ramp: 'set' });
-  assert.ok(env.gain.calls.some((c) => c[0] === 'cancelScheduledValues'));
-  // The curve before `at` is unchanged: the in-progress ramp is re-ended at `at`.
-  assertNear(
-    automationValueAt(env.gain.events, at - EDGE_S / 4, 1),
-    (1 - GAIN_FLOOR) * 0.25 + GAIN_FLOOR,
-    1e-9,
-  );
-  // The output fades to the floor, never to 0.
-  const out = ctx.created.filter((n) => n.kind === 'gain')[2];
-  assert.deepEqual(out.gain.events, [
-    { t: at, value: 1, ramp: 'set' },
-    { t: at + STOP_RAMP_S, value: GAIN_FLOOR, ramp: 'linear' },
-  ]);
-  // Every running or future source stops after the fade; none is extended.
-  const stopAt = at + STOP_RAMP_S + STOP_PAD_S;
-  for (const o of ctx.oscillators) assert.ok(o.stopAt <= stopAt + 1e-12, `${o.stopAt}`);
-  assertNear(ctx.oscillators[0].stopAt, stopAt, 1e-12);
-  ctx.advance(stopAt);
-  assert.equal(voice.ended, true);
-  assert.equal(ctx.liveSources, 0);
-  assert.equal(voice.activeNodeCount, 0);
-  assert.deepEqual(ended, [{ stopped: true }]);
+test('stop(at) mid-ramp fades the output and never edits a sounding schedule', () => {
+  for (const holdSupported of [false, true]) {
+    const { ctx, voice, ended } = compileRef({ ctx: { holdSupported } });
+    const gains = ctx.created.filter((n) => n.kind === 'gain');
+    const params = [gains[0].gain, gains[1].gain, ctx.oscillators[0].frequency];
+    // In the middle of the sweep block's attack edge, and mid-sweep for the frequency.
+    const at = voice.t0 + 0.5 + EDGE_S / 2;
+    const env = gains[1];
+    const envAt = automationValueAt(env.gain.events, at, 1);
+    assert.ok(envAt > 0.4 && envAt < 0.6, `mid-edge ${envAt}`);
+    const before = params.map((p) => p.calls.length);
+    const eventsBefore = params.map((p) => JSON.stringify(p.events));
+    ctx.currentTime = at - 0.001;
+    assert.equal(voice.stop(at), true);
+    assert.equal(voice.stop(at), false, 'a second stop is a no-op');
+    // Chromium renders a quantum whose timeline is being edited at the param's last value: the
+    // ramping amp/env/frequency params get no call at all while they sound.
+    params.forEach((p, i) => {
+      assert.equal(p.calls.length, before[i], `param ${i} edited: ${JSON.stringify(p.calls)}`);
+      assert.equal(JSON.stringify(p.events), eventsBefore[i]);
+    });
+    // The output gain (a constant 1 since the voice was compiled) is held at `at` and fades to
+    // the floor, never to 0.
+    const out = gains[2];
+    assert.deepEqual(out.gain.events.slice(1), [
+      { t: at, value: 1, ramp: 'set' },
+      { t: at + STOP_RAMP_S, value: GAIN_FLOOR, ramp: 'linear' },
+    ]);
+    // Every running or future source stops after the fade; none is extended.
+    const stopAt = at + STOP_RAMP_S + STOP_PAD_S;
+    for (const o of ctx.oscillators) assert.ok(o.stopAt <= stopAt + 1e-12, `${o.stopAt}`);
+    assertNear(ctx.oscillators[0].stopAt, stopAt, 1e-12);
+    ctx.advance(stopAt);
+    assert.equal(voice.ended, true);
+    assert.equal(ctx.liveSources, 0);
+    assert.equal(voice.activeNodeCount, 0);
+    assert.deepEqual(ended, [{ stopped: true }]);
+    // Once every source has ended, the automation that can no longer sound is cancelled.
+    for (const p of params) {
+      assert.deepEqual(p.calls[p.calls.length - 1], ['cancelScheduledValues', 0]);
+    }
+  }
 });
 
-test('stop() uses cancelAndHoldAtTime where the browser has it', () => {
-  const { ctx, voice } = compileRef({ ctx: { holdSupported: true } });
-  const env = ctx.created.filter((n) => n.kind === 'gain')[1];
-  voice.stop(voice.t0 + 0.2);
-  assert.ok(env.gain.calls.some((c) => c[0] === 'cancelAndHoldAtTime'));
-  assert.ok(!env.gain.calls.some((c) => c[0] === 'cancelScheduledValues'));
-});
-
-test('stop() defaults to two render quanta ahead on a realtime context', () => {
+test('stop() defaults to STOP_LEAD_S ahead, on a render-quantum boundary (realtime)', () => {
   const { ctx, voice } = compileRef();
   ctx.currentTime = voice.t0 + 0.3;
   voice.stop();
   const out = ctx.created.filter((n) => n.kind === 'gain')[2];
-  assertNear(out.gain.events[0].t, voice.t0 + 0.3 + 256 / SR, 1e-12);
+  const q = 128 / SR;
+  const expected = Math.ceil((voice.t0 + 0.3 + STOP_LEAD_S) / q - 1e-9) * q;
+  const hold = out.gain.events[1];
+  assert.deepEqual(out.gain.events[0], { t: 1, value: 1, ramp: 'set' }, 'constant since compile');
+  assertNear(hold.t, expected, 1e-12);
+  assert.ok(hold.t >= ctx.currentTime + STOP_LEAD_S - 1e-12);
+  const frames = (hold.t * SR) / 128;
+  assertNear(frames, Math.round(frames), 1e-6);
+  assertNear(voice.stopTime, expected, 1e-12);
+});
+
+test('stop() anchors after the audio already rendered when currentTime is stale', () => {
+  // getOutputTimestamp extrapolated to now plus the latencies is ahead of a stale currentTime.
+  const { ctx, voice } = compileRef();
+  const stale = voice.t0 + 0.3;
+  ctx.currentTime = stale;
+  ctx.baseLatency = 0.005;
+  ctx.outputLatency = 0.02;
+  const perf = globalThis.performance.now();
+  ctx.getOutputTimestamp = () => ({ contextTime: stale + 0.01, performanceTime: perf });
+  voice.stop();
+  const q = 128 / SR;
+  const rendered = stale + 0.01 + 0.025; // at least; real time since `perf` only adds to it
+  assert.ok(voice.stopTime >= rendered + STOP_LEAD_S - 1e-9, `${voice.stopTime} < ${rendered}`);
+  // The gain over currentTime is bounded by the time since the newest reading + 50 ms.
+  assert.ok(voice.stopTime <= stale + 0.05 + 0.01 + STOP_LEAD_S + q + 1e-9, 'bounded estimate');
+});
+
+test('stop() estimate from an earlier clock reading is capped above currentTime', () => {
+  const realPerf = globalThis.performance;
+  let fakeNow = 1000;
+  Object.defineProperty(globalThis, 'performance', {
+    value: { now: () => fakeNow },
+    configurable: true,
+    writable: true,
+  });
+  try {
+    const { ctx, voice } = compileRef(); // reads the clock: currentTime 1 at 1000 ms
+    const q = 128 / SR;
+    // 0.08 s of real time later the main thread still reads the clock it saw at compile time
+    // (Firefox, a long task): the hold must land after what has been rendered meanwhile.
+    fakeNow += 80;
+    voice.stop();
+    assert.ok(voice.stopTime >= 1 + 0.08 + STOP_LEAD_S - 1e-9, `${voice.stopTime}`);
+    assert.ok(voice.stopTime <= 1 + 0.08 + STOP_LEAD_S + q + 1e-9, `${voice.stopTime}`);
+    // A reading older than 250 ms is not extrapolated (the audio clock may have stalled).
+    const second = compileRef();
+    fakeNow += 3000;
+    second.ctx.currentTime = 1.5;
+    assert.equal(second.voice.stop(), true);
+    assert.ok(second.voice.stopTime <= 1.5 + STOP_LEAD_S + q + 1e-9, `${second.voice.stopTime}`);
+    // Within the window the estimate is still capped 0.2 s above currentTime.
+    const third = compileRef();
+    fakeNow += 200;
+    third.ctx.currentTime = 0.9; // a clock reading behind the one at compile time (1.0)
+    assert.equal(third.voice.stop(), true);
+    const cap = 0.9 + 0.2 + STOP_LEAD_S + q;
+    assert.ok(third.voice.stopTime <= cap + 1e-9, `${third.voice.stopTime}`);
+  } finally {
+    Object.defineProperty(globalThis, 'performance', {
+      value: realPerf,
+      configurable: true,
+      writable: true,
+    });
+  }
 });
 
 test('stop before t0 cancels a queued voice: nothing plays, everything is released', () => {
