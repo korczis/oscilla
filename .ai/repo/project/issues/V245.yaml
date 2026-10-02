@@ -1,0 +1,20 @@
+id: V245
+milestone: M010
+title: "Social card tags"
+slug: social-card-tags
+priority: p1
+profile: implementation
+objective: "X/Twitter and other platforms that read twitter: tags show a large-image card: twitter:card summary_large_image, twitter:title, twitter:description, twitter:image, twitter:image:alt."
+scope:
+  - "src"
+  - "dist"
+  - "tests"
+depends_on: []
+acceptance_criteria:
+  - "twitter:card is summary_large_image; title, description, image and image:alt match the Open Graph values."
+validation:
+  - "npm test"
+  - "npm run verify-dist"
+evidence_required:
+  - "verified"
+created_at: 2026-10-02

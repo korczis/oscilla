@@ -1,0 +1,23 @@
+id: V243
+milestone: M010
+title: "Favicon and app icons"
+slug: favicon-and-app-icons
+priority: p1
+profile: implementation
+objective: "Restore the site icon lost in the V1 to V2 move: the OSCILLA wave mark as an inline SVG favicon, a 180 px apple-touch-icon and light/dark theme-color, all inline in dist/index.html."
+scope:
+  - "src"
+  - "dist"
+  - "scripts"
+  - "tests"
+depends_on: []
+acceptance_criteria:
+  - "dist/index.html has <link rel=icon> with an inline SVG of the brand mark and a 180x180 PNG apple-touch-icon as a data: URL; verify-dist still passes."
+  - "The tab shows the icon from file:// and from GitHub Pages in chromium, firefox and webkit."
+  - "theme-color is set for light and dark."
+validation:
+  - "npm test"
+  - "npm run verify-dist"
+evidence_required:
+  - "verified"
+created_at: 2026-10-02

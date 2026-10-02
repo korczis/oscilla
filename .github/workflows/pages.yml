@@ -36,6 +36,8 @@ jobs:
         run: |
           mkdir -p _site
           cp dist/index.html _site/index.html
+          # Crawler-only share assets: the page never loads them (project.single-file-deliverable).
+          cp site/og-image.png site/apple-touch-icon.png _site/
           touch _site/.nojekyll
       - uses: actions/configure-pages@v6
       - uses: actions/upload-pages-artifact@v5
@@ -51,3 +53,6 @@ jobs:
           grep -q 'data-vendor="p5@' live.html
           ! grep -q 'type="module"' live.html
           cmp -s live.html dist/index.html || echo "::warning::live page differs from dist (CDN propagation?)"
+          grep -q "<meta property=\"og:image\" content=\"${url}og-image.png\">" live.html
+          curl -fsSL --retry 5 --retry-delay 10 -o og.png -w '%{content_type}\n' "${url}og-image.png" | grep -q '^image/png'
+          cmp -s og.png site/og-image.png || echo "::warning::live preview differs from site/og-image.png"

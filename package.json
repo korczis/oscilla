@@ -17,7 +17,8 @@
     "test:browser": "node tests/browser/app.cjs",
     "release-gate": "npm test && npm run build && npm run verify-dist && npm run test:engine && npm run test:browser",
     "visual": "node scripts/visual-compare.mjs dist --play --out tests/visual/out-integration",
-    "test:engine": "node tests/browser/engine-v1port.cjs"
+    "test:engine": "node tests/browser/engine-v1port.cjs",
+    "social": "node scripts/social-assets.mjs"
   },
   "dependencies": {
     "alpinejs": "3.14.9",
