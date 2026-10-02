@@ -1,0 +1,1520 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark light">
+  <meta name="description"
+    content="OSCILLA: an interactive sound and frequency laboratory in the browser.">
+  <title>OSCILLA · Interactive Sound &amp; Frequency Lab</title>
+  <!-- @inline-css -->
+</head>
+<body>
+<a class="osc-skip" href="#osc-main">Skip to the instrument</a>
+
+<!-- Icon sprite: hand-drawn 24x24 strokes, currentColor. -->
+<svg class="osc-sr-only" aria-hidden="true" focusable="false">
+  <defs>
+    <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.5"/><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M5.6 18.4L7 17M17 7l1.4-1.4"/></symbol>
+    <symbol id="i-moon" viewBox="0 0 24 24"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/></symbol>
+    <symbol id="i-help" viewBox="0 0 24 24"><path d="M8 8.2a4 4 0 1 1 5.9 3.5c-1.2.7-1.9 1.4-1.9 2.8v.7" stroke-width="2.2"/><path d="M12 19.2v.3" stroke-width="2.6"/></symbol>
+    <symbol id="i-more" viewBox="0 0 24 24"><path d="M5 12h.01M12 12h.01M19 12h.01" stroke-width="3.4"/></symbol>
+    <symbol id="i-export" viewBox="0 0 24 24"><path d="M4 13v6a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-6" stroke-width="2.2"/><path d="M12 14V3.5M7.5 8L12 3.5 16.5 8" stroke-width="2.2"/><path d="M8 16.5h8" stroke-width="2.2"/></symbol>
+    <symbol id="i-upload" viewBox="0 0 24 24"><path d="M4 15v4a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-4"/><path d="M12 16V4M7.5 8.5L12 4l4.5 4.5"/></symbol>
+    <symbol id="i-expand" viewBox="0 0 24 24"><path d="M14 4h6v6M20 4l-7 7M10 20H4v-6M4 20l7-7"/></symbol>
+    <symbol id="i-play" viewBox="0 0 24 24"><path d="M7 4.5v15l12.5-7.5z" fill="currentColor" stroke="none"/></symbol>
+    <symbol id="i-pause" viewBox="0 0 24 24"><rect x="6" y="5" width="4" height="14" rx="1" fill="currentColor" stroke="none"/><rect x="14" y="5" width="4" height="14" rx="1" fill="currentColor" stroke="none"/></symbol>
+    <symbol id="i-stop" viewBox="0 0 24 24"><rect x="5.5" y="5.5" width="13" height="13" rx="1.5" fill="currentColor" stroke="none"/></symbol>
+    <symbol id="i-record" viewBox="0 0 24 24"><circle cx="12" cy="12" r="7.5" fill="currentColor" stroke="none"/></symbol>
+    <symbol id="i-skip" viewBox="0 0 24 24"><path d="M3.5 6v12l8-6zM12.5 6v12l8-6z" fill="currentColor" stroke="none"/></symbol>
+    <symbol id="i-gear" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><circle cx="12" cy="12" r="6.5"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M5.3 18.7l2.1-2.1M16.6 7.4l2.1-2.1"/></symbol>
+    <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="currentColor" stroke="none"/><path d="M12 11v6M12 7.5v.5" stroke="var(--osc-info-bg)" stroke-width="2.2"/></symbol>
+    <symbol id="i-close" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></symbol>
+    <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+    <symbol id="i-trash" viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></symbol>
+    <symbol id="i-left" viewBox="0 0 24 24"><path d="M14.5 6l-6 6 6 6"/></symbol>
+    <symbol id="i-right" viewBox="0 0 24 24"><path d="M9.5 6l6 6-6 6"/></symbol>
+    <symbol id="i-up" viewBox="0 0 24 24"><path d="M6 15l6-6 6 6"/></symbol>
+    <symbol id="i-down" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></symbol>
+    <symbol id="i-link" viewBox="0 0 24 24"><path d="M10 14a4.2 4.2 0 0 0 6 0l3-3a4.2 4.2 0 0 0-6-6l-1 1"/><path d="M14 10a4.2 4.2 0 0 0-6 0l-3 3a4.2 4.2 0 0 0 6 6l1-1"/></symbol>
+    <symbol id="i-camera" viewBox="0 0 24 24"><path d="M3.5 8.5a1.5 1.5 0 0 1 1.5-1.5h2.5L9 4.5h6L16.5 7H19a1.5 1.5 0 0 1 1.5 1.5v9A1.5 1.5 0 0 1 19 19H5a1.5 1.5 0 0 1-1.5-1.5z"/><circle cx="12" cy="12.8" r="3.3"/></symbol>
+    <symbol id="i-save" viewBox="0 0 24 24"><path d="M5 4h11l3 3v12a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1z"/><path d="M8 4v4h7V4M8 20v-6h8v6"/></symbol>
+    <symbol id="i-power" viewBox="0 0 24 24"><path d="M12 3.5v7"/><path d="M7.2 6.6a7.5 7.5 0 1 0 9.6 0"/></symbol>
+    <symbol id="i-sweep" viewBox="0 0 24 24"><path d="M4 19c4 0 5-3 7-7s4-7 9-7"/><path d="M4 19l3-6"/></symbol>
+    <symbol id="i-menu" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></symbol>
+    <!-- Sequencer block glyphs (status/labs.txt request 3) -->
+    <symbol id="i-block-tone" viewBox="0 0 24 24"><path d="M2.5 12c2-6 4-6 6 0s4 6 6 0 4-6 6 0"/></symbol>
+    <symbol id="i-block-silence" viewBox="0 0 24 24"><path d="M3 12h4M10 12h4M17 12h4"/></symbol>
+    <symbol id="i-block-sweep" viewBox="0 0 24 24"><path d="M4 19c4 0 5-3 7-7s4-7 9-7"/><path d="M4 19l3-6"/></symbol>
+    <symbol id="i-block-pulse" viewBox="0 0 24 24"><path d="M2.5 17h3V7h4v10h4V7h4v10h4"/></symbol>
+    <symbol id="i-block-chirp" viewBox="0 0 24 24"><path d="M2.5 12c3-5 4-5 5 0s2 4 3 0 1.5-3 2 0 1 2.5 1.5 0 .8-2 1.2 0 .6 1.5 1 0 .4-1 .8 0"/></symbol>
+    <symbol id="i-block-burst" viewBox="0 0 24 24"><path d="M3 12h2M8 7v10M10 9v6M12 7v10M14 12h2M19 12h2"/></symbol>
+    <symbol id="i-block-siren" viewBox="0 0 24 24"><path d="M3 15c3-8 6-8 9 0s6 8 9 0"/><path d="M3 9h18" stroke-dasharray="2 3"/></symbol>
+    <symbol id="i-block-am" viewBox="0 0 24 24"><path d="M2.5 12c1-2 1.5-2 2 0s1 2 2 0 1.5-5 2.5 0 1.5 6 2.5 0 1.5-6 2.5 0 1.5 5 2.5 0 1-2 2 0 1 2 2 0"/></symbol>
+    <symbol id="i-block-fm" viewBox="0 0 24 24"><path d="M2.5 12c1-6 2-6 3 0s1.5 6 2.5 0 1-6 1.5 0 .6 6 1 0 .6-6 1 0 1 6 1.5 0 1.5-6 2.5 0 2 6 3 0"/></symbol>
+    <symbol id="i-block-random" viewBox="0 0 24 24"><path d="M3 15h3V9h3v8h3V6h3v7h3V8h3"/></symbol>
+    <symbol id="w-sine" viewBox="0 0 24 18"><path d="M1.5 9c2.4-8.5 4.8-8.5 7 0s4.6 8.5 7 0 4.7-8.5 7 0"/></symbol>
+    <symbol id="w-square" viewBox="0 0 24 18"><path d="M1.5 15.5h3.5v-13h14v13h3.5"/></symbol>
+    <symbol id="w-triangle" viewBox="0 0 24 18"><path d="M1.5 15.5l10.5-13 10.5 13"/></symbol>
+    <symbol id="w-saw" viewBox="0 0 24 18"><path d="M1.5 15.5l9-13v13l9-10v6"/></symbol>
+  </defs>
+</svg>
+
+<div class="osc-app" id="osc-app" x-data="oscilla" data-mode="playground" :data-mode="workspace">
+
+  <!-- ================= Header ================= -->
+  <header class="osc-header" role="banner">
+    <a class="osc-brand" href="#osc-main" aria-label="OSCILLA, Interactive Sound and Frequency Lab">
+      <svg class="osc-logo" viewBox="0 0 50 36" aria-hidden="true" focusable="false">
+        <defs>
+          <linearGradient id="osc-logo-grad" x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0" style="stop-color: var(--osc-cyan)"/>
+            <stop offset="0.3" style="stop-color: var(--osc-blue)"/>
+            <stop offset="0.5" style="stop-color: var(--osc-purple)"/>
+            <stop offset="0.72" style="stop-color: var(--osc-magenta)"/>
+            <stop offset="1" style="stop-color: var(--osc-orange)"/>
+          </linearGradient>
+        </defs>
+        <path d="M3 18h1.5c1.4 0 1.8-5 3.2-5s1.9 10 3.3 10 2-17 3.5-17 2.1 25 3.6 25 2.1-31 3.6-31 2.1 27 3.6 27 2-19 3.4-19 1.9 11 3.3 11 1.6-5 3-5H47" fill="none" stroke="url(#osc-logo-grad)" stroke-width="3.8" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      <span class="osc-brand-text">
+        <span class="osc-brand-name">OSCILLA</span>
+        <span class="osc-brand-sub">Interactive Sound &amp; Frequency Lab</span>
+      </span>
+    </a>
+
+    <nav class="osc-nav" aria-label="Workspace">
+      <ul class="osc-tabs osc-tabs--underline" id="osc-nav">
+        <li><a class="osc-tab is-active" href="#osc-main" aria-current="page" data-osc="nav.playground" x-bind="navItem('playground')">Playground</a></li>
+        <li><a class="osc-tab" href="#osc-panel-sequencer" data-osc="nav.sequencer" x-bind="navItem('sequencer')">Sequencer</a></li>
+        <li><a class="osc-tab" href="#osc-panel-mic" data-osc="nav.analyzer" x-bind="navItem('analyzer')">Analyzer</a></li>
+        <li><a class="osc-tab" href="#osc-panel-filter" data-osc="nav.filter" x-bind="navItem('filter')">Filter Lab</a></li>
+        <li><a class="osc-tab" href="#osc-panel-envelope" data-osc="nav.synthesis" x-bind="navItem('synthesis')">Synthesis</a></li>
+        <li><a class="osc-tab" href="#osc-panel-bio" data-osc="nav.compare" x-bind="navItem('compare')">Compare</a></li>
+        <li><a class="osc-tab" href="#osc-main" data-osc="nav.learn" x-bind="navItem('learn')">Learn</a></li>
+        <li><a class="osc-tab" href="#osc-main" data-osc="nav.presets" x-bind="navItem('presets')">Presets</a></li>
+      </ul>
+    </nav>
+
+    <div class="osc-header-actions">
+      <button type="button" class="osc-icon-btn osc-header-theme" id="osc-theme-toggle"
+        data-osc="header.theme" aria-label="Switch to light theme" @click="toggleTheme()"
+        :aria-label="theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'">
+        <svg class="osc-ico" aria-hidden="true"><use href="#i-sun"/></svg>
+      </button>
+      <button type="button" class="osc-icon-btn osc-icon-btn--ghost osc-header-icon" id="osc-help"
+        data-osc="header.help" aria-label="Help" aria-haspopup="dialog" @click="openDialog('help')">
+        <svg class="osc-ico" aria-hidden="true"><use href="#i-help"/></svg>
+      </button>
+      <div class="osc-menu-anchor">
+        <button type="button" class="osc-icon-btn osc-icon-btn--ghost osc-header-icon" id="osc-overflow"
+          data-osc="header.overflow" aria-label="More actions" aria-haspopup="menu"
+          aria-expanded="false" aria-controls="osc-overflow-menu" x-bind="menuButton('overflow')">
+          <svg class="osc-ico" aria-hidden="true"><use href="#i-more"/></svg>
+        </button>
+        <div class="osc-menu osc-menu--right" id="osc-overflow-menu" role="menu" hidden
+          aria-labelledby="osc-overflow" x-bind="menuPanel('overflow')">
+          <button type="button" class="osc-menu-item" role="menuitem" data-osc="config.import" @click="importConfigClick()">Import config…</button>
+          <button type="button" class="osc-menu-item" role="menuitem" data-osc="config.export" @click="exportConfig()">Export config</button>
+          <button type="button" class="osc-menu-item" role="menuitemcheckbox" data-osc="header.explore"
+            :aria-checked="String(explore)" aria-checked="false" @click="explore = !explore">Explore hints</button>
+          <button type="button" class="osc-menu-item" role="menuitem" data-osc="header.settings" @click="openDialog('settings')">Settings…</button>
+          <button type="button" class="osc-menu-item" role="menuitem" data-osc="header.shortcuts" @click="openDialog('help')">Keyboard shortcuts</button>
+          <button type="button" class="osc-menu-item" role="menuitem" data-osc="header.about" @click="openDialog('about')">About OSCILLA</button>
+        </div>
+      </div>
+      <div class="osc-menu-anchor">
+        <button type="button" class="osc-btn osc-btn-primary osc-header-export" id="osc-export"
+          data-osc="header.export" aria-haspopup="menu" aria-expanded="false"
+          aria-controls="osc-export-menu" x-bind="menuButton('export')">
+          <svg aria-hidden="true"><use href="#i-export"/></svg>
+          <span>Export</span>
+        </button>
+        <div class="osc-menu osc-menu--right" id="osc-export-menu" role="menu" hidden
+          aria-labelledby="osc-export" x-bind="menuPanel('export')">
+          <button type="button" class="osc-menu-item" role="menuitem" data-osc="export.wav" @click="exportAudio('pattern')" :aria-disabled="String(exportBusy)">Export tone / pattern (WAV)</button>
+          <button type="button" class="osc-menu-item" role="menuitem" data-osc="export.seqWav" @click="exportAudio('sequence')" :aria-disabled="String(exportBusy)">Export sequence (WAV)</button>
+          <button type="button" class="osc-menu-item" role="menuitem" data-osc="export.png" @click="screenshot()">Export graph (PNG)</button>
+          <button type="button" class="osc-menu-item" role="menuitem" data-osc="export.config" @click="exportConfig()">Export config (JSON)</button>
+          <button type="button" class="osc-menu-item" role="menuitem" data-osc="export.import" @click="importConfigClick()">Import config (JSON)…</button>
+          <button type="button" class="osc-menu-item" role="menuitem" data-osc="export.url" @click="copyConfigUrl()">Copy config URL</button>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- ================= Notifications (in flow: never cover a control) ================= -->
+  <div class="osc-toasts" role="region" aria-label="Notifications" data-osc="alerts"
+    x-show="alerts.length" style="display: none">
+    <template x-for="a in alerts" :key="a.id">
+      <div class="osc-toast" :class="'osc-toast--' + a.level"
+        :role="a.level === 'error' || a.level === 'warning' ? 'alert' : 'status'" data-osc="alert">
+        <div class="osc-toast-text">
+          <strong x-text="a.title"></strong>
+          <span x-text="a.message"></span>
+        </div>
+        <button type="button" class="osc-icon-btn osc-icon-btn--ghost osc-icon-btn--sm"
+          @click="dismissAlertFocus(a.id, $event)" aria-label="Dismiss notification">
+          <svg aria-hidden="true"><use href="#i-close"/></svg>
+        </button>
+      </div>
+    </template>
+  </div>
+
+  <section class="osc-hints" data-osc="hints" aria-label="Explore hints" x-show="explore"
+    style="display: none">
+    <ul class="osc-hints-list">
+      <template x-for="h in hints" :key="h"><li x-text="h"></li></template>
+    </ul>
+    <button type="button" class="osc-icon-btn osc-icon-btn--ghost osc-icon-btn--sm"
+      data-osc="hints.close" aria-label="Hide explore hints" @click="explore = false; $nextTick(() => document.getElementById('osc-overflow').focus())">
+      <svg aria-hidden="true"><use href="#i-close"/></svg>
+    </button>
+  </section>
+
+  <!-- ================= Main grid ================= -->
+  <main class="osc-main" id="osc-main" tabindex="-1">
+    <h1 class="osc-sr-only">OSCILLA playground</h1>
+
+    <div class="osc-top">
+      <div class="osc-top-left">
+        <div class="osc-row1-left">
+
+          <!-- ---------- Source & Pattern ---------- -->
+          <section class="osc-panel osc-p-source" id="osc-panel-source" data-osc-panel="source"
+            data-osc-modes="playground sequencer synthesis" aria-labelledby="osc-source-title">
+            <div class="osc-panel-header">
+              <h2 class="osc-panel-title" id="osc-source-title">Source &amp; Pattern</h2>
+            </div>
+
+            <div class="osc-seg osc-seg--split osc-source-kind" role="radiogroup"
+              aria-label="Source type">
+              <button type="button" class="osc-seg-btn is-active" role="radio" aria-checked="true"
+                tabindex="0" id="osc-source-osc" data-osc="source.kind" data-value="oscillator"
+                x-bind="choice('sourceKind', 'oscillator')">Oscillator</button>
+              <button type="button" class="osc-seg-btn" role="radio" aria-checked="false"
+                tabindex="-1" id="osc-source-pattern" data-osc="source.kind" data-value="pattern"
+                x-bind="choice('sourceKind', 'pattern')">Pattern</button>
+            </div>
+
+            <div class="osc-source-view osc-source-view--osc" id="osc-source-view-osc"
+              data-osc="source.oscView" :hidden="sourceKind !== 'oscillator'">
+            <div class="osc-wave-tiles" role="radiogroup" aria-label="Waveform"
+              data-osc="source.waveform">
+              <button type="button" class="osc-wave-tile is-active" role="radio" aria-checked="true"
+                tabindex="0" id="osc-wave-sine" data-osc="source.waveform" data-value="sine"
+                x-bind="choice('waveform', 'sine')">
+                <svg aria-hidden="true"><use href="#w-sine"/></svg><span>Sine</span>
+              </button>
+              <button type="button" class="osc-wave-tile" role="radio" aria-checked="false"
+                tabindex="-1" id="osc-wave-square" data-osc="source.waveform" data-value="square"
+                x-bind="choice('waveform', 'square')">
+                <svg aria-hidden="true"><use href="#w-square"/></svg><span>Square</span>
+              </button>
+              <button type="button" class="osc-wave-tile" role="radio" aria-checked="false"
+                tabindex="-1" id="osc-wave-triangle" data-osc="source.waveform" data-value="triangle"
+                x-bind="choice('waveform', 'triangle')">
+                <svg aria-hidden="true"><use href="#w-triangle"/></svg><span>Triangle</span>
+              </button>
+              <button type="button" class="osc-wave-tile" role="radio" aria-checked="false"
+                tabindex="-1" id="osc-wave-sawtooth" data-osc="source.waveform" data-value="sawtooth"
+                x-bind="choice('waveform', 'sawtooth')">
+                <svg aria-hidden="true"><use href="#w-saw"/></svg><span>Saw</span>
+              </button>
+            </div>
+
+            <div class="osc-freq-readout" aria-live="off">
+              <output class="osc-freq-value osc-num" id="osc-freq-value" for="osc-freq-slider"
+                data-osc="source.freqValue" x-text="freqMain">440</output>
+              <span class="osc-freq-unit" data-osc="source.freqUnit">Hz</span>
+              <output class="osc-freq-alt osc-num" id="osc-freq-alt"
+                data-osc="source.freqAlt" x-text="freqAlt">440 Hz</output>
+            </div>
+
+            <div class="osc-freq-slider-wrap">
+              <label class="osc-sr-only" for="osc-freq-slider">Frequency (logarithmic)</label>
+              <input class="osc-slider osc-freq-slider" id="osc-freq-slider" type="range"
+                min="0" max="1000" step="1" value="500" style="--osc-fill: 50%"
+                data-osc="source.freqSlider" aria-valuetext="440 Hz"
+                :value="freqSliderValue" :style="'--osc-fill: ' + freqSliderFill"
+                :aria-valuetext="freqDisplay" @input="onFreqSlider($event.target.value)"
+                @keydown.page-up.prevent="stepOctave(1)" @keydown.page-down.prevent="stepOctave(-1)">
+              <div class="osc-range-labels osc-num" aria-hidden="true">
+                <span data-osc="source.rangeMin" x-text="rangeMinText">20 Hz</span>
+                <span data-osc="source.rangeMax" x-text="rangeMaxText">20 kHz</span>
+              </div>
+            </div>
+
+            <div class="osc-fine" role="group" aria-label="Fine frequency steps">
+              <button type="button" class="osc-btn osc-btn-secondary osc-fine-btn" id="osc-step-oct-down"
+                data-osc="source.step" data-step="-1oct" @click="stepFine('-1oct')" aria-label="Down one octave">-1 oct</button>
+              <button type="button" class="osc-btn osc-btn-secondary osc-fine-btn" id="osc-step-st-down"
+                data-osc="source.step" data-step="-1st" @click="stepFine('-1st')" aria-label="Down one semitone">-1 st</button>
+              <button type="button" class="osc-btn osc-btn-secondary osc-fine-btn" id="osc-step-10-down"
+                data-osc="source.step" data-step="-10hz" @click="stepFine('-10hz')" aria-label="Down 10 hertz">-10 Hz</button>
+              <button type="button" class="osc-btn osc-btn-secondary osc-fine-btn" id="osc-step-10-up"
+                data-osc="source.step" data-step="+10hz" @click="stepFine('+10hz')" aria-label="Up 10 hertz">+10 Hz</button>
+              <button type="button" class="osc-btn osc-btn-secondary osc-fine-btn" id="osc-step-st-up"
+                data-osc="source.step" data-step="+1st" @click="stepFine('+1st')" aria-label="Up one semitone">+1 st</button>
+              <button type="button" class="osc-btn osc-btn-secondary osc-fine-btn" id="osc-step-oct-up"
+                data-osc="source.step" data-step="+1oct" @click="stepFine('+1oct')" aria-label="Up one octave">+1 oct</button>
+            </div>
+            </div>
+
+            <div class="osc-source-view osc-source-view--pattern" id="osc-source-view-pattern"
+              data-osc="source.patternView" hidden :hidden="sourceKind !== 'pattern'">
+              <div class="osc-row-field osc-pattern-row">
+                <label class="osc-label" for="osc-pattern-select">Pattern</label>
+                <div class="osc-select osc-pattern-select">
+                  <select id="osc-pattern-select" data-osc="pattern-select"
+                    @change="onPatternSelect($event.target.value)">
+                    <template x-for="g in PATTERN_GROUPS" :key="g">
+                      <optgroup :label="g">
+                        <template x-for="pt in patternsIn(g)" :key="pt.id">
+                          <option :value="pt.id" x-text="pt.label"
+                            :selected="patternSelectValue === pt.id"></option>
+                        </template>
+                      </optgroup>
+                    </template>
+                    <option value="__sweep" x-show="source === 'sweep'"
+                      :selected="patternSelectValue === '__sweep'">Sweep (sweep mode)</option>
+                  </select>
+                </div>
+              </div>
+              <p class="osc-pattern-desc osc-muted" id="osc-pattern-desc"
+                data-osc="pattern-desc" aria-live="polite"
+                x-text="source === 'sweep' ? 'Sweep between two frequencies (sweep mode).' : currentPattern.desc"></p>
+              <div class="osc-pattern-params" id="osc-pattern-params" data-osc="pattern-params"
+                role="group" aria-label="Pattern parameters">
+                <template x-if="source !== 'sweep'">
+                  <div class="osc-pp-grid">
+                    <template x-for="d in currentPattern.params" :key="paramId(d)">
+                      <div class="osc-pp-field" :class="{ 'osc-pp-field--wide': d.type === 'text' }">
+                        <label class="osc-label" :for="paramId(d)" x-text="d.label"></label>
+                        <template x-if="d.type === 'select'">
+                          <div class="osc-select">
+                            <select :id="paramId(d)" data-osc="pattern.param" :data-key="d.key"
+                              @change="setParam(d, $event.target.value)">
+                              <template x-for="o in d.options" :key="o[0]">
+                                <option :value="o[0]" x-text="o[1]" :selected="paramValue(d) === o[0]"></option>
+                              </template>
+                            </select>
+                          </div>
+                        </template>
+                        <template x-if="d.type !== 'select'">
+                          <input class="osc-number" type="text" :id="paramId(d)" data-osc="pattern.param"
+                            :data-key="d.key" :value="paramValue(d)" :aria-label="d.label + paramUnit(d)"
+                            :inputmode="d.type === 'text' ? 'text' : 'decimal'"
+                            :aria-invalid="paramErrors[paramId(d)] ? 'true' : 'false'"
+                            @change="setParam(d, $event.target.value)"
+                            @keydown.enter.prevent="setParam(d, $event.target.value)">
+                        </template>
+                        <p class="osc-pp-error" role="alert" x-show="paramErrors[paramId(d)]"
+                          x-text="paramErrors[paramId(d)]"></p>
+                      </div>
+                    </template>
+                  </div>
+                </template>
+                <template x-if="source === 'sweep'">
+                  <div class="osc-pp-grid">
+                    <template x-for="d in SWEEP_FORM" :key="'sw-' + d.key">
+                      <div class="osc-pp-field">
+                        <label class="osc-label" :for="'sw-' + d.key" x-text="sweepLabel(d)"></label>
+                        <template x-if="d.type === 'select'">
+                          <div class="osc-select">
+                            <select :id="'sw-' + d.key" data-osc="sweep.param" :data-key="d.key"
+                              @change="setSweepField(d, $event.target.value)">
+                              <template x-for="o in d.options" :key="o[0]">
+                                <option :value="o[0]" x-text="o[1]" :selected="sweep[d.key] === o[0]"></option>
+                              </template>
+                            </select>
+                          </div>
+                        </template>
+                        <template x-if="d.type !== 'select'">
+                          <input class="osc-number" type="text" :id="'sw-' + d.key" data-osc="sweep.param"
+                            :data-key="d.key" :value="sweepValue(d)" inputmode="decimal"
+                            @change="setSweepField(d, $event.target.value)">
+                        </template>
+                      </div>
+                    </template>
+                    <div class="osc-pp-field">
+                      <label class="osc-label" for="sw-direction">Direction</label>
+                      <div class="osc-select">
+                        <select id="sw-direction" data-osc="sweep.param" data-key="direction"
+                          @change="sweep.direction = $event.target.value">
+                          <option value="up" :selected="sweep.direction === 'up'">Up</option>
+                          <option value="down" :selected="sweep.direction === 'down'">Down</option>
+                          <option value="pingpong" :selected="sweep.direction === 'pingpong'">Ping-pong</option>
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+                </template>
+                <p class="osc-pp-error" role="alert" x-show="planError" x-text="planError"></p>
+                <p class="osc-pp-warn" x-show="planWarnings.length" x-text="planWarnings.join(' ')"></p>
+              </div>
+            </div>
+
+            <div class="osc-row-field osc-mode-row">
+              <span class="osc-label" id="osc-mode-label">Mode</span>
+              <div class="osc-seg osc-mode-seg" role="radiogroup" aria-labelledby="osc-mode-label">
+                <button type="button" class="osc-seg-btn is-active" role="radio" aria-checked="true"
+                  tabindex="0" id="osc-mode-freq" data-osc="source.inputMode" data-value="frequency"
+                  x-bind="choice('inputMode', 'frequency')">Frequency</button>
+                <button type="button" class="osc-seg-btn" role="radio" aria-checked="false"
+                  tabindex="-1" id="osc-mode-note" data-osc="source.inputMode" data-value="note"
+                  x-bind="choice('inputMode', 'note')">Note</button>
+              </div>
+            </div>
+
+            <div class="osc-row-field osc-gain-row">
+              <label class="osc-label" for="osc-gain">Gain</label>
+              <input class="osc-slider osc-slider--sm" id="osc-gain" type="range" min="0" max="100"
+                step="1" value="57" style="--osc-fill: 57%" data-osc="source.gain"
+                aria-valuetext="-21.9 dB" :value="gainPct" :style="'--osc-fill: ' + gainFill"
+                :aria-valuetext="gainDbText + ' (logical gain ' + gainLevel.toFixed(3) + ', ' + gainLabel + ')'"
+                @input="setGainPct($event.target.value)">
+              <output class="osc-gain-value osc-num" id="osc-gain-value" for="osc-gain"
+                data-osc="source.gainValue" x-text="gainDbText"
+                :title="'Logical gain ' + gainLevel.toFixed(3) + ' re full scale (relative, not SPL)'">-21.9 dB</output>
+            </div>
+
+            <div class="osc-play-row">
+              <button type="button" class="osc-btn osc-btn-primary osc-btn-lg osc-hold" id="osc-hold-play"
+                data-osc="source.hold" aria-pressed="false" :aria-pressed="String(holding || latched)"
+                :class="{ 'is-playing': playing }" aria-describedby="osc-transport-desc"
+                @pointerdown="holdStart($event)" @pointerup="holdEnd()" @pointercancel="holdEnd()"
+                @lostpointercapture="keyHolding || holdEnd()" @pointerleave="keyHolding || holdLeave($event)"
+                @keydown.space.prevent="holdKey($event)" @keyup.space.prevent="holdEnd()"
+                @blur="holdEnd()" @keydown.enter.prevent="triggerKey($event)" @contextmenu.prevent>
+                <svg aria-hidden="true"><use href="#i-play"/></svg><span x-text="holdLabel">Hold to Play</span>
+              </button>
+              <button type="button" class="osc-btn osc-btn-secondary osc-btn-lg osc-trigger" id="osc-trigger"
+                data-osc="source.trigger" @click="trigger()" @keydown.enter.prevent="triggerKey($event)"
+                :aria-label="isProgrammed ? 'Trigger the programmed pattern' : 'Trigger for the set duration'">Trigger</button>
+            </div>
+            <p class="osc-sr-only" id="osc-transport-desc" x-text="transportText"></p>
+          </section>
+
+          <!-- ---------- Primary analysis ---------- -->
+          <section class="osc-panel osc-p-analysis" id="osc-panel-analysis" data-osc-panel="analysis"
+            data-osc-modes="playground analyzer synthesis" aria-label="Signal analysis">
+            <div class="osc-analysis-head">
+              <div class="osc-tabs osc-tabs--auto osc-analysis-tabs" role="tablist"
+                aria-label="Analysis view" id="osc-analysis-tabs">
+                <button type="button" class="osc-tab is-active" role="tab" aria-selected="true"
+                  tabindex="0" id="osc-atab-waveform" aria-controls="osc-analysis-view"
+                  data-osc="analysis.tab" data-value="waveform"
+                  x-bind="tab('analysis', 'waveform')">Waveform</button>
+                <button type="button" class="osc-tab" role="tab" aria-selected="false" tabindex="-1"
+                  id="osc-atab-spectrum" aria-controls="osc-analysis-view" data-osc="analysis.tab"
+                  data-value="spectrum" x-bind="tab('analysis', 'spectrum')">Spectrum</button>
+                <button type="button" class="osc-tab" role="tab" aria-selected="false" tabindex="-1"
+                  id="osc-atab-spectrogram" aria-controls="osc-analysis-view" data-osc="analysis.tab"
+                  data-value="spectrogram" x-bind="tab('analysis', 'spectrogram')">Spectrogram</button>
+                <button type="button" class="osc-tab" role="tab" aria-selected="false" tabindex="-1"
+                  id="osc-atab-harmonics" aria-controls="osc-analysis-view" data-osc="analysis.tab"
+                  data-value="harmonics" x-bind="tab('analysis', 'harmonics')">Harmonics</button>
+                <button type="button" class="osc-tab" role="tab" aria-selected="false" tabindex="-1"
+                  id="osc-atab-signalpath" aria-controls="osc-analysis-view" data-osc="analysis.tab"
+                  data-value="signalPath" x-bind="tab('analysis', 'signalPath')">Signal Path</button>
+              </div>
+              <button type="button" class="osc-icon-btn osc-icon-btn--ghost osc-viz-pause"
+                id="osc-viz-pause" data-osc="analysis.pause" aria-label="Pause animation"
+                title="Pause animation (the view still redraws when something changes)"
+                aria-pressed="false" :aria-pressed="String(vizPaused)" @click="vizPaused = !vizPaused">
+                <svg aria-hidden="true" x-show="!vizPaused"><use href="#i-pause"/></svg>
+                <svg aria-hidden="true" x-show="vizPaused" style="display: none"><use href="#i-play"/></svg>
+              </button>
+              <div class="osc-select osc-time-select">
+                <label class="osc-sr-only" for="osc-time-window">Time window</label>
+                <select id="osc-time-window" data-osc="analysis.timeWindow"
+                  @change="timeWindowMs = Number($event.target.value)">
+                  <option value="5" selected>Time: 5 ms</option>
+                  <option value="10">Time: 10 ms</option>
+                  <option value="20">Time: 20 ms</option>
+                  <option value="50">Time: 50 ms</option>
+                  <option value="100">Time: 100 ms</option>
+                </select>
+              </div>
+              <button type="button" class="osc-icon-btn osc-analysis-fs" id="osc-analysis-fullscreen"
+                data-osc="analysis.fullscreen" aria-label="Analysis fullscreen"
+                @click="toggleFullscreen('osc-panel-analysis')">
+                <svg aria-hidden="true"><use href="#i-expand"/></svg>
+              </button>
+            </div>
+            <hr class="osc-divider osc-analysis-sep">
+
+            <div class="osc-analysis-view" id="osc-analysis-view" role="tabpanel" data-tab="waveform"
+              :data-tab="tabs.analysis" aria-labelledby="osc-atab-waveform"
+              :aria-labelledby="'osc-atab-' + tabs.analysis.toLowerCase()">
+              <div class="osc-chart-host osc-chart-inset osc-h-waveform" id="osc-chart-waveform"
+                data-osc-chart="waveform" role="img" aria-label="Live waveform"
+                :aria-label="tabs.analysis === 'harmonics' ? 'Theoretical harmonics of the oscillator: ' + vizSummaryHarm
+                  : tabs.analysis === 'signalPath' ? 'Active Web Audio signal path'
+                  : 'Live waveform, ' + timeWindowMs + ' ms window' + (playing ? '' : ' (not playing)')"></div>
+              <div class="osc-chart-host osc-h-spectrum" id="osc-chart-spectrum"
+                data-osc-chart="spectrum" role="img"
+                aria-label="Live spectrum, relative level (dBFS-like analyser level)"></div>
+              <div class="osc-chart-host osc-h-analysis-spg" id="osc-chart-analysis-spg"
+                data-osc-chart="analysis-spectrogram" role="img"
+                aria-label="Live spectrogram of the output: time, frequency, relative level"></div>
+            </div>
+
+            <div class="osc-analysis-foot"
+              :class="{ 'is-inert': !['waveform', 'spectrum'].includes(tabs.analysis) }">
+              <div class="osc-seg osc-seg--primary osc-scale-seg" role="radiogroup"
+                aria-label="Frequency axis">
+                <button type="button" class="osc-seg-btn is-active" role="radio" aria-checked="true"
+                  tabindex="0" id="osc-spec-log" data-osc="analysis.freqScale" data-value="log"
+                  x-bind="choice('specScale', 'log')">Log</button>
+                <button type="button" class="osc-seg-btn" role="radio" aria-checked="false"
+                  tabindex="-1" id="osc-spec-linear" data-osc="analysis.freqScale" data-value="linear"
+                  x-bind="choice('specScale', 'linear')">Linear</button>
+              </div>
+              <div class="osc-select osc-max-select">
+                <label class="osc-sr-only" for="osc-spec-max">Maximum frequency</label>
+                <select id="osc-spec-max" data-osc="analysis.maxFreq">
+                  <option value="2000">Max: 2 kHz</option>
+                  <option value="5000">Max: 5 kHz</option>
+                  <option value="10000">Max: 10 kHz</option>
+                  <option value="20000" selected>Max: 20 kHz</option>
+                  <option value="nyquist">Max: Nyquist</option>
+                </select>
+              </div>
+              <ul class="osc-legend osc-analysis-legend" aria-label="Legend">
+                <li class="osc-legend-item"><span class="osc-legend-dot osc-legend-dot--purple"></span>Spectrum</li>
+                <li class="osc-legend-item"><span class="osc-legend-dot osc-legend-dot--blue"></span>Requested frequency</li>
+              </ul>
+            </div>
+          </section>
+        </div>
+
+        <!-- ---------- Spectrogram ---------- -->
+        <section class="osc-panel osc-p-spectrogram" id="osc-panel-spectrogram"
+          data-osc-panel="spectrogram" data-osc-modes="analyzer" aria-labelledby="osc-spg-title">
+          <div class="osc-panel-header">
+            <h2 class="osc-panel-title" id="osc-spg-title">Spectrogram</h2>
+            <span class="osc-spacer"></span>
+            <button type="button" class="osc-toggle" role="switch" aria-checked="false"
+              id="osc-spg-freeze" data-osc="spectrogram.freeze">
+              <span class="osc-toggle-track" aria-hidden="true"></span><span>Freeze</span>
+            </button>
+            <div class="osc-select osc-spg-span">
+              <label class="osc-sr-only" for="osc-spg-span-select">Time span</label>
+              <select id="osc-spg-span-select" data-osc="spectrogram.span">
+                <option value="5">5 s</option>
+                <option value="10" selected>10 s</option>
+                <option value="20">20 s</option>
+              </select>
+            </div>
+            <div class="osc-select osc-spg-scale">
+              <label class="osc-sr-only" for="osc-spg-scale-select">Frequency axis</label>
+              <select id="osc-spg-scale-select" data-osc="spectrogram.freqScale">
+                <option value="log" selected>Log freq</option>
+                <option value="linear">Linear freq</option>
+              </select>
+            </div>
+            <button type="button" class="osc-icon-btn osc-spg-fs" id="osc-spg-fullscreen"
+              data-osc="spectrogram.fullscreen" aria-label="Spectrogram fullscreen"
+              @click="toggleFullscreen('osc-panel-spectrogram')">
+              <svg aria-hidden="true"><use href="#i-expand"/></svg>
+            </button>
+          </div>
+          <div class="osc-spg-body">
+            <div class="osc-chart-host osc-h-spectrogram" id="osc-chart-spectrogram"
+              data-osc-chart="spectrogram" role="img"
+              aria-label="Live spectrogram: time, frequency, relative level"></div>
+            <div class="osc-spg-scale-col" aria-hidden="true">
+              <div class="osc-colorbar osc-h-colorbar" id="osc-spg-colorbar"
+                data-osc="spectrogram.colorbar"></div>
+              <ol class="osc-colorbar-ticks osc-num" data-osc="spectrogram.colorbarTicks">
+                <li>0 dB</li><li>-20</li><li>-40</li><li>-60</li><li>-80</li><li>-100</li>
+              </ol>
+            </div>
+          </div>
+        </section>
+      </div>
+
+      <div class="osc-top-right">
+        <div class="osc-row1-right">
+
+          <!-- ---------- Microphone analyzer ---------- -->
+          <section class="osc-panel osc-p-mic" id="osc-panel-mic" data-osc-panel="mic"
+            data-osc-modes="analyzer compare" aria-labelledby="osc-mic-title">
+            <div class="osc-panel-header osc-mic-head">
+              <h2 class="osc-panel-title" id="osc-mic-title">Microphone Analyzer</h2>
+              <span class="osc-spacer"></span>
+              <button type="button" class="osc-btn osc-btn-success osc-mic-use" id="osc-mic-toggle"
+                data-osc="mic.toggle" aria-pressed="false">Use microphone</button>
+              <button type="button" class="osc-icon-btn osc-mic-settings" id="osc-mic-settings"
+                data-osc="mic.settings" aria-label="Microphone settings" aria-haspopup="dialog"
+                @click="openDialog('osc-dlg-mic')">
+                <svg aria-hidden="true"><use href="#i-gear"/></svg>
+              </button>
+            </div>
+            <div class="osc-tabs osc-mic-tabs" role="tablist" aria-label="Microphone view">
+              <button type="button" class="osc-tab is-active" role="tab" aria-selected="true"
+                tabindex="0" id="osc-mtab-live" aria-controls="osc-mic-view" data-osc="mic.tab"
+                data-value="live" x-bind="tab('mic', 'live')">Live Spectrum</button>
+              <button type="button" class="osc-tab" role="tab" aria-selected="false" tabindex="-1"
+                id="osc-mtab-spectrogram" aria-controls="osc-mic-view" data-osc="mic.tab"
+                data-value="spectrogram" x-bind="tab('mic', 'spectrogram')">Spectrogram</button>
+              <button type="button" class="osc-tab" role="tab" aria-selected="false" tabindex="-1"
+                id="osc-mtab-compare" aria-controls="osc-mic-view" data-osc="mic.tab"
+                data-value="compare" x-bind="tab('mic', 'compare')">Compare</button>
+            </div>
+            <hr class="osc-divider osc-mic-sep">
+            <div class="osc-mic-view" id="osc-mic-view" role="tabpanel"
+              aria-labelledby="osc-mtab-live" :aria-labelledby="'osc-mtab-' + tabs.mic">
+              <div class="osc-seg osc-mic-tools" role="group" aria-label="Compare options" hidden>
+                <button type="button" class="osc-seg-btn" role="switch" aria-checked="false"
+                  data-osc="mic.freeze">Freeze</button>
+                <button type="button" class="osc-seg-btn" role="switch" aria-checked="false"
+                  data-osc="mic.average">Average</button>
+                <button type="button" class="osc-seg-btn" role="switch" aria-checked="false"
+                  data-osc="mic.peakHold">Peak hold</button>
+              </div>
+              <div class="osc-chart-host osc-h-mic" id="osc-chart-mic" data-osc-chart="mic"
+                role="img" aria-label="Microphone spectrum against generator target"></div>
+            </div>
+            <div class="osc-mic-readout" aria-live="polite">
+              <p><span class="osc-mic-k">Requested:</span>
+                <output class="osc-num" id="osc-mic-requested" data-osc="mic.requested">15.5 kHz</output></p>
+              <p><span class="osc-mic-k">Microphone detected:</span>
+                <output class="osc-num" id="osc-mic-detected" data-osc="mic.detected">UNAVAILABLE (microphone off)</output></p>
+              <p class="osc-mic-note">Not a calibrated measurement. Microphone frequency response varies.</p>
+            </div>
+          </section>
+
+          <!-- ---------- Device & Limits ---------- -->
+          <section class="osc-panel osc-p-device" id="osc-panel-device" data-osc-panel="device"
+            data-osc-modes="analyzer" aria-labelledby="osc-dev-title">
+            <div class="osc-panel-header">
+              <h2 class="osc-panel-title" id="osc-dev-title">Device &amp; Limits</h2>
+              <span class="osc-spacer"></span>
+              <button type="button" class="osc-icon-btn osc-icon-btn--ghost osc-icon-btn--sm"
+                id="osc-dev-collapse" data-osc="device.collapse" aria-expanded="true"
+                aria-controls="osc-dev-body" aria-label="Hide Device and Limits details"
+                x-bind="collapseButton('device')">
+                <svg aria-hidden="true"><use href="#i-close"/></svg>
+              </button>
+            </div>
+            <div class="osc-dev-body" id="osc-dev-body" :hidden="collapsed.device">
+              <dl class="osc-dev-metrics">
+                <div class="osc-metric"><dt>Sample rate</dt><dd id="osc-dev-sr" data-osc="device.sampleRate">—</dd></div>
+                <div class="osc-metric"><dt>Nyquist</dt><dd id="osc-dev-nyquist" data-osc="device.nyquist">—</dd></div>
+                <div class="osc-metric"><dt>Safe max</dt><dd id="osc-dev-safemax" data-osc="device.safeMax">—</dd></div>
+              </dl>
+              <div class="osc-dev-limits" role="group" aria-labelledby="osc-dev-limits-title">
+                <h3 class="osc-sr-only" id="osc-dev-limits-title">Limits</h3>
+                <div class="osc-metric osc-dev-limit-row">
+                  <label for="osc-safety-limit" title="The limit is scheduled on the audio clock, so it holds even if the page stalls. It also caps the Finite tone. Other programmed patterns stop at their own end (max 30 s); a continuous sweep repeat needs “Allow continuous playback”.">Hard limit</label>
+                  <div class="osc-select osc-select--xs">
+                    <select id="osc-safety-limit" data-osc="safety-limit"
+                      @change="setSafetyLimit($event.target.value)" :disabled="continuousAllowed"
+                      aria-describedby="osc-safety-help">
+                      <template x-for="v in SAFETY_LIMIT_OPTIONS" :key="v">
+                        <option :value="v" x-text="v + ' s'" :selected="v === safetyLimit"></option>
+                      </template>
+                    </select>
+                  </div>
+                </div>
+                <button type="button" class="osc-toggle osc-dev-continuous" role="switch"
+                  aria-checked="false" id="osc-continuous-toggle" data-osc="continuous-toggle"
+                  :aria-checked="String(continuousAllowed)" @click="onContinuousToggle()">
+                  <span>Allow continuous playback</span>
+                  <span class="osc-toggle-track" aria-hidden="true"></span>
+                </button>
+              </div>
+              <p class="osc-sr-only" id="osc-safety-help">The limit is scheduled on the audio
+                clock, so it holds even if the page stalls. It also caps the Finite tone. Other
+                programmed patterns stop at their own end (max 30 s); a continuous sweep repeat
+                needs “Allow continuous playback”.</p>
+              <hr class="osc-divider osc-dev-sep">
+              <p class="osc-dev-out-label">Output device</p>
+              <p class="osc-dev-out" id="osc-dev-output" data-osc="device.output">Default audio output</p>
+              <div class="osc-warning osc-warning--info osc-dev-alert" role="note">
+                <svg aria-hidden="true"><use href="#i-info"/></svg>
+                <p>Web Audio can generate digital signals within sampling limits. Actual speaker output is unknown.</p>
+              </div>
+            </div>
+          </section>
+        </div>
+
+        <!-- ---------- Pattern sequencer ---------- -->
+        <section class="osc-panel osc-p-sequencer" id="osc-panel-sequencer"
+          data-osc-panel="sequencer" data-osc-modes="sequencer" aria-labelledby="osc-seq-title">
+          <div class="osc-panel-header osc-seq-head">
+            <h2 class="osc-panel-title" id="osc-seq-title">Pattern Sequencer</h2>
+            <div class="osc-transport" role="group" aria-label="Sequencer transport">
+              <button type="button" class="osc-transport-btn" id="osc-seq-play"
+                data-osc="seq.play" aria-label="Play sequence" aria-pressed="false">
+                <svg aria-hidden="true"><use href="#i-play"/></svg>
+              </button>
+              <button type="button" class="osc-transport-btn" id="osc-seq-stop"
+                data-osc="seq.stop" aria-label="Stop sequence">
+                <svg aria-hidden="true"><use href="#i-stop"/></svg>
+              </button>
+              <button type="button" class="osc-transport-btn osc-transport-btn--record" id="osc-seq-record"
+                data-osc="seq.record" aria-label="Loop sequence" aria-pressed="false">
+                <svg aria-hidden="true"><use href="#i-record"/></svg>
+              </button>
+            </div>
+            <span class="osc-spacer"></span>
+            <label class="osc-label osc-seq-tempo-label" for="osc-seq-tempo">Tempo</label>
+            <div class="osc-select osc-seq-tempo">
+              <select id="osc-seq-tempo" data-osc="seq.tempo">
+                <option value="60">60 BPM</option>
+                <option value="90">90 BPM</option>
+                <option value="100">100 BPM</option>
+                <option value="110">110 BPM</option>
+                <option value="120" selected>120 BPM</option>
+                <option value="128">128 BPM</option>
+                <option value="140">140 BPM</option>
+                <option value="160">160 BPM</option>
+                <option value="180">180 BPM</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="osc-seq-timeline-wrap">
+            <div class="osc-chart-host osc-seq-ruler" id="osc-seq-ruler" data-osc-chart="seq-ruler"
+              aria-hidden="true"></div>
+            <div class="osc-seq-lane">
+              <button type="button" class="osc-icon-btn osc-seq-start" id="osc-seq-start"
+                data-osc="seq.start" aria-label="Play from the start">
+                <svg aria-hidden="true"><use href="#i-skip"/></svg>
+              </button>
+              <div class="osc-timeline osc-chart-host" id="osc-seq-timeline" data-osc="seq.timeline"
+                data-osc-chart="seq-timeline" role="listbox" aria-label="Pattern blocks"
+                aria-orientation="horizontal" tabindex="0"></div>
+            </div>
+            <div class="osc-seq-under">
+              <div class="osc-seq-scroll" id="osc-seq-scroll" data-osc="seq.scroll" aria-hidden="true">
+                <span class="osc-seq-scroll-thumb"></span>
+              </div>
+              <div class="osc-menu-anchor">
+                <button type="button" class="osc-btn osc-btn-secondary osc-seq-add" id="osc-seq-add"
+                  data-osc="seq.add" aria-haspopup="menu" aria-expanded="false"
+                  aria-controls="osc-seq-add-menu" x-bind="menuButton('addBlock')">
+                  <svg aria-hidden="true"><use href="#i-plus"/></svg><span>Add block</span>
+                </button>
+                <div class="osc-menu osc-menu--right osc-menu--grid" id="osc-seq-add-menu" role="menu"
+                  hidden aria-labelledby="osc-seq-add" x-bind="menuPanel('addBlock')">
+                  <button type="button" class="osc-menu-item" role="menuitem" data-osc="seq.addType" data-value="tone">Tone</button>
+                  <button type="button" class="osc-menu-item" role="menuitem" data-osc="seq.addType" data-value="silence">Silence</button>
+                  <button type="button" class="osc-menu-item" role="menuitem" data-osc="seq.addType" data-value="sweep">Sweep</button>
+                  <button type="button" class="osc-menu-item" role="menuitem" data-osc="seq.addType" data-value="pulse">Pulse</button>
+                  <button type="button" class="osc-menu-item" role="menuitem" data-osc="seq.addType" data-value="chirp">Chirp</button>
+                  <button type="button" class="osc-menu-item" role="menuitem" data-osc="seq.addType" data-value="burst">Burst</button>
+                  <button type="button" class="osc-menu-item" role="menuitem" data-osc="seq.addType" data-value="siren">Siren</button>
+                  <button type="button" class="osc-menu-item" role="menuitem" data-osc="seq.addType" data-value="am">AM</button>
+                  <button type="button" class="osc-menu-item" role="menuitem" data-osc="seq.addType" data-value="fm">FM</button>
+                  <button type="button" class="osc-menu-item" role="menuitem" data-osc="seq.addType" data-value="random">Random</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="osc-seq-editor" id="osc-seq-editor" data-osc="seq.editor" role="group"
+            aria-labelledby="osc-seq-editor-title">
+            <div class="osc-seq-editor-head">
+              <span class="osc-seq-editor-icon" data-osc="seq.editor.icon" aria-hidden="true">
+                <svg><use href="#i-sweep"/></svg>
+              </span>
+              <h3 class="osc-seq-editor-title" id="osc-seq-editor-title"
+                data-osc="seq.editor.title">Sweep</h3>
+              <span class="osc-spacer"></span>
+              <button type="button" class="osc-icon-btn osc-icon-btn--ghost osc-icon-btn--sm"
+                id="osc-seq-move-earlier" data-osc="seq.moveEarlier" aria-label="Move block earlier">
+                <svg aria-hidden="true"><use href="#i-left"/></svg>
+              </button>
+              <button type="button" class="osc-icon-btn osc-icon-btn--ghost osc-icon-btn--sm"
+                id="osc-seq-move-later" data-osc="seq.moveLater" aria-label="Move block later">
+                <svg aria-hidden="true"><use href="#i-right"/></svg>
+              </button>
+              <button type="button" class="osc-icon-btn osc-seq-delete" id="osc-seq-delete"
+                data-osc="seq.delete" aria-label="Delete block">
+                <svg aria-hidden="true"><use href="#i-trash"/></svg>
+              </button>
+            </div>
+            <p class="osc-seq-msg" data-osc="seq.message" role="status" aria-live="polite"></p>
+            <div class="osc-seq-fields" data-osc="seq.editor.fields">
+              <div class="osc-seq-field osc-seq-f-start">
+                <label class="osc-label" for="osc-seq-start-hz">Start</label>
+                <div class="osc-stepper osc-unit" data-unit="Hz">
+                  <input class="osc-number" id="osc-seq-start-hz" type="number" min="20" max="22800"
+                    step="1" value="440" inputmode="decimal" data-osc="seq.field" data-field="start">
+                  <span class="osc-unit-suffix" aria-hidden="true">Hz</span>
+                  <span class="osc-stepper-keys">
+                    <button type="button" tabindex="-1" data-osc="seq.fieldStep" data-field="start" data-dir="1" aria-label="Increase start frequency"><svg aria-hidden="true"><use href="#i-up"/></svg></button>
+                    <button type="button" tabindex="-1" data-osc="seq.fieldStep" data-field="start" data-dir="-1" aria-label="Decrease start frequency"><svg aria-hidden="true"><use href="#i-down"/></svg></button>
+                  </span>
+                </div>
+              </div>
+              <div class="osc-seq-field osc-seq-f-end">
+                <label class="osc-label" for="osc-seq-end-hz">End</label>
+                <div class="osc-unit" data-unit="Hz">
+                  <input class="osc-number" id="osc-seq-end-hz" type="number" min="20" max="22800"
+                    step="1" value="880" inputmode="decimal" data-osc="seq.field" data-field="end">
+                  <span class="osc-unit-suffix" aria-hidden="true">Hz</span>
+                </div>
+              </div>
+              <div class="osc-seq-field osc-seq-f-dur">
+                <label class="osc-label" for="osc-seq-duration">Duration</label>
+                <div class="osc-unit" data-unit="ms">
+                  <input class="osc-number" id="osc-seq-duration" type="number" min="10" max="60000"
+                    step="10" value="500" inputmode="numeric" data-osc="seq.field" data-field="durationMs">
+                  <span class="osc-unit-suffix" aria-hidden="true">ms</span>
+                </div>
+              </div>
+              <div class="osc-seq-field osc-seq-f-curve">
+                <label class="osc-label" for="osc-seq-curve">Curve</label>
+                <div class="osc-select">
+                  <select id="osc-seq-curve" data-osc="seq.field" data-field="curve">
+                    <option value="linear">Linear</option>
+                    <option value="logarithmic" selected>Logarithmic</option>
+                    <option value="exponential">Exponential</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+      </div>
+    </div>
+
+    <!-- ================= Row 3 ================= -->
+    <div class="osc-row3">
+
+      <!-- ---------- Filter Lab ---------- -->
+      <section class="osc-panel osc-p-filter" id="osc-panel-filter" data-osc-panel="filter"
+        data-osc-modes="filter" aria-labelledby="osc-filter-title">
+        <div class="osc-panel-header">
+          <h2 class="osc-panel-title" id="osc-filter-title">Filter Lab</h2>
+          <button type="button" class="osc-toggle osc-toggle--lg" role="switch" aria-checked="false"
+            id="osc-filter-enable" data-osc="filter.enable" aria-label="Filter enabled">
+            <span class="osc-toggle-track" aria-hidden="true"></span>
+          </button>
+          <span class="osc-spacer"></span>
+          <button type="button" class="osc-icon-btn osc-icon-btn--sm osc-panel-fs" id="osc-filter-fullscreen"
+            data-osc="filter.fullscreen" aria-label="Open Filter Lab page"
+            @click="setWorkspace(workspace === 'filter' ? 'playground' : 'filter')">
+            <svg aria-hidden="true"><use href="#i-expand"/></svg>
+          </button>
+        </div>
+        <div class="osc-tabs osc-filter-types" role="radiogroup" aria-label="Filter type">
+          <button type="button" class="osc-tab is-active" role="radio" aria-checked="true" tabindex="0"
+            id="osc-ftype-lowpass" data-osc="filter.type" data-value="lowpass"
+            x-bind="choice('filterType', 'lowpass')">Low-pass</button>
+          <button type="button" class="osc-tab" role="radio" aria-checked="false" tabindex="-1"
+            id="osc-ftype-highpass" data-osc="filter.type" data-value="highpass"
+            x-bind="choice('filterType', 'highpass')">High-pass</button>
+          <button type="button" class="osc-tab" role="radio" aria-checked="false" tabindex="-1"
+            id="osc-ftype-bandpass" data-osc="filter.type" data-value="bandpass"
+            x-bind="choice('filterType', 'bandpass')">Band-pass</button>
+          <button type="button" class="osc-tab" role="radio" aria-checked="false" tabindex="-1"
+            id="osc-ftype-notch" data-osc="filter.type" data-value="notch"
+            x-bind="choice('filterType', 'notch')">Notch</button>
+          <button type="button" class="osc-tab" role="radio" aria-checked="false" tabindex="-1"
+            id="osc-ftype-peaking" data-osc="filter.type" data-value="peaking"
+            x-bind="choice('filterType', 'peaking')">Peaking</button>
+        </div>
+        <div class="osc-filter-body">
+          <div class="osc-chart-host osc-h-filter" id="osc-chart-filter" data-osc-chart="filter"
+            role="img" aria-label="Filter magnitude response (getFrequencyResponse)"></div>
+          <div class="osc-filter-controls">
+            <label class="osc-label" for="osc-filter-cutoff-value">Cutoff</label>
+            <div class="osc-field-box">
+              <input class="osc-number" id="osc-filter-cutoff-value" type="text" value="2.5 kHz"
+                inputmode="decimal" data-osc="filter.cutoffValue" aria-describedby="osc-filter-cutoff-hint">
+              <input class="osc-slider osc-slider--sm" id="osc-filter-cutoff" type="range" min="0"
+                max="1000" step="1" value="100" style="--osc-fill: 20%" data-osc="filter.cutoff"
+                aria-label="Cutoff (logarithmic)" aria-valuetext="2.5 kHz">
+            </div>
+            <span class="osc-sr-only" id="osc-filter-cutoff-hint">Hertz or kilohertz, for example 2.5 kHz</span>
+            <label class="osc-label osc-filter-q-label" for="osc-filter-q-value">Q</label>
+            <div class="osc-field-box">
+              <input class="osc-number" id="osc-filter-q-value" type="text" value="0.707"
+                inputmode="decimal" data-osc="filter.qValue">
+              <input class="osc-slider osc-slider--sm" id="osc-filter-q" type="range" min="0" max="1000"
+                step="1" value="600" style="--osc-fill: 60%" data-osc="filter.q" aria-label="Q"
+                aria-valuetext="0.707">
+            </div>
+            <div class="osc-filter-gain" hidden data-osc="filter.gainGroup">
+              <label class="osc-label" for="osc-filter-gain">Gain</label>
+              <input class="osc-slider osc-slider--sm" id="osc-filter-gain" type="range" min="-24"
+                max="24" step="0.5" value="0" style="--osc-fill: 50%" data-osc="filter.gain">
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ---------- Envelope (ADSR) ---------- -->
+      <section class="osc-panel osc-p-envelope" id="osc-panel-envelope" data-osc-panel="envelope"
+        data-osc-modes="synthesis" aria-labelledby="osc-env-title">
+        <div class="osc-panel-header">
+          <h2 class="osc-panel-title" id="osc-env-title">Envelope (ADSR)</h2>
+          <button type="button" class="osc-icon-btn osc-icon-btn--ghost osc-icon-btn--sm osc-env-power"
+            id="osc-env-enable" data-osc="envelope.enable" aria-pressed="false"
+            aria-label="Envelope enabled">
+            <svg aria-hidden="true"><use href="#i-power"/></svg>
+          </button>
+          <span class="osc-spacer"></span>
+          <button type="button" class="osc-icon-btn osc-icon-btn--sm osc-panel-fs" id="osc-env-fullscreen"
+            data-osc="envelope.fullscreen" aria-label="Open envelope editor"
+            @click="toggleFullscreen('osc-panel-envelope')">
+            <svg aria-hidden="true"><use href="#i-expand"/></svg>
+          </button>
+        </div>
+        <div class="osc-env-body">
+          <div class="osc-chart-host osc-h-envelope" id="osc-chart-envelope" data-osc-chart="envelope"
+            role="img" aria-label="ADSR envelope graph"></div>
+          <div class="osc-env-controls">
+            <div class="osc-env-param">
+              <label class="osc-label" for="osc-env-attack">Attack</label>
+              <input class="osc-number" id="osc-env-attack-value" type="text" value="10 ms"
+                data-osc="envelope.attackValue" aria-label="Attack time">
+              <input class="osc-slider osc-slider--sm" id="osc-env-attack" type="range" min="0"
+                max="1000" step="1" value="110" style="--osc-fill: 8%" data-osc="envelope.attack"
+                aria-valuetext="10 ms">
+            </div>
+            <div class="osc-env-param">
+              <label class="osc-label" for="osc-env-decay">Decay</label>
+              <input class="osc-number" id="osc-env-decay-value" type="text" value="100 ms"
+                data-osc="envelope.decayValue" aria-label="Decay time">
+              <input class="osc-slider osc-slider--sm" id="osc-env-decay" type="range" min="0"
+                max="1000" step="1" value="270" style="--osc-fill: 30%" data-osc="envelope.decay"
+                aria-valuetext="100 ms">
+            </div>
+            <div class="osc-env-param">
+              <label class="osc-label" for="osc-env-sustain">Sustain</label>
+              <input class="osc-number" id="osc-env-sustain-value" type="text" value="0.6"
+                data-osc="envelope.sustainValue" aria-label="Sustain level">
+              <input class="osc-slider osc-slider--sm osc-slider--green" id="osc-env-sustain"
+                type="range" min="0" max="1" step="0.01" value="0.6" style="--osc-fill: 60%"
+                data-osc="envelope.sustain">
+            </div>
+            <div class="osc-env-param">
+              <label class="osc-label" for="osc-env-release">Release</label>
+              <input class="osc-number" id="osc-env-release-value" type="text" value="300 ms"
+                data-osc="envelope.releaseValue" aria-label="Release time">
+              <input class="osc-slider osc-slider--sm osc-slider--orange" id="osc-env-release"
+                type="range" min="0" max="1000" step="1" value="260" style="--osc-fill: 37%"
+                data-osc="envelope.release" aria-valuetext="300 ms">
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ---------- Additive synthesis ---------- -->
+      <section class="osc-panel osc-p-additive" id="osc-panel-additive" data-osc-panel="additive"
+        data-osc-modes="synthesis" aria-labelledby="osc-add-title">
+        <div class="osc-panel-header">
+          <h2 class="osc-panel-title" id="osc-add-title">Additive Synthesis</h2>
+          <span class="osc-spacer"></span>
+          <div class="osc-select osc-add-preset">
+            <label class="osc-sr-only" for="osc-add-preset">Harmonic preset</label>
+            <select id="osc-add-preset" data-osc="additive.preset">
+              <option value="sine">Sine</option>
+              <option value="square">Square approx</option>
+              <option value="saw">Saw approx</option>
+              <option value="triangle">Triangle approx</option>
+              <option value="custom" selected>Custom</option>
+            </select>
+          </div>
+          <button type="button" class="osc-toggle osc-toggle--lg" role="switch" aria-checked="false"
+            id="osc-add-enable" data-osc="additive.enable" aria-label="Additive synthesis enabled">
+            <span class="osc-toggle-track" aria-hidden="true"></span>
+          </button>
+        </div>
+        <div class="osc-chart-host osc-h-additive" id="osc-chart-additive" data-osc-chart="additive"
+          role="img" aria-label="Harmonic amplitudes 1 to 10" tabindex="0"></div>
+        <div class="osc-add-fields">
+          <div class="osc-add-field">
+            <label class="osc-label" for="osc-add-harmonic">Harmonic</label>
+            <div class="osc-stepper">
+              <input class="osc-number" id="osc-add-harmonic" type="number" min="1" max="10" step="1"
+                value="1" data-osc="additive.harmonic">
+              <span class="osc-stepper-keys">
+                <button type="button" tabindex="-1" data-osc="additive.harmonicStep" data-dir="1" aria-label="Next harmonic"><svg aria-hidden="true"><use href="#i-up"/></svg></button>
+                <button type="button" tabindex="-1" data-osc="additive.harmonicStep" data-dir="-1" aria-label="Previous harmonic"><svg aria-hidden="true"><use href="#i-down"/></svg></button>
+              </span>
+            </div>
+          </div>
+          <div class="osc-add-field">
+            <label class="osc-label" for="osc-add-gain-value">Gain</label>
+            <div class="osc-field-box">
+              <input class="osc-number" id="osc-add-gain-value" type="text" value="0.0 dB"
+                data-osc="additive.gainValue">
+              <input class="osc-slider osc-slider--sm" id="osc-add-gain" type="range" min="-60" max="0"
+                step="0.5" value="0" style="--osc-fill: 100%" data-osc="additive.gain"
+                aria-label="Harmonic gain" aria-valuetext="0.0 dB">
+            </div>
+          </div>
+          <div class="osc-add-field">
+            <label class="osc-label" for="osc-add-phase">Phase</label>
+            <input class="osc-number" id="osc-add-phase" type="text" inputmode="numeric"
+              value="0°" data-osc="additive.phase" aria-describedby="osc-add-phase-hint">
+            <span class="osc-sr-only" id="osc-add-phase-hint">Degrees, 0 to 359</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- ---------- Phase & Stereo ---------- -->
+      <section class="osc-panel osc-p-phase" id="osc-panel-phase" data-osc-panel="phase"
+        data-osc-modes="compare synthesis" aria-labelledby="osc-phase-title">
+        <div class="osc-panel-header">
+          <h2 class="osc-panel-title" id="osc-phase-title">Phase &amp; Stereo</h2>
+          <span class="osc-spacer"></span>
+          <button type="button" class="osc-icon-btn osc-icon-btn--ghost osc-icon-btn--sm"
+            id="osc-phase-collapse" data-osc="phase.collapse" aria-expanded="true"
+            aria-controls="osc-phase-body" aria-label="Hide Phase and Stereo details"
+            x-bind="collapseButton('phase')">
+            <svg aria-hidden="true"><use href="#i-close"/></svg>
+          </button>
+        </div>
+        <div class="osc-phase-body" id="osc-phase-body" :hidden="collapsed.phase">
+          <div class="osc-tabs osc-tabs--mid osc-phase-tabs" role="tablist" aria-label="Phase view">
+            <button type="button" class="osc-tab is-active" role="tab" aria-selected="true" tabindex="0"
+              id="osc-ptab-phase" aria-controls="osc-phase-view" data-osc="phase.tab"
+              data-value="phase" x-bind="tab('phase', 'phase')">Phase</button>
+            <button type="button" class="osc-tab" role="tab" aria-selected="false" tabindex="-1"
+              id="osc-ptab-lissajous" aria-controls="osc-phase-view" data-osc="phase.tab"
+              data-value="lissajous" x-bind="tab('phase', 'lissajous')">Lissajous</button>
+            <button type="button" class="osc-tab" role="tab" aria-selected="false" tabindex="-1"
+              id="osc-ptab-stereo" aria-controls="osc-phase-view" data-osc="phase.tab"
+              data-value="stereo" x-bind="tab('phase', 'stereo')">Stereo</button>
+          </div>
+          <div class="osc-phase-view" id="osc-phase-view" role="tabpanel"
+            aria-labelledby="osc-ptab-phase" :aria-labelledby="'osc-ptab-' + tabs.phase">
+            <div class="osc-phase-offset" x-show="tabs.phase !== 'stereo'">
+              <label class="osc-label" for="osc-phase-offset">Δφ B</label>
+              <input class="osc-number" type="number" min="0" max="359" step="1" value="45"
+                id="osc-phase-offset" data-osc="phase.offset" aria-label="Phase offset B (degrees)">
+            </div>
+            <div class="osc-chart-host osc-h-phase" id="osc-chart-phase" data-osc-chart="phase"
+              role="img" aria-label="Signals A and B and their Lissajous figure"
+              :hidden="tabs.phase === 'stereo'"></div>
+            <div class="osc-stereo-controls" id="osc-stereo-controls" data-osc="stereo.controls"
+              hidden :hidden="tabs.phase !== 'stereo'" role="group" aria-label="Stereo routing">
+              <label class="osc-label" for="osc-stereo-fa">A</label>
+              <div class="osc-unit" data-unit="Hz">
+                <input class="osc-number" id="osc-stereo-fa" type="number" min="20" max="22800"
+                  step="1" value="440" inputmode="decimal" data-osc="stereo.freqA" :value="dual.a.freq"
+                  aria-label="Oscillator A frequency">
+                <span class="osc-unit-suffix" aria-hidden="true">Hz</span>
+              </div>
+              <label class="osc-label" for="osc-stereo-fb">B</label>
+              <div class="osc-unit" data-unit="Hz">
+                <input class="osc-number" id="osc-stereo-fb" type="number" min="20" max="22800"
+                  step="1" value="442" inputmode="decimal" data-osc="stereo.freqB" :value="dual.b.freq"
+                  aria-label="Oscillator B frequency">
+                <span class="osc-unit-suffix" aria-hidden="true">Hz</span>
+              </div>
+              <label class="osc-label" for="osc-stereo-pan">Pan</label>
+              <input class="osc-slider osc-slider--sm" id="osc-stereo-pan" type="range" min="-1"
+                max="1" step="0.01" value="0" style="--osc-fill: 50%" data-osc="stereo.pan"
+                aria-valuetext="Centre">
+              <span class="osc-label" id="osc-stereo-route-label">Output</span>
+              <div class="osc-seg osc-stereo-route" role="radiogroup"
+                aria-labelledby="osc-stereo-route-label">
+                <button type="button" class="osc-seg-btn is-active" role="radio" aria-checked="true"
+                  tabindex="0" id="osc-stereo-mono" data-osc="stereo.route" data-value="mono"
+                  x-bind="choice('stereoRoute', 'mono')">Mono</button>
+                <button type="button" class="osc-seg-btn" role="radio" aria-checked="false"
+                  tabindex="-1" id="osc-stereo-split" data-osc="stereo.route" data-value="stereo"
+                  x-bind="choice('stereoRoute', 'stereo')">Stereo</button>
+              </div>
+            </div>
+          </div>
+          <div class="osc-phase-corr">
+            <span class="osc-label" id="osc-corr-label">Correlation</span>
+            <div class="osc-meter osc-corr-meter" id="osc-corr-meter" data-osc="phase.correlationMeter"
+              role="meter" aria-labelledby="osc-corr-label" aria-valuemin="-1" aria-valuemax="1"
+              aria-valuenow="0" aria-valuetext="Unavailable" style="--osc-meter-value: 0%">
+              <span class="osc-meter-fill"></span>
+            </div>
+            <output class="osc-corr-value osc-num" id="osc-corr-value"
+              data-osc="phase.correlation">—</output>
+          </div>
+        </div>
+      </section>
+
+      <!-- ---------- Bioacoustics ---------- -->
+      <section class="osc-panel osc-p-bio" id="osc-panel-bio" data-osc-panel="bio"
+        data-osc-modes="compare" aria-labelledby="osc-bio-title">
+        <div class="osc-panel-header">
+          <h2 class="osc-panel-title" id="osc-bio-title">Bioacoustics</h2>
+          <span class="osc-spacer"></span>
+          <button type="button" class="osc-icon-btn osc-icon-btn--ghost osc-icon-btn--sm"
+            id="osc-bio-collapse" data-osc="bio.collapse" aria-expanded="true"
+            aria-controls="osc-bio-body" aria-label="Hide Bioacoustics details"
+            x-bind="collapseButton('bio')">
+            <svg aria-hidden="true"><use href="#i-close"/></svg>
+          </button>
+        </div>
+        <div class="osc-bio-body" id="osc-bio-body" :hidden="collapsed.bio">
+          <div class="osc-tabs osc-tabs--primary osc-bio-tabs" role="tablist" aria-label="Bioacoustics view">
+            <button type="button" class="osc-tab is-active" role="tab" aria-selected="true" tabindex="0"
+              id="osc-btab-ranges" aria-controls="osc-bio-view" data-osc="bio.tab" data-value="ranges"
+              x-bind="tab('bio', 'ranges')">Hearing ranges</button>
+            <button type="button" class="osc-tab" role="tab" aria-selected="false" tabindex="-1"
+              id="osc-btab-calls" aria-controls="osc-bio-view" data-osc="bio.tab" data-value="calls"
+              x-bind="tab('bio', 'calls')">Call examples</button>
+          </div>
+          <div class="osc-bio-view" id="osc-bio-view" role="tabpanel" aria-labelledby="osc-btab-ranges"
+            :aria-labelledby="'osc-btab-' + tabs.bio">
+            <div class="osc-chart-host osc-h-bio" id="osc-chart-bio" data-osc-chart="bio"
+              data-osc="bio.ranges" aria-label="Approximate hearing ranges by species"></div>
+          </div>
+          <p class="osc-bio-note">Ranges are approximate and vary by source and individual.</p>
+        </div>
+      </section>
+    </div>
+
+    <!-- ================= Workspace-only panels (shown by nav focus) ================= -->
+    <div class="osc-workspace">
+
+      <!-- ---------- Dual oscillator (Synthesis workspace) ---------- -->
+      <section class="osc-panel osc-p-dual" id="osc-panel-dual" data-osc-panel="dual"
+        data-osc="dual-panel" data-osc-modes="synthesis" aria-labelledby="osc-dual-title">
+        <div class="osc-panel-header">
+          <h2 class="osc-panel-title" id="osc-dual-title">Dual Oscillator</h2>
+          <span class="osc-spacer"></span>
+          <output class="osc-dual-beat osc-num osc-muted" id="osc-dual-beat"
+            data-osc="dual.beat" aria-label="Difference frequency" x-text="beatText">Δ —</output>
+          <button type="button" class="osc-toggle" role="switch" aria-checked="false"
+            id="osc-dual-enable" data-osc="dual.enable" :aria-checked="String(source === 'dual')"
+            @click="setDualSource(source !== 'dual')">
+            <span class="osc-toggle-track" aria-hidden="true"></span><span>Play A + B</span>
+          </button>
+        </div>
+        <div class="osc-dual-grid">
+          <fieldset class="osc-dual-osc" data-osc="dual.a">
+            <legend class="osc-dual-legend osc-dual-legend--a">Osc A</legend>
+            <label class="osc-label" for="osc-dual-a-freq">Frequency</label>
+            <div class="osc-unit" data-unit="Hz">
+              <input class="osc-number" id="osc-dual-a-freq" type="text" inputmode="decimal"
+                value="440" data-osc="dual.freq" data-side="a"
+                :value="dual.a.freq" @change="setDualFreq('a', $event.target.value)"
+                @keydown.enter.prevent="setDualFreq('a', $event.target.value)"
+                :aria-invalid="paramErrors['dual-a'] ? 'true' : 'false'">
+              <span class="osc-unit-suffix" aria-hidden="true">Hz</span>
+            </div>
+            <label class="osc-sr-only" for="osc-dual-a-range">Osc A frequency, logarithmic</label>
+            <input class="osc-slider osc-slider--sm" id="osc-dual-a-range" type="range" min="0"
+              max="1000" step="1" value="0" data-osc="dual.freqSlider" data-side="a"
+              :value="dualSlider('a')" :style="'--osc-fill: ' + dualSlider('a') / 10 + '%'"
+              @input="setDualSlider('a', $event.target.value)">
+            <label class="osc-label" for="osc-dual-a-wave">Waveform</label>
+            <div class="osc-select">
+              <select id="osc-dual-a-wave" data-osc="dual.wave" data-side="a"
+                @change="dual.a.wave = $event.target.value" x-effect="$el.value = dual.a.wave">
+                <option value="sine" selected>Sine</option><option value="square">Square</option>
+                <option value="triangle">Triangle</option><option value="sawtooth">Saw</option>
+              </select>
+            </div>
+            <label class="osc-label" for="osc-dual-a-gain">Gain</label>
+            <input class="osc-slider osc-slider--sm" id="osc-dual-a-gain" type="range" min="0"
+              max="100" step="1" value="100" style="--osc-fill: 100%" data-osc="dual.gain" data-side="a"
+              :value="dual.a.gain" :style="'--osc-fill: ' + dual.a.gain + '%'"
+              :aria-valuetext="dual.a.gain + ' %'" @input="dual.a.gain = Number($event.target.value)">
+            <label class="osc-label" for="osc-dual-a-detune">Detune</label>
+            <input class="osc-slider osc-slider--sm" id="osc-dual-a-detune" type="range" min="-100"
+              max="100" step="1" value="0" style="--osc-fill: 50%" data-osc="dual.detune" data-side="a"
+              :value="dual.a.detune" :style="'--osc-fill: ' + (dual.a.detune + 100) / 2 + '%'"
+              :aria-valuetext="dual.a.detune + ' cents'" @input="dual.a.detune = Number($event.target.value)">
+          </fieldset>
+          <fieldset class="osc-dual-osc" data-osc="dual.b">
+            <legend class="osc-dual-legend osc-dual-legend--b">Osc B</legend>
+            <label class="osc-label" for="osc-dual-b-freq">Frequency</label>
+            <div class="osc-unit" data-unit="Hz">
+              <input class="osc-number" id="osc-dual-b-freq" type="text" inputmode="decimal"
+                value="442" data-osc="dual.freq" data-side="b"
+                :value="dual.b.freq" @change="setDualFreq('b', $event.target.value)"
+                @keydown.enter.prevent="setDualFreq('b', $event.target.value)"
+                :aria-invalid="paramErrors['dual-b'] ? 'true' : 'false'">
+              <span class="osc-unit-suffix" aria-hidden="true">Hz</span>
+            </div>
+            <label class="osc-sr-only" for="osc-dual-b-range">Osc B frequency, logarithmic</label>
+            <input class="osc-slider osc-slider--sm" id="osc-dual-b-range" type="range" min="0"
+              max="1000" step="1" value="0" data-osc="dual.freqSlider" data-side="b"
+              :value="dualSlider('b')" :style="'--osc-fill: ' + dualSlider('b') / 10 + '%'"
+              @input="setDualSlider('b', $event.target.value)">
+            <label class="osc-label" for="osc-dual-b-wave">Waveform</label>
+            <div class="osc-select">
+              <select id="osc-dual-b-wave" data-osc="dual.wave" data-side="b"
+                @change="dual.b.wave = $event.target.value" x-effect="$el.value = dual.b.wave">
+                <option value="sine" selected>Sine</option><option value="square">Square</option>
+                <option value="triangle">Triangle</option><option value="sawtooth">Saw</option>
+              </select>
+            </div>
+            <label class="osc-label" for="osc-dual-b-gain">Gain</label>
+            <input class="osc-slider osc-slider--sm" id="osc-dual-b-gain" type="range" min="0"
+              max="100" step="1" value="100" style="--osc-fill: 100%" data-osc="dual.gain" data-side="b"
+              :value="dual.b.gain" :style="'--osc-fill: ' + dual.b.gain + '%'"
+              :aria-valuetext="dual.b.gain + ' %'" @input="dual.b.gain = Number($event.target.value)">
+            <label class="osc-label" for="osc-dual-b-detune">Detune</label>
+            <input class="osc-slider osc-slider--sm" id="osc-dual-b-detune" type="range" min="-100"
+              max="100" step="1" value="0" style="--osc-fill: 50%" data-osc="dual.detune" data-side="b"
+              :value="dual.b.detune" :style="'--osc-fill: ' + (dual.b.detune + 100) / 2 + '%'"
+              :aria-valuetext="dual.b.detune + ' cents'" @input="dual.b.detune = Number($event.target.value)">
+          </fieldset>
+          <fieldset class="osc-dual-osc osc-dual-mix" data-osc="dual.mixer">
+            <legend class="osc-dual-legend">Mixer</legend>
+            <label class="osc-label" for="osc-dual-level-a">A level</label>
+            <input class="osc-slider osc-slider--sm" id="osc-dual-level-a" type="range" min="0"
+              max="100" step="1" value="80" style="--osc-fill: 80%" data-osc="dual.levelA"
+              :value="dual.levelA" :style="'--osc-fill: ' + dual.levelA + '%'"
+              :aria-valuetext="dual.levelA + ' %'" @input="dual.levelA = Number($event.target.value)">
+            <label class="osc-label" for="osc-dual-level-b">B level</label>
+            <input class="osc-slider osc-slider--sm" id="osc-dual-level-b" type="range" min="0"
+              max="100" step="1" value="80" style="--osc-fill: 80%" data-osc="dual.levelB"
+              :value="dual.levelB" :style="'--osc-fill: ' + dual.levelB + '%'"
+              :aria-valuetext="dual.levelB + ' %'" @input="dual.levelB = Number($event.target.value)">
+            <span class="osc-label" id="osc-dual-route-label">Output</span>
+            <div class="osc-seg" role="radiogroup" aria-labelledby="osc-dual-route-label">
+              <button type="button" class="osc-seg-btn is-active" role="radio" aria-checked="true"
+                tabindex="0" id="osc-dual-mono" data-osc="dual.route" data-value="mono"
+                x-bind="choice('dualRoute', 'mono')">Mono mix</button>
+              <button type="button" class="osc-seg-btn" role="radio" aria-checked="false"
+                tabindex="-1" id="osc-dual-stereo" data-osc="dual.route" data-value="stereo"
+                x-bind="choice('dualRoute', 'stereo')">Stereo split</button>
+            </div>
+            <button type="button" class="osc-toggle" role="switch" aria-checked="false"
+              id="osc-dual-binaural" data-osc="dual.binaural" :aria-checked="String(dual.binaural)"
+              @click="toggleBinaural()">
+              <span class="osc-toggle-track" aria-hidden="true"></span>
+              <span>Binaural (headphones)</span>
+            </button>
+            <div class="osc-dual-presets" data-osc="dual.presets" role="group"
+              aria-label="Dual oscillator presets">
+              <template x-for="p in dualPresets()" :key="p.id">
+                <button type="button" class="osc-btn osc-btn-secondary osc-chip-btn" data-osc="dual.preset"
+                  :title="p.desc" @click="loadPresetFromView(p)" :disabled="presetDisabled(p)"
+                  x-text="p.name"></button>
+              </template>
+            </div>
+          </fieldset>
+        </div>
+      </section>
+    </div>
+
+    <!-- ================= Full-width workspace views ================= -->
+    <section class="osc-view osc-view--learn" id="osc-view-learn" data-osc="learn-view"
+      data-osc-modes="learn" hidden :hidden="mode !== 'learn'" aria-labelledby="osc-learn-title"
+      tabindex="-1">
+      <h2 class="osc-panel-title" id="osc-learn-title">Learn</h2>
+      <div class="osc-view-body osc-learn" data-osc="learn-content">
+        <ul class="osc-learn-list" role="list">
+          <template x-for="t in LEARN_TOPICS" :key="t.id">
+            <li class="osc-learn-item" :class="{ 'is-current': learnTopic === t.id }">
+              <h3 class="osc-learn-title" x-text="t.title"></h3>
+              <p class="osc-learn-body" x-text="t.body"></p>
+              <p class="osc-learn-example osc-num" x-show="learnTopic === t.id" x-text="topicExample"></p>
+              <div class="osc-learn-actions">
+                <button type="button" class="osc-btn osc-btn-secondary" data-osc="learn.example"
+                  @click="learnTopic = t.id" :aria-pressed="String(learnTopic === t.id)">Relate to current settings</button>
+                <button type="button" class="osc-btn osc-btn-primary" data-osc="learn.demo"
+                  @click="learnTopic = t.id; runLearnDemo(t)" x-text="'Demo: ' + t.demo.label"></button>
+              </div>
+            </li>
+          </template>
+        </ul>
+      </div>
+    </section>
+    <section class="osc-view osc-view--presets" id="osc-view-presets" data-osc="presets-view"
+      data-osc-modes="presets" hidden :hidden="mode !== 'presets'"
+      aria-labelledby="osc-presets-title" tabindex="-1">
+      <h2 class="osc-panel-title" id="osc-presets-title">Presets</h2>
+      <div class="osc-view-body osc-presets" data-osc="presets-content">
+        <div class="osc-tabs osc-tabs--primary osc-preset-tabs" role="tablist" aria-label="Preset categories">
+          <template x-for="c in PRESET_CATEGORIES" :key="c.id">
+            <button type="button" class="osc-tab" role="tab" data-osc="presets.tab" :data-value="c.id"
+              :id="'osc-ptab-cat-' + c.id" :class="{ 'is-active': presetTab === c.id }"
+              :aria-selected="String(presetTab === c.id)" :tabindex="presetTab === c.id ? 0 : -1"
+              @click="presetTab = c.id" @keydown="rovingKeydown($event)" x-text="c.label"></button>
+          </template>
+        </div>
+        <div class="osc-preset-toolbar">
+          <button type="button" class="osc-btn osc-btn-primary" data-osc="presets.save" @click="openSave()">Save current…</button>
+          <button type="button" class="osc-btn osc-btn-secondary" data-osc="presets.reset" @click="resetDefaults()">Reset to defaults</button>
+          <button type="button" class="osc-btn osc-btn-secondary" data-osc="presets.clearHistory"
+            x-show="presetTab === 'history'" @click="clearHistory()">Clear history</button>
+        </div>
+        <div role="tabpanel" :aria-labelledby="'osc-ptab-cat-' + presetTab">
+          <template x-if="presetTab !== 'history'">
+            <ul class="osc-preset-list" role="list">
+              <template x-for="p in presetsFor(presetTab)" :key="p.id">
+                <li class="osc-preset-item" data-osc="presets.item" :data-id="p.id">
+                  <div class="osc-preset-text">
+                    <span class="osc-preset-name" x-text="p.name"></span>
+                    <span class="osc-preset-desc" x-text="p.desc"></span>
+                    <span class="osc-preset-params osc-num" x-text="presetParams(p)"></span>
+                    <span class="osc-preset-disabled" x-show="presetDisabled(p)" x-text="presetDisabledReason(p)"></span>
+                  </div>
+                  <div class="osc-preset-actions">
+                    <button type="button" class="osc-btn osc-btn-primary" data-osc="presets.load"
+                      :disabled="presetDisabled(p)" @click="loadPresetFromView(p)"
+                      :aria-label="'Load preset ' + p.name">Load</button>
+                    <button type="button" class="osc-btn osc-btn-secondary" data-osc="presets.delete"
+                      x-show="p.custom" @click="deletePresetFocus(p, $event)" @blur="cancelDelete(p.id)"
+                      :aria-label="(pendingDelete === p.id ? 'Confirm delete ' : 'Delete ') + p.name"
+                      x-text="pendingDelete === p.id ? 'Confirm' : 'Delete'"></button>
+                  </div>
+                </li>
+              </template>
+              <li class="osc-preset-empty" x-show="!presetsFor(presetTab).length">No presets here yet. Use “Save current…” or the status bar “Save Preset”.</li>
+            </ul>
+          </template>
+          <template x-if="presetTab === 'history'">
+            <ul class="osc-preset-list" role="list">
+              <template x-for="h in history" :key="h.ts + h.label">
+                <li class="osc-preset-item" data-osc="presets.history">
+                  <div class="osc-preset-text">
+                    <span class="osc-preset-name" x-text="h.label"></span>
+                    <span class="osc-preset-params osc-num" x-text="historyTime(h.ts) + ' · ' + historyFreqs(h)"></span>
+                  </div>
+                  <div class="osc-preset-actions">
+                    <button type="button" class="osc-btn osc-btn-secondary" @click="recallHistory(h)">Recall</button>
+                  </div>
+                </li>
+              </template>
+              <li class="osc-preset-empty" x-show="!history.length">Nothing played in this page view yet.</li>
+            </ul>
+          </template>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- ================= Status bar ================= -->
+  <footer class="osc-statusbar" aria-label="Status and actions">
+    <div class="osc-sb-brand">
+      <span class="osc-sb-name">OSCILLA</span>
+      <span class="osc-sb-version" data-osc="status.version" x-text="'v' + OSCILLA_VERSION">v2.0.0</span>
+      <span class="osc-sb-div" aria-hidden="true"></span>
+      <span class="osc-sb-sub">Interactive Sound &amp; Frequency Lab</span>
+    </div>
+
+    <button type="button" class="osc-icon-btn osc-sb-play" id="osc-sb-play" data-osc="status.play"
+      aria-label="Play" aria-pressed="false" :aria-pressed="String(isSounding)"
+      :aria-label="isSounding ? 'Stop playback' : (continuousAllowed && !isProgrammed ? 'Play continuously' : 'Trigger')"
+      @click="statusPlay()" @keydown.enter="latchKey($event)">
+      <svg aria-hidden="true" x-show="!isSounding"><use href="#i-play"/></svg>
+      <svg aria-hidden="true" x-show="isSounding" style="display: none"><use href="#i-stop"/></svg>
+    </button>
+
+    <p class="osc-sr-only" role="status" aria-live="polite" aria-atomic="true"
+      data-osc="status.announce" x-text="announceText"></p>
+    <div class="osc-sb-state">
+      <span class="osc-status" id="osc-status" data-osc="status.state"
+        :class="{ 'is-playing': isSounding, 'is-error': status === 'ERROR' }">
+        <span class="osc-status-dot" aria-hidden="true"></span>
+        <span class="osc-status-label" data-osc="status.label" x-text="statusLabel">READY</span>
+      </span>
+      <span class="osc-sb-readout osc-num" data-osc="status.readout">
+        <span data-osc="status.frequency" x-text="statusFreqText">440 Hz</span>
+        <span class="osc-sb-dot" aria-hidden="true">•</span>
+        <span data-osc="status.waveform" x-text="statusWaveText">Sine</span>
+        <span class="osc-sb-dot osc-sb-extra" aria-hidden="true">•</span>
+        <span class="osc-sb-extra" data-osc="status.pattern" x-text="statusPatternText">Continuous tone</span>
+        <span class="osc-sb-dot osc-sb-extra" aria-hidden="true">•</span>
+        <span class="osc-sb-extra" data-osc="status.duration" x-text="statusDurationText">≤ 2 s</span>
+        <span class="osc-sb-dot osc-sb-extra" aria-hidden="true">•</span>
+        <span class="osc-sb-extra" data-osc="status.gain" x-text="statusGainText">Gain -21.9 dB</span>
+      </span>
+    </div>
+
+    <div class="osc-sb-actions-wrap">
+      <button type="button" class="osc-icon-btn osc-sb-menu-btn" id="osc-sb-actions-toggle"
+        data-osc="status.actionsMenu" aria-label="Actions" aria-haspopup="true"
+        aria-expanded="false" aria-controls="osc-sb-actions" x-bind="menuButton('actions')">
+        <svg aria-hidden="true"><use href="#i-more"/></svg>
+      </button>
+      <div class="osc-sb-actions" id="osc-sb-actions" role="group" aria-label="Actions"
+        :class="{ 'is-open': menus.actions }">
+        <button type="button" class="osc-sb-action" id="osc-act-url" data-osc="action.copyUrl" @click="copyConfigUrl()"
+          aria-label="Copy config URL">
+          <svg aria-hidden="true"><use href="#i-link"/></svg><span>URL</span>
+        </button>
+        <button type="button" class="osc-sb-action" id="osc-act-screenshot" data-osc="action.screenshot" @click="screenshot()"
+          aria-label="Screenshot of the visible charts (PNG)">
+          <svg aria-hidden="true"><use href="#i-camera"/></svg><span>Screenshot</span>
+        </button>
+        <button type="button" class="osc-sb-action" id="osc-act-export-audio" data-osc="action.exportAudio"
+          @click="exportAudio()" :aria-disabled="String(exportBusy)" :aria-busy="String(exportBusy)"
+          aria-label="Export audio (WAV)">
+          <svg aria-hidden="true"><use href="#i-upload"/></svg><span>Export Audio</span>
+        </button>
+        <button type="button" class="osc-sb-action" id="osc-act-save-preset" data-osc="action.savePreset" @click="openSave()"
+          aria-label="Save preset">
+          <svg aria-hidden="true"><use href="#i-save"/></svg><span>Save Preset</span>
+        </button>
+        <button type="button" class="osc-sb-action osc-sb-action--icon" id="osc-act-settings"
+          data-osc="action.settings" aria-label="Settings"
+          @click="openDialog('settings')">
+          <svg aria-hidden="true"><use href="#i-gear"/></svg><span class="osc-sb-action-label">Settings</span>
+        </button>
+      </div>
+    </div>
+  </footer>
+
+  <input type="file" id="osc-import-file" class="osc-sr-only" accept="application/json,.json"
+    tabindex="-1" aria-hidden="true" data-osc="config.importFile" @change="importConfigFile($event)">
+
+  <!-- ================= Dialogs (native <dialog>) ================= -->
+  <dialog class="osc-dialog" id="osc-dlg-save" data-oscilla-modal aria-labelledby="osc-dlg-save-title">
+    <form method="dialog" class="osc-dialog-body" @submit.prevent="savePreset()">
+      <h2 class="osc-dialog-title" id="osc-dlg-save-title">Save preset</h2>
+      <label class="osc-label" for="osc-save-name">Name</label>
+      <input class="osc-number osc-dialog-input" id="osc-save-name" type="text" maxlength="60"
+        data-osc="save.name" x-model="saveName" autocomplete="off" autofocus>
+      <p class="osc-pp-error" role="alert" x-show="saveError" x-text="saveError"></p>
+      <p class="osc-muted osc-dialog-note">Stored in this browser (localStorage, preset schema v1).
+        The continuous-playback permission is never stored.</p>
+      <div class="osc-dialog-actions">
+        <button type="button" class="osc-btn osc-btn-secondary" @click="closeDialog('saveModal')">Cancel</button>
+        <button type="submit" class="osc-btn osc-btn-primary" data-osc="save.confirm">Save</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog class="osc-dialog" id="osc-dlg-headphones" data-oscilla-modal aria-labelledby="osc-dlg-hp-title">
+    <div class="osc-dialog-body">
+      <h2 class="osc-dialog-title" id="osc-dlg-hp-title">Headphones required</h2>
+      <p>Binaural beats need one tone per ear: put on headphones and keep the level low before
+        you continue. Speakers mix both channels and the effect disappears.</p>
+      <div class="osc-dialog-actions">
+        <button type="button" class="osc-btn osc-btn-secondary" @click="cancelHeadphones()">Cancel</button>
+        <button type="button" class="osc-btn osc-btn-primary" data-osc="headphones.confirm"
+          @click="confirmHeadphones()">I am wearing headphones</button>
+      </div>
+    </div>
+  </dialog>
+
+  <dialog class="osc-dialog" id="osc-dlg-copy" data-oscilla-modal aria-labelledby="osc-dlg-copy-title">
+    <div class="osc-dialog-body">
+      <h2 class="osc-dialog-title" id="osc-dlg-copy-title">Config link</h2>
+      <p>The clipboard is not available here. Copy the link manually; opening it restores these
+        settings and never starts playback.</p>
+      <input class="osc-number osc-dialog-input" type="text" readonly :value="copyUrl"
+        data-osc="copy.url" aria-label="Config link" @focus="$event.target.select()">
+      <div class="osc-dialog-actions">
+        <button type="button" class="osc-btn osc-btn-primary" @click="closeDialog('copyModal')">Done</button>
+      </div>
+    </div>
+  </dialog>
+
+  <dialog class="osc-dialog" id="osc-dlg-help" data-oscilla-modal aria-labelledby="osc-dlg-help-title">
+    <div class="osc-dialog-body">
+      <h2 class="osc-dialog-title" id="osc-dlg-help-title">Keyboard shortcuts</h2>
+      <dl class="osc-shortcuts">
+        <div><dt><kbd>Space</kbd> (hold)</dt><dd>Hold to play (programmed patterns: trigger)</dd></div>
+        <div><dt><kbd>Enter</kbd> on Hold / Trigger</dt><dd>Trigger once</dd></div>
+        <div><dt><kbd>Esc</kbd></dt><dd>Stop immediately; close menus and dialogs</dd></div>
+        <div><dt><kbd>←</kbd> <kbd>→</kbd> on tabs and segments</dt><dd>Move and select</dd></div>
+        <div><dt><kbd>PgUp</kbd> / <kbd>PgDn</kbd> on the frequency slider</dt><dd>One octave up / down</dd></div>
+        <div><dt>Sequencer timeline: arrows, <kbd>Alt</kbd>+arrows, <kbd>Del</kbd>, <kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>D</kbd></dt><dd>Select, move, delete, duplicate blocks</dd></div>
+      </dl>
+      <p class="osc-muted osc-dialog-note">Space does nothing while a text field, button or
+        dialog has focus. Start at a low level: OSCILLA caps the logical gain at 0.25 and, unless
+        continuous playback is allowed in Device &amp; Limits, stops every tone after the hard limit.</p>
+      <div class="osc-dialog-actions">
+        <button type="button" class="osc-btn osc-btn-primary" @click="closeDialog('help')">Close</button>
+      </div>
+    </div>
+  </dialog>
+
+  <dialog class="osc-dialog" id="osc-dlg-about" data-oscilla-modal aria-labelledby="osc-dlg-about-title">
+    <div class="osc-dialog-body">
+      <h2 class="osc-dialog-title" id="osc-dlg-about-title">About OSCILLA</h2>
+      <p><strong x-text="'OSCILLA ' + OSCILLA_VERSION"></strong> — Interactive Sound &amp; Frequency Lab.
+        One static file; runs from file:// and from GitHub Pages; nothing is sent anywhere.</p>
+      <p>Signals are digital: sample rate, Nyquist and every spectrum come from the browser's
+        Web Audio API. Levels are relative (dBFS-like), never calibrated sound pressure. Actual
+        speaker and microphone responses are unknown.</p>
+      <p class="osc-muted">Bundled software: Alpine.js, uPlot (MIT) and p5.js (LGPL-2.1, embedded
+        unmodified); licence texts are in the HTML comment at the top of this file.</p>
+      <div class="osc-dialog-actions">
+        <button type="button" class="osc-btn osc-btn-primary" @click="closeDialog('about')">Close</button>
+      </div>
+    </div>
+  </dialog>
+
+  <dialog class="osc-dialog" id="osc-dlg-mic" data-oscilla-modal aria-labelledby="osc-dlg-mic-title">
+    <div class="osc-dialog-body">
+      <h2 class="osc-dialog-title" id="osc-dlg-mic-title">Microphone</h2>
+      <p>The microphone starts only when you press “Use microphone”. Echo cancellation, noise
+        suppression and automatic gain are requested off, so the analyser sees the raw input.
+        Audio never leaves this page.</p>
+      <p>Detected frequencies come from the FFT peak (parabolic interpolation; autocorrelation
+        below 1 kHz) and are never shown finer than the bin resolution. Use the Compare tab for
+        freeze, averaging and peak hold.</p>
+      <p class="osc-muted">Not a calibrated measurement. From file:// some browsers refuse the
+        microphone; the panel then says so.</p>
+      <div class="osc-dialog-actions">
+        <button type="button" class="osc-btn osc-btn-primary" @click="closeDialog('osc-dlg-mic')">Close</button>
+      </div>
+    </div>
+  </dialog>
+
+  <dialog class="osc-dialog osc-dialog--wide" id="osc-dlg-settings" data-oscilla-modal
+    aria-labelledby="osc-dlg-settings-title">
+    <div class="osc-dialog-body">
+      <h2 class="osc-dialog-title" id="osc-dlg-settings-title">Settings</h2>
+      <div class="osc-settings-grid">
+        <label class="osc-label" for="osc-set-range">Frequency range</label>
+        <div class="osc-select">
+          <select id="osc-set-range" data-osc="settings.range" @change="setRangeMode($event.target.value)">
+            <template x-for="r in RANGE_MODES" :key="r.id">
+              <option :value="r.id" x-text="r.label + ' (' + r.hint + ')'" :selected="rangeMode === r.id"></option>
+            </template>
+          </select>
+        </div>
+        <template x-if="rangeMode === 'custom'">
+          <div class="osc-settings-pair">
+            <label class="osc-label" for="osc-set-min">Min</label>
+            <input class="osc-number" id="osc-set-min" type="text" :value="customMinText"
+              data-osc="settings.customMin" @change="setCustomBound('min', $event.target.value)">
+            <label class="osc-label" for="osc-set-max">Max</label>
+            <input class="osc-number" id="osc-set-max" type="text" :value="customMaxText"
+              data-osc="settings.customMax" @change="setCustomBound('max', $event.target.value)">
+          </div>
+        </template>
+        <p class="osc-pp-error" role="alert" x-show="rangeError" x-text="rangeError"></p>
+        <label class="osc-label" for="osc-set-a4">A4 reference (Hz)</label>
+        <input class="osc-number" id="osc-set-a4" type="number" min="432" max="445" step="1"
+          :value="a4" data-osc="settings.a4" @change="setA4($event.target.value)">
+        <p class="osc-muted osc-dialog-note osc-settings-wide">Hard limit (Device &amp; Limits):
+          scheduled on the audio clock, so it holds even if the page stalls. It also caps the
+          Finite tone. Other programmed patterns stop at their own end (max 30 s); a continuous
+          sweep repeat needs “Allow continuous playback”.</p>
+        <label class="osc-label" for="osc-set-duration">Trigger duration (ms)</label>
+        <input class="osc-number" id="osc-set-duration" type="text" :value="duration"
+          data-osc="settings.duration" @change="setEnv('duration', $event.target.value)">
+        <label class="osc-label" for="osc-set-attack">Attack (ms, ADSR off)</label>
+        <input class="osc-number" id="osc-set-attack" type="text" :value="attack"
+          data-osc="settings.attack" @change="setEnv('attack', $event.target.value)">
+        <label class="osc-label" for="osc-set-release">Release (ms, ADSR off)</label>
+        <input class="osc-number" id="osc-set-release" type="text" :value="release"
+          data-osc="settings.release" @change="setEnv('release', $event.target.value)">
+      </div>
+      <p class="osc-pp-error" role="alert" x-show="Object.keys(paramErrors).length"
+        x-text="Object.values(paramErrors).join(' ')"></p>
+      <p class="osc-muted osc-dialog-note">Browser: <span x-text="browserText"></span> ·
+        Platform: <span x-text="platformText"></span> · Audio: <span x-text="audioState"></span>
+        <span x-show="!provisional" x-text="' · ' + effectiveSampleRate + ' Hz'"></span></p>
+      <div class="osc-dialog-actions">
+        <button type="button" class="osc-btn osc-btn-secondary" data-osc="settings.reset"
+          @click="resetDefaults()">Reset instrument</button>
+        <button type="button" class="osc-btn osc-btn-primary" @click="closeDialog('settings')">Close</button>
+      </div>
+    </div>
+  </dialog>
+</div>
+<!-- @inline-js -->
+</body>
+</html>

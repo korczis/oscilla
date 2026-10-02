@@ -1,0 +1,222 @@
+/*
+ * OSCILLA V2 design tokens.
+ * Every colour below was sampled from scratchpad/v2/reference.png (1536x1024) with
+ * tests/visual/tools/img.mjs; the sample point is noted where it is not obvious.
+ * Dark is the default and is the reference. Light overrides live on [data-theme="light"].
+ * Nothing outside this file may hard-code a colour.
+ */
+:root {
+  color-scheme: dark;
+
+  /* Surfaces */
+  --osc-bg: #020b15;               /* page, gaps between panels */
+  --osc-header-bg: #061220;        /* header strip */
+  --osc-statusbar-bg: #05111e;     /* bottom status bar */
+  --osc-surface-0: #020a16;        /* chart/canvas inset (waveform, mic plot) */
+  --osc-surface-1: #06111d;        /* panel body */
+  --osc-surface-1-end: #071420;    /* panel body, bottom of the subtle vertical gradient */
+  --osc-surface-2: #0e1a28;        /* inactive buttons, tab groups, segmented track */
+  --osc-surface-3: #142233;        /* interactive inset: inputs, hover, transport keys */
+  --osc-surface-4: #1b2e42;        /* raised: add-block button, silence block */
+  --osc-surface-tooltip: #0e1c2c;  /* chart readout chips */
+  --osc-overlay: rgb(2 11 21 / 72%);
+
+  /* Borders */
+  --osc-border: #14222f;           /* panel outline (x=11/324 at y=300) */
+  --osc-border-strong: #1b2a3b;    /* control outline (Trigger, tiles) */
+  --osc-border-soft: #0d1926;      /* inner separators, chart frames */
+  --osc-grid: rgb(120 150 180 / 10%); /* chart grid lines */
+
+  /* Text */
+  --osc-text: #f3f6f9;             /* titles, values, active labels */
+  --osc-text-2: #c4d2df;           /* nav, tabs, body labels */
+  --osc-text-muted: #94a9bd;       /* secondary readouts (15.50 kHz, 20 Hz) */
+  --osc-text-dim: #66798d;         /* axis ticks, disabled */
+  --osc-text-on-accent: #ffffff;
+  --osc-text-on-green: #04261a;    /* "Use microphone" label */
+  --osc-text-on-warm: #2a1600;     /* text on orange/green sequencer blocks */
+
+  /* Blue primary */
+  --osc-blue: #007afd;             /* primary buttons, Export, Oscillator segment, Log */
+  --osc-blue-hover: #1a88ff;
+  --osc-blue-press: #0067d6;
+  --osc-blue-deep: #00468c;        /* filled active tab (Waveform, Live Spectrum, Low-pass) */
+  --osc-blue-mid: #005dc5;         /* filled active tab, mid variant (Phase) */
+  --osc-blue-deep-border: #0169b8; /* active waveform tile outline */
+  --osc-blue-trace: #12a0f5;       /* waveform trace, generator trace, filter curve */
+  --osc-blue-underline: #0a86f0;   /* nav underline */
+  --osc-focus: #4da3ff;
+
+  /* Accents */
+  --osc-green: #34db7b;            /* Use microphone, PLAYING, sustain */
+  --osc-green-2: #3dd786;          /* tone block, correlation fill */
+  --osc-green-deep: #1e7a4c;
+  --osc-cyan: #19b8f0;
+  --osc-purple: #a164fa;           /* chirp block, spectrum legend */
+  --osc-purple-deep: #3b2496;      /* selected sweep block fill */
+  --osc-purple-border: #a567ed;    /* selected sweep block outline */
+  --osc-magenta: #f04ac4;          /* bat range, ADSR attack, phase B */
+  --osc-orange: #fcad38;           /* pulse block, cat range, release */
+  --osc-red: #f72f35;              /* record key */
+  --osc-red-soft: #e5363f;         /* delete icon */
+  --osc-info-bg: #0a3a6a;          /* Device & Limits info alert */
+  --osc-info-border: #0c4a86;
+  --osc-info-icon: #2a8be0;
+  --osc-warn-bg: #3a2a08;
+  --osc-warn-border: #7a5310;
+
+  /* Spectrogram LUT, sampled down the colourbar at x=906, y=536 (0 dB) .. 690 (-100 dB).
+     Position = (694 - y) / 159, i.e. 0 = floor (-100), 1 = top (0 dB). */
+  --osc-lut-0: #03030d;    /* 0.025 */
+  --osc-lut-1: #01012b;    /* 0.057 */
+  --osc-lut-2: #020154;    /* 0.12 */
+  --osc-lut-3: #10028e;    /* 0.18 */
+  --osc-lut-4: #30009d;    /* 0.245 */
+  --osc-lut-5: #5701ae;    /* 0.31 */
+  --osc-lut-6: #8503b6;    /* 0.37 */
+  --osc-lut-7: #aa0ba5;    /* 0.43 */
+  --osc-lut-8: #c71f85;    /* 0.50 */
+  --osc-lut-9: #e8396c;    /* 0.56 */
+  --osc-lut-10: #f9504a;   /* 0.62 */
+  --osc-lut-11: #fd6831;   /* 0.69 */
+  --osc-lut-12: #fd8828;   /* 0.75 */
+  --osc-lut-13: #fea82d;   /* 0.81 */
+  --osc-lut-14: #fdc335;   /* 0.87 */
+  --osc-lut-15: #fee768;   /* 0.94 */
+  --osc-lut-16: #faee97;   /* 0.98 */
+  --osc-lut-17: #f8f7be;   /* 1.00 */
+  --osc-lut-gradient: linear-gradient(0deg, var(--osc-lut-0) 2.5%, var(--osc-lut-1) 5.7%,
+    var(--osc-lut-2) 12%, var(--osc-lut-3) 18%, var(--osc-lut-4) 24.5%, var(--osc-lut-5) 31%,
+    var(--osc-lut-6) 37%, var(--osc-lut-7) 43%, var(--osc-lut-8) 50%, var(--osc-lut-9) 56%,
+    var(--osc-lut-10) 62%, var(--osc-lut-11) 69%, var(--osc-lut-12) 75%, var(--osc-lut-13) 81%,
+    var(--osc-lut-14) 87%, var(--osc-lut-15) 94%, var(--osc-lut-16) 98%, var(--osc-lut-17) 100%);
+
+  /* Sequencer block colours (fill / text) */
+  --osc-block-tone: #3dd786;
+  --osc-block-tone-text: #06301b;
+  --osc-block-sweep: #3b2496;
+  --osc-block-sweep-text: #ece6ff;
+  --osc-block-silence: #1b2e42;
+  --osc-block-silence-text: #c4d2df;
+  --osc-block-pulse: #fcad38;
+  --osc-block-pulse-text: #3a2200;
+  --osc-block-chirp: #a164fa;
+  --osc-block-chirp-text: #1c0b3a;
+  --osc-block-burst: #f04ac4;
+  --osc-block-siren: #f9504a;
+  --osc-block-am: #19b8f0;
+  --osc-block-fm: #12a0f5;
+  --osc-block-random: #94a9bd;
+  --osc-block-selected-ring: #a567ed;
+
+  /* Hearing-range bars (bioacoustics) */
+  --osc-range-human: #019ffb;
+  --osc-range-dog: #31b06f;
+  --osc-range-cat: #fba733;
+  --osc-range-bat: #f94ac0;
+  --osc-range-elephant: #9955fa;
+
+  /* Typography */
+  --osc-font: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --osc-font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  /* Calibrated against text extents measured on reference.png (tools/textext.mjs). */
+  --osc-fs-2xs: 10px;
+  --osc-fs-xs: 10.5px;
+  --osc-fs-sm: 11.5px;
+  --osc-fs-md: 12.5px;
+  --osc-fs-lg: 13px;
+  --osc-fs-xl: 14.25px;
+  --osc-fs-nav: 13px;
+  --osc-fs-tab: 10.6px;
+  --osc-fs-control: 11px;
+  --osc-fs-readout: 40px;
+  --osc-fs-readout-unit: 22px;
+  --osc-fw-regular: 400;
+  --osc-fw-medium: 500;
+  --osc-fw-semibold: 600;
+  --osc-fw-bold: 700;
+
+  /* Shape and rhythm */
+  --osc-radius-panel: 8px;
+  --osc-radius-control: 6px;
+  --osc-radius-sm: 4px;
+  --osc-control-h: 28px;
+  --osc-control-h-sm: 24px;
+  --osc-control-h-lg: 40px;
+  --osc-shadow-panel: 0 1px 0 rgb(255 255 255 / 2%) inset, 0 6px 18px rgb(0 0 0 / 22%);
+  --osc-touch: 44px;
+
+  /* Layout (desktop reference geometry, px measured on reference.png) */
+  --osc-header-h: 62px;
+  --osc-statusbar-h: 55px;
+}
+
+[data-theme="light"] {
+  color-scheme: light;
+  --osc-bg: #e9eef4;
+  --osc-header-bg: #f7f9fc;
+  --osc-statusbar-bg: #f7f9fc;
+  --osc-surface-0: #f3f6fa;
+  --osc-surface-1: #ffffff;
+  --osc-surface-1-end: #fbfcfe;
+  --osc-surface-2: #eef2f7;
+  --osc-surface-3: #e4eaf2;
+  --osc-surface-4: #d9e1ec;
+  --osc-surface-tooltip: #ffffff;
+  --osc-overlay: rgb(233 238 244 / 80%);
+  --osc-border: #d3dbe6;
+  --osc-border-strong: #c3cddb;
+  --osc-border-soft: #e2e8f0;
+  --osc-grid: rgb(40 60 90 / 10%);
+  --osc-text: #0b1726;
+  --osc-text-2: #2b3b50;
+  --osc-text-muted: #55677d;
+  --osc-text-dim: #7d8ea3;
+  --osc-blue: #0067d6;
+  --osc-blue-hover: #0a74e6;
+  --osc-blue-press: #0057b5;
+  --osc-blue-deep: #d7e8fd;
+  --osc-blue-mid: #c4dcfb;
+  --osc-blue-deep-border: #7fb2ef;
+  --osc-blue-trace: #0a78d8;
+  --osc-blue-underline: #0067d6;
+  --osc-focus: #0067d6;
+  --osc-green: #13a356;
+  --osc-green-2: #1fb36a;
+  --osc-text-on-green: #ffffff;
+  --osc-info-bg: #e3f0ff;
+  --osc-info-border: #a9cdf5;
+  --osc-info-icon: #0067d6;
+  --osc-warn-bg: #fff4dc;
+  --osc-warn-border: #e7b552;
+  --osc-block-silence: #d9e1ec;
+  --osc-block-silence-text: #2b3b50;
+  --osc-block-sweep: #5b3fc4;
+  --osc-shadow-panel: 0 1px 2px rgb(16 32 56 / 8%);
+
+  /* Spectrogram LUT on a light surface: floor = page white, rising through lavender, purple,
+     magenta and orange to a dark amber top, so loud cells stay the most contrasted. */
+  --osc-lut-0: #f7f9fc;
+  --osc-lut-1: #eceffb;
+  --osc-lut-2: #dcdcf6;
+  --osc-lut-3: #c4bdf0;
+  --osc-lut-4: #a99ce8;
+  --osc-lut-5: #8d79df;
+  --osc-lut-6: #7a57d2;
+  --osc-lut-7: #7b3dbf;
+  --osc-lut-8: #8e2ba6;
+  --osc-lut-9: #a8238a;
+  --osc-lut-10: #c3226c;
+  --osc-lut-11: #d9304f;
+  --osc-lut-12: #e64a33;
+  --osc-lut-13: #ec6a1f;
+  --osc-lut-14: #ee8b12;
+  --osc-lut-15: #e2a00c;
+  --osc-lut-16: #c07f05;
+  --osc-lut-17: #7f5200;
+}
+
+/* Active tab label colour differs between themes: white on deep blue in dark,
+   deep blue on pale blue in light. */
+:root { --osc-tab-active-text: #ffffff; }
+[data-theme="light"] { --osc-tab-active-text: #0b4f9e; }

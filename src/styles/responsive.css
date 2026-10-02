@@ -1,0 +1,550 @@
+/*
+ * Responsive behaviour.
+ *   >= 1280px  desktop reference grid (instrument.css)
+ *   768-1279   two columns, every panel visible, compact header and status bar
+ *   < 768      single-column focused instrument: Source & Pattern + analysis always shown,
+ *              the nav becomes a workspace switcher that shows one group of secondary panels,
+ *              the status bar collapses to a compact transport plus an actions menu
+ *   pointer: coarse  every control is at least 44px
+ */
+
+/* ---------- Below the reference width: flatten the nested desktop grid ---------- */
+@media (max-width: 1279.98px) {
+  .osc-main {
+    grid-template-rows: none;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+    padding: 10px;
+  }
+
+  .osc-top,
+  .osc-top-left,
+  .osc-top-right,
+  .osc-row1-left,
+  .osc-row1-right,
+  .osc-row3,
+  .osc-workspace {
+    display: contents;
+  }
+
+  .osc-workspace {
+    display: none;
+  }
+
+  .osc-app[data-mode="synthesis"] .osc-workspace {
+    display: contents;
+  }
+
+  .osc-p-source { order: 1; }
+  .osc-p-analysis { order: 2; }
+  .osc-p-mic { order: 3; }
+  .osc-p-device { order: 4; }
+  .osc-p-spectrogram { order: 5; grid-column: 1 / -1; }
+  .osc-p-sequencer { order: 6; grid-column: 1 / -1; }
+  .osc-p-filter { order: 7; }
+  .osc-p-envelope { order: 8; }
+  .osc-p-additive { order: 9; }
+  .osc-p-phase { order: 10; }
+  .osc-p-bio { order: 11; grid-column: 1 / -1; }
+  .osc-p-dual { order: 12; grid-column: 1 / -1; }
+  .osc-view { order: 13; grid-column: 1 / -1; }
+
+  .osc-app[data-mode="learn"] .osc-panel,
+  .osc-app[data-mode="presets"] .osc-panel {
+    display: none;
+  }
+
+  /* Header: nav scrolls inside its own strip, never the page. */
+  .osc-brand-sub {
+    display: none;
+  }
+
+  .osc-nav {
+    flex: 1 1 auto;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scrollbar-width: none;
+  }
+
+  .osc-nav::-webkit-scrollbar {
+    display: none;
+  }
+
+  .osc-header-actions {
+    flex: none;
+    margin-left: auto;
+    padding-left: 12px;
+  }
+
+  /* Panels: natural height; hosts keep explicit heights. */
+  .osc-analysis-head {
+    flex-wrap: wrap;
+    gap: 8px;
+    height: auto;
+  }
+
+  .osc-analysis-tabs {
+    max-width: 100%;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .osc-analysis-fs {
+    margin-left: 0;
+  }
+
+  .osc-h-waveform,
+  .osc-h-spectrum,
+  .osc-mic-view,
+  .osc-mic-tabs,
+  .osc-mic-readout,
+  .osc-seq-timeline-wrap,
+  .osc-seq-editor,
+  .osc-phase-view,
+  .osc-bio-view,
+  .osc-h-additive {
+    margin-right: 0;
+    margin-left: 0;
+  }
+
+  .osc-mic-readout,
+  .osc-seq-editor {
+    height: auto;
+    padding-bottom: 8px;
+  }
+
+  .osc-analysis-legend {
+    position: static;
+    margin-left: auto;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+
+  .osc-analysis-foot {
+    flex-wrap: wrap;
+    height: auto;
+  }
+
+  .osc-dev-alert {
+    margin-right: 0;
+    margin-left: 0;
+  }
+
+  /* Status bar: drop the secondary readouts and the action labels. */
+  .osc-statusbar {
+    grid-template-columns: auto minmax(12px, 1fr) auto minmax(12px, 1fr) auto;
+    padding: 0 16px;
+  }
+
+  .osc-sb-brand { grid-column: 1; }
+  .osc-sb-state { grid-column: 3; }
+  .osc-sb-actions-wrap { grid-column: 5; }
+
+  .osc-sb-sub,
+  .osc-sb-div,
+  .osc-sb-extra {
+    display: none;
+  }
+
+  .osc-sb-actions {
+    gap: 6px;
+  }
+
+  .osc-sb-action {
+    justify-content: center;
+    min-width: 34px;
+  }
+
+  .osc-sb-action > span {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+
+  .osc-sb-action--icon {
+    margin-left: 0;
+  }
+}
+
+/* ---------- Mobile: single-column focused instrument ---------- */
+@media (max-width: 767.98px) {
+  .osc-header {
+    flex-wrap: wrap;
+    height: auto;
+    padding: 8px 12px 0;
+  }
+
+  .osc-brand-name {
+    font-size: 18px;
+    letter-spacing: 0.14em;
+  }
+
+  .osc-logo {
+    width: 40px;
+    height: 29px;
+  }
+
+  .osc-header-actions {
+    gap: 4px;
+  }
+
+  .osc-header-export span {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+  }
+
+  .osc-header-export {
+    width: 36px;
+    margin-left: 0;
+    padding: 0;
+  }
+
+  #osc-help {
+    display: none;
+  }
+
+  /* The nav becomes the workspace switcher strip under the brand row. */
+  .osc-nav {
+    order: 3;
+    flex: 1 0 100%;
+    height: 44px;
+    margin: 6px -12px 0;
+    padding: 0 4px;
+    border-top: 1px solid var(--osc-border-soft);
+  }
+
+  .osc-nav::before {
+    display: none;
+  }
+
+  .osc-nav .osc-tab {
+    padding: 0 12px;
+    font-size: var(--osc-fs-md);
+  }
+
+  .osc-tabs--underline .osc-tab.is-active::after {
+    bottom: 4px;
+    height: 3px;
+  }
+
+  .osc-main {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 8px;
+    padding: 8px 8px 12px;
+  }
+
+  .osc-p-spectrogram,
+  .osc-p-sequencer,
+  .osc-p-bio,
+  .osc-p-dual,
+  .osc-view {
+    grid-column: auto;
+  }
+
+  /* Secondary panels: hidden unless the current workspace lists them. */
+  .osc-panel[data-osc-modes] {
+    display: none;
+  }
+
+  .osc-panel.osc-p-source,
+  .osc-panel.osc-p-analysis,
+  .osc-app[data-mode="sequencer"] .osc-panel[data-osc-modes~="sequencer"],
+  .osc-app[data-mode="analyzer"] .osc-panel[data-osc-modes~="analyzer"],
+  .osc-app[data-mode="filter"] .osc-panel[data-osc-modes~="filter"],
+  .osc-app[data-mode="synthesis"] .osc-panel[data-osc-modes~="synthesis"],
+  .osc-app[data-mode="compare"] .osc-panel[data-osc-modes~="compare"] {
+    display: flex;
+  }
+
+  .osc-app[data-mode="learn"] .osc-panel.osc-p-source,
+  .osc-app[data-mode="learn"] .osc-panel.osc-p-analysis,
+  .osc-app[data-mode="presets"] .osc-panel.osc-p-source,
+  .osc-app[data-mode="presets"] .osc-panel.osc-p-analysis {
+    display: none;
+  }
+
+  .osc-source-view {
+    height: auto;
+    min-height: 196px;
+  }
+
+  .osc-freq-value {
+    font-size: 34px;
+  }
+
+  .osc-fine {
+    flex-wrap: wrap;
+  }
+
+  .osc-fine-btn {
+    flex: 1 0 calc(33.333% - 4px);
+  }
+
+  .osc-mic-head {
+    flex-wrap: wrap;
+    height: auto;
+    gap: 6px;
+    margin-top: 0;
+  }
+
+  .osc-mic-use {
+    flex: 1 1 auto;
+  }
+
+  .osc-seq-head {
+    grid-template-columns: minmax(0, 1fr) auto;
+    row-gap: 8px;
+    height: auto;
+  }
+
+  .osc-seq-head .osc-spacer {
+    display: none;
+  }
+
+  .osc-seq-tempo-label {
+    justify-self: start;
+  }
+
+  .osc-seq-fields {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+    margin-left: 0;
+  }
+
+  .osc-filter-body,
+  .osc-env-body {
+    grid-template-columns: minmax(0, 1fr);
+    row-gap: 10px;
+  }
+
+  .osc-add-fields {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    column-gap: 8px;
+  }
+
+  .osc-spg-body {
+    grid-template-columns: minmax(0, 1fr) 46px;
+    column-gap: 6px;
+  }
+
+  .osc-p-spectrogram .osc-panel-header {
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .osc-spg-fs {
+    margin-left: 0;
+  }
+
+  .osc-dual-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  /* Status bar: compact transport + actions menu. */
+  .osc-statusbar {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    column-gap: 10px;
+    height: auto;
+    min-height: 56px;
+    padding: 6px 10px calc(6px + env(safe-area-inset-bottom));
+  }
+
+  .osc-sb-brand {
+    display: none;
+  }
+
+  .osc-sb-play {
+    display: inline-flex;
+    grid-column: 1;
+    width: 44px;
+    height: 44px;
+    border-color: var(--osc-blue);
+    background: var(--osc-blue);
+    color: var(--osc-text-on-accent);
+  }
+
+  .osc-sb-state {
+    grid-column: 2;
+    overflow: hidden;
+  }
+
+  .osc-sb-actions-wrap {
+    grid-column: 3;
+  }
+
+  .osc-sb-menu-btn {
+    display: inline-flex;
+    width: 44px;
+    height: 44px;
+  }
+
+  .osc-sb-actions {
+    position: absolute;
+    right: 0;
+    bottom: calc(100% + 8px);
+    display: none;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 2px;
+    min-width: 200px;
+    padding: 4px;
+    border: 1px solid var(--osc-border-strong);
+    border-radius: var(--osc-radius-control);
+    background: var(--osc-surface-1);
+    box-shadow: 0 10px 30px rgb(0 0 0 / 40%);
+  }
+
+  .osc-sb-actions.is-open {
+    display: flex;
+  }
+
+  .osc-sb-action {
+    justify-content: flex-start;
+    height: 44px;
+    padding: 0 10px;
+  }
+
+  .osc-sb-action > span,
+  .osc-sb-action--icon .osc-sb-action-label {
+    position: static;
+    width: auto;
+    height: auto;
+    overflow: visible;
+    clip: auto;
+  }
+}
+
+@media (max-width: 359.98px) {
+  .osc-brand-text {
+    display: none;
+  }
+}
+
+/* ---------- Touch: 44px targets ---------- */
+@media (pointer: coarse) {
+  .osc-main,
+  .osc-top-left,
+  .osc-top-right {
+    grid-template-rows: none;
+  }
+
+  .osc-panel {
+    height: auto;
+  }
+
+  .osc-btn,
+  .osc-seg-btn,
+  .osc-tab,
+  .osc-select select,
+  .osc-number,
+  .osc-transport-btn,
+  .osc-sb-action,
+  .osc-menu-item,
+  .osc-toggle,
+  .osc-fine-btn,
+  .osc-mic-use {
+    min-height: 44px;
+  }
+
+  .osc-icon-btn,
+  .osc-icon-btn--sm,
+  .osc-transport-btn,
+  .osc-seq-start,
+  .osc-header-export,
+  .osc-sb-action {
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  .osc-brand {
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  .osc-tabs,
+  .osc-seg,
+  .osc-analysis-tabs,
+  .osc-mic-tabs,
+  .osc-filter-types,
+  .osc-phase-tabs,
+  .osc-bio-tabs,
+  .osc-scale-seg,
+  .osc-mode-seg,
+  .osc-source-kind,
+  .osc-analysis-head,
+  .osc-analysis-foot,
+  .osc-seq-head,
+  .osc-seq-under,
+  .osc-p-additive .osc-panel-header,
+  .osc-env-param,
+  .osc-field-box,
+  .osc-mic-readout,
+  .osc-seq-editor,
+  .osc-stepper,
+  .osc-unit {
+    height: auto;
+  }
+
+  .osc-env-param {
+    grid-template-rows: 44px 44px;
+  }
+
+  .osc-wave-tiles {
+    height: auto;
+  }
+
+  .osc-wave-tile {
+    min-height: 56px;
+  }
+
+  .osc-slider {
+    height: 44px;
+  }
+
+  .osc-slider::-webkit-slider-thumb {
+    width: 24px;
+    height: 24px;
+    margin-top: calc((var(--osc-slider-track) - 24px) / 2);
+  }
+
+  .osc-stepper-keys {
+    width: 36px;
+  }
+
+  .osc-stepper .osc-number {
+    padding-right: 44px;
+  }
+}
+
+/* 768-1023: the nav gets its own scrollable row so every item stays reachable. */
+@media (min-width: 768px) and (max-width: 1023.98px) {
+  .osc-header {
+    flex-wrap: wrap;
+    height: auto;
+    padding-top: 8px;
+  }
+
+  .osc-nav {
+    order: 3;
+    flex: 1 0 100%;
+    height: 44px;
+    margin: 6px -15px 0 -20px;
+    padding: 0 8px;
+    border-top: 1px solid var(--osc-border-soft);
+  }
+
+  .osc-nav::before {
+    display: none;
+  }
+
+  .osc-tabs--underline .osc-tab.is-active::after {
+    bottom: 4px;
+    height: 3px;
+  }
+}
