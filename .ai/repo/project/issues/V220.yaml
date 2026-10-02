@@ -16,3 +16,14 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-02
+started_at: 2026-10-02T09:34:15Z
+updated_at: 2026-10-02T09:34:19Z
+completed_at: 2026-10-02T09:34:19Z
+evidence:
+  - covers: verified
+    type: test
+    command: "node tests/browser/qa-regressions.cjs"
+    result: "Phase offset measured as L/R correlation 1.000 / 0.001 / -1.000 at 0/90/180 degrees in three engines; stereo split routing; Lissajous from live L/R"
+    artifact: "b08ed34"
+    commit: 5fbf451eeebf6618f3abb12b9eb7047adb98903f
+    recorded_at: 2026-10-02T09:34:18Z

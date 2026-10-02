@@ -29,6 +29,8 @@ const LAUNCH = {
 };
 const WIDTHS = [[320, 640], [375, 812], [768, 1024], [1024, 768], [1280, 800], [1536, 1024]];
 const WORKSPACES = ['playground', 'sequencer', 'analyzer', 'filter', 'synthesis', 'compare'];
+// Full-width views (no .osc-panel): their content must stay inside the view's box.
+const VIEWS = ['about'];
 
 function measure() {
   const vis = (el) => {
@@ -77,6 +79,25 @@ function measure() {
   return { panels: panels.length, squashed, overlaps, covered };
 }
 
+function measureView(ws) {
+  const view = document.getElementById(`osc-view-${ws}`);
+  const r = view.getBoundingClientRect();
+  const bad = [];
+  if (!(r.width > 0 && r.height > 0)) return ['view not visible'];
+  if (document.documentElement.scrollWidth > document.documentElement.clientWidth + 1) {
+    bad.push('page scrolls horizontally');
+  }
+  const inner = { left: r.left + view.clientLeft, right: r.left + view.clientLeft + view.clientWidth,
+    bottom: r.top + view.clientTop + view.clientHeight };
+  for (const c of view.children) {
+    const b = c.getBoundingClientRect();
+    if (!b.width || !b.height) continue;
+    if (b.left < inner.left - 1 || b.right > inner.right + 1) bad.push(`${c.className} leaves the view sideways`);
+    if (b.bottom - inner.bottom > 2) bad.push(`${c.className} ${Math.round(b.bottom - inner.bottom)} px past the view`);
+  }
+  return bad;
+}
+
 async function setWorkspace(page, ws) {
   await page.evaluate((w) => window.OSCILLA.app.setWorkspace(w), ws);
   await page.waitForTimeout(150);
@@ -101,6 +122,12 @@ async function runOne(name) {
         const bad = [...m.squashed.map((s) => `squashed ${s}`), ...m.overlaps.map((s) => `overlap ${s}`),
           ...m.covered.map((s) => `covered ${s}`)];
         if (!m.panels) bad.push('no visible panel');
+        if (bad.length) failures.push(`${w}x${h} ${ws}: ${bad.slice(0, 6).join('; ')}`);
+      }
+      for (const ws of VIEWS) {
+        await setWorkspace(page, ws);
+        const bad = await page.evaluate(measureView, ws);
+        checks++;
         if (bad.length) failures.push(`${w}x${h} ${ws}: ${bad.slice(0, 6).join('; ')}`);
       }
       await page.close();

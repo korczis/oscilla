@@ -18,3 +18,14 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-02
+started_at: 2026-10-02T09:32:28Z
+updated_at: 2026-10-02T09:32:33Z
+completed_at: 2026-10-02T09:32:33Z
+evidence:
+  - covers: verified
+    type: manual
+    command: "git show 95dfa81:index.html (unit-by-unit audit)"
+    result: "Baseline inventory PRESERVE/REFACTOR/EXTEND/REPLACE/REMOVE with coupling register K1-K13 and top extraction risks"
+    artifact: "docs/v2-baseline-inventory.txt"
+    commit: 5fbf451eeebf6618f3abb12b9eb7047adb98903f
+    recorded_at: 2026-10-02T09:32:31Z

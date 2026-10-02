@@ -27,7 +27,6 @@ export const MODAL_IDS = Object.freeze({
   headphonesModal: 'osc-dlg-headphones',
   copyModal: 'osc-dlg-copy',
   help: 'osc-dlg-help',
-  about: 'osc-dlg-about',
   settings: 'osc-dlg-settings',
 });
 

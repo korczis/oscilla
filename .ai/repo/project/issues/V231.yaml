@@ -16,3 +16,14 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-02
+started_at: 2026-10-02T09:35:00Z
+updated_at: 2026-10-02T09:35:05Z
+completed_at: 2026-10-02T09:35:05Z
+evidence:
+  - covers: verified
+    type: manual
+    command: "npm run visual"
+    result: "Design tokens sampled from the reference; OSCILLA component primitives in src/styles; all 13 panel boxes within +-1 px of the reference at 1536x1024"
+    artifact: "b67c97d"
+    commit: 5fbf451eeebf6618f3abb12b9eb7047adb98903f
+    recorded_at: 2026-10-02T09:35:03Z

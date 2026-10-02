@@ -236,14 +236,17 @@
 }
 
 .osc-app[data-mode="learn"] .osc-main,
-.osc-app[data-mode="presets"] .osc-main {
+.osc-app[data-mode="presets"] .osc-main,
+.osc-app[data-mode="about"] .osc-main {
   grid-template-rows: auto;
 }
 
 .osc-app[data-mode="learn"] .osc-top,
 .osc-app[data-mode="learn"] .osc-row3,
 .osc-app[data-mode="presets"] .osc-top,
-.osc-app[data-mode="presets"] .osc-row3 {
+.osc-app[data-mode="presets"] .osc-row3,
+.osc-app[data-mode="about"] .osc-top,
+.osc-app[data-mode="about"] .osc-row3 {
   display: none;
 }
 

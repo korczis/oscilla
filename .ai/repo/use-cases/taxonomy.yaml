@@ -68,3 +68,7 @@ categories:
     title: Running OSCILLA
     summary: The one self-contained page, from file:// or from GitHub Pages.
     order: 240
+  - id: about
+    title: About the project
+    summary: What OSCILLA is, how it was built and where its source lives.
+    order: 250

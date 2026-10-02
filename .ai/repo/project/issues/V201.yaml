@@ -16,3 +16,14 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-02
+started_at: 2026-10-02T09:32:21Z
+updated_at: 2026-10-02T09:32:25Z
+completed_at: 2026-10-02T09:32:25Z
+evidence:
+  - covers: verified
+    type: test
+    command: "majordomus plan validate && majordomus doctor"
+    result: "V2 plan M007-M010 and project rules v2 recorded (PR #3, 5288ce0); plan validate 0 failures, doctor 0 failures"
+    artifact: "9fe0a15"
+    commit: 5fbf451eeebf6618f3abb12b9eb7047adb98903f
+    recorded_at: 2026-10-02T09:32:24Z
