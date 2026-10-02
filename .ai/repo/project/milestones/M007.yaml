@@ -1,0 +1,16 @@
+id: M007
+title: "V2 foundation"
+slug: v2-foundation
+order: 7
+priority: p0
+problem: "V1 is one 5000-line index.html; V2 needs modular source."
+outcome: "Modular src/ builds deterministically into one static dist/index.html; V1 behaviour frozen and preserved."
+acceptance_criteria:
+  - "Modular src/ builds deterministically into one static dist/index.html; V1 behaviour frozen and preserved."
+validation:
+  - "npm test"
+  - "npm run build:check"
+  - "npm run verify-dist"
+evidence_required:
+  - "milestone_verified"
+created_at: 2026-10-02

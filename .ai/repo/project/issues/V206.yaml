@@ -1,0 +1,21 @@
+id: V206
+milestone: M007
+title: "file:// and Pages release gates"
+slug: file-and-pages-release-gates
+priority: p0
+profile: implementation
+objective: "dist/index.html passes the browser gate from file:// and from a sub-path in chromium, firefox, webkit; pages.yml deploys dist."
+scope:
+  - ".github"
+  - "tests/browser"
+depends_on:
+  - "V204"
+acceptance_criteria:
+  - "dist/index.html passes the browser gate from file:// and from a sub-path in chromium, firefox, webkit; pages.yml deploys dist."
+validation:
+  - "npm test"
+  - "npm run build:check"
+  - "npm run verify-dist"
+evidence_required:
+  - "verified"
+created_at: 2026-10-02

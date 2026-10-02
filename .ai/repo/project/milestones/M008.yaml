@@ -1,0 +1,14 @@
+id: M008
+title: "V2 laboratory features"
+slug: v2-lab
+order: 8
+priority: p0
+problem: "V1 generates and visualizes; it cannot measure, compose, filter, synthesize, compare or export."
+outcome: "Every V2 definition-of-done feature works with real data and no stuck nodes."
+acceptance_criteria:
+  - "Every V2 definition-of-done feature works with real data and no stuck nodes."
+validation:
+  - "npm run release-gate"
+evidence_required:
+  - "milestone_verified"
+created_at: 2026-10-02

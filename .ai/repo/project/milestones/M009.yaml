@@ -1,0 +1,14 @@
+id: M009
+title: "V2 visual acceptance"
+slug: v2-visual
+order: 9
+priority: p0
+problem: "V2 must look like the supplied reference, not an interpretation of it."
+outcome: "Desktop at 1536x1024 matches the reference after at least three refinement passes; tablet and mobile adapt."
+acceptance_criteria:
+  - "Desktop at 1536x1024 matches the reference after at least three refinement passes; tablet and mobile adapt."
+validation:
+  - "node scripts/visual-compare.mjs"
+evidence_required:
+  - "milestone_verified"
+created_at: 2026-10-02
