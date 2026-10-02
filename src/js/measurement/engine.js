@@ -75,10 +75,8 @@ import {
 } from './state-machine.js';
 import { normalizeStimulus, renderStimulus, StimulusError } from './stimulus.js';
 import { checkCapture, CLIP_THRESHOLD } from './capture-checks.js';
-import { align } from './align.js';
-import { computeTransfer, fftPlan, nextPowerOfTwo, noiseSpectrum } from './transfer.js';
-import { computeTransferAndIr } from './impulse-response.js';
-import { aggregateRuns } from './aggregate.js';
+import { aggregateResult, transferFromAggregate } from './aggregate.js';
+import { analysisMessage, analyzeInline } from './analysis-task.js';
 import { assessQuality, normalizeChainNotes } from './quality.js';
 import { ALGORITHMS } from './algorithms.js';
 import { welch, windowFn } from './spectrum.js';
@@ -436,33 +434,15 @@ export function inputProcessingMayApply(applied) {
     .some((k) => applied[k] !== false);
 }
 
-function combineTransfers(transfers, aggregate) {
-  const first = transfers[0];
-  if (transfers.length === 1) return first;
-  let snrDb = null;
-  if (transfers.every((t) => t.snrDb)) {
-    snrDb = new Float64Array(first.snrDb.length);
-    for (let i = 0; i < snrDb.length; i++) {
-      let m = Infinity;
-      for (const t of transfers) m = Math.min(m, t.snrDb[i]);
-      snrDb[i] = m;
-    }
-  }
-  let validRange = null;
-  if (transfers.every((t) => t.validRange)) {
-    const lo = Math.max(...transfers.map((t) => t.validRange[0]));
-    const hi = Math.min(...transfers.map((t) => t.validRange[1]));
-    validRange = hi > lo ? [lo, hi] : null;
-  }
-  return {
-    ...first,
-    magnitudeDb: aggregate.centreDb,
-    phaseDeg: null, // phases of separate runs are not averaged (§27)
-    snrDb, // the worst run per point: conservative
-    validRange, // where every run is valid
-    runs: transfers.length,
-    aggregation: aggregate.method,
-  };
+/**
+ * The measurement's transfer (G20 storage rule, aggregate.js): one run → that run's
+ * TransferResult; repeated runs → the aggregate centre as a storable TransferResult marked
+ * derivedFrom 'aggregate' (magnitudeDb = aggregateResult().centreDb bit for bit, lowest run SNR,
+ * common valid range, no phase). Each run's own transfer stays in result.runs[i].transfer.
+ */
+function measurementTransfer(transfers, aggregate) {
+  if (transfers.length === 1) return transfers[0];
+  return transferFromAggregate(aggregateResult(aggregate, transfers[0].frequencies), transfers);
 }
 
 /**
@@ -530,11 +510,15 @@ const clamp01 = (v) => (v < 0 ? 0 : v > 1 ? 1 : v);
  *             maxRawBytes)
  *   assess    optional (result, { recipe, plan, calibration, chainNotes }) → QualityAssessment
  *             (quality.js); assessMeasurement is the standard one
+ *   analyze   optional (message, { now, yield, onStep, keepRaw }) → Promise<AnalysisResult>:
+ *             the offline analysis (analysis-task.js). Default analyzeInline (this thread,
+ *             yields between steps); a Worker-backed one posts the message with
+ *             analysisTransferList(message, { keepRaw }) and resolves with the reply
  *
  * engine = { state, history, limits, preflight(recipe, opts), measure(recipe, opts),
  *   abort(reason), progress(), reset(), dispose() }
  */
-export function createMeasurementEngine({ io, clock, onEvent, limits, assess } = {}) {
+export function createMeasurementEngine({ io, clock, onEvent, limits, assess, analyze } = {}) {
   if (!io || typeof io.now !== 'function' || typeof io.runStimulus !== 'function'
     || typeof io.preflight !== 'function' || typeof io.cancel !== 'function')
     throw new TypeError('createMeasurementEngine needs an io adapter (see engine.js)');
@@ -542,6 +526,7 @@ export function createMeasurementEngine({ io, clock, onEvent, limits, assess } =
   const clk = makeClock(clock);
   const emitFn = typeof onEvent === 'function' ? onEvent : null;
   const defaultAssess = typeof assess === 'function' ? assess : null;
+  const analyzeFn = typeof analyze === 'function' ? analyze : analyzeInline;
   let muted = false;
   let current = null; // the session (one preflight/measure sequence)
   let prepared = null; // { key, plan, report, calibration } after a successful preflight
@@ -913,110 +898,66 @@ export function createMeasurementEngine({ io, clock, onEvent, limits, assess } =
     };
   }
 
-  async function step(s, name, run, fn) {
-    await guard(s, typeof io.yield === 'function' ? io.yield() : null);
-    const t0 = clk.mono();
-    let out;
-    try {
-      out = fn();
-    } catch (e) {
-      throw mapError(e, 'ANALYSIS_FAILURE');
-    }
-    const ms = clk.mono() - t0;
-    s.timeline.analysis.steps.push({ name, run, ms });
-    s.analysis.done += 1;
-    emit(s, { type: 'analysis', step: name, run, ms });
-    tick(s, null);
-    if (s.dead) throw s.deadError;
-    return out;
-  }
-
-  async function analyze(s, stimulus, runs, opts) {
+  // Offline analysis through the injected `analyze` (analysis-task.js; default analyzeInline):
+  // one serializable message, the engine's hooks between steps (yield = abort point, onStep =
+  // timing, progress and the 'analysis' event). An analyze without per-step hooks (a Worker)
+  // has its result.steps reported when it resolves.
+  async function analyzeRuns(s, stimulus, runs, opts) {
     const plan = s.plan;
     const spec = stimulus.spec;
-    const sr = spec.sampleRate;
-    const n = stimulus.samples.length;
     const keepRaw = opts.keepRaw === true;
     s.analysis = { done: 0, total: runs.length * 2 + 1 };
     s.timeline.analysis = { steps: [], startedAtMs: clk.wall(), totalMs: 0, longestMs: 0 };
     const t0 = clk.mono();
-    const reasons = [];
-    for (const run of runs) {
-      run.alignment = await step(s, 'align', run.index, () => align(stimulus.samples,
-        s.captures[run.index].samples, sr));
-      const lag = run.alignment.lagSamples;
-      const capLen = s.captures[run.index].samples.length;
-      const guardS = Math.round(0.005 * sr);
-      if (lag === null)
-        reasons.push(reason('NO_ALIGNMENT', `Run ${run.index + 1}: the stimulus was not found `
-          + 'in the capture.', { run: run.index }));
-      else if (lag < -guardS || lag + n > capLen + guardS)
-        reasons.push(reason('STIMULUS_OUTSIDE_CAPTURE', `Run ${run.index + 1}: the stimulus `
-          + 'is not fully inside the capture window.', { run: run.index, value: lag }));
-    }
-    if (reasons.length) return { invalid: true, reasons };
-    // Representative impulse response: the run whose capture matches the stimulus best.
-    let best = runs[0];
-    for (const run of runs) {
-      if (run.alignment.peakCorrelation > best.alignment.peakCorrelation) best = run;
-    }
-    const noise = s.noiseCapture ? s.noiseCapture.samples : null;
-    // One FFT plan for every run of equal capture length; the representative run's transfer
-    // and impulse response come from ONE spectral division (computeTransferAndIr), identical
-    // to computing them separately.
-    // The noise capture's spectrum is the same for every run: computed once per FFT size.
-    let shared = null;
-    let noiseSpec = null;
-    const planFor = (captured) => {
-      const size = nextPowerOfTwo(n + captured.length);
-      if (!shared || shared.size !== size) shared = fftPlan(size);
-      return shared;
+    const message = analysisMessage({
+      stimulus: stimulus.samples, sampleRate: spec.sampleRate, f1: spec.f1, f2: spec.f2,
+      captures: runs.map((run) => s.captures[run.index].samples),
+      noise: s.noiseCapture ? s.noiseCapture.samples : null,
+      phase: plan.phase, aggregation: plan.aggregation,
+    });
+    const onStep = (st) => {
+      s.timeline.analysis.steps.push({ name: st.name, run: st.run, ms: st.ms });
+      s.analysis.done += 1;
+      emit(s, { type: 'analysis', step: st.name, run: st.run, ms: st.ms });
+      tick(s, null);
+      if (s.dead) throw s.deadError;
     };
-    const noiseFor = (fft) => {
-      if (!noise) return null;
-      if (!noiseSpec || noiseSpec.fftSize !== fft.size)
-        noiseSpec = noiseSpectrum(noise, fft.size, fft);
-      return noiseSpec;
-    };
-    let ir = null;
-    for (const run of runs) {
-      const captured = s.captures[run.index].samples;
-      const args = {
-        stimulus: stimulus.samples, captured, sampleRate: sr, f1: spec.f1, f2: spec.f2,
-        lagSamples: run.alignment.lagSamples, alignment: run.alignment, noise,
-        options: { phase: plan.phase },
-      };
-      if (run === best) {
-        const both = await step(s, 'transfer+impulse-response', run.index,
-          () => {
-            const fft = planFor(captured);
-            return computeTransferAndIr({ ...args, fft, noiseSpectrum: noiseFor(fft),
-              irLagSamples: Math.max(0, run.alignment.lagSamples) });
-          });
-        run.transfer = both.transfer;
-        ir = both.ir;
-      } else {
-        run.transfer = await step(s, 'transfer', run.index, () => {
-          const fft = planFor(captured);
-          return computeTransfer({ ...args, fft, noiseSpectrum: noiseFor(fft) });
-        });
-        run.raw = keepRaw ? captured : null;
-        if (!keepRaw) s.captures[run.index] = null; // released as soon as it is not needed
-      }
+    let out;
+    try {
+      out = await guard(s, analyzeFn(message, {
+        now: clk.mono,
+        yield: () => guard(s, typeof io.yield === 'function' ? io.yield() : null),
+        onStep,
+        keepRaw,
+      }));
+    } catch (e) {
+      if (s.dead) throw s.deadError;
+      throw mapError(e, 'ANALYSIS_FAILURE');
     }
-    const bestCap = s.captures[best.index].samples;
+    if (s.timeline.analysis.steps.length === 0 && Array.isArray(out.steps)) {
+      for (const st of out.steps) onStep(st);
+    }
+    out.alignments.forEach((a, i) => { runs[i].alignment = a; });
+    if (out.invalid) return { invalid: true, reasons: out.reasons.map((x) => Object.freeze(x)) };
+    const best = runs[out.best];
+    runs.forEach((run, i) => {
+      run.transfer = out.transfers[i];
+      run.raw = keepRaw ? s.captures[run.index].samples : null;
+      run.ir = null;
+    });
+    if (!keepRaw) for (const run of runs) s.captures[run.index] = null;
+    const ir = out.ir;
     ir.run = best.index;
-    best.raw = keepRaw ? bestCap : null;
-    if (!keepRaw) s.captures[best.index] = null;
-    for (const run of runs) if (run !== best) run.ir = null;
     best.ir = irMeta(ir);
-    const aggregate = await step(s, 'aggregate', null, () => aggregateRuns(
-      runs.map((r) => r.transfer.magnitudeDb), { method: plan.aggregation }));
-    const transfer = combineTransfers(runs.map((r) => r.transfer), aggregate);
-    const total = clk.mono() - t0;
-    s.timeline.analysis.totalMs = total;
+    let transfer;
+    try {
+      transfer = measurementTransfer(out.transfers, out.aggregate);
+    } catch (e) {
+      throw mapError(e, 'ANALYSIS_FAILURE');
+    }
+    s.timeline.analysis.totalMs = clk.mono() - t0;
     s.timeline.analysis.longestMs = Math.max(0, ...s.timeline.analysis.steps.map((x) => x.ms));
-    return { invalid: false, transfer, ir, aggregate };
+    return { invalid: false, transfer, ir, aggregate: out.aggregate };
   }
 
   function applyCalibration(cal, transfer) {
@@ -1132,7 +1073,7 @@ export function createMeasurementEngine({ io, clock, onEvent, limits, assess } =
       const first = s.captures[0];
       const input = { device: first.device || { label: null, id: null },
         constraints: first.constraints || { requested: null, applied: null } };
-      const analysis = await analyze(s, stimulus, runs, opts);
+      const analysis = await analyzeRuns(s, stimulus, runs, opts);
       if (analysis.invalid) {
         go(s, S.INVALID, { reasons: analysis.reasons.map((x) => x.code) });
         releaseRaw(s);

@@ -30,7 +30,7 @@ visible frame (spec §84-§85, §248).
 src/js/measurement/   algorithms.js  state-machine.js  stimulus.js  spectrum.js
                       capture.js  capture-checks.js  align.js  transfer.js
                       impulse-response.js  smoothing.js  rta.js  aggregate.js
-                      quality.js  format.js  engine.js (orchestration; no DOM)
+                      analysis-task.js  quality.js  format.js  engine.js (orchestration; no DOM)
 src/js/calibration/   profile.js  parse.js  interpolate.js  level.js  sha256.js
 src/js/experiments/   schema.js  migrate.js  validate.js  hash.js  csv.js  store.js  compare.js
                       canonical-json.js  encode.js
@@ -88,7 +88,11 @@ windowAlgorithm(name) -> id;  WINDOW_ALGORITHMS = { hann, 'blackman-harris' }
 // capture.js (browser) / capture-checks.js (pure)
 Capture = { sampleRate, samples: Float32Array /* mono */, preRoll /* s */, postRoll /* s */,
   startedAt /* AudioContext time */, constraints: { requested, applied /* or null */ },
-  device: { label: string|null, id: string|null } }
+  device: { label: string|null, id: string|null },
+  integrity? /* browser io: { expectedFrames, receivedFrames, discontinuities, timing:
+    { scheduledAtFrame, startFrame, armedAtFrame, firstFrame, clockCorrections, gaps } } */ }
+  // capture.js frames are the worklet's own quantum count (a stale currentFrame is corrected
+  // forward-only; clockCorrections counts them); io.diagnostics() lists the last windows
 checkCapture(capture, opts) -> { algorithms: { clip, discontinuity },
   clipping: { ratio, regions: [{ start, end }] }, dropouts: [{ start, end }],
   discontinuities: [{ start, end, jump, ratio|null }], rms, peak, empty: bool, invalid: bool,
@@ -109,8 +113,9 @@ computeTransfer({ stimulus, captured, sampleRate, f1, f2, alignment, lagSamples 
 TransferResult = { algorithm, sampleRate, frequencies: Float64Array /* Hz */,
   magnitudeDb: Float64Array /* raw, relative; zero power −300 */, phaseDeg: Float64Array|null,
   snrDb: Float64Array|null, validRange: [fLo, fHi]|null, requestedRange: [f1, f2], fftSize,
-  binHz, phaseReason: null|'NOT_REQUESTED'|'NO_ALIGNMENT'|'ALIGNMENT_NOT_ROBUST',
-  alignment: { algorithm, lagSamples, peakCorrelation, polarity }|null }
+  binHz, phaseReason: null|'NOT_REQUESTED'|'NO_ALIGNMENT'|'ALIGNMENT_NOT_ROBUST'|'AGGREGATED',
+  alignment: { algorithm, lagSamples, peakCorrelation, polarity }|null,
+  derivedFrom? /* 'aggregate': the centre of repeated runs (G20), aggregate.js */ }
 
 // impulse-response.js
 computeImpulseResponse({ stimulus, captured, sampleRate, f1, f2, inverse, method,
@@ -158,6 +163,24 @@ aggregateResult(aggregate, frequencies) -> AggregateResult   // the stored resul
 AggregateResult = { algorithm, method, dispersion, runs, frequencies: Float64Array,
   centreDb: Float64Array, lowerDb|null, upperDb|null, spreadDb|null, repeatabilityDb|null }
   // zero power −300 dB; validated lowerDb ≤ centreDb ≤ upperDb
+// G20 storage rule: with ≥ 2 runs the aggregate is the primary response and the transfer is
+transferFromAggregate(stored /* AggregateResult, runs ≥ 2 */, transfers) -> TransferResult
+  // magnitudeDb = stored.centreDb (same bits), lowest run snrDb, common validRange, phaseDeg
+  // null + phaseReason 'AGGREGATED', alignment null, derivedFrom: 'aggregate'
+
+// analysis-task.js — the offline analysis as ONE serializable task (G21 boundary)
+AnalysisMessage = { type: 'oscilla.analysis-task', version: 1, stimulus: Float32Array,
+  sampleRate, f1, f2, captures: Float32Array[] /* run order */, noise: Float32Array|null,
+  phase: bool, aggregation: 'mean'|'median' }
+runAnalysis(message, { now? }) -> AnalysisResult   // pure, structured-cloneable in and out
+AnalysisResult = { type: 'oscilla.analysis-result', version: 1, invalid, reasons,
+  alignments: [align() per run], transfers: [TransferResult]|null, best: run|null,
+  ir: IrResult|null, aggregate: aggregateRuns()|null, steps: [{ name, run, ms|null }] }
+analysisSteps(message, { now }) /* generator, one step per next() */;
+analyzeInline(message, { now, yield, onStep }) -> Promise<AnalysisResult>  // engine default
+analysisTransferList(message, { keepRaw }) / analysisResultTransferList(result) -> buffers
+// engine.js: createMeasurementEngine({ ..., analyze /* (message, { now, yield, onStep,
+// keepRaw }) -> Promise<AnalysisResult>, default analyzeInline */ })
 
 // quality.js
 assessQuality({ capture, transfer, aggregate /* aggregateRuns() or AggregateResult */,
@@ -203,10 +226,22 @@ Experiment = { kind: 'oscilla-experiment', schemaVersion: 1, oscillaVersion, osc
   calibration: { frequency: { id, name }|null, level: {...}|null },
   environment: { notes }, measurement: { startedAt, sampleRate, runs },
   quality, algorithms: { role: id }, results: { transfer, ir, rta /* RtaResult */,
-    aggregate? /* AggregateResult, optional, presence kept */ },
+    aggregate? /* AggregateResult, optional, presence kept */,
+    runTransfers? /* [{ run, transfer }] ≤ LIMITS.runTransfers, only on request (G20) */ },
   provenance: { configHash, resultHash /* SHA-256 of the encoded results, §101 */,
     createdAt, repeatOf /* source experimentId|null */,
     build /* { version, commit, shortCommit, sourceDate, channel, dirty, repository }|null */ } }
+// G20: with an aggregate of ≥ 2 runs, results.transfer is its derivedFrom 'aggregate' centre
+// or null (never one run's transfer); validate.js enforces it
+resultsFromMeasurement(engineResult, { runTransfers: false|true|[run indices] })
+  -> { transfer, ir, rta: null, aggregate?, runTransfers? }   // schema.js
+// experiments/compare.js
+responseOf(experiment|TransferResult|AggregateResult) -> { kind: 'transfer'|'aggregate'|
+  'aggregate-centre', frequencies, magnitudeDb, validRange, lowerDb, upperDb, dispersion,
+  runs, method }|null          // the aggregate when present (≥ 2 runs), else the transfer
+responseDelta(a, b, { pointsPerOctave }) -> { ok, frequencies, aDb, bDb, deltaDb, range,
+  pointsPerOctave, label, sources, equivalent /* false: single run vs aggregate */, warnings,
+  envelope /* both bounds, overlap, overlapFraction, dispersion, comparable */|null }
 // experiments/hash.js
 configHash(e) -> hex;  withConfigHash(e, hex);  resultHash(e) -> hex;  withResultHash(e, hex)
 // experiments/validate.js verifies resultHash on import: mismatch -> error code 'corrupt'
@@ -216,10 +251,14 @@ configHash(e) -> hex;  withConfigHash(e, hex);  resultHash(e) -> hex;  withResul
 
 The shapes above are what the modules produce and what `validate.js` accepts (the former
 mismatches G1-G4 are closed). G12 and G15-G19 are closed as described in
-`docs/v3/algorithms.md` ("Gaps"); open there: G20 (storing a repeated measurement: aggregate vs
-one run's transfer, `compare.js` reads only `results.transfer`) and G21 (the combined
-transfer + IR step is the longest main-thread block until the Worker lands). The engine's
-`PreflightFacts` may carry `chainNotes` (pure data, e.g. `{ limiterDeviationAboveHz: 18000 }`),
+`docs/v3/algorithms.md` ("Gaps"). G20 is closed: a repeated measurement stores the aggregate
+as its primary response, `results.transfer` is its centre marked `derivedFrom: 'aggregate'` (or
+null), individual runs only on request in `results.runTransfers`, and `compare.js` compares the
+aggregate and flags single run vs aggregate. Open: G21 (the combined transfer + IR step is the
+longest main-thread block until the Worker lands); its boundary is ready — the analysis is one
+serializable task (`analysis-task.js`) behind the engine's injected `analyze`, so the Worker
+is a build change only (a `scripts/build.mjs` sub-build of that module, loaded from `data:`).
+The engine's `PreflightFacts` may carry `chainNotes` (pure data, e.g. `{ limiterDeviationAboveHz: 18000 }`),
 recorded as `result.chainNotes`; `assessMeasurement(result, ctx)` (engine.js) is the standard
 `assess`. CSV transfer columns are ratios (`magnitude_db_relative`, `magnitude_db_corrected`);
 `level_db_spl` appears only in RTA CSVs under a valid level calibration.

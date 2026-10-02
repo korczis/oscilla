@@ -31,9 +31,9 @@
 // echoCancellation, noiseSuppression and autoGainControl requested false, §209) recorded by an
 // AudioWorklet loaded from a data: URL (inline source CAPTURE_WORKLET_SOURCE; a data: URL loads
 // on file:// in every target browser where a blob: worklet does not in Chromium, ADR 0012;
-// verify-dist rejects any worklet loaded from a path). The processor is frame-indexed
-// (currentFrame), zero-fills quanta whose input is empty (Firefox delivers no channels while
-// upstream is silent), records only inside an armed [startFrame, endFrame) window and posts
+// verify-dist rejects any worklet loaded from a path). The processor is frame-indexed (its own
+// quantum count anchored at currentFrame, see CAPTURE_WORKLET_SOURCE), zero-fills quanta whose
+// input is empty (Firefox delivers no channels while upstream is silent), records only inside an armed [startFrame, endFrame) window and posts
 // transferable chunks; the main thread writes each chunk at its frame offset into ONE
 // preallocated Float32Array per capture, so memory is bounded by the capture length and a lost
 // or late chunk shows up as missing frames (integrity) instead of shifted audio. Capture start
@@ -98,10 +98,25 @@ export const REQUESTED_AUDIO_CONSTRAINTS = Object.freeze({
   channelCount: Object.freeze({ ideal: 1 }),
 });
 
+/** Clock corrections a processor reports at most (diagnostics; the correction never stops). */
+export const CLOCK_NOTE_LIMIT = 32;
+
 /**
  * The capture processor (AudioWorkletGlobalScope source). Messages in: { type: 'arm', id,
  * start, end } (frames), { type: 'disarm' }, { type: 'stop' }. Messages out: { type: 'chunk',
- * id, frame, data: Float32Array (transferred) } and { type: 'done', id, frame }.
+ * id, frame, data: Float32Array (transferred) }, { type: 'done', id, frame }, { type: 'armed',
+ * id, frame } (the frame at which the arm arrived) and { type: 'clock', id, reported, expected,
+ * frame } (a corrected currentFrame reading; id -1 while unarmed).
+ *
+ * Frame index: the processor's OWN count of the quanta it processed, anchored at the first
+ * currentFrame it sees, and moved forward to currentFrame only when the clock is ahead of the
+ * count: frame = max(currentFrame, previous frame + quantum). Chromium 153 under CPU load
+ * reports a stale currentFrame for one quantum (the sequence F, F, F + 256 over three process()
+ * calls, each with fresh input: measured, tests/browser/v3-measure.cjs); labelling chunks with
+ * the raw value wrote the second quantum over the first and left a 128-frame hole, which the
+ * integrity check rightly called FRAMES_MISSING. A lagging reading leaves the count, i.e. the
+ * true index, unchanged; a reading ahead of the count is a quantum this node did not process and
+ * stays a real gap, reported as missing frames (never silently relabelled audio).
  */
 export const CAPTURE_WORKLET_SOURCE = `
 class OscillaCapture extends AudioWorkletProcessor {
@@ -117,10 +132,14 @@ class OscillaCapture extends AudioWorkletProcessor {
     this.end = 0;
     this.armed = false;
     this.alive = true;
+    this.next = null; // the frame index of the next quantum (own count)
+    this.notes = 0;
     this.port.onmessage = (e) => {
       const m = e.data || {};
       if (m.type === 'arm') {
         this.id = m.id; this.start = m.start; this.end = m.end; this.n = 0; this.armed = true;
+        this.port.postMessage({ type: 'armed', id: m.id,
+          frame: this.next === null ? currentFrame : this.next });
       } else if (m.type === 'disarm') {
         this.armed = false; this.n = 0;
       } else if (m.type === 'stop') {
@@ -138,11 +157,19 @@ class OscillaCapture extends AudioWorkletProcessor {
   }
   process(inputs) {
     if (!this.alive) return false;
-    if (!this.armed) return true;
     const input = inputs[0];
     const ch = input && input.length ? input[0] : null;
     const len = ch ? ch.length : 128;
-    const frame = currentFrame;
+    const reported = currentFrame;
+    const expected = this.next;
+    const frame = expected === null || reported > expected ? reported : expected;
+    if (expected !== null && reported !== expected && this.notes < ${CLOCK_NOTE_LIMIT}) {
+      this.notes += 1;
+      this.port.postMessage({ type: 'clock', id: this.armed ? this.id : -1, reported, expected,
+        frame });
+    }
+    this.next = frame + len;
+    if (!this.armed) return true;
     const a = Math.max(frame, this.start);
     const b = Math.min(frame + len, this.end);
     if (b > a) {
@@ -393,6 +420,16 @@ function createIoCore({ engine, env = defaultEnv(), mode = 'auto', openInput, ki
         const m = e.data || {};
         if (m.type === 'chunk') deliver(m.id, m.frame, m.data);
         else if (m.type === 'done') finish(m.id);
+        else if (m.type === 'clock') {
+          clockNotes.push({ id: m.id, reported: m.reported, expected: m.expected,
+            frame: m.frame });
+          if (clockNotes.length > CLOCK_NOTE_LIMIT) clockNotes.shift();
+          const w = windows.get(m.id);
+          if (w) w.clockCorrections += 1;
+        } else if (m.type === 'armed') {
+          const w = windows.get(m.id);
+          if (w) w.armedAtFrame = m.frame;
+        }
       };
     } else {
       node = register(ctx.createScriptProcessor(SCRIPT_PROCESSOR_FRAMES, 1, 1));
@@ -443,8 +480,10 @@ function createIoCore({ engine, env = defaultEnv(), mode = 'auto', openInput, ki
     const a = Math.max(frame, w.startFrame);
     const b = Math.min(frame + data.length, w.endFrame);
     if (b <= a) return;
+    if (w.firstFrame === null) w.firstFrame = a;
     if (a !== w.next) {
       w.discontinuities += 1;
+      if (w.gaps.length < 8) w.gaps.push({ at: a, expected: w.next });
       if (a < w.next) w.received -= Math.min(w.next, b) - a; // overlap: rewritten frames
     }
     w.samples.set(data.subarray(a - frame, b - frame), a - w.startFrame);
@@ -456,13 +495,26 @@ function createIoCore({ engine, env = defaultEnv(), mode = 'auto', openInput, ki
     }
   }
 
+  // Bounded record of the last capture windows (diagnostics(): frame timing per window).
+  const recent = [];
+  const clockNotes = [];
+  function remember(w, outcome) {
+    recent.push({ id: w.id, outcome, startFrame: w.startFrame, frames: w.frames,
+      scheduledAtFrame: w.scheduledAtFrame, armedAtFrame: w.armedAtFrame,
+      firstFrame: w.firstFrame, received: w.received, discontinuities: w.discontinuities,
+      clockCorrections: w.clockCorrections, gaps: w.gaps.slice() });
+    if (recent.length > 8) recent.shift();
+  }
+
   function completeWindow(w) {
+    remember(w, 'complete');
     windows.delete(w.id);
     if (w.watchdog) env.clearTimeout(w.watchdog);
     w.resolve(w);
   }
 
   function failWindow(w, err) {
+    remember(w, err && err.code ? err.code : 'failed');
     windows.delete(w.id);
     if (w.watchdog) env.clearTimeout(w.watchdog);
     w.reject(err);
@@ -499,7 +551,9 @@ function createIoCore({ engine, env = defaultEnv(), mode = 'auto', openInput, ki
       throw mapError(e, 'MEMORY_LIMIT');
     }
     const w = { id: nextId++, startFrame, endFrame: startFrame + frames, frames, samples,
-      received: 0, next: startFrame, discontinuities: 0, onChunk, watchdog: null };
+      received: 0, next: startFrame, discontinuities: 0, onChunk, watchdog: null,
+      scheduledAtFrame: Math.round(ctx.currentTime * ctx.sampleRate), armedAtFrame: null,
+      firstFrame: null, clockCorrections: 0, gaps: [] };
     const promise = new Promise((resolve, reject) => { w.resolve = resolve; w.reject = reject; });
     windows.set(w.id, w);
     recorder.arm(w);
@@ -549,7 +603,9 @@ function createIoCore({ engine, env = defaultEnv(), mode = 'auto', openInput, ki
       constraints: input ? input.constraints : { requested: null, applied: null },
       device: input ? input.device : { label: null, id: null },
       integrity: { expectedFrames: w.frames, receivedFrames: w.received,
-        discontinuities: w.discontinuities },
+        discontinuities: w.discontinuities, timing: { scheduledAtFrame: w.scheduledAtFrame,
+          startFrame: w.startFrame, armedAtFrame: w.armedAtFrame, firstFrame: w.firstFrame,
+          clockCorrections: w.clockCorrections, gaps: w.gaps.slice() } },
       mode: recorderMode,
       testContext: input && input.testContext ? input.testContext : testContext,
       ...extra,
@@ -627,6 +683,9 @@ function createIoCore({ engine, env = defaultEnv(), mode = 'auto', openInput, ki
     get openTrackCount() { return input && input.liveTracks ? input.liveTracks() : 0; },
     now() { return engine.ctx ? engine.ctx.currentTime : 0; },
     yield: makeYield(env),
+    /** Frame timing of the last (≤ 8) capture windows, for test diagnostics. */
+    diagnostics() { return { mode: recorderMode, windows: recent.map((x) => ({ ...x })),
+      clock: clockNotes.slice() }; },
 
     async preflight() {
       const facts = {

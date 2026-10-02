@@ -282,8 +282,11 @@ test('three repeats produce three runs and an aggregate, captures never overlap'
   assert.equal(r.state, S.COMPLETE);
   assert.equal(r.runs.length, 3);
   assert.equal(r.aggregate.runs, 3);
-  assert.equal(r.transfer.runs, 3);
+  // G20: the measurement's transfer is the aggregate centre, marked, storable; no phase.
+  assert.equal(r.transfer.derivedFrom, 'aggregate');
   assert.equal(r.transfer.phaseDeg, null);
+  assert.equal(r.transfer.phaseReason, 'AGGREGATED');
+  assert.ok(r.runs.every((run) => run.transfer && run.transfer.derivedFrom === undefined));
   assert.equal(io.maxConcurrentCaptures, 1, 'one capture at a time');
   const runs = r.timeline.actual.filter((a) => a.phase === 'run');
   assert.equal(runs.length, 3);

@@ -15,9 +15,10 @@
 //
 // Result hash (spec §101): resultHash = SHA-256 (lowercase hex) of the canonical JSON of
 //   { v: 1, results: serializeExperiment(e.results) }
-// i.e. the results block { transfer, ir, rta, aggregate? } (aggregate only when present, so a
-// result without it hashes as before) with every typed array in its EncodedArray form
-// (dtype + little-endian bytes, encode.js), so the hash covers the exact stored bits and the
+// i.e. the results block { transfer, ir, rta, aggregate?, runTransfers? } (optional fields only
+// when present, so a result without them hashes as before; for a repeated measurement the
+// G20 marker transfer.derivedFrom and every stored run transfer are covered) with every
+// typed array in its EncodedArray form (dtype + little-endian bytes, encode.js), so the hash covers the exact stored bits and the
 // dtype, and does not depend on key order. It detects corruption of a stored or exported file;
 // it is not a signature (anyone can recompute it). withResultHash stamps
 // provenance.resultHash; schema.js withResults clears it when results change; validate.js
