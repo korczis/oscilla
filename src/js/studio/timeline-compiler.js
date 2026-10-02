@@ -39,7 +39,7 @@
 // documents all three.
 
 import {
-  buildTimeline, planFromTimeline, STOP_PAD_S, STOP_RAMP_S,
+  buildTimeline, planFromTimeline, STOP_LEAD_S, STOP_PAD_S, STOP_RAMP_S,
 } from '../sequencer/compiler.js';
 import {
   BLOCK_SCHEMA, DEFAULT_SEED, PROVISIONAL_SAMPLE_RATE, WAVEFORMS, normalizeModel,
@@ -60,7 +60,7 @@ import {
 export const TIMELINE_LOOKAHEAD_S = LOOKAHEAD_S;
 /** Safe horizon: nothing is changed closer to now than the engine's SCHEDULE_LEAD_S. */
 export const SAFE_HORIZON_S = SCHEDULE_LEAD_S;
-/** Frames per Web Audio render quantum; STOP lands two quanta ahead (compileSequence). */
+/** Frames per Web Audio render quantum; STOP lands on a quantum boundary (stopTime). */
 export const RENDER_QUANTUM = 128;
 /** Guard against pathological loops: passes compiled per window at most. */
 export const MAX_PASSES_PER_WINDOW = 4096;
@@ -87,8 +87,10 @@ export const EDIT_POLICY = Object.freeze({
 
 /** STOP policy (§184), as data; scheduler.stop() implements it. */
 export const STOP_POLICY = Object.freeze({
-  at: 'now + 2 render quanta, rounded up to a whole frame (compileSequence voice.stop)',
-  sounding: 'release', // voice.stop(at): params held, fade over STOP_RAMP_S, sources stopped
+  at: 'now + STOP_LEAD_S (at least 2 render quanta), rounded up to a render-quantum boundary',
+  // voice.stop(at): the voice's output gain (a constant 1) held and faded over STOP_RAMP_S, its
+  // schedules left untouched; sources stopped after the fade, automation cancelled once ended
+  sounding: 'release',
   pending: 'cancel', // scheduled but not started: disposed, never heard
   futureScheduling: 'cancelled', // advance() returns nothing after stop
   automation: 'hold', // every lane held at its exact value at `at`
@@ -116,10 +118,17 @@ export function safeHorizon(now, sampleRate) {
   return frameCeil(now + SAFE_HORIZON_S, sampleRate);
 }
 
-/** STOP time at `now`: two render quanta ahead, on a frame (compileSequence's guard). */
+/**
+ * STOP time at `now`: the realtime voice.stop() default of compileSequence (STOP_LEAD_S, at least
+ * two render quanta, rounded up to a render-quantum boundary), which is also the engine's
+ * release time (AudioEngine._soon, hooks.soon, the same lead and boundary): the voices' fade and
+ * the runtime's output fade start together, on frames not rendered yet, and no ramp starts
+ * mid-quantum (Firefox anchors such a ramp at the quantum's edge). `now` is the context clock
+ * the transport read; the result is a whole frame at every sample rate.
+ */
 export function stopTime(now, sampleRate) {
-  const sr = rateOf(sampleRate);
-  return frameCeil(now + (2 * RENDER_QUANTUM) / sr, sr);
+  const q = RENDER_QUANTUM / rateOf(sampleRate);
+  return Math.ceil((now + Math.max(STOP_LEAD_S, 2 * q)) / q - 1e-9) * q;
 }
 
 const sameJson = (a, b) => JSON.stringify(a) === JSON.stringify(b);

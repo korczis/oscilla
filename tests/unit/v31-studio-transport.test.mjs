@@ -13,7 +13,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { AudioEngine } from '../../src/js/audio/audio-engine.js';
-import { STOP_PAD_S, STOP_RAMP_S } from '../../src/js/sequencer/compiler.js';
+import {
+  GAIN_FLOOR, STOP_LEAD_S, STOP_PAD_S, STOP_RAMP_S,
+} from '../../src/js/sequencer/compiler.js';
 import { createIdGenerator, createStudioStore } from '../../src/js/studio/actions.js';
 import { ROUTE_FLOOR } from '../../src/js/studio/compiler.js';
 import { createStudioRuntime } from '../../src/js/studio/runtime.js';
@@ -103,8 +105,10 @@ test('Basic Synth: Tone and Sweep clips play on the oscillator at exact audio-cl
   // A voice ends at startTime + its duration (a float sum) + STOP_PAD_S.
   near(carriers[0].stopAt, at(bF, 1) + STOP_PAD_S);
   near(carriers[1].stopAt, at(bF, 3) + STOP_PAD_S);
-  // Tone 220 Hz, then the log sweep 220 → 880 Hz over the clip.
-  assert.deepEqual(carriers[0].frequency.events.filter((e) => e.t >= b).map((e) => [e.t, e.value,
+  // Tone 220 Hz, then the log sweep 220 → 880 Hz over the clip. The tone voice has ended and
+  // cancelled its automation (compileSequence cleanup): what it played is FakeParam.scheduled.
+  assert.deepEqual(carriers[0].frequency.events, []);
+  assert.deepEqual(carriers[0].frequency.scheduled.filter((e) => e.t >= b).map((e) => [e.t, e.value,
     e.ramp]).slice(0, 1), [[at(bF, 0), 220, 'set']]);
   const sweep = carriers[1].frequency.events.filter((e) => e.t >= at(bF, 1));
   assert.deepEqual([sweep.at(-1).value, sweep.at(-1).ramp], [880, 'exponential']);
@@ -305,8 +309,20 @@ test('Basic Synth: STOP releases everything, holds automation, leaves the model;
     const mark = fp.calls.length;
     const done = s.transport.stop();
     assert.equal(s.transport.playing, false);
-    // Sounding voices are released at the STOP time (held, faded over STOP_RAMP_S).
+    // Sounding voices are released at the STOP time: the engine's release time (hooks.soon), on
+    // a render quantum; the voice's output gain is faded over STOP_RAMP_S and its frequency
+    // schedule is not edited while it sounds.
+    assert.equal(atStop, s.engine._soon(s.ctx));
+    assert.ok(atStop >= now + STOP_LEAD_S);
+    const sweepCalls = sweep.frequency.calls.length;
     assert.equal(sweep.stopAt, atStop + STOP_RAMP_S + STOP_PAD_S);
+    assert.equal(sweep.frequency.calls.length, sweepCalls);
+    const voiceOut = [...reach(sweep)].find((n) => n.kind === 'gain'
+      && n.gain.calls.some((c) => c[0] === 'linearRampToValueAtTime' && c[2] === atStop
+        + STOP_RAMP_S));
+    assert.ok(voiceOut, 'the voice output fades from the STOP time');
+    assert.deepEqual(voiceOut.gain.events.slice(-2).map((e) => [e.ramp, e.value, e.t]),
+      [['set', 1, atStop], ['linear', GAIN_FLOOR, atStop + STOP_RAMP_S]]);
     // Every lane is held at its exact value at the STOP time.
     const held = 500 * (8000 / 500) ** ((atStop - b) / (at(bF, 3) - b));
     const tail = fp.calls.slice(mark);

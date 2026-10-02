@@ -43,11 +43,11 @@ panel), **MIGRATE** (data converted by `importSequence` / `exportSequence`).
 | --- | --- | --- |
 | `buildTimeline` (plan topologies, frame quantisation, clamping) | KEEP | Compiles every pattern clip (a one-block sequence, `timeline-compiler.js clipSequence`) |
 | `planFromTimeline`, `planSequence` | KEEP | Each pattern item carries the plan with absolute `time` (= start + `t`); the test asserts the events equal the sequencer's plan |
-| `compileSequence` (voice graph, `track` / `source` hooks, stop with hold, cleanup) | KEEP | The runtime plays a pattern item with `compileSequence(item.sequence, ctx, destination, item.startTime)`; STOP calls `voice.stop(at)` |
+| `compileSequence` (voice graph, `track` / `source` hooks, stop by an output-gain fade, cleanup) | KEEP | The runtime plays a pattern item with `compileSequence(item.sequence, ctx, destination, item.startTime)`; STOP calls `voice.stop(at)` |
 | One voice for the whole sequence | REFACTOR | One voice per pattern clip. A block boundary is at the envelope floor in both cases, so contiguous clips sound the same; an edit or a STOP then touches exactly one voice, and only clips inside the look-ahead window own nodes |
 | `renderSequenceOffline` | KEEP | Offline rendering of pattern clips (§105) |
 | `automationValueAt` | KEEP | `automation.js scheduledValueAt` and every hold computation |
-| `holdParam`, `loggedParam` | KEEP / REFACTOR | Unchanged inside `compileSequence`; the same rule (exact value, re-ended ramp, pinned value) is applied to automation lanes by `automation.js holdAutomation` and `timeline-compiler.js holdEvents` (the originals are module-private) |
+| `holdParam`, `loggedParam` | REFACTOR | `holdParam` is gone from `compileSequence` (a voice's stop fades only its output gain and never edits a sounding schedule); the hold rule (exact value, re-ended ramp, pinned value) lives on for automation lanes in `automation.js holdAutomation` and `timeline-compiler.js holdEvents`; `loggedParam` is module-private |
 | `createSequenceLookup`, `freqAt`, `describeSequence` | KEEP | Readouts through each voice (`voice.freqAt`, `voice.blockIndexAt`) |
 | `GAIN_FLOOR`, `EDGE_S`, `START_OFFSET_S`, `STOP_RAMP_S`, `STOP_PAD_S` | KEEP | Envelope edges, start offset, STOP fade (`STOP_POLICY`) |
 

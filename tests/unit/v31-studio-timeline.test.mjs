@@ -11,8 +11,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  buildTimeline, compileSequence, planFromTimeline, GAIN_FLOOR, STOP_PAD_S, STOP_RAMP_S,
-  automationValueAt,
+  buildTimeline, compileSequence, planFromTimeline, GAIN_FLOOR, STOP_LEAD_S, STOP_PAD_S,
+  STOP_RAMP_S, automationValueAt,
 } from '../../src/js/sequencer/compiler.js';
 import {
   addBlock, createSequence, moveBlock, referenceSequence, serializeSequence, setTempo,
@@ -196,13 +196,17 @@ test('§212 fake scheduler plays every clip on the AudioContext clock with look-
   assert.deepEqual(carriers.map((o) => o.startAt), [10, 11, 13, 13.5]);
   assert.deepEqual(carriers.map((o) => o.stopAt), [11, 13, 13.5, 14.5].map((t) => t + STOP_PAD_S));
   const sweepVoice = [...voices.values()][1];
-  assert.deepEqual(ctx.oscillators[1].frequency.events.filter((e) => e.t >= 11)
+  // Every voice has ended and cancelled its automation (compileSequence cleanup): the schedule it
+  // played is FakeParam.scheduled, the one written before that cleanup.
+  assert.deepEqual(ctx.oscillators[1].frequency.events, []);
+  assert.deepEqual(ctx.oscillators[1].frequency.scheduled.filter((e) => e.t >= 11)
     .map((e) => [e.t, e.value, e.ramp]), [[11, 440, 'set'], [11, 440, 'set'],
     [13, 880, 'exponential']]);
   assert.equal(sweepVoice.blockIndexAt(12), 0);
   // The silence voice keeps its envelope at the floor for its whole clip.
   const silenceEnv = ctx.created.filter((n) => n.kind === 'gain')[7];
-  assert.ok(silenceEnv.gain.events.filter((e) => e.t >= 13).every((e) => e.value === GAIN_FLOOR));
+  const silence = silenceEnv.gain.scheduled.filter((e) => e.t >= 13);
+  assert.ok(silence.length > 0 && silence.every((e) => e.value === GAIN_FLOOR));
   // Playhead from the audio clock (§94).
   const a = sched.getState().anchor;
   assert.deepEqual(positionAt(a, 12), { position: 2, pass: 0, playing: true });
@@ -691,7 +695,10 @@ test('STOP releases sounding voices, cancels pending ones, holds automation, kee
   sched.advance(11.5);
   const plan = sched.stop(11.5);
   assert.equal(plan.at, stopTime(11.5, SR));
-  assert.equal(plan.at, frameCeil(11.5 + 256 / SR, SR));
+  // The sequencer's realtime voice.stop() default: STOP_LEAD_S ahead, on a render quantum.
+  const q = 128 / SR;
+  assert.equal(plan.at, Math.ceil((11.5 + STOP_LEAD_S) / q - 1e-9) * q);
+  assert.ok(plan.at >= 11.5 + STOP_LEAD_S && isWholeFrame(plan.at));
   assert.equal(plan.fadeS, STOP_RAMP_S);
   assert.deepEqual(plan.playhead, { mode: 'return-to-play-start', position: 0 });
   assert.equal(plan.model, 'unchanged');

@@ -196,10 +196,16 @@ inspectable and testable. A tempo change is an ordinary clip change (tempo-linke
 
 ## STOP (§184) and Escape (§185)
 
-`scheduler.stop(now)` (`STOP_POLICY`): `at = frameCeil(now + 2 render quanta)` (the
-`compileSequence` guard); sounding items are released (`voice.stop(at)`: params held, fade over
-`STOP_RAMP_S`, sources stopped after `STOP_PAD_S`); scheduled items that have not started are
-cancelled (disposed, never heard); every automation lane is held at its exact value at `at`;
+`scheduler.stop(now)` (`STOP_POLICY`): `at = stopTime(now)`, `now + STOP_LEAD_S` (at least two
+render quanta) rounded up to a render-quantum boundary: the realtime default of the sequencer's
+`voice.stop()` and the same lead and boundary as the engine's releases (`hooks.soon()`), so the
+voices and the runtime's output fade start on the same quantum, on frames not rendered yet, and
+no ramp starts mid-quantum. Sounding items are released (`voice.stop(at)`: the voice's output
+gain, a constant 1, is held at `at` and faded to the floor over `STOP_RAMP_S`; its envelope,
+frequency and AM schedules are not edited while they sound; its sources stop after a further
+`STOP_PAD_S`, and once every source has ended the voice cancels its remaining automation and
+disconnects its nodes); scheduled items that have not started are cancelled (disposed, never
+heard); every automation lane is held at its exact value at `at`;
 future scheduling is cancelled (`advance` returns nothing, `nextWakeMs` returns null); the model
 is never touched; the playhead returns to the position playback started from (RETURN goes to 0).
 There is no pause (§93): stop and play again.

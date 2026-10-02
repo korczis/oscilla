@@ -74,16 +74,20 @@ function fakeOfflineCtor(made) {
 /**
  * Everything the Studio scheduled on a context, from node `from` on (after the engine's or the
  * renderer's own output chain): per node in creation order its kind, waveform, source start and
- * stop, and every AudioParam's resulting schedule (FakeParam.events, after cancellations). An
- * event at the context time the node was built is its initial value ('init'): a voice is built
- * when the look-ahead reaches it (live) or at once (offline), and only that moment differs.
+ * stop, and every AudioParam's resulting schedule (after cancellations). An event at the context
+ * time the node was built is its initial value ('init'): a voice is built when the look-ahead
+ * reaches it (live) or at once (offline), and only that moment differs.
+ * The schedule is FakeParam.scheduled: a sequencer voice cancels its automation once all of its
+ * sources have ended (compileSequence cleanup). A live voice that ended before the trace is read
+ * has done so, while the fake offline context never renders, so the schedule compared is the
+ * one written before that cleanup (the cleanup itself is asserted separately).
  */
 function scheduleTrace(ctx, from) {
   return ctx.created.slice(from).map((n) => {
     const params = {};
     for (const [k, v] of Object.entries(n)) {
       if (v instanceof FakeParam) {
-        params[k] = v.events.map((e) => [e.ramp, e.value, e.t === n.createdAt ? 'init' : e.t,
+        params[k] = v.scheduled.map((e) => [e.ramp, e.value, e.t === n.createdAt ? 'init' : e.t,
           e.tau ?? null]);
       }
     }
@@ -111,6 +115,15 @@ test('offline renders what the live transport plays: Subtractive Synth, exact fr
     const off = scheduleTrace(made[0], 2); // after the destination and the render's master
     assert.ok(off.length > 20, 'a whole graph');
     assert.deepEqual(off, live);
+    // Live, the Tone voice has ended and cancelled its automation (which can no longer sound);
+    // the Sweep voice still sounds at 2.9 s and keeps its schedule.
+    const [toneV, sweepV] = s.ctx.oscillators.filter((o) => o.type === 'sawtooth'
+      && o.stopAt !== null);
+    assert.ok(toneV.endedFired && !sweepV.endedFired);
+    assert.deepEqual(toneV.frequency.calls.at(-1), ['cancelScheduledValues', 0]);
+    assert.deepEqual(toneV.frequency.events, []);
+    assert.ok(toneV.frequency.scheduled.length > 0, 'the trace compares what was scheduled');
+    assert.equal(sweepV.frequency.scheduled, sweepV.frequency.events);
     // The content: the Tone then the Sweep voice on whole frames (the graph carrier never stops),
     // the carrier held at the floor, the cutoff lane owned and scheduled.
     const bF = Math.round(b * SR);

@@ -54,6 +54,30 @@ export class FakeParam {
     this.events = this.events.filter((e) => e.t < t);
   }
 
+  /**
+   * The schedule as written, before a sequencer voice's post-end cleanup: compileSequence cancels
+   * every automation it wrote (cancelScheduledValues(0)) once all of the voice's sources have
+   * ended, which can no longer sound. `events` replayed from `calls` without that trailing cancel;
+   * a param that was not cleaned up returns `events` itself.
+   */
+  get scheduled() {
+    const last = this.calls[this.calls.length - 1];
+    if (!last || last[0] !== 'cancelScheduledValues' || last[1] !== 0) return this.events;
+    const ramps = { setValueAtTime: 'set', linearRampToValueAtTime: 'linear',
+      exponentialRampToValueAtTime: 'exponential', setTargetAtTime: 'target' };
+    let events = [];
+    for (const [m, a, b, c] of this.calls.slice(0, -1)) {
+      if (m === 'cancelScheduledValues' || m === 'cancelAndHoldAtTime') {
+        events = events.filter((e) => e.t < a);
+      } else if (m === 'setTargetAtTime') {
+        events.push({ t: b, value: a, ramp: 'target', tau: c });
+      } else {
+        events.push({ t: b, value: a, ramp: ramps[m] });
+      }
+    }
+    return events;
+  }
+
   _check(v, t) {
     if (!Number.isFinite(v) || !Number.isFinite(t) || t < 0) {
       throw new TypeError(`bad automation value ${v} at ${t}`);
