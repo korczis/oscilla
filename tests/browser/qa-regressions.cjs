@@ -118,9 +118,21 @@ function tapCorrelation(page) {
     e.analyser.connect(sp);
     sp.connect(L, 0);
     sp.connect(R, 1);
-    await new Promise((r) => setTimeout(r, 350));
     const l = new Float32Array(8192);
     const r = new Float32Array(8192);
+    const wait = (ms) => new Promise((res) => setTimeout(res, ms));
+    const rmsOf = (a) => Math.sqrt(a.reduce((q, v) => q + v * v, 0) / a.length);
+    // Deadline-based: on a slow runner the first voice after the context starts can take a
+    // while to reach the output. Poll until both channels carry signal, then let the 8192-
+    // sample window fill with steady signal (about 170 ms at 48 kHz) before measuring.
+    const deadline = performance.now() + 3000;
+    for (;;) {
+      await wait(100);
+      L.getFloatTimeDomainData(l);
+      R.getFloatTimeDomainData(r);
+      if ((rmsOf(l) > 0.005 && rmsOf(r) > 0.005) || performance.now() > deadline) break;
+    }
+    await wait(250);
     L.getFloatTimeDomainData(l);
     R.getFloatTimeDomainData(r);
     e.analyser.disconnect(sp);
