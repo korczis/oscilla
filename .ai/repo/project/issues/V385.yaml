@@ -1,0 +1,19 @@
+id: V385
+milestone: M020
+title: "Majordomus V3 product graph"
+slug: majordomus-v3-product-graph
+priority: p1
+profile: implementation
+objective: "V3 Features, Use Cases, ADRs and knowledge discovery, validated (§133-§136)."
+scope:
+  - ".ai/repo"
+depends_on:
+  - "V382"
+acceptance_criteria:
+  - "V3 Features, Use Cases, ADRs and knowledge discovery, validated (§133-§136)."
+  - "Specification: docs/specs/oscilla-v3-measure.md"
+validation:
+  - "npm run release-gate"
+evidence_required:
+  - "verified"
+created_at: 2026-10-02

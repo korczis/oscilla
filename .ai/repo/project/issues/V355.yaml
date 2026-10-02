@@ -1,0 +1,20 @@
+id: V355
+milestone: M017
+title: "Recipe, repeat and URL recipe"
+slug: recipe-repeat-and-url-recipe
+priority: p1
+profile: implementation
+objective: "Recipe vs experiment; REPEAT creates a new experiment; small recipes in the URL hash, never results (§102-§104, §160)."
+scope:
+  - "src"
+  - "tests"
+depends_on:
+  - "V351"
+acceptance_criteria:
+  - "Recipe vs experiment; REPEAT creates a new experiment; small recipes in the URL hash, never results (§102-§104, §160)."
+  - "Specification: docs/specs/oscilla-v3-measure.md"
+validation:
+  - "npm run release-gate"
+evidence_required:
+  - "verified"
+created_at: 2026-10-02

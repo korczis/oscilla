@@ -1,0 +1,20 @@
+id: V333
+milestone: M015
+title: "IR chart"
+slug: ir-chart
+priority: p1
+profile: implementation
+objective: "uPlot or custom line view in ms with zoom (§121)."
+scope:
+  - "src"
+  - "tests"
+depends_on:
+  - "V332"
+acceptance_criteria:
+  - "uPlot or custom line view in ms with zoom (§121)."
+  - "Specification: docs/specs/oscilla-v3-measure.md"
+validation:
+  - "npm run release-gate"
+evidence_required:
+  - "verified"
+created_at: 2026-10-02

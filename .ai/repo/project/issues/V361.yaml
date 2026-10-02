@@ -1,0 +1,20 @@
+id: V361
+milestone: M018
+title: "Clipping, dropout and invalid capture"
+slug: clipping-dropout-and-invalid-capture
+priority: p1
+profile: implementation
+objective: "Threshold plus run-length clipping with regions; empty, stalled, zero and discontinuous capture invalidates (§67-§68, §220)."
+scope:
+  - "src"
+  - "tests"
+depends_on:
+  - "V305"
+acceptance_criteria:
+  - "Threshold plus run-length clipping with regions; empty, stalled, zero and discontinuous capture invalidates (§67-§68, §220)."
+  - "Specification: docs/specs/oscilla-v3-measure.md"
+validation:
+  - "npm run release-gate"
+evidence_required:
+  - "verified"
+created_at: 2026-10-02

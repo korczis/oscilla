@@ -1,0 +1,20 @@
+id: V376
+milestone: M019
+title: "Visual acceptance"
+slug: visual-acceptance
+priority: p1
+profile: implementation
+objective: "Deterministic synthetic MEASURE reference at 1536x1024 and mobile; extends V2 tokens; accessible measurement colours (§117, §148-§149)."
+scope:
+  - "src"
+  - "tests"
+depends_on:
+  - "V371"
+acceptance_criteria:
+  - "Deterministic synthetic MEASURE reference at 1536x1024 and mobile; extends V2 tokens; accessible measurement colours (§117, §148-§149)."
+  - "Specification: docs/specs/oscilla-v3-measure.md"
+validation:
+  - "npm run release-gate"
+evidence_required:
+  - "verified"
+created_at: 2026-10-02

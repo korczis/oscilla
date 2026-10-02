@@ -1,0 +1,23 @@
+id: V386
+milestone: M020
+title: "Release 3.0.0 and public verification"
+slug: release-3.0.0-and-public-verification
+priority: p1
+profile: implementation
+objective: "Single-source version 3.0.0 (rc first if supported), gated release, Pages deploy of the same artifact, public version/commit/MEASURE/Playground smoke, Majordomus release records (§130, §179-§181, §229-§233, §243-§244)."
+scope:
+  - ".github"
+  - "dist"
+  - "package.json"
+depends_on:
+  - "V383"
+  - "V384"
+  - "V385"
+acceptance_criteria:
+  - "Single-source version 3.0.0 (rc first if supported), gated release, Pages deploy of the same artifact, public version/commit/MEASURE/Playground smoke, Majordomus release records (§130, §179-§181, §229-§233, §243-§244)."
+  - "Specification: docs/specs/oscilla-v3-measure.md"
+validation:
+  - "npm run release-gate"
+evidence_required:
+  - "verified"
+created_at: 2026-10-02

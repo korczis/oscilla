@@ -1,0 +1,20 @@
+id: V323
+milestone: M014
+title: "Normalization and smoothing"
+slug: normalization-and-smoothing
+priority: p1
+profile: implementation
+objective: "Optional labelled normalization; 1/24-1/3 octave smoothing as derived views; raw data kept (§34-§35, §159)."
+scope:
+  - "src"
+  - "tests"
+depends_on:
+  - "V321"
+acceptance_criteria:
+  - "Optional labelled normalization; 1/24-1/3 octave smoothing as derived views; raw data kept (§34-§35, §159)."
+  - "Specification: docs/specs/oscilla-v3-measure.md"
+validation:
+  - "npm run release-gate"
+evidence_required:
+  - "verified"
+created_at: 2026-10-02

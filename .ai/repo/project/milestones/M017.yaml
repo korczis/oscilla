@@ -1,0 +1,15 @@
+id: M017
+title: "V3 experiment model"
+slug: v3-experiments
+order: 17
+priority: p0
+problem: "Presets store settings only; nothing records what was measured, how, with which calibration and software."
+outcome: "Versioned experiments with provenance, local persistence that degrades gracefully under file://, strict import validation, CSV export, repeat and comparison."
+acceptance_criteria:
+  - "Versioned experiments with provenance, local persistence that degrades gracefully under file://, strict import validation, CSV export, repeat and comparison."
+  - "Specification: docs/specs/oscilla-v3-measure.md"
+validation:
+  - "npm run release-gate"
+evidence_required:
+  - "milestone_verified"
+created_at: 2026-10-02

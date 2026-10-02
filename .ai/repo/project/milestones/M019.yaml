@@ -1,0 +1,15 @@
+id: M019
+title: "V3 workbench UX"
+slug: v3-workbench-ux
+order: 19
+priority: p0
+problem: "The measurement capabilities have no coherent place in the V2 cockpit."
+outcome: "A MEASURE workspace in the OSCILLA design language with guided and expert modes, a live quality bar, safe abort, mobile-first guidance and accessible summaries."
+acceptance_criteria:
+  - "A MEASURE workspace in the OSCILLA design language with guided and expert modes, a live quality bar, safe abort, mobile-first guidance and accessible summaries."
+  - "Specification: docs/specs/oscilla-v3-measure.md"
+validation:
+  - "npm run release-gate"
+evidence_required:
+  - "milestone_verified"
+created_at: 2026-10-02

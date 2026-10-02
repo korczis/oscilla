@@ -1,0 +1,21 @@
+id: V381
+milestone: M020
+title: "V3 test suites in the release gate"
+slug: v3-test-suites-in-the-release-gate
+priority: p1
+profile: implementation
+objective: "V3 unit DSP, synthetic measurement, browser workflow with fake devices, one realistic-size run; fast verify separate; physical limits stated (§146-§147, §182-§185)."
+scope:
+  - "tests"
+  - ".github"
+depends_on:
+  - "V364"
+  - "V356"
+acceptance_criteria:
+  - "V3 unit DSP, synthetic measurement, browser workflow with fake devices, one realistic-size run; fast verify separate; physical limits stated (§146-§147, §182-§185)."
+  - "Specification: docs/specs/oscilla-v3-measure.md"
+validation:
+  - "npm run release-gate"
+evidence_required:
+  - "verified"
+created_at: 2026-10-02

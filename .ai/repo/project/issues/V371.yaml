@@ -1,0 +1,21 @@
+id: V371
+milestone: M019
+title: "MEASURE and EXPERIMENTS workspaces"
+slug: measure-and-experiments-workspaces
+priority: p1
+profile: implementation
+objective: "Navigation PLAYGROUND, MEASURE, EXPERIMENTS, ANALYZE, SYNTHESIS, LEARN; V2 functions preserved; experiment management surface (§72-§76, §183)."
+scope:
+  - "src"
+  - "tests"
+depends_on:
+  - "V322"
+  - "V353"
+acceptance_criteria:
+  - "Navigation PLAYGROUND, MEASURE, EXPERIMENTS, ANALYZE, SYNTHESIS, LEARN; V2 functions preserved; experiment management surface (§72-§76, §183)."
+  - "Specification: docs/specs/oscilla-v3-measure.md"
+validation:
+  - "npm run release-gate"
+evidence_required:
+  - "verified"
+created_at: 2026-10-02

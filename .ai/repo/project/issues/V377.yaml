@@ -1,0 +1,20 @@
+id: V377
+milestone: M019
+title: "Measurement safety"
+slug: measurement-safety
+priority: p1
+profile: implementation
+objective: "Conservative digital output levels (never SPL), user gesture, hard stop, no auto-gain, low/high-frequency and headphone warnings, limiter effect documented (§152-§155, §207-§208)."
+scope:
+  - "src"
+  - "tests"
+depends_on:
+  - "V322"
+acceptance_criteria:
+  - "Conservative digital output levels (never SPL), user gesture, hard stop, no auto-gain, low/high-frequency and headphone warnings, limiter effect documented (§152-§155, §207-§208)."
+  - "Specification: docs/specs/oscilla-v3-measure.md"
+validation:
+  - "npm run release-gate"
+evidence_required:
+  - "verified"
+created_at: 2026-10-02

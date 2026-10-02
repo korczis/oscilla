@@ -1,0 +1,20 @@
+id: V303
+milestone: M012
+title: "Measurement state machine"
+slug: measurement-state-machine
+priority: p1
+profile: implementation
+objective: "IDLE/PREFLIGHT/NOISE_CHECK/READY/ARMED/MEASURING/ANALYZING/COMPLETE/INVALID/ABORTED/ERROR with enforced transitions and illegal-transition tests (§166-§168)."
+scope:
+  - "src"
+  - "tests"
+depends_on:
+  - "V302"
+acceptance_criteria:
+  - "IDLE/PREFLIGHT/NOISE_CHECK/READY/ARMED/MEASURING/ANALYZING/COMPLETE/INVALID/ABORTED/ERROR with enforced transitions and illegal-transition tests (§166-§168)."
+  - "Specification: docs/specs/oscilla-v3-measure.md"
+validation:
+  - "npm run release-gate"
+evidence_required:
+  - "verified"
+created_at: 2026-10-02
