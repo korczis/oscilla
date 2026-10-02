@@ -56,6 +56,45 @@ export function harmonicTable(wave, f, nyquist) {
   };
 }
 
+/**
+ * The harmonic table (same shape as harmonicTable) of the additive synthesis that plays: bars
+ * are labs/additive coefficients() = audio/additive visualCoefficients() of the PeriodicWave
+ * (peak normalisation applied, so db is the level each partial is played at, relative to full
+ * scale). Partials at or below OFF_DB (gain 0) are left out; `below` counts those under Nyquist.
+ * The table carries `source: 'additive'` and its own title.
+ */
+export function additiveHarmonicTable(bars, f, nyquist) {
+  const list = [];
+  const empty = { list, below: 0, total: 0, shown: 0, capped: false, axisMax: 0, summary: '',
+    summaryShort: '', summaryTiny: '', source: 'additive', title: ADDITIVE_TITLE };
+  if (!(f > 0) || !(nyquist > 0) || !Array.isArray(bars)) return empty;
+  let below = 0;
+  for (const b of bars) {
+    if (!(b.gain > 0) || !(b.n >= 1)) continue;
+    const pf = b.n * f;
+    const isBelow = pf < nyquist;
+    if (isBelow) below++;
+    if (list.length < HARMONIC_LIST_CAP) {
+      list.push({ n: b.n, f: pf, db: 20 * Math.log10(b.gain), below: isBelow });
+    }
+  }
+  const total = list.length;
+  if (!total) return { ...empty, summary: 'additive table is silent', summaryShort: 'silent',
+    summaryTiny: 'silent' };
+  const axisMax = Math.max(nyquist * 1.6, list[list.length - 1].f * 1.1);
+  return {
+    list, below, total, shown: total, capped: false, axisMax, source: 'additive',
+    title: ADDITIVE_TITLE,
+    summary: `additive: ${below} of ${total} partials below Nyquist · levels as played `
+      + '(peak-normalised)',
+    summaryShort: `additive: ${below}/${total} below Nyquist`,
+    summaryTiny: `${below}/${total} below Nyquist`,
+  };
+}
+
+export const ADDITIVE_TITLE =
+  'ADDITIVE SPECTRUM (PeriodicWave coefficients that play, not measured)';
+
 // V1: harmonic chart labels (index.html@a7b7a23)
 export const HARMONIC_DB_GRID = [0, -20, -40, -60];
 export const HARMONIC_DB_LABELS = HARMONIC_DB_GRID.map(String);

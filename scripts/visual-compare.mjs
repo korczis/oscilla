@@ -199,6 +199,10 @@ async function main() {
   await page.waitForFunction(() => window.__oscReady || window.Alpine, null, { timeout: 5000 })
     .catch(() => errors.push('Alpine did not start within 5 s (static render compared)'));
   await page.evaluate(() => document.fonts && document.fonts.ready);
+  // The reference shows a returning user: the first-run safety notice is dismissed (a real
+  // click, as a user would; its collapsed state is then stored for the session).
+  const safety = page.locator('[data-osc="safety.dismiss"]');
+  if (await safety.isVisible().catch(() => false)) await safety.click();
   await page.waitForTimeout(400);
   let releaseHold = null;
   if (PLAY) releaseHold = await playScene(page, errors);

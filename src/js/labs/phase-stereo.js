@@ -8,7 +8,10 @@
 //           (correlation.js; labelled "estimated" because two analysers are read one after
 //           the other);
 //   model — otherwise the analytic A/B of the configured frequencies and phase offset,
-//           labelled "model"; the correlation reads "—" (nothing is playing).
+//           labelled "model". The correlation then says why there is no measurement: "—"
+//           (nothing playing, or no signal on the router yet) or "1.00 mono" (a mono output,
+//           L and R identical by construction). A measured value carries a visible "est."
+//           (correlationDisplay).
 // The controller never creates audio nodes; the engine builds the router from lab.config.
 
 import { createPhaseStereoView } from '../charts/phase-view.js';
@@ -19,7 +22,9 @@ import {
   risingZeroCrossing,
   commonPeak,
 } from '../charts/phase-model.js';
-import { createCorrelationMeter } from '../analysis/correlation.js';
+import { createCorrelationMeter, correlationDisplay } from '../analysis/correlation.js';
+
+export { correlationDisplay };
 import { parseNumber, clamp } from '../charts/axes.js';
 import { onFrame } from '../charts/frame-loop.js';
 import { on, onUi, setText, setAttr, activeValue } from './dom.js';
@@ -31,19 +36,6 @@ export const PHASE_DEFAULTS = Object.freeze({
   pan: 0,
   route: 'mono',
 });
-
-/** Correlation display: value → { text, meterPct, valueText }; null → unavailable. */
-export function correlationDisplay(value) {
-  if (value == null || !Number.isFinite(value)) {
-    return { text: '—', meterPct: 0, valueText: 'Unavailable (nothing playing)' };
-  }
-  const v = clamp(value, -1, 1);
-  return {
-    text: v.toFixed(2),
-    meterPct: ((v + 1) / 2) * 100,
-    valueText: `${v.toFixed(2)} (estimated from the L/R analysers)`,
-  };
-}
 
 /** Stereo router config (audio/stereo.js) for the lab's Mono/Stereo output and pan. */
 export function routerConfig(cfg) {
@@ -61,6 +53,7 @@ export function mount(rootEl, adapter) {
     pan: q('#osc-stereo-pan'),
     offset: q('[data-osc="phase.offset"]'), // optional (requested markup), degrees
     value: q('#osc-corr-value'),
+    basis: q('#osc-corr-basis'),
     meter: q('#osc-corr-meter'),
   };
   const listeners = new Set();
@@ -77,20 +70,35 @@ export function mount(rootEl, adapter) {
   const meter = createCorrelationMeter({ timeConstantS: 0.3 });
   const t0 = performance.now();
   const model = { waves: { a: null, b: null }, liss: { x: null, y: null } };
-  let lastCorr = undefined;
+  let lastCorr = '';
   let source = 'model';
+  let corrState = 'idle';
 
-  function showCorrelation(value) {
-    if (value === lastCorr) return;
-    lastCorr = value;
-    const d = correlationDisplay(value);
+  function showCorrelation(value, state) {
+    const key = `${state}:${value}`;
+    if (key === lastCorr) return;
+    lastCorr = key;
+    corrState = state;
+    const d = correlationDisplay(value, state);
     setText(el.value, d.text);
-    setAttr(el.value, 'title', value == null ? 'Unavailable' : 'Estimated');
+    setText(el.basis, d.basis);
+    setAttr(el.value, 'title', d.title);
     if (el.meter) {
-      el.meter.style.setProperty('--osc-meter-value', `${d.meterPct.toFixed(1)}%`);
-      setAttr(el.meter, 'aria-valuenow', value == null ? 0 : value.toFixed(2));
+      const pct = `${d.meterPct.toFixed(1)}%`;
+      if (el.meter.style.getPropertyValue('--osc-meter-value') !== pct) {
+        el.meter.style.setProperty('--osc-meter-value', pct);
+      }
+      setAttr(el.meter, 'aria-valuenow', d.meterNow.toFixed(2));
       setAttr(el.meter, 'aria-valuetext', d.valueText);
     }
+  }
+
+  /** Why there is no live measurement: 'mono' | 'silent' | 'idle'. */
+  function idleState() {
+    const playing = adapter.isPlaying ? !!adapter.isPlaying() : false;
+    if (!playing) return 'idle';
+    const router = adapter.getStereoRouter ? adapter.getStereoRouter() : null;
+    return router ? 'silent' : 'mono';
   }
 
   function liveData(now) {
@@ -117,11 +125,11 @@ export function mount(rootEl, adapter) {
     const live = liveData(now);
     if (live) {
       source = 'live';
-      showCorrelation(Math.round(live.corr * 100) / 100);
+      showCorrelation(Math.round(live.corr * 100) / 100, 'live');
       return live;
     }
     source = 'model';
-    showCorrelation(null);
+    showCorrelation(null, idleState());
     const elapsedS = (now - t0) / 1000;
     const w = modelWaves({ fA: cfg.freqA, fB: cfg.freqB, phaseDeg: cfg.phaseDeg, elapsedS,
       points: 240, cycles: 2 }, model.waves);
@@ -187,7 +195,7 @@ export function mount(rootEl, adapter) {
       else if (d.kind === 'theme' && view) view.refreshTheme();
     }),
   ];
-  showCorrelation(null);
+  showCorrelation(null, 'idle');
 
   return {
     view,
@@ -199,6 +207,10 @@ export function mount(rootEl, adapter) {
     },
     get source() {
       return source;
+    },
+    /** Correlation readout state: 'live' | 'mono' | 'silent' | 'idle'. */
+    get correlationState() {
+      return corrState;
     },
     get tab() {
       return tab;

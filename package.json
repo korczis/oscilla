@@ -14,7 +14,7 @@
     "build:debug": "node scripts/build.mjs --debug",
     "verify-dist": "node scripts/verify-dist.mjs",
     "test": "node --test \"tests/unit/**/*.test.mjs\"",
-    "test:browser": "node tests/browser/app.cjs && node tests/browser/layout.cjs",
+    "test:browser": "node tests/browser/app.cjs && node tests/browser/layout.cjs && node tests/browser/qa-regressions.cjs",
     "release-gate": "npm test && npm run build && npm run verify-dist && npm run test:engine && npm run test:browser",
     "visual": "node scripts/visual-compare.mjs dist --play --out tests/visual/out-integration",
     "test:engine": "node tests/browser/engine-v1port.cjs",

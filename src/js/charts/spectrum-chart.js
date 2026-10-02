@@ -48,6 +48,11 @@ const DEFAULTS = {
   autoFrame: true, // subscribe to the shared rAF loop
 };
 
+/** Set `hidden` only when it changes (assigning it always writes the attribute). */
+export function setHidden(el, hidden) {
+  if (el && el.hidden !== hidden) el.hidden = hidden;
+}
+
 function makeChip(host, extraClass = '') {
   const el = document.createElement('div');
   el.className = `osc-chip-readout ${extraClass}`.trim();
@@ -270,7 +275,7 @@ export function createSpectrumChart(host, options = {}) {
       text = [formatHz(requested), chipLevelText(db)];
     }
     if (x == null) {
-      markerChip.hidden = true;
+      setHidden(markerChip, true);
       return;
     }
     const content = `${text[0]}\n${text[1]}`;
@@ -279,7 +284,7 @@ export function createSpectrumChart(host, options = {}) {
       markerChip.append(text[0], document.createElement('br'), text[1]);
       markerChip.dataset.text = content;
     }
-    markerChip.hidden = false;
+    setHidden(markerChip, false);
     const w = markerChip.offsetWidth || 60;
     const left = plotLeft() + x;
     const hostW = host.clientWidth;
@@ -291,7 +296,7 @@ export function createSpectrumChart(host, options = {}) {
   function onCursor(self) {
     const idx = self.cursor.idx;
     if (idx == null || self.cursor.left < 0) {
-      hoverChip.hidden = true;
+      setHidden(hoverChip, true);
       return;
     }
     const f = xs[idx];
@@ -300,8 +305,9 @@ export function createSpectrumChart(host, options = {}) {
       if (self.series[1].show) parts.push(`mic ${chipLevelText(ys[0][idx])}`);
       if (self.series[2].show) parts.push(`gen ${chipLevelText(ys[1][idx])}`);
     } else if (self.series[1].show) parts.push(chipLevelText(ys[0][idx]));
-    hoverChip.textContent = parts.join(' · ');
-    hoverChip.hidden = false;
+    const hoverText = parts.join(' · ');
+    if (hoverChip.textContent !== hoverText) hoverChip.textContent = hoverText;
+    setHidden(hoverChip, false);
     const w = hoverChip.offsetWidth || 80;
     const left = plotLeft() + self.cursor.left;
     const pos = left + 8 + w <= host.clientWidth ? left + 8 : left - w - 8;
@@ -473,6 +479,12 @@ export function createSpectrumChart(host, options = {}) {
     return r;
   }
 
+  /** The "no data" note: hidden for null, else shown with text. Writes only on change. */
+  function setNote(text) {
+    setHidden(note, text == null);
+    if (text != null && note.textContent !== text) note.textContent = text;
+  }
+
   function frame(nowMs = performance.now()) {
     if (!u) return;
     if (host.offsetParent === null) return; // hidden panel or tab: nothing to draw
@@ -481,15 +493,13 @@ export function createSpectrumChart(host, options = {}) {
     if (!dual) {
       const r = readInto('main', o.getAnalyser && o.getAnalyser(), ys[0], nowMs);
       setShow([!!r]);
-      note.hidden = !!r;
-      if (!r) note.textContent = 'Audio not started';
+      setNote(r ? null : 'Audio not started');
     } else {
       const rm = readInto('mic', o.getMicAnalyser && o.getMicAnalyser(), ys[0], nowMs);
       const rt = readInto('main', o.getAnalyser && o.getAnalyser(), ys[1], nowMs);
       if (rm && peakHold) sampleSpectrum(rm.peak, mapFor('mic', rm), ys[2], o.minDb);
       setShow([!!rm, !!rt, !!rm && peakHold]);
-      note.hidden = !!rm;
-      if (!rm) note.textContent = o.micOffText || 'Microphone off';
+      setNote(rm ? null : o.micOffText || 'Microphone off');
     }
     u.setData([xs, ...ys], false);
     u.redraw(true, false); // setData(…, false) alone does not repaint

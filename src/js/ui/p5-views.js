@@ -6,7 +6,9 @@
 //              the same window, drawn dim and labelled "not playing".
 //   harmonics  the theoretical partials of the built-in oscillator (bridge.state.harm, from
 //              visualization/harmonics.js harmonicTable) as bars on a log-frequency axis,
-//              with the Nyquist line; partials above Nyquist are outlined only.
+//              with the Nyquist line; partials above Nyquist are outlined only. With additive
+//              synthesis on, the table is the PeriodicWave coefficients that play
+//              (additiveHarmonicTable) and carries its own title.
 // Views follow the host contract { id, layout?(h), draw(h, st, now) }; per frame they build no
 // arrays or closures and never touch the DOM.
 
@@ -86,6 +88,25 @@ export function scopeTickStep(windowMs) {
 }
 
 /**
+ * The live scope window the analyser buffer can actually show (pure): the requested window,
+ * less the room the rising-zero-crossing trigger needs (one period of freqHz, at most half the
+ * buffer) → { samples, ms, requestedMs, limited }. limited: the buffer cannot fill the request
+ * (e.g. 100 ms at 96 kHz from an 8192-sample analyser); the axis and labels then show `ms`.
+ */
+export function scopeWindow({ requestedMs, bufferLength, sampleRate, freqHz }) {
+  const req = clamp(Number(requestedMs) || 5, 0.5, 200);
+  if (!(bufferLength > 0) || !(sampleRate > 0)) {
+    return { samples: 0, ms: req, requestedMs: req, limited: false };
+  }
+  const half = bufferLength >> 1;
+  const room = freqHz > 0 ? Math.min(half, Math.ceil(sampleRate / freqHz) + 1) : half;
+  const want = Math.round((req / 1000) * sampleRate);
+  const samples = Math.max(8, Math.min(bufferLength - room, want));
+  const ms = (samples / sampleRate) * 1000;
+  return { samples, ms, requestedMs: req, limited: samples < want };
+}
+
+/**
  * createScopeView({ getWindowMs }) -> view. getWindowMs() returns the selected window in ms.
  */
 export function createScopeView({ getWindowMs }) {
@@ -101,7 +122,15 @@ export function createScopeView({ getWindowMs }) {
       const ymid = (y0 + y1) / 2;
       const hh = Math.max(1, (y1 - y0) / 2 - 2);
       const cols = Math.max(1, Math.min(bandMin.length, Math.floor(x1 - x0)));
-      const windowMs = clamp(Number(getWindowMs()) || 5, 0.5, 200);
+      const requestedMs = clamp(Number(getWindowMs()) || 5, 0.5, 200);
+      const d = L.timeData;
+      const sr = L.sampleRate;
+      const live = !!(d && st.playing && sr > 0);
+      const fLive = Number.isFinite(L.inst) && L.inst > 0 ? L.inst : L.refFreq;
+      // Live: the window the analyser buffer can fill (labelled and ticked as such).
+      const sw = live ? scopeWindow({ requestedMs, bufferLength: d.length, sampleRate: sr,
+        freqHz: fLive }) : null;
+      const windowMs = sw ? sw.ms : requestedMs;
 
       // grid: ms ticks, 0 / ±1 lines
       p.stroke(pal.gridSoft);
@@ -110,9 +139,11 @@ export function createScopeView({ getWindowMs }) {
       for (let t = 0; t <= windowMs + 1e-9; t += step) {
         const x = x0 + (t / windowMs) * (x1 - x0);
         p.line(x, y0, x, y1);
-        const last = t > windowMs - step / 2;
-        uiLabel(p, t === 0 ? '0' : msLabel(t), last ? x1 : x, H - 3, pal.muted, 8.5,
-          t === 0 ? p.LEFT : last ? p.RIGHT : p.CENTER);
+        // A tick at (or within a label's half-width of) the right edge is right-aligned there;
+        // every label stays at its own time (the live window need not be a multiple of step).
+        const edge = t > 0 && x > x1 - 14;
+        uiLabel(p, t === 0 ? '0' : msLabel(t), edge ? Math.min(x1, x + 6) : x, H - 3, pal.muted,
+          8.5, t === 0 ? p.LEFT : edge ? p.RIGHT : p.CENTER);
       }
       p.line(x0, ymid, x1, ymid);
       p.line(x0, ymid - hh, x1, ymid - hh);
@@ -121,20 +152,16 @@ export function createScopeView({ getWindowMs }) {
       uiLabel(p, '0', x0 - 4, ymid + 3, pal.muted, 8.5, p.RIGHT);
       uiLabel(p, '-1', x0 - 4, ymid + hh + 3, pal.muted, 8.5, p.RIGHT);
 
-      const d = L.timeData;
-      const sr = L.sampleRate;
-      const live = !!(d && st.playing && sr > 0);
       const g = Math.max(st.gain, 1e-4);
       if (live) {
-        const win = Math.max(8, Math.min(d.length >> 1, Math.round((windowMs / 1000) * sr)));
+        const win = sw.samples;
         let start = 0;
         const searchEnd = d.length - win;
         for (let i = 1; i < searchEnd; i++) { if (d[i - 1] < 0 && d[i] >= 0) { start = i; break; } }
         const spc = win / cols;
         // Fewer than 4 samples per cycle: a polyline through the samples would show a false
         // beat (V1 rule): draw the min/max band, widened by 1 ms so its edges do not ripple.
-        const f = Number.isFinite(L.inst) && L.inst > 0 ? L.inst : L.refFreq;
-        const sparse = f > 0 && sr / f < 4;
+        const sparse = fLive > 0 && sr / fLive < 4;
         if (spc <= 1.5 && !sparse) {
           p.noFill();
           p.stroke(pal.accent);
@@ -164,7 +191,8 @@ export function createScopeView({ getWindowMs }) {
           drawBand(p, pal, x0, cols, bandMin, bandMax, pal.accent, bandFill(p, pal));
         }
         const room = x1 - x0 - 4;
-        const head = `output analyser · ${msLabel(windowMs)} window`;
+        const head = `output analyser · ${msLabel(windowMs)} window${sw.limited
+          ? ` (buffer limit; ${msLabel(requestedMs)} requested)` : ''}`;
         uiLabel(p, uiPickFit(p, [
           `${head} · relative to set gain${sparse ? ' · < 4 samples per cycle: min/max band' : ''}`,
           `${head}${sparse ? ' · min/max band' : ''}`, head, 'output analyser'], 9, room),
@@ -228,8 +256,9 @@ export function createHarmonicBarsView() {
       const x1 = W - 10;
       const y0 = 22;
       const y1 = H - 18;
-      uiLabel(p, 'THEORETICAL OSCILLATOR SPECTRUM (computed from the waveform, not measured)',
-        x0, 13, pal.fg, 10);
+      uiLabel(p, hm.title
+        || 'THEORETICAL OSCILLATOR SPECTRUM (computed from the waveform, not measured)',
+      x0, 13, pal.fg, 10);
       p.stroke(pal.gridSoft);
       p.strokeWeight(1);
       for (const db of HARMONIC_DB_GRID) {

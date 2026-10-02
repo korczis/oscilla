@@ -41,7 +41,8 @@ export function rangeLabel(entry) {
   return `${formatHz(entry.minHz)} – ${formatHz(entry.maxHz)}`;
 }
 
-function citation(src) {
+/** "Authors (year). Title. Venue. DOI/URL" of an entry's source ('' without one). */
+export function citation(src) {
   if (!src) return '';
   const year = src.year ? ` (${src.year})` : '';
   return `${src.authors}${year}. ${src.title}. ${src.venue}. ${src.doi_or_url}`;

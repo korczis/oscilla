@@ -144,6 +144,7 @@
           <button type="button" class="osc-menu-item" role="menuitem" data-osc="header.settings" @click="openDialog('settings')">Settings…</button>
           <button type="button" class="osc-menu-item" role="menuitem" data-osc="header.shortcuts" @click="openDialog('help')">Keyboard shortcuts</button>
           <button type="button" class="osc-menu-item" role="menuitem" data-osc="header.about" @click="openDialog('about')">About OSCILLA</button>
+          <button type="button" class="osc-menu-item" role="menuitem" data-osc="safety.reopenMenu" @click="reopenSafety()">Safety notice</button>
         </div>
       </div>
       <div class="osc-menu-anchor">
@@ -191,6 +192,29 @@
     </ul>
     <button type="button" class="osc-icon-btn osc-icon-btn--ghost osc-icon-btn--sm"
       data-osc="hints.close" aria-label="Hide explore hints" @click="explore = false; $nextTick(() => document.getElementById('osc-overflow').focus())">
+      <svg aria-hidden="true"><use href="#i-close"/></svg>
+    </button>
+  </section>
+
+  <!-- ================= First-run safety notice (in flow: never covers a control) ========= -->
+  <section class="osc-safety" id="osc-safety" data-osc="safety" aria-labelledby="osc-safety-title"
+    x-show="!safetyCollapsed" style="display: none">
+    <svg class="osc-safety-icon" aria-hidden="true"><use href="#i-info"/></svg>
+    <p class="osc-safety-text">
+      <strong id="osc-safety-title">Listening safety.</strong>
+      <span class="osc-safety-more" :class="{ 'is-open': safetyExpanded }">Audio can be
+        uncomfortable or harmful at excessive output levels.</span>
+      <span>Start low, especially with headphones.</span>
+      <span class="osc-safety-more" id="osc-safety-more" :class="{ 'is-open': safetyExpanded }">
+        Perceived loudness is not a reliable measure of acoustic output. Digital signal generation
+        does not guarantee that your hardware reproduces the requested frequency.</span>
+      <button type="button" class="osc-safety-toggle" aria-controls="osc-safety"
+        aria-expanded="false" :aria-expanded="String(safetyExpanded)"
+        @click="safetyExpanded = !safetyExpanded" x-text="safetyExpanded ? 'Less' : 'More'">More</button>
+    </p>
+    <button type="button" class="osc-icon-btn osc-icon-btn--ghost osc-icon-btn--sm"
+      id="osc-safety-dismiss" data-osc="safety.dismiss" aria-label="Dismiss the safety notice"
+      @click="dismissSafety()">
       <svg aria-hidden="true"><use href="#i-close"/></svg>
     </button>
   </section>
@@ -442,6 +466,7 @@
                   id="osc-atab-signalpath" aria-controls="osc-analysis-view" data-osc="analysis.tab"
                   data-value="signalPath" x-bind="tab('analysis', 'signalPath')">Signal Path</button>
               </div>
+              <div class="osc-analysis-tools">
               <button type="button" class="osc-icon-btn osc-icon-btn--ghost osc-viz-pause"
                 id="osc-viz-pause" data-osc="analysis.pause" aria-label="Pause animation"
                 title="Pause animation (the view still redraws when something changes)"
@@ -465,6 +490,7 @@
                 @click="toggleFullscreen('osc-panel-analysis')">
                 <svg aria-hidden="true"><use href="#i-expand"/></svg>
               </button>
+              </div>
             </div>
             <hr class="osc-divider osc-analysis-sep">
 
@@ -659,6 +685,9 @@
                 <svg aria-hidden="true"><use href="#i-info"/></svg>
                 <p>Web Audio can generate digital signals within sampling limits. Actual speaker output is unknown.</p>
               </div>
+              <button type="button" class="osc-link-btn osc-safety-reopen" id="osc-safety-reopen"
+                data-osc="safety.reopen" aria-controls="osc-safety"
+                :aria-expanded="String(!safetyCollapsed)" @click="reopenSafety()">Safety notice</button>
             </div>
           </section>
         </div>
@@ -1022,14 +1051,16 @@
               hidden :hidden="tabs.phase !== 'stereo'" role="group" aria-label="Stereo routing">
               <label class="osc-label" for="osc-stereo-fa">A</label>
               <div class="osc-unit" data-unit="Hz">
-                <input class="osc-number" id="osc-stereo-fa" type="number" min="20" max="22800"
+                <input class="osc-number" id="osc-stereo-fa" type="number" min="20"
+                  :max="Math.floor(safeMax)"
                   step="1" value="440" inputmode="decimal" data-osc="stereo.freqA" :value="dual.a.freq"
                   aria-label="Oscillator A frequency">
                 <span class="osc-unit-suffix" aria-hidden="true">Hz</span>
               </div>
               <label class="osc-label" for="osc-stereo-fb">B</label>
               <div class="osc-unit" data-unit="Hz">
-                <input class="osc-number" id="osc-stereo-fb" type="number" min="20" max="22800"
+                <input class="osc-number" id="osc-stereo-fb" type="number" min="20"
+                  :max="Math.floor(safeMax)"
                   step="1" value="442" inputmode="decimal" data-osc="stereo.freqB" :value="dual.b.freq"
                   aria-label="Oscillator B frequency">
                 <span class="osc-unit-suffix" aria-hidden="true">Hz</span>
@@ -1057,8 +1088,11 @@
               aria-valuenow="0" aria-valuetext="Unavailable" style="--osc-meter-value: 0%">
               <span class="osc-meter-fill"></span>
             </div>
-            <output class="osc-corr-value osc-num" id="osc-corr-value"
-              data-osc="phase.correlation">—</output>
+            <span class="osc-corr-readout">
+              <output class="osc-corr-value osc-num" id="osc-corr-value"
+                data-osc="phase.correlation">—</output><span class="osc-corr-basis"
+                id="osc-corr-basis" data-osc="phase.correlationBasis"></span>
+            </span>
           </div>
         </div>
       </section>
@@ -1092,6 +1126,11 @@
               aria-label="Approximate hearing ranges by species"></div>
           </div>
           <p class="osc-bio-note">Ranges are approximate and vary by source and individual.</p>
+          <details class="osc-bio-sources" id="osc-bio-sources">
+            <summary class="osc-bio-sources-toggle">Sources</summary>
+            <ol class="osc-bio-source-list" id="osc-bio-source-list"
+              aria-label="Sources of the bars shown"></ol>
+          </details>
         </div>
       </section>
     </div>

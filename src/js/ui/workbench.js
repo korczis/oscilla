@@ -6,7 +6,7 @@
 // svc: { engine, bridge, labs, exportConfigDoc(cmp), applyImport(cmp, parsed),
 //        renderWav(cmp, kind), screenshot(cmp), relayout() }
 
-import { WAVEFORM_LABELS } from '../core/constants.js';
+import { STORAGE_KEYS, WAVEFORM_LABELS } from '../core/constants.js';
 import { clamp, round } from '../core/math.js';
 import {
   formatFrequency, formatMs, frequencyToNormalized, normalizedToFrequency,
@@ -15,13 +15,16 @@ import { midiToFrequency, nearestNote, formatCents } from '../core/music.js';
 import { gainLevelDb } from '../core/config.js';
 import { SWEEP_PARAMS } from '../audio/patterns.js';
 import { LEARN_VIZ_TARGETS } from '../data/learn.js';
-import { harmonicTable } from '../visualization/harmonics.js';
+import { additiveHarmonicTable, harmonicTable } from '../visualization/harmonics.js';
+import { totalDurationMs } from '../sequencer/model.js';
+import { scopeWindow } from './p5-views.js';
 import { OSCILLA_VERSION } from './version.js';
 import { formatHz } from '../charts/axes.js';
 import { rovingKeydown } from './app.js';
 import { parseConfigImport, exportFileName } from './config-file.js';
 import { downloadBlob, readFileText } from './exporters.js';
-import { focusSafely } from './dialogs.js';
+import { focusSafely, isFocusable } from './dialogs.js';
+import { sessionStore } from '../core/storage.js';
 
 const GROUP = new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 });
 const GROUP2 = new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -63,6 +66,8 @@ export function createWorkbench(svc) {
     lastPattern: null,
     fullscreen: '',
     learnOpen: 'frequency',
+    // Bumped by main.js when a lab changes (getters below that read lab state depend on it).
+    labRev: 0,
 
     // ------------------------------------------------------------------ readouts
     get freqMain() { return groupedHz(this.frequency); },
@@ -124,6 +129,16 @@ export function createWorkbench(svc) {
       return p.label;
     },
     get statusDurationText() {
+      if (this.seqPlaying && !this.playing) {
+        // The sequence plays, not the instrument plan: its own length (loops repeat it).
+        void this.labRev;
+        const seq = svc.labs && svc.labs.sequencer;
+        const model = seq && seq.editor && seq.editor.model;
+        if (model) {
+          const ms = totalDurationMs(model);
+          return model.loop ? `${formatMs(ms)} (loop)` : formatMs(ms);
+        }
+      }
       const p = this.planSummary;
       if (p && p.kind === 'continuous') return 'until stopped';
       if (p && p.kind === 'finite' && this.source === 'single' && this.pattern === 'finite'
@@ -138,7 +153,20 @@ export function createWorkbench(svc) {
     get vizSummaryHarm() {
       const wave = this.source === 'dual' ? this.dual.a.wave : this.waveform;
       const f = this.source === 'dual' ? this.dualFa : this.metricFrequencyIdle;
+      void this.labRev;
+      const add = svc.labs && svc.labs.additive;
+      if (this.additiveOn && this.source !== 'dual' && add) {
+        return additiveHarmonicTable(add.coefficients(), f, this.nyquist).summary || 'unavailable';
+      }
       return harmonicTable(wave, f, this.nyquist).summary || 'unavailable';
+    },
+    /** The scope window actually shown while playing (the analyser buffer may not fill it). */
+    get scopeShownMs() {
+      const an = svc.engine && svc.engine.analyser;
+      const f = this.source === 'dual' ? this.dualFa : this.metricFrequency;
+      const w = scopeWindow({ requestedMs: this.timeWindowMs, bufferLength: an ? an.fftSize : 0,
+        sampleRate: this.effectiveSampleRate, freqHz: f });
+      return w.ms;
     },
     /**
      * Accessible description of the primary analysis canvas (there is no visible caption: the
@@ -149,6 +177,10 @@ export function createWorkbench(svc) {
     get analysisCanvasLabel() {
       const tab = this.tabs.analysis;
       if (tab === 'harmonics') {
+        if (this.additiveOn && this.source !== 'dual') {
+          return `Additive synthesis spectrum, the PeriodicWave coefficients that play, not `
+            + `measured: ${this.vizSummaryHarm}. Actual speaker output is unknown.`;
+        }
         return `Theoretical oscillator spectrum, computed from the waveform, not measured: ${
           this.vizSummaryHarm}. Actual speaker output is unknown.`;
       }
@@ -165,7 +197,12 @@ export function createWorkbench(svc) {
           + 'Hold to Play shows the live output analyser trace.';
       }
       const sparse = f > 0 && sr > 0 && sr / f < 4;
-      return `Live output analyser waveform over a ${w}, scaled to the set gain${sparse
+      const shown = this.scopeShownMs;
+      const lw = shown < this.timeWindowMs - 0.05
+        ? `${Math.round(shown)} ms window (the analyser buffer limit; ${this.timeWindowMs} ms `
+          + 'requested)'
+        : w;
+      return `Live output analyser waveform over a ${lw}, scaled to the set gain${sparse
         ? `; drawn as a min/max band because ${formatFrequency(f)} has fewer than 4 samples `
           + `per cycle at ${sr} Hz` : ''}.`;
     },
@@ -256,6 +293,35 @@ export function createWorkbench(svc) {
 
     // ------------------------------------------------------------------ focus-safe removals
     /** Dismiss a notification and move focus to its neighbour (never to <body>). */
+    // ------------------------------------------------------------------ safety notice
+    /**
+     * Dismiss the first-run safety notice (instrument.collapseSafety stores the collapsed state
+     * under STORAGE_KEYS.safetySeen). Focus moves to the reopen control (Device & Limits), or to
+     * the overflow menu button where that panel is not shown; never to <body>.
+     */
+    dismissSafety() {
+      this.collapseSafety();
+      this.$nextTick(() => {
+        const reopen = document.querySelector('[data-osc="safety.reopen"]');
+        focusSafely(isFocusable(reopen) ? reopen : document.getElementById('osc-overflow'));
+      });
+    },
+    /** Show the safety notice again and focus its dismiss button. */
+    reopenSafety() {
+      this.safetyCollapsed = false;
+      this.safetyExpanded = false;
+      sessionStore.set(STORAGE_KEYS.safetySeen, '0');
+      // x-show may reveal the notice a frame later in some browsers: wait until the dismiss
+      // button can take focus (a few frames at most), then fall back safely.
+      const dismiss = document.querySelector('[data-osc="safety.dismiss"]');
+      let tries = 0;
+      const go = () => {
+        if (!isFocusable(dismiss) && tries++ < 6) { requestAnimationFrame(go); return; }
+        focusSafely(dismiss);
+        if (dismiss && dismiss.scrollIntoView) dismiss.scrollIntoView({ block: 'nearest' });
+      };
+      this.$nextTick(go);
+    },
     dismissAlertFocus(id, e) {
       const item = e && e.currentTarget && e.currentTarget.closest('.osc-toast');
       const hadFocus = item && item.contains(document.activeElement);
