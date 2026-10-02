@@ -3,14 +3,22 @@
 // DOM, no Web Audio, no globals, no clock and no randomness — callers pass `now`, `id` (see
 // newExperimentId) and `build` (the build-info record; this module never imports it).
 //
-// RECIPE = what to do: { stimulus: StimulusSpec, repeats, analysis } (§103).
+// RECIPE = what to do: { stimulus: StimulusSpec, repeats, analysis } (§103). The stimulus is
+// stored in the normalized form of measurement/stimulus.js (every field, null where the kind
+// does not use it, including band-noise `color` and chirp `law`), and its limits are
+// stimulus.js's own constants (DURATION_LIMITS per kind, SAMPLE_RATE_LIMITS, fade ≤ duration/4,
+// MIN_FREQUENCY_HZ ≤ f ≤ safeMaxFrequency(sampleRate) = 0.95 × Nyquist), imported rather than
+// copied, so createRecipe({ stimulus: renderStimulus(spec).spec }).stimulus deep-equals the
+// rendered spec. An omitted seed/color/law stays null (stimulus.js then uses its default).
 // EXPERIMENT = what was done plus the result:
 //   { kind: 'oscilla-experiment', schemaVersion, oscillaVersion, oscillaCommit, experimentId,
 //     name, recipe, output: { level }, input: { device: { label, id }, constraints:
 //     { requested, applied } }, calibration: { frequency: { id, name }|null, level|null },
 //     environment: { notes }, measurement: { startedAt, sampleRate, runs: [] }, quality,
 //     algorithms: { role: id }, results: { transfer, ir, rta },
-//     provenance: { configHash, createdAt, repeatOf, build } }
+//     provenance: { configHash, resultHash, createdAt, repeatOf, build } }
+// provenance.resultHash (hash.js resultHash, spec §101) is null until stamped and is cleared by
+// withResults whenever the results change; validate.js verifies it on import.
 // Unknown values are null, never guessed (§52). Result arrays are typed arrays in memory and
 // EncodedArray objects (encode.js) in a file; serializeExperiment converts.
 //
@@ -29,6 +37,12 @@ import { PRESET_SCHEMA_VERSION } from '../core/constants.js';
 import { sig } from '../core/math.js';
 import { encodeArray } from './encode.js';
 import { PROFILE_SCHEMA_VERSION } from '../calibration/profile.js';
+import {
+  DURATION_LIMITS, MIN_FREQUENCY_HZ, SAMPLE_RATE_LIMITS, STIMULUS_KINDS, safeMaxFrequency,
+} from '../measurement/stimulus.js';
+import {
+  RELATIVE_SCALE_LABEL, RELATIVE_UNIT, isValidLevelCalibration,
+} from '../calibration/level.js';
 
 /** Experiment file schema (§131-§132: V3.0 starts at 1, independent of the product version). */
 export const EXPERIMENT_SCHEMA_VERSION = 1;
@@ -47,11 +61,15 @@ export const SCHEMA_VERSIONS = Object.freeze({
   preset: PRESET_SCHEMA_VERSION,
 });
 
-/** Documented limits (§174, architecture "Limits"). */
+const durations = Object.values(DURATION_LIMITS);
+
+/** Documented limits (§174, architecture "Limits"); stimulus limits are stimulus.js's. */
 export const LIMITS = Object.freeze({
-  sampleRate: Object.freeze([8000, 384000]),
-  sweepDurationS: Object.freeze([1, 30]),
-  stimulusDurationS: Object.freeze([0.01, 30]),
+  sampleRate: SAMPLE_RATE_LIMITS,
+  sweepDurationS: DURATION_LIMITS['log-sweep'],
+  /** Envelope of every kind's DURATION_LIMITS; each kind is checked against its own. */
+  stimulusDurationS: Object.freeze([Math.min(...durations.map((d) => d[0])),
+    Math.max(...durations.map((d) => d[1]))]),
   repeats: Object.freeze([1, 10]),
   runs: 64,
   frequencyHz: Object.freeze([0, 192000]),
@@ -69,14 +87,15 @@ export const LIMITS = Object.freeze({
   algorithmRoles: 32,
 });
 
-export const STIMULUS_KINDS = Object.freeze(['sine', 'log-sweep', 'white', 'pink', 'band-noise',
-  'chirp']);
+export { STIMULUS_KINDS };
 const STIMULUS_FIELDS = ['kind', 'sampleRate', 'duration', 'level', 'f', 'f1', 'f2', 'fade',
-  'seed'];
+  'seed', 'color', 'law'];
 const STIMULUS_USES = {
-  sine: ['f'], 'log-sweep': ['f1', 'f2'], chirp: ['f1', 'f2'], 'band-noise': ['f1', 'f2', 'seed'],
-  white: ['seed'], pink: ['seed'],
+  sine: ['f'], 'log-sweep': ['f1', 'f2'], chirp: ['f1', 'f2', 'law'],
+  'band-noise': ['f1', 'f2', 'seed', 'color'], white: ['seed'], pink: ['seed'],
 };
+/** Allowed values of the option fields (stimulus.js normalizeStimulus). */
+const STIMULUS_OPTIONS = { color: ['white', 'pink'], law: ['log', 'linear'] };
 
 export const ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/;
 export const HEX64_PATTERN = /^[0-9a-f]{64}$/;
@@ -97,13 +116,14 @@ const CTRL_SINGLE = /[\u0000-\u001f\u007f]/;
 const CTRL_MULTI = /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/;
 
 /**
- * Collects { path, text } errors. Each check returns true when the value is acceptable.
- * Used by createRecipe and by validate.js, so a builder and an import agree on the rules.
+ * Collects { path, text } errors (plus `code` when add() is given one, e.g. 'corrupt'). Each
+ * check returns true when the value is acceptable. Used by createRecipe and by validate.js, so
+ * a builder and an import agree on the rules.
  */
 export function createChecker(maxErrors = 100) {
   const errors = [];
-  const add = (path, text) => {
-    if (errors.length < maxErrors) errors.push({ path, text });
+  const add = (path, text, code) => {
+    if (errors.length < maxErrors) errors.push(code ? { path, text, code } : { path, text });
     return false;
   };
   const c = {
@@ -250,20 +270,24 @@ function checkStimulus(c, s, path) {
     STIMULUS_FIELDS.filter((k) => !['kind', 'duration', 'level', 'fade'].includes(k)))) return null;
   if (!c.oneOf(s.kind, join(path, 'kind'), STIMULUS_KINDS)) return null;
   const uses = STIMULUS_USES[s.kind];
-  const dur = s.kind === 'log-sweep' ? LIMITS.sweepDurationS : LIMITS.stimulusDurationS;
-  let ok = c.num(s.sampleRate ?? null, join(path, 'sampleRate'), ...LIMITS.sampleRate,
+  let ok = c.num(s.sampleRate ?? null, join(path, 'sampleRate'), ...SAMPLE_RATE_LIMITS,
     { nullable: true });
-  ok = c.num(s.duration, join(path, 'duration'), ...dur) && ok;
-  ok = c.num(s.level, join(path, 'level'), ...LIMITS.levelDigital) && ok;
-  ok = ok && c.num(s.fade, join(path, 'fade'), 0, s.duration / 2);
-  const nyquist = typeof s.sampleRate === 'number' ? s.sampleRate / 2 : LIMITS.frequencyHz[1];
+  ok = c.num(s.duration, join(path, 'duration'), ...DURATION_LIMITS[s.kind]) && ok;
+  let levelOk = c.num(s.level, join(path, 'level'), ...LIMITS.levelDigital);
+  if (levelOk && !(s.level > 0)) {
+    levelOk = c.add(join(path, 'level'), 'must be above 0 (a digital peak in (0, 1])');
+  }
+  ok = levelOk && ok;
+  ok = ok && c.num(s.fade, join(path, 'fade'), 0, s.duration / 4);
+  // Unknown sample rate: the bound at the highest supported rate (stimulus.js needs a rate).
+  const fMax = safeMaxFrequency(typeof s.sampleRate === 'number' ? s.sampleRate
+    : SAMPLE_RATE_LIMITS[1]);
   const out = { kind: s.kind, sampleRate: s.sampleRate ?? null, duration: s.duration,
-    level: s.level, f: null, f1: null, f2: null, fade: s.fade, seed: null };
+    level: s.level, f: null, f1: null, f2: null, fade: s.fade, seed: null, color: null,
+    law: null };
   for (const k of ['f', 'f1', 'f2']) {
     if (uses.includes(k)) {
-      let fOk = c.num(s[k], join(path, k), LIMITS.frequencyHz[0], nyquist);
-      if (fOk && s[k] <= 0) fOk = c.add(join(path, k), 'must be above 0 Hz');
-      ok = fOk && ok;
+      ok = c.num(s[k], join(path, k), MIN_FREQUENCY_HZ, fMax) && ok;
       out[k] = s[k];
     } else {
       ok = c.num(s[k] ?? null, join(path, k), -Infinity, Infinity, { nullable: true }) && ok;
@@ -276,6 +300,15 @@ function checkStimulus(c, s, path) {
     out.seed = s.seed ?? null;
   } else {
     ok = c.num(s.seed ?? null, join(path, 'seed'), -Infinity, Infinity, { nullable: true }) && ok;
+  }
+  for (const k of ['color', 'law']) {
+    const v = s[k] ?? null;
+    if (uses.includes(k)) {
+      ok = c.oneOf(v, join(path, k), STIMULUS_OPTIONS[k], { nullable: true }) && ok;
+      out[k] = v;
+    } else if (v !== null) {
+      ok = c.add(join(path, k), `is not used by a ${s.kind} stimulus (must be null)`) && ok;
+    }
   }
   return ok ? out : null;
 }
@@ -411,19 +444,22 @@ export function createExperiment({
     quality: null,
     algorithms: { ...algorithms },
     results: { transfer: null, ir: null, rta: null },
-    provenance: { configHash: null, createdAt, repeatOf: null, build: b },
+    provenance: { configHash: null, resultHash: null, createdAt, repeatOf: null, build: b },
   };
 }
 
 /**
  * A copy of `experiment` with what was measured. Result typed arrays are referenced, not
  * copied (§172); the input experiment is not modified. A changed configuration (algorithms,
- * sampleRate) clears provenance.configHash, which hash.js recomputes.
+ * sampleRate) clears provenance.configHash, and new results clear provenance.resultHash; hash.js
+ * recomputes both.
  */
 export function withResults(experiment, patch = {}) {
   const e = experiment;
   const m = e.measurement;
   const changesConfig = patch.algorithms !== undefined || patch.sampleRate !== undefined;
+  let provenance = changesConfig ? { ...e.provenance, configHash: null } : e.provenance;
+  if (patch.results !== undefined) provenance = { ...provenance, resultHash: null };
   return {
     ...e,
     measurement: {
@@ -434,7 +470,7 @@ export function withResults(experiment, patch = {}) {
     quality: patch.quality !== undefined ? patch.quality : e.quality,
     algorithms: patch.algorithms !== undefined ? { ...patch.algorithms } : e.algorithms,
     results: patch.results !== undefined ? { ...e.results, ...patch.results } : e.results,
-    provenance: changesConfig ? { ...e.provenance, configHash: null } : e.provenance,
+    provenance,
   };
 }
 
@@ -508,14 +544,18 @@ export function describeStimulus(s) {
   }
 }
 
-/** The calibration state in words: frequency profile name or none; SPL CALIBRATED/UNCALIBRATED. */
+/**
+ * The calibration state in words: frequency profile name or none; "SPL CALIBRATED (…)" only for
+ * a valid LevelCalibration (calibration/level.js), otherwise "level UNCALIBRATED (<spec §24
+ * scale label>)" — never the string "SPL" without a valid level calibration.
+ */
 export function describeCalibration(cal) {
   const f = cal && cal.frequency;
   const l = cal && cal.level;
   const freq = f ? `frequency profile "${f.name || UNKNOWN}"` : 'frequency profile none';
-  const spl = l && typeof l.offsetDb === 'number' && typeof l.referenceDbSpl === 'number'
+  const spl = isValidLevelCalibration(l)
     ? `SPL CALIBRATED (${sig(l.referenceDbSpl, 4)} dB SPL at ${formatHz(l.referenceHz)})`
-    : 'SPL UNCALIBRATED';
+    : `level UNCALIBRATED (${RELATIVE_SCALE_LABEL})`;
   return `${freq}, ${spl}`;
 }
 
@@ -528,7 +568,7 @@ export function summarizeExperiment(e) {
   const level = e.output && typeof e.output.level === 'number' ? e.output.level : null;
   const sr = e.measurement && e.measurement.sampleRate;
   const levelText = level === null ? UNKNOWN : level === 0 ? 'digital peak 0 (silent)'
-    : `digital peak ${sig(level, 3)} (${(20 * Math.log10(level)).toFixed(1)} dB relative)`;
+    : `digital peak ${sig(level, 3)}, ${(20 * Math.log10(level)).toFixed(1)} ${RELATIVE_UNIT}`;
   return [
     `Name: ${e.name ? e.name : '(unnamed)'}`,
     `Stimulus: ${describeStimulus(s)}`,

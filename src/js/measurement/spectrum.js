@@ -10,18 +10,30 @@
 // enbwBins = noisePowerGain / coherentGain² (equivalent noise bandwidth: 1.5 bins for Hann,
 // ≈ 2.0044 for Blackman-Harris).
 //
-// Scaling ("tone" or AES17-style dBFS): P[k] = |2·X[k] / (N·coherentGain)|² for 0 < k < N/2
-// and |X[k] / (N·coherentGain)|² at DC and Nyquist, so a full-scale sine (amplitude 1) centred
-// on a bin reads P = 1, i.e. 0 dB after toDb(). An off-centre tone reads lower by the window's
-// scalloping loss (up to 1.42 dB for Hann, 0.83 dB for Blackman-Harris).
-// Broadband signals: Σ P[k] over a band overstates the band's power by enbwBins; divide by it
-// (or by 2·enbwBins·binHz for a density per Hz, on the same full-scale-sine = 1 scale).
+// Power scales (POWER_SCALES; the ONE definition for OSCILLA, docs/v3/algorithms.md
+// "Conventions"):
+//   'tone' (default; AES17-style dBFS): P[k] = |2·X[k] / (N·coherentGain)|² for 0 < k < N/2 and
+//     |X[k] / (N·coherentGain)|² at DC and Nyquist, so a full-scale sine (amplitude 1) centred
+//     on a bin reads P = 1, i.e. 0 dB after toDb(). An off-centre tone reads lower by the
+//     window's scalloping loss (up to 1.42 dB for Hann, 0.83 dB for Blackman-Harris). Use it to
+//     read the amplitude of a tone; Σ P[k] over a band overstates broadband power by enbwBins.
+//   'mean-square' (PSD × bin width): P[k] = c·|X[k]|² / (N·Σw²), c = 2 for 0 < k < N/2 and 1 at
+//     DC and Nyquist, so Σ P[k] is the signal's mean square (Parseval) and a full-scale sine
+//     summed over the bins around it reads 0.5 = −3.01 dB whatever the window or bin offset.
+//     This is the scale of every band level (rta.js).
+//   The conversion is explicit and named: toneToMeanSquare(P, window) multiplies by
+//   1/(2·enbwBins) for 0 < k < N/2 and by 1/enbwBins at DC and Nyquist (the two definitions
+//   above divided). welch() and powerSpectrum() take { scale } and welch() reports the scale it
+//   used, so rta.js converts a welch() result itself instead of trusting the caller.
+// Every window result names its algorithm ID (WINDOW_ALGORITHMS): oscilla.window.hann.v1,
+// oscilla.window.blackman-harris.v1; welch() reports it as windowAlgorithm.
 //
 // welch() averages linear power over overlapping windowed segments (Welch 1967). Averaging dB
 // values instead would bias noise low by 2.5 dB (the mean of the log of an exponential
 // variable) and is never done here.
 
 import { createFft, isPowerOfTwo } from '../analysis/fft.js';
+import { ALGORITHMS } from './algorithms.js';
 
 const BH = Object.freeze([0.35875, 0.48829, 0.14128, 0.01168]);
 
@@ -35,6 +47,47 @@ export const WINDOW_GAINS = Object.freeze({
 });
 
 export const WINDOW_NAMES = Object.freeze(Object.keys(WINDOW_GAINS));
+
+/** Algorithm ID of each window (spec §86: the window is recorded as an algorithm choice). */
+export const WINDOW_ALGORITHMS = Object.freeze({
+  hann: ALGORITHMS.window,
+  'blackman-harris': ALGORITHMS.windowBlackmanHarris,
+});
+
+/** The power scales of this module (see the header); 'tone' is the default. */
+export const POWER_SCALES = Object.freeze(['tone', 'mean-square']);
+
+/** Algorithm ID of a window name ('hann' | 'blackman-harris'); throws for any other. */
+export function windowAlgorithm(name) {
+  if (!Object.hasOwn(WINDOW_ALGORITHMS, name))
+    throw new RangeError(`Unknown window "${name}" (use ${WINDOW_NAMES.join(', ')})`);
+  return WINDOW_ALGORITHMS[name];
+}
+
+function checkScale(scale) {
+  if (!POWER_SCALES.includes(scale))
+    throw new RangeError(`power scale must be ${POWER_SCALES.join(' or ')}, got ${scale}`);
+  return scale;
+}
+
+/**
+ * toneToMeanSquare(power, window, out?) → Float64Array
+ * Converts a one-sided 'tone'-scaled spectrum (bins 0 … N/2, the last bin is Nyquist) of the
+ * given window (a name or a windowFn() result) to the 'mean-square' scale: × 1/(2·enbwBins)
+ * for 0 < k < N/2, × 1/enbwBins at DC and Nyquist. `power` is not modified unless passed as
+ * `out`.
+ */
+export function toneToMeanSquare(power, window, out = new Float64Array(power.length)) {
+  const name = typeof window === 'string' ? window : window && window.name;
+  const gains = WINDOW_GAINS[name];
+  if (!gains) throw new RangeError(`Unknown window "${name}" (use ${WINDOW_NAMES.join(', ')})`);
+  const enbw = gains.noisePowerGain / gains.coherentGain ** 2;
+  const last = power.length - 1;
+  for (let k = 0; k <= last; k++) {
+    out[k] = power[k] / (k === 0 || k === last ? enbw : 2 * enbw);
+  }
+  return out;
+}
 
 /** Smallest power of two ≥ n (n ≥ 1). */
 export function nextPow2(n) {
@@ -55,8 +108,9 @@ export function toDb(power) {
 }
 
 /**
- * windowFn(name, n) → { name, samples: Float64Array, coherentGain, noisePowerGain, enbwBins }
- * name: 'hann' | 'blackman-harris'.
+ * windowFn(name, n) → { name, algorithm, samples: Float64Array, coherentGain, noisePowerGain,
+ *   enbwBins }
+ * name: 'hann' | 'blackman-harris'; algorithm: its WINDOW_ALGORITHMS ID.
  */
 export function windowFn(name, n) {
   const gains = WINDOW_GAINS[name];
@@ -72,6 +126,7 @@ export function windowFn(name, n) {
   }
   return Object.freeze({
     name,
+    algorithm: WINDOW_ALGORITHMS[name],
     samples: w,
     coherentGain: gains.coherentGain,
     noisePowerGain: gains.noisePowerGain,
@@ -80,21 +135,29 @@ export function windowFn(name, n) {
 }
 
 /**
- * createPowerSpectrumAnalyzer(fftSize, window = 'hann') → { fftSize, window, compute }
- * compute(samples, offset = 0, out?) writes fftSize/2 + 1 linear powers (bins 0 … N/2) into
- * out (a new Float64Array by default). Samples outside the input count as zeros. Reuse one
- * analyzer for many frames: the FFT tables and window are built once.
+ * createPowerSpectrumAnalyzer(fftSize, window = 'hann', { scale = 'tone' })
+ *   → { fftSize, window, scale, compute }
+ * compute(samples, offset = 0, out?) writes fftSize/2 + 1 linear powers (bins 0 … N/2) on the
+ * requested power scale into out (a new Float64Array by default). Samples outside the input
+ * count as zeros. Reuse one analyzer for many frames: the FFT tables and window are built once.
  */
-export function createPowerSpectrumAnalyzer(fftSize, window = 'hann') {
+export function createPowerSpectrumAnalyzer(fftSize, window = 'hann', { scale = 'tone' } = {}) {
   if (!isPowerOfTwo(fftSize) || fftSize < 2)
     throw new RangeError(`fftSize must be a power of two ≥ 2, got ${fftSize}`);
+  checkScale(scale);
   const fft = createFft(fftSize);
   const win = windowFn(window, fftSize);
   const w = win.samples;
   const re = new Float64Array(fftSize);
   const im = new Float64Array(fftSize);
   const half = fftSize / 2;
-  const norm = 1 / (fftSize * win.coherentGain) ** 2;
+  // tone: 4|X|²/(N·cg)² inside, |X|²/(N·cg)² at the ends; mean-square: 2|X|²/(N²·npg) inside,
+  // |X|²/(N²·npg) at the ends (N·Σw² = N²·npg).
+  const meanSquare = scale === 'mean-square';
+  const norm = meanSquare
+    ? 1 / (fftSize * fftSize * win.noisePowerGain)
+    : 1 / (fftSize * win.coherentGain) ** 2;
+  const inner = meanSquare ? 2 : 4;
 
   function compute(samples, offset = 0, out = new Float64Array(half + 1)) {
     for (let i = 0; i < fftSize; i++) {
@@ -105,41 +168,47 @@ export function createPowerSpectrumAnalyzer(fftSize, window = 'hann') {
     fft.forward(re, im);
     for (let k = 0; k <= half; k++) {
       const p = (re[k] * re[k] + im[k] * im[k]) * norm;
-      out[k] = k === 0 || k === half ? p : 4 * p;
+      out[k] = k === 0 || k === half ? p : inner * p;
     }
     return out;
   }
 
-  return { fftSize, window: win, compute };
+  return { fftSize, window: win, scale, compute };
 }
 
 /**
- * powerSpectrum(samples, { fftSize, window = 'hann', offset = 0 }) → Float64Array
- * One frame, fftSize/2 + 1 bins, tone scaling (full-scale bin-centred sine = 1 = 0 dB).
- * fftSize defaults to the largest power of two that fits the samples from offset.
+ * powerSpectrum(samples, { fftSize, window = 'hann', offset = 0, scale = 'tone' })
+ *   → Float64Array
+ * One frame, fftSize/2 + 1 bins; default tone scaling (full-scale bin-centred sine = 1 = 0 dB),
+ * scale 'mean-square' for Σ P = mean square. fftSize defaults to the largest power of two that
+ * fits the samples from offset.
  */
 export function powerSpectrum(samples, options = {}) {
   const offset = options.offset || 0;
   const fftSize = options.fftSize || 2 ** Math.floor(Math.log2(Math.max(2, samples.length)));
-  return createPowerSpectrumAnalyzer(fftSize, options.window || 'hann').compute(samples, offset);
+  return createPowerSpectrumAnalyzer(fftSize, options.window || 'hann',
+    { scale: options.scale || 'tone' }).compute(samples, offset);
 }
 
 /**
- * welch(samples, { fftSize, overlap = 0.5, window = 'hann' })
- *   → { power: Float64Array, segments, fftSize, hop, window }
+ * welch(samples, { fftSize, overlap = 0.5, window = 'hann', scale = 'tone' })
+ *   → { power: Float64Array, segments, fftSize, hop, window, scale, windowAlgorithm }
  * Mean of the linear power spectra of every full segment (start = 0, hop, 2·hop, … while the
  * segment fits). overlap in [0, 0.95]; 50 % with Hann keeps the segment weights nearly flat.
+ * `window` is the window name, `windowAlgorithm` its ID, `scale` the power scale of `power`
+ * (pass the whole result to rta.js bandPowers/bandAnalysis, which converts by that scale).
  * Throws when the input is shorter than one segment instead of zero-padding silently.
  */
 export function welch(samples, options = {}) {
   const fftSize = options.fftSize;
   const overlap = options.overlap != null ? options.overlap : 0.5;
   const window = options.window || 'hann';
+  const scale = checkScale(options.scale || 'tone');
   if (!(overlap >= 0 && overlap <= 0.95))
     throw new RangeError(`overlap must be in [0, 0.95], got ${overlap}`);
   if (!samples || samples.length < fftSize)
     throw new RangeError(`welch needs at least fftSize (${fftSize}) samples`);
-  const analyzer = createPowerSpectrumAnalyzer(fftSize, window);
+  const analyzer = createPowerSpectrumAnalyzer(fftSize, window, { scale });
   const hop = Math.max(1, Math.round(fftSize * (1 - overlap)));
   const bins = fftSize / 2 + 1;
   const acc = new Float64Array(bins);
@@ -151,5 +220,13 @@ export function welch(samples, options = {}) {
     segments++;
   }
   for (let k = 0; k < bins; k++) acc[k] /= segments;
-  return { power: acc, segments, fftSize, hop, window: analyzer.window.name };
+  return {
+    power: acc,
+    segments,
+    fftSize,
+    hop,
+    window: analyzer.window.name,
+    scale,
+    windowAlgorithm: analyzer.window.algorithm,
+  };
 }

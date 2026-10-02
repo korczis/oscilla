@@ -23,9 +23,19 @@
 // capture equals the stimulus), raw — no smoothing, no calibration (§159). A band holding no bin
 // uses the nearest bin. A pure delay does not change the magnitude.
 //
-// Phase (§27: never faked): only when options.phase is true AND an alignment lag was supplied.
-// The bins are rotated by e^(+j2πk·lag/N) to remove the aligned delay, complex-averaged over
-// the band, and reported as the wrapped angle in (−180°, 180°]; otherwise phaseDeg is null.
+// Phase (§27: never faked, only if robust): only when options.phase is true AND an align()
+// result is supplied as `alignment` AND its peakCorrelation ≥ PHASE_MIN_CORRELATION (0.5).
+// The bins are rotated by e^(+j2πk·lag/N) to remove the aligned delay (lag = lagSamples when
+// given, else alignment.lagSamples), complex-averaged over the band, and reported as the
+// wrapped angle in (−180°, 180°]. Otherwise phaseDeg is null and phaseReason says why
+// (PHASE_REASONS: NOT_REQUESTED, NO_ALIGNMENT, ALIGNMENT_NOT_ROBUST); a bare lagSamples is not
+// evidence of a robust alignment and no longer yields a phase by itself. Why 0.5: ρ² is the
+// fraction of the capture's energy in the stimulus window that one scaled, delayed copy of the
+// stimulus explains (ρ = 1/√2 at 0 dB broadband SNR for a flat system). Below ρ = 0.5 most of
+// that energy is noise, reverberation or filtering the delay model does not describe, so "the"
+// delay removed from the phase is not well defined; the lag itself stays sub-sample accurate
+// down to ρ ≈ 0.7 (v3-measurement-core align tests), far above the cut. The result records the
+// alignment it used as `alignment` ({ algorithm, lagSamples, peakCorrelation, polarity }).
 //
 // SNR (§31-§32), when a separate noise capture n (stimulus silent) is given: for stationary
 // noise of power spectral density S, the zero-padded DFT of M samples has E|N[k]|² = M·S(f_k)
@@ -71,8 +81,17 @@ export const VALID_MIN_SNR_DB = 10;
 export const VALIDITY_SMOOTHING_FRACTION = 6;
 export const SNR_FLOOR_DB = -60;
 export const SNR_CEIL_DB = 200;
-/** dB value standing for zero power, so results stay finite (JSON-safe). */
+/** dB value standing for zero power, so results stay finite (JSON-safe). The one zero-power
+ *  encoding of every stored OSCILLA result (rta.js rtaResult uses it too). */
 export const ZERO_POWER_DB = -300;
+/** Minimum alignment peakCorrelation for a phase response (see the header). */
+export const PHASE_MIN_CORRELATION = 0.5;
+/** Why phaseDeg is null (TransferResult.phaseReason; null when a phase is reported). */
+export const PHASE_REASONS = Object.freeze({
+  NOT_REQUESTED: 'NOT_REQUESTED',
+  NO_ALIGNMENT: 'NO_ALIGNMENT',
+  ALIGNMENT_NOT_ROBUST: 'ALIGNMENT_NOT_ROBUST',
+});
 
 export function nextPowerOfTwo(n) {
   let p = 1;
@@ -250,15 +269,32 @@ function longestRun(mask) {
   return best;
 }
 
+/** The alignment summary a TransferResult records, from an align() result. */
+function alignmentSummary(alignment) {
+  if (alignment === null || alignment === undefined) return null;
+  if (typeof alignment !== 'object' || typeof alignment.peakCorrelation !== 'number'
+    || !(alignment.lagSamples === null || Number.isFinite(alignment.lagSamples)))
+    throw new TypeError('alignment must be an align() result');
+  return {
+    algorithm: typeof alignment.algorithm === 'string' ? alignment.algorithm : null,
+    lagSamples: alignment.lagSamples,
+    peakCorrelation: alignment.peakCorrelation,
+    polarity: alignment.polarity ?? null,
+  };
+}
+
 /**
- * computeTransfer({ stimulus, captured, sampleRate, f1, f2, lagSamples, noise, options })
+ * computeTransfer({ stimulus, captured, sampleRate, f1, f2, lagSamples, alignment, noise,
+ *   options })
  *   stimulus    Float32Array, the emitted digital stimulus (e.g. renderStimulus().samples)
  *   captured    Float32Array, mono capture containing the response (pre/post-roll allowed)
- *   lagSamples  alignment of the stimulus start inside the capture (align().lagSamples);
- *               default 0; needed only for phase
+ *   alignment   align() result for this capture; required for a phase response, which is
+ *               reported only when its peakCorrelation ≥ PHASE_MIN_CORRELATION
+ *   lagSamples  lag to remove from the phase; defaults to alignment.lagSamples
  *   noise       Float32Array|null, a stimulus-free capture for the SNR estimate
  *   options     { phase = false, pointsPerOctave = 48 }
- * Returns TransferResult (docs/v3/architecture.md).
+ * Returns TransferResult (docs/v3/architecture.md) with phaseReason (null when phaseDeg is
+ * reported, else a PHASE_REASONS code) and alignment (the summary used, or null).
  */
 export function computeTransfer({
   stimulus,
@@ -267,6 +303,7 @@ export function computeTransfer({
   f1,
   f2,
   lagSamples,
+  alignment = null,
   noise = null,
   options = {},
 }) {
@@ -274,6 +311,7 @@ export function computeTransfer({
   if (!(pointsPerOctave > 0)) throw new RangeError('pointsPerOctave must be positive');
   if (lagSamples !== undefined && !Number.isFinite(lagSamples))
     throw new RangeError(`lagSamples must be finite, got ${lagSamples}`);
+  const aligned = alignmentSummary(alignment);
   if (noise !== null) assertSignal('noise', noise);
   const dec = spectralDeconvolution({ stimulus, captured, sampleRate, f1, f2 });
   const { fft, fftSize, binHz, half, xPow, yRe, yIm, hRe, hIm } = dec;
@@ -291,10 +329,16 @@ export function computeTransfer({
     coverage[i] = frequencies[i] * bandMean(xPow, k0[i], k1[i]);
   }
 
+  const lag = lagSamples !== undefined ? lagSamples : aligned && aligned.lagSamples;
+  let phaseReason = null;
+  if (phase !== true) phaseReason = PHASE_REASONS.NOT_REQUESTED;
+  else if (!aligned) phaseReason = PHASE_REASONS.NO_ALIGNMENT;
+  else if (!(aligned.peakCorrelation >= PHASE_MIN_CORRELATION) || !Number.isFinite(lag))
+    phaseReason = PHASE_REASONS.ALIGNMENT_NOT_ROBUST;
   let phaseDeg = null;
-  if (phase === true && lagSamples !== undefined) {
+  if (phaseReason === null) {
     phaseDeg = new Float64Array(n);
-    const w = (2 * Math.PI * lagSamples) / fftSize;
+    const w = (2 * Math.PI * lag) / fftSize;
     for (let i = 0; i < n; i++) {
       let sr = 0;
       let si = 0;
@@ -358,5 +402,7 @@ export function computeTransfer({
     requestedRange: [f1, f2],
     fftSize,
     binHz,
+    phaseReason,
+    alignment: aligned,
   };
 }

@@ -535,12 +535,14 @@ test('format: bin resolution and resolution-limited frequency digits', () => {
 });
 
 test('format: dB labels — relative never becomes SPL', () => {
-  assert.equal(formatDb(-12.34), '−12.3 dB relative');
-  assert.equal(formatDb(-12.34, { decimals: 2, kind: 'relative' }), '−12.34 dB relative');
+  // One uncalibrated unit label everywhere (calibration/level.js RELATIVE_UNIT, spec §24).
+  assert.equal(formatDb(-12.34), '−12.3 dB relative (dBFS-like)');
+  assert.equal(formatDb(-12.34, { decimals: 2, kind: 'relative' }),
+    '−12.34 dB relative (dBFS-like)');
   assert.equal(formatDb(94, { kind: 'spl' }), '94.0 dB SPL');
-  assert.equal(formatDb(-0.01), '0.0 dB relative');
-  assert.equal(formatDb(-Infinity), '−∞ dB relative');
-  assert.equal(formatDb(NaN), '— dB relative');
+  assert.equal(formatDb(-0.01), '0.0 dB relative (dBFS-like)');
+  assert.equal(formatDb(-Infinity), '−∞ dB relative (dBFS-like)');
+  assert.equal(formatDb(NaN), '— dB relative (dBFS-like)');
   for (const v of [-200, -60, 0, 94, 120, -Infinity, NaN]) {
     assert.ok(!formatDb(v, { kind: 'relative' }).includes('SPL'));
     assert.ok(!formatDb(v).includes('SPL'));

@@ -8,28 +8,33 @@ method was chosen; the ADRs do.
 
 Every statement below is traceable to a file and function. Measured margins were taken from
 the test diagnostics (`node --test tests/unit/v3-*.test.mjs`) or by re-running the test
-computation with the same seeds; they describe the current code at `origin/feature/v3`
-(b650281) and will drift if the code changes. Where the code and the specification disagree,
-the disagreement is listed under [Gaps](#gaps), not resolved here.
+computation with the same seeds; they describe the code at `origin/feature/v3` (b650281) and
+will drift if the code changes. The integration fixes on top of 88c0daf closed gaps G1-G11 and
+G13 and documented G14; sections they changed are marked **Changed (integration)** and give
+their own margins. `tests/unit/v3-integration.test.mjs` has one test group per closed gap and
+`tests/unit/v3-pipeline.test.mjs` runs the whole chain (stimulus → capture checks → alignment
+→ transfer and IR → aggregation → quality → experiment → hashes → JSON → validation) on the
+real result objects. Where the code and the specification still disagree, the disagreement is
+listed under [Gaps](#gaps), not resolved here.
 
 ## Contents
 
 | ID | Module (function) | Section |
 | --- | --- | --- |
 | (none; recorded through the recipe) | `measurement/stimulus.js` | [Stimuli](#stimuli) |
-| `oscilla.window.hann.v1` | `measurement/spectrum.js` | [Windows, spectra, Welch](#windows) |
-| `oscilla.clip.v1` | `measurement/capture-checks.js` | [Capture checks](#capture-checks) |
+| `oscilla.window.hann.v1`, `oscilla.window.blackman-harris.v1` | `measurement/spectrum.js` | [Windows, spectra, Welch](#windows) |
+| `oscilla.clip.v1`, `oscilla.discontinuity.v1` | `measurement/capture-checks.js` | [Capture checks](#capture-checks) |
 | `oscilla.align.xcorr.v1` | `measurement/align.js` | [Alignment](#alignment) |
 | `oscilla.transfer.v1` | `measurement/transfer.js` | [Transfer function](#transfer) |
-| `oscilla.ir.log-sweep.v1` | `measurement/impulse-response.js` | [Impulse response](#ir) |
-| `oscilla.smoothing.fractional-octave.v1` | `measurement/smoothing.js` | [Smoothing](#smoothing) |
+| `oscilla.ir.log-sweep.v1` (spectral), `oscilla.ir.farina-inverse.v1` | `measurement/impulse-response.js` | [Impulse response](#ir) |
+| `oscilla.smoothing.fractional-octave.v1`, `oscilla.normalization.v1` | `measurement/smoothing.js` | [Smoothing](#smoothing) |
 | `oscilla.rta.v1` | `measurement/rta.js` | [RTA bands](#rta) |
 | (none) | `measurement/aggregate.js` | [Aggregation of repeats](#aggregate) |
 | `oscilla.calibration.log-interp.v1` | `calibration/*.js` | [Frequency calibration](#calibration) |
 | (none) | `calibration/level.js` | [Level calibration, SPL](#level) |
 | (none) | `measurement/format.js` | [Resolution-aware formatting](#format) |
 | (none) | `experiments/*.js` | [Experiment hashing, encoding](#experiments) |
-| `oscilla.confidence.v1` | `measurement/quality.js` (not yet landed) | [Quality](#quality) |
+| `oscilla.confidence.v1` | `measurement/quality.js` | [Quality](#quality) |
 
 ## Conventions
 
@@ -37,14 +42,25 @@ the disagreement is listed under [Gaps](#gaps), not resolved here.
   `Float64Array`. No module mutates its inputs; every test file checks this for its module.
 - "dB" always means `10·log10(power)` or `20·log10(amplitude)` of a **digital** quantity.
   Nothing in the analysis layer knows sound pressure; see [Level calibration](#level).
-- Two power scales exist in the code and must not be confused (see [Gaps](#gaps), G1):
-  - **Tone scale** (`spectrum.js`): a full-scale sine centred on a bin reads power 1, 0 dB
-    (AES17-style dBFS).
-  - **Mean-square scale** (`rta.js` input contract): Σ power over all bins equals the signal's
-    mean square, so a full-scale sine reads 0.5, −3.01 dB.
-- Zero power: `transfer.js` and `impulse-response.js` floor dB at `ZERO_POWER_DB = −300` so
-  results stay finite and JSON-safe; `spectrum.js` `toDb` and `rta.js` `powerToDb` return
-  `−Infinity`.
+- **Power scales — one definition** (`spectrum.js` header, `POWER_SCALES`; Changed
+  (integration), was G1). Two scales exist for two purposes and the conversion between them is
+  explicit and named:
+  - **Tone scale** (`'tone'`, the default of `powerSpectrum`/`welch`): a full-scale sine centred
+    on a bin reads power 1, 0 dB (AES17-style dBFS). For reading the amplitude of a tone.
+  - **Mean-square scale** (`'mean-square'`): Σ power over all bins equals the signal's mean
+    square, so a full-scale sine reads 0.5, −3.01 dB, whatever the window. **Every band level
+    is on this scale** (`rta.js`), so a full-scale sine reads −3.01 dB in its band.
+  - `toneToMeanSquare(P, window)` converts: × 1/(2·ENBW) for 0 < k < N/2, × 1/ENBW at DC and
+    Nyquist. `welch()` and `powerSpectrum()` take `{ scale }`, `welch()` reports the scale it
+    used, and `rta.js` accepts a `welch()` result object and converts it by its stated scale,
+    so the old error (a bare tone-scale array read as mean-square, +4.77 dB Hann, +6.03 dB
+    Blackman-Harris) cannot happen when the result object is passed.
+- **Zero power** (Changed (integration), was part of G4): every *stored* result uses
+  `ZERO_POWER_DB = −300` dB (`transfer.js`) as the one JSON-safe encoding of zero power —
+  `transfer.js` and `impulse-response.js` floor at it, `rta.js` `rtaResult()` maps
+  `−Infinity` and anything below −300 dB to it. Intermediate arrays (`spectrum.js` `toDb`,
+  `rta.js` `powerToDb`/`bandPowers`/the averager, `aggregate.js`) keep exact `−Infinity`;
+  `validate.js` rejects non-finite stored values.
 - Uncertainty wording follows the GUM (JCGM 100:2008): values are estimates, tolerances below
   are test acceptance bounds derived from stated error sources, not claimed measurement
   uncertainties of a physical setup.
@@ -58,19 +74,41 @@ well-formed ID (so `oscilla.transfer.v2` from a newer build is described, not re
 `family` is the `ALGORITHMS` key whose ID has the same stem (`oscilla.confidence.v1` belongs to
 family `quality`), else the first name segment.
 
-Which modules stamp their ID into their result: `transfer.js` (`TRANSFER_ALGORITHM`),
-`impulse-response.js` (`IR_ALGORITHM`), `interpolate.js` (`CALIBRATION_ALGORITHM` in the
-`applyFrequencyCorrection` result). `smoothing.js` exports `SMOOTHING_ALGORITHM` but its
-functions return plain arrays. `align.js`, `capture-checks.js`, `spectrum.js` and `rta.js` do
-not reference their IDs; the caller must record them (G7).
+**Changed (integration)** (was G6, G7). Variant keys name an alternative method of a role
+(`VARIANT_OF`): `irFarina` (`oscilla.ir.farina-inverse.v1`, family `ir`) and
+`windowBlackmanHarris` (`oscilla.window.blackman-harris.v1`, family `window`). New roles:
+`normalization` (`oscilla.normalization.v1`) and `discontinuity` (`oscilla.discontinuity.v1`).
+Every result object now carries the IDs it used:
 
-Test: `v3-measurement-core.test.mjs` "algorithms: frozen contract IDs ..." (exact equality).
+| Result | Field | ID(s) |
+| --- | --- | --- |
+| `computeTransfer` | `algorithm`; `alignment.algorithm` | transfer; align (when phase used one) |
+| `computeImpulseResponse` | `algorithm` (by `method`, `IR_ALGORITHMS`) | ir or irFarina |
+| `align` | `algorithm` | align |
+| `checkCapture` | `algorithms: { clip, discontinuity }` | clip, discontinuity |
+| `windowFn`, `welch` | `algorithm`; `windowAlgorithm` | window or windowBlackmanHarris |
+| `bandAnalysis`, `rtaResult` | `algorithm`; `windowAlgorithm` (RtaResult) | rta; window |
+| `smoothResponse` | `algorithm` | smoothing |
+| `normalizeResponse`, `normalizeIr` | `algorithm` (+ `mode`) | normalization |
+| `assessQuality` | `algorithm` | quality |
+| `applyFrequencyCorrection`, `applyFrequencyCorrectionToBands` | `algorithm` | calibration |
+
+`smoothFractionalOctave` still returns a bare array (used internally by `transfer.js` and
+`quality.js`); `smoothResponse` is its labelled, ID-carrying view.
+
+Tests: `v3-measurement-core.test.mjs` "algorithms: frozen contract IDs ..." (exact equality,
+variants report their family); `v3-integration.test.mjs` "G6/G7/G9" pins every ID string and
+every result field above.
 
 <a id="stimuli"></a>
 ## Stimuli (`measurement/stimulus.js`)
 
 No algorithm ID: the stimulus is fully described by its normalized spec, which the recipe
-stores (§103), so the spec itself is the record.
+stores (§103), so the spec itself is the record. **Changed (integration)** (was G2): the
+recipe stores exactly `renderStimulus(spec).spec`, including `color` and `law`, and checks it
+against this module's constants (`DURATION_LIMITS`, `SAMPLE_RATE_LIMITS`, fade ≤ duration/4,
+`MIN_FREQUENCY_HZ` ≤ f ≤ `safeMaxFrequency(sampleRate)`); see
+[Experiments](#experiments).
 
 ### Normalization: `normalizeStimulus(spec) → { spec, clampedTo }`
 
@@ -83,7 +121,8 @@ stores (§103), so the spec itself is the record.
   chirp duration/10), capped at duration/4; outside [0, duration/4] it throws.
 - Frequencies below `MIN_FREQUENCY_HZ = 1` throw. Frequencies above
   `SAFE_NYQUIST_FRACTION · sampleRate/2` (0.95 × Nyquist) are **clamped** and the clamp is
-  reported as `clampedTo` (Hz); everything else invalid throws `StimulusError` with a code
+  reported as `clampedTo` (Hz); the limit is `safeMaxFrequency(sampleRate)`, the one
+  expression `schema.js` also uses; everything else invalid throws `StimulusError` with a code
   (`BAD_SPEC`, `UNKNOWN_KIND`, `BAD_SAMPLE_RATE`, `BAD_DURATION`, `BAD_LEVEL`, `BAD_FADE`,
   `BAD_SEED`, `BAD_FREQUENCY`, `BAD_OPTION`). After clamping `f1 < f2` is required.
 - Defaults: sine 1 kHz / 1 s; log-sweep 20 Hz-20 kHz / 5 s; band-noise 20 Hz-20 kHz, colour
@@ -159,9 +198,9 @@ not controlled (peak normalization). Pink accuracy outside 44.1 kHz is not separ
 | band pink slope | −3.01 ± 0.5 dB/oct | −2.984 |
 
 <a id="windows"></a>
-## Windows, power spectrum and Welch — `oscilla.window.hann.v1` (`measurement/spectrum.js`)
+## Windows, power spectrum and Welch — `oscilla.window.hann.v1`, `oscilla.window.blackman-harris.v1` (`measurement/spectrum.js`)
 
-### Windows: `windowFn(name, n) → { name, samples, coherentGain, noisePowerGain, enbwBins }`
+### Windows: `windowFn(name, n) → { name, algorithm, samples, coherentGain, noisePowerGain, enbwBins }`
 
 Periodic (DFT-even) forms with period N (Harris 1978):
 
@@ -173,15 +212,24 @@ blackman-harris   w[n] = a0 − a1·cos(x) + a2·cos(2x) − a3·cos(3x),  x = 2
 enbwBins = noisePowerGain / coherentGain²            1.5 (Hann), ≈ 2.0044 (Blackman-Harris)
 ```
 
-The gains are exact constants (`WINDOW_GAINS`) because the windows are periodic.
+The gains are exact constants (`WINDOW_GAINS`) because the windows are periodic. Each window
+result carries its ID (`algorithm`, `WINDOW_ALGORITHMS`, `windowAlgorithm(name)`).
 
-### Power spectrum: `createPowerSpectrumAnalyzer(fftSize, window)`, `powerSpectrum(samples, opts)`
+### Power spectrum: `createPowerSpectrumAnalyzer(fftSize, window, { scale })`, `powerSpectrum(samples, opts)`
 
-Tone scaling, `fftSize/2 + 1` bins, samples outside the input count as zeros:
+`fftSize/2 + 1` bins, samples outside the input count as zeros. Tone scaling (default):
 
 ```
 P[k] = |2·X[k] / (N·coherentGain)|²    0 < k < N/2
 P[k] = |X[k] / (N·coherentGain)|²      k = 0, N/2
+```
+
+Mean-square scaling (`scale: 'mean-square'`; Changed (integration)):
+
+```
+P[k] = 2·|X[k]|² / (N·Σw²)             0 < k < N/2       (N·Σw² = N²·noisePowerGain)
+P[k] = |X[k]|² / (N·Σw²)               k = 0, N/2
+toneToMeanSquare(P, window) = P / (2·enbwBins)  inside,  P / enbwBins  at k = 0, N/2
 ```
 
 A full-scale sine centred on a bin reads `P = 1`, 0 dB after `toDb`. Off-centre tones read
@@ -190,17 +238,20 @@ signals Σ P over a band overstates the band's tone-scale power by `enbwBins`; d
 `2·enbwBins·binHz` gives a density per Hz on the same scale (header comment). `powerSpectrum`'s
 default `fftSize` is the largest power of two that fits. `binHz(sr, n) = sr/n`.
 
-### Welch: `welch(samples, { fftSize, overlap = 0.5, window = 'hann' })`
+### Welch: `welch(samples, { fftSize, overlap = 0.5, window = 'hann', scale = 'tone' })`
 
-Returns `{ power, segments, fftSize, hop, window }`. `hop = max(1, round(fftSize·(1 −
-overlap)))`, segments start at 0, hop, 2·hop … while a full segment fits, and `power` is the
-mean of the **linear** tone-scaled spectra (Welch 1967). `overlap` must lie in [0, 0.95]; input
+Returns `{ power, segments, fftSize, hop, window, scale, windowAlgorithm }` (`scale` and
+`windowAlgorithm` added by the integration fixes; `scale` option, default `'tone'`).
+`hop = max(1, round(fftSize·(1 − overlap)))`, segments start at 0, hop, 2·hop … while a full
+segment fits, and `power` is the mean of the **linear** spectra on the requested scale (Welch
+1967). `overlap` must lie in [0, 0.95]; input
 shorter than one segment throws instead of zero-padding.
 
 ### Assumptions and limits
 
-Only the Hann window has an algorithm ID; a Blackman-Harris analysis cannot be recorded
-distinctly (G6). The tone scale is not the scale `rta.js` expects (G1).
+The transfer function and IR use no analysis window (whole-buffer DFT), so a window ID applies
+to Welch/RTA analyses only. Passing a bare tone-scale array (not the `welch()` result) to
+`rta.js` still reads 10·log10(2·ENBW) high; pass the result object or convert explicitly.
 
 ### Tests (`v3-measurement-core.test.mjs`)
 
@@ -213,13 +264,21 @@ distinctly (G6). The tone scale is not the scale `rta.js` expects (G1).
 | Welch equals mean of per-segment spectra | relative 1e-12 | pass |
 | white-noise level `4σ²·ENBW/N` | ±0.25 dB | −0.014 dB |
 | dB-averaging bias (proves linear averaging) | gap in (1, 4) dB | 2.52 dB |
+| (integration) FS sine at the 1 kHz octave/third centre, 44.1/48/96 kHz, Hann and BH, `welch()` result, mean-square `welch()` and `toneToMeanSquare` into `bandPowers` | −3.0103 ± 1e-3 dB | ≤ 2.3e-7 dB |
+| (integration) a bare tone-scale array reads 10·log10(2·ENBW) high | ± 1e-3 dB | pass |
+| (integration) one mean-square frame of a FS sine sums to 0.5; equals `toneToMeanSquare` | ± 1e-3 dB; 1e-12 rel. | pass |
+
+The ±1e-3 dB bound for the band level covers window leakage beyond 12 bins from the tone (Hann
+sidelobes ≈ −72 dB there, Blackman-Harris −92 dB: < 1e-6 of the power), the 2f cross term of a
+non-bin-centred tone (< 1e-6) and float32 input rounding (≈ −150 dB).
 
 <a id="capture-checks"></a>
-## Capture checks — `oscilla.clip.v1` (`measurement/capture-checks.js`)
+## Capture checks — `oscilla.clip.v1`, `oscilla.discontinuity.v1` (`measurement/capture-checks.js`)
 
-`checkCapture(capture, opts) → { clipping: { ratio, regions }, dropouts, rms, peak, empty,
-invalid, reasons }`. Digital integrity only; a capture that passes can still be acoustically
-wrong. Regions are half-open `[start, end)`.
+`checkCapture(capture, opts) → { algorithms: { clip, discontinuity }, clipping: { ratio,
+regions }, dropouts, discontinuities, rms, peak, empty, invalid, reasons }`. Digital integrity
+only; a capture that passes can still be acoustically wrong. Regions are half-open
+`[start, end)`.
 
 - **Clipping**: a sample is at the rail when `|x| ≥ CLIP_THRESHOLD = 0.98` (−0.18 dBFS). A
   region is a run of at least `CLIP_MIN_RUN = 3` consecutive rail samples; regions closer than
@@ -232,24 +291,55 @@ wrong. Regions are half-open `[start, end)`.
 - **Empty**: `20·log10(rms) < EMPTY_RMS_DBFS = −90`.
 - **Non-finite** samples are counted and left out of the RMS sum (the mean still divides by
   all samples).
-- Reason codes: `NO_SAMPLES`, `BAD_SAMPLE_RATE`, `NON_FINITE`, `EMPTY`, `CLIPPING`, `DROPOUT`;
-  `invalid` is true exactly when `reasons` is non-empty. All thresholds are overridable through
-  `opts`.
+- **Discontinuity** (Changed (integration), was G5; ID `oscilla.discontinuity.v1`): a step
+  between consecutive samples far beyond the signal's own local slope. With `d[i] = x[i] −
+  x[i−1]`, the boundary between b − 1 and b is flagged when
 
-Limits: discontinuities (steps without a constant run) are not detected (G5). RMS and peak are
-digital (dBFS), not acoustic.
+  ```
+  rms_local = RMS of d over [b − W, b + W] without [b − H, b + H]   W = 5 ms, H = 2 samples
+  |d[b]| ≥ DISCONTINUITY_RATIO · rms_local          (8)
+  |d[b]| ≥ DISCONTINUITY_MIN_JUMP                   (2^−12 ≈ −72 dBFS)
+  sign(d[b])·(x[b+w] − x[b−1]) > |d[b]|/2  and  sign(d[b])·(x[b] − x[b−1−w]) > |d[b]|/2,
+  w = 1 … H                                        (DISCONTINUITY_HOLD, _HOLD_FRACTION)
+  ```
+
+  For any single sinusoid max|d| = √2·rms(d) whatever its frequency, so a full-scale tone just
+  below Nyquist (|d| up to 2) is never flagged, while a phase-reversing splice of a 440 Hz tone
+  is ≈ 49× its rms(d); Gaussian noise exceeds 8σ_d with probability ≈ 1e-15 per sample. The
+  persistence condition separates a step from a 1-2 sample transient (which returns to its old
+  level); with ratio 8 a sinusoid's own slope moves the level by at most 2·√2/8 = 0.35·|d[b]|
+  within two samples, below the half a step must keep. Steps explained elsewhere are not
+  reported again: any rail sample in [b − 1 − H, b + H], a boundary of a reported dropout, the
+  onset or end of edge silence. Regions are `[b − 1, b + 1)` (merged when touching) with
+  `jump` and `ratio` (null when rms_local is 0). The rolling sums are re-summed exactly every
+  1024 samples so they cannot drift (cost O(n): 53 ms for 40 s at 48 kHz, 0.46 s at 384 kHz on
+  the test machine). A step smeared over several samples by a filter after the splice is not
+  single-sample and may be missed.
+- Reason codes: `NO_SAMPLES`, `BAD_SAMPLE_RATE`, `NON_FINITE`, `EMPTY`, `CLIPPING`, `DROPOUT`,
+  `DISCONTINUITY`; `invalid` is true exactly when `reasons` is non-empty. All thresholds are
+  overridable through `opts`.
+
+Limits: RMS and peak are digital (dBFS), not acoustic. `quality.js` (`oscilla.confidence.v1`)
+does not read `DISCONTINUITY`; see [Gaps](#gaps), G15.
 
 Tests (`v3-measurement-core.test.mjs`, all exact): clipped sine gives one merged region equal to
 an independent rail-run reference and the exact ratio; one or two 0.99 samples are not clipping,
 three are; 50 ms of zeros inside is a dropout `[20000, 22400)`, 10 ms is not, a frozen non-zero
 value is, leading silence is not; silence is `EMPTY` (not a dropout); −100 dBFS RMS noise is
 empty, −60 dBFS is not; NaN, empty input and missing sample rate give their codes.
+`v3-integration.test.mjs` "G5" (exact): a phase-reversed 440 Hz splice gives one region
+`[s − 1, s + 1)` with ratio > 40 and reason `DISCONTINUITY`; a 0.05 DC step under a 100 Hz
+tone is found at its sample; a 10 ms zero gap (not a dropout) is reported through its edges;
+not flagged: 0.97-amplitude tones at 0.95 × Nyquist (44.1/48/96 kHz), Gaussian noise, pink
+noise, a log sweep, 1- and 2-sample spikes, an abrupt onset after edge silence and the edges of
+a reported dropout. `v3-pipeline.test.mjs`: three noisy low-pass sweep captures pass.
 
 <a id="alignment"></a>
 ## Alignment — `oscilla.align.xcorr.v1` (`measurement/align.js`)
 
-`align(reference, captured, sampleRate, { maxLagS, minLagS = 0 }) → { lagSamples, lagSeconds,
-peakCorrelation, polarity }`.
+`align(reference, captured, sampleRate, { maxLagS, minLagS = 0 }) → { algorithm, lagSamples,
+lagSeconds, peakCorrelation, polarity }` (`algorithm` = `ALIGN_ALGORITHM`, added by the
+integration fixes).
 
 ```
 r[l] = Σ_n ref[n]·cap[n + l]      for l in [minLag, maxLag]
@@ -288,10 +378,11 @@ Tests (`v3-measurement-core.test.mjs`):
 <a id="transfer"></a>
 ## Transfer function — `oscilla.transfer.v1` (`measurement/transfer.js`)
 
-`computeTransfer({ stimulus, captured, sampleRate, f1, f2, lagSamples, noise, options:
-{ phase = false, pointsPerOctave = 48 } }) → TransferResult`. Method: regularized spectral
-division (Müller & Massarani 2001, §5; regularization after Kirkeby et al. 1998), shared with the
-IR through `spectralDeconvolution`.
+`computeTransfer({ stimulus, captured, sampleRate, f1, f2, lagSamples, alignment, noise,
+options: { phase = false, pointsPerOctave = 48 } }) → TransferResult` (`alignment`,
+`phaseReason` and the result's `alignment` added by the integration fixes). Method: regularized
+spectral division (Müller & Massarani 2001, §5; regularization after Kirkeby et al. 1998),
+shared with the IR through `spectralDeconvolution`.
 
 ### Deconvolution (`spectralDeconvolution`)
 
@@ -328,12 +419,25 @@ magnitudeDb[i] = 10·log10( mean_{k in band i} |H[k]|² )     (power mean, never
 dB relative to a unity digital transfer (0 dB: the capture equals the stimulus), raw: no
 smoothing, no calibration (§159). A pure delay does not change it.
 
-### Phase (§27: never faked)
+### Phase (§27: never faked, only if robust) — Changed (integration), was G8
 
-Only when `options.phase === true` **and** `lagSamples` is supplied; otherwise `phaseDeg` is
-`null`. Each bin is rotated by `e^(+j2πk·lag/N)` to remove the aligned delay, the rotated
-complex values are averaged over the grid band, and the angle is reported wrapped to
-(−180°, 180°]. The module does not judge whether the alignment is robust; the caller does (G8).
+Reported only when `options.phase === true` **and** an `align()` result is passed as
+`alignment` **and** `alignment.peakCorrelation ≥ PHASE_MIN_CORRELATION = 0.5` (with a finite
+lag). Otherwise `phaseDeg` is `null` and `phaseReason` is `NOT_REQUESTED`, `NO_ALIGNMENT` or
+`ALIGNMENT_NOT_ROBUST` (`PHASE_REASONS`); with a phase, `phaseReason` is `null`. A bare
+`lagSamples` (the old call form) is accepted but is not evidence of a robust alignment: it
+yields `phaseReason: 'NO_ALIGNMENT'`. The lag removed is `lagSamples` when given, else
+`alignment.lagSamples`; each bin is rotated by `e^(+j2πk·lag/N)`, the rotated complex values
+are averaged over the grid band, and the angle is reported wrapped to (−180°, 180°]. The
+result records `alignment: { algorithm, lagSamples, peakCorrelation, polarity }` (or null).
+
+Why 0.5: ρ² is the fraction of the capture's energy in the stimulus window that one scaled,
+delayed copy of the stimulus explains (ρ = 1/√2 at 0 dB broadband SNR for a flat system).
+Below ρ = 0.5 most of that energy is noise, reverberation or filtering that a pure delay does
+not describe, so the delay removed from the phase is ill defined, while the lag estimate
+itself stays sub-sample accurate down to ρ ≈ 0.7 (alignment tests). It is an engineering
+threshold, not a derived uncertainty: phase accuracy also depends on the per-point SNR, which
+`snrDb` reports.
 
 ### SNR (when a stimulus-free capture `noise` is given)
 
@@ -381,8 +485,10 @@ Errors are the maximum over grid points in 50 Hz-15 kHz.
 | flat 0 dB and −6 dB at 44.1, 48, 96 kHz | ±0.1 dB | 5.74e-3 dB (all six) |
 | −6 dB with a 0.3 s pure delay | ±0.1 dB | pass |
 | RBJ LP and HP 1 kHz, peaking +6 dB/1 kHz and −9 dB/4 kHz, 3 rates | ±0.5 dB | ≤ 1.97e-2 dB |
-| phase of the 1 kHz low-pass with lag, 50 Hz-10 kHz | < 2° | pass |
-| phase null without lag or without `phase: true` | exact | pass |
+| phase of the 1 kHz low-pass with a robust alignment (+ exact lag), 50 Hz-10 kHz | < 2° | pass |
+| phase null with its reason: no alignment, bare lag, not requested, ρ just below 0.5, lag null | exact | pass |
+| (pipeline) 4 kHz low-pass, 30 dB SNR, aligned: magnitude per point vs analytic, 50 Hz-10 kHz where snrDb ≥ 10 | 20·log10(1 + 3·10^(−snr/20)) | 0.534 dB max, ≤ 62 % of the bound |
+| (pipeline) same, phase after removing the residual lag, 50 Hz-5 kHz | 2° + (180/π)·3·10^(−snr/20) | 0.42° max |
 | −6 dB with white noise at 30 dB broadband SNR | ±0.3 dB | 0.0871 dB |
 | SNR estimate vs stationary-phase prediction (1/3-oct median) | ±1 dB | −0.17, −0.04, −0.07 dB |
 | validRange at 10 dB broadband SNR: upper edge vs predicted | within ×/÷ √2 | 987 vs 1162 Hz |
@@ -398,10 +504,14 @@ white noise at 40 dB broadband SNR (FFT size 2^21); the time is the analysis wal
 transfer plus IR on the test machine.
 
 <a id="ir"></a>
-## Impulse response — `oscilla.ir.log-sweep.v1` (`measurement/impulse-response.js`)
+## Impulse response — `oscilla.ir.log-sweep.v1`, `oscilla.ir.farina-inverse.v1` (`measurement/impulse-response.js`)
 
 `computeImpulseResponse({ stimulus, captured, sampleRate, f1, f2, inverse, method, lagSamples })
-→ IrResult` plus `method` and `fftSize`.
+→ IrResult` with `method` and `fftSize`. **Changed (integration)** (was G3, G9): `algorithm` is
+`IR_ALGORITHMS[method]` — `'spectral'` → `oscilla.ir.log-sweep.v1` (`IR_ALGORITHM`),
+`'farina-inverse'` → `oscilla.ir.farina-inverse.v1` (`IR_FARINA_ALGORITHM`) — because the two
+methods' outputs differ (ADR 0024); validation accepts `method` and `fftSize` and rejects a
+`method` that contradicts the ID.
 
 ### Methods
 
@@ -446,12 +556,31 @@ are implemented.
   label "NORMALIZED: relative amplitude (peak = 1.0)"). Both carry `kind: 'normalized'` and the
   reference value; the IR is unchanged.
 
+### Deviation from ADR 0021 (documented, not changed; was G9)
+
+ADR 0021 describes ε as "negligible inside the excited band [f1, f2] and large outside it **and
+near the fade-affected edges**", and Farina's inverse as a test oracle. The code differs in two
+ways, kept deliberately:
+
+1. ε is −60 dB re max|X|² uniformly across [f1, f2], edges included; it rises only beyond the
+   band (1/3-octave raised cosine). No edge ramp is applied because the division is by the
+   spectrum of the **exact rendered** stimulus, fades and clamp included, so the edges carry no
+   model error to suppress; where the fades leave |X|² small, the in-band bias
+   `−10·log10(1 + ε/|X|²)` is 0.004 dB where |X|² is 30 dB below max|X|² and 0.043 dB at
+   40 dB below, and the `validRange` coverage test (f·P_x within 20 dB of its maximum) already
+   excludes edge points whose stimulus energy is too low to trust. An edge ramp would bias
+   exactly those edge points and, by ADR 0024, need a new transfer ID.
+2. `farina-inverse` is a selectable production method, not only an oracle. It now has its own
+   ID (`oscilla.ir.farina-inverse.v1`), so a stored IR says which method produced it; the
+   default stays `spectral` as the ADR decides.
+
+The ADR text is not edited here; revisiting it is a decision for its owner.
+
 ### Assumptions and limits
 
 As for the transfer function. `noiseFloorDb` is relative to the peak, not an absolute level. The
 peak is the largest absolute sample, which is the direct sound only when nothing arrives
-stronger later. The IR result shape carries `method` and `fftSize`, which experiment validation
-does not yet accept (G3).
+stronger later.
 
 ### Tests (`v3-transfer-ir.test.mjs`)
 
@@ -467,12 +596,18 @@ does not yet accept (G3).
 | farina-inverse vs spectral identity peak scale (44.1 kHz) | < 0.5 dB | pass |
 | `irWindow`, `normalizeIr` leave the original untouched; labels say NORMALIZED | exact | pass |
 | realistic 10 s case: IR peak within 1 ms after the true arrival | — | pass |
+| (pipeline) 4 kHz low-pass at 30 dB SNR, aligned: absolute peak vs the system delay | ±4 samples | pass |
+| (integration) spectral and farina-inverse IRs validate and round-trip with their IDs | exact | pass |
 
 <a id="smoothing"></a>
-## Smoothing, normalization — `oscilla.smoothing.fractional-octave.v1` (`smoothing.js`)
+## Smoothing, normalization — `oscilla.smoothing.fractional-octave.v1`, `oscilla.normalization.v1` (`smoothing.js`)
 
 Both are **derived views**: they return new arrays and never modify the raw response (§34, §35,
-§159).
+§159). **Changed (integration)** (was G7): `smoothResponse(frequencies, magnitudeDb, fraction)`
+returns the labelled view `{ kind: 'smoothed', algorithm: SMOOTHING_ALGORITHM, fraction,
+label, smoothedDb }` ("SMOOTHED: 1/6 octave (power mean)", "RAW: unsmoothed" for 0);
+`normalizeResponse` and `impulse-response.js` `normalizeIr` results carry
+`algorithm: NORMALIZATION_ALGORITHM` (`oscilla.normalization.v1`) with their `mode`.
 
 ### `smoothFractionalOctave(frequencies, magnitudeDb, fraction)`
 
@@ -489,7 +624,7 @@ window of identical values returns that value exactly; `fraction = 0` returns a 
 `SMOOTHING_FRACTIONS = [0, 24, 12, 6, 3]` lists the specified choices (§35); any N > 0 is
 accepted. Frequencies must be positive and strictly increasing.
 
-### `normalizeResponse(frequencies, magnitudeDb, spec) → { mode, normalizedDb, referenceDb, label }`
+### `normalizeResponse(frequencies, magnitudeDb, spec) → { algorithm, mode, normalizedDb, referenceDb, label }`
 
 - `{ mode: 'at-frequency', hz }`: reference is the response at `hz`, linear in dB over
   log-frequency between neighbours (an exact grid point reads itself); outside the range throws.
@@ -539,6 +674,11 @@ calibration is applied downstream.
 
 Input contract: one-sided linear power per bin on the **mean-square** scale,
 `P[k] = c·|X[k]|² / (N·Σw²)` with c = 2 except c = 1 at DC and Nyquist, so Σ P = mean square.
+**Changed (integration)** (was G1): the functions also accept a `spectrum.js` `welch()` result
+and convert it by its stated `scale` (`meanSquarePower`: `'tone'` → `toneToMeanSquare`,
+`'mean-square'` as is; an object without a known scale throws). A sine of amplitude A reads
+10·log10(A²/2) in its band, a full-scale sine −3.01 dB, whatever window produced the
+spectrum. `bandAnalysis` results carry `algorithm: 'oscilla.rta.v1'`.
 Bin k covers `[(k − ½)·binHz, (k + ½)·binHz]`, power is assumed uniform within a bin, and
 
 ```
@@ -550,6 +690,15 @@ levelDb   = 10·log10(bandPower)            (−Infinity for zero power; dB neve
 and `underResolved = binCount < UNDER_RESOLVED_BINS (2)`: such a band's level is dominated by the
 window main lobe and bin placement. `bandAnalysis` returns `{ levelsDb, power, binCounts,
 underResolved }`; `bandPowers` returns the dB array only (contract signature).
+
+### Stored result: `rtaResult({ sampleRate, resolution, bands, levelsDb, fftSize, window })`
+
+**New (integration)** (was G4). Builds the `RtaResult` that `validate.js` checks:
+`{ algorithm: 'oscilla.rta.v1', sampleRate, resolution, bands: [{ nominal, exact, lo, hi }]
+(copies), levelsDb: Float64Array, fftSize, windowAlgorithm }`. `levelsDb` are mean-square band
+levels; `−Infinity` and anything below `ZERO_POWER_DB` are stored as −300 dB (zero power);
+NaN, +Infinity, a length mismatch or an unknown resolution throw. `window` is the window name
+(or `windowFn()` result) whose ID is stored as `windowAlgorithm`, null when unknown.
 
 ### Averaging: `createRtaAverager({ mode = 'fast', peakHold = false, size })`
 
@@ -588,8 +737,12 @@ verified against IEC 61672-1.
 | frame-rate independence (two Δt/2 = one Δt) | 1e-9 dB | pass |
 | power averaging (17.03 dB, not 10 dB), peak hold, freeze, reset, no allocation | 1e-9 | pass |
 
-The tests feed `bandPowers` a mean-square-scaled Welch spectrum built in the test file, not
-`spectrum.js` output (see G1).
+The tests above feed `bandPowers` a mean-square Welch spectrum built in the test file; the
+`spectrum.js` path is pinned by the integration test in [Windows](#windows) (FS sine
+−3.0103 ± 1e-3 dB for Hann and Blackman-Harris at 44.1/48/96 kHz) and by the pipeline's pink
+noise (third-octave bands 100 Hz-10 kHz within ±1.5 dB of their median, 3σ of a 3 s
+realization). `v3-integration.test.mjs` "G4" pins `rtaResult` (zero-power encoding, copies,
+errors, round trip).
 
 <a id="aggregate"></a>
 ## Aggregation of repeats (`measurement/aggregate.js`)
@@ -695,6 +848,30 @@ c(f) = c0 + t·(c1 − c0)                                 exact stored value at
   `{ algorithm, profileId, correctedDb, covered, coverage, extrapolate }`; the input is not
   modified, so raw and corrected curves coexist (§18 overlay).
 
+### RTA bands: `applyFrequencyCorrectionToBands(rta, profile, { power, binHz })` — New (integration), was G11
+
+A band level is a sum of power, so a correction that varies inside the band is applied to the
+power before summing, never as one value at the band centre:
+
+```
+gain        = Σ_k W_k·10^(−c(f_k)/10) / Σ_k W_k          (CORRECTION_SIGN = −1)
+correctedDb = levelDb + 10·log10(gain)
+```
+
+- `'spectrum'` weighting, when the band's per-bin spectrum is given (`power`: a mean-square
+  array or a `welch()` result, and `binHz`): `W_k = P[k]·w[k]`, w[k] the fraction of bin k in
+  the band (the `rta.js` bin cells), f_k the bin centre clamped into the band. A band whose
+  power is all zero falls back to flat.
+- `'flat'` weighting otherwise: power uniform in Hz across the band, `BAND_CORRECTION_STEPS =
+  256` equal sub-bands at their centres (midpoint rule; error ∝ 1/M²: 3.6e-5 dB for 12
+  dB/octave across a one-octave band, 5.8e-4 dB if M were 64).
+- A band is **covered** only when [lo, hi] lies inside the profile coverage; any other band is
+  returned unchanged with `covered = 0` and `correctionDb = NaN` (never extrapolated, whatever
+  the overlap). Zero power (≤ −300 dB, −Infinity) stays as it is.
+
+Returns `{ algorithm: CALIBRATION_ALGORITHM, profileId, correctedDb, correctionDb, covered,
+coverage, weighting }`; the input is not modified.
+
 Limits: magnitude only (no phase calibration). A single-point profile covers exactly one
 frequency. The calibration's own uncertainty is not represented.
 
@@ -716,6 +893,10 @@ can fail); exact points and offsets with strict equality.
   edge value with `held: true` under `'hold'`; `applyFrequencyCorrection` gives
   [−10, −11, −12, −10] for a 100 Hz-15 kHz profile [1, 2] dB on a −10 dB response, coverage mask
   [0, 1, 1, 0].
+- `v3-integration.test.mjs` "G11": a constant +2 dB profile lowers every covered band by 2 dB
+  (1e-9) under both weightings; all power in one bin gives exactly that bin's correction
+  (1e-12); flat weighting agrees with a 200 000-point integral within 1e-4 dB at 12 dB/octave;
+  bands not entirely inside the coverage are unchanged and flagged; zero power stays.
 
 <a id="level"></a>
 ## Level calibration and SPL labelling (`calibration/level.js`)
@@ -738,20 +919,34 @@ displayed SPL  = R + offsetDb                                 for a later relati
   for a valid calibration, otherwise `{ unit: 'dB relative (dBFS-like)', calibrated: false,
   indicator: 'UNCALIBRATED' }`. `toDisplayLevel(R, cal)` adds the offset only under a valid
   calibration. There is no default SPL calibration anywhere.
+- **One label for the uncalibrated scale** (Changed (integration), was G10): `RELATIVE_UNIT =
+  'dB relative (dBFS-like)'` is the unit after every uncalibrated value and
+  `RELATIVE_SCALE_LABEL = 'Relative level · dBFS-like / analyser-relative scale'` (the spec
+  §24 wording) names the scale on axes and in file metadata. `format.js` (`DB_KIND_LABELS`),
+  `quality.js` (reason units and texts), `experiments/csv.js` (level columns, calibration line)
+  and `experiments/schema.js` (`describeCalibration`, `summarizeExperiment`) import them. The
+  strings "not SPL" and "SPL UNCALIBRATED" are gone: no uncalibrated output contains "SPL".
+  `csv.js` and `describeCalibration` now require `isValidLevelCalibration` (a tampered offset
+  or a missing `createdAt` reads uncalibrated) before printing "dB SPL".
 - `format.js` `formatDb(value, { kind })` prints "dB SPL" only when the caller passes
   `kind: 'spl'`; an unknown kind throws rather than falling back.
 
 Limits: a single broadband scalar for the whole input chain, valid only for the device, input
 gain, browser processing and microphone position it was taken with. X must be read on the same
 scale and with the same frequency-correction state as later readings, otherwise the correction
-at `referenceHz` (or the 3 dB tone-scale versus mean-square-scale difference, G1) is counted
-twice. It is independent of, and never derived from, a frequency profile (§17).
+at `referenceHz` (or the tone-scale versus mean-square-scale difference of a sine, 3.01 dB;
+see [Conventions](#conventions)) is counted twice. It is independent of, and never derived from,
+a frequency profile (§17).
 
 Tests (`v3-calibration.test.mjs`, exact): offset 94 − (−30.5) = 124.5 dB and display 84.5 dB SPL
 for −40 dB relative; SPL label only for a valid calibration; `null`, `{}`, a tampered offset, a
 wrong kind, an out-of-range reference and a frequency profile all read UNCALIBRATED; invalid
 references rejected, bounds 20 Hz/140 dB and 20 kHz/40 dB accepted. `v3-rta-aggregate.test.mjs`
-"format: dB labels" checks "relative" never prints SPL.
+"format: dB labels" checks "relative" never prints SPL. `v3-integration.test.mjs` "G10" scans
+every text output of `describeCalibration`, `summarizeExperiment`, the three CSV exports,
+quality reasons, `formatDb` and `levelLabel` for no calibration, a tampered one and one
+without `createdAt` (no "SPL"; the relative unit and scale label present) and for a valid one
+("dB SPL" present); `v3-pipeline.test.mjs` repeats the scan on the pipeline's outputs.
 
 <a id="format"></a>
 ## Resolution-aware formatting (`measurement/format.js`)
@@ -798,7 +993,24 @@ It covers what was configured and by which software; it excludes timestamps, nam
 device and constraints, results, quality and UI state. Equal hashes mean the same configuration,
 not the same result. `sha256Hex` defaults to `calibration/sha256.js` and may be injected.
 `withConfigHash(e, hex)` stamps `provenance.configHash`; `withResults` clears it when
-`algorithms` or `sampleRate` change. No result hash (§101) is implemented.
+`algorithms` or `sampleRate` change.
+
+### Result hash (`hash.js`, §101) — New (integration), was G13
+
+```
+resultHash = SHA-256 hex( canonicalJson({ v: 1,             RESULT_HASH_VERSION
+  results: serializeExperiment(results) }) )                 { transfer, ir, rta }, typed
+                                                             arrays as EncodedArray
+```
+
+The typed arrays enter in their encoded form (dtype + little-endian bytes), so the hash covers
+the exact stored bits and the dtype; key order does not matter. `withResultHash(e, hex)` stamps
+`provenance.resultHash` (`null` from `createExperiment`); `withResults` clears it whenever
+`results` change. On import `validateExperiment` recomputes it over the decoded results when
+`provenance.resultHash` is a hash and reports a mismatch as `{ path: 'provenance.resultHash',
+code: 'corrupt', text: 'corrupt: …' }`; `null` (not stamped) is not verified. It detects
+corruption, not tampering (anyone can recompute it). Plain-number arrays in a file are hashed
+in their decoded typed form.
 
 ### Typed-array encoding (`encode.js`, §56-§57)
 
@@ -810,6 +1022,19 @@ length equal to `ceil(length·bytes/3)·4`, only the RFC alphabet, padding only 
 unused bits. `serializeExperiment` turns every typed array into an EncodedArray;
 `experimentToJson` writes the `.oscilla.json` text.
 
+### Recipe stimulus (`schema.js`) — Changed (integration), was G2
+
+`checkRecipe` stores the stimulus in `stimulus.js`'s normalized form — `kind, sampleRate,
+duration, level, f, f1, f2, fade, seed, color, law`, null where the kind does not use a field —
+so `createRecipe({ stimulus: renderStimulus(spec).spec }).stimulus` deep-equals the rendered
+spec. Limits are imported, not copied: `DURATION_LIMITS[kind]` (chirp 5 ms-1 s, sweep 1-30 s,
+others 50 ms-30 s), `SAMPLE_RATE_LIMITS`, fade in [0, duration/4], level in (0, 1],
+`MIN_FREQUENCY_HZ` ≤ f ≤ `safeMaxFrequency(sampleRate)` (0.95 × Nyquist; at the highest
+supported rate when the recipe has no sample rate), `color` ∈ {white, pink} for band noise,
+`law` ∈ {log, linear} for chirps, both null elsewhere (an omitted value stays null and means
+the stimulus default). `LIMITS.sampleRate`, `LIMITS.sweepDurationS` are the stimulus.js
+arrays and `LIMITS.stimulusDurationS` is their envelope [0.005, 30].
+
 ### Import validation and migration (`validate.js`, `migrate.js`)
 
 `validateExperiment(json, opts)` never throws: size cap `DEFAULT_MAX_BYTES` = 32 MiB measured as
@@ -818,8 +1043,16 @@ UTF-8 before `JSON.parse`; structural scan (depth ≤ 32, plain objects only, no
 (unknown fields rejected, numeric bounds from `schema.js` `LIMITS`, string caps, algorithm IDs
 against `knownAlgorithms` or the ID pattern, calibration shape, result arrays decoded with
 `DEFAULT_MAX_ARRAY` = 4 000 000 elements and plain arrays ≤ 65 536). It returns a normalized deep
-copy. `migrateExperiment` runs registry steps `n − 1 → n` in order (schema 1 is an identity
-placeholder), rejects newer schemas with a clear message, and never modifies its input.
+copy. **Changed (integration)** (was G3, G4): the accepted result shapes are exactly the
+modules' outputs — TransferResult with `validRange: null` and the optional `phaseReason` and
+`alignment`; IrResult with the optional `method` (must match the IR ID) and `fftSize`;
+RtaResult from `rtaResult()` with the optional `windowAlgorithm` (zero power as −300 dB,
+non-finite levels rejected); QualityAssessment from `assessQuality()` with reason `scope` and
+the `mask` `{ frequencies f64, reliable u8 (0/1), calibrated u8 (0/1) }` (quality metrics may
+hold arrays of up to 1024 elements). Optional fields keep their presence, so a validated
+experiment re-exports byte for byte; the result hash is verified as above. `migrateExperiment`
+runs registry steps `n − 1 → n` in order (schema 1 is an identity placeholder), rejects newer
+schemas with a clear message, and never modifies its input.
 
 `newExperimentId(bytes16)` formats caller-supplied random bytes as a UUIDv4 (version and variant
 bits set); the module uses no randomness or clock of its own.
@@ -833,18 +1066,139 @@ oversize files and future schema versions are rejected with paths; a synthetic s
 migrates; create → encode → JSON → validate is identical (§144); `configHash` is stable under
 key reordering, ignores the 12 listed non-configuration fields and changes for the 10 listed
 configuration fields, and the bundled SHA-256 equals `node:crypto`. These tests build result
-objects by hand rather than from the analysis modules, which is why G2-G4 are not caught.
+objects by hand; `v3-integration.test.mjs` (G2, G3, G4, G13) and `v3-pipeline.test.mjs` use the
+analysis modules' real outputs: every normalized stimulus kind at 44.1/48/96 kHz is a valid
+recipe; real transfer, IR (both methods), RTA and quality results validate and round-trip
+identically (deep-equal and byte-identical re-export); malformed optional fields are rejected
+with paths; the result hash equals node:crypto over the documented canonical form, ignores
+non-result fields and key order, changes with one flipped bit or a dtype change, and a
+modified result in a stamped file is rejected as `corrupt`.
 
 <a id="quality"></a>
-## Measurement quality — `oscilla.confidence.v1` (placeholder)
+## Measurement quality — `oscilla.confidence.v1` (`measurement/quality.js`)
 
-**Not yet documented.** `src/js/measurement/quality.js` has not landed on `feature/v3`
-(b650281); it is being written now. This section will be completed from the code when it lands:
-the metrics, the named thresholds, the exact GOOD / USABLE / POOR / INVALID rules, the reason
-codes, and the tests that pin them. Until then nothing in this document describes how quality is
-assessed. Inputs it is expected to consume already exist: `checkCapture` reasons, per-point
-`snrDb` and `validRange` from the transfer, `repeatabilityDb` from aggregation, calibration
-`coverage`, and `binHz`.
+Documented from the code that landed in e89ff9f (was G14). ADR 0025: a pure rule table maps
+measured metrics to one of four statuses and always returns the reasons, passing and failing,
+each backed by the number it came from. There is no score and no "confidence" percentage.
+
+`assessQuality({ capture, transfer, aggregate, calibration, requestedRange, resolutionHz,
+sweepWindow }) → { algorithm, status, reasons, metrics, mask }`
+
+- `capture`: one `checkCapture()` result or one per run; `transfer`: a `computeTransfer()`
+  result or null (RTA-only); `aggregate`: an `aggregateRuns()` result or null;
+  `calibration`: `{ frequency: applyFrequencyCorrection() result (its `covered` on the
+  transfer grid) or { coverage }, level: LevelCalibration }`; `requestedRange` defaults to
+  `transfer.requestedRange`, `resolutionHz` to `transfer.binHz`; `sweepWindow` is the
+  `[start, end)` sample range of the stimulus in the capture (or one per run).
+- `summarizeQuality(assessment)` gives one or two sentences for screen readers (§150).
+
+### Thresholds (`QUALITY_THRESHOLDS`, part of the v1 rule set)
+
+| Name | Value | Rationale (from the code) |
+| --- | --- | --- |
+| `clipInvalidRatio` | 0.01 | ≥ 1 % rail samples: sustained overload, the response is the clipper's |
+| `clipPoorRatio` | 0.001 | a tenth of that is still a sustained overload event (POOR) |
+| `snrGoodDb` | 20 | noise ≤ 0.1 × signal bounds the magnitude error to +0.83/−0.92 dB |
+| `snrUsableDb` | 10 | +2.4/−3.3 dB; equals `transfer.js` `VALID_MIN_SNR_DB` |
+| `reliableMinSnrDb` | 10 | per-point margin of the reliable mask, = `VALID_MIN_SNR_DB` |
+| `reliablePoolingFraction` | 6 | 1/6-octave pooling, = `VALIDITY_SMOOTHING_FRACTION` |
+| `repeatabilityGoodDb` | 1 | the same ~1 dB bound as `snrGoodDb` |
+| `repeatabilityUsableDb` | 3 | beyond ±3 dB a 3 dB feature is indistinguishable from scatter |
+| `minRunsForRepeatability` | 2 | fewer runs: repeatability NOT MEASURED |
+| `coverageGoodFraction` | 0.9 | octaves of `validRange` / octaves requested; one octave of ten may be lost |
+| `coverageUsableFraction` | 0.5 | less than half the requested octaves: POOR |
+| `frequencyCalibratedFraction` | 1 | "calibrated" needs the whole reliable range covered |
+| `resolutionBandFraction` | 6 | Δf must be finer than 1/6 octave at the lowest reliable frequency |
+| `poorWarnCount` | 3 | measured warns in three distinct dimensions compound to POOR |
+| `lowSnrBandMinOctaves` | 1/6 | narrowest low-SNR band named as its own reason |
+| `maxBandReasons` | 3 | display limit for named low-SNR bands (not a rule) |
+
+### Reasons and rules
+
+Reason: `{ code, scope: 'quality'|'calibration', severity: 'ok'|'warn'|'fail', text, value,
+unit, range? }`. `value` is a finite number for every `ok` reason and null only for a quantity
+not measured or absent. Only scope `quality` decides the status; `calibration` reasons
+(`FREQUENCY_CALIBRATION`, `LEVEL_CALIBRATION`) only say how the numbers may be labelled.
+
+| Code | Dimension | Severity rule |
+| --- | --- | --- |
+| `CAPTURE_MISSING`, `NO_SAMPLES`, `BAD_SAMPLE_RATE`, `NON_FINITE_CAPTURE`, `NO_SIGNAL` | capture | fail, invalidating (`NO_SIGNAL`: RMS below `EMPTY_RMS_DBFS`) |
+| `CLIPPING_SEVERE` / `CLIPPING` | capture | worst run's ratio ≥ 0.01: severe fail (invalidating); ≥ 0.001 fail; any region warn; else ok |
+| `DROPOUT_IN_SWEEP` / `DROPOUT` | capture | a dropout inside the sweep window (every interior dropout without a window) fails, invalidating; outside warns; none ok |
+| `NON_FINITE_ANALYSIS` | analysis | non-finite grid, magnitude, SNR, phase or aggregate centre: fail, invalidating |
+| `NO_VALID_RANGE` | range | `validRange` null: fail, invalidating |
+| `SNR_MEDIAN` / `SNR_NOT_MEASURED` | snr | median per-point `snrDb` over the whole grid ≥ 20 ok, ≥ 10 warn, < 10 fail; no noise capture or no transfer: not measured (warn) |
+| `LOW_SNR_BAND` | range | each run of 1/6-octave-pooled SNR < 10 dB at least 1/6 octave wide (the 3 widest): warn |
+| `COVERAGE` | range | coverage fraction ≥ 0.9 ok, ≥ 0.5 warn, < 0.5 fail; mentions Nyquist when the request exceeds it |
+| `REPEATABILITY` / `REPEATABILITY_NOT_MEASURED` | repeatability | `aggregate.repeatabilityDb` ≤ 1 ok, ≤ 3 warn, > 3 fail; < 2 runs or no aggregate: not measured (warn) |
+| `RESOLUTION` | resolution | Δf ≤ f_low·(2^(1/12) − 2^(−1/12)) (= 0.1156·f_low) ok, else warn |
+| `FREQUENCY_CALIBRATION` | calibration | none: warn; covers the whole reliable range: ok; partly: warn with the range |
+| `LEVEL_CALIBRATION` | calibration | valid LevelCalibration: ok, text with its offset and "dB SPL" reference; otherwise warn, "levels are dB relative (dBFS-like)" |
+
+Status (`decideStatus`):
+
+| Status | Rule |
+| --- | --- |
+| INVALID | any invalidating code (always `fail`) |
+| POOR | not INVALID, and any other `fail`, or measured warns (not the NOT_MEASURED codes) in ≥ 3 distinct dimensions |
+| USABLE | not POOR, and at least one `warn` (NOT_MEASURED included) |
+| GOOD | every `quality` reason is `ok` |
+
+GOOD therefore needs positive evidence on every dimension (a noise capture, ≥ 2 runs, coverage,
+no clipping, no dropout); a missing measurement caps the status at USABLE without pushing it
+to POOR. An INVALID assessment keeps only its `fail` reasons and an all-zero reliable mask.
+
+### Masks and metrics
+
+- `mask.reliable[i]`: with an SNR estimate, the 1/6-octave power mean of the linear per-point
+  SNR ≥ 10 dB **and** f ≤ 0.95 × Nyquist; without one, inside `validRange`. A point need not lie
+  in `validRange` (the longest run only) to be reliable.
+- `mask.calibrated[i]`: the profile's `covered` flag on the same grid, else inside its
+  `coverage`; never extrapolated.
+- `metrics`: `snrMedianDb`, `snrMinDb` (worst pooled SNR inside `validRange`), `clippingRatio`,
+  `clippingRegions`, `dropouts`, `repeatabilityDb`, `runs`, `requestedRange`, `coverage`,
+  `coverageFraction`, `reliableRanges`, `unreliableRanges`, `calibratedRange`,
+  `frequencyCalibrated`, `levelCalibrated`, `resolutionHz`.
+- Text: frequencies through `formatFrequencyWithResolution` at the coarser of Δf and the grid
+  step; levels through `formatDb` (`RELATIVE_UNIT` unless a valid level calibration applies);
+  SNR and spreads as plain dB, whole dB in passing reasons and one decimal in warn/fail
+  reasons; a passing "agree within ±x dB" rounds x up to 0.1 dB. Never "high confidence".
+
+### Assumptions and limits
+
+Thresholds are engineering choices with stated rationale, versioned by the ID (§199): changing
+any threshold, rule or invalidating code mints `oscilla.confidence.v2`. SNR, coverage and the
+masks come from the one `transfer` passed (with repeats, the caller chooses which run; the
+aggregate contributes only `repeatabilityDb`). `checkCapture`'s `DISCONTINUITY` is not read
+(G15).
+
+### Tests (`v3-quality.test.mjs`)
+
+Fixtures run the real chain (rendered sweep → gain or RBJ low-pass + seeded Gaussian noise →
+`checkCapture` → `computeTransfer` with a noise capture → `aggregateRuns`). Assertions are on
+the documented rules, so they are exact (status, codes, severities, values equal to the
+inputs they came from):
+
+| Test | Checks |
+| --- | --- |
+| thresholds frozen and consistent | `reliableMinSnrDb` = `VALID_MIN_SNR_DB`, pooling = `VALIDITY_SMOOTHING_FRACTION` |
+| clean repeated response (σ = 1e-3, 3 runs) | GOOD with ok reasons for every dimension |
+| low SNR (σ = 0.15) | USABLE; the band lost in noise named with its range |
+| very low SNR (σ = 0.3) | POOR with a failing `SNR_MEDIAN` |
+| severe / mild / sustained clipping | INVALID / warn / POOR with `checkCapture`'s ratio and regions |
+| high-variance runs | repeatability warn at ±2 dB, fail at ±4 dB |
+| missing / valid / tampered level calibration | never "SPL" unless valid; offset reported when valid |
+| calibrated mask (20 Hz-16 kHz profile), partial coverage | mask and `FREQUENCY_CALIBRATION` follow the coverage |
+| request above Nyquist | reported in the coverage text, not truncated silently |
+| empty capture, silence, missing checks; dropout in/out of the sweep window | INVALID / warn as ruled |
+| non-finite analysis output, empty valid range | INVALID |
+| no noise capture | `SNR_NOT_MEASURED`; reliability falls back to `validRange` |
+| RTA-only (no transfer) | resolution judged against the requested range |
+| `maskRuns` / `maskRanges`; reliable mask = pooled SNR test | contiguous inclusive runs; ranges partition the grid |
+| inputs not mutated, deterministic output | exact |
+
+`v3-integration.test.mjs` "G4" and `v3-pipeline.test.mjs` check that a real assessment (with
+`scope` and `mask`) is stored, validated and re-exported unchanged.
 
 ## Measurement state machine (`measurement/state-machine.js`)
 
@@ -887,56 +1241,36 @@ every active state, and bounded history over 256 repeat loops.
 
 ## Gaps
 
-Differences between the specification, the contract or the ADRs and what the code does at
-b650281. Each is stated, not fixed here.
+Differences between the specification, the contract or the ADRs and what the code does after the
+integration fixes on top of 88c0daf. **Closed** by those fixes (see the sections marked
+"Changed (integration)"): G1 power scales, G2 recipe stimulus, G3 IR validation, G4 null valid
+range / zero-power encoding / `rtaResult`, G5 discontinuities, G6 Blackman-Harris ID, G7 IDs
+stamped, G8 phase robustness, G9 Farina ID (the ε deviation from ADR 0021 is documented in
+[Impulse response](#ir)), G10 one uncalibrated label, G11 calibration of RTA bands, G13 result
+hash; G14 is documented in [Quality](#quality). Also closed: `assessQuality()` output was
+rejected by validation (`mask`, reason `scope`; found by the pipeline test). The remaining
+gaps are stated, not fixed:
 
-- **G1 Two power scales.** `spectrum.js` (`powerSpectrum`, `welch`) uses the tone scale
-  (full-scale sine = 0 dB); `rta.js` requires the mean-square scale (full-scale sine = −3.01 dB).
-  No exported function converts between them. Feeding `welch().power` into `bandPowers` reads
-  every band `10·log10(2·enbwBins)` too high: +4.77 dB with Hann, +6.03 dB with Blackman-Harris
-  (bins other than DC and Nyquist; measured +4.78 dB on white noise). The RTA tests avoid this by
-  building their own mean-square spectrum. Both scales are labelled "dB relative".
-- **G2 Recipe cannot hold a rendered stimulus spec.** `schema.js` `STIMULUS_FIELDS` lacks
-  `color` and `law`, which `normalizeStimulus` always emits, so
-  `createRecipe({ stimulus: renderStimulus(spec).spec })` throws ("unknown field"), contrary to
-  the `createRecipe` doc comment. Band-noise colour and chirp law are therefore not recordable,
-  and the experiment cannot reproduce such a stimulus. The schema also allows durations from
-  0.01 s (chirp minimum is 0.005 s), fades up to duration/2 (stimulus caps at duration/4), and
-  frequencies up to Nyquist (stimulus clamps at 0.95 × Nyquist).
-- **G3 IR result rejected by validation.** `computeImpulseResponse` returns `method` and
-  `fftSize`; `validate.js` `checkIr` treats both as unknown fields, so a real IR result cannot be
-  stored or exported unchanged (verified).
-- **G4 Null valid range and −Infinity levels rejected.** `computeTransfer` may return
-  `validRange: null`, but `checkTransfer` requires a pair. `bandPowers`/`bandAnalysis` return
-  `−Infinity` for a band with no power, but `checkRta` requires finite levels. No module builds
-  the `RtaResult` object (`{ algorithm, sampleRate, resolution, bands, levelsDb, fftSize }`)
-  that validation expects.
-- **G5 Discontinuity detection (§68).** The specification asks for detection of
-  discontinuities; `checkCapture` detects constant runs (stalls, zeros), empty and non-finite
-  captures only.
-- **G6 Window choice not recordable (§86).** `ALGORITHMS.window` is `oscilla.window.hann.v1`
-  only; `spectrum.js` also offers Blackman-Harris, which has no ID. The transfer and IR use no
-  analysis window at all (whole-buffer DFT), so the window ID applies to Welch/RTA only.
-- **G7 IDs not stamped.** `align.js`, `capture-checks.js`, `spectrum.js` and `rta.js` do not
-  attach `oscilla.align.xcorr.v1`, `oscilla.clip.v1`, `oscilla.window.hann.v1` or
-  `oscilla.rta.v1` to their results; `smoothing.js` exports its ID but its outputs do not carry
-  it. The orchestration layer (`engine.js`, not yet written) must record them (§43).
-- **G8 Phase robustness criterion (§27).** `computeTransfer` reports phase for any supplied lag
-  when asked; no threshold on `peakCorrelation` (or any other robustness test) is defined in the
-  code. It is left to the caller or `quality.js`.
-- **G9 ADR 0021 vs code.** ADR 0021 describes ε as large "near the fade-affected edges" and
-  Farina's inverse as a test oracle. The code applies −60 dB uniformly across [f1, f2] (edges
-  included) and ships `farina-inverse` as a selectable production method under the same IR
-  algorithm ID; a result's `method` field (rejected by validation, G3) is the only distinction.
-- **G10 Label wording.** The same uncalibrated scale is written three ways: `level.js`
-  "dB relative (dBFS-like)", `format.js` "dB relative", `csv.js` "dB relative (dBFS-like), not
-  SPL"; the specification (§24) asks for "Relative level, dBFS-like / analyser-relative scale".
-- **G11 Calibration not wired to RTA (§45).** No code applies a frequency profile to RTA bands;
-  `applyFrequencyCorrection` works on any frequency/dB pair and could be applied at band centres,
-  which ignores the correction's variation inside a band.
 - **G12 Output limiter (§207).** Whether measurement playback passes through the V2 master
   limiter/ceiling is decided by the not-yet-written engine; if it does, the limiter is part of the
   measured chain and is not compensated.
-- **G13 Result hash (§101)** is not implemented (the specification marks it optional).
-- **G14 Quality (§64-§66, §143, §199, §220-§221)** is not implemented on this commit; see
-  [Quality](#quality).
+- **G15 Quality ignores discontinuities.** `checkCapture` reports `DISCONTINUITY` (and
+  `invalid: true`), but `quality.js` maps only its listed codes, so a spliced capture can still
+  be assessed GOOD. Making `DISCONTINUITY` a quality reason (invalidating inside the sweep
+  window, like a dropout) changes the v1 rule set and must mint `oscilla.confidence.v2`
+  (§199). Until then the engine must not treat the quality status as covering
+  `checkCapture().invalid`.
+- **G16 No stored form for an aggregate.** `aggregateRuns()` (centre, envelope,
+  `repeatabilityDb`) feeds `assessQuality`, but `Experiment.results` is `{ transfer, ir, rta }`:
+  with repeats the engine must choose which run's TransferResult to store (the pipeline test
+  stores run 1) and the envelope is not stored. A builder for an aggregated TransferResult (and
+  its validation) should be defined in the contract first.
+- **G17 Phase threshold.** `PHASE_MIN_CORRELATION = 0.5` is reasoned (ρ² = explained energy),
+  not derived from a phase-uncertainty model; no per-point phase uncertainty is reported.
+- **G18 Fixture per ID (ADR 0024 confirmation).** IDs are pinned as strings and outputs by
+  analytic tolerances, but no golden-output fixture per ID fails on an unannounced numeric
+  change that stays inside a tolerance.
+- **G19 Calibrated transfer column.** `transferCsv` labels the calibrated magnitude column
+  "dB SPL (CALIBRATED)" under a valid level calibration, but |H| is a ratio (capture /
+  stimulus); with the offset added it is the SPL a full-scale digital stimulus would produce at
+  that frequency, which the label does not say.

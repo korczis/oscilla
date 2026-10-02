@@ -1,5 +1,8 @@
 // Derived views of a magnitude response: fractional-octave smoothing (spec §35) and
-// normalization (spec §34). Algorithm ID: 'oscilla.smoothing.fractional-octave.v1'.
+// normalization (spec §34). Algorithm IDs: 'oscilla.smoothing.fractional-octave.v1'
+// (SMOOTHING_ALGORITHM, carried by smoothResponse() views) and 'oscilla.normalization.v1'
+// (NORMALIZATION_ALGORITHM, carried by normalizeResponse() results and impulse-response.js
+// normalizeIr() views). smoothFractionalOctave() returns a bare array for internal use.
 //
 // smoothFractionalOctave: for each point f_i the result is the POWER mean of the points whose
 // frequency lies in the rectangular 1/N-octave window [f_i·2^(−1/2N), f_i·2^(1/2N)],
@@ -19,6 +22,7 @@
 import { ALGORITHMS } from './algorithms.js';
 
 export const SMOOTHING_ALGORITHM = ALGORITHMS.smoothing;
+export const NORMALIZATION_ALGORITHM = ALGORITHMS.normalization;
 export const SMOOTHING_FRACTIONS = Object.freeze([0, 24, 12, 6, 3]);
 
 function assertSeries(frequencies, magnitudeDb) {
@@ -61,6 +65,23 @@ export function smoothFractionalOctave(frequencies, magnitudeDb, fraction) {
   return out;
 }
 
+/**
+ * smoothResponse(frequencies, magnitudeDb, fraction) → { kind: 'smoothed', algorithm,
+ *   fraction, label, smoothedDb }
+ * The labelled derived view of smoothFractionalOctave (§35): the raw response is untouched and
+ * the view says which smoothing produced it. fraction 0 is an unsmoothed copy.
+ */
+export function smoothResponse(frequencies, magnitudeDb, fraction) {
+  const smoothedDb = smoothFractionalOctave(frequencies, magnitudeDb, fraction);
+  return {
+    kind: 'smoothed',
+    algorithm: SMOOTHING_ALGORITHM,
+    fraction,
+    label: fraction === 0 ? 'RAW: unsmoothed' : `SMOOTHED: 1/${fraction} octave (power mean)`,
+    smoothedDb,
+  };
+}
+
 function interpolateAt(frequencies, magnitudeDb, hz) {
   const n = frequencies.length;
   if (!(hz >= frequencies[0] && hz <= frequencies[n - 1]))
@@ -79,7 +100,7 @@ function formatHz(hz) {
 
 /**
  * normalizeResponse(frequencies, magnitudeDb, { mode: 'at-frequency', hz }
- *   | { mode: 'band-mean', lo, hi }) -> { normalizedDb, referenceDb, label, mode }
+ *   | { mode: 'band-mean', lo, hi }) -> { algorithm, mode, normalizedDb, referenceDb, label }
  */
 export function normalizeResponse(frequencies, magnitudeDb, spec) {
   assertSeries(frequencies, magnitudeDb);
@@ -108,5 +129,7 @@ export function normalizeResponse(frequencies, magnitudeDb, spec) {
   }
   const normalizedDb = new Float64Array(magnitudeDb.length);
   for (let i = 0; i < magnitudeDb.length; i++) normalizedDb[i] = magnitudeDb[i] - referenceDb;
-  return { mode: spec.mode, normalizedDb, referenceDb, label };
+  return {
+    algorithm: NORMALIZATION_ALGORITHM, mode: spec.mode, normalizedDb, referenceDb, label,
+  };
 }

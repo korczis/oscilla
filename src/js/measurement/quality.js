@@ -17,9 +17,10 @@
 //   scope 'calibration'  what the numbers may be labelled as (frequency profile coverage,
 //                        absolute level). Never changes the status: an uncalibrated response is
 //                        a valid RELATIVE measurement of the whole chain, and its unit says so
-//                        ("dB relative"); the calibration state is reported beside the status
-//                        (metrics.frequencyCalibrated / levelCalibrated, the calibrated mask and
-//                        the summary), not folded into it.
+//                        (RELATIVE_UNIT "dB relative (dBFS-like)"); the calibration state is
+//                        reported beside the status (metrics.frequencyCalibrated /
+//                        levelCalibrated, the calibrated mask and the summary), not folded into
+//                        it.
 //   value is a finite number for every 'ok' reason (positive evidence is always numeric); it is
 //   null only for a quantity that was NOT MEASURED or is absent (SNR without a noise capture,
 //   no level calibration, digital silence), and the text says so (§249).
@@ -78,7 +79,8 @@
 //
 // Text: frequencies through format.js formatFrequencyWithResolution at the coarser of the bin
 // resolution and the local grid spacing (a range edge is a grid point; no digit finer than
-// that); levels through formatDb as "dB relative" unless a valid LevelCalibration applies;
+// that); levels through formatDb as calibration/level.js RELATIVE_UNIT ("dB relative
+// (dBFS-like)", the one uncalibrated label) unless a valid LevelCalibration applies;
 // SNR and spreads are ratios, printed as plain dB: whole dB in passing reasons, one decimal in
 // warn/fail reasons (so 19.6 dB never reads as "20 dB" next to a 20 dB limit), and a passing
 // "agree within ±x dB" rounds x UP to 0.1 dB (an upper bound stays an upper bound). Never
@@ -91,7 +93,7 @@ import { EMPTY_RMS_DBFS } from './capture-checks.js';
 import { formatDb, formatFrequencyWithResolution } from './format.js';
 import { smoothFractionalOctave } from './smoothing.js';
 import { SAFE_NYQUIST_FRACTION } from './stimulus.js';
-import { isValidLevelCalibration } from '../calibration/level.js';
+import { RELATIVE_UNIT, isValidLevelCalibration } from '../calibration/level.js';
 
 export const QUALITY_ALGORITHM = ALGORITHMS.quality;
 
@@ -378,10 +380,10 @@ function assessCaptures(captures, sweepWindow, add) {
       const db = 20 * Math.log10(rms);
       add('NO_SIGNAL', 'fail',
         `no captured signal in ${who(empty)}: RMS ${formatDb(db)}, below ` +
-          `${formatDb(EMPTY_RMS_DBFS)}`, db, 'dB relative');
+          `${formatDb(EMPTY_RMS_DBFS)}`, db, RELATIVE_UNIT);
     } else {
       add('NO_SIGNAL', 'fail', `no captured signal in ${who(empty)}: digital silence`, null,
-        'dB relative');
+        RELATIVE_UNIT);
     }
   }
 
@@ -653,8 +655,8 @@ function assessLevelCalibration(level, add) {
     return true;
   }
   const text = level
-    ? 'level calibration is not valid: uncalibrated, levels are dB relative (dBFS-like)'
-    : 'no absolute level calibration: uncalibrated, levels are dB relative (dBFS-like)';
+    ? `level calibration is not valid: uncalibrated, levels are ${RELATIVE_UNIT}`
+    : `no absolute level calibration: uncalibrated, levels are ${RELATIVE_UNIT}`;
   add('LEVEL_CALIBRATION', 'warn', text, null, 'dB');
   return false;
 }

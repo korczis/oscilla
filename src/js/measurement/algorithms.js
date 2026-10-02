@@ -5,20 +5,34 @@
 //
 // ID grammar: oscilla.<family>[.<variant>].v<integer>, lowercase, '-' inside segments.
 // `family` in describeAlgorithm() is the key of ALGORITHMS whose ID shares the name (so
-// 'oscilla.confidence.v1' belongs to family 'quality'); an unknown but well-formed ID falls
+// 'oscilla.confidence.v1' belongs to family 'quality'), except that a VARIANT key (an
+// alternative method of another role, VARIANT_OF) reports that role: the Farina-inverse IR is
+// family 'ir', the Blackman-Harris window family 'window'. An unknown but well-formed ID falls
 // back to its first name segment, so a result written by a newer build can still be grouped.
+//
+// Every key is a role an experiment may record in its `algorithms` map; the plain role keys
+// (transfer, ir, window, ...) name the default method, variants name the alternative one. Which
+// module stamps which ID into its result is listed in docs/v3/algorithms.md ("Algorithm
+// registry").
 
 export const ALGORITHMS = Object.freeze({
   transfer: 'oscilla.transfer.v1',
   ir: 'oscilla.ir.log-sweep.v1',
+  irFarina: 'oscilla.ir.farina-inverse.v1',
   rta: 'oscilla.rta.v1',
   smoothing: 'oscilla.smoothing.fractional-octave.v1',
+  normalization: 'oscilla.normalization.v1',
   align: 'oscilla.align.xcorr.v1',
   clip: 'oscilla.clip.v1',
+  discontinuity: 'oscilla.discontinuity.v1',
   quality: 'oscilla.confidence.v1',
   calibration: 'oscilla.calibration.log-interp.v1',
   window: 'oscilla.window.hann.v1',
+  windowBlackmanHarris: 'oscilla.window.blackman-harris.v1',
 });
+
+/** Variant keys of ALGORITHMS and the role (family) whose alternative method they are. */
+export const VARIANT_OF = Object.freeze({ irFarina: 'ir', windowBlackmanHarris: 'window' });
 
 const ID_PATTERN = /^oscilla\.([a-z0-9-]+(?:\.[a-z0-9-]+)*)\.v([1-9][0-9]*)$/;
 
@@ -28,7 +42,9 @@ function stemOf(id) {
   return m ? m[1] : null;
 }
 
-const FAMILY_BY_STEM = new Map(Object.entries(ALGORITHMS).map(([k, id]) => [stemOf(id), k]));
+const FAMILY_BY_STEM = new Map(
+  Object.entries(ALGORITHMS).map(([k, id]) => [stemOf(id), VARIANT_OF[k] || k]),
+);
 const KNOWN = new Set(Object.values(ALGORITHMS));
 
 /** True only for an ID this build implements exactly (name and version). */

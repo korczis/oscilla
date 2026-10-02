@@ -37,9 +37,10 @@ src/js/experiments/   schema.js  migrate.js  validate.js  hash.js  csv.js  store
 tests/unit/v3-*.test.mjs   (picked up by `npm test`)
 ```
 
-Not yet landed (feature/v3 at b650281): `capture.js`, `quality.js`, `engine.js`. Their shapes
-below are still the contract they are built against. How each algorithm computes its result,
-and the known mismatches between modules, are in `docs/v3/algorithms.md` (section "Gaps").
+Not yet landed: `capture.js`, `engine.js` (being written against the shapes below).
+`quality.js` landed in e89ff9f. How each algorithm computes its result, and the remaining
+mismatches, are in `docs/v3/algorithms.md` (section "Gaps"); `tests/unit/v3-pipeline.test.mjs`
+runs the whole chain on the real result objects and keeps the shapes below consistent.
 
 Every module except `engine.js`, `capture.js` and `store.js` is pure: plain data in, plain data
 out, no DOM, no Web Audio, no globals, no `Date.now()` (callers pass timestamps). Arrays are
@@ -48,11 +49,16 @@ out, no DOM, no Web Audio, no globals, no `Date.now()` (callers pass timestamps)
 ## Shared shapes
 
 ```js
-// algorithms.js — stable IDs persisted in results (spec §43, §199)
+// algorithms.js — stable IDs persisted in results (spec §43, §199); every result object
+// carries the IDs it used (docs/v3/algorithms.md, "Algorithm registry")
 ALGORITHMS = { transfer: 'oscilla.transfer.v1', ir: 'oscilla.ir.log-sweep.v1',
-  rta: 'oscilla.rta.v1', smoothing: 'oscilla.smoothing.fractional-octave.v1',
-  align: 'oscilla.align.xcorr.v1', clip: 'oscilla.clip.v1', quality: 'oscilla.confidence.v1',
-  calibration: 'oscilla.calibration.log-interp.v1', window: 'oscilla.window.hann.v1' }
+  irFarina: 'oscilla.ir.farina-inverse.v1', rta: 'oscilla.rta.v1',
+  smoothing: 'oscilla.smoothing.fractional-octave.v1', normalization: 'oscilla.normalization.v1',
+  align: 'oscilla.align.xcorr.v1', clip: 'oscilla.clip.v1',
+  discontinuity: 'oscilla.discontinuity.v1', quality: 'oscilla.confidence.v1',
+  calibration: 'oscilla.calibration.log-interp.v1', window: 'oscilla.window.hann.v1',
+  windowBlackmanHarris: 'oscilla.window.blackman-harris.v1' }
+VARIANT_OF = { irFarina: 'ir', windowBlackmanHarris: 'window' }   // describeAlgorithm family
 
 // stimulus.js
 StimulusSpec = { kind: 'sine'|'log-sweep'|'white'|'pink'|'band-noise'|'chirp',
@@ -65,63 +71,79 @@ renderStimulus(spec) -> { spec /* normalized, Nyquist-clamped */, samples: Float
   clampedTo /* Hz or null */ }
 // The sweep inverse is derived from the SAME normalized spec (spec §206):
 inverseSweep(spec) -> Float32Array
+safeMaxFrequency(sampleRate) -> 0.95 × Nyquist   // the clamp; schema.js uses the same
 
-// spectrum.js — tone scaling: a full-scale bin-centred sine reads 1 (0 dB)
-windowFn('hann'|'blackman-harris', n) -> { name, samples: Float64Array, coherentGain,
-  noisePowerGain, enbwBins }
-powerSpectrum(samples, { fftSize, window, offset }) -> Float64Array /* fftSize/2 + 1 */
-welch(samples, { fftSize, overlap = 0.5, window = 'hann' }) -> { power: Float64Array,
-  segments, fftSize, hop, window }
+// spectrum.js — scale 'tone' (default): a full-scale bin-centred sine reads 1 (0 dB);
+// scale 'mean-square': Σ P = mean square (FS sine 0.5, −3.01 dB) = the band-level scale
+windowFn('hann'|'blackman-harris', n) -> { name, algorithm, samples: Float64Array,
+  coherentGain, noisePowerGain, enbwBins }
+powerSpectrum(samples, { fftSize, window, offset, scale = 'tone' }) -> Float64Array /* N/2+1 */
+welch(samples, { fftSize, overlap = 0.5, window = 'hann', scale = 'tone' }) -> { power:
+  Float64Array, segments, fftSize, hop, window, scale, windowAlgorithm }
+toneToMeanSquare(power, window) -> Float64Array  // ×1/(2·ENBW) inside, ×1/ENBW at DC, Nyquist
+windowAlgorithm(name) -> id;  WINDOW_ALGORITHMS = { hann, 'blackman-harris' }
 
 // capture.js (browser) / capture-checks.js (pure)
 Capture = { sampleRate, samples: Float32Array /* mono */, preRoll /* s */, postRoll /* s */,
   startedAt /* AudioContext time */, constraints: { requested, applied /* or null */ },
   device: { label: string|null, id: string|null } }
-checkCapture(capture, opts) -> { clipping: { ratio, regions: [{ start, end }] },
-  dropouts: [{ start, end }], rms, peak, empty: bool, invalid: bool,
-  reasons: [{ code /* NO_SAMPLES|BAD_SAMPLE_RATE|NON_FINITE|EMPTY|CLIPPING|DROPOUT */, text }] }
+checkCapture(capture, opts) -> { algorithms: { clip, discontinuity },
+  clipping: { ratio, regions: [{ start, end }] }, dropouts: [{ start, end }],
+  discontinuities: [{ start, end, jump, ratio|null }], rms, peak, empty: bool, invalid: bool,
+  reasons: [{ code /* NO_SAMPLES|BAD_SAMPLE_RATE|NON_FINITE|EMPTY|CLIPPING|DROPOUT|
+    DISCONTINUITY */, text }] }
 
 // align.js
 align(reference: Float32Array, captured: Float32Array, sampleRate, { maxLagS, minLagS = 0 }) ->
-  { lagSamples /* fractional, null if no energy */, lagSeconds,
+  { algorithm, lagSamples /* fractional, null if no energy */, lagSeconds,
     peakCorrelation /* 0..1 normalized */, polarity /* 1|-1|null */ }
 
-// transfer.js — magnitude required, phase only when alignment is robust (spec §26-§27)
-computeTransfer({ stimulus, captured, sampleRate, f1, f2, lagSamples, noise,
-  options: { phase = false, pointsPerOctave = 48 } }) -> TransferResult
+// transfer.js — magnitude required, phase only when alignment is robust (spec §26-§27):
+// phase needs options.phase, an align() result and peakCorrelation ≥ PHASE_MIN_CORRELATION
+// (0.5); a bare lagSamples gives phaseDeg null with phaseReason 'NO_ALIGNMENT'
+computeTransfer({ stimulus, captured, sampleRate, f1, f2, alignment, lagSamples /* default
+  alignment.lagSamples */, noise, options: { phase = false, pointsPerOctave = 48 } })
+  -> TransferResult
 TransferResult = { algorithm, sampleRate, frequencies: Float64Array /* Hz */,
-  magnitudeDb: Float64Array /* raw, relative */, phaseDeg: Float64Array|null,
+  magnitudeDb: Float64Array /* raw, relative; zero power −300 */, phaseDeg: Float64Array|null,
   snrDb: Float64Array|null, validRange: [fLo, fHi]|null, requestedRange: [f1, f2], fftSize,
-  binHz }
+  binHz, phaseReason: null|'NOT_REQUESTED'|'NO_ALIGNMENT'|'ALIGNMENT_NOT_ROBUST',
+  alignment: { algorithm, lagSamples, peakCorrelation, polarity }|null }
 
 // impulse-response.js
 computeImpulseResponse({ stimulus, captured, sampleRate, f1, f2, inverse, method,
   lagSamples }) -> IrResult
-IrResult = { algorithm, method: 'spectral'|'farina-inverse', sampleRate,
-  samples: Float32Array /* original scale */, peakIndex, peakTimeS, captureOffsetS,
-  noiseFloorDb, window: null|[t0, t1], fftSize }
+IrResult = { algorithm /* IR_ALGORITHMS[method]: spectral 'oscilla.ir.log-sweep.v1',
+  farina-inverse 'oscilla.ir.farina-inverse.v1' */, method: 'spectral'|'farina-inverse',
+  sampleRate, samples: Float32Array /* original scale */, peakIndex, peakTimeS,
+  captureOffsetS, noiseFloorDb, window: null|[t0, t1], fftSize }
 irWindow(ir, t0, t1) -> { ...ir, window: [t0, t1], view: { startIndex, endIndex, samples } }
-normalizeIr(ir, 'peak-db'|'peak-linear') -> { kind: 'normalized', mode, label, unit,
-  referenceValue, values: Float64Array }
+normalizeIr(ir, 'peak-db'|'peak-linear') -> { kind: 'normalized', algorithm /* normalization */,
+  mode, label, unit, referenceValue, values: Float64Array }
 
 // smoothing.js — derived views; the raw response is never modified
 smoothFractionalOctave(frequencies, magnitudeDb, fraction /* 0 = none, N = 1/N octave */)
   -> Float64Array
+smoothResponse(frequencies, magnitudeDb, fraction) -> { kind: 'smoothed', algorithm, fraction,
+  label, smoothedDb }
 normalizeResponse(frequencies, magnitudeDb, { mode: 'at-frequency', hz }
-  | { mode: 'band-mean', lo, hi }) -> { mode, normalizedDb, referenceDb, label }
+  | { mode: 'band-mean', lo, hi }) -> { algorithm, mode, normalizedDb, referenceDb, label }
 
-// rta.js — input power on the mean-square scale (Σ power = mean square), not spectrum.js's
+// rta.js — band levels on the mean-square scale (FS sine −3.01 dB); `power` is a mean-square
+// array or a spectrum.js welch() result, converted by its stated scale (meanSquarePower)
 bandCenters('octave'|'third', fMin, fMax, sampleRate) -> [{ nominal, exact, lo, hi }]
   // selected by nominal label; bands with hi > 0.95 × Nyquist excluded
 integrateBands(power, binHz, bands, out?) -> Float64Array /* linear band power */
-bandPowers(power /* linear power per bin */, binHz, bands) -> Float64Array /* dB */
+bandPowers(power, binHz, bands) -> Float64Array /* dB, −Infinity for zero power */
 bandBinCounts(binHz, bands, binCount?) -> { binCounts: Float64Array, underResolved: bool[] }
-bandAnalysis(power, binHz, bands) -> { levelsDb, power, binCounts, underResolved }
+bandAnalysis(power, binHz, bands) -> { algorithm, levelsDb, power, binCounts, underResolved }
 createRtaAverager({ mode: 'instant'|'fast'|'slow', peakHold, size }) -> { push(power, dt)
   -> { levelsDb, peakDb|null }, reset, freeze, unfreeze, frozen, frames, mode, tau, peakHold }
-RtaResult /* as stored in an experiment; assembled by the caller */ = { algorithm, sampleRate,
-  resolution: 'octave'|'third', bands: [{ nominal, exact, lo, hi }], levelsDb: Float64Array,
-  fftSize|null }
+rtaResult({ sampleRate, resolution, bands, levelsDb, fftSize = null, window = null })
+  -> RtaResult   // the stored form; −Infinity / < −300 dB stored as −300 dB (zero power)
+RtaResult = { algorithm, sampleRate, resolution: 'octave'|'third',
+  bands: [{ nominal, exact, lo, hi }], levelsDb: Float64Array, fftSize|null,
+  windowAlgorithm|null }
 
 // aggregate.js — repeated runs on one frequency grid
 aggregateRuns(runs: Float64Array[] /* dB */, { method: 'mean'|'median' }) -> { method, runs,
@@ -129,9 +151,16 @@ aggregateRuns(runs: Float64Array[] /* dB */, { method: 'mean'|'median' }) -> { m
   repeatabilityDb }   // envelope fields null for one run
 
 // quality.js
+assessQuality({ capture, transfer, aggregate, calibration, requestedRange, resolutionHz,
+  sweepWindow }) -> QualityAssessment
 QualityAssessment = { algorithm, status: 'GOOD'|'USABLE'|'POOR'|'INVALID',
-  reasons: [{ code, severity: 'ok'|'warn'|'fail', text, value, unit, range? }],
-  metrics: { snrMedianDb, clippingRatio, repeatabilityDb, coverage: [fLo, fHi], ... } }
+  reasons: [{ code, scope: 'quality'|'calibration', severity: 'ok'|'warn'|'fail', text, value,
+    unit, range? }],
+  metrics: { snrMedianDb, snrMinDb, clippingRatio, clippingRegions, dropouts,
+    repeatabilityDb, runs, requestedRange, coverage: [fLo, fHi]|null, coverageFraction,
+    reliableRanges, unreliableRanges, calibratedRange, frequencyCalibrated, levelCalibrated,
+    resolutionHz },
+  mask: { frequencies: Float64Array, reliable: Uint8Array, calibrated: Uint8Array } }
 
 // calibration/profile.js — two kinds, never conflated (spec §17)
 FrequencyProfile = { schemaVersion: 1, kind: 'frequency', id /* sha-256 of normalized points */,
@@ -145,34 +174,46 @@ exportProfile(profile) -> { format: 'oscilla.calibration', schemaVersion, kind, 
 applyFrequencyCorrection(magnitudeDb, frequencies, profile, { extrapolate: 'none'|'hold' })
   -> { algorithm, profileId, correctedDb: Float64Array, covered: Uint8Array,
        coverage: [fLo, fHi], extrapolate }
-// calibration/level.js
-levelLabel(levelCalibration) -> { unit: 'dB SPL'|'dB relative (dBFS-like)', calibrated,
+applyFrequencyCorrectionToBands(rta /* { bands, levelsDb } */, profile, { power, binHz })
+  -> { algorithm, profileId, correctedDb, correctionDb /* NaN uncovered */, covered,
+       coverage, weighting: 'spectrum'|'flat' }   // power-weighted per band, no extrapolation
+// calibration/level.js — the one uncalibrated label (spec §24)
+RELATIVE_UNIT = 'dB relative (dBFS-like)'
+RELATIVE_SCALE_LABEL = 'Relative level · dBFS-like / analyser-relative scale'
+levelLabel(levelCalibration) -> { unit: 'dB SPL'|RELATIVE_UNIT, calibrated,
   indicator: 'CALIBRATED'|'UNCALIBRATED' }
 
 // experiments/schema.js — schema versions are independent of the product version (spec §131)
 Experiment = { kind: 'oscilla-experiment', schemaVersion: 1, oscillaVersion, oscillaCommit,
-  experimentId, name, recipe: { stimulus, repeats, analysis }, output: { level },
+  experimentId, name, recipe: { stimulus /* = renderStimulus(spec).spec, incl. color, law */,
+  repeats, analysis }, output: { level },
   input: { device: { label, id }, constraints: { requested, applied } },
   calibration: { frequency: { id, name }|null, level: {...}|null },
   environment: { notes }, measurement: { startedAt, sampleRate, runs },
   quality, algorithms: { role: id }, results: { transfer, ir, rta /* RtaResult */ },
-  provenance: { configHash, createdAt, repeatOf /* source experimentId|null */,
+  provenance: { configHash, resultHash /* SHA-256 of the encoded results, §101 */,
+    createdAt, repeatOf /* source experimentId|null */,
     build /* { version, commit, shortCommit, sourceDate, channel, dirty, repository }|null */ } }
+// experiments/hash.js
+configHash(e) -> hex;  withConfigHash(e, hex);  resultHash(e) -> hex;  withResultHash(e, hex)
+// experiments/validate.js verifies resultHash on import: mismatch -> error code 'corrupt'
 // In a file, typed arrays are EncodedArray { dtype: 'f32'|'f64'|'u8', length,
 // encoding: 'base64-le', data } (experiments/encode.js).
 ```
 
-Known mismatches between these shapes as implemented (details in `docs/v3/algorithms.md`,
-"Gaps"): the recipe schema does not accept `color` and `law`, so a rendered `StimulusSpec`
-cannot be stored as is (G2); validation rejects an `IrResult` carrying `method` and `fftSize`
-(G3), a `validRange` of null and non-finite `levelsDb` (G4); `spectrum.js` and `rta.js` use
-different power scales (G1).
+The shapes above are what the modules produce and what `validate.js` accepts (the former
+mismatches G1-G4 are closed). Remaining gaps (`docs/v3/algorithms.md`, "Gaps"): the output
+limiter (G12), quality not reading `DISCONTINUITY` (G15), no stored form for an aggregate of
+repeats (G16), the phase threshold being an engineering choice (G17), no golden fixture per
+algorithm ID (G18), and the meaning of the calibrated transfer CSV column (G19).
 
 ## Labels (spec §24, §98)
 
 Every displayed quantity is one of REQUESTED, DIGITAL, OBSERVED, CALIBRATED, ESTIMATED,
-NORMALIZED. Levels are "dB relative (dBFS-like)" unless a valid `LevelCalibration` applies, and
-only then "dB SPL" with a CALIBRATED indicator. Smoothed and normalized views say so.
+NORMALIZED. Levels are `RELATIVE_UNIT` "dB relative (dBFS-like)" on the scale
+`RELATIVE_SCALE_LABEL` "Relative level · dBFS-like / analyser-relative scale" unless a valid
+`LevelCalibration` applies, and only then "dB SPL" with a CALIBRATED indicator; no uncalibrated
+output contains "SPL". Smoothed and normalized views say so and carry their algorithm ID.
 
 ## Limits (spec §174)
 

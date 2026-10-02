@@ -911,7 +911,8 @@ export function createMeasurementEngine({ io, clock, onEvent, limits, assess } =
       const captured = s.captures[run.index].samples;
       run.transfer = await step(s, 'transfer', run.index, () => computeTransfer({
         stimulus: stimulus.samples, captured, sampleRate: sr, f1: spec.f1, f2: spec.f2,
-        lagSamples: run.alignment.lagSamples, noise, options: { phase: plan.phase },
+        lagSamples: run.alignment.lagSamples, alignment: run.alignment, noise,
+        options: { phase: plan.phase },
       }));
       if (run !== best) {
         run.raw = keepRaw ? captured : null;

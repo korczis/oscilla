@@ -483,8 +483,8 @@ test('empty capture, digital silence and missing capture checks are INVALID', ()
   assert.equal(qq.status, 'INVALID');
   const rq = one(qq, 'NO_SIGNAL');
   assert.ok(Math.abs(rq.value - 20 * Math.log10(quiet.rms)) < 1e-9);
-  assert.equal(rq.unit, 'dB relative');
-  assert.match(rq.text, /below −90\.0 dB relative/);
+  assert.equal(rq.unit, 'dB relative (dBFS-like)');
+  assert.match(rq.text, /below −90\.0 dB relative \(dBFS-like\)/);
 
   const missing = assessQuality({ transfer: CLEAN.transfer });
   assertWellFormed(missing);

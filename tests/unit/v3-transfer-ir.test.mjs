@@ -15,7 +15,10 @@ import {
   spectralDeconvolution,
   logGrid,
   REGULARIZATION,
+  PHASE_MIN_CORRELATION,
+  PHASE_REASONS,
 } from '../../src/js/measurement/transfer.js';
+import { align } from '../../src/js/measurement/align.js';
 import {
   computeImpulseResponse,
   irWindow,
@@ -232,31 +235,56 @@ for (const sr of RATES) {
 
 // ----------------------------------------------------------------------- transfer: phase
 
-test('transfer: phase only on request with an alignment lag; then matches analytic arg H', () => {
-  const sr = 48000;
-  const coef = rbj('lowpass', 1000, Math.SQRT1_2, sr);
-  const delay = 0.3;
-  const lag = Math.round((PRE + delay) * sr);
-  const noLag = measure(sr, (z) => biquadFilter(coef, z), { delay, options: { phase: true } });
-  assert.equal(noLag.r.phaseDeg, null, 'no alignment supplied: phase must not be faked');
-  const notAsked = measure(sr, (z) => biquadFilter(coef, z), { delay, lagSamples: lag });
-  assert.equal(notAsked.r.phaseDeg, null);
-  const { r } = measure(sr, (z) => biquadFilter(coef, z), {
-    delay, lagSamples: lag, options: { phase: true },
+test('transfer: phase only on request with a robust alignment; then matches analytic arg H',
+  () => {
+    const sr = 48000;
+    const coef = rbj('lowpass', 1000, Math.SQRT1_2, sr);
+    const delay = 0.3;
+    const lag = Math.round((PRE + delay) * sr);
+    const { x, y } = measure(sr, (z) => biquadFilter(coef, z), { delay });
+    const alignment = align(x, y, sr);
+    assert.ok(alignment.peakCorrelation >= PHASE_MIN_CORRELATION, `${alignment.peakCorrelation}`);
+    const base = { stimulus: x, captured: y, sampleRate: sr, f1: F1, f2: F2 };
+    const noAlign = computeTransfer({ ...base, options: { phase: true } });
+    assert.equal(noAlign.phaseDeg, null, 'no alignment supplied: phase must not be faked');
+    assert.equal(noAlign.phaseReason, PHASE_REASONS.NO_ALIGNMENT);
+    assert.equal(noAlign.alignment, null);
+    // A bare lag is not evidence of a robust alignment (spec §27); the old call form still
+    // works and says why there is no phase.
+    const bareLag = computeTransfer({ ...base, lagSamples: lag, options: { phase: true } });
+    assert.equal(bareLag.phaseDeg, null);
+    assert.equal(bareLag.phaseReason, PHASE_REASONS.NO_ALIGNMENT);
+    const notAsked = computeTransfer({ ...base, alignment, lagSamples: lag });
+    assert.equal(notAsked.phaseDeg, null);
+    assert.equal(notAsked.phaseReason, PHASE_REASONS.NOT_REQUESTED);
+    assert.equal(notAsked.alignment.peakCorrelation, alignment.peakCorrelation);
+    const weak = computeTransfer({ ...base, options: { phase: true },
+      alignment: { ...alignment, peakCorrelation: PHASE_MIN_CORRELATION - 1e-9 } });
+    assert.equal(weak.phaseDeg, null);
+    assert.equal(weak.phaseReason, PHASE_REASONS.ALIGNMENT_NOT_ROBUST);
+    const lost = computeTransfer({ ...base, options: { phase: true },
+      alignment: { ...alignment, lagSamples: null } });
+    assert.equal(lost.phaseReason, PHASE_REASONS.ALIGNMENT_NOT_ROBUST);
+    // Explicit lagSamples overrides alignment.lagSamples (here: the exact delay, so the
+    // expected phase is arg H of the filter alone).
+    const r = computeTransfer({ ...base, alignment, lagSamples: lag, options: { phase: true } });
+    assert.ok(r.phaseDeg instanceof Float64Array);
+    assert.equal(r.phaseReason, null);
+    assert.deepEqual(r.alignment, { algorithm: 'oscilla.align.xcorr.v1',
+      lagSamples: alignment.lagSamples, peakCorrelation: alignment.peakCorrelation,
+      polarity: 1 });
+    let worst = 0;
+    r.frequencies.forEach((f, i) => {
+      if (f < 50 || f > 10000) return;
+      const [re, im] = biquadResponse(coef, f, sr);
+      const expected = (Math.atan2(im, re) * 180) / Math.PI;
+      const d = Math.abs(((r.phaseDeg[i] - expected + 540) % 360) - 180);
+      worst = Math.max(worst, d);
+    });
+    // The phase within a 1/48-octave band varies by < 1° for this filter; complex averaging
+    // returns the band's mean angle.
+    assert.ok(worst < 2, `phase error ${worst.toFixed(3)}°`);
   });
-  assert.ok(r.phaseDeg instanceof Float64Array);
-  let worst = 0;
-  r.frequencies.forEach((f, i) => {
-    if (f < 50 || f > 10000) return;
-    const [re, im] = biquadResponse(coef, f, sr);
-    const expected = (Math.atan2(im, re) * 180) / Math.PI;
-    const d = Math.abs(((r.phaseDeg[i] - expected + 540) % 360) - 180);
-    worst = Math.max(worst, d);
-  });
-  // The phase within a 1/48-octave band varies by < 1° for this filter; complex averaging
-  // returns the band's mean angle.
-  assert.ok(worst < 2, `phase error ${worst.toFixed(3)}°`);
-});
 
 // ----------------------------------------------------------------------- transfer: noise
 

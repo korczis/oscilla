@@ -24,19 +24,34 @@
 // masks. Band levels here are ESTIMATED, relative (dBFS-like) unless a level calibration is
 // applied downstream, and narrow bands with few bins are flagged as under-resolved.
 //
-// Band integration: power[k] is the one-sided linear power of bin k, normalised by the caller so
-// that Σ power[k] is the signal's mean square (power spectral density × bin width; for a
-// window w of length N: P[k] = c·|X[k]|² / (N·Σw²) with c = 2 except c = 1 at DC and Nyquist).
-// Bin k is taken to cover [(k − ½)·binHz, (k + ½)·binHz]; a bin partially inside a band
-// contributes power[k] times the fraction of its width that the band overlaps (uniform power
-// within a bin). Band power is a sum of linear power and only the result is converted to dB;
-// dB values are never averaged.
+// Band integration: power[k] is the one-sided linear power of bin k on the 'mean-square' scale
+// of spectrum.js (Σ power[k] is the signal's mean square, power spectral density × bin width;
+// for a window w of length N: P[k] = c·|X[k]|² / (N·Σw²) with c = 2 except c = 1 at DC and
+// Nyquist). That is the ONE band-level scale: a sine of amplitude A reads 10·log10(A²/2), so a
+// full-scale sine is −3.01 dB whatever window produced the spectrum. Instead of a bare array
+// the functions also take a spectrum.js welch() result ({ power, scale, window }) and convert
+// it by its stated scale (toneToMeanSquare for 'tone'), so welch() output can be passed as is;
+// an object without a known scale is rejected rather than guessed. Bin k is taken to cover
+// [(k − ½)·binHz, (k + ½)·binHz]; a bin partially inside a band contributes power[k] times the
+// fraction of its width that the band overlaps (uniform power within a bin). Band power is a
+// sum of linear power and only the result is converted to dB; dB values are never averaged.
+//
+// Zero power: levelsDb from bandPowers/bandAnalysis/the averager are −Infinity for a band with
+// no power (exact arithmetic). The stored form, rtaResult(), encodes it — and anything below
+// it — as ZERO_POWER_DB = −300 dB (transfer.js), the one JSON-safe zero-power value of every
+// stored OSCILLA result.
 //
 // Time averaging: exponential averaging of POWER per band, y ← y + α·(p − y) with
 // α = 1 − e^(−Δt/τ). FAST (τ = 125 ms) and SLOW (τ = 1 s) follow the conventional sound-level
 // meter time weightings (IEC 61672-1 §5.8) in name and time constant only: they are applied per
 // analysis frame of a block FFT, not as a continuous detector on the squared signal, and are not
 // verified against IEC 61672-1.
+
+import { ALGORITHMS } from './algorithms.js';
+import { POWER_SCALES, toneToMeanSquare, windowAlgorithm } from './spectrum.js';
+import { ZERO_POWER_DB } from './transfer.js';
+
+export const RTA_ALGORITHM = ALGORITHMS.rta;
 
 /** Base-10 octave frequency ratio G = 10^(3/10) (IEC 61260-1 §5.2). */
 export const OCTAVE_RATIO_G = 10 ** (3 / 10);
@@ -137,13 +152,32 @@ function checkBinHz(binHz) {
 }
 
 /**
+ * meanSquarePower(spectrum) → array of per-bin powers on the 'mean-square' scale
+ * spectrum: a bare array (taken to be mean-square already, the input contract) or a
+ * spectrum.js welch() result { power, scale, window }: 'mean-square' is used as is, 'tone' is
+ * converted with toneToMeanSquare(power, window). Anything else throws.
+ */
+export function meanSquarePower(spectrum) {
+  if (spectrum && (ArrayBuffer.isView(spectrum) || Array.isArray(spectrum))) return spectrum;
+  if (!spectrum || typeof spectrum !== 'object' || !spectrum.power)
+    throw new TypeError('power must be an array or a welch() result { power, scale, window }');
+  if (!POWER_SCALES.includes(spectrum.scale))
+    throw new TypeError(`spectrum scale must be ${POWER_SCALES.join(' or ')}, ` +
+      `got ${spectrum.scale}`);
+  return spectrum.scale === 'tone' ? toneToMeanSquare(spectrum.power, spectrum.window)
+    : spectrum.power;
+}
+
+/**
  * integrateBands(power, binHz, bands, out = new Float64Array(bands.length)) → out
  *
  * LINEAR band power: Σ power[k]·w[k] with w[k] the fraction of bin k inside the band. Writes
  * into `out` (pass a reused Float64Array for allocation-free per-frame use); power is read only.
+ * power: mean-square array or a welch() result (see meanSquarePower).
  */
-export function integrateBands(power, binHz, bands, out = new Float64Array(bands.length)) {
+export function integrateBands(spectrum, binHz, bands, out = new Float64Array(bands.length)) {
   checkBinHz(binHz);
+  const power = meanSquarePower(spectrum);
   const n = power.length;
   for (let i = 0; i < bands.length; i++) {
     const lo = bands[i].lo / binHz + 0.5; // band edges in "bin-cell" units: cell k = [k, k + 1)
@@ -169,8 +203,9 @@ export function powerToDb(power, out = new Float64Array(power.length)) {
 }
 
 /**
- * bandPowers(power, binHz, bands) → Float64Array of band levels in dB (relative, ESTIMATED).
- * The contract signature of docs/v3/architecture.md; bandAnalysis() adds the bin counts.
+ * bandPowers(power, binHz, bands) → Float64Array of band levels in dB (relative, ESTIMATED,
+ * mean-square scale). power: mean-square array or a welch() result. The contract signature of
+ * docs/v3/architecture.md; bandAnalysis() adds the bin counts.
  */
 export function bandPowers(power, binHz, bands) {
   const p = integrateBands(power, binHz, bands);
@@ -178,13 +213,54 @@ export function bandPowers(power, binHz, bands) {
 }
 
 /**
- * bandAnalysis(power, binHz, bands) → { levelsDb: Float64Array, power: Float64Array,
- *   binCounts: Float64Array, underResolved: boolean[] }
+ * bandAnalysis(power, binHz, bands) → { algorithm, levelsDb: Float64Array,
+ *   power: Float64Array, binCounts: Float64Array, underResolved: boolean[] }
+ * power: mean-square array or a welch() result.
  */
-export function bandAnalysis(power, binHz, bands) {
+export function bandAnalysis(spectrum, binHz, bands) {
+  const power = meanSquarePower(spectrum);
   const p = integrateBands(power, binHz, bands);
   const { binCounts, underResolved } = bandBinCounts(binHz, bands, power.length);
-  return { levelsDb: powerToDb(p), power: p, binCounts, underResolved };
+  return { algorithm: RTA_ALGORITHM, levelsDb: powerToDb(p), power: p, binCounts, underResolved };
+}
+
+/**
+ * rtaResult({ sampleRate, resolution, bands, levelsDb, fftSize = null, window = null })
+ *   → RtaResult { algorithm, sampleRate, resolution, bands: [{ nominal, exact, lo, hi }],
+ *     levelsDb: Float64Array, fftSize, windowAlgorithm }
+ * The stored RTA result (docs/v3/architecture.md), the shape experiments/validate.js checks.
+ * levelsDb are band levels in dB on the mean-square scale (bandPowers, bandAnalysis().levelsDb
+ * or an averager's levelsDb); −Infinity and anything below ZERO_POWER_DB are stored as
+ * ZERO_POWER_DB (−300 dB, zero power). window: the analysis window name or windowFn() result
+ * (its ID is stored as windowAlgorithm), or null when unknown. Inputs are copied, not kept.
+ */
+export function rtaResult({
+  sampleRate, resolution, bands, levelsDb, fftSize = null, window = null,
+} = {}) {
+  if (!(sampleRate > 0) || !Number.isFinite(sampleRate))
+    throw new RangeError(`sample rate must be positive, got ${sampleRate}`);
+  bandsPerOctave(resolution);
+  if (!Array.isArray(bands) || !levelsDb || levelsDb.length !== bands.length)
+    throw new RangeError('rtaResult needs bands and one level per band');
+  if (fftSize !== null && !(Number.isInteger(fftSize) && fftSize >= 2))
+    throw new RangeError(`fftSize must be an integer ≥ 2 or null, got ${fftSize}`);
+  const levels = new Float64Array(bands.length);
+  for (let i = 0; i < bands.length; i++) {
+    const v = levelsDb[i];
+    if (Number.isNaN(v) || v === Infinity)
+      throw new RangeError(`levelsDb[${i}] is not a band level: ${v}`);
+    levels[i] = v > ZERO_POWER_DB ? v : ZERO_POWER_DB;
+  }
+  const name = typeof window === 'string' ? window : window && window.name;
+  return {
+    algorithm: RTA_ALGORITHM,
+    sampleRate,
+    resolution,
+    bands: bands.map(({ nominal, exact, lo, hi }) => ({ nominal, exact, lo, hi })),
+    levelsDb: levels,
+    fftSize,
+    windowAlgorithm: name == null ? null : windowAlgorithm(name),
+  };
 }
 
 /**

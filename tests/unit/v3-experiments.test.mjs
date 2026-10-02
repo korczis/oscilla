@@ -184,7 +184,8 @@ test('createExperiment: contract shape, unknowns null, inputs not mutated', () =
   assert.strictEqual(e.input.device.label, null);
   assert.deepStrictEqual(e.calibration, { frequency: null, level: null });
   assert.deepStrictEqual(e.results, { transfer: null, ir: null, rta: null });
-  assert.deepStrictEqual(e.recipe, { stimulus: { ...SWEEP, f: null }, repeats: 1, analysis: {} });
+  assert.deepStrictEqual(e.recipe, { stimulus: { ...SWEEP, f: null, color: null, law: null },
+    repeats: 1, analysis: {} });
   assert.strictEqual(e.output.level, 0.5);
   assert.strictEqual(e.provenance.createdAt, new Date(1767000000000).toISOString());
   assert.strictEqual(e.provenance.configHash, null);
@@ -200,12 +201,33 @@ test('createRecipe: limits enforced, unused fields normalized to null (§103, §
   const sine = createRecipe({ stimulus: { kind: 'sine', duration: 2, level: 0.25, f: 1000,
     fade: 0.01, f1: 20, sampleRate: null } });
   assert.deepStrictEqual(sine.stimulus, { kind: 'sine', sampleRate: null, duration: 2,
-    level: 0.25, f: 1000, f1: null, f2: null, fade: 0.01, seed: null });
+    level: 0.25, f: 1000, f1: null, f2: null, fade: 0.01, seed: null, color: null, law: null });
+  // Limits are stimulus.js's own (G2): fade ≤ duration/4 (10 s → 2.5 s), f ≤ 0.95 × Nyquist
+  // (22 800 Hz at 48 kHz), f ≥ 1 Hz, level in (0, 1], per-kind durations (chirp 5 ms-1 s),
+  // and colour / law only where the kind uses them.
   const bad = [
     { ...SWEEP, duration: 31 }, { ...SWEEP, duration: 0.5 }, { ...SWEEP, level: 1.5 },
     { ...SWEEP, f1: 2000, f2: 20 }, { ...SWEEP, f2: 30000 }, { ...SWEEP, kind: 'square' },
     { ...SWEEP, fade: 6 }, { ...SWEEP, extra: 1 }, { ...SWEEP, duration: NaN },
+    { ...SWEEP, fade: 2.6 }, { ...SWEEP, f2: 22801 }, { ...SWEEP, f1: 0.5 },
+    { ...SWEEP, level: 0 }, { ...SWEEP, color: 'pink' }, { ...SWEEP, law: 'log' },
+    { kind: 'chirp', sampleRate: 48000, duration: 2, level: 0.5, f1: 20, f2: 20000, fade: 0.1 },
+    { kind: 'chirp', sampleRate: 48000, duration: 0.05, level: 0.5, f1: 20, f2: 20000,
+      fade: 0.005, law: 'cubic' },
+    { kind: 'band-noise', sampleRate: 48000, duration: 1, level: 0.5, f1: 20, f2: 20000,
+      fade: 0.02, color: 'brown' },
+    { kind: 'sine', sampleRate: 48000, duration: 0.04, level: 0.5, f: 1000, fade: 0.01 },
   ];
+  assert.deepStrictEqual(createRecipe({ stimulus: { ...SWEEP, fade: 2.5, f2: 22800 } })
+    .stimulus.f2, 22800, 'the clamp limit itself is accepted');
+  const chirp = createRecipe({ stimulus: { kind: 'chirp', sampleRate: 48000, duration: 0.005,
+    level: 0.5, f1: 20, f2: 20000, fade: 0.0005, law: 'linear' } }).stimulus;
+  assert.strictEqual(chirp.law, 'linear');
+  assert.strictEqual(chirp.color, null);
+  const band = createRecipe({ stimulus: { kind: 'band-noise', sampleRate: 48000, duration: 1,
+    level: 0.5, f1: 100, f2: 1000, fade: 0.02, seed: 3, color: 'pink' } }).stimulus;
+  assert.strictEqual(band.color, 'pink');
+  assert.strictEqual(band.law, null);
   for (const stimulus of bad) assert.throws(() => createRecipe({ stimulus }), RangeError);
   assert.throws(() => createRecipe({ stimulus: SWEEP, repeats: 11 }), RangeError);
   assert.throws(() => createRecipe({ stimulus: SWEEP, repeats: 1.5 }), RangeError);
@@ -255,7 +277,7 @@ test('summarizeExperiment: compact lines; never invents data (§52, §161)', () 
   assert.deepStrictEqual(summarizeExperiment(fullExperiment()), [
     'Name: MacBook speakers — desk',
     'Stimulus: 20 Hz → 20 kHz log sweep, 10 s',
-    'Output level: digital peak 0.5 (-6.0 dB relative)',
+    'Output level: digital peak 0.5, -6.0 dB relative (dBFS-like)',
     'Input: MacBook Pro Microphone',
     'Calibration: frequency profile "UMIK-1 #7001", SPL CALIBRATED (94 dB SPL at 1 kHz)',
     'Sample rate: 48000 Hz',
@@ -268,9 +290,10 @@ test('summarizeExperiment: compact lines; never invents data (§52, §161)', () 
   assert.deepStrictEqual(summarizeExperiment(bare), [
     'Name: (unnamed)',
     'Stimulus: pink noise, 5 s',
-    'Output level: digital peak 0.1 (-20.0 dB relative)',
+    'Output level: digital peak 0.1, -20.0 dB relative (dBFS-like)',
     `Input: ${UNKNOWN_DEVICE}`,
-    'Calibration: frequency profile none, SPL UNCALIBRATED',
+    'Calibration: frequency profile none, level UNCALIBRATED (Relative level · dBFS-like / '
+      + 'analyser-relative scale)',
     'Sample rate: Unknown',
     'Runs: 0 of 1 requested',
     'Quality: Unknown (not assessed)',
@@ -839,10 +862,11 @@ test('transferCsv: metadata header, explicit unit columns, raw by default', () =
     '# experiment_id: exp-1',
     '# algorithm: oscilla.transfer.v1',
     '# sample_rate_hz: 48000',
-    '# calibration: UNCALIBRATED (frequency profile none, SPL UNCALIBRATED)',
+    '# calibration: UNCALIBRATED (frequency profile none; levels: Relative level · dBFS-like '
+      + '/ analyser-relative scale)',
     '# view: RAW (unsmoothed, not normalized)',
     '# column frequency_hz: Hz',
-    '# column magnitude_db_relative: dB relative (dBFS-like), not SPL',
+    '# column magnitude_db_relative: dB relative (dBFS-like)',
     '# column magnitude_db_calibrated: empty (no calibration applied)',
     '# column snr_db: dB, ESTIMATED signal-to-noise ratio',
     '# column reliable: 1 = inside the valid range 20-20000 Hz, 0 = outside',
@@ -902,7 +926,7 @@ test('irCsv and rtaCsv: exact columns and units', () => {
   const rta = rtaCsv(rtaResult(), META).split('\n');
   assert.strictEqual(rta[0], '# OSCILLA real-time analyzer bands (octave)');
   assert.deepStrictEqual(rta.slice(-6), [
-    '# column level_db_relative: dB relative (dBFS-like), not SPL',
+    '# column level_db_relative: dB relative (dBFS-like)',
     'band_nominal_hz,band_lo_hz,band_hi_hz,level_db_relative',
     '31.5,22.1,44.2,-42.5',
     '63,44.2,88.4,-38.25',

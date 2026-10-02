@@ -6,9 +6,10 @@
 // (5.86 Hz) 18437.238194 Hz prints as "18.437 kHz"; at 46.9 Hz resolution as "18.44 kHz".
 // Values from 1000 Hz up (after rounding) are shown in kHz.
 //
-// Levels: "dB relative" is the uncalibrated digital level (dBFS-like); "dB SPL" is produced only
-// when the CALLER asks for kind 'spl', which it may do only when a valid LevelCalibration
-// applies (docs/v3/architecture.md, Labels). This module never infers or upgrades a level kind.
+// Levels: "dB relative (dBFS-like)" (calibration/level.js RELATIVE_UNIT, the one uncalibrated
+// unit label) is the uncalibrated digital level; "dB SPL" is produced only when the CALLER asks
+// for kind 'spl', which it may do only when a valid LevelCalibration applies
+// (docs/v3/architecture.md, Labels). This module never infers or upgrades a level kind.
 //
 // Estimates: "≈ value ± uncertainty unit (estimate)". The uncertainty is rounded to two
 // significant digits and the value to the same decimal position (JCGM 100:2008, GUM §7.2.6).
@@ -16,12 +17,13 @@
 // Negative numbers use U+2212 MINUS SIGN, as the V2 readouts do. Missing values print "—".
 
 import { displayStepHz } from '../analysis/peak-detector.js';
+import { RELATIVE_UNIT, SPL_UNIT } from '../calibration/level.js';
 
 const MINUS = '−';
 const DASH = '—';
 
 /** Level kinds and the unit label each one prints. */
-export const DB_KIND_LABELS = Object.freeze({ relative: 'dB relative', spl: 'dB SPL' });
+export const DB_KIND_LABELS = Object.freeze({ relative: RELATIVE_UNIT, spl: SPL_UNIT });
 
 /** FFT bin spacing in Hz: sampleRate / fftSize. */
 export function binResolutionHz(sampleRate, fftSize) {
@@ -61,7 +63,8 @@ export function formatFrequencyWithResolution(hz, resolutionHz) {
 }
 
 /**
- * formatDb(value, { decimals = 1, kind = 'relative' }) → "−12.3 dB relative" | "94.0 dB SPL"
+ * formatDb(value, { decimals = 1, kind = 'relative' })
+ *   → "−12.3 dB relative (dBFS-like)" | "94.0 dB SPL"
  * kind is decided by the caller (calibration state); an unknown kind is an error, never a
  * fallback to SPL. −Infinity prints "−∞", NaN / missing prints "—".
  */
