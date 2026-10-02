@@ -11,6 +11,7 @@
 //
 //   node tests/browser/engine-v1port.cjs                       # chromium and firefox
 //   node tests/browser/engine-v1port.cjs --browser firefox     # one browser (or webkit)
+//   OSC_BROWSERS=firefox node tests/browser/engine-v1port.cjs  # the same, from the environment (CI)
 //
 // Resolves esbuild, alpinejs and playwright from app/node_modules, or from NODE_PATH. The
 // fixture is written to a temporary directory and opened from file:// like V1's index.html
@@ -23,7 +24,8 @@ const fs = require('fs');
 const os = require('os');
 
 const args = process.argv.slice(2);
-const BROWSERS = args.includes('--browser') ? [args[args.indexOf('--browser') + 1]] : ['chromium', 'firefox'];
+const BROWSERS = args.includes('--browser') ? [args[args.indexOf('--browser') + 1]]
+  : (process.env.OSC_BROWSERS || 'chromium,firefox').split(',');
 const APP_JS = path.resolve(__dirname, '..', '..', 'src', 'js');
 let ENGINE = BROWSERS[0];
 let BASE = null; // file:// URL of the built fixture (buildFixture)
@@ -120,7 +122,7 @@ let passed = 0;
 let failed = 0;
 const failures = [];
 function check(name, ok, detail = '') {
-  if (ok) { passed++; console.log(`  ok   ${name}`); }
+  if (ok) { passed++; console.log(`  ok   ${name}${process.env.OSC_VERBOSE && detail ? ` ${detail}` : ''}`); }
   else { failed++; failures.push(`${name} ${detail}`); console.log(`  FAIL ${name} ${detail}`); }
 }
 
@@ -177,7 +179,14 @@ function instrument(opts) {
   };
   SSN.prototype.stop = function (when = 0) {
     const rec = oscRec.get(this);
-    if (rec) rec.stopAt = when;
+    // stopEff: when the stop takes effect on the audio clock (stop(0) or a past time = now).
+    // A later stop() replaces an earlier one only while the node has not stopped yet (Web Audio:
+    // the last call wins); a redundant stop() on a stopped node (cleanup) changes nothing.
+    if (rec) {
+      const now = this.context.currentTime;
+      rec.stopAt = when;
+      if (rec.stopEff == null || now < rec.stopEff) rec.stopEff = Math.max(when, now);
+    }
     return oStop.call(this, when);
   };
   T.liveOscs = () => T.oscs.filter((r) => r.started && !r.ended).length;
@@ -209,17 +218,20 @@ function instrument(opts) {
 
   // Output tap: the node the application connects to the destination also feeds a recorder.
   const WORKLET = `class Tap extends AudioWorkletProcessor {
-    constructor() { super(); this.N = 4096; this.L = new Float32Array(this.N); this.R = new Float32Array(this.N); this.n = 0; this.f0 = 0; }
+    // frame counts quanta independently: under load Chromium can repeat a stale currentFrame.
+    constructor() { super(); this.N = 4096; this.L = new Float32Array(this.N); this.R = new Float32Array(this.N); this.n = 0; this.f0 = 0; this.next = -1; }
     flush() { if (this.n) this.port.postMessage({ f: this.f0, L: this.L.slice(0, this.n), R: this.R.slice(0, this.n) }); this.n = 0; }
     process(inputs) {
       const i = inputs[0];
-      if (this.n && currentFrame !== this.f0 + this.n) this.flush();
-      if (!this.n) this.f0 = currentFrame;
+      const frame = this.next < 0 ? currentFrame : Math.max(currentFrame, this.next);
+      if (this.n && frame !== this.f0 + this.n) this.flush();
+      if (!this.n) this.f0 = frame;
       const L = i && i.length ? i[0] : null;
       const R = i && i.length > 1 ? i[1] : L;
       const len = L ? L.length : 128;
       if (L) { this.L.set(L, this.n); this.R.set(R, this.n); } else { this.L.fill(0, this.n, this.n + len); this.R.fill(0, this.n, this.n + len); }
       this.n += len;
+      this.next = frame + len;
       if (this.n + 128 > this.N) this.flush();
       return true;
     }
@@ -375,13 +387,49 @@ const app = (page, fn, arg) => page.evaluate(([src, a]) => {
   const prelude = `
     const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     const untilAudio = async (t) => { const c = window.OSCILLA.engine.ctx; while (c.currentTime < t) await sleep(3); };
+    // Deadline-based teardown probe. Polls until the audio graph is empty or maxS of audio time
+    // passed, and reports: after (audio time when the poll SAW it empty), stopAt (the latest
+    // time a stop() takes effect on the audio clock for the oscillators live at t0 or started
+    // since, relative to t0: the precise teardown time), tick (the largest currentTime step seen: the clock is only
+    // observable in steps of one audio callback, 2.9 ms locally, 11.6 ms on the CI runner).
     const gone = async (t0, maxS) => {
       const c = window.OSCILLA.engine.ctx;
-      while (c.currentTime - t0 < maxS && (window.__T.liveOscs() || window.OSCILLA.engine.voices.size)) await sleep(2);
-      return { after: c.currentTime - t0, oscs: window.__T.liveOscs(), voices: window.OSCILLA.engine.voices.size, nodes: window.OSCILLA.engine.activeNodeCount };
+      const first = window.__T.oscs.length;
+      const liveAtT0 = window.__T.oscs.filter((r) => r.started && !r.ended);
+      let tick = 0;
+      let last = c.currentTime;
+      while (c.currentTime - t0 < maxS && (window.__T.liveOscs() || window.OSCILLA.engine.voices.size)) {
+        await sleep(2);
+        tick = Math.max(tick, c.currentTime - last);
+        last = c.currentTime;
+      }
+      // the oscillators live at t0 plus any started since (a voice may start asynchronously)
+      const live = [...liveAtT0, ...window.__T.oscs.slice(first).filter((r) => r.started)];
+      const stops = live.map((r) => (r.stopEff == null ? Infinity : Math.max(r.stopEff, t0) - t0));
+      return { after: c.currentTime - t0, stopAt: stops.length ? Math.max(...stops) : 0, tick,
+        oscs: window.__T.liveOscs(), voices: window.OSCILLA.engine.voices.size, nodes: window.OSCILLA.engine.activeNodeCount };
     };`;
   return new Function('app', 'engine', 'O', 'T', 'arg', `${prelude} return (${src})(app, engine, O, T, arg);`)(data, window.OSCILLA.engine, window.OSCILLA, window.__T, a);
 }, [fn.toString(), arg]);
+
+// Observation margin for teardown checks: the poll in gone() can only see the empty graph at
+// the first poll after the audio thread has rendered past the stop, so the observed time lags
+// the scheduled one by at most one audio-clock step (one callback: 128 frames locally, 512 at
+// 48 kHz on the CI runner; measured per probe as `tick`, capped at 25 ms so a stalled clock
+// cannot excuse a late teardown) plus one poll interval (2 ms timer, clamped to ~5 ms).
+const POLL_S = 0.005;
+const MAX_TICK_S = 0.025;
+const observeMargin = (g) => Math.min(g.tick, MAX_TICK_S) + POLL_S;
+/**
+ * The audio graph torn down within `bound` seconds of audio time: nothing left (oscillators,
+ * voices, nodes), every oscillator's stop() taking effect at or before the bound on the audio
+ * clock (exact), and the empty graph observed no later than the bound plus the margin above.
+ */
+const tornDown = (g, bound) => g.oscs === 0 && g.voices === 0 && g.nodes === 0
+  && g.stopAt <= bound + 1e-6 && g.after <= bound + observeMargin(g);
+/** Ended at `at` +- tol seconds of audio time: scheduled there, and observed no later. */
+const endsAt = (g, at, tol) => g.oscs === 0 && Math.abs(g.stopAt - at) < tol
+  && g.after <= at + tol + observeMargin(g);
 
 /** Create the context and wait until the tap is recording. */
 async function startAudio(page) {
@@ -457,12 +505,12 @@ async function runBrowser() {
       a.setMode('playground');
       return out;
     });
-    const tail = (g, max) => g.oscs === 0 && g.voices === 0 && g.nodes === 0 && g.after < max;
+    const tail = tornDown;
     check('stop: 0 live oscillators within release + 50 ms', tail(r.stop, 0.03 + 0.05), JSON.stringify(r.stop));
     check('stop: output silent (< 1e-4) 30 ms after the release', r.stopTail < 1e-4, String(r.stopTail));
     check('stopNow: 0 live oscillators within 60 ms', tail(r.stopNow, 0.06), JSON.stringify(r.stopNow));
     check('stopNow: output silent (< 1e-4) 30 ms after the fade', r.stopNowTail < 1e-4, String(r.stopNowTail));
-    check('safety limit 0.5 s: 0 oscillators at ≈ 0.5 s (audio clock)', tail(r.limit, 0.56) && r.limit.after > 0.49, JSON.stringify(r.limit));
+    check('safety limit 0.5 s: 0 oscillators at ≈ 0.5 s (audio clock)', tail(r.limit, 0.56) && r.limit.stopAt > 0.49, JSON.stringify(r.limit));
     check('programmed pattern ends by itself with 0 oscillators', tail(r.natural, 3), JSON.stringify(r.natural));
     check('mode switch while latched replaces the voice (no leftover oscillator)', r.beforeSwitch === 1 && r.afterSwitch.oscs === 2 && r.afterSwitch.type === 'dual', JSON.stringify(r));
     check('mode switch: 0 oscillators after stop', tail(r.switchStop, 0.2), JSON.stringify(r.switchStop));
@@ -698,7 +746,7 @@ async function runBrowser() {
       await page.waitForTimeout(100);
     }
     for (const [k, v] of Object.entries(out)) {
-      check(`hold ended by ${k}: voice gone within release + 50 ms`, v.playing && v.oscs === 0 && v.voices === 0 && v.after <= v.release + 0.05, JSON.stringify(v));
+      check(`hold ended by ${k}: voice gone within release + 50 ms`, v.playing && tornDown(v, v.release + 0.05), JSON.stringify(v));
     }
     const r = await app(page, async (a, e, O, T) => {
       const res = {};
@@ -733,10 +781,10 @@ async function runBrowser() {
       a.setMode('playground');
       return res;
     });
-    check('Escape during a 3000 ms release: 0 nodes within 100 ms', r.escape.nodes === 0 && r.escape.oscs === 0 && r.escape.after < 0.1, JSON.stringify(r.escape));
+    check('Escape during a 3000 ms release: 0 nodes within 100 ms', tornDown(r.escape, 0.1), JSON.stringify(r.escape));
     check('Escape during a 3000 ms release: silent afterwards', r.escapeTail < 1e-4, String(r.escapeTail));
     for (const k of ['latch', 'hold', 'sweep']) {
-      check(`continuous revoked: ${k} stops within 100 ms`, r[k].was && r[k].oscs === 0 && r[k].voices === 0 && r[k].after < 0.1, JSON.stringify(r[k]));
+      check(`continuous revoked: ${k} stops within 100 ms`, r[k].was && tornDown(r[k], 0.1), JSON.stringify(r[k]));
     }
     check('continuous revoked: sweep repeat back to once', r.sweepRepeat === 'once', r.sweepRepeat);
     check('no console problems (edge cases)', problems.length === 0, problems.join(' | '));
@@ -875,10 +923,10 @@ async function runBrowser() {
       return out;
     });
     for (const m of ['trigger', 'hold']) {
-      check(`finite tone 10 s with limit 2 s (${m}) ends ≈ 2 s`, r[`finite_${m}`].oscs === 0 && Math.abs(r[`finite_${m}`].after - 2.01) < 0.06, JSON.stringify(r[`finite_${m}`]));
+      check(`finite tone 10 s with limit 2 s (${m}) ends ≈ 2 s`, endsAt(r[`finite_${m}`], 2.01, 0.06), JSON.stringify(r[`finite_${m}`]));
     }
     check('transport text states the finite tone is limited', /limited to 2 s/.test(r.finiteText), r.finiteText);
-    check('sweep 10 s plays 10 s (patterns exempt from the hold limit)', r.sweep.oscs === 0 && Math.abs(r.sweep.after - 10.01) < 0.06, JSON.stringify(r.sweep));
+    check('sweep 10 s plays 10 s (patterns exempt from the hold limit)', endsAt(r.sweep, 10.01, 0.06), JSON.stringify(r.sweep));
     check('transport text states patterns are exempt', /exempt from the hold limit/.test(r.sweepText), r.sweepText);
     check('continuous sweep: transport says it repeats until stopped', /until stopped/.test(r.contText), r.contText);
     check('continuous sweep: scheduled ≈ 10 s ahead, not 600 s', r.initialAhead > 8 && r.initialAhead < 12 && r.initialEvents < 2000, JSON.stringify(r));

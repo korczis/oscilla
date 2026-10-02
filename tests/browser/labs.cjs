@@ -23,7 +23,8 @@ const playwright = require('playwright');
 const ROOT = path.resolve(__dirname, '..', '..');
 const args = process.argv.slice(2);
 const opt = (name) => (args.includes(name) ? args[args.indexOf(name) + 1] : null);
-const ENGINES = opt('--browser') ? [opt('--browser')] : ['chromium', 'firefox'];
+const ENGINES = opt('--browser') ? [opt('--browser')]
+  : (process.env.OSC_BROWSERS ? process.env.OSC_BROWSERS.split(',') : ['chromium', 'firefox']);
 
 // ---------------------------------------------------------------- fixture build
 
@@ -151,7 +152,11 @@ async function runEngine(engine, base) {
   console.log(`\n${engine} ${browser.version()}`);
   await page.goto(`${base}/labs.html`);
   await page.waitForFunction(() => window.__oscReady && window.__labs, null, { timeout: 10000 });
-  await page.waitForTimeout(1500);
+  // Wait on the audio clock, not wall time: a starved CI runner renders far less than 1.5 s of
+  // audio in 1.5 s, and the charts would read a nearly silent analyser (deadline 10 s).
+  await page.waitForFunction(() => window.__labs.ctx.currentTime >= 1.2, null, { timeout: 10000 })
+    .catch(() => {});
+  await page.waitForTimeout(400);
 
   // (1) Spectrum: peak at the oscillator frequency, read from uPlot's own data.
   const spec = await page.evaluate(() => {

@@ -26,7 +26,7 @@ Source is modular (`src/`, plain ES modules and CSS); the runtime is one self-co
 npm ci
 npm run build          # src/ -> dist/index.html (deterministic; commit the result)
 npm test               # unit and V1 freeze suites
-npm run release-gate   # unit, build, verify-dist, V1 engine checks, browser gate
+npm run release-gate   # everything CI gates on, see tests/README.md
 npm run visual         # screenshot vs. the visual reference at 1536x1024
 ```
 

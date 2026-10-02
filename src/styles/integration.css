@@ -816,6 +816,28 @@
     min-width: 44px;
     min-height: 44px;
   }
+
+  /* Eight category tabs shared one row (33-40 px each at 320-375 px): they wrap instead. */
+  .osc-preset-tabs .osc-tab {
+    flex: 1 0 auto;
+    min-width: 44px;
+  }
+
+  /* "More" is a word inside the phone safety notice: a centred 44 px pseudo-element is its hit
+     area, over notice text only (the dismiss button sits outside the text column). */
+  .osc-safety-toggle {
+    position: relative;
+  }
+
+  .osc-safety-toggle::before {
+    content: "";
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: max(100%, 44px);
+    height: 44px;
+    transform: translate(-50%, -50%);
+  }
 }
 
 /* Between 1280 and 1535 px the lab keeps the reference arrangement, but panels are narrower than

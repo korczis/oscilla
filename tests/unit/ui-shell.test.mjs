@@ -1,4 +1,4 @@
-// Pure-function tests for the visual shell (node --test tests/visual/ui.test.mjs).
+// Pure-function tests for the visual shell (node --test tests/unit/ui-shell.test.mjs).
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { resolveTheme, sliderFill, createOscillaUi } from '../../src/js/ui/app.js';

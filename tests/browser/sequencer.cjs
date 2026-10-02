@@ -3,6 +3,7 @@
 //
 //   NODE_PATH=/Users/korczis/dev/oscilla/tests/node_modules node tests/browser/sequencer.cjs
 //   node tests/browser/sequencer.cjs --browser firefox     # chromium | firefox (default: both)
+//   (stop and teardown checks poll against a deadline; no fixed sleep precedes an assertion)
 //
 // The fixture (tests/browser/fixtures/sequencer-fixture.js) is bundled in memory with esbuild
 // and injected into a blank page. Checks:
@@ -22,7 +23,8 @@ const playwright = require('playwright');
 
 const args = process.argv.slice(2);
 const only = args.includes('--browser') ? args[args.indexOf('--browser') + 1] : null;
-const ENGINES = only ? [only] : ['chromium', 'firefox'];
+const ENGINES = only ? [only]
+  : (process.env.OSC_BROWSERS ? process.env.OSC_BROWSERS.split(',') : ['chromium', 'firefox']);
 const FIXTURE = path.join(__dirname, 'fixtures', 'sequencer-fixture.js');
 const SR = 48000;
 // The spec's shortest allowed edge ramp (2-5 ms). Bounds use this fixed value, never the
@@ -327,14 +329,19 @@ function checkRealtimeCapture(engine, label, cap) {
   const worst = Math.max(...cap.runs.map((r) => r.maxStep));
   const midRamp = cap.runs.filter((r) => r.envAtStop > 0.01 && r.envAtStop < 0.99).length;
   const frames = Math.min(...cap.runs.map((r) => r.frames));
-  const ok = worst <= bound && cap.runs.every((r) => r.ended && r.nodes === 0) && frames > 0.1 * sr;
+  // Torn down within 100 ms of audio time after stop() (observed by a deadline poll; the voice's
+  // own fade and source stops are scheduled well inside that).
+  const endedAfter = cap.runs.map((r) => r.endedAfter);
+  const ok = worst <= bound && frames > 0.1 * sr
+    && cap.runs.every((r) => r.ended && r.nodes === 0 && r.endedAfter !== null && r.endedAfter <= 0.1);
   check(
     engine,
     `(b) realtime stop x${cap.runs.length} (dense 200 Hz pulses, captured): ${label}`,
     ok,
     `worst step ${worst.toFixed(4)} (bound ${bound.toFixed(4)}), ` +
       `${midRamp} stops landed mid-ramp, ` +
-      `gaps ${cap.runs.map((r) => r.gaps).join('/')}, min frames ${frames}`,
+      `gaps ${cap.runs.map((r) => r.gaps).join('/')}, min frames ${frames}, ended after `
+      + `${endedAfter.map((v) => (v === null ? 'never' : `${(v * 1000).toFixed(0)} ms`)).join('/')}`,
   );
 }
 
@@ -420,7 +427,7 @@ async function runEngine(engine, bundle) {
         mid.after.stats.activeNodeCount === 0 &&
         !mid.after.playing,
       `started ${mid.after.started}, ended ${mid.after.ended}, live ${mid.after.live}, ` +
-        `voice nodes ${mid.after.stats.activeNodeCount}`,
+        `voice nodes ${mid.after.stats.activeNodeCount}, torn down in ${mid.after.waitedMs} ms`,
     );
     const loop = await page.evaluate(() => window.seqFixture.loopThenStop(1300));
     check(

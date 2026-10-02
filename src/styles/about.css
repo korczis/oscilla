@@ -596,3 +596,12 @@
     gap: 2px;
   }
 }
+
+/* Touch: the About links keep their look but get a 44 px hit area on coarse pointers. */
+@media (pointer: coarse) {
+  .osc-view--about a[data-osc^="about."] {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+  }
+}
