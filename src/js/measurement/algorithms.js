@@ -1,0 +1,52 @@
+// Stable algorithm identifiers persisted in measurement results and experiments (spec §43,
+// §199). An ID names a method and its version, never an implementation detail: a change that
+// can alter a stored number gets a new version (`.v2`), and old IDs stay meaningful so a stored
+// experiment says which method produced it.
+//
+// ID grammar: oscilla.<family>[.<variant>].v<integer>, lowercase, '-' inside segments.
+// `family` in describeAlgorithm() is the key of ALGORITHMS whose ID shares the name (so
+// 'oscilla.confidence.v1' belongs to family 'quality'); an unknown but well-formed ID falls
+// back to its first name segment, so a result written by a newer build can still be grouped.
+
+export const ALGORITHMS = Object.freeze({
+  transfer: 'oscilla.transfer.v1',
+  ir: 'oscilla.ir.log-sweep.v1',
+  rta: 'oscilla.rta.v1',
+  smoothing: 'oscilla.smoothing.fractional-octave.v1',
+  align: 'oscilla.align.xcorr.v1',
+  clip: 'oscilla.clip.v1',
+  quality: 'oscilla.confidence.v1',
+  calibration: 'oscilla.calibration.log-interp.v1',
+  window: 'oscilla.window.hann.v1',
+});
+
+const ID_PATTERN = /^oscilla\.([a-z0-9-]+(?:\.[a-z0-9-]+)*)\.v([1-9][0-9]*)$/;
+
+/** Name part of an ID without its version: 'oscilla.ir.log-sweep.v1' → 'ir.log-sweep'. */
+function stemOf(id) {
+  const m = ID_PATTERN.exec(id);
+  return m ? m[1] : null;
+}
+
+const FAMILY_BY_STEM = new Map(Object.entries(ALGORITHMS).map(([k, id]) => [stemOf(id), k]));
+const KNOWN = new Set(Object.values(ALGORITHMS));
+
+/** True only for an ID this build implements exactly (name and version). */
+export function isKnownAlgorithm(id) {
+  return typeof id === 'string' && KNOWN.has(id);
+}
+
+/**
+ * describeAlgorithm(id) → { id, family, version } | null
+ * null for anything that is not a well-formed OSCILLA algorithm ID. A well-formed ID of
+ * another version (e.g. 'oscilla.transfer.v2') is described, not rejected; use
+ * isKnownAlgorithm() to ask whether this build can reproduce it.
+ */
+export function describeAlgorithm(id) {
+  if (typeof id !== 'string') return null;
+  const m = ID_PATTERN.exec(id);
+  if (!m) return null;
+  const stem = m[1];
+  const family = FAMILY_BY_STEM.get(stem) || stem.split('.')[0];
+  return Object.freeze({ id, family, version: Number(m[2]) });
+}
