@@ -218,17 +218,20 @@ function instrument(opts) {
 
   // Output tap: the node the application connects to the destination also feeds a recorder.
   const WORKLET = `class Tap extends AudioWorkletProcessor {
-    constructor() { super(); this.N = 4096; this.L = new Float32Array(this.N); this.R = new Float32Array(this.N); this.n = 0; this.f0 = 0; }
+    // frame counts quanta independently: under load Chromium can repeat a stale currentFrame.
+    constructor() { super(); this.N = 4096; this.L = new Float32Array(this.N); this.R = new Float32Array(this.N); this.n = 0; this.f0 = 0; this.next = -1; }
     flush() { if (this.n) this.port.postMessage({ f: this.f0, L: this.L.slice(0, this.n), R: this.R.slice(0, this.n) }); this.n = 0; }
     process(inputs) {
       const i = inputs[0];
-      if (this.n && currentFrame !== this.f0 + this.n) this.flush();
-      if (!this.n) this.f0 = currentFrame;
+      const frame = this.next < 0 ? currentFrame : Math.max(currentFrame, this.next);
+      if (this.n && frame !== this.f0 + this.n) this.flush();
+      if (!this.n) this.f0 = frame;
       const L = i && i.length ? i[0] : null;
       const R = i && i.length > 1 ? i[1] : L;
       const len = L ? L.length : 128;
       if (L) { this.L.set(L, this.n); this.R.set(R, this.n); } else { this.L.fill(0, this.n, this.n + len); this.R.fill(0, this.n, this.n + len); }
       this.n += len;
+      this.next = frame + len;
       if (this.n + 128 > this.N) this.flush();
       return true;
     }

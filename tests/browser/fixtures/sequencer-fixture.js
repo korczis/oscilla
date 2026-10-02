@@ -245,9 +245,14 @@ async function loopThenStop(waitMs) {
 
 const RECORDER = `
 class SeqRecorder extends AudioWorkletProcessor {
+  // Under load Chromium can report a stale currentFrame (F, F, F+256 over three calls, each
+  // with fresh input); count quanta independently so no chunk overwrites another.
+  constructor() { super(); this.next = -1; }
   process(inputs) {
     const ch = inputs[0] && inputs[0][0];
-    if (ch) this.port.postMessage({ frame: currentFrame, data: ch.slice(0) });
+    const frame = this.next < 0 ? currentFrame : Math.max(currentFrame, this.next);
+    this.next = frame + (ch ? ch.length : 128);
+    if (ch) this.port.postMessage({ frame, data: ch.slice(0) });
     return true;
   }
 }
