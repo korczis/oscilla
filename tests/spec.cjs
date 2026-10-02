@@ -631,6 +631,46 @@ async function main() {
       !!pt.sweepAfterHigh && pt.sweepAfterHigh.before === pt.sweepAfterHigh.after,
       JSON.stringify(pt.sweepAfterHigh),
     );
+    // A preset or demo whose label names the octave steps must play exactly those steps, even
+    // after the user edited the Steps (Hz) field to something else or to something invalid.
+    const octaves = await app(page, (a, e, O) => {
+      const d = O.PATTERNS.find((p) => p.id === 'octave').params.find((x) => x.key === 'text');
+      const defaultText = a.pp.octave.text;
+      const before = { mode: a.mode, pattern: a.pattern };
+      const out = [];
+      for (const txt of ['300, 600', '125, 250, abc']) {
+        for (const via of ['preset', 'learn']) {
+          a.setMode('playground');
+          a.setPattern('octave');
+          a.setParam(d, txt);
+          if (via === 'preset') {
+            a.setMode('presets');
+            a.loadPreset(O.BUILTIN_PRESETS.find((x) => x.id === 'pt-octaves'));
+          } else {
+            a.setMode('learn');
+            a.runDemo(O.LEARN_TOPICS.find((x) => x.id === 'hearing'));
+          }
+          const r = a.currentPlan();
+          out.push({
+            txt,
+            via,
+            ok: r.ok,
+            freqs: r.ok ? r.plan.steps.map((s) => s.f) : r.error,
+            text: a.pp.octave.text,
+          });
+        }
+      }
+      a.pp.octave.text = defaultText;
+      a.setMode(before.mode);
+      a.setPattern(before.pattern);
+      return out;
+    });
+    const OCT = [125, 250, 500, 1000, 2000, 4000, 8000, 16000];
+    check(
+      '“Octave stepping” and the Learn hearing-range demo reset edited steps to 125 Hz … 16 kHz',
+      octaves.every((o) => o.ok && JSON.stringify(o.freqs) === JSON.stringify(OCT)),
+      JSON.stringify(octaves),
+    );
 
     console.log('§44 learn topics');
     const ids = await page.evaluate(() => window.OSCILLA.LEARN_TOPICS.map((t) => t.id));
@@ -2376,6 +2416,95 @@ async function main() {
     );
     await app(page, (a) => a.setMode('playground'));
 
+    console.log('§49 accessibility: focus is never dropped or obscured');
+    const focused = () =>
+      page.evaluate(() => {
+        const el = document.activeElement;
+        return el === document.body ? 'BODY' : window.__t.norm(el.textContent);
+      });
+    await page.evaluate(() => window.scrollTo(0, 0));
+    await page.getByRole('button', { name: 'Got it' }).focus();
+    await page.keyboard.press('Enter');
+    await settle(page);
+    const afterGotIt = await focused();
+    await page.keyboard.press('Enter');
+    await settle(page);
+    const afterFullNotice = await focused();
+    check(
+      '“Got it” hands focus to “Full notice”, and “Full notice” hands it back to “Got it”',
+      afterGotIt === 'Full notice' && afterFullNotice === 'Got it',
+      `${afterGotIt} → ${afterFullNotice}`,
+    );
+    const pendingMic = await app(page, async (a) => {
+      const prevViz = a.vizMode;
+      a.vizMode = 'spectrum';
+      a.micPending = true;
+      await window.__t.raf();
+      const b = [...document.querySelectorAll('button')].find(
+        (x) => window.__t.norm(x.textContent) === 'Use mic',
+      );
+      const out = b && { disabled: b.disabled, aria: b.getAttribute('aria-disabled') };
+      a.micPending = false;
+      a.vizMode = prevViz;
+      return out;
+    });
+    check(
+      '“Use mic” stays focusable while the microphone is pending (aria-disabled, not disabled)',
+      !!pendingMic && !pendingMic.disabled && pendingMic.aria === 'true',
+      JSON.stringify(pendingMic),
+    );
+    // WCAG 2.4.11: with an error alert showing (errors do not auto-dismiss), no keyboard focus
+    // stop in the playground may sit under the alert stack, at the top of the page or below.
+    const obscured = [];
+    for (const w of [768, 1280]) {
+      await page.setViewportSize({ width: w, height: 900 });
+      await app(page, (a) => {
+        a.alerts = [];
+        a.notify('error', 'Microphone unavailable', 'Microphone permission was denied.');
+        document.activeElement.blur();
+        window.scrollTo(0, 0);
+      });
+      await settle(page);
+      let first = null;
+      for (let i = 0; i < 90; i++) {
+        await page.keyboard.press('Tab');
+        await settle(page);
+        const s = await page.evaluate(() => {
+          const el = document.activeElement;
+          if (!el || el === document.body) return null;
+          const r = el.getBoundingClientRect();
+          const stack = document.getElementById('alert-stack');
+          const pts = [
+            [r.left + r.width / 2, r.top + r.height / 2],
+            [r.left + 2, r.top + 2],
+            [r.right - 2, r.top + 2],
+            [r.left + 2, r.bottom - 2],
+            [r.right - 2, r.bottom - 2],
+          ];
+          const under = pts.filter(([x, y]) => {
+            const h = document.elementFromPoint(x, y);
+            return h && stack.contains(h) && !stack.contains(el);
+          }).length;
+          const name = el.getAttribute('aria-label') || window.__t.norm(el.textContent) || el.id;
+          return { key: el.outerHTML.slice(0, 160), name: name.slice(0, 30), under };
+        });
+        if (!s) continue;
+        if (first === s.key) break;
+        if (!first) first = s.key;
+        if (s.under) obscured.push(`${w}px “${s.name}” ${s.under}/5`);
+      }
+    }
+    await app(page, (a) => {
+      a.alerts = [];
+    });
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await page.evaluate(() => window.scrollTo(0, 0));
+    check(
+      'with an error alert at 768 and 1280 px, no Tab stop is covered by the alert stack',
+      obscured.length === 0,
+      JSON.stringify(obscured),
+    );
+
     console.log('§61 safety alert at 1280 px');
     const s1280 = await page.evaluate((S) => {
       const t = window.__t;
@@ -3467,6 +3596,21 @@ async function main() {
       }, SAFETY_NOTICE);
     const s375 = await safetyText();
     check('375 px: the visible safety line mentions “harmful”', s375.harmful, s375.text);
+    const fullNoticeTop = await page.evaluate(() => {
+      window.scrollTo(0, 0);
+      const b = [...document.querySelectorAll('aside[aria-label="Safety notice"] button')].find(
+        (x) => window.__t.norm(x.textContent) === 'Full notice',
+      );
+      return {
+        button: Math.round(b.getBoundingClientRect().top),
+        header: Math.round(document.querySelector('header').getBoundingClientRect().bottom),
+      };
+    });
+    check(
+      '375 px: the “Full notice” target starts below the sticky header at scroll 0',
+      fullNoticeTop.button >= fullNoticeTop.header,
+      JSON.stringify(fullNoticeTop),
+    );
     const more = page.locator('aside[aria-label="Safety notice"] button:visible').first();
     if (touch) await more.tap();
     else await more.click();
@@ -3569,6 +3713,47 @@ async function main() {
       'no horizontal overflow in any mode at 320, 375, 390, 430, 768, 1024, 1280, 1440 px',
       overflow.length === 0,
       JSON.stringify(overflow),
+    );
+    // The widest header state on the narrowest phone: a long status word plus the mic chip.
+    await page.setViewportSize({ width: 320, height: 700 });
+    const hdr = [];
+    for (const [st, mic] of [
+      ['RELEASING', true],
+      ['SUSPENDED', true],
+      ['SUSPENDED', false],
+    ]) {
+      hdr.push(
+        await app(
+          page,
+          async (a, e, O, x) => {
+            const prev = { status: a.status, mic: a.micActive };
+            a.status = x[0];
+            a.micActive = x[1];
+            await window.__t.raf();
+            const sub = document.querySelector('header h1 + p');
+            const rg = document.createRange();
+            rg.selectNodeContents(sub);
+            const tops = new Set([...rg.getClientRects()].map((r) => Math.round(r.top)));
+            const tabs = document.querySelector('nav[aria-label=Modes]').getBoundingClientRect();
+            const out = {
+              st: x[0],
+              mic: x[1],
+              lines: tops.size,
+              clear: rg.getBoundingClientRect().bottom <= tabs.top,
+              sx: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+            };
+            a.status = prev.status;
+            a.micActive = prev.mic;
+            return out;
+          },
+          [st, mic],
+        ),
+      );
+    }
+    check(
+      '320 px header: the subtitle keeps ≤ 2 lines clear of the mode tabs in every status',
+      hdr.every((h) => h.lines <= 2 && h.clear && h.sx <= 0),
+      JSON.stringify(hdr),
     );
     await context.close();
   }

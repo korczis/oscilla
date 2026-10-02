@@ -80,6 +80,8 @@
   :focus-visible { outline: 2px solid rgb(var(--c-accent)); outline-offset: 2px; }
   /* Focused and scrolled-to elements stay clear of the sticky header (height measured at runtime). */
   html { scroll-padding-top: calc(var(--header-h, 150px) + 8px); scroll-padding-bottom: calc(var(--alerts-h, 0px) + 8px); }
+  /* Room below the footer while alerts show, so the last controls can scroll clear of them. */
+  body { padding-bottom: var(--alerts-h, 0px); }
   .field {
     display: block; width: 100%; min-height: 44px; padding: 0.5rem 0.75rem; border-radius: 0.5rem;
     background: rgb(var(--c-surface2)); border: 1px solid rgb(var(--c-muted) / 0.75); color: rgb(var(--c-fg));
@@ -94,7 +96,7 @@
   .chip[aria-pressed="true"], .chip[aria-checked="true"], .chip[aria-selected="true"] {
     background: rgb(var(--c-fg)); color: rgb(var(--c-surface)); border-color: rgb(var(--c-fg));
   }
-  .chip:disabled { opacity: 0.45; cursor: not-allowed; }
+  .chip:disabled, .chip[data-pending="true"] { opacity: 0.45; cursor: not-allowed; }
   /* Compact chips only where the pointer is precise; touch keeps 44 px targets. */
   @media (min-width: 640px) and (pointer: fine) { .chip-sm { min-height: 36px; } }
   /* Visualization box: viewport-aware so HOLD TO PLAY stays in the first viewport (spec §5).
@@ -143,10 +145,12 @@
 
 <!-- ============================== HEADER -->
 <header class="sticky top-0 z-30 border-b border-line bg-bg/95 backdrop-blur supports-[backdrop-filter]:bg-bg/80">
-  <div class="mx-auto max-w-[1440px] px-3 sm:px-5 flex flex-wrap items-center gap-x-3">
+  <div class="mx-auto max-w-[1440px] px-3 sm:px-5 flex flex-wrap items-center gap-x-2 sm:gap-x-3">
     <div class="flex items-center gap-2 h-11 sm:h-14 min-w-0 grow basis-0 md:grow-0 md:basis-auto">
-      <!-- Below 1024 px the subtitle wraps to two short lines beside the wordmark (three lines fit
-           the row) and is never truncated; the decorative logo gives way to the mic chip on phones. -->
+      <!-- Below 1024 px the subtitle wraps to two short lines beside the wordmark (a third would
+           spill onto the mode tabs) and is never truncated; the decorative logo gives way to the
+           mic chip on phones, and the status chip is compact there so that at 320 px even
+           SUSPENDED plus the mic chip leaves the subtitle its two lines. -->
       <svg class="w-7 h-7 shrink-0" :class="micActive ? 'max-sm:hidden' : ''" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="8" class="fill-accent"/><path d="M4 16 Q8 4 12 16 T20 16 T28 16" fill="none" stroke="rgb(var(--c-surface))" stroke-width="2.6" stroke-linecap="round"/></svg>
       <div class="leading-tight min-w-0">
         <h1 class="font-semibold tracking-[0.14em] sm:tracking-[0.22em] text-[13px] sm:text-base">OSCILLA</h1>
@@ -171,7 +175,7 @@
            suspended context), otherwise a plain label. Only PLAYING, SUSPENDED, STOPPED and ERROR
            are announced, through the separate live region below. -->
       <button type="button" x-show="['PLAYING', 'RELEASING', 'SUSPENDED'].includes(status)" x-cloak @click="stopNow()"
-              class="chip chip-sm rounded-full flex items-center justify-center gap-1.5 px-2.5 text-[11px] font-semibold tracking-wider sm:tracking-widest"
+              class="chip chip-sm rounded-full flex items-center justify-center gap-1 sm:gap-1.5 px-1.5 sm:px-2.5 text-[11px] font-semibold tracking-normal sm:tracking-widest"
               :class="status === 'PLAYING' ? 'border-accent text-accent' : 'border-warn text-warn'" aria-label="Stop playback" title="Stop playback">
         <span class="w-2 h-2 bg-current" aria-hidden="true"></span><span aria-hidden="true"><span class="hidden sm:inline">STOP · </span><span x-text="status"></span></span>
       </button>
@@ -183,7 +187,7 @@
       <span class="sr-only" role="status" aria-live="polite" aria-atomic="true" x-data="{ said: '' }"
             x-effect="if (['PLAYING', 'SUSPENDED', 'STOPPED', 'ERROR'].includes(status)) said = status === 'SUSPENDED' ? 'Playback SUSPENDED: tap or press a key to start audio' : `Playback ${status}`" x-text="said"></span>
       <!-- Persistent microphone indicator: visible in every mode and view while the mic is open. -->
-      <button type="button" x-show="micActive" x-cloak @click="toggleMic()" :disabled="micPending"
+      <button type="button" x-show="micActive" x-cloak x-ref="micChip" @click="toggleMic()" :aria-disabled="micPending" :data-pending="micPending"
               class="chip chip-sm w-11 px-0 sm:w-auto sm:px-2.5 flex items-center justify-center gap-1 border-danger text-danger text-[11px] font-semibold tracking-widest"
               aria-label="Microphone on — stop the microphone">
         <svg class="w-4 h-4 sm:hidden" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3" fill="currentColor"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21"/></svg>
@@ -227,8 +231,11 @@
 </header>
 
 <!-- ============================== ALERTS (Flowbite alert markup, Alpine-managed) -->
-<!-- Below md the stack sits at the bottom (clear of the header's mode tabs), above the home indicator. -->
-<div id="alert-stack" class="fixed z-50 right-3 left-3 bottom-[calc(0.75rem+env(safe-area-inset-bottom))] md:bottom-auto md:top-[calc(var(--header-h,113px)+0.5rem)] sm:left-auto sm:w-[380px] space-y-2 pointer-events-none" aria-live="polite">
+<!-- The stack sits at the bottom at every width, above the home indicator: at the top it covered
+     the first rows of content at scroll 0, where no scroll-padding can move a focused control
+     clear. At the bottom, scroll-padding-bottom and body padding (--alerts-h, measured at
+     runtime) keep focus visible. -->
+<div id="alert-stack" class="fixed z-50 right-3 left-3 bottom-[calc(0.75rem+env(safe-area-inset-bottom))] sm:left-auto sm:w-[380px] space-y-2 pointer-events-none" aria-live="polite">
   <template x-for="a in alerts" :key="a.id">
     <div class="flex items-start p-3 text-sm rounded-lg border shadow-sm bg-surface pointer-events-auto"
          :role="a.level === 'error' ? 'alert' : 'status'"
@@ -238,7 +245,7 @@
         <span class="font-semibold" x-text="a.title"></span>
         <div class="text-fg/90 text-[13px]" x-text="a.message"></div>
       </div>
-      <button type="button" class="ms-1 -my-2.5 -me-2 w-11 h-11 shrink-0 rounded-lg inline-flex items-center justify-center hover:bg-surface2" @click="dismissAlert(a.id)" aria-label="Dismiss">
+      <button type="button" class="ms-1 -my-2.5 -me-2 w-11 h-11 shrink-0 rounded-lg inline-flex items-center justify-center hover:bg-surface2" @click="dismissAlert(a.id)" aria-label="Dismiss" data-alert-dismiss>
         <svg class="w-3 h-3" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m1 1 12 12M13 1 1 13"/></svg>
       </button>
     </div>
@@ -253,15 +260,16 @@
       <p>Audio signals can be uncomfortable or harmful at excessive output levels. Start low, especially with headphones. Perceived loudness is not a reliable measure of acoustic output, particularly at very low or very high frequencies.</p>
       <p class="mt-1 text-muted">Digital signal generation does not guarantee that your playback hardware reproduces the requested frequency accurately.</p>
     </div>
-    <button type="button" class="chip chip-sm text-xs" @click="collapseSafety()">Got it</button>
+    <button type="button" class="chip chip-sm text-xs" x-ref="safetyDismiss" @click="collapseSafety()">Got it</button>
   </div>
   <p x-show="!safetyExpanded" class="text-[11px] text-muted items-center gap-2" :class="safetyCollapsed ? 'flex' : 'flex sm:hidden'">
     <svg class="w-3.5 h-3.5 shrink-0 text-warn" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path d="M10 1.5 19 18H1L10 1.5Zm-1 6v5h2v-5H9Zm0 6.5v2h2v-2H9Z"/></svg>
     <!-- One line on phones (spec §5 first viewport): the short form, with the full notice one tap away.
-         The button is a 44 px target whose negative margins keep the line 24 px tall. -->
+         The button is a 44 px target whose negative margins keep the line 24 px tall; they are
+         uneven (and pb-3 re-centres the label) so that its top stays below the sticky header. -->
     <span class="min-w-0 truncate sm:hidden">Loud audio can be harmful — start low.</span>
     <span class="hidden sm:inline">Audio can be uncomfortable or harmful at excessive levels — start low, especially with headphones.</span>
-    <button type="button" class="underline min-w-[44px] min-h-[44px] -my-2.5 px-1 whitespace-nowrap shrink-0" @click="showSafety()">Full notice</button>
+    <button type="button" class="underline min-w-[44px] min-h-[44px] -mt-1 -mb-4 px-1 pb-3 whitespace-nowrap shrink-0" x-ref="safetyReopen" @click="showSafety()">Full notice</button>
   </p>
 </aside>
 
@@ -307,7 +315,8 @@
             </ul>
           </div>
         </div>
-        <button type="button" class="chip chip-sm text-xs flex items-center gap-1" @click="toggleMic()" :aria-pressed="micActive" :disabled="micPending">
+        <button type="button" class="chip chip-sm text-xs flex items-center gap-1" @click="toggleMic()" :aria-pressed="micActive" x-ref="micToggle"
+                :aria-disabled="micPending" :data-pending="micPending">
           <span class="w-2 h-2 rounded-full" :class="micActive ? 'bg-danger' : 'bg-line'" aria-hidden="true"></span>
           <span x-text="micActive ? 'MIC ON' : 'Use mic'"></span>
         </button>
@@ -1681,7 +1690,7 @@ const BUILTIN_PRESETS = [
     params: '40 Hz · sine · 2 s', cfg: { source: 'single', pattern: 'finite', waveform: 'sine', frequency: 40, duration: 2000 } },
   { id: 'pt-octaves', cat: 'patterns', name: 'Octave stepping', desc: '125 Hz to 16 kHz in octave steps.',
     params: '8 steps × 400 ms', cfg: { source: 'single', pattern: 'octave', waveform: 'sine',
-      pp: { octave: { toneMs: 400, gapMs: 100 } } } },
+      pp: { octave: { text: OCTAVE_STEP_FREQUENCIES.join(', '), toneMs: 400, gapMs: 100 } } } },
   { id: 'pt-third', cat: 'patterns', name: 'Third-octave demonstration', desc: 'Nominal third-octave center frequencies, 20 Hz to 20 kHz; values above the digital limit are skipped.',
     params: 'up to 31 steps × 250 ms', cfg: { source: 'single', pattern: 'sequence', waveform: 'sine',
       pp: { sequence: { text: THIRD_OCTAVE_FREQUENCIES.join(', '), toneMs: 250, gapMs: 50, repeats: 1 } } } },
@@ -1742,7 +1751,8 @@ const LEARN_TOPICS = [
   { id: 'logscale', title: 'Logarithmic perception', body: 'Pitch is perceived roughly by ratios: 100→200 Hz and 1→2 kHz are both one octave and sound like a similar step. That is why sweeps and maps here are logarithmic.',
     demo: { label: 'Log sweep 20 Hz → 20 kHz', viz: 'motion', cfg: { source: 'sweep', sweep: { start: 20, end: 20000, durationMs: 10000, curve: 'log', direction: 'up', repeat: 'once' } } } },
   { id: 'hearing', title: 'Human hearing range', body: 'Nominally 20 Hz – 20 kHz. The upper limit commonly falls with age and noise exposure; individual hearing varies widely.',
-    demo: { label: 'Octave steps 125 Hz – 16 kHz', viz: 'motion', cfg: { source: 'single', pattern: 'octave', waveform: 'sine' } } },
+    demo: { label: 'Octave steps 125 Hz – 16 kHz', viz: 'motion', cfg: { source: 'single', pattern: 'octave', waveform: 'sine',
+      pp: { octave: { text: OCTAVE_STEP_FREQUENCIES.join(', '), toneMs: 400, gapMs: 100 } } } } },
   { id: 'ultrasound', title: 'Ultrasound', body: 'Nominal ultrasound begins above about 20 kHz. 15.5 kHz is a high-frequency signal, not ultrasound. Generating >20 kHz digitally does not mean a speaker emits it.',
     demo: { label: 'High range sweep', viz: 'spectrum', cfg: { source: 'sweep', sweep: { start: 8000, end: 'max', durationMs: 4000, curve: 'log', direction: 'up', repeat: 'once' } } } },
   { id: 'speakers', title: 'Speaker limitations', body: 'Speakers, headphones, DACs and amplifiers can attenuate or distort very low and very high frequencies. Perceived loudness is not a measure of acoustic output.',
@@ -2387,7 +2397,10 @@ class AudioEngine {
 
   /**
    * Start a plan. Every earlier voice — sounding or still in a long release — fades out within
-   * FAST_RELEASE_S, so oscillators never accumulate and at most two voices overlap, briefly.
+   * FAST_RELEASE_S, and the new voice starts only after that fade, so the output never carries
+   * more than one audible voice. Under rapid retriggering the voice set can still hold several
+   * (4–9 measured) released, silent voices waiting for their onended; each one disconnects
+   * and leaves the set when it fires, so they do not accumulate.
    * o = { mode: 'hold' | 'trigger' | 'latch', continuous, limitS, durationS, attackS, releaseS,
    *       until?: absolute deadline inherited by a replacement voice }
    */
@@ -3962,7 +3975,7 @@ function oscillaApp() {
       this.dual.stereo = !!on;
       if (!on) this.dual.binaural = false;
     },
-    /** Publish the sticky header's height as --header-h so scroll-padding keeps focus visible. */
+    /** Keep keyboard focus clear of the sticky header and the alert stack. */
     trackHeaderHeight() {
       const header = document.querySelector('header');
       if (!header) return;
@@ -3970,17 +3983,36 @@ function oscillaApp() {
       set();
       if (typeof ResizeObserver === 'function') new ResizeObserver(set).observe(header);
       else window.addEventListener('resize', set, { passive: true });
-      // Below md the alert stack sits at the bottom: keep focused controls clear of it.
+      // The alert stack sits at the bottom: keep focused controls clear of it.
       const stack = document.getElementById('alert-stack');
       if (!stack) return;
       const setStack = () => {
         const r = stack.getBoundingClientRect();
-        const atBottom = r.height > 0 && r.top > window.innerHeight / 2;
-        document.documentElement.style.setProperty('--alerts-h', `${atBottom ? Math.ceil(r.height) : 0}px`);
+        const h = r.height > 0 ? Math.ceil(window.innerHeight - r.top) : 0;
+        document.documentElement.style.setProperty('--alerts-h', `${Math.max(0, h)}px`);
       };
       setStack();
       if (typeof ResizeObserver === 'function') new ResizeObserver(setStack).observe(stack);
       window.addEventListener('resize', setStack, { passive: true });
+      // Firefox does not scroll a focused control that is already inside the viewport, even when
+      // the header or the alert stack covers part of it, so scroll-padding alone is not enough
+      // there. After the browser's own focus scroll, nudge a keyboard-focused control clear.
+      document.addEventListener('focusin', (e) => {
+        const el = e.target;
+        if (!(el instanceof Element) || header.contains(el) || stack.contains(el)) return;
+        requestAnimationFrame(() => {
+          if (document.activeElement !== el || !el.matches(':focus-visible')) return;
+          if (el.closest('[data-oscilla-modal], .fixed')) return;
+          const r = el.getBoundingClientRect();
+          if (!r.height) return;
+          const top = header.getBoundingClientRect().bottom + 8;
+          const s = stack.getBoundingClientRect();
+          const under = s.height > 0 && r.right > s.left && r.left < s.right;
+          const bottom = (under ? s.top : window.innerHeight) - 8;
+          if (r.top < top) window.scrollBy(0, r.top - top);
+          else if (r.bottom > bottom) window.scrollBy(0, Math.min(r.bottom - bottom, r.top - top));
+        });
+      });
     },
     /** Spoken unit for a parameter label, unless the visible label already names it. */
     paramUnit(d) {
@@ -4488,13 +4520,37 @@ function oscillaApp() {
       if (level === 'success' || level === 'info') setTimeout(() => this.dismissAlert(id), 6000);
       if (level === 'error') engine.lastError = { message: `${title}: ${message}`, context: 'ui' };
     },
-    dismissAlert(id) { this.alerts = this.alerts.filter((a) => a.id !== id); },
+    /** A focused Dismiss button removes itself: focus moves to the next alert, else to HOLD. */
+    dismissAlert(id) {
+      const stack = document.getElementById('alert-stack');
+      const focused = stack && stack.contains(document.activeElement);
+      const i = this.alerts.findIndex((a) => a.id === id);
+      this.alerts = this.alerts.filter((a) => a.id !== id);
+      if (!focused) return;
+      this.$nextTick(() => {
+        const rest = stack.querySelectorAll('[data-alert-dismiss]');
+        this.focusWhenShown(rest[Math.min(Math.max(i, 0), rest.length - 1)] || document.querySelector('.hold-btn'));
+      });
+    },
+    /** Focus el once Alpine has shown it: x-show can apply a frame after the state change. */
+    focusWhenShown(el, frames = 3) {
+      if (!el) return;
+      el.focus();
+      if (document.activeElement !== el && frames > 0) {
+        requestAnimationFrame(() => this.focusWhenShown(el, frames - 1));
+      }
+    },
+    // Each safety-notice button hides itself, so a focused one hands focus to its counterpart.
     showSafety() {
+      const refocus = document.activeElement === this.$refs.safetyReopen;
       if (window.innerWidth < 640) this.safetyExpanded = true; else this.safetyCollapsed = false;
+      if (refocus) this.focusWhenShown(this.$refs.safetyDismiss);
     },
     collapseSafety() {
+      const refocus = document.activeElement === this.$refs.safetyDismiss;
       this.safetyExpanded = false;
       this.safetyCollapsed = true;
+      if (refocus) this.focusWhenShown(this.$refs.safetyReopen);
       sessionStore.set(STORAGE_KEYS.safetySeen, '1');
     },
     modal(id) {
@@ -4552,10 +4608,18 @@ function oscillaApp() {
       items[next].focus();
     },
     async toggleMic() {
-      if (this.micPending) return; // a second tap before :disabled renders would open a second stream
+      // While pending the buttons are aria-disabled, not disabled, so a keyboard user keeps focus;
+      // this guard is what stops a second press from opening a second stream.
+      if (this.micPending) return;
       if (this.micActive || engine.mic) {
+        // The header chip hides itself when the mic stops: hand its focus to a mic control.
+        const fromChip = document.activeElement === this.$refs.micChip;
         engine.stopMic('user');
         this.micActive = false;
+        if (fromChip) {
+          const t = this.$refs.micToggle;
+          this.focusWhenShown(t && t.offsetParent ? t : document.getElementById('themeButton'));
+        }
         return;
       }
       this.micPending = true;
