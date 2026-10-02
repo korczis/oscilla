@@ -171,6 +171,21 @@ Firefox's DynamicsCompressor reacts to high frequencies below its −3 dB thresh
 response near Nyquist is not flat. Chromium and WebKit stay transparent to within 0.00014 dB
 below threshold. The WaveShaper ceiling is exact (identity) in all three engines below ±0.25.
 
+**Changed (V3 pre-release)**: the Firefox 18-20 kHz deviation at peaks ≤ 0.1 and the offline
+sweep's −3.8 dB were not a frequency response of the compressor. Gecko's DynamicsCompressor
+returns silence for a silent (null) input block without advancing its 6 ms look-ahead line, so
+the last 288 frames of every sound stay in the line and come out when the next sound starts.
+Offline, a sweep through the compressor alone ends at frame 95 999 instead of 96 286 (Chromium:
+96 286), and its last 600 frames read −0.46 dB instead of −0.014 dB. In the realtime loopback
+each run started with the previous run's 20 kHz fade-out tail (peak 0.013 at the scheduled
+onset), and after an aborted run with the abort fade's tail, which made the next run INVALID
+(DISCONTINUITY at the onset). `audio-engine.js` now feeds the limiter a constant 0
+(`feedLimiter`), so the line always advances. Re-measured in Firefox 155 (v3-measure.cjs,
+file://): 18-20 kHz worst −0.000 dB at peaks 0.02 and 0.1, 20 Hz-18 kHz worst −0.00014 dB. The
+0.25-peak compression is unchanged (−4.73 dB at 18.0 kHz, −4.84 dB at 18.8 kHz), so
+`LIMITER_RANGE` and its 0.1 threshold stay. The last bullet below no longer applies to peaks
+≤ 0.1.
+
 **Decision**:
 
 - Measurement playback always passes the master chain (master gain → limiter → trim →

@@ -1300,9 +1300,10 @@ An unknown ID throws. Thresholds are the same object in both. v2 adds four codes
 `chainNotes` is pure data reported by the platform layer, validated by `normalizeChainNotes`
 (plain object, only `limiterDeviationAboveHz`, null or a finite frequency > 0; anything else
 throws). quality.js does no browser sniffing. The case it exists for is the G12 measurement:
-Firefox 155's DynamicsCompressor in the master chain deviates above 18 kHz at every level
-([spike](spike-audioworklet-worker.md)). `engine.js` reads an optional `chainNotes` from the
-io's PreflightFacts, warns in preflight (`OUTPUT_CHAIN_DEVIATION`) when the sweep reaches above
+Firefox 155's DynamicsCompressor in the master chain read as deviating above 18 kHz at every
+level ([spike](spike-audioworklet-worker.md)); that reading was later traced to a look-ahead
+replay that `audio-engine.js` `feedLimiter` removes, so no browser needs the note today.
+`engine.js` reads an optional `chainNotes` from the io's PreflightFacts, warns in preflight (`OUTPUT_CHAIN_DEVIATION`) when the sweep reaches above
 it, ignores an invalid note with `CHAIN_NOTES_IGNORED`, records it as `result.chainNotes` and
 passes it to `assess` (context `chainNotes`); `assessMeasurement(result, ctx)` (engine.js) is the
 standard `assess` — all runs' checks, the combined transfer, the aggregate, the applied

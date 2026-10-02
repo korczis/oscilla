@@ -130,27 +130,41 @@ const H = {
   }),
   live: (page) => page.evaluate(() => (window.__oscLive || []).slice()),
   /**
-   * Run a measurement through `start` (a click) until it ends; a run rejected for a CAPTURE
-   * DEFECT of the realtime platform (Firefox's headless loopback occasionally delivers a
-   * discontinuity) is repeated up to twice and reported, never hidden: the UI path is what this
-   * suite asserts, the capture checks are asserted by v3-measure.cjs.
+   * Run ONE measurement through `start` (a click) until it ends: no retry. The digital loopback
+   * is deterministic, so a run that is not COMPLETE is a defect and fails the check with its
+   * reasons (Firefox once replayed the limiter's look-ahead line at the next onset, which made
+   * the run after an abort INVALID: audio-engine.js feedLimiter).
    */
   run: async (page, start) => {
-    const defects = [];
-    for (let i = 0; i < 3; i++) {
-      await start();
-      await H.waitState(page, ['COMPLETE', 'INVALID', 'ERROR', 'ABORTED']);
-      const r = await page.evaluate(() => {
-        const res = window.OSCILLA.measure.result;
-        return { state: window.OSCILLA.measure.state,
-          codes: res ? (res.reasons || []).map((x) => x.code) : [] };
-      });
-      const capture = r.codes.length && r.codes.every((c) => ['DISCONTINUITY', 'FRAMES_MISSING',
-        'DROPOUT'].includes(c));
-      if (r.state !== 'INVALID' || !capture) return { state: r.state, defects };
-      defects.push(r.codes.join(','));
-    }
-    return { state: 'INVALID', defects };
+    await start();
+    await H.waitState(page, ['COMPLETE', 'INVALID', 'ERROR', 'ABORTED']);
+    return page.evaluate(() => {
+      const m = window.OSCILLA.measure;
+      const res = m.result;
+      const out = { state: m.state,
+        reasons: res ? (res.reasons || []).filter((x) => x.severity !== 'ok')
+          .map((x) => `${x.code}: ${x.text}`).slice(0, 4) : [] };
+      if (m.state !== 'COMPLETE') {
+        // Frame timing of the capture windows, so a capture defect says where it came from.
+        out.integrity = res ? (res.runs || []).map((r) => r.checks && r.checks.integrity) : null;
+        out.diag = m.io && m.io.diagnostics ? m.io.diagnostics() : null;
+      }
+      return out;
+    });
+  },
+  /** Wait for MEASURE's save to finish; on a timeout, say what the page was in. */
+  saved: (page) => page.waitForFunction(() => window.OSCILLA.app.meas.saved, null,
+    { timeout: 10000 }).then(() => null, () => page.evaluate(() => ({
+    saveTimeout: true, state: window.OSCILLA.measure.state, saving: window.OSCILLA.app.meas.saving,
+    alerts: (window.OSCILLA.app.alerts || []).map((a) => `${a.title}: ${a.text || ''}`)
+      .slice(0, 4) }))),
+  /**
+   * Named conditions -> { ok, failed: [names] }, so a failing check says WHICH condition failed
+   * (the printed JSON is truncated).
+   */
+  verdict: (conds) => {
+    const failed = Object.keys(conds).filter((k) => !conds[k]);
+    return { ok: failed.length === 0, failed };
   },
   loopback: (page) => page.evaluate((values) => {
     const m = window.OSCILLA.measure;
@@ -217,15 +231,8 @@ function defineChecks(fixtures) {
         .replace('osc-m-step ', '')),
       input: document.querySelector('[data-osc="measure.bar"]').textContent.replace(/\s+/g, ' '),
     }));
-    // Start measurement (a retry, if any, uses the same primary action "Measure again" ->
-    // setup check -> start, so it goes through the UI too).
-    res.run1 = await H.run(page, async () => {
-      if (await H.state(page) === 'INVALID') {
-        await page.click('#osc-measure-primary');
-        await H.waitState(page, ['READY', 'INVALID', 'ERROR'], 15000);
-      }
-      await page.click('#osc-measure-primary');
-    });
+    res.run1 = await H.run(page, () => page.click('#osc-measure-primary')); // Start measurement
+    if (res.run1.state !== 'COMPLETE') return { ok: false, failed: ['run1'], ...res };
     await sleep(200);
     res.done = await page.evaluate(() => {
       const q = (s) => document.querySelector(s);
@@ -260,14 +267,14 @@ function defineChecks(fixtures) {
     // Save, then REPEAT: a new experiment that records what it repeats.
     await page.fill('#osc-m-name', 'Gate loopback');
     await page.click('#osc-measure-save');
-    await page.waitForFunction(() => window.OSCILLA.app.meas.saved, null, { timeout: 10000 });
+    res.save1 = await H.saved(page);
+    if (res.save1) return { ok: false, failed: ['save1'], ...res };
     const firstId = await page.evaluate(() => window.OSCILLA.app.meas.savedId);
-    res.run2 = await H.run(page, async () => {
-      if (await H.state(page) === 'COMPLETE') await page.click('[data-osc="measure.repeat"]');
-      else await page.evaluate(() => { window.OSCILLA.app.measureRepeat(); });
-    });
+    res.run2 = await H.run(page, () => page.click('[data-osc="measure.repeat"]'));
+    if (res.run2.state !== 'COMPLETE') return { ok: false, failed: ['run2'], ...res };
     await page.click('#osc-measure-save');
-    await page.waitForFunction(() => window.OSCILLA.app.meas.saved, null, { timeout: 10000 });
+    res.save2 = await H.saved(page);
+    if (res.save2) return { ok: false, failed: ['save2'], ...res };
     res.repeat = await page.evaluate(async (first) => {
       const a = window.OSCILLA.app;
       const id = a.meas.savedId;
@@ -280,20 +287,25 @@ function defineChecks(fixtures) {
     const d = res.done;
     const announced = ['Setup check complete: ready', 'Measurement started',
       'Noise-floor check complete', 'Sweep running', 'Measurement complete'];
-    const ok = res.banner && res.afterPreflight.state === 'READY'
-      && res.afterPreflight.primary === 'Start measurement'
-      && d.state === 'COMPLETE' && d.history.includes('ANALYZING') && d.history.includes('ARMED')
-      && d.bar.length === 5 && d.bar.includes('CAPTURE COMPLETE') && d.bar.includes('INPUT OK')
-      && /^(GOOD|USABLE)$/.test(d.quality) && d.reasons > 0
-      && /^Frequency response \(/.test(d.response) && /TEST CONTEXT/.test(d.shown)
-      && d.primary === 'Save experiment' && d.chart
-      && /^Impulse response: direct peak/.test(res.ir.text) && res.ir.chart
-      && res.ir.tabs === 'true' && res.rtaTab === 'osc-m-tab-rta'
-      && announced.every((t) => res.live.filter((x) => x === t).length === 1)
-      && !res.live.some((t) => /%/.test(t))
-      && H.zero(res.counts) && H.zero(res.counts2)
-      && res.repeat.newId && res.repeat.repeatOf && res.repeat.testContext;
-    return { ok, ...res };
+    const v = H.verdict({
+      banner: res.banner,
+      preflightReady: res.afterPreflight.state === 'READY'
+        && res.afterPreflight.primary === 'Start measurement',
+      run1: res.run1.state === 'COMPLETE',
+      history: d.state === 'COMPLETE' && d.history.includes('ANALYZING')
+        && d.history.includes('ARMED'),
+      bar: d.bar.length === 5 && d.bar.includes('CAPTURE COMPLETE') && d.bar.includes('INPUT OK'),
+      quality: /^(GOOD|USABLE)$/.test(d.quality) && d.reasons > 0,
+      response: /^Frequency response \(/.test(d.response) && /TEST CONTEXT/.test(d.shown)
+        && d.primary === 'Save experiment' && d.chart,
+      ir: /^Impulse response: direct peak/.test(res.ir.text) && res.ir.chart
+        && res.ir.tabs === 'true' && res.rtaTab === 'osc-m-tab-rta',
+      announcements: announced.every((t) => res.live.filter((x) => x === t).length === 1)
+        && !res.live.some((t) => /%/.test(t)),
+      zero: H.zero(res.counts) && H.zero(res.counts2),
+      repeat: res.repeat.newId && res.repeat.repeatOf && res.repeat.testContext,
+    });
+    return { ...v, ...res };
   });
 
   def('abort-stages', async ({ page }) => {
@@ -311,43 +323,37 @@ function defineChecks(fixtures) {
     const out = [];
     const terminal = ['IDLE', 'COMPLETE', 'INVALID', 'ABORTED', 'ERROR'];
     for (const [stage, via] of cases) {
-      // A run that ends INVALID before reaching the stage (a real capture defect, e.g. Firefox's
-      // realtime loopback occasionally delivers a DISCONTINUITY under load) is retried, and the
-      // retry is reported; reaching the stage and aborting there is what is asserted.
-      const missed = [];
-      for (let attempt = 0; attempt < 3; attempt++) {
-        await H.workspace(page, 'measure');
-        await H.recordLive(page);
-        const hook = page.evaluate(([st, fnText]) => window.OSCILLA.measure.onceInState(st,
-          // eslint-disable-next-line no-new-func
-          new Function(`(${fnText})()`)), [stage, how[via].toString()]);
-        // One measure() call (it runs its own setup check), started as the Start button does.
-        await page.evaluate(() => { window.OSCILLA.app.measureStart(); });
-        const ended = H.waitState(page, terminal).then(() => null, () => null);
-        const hit = await Promise.race([hook, ended.then(() => sleep(50)).then(() => null)]);
-        await page.evaluate(() => window.OSCILLA.measure.clearStateHook());
-        const end = await H.until(() => H.state(page), (st) => terminal.includes(st), 3000);
-        const counts = await H.until(() => H.counts(page), H.zero, 3000);
-        if (!hit && end !== 'ABORTED') {
-          missed.push({ end, reasons: await page.evaluate(() => {
-            const r = window.OSCILLA.measure.result;
-            return r ? (r.reasons || []).map((x) => `${x.code}: ${x.text}`).slice(0, 3) : null;
-          }) });
-          await page.evaluate(() => window.OSCILLA.measure.engine.reset());
-          continue;
-        }
-        // Announcements reach the live region on the next task (it is cleared first).
-        const live = await H.until(() => H.live(page), (l) => l.includes('Measurement stopped'),
-          1500);
-        out.push({ stage, via, hit: hit && hit.ran, end, zero: H.zero(counts), counts,
-          stopped: live.includes('Measurement stopped'), retries: missed });
-        await page.evaluate(() => {
-          const e = window.OSCILLA.measure.engine;
-          if (e && ['ABORTED', 'COMPLETE', 'INVALID', 'ERROR'].includes(e.state)) e.reset();
-        });
-        break;
+      // One attempt per case, no retry: a run that ends before reaching the stage is a failure
+      // and is reported with its reasons.
+      await H.workspace(page, 'measure');
+      await H.recordLive(page);
+      const hook = page.evaluate(([st, fnText]) => window.OSCILLA.measure.onceInState(st,
+        // eslint-disable-next-line no-new-func
+        new Function(`(${fnText})()`)), [stage, how[via].toString()]);
+      // One measure() call (it runs its own setup check), started as the Start button does.
+      await page.evaluate(() => { window.OSCILLA.app.measureStart(); });
+      const ended = H.waitState(page, terminal).then(() => null, () => null);
+      const hit = await Promise.race([hook, ended.then(() => sleep(50)).then(() => null)]);
+      await page.evaluate(() => window.OSCILLA.measure.clearStateHook());
+      const end = await H.until(() => H.state(page), (st) => terminal.includes(st), 3000);
+      const counts = await H.until(() => H.counts(page), H.zero, 3000);
+      if (!hit && end !== 'ABORTED') {
+        out.push({ stage, via, hit: false, end, reasons: await page.evaluate(() => {
+          const r = window.OSCILLA.measure.result;
+          return r ? (r.reasons || []).map((x) => `${x.code}: ${x.text}`).slice(0, 3) : null;
+        }) });
+        await page.evaluate(() => window.OSCILLA.measure.engine.reset());
+        continue;
       }
-      if (missed.length === 3) out.push({ stage, via, hit: false, end: 'never reached', missed });
+      // Announcements reach the live region on the next task (it is cleared first).
+      const live = await H.until(() => H.live(page), (l) => l.includes('Measurement stopped'),
+        1500);
+      out.push({ stage, via, hit: hit && hit.ran, end, zero: H.zero(counts), counts,
+        stopped: live.includes('Measurement stopped') });
+      await page.evaluate(() => {
+        const e = window.OSCILLA.measure.engine;
+        if (e && ['ABORTED', 'COMPLETE', 'INVALID', 'ERROR'].includes(e.state)) e.reset();
+      });
     }
     const ok = out.every((r) => r.hit === true && r.end === 'ABORTED' && r.zero && r.stopped);
     return { ok, cases: out };
@@ -444,23 +450,37 @@ function defineChecks(fixtures) {
     }
     res.again = await page.evaluate((t) => window.OSCILLA.app.experimentsImportText(t),
       fixtures.a.json);
-    await sleep(150);
+    // Every step below waits for the state it asserts (bounded), never a fixed sleep: the store
+    // is asynchronous IndexedDB, and Alpine renders on a later microtask/frame. waitMs records
+    // how long each took (the fixed 150-200 ms sleeps these replace were not always enough).
+    res.waitMs = {};
+    const timed = async (k, p) => {
+      const t0 = Date.now();
+      const v = await p;
+      res.waitMs[k] = Date.now() - t0;
+      return v;
+    };
     res.rows = await page.evaluate(() => window.OSCILLA.app.exps.rows.length - 0);
     // Open A, then compare A + B (equivalent) and A + C (not equivalent).
     await page.evaluate(() => window.OSCILLA.app.experimentsOpen('fixture-a'));
-    await sleep(150);
-    res.detail = await page.evaluate(() => ({
+    res.detail = await timed('detail', H.until(() => page.evaluate(() => ({
       compact: document.querySelector('[data-osc="exp.compact"]').textContent,
       chart: !!document.querySelector('#osc-exp-chart-detail .uplot'),
       testContext: window.OSCILLA.app.exps.detail.testContext,
-    }));
-    const compare = (ids) => page.evaluate(async (list) => {
-      const v = await window.OSCILLA.app.experimentsCompare(list);
-      await new Promise((r) => setTimeout(r, 100));
-      return { compatible: v.compatible, delta: v.delta.ok, reason: v.delta.reason || null,
+    })), (d) => /synthetic A/.test(d.compact) && d.chart, 5000));
+    const compare = async (ids) => {
+      const v = await page.evaluate(async (list) => {
+        const c = await window.OSCILLA.app.experimentsCompare(list);
+        return { compatible: c.compatible, delta: c.delta.ok, reason: c.delta.reason || null };
+      }, ids);
+      // The rendered delta text follows the view model (Alpine): wait until it says this pair.
+      const dom = await timed(`compare-${ids.join('-')}`, H.until(() => page.evaluate(() => ({
         text: document.querySelector('[data-osc="exp.delta"]').textContent,
-        overlay: !!document.querySelector('#osc-exp-chart-overlay .uplot') };
-    }, ids);
+        overlay: !!document.querySelector('#osc-exp-chart-overlay .uplot') })),
+      (d) => d.overlay && (v.delta ? /^A − B over/.test(d.text) : /not shown/.test(d.text)),
+      5000));
+      return { ...v, ...dom };
+    };
     res.ab = await compare(['fixture-a', 'fixture-b']);
     res.ac = await compare(['fixture-a', 'fixture-c']);
     // Rename (dialog), duplicate, export (download re-validates), CSV.
@@ -468,9 +488,8 @@ function defineChecks(fixtures) {
     await page.click('[data-osc="exp.rename"]');
     await page.fill('#osc-exp-rename-name', 'TEST CONTEXT · renamed B');
     await page.click('[data-osc="exp.renameSave"]');
-    await sleep(150);
-    res.renamed = await page.evaluate(() => window.OSCILLA.app.exps.rows
-      .some((r) => r.name === 'TEST CONTEXT · renamed B'));
+    res.renamed = await timed('renamed', H.until(() => page.evaluate(() => window.OSCILLA.app
+      .exps.rows.some((r) => r.name === 'TEST CONTEXT · renamed B')), Boolean, 5000));
     res.dup = await page.evaluate(() => window.OSCILLA.app.experimentsDuplicate('fixture-b'));
     const [dl] = await Promise.all([page.waitForEvent('download'),
       page.click('[data-osc="exp.export"]')]);
@@ -488,12 +507,11 @@ function defineChecks(fixtures) {
       spl: /SPL/.test(csvText), unit: /magnitude_db_relative/.test(csvText) };
     // Show in MEASURE (inspection), then back.
     await page.click('[data-osc="exp.inspect"]');
-    await sleep(200);
-    res.inspect = await page.evaluate(() => ({
+    res.inspect = await timed('inspect', H.until(() => page.evaluate(() => ({
       mode: document.querySelector('#osc-app').dataset.mode,
       shown: document.querySelector('[data-osc="measure.shown"]').textContent,
       banner: document.querySelector('[data-osc="measure.testContext"]').offsetParent !== null,
-    }));
+    })), (x) => x.mode === 'measure' && /Saved experiment/.test(x.shown) && x.banner, 5000));
     await H.workspace(page, 'experiments');
     // Explicit delete: the dialog asks first; Cancel keeps it, Delete removes it.
     await page.evaluate((id) => window.OSCILLA.app.experimentsOpen(id), res.dup);
@@ -503,26 +521,32 @@ function defineChecks(fixtures) {
       res.dup);
     await page.click('[data-osc="exp.delete"]');
     await page.click('[data-osc="exp.deleteConfirm"]');
-    await sleep(200);
-    res.deleted = kept && await page.evaluate((id) => !window.OSCILLA.app.exps.rows
-      .some((r) => r.id === id), res.dup);
+    res.deleted = kept && await timed('deleted', H.until(() => page.evaluate((id) => !window
+      .OSCILLA.app.exps.rows.some((r) => r.id === id), res.dup), Boolean, 5000));
     await page.evaluate(() => { window.OSCILLA.app.alerts = []; });
     void context;
-    const ok = (res.store.kind === 'indexeddb' || (res.store.kind === 'memory'
-      && /memory for this page view/.test(res.store.note) && res.store.shown))
-      && res.importa === 'fixture-a' && res.importb === 'fixture-b' && res.importc === 'fixture-c'
-      && res.again === null && res.rows === before + 3
-      && /TEST CONTEXT · synthetic A/.test(res.detail.compact) && res.detail.chart
-      && res.detail.testContext
-      && res.ab.compatible && res.ab.delta && /^A − B over/.test(res.ab.text) && res.ab.overlay
-      && !res.ac.compatible && !res.ac.delta && /not shown/.test(res.ac.text)
-      && res.renamed && typeof res.dup === 'string'
-      && /\.oscilla\.json$/.test(res.exportName) && res.exportValid
-      && /\.csv$/.test(res.csv.name) && /^# OSCILLA/.test(res.csv.head) && !res.csv.spl
-      && res.csv.unit && res.inspect.mode === 'measure'
-      && /Saved experiment/.test(res.inspect.shown)
-      && res.inspect.banner && res.deleted;
-    return { ok, ...res };
+    res.before = before;
+    const v = H.verdict({
+      store: res.store.kind === 'indexeddb' || (res.store.kind === 'memory'
+        && /memory for this page view/.test(res.store.note) && res.store.shown),
+      imports: res.importa === 'fixture-a' && res.importb === 'fixture-b'
+        && res.importc === 'fixture-c',
+      again: res.again === null,
+      rows: res.rows === before + 3,
+      detail: /TEST CONTEXT · synthetic A/.test(res.detail.compact) && res.detail.chart
+        && res.detail.testContext,
+      ab: res.ab.compatible && res.ab.delta && /^A − B over/.test(res.ab.text) && res.ab.overlay,
+      ac: !res.ac.compatible && !res.ac.delta && /not shown/.test(res.ac.text),
+      renamed: res.renamed,
+      dup: typeof res.dup === 'string',
+      export: /\.oscilla\.json$/.test(res.exportName) && res.exportValid,
+      csv: /\.csv$/.test(res.csv.name) && /^# OSCILLA/.test(res.csv.head) && !res.csv.spl
+        && res.csv.unit,
+      inspect: res.inspect.mode === 'measure' && /Saved experiment/.test(res.inspect.shown)
+        && res.inspect.banner,
+      deleted: res.deleted,
+    });
+    return { ...v, ...res };
   });
 
   def('no-spl', async ({ page }) => {
@@ -635,7 +659,10 @@ async function runOne(browserName, origin, baseUrl, fixtures) {
         failed += bad.length;
         console.log(`${bad.length ? 'FAIL' : 'PASS'} ${key}/v3-ui: ${names.length - bad.length}/`
           + `${names.length} checks (${((Date.now() - t0) / 1000).toFixed(1)} s)`);
-        for (const n of bad) console.log(`   x ${n}: ${JSON.stringify(res[n]).slice(0, 900)}`);
+        for (const n of bad) {
+          const why = res[n].failed ? `failed [${res[n].failed.join(', ')}] ` : '';
+          console.log(`   x ${n}: ${why}${JSON.stringify(res[n]).slice(0, 900)}`);
+        }
       }
     }
   } finally {

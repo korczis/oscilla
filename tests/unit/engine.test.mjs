@@ -501,3 +501,40 @@ test('audibleVoiceCount: silent released voices waiting for onended are not coun
     advance(t + 1);
     assert.strictEqual(eng.audibleVoiceCount, 0);
   });
+
+test('limiter feed: constant 0 into the limiter for the context lifetime, gone on discard',
+  { skip }, () => {
+    const { eng, audio } = setup();
+    const created = [];
+    audio.AudioContext.prototype.createConstantSource = function () {
+      const n = this.createGain();
+      n.kind = 'constantSource';
+      n.offset = n.gain;
+      n.started = null;
+      n.stopped = false;
+      n.start = (t = 0) => { n.started = t; };
+      n.stop = () => { n.stopped = true; };
+      created.push(n);
+      return n;
+    };
+    assert.ok(eng.init());
+    const feed = eng.limiterFeed;
+    assert.strictEqual(created.length, 1);
+    assert.strictEqual(feed, created[0]);
+    assert.strictEqual(feed.offset.value, 0);
+    assert.strictEqual(feed.started, 0);
+    assert.deepStrictEqual(feed.out, [`node:${eng.limiter.id}`]);
+    // Output-chain infrastructure, not a voice node: the voice accounting stays at zero.
+    assert.strictEqual(eng.activeNodeCount, 0);
+    assert.strictEqual(eng.activeSourceCount, 0);
+    eng.ctx.externalState('closed');
+    assert.strictEqual(eng.limiterFeed, null);
+    assert.ok(feed.stopped);
+    assert.ok(feed.disconnected > 0);
+  });
+
+test('limiter feed: none where the context has no ConstantSourceNode', { skip }, () => {
+  const { eng } = setup();
+  assert.ok(eng.init());
+  assert.strictEqual(eng.limiterFeed, null);
+});

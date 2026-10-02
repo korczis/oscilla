@@ -22,9 +22,10 @@
 //       `chainNotes` is pure data about the playback chain reported by the platform layer (no
 //       browser sniffing here), currently { limiterDeviationAboveHz }: every grid point above
 //       that frequency is marked unreliable and OUTPUT_CHAIN_DEVIATION (dimension range) warns
-//       when the measured or requested range reaches above it (ok when it does not). Measured
-//       for Firefox 155's DynamicsCompressor in the master chain, which deviates above 18 kHz
-//       at every level (docs/v3/spike-audioworklet-worker.md, G12). Thresholds are unchanged.
+//       when the measured or requested range reaches above it (ok when it does not). Added for
+//       the spike's Firefox 155 reading above 18 kHz (docs/v3/spike-audioworklet-worker.md,
+//       G12), since traced to a look-ahead replay that audio-engine.js feedLimiter removes; no
+//       platform layer sets the note today. Thresholds are unchanged.
 //
 // Reasons: { code, scope, severity: 'ok'|'warn'|'fail', text, value, unit, range? }.
 //   scope 'quality'      integrity and precision of the measurement; decides the status.

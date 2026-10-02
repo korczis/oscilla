@@ -26,6 +26,10 @@
 //   - 0 engine nodes, 0 io nodes/sources/captures/ports and 0 started-but-not-ended
 //     AudioBufferSourceNodes (independent instrumentation) after finish and after an abort in
 //     the middle of the sweep
+//   - the run after that abort starts clean: silent until the limiter's look-ahead has passed
+//     and no discontinuity (Firefox replayed the aborted fade tail before feedLimiter)
+//   - a capture scheduled after 200 ms of synchronous work in one task is complete (Firefox
+//     freezes currentTime for the task; capture.js schedules from a fresh task)
 //   - fake microphone (chromium and firefox, http origin, once per browser): the real capture
 //     path returns the requested number of frames, the applied-constraints read-back object, and
 //     every track is stopped and every node released by cancel() — acoustics are not asserted
@@ -87,6 +91,7 @@ import { createMeasurementEngine } from './measurement/engine.js';
 import { createLoopbackIo, createCaptureIo, workletDataUrl, CAPTURE_WORKLET_SOURCE }
   from './measurement/capture.js';
 import { renderStimulus } from './measurement/stimulus.js';
+import { checkCapture } from './measurement/capture-checks.js';
 import { align } from './measurement/align.js';
 import { computeTransfer } from './measurement/transfer.js';
 import { computeImpulseResponse } from './measurement/impulse-response.js';
@@ -303,6 +308,44 @@ T.abortMidSweep = async (o = {}) => {
   await fire;
   const code = await m;
   return { code, state: eng.state, atAbort, after: T.counts() };
+};
+
+// The run right after T.abortMidSweep, pure-gain post-chain tap: the frames between the scheduled
+// stimulus onset and the limiter's 288-frame look-ahead must be silent (before feedLimiter,
+// Firefox replayed the aborted run's fade tail there), and the capture has no discontinuity.
+T.afterAbort = async () => {
+  const io = createLoopbackIo({ engine: T.engine, system: { type: 'gain', gain: 1 } });
+  T.io = io;
+  const sr = T.engine.ctx.sampleRate;
+  const stim = renderStimulus({ kind: 'log-sweep', duration: 1, level: 0.25, f1: 20, f2: 20000,
+    fade: 0.01, sampleRate: sr });
+  const cap = await io.runStimulus(stim, { preRollS: 0.25, postRollS: 0.2 });
+  const onset = Math.round(cap.preRoll * sr);
+  let peak = 0;
+  for (let k = onset; k < onset + 280; k++) peak = Math.max(peak, Math.abs(cap.samples[k]));
+  const chk = checkCapture(cap);
+  io.dispose();
+  return { peakBeforeDelayedOnset: peak, discontinuities: chk.discontinuities.length,
+    reasons: chk.reasons.map((x) => x.code) };
+};
+
+// A window scheduled after busyMs of synchronous work in the same task (Firefox freezes
+// currentTime for the whole task): the capture must still be complete (capture.js freshClock).
+T.staleClock = async (busyMs = 200) => {
+  const io = createLoopbackIo({ engine: T.engine, system: { type: 'gain', gain: 1 } });
+  T.io = io;
+  const sr = T.engine.ctx.sampleRate;
+  const stim = renderStimulus({ kind: 'log-sweep', duration: 1, level: 0.25, f1: 20,
+    f2: 20000, fade: 0.01, sampleRate: sr });
+  await io.captureNoise(0.1); // input and recorder ready
+  await new Promise((r) => setTimeout(r, 50));
+  const p0 = performance.now();
+  while (performance.now() - p0 < busyMs) { /* synchronous work in this task */ }
+  const cap = await io.runStimulus(stim, { preRollS: 0.25, postRollS: 0.2 });
+  const i = cap.integrity;
+  io.dispose();
+  return { missing: i.expectedFrames - i.receivedFrames, discontinuities: i.discontinuities,
+    armedAfterStart: i.timing.armedAtFrame - i.timing.startFrame };
 };
 
 T.disposeIo = () => { if (T.io) T.io.dispose(); return T.counts(); };
@@ -659,6 +702,14 @@ async function runOne(browserName, origin, url, workerSource, micDone) {
     rec.afterAbort = await page.evaluate(() => window.T.counts());
     check(key, '0 active nodes/sources/captures/ports after abort (after the 10 ms fade)',
       rec.afterAbort.zero, JSON.stringify(rec.afterAbort));
+    await page.evaluate(() => window.T.disposeIo());
+    const aa = (rec.afterAbortRun = await page.evaluate(() => window.T.afterAbort()));
+    check(key, 'run after an abort starts clean (limiter look-ahead not replayed), no '
+      + 'discontinuity', aa.peakBeforeDelayedOnset === 0 && aa.discontinuities === 0,
+    JSON.stringify(aa));
+    const sc = (rec.staleClock = await page.evaluate(() => window.T.staleClock(200)));
+    check(key, 'capture scheduled after 200 ms of work in the same task is complete',
+      sc.missing === 0 && sc.discontinuities === 0, JSON.stringify(sc));
     await page.evaluate(() => window.T.disposeIo());
 
     // 4. Fake microphone, once per browser that has one.

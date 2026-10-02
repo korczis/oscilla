@@ -32,8 +32,9 @@
 //     worklet: { supported, mode, error? }, testContext?, chainNotes? }
 //   chainNotes (optional): pure data about the playback chain that the platform layer has
 //     MEASURED or knows from a measured probe, e.g. { limiterDeviationAboveHz: 18000 } when the
-//     master limiter of this browser is not transparent above 18 kHz (Firefox 155,
-//     docs/v3/spike-audioworklet-worker.md G12). The engine never sniffs the browser: it
+//     master limiter of this browser is not transparent above 18 kHz (the spike's Firefox 155
+//     reading, docs/v3/spike-audioworklet-worker.md G12, later traced to the look-ahead replay
+//     that audio-engine.js feedLimiter removes). The engine never sniffs the browser: it
 //     validates the note (quality.js normalizeChainNotes), warns in preflight when the sweep
 //     reaches above it, records it as result.chainNotes and passes it to `assess` (context
 //     `chainNotes`); assessMeasurement() hands it to assessQuality, which marks the bins above

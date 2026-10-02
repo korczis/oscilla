@@ -17,14 +17,17 @@
 // ≥ 9 dB below the limiter threshold. Measured with the loopback taps (tests/browser/
 // v3-measure.cjs, post-chain minus pre-limiter, 2 s sweep): Chromium 153 and WebKit 26.6 are
 // transparent (≤ 0.0002 dB, 20 Hz-20 kHz) at peaks 0.02 and 0.25. Firefox 155's
-// DynamicsCompressor is transparent over 20 Hz-18 kHz (≤ 0.003 dB) up to a 0.1 peak (−20 dBFS),
-// but deviates above ~18 kHz at every level (+5.8 dB at 19.9 kHz in the realtime loopback,
-// −3.9 dB at 19.5 kHz offline) and, at a 0.25 peak, compresses ≥ 8 kHz by up to 4.7 dB although
-// the signal is below its threshold (its detector apparently sees pre-emphasized highs). Hence
-// the engine warns (LIMITER_RANGE) when level × master gain exceeds
-// PREFLIGHT_THRESHOLDS.limiterTransparentPeak = 0.1; the default (0.25 × 0.08 = 0.02) is well
-// inside. The compressor adds its look-ahead delay (288 frames = 6 ms at 48 kHz in all
-// three engines), which alignment absorbs. The measured transfer includes the master gain:
+// DynamicsCompressor is transparent over 20 Hz-20 kHz (≤ 0.0002 dB) up to a 0.1 peak (−20 dBFS)
+// since the engine feeds it a constant 0 (audio-engine.js feedLimiter): without that feed Gecko
+// skips the compressor's look-ahead line on silent input, so a sound's last 6 ms were cut off
+// and replayed at the start of the next sound (the earlier "+5.8 dB at 19.9 kHz" here was the
+// previous run's 20 kHz fade-out tail replayed at each run's onset, and an aborted run's fade
+// tail made the next run INVALID with a DISCONTINUITY at the scheduled onset). At a 0.25 peak
+// it still compresses ≥ 8 kHz by up to 4.8 dB although the signal is below its threshold (its
+// detector apparently sees pre-emphasized highs). Hence the engine warns (LIMITER_RANGE) when
+// level × master gain exceeds PREFLIGHT_THRESHOLDS.limiterTransparentPeak = 0.1; the default
+// (0.25 × 0.08 = 0.02) is well inside. The compressor adds its look-ahead delay (288 frames =
+// 6 ms at 48 kHz in all three engines), which alignment absorbs. The measured transfer includes the master gain:
 // 20·log10(engine.gainLevel) dB on top of the acoustic path.
 //
 // Capture (CaptureSession): mono PCM from a MediaStreamAudioSourceNode (getUserMedia with
@@ -599,6 +602,20 @@ function createIoCore({ engine, env = defaultEnv(), mode = 'auto', openInput, ki
     return ctx;
   }
 
+  // Firefox 155 freezes AudioContext.currentTime for the whole task, microtasks included
+  // (measured: after 50/150/300 ms of synchronous work in one task it still reads the value
+  // from the task's start; Chromium and WebKit read the live clock). A window scheduled at
+  // currentTime + SCHEDULE_LEAD_S after more than ~0.1 s of work in the same task (the noise
+  // summary, UI updates, the previous run's checks) starts in the past: the worklet is armed
+  // after its start frame and the run is INVALID with FRAMES_MISSING (200 ms of work: 4864
+  // frames missing, 1 discontinuity, the worklet armed 4864 frames late). So every window is
+  // scheduled from the clock read at the start of a NEW task.
+  const nextTask = makeYield(env);
+  async function freshClock(since) {
+    await nextTask();
+    if (abortedSince(since)) throw new MeasurementError('ABORTED');
+  }
+
   const quantum = (sr) => 128 / sr;
   const ceilFrame = (t, sr) => Math.ceil((t * sr) / 128 - 1e-9) * 128;
 
@@ -738,6 +755,7 @@ function createIoCore({ engine, env = defaultEnv(), mode = 'auto', openInput, ki
       if (ctx.state === 'running') {
         try {
           await ensureReady({ since });
+          await freshClock(since);
           const sr = ctx.sampleRate;
           const start = ceilFrame(ctx.currentTime + SCHEDULE_LEAD_S, sr);
           const w = await openWindow(ctx, start, Math.round(PREFLIGHT_LEVEL_S * sr), null);
@@ -760,7 +778,9 @@ function createIoCore({ engine, env = defaultEnv(), mode = 'auto', openInput, ki
     },
 
     async captureNoise(seconds, { onScheduled, onChunk } = {}) {
-      const ctx = await ensureReady();
+      const since = epoch;
+      const ctx = await ensureReady({ since });
+      await freshClock(since);
       const sr = ctx.sampleRate;
       const startFrame = ceilFrame(ctx.currentTime + SCHEDULE_LEAD_S, sr);
       const frames = Math.round(seconds * sr);
@@ -773,7 +793,9 @@ function createIoCore({ engine, env = defaultEnv(), mode = 'auto', openInput, ki
 
     async runStimulus(stimulus, { preRollS, postRollS, notBefore = null, onScheduled,
       onChunk } = {}) {
-      const ctx = await ensureReady();
+      const since = epoch;
+      const ctx = await ensureReady({ since });
+      await freshClock(since);
       const sr = ctx.sampleRate;
       const samples = stimulus && stimulus.samples;
       if (!(samples instanceof Float32Array) || !samples.length)

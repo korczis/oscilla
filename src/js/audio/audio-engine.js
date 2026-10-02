@@ -86,6 +86,29 @@ export function planKey(plan, ignoreWave = false) {
   return JSON.stringify(plan, (k, v) => (k === 'label' || (ignoreWave && k === 'wave') ? undefined : v));
 }
 
+/**
+ * A ConstantSourceNode at offset 0 connected to the limiter for the context's lifetime, so the
+ * limiter's input is never "silent" (null) in Gecko. Firefox 155's DynamicsCompressorNode
+ * returns silence for a null input block WITHOUT running its look-ahead delay line (6 ms,
+ * 288 frames at 48 kHz): the last 6 ms of every sound stay in the line and are emitted when the
+ * next sound starts. Measured in loopback (post-chain vs pre-limiter tap): after an aborted
+ * sweep the next stimulus began with the abort fade's tail (a linear ramp from -0.0029) at the
+ * scheduled onset, 288 frames before the stimulus itself; after a complete sweep, with its
+ * 20 kHz fade-out tail (peak 0.013). The pre-limiter tap and Chromium/WebKit show nothing there.
+ * With the zero feed the line always advances, so a sound's tail plays out after it (as the spec
+ * requires) and the post-chain capture equals the other engines'. Adding 0 changes no sample.
+ * The output chain owns it (like master and limiter), outside the voice accounting. Contexts
+ * without ConstantSourceNode (old WebKit, the recording mock) get no feed: null.
+ */
+export function feedLimiter(ctx, limiter) {
+  if (typeof ctx.createConstantSource !== 'function') return null;
+  const feed = ctx.createConstantSource();
+  feed.offset.value = 0;
+  feed.connect(limiter);
+  feed.start();
+  return feed;
+}
+
 /** Waveshaper curve: identity up to ±cap, flat beyond (exact under linear interpolation). */
 export function ceilingCurve(cap) {
   // V1: ceilingCurve (index.html@a7b7a23)
@@ -105,6 +128,7 @@ export class AudioEngine {
     this.ctx = null;
     this.master = null;
     this.limiter = null;
+    this.limiterFeed = null;     // constant 0 into the limiter (see feedLimiter)
     this.trim = null;
     this.ceiling = null;
     this.analyser = null;
@@ -228,6 +252,7 @@ export class AudioEngine {
       this.analyser.minDecibels = -140;
       this.analyser.maxDecibels = 0;
       this.master.connect(this.limiter);
+      this.limiterFeed = feedLimiter(ctx, this.limiter);
       this.limiter.connect(this.trim);
       this.trim.connect(this.ceiling);
       this.ceiling.connect(this.analyser);
@@ -256,6 +281,11 @@ export class AudioEngine {
     this.stopMic('closed');
     this.detachMicrophone('closed');
     this.ctx = null;
+    if (this.limiterFeed) {
+      try { this.limiterFeed.stop(); } catch (e) { /* not started / stopped */ }
+      try { this.limiterFeed.disconnect(); } catch (e) { /* gone */ }
+    }
+    this.limiterFeed = null;
     this.master = this.limiter = this.trim = this.ceiling = this.analyser = null;
     if (ctx) {
       ctx.onstatechange = null;
