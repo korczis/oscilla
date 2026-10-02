@@ -8,7 +8,10 @@
 // waveform changes dip, closed contexts are rebuilt, continuous sweeps are scheduled ahead in
 // slices and topped up, and the microphone stops its tracks on failure and reports a track that
 // ends by itself. Behaviour with default options is V1's (frozen by the engine.stop golden
-// vectors on a recording mock AudioContext).
+// vectors on a recording mock AudioContext), except where a release fades: V249 moved it from
+// the envelope and dip gains to two output-stage gains of the voice (`fade`, `cut`) that
+// nothing else automates, so no sounding param is edited (see _releaseVoice; the freeze suite
+// maps it back to V1's schedule, tests/unit/freeze.test.mjs V249_CASES).
 //
 // Split (cohesive parts only): voice.js (recorded automation, step envelope, open-pattern
 // envelope), scheduler.js (const/steps/ramps automation, continuous cycles, timing constants),
@@ -18,9 +21,10 @@
 // INVARIANTS (inventory K4/K5, risks 4/5):
 //   - every node of a voice goes through track() (sources through source()), so
 //     activeNodeCount/activeSourceCount stay exact and stop/cleanup leaves zero nodes;
-//   - every automation of the envelope and release gains goes through the recorded params
-//     (v.env / v.rel, envelope functions through the `eg` wrapper), so _freeze holds them at
-//     their scheduled value in every browser.
+//   - every automation of the envelope, dip and fade gains goes through the recorded params
+//     (v.env / v.rel / v.fade / v.cut, envelope functions through the `eg` wrapper), so their
+//     scheduled value is known at any time in every browser (_freeze holds rel for a dip);
+//   - a release edits only v.fade or v.cut, never a param that is sounding (V249).
 //
 // V2 EXTENSION POINTS (no DSP here; src/js/audio/{envelope,filters,additive,stereo}.js plug in):
 //   play(plan, o) options, all optional (absent = V1 behaviour, identical graph and schedule):
@@ -72,6 +76,7 @@ import {
   MIC_UNAVAILABLE_TEXT, buildMicrophoneGraph, closeMicrophone, hasMicrophoneApi,
   requestMicrophoneStream, stopStreamTracks,
 } from './microphone.js';
+import { forgetClock, observeClock, renderedTimeAtLeast } from './clock.js';
 
 export {
   ESCAPE_RELEASE_S, FAST_RELEASE_S, SCHEDULE_AHEAD_S, SCHEDULE_LEAD_S, TOP_UP_EVERY_MS,
@@ -236,6 +241,7 @@ export class AudioEngine {
       this.freqData = new Float32Array(this.analyser.frequencyBinCount);
       this.ctx = ctx;
       ctx.onstatechange = () => {
+        forgetClock(ctx); // readings taken before a suspension or a start would run ahead
         this._emit('context', ctx.state);
         if (ctx.state === 'closed' && this.ctx === ctx) this._discardContext();
       };
@@ -281,12 +287,28 @@ export class AudioEngine {
     if (this.master) this.master.gain.setTargetAtTime(this.gainLevel, this.ctx.currentTime, 0.02);
   }
 
+  /** performance.now() of the engine's environment, or null (then the clock is currentTime). */
+  _perfNow() {
+    const p = this._env.performance;
+    return p && typeof p.now === 'function' ? p.now() : null;
+  }
+
+  /** A clock reading for _soon, only while the audio clock runs (it stalls otherwise). */
+  _observeClock(ctx) {
+    if (ctx && ctx.state === 'running') observeClock(ctx, this._perfNow());
+  }
+
   /** The earliest time a change to a sounding voice can be scheduled without a step. */
   _soon(ctx) {
     // On a render-quantum boundary: Firefox starts a ramp anchored mid-quantum at the quantum's
-    // edge, which steps by up to 128 frames' worth of the ramp.
+    // edge, which steps by up to 128 frames' worth of the ramp. SCHEDULE_LEAD_S after the audio
+    // already rendered (V249, clock.js renderedTimeAtLeast, from the clock readings of play()
+    // and the per-frame snapshot()): Firefox's currentTime stands still within a task, so a main
+    // thread late inside one would anchor a fade in the past. Without a performance clock in the
+    // environment, or without readings, this is currentTime + SCHEDULE_LEAD_S (V1).
     const q = 128 / ctx.sampleRate;
-    return Math.ceil((ctx.currentTime + Math.max(SCHEDULE_LEAD_S, 2 * q)) / q) * q;
+    const rendered = renderedTimeAtLeast(ctx, this._perfNow(), { outputTimestamp: false });
+    return Math.ceil((rendered + Math.max(SCHEDULE_LEAD_S, 2 * q)) / q) * q;
   }
 
   /** Frequencies are clamped once more here, against the running context. */
@@ -342,6 +364,7 @@ export class AudioEngine {
   play(plan, o) {
     if (!this.init()) return null;
     const ctx = this.ctx;
+    this._observeClock(ctx);
     // The replaced voice stops being current before it is released, so its end (immediate on a
     // suspended context) is not reported as the end of playback.
     const prev = this.voice;
@@ -355,6 +378,7 @@ export class AudioEngine {
     const v = {
       id: ++this._seq, ctx, plan, opts: o, t0: startAt, nodes: [], sources: [],
       freqParams: [], env: null, rel: null, carrier: null, live: {}, cycle: 0, topUp: null,
+      fade: null, cut: null,
       endTime: Infinity, deadline: Infinity, releasing: false, ended: false, timers: [], dipping: false,
       attack: Math.max(0.001, adsr ? adsr.a : o.attackS), release: Math.max(0.005, adsr ? adsr.r : o.releaseS),
       limited: !!o.limited, extended: false,
@@ -364,8 +388,8 @@ export class AudioEngine {
     const track = (n) => { v.nodes.push(n); this.nodes.add(n); return n; };
     const source = (n) => { track(n); v.sources.push(n); this.sources.add(n); return n; };
     try {
-      // env (programmed envelope) → [inserts] → rel (release and waveform dips only) →
-      // [output stage] → master
+      // env (programmed envelope) → [inserts] → rel (waveform dips only) → [output stage] →
+      // fade (the release) → cut (a shorter release overriding it) → master
       const envNode = track(ctx.createGain());
       v.env = this._track(envNode.gain, 1);
       const eg = trackedParam(v.env);
@@ -373,6 +397,13 @@ export class AudioEngine {
       this._ev(v.env, 'setValueAtTime', GAIN_FLOOR, ctx.currentTime);
       const relNode = track(ctx.createGain());
       v.rel = this._track(relNode.gain, 1);
+      // The output-stage fades (V249, see _releaseVoice): never automated before a release.
+      const fadeNode = track(ctx.createGain());
+      const cutNode = track(ctx.createGain());
+      v.fade = this._track(fadeNode.gain, 1);
+      v.cut = this._track(cutNode.gain, 1);
+      fadeNode.connect(cutNode);
+      cutNode.connect(this.master);
       let tail = envNode;
       for (const make of o.inserts || []) {
         const stage = make(ctx, track, source);
@@ -385,9 +416,9 @@ export class AudioEngine {
         const out = o.output(ctx, track, source);
         v.inserts.push(out);
         relNode.connect(out.input);
-        out.output.connect(this.master);
+        out.output.connect(fadeNode);
       } else {
-        relNode.connect(this.master);
+        relNode.connect(fadeNode);
       }
       const a = v.attack;
       const r = v.release;
@@ -489,11 +520,25 @@ export class AudioEngine {
   }
 
   // V1: AudioEngine: _releaseVoice, _releaseAll, release, stopAll, revokeContinuous
-  //   (index.html@a7b7a23)
+  //   (index.html@a7b7a23); V249: the fade moved to the voice's output stage
   /**
-   * Fade a voice out over releaseS, starting slightly ahead (see SCHEDULE_LEAD_S). A voice that
-   * is already releasing is re-released when the new fade ends earlier (Escape during a long
-   * release): both gains are frozen at their scheduled values and fade from there.
+   * Fade a voice out over releaseS, starting slightly ahead (see SCHEDULE_LEAD_S) on a
+   * render-quantum boundary. A voice that is already releasing is re-released when the new fade
+   * ends earlier (Escape during a long release).
+   *
+   * V249: no param that is sounding is edited. Chromium renders concurrently with the main
+   * thread, and a render quantum that meets a param's timeline while the main thread edits it
+   * renders at the param's last value: any edit of a ramping param (a hold, a cancel, even a
+   * no-op event far ahead) can freeze one quantum of the ramp, a one-sample step of up to a
+   * whole envelope edge. So the envelope, the waveform-dip gain and the frequency schedules keep
+   * running untouched under the fade (they are discarded with the voice), and the fade runs on
+   * a gain of the voice's output stage that nothing else automates: `fade` for the first
+   * release, `cut` for a shorter one overriding it. Each is exactly 1 until its release, so
+   * setValueAtTime(1, t) is the exact hold in every browser (with or without
+   * cancelAndHoldAtTime), and an edit glitched by the render thread still renders 1. An override
+   * is always one of the fast fades (stop now, Escape, a retrigger, the continuous permission
+   * withdrawn: FAST_RELEASE_S or less), so a voice whose `cut` is fading already ends within
+   * FAST_RELEASE_S plus the stop margin; a third request is declined (returns false).
    */
   _releaseVoice(v, releaseS, silent = false) {
     if (!v || v.ended) return false;
@@ -503,20 +548,15 @@ export class AudioEngine {
     const rel = Math.max(0.005, releaseS);
     const stopAt = Math.max(t + rel + 0.01, v.t0 + 0.005);
     if (t >= v.endTime - 0.002 || stopAt >= v.endTime) return false; // ends sooner on its own
+    const stage = !v.fade.ev.length ? v.fade : !v.cut.ev.length ? v.cut : null;
+    if (!stage) return false; // already in its second, fast fade
     v.releasing = true;
     this._timers.clearTimeout(v.topUp);
     try {
-      // Freeze the envelope where it will be (no step, no later attack), then fade on the
-      // release gain from its own current value.
-      this._freeze(v.env, t);
-      this._freeze(v.rel, t);
-      this._ev(v.rel, 'linearRampToValueAtTime', GAIN_FLOOR, t + rel);
+      this._ev(stage, 'setValueAtTime', 1, t);
+      this._ev(stage, 'linearRampToValueAtTime', GAIN_FLOOR, t + rel);
       for (const s of v.sources) {
         try { s.stop(stopAt); } catch (e) { /* already stopped */ }
-      }
-      // Automation after the stop can never sound: cancel it.
-      for (const p of v.freqParams) {
-        try { p.cancelScheduledValues(stopAt); } catch (e) { /* ignore */ }
       }
       v.endTime = stopAt;
     } catch (e) {
@@ -584,6 +624,8 @@ export class AudioEngine {
     v.carrier = null;
     v.env = null;
     v.rel = null;
+    v.fade = null;
+    v.cut = null;
     v.eg = null;
     this.voices.delete(v);
     if (this.voice === v) {
@@ -843,6 +885,8 @@ export class AudioEngine {
     const o = out || {};
     const ctx = this.ctx;
     const v = this.voice;
+    // UI bookkeeping: the per-frame read is also a clock reading for the releases (see _soon).
+    this._observeClock(ctx);
     o.hasCtx = !!ctx;
     o.state = this.state;
     o.running = this.running;
