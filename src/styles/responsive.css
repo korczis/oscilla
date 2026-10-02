@@ -428,6 +428,13 @@
   .osc-brand-text {
     display: none;
   }
+
+  /* The status bar keeps frequency and state; the waveform is in the source panel. On CI fonts
+     it did not fit next to RELEASING at 320 px. */
+  [data-osc="status.waveform"],
+  [data-osc="status.readout"] > .osc-sb-dot:not(.osc-sb-extra) {
+    display: none;
+  }
 }
 
 /* ---------- Touch: 44px targets ---------- */

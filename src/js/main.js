@@ -52,7 +52,7 @@ import { LEARN_TOPICS } from './data/learn.js';
 import { serializeSequence } from './sequencer/model.js';
 
 import { registerOscillaUi } from './ui/app.js';
-import { keyGuard, openModal, closeModal, watchDialogs } from './ui/dialogs.js';
+import { keyGuard, openModal, closeModal, watchDialogs, focusSafely } from './ui/dialogs.js';
 import { createWorkbench, v1ModeFor, workspaceForV1Mode } from './ui/workbench.js';
 import { createScopeView, createHarmonicBarsView } from './ui/p5-views.js';
 import { buildConfigExport, parseConfigImport } from './ui/config-file.js';
@@ -512,6 +512,7 @@ function integrationInit() {
   });
 
   watchDialogs(document);
+  keepFocusInView(document.getElementById('osc-main'));
   bridge.readPalette();
   // V1 initVisualizer: the primary host reports the wave layout (V2's primary view is the scope,
   // which labels itself in the canvas; the layout is still forwarded for the V1 views).
@@ -555,6 +556,49 @@ function integrationInit() {
   });
 }
 
+/**
+ * Firefox and WebKit do not scroll a keyboard-focused control that is already partly inside
+ * the #osc-main scroller, so its edge (the status bar below it) can cut the control (WCAG
+ * 2.4.11). After the browser's own focus scroll, nudge #osc-main until it is fully visible.
+ */
+function keepFocusInView(main) {
+  if (!main) return;
+  document.addEventListener('focusin', (e) => {
+    const el = e.target;
+    if (!(el instanceof Element) || el === main || !main.contains(el)) return;
+    requestAnimationFrame(() => {
+      let keyboard = true;
+      try { keyboard = el.matches(':focus-visible'); } catch (err) { /* no :focus-visible */ }
+      if (document.activeElement !== el || !keyboard) return;
+      const r = el.getBoundingClientRect();
+      if (!r.height) return;
+      const top = main.getBoundingClientRect().top + main.clientTop + 4;
+      const bottom = top + main.clientHeight - 8;
+      if (r.top < top) main.scrollTop -= top - r.top;
+      else if (r.bottom > bottom) main.scrollTop += Math.min(r.bottom - bottom, r.top - top);
+    });
+  });
+}
+
+/**
+ * The info/success auto-dismiss timer (core notify) removes a notification through
+ * dismissAlert(). When that notification holds focus, hand focus to its neighbour's Dismiss
+ * button, else #osc-main, as dismissAlertFocus does for a pressed Dismiss: never <body>.
+ */
+function focusSafeDismiss(coreDismiss) {
+  return function dismissAlert(id) {
+    const i = this.alerts.findIndex((a) => a.id === id);
+    const toasts = [...document.querySelectorAll('[data-osc="alerts"] .osc-toast')];
+    const item = i >= 0 ? toasts[i] : null;
+    const hadFocus = !!item && item.contains(document.activeElement);
+    const next = hadFocus ? toasts[i + 1] || toasts[i - 1] || null : null;
+    coreDismiss.call(this, id);
+    if (!hadFocus) return;
+    this.$nextTick(() => focusSafely(next && next.isConnected ? next.querySelector('button')
+      : null));
+  };
+}
+
 function createOscillaComponent(ui) {
   const instrument = createInstrument({
     engine, bridge, keyGuard: (e) => keyGuard(e), openModal: (id) => openModal(id),
@@ -566,6 +610,7 @@ function createOscillaComponent(ui) {
     relayout: () => { if (host) host.resize(); repairCharts(); },
   });
   const cmp = compose(instrument, ui, workbench, TEMPLATE_HELPERS);
+  cmp.dismissAlert = focusSafeDismiss(cmp.dismissAlert);
   Object.defineProperty(cmp, 'init', {
     value() {
       shellInit.call(this);

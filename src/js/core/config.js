@@ -172,7 +172,16 @@ export function applyConfigTo(s, cfg, origin, env = {}, notices = []) {
         const [ok, value] = coerceLike(defaults[key], incoming[key], desc);
         // Frequency lists must parse completely, or the link would only fail at play time.
         const badList = ok && desc && desc.type === 'text' && parseFrequencyList(value).invalid.length > 0;
-        if (ok && !badList) s.pp[pid][key] = value; else issues++;
+        if (ok && !badList) {
+          s.pp[pid][key] = value;
+          // The applied value replaces what the user typed: drop that field's stale error.
+          const errId = `pp-${pid}-pp-${key}`;
+          if (s.paramErrors && errId in s.paramErrors) {
+            const next = { ...s.paramErrors };
+            delete next[errId];
+            s.paramErrors = next;
+          }
+        } else issues++;
       }
     }
   }
