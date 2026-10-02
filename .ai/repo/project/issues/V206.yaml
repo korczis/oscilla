@@ -19,3 +19,14 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-02
+started_at: 2026-10-02T09:32:58Z
+updated_at: 2026-10-02T09:33:03Z
+completed_at: 2026-10-02T09:33:03Z
+evidence:
+  - covers: verified
+    type: ci
+    command: "npm run test:browser"
+    result: "dist/index.html passes the browser gate from file:// and the /oscilla/ sub-path in chromium, firefox and webkit; Pages deploys dist (pages.yml)"
+    artifact: "9fe0a15"
+    commit: 5fbf451eeebf6618f3abb12b9eb7047adb98903f
+    recorded_at: 2026-10-02T09:33:01Z

@@ -16,3 +16,14 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-02
+started_at: 2026-10-02T09:34:00Z
+updated_at: 2026-10-02T09:34:04Z
+completed_at: 2026-10-02T09:34:04Z
+evidence:
+  - covers: verified
+    type: test
+    command: "node tests/browser/dsp.cjs"
+    result: "ADSR shapes the signal (sustain 0.5 -> 0.040 of 0.08 peak); releases click-free in chromium and firefox including mid-attack and sustain"
+    artifact: "b08ed34"
+    commit: 5fbf451eeebf6618f3abb12b9eb7047adb98903f
+    recorded_at: 2026-10-02T09:34:03Z

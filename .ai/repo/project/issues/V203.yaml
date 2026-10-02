@@ -18,3 +18,14 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-02
+started_at: 2026-10-02T09:32:36Z
+updated_at: 2026-10-02T09:32:40Z
+completed_at: 2026-10-02T09:32:40Z
+evidence:
+  - covers: verified
+    type: test
+    command: "npm test"
+    result: "V1 freeze: 1117 golden cases from v1.0.0 (a7b7a23) replayed against the V2 modules, all pass (tests/unit/freeze.test.mjs, tests/freeze/)"
+    artifact: "9fe0a15"
+    commit: 5fbf451eeebf6618f3abb12b9eb7047adb98903f
+    recorded_at: 2026-10-02T09:32:39Z

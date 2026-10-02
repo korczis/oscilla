@@ -16,3 +16,14 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-02
+started_at: 2026-10-02T09:34:30Z
+updated_at: 2026-10-02T09:34:35Z
+completed_at: 2026-10-02T09:34:35Z
+evidence:
+  - covers: verified
+    type: test
+    command: "npm run test:browser"
+    result: "Status bar, URL copy and restore, preset save/load, config JSON export/import round trip with validation (app.cjs)"
+    artifact: "b08ed34"
+    commit: 5fbf451eeebf6618f3abb12b9eb7047adb98903f
+    recorded_at: 2026-10-02T09:34:33Z
