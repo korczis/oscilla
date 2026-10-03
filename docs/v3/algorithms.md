@@ -36,7 +36,7 @@ listed under [Gaps](#gaps), not resolved here.
 | (none) | `calibration/level.js` | [Level calibration, SPL](#level) |
 | (none) | `measurement/format.js` | [Resolution-aware formatting](#format) |
 | (none) | `experiments/*.js` | [Experiment hashing, encoding](#experiments) |
-| `oscilla.confidence.v3` (default), `oscilla.confidence.v2` and `oscilla.confidence.v1` (retained) | `measurement/quality.js` | [Quality](#quality) |
+| `oscilla.confidence.v4` (default), `oscilla.confidence.v3`, `.v2` and `.v1` (retained) | `measurement/quality.js` | [Quality](#quality) |
 | (all IDs) | `tests/unit/fixtures/v3/*.json` | [Golden outputs per ID](#golden) |
 
 ## Conventions
@@ -1654,7 +1654,7 @@ non-result fields and key order, changes with one flipped bit or a dtype change,
 modified result in a stamped file is rejected as `corrupt`.
 
 <a id="quality"></a>
-## Measurement quality — `oscilla.confidence.v3`, `oscilla.confidence.v2`, `oscilla.confidence.v1` (`measurement/quality.js`)
+## Measurement quality — `oscilla.confidence.v4`, `oscilla.confidence.v3`, `oscilla.confidence.v2`, `oscilla.confidence.v1` (`measurement/quality.js`)
 
 Documented from the code that landed in e89ff9f (was G14). ADR 0025: a pure rule table maps
 measured metrics to one of four statuses and always returns the reasons, passing and failing,
@@ -1663,6 +1663,24 @@ each backed by the number it came from. There is no score and no "confidence" pe
 `assessQuality({ capture, transfer, aggregate, calibration, requestedRange, resolutionHz,
 sweepWindow, chainNotes, noiseCheck, inputProcessing, stimulus, algorithm }) → { algorithm,
 status, reasons, metrics, mask }`
+
+### confidence.v4 — V382 independent DSP review
+
+`QUALITY_ALGORITHM` = `oscilla.confidence.v4` = v3 with the same reason codes and thresholds and
+three changed rules; v3 (and v2, v1) stay selectable and reproduce their assessments exactly.
+
+- **Repeatability**: a median absolute deviation is judged as σ = MAD × 1.4826
+  (`MAD_TO_SIGMA`, normal scatter) on the same thresholds as a standard deviation, and the reason
+  text says so. v3 compared the unscaled MAD with the SD bound: the same σ = 1.3 dB scatter of 5
+  runs read 0.66 dB 'ok' with median aggregation and 1.18 dB 'warn' with mean aggregation.
+- **Empty grid**: a transfer with no frequency point reports `SNR_NOT_MEASURED` (it was rated
+  GOOD with "SNR not measured" in the summary, against the rule that GOOD needs a measured SNR).
+- **Non-finite pooled SNR**: NaN/Infinity in `snrPooledDb` counts as `NON_FINITE_ANALYSIS`
+  (fail); v3 threw a TypeError. `transfer.js` clamps the SNR, so only an imported or hand-built
+  transfer reaches it.
+
+Level calibration (V382, not part of the rule set): `createLevelCalibration` refuses an
+`observedDbRelative` above 0 dB, which the mean-square band scale cannot read.
 
 ### confidence.v3 — **New (V3 pre-release review, quality and DSP group)**
 
