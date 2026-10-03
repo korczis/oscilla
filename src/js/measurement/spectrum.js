@@ -185,7 +185,9 @@ export function createPowerSpectrumAnalyzer(fftSize, window = 'hann', { scale = 
  */
 export function powerSpectrum(samples, options = {}) {
   const offset = options.offset || 0;
-  const fftSize = options.fftSize || 2 ** Math.floor(Math.log2(Math.max(2, samples.length)));
+  // the samples from offset (V382: the whole array, so an offset frame was zero padded)
+  const fftSize = options.fftSize
+    || 2 ** Math.floor(Math.log2(Math.max(2, samples.length - offset)));
   return createPowerSpectrumAnalyzer(fftSize, options.window || 'hann',
     { scale: options.scale || 'tone' }).compute(samples, offset);
 }

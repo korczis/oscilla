@@ -28,8 +28,8 @@ export const ALGORITHMS = Object.freeze({
   transfer: 'oscilla.transfer.v3',
   ir: 'oscilla.ir.log-sweep.v3',
   irFarina: 'oscilla.ir.farina-inverse.v3',
-  rta: 'oscilla.rta.v1',
-  smoothing: 'oscilla.smoothing.fractional-octave.v1',
+  rta: 'oscilla.rta.v2',
+  smoothing: 'oscilla.smoothing.fractional-octave.v2',
   normalization: 'oscilla.normalization.v1',
   align: 'oscilla.align.xcorr.v1',
   clip: 'oscilla.clip.v2',
@@ -48,6 +48,8 @@ export const RETAINED_ALGORITHMS = Object.freeze({
   irFarina: Object.freeze(['oscilla.ir.farina-inverse.v1', 'oscilla.ir.farina-inverse.v2']),
   clip: Object.freeze(['oscilla.clip.v1']),
   quality: Object.freeze(['oscilla.confidence.v1', 'oscilla.confidence.v2']),
+  smoothing: Object.freeze(['oscilla.smoothing.fractional-octave.v1']),
+  rta: Object.freeze(['oscilla.rta.v1']),
 });
 
 /** Variant keys of ALGORITHMS and the role (family) whose alternative method they are. */

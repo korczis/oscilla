@@ -388,7 +388,7 @@ function defineChecks(fixtures) {
         && res.ir.tabs === 'true' && res.rtaTab === 'osc-m-tab-rta',
       rtaStored: !!res.rtaStored && res.rtaStored.badges.includes('NOISE CHECK SNAPSHOT')
         && !res.rtaStored.badges.includes('LIVE') && res.rtaStored.live === false
-        && /fewer than 2 FFT bins/.test(res.rtaStored.notes),
+        && /fewer than 6 FFT bins/.test(res.rtaStored.notes), // rta.v2: Hann limit (V382)
       announcements: announced.every((t) => res.live.filter((x) => x === t).length === 1)
         && !res.live.some((t) => /%/.test(t)),
       zero: H.zero(res.counts) && H.zero(res.counts2),
@@ -673,7 +673,7 @@ function defineChecks(fixtures) {
         && /dB relative \(dBFS-like\)/.test(res.thirdUi.source) && res.thirdUi.chart
         && res.thirdUi.chip === '1/3 OCTAVE' && !res.thirdUi.modesDisabled,
       underResolved: res.thirdUnder > 0,
-      snapshot: !!res.snapshot && res.snapshot.algorithm === 'oscilla.rta.v1'
+      snapshot: !!res.snapshot && res.snapshot.algorithm === 'oscilla.rta.v2'
         && res.snapshot.windowAlgorithm === 'oscilla.window.hann.v1'
         && res.snapshot.resolution === 'third' && res.snapshot.fftSize === 8192
         && res.snapshot.levelsDb.length === res.thirdBands,

@@ -561,3 +561,28 @@ test('format: estimates with two significant digits of uncertainty (spec §70)',
   assert.equal(formatEstimate(440.04, 0, 'Hz'), '≈ 440 Hz (estimate, uncertainty unknown)');
   assert.equal(formatEstimate(NaN, 1, 'Hz'), '— Hz');
 });
+
+test('V382 smoothing.v2: symmetric windows on the default grid; a ramp keeps one offset', async () => {
+  const { smoothResponse } = await import('../../src/js/measurement/smoothing.js');
+  const { logGrid } = await import('../../src/js/measurement/transfer.js');
+  const f = logGrid(20, 20000, 48);
+  const ramp = Float64Array.from(f, (hz) => 6 * Math.log2(hz / 20)); // 6 dB/octave
+  for (const fraction of [3, 24]) {
+    const spread = (algorithm) => {
+      const s = smoothResponse(f, ramp, fraction, { algorithm }).smoothedDb;
+      const half = 48 / (2 * fraction); // grid points per half window
+      let lo = Infinity;
+      let hi = -Infinity;
+      for (let i = half; i < f.length - half; i++) {
+        lo = Math.min(lo, s[i] - ramp[i]);
+        hi = Math.max(hi, s[i] - ramp[i]);
+      }
+      return hi - lo;
+    };
+    assert.ok(spread('oscilla.smoothing.fractional-octave.v1') > 0.02, `v1 1/${fraction}`);
+    assert.ok(spread() < 1e-9, `v2 1/${fraction}: ${spread()}`);
+  }
+  assert.equal(smoothResponse(f, ramp, 3).algorithm, 'oscilla.smoothing.fractional-octave.v2');
+  assert.throws(() => smoothResponse(f, ramp, 3, { algorithm: 'oscilla.smoothing.x.v9' }),
+    /unknown smoothing/);
+});

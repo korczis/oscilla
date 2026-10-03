@@ -215,8 +215,8 @@ IndexedDB as an injected dependency. Signals are `Float32Array` and accumulators
 // algorithms.js — stable IDs persisted in results (spec §43, §199); every result object
 // carries the IDs it used (docs/v3/algorithms.md, "Algorithm registry")
 ALGORITHMS = { transfer: 'oscilla.transfer.v3', ir: 'oscilla.ir.log-sweep.v3',
-  irFarina: 'oscilla.ir.farina-inverse.v3', rta: 'oscilla.rta.v1',
-  smoothing: 'oscilla.smoothing.fractional-octave.v1', normalization: 'oscilla.normalization.v1',
+  irFarina: 'oscilla.ir.farina-inverse.v3', rta: 'oscilla.rta.v2',
+  smoothing: 'oscilla.smoothing.fractional-octave.v2', normalization: 'oscilla.normalization.v1',
   align: 'oscilla.align.xcorr.v1', clip: 'oscilla.clip.v2',
   discontinuity: 'oscilla.discontinuity.v1', quality: 'oscilla.confidence.v3',
   calibration: 'oscilla.calibration.log-interp.v1', window: 'oscilla.window.hann.v1',
