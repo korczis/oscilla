@@ -19,3 +19,11 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-02
+updated_at: 2026-10-03T06:50:47Z
+evidence:
+  - covers: verified
+    type: test
+    command: "node --test tests/unit/v31-studio-ui-graph-geometry.test.mjs && node tests/browser/v31-studio-graph.cjs"
+    result: "MET at 320130f: zoomAt keeps the logical point under the pointer, zoom clamped to bounds, fitView centres; browser pan-zoom-frame (buttons, F frame selection, A frame all). Impl ui/studio/graph-geometry.js, graph-keys.js. Commit e31ab23"
+    commit: 320130f1a967e894002a55dd9ebb6c837eb2621f
+    recorded_at: 2026-10-03T06:50:47Z

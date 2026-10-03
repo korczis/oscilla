@@ -18,3 +18,11 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-02
+updated_at: 2026-10-03T06:50:18Z
+evidence:
+  - covers: verified
+    type: test
+    command: "node --test tests/unit/v3-engine.test.mjs tests/unit/v3-rta-aggregate.test.mjs tests/unit/v3-storage.test.mjs"
+    result: "MET at 320130f: three repeats produce three runs with gaps and an aggregate, captures never overlap; mean power centre with dB std envelope; median with p10-p90 and median absolute deviation; G20 aggregate stored. Impl aggregate.js, engine.js. Commits b862445, d689631, 1e31167"
+    commit: 320130f1a967e894002a55dd9ebb6c837eb2621f
+    recorded_at: 2026-10-03T06:50:18Z

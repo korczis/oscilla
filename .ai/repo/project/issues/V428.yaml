@@ -19,3 +19,11 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-02
+updated_at: 2026-10-03T06:51:07Z
+evidence:
+  - covers: verified
+    type: test
+    command: "node --test tests/unit/v31-studio-model.test.mjs tests/unit/v31-studio-ui-graph-view.test.mjs && node tests/browser/v31-studio-graph.cjs"
+    result: "PARTIAL (do not mark done): tap/keyboard connect, Connect dialog, arrow nudges, Inspector clip fields, focus after delete, ARIA labels, live-region announcements, graph text summary (summarizeGraph); browser keyboard-connect, mobile-tap-connect, controls-labelled. Unmet: graph search (find and frame a node, spec 251) not built (README: minimap and search). Commits e6a9457, e31ab23"
+    commit: 320130f1a967e894002a55dd9ebb6c837eb2621f
+    recorded_at: 2026-10-03T06:51:07Z
