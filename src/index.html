@@ -1455,7 +1455,7 @@
               <div class="osc-metric"><dt x-text="r.label"></dt><dd class="osc-num" x-text="r.text"></dd></div>
             </template>
             <div class="osc-metric"><dt>Frequency profile</dt><dd x-text="meas.cal.profile && meas.cal.useFrequency ? meas.cal.profile.name : 'none (UNCALIBRATED)'"></dd></div>
-            <div class="osc-metric"><dt>Levels</dt><dd x-text="meas.cal.level && meas.cal.useLevel ? 'CALIBRATED (reference offset applied)' : 'relative (dBFS-like)'"></dd></div>
+            <div class="osc-metric"><dt>Levels</dt><dd x-text="meas.cal.level && meas.cal.useLevel ? (measureCalIndicator === 'CALIBRATED' ? 'CALIBRATED (reference offset applied)' : 'UNCALIBRATED (calibration taken with another input)') : 'relative (dBFS-like)'"></dd></div>
           </dl>
           <p class="osc-m-hint" x-show="!meas.inputRows.length || meas.inputRows[0].text === 'UNKNOWN'">Run the setup check to read the input device, its sample rate and the processing the browser applies.</p>
           <p class="osc-m-hint">The microphone opens only for the setup check, the measurement and the live RTA, and is released when they end. Audio stays in this page.</p>
