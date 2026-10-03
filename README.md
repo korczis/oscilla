@@ -427,5 +427,5 @@ licence text of every bundled third-party package:
 - p5.js: LGPL-2.1. It is shipped unmodified as a separately identifiable script block, and any
   compatible p5.js build can replace it.
 
-The licence for OSCILLA's own code has not been decided yet. `package.json` declares
-`UNLICENSED`, and choosing a licence is an open decision for the owner.
+OSCILLA's own code is released under the MIT License (see [`LICENSE`](LICENSE)). The same
+notice comment carries it first, so the single published file contains its own licence text.
