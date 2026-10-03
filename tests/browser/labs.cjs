@@ -141,9 +141,11 @@ async function runEngine(engine, base) {
   const onPageError = (tag) => (e) => {
     const msg = `${tag}: ${e.message}`;
     // Chromium tags Alpine evaluator frames "[Alpine] <expr>", Firefox shows Alpine's
-    // generateEvaluatorFromString frame.
-    if (/\[Alpine\]|generateEvaluatorFromString/.test(e.stack || '')) shellErrors.push(msg);
-    else errors.push(msg);
+    // generateEvaluatorFromString frame; the object form of x-bind (x-bind="obj", used by the
+    // Studio markup) fails inside Alpine's applyBindingsObject when the shell's state is absent.
+    if (/\[Alpine\]|generateEvaluatorFromString|applyBindingsObject/.test(e.stack || '')) {
+      shellErrors.push(msg);
+    } else errors.push(msg);
   };
   page.on('pageerror', onPageError('pageerror'));
   page.on('console', (m) => {
