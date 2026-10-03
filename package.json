@@ -26,7 +26,7 @@
     "test:labs": "node tests/browser/labs.cjs",
     "test:sequencer": "node tests/browser/sequencer.cjs",
     "test:measure": "node tests/browser/v3-measure.cjs && node tests/browser/analysis-worker.cjs && node tests/browser/v3-ui.cjs",
-    "test:studio": "node tests/browser/v31-studio-graph.cjs && node tests/browser/v31-studio-timeline.cjs && node tests/browser/v31-studio-audio.cjs && node tests/browser/v31-studio-transport.cjs && node tests/browser/v31-studio-offline.cjs && node tests/browser/v31-studio-workflows.cjs",
+    "test:studio": "node tests/browser/v31-studio-graph.cjs && node tests/browser/v31-studio-timeline.cjs && node tests/browser/v31-studio-audio.cjs && node tests/browser/v31-studio-transport.cjs && node tests/browser/v31-studio-offline.cjs && node tests/browser/v31-studio-workflows.cjs && node tests/browser/v31-studio-links.cjs",
     "test:visual": "node scripts/visual-gate.mjs dist && node scripts/visual-measure.mjs dist && node scripts/visual-studio.mjs dist",
     "test:live": "node tests/browser/live-smoke.cjs",
     "test:release": "npm run test:engine && npm run test:dsp && npm run test:labs && npm run test:sequencer && npm run test:measure && npm run test:studio && npm run test:browser && npm run test:visual",

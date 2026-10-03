@@ -33,9 +33,12 @@
 // TOP_UP_EVERY_MS, so the existing look-ahead behaviour is kept. After a stall, items that would
 // start less than SCHEDULE_LEAD_S from now are skipped (the grid is kept, as
 // audio/scheduler.js scheduleCycles does) and automation is re-anchored at the safe horizon.
-// The first window of an anchor caps that horizon at baseTime while baseTime is ahead of the
-// clock: baseTime already carries the lead (hooks.soon()), so a clock that moved a few quanta
-// during PLAY does not drop the clip at baseTime.
+// The first window of an anchor measures lateness against the anchor: it caps that horizon at
+// baseTime while baseTime is ahead of the clock (baseTime already carries the lead,
+// hooks.soon(), so a clock that moved a few quanta during PLAY does not drop the clip at
+// baseTime), and re-anchors the playback at startLeadTime(now) when the clock has already
+// reached baseTime (nothing was scheduled yet: a starved PLAY plays every clip, late as a
+// whole, instead of losing its first ones).
 //
 // Edit during playback (§182-§183): EDIT_POLICY below, implemented by scheduler.edit(); STOP
 // (§184): STOP_POLICY, scheduler.stop(); Escape (§185): resolveEscape(). docs/v31/timeline.md
@@ -114,6 +117,16 @@ const rateOf = (sr) => (finite(sr) && sr > 0 ? sr : PROVISIONAL_SAMPLE_RATE);
 export function frameCeil(t, sampleRate) {
   const sr = rateOf(sampleRate);
   return Math.ceil(t * sr - 1e-6) / sr;
+}
+
+/**
+ * The first schedulable start at `now` (hooks.soon() from a clock reading): SAFE_HORIZON_S (at
+ * least two render quanta) ahead, on a render-quantum boundary. A playback whose anchor the
+ * clock reached before its first window is re-anchored here.
+ */
+export function startLeadTime(now, sampleRate) {
+  const q = RENDER_QUANTUM / rateOf(sampleRate);
+  return Math.ceil((now + Math.max(SAFE_HORIZON_S, 2 * q)) / q - 1e-9) * q;
 }
 
 /** The safe horizon for an edit at `now`: frameCeil(now + SAFE_HORIZON_S). */
@@ -428,7 +441,8 @@ export function holdEvents(scheduled, at, defaultValue = null) {
 
 /**
  * The transport's scheduling state machine (§93-§95, §180-§184). No timers: the runtime calls
- *   advance(now)      -> { from, until, items, automation, skipped, warnings, done }
+ *   advance(now)      -> { from, until, items, automation, skipped, reanchored, warnings, done }
+ *                        reanchored: { from, to } when the first window moved the anchor
  *   nextWakeMs(now)   -> ms until the next advance (null when done or stopped)
  *   edit(model, now)  -> rebuild plan (EDIT_POLICY)
  *   stop(now)         -> stop plan (STOP_POLICY)
@@ -477,18 +491,31 @@ export function createTimelineScheduler(initialModel, opts = {}) {
       return { from: scheduledUntil, until: scheduledUntil, items: [], automation: [],
         skipped: [], warnings: [], done: true };
     }
+    // First window of a playback: lateness is measured against the anchor, not against a clock
+    // that moved while PLAY / locate ran. The anchor was chosen at least SAFE_HORIZON_S after
+    // the clock reading it came from (hooks.soon(), the runtime's crossfade time), in the same
+    // synchronous call that schedules the graph's start there, and the clock may have moved on
+    // since. While baseTime is still ahead of the clock (two render quanta measured in a fresh
+    // chromium context) the lateness horizon is capped at baseTime: items there are as safe as
+    // that graph start. When the clock has already reached baseTime (a starved runner: the
+    // main thread or a context that only started rendering in bursts, measured in webkit CI)
+    // nothing was scheduled under this anchor yet, so the playback is re-anchored at the first
+    // schedulable time (startLeadTime) instead of dropping its first clips: every clip keeps its
+    // offset from the start. Later windows keep the plain rule: a stall skips late items.
+    let reanchored = null;
+    if (firstWindow && now >= anchor.baseTime) {
+      const at = startLeadTime(now, sr);
+      reanchored = { from: anchor.baseTime, to: at };
+      anchor = createAnchor(model, { baseTime: at, startPosition: anchor.startPosition,
+        sampleRate: sr, generation: anchor.generation });
+      cache = new Map();
+      scheduledUntil = anchor.baseTime;
+    }
     const from = scheduledUntil;
     const until = Math.max(from, now + lookAheadS);
     const w = compileWindow(model, anchor, from, until, { passCache });
-    // Lateness horizon: now + SAFE_HORIZON_S. In the first window, while baseTime is still
-    // ahead of the clock, it is capped at baseTime: the anchor was chosen at least
-    // SAFE_HORIZON_S after the clock reading it came from (hooks.soon(), the runtime's crossfade
-    // time), in the same synchronous PLAY / locate that schedules the graph's start there, and
-    // the clock may have moved on since (two render quanta measured in a fresh chromium
-    // context, which skipped the clip at baseTime). Items at baseTime are as safe as that graph
-    // start; a stall past baseTime itself is handled as any other stall.
-    const horizon = firstWindow && now < anchor.baseTime
-      ? Math.min(now + SAFE_HORIZON_S, anchor.baseTime) : now + SAFE_HORIZON_S;
+    const horizon = firstWindow ? Math.min(now + SAFE_HORIZON_S, anchor.baseTime)
+      : now + SAFE_HORIZON_S;
     firstWindow = false;
     const late = horizon - 1e-9;
     const items = [];
@@ -515,7 +542,8 @@ export function createTimelineScheduler(initialModel, opts = {}) {
     });
     scheduledUntil = until;
     prune(now);
-    return { from, until, items, automation, skipped, warnings: w.warnings, done: done() };
+    return { from, until, items, automation, skipped, reanchored, warnings: w.warnings,
+      done: done() };
   }
 
   function nextWakeMs(now) {

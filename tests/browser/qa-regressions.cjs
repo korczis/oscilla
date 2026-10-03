@@ -20,7 +20,9 @@
 //   no-per-frame-dom-writes [15]  MutationObserver over 2 s while a tone plays
 //   mic-through-engine [16]       mic nodes are the engine's (micNodeCount), 0 after stop;
 //                                 an accurate message where the browser has no microphone
-//   signal-path-stages [17]       filter, ADSR, additive and stereo router in the path
+//   signal-path-stages [17]       filter, ADSR, additive and stereo router in the path, each
+//                                 drawn stage projected from the Playground voice's
+//                                 StudioModel (filter node, envelope, stereo split; V421)
 //   additive-gain-field [17]      the gain field shows the played (normalised) level; the
 //                                 Nyquist hatching follows the fundamental
 //   stereo-max-from-rate [17]     #osc-stereo-fa/fb max = floor(safe maximum of the context)
@@ -499,11 +501,21 @@ function defineChecks() {
       const O = window.OSCILLA;
       const wait = () => new Promise((res) => setTimeout(res, 40));
       const titles = () => O.viz.state.pathNodes.map((n) => n.title);
+      // V421: every drawn stage is projected from the Playground voice's StudioModel; `typed`
+      // pairs each stage title with the types of the model nodes it came from.
+      const typed = () => {
+        const sp = O.viz.state.signalPath;
+        const types = new Map(sp.model.graph.nodes.map((n) => [n.id, n.type]));
+        return { kind: sp.model.kind, same: sp.sources.length === O.viz.state.pathNodes.length,
+          stages: O.viz.state.pathNodes.map((n, i) => `${n.title}:${
+            sp.sources[i].nodes.map((id) => types.get(id)).join('+')}`) };
+      };
       const base = titles();
       O.labs.filter.update({ enabled: true });
       O.labs.envelope.update({ enabled: true });
       await wait();
       const fe = titles();
+      const feModel = typed();
       O.labs.additive.update({ enabled: true });
       await wait();
       const add = titles();
@@ -514,12 +526,18 @@ function defineChecks() {
       O.app.setStereo(true);
       await wait();
       const dual = titles();
-      return { base, fe, add, dual };
+      const dualModel = typed();
+      return { base, fe, add, dual, feModel, dualModel };
     });
     await context.close();
+    const has = (m, s) => m.kind === 'oscilla-studio' && m.same && m.stages.includes(s);
     const ok = !r.base.includes('FILTER') && r.fe.includes('FILTER')
       && r.fe.includes('ADSR ENVELOPE') && r.add[0] === 'ADDITIVE OSC'
-      && r.dual.includes('STEREO ROUTER');
+      && r.dual.includes('STEREO ROUTER')
+      && has(r.feModel, 'FILTER:filter') && has(r.feModel, 'ADSR ENVELOPE:envelope')
+      && has(r.feModel, 'MASTER GAIN:master')
+      && has(r.dualModel, 'OSC A + OSC B:oscillator+oscillator')
+      && has(r.dualModel, 'STEREO ROUTER:stereo-split');
     return { ok, ...r };
   });
 

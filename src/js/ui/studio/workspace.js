@@ -36,6 +36,19 @@
 // Find node (§250-§251; plan V428): `/` or the Find button opens graph-picker.js createFindNode;
 // a result is selected, framed and focused.
 //
+// Deep link (§199-§200; plan V422): `#m=studio[&st=<template id>][&sv=<subview>]`
+// (core/url-state-studio.js). A link read at load (main.js, after the V1 `m` key) or on
+// hashchange is validated like an import and refused whole with a readable message; it opens the
+// workspace, the subview and a shipped template, never starts playback, and never replaces a
+// document with unsaved changes (the Templates dialog and its "unsaved changes" note open
+// instead, the usual explicit Open). Copy link writes the current view: the template id only
+// while the document is that template unmodified, otherwise the workspace and subview alone.
+//
+// Browser fullscreen (§133-§135; plan V422): an optional FULLSCREEN command on the workspace
+// element (#osc-view-studio), feature-detected (fullscreenSupport); the maximized workspace never
+// depends on it. While fullscreen, Escape belongs to the browser (it exits fullscreen); leaving
+// the Studio workspace exits it too.
+//
 // Alpine holds only small plain view state (`studio`); the store, runtime, transport and view
 // controllers live in the closure `ctx`, never in reactive state.
 
@@ -51,8 +64,9 @@ import { timelineEnd } from '../../studio/timeline.js';
 import { DEFAULT_RENDER } from '../../audio/offline-renderer.js';
 import { resolveEscape } from '../../studio/timeline-compiler.js';
 import {
-  REFERENCE_TEMPLATE_ID, listTemplates, templateModel,
+  REFERENCE_TEMPLATE_ID, getTemplate, listTemplates, templateModel,
 } from '../../studio/templates/index.js';
+import { decodeStudioLink, encodeStudioLink } from '../../core/url-state-studio.js';
 import {
   createDirtyTracker, createStudioLibrary, exportProjectFile, fileSlug, importStudioFile,
 } from '../../studio/library.js';
@@ -75,6 +89,52 @@ import { mountStudioTimeline } from './timeline-editor.js';
 export const STUDIO_SUBVIEWS = Object.freeze(['graph', 'timeline', 'inspector']);
 /** Largest Studio file read from disk (the import pipeline re-checks every limit). */
 export const STUDIO_FILE_MAX_BYTES = 4 * 1024 * 1024;
+/** Why browser fullscreen is not offered (the button stays, aria-disabled, with this reason). */
+export const FULLSCREEN_UNSUPPORTED = 'This browser does not offer fullscreen for part of a page '
+  + '(Safari on iPhone, for example). Studio already fills the window.';
+export const FULLSCREEN_BLOCKED = 'Fullscreen is turned off here (an embedding page or a browser '
+  + 'setting). Studio already fills the window.';
+
+/**
+ * Whether `el` can go fullscreen in `doc` (standard or WebKit-prefixed API): { available,
+ * reason } — reason is '' when available.
+ */
+export function fullscreenSupport(doc, el) {
+  const req = el && (el.requestFullscreen || el.webkitRequestFullscreen);
+  if (!doc || typeof req !== 'function') {
+    return { available: false, reason: FULLSCREEN_UNSUPPORTED };
+  }
+  const enabled = doc.fullscreenEnabled !== undefined ? doc.fullscreenEnabled
+    : doc.webkitFullscreenEnabled;
+  if (enabled === false) return { available: false, reason: FULLSCREEN_BLOCKED };
+  return { available: true, reason: '' };
+}
+
+/** The element shown fullscreen in `doc`, or null. */
+export function fullscreenElementOf(doc) {
+  return (doc && (doc.fullscreenElement || doc.webkitFullscreenElement)) || null;
+}
+
+/**
+ * The view a Studio link writes (plain data): the template id only while the document is that
+ * shipped template unmodified (`templateUnmodified`), else null; the subview always.
+ * { templateId, templateTitle, subview, hash, note }.
+ */
+export function studioLinkView({ templateId = null, templateUnmodified = false,
+  subview = 'graph', title = '' } = {}) {
+  const t = templateId && templateUnmodified ? getTemplate(templateId) : null;
+  const sv = STUDIO_SUBVIEWS.includes(subview) ? subview : 'graph';
+  const hash = encodeStudioLink({ templateId: t ? t.id : null, subview: sv });
+  const view = sv.charAt(0).toUpperCase() + sv.slice(1);
+  const doc = title ? `“${title}”` : 'this document';
+  const note = t ? `The link opens Studio with the template ${t.title} in the ${view} view. `
+    + 'Nothing plays until Play.'
+    : `The link opens the Studio workspace in the ${view} view only: ${doc} is not an `
+      + 'unmodified template, so it is not in the link. Save it or export a project file to '
+      + 'share it.';
+  return { templateId: t ? t.id : null, templateTitle: t ? t.title : '', subview: sv, hash, note };
+}
+
 /** The idle Studio task view (render or measurement in progress). */
 export const IDLE_TASK = Object.freeze({ active: false, kind: '', label: '', pct: null, text: '',
   abortable: false });
@@ -220,6 +280,7 @@ export function createStudioUi(svc = {}) {
     raf: 0,
     limitSig: '',
     templateId: REFERENCE_TEMPLATE_ID,
+    templateBaseline: null, // dirty tracker against the opened template (Copy link, V422)
     liveToggle: false,
     alertToggle: false,
     mounted: false,
@@ -422,6 +483,7 @@ export function createStudioUi(svc = {}) {
     ctx.dirty = createDirtyTracker(ctx.handle.getModel());
     ctx.projectId = projectId;
     ctx.templateId = templateId;
+    ctx.templateBaseline = templateId ? createDirtyTracker(ctx.handle.getModel()) : null;
     if (ctx.editor) requestAnimationFrame(() => ctx.editor.frameAll());
     refreshState();
   }
@@ -447,6 +509,16 @@ export function createStudioUi(svc = {}) {
 
   function downloadFile(f) {
     downloadBlob(new Blob([f.text], { type: f.type }), f.name);
+  }
+
+  /** Leave browser fullscreen when the Studio workspace is what is fullscreen. */
+  async function exitFullscreen() {
+    const el = fullscreenElementOf(document);
+    if (!el || el !== viewEl()) return;
+    const exit = document.exitFullscreen || document.webkitExitFullscreen;
+    try {
+      if (exit) await exit.call(document);
+    } catch (e) { /* already left */ }
   }
 
   // ---------------------------------------------------------------- keyboard
@@ -680,12 +752,19 @@ export function createStudioUi(svc = {}) {
       measureNote: '',
       renderForm: { duration: '', note: '', format: '', limitations: [], refused: false,
         error: '' },
+      fullscreen: false,
+      fullscreenAvailable: false,
+      fullscreenReason: FULLSCREEN_UNSUPPORTED,
+      link: '', // the last link Copy link wrote (the dialog shows it when there is no clipboard)
+      linkNote: '',
+      linkPending: '', // a linked template waiting for an explicit Open (unsaved changes)
     },
 
     studioInit() {
       ctx.cmp = this;
       ctx.handle = createStoreHandle(templateModel(REFERENCE_TEMPLATE_ID), { registry });
       ctx.dirty = createDirtyTracker(ctx.handle.getModel());
+      ctx.templateBaseline = createDirtyTracker(ctx.handle.getModel());
       ctx.handle.subscribe(onStoreChange);
       setupAudio();
       // Registered before main.js's own window keydown listener: Studio keys run first and
@@ -702,7 +781,36 @@ export function createStudioUi(svc = {}) {
       this.$watch('meas.progressPct', follow);
       this.$watch('workspace', (ws) => {
         if (ws === 'studio' && ctx.editor) requestAnimationFrame(() => ctx.editor.onShow());
+        // The hidden workspace must not stay fullscreen (a blank screen). The browser's
+        // fullscreenchange may still be on its way, so ask the document, not the flag.
+        if (ws !== 'studio') exitFullscreen();
       });
+      // Browser fullscreen (§134): offered when the API exists; the state follows the browser
+      // (Escape, the browser's own controls), and the graph re-measures its viewport.
+      const fs = fullscreenSupport(document, viewEl());
+      this.studio.fullscreenAvailable = fs.available;
+      this.studio.fullscreenReason = fs.reason;
+      const onFullscreen = () => {
+        const view = viewEl();
+        const on = !!view && fullscreenElementOf(document) === view;
+        if (on === this.studio.fullscreen) return;
+        this.studio.fullscreen = on;
+        announce(on ? 'Studio fullscreen. Esc exits fullscreen.' : 'Studio fullscreen ended');
+        requestAnimationFrame(() => {
+          if (ctx.editor && this.workspace === 'studio') ctx.editor.onShow();
+          // Focus stays where it was; if the browser dropped it, it returns to the button.
+          const a = document.activeElement;
+          if (this.workspace === 'studio' && (!a || a === document.body)) {
+            const btn = document.querySelector('[data-osc="studio.fullscreen"]');
+            if (btn) btn.focus({ preventScroll: true });
+          }
+        });
+      };
+      document.addEventListener('fullscreenchange', onFullscreen);
+      document.addEventListener('webkitfullscreenchange', onFullscreen);
+      // Deep links after load (the load itself is applied by main.js after the V1 `m` key).
+      window.addEventListener('hashchange', () => this.studioApplyLinkHash(window.location.hash,
+        { origin: 'hashchange' }));
       const hide = () => { if (ctx.transport && ctx.transport.playing) stopStudio({ fast: true }); };
       document.addEventListener('visibilitychange', () => { if (document.hidden) hide(); });
       window.addEventListener('pagehide', hide);
@@ -969,6 +1077,7 @@ export function createStudioUi(svc = {}) {
     },
 
     studioOpenTemplates() {
+      this.studio.linkPending = '';
       openModal('osc-dlg-studio-templates');
     },
 
@@ -981,6 +1090,7 @@ export function createStudioUi(svc = {}) {
         return false;
       }
       closeModal('osc-dlg-studio-templates');
+      this.studio.linkPending = '';
       openDocument(model, { reason: 'template', templateId: id });
       announce(`Opened template ${model.metadata.title}`);
       return true;
@@ -1064,6 +1174,124 @@ export function createStudioUi(svc = {}) {
       return { ok: true, kind: 'project' };
     },
 
+    // ------------------------------------------------------------ deep link (V422, §199)
+    /** The view a Studio link carries now (studioLinkView). */
+    studioLinkView() {
+      const model = ctx.handle.getModel();
+      return studioLinkView({ templateId: ctx.templateId,
+        templateUnmodified: !!(ctx.templateBaseline && !ctx.templateBaseline.isDirty(model)),
+        subview: this.studio.subview, title: model.metadata.title });
+    },
+
+    /** This page's URL with the Studio view as its whole hash. */
+    studioLinkUrl() {
+      const loc = typeof window !== 'undefined' ? window.location : null;
+      return loc ? `${loc.href.split('#')[0]}#${this.studioLinkView().hash}` : null;
+    },
+
+    /** Copy link: the address bar and the clipboard (a dialog when there is no clipboard). */
+    async studioCopyLink() {
+      const view = this.studioLinkView();
+      const url = this.studioLinkUrl();
+      if (!url) return null;
+      try { window.history.replaceState(null, '', url); } catch (e) { /* file:// in some */ }
+      this.studio.link = url;
+      this.studio.linkNote = view.note;
+      let copied = false;
+      try {
+        if (navigator.clipboard && window.isSecureContext !== false) {
+          await navigator.clipboard.writeText(url);
+          copied = true;
+        }
+      } catch (e) {
+        copied = false;
+      }
+      if (copied) {
+        announce(`Link copied. ${view.note}`);
+        this.notify('success', 'Studio link copied', view.note);
+      } else openModal('osc-dlg-studio-link');
+      return { url, copied, ...view };
+    },
+
+    /**
+     * Apply a Studio link from a location hash (§199): validated like an import, refused whole
+     * with a message when invalid, never starts playback, never replaces unsaved changes.
+     * Returns true (applied, perhaps waiting for an explicit Open), false (refused) or null (no
+     * Studio link in the hash). origin: 'load' | 'hashchange' | 'link'.
+     */
+    studioApplyLinkHash(hash, { origin = 'link' } = {}) {
+      const r = decodeStudioLink(hash);
+      if (r === null) return null;
+      if (!r.ok) {
+        const why = r.errors.slice(0, 3).join('; ');
+        this.notify('warning', 'Studio link not applied', `${why}. Nothing was changed.`);
+        announce(`Studio link not applied: ${why}`, { assertive: true });
+        return false;
+      }
+      if (origin === 'load') this.workspace = 'studio';
+      else if (this.workspace !== 'studio') this.setWorkspace('studio');
+      if (r.subview) this.studioSetSubview(r.subview);
+      const view = r.subview ? `${r.subview.charAt(0).toUpperCase()}${r.subview.slice(1)} view`
+        : 'Studio';
+      if (!r.templateId) {
+        this.notify('info', 'Studio opened from the link', `${view}. Nothing plays until you press `
+          + 'Play.');
+        return true;
+      }
+      const model = ctx.handle.getModel();
+      const t = getTemplate(r.templateId);
+      const already = ctx.templateId === r.templateId && ctx.templateBaseline
+        && !ctx.templateBaseline.isDirty(model);
+      if (already) {
+        this.notify('info', 'Studio opened from the link', `${t.title} is already open (${view}). `
+          + 'Nothing plays until you press Play.');
+        return true;
+      }
+      if (ctx.dirty && ctx.dirty.isDirty(model)) {
+        // No silent overwrite: the Templates dialog says what would be lost; Open is explicit.
+        this.studio.linkPending = t.title;
+        openModal('osc-dlg-studio-templates');
+        this.notify('warning', 'Studio link waits for you', `The link opens the template `
+          + `${t.title}, but this Studio has unsaved changes. Choose Open on ${t.title} to replace `
+          + 'it, or save or export first.');
+        announce(`The link opens ${t.title}; this Studio has unsaved changes, so it was not `
+          + 'replaced.', { assertive: true });
+        return true;
+      }
+      openDocument(templateModel(r.templateId), { reason: 'link', templateId: r.templateId });
+      this.notify('info', 'Studio opened from the link', `Template ${t.title}, ${view}. Nothing `
+        + 'plays until you press Play.');
+      announce(`Opened template ${t.title} from the link`);
+      return true;
+    },
+
+    // ------------------------------------------------------------ fullscreen (V422, §134)
+    /** Browser fullscreen on the workspace element, or out of it. Resolves the new state. */
+    async studioToggleFullscreen() {
+      const view = viewEl();
+      const fs = fullscreenSupport(document, view);
+      if (!fs.available) {
+        announce(fs.reason, { assertive: true });
+        this.notify('info', 'Fullscreen not available', fs.reason);
+        return false;
+      }
+      if (fullscreenElementOf(document) === view) {
+        await exitFullscreen();
+        return false;
+      }
+      try {
+        const req = view.requestFullscreen || view.webkitRequestFullscreen;
+        await req.call(view);
+        return true;
+      } catch (e) {
+        const msg = `Fullscreen was refused by the browser${e && e.message ? `: ${e.message}`
+          : ''}. Studio stays in the window.`;
+        announce(msg, { assertive: true });
+        this.notify('info', 'Fullscreen not available', msg);
+        return false;
+      }
+    },
+
     /** Test seam (window.OSCILLA.studio): the live objects, never copies. */
     studioTestSeam() {
       return {
@@ -1075,6 +1303,7 @@ export function createStudioUi(svc = {}) {
         get editor() { return ctx.editor; },
         get dirty() { return ctx.dirty ? ctx.dirty.isDirty(ctx.handle.getModel()) : false; },
         get projectId() { return ctx.projectId; },
+        get templateId() { return ctx.templateId; },
         get measurementRun() { return ctx.measureRun ? ctx.measureRun.view : null; },
         get rendering() { return !!ctx.render; },
         library,

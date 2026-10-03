@@ -240,6 +240,10 @@ How to use it, with the keyboard shortcuts, is the [Studio user guide](docs/v31/
   workspace splits into Graph, Timeline and Inspector views.
 - **Compact widget.** The Playground shows a small signal path and clip strip of the current
   Studio document, with a button to expand it to the full workspace.
+- **Signal Path from the Studio model.** The Playground's Signal Path view draws the
+  Playground voice expressed as a Studio graph: the same model kind and the same signal-path
+  reading as Studio, read-only, with the boxes and wording it always had
+  ([why and how](docs/v31/signal-path.md)).
 - **Templates and patches.** Start from a template, then save, open, insert, export and import
   projects and patches. An import never overwrites silently, and a hostile file is refused.
   From `file://` the browser's storage may be unavailable; the library then uses memory and
@@ -253,13 +257,17 @@ How to use it, with the keyboard shortcuts, is the [Studio user guide](docs/v31/
   execution state) beside its recipe.
 - **Performance.** Responsive at about 100 nodes and 200 connections; the numbers and budgets
   are in [performance](docs/v31/performance.md).
+- **Links and fullscreen.** `#m=studio&st=<template id>&sv=<graph|timeline|inspector>` opens
+  Studio, a shipped template and a view. It never starts playback, and it never replaces a
+  document that has unsaved changes. An invalid link is refused with the reason. **Copy link**
+  writes the current view, naming the template only while the document is that template
+  unmodified. An optional **Fullscreen** button uses the browser's Fullscreen API where it
+  exists; where it does not (Safari on iPhone), the button says so.
 
 Studio output and Playground output are exclusive: starting one stops the other, and a
 measurement stops the Studio.
 
 Not yet built:
-- browser fullscreen
-- deep links
 - a minimap
 - node groups
 - dragging several clips at once

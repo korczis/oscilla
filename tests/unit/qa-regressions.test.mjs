@@ -18,7 +18,8 @@ import { buildPlan } from '../../src/js/audio/patterns.js';
 import { defaultInstrumentState } from '../../src/js/core/config.js';
 import { buildPeriodicWave, harmonicSeries, visualCoefficients } from '../../src/js/audio/additive.js';
 import { additiveHarmonicTable, harmonicTable } from '../../src/js/visualization/harmonics.js';
-import { pathNodesFor } from '../../src/js/visualization/signal-path.js';
+import { playgroundVoiceModel } from '../../src/js/studio/playground-voice.js';
+import { projectSignalPath } from '../../src/js/studio/signal-path-projection.js';
 import { scopeWindow } from '../../src/js/ui/p5-views.js';
 import { createWorkbench } from '../../src/js/ui/workbench.js';
 import { correlationDisplay } from '../../src/js/analysis/correlation.js';
@@ -187,12 +188,18 @@ test('additiveHarmonicTable: the played PeriodicWave coefficients, Nyquist split
 
 // ---------------------------------------------------------------- #17 signal path stages
 
+/** The Signal Path stages of a Playground voice (V421: projected from its StudioModel). */
+function pathStages(plan, lab = null) {
+  const voice = playgroundVoiceModel({ plan, waveform: 'sine', frequency: 440, gain: 0.08,
+    attackMs: 10, releaseMs: 30, lab });
+  return projectSignalPath(voice.model, { annotations: voice.annotations }).stages;
+}
+
 test('signal path: additive, ADSR, filter and stereo router appear; V1 list without labs', () => {
-  const st = { waveform: 'sine', labels: { freq: '440 Hz', attack: '10 ms', release: '30 ms',
-    gain: '0.080' } };
-  const v1 = pathNodesFor(null, st);
-  assert.deepEqual(pathNodesFor(null, st, null), v1);
+  const v1 = pathStages(null);
   assert.equal(v1.length, 7);
+  assert.equal(v1[2].sub, 'A 10 ms · R 30 ms');
+  assert.equal(v1[3].sub, 'logical 0.080');
   const lab = {
     additive: [{ n: 1, gain: 0.8 }, { n: 2, gain: 0 }, { n: 3, gain: 0.2 }],
     adsr: { a: 0.01, d: 0.2, s: 0.6, r: 0.4 },
@@ -200,12 +207,12 @@ test('signal path: additive, ADSR, filter and stereo router appear; V1 list with
     router: null,
     phaseDeg: 0,
   };
-  const n = pathNodesFor(null, st, lab);
+  const n = pathStages(null, lab);
   assert.deepEqual(n.map((x) => x.title), ['ADDITIVE OSC', 'MODULATION', 'ADSR ENVELOPE',
     'FILTER', 'MASTER GAIN', 'LIMITER', 'ANALYSER', 'DEVICE OUTPUT']);
   assert.match(n[0].sub, /2 partials/);
   assert.match(n[3].sub, /low-pass · 1\.20 kHz · Q 0\.707/);
-  const d = pathNodesFor(dualPlan(440, 442), st, { additive: null, adsr: null, filter: null,
+  const d = pathStages(dualPlan(440, 442), { additive: null, adsr: null, filter: null,
     router: { mode: 'split', panA: -1, panB: 1 }, phaseDeg: 90 });
   assert.equal(d[1].title, 'STEREO ROUTER');
   assert.match(d[0].sub, /B \+90°/);
