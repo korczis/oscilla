@@ -26,9 +26,9 @@ listed under [Gaps](#gaps), not resolved here.
 | `oscilla.window.hann.v1`, `oscilla.window.blackman-harris.v1` | `measurement/spectrum.js` | [Windows, spectra, Welch](#windows) |
 | `oscilla.clip.v1`, `oscilla.discontinuity.v1` | `measurement/capture-checks.js` | [Capture checks](#capture-checks) |
 | `oscilla.align.xcorr.v1` | `measurement/align.js` | [Alignment](#alignment) |
-| `oscilla.transfer.v1` | `measurement/transfer.js` | [Transfer function](#transfer) |
+| `oscilla.transfer.v3` (retained `.v1`, `.v2`) | `measurement/transfer.js` | [Transfer function](#transfer) |
 | (none) | `measurement/analysis-task.js`, `analysis-runner.js`, `analysis-worker.js` | [Analysis execution and memory](#analysis-memory) |
-| `oscilla.ir.log-sweep.v1` (spectral), `oscilla.ir.farina-inverse.v1` | `measurement/impulse-response.js` | [Impulse response](#ir) |
+| `oscilla.ir.log-sweep.v3` (spectral), `oscilla.ir.farina-inverse.v3` (retained `.v1`, `.v2`) | `measurement/impulse-response.js` | [Impulse response](#ir) |
 | `oscilla.smoothing.fractional-octave.v2` (retained `.v1`), `oscilla.normalization.v1` | `measurement/smoothing.js` | [Smoothing](#smoothing) |
 | `oscilla.rta.v2` (retained `.v1`) | `measurement/rta.js`, `measurement/live-rta.js` | [RTA bands](#rta), [Live RTA](#live-rta) |
 | `oscilla.aggregate.v1` | `measurement/aggregate.js` | [Aggregation of repeats](#aggregate) |
@@ -201,8 +201,12 @@ C = 4·f1·e^((N−1)/(sr·L)) / (sr²·A²·L)
 ```
 
 derived from the stationary-phase sweep spectrum `|X(f)| ≈ sr·(A/2)·√(L/f)`, so that
-`sweep ⊛ inverse` peaks at index N − 1 with unit gain across the band (exactly 1 at
-`√(f1·f2)` up to the stationary-phase error). Production deconvolution does not use it (see
+`sweep ⊛ inverse` peaks at index N − 1 with unit gain at the band centre `√(f1·f2)` (measured
+in the V382 review: −0.0005 dB at 44.1 kHz, −0.0007 dB at 48 kHz). It is NOT flat across the
+band: truncation (Fresnel) ripple and the fades give [−1.89, +2.46] dB half an octave inside
+the band for a 1 s sweep and [−1.33, +1.44] dB for 5 s, and the `farina-inverse` IR of a 2 s
+sweep reads −6.5 dB at 22 Hz and −3.1 dB at 19.5 kHz (spectral method: −0.56 dB). Its usable
+band is about 60 Hz to 18 kHz for a 2 s sweep. Production deconvolution does not use it (see
 [Transfer](#transfer)); it is the Farina oracle and the input of the `farina-inverse` IR method.
 
 ### Assumptions and limits
@@ -435,8 +439,13 @@ P_max  = max |X[k]|² over bins in [f1, min(f2, Nyquist)]
 ε[k]   = P_max · 10^(ε_dB/10)                       (DC: 0 dB)
 ```
 
-In band the magnitude bias is `−10·log10(1 + ε/|X|²)`: about 0.004-0.006 dB where `|X|²` is
-~30 dB below its maximum, as at the top of a 20 Hz-20 kHz exponential sweep. Outside the
+In band the magnitude bias is `−20·log10(1 + ε/|X|²)` (|H| = |X|²/(|X|² + ε) for a unity
+system; corrected in the V382 review, which measured it: −0.00858 dB at a bin 29.95 dB below
+max|X|², where the earlier `−10·log10` form gave half): about 0.009-0.012 dB where `|X|²` is
+~30 dB below its maximum, as at the top of a 20 Hz-20 kHz exponential sweep. Near f2 the
+fade-out and the bands reaching past f2 bring |X|² much closer to ε: there `transfer.v3`
+excludes from `validRange` every point a unity system reads more than 0.1 dB low (see
+validRange). Outside the
 excited band the estimate is pulled toward zero instead of dividing by noise. A stimulus with no
 energy in [f1, f2] throws.
 
@@ -742,7 +751,11 @@ methods' outputs differ (ADR 0024); validation accepts `method` and `fftSize` an
   unity in band whatever constant the inverse was built with.
 
 For an exponential sweep both methods place harmonic-distortion responses at negative time
-(Farina 2000, §3), i.e. at the end of the circular buffer, which is not part of `samples`. The
+(Farina 2000, §3): harmonic k at capture index `lag − L·ln k`. With `lagSamples` (as the
+analysis task always supplies) `samples` starts after them; WITHOUT it `samples` starts at
+capture index 0, so harmonic k lies inside `samples` whenever the pre-roll exceeds `L·ln k`
+(V382: y = x + 0.3x², no lag, 44.1 kHz: the second harmonic at index 13200, −22.1 dB re the
+peak). The
 IR is band-limited to [f1, f2]: a unity system gives a pulse of peak ≈ `(f2 − f1)/(fs/2)`, not
 a unit sample.
 
@@ -802,9 +815,10 @@ ways, kept deliberately:
    band (1/3-octave raised cosine). No edge ramp is applied because the division is by the
    spectrum of the **exact rendered** stimulus, fades and clamp included, so the edges carry no
    model error to suppress; where the fades leave |X|² small, the in-band bias
-   `−10·log10(1 + ε/|X|²)` is 0.004 dB where |X|² is 30 dB below max|X|² and 0.043 dB at
-   40 dB below, and the `validRange` coverage test (f·P_x within 20 dB of its maximum) already
-   excludes edge points whose stimulus energy is too low to trust. An edge ramp would bias
+   `−20·log10(1 + ε/|X|²)` is 0.0087 dB where |X|² is 30 dB below max|X|² and 0.086 dB at
+   40 dB below. The `validRange` coverage test (f·P_x within 20 dB of its maximum) did NOT
+   exclude every such edge point (V382: a unity system read −0.55 dB at the top of a v2
+   validRange); `transfer.v3` adds the bias condition (≤ 0.1 dB) for that. An edge ramp would bias
    exactly those edge points and, by ADR 0024, need a new transfer ID.
 2. `farina-inverse` is a selectable production method, not only an oracle. It now has its own
    ID (`oscilla.ir.farina-inverse.v1`), so a stored IR says which method produced it; the
