@@ -127,6 +127,7 @@ const SPECTRUM = welch(Float32Array.from(noise(21, 16384, 0.5), (v, i) => v
   + 0.25 * Math.sin((2 * Math.PI * 440 * i) / SR)), { fftSize: 1024 });
 const BANDS = bandCenters('third', 50, 3000, SR);
 const RTA = bandAnalysis(SPECTRUM, SR / 1024, BANDS);
+const RTA_V1 = bandAnalysis(SPECTRUM, SR / 1024, BANDS, { algorithm: 'oscilla.rta.v1' });
 
 // ----------------------------------------------------------------------------- reduction
 
@@ -229,6 +230,13 @@ const CASES = {
     return { id: w.algorithm, output: { samples: w.samples, coherentGain: w.coherentGain,
       noisePowerGain: w.noisePowerGain, enbwBins: w.enbwBins, welch: summary(p.power, 6, 12) } };
   },
+  'oscilla.rta.v1': () => {
+    const r = rtaResult({ sampleRate: SR, resolution: 'third', bands: BANDS,
+      levelsDb: RTA_V1.levelsDb, fftSize: 1024, window: 'hann' });
+    return { id: RTA_V1.algorithm, output: { analysis: RTA_V1.algorithm, nominal: BANDS.map((b) =>
+      b.nominal), levelsDb: r.levelsDb, binCounts: RTA_V1.binCounts,
+    underResolved: RTA_V1.underResolved, windowAlgorithm: r.windowAlgorithm } };
+  },
   [ALGORITHMS.rta]: () => {
     const r = rtaResult({ sampleRate: SR, resolution: 'third', bands: BANDS,
       levelsDb: RTA.levelsDb, fftSize: 1024, window: 'hann' });
@@ -240,6 +248,12 @@ const CASES = {
     const s = smoothResponse(GRID, RESPONSE, 3);
     return { id: s.algorithm, output: { label: s.label, smoothedDb: s.smoothedDb,
       sixth: smoothResponse(GRID, RESPONSE, 6).smoothedDb } };
+  },
+  'oscilla.smoothing.fractional-octave.v1': () => {
+    const algorithm = 'oscilla.smoothing.fractional-octave.v1';
+    const s = smoothResponse(GRID, RESPONSE, 3, { algorithm });
+    return { id: s.algorithm, output: { label: s.label, smoothedDb: s.smoothedDb,
+      sixth: smoothResponse(GRID, RESPONSE, 6, { algorithm }).smoothedDb } };
   },
   [ALGORITHMS.normalization]: () => {
     const at = normalizeResponse(GRID, RESPONSE, { mode: 'at-frequency', hz: 1000 });
