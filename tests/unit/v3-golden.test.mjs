@@ -25,10 +25,10 @@ import { inverseSweep, renderStimulus } from '../../src/js/measurement/stimulus.
 import { align } from '../../src/js/measurement/align.js';
 import { checkCapture } from '../../src/js/measurement/capture-checks.js';
 import {
-  TRANSFER_ALGORITHM, TRANSFER_ALGORITHM_V1, computeTransfer,
+  TRANSFER_ALGORITHM, TRANSFER_ALGORITHM_V1, TRANSFER_ALGORITHM_V2, computeTransfer,
 } from '../../src/js/measurement/transfer.js';
 import {
-  IR_ALGORITHMS_V1, computeImpulseResponse, normalizeIr,
+  IR_ALGORITHMS_V1, IR_ALGORITHMS_V2, computeImpulseResponse, normalizeIr,
 } from '../../src/js/measurement/impulse-response.js';
 import { normalizeResponse, smoothResponse } from '../../src/js/measurement/smoothing.js';
 import { welch, windowFn } from '../../src/js/measurement/spectrum.js';
@@ -88,9 +88,14 @@ const BASE = { stimulus: STIM.samples, sampleRate: SR, f1: SPEC.f1, f2: SPEC.f2 
 const transfersOf = (algorithm) => CAP.map((captured) => computeTransfer({ ...BASE, captured,
   noise: NOISE, alignment: align(STIM.samples, captured, SR),
   options: { phase: true, pointsPerOctave: 6, algorithm } }));
-const TRANSFERS = transfersOf(TRANSFER_ALGORITHM);
+// transfer.v2 inputs: the quality and aggregate fixtures predate transfer.v3 (V382), whose
+// stricter validRange would change their input, not their method.
+const TRANSFERS = transfersOf(TRANSFER_ALGORITHM_V2);
 const TRANSFERS_V1 = transfersOf(TRANSFER_ALGORITHM_V1);
+// ir.v2 input for the normalization case, which predates ir.v3 (V382: a longer pre-guard)
 const IR = computeImpulseResponse({ ...BASE, captured: CAP[0],
+  lagSamples: Math.max(0, ALIGN.lagSamples), algorithm: IR_ALGORITHMS_V2.spectral });
+const IR_V3 = computeImpulseResponse({ ...BASE, captured: CAP[0],
   lagSamples: Math.max(0, ALIGN.lagSamples) });
 const IR_V1 = computeImpulseResponse({ ...BASE, captured: CAP[0],
   lagSamples: Math.max(0, ALIGN.lagSamples), algorithm: IR_ALGORITHMS_V1.spectral });
@@ -190,16 +195,28 @@ const CASES = {
       options: { phase: true, pointsPerOctave: 3 } });
     return { id: t.algorithm, output: transferOutput(t) };
   },
+  [TRANSFER_ALGORITHM_V2]: () => {
+    const t = computeTransfer({ ...BASE, captured: CAP[0], noise: NOISE, alignment: ALIGN,
+      options: { phase: true, pointsPerOctave: 3, algorithm: TRANSFER_ALGORITHM_V2 } });
+    return { id: t.algorithm, output: transferOutput(t) };
+  },
   [TRANSFER_ALGORITHM_V1]: () => {
     const t = computeTransfer({ ...BASE, captured: CAP[0], noise: NOISE, alignment: ALIGN,
       options: { phase: true, pointsPerOctave: 3, algorithm: TRANSFER_ALGORITHM_V1 } });
     return { id: t.algorithm, output: transferOutput(t) };
   },
-  [ALGORITHMS.ir]: () => ({ id: IR.algorithm, output: irOutput(IR) }),
+  [ALGORITHMS.ir]: () => ({ id: IR_V3.algorithm, output: irOutput(IR_V3) }),
+  [IR_ALGORITHMS_V2.spectral]: () => ({ id: IR.algorithm, output: irOutput(IR) }),
   [IR_ALGORITHMS_V1.spectral]: () => ({ id: IR_V1.algorithm, output: irOutput(IR_V1) }),
   [ALGORITHMS.irFarina]: () => {
     const ir = computeImpulseResponse({ ...BASE, captured: CAP[0], method: 'farina-inverse',
       inverse: inverseSweep(SPEC), lagSamples: Math.max(0, ALIGN.lagSamples) });
+    return { id: ir.algorithm, output: irOutput(ir) };
+  },
+  [IR_ALGORITHMS_V2['farina-inverse']]: () => {
+    const ir = computeImpulseResponse({ ...BASE, captured: CAP[0], method: 'farina-inverse',
+      inverse: inverseSweep(SPEC), lagSamples: Math.max(0, ALIGN.lagSamples),
+      algorithm: IR_ALGORITHMS_V2['farina-inverse'] });
     return { id: ir.algorithm, output: irOutput(ir) };
   },
   [IR_ALGORITHMS_V1['farina-inverse']]: () => {

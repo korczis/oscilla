@@ -428,7 +428,13 @@ test('M5: the IR noise floor matches σ²·Σ|X|²/D²/N, the v1 tail reads far 
   assert.equal(v1.algorithm, 'oscilla.ir.log-sweep.v1');
   assert.ok(!('noiseFloorMethod' in v1));
   assert.ok(v1.noiseFloorDb < truthDb - 20, `v1 ${v1.noiseFloorDb.toFixed(1)} dB`);
-  assert.deepEqual(v1.samples, ir.samples, 'v1 and v2 differ only in the noise floor');
+  const v2 = computeImpulseResponse({ ...args, algorithm: 'oscilla.ir.log-sweep.v2' });
+  assert.deepEqual(v1.samples, v2.samples, 'v1 and v2 differ only in the noise floor');
+  // v3 (V382) keeps a longer precursor; from v2's start on its samples are v2's
+  const off = Math.round((v2.captureOffsetS - ir.captureOffsetS) * SR);
+  assert.ok(off > 0);
+  assert.deepEqual(ir.samples.subarray(off), v2.samples, 'v3 = v2 plus an earlier start');
+  assert.equal(ir.noiseFloorDb, v2.noiseFloorDb);
   // No full-overlap lags after the peak (no post-roll): no floor, said so.
   const short = Float32Array.from(y.subarray(0, pre + 100 + x.length + 8));
   const none = computeImpulseResponse({ ...args, captured: short });

@@ -246,8 +246,8 @@ test('legal flow IDLE → PREFLIGHT → NOISE_CHECK → READY → ARMED → MEAS
   assert.equal(result.state, S.COMPLETE);
   assert.equal(result.runs.length, 1);
   assert.ok(result.transfer && result.ir && result.aggregate && result.noise);
-  assert.equal(result.transfer.algorithm, 'oscilla.transfer.v2');
-  assert.equal(result.ir.algorithm, 'oscilla.ir.log-sweep.v2');
+  assert.equal(result.transfer.algorithm, 'oscilla.transfer.v3');
+  assert.equal(result.ir.algorithm, 'oscilla.ir.log-sweep.v3');
   assert.equal(result.captureChecks.length, 1);
   assert.equal(result.captureChecks[0].invalid, false);
   assert.ok(io.calls.cancel >= 1, 'resources released at completion');

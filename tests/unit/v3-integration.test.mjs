@@ -382,8 +382,8 @@ test('G5: full-scale tones near Nyquist, noise, transients and explained steps a
 
 test('G6/G7/G9: every result carries the algorithm IDs it used (pinned)', () => {
   const ids = {
-    transfer: 'oscilla.transfer.v2', ir: 'oscilla.ir.log-sweep.v2',
-    irFarina: 'oscilla.ir.farina-inverse.v2', rta: 'oscilla.rta.v1',
+    transfer: 'oscilla.transfer.v3', ir: 'oscilla.ir.log-sweep.v3',
+    irFarina: 'oscilla.ir.farina-inverse.v3', rta: 'oscilla.rta.v1',
     smoothing: 'oscilla.smoothing.fractional-octave.v1', normalization: 'oscilla.normalization.v1',
     align: 'oscilla.align.xcorr.v1', clip: 'oscilla.clip.v1',
     discontinuity: 'oscilla.discontinuity.v1', quality: 'oscilla.confidence.v4',
