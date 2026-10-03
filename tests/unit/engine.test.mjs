@@ -675,3 +675,29 @@ test('limiter feed: none where the context has no ConstantSourceNode', { skip },
   assert.strictEqual(eng.limiterFeed, null);
   assert.ok(eng.ctx.trace().every((n) => n.kind !== 'constantSource'));
 });
+
+test('V253: a continuous repeat schedules its first cycle at t0; a stalled top-up skips',
+  { skip }, () => {
+    const { eng, advance, flush } = setup();
+    const p = buildPlan({
+      ...defaultInstrumentState(), source: 'sweep',
+      sweep: { start: 200, end: 2000, durationMs: 500, curve: 'log', direction: 'up', repeat: 'continuous' },
+    }, ENV_S).plan;
+    eng.init();
+    advance(0.01); // currentTime + START_OFFSET_S is off the quantum grid, as in every browser
+    eng.play(p, opt({ mode: 'trigger' }));
+    const v = eng.voice;
+    const starts = () => v.carrier.frequency.events
+      .filter((e) => e[0] === 'set' && Math.abs(e[1] - 200) < 1e-6 && e[2] >= v.t0 - 1e-9)
+      .map((e) => Math.round((e[2] - v.t0) / p.period));
+    const env = v.nodes[0].gain.events;
+    assert.ok(env.some((e) => e[0] === 'set' && Math.abs(e[2] - v.t0) < 1e-9 && e[1] < 1e-3),
+      'the segment envelope starts at t0');
+    assert.deepStrictEqual(starts().slice(0, 3), [0, 1, 2], 'cycles 0, 1, 2 in order');
+    // A stall: the top-up runs 30 s later and skips the cycles already in the past.
+    advance(30);
+    flush();
+    const after = starts().filter((k) => v.t0 + k * p.period > 30);
+    assert.ok(after.length > 0 && v.t0 + after[0] * p.period >= 30, 'resumes on the grid');
+    assert.ok(new Set(starts()).size === starts().length, 'no cycle twice');
+  });

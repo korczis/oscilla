@@ -101,13 +101,18 @@ export function rampSegments(v, at) {
  * Continuous repeat: schedule whole cycles up to SCHEDULE_AHEAD_S ahead on the audio clock.
  * After a stall (throttled timer) cycles already in the past are skipped, keeping the grid.
  * V1: AudioEngine._scheduleCycles (index.html@a7b7a23)
+ * V253: only a top-up skips. At play the first cycle starts at t0, before the voice sounds;
+ * V1's _soon was exactly t0 there, while the quantum-aligned _soon of V2 lies up to a quantum
+ * after it, which skipped cycle 0 (one period of silence, or of a held tone).
  */
 export function scheduleCycles(v) {
   const ctx = v.ctx;
   const period = v.plan.period;
   const now = ctx.currentTime;
-  const first = Math.max(0, Math.ceil((this._soon(ctx) - v.t0) / period));
-  if (v.cycle < first) v.cycle = first;
+  if (v.cycle > 0) {
+    const first = Math.max(0, Math.ceil((this._soon(ctx) - v.t0) / period));
+    if (v.cycle < first) v.cycle = first;
+  }
   while (v.t0 + v.cycle * period < now + SCHEDULE_AHEAD_S) {
     this._rampSegments(v, v.t0 + v.cycle * period);
     v.cycle++;
