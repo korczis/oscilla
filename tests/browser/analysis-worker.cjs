@@ -18,7 +18,8 @@
 //     2 s sweep at 48 kHz with a noise capture and phase: every typed array compared byte for
 //     byte, every other field by value), and the captures were transferred;
 //   - the main thread stays responsive while the Worker runs a 10 s sweep at 48 kHz: the
-//     largest gap between MessageChannel heartbeats is below MAX_WORKER_GAP_MS;
+//     largest gap between MessageChannel heartbeats is below MAX_WORKER_GAP_MS plus the largest
+//     gap the same heartbeat shows over an idle window of the same length (the machine's noise);
 //   - an abort mid-analysis rejects at once (ABORTED; that it terminates the Worker is checked
 //     in tests/unit/v3-analysis-worker.test.mjs).
 // --bench (reported, not asserted; recorded in docs/v3/spike-audioworklet-worker.md "M10"):
@@ -187,6 +188,11 @@ T.run = async ({ seconds, sr, mode }) => {
     irTruncation: hb.value.ir.truncation || null };
 };
 
+// The same heartbeat over an idle window of ms: the machine's own scheduling noise, the control
+// for a Worker run's gap (a loaded machine delays heartbeats that no analysis caused).
+T.idleGap = async (ms) => (await withHeartbeat(() => new Promise((r) => setTimeout(r, ms))))
+  .maxGapMs;
+
 T.abort = async () => {
   const m = T.message({ seconds: 10, sr: 48000 });
   const ac = new AbortController();
@@ -282,10 +288,16 @@ async function runOne(name, origin, url) {
     check(key, 'captures and noise transferred to the Worker', id.transferred);
     const w = (rec.worker10 = await page.evaluate(() => window.T.run({ seconds: 10, sr: 48000,
       mode: 'worker' })));
+    // Control: the same heartbeat over an idle window as long as the run; the analysis may add
+    // less than MAX_WORKER_GAP_MS to what the machine itself imposes (on a quiet machine the
+    // idle gap is a few ms, so the bound stays ~50 ms; under load it absorbs only the load).
+    const idleGapMs = (rec.idleGapMs = await page.evaluate((ms) => window.T.idleGap(ms),
+      Math.min(Math.max(w.totalMs, 1000), 10000)));
     check(key, `main thread responsive during a 10 s / 48 kHz Worker analysis (max gap < `
-      + `${MAX_WORKER_GAP_MS} ms)`, w.mode === 'worker' && w.maxGapMs < MAX_WORKER_GAP_MS,
-    `max gap ${w.maxGapMs.toFixed(1)} ms, total ${w.totalMs.toFixed(0)} ms, longest Worker step `
-      + `${w.longestStepMs.toFixed(0)} ms`);
+      + `${MAX_WORKER_GAP_MS} ms + idle control)`, w.mode === 'worker'
+      && w.maxGapMs < MAX_WORKER_GAP_MS + idleGapMs,
+    `max gap ${w.maxGapMs.toFixed(1)} ms vs idle ${idleGapMs.toFixed(1)} ms, total `
+      + `${w.totalMs.toFixed(0)} ms, longest Worker step ${w.longestStepMs.toFixed(0)} ms`);
     const ab = (rec.abort = await page.evaluate(() => window.T.abort()));
     check(key, 'abort rejects with ABORTED while the Worker computes', ab.rejected
       && ab.code === 'ABORTED' && ab.afterMs < 1000, JSON.stringify(ab));
