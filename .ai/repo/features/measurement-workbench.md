@@ -35,6 +35,6 @@ left running.
 
 It measures the whole playback and capture chain, never a loudspeaker, a room or a
 microphone alone. The automated gate runs it on a TEST CONTEXT digital loopback and a fake
-microphone, so no test proves a physical setup. The offline analysis runs on the main
-thread, yielding between steps; moving it into a Worker is the planned claim
-`analysis-off-main-thread`.
+microphone, so no test proves a physical setup. The offline analysis runs in a Worker
+started from a `data:` URL (claim `analysis-off-main-thread`); without Worker support it runs
+inline on the main thread, yielding between steps, with identical results.

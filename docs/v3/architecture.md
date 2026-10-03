@@ -80,8 +80,8 @@ start and stop are frame counts on the audio clock, not timers, and runs never o
 any stage is cancelled, the stimulus fades over 10 ms, the capture is rejected, the worklet
 port is closed and every node and track is released. The same cleanup runs on engine abort,
 error and completion, on Escape, on a hidden page and on a context that closes. Why
-AudioWorklet with a ScriptProcessor fallback and no Worker yet: ADR 0026 and
-`docs/v3/spike-audioworklet-worker.md`.
+AudioWorklet with a ScriptProcessor fallback, and the analysis in a `data:` URL Worker: ADR 0026
+and `docs/v3/spike-audioworklet-worker.md`.
 
 ### 3. Analysis
 
@@ -91,9 +91,11 @@ capture as it returns; a failing capture ends the measurement INVALID before any
 (stimulus, captures, noise, f1, f2, phase, aggregation). `runAnalysis` turns it into one
 result, in steps that can yield: alignment per run, one spectral division per run for the
 transfer and the impulse response, and aggregation over runs. The engine calls
-it through its injected `analyze`. The default, `analyzeInline`, runs on the main thread and
-yields between steps, so an abort can land between them. A Worker-backed `analyze` would post
-the same message (claim `analysis-off-main-thread`, planned). The noise check produces
+it through its injected `analyze`. The default, `defaultAnalyze` (`analysis-runner.js`), posts
+the same message to a Worker started from a `data:` URL when the build embedded the Worker and
+the platform has `Worker` (claim `analysis-off-main-thread`, guaranteed); otherwise
+`analyzeInline` runs it on the main thread and yields between steps. Either way an abort can
+land between steps, and the results are bit-identical. The noise check produces
 Welch power and one-third-octave band power through `spectrum.js` and `rta.js`. Why the
 sweep deconvolution method: ADR 0021.
 
