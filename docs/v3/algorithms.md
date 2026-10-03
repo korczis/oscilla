@@ -24,19 +24,19 @@ listed under [Gaps](#gaps), not resolved here.
 | --- | --- | --- |
 | (none; recorded through the recipe) | `measurement/stimulus.js` | [Stimuli](#stimuli) |
 | `oscilla.window.hann.v1`, `oscilla.window.blackman-harris.v1` | `measurement/spectrum.js` | [Windows, spectra, Welch](#windows) |
-| `oscilla.clip.v1`, `oscilla.discontinuity.v1` | `measurement/capture-checks.js` | [Capture checks](#capture-checks) |
-| `oscilla.align.xcorr.v1` | `measurement/align.js` | [Alignment](#alignment) |
+| `oscilla.clip.v2` (retained `oscilla.clip.v1`), `oscilla.discontinuity.v1` | `measurement/capture-checks.js` | [Capture checks](#capture-checks) |
+| `oscilla.align.xcorr.v2` (retained `.v1`) | `measurement/align.js` | [Alignment](#alignment) |
 | `oscilla.transfer.v3` (retained `.v1`, `.v2`) | `measurement/transfer.js` | [Transfer function](#transfer) |
 | (none) | `measurement/analysis-task.js`, `analysis-runner.js`, `analysis-worker.js` | [Analysis execution and memory](#analysis-memory) |
 | `oscilla.ir.log-sweep.v3` (spectral), `oscilla.ir.farina-inverse.v3` (retained `.v1`, `.v2`) | `measurement/impulse-response.js` | [Impulse response](#ir) |
-| `oscilla.smoothing.fractional-octave.v1`, `oscilla.normalization.v1` | `measurement/smoothing.js` | [Smoothing](#smoothing) |
-| `oscilla.rta.v1` | `measurement/rta.js`, `measurement/live-rta.js` | [RTA bands](#rta), [Live RTA](#live-rta) |
+| `oscilla.smoothing.fractional-octave.v2` (retained `.v1`), `oscilla.normalization.v1` | `measurement/smoothing.js` | [Smoothing](#smoothing) |
+| `oscilla.rta.v2` (retained `.v1`) | `measurement/rta.js`, `measurement/live-rta.js` | [RTA bands](#rta), [Live RTA](#live-rta) |
 | `oscilla.aggregate.v1` | `measurement/aggregate.js` | [Aggregation of repeats](#aggregate) |
 | `oscilla.calibration.log-interp.v1` | `calibration/*.js` | [Frequency calibration](#calibration) |
 | (none) | `calibration/level.js` | [Level calibration, SPL](#level) |
 | (none) | `measurement/format.js` | [Resolution-aware formatting](#format) |
 | (none) | `experiments/*.js` | [Experiment hashing, encoding](#experiments) |
-| `oscilla.confidence.v3` (default), `oscilla.confidence.v2` and `oscilla.confidence.v1` (retained) | `measurement/quality.js` | [Quality](#quality) |
+| `oscilla.confidence.v4` (default), `oscilla.confidence.v3`, `.v2` and `.v1` (retained) | `measurement/quality.js` | [Quality](#quality) |
 | (all IDs) | `tests/unit/fixtures/v3/*.json` | [Golden outputs per ID](#golden) |
 
 ## Conventions
@@ -307,17 +307,25 @@ sidelobes ≈ −72 dB there, Blackman-Harris −92 dB: < 1e-6 of the power), th
 non-bin-centred tone (< 1e-6) and float32 input rounding (≈ −150 dB).
 
 <a id="capture-checks"></a>
-## Capture checks — `oscilla.clip.v1`, `oscilla.discontinuity.v1` (`measurement/capture-checks.js`)
+## Capture checks — `oscilla.clip.v2`, `oscilla.discontinuity.v1` (`measurement/capture-checks.js`)
 
 `checkCapture(capture, opts) → { algorithms: { clip, discontinuity }, clipping: { ratio,
 regions }, dropouts, discontinuities, rms, peak, empty, invalid, reasons }`. Digital integrity
 only; a capture that passes can still be acoustically wrong. Regions are half-open
 `[start, end)`.
 
-- **Clipping**: a sample is at the rail when `|x| ≥ CLIP_THRESHOLD = 0.98` (−0.18 dBFS). A
-  region is a run of at least `CLIP_MIN_RUN = 3` consecutive rail samples; regions closer than
+- **Clipping** (`oscilla.clip.v2`, V382): a sample is at the rail when `|x| ≥ CLIP_THRESHOLD =
+  0.98` (−0.18 dBFS). Clipping is at least `CLIP_MIN_RUN = 3` rail samples within
+  `CLIP_WINDOW_S = 0.001` s; a region spans the rail samples it groups, and regions closer than
   `CLIP_MERGE_GAP_S = 0.005` s are merged into one overload event.
-  `ratio = rail samples inside regions / total samples`.
+  `ratio = rail samples inside regions / total samples`. Why 1 ms: above a few kHz a flat top
+  spans one or two samples, so an overloaded high-frequency tone puts its rail samples a few
+  samples apart but never three in a row. Measured in the V382 review: a 1 dB overload of a
+  20 Hz–20 kHz sweep above 5 kHz left 5.1 % of the samples at the rail, no v1 region and the
+  status USABLE, while the same overload below 2 kHz was INVALID. `oscilla.clip.v1` (retained,
+  `checkCapture(c, { algorithm: 'oscilla.clip.v1' })`) required consecutive rail samples; it
+  is the same rule with a window of `CLIP_MIN_RUN − 1` samples and reproduces v1 exactly
+  (0 differences in 3000 fuzzed captures).
 - **Dropout**: a run of at least `max(2, ceil(DROPOUT_MIN_S·sr))` samples
   (`DROPOUT_MIN_S = 0.02` s) whose peak-to-peak spread stays within
   `CONSTANT_TOLERANCE = 2^−20` (≈ −120 dBFS), that touches neither the first nor the last
@@ -370,7 +378,7 @@ noise, a log sweep, 1- and 2-sample spikes, an abrupt onset after edge silence a
 a reported dropout. `v3-pipeline.test.mjs`: three noisy low-pass sweep captures pass.
 
 <a id="alignment"></a>
-## Alignment — `oscilla.align.xcorr.v1` (`measurement/align.js`)
+## Alignment — `oscilla.align.xcorr.v2` (`measurement/align.js`)
 
 `align(reference, captured, sampleRate, { maxLagS, minLagS = 0 }) → { algorithm, lagSamples,
 lagSeconds, peakCorrelation, polarity }` (`algorithm` = `ALIGN_ALGORITHM`, added by the
@@ -384,8 +392,14 @@ computed as `IFFT(conj(REF)·CAP)` with both signals zero-padded to
 `nextPow2(Nref + min(Ncap, maxLag + Nref) − 1)`, so the circular correlation equals the linear
 one for every searched lag. Both real inputs share one complex FFT (`ref + j·cap`, split by
 conjugate symmetry). The lag is the argmax of `|r|`; `polarity` is the sign of `r` there (−1
-for an inverted chain). A parabola through the three samples around the peak (V2
-`parabolicPeak`, offset clipped to ±0.5) refines it to a fractional lag. `minLag` defaults to 0,
+for an inverted chain). v2 (V382) refines it to a fractional lag at the maximum of the
+band-limited interpolant of `r`: a Blackman-windowed sinc over ±`ALIGN_SINC_HALF_WIDTH` (32)
+samples, maximized by golden-section search in (−1, 1). On exact band-limited fractional delays
+the error is below 5·10⁻⁵ samples (44.1 and 48 kHz, 20 Hz–20 kHz and 100 Hz–5 kHz sweeps).
+v1 (retained, `options.algorithm`) fitted a parabola through the three samples around the peak
+(V2 `parabolicPeak`), which is biased for a broadband peak: −0.061 samples at a fractional
+delay of 0.25 (44.1 kHz, 20 Hz–20 kHz), which tilts the transfer phase by −9.9° at 19 kHz.
+`minLag` defaults to 0,
 `maxLag` to the whole capture.
 
 ```
@@ -851,7 +865,16 @@ stronger later.
 | (integration) spectral and farina-inverse IRs validate and round-trip with their IDs | exact | pass |
 
 <a id="smoothing"></a>
-## Smoothing, normalization — `oscilla.smoothing.fractional-octave.v1`, `oscilla.normalization.v1` (`smoothing.js`)
+## Smoothing, normalization — `oscilla.smoothing.fractional-octave.v2`, `oscilla.normalization.v1` (`smoothing.js`)
+
+V382: `smoothResponse` views are v2: a window `[f/2^(1/2N), f·2^(1/2N)]` includes a point on
+either edge (relative tolerance `SMOOTHING_EDGE_TOLERANCE = 1e-9`). On the default 48-points-
+per-octave grid the edges of 1/3- and 1/24-octave windows fall exactly on grid points, and v1's
+exact comparison let rounding decide: 7 or 8 points on either side at 1/3 octave, 18 centres
+with no neighbour at 1/24 octave, and a 6 dB/octave ramp came back with an offset varying by
+0.12 dB (v2: constant to 1e-9 dB). v1 stays selectable (`smoothResponse(..., { algorithm })`)
+and is `smoothFractionalOctave`'s default, which `transfer.js` and `quality.js` use inside their
+own versioned methods (so their outputs are unchanged).
 
 Both are **derived views**: they return new arrays and never modify the raw response (§34, §35,
 §159). **Changed (integration)** (was G7): `smoothResponse(frequencies, magnitudeDb, fraction)`
@@ -905,7 +928,7 @@ reference equals the analytic filter level within 0.1 dB; band mean `10·log10((
 within 1e-12; labels contain NORMALIZED.
 
 <a id="rta"></a>
-## RTA bands — `oscilla.rta.v1` (`measurement/rta.js`)
+## RTA bands — `oscilla.rta.v2` (`measurement/rta.js`)
 
 ### Band layout: `bandCenters(kind, fMin, fMax, sampleRate) → [{ nominal, exact, lo, hi }]`
 
@@ -940,7 +963,8 @@ Input contract: one-sided linear power per bin on the **mean-square** scale,
 and convert it by its stated `scale` (`meanSquarePower`: `'tone'` → `toneToMeanSquare`,
 `'mean-square'` as is; an object without a known scale throws). A sine of amplitude A reads
 10·log10(A²/2) in its band, a full-scale sine −3.01 dB, whatever window produced the
-spectrum. `bandAnalysis` results carry `algorithm: 'oscilla.rta.v1'`.
+spectrum. `bandAnalysis` results carry `algorithm: 'oscilla.rta.v2'` (or the retained v1 when
+asked for).
 Bin k covers `[(k − ½)·binHz, (k + ½)·binHz]`, power is assumed uniform within a bin, and
 
 ```
@@ -949,14 +973,17 @@ levelDb   = 10·log10(bandPower)            (−Infinity for zero power; dB neve
 ```
 
 `bandBinCounts` returns the effective bin count (band width in bins where the spectrum covers it)
-and `underResolved = binCount < UNDER_RESOLVED_BINS (2)`: such a band's level is dominated by the
-window main lobe and bin placement. `bandAnalysis` returns `{ levelsDb, power, binCounts,
+and `underResolved = binCount < underResolvedBins(window)`: 6 bins for Hann, 8 for
+Blackman-Harris (v2, V382), so that the window's main lobe (±2 / ±4 bins) fits inside the band.
+With v1's single limit of 2 bins a mid-band tone read up to 0.91 dB (Hann) and 1.57 dB
+(Blackman-Harris) low in a band that was not flagged; at the v2 limits the loss is below
+0.01 dB (`v3-live-rta.test.mjs`). Band levels do not change, only the flag. `bandAnalysis` returns `{ levelsDb, power, binCounts,
 underResolved }`; `bandPowers` returns the dB array only (contract signature).
 
 ### Stored result: `rtaResult({ sampleRate, resolution, bands, levelsDb, fftSize, window })`
 
 **New (integration)** (was G4). Builds the `RtaResult` that `validate.js` checks:
-`{ algorithm: 'oscilla.rta.v1', sampleRate, resolution, bands: [{ nominal, exact, lo, hi }]
+`{ algorithm: 'oscilla.rta.v2', sampleRate, resolution, bands: [{ nominal, exact, lo, hi }]
 (copies), levelsDb: Float64Array, fftSize, windowAlgorithm }`. `levelsDb` are mean-square band
 levels; `−Infinity` and anything below `ZERO_POWER_DB` are stored as −300 dB (zero power);
 NaN, +Infinity, a length mismatch or an unknown resolution throw. `window` is the window name
@@ -1043,7 +1070,7 @@ stored result depends on it (only an explicit `snapshot()` would be, see below).
   access instead of array destructuring), the same values as before (calibration tests and
   golden fixture unchanged): the object per bin made 40 scavenges per 1500 live frames.
 - **Snapshot**: `snapshot()` → `rtaResult({ sampleRate, resolution, bands, levelsDb: raw
-  averaged, fftSize, window })` (`oscilla.rta.v1`, the window ID); null in FFT mode. Not yet
+  averaged, fftSize, window })` (`oscilla.rta.v2`, the window ID); null in FFT mode. Not yet
   saved into an experiment (an experiment recipe requires a stimulus).
 - **View**: `buildRtaView({ ...live.viewInput(), fixedRange: true })` — badge LIVE (stored data
   is badged its `snapshotLabel`, e.g. NOISE CHECK SNAPSHOT, never LIVE), fixed axis
@@ -1633,7 +1660,7 @@ non-result fields and key order, changes with one flipped bit or a dtype change,
 modified result in a stamped file is rejected as `corrupt`.
 
 <a id="quality"></a>
-## Measurement quality — `oscilla.confidence.v3`, `oscilla.confidence.v2`, `oscilla.confidence.v1` (`measurement/quality.js`)
+## Measurement quality — `oscilla.confidence.v4`, `oscilla.confidence.v3`, `oscilla.confidence.v2`, `oscilla.confidence.v1` (`measurement/quality.js`)
 
 Documented from the code that landed in e89ff9f (was G14). ADR 0025: a pure rule table maps
 measured metrics to one of four statuses and always returns the reasons, passing and failing,
@@ -1642,6 +1669,24 @@ each backed by the number it came from. There is no score and no "confidence" pe
 `assessQuality({ capture, transfer, aggregate, calibration, requestedRange, resolutionHz,
 sweepWindow, chainNotes, noiseCheck, inputProcessing, stimulus, algorithm }) → { algorithm,
 status, reasons, metrics, mask }`
+
+### confidence.v4 — V382 independent DSP review
+
+`QUALITY_ALGORITHM` = `oscilla.confidence.v4` = v3 with the same reason codes and thresholds and
+three changed rules; v3 (and v2, v1) stay selectable and reproduce their assessments exactly.
+
+- **Repeatability**: a median absolute deviation is judged as σ = MAD × 1.4826
+  (`MAD_TO_SIGMA`, normal scatter) on the same thresholds as a standard deviation, and the reason
+  text says so. v3 compared the unscaled MAD with the SD bound: the same σ = 1.3 dB scatter of 5
+  runs read 0.66 dB 'ok' with median aggregation and 1.18 dB 'warn' with mean aggregation.
+- **Empty grid**: a transfer with no frequency point reports `SNR_NOT_MEASURED` (it was rated
+  GOOD with "SNR not measured" in the summary, against the rule that GOOD needs a measured SNR).
+- **Non-finite pooled SNR**: NaN/Infinity in `snrPooledDb` counts as `NON_FINITE_ANALYSIS`
+  (fail); v3 threw a TypeError. `transfer.js` clamps the SNR, so only an imported or hand-built
+  transfer reaches it.
+
+Level calibration (V382, not part of the rule set): `createLevelCalibration` refuses an
+`observedDbRelative` above 0 dB, which the mean-square band scale cannot read.
 
 ### confidence.v3 — **New (V3 pre-release review, quality and DSP group)**
 

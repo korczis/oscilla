@@ -35,7 +35,7 @@ import { welch, windowFn } from '../../src/js/measurement/spectrum.js';
 import { bandAnalysis, bandCenters, rtaResult } from '../../src/js/measurement/rta.js';
 import { aggregateResult, aggregateRuns } from '../../src/js/measurement/aggregate.js';
 import {
-  QUALITY_ALGORITHM_V1, QUALITY_ALGORITHM_V2, assessQuality,
+  QUALITY_ALGORITHM_V1, QUALITY_ALGORITHM_V2, QUALITY_ALGORITHM_V3, assessQuality,
 } from '../../src/js/measurement/quality.js';
 import { createFrequencyProfile } from '../../src/js/calibration/profile.js';
 import {
@@ -81,12 +81,16 @@ function capture(seed) {
 
 const CAP = [capture(1), capture(2)];
 const NOISE = noise(9, CAP[0].length, 2e-3);
-const ALIGN = align(STIM.samples, CAP[0], SR);
+// align.v1 inputs: the transfer, IR and quality fixtures predate align.v2 (V382), whose
+// unbiased sub-sample lag changes their phase input, not their method.
+const ALIGN_V1 = { algorithm: 'oscilla.align.xcorr.v1' };
+const ALIGN = align(STIM.samples, CAP[0], SR, ALIGN_V1);
+const ALIGN_V2 = align(STIM.samples, CAP[0], SR);
 const BASE = { stimulus: STIM.samples, sampleRate: SR, f1: SPEC.f1, f2: SPEC.f2 };
 /** Transfers of both captures under one transfer method (v1 inputs for the retained quality
  *  rule sets, which were assessed on transfer.v1 results). */
 const transfersOf = (algorithm) => CAP.map((captured) => computeTransfer({ ...BASE, captured,
-  noise: NOISE, alignment: align(STIM.samples, captured, SR),
+  noise: NOISE, alignment: align(STIM.samples, captured, SR, ALIGN_V1),
   options: { phase: true, pointsPerOctave: 6, algorithm } }));
 // transfer.v2 inputs: the quality and aggregate fixtures predate transfer.v3 (V382), whose
 // stricter validRange would change their input, not their method.
@@ -114,6 +118,18 @@ const CHECK_SIGNAL = (() => {
   return x;
 })();
 const CHECK = checkCapture({ sampleRate: SR, samples: CHECK_SIGNAL });
+const CHECK_V1 = checkCapture({ sampleRate: SR, samples: CHECK_SIGNAL },
+  { algorithm: 'oscilla.clip.v1' });
+/** clip.v2 (V382): the same input plus a 1 dB overload of a 3.1 kHz tone (2.6 samples per
+ *  period): rail samples a few samples apart, never three in a row, which v1 does not see. */
+const CHECK_HF_SAMPLES = (() => {
+  const x = CHECK_SIGNAL.slice();
+  for (let i = 2000; i < 2400; i++) {
+    x[i] = Math.max(-1, Math.min(1, 1.122 * Math.sin((2 * Math.PI * 3100 * i) / SR)));
+  }
+  return x;
+})();
+const CHECK_HF = checkCapture({ sampleRate: SR, samples: CHECK_HF_SAMPLES });
 
 /** Checks of the two sweep captures, the second with a step after the sweep (post-roll). */
 const SWEEP_CHECKS = (() => {
@@ -132,6 +148,7 @@ const SPECTRUM = welch(Float32Array.from(noise(21, 16384, 0.5), (v, i) => v
   + 0.25 * Math.sin((2 * Math.PI * 440 * i) / SR)), { fftSize: 1024 });
 const BANDS = bandCenters('third', 50, 3000, SR);
 const RTA = bandAnalysis(SPECTRUM, SR / 1024, BANDS);
+const RTA_V1 = bandAnalysis(SPECTRUM, SR / 1024, BANDS, { algorithm: 'oscilla.rta.v1' });
 
 // ----------------------------------------------------------------------------- reduction
 
@@ -225,12 +242,20 @@ const CASES = {
       algorithm: IR_ALGORITHMS_V1['farina-inverse'] });
     return { id: ir.algorithm, output: irOutput(ir) };
   },
-  [ALGORITHMS.align]: () => ({ id: ALIGN.algorithm, output: { lagSamples: ALIGN.lagSamples,
+  [ALGORITHMS.align]: () => ({ id: ALIGN_V2.algorithm, output: { lagSamples: ALIGN_V2.lagSamples,
+    lagSeconds: ALIGN_V2.lagSeconds, peakCorrelation: ALIGN_V2.peakCorrelation,
+    polarity: ALIGN_V2.polarity } }),
+  'oscilla.align.xcorr.v1': () => ({ id: ALIGN.algorithm, output: { lagSamples: ALIGN.lagSamples,
     lagSeconds: ALIGN.lagSeconds, peakCorrelation: ALIGN.peakCorrelation,
     polarity: ALIGN.polarity } }),
-  [ALGORITHMS.clip]: () => ({ id: CHECK.algorithms.clip, output: { clipping: CHECK.clipping,
-    dropouts: CHECK.dropouts, rms: CHECK.rms, peak: CHECK.peak, empty: CHECK.empty,
-    reasons: CHECK.reasons.map((r) => r.code) } }),
+  'oscilla.clip.v1': () => ({ id: CHECK_V1.algorithms.clip, output: {
+    clipping: CHECK_V1.clipping, dropouts: CHECK_V1.dropouts, rms: CHECK_V1.rms,
+    peak: CHECK_V1.peak, empty: CHECK_V1.empty, reasons: CHECK_V1.reasons.map((r) => r.code) } }),
+  [ALGORITHMS.clip]: () => ({ id: CHECK_HF.algorithms.clip, output: {
+    clipping: CHECK_HF.clipping, dropouts: CHECK_HF.dropouts, rms: CHECK_HF.rms,
+    peak: CHECK_HF.peak, empty: CHECK_HF.empty, reasons: CHECK_HF.reasons.map((r) => r.code),
+    v1Ratio: checkCapture({ sampleRate: SR, samples: CHECK_HF_SAMPLES },
+      { algorithm: 'oscilla.clip.v1' }).clipping.ratio } }),
   [ALGORITHMS.discontinuity]: () => ({ id: CHECK.algorithms.discontinuity,
     output: { discontinuities: CHECK.discontinuities,
       sweepChecks: SWEEP_CHECKS.map((c) => c.discontinuities) } }),
@@ -246,6 +271,13 @@ const CASES = {
     return { id: w.algorithm, output: { samples: w.samples, coherentGain: w.coherentGain,
       noisePowerGain: w.noisePowerGain, enbwBins: w.enbwBins, welch: summary(p.power, 6, 12) } };
   },
+  'oscilla.rta.v1': () => {
+    const r = rtaResult({ sampleRate: SR, resolution: 'third', bands: BANDS,
+      levelsDb: RTA_V1.levelsDb, fftSize: 1024, window: 'hann' });
+    return { id: RTA_V1.algorithm, output: { analysis: RTA_V1.algorithm, nominal: BANDS.map((b) =>
+      b.nominal), levelsDb: r.levelsDb, binCounts: RTA_V1.binCounts,
+    underResolved: RTA_V1.underResolved, windowAlgorithm: r.windowAlgorithm } };
+  },
   [ALGORITHMS.rta]: () => {
     const r = rtaResult({ sampleRate: SR, resolution: 'third', bands: BANDS,
       levelsDb: RTA.levelsDb, fftSize: 1024, window: 'hann' });
@@ -257,6 +289,12 @@ const CASES = {
     const s = smoothResponse(GRID, RESPONSE, 3);
     return { id: s.algorithm, output: { label: s.label, smoothedDb: s.smoothedDb,
       sixth: smoothResponse(GRID, RESPONSE, 6).smoothedDb } };
+  },
+  'oscilla.smoothing.fractional-octave.v1': () => {
+    const algorithm = 'oscilla.smoothing.fractional-octave.v1';
+    const s = smoothResponse(GRID, RESPONSE, 3, { algorithm });
+    return { id: s.algorithm, output: { label: s.label, smoothedDb: s.smoothedDb,
+      sixth: smoothResponse(GRID, RESPONSE, 6, { algorithm }).smoothedDb } };
   },
   [ALGORITHMS.normalization]: () => {
     const at = normalizeResponse(GRID, RESPONSE, { mode: 'at-frequency', hz: 1000 });
@@ -288,6 +326,13 @@ const CASES = {
     const q = assessQuality({ ...qualityInput(), chainNotes: { limiterDeviationAboveHz: 2500 },
       noiseCheck: NOISE_CHECK, stimulus: STIM.spec,
       inputProcessing: { echoCancellation: false, noiseSuppression: null,
+        autoGainControl: false } });
+    return { id: q.algorithm, output: qualityOutput(q) };
+  },
+  [QUALITY_ALGORITHM_V3]: () => {
+    const q = assessQuality({ ...qualityInput(), algorithm: QUALITY_ALGORITHM_V3,
+      chainNotes: { limiterDeviationAboveHz: 2500 }, noiseCheck: NOISE_CHECK,
+      stimulus: STIM.spec, inputProcessing: { echoCancellation: false, noiseSuppression: null,
         autoGainControl: false } });
     return { id: q.algorithm, output: qualityOutput(q) };
   },

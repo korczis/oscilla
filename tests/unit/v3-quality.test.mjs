@@ -199,7 +199,7 @@ function assertWellFormed(q) {
 // ----------------------------------------------------------------------------- thresholds
 
 test('thresholds are frozen, named, and consistent with transfer.js validity', () => {
-  assert.equal(QUALITY_ALGORITHM, 'oscilla.confidence.v3');
+  assert.equal(QUALITY_ALGORITHM, 'oscilla.confidence.v4');
   assert.ok(Object.isFrozen(QUALITY_THRESHOLDS));
   assert.ok(Object.isFrozen(REASON_CODES));
   for (const [k, v] of Object.entries(QUALITY_THRESHOLDS))
@@ -633,4 +633,55 @@ test('inputs are not mutated and the output is deterministic', () => {
   assert.throws(() => assessQuality({ capture: { samples: [] } }), TypeError);
   assert.throws(() => assessQuality({ capture: CLEAN.capture, transfer: { frequencies: [1] } }),
     TypeError);
+});
+
+// ---- V382: confidence.v4
+test('V382 confidence.v4: MAD judged as σ, empty grid not GOOD, NaN pooled SNR fails', async () => {
+  const { checkCapture } = await import('../../src/js/measurement/capture-checks.js');
+  const Q = await import('../../src/js/measurement/quality.js');
+  const { aggregateRuns } = await import('../../src/js/measurement/aggregate.js');
+  const sr = 48000;
+  const N = 480;
+  const fr = Float64Array.from({ length: N }, (_, i) => 20 * 1000 ** (i / (N - 1)));
+  const transfer = { frequencies: fr, magnitudeDb: new Float64Array(N),
+    phaseDeg: new Float64Array(N), snrDb: new Float64Array(N).fill(40),
+    snrPooledDb: new Float64Array(N).fill(40), snrResolutionHz: 0.5, validRange: [20, 20000],
+    requestedRange: [20, 20000], sampleRate: sr, binHz: 0.5, resolutionHz: 0.5 };
+  const ip = { echoCancellation: false, noiseSuppression: false, autoGainControl: false };
+  const noise = checkCapture({ sampleRate: sr, samples: Float32Array.from({ length: sr },
+    (_, i) => 1e-3 * Math.sin(i * 0.37) + 1e-3 * Math.sin(i * 1.91)) });
+  const run = checkCapture({ sampleRate: sr, samples: Float32Array.from({ length: 2 * sr },
+    (_, i) => 0.5 * Math.sin(i * 0.05) + 1e-5 * Math.sin(i * 1.7)) });
+  const assess = (algorithm, over) => Q.assessQuality({ capture: [run, run, run], transfer,
+    noiseCheck: noise, inputProcessing: ip, sweepWindow: [0, 2 * sr], algorithm, ...over });
+  // (a) the same normal scatter, σ = 1.3 dB: MAD 0.674σ ≈ 0.88 dB passed as 'ok' under v3
+  let s = 12345;
+  const gauss = () => {
+    s = (s * 1103515245 + 12345) % 2 ** 31; const u = (s + 1) / (2 ** 31 + 1);
+    s = (s * 1103515245 + 12345) % 2 ** 31; const v = (s + 1) / (2 ** 31 + 1);
+    return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+  };
+  const runs = Array.from({ length: 5 }, () => Float64Array.from({ length: N }, () => 1.3 * gauss()));
+  const rep = (algorithm, method) => assess(algorithm, { capture: Array(5).fill(run),
+    aggregate: aggregateRuns(runs, { method }) }).reasons.find((r) => r.code === 'REPEATABILITY');
+  assert.equal(rep('oscilla.confidence.v3', 'median').severity, 'ok');
+  assert.equal(rep('oscilla.confidence.v3', 'mean').severity, 'warn');
+  assert.equal(rep(undefined, 'median').severity, 'warn', 'v4: MAD as σ agrees with the SD');
+  assert.equal(rep(undefined, 'mean').severity, 'warn');
+  assert.match(rep(undefined, 'median').text, /σ-equivalent/);
+  // (b) a transfer with no frequency point
+  const E = new Float64Array(0);
+  const empty = { ...transfer, frequencies: E, magnitudeDb: E, phaseDeg: E, snrDb: E,
+    snrPooledDb: E, validRange: null };
+  const agg = { ...aggregateRuns([E, E]), repeatabilityDb: 0.2 };
+  assert.equal(assess('oscilla.confidence.v3', { transfer: empty, aggregate: agg }).status, 'GOOD');
+  const v4 = assess(undefined, { transfer: empty, aggregate: agg });
+  assert.notEqual(v4.status, 'GOOD');
+  assert.ok(v4.reasons.some((r) => r.code === 'SNR_NOT_MEASURED'));
+  // (c) non-finite pooled SNR: v3 threw, v4 reports a numerical failure
+  const nan = { ...transfer, snrPooledDb: new Float64Array(N).fill(NaN) };
+  assert.throws(() => assess('oscilla.confidence.v3', { transfer: nan }));
+  const r = assess(undefined, { transfer: nan });
+  assert.ok(r.reasons.some((x) => x.code === 'NON_FINITE_ANALYSIS' && x.severity === 'fail'));
+  assert.equal(r.algorithm, 'oscilla.confidence.v4');
 });

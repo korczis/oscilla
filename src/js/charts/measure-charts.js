@@ -227,7 +227,7 @@ function createViewChart(host, { onReadout = null, draw = null } = {}) {
       if (b) {
         lines = [`Band ${b.label} Hz (${Math.round(b.lo)}–${Math.round(b.hi)} Hz)`, b.text];
         if (b.peakText) lines.push(`PEAK HOLD ${b.peakText}`);
-        if (b.underResolved) lines.push('under-resolved (fewer than 2 FFT bins)');
+        if (b.underResolved) lines.push('under-resolved (too few FFT bins for the window)');
       }
     }
     if (!lines) {
