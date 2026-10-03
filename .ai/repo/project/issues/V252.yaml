@@ -1,0 +1,27 @@
+id: V252
+milestone: M034
+title: "Stepper keys are hidden on coarse pointers (accepted)"
+slug: stepper-keys-are-hidden-on-coarse-pointers
+priority: p3
+profile: implementation
+objective: "On coarse pointers the ± stepper keys of number fields are hidden: they are tabindex -1 mouse conveniences that cannot reach 44 px inside a 44 px field without covering each other or the number. The number field alone sets the value (inputmode decimal), as native mobile number inputs do. Record this as an accepted design with evidence rather than a defect."
+scope:
+  - ".ai/repo/project"
+acceptance_criteria:
+  - "Documented as accepted with evidence: the rationale lives beside the rule (src/styles/responsive.css), and the touch pass shows every remaining target at 44 px."
+validation:
+  - "node tests/browser/layout.cjs"
+evidence_required:
+  - "verified"
+created_at: 2026-10-03
+started_at: 2026-10-03T11:08:09Z
+updated_at: 2026-10-03T11:08:17Z
+completed_at: 2026-10-03T11:08:17Z
+evidence:
+  - covers: verified
+    type: test
+    command: "OSC_BROWSERS=chromium,webkit node tests/browser/layout.cjs"
+    result: "Accepted design: the stepper keys are tabindex -1 mouse conveniences hidden on coarse pointers (rationale in src/styles/responsive.css beside the rule); the number field sets the value with inputmode decimal. Touch hit-test pass 99/99 in chromium and webkit at 535af3b with every remaining target at 44 px"
+    artifact: "src/styles/responsive.css"
+    commit: 535af3b347443dfa05c16cb5fb67128637e3db1f
+    recorded_at: 2026-10-03T11:08:14Z
