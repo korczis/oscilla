@@ -33,6 +33,9 @@
 //                       recorded), Space stops: 0 engine nodes and sources
 //   escape-priority     while playing: Escape first cancels a drag (audio continues), then closes
 //                       the details, then stops audio (0 nodes); the Playground plays afterwards
+//   workspace           the STUDIO workspace's own mount (its store and transport) next to the
+//                       seam instance: one root per host, keys move the focused instance's
+//                       clip only, Space plays its transport only, Escape stops it (0 nodes)
 //   compact             renderCompactTimeline draws the same model (clip count, positions) and
 //                       moves only the playhead on repeated calls; follows a store change
 //   layout              no horizontal page overflow at 320, 375, 768, 1024, 1280 and 1536 px;
@@ -166,7 +169,7 @@ function defineChecks() {
     { name: 'mount', fn: async ({ page }) => {
       await mount(page);
       const v = await page.evaluate(() => {
-        const r = document.querySelector('[data-osc="studio.timeline"]');
+        const r = document.querySelector('#tl-host [data-osc="studio.tl.root"]');
         const clips = [...r.querySelectorAll('.osc-stl-clip')];
         return {
           clips: clips.map((c) => ({ id: c.dataset.clip, label: c.getAttribute('aria-label'),
@@ -202,14 +205,14 @@ function defineChecks() {
 
     { name: 'clip-drag', fn: async ({ page }) => {
       await mount(page);
-      const r = await H.rect(page, '[data-clip="clip-2"]');
+      const r = await H.rect(page, '#tl-host [data-clip="clip-2"]');
       // +0.53 s at 100 px/s with the 0.1 s grid -> 1.5 s.
       await H.drag(page, { x: r.cx, y: r.cy }, { x: r.cx + 53, y: r.cy });
       const moved = await H.clip(page, 'clip-2');
       const said = await H.said(page);
       const undoDepth = await page.evaluate(() => window.__tl.ctx.store.debugInfo().undoDepth);
       // Escape mid-drag cancels.
-      const r2 = await H.rect(page, '[data-clip="clip-2"]');
+      const r2 = await H.rect(page, '#tl-host [data-clip="clip-2"]');
       await page.mouse.move(r2.cx, r2.cy);
       await page.mouse.down();
       await page.mouse.move(r2.cx + 40, r2.cy, { steps: 5 });
@@ -217,10 +220,11 @@ function defineChecks() {
       await page.mouse.up();
       await sleep(60);
       const afterEsc = await H.clip(page, 'clip-2');
-      const transform = await page.evaluate(() => document.querySelector('[data-clip="clip-2"]')
+      const transform = await page.evaluate(() => document.querySelector(
+        '#tl-host [data-clip="clip-2"]')
         .style.transform);
       // Undo from the keyboard (focus is on the clip).
-      await H.focus(page, '[data-clip="clip-2"]');
+      await H.focus(page, '#tl-host [data-clip="clip-2"]');
       await H.key(page, process.platform === 'darwin' ? 'Meta+z' : 'Control+z');
       const undone = await H.clip(page, 'clip-2');
       return result({
@@ -234,17 +238,17 @@ function defineChecks() {
 
     { name: 'clip-resize', fn: async ({ page }) => {
       await mount(page);
-      const r = await H.rect(page, '[data-clip="clip-1"]');
+      const r = await H.rect(page, '#tl-host [data-clip="clip-1"]');
       // End handle: 1.0 s -> 0.6 s.
       await H.drag(page, { x: r.x + r.w - 3, y: r.cy }, { x: r.x + r.w - 43, y: r.cy });
       const c1 = await H.clip(page, 'clip-1');
       // Below the tone minimum: clamped, start never moves.
-      const r2 = await H.rect(page, '[data-clip="clip-1"]');
+      const r2 = await H.rect(page, '#tl-host [data-clip="clip-1"]');
       await page.mouse.move(r2.x + r2.w - 3, r2.cy);
       await page.mouse.down();
       await page.mouse.move(r2.x - 30, r2.cy, { steps: 6 });
       const chip = await page.evaluate(() => {
-        const n = document.querySelector('.osc-stl-dragchip');
+        const n = document.querySelector('#tl-host .osc-stl-dragchip');
         return { hidden: n.hidden, text: n.textContent, bad: n.dataset.bad };
       });
       await page.mouse.up();
@@ -259,26 +263,26 @@ function defineChecks() {
 
     { name: 'clip-keyboard', fn: async ({ page }) => {
       await mount(page);
-      await H.focus(page, '[data-clip="clip-2"]');
+      await H.focus(page, '#tl-host [data-clip="clip-2"]');
       await H.key(page, 'ArrowRight');
       const a = await H.clip(page, 'clip-2');
       await H.key(page, 'Shift+ArrowRight');
       const b = await H.clip(page, 'clip-2');
       await H.key(page, 'Enter');
       const det = await page.evaluate(() => ({
-        open: !document.querySelector('[data-osc="studio.tl.details"]').hidden,
+        open: !document.querySelector('#tl-host [data-osc="studio.tl.details"]').hidden,
         focus: document.activeElement.dataset.field }));
-      await page.fill('[data-osc="studio.tl.details"] [data-field="start"]', '2.5');
-      await page.press('[data-osc="studio.tl.details"] [data-field="start"]', 'Enter');
+      await page.fill('#tl-host [data-osc="studio.tl.details"] [data-field="start"]', '2.5');
+      await page.press('#tl-host [data-osc="studio.tl.details"] [data-field="start"]', 'Enter');
       await sleep(60);
-      await page.fill('[data-osc="studio.tl.details"] [data-field="duration"]', '1.25');
-      await page.press('[data-osc="studio.tl.details"] [data-field="duration"]', 'Tab');
+      await page.fill('#tl-host [data-osc="studio.tl.details"] [data-field="duration"]', '1.25');
+      await page.press('#tl-host [data-osc="studio.tl.details"] [data-field="duration"]', 'Tab');
       await sleep(60);
       const c = await H.clip(page, 'clip-2');
       await H.key(page, 'Escape');
       const back = await H.active(page);
       const closed = await page.evaluate(() => document.querySelector(
-        '[data-osc="studio.tl.details"]').hidden);
+        '#tl-host [data-osc="studio.tl.details"]').hidden);
       await H.key(page, process.platform === 'darwin' ? 'Meta+d' : 'Control+d');
       const dup = (await H.model(page)).timeline.clips;
       const dupFocus = await H.active(page);
@@ -303,20 +307,20 @@ function defineChecks() {
 
     { name: 'create-split', fn: async ({ page }) => {
       await mount(page);
-      await page.click('[data-key="track-add:track-1"]');
+      await page.click('#tl-host [data-key="track-add:track-1"]');
       await sleep(60);
       const m1 = await H.model(page);
       const added = m1.timeline.clips.find((c) => !['clip-1', 'clip-2'].includes(c.id));
       // Double-click an empty spot at 6.0 s.
-      const row = await H.rect(page, '.osc-stl-row--track');
-      const content = await H.rect(page, '.osc-stl-content');
+      const row = await H.rect(page, '#tl-host .osc-stl-row--track');
+      const content = await H.rect(page, '#tl-host .osc-stl-content');
       await page.mouse.dblclick(content.x + 600, row.cy);
       await sleep(80);
       const m2 = await H.model(page);
       const at6 = m2.timeline.clips.find((c) => near(c.start, 6));
       // Split the 220 -> 880 log sweep at 2.0 s (the halfway point: 440 Hz).
       await page.evaluate(() => window.__tl.ctx.transport.locate(2));
-      await H.focus(page, '[data-clip="clip-2"]');
+      await H.focus(page, '#tl-host [data-clip="clip-2"]');
       await H.key(page, 's');
       const m3 = await H.model(page);
       const left = m3.timeline.clips.find((c) => c.id === 'clip-2');
@@ -338,8 +342,8 @@ function defineChecks() {
 
     { name: 'automation', fn: async ({ page }) => {
       await mount(page);
-      const lane = await H.rect(page, '.osc-stl-row--lane');
-      const content = await H.rect(page, '.osc-stl-content');
+      const lane = await H.rect(page, '#tl-host .osc-stl-row--lane');
+      const content = await H.rect(page, '#tl-host .osc-stl-content');
       await page.mouse.dblclick(content.x + 150, lane.y + lane.h / 2);
       await sleep(80);
       const m1 = await H.model(page);
@@ -347,25 +351,27 @@ function defineChecks() {
       const added = pts.find((p) => !['pt-1', 'pt-2'].includes(p.id));
       const focus1 = await H.active(page);
       // Drag it +0.5 s.
-      const pr = await H.rect(page, `[data-point="${added.id}"]`);
+      const pr = await H.rect(page, `#tl-host [data-point="${added.id}"]`);
       await H.drag(page, { x: pr.cx, y: pr.cy }, { x: pr.cx + 50, y: pr.cy });
       const moved = (await H.model(page)).timeline.automation[0].points
         .find((p) => p.id === added.id);
-      await H.focus(page, `[data-point="${added.id}"]`);
+      await H.focus(page, `#tl-host [data-point="${added.id}"]`);
       await H.key(page, 'ArrowUp');
       const up = (await H.model(page)).timeline.automation[0].points.find((p) => p.id === added.id);
       await H.key(page, 'Enter');
-      await page.fill('[data-osc="studio.tl.details"] [data-field="value"]', '2 kHz');
-      await page.press('[data-osc="studio.tl.details"] [data-field="value"]', 'Enter');
+      await page.fill('#tl-host [data-osc="studio.tl.details"] [data-field="value"]', '2 kHz');
+      await page.press('#tl-host [data-osc="studio.tl.details"] [data-field="value"]', 'Enter');
       await sleep(60);
-      await page.selectOption('[data-osc="studio.tl.details"] [data-field="curve"]', 'exponential');
+      await page.selectOption('#tl-host [data-osc="studio.tl.details"] [data-field="curve"]',
+        'exponential');
       await sleep(60);
       const typed = (await H.model(page)).timeline.automation[0].points
         .find((p) => p.id === added.id);
       const curveOpts = await page.evaluate(() => [...document.querySelectorAll(
-        '[data-osc="studio.tl.details"] [data-field="curve"] option')].map((o) => o.value));
+        '#tl-host [data-osc="studio.tl.details"] [data-field="curve"] option')]
+        .map((o) => o.value));
       await H.key(page, 'Escape');
-      await H.focus(page, `[data-point="${added.id}"]`);
+      await H.focus(page, `#tl-host [data-point="${added.id}"]`);
       await H.key(page, 'Delete');
       const after = (await H.model(page)).timeline.automation[0].points;
       return result({
@@ -382,7 +388,7 @@ function defineChecks() {
     { name: 'loop-markers', fn: async ({ page }) => {
       await mount(page);
       await page.evaluate(() => window.__tl.ctx.transport.locate(1.2));
-      await H.focus(page, '[data-clip="clip-1"]');
+      await H.focus(page, '#tl-host [data-clip="clip-1"]');
       await H.key(page, 'm');
       const m1 = await H.model(page);
       const mk = m1.timeline.markers[0];
@@ -391,18 +397,18 @@ function defineChecks() {
       const mk2 = (await H.model(page)).timeline.markers[0];
       await H.key(page, 'l');
       const loopOn = (await H.model(page)).timeline.loop;
-      await H.focus(page, '[data-key="loop:end"]');
+      await H.focus(page, '#tl-host [data-key="loop:end"]');
       await H.key(page, 'ArrowLeft');
       const loop2 = (await H.model(page)).timeline.loop;
       // Ruler click at 2.5 s locates the transport.
-      const ruler = await H.rect(page, '.osc-stl-ruler');
-      const content = await H.rect(page, '.osc-stl-content');
+      const ruler = await H.rect(page, '#tl-host .osc-stl-ruler');
+      const content = await H.rect(page, '#tl-host .osc-stl-content');
       await page.mouse.click(content.x + 250, ruler.y + ruler.h - 4);
       await sleep(60);
       const ph = await page.evaluate(() => window.__tl.ctx.transport.playhead());
       const phX = await page.evaluate(() => window.__tl.handle.debug().playheadX);
       // ] jumps to the next marker (none after 2.5 s), [ to the previous one.
-      await H.focus(page, '[data-clip="clip-1"]');
+      await H.focus(page, '#tl-host [data-clip="clip-1"]');
       await H.key(page, '[');
       const ph2 = await page.evaluate(() => window.__tl.ctx.transport.playhead());
       return result({
@@ -417,7 +423,7 @@ function defineChecks() {
 
     { name: 'playback', fn: async ({ page }) => {
       await mount(page);
-      await H.focus(page, '[data-clip="clip-1"]');
+      await H.focus(page, '#tl-host [data-clip="clip-1"]');
       await H.key(page, ' ');
       const playing = await H.until(() => H.counts(page), (c) => c.playing, 2000);
       await sleep(500);
@@ -426,9 +432,9 @@ function defineChecks() {
       await sleep(300);
       const s2 = await page.evaluate(() => ({ p: window.__tl.ctx.transport.playhead().position,
         x: window.__tl.handle.debug().playheadX,
-        state: document.querySelector('[data-osc="studio.tl.state"]').textContent }));
+        state: document.querySelector('#tl-host [data-osc="studio.tl.state"]').textContent }));
       // Edit during playback: move the sweep one step later.
-      await H.focus(page, '[data-clip="clip-2"]');
+      await H.focus(page, '#tl-host [data-clip="clip-2"]');
       await H.key(page, 'ArrowRight');
       const dbg = await page.evaluate(() => {
         const d = window.__tl.ctx.transport.debugInfo();
@@ -455,7 +461,7 @@ function defineChecks() {
       await mount(page);
       await page.evaluate(() => window.__tl.handle.commands.play());
       await H.until(() => H.counts(page), (c) => c.playing, 2000);
-      const r = await H.rect(page, '[data-clip="clip-2"]');
+      const r = await H.rect(page, '#tl-host [data-clip="clip-2"]');
       await page.mouse.move(r.cx, r.cy);
       await page.mouse.down();
       await page.mouse.move(r.cx + 40, r.cy, { steps: 5 });
@@ -464,12 +470,12 @@ function defineChecks() {
       await sleep(80);
       const afterGesture = await H.counts(page);
       const clip = await H.clip(page, 'clip-2');
-      await H.focus(page, '[data-clip="clip-2"]');
+      await H.focus(page, '#tl-host [data-clip="clip-2"]');
       await H.key(page, 'Enter');
       await H.key(page, 'Escape');
       const afterPopup = await H.counts(page);
       const closed = await page.evaluate(() => document.querySelector(
-        '[data-osc="studio.tl.details"]').hidden);
+        '#tl-host [data-osc="studio.tl.details"]').hidden);
       await H.key(page, 'Escape');
       const stopped = await H.until(() => H.counts(page),
         (c) => !c.playing && c.nodes === 0 && c.sources === 0, 3000);
@@ -488,6 +494,57 @@ function defineChecks() {
         stopThird: !stopped.playing && stopped.nodes === 0 && stopped.sources === 0,
         playground: pg.playing && pg.nodes > 0 && pgStop.nodes === 0,
       }, { afterGesture, afterPopup, stopped, pg, pgStop });
+    } },
+
+    { name: 'workspace', fn: async ({ page }) => {
+      // The real STUDIO workspace mounts its own instance on its own store and transport; the
+      // seam instance stays mounted meanwhile: keys go to the instance that has focus only.
+      await mount(page);
+      await page.evaluate(() => {
+        const a = window.OSCILLA.app;
+        a.alerts = [];
+        if (a.workspace !== 'studio') a.setWorkspace('studio');
+      });
+      await page.waitForFunction(() => document.querySelector('#osc-app').dataset.mode
+        === 'studio');
+      await sleep(150);
+      const W = '[data-osc="studio.timeline"]';
+      const v0 = await page.evaluate((w) => {
+        const host = document.querySelector(w);
+        const st = window.OSCILLA.studio;
+        return { roots: host.querySelectorAll('[data-osc="studio.tl.root"]').length,
+          clips: host.querySelectorAll('.osc-stl-clip').length,
+          modelClips: st.model.timeline.clips.length,
+          visible: host.getBoundingClientRect().height > 0 };
+      }, W);
+      const start = await page.evaluate(() => window.OSCILLA.studio.model.timeline.clips
+        .find((c) => c.id === 'clip-2').start);
+      await page.evaluate((w) => document.querySelector(`${w} [data-clip="clip-2"]`).focus(), W);
+      await H.key(page, 'ArrowRight');
+      const moved = await page.evaluate(() => ({
+        ws: window.OSCILLA.studio.model.timeline.clips.find((c) => c.id === 'clip-2').start,
+        seam: window.__tl.ctx.store.getModel().timeline.clips.find((c) => c.id === 'clip-2')
+          .start }));
+      await H.key(page, ' ');
+      const playing = await H.until(() => page.evaluate(() => ({
+        ws: window.OSCILLA.studio.transport.playing, seam: window.__tl.ctx.transport.playing,
+        instrument: window.OSCILLA.app.playing })), (x) => x.ws, 2000);
+      await sleep(300);
+      await H.key(page, 'Escape');
+      const stopped = await H.until(() => page.evaluate(() => window.OSCILLA.studio.counts()),
+        (c) => !c.playing && c.engineNodes === 0 && c.engineSources === 0, 3000);
+      await page.evaluate(() => {
+        const st = window.OSCILLA.studio;
+        while (st.store.canUndo()) st.store.undo();
+        window.OSCILLA.app.setWorkspace('playground');
+      });
+      return result({
+        oneInstance: v0.roots === 1 && v0.visible,
+        projection: v0.clips === v0.modelClips && v0.clips > 0,
+        keyOwnStore: near(moved.ws, start + 0.1) && near(moved.seam, 1),
+        spaceOwnTransport: playing.ws && !playing.seam && !playing.instrument,
+        escapeStops: !stopped.playing && stopped.engineNodes === 0 && stopped.engineSources === 0,
+      }, { v0, start, moved, playing, stopped });
     } },
 
     { name: 'compact', fn: async ({ page }) => {
@@ -530,7 +587,8 @@ function defineChecks() {
         await mount(page);
         await sleep(60);
         const v = await page.evaluate(() => {
-          const r = document.querySelector('[data-osc="studio.timeline"]').getBoundingClientRect();
+          const r = document.querySelector('#tl-host [data-osc="studio.tl.root"]')
+            .getBoundingClientRect();
           const host = document.getElementById('tl-host');
           return { page: document.documentElement.scrollWidth, inner: window.innerWidth,
             right: Math.round(r.right), host: host.scrollWidth - host.clientWidth };
@@ -557,7 +615,7 @@ function defineChecks() {
           return [255, 255, 255];
         };
         const ratio = (sel) => {
-          const n = document.querySelector(sel);
+          const n = document.querySelector(`#tl-host ${sel}`);
           const a = lum(rgb(getComputedStyle(n).color));
           const b = lum(bgOf(n));
           return Math.round(((Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05)) * 100) / 100;
@@ -583,8 +641,8 @@ function defineChecks() {
       const v = await page.evaluate(() => {
         const coarse = matchMedia('(pointer: coarse)').matches;
         const small = [];
-        const sel = '[data-osc="studio.timeline"] button, [data-osc="studio.timeline"] select, '
-          + '[data-osc="studio.timeline"] input, .osc-stl-pt, .osc-stl-loop-h';
+        const sel = '#tl-host button, #tl-host select, #tl-host input, #tl-host .osc-stl-pt, '
+          + '#tl-host .osc-stl-loop-h';
         for (const n of document.querySelectorAll(sel)) {
           const r = n.getBoundingClientRect();
           if (!r.width) continue;

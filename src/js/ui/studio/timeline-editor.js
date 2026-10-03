@@ -132,7 +132,7 @@ export function mountStudioTimeline(host, ctx) {
     'data-osc': 'studio.tl.details' });
   const help = el('p', { class: 'osc-stl-help', id: `${uid}-help` }, [KEY_HELP]);
   const root = el('section', { class: 'osc-stl', role: 'region', 'aria-label': 'Studio timeline',
-    'aria-describedby': `${uid}-help`, 'data-osc': 'studio.timeline' },
+    'aria-describedby': `${uid}-help`, 'data-osc': 'studio.tl.root' },
   [toolbar, frame, detailsEl, help, live]);
 
   // ------------------------------------------------------------ toolbar
