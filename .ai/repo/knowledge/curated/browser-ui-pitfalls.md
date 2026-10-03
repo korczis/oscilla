@@ -16,9 +16,7 @@ tags:
 provenance:
   origin: authored
   derived_from:
-    - file:index.html
-    - file:tests/spec.cjs
-    - file:tests/smoke.cjs
+    - commit:a7b7a23d7cc64e34b31fa2448d7281029d5918f1
 ---
 
 # Browser and Alpine behaviours that broke OSCILLA's UI checks
