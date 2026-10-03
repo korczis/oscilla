@@ -1,65 +1,226 @@
-# OSCILLA V3 measurement architecture (contract)
+# OSCILLA V3 measurement architecture
 
-Specification: `docs/specs/oscilla-v3-measure.md`. Plan: milestones M012-M020. This document says
-*how* the layers fit; the ADRs say *why*. Module names and data shapes below are the contract the
-parallel work is built against; change them here first.
+Specification: `docs/specs/oscilla-v3-measure.md` (milestones M012-M020). This document says
+*how* the measurement layers fit together in the code on this branch. The reasons for each
+choice are in the ADRs it names, and they are not repeated here. The way each algorithm
+computes its result, and which tests pin it, is in `docs/v3/algorithms.md`. The UI binding is
+in `docs/v3/ui-integration.md`. The module names and data shapes below are what the modules
+produce and what `experiments/validate.js` accepts. `tests/unit/v3-pipeline.test.mjs` runs
+the whole chain on the real result objects, so a shape that drifts fails a test. When a shape
+changes, change it here in the same commit.
+
+## The layers
 
 ```
- Recipe ──► StimulusGenerator ──► PlaybackSession ──► output ─┐
-   │            (stimulus.js)                                  │  physical system
-   │                                                           ▼  (speaker, room, mic, ADC)
-   │        CaptureSession ◄── MediaStream input ◄─────────────┘
-   │         (capture.js: bounded PCM, pre/post-roll)
-   ▼                │
- MeasurementEngine  ▼
- (state machine) ─► offline analysis (pure, deterministic, on captured PCM)
-                    alignment → transfer.js / impulse-response.js / rta.js
-                    → calibration (calibration/*.js) → MeasurementResult
-                    → quality.js (QualityAssessment with reasons)
-                    → Experiment (experiments/*.js: schema, provenance, store, compare)
-                    → UI adapters and charts (render result objects; never own data)
+ Recipe: stimulus spec, repeats, analysis settings (recorded in the experiment)
+   │
+   ▼
+ STIMULUS     measurement/stimulus.js   renderStimulus(spec) → samples   inverseSweep(spec)
+   │
+   ▼
+ CAPTURE      measurement/engine.js (state machine, no DOM) ── io ──► measurement/capture.js
+                playback  source → fade → master → limiter → trim → ceiling → output ──┐
+                                                                                       │
+                          physical chain: DAC, amplifier, speaker, room, microphone,   │
+                          preamplifier, ADC, browser input processing                  │
+                                                                                       │
+                capture   getUserMedia → AudioWorklet from a data: URL ◄───────────────┘
+                          (ScriptProcessor fallback) → Capture per run: Float32Array,
+                          pre-roll, post-roll, device, constraints, integrity; no overlap
+   │
+   ▼
+ ANALYSIS     capture-checks.js per run (clipping, dropouts, discontinuities), then
+              measurement/analysis-task.js runAnalysis (pure, offline, on captured PCM):
+                align → transfer + impulse response (one spectral division per run)
+                → aggregate (two or more runs)
+              noise check (engine.js summarizeNoise) → spectrum.js welch → rta.js
+                one-third-octave band power, level, per-frequency noise for the SNR
+   │
+   ▼
+ CALIBRATION  calibration/interpolate.js   frequency profile → separate CALIBRATED curve
+              calibration/level.js         level calibration → the only path to dB SPL
+   │
+   ▼
+ RESULT       measure() result: recipe, input, runs, transfer, ir, aggregate, calibrated,
+              captureChecks, noise, notes, algorithms (raw PCM dropped by default)
+   │
+   ▼
+ QUALITY      measurement/quality.js assessQuality → status, reasons, metrics, masks
+   │
+   ▼
+ EXPERIMENT   ui/measure-experiment.js → experiments/schema.js → hash.js → encode.js
+              → store.js (IndexedDB oscilla-experiments, or memory)
+              ⇄ export / import (validate.js, migrate.js) → compare.js, csv.js
+
+ UI adapters  ui/measure.js, ui/experiments.js: engine events and results → the pure
+              reducers and view builders of measurement/views/ → charts/measure-charts.js.
+              They render view models and compute nothing.
 ```
 
-Rule: **PCM capture → deterministic offline DSP → structured MeasurementResult → quality and
-provenance → chart.** The live AnalyserNode is feedback only; no final result depends on a
-visible frame (spec §84-§85, §248).
+Rule: data flows one way, **PCM capture → deterministic offline DSP → structured result → quality
+and provenance → experiment → chart.** The live AnalyserNode of the V2 engine is feedback
+only. No stored or displayed result depends on a visible frame. Why: ADR 0018.
+
+### 1. Stimulus
+
+`measurement/stimulus.js` normalises a `StimulusSpec`, clamps frequencies to 0.95 of Nyquist
+and renders it deterministically. The kinds are sine, log sweep, white, pink, band noise and
+chirp. The inverse sweep is derived from the same normalised spec that was played. The engine
+renders the stimulus at the running context's sample rate. The recipe stores the normalised
+spec, so a repeat plays the same samples.
+
+### 2. Capture
+
+`measurement/engine.js` never touches Web Audio. Everything platform-specific sits behind the
+injected `io` (`preflight`, `captureNoise`, `runStimulus`, `cancel`, `dispose`, `now`,
+`yield`, `onInterrupt`). `measurement/capture.js` implements `createCaptureIo` on the V2
+`AudioEngine`, and `createLoopbackIo`, the TEST CONTEXT of a known synthetic system. Playback
+passes the whole master safety chain, and that chain is part of the measured system. Capture
+start and stop are frame counts on the audio clock, not timers, and runs never overlap. When
+any stage is cancelled, the stimulus fades over 10 ms, the capture is rejected, the worklet
+port is closed and every node and track is released. The same cleanup runs on engine abort,
+error and completion, on Escape, on a hidden page and on a context that closes. Why
+AudioWorklet with a ScriptProcessor fallback and no Worker yet: ADR 0026 and
+`docs/v3/spike-audioworklet-worker.md`.
+
+### 3. Analysis
+
+The engine runs `measurement/capture-checks.js` (clipping, dropouts, discontinuities) on each
+capture as it returns; a failing capture ends the measurement INVALID before any DSP.
+`measurement/analysis-task.js` then packs the offline analysis into one serializable message
+(stimulus, captures, noise, f1, f2, phase, aggregation). `runAnalysis` turns it into one
+result, in steps that can yield: alignment per run, one spectral division per run for the
+transfer and the impulse response, and aggregation over runs. The engine calls
+it through its injected `analyze`. The default, `analyzeInline`, runs on the main thread and
+yields between steps, so an abort can land between them. A Worker-backed `analyze` would post
+the same message (claim `analysis-off-main-thread`, planned). The noise check produces
+Welch power and one-third-octave band power through `spectrum.js` and `rta.js`. Why the
+sweep deconvolution method: ADR 0021.
+
+### Live RTA
+
+`measurement/live-rta.js` is the real-time analyzer: FFT, octave and one-third-octave bands of
+the live input on the same mean-square scale as `spectrum.js`, averaged by `createRtaAverager`
+(instant, fast, slow), with peak hold and freeze, frequency calibration on bands and bins and a
+level offset only under a valid level calibration. Its samples come from the capture io's
+`openLiveTap()` (one AnalyserNode on the measurement input, refused while a capture runs, closed
+by every release path). It is feedback in the sense of the rule above: only its explicit
+`snapshot()` (an `RtaResult` with algorithm and window IDs) could ever be stored.
+
+### 4. Calibration
+
+`calibration/parse.js` reads CSV, TXT and JSON profiles. `profile.js` normalises a profile and
+identifies it by the SHA-256 of its points and sign convention (`sha256.js`, so it works
+without `crypto.subtle` on `file://`). The convention says what the values mean: `deviation`
+(the microphone's response, corrected = observed − value) or `correction` (a correction to add,
+corrected = observed + value). `parse.js` takes it from the file's column header, and a header
+that does not state it ("correction", "gain", "EQ", "cal") needs the user's explicit choice
+before anything is loaded. `interpolate.js` applies a profile with its convention's sign to a
+transfer grid or to RTA bands inside its coverage only. `level.js` holds the one rule for
+labelling a level dB SPL. A `LevelCalibration` names the scale of its reading (the
+one-third-octave band level on the MEASURE mean-square scale), how the reading was obtained
+(`captured` by `reference.js` through the measurement's own capture io, or typed by hand), and
+the input it was taken with (hashed device id, sample rate, applied processing).
+`levelCalibrationApplies` voids it, UNCALIBRATED with the reason, when the current input
+differs. The engine applies the frequency profile after the analysis into a separate
+`calibrated` curve, and the raw curve is never modified. Why two separate kinds: ADR 0020. Why
+SPL only under a level calibration: ADR 0017.
+
+### 5. Result
+
+`measure()` resolves with a plain result object that carries no DOM, node or engine
+reference: the recipe, the rendered stimulus spec, the input device and its constraints, one
+entry per run, `transfer`, `ir`, `aggregate`, `calibrated`, `captureChecks`, `noise`,
+`notes`, `timeline` and the `algorithms` used. Raw PCM is dropped unless
+`measure(..., { keepRaw: true })` is called, and the UI never calls it that way. Every result
+object names its algorithm ID from `measurement/algorithms.js`. Why versioned IDs: ADR 0024.
+
+### 6. Quality
+
+`assessMeasurement(result, ctx)` (engine.js) calls `measurement/quality.js` `assessQuality`
+with every run's capture checks, the transfer, the aggregate, the calibration and each run's
+sweep window. The output is a `QualityAssessment` with its status, reasons, metrics and
+frequency masks. An INVALID assessment ends the measurement INVALID with its failing reasons.
+The view models draw the masks: unreliable stretches are dashed and faded, uncalibrated spans
+are hatched. Why rules with reasons: ADR 0025.
+
+### 7. Experiment
+
+`ui/measure-experiment.js` `experimentFromResult` is pure. It builds the `Experiment` from a
+result, stores the frequency profile by name and identity only, and marks a TEST CONTEXT
+capture in every run and in the notes. It records the master output gain the stimulus passed
+(`output.masterGain`: 20·log10 of it is part of every magnitude), the engine's result notes,
+the frequencies the user asked for before the Nyquist clamp (`recipe.requested`) and the full
+algorithm map, and stores the input device id hashed (spec §88). It then stamps the
+configuration hash and the version-2 result hash, which covers the results, the quality
+verdict, the calibration, the input and the output (version 1, results only, still verifies
+in older files). With two or more runs, `schema.js` `resultsFromMeasurement` stores the aggregate as the
+primary response and the transfer as its marked centre (the G20 rule, enforced again by
+`validate.js`). `store.js` serialises the experiment to the file form, validates it on every
+put and get, and keeps it in the IndexedDB database `oscilla-experiments` (object stores
+`experiments` and `summaries`). When that database cannot be opened, it falls back to a memory
+store and says so. Export writes the same file form. Import goes through `validate.js` (an
+untrusted input with size, type, finiteness, algorithm-ID and hash checks) and `migrate.js`.
+Why a recipe and an experiment are separate: ADR 0019. Why IndexedDB with export as the
+durable path: ADR 0022. Why schema versions are independent integers: ADR 0023.
+
+### The UI adapters
+
+`src/js/ui/measure.js` and `src/js/ui/experiments.js` are composed into the one Alpine
+component. They keep the measurement engine, its io, results with typed arrays, calibration
+objects and chart instances in a closure, never in Alpine's reactive state. Engine events go
+through the pure reducers of `measurement/views/` (`quality-bar.js`, `announcements.js`), and
+results go through the pure view builders (`measure-flow.js`, `response-chart.js`,
+`ir-chart.js`, `rta-chart.js`, `experiment-summary.js`, `compare-view.js`).
+`charts/measure-charts.js` draws the descriptors with uPlot. The UI computes no level, mask,
+range or label. While a measurement is active the instrument cannot play, and leaving the
+Measure workspace aborts it. A view option never fails a measurement: a normalization whose
+reference is outside the result's grid is disabled for that result, and a view that cannot be
+built becomes a note.
 
 ## Layout
 
 ```
 src/js/measurement/   algorithms.js  state-machine.js  stimulus.js  spectrum.js
-                      capture.js  capture-checks.js  align.js  transfer.js
+                      capture.js (browser io)  capture-checks.js  align.js  transfer.js
                       impulse-response.js  smoothing.js  rta.js  aggregate.js
                       analysis-task.js  quality.js  format.js  engine.js (orchestration; no DOM)
+src/js/measurement/views/   common.js  measure-flow.js  quality-bar.js  response-chart.js
+                      ir-chart.js  rta-chart.js  experiment-summary.js  compare-view.js
+                      announcements.js
 src/js/calibration/   profile.js  parse.js  interpolate.js  level.js  sha256.js
 src/js/experiments/   schema.js  migrate.js  validate.js  hash.js  csv.js  store.js  compare.js
                       canonical-json.js  encode.js
-tests/unit/v3-*.test.mjs   (picked up by `npm test`)
+src/js/ui/            measure.js  measure-experiment.js  experiments.js
+src/js/charts/        measure-charts.js
+tests/unit/v3-*.test.mjs        (npm test)
+tests/browser/v3-measure.cjs, tests/browser/v3-ui.cjs   (npm run test:measure)
+scripts/visual-measure.mjs, tests/visual/measure/       (npm run test:visual)
 ```
 
-Not yet landed: `capture.js`, `engine.js` (being written against the shapes below).
-`quality.js` landed in e89ff9f. How each algorithm computes its result, and the remaining
-mismatches, are in `docs/v3/algorithms.md` (section "Gaps"); `tests/unit/v3-pipeline.test.mjs`
-runs the whole chain on the real result objects and keeps the shapes below consistent.
-
-Every module except `engine.js`, `capture.js` and `store.js` is pure: plain data in, plain data
-out, no DOM, no Web Audio, no globals, no `Date.now()` (callers pass timestamps). Arrays are
-`Float32Array` for signals, `Float64Array` for accumulators; inputs are never mutated.
+Every module under `measurement/`, `calibration/` and `experiments/` except `engine.js`,
+`capture.js` and `store.js` is pure: plain data in, plain data out, no DOM, no Web Audio, no
+globals and no `Date.now()` (callers pass timestamps). `engine.js` is DOM-free but owns the
+session state. `capture.js` and `store.js` talk to the platform, and `store.js` takes
+IndexedDB as an injected dependency. Signals are `Float32Array` and accumulators
+`Float64Array`, and inputs are never mutated.
 
 ## Shared shapes
 
 ```js
 // algorithms.js — stable IDs persisted in results (spec §43, §199); every result object
 // carries the IDs it used (docs/v3/algorithms.md, "Algorithm registry")
-ALGORITHMS = { transfer: 'oscilla.transfer.v1', ir: 'oscilla.ir.log-sweep.v1',
-  irFarina: 'oscilla.ir.farina-inverse.v1', rta: 'oscilla.rta.v1',
+ALGORITHMS = { transfer: 'oscilla.transfer.v2', ir: 'oscilla.ir.log-sweep.v2',
+  irFarina: 'oscilla.ir.farina-inverse.v2', rta: 'oscilla.rta.v1',
   smoothing: 'oscilla.smoothing.fractional-octave.v1', normalization: 'oscilla.normalization.v1',
   align: 'oscilla.align.xcorr.v1', clip: 'oscilla.clip.v1',
-  discontinuity: 'oscilla.discontinuity.v1', quality: 'oscilla.confidence.v2',
+  discontinuity: 'oscilla.discontinuity.v1', quality: 'oscilla.confidence.v3',
   calibration: 'oscilla.calibration.log-interp.v1', window: 'oscilla.window.hann.v1',
   windowBlackmanHarris: 'oscilla.window.blackman-harris.v1', aggregate: 'oscilla.aggregate.v1' }
 VARIANT_OF = { irFarina: 'ir', windowBlackmanHarris: 'window' }   // describeAlgorithm family
-RETAINED_ALGORITHMS = { quality: ['oscilla.confidence.v1'] }      // superseded, still implemented
+RETAINED_ALGORITHMS = { transfer: ['oscilla.transfer.v1'], ir: ['oscilla.ir.log-sweep.v1'],
+  irFarina: ['oscilla.ir.farina-inverse.v1'],
+  quality: ['oscilla.confidence.v1', 'oscilla.confidence.v2'] }  // superseded, still implemented
 KNOWN_ALGORITHM_IDS = [...ALGORITHMS values, ...retained]         // the import allow-list
 
 // stimulus.js
@@ -108,34 +269,45 @@ align(reference: Float32Array, captured: Float32Array, sampleRate, { maxLagS, mi
 // phase needs options.phase, an align() result and peakCorrelation ≥ PHASE_MIN_CORRELATION
 // (0.5); a bare lagSamples gives phaseDeg null with phaseReason 'NO_ALIGNMENT'
 computeTransfer({ stimulus, captured, sampleRate, f1, f2, alignment, lagSamples /* default
-  alignment.lagSamples */, noise, options: { phase = false, pointsPerOctave = 48 } })
+  alignment.lagSamples */, noise, options: { phase = false, pointsPerOctave = 48,
+  algorithm = 'oscilla.transfer.v2' /* | 'oscilla.transfer.v1' (retained) */ } })
   -> TransferResult
 TransferResult = { algorithm, sampleRate, frequencies: Float64Array /* Hz */,
   magnitudeDb: Float64Array /* raw, relative; zero power −300 */, phaseDeg: Float64Array|null,
-  snrDb: Float64Array|null, validRange: [fLo, fHi]|null, requestedRange: [f1, f2], fftSize,
-  binHz, phaseReason: null|'NOT_REQUESTED'|'NO_ALIGNMENT'|'ALIGNMENT_NOT_ROBUST'|'AGGREGATED',
+  snrDb: Float64Array|null /* null also when the noise capture holds no noise power (v2) */,
+  snrPooledDb /* v2: Float64Array|null, 1/6-octave pooled power ratio (ΣPy − ΣPn)/ΣPn */,
+  snrResolutionHz /* v2: sampleRate/len(noise) = 1/T_noise, null without noise */,
+  validRange: [fLo, fHi]|null, requestedRange: [f1, f2], fftSize, binHz,
+  resolutionHz /* v2: max(binHz, sampleRate/len(captured)) = max(fs/N, 1/T_capture) */,
+  phaseReason: null|'NOT_REQUESTED'|'NO_ALIGNMENT'|'ALIGNMENT_NOT_ROBUST'|'AGGREGATED',
   alignment: { algorithm, lagSamples, peakCorrelation, polarity }|null,
   derivedFrom? /* 'aggregate': the centre of repeated runs (G20), aggregate.js */ }
+  // v1 results have none of the three v2 fields and may hold snrDb = 200 (SNR_CEIL_DB) for
+  // Pn = 0; v2 never stores the ceiling (docs/v3/algorithms.md "SNR")
 
 // impulse-response.js
 computeImpulseResponse({ stimulus, captured, sampleRate, f1, f2, inverse, method,
-  lagSamples }) -> IrResult
-IrResult = { algorithm /* IR_ALGORITHMS[method]: spectral 'oscilla.ir.log-sweep.v1',
-  farina-inverse 'oscilla.ir.farina-inverse.v1' */, method: 'spectral'|'farina-inverse',
-  sampleRate, samples: Float32Array /* original scale */, peakIndex, peakTimeS,
-  captureOffsetS, noiseFloorDb, window: null|[t0, t1], fftSize }
+  lagSamples, algorithm /* default IR_ALGORITHMS[method]; IR_ALGORITHMS_V1[method] retained */ })
+  -> IrResult
+IrResult = { algorithm /* IR_ALGORITHMS[method]: spectral 'oscilla.ir.log-sweep.v2',
+  farina-inverse 'oscilla.ir.farina-inverse.v2' (v1 retained) */,
+  method: 'spectral'|'farina-inverse', sampleRate, samples: Float32Array /* original scale */,
+  peakIndex, peakTimeS, captureOffsetS,
+  noiseFloorDb /* dB re peak; v2: over the full-overlap lags after the peak, null if none */,
+  noiseFloorMethod /* v2 only: 'full-overlap-tail'|'none' */, window: null|[t0, t1], fftSize }
 irWindow(ir, t0, t1) -> { ...ir, window: [t0, t1], view: { startIndex, endIndex, samples } }
 normalizeIr(ir, 'peak-db'|'peak-linear') -> { kind: 'normalized', algorithm /* normalization */,
   mode, label, unit, referenceValue, values: Float64Array }
 // one spectral division for both (bit-identical to the two calls); fft / noiseSpectrum reuse
 computeTransferAndIr({ ...computeTransfer args, irLagSamples, method, inverse, fft,
-  noiseSpectrum }) -> { transfer: TransferResult, ir: IrResult }
+  noiseSpectrum, irAlgorithm }) -> { transfer: TransferResult, ir: IrResult }
 
 // smoothing.js — derived views; the raw response is never modified
-smoothFractionalOctave(frequencies, magnitudeDb, fraction /* 0 = none, N = 1/N octave */)
+smoothFractionalOctave(frequencies, magnitudeDb, fraction /* 0 = none, N = 1/N octave */,
+  { mask } /* optional: only masked-in finite points enter; NaN elsewhere (no edge leak) */)
   -> Float64Array
-smoothResponse(frequencies, magnitudeDb, fraction) -> { kind: 'smoothed', algorithm, fraction,
-  label, smoothedDb }
+smoothResponse(frequencies, magnitudeDb, fraction, { mask }) -> { kind: 'smoothed',
+  algorithm, fraction, label, smoothedDb, masked? /* true with a mask */ }
 normalizeResponse(frequencies, magnitudeDb, { mode: 'at-frequency', hz }
   | { mode: 'band-mean', lo, hi }) -> { algorithm, mode, normalizedDb, referenceDb, label }
 
@@ -148,12 +320,24 @@ bandPowers(power, binHz, bands) -> Float64Array /* dB, −Infinity for zero powe
 bandBinCounts(binHz, bands, binCount?) -> { binCounts: Float64Array, underResolved: bool[] }
 bandAnalysis(power, binHz, bands) -> { algorithm, levelsDb, power, binCounts, underResolved }
 createRtaAverager({ mode: 'instant'|'fast'|'slow', peakHold, size }) -> { push(power, dt)
-  -> { levelsDb, peakDb|null }, reset, freeze, unfreeze, frozen, frames, mode, tau, peakHold }
+  -> { levelsDb, peakDb|null }, reset, resetPeaks, freeze, unfreeze, frozen, frames, mode, tau,
+  peakHold }
 rtaResult({ sampleRate, resolution, bands, levelsDb, fftSize = null, window = null })
   -> RtaResult   // the stored form; −Infinity / < −300 dB stored as −300 dB (zero power)
 RtaResult = { algorithm, sampleRate, resolution: 'octave'|'third',
   bands: [{ nominal, exact, lo, hi }], levelsDb: Float64Array, fftSize|null,
   windowAlgorithm|null }
+
+// live-rta.js — the live input analysis (feedback, never a stored result): frames of the input
+// tap's time-domain samples on the same mean-square scale; push() allocates nothing
+createLiveRta({ sampleRate, fftSize = 8192, window = 'hann', mode: 'fft'|'octave'|'third',
+  averaging: 'instant'|'fast'|'slow', profile, levelCalibration }) -> { push(samples, dt)
+  -> frame { mode, count, values, peaks, frequencies|null, bands|null, covered|null,
+  underResolved|null, calibrated, levelOffsetDb, frames, frozen }, setMode, setAveraging,
+  setCalibration, freeze, unfreeze, reset, resetPeaks, viewInput(), snapshot() -> RtaResult|null }
+// capture.js io — the live input tap on the measurement input (exclusive with a capture)
+io.openLiveTap({ fftSize, onClosed(reason) }) -> { analyser, sampleRate, close() }
+io.closeLiveTap(); io.liveTapOpen
 
 // aggregate.js — repeated runs on one frequency grid
 aggregateRuns(runs: Float64Array[] /* dB */, { method: 'mean'|'median' }) -> { algorithm,
@@ -165,28 +349,39 @@ AggregateResult = { algorithm, method, dispersion, runs, frequencies: Float64Arr
   // zero power −300 dB; validated lowerDb ≤ centreDb ≤ upperDb
 // G20 storage rule: with ≥ 2 runs the aggregate is the primary response and the transfer is
 transferFromAggregate(stored /* AggregateResult, runs ≥ 2 */, transfers) -> TransferResult
-  // magnitudeDb = stored.centreDb (same bits), lowest run snrDb, common validRange, phaseDeg
+  // magnitudeDb = stored.centreDb (same bits), lowest run snrDb (and snrPooledDb for v2 runs;
+  // coarsest snrResolutionHz / resolutionHz), common validRange, phaseDeg
   // null + phaseReason 'AGGREGATED', alignment null, derivedFrom: 'aggregate'
 
 // analysis-task.js — the offline analysis as ONE serializable task (G21 boundary)
 AnalysisMessage = { type: 'oscilla.analysis-task', version: 1, stimulus: Float32Array,
   sampleRate, f1, f2, captures: Float32Array[] /* run order */, noise: Float32Array|null,
-  phase: bool, aggregation: 'mean'|'median' }
+  phase: bool, aggregation: 'mean'|'median', irMaxSamples? /* default IR_MAX_SAMPLES 2^21 */ }
 runAnalysis(message, { now? }) -> AnalysisResult   // pure, structured-cloneable in and out
 AnalysisResult = { type: 'oscilla.analysis-result', version: 1, invalid, reasons,
   alignments: [align() per run], transfers: [TransferResult]|null, best: run|null,
-  ir: IrResult|null, aggregate: aggregateRuns()|null, steps: [{ name, run, ms|null }] }
+  ir: IrResult|null /* + truncation { maxSamples, fullLength, startIndex } when capped */,
+  aggregate: aggregateRuns()|null, steps: [{ name, run, ms|null }] }
 analysisSteps(message, { now }) /* generator, one step per next() */;
-analyzeInline(message, { now, yield, onStep }) -> Promise<AnalysisResult>  // engine default
+analyzeInline(message, { now, yield, onStep }) -> Promise<AnalysisResult>  // this thread
 analysisTransferList(message, { keepRaw }) / analysisResultTransferList(result) -> buffers
+estimateAnalysisMemory({ stimulusFrames, captureFrames, runs, noiseFrames })
+  -> { fftSize, bytes, model }                     // M10 working-set model
+capIrLength(ir, maxSamples = IR_MAX_SAMPLES) -> IrResult   // M10 stored IR length
+// analysis-runner.js (M10): defaultAnalyze() -> the data: URL Worker (analysis-worker.js,
+// embedded by the build) or analyzeInline; createWorkerAnalyze({ source, WorkerCtor })
 // engine.js: createMeasurementEngine({ ..., analyze /* (message, { now, yield, onStep,
-// keepRaw }) -> Promise<AnalysisResult>, default analyzeInline */ })
+// keepRaw, signal }) -> Promise<AnalysisResult>, default defaultAnalyze() */ })
 
 // quality.js
 assessQuality({ capture, transfer, aggregate /* aggregateRuns() or AggregateResult */,
-  calibration, requestedRange, resolutionHz, sweepWindow,
-  chainNotes /* v2: { limiterDeviationAboveHz }|null */,
-  algorithm /* 'oscilla.confidence.v2' (default) | 'oscilla.confidence.v1' */ })
+  calibration, requestedRange, resolutionHz /* v3 default transfer.resolutionHz */,
+  sweepWindow, chainNotes /* v2: { limiterDeviationAboveHz }|null */,
+  noiseCheck /* v3: checkCapture() of the noise capture|null; EMPTY → SNR NOT MEASURED */,
+  inputProcessing /* v3: applied { echoCancellation, noiseSuppression, autoGainControl }
+    | 'test-context' | null (none reported) | undefined (rule not applied) */,
+  stimulus /* v3: StimulusSpec, names the sweep frequency of clipped regions */,
+  algorithm /* 'oscilla.confidence.v3' (default) | '…v2' | '…v1' (retained) */ })
   -> QualityAssessment
 QualityAssessment = { algorithm, status: 'GOOD'|'USABLE'|'POOR'|'INVALID',
   reasons: [{ code, scope: 'quality'|'calibration', severity: 'ok'|'warn'|'fail', text, value,
@@ -194,17 +389,28 @@ QualityAssessment = { algorithm, status: 'GOOD'|'USABLE'|'POOR'|'INVALID',
   metrics: { snrMedianDb, snrMinDb, clippingRatio, clippingRegions, dropouts,
     repeatabilityDb, runs, requestedRange, coverage: [fLo, fHi]|null, coverageFraction,
     reliableRanges, unreliableRanges, calibratedRange, frequencyCalibrated, levelCalibrated,
-    resolutionHz /* v2 also: discontinuities, outputChainLimitHz */ },
+    resolutionHz /* v2 also: discontinuities, outputChainLimitHz; v3 also: snrResolutionHz,
+    snrAssessedFromHz */ },
   mask: { frequencies: Float64Array, reliable: Uint8Array, calibrated: Uint8Array } }
 
 // calibration/profile.js — two kinds, never conflated (spec §17)
-FrequencyProfile = { schemaVersion: 1, kind: 'frequency', id /* sha-256 of normalized points */,
-  name, source: string|null, notes: string|null, units: { frequency: 'Hz', correction: 'dB' },
-  points: [[hz, db], ...] /* sorted, unique */, importedAt: string|null }
-LevelCalibration = { schemaVersion: 1, kind: 'level', referenceHz, referenceDbSpl,
-  observedDbRelative, offsetDb, conditions: string|null, createdAt }
+FrequencyProfile = { schemaVersion: 2, kind: 'frequency', id /* sha-256 of normalized points
+  and convention; a deviation profile keeps its schema-1 id */, name,
+  convention: 'deviation'|'correction', source: string|null, notes: string|null,
+  units: { frequency: 'Hz', correction: 'dB' }, points: [[hz, db], ...] /* sorted, unique */,
+  importedAt: string|null }
+migrateProfileDocument(doc) -> { ok, doc, from, migrated }   // schema 1 → 2: 'deviation'
+LevelCalibration = { schemaVersion: 2, kind: 'level', referenceHz, referenceDbSpl,
+  observedDbRelative, offsetDb, scale: 'band-mean-square', method: 'captured'|'manual',
+  input: { deviceId /* 'sha256:…' */, sampleRate, echoCancellation, noiseSuppression,
+    autoGainControl, channelCount }|null, conditions: string|null, createdAt }
+  // schema 1 (no scale, method, input) is still a valid stored record
+levelCalibrationApplies(cal, currentInput) -> { applies, checked, reason, differences }
 exportProfile(profile) -> { format: 'oscilla.calibration', schemaVersion, kind, id, name,
-  source? /* only when given */, units, points, notes, importedAt }
+  convention, source? /* only when given */, units, points, notes, importedAt }
+// calibration/reference.js — the captured reading (M3)
+measureReferenceLevel(capture, { referenceHz }) -> { ok, observedDbRelative, scale, band,
+  broadbandDb, bandFraction, peak, durationS, sampleRate, errors, warnings }
 // calibration/interpolate.js
 applyFrequencyCorrection(magnitudeDb, frequencies, profile, { extrapolate: 'none'|'hold' })
   -> { algorithm, profileId, correctedDb: Float64Array, covered: Uint8Array,
@@ -215,20 +421,23 @@ applyFrequencyCorrectionToBands(rta /* { bands, levelsDb } */, profile, { power,
 // calibration/level.js — the one uncalibrated label (spec §24)
 RELATIVE_UNIT = 'dB relative (dBFS-like)'
 RELATIVE_SCALE_LABEL = 'Relative level · dBFS-like / analyser-relative scale'
-levelLabel(levelCalibration) -> { unit: 'dB SPL'|RELATIVE_UNIT, calibrated,
-  indicator: 'CALIBRATED'|'UNCALIBRATED' }
+levelLabel(levelCalibration, currentInput?) -> { unit: 'dB SPL'|RELATIVE_UNIT, calibrated,
+  indicator: 'CALIBRATED'|'UNCALIBRATED', reason? /* another input */ }
 
 // experiments/schema.js — schema versions are independent of the product version (spec §131)
 Experiment = { kind: 'oscilla-experiment', schemaVersion: 1, oscillaVersion, oscillaCommit,
   experimentId, name, recipe: { stimulus /* = renderStimulus(spec).spec, incl. color, law */,
-  repeats, analysis }, output: { level },
-  input: { device: { label, id }, constraints: { requested, applied } },
+  repeats, analysis, requested? /* { f1, f2 } before the Nyquist clamp */ },
+  output: { level, masterGain? /* linear, (0, 1] */ },
+  input: { device: { label, id /* hashed 'sha256:…', §88 */ }, constraints: { requested,
+    applied } /* no raw deviceId */ },
   calibration: { frequency: { id, name }|null, level: {...}|null },
-  environment: { notes }, measurement: { startedAt, sampleRate, runs },
+  environment: { notes }, measurement: { startedAt, sampleRate, runs, notes? },
   quality, algorithms: { role: id }, results: { transfer, ir, rta /* RtaResult */,
     aggregate? /* AggregateResult, optional, presence kept */,
     runTransfers? /* [{ run, transfer }] ≤ LIMITS.runTransfers, only on request (G20) */ },
-  provenance: { configHash, resultHash /* SHA-256 of the encoded results, §101 */,
+  provenance: { configHash, resultHash /* SHA-256, §101 */, resultHashVersion? /* 2: results,
+    quality, calibration, input, output; absent: 1, results only */,
     createdAt, repeatOf /* source experimentId|null */,
     build /* { version, commit, shortCommit, sourceDate, channel, dirty, repository }|null */ } }
 // G20: with an aggregate of ≥ 2 runs, results.transfer is its derivedFrom 'aggregate' centre
@@ -243,25 +452,49 @@ responseDelta(a, b, { pointsPerOctave }) -> { ok, frequencies, aDb, bDb, deltaDb
   pointsPerOctave, label, sources, equivalent /* false: single run vs aggregate */, warnings,
   envelope /* both bounds, overlap, overlapFraction, dispersion, comparable */|null }
 // experiments/hash.js
-configHash(e) -> hex;  withConfigHash(e, hex);  resultHash(e) -> hex;  withResultHash(e, hex)
-// experiments/validate.js verifies resultHash on import: mismatch -> error code 'corrupt'
+configHash(e) -> hex;  withConfigHash(e, hex)
+resultHash(e, { version = 2 }) -> hex;  withResultHash(e, hex, version = 2)
+// experiments/validate.js verifies resultHash in the file's version on import (mismatch ->
+// error code 'corrupt') and that quality.mask.frequencies equals the stored response grid
 // In a file, typed arrays are EncodedArray { dtype: 'f32'|'f64'|'u8', length,
 // encoding: 'base64-le', data } (experiments/encode.js).
 ```
 
-The shapes above are what the modules produce and what `validate.js` accepts (the former
-mismatches G1-G4 are closed). G12 and G15-G19 are closed as described in
-`docs/v3/algorithms.md` ("Gaps"). G20 is closed: a repeated measurement stores the aggregate
-as its primary response, `results.transfer` is its centre marked `derivedFrom: 'aggregate'` (or
-null), individual runs only on request in `results.runTransfers`, and `compare.js` compares the
-aggregate and flags single run vs aggregate. Open: G21 (the combined transfer + IR step is the
-longest main-thread block until the Worker lands); its boundary is ready — the analysis is one
-serializable task (`analysis-task.js`) behind the engine's injected `analyze`, so the Worker
-is a build change only (a `scripts/build.mjs` sub-build of that module, loaded from `data:`).
-The engine's `PreflightFacts` may carry `chainNotes` (pure data, e.g. `{ limiterDeviationAboveHz: 18000 }`),
-recorded as `result.chainNotes`; `assessMeasurement(result, ctx)` (engine.js) is the standard
-`assess`. CSV transfer columns are ratios (`magnitude_db_relative`, `magnitude_db_corrected`);
-`level_db_spl` appears only in RTA CSVs under a valid level calibration.
+Notes on the shapes:
+
+- **Repeated runs (G20).** A repeated measurement stores the aggregate as its primary
+  response. `results.transfer` is the aggregate's centre, marked `derivedFrom: 'aggregate'`,
+  or null. Individual runs are stored only on request, in `results.runTransfers`.
+  `compare.js` compares the aggregate and flags single run vs aggregate.
+- **Chain notes.** The engine's `PreflightFacts` may carry `chainNotes`, which are pure data
+  (for example `{ limiterDeviationAboveHz: 18000 }`). They are recorded as
+  `result.chainNotes` and passed to `assess`. `capture.js` does not set them yet (open in G12).
+- **RTA in experiments.** An experiment built by the Measure workspace has `results.rta`
+  null. The noise check's band power is shown in the RTA tab but not stored.
+- **CSV.** Transfer columns are ratios (`magnitude_db_relative`, `magnitude_db_corrected`).
+  `reliable` is the quality mask when it lies on the transfer grid, `phase_deg` the phase or
+  empty with the reason. IR amplitudes are a dimensionless transfer ratio. `level_db_spl`
+  appears only in RTA CSVs under a valid level calibration.
+- **G21 closed.** The analysis runs in a `data:` URL Worker built from `analysis-worker.js`
+  (`scripts/build-analysis-worker.mjs`, embedded via the `__OSCILLA_ANALYSIS_WORKER__` define);
+  `analysis-runner.js` posts the serializable message with transfer lists, relays steps,
+  terminates on abort and falls back inline when no Worker starts. Results are bit-identical.
+- **Memory.** `validateRecipe` estimates the analysis working set (`estimateAnalysisMemory`)
+  and refuses with `MEMORY_LIMIT` above an FFT length of 2^22 or 1 GiB; preflight warns
+  `ANALYSIS_MEMORY` above 512 MiB. Stored impulse responses are capped at 2^21 samples and
+  record `ir.truncation` when cut.
+
+- **Run validity and assessment context (review M8, M2).** A run is invalid before analysis
+  only for `RUN_INVALIDATING_CODES` (no usable samples, missing frames, a dropout certainly
+  inside the sweep); clipping, other dropouts and discontinuities are graded by the quality
+  assessment, and an INVALID assessment carries its failing codes in the INVALID transition.
+  A noise capture invalidates only when clipping or broken (`NOISE_CLIPPING`,
+  `NOISE_CAPTURE_INVALID`); an EMPTY one does not (SNR NOT MEASURED). `assessMeasurement`
+  passes the noise check, `inputProcessingFacts(result)` (the first capture's applied
+  constraints, or `'test-context'`) and the stimulus spec.
+
+The remaining differences between the specification and the code are listed under "Gaps" in
+`docs/v3/algorithms.md`.
 
 ## Labels (spec §24, §98)
 
@@ -273,5 +506,8 @@ output contains "SPL". Smoothed and normalized views say so and carry their algo
 
 ## Limits (spec §174)
 
-Sweep 1-30 s; repeats 1-10; capture ≤ 40 s mono per run; calibration ≤ 2000 points; imported
+Sweep 1-30 s; repeats 1-10; capture ≤ 40 s mono per run; raw captures ≤ 128 MiB together;
+analysis FFT ≤ 2²² points and estimated analysis memory ≤ 1 GiB (M10: `MEMORY_LIMIT` in
+preflight; 30 s sweeps at 44.1/48 kHz, about 20 s at 96 kHz, 9.9 s at 192 kHz); stored impulse
+response ≤ 2²¹ samples (`truncation` records a cut); calibration ≤ 2000 points; imported
 experiment ≤ 32 MiB; stored experiments bounded by quota with explicit delete/export.

@@ -32,12 +32,28 @@
 // frequency profile covers (no extrapolation, §158); a smoothed or normalized view says so in
 // every series label it touches (§34-§35). Unreliable stretches (quality mask, §156, §221) are
 // separate dashed, faded series; an INVALID result is drawn as not authoritative.
+//
+// View options never fail a result (M6 of the V3 review): a normalization whose reference lies
+// outside the measured grid (0 dB at 1 kHz for a 2-20 kHz sweep, a band without points) is not
+// applied; the view says so in `normalizationNote` and in its notes, and
+// normalizationAvailability() lets the UI disable such an option beforehand.
+//
+// Master gain (M9): every transfer magnitude includes 20·log10(master output gain) (capture.js:
+// the stimulus passes the master gain stage); the view states it in its notes when the source
+// records the gain (engine result preflight facts output.gain, experiment output.masterGain).
+//
+// Phase (m3): readouts carry the phase where the transfer has one; buildPhaseView() is the
+// phase-over-frequency view (degrees, wrapped, reliability split as for the magnitude) and
+// phaseUnavailableText() the reason when there is none (transfer.js PHASE_REASONS).
 
-import { smoothResponse, normalizeResponse } from '../smoothing.js';
+import {
+  smoothResponse, smoothFractionalOctave, normalizeResponse,
+} from '../smoothing.js';
 import { formatFrequencyWithResolution } from '../format.js';
 import { applyFrequencyCorrection } from '../../calibration/interpolate.js';
 import { isValidLevelCalibration } from '../../calibration/level.js';
 import { TRANSFER_RATIO_UNIT } from '../../experiments/csv.js';
+import { PHASE_REASONS } from '../transfer.js';
 import {
   QUANTITY_KINDS as K, UNAVAILABLE, LINE_STYLES, DASH, ratioDbText, gridResolutionHz,
   gridFrequencyText, rangeText, nearestIndex, toPlotArray, splitByMask, extent, dbAxisRange,
@@ -59,6 +75,65 @@ const DISPERSION_WORDS = Object.freeze({
 
 const isExperiment = (s) => !!s && s.kind === 'oscilla-experiment';
 
+/** Why a transfer has no phase, in words (transfer.js PHASE_REASONS). */
+export const PHASE_REASON_TEXT = Object.freeze({
+  [PHASE_REASONS.NOT_REQUESTED]: 'phase was not requested (expert analysis setting "Phase")',
+  [PHASE_REASONS.NO_ALIGNMENT]: 'no alignment of capture and stimulus was available',
+  [PHASE_REASONS.ALIGNMENT_NOT_ROBUST]: 'the alignment was not robust enough for a meaningful '
+    + 'phase (peak correlation below 0.5)',
+  [PHASE_REASONS.AGGREGATED]: 'the aggregate of repeated runs has no phase (the phases of '
+    + 'separate runs are not averaged; each run keeps its own)',
+});
+
+/** The master output gain a source records (a linear gain > 0), or null. */
+export function masterGainOf(src) {
+  if (!src || typeof src !== 'object') return null;
+  let g = null;
+  if (isExperiment(src)) g = src.output ? src.output.masterGain : null;
+  else {
+    const f = src.preflight && src.preflight.facts;
+    g = f && f.output ? f.output.gain : null;
+    if (!(g > 0) && src.testContext) g = src.testContext.chainGain;
+  }
+  return typeof g === 'number' && Number.isFinite(g) && g > 0 ? g : null;
+}
+
+/** "Includes the master output gain 0.08 (−21.9 dB) …" */
+export function masterGainText(g) {
+  const db = 20 * Math.log10(g);
+  return `Every magnitude includes the master output gain ${+g.toPrecision(3)} `
+    + `(${db < 0 ? '−' : '+'}${Math.abs(db).toFixed(1)} dB = 20·log10 gain) on top of the `
+    + 'playback / capture path.';
+}
+
+/**
+ * normalizationAvailability(frequencies, spec) → { ok, reason }
+ * Whether a normalization (smoothing.js normalizeResponse spec) has a reference inside the
+ * grid: 'at-frequency' needs hz within [f_first, f_last], 'band-mean' at least one point in
+ * [lo, hi]. null spec (none) is always available.
+ */
+export function normalizationAvailability(frequencies, spec) {
+  if (!spec) return { ok: true, reason: null };
+  const n = frequencies ? frequencies.length : 0;
+  if (!n) return { ok: false, reason: 'there is no response to normalize' };
+  const lo = frequencies[0];
+  const hi = frequencies[n - 1];
+  const hz = (v) => (v >= 1000 ? `${+(v / 1000).toPrecision(4)} kHz` : `${+v.toPrecision(4)} Hz`);
+  const span = `the response covers ${hz(lo)}–${hz(hi)}`;
+  if (spec.mode === 'at-frequency') {
+    return spec.hz >= lo && spec.hz <= hi ? { ok: true, reason: null }
+      : { ok: false, reason: `${hz(spec.hz)} is outside the measured range (${span})` };
+  }
+  if (spec.mode === 'band-mean') {
+    for (let i = 0; i < n; i++) {
+      if (frequencies[i] >= spec.lo && frequencies[i] <= spec.hi) return { ok: true, reason: null };
+    }
+    return { ok: false, reason: `no measured point lies in ${hz(spec.lo)}–${hz(spec.hi)} `
+      + `(${span})` };
+  }
+  return { ok: false, reason: 'unknown normalization' };
+}
+
 /** The pieces of a response, from an engine result or an experiment. */
 export function responseSource(src, { profile = null, useCalibration = true } = {}) {
   if (!src || typeof src !== 'object') throw new TypeError('response source must be an object');
@@ -72,6 +147,8 @@ export function responseSource(src, { profile = null, useCalibration = true } = 
   let sampleRate = null;
   let agg = null;
   let requestedRange = null;
+  let phaseDeg = null;
+  let phaseReason = null;
   const transfer = exp ? src.results && src.results.transfer : src.transfer;
   const aggregate = exp ? src.results && src.results.aggregate : src.aggregate;
   if (transfer) {
@@ -79,12 +156,18 @@ export function responseSource(src, { profile = null, useCalibration = true } = 
     rawDb = transfer.magnitudeDb;
     snrDb = transfer.snrDb || null;
     validRange = transfer.validRange || null;
-    binHz = transfer.binHz || null;
+    // transfer.v2 resolutionHz = max(binHz, fs / capture length): the true resolution, coarser
+    // than the zero-padded bin spacing; frequencies are printed to it (§97).
+    binHz = transfer.resolutionHz > 0 ? transfer.resolutionHz : transfer.binHz || null;
     sampleRate = transfer.sampleRate || null;
     requestedRange = transfer.requestedRange || null;
+    phaseDeg = transfer.phaseDeg && transfer.phaseDeg.length === transfer.frequencies.length
+      ? transfer.phaseDeg : null;
+    phaseReason = phaseDeg ? null : transfer.phaseReason || null;
   } else if (aggregate && aggregate.frequencies) {
     frequencies = aggregate.frequencies;
     rawDb = aggregate.centreDb;
+    phaseReason = PHASE_REASONS.AGGREGATED;
   }
   if (aggregate && aggregate.centreDb && frequencies
     && aggregate.centreDb.length === frequencies.length) agg = aggregate;
@@ -125,6 +208,7 @@ export function responseSource(src, { profile = null, useCalibration = true } = 
   return {
     experiment: exp, frequencies, rawDb, snrDb, validRange, binHz, sampleRate,
     requestedRange, aggregate: agg, quality, correction, correctionNote, levelCalibration,
+    phaseDeg, phaseReason, masterGain: masterGainOf(src),
     runs: agg && Number.isInteger(agg.runs) ? agg.runs
       : (transfer && Number.isInteger(transfer.runs) ? transfer.runs : 1),
     method: agg ? agg.method : null,
@@ -189,12 +273,35 @@ export function buildResponseView(source, options = {}) {
   const authoritative = status !== 'INVALID';
 
   // Derived view of the primary curve: normalization offset (shift-invariant, so it commutes
-  // with the power-mean smoothing), then smoothing. Both carry their algorithm IDs.
+  // with the power-mean smoothing), then smoothing. Both carry their algorithm IDs. A
+  // normalization without a reference in the grid is not applied (M6): the view says so.
   let normalized = null;
-  if (normalization) normalized = normalizeResponse(f, base, normalization);
+  let normalizationNote = null;
+  if (normalization) {
+    const avail = normalizationAvailability(f, normalization);
+    if (avail.ok) {
+      try {
+        normalized = normalizeResponse(f, base, normalization);
+        if (!Number.isFinite(normalized.referenceDb)) {
+          normalized = null;
+          avail.reason = 'the response has no finite level at the reference';
+        }
+      } catch (e) {
+        avail.reason = e.message;
+      }
+    }
+    if (!normalized) {
+      normalizationNote = `NORMALIZATION not applied: ${avail.reason}; the curve is shown `
+        + 'unnormalized.';
+    }
+  }
   const offset = normalized ? -normalized.referenceDb : 0;
+  const rel = reliabilityMask(s);
   let smoothed = null;
-  if (smoothing && smoothing > 0) smoothed = smoothResponse(f, base, smoothing);
+  if (smoothing && smoothing > 0) {
+    smoothed = smoothResponse(f, base, smoothing);
+    smoothed.smoothedDb = smoothWithinRegions(f, base, smoothing, covered, rel.mask);
+  }
   const derived = !!(normalized || smoothed);
   const primaryValues = smoothed ? smoothed.smoothedDb : base;
   const derivation = derived ? {
@@ -212,7 +319,6 @@ export function buildResponseView(source, options = {}) {
     : 'RAW · OBSERVED · unsmoothed';
   const calName = corr ? `CALIBRATED · profile "${corr.name || UNAVAILABLE.UNKNOWN}"` : null;
 
-  const rel = reliabilityMask(s);
   const out = [];
   const bands = [];
 
@@ -309,10 +415,13 @@ export function buildResponseView(source, options = {}) {
   if (smoothed) badges.push(smoothed.label.split(':')[0]);
   if (normalized) badges.push('NORMALIZED');
   if (!authoritative) badges.push('INVALID · not authoritative');
+  if (normalizationNote) badges.push('NORMALIZATION NOT APPLIED');
   const notes = [];
   if (corr && calibratedRange) notes.push(markers.calibratedRange.label);
   if (s.correctionNote) notes.push(s.correctionNote);
+  if (normalizationNote) notes.push(normalizationNote);
   if (dText) notes.push(`Derived view: ${dText}. RAW is kept and exported unchanged.`);
+  if (s.masterGain !== null) notes.push(masterGainText(s.masterGain));
   notes.push(capitalize(rel.label) + '.');
   if (unreliableRanges.length) {
     notes.push(`Dashed, faded stretches are unreliable (low SNR, outside the valid range or `
@@ -334,6 +443,11 @@ export function buildResponseView(source, options = {}) {
     primary: primaryId,
     reliability: { source: rel.source, label: rel.label },
     authoritative,
+    normalizationApplied: !!normalized,
+    normalizationNote,
+    masterGain: s.masterGain,
+    phase: { available: !!s.phaseDeg, reason: s.phaseDeg ? null : s.phaseReason,
+      text: s.phaseDeg ? 'Phase available (wrapped, degrees)' : phaseUnavailableText(s) },
     quality: qualityStatusPresentation(status || 'NOT_ASSESSED'),
     summary: '',
     readout: null,
@@ -344,6 +458,35 @@ export function buildResponseView(source, options = {}) {
     covered, mask: rel.mask, derived, normalized });
   view.readoutAt = (hz) => view.readout(nearestIndex(f, hz));
   return view;
+}
+
+/**
+ * Smoothing that never crosses a coverage or reliability edge (m1 of the V3 review): the curve
+ * is smoothed separately inside each region — profile-covered AND reliable, profile-covered AND
+ * unreliable (uncovered points hold RAW values and are never drawn as CALIBRATED) — with
+ * smoothing.js's NaN-aware `mask` option, so a window never mixes a reliable point with an
+ * unreliable one or a corrected value with a raw one. Each point takes the value of its own
+ * region; a point in no region is NaN (not drawn).
+ */
+function smoothWithinRegions(f, base, fraction, covered, reliable) {
+  const n = f.length;
+  const regions = [];
+  if (reliable) {
+    for (const want of [1, 0]) {
+      const m = new Uint8Array(n);
+      for (let i = 0; i < n; i++) m[i] = (reliable[i] ? 1 : 0) === want && (!covered || covered[i])
+        ? 1 : 0;
+      regions.push(m);
+    }
+  } else if (covered) regions.push(Uint8Array.from(covered, (v) => (v ? 1 : 0)));
+  if (!regions.length) return smoothFractionalOctave(f, base, fraction);
+  const out = new Float64Array(n).fill(NaN);
+  for (const m of regions) {
+    if (!m.includes(1)) continue;
+    const part = smoothFractionalOctave(f, base, fraction, { mask: m });
+    for (let i = 0; i < n; i++) if (m[i]) out[i] = part[i];
+  }
+  return out;
 }
 
 function capitalize(t) {
@@ -441,6 +584,7 @@ function responseReadout(view, s, index, ctx) {
     : UNAVAILABLE.NOT_ASSESSED;
   const snr = s.snrDb && Number.isFinite(s.snrDb[i])
     ? ratioDbText(s.snrDb[i], { decimals: 0, sign: false }) : UNAVAILABLE.NOT_MEASURED;
+  const phase = s.phaseDeg && Number.isFinite(s.phaseDeg[i]) ? phaseText(s.phaseDeg[i]) : null;
   let spread = null;
   const a = s.aggregate;
   if (a && a.spreadDb && Number.isFinite(a.spreadDb[i]))
@@ -453,6 +597,7 @@ function responseReadout(view, s, index, ctx) {
   if (viewText !== null) lines.push(`${view.series.find((d) => d.id === 'view').kind} `
     + `${viewText}`);
   lines.push(`SNR ${snr}`);
+  if (phase) lines.push(`Phase ${phase}`);
   if (spread) lines.push(`Run spread ${spread}`);
   lines.push(`Reliability ${reliability}`);
   if (ctx.normalized) lines.push(ctx.normalized.label);
@@ -464,9 +609,91 @@ function responseReadout(view, s, index, ctx) {
     view: viewText,
     reliability,
     snr,
+    phase,
     spread,
     calibrated,
     lines,
     text: lines.join(' · ') || DASH,
   };
+}
+
+function phaseText(deg) {
+  return `${deg < 0 ? '−' : deg > 0 ? '+' : ''}${Math.abs(deg).toFixed(1)}°`;
+}
+
+/** "Phase NOT MEASURED: <reason>." for a source (responseSource) or a transfer without phase. */
+export function phaseUnavailableText(s) {
+  const reason = s && s.phaseReason ? PHASE_REASON_TEXT[s.phaseReason] || s.phaseReason : null;
+  return `Phase ${UNAVAILABLE.NOT_MEASURED}${reason ? `: ${reason}` : ''}.`;
+}
+
+/** Y axis of the phase view: wrapped degrees. */
+export const PHASE_Y_LABEL = 'Phase · degrees (wrapped, delay of the alignment removed)';
+
+/**
+ * buildPhaseView(source, options) → PhaseView | null
+ * The phase of the transfer over frequency (expert view, m3): x as in buildResponseView, y in
+ * degrees over [−180, 180], the curve split at the same reliability mask (unreliable stretches
+ * dashed and faded). null when the source has no response; a view with `available: false`, no
+ * series and `reason` (phaseUnavailableText) when the transfer has no phase. Nothing is
+ * smoothed, unwrapped or normalized.
+ */
+export function buildPhaseView(source) {
+  const s = responseSource(source, { useCalibration: false });
+  if (!s) return null;
+  const f = s.frequencies;
+  const n = f.length;
+  const lo = s.requestedRange ? Math.min(s.requestedRange[0], f[0]) : f[0];
+  const hi = s.requestedRange ? Math.max(s.requestedRange[1], f[n - 1]) : f[n - 1];
+  const axes = {
+    x: frequencyAxis(lo, hi),
+    y: { label: PHASE_Y_LABEL, unit: 'degrees', range: [-180, 180],
+      ticks: [-180, -90, 0, 90, 180], kind: K.OBSERVED },
+  };
+  const status = s.quality && s.quality.status ? s.quality.status : null;
+  if (!s.phaseDeg) {
+    const reason = phaseUnavailableText(s);
+    return { x: Float64Array.from(f), axes, series: [], bands: [], markers: null,
+      badges: ['PHASE NOT MEASURED'], notes: [reason], available: false, reason,
+      quality: qualityStatusPresentation(status || 'NOT_ASSESSED'),
+      summary: `${reason}`, readout: () => null, readoutAt: () => null };
+  }
+  const rel = reliabilityMask(s);
+  const split = splitByMask(s.phaseDeg, rel.mask, 0);
+  const authoritative = status !== 'INVALID';
+  const label = 'OBSERVED phase · wrapped (−180°, 180°]';
+  const series = [
+    { id: 'phase', label, kind: K.OBSERVED, role: 'observed', values: split.reliable,
+      width: LINE_STYLES.primary.width, dash: LINE_STYLES.primary.dash,
+      alpha: authoritative ? LINE_STYLES.primary.alpha : LINE_STYLES.unreliable.alpha,
+      show: true, reliable: true, derivation: null },
+    { id: 'phase-unreliable', label: `${label} · UNRELIABLE (dashed)`, kind: K.OBSERVED,
+      role: 'observed', values: split.unreliable, width: LINE_STYLES.unreliable.width,
+      dash: LINE_STYLES.unreliable.dash, alpha: LINE_STYLES.unreliable.alpha, show: true,
+      reliable: false, derivation: null },
+  ];
+  const view = {
+    x: Float64Array.from(f), axes, series, bands: [],
+    markers: { requestedRange: null, calibratedRange: null, reliableRanges: [],
+      unreliableRanges: [] },
+    badges: ['PHASE', 'WRAPPED'], notes: [capitalize(rel.label) + '.'], available: true,
+    reason: null, quality: qualityStatusPresentation(status || 'NOT_ASSESSED'), summary: '',
+    readout: null, readoutAt: null,
+  };
+  let count = 0;
+  for (let i = 0; i < n; i++) if (Number.isFinite(s.phaseDeg[i])) count++;
+  view.summary = `Phase response (observed, wrapped to ±180°): ${count} points from `
+    + `${gridFrequencyText(f, 0, s.binHz)} to ${gridFrequencyText(f, n - 1, s.binHz)}; `
+    + `measurement quality: ${view.quality.word}.`;
+  view.readout = (index) => {
+    if (!(index >= 0 && index < n)) return null;
+    const res = gridResolutionHz(f, index, s.binHz);
+    const lines = [`Frequency ${formatFrequencyWithResolution(f[index], res)}`,
+      `Phase ${Number.isFinite(s.phaseDeg[index]) ? phaseText(s.phaseDeg[index]) : DASH}`,
+      `Reliability ${rel.mask ? (rel.mask[index] ? 'reliable' : 'unreliable')
+        : UNAVAILABLE.NOT_ASSESSED}`];
+    return { index, lines, text: lines.join(' · ') };
+  };
+  view.readoutAt = (hz) => view.readout(nearestIndex(f, hz));
+  return view;
 }

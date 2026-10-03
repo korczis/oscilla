@@ -10,7 +10,9 @@
 // The literal scan is structural: the literal is derived from package.json at run time, so a
 // bump never needs an allowlist edit. Allowed: package.json, package-lock.json (its root is
 // checked above; other entries are dependency versions), dist/** (generated), .ai/** and
-// CHANGELOG.md (append-only history that legitimately names released versions), binary files.
+// CHANGELOG.md (append-only history that legitimately names released versions), docs/specs/**
+// (the requesters' specifications recorded verbatim; they name target versions as plans and are
+// never a version source), binary files.
 import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
@@ -21,6 +23,7 @@ import {
 
 export const LITERAL_ALLOW = [
   /^package\.json$/, /^package-lock\.json$/, /^dist\//, /^\.ai\//, /(^|\/)CHANGELOG\.md$/,
+  /^docs\/specs\//,
 ];
 
 const escape = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');

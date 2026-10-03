@@ -29,5 +29,5 @@ mismatch, no signal or out of range.
 ## What it does not do
 
 The microphone is uncalibrated: readings are relative, and the comparison says nothing about
-sound pressure or about the microphone's own frequency response. Calibration profiles are
-planned V3 work.
+sound pressure or about the microphone's own frequency response. Calibration profiles belong
+to the V3 Measure workspace (feature calibration-profiles) and do not apply here.

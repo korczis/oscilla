@@ -7,22 +7,28 @@
 //           ─► aggregate the run magnitudes ─► result
 //
 // The engine (engine.js) builds the message from its captures and calls an injected
-// `analyze(message, hooks) → Promise<result>`; the default, analyzeInline, runs the steps on the
-// calling thread with hooks.yield() between them (abort and the UI land between steps, as
-// before). Moving the analysis into a Worker later is a build change only: a Worker bundle of
-// this module (loaded from a data: URL, like the capture worklet) answers
-//   onmessage = (e) => postMessage(runAnalysis(e.data), analysisResultTransferList(result))
-// and the engine is created with an `analyze` that posts the message with
-// analysisTransferList(message) and resolves with the reply (no per-step hooks then: the engine
-// reports result.steps when the reply arrives).
+// `analyze(message, hooks) → Promise<result>`. analyzeInline runs the steps on the calling
+// thread with hooks.yield() between them (abort and the UI land between steps). In the built
+// page the engine's default is the Worker (analysis-runner.js): analysis-worker.js, bundled by
+// scripts/build-analysis-worker.mjs into a string inside dist/index.html and started from a
+// data: URL, drives the same analysisSteps() generator, posts each step and then the result
+// with analysisResultTransferList(result); the message goes in with
+// analysisTransferList(message). Under node and in bundles without that string the default
+// stays analyzeInline. Both paths compute the same numbers (tests/unit/v3-analysis-worker).
+//
+// Memory (gap M10): estimateAnalysisMemory() is the working-set model the engine checks before
+// a measurement (engine.js validateRecipe, MEMORY_LIMIT); the stored impulse response is capped
+// at IR_MAX_SAMPLES (capIrLength, recorded as ir.truncation) so a saved experiment stays inside
+// the import limits (experiments/validate.js maxArray 4 000 000 elements, 32 MiB).
 //
 //   AnalysisMessage = { type: ANALYSIS_TASK, version: ANALYSIS_TASK_VERSION,
 //     stimulus: Float32Array, sampleRate, f1, f2, captures: Float32Array[] (one per run, run
 //     order), noise: Float32Array|null (stimulus-free capture), phase: bool,
-//     aggregation: 'mean'|'median' }
+//     aggregation: 'mean'|'median', irMaxSamples?: integer ≥ 1 (default IR_MAX_SAMPLES) }
 //   AnalysisResult = { type: ANALYSIS_RESULT, version, invalid: false, reasons: [],
 //     alignments: [align() result per run], transfers: [TransferResult per run], best,
-//     ir: IrResult (samples included), aggregate: aggregateRuns() result, steps }
+//     ir: IrResult (samples included; truncation when capped, see capIrLength),
+//     aggregate: aggregateRuns() result, steps }
 //   | { type, version, invalid: true, reasons: [{ code: 'NO_ALIGNMENT'|
 //     'STIMULUS_OUTSIDE_CAPTURE', text, run, value? }], alignments, transfers: null, best: null,
 //     ir: null, aggregate: null, steps }
@@ -45,6 +51,85 @@ export const ANALYSIS_TASK_VERSION = 1;
 /** Stimulus-window guard of the STIMULUS_OUTSIDE_CAPTURE check (seconds). */
 export const OUTSIDE_GUARD_S = 0.005;
 
+/**
+ * Longest impulse response a result carries (samples). The causal IR is as long as the capture
+ * (impulse-response.js); 2^21 samples keep ≥ 10.9 s after the IR start at 192 kHz, 21.8 s at
+ * 96 kHz and 43.7 s at 48 kHz (longer than any 48 kHz capture, CONTRACT_LIMITS.maxCaptureS
+ * 40 s), and a stored IR (8 MiB of Float32, 11.2 MB base64) stays far inside the import limits
+ * of experiments/validate.js (4 000 000 elements per array, 32 MiB per file) next to the
+ * transfer arrays.
+ */
+export const IR_MAX_SAMPLES = 2 ** 21;
+
+/**
+ * Working-set model of one analysis (estimateAnalysisMemory), bytes. Per FFT point of the
+ * deconvolution size N (transfer.js, the same N as align.js's correlation):
+ *   align, per run                 plan 12·N (Uint32 bit reversal + Float64 twiddles), 4 Float64
+ *                                  buffers 32·N                                    = 44·N
+ *   transfer + IR (one division)   shared plan 12·N, scratch 16·N, X/Y half spectra 16·N,
+ *                                  |X|², ε, H 16·N, |H|² 4·N, noise and |Y|² power 8·N, the
+ *                                  noise spectrum 8·N                               = 80·N
+ * A step's garbage is not collected before the next step allocates, so the peak is about
+ * 44·N + 80·N = 124·N for one run; repeated runs leave more uncollected garbage (node: 111 B per
+ * point for one run, 143-160 B for 10). bytesPerFftPoint = 160 is that envelope, inputs count
+ * twice (captures + stimulus + noise as Float32, plus the Worker's copy of the stimulus or the
+ * keepRaw copy, plus the IR samples) and fixedBytes covers the heap growth of small analyses.
+ * Every measured peak RSS growth (node 22, Chromium 153 and Firefox 155, inline and Worker,
+ * 1-10 runs, 2^19-2^23 points; docs/v3/spike-audioworklet-worker.md "M10") was 42-87 % of the
+ * estimate.
+ */
+export const ANALYSIS_MEMORY_MODEL = Object.freeze({
+  bytesPerFftPoint: 160,
+  bytesPerInputFrame: 8,
+  fixedBytes: 64 * 2 ** 20,
+});
+
+/**
+ * estimateAnalysisMemory({ stimulusFrames, captureFrames, runs = 1, noiseFrames = 0 })
+ *   → { fftSize, bytes, model }
+ * fftSize is the deconvolution and correlation size nextPowerOfTwo(stimulus + capture), bytes
+ * the ANALYSIS_MEMORY_MODEL estimate of the analysis's peak memory. Pure; no allocation.
+ */
+export function estimateAnalysisMemory({ stimulusFrames, captureFrames, runs = 1,
+  noiseFrames = 0 } = {}) {
+  for (const [k, v] of Object.entries({ stimulusFrames, captureFrames, runs, noiseFrames })) {
+    if (!(Number.isInteger(v) && v >= 0)) throw new RangeError(`${k} must be an integer ≥ 0`);
+  }
+  const fftSize = nextPowerOfTwo(stimulusFrames + captureFrames);
+  const m = ANALYSIS_MEMORY_MODEL;
+  const bytes = m.fixedBytes + m.bytesPerFftPoint * fftSize
+    + m.bytesPerInputFrame * (stimulusFrames + runs * captureFrames + noiseFrames);
+  return { fftSize, bytes, model: m };
+}
+
+/**
+ * capIrLength(ir, maxSamples = IR_MAX_SAMPLES) → IrResult
+ * `ir` itself when it has ≤ maxSamples samples. Otherwise a NEW IrResult holding the window
+ * [shift, shift + maxSamples) of ir.samples, shift = max(0, min(peakIndex − ⌊maxSamples/2⌋,
+ * length − maxSamples)): the original start is kept unless the peak lies beyond the first half
+ * of the window, so at least half the window follows the peak. peakIndex, peakTimeS and
+ * captureOffsetS are moved to the kept window (the absolute peak time is unchanged);
+ * noiseFloorDb stays the value of the full IR (its late tail). truncation records the cut:
+ * { maxSamples, fullLength, startIndex: shift } (indices of the full IR).
+ */
+export function capIrLength(ir, maxSamples = IR_MAX_SAMPLES) {
+  if (!(Number.isInteger(maxSamples) && maxSamples >= 1))
+    throw new RangeError('maxSamples must be an integer ≥ 1');
+  const full = ir.samples.length;
+  if (full <= maxSamples) return ir;
+  const shift = Math.max(0, Math.min(ir.peakIndex - Math.floor(maxSamples / 2),
+    full - maxSamples));
+  const peakIndex = ir.peakIndex - shift;
+  return {
+    ...ir,
+    samples: ir.samples.slice(shift, shift + maxSamples),
+    peakIndex,
+    peakTimeS: peakIndex / ir.sampleRate,
+    captureOffsetS: ir.captureOffsetS + shift / ir.sampleRate,
+    truncation: { maxSamples, fullLength: full, startIndex: shift },
+  };
+}
+
 const AGGREGATIONS = ['mean', 'median'];
 const isNum = (v) => typeof v === 'number' && Number.isFinite(v);
 
@@ -57,9 +142,10 @@ function reason(code, text, extra) {
  *   → AnalysisMessage (validated; the arrays are referenced, not copied)
  */
 export function analysisMessage({ stimulus, sampleRate, f1, f2, captures, noise = null,
-  phase = false, aggregation = 'mean' } = {}) {
+  phase = false, aggregation = 'mean', irMaxSamples } = {}) {
   const m = { type: ANALYSIS_TASK, version: ANALYSIS_TASK_VERSION, stimulus, sampleRate, f1, f2,
     captures, noise, phase, aggregation };
+  if (irMaxSamples !== undefined) m.irMaxSamples = irMaxSamples;
   checkMessage(m);
   return m;
 }
@@ -83,6 +169,9 @@ export function checkMessage(m) {
   if (typeof m.phase !== 'boolean') throw new TypeError('message.phase must be a boolean');
   if (!AGGREGATIONS.includes(m.aggregation))
     throw new RangeError('message.aggregation must be "mean" or "median"');
+  if (m.irMaxSamples !== undefined
+    && !(Number.isInteger(m.irMaxSamples) && m.irMaxSamples >= 1))
+    throw new RangeError('message.irMaxSamples must be an integer ≥ 1');
 }
 
 /**
@@ -165,7 +254,8 @@ export function* analysisSteps(message, { now = null } = {}) {
       const both = computeTransferAndIr({ ...args, fft, noiseSpectrum: noiseFor(fft),
         irLagSamples: Math.max(0, alignments[r].lagSamples) });
       transfers[r] = both.transfer;
-      ir = both.ir;
+      ir = capIrLength(both.ir, m.irMaxSamples === undefined ? IR_MAX_SAMPLES
+        : m.irMaxSamples);
       yield record('transfer+impulse-response', r, t0, false);
     } else {
       const fft = planFor(captured);

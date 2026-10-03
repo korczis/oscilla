@@ -25,7 +25,11 @@ export const VENDOR_SCRIPTS = [
 export const BUILD_TIME_ASSETS = ['lucide-static'];
 
 // Size budget for dist/index.html (bytes). p5.min.js alone is ~1.03 MiB raw / ~244 KiB gzip.
+// V3 (MEASURE, EXPERIMENTS) raised it from 2 000 000 / 560 000 after measuring the contributors
+// (spec §129; esbuild metafile, minified): measurement modules 101 KB, measurement views 59 KB,
+// experiments 56 KB, calibration 17 KB, the two UI adapters 28 KB, their charts 6 KB, plus about
+// 46 KB of workspace markup and 15 KB of CSS (+332 KB raw over the V2 release).
 export const BUDGET = {
-  rawBytes: 2_000_000,
-  gzipBytes: 560_000,
+  rawBytes: 2_250_000,
+  gzipBytes: 630_000,
 };

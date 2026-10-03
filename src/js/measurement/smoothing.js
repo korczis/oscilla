@@ -13,6 +13,12 @@
 // uniform in log-frequency. At the ends of the grid the window is truncated to the points
 // that exist (no extrapolation). A flat response is a fixed point; fraction 0 returns a copy.
 // The raw response is never modified: smoothing is a derived view (§35, §159).
+// MASKED smoothing (options.mask; review m1): the same power mean over only the points of the
+// window that the mask includes and that are finite; excluded points come out NaN. It is the
+// same method on a subset of the points, so it keeps the smoothing ID; without a mask the
+// output is unchanged bit for bit. Use it whenever a curve mixes points of different standing
+// (calibration-corrected next to uncovered raw points, reliable next to unreliable ones):
+// unmasked smoothing pulls each across the edge into the other.
 //
 // normalizeResponse: subtracts a reference level and labels the result (§34, never silent):
 //   'at-frequency'  reference = the response at hz, linear interpolation in log-frequency
@@ -36,11 +42,23 @@ function assertSeries(frequencies, magnitudeDb) {
     throw new RangeError('frequencies must be positive');
 }
 
-/** Power-domain 1/fraction-octave smoothing; returns a new Float64Array. */
-export function smoothFractionalOctave(frequencies, magnitudeDb, fraction) {
+/**
+ * Power-domain 1/fraction-octave smoothing; returns a new Float64Array.
+ * options.mask (optional, array-like of the same length): MASKED smoothing. Only points with a
+ * truthy mask entry AND a finite value enter any window; every other point is treated as
+ * missing (never as 0 dB, never as its raw value). The result is NaN at excluded points and at
+ * points whose window holds no included point, so a curve drawn from it has a gap there
+ * instead of values leaking across a mask edge (e.g. corrected points next to uncovered raw
+ * ones, or unreliable points next to reliable ones). fraction 0 with a mask returns the values
+ * at included points and NaN elsewhere. Without `mask` the behaviour is exactly the unmasked
+ * smoothing above (same doubles).
+ */
+export function smoothFractionalOctave(frequencies, magnitudeDb, fraction, options = {}) {
   assertSeries(frequencies, magnitudeDb);
   if (!(fraction === 0 || (Number.isFinite(fraction) && fraction > 0)))
     throw new RangeError(`fraction must be 0 (none) or N > 0 for 1/N octave, got ${fraction}`);
+  const mask = options && options.mask != null ? options.mask : null;
+  if (mask !== null) return smoothMasked(frequencies, magnitudeDb, fraction, mask);
   const n = frequencies.length;
   const out = Float64Array.from(magnitudeDb);
   if (fraction === 0 || n === 0) return out;
@@ -65,21 +83,64 @@ export function smoothFractionalOctave(frequencies, magnitudeDb, fraction) {
   return out;
 }
 
+/** The masked variant of smoothFractionalOctave (see its options.mask). */
+function smoothMasked(frequencies, magnitudeDb, fraction, mask) {
+  const n = frequencies.length;
+  if (!mask || typeof mask.length !== 'number' || mask.length !== n)
+    throw new RangeError('mask must have the length of frequencies');
+  const use = new Uint8Array(n);
+  const power = new Float64Array(n);
+  for (let i = 0; i < n; i++) {
+    use[i] = mask[i] && Number.isFinite(magnitudeDb[i]) ? 1 : 0;
+    if (use[i]) power[i] = 10 ** (magnitudeDb[i] / 10);
+  }
+  const out = new Float64Array(n).fill(NaN);
+  if (fraction === 0) {
+    for (let i = 0; i < n; i++) if (use[i]) out[i] = magnitudeDb[i];
+    return out;
+  }
+  const edge = 2 ** (1 / (2 * fraction));
+  let lo = 0;
+  let hi = 0; // window is [lo, hi)
+  for (let i = 0; i < n; i++) {
+    while (hi < n && frequencies[hi] <= frequencies[i] * edge) hi++;
+    while (frequencies[lo] < frequencies[i] / edge) lo++;
+    if (!use[i]) continue;
+    let flat = true;
+    let first = null;
+    let s = 0;
+    let count = 0;
+    for (let j = lo; j < hi; j++) {
+      if (!use[j]) continue;
+      if (first === null) first = magnitudeDb[j];
+      else if (magnitudeDb[j] !== first) flat = false;
+      s += power[j];
+      count++;
+    }
+    out[i] = flat ? first : 10 * Math.log10(s / count);
+  }
+  return out;
+}
+
 /**
- * smoothResponse(frequencies, magnitudeDb, fraction) → { kind: 'smoothed', algorithm,
- *   fraction, label, smoothedDb }
+ * smoothResponse(frequencies, magnitudeDb, fraction, { mask }) → { kind: 'smoothed',
+ *   algorithm, fraction, label, smoothedDb[, masked] }
  * The labelled derived view of smoothFractionalOctave (§35): the raw response is untouched and
- * the view says which smoothing produced it. fraction 0 is an unsmoothed copy.
+ * the view says which smoothing produced it. fraction 0 is an unsmoothed copy. With `mask`
+ * (see smoothFractionalOctave) the view is masked: NaN outside the mask, `masked: true`.
  */
-export function smoothResponse(frequencies, magnitudeDb, fraction) {
-  const smoothedDb = smoothFractionalOctave(frequencies, magnitudeDb, fraction);
-  return {
+export function smoothResponse(frequencies, magnitudeDb, fraction, options = {}) {
+  const mask = options && options.mask != null ? options.mask : null;
+  const smoothedDb = smoothFractionalOctave(frequencies, magnitudeDb, fraction, { mask });
+  const view = {
     kind: 'smoothed',
     algorithm: SMOOTHING_ALGORITHM,
     fraction,
     label: fraction === 0 ? 'RAW: unsmoothed' : `SMOOTHED: 1/${fraction} octave (power mean)`,
     smoothedDb,
   };
+  if (mask !== null) view.masked = true;
+  return view;
 }
 
 function interpolateAt(frequencies, magnitudeDb, hz) {

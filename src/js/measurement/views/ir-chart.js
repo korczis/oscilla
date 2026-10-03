@@ -4,7 +4,8 @@
 //     ir       an IrResult (impulse-response.js; engine result.ir or experiment results.ir)
 //     options  { scale = 'linear' | 'db', normalize = false,
 //                window = null | [fromMs, toMs]   relative to the direct peak (view only),
-//                range = null | [fromMs, toMs]    x-axis range, default [first sample, 200 ms],
+//                range = null | 'full' | [fromMs, toMs]  x-axis range; null = [first sample,
+//                                                 200 ms], 'full' = first to last sample,
 //                maxPoints = 4000                 plot columns (min/max decimation) }
 //   IrView = { x: Float64Array (ms re direct peak), axes, series: [descriptor], origin,
 //     windowRegion|null, decimation, badges, notes, summary }
@@ -17,7 +18,11 @@
 // region descriptor from irWindow(): the IrResult is never cropped.
 //
 // Decimation keeps the minimum and maximum of each column (so the direct peak and reflections
-// are never averaged away); the summary never lists points (§150).
+// are never averaged away) and runs over the VISIBLE span only (M7 of the V3 review): the
+// samples inside the x range (plus one on each side, so the line reaches the edges) are sliced
+// first and then decimated to maxPoints columns, so a 22 ms span of a 10 s IR is drawn sample by
+// sample instead of from a handful of whole-IR columns. A changed span needs a new view (the
+// caller rebuilds on every span change). The summary never lists points (§150).
 
 import { irWindow, normalizeIr } from '../impulse-response.js';
 import { ZERO_POWER_DB } from '../transfer.js';
@@ -84,8 +89,20 @@ export function buildIrView(ir, options = {}) {
   const n = ir.samples.length;
   const msPerSample = 1000 / sr;
   const peakMs = (ir.peakTimeS ?? ir.peakIndex / sr) * 1000;
-  const xsFull = new Float64Array(n);
-  for (let i = 0; i < n; i++) xsFull[i] = (i - ir.peakIndex) * msPerSample;
+  const msAt = (i) => (i - ir.peakIndex) * msPerSample;
+  const startMs = msAt(0);
+  const endMs = msAt(n - 1);
+  let xr;
+  if (range === 'full') xr = [startMs, endMs];
+  else if (Array.isArray(range)) xr = [range[0], range[1]];
+  else if (range === null) xr = [startMs, Math.min(endMs, IR_DEFAULT_VIEW_MS)];
+  else throw new RangeError("range must be null, 'full' or [fromMs, toMs]");
+  if (!(xr[1] > xr[0])) throw new RangeError('range must be [fromMs, toMs] with fromMs < toMs');
+  // The visible samples, one beyond each edge (clamped to the IR).
+  const i0 = Math.max(0, Math.min(n - 1, Math.floor(ir.peakIndex + xr[0] / msPerSample) - 1));
+  const i1 = Math.max(i0, Math.min(n - 1, Math.ceil(ir.peakIndex + xr[1] / msPerSample) + 1));
+  const xsVis = new Float64Array(i1 - i0 + 1);
+  for (let i = i0; i <= i1; i++) xsVis[i - i0] = msAt(i);
 
   let values;
   let label;
@@ -113,9 +130,10 @@ export function buildIrView(ir, options = {}) {
     label = IR_LABELS.linear;
     unit = 'relative';
   }
-  const ys = scale === 'db' ? Array.from(values, (v) => (v > ZERO_POWER_DB ? v : null))
-    : Array.from(values);
-  const dec = decimate(xsFull, ys.map((v) => (v === null ? -Infinity : v)), maxPoints);
+  const visible = values.subarray ? values.subarray(i0, i1 + 1) : values.slice(i0, i1 + 1);
+  const ys = scale === 'db' ? Array.from(visible, (v) => (v > ZERO_POWER_DB ? v : -Infinity))
+    : Array.from(visible);
+  const dec = decimate(xsVis, ys, maxPoints);
   const plotY = dec.y.map((v) => (Number.isFinite(v) ? v : null));
 
   const lineLabel = `${kind === K.NORMALIZED ? 'NORMALIZED' : 'OBSERVED'} impulse response · `
@@ -126,9 +144,6 @@ export function buildIrView(ir, options = {}) {
     derivation,
   }];
 
-  const startMs = xsFull[0];
-  const endMs = xsFull[n - 1];
-  const xr = range ? [range[0], range[1]] : [startMs, Math.min(endMs, IR_DEFAULT_VIEW_MS)];
   let yAxis;
   if (scale === 'db') {
     // Top: the peak (0 dB when normalized); bottom: 10 dB under the noise tail (re peak),
@@ -176,8 +191,12 @@ export function buildIrView(ir, options = {}) {
 
   const badges = [normalize ? 'NORMALIZED' : 'ORIGINAL SCALE', scale === 'db' ? 'dB' : 'LINEAR'];
   const notes = [origin.label + '.', `Method: ${ir.method || 'spectral'} (${ir.algorithm}).`];
+  if (!Number.isFinite(ir.noiseFloorDb)) notes.push('Noise tail: not available.');
+  else if (typeof ir.noiseFloorMethod === 'string' && ir.noiseFloorMethod) {
+    notes.push(`Noise tail estimate: ${ir.noiseFloorMethod}.`);
+  }
   if (dec.factor > 1) notes.push(`Drawn as the minimum and maximum of every ${dec.factor} `
-    + 'samples (display decimation; the data are not resampled).');
+    + 'samples of the visible span (display decimation; the data are not resampled).');
   if (normalize) notes.push('NORMALIZED for display; the experiment keeps the original scale.');
 
   const peakAmp = ir.samples[ir.peakIndex];
@@ -186,7 +205,9 @@ export function buildIrView(ir, options = {}) {
     + `${msText(absolutePeakS * 1000, msPerSample)} after the capture start (shown at 0 ms), `
     + `peak amplitude ${amp === null ? '—' : fixedText(amp, decimalsOf(amp))} (relative, `
     + `${amp !== null && amp < 0 ? 'inverted polarity, ' : ''}original scale), noise tail `
-    + `${Number.isFinite(ir.noiseFloorDb) ? fixedText(ir.noiseFloorDb, 0) : '—'} dB re peak, `
+    // IR v2 may report no noise floor (noiseFloorDb null): say so, never print a number.
+    + `${Number.isFinite(ir.noiseFloorDb) ? `${fixedText(ir.noiseFloorDb, 0)} dB re peak`
+      : 'not available'}, `
     + `length ${msText(n * msPerSample, Math.max(1, msPerSample))}`
     + `${normalize ? '; display NORMALIZED' : ''}.`;
 
@@ -200,7 +221,8 @@ export function buildIrView(ir, options = {}) {
     series: seriesList,
     origin,
     windowRegion,
-    decimation: { factor: dec.factor, points: dec.x.length, samples: n },
+    decimation: { factor: dec.factor, points: dec.x.length, samples: n,
+      visibleSamples: i1 - i0 + 1, firstIndex: i0, lastIndex: i1 },
     badges,
     notes,
     summary,

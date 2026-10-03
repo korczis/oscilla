@@ -24,13 +24,19 @@ import { ALGORITHMS, KNOWN_ALGORITHM_IDS } from '../../src/js/measurement/algori
 import { inverseSweep, renderStimulus } from '../../src/js/measurement/stimulus.js';
 import { align } from '../../src/js/measurement/align.js';
 import { checkCapture } from '../../src/js/measurement/capture-checks.js';
-import { computeTransfer } from '../../src/js/measurement/transfer.js';
-import { computeImpulseResponse, normalizeIr } from '../../src/js/measurement/impulse-response.js';
+import {
+  TRANSFER_ALGORITHM, TRANSFER_ALGORITHM_V1, computeTransfer,
+} from '../../src/js/measurement/transfer.js';
+import {
+  IR_ALGORITHMS_V1, computeImpulseResponse, normalizeIr,
+} from '../../src/js/measurement/impulse-response.js';
 import { normalizeResponse, smoothResponse } from '../../src/js/measurement/smoothing.js';
 import { welch, windowFn } from '../../src/js/measurement/spectrum.js';
 import { bandAnalysis, bandCenters, rtaResult } from '../../src/js/measurement/rta.js';
 import { aggregateResult, aggregateRuns } from '../../src/js/measurement/aggregate.js';
-import { QUALITY_ALGORITHM_V1, assessQuality } from '../../src/js/measurement/quality.js';
+import {
+  QUALITY_ALGORITHM_V1, QUALITY_ALGORITHM_V2, assessQuality,
+} from '../../src/js/measurement/quality.js';
 import { createFrequencyProfile } from '../../src/js/calibration/profile.js';
 import {
   applyFrequencyCorrection, applyFrequencyCorrectionToBands,
@@ -77,10 +83,17 @@ const CAP = [capture(1), capture(2)];
 const NOISE = noise(9, CAP[0].length, 2e-3);
 const ALIGN = align(STIM.samples, CAP[0], SR);
 const BASE = { stimulus: STIM.samples, sampleRate: SR, f1: SPEC.f1, f2: SPEC.f2 };
-const TRANSFERS = CAP.map((captured) => computeTransfer({ ...BASE, captured, noise: NOISE,
-  alignment: align(STIM.samples, captured, SR), options: { phase: true, pointsPerOctave: 6 } }));
+/** Transfers of both captures under one transfer method (v1 inputs for the retained quality
+ *  rule sets, which were assessed on transfer.v1 results). */
+const transfersOf = (algorithm) => CAP.map((captured) => computeTransfer({ ...BASE, captured,
+  noise: NOISE, alignment: align(STIM.samples, captured, SR),
+  options: { phase: true, pointsPerOctave: 6, algorithm } }));
+const TRANSFERS = transfersOf(TRANSFER_ALGORITHM);
+const TRANSFERS_V1 = transfersOf(TRANSFER_ALGORITHM_V1);
 const IR = computeImpulseResponse({ ...BASE, captured: CAP[0],
   lagSamples: Math.max(0, ALIGN.lagSamples) });
+const IR_V1 = computeImpulseResponse({ ...BASE, captured: CAP[0],
+  lagSamples: Math.max(0, ALIGN.lagSamples), algorithm: IR_ALGORITHMS_V1.spectral });
 const SWEEP_WINDOW = [PRE + DELAY, PRE + DELAY + STIM.samples.length];
 
 /** A capture-check input: a clipped burst, a dropout and a step in the post-roll. */
@@ -135,9 +148,19 @@ function summary(arr, from = 0, count = 16) {
 }
 
 function irOutput(ir) {
-  return { method: ir.method, peakIndex: ir.peakIndex, peakTimeS: ir.peakTimeS,
+  const out = { method: ir.method, peakIndex: ir.peakIndex, peakTimeS: ir.peakTimeS,
     captureOffsetS: ir.captureOffsetS, noiseFloorDb: ir.noiseFloorDb, fftSize: ir.fftSize,
     samples: summary(ir.samples, ir.peakIndex - 8, 32) };
+  if ('noiseFloorMethod' in ir) out.noiseFloorMethod = ir.noiseFloorMethod;
+  return out;
+}
+
+function transferOutput(t) {
+  const out = { frequencies: t.frequencies, magnitudeDb: t.magnitudeDb, phaseDeg: t.phaseDeg,
+    snrDb: t.snrDb, validRange: t.validRange, fftSize: t.fftSize, binHz: t.binHz,
+    phaseReason: t.phaseReason };
+  for (const k of ['snrPooledDb', 'snrResolutionHz', 'resolutionHz']) if (k in t) out[k] = t[k];
+  return out;
 }
 
 function qualityOutput(q) {
@@ -146,15 +169,17 @@ function qualityOutput(q) {
       calibrated: Array.from(q.mask.calibrated) } };
 }
 
-function qualityInput() {
-  const aggregate = aggregateRuns(TRANSFERS.map((t) => t.magnitudeDb));
-  const corrected = applyFrequencyCorrection(TRANSFERS[0].magnitudeDb, TRANSFERS[0].frequencies,
+function qualityInput(transfers = TRANSFERS) {
+  const aggregate = aggregateRuns(transfers.map((t) => t.magnitudeDb));
+  const corrected = applyFrequencyCorrection(transfers[0].magnitudeDb, transfers[0].frequencies,
     PROFILE);
   const level = createLevelCalibration({ referenceHz: 1000, referenceDbSpl: 94,
     observedDbRelative: -31.25, createdAt: '2026-10-02T00:00:00.000Z' });
-  return { capture: SWEEP_CHECKS, transfer: TRANSFERS[0], aggregate,
+  return { capture: SWEEP_CHECKS, transfer: transfers[0], aggregate,
     calibration: { frequency: corrected, level }, sweepWindow: SWEEP_WINDOW };
 }
+
+const NOISE_CHECK = checkCapture({ sampleRate: SR, samples: NOISE });
 
 // ----------------------------------------------------------------------------- cases
 
@@ -163,14 +188,24 @@ const CASES = {
   [ALGORITHMS.transfer]: () => {
     const t = computeTransfer({ ...BASE, captured: CAP[0], noise: NOISE, alignment: ALIGN,
       options: { phase: true, pointsPerOctave: 3 } });
-    return { id: t.algorithm, output: { frequencies: t.frequencies, magnitudeDb: t.magnitudeDb,
-      phaseDeg: t.phaseDeg, snrDb: t.snrDb, validRange: t.validRange, fftSize: t.fftSize,
-      binHz: t.binHz, phaseReason: t.phaseReason } };
+    return { id: t.algorithm, output: transferOutput(t) };
+  },
+  [TRANSFER_ALGORITHM_V1]: () => {
+    const t = computeTransfer({ ...BASE, captured: CAP[0], noise: NOISE, alignment: ALIGN,
+      options: { phase: true, pointsPerOctave: 3, algorithm: TRANSFER_ALGORITHM_V1 } });
+    return { id: t.algorithm, output: transferOutput(t) };
   },
   [ALGORITHMS.ir]: () => ({ id: IR.algorithm, output: irOutput(IR) }),
+  [IR_ALGORITHMS_V1.spectral]: () => ({ id: IR_V1.algorithm, output: irOutput(IR_V1) }),
   [ALGORITHMS.irFarina]: () => {
     const ir = computeImpulseResponse({ ...BASE, captured: CAP[0], method: 'farina-inverse',
       inverse: inverseSweep(SPEC), lagSamples: Math.max(0, ALIGN.lagSamples) });
+    return { id: ir.algorithm, output: irOutput(ir) };
+  },
+  [IR_ALGORITHMS_V1['farina-inverse']]: () => {
+    const ir = computeImpulseResponse({ ...BASE, captured: CAP[0], method: 'farina-inverse',
+      inverse: inverseSweep(SPEC), lagSamples: Math.max(0, ALIGN.lagSamples),
+      algorithm: IR_ALGORITHMS_V1['farina-inverse'] });
     return { id: ir.algorithm, output: irOutput(ir) };
   },
   [ALGORITHMS.align]: () => ({ id: ALIGN.algorithm, output: { lagSamples: ALIGN.lagSamples,
@@ -233,11 +268,19 @@ const CASES = {
       median: aggregateResult(median, GRID) } };
   },
   [ALGORITHMS.quality]: () => {
-    const q = assessQuality({ ...qualityInput(), chainNotes: { limiterDeviationAboveHz: 2500 } });
+    const q = assessQuality({ ...qualityInput(), chainNotes: { limiterDeviationAboveHz: 2500 },
+      noiseCheck: NOISE_CHECK, stimulus: STIM.spec,
+      inputProcessing: { echoCancellation: false, noiseSuppression: null,
+        autoGainControl: false } });
+    return { id: q.algorithm, output: qualityOutput(q) };
+  },
+  [QUALITY_ALGORITHM_V2]: () => {
+    const q = assessQuality({ ...qualityInput(TRANSFERS_V1), algorithm: QUALITY_ALGORITHM_V2,
+      chainNotes: { limiterDeviationAboveHz: 2500 } });
     return { id: q.algorithm, output: qualityOutput(q) };
   },
   [QUALITY_ALGORITHM_V1]: () => {
-    const q = assessQuality({ ...qualityInput(), algorithm: QUALITY_ALGORITHM_V1,
+    const q = assessQuality({ ...qualityInput(TRANSFERS_V1), algorithm: QUALITY_ALGORITHM_V1,
       chainNotes: { limiterDeviationAboveHz: 2500 } });
     return { id: q.algorithm, output: qualityOutput(q) };
   },

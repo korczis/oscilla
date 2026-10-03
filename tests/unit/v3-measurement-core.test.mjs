@@ -135,7 +135,7 @@ function meanPowerDb(power, sr, fftSize, inBand) {
 
 test('algorithms: frozen contract IDs, known/unknown, described by family and version', () => {
   assert.ok(Object.isFrozen(ALGORITHMS));
-  assert.equal(ALGORITHMS.ir, 'oscilla.ir.log-sweep.v1');
+  assert.equal(ALGORITHMS.ir, 'oscilla.ir.log-sweep.v2');
   for (const [role, id] of Object.entries(ALGORITHMS)) {
     assert.ok(isKnownAlgorithm(id), id);
     const family = VARIANT_OF[role] || role;
@@ -147,16 +147,16 @@ test('algorithms: frozen contract IDs, known/unknown, described by family and ve
     for (const id of ids) {
       assert.ok(isKnownAlgorithm(id), id);
       assert.ok(KNOWN_ALGORITHM_IDS.includes(id), id);
-      assert.equal(describeAlgorithm(id).family, role);
+      assert.equal(describeAlgorithm(id).family, VARIANT_OF[role] || role);
       assert.ok(describeAlgorithm(id).version < describeAlgorithm(ALGORITHMS[role]).version);
     }
   }
-  assert.equal(ALGORITHMS.quality, 'oscilla.confidence.v2');
+  assert.equal(ALGORITHMS.quality, 'oscilla.confidence.v3');
   assert.equal(describeAlgorithm('oscilla.confidence.v1').family, 'quality');
   // A variant reports the role it is an alternative for (ADR 0024: distinct IDs per method).
   assert.equal(describeAlgorithm('oscilla.ir.farina-inverse.v1').family, 'ir');
   assert.equal(describeAlgorithm('oscilla.window.blackman-harris.v1').family, 'window');
-  assert.equal(isKnownAlgorithm('oscilla.transfer.v2'), false);
+  assert.equal(isKnownAlgorithm('oscilla.transfer.v3'), false);
   assert.deepEqual(
     { ...describeAlgorithm('oscilla.transfer.v2') },
     { id: 'oscilla.transfer.v2', family: 'transfer', version: 2 },

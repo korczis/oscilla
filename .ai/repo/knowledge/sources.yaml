@@ -181,6 +181,15 @@ sources:
     pathspec: ':(glob)docs/specs/*.md'
     required: false
 
+  # The V3 measurement documentation (docs/v3/): how the layers fit, how each algorithm is
+  # computed and how to make a useful measurement (spec §137, §191-§192). The V3 features name
+  # these documents, so they have to be nodes of the index, which `docs/*.md` does not reach.
+  - id: v3_docs
+    kind: document
+    discovery: vcs
+    pathspec: ':(glob)docs/v3/*.md'
+    required: false
+
   # The claims matrix and its detail pages: doctrines and milestones name claims by id, so
   # a repository that keeps one has its claims as nodes the rest of the graph can reach.
   - id: claims

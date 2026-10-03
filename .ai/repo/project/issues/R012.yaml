@@ -19,3 +19,15 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-02
+started_at: 2026-10-02T13:38:31Z
+updated_at: 2026-10-02T13:38:40Z
+verified_at: 2026-10-02T13:38:34Z
+completed_at: 2026-10-02T13:38:40Z
+evidence:
+  - covers: verified
+    type: test
+    command: "majordomus knowledge sources; majordomus knowledge nodes; majordomus knowledge edges"
+    result: "Knowledge discovers features, use cases, claims, specs, sources and tests (spec/source/shell/build/unit_test/browser_test classes, PR #16); edges implemented_by/tested_by resolve with no missing targets. Answers: what OSCILLA is (README + product list), why one file (ADR 0011/0012 + rule single-file-deliverable), why native Web Audio (ADR 0015), how the version is decided (ADR 0027), which use case proves WAV export (export-a-wav-file -> claim wav-export-valid), what is public (provenance region on the live page; no canonical Majordomus object, see R011). Known limit: the shell extractor has no rule for kind feature (nodes typed unknown)"
+    artifact: "66c5fac"
+    commit: 66c5fac5a2515418c81c2533c5500d3574c92728
+    recorded_at: 2026-10-02T13:38:38Z

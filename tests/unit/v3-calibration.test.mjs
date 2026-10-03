@@ -80,7 +80,8 @@ test('sha256: block-boundary lengths, UTF-8 and byte input agree with node:crypt
 
 test('profile: normalized shape with units, schema, sorted points and null provenance', () => {
   const p = createFrequencyProfile({ name: '  My mic  ', points: [[1000, 0], [20, 4.2]] });
-  assert.equal(p.schemaVersion, 1);
+  assert.equal(p.schemaVersion, 2);
+  assert.equal(p.convention, 'deviation');
   assert.equal(p.kind, 'frequency');
   assert.deepEqual(p.units, { frequency: 'Hz', correction: 'dB' });
   assert.deepEqual(p.points, [[20, 4.2], [1000, 0]]);
@@ -139,7 +140,8 @@ test('profile: range, finiteness and size limits', () => {
 test('exportProfile: normalized OSCILLA object; source only when given; no invented fields', () => {
   const plain = exportProfile(specProfile());
   assert.equal(plain.format, PROFILE_FORMAT);
-  assert.equal(plain.schemaVersion, 1);
+  assert.equal(plain.schemaVersion, 2);
+  assert.equal(plain.convention, 'deviation');
   assert.equal('source' in plain, false);
   assert.equal(plain.notes, null);
   assert.equal(plain.importedAt, null);
@@ -157,7 +159,7 @@ test('exportProfile: normalized OSCILLA object; source only when given; no inven
 
 test('parse: CSV with frequency_hz, correction_db header', () => {
   const r = parseCalibrationText('frequency_hz, correction_db\n20, 4.2\n50, 1.7\n1000, 0\n',
-    { name: 'mic.csv' });
+    { name: 'mic.csv', convention: 'deviation' });
   assert.equal(r.ok, true);
   assert.deepEqual(r.profile.points, [[20, 4.2], [50, 1.7], [1000, 0]]);
   assert.equal(r.profile.name, 'mic.csv');
@@ -175,7 +177,8 @@ test('parse: tab-separated, header variants, semicolons, comments and blank line
     '﻿20 1\n40 2',
   ];
   for (const text of variants) {
-    const r = parseCalibrationText(text);
+    // "correction" headers state no sign: those variants need the explicit choice (M4).
+    const r = parseCalibrationText(text, { convention: 'deviation' });
     assert.equal(r.ok, true, `${JSON.stringify(text)}: ${JSON.stringify(r.errors)}`);
     assert.deepEqual(r.profile.points, [[20, 1], [40, 2]], JSON.stringify(text));
   }
@@ -407,9 +410,9 @@ const LEVEL = {
 test('level: offset = referenceDbSpl − observedDbRelative; shape per contract', () => {
   const cal = createLevelCalibration(LEVEL);
   assert.deepEqual(cal, {
-    schemaVersion: 1, kind: 'level', referenceHz: 1000, referenceDbSpl: 94,
-    observedDbRelative: -30.5, offsetDb: 124.5, conditions: LEVEL.conditions,
-    createdAt: LEVEL.createdAt,
+    schemaVersion: 2, kind: 'level', referenceHz: 1000, referenceDbSpl: 94,
+    observedDbRelative: -30.5, offsetDb: 124.5, scale: 'band-mean-square', method: 'manual',
+    input: null, conditions: LEVEL.conditions, createdAt: LEVEL.createdAt,
   });
   assert.equal(isValidLevelCalibration(cal), true);
   assert.deepEqual(toDisplayLevel(-40, cal), { value: 84.5, unit: SPL_UNIT, calibrated: true });

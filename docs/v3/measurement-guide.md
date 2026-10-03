@@ -1,12 +1,16 @@
 # How to make a useful measurement
 
-A practical guide for OSCILLA's MEASURE workspace (specification §191). The controls are
-described by what they do, not by their final names, because the MEASURE interface is still
-being built. The algorithms behind the results are documented in `docs/v3/algorithms.md`.
+A practical guide for OSCILLA's Measure workspace (specification §191). The algorithms
+behind the results are documented in `docs/v3/algorithms.md`, and the way the layers fit
+together in `docs/v3/architecture.md`.
 
-Status: the analysis, calibration and experiment layers exist; the capture, preflight,
-background-noise check, quality assessment and the MEASURE screen are still being written.
-Where this guide describes them, it describes the specified behaviour.
+In the workspace, the guided flow runs through seven steps: input, calibration, noise check,
+stimulus, measure, review and save. **Check setup** runs the permission, input, sample-rate
+and background-noise checks. **Start measurement** plays and captures the sweep. **Save
+experiment** stores the result. **Expert settings** opens the sweep range and duration, the
+number of runs, the aggregation and the timing. The preset CHARACTERIZE PLAYBACK CHAIN is a
+good start: it runs a noise check, then a 20 Hz-20 kHz sweep, three times, at the LOW digital
+level.
 
 ## What you are measuring
 
@@ -39,14 +43,19 @@ position, temperature. OSCILLA never senses these automatically.
 
 1. **Quiet room.** Switch off fans, air conditioning and music; close the door and windows. Use
    the background-noise check: it records the room without the sweep and is used to estimate the
-   signal-to-noise ratio per frequency.
+   signal-to-noise ratio per frequency. Its length sets how low the SNR can be assessed: below
+   about 87 Hz / (noise-check seconds) the check holds too few independent observations, and
+   that band is reported as "SNR not assessed" (1 s assesses from 87 Hz, 5 s from 17 Hz). A
+   noise check that is digital silence gives no SNR at all ("SNR not measured").
 2. **Fixed microphone.** Put the microphone on a stand or a stable surface, not in your hand.
    Note the distance and aim. Keep it in exactly the same place for every repeat and for any
    measurement you want to compare.
 3. **Disable input processing.** OSCILLA asks the browser to turn off echo cancellation, noise
    suppression and automatic gain control. Browsers and devices may ignore the request. When
    the settings cannot be confirmed, the result says "Input processing may have been applied by
-   browser/device", and the response may be altered in ways OSCILLA cannot correct. A USB
+   browser/device", and the response may be altered in ways OSCILLA cannot correct; the quality
+   assessment then stays at USABLE at best, and a browser that reports processing ON makes it
+   POOR. A USB
    measurement microphone or an audio interface is usually more predictable than a built-in
    microphone.
 4. **Check the sample rate and range.** The sweep cannot exceed 95 % of the Nyquist frequency
@@ -54,9 +63,12 @@ position, temperature. OSCILLA never senses these automatically.
 
 ## Output level
 
-- Start **low** and raise the level only until the signal is clearly above the background noise
-  in the level meter. Moderate is enough: doubling the sweep duration raises the
-  signal-to-noise ratio by about 3 dB without making anything louder.
+- The output level is a choice of LOW, MEDIUM or HIGH, each a digital peak before the master
+  volume. Start at **LOW**. Raise the level only when the result's signal-to-noise reasons
+  say the signal is too close to the background noise. The setup check reports the input
+  level and the background noise, and the quality bar shows NOISE and SIGNAL during the run.
+  Moderate is enough: doubling the sweep duration raises the signal-to-noise ratio by about
+  3 dB without making anything louder.
 - **Never raise the gain to beat the noise.** Loud sweeps drive loudspeakers and amplifiers into
   distortion and the microphone input into clipping, and both corrupt the result. If the noise
   is too high, make the room quieter, move the microphone closer, or use a longer sweep.
@@ -95,11 +107,22 @@ version; take those warnings seriously.
   correction values, typically supplied with a measurement microphone) corrects the microphone's
   own deviation from flat. It applies only between its first and last frequency; outside that
   range the result is shown uncorrected and marked as uncalibrated. The raw result is always
-  kept.
+  kept. In the calibration step, import the file as CSV, TXT (frequency and correction
+  columns) or JSON. A malformed file is refused with the line numbers at fault, and the step
+  shows the profile's name, its number of points and the range it covers. The Frequency
+  indicator then reads CALIBRATED, and the profile can be switched off or removed.
 - An **absolute level calibration** needs an external reference, typically a 94 dB SPL
-  calibrator at 1 kHz on the microphone. It is valid only for the same microphone, input gain,
-  browser settings and position it was taken with.
+  calibrator at 1 kHz on the microphone. The level calibration dialog asks for the reference
+  frequency, the reference sound pressure (dB re 20 µPa), the relative reading observed for
+  that reference with the same microphone and settings, and a note on the conditions. The
+  form suggests 1 kHz and 94 dB, but the observed reading starts empty and there is no
+  default calibration. An incomplete or out-of-range entry is refused. A valid entry turns the
+  Level indicator to CALIBRATED. It is valid only for the same microphone, input gain, browser
+  settings and position it was taken with.
 - The two are separate. A frequency profile alone does not give dB SPL.
+- Calibrations are kept for the page view only. A saved experiment records which frequency
+  profile it used (name and identity) and the level calibration, so reload the profile file
+  before a new session.
 
 ## Relative level versus SPL
 
@@ -119,9 +142,27 @@ Exported CSV files contain the raw data unless you choose a labelled derived vie
   false precision.
 - Phase is shown only when the alignment supports it; otherwise it is absent rather than
   guessed.
-- A measurement quality assessment (GOOD, USABLE, POOR, INVALID, always with its reasons) will
-  accompany each result once the quality module lands; until then judge the result from the
-  valid range, the noise check and the agreement between repeats.
+- Every result comes with a quality status (GOOD, USABLE, POOR or INVALID) and the reasons
+  behind it, each with its value and unit: signal-to-noise, clipping, dropouts and
+  discontinuities, frequency coverage, repeatability between runs, and calibration. A check
+  that was not made reads NOT MEASURED, and that caps the status. Read the reasons, not only
+  the status. Stretches outside the reliable range are drawn dashed and faded, and
+  uncalibrated spans are hatched.
+- An INVALID run cannot be saved as a measurement of anything. Fix the cause the reasons
+  name, such as clipping, an empty capture or a dropout during the sweep, and measure again.
+- The quality bar during the run (INPUT, NOISE, CLIPPING, SIGNAL, CAPTURE) is a warning while
+  you measure. The quality status after the analysis is what counts.
+
+## Live RTA
+
+The RTA tab can analyse the microphone live ("Start live RTA"): FFT, octave or one-third-octave
+bands, averaged INSTANT, FAST (125 ms) or SLOW (1 s), with peak hold and freeze. It is feedback
+for setting up, not a measurement: nothing of it is stored. Band levels are the power in each
+band (a tone of full-scale amplitude reads −3 dB relative in its band); in FFT mode a tone's
+strongest bin reads a few dB lower, because the tone's power spreads over neighbouring bins.
+Hatched bands are too narrow for the analysis resolution to resolve (raise the FFT size in
+expert mode). The microphone is released when you stop it, leave the tab or the workspace,
+press Escape or start a setup check or measurement; the two never share the input.
 
 ## Limits of automated testing
 

@@ -76,7 +76,7 @@ const SNR_DB = 30;
 const RUNS = 3;
 const NOW = '2026-10-02T10:00:00.000Z';
 const BUILD = Object.freeze({
-  version: '3.0.0-test', commit: 'abc1234def5678abc1234def5678abc1234def56',
+  version: '9.8.7-test', commit: 'abc1234def5678abc1234def5678abc1234def56',
   shortCommit: 'abc1234', sourceDate: '2026-10-01T00:00:00Z', channel: 'test', dirty: false,
   repository: null,
 });
@@ -838,13 +838,17 @@ test('flow: warnings never block; READY → measure → review → save', async 
   assert.equal(saved.primaryAction.id, 'repeat');
 });
 
-test('flow: an invalid (clipped) run blocks MEASURE; expert mode can bypass', async () => {
+test('flow: a severely clipped measurement blocks REVIEW; expert mode can bypass', async () => {
+  // Review M8: clipping no longer invalidates the run before analysis; every run is captured
+  // and the quality assessment rejects the result (CLIPPING_SEVERE), so REVIEW is blocked.
   const { engine, result } = await RUN_CLIP;
   const recipe = engineRecipe({ repeats: 2 });
+  assert.equal(result.runs.length, 2, 'both runs captured');
+  assert.equal(result.quality.status, 'INVALID');
   const flow = measureFlow({ state: engine.state, preflight: result.preflight, recipe, result });
   const by = Object.fromEntries(flow.steps.map((s) => [s.id, s]));
-  assert.equal(by.measure.status, 'blocked');
-  assert.ok(by.measure.reasons.some((r) => r.code === 'CLIPPING'));
+  assert.equal(by.review.status, 'blocked');
+  assert.ok(by.review.reasons.some((r) => r.code === 'CLIPPING_SEVERE'));
   assert.equal(by.save.status, 'todo');
   assert.equal(flow.primaryAction.id, 'preflight');
   const expert = measureFlow({ state: S.IDLE, recipe, expert: true });
@@ -893,7 +897,11 @@ test('experiment summary and list rows (§161, §76)', async () => {
   assert.deepEqual(s.lines, schema.summarizeExperiment(EXP_A));
   assert.ok(s.lines.some((l) => /Calibration: frequency profile none, level UNCALIBRATED/
     .test(l)));
-  assert.ok(s.provenance.some((p) => p.label === 'Result hash' && /^[0-9a-f]{12}…$/.test(p.text)));
+  // M11: the result hash names its version and what it covers; the verdict names its build.
+  assert.ok(s.provenance.some((p) => p.label === 'Result hash'
+    && /^[0-9a-f]{12}… v2 \(results, quality, calibration, input, output\)$/.test(p.text)));
+  assert.ok(s.provenance.some((p) => p.label === 'Quality verdict'
+    && /\(as assessed by OSCILLA /.test(p.text)));
   assert.doesNotMatch(allText(s), /SPL/);
 
   const store = createMemoryStore({ knownAlgorithms: ALGORITHMS });

@@ -1,7 +1,10 @@
 // Impulse response from a log-sweep measurement (spec §37-§42, §214). Algorithm IDs, one per
 // method because their outputs differ (ADR 0024; IR_ALGORITHMS): 'spectral' →
-// 'oscilla.ir.log-sweep.v1', 'farina-inverse' → 'oscilla.ir.farina-inverse.v1'. The result's
-// `algorithm` is the ID of the method that produced it; `method` repeats it in words.
+// 'oscilla.ir.log-sweep.v2', 'farina-inverse' → 'oscilla.ir.farina-inverse.v2'. The result's
+// `algorithm` is the ID of the method that produced it; `method` repeats it in words. The v1
+// IDs ('oscilla.ir.log-sweep.v1', 'oscilla.ir.farina-inverse.v1') are retained: `algorithm`
+// selects them and reproduces a v1 result exactly. v1 and v2 differ ONLY in noiseFloorDb (see
+// below); the samples, peak and time origin are identical.
 //
 // Primary method, 'spectral' (default): h = IDFT(H), H the regularized spectral division of
 // transfer.js (Müller & Massarani 2001, JAES 49(6), §5), so the IR and the transfer function
@@ -30,8 +33,20 @@
 // full causal length is kept (len(y) − start samples, original scale, sign kept) for later
 // ETC / Schroeder / RT60 / EDT work.
 //
-// noiseFloorDb: 10·log10(mean h² over the last 10 % of the samples after the peak / h_peak²) —
-// the late-tail energy relative to the peak, floored at −300 dB.
+// noiseFloorDb (dB re the peak, h² / h_peak²), with noiseFloorMethod naming how (v2 only):
+//   v2 'full-overlap-tail': 10·log10(mean h² / h_peak²) over the last 10 % (IR_TAIL_FRACTION)
+//     of the lags after the peak at which the stimulus lies WHOLLY inside the capture, i.e.
+//     capture lag τ = start + i ≤ len(y) − len(x). Only there does every sample of y — and so
+//     all of its noise — enter the estimate; beyond that lag the stimulus runs past the end of
+//     the capture, ever less of y is correlated and the deconvolved noise falls away (−159 dB
+//     at the end of a 2 s sweep's causal window against a true −100 dB floor, review probe p4).
+//     The full-overlap span after the peak is ≈ the post-roll minus the latency, so with a
+//     decay longer than the post-roll the figure is an upper bound (decay, not noise). null
+//     with noiseFloorMethod 'none' when fewer than IR_NOISE_MIN_SAMPLES full-overlap lags
+//     follow the peak (no place to read the noise).
+//   v1: the last 10 % of the whole causal window after the peak (no noiseFloorMethod field),
+//     which lies beyond the full-overlap lags whenever the post-roll is shorter than the sweep.
+//   Both are floored at −300 dB (ZERO_POWER_DB).
 //
 // irWindow and normalizeIr never modify an IrResult: they return new objects (§40, §41).
 // normalizeIr's view carries algorithm 'oscilla.normalization.v1' (smoothing.js
@@ -48,13 +63,22 @@ import { NORMALIZATION_ALGORITHM } from './smoothing.js';
 export const IR_ALGORITHM = ALGORITHMS.ir;
 /** ID of the 'farina-inverse' method. */
 export const IR_FARINA_ALGORITHM = ALGORITHMS.irFarina;
-/** Algorithm ID by IR method. */
+/** Algorithm ID by IR method (the current version of each). */
 export const IR_ALGORITHMS = Object.freeze({
   spectral: IR_ALGORITHM,
   'farina-inverse': IR_FARINA_ALGORITHM,
 });
+/** Retained v1 IDs by method (tail noise floor over the whole causal window). */
+export const IR_ALGORITHMS_V1 = Object.freeze({
+  spectral: 'oscilla.ir.log-sweep.v1',
+  'farina-inverse': 'oscilla.ir.farina-inverse.v1',
+});
+/** IrResult.noiseFloorMethod values (v2). */
+export const IR_NOISE_FLOOR_METHODS = Object.freeze(['full-overlap-tail', 'none']);
 export const IR_PRE_GUARD_S = 0.005;
 export const IR_TAIL_FRACTION = 0.1;
+/** Fewest full-overlap lags after the peak from which a v2 noise floor is read. */
+export const IR_NOISE_MIN_SAMPLES = 16;
 
 /**
  * N·x for the real time signal x of a Hermitian half spectrum: Re(DFT(conj(H))), NOT yet
@@ -104,7 +128,7 @@ function farinaDeconvolution(base, { stimulus, sampleRate, f1, f2, inverse }) {
 }
 
 /** Argument checks of computeImpulseResponse that need no spectra (same order as before). */
-function checkIrArgs({ stimulus, inverse, method, lagSamples }) {
+function checkIrArgs({ stimulus, inverse, method, lagSamples, algorithm }) {
   if (lagSamples !== undefined && !(Number.isFinite(lagSamples) && lagSamples >= 0))
     throw new RangeError(`lagSamples must be a finite number ≥ 0, got ${lagSamples}`);
   if (method !== 'spectral' && method !== 'farina-inverse')
@@ -112,6 +136,10 @@ function checkIrArgs({ stimulus, inverse, method, lagSamples }) {
   if (method === 'farina-inverse'
     && !(inverse instanceof Float32Array) && !(inverse instanceof Float64Array))
     throw new TypeError("method 'farina-inverse' needs inverse: Float32Array");
+  if (algorithm !== undefined && algorithm !== IR_ALGORITHMS[method]
+    && algorithm !== IR_ALGORITHMS_V1[method])
+    throw new RangeError(`IR algorithm '${algorithm}' is not a version of method '${method}' `
+      + `(${IR_ALGORITHMS_V1[method]}, ${IR_ALGORITHMS[method]})`);
   return { stimulus };
 }
 
@@ -121,7 +149,9 @@ function checkIrArgs({ stimulus, inverse, method, lagSamples }) {
  */
 export function irFromDeconvolution(dec, {
   stimulus, captured, sampleRate, f1, f2, inverse = null, method = 'spectral', lagSamples,
+  algorithm = IR_ALGORITHMS[method],
 }) {
+  const v1 = algorithm === IR_ALGORITHMS_V1[method];
   let scaled;
   let shift = 0;
   if (method === 'spectral') {
@@ -149,15 +179,33 @@ export function irFromDeconvolution(dec, {
       peakIndex = i;
     }
   }
+  if (v1) {
+    return {
+      algorithm,
+      method,
+      sampleRate,
+      samples,
+      peakIndex,
+      peakTimeS: peakIndex / sampleRate,
+      captureOffsetS: start / sampleRate,
+      noiseFloorDb: tailFloorDb(samples, peakIndex),
+      window: null,
+      fftSize: dec.fftSize,
+    };
+  }
+  // Last sample index whose lag start + i still has the whole stimulus inside the capture.
+  const fullEnd = Math.min(length - 1, captured.length - stimulus.length - start);
+  const floor = fullOverlapFloorDb(samples, peakIndex, fullEnd);
   return {
-    algorithm: IR_ALGORITHMS[method],
+    algorithm,
     method,
     sampleRate,
     samples,
     peakIndex,
     peakTimeS: peakIndex / sampleRate,
     captureOffsetS: start / sampleRate,
-    noiseFloorDb: tailFloorDb(samples, peakIndex),
+    noiseFloorDb: floor,
+    noiseFloorMethod: floor === null ? 'none' : 'full-overlap-tail',
     window: null,
     fftSize: dec.fftSize,
   };
@@ -170,6 +218,8 @@ export function irFromDeconvolution(dec, {
  *   method      'spectral' (default) | 'farina-inverse' (requires `inverse`)
  *   lagSamples  optional alignment of the stimulus start in the capture (align().lagSamples)
  *   fft         optional FFT plan of the deconvolution size (transfer.js fftPlan)
+ *   algorithm   optional version of the method: IR_ALGORITHMS[method] (default) or
+ *               IR_ALGORITHMS_V1[method] (reproduces a stored v1 result)
  */
 export function computeImpulseResponse({
   stimulus,
@@ -181,16 +231,18 @@ export function computeImpulseResponse({
   method = 'spectral',
   lagSamples,
   fft = null,
+  algorithm,
 }) {
-  checkIrArgs({ stimulus, inverse, method, lagSamples });
+  checkIrArgs({ stimulus, inverse, method, lagSamples, algorithm });
   const dec = spectralDeconvolution({ stimulus, captured, sampleRate, f1, f2, fft });
   return irFromDeconvolution(dec, { stimulus, captured, sampleRate, f1, f2, inverse, method,
-    lagSamples });
+    lagSamples, algorithm: algorithm ?? IR_ALGORITHMS[method] });
 }
 
 /**
  * computeTransferAndIr({ stimulus, captured, sampleRate, f1, f2, lagSamples, alignment, noise,
- *   options, irLagSamples, method, inverse, fft, noiseSpectrum }) → { transfer, ir }
+ *   options, irLagSamples, method, inverse, fft, noiseSpectrum, irAlgorithm }) →
+ *   { transfer, ir }  (options.algorithm selects the transfer version, irAlgorithm the IR's)
  * ONE regularized spectral division (spectralDeconvolution) for both results instead of one
  * each: `transfer` is exactly computeTransfer({ stimulus, captured, sampleRate, f1, f2,
  * lagSamples, alignment, noise, options }) and `ir` exactly computeImpulseResponse({ stimulus,
@@ -215,6 +267,7 @@ export function computeTransferAndIr({
   inverse = null,
   fft = null,
   noiseSpectrum = null,
+  irAlgorithm,
 }) {
   const checked = checkTransferArgs({ lagSamples, alignment, noise, options });
   let irLag = irLagSamples;
@@ -223,15 +276,29 @@ export function computeTransferAndIr({
       : checked.aligned && checked.aligned.lagSamples;
     irLag = Number.isFinite(lag) ? Math.max(0, lag) : undefined;
   }
-  checkIrArgs({ stimulus, inverse, method, lagSamples: irLag });
+  checkIrArgs({ stimulus, inverse, method, lagSamples: irLag, algorithm: irAlgorithm });
   const dec = spectralDeconvolution({ stimulus, captured, sampleRate, f1, f2, fft });
   const transfer = transferFromDeconvolution(dec, { captured, sampleRate, f1, f2, lagSamples,
     noise, noiseSpectrum, ...checked });
   const ir = irFromDeconvolution(dec, { stimulus, captured, sampleRate, f1, f2, inverse, method,
-    lagSamples: irLag });
+    lagSamples: irLag, algorithm: irAlgorithm ?? IR_ALGORITHMS[method] });
   return { transfer, ir };
 }
 
+/** v2: mean h²/h_peak² over the last IR_TAIL_FRACTION of (peakIndex, fullEnd]; null when that
+ *  span has fewer than IR_NOISE_MIN_SAMPLES samples. */
+function fullOverlapFloorDb(samples, peakIndex, fullEnd) {
+  const span = fullEnd - peakIndex;
+  if (!(span >= IR_NOISE_MIN_SAMPLES)) return null;
+  const peak = Math.abs(samples[peakIndex]);
+  if (!(peak > 0)) return ZERO_POWER_DB;
+  const count = Math.max(IR_NOISE_MIN_SAMPLES, Math.floor(span * IR_TAIL_FRACTION));
+  let s = 0;
+  for (let i = fullEnd - count + 1; i <= fullEnd; i++) s += samples[i] * samples[i];
+  return powerToDb(s / count / (peak * peak));
+}
+
+/** v1: mean h²/h_peak² over the last IR_TAIL_FRACTION of the samples after the peak. */
 function tailFloorDb(samples, peakIndex) {
   const peak = Math.abs(samples[peakIndex]);
   if (!(peak > 0)) return ZERO_POWER_DB;

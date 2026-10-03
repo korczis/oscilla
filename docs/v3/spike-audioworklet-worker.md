@@ -171,6 +171,21 @@ Firefox's DynamicsCompressor reacts to high frequencies below its −3 dB thresh
 response near Nyquist is not flat. Chromium and WebKit stay transparent to within 0.00014 dB
 below threshold. The WaveShaper ceiling is exact (identity) in all three engines below ±0.25.
 
+**Changed (V3 pre-release)**: the Firefox 18-20 kHz deviation at peaks ≤ 0.1 and the offline
+sweep's −3.8 dB were not a frequency response of the compressor. Gecko's DynamicsCompressor
+returns silence for a silent (null) input block without advancing its 6 ms look-ahead line, so
+the last 288 frames of every sound stay in the line and come out when the next sound starts.
+Offline, a sweep through the compressor alone ends at frame 95 999 instead of 96 286 (Chromium:
+96 286), and its last 600 frames read −0.46 dB instead of −0.014 dB. In the realtime loopback
+each run started with the previous run's 20 kHz fade-out tail (peak 0.013 at the scheduled
+onset), and after an aborted run with the abort fade's tail, which made the next run INVALID
+(DISCONTINUITY at the onset). `audio-engine.js` now feeds the limiter a constant 0
+(`feedLimiter`), so the line always advances. Re-measured in Firefox 155 (v3-measure.cjs,
+file://): 18-20 kHz worst −0.000 dB at peaks 0.02 and 0.1, 20 Hz-18 kHz worst −0.00014 dB. The
+0.25-peak compression is unchanged (−4.73 dB at 18.0 kHz, −4.84 dB at 18.8 kHz), so
+`LIMITER_RANGE` and its 0.1 threshold stay. The last bullet below no longer applies to peaks
+≤ 0.1.
+
 **Decision**:
 
 - Measurement playback always passes the master chain (master gain → limiter → trim →
@@ -204,14 +219,126 @@ below threshold. The WaveShaper ceiling is exact (identity) in all three engines
   In a Worker the main thread stays responsive (largest heartbeat gap ≤ 4 ms) at a 1.0-1.3×
   compute-time cost. `data:` and `blob:` Workers both load on `file://` and http in all three
   engines.
-- **Worker integration is not done in this change.** The engine's analysis is pure functions
-  on plain arrays, separated by `io.yield()`. The Worker bundle must be embedded source (like
-  the worklet) and loaded from a `data:` URL. That requires a build step that bundles the
-  analysis modules into a string: an esbuild sub-build or a `?raw` import of a pre-bundled
-  file, which is a `scripts/build.mjs` change. Until then, analysis runs on the main thread
-  with yields between steps, and the UI should show progress (§170). Since G21 the boundary
-  exists: `measurement/analysis-task.js` `runAnalysis(message)` is the whole analysis as one
-  structured-cloneable task, called by the engine through its injected `analyze`, so the
-  Worker is that module's bundle plus an `analyze` that posts the message.
+- **Worker integration: done (M10, below).** The spike left it open: the analysis ran on the
+  main thread with `io.yield()` between steps. Since M10 a build sub-step bundles
+  `measurement/analysis-worker.js` (with `analysis-task.js` and its pure dependencies) into a
+  string inside `dist/index.html`, and the engine's default `analyze` starts it from a `data:`
+  URL.
 - **WASM: not needed.** In the slowest engine, a full 2²¹-point analysis takes 1.0 s off the
   main thread (§83).
+
+## M10: the analysis in a Worker, and its memory (V3 pre-release)
+
+An independent review measured, for one 30 s sweep, 522 MB peak RSS and a 1.6 s blocking step
+at 48 kHz, 1.1 GB and 3.5 s at 96 kHz; `maxRawBytes` (engine.js) counted only the raw captures,
+not the FFT working set; and at 192 kHz a long capture's impulse response exceeded the
+4 000 000-element array limit of `experiments/validate.js`, so the app's own `store.put` refused
+to save it.
+
+### What changed
+
+- **Worker.** `scripts/build-analysis-worker.mjs` bundles `src/js/measurement/analysis-worker.js`
+  (esbuild, IIFE, minified, no source map, src/ modules only: 20.2 KiB from 11 modules). The
+  main build compiles that text into the app bundle as the string define
+  `__OSCILLA_ANALYSIS_WORKER__`; `measurement/analysis-runner.js` starts it with
+  `new Worker('data:text/javascript;charset=utf-8,' + encodeURIComponent(source))`. No file is
+  added and nothing is loaded from a path, so rule `project.single-file-deliverable` v2 holds
+  as written (its ban is on workers loaded from a path); `scripts/verify-dist.mjs` explains why
+  and scans the embedded Worker text with every first-party pattern. `dist/index.html` grew by
+  26 686 B raw and 7 705 B gzip (2 074 819 / 574 993 B, budget 2 250 000 / 630 000 B).
+- **Protocol.** One Worker per analysis. The Worker posts `ready`; only then the main thread
+  posts the `AnalysisMessage` with `analysisTransferList(message, { keepRaw })` (captures and
+  noise move, the stimulus is copied). The Worker drives the same `analysisSteps()` generator
+  as `analyzeInline`, posts every step (the engine's progress and `analysis` events keep
+  working) and the result with its typed arrays transferred. The Worker is terminated after
+  the reply, on an error and on abort (`hooks.signal`, an `AbortSignal` the engine aborts with
+  the session).
+- **Fallback.** No embedded script (node unit tests, test bundles) or no `Worker`:
+  `analyzeInline`, as before. A Worker that cannot be constructed or fails before `ready`
+  (e.g. a CSP without `data:` workers) falls back inline with every array still in place.
+- **Same numbers.** Structured cloning copies bits, and both paths run one generator.
+  `tests/unit/v3-analysis-worker.test.mjs` runs the real bundle (node worker_thread behind a
+  Worker-shaped shim fed the `data:` URL) and `tests/browser/analysis-worker.cjs` runs it in
+  Chromium 153, Firefox 155 and WebKit 26.6 from `file://` and http: both compare every typed
+  array byte for byte with `analyzeInline` (3 runs, noise, phase) — identical in all six
+  browser/origin combinations.
+- **Memory accounting.** `analysis-task.js` `estimateAnalysisMemory()` models the working set
+  from the FFT size N = nextPow2(stimulus + capture frames) (the deconvolution and correlation
+  size): 64 MiB + 160 B per FFT point + 8 B per input frame (derivation in
+  `ANALYSIS_MEMORY_MODEL`). `validateRecipe` stores it as `plan.analysis` and fails with
+  `MEMORY_LIMIT` (a preflight blocker; detail: `fftSize`, `analysisBytes`, the limits and the
+  longest sweep that fits) when N > `CONTRACT_LIMITS.maxAnalysisFftSize` = 2²² or the estimate
+  > `maxAnalysisBytes` = 1 GiB; preflight warns `ANALYSIS_MEMORY` above 512 MiB. 2²² admits
+  every 44.1/48 kHz recipe, sweeps up to about 20.8 s at 96 kHz and 9.9 s at 192 kHz with the
+  default pre/post-roll.
+- **Stored IR length.** `capIrLength` keeps at most `IR_MAX_SAMPLES` = 2²¹ samples (≥ 10.9 s at
+  192 kHz; never reached at 48 kHz, whose captures are ≤ 40 s): the window starts at the IR
+  start unless the peak lies beyond its first half. The cut is recorded as
+  `ir.truncation = { maxSamples, fullLength, startIndex }` (absent when nothing was cut, so
+  earlier results and files are unchanged); `peakIndex`, `peakTimeS` and `captureOffsetS` refer
+  to the kept window, `noiseFloorDb` stays the full IR's. `experiments/validate.js` accepts the
+  field only when it describes the stored samples, and a capped IR stores and re-imports byte
+  for byte.
+- **Float32 spectra: not adopted.** The spectra stay Float64. A Float32 2²²-point FFT carries a
+  relative rounding error of about log2(N)·2⁻²⁴ ≈ 1.3·10⁻⁶ (−118 dB), which reaches the IR
+  noise floors and the −60 dB regularization the results report; proving a tolerance for every
+  output would need new golden outputs and, by ADR 0024, new algorithm IDs. Releasing spectra
+  earlier inside `transfer.js` / `impulse-response.js` was out of scope of this change (those
+  modules were being edited concurrently); the Worker returns all of its heap when it ends.
+
+### Measurements
+
+Fixture `tests/browser/analysis-worker.cjs --bench`: one run of a synthetic capture (0.5 s
+pre-roll + sweep + 1.5 s post-roll, a one-pole system and noise) and a 1 s noise capture,
+`file://`, one fresh browser per row after a 1 s warm-up analysis. "Main-thread block" is the
+largest gap between MessageChannel heartbeats during the analysis (Chromium's longtask entries
+agree within 1 ms). Inline is the pre-M10 path (`analyzeInline`, a MessageChannel task between
+steps). Peak RSS is the growth of the browser's whole process tree (`ps`, every 20 ms) over the
+analysis; WebKit's WebContent process is started by launchd, outside that tree, so WebKit has no
+memory figures. Apple M5 Pro, macOS 26.5.1, Node 22.20.0, Playwright 1.63.0, headless.
+
+Main-thread longest block, ms (before = inline, after = Worker):
+
+| Sweep | N | Chromium 153 | Firefox 155 | WebKit 26.6 |
+| --- | --- | --- | --- | --- |
+| 10 s, 48 kHz | 2²¹ | 448 → 5 | 776 → 2 | 428 → 2 |
+| 30 s, 48 kHz | 2²² | 895 → 5 | 1107 → 3 | 1045 → 1 |
+| 10 s, 96 kHz | 2²² | 959 → 5 | 1106 → 2 | 1038 → 2 |
+| 30 s, 96 kHz | 2²³ | 2429 → 3 | 2411 → 4 | 2667 → 3 |
+
+Total analysis time is unchanged within run-to-run noise (Chromium 693 → 724, 1442 → 1567,
+1561 → 1574, 3761 → 3651 ms; Firefox 1113 → 848, 1848 → 1852, 1828 → 1884, 4069 → 4729 ms).
+
+Peak RSS growth during the analysis, and what was still held 1.5 s after it, MiB:
+
+| Sweep | Chromium inline | Chromium Worker | Firefox inline | Firefox Worker |
+| --- | --- | --- | --- | --- |
+| 10 s, 48 kHz | +188, held +191 | +342, held +184 | +164, held +167 | +210, held +47 |
+| 30 s, 48 kHz | +308, held +314 | +503, held +186 | +508, held +359 | +448, held +55 |
+| 10 s, 96 kHz | +304, held +309 | +475, held +162 | +410, held +308 | +415, held +59 |
+| 30 s, 96 kHz | +639, held +659 | +809, held +174 | +644, held +569 | +761, held +107 |
+
+Node 22 (inline, `process.memoryUsage.rss()` sampled every 1 ms from a worker thread): 10 s /
+48 kHz +222 MiB in 717 ms; 30 s / 48 kHz +446 MiB, 1753 ms (longest step 1101 ms); 10 s /
+96 kHz +443 MiB; 30 s / 96 kHz +955 MiB, 3840 ms (longest step 2360 ms); 10 runs of 30 s at
+48 kHz +572 MiB.
+
+Reading:
+
+- The Worker removes the main-thread block: ≤ 5 ms in every engine and size, against 0.4-2.7 s
+  before. `tests/browser/analysis-worker.cjs` asserts < 50 ms for a 10 s / 48 kHz analysis in
+  all six browser/origin combinations (measured 1.0-2.0 ms).
+- The Worker does not lower the peak. In Chromium the Worker's peak is 154-195 MiB above the
+  same analysis inline; the cause is not identified (it is not garbage between steps: a task
+  between Worker steps, and a forced `gc()` there under `--js-flags=--expose-gc`, left it
+  unchanged). In Firefox the difference is −60 to +117 MiB. What the Worker changes is the
+  aftermath: the page keeps the inline garbage until its next GC (+167 to +659 MiB still held
+  after 1.5 s), a terminated Worker returns its heap (+47 to +186 MiB held).
+- The bound on memory is the budget: the 2²³-point rows (+639 to +955 MiB) are now refused by
+  preflight with `MEMORY_LIMIT` before anything is captured; the largest admitted analysis
+  (2²²) peaked at +446 to +508 MiB. Every measured peak (node, Chromium and Firefox, inline and
+  Worker, 1-10 runs, 2²¹-2²³ points; the 2 s / 3-run node analysis too) was 42-87 % of
+  `estimateAnalysisMemory()` for its recipe, so the estimate is an upper bound with margin.
+- An abort 150 ms into a 10 s / 48 kHz Worker analysis rejects 151-166 ms after the start in
+  every browser and origin; the Worker is terminated (asserted in the unit test).
+

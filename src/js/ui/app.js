@@ -13,9 +13,10 @@
 const THEME_KEY = 'oscilla.v2.theme';
 const ANALYSIS_TAB_KEY = 'oscilla.v2.analysisTab';
 const ANALYSIS_TABS = ['waveform', 'spectrum', 'spectrogram', 'harmonics', 'signalPath'];
+// §73 order: Measure and Experiments follow Playground; About stays the last item (PR #17).
 const MODES = [
-  'playground', 'sequencer', 'analyzer', 'filter', 'synthesis', 'compare', 'learn', 'presets',
-  'about',
+  'playground', 'measure', 'experiments', 'sequencer', 'analyzer', 'filter', 'synthesis',
+  'compare', 'learn', 'presets', 'about',
 ];
 const WORKSPACE_TITLES = { about: 'About' };
 const ROVING_ROLES = ['tab', 'radio'];
@@ -71,6 +72,22 @@ export function syncSliderFill(root = document) {
   root.querySelectorAll('input.osc-slider').forEach((el) => {
     el.style.setProperty('--osc-fill', sliderFill(el));
   });
+}
+
+/**
+ * Scroll the nav strip so `tab` is fully visible. align 'start' puts it at the left edge (the
+ * workspace just chosen); otherwise the strip moves only as far as needed.
+ */
+export function keepNavTabInView(tab, align = 'nearest') {
+  const nav = tab.closest('.osc-nav');
+  if (!nav || nav.scrollWidth <= nav.clientWidth) return;
+  const t = tab.getBoundingClientRect();
+  const n = nav.getBoundingClientRect();
+  const pad = 8;
+  if (align === 'start') {
+    if (t.left < n.left || t.right > n.right) nav.scrollLeft += t.left - n.left - pad;
+  } else if (t.left < n.left + pad) nav.scrollLeft -= n.left + pad - t.left;
+  else if (t.right > n.right - pad) nav.scrollLeft += t.right - (n.right - pad);
 }
 
 /** Arrow/Home/End navigation among sibling tabs or radios; selection follows focus. */
@@ -133,6 +150,12 @@ export function createOscillaUi({ storedAnalysisTab = storageGet(ANALYSIS_TAB_KE
       document.addEventListener('click', (e) => {
         if (!e.target.closest('.osc-menu-anchor, .osc-sb-actions-wrap')) this.closeMenus();
       });
+      // Below 1280 px the nav scrolls in its own strip; browsers do not reliably scroll that strip
+      // to a tab reached with Tab / Shift+Tab, so bring it fully into view (WCAG 2.4.11).
+      this.$root.addEventListener('focusin', (e) => {
+        const tab = e.target && e.target.closest ? e.target.closest('.osc-nav .osc-tab') : null;
+        if (tab) keepNavTabInView(tab);
+      });
       document.addEventListener('keydown', (e) => {
         if (e.key === 'Escape' && Object.values(this.menus).some(Boolean)) {
           const open = Object.keys(this.menus).find((k) => this.menus[k]);
@@ -194,12 +217,7 @@ export function createOscillaUi({ storedAnalysisTab = storageGet(ANALYSIS_TAB_KE
       // Below 1280 px the nav scrolls in its own strip: keep the active tab in view (it may
       // have been chosen elsewhere, e.g. About from the overflow menu).
       const tab = this.$root.querySelector('.osc-nav .osc-tab.is-active');
-      if (tab && tab.parentElement.offsetParent !== null) {
-        const nav = tab.closest('.osc-nav');
-        const t = tab.getBoundingClientRect();
-        const n = nav.getBoundingClientRect();
-        if (t.left < n.left || t.right > n.right) nav.scrollLeft += t.left - n.left - 8;
-      }
+      if (tab && tab.parentElement.offsetParent !== null) keepNavTabInView(tab, 'start');
       const panels = [...this.$root.querySelectorAll('[data-osc-modes]')];
       panels.forEach((p) => {
         const on = mode !== 'playground' && p.dataset.oscModes.split(/\s+/).includes(mode);

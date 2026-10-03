@@ -35,6 +35,23 @@
 // Unknown values are null, never guessed (§52). Result arrays are typed arrays in memory and
 // EncodedArray objects (encode.js) in a file; serializeExperiment converts.
 //
+// Provenance fields added after the first V3 review (optional, so files without them keep
+// their exact form and hashes; validate.js checks them when present):
+//   recipe.requested     { f1, f2 } the frequencies the user ASKED for, before stimulus.js
+//                        clamped f2 to 0.95 × Nyquist (the recipe's stimulus holds the played
+//                        values), only when the caller knows them
+//   output.masterGain    the linear master output gain the stimulus passed (capture.js: every
+//                        transfer magnitude includes 20·log10 of it), in (0, 1]
+//   measurement.notes    the engine's result notes (e.g. "Input processing may have been
+//                        applied by browser/device."), at most LIMITS.measurementNotes texts
+//   provenance.resultHashVersion   which hash.js result hash provenance.resultHash is (absent:
+//                        version 1, results only; 2: results, quality, calibration, input and
+//                        output)
+// Input device ids (spec §88): normalizeInput() stores input.device.id hashed
+// (calibration/device-id.js) and drops the duplicate constraints.applied.deviceId, so a stored
+// or exported experiment never carries the raw identifier, once or twice; sanitizeForExport()
+// applies the same rule to a record that predates it.
+//
 //   createRecipe(spec) -> Recipe                      (throws RangeError on an invalid recipe)
 //   createExperiment({ recipe, build, now, id, name, sampleRate, input, calibration,
 //     environment, algorithms }) -> Experiment
@@ -58,6 +75,7 @@ import {
 import {
   RELATIVE_SCALE_LABEL, RELATIVE_UNIT, isValidLevelCalibration,
 } from '../calibration/level.js';
+import { hashDeviceId, isHashedDeviceId } from '../calibration/device-id.js';
 import { aggregateResult, transferFromAggregate } from '../measurement/aggregate.js';
 
 /** Experiment file schema (§131-§132: V3.0 starts at 1, independent of the product version). */
@@ -103,6 +121,8 @@ export const LIMITS = Object.freeze({
   plainArray: 65536,
   qualityReasons: 256,
   algorithmRoles: 32,
+  measurementNotes: 16,
+  masterGain: Object.freeze([0, 1]),
 });
 
 export { STIMULUS_KINDS };
@@ -270,7 +290,7 @@ function jsonCopy(c, v, path, lim, depth = 0) {
  * stimulus kind does not use are normalized to null (they do not change what is played).
  */
 export function checkRecipe(c, value, path = 'recipe') {
-  if (!c.keys(value, path, ['stimulus', 'repeats', 'analysis'])) return null;
+  if (!c.keys(value, path, ['stimulus', 'repeats', 'analysis'], ['requested'])) return null;
   const stimulus = checkStimulus(c, value.stimulus, join(path, 'stimulus'));
   const okRepeats = c.num(value.repeats, join(path, 'repeats'), ...LIMITS.repeats,
     { integer: true });
@@ -279,8 +299,20 @@ export function checkRecipe(c, value, path = 'recipe') {
     c.add(join(path, 'analysis'), 'must be an object');
     return null;
   }
+  let requested;
+  if (Object.prototype.hasOwnProperty.call(value, 'requested')) {
+    const rp = join(path, 'requested');
+    if (c.keys(value.requested, rp, ['f1', 'f2'])) {
+      const okF = ['f1', 'f2'].map((k) => c.num(value.requested[k], join(rp, k),
+        ...LIMITS.frequencyHz, { nullable: true })).every(Boolean);
+      if (okF) requested = { f1: value.requested.f1, f2: value.requested.f2 };
+    }
+    if (requested === undefined) return null;
+  }
   if (!stimulus || !okRepeats || analysis === undefined) return null;
-  return { stimulus, repeats: value.repeats, analysis };
+  const out = { stimulus, repeats: value.repeats, analysis };
+  if (requested !== undefined) out.requested = requested;
+  return out;
 }
 
 function checkStimulus(c, s, path) {
@@ -336,9 +368,10 @@ function checkStimulus(c, s, path) {
  * StimulusSpec as rendered (stimulus.js renderStimulus().spec). Throws RangeError listing every
  * problem; the input is not modified.
  */
-export function createRecipe({ stimulus, repeats = 1, analysis = {} } = {}) {
+export function createRecipe({ stimulus, repeats = 1, analysis = {}, requested } = {}) {
   const c = createChecker();
-  const recipe = checkRecipe(c, { stimulus, repeats, analysis });
+  const recipe = checkRecipe(c, requested === undefined || requested === null
+    ? { stimulus, repeats, analysis } : { stimulus, repeats, analysis, requested });
   if (!recipe) throw new RangeError(`Invalid recipe: ${formatErrors(c.errors)}`);
   return recipe;
 }
@@ -396,32 +429,88 @@ export function normalizeBuild(build) {
 
 const plainCopy = (v) => (v == null ? null : JSON.parse(JSON.stringify(v)));
 
-/** input: { device: { label, id }, constraints: { requested, applied } } — '' labels -> null. */
+/** Drop a raw deviceId from a constraints object (requested { exact } or applied string). */
+function withoutDeviceId(c) {
+  const out = plainCopy(c);
+  if (out && typeof out === 'object' && Object.prototype.hasOwnProperty.call(out, 'deviceId')) {
+    delete out.deviceId;
+  }
+  return out;
+}
+
+/**
+ * input: { device: { label, id }, constraints: { requested, applied } } — '' labels -> null;
+ * device.id hashed (calibration/device-id.js, §88; the applied deviceId if device.id is
+ * missing), constraints without any raw deviceId.
+ */
 export function normalizeInput(input) {
   const i = input && typeof input === 'object' ? input : {};
   const d = i.device && typeof i.device === 'object' ? i.device : {};
   const k = i.constraints && typeof i.constraints === 'object' ? i.constraints : {};
+  const applied = k.applied && typeof k.applied === 'object' ? k.applied : {};
+  const rawId = strOrNull(d.id, 4096) ?? strOrNull(applied.deviceId, 4096);
   return {
     device: {
       label: strOrNull(d.label, LIMITS.labelChars),
-      id: strOrNull(d.id, LIMITS.labelChars),
+      id: rawId ? hashDeviceId(rawId) : null,
     },
-    constraints: { requested: plainCopy(k.requested), applied: plainCopy(k.applied) },
+    constraints: { requested: withoutDeviceId(k.requested), applied: withoutDeviceId(k.applied) },
   };
 }
 
-/** calibration: { frequency: FrequencyProfile|{ id, name }|null, level: LevelCalibration|null }. */
+/**
+ * A copy of an experiment fit for export (§88): input.device.id hashed and no raw deviceId in
+ * the constraints. Returns { experiment, changed }; an experiment already in that form comes
+ * back unchanged (same object). The caller re-stamps a version-2 result hash, which covers the
+ * input, when `changed` (hash.js).
+ */
+export function sanitizeForExport(e) {
+  const input = e && e.input;
+  if (!input || typeof input !== 'object') return { experiment: e, changed: false };
+  const id = input.device ? input.device.id : null;
+  const k = input.constraints || {};
+  const raw = (c) => !!c && typeof c === 'object'
+    && Object.prototype.hasOwnProperty.call(c, 'deviceId');
+  const clean = (id === null || id === undefined || isHashedDeviceId(id)) && !raw(k.requested)
+    && !raw(k.applied);
+  if (clean) return { experiment: e, changed: false };
+  return {
+    experiment: { ...e, input: {
+      device: { label: input.device ? input.device.label ?? null : null,
+        id: typeof id === 'string' && id ? hashDeviceId(id) : null },
+      constraints: { requested: k.requested == null ? null : withoutDeviceId(k.requested),
+        applied: k.applied == null ? null : withoutDeviceId(k.applied) },
+    } },
+    changed: true,
+  };
+}
+
+/**
+ * calibration: { frequency: FrequencyProfile|{ id, name }|null, level: LevelCalibration|null }.
+ * A schema-2 LevelCalibration keeps its scale, method and (hashed) input binding.
+ */
 export function normalizeCalibration(calibration) {
   const cal = calibration && typeof calibration === 'object' ? calibration : {};
   const f = cal.frequency;
   const l = cal.level;
-  return {
-    frequency: f && typeof f === 'object' ? { id: f.id, name: f.name } : null,
-    level: l && typeof l === 'object' ? {
+  let level = null;
+  if (l && typeof l === 'object') {
+    level = {
       schemaVersion: l.schemaVersion, kind: l.kind, referenceHz: l.referenceHz,
       referenceDbSpl: l.referenceDbSpl, observedDbRelative: l.observedDbRelative,
-      offsetDb: l.offsetDb, conditions: l.conditions ?? null, createdAt: l.createdAt ?? null,
-    } : null,
+      offsetDb: l.offsetDb,
+    };
+    if (l.schemaVersion !== 1) {
+      level.scale = l.scale ?? null;
+      level.method = l.method ?? null;
+      level.input = l.input ? { ...l.input } : null;
+    }
+    level.conditions = l.conditions ?? null;
+    level.createdAt = l.createdAt ?? null;
+  }
+  return {
+    frequency: f && typeof f === 'object' ? { id: f.id, name: f.name } : null,
+    level,
   };
 }
 
@@ -433,7 +522,7 @@ export function normalizeCalibration(calibration) {
  */
 export function createExperiment({
   recipe, build = null, now, id, name = '', sampleRate = null, input = null, calibration = null,
-  environment = null, algorithms = {},
+  environment = null, algorithms = {}, masterGain = null, notes = null,
 } = {}) {
   const createdAt = toIsoTimestamp(now);
   if (typeof id !== 'string' || !ID_PATTERN.test(id)) {
@@ -445,7 +534,16 @@ export function createExperiment({
   }
   const r = createRecipe(recipe);
   const b = normalizeBuild(build);
-  const notes = environment && typeof environment.notes === 'string' ? environment.notes : null;
+  const envNotes = environment && typeof environment.notes === 'string' ? environment.notes
+    : null;
+  if (masterGain !== null && !(typeof masterGain === 'number' && masterGain > LIMITS.masterGain[0]
+    && masterGain <= LIMITS.masterGain[1])) {
+    throw new RangeError('createExperiment: masterGain must be a linear gain in (0, 1] or null');
+  }
+  const runNotes = Array.isArray(notes) ? notes.filter((t) => typeof t === 'string' && t.trim())
+    .slice(0, LIMITS.measurementNotes).map((t) => t.slice(0, LIMITS.textChars)) : [];
+  const measurement = { startedAt: null, sampleRate, runs: [] };
+  if (runNotes.length) measurement.notes = runNotes;
   return {
     kind: EXPERIMENT_KIND,
     schemaVersion: EXPERIMENT_SCHEMA_VERSION,
@@ -454,11 +552,12 @@ export function createExperiment({
     experimentId: id,
     name: typeof name === 'string' ? name.trim().slice(0, LIMITS.nameChars) : '',
     recipe: r,
-    output: { level: r.stimulus.level },
+    output: masterGain !== null ? { level: r.stimulus.level, masterGain }
+      : { level: r.stimulus.level },
     input: normalizeInput(input),
     calibration: normalizeCalibration(calibration),
-    environment: { notes: notes ? notes.slice(0, LIMITS.notesChars) : null },
-    measurement: { startedAt: null, sampleRate, runs: [] },
+    environment: { notes: envNotes ? envNotes.slice(0, LIMITS.notesChars) : null },
+    measurement,
     quality: null,
     algorithms: { ...algorithms },
     results: { transfer: null, ir: null, rta: null },
@@ -478,13 +577,16 @@ export function withResults(experiment, patch = {}) {
   const changesConfig = patch.algorithms !== undefined || patch.sampleRate !== undefined;
   let provenance = changesConfig ? { ...e.provenance, configHash: null } : e.provenance;
   if (patch.results !== undefined) provenance = { ...provenance, resultHash: null };
+  const measurement = {
+    startedAt: patch.startedAt !== undefined ? toIsoTimestamp(patch.startedAt) : m.startedAt,
+    sampleRate: patch.sampleRate !== undefined ? patch.sampleRate : m.sampleRate,
+    runs: patch.runs !== undefined ? patch.runs.map((r) => ({ ...r })) : m.runs,
+  };
+  if (m.notes !== undefined) measurement.notes = m.notes;
+  if (patch.quality !== undefined) provenance = { ...provenance, resultHash: null };
   return {
     ...e,
-    measurement: {
-      startedAt: patch.startedAt !== undefined ? toIsoTimestamp(patch.startedAt) : m.startedAt,
-      sampleRate: patch.sampleRate !== undefined ? patch.sampleRate : m.sampleRate,
-      runs: patch.runs !== undefined ? patch.runs.map((r) => ({ ...r })) : m.runs,
-    },
+    measurement,
     quality: patch.quality !== undefined ? patch.quality : e.quality,
     algorithms: patch.algorithms !== undefined ? { ...patch.algorithms } : e.algorithms,
     results: patch.results !== undefined ? { ...e.results, ...patch.results } : e.results,
@@ -636,19 +738,48 @@ export function summarizeExperiment(e) {
   const runs = e.measurement && Array.isArray(e.measurement.runs) ? e.measurement.runs.length : 0;
   const repeats = e.recipe && typeof e.recipe.repeats === 'number' ? e.recipe.repeats : null;
   const level = e.output && typeof e.output.level === 'number' ? e.output.level : null;
+  const gain = e.output && typeof e.output.masterGain === 'number' ? e.output.masterGain : null;
   const sr = e.measurement && e.measurement.sampleRate;
   const levelText = level === null ? UNKNOWN : level === 0 ? 'digital peak 0 (silent)'
     : `digital peak ${sig(level, 3)}, ${(20 * Math.log10(level)).toFixed(1)} ${RELATIVE_UNIT}`;
-  return [
+  const req = e.recipe && e.recipe.requested;
+  const lines = [
     `Name: ${e.name ? e.name : '(unnamed)'}`,
     `Stimulus: ${describeStimulus(s)}`,
+  ];
+  if (req && s && typeof req.f2 === 'number' && req.f2 !== s.f2) {
+    lines.push(`Requested: up to ${formatHz(req.f2)} (limited to ${formatHz(s.f2)}, 0.95 × the `
+      + 'Nyquist frequency)');
+  }
+  lines.push(
     `Output level: ${levelText}`,
+    `Master output gain: ${gain === null ? `${UNKNOWN} (not recorded)`
+      : `${sig(gain, 3)} (${(20 * Math.log10(gain)).toFixed(1)} dB, included in every `
+        + 'magnitude)'}`,
     `Input: ${label || UNKNOWN_DEVICE}`,
     `Calibration: ${describeCalibration(e.calibration)}`,
     `Sample rate: ${typeof sr === 'number' ? `${sig(sr, 6)} Hz` : UNKNOWN}`,
     `Runs: ${runs}${repeats !== null ? ` of ${repeats} requested` : ''}`,
-    `Quality: ${e.quality && e.quality.status ? e.quality.status : `${UNKNOWN} (not assessed)`}`,
-    `OSCILLA ${e.oscillaVersion || UNKNOWN}, commit ${
-      e.oscillaCommit ? e.oscillaCommit.slice(0, 7) : UNKNOWN}`,
-  ];
+    `Quality: ${qualityVerdictText(e)}`,
+  );
+  const notes = e.measurement && Array.isArray(e.measurement.notes) ? e.measurement.notes : [];
+  for (const n of notes) lines.push(`Note: ${n}`);
+  lines.push(`OSCILLA ${e.oscillaVersion || UNKNOWN}, commit ${
+    e.oscillaCommit ? e.oscillaCommit.slice(0, 7) : UNKNOWN}`);
+  return lines;
+}
+
+/**
+ * The stored quality verdict with who gave it (M11): "USABLE (as assessed by OSCILLA <version>,
+ * commit abc1234, oscilla.confidence.v2)". A stored verdict is the assessing build's; a newer
+ * build may assess the same data differently.
+ */
+export function qualityVerdictText(e) {
+  const q = e && e.quality;
+  if (!q || !q.status) return `${UNKNOWN} (not assessed)`;
+  const b = e.provenance && e.provenance.build;
+  const version = (b && b.version) || e.oscillaVersion || UNKNOWN;
+  const commit = (b && b.commit) || e.oscillaCommit;
+  return `${q.status} (as assessed by OSCILLA ${version}, commit ${commit ? commit.slice(0, 7)
+    : UNKNOWN}${q.algorithm ? `, ${q.algorithm}` : ''})`;
 }

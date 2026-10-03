@@ -17,8 +17,9 @@
 //
 // Accepted result shapes are exactly what the analysis modules produce: TransferResult
 // (validRange may be null; optional phaseReason and alignment), IrResult (optional method and
-// fftSize; method must match the IR algorithm ID), RtaResult (rta.js rtaResult: optional
-// windowAlgorithm; zero power is stored as −300 dB, non-finite levels are rejected),
+// fftSize; method must match the IR algorithm ID; optional truncation { maxSamples, fullLength,
+// startIndex } of an IR capped by analysis-task.js capIrLength), RtaResult (rta.js rtaResult:
+// optional windowAlgorithm; zero power is stored as −300 dB, non-finite levels are rejected),
 // AggregateResult (aggregate.js aggregateResult, the optional `results.aggregate`: dispersion
 // consistent with method and runs, envelope arrays and repeatabilityDb null for one run,
 // lowerDb ≤ centreDb ≤ upperDb, spreadDb ≥ 0) and QualityAssessment (quality.js: reasons with
@@ -39,8 +40,18 @@
 // aggregate grid) holds individual runs when they were asked for; it needs such an aggregate.
 //
 // Result hash (spec §101): when provenance.resultHash is a hash, it is recomputed (hash.js
-// resultHash) over the decoded results; a mismatch is the error
-// { path: 'provenance.resultHash', code: 'corrupt' }. opts.sha256Hex may inject SHA-256.
+// resultHash) in the version the file declares (provenance.resultHashVersion; absent = 1, the
+// results only; 2 = results, quality, calibration, input and output) over the decoded
+// experiment; a mismatch is the error { path: 'provenance.resultHash', code: 'corrupt' }.
+// opts.sha256Hex may inject SHA-256.
+//
+// Quality mask (M11): quality.mask.frequencies must equal the grid of the stored response
+// (results.transfer, else results.aggregate) bit for bit; a mask on another grid would mark the
+// wrong points reliable.
+//
+// Optional provenance fields (schema.js header): recipe.requested, output.masterGain,
+// measurement.notes, provenance.resultHashVersion. calibration.level is a schema-1 or schema-2
+// LevelCalibration (calibration/level.js; schema 2 adds scale, method and the hashed input).
 //
 // knownAlgorithms: the allowed algorithm IDs (array, Set or an object such as ALGORITHMS whose
 // values are IDs). Without it only the ID format (oscilla.<name>.v<n>) is checked. For imports
@@ -48,15 +59,22 @@
 // the current defaults and would reject a stored 'oscilla.confidence.v1' assessment.
 
 import {
-  ALGORITHM_ID_PATTERN, CALIBRATION_SCHEMA_VERSION, COMMIT_PATTERN, EXPERIMENT_KIND,
+  ALGORITHM_ID_PATTERN, COMMIT_PATTERN, EXPERIMENT_KIND,
   EXPERIMENT_SCHEMA_VERSION, FORBIDDEN_KEYS, HEX64_PATTERN, ID_PATTERN, LIMITS, VERSION_PATTERN,
   checkRecipe, createChecker,
 } from './schema.js';
+import {
+  LEVEL_SCHEMA_VERSIONS, LEVEL_SCALE, LEVEL_METHODS, isInputBinding,
+} from '../calibration/level.js';
 import { DTYPES, decodeArray, dtypeOf, isEncodedArray } from './encode.js';
 import { migrateExperiment } from './migrate.js';
-import { resultHash, studioExecutionHash } from './hash.js';
+import {
+  resultHash, resultHashVersionOf, RESULT_HASH_VERSIONS, studioExecutionHash,
+} from './hash.js';
 import { PHASE_REASONS } from '../measurement/transfer.js';
-import { IR_ALGORITHMS } from '../measurement/impulse-response.js';
+import {
+  IR_ALGORITHMS, IR_ALGORITHMS_V1, IR_NOISE_FLOOR_METHODS,
+} from '../measurement/impulse-response.js';
 import { AGGREGATE_DISPERSION, DERIVED_FROM_AGGREGATE } from '../measurement/aggregate.js';
 
 export const DEFAULT_MAX_BYTES = 32 * 1024 * 1024;
@@ -248,25 +266,53 @@ function checkExperiment(c, e, ctx) {
     provenance: checkProvenance(c, e.provenance, 'provenance'),
   };
   if (has(e, 'studio')) out.studio = checkStudio(c, e.studio, 'studio', ctx);
-  if (c.keys(e.output, 'output', ['level'])) {
+  if (c.keys(e.output, 'output', ['level'], ['masterGain'])) {
     c.num(e.output.level, 'output.level', ...LIMITS.levelDigital, { nullable: true });
     out.output = { level: e.output.level };
+    if (has(e.output, 'masterGain')) {
+      if (c.num(e.output.masterGain, 'output.masterGain', ...LIMITS.masterGain)
+        && !(e.output.masterGain > 0)) {
+        c.add('output.masterGain', 'must be above 0 (a linear gain in (0, 1])');
+      }
+      out.output.masterGain = e.output.masterGain;
+    }
   }
   if (c.keys(e.environment, 'environment', ['notes'])) {
     c.str(e.environment.notes, 'environment.notes', LIMITS.notesChars,
       { nullable: true, multiline: true });
     out.environment = { notes: e.environment.notes };
   }
+  checkMaskGrid(c, out.quality, out.results);
   if (!c.errors.length && out.provenance && typeof out.provenance.resultHash === 'string') {
-    const opts = ctx.sha256Hex ? { sha256Hex: ctx.sha256Hex } : undefined;
+    const version = resultHashVersionOf(out);
+    const opts = { version };
+    if (ctx.sha256Hex) opts.sha256Hex = ctx.sha256Hex;
     const actual = resultHash(out, opts);
     if (actual !== out.provenance.resultHash) {
-      c.add('provenance.resultHash', 'corrupt: the results do not match their stored hash '
-        + `(stored ${out.provenance.resultHash.slice(0, 12)}…, computed ${actual.slice(0, 12)}…)`,
-      'corrupt');
+      const what = version === 1 ? 'the results do not'
+        : 'the results, quality, calibration, input or output do not';
+      c.add('provenance.resultHash', `corrupt: ${what} match their stored hash (version `
+        + `${version}; stored ${out.provenance.resultHash.slice(0, 12)}…, computed `
+        + `${actual.slice(0, 12)}…)`, 'corrupt');
     }
   }
   return c.errors.length ? null : out;
+}
+
+/** quality.mask must sit on the stored response grid (results.transfer, else aggregate). */
+function checkMaskGrid(c, q, r) {
+  if (!q || !q.mask || !q.mask.frequencies || !r) return;
+  const grid = (r.transfer && r.transfer.frequencies)
+    || (r.aggregate && r.aggregate.frequencies) || null;
+  const f = q.mask.frequencies;
+  // Without a stored response (an RTA, an IR alone) the mask marks nothing that is drawn.
+  if (!grid) return;
+  const bad = f.length !== grid.length ? 0 : f.findIndex((v, i) => v !== grid[i]);
+  if (f.length !== grid.length || bad >= 0) {
+    c.add(f.length !== grid.length ? 'quality.mask.frequencies'
+      : `quality.mask.frequencies[${bad}]`, 'must equal the frequency grid of the stored '
+      + `response (${grid.length} points); the mask marks other points than the response has`);
+  }
 }
 
 function algorithmId(c, v, path, ctx) {
@@ -310,10 +356,23 @@ function checkCalibration(c, v, path) {
   }
   const l = v.level;
   const p = `${path}.level`;
-  if (l !== null && c.keys(l, p, ['schemaVersion', 'kind', 'referenceHz', 'referenceDbSpl',
-    'observedDbRelative', 'offsetDb', 'conditions', 'createdAt'])) {
-    c.num(l.schemaVersion, `${p}.schemaVersion`, CALIBRATION_SCHEMA_VERSION,
-      CALIBRATION_SCHEMA_VERSION, { integer: true });
+  const v1Keys = ['schemaVersion', 'kind', 'referenceHz', 'referenceDbSpl',
+    'observedDbRelative', 'offsetDb', 'conditions', 'createdAt'];
+  const isV1 = !!l && typeof l === 'object' && l.schemaVersion === 1;
+  const isObj = l !== null && c.obj(l, p);
+  const known = isObj && LEVEL_SCHEMA_VERSIONS.includes(l.schemaVersion);
+  if (isObj && !known) {
+    c.oneOf(l.schemaVersion, `${p}.schemaVersion`, LEVEL_SCHEMA_VERSIONS);
+  } else if (known
+    && c.keys(l, p, isV1 ? v1Keys : [...v1Keys, 'scale', 'method', 'input'])) {
+    if (!isV1) {
+      c.oneOf(l.scale, `${p}.scale`, [LEVEL_SCALE.id]);
+      c.oneOf(l.method, `${p}.method`, LEVEL_METHODS);
+      if (!isInputBinding(l.input)) {
+        c.add(`${p}.input`, 'must be null or { deviceId (hashed), sampleRate, '
+          + 'echoCancellation, noiseSuppression, autoGainControl, channelCount }');
+      }
+    }
     c.oneOf(l.kind, `${p}.kind`, ['level']);
     c.num(l.referenceHz, `${p}.referenceHz`, 10, 24000);
     c.num(l.referenceDbSpl, `${p}.referenceDbSpl`, 0, 200);
@@ -322,12 +381,22 @@ function checkCalibration(c, v, path) {
     c.str(l.conditions, `${p}.conditions`, LIMITS.textChars, { nullable: true, multiline: true });
     c.iso(l.createdAt, `${p}.createdAt`, { nullable: true });
     out.level = { ...l };
+    if (!isV1 && l.input) out.level.input = { ...l.input };
   }
   return out;
 }
 
 function checkMeasurement(c, v, path) {
-  if (!c.keys(v, path, ['startedAt', 'sampleRate', 'runs'])) return null;
+  if (!c.keys(v, path, ['startedAt', 'sampleRate', 'runs'], ['notes'])) return null;
+  let notes;
+  if (has(v, 'notes')) {
+    if (!Array.isArray(v.notes) || v.notes.length > LIMITS.measurementNotes) {
+      c.add(`${path}.notes`, `must be an array of at most ${LIMITS.measurementNotes} texts`);
+    } else {
+      v.notes.forEach((t, i) => c.str(t, `${path}.notes[${i}]`, LIMITS.textChars, { min: 1 }));
+      notes = v.notes.slice();
+    }
+  }
   c.iso(v.startedAt, `${path}.startedAt`, { nullable: true });
   c.num(v.sampleRate, `${path}.sampleRate`, ...LIMITS.sampleRate, { nullable: true });
   const runs = [];
@@ -339,7 +408,9 @@ function checkMeasurement(c, v, path) {
       if (c.obj(r, p)) runs.push(c.json(r, p, { depth: 3, keys: 64, array: 64, string: 500 }));
     });
   }
-  return { startedAt: v.startedAt, sampleRate: v.sampleRate, runs };
+  const out = { startedAt: v.startedAt, sampleRate: v.sampleRate, runs };
+  if (notes !== undefined) out.notes = notes;
+  return out;
 }
 
 function checkQuality(c, q, path, ctx) {
@@ -613,8 +684,10 @@ function resultArray(c, v, path, dtype, ctx, o = {}) {
 function checkTransfer(c, t, path, ctx, { derived = false } = {}) {
   const keys = ['algorithm', 'sampleRate', 'frequencies', 'magnitudeDb', 'phaseDeg', 'snrDb',
     'validRange', 'requestedRange', 'fftSize', 'binHz'];
-  const optional = derived ? ['phaseReason', 'alignment', 'derivedFrom']
-    : ['phaseReason', 'alignment'];
+  // transfer.v2 adds snrPooledDb, snrResolutionHz and resolutionHz (transfer.js header).
+  const v2 = ['snrPooledDb', 'snrResolutionHz', 'resolutionHz'];
+  const optional = derived ? ['phaseReason', 'alignment', 'derivedFrom', ...v2]
+    : ['phaseReason', 'alignment', ...v2];
   if (!c.keys(t, path, keys, optional)) return null;
   if (derived && has(t, 'derivedFrom')) {
     c.oneOf(t.derivedFrom, `${path}.derivedFrom`, [DERIVED_FROM_AGGREGATE]);
@@ -644,11 +717,24 @@ function checkTransfer(c, t, path, ctx, { derived = false } = {}) {
     { length: n, lo: -1e7, hi: 1e7, nullable: true });
   const snrDb = resultArray(c, t.snrDb, `${path}.snrDb`, 'f64', ctx,
     { length: n, lo: -db, hi: db, nullable: true });
+  // Key order follows transfer.js (the re-export is byte-identical).
   const out = {
     algorithm: t.algorithm, sampleRate: t.sampleRate, frequencies, magnitudeDb, phaseDeg, snrDb,
-    validRange: pair(t.validRange), requestedRange: pair(t.requestedRange), fftSize: t.fftSize,
-    binHz: t.binHz,
   };
+  if (has(t, 'snrPooledDb')) {
+    out.snrPooledDb = resultArray(c, t.snrPooledDb, `${path}.snrPooledDb`, 'f64', ctx,
+      { length: n, lo: -db, hi: db, nullable: true });
+  }
+  if (has(t, 'snrResolutionHz')) {
+    c.num(t.snrResolutionHz, `${path}.snrResolutionHz`, 0, nyq, { nullable: true });
+    out.snrResolutionHz = t.snrResolutionHz;
+  }
+  Object.assign(out, { validRange: pair(t.validRange), requestedRange: pair(t.requestedRange),
+    fftSize: t.fftSize, binHz: t.binHz });
+  if (has(t, 'resolutionHz')) {
+    c.num(t.resolutionHz, `${path}.resolutionHz`, 0, nyq, { nullable: true });
+    out.resolutionHz = t.resolutionHz;
+  }
   if (has(t, 'phaseReason')) out.phaseReason = t.phaseReason;
   if (has(t, 'alignment')) out.alignment = alignment;
   if (derived && has(t, 'derivedFrom')) out.derivedFrom = t.derivedFrom;
@@ -670,11 +756,17 @@ function checkAlignment(c, a, path, ctx) {
 function checkIr(c, ir, path, ctx) {
   const keys = ['algorithm', 'sampleRate', 'samples', 'peakIndex', 'peakTimeS', 'captureOffsetS',
     'noiseFloorDb', 'window'];
-  if (!c.keys(ir, path, keys, ['method', 'fftSize'])) return null;
+  // ir.*.v2 adds noiseFloorMethod (impulse-response.js IR_NOISE_FLOOR_METHODS); a capped IR
+  // records truncation (analysis memory cap).
+  if (!c.keys(ir, path, keys, ['method', 'fftSize', 'truncation', 'noiseFloorMethod'])) return null;
+  if (has(ir, 'noiseFloorMethod')) {
+    c.oneOf(ir.noiseFloorMethod, `${path}.noiseFloorMethod`, IR_NOISE_FLOOR_METHODS);
+  }
   algorithmId(c, ir.algorithm, `${path}.algorithm`, ctx);
+  const irIds = [...Object.values(IR_ALGORITHMS), ...Object.values(IR_ALGORITHMS_V1)];
   if (has(ir, 'method') && c.oneOf(ir.method, `${path}.method`, Object.keys(IR_ALGORITHMS))
-    && Object.values(IR_ALGORITHMS).includes(ir.algorithm)
-    && IR_ALGORITHMS[ir.method] !== ir.algorithm) {
+    && irIds.includes(ir.algorithm)
+    && IR_ALGORITHMS[ir.method] !== ir.algorithm && IR_ALGORITHMS_V1[ir.method] !== ir.algorithm) {
     c.add(`${path}.method`, `does not match algorithm "${ir.algorithm}"`);
   }
   if (has(ir, 'fftSize')) {
@@ -689,15 +781,31 @@ function checkIr(c, ir, path, ctx) {
   c.num(ir.captureOffsetS, `${path}.captureOffsetS`, -LIMITS.timeS, LIMITS.timeS);
   c.num(ir.noiseFloorDb, `${path}.noiseFloorDb`, -LIMITS.dbAbs, LIMITS.dbAbs, { nullable: true });
   c.range(ir.window, `${path}.window`, -LIMITS.timeS, LIMITS.timeS, { nullable: true });
+  const truncation = has(ir, 'truncation')
+    ? checkIrTruncation(c, ir.truncation, `${path}.truncation`, samples.length) : undefined;
   const out = { algorithm: ir.algorithm };
   if (has(ir, 'method')) out.method = ir.method;
   Object.assign(out, {
     sampleRate: ir.sampleRate, samples, peakIndex: ir.peakIndex,
     peakTimeS: ir.peakTimeS, captureOffsetS: ir.captureOffsetS, noiseFloorDb: ir.noiseFloorDb,
-    window: ir.window === null ? null : pair(ir.window),
   });
+  if (has(ir, 'noiseFloorMethod')) out.noiseFloorMethod = ir.noiseFloorMethod;
+  out.window = ir.window === null ? null : pair(ir.window);
   if (has(ir, 'fftSize')) out.fftSize = ir.fftSize;
+  if (truncation) out.truncation = truncation;
   return out;
+}
+
+// The stored IR is the window [startIndex, startIndex + length) of a longer causal IR.
+function checkIrTruncation(c, t, path, length) {
+  if (!c.keys(t, path, ['maxSamples', 'fullLength', 'startIndex'])) return undefined;
+  const okMax = c.num(t.maxSamples, `${path}.maxSamples`, length, length, { integer: true });
+  const okFull = c.num(t.fullLength, `${path}.fullLength`, length + 1, Number.MAX_SAFE_INTEGER,
+    { integer: true });
+  const okStart = okFull && c.num(t.startIndex, `${path}.startIndex`, 0, t.fullLength - length,
+    { integer: true });
+  if (!okMax || !okFull || !okStart) return undefined;
+  return { maxSamples: t.maxSamples, fullLength: t.fullLength, startIndex: t.startIndex };
 }
 
 function checkRta(c, r, path, ctx) {
@@ -784,12 +892,16 @@ function checkStudio(c, s, path, ctx) {
 }
 
 function checkProvenance(c, p, path) {
-  if (!c.keys(p, path, ['configHash', 'createdAt', 'repeatOf', 'build'], ['resultHash'])) {
+  if (!c.keys(p, path, ['configHash', 'createdAt', 'repeatOf', 'build'],
+    ['resultHash', 'resultHashVersion'])) {
     return null;
   }
   c.str(p.configHash, `${path}.configHash`, 64, { nullable: true, pattern: HEX64_PATTERN });
   if (has(p, 'resultHash')) {
     c.str(p.resultHash, `${path}.resultHash`, 64, { nullable: true, pattern: HEX64_PATTERN });
+  }
+  if (has(p, 'resultHashVersion')) {
+    c.oneOf(p.resultHashVersion, `${path}.resultHashVersion`, RESULT_HASH_VERSIONS);
   }
   c.iso(p.createdAt, `${path}.createdAt`);
   c.str(p.repeatOf, `${path}.repeatOf`, LIMITS.idChars, { nullable: true, pattern: ID_PATTERN });
@@ -810,9 +922,12 @@ function checkProvenance(c, p, path) {
     c.str(b.repository, `${bp}.repository`, LIMITS.labelChars, { nullable: true });
     build = { ...b };
   }
-  const out = { configHash: p.configHash };
-  if (has(p, 'resultHash')) out.resultHash = p.resultHash;
-  return Object.assign(out, { createdAt: p.createdAt, repeatOf: p.repeatOf, build });
+  // The input's key order is kept (every key was checked above), so a file re-exports as is.
+  const vals = { configHash: p.configHash, resultHash: p.resultHash,
+    resultHashVersion: p.resultHashVersion, createdAt: p.createdAt, repeatOf: p.repeatOf, build };
+  const out = {};
+  for (const k of Object.keys(p)) out[k] = vals[k];
+  return out;
 }
 
 const pair = (v) => (Array.isArray(v) ? [v[0], v[1]] : null);

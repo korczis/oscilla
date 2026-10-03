@@ -2,8 +2,10 @@
 //
 //   compareExperiments(list) -> { common: { field: value }, differences: [{ field, values,
 //     severity: 'info'|'warn' }], compatible, warnings: [text], sameConfiguration }
-// Differences in calibration, sample rate, stimulus, analysis or algorithm versions are 'warn'
-// and make the set incompatible (it may still be overlaid, with the warnings shown); name,
+// Differences in calibration, sample rate, stimulus, analysis, algorithm versions or the master
+// output gain (output.masterGain: 20·log10 of it is part of every stored magnitude, so two
+// gains offset the curves by their ratio; a recorded gain against none is a difference too) are
+// 'warn' and make the set incompatible (it may still be overlaid, with the warnings shown); name,
 // versions of OSCILLA and of the schema, input device and repeats are 'info'. The stored
 // response kind (G20) is 'warn' too: a single run against the aggregate of repeated runs is not
 // an equivalent comparison (field `results.response`: 'single run' | 'aggregate (<method>)'),
@@ -38,6 +40,7 @@ const FIELDS = [
   ['recipe.analysis', (e) => e.recipe?.analysis ?? null, 'warn'],
   ['recipe.repeats', (e) => e.recipe?.repeats ?? null, 'info'],
   ['output.level', (e) => e.output?.level ?? null, 'info'],
+  ['output.masterGain', (e) => e.output?.masterGain ?? null, 'warn'],
   ['schemaVersion', (e) => e.schemaVersion ?? null, 'info'],
   ['oscillaVersion', (e) => e.oscillaVersion ?? null, 'info'],
   ['oscillaCommit', (e) => e.oscillaCommit ?? null, 'info'],
@@ -50,6 +53,8 @@ const WARN_TEXT = {
   'measurement.sampleRate': 'different sample rates',
   'recipe.stimulus': 'different stimuli',
   'recipe.analysis': 'different analysis settings',
+  'output.masterGain': 'different master output gains (20·log10 of the gain is part of every '
+    + 'magnitude)',
   'results.response': 'a single run compared with the aggregate of repeated runs, or aggregates '
     + 'of different methods',
 };

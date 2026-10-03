@@ -27,5 +27,5 @@ charts and a custom canvas the spectrogram, on one frame loop (ADR 0016).
 ## What it does not do
 
 Levels are relative to digital full scale, never dB SPL (ADR 0017). The live analyser is
-feedback, not measurement: measurement results will come from captured PCM through offline
-DSP (ADR 0018), which is planned V3 work.
+feedback, not measurement: measurement results come from captured PCM through offline DSP
+(ADR 0018) in the V3 Measure workspace (feature measurement-workbench).

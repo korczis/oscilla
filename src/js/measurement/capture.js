@@ -17,14 +17,17 @@
 // ≥ 9 dB below the limiter threshold. Measured with the loopback taps (tests/browser/
 // v3-measure.cjs, post-chain minus pre-limiter, 2 s sweep): Chromium 153 and WebKit 26.6 are
 // transparent (≤ 0.0002 dB, 20 Hz-20 kHz) at peaks 0.02 and 0.25. Firefox 155's
-// DynamicsCompressor is transparent over 20 Hz-18 kHz (≤ 0.003 dB) up to a 0.1 peak (−20 dBFS),
-// but deviates above ~18 kHz at every level (+5.8 dB at 19.9 kHz in the realtime loopback,
-// −3.9 dB at 19.5 kHz offline) and, at a 0.25 peak, compresses ≥ 8 kHz by up to 4.7 dB although
-// the signal is below its threshold (its detector apparently sees pre-emphasized highs). Hence
-// the engine warns (LIMITER_RANGE) when level × master gain exceeds
-// PREFLIGHT_THRESHOLDS.limiterTransparentPeak = 0.1; the default (0.25 × 0.08 = 0.02) is well
-// inside. The compressor adds its look-ahead delay (288 frames = 6 ms at 48 kHz in all
-// three engines), which alignment absorbs. The measured transfer includes the master gain:
+// DynamicsCompressor is transparent over 20 Hz-20 kHz (≤ 0.0002 dB) up to a 0.1 peak (−20 dBFS)
+// since the engine feeds it a constant 0 (audio-engine.js feedLimiter): without that feed Gecko
+// skips the compressor's look-ahead line on silent input, so a sound's last 6 ms were cut off
+// and replayed at the start of the next sound (the earlier "+5.8 dB at 19.9 kHz" here was the
+// previous run's 20 kHz fade-out tail replayed at each run's onset, and an aborted run's fade
+// tail made the next run INVALID with a DISCONTINUITY at the scheduled onset). At a 0.25 peak
+// it still compresses ≥ 8 kHz by up to 4.8 dB although the signal is below its threshold (its
+// detector apparently sees pre-emphasized highs). Hence the engine warns (LIMITER_RANGE) when
+// level × master gain exceeds PREFLIGHT_THRESHOLDS.limiterTransparentPeak = 0.1; the default
+// (0.25 × 0.08 = 0.02) is well inside. The compressor adds its look-ahead delay (288 frames =
+// 6 ms at 48 kHz in all three engines), which alignment absorbs. The measured transfer includes the master gain:
 // 20·log10(engine.gainLevel) dB on top of the acoustic path.
 //
 // Capture (CaptureSession): mono PCM from a MediaStreamAudioSourceNode (getUserMedia with
@@ -62,6 +65,18 @@
 // this io's counters AND in engine.nodes / engine.sources, so the engine's own node accounting
 // sees them; after cleanup both are zero (sources once their fade has ended).
 //
+// Live input tap (spec §44-§45, §123; docs/v3/ui-integration.md "Live RTA"): openLiveTap()
+// opens the SAME input as a measurement (getUserMedia through this io's permission path and
+// constraints, or the TEST CONTEXT loopback) into one AnalyserNode, configured as the V2
+// microphone analysis does (audio/microphone.js configureAnalyser), never connected to the
+// destination. The caller reads its time-domain samples (analysis/analyser.js reader) and
+// computes the spectrum itself (measurement/live-rta.js), so the analyser's own dB scaling and
+// smoothing are never used. The tap is EXCLUSIVE with a measurement: it is refused (BUSY) while
+// a capture or stimulus runs, and preflight()/captureNoise()/runStimulus() close it before they
+// start. Every release path (cancel, dispose, Escape through the app, pagehide / hidden
+// document, a track that ends, a closed context) closes it too and calls its onClosed(reason);
+// closeLiveTap() also releases the input, so after it the io owns no node and no live track.
+//
 // Timers: none drives audio or progress. One watchdog setTimeout per capture detects a stalled
 // or suspended audio thread (CAPTURE_TIMEOUT / CONTEXT_SUSPENDED); it reads the audio clock and
 // only ever fails a capture. yield() uses a MessageChannel task between analysis steps.
@@ -73,7 +88,10 @@
 // of a physical system.
 
 import { MAX_OUTPUT_GAIN } from '../core/constants.js';
-import { MIC_UNAVAILABLE_TEXT, hasMicrophoneApi, stopStreamTracks } from '../audio/microphone.js';
+import {
+  MIC_ANALYSER_FFT_SIZE, MIC_UNAVAILABLE_TEXT, configureAnalyser, hasMicrophoneApi,
+  stopStreamTracks,
+} from '../audio/microphone.js';
 import { MeasurementError, mapError } from './engine.js';
 
 export const CAPTURE_PROCESSOR_NAME = 'oscilla-capture-v1';
@@ -286,6 +304,7 @@ function createIoCore({ engine, env = defaultEnv(), mode = 'auto', openInput, ki
   let disposed = false;
   let origStopAll = null;
   let stopAllWrapper = null;
+  let live = null; // the live input tap: { analyser, sampleRate, onClosed }
 
   const io = {};
 
@@ -301,6 +320,17 @@ function createIoCore({ engine, env = defaultEnv(), mode = 'auto', openInput, ki
   };
 
   const busy = () => windows.size > 0 || stims.size > 0;
+
+  // ---- live input tap (see the header): drop it, keeping the input for a measurement.
+  function dropLive(reason) {
+    if (!live) return;
+    const l = live;
+    live = null;
+    unregister(l.analyser);
+    if (typeof l.onClosed === 'function') {
+      try { l.onClosed(reason); } catch (e) { /* the caller's cleanup must not break ours */ }
+    }
+  }
 
   function interrupt(info) {
     if (!busy() && !input) return;
@@ -562,10 +592,15 @@ function createIoCore({ engine, env = defaultEnv(), mode = 'auto', openInput, ki
   }
 
   // ---- input
-  async function ensureInput(ctx) {
+  // `since` is the session epoch the caller started in: a cancel() (release) while the caller
+  // was awaiting the context or the worklet module bumps the epoch, and nothing may be opened
+  // for a session that was already released (the input and the recorder would leak).
+  const abortedSince = (since) => since !== epoch || disposed;
+  async function ensureInput(ctx, since = epoch) {
+    if (abortedSince(since)) throw new MeasurementError('ABORTED');
     if (input) return input;
     if (inputPending) return inputPending;
-    const my = epoch;
+    const my = since;
     inputPending = (async () => {
       const opened = await openInput(ctx, { register, unregister });
       if (my !== epoch || disposed) {
@@ -583,13 +618,30 @@ function createIoCore({ engine, env = defaultEnv(), mode = 'auto', openInput, ki
     }
   }
 
-  async function ensureReady({ requireRunning = true } = {}) {
+  async function ensureReady({ requireRunning = true, since = epoch } = {}) {
+    dropLive('measurement'); // exclusive: a capture never runs beside the live tap
     const ctx = await ensureContext({ requireRunning });
+    if (abortedSince(since)) throw new MeasurementError('ABORTED');
     await ensureRecorderMode(ctx);
-    const inp = await ensureInput(ctx);
+    const inp = await ensureInput(ctx, since);
+    if (abortedSince(since)) throw new MeasurementError('ABORTED');
     if (!recorder) recorder = buildRecorder(ctx, inp.node);
     wrapStopAll();
     return ctx;
+  }
+
+  // Firefox 155 freezes AudioContext.currentTime for the whole task, microtasks included
+  // (measured: after 50/150/300 ms of synchronous work in one task it still reads the value
+  // from the task's start; Chromium and WebKit read the live clock). A window scheduled at
+  // currentTime + SCHEDULE_LEAD_S after more than ~0.1 s of work in the same task (the noise
+  // summary, UI updates, the previous run's checks) starts in the past: the worklet is armed
+  // after its start frame and the run is INVALID with FRAMES_MISSING (200 ms of work: 4864
+  // frames missing, 1 discontinuity, the worklet armed 4864 frames late). So every window is
+  // scheduled from the clock read at the start of a NEW task.
+  const nextTask = makeYield(env);
+  async function freshClock(since) {
+    await nextTask();
+    if (abortedSince(since)) throw new MeasurementError('ABORTED');
   }
 
   const quantum = (sr) => 128 / sr;
@@ -649,6 +701,8 @@ function createIoCore({ engine, env = defaultEnv(), mode = 'auto', openInput, ki
   // ---- release everything of the current session
   function release(err) {
     epoch += 1;
+    const info = err && err.detail;
+    dropLive(info && info.reason ? info.reason : (err && err.code) || 'released');
     const ctx = engine.ctx;
     for (const w of [...windows.values()]) failWindow(w, err || new MeasurementError('ABORTED'));
     if (recorder) {
@@ -681,13 +735,53 @@ function createIoCore({ engine, env = defaultEnv(), mode = 'auto', openInput, ki
     get activeCaptureCount() { return windows.size; },
     get openPortCount() { return recorder && recorder.portOpen ? 1 : 0; },
     get openTrackCount() { return input && input.liveTracks ? input.liveTracks() : 0; },
+    get liveTapOpen() { return !!live; },
     now() { return engine.ctx ? engine.ctx.currentTime : 0; },
     yield: makeYield(env),
     /** Frame timing of the last (≤ 8) capture windows, for test diagnostics. */
     diagnostics() { return { mode: recorderMode, windows: recent.map((x) => ({ ...x })),
       clock: clockNotes.slice() }; },
 
+    /**
+     * openLiveTap({ fftSize, onClosed(reason) }) → { analyser, sampleRate, close() }
+     * The live input tap (see the header). Opens the context and the input like preflight()
+     * (in the user gesture: engine.init() first) and connects one AnalyserNode of fftSize
+     * (default MIC_ANALYSER_FFT_SIZE) to it. BUSY while a capture or stimulus runs; ABORTED
+     * when cancel() ran while the input was opening. A second call returns the open tap.
+     * close() = closeLiveTap().
+     */
+    async openLiveTap({ fftSize = MIC_ANALYSER_FFT_SIZE, onClosed = null } = {}) {
+      if (busy()) throw new MeasurementError('BUSY');
+      const handle = () => ({ analyser: live.analyser, sampleRate: live.sampleRate,
+        close: () => io.closeLiveTap() });
+      if (live) return handle();
+      const since = epoch;
+      const ctx = await ensureContext({ requireRunning: true });
+      if (abortedSince(since)) throw new MeasurementError('ABORTED');
+      const inp = await ensureInput(ctx, since);
+      if (abortedSince(since)) throw new MeasurementError('ABORTED');
+      if (busy()) throw new MeasurementError('BUSY');
+      if (live) return handle();
+      const analyser = register(configureAnalyser(ctx.createAnalyser(), { fftSize }));
+      inp.node.connect(analyser); // analysis only: never connected to the destination
+      live = { analyser, sampleRate: ctx.sampleRate, onClosed };
+      return handle();
+    },
+
+    /** Close the live tap and release the input (idempotent; no-op during a capture). */
+    closeLiveTap() {
+      if (!live) return false;
+      if (busy()) {
+        dropLive('stopped');
+        return true;
+      }
+      release(new MeasurementError('ABORTED', undefined, { detail: { reason: 'stopped' } }));
+      return true;
+    },
+
     async preflight() {
+      dropLive('measurement');
+      const since = epoch;
       const facts = {
         audioContext: { available: true, state: null },
         sampleRate: null,
@@ -718,7 +812,7 @@ function createIoCore({ engine, env = defaultEnv(), mode = 'auto', openInput, ki
         return facts;
       }
       try {
-        const inp = await ensureInput(ctx);
+        const inp = await ensureInput(ctx, since);
         facts.input = { ok: true, device: inp.device, constraints: inp.constraints };
       } catch (e) {
         const me = mapError(e, 'NO_INPUT');
@@ -729,7 +823,8 @@ function createIoCore({ engine, env = defaultEnv(), mode = 'auto', openInput, ki
       }
       if (ctx.state === 'running') {
         try {
-          await ensureReady();
+          await ensureReady({ since });
+          await freshClock(since);
           const sr = ctx.sampleRate;
           const start = ceilFrame(ctx.currentTime + SCHEDULE_LEAD_S, sr);
           const w = await openWindow(ctx, start, Math.round(PREFLIGHT_LEVEL_S * sr), null);
@@ -752,7 +847,9 @@ function createIoCore({ engine, env = defaultEnv(), mode = 'auto', openInput, ki
     },
 
     async captureNoise(seconds, { onScheduled, onChunk } = {}) {
-      const ctx = await ensureReady();
+      const since = epoch;
+      const ctx = await ensureReady({ since });
+      await freshClock(since);
       const sr = ctx.sampleRate;
       const startFrame = ceilFrame(ctx.currentTime + SCHEDULE_LEAD_S, sr);
       const frames = Math.round(seconds * sr);
@@ -765,7 +862,9 @@ function createIoCore({ engine, env = defaultEnv(), mode = 'auto', openInput, ki
 
     async runStimulus(stimulus, { preRollS, postRollS, notBefore = null, onScheduled,
       onChunk } = {}) {
-      const ctx = await ensureReady();
+      const since = epoch;
+      const ctx = await ensureReady({ since });
+      await freshClock(since);
       const sr = ctx.sampleRate;
       const samples = stimulus && stimulus.samples;
       if (!(samples instanceof Float32Array) || !samples.length)

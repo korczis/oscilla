@@ -13,7 +13,8 @@
 #   status          one of the statuses below
 #
 # Every guaranteed claim names a test that a release-gate script runs (`npm test`,
-# `npm run test:engine` or `npm run test:browser`), and CI blocks a merge on its failure.
+# `npm run test:engine`, `npm run test:measure` or `npm run test:browser`), and CI blocks a
+# merge on its failure.
 # Majordomus's evidence ledger records only its own runners (test/run.sh, cargo test), so
 # `majordomus-cli evidence show` reports these claims `unrunnable`: the proof is the CI run,
 # not the ledger. That is a limit of the tool, stated here rather than hidden.
@@ -23,7 +24,7 @@ statuses:
   - id: guaranteed
     meaning: Implemented, and a test in the release gate proves it; CI blocks a merge when it fails.
   - id: planned
-    meaning: Specified and not implemented on main. Named so the omission is visible.
+    meaning: Specified and not implemented on the branch that carries the claim. Named so the omission is visible.
 
 claims:
   # ---- V2, shipped
@@ -206,62 +207,145 @@ claims:
     status: guaranteed
     note: Checked against git history where it is complete; a shallow clone skips the comparison and still checks the stated duration against the stated times.
 
-  # ---- V3 MEASURE, planned (milestones M012-M020); nothing on main implements these
+  # ---- V3 MEASURE (milestones M012-M020), on feature/v3. `npm test` runs tests/unit/v3-*.test.mjs;
+  # `npm run test:measure` runs tests/browser/v3-measure.cjs and tests/browser/v3-ui.cjs; both
+  # are in the release gate. Every browser check runs on a TEST CONTEXT digital loopback or a
+  # fake microphone: no automated test proves how a physical speaker, room or microphone behaves.
   - id: measurement-workbench
-    claim: OSCILLA will offer a Measure workspace, separate from the Playground, that runs a measurement from preflight to a stored result
+    claim: The Measure workspace, separate from the Playground, takes a measurement through setup check, noise check, sweep, analysis and review to a saved experiment, and the instrument cannot play while a measurement owns the output
     source: docs/specs/oscilla-v3-measure.md
-    implementation: "-"
-    test: "-"
-    status: planned
+    implementation: src/js/ui/measure.js
+    test: tests/browser/v3-ui.cjs
+    status: guaranteed
+    note: Checks loopback-workflow and output-exclusive, in Chromium, Firefox and WebKit, from file:// and from a /oscilla/ sub-path; the state machine and the engine flow are in tests/unit/v3-measurement-core.test.mjs and tests/unit/v3-engine.test.mjs.
+
+  - id: measurement-abort-releases-everything
+    claim: Aborting a measurement in preflight, noise check, armed, measuring or analysing, by Escape, STOP, page hide or leaving the workspace, ends it ABORTED with no audio node, source, capture, worklet port or input track left
+    source: .ai/repo/rules/project/audio-engine-discipline.v2.md
+    implementation: src/js/measurement/capture.js
+    test: tests/browser/v3-ui.cjs
+    status: guaranteed
+    note: Check abort-stages; tests/browser/v3-measure.cjs counts nodes and unended sources independently after an abort mid-sweep, and tests/unit/v3-engine.test.mjs aborts from every active state on a fake io.
+
+  - id: measure-from-file-and-subpath
+    claim: The Measure and Experiments workspaces of the built page run in Chromium, Firefox and WebKit from file:// and from a /oscilla/ sub-path, with the capture worklet loaded from a data URL and no console errors
+    source: .ai/repo/adrs/0012-self-contained-runtime.md
+    implementation: src/js/measurement/capture.js
+    test: tests/browser/v3-ui.cjs
+    status: guaranteed
+    note: Every v3-ui.cjs check runs per browser and origin and ends with no-console-errors; tests/browser/v3-measure.cjs loads the worklet from a data URL (or the documented ScriptProcessor fallback) on both origins.
 
   - id: calibration-profiles
-    claim: OSCILLA will apply frequency-response and absolute-level calibration profiles, interpolated in log frequency and never extrapolated, and label dB SPL only under a valid absolute calibration
+    claim: A frequency-response calibration profile is imported from CSV, TXT or JSON with line-numbered errors, identified by the SHA-256 of its normalised points, interpolated linearly in dB over log frequency and never extrapolated by the application; uncovered frequencies stay uncorrected and marked
     source: .ai/repo/adrs/0020-calibration-semantics.md
-    implementation: "-"
-    test: "-"
-    status: planned
+    implementation: src/js/calibration/interpolate.js
+    test: tests/unit/v3-calibration.test.mjs
+    status: guaranteed
+    note: Parsing is src/js/calibration/parse.js, identity src/js/calibration/profile.js; the import through the UI is check calibration in tests/browser/v3-ui.cjs. Profiles are kept in page memory only.
+
+  - id: spl-only-with-level-calibration
+    claim: No level is labelled dB SPL unless a valid absolute level calibration with an explicit external reference applies; otherwise every level is dB relative (dBFS-like) and marked UNCALIBRATED
+    source: .ai/repo/adrs/0017-relative-levels-spl-only-when-calibrated.md
+    implementation: src/js/calibration/level.js
+    test: tests/unit/v3-calibration.test.mjs
+    status: guaranteed
+    note: The rendered workspaces are searched for SPL by check no-spl in tests/browser/v3-ui.cjs; views, CSV and quality reasons in tests/unit/v3-views.test.mjs, tests/unit/v3-gaps.test.mjs (G19) and tests/unit/v3-quality.test.mjs.
 
   - id: transfer-function
-    claim: OSCILLA will measure the transfer function of the playback, room and microphone chain from a captured log sweep
+    claim: The transfer function of the playback and capture chain is recovered from a captured log sweep, a known flat gain within 0.1 dB and known filters within 0.5 dB of their analytic magnitude, with phase only under a robust alignment and a valid range that ends where the signal is less than 10 dB above the noise
     source: .ai/repo/adrs/0021-sweep-deconvolution-method.md
-    implementation: "-"
-    test: "-"
-    status: planned
+    implementation: src/js/measurement/transfer.js
+    test: tests/unit/v3-transfer-ir.test.mjs
+    status: guaranteed
+    note: Synthetic systems with mathematically known answers; the real-browser loopback through a BiquadFilterNode is tests/browser/v3-measure.cjs.
 
   - id: impulse-response
-    claim: OSCILLA will derive the impulse response by regularised deconvolution of the captured sweep, windowed and normalised, with its algorithm ID recorded
+    claim: The impulse response is derived by regularised spectral deconvolution of the captured sweep, an identity system giving one peak at the pre-roll within one sample and a 0.5 echo reading -6.02 dB within 0.5 dB, and windowing and normalisation return new objects that never alter the original
     source: .ai/repo/adrs/0021-sweep-deconvolution-method.md
-    implementation: "-"
-    test: "-"
-    status: planned
+    implementation: src/js/measurement/impulse-response.js
+    test: tests/unit/v3-transfer-ir.test.mjs
+    status: guaranteed
+    note: The Farina inverse filter (oscilla.ir.farina-inverse.v1) is the test oracle and agrees on peak index and in-band scale.
 
   - id: rta-bands
-    claim: OSCILLA will show a real-time analyzer as FFT, octave and third-octave band power with documented averaging constants
+    claim: Octave and one-third-octave band levels integrate power between the base-10 band edges below 0.95 of Nyquist, and the band averager in fast and slow mode reaches 63.2 percent of a step after one time constant whatever the frame rate
     source: docs/specs/oscilla-v3-measure.md
-    implementation: "-"
-    test: "-"
-    status: planned
+    implementation: src/js/measurement/rta.js
+    test: tests/unit/v3-rta-aggregate.test.mjs
+    status: guaranteed
+    note: No IEC 61260-1 class is claimed. The RTA view (bars over band edges, peak hold, freeze, relative unless calibrated) is tested in tests/unit/v3-views.test.mjs.
 
   - id: reproducible-experiments
-    claim: OSCILLA will record every measurement as an experiment with its stimulus, calibration, device, algorithm IDs and product version, persisted and exportable
+    claim: Every saved measurement is an experiment that records its recipe, output level, input device and constraints, calibration, sample rate, runs, quality, algorithm IDs, product version and build, with a configuration hash and a result hash
     source: .ai/repo/adrs/0019-recipe-versus-experiment.md
-    implementation: "-"
-    test: "-"
-    status: planned
+    implementation: src/js/experiments/schema.js
+    test: tests/unit/v3-experiments.test.mjs
+    status: guaranteed
+    note: The experiment the UI builds from a measurement is checked in tests/unit/v3-ui.test.mjs; repeating it creates a new experiment with repeatOf (check loopback-workflow in tests/browser/v3-ui.cjs).
+
+  - id: experiment-round-trip
+    claim: An experiment survives create, encode, JSON and validate identically, its typed arrays written as explicit little-endian base64 that decodes bit for bit
+    source: .ai/repo/adrs/0023-schema-versions-independent-of-product-version.md
+    implementation: src/js/experiments/encode.js
+    test: tests/unit/v3-experiments.test.mjs
+    status: guaranteed
+    note: The pipeline from a sweep to a validated experiment is in tests/unit/v3-pipeline.test.mjs, with repeated runs in tests/unit/v3-storage.test.mjs; the exported file re-validates in check experiments of tests/browser/v3-ui.cjs.
+
+  - id: experiment-import-validated
+    claim: An imported experiment is untrusted input; oversized files, length mismatches, wrong types, non-finite numbers, unknown algorithm IDs, prototype keys, a future schema version or a result hash mismatch are refused with a reason and nothing is stored
+    source: .ai/repo/adrs/0022-experiment-persistence.md
+    implementation: src/js/experiments/validate.js
+    test: tests/unit/v3-experiments.test.mjs
+    status: guaranteed
+    note: The result-hash check is in tests/unit/v3-integration.test.mjs (G13); import through the UI, and the refused re-import of an existing ID, is check experiments in tests/browser/v3-ui.cjs.
+
+  - id: experiment-persistence
+    claim: Experiments persist in the browser IndexedDB database oscilla-experiments, survive reopening, are deleted only explicitly, and fall back to an in-memory store that says so when IndexedDB is unavailable
+    source: .ai/repo/adrs/0022-experiment-persistence.md
+    implementation: src/js/experiments/store.js
+    test: tests/unit/v3-experiments.test.mjs
+    status: guaranteed
+    note: Proven on an in-process IndexedDB fake (open, upgrade, CRUD, reopen, quota, open failure, memory fallback); the UI path (list, rename, duplicate, delete with confirmation) is check experiments in tests/browser/v3-ui.cjs. No test reloads a real browser page and reads the record back.
+
+  - id: algorithm-ids-on-results
+    claim: Every stored result names the algorithm that produced it by a versioned ID, an unknown ID is refused on import, and every known ID reproduces its golden output
+    source: .ai/repo/adrs/0024-versioned-algorithm-ids.md
+    implementation: src/js/measurement/algorithms.js
+    test: tests/unit/v3-golden.test.mjs
+    status: guaranteed
+    note: Fixtures under tests/unit/fixtures/v3/; the IDs stamped on real results are pinned in tests/unit/v3-integration.test.mjs (G6, G7, G9) and unknown IDs refused in tests/unit/v3-experiments.test.mjs.
 
   - id: measurement-comparison
-    claim: OSCILLA will compare two or more experiments and aggregate repeated measurements with their dispersion
-    source: docs/specs/oscilla-v3-measure.md
-    implementation: "-"
-    test: "-"
-    status: planned
+    claim: Comparing experiments flags differences in calibration, sample rate, stimulus and algorithm, and shows A minus B only over the overlapping valid range of equivalent experiments, never normalised
+    source: .ai/repo/adrs/0019-recipe-versus-experiment.md
+    implementation: src/js/experiments/compare.js
+    test: tests/unit/v3-experiments.test.mjs
+    status: guaranteed
+    note: The compare view is in tests/unit/v3-views.test.mjs; check experiments in tests/browser/v3-ui.cjs compares an equivalent pair (delta shown) and a non-equivalent pair (refused with the reason).
+
+  - id: aggregate-primary-response
+    claim: A measurement of two or more runs stores the aggregate (centre, dispersion and repeatability) as its primary response; the stored transfer is the aggregate centre marked as derived, never one run, and comparison uses the aggregate
+    source: .ai/repo/adrs/0019-recipe-versus-experiment.md
+    implementation: src/js/measurement/aggregate.js
+    test: tests/unit/v3-storage.test.mjs
+    status: guaranteed
+    note: Gap G20 of docs/v3/algorithms.md, enforced by src/js/experiments/schema.js and validate.js. The engine runs repeats without overlapping captures (tests/unit/v3-engine.test.mjs, three runs); the recipe allows 1 to 10.
 
   - id: measurement-quality
-    claim: OSCILLA will rate every measurement GOOD, USABLE, POOR or INVALID from named metrics, always with its reasons
+    claim: Every measurement is rated GOOD, USABLE, POOR or INVALID by the versioned rule set oscilla.confidence.v2 from named metrics (signal-to-noise, clipping, dropouts, discontinuities, coverage, repeatability, calibration), always with its reasons
     source: .ai/repo/adrs/0025-data-driven-quality-with-reasons.md
-    implementation: "-"
-    test: "-"
-    status: planned
+    implementation: src/js/measurement/quality.js
+    test: tests/unit/v3-quality.test.mjs
+    status: guaranteed
+    note: oscilla.confidence.v1 is retained and selectable (tests/unit/v3-gaps.test.mjs, G15); the quality panel never relies on colour alone (tests/unit/v3-views.test.mjs).
+
+  - id: analysis-off-main-thread
+    claim: OSCILLA runs the offline measurement analysis in a Worker loaded from a data URL when the platform has Worker, so that no analysis step blocks the main thread, with results bit-identical to the inline fallback
+    source: .ai/repo/adrs/0026-audioworklet-and-worker-by-spike.md
+    implementation: src/js/measurement/analysis-runner.js
+    test: tests/browser/analysis-worker.cjs
+    status: guaranteed
+    note: Gap G21 of docs/v3/algorithms.md, resolved in M10. Without Worker the engine falls back to analyzeInline, which yields between steps; tests/unit/v3-analysis-task.test.mjs runs the real bundle in a worker thread.
 
   # ---- OSCILLA Studio (V3.1) ----
   - id: studio-model-plain-data

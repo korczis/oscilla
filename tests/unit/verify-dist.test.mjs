@@ -55,6 +55,12 @@ test('runtime loading in first-party script fails', () => {
 test('data: worklets and method names that merely contain "import"/"fetch" pass', () => {
   const app = 'ctx.audioWorklet.addModule(`data:text/javascript,${s}`)';
   assert.deepEqual(check(doc({ app })), []);
+  // The analysis Worker (M10): a string-embedded script started from a data: URL.
+  const worker = 'const W="self.onmessage=e=>postMessage(e.data)";'
+    + 'new Worker(`data:text/javascript;charset=utf-8,${encodeURIComponent(W)}`)';
+  assert.deepEqual(check(doc({ app: worker })), []);
+  fails(doc({ app: 'const W="importScripts(\'x.js\')";new Worker("data:,"+W)' }),
+    /importScripts/);
   assert.deepEqual(check(doc({ app: 'a.import(1);b.prefetch(2);c.fetchAll(3)' })), []);
 });
 

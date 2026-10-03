@@ -18,3 +18,13 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-02
+updated_at: 2026-10-02T13:46:33Z
+completed_at: 2026-10-02T13:46:33Z
+evidence:
+  - covers: verified
+    type: manual
+    command: "schema inspection of deployment/v1 and release/v1; curl https://korczis.github.io/oscilla/ provenance region"
+    result: "No deployment/release records written by design: deployment/v1 allows only provider fly with Cargo build fields and health routes, release/v1 expects GitHub release-download artifacts for Majordomus build targets (documented in .ai/repo/knowledge/curated/majordomus-0-10-0-quirks.md). The release evidence is the stamped provenance region: live page reports version 2.0.0, channel production, commit 66c5fac (Pages run 37010974633, verify-deploy pass 1/10) and GitHub Release v2.0.0"
+    artifact: "https://korczis.github.io/oscilla/ @ 66c5fac"
+    commit: 66c5fac5a2515418c81c2533c5500d3574c92728
+    recorded_at: 2026-10-02T13:38:28Z

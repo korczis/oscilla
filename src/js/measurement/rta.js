@@ -274,7 +274,7 @@ export function rtaResult({
  * The first frame after construction or reset() seeds the average with its own power (no ramp
  * up from silence). freeze() keeps the returned values unchanged while frames are still pushed
  * (they are discarded); unfreeze() resumes from the frozen state. reset() clears the average and
- * the peaks. Buffers are allocated once (at construction when size is given, else on the first
+ * the peaks; resetPeaks() clears only the peaks (the next push holds from its own level). Buffers are allocated once (at construction when size is given, else on the first
  * push); a push of a different length is an error.
  */
 export function createRtaAverager({ mode = 'fast', peakHold = false, size } = {}) {
@@ -328,12 +328,17 @@ export function createRtaAverager({ mode = 'fast', peakHold = false, size } = {}
     if (result.peakDb) result.peakDb.fill(-Infinity);
   }
 
+  function resetPeaks() {
+    if (result.peakDb) result.peakDb.fill(-Infinity);
+  }
+
   return {
     mode,
     tau,
     peakHold: Boolean(peakHold),
     push,
     reset,
+    resetPeaks,
     freeze() {
       frozen = true;
     },

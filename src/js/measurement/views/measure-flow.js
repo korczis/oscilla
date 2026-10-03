@@ -52,6 +52,19 @@ export const OUTPUT_LEVEL_CHOICES = Object.freeze(['low', 'medium', 'high'].map(
  * result is the OBSERVED response of the whole chain — output DSP, speaker, room, microphone,
  * ADC and browser input processing together — never "the speaker response".
  */
+/**
+ * Default noise-check length (s) of the workspace and the preset. The SNR of a grid point is
+ * assessed only where the noise capture resolves it: below about 10 / (0.1156 · T) Hz (T the
+ * noise-check length; quality.js, 1/6-octave pooling) a point is "SNR not assessed", so a 1 s
+ * check could never assess below ~87 Hz and a default 20 Hz sweep could never reach GOOD; 5 s
+ * assesses from ~17 Hz. The engine's own DEFAULT_TIMING is unchanged (a recipe without the
+ * field keeps its meaning).
+ */
+export const DEFAULT_NOISE_CHECK_S = 5;
+const NOISE_CHECK_HELP = `${DEFAULT_NOISE_CHECK_S} s by default: the SNR is assessed only above `
+  + 'about 10 / (0.1156 × length) Hz (17 Hz for 5 s, 87 Hz for 1 s), so a shorter check leaves '
+  + 'the low end NOT ASSESSED. 0 skips it (SNR NOT MEASURED).';
+
 export const CHARACTERIZE_PLAYBACK_CHAIN = Object.freeze({
   id: 'characterize-playback-chain',
   label: 'CHARACTERIZE PLAYBACK CHAIN',
@@ -64,7 +77,7 @@ export const CHARACTERIZE_PLAYBACK_CHAIN = Object.freeze({
   recipe: Object.freeze({
     stimulus: Object.freeze({ kind: 'log-sweep', f1: 20, f2: 20000, duration: 10, level: 'low' }),
     repeats: 3,
-    analysis: Object.freeze({ noiseCheckS: 1, preRollS: DEFAULT_TIMING.preRollS,
+    analysis: Object.freeze({ noiseCheckS: DEFAULT_NOISE_CHECK_S, preRollS: DEFAULT_TIMING.preRollS,
       postRollS: DEFAULT_TIMING.postRollS, gapS: DEFAULT_TIMING.gapS, phase: false,
       aggregation: 'mean' }),
   }),
@@ -141,7 +154,8 @@ export const REASON_STEP = Object.freeze({
   INVALID_CALIBRATION: 'calibration', UNCALIBRATED: 'calibration',
   LEVEL_RELATIVE: 'calibration',
   NOISE_HIGH: 'noise', NOISE_CLIPPING: 'noise',
-  INVALID_RECIPE: 'stimulus', MEMORY_LIMIT: 'stimulus', RANGE_CLAMPED: 'stimulus',
+  INVALID_RECIPE: 'stimulus', MEMORY_LIMIT: 'stimulus', ANALYSIS_MEMORY: 'stimulus',
+  RANGE_CLAMPED: 'stimulus',
   OUTPUT_SILENT: 'stimulus', HIGH_OUTPUT: 'stimulus', LIMITER_RANGE: 'stimulus',
   OTHER_AUDIO: 'stimulus', OUTPUT_CHAIN_DEVIATION: 'stimulus', CHAIN_NOTES_IGNORED: 'stimulus',
 });
@@ -409,8 +423,9 @@ export function expertFields({ disclosure = 'basic', sampleRate = null } = {}) {
           postRollS: 'Post-roll (tail)', gapS: 'Gap between runs' }[k], kind: 'number',
         unit: 's', min: k === 'noiseCheckS' ? 0 : TIMING_LIMITS[k][0],
         max: k === 'noiseCheckS' ? Math.min(TIMING_LIMITS[k][1], CONTRACT_LIMITS.maxNoiseS)
-          : TIMING_LIMITS[k][1], step: 0.05, default: DEFAULT_TIMING[k], disclosure: 'advanced',
-        help: k === 'noiseCheckS' ? '0 skips it (SNR NOT MEASURED).' : null })),
+          : TIMING_LIMITS[k][1], step: 0.05,
+        default: k === 'noiseCheckS' ? DEFAULT_NOISE_CHECK_S : DEFAULT_TIMING[k],
+        disclosure: 'advanced', help: k === 'noiseCheckS' ? NOISE_CHECK_HELP : null })),
     ] },
     { id: 'analysis', label: 'Analysis', disclosure: 'advanced', fields: [
       field({ id: 'phase', path: 'analysis.phase', label: 'Phase (when alignment is robust)',

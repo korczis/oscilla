@@ -15,12 +15,17 @@
 // written into ONE inline metadata region with commit null and channel "source", plus the
 // top-of-file banner. No git state and no clock enter the file; the deploy stamp adds the
 // commit later (scripts/stamp-build.mjs).
+//
+// Analysis Worker (gap M10): scripts/build-analysis-worker.mjs bundles the offline analysis into
+// one Worker script first; its text enters the app bundle as the string define
+// __OSCILLA_ANALYSIS_WORKER__ and is started at runtime from a data: URL (analysis-runner.js).
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import * as esbuild from 'esbuild';
 import { pack } from './pack-single-file.mjs';
+import { ANALYSIS_WORKER_DEFINE, buildAnalysisWorker } from './build-analysis-worker.mjs';
 import {
   bannerComment, computeSourceDigest, readVersion, renderRegion, sourceRecord,
 } from './release-metadata.mjs';
@@ -144,7 +149,7 @@ async function buildCss() {
   return { code: result.outputFiles[0].text.trim(), inputs: Object.keys(result.metafile.inputs) };
 }
 
-async function buildJs() {
+async function buildJs(worker) {
   const result = await esbuild.build({
     ...common,
     entryPoints: [JS_ENTRY],
@@ -156,6 +161,7 @@ async function buildJs() {
       'process.env.NODE_ENV': DEBUG ? '"development"' : '"production"',
       __OSCILLA_VERSION__: JSON.stringify(VERSION),
       __OSCILLA_SOURCE_DIGEST__: JSON.stringify(SOURCE_DIGEST),
+      [ANALYSIS_WORKER_DEFINE]: JSON.stringify(worker.code),
     },
     plugins: [rawPlugin, vendorGlobalsPlugin],
   });
@@ -166,7 +172,8 @@ async function buildJs() {
 
 async function main() {
   const t0 = performance.now();
-  const [css, js] = await Promise.all([buildCss(), buildJs()]);
+  const worker = await buildAnalysisWorker({ root: ROOT, minify: !DEBUG });
+  const [css, js] = await Promise.all([buildCss(), buildJs(worker)]);
   const vendors = VENDOR_SCRIPTS.map(({ pkg, file }) => ({
     id: `${pkg}@${require(`${pkg}/package.json`).version}`,
     code: readFileSync(require.resolve(file), 'utf8').replace(/\r\n/g, '\n').trim(),
@@ -200,6 +207,8 @@ async function main() {
   rmSync(path.dirname(OUT), { recursive: true, force: true });
   mkdirSync(path.dirname(OUT), { recursive: true });
   writeFileSync(OUT, html);
+  console.log(`analysis worker: ${(Buffer.byteLength(worker.code) / 1024).toFixed(1)} KiB from `
+    + `${worker.inputs.length} modules (data: URL Worker)`);
   console.log(`built ${rel}: ${(Buffer.byteLength(html) / 1024).toFixed(1)} KiB in `
     + `${(performance.now() - t0).toFixed(0)} ms; v${VERSION}, source ${SOURCE_DIGEST}; `
     + `contains ${[...pkgs].sort().join(', ')}`);

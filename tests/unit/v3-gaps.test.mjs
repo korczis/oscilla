@@ -27,7 +27,8 @@ import {
   AGGREGATE_ALGORITHM, aggregateResult, aggregateRuns,
 } from '../../src/js/measurement/aggregate.js';
 import {
-  INVALIDATING_CODES, QUALITY_ALGORITHM, QUALITY_ALGORITHM_V1, QUALITY_RULESETS,
+  INVALIDATING_CODES, QUALITY_ALGORITHM, QUALITY_ALGORITHM_V1, QUALITY_ALGORITHM_V2,
+  QUALITY_RULESETS,
   QUALITY_THRESHOLDS, REASON_CODES, assessQuality, normalizeChainNotes, summarizeQuality,
 } from '../../src/js/measurement/quality.js';
 import { bandCenters, rtaResult } from '../../src/js/measurement/rta.js';
@@ -90,18 +91,21 @@ const assess = (captures, extra = {}) => assessQuality({ capture: captures.map(c
 
 // ----------------------------------------------------------------------------- G15
 
-test('G15: confidence.v2 is the default; v1 is retained and still selectable', () => {
-  assert.equal(QUALITY_ALGORITHM, 'oscilla.confidence.v2');
+test('G15: confidence.v3 is the default; v1 and v2 are retained and still selectable', () => {
+  assert.equal(QUALITY_ALGORITHM, 'oscilla.confidence.v3');
   assert.equal(ALGORITHMS.quality, QUALITY_ALGORITHM);
-  assert.deepEqual(RETAINED_ALGORITHMS.quality, [QUALITY_ALGORITHM_V1]);
-  assert.ok(isKnownAlgorithm(QUALITY_ALGORITHM_V1));
+  assert.deepEqual(RETAINED_ALGORITHMS.quality, [QUALITY_ALGORITHM_V1, QUALITY_ALGORITHM_V2]);
+  assert.ok(isKnownAlgorithm(QUALITY_ALGORITHM_V1) && isKnownAlgorithm(QUALITY_ALGORITHM_V2));
   assert.deepEqual(Object.keys(QUALITY_RULESETS).sort(),
-    [QUALITY_ALGORITHM_V1, QUALITY_ALGORITHM].sort());
+    [QUALITY_ALGORITHM_V1, QUALITY_ALGORITHM_V2, QUALITY_ALGORITHM].sort());
   const v1 = QUALITY_RULESETS[QUALITY_ALGORITHM_V1];
-  const v2 = QUALITY_RULESETS[QUALITY_ALGORITHM];
+  const v2 = QUALITY_RULESETS[QUALITY_ALGORITHM_V2];
+  const v3 = QUALITY_RULESETS[QUALITY_ALGORITHM];
   assert.ok(Object.isFrozen(v1) && Object.isFrozen(v2) && Object.isFrozen(v2.reasonCodes));
+  assert.ok(Object.isFrozen(v3) && Object.isFrozen(v3.reasonCodes));
   assert.equal(v1.thresholds, QUALITY_THRESHOLDS, 'thresholds unchanged by v2');
   assert.equal(v2.thresholds, QUALITY_THRESHOLDS);
+  assert.equal(v3.thresholds, QUALITY_THRESHOLDS);
   // v2 = v1 + four codes, nothing else changed.
   const added = Object.keys(v2.reasonCodes).filter((c) => !(c in v1.reasonCodes));
   assert.deepEqual(added.sort(), ['DISCONTINUITY', 'DISCONTINUITY_IN_SWEEP',
@@ -109,11 +113,19 @@ test('G15: confidence.v2 is the default; v1 is retained and still selectable', (
   for (const c of Object.keys(v1.reasonCodes)) {
     assert.deepEqual(v2.reasonCodes[c], v1.reasonCodes[c]);
   }
-  assert.equal(REASON_CODES, v2.reasonCodes);
+  // v3 = v2 + four codes (review B1/M1/M2/NIT), none invalidating.
+  const added3 = Object.keys(v3.reasonCodes).filter((c) => !(c in v2.reasonCodes));
+  assert.deepEqual(added3.sort(), ['CLIPPING_NOT_EXCLUDED', 'INPUT_PROCESSING',
+    'INPUT_PROCESSING_NOT_CONFIRMED', 'SNR_NOT_ASSESSED']);
+  for (const c of Object.keys(v2.reasonCodes)) {
+    assert.deepEqual(v3.reasonCodes[c], v2.reasonCodes[c]);
+  }
+  assert.equal(REASON_CODES, v3.reasonCodes);
   assert.deepEqual([...INVALIDATING_CODES], [...v1.invalidatingCodes, 'DISCONTINUITY_IN_SWEEP']);
+  assert.deepEqual([...v3.invalidatingCodes], [...v2.invalidatingCodes]);
   assert.equal(v2.reasonCodes.DISCONTINUITY_NOT_MEASURED.notMeasured, true);
   assert.equal(v2.reasonCodes.OUTPUT_CHAIN_DEVIATION.dimension, 'range');
-  for (const bad of ['oscilla.confidence.v3', '__proto__', 'toString', null]) {
+  for (const bad of ['oscilla.confidence.v4', '__proto__', 'toString', null]) {
     assert.throws(() => assess(CLEAN, { algorithm: bad }), RangeError, String(bad));
   }
 });
@@ -123,9 +135,12 @@ test('G15: a discontinuity inside the sweep window invalidates under v2, not und
   const c = check(spliced);
   assert.deepEqual(c.discontinuities.map((d) => [d.start, d.end]),
     [[PRE + 799, PRE + 801], [PRE + 999, PRE + 1001]], 'both edges found by checkCapture');
-  const q2 = assess([spliced, CLEAN[1]]);
+  const q2 = assess([spliced, CLEAN[1]], { algorithm: QUALITY_ALGORITHM_V2 });
   assert.equal(q2.algorithm, 'oscilla.confidence.v2');
   assert.equal(q2.status, 'INVALID');
+  const q3 = assess([spliced, CLEAN[1]]);
+  assert.equal(q3.algorithm, 'oscilla.confidence.v3');
+  assert.equal(q3.status, 'INVALID', 'v3 keeps the v2 discontinuity rule');
   const r = reason(q2, 'DISCONTINUITY_IN_SWEEP');
   assert.equal(r.severity, 'fail');
   assert.equal(r.value, 2);
@@ -155,11 +170,12 @@ test('G15: outside the window warns; without a window it counts as inside; none 
   // Per-run windows: the window of run 1 decides for run 1.
   const perRun = assess([late, CLEAN[1]], { sweepWindow: [[PRE, LEN], WINDOW] });
   assert.equal(perRun.status, 'INVALID');
-  const clean = assess(CLEAN);
+  const clean = assess(CLEAN, { algorithm: QUALITY_ALGORITHM_V2 });
   const ok = reason(clean, 'DISCONTINUITY');
   assert.deepEqual([ok.severity, ok.value, ok.text], ['ok', 0, 'no discontinuities']);
   assert.equal(clean.metrics.discontinuities, 0);
   assert.equal(clean.status, 'GOOD', summarizeQuality(clean));
+  assert.deepEqual(reason(assess(CLEAN), 'DISCONTINUITY'), ok, 'v3: the same rule');
   // v1 on the clean input reaches the same status with the same non-discontinuity reasons.
   const v1 = assess(CLEAN, { algorithm: QUALITY_ALGORITHM_V1 });
   assert.equal(v1.status, clean.status);
@@ -313,7 +329,7 @@ test('G16: results.aggregate validates, hashes, round-trips and exports as CSV',
   const plain = createExperiment({ recipe: createRecipe({ stimulus: STIM.spec }), now: NOW,
     id: 'plain-1' });
   assert.deepEqual(Object.keys(plain.results), ['transfer', 'ir', 'rta']);
-  assert.equal(resultCanonical(plain),
+  assert.equal(resultCanonical(plain, { version: 1 }),
     '{"results":{"ir":null,"rta":null,"transfer":null},"v":1}');
   const nul = withResults(plain, { results: { aggregate: null } });
   assert.ok(validateExperiment(experimentToJson(nul), OPTS).ok);
@@ -370,7 +386,7 @@ test('G19: absolute level only in level/RTA outputs under a valid level calibrat
     levelsDb: Float64Array.from(bands, (_, i) => (i === 0 ? -Infinity : -40 + i)) });
   const level = createLevelCalibration({ referenceHz: 1000, referenceDbSpl: 94,
     observedDbRelative: -30.5, createdAt: '2026-10-02T09:00:00.000Z' });
-  const meta = (cal) => ({ oscillaVersion: '3.0.0', experimentId: 'x', sampleRate: 48000,
+  const meta = (cal) => ({ oscillaVersion: '9.8.7', experimentId: 'x', sampleRate: 48000,
     calibration: cal });
   const uncal = rtaCsv(rta, meta({ frequency: null, level: null }));
   assert.doesNotMatch(uncal, /SPL|level_db_spl/);
@@ -405,7 +421,7 @@ test('G19: absolute level only in level/RTA outputs under a valid level calibrat
     .filter((l) => l.startsWith('# column ') || /^frequency_hz,/.test(l));
   assert.ok(columns.every((l) => !/SPL/.test(l)), columns.join('\n'));
   assert.ok(columns.includes('frequency_hz,magnitude_db_relative,magnitude_db_corrected,snr_db,'
-    + 'reliable'));
+    + 'reliable,phase_deg'));
 });
 
 // ----------------------------------------------------------------------------- G17
@@ -609,7 +625,7 @@ test('engine: io chain notes reach preflight, result, assess and the quality mas
   assert.deepEqual(r.chainNotes, { limiterDeviationAboveHz: 2000 });
   assert.deepEqual(seen, [{ limiterDeviationAboveHz: 2000 }]);
   const q = r.quality;
-  assert.equal(q.algorithm, 'oscilla.confidence.v2');
+  assert.equal(q.algorithm, 'oscilla.confidence.v3');
   assert.equal(q.metrics.outputChainLimitHz, 2000);
   assert.ok(q.reasons.some((x) => x.code === 'OUTPUT_CHAIN_DEVIATION' && x.severity === 'warn'));
   q.mask.frequencies.forEach((f, i) => { if (f > 2000) assert.equal(q.mask.reliable[i], 0); });

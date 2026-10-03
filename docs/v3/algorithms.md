@@ -27,9 +27,10 @@ listed under [Gaps](#gaps), not resolved here.
 | `oscilla.clip.v1`, `oscilla.discontinuity.v1` | `measurement/capture-checks.js` | [Capture checks](#capture-checks) |
 | `oscilla.align.xcorr.v1` | `measurement/align.js` | [Alignment](#alignment) |
 | `oscilla.transfer.v1` | `measurement/transfer.js` | [Transfer function](#transfer) |
+| (none) | `measurement/analysis-task.js`, `analysis-runner.js`, `analysis-worker.js` | [Analysis execution and memory](#analysis-memory) |
 | `oscilla.ir.log-sweep.v1` (spectral), `oscilla.ir.farina-inverse.v1` | `measurement/impulse-response.js` | [Impulse response](#ir) |
 | `oscilla.smoothing.fractional-octave.v1`, `oscilla.normalization.v1` | `measurement/smoothing.js` | [Smoothing](#smoothing) |
-| `oscilla.rta.v1` | `measurement/rta.js` | [RTA bands](#rta) |
+| `oscilla.rta.v1` | `measurement/rta.js`, `measurement/live-rta.js` | [RTA bands](#rta), [Live RTA](#live-rta) |
 | `oscilla.aggregate.v1` | `measurement/aggregate.js` | [Aggregation of repeats](#aggregate) |
 | `oscilla.calibration.log-interp.v1` | `calibration/*.js` | [Frequency calibration](#calibration) |
 | (none) | `calibration/level.js` | [Level calibration, SPL](#level) |
@@ -92,7 +93,7 @@ Every result object now carries the IDs it used:
 | `bandAnalysis`, `rtaResult` | `algorithm`; `windowAlgorithm` (RtaResult) | rta; window |
 | `smoothResponse` | `algorithm` | smoothing |
 | `normalizeResponse`, `normalizeIr` | `algorithm` (+ `mode`) | normalization |
-| `assessQuality` | `algorithm` | quality (the rule set used: v2 by default, v1 on request) |
+| `assessQuality` | `algorithm` | quality (the rule set used: v3 by default, v1/v2 on request) |
 | `aggregateRuns`, `aggregateResult` | `algorithm` (+ `method`) | aggregate |
 | `applyFrequencyCorrection`, `applyFrequencyCorrectionToBands` | `algorithm` | calibration |
 
@@ -108,6 +109,22 @@ carry them"). `isKnownAlgorithm()` is true for current and retained IDs, and
 would reject a stored v1 assessment. New role `aggregate` (`oscilla.aggregate.v1`): the
 aggregate became a stored result, so it carries an ID (`aggregateRuns().algorithm`,
 `aggregateResult().algorithm`); mean or median is its recorded `method` parameter.
+
+**Changed (V3 pre-release review, quality and DSP group).** Four new IDs, each because a stored
+number changes (ADR 0024); every superseded ID stays implemented and in `RETAINED_ALGORITHMS`:
+
+| Role | New default | Retained (selectable) | What changed |
+| --- | --- | --- | --- |
+| `transfer` | `oscilla.transfer.v2` | `oscilla.transfer.v1` (`options.algorithm`) | SNR: Welch noise PSD, pooled power ratio stored, no 200 dB ceiling ([SNR](#transfer-snr)) |
+| `ir` | `oscilla.ir.log-sweep.v2` | `oscilla.ir.log-sweep.v1` (`algorithm`) | `noiseFloorDb` over the full-overlap lags, `noiseFloorMethod` ([IR](#ir)) |
+| `irFarina` | `oscilla.ir.farina-inverse.v2` | `oscilla.ir.farina-inverse.v1` (`algorithm`) | as `ir` |
+| `quality` | `oscilla.confidence.v3` | `oscilla.confidence.v2`, `oscilla.confidence.v1` | B1, M1, M2, m2, m5 and NIT rules ([quality](#quality)) |
+
+`RETAINED_ALGORITHMS = { transfer: ['oscilla.transfer.v1'], ir: ['oscilla.ir.log-sweep.v1'],
+irFarina: ['oscilla.ir.farina-inverse.v1'], quality: ['oscilla.confidence.v1',
+'oscilla.confidence.v2'] }`. The golden fixtures of the retained IDs are unchanged (they are
+computed with the retained method selected, and the retained quality rule sets are fed
+transfer.v1 results, the data they were assessed on); the four new IDs have new fixtures.
 
 Tests: `v3-measurement-core.test.mjs` "algorithms: frozen contract IDs ..." (exact equality,
 variants report their family); `v3-integration.test.mjs` "G6/G7/G9" pins every ID string and
@@ -390,11 +407,14 @@ Tests (`v3-measurement-core.test.mjs`):
 | silent capture | lag null, ρ 0 | pass |
 
 <a id="transfer"></a>
-## Transfer function — `oscilla.transfer.v1` (`measurement/transfer.js`)
+## Transfer function — `oscilla.transfer.v2`, `oscilla.transfer.v1` (`measurement/transfer.js`)
 
 `computeTransfer({ stimulus, captured, sampleRate, f1, f2, lagSamples, alignment, noise,
-options: { phase = false, pointsPerOctave = 48 } }) → TransferResult` (`alignment`,
-`phaseReason` and the result's `alignment` added by the integration fixes). Method: regularized
+options: { phase = false, pointsPerOctave = 48, algorithm = TRANSFER_ALGORITHM } }) →
+TransferResult` (`alignment`, `phaseReason` and the result's `alignment` added by the
+integration fixes; `options.algorithm` by the V3 pre-release review: `oscilla.transfer.v2`
+default, `oscilla.transfer.v1` reproduces a stored v1 result exactly). v1 and v2 differ only in
+the SNR and its fields; deconvolution, magnitude, phase and coverage are identical. Method: regularized
 spectral division (Müller & Massarani 2001, §5; regularization after Kirkeby et al. 1998),
 shared with the IR through `spectralDeconvolution`.
 
@@ -477,18 +497,55 @@ energy), where the single delay removed from the phase is not a meaningful refer
 `v3-gaps.test.mjs` "G17" pins ρ = 1/√(1 + 1/s) within ±0.01 at 0, −4.77 and −10 dB and the
 withheld phase for the noise-free 50 Hz low-pass. No per-point phase uncertainty is reported.
 
-### SNR (when a stimulus-free capture `noise` is given)
+<a id="transfer-snr"></a>
+### SNR (when a stimulus-free capture `noise` is given) — **Changed (V3 review B1, M1, m2)**
 
-For stationary noise of PSD S, the zero-padded DFT of M samples has `E|N[k]|² = M·S(f_k)`. So:
+For stationary noise of PSD S (power per DFT bin per sample), the zero-padded DFT of M samples
+has `E|N[k]|² = M·S(f_k)`, so the noise energy per bin expected inside the capture is
+`Pn(f) = len(y)·S(f)`. The per-bin SNR of Y equals that of H because dividing by X scales
+signal and noise alike.
+
+**v2 (default)**:
 
 ```
-Pn(f) = band mean of |N[k]|² · len(y)/len(n)     n padded to the same N (bins coincide);
-                                                 at most N samples of n are used
-Py(f) = band mean of |Y[k]|²                     signal + noise
-snrDb = 10·log10((Py − Pn)/Pn), clamped to [SNR_FLOOR_DB, SNR_CEIL_DB] = [−60, 200]
+S[k]        = Welch PSD of n: Hann, 50 % overlap, segment L = power of two ≥ len(n)/4 (at most
+              len(n)): mean over segments of |DFT(w·seg)[k]|² / Σw²     (NOISE_WELCH)
+S(f)        = mean of S over the Welch bins inside the grid band (linear interpolation at f
+              when the band holds none)
+Pn(f)       = len(y)·S(f);   Py(f) = band mean of |Y[k]|²
+snrDb       = 10·log10((Py − Pn)/Pn), floored at SNR_FLOOR_DB = −60
+snrPooledDb = 10·log10((ΣPy − ΣPn)/ΣPn), Py and Pn power-averaged over 1/6 octave
+              (VALIDITY_SMOOTHING_FRACTION): the POOLED POWER RATIO
+snrResolutionHz = sampleRate/len(n) = 1/T_noise
+resolutionHz    = max(binHz, sampleRate/len(y)) = max(fs/N, 1/T_capture)
 ```
 
-The per-bin SNR of Y equals that of H because dividing by X scales signal and noise alike.
+SNR NOT MEASURED: when Pn is zero at any grid point (digital silence, a gate) or any ratio
+reaches `SNR_CEIL_DB = 200`, `snrDb` and `snrPooledDb` are `null` (`snrResolutionHz` is kept, so
+a reader knows a noise capture was taken) and `validRange` uses coverage only. The ceiling is
+never stored as a value. Root cause of review B1: v1 set the SNR to the 200 dB ceiling when
+Pn = 0, the engine only rejected a clipping noise check, and quality pooled the ceiling as a
+measured SNR, so a silent noise check produced "200 dB median SNR" and GOOD.
+
+Why the pooled power ratio (review M1): the quality assessment pooled the per-point ratios
+(`smoothFractionalOctave(snrDb)`, a mean of ratios). With Pn from one noise record of
+T_noise seconds, a 1/6-octave pool at f holds only ≈ 0.1155·f·T_noise independent noise
+observations (the time-bandwidth product, whatever the number of zero-padded bins), and
+E[1/Pn] > 1/E[Pn] (Jensen) biases the mean of ratios high: +3-4 dB below 150 Hz with a 1 s noise
+check (review probe p2c; `v3-review-fixes` "M1" measures > 2 dB average bias over 30-150 Hz).
+The ratio of pooled powers has no such bias (within 1 dB of the analytic truth in the same
+test). Welch averaging also smooths the per-point `snrDb` (≈ 4-7 segments instead of one
+periodogram). A narrow line in the noise (hum) is spread over the Welch resolution (ENBW
+1.5·fs/L ≤ 6/T_noise Hz): beside a line the per-point SNR is pessimistic, on it optimistic; the
+pooled value is unaffected where the pool is wider than that, which the quality rule
+"assessed only with ≥ 10 observations per pool" guarantees (pool width ≥ 10/T_noise Hz).
+
+**v1 (retained)**: `Pn(f)` = band mean of the zero-padded N-point periodogram `|N[k]|²` of n
+(at most N samples) times `len(y)/len(n)`; `snrDb` clamped to [−60, 200] dB, 200 dB when
+Pn = 0; no `snrPooledDb`, `snrResolutionHz` or `resolutionHz`.
+
+`noiseSpectrum(noise, fftSize, fft, { algorithm })` returns the v2 Welch estimate (or the v1
+spectrum) for reuse across runs; `analysis-task.js` passes it unchanged.
 
 ### Valid range
 
@@ -497,10 +554,14 @@ The per-bin SNR of Y equals that of H because dividing by X scales signal and no
 1. **Coverage**: `f·P_x(f)` (P_x the band mean of `|X|²`) within `COVERAGE_DB = −20` dB of its
    maximum on the grid. For a log sweep or pink noise this per-relative-bandwidth energy is
    flat, so the test rejects leakage outside the swept band and a Nyquist clamp.
-2. **SNR** (only with `noise`): ≥ `VALID_MIN_SNR_DB = 10` dB, with Py and Pn first power-averaged
-   over 1/`VALIDITY_SMOOTHING_FRACTION` = 1/6 octave (`smoothFractionalOctave`), because the
-   per-point estimate scatters by ≈ 4.34/√K dB for K bins and would fragment the range at the
-   first dip. The reported `snrDb` stays per point.
+2. **SNR** (only when an SNR is measured): ≥ `VALID_MIN_SNR_DB = 10` dB, with Py and Pn first
+   power-averaged over 1/`VALIDITY_SMOOTHING_FRACTION` = 1/6 octave (`smoothFractionalOctave`;
+   in v2 this is `snrPooledDb`), because the per-point estimate would fragment the range at the
+   first dip. **Corrected (V3 review M1):** a power average of K independent exponentially
+   distributed bin powers scatters by ≈ 4.34/√K dB, but K is the time-bandwidth product of the
+   band (B·T, for the noise B·T_noise), NOT the number of bins in it: zero padding to N >
+   len(n) makes neighbouring bins correlated, so a band of many bins can still hold one
+   independent noise observation. The reported `snrDb` stays per point.
 
 `validRange` is `null` when no point qualifies. `requestedRange` is always `[f1, f2]` as
 requested, even above Nyquist; the grid stops at Nyquist (§205). The result also carries
@@ -592,11 +653,77 @@ step in Chromium is 29-34 ms for 2 s sweeps. The IR path has no non-power-of-two
 2·N inverse buffers, which are now reused. The 160-264 ms in the spike were most likely garbage
 collection or tier-up during the live loopback; nothing in the pure module explains them.
 
-<a id="ir"></a>
-## Impulse response — `oscilla.ir.log-sweep.v1`, `oscilla.ir.farina-inverse.v1` (`measurement/impulse-response.js`)
+<a id="analysis-memory"></a>
+## Analysis execution and memory — **New (M10)** (`analysis-task.js`, `analysis-runner.js`, `analysis-worker.js`)
 
-`computeImpulseResponse({ stimulus, captured, sampleRate, f1, f2, inverse, method, lagSamples })
-→ IrResult` with `method` and `fftSize`. **Changed (integration)** (was G3, G9): `algorithm` is
+No algorithm ID changes: where the analysis runs and how much of it is admitted do not change
+any number it produces. Measurements: [spike, section M10](spike-audioworklet-worker.md).
+
+### Where it runs
+
+`analysisSteps(message)` (align every run → transfer per run, the representative run's transfer
+and IR from one division → aggregate) is the analysis. `analyzeInline` drives it on the calling
+thread with a yield between steps; the Worker (`analysis-worker.js`, bundled by
+`scripts/build-analysis-worker.mjs` into a string in `dist/index.html`, started from a `data:`
+URL by `analysis-runner.js`) drives the same generator and posts every step and the result. The
+engine's default is the Worker when the build embedded it and the platform has `Worker`,
+otherwise inline. Structured cloning copies every value bit for bit, so both give identical
+results (asserted byte for byte in node and in Chromium, Firefox and WebKit).
+
+### Working-set estimate: `estimateAnalysisMemory({ stimulusFrames, captureFrames, runs, noiseFrames })`
+
+```
+N      = nextPow2(stimulusFrames + captureFrames)        deconvolution and correlation size
+bytes  = 64 MiB + 160 · N + 8 · (stimulusFrames + runs · captureFrames + noiseFrames)
+```
+
+Per FFT point, `align` holds 44 bytes (plan 12, four Float64 buffers 32) and the transfer + IR
+division 80 bytes (shared plan 12, scratch 16, X/Y half spectra 16, |X|², ε, H 16, |H|² 4, noise
+and |Y|² power 8, noise spectrum 8); one step's garbage is typically still uncollected when the
+next allocates, so one run needs about 124 · N, and more runs leave more garbage (node: 111 B per
+point for one run, 143-160 B for ten). Inputs count twice (Float32 inputs plus the stimulus copy
+for the Worker or the keepRaw copy, plus the IR samples); 64 MiB covers the heap growth of
+small analyses. Every measured peak (node 22, Chromium 153, Firefox 155; inline and Worker; 1-10
+runs; 2¹⁹-2²³ points) was 42-87 % of the estimate.
+
+`engine.js validateRecipe` computes it into `plan.analysis = { fftSize, bytes }` and refuses the
+recipe with `MEMORY_LIMIT` (preflight blocker; detail `fftSize`, `analysisBytes`,
+`maxAnalysisFftSize`, `maxAnalysisBytes`, `longestSweepS`) when `fftSize >
+CONTRACT_LIMITS.maxAnalysisFftSize` (2²²) or `bytes > maxAnalysisBytes` (1 GiB); preflight warns
+`ANALYSIS_MEMORY` above `PREFLIGHT_THRESHOLDS.analysisMemoryWarnBytes` (512 MiB). Both limits
+can be tightened through the engine's `limits`. With the default 0.5 s pre-roll and 1.5 s
+post-roll, 2²² admits every 44.1/48 kHz recipe (30 s sweep), sweeps up to 20.8 s at 96 kHz and
+9.9 s at 192 kHz; `longestSweepS` = ⌊(2²² − 258 − (pre + post)·sr) / (2·sr)⌋ to 0.1 s.
+
+### Stored impulse-response length: `capIrLength(ir, maxSamples = IR_MAX_SAMPLES)`
+
+`IR_MAX_SAMPLES` = 2²¹ (≥ 10.9 s at 192 kHz, 21.8 s at 96 kHz; longer than any 48 kHz capture).
+A longer IR keeps the window `[shift, shift + maxSamples)` with `shift = max(0, min(peakIndex −
+⌊maxSamples/2⌋, length − maxSamples))` — the IR start, unless the peak lies beyond the first half
+of the window. `peakIndex`, `peakTimeS` and `captureOffsetS` refer to the kept window (absolute
+peak time unchanged); `noiseFloorDb` stays the value of the full IR. `truncation = { maxSamples,
+fullLength, startIndex }` records the cut; it is absent when nothing was cut, so earlier results
+and files are unchanged. A stored IR therefore stays below 8 MiB of Float32 (11.2 MB base64),
+inside `experiments/validate.js`'s 4 000 000-element and 32 MiB limits, which accept
+`truncation` only when it describes the stored samples (`maxSamples` = stored length,
+`fullLength` > it, `startIndex` ≤ `fullLength` − length).
+
+### Float32 spectra: not adopted
+
+The spectra and FFT buffers stay Float64: a Float32 2²²-point FFT has a relative rounding error
+of about log2(N)·2⁻²⁴ ≈ 1.3·10⁻⁶ (−118 dB), which reaches the IR noise floors and the −60 dB
+regularization reported here; adopting it would need new golden outputs and new algorithm IDs
+(ADR 0024).
+
+<a id="ir"></a>
+## Impulse response — `oscilla.ir.log-sweep.v2`, `oscilla.ir.farina-inverse.v2` (v1 of both retained) (`measurement/impulse-response.js`)
+
+`computeImpulseResponse({ stimulus, captured, sampleRate, f1, f2, inverse, method, lagSamples,
+algorithm }) → IrResult` with `method` and `fftSize` (and, in v2, `noiseFloorMethod`).
+**Changed (V3 review M5):** the current IDs are the v2 ones; `algorithm` may name the v1 ID of
+the same method (`IR_ALGORITHMS_V1[method]`) to reproduce a stored v1 result exactly (another
+method's ID throws). v1 and v2 differ only in `noiseFloorDb`; samples, peak and time origin are
+identical. `computeTransferAndIr` takes the IR version as `irAlgorithm`. **Changed (integration)** (was G3, G9): `algorithm` is
 `IR_ALGORITHMS[method]` — `'spectral'` → `oscilla.ir.log-sweep.v1` (`IR_ALGORITHM`),
 `'farina-inverse'` → `oscilla.ir.farina-inverse.v1` (`IR_FARINA_ALGORITHM`) — because the two
 methods' outputs differ (ADR 0024); validation accepts `method` and `fftSize` and rejects a
@@ -627,13 +754,33 @@ start          = lagSamples given ? clamp(round(lagSamples) − round(IR_PRE_GUA
 samples[i]     = h[start + i (+ shift)],  i = 0 … len(y) − start − 1   original scale, sign kept
 peakIndex      = argmax |samples|;  peakTimeS = peakIndex/sr (relative to samples[0])
 captureOffsetS = start/sr;  absolute peak time = captureOffsetS + peakTimeS
-noiseFloorDb   = 10·log10( mean h² over the last IR_TAIL_FRACTION (10 %) of the samples after
-                 the peak / h_peak² ),  floored at −300 dB
+fullEnd        = min(len − 1, len(y) − len(x) − start)   last index whose lag has the whole
+                 stimulus inside the capture
+noiseFloorDb   = v2: 10·log10( mean h² over the last IR_TAIL_FRACTION (10 %, at least
+                 IR_NOISE_MIN_SAMPLES = 16) of (peakIndex, fullEnd] / h_peak² ), floored at
+                 −300 dB; null when fewer than 16 such lags follow the peak
+                 v1: the same over the last 10 % of ALL samples after the peak
+noiseFloorMethod = v2 only: 'full-overlap-tail', or 'none' with noiseFloorDb null
 window         = null
 ```
 
+Why (review M5): the deconvolved noise at lag τ is `Σ_m n[m]·g[τ − m]` with g the regularized
+inverse of the stimulus (support ≈ len(x)), so its variance is `σ²·Σ g²` only while every
+sample of y meets g, i.e. τ ≤ len(y) − len(x) ("full overlap"); beyond that less and less of the
+capture's noise enters and the deconvolved noise falls away towards the end of the causal
+window. v1 read its floor exactly there: −159 dB against a true −100 dB for a 2 s sweep with a
+1.5 s post-roll (review probe p4). The full-overlap span after the peak is ≈ the post-roll
+minus the latency, so a decay longer than the post-roll makes the v2 figure an upper bound
+(decay, not noise). Known truth (`v3-review-fixes` "M5"): for white noise σ² in y the floor is
+`σ²·(1/N)·Σ_k |X[k]|²/(|X[k]|² + ε[k])² / h_peak²` (Parseval); the v2 estimate is within 0.5 dB
+of it (power mean of three noise seeds, each within 1.5 dB) and v1 reads > 20 dB below.
+`ir-chart.js` uses only the field name and its meaning (dB re peak, or non-finite → "—"),
+both unchanged.
+
 The full causal length is kept for later ETC, Schroeder, RT60 or EDT work (§90); none of those
-are implemented.
+are implemented. **Changed (M10):** a result carries at most `IR_MAX_SAMPLES` = 2²¹ samples
+(`analysis-task.js capIrLength`, see [Analysis execution and memory](#analysis-memory)); a cut
+is recorded as `truncation`.
 
 ### Windowing and normalization (non-destructive, §40-§41)
 
@@ -678,7 +825,8 @@ stronger later.
 | identity at 44.1/48/96 kHz: peak index at the pre-roll | ±1 sample | pass |
 | identity: peak value vs `(f2 − f1)/(fs/2)` | ±2 % | pass |
 | identity: largest sample beyond ±1 ms | ≤ −40 dB | −45.0, −44.4, −44.0 dB |
-| identity: tail noise floor | < −60 dB | −162.2, −161.6, −161.6 dB |
+| identity: tail noise floor (v2: full-overlap tail) | < −60 dB | pass |
+| (`v3-review-fixes`) v2 noise floor vs the Parseval truth; v1 far below; no full overlap → null | 0.5 dB (3 seeds) | pass |
 | delayed impulse 0.3 s; with lag: offset `(lag − guard)/sr`, absolute time | ±1 sample | pass |
 | echo 0.5 at 12 ms, spectral and farina-inverse: positions | ±1 sample | pass |
 | echo ratio | −6.02 ± 0.5 dB | −6.0284, −6.0286 dB |
@@ -710,6 +858,17 @@ S_i      = 10·log10( mean_{j: f_j in window_i} 10^(L_j/10) )
 Each point in the window counts once, so on the log-spaced transfer grid the average is uniform
 in log-frequency. At the ends the window is truncated to existing points (no extrapolation). A
 window of identical values returns that value exactly; `fraction = 0` returns a copy.
+
+**New (V3 review m1): masked smoothing**, `smoothFractionalOctave(f, L, N, { mask })` and
+`smoothResponse(f, L, N, { mask })` (view gains `masked: true`). Only points with a truthy mask
+entry and a finite value enter any window; excluded points are missing, never 0 dB and never
+their raw value; the output is NaN at excluded points and where a window holds no included
+point, so a drawn curve has a gap instead of a leak. Root cause: smoothing the corrected curve
+where uncovered points still held raw values (or reliable next to unreliable points) power-
+averaged the two across the mask edge, e.g. a +20 dB unreliable band raised the reliable points
+within half a window of it. Same method on a subset of points, so the ID is unchanged; without
+`mask` the output is bit-identical. The views agent wires it (response chart calibration and
+reliability edges).
 `SMOOTHING_FRACTIONS = [0, 24, 12, 6, 3]` lists the specified choices (§35); any N > 0 is
 accepted. Frequencies must be positive and strictly increasing.
 
@@ -800,7 +959,8 @@ RTA_MODES: instant (τ = null, α = 1), fast (RTA_TAU_FAST_S = 0.125 s), slow (R
 
 The first frame after construction or `reset()` seeds the average (no ramp from silence).
 `levelsDb = 10·log10(y)`; `peakDb` is the running maximum of `levelsDb` when `peakHold`.
-`freeze()` discards pushed frames, `unfreeze()` resumes from the frozen state. Buffers are
+`freeze()` discards pushed frames, `unfreeze()` resumes from the frozen state; `resetPeaks()`
+clears only the peaks (the next push holds from its own level). Buffers are
 allocated once and reused (the same result object is returned on every push). FAST and SLOW
 follow the IEC 61672-1 §5.8 time weightings in name and time constant only: they act per
 analysis frame of a block FFT, not as a continuous detector on the squared signal, and are not
@@ -832,6 +992,70 @@ The tests above feed `bandPowers` a mean-square Welch spectrum built in the test
 noise (third-octave bands 100 Hz-10 kHz within ±1.5 dB of their median, 3σ of a 3 s
 realization). `v3-integration.test.mjs` "G4" pins `rtaResult` (zero-power encoding, copies,
 errors, round trip).
+
+<a id="live-rta"></a>
+### Live RTA: `createLiveRta(…)` (`measurement/live-rta.js`) — New (V341-V344)
+
+The MEASURE RTA tab's live analysis of the input (spec §44-§49, §122-§123). Feedback only: no
+stored result depends on it (only an explicit `snapshot()` would be, see below).
+
+- **Frames**: the last `fftSize` samples of the input tap (`capture.js` `openLiveTap`, an
+  `AnalyserNode` whose `getFloatTimeDomainData` samples are read through
+  `analysis/analyser.js`), read once per display frame (≈ 60 Hz). Default 8192 samples
+  (≈ 171 ms at 48 kHz, the V2 mic analyser size), expert 4096-32768; the frames overlap.
+  The analyser's own `getFloatFrequencyData` (Blackman window, `smoothingTimeConstant`, its
+  own dB scaling) is never used.
+- **Spectrum**: `createPowerSpectrumAnalyzer(fftSize, window, { scale: 'mean-square' })` (Hann
+  by default, Blackman-Harris on request): Σ P[k] is the frame's mean square, the one band-level
+  scale (Conventions). Octave / one-third-octave: `integrateBands` over `bandCenters(kind, 20,
+  20000, sr)`, `bandBinCounts` flags bands under 2 bins (8192 at 48 kHz: the 20-50 Hz thirds).
+  FFT mode shows the bins 20 Hz … min(20 kHz, 0.95 × Nyquist) as they are, so a tone's
+  strongest bin reads below its band level by Σ bins / max bin: Hann 1.76 dB bin-centred
+  (10·log10 1.5) to 3.19 dB half-way between bins; Blackman-Harris 3.02-3.85 dB
+  (`FFT_PEAK_BIN_DEFICIT_DB`, measured with the analyzer).
+- **Averaging**: `createRtaAverager` of linear power per bin or band with α = 1 − e^(−Δt/τ),
+  Δt the wall-clock time between frames; instant / fast (125 ms) / slow (1 s); peak hold of the
+  averaged level. Because frames overlap, INSTANT still spans one window. Not an IEC 61672-1
+  detector. A mode, averaging, FFT size, window or calibration change restarts the average.
+- **Calibration**: frequency profile, band modes — per frame
+  `applyFrequencyCorrectionToBands(…, { power: thisFrame, binHz, out })` ('spectrum'
+  weighting, in place), the corrected band power averaged by its own averager (averaging is
+  linear, so this is the corrected average); uncovered bands stay raw. FFT mode —
+  `correctionCurve` at the bin centres once per profile (observed − correction). Level — the
+  offset of a valid `LevelCalibration` only; otherwise "dB relative (dBFS-like)".
+- **Allocation** (§123): `push()` allocates nothing; buffers and the per-frame call arguments
+  are built on construction or on a change. **Changed (V341)** `interpolate.js` evaluates the
+  profile in its per-bin band loops through a number-returning core (`interpolateDb`, index
+  access instead of array destructuring), the same values as before (calibration tests and
+  golden fixture unchanged): the object per bin made 40 scavenges per 1500 live frames.
+- **Snapshot**: `snapshot()` → `rtaResult({ sampleRate, resolution, bands, levelsDb: raw
+  averaged, fftSize, window })` (`oscilla.rta.v1`, the window ID); null in FFT mode. Not yet
+  saved into an experiment (an experiment recipe requires a stimulus).
+- **View**: `buildRtaView({ ...live.viewInput(), fixedRange: true })` — badge LIVE (stored data
+  is badged its `snapshotLabel`, e.g. NOISE CHECK SNAPSHOT, never LIVE), fixed axis
+  `LIVE_RTA_Y_RANGE` (bands −120 … 0 dB, FFT −150 … 0 dB, shifted by a valid level offset), the
+  corrected peaks as given.
+
+| Test (`v3-live-rta.test.mjs`) | Tolerance | Measured |
+| --- | --- | --- |
+| sine at the band centre, octave + third, 44.1/48/96 kHz, A = 1 and 0.1: `10·log10(A²/2)` | ±0.01 dB | ≤ 0.0023 dB |
+| same: dominance over every other band | ≥ 20 dB | ≥ 34.8 dB |
+| one live frame vs `welch()` → `bandPowers()` of the same stationary three-tone signal | ±0.05 dB | ≤ 3.2e-8 dB |
+| two equal tones in one octave band | +3.0103 ± 0.05 dB | 1.4e-8 dB error |
+| FFT: bin-centred tone's peak bin `−3.0103 − 1.7609` dB; Σ bins = mean square | 1e-6 / 1e-3 dB | pass |
+| FAST step after τ: 63.2 % of the power step; peak hold; `resetPeaks()` | 1e-9 | pass |
+| freeze holds frame and count; a mode change restarts unfrozen | exact | pass |
+| profile per band = `applyFrequencyCorrectionToBands` of that frame; per bin = `correctionCurve`; level offset; invalid level ignored | 1e-6 dB | pass |
+| `applyFrequencyCorrectionToBands({ out })` = without `out` | exact | pass |
+| `push()`: 0 typed arrays constructed, ≤ 2 scavenges in 3000 frames, same frame objects (all modes, with and without calibration) | exact / ≤ 2 | 0 / 0-1 |
+| snapshot IDs, raw levels; FFT size and window keep the band scale (4096-32768, both windows) | ±0.01 dB | pass |
+| view: fixed axis, LIVE vs NOISE CHECK SNAPSHOT badge, under-resolved flagged, no SPL uncalibrated, dB SPL + corrected peaks calibrated | exact | pass |
+
+Browser (`tests/browser/v3-ui.cjs` live-rta, Chromium and Firefox fake microphones, a 1 kHz
+sine of amplitude 0.1): the 1 kHz third-octave band reads −23.06 dB (Chromium) against
+10·log10(0.1²/2) = −23.01 dB (gate ±1 dB), 48 dB above the next band; the octave band
+−23.01 dB; the FFT peak bin 1001.95 Hz at −25.37 dB (an off-centre tone, inside the Hann
+1.76-3.19 dB deficit).
 
 <a id="aggregate"></a>
 ## Aggregation of repeats (`measurement/aggregate.js`)
@@ -897,7 +1121,10 @@ The aggregate is the primary response of a repeated measurement. With `runs ≥ 
   at −300 dB is the stored one), `snrDb` the lowest run SNR per point (null unless every run
   has one), `validRange` the intersection of the runs' valid ranges (null if empty), `phaseDeg`
   null with `phaseReason: 'AGGREGATED'` (phases of separate runs are not averaged, §27),
-  `alignment` null (each run has its own), the other fields from run 1. Why a marked transfer
+  `alignment` null (each run has its own), the other fields from run 1; for transfer.v2 runs
+  also `snrPooledDb` (lowest run per point; null, together with `snrDb`, unless every run has
+  both), `snrResolutionHz` and `resolutionHz` (the coarsest run's), while transfer.v1 runs keep
+  the v1 shape exactly (V3 review). Why a marked transfer
   rather than null: the aggregate has no valid range and no SNR, and both are what make its
   centre usable (quality, `responseDelta`); keeping them conservative (worst run, common range)
   never claims more than every run supports;
@@ -933,7 +1160,9 @@ spread is NaN and it is left out of `repeatabilityDb`.
 
 ### Profile and identity (`profile.js`)
 
-A `FrequencyProfile` is `[hz, db]` pairs stating a measuring chain's **deviation from flat**.
+A `FrequencyProfile` (schema 2) is `[hz, db]` pairs plus the **sign convention** of the values:
+`convention: 'deviation'` (the measuring chain's deviation from flat, the meaning schema 1 had)
+or `'correction'` (a correction to add, see Interpolation).
 `normalizePoints` sorts ascending (stable, with a warning if unsorted), merges exact duplicates
 (same Hz and dB, warning), and rejects conflicting duplicates, non-finite values, frequencies
 outside 1 Hz-200 kHz, corrections beyond ±60 dB, and fewer than 1 or more than 2000 points
@@ -941,17 +1170,21 @@ outside 1 Hz-200 kHz, corrections beyond ±60 dB, and fewer than 1 or more than 
 
 ```
 profileId = SHA-256( JSON.stringify({ schemaVersion: 1, kind: 'frequency',
-                     units: { frequency: 'Hz', correction: 'dB' }, points }) )   64 hex digits
+                     units: { frequency: 'Hz', correction: 'dB' }, points
+                     [, convention]  /* only when not 'deviation' */ }) )      64 hex digits
 ```
 
 with fixed key order and ECMAScript shortest round-trip number text, so the ID is stable across
 engines. Name, source, notes, file name and import time are excluded: renaming keeps the ID, any
-point change alters it (§200). SHA-256 is the synchronous FIPS 180-4 implementation in
+point change alters it (§200). The identity keeps the schema-1 form for a deviation profile, so
+every V3.0 profile keeps the id its experiments recorded, while the same points read as a
+correction get another id. `migrateProfileDocument` upgrades a schema-1 export (or a document
+without a version) to schema 2 with convention `deviation`; a newer schema is refused. SHA-256 is the synchronous FIPS 180-4 implementation in
 `sha256.js` (WebCrypto is asynchronous and unavailable in some file:// contexts). Missing
 provenance stays `null`; a missing name becomes `UNNAMED_PROFILE`.
 
-`exportProfile` writes `{ format: 'oscilla.calibration', schemaVersion, kind, id, name,
-[source], units, points, notes, importedAt }`; `source` appears only when given.
+`exportProfile` writes `{ format: 'oscilla.calibration', schemaVersion: 2, kind, id, name,
+convention, [source], units, points, notes, importedAt }`; `source` appears only when given.
 
 ### Import (`parse.js`): `parseCalibrationText(text, opts)`
 
@@ -968,6 +1201,18 @@ they cannot be separators, with a warning. A "Sens Factor" line is quoted into t
 warning and **never applied** (it is neither a frequency correction nor an SPL calibration). For
 JSON with a stored `id` that does not match the points, the ID is recomputed with a warning.
 
+**Convention** — Changed (review M4). `parse.js` decides the sign convention from the file and
+never guesses: a header naming the value column as the microphone's response (deviation,
+response, SPL, magnitude, level, amplitude, a bare dB) states `deviation`; a header naming it
+correction, corr, gain, EQ, cal, calibration or value does not say which way the values go, so
+the result is `{ ok: true, needsConvention: true, profile: null, previews }` and the caller
+parses again with `opts.convention` (the user's explicit choice). A file without a header and a
+JSON point list read as `deviation` (the measurement-microphone convention), said so in
+`convention.text`; an OSCILLA export states its convention, and a schema-1 export is migrated.
+Every successful parse returns `convention` and a one-point `preview`
+(`previewConvention(profile)`: at the point with the largest |value|, "At 20 Hz the file states
++4.20 dB; a reading of 0.00 dB becomes −4.20 dB").
+
 ### Interpolation and application (`interpolate.js`)
 
 Piecewise linear in dB over log10(frequency):
@@ -982,27 +1227,29 @@ c(f) = c0 + t·(c1 − c0)                                 exact stored value at
   `correctionCurve` gives NaN and `covered = 0`). The opt-in `'hold'` repeats the edge value but
   still marks the point uncovered (`held: true`). 0 Hz and negative frequencies are below every
   profile.
-- **Sign convention** (`CORRECTION_SIGN = −1`, `CORRECTION_CONVENTION`): "+2.1 dB at 10 kHz"
-  means the microphone reads 2.1 dB high there, as measurement-microphone calibration files are
-  distributed, so
+- **Sign convention** (`conventionSign(profile)`, `CONVENTION_RULES`), stored in the profile:
 
   ```
-  correctedDb = observedDb − correction       (uncovered points: observedDb unchanged)
+  deviation  ("+2.1 dB at 10 kHz" = the microphone reads 2.1 dB high there):
+             correctedDb = observedDb − value        (CORRECTION_SIGN = −1)
+  correction (the file states what to add, e.g. an EQ curve):
+             correctedDb = observedDb + value
   ```
 
-  An EQ-style (inverse) profile must be negated before import; the code never guesses.
+  Uncovered points keep observedDb. `correctionAt` / `correctionCurve` return the STATED value;
+  the dB actually added is `conventionSign · value`. The code never guesses a convention.
 - `applyFrequencyCorrection(magnitudeDb, frequencies, profile, opts)` returns
   `{ algorithm, profileId, correctedDb, covered, coverage, extrapolate }`; the input is not
   modified, so raw and corrected curves coexist (§18 overlay).
 
-### RTA bands: `applyFrequencyCorrectionToBands(rta, profile, { power, binHz })` — New (integration), was G11
+### RTA bands: `applyFrequencyCorrectionToBands(rta, profile, { power, binHz, out })` — New (integration), was G11
 
 A band level is a sum of power, so a correction that varies inside the band is applied to the
 power before summing, never as one value at the band centre:
 
 ```
-gain        = Σ_k W_k·10^(−c(f_k)/10) / Σ_k W_k          (CORRECTION_SIGN = −1)
-correctedDb = levelDb + 10·log10(gain)
+gain        = Σ_k W_k·10^(s·c(f_k)/10) / Σ_k W_k          (s = conventionSign: −1 deviation,
+correctedDb = levelDb + 10·log10(gain)                      +1 correction)
 ```
 
 - `'spectrum'` weighting, when the band's per-bin spectrum is given (`power`: a mean-square
@@ -1017,7 +1264,9 @@ correctedDb = levelDb + 10·log10(gain)
   the overlap). Zero power (≤ −300 dB, −Infinity) stays as it is.
 
 Returns `{ algorithm: CALIBRATION_ALGORITHM, profileId, correctedDb, correctionDb, covered,
-coverage, weighting }`; the input is not modified.
+coverage, weighting }`; the input is not modified. With `out` (a previous result of the same
+band count) the values are written into its arrays and it is returned — the same values, no
+allocation (the live RTA corrects every frame this way, [Live RTA](#live-rta)).
 
 Limits: magnitude only (no phase calibration). A single-point profile covers exactly one
 frequency. The calibration's own uncertainty is not represented.
@@ -1049,19 +1298,52 @@ can fail); exact points and offsets with strict equality.
 ## Level calibration and SPL labelling (`calibration/level.js`)
 
 One explicit reference reading (§23). The user applies a known external reference (typically a
-94 dB SPL calibrator at 1 kHz); OSCILLA observes its relative level X; then
+94 dB SPL calibrator at 1 kHz); OSCILLA observes its relative level X on a NAMED scale; then
 
 ```
 offsetDb       = referenceDbSpl − observedDbRelative          (createLevelCalibration)
 displayed SPL  = R + offsetDb                                 for a later relative reading R
 ```
 
+- **The reading X** — Changed (review M3). V3.0 took X typed by hand with no defined scale,
+  although OSCILLA has several "dB relative" scales (MEASURE mean-square band levels: a
+  full-scale sine reads −3.01 dB; the V2 analyser `levelDb`; a dBFS peak scale reading 0 dB).
+  Now X is `LEVEL_SCALE` `'band-mean-square'`: the one-third-octave band level (IEC 61260-1
+  base-ten edges, `rta.js bandCenters`) containing `referenceHz`, dB re digital full scale on
+  the mean-square scale — the scale of the MEASURE noise and RTA bands. `reference.js`
+  `measureReferenceLevel(capture, { referenceHz })` reads it from a stimulus-free capture of the
+  SAME capture io a measurement uses (`io.captureNoise`, 3 s):
+
+  ```
+  W   = welch(x, Hann, 8192 points, 50 % overlap)           tone scale
+  P_b = integrateBands(W → mean-square, binHz, [band])      fractional bin weights
+  X   = 10·log10(P_b)                                       = 20·log10(A) − 3.01 dB for a sine
+  bandFraction = P_b / mean(x²)                             < 0.25 refused, < 0.8 warned
+  ```
+
+  A clipped capture (|x| ≥ `CLIP_THRESHOLD`), no power in the band, a capture shorter than one
+  segment or a band holding less than a quarter of the power (no reference tone) is refused.
+  For a sine at the band centre the Hann leakage outside the band is < 0.01 dB, and X equals
+  the engine's `summarizeNoise` band level of the same capture (tested to 0.01 dB).
 - `createLevelCalibration({ referenceHz, referenceDbSpl, observedDbRelative, conditions,
-  createdAt })`: `referenceHz` in 20 Hz-20 kHz, `referenceDbSpl` in 40-140 dB, observed finite,
-  `createdAt` a caller timestamp (no clock in the module), `conditions` free text ≤ 2000 chars.
-- `isValidLevelCalibration(cal)` is true only for the right schema and kind, in-range fields and
-  an `offsetDb` that matches `referenceDbSpl − observedDbRelative` within `1e-9` dB (absorbs JSON
-  rounding only; a tampered offset fails).
+  createdAt, method, input })` (schema 2): `referenceHz` in 20 Hz-20 kHz, `referenceDbSpl` in
+  40-140 dB, observed finite, `createdAt` a caller timestamp (no clock in the module),
+  `conditions` free text ≤ 2000 chars, `method` `'captured'` | `'manual'` (typed by hand, an
+  advanced option on the same scale), `input` the capture facts, stored as the binding
+  `{ deviceId: hashDeviceId(id), sampleRate, echoCancellation, noiseSuppression,
+  autoGainControl, channelCount }` (unknown values null; `null` when nothing is known).
+  `hashDeviceId(id) = 'sha256:' + SHA-256('oscilla.device-id:' + id)[0..32)` (§88: the raw id is
+  never stored; equal inputs stay equal).
+- `levelCalibrationApplies(cal, current)`: a schema-2 calibration applies to the current input
+  only when every recorded binding field equals it; otherwise `{ applies: false, reason:
+  'UNCALIBRATED: the level calibration was taken with … at calibration, … now' }`. Without a
+  recorded or a current input nothing is compared (`checked: false`). `levelLabel(cal,
+  current)` carries that reason. Schema-1 records (no scale, method, input) stay valid as
+  stored records; the workspace creates schema 2 only.
+- `isValidLevelCalibration(cal)` is true only for a known schema (1 or 2) and kind, in-range
+  fields, an `offsetDb` that matches `referenceDbSpl − observedDbRelative` within `1e-9` dB
+  (absorbs JSON rounding only; a tampered offset fails) and, for schema 2, the known scale and
+  method and a well-formed binding (a raw deviceId fails).
 - `levelLabel(cal)` returns `{ unit: 'dB SPL', calibrated: true, indicator: 'CALIBRATED' }` only
   for a valid calibration, otherwise `{ unit: 'dB relative (dBFS-like)', calibrated: false,
   indicator: 'UNCALIBRATED' }`. `toDisplayLevel(R, cal)` adds the offset only under a valid
@@ -1142,21 +1424,32 @@ not the same result. `sha256Hex` defaults to `calibration/sha256.js` and may be 
 `withConfigHash(e, hex)` stamps `provenance.configHash`; `withResults` clears it when
 `algorithms` or `sampleRate` change.
 
-### Result hash (`hash.js`, §101) — New (integration), was G13
+### Result hash (`hash.js`, §101) — Changed (review M11), was G13
 
 ```
-resultHash = SHA-256 hex( canonicalJson({ v: 1,             RESULT_HASH_VERSION
-  results: serializeExperiment(results) }) )                 { transfer, ir, rta,
-                                                             aggregate? }, typed arrays as
-                                                             EncodedArray
+version 2 (RESULT_HASH_VERSION, provenance.resultHashVersion = 2):
+resultHash = SHA-256 hex( canonicalJson({ v: 2,
+  results, quality, calibration, input, output }) )       each serializeExperiment()'d,
+                                                           typed arrays as EncodedArray
+version 1 (files without resultHashVersion; still verified):
+resultHash = SHA-256 hex( canonicalJson({ v: 1, results: serializeExperiment(results) }) )
 ```
 
-(`aggregate` only when present: a results block without it hashes as before.)
+Version 1 covered the results only, so the stored quality verdict, the calibration and the
+input could be edited without detection (a POOR verdict edited to GOOD still verified). Version
+2 also covers the quality assessment (status, reasons, metrics, mask), the calibration, the
+input (device label, hashed id, constraints) and the output (level, master gain).
+`withResultHash(e, hex, version)` stamps both fields (version 1 omits `resultHashVersion`, the
+form of a version-1 file); validation recomputes the hash in the version the file declares.
+(`aggregate` only when present: a results block without it hashes as before.) Validation also
+requires `quality.mask.frequencies` to equal the stored response grid (results.transfer, else
+results.aggregate) bit for bit, and the experiment summary labels the stored verdict "as
+assessed by OSCILLA <version>, commit <c>, <rule set>".
 
 The typed arrays enter in their encoded form (dtype + little-endian bytes), so the hash covers
 the exact stored bits and the dtype; key order does not matter. `withResultHash(e, hex)` stamps
 `provenance.resultHash` (`null` from `createExperiment`); `withResults` clears it whenever
-`results` change. On import `validateExperiment` recomputes it over the decoded results when
+`results` or `quality` change. On import `validateExperiment` recomputes it over the decoded results when
 `provenance.resultHash` is a hash and reports a mismatch as `{ path: 'provenance.resultHash',
 code: 'corrupt', text: 'corrupt: …' }`; `null` (not stamped) is not verified. It detects
 corruption, not tampering (anyone can recompute it). Plain-number arrays in a file are hashed
@@ -1257,6 +1550,16 @@ filed under. A self-check shows a 0.001 dB shift — inside every analytic toler
 Regenerate only after announcing an ID change: `OSCILLA_UPDATE_GOLDEN=1 node --test
 tests/unit/v3-golden.test.mjs`.
 
+**Changed (V3 pre-release review).** 19 IDs now: the four new defaults (`oscilla.transfer.v2`,
+`oscilla.ir.log-sweep.v2`, `oscilla.ir.farina-inverse.v2`, `oscilla.confidence.v3`) got new
+fixtures; the retained `oscilla.transfer.v1`, `oscilla.ir.*.v1` and `oscilla.confidence.v1/v2`
+keep their fixtures byte for byte, computed with the retained method selected (the retained
+quality rule sets on transfer.v1 inputs). The v3 case also passes the noise check, the
+stimulus spec and one unconfirmed input-processing flag, so the new inputs are pinned.
+Experiment validation (`validate.js`, additive) accepts the transfer.v2 keys `snrPooledDb`,
+`snrResolutionHz`, `resolutionHz` and the IR v2 key `noiseFloorMethod`, in the producing
+module's key order (byte-identical re-export), and accepts a v1 IR ID for its own method.
+
 ### Tests (`v3-experiments.test.mjs`)
 
 Encoding round trip is bitwise (including a float32 subnormal and `−0`); base64 matches `Buffer`
@@ -1275,17 +1578,68 @@ non-result fields and key order, changes with one flipped bit or a dtype change,
 modified result in a stamped file is rejected as `corrupt`.
 
 <a id="quality"></a>
-## Measurement quality — `oscilla.confidence.v2`, `oscilla.confidence.v1` (`measurement/quality.js`)
+## Measurement quality — `oscilla.confidence.v3`, `oscilla.confidence.v2`, `oscilla.confidence.v1` (`measurement/quality.js`)
 
 Documented from the code that landed in e89ff9f (was G14). ADR 0025: a pure rule table maps
 measured metrics to one of four statuses and always returns the reasons, passing and failing,
 each backed by the number it came from. There is no score and no "confidence" percentage.
 
 `assessQuality({ capture, transfer, aggregate, calibration, requestedRange, resolutionHz,
-sweepWindow, chainNotes, algorithm }) → { algorithm, status, reasons, metrics, mask }`
+sweepWindow, chainNotes, noiseCheck, inputProcessing, stimulus, algorithm }) → { algorithm,
+status, reasons, metrics, mask }`
+
+### confidence.v3 — **New (V3 pre-release review, quality and DSP group)**
+
+`QUALITY_ALGORITHM` = `oscilla.confidence.v3`; `QUALITY_ALGORITHM_V2` and `QUALITY_ALGORITHM_V1`
+stay selectable and reproduce their assessments exactly (golden fixtures unchanged); v1/v2
+ignore the three new inputs. v3 = v2 plus the rules below; thresholds are the same object plus
+`minSnrObservations = 10`; no new invalidating code.
+
+| Code (v3) | Dimension | Rule |
+| --- | --- | --- |
+| `SNR_NOT_MEASURED` (extended, B1) | snr | warn, value null, and no `SNR_MEDIAN` when the noise check (`noiseCheck`, its `checkCapture` result) is EMPTY (RMS < −90 dBFS, digital silence included; the text adds "while the runs carry signal (a noise gate, input processing or a digital loopback)" when they do), when the transfer has no SNR although a noise capture was taken (transfer.v2: zero noise power in a band), or when a stored SNR sits at `SNR_CEIL_DB` (transfer.v1's 200 dB) |
+| `SNR_NOT_ASSESSED` (M1) | snr, not measured | points with f < `minSnrObservations`·`snrResolutionHz`/0.1156 = 10/(0.1156·T_noise) (86.5 Hz for 1 s, 17.3 Hz for 5 s; 20 Hz needs 4.33 s) have fewer than 10 independent noise observations per 1/6-octave pool: warn with their range, not reliable; caps USABLE, never pushes to POOR |
+| `INPUT_PROCESSING` (M2) | input | any of echoCancellation, noiseSuppression, autoGainControl reported `true`: fail (POOR); all `false`, or `inputProcessing = 'test-context'` (digital loopback): ok |
+| `INPUT_PROCESSING_NOT_CONFIRMED` (M2) | input, not measured | any of the three not reported (null/absent), or no applied constraints at all (`null`): warn (caps USABLE). `inputProcessing` undefined: the rule is not applied (a caller without a microphone path) |
+| `CLIPPING_NOT_EXCLUDED` (NIT) | capture, not measured | no clip region but a peak ≥ `CLIP_THRESHOLD`: warn instead of `CLIPPING` ok (see below) |
+
+Other v3 changes:
+
+- **Pooled SNR (M1).** The 1/6-octave SNR behind the reliable mask, `LOW_SNR_BAND`, `snrMinDb`
+  and now also `snrMedianDb` is transfer.v2's `snrPooledDb`, the pooled power ratio
+  `(ΣPy − ΣPn)/ΣPn`, over the assessed points only. v1/v2 pooled the per-point ratios (mean of
+  ratios), biased high by +3-4 dB below 150 Hz with a 1 s noise check ([transfer SNR](#transfer-snr)).
+  A transfer.v1 (no `snrPooledDb`, no `snrResolutionHz`) is pooled as before and counts as
+  assessed everywhere (documented fallback for re-assessing stored v1 data). The SNR_MEDIAN text
+  says "(1/6-octave pooled)".
+- **Resolution (m2).** `resolutionHz` defaults to `transfer.resolutionHz` = max(fs/N,
+  1/T_capture) (v1/v2: `binHz`, the zero-padded spacing, finer than the capture resolves);
+  metrics add `snrResolutionHz` (1/T_noise) and `snrAssessedFromHz` after `outputChainLimitHz`.
+- **Repeatability text (m5).** "N runs: median run-to-run SD x dB (per-frequency standard
+  deviation, median across frequency)" (median aggregation: "absolute deviation"), a statistic,
+  not a "±" bound or an agreement claim.
+- **Clipping texts (NIT).** With `stimulus` (the spec) and `sweepWindow`, a clip text names the
+  sweep frequency of its regions, `stimulus.js` `instantaneousFrequency` at the region's time in
+  the sweep: "clipping at 0.0048 % of samples (2 regions, at ≈ 260 Hz of the sweep)".
+  `CLIP_MIN_RUN` stays 3 (decision): a sine of amplitude A hard-clipped at rail r stays at the
+  rail for acos(r/A)/π of each period, i.e. fewer than 3 samples above
+  f = acos(r/A)·fs/(3π) (≈ 2.4 kHz at 48 kHz for 1 dB of overdrive, 5.3 kHz for 6 dB), so mild
+  clipping at high sweep frequencies leaves no clip region; lowering the run length would count
+  lone full-scale transients as clipping. Instead the rail peak is reported:
+  `CLIPPING_NOT_EXCLUDED` "peak 0.99 reaches the rail (≥ 0.98) without a 3-sample flat top:
+  brief clipping (high sweep frequencies) is not excluded".
+
+Decision (B1): a silent or EMPTY noise check is **not invalidating**. The runs are valid
+captures; only the SNR is unknown, which is a NOT MEASURED warn. That is also how a digital
+loopback looks (its noise check is digital silence), and for a microphone a silent noise check
+next to signal-carrying runs points at a gate or input processing, which `INPUT_PROCESSING`
+judges from the applied constraints. A noise capture that is broken (NaN, no samples, bad rate)
+is invalidating in the engine (`NOISE_CAPTURE_INVALID`), as a clipping one was before.
+
+### confidence.v2 (retained) and v1
 
 **Changed (gaps)** (was G15, G12). Each ID is one rule set (`QUALITY_RULESETS`):
-`algorithm` defaults to `QUALITY_ALGORITHM` = `oscilla.confidence.v2`; `QUALITY_ALGORITHM_V1`
+`algorithm` defaulted to `oscilla.confidence.v2` (now v3, above); `QUALITY_ALGORITHM_V1`
 reproduces a v1 assessment exactly (verified against the 8628438 implementation in 45 input
 combinations, and by its golden fixture) and reads neither discontinuities nor chain notes.
 An unknown ID throws. Thresholds are the same object in both. v2 adds four codes, nothing else:
@@ -1300,9 +1654,10 @@ An unknown ID throws. Thresholds are the same object in both. v2 adds four codes
 `chainNotes` is pure data reported by the platform layer, validated by `normalizeChainNotes`
 (plain object, only `limiterDeviationAboveHz`, null or a finite frequency > 0; anything else
 throws). quality.js does no browser sniffing. The case it exists for is the G12 measurement:
-Firefox 155's DynamicsCompressor in the master chain deviates above 18 kHz at every level
-([spike](spike-audioworklet-worker.md)). `engine.js` reads an optional `chainNotes` from the
-io's PreflightFacts, warns in preflight (`OUTPUT_CHAIN_DEVIATION`) when the sweep reaches above
+Firefox 155's DynamicsCompressor in the master chain read as deviating above 18 kHz at every
+level ([spike](spike-audioworklet-worker.md)); that reading was later traced to a look-ahead
+replay that `audio-engine.js` `feedLimiter` removes, so no browser needs the note today.
+`engine.js` reads an optional `chainNotes` from the io's PreflightFacts, warns in preflight (`OUTPUT_CHAIN_DEVIATION`) when the sweep reaches above
 it, ignores an invalid note with `CHAIN_NOTES_IGNORED`, records it as `result.chainNotes` and
 passes it to `assess` (context `chainNotes`); `assessMeasurement(result, ctx)` (engine.js) is the
 standard `assess` — all runs' checks, the combined transfer, the aggregate, the applied
@@ -1319,7 +1674,7 @@ measured probe. v2 metrics add `discontinuities` (count, null when no run was ch
   `[start, end)` sample range of the stimulus in the capture (or one per run).
 - `summarizeQuality(assessment)` gives one or two sentences for screen readers (§150).
 
-### Thresholds (`QUALITY_THRESHOLDS`, shared by the v1 and v2 rule sets)
+### Thresholds (`QUALITY_THRESHOLDS`, shared by the v1, v2 and v3 rule sets)
 
 | Name | Value | Rationale (from the code) |
 | --- | --- | --- |
@@ -1339,6 +1694,7 @@ measured probe. v2 metrics add `discontinuities` (count, null when no run was ch
 | `poorWarnCount` | 3 | measured warns in three distinct dimensions compound to POOR |
 | `lowSnrBandMinOctaves` | 1/6 | narrowest low-SNR band named as its own reason |
 | `maxBandReasons` | 3 | display limit for named low-SNR bands (not a rule) |
+| `minSnrObservations` | 10 | v3 only: B·T_noise per 1/6-octave pool for an assessed SNR; bounds the pooled noise estimate's scatter to ≈ 4.34/√10 = 1.4 dB |
 
 ### Reasons and rules
 
@@ -1354,7 +1710,7 @@ not measured or absent. Only scope `quality` decides the status; `calibration` r
 | `DROPOUT_IN_SWEEP` / `DROPOUT` | capture | a dropout inside the sweep window (every interior dropout without a window) fails, invalidating; outside warns; none ok |
 | `NON_FINITE_ANALYSIS` | analysis | non-finite grid, magnitude, SNR, phase or aggregate centre: fail, invalidating |
 | `NO_VALID_RANGE` | range | `validRange` null: fail, invalidating |
-| `SNR_MEDIAN` / `SNR_NOT_MEASURED` | snr | median per-point `snrDb` over the whole grid ≥ 20 ok, ≥ 10 warn, < 10 fail; no noise capture or no transfer: not measured (warn) |
+| `SNR_MEDIAN` / `SNR_NOT_MEASURED` | snr | median per-point `snrDb` over the whole grid (v3: median pooled SNR over the assessed points) ≥ 20 ok, ≥ 10 warn, < 10 fail; no noise capture or no transfer (v3 also: an EMPTY noise check, no noise power, a stored ceiling): not measured (warn) |
 | `LOW_SNR_BAND` | range | each run of 1/6-octave-pooled SNR < 10 dB at least 1/6 octave wide (the 3 widest): warn |
 | `COVERAGE` | range | coverage fraction ≥ 0.9 ok, ≥ 0.5 warn, < 0.5 fail; mentions Nyquist when the request exceeds it |
 | `REPEATABILITY` / `REPEATABILITY_NOT_MEASURED` | repeatability | `aggregate.repeatabilityDb` ≤ 1 ok, ≤ 3 warn, > 3 fail; < 2 runs or no aggregate: not measured (warn) |
@@ -1377,19 +1733,22 @@ to POOR. An INVALID assessment keeps only its `fail` reasons and an all-zero rel
 
 ### Masks and metrics
 
-- `mask.reliable[i]`: with an SNR estimate, the 1/6-octave power mean of the linear per-point
-  SNR ≥ 10 dB **and** f ≤ 0.95 × Nyquist; without one, inside `validRange`. A point need not lie
-  in `validRange` (the longest run only) to be reliable.
+- `mask.reliable[i]`: with an SNR estimate, the 1/6-octave pooled SNR ≥ 10 dB **and**
+  f ≤ 0.95 × Nyquist (v1/v2: power mean of the linear per-point SNR; v3: transfer.v2's pooled
+  power ratio, and the point must be assessed); without one, inside `validRange`. A point need
+  not lie in `validRange` (the longest run only) to be reliable.
 - `mask.calibrated[i]`: the profile's `covered` flag on the same grid, else inside its
   `coverage`; never extrapolated.
 - `metrics`: `snrMedianDb`, `snrMinDb` (worst pooled SNR inside `validRange`), `clippingRatio`,
   `clippingRegions`, `dropouts`, `repeatabilityDb`, `runs`, `requestedRange`, `coverage`,
   `coverageFraction`, `reliableRanges`, `unreliableRanges`, `calibratedRange`,
-  `frequencyCalibrated`, `levelCalibrated`, `resolutionHz`.
+  `frequencyCalibrated`, `levelCalibrated`, `resolutionHz` (v2 adds `discontinuities`,
+  `outputChainLimitHz`; v3 adds `snrResolutionHz`, `snrAssessedFromHz`).
 - Text: frequencies through `formatFrequencyWithResolution` at the coarser of Δf and the grid
   step; levels through `formatDb` (`RELATIVE_UNIT` unless a valid level calibration applies);
   SNR and spreads as plain dB, whole dB in passing reasons and one decimal in warn/fail
-  reasons; a passing "agree within ±x dB" rounds x up to 0.1 dB. Never "high confidence".
+  reasons; a passing repeatability (v1/v2 "agree within ±x dB", v3 "median run-to-run SD x
+  dB") rounds x up to 0.1 dB. Never "high confidence".
 
 ### Assumptions and limits
 
@@ -1397,8 +1756,19 @@ Thresholds are engineering choices with stated rationale, versioned by the ID (�
 any threshold, rule or invalidating code mints the next ID (v2 did, for the discontinuity rule
 and the chain note). SNR, coverage and the masks come from the one `transfer` passed (with
 repeats, the caller chooses which run; the aggregate contributes only `repeatabilityDb`). The
-chain note caps the reliable mask, not `validRange`/`COVERAGE`. The engine's own capture checks
-still stop a run on any `DISCONTINUITY` (stricter than v2's window rule).
+chain note caps the reliable mask, not `validRange`/`COVERAGE`. **Changed (V3 review M8):** the
+engine no longer stops a run on every capture-check reason (before, any `CLIPPING`, `DROPOUT` or
+`DISCONTINUITY`, even outside the sweep, discarded the measurement, so quality's graded tiers
+were unreachable: one 4-sample flat top at 0.999 made it INVALID, probe p6). A run is invalid
+before analysis only for `engine.js` `RUN_INVALIDATING_CODES` — `NO_SAMPLES`,
+`BAD_SAMPLE_RATE`, `NON_FINITE`, `EMPTY`/`NO_INPUT`, `FRAMES_MISSING`, and `DROPOUT_IN_SWEEP`
+for a dropout CERTAINLY inside the sweep: `[s0 + postRoll, s0 + frames)` with s0 the scheduled
+stimulus offset in the capture, the samples the response covers for every latency in
+[0, post-roll] (a larger latency is rejected by the analysis as STIMULUS_OUTSIDE_CAPTURE;
+empty when the post-roll is longer than the sweep). Everything else is graded here against the
+ALIGNED sweep window (`CLIPPING` ok/warn/fail, `CLIPPING_SEVERE`, `DROPOUT[_IN_SWEEP]`,
+`DISCONTINUITY[_IN_SWEEP]`); an INVALID assessment makes the result INVALID with the failing
+codes in the state transition (so `announcements.js` still says "invalid due to clipping").
 
 ### Tests (`v3-quality.test.mjs`)
 
@@ -1424,6 +1794,21 @@ inputs they came from):
 | RTA-only (no transfer) | resolution judged against the requested range |
 | `maskRuns` / `maskRanges`; reliable mask = pooled SNR test | contiguous inclusive runs; ranges partition the grid |
 | inputs not mutated, deterministic output | exact |
+
+The fixtures' noise captures are 5 s long since v3, so every point from 20 Hz is assessed;
+texts and the resolution follow v3, and the reliable-mask test checks v3 (pooled power ratio)
+and v2 (mean of ratios) side by side.
+
+`v3-review-fixes.test.mjs` (one regression per review finding, each failing before the fix):
+B1 silent and −100 dBFS noise checks give SNR NOT MEASURED, USABLE, no "200 dB" anywhere, the
+retained v2 reproducing "200 dB median SNR" from a stored v1 transfer and v3 rejecting it, a
+NaN noise capture INVALID; M1 pooled SNR within 1 dB of the analytic truth at 30-150 Hz while
+the mean of ratios is > 2 dB high, NOT ASSESSED below 86.5 Hz with a 1 s check; M2 POOR /
+USABLE / ok by applied constraints and test context; M8 every tier reachable through the
+engine (one flat top warn, sustained fail, severe INVALID with all runs captured, dropout
+outside warn / certainly inside run-INVALID / aligned-inside quality-INVALID, discontinuity
+after the sweep warn, rail peak `CLIPPING_NOT_EXCLUDED`); M5 IR floor vs Parseval truth; m1
+masked smoothing; m2 resolutions; m9 band levels.
 
 `v3-integration.test.mjs` "G4" and `v3-pipeline.test.mjs` check that a real assessment (with
 `scope` and `mask`) is stored, validated and re-exported unchanged. `v3-gaps.test.mjs` (exact):

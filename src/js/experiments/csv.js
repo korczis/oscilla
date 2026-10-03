@@ -9,13 +9,19 @@
 //
 //   csvMeta(experiment) -> meta
 //   transferCsv(result, meta, { view, derivation, correctedDb, reliable, run })
-//     columns frequency_hz, magnitude_db_relative, magnitude_db_corrected, snr_db, reliable
+//     columns frequency_hz, magnitude_db_relative, magnitude_db_corrected, snr_db, reliable,
+//     phase_deg (empty, with the reason in its column line, when the transfer has no phase)
+//     `reliable` is the quality assessment's mask (quality.mask.reliable) when the caller passes
+//     it — reliableFromQuality() takes it from an experiment only when the mask lies on the
+//     transfer's grid — else membership of the valid range, and the column line says which.
 //     A transfer marked derivedFrom 'aggregate' (G20: the centre of repeated runs) says so in a
 //     `# derived_from:` line and in its column units; `run` (an index of results.runTransfers)
 //     adds `# run:` for one run of a repeated measurement.
 //   aggregateCsv(aggregate, meta, { view, derivation })
 //     columns frequency_hz, centre_db_relative, lower_db_relative, upper_db_relative, spread_db
 //   irCsv(ir, meta, { view, derivation })            columns time_s, amplitude
+//     amplitude is the impulse response of the capture/stimulus transfer: a dimensionless
+//     ratio (a unity digital system peaks near 1), not a level re digital full scale
 //   rtaCsv(bands, meta, { view, derivation, correctedDb })
 //     columns band_nominal_hz, band_lo_hz, band_hi_hz, level_db_relative
 //     [, level_db_corrected] [, level_db_spl]
@@ -38,13 +44,13 @@
 // "SPL".
 
 import { UNKNOWN, describeCalibration } from './schema.js';
-import { ZERO_POWER_DB } from '../measurement/transfer.js';
+import { ZERO_POWER_DB, PHASE_REASONS } from '../measurement/transfer.js';
 import {
   RELATIVE_SCALE_LABEL, RELATIVE_UNIT, SPL_UNIT, isValidLevelCalibration,
 } from '../calibration/level.js';
 
 export const TRANSFER_COLUMNS = Object.freeze(['frequency_hz', 'magnitude_db_relative',
-  'magnitude_db_corrected', 'snr_db', 'reliable']);
+  'magnitude_db_corrected', 'snr_db', 'reliable', 'phase_deg']);
 export const AGGREGATE_COLUMNS = Object.freeze(['frequency_hz', 'centre_db_relative',
   'lower_db_relative', 'upper_db_relative', 'spread_db']);
 export const IR_COLUMNS = Object.freeze(['time_s', 'amplitude']);
@@ -54,6 +60,30 @@ export const RTA_COLUMNS = Object.freeze(['band_nominal_hz', 'band_lo_hz', 'band
 const DB_RELATIVE = RELATIVE_UNIT;
 /** Unit of a transfer magnitude: a ratio, not a level (G19). */
 export const TRANSFER_RATIO_UNIT = 'dB re unity digital transfer (capture/stimulus ratio)';
+/** Unit of an impulse-response sample: the transfer's impulse response is a pure ratio. */
+export const IR_AMPLITUDE_UNIT = 'dimensionless transfer ratio (impulse response of capture / '
+  + 'stimulus; a unity digital system peaks near 1), original scale, not normalized';
+
+const PHASE_WHY = Object.freeze({
+  [PHASE_REASONS.NOT_REQUESTED]: 'phase not requested',
+  [PHASE_REASONS.NO_ALIGNMENT]: 'no alignment available',
+  [PHASE_REASONS.ALIGNMENT_NOT_ROBUST]: 'alignment not robust enough for phase',
+  [PHASE_REASONS.AGGREGATED]: 'aggregate of repeated runs: phases are not averaged',
+});
+
+/**
+ * The quality mask of an experiment as a `reliable` option for transferCsv, or null when the
+ * experiment has none or it is not on the transfer's grid (then the CSV falls back to the
+ * valid range and says so).
+ */
+export function reliableFromQuality(quality, transfer) {
+  const m = quality && quality.mask;
+  if (!m || !m.reliable || !m.frequencies || !transfer || !transfer.frequencies) return null;
+  const f = transfer.frequencies;
+  if (m.frequencies.length !== f.length || m.reliable.length !== f.length) return null;
+  for (let i = 0; i < f.length; i++) if (m.frequencies[i] !== f[i]) return null;
+  return m.reliable;
+}
 
 /** CSV metadata from an experiment. */
 export function csvMeta(e) {
@@ -134,6 +164,7 @@ export function transferCsv(result, meta, opts = {}) {
   checkLength(r.snrDb, n, 'snrDb');
   checkLength(corrected, n, 'correctedDb');
   checkLength(opts.reliable, n, 'reliable');
+  checkLength(r.phaseDeg, n, 'phaseDeg');
   const [vLo, vHi] = r.validRange || [NaN, NaN];
   const derived = r.derivedFrom === 'aggregate';
   if (r.derivedFrom !== undefined && !derived) {
@@ -158,9 +189,12 @@ export function transferCsv(result, meta, opts = {}) {
         : 'empty (no frequency calibration applied)'],
       ['snr_db', r.snrDb ? `dB, ESTIMATED signal-to-noise ratio${derived
         ? ', lowest of the runs' : ''}` : 'empty (not estimated)'],
-      ['reliable', opts.reliable ? '1 = reliable, 0 = not (quality assessment)'
+      ['reliable', opts.reliable ? '1 = reliable, 0 = not (quality assessment mask)'
         : `1 = inside the valid range ${num(vLo)}-${num(vHi)} Hz${derived
-          ? ' (where every run is valid)' : ''}, 0 = outside`],
+          ? ' (where every run is valid)' : ''}, 0 = outside (quality mask not available)`],
+      ['phase_deg', r.phaseDeg ? 'degrees, wrapped to (−180, 180], alignment delay removed'
+        : `empty (phase not measured: ${PHASE_WHY[r.phaseReason] || (derived
+          ? PHASE_WHY[PHASE_REASONS.AGGREGATED] : 'no reason recorded')})`],
     ]);
   const at = lines.findIndex((l) => l.startsWith('# column '));
   if (derived) {
@@ -174,7 +208,7 @@ export function transferCsv(result, meta, opts = {}) {
     const f = r.frequencies[i];
     const rel = opts.reliable ? (opts.reliable[i] ? 1 : 0) : (f >= vLo && f <= vHi ? 1 : 0);
     lines.push([num(f), num(r.magnitudeDb[i]), corrected ? num(corrected[i]) : '',
-      r.snrDb ? num(r.snrDb[i]) : '', rel].join(','));
+      r.snrDb ? num(r.snrDb[i]) : '', rel, r.phaseDeg ? num(r.phaseDeg[i]) : ''].join(','));
   }
   return `${lines.join('\n')}\n`;
 }
@@ -219,7 +253,7 @@ export function irCsv(ir, meta, opts = {}) {
   if (!(typeof sr === 'number' && sr > 0)) throw new RangeError('irCsv needs ir.sampleRate');
   const lines = header('impulse response', meta, ir.algorithm, sr, opts, [
     ['time_s', 's from the first IR sample'],
-    ['amplitude', 'linear, relative to digital full scale (original scale, not normalized)'],
+    ['amplitude', IR_AMPLITUDE_UNIT],
   ]);
   lines.splice(lines.length - 3, 0,
     `# peak: sample ${num(ir.peakIndex)}, ${num(ir.peakTimeS)} s`,

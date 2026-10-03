@@ -13,8 +13,10 @@ An interactive sound and frequency laboratory that runs in the browser from one 
 OSCILLA generates signals with the native Web Audio API and measures them while they play. It
 shows them as a waveform, a live spectrum and a spectrogram, and it compares them with what your
 microphone picks up. You can arrange signals into block sequences, shape them with filters, an
-ADSR envelope and additive harmonics, explore phase and stereo, and export the result. The app
-is a single HTML file. It needs no server, no account and no network once loaded, and it works
+ADSR envelope and additive harmonics, explore phase and stereo, and export the result. In the
+Measure workspace it records a sweep through your speaker and microphone. From that recording
+it computes the response of the whole playback and capture chain, rates the quality of the
+measurement and keeps it as a reproducible experiment. The app is a single HTML file. It needs no server, no account and no network once loaded, and it works
 when opened straight from disk.
 
 ## The V2 laboratory
@@ -47,16 +49,163 @@ when opened straight from disk.
 - **About:** the last workspace tells how OSCILLA was built and with what discipline, and shows
   the running build's version, commit, channel and source digest.
 
+## The V3 measurement workbench
+
+V3 adds two workspaces after Playground: **Measure** takes a measurement, **Experiments** keeps
+and compares them. A measurement plays a known digital signal, records what comes back and
+analyses the recording offline. Its result is the observed response of the whole playback and
+capture chain, not of any one part of it. How to make a useful measurement is in the
+[measurement guide](docs/v3/measurement-guide.md). How the layers fit together is in the
+[architecture](docs/v3/architecture.md). How each result is computed, and which tests pin it,
+is in the [algorithm notes](docs/v3/algorithms.md).
+
+### Measurement Workbench
+
+- **Guided flow.** Seven steps: input, calibration, noise check, stimulus, measure, review,
+  save. One primary action moves the flow on, and an explicit state machine owns every stage
+  (IDLE, PREFLIGHT, NOISE_CHECK, READY, ARMED, MEASURING, ANALYZING, then COMPLETE, INVALID,
+  ABORTED or ERROR). The preset CHARACTERIZE PLAYBACK CHAIN runs a noise check and then a
+  20 Hz-20 kHz log sweep, three times, at the LOW digital level. Expert settings add the sweep
+  range and duration, the number of runs (1-10), mean or median aggregation, timing and phase.
+- **Setup check.** Before anything plays, OSCILLA checks the microphone permission, the input
+  device, the sample rate, the input level and the background noise. It requests echo
+  cancellation, noise suppression and automatic gain control off, and reads back what the
+  browser actually applied. A blocker stops the flow and a warning never does.
+- **During the run.** A quality bar reports INPUT, NOISE, CLIPPING, SIGNAL and CAPTURE, and a
+  screen reader hears one announcement per stage. While a measurement owns the output, the
+  instrument cannot play. Escape, STOP, hiding the page or leaving the workspace aborts the
+  measurement, and no audio node, capture or input track is left running.
+- **Capture.** Mono PCM is recorded by an AudioWorklet loaded from a `data:` URL, so it also
+  works from `file://`. When AudioWorklet is unavailable, a ScriptProcessor fallback records
+  instead. The stimulus passes through the same master safety chain as every other sound, and
+  that chain is part of what is measured.
+- **TEST CONTEXT.** `?measure=loopback` replaces the microphone with a known synthetic digital
+  system. The page then says TEST CONTEXT on the result and in every saved experiment. The
+  automated tests use this mode, and it is never presented as a measurement of a physical
+  system.
+
+### Calibration
+
+- **Frequency-response profile.** Import a microphone correction file (CSV, TXT or JSON).
+  Errors are reported with their line numbers. A profile is identified by the SHA-256 of its
+  points and interpolated linearly in dB over log frequency. It applies only between its first
+  and last frequency: outside that range the curve stays uncorrected and is marked
+  uncalibrated. The raw curve is always kept beside the CALIBRATED one.
+- **Absolute level calibration.** You enter an external reference (for example 94 dB SPL at
+  1 kHz from a calibrator) and the relative level OSCILLA observed. This is the only way to
+  get dB SPL. It is valid only for the microphone, gain, browser settings and position it was
+  taken with. There is no default calibration.
+
+### Transfer Function
+
+The Frequency response tab shows the magnitude recovered from the captured sweep. The capture
+is divided by the spectrum of the rendered sweep, with band-limited regularisation. The tab
+offers:
+
+- the raw curve, a calibrated curve where a profile covers it, smoothing (1/24 to 1/3 octave)
+  and normalisation (0 dB at 1 kHz, or the mean over 500 Hz-2 kHz). Every derived view is
+  labelled, and the raw curve stays visible behind it.
+- a valid range, which ends where the sweep has no energy or where the signal is less than
+  10 dB above the background noise. Stretches outside it are drawn dashed and faded.
+- a cursor that prints frequencies no finer than the analysis resolution allows.
+
+Phase is shown only when requested and when the alignment is robust. Otherwise it is absent,
+not guessed. The magnitude is a ratio and never dB SPL.
+
+### Impulse Response
+
+The Impulse response tab derives the impulse response from the same sweep and the same
+spectral division. Time is shown in ms from the direct peak, and the absolute offset in the
+recording is kept. You can zoom to the direct sound, the early part or the whole response,
+show the analysis window, and switch to a dB view normalised to the peak. Windows and
+normalised views are derived objects, so the stored response never changes. The peak time
+includes unknown device and browser delays: it is not a time of flight and not a latency.
+
+### RTA
+
+The analysis layer computes octave and one-third-octave band power on the standard base-10
+band edges. Bands above 95 % of Nyquist are left out. An averager offers instant, fast and slow
+time constants, peak hold and freeze. The RTA tab of the Measure workspace draws
+one-third-octave band levels as bars over each band's edges, with peak hold, freeze and reset.
+Levels are in dB relative (dBFS-like) unless a valid level calibration applies. No IEC 61260-1
+filter class is claimed. An experiment saved from Measure does not store band levels yet: its
+`results.rta` is empty, although the format, validation and CSV export already support them.
+
+### Experiments
+
+- **What is recorded.** Every saved measurement becomes an experiment. It records the recipe
+  (stimulus, runs, analysis settings), the output level, the input device and the requested
+  and applied constraints, the calibration (profile name and identity, level calibration), the
+  sample rate and runs, the quality assessment and the algorithm ID of every result. It also
+  records the product version and build, with a configuration hash and a result hash.
+- **Repeats.** With two or more runs, the stored response is the aggregate: a power mean with
+  a standard-deviation envelope, or a median with a 10th-90th percentile band, plus a
+  repeatability figure in dB. The stored transfer is the aggregate's centre, marked as
+  derived, never a single run.
+- **The Experiments workspace.** It lists, opens, renames, duplicates, repeats (as a new
+  experiment), exports and deletes experiments. It also shows an experiment in Measure.
+  Export gives an `.oscilla.json` file or CSV (transfer, impulse response, aggregate) with a
+  metadata header and explicit unit columns.
+- **Import.** An imported file is untrusted. Oversized files, wrong types, non-finite numbers,
+  unknown algorithm IDs, a future schema version and a result-hash mismatch are all refused,
+  each with its reason. The file format has its own schema version, independent of the
+  product version
+  ([ADR 0023](.ai/repo/adrs/0023-schema-versions-independent-of-product-version.md), proposed).
+- **Compare.** Comparing two or more experiments names every difference in calibration, sample
+  rate, stimulus and algorithm. A minus B is shown only for equivalent experiments, and only
+  over their overlapping valid range.
+
+### Measurement quality
+
+Every measurement is rated GOOD, USABLE, POOR or INVALID by a versioned rule set
+(`oscilla.confidence.v2`). The rules use named metrics: signal-to-noise, clipping, dropouts,
+discontinuities, frequency coverage and resolution, repeatability, and calibration. Each
+rating comes with its reasons, and each reason carries its value and unit. A check that was
+not made reads NOT MEASURED. Severe clipping, an empty capture, or a dropout or discontinuity
+inside the sweep makes a run INVALID; milder clipping lowers the rating. Statuses are shown with text, a glyph and a shape, never colour alone. The rationale
+is in the proposed [ADR 0025](.ai/repo/adrs/0025-data-driven-quality-with-reasons.md).
+
+### Scientific limitations
+
+- **A measurement is of the whole chain.** That chain is the browser's output, the operating
+  system, the DAC and amplifier, the loudspeaker, the room, the microphone position, the
+  microphone, its ADC and the browser's input path. A room measurement is not "the speaker's
+  response".
+- **Browsers may process the input anyway.** OSCILLA requests input processing off but cannot
+  enforce it. When the applied settings cannot be confirmed, the result says so.
+- **SPL needs a level calibration.** Without a valid absolute level calibration, nothing is
+  labelled dB SPL. A frequency profile alone never gives SPL
+  ([ADR 0017](.ai/repo/adrs/0017-relative-levels-spl-only-when-calibrated.md),
+  [ADR 0020](.ai/repo/adrs/0020-calibration-semantics.md), both proposed).
+- **Results come from captured PCM.** Every result is computed from captured PCM by
+  deterministic offline DSP. The live analyser is feedback only
+  ([ADR 0018](.ai/repo/adrs/0018-measurement-from-captured-pcm-offline-dsp.md), proposed).
+  Each stored result names its algorithm by a versioned ID
+  ([ADR 0024](.ai/repo/adrs/0024-versioned-algorithm-ids.md), proposed).
+- **The analysis runs on the main thread.** It is one serializable task that yields between
+  steps. Moving it into a Worker is planned (gap G21 in the algorithm notes).
+- **What the tests prove.** The automated tests check the digital pipeline, the mathematics on
+  synthetic systems with known answers, the browser APIs and the interface. They cannot prove
+  how your hardware, room or browser behaves.
+- **No medical or certification claims.** OSCILLA is not audiometry and not an IEC 61672
+  sound level meter.
+
 ## Safety and measurement limits
 
 - **Start quietly, especially on headphones.** Loudness is a poor guide to acoustic output,
   above all at very low and very high frequencies. Open-ended patterns stop at a hard time
   limit unless you allow continuous playback for the session, and a limiter caps the output.
 - **Levels are relative, not SPL.** Every level is relative to digital full scale (dBFS-like)
-  and labelled as uncalibrated. A browser knows sample values, not sound pressure.
+  and labelled as uncalibrated. A browser knows sample values, not sound pressure. The only
+  exception is the Measure workspace with a valid absolute level calibration that you supply
+  from an external reference.
 - **The microphone is not calibrated.** Its response, the input processing and the room are
-  unknown, so readings are only comparisons. Detected frequencies are never shown with more
+  unknown, so readings are only comparisons. In Measure, a frequency-response profile corrects
+  the microphone only inside the profile's range. Detected frequencies are never shown with more
   precision than the analysis resolution allows.
+- **Measurement sweeps start at a low digital level.** Do not wear headphones during a
+  loudspeaker sweep. Small speakers can be overloaded below about 50 Hz before you hear
+  anything. The [measurement guide](docs/v3/measurement-guide.md) has the details.
 - **Speaker output is unknown.** Generating a frequency digitally does not mean your hardware
   reproduces it accurately, or at all.
 - **Hearing ranges are approximate.** They depend on the threshold criterion and on the
@@ -101,6 +250,12 @@ src/  (ES modules, plain CSS, the src/index.html shell)
   conceptual views, uPlot the quantitative charts, and custom canvas code the spectrogram and
   editors, all on one frame loop
   ([ADR 0016](.ai/repo/adrs/0016-renderer-split.md)).
+- **Measurement layers.** V3 adds `src/js/measurement/`, `src/js/calibration/` and
+  `src/js/experiments/`. Almost every module there is pure: plain data in, plain data out, no
+  DOM and no Web Audio. Three modules are not: the engine, the browser capture adapter and the
+  experiment store. The UI renders view models and computes nothing itself.
+  [`docs/v3/architecture.md`](docs/v3/architecture.md) shows how stimulus, capture,
+  calibration, analysis, result, quality and experiment fit together.
 
 ## Why one file?
 
@@ -113,9 +268,11 @@ not collide; users never see it. See
 ## Run locally
 
 Double-click [`dist/index.html`](dist/index.html). No build, server or network is needed. Some
-browsers refuse microphone access from `file://`. In that case the microphone panel says so and
-everything else keeps working. To use the microphone locally, serve the repository on localhost
-and open `dist/index.html` there:
+browsers refuse microphone access from `file://`. In that case the microphone panel and the
+Measure setup check say so, and everything else keeps working. Where IndexedDB is unavailable
+from `file://`, Experiments keeps saved experiments in memory for that page view and says so;
+export them to keep them. To use the microphone locally, serve the repository on localhost and
+open `dist/index.html` there:
 
 ```bash
 python3 -m http.server 8000     # then open http://127.0.0.1:8000/dist/index.html
@@ -159,6 +316,12 @@ GitHub-Pages-like `/oscilla/` sub-path, and the run must produce zero console er
 | V1 freeze | `tests/freeze/` | Golden vectors that pin V1 behaviour ([ADR 0014](.ai/repo/adrs/0014-v1-behaviour-frozen-by-golden-vectors.md)) |
 | Browser | `tests/browser/` | Playwright suites for the app gate, layout, V1 engine port, DSP, labs and sequencer |
 | Visual | `tests/visual/` | The 1536x1024 reference and named regions, compared region by region with thresholds measured from run-to-run variance ([ADR 0029](.ai/repo/adrs/0029-visual-regression-in-the-release-gate.md)) |
+| V3 unit | `tests/unit/v3-*.test.mjs` | Measurement core, transfer and impulse response on synthetic systems with known answers, RTA and aggregation, calibration, quality, experiments (schema, round trip, corrupt imports, store), goldens per algorithm ID, the engine on a fake io and the view models, all in `npm test` |
+| V3 browser | `npm run test:measure` | `tests/browser/v3-measure.cjs`: the measurement engine on real Web Audio, a recovered digital loopback response, limiter transparency, 0 nodes after finish and abort. `tests/browser/v3-ui.cjs`: Measure and Experiments of the built page, guided flow, abort at every stage, calibration, experiment import, compare and export, and no "SPL" without a level calibration. Both run in Chromium, Firefox and WebKit, from `file://` and `/oscilla/` |
+| V3 visual | `scripts/visual-measure.mjs`, `tests/visual/measure/` | Measure at 1536x1024 and 390x844 showing a deterministic TEST CONTEXT experiment, against the accepted reference for each environment (part of `npm run test:visual`) |
+
+Every V3 browser check runs on a TEST CONTEXT digital loopback or a fake microphone. No
+automated test proves how a physical speaker, room or microphone behaves.
 
 `npm run release-gate` is the authority on what the gate runs and in what order.
 [`tests/README.md`](tests/README.md) describes each layer and how to run it alone.
@@ -176,6 +339,10 @@ GitHub-Pages-like `/oscilla/` sub-path, and the run must produce zero console er
   public contract (`type!:` or a `BREAKING CHANGE:` footer). MINOR means a new compatible
   capability (`feat:`). PATCH covers fixes, performance and any non-conventional commit.
   Commits that are only docs, chore, ci, test, refactor, style or build need no release.
+  A new product generation (a new primary workspace family, such as V3's measurement
+  workbench) may also take a MAJOR version without an incompatible change: the owner sets the
+  untagged version in `package.json`, and `release:prepare` confirms it because it covers the
+  level the commits require.
 - **Release flow.**
   1. `npm run release:analyze` reads the conventional commits since the last `v*` tag and
      proposes the level, with a reason for each commit.
@@ -209,9 +376,15 @@ issues in [`.ai/repo/project/`](.ai/repo/project/)), the architecture decisions
 `majordomus plan status` shows milestone progress. AI workers start at
 [`AGENTS.md`](AGENTS.md) (Claude Code: [`CLAUDE.md`](CLAUDE.md)).
 
-Planned, not shipped: OSCILLA V3 Measure ([`docs/specs/oscilla-v3-measure.md`](docs/specs/oscilla-v3-measure.md))
-and V3.1 Studio ([`docs/specs/oscilla-v3.1-studio.md`](docs/specs/oscilla-v3.1-studio.md)),
-milestones M012-M033.
+V3 Measure is specified in [`docs/specs/oscilla-v3-measure.md`](docs/specs/oscilla-v3-measure.md)
+(milestones M012-M020). Its features, use cases and claims are under
+[`.ai/repo/features/`](.ai/repo/features/), [`.ai/repo/use-cases/`](.ai/repo/use-cases/) and
+[`docs/CLAIMS.yaml`](docs/CLAIMS.yaml). Each claim names the file that implements it and the
+test that proves it.
+
+Planned, not shipped: V3.1 Studio
+([`docs/specs/oscilla-v3.1-studio.md`](docs/specs/oscilla-v3.1-studio.md)), milestones
+M021-M033.
 
 ## Privacy
 
@@ -221,7 +394,15 @@ and is never played back, recorded or uploaded. Exports are downloaded to your m
 configuration URL contains only your settings, and it leaves your machine only if you share
 it.
 
-Browser storage holds only these keys:
+In Measure, the microphone opens only when you run the setup check or a measurement, and every
+track is stopped when the measurement ends or is aborted. The captured audio is analysed in
+the page. The raw recording is released after analysis and is never stored, exported or
+uploaded. A saved experiment does contain the input device's label and the browser's device ID,
+when the browser reports them, along with your notes and the results. Both go into an exported
+file, so check it before you share it. Calibration profiles and level calibrations are kept in
+page memory only.
+
+Browser storage holds only these keys and databases:
 
 | Storage | Key | Contents |
 | --- | --- | --- |
@@ -230,8 +411,11 @@ Browser storage holds only these keys:
 | localStorage | `oscilla.v2.analysisTab` | The last analysis tab |
 | sessionStorage | `oscilla.history` | Recently played configurations (this tab only) |
 | sessionStorage | `oscilla.safetyNoticeCollapsed` | Whether the safety notice was collapsed |
+| IndexedDB | `oscilla-experiments`, object store `experiments` | Your saved experiments, in the exported file form |
+| IndexedDB | `oscilla-experiments`, object store `summaries` | One small row per experiment for the list (name, date, schema and product version, quality status, size) |
 
-Permission to play continuously is never stored.
+Experiments are deleted only when you delete them. Permission to play continuously is never
+stored.
 
 ## Licences
 

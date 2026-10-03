@@ -11,12 +11,12 @@
         "height": 1024
       },
       "runs": 3,
-      "total": 15.86,
-      "totalExclData": 6.93,
+      "total": 15.91,
+      "totalExclData": 7.01,
       "regions": {
         "header": {
-          "mismatch": 5.22,
-          "mismatchExclData": 5.22,
+          "mismatch": 5.95,
+          "mismatchExclData": 5.95,
           "runToRunPct": 0,
           "dataPp": 0.5
         },
@@ -45,9 +45,9 @@
           "dataPp": 0.5
         },
         "spectrogram": {
-          "mismatch": 46.96,
+          "mismatch": 46.95,
           "mismatchExclData": 4.19,
-          "runToRunPct": 0.08,
+          "runToRunPct": 0.01,
           "dataPp": 1
         },
         "sequencer": {
@@ -75,9 +75,9 @@
           "dataPp": 0.5
         },
         "phase": {
-          "mismatch": 11.02,
+          "mismatch": 11.05,
           "mismatchExclData": 10.21,
-          "runToRunPct": 2.56,
+          "runToRunPct": 2.53,
           "dataPp": 3.5
         },
         "bio": {
@@ -292,12 +292,12 @@
         "height": 1024
       },
       "runs": 3,
-      "total": 15.89,
-      "totalExclData": 7,
+      "total": 15.91,
+      "totalExclData": 7.03,
       "regions": {
         "header": {
-          "mismatch": 6.62,
-          "mismatchExclData": 6.62,
+          "mismatch": 6.98,
+          "mismatchExclData": 6.98,
           "runToRunPct": 0,
           "dataPp": 0.5
         },
@@ -326,10 +326,10 @@
           "dataPp": 0.5
         },
         "spectrogram": {
-          "mismatch": 47.07,
+          "mismatch": 47.11,
           "mismatchExclData": 4.3,
-          "runToRunPct": 0.25,
-          "dataPp": 1
+          "runToRunPct": 2.48,
+          "dataPp": 3
         },
         "sequencer": {
           "mismatch": 14.29,
@@ -356,9 +356,9 @@
           "dataPp": 0.5
         },
         "phase": {
-          "mismatch": 11.03,
+          "mismatch": 11.02,
           "mismatchExclData": 10.3,
-          "runToRunPct": 2.57,
+          "runToRunPct": 2.61,
           "dataPp": 3.5
         },
         "bio": {

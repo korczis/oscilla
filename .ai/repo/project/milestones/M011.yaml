@@ -14,3 +14,12 @@ validation:
 evidence_required:
   - "milestone_verified"
 created_at: 2026-10-02
+updated_at: 2026-10-02T13:46:50Z
+evidence:
+  - covers: milestone_verified
+    type: ci
+    command: "npm run test:live -- --expect-version 2.0.0 --expect-commit 66c5fac5a2515418c81c2533c5500d3574c92728"
+    result: "R001-R017 done with evidence: one version authority, deterministic provenance with a deploy-stamped commit, fatal Pages verification, visual and every suite in the release gate, product graph (ADRs, features, use cases, knowledge), README and metadata; v2.0.0 tagged, released and verified at the public URL"
+    artifact: "https://github.com/korczis/oscilla/releases/tag/v2.0.0"
+    commit: 74d47e2d54d6437fe672c4d2c1b2e7654143b046
+    recorded_at: 2026-10-02T13:46:50Z
