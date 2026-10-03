@@ -254,7 +254,12 @@ function defineChecks() {
       rows.push({ deg, corr: t.corr, want: Math.cos((deg * Math.PI) / 180), rms: t.rms,
         phase: info.phase, ui: info.ui });
     }
-    const live = rows.every((r) => r.corr != null && Math.abs(r.corr - r.want) < 0.05
+    // A start can only land on a sample frame: at 440 Hz one frame is 2*pi*440/sr rad of phase
+    // (3.3 degrees at 48 kHz, a correlation shift of ~0.057). Allow 1.5 frames of that, at
+    // least 0.05, so a correct offset is never failed by the sample grid.
+    const sr = await page.evaluate(() => window.OSCILLA.engine.ctx.sampleRate);
+    const tol = Math.max(0.05, 1.5 * Math.sin((2 * Math.PI * 440) / sr));
+    const live = rows.every((r) => r.corr != null && Math.abs(r.corr - r.want) < tol
       && r.phase === r.deg && r.rms > 0.005);
     const restarted = new Set(voiceIds).size === voiceIds.length; // a change restarts B's start
     const nodesAfter = await stopAll(page);
