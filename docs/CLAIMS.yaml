@@ -339,11 +339,10 @@ claims:
     status: guaranteed
     note: oscilla.confidence.v1 is retained and selectable (tests/unit/v3-gaps.test.mjs, G15); the quality panel never relies on colour alone (tests/unit/v3-views.test.mjs).
 
-  # ---- V3 MEASURE, planned: specified, not implemented on feature/v3
   - id: analysis-off-main-thread
-    claim: OSCILLA will run the offline measurement analysis in a Worker loaded from a data URL, so that no analysis step blocks the main thread
+    claim: OSCILLA runs the offline measurement analysis in a Worker loaded from a data URL when the platform has Worker, so that no analysis step blocks the main thread, with results bit-identical to the inline fallback
     source: .ai/repo/adrs/0026-audioworklet-and-worker-by-spike.md
-    implementation: "-"
-    test: "-"
-    status: planned
-    note: Gap G21 of docs/v3/algorithms.md. The analysis is already one serializable task (src/js/measurement/analysis-task.js) behind the injected analyze of the engine; today it runs inline on the main thread, yielding between steps.
+    implementation: src/js/measurement/analysis-runner.js
+    test: tests/browser/analysis-worker.cjs
+    status: guaranteed
+    note: Gap G21 of docs/v3/algorithms.md, resolved in M10. Without Worker the engine falls back to analyzeInline, which yields between steps; tests/unit/v3-analysis-task.test.mjs runs the real bundle in a worker thread.
