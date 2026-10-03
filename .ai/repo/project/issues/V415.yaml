@@ -19,3 +19,11 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-02
+updated_at: 2026-10-03T06:50:53Z
+evidence:
+  - covers: verified
+    type: test
+    command: "node --test tests/unit/v31-studio-compiler.test.mjs && node tests/browser/v31-studio-audio.cjs"
+    result: "MET at 320130f: unit crossfaded filter removal, failed transaction leaves the previous runtime, 20 edits then stop leave 0 nodes/sources (spec 213), Microphone degrades, graph revision in debugInfo; real browsers 81/81 checks pass in chromium, firefox, webkit on file:// (run at 320130f). Caveat: the real-browser suite is ungated. Commits a9af53f, 62e432e"
+    commit: 320130f1a967e894002a55dd9ebb6c837eb2621f
+    recorded_at: 2026-10-03T06:50:53Z

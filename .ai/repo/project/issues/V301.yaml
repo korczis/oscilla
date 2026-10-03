@@ -17,3 +17,13 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-02
+started_at: 2026-10-03T06:49:32Z
+updated_at: 2026-10-03T06:49:35Z
+verified_at: 2026-10-03T06:49:35Z
+evidence:
+  - covers: verified
+    type: ci
+    command: "npm run release-gate && majordomus plan validate && majordomus doctor"
+    result: "NOT MET as specified (do not mark done without accepting a retrospective audit): no baseline audit of V2 against HEAD was recorded before V3 code; the first V3 commit 1c84382 (2026-10-02T03:29Z) precedes v2.0.0 (13:28Z). Retrospective check at 320130f: release-gate exit 0 (unit 2040/2040 incl. V1 freeze; engine-v1port, dsp, labs, sequencer, measure, studio, app/layout/qa browser suites; visual gate 13 regions, MEASURE 2 views, STUDIO 3 views); releases v2.0.0 and v2.0.1 published; Pages deploy of 1283678 (v2.0.1, last pre-V3 main) succeeded; M007-M011 DONE; plan validate and doctor 0 failures"
+    commit: 320130f1a967e894002a55dd9ebb6c837eb2621f
+    recorded_at: 2026-10-03T06:49:34Z

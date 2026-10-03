@@ -21,3 +21,17 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-02
+updated_at: 2026-10-03T06:53:30Z
+evidence:
+  - covers: verified
+    type: ci
+    command: "git tag -l v3.1.0"
+    result: "NOT MET (do not mark done): at 320130f package.json is 3.0.0 and no v3.1.0 tag or GitHub Release exists; release PR #34 open; Pages deploy of 320130f passed verify-deploy. Unmet: release 3.1.0 not tagged, no public Studio smoke (live-smoke.cjs), no release notes or deployment record"
+    commit: 320130f1a967e894002a55dd9ebb6c837eb2621f
+    recorded_at: 2026-10-03T06:51:13Z
+  - covers: verified
+    type: test
+    command: "npm run release:verify-deploy && npm run test:live"
+    result: "PARTIAL (do not mark done): v3.1.0 tagged at a810b94 (PR #34), GitHub Release published, Pages run 37103655560 success, verify-deploy PASS (source cc2df8149b6b), test:live PASS (status bar OSCILLA v3.1.0). Missing: no public Studio smoke (test:live covers the Playground only); blocked behind V401."
+    commit: 3bac88d720b37ce2ee2c7567bab23c020ed3cf5a
+    recorded_at: 2026-10-03T06:53:30Z

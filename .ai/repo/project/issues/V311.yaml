@@ -18,3 +18,11 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-02
+updated_at: 2026-10-03T06:49:53Z
+evidence:
+  - covers: verified
+    type: test
+    command: "node --test tests/unit/v3-calibration.test.mjs tests/unit/v3-review-calibration.test.mjs"
+    result: "MET at 320130f: 30+17 pass incl. normalized profile shape with units and schema, profileId SHA-256 independent of name, exportProfile normalized object, M4 schema-2 migration keeps id; level calibration separate (calibration/level.js). Impl calibration/profile.js, sha256.js. Commits b862445, 6d60332"
+    commit: 320130f1a967e894002a55dd9ebb6c837eb2621f
+    recorded_at: 2026-10-03T06:49:53Z

@@ -18,3 +18,11 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-02
+updated_at: 2026-10-03T06:50:14Z
+evidence:
+  - covers: verified
+    type: test
+    command: "node --test tests/unit/v3-experiments.test.mjs && node tests/browser/v3-ui.cjs"
+    result: "PARTIAL (do not mark done): repeatExperiment creates a NEW experiment with the same recipe; v3-ui loopback-workflow repeat saves a second experiment; ADR 0019 recipe vs experiment. Unmet: no recipe in the URL hash (url-state and main.js carry no MEASURE recipe; only ?measure=loopback). Commits 6ca33da, b0ad11e"
+    commit: 320130f1a967e894002a55dd9ebb6c837eb2621f
+    recorded_at: 2026-10-03T06:50:14Z

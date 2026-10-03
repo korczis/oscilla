@@ -18,3 +18,11 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-02
+updated_at: 2026-10-03T06:49:50Z
+evidence:
+  - covers: verified
+    type: test
+    command: "node --test tests/unit/v3-measurement-core.test.mjs tests/unit/v3-integration.test.mjs"
+    result: "MET at 320130f: full-scale bin-centred sine reads 0 dB +-0.05 with Hann and Blackman-Harris, Welch averages linear power not dB, G1 power scales. Impl measurement/spectrum.js; AnalyserNode only in the live tap (live-rta.js). Commits b862445, 8628438"
+    commit: 320130f1a967e894002a55dd9ebb6c837eb2621f
+    recorded_at: 2026-10-03T06:49:50Z

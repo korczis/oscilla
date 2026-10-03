@@ -19,3 +19,11 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-02
+updated_at: 2026-10-03T06:50:10Z
+evidence:
+  - covers: verified
+    type: test
+    command: "node --test tests/unit/v3-experiments.test.mjs"
+    result: "MET at 320130f: 37 pass incl. four independent version axes, migration registry, schema 0 fixture imports as schema 1, non-plain objects and proto keys refused. Impl experiments/schema.js, migrate.js, validate.js. Commit 6ca33da"
+    commit: 320130f1a967e894002a55dd9ebb6c837eb2621f
+    recorded_at: 2026-10-03T06:50:10Z
