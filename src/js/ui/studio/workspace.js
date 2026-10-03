@@ -642,6 +642,7 @@ export function createStudioUi(svc = {}) {
           announce,
           getSelection: () => ctx.handle.getSelection(),
           setSelection: (sel) => ctx.handle.dispatch({ type: 'SELECTION_CHANGE', selection: sel }),
+          transportKeys: false, // the workspace header is the one transport on screen
         });
       } catch (e) {
         console.error('OSCILLA Studio timeline failed to mount:', e);

@@ -3,10 +3,12 @@
 // (.osc-transport-btn, the sequencer's), segmented control and number field. Every command goes
 // through transport-commands.js; nothing here touches audio or holds reactive state.
 //
-//   mountTransportBar(host, ctx, { commands, ownFrame }) -> { element, update(), tick(now),
-//                                                            destroy() }
+//   mountTransportBar(host, ctx, { commands, ownFrame, keys }) -> { element, update(),
+//                                                                  tick(now), destroy() }
 // The timeline editor calls update() after a model change and tick() on its frame; a shell that
-// mounts the strip on its own passes ownFrame: true.
+// mounts the strip on its own passes ownFrame: true. keys: false leaves out RETURN, PLAY, STOP,
+// LOOP and the clock, for a host whose own header already carries them (the STUDIO workspace):
+// one transport on screen, the time mode and tempo kept.
 
 import { onFrame } from '../../charts/frame-loop.js';
 import { TEMPO_RANGE } from '../../studio/schema.js';
@@ -15,7 +17,8 @@ import { createTransportCommands } from './transport-commands.js';
 import { READOUT_INTERVAL_MS, transportStrip } from './transport-view.js';
 import { el, pathIcon, setAttr, setText, spriteIcon } from './timeline-dom.js';
 
-export function mountTransportBar(host, ctx, { commands = null, ownFrame = false } = {}) {
+export function mountTransportBar(host, ctx,
+  { commands = null, ownFrame = false, keys = true } = {}) {
   const { store, transport } = ctx;
   const cmd = commands || createTransportCommands(ctx);
   const say = (t) => { if (t && typeof ctx.announce === 'function') ctx.announce(t); };
@@ -70,9 +73,12 @@ export function mountTransportBar(host, ctx, { commands = null, ownFrame = false
     el('span', { class: 'osc-stl-unit' }, ['BPM'])]);
 
   const element = el('div', { class: 'osc-stl-transport', role: 'group',
-    'aria-label': 'Studio transport', 'data-osc': 'studio.tl.transport' }, [
-    el('div', { class: 'osc-transport osc-stl-keys' }, [returnBtn, playBtn, stopBtn, loopBtn]),
-    el('div', { class: 'osc-stl-clock' }, [time, state]),
+    'aria-label': keys ? 'Studio transport' : 'Timeline time mode and tempo',
+    'data-osc': 'studio.tl.transport' }, [
+    ...(keys ? [
+      el('div', { class: 'osc-transport osc-stl-keys' }, [returnBtn, playBtn, stopBtn, loopBtn]),
+      el('div', { class: 'osc-stl-clock' }, [time, state]),
+    ] : []),
     modeSeg, tempoBox,
   ]);
   host.append(element);
