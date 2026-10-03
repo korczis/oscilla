@@ -27,6 +27,7 @@ const ORIGINS = arg('origins', 'file,http').split(',');
 const ONLY = arg('only', '') ? new Set(arg('only', '').split(',')) : null;
 const JSON_OUT = arg('json', '');
 const WIDTHS = [320, 375, 768, 1024, 1280, 1536];
+const CHECK_TIMEOUT_MS = 60000; // per check, unless it declares its own budget
 
 // Chromium and Firefox get their fake capture devices (granted without a prompt) so the
 // microphone checks can open a real stream; WebKit has none and skips only that part.
@@ -230,6 +231,10 @@ function auditControls() {
  * status bar, the hints strip or any fixed/sticky element, or cut off by the viewport? Samples
  * elementFromPoint at the centre and the four inset corners of its box.
  */
+/** In-page expression: two frames for focus scrolling to settle, then focusObscured(). */
+const SETTLED_OBSCURED = 'new Promise((r) => requestAnimationFrame(() => '
+  + `requestAnimationFrame(r))).then(() => (${focusObscured})())`;
+
 function focusObscured() {
   const el = document.activeElement;
   if (!el || el === document.body) return { body: true };
@@ -378,7 +383,8 @@ const KNOWN_DEFECTS = Object.freeze({});
 
 function defineChecks() {
   const checks = [];
-  const def = (name, fn) => checks.push({ name, fn });
+  // opts.timeoutMs: the check's budget (default CHECK_TIMEOUT_MS)
+  const def = (name, fn, opts = {}) => checks.push({ name, fn, timeoutMs: opts.timeoutMs });
 
   def('boot-no-console-errors', async ({ page, errors }) => {
     await sleep(800);
@@ -1264,7 +1270,10 @@ function defineChecks() {
   // §48 (WCAG 2.4.11): with an error notification showing, no focused control is covered, fully
   // or partly, by a notification, the header, the status bar or any fixed/sticky element, Tab
   // forward and Shift+Tab back. Measured by elementFromPoint after focus scrolling settled.
-  def('a11y-focus-never-obscured', async ({ page, browserName }) => {
+  // Every tab stop at four widths, both directions: one round trip per step (the settle and the
+  // measurement in one evaluate) and its own budget, as the V3 workbench and the V3.1 Studio
+  // brought the tab order to several hundred stops (WebKit on CI needed close to 60 s).
+  def('a11y-focus-never-obscured', async ({ page, browserName, run }) => {
     // WebKit (macOS) tabs only to form fields unless Option is held: Option+Tab reaches all.
     const KEYS = browserName === 'webkit' ? ['Alt+Tab', 'Alt+Shift+Tab'] : ['Tab', 'Shift+Tab'];
     const res = {};
@@ -1284,10 +1293,9 @@ function defineChecks() {
         const seen = new Set();
         const covered = [];
         let steps = 0;
-        for (; steps < 320; steps++) {
+        for (; steps < 320 && !run.aborted; steps++) {
           await page.keyboard.press(key);
-          await H.frames(page);
-          const r = await page.evaluate(focusObscured);
+          const r = await page.evaluate(SETTLED_OBSCURED);
           if (r.body) continue;
           if (r.n) covered.push(`${r.key} under ${r.under.join('/')}`);
           if (seen.has(r.key) && steps > 20) break;
@@ -1302,7 +1310,7 @@ function defineChecks() {
     await sleep(150);
     const ok = Object.values(res).every((r) => !r.count && r.distinct > 60);
     return { ok, res };
-  });
+  }, { timeoutMs: 240000 });
 
   // §49 (a): the safety notice's dismiss and the control that reopens it hide themselves, so each
   // hands focus to the other (V1: "Got it" <-> "Full notice"). Contract for V2's notice:
@@ -1656,15 +1664,25 @@ async function runOne(browserName, origin, baseUrl) {
     await browser.close();
     return results;
   }
-  for (const { name, fn } of defineChecks()) {
+  for (const { name, fn, timeoutMs = CHECK_TIMEOUT_MS } of defineChecks()) {
     if (ONLY && !ONLY.has(name) && name !== 'boot-no-console-errors') continue;
     const t0 = Date.now();
+    // A check that runs out of time is told to stop (run.aborted) and the page is reloaded:
+    // otherwise its loop keeps driving the page underneath the next check.
+    const run = { aborted: false };
     try {
       const v = await Promise.race([
-        fn({ page, context, errors, baseUrl, browserName, origin }),
-        sleep(60000).then(() => ({ ok: false, detail: 'timeout 60 s' })),
+        fn({ page, context, errors, baseUrl, browserName, origin, run }),
+        sleep(timeoutMs).then(() => {
+          run.aborted = true;
+          return { ok: false, detail: `timeout ${timeoutMs / 1000} s`, timedOut: true };
+        }),
       ]);
       results[name] = { ...v, ms: Date.now() - t0 };
+      if (v.timedOut) {
+        await page.goto(baseUrl, { waitUntil: 'load' });
+        await H.ready(page);
+      }
     } catch (e) {
       const msg = String(e.message || e).split('\n');
       const sel = msg.find((l) => /waiting for|locator/.test(l)) || '';
