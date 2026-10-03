@@ -16,7 +16,9 @@ import {
   applyFrequencyCorrectionToBands, correctionCurve,
 } from '../../src/js/calibration/interpolate.js';
 import { createFrequencyProfile } from '../../src/js/calibration/profile.js';
-import { createLevelCalibration } from '../../src/js/calibration/level.js';
+import {
+  createLevelCalibration, levelOffsetWithProfile, toDisplayLevel,
+} from '../../src/js/calibration/level.js';
 import { buildRtaView, LIVE_RTA_Y_RANGE } from '../../src/js/measurement/views/rta-chart.js';
 
 const N = LIVE_RTA_FFT_SIZE;
@@ -351,4 +353,42 @@ test('live RTA: expert FFT size and window keep the band scale; resolution follo
     assert.ok(fftSize >= 32768 ? under === 0 : under > 0, `${fftSize}: ${under} under-resolved`);
   }
   assert.throws(() => createLiveRta({ sampleRate: sr, window: 'kaiser' }), RangeError);
+});
+
+test('V382: a 94 dB calibrator reads 94 dB SPL whether or not a profile corrects it', () => {
+  const sr = 48000;
+  const x = tones(sr, N, [{ f: 1000, a: 0.1 }]);
+  const band = (rta) => rta.bands.findIndex((b) => b.lo <= 1000 && 1000 < b.hi);
+  // X: the calibrator's uncorrected third-octave band level, as reference.js reads it
+  const raw = createLiveRta({ sampleRate: sr, mode: 'third', averaging: 'instant' });
+  const r = raw.push(x, 0);
+  const level = createLevelCalibration({ referenceHz: 1000, referenceDbSpl: 94,
+    observedDbRelative: r.values[band(r)], conditions: 'synthetic',
+    createdAt: '2026-10-03T09:00:00.000Z' });
+  const points = [[20, 2], [500, 2], [1000, 2], [20000, 2]];
+  for (const convention of [null, 'deviation', 'correction']) {
+    for (const mode of ['third', 'fft']) {
+      const profile = convention
+        ? createFrequencyProfile({ name: convention, points, convention }) : null;
+      const cal = createLiveRta({ sampleRate: sr, mode, averaging: 'instant', profile,
+        levelCalibration: level });
+      const c = cal.push(x, 0);
+      // FFT mode: the tone's bins summed back to its band power
+      const read = mode === 'fft'
+        ? 10 * Math.log10(c.values.reduce((s, v, i) => (Math.abs(c.frequencies[i] - 1000) < 30
+          ? s + 10 ** (v / 10) : s), 0))
+        : c.values[band(c)];
+      assert.ok(Math.abs(read - 94) < (mode === 'fft' ? 0.02 : 1e-6),
+        `${convention || 'no profile'} ${mode}: ${read.toFixed(3)} dB SPL`);
+    }
+  }
+  // the offset helper itself, and a profile that does not reach the reference frequency
+  const dev = createFrequencyProfile({ name: 'd', points, convention: 'deviation' });
+  assert.equal(levelOffsetWithProfile(level, null), level.offsetDb);
+  assert.ok(Math.abs(levelOffsetWithProfile(level, dev) - (level.offsetDb + 2)) < 1e-12);
+  const high = createFrequencyProfile({ name: 'h', points: [[2000, 5], [8000, 5]] });
+  assert.equal(levelOffsetWithProfile(level, high), level.offsetDb);
+  assert.equal(levelOffsetWithProfile(null, dev), 0);
+  assert.ok(Math.abs(toDisplayLevel(level.observedDbRelative - 2, level, { profile: dev }).value
+    - 94) < 1e-9);
 });

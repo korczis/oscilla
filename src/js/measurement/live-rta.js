@@ -55,7 +55,7 @@ import {
 import {
   applyFrequencyCorrectionToBands, correctionCurve, CORRECTION_SIGN,
 } from '../calibration/interpolate.js';
-import { isValidLevelCalibration } from '../calibration/level.js';
+import { isValidLevelCalibration, levelOffsetWithProfile } from '../calibration/level.js';
 
 /** Live RTA modes: per-bin FFT, octave bands, one-third-octave bands. */
 export const LIVE_RTA_MODES = Object.freeze(['fft', 'octave', 'third']);
@@ -201,7 +201,8 @@ export function createLiveRta({
   function setCalibration({ profile: p = null, levelCalibration: l = null } = {}) {
     curProfile = p || null;
     curLevel = isValidLevelCalibration(l) ? l : null;
-    levelOffsetDb = curLevel ? curLevel.offsetDb : 0;
+    // with a profile, without its correction at the reference frequency (level.js, V382)
+    levelOffsetDb = curLevel ? levelOffsetWithProfile(curLevel, curProfile) : 0;
     fftCorrection = null;
     if (curProfile) {
       const cc = correctionCurve(curProfile, shownFrequencies);
