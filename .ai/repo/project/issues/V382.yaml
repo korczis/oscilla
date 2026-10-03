@@ -19,7 +19,7 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-02
-updated_at: 2026-10-03T06:50:30Z
+updated_at: 2026-10-03T13:14:32Z
 evidence:
   - covers: verified
     type: manual
@@ -27,3 +27,9 @@ evidence:
     result: "PARTIAL (do not mark done): review findings were fixed (465ba22 B1, M1, M2, M5, M8; 6d60332 M3, M4, M6, M7, M9, M11) and pinned by tests/unit/v3-review-fixes.test.mjs and v3-review-calibration.test.mjs. Unmet: the independent critique itself and a release-readiness audit are not recorded in the repository"
     commit: 320130f1a967e894002a55dd9ebb6c837eb2621f
     recorded_at: 2026-10-03T06:50:30Z
+  - covers: verified
+    type: manual
+    command: "ls docs docs/v3 .ai/repo/knowledge/curated && grep -rli 'cross-model\|release-readiness' docs .ai/repo"
+    result: "NOT MET (do not mark done): re-checked at 6f47ab7; review findings were fixed and pinned (465ba22, 6d60332; v3-review-fixes and v3-review-calibration pass), but no recorded artifact of the independent cross-model DSP critique or of a release-readiness audit exists in the repository (docs/, .ai/repo/knowledge, .ai/repo/why searched)"
+    commit: 6f47ab76768738e5b4fcd1754da68e72243e0930
+    recorded_at: 2026-10-03T13:14:32Z

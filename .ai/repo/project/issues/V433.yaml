@@ -21,7 +21,7 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-02
-updated_at: 2026-10-03T06:53:30Z
+updated_at: 2026-10-03T13:15:47Z
 evidence:
   - covers: verified
     type: ci
@@ -35,3 +35,9 @@ evidence:
     result: "PARTIAL (do not mark done): v3.1.0 tagged at a810b94 (PR #34), GitHub Release published, Pages run 37103655560 success, verify-deploy PASS (source cc2df8149b6b), test:live PASS (status bar OSCILLA v3.1.0). Missing: no public Studio smoke (test:live covers the Playground only); blocked behind V401."
     commit: 3bac88d720b37ce2ee2c7567bab23c020ed3cf5a
     recorded_at: 2026-10-03T06:53:30Z
+  - covers: verified
+    type: test
+    command: "npm run release:verify-deploy && npm run test:live"
+    result: "PARTIAL (do not mark done; blocked behind V432 and V386): at 6f47ab7 v3.1.0 is tagged with a GitHub Release; Pages serves 6f47ab7 (verify-deploy PASS attempt 1/10, artifact 15e9e594b2dc); test:live 10/10 in chromium, firefox, webkit incl. the new public Studio smoke (STUDIO from navigation, Subtractive Synth renders 6 nodes / 5 cables, PLAY sounds, STOP leaves 0 engine, source and runtime nodes). Unmet: spec 270 public smoke does not open the Measurement Sweep template and check its measurement nodes; no Majordomus deployment record (spec 227, 271; .ai/repo/deployments holds only its README); the deployed 6f47ab7 carries PR #44 features under the v3.1.0 label without a new release tag"
+    commit: 6f47ab76768738e5b4fcd1754da68e72243e0930
+    recorded_at: 2026-10-03T13:15:47Z

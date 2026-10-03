@@ -19,7 +19,10 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-02
-updated_at: 2026-10-03T06:51:07Z
+updated_at: 2026-10-03T13:08:31Z
+started_at: 2026-10-03T13:08:12Z
+verified_at: 2026-10-03T13:08:22Z
+completed_at: 2026-10-03T13:08:31Z
 evidence:
   - covers: verified
     type: test
@@ -27,3 +30,9 @@ evidence:
     result: "PARTIAL (do not mark done): tap/keyboard connect, Connect dialog, arrow nudges, Inspector clip fields, focus after delete, ARIA labels, live-region announcements, graph text summary (summarizeGraph); browser keyboard-connect, mobile-tap-connect, controls-labelled. Unmet: graph search (find and frame a node, spec 251) not built (README: minimap and search). Commits e6a9457, e31ab23"
     commit: 320130f1a967e894002a55dd9ebb6c837eb2621f
     recorded_at: 2026-10-03T06:51:07Z
+  - covers: verified
+    type: test
+    command: "node --test tests/unit/v31-studio-model.test.mjs tests/unit/v31-studio-ui-graph-view.test.mjs tests/unit/v31-studio-gaps.test.mjs && node tests/browser/v31-studio-graph.cjs && node tests/browser/v31-studio-workflows.cjs"
+    result: "MET at 6f47ab7: tap/keyboard connection mode, accessible Connect dialog, arrow-key nudges, Inspector position and clip fields, focus after delete, ARIA labels, live-region announcements, graph text summary, and now graph search (Find node, '/' shortcut, ui/studio/graph-search.js: select, frame and focus; Escape returns focus). Unit model 43, graph-view 7, studio-gaps 13 pass; browser v31-studio-graph (keyboard-connect, mobile-tap-connect, controls-labelled, escape-priority) and v31-studio-workflows graph-search pass in chromium, firefox, webkit on file:// and /oscilla/. PR #44"
+    commit: 6f47ab76768738e5b4fcd1754da68e72243e0930
+    recorded_at: 2026-10-03T13:08:06Z

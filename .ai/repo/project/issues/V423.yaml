@@ -18,7 +18,7 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-02
-updated_at: 2026-10-03T06:51:02Z
+updated_at: 2026-10-03T13:15:58Z
 evidence:
   - covers: verified
     type: test
@@ -26,3 +26,9 @@ evidence:
     result: "MET at 320130f: 31 pass: the six templates (Basic Tone, Subtractive Synth, Sweep Sequence, Stereo Beat, Filter Automation, Measurement Sweep) exist as versioned validated data with pinned hashes, each compiles; Learn summary/points per template within bounds shown in the gallery; browser templates check. Commit e6a9457"
     commit: 320130f1a967e894002a55dd9ebb6c837eb2621f
     recorded_at: 2026-10-03T06:51:02Z
+  - covers: verified
+    type: test
+    command: "node --test tests/unit/v31-studio-templates.test.mjs && node tests/browser/v31-studio-graph.cjs"
+    result: "MET re-verified at 6f47ab7 (still blocked behind V422): templates unit 31 pass; v31-studio-graph templates check passes in chromium, firefox, webkit"
+    commit: 6f47ab76768738e5b4fcd1754da68e72243e0930
+    recorded_at: 2026-10-03T13:15:58Z

@@ -20,7 +20,10 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-02
-updated_at: 2026-10-03T06:51:03Z
+updated_at: 2026-10-03T13:12:18Z
+started_at: 2026-10-03T13:12:06Z
+verified_at: 2026-10-03T13:12:11Z
+completed_at: 2026-10-03T13:12:18Z
 evidence:
   - covers: verified
     type: test
@@ -28,3 +31,9 @@ evidence:
     result: "PARTIAL (do not mark done): Capture, Calibration, Transfer Analyzer, Measurement Result and RTA node types exist (studio/nodes/measurement.js, analysis.js). Unmet: adapters are data nodes; measurement clips are only handed to an onMeasurement callback as plain data, which the workspace never supplies, so no clip runs through the MeasurementEngine state machine (transport.js header). Commit 90de098"
     commit: 320130f1a967e894002a55dd9ebb6c837eb2621f
     recorded_at: 2026-10-03T06:51:03Z
+  - covers: verified
+    type: test
+    command: "node --test tests/unit/v31-studio-gaps.test.mjs tests/unit/v31-studio-transport.test.mjs tests/unit/v31-studio-model.test.mjs && node tests/browser/v31-studio-workflows.cjs"
+    result: "MET at 6f47ab7: Capture, Calibration, Transfer Analyzer, RTA and Measurement Result node types adapt the MeasurementEngine (no duplicate DSP); measurement clips (noise check, pre-roll, stimulus, capture, tail, analysis) are now run: studio/measurement-run.js is the transport's onMeasurement hook, derives the recipe from the topology (recipeFromStudio) and hands ONE measurement per pass to the MEASURE workspace's MeasurementEngine state machine (measure.js measureRunRecipe, wired in ui/studio/workspace.js). Unit studio-gaps 13 (clips handed to a real MeasurementEngine on a synthetic io), transport 13, model 43 pass; browser v31-studio-workflows measure-from-studio passes in chromium, firefox, webkit (PREFLIGHT..COMPLETE, Studio PLAY refused while measuring, Escape abort, 0 engine/runtime/capture nodes). PR #44"
+    commit: 6f47ab76768738e5b4fcd1754da68e72243e0930
+    recorded_at: 2026-10-03T13:12:04Z

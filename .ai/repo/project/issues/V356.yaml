@@ -19,7 +19,10 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-02
-updated_at: 2026-10-03T06:50:15Z
+updated_at: 2026-10-03T13:06:51Z
+started_at: 2026-10-03T13:06:44Z
+verified_at: 2026-10-03T13:06:47Z
+completed_at: 2026-10-03T13:06:51Z
 evidence:
   - covers: verified
     type: test
@@ -27,3 +30,9 @@ evidence:
     result: "PARTIAL (do not mark done): compare flags calibration, sample-rate and algorithm differences; A-B only over the overlapping valid range, never normalized; response overlay; v3-ui experiments compare passes. Unmet: no IR overlay (compare-view.js overlays transfer responses only). Commits 6ca33da, deb326d"
     commit: 320130f1a967e894002a55dd9ebb6c837eb2621f
     recorded_at: 2026-10-03T06:50:15Z
+  - covers: verified
+    type: test
+    command: "node --test tests/unit/v3-experiments.test.mjs tests/unit/v3-views.test.mjs tests/unit/v3-measure-gaps.test.mjs && node tests/browser/v3-ui.cjs"
+    result: "MET at 6f47ab7: compare flags calibration, sample-rate, stimulus and algorithm differences; A-B only over the overlapping valid range, never normalized; response overlay; IR overlay now in compare-view.js / views/ir-chart.js for equivalent sets only (unit v3-measure-gaps: overlay and equivalence gate). Browser v3-ui 19/19 in chromium, firefox, webkit on file:// and /oscilla/ incl. experiments (A,B equivalent: A-B; A,C refused with reason) and experiments-ir (two IR curves -5..200 ms re each direct peak, original scale, no IR A-B; non-equivalent refused, no chart). PR #44"
+    commit: 6f47ab76768738e5b4fcd1754da68e72243e0930
+    recorded_at: 2026-10-03T13:06:42Z

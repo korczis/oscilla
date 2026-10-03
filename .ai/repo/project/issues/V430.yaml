@@ -26,7 +26,7 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-02
-updated_at: 2026-10-03T06:51:10Z
+updated_at: 2026-10-03T13:15:44Z
 evidence:
   - covers: verified
     type: ci
@@ -34,3 +34,9 @@ evidence:
     result: "PARTIAL (do not mark done): graph and timeline suites cover the spec 206 interaction scenarios in chromium/firefox/webkit; visual-studio compares desktop, compact and phone-graph references. Unmet: no mobile timeline reference, the desktop reference excludes the timeline row, and v31-studio-audio/offline/transport (spec 209/210/213 audio, leak, offline) are not in test:studio or CI (they pass when run by hand at 320130f: 81, 33, 69 checks)"
     commit: 320130f1a967e894002a55dd9ebb6c837eb2621f
     recorded_at: 2026-10-03T06:51:10Z
+  - covers: verified
+    type: ci
+    command: "npm run test:studio && node scripts/visual-studio.mjs dist && npm test"
+    result: "PARTIAL (do not mark done; also blocked behind V421, V423, V429): at 6f47ab7 test:studio now runs graph, timeline, audio, transport, offline and workflows (all pass in chromium, firefox, webkit; the prior ungated-suites gap is closed) and CI runs test:studio per browser; visual-studio gates desktop, compact, phone and the new phone-timeline view (0 % differ); model/history/compiler/timeline/leak/compact-full/file:// unit and browser tests pass (unit 2079/2079); fast verify separate. Remaining gap: the full desktop reference crops the timeline row (scripts/visual-studio.mjs header), so the spec 204 Full Studio reference shows no clips or automation lane; those are pixel-gated only at phone width"
+    commit: 6f47ab76768738e5b4fcd1754da68e72243e0930
+    recorded_at: 2026-10-03T13:15:44Z

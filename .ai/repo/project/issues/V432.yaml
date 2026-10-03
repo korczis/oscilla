@@ -19,7 +19,7 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-02
-updated_at: 2026-10-03T06:51:12Z
+updated_at: 2026-10-03T13:14:46Z
 evidence:
   - covers: verified
     type: manual
@@ -27,3 +27,9 @@ evidence:
     result: "NOT MET (do not mark done): README Studio section and docs/v31/*.md exist. Unmet: no user guide, no documented canonical shortcut table outside code (graph-keys.js), no knowledge/evidence audit (features, use cases, claims still draft/planned), no spec 266 repository self-knowledge test; tests/README omits the v31 model/compiler/timeline/transport/patches/provenance/templates suites"
     commit: 320130f1a967e894002a55dd9ebb6c837eb2621f
     recorded_at: 2026-10-03T06:51:12Z
+  - covers: verified
+    type: manual
+    command: "node --test tests/unit/v31-studio-docs.test.mjs && grep -n '^status:' .ai/repo/features/studio*.md .ai/repo/use-cases/studio-*.md"
+    result: "PARTIAL (do not mark done): at 6f47ab7 README Studio section, docs/v31 architecture docs, docs/v31/user-guide.md with the canonical shortcut table checked against STUDIO_SHORTCUTS and KEY_HELP (v31-studio-docs 5 pass), tests/README rows for every v31 suite. Unmet: no Majordomus knowledge/evidence audit (spec 225-226: all Studio features and use cases still draft, features/studio.md says Studio is not shipped) and no spec 266 repository self-knowledge test"
+    commit: 6f47ab76768738e5b4fcd1754da68e72243e0930
+    recorded_at: 2026-10-03T13:14:46Z
