@@ -91,6 +91,9 @@ const GATE_KEEP_S = 10;
 
 const finite = (v) => typeof v === 'number' && Number.isFinite(v);
 const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+/** A linear segment { t0, v0, t1, v1 } at time t: v0 before t0, v1 from t1. */
+const segValue = (g, t) => (t >= g.t1 || !(g.t1 > g.t0) ? g.v1
+  : g.v0 + (g.v1 - g.v0) * clamp((t - g.t0) / (g.t1 - g.t0), 0, 1));
 const messageOf = (e) => (e && e.message) || String(e);
 
 const PATTERN_TARGETS = Object.freeze(['sequence', 'oscillator']);
@@ -132,7 +135,11 @@ export function createStudioTransport({
   const gates = new Map(); // gate key → { key, itemKey, clipId, nodeId, handle, start, end }
   const measures = new Map(); // item key → measurement data
   const lanes = new Map(); // lane id → { laneId, target, param, handle, events (as applied) }
-  const claims = new Map(); // oscillator id → { id, handle, bus, param, level, routes }
+  // oscillator id → { id, handle, bus, param, level, fadeAt (null: fresh), routes }
+  const claims = new Map();
+  // Carrier level AudioParam → the transport's last segment on it { t0, v0, t1, v1 } (claim
+  // fade or release ramp), so the next claim or release holds its value instead of stepping.
+  const levelSegs = new WeakMap();
   // Modulation edge gain → { id, handle, toBus, toCarrier, retiredAt }: a CONTROL edge into a
   // pattern-played oscillator's level, re-routed onto its pattern bus (levelMods).
   const levelTaps = new Map();
@@ -341,6 +348,27 @@ export function createStudioTransport({
     }
   }
 
+  /**
+   * Hold a carrier level at t without a step (envelope.js holdAt): `seg` is the transport's last
+   * ramp on it ({ t0, v0, t1, v1 }: v0 at t0, linear to v1 at t1), v its value at t.
+   * cancelAndHoldAtTime when available; else cancelScheduledValues, which would drop a ramp in
+   * progress at t (the param would jump back to its start), so the ramp is re-ended at t with v
+   * (also when `seg` itself starts at t from such a re-ended ramp: the cancel drops that end).
+   * Either way anchored with setValueAtTime(v, t), as cancelAndHoldAtTime inserts nothing after
+   * the last event. Returns whether a ramp was re-ended at t.
+   */
+  function holdLevel(param, t, seg, v) {
+    let reEnd = false;
+    if (typeof param.cancelAndHoldAtTime === 'function') param.cancelAndHoldAtTime(t);
+    else {
+      param.cancelScheduledValues(t);
+      reEnd = !!seg && ((seg.t0 < t && t <= seg.t1) || (seg.t0 === t && seg.reEnd));
+      if (reEnd) param.linearRampToValueAtTime(v, t);
+    }
+    param.setValueAtTime(v, t);
+    return reEnd;
+  }
+
   function claimOscillator(id, fresh) {
     const h = ready(id);
     const n = nodeOf(model, id);
@@ -355,18 +383,25 @@ export function createStudioTransport({
     bus.gain.setValueAtTime(level, now);
     const param = t.param;
     let fadeAt = null;
+    let seg;
     if (fresh) {
       // Built in this transaction: its source starts at the crossfade time, nothing rendered.
       param.setValueAtTime(ROUTE_FLOOR, now);
+      seg = { t0: now, v0: ROUTE_FLOOR, t1: now, v1: ROUTE_FLOOR };
     } else {
       const s = hooks.soon();
       fadeAt = s;
-      if (typeof param.cancelAndHoldAtTime === 'function') param.cancelAndHoldAtTime(s);
-      else param.cancelScheduledValues(s);
-      param.setValueAtTime(level, s);
+      // Claimed again while its release ramp runs: the fade starts from that ramp's value at s.
+      // Otherwise the carrier plays at its level (the runtime's base while it was not owned).
+      const prev = levelSegs.get(param);
+      const inRelease = prev && s < prev.t1;
+      const from = inRelease ? segValue(prev, s) : level;
+      const reEnd = holdLevel(param, s, inRelease ? prev : null, from);
       param.linearRampToValueAtTime(ROUTE_FLOOR, s + STUDIO_XFADE_S);
+      seg = { t0: s, v0: from, t1: s + STUDIO_XFADE_S, v1: ROUTE_FLOOR, reEnd };
     }
-    const claim = { id, handle: h, bus, param, level, routes: new Map() };
+    levelSegs.set(param, seg);
+    const claim = { id, handle: h, bus, param, level, fadeAt, routes: new Map() };
     claims.set(id, claim);
     connectRoutes(claim);
     levelMods(claim, fadeAt);
@@ -378,9 +413,14 @@ export function createStudioTransport({
     claims.delete(id);
     if (!c || ready(id) !== c.handle) return; // replaced or gone: its bus went with it
     const s = hooks.soon();
-    c.param.cancelScheduledValues(s);
-    c.param.setValueAtTime(ROUTE_FLOOR, s);
-    c.param.linearRampToValueAtTime(patternLevel(id), s + STUDIO_XFADE_S);
+    // Released while the claim's own fade runs (or right after a fresh claim): continue from
+    // the value that fade has at s, not from the floor.
+    const seg = levelSegs.get(c.param);
+    const held = seg ? segValue(seg, s) : ROUTE_FLOOR;
+    const to = patternLevel(id);
+    const reEnd = holdLevel(c.param, s, seg, held);
+    c.param.linearRampToValueAtTime(to, s + STUDIO_XFADE_S);
+    levelSegs.set(c.param, { t0: s, v0: held, t1: s + STUDIO_XFADE_S, v1: to, reEnd });
     // The modulation returns to the carrier with its level.
     for (const tap of levelTaps.values()) {
       if (tap.id === id && tap.handle === c.handle) tap.toCarrier.ramp.to(1, s, STUDIO_XFADE_S);
