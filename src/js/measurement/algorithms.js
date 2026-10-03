@@ -25,9 +25,9 @@
 // uses for new results.
 
 export const ALGORITHMS = Object.freeze({
-  transfer: 'oscilla.transfer.v2',
-  ir: 'oscilla.ir.log-sweep.v2',
-  irFarina: 'oscilla.ir.farina-inverse.v2',
+  transfer: 'oscilla.transfer.v3',
+  ir: 'oscilla.ir.log-sweep.v3',
+  irFarina: 'oscilla.ir.farina-inverse.v3',
   rta: 'oscilla.rta.v1',
   smoothing: 'oscilla.smoothing.fractional-octave.v1',
   normalization: 'oscilla.normalization.v1',
@@ -43,9 +43,9 @@ export const ALGORITHMS = Object.freeze({
 
 /** Superseded IDs by role, still implemented for stored results (newest last). */
 export const RETAINED_ALGORITHMS = Object.freeze({
-  transfer: Object.freeze(['oscilla.transfer.v1']),
-  ir: Object.freeze(['oscilla.ir.log-sweep.v1']),
-  irFarina: Object.freeze(['oscilla.ir.farina-inverse.v1']),
+  transfer: Object.freeze(['oscilla.transfer.v1', 'oscilla.transfer.v2']),
+  ir: Object.freeze(['oscilla.ir.log-sweep.v1', 'oscilla.ir.log-sweep.v2']),
+  irFarina: Object.freeze(['oscilla.ir.farina-inverse.v1', 'oscilla.ir.farina-inverse.v2']),
   quality: Object.freeze(['oscilla.confidence.v1', 'oscilla.confidence.v2']),
 });
 

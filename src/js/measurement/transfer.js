@@ -13,9 +13,10 @@
 //   X, Y = N-point DFTs of x and y, zero padded       (one complex FFT of x + j·y)
 //   H[k] = Y[k]·conj(X[k]) / (|X[k]|² + ε[k])
 //
-// ε[k] is frequency dependent: ε_in = 10^(−60/10)·max|X|² inside [f1, f2] (|H| is biased by
-// −10·log10(1 + ε/|X|²): 0.004 dB where |X|² is 30 dB below its maximum, as at the top of a
-// 20 Hz-20 kHz exponential sweep), ε_out = 10^(0/10)·max|X|² outside, joined by a
+// ε[k] is frequency dependent: ε_in = 10^(−60/10)·max|X|² inside [f1, f2] (|H| = |X|²/(|X|² +
+// ε) for a unity system, a magnitude bias of −20·log10(1 + ε/|X|²): 0.0087 dB where |X|² is
+// 30 dB below its maximum, as at the top of a 20 Hz-20 kHz exponential sweep; v3 validRange
+// excludes points biased by more than 0.1 dB), ε_out = 10^(0/10)·max|X|² outside, joined by a
 // raised-cosine (in log-frequency, interpolated in dB) over 1/3 octave beyond each band edge,
 // so the in-band estimate is untouched and bins the stimulus did not excite cannot blow up.
 // max|X|² is taken over the bins in [f1, min(f2, Nyquist)].
@@ -86,8 +87,14 @@
 // exponentially distributed bin power scatters by ≈ 4.34/√K dB, and K is the time-bandwidth
 // product B·T of the band (for the noise B·T_noise), NOT the number of zero-padded bins in it,
 // which are correlated whenever N exceeds the record length. Without pooling the range would
-// fragment at the first dip. null when no point qualifies. requestedRange is always [f1, f2] as requested, even past Nyquist; the grid
-// itself stops at Nyquist (§205).
+// fragment at the first dip. In v3 (V382) also (c): the regularization bias of the point is
+// at most REGULARIZATION_BIAS_LIMIT_DB, i.e. 10·log10(mean_k (|X|²/(|X|² + ε))²) over its bins,
+// the magnitude a unity system reads there, is ≥ −0.1 dB. ε is fixed at −60 dB re max|X|², and
+// near f2 the fade-out and the band reaching past f2 bring |X|² down towards it: a unity system
+// read −0.55 dB at the top of a v2 validRange (default 5 s sweep at 48 kHz) and −0.99 dB for a
+// 2 s sweep at 44.1 kHz; (a) alone did not exclude those points. v2 is v3 without (c) and is
+// retained (options.algorithm). null when no point qualifies. requestedRange is always [f1, f2]
+// as requested, even past Nyquist; the grid itself stops at Nyquist (§205).
 //
 // Assumptions: x and y share sampleRate and are mono, sample-synchronous (one clock) and
 // linear time-invariant apart from additive noise; harmonic distortion is not separated (use
@@ -98,12 +105,18 @@ import { smoothFractionalOctave } from './smoothing.js';
 import { ALGORITHMS } from './algorithms.js';
 import { welch } from './spectrum.js';
 
-/** Default method for new transfers: 'oscilla.transfer.v2'. */
+/** Default method for new transfers: 'oscilla.transfer.v3'. */
 export const TRANSFER_ALGORITHM = ALGORITHMS.transfer;
 /** The retained first method (periodogram SNR, ceiling stored; see the header). */
 export const TRANSFER_ALGORITHM_V1 = 'oscilla.transfer.v1';
+/** The retained second method: v3 without the regularization-bias validity condition. */
+export const TRANSFER_ALGORITHM_V2 = 'oscilla.transfer.v2';
 /** Every transfer method this build reproduces (options.algorithm). */
-export const TRANSFER_ALGORITHMS = Object.freeze([TRANSFER_ALGORITHM_V1, TRANSFER_ALGORITHM]);
+export const TRANSFER_ALGORITHMS = Object.freeze([TRANSFER_ALGORITHM_V1, TRANSFER_ALGORITHM_V2,
+  TRANSFER_ALGORITHM]);
+/** v3 validity (c): a grid point is valid only where the regularization alone moves a unity
+ *  system by at most this much (see the header, validRange). */
+export const REGULARIZATION_BIAS_LIMIT_DB = 0.1;
 /** v2 Welch estimate of the noise PSD (see the header). */
 export const NOISE_WELCH = Object.freeze({ window: 'hann', overlap: 0.5, segmentFraction: 1 / 4 });
 
@@ -519,7 +532,8 @@ export function transferFromDeconvolution(dec, {
   phase, aligned, algorithm = TRANSFER_ALGORITHM,
 }) {
   const v1 = algorithm === TRANSFER_ALGORITHM_V1;
-  const { fft, fftSize, binHz, half, xPow, yRe, yIm, hRe, hIm } = dec;
+  const biasCheck = !v1 && algorithm !== TRANSFER_ALGORITHM_V2;
+  const { fft, fftSize, binHz, half, xPow, yRe, yIm, hRe, hIm, eps } = dec;
   const fTop = Math.min(f2, sampleRate / 2);
   const frequencies = logGrid(f1, fTop, pointsPerOctave);
   const { k0, k1 } = gridBins(frequencies, pointsPerOctave, binHz, half);
@@ -615,10 +629,22 @@ export function transferFromDeconvolution(dec, {
   let covMax = 0;
   for (let i = 0; i < n; i++) if (coverage[i] > covMax) covMax = coverage[i];
   const covMin = covMax * 10 ** (COVERAGE_DB / 10);
+  // v3 (c): the magnitude a unity system reads through the regularized inverse, per point
+  let biasDb = null;
+  if (biasCheck) {
+    const g2 = new Float64Array(half + 1);
+    for (let k = 0; k <= half; k++) {
+      const g = xPow[k] + eps[k] > 0 ? xPow[k] / (xPow[k] + eps[k]) : 0;
+      g2[k] = g * g;
+    }
+    biasDb = new Float64Array(n);
+    for (let i = 0; i < n; i++) biasDb[i] = powerToDb(bandMean(g2, k0[i], k1[i]));
+  }
   const valid = new Uint8Array(n);
   for (let i = 0; i < n; i++) {
     const snrOk = snrValidDb === null || snrValidDb[i] >= VALID_MIN_SNR_DB;
-    valid[i] = coverage[i] >= covMin && snrOk ? 1 : 0;
+    const biasOk = biasDb === null || biasDb[i] >= -REGULARIZATION_BIAS_LIMIT_DB;
+    valid[i] = coverage[i] >= covMin && snrOk && biasOk ? 1 : 0;
   }
   const run = longestRun(valid);
   const validRange = run ? [frequencies[run[0]], frequencies[run[1]]] : null;
@@ -640,7 +666,7 @@ export function transferFromDeconvolution(dec, {
     };
   }
   return {
-    algorithm: TRANSFER_ALGORITHM,
+    algorithm,
     sampleRate,
     frequencies,
     magnitudeDb,
