@@ -134,7 +134,7 @@ export function readVersion(root = ROOT) {
 // checkout and CI hash the same set. node_modules content is pinned by package-lock.json.
 export const SOURCE_DIRS = ['src', 'licenses'];
 export const SOURCE_FILES = [
-  'package.json', 'package-lock.json', 'scripts/pack-single-file.mjs',
+  'LICENSE', 'package.json', 'package-lock.json', 'scripts/pack-single-file.mjs',
   'scripts/release-metadata.mjs',
 ];
 export const SOURCE_SCRIPT_PATTERN = /^build[^/]*\.mjs$/; // scripts/build*.mjs
