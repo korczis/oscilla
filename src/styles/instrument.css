@@ -60,15 +60,26 @@
   white-space: nowrap;
 }
 
+/* The nav scrolls inside its own strip at every width, never over the header actions: with
+   twelve workspaces it overflows 1280-1535 px (and can at 1536 with wider system fonts), and
+   focusing a tab scrolls it into view. When the tabs fit, nothing changes. */
 .osc-nav {
   align-self: stretch;
   display: flex;
+  flex: 1 1 auto;
   min-width: 0;
   margin-left: 13px;
   padding-left: 8px;
   border-left: 1px solid var(--osc-border);
   border-left-color: transparent;
   position: relative;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+}
+
+.osc-nav::-webkit-scrollbar {
+  display: none;
 }
 
 .osc-nav::before {
@@ -102,9 +113,11 @@
 
 .osc-header-actions {
   display: flex;
+  flex: none;
   align-items: center;
   gap: 10px;
   margin-left: auto;
+  padding-left: 12px;
 }
 
 .osc-header-actions .osc-icon-btn {
