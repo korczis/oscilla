@@ -27,7 +27,7 @@ import * as esbuild from 'esbuild';
 import { pack } from './pack-single-file.mjs';
 import { ANALYSIS_WORKER_DEFINE, buildAnalysisWorker } from './build-analysis-worker.mjs';
 import {
-  bannerComment, computeSourceDigest, readVersion, renderRegion, sourceRecord,
+  bannerComment, computeSourceDigest, readPackage, readVersion, renderRegion, sourceRecord,
 } from './release-metadata.mjs';
 import {
   BUILD_TIME_ASSETS, CSS_ENTRY, DIST_HTML, JS_ENTRY, SRC_HTML, TARGETS, VENDOR_SCRIPTS,
@@ -120,7 +120,10 @@ function notice(pkgs) {
       : 'Bundled (minified) into this file.';
     return `== ${pkg}@${meta.version} - ${meta.license}\n${how}\n\n${licenceText(pkg)}`;
   });
-  return 'OSCILLA - third-party software contained in this file.\n\n'
+  const own = readFileSync(path.join(ROOT, 'LICENSE'), 'utf8').replace(/\r\n/g, '\n').trim();
+  return `OSCILLA - ${readPackage().license}\n\n${own}\n\n`
+    + '================================================================\n\n'
+    + 'OSCILLA - third-party software contained in this file.\n\n'
     + sections.join('\n\n----------------------------------------------------------------\n\n');
 }
 

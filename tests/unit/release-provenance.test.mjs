@@ -33,21 +33,21 @@ test('source digest: order-independent, sensitive to content and to paths', () =
   assert.throws(() => digestEntries([a[0], a[0]]), /duplicate/);
 });
 
-test('source inputs: src/**, licenses/**, package files, build scripts; no dotfiles', () => {
+test('source inputs: src/**, licenses/**, LICENSE, package and build files; no dotfiles', () => {
   const dir = mkdtempSync(path.join(os.tmpdir(), 'oscilla-inputs-'));
   for (const f of ['src/js/a.js', 'src/.DS_Store', 'licenses/x.LICENSE', 'scripts/build.mjs',
     'scripts/build-config.mjs', 'scripts/verify-dist.mjs', 'scripts/pack-single-file.mjs',
-    'package.json', 'package-lock.json', 'README.md', 'tests/t.mjs']) {
+    'LICENSE', 'package.json', 'package-lock.json', 'README.md', 'tests/t.mjs']) {
     mkdirSync(path.dirname(path.join(dir, f)), { recursive: true });
     writeFileSync(path.join(dir, f), f);
   }
-  assert.deepEqual(listSourceInputs(dir), ['licenses/x.LICENSE', 'package-lock.json',
+  assert.deepEqual(listSourceInputs(dir), ['LICENSE', 'licenses/x.LICENSE', 'package-lock.json',
     'package.json', 'scripts/build-config.mjs', 'scripts/build.mjs',
     'scripts/pack-single-file.mjs', 'src/js/a.js']);
   const real = listSourceInputs();
-  for (const p of ['src/index.html', 'src/js/main.js', 'package.json', 'package-lock.json',
-    'scripts/build.mjs', 'scripts/build-config.mjs', 'scripts/pack-single-file.mjs',
-    'scripts/release-metadata.mjs']) assert.ok(real.includes(p), p);
+  for (const p of ['src/index.html', 'src/js/main.js', 'LICENSE', 'package.json',
+    'package-lock.json', 'scripts/build.mjs', 'scripts/build-config.mjs',
+    'scripts/pack-single-file.mjs', 'scripts/release-metadata.mjs']) assert.ok(real.includes(p), p);
   assert.ok(!real.some((p) => p.startsWith('dist/') || p.startsWith('tests/')));
 });
 
