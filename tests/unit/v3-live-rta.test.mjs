@@ -271,7 +271,7 @@ test('live RTA snapshot: an rtaResult of the raw band levels with algorithm IDs'
   assert.equal(live.snapshot(), null, 'nothing analysed yet');
   live.push(tones(sr, N, [{ f: 1000, a: 0.1 }]), 0.016);
   const s = live.snapshot();
-  assert.equal(s.algorithm, 'oscilla.rta.v1');
+  assert.equal(s.algorithm, 'oscilla.rta.v2');
   assert.equal(s.windowAlgorithm, 'oscilla.window.hann.v1');
   assert.equal(s.resolution, 'third');
   assert.equal(s.fftSize, N);
@@ -332,6 +332,7 @@ test('RTA view: a stored snapshot is never badged LIVE; its averaging is stored'
 
 test('live RTA: expert FFT size and window keep the band scale; resolution follows', () => {
   const sr = 48000;
+  let lastUnder = Infinity;
   for (const fftSize of [4096, 16384, 32768]) {
     for (const window of ['hann', 'blackman-harris']) {
       const live = createLiveRta({ sampleRate: sr, fftSize, window, mode: 'third',
@@ -348,9 +349,15 @@ test('live RTA: expert FFT size and window keep the band scale; resolution follo
       assert.match(v.notes[0], window === 'hann' ? /Hann window.*1\.8-3\.2 dB/
         : /Blackman-Harris window.*3\.0-3\.9 dB/);
     }
-    const under = createLiveRta({ sampleRate: sr, fftSize, mode: 'third' }).frame.underResolved
-      .filter(Boolean).length;
-    assert.ok(fftSize >= 32768 ? under === 0 : under > 0, `${fftSize}: ${under} under-resolved`);
+    // V382: under-resolved below underResolvedBins(window) (Hann 6): fewer as N grows, and at
+    // 32768 points only the third-octave bands below 40 Hz (about 3 bins of 1.46 Hz)
+    const frame = createLiveRta({ sampleRate: sr, fftSize, mode: 'third' }).frame;
+    const under = frame.underResolved.filter(Boolean).length;
+    assert.ok(under > 0 && under < lastUnder, `${fftSize}: ${under} under-resolved`);
+    lastUnder = under;
+    if (fftSize === 32768) {
+      assert.ok(frame.bands.every((b, i) => frame.underResolved[i] === b.nominal < 40));
+    }
   }
   assert.throws(() => createLiveRta({ sampleRate: sr, window: 'kaiser' }), RangeError);
 });
@@ -413,6 +420,29 @@ test('V382: FFT mode applies a profile in its own convention, as the band modes 
     for (const mode of ['fft', 'third']) {
       assert.ok(Math.abs(shift(convention, mode) - expect) < 1e-6,
         `${convention} ${mode}: ${shift(convention, mode)} dB, expected ${expect}`);
+    }
+  }
+});
+
+test('V382: a band that is not flagged under-resolved reads a mid-band tone within 0.1 dB', () => {
+  const a = 0.1;
+  const expect = 10 * Math.log10((a * a) / 2);
+  for (const sr of [44100, 48000]) {
+    for (const window of ['hann', 'blackman-harris']) {
+      const rta = createLiveRta({ sampleRate: sr, window, mode: 'third', averaging: 'instant' });
+      const { bands, underResolved } = rta.frame;
+      let worst = 0;
+      bands.forEach((b, i) => {
+        if (underResolved[i] || b.nominal > 2000) return;
+        // across the central half of the band (in log frequency)
+        for (const u of [0.25, 0.4, 0.5, 0.6, 0.75]) {
+          const f = b.lo * (b.hi / b.lo) ** u;
+          const r = rta.push(tones(sr, N, [{ f, a }]), 0);
+          worst = Math.max(worst, Math.abs(r.values[i] - expect));
+        }
+      });
+      assert.ok(worst < 0.1, `${sr} ${window}: worst ${worst.toFixed(3)} dB`);
+      assert.ok(underResolved.some(Boolean), 'the lowest bands are flagged');
     }
   }
 });

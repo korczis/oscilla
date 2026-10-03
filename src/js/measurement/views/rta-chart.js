@@ -34,7 +34,7 @@
 // only bands it covers (§158). Averaging time constants are the conventional FAST/SLOW values,
 // not an IEC-verified meter (§49).
 
-import { bandBinCounts, RTA_MODES, UNDER_RESOLVED_BINS } from '../rta.js';
+import { bandBinCounts, RTA_MODES, underResolvedBins } from '../rta.js';
 import { ZERO_POWER_DB } from '../transfer.js';
 import { formatDb } from '../format.js';
 import { toDisplayLevel } from '../../calibration/level.js';
@@ -116,7 +116,8 @@ export function buildRtaView(input = {}) {
   const mode = rta.resolution === 'octave' ? 'octave' : 'third';
   const bands = rta.bands;
   const n = bands.length;
-  const under = binHz > 0 ? bandBinCounts(binHz, bands).underResolved : null;
+  const under = binHz > 0
+    ? bandBinCounts(binHz, bands, Infinity, window || 'hann').underResolved : null;
   const corr = correction && correction.correctedDb && correction.correctedDb.length === n
     ? correction : null;
   if (corr) badges.splice(1, 0, 'CALIBRATED (frequency)');
@@ -167,7 +168,8 @@ export function buildRtaView(input = {}) {
   if (under && under.some(Boolean)) {
     const low = bars.filter((b) => b.underResolved);
     notes.push(`${low.length} band${low.length === 1 ? '' : 's'} up to `
-      + `${formatHz(low[low.length - 1].nominal)} span fewer than ${UNDER_RESOLVED_BINS} FFT `
+      + `${formatHz(low[low.length - 1].nominal)} span fewer than `
+      + `${underResolvedBins(window || 'hann')} FFT `
       + 'bins: their level is dominated by the window, not the band shape (drawn hatched).');
   }
   if (corr && bars.some((b) => !b.covered))

@@ -29,8 +29,8 @@ listed under [Gaps](#gaps), not resolved here.
 | `oscilla.transfer.v3` (retained `.v1`, `.v2`) | `measurement/transfer.js` | [Transfer function](#transfer) |
 | (none) | `measurement/analysis-task.js`, `analysis-runner.js`, `analysis-worker.js` | [Analysis execution and memory](#analysis-memory) |
 | `oscilla.ir.log-sweep.v3` (spectral), `oscilla.ir.farina-inverse.v3` (retained `.v1`, `.v2`) | `measurement/impulse-response.js` | [Impulse response](#ir) |
-| `oscilla.smoothing.fractional-octave.v1`, `oscilla.normalization.v1` | `measurement/smoothing.js` | [Smoothing](#smoothing) |
-| `oscilla.rta.v1` | `measurement/rta.js`, `measurement/live-rta.js` | [RTA bands](#rta), [Live RTA](#live-rta) |
+| `oscilla.smoothing.fractional-octave.v2` (retained `.v1`), `oscilla.normalization.v1` | `measurement/smoothing.js` | [Smoothing](#smoothing) |
+| `oscilla.rta.v2` (retained `.v1`) | `measurement/rta.js`, `measurement/live-rta.js` | [RTA bands](#rta), [Live RTA](#live-rta) |
 | `oscilla.aggregate.v1` | `measurement/aggregate.js` | [Aggregation of repeats](#aggregate) |
 | `oscilla.calibration.log-interp.v1` | `calibration/*.js` | [Frequency calibration](#calibration) |
 | (none) | `calibration/level.js` | [Level calibration, SPL](#level) |
@@ -865,7 +865,16 @@ stronger later.
 | (integration) spectral and farina-inverse IRs validate and round-trip with their IDs | exact | pass |
 
 <a id="smoothing"></a>
-## Smoothing, normalization — `oscilla.smoothing.fractional-octave.v1`, `oscilla.normalization.v1` (`smoothing.js`)
+## Smoothing, normalization — `oscilla.smoothing.fractional-octave.v2`, `oscilla.normalization.v1` (`smoothing.js`)
+
+V382: `smoothResponse` views are v2: a window `[f/2^(1/2N), f·2^(1/2N)]` includes a point on
+either edge (relative tolerance `SMOOTHING_EDGE_TOLERANCE = 1e-9`). On the default 48-points-
+per-octave grid the edges of 1/3- and 1/24-octave windows fall exactly on grid points, and v1's
+exact comparison let rounding decide: 7 or 8 points on either side at 1/3 octave, 18 centres
+with no neighbour at 1/24 octave, and a 6 dB/octave ramp came back with an offset varying by
+0.12 dB (v2: constant to 1e-9 dB). v1 stays selectable (`smoothResponse(..., { algorithm })`)
+and is `smoothFractionalOctave`'s default, which `transfer.js` and `quality.js` use inside their
+own versioned methods (so their outputs are unchanged).
 
 Both are **derived views**: they return new arrays and never modify the raw response (§34, §35,
 §159). **Changed (integration)** (was G7): `smoothResponse(frequencies, magnitudeDb, fraction)`
@@ -919,7 +928,7 @@ reference equals the analytic filter level within 0.1 dB; band mean `10·log10((
 within 1e-12; labels contain NORMALIZED.
 
 <a id="rta"></a>
-## RTA bands — `oscilla.rta.v1` (`measurement/rta.js`)
+## RTA bands — `oscilla.rta.v2` (`measurement/rta.js`)
 
 ### Band layout: `bandCenters(kind, fMin, fMax, sampleRate) → [{ nominal, exact, lo, hi }]`
 
@@ -954,7 +963,8 @@ Input contract: one-sided linear power per bin on the **mean-square** scale,
 and convert it by its stated `scale` (`meanSquarePower`: `'tone'` → `toneToMeanSquare`,
 `'mean-square'` as is; an object without a known scale throws). A sine of amplitude A reads
 10·log10(A²/2) in its band, a full-scale sine −3.01 dB, whatever window produced the
-spectrum. `bandAnalysis` results carry `algorithm: 'oscilla.rta.v1'`.
+spectrum. `bandAnalysis` results carry `algorithm: 'oscilla.rta.v2'` (or the retained v1 when
+asked for).
 Bin k covers `[(k − ½)·binHz, (k + ½)·binHz]`, power is assumed uniform within a bin, and
 
 ```
@@ -963,14 +973,17 @@ levelDb   = 10·log10(bandPower)            (−Infinity for zero power; dB neve
 ```
 
 `bandBinCounts` returns the effective bin count (band width in bins where the spectrum covers it)
-and `underResolved = binCount < UNDER_RESOLVED_BINS (2)`: such a band's level is dominated by the
-window main lobe and bin placement. `bandAnalysis` returns `{ levelsDb, power, binCounts,
+and `underResolved = binCount < underResolvedBins(window)`: 6 bins for Hann, 8 for
+Blackman-Harris (v2, V382), so that the window's main lobe (±2 / ±4 bins) fits inside the band.
+With v1's single limit of 2 bins a mid-band tone read up to 0.91 dB (Hann) and 1.57 dB
+(Blackman-Harris) low in a band that was not flagged; at the v2 limits the loss is below
+0.01 dB (`v3-live-rta.test.mjs`). Band levels do not change, only the flag. `bandAnalysis` returns `{ levelsDb, power, binCounts,
 underResolved }`; `bandPowers` returns the dB array only (contract signature).
 
 ### Stored result: `rtaResult({ sampleRate, resolution, bands, levelsDb, fftSize, window })`
 
 **New (integration)** (was G4). Builds the `RtaResult` that `validate.js` checks:
-`{ algorithm: 'oscilla.rta.v1', sampleRate, resolution, bands: [{ nominal, exact, lo, hi }]
+`{ algorithm: 'oscilla.rta.v2', sampleRate, resolution, bands: [{ nominal, exact, lo, hi }]
 (copies), levelsDb: Float64Array, fftSize, windowAlgorithm }`. `levelsDb` are mean-square band
 levels; `−Infinity` and anything below `ZERO_POWER_DB` are stored as −300 dB (zero power);
 NaN, +Infinity, a length mismatch or an unknown resolution throw. `window` is the window name
@@ -1057,7 +1070,7 @@ stored result depends on it (only an explicit `snapshot()` would be, see below).
   access instead of array destructuring), the same values as before (calibration tests and
   golden fixture unchanged): the object per bin made 40 scavenges per 1500 live frames.
 - **Snapshot**: `snapshot()` → `rtaResult({ sampleRate, resolution, bands, levelsDb: raw
-  averaged, fftSize, window })` (`oscilla.rta.v1`, the window ID); null in FFT mode. Not yet
+  averaged, fftSize, window })` (`oscilla.rta.v2`, the window ID); null in FFT mode. Not yet
   saved into an experiment (an experiment recipe requires a stimulus).
 - **View**: `buildRtaView({ ...live.viewInput(), fixedRange: true })` — badge LIVE (stored data
   is badged its `snapshotLabel`, e.g. NOISE CHECK SNAPSHOT, never LIVE), fixed axis
