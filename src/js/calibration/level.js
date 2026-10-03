@@ -149,6 +149,12 @@ export function createLevelCalibration({
   if (typeof observedDbRelative !== 'number' || !Number.isFinite(observedDbRelative)) {
     throw new RangeError(`observedDbRelative must be finite, got ${String(observedDbRelative)}`);
   }
+  // V382: on the mean-square band scale no band reads above full scale (a full-scale sine reads
+  // −3.01 dB), so a larger reading is a typing or scale mistake, not a calibration.
+  if (observedDbRelative > 0) {
+    throw new RangeError(`observedDbRelative must be at most 0 dB on the ${LEVEL_SCALE.id} scale `
+      + `(a full-scale sine reads −3.01 dB), got ${observedDbRelative}`);
+  }
   if (!LEVEL_METHODS.includes(method)) {
     throw new RangeError(`method must be ${LEVEL_METHODS.join(' or ')}, got ${String(method)}`);
   }

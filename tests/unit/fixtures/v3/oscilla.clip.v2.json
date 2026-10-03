@@ -1,0 +1,30 @@
+{
+ "id": "oscilla.clip.v2",
+ "digits": 10,
+ "output": {
+  "clipping": {
+   "ratio": 0.04125,
+   "regions": [
+    {
+     "start": 1007,
+     "end": 1094
+    },
+    {
+     "start": 2002,
+     "end": 2399
+    }
+   ]
+  },
+  "dropouts": [
+   {
+    "start": 1500,
+    "end": 1700
+   }
+  ],
+  "rms": 0.3428336851,
+  "peak": 1.000456929,
+  "empty": false,
+  "reasons": ["CLIPPING", "DROPOUT", "DISCONTINUITY"],
+  "v1Ratio": 0.00875
+ }
+}

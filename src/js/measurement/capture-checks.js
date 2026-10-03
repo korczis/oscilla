@@ -4,11 +4,16 @@
 // passes can still be acoustically wrong (wrong device, processing left on), which quality.js
 // judges.
 //
-// Clipping: a sample is "at the rail" when |x| ≥ clipThreshold; a clip region is a run of at
-// least clipMinRun consecutive rail samples, because hard clipping flattens the waveform over
-// several samples while a lone full-scale sample is a legitimate transient. Regions closer
-// than clipMergeGapS are merged into one overload event. ratio = rail samples inside regions /
-// total samples.
+// Clipping: a sample is "at the rail" when |x| ≥ clipThreshold; clipping is at least
+// clipMinRun rail samples within clipWindowS, because a lone full-scale sample is a legitimate
+// transient while an overloaded input keeps returning to the rail. 'oscilla.clip.v2' (V382)
+// takes 1 ms: above a few kHz a flat top spans one or two samples, so an overload of a
+// high-frequency tone puts its rail samples a few samples apart but never three in a row
+// (a 1 dB overload of a sweep above 5 kHz left 5.1 % of the samples at the rail and no v1
+// region). 'oscilla.clip.v1' (consecutive rail samples only) is the same rule with a window of
+// clipMinRun − 1 samples and is still selectable (opts.algorithm). A region spans the rail
+// samples it groups; regions closer than clipMergeGapS are merged into one overload event.
+// ratio = rail samples inside regions / total samples.
 //
 // Dropouts: a run longer than dropoutMinS whose samples all stay within constantTolerance of
 // each other (exact zeros, or a frozen value) that lies inside the capture, i.e. touches
@@ -49,8 +54,12 @@ import { ALGORITHMS } from './algorithms.js';
 /** |x| at or above this counts as at the rail: −0.18 dBFS, below the softened flat tops that
  *  resampling or a float-converted ADC leave just under 1.0. */
 export const CLIP_THRESHOLD = 0.98;
-/** Consecutive rail samples needed for clipping: a flat top, not a single transient peak. */
+/** Rail samples needed for clipping: a flat top, not a single transient peak. */
 export const CLIP_MIN_RUN = 3;
+/** clip.v2: the clipMinRun rail samples lie within this span (1 ms: a few periods at 3 kHz). */
+export const CLIP_WINDOW_S = 0.001;
+/** Clipping algorithms checkCapture implements (opts.algorithm; ALGORITHMS.clip by default). */
+export const CLIP_ALGORITHM_IDS = Object.freeze(['oscilla.clip.v1', 'oscilla.clip.v2']);
 /** Clip regions closer than this merge (5 ms ≈ half a period at 100 Hz: one overload). */
 export const CLIP_MERGE_GAP_S = 0.005;
 /** Shortest constant run reported as a dropout: 20 ms (960 frames at 48 kHz) is shorter than a
@@ -182,8 +191,13 @@ function findDiscontinuities(x, sr, o, skip) {
  * non-empty.
  */
 export function checkCapture(capture, opts = {}) {
+  const clipAlgorithm = opts.algorithm ?? ALGORITHMS.clip;
+  if (!CLIP_ALGORITHM_IDS.includes(clipAlgorithm)) {
+    throw new RangeError(`unknown clipping algorithm ${clipAlgorithm}`);
+  }
   const clipThreshold = opts.clipThreshold ?? CLIP_THRESHOLD;
   const clipMinRun = opts.clipMinRun ?? CLIP_MIN_RUN;
+  const clipWindowS = opts.clipWindowS ?? CLIP_WINDOW_S;
   const mergeGapS = opts.clipMergeGapS ?? CLIP_MERGE_GAP_S;
   const dropoutMinS = opts.dropoutMinS ?? DROPOUT_MIN_S;
   const tolerance = opts.constantTolerance ?? CONSTANT_TOLERANCE;
@@ -222,16 +236,26 @@ export function checkCapture(capture, opts = {}) {
   let sumSq = 0;
   let peak = 0;
   let nonFinite = 0;
+  // Clip grouping (see the header): the last clipMinRun rail indices; a rail sample whose
+  // (clipMinRun − 1)-th predecessor lies within `span` samples groups them into a region.
+  const span = clipAlgorithm === 'oscilla.clip.v1' || !(sampleRate > 0)
+    ? clipMinRun - 1
+    : Math.max(clipMinRun - 1, Math.round(clipWindowS * sampleRate));
   const clipRuns = [];
   let clipped = 0;
-  let railStart = -1;
-  const closeRail = (end) => {
-    if (railStart >= 0 && end - railStart >= clipMinRun) {
-      clipRuns.push({ start: railStart, end });
-      clipped += end - railStart;
-    }
-    railStart = -1;
+  const recent = [];
+  let counted = -1; // last rail index already counted in `clipped`
+  const rail = (i) => {
+    recent.push(i);
+    if (recent.length > clipMinRun) recent.shift();
+    if (recent.length < clipMinRun || i - recent[0] > span) return;
+    const last = clipRuns[clipRuns.length - 1];
+    if (last && recent[0] <= last.end) last.end = i + 1;
+    else clipRuns.push({ start: recent[0], end: i + 1 });
+    for (const k of recent) if (k > counted) clipped++;
+    counted = i;
   };
+  const closeRail = () => { recent.length = 0; };
 
   const dropouts = [];
   const minRun = Math.max(2, Math.ceil(dropoutMinS * sr));
@@ -248,15 +272,14 @@ export function checkCapture(capture, opts = {}) {
     const v = samples[i];
     if (!Number.isFinite(v)) {
       nonFinite++;
-      closeRail(i);
+      closeRail();
       continue;
     }
     const a = Math.abs(v);
     sumSq += v * v;
     if (a > peak) peak = a;
-    if (a >= clipThreshold) {
-      if (railStart < 0) railStart = i;
-    } else closeRail(i);
+    if (a >= clipThreshold) rail(i);
+    else if (span === clipMinRun - 1) closeRail();
     if (i > 0) {
       const lo = Math.min(runMin, v);
       const hi = Math.max(runMax, v);
@@ -271,7 +294,6 @@ export function checkCapture(capture, opts = {}) {
       }
     }
   }
-  closeRail(n);
   closeRun(n);
 
   const rms = Math.sqrt(sumSq / n);
@@ -309,7 +331,8 @@ export function checkCapture(capture, opts = {}) {
   }
 
   return {
-    algorithms: CAPTURE_CHECK_ALGORITHMS,
+    algorithms: clipAlgorithm === CAPTURE_CHECK_ALGORITHMS.clip ? CAPTURE_CHECK_ALGORITHMS
+      : Object.freeze({ ...CAPTURE_CHECK_ALGORITHMS, clip: clipAlgorithm }),
     clipping: { ratio: clipped / n, regions },
     dropouts,
     discontinuities,

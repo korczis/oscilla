@@ -6,10 +6,14 @@
 // equals the linear correlation for every searched lag (no wrap-around). The two real inputs
 // share one complex FFT (ref + j·cap, split by conjugate symmetry). The peak of |r| is the
 // matched-filter estimate of the delay (polarity is reported, an inverted input still aligns);
-// a parabola through the three samples around it gives the sub-sample offset (V2
-// parabolicPeak). For a broadband reference the correlation peak is a band-limited impulse,
-// symmetric around the true delay, so integer delays are recovered exactly and fractional ones
-// to a fraction of a sample.
+// the sub-sample offset is the maximum of the band-limited interpolant of r around it
+// ('oscilla.align.xcorr.v2', V382): r is sampled from a band-limited correlation, so a
+// Blackman-windowed sinc over ±ALIGN_SINC_HALF_WIDTH samples reconstructs it between samples,
+// and a golden-section search finds its peak. 'oscilla.align.xcorr.v1' (retained,
+// options.algorithm) fitted a parabola through the three samples around the peak (V2
+// parabolicPeak), which is biased for a broadband peak: −0.061 samples at a fractional delay of
+// 0.25 (44.1 kHz, 20 Hz-20 kHz sweep), a phase error of −9.9° at 19 kHz in the transfer.
+// Integer delays are exact in both.
 //
 // peakCorrelation = |r[l]| / √(Σref² · Σcap²[l … l + Nref)), the normalized correlation
 // coefficient at the peak (Cauchy-Schwarz: 0 … 1). Noise, a non-flat system response or a
@@ -19,7 +23,7 @@
 // this capture buffer, which includes the output and input pipeline delays of the browser and
 // device, unknown and not separable from the acoustic path without a loopback reference.
 // Cost: one FFT pair of size nextPow2(Nref + min(Ncap, maxLag + Nref) − 1).
-// The result carries its algorithm ID, ALIGN_ALGORITHM = 'oscilla.align.xcorr.v1'.
+// The result carries its algorithm ID, ALIGN_ALGORITHM = 'oscilla.align.xcorr.v2'.
 
 import { createFft } from '../analysis/fft.js';
 import { ALGORITHMS } from './algorithms.js';
@@ -27,11 +31,56 @@ import { parabolicPeak } from '../analysis/peak-detector.js';
 import { nextPow2 } from './spectrum.js';
 
 export const ALIGN_ALGORITHM = ALGORITHMS.align;
+/** The retained first method: parabolic sub-sample refinement. */
+export const ALIGN_ALGORITHM_V1 = 'oscilla.align.xcorr.v1';
+/** Every alignment method this build reproduces (options.algorithm). */
+export const ALIGN_ALGORITHMS = Object.freeze([ALIGN_ALGORITHM_V1, ALIGN_ALGORITHM]);
+/** v2: half-width in samples of the windowed-sinc interpolant of the correlation. */
+export const ALIGN_SINC_HALF_WIDTH = 32;
+
+/** Blackman-windowed sinc kernel of half-width M at x (0 outside). */
+function kernel(x, M) {
+  const a = Math.abs(x);
+  if (a >= M + 1) return 0;
+  const u = (Math.PI * x) / (M + 1);
+  const w = 0.42 + 0.5 * Math.cos(u) + 0.08 * Math.cos(2 * u);
+  return a < 1e-12 ? w : (w * Math.sin(Math.PI * x)) / (Math.PI * x);
+}
+
+/**
+ * v2: the offset in (−1, 1) of the maximum of the windowed-sinc interpolant of polarity·r
+ * around the integer peak `best` (r(l) is 0 outside [lo, hi], the lags the linear correlation
+ * has). Golden-section search; the interpolant is unimodal there for a correlation peak.
+ */
+function sincPeakOffset(r, best, polarity, lo, hi) {
+  const M = ALIGN_SINC_HALF_WIDTH;
+  const at = (tau) => {
+    let s = 0;
+    for (let n = -M; n <= M; n++) {
+      const l = best + n;
+      if (l >= lo && l <= hi) s += polarity * r(l) * kernel(tau - n, M);
+    }
+    return s;
+  };
+  const g = (Math.sqrt(5) - 1) / 2;
+  let a = -1;
+  let b = 1;
+  let c = b - g * (b - a);
+  let d = a + g * (b - a);
+  let fc = at(c);
+  let fd = at(d);
+  for (let i = 0; i < 48; i++) {
+    if (fc > fd) { b = d; d = c; fd = fc; c = b - g * (b - a); fc = at(c); }
+    else { a = c; c = d; fc = fd; d = a + g * (b - a); fd = at(d); }
+  }
+  return (a + b) / 2;
+}
 
 /**
  * align(reference, captured, sampleRate, { maxLagS, minLagS = 0 })
  *   → { algorithm, lagSamples, lagSeconds, peakCorrelation, polarity }
- * lagSamples is fractional (parabolic refinement). maxLagS defaults to the whole capture. When
+ * lagSamples is fractional (v2: windowed-sinc peak; options.algorithm 'oscilla.align.xcorr.v1':
+ * parabolic). maxLagS defaults to the whole capture. When
  * either input has no energy the lag is null and peakCorrelation 0 (nothing to align).
  * polarity is +1, or −1 when the best match is the inverted reference.
  */
@@ -39,6 +88,9 @@ export function align(reference, captured, sampleRate, options = {}) {
   if (!reference || !reference.length) throw new RangeError('align needs a reference');
   if (!captured || !captured.length) throw new RangeError('align needs a capture');
   if (!(sampleRate > 0)) throw new RangeError('align needs a sample rate');
+  const algorithm = options.algorithm ?? ALIGN_ALGORITHM;
+  if (!ALIGN_ALGORITHMS.includes(algorithm))
+    throw new RangeError(`unknown alignment method '${algorithm}'`);
   const nr = reference.length;
   const nc = captured.length;
   const minLag = Math.max(-(nr - 1), Math.round((options.minLagS || 0) * sampleRate));
@@ -97,13 +149,15 @@ export function align(reference, captured, sampleRate, options = {}) {
   const polarity = r(best) < 0 ? -1 : 1;
   let offset = 0;
   if (best > minLag && best < maxLag) {
-    offset = parabolicPeak(polarity * r(best - 1), bestAbs, polarity * r(best + 1)).offset;
+    offset = algorithm === ALIGN_ALGORITHM_V1
+      ? parabolicPeak(polarity * r(best - 1), bestAbs, polarity * r(best + 1)).offset
+      : sincPeakOffset(r, best, polarity, -(nr - 1), ncut - 1);
   }
   const w0 = Math.max(0, best);
   const w1 = Math.min(ncut, best + nr);
   const eWin = w1 > w0 ? prefix[w1] - prefix[w0] : 0;
   const peakCorrelation = eWin > 0 ? Math.min(1, bestAbs / Math.sqrt(eRef * eWin)) : 0;
   const lagSamples = best + offset;
-  return { algorithm: ALIGN_ALGORITHM, lagSamples, lagSeconds: lagSamples / sampleRate,
+  return { algorithm, lagSamples, lagSeconds: lagSamples / sampleRate,
     peakCorrelation, polarity };
 }
