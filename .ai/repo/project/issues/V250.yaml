@@ -1,0 +1,18 @@
+id: V250
+milestone: M034
+title: "Continuous-sweep top-ups must not write into a ramping gain"
+slug: continuous-sweep-top-ups-must-not-write-into-a-ramping-gain
+priority: p2
+profile: implementation
+objective: "The continuous-repeat top-up appends segment envelopes to the voice's envelope gain while that gain is ramping. Chromium and WebKit flatten a whole render quantum of a ramping param when the main thread mutates its timeline concurrently (measured: a gain ramp under appends far in the future, Chromium 109 and WebKit 482 flattened quanta in 6 s; one top-up-sized burst per second, WebKit 17 and Chromium 1 in 60 s; Firefox 0). On a segment attack the held quantum ends in a step of about half the gain: a click. Frequency is exempt: a held oscillator frequency keeps its phase continuous. Write each block of cycles into a gain lane that is constant (idle) when it is written."
+scope:
+  - "src/js/audio"
+  - "tests"
+acceptance_criteria:
+  - "Every top-up write of a continuous segment sweep lands on a gain lane whose value is constant at the moment of writing (a unit test asserts it on every write; the old path violates it); the horizon stays about 10 s; node accounting returns to 0; the V1 freeze golden is unchanged (no ConstantSourceNode in the mock: the old path)."
+  - "In the browser, a continuous segment sweep sounds identical to the old path (envelope shape, cycle grid) with no flattened quanta over a long run in chromium, firefox and webkit."
+validation:
+  - "npm run release-gate"
+evidence_required:
+  - "verified"
+created_at: 2026-10-03
