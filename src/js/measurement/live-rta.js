@@ -18,7 +18,7 @@
 //                 Blackman-Harris 3.02-3.85 dB (rta-chart.js FFT_PEAK_BIN_DEFICIT_DB).
 //   OCTAVE, 1/3   rta.js integrateBands over bandCenters('octave' | 'third', 20, 20000, sr):
 //                 power summed over each band's bins, never a sample at the centre; a band
-//                 narrower than UNDER_RESOLVED_BINS bins is flagged underResolved.
+//                 narrower than rta.js underResolvedBins(window) is flagged underResolved.
 //
 // Time averaging: rta.js createRtaAverager of POWER per bin or band, instant / fast
 // (τ = 125 ms) / slow (τ = 1 s), α = 1 − e^(−Δt/τ) with Δt the caller's wall-clock time between
@@ -97,7 +97,7 @@ function checkAveraging(a) {
  *   frequencies     FFT mode: the bin centres shown (Float64Array, display range); else null
  *   bands           band modes: [{ nominal, exact, lo, hi }]; else null
  *   covered         Uint8Array(count) 1 where the frequency profile corrected the value, or null
- *   underResolved   band modes: boolean[] (fewer than 2 bins); else null
+ *   underResolved   band modes: boolean[] (fewer than underResolvedBins(window)); else null
  * live.setMode(mode), live.setAveraging(averaging), live.setCalibration({ profile,
  *   levelCalibration }) restart the average and the peaks (and unfreeze); freeze(),
  *   unfreeze(), frozen;
@@ -133,7 +133,7 @@ export function createLiveRta({
       covered: new Uint8Array(n), coverage: [0, 0] };
     layouts[kind] = {
       bands,
-      underResolved: bandBinCounts(binHz, bands, bins).underResolved,
+      underResolved: bandBinCounts(binHz, bands, bins, window).underResolved,
       power: new Float64Array(n),
       instDb,
       corrPower: new Float64Array(n),
