@@ -46,7 +46,7 @@
 import { UNKNOWN, describeCalibration } from './schema.js';
 import { ZERO_POWER_DB, PHASE_REASONS } from '../measurement/transfer.js';
 import {
-  RELATIVE_SCALE_LABEL, RELATIVE_UNIT, SPL_UNIT, isValidLevelCalibration,
+  RELATIVE_SCALE_LABEL, RELATIVE_UNIT, SPL_UNIT, isValidLevelCalibration, levelOffsetWithProfile,
 } from '../calibration/level.js';
 
 export const TRANSFER_COLUMNS = Object.freeze(['frequency_hz', 'magnitude_db_relative',
@@ -281,7 +281,13 @@ export function rtaCsv(bands, meta, opts = {}) {
   }
   checkLength(levels, list.length, 'levelsDb');
   checkLength(corrected, list.length, 'correctedDb');
-  const offset = hasLevelCal(cal) ? cal.level.offsetDb : null;
+  // Corrected levels take the offset without the profile's correction at the reference
+  // frequency (level.js levelOffsetWithProfile, V382); that needs the profile's points, so
+  // with only { id, name } level_db_spl is computed from the uncorrected level.
+  const fullProfile = corrected && cal.frequency && Array.isArray(cal.frequency.points)
+    ? cal.frequency : null;
+  const splFromCorrected = !!fullProfile;
+  const offset = hasLevelCal(cal) ? levelOffsetWithProfile(cal.level, fullProfile) : null;
   const columns = [
     ['band_nominal_hz', 'Hz (nominal band centre)'],
     ['band_lo_hz', 'Hz (lower band edge)'],
@@ -292,9 +298,9 @@ export function rtaCsv(bands, meta, opts = {}) {
     columns.push(['level_db_corrected', `${DB_RELATIVE}, frequency-profile corrected`]);
   }
   if (offset !== null) {
-    columns.push(['level_db_spl', `${SPL_UNIT} (CALIBRATED: ${corrected ? 'level_db_corrected'
-      : 'level_db_relative'} ${offset < 0 ? '−' : '+'} ${num(Math.abs(offset))} dB level `
-      + 'calibration offset)']);
+    const from = splFromCorrected ? 'level_db_corrected' : 'level_db_relative';
+    columns.push(['level_db_spl', `${SPL_UNIT} (CALIBRATED: ${from} ${offset < 0 ? '−' : '+'} `
+      + `${num(Math.abs(offset))} dB level calibration offset)`]);
   }
   const lines = header(`real-time analyzer bands${isResult && bands.resolution
     ? ` (${bands.resolution === 'third' ? '1/3 octave' : 'octave'})` : ''}`, meta,
@@ -303,7 +309,7 @@ export function rtaCsv(bands, meta, opts = {}) {
     const row = [num(b.nominal), num(b.lo), num(b.hi), num(levels[i])];
     if (corrected) row.push(num(corrected[i]));
     if (offset !== null) {
-      const base = corrected ? corrected[i] : levels[i];
+      const base = splFromCorrected ? corrected[i] : levels[i];
       // Zero power (stored as ZERO_POWER_DB) has no sound pressure level: empty field.
       row.push(Number.isFinite(base) && base > ZERO_POWER_DB ? num(base + offset) : '');
     }

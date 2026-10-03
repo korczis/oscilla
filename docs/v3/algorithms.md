@@ -1396,10 +1396,15 @@ displayed SPL  = R + offsetDb                                 for a later relati
 
 Limits: a single broadband scalar for the whole input chain, valid only for the device, input
 gain, browser processing and microphone position it was taken with. X must be read on the same
-scale and with the same frequency-correction state as later readings, otherwise the correction
-at `referenceHz` (or the tone-scale versus mean-square-scale difference of a sine, 3.01 dB;
-see [Conventions](#conventions)) is counted twice. It is independent of, and never derived from,
-a frequency profile (§17).
+scale as later readings, otherwise the tone-scale versus mean-square-scale difference of a sine
+(3.01 dB; see [Conventions](#conventions)) is counted twice. X is read without frequency
+correction, so the offset already contains the input's deviation at `referenceHz`; a reading
+that a frequency profile corrected therefore takes `levelOffsetWithProfile(cal, profile)`, the
+offset minus the profile's applied correction at `referenceHz` (V382: before, a 94 dB
+calibrator read 92 dB SPL under a +2 dB deviation profile). The live RTA, `toDisplayLevel(db,
+cal, { profile })` and the RTA CSV use it; the CSV computes `level_db_spl` from the uncorrected
+level when its metadata carries only the profile's `{ id, name }`. The offset itself is
+independent of, and never derived from, a frequency profile (§17).
 
 Tests (`v3-calibration.test.mjs`, exact): offset 94 − (−30.5) = 124.5 dB and display 84.5 dB SPL
 for −40 dB relative; SPL label only for a valid calibration; `null`, `{}`, a tampered offset, a
