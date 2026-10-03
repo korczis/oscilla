@@ -40,8 +40,9 @@ release gate runs and CI blocks a merge on.
 # What it cannot prove
 
 From file:// the browser's storage may be unavailable; the Studio library then keeps
-projects and patches in memory for this page view and says so. Browser fullscreen and deep
-links into Studio are not built.
+projects and patches in memory for this page view and says so. A deep link opens a shipped
+template, never a stored project; browser fullscreen is optional and absent on some browsers
+(Safari on iPhone).
 
 # Scenario
 

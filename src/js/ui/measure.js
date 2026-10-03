@@ -114,6 +114,7 @@ import { inputDeviceView } from '../measurement/views/input-devices.js';
 import {
   encodeRecipeLink, decodeRecipeLink, recipeParamOf, withRecipeParam, RECIPE_WIRE_KEYS,
 } from '../core/url-state-measure.js';
+import { withoutStudioParams } from '../core/url-state-studio.js';
 
 /** Result tabs (role=tab via the shell's tab binding is not used: these are measure-local). */
 export const MEASURE_RESULT_TABS = Object.freeze([
@@ -1291,7 +1292,9 @@ export function createMeasureUi(svc) {
     measureRecipeUrl() {
       const loc = typeof window !== 'undefined' ? window.location : null;
       if (!loc) return null;
-      return `${loc.href.split('#')[0]}#${withRecipeParam(loc.hash, this.measureRecipeParam())}`;
+      // A recipe link opens MEASURE: the Studio deep-link keys (V422) are not carried along.
+      return `${loc.href.split('#')[0]}#${withRecipeParam(withoutStudioParams(loc.hash),
+        this.measureRecipeParam())}`;
     },
     /** Put the recipe link in the address bar and on the clipboard (dialog when unavailable). */
     async measureCopyRecipeLink() {
