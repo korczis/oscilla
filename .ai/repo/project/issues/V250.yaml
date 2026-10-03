@@ -1,0 +1,29 @@
+id: V250
+milestone: M034
+title: "Continuous-sweep top-ups must not write into a ramping gain"
+slug: continuous-sweep-top-ups-must-not-write-into-a-ramping-gain
+priority: p2
+profile: implementation
+objective: "The continuous-repeat top-up appends segment envelopes to the voice's envelope gain while that gain is ramping. Chromium and WebKit flatten a whole render quantum of a ramping param when the main thread mutates its timeline concurrently (measured: a gain ramp under appends far in the future, Chromium 109 and WebKit 482 flattened quanta in 6 s; one top-up-sized burst per second, WebKit 17 and Chromium 1 in 60 s; Firefox 0). On a segment attack the held quantum ends in a step of about half the gain: a click. Frequency is exempt: a held oscillator frequency keeps its phase continuous. Write each block of cycles into a gain lane that is constant (idle) when it is written."
+scope:
+  - "src/js/audio"
+  - "tests"
+acceptance_criteria:
+  - "Every top-up write of a continuous segment sweep lands on a gain lane whose value is constant at the moment of writing (a unit test asserts it on every write; the old path violates it); the horizon stays about 10 s; node accounting returns to 0; the V1 freeze golden is unchanged (no ConstantSourceNode in the mock: the old path)."
+  - "In the browser, a continuous segment sweep sounds identical to the old path (envelope shape, cycle grid) with no flattened quanta over a long run in chromium, firefox and webkit."
+validation:
+  - "npm run release-gate"
+evidence_required:
+  - "verified"
+created_at: 2026-10-03
+started_at: 2026-10-03T11:56:48Z
+updated_at: 2026-10-03T11:56:52Z
+completed_at: 2026-10-03T11:56:52Z
+evidence:
+  - covers: verified
+    type: test
+    command: "npm test; npm run test:engine; npm run test:studio; npm run test:browser; scratchpad append-storm.cjs (none/append/cancel/topup/lanes) and lanes-probe.cjs"
+    result: "Mechanism measured with a sample tap on a ramping gain: appends far in the future flatten whole quanta in Chromium (109/6 s) and WebKit (482/6 s; 890 in a rerun), one top-up-sized burst per second WebKit 17 and Chromium 1 per 60 s, Firefox 0; the lock is per param: the same storm into an idle lane while another lane ramps gives 0 flats in chromium (1.46M writes), webkit and firefox. Fix: three ConstantSourceNode gain lanes written only while idle. Unit: every top-up gain write lands on a constant param (the V1 path violates it); lanes sum to the V1 envelope within 1e-9 over 60 s with the identical frequency schedule; stalled top-ups resume on the grid; freeze unchanged (2044/2044). Real app in chromium, firefox, webkit: 3 lanes, a 16-cycle block per top-up, horizon 13.5-14.4 s, 0 nodes after stop. Engine 87/87 x2, studio all pass, app 28/28 x6, layout 99/99 x3"
+    artifact: "fix/v250-envelope-lanes"
+    commit: 6a27eda8ca174553ebd8851a6eedde63cc8f6d52
+    recorded_at: 2026-10-03T11:56:51Z

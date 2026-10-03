@@ -18,8 +18,9 @@ evidence_required:
   - "verified"
 created_at: 2026-10-02
 started_at: 2026-10-03T06:49:32Z
-updated_at: 2026-10-03T06:49:35Z
+updated_at: 2026-10-03T11:31:10Z
 verified_at: 2026-10-03T06:49:35Z
+completed_at: 2026-10-03T11:31:10Z
 evidence:
   - covers: verified
     type: ci
@@ -27,3 +28,10 @@ evidence:
     result: "NOT MET as specified (do not mark done without accepting a retrospective audit): no baseline audit of V2 against HEAD was recorded before V3 code; the first V3 commit 1c84382 (2026-10-02T03:29Z) precedes v2.0.0 (13:28Z). Retrospective check at 320130f: release-gate exit 0 (unit 2040/2040 incl. V1 freeze; engine-v1port, dsp, labs, sequencer, measure, studio, app/layout/qa browser suites; visual gate 13 regions, MEASURE 2 views, STUDIO 3 views); releases v2.0.0 and v2.0.1 published; Pages deploy of 1283678 (v2.0.1, last pre-V3 main) succeeded; M007-M011 DONE; plan validate and doctor 0 failures"
     commit: 320130f1a967e894002a55dd9ebb6c837eb2621f
     recorded_at: 2026-10-03T06:49:34Z
+  - covers: verified
+    type: manual
+    command: "git tag -l --format=...; git log -1 --format=%cI 1c84382 b862445 66c5fac 1283678 14c7d5f 535af3b; git merge-base 1c84382 v2.0.0; git log --merges c367cdb..feature/v3; git ls-tree -r v2.0.0 tests; git show v2.0.0:docs/CLAIMS.yaml; gh release list; gh pr view 21 30 --json statusCheckRollup; majordomus plan show R001 R015 R016 R017; npm run release:verify-deploy; npm run release-gate; majordomus plan validate; majordomus doctor"
+    result: "MET as a RETROSPECTIVE audit (performed 2026-10-03 after V3.0 and V3.1 shipped; it cannot show that an audit informed the V3 design, and the criterion's 'before V3 code' was not met in time): docs/v3/audit-baseline.md reconstructs the pre-V3 state from git and GitHub records (first V3 commit 1c84382 03:29:53Z and first V3 code b862445 03:47:10Z precede the v2.0.0 tag 13:28:17Z on 66c5fac; feature/v3 forked from c367cdb mid-V2), the V2 release, deployment, provenance, tests and Majordomus state recorded at the time (R001, R015-R017, PR #21 and #30 checks), and re-verifies every spec 1 V2 capability through its 24 guaranteed claims at HEAD 535af3b: release-gate exit 0 (unit 2040/2040, every browser suite, visual 13 regions + MEASURE 2 + STUDIO 3), verify-deploy PASS for 535af3b, plan validate and doctor 0 failures"
+    artifact: "docs/v3/audit-baseline.md"
+    commit: 535af3b347443dfa05c16cb5fb67128637e3db1f
+    recorded_at: 2026-10-03T11:31:08Z

@@ -11,8 +11,16 @@
 //   osc.connect(envNode)           ->  osc.connect(env)
 // b = { ctx, t0, track, source, env (the envelope GainNode), eg, a, r, stepEnv, o }. Every node
 // goes through track() or source() (inventory K5), so the engine's node accounting stays exact.
+//
+// V250: a continuous segment sweep writes its segment envelopes into gain lanes instead of the
+// envelope gain. Chromium and WebKit render a param from the value of the previous render quantum
+// while the main thread holds its timeline (one quantum flattened; at the end of it a ramping gain
+// steps: a click), and a top-up mutates the timeline of a param that is sounding. Each block of
+// cycles therefore goes into a lane whose value is constant when it is written (envelopeLanes).
+// Frequency stays on the carrier: a flattened quantum of the frequency keeps the phase continuous.
 
 import { GAIN_FLOOR } from '../core/constants.js';
+import { trackedParam } from './voice.js';
 
 // V1: SCHEDULE_LEAD_S, FAST_RELEASE_S, ESCAPE_RELEASE_S, WAVE_DIP_S, SCHEDULE_AHEAD_S,
 // TOP_UP_EVERY_MS (index.html@a7b7a23)
@@ -25,6 +33,11 @@ export const ESCAPE_RELEASE_S = 0.008;  // Escape / STOP: everything fades withi
 export const WAVE_DIP_S = 0.005;        // waveform change: fade to the floor, switch, fade back in
 export const SCHEDULE_AHEAD_S = 10;     // continuous repeat: audio scheduled this far ahead …
 export const TOP_UP_EVERY_MS = 1000;    // … and topped up by this UI bookkeeping timer
+// V250: gain lanes of a continuous segment sweep. A block of whole cycles of at least
+// LANE_BLOCK_S goes into the next lane in turn, so a lane is written about one block after its
+// previous block ended: LANES - 1 blocks cover the SCHEDULE_AHEAD_S horizon.
+export const LANES = 3;
+export const LANE_BLOCK_S = SCHEDULE_AHEAD_S / (LANES - 1);
 
 /** V1: AudioEngine.play case 'const' (index.html@a7b7a23). Returns the programmed end or null. */
 export function scheduleConst(v, plan, b) {
@@ -63,7 +76,9 @@ export function scheduleSteps(v, plan, b) {
 export function scheduleRamps(v, plan, b) {
   const { t0, source, env, eg, a, r } = b;
   const osc = source(this._carrier(v, plan.wave, plan.segments[0].f0, t0));
-  osc.connect(env);
+  const lanes = plan.kind === 'continuous' && plan.envelope === 'segment'
+    && typeof b.ctx.createConstantSource === 'function';
+  osc.connect(lanes ? envelopeLanes.call(this, v, b) : env);
   v.carrier = osc;
   v.freqParams.push(osc.frequency);
   if (plan.kind === 'continuous') {
@@ -81,11 +96,37 @@ export function scheduleRamps(v, plan, b) {
 }
 
 /**
+ * V250: the gain lanes of a continuous segment sweep. The carrier feeds a gain that only the
+ * lanes drive (intrinsic 0); each lane is a ConstantSourceNode on that gain, 0 while idle. The
+ * envelope gain passes the result through at 1. Returns the node the carrier connects to.
+ * Without ConstantSourceNode (old WebKit, the recording mock) the envelope stays on env (V1).
+ */
+function envelopeLanes(v, b) {
+  const { ctx, t0, track, source, env, eg } = b;
+  const vca = track(ctx.createGain());
+  vca.gain.value = 0;
+  vca.connect(env);
+  eg.setValueAtTime(1, t0);
+  v.lanes = [];
+  for (let i = 0; i < LANES; i++) {
+    const node = source(ctx.createConstantSource());
+    node.offset.value = 0;
+    node.connect(vca.gain);
+    node.start(t0);
+    const pt = this._track(node.offset, 0);
+    v.lanes.push({ pt, eg: trackedParam(pt), end: -Infinity });
+  }
+  v.laneNext = 0;
+  return vca;
+}
+
+/**
  * Frequency ramps (and per-segment envelopes) of one pass of a ramps plan, from `at`.
  * V1: AudioEngine._rampSegments (index.html@a7b7a23). v.stepEnv / v.eg are the voice's step
- * envelope and tracked wrapper (set by engine.play), so top-ups use the same envelope.
+ * envelope and tracked wrapper (set by engine.play), so top-ups use the same envelope; `eg` is
+ * the gain lane of the block instead (V250).
  */
-export function rampSegments(v, at) {
+export function rampSegments(v, at, eg = v.eg) {
   const plan = v.plan;
   const f = v.carrier.frequency;
   const short = plan.chirp ? Math.min(v.attack, plan.dur * 0.1) : v.attack;
@@ -93,7 +134,7 @@ export function rampSegments(v, at) {
     f.setValueAtTime(this._f(s.f0), at + s.t);
     if (s.curve === 'log') f.exponentialRampToValueAtTime(this._f(s.f1), at + s.t + s.dur);
     else f.linearRampToValueAtTime(this._f(s.f1), at + s.t + s.dur);
-    if (plan.envelope === 'segment') v.stepEnv(v.eg, at + s.t, s.dur, short, v.release);
+    if (plan.envelope === 'segment') v.stepEnv(eg, at + s.t, s.dur, short, v.release);
   }
 }
 
@@ -101,18 +142,48 @@ export function rampSegments(v, at) {
  * Continuous repeat: schedule whole cycles up to SCHEDULE_AHEAD_S ahead on the audio clock.
  * After a stall (throttled timer) cycles already in the past are skipped, keeping the grid.
  * V1: AudioEngine._scheduleCycles (index.html@a7b7a23)
+ * V253: only a top-up skips. At play the first cycle starts at t0, before the voice sounds;
+ * V1's _soon was exactly t0 there, while the quantum-aligned _soon of V2 lies up to a quantum
+ * after it, which skipped cycle 0 (one period of silence, or of a held tone).
  */
 export function scheduleCycles(v) {
   const ctx = v.ctx;
   const period = v.plan.period;
   const now = ctx.currentTime;
-  const first = Math.max(0, Math.ceil((this._soon(ctx) - v.t0) / period));
-  if (v.cycle < first) v.cycle = first;
-  while (v.t0 + v.cycle * period < now + SCHEDULE_AHEAD_S) {
-    this._rampSegments(v, v.t0 + v.cycle * period);
-    v.cycle++;
+  if (v.cycle > 0) {
+    const first = Math.max(0, Math.ceil((this._soon(ctx) - v.t0) / period));
+    if (v.cycle < first) v.cycle = first;
+  }
+  if (v.lanes) {
+    scheduleLaneBlocks.call(this, v, now);
+  } else {
+    while (v.t0 + v.cycle * period < now + SCHEDULE_AHEAD_S) {
+      this._rampSegments(v, v.t0 + v.cycle * period);
+      v.cycle++;
+    }
   }
   this._prune(v.env, now);
+}
+
+/**
+ * V250: whole cycles in blocks of at least LANE_BLOCK_S, each into the next gain lane in turn,
+ * ending with that lane back at 0 where the next block starts. A lane is written only when the
+ * end of its previous block is behind the clock (the render position is never behind
+ * currentTime), so the param is constant while its timeline changes.
+ */
+function scheduleLaneBlocks(v, now) {
+  const period = v.plan.period;
+  const n = Math.max(1, Math.ceil(LANE_BLOCK_S / period));
+  for (const lane of v.lanes) this._prune(lane.pt, now);
+  while (v.t0 + v.cycle * period < now + SCHEDULE_AHEAD_S) {
+    const lane = v.lanes[v.laneNext];
+    if (lane.end > now) break;
+    for (let k = 0; k < n; k++) this._rampSegments(v, v.t0 + (v.cycle + k) * period, lane.eg);
+    v.cycle += n;
+    lane.end = v.t0 + v.cycle * period;
+    this._ev(lane.pt, 'setValueAtTime', 0, lane.end);
+    v.laneNext = (v.laneNext + 1) % v.lanes.length;
+  }
 }
 
 /** The top-up timer of a continuous voice. V1: AudioEngine._armTopUp (index.html@a7b7a23) */

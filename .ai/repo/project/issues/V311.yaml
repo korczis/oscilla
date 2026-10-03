@@ -18,7 +18,10 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-02
-updated_at: 2026-10-03T06:49:53Z
+updated_at: 2026-10-03T11:33:55Z
+started_at: 2026-10-03T11:33:46Z
+verified_at: 2026-10-03T11:33:49Z
+completed_at: 2026-10-03T11:33:55Z
 evidence:
   - covers: verified
     type: test
@@ -26,3 +29,10 @@ evidence:
     result: "MET at 320130f: 30+17 pass incl. normalized profile shape with units and schema, profileId SHA-256 independent of name, exportProfile normalized object, M4 schema-2 migration keeps id; level calibration separate (calibration/level.js). Impl calibration/profile.js, sha256.js. Commits b862445, 6d60332"
     commit: 320130f1a967e894002a55dd9ebb6c837eb2621f
     recorded_at: 2026-10-03T06:49:53Z
+  - covers: verified
+    type: test
+    command: "node --test tests/unit/v3-calibration.test.mjs tests/unit/v3-review-calibration.test.mjs"
+    result: "MET re-verified at 535af3b on 2026-10-03 (retrospective close, after V3.0 and V3.1 shipped; original evidence above): unit v3-calibration, v3-review-calibration 47/47 pass"
+    artifact: "535af3b347443dfa05c16cb5fb67128637e3db1f"
+    commit: 535af3b347443dfa05c16cb5fb67128637e3db1f
+    recorded_at: 2026-10-03T11:33:53Z

@@ -236,6 +236,35 @@ function v249Shadow(pt, ledger, ctx) {
   };
 }
 
+// ------------------------------------------------- V253: a continuous repeat plays cycle 0
+// V1 aligned _soon to the render quantum and then skipped every cycle starting before it, so at
+// play (t0 = currentTime + START_OFFSET_S, off the quantum grid) cycle 0 too: a continuous
+// repeat began with one period of silence (a segment sweep) or of a held tone (ping-pong). V2
+// (issue V253) schedules cycle 0 at t0. v253View asserts its events (one step envelope on the
+// envelope gain, one sweep on the carrier) and removes them, so the rest of the case is still
+// compared with the golden file.
+const V253_CASES = new Set(['engine.a7b7a23/continuous-sweep-schedule-and-top-up']);
+
+function v253View(out) {
+  const q = structuredClone(out);
+  const t0 = q.info.start;
+  const env = q.graph.find((n) => n.kind === 'gain' && n.params
+    && n.params.gain.events.some((e) => e[0] === 'exp'));
+  const osc = q.graph.find((n) => n.kind === 'oscillator');
+  const starts = env.params.gain.events.filter((e) => e[0] === 'set' && e[1] < 1e-3
+    && e[2] >= t0 - 1e-9).map((e) => e[2]);
+  assert.ok(Math.abs(starts[0] - t0) < 1e-9, 'V253: the first step envelope starts at t0');
+  const end = starts[1];
+  const inCycle0 = (e) => e[2] >= t0 - 1e-9 && e[2] < end - 1e-9;
+  assert.deepStrictEqual(env.params.gain.events.filter(inCycle0).map((e) => e[0]),
+    ['set', 'linear', 'set', 'exp'], 'V253: cycle 0 carries one step envelope');
+  assert.deepStrictEqual(osc.params.frequency.events.filter(inCycle0).map((e) => e[0]),
+    ['set', 'exp'], 'V253: cycle 0 carries one sweep');
+  env.params.gain.events = env.params.gain.events.filter((e) => !inCycle0(e));
+  osc.params.frequency.events = osc.params.frequency.events.filter((e) => !inCycle0(e));
+  return q;
+}
+
 /** Map the V2 output of a V249 case to V1's (see above). */
 function v249View(out, id) {
   const [fades, cuts, note] = V249_CASES[id];
@@ -535,8 +564,9 @@ if (!available) {
     v249Scope = V249_CASES[c.id] ? { engines: [] } : null;
     try {
       const out = c.run(E);
-      if (V249_CASES[c.id]) return enc(v249View(out, c.id));
-      return enc(DEVIATIONS[c.id] ? DEVIATIONS[c.id](out) : out);
+      const v2 = V253_CASES.has(c.id) ? v253View(out) : out;
+      if (V249_CASES[c.id]) return enc(v249View(v2, c.id));
+      return enc(DEVIATIONS[c.id] ? DEVIATIONS[c.id](v2) : v2);
     } finally {
       v249Scope = null;
       Math.random = realRandom;

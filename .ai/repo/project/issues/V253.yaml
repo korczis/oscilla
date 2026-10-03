@@ -1,0 +1,28 @@
+id: V253
+milestone: M034
+title: "A continuous repeat must play its first cycle"
+slug: a-continuous-repeat-must-play-its-first-cycle
+priority: p1
+profile: implementation
+objective: "The continuous-repeat scheduler skips every cycle that starts before _soon, to keep the grid after a stalled top-up. _soon is aligned to the render quantum, so at play (t0 = currentTime + START_OFFSET_S, off the quantum grid in every browser) cycle 0 was skipped too: a continuous segment sweep began with one period of silence (10 s for the default sweep), and a ping-pong with a held tone. Present since V1 a7b7a23 (frozen in the golden file) and confirmed on the live v3.1.0 page in chromium. Skip only in top-ups."
+scope:
+  - "src/js/audio"
+  - "tests"
+acceptance_criteria:
+  - "At play the first cycle is scheduled at t0; a stalled top-up still resumes on the grid without repeating a cycle; the freeze case maps the change back to the V1 golden with a positive assertion."
+validation:
+  - "npm run release-gate"
+evidence_required:
+  - "verified"
+created_at: 2026-10-03
+started_at: 2026-10-03T11:28:35Z
+updated_at: 2026-10-03T11:28:47Z
+completed_at: 2026-10-03T11:28:47Z
+evidence:
+  - covers: verified
+    type: test
+    command: "npm test && npm run test:engine && npm run test:studio && node first-cycle probe (chromium, firefox, webkit)"
+    result: "Reproduced on live v3.1.0 (chromium: t0 0.02, first envelope event 2.05 = t0 + period) and in the mock (the V1 golden itself records cycle 0 skipped); fixed: unit test fails on the old scheduler and passes on the fix, stalled top-ups still resume on the grid with no repeated cycle; freeze 1144/1144 with the V253 view asserting cycle 0; local build schedules cycle 0 at t0 in chromium, firefox and webkit; unit 2041/2041; engine 87/87 x2; studio all pass (on 535af3b plus this change)"
+    artifact: "fix/v253-first-cycle"
+    commit: 535af3b347443dfa05c16cb5fb67128637e3db1f
+    recorded_at: 2026-10-03T11:28:44Z

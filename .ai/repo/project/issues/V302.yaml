@@ -19,7 +19,10 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-02
-updated_at: 2026-10-03T06:49:45Z
+updated_at: 2026-10-03T11:31:35Z
+started_at: 2026-10-03T11:31:25Z
+verified_at: 2026-10-03T11:31:29Z
+completed_at: 2026-10-03T11:31:35Z
 evidence:
   - covers: verified
     type: test
@@ -27,3 +30,10 @@ evidence:
     result: "MET at 320130f: 10+15 pass (whole chain stimulus-capture-calibration-analysis-result-quality-experiment on real result objects; G1-G13). Layers: docs/v3/architecture.md diagram; ADR 0018 pipeline and offline final analysis, ADR 0019 recipe vs experiment (proposed). Commits 1c84382, 89bc156 (feature/v3, squash 14c7d5f)"
     commit: 320130f1a967e894002a55dd9ebb6c837eb2621f
     recorded_at: 2026-10-03T06:49:45Z
+  - covers: verified
+    type: test
+    command: "node --test tests/unit/v3-pipeline.test.mjs tests/unit/v3-integration.test.mjs"
+    result: "MET re-verified at 535af3b on 2026-10-03 (retrospective close, after V3.0 and V3.1 shipped; original evidence above): unit v3-pipeline, v3-integration 25/25 pass"
+    artifact: "535af3b347443dfa05c16cb5fb67128637e3db1f"
+    commit: 535af3b347443dfa05c16cb5fb67128637e3db1f
+    recorded_at: 2026-10-03T11:31:32Z

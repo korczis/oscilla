@@ -18,7 +18,10 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-02
-updated_at: 2026-10-03T06:50:16Z
+updated_at: 2026-10-03T11:40:16Z
+started_at: 2026-10-03T11:40:06Z
+verified_at: 2026-10-03T11:40:10Z
+completed_at: 2026-10-03T11:40:16Z
 evidence:
   - covers: verified
     type: test
@@ -26,3 +29,10 @@ evidence:
     result: "MET at 320130f: clipped sine detected with merged regions (threshold + run length), 50 ms zeros is a dropout, silence empty/invalid, in-sweep discontinuity invalidates, CAPTURE_TIMEOUT for stalled capture, G5, M8 grading. Impl capture-checks.js, engine.js. Commits b862445, 8628438, 465ba22"
     commit: 320130f1a967e894002a55dd9ebb6c837eb2621f
     recorded_at: 2026-10-03T06:50:16Z
+  - covers: verified
+    type: test
+    command: "node --test tests/unit/v3-measurement-core.test.mjs tests/unit/v3-integration.test.mjs tests/unit/v3-review-fixes.test.mjs tests/unit/v3-engine.test.mjs"
+    result: "MET re-verified at 535af3b on 2026-10-03 (retrospective close, after V3.0 and V3.1 shipped; original evidence above): unit v3-measurement-core, v3-integration, v3-review-fixes, v3-engine 82/82 pass"
+    artifact: "535af3b347443dfa05c16cb5fb67128637e3db1f"
+    commit: 535af3b347443dfa05c16cb5fb67128637e3db1f
+    recorded_at: 2026-10-03T11:40:14Z

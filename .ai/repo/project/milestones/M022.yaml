@@ -13,3 +13,12 @@ validation:
 evidence_required:
   - "milestone_verified"
 created_at: 2026-10-02
+updated_at: 2026-10-03T11:46:24Z
+evidence:
+  - covers: milestone_verified
+    type: ci
+    command: "npm run release-gate"
+    result: "Verified retrospectively on 2026-10-03 at 535af3b, after V3.1 shipped: V404-V408 done, each MET item re-run at 535af3b; one versioned StudioModel with node-type registry, typed ports, pure validation and an undoable action layer, no runtime objects inside (v31-studio-model, v31-studio-compiler, v31-studio-timeline, v31-studio-ui-graph-view units; v31-studio-graph browser suite); release-gate exit 0"
+    artifact: "535af3b347443dfa05c16cb5fb67128637e3db1f"
+    commit: 535af3b347443dfa05c16cb5fb67128637e3db1f
+    recorded_at: 2026-10-03T11:46:24Z

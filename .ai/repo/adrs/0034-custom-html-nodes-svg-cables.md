@@ -80,7 +80,9 @@ Proposed:
 - Confirmation criteria: not yet built (issues V409-V413, V421, V422). The decision is
   confirmed when (a) the §55 comparison is written down with measured bundle bytes, licence,
   framework dependency, `file://` bundling, touch and keyboard support for the custom editor
-  against at least two lightweight libraries (issue V401), (b) the editor meets the §145-§146
+  against at least two lightweight libraries (issue V401; written retrospectively on 2026-10-03,
+  after the editor shipped, in `docs/v31/audit-current-state.md` §3, which measures Drawflow,
+  Rete.js and LiteGraph and supports this decision), (b) the editor meets the §145-§146
   frame-time targets on the large-graph fixture (§250), and (c) `verify-dist` and the
   `file://` browser gate pass with Studio included. It is revised if the measured comparison
   shows a library that satisfies the identity lock, single-file rule and accessibility

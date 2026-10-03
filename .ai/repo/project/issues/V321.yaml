@@ -20,7 +20,10 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-02
-updated_at: 2026-10-03T06:49:58Z
+updated_at: 2026-10-03T11:35:01Z
+started_at: 2026-10-03T11:34:51Z
+verified_at: 2026-10-03T11:34:55Z
+completed_at: 2026-10-03T11:35:01Z
 evidence:
   - covers: verified
     type: test
@@ -28,3 +31,10 @@ evidence:
     result: "MET at 320130f: 36 pass: flat 0 and -6 dB within +-0.1 dB, 2nd-order low-pass, high-pass and peaking EQ match analytic |H| within +-0.5 dB, each at 44.1, 48 and 96 kHz; phase only on request with robust alignment. Impl measurement/transfer.js. Commits b862445, 465ba22"
     commit: 320130f1a967e894002a55dd9ebb6c837eb2621f
     recorded_at: 2026-10-03T06:49:58Z
+  - covers: verified
+    type: test
+    command: "node --test tests/unit/v3-transfer-ir.test.mjs"
+    result: "MET re-verified at 535af3b on 2026-10-03 (retrospective close, after V3.0 and V3.1 shipped; original evidence above): unit v3-transfer-ir 36/36 pass"
+    artifact: "535af3b347443dfa05c16cb5fb67128637e3db1f"
+    commit: 535af3b347443dfa05c16cb5fb67128637e3db1f
+    recorded_at: 2026-10-03T11:34:59Z
