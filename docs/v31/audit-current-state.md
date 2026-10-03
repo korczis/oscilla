@@ -52,6 +52,14 @@ The other V2 concepts Studio touches:
 | Experiment IndexedDB store | REFACTOR | Same database, upgrade 1 → 2 adds Studio stores and deletes nothing |
 | V2 configuration file, URL state, presets | KEEP | Playground state; Studio files are their own kinds (`oscilla-studio`, `oscilla-patch`) |
 
+**Update after this audit (V421).** The Signal Path rows above describe `535af3b`. Since V421 the
+Signal Path view is REFACTORED, not kept as it was. Its stage list is no longer its own
+derivation (`pathNodesFor` is removed). It is the Signal Path projection
+(`studio/signal-path-projection.js`) of the Playground voice expressed as a StudioModel
+(`studio/playground-voice.js`). The p5 renderer and the V1 wording are unchanged. The compact
+widget still lays out the Studio document through `graph-layout.js`. The decision and its
+limits are in `docs/v31/signal-path.md`.
+
 ## 3. Custom editor versus libraries, measured (spec §55, ADR 0034 criterion (a))
 
 ### Method
