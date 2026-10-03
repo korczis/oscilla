@@ -32,8 +32,9 @@
 // inverseSweep(spec) is the Farina inverse filter built from the SAME normalized spec (spec
 // §206): the rendered sweep reversed in time and weighted by e^{−t/L} (+6 dB/octave across
 // the reversed sweep, compensating its −3 dB/octave power), scaled so that sweep ⊛ inverse
-// has unit magnitude across the band, i.e. exactly 1 (0 dB) at the band centre √(f1·f2). The
-// scale comes from the stationary-phase spectrum |X(f)| ≈ sr·(A/2)·√(L/f) of the sweep.
+// is exactly 1 (0 dB) at the band centre √(f1·f2). The scale comes from the stationary-phase
+// spectrum |X(f)| ≈ sr·(A/2)·√(L/f) of the sweep. It is not flat across the band: truncation
+// ripple and the fades reach ±1.4-2.5 dB half an octave inside it (docs/v3/algorithms.md).
 
 import { mulberry32, fillWhite, fillPink } from '../audio/noise.js';
 import { createFft } from '../analysis/fft.js';
@@ -322,7 +323,7 @@ export function renderStimulus(input) {
  * inverseSweep(spec) → Float32Array (same length as the sweep)
  * Farina inverse filter of the log-sweep described by spec (normalized here, so the raw and
  * the normalized spec give the same filter). Linear convolution sweep ⊛ inverse peaks at
- * index N − 1 and has unit gain over [f1, f2].
+ * index N − 1 and has unit gain at √(f1·f2) (ripple elsewhere in the band; see the header).
  */
 export function inverseSweep(input) {
   const { spec } = normalizeStimulus(input);

@@ -1,6 +1,6 @@
 // Impulse response from a log-sweep measurement (spec §37-§42, §214). Algorithm IDs, one per
 // method because their outputs differ (ADR 0024; IR_ALGORITHMS): 'spectral' →
-// 'oscilla.ir.log-sweep.v2', 'farina-inverse' → 'oscilla.ir.farina-inverse.v2'. The result's
+// 'oscilla.ir.log-sweep.v3', 'farina-inverse' → 'oscilla.ir.farina-inverse.v3'. The result's
 // `algorithm` is the ID of the method that produced it; `method` repeats it in words. The v1
 // IDs ('oscilla.ir.log-sweep.v1', 'oscilla.ir.farina-inverse.v1') are retained: `algorithm`
 // selects them and reproduces a v1 result exactly. v1 and v2 differ ONLY in noiseFloorDb (see
@@ -18,16 +18,27 @@
 // f the supplied inverse filter (the time-reversed sweep with its −6 dB/octave envelope, same
 // length as the stimulus). Linear convolution via the same N-point DFT; the linear IR then
 // starts at output index len(x) − 1, which is removed. Scale: divided by g, the median of
-// |X[k]·F[k]| over bins half an octave inside [f1, f2], so a unity system reads unity in band
-// whatever constant the inverse was built with.
+// |X[k]·F[k]| over bins half an octave inside [f1, f2], so a unity system reads unity at the
+// median whatever constant the inverse was built with; the inverse's truncation ripple
+// remains (about ±1.5-2.5 dB half an octave inside the band, several dB at the edges; V382),
+// so the spectral method is the default.
 //
 // For an exponential sweep both methods place the harmonic-distortion responses at negative
-// time (Farina 2000, §3); keeping only the causal part keeps the linear IR. The result is
+// time (Farina 2000, §3): harmonic k at capture index lag − L·ln k. With lagSamples the stored
+// window starts after them; without it (start 0) harmonic k lies inside `samples` whenever
+// the pre-roll exceeds L·ln k. The result is
 // band-limited to [f1, f2]: a unity system gives a band-limited pulse, not a single unit sample,
 // and its peak value is about (f2 − f1)/(fs/2).
 //
-// Time origin (§214): samples[0] is capture sample `start`, start = max(0, lagSamples − 5 ms)
-// when an alignment lag is given (the guard keeps the pulse's precursor), else 0.
+// Time origin (§214): samples[0] is capture sample `start`, start = max(0, lagSamples − guard)
+// when an alignment lag is given (the guard keeps the pulse's precursor), else 0. v3 (V382):
+// guard = max(5 ms, IR_PRE_GUARD_CYCLES / f1) — 250 ms at f1 = 20 Hz. The band limit at f1
+// (the 1/3-octave regularization ramp) is zero-phase, so its ringing reaches ~1/Δf before the
+// peak; cutting it at 5 ms the stored IR read −1.22 dB at 30 Hz and −0.75 dB at 60 Hz against
+// its own transfer function (2 s sweep, 48 kHz). The error of a cut ripples with its position
+// (3, 4, 5, 8 periods: −0.066, +0.041, +0.001, −0.004 dB at 30 Hz); 5 periods read within
+// 0.01 dB of the uncut IR from 30 Hz up.
+// v1 and v2 use 5 ms and are retained (`algorithm`); v2 and v3 differ only in `start`.
 // captureOffsetS = start / fs is the absolute offset, peakIndex indexes samples (largest |h|),
 // peakTimeS = peakIndex / fs is relative to samples[0]; absolute peak time is their sum. The
 // full causal length is kept (len(y) − start samples, original scale, sign kept) for later
@@ -73,9 +84,16 @@ export const IR_ALGORITHMS_V1 = Object.freeze({
   spectral: 'oscilla.ir.log-sweep.v1',
   'farina-inverse': 'oscilla.ir.farina-inverse.v1',
 });
+/** Retained v2 IDs by method (v3 without the f1-dependent pre-guard; see the header). */
+export const IR_ALGORITHMS_V2 = Object.freeze({
+  spectral: 'oscilla.ir.log-sweep.v2',
+  'farina-inverse': 'oscilla.ir.farina-inverse.v2',
+});
 /** IrResult.noiseFloorMethod values (v2). */
 export const IR_NOISE_FLOOR_METHODS = Object.freeze(['full-overlap-tail', 'none']);
 export const IR_PRE_GUARD_S = 0.005;
+/** v3: the pre-guard also spans this many periods of f1 (the band edge's ringing; header). */
+export const IR_PRE_GUARD_CYCLES = 5;
 export const IR_TAIL_FRACTION = 0.1;
 /** Fewest full-overlap lags after the peak from which a v2 noise floor is read. */
 export const IR_NOISE_MIN_SAMPLES = 16;
@@ -137,9 +155,9 @@ function checkIrArgs({ stimulus, inverse, method, lagSamples, algorithm }) {
     && !(inverse instanceof Float32Array) && !(inverse instanceof Float64Array))
     throw new TypeError("method 'farina-inverse' needs inverse: Float32Array");
   if (algorithm !== undefined && algorithm !== IR_ALGORITHMS[method]
-    && algorithm !== IR_ALGORITHMS_V1[method])
+    && algorithm !== IR_ALGORITHMS_V1[method] && algorithm !== IR_ALGORITHMS_V2[method])
     throw new RangeError(`IR algorithm '${algorithm}' is not a version of method '${method}' `
-      + `(${IR_ALGORITHMS_V1[method]}, ${IR_ALGORITHMS[method]})`);
+      + `(${IR_ALGORITHMS_V1[method]}, ${IR_ALGORITHMS_V2[method]}, ${IR_ALGORITHMS[method]})`);
   return { stimulus };
 }
 
@@ -162,7 +180,11 @@ export function irFromDeconvolution(dec, {
     ({ scaled, shift } = farinaDeconvolution(dec, { stimulus, sampleRate, f1, f2, inverse }));
   }
   const n = dec.fftSize;
-  const guard = Math.round(IR_PRE_GUARD_S * sampleRate);
+  // v3 (V382): the band limit at f1 rings ~1/Δf before the peak; 5 ms cut that precursor and
+  // the stored IR read up to 1.2 dB low below 60 Hz. v1/v2 keep 5 ms.
+  const guardS = algorithm === IR_ALGORITHMS_V1[method] || algorithm === IR_ALGORITHMS_V2[method]
+    ? IR_PRE_GUARD_S : Math.max(IR_PRE_GUARD_S, IR_PRE_GUARD_CYCLES / f1);
+  const guard = Math.round(guardS * sampleRate);
   const start = lagSamples === undefined
     ? 0
     : Math.min(captured.length - 1, Math.max(0, Math.round(lagSamples) - guard));
