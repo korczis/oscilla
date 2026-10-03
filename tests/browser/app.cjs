@@ -1004,6 +1004,7 @@ function defineChecks() {
       let covered = [];
       for (; steps < 320; steps++) {
         await page.keyboard.press(TAB);
+        await H.frames(page); // focus scrolling settled (slow runners measured mid-scroll)
         const r = await page.evaluate(() => {
           const a = document.activeElement;
           if (!a || a === document.body) return { body: true };
