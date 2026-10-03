@@ -4,7 +4,7 @@ kind: use-case
 title: 'Modulate a filter cutoff with an LFO'
 summary: 'Connect an LFO control output to the Filter cutoff parameter port and set the modulation depth on the cable.'
 category: studio
-status: draft
+status: active
 target: advisory
 weight: 310
 difficulty: intermediate
@@ -15,24 +15,32 @@ tags: [oscilla, studio, v31, product-acceptance]
 
 # Situation
 
-Someone adds an LFO beside the filter of a working chain and drags its control output onto the Filter cutoff port (specification §14 UC2). The cable is dashed, carries a depth of 1200 Hz bipolar, and the cutoff moves around its set value.
+Someone adds an LFO beside the Filter of a working chain and drags its control output onto
+the Filter's cutoff port (specification §14 UC2). The cable is drawn in the control style; in
+the Inspector the connection carries its depth (1200 Hz, bipolar, in the Subtractive Synth
+template) and the cutoff moves around its set value.
 
 # What proves it
 
-Status `draft`: Studio is not in the shipped product yet, so nobody can perform this task today. What the Studio model core already proves is named below with its test, run by `npm test` (`tests/unit/v31-studio-model.test.mjs`); what is not yet provable is named with the issue that will prove it.
+The behaviour is proven by the OSCILLA tests named in each claim of `docs/CLAIMS.yaml` and
+by these, run by:
 
-Proven now:
+- `npm test`: tests/unit/v31-studio-model.test.mjs ("parameter target ports know parameter,
+  unit, range and mapping", "modulation edge properties: depth, polarity, mapping, offset",
+  "control-cycle policy") and tests/unit/v31-studio-compiler.test.mjs ("LFO → cutoff binds the
+  real AudioParam with edge depth and polarity"); tests/unit/v31-studio-timeline.test.mjs
+  "automation + modulation: actual = base + modulation within bounds".
+- `npm run test:studio`: tests/browser/v31-studio-audio.cjs §210 (a 1 Hz LFO at 800 Hz and
+  400 Hz depth moves the level of a filtered 1 kHz sine between the levels the browser's biquad
+  predicts; a muted edge holds it steady), and tests/browser/v31-studio-graph.cjs
+  cable-connect, in Chromium, Firefox and WebKit.
 
-- A CONTROL output connects only to a PARAMETER input, which knows its parameter, unit, range and mapping (tests "parameter target ports know parameter, unit, range and mapping (§34)" and "port compatibility matrix: only same-type connections are allowed (§31, §33)").
-- Depth, polarity, mapping and offset live on the edge with unit-aware bounds; the Basic Synth edge `lfo-1.control → filter-1.frequency` carries depth 1200, bipolar (tests "modulation edge properties: depth, polarity, mapping, offset (§35)" and "§257 Basic Synth topology builds and validates").
-- A modulation loop is refused as a control cycle (test "control-cycle policy (§40)").
-
-Not yet provable:
-
-- Cable drag and the connection inspector (issues V411, V413).
-- The modulation signal in Web Audio: compiler and modulation test (issue V414, specification §210). Claim `studio-compiled-topology` is planned.
-
-A use-case/v1 scenario can only invoke `bin/majordomus`, and a live one only its read-only commands, so the scenario below does not run Studio. It proves the traceability instead: each guaranteed claim resolves to a tracked implementation and a tracked test in the knowledge graph, and each planned claim to the document that specifies it, so a renamed or deleted test or specification breaks this use case rather than silently orphaning the claim.
+A use-case/v1 scenario can only invoke `bin/majordomus`, and a live one only its read-only
+commands, so the scenario below does not open a browser or play audio. It proves the
+traceability instead: each claim's implementation and test are tracked files wired to the
+claim in the knowledge graph, so a renamed or deleted test breaks this use case rather than
+silently orphaning the claim. The behaviour itself is proven by the commands above, which the
+release gate runs and CI blocks a merge on.
 
 # Scenario
 
@@ -63,16 +71,24 @@ steps:
     expect:
       exit: 0
       stdout_contains: ['claim:studio-feedback-rejected +test:tests/unit/v31-studio-model\.test\.mjs']
-  - id: studio-compiled-topology-specified
-    run: ['knowledge', 'edges', '--type', 'specified_by']
-    note: 'claim studio-compiled-topology is planned: specified by docs/specs/oscilla-v3.1-studio.md, with no implementation or test yet'
+  - id: studio-compiled-topology-implemented
+    run: ['knowledge', 'edges', '--type', 'implemented_by']
+    note: 'claim studio-compiled-topology is implemented by src/js/studio/compiler.js, a tracked file'
     expect:
       exit: 0
-      stdout_contains: ['claim:studio-compiled-topology +document:docs/specs/oscilla-v3\.1-studio\.md']
+      stdout_contains: ['claim:studio-compiled-topology +implementation:src/js/studio/compiler\.js']
+  - id: studio-compiled-topology-tested
+    run: ['knowledge', 'edges', '--type', 'tested_by']
+    note: 'claim studio-compiled-topology is proven by tests/browser/v31-studio-audio.cjs'
+    expect:
+      exit: 0
+      stdout_contains: ['claim:studio-compiled-topology +test:tests/browser/v31-studio-audio\.cjs']
 then:
-  - 'every guaranteed claim this use case names resolves to a tracked implementation and a tracked test, and every planned one to its specification'
+  - 'every claim this use case names resolves to a tracked implementation and a tracked test'
 ```
 
 # Outcome
 
-The modulation is an edge of the model with its own depth (ADR 0037); compiled, it adds to the cutoff value and never rewrites the cutoff automation.
+The modulation is an edge of the model with its own depth (ADR 0037); compiled, it adds to
+the cutoff's base value and never rewrites the cutoff automation. A modulation loop is
+refused as a control cycle.

@@ -4,7 +4,7 @@ kind: use-case
 title: 'See an invalid Studio connection rejected with a reason'
 summary: 'Try to connect incompatible ports or close an audio loop and get a refusal that says why, with nothing changed.'
 category: studio
-status: draft
+status: active
 target: advisory
 weight: 320
 difficulty: basic
@@ -15,23 +15,31 @@ tags: [oscilla, studio, v31, product-acceptance]
 
 # Situation
 
-Someone drags an audio output onto a trigger input, then wires a filter output back into the mixer that feeds it (specification §14 UC3). Both connections are refused with a sentence, and the graph and the sound stay as they were.
+Someone drags an audio output onto a control input, then wires a node's output back into
+the chain that feeds it (specification §14 UC3). While the cable is dragged only compatible
+inputs are emphasised; both connections are refused with a sentence, and the graph and the
+sound stay as they were.
 
 # What proves it
 
-Status `draft`: Studio is not in the shipped product yet, so nobody can perform this task today. What the Studio model core already proves is named below with its test, run by `npm test` (`tests/unit/v31-studio-model.test.mjs`); what is not yet provable is named with the issue that will prove it.
+The behaviour is proven by the OSCILLA tests named in each claim of `docs/CLAIMS.yaml` and
+by these, run by:
 
-Proven now:
+- `npm test`: tests/unit/v31-studio-model.test.mjs ("port compatibility matrix", "canConnect
+  rejects wrong direction, unknown ports and self-connection", "rejected EDGE_ADD leaves model,
+  history and revision unchanged", "cycle detection: audio feedback rejected with the spec
+  message") and tests/unit/v31-studio-ui-graph-view.test.mjs ("probeConnection agrees with the
+  store").
+- `npm run test:studio`: tests/browser/v31-studio-graph.cjs check cable-reject (no edge, the
+  type reason announced; an instantaneous feedback loop refused with the §39 sentence), in
+  Chromium, Firefox and WebKit.
 
-- Incompatible types, wrong direction, unknown ports and self connections are refused by `canConnect` with a sentence such as "Audio output cannot connect to a trigger input." (tests "port compatibility matrix: only same-type connections are allowed (§31, §33)" and "canConnect rejects wrong direction, unknown ports and self-connection").
-- A rejected EDGE_ADD leaves model, history and revision unchanged (test "rejected EDGE_ADD leaves model, history and revision unchanged").
-- An instantaneous audio loop is refused with "Connection rejected: This would create an unsupported instantaneous audio feedback loop." (test "cycle detection: audio feedback rejected with the spec message (§38-§39, §241)").
-
-Not yet provable:
-
-- The editor showing the refusal while the cable is dragged, and the live-region announcement (issues V411, V428).
-
-A use-case/v1 scenario can only invoke `bin/majordomus`, and a live one only its read-only commands, so the scenario below does not run Studio. It proves the traceability instead: each guaranteed claim resolves to a tracked implementation and a tracked test in the knowledge graph, and each planned claim to the document that specifies it, so a renamed or deleted test or specification breaks this use case rather than silently orphaning the claim.
+A use-case/v1 scenario can only invoke `bin/majordomus`, and a live one only its read-only
+commands, so the scenario below does not open a browser or play audio. It proves the
+traceability instead: each claim's implementation and test are tracked files wired to the
+claim in the knowledge graph, so a renamed or deleted test breaks this use case rather than
+silently orphaning the claim. The behaviour itself is proven by the commands above, which the
+release gate runs and CI blocks a merge on.
 
 # Scenario
 
@@ -63,9 +71,10 @@ steps:
       exit: 0
       stdout_contains: ['claim:studio-feedback-rejected +test:tests/unit/v31-studio-model\.test\.mjs']
 then:
-  - 'every guaranteed claim this use case names resolves to a tracked implementation and a tracked test, and every planned one to its specification'
+  - 'every claim this use case names resolves to a tracked implementation and a tracked test'
 ```
 
 # Outcome
 
-Nothing invalid reaches the model or Web Audio (rules `project.typed-ports` and `project.no-silent-feedback`); the user reads why.
+Nothing invalid reaches the model or Web Audio (rules `project.typed-ports` and
+`project.no-silent-feedback`); the user reads why, and screen readers hear it.

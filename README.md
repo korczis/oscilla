@@ -457,9 +457,9 @@ V3 Measure is specified in [`docs/specs/oscilla-v3-measure.md`](docs/specs/oscil
 [`docs/CLAIMS.yaml`](docs/CLAIMS.yaml). Each claim names the file that implements it and the
 test that proves it.
 
-Planned, not shipped: V3.1 Studio
-([`docs/specs/oscilla-v3.1-studio.md`](docs/specs/oscilla-v3.1-studio.md)), milestones
-M021-M033.
+V3.1 Studio ([`docs/specs/oscilla-v3.1-studio.md`](docs/specs/oscilla-v3.1-studio.md),
+milestones M021-M033) has shipped (the V3.1 release tag); its features, use cases and claims are in the same
+places, and `majordomus plan status` shows which Studio issues remain open.
 
 ## Privacy
 

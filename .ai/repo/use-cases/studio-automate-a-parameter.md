@@ -4,7 +4,7 @@ kind: use-case
 title: 'Automate a filter cutoff from 500 Hz to 8 kHz'
 summary: 'Add an automation lane on the Filter cutoff and ramp it from 500 Hz to 8 kHz over the timeline.'
 category: studio
-status: draft
+status: active
 target: advisory
 weight: 340
 difficulty: intermediate
@@ -15,23 +15,33 @@ tags: [oscilla, studio, v31, product-acceptance]
 
 # Situation
 
-Someone chooses Automate on the Filter cutoff in the Inspector, adds a point at 500 Hz at 0 s and an exponential ramp to 8 kHz at 3 s (specification §14 UC5), and plays.
+Someone selects the Filter, chooses **Automate** on its cutoff in the Inspector, adds a
+point at 500 Hz at 0 s and an exponential ramp to 8 kHz at 3 s in the lane (double-click, drag,
+arrow keys or a typed value such as "2 kHz"), and plays (specification §14 UC5; the
+Subtractive Synth template carries this lane).
 
 # What proves it
 
-Status `draft`: Studio is not in the shipped product yet, so nobody can perform this task today. What the Studio model core already proves is named below with its test, run by `npm test` (`tests/unit/v31-studio-model.test.mjs`); what is not yet provable is named with the issue that will prove it.
+The behaviour is proven by the OSCILLA tests named in each claim of `docs/CLAIMS.yaml` and
+by these, run by:
 
-Proven now:
+- `npm test`: tests/unit/v31-studio-timeline.test.mjs ("§211 automation produces the exact
+  AudioParam event list", "exponential automation to or from zero ... is rejected", "automation
+  clamps to the parameter range and 0.95 × Nyquist", "AUTOMATE from the Inspector creates or
+  reveals the lane"), tests/unit/v31-studio-transport.test.mjs ("cutoff automation reaches the
+  filter frequency AudioParam") and tests/unit/v31-studio-ui-timeline-automation.test.mjs.
+- `npm run test:studio`: tests/browser/v31-studio-transport.cjs (the automated cutoff shows in
+  the spectrum at the predicted frequency at 0.15 s and 0.85 s), tests/browser/v31-studio-graph.cjs
+  check inspector (AUTOMATE creates or reveals a lane) and tests/browser/v31-studio-timeline.cjs
+  check automation (points added, dragged, nudged, typed; logarithmic lane), in Chromium,
+  Firefox and WebKit.
 
-- The lane is accepted only on an automatable parameter, one lane per parameter, points kept sorted; the Basic Synth lane holds 500 linear at 0 s and 8000 exponential at 3 s (tests "§257 Basic Synth topology builds and validates" and "timeline actions validate references and undo exactly").
-- An exponential ramp to zero and a lane on a non-automatable parameter are refused (tests "timeline actions validate references and undo exactly" and "invalid parameters, edge properties and timeline references are reported").
-
-Not yet provable:
-
-- Compiling the lane to AudioParam automation and the offline render check (issue V419, specification §211). Claim `studio-transport-audio-clock` is planned.
-- The automation editor (issue V420).
-
-A use-case/v1 scenario can only invoke `bin/majordomus`, and a live one only its read-only commands, so the scenario below does not run Studio. It proves the traceability instead: each guaranteed claim resolves to a tracked implementation and a tracked test in the knowledge graph, and each planned claim to the document that specifies it, so a renamed or deleted test or specification breaks this use case rather than silently orphaning the claim.
+A use-case/v1 scenario can only invoke `bin/majordomus`, and a live one only its read-only
+commands, so the scenario below does not open a browser or play audio. It proves the
+traceability instead: each claim's implementation and test are tracked files wired to the
+claim in the knowledge graph, so a renamed or deleted test breaks this use case rather than
+silently orphaning the claim. The behaviour itself is proven by the commands above, which the
+release gate runs and CI blocks a merge on.
 
 # Scenario
 
@@ -50,16 +60,23 @@ steps:
     expect:
       exit: 0
       stdout_contains: ['claim:studio-automation-model +test:tests/unit/v31-studio-model\.test\.mjs']
-  - id: studio-transport-audio-clock-specified
-    run: ['knowledge', 'edges', '--type', 'specified_by']
-    note: 'claim studio-transport-audio-clock is planned: specified by docs/specs/oscilla-v3.1-studio.md, with no implementation or test yet'
+  - id: studio-transport-audio-clock-implemented
+    run: ['knowledge', 'edges', '--type', 'implemented_by']
+    note: 'claim studio-transport-audio-clock is implemented by src/js/studio/transport.js, a tracked file'
     expect:
       exit: 0
-      stdout_contains: ['claim:studio-transport-audio-clock +document:docs/specs/oscilla-v3\.1-studio\.md']
+      stdout_contains: ['claim:studio-transport-audio-clock +implementation:src/js/studio/transport\.js']
+  - id: studio-transport-audio-clock-tested
+    run: ['knowledge', 'edges', '--type', 'tested_by']
+    note: 'claim studio-transport-audio-clock is proven by tests/browser/v31-studio-transport.cjs'
+    expect:
+      exit: 0
+      stdout_contains: ['claim:studio-transport-audio-clock +test:tests/browser/v31-studio-transport\.cjs']
 then:
-  - 'every guaranteed claim this use case names resolves to a tracked implementation and a tracked test, and every planned one to its specification'
+  - 'every claim this use case names resolves to a tracked implementation and a tracked test'
 ```
 
 # Outcome
 
-The cutoff follows the authored curve on the audio clock; an LFO on the same cutoff adds to it rather than replacing it (ADR 0037).
+The cutoff follows the authored curve on the audio clock; an LFO on the same cutoff adds to
+it rather than replacing it (ADR 0037).

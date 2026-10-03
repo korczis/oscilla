@@ -2,9 +2,9 @@
 id: studio-save-and-load-a-patch
 kind: use-case
 title: 'Save a Studio patch and load it back'
-summary: 'Save the current graph as a patch, change things, then load the patch back by explicit replace or insert.'
+summary: 'Save a project or a selection as a patch, change things, then open the project or insert the patch by explicit choice.'
 category: studio
-status: draft
+status: active
 target: advisory
 weight: 390
 difficulty: intermediate
@@ -15,34 +15,56 @@ tags: [oscilla, studio, v31, product-acceptance]
 
 # Situation
 
-Someone saves the Basic Synth graph as a patch, edits the graph, then loads the patch, choosing replace (specification §14 UC10). Later they import a patch file somebody sent them.
+Someone saves the current Studio as a project, selects three nodes and chooses **Save as
+patch…**, edits the graph, then opens the project and inserts the patch (specification §14
+UC10). Later they **Import** a `.oscilla-studio.json` file somebody sent them
+(docs/v31/user-guide.md, "Save, export and patches").
 
 # What proves it
 
-Status `draft`: Studio is not in the shipped product yet, so nobody can perform this task today. What the Studio model core already proves is named below with its test, run by `npm test` (`tests/unit/v31-studio-model.test.mjs`); what is not yet provable is named with the issue that will prove it.
+The behaviour is proven by the OSCILLA tests named in each claim of `docs/CLAIMS.yaml` and
+by these, run by:
 
-Proven now:
+- `npm test`: tests/unit/v31-studio-patches.test.mjs ("§113 save and load a project: the
+  exact model", "§114 insertPatch", "§114 replaceWithPatch", "§155 patches are never silently
+  overwritten", "§158 JSON export and import", "§115 importPatch: ... untrusted input
+  rejected", "§154 the memory fallback (file://)") and tests/unit/v31-studio-model.test.mjs
+  ("import rejects malicious and oversized input", "serialization is deterministic").
+- `npm run test:studio`: tests/browser/v31-studio-graph.cjs check patches-files (save locally,
+  the Open dialog lists it; export and re-import with identical semantics; save a selection as
+  a patch and insert it, undoable; malformed and hostile files refused), in Chromium, Firefox and
+  WebKit.
 
-- A serialized Studio file imports back to the same normalized model, deterministically (tests "validateStudioImport accepts a serialized Studio and returns a normalized copy" and "serialization is deterministic and round-trips through normalize (§161)").
-- An imported file is untrusted: oversized, too deep, prototype-polluting or newer-schema input is refused without evaluation (test "import rejects malicious and oversized input (§115, §159, §238)").
+A use-case/v1 scenario can only invoke `bin/majordomus`, and a live one only its read-only
+commands, so the scenario below does not open a browser or play audio. It proves the
+traceability instead: each claim's implementation and test are tracked files wired to the
+claim in the knowledge graph, so a renamed or deleted test breaks this use case rather than
+silently orphaning the claim. The behaviour itself is proven by the commands above, which the
+release gate runs and CI blocks a merge on.
 
-Not yet provable:
+# What it cannot prove
 
-- The patch format, local persistence, replace and insert, and export (issue V426). Claim `studio-patch-round-trip` is planned.
-
-A use-case/v1 scenario can only invoke `bin/majordomus`, and a live one only its read-only commands, so the scenario below does not run Studio. It proves the traceability instead: each guaranteed claim resolves to a tracked implementation and a tracked test in the knowledge graph, and each planned claim to the document that specifies it, so a renamed or deleted test or specification breaks this use case rather than silently orphaning the claim.
+A patch is a graph fragment: nodes, parameters, internal cables and their automation
+lanes, never tracks, clips or markers; the timeline travels in a project. Autosave and crash
+recovery are not built.
 
 # Scenario
 
 ```yaml
 mode: live
 steps:
-  - id: studio-patch-round-trip-specified
-    run: ['knowledge', 'edges', '--type', 'specified_by']
-    note: 'claim studio-patch-round-trip is planned: specified by docs/specs/oscilla-v3.1-studio.md, with no implementation or test yet'
+  - id: studio-patch-round-trip-implemented
+    run: ['knowledge', 'edges', '--type', 'implemented_by']
+    note: 'claim studio-patch-round-trip is implemented by src/js/studio/patches.js, a tracked file'
     expect:
       exit: 0
-      stdout_contains: ['claim:studio-patch-round-trip +document:docs/specs/oscilla-v3\.1-studio\.md']
+      stdout_contains: ['claim:studio-patch-round-trip +implementation:src/js/studio/patches\.js']
+  - id: studio-patch-round-trip-tested
+    run: ['knowledge', 'edges', '--type', 'tested_by']
+    note: 'claim studio-patch-round-trip is proven by tests/unit/v31-studio-patches.test.mjs'
+    expect:
+      exit: 0
+      stdout_contains: ['claim:studio-patch-round-trip +test:tests/unit/v31-studio-patches\.test\.mjs']
   - id: studio-untrusted-import-implemented
     run: ['knowledge', 'edges', '--type', 'implemented_by']
     note: 'claim studio-untrusted-import is implemented by src/js/studio/migrate.js, a tracked file'
@@ -68,9 +90,10 @@ steps:
       exit: 0
       stdout_contains: ['claim:studio-deterministic-hash +test:tests/unit/v31-studio-model\.test\.mjs']
 then:
-  - 'every guaranteed claim this use case names resolves to a tracked implementation and a tracked test, and every planned one to its specification'
+  - 'every claim this use case names resolves to a tracked implementation and a tracked test'
 ```
 
 # Outcome
 
-The loaded patch is the saved graph and parameters exactly, and nothing malformed reaches the model.
+The loaded project is the saved model exactly, an inserted patch gets new ids beside what is
+there, and nothing malformed reaches the model.

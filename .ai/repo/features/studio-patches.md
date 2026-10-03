@@ -2,34 +2,44 @@
 schema: feature/v1
 id: studio-patches
 kind: feature
-title: 'Save, load and share Studio patches as validated files'
+title: 'Save, load and share Studio projects and patches as validated files'
 short_title: 'Patches'
-headline: 'Planned: keep a graph as a reusable patch, load it back exactly, and import files from others safely.'
-summary: 'Deterministic, versioned Studio serialization with an untrusted-import pipeline and stepwise migrations; patch persistence in the existing local store and JSON export.'
-status: draft
+headline: 'Keep a Studio as a project or a graph fragment as a reusable patch, load it back exactly, and import files from others safely.'
+summary: 'Deterministic, versioned Studio and patch serialization with an untrusted-import pipeline and stepwise migrations; local persistence in the experiment database with a memory fallback, explicit insert or replace, and JSON export and import.'
+status: stable
 weight: 440
 featured: false
 rules: [project.studio-model-is-canonical, project.typed-ports]
-docs: [docs/v31/studio-model.md, docs/specs/oscilla-v3.1-studio.md]
+docs: [docs/v31/patches-and-provenance.md, docs/v31/studio-model.md, docs/v31/user-guide.md, docs/specs/oscilla-v3.1-studio.md]
 adrs: [adr-0030, adr-0032]
 claims: [studio-deterministic-hash, studio-untrusted-import, studio-schema-version, studio-patch-round-trip]
 use_cases: [studio-save-and-load-a-patch]
 related: [studio]
-tags: [planned, v31, studio, persistence]
+tags: [v31, studio, persistence]
 ---
 
 ## What it does
 
 A Studio file is canonical JSON of the normalized model with its own schema version
 (ADR 0030, ADR 0023), imported through one pipeline: size cap, structural scan, depth,
-counts, strict schema, normalize, validate, migrate (specification §111-§115, §154-§161).
-Nothing is evaluated, and a newer schema is refused.
+counts, strict schema, normalize, validate, migrate (`src/js/studio/migrate.js`). A patch
+(`src/js/studio/patches.js`) is a graph fragment with its own kind and version: nodes,
+parameters, internal cables and their automation lanes. Projects and patches are saved in
+the Studio partition of the experiment database (`DB_VERSION` 2, which adds stores and
+deletes nothing; `src/js/studio/library.js`), exported as `.oscilla-studio.json` and imported
+back. Opening a project replaces the document; inserting a patch adds it with new ids as one
+undo step; nothing saved is overwritten silently, and a malformed, hostile or newer-schema
+file is refused with the reason. Dirty state follows semantic content only. Six templates
+(Basic Tone, Subtractive Synth, Sweep Sequence, Filter Automation, Stereo Beat, Measurement
+Sweep) start a document, each pinned by its hash.
 
-Guaranteed now, by `tests/unit/v31-studio-model.test.mjs`: deterministic serialization and
-hashing, untrusted import, and the independent schema version.
+Proven by `npm test` (`tests/unit/v31-studio-patches.test.mjs`,
+`v31-studio-model.test.mjs`, `v31-studio-templates.test.mjs`) and `npm run test:studio`
+(`tests/browser/v31-studio-graph.cjs` checks patches-files and templates in three browsers).
 
 ## What it does not do
 
-The patch format, local persistence, replace or insert on load, and export (issue V426) are
-not built; claim `studio-patch-round-trip` is `planned`. There is no cloud sync and no
-second database layer; the patch file extension is an open question.
+A patch carries no tracks, clips or markers; the timeline travels in a project. There is no
+cloud sync, no second database, and no autosave or crash recovery. From `file://` the
+browser's storage may be unavailable; the library then keeps projects and patches in memory
+for the page view and says so.
