@@ -1238,10 +1238,14 @@ function defineChecks() {
             invalid: field.getAttribute('aria-invalid'),
             freqs: plan.ok ? plan.plan.steps.map((s) => s.f) : plan.error };
         }, steps);
-        // what plays: trigger and read the engine's first scheduled step
+        // what plays: trigger and read the first step of the voice the engine scheduled, at
+        // elapsed time 0 of its plan (a wall-clock sleep before instantaneousFrequency() could
+        // land past the first step, or before the voice existed, on a loaded runner)
         await page.click('#osc-trigger');
-        await sleep(150);
-        const first = await page.evaluate(() => window.OSCILLA.engine.instantaneousFrequency());
+        const first = await H.until(() => page.evaluate(() => {
+          const o = window.OSCILLA;
+          return o.engine.voice ? o.planFreqAt(o.engine.voice.plan, 0) : null;
+        }), (f) => f !== null);
         await page.keyboard.press('Escape');
         await H.waitNodes0(page);
         out.push({ text, via, edited, ...r, first: first && +first.toFixed(1) });
