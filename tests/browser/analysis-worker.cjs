@@ -56,6 +56,9 @@ const SRC = path.join(ROOT, 'src', 'js');
 // The spike measured 1-4 ms heartbeat gaps with a Worker; a blocked main thread shows the
 // analysis steps (≥ 200 ms for a 10 s sweep). 50 ms leaves room for a loaded CI machine.
 const MAX_WORKER_GAP_MS = 50;
+// At most this much of the idle control's gap is allowed on top: a loaded machine may excuse
+// its own noise, never a block the size of an inline analysis step (hundreds of ms).
+const MAX_IDLE_ALLOWANCE_MS = 100;
 
 const ENTRY = `
 import { renderStimulus } from './measurement/stimulus.js';
@@ -294,8 +297,8 @@ async function runOne(name, origin, url) {
     const idleGapMs = (rec.idleGapMs = await page.evaluate((ms) => window.T.idleGap(ms),
       Math.min(Math.max(w.totalMs, 1000), 10000)));
     check(key, `main thread responsive during a 10 s / 48 kHz Worker analysis (max gap < `
-      + `${MAX_WORKER_GAP_MS} ms + idle control)`, w.mode === 'worker'
-      && w.maxGapMs < MAX_WORKER_GAP_MS + idleGapMs,
+      + `${MAX_WORKER_GAP_MS} ms + idle control, at most ${MAX_IDLE_ALLOWANCE_MS} ms)`, w.mode === 'worker'
+      && w.maxGapMs < MAX_WORKER_GAP_MS + Math.min(idleGapMs, MAX_IDLE_ALLOWANCE_MS),
     `max gap ${w.maxGapMs.toFixed(1)} ms vs idle ${idleGapMs.toFixed(1)} ms, total `
       + `${w.totalMs.toFixed(0)} ms, longest Worker step ${w.longestStepMs.toFixed(0)} ms`);
     const ab = (rec.abort = await page.evaluate(() => window.T.abort()));
