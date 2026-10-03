@@ -311,8 +311,11 @@ T.abortMidSweep = async (o = {}) => {
 };
 
 // The run right after T.abortMidSweep, pure-gain post-chain tap: the frames between the scheduled
-// stimulus onset and the limiter's 288-frame look-ahead must be silent (before feedLimiter,
-// Firefox replayed the aborted run's fade tail there), and the capture has no discontinuity.
+// stimulus onset and the end of the limiter's 6 ms look-ahead must be silent (before feedLimiter,
+// Firefox replayed the aborted run's fade tail there), and the capture has no discontinuity. The
+// look-ahead is a time, so the window is too: 288 frames at 48 kHz, 264 at 44.1 kHz (the CI
+// runners' rate), less a margin of 8 frames for the onset rounding.
+const LIMITER_LOOKAHEAD_S = 0.006; // DynamicsCompressorNode, every engine
 T.afterAbort = async () => {
   const io = createLoopbackIo({ engine: T.engine, system: { type: 'gain', gain: 1 } });
   T.io = io;
@@ -322,10 +325,12 @@ T.afterAbort = async () => {
   const cap = await io.runStimulus(stim, { preRollS: 0.25, postRollS: 0.2 });
   const onset = Math.round(cap.preRoll * sr);
   let peak = 0;
-  for (let k = onset; k < onset + 280; k++) peak = Math.max(peak, Math.abs(cap.samples[k]));
+  const silent = Math.floor(LIMITER_LOOKAHEAD_S * sr) - 8;
+  for (let k = onset; k < onset + silent; k++) peak = Math.max(peak, Math.abs(cap.samples[k]));
   const chk = checkCapture(cap);
   io.dispose();
-  return { peakBeforeDelayedOnset: peak, discontinuities: chk.discontinuities.length,
+  return { peakBeforeDelayedOnset: peak, frames: silent, sampleRate: sr,
+    discontinuities: chk.discontinuities.length,
     reasons: chk.reasons.map((x) => x.code) };
 };
 
