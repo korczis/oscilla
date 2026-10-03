@@ -22,6 +22,35 @@ pressure.
 
 Below 768 px the workspace shows one of **Graph**, **Timeline** and **Inspector** at a time.
 
+## Links and fullscreen
+
+- **Copy link** (the chain-link button after Frame all in the toolbar) puts a link to the current view in the
+  address bar and on the clipboard (a dialog shows it when there is no clipboard, for example
+  from some `file://` pages). It names the Studio workspace and the current view, plus the
+  template while the document is that shipped template unmodified, for example
+  `#m=studio&st=filter-automation&sv=timeline`. After any edit, or for a saved or imported
+  project, the link carries the workspace and the view only and says so: share the document
+  itself by exporting a project file. A link never carries a graph.
+- **Opening a link** shows Studio, the view (`sv`: `graph`, `timeline` or `inspector`) and the
+  template (`st`, one of the shipped template ids). Nothing plays until you press Play. An
+  unknown template or view, an empty or repeated value, or `st` / `sv` without `m=studio` is
+  refused whole with the reason, and nothing changes. If the current Studio has unsaved
+  changes, the link does not replace it: the Templates dialog opens, names the linked template
+  and repeats the unsaved-changes note, and **Open** is your choice.
+- The Studio keys sit beside the Playground's own link and the Measure recipe link; each reads
+  only its own keys. Copy link in Studio writes the Studio keys alone, and a recipe link copied
+  in Measure leaves them out.
+- **Fullscreen** (the button with two diagonal arrows, next to Copy link) shows the
+  Studio workspace alone on the screen through the browser's fullscreen; press it again, or
+  Esc, to leave. Leaving the Studio workspace leaves fullscreen too. It is optional: the
+  workspace already fills the window without it. Where the browser has no fullscreen for part
+  of a page (Safari on iPhone, for example) or it is turned off, the button stays but is marked
+  unavailable, and pressing it says why.
+- While Studio is fullscreen, Esc belongs to the browser first. In the tests, Firefox and
+  WebKit leave fullscreen and do not pass that key press to Studio, so a second Esc is the
+  usual Studio Esc (cancel a drag, close a picker, else stop). **Stop** in the toolbar always
+  stops.
+
 ## Create a node
 
 - Click an item in the **Node library** to add it at the centre of the graph, or drag it onto
@@ -162,7 +191,7 @@ The same table is the in-app list (the keyboard button in the toolbar).
 
 ## Limits
 
-- Not built yet: browser fullscreen for Studio, deep links, a minimap, node groups, dragging
-  several clips at once, pinch zoom on the timeline.
+- Not built yet: a minimap, node groups, dragging several clips at once, pinch zoom on the
+  timeline. A link opens a shipped template only; a saved project is shared as a file.
 - Studio is responsive at about 100 nodes and 200 connections ([performance](performance.md));
   it is not designed for much larger graphs.

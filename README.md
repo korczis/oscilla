@@ -253,13 +253,17 @@ How to use it, with the keyboard shortcuts, is the [Studio user guide](docs/v31/
   execution state) beside its recipe.
 - **Performance.** Responsive at about 100 nodes and 200 connections; the numbers and budgets
   are in [performance](docs/v31/performance.md).
+- **Links and fullscreen.** `#m=studio&st=<template id>&sv=<graph|timeline|inspector>` opens
+  Studio, a shipped template and a view. It never starts playback, and it never replaces a
+  document that has unsaved changes. An invalid link is refused with the reason. **Copy link**
+  writes the current view, naming the template only while the document is that template
+  unmodified. An optional **Fullscreen** button uses the browser's Fullscreen API where it
+  exists; where it does not (Safari on iPhone), the button says so.
 
 Studio output and Playground output are exclusive: starting one stops the other, and a
 measurement stops the Studio.
 
 Not yet built:
-- browser fullscreen
-- deep links
 - a minimap
 - node groups
 - dragging several clips at once

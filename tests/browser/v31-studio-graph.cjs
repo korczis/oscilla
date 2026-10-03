@@ -304,6 +304,11 @@ function defineChecks() {
     await H.frames(page);
     await step(() => page.click('[data-osc="studio.inspector.connect"]'));
     await close();
+    // Copy link without a clipboard: the link dialog (V422).
+    await page.evaluate(() => Object.defineProperty(navigator, 'clipboard', { value: undefined,
+      configurable: true }));
+    await step(() => page.click('[data-osc="studio.copyLink"]'));
+    await close();
     await page.click('[data-osc="studio.save"]');
     await sleep(150);
     await step(() => page.click('[data-osc="studio.open"]'));
