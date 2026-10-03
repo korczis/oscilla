@@ -190,6 +190,52 @@ is in the proposed [ADR 0025](.ai/repo/adrs/0025-data-driven-quality-with-reason
 - **No medical or certification claims.** OSCILLA is not audiometry and not an IEC 61672
   sound level meter.
 
+## The V3.1 Studio
+
+**Studio** sits after Experiments and before About. It is a patching and composition workspace
+over the same audio engine: no second engine, and the engine's master chain and limits apply.
+
+- **The model is the source of truth.** A Studio document is a plain, versioned `StudioModel`:
+  a graph of typed nodes and ports, a timeline of tracks and clips, automation lanes, and
+  transport settings. Every edit is an action with undo and redo. The audio graph is compiled
+  from the model and patched in place with crossfades, so editing during playback does not
+  click. Details are in [the model](docs/v31/studio-model.md), [the compiler](docs/v31/compiler.md),
+  [the timeline](docs/v31/timeline.md) and
+  [patches and provenance](docs/v31/patches-and-provenance.md).
+- **Graph editor.** Nodes look like the Signal Path boxes, joined by cables drawn in one SVG
+  layer. Port glyphs show the signal type, and only compatible ports connect. A rejected
+  connection, including a feedback loop without a delay, says why in words. The editor offers:
+  - pan, zoom, and frame all or the selection
+  - a node library
+  - dropping a cable on empty canvas to pick a compatible node
+  - rectangle selection, copy, paste, duplicate and delete
+  - an inspector generated from each node's parameter schema, with units
+- **Timeline, transport and automation.** Tracks hold clips that you create, move, resize,
+  split and delete with snapping. The timeline also has a loop region, markers, a playhead that
+  follows the audio clock, and automation lanes in each parameter's own scale. STOP and Escape
+  release every node and source.
+- **Keyboard and touch.** Every editor has a keyboard path: a "Connect…" dialog instead of
+  dragging a cable, a details panel instead of dragging a clip, and arrow-key nudges. Changes
+  are announced to screen readers. On coarse pointers the targets are 44 px. Below 768 px the
+  workspace splits into Graph, Timeline and Inspector views.
+- **Compact widget.** The Playground shows a small signal path and clip strip of the current
+  Studio document, with a button to expand it to the full workspace.
+- **Templates and patches.** Start from a template, then save, open, insert, export and import
+  projects and patches. An import never overwrites silently, and a hostile file is refused.
+  From `file://` the browser's storage may be unavailable; the library then uses memory and
+  says so.
+
+Studio output and Playground output are exclusive: starting one stops the other, and a
+measurement stops the Studio.
+
+Not yet built:
+- browser fullscreen
+- deep links
+- a minimap and search
+- node groups
+- dragging several clips at once
+- pinch zoom on the timeline
+
 ## Safety and measurement limits
 
 - **Start quietly, especially on headphones.** Loudness is a poor guide to acoustic output,

@@ -86,6 +86,18 @@
     <symbol id="q-pending" viewBox="0 0 24 24"><!-- @icon:loader-circle --></symbol>
     <symbol id="q-unknown" viewBox="0 0 24 24"><!-- @icon:circle-dashed --></symbol>
     <symbol id="q-info" viewBox="0 0 24 24"><!-- @icon:info --></symbol>
+    <!-- Studio toolbar icons (lucide, inlined at build time). -->
+    <symbol id="s-undo" viewBox="0 0 24 24"><!-- @icon:undo-2 --></symbol>
+    <symbol id="s-redo" viewBox="0 0 24 24"><!-- @icon:redo-2 --></symbol>
+    <symbol id="s-return" viewBox="0 0 24 24"><!-- @icon:skip-back --></symbol>
+    <symbol id="s-loop" viewBox="0 0 24 24"><!-- @icon:repeat --></symbol>
+    <symbol id="s-frame" viewBox="0 0 24 24"><!-- @icon:scan --></symbol>
+    <symbol id="s-open" viewBox="0 0 24 24"><!-- @icon:folder-open --></symbol>
+    <symbol id="s-template" viewBox="0 0 24 24"><!-- @icon:layout-template --></symbol>
+    <symbol id="s-keys" viewBox="0 0 24 24"><!-- @icon:keyboard --></symbol>
+    <symbol id="s-import" viewBox="0 0 24 24"><!-- @icon:file-up --></symbol>
+    <symbol id="s-export" viewBox="0 0 24 24"><!-- @icon:file-down --></symbol>
+    <symbol id="s-back" viewBox="0 0 24 24"><!-- @icon:arrow-left --></symbol>
     <symbol id="w-sine" viewBox="0 0 24 18"><path d="M1.5 9c2.4-8.5 4.8-8.5 7 0s4.6 8.5 7 0 4.7-8.5 7 0"/></symbol>
     <symbol id="w-square" viewBox="0 0 24 18"><path d="M1.5 15.5h3.5v-13h14v13h3.5"/></symbol>
     <symbol id="w-triangle" viewBox="0 0 24 18"><path d="M1.5 15.5l10.5-13 10.5 13"/></symbol>
@@ -129,6 +141,7 @@
         <li><a class="osc-tab" href="#osc-panel-bio" data-osc="nav.compare" x-bind="navItem('compare')">Compare</a></li>
         <li><a class="osc-tab" href="#osc-main" data-osc="nav.learn" x-bind="navItem('learn')">Learn</a></li>
         <li><a class="osc-tab" href="#osc-main" data-osc="nav.presets" x-bind="navItem('presets')">Presets</a></li>
+        <li><a class="osc-tab" href="#osc-view-studio" data-osc="nav.studio" x-bind="navItem('studio')">Studio</a></li>
         <li><a class="osc-tab" href="#osc-view-about" data-osc="nav.about" x-bind="navItem('about')">About</a></li>
       </ul>
     </nav>
@@ -1289,6 +1302,17 @@
       </section>
     </div>
 
+    <!-- ---------- Compact Studio (V3.1, spec §127-§130): a projection of the ONE Studio store
+         (src/js/ui/studio/compact.js renders it); EXPAND STUDIO opens the full workspace. -->
+    <section class="osc-panel osc-p-studio" id="osc-panel-studio" data-osc="studio.compact"
+      data-osc-panel="studio" data-osc-modes="playground sequencer"></section>
+
+    <!-- Studio announcements (outside the views: the compact widget announces too). -->
+    <p class="osc-sr-only" aria-live="polite" aria-atomic="true" data-osc="studio.live"
+      x-text="studio.live"></p>
+    <p class="osc-sr-only" aria-live="assertive" aria-atomic="true" data-osc="studio.alert"
+      x-text="studio.alert"></p>
+
     <!-- ================= Full-width workspace views ================= -->
     <!-- ================= MEASURE (V3): structured stimulus, capture, analysis =================
          Thin bindings over src/js/ui/measure.js, which renders the pure view models of
@@ -1971,6 +1995,123 @@
         </div>
       </div>
     </section>
+    <!-- ================= STUDIO (V3.1): visual signal programming =================
+         Thin bindings over src/js/ui/studio/workspace.js: toolbar and transport here; the graph
+         editor, node library, Inspector and compact widget are rendered by their modules from
+         the ONE Studio store; the timeline region belongs to src/js/ui/studio/timeline-editor.js
+         (spec §131-§136). Below 768 px one of GRAPH / TIMELINE / INSPECTOR is shown at a time. -->
+    <section class="osc-view osc-view--studio" id="osc-view-studio" data-osc="studio-view"
+      data-osc-modes="studio" hidden :hidden="workspace !== 'studio'" :data-subview="studio.subview"
+      aria-labelledby="osc-studio-title" tabindex="-1">
+      <h2 class="osc-sr-only" id="osc-studio-title">Studio</h2>
+      <div class="osc-studio">
+        <header class="osc-panel osc-st-bar" role="group" aria-label="Studio toolbar">
+          <div class="osc-st-row">
+            <button type="button" class="osc-btn osc-btn-secondary osc-st-back" data-osc="studio.back"
+              @click="studioBack()" aria-label="Back to the Playground" title="Back to the Playground">
+              <svg aria-hidden="true"><use href="#s-back"/></svg><span class="osc-st-lbl">Playground</span>
+            </button>
+            <div class="osc-st-docbox">
+              <span class="osc-st-doc" data-osc="studio.title" x-text="studio.title"></span>
+              <span class="osc-st-dirty" data-osc="studio.dirty" x-show="studio.dirty"
+                style="display: none">unsaved changes</span>
+            </div>
+            <div class="osc-st-group osc-st-transport" role="group" aria-label="Transport">
+              <button type="button" class="osc-btn osc-btn-primary osc-st-play" data-osc="studio.play"
+                :aria-pressed="String(studio.playing)" aria-pressed="false"
+                :aria-label="studio.playing ? 'Stop the Studio' : 'Play the Studio'" aria-label="Play the Studio"
+                aria-keyshortcuts="Space" @click="studioTogglePlay()">
+                <svg aria-hidden="true" x-show="!studio.playing"><use href="#i-play"/></svg>
+                <svg aria-hidden="true" x-show="studio.playing" style="display: none"><use href="#i-pause"/></svg>
+                <span x-text="studio.playing ? 'Playing' : 'Play'">Play</span>
+              </button>
+              <button type="button" class="osc-icon-btn osc-st-ico" data-osc="studio.stop" aria-label="Stop"
+                title="Stop (Esc)" aria-keyshortcuts="Escape" @click="studioStop()">
+                <svg aria-hidden="true"><use href="#i-stop"/></svg></button>
+              <button type="button" class="osc-icon-btn osc-st-ico" data-osc="studio.return"
+                aria-label="Return to start" title="Return to start" @click="studioReturn()">
+                <svg aria-hidden="true"><use href="#s-return"/></svg></button>
+              <button type="button" class="osc-icon-btn osc-st-ico osc-st-toggle" data-osc="studio.loop"
+                aria-label="Loop" title="Loop" :aria-pressed="String(studio.loop)" aria-pressed="false"
+                @click="studioToggleLoop()"><svg aria-hidden="true"><use href="#s-loop"/></svg></button>
+              <span class="osc-st-time osc-num" data-osc="studio.time" role="timer"
+                aria-label="Playhead position">00:00.000</span>
+            </div>
+            <div class="osc-st-group" role="group" aria-label="Edit">
+              <button type="button" class="osc-icon-btn osc-st-ico" data-osc="studio.undo"
+                :disabled="!studio.canUndo" :title="studio.undoLabel ? 'Undo ' + studio.undoLabel : 'Nothing to undo'"
+                aria-label="Undo" aria-keyshortcuts="Control+Z Meta+Z" @click="studioUndo()">
+                <svg aria-hidden="true"><use href="#s-undo"/></svg></button>
+              <button type="button" class="osc-icon-btn osc-st-ico" data-osc="studio.redo"
+                :disabled="!studio.canRedo" :title="studio.redoLabel ? 'Redo ' + studio.redoLabel : 'Nothing to redo'"
+                aria-label="Redo" aria-keyshortcuts="Control+Shift+Z Meta+Shift+Z" @click="studioRedo()">
+                <svg aria-hidden="true"><use href="#s-redo"/></svg></button>
+              <button type="button" class="osc-btn osc-btn-secondary osc-st-add" data-osc="studio.add"
+                aria-keyshortcuts="N" @click="studioAddNode()">
+                <svg aria-hidden="true"><use href="#i-plus"/></svg><span class="osc-st-lbl">Add node</span></button>
+              <button type="button" class="osc-icon-btn osc-st-ico" data-osc="studio.frameAll"
+                aria-label="Frame all" title="Frame all (A)" @click="studioFrameAll()">
+                <svg aria-hidden="true"><use href="#s-frame"/></svg></button>
+            </div>
+            <span class="osc-spacer"></span>
+            <div class="osc-st-group" role="group" aria-label="Project">
+              <button type="button" class="osc-btn osc-btn-secondary" data-osc="studio.templates"
+                @click="studioOpenTemplates()"><svg aria-hidden="true"><use href="#s-template"/></svg><span class="osc-st-lbl">Templates</span></button>
+              <button type="button" class="osc-btn osc-btn-secondary" data-osc="studio.open"
+                @click="studioOpenLibrary()"><svg aria-hidden="true"><use href="#s-open"/></svg><span class="osc-st-lbl">Open</span></button>
+              <button type="button" class="osc-btn osc-btn-secondary" data-osc="studio.save"
+                @click="studioSave()"><svg aria-hidden="true"><use href="#i-save"/></svg><span class="osc-st-lbl">Save</span></button>
+              <button type="button" class="osc-icon-btn osc-st-ico" data-osc="studio.export"
+                aria-label="Export project file" title="Export project (.oscilla-studio.json)"
+                @click="studioExport()"><svg aria-hidden="true"><use href="#s-export"/></svg></button>
+              <button type="button" class="osc-icon-btn osc-st-ico" data-osc="studio.import"
+                aria-label="Import project or patch file" title="Import project or patch"
+                @click="studioImportClick()"><svg aria-hidden="true"><use href="#s-import"/></svg></button>
+              <button type="button" class="osc-icon-btn osc-st-ico" data-osc="studio.keys"
+                aria-label="Studio keyboard shortcuts" title="Keyboard shortcuts"
+                @click="openDialog('osc-dlg-studio-keys')"><svg aria-hidden="true"><use href="#s-keys"/></svg></button>
+            </div>
+          </div>
+          <p class="osc-st-note" data-osc="studio.storeNote" x-show="studio.storeNote" style="display: none"
+            x-text="studio.storeNote"></p>
+          <p class="osc-st-note osc-st-warn" data-osc="studio.warning" x-show="studio.warning" style="display: none"
+            x-text="studio.warning"></p>
+          <div class="osc-tabs osc-st-subviews" role="tablist" aria-label="Studio view">
+            <button type="button" class="osc-tab" role="tab" data-osc="studio.subview" data-value="graph"
+              aria-controls="osc-st-graph" x-bind="studioSubview('graph')">Graph</button>
+            <button type="button" class="osc-tab" role="tab" data-osc="studio.subview" data-value="timeline"
+              aria-controls="osc-st-timeline" x-bind="studioSubview('timeline')">Timeline</button>
+            <button type="button" class="osc-tab" role="tab" data-osc="studio.subview" data-value="inspector"
+              aria-controls="osc-st-inspector" x-bind="studioSubview('inspector')">Inspector</button>
+          </div>
+        </header>
+
+        <section class="osc-panel osc-st-library" id="osc-st-library" aria-labelledby="osc-st-lib-title">
+          <div class="osc-panel-header"><h3 class="osc-panel-title" id="osc-st-lib-title">Node library</h3></div>
+          <div class="osc-st-libhost" data-osc="studio.library"></div>
+        </section>
+
+        <section class="osc-panel osc-st-graph" id="osc-st-graph" aria-labelledby="osc-st-graph-title">
+          <div class="osc-panel-header">
+            <h3 class="osc-panel-title" id="osc-st-graph-title">Signal graph</h3>
+            <span class="osc-spacer"></span>
+            <span class="osc-st-counts osc-num" data-osc="studio.counts" x-text="studio.counts"></span>
+          </div>
+          <div class="osc-st-graphhost" data-osc="studio.graph"></div>
+        </section>
+
+        <section class="osc-panel osc-st-inspector" id="osc-st-inspector" aria-labelledby="osc-st-insp-title">
+          <div class="osc-panel-header"><h3 class="osc-panel-title" id="osc-st-insp-title">Inspector</h3></div>
+          <div class="osc-st-insphost" data-osc="studio.inspector"></div>
+        </section>
+
+        <section class="osc-panel osc-st-timeline" id="osc-st-timeline" aria-labelledby="osc-st-tl-title">
+          <div class="osc-panel-header"><h3 class="osc-panel-title" id="osc-st-tl-title">Timeline</h3></div>
+          <div data-osc="studio.timeline" class="osc-studio-timeline-host"></div>
+        </section>
+      </div>
+    </section>
+
     <!-- ---------- About: the instrument explaining itself ----------
          Static, semantic copy (no text lives in canvas or script). The provenance times are
          commit timestamps; tests/unit/about-provenance.test.mjs checks them against git. -->
@@ -2235,6 +2376,9 @@
 
   <input type="file" id="osc-import-file" class="osc-sr-only" accept="application/json,.json"
     tabindex="-1" aria-hidden="true" data-osc="config.importFile" @change="importConfigFile($event)">
+  <input type="file" id="osc-studio-import-file" class="osc-sr-only"
+    accept=".json,application/json" tabindex="-1" aria-hidden="true"
+    data-osc="studio.importFile" @change="studioImportFile($event)">
   <input type="file" id="osc-measure-cal-file" class="osc-sr-only"
     accept=".csv,.txt,.tsv,.json,text/csv,text/plain,application/json" tabindex="-1" aria-hidden="true"
     @change="measureImportCalibrationFile($event)">
@@ -2486,6 +2630,60 @@
       </div>
     </div>
   </dialog>
+  <!-- ================= Studio dialogs (V3.1; content rendered by src/js/ui/studio/*) ======= -->
+  <dialog class="osc-dialog osc-dialog--wide" id="osc-dlg-studio-templates" data-oscilla-modal
+    data-osc-studio-dialog aria-labelledby="osc-dlg-st-tpl-title">
+    <div class="osc-dialog-body">
+      <h2 class="osc-dialog-title" id="osc-dlg-st-tpl-title">Start from a template</h2>
+      <p class="osc-muted osc-dialog-note" x-show="studio.dirty" style="display: none"
+        data-osc="studio.templates.dirty">Opening a template replaces the current Studio and its
+        unsaved changes; save or export it first to keep them.</p>
+      <ul class="osc-st-templates" data-osc="studio.templates.list">
+        <template x-for="t in studio.templates" :key="t.id">
+          <li class="osc-st-tpl">
+            <div class="osc-st-tpl-text">
+              <h3 class="osc-st-tpl-title" x-text="t.title"></h3>
+              <span class="osc-st-tpl-cat" x-text="t.category + ' · v' + t.version"></span>
+              <p x-text="t.learn.summary"></p>
+              <ul class="osc-st-tpl-points">
+                <template x-for="(p, i) in t.learn.points" :key="i"><li x-text="p"></li></template>
+              </ul>
+            </div>
+            <button type="button" class="osc-btn osc-btn-primary" data-osc="studio.template.open"
+              :data-template="t.id" :aria-label="'Open template ' + t.title"
+              @click="studioLoadTemplate(t.id)">Open</button>
+          </li>
+        </template>
+      </ul>
+      <div class="osc-dialog-actions">
+        <button type="button" class="osc-btn osc-btn-secondary"
+          @click="closeDialog('osc-dlg-studio-templates')">Close</button>
+      </div>
+    </div>
+  </dialog>
+  <dialog class="osc-dialog osc-dialog--wide" id="osc-dlg-studio-keys" data-oscilla-modal
+    data-osc-studio-dialog aria-labelledby="osc-dlg-st-keys-title">
+    <div class="osc-dialog-body">
+      <h2 class="osc-dialog-title" id="osc-dlg-st-keys-title">Studio keyboard shortcuts</h2>
+      <dl class="osc-shortcuts" data-osc="studio.shortcuts">
+        <template x-for="k in studio.shortcuts" :key="k.id">
+          <div><dt><kbd x-text="k.keys"></kbd></dt><dd x-text="k.text"></dd></div>
+        </template>
+      </dl>
+      <p class="osc-muted osc-dialog-note">They apply while Studio has focus and no text field is
+        being edited. Every drag has a keyboard path: arrows move nodes, C lists the inputs a node
+        can connect to, and the Inspector edits positions and clip times.</p>
+      <div class="osc-dialog-actions">
+        <button type="button" class="osc-btn osc-btn-primary"
+          @click="closeDialog('osc-dlg-studio-keys')">Done</button>
+      </div>
+    </div>
+  </dialog>
+  <dialog class="osc-dialog" id="osc-dlg-studio-add" data-oscilla-modal data-osc-studio-dialog></dialog>
+  <dialog class="osc-dialog" id="osc-dlg-studio-connect" data-oscilla-modal data-osc-studio-dialog></dialog>
+  <dialog class="osc-dialog osc-dialog--wide" id="osc-dlg-studio-library" data-oscilla-modal
+    data-osc-studio-dialog></dialog>
+  <dialog class="osc-dialog" id="osc-dlg-studio-patch" data-oscilla-modal data-osc-studio-dialog></dialog>
 </div>
 <!-- @inline-js -->
 </body>

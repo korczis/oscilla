@@ -168,6 +168,44 @@ jobs:
           path: logs/
           retention-days: 14
 
+  studio:
+    # V3.1: the STUDIO workspace, graph editor, timeline, transport and automation editors of dist
+    # (v31-studio-graph.cjs, v31-studio-timeline.cjs), one browser per job like the measure gate.
+    name: V3.1 Studio UI (${{ matrix.browser }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        browser: [chromium, firefox, webkit]
+    env:
+      OSC_BROWSERS: ${{ matrix.browser }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Install ${{ matrix.browser }}
+        run: npx playwright install --with-deps ${{ matrix.browser }}
+      - name: Audio sink for headless Firefox (no sound server on the runner)
+        if: matrix.browser == 'firefox'
+        run: |
+          sudo apt-get update -q && sudo apt-get install -y --no-install-recommends pulseaudio
+          pulseaudio --start --exit-idle-time=-1
+          pactl load-module module-null-sink sink_name=ci_null
+          pactl set-default-sink ci_null
+      - name: STUDIO workspace, graph and timeline editors, file:// and /oscilla/
+        run: mkdir -p logs && npm run test:studio 2>&1 | tee logs/studio-${{ matrix.browser }}.log
+      - name: Upload the log on failure
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: logs-studio-${{ matrix.browser }}
+          path: logs/
+          retention-days: 14
+
   browser:
     name: Browser gate (${{ matrix.browser }})
     runs-on: ubuntu-latest
@@ -221,7 +259,7 @@ jobs:
         run: |
           want="$(node -p "require('./package-lock.json').packages['node_modules/playwright'].version")"
           test "$want" = "1.63.0" || { echo "lockfile playwright $want, image v1.63.0"; exit 1; }
-      - name: 1536x1024 --play scene and the MEASURE reference against the accepted baselines
+      - name: 1536x1024 --play scene, the MEASURE and STUDIO references against the accepted baselines
         run: npm run test:visual
       - name: Upload current, reference, diff and report on failure
         if: failure()
@@ -231,12 +269,13 @@ jobs:
           path: |
             tests/visual/out-gate/
             tests/visual/out-measure/
+            tests/visual/out-studio/
           retention-days: 14
 
   gate:
     name: gate
     if: always()
-    needs: [unit, engine, suites, measure, browser, visual]
+    needs: [unit, engine, suites, measure, studio, browser, visual]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:

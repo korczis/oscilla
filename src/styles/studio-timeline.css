@@ -1,0 +1,916 @@
+/*
+ * OSCILLA Studio timeline, transport strip, automation lanes and compact timeline (V3.1 §81-§104,
+ * §127-§129, §136-§141). Built on the existing primitives — panel surfaces, .osc-transport-btn,
+ * .osc-seg, .osc-select, .osc-number, .osc-icon-btn and the sequencer's .osc-block colours — and
+ * only the tokens of tokens.css (VISUAL IDENTITY LOCK: no new colour, no new token).
+ * Row heights match src/js/ui/studio/timeline-editor.js (TRACK_ROW_PX) and automation-view.js
+ * (LANE_HEIGHT_PX).
+ */
+.osc-stl {
+  --osc-stl-head-w: 156px;
+  --osc-stl-ruler-h: 30px;
+  --osc-stl-track-h: 44px;
+  --osc-stl-lane-h: 64px;
+  --osc-stl-hit: 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  min-height: 0;
+  color: var(--osc-text-2);
+  font-size: var(--osc-fs-sm);
+}
+
+/* Sprite icons (<svg><use>) keep the app's stroke defaults wherever the timeline is mounted. */
+.osc-stl button svg,
+.osc-stl button svg use {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* ---------- Toolbar: transport strip + tools ---------- */
+.osc-stl-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 14px;
+  min-width: 0;
+}
+
+.osc-stl-transport {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  min-width: 0;
+}
+
+.osc-stl-keys {
+  gap: 6px;
+}
+
+.osc-stl-tbtn[aria-pressed="true"] {
+  border-color: var(--osc-blue);
+  color: var(--osc-text);
+}
+
+.osc-stl-transport[data-playing="true"] [data-osc="studio.tl.play"] {
+  border-color: var(--osc-green);
+  color: var(--osc-green);
+}
+
+.osc-stl-clock {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+
+.osc-stl-time {
+  min-width: 9ch;
+  color: var(--osc-text);
+  font-family: var(--osc-font-mono);
+  font-size: var(--osc-fs-xl);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.01em;
+}
+
+.osc-stl-state {
+  padding: 2px 6px;
+  border: 1px solid var(--osc-border-strong);
+  border-radius: var(--osc-radius-sm);
+  color: var(--osc-text-muted);
+  font-size: var(--osc-fs-2xs);
+  font-weight: var(--osc-fw-semibold);
+  letter-spacing: 0.06em;
+}
+
+.osc-stl-transport[data-playing="true"] .osc-stl-state {
+  border-color: var(--osc-green-deep);
+  color: var(--osc-green);
+}
+
+.osc-stl-mode {
+  height: var(--osc-control-h-sm);
+}
+
+.osc-stl-mode .osc-seg-btn {
+  padding: 0 9px;
+  font-size: var(--osc-fs-2xs);
+  font-weight: var(--osc-fw-semibold);
+  letter-spacing: 0.05em;
+}
+
+.osc-stl-tempo-box {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.osc-stl-tempo {
+  width: 64px;
+  height: var(--osc-control-h-sm);
+}
+
+.osc-stl-unit {
+  color: var(--osc-text-dim);
+  font-size: var(--osc-fs-2xs);
+}
+
+.osc-stl-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  margin-left: auto;
+}
+
+.osc-stl-snap select {
+  height: var(--osc-control-h-sm);
+  min-width: 104px;
+}
+
+.osc-stl-zoom {
+  display: inline-flex;
+  gap: 2px;
+}
+
+.osc-stl-tool.osc-icon-btn {
+  width: 26px;
+  height: 26px;
+}
+
+.osc-stl-tool.osc-btn {
+  height: var(--osc-control-h-sm);
+  gap: 5px;
+  padding: 0 8px;
+  font-size: var(--osc-fs-xs);
+}
+
+.osc-stl-tool.osc-btn svg {
+  width: 13px;
+  height: 13px;
+}
+
+.osc-stl-tool[aria-pressed="true"] {
+  border-color: var(--osc-blue-deep-border);
+  background: var(--osc-blue-deep);
+  color: var(--osc-tab-active-text);
+}
+
+/* ---------- Frame: header column + scrolling time area ---------- */
+.osc-stl-frame {
+  display: grid;
+  grid-template-columns: var(--osc-stl-head-w) minmax(0, 1fr);
+  min-width: 0;
+  border: 1px solid var(--osc-border);
+  border-radius: var(--osc-radius-control);
+  background: var(--osc-surface-0);
+  overflow: hidden;
+}
+
+.osc-stl-headcol {
+  min-width: 0;
+  border-right: 1px solid var(--osc-border-strong);
+  background: var(--osc-surface-1);
+}
+
+.osc-stl-corner {
+  display: flex;
+  align-items: center;
+  height: var(--osc-stl-ruler-h);
+  padding: 0 8px;
+  border-bottom: 1px solid var(--osc-border-strong);
+}
+
+.osc-stl-corner .osc-label {
+  color: var(--osc-text-dim);
+  font-size: var(--osc-fs-2xs);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.osc-stl-hrow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-rows: auto auto;
+  align-content: center;
+  column-gap: 4px;
+  height: var(--osc-stl-track-h);
+  padding: 0 4px 0 8px;
+  border-bottom: 1px solid var(--osc-border-soft);
+  min-width: 0;
+}
+
+.osc-stl-hrow--lane {
+  height: var(--osc-stl-lane-h);
+}
+
+.osc-stl-hrow--empty {
+  display: flex;
+  align-items: center;
+}
+
+.osc-stl-hmain {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+}
+
+.osc-stl-hkind svg {
+  width: 12px;
+  height: 12px;
+  color: var(--osc-text-dim);
+}
+
+.osc-stl-hname {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--osc-text);
+  font-size: var(--osc-fs-sm);
+  font-weight: var(--osc-fw-medium);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.osc-stl-hsub {
+  display: flex;
+  grid-column: 1;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+}
+
+.osc-stl-htarget,
+.osc-stl-hrange {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--osc-text-muted);
+  font-size: var(--osc-fs-2xs);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.osc-stl-chip {
+  flex: none;
+  padding: 0 4px;
+  border: 1px solid var(--osc-border-strong);
+  border-radius: 3px;
+  color: var(--osc-text-muted);
+  font-size: 9px;
+  font-weight: var(--osc-fw-semibold);
+  line-height: 13px;
+  letter-spacing: 0.05em;
+}
+
+.osc-stl-hacts {
+  display: flex;
+  grid-row: 1 / span 2;
+  grid-column: 2;
+  align-items: center;
+  gap: 2px;
+}
+
+.osc-stl-hbtn.osc-icon-btn--sm {
+  border-color: transparent;
+  background: none;
+}
+
+.osc-stl-hbtn.osc-icon-btn--sm:hover {
+  background: var(--osc-surface-3);
+}
+
+.osc-stl-scroll {
+  position: relative;
+  min-width: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  overscroll-behavior-x: contain;
+  scrollbar-color: var(--osc-border-strong) transparent;
+}
+
+.osc-stl-content {
+  position: relative;
+  min-height: 100%;
+}
+
+/* ---------- Ruler: ticks, loop region, markers ---------- */
+.osc-stl-ruler {
+  position: relative;
+  height: var(--osc-stl-ruler-h);
+  border-bottom: 1px solid var(--osc-border-strong);
+  background: var(--osc-surface-1);
+  cursor: text;
+  touch-action: none;
+  user-select: none;
+}
+
+.osc-stl-ticks {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.osc-stl-tick {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+}
+
+.osc-stl-tick::before {
+  content: "";
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 1px;
+  height: 5px;
+  background: var(--osc-seq-grid);
+}
+
+.osc-stl-tick.is-major::before {
+  height: 11px;
+  background: var(--osc-text-dim);
+}
+
+.osc-stl-ticklabel {
+  position: absolute;
+  bottom: 12px;
+  left: 3px;
+  color: var(--osc-text-muted);
+  font-size: var(--osc-fs-2xs);
+  white-space: nowrap;
+}
+
+.osc-stl-loop {
+  position: absolute;
+  top: 2px;
+  height: 7px;
+  border: 1px solid var(--osc-blue-deep-border);
+  border-radius: 2px;
+  background: none;
+  cursor: grab;
+}
+
+.osc-stl[data-loop="on"] .osc-stl-loop {
+  border-color: var(--osc-blue);
+  background: var(--osc-blue-deep);
+}
+
+.osc-stl-loop-h {
+  position: absolute;
+  top: 0;
+  z-index: 2;
+  width: var(--osc-stl-hit);
+  height: 13px;
+  margin-left: calc(var(--osc-stl-hit) / -2);
+  cursor: ew-resize;
+}
+
+.osc-stl-loop-h::before {
+  content: "";
+  position: absolute;
+  top: 1px;
+  left: calc(50% - 2px);
+  width: 4px;
+  height: 11px;
+  border-radius: 1px;
+  background: var(--osc-blue-deep-border);
+}
+
+.osc-stl[data-loop="on"] .osc-stl-loop-h::before {
+  background: var(--osc-blue);
+}
+
+.osc-stl-markers {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.osc-stl-marker {
+  position: absolute;
+  top: 10px;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  max-width: 96px;
+  height: 12px;
+  padding: 0 4px 0 5px;
+  border-left: 2px solid var(--osc-orange);
+  background: var(--osc-surface-3);
+  color: var(--osc-text);
+  font-size: 9px;
+  line-height: 12px;
+  cursor: grab;
+  pointer-events: auto;
+}
+
+.osc-stl-marker-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.osc-stl-marker[data-selected="true"] {
+  outline: 1px solid var(--osc-focus);
+}
+
+/* ---------- Rows ---------- */
+.osc-stl-rows {
+  position: relative;
+}
+
+.osc-stl-row {
+  position: relative;
+  height: var(--osc-stl-track-h);
+  border-bottom: 1px solid var(--osc-border-soft);
+}
+
+.osc-stl-row--lane {
+  height: var(--osc-stl-lane-h);
+}
+
+.osc-stl-row--empty {
+  display: flex;
+  align-items: center;
+  padding: 0 12px;
+}
+
+.osc-stl-clip.osc-block {
+  position: absolute;
+  top: 4px;
+  height: calc(var(--osc-stl-track-h) - 9px);
+  padding: 0 6px;
+  font-size: var(--osc-fs-xs);
+  line-height: 14px;
+  cursor: grab;
+  touch-action: pan-x pan-y;
+  user-select: none;
+}
+
+.osc-stl-clip[data-selected="true"] {
+  border: 2px solid var(--osc-block-selected-ring);
+  touch-action: none;
+}
+
+.osc-stl-clip[data-dragging="true"] {
+  z-index: 4;
+  cursor: grabbing;
+  opacity: 0.88;
+}
+
+.osc-stl-clip[data-invalid="true"] {
+  outline: 2px dashed var(--osc-red-soft);
+  outline-offset: 1px;
+}
+
+.osc-stl-clip--event {
+  border-color: var(--osc-border-strong);
+  background: var(--osc-surface-4);
+  color: var(--osc-text);
+}
+
+.osc-stl-clip--measurement {
+  border-color: var(--osc-info-border);
+  background: var(--osc-info-bg);
+  color: var(--osc-text);
+}
+
+.osc-stl-flag {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  margin-right: 4px;
+  border: 1px solid currentColor;
+  border-radius: 2px;
+  font-size: 9px;
+  font-weight: var(--osc-fw-bold);
+  line-height: 10px;
+  text-align: center;
+}
+
+.osc-stl-linked {
+  margin-right: 4px;
+}
+
+.osc-stl-clip-h {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 8px;
+  cursor: ew-resize;
+}
+
+.osc-stl-clip-h[data-edge="start"] {
+  left: 0;
+}
+
+.osc-stl-clip-h[data-edge="end"] {
+  right: 0;
+}
+
+/* ---------- Automation lane ---------- */
+.osc-stl-lane-svg {
+  position: absolute;
+  inset: 0 auto auto 0;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.osc-stl-lane-grid {
+  stroke: var(--osc-grid);
+  stroke-width: 1;
+}
+
+.osc-stl-lane-curve {
+  fill: none;
+  stroke: var(--osc-blue-trace);
+  stroke-width: 1.5;
+  stroke-linejoin: round;
+}
+
+.osc-stl-pt {
+  position: absolute;
+  z-index: 2;
+  width: var(--osc-stl-hit);
+  height: var(--osc-stl-hit);
+  margin: calc(var(--osc-stl-hit) / -2) 0 0 calc(var(--osc-stl-hit) / -2);
+  cursor: grab;
+  touch-action: none;
+}
+
+/* Shape carries the curve (no colour-only meaning): circle linear, square step, diamond
+   exponential, ring for the first point. */
+.osc-stl-pt::before {
+  content: "";
+  position: absolute;
+  top: calc(50% - 4px);
+  left: calc(50% - 4px);
+  width: 8px;
+  height: 8px;
+  border: 1.5px solid var(--osc-blue-trace);
+  border-radius: 50%;
+  background: var(--osc-surface-1);
+}
+
+.osc-stl-pt[data-curve="step"]::before {
+  border-radius: 1px;
+}
+
+.osc-stl-pt[data-curve="exponential"]::before {
+  border-radius: 1px;
+  transform: rotate(45deg);
+}
+
+.osc-stl-pt[data-curve="start"]::before {
+  border-width: 2px;
+}
+
+.osc-stl-pt[data-selected="true"]::before {
+  border-color: var(--osc-text);
+  background: var(--osc-blue);
+}
+
+.osc-stl-pt[data-invalid="true"]::before {
+  border-color: var(--osc-red-soft);
+}
+
+/* ---------- Overlays: loop shade, marker lines, playhead, drag chip ---------- */
+.osc-stl-shade {
+  position: absolute;
+  top: var(--osc-stl-ruler-h);
+  bottom: 0;
+  display: none;
+  border-right: 1px solid var(--osc-blue-deep-border);
+  border-left: 1px solid var(--osc-blue-deep-border);
+  pointer-events: none;
+}
+
+.osc-stl[data-loop="on"] .osc-stl-shade {
+  display: block;
+}
+
+.osc-stl-shade::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: var(--osc-blue-deep);
+  opacity: 0.22;
+}
+
+.osc-stl-mlines {
+  position: absolute;
+  inset: var(--osc-stl-ruler-h) 0 0 0;
+  pointer-events: none;
+}
+
+.osc-stl-mline {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  border-left: 1px dashed var(--osc-orange);
+  opacity: 0.55;
+}
+
+.osc-stl-playhead {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 5;
+  width: 0;
+  border-left: 1px solid var(--osc-cyan);
+  pointer-events: none;
+  will-change: transform;
+}
+
+.osc-stl-playhead::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: -5px;
+  border-top: 7px solid var(--osc-cyan);
+  border-right: 4.5px solid transparent;
+  border-left: 4.5px solid transparent;
+}
+
+.osc-stl-dragchip {
+  position: absolute;
+  top: 2px;
+  left: 4px;
+  z-index: 6;
+  padding: 1px 6px;
+  border: 1px solid var(--osc-border-strong);
+  border-radius: var(--osc-radius-sm);
+  background: var(--osc-surface-tooltip);
+  color: var(--osc-text);
+  font-size: var(--osc-fs-2xs);
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.osc-stl-dragchip[data-bad="true"] {
+  border-color: var(--osc-warn-border);
+  background: var(--osc-warn-bg);
+}
+
+/* ---------- Details panel (§141 semantic fallbacks) ---------- */
+.osc-stl-details {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 9px 10px 10px;
+  border: 1px solid var(--osc-border);
+  border-radius: var(--osc-radius-control);
+  background: var(--osc-surface-1);
+}
+
+.osc-stl-dhead {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.osc-stl-dtitle {
+  margin: 0;
+  font-size: var(--osc-fs-md);
+}
+
+.osc-stl-dfields {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(132px, 1fr));
+  gap: 8px 10px;
+}
+
+.osc-stl-field {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.osc-stl-field .osc-select {
+  display: flex;
+}
+
+.osc-stl-input {
+  height: var(--osc-control-h);
+}
+
+.osc-stl-dacts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.osc-stl-dbtn {
+  height: var(--osc-control-h-sm);
+  gap: 5px;
+  font-size: var(--osc-fs-xs);
+}
+
+.osc-stl-dbtn svg {
+  width: 13px;
+  height: 13px;
+}
+
+.osc-stl-dstatus {
+  min-height: 15px;
+  margin: 0;
+  color: var(--osc-text-muted);
+  font-size: var(--osc-fs-xs);
+}
+
+.osc-stl-dstatus[data-bad="true"] {
+  color: var(--osc-text);
+}
+
+.osc-stl-dstatus[data-bad="true"]::before {
+  content: "! ";
+  font-weight: var(--osc-fw-bold);
+}
+
+.osc-stl-help {
+  margin: 0;
+  color: var(--osc-text-muted);
+  font-size: var(--osc-fs-2xs);
+  line-height: 1.5;
+}
+
+/* ---------- Compact timeline (§129) ---------- */
+.osc-stc {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  padding: 4px 0 12px;
+  border: 1px solid var(--osc-border-soft);
+  border-radius: var(--osc-radius-sm);
+  background: var(--osc-surface-0);
+  overflow: hidden;
+}
+
+.osc-stc-row {
+  position: relative;
+  height: 12px;
+}
+
+.osc-stc-clip.osc-block {
+  position: absolute;
+  top: 0;
+  height: 12px;
+  min-width: 2px;
+  padding: 0;
+  border-width: 0;
+  border-right: 1px solid var(--osc-surface-0);
+  border-radius: 2px;
+}
+
+.osc-stc-lane {
+  display: block;
+  width: 100%;
+  height: 14px;
+}
+
+.osc-stc-lane path {
+  fill: none;
+  stroke: var(--osc-blue-trace);
+  stroke-width: 1.25;
+}
+
+.osc-stc-loop {
+  position: absolute;
+  top: 0;
+  bottom: 10px;
+  border-right: 1px solid var(--osc-blue-deep-border);
+  border-left: 1px solid var(--osc-blue-deep-border);
+}
+
+.osc-stc-marker {
+  position: absolute;
+  top: 0;
+  bottom: 10px;
+  border-left: 1px dashed var(--osc-orange);
+  opacity: 0.6;
+}
+
+.osc-stc-playhead {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  border-left: 1px solid var(--osc-cyan);
+}
+
+.osc-stc-time {
+  position: absolute;
+  right: 4px;
+  bottom: 0;
+  color: var(--osc-text-dim);
+  font-size: 9px;
+  line-height: 11px;
+}
+
+/* ---------- Narrow screens (§136): one subview; heads shrink, tools wrap ---------- */
+@media (max-width: 600px) {
+  .osc-stl {
+    --osc-stl-head-w: 104px;
+  }
+
+  .osc-stl-tools {
+    margin-left: 0;
+  }
+
+  .osc-stl-hsub {
+    display: none;
+  }
+
+  /* The name keeps the full head width; the head's buttons move under it. */
+  .osc-stl-hrow {
+    grid-template-columns: minmax(0, 1fr);
+    padding-left: 6px;
+  }
+
+  .osc-stl-hacts {
+    grid-row: 2;
+    grid-column: 1;
+  }
+
+  .osc-stl-tool.osc-btn span {
+    display: none;
+  }
+
+  .osc-stl-help {
+    display: none;
+  }
+}
+
+@media (max-width: 360px) {
+  .osc-stl {
+    --osc-stl-head-w: 88px;
+  }
+}
+
+/* ---------- Touch: 44 px targets, large invisible hit areas (§245) ---------- */
+@media (pointer: coarse) {
+  .osc-stl {
+    --osc-stl-track-h: 52px;
+    --osc-stl-hit: 44px;
+    --osc-stl-ruler-h: 48px;
+  }
+
+  .osc-stl-tool.osc-icon-btn,
+  .osc-stl-hbtn.osc-icon-btn--sm {
+    width: 44px;
+    height: 44px;
+  }
+
+  .osc-stl-tool.osc-btn,
+  .osc-stl-dbtn,
+  .osc-stl-snap select,
+  .osc-stl-tempo,
+  .osc-stl-mode {
+    min-height: 44px;
+  }
+
+  .osc-stl-hrow {
+    grid-template-rows: auto;
+  }
+
+  .osc-stl-hrow--lane {
+    grid-template-rows: auto auto;
+  }
+
+  .osc-stl-loop-h {
+    height: 44px;
+  }
+
+  .osc-stl-marker {
+    top: 22px;
+    height: 18px;
+    line-height: 18px;
+  }
+
+  .osc-stl-clip-h {
+    width: 14px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .osc-stl-playhead {
+    will-change: auto;
+  }
+}
+
+@media (pointer: coarse) and (max-width: 600px) {
+  .osc-stl {
+    --osc-stl-track-h: 64px;
+  }
+}

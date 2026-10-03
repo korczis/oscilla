@@ -1,0 +1,15 @@
+{
+  "schema": 1,
+  "environments": {
+    "darwin-arm64": {
+      "browser": "153.0.8010.12",
+      "template": "subtractive-synth",
+      "views": [
+        "desktop 1536x1024",
+        "compact 1536x1024",
+        "phone 390x844"
+      ]
+    }
+  },
+  "note": "Accepted STUDIO references per environment, written only by node scripts/visual-studio.mjs --update-reference."
+}
