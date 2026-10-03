@@ -161,12 +161,18 @@ import { SAFE_NYQUIST_FRACTION, instantaneousFrequency } from './stimulus.js';
 import { SNR_CEIL_DB } from './transfer.js';
 import { RELATIVE_UNIT, isValidLevelCalibration } from '../calibration/level.js';
 
-/** The default rule set for new assessments: 'oscilla.confidence.v3'. */
+/** The default rule set for new assessments: 'oscilla.confidence.v4'. */
 export const QUALITY_ALGORITHM = ALGORITHMS.quality;
 /** The retained first rule set (no discontinuity rule, no chain notes). */
 export const QUALITY_ALGORITHM_V1 = 'oscilla.confidence.v1';
 /** The retained second rule set (v1 + discontinuities + chain notes). */
 export const QUALITY_ALGORITHM_V2 = 'oscilla.confidence.v2';
+/** The retained third rule set: v4 without its three V382 changes (see assessQuality). */
+export const QUALITY_ALGORITHM_V3 = 'oscilla.confidence.v3';
+/** v4: a median absolute deviation is judged as σ = MAD × this (normal scatter), on the same
+ *  thresholds as a standard deviation (V382: an unscaled MAD read 0.48 dB against SD 1.07 dB
+ *  for the same σ = 1.3 dB scatter, 'ok' against 'warn'). */
+export const MAD_TO_SIGMA = 1.4826;
 /** Relative width of a 1/6-octave pooling band: 2^(1/12) − 2^(−1/12). */
 const SIXTH_OCTAVE_WIDTH = 2 ** (1 / 12) - 2 ** (-1 / 12);
 
@@ -296,9 +302,18 @@ export const QUALITY_RULESETS = Object.freeze({
     algorithm: QUALITY_ALGORITHM_V2, thresholds: QUALITY_THRESHOLDS, reasonCodes: V2_CODES,
     invalidatingCodes: invalidating(V2_CODES), discontinuity: true, chainNotes: true, v3: false,
   }),
-  'oscilla.confidence.v3': Object.freeze({
-    algorithm: 'oscilla.confidence.v3', thresholds: QUALITY_THRESHOLDS, reasonCodes: V3_CODES,
+  [QUALITY_ALGORITHM_V3]: Object.freeze({
+    algorithm: QUALITY_ALGORITHM_V3, thresholds: QUALITY_THRESHOLDS, reasonCodes: V3_CODES,
     invalidatingCodes: invalidating(V3_CODES), discontinuity: true, chainNotes: true, v3: true,
+    v4: false,
+  }),
+  // v4 (V382): v3 plus (a) a MAD is judged as σ = MAD·MAD_TO_SIGMA, (b) a transfer with no grid
+  // point reports SNR_NOT_MEASURED (it was rated GOOD), (c) a non-finite snrPooledDb counts as
+  // NON_FINITE_ANALYSIS (it threw).
+  'oscilla.confidence.v4': Object.freeze({
+    algorithm: 'oscilla.confidence.v4', thresholds: QUALITY_THRESHOLDS, reasonCodes: V3_CODES,
+    invalidatingCodes: invalidating(V3_CODES), discontinuity: true, chainNotes: true, v3: true,
+    v4: true,
   }),
 });
 
@@ -460,8 +475,11 @@ function validateTransfer(t) {
 }
 
 /** Non-finite points of a transfer result: grid, magnitude, SNR and phase. */
-function countNonFiniteTransfer(t) {
+function countNonFiniteTransfer(t, rules = { v4: false }) {
   let bad = 0;
+  if (rules.v4 && t.snrPooledDb) {
+    for (let i = 0; i < t.snrPooledDb.length; i++) if (!Number.isFinite(t.snrPooledDb[i])) bad++;
+  }
   const f = t.frequencies;
   for (let i = 0; i < f.length; i++) {
     if (!Number.isFinite(f[i]) || !(f[i] > 0) || (i > 0 && !(f[i] > f[i - 1]))) bad++;
@@ -928,7 +946,8 @@ function assessCoverage(transfer, requested, fmt, add) {
 /** v3 (e): repeatability as the statistic it is, "median run-to-run SD x dB". */
 function repeatabilityTextV3(n, rep, kind, severity) {
   const T = QUALITY_THRESHOLDS;
-  const stat = kind === 'std' ? 'SD' : 'absolute deviation';
+  const stat = kind === 'std' ? 'SD' : kind === 'mad-sigma'
+    ? `absolute deviation × ${MAD_TO_SIGMA} (σ-equivalent)` : 'absolute deviation';
   const per = kind === 'std' ? 'standard deviation' : 'absolute deviation from the median';
   const head = `${n} runs: median run-to-run ${stat}`;
   const basis = `per-frequency ${per}, median across frequency`;
@@ -958,10 +977,12 @@ function assessRepeatability(aggregate, runs, add, rules = { v3: false }) {
     return null;
   }
   if (rules.v3) {
-    const severity = rep <= T.repeatabilityGoodDb ? 'ok'
-      : rep <= T.repeatabilityUsableDb ? 'warn' : 'fail';
-    add('REPEATABILITY', severity, repeatabilityTextV3(n, rep,
-      aggregate.dispersion === 'std' ? 'std' : 'mad', severity), rep, 'dB');
+    const mad = aggregate.dispersion !== 'std';
+    const judged = rules.v4 && mad ? rep * MAD_TO_SIGMA : rep;
+    const severity = judged <= T.repeatabilityGoodDb ? 'ok'
+      : judged <= T.repeatabilityUsableDb ? 'warn' : 'fail';
+    add('REPEATABILITY', severity, repeatabilityTextV3(n, judged,
+      !mad ? 'std' : rules.v4 ? 'mad-sigma' : 'mad', severity), judged, 'dB');
     return rep;
   }
   const kind = aggregate.dispersion === 'std' ? 'standard deviation' : 'absolute deviation';
@@ -1182,7 +1203,7 @@ export function assessQuality({
   const cap = assessCaptures(captures, sweepWindow, add, rules, stimulus);
   if (rules.v3) assessInputProcessing(inputProcessing, add);
 
-  const nonFinite = (transfer ? countNonFiniteTransfer(transfer) : 0)
+  const nonFinite = (transfer ? countNonFiniteTransfer(transfer, rules) : 0)
     + countNonFiniteAggregate(aggregate);
   if (nonFinite)
     add('NON_FINITE_ANALYSIS', 'fail',
@@ -1193,7 +1214,7 @@ export function assessQuality({
   let snr = { snrMedianDb: null, snrMinDb: null, pooled: null, assessed: null,
     snrResolutionHz: null, snrAssessedFromHz: null };
   let cov = { coverage: null, coverageFraction: null };
-  const transferUsable = transfer && n > 0 && countNonFiniteTransfer(transfer) === 0;
+  const transferUsable = transfer && n > 0 && countNonFiniteTransfer(transfer, rules) === 0;
   if (transferUsable) {
     snr = rules.v3 ? assessSnrV3(transfer, noiseCheck, captures, fmt, add)
       : assessSnr(transfer, fmt, add);
@@ -1211,6 +1232,9 @@ export function assessQuality({
     }
   } else if (!transfer) {
     add('SNR_NOT_MEASURED', 'warn', 'SNR not measured: no transfer function', null, 'dB');
+  } else if (rules.v4 && n === 0) {
+    add('SNR_NOT_MEASURED', 'warn', 'SNR not measured: the transfer function has no frequency '
+      + 'point', null, 'dB');
   }
 
   const outputChainLimitHz = chain

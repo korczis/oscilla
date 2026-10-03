@@ -456,3 +456,10 @@ test('level: invalid references rejected', () => {
     assert.doesNotThrow(() => createLevelCalibration({ ...LEVEL, referenceHz, referenceDbSpl }));
   }
 });
+
+test('V382: a level reading above full scale is refused at creation', async () => {
+  const { createLevelCalibration } = await import('../../src/js/calibration/level.js');
+  const base = { referenceHz: 1000, referenceDbSpl: 94, createdAt: '2026-10-03T12:00:00.000Z' };
+  assert.throws(() => createLevelCalibration({ ...base, observedDbRelative: 40 }), /at most 0 dB/);
+  assert.equal(createLevelCalibration({ ...base, observedDbRelative: -3.01 }).offsetDb, 97.01);
+});

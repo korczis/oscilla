@@ -35,7 +35,7 @@ import { welch, windowFn } from '../../src/js/measurement/spectrum.js';
 import { bandAnalysis, bandCenters, rtaResult } from '../../src/js/measurement/rta.js';
 import { aggregateResult, aggregateRuns } from '../../src/js/measurement/aggregate.js';
 import {
-  QUALITY_ALGORITHM_V1, QUALITY_ALGORITHM_V2, assessQuality,
+  QUALITY_ALGORITHM_V1, QUALITY_ALGORITHM_V2, QUALITY_ALGORITHM_V3, assessQuality,
 } from '../../src/js/measurement/quality.js';
 import { createFrequencyProfile } from '../../src/js/calibration/profile.js';
 import {
@@ -326,6 +326,13 @@ const CASES = {
     const q = assessQuality({ ...qualityInput(), chainNotes: { limiterDeviationAboveHz: 2500 },
       noiseCheck: NOISE_CHECK, stimulus: STIM.spec,
       inputProcessing: { echoCancellation: false, noiseSuppression: null,
+        autoGainControl: false } });
+    return { id: q.algorithm, output: qualityOutput(q) };
+  },
+  [QUALITY_ALGORITHM_V3]: () => {
+    const q = assessQuality({ ...qualityInput(), algorithm: QUALITY_ALGORITHM_V3,
+      chainNotes: { limiterDeviationAboveHz: 2500 }, noiseCheck: NOISE_CHECK,
+      stimulus: STIM.spec, inputProcessing: { echoCancellation: false, noiseSuppression: null,
         autoGainControl: false } });
     return { id: q.algorithm, output: qualityOutput(q) };
   },
