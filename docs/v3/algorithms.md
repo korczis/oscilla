@@ -1908,14 +1908,10 @@ reason `scope`; found by the pipeline test).
   sample-exact (max |capture − g·stimulus| = 0) including captures that needed a correction,
   and the browser test asserts that.
 
-Remaining:
+Resolved after the review (no gap remains open):
 
-- **G21 Longest analysis block.** `transfer+impulse-response` is one engine step (≈ 360-520 ms
-  in Node for a 10 s sweep at 48 kHz), longer than either step was; the Worker integration of the
-  spike is still the remedy. **Prepared (G21):** the whole analysis is one serializable task,
-  `measurement/analysis-task.js` `runAnalysis(message) → result` (plain data and transferable
-  typed arrays in and out, bit-identical to the previous engine analysis:
-  `tests/unit/v3-analysis-task.test.mjs`), which `engine.js` calls through the injected
-  `analyze` (default `analyzeInline`, yields between steps as before). Moving it into a
-  `data:` Worker needs only the bundled Worker source (a `scripts/build.mjs` sub-build) and an
-  `analyze` that posts the message with `analysisTransferList(message, { keepRaw })`.
+- **G21 Longest analysis block — resolved (M10).** The whole analysis is one serializable task
+  (`measurement/analysis-task.js`, bit-identical to the previous engine analysis:
+  `tests/unit/v3-analysis-task.test.mjs`) that `analysis-runner.js` runs in a `data:` URL Worker
+  ([Analysis execution and memory](#analysis-memory)); the longest main-thread block of a 10 s
+  48 kHz measurement fell from 428-776 ms to 2-5 ms (`tests/browser/analysis-worker.cjs`).
