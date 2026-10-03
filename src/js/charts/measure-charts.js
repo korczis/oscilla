@@ -386,7 +386,8 @@ export function createIrChart(host) {
  * The live FFT trace: one vertex per pixel column (the column's strongest bin), so a dense
  * spectrum costs one path of plot-width points; −Infinity (zero power) breaks the line.
  */
-function liveTrace(self, ctx, freqs, values, x0, x1, yPos) {
+// mask / want (optional): only bins with mask[i] === want are drawn; the others leave a gap.
+function liveTrace(self, ctx, freqs, values, x0, x1, yPos, mask = null, want = 1) {
   let col = -1;
   let best = -Infinity;
   let bestX = 0;
@@ -413,7 +414,7 @@ function liveTrace(self, ctx, freqs, values, x0, x1, yPos) {
       best = -Infinity;
       bestX = x;
     }
-    if (values[i] > best) best = values[i];
+    if ((!mask || mask[i] === want) && values[i] > best) best = values[i];
   }
   if (col >= 0) flush();
   ctx.stroke();
@@ -426,16 +427,22 @@ function drawLiveFft(self, v, theme, ls) {
   const [x0, x1] = v.axes.x.range;
   const [y0, y1] = v.axes.y.range;
   const yPos = (db) => self.valToPos(Math.max(y0, Math.min(y1, db)), 'y', true);
-  const c = roleColour(theme, live.calibrated && live.calibrated.frequency ? 'calibrated'
-    : 'observed');
+  // V383: the 'calibrated' colour only where the profile corrected the bin (frame.covered); the
+  // rest of the trace is observed, as the band modes draw it.
+  const mask = live.calibrated && live.calibrated.frequency && live.covered ? live.covered : null;
+  const passes = mask ? [[1, 'calibrated'], [0, 'observed']] : [[1, 'observed']];
   ctx.save();
   ctx.lineWidth = 1 * dpr;
-  ctx.strokeStyle = withAlpha(c, 0.95);
-  liveTrace(self, ctx, live.frequencies, live.values, x0, x1, yPos);
-  if (ls.showPeaks) {
-    ctx.strokeStyle = withAlpha(c, 0.6);
-    ctx.setLineDash([3 * dpr, 3 * dpr]);
-    liveTrace(self, ctx, live.frequencies, live.peaks, x0, x1, yPos);
+  for (const [want, role] of passes) {
+    const c = roleColour(theme, role);
+    ctx.setLineDash([]);
+    ctx.strokeStyle = withAlpha(c, 0.95);
+    liveTrace(self, ctx, live.frequencies, live.values, x0, x1, yPos, mask, want);
+    if (ls.showPeaks) {
+      ctx.strokeStyle = withAlpha(c, 0.6);
+      ctx.setLineDash([3 * dpr, 3 * dpr]);
+      liveTrace(self, ctx, live.frequencies, live.peaks, x0, x1, yPos, mask, want);
+    }
   }
   ctx.restore();
 }

@@ -446,3 +446,30 @@ test('V382: a band that is not flagged under-resolved reads a mid-band tone with
     }
   }
 });
+
+test('V383: the live view text shows the same SPL as the drawn frame under a profile', () => {
+  const sr = 48000;
+  const A = 0.1;
+  const x = tones(sr, N, [{ f: 1000, a: A }]);
+  const level = createLevelCalibration({ referenceHz: 1000, referenceDbSpl: 94,
+    observedDbRelative: 10 * Math.log10((A * A) / 2), conditions: 'synthetic',
+    createdAt: '2026-10-04T00:00:00.000Z' });
+  const profile = createFrequencyProfile({ name: 'dev+2', points: [[500, 2], [1000, 2], [4000, 2]],
+    convention: 'deviation' });
+  for (const mode of ['third', 'fft']) {
+    const live = createLiveRta({ sampleRate: sr, mode, averaging: 'instant', profile,
+      levelCalibration: level });
+    const f = live.push(x, 0);
+    const v = buildRtaView({ ...live.viewInput(), fixedRange: true });
+    if (mode === 'third') {
+      const i = v.bars.findIndex((b) => b.nominal === 1000);
+      assert.ok(Math.abs(f.values[i] - 94) < 1e-6, `drawn ${f.values[i]}`);
+      assert.match(v.bars[i].text, /^94\.0 dB SPL/, v.bars[i].text);
+      assert.match(v.summary, /1 kHz at 94\.0 dB SPL/, v.summary);
+    } else {
+      // FFT: the strongest bin reads the frame's value, drawn and in text alike
+      const k = f.values.indexOf(Math.max(...f.values));
+      assert.ok(v.summary.includes(`${f.values[k].toFixed(1)} dB SPL`), `${v.summary} / ${f.values[k]}`);
+    }
+  }
+});

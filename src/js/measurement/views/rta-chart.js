@@ -19,6 +19,8 @@
 //                               (optionally with peakDb: corrected peak levels, live-rta.js)
 //               frequencyCovered = null, FFT mode: Uint8Array per bin, 1 where a frequency
 //                               profile corrected the bin (live-rta.js correctionCurve)
+//               profile = null, the frequency profile that corrected the levels: SPL then uses
+//                               level.js levelOffsetWithProfile, as the live frame does
 //               fixedRange = false, true: the stable live axis LIVE_RTA_Y_RANGE (shifted by a
 //                               valid level offset) instead of the data extent
 //               levelCalibration = null }   a VALID LevelCalibration turns levels into dB SPL
@@ -36,7 +38,7 @@
 
 import { bandBinCounts, RTA_MODES, underResolvedBins } from '../rta.js';
 import { ZERO_POWER_DB } from '../transfer.js';
-import { formatDb } from '../format.js';
+import { formatDb, formatFrequencyWithResolution } from '../format.js';
 import { toDisplayLevel } from '../../calibration/level.js';
 import { formatHzTick, formatHz, linearTicks } from '../../charts/axes.js';
 import {
@@ -92,16 +94,26 @@ export function averagingLabel(averaging) {
 
 const drawableLevel = (v) => Number.isFinite(v) && v > ZERO_POWER_DB;
 
+/** A bin's frequency to the bin spacing (V383: 3 significant digits claimed 0.1 Hz at 5.86 Hz). */
+function binText(f, i) {
+  const df = f.length > 1 ? Math.abs(f[Math.min(f.length - 1, i + 1)] - f[Math.max(0, i - 1)])
+    / (Math.min(f.length - 1, i + 1) - Math.max(0, i - 1)) : 0;
+  return df > 0 ? formatFrequencyWithResolution(f[i], df) : formatHz(f[i]);
+}
+
 /** buildRtaView(input) → RtaView (see the header); null without data (NOT MEASURED). */
 export function buildRtaView(input = {}) {
   const {
     rta = null, fft = null, peakDb = null, frozen = false, averaging = null, binHz = null,
     correction = null, frequencyCovered = null, fixedRange = false, levelCalibration = null,
-    live = false, snapshotLabel = null, window = null,
+    live = false, snapshotLabel = null, window = null, profile = null,
   } = input;
   const axisY = levelAxis(levelCalibration);
   const levelKind = axisY.calibrated ? 'spl' : 'relative';
-  const display = (db) => toDisplayLevel(db, levelCalibration).value;
+  // With a frequency correction the offset leaves out the profile's correction at the reference
+  // frequency (level.js levelOffsetWithProfile), as the live frame does (V383: the text read the
+  // raw offset, 2 dB below the drawn bar under a +2 dB deviation profile).
+  const display = (db) => toDisplayLevel(db, levelCalibration, profile ? { profile } : {}).value;
   const avgText = averagingLabel(averaging);
   const badges = [axisY.indicator, frozen ? 'FROZEN' : (live ? 'LIVE' : snapshotLabel
     || 'SNAPSHOT')];
@@ -241,7 +253,7 @@ function fftView({ fft, peakDb, frozen, axisY, levelKind, display, avgText, badg
   for (let i = 0; i < vals.length; i++) if (vals[i] !== null && (best < 0 || vals[i] > vals[best]))
     best = i;
   const summary = `RTA, FFT, ${f.length} bins, ${avgText}: ${best < 0 ? 'no energy'
-    : `strongest bin ${formatHz(f[best])} at ${formatDb(vals[best], { kind: levelKind })}`}`
+    : `strongest bin ${binText(f, best)} at ${formatDb(vals[best], { kind: levelKind })}`}`
     + `${frozen ? '; frozen' : ''}.`;
   return {
     mode: 'fft',
