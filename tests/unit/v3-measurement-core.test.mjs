@@ -151,7 +151,7 @@ test('algorithms: frozen contract IDs, known/unknown, described by family and ve
       assert.ok(describeAlgorithm(id).version < describeAlgorithm(ALGORITHMS[role]).version);
     }
   }
-  assert.equal(ALGORITHMS.quality, 'oscilla.confidence.v3');
+  assert.equal(ALGORITHMS.quality, 'oscilla.confidence.v4');
   assert.equal(describeAlgorithm('oscilla.confidence.v1').family, 'quality');
   // A variant reports the role it is an alternative for (ADR 0024: distinct IDs per method).
   assert.equal(describeAlgorithm('oscilla.ir.farina-inverse.v1').family, 'ir');
