@@ -749,3 +749,41 @@ test('align: inverted polarity, lag limit and empty inputs', () => {
   assert.equal(none.peakCorrelation, 0);
   assert.throws(() => align(new Float32Array(0), cap, SR), RangeError);
 });
+
+test('V382 clip.v2: a high-frequency overload is clipping, a lone rail sample is not', async () => {
+  const { checkCapture, CLIP_WINDOW_S } = await import(
+    '../../src/js/measurement/capture-checks.js');
+  const { renderStimulus } = await import('../../src/js/measurement/stimulus.js');
+  const sr = 48000;
+  const st = renderStimulus({ kind: 'log-sweep', sampleRate: sr, duration: 1, f1: 20, f2: 20000,
+    level: 1 });
+  const f = (t) => 20 * (20000 / 20) ** t; // instantaneous frequency at fraction t of the sweep
+  const overload = (above, below) => Float32Array.from(st.samples, (v, i) => {
+    const hz = f(i / st.samples.length);
+    const g = hz >= above && hz < below ? 1.122 : 1 / 1.122; // 1 dB over in the band only
+    return Math.max(-1, Math.min(1, v * g));
+  });
+  const hf = overload(5000, 20001);
+  const v1 = checkCapture({ sampleRate: sr, samples: hf }, { algorithm: 'oscilla.clip.v1' });
+  const v2 = checkCapture({ sampleRate: sr, samples: hf });
+  assert.equal(v2.algorithms.clip, 'oscilla.clip.v2');
+  assert.equal(v1.algorithms.clip, 'oscilla.clip.v1');
+  assert.ok(v1.clipping.ratio < 0.01, `v1 misses most of it: ${v1.clipping.ratio}`);
+  assert.ok(v2.clipping.ratio > 0.01, `v2 sees it (≥ clipInvalidRatio): ${v2.clipping.ratio}`);
+  // the low-frequency overload is clipping for both
+  const lf = overload(20, 2000);
+  assert.ok(checkCapture({ sampleRate: sr, samples: lf }).clipping.ratio > 0.01);
+  // not clipping: a lone full-scale sample, two rail samples, rail samples further apart than
+  // the window, and a clean full sweep at −1 dB
+  const quiet = new Float32Array(sr).fill(0).map((_, i) => 0.2 * Math.sin(i / 7));
+  const w = Math.round(CLIP_WINDOW_S * sr);
+  for (const idx of [[100], [100, 102], [100, 100 + w + 1, 100 + 2 * w + 2]]) {
+    const x = quiet.slice();
+    for (const k of idx) x[k] = 1;
+    assert.equal(checkCapture({ sampleRate: sr, samples: x }).clipping.regions.length, 0,
+      `${idx}`);
+  }
+  assert.equal(checkCapture({ sampleRate: sr, samples: overload(0, 0) }).clipping.ratio, 0);
+  assert.throws(() => checkCapture({ sampleRate: sr, samples: quiet },
+    { algorithm: 'oscilla.clip.v9' }), /unknown clipping algorithm/);
+});

@@ -24,7 +24,7 @@ listed under [Gaps](#gaps), not resolved here.
 | --- | --- | --- |
 | (none; recorded through the recipe) | `measurement/stimulus.js` | [Stimuli](#stimuli) |
 | `oscilla.window.hann.v1`, `oscilla.window.blackman-harris.v1` | `measurement/spectrum.js` | [Windows, spectra, Welch](#windows) |
-| `oscilla.clip.v1`, `oscilla.discontinuity.v1` | `measurement/capture-checks.js` | [Capture checks](#capture-checks) |
+| `oscilla.clip.v2` (retained `oscilla.clip.v1`), `oscilla.discontinuity.v1` | `measurement/capture-checks.js` | [Capture checks](#capture-checks) |
 | `oscilla.align.xcorr.v2` (retained `.v1`) | `measurement/align.js` | [Alignment](#alignment) |
 | `oscilla.transfer.v3` (retained `.v1`, `.v2`) | `measurement/transfer.js` | [Transfer function](#transfer) |
 | (none) | `measurement/analysis-task.js`, `analysis-runner.js`, `analysis-worker.js` | [Analysis execution and memory](#analysis-memory) |
@@ -307,17 +307,25 @@ sidelobes ≈ −72 dB there, Blackman-Harris −92 dB: < 1e-6 of the power), th
 non-bin-centred tone (< 1e-6) and float32 input rounding (≈ −150 dB).
 
 <a id="capture-checks"></a>
-## Capture checks — `oscilla.clip.v1`, `oscilla.discontinuity.v1` (`measurement/capture-checks.js`)
+## Capture checks — `oscilla.clip.v2`, `oscilla.discontinuity.v1` (`measurement/capture-checks.js`)
 
 `checkCapture(capture, opts) → { algorithms: { clip, discontinuity }, clipping: { ratio,
 regions }, dropouts, discontinuities, rms, peak, empty, invalid, reasons }`. Digital integrity
 only; a capture that passes can still be acoustically wrong. Regions are half-open
 `[start, end)`.
 
-- **Clipping**: a sample is at the rail when `|x| ≥ CLIP_THRESHOLD = 0.98` (−0.18 dBFS). A
-  region is a run of at least `CLIP_MIN_RUN = 3` consecutive rail samples; regions closer than
+- **Clipping** (`oscilla.clip.v2`, V382): a sample is at the rail when `|x| ≥ CLIP_THRESHOLD =
+  0.98` (−0.18 dBFS). Clipping is at least `CLIP_MIN_RUN = 3` rail samples within
+  `CLIP_WINDOW_S = 0.001` s; a region spans the rail samples it groups, and regions closer than
   `CLIP_MERGE_GAP_S = 0.005` s are merged into one overload event.
-  `ratio = rail samples inside regions / total samples`.
+  `ratio = rail samples inside regions / total samples`. Why 1 ms: above a few kHz a flat top
+  spans one or two samples, so an overloaded high-frequency tone puts its rail samples a few
+  samples apart but never three in a row. Measured in the V382 review: a 1 dB overload of a
+  20 Hz–20 kHz sweep above 5 kHz left 5.1 % of the samples at the rail, no v1 region and the
+  status USABLE, while the same overload below 2 kHz was INVALID. `oscilla.clip.v1` (retained,
+  `checkCapture(c, { algorithm: 'oscilla.clip.v1' })`) required consecutive rail samples; it
+  is the same rule with a window of `CLIP_MIN_RUN − 1` samples and reproduces v1 exactly
+  (0 differences in 3000 fuzzed captures).
 - **Dropout**: a run of at least `max(2, ceil(DROPOUT_MIN_S·sr))` samples
   (`DROPOUT_MIN_S = 0.02` s) whose peak-to-peak spread stays within
   `CONSTANT_TOLERANCE = 2^−20` (≈ −120 dBFS), that touches neither the first nor the last
