@@ -6,7 +6,9 @@
 //   mountStudioTimeline(host, ctx) -> { element, destroy(), refresh(), setSnap(id), zoom(steps),
 //                                       debug() }
 //   ctx = { store, transport, runtime, announce, getSelection, setSelection,
-//           subscribe?, sampleRate?, transportBar? }
+//           subscribe?, sampleRate?, transportBar?, transportKeys? }
+// transportKeys: false keeps the strip's time mode and tempo but not its keys and clock (the
+// STUDIO workspace header already has them).
 //
 // Rules this file keeps:
 //   - The StudioModel is the only state (rule studio-model-is-canonical): every change is a
@@ -137,7 +139,7 @@ export function mountStudioTimeline(host, ctx) {
 
   // ------------------------------------------------------------ toolbar
   const bar = ctx.transportBar === false ? null
-    : mountTransportBar(toolbar, ctx, { commands });
+    : mountTransportBar(toolbar, ctx, { commands, keys: ctx.transportKeys !== false });
   const snapSel = el('select', { 'aria-label': 'Snap', 'data-osc': 'studio.tl.snap', on: {
     change: (e) => setSnap(e.target.value) } }, SNAP_CHOICES.map((c) => el('option',
     { value: c.id, text: c.label })));
