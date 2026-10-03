@@ -26,6 +26,7 @@
 
 import { NODE_REGISTRY } from './registry.js';
 import { portAccessibleLabel } from './ports.js';
+import { signalInputs } from './signal-path-projection.js';
 
 const CATEGORY_NOUNS = Object.freeze({
   SOURCES: 'source node',
@@ -89,17 +90,9 @@ function edgeInfo(model, edge, registry, byId) {
 // ---------------------------------------------------------------- §249 summary
 
 function signalPaths(model, registry, byId, master, opts) {
-  // AUDIO edges into SIGNAL inputs (taps observe, they are not on the path).
-  const incoming = new Map();
-  for (const e of model.graph.edges) {
-    const info = edgeInfo(model, e, registry, byId);
-    if (!info || info.from.type !== 'AUDIO' || info.to.role !== 'SIGNAL') continue;
-    const def = registry.get(info.b.type);
-    const rank = def.inputs.findIndex((p) => p.id === e.to.port);
-    if (!incoming.has(e.to.node)) incoming.set(e.to.node, []);
-    incoming.get(e.to.node).push({ from: e.from.node, rank });
-  }
-  for (const list of incoming.values()) list.sort((x, y) => x.rank - y.rank);
+  // AUDIO edges into SIGNAL inputs (taps observe, they are not on the path): the same reading
+  // of the signal path as the Signal Path projection (signal-path-projection.js).
+  const incoming = signalInputs(model, { registry });
   // Exact path counts (the graph is a validated DAG): roots count 1.
   const count = new Map();
   const countTo = (id, guard = 0) => {

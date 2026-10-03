@@ -240,6 +240,10 @@ How to use it, with the keyboard shortcuts, is the [Studio user guide](docs/v31/
   workspace splits into Graph, Timeline and Inspector views.
 - **Compact widget.** The Playground shows a small signal path and clip strip of the current
   Studio document, with a button to expand it to the full workspace.
+- **Signal Path from the Studio model.** The Playground's Signal Path view draws the
+  Playground voice expressed as a Studio graph: the same model kind and the same signal-path
+  reading as Studio, read-only, with the boxes and wording it always had
+  ([why and how](docs/v31/signal-path.md)).
 - **Templates and patches.** Start from a template, then save, open, insert, export and import
   projects and patches. An import never overwrites silently, and a hostile file is refused.
   From `file://` the browser's storage may be unavailable; the library then uses memory and

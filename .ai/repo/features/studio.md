@@ -46,6 +46,7 @@ Proven by `npm test` (`tests/unit/v31-studio-*.test.mjs`) and `npm run test:stud
 Not built: a minimap, node groups, dragging several clips at once, pinch zoom on the
 timeline, autosave and crash recovery. A deep link opens Studio, a view and a shipped template
 only; a saved project or an edited graph is shared as an exported file, never in a URL. The
-Playground's V2 Signal Path view is not drawn from the Studio graph; the compact widget is.
+Playground's Signal Path view draws the Playground voice as a derived Studio graph
+(`docs/v31/signal-path.md`), read-only; it cannot yet open that voice in the Studio.
 Studio is not a DAW or an audio-file editor, adds no second audio engine, and does not
 replace the Playground or the Measure workspace; it orchestrates them.
