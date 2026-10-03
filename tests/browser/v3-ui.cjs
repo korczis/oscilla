@@ -81,6 +81,14 @@ const JSON_OUT = arg('json', '');
 // (measured: peak 0.100, mean square -23.0 dB); Chromium's default fake device only beeps, so it
 // plays the same tone from a WAV file (written below, looped by Chromium).
 const FAKE_TONE = { hz: 1000, amplitude: 0.1, sampleRate: 48000, seconds: 2 };
+// One-third-octave bands 20 Hz-20 kHz the RTA can show at a context rate: base-10 series,
+// band x has upper edge 1 kHz * 10^(3(2x+1)/60); rta.js drops bands above 0.95 * Nyquist. 31 at
+// 48 kHz, 30 at 44.1 kHz (the CI runners' rate), computed here independently of rta.js.
+const thirdBandCount = (sr) => {
+  let n = 0;
+  for (let x = -17; x <= 13; x++) if (1000 * 10 ** ((3 * (2 * x + 1)) / 60) <= 0.475 * sr) n++;
+  return n;
+};
 function writeToneWav(file, { hz, amplitude, sampleRate, seconds }) {
   const n = sampleRate * seconds; // a whole number of cycles: the loop is seamless
   const b = Buffer.alloc(44 + n * 2);
@@ -517,6 +525,8 @@ function defineChecks(fixtures) {
     const third = await settled('third');
     res.third = bandCheck(third);
     res.thirdUnder = third ? third.underResolved.filter(Boolean).length : null;
+    res.sampleRate = await page.evaluate(() => window.OSCILLA.engine.ctx.sampleRate);
+    res.thirdBands = thirdBandCount(res.sampleRate);
     res.thirdUi = await H.until(ui, (u) => /highest band 1 kHz/.test(u.summary), 3000);
     res.snapshot = await page.evaluate(() => window.OSCILLA.measure.liveRtaSnapshot());
     res.spl = await page.evaluate(splMentions);
@@ -630,8 +640,8 @@ function defineChecks(fixtures) {
     const v = H.verdict({
       disabledBefore: res.before.modesDisabled && res.before.averagingDisabled
         && res.before.button === 'Start live RTA',
-      third: res.third.ok && res.third.bands === 31,
-      thirdUi: /^RTA, 1\/3 OCTAVE, 31 bands, FAST/.test(res.thirdUi.summary)
+      third: res.third.ok && res.third.bands === res.thirdBands,
+      thirdUi: res.thirdUi.summary.startsWith(`RTA, 1/3 OCTAVE, ${res.thirdBands} bands, FAST`)
         && /^LIVE · microphone input/.test(res.thirdUi.source)
         && /dB relative \(dBFS-like\)/.test(res.thirdUi.source) && res.thirdUi.chart
         && res.thirdUi.chip === '1/3 OCTAVE' && !res.thirdUi.modesDisabled,
@@ -639,7 +649,7 @@ function defineChecks(fixtures) {
       snapshot: !!res.snapshot && res.snapshot.algorithm === 'oscilla.rta.v1'
         && res.snapshot.windowAlgorithm === 'oscilla.window.hann.v1'
         && res.snapshot.resolution === 'third' && res.snapshot.fftSize === 8192
-        && res.snapshot.levelsDb.length === 31,
+        && res.snapshot.levelsDb.length === res.thirdBands,
       noSpl: res.spl.length === 0,
       octave: res.octave.ok,
       expert: !!res.expert && res.expert.ok && res.expert.analyser === 16384
@@ -828,7 +838,8 @@ function defineChecks(fixtures) {
     res.ir = await page.evaluate(() => {
       const v = window.OSCILLA.measure.irView;
       return v ? { factor: v.decimation.factor, points: v.x.length,
-        inSpan: Array.from(v.x).filter((t) => t >= -2 && t <= 20).length } : null;
+        inSpan: Array.from(v.x).filter((t) => t >= -2 && t <= 20).length,
+        sampleRate: window.OSCILLA.engine.ctx.sampleRate } : null;
     });
     await page.evaluate(() => {
       const a = window.OSCILLA.app;
@@ -843,7 +854,9 @@ function defineChecks(fixtures) {
       disabled: res.disabled === true && res.avail.ok === false && /outside/.test(res.avail.reason),
       refused: res.refused === false,
       response: /^Frequency response/.test(res.summary || ''),
-      irDirect: !!res.ir && res.ir.factor === 1 && res.ir.inSpan > 1000,
+      // Undecimated: every sample of the 22 ms span (1056 at 48 kHz, 970 at 44.1 kHz).
+      irDirect: !!res.ir && res.ir.factor === 1
+        && res.ir.inSpan >= Math.floor(0.022 * res.ir.sampleRate) - 1,
     }) };
   });
 
