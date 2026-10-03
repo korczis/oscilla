@@ -17,10 +17,13 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-01
-updated_at: 2026-10-02T01:40:26Z
-started_at: 2026-10-02T01:40:21Z
-verified_at: 2026-10-02T01:40:24Z
-completed_at: 2026-10-02T01:40:26Z
+updated_at: 2026-10-03T21:53:55Z
+started_at: 2026-10-03T21:53:46Z
+verified_at: 2026-10-03T21:53:50Z
+completed_at: 2026-10-03T21:53:55Z
+started_event: sha256:f6fdf8cd04a05a2d4266c90f5b872882254ef586711c5bca7fa5d318e975e3ec
+verified_event: sha256:51f5a77c3053171ff23964da05bc5a4cc92b8869da4e0c1f2f7af6a9fb6436a7
+completed_event: sha256:5687541c5c4612ff18e71850181198a39a21d81f6191f6a9e812a4baac4f4d92
 evidence:
   - covers: verified
     type: test
