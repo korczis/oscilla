@@ -515,7 +515,12 @@ function defineChecks() {
         return { roots: host.querySelectorAll('[data-osc="studio.tl.root"]').length,
           clips: host.querySelectorAll('.osc-stl-clip').length,
           modelClips: st.model.timeline.clips.length,
-          visible: host.getBoundingClientRect().height > 0 };
+          visible: host.getBoundingClientRect().height > 0,
+          // one transport on screen: the header's; the embedded strip keeps mode and tempo
+          tlKeys: host.querySelectorAll('[data-osc="studio.tl.play"], [data-osc="studio.tl.time"]')
+            .length,
+          headerPlay: document.querySelectorAll('[data-osc="studio.play"]').length,
+          tempo: host.querySelectorAll('[data-osc="studio.tl.tempo"]').length };
       }, W);
       const start = await page.evaluate(() => window.OSCILLA.studio.model.timeline.clips
         .find((c) => c.id === 'clip-2').start);
@@ -540,6 +545,7 @@ function defineChecks() {
       });
       return result({
         oneInstance: v0.roots === 1 && v0.visible,
+        oneTransport: v0.tlKeys === 0 && v0.headerPlay === 1 && v0.tempo === 1,
         projection: v0.clips === v0.modelClips && v0.clips > 0,
         keyOwnStore: near(moved.ws, start + 0.1) && near(moved.seam, 1),
         spaceOwnTransport: playing.ws && !playing.seam && !playing.instrument,
