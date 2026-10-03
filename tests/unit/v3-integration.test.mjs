@@ -27,7 +27,7 @@ import {
   IR_ALGORITHMS, computeImpulseResponse, normalizeIr,
 } from '../../src/js/measurement/impulse-response.js';
 import {
-  normalizeResponse, smoothFractionalOctave, smoothResponse,
+  normalizeResponse, smoothFractionalOctave, smoothResponse, SMOOTHING_EDGE_TOLERANCE,
 } from '../../src/js/measurement/smoothing.js';
 import { assessQuality } from '../../src/js/measurement/quality.js';
 import { DB_KIND_LABELS, formatDb } from '../../src/js/measurement/format.js';
@@ -258,7 +258,7 @@ test('G4: rtaResult encodes zero power as −300 dB; non-finite stored levels ar
   const levels = Float64Array.from(silent, (v, i) => (i === 3 ? -12.5 : i === 4 ? -350 : v));
   const r = rtaResult({ sampleRate: sr, resolution: 'octave', bands, levelsDb: levels,
     fftSize: 8192, window: 'blackman-harris' });
-  assert.equal(r.algorithm, 'oscilla.rta.v1');
+  assert.equal(r.algorithm, 'oscilla.rta.v2');
   assert.equal(r.windowAlgorithm, 'oscilla.window.blackman-harris.v1');
   assert.equal(r.levelsDb[0], ZERO_POWER_DB);
   assert.equal(r.levelsDb[3], -12.5);
@@ -383,9 +383,9 @@ test('G5: full-scale tones near Nyquist, noise, transients and explained steps a
 test('G6/G7/G9: every result carries the algorithm IDs it used (pinned)', () => {
   const ids = {
     transfer: 'oscilla.transfer.v3', ir: 'oscilla.ir.log-sweep.v3',
-    irFarina: 'oscilla.ir.farina-inverse.v3', rta: 'oscilla.rta.v1',
-    smoothing: 'oscilla.smoothing.fractional-octave.v1', normalization: 'oscilla.normalization.v1',
-    align: 'oscilla.align.xcorr.v1', clip: 'oscilla.clip.v1',
+    irFarina: 'oscilla.ir.farina-inverse.v3', rta: 'oscilla.rta.v2',
+    smoothing: 'oscilla.smoothing.fractional-octave.v2', normalization: 'oscilla.normalization.v1',
+    align: 'oscilla.align.xcorr.v1', clip: 'oscilla.clip.v2',
     discontinuity: 'oscilla.discontinuity.v1', quality: 'oscilla.confidence.v3',
     calibration: 'oscilla.calibration.log-interp.v1', window: 'oscilla.window.hann.v1',
     windowBlackmanHarris: 'oscilla.window.blackman-harris.v1',
@@ -423,7 +423,8 @@ test('G6/G7/G9: every result carries the algorithm IDs it used (pinned)', () => 
   assert.equal(sm.algorithm, ids.smoothing);
   assert.equal(sm.kind, 'smoothed');
   assert.equal(sm.label, 'SMOOTHED: 1/6 octave (power mean)');
-  assert.deepEqual(sm.smoothedDb, smoothFractionalOctave(frequencies, magnitudeDb, 6));
+  assert.deepEqual(sm.smoothedDb, smoothFractionalOctave(frequencies, magnitudeDb, 6,
+    { edgeTolerance: SMOOTHING_EDGE_TOLERANCE }));
   assert.equal(smoothResponse(frequencies, magnitudeDb, 0).label, 'RAW: unsmoothed');
   assert.equal(normalizeResponse(frequencies, magnitudeDb, { mode: 'at-frequency', hz: 1000 })
     .algorithm, ids.normalization);

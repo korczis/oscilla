@@ -114,6 +114,18 @@ const CHECK_SIGNAL = (() => {
   return x;
 })();
 const CHECK = checkCapture({ sampleRate: SR, samples: CHECK_SIGNAL });
+const CHECK_V1 = checkCapture({ sampleRate: SR, samples: CHECK_SIGNAL },
+  { algorithm: 'oscilla.clip.v1' });
+/** clip.v2 (V382): the same input plus a 1 dB overload of a 3.1 kHz tone (2.6 samples per
+ *  period): rail samples a few samples apart, never three in a row, which v1 does not see. */
+const CHECK_HF_SAMPLES = (() => {
+  const x = CHECK_SIGNAL.slice();
+  for (let i = 2000; i < 2400; i++) {
+    x[i] = Math.max(-1, Math.min(1, 1.122 * Math.sin((2 * Math.PI * 3100 * i) / SR)));
+  }
+  return x;
+})();
+const CHECK_HF = checkCapture({ sampleRate: SR, samples: CHECK_HF_SAMPLES });
 
 /** Checks of the two sweep captures, the second with a step after the sweep (post-roll). */
 const SWEEP_CHECKS = (() => {
@@ -132,6 +144,7 @@ const SPECTRUM = welch(Float32Array.from(noise(21, 16384, 0.5), (v, i) => v
   + 0.25 * Math.sin((2 * Math.PI * 440 * i) / SR)), { fftSize: 1024 });
 const BANDS = bandCenters('third', 50, 3000, SR);
 const RTA = bandAnalysis(SPECTRUM, SR / 1024, BANDS);
+const RTA_V1 = bandAnalysis(SPECTRUM, SR / 1024, BANDS, { algorithm: 'oscilla.rta.v1' });
 
 // ----------------------------------------------------------------------------- reduction
 
@@ -228,9 +241,14 @@ const CASES = {
   [ALGORITHMS.align]: () => ({ id: ALIGN.algorithm, output: { lagSamples: ALIGN.lagSamples,
     lagSeconds: ALIGN.lagSeconds, peakCorrelation: ALIGN.peakCorrelation,
     polarity: ALIGN.polarity } }),
-  [ALGORITHMS.clip]: () => ({ id: CHECK.algorithms.clip, output: { clipping: CHECK.clipping,
-    dropouts: CHECK.dropouts, rms: CHECK.rms, peak: CHECK.peak, empty: CHECK.empty,
-    reasons: CHECK.reasons.map((r) => r.code) } }),
+  'oscilla.clip.v1': () => ({ id: CHECK_V1.algorithms.clip, output: {
+    clipping: CHECK_V1.clipping, dropouts: CHECK_V1.dropouts, rms: CHECK_V1.rms,
+    peak: CHECK_V1.peak, empty: CHECK_V1.empty, reasons: CHECK_V1.reasons.map((r) => r.code) } }),
+  [ALGORITHMS.clip]: () => ({ id: CHECK_HF.algorithms.clip, output: {
+    clipping: CHECK_HF.clipping, dropouts: CHECK_HF.dropouts, rms: CHECK_HF.rms,
+    peak: CHECK_HF.peak, empty: CHECK_HF.empty, reasons: CHECK_HF.reasons.map((r) => r.code),
+    v1Ratio: checkCapture({ sampleRate: SR, samples: CHECK_HF_SAMPLES },
+      { algorithm: 'oscilla.clip.v1' }).clipping.ratio } }),
   [ALGORITHMS.discontinuity]: () => ({ id: CHECK.algorithms.discontinuity,
     output: { discontinuities: CHECK.discontinuities,
       sweepChecks: SWEEP_CHECKS.map((c) => c.discontinuities) } }),
@@ -246,6 +264,13 @@ const CASES = {
     return { id: w.algorithm, output: { samples: w.samples, coherentGain: w.coherentGain,
       noisePowerGain: w.noisePowerGain, enbwBins: w.enbwBins, welch: summary(p.power, 6, 12) } };
   },
+  'oscilla.rta.v1': () => {
+    const r = rtaResult({ sampleRate: SR, resolution: 'third', bands: BANDS,
+      levelsDb: RTA_V1.levelsDb, fftSize: 1024, window: 'hann' });
+    return { id: RTA_V1.algorithm, output: { analysis: RTA_V1.algorithm, nominal: BANDS.map((b) =>
+      b.nominal), levelsDb: r.levelsDb, binCounts: RTA_V1.binCounts,
+    underResolved: RTA_V1.underResolved, windowAlgorithm: r.windowAlgorithm } };
+  },
   [ALGORITHMS.rta]: () => {
     const r = rtaResult({ sampleRate: SR, resolution: 'third', bands: BANDS,
       levelsDb: RTA.levelsDb, fftSize: 1024, window: 'hann' });
@@ -257,6 +282,12 @@ const CASES = {
     const s = smoothResponse(GRID, RESPONSE, 3);
     return { id: s.algorithm, output: { label: s.label, smoothedDb: s.smoothedDb,
       sixth: smoothResponse(GRID, RESPONSE, 6).smoothedDb } };
+  },
+  'oscilla.smoothing.fractional-octave.v1': () => {
+    const algorithm = 'oscilla.smoothing.fractional-octave.v1';
+    const s = smoothResponse(GRID, RESPONSE, 3, { algorithm });
+    return { id: s.algorithm, output: { label: s.label, smoothedDb: s.smoothedDb,
+      sixth: smoothResponse(GRID, RESPONSE, 6, { algorithm }).smoothedDb } };
   },
   [ALGORITHMS.normalization]: () => {
     const at = normalizeResponse(GRID, RESPONSE, { mode: 'at-frequency', hz: 1000 });
