@@ -21,10 +21,12 @@ workspaces out; gated by `tests/browser/v3-ui.cjs`, `tests/unit/v3-ui.test.mjs` 
 | `views/measure-flow.js` | engine state, preflight report, recipe, calibration, result, progress | `measureFlow()` 7 steps + primary action; `expertFields()` with basic/advanced disclosure; `recipeFromFields()`; `CHARACTERIZE_PLAYBACK_CHAIN`; `OUTPUT_LEVEL_CHOICES`; `safetyNotes()`; `ROOM_NOTES` |
 | `views/quality-bar.js` | engine events (incl. progress `capture` chunks) | `reduceQualityBar()` / `qualityBarView()` (INPUT, NOISE, CLIPPING, SIGNAL, CAPTURE); `qualityPanel(assessment)` |
 | `views/response-chart.js` | engine result or Experiment | `buildResponseView()`: x, axes, series, bands, markers, badges, notes, summary, `readout(i)` / `readoutAt(hz)` (phase line where measured), `normalizationApplied` / `normalizationNote`, `phase`, `masterGain`; `normalizationAvailability()`; `buildPhaseView()` (expert phase over frequency) |
-| `views/ir-chart.js` | IrResult | `buildIrView()`: ms re direct peak, absolute origin, window region, series decimated over the VISIBLE span only (`range` `[from, to]` or `'full'`) |
+| `views/ir-chart.js` | IrResult | `buildIrView()`: ms re direct peak, absolute origin, window region, series decimated over the VISIBLE span only (`range` `[from, to]` or `'full'`); `buildIrOverlayView()`: two or more IRs at one rate, ms re each own direct peak, original scale (V356) |
 | `views/rta-chart.js` | RtaResult (or FFT bins), averager state, a live-rta.js `viewInput()` | `buildRtaView()`: bars over band edges, peak ticks, labels, summary; `live` / `snapshotLabel` badge, fixed live axis (`liveRange`) |
 | `views/experiment-summary.js` | Experiment, store `list()` rows | `experimentSummary()` (§161), `experimentListRows()` |
-| `views/compare-view.js` | 2+ Experiments | `buildCompareView()`: common config, differences, overlay, A − B |
+| `views/compare-view.js` | 2+ Experiments | `buildCompareView()`: common config, differences, overlay, A − B, IR overlay (equivalent sets only; `irDelta` always refused) |
+| `views/input-devices.js` | enumerateDevices() result, chosen deviceId | `inputDeviceView()`: Default input first, real inputs with the browser's labels, a vanished choice kept and marked "not available" with its message (V322) |
+| `core/url-state-measure.js` | setup values, location hash | `encodeRecipeLink()` / `decodeRecipeLink()` (the `mr` hash parameter; recipe only, refused whole when invalid), `recipeParamOf()`, `withRecipeParam()` (V355) |
 | `views/announcements.js` | engine events | `reduceAnnouncements()` / `announce()` (§151) |
 
 Every module is pure (no DOM, no uPlot instance, no clock, no globals) and never mutates its
@@ -182,6 +184,43 @@ loop). From a view model:
   until "the microphone's deviation" or "a correction to add" is chosen, each with its preview.
 - Files are size-checked before they are read (m6): 1 MiB for calibration, 32 MiB for
   experiments (`readFileText(file, { maxBytes })`).
+- Profile export (V315). With a profile loaded, "Export CSV" and "Export JSON"
+  (`measureExportCalibration`, `calibration/export.js`) download deterministic files named
+  `<name>-<id prefix>.calibration.csv|json`; both import back through the same path to the same
+  id and convention without the convention dialog (the CSV states it on `# convention:`).
+
+## Input device in the MEASURE workspace (V322)
+
+- The Live input panel has an "Input device" select (`#osc-m-input-device`,
+  `measureSelectInput`). Its first option is "Default input (chosen by the browser and
+  system)": no deviceId is requested, exactly as before. The other options are filled from
+  `navigator.mediaDevices.enumerateDevices()` only after the microphone was opened (setup check,
+  live RTA, reference capture; browsers hide the list before the permission) and on every
+  `devicechange`.
+- A chosen input is passed to `createCaptureIo({ deviceId })` (getUserMedia `deviceId:
+  { exact }`); the capture io is re-created for it at the next capture, never while a
+  measurement or reference capture runs (the select is disabled while busy). A READY setup check
+  is reset, and the level calibration is checked against the new input first.
+- Provenance: the result's `input.constraints.requested.deviceId` holds the raw id in memory;
+  the experiment stores it hashed (`{ exact: 'sha256:…' }`, `schema.js normalizeInput`,
+  `calibration/device-id.js`). The default input records no requested deviceId.
+- A chosen input that disappears stays selected, its option reads "<label> — not available",
+  the panel shows the message (`role="alert"`) and it is announced assertively. A setup check
+  then fails at the input step with `INPUT_DEVICE_UNAVAILABLE_TEXT` (capture.js maps the
+  OverconstrainedError / NotFoundError of `{ exact }`). Nothing switches microphones silently.
+
+## Recipe link (V355)
+
+- "Copy recipe link" (top of Measurement setup, `measureCopyRecipeLink`) writes
+  `#…&mr=<base64url JSON>` with `history.replaceState`, keeping every other hash parameter (the
+  instrument link), and copies the URL; without a clipboard the dialog `osc-dlg-recipe-link`
+  shows it. The link holds the recipe fields only (`RECIPE_WIRE_KEYS`).
+- `measureApplyRecipeHash` runs at start-up (from `measureInit`) and on `hashchange`. A valid
+  recipe fills `meas.values` (absent keys take the CHARACTERIZE PLAYBACK CHAIN preset), resets a
+  READY check, opens MEASURE and notifies "Measurement recipe loaded from the link"; it never
+  starts a check or a measurement. An invalid one is refused whole (notification "Recipe link
+  not applied" and the reasons under the button); a link opened while a measurement runs is
+  refused too. The same `mr` value is applied once (the one this page wrote is not re-applied).
 
 ## Visual identity constraints
 

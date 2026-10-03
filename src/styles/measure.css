@@ -461,6 +461,23 @@
   height: var(--osc-control-h);
 }
 
+/* Input device choice (V322) and the recipe link row (V355). */
+.osc-m-inputsel .osc-select,
+.osc-m-inputsel .osc-select select {
+  width: 100%;
+  min-width: 0;
+  height: var(--osc-control-h-sm);
+}
+
+.osc-m-recipelink {
+  margin-bottom: 8px;
+}
+
+.osc-m-recipelink .osc-m-hint {
+  flex: 1 1 220px;
+  min-width: 0;
+}
+
 .osc-m-bar {
   display: flex;
   flex-wrap: wrap;
@@ -744,6 +761,10 @@
   height: 170px;
 }
 
+.osc-x-chart--ir {
+  height: 200px;
+}
+
 .osc-x-cols {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr));
@@ -894,7 +915,9 @@
   .osc-m-toolbar .osc-select select,
   .osc-m-fieldrow .osc-number,
   .osc-m-fieldrow .osc-select,
-  .osc-m-fieldrow .osc-select select {
+  .osc-m-fieldrow .osc-select select,
+  .osc-m-inputsel .osc-select,
+  .osc-m-inputsel .osc-select select {
     min-height: 44px;
     height: auto;
   }

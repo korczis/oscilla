@@ -1213,6 +1213,26 @@ Every successful parse returns `convention` and a one-point `preview`
 (`previewConvention(profile)`: at the point with the largest |value|, "At 20 Hz the file states
 +4.20 dB; a reading of 0.00 dB becomes −4.20 dB").
 
+**OSCILLA CSV directives** — New (V315). `#` comment lines of the form `# convention:
+deviation|correction`, `# name: …` and `# id: …` are read as statements of the file: the
+convention settles an ambiguous header (`correction_db`), a convention that contradicts a header
+naming the microphone's response is an error on its line, a directive repeated with another
+value is an error, the name wins over the file name (as in a JSON export), and an id that does
+not match the points is a warning (the id is always recomputed).
+
+### Export (`export.js`) — New (V315)
+
+`profileCsvText(profile)` and `profileJsonText(profile)` are pure and deterministic (same
+profile → same bytes; no clock). The JSON is `exportProfile` (format `oscilla.calibration`,
+schema 2: name, id, convention, source, units, points, notes, importedAt). The CSV is the
+directives above (name, id, convention and its meaning), the header `frequency_hz,deviation_db`
+or `frequency_hz,correction_db`, and one `hz,db` row per point in ECMAScript `Number::toString`
+form (the shortest that round-trips). Both parse back through `parseCalibrationText` to the same
+id, convention, name and points without asking for the convention; the JSON also keeps source
+and notes (the CSV leaves them out, so a quoted sensitivity line is not read again as a file
+statement). `profileFileName(profile, 'csv'|'json')` is `<name stem>-<first 8 hex digits of the
+id>.calibration.<ext>`.
+
 ### Interpolation and application (`interpolate.js`)
 
 Piecewise linear in dB over log10(frequency):
@@ -1532,6 +1552,22 @@ methods. When both responses carry an envelope, `envelope` holds both bounds on 
 dispersion measures (`std` vs `p10-p90`) are marked `comparable: false` with a warning.
 `compareExperiments` adds `results.response` ('single run' | 'aggregate (<method>)', a `warn`
 difference), `results.aggregate.runs` (`info`) and `results.aggregate.algorithm`.
+
+### Experiment comparison: overlays, A − B and the IR overlay (`views/compare-view.js`, `views/ir-chart.js`) — New (V356)
+
+The compare view draws the raw magnitudes of every compared experiment (unchanged, §60), A − B
+only for an equivalent set (above), and the **impulse-response overlay**
+(`buildIrOverlayView`), under the same equivalence rule as A − B: it is shown only when
+`compareExperiments` finds no `warn` difference (calibration, sample rate, stimulus, analysis,
+algorithms, master gain, response kind) and at least two experiments carry an IR at one sample
+rate; otherwise it is refused with the reason. Each IR keeps its original scale (relative
+amplitude, sign kept); the time axis is milliseconds re **each curve's own detected direct
+peak** (the convention of the single IR view, §214), and the absolute peak times are listed in
+the notes. Nothing is normalized, offset or resampled; more than 2000 samples in the span
+(−5 ms to 200 ms) are drawn as the minimum and maximum of each column. **There is no A − B of
+impulse responses**: a sample-by-sample difference of two measured IRs depends on their exact
+alignment and on the deconvolution noise and has no defined meaning here, so the view says so
+instead of drawing one.
 
 <a id="golden"></a>
 ### Golden outputs per algorithm ID — **New (gaps)** (was G18)

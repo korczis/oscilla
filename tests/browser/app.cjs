@@ -423,7 +423,7 @@ function defineChecks() {
     await collect();
     await page.click('#osc-ftype-lowpass');
     for (const id of ['saveModal', 'headphonesModal', 'copyModal', 'settings', 'help',
-      'osc-dlg-mic']) {
+      'osc-dlg-mic', 'osc-dlg-recipe-link']) {
       await page.evaluate((d) => window.OSCILLA.app.openModal(d), id);
       await sleep(120);
       await collect();

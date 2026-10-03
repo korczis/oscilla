@@ -50,6 +50,24 @@
 // View options never fail a measurement (M6): a normalization whose reference lies outside the
 // result's grid is disabled for that result (the selection resets to None), and a view that
 // still cannot be built is reported as a note, never as "Measurement failed".
+//
+// Profile export (V315): the loaded frequency profile exports as CSV or JSON
+// (calibration/export.js); both files are deterministic and parse back to the same profile id.
+//
+// Input device (V322, spec §29 step 1): after the microphone permission (setup check, live RTA,
+// reference capture) the inputs are listed with enumerateDevices (views/input-devices.js) and
+// refreshed on 'devicechange'. The default input stays the default (no deviceId). A chosen
+// input is passed to createCaptureIo as deviceId (getUserMedia deviceId { exact }); the io is
+// re-created for it at the next capture, and the experiment records it hashed
+// (constraints.requested.deviceId). A chosen input that disappears stays selected, marked
+// "not available", with a readable message and an assertive announcement; nothing switches
+// microphones silently.
+//
+// Recipe link (V355, spec §102): "Copy recipe link" writes the setup's recipe into the URL hash
+// (`mr`, core/url-state-measure.js; recipe only, never results, calibration or device) next to
+// the instrument's own hash state. A link read at load or on hashchange is validated like every
+// import and refused whole when anything is wrong; a valid one fills the setup and opens
+// MEASURE, and never starts a check or a measurement.
 
 import { MEASUREMENT_STATES as S, isActiveState } from '../measurement/state-machine.js';
 import {
@@ -90,7 +108,12 @@ import { newExperimentId, describeStimulus } from '../experiments/schema.js';
 import { experimentFromResult, experimentTestContext } from './measure-experiment.js';
 import { formatHz } from '../charts/axes.js';
 import { createResponseChart, createIrChart, createRtaChart } from '../charts/measure-charts.js';
-import { readFileText } from './exporters.js';
+import { readFileText, downloadBlob } from './exporters.js';
+import { exportProfileFile } from '../calibration/export.js';
+import { inputDeviceView } from '../measurement/views/input-devices.js';
+import {
+  encodeRecipeLink, decodeRecipeLink, recipeParamOf, withRecipeParam, RECIPE_WIRE_KEYS,
+} from '../core/url-state-measure.js';
 
 /** Result tabs (role=tab via the shell's tab binding is not used: these are measure-local). */
 export const MEASURE_RESULT_TABS = Object.freeze([
@@ -158,6 +181,14 @@ const FIELD_DEFAULTS = (() => {
   return Object.freeze(out);
 })();
 
+/** The setup values a recipe link carries (field id → value), see url-state-measure.js. */
+const RECIPE_FIELD_IDS = Object.freeze(Object.values(RECIPE_WIRE_KEYS));
+function recipeValues(values) {
+  const out = {};
+  for (const id of RECIPE_FIELD_IDS) if (Object.hasOwn(values, id)) out[id] = values[id];
+  return out;
+}
+
 function randomBytes16() {
   const b = new Uint8Array(16);
   const c = typeof crypto !== 'undefined' ? crypto : null;
@@ -218,6 +249,12 @@ export function createMeasureUi(svc) {
     reference: null,       // { reading, input, referenceHz, testContext } of the last capture
     refCapture: null,      // the running reference capture { io } (abortable)
     pendingImport: null,   // { text, fileName } of a profile waiting for its sign convention
+    deviceId: null,        // the chosen input (raw deviceId, page only); null = default input
+    deviceLabel: null,     // its label as listed, for the "not available" message
+    ioDeviceId: null,      // the deviceId the current capture io was created with
+    devices: [],           // the last enumerateDevices() result (plain { kind, deviceId, label })
+    devicesEnumerated: false,
+    lastRecipeParam: null, // the `mr` hash value last applied or written (V355)
   };
 
   /** The level calibration's applicability to the current input (level.js). */
@@ -269,6 +306,7 @@ export function createMeasureUi(svc) {
         if (e.facts && e.facts.input && e.facts.input.ok) {
           ctx.inputNow = { device: e.facts.input.device, constraints: e.facts.input.constraints,
             sampleRate: e.sampleRate };
+          inputOpened(e.facts.input.device);
         }
         break;
       case 'noise':
@@ -297,11 +335,15 @@ export function createMeasureUi(svc) {
   }
 
   function ensureEngine() {
+    // A newly chosen input takes effect here: the io is re-created for it when nothing runs.
+    if (ctx.me && ctx.ioKind === 'microphone' && ctx.ioDeviceId !== ctx.deviceId
+      && !isActiveState(ctx.me.state)) disposeEngine();
     if (ctx.me) return ctx.me;
     const kind = ctx.loopback ? 'loopback' : 'microphone';
     ctx.io = kind === 'loopback'
       ? createLoopbackIo({ engine: svc.engine, system: ctx.loopbackSystem })
-      : createCaptureIo({ engine: svc.engine });
+      : createCaptureIo({ engine: svc.engine, deviceId: ctx.deviceId });
+    ctx.ioDeviceId = kind === 'microphone' ? ctx.deviceId : null;
     ctx.ioKind = kind;
     ctx.me = createMeasurementEngine({ io: ctx.io, assess: assessMeasurement, onEvent });
     return ctx.me;
@@ -312,6 +354,85 @@ export function createMeasureUi(svc) {
     ctx.me = null;
     ctx.io = null;
     ctx.ioKind = null;
+  }
+
+  // ---------------------------------------------------------------- input device (V322)
+  function mediaDevices() {
+    try {
+      const md = typeof navigator !== 'undefined' ? navigator.mediaDevices : null;
+      return md && typeof md.enumerateDevices === 'function' ? md : null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function renderInputs() {
+    const cmp = ctx.cmp;
+    if (!cmp) return;
+    const v = inputDeviceView({ devices: ctx.devices, selectedId: ctx.deviceId,
+      selectedLabel: ctx.deviceLabel, enumerated: ctx.devicesEnumerated, loopback: ctx.loopback,
+      available: !!mediaDevices() });
+    cmp.meas.input = { options: v.options, selected: v.selected, missing: v.missing,
+      message: v.message, status: v.status, disabled: v.disabled };
+  }
+
+  /** List the inputs (after the permission); announce a chosen input that disappeared. */
+  async function refreshInputs() {
+    const md = mediaDevices();
+    if (!md || !ctx.cmp) {
+      renderInputs();
+      return false;
+    }
+    let list;
+    try {
+      list = await md.enumerateDevices();
+    } catch (e) {
+      renderInputs();
+      return false;
+    }
+    ctx.devices = Array.from(list || [], (d) => ({ kind: d.kind, deviceId: d.deviceId,
+      label: d.label }));
+    ctx.devicesEnumerated = true;
+    const wasMissing = !!ctx.cmp.meas.input.missing;
+    renderInputs();
+    const m = ctx.cmp.meas.input;
+    if (m.missing && !wasMissing) announce({ politeness: 'assertive', text: m.message });
+    return true;
+  }
+
+  /** The microphone was opened (permission granted): the list can be read now. */
+  function inputOpened(device) {
+    if (ctx.ioKind !== 'microphone') return;
+    if (ctx.deviceId && device && device.label) ctx.deviceLabel = device.label;
+    refreshInputs();
+  }
+
+  function selectInput(cmp, raw) {
+    const value = typeof raw === 'string' ? raw : '';
+    if (ctx.loopback) return false;
+    if (value === (ctx.deviceId || '')) return true;
+    if (cmp.meas.busy || ctx.refCapture || ctx.pending) {
+      cmp.notify('warning', 'Input not changed', 'A measurement or a reference capture is using '
+        + 'the input; stop it before choosing another input.');
+      renderInputs(); // the select shows the input still in use
+      return false;
+    }
+    const opt = cmp.meas.input.options.find((o) => o.value === value);
+    if (!opt) {
+      renderInputs();
+      return false;
+    }
+    stopLive(); // the live RTA listens to the previous input
+    if (ctx.me && ctx.me.state === S.READY) ctx.me.reset(); // releases the checked input
+    ctx.deviceId = value || null;
+    ctx.deviceLabel = value ? opt.label.replace(/ — not available$/, '') : null;
+    ctx.inputNow = null; // a level calibration is checked against the new input first (M3)
+    ctx.preflight = null;
+    renderInputs();
+    refresh();
+    announce({ politeness: 'polite', text: `Input: ${value ? ctx.deviceLabel
+      : 'default input'}. Run the setup check for this input.` });
+    return true;
   }
 
   // ---------------------------------------------------------------- view refresh
@@ -633,6 +754,7 @@ export function createMeasureUi(svc) {
       announce({ politeness: 'polite', text: 'Live RTA started' });
       rebuildRta();
       L.off = onFrame(liveTick);
+      inputOpened(null);
       return true;
     } catch (e) {
       if (token === ctx.liveToken) {
@@ -789,6 +911,7 @@ export function createMeasureUi(svc) {
         input: { device: cap.device || null, constraints: cap.constraints || null,
           sampleRate: cap.sampleRate }, testContext: cap.testContext || null };
       ctx.inputNow = ctx.reference.input;
+      inputOpened(cap.device || null);
       f.reading = referenceSummary(r, referenceHz);
       if (!r.ok) f.error = r.errors.join(' ');
       return r.ok;
@@ -867,7 +990,8 @@ export function createMeasureUi(svc) {
       && ctx.levelCal.input && !ctx.inputNow;
   }
 
-  async function runMeasure(cmp) {
+  /** Run one measurement of `given` (Studio, V424) or of the setup fields; resolves the result. */
+  async function runMeasure(cmp, given = null) {
     stopLive();
     const me = ensureEngine();
     svc.engine.init();
@@ -878,7 +1002,7 @@ export function createMeasureUi(svc) {
     ctx.result = null;
     if (ctx.shown && ctx.shown.kind === 'result') ctx.shown = null;
     rebuildAll();
-    const recipe = recipeNow();
+    const recipe = given || recipeNow();
     ctx.lastRecipe = recipe;
     let result = null;
     try {
@@ -903,6 +1027,7 @@ export function createMeasureUi(svc) {
       showResult(result);
       refresh();
     }
+    return result;
   }
 
   return {
@@ -957,6 +1082,10 @@ export function createMeasureUi(svc) {
       levelForm: { referenceHz: '1000', referenceDb: '94', observedDb: '', conditions: '',
         error: '', manual: false, capturing: false, reading: null },
       calImport: null,
+      input: { options: [], selected: '', missing: false, message: null, status: '',
+        disabled: true },
+      recipeLink: '',
+      recipeLinkErrors: [],
       name: '',
       notes: '',
       saved: false,
@@ -994,7 +1123,17 @@ export function createMeasureUi(svc) {
     // ------------------------------------------------------------------ lifecycle
     measureInit() {
       ctx.cmp = this;
+      renderInputs();
       refresh();
+      const md = mediaDevices();
+      if (md && typeof md.addEventListener === 'function') {
+        md.addEventListener('devicechange', () => { if (ctx.devicesEnumerated) refreshInputs(); });
+      }
+      if (typeof window !== 'undefined' && window.location) {
+        this.measureApplyRecipeHash(window.location.hash, { origin: 'load' });
+        window.addEventListener('hashchange', () => this.measureApplyRecipeHash(window.location
+          .hash, { origin: 'hashchange' }));
+      }
     },
     /** Mount the charts once the view exists (main.js, after the labs). */
     measureMountCharts(root) {
@@ -1062,6 +1201,39 @@ export function createMeasureUi(svc) {
     measureStop() {
       this.measureAbort('user');
     },
+    /**
+     * Studio hook (V3.1 plan V424, docs/v31/timeline.md "Measurement clips"): run `recipe` (a
+     * Studio topology's, studio/provenance.js recipeFromStudio) through THIS workspace's
+     * MeasurementEngine (the same io, calibration, state machine, abort paths and output
+     * exclusivity as MEASURE) and save it as measureSave does, with `decorate` (the Studio
+     * provenance block) applied to the experiment. Resolves { ok, state, experimentId, name,
+     * experiment, reason }; never rejects.
+     */
+    async measureRunRecipe(recipe, { decorate = null } = {}) {
+      if (this.measureOwnsOutput() || ctx.pending) {
+        return { ok: false, state: ctx.me ? ctx.me.state : S.IDLE,
+          reason: 'A measurement is already in progress.' };
+      }
+      let result = null;
+      try {
+        result = await runMeasure(this, recipe);
+      } catch (e) {
+        return { ok: false, state: ctx.me ? ctx.me.state : S.IDLE, reason: e.message || String(e) };
+      }
+      const state = result ? result.state : (ctx.me ? ctx.me.state : S.IDLE);
+      if (!result || state !== S.COMPLETE) {
+        const why = result && Array.isArray(result.reasons) ? result.reasons
+          .filter((x) => x.severity !== 'ok').map((x) => x.text).slice(0, 2).join(' ') : '';
+        return { ok: false, state, reason: why || (ctx.error ? ctx.error.message : state) };
+      }
+      let saved = null;
+      const id = await this.measureSave({ decorate: (e) => {
+        saved = decorate ? decorate(e) : e;
+        return saved;
+      } });
+      return id ? { ok: true, state, experimentId: id, name: saved.name, experiment: saved }
+        : { ok: false, state, reason: 'The experiment was not saved.' };
+    },
     async measureStart() {
       await runMeasure(this);
     },
@@ -1101,6 +1273,90 @@ export function createMeasureUi(svc) {
       this.measureSetValue('level', id, 'choice');
     },
     measureLevelKeydown(e) { this.rovingKeydown(e); },
+    /** Choose the measurement input ('' = the default input), V322. */
+    measureSelectInput(id) {
+      return selectInput(this, id);
+    },
+    /** Re-read the input list (after the permission was granted). */
+    async measureRefreshInputs() {
+      return refreshInputs();
+    },
+
+    // ------------------------------------------------------------------ recipe link (V355)
+    /** The setup's recipe as the `mr` hash value (a recipe only: never results). */
+    measureRecipeParam() {
+      return encodeRecipeLink(recipeValues(this.meas.values));
+    },
+    /** This page's URL with the recipe in its hash (other hash parameters kept). */
+    measureRecipeUrl() {
+      const loc = typeof window !== 'undefined' ? window.location : null;
+      if (!loc) return null;
+      return `${loc.href.split('#')[0]}#${withRecipeParam(loc.hash, this.measureRecipeParam())}`;
+    },
+    /** Put the recipe link in the address bar and on the clipboard (dialog when unavailable). */
+    async measureCopyRecipeLink() {
+      const url = this.measureRecipeUrl();
+      if (!url) return null;
+      ctx.lastRecipeParam = this.measureRecipeParam(); // our own link is not one to apply
+      try { window.history.replaceState(null, '', url); } catch (e) { /* file:// in some */ }
+      this.meas.recipeLink = url;
+      let copied = false;
+      try {
+        if (navigator.clipboard && window.isSecureContext !== false) {
+          await navigator.clipboard.writeText(url);
+          copied = true;
+        }
+      } catch (e) {
+        copied = false;
+      }
+      if (copied) {
+        this.notify('success', 'Recipe link copied', 'The link loads this measurement recipe '
+          + '(sweep, level, runs, timing); it carries no result, calibration or input device and '
+          + 'never starts a measurement.');
+      } else this.openModal('osc-dlg-recipe-link');
+      return url;
+    },
+    /**
+     * Apply a recipe link from a location hash (V355): validated like every import, refused
+     * whole when invalid, never starts anything. Returns true (applied), false (refused) or
+     * null (no recipe in the hash, or the one already applied).
+     */
+    measureApplyRecipeHash(hash, { origin = 'link' } = {}) {
+      const param = recipeParamOf(hash);
+      if (param === null) {
+        ctx.lastRecipeParam = null;
+        return null;
+      }
+      if (param === ctx.lastRecipeParam) return null;
+      ctx.lastRecipeParam = param;
+      const r = decodeRecipeLink(param, { defaults: recipeValues(FIELD_DEFAULTS) });
+      if (!r.ok) {
+        this.meas.recipeLinkErrors = r.errors.slice(0, 5);
+        this.notify('warning', 'Recipe link not applied', `${r.errors.slice(0, 3).join('; ')}. `
+          + 'The measurement setup is unchanged.');
+        return false;
+      }
+      if (this.meas.busy || ctx.refCapture) {
+        this.meas.recipeLinkErrors = ['a measurement is running'];
+        this.notify('warning', 'Recipe link not applied', 'A measurement is running; stop it and '
+          + 'open the link again.');
+        ctx.lastRecipeParam = null;
+        return false;
+      }
+      Object.assign(this.meas.values, r.values);
+      this.meas.recipeLinkErrors = [];
+      ctx.repeatOf = null;
+      this.meas.saved = false;
+      this.meas.savedId = null;
+      if (ctx.me && ctx.me.state === S.READY) ctx.me.reset(); // the recipe changed
+      refresh();
+      if (origin === 'load') this.workspace = 'measure';
+      else if (this.workspace !== 'measure') this.setWorkspace('measure');
+      this.notify('info', 'Measurement recipe loaded from the link', `${this.meas.stimulusText}, `
+        + `${this.meas.values.repeats} run(s). Nothing runs until you press Check setup or Start `
+        + 'measurement.');
+      return true;
+    },
     measureSetTab(tab) {
       if (!MEASURE_RESULT_TABS.some((t) => t.id === tab)) return;
       if (tab !== 'rta') stopLive(); // the live RTA runs only while it is seen
@@ -1236,6 +1492,20 @@ export function createMeasureUi(svc) {
       this.meas.calImport = null;
       this.closeModal('osc-dlg-cal-convention');
     },
+    /** Export the loaded frequency profile as 'csv' or 'json' (V315); returns the text. */
+    measureExportCalibration(format) {
+      if (!ctx.profile) return null;
+      try {
+        const f = exportProfileFile(ctx.profile, format);
+        downloadBlob(new Blob([f.text], { type: f.type }), f.fileName);
+        this.notify('success', 'Frequency profile exported', `${f.fileName}: ${ctx.profile.points
+          .length} points, sign convention ${ctx.profile.convention}; it imports back unchanged.`);
+        return f.text;
+      } catch (err) {
+        this.notify('error', 'Profile not exported', err.message || String(err));
+        return null;
+      }
+    },
     measureClearCalibration() {
       ctx.profile = null;
       this.meas.cal.profile = null;
@@ -1343,12 +1613,13 @@ export function createMeasureUi(svc) {
     measureCurrentProfile() { return ctx.profile; },
 
     // ------------------------------------------------------------------ experiment actions
-    async measureSave() {
+    async measureSave({ decorate = null } = {}) {
       const result = ctx.result;
       if (!result || result.state !== S.COMPLETE || this.meas.saving) return null;
       this.meas.saving = true;
       try {
-        const e = experimentOf(result, this);
+        const base = experimentOf(result, this);
+        const e = decorate ? decorate(base) : base;
         const id = await this.experimentsPut(e);
         this.meas.saved = true;
         this.meas.savedId = id;
@@ -1408,6 +1679,7 @@ export function createMeasureUi(svc) {
           ctx.loopback = true;
           if (system) ctx.loopbackSystem = system;
           self.meas.loopback = true;
+          renderInputs();
           refresh();
           return true;
         },
@@ -1417,6 +1689,7 @@ export function createMeasureUi(svc) {
           disposeEngine();
           ctx.loopback = false;
           self.meas.loopback = false;
+          renderInputs();
           refresh();
           return true;
         },
@@ -1493,6 +1766,10 @@ export function createMeasureUi(svc) {
           refresh();
         },
         get responseView() { return ctx.charts.response ? ctx.charts.response.view : null; },
+        /** The chosen input (raw id, page only) and the one the current io was opened with. */
+        get deviceId() { return ctx.deviceId; },
+        get ioDeviceId() { return ctx.ioDeviceId; },
+        refreshInputs: () => refreshInputs(),
         get irView() { return ctx.charts.ir ? ctx.charts.ir.view : null; },
       };
     },

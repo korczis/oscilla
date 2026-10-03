@@ -2,7 +2,8 @@
 //
 //   buildCompareView(experiments, options) -> CompareView
 //     options = { labels = ['A', 'B', …], deltaPair = [0, 1], pointsPerOctave = 48,
-//                 allowNonEquivalentDelta = false }
+//                 allowNonEquivalentDelta = false, irRange = null ([fromMs, toMs]; null =
+//                 ir-chart.js IR_OVERLAY_RANGE_MS) }
 //   CompareView = {
 //     entries: [{ label, id, title, compact, role }],
 //     common: [{ field, label, text }],
@@ -12,6 +13,9 @@
 //     overlay: { x, grid: 'shared'|'resampled', axes, series, notes } | null,
 //     delta: { ok: true, x, range, rangeText, label, series, axes, summary, readoutAt(hz) }
 //          | { ok: false, reason },
+//     irOverlay: { ok: true, view (ir-chart.js IrOverlayView), summary, notes, labels }
+//              | { ok: false, reason },
+//     irDelta: { ok: false, reason },
 //     summary }
 //
 // Rules: the comparison metadata come from experiments/compare.js compareExperiments
@@ -22,12 +26,20 @@
 // over the overlap of both VALID ranges and, unless the caller explicitly allows it, only for
 // equivalent experiments; otherwise the delta is refused with the reason. Each overlay curve
 // keeps its own reliability mask (dashed where unreliable).
+// IR overlay (spec §59 "useful: IR overlay"; plan V356): the impulse responses of the compared
+// experiments on one time axis (ms re each curve's own direct peak, original scale, nothing
+// normalized; ir-chart.js buildIrOverlayView), shown ONLY when the set is equivalent (the
+// compareExperiments rules that also gate A − B: same calibration, sample rate, stimulus,
+// analysis, algorithms and master gain) and at least two of them carry an IR; otherwise it is
+// refused with the reason. There is no A − B of impulse responses (irDelta is always refused):
+// docs/v3/algorithms.md defines none.
 
 import { compareExperiments, responseDelta } from '../../experiments/compare.js';
 import { describeStimulus } from '../../experiments/schema.js';
 import { isValidLevelCalibration } from '../../calibration/level.js';
 import { TRANSFER_RATIO_UNIT } from '../../experiments/csv.js';
 import { experimentSummary } from './experiment-summary.js';
+import { buildIrOverlayView } from './ir-chart.js';
 import {
   QUANTITY_KINDS as K, COMPARE_ROLES, LINE_STYLES, STATUS_PRESENTATION, UNAVAILABLE,
   splitByMask, extent, dbAxisRange, frequencyAxis, interpLogF, nearestIndex, maskOn, rangeText,
@@ -237,13 +249,48 @@ function deltaView(exps, responses, labels, [ia, ib], cmp, { allowNonEquivalentD
   };
 }
 
+/** The IrResult of an experiment, or null. */
+function experimentIr(e) {
+  const ir = e && e.results ? e.results.ir : null;
+  return ir && ir.samples && ir.samples.length > 0 && ir.sampleRate > 0
+    && Number.isInteger(ir.peakIndex) ? ir : null;
+}
+
+/** IR_DELTA_REASON: why the compare view has no A − B of impulse responses. */
+export const IR_DELTA_REASON = 'A − B is not defined for impulse responses (only for the '
+  + 'frequency responses above)';
+
+/** The IR overlay of a compared set, or the reason it is not shown (see the header). */
+function irOverlayOf(exps, labels, cmp, { irRange }) {
+  const present = exps.map((e, i) => ({ ir: experimentIr(e), i })).filter((x) => x.ir);
+  if (present.length < 2) {
+    const missing = exps.map((e, i) => (experimentIr(e) ? null : labels[i])).filter(Boolean);
+    return { ok: false, reason: `the IR overlay needs two or more impulse responses (${
+      missing.join(', ')} ${missing.length === 1 ? 'has' : 'have'} none)` };
+  }
+  if (!cmp.compatible) {
+    return { ok: false, reason: `the IR overlay is not shown for non-equivalent experiments: ${
+      cmp.warnings.join(' ')}` };
+  }
+  const rates = [...new Set(present.map((p) => p.ir.sampleRate))];
+  if (rates.length > 1) {
+    return { ok: false, reason: `the impulse responses have different sample rates (${
+      rates.join(' Hz, ')} Hz)` };
+  }
+  const entries = present.map(({ ir, i }) => ({ ir, label: labels[i],
+    name: exps[i].name || '(unnamed)', role: COMPARE_ROLES[i % COMPARE_ROLES.length] }));
+  const view = buildIrOverlayView(entries, irRange ? { range: irRange } : {});
+  return { ok: true, view, summary: view.summary, notes: view.notes.slice(),
+    labels: entries.map((e) => e.label) };
+}
+
 /** buildCompareView(experiments, options) → CompareView (see the header). */
 export function buildCompareView(experiments, options = {}) {
   if (!Array.isArray(experiments) || experiments.length < 2)
     throw new RangeError('buildCompareView needs at least two experiments');
   const {
     labels = experiments.map((_, i) => String.fromCharCode(65 + (i % 26))),
-    deltaPair = [0, 1], pointsPerOctave = 48, allowNonEquivalentDelta = false,
+    deltaPair = [0, 1], pointsPerOctave = 48, allowNonEquivalentDelta = false, irRange = null,
   } = options;
   const cmp = compareExperiments(experiments);
   const entries = experiments.map((e, i) => {
@@ -264,6 +311,7 @@ export function buildCompareView(experiments, options = {}) {
   const overlay = overlayView(experiments, responses, labels, pointsPerOctave);
   const delta = deltaView(experiments, responses, labels, deltaPair, cmp,
     { allowNonEquivalentDelta, ppo: pointsPerOctave });
+  const irOverlay = irOverlayOf(experiments, labels, cmp, { irRange });
   const warn = cmp.warnings.length;
   const refused = delta.ok ? '' : delta.reason.replace(/\.$/, '');
   const summary = `Comparing ${entries.map((e) => `${e.label} "${e.title}"`).join(', ')}: `
@@ -279,6 +327,8 @@ export function buildCompareView(experiments, options = {}) {
     warnings: cmp.warnings.slice(),
     overlay,
     delta,
+    irOverlay,
+    irDelta: { ok: false, reason: IR_DELTA_REASON },
     summary,
   };
 }

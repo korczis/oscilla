@@ -60,6 +60,14 @@ position, temperature. OSCILLA never senses these automatically.
    microphone.
 4. **Check the sample rate and range.** The sweep cannot exceed 95 % of the Nyquist frequency
    (half the sample rate); a higher requested end is lowered and the change is shown.
+5. **Choose the input.** OSCILLA uses the browser's default input until you choose another one.
+   The Live input panel lists the inputs once the browser has granted the microphone (run the
+   setup check first; browsers hide the list before that) and keeps the list current when a
+   device is plugged in or out. The chosen input is used for the setup check, the measurement,
+   the live RTA and the level reference, and a saved experiment records it as a hashed
+   identifier (never the browser's raw device id). If the chosen input disappears it stays
+   selected, marked "not available", with a message; the setup check then refuses it until you
+   choose another input or the default. OSCILLA never switches microphones for you.
 
 ## Output level
 
@@ -99,7 +107,45 @@ device. Leave a short pause between repeats; captures never overlap.
 To compare two setups (another speaker position, another loudspeaker), change one thing only,
 keep the microphone, level and sweep the same, and save each as its own experiment. The
 comparison warns when experiments differ in calibration, sample rate, stimulus or algorithm
-version; take those warnings seriously.
+version; take those warnings seriously. For equivalent experiments it also overlays their
+impulse responses, each drawn from its own direct peak (0 ms) on its original scale; there is
+no A − B of impulse responses.
+
+## Sharing a recipe
+
+**Copy recipe link** (Measurement setup) puts the current recipe — sweep range and duration,
+digital output level, number of runs and aggregation, noise check, timing and phase — into the
+page address (`#mr=…`) and on the clipboard. The link carries no result, no calibration, no input
+device, name or notes. Opening it fills the setup and opens Measure; it never starts a setup
+check or a measurement. A link that has been altered or does not fit (an unknown field, a value
+out of range, a start frequency above the end) is refused as a whole and the setup is left as
+it was. The recipe can sit next to a Playground link in the same address; each restores its own
+part.
+
+## Where experiments are kept
+
+Saved experiments live in this browser's IndexedDB, for this page address only, and nowhere
+else. Where IndexedDB cannot be opened, OSCILLA keeps them in memory for the page view and says
+so; export each one as `.oscilla.json` to keep it. A save that fails (for example because the
+browser's storage for the page is full) says why and keeps the result on screen, so you can
+free space (export, then delete experiments) and save it again. The Playground never uses this
+storage and works the same when it is unavailable.
+
+Observed by the automated tests (`tests/browser/v3-ui.cjs`, check `persistence`, Playwright
+1.63 browsers, a fresh browser profile per run):
+
+| Browser (engine) | `file://` | `http(s)://` (GitHub Pages) |
+| --- | --- | --- |
+| Chromium 153 | IndexedDB opens; an experiment survives a page reload | same |
+| Firefox 155 | IndexedDB opens; an experiment survives a page reload | same |
+| WebKit 26.6 | IndexedDB opens; an experiment survives a page reload | same |
+
+These are the engines' behaviour in a fresh test profile. They do not show what a given browser
+does with its own settings: private windows, "clear data on exit", Safari's removal of site data
+after a period without visits, and enterprise policies can make IndexedDB unavailable or empty
+it. The tests also check that a storage-full error fails the save with its reason and keeps the
+result, and that a database that cannot be opened at all leaves the Playground and Measure
+working, with saves kept in memory.
 
 ## Calibration, if you have it
 
@@ -123,6 +169,9 @@ version; take those warnings seriously.
 - Calibrations are kept for the page view only. A saved experiment records which frequency
   profile it used (name and identity) and the level calibration, so reload the profile file
   before a new session.
+- **Export CSV** and **Export JSON** save the loaded frequency profile. Both files are the same
+  for the same profile (name, identity, sign convention and points; the JSON also keeps the
+  source and notes) and import back unchanged, without asking for the sign convention again.
 
 ## Relative level versus SPL
 

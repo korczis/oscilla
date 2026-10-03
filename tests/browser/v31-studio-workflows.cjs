@@ -1,0 +1,610 @@
+#!/usr/bin/env node
+// OSCILLA V3.1 Studio workflows the evidence audit found missing, on the built dist/index.html in
+// chromium, firefox and webkit, from file:// (every check) and from a GitHub-Pages-like sub-path
+// (http://127.0.0.1:<port>/oscilla/, the smoke checks). Spec §78, §105-§110, §145, §250-§251;
+// plan V413, V424, V425, V427, V428, V431.
+//
+//   node tests/browser/v31-studio-workflows.cjs [--browsers chromium,firefox,webkit]
+//        [--origins file,http] [--only name1,name2] [--json out.json]   (or OSC_BROWSERS=...)
+//
+// Checks (asserted):
+//   transport-inspector  nothing selected: the Inspector shows tempo, time signature, time mode,
+//                        loop and length; typed tempo, beats, beat unit and the loop switch are
+//                        store actions (the timeline transport strip shows the same tempo),
+//                        a refused tempo is announced and reverted, undo restores (V413)
+//   graph-search         `/` from the graph opens Find with the field focused; typing and Enter
+//                        selects, frames and focuses the node (inside the viewport); the Find
+//                        button opens it too and Escape returns focus to the button (V428)
+//   render-wav           Render WAV on Basic Tone downloads a 16-bit WAV at the plan's 48 kHz
+//                        stereo, frames = duration × rate; a second render is byte-identical;
+//                        progress shows in the task strip; Abort (the strip's button) drops a
+//                        render without a download; Measurement Sweep is refused with the live
+//                        Microphone limitation (V427)
+//   measure-from-studio  on the TEST CONTEXT loopback: PLAY of a (shortened) Measurement Sweep
+//                        hands the derived recipe to the MeasurementEngine at the first
+//                        measurement clip; MEASURE runs PREFLIGHT … COMPLETE; the experiment is
+//                        saved with the Studio block (studioHash of the model that ran, the
+//                        recipe derived from the topology, TEST CONTEXT runs); Studio PLAY is
+//                        refused while the measurement owns the output; Escape aborts a second
+//                        run; 0 engine, Studio runtime and capture nodes after each (V424, V425)
+//   large-graph-render   the 100-node / 200-edge fixture imported through the UI path renders
+//                        100 node cards and 200 cables within BROWSER_BUDGETS.importMs; one edit
+//                        (store dispatch + every projection) and Frame All within
+//                        BROWSER_BUDGETS.editMs (median of 9; tests/unit/fixtures/
+//                        v31-large-studio.mjs, docs/v31/performance.md); the numbers are printed
+//                        (V431)
+//   no-console-errors
+'use strict';
+const { spawn } = require('node:child_process');
+const crypto = require('node:crypto');
+const fs = require('node:fs');
+const os = require('node:os');
+const path = require('node:path');
+const { pathToFileURL } = require('node:url');
+const playwright = require('playwright');
+
+const argv = process.argv.slice(2);
+const arg = (name, fallback) => {
+  const i = argv.indexOf(`--${name}`);
+  return i >= 0 && argv[i + 1] ? argv[i + 1] : fallback;
+};
+const ROOT = path.resolve(__dirname, '..', '..');
+const DIST = path.join(ROOT, 'dist', 'index.html');
+const BROWSERS = arg('browsers', process.env.OSC_BROWSERS || 'chromium,firefox,webkit').split(',');
+const ORIGINS = arg('origins', 'file,http').split(',');
+const ONLY = arg('only', '') ? new Set(arg('only', '').split(',')) : null;
+const JSON_OUT = arg('json', '');
+const HTTP_CHECKS = new Set(['graph-search', 'render-wav', 'no-console-errors']);
+const LAUNCH = {
+  chromium: { args: ['--autoplay-policy=no-user-gesture-required'] },
+  firefox: { firefoxUserPrefs: { 'media.autoplay.default': 0, 'media.autoplay.blocking_policy': 0,
+    'media.autoplay.block-webaudio': false } },
+  webkit: {},
+};
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const esm = (rel) => import(pathToFileURL(path.join(ROOT, rel)).href);
+
+function startServer() {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'oscilla-studio-wf-'));
+  fs.mkdirSync(path.join(root, 'oscilla'));
+  fs.copyFileSync(DIST, path.join(root, 'oscilla', 'index.html'));
+  const port = 9300 + Math.floor(Math.random() * 300);
+  const proc = spawn('python3', ['-m', 'http.server', String(port), '--bind', '127.0.0.1',
+    '--directory', root], { stdio: 'ignore' });
+  return { proc, root, url: `http://127.0.0.1:${port}/oscilla/` };
+}
+
+async function waitForServer(url) {
+  for (let i = 0; i < 80; i += 1) {
+    try { const r = await fetch(url); if (r.ok) return; } catch { /* not yet */ }
+    await sleep(100);
+  }
+  throw new Error(`server did not start: ${url}`);
+}
+
+// ------------------------------------------------------------------------------ page helpers
+const H = {
+  verdict: (conds) => {
+    const failed = Object.keys(conds).filter((k) => !conds[k]);
+    return { ok: failed.length === 0, failed };
+  },
+  until: async (fn, test, ms = 3000, step = 40) => {
+    const t0 = Date.now();
+    let v = await fn();
+    while (!test(v) && Date.now() - t0 < ms) {
+      await sleep(step);
+      v = await fn();
+    }
+    return v;
+  },
+  frames: (page, n = 2) => page.evaluate((k) => new Promise((r) => {
+    let i = 0;
+    const f = () => (++i >= k ? r() : requestAnimationFrame(f));
+    requestAnimationFrame(f);
+  }), n),
+  /** Open the Studio workspace on a fresh template document. */
+  fresh: async (page, id = 'subtractive-synth') => {
+    await page.evaluate(async (tid) => {
+      const a = window.OSCILLA.app;
+      const s = window.OSCILLA.studio;
+      if (s.transport && s.transport.playing) await a.studioStop();
+      a.alerts = [];
+      for (const d of document.querySelectorAll('dialog[open]')) d.close();
+      if (a.workspace !== 'studio') a.setWorkspace('studio');
+      a.studioLoadTemplate(tid);
+      a.studio.warning = '';
+    }, id);
+    await page.waitForFunction(() => document.querySelector('#osc-app').dataset.mode === 'studio');
+    await H.frames(page);
+    await page.evaluate(() => window.OSCILLA.studio.editor.frameAll());
+    await H.frames(page);
+  },
+  /** Record every text the two Studio live regions receive. */
+  recordLive: (page) => page.evaluate(() => {
+    if (window.__studioLive) { window.__studioLive.length = 0; return; }
+    const log = [];
+    window.__studioLive = log;
+    for (const sel of ['[data-osc="studio.live"]', '[data-osc="studio.alert"]']) {
+      const el = document.querySelector(sel);
+      new MutationObserver(() => {
+        const t = el.textContent.replace(/​/g, '');
+        if (t) log.push(t);
+      }).observe(el, { childList: true, characterData: true, subtree: true });
+    }
+  }),
+  live: (page) => page.evaluate(() => (window.__studioLive || []).slice()),
+  counts: (page) => page.evaluate(() => {
+    const c = window.OSCILLA.studio.counts();
+    const m = window.OSCILLA.measure.counts();
+    return { ...c, ioNodes: m.ioNodes, ioSources: m.ioSources, captures: m.captures };
+  }),
+  quiet: (page) => H.until(() => H.counts(page), (c) => !c.playing && c.engineNodes === 0
+    && c.engineSources === 0 && c.runtimeNodes === 0 && c.ioNodes === 0 && c.ioSources === 0
+    && c.captures === 0, 5000),
+  /** Type into a field like a user (select all, type, commit with Enter). */
+  type: async (page, sel, text) => {
+    await page.click(sel, { clickCount: 3 });
+    await page.keyboard.press(process.platform === 'darwin' ? 'Meta+A' : 'Control+A');
+    await page.keyboard.type(text);
+    await page.keyboard.press('Enter');
+    await H.frames(page);
+  },
+};
+
+function wavInfo(buf) {
+  const b = Buffer.from(buf);
+  const fmt = b.indexOf('fmt ');
+  const data = b.indexOf('data');
+  return { riff: b.toString('ascii', 0, 4), wave: b.toString('ascii', 8, 12),
+    channels: b.readUInt16LE(fmt + 10), sampleRate: b.readUInt32LE(fmt + 12),
+    bits: b.readUInt16LE(fmt + 22), dataBytes: b.readUInt32LE(data + 4),
+    sha256: crypto.createHash('sha256').update(b).digest('hex') };
+}
+
+// ------------------------------------------------------------------------------ checks
+function defineChecks(fx) {
+  const checks = [];
+  const def = (name, fn) => checks.push({ name, fn });
+
+  def('transport-inspector', async ({ page }) => {
+    await H.fresh(page);
+    await H.recordLive(page);
+    await page.evaluate(() => window.OSCILLA.studio.store.dispatch({ type: 'SELECTION_CHANGE',
+      selection: { nodes: [] } }));
+    await H.frames(page);
+    const shown = await page.evaluate(() => {
+      const q = (k) => document.querySelector(`[data-osc="studio.inspector.${k}"]`);
+      return { transport: !!q('transport'), tempo: q('tempo') && q('tempo').value,
+        beats: q('beats') && q('beats').value, unit: q('unit') && q('unit').value,
+        mode: q('timeMode') && q('timeMode').value,
+        loop: q('loop') && q('loop').getAttribute('aria-checked'),
+        length: q('length') && q('length').textContent,
+        tempoLabel: document.querySelector('label[for="osc-si-studio-tempo"]').textContent };
+    });
+    const depth0 = await page.evaluate(() => window.OSCILLA.studio.store.debugInfo().undoDepth);
+    await H.type(page, '[data-osc="studio.inspector.tempo"]', '96');
+    await H.type(page, '[data-osc="studio.inspector.beats"]', '3');
+    await page.selectOption('[data-osc="studio.inspector.unit"]', '8');
+    await page.click('[data-osc="studio.inspector.loop"]');
+    await H.frames(page);
+    const after = await page.evaluate(() => {
+      const m = window.OSCILLA.studio.model;
+      const strip = document.querySelector('[data-osc="studio.tl.tempo"]');
+      return { tempo: m.transport.tempo, sig: m.transport.timeSignature,
+        loop: m.timeline.loop.enabled,
+        strip: strip ? strip.value : null,
+        depth: window.OSCILLA.studio.store.debugInfo().undoDepth,
+        loopChecked: document.querySelector('[data-osc="studio.inspector.loop"]')
+          .getAttribute('aria-checked') };
+    });
+    await H.type(page, '[data-osc="studio.inspector.tempo"]', '5');
+    const refused = await page.evaluate(() => ({
+      tempo: window.OSCILLA.studio.model.transport.tempo,
+      field: document.querySelector('[data-osc="studio.inspector.tempo"]').value }));
+    const live = await H.live(page);
+    await page.evaluate(() => document.activeElement.blur()); // a focused field keeps its text
+    for (let i = 0; i < 4; i++) await page.evaluate(() => window.OSCILLA.app.studioUndo());
+    await H.frames(page);
+    const undone = await page.evaluate(() => {
+      const m = window.OSCILLA.studio.model;
+      return { tempo: m.transport.tempo, sig: m.transport.timeSignature,
+        loop: m.timeline.loop.enabled,
+        field: document.querySelector('[data-osc="studio.inspector.tempo"]').value };
+    });
+    return { ...H.verdict({
+      shown: shown.transport && shown.tempo === '120' && shown.beats === '4' && shown.unit === '4'
+        && shown.mode === 'seconds' && /s$/.test(shown.length || '')
+        && shown.tempoLabel === 'Tempo',
+      edited: after.tempo === 96 && after.sig[0] === 3 && after.sig[1] === 8 && after.loop
+        && after.loopChecked === 'true',
+      oneEntryEach: after.depth === depth0 + 4,
+      oneStore: after.strip === null || after.strip === '96',
+      refused: refused.tempo === 96 && refused.field === '96'
+        && live.some((t) => /^Tempo must be \d+-\d+ BPM\.$/.test(t)),
+      announced: live.includes('Changed tempo'),
+      undone: undone.tempo === 120 && undone.sig[0] === 4 && undone.sig[1] === 4 && !undone.loop
+        && undone.field === '120',
+    }), shown, after, refused, undone, live: live.slice(-6) };
+  });
+
+  def('graph-search', async ({ page }) => {
+    await H.fresh(page);
+    await H.recordLive(page);
+    await page.focus('[data-osc="studio.graph.viewport"]');
+    await page.keyboard.press('/');
+    await page.waitForSelector('#osc-dlg-studio-find[open]');
+    await H.frames(page);
+    const opened = await page.evaluate(() => ({
+      focused: document.activeElement && document.activeElement.dataset.osc,
+      items: document.querySelectorAll('[data-osc="studio.find.item"]').length,
+      status: document.querySelector('[data-osc="studio.find.status"]').textContent }));
+    await page.keyboard.type('lfo');
+    const filtered = await page.evaluate(() => [...document.querySelectorAll(
+      '[data-osc="studio.find.item"]')].map((b) => b.dataset.node));
+    await page.keyboard.press('Enter');
+    await H.frames(page, 4);
+    const found = await page.evaluate(() => {
+      const el = document.activeElement;
+      const vp = document.querySelector('[data-osc="studio.graph.viewport"]')
+        .getBoundingClientRect();
+      const r = el.getBoundingClientRect();
+      return { dialog: !!document.querySelector('#osc-dlg-studio-find[open]'),
+        selection: [...window.OSCILLA.studio.selection.nodes], focusedNode: el.dataset.nodeId,
+        inside: r.left >= vp.left - 1 && r.right <= vp.right + 1 && r.top >= vp.top - 1
+          && r.bottom <= vp.bottom + 1,
+        dirty: window.OSCILLA.studio.dirty };
+    });
+    // The Find button from the keyboard (WebKit does not focus a clicked button); Escape
+    // returns focus to it; nothing matched is said in words.
+    await page.focus('[data-osc="studio.find"]');
+    await page.keyboard.press('Enter');
+    await page.waitForSelector('#osc-dlg-studio-find[open]');
+    await H.frames(page);
+    await page.keyboard.type('zzz');
+    const none = await page.evaluate(() => document.querySelector('[data-osc="studio.find.status"]')
+      .textContent);
+    await page.keyboard.press('Escape');
+    await H.frames(page, 3);
+    const back = await page.evaluate(() => ({
+      dialog: !!document.querySelector('#osc-dlg-studio-find[open]'),
+      focused: document.activeElement && document.activeElement.dataset.osc }));
+    const live = await H.live(page);
+    return { ...H.verdict({
+      opened: opened.focused === 'studio.find.search' && opened.items === 6
+        && /^6 nodes match\.$/.test(opened.status),
+      filtered: filtered.length === 1 && filtered[0] === 'lfo-1',
+      selected: !found.dialog && found.selection.length === 1 && found.selection[0] === 'lfo-1',
+      focused: found.focusedNode === 'lfo-1', framed: found.inside, notDirty: !found.dirty,
+      announced: live.some((t) => t.startsWith('Found LFO 1')),
+      noneSaid: none === 'No node matches “zzz”.',
+      focusBack: !back.dialog && back.focused === 'studio.find',
+    }), opened, filtered, found, back, live: live.slice(-4) };
+  });
+
+  def('render-wav', async ({ page }) => {
+    await H.fresh(page, 'basic-tone');
+    await H.recordLive(page);
+    // Progress: record every task-strip state the page shows.
+    await page.evaluate(() => {
+      window.__task = [];
+      const el = document.querySelector('[data-osc="studio.task"]');
+      new MutationObserver(() => {
+        const t = el.querySelector('[data-osc="studio.task.text"]').textContent;
+        if (t && getComputedStyle(el).display !== 'none') window.__task.push(t);
+      }).observe(el, { attributes: true, childList: true, characterData: true, subtree: true });
+    });
+    // The dialog: a graph without a timeline is offered RENDER_DEFAULT_S; a bad duration is
+    // refused in words and the dialog stays.
+    await page.click('[data-osc="studio.renderWav"]');
+    await page.waitForSelector('#osc-dlg-studio-render[open]');
+    await H.frames(page);
+    const form = await page.evaluate(() => ({
+      duration: document.querySelector('[data-osc="studio.render.duration"]').value,
+      format: document.querySelector('[data-osc="studio.render.format"]').textContent,
+      note: document.querySelector('[data-osc="studio.render.note"]').textContent,
+      focused: document.activeElement && document.activeElement.dataset.osc }));
+    await page.fill('[data-osc="studio.render.duration"]', '0');
+    await page.click('[data-osc="studio.render.start"]');
+    await H.frames(page);
+    const bad = await page.evaluate(() => ({
+      open: !!document.querySelector('#osc-dlg-studio-render[open]'),
+      error: document.querySelector('[data-osc="studio.render.error"]').textContent }));
+    await page.fill('[data-osc="studio.render.duration"]', '1.5');
+    const files = [];
+    for (let i = 0; i < 2; i++) {
+      if (i > 0) {
+        await page.click('[data-osc="studio.renderWav"]');
+        await page.waitForSelector('#osc-dlg-studio-render[open]');
+        await page.fill('[data-osc="studio.render.duration"]', '1.5');
+      }
+      const [dl] = await Promise.all([page.waitForEvent('download', { timeout: 20000 }),
+        page.focus('[data-osc="studio.render.duration"]')
+          .then(() => page.keyboard.press('Enter'))]);
+      const p = await dl.path();
+      files.push({ name: dl.suggestedFilename(), info: wavInfo(fs.readFileSync(p)) });
+      await H.until(() => page.evaluate(() => window.OSCILLA.studio.rendering), (r) => !r, 5000);
+    }
+    const progress = await page.evaluate(() => window.__task.slice());
+    // Abort through the strip's button while the render runs (it is shown at once).
+    const abort = await page.evaluate(async () => {
+      let downloads = 0;
+      const orig = HTMLAnchorElement.prototype.click;
+      HTMLAnchorElement.prototype.click = function click() {
+        if (this.download) downloads += 1; else orig.call(this);
+      };
+      try {
+        const p = window.OSCILLA.app.studioRenderWav({ duration: 1.5 });
+        for (let i = 0; i < 4; i++) await Promise.resolve();
+        const btn = document.querySelector('[data-osc="studio.task.abort"]');
+        const visible = !!btn && btn.getBoundingClientRect().width > 0;
+        btn.click();
+        const r = await p;
+        return { visible, aborted: !!r.aborted, ok: r.ok, downloads };
+      } finally {
+        HTMLAnchorElement.prototype.click = orig;
+      }
+    });
+    await H.frames(page);
+    const stripAfter = await page.evaluate(() => `${getComputedStyle(
+      document.querySelector('[data-osc="studio.task"]')).display} ${JSON.stringify(
+      window.OSCILLA.app.studio.task)}`);
+    // A Studio with a live input: the dialog states the limitation and cannot render.
+    await H.fresh(page, 'measurement-sweep');
+    await page.click('[data-osc="studio.renderWav"]');
+    await page.waitForSelector('#osc-dlg-studio-render[open]');
+    await H.frames(page);
+    const refused = await page.evaluate(async () => {
+      const limits = [...document.querySelectorAll('[data-osc="studio.render.limits"] li')]
+        .map((li) => li.textContent);
+      const disabled = document.querySelector('[data-osc="studio.render.start"]').disabled;
+      document.querySelector('[data-osc="studio.render.cancel"]').click();
+      const r = await window.OSCILLA.app.studioRenderWav();
+      return { limits, disabled, ok: r.ok, reason: r.reason };
+    });
+    const live = await H.live(page);
+    const [a, b] = files;
+    const frames = a.info.dataBytes / (a.info.channels * 2);
+    return { ...H.verdict({
+      form: form.duration === '2' && /^48 kHz · stereo · 16-bit WAV/.test(form.format)
+        && /no timeline/.test(form.note) && form.focused === 'studio.render.duration',
+      badRefused: bad.open && bad.error === 'Give a duration in seconds.',
+      downloaded: a.name === 'basic-tone.wav' && a.info.riff === 'RIFF' && a.info.wave === 'WAVE',
+      format: a.info.sampleRate === 48000 && a.info.channels === 2 && a.info.bits === 16,
+      length: frames === 72000,
+      deterministic: a.info.sha256 === b.info.sha256,
+      progress: progress.length > 0 && progress.every((t) => /^\d{1,3} %$/.test(t)),
+      announced: live.some((t) => t.startsWith('Rendered basic-tone.wav: 1.50 s, 48000 Hz')),
+      abortShown: abort.visible, aborted: abort.aborted && !abort.ok && abort.downloads === 0
+        && live.includes('WAV render aborted'), stripHidden: stripAfter.startsWith('none '),
+      refused: refused.disabled && refused.limits.some((t) => /live input/.test(t))
+        && !refused.ok && /live input/.test(refused.reason || ''),
+    }), form, bad, files, frames, progress: progress.slice(0, 12), abort, stripAfter, refused,
+    live: live.slice(-5) };
+  });
+
+  def('measure-from-studio', async ({ page }) => {
+    await page.evaluate(() => {
+      const m = window.OSCILLA.measure;
+      m.useLoopback({ type: 'biquad', filter: 'lowpass', frequency: 2000, Q: Math.SQRT1_2 });
+    });
+    await H.fresh(page, 'measurement-sweep');
+    await H.recordLive(page);
+    await page.evaluate(() => {
+      const s = window.OSCILLA.studio.store;
+      for (const a of [
+        { type: 'NODE_PARAM_SET', nodeId: 'sweep-1', key: 'duration', value: 1 },
+        { type: 'NODE_PARAM_SET', nodeId: 'sweep-1', key: 'level', value: 0.25 },
+        { type: 'CLIP_RESIZE', clipId: 'clip-1', duration: 0.25 },
+        { type: 'CLIP_RESIZE', clipId: 'clip-3', duration: 1 },
+      ]) {
+        const r = s.dispatch(a);
+        if (!r.ok) throw new Error(r.reason);
+      }
+    });
+    const modelText = await page.evaluate(() => JSON.stringify(window.OSCILLA.studio.model));
+    await page.click('[data-osc="studio.play"]');
+    const during = await H.until(() => page.evaluate(() => ({
+      run: window.OSCILLA.studio.measurementRun.state, state: window.OSCILLA.measure.state,
+      strip: getComputedStyle(document.querySelector('[data-osc="studio.task"]')).display,
+      label: document.querySelector('[data-osc="studio.task"] .osc-st-task-label').textContent })),
+    (v) => v.state === 'MEASURING', 10000, 20);
+    const refusedPlay = await page.evaluate(() => window.OSCILLA.app.studioPlay());
+    const done = await H.until(() => page.evaluate(() => {
+      const r = window.OSCILLA.studio.measurementRun;
+      return { run: r.state, text: r.text, id: r.experimentId, state: window.OSCILLA.measure.state,
+        history: window.OSCILLA.measure.history };
+    }), (v) => v.run === 'done' || v.run === 'failed', 30000, 50);
+    const quiet1 = await H.quiet(page);
+    const exp = done.id ? await page.evaluate(async (id) => {
+      const e = window.OSCILLA.experiments.get(id);
+      return e ? { name: e.name, studio: e.studio, recipe: e.recipe,
+        sampleRate: e.measurement ? e.measurement.sampleRate : null,
+        runs: e.measurement ? e.measurement.runs.map((r) => r.testContext || null) : [],
+        configHash: e.provenance && e.provenance.configHash } : null;
+    }, done.id) : null;
+    // Node side: the hash of the model that ran and the recipe its topology describes.
+    const { normalizeStudio, studioHash } = await esm('src/js/studio/schema.js');
+    const { recipeFromStudio } = await esm('src/js/studio/provenance.js');
+    const model = normalizeStudio(JSON.parse(modelText));
+    const sr = await page.evaluate(() => window.OSCILLA.engine.ctx.sampleRate);
+    const derived = recipeFromStudio(model, { sampleRate: sr });
+    // A second run aborted by Escape mid-measurement.
+    await page.evaluate(() => window.OSCILLA.app.studioPlay());
+    await H.until(() => page.evaluate(() => window.OSCILLA.measure.state),
+      (s) => s === 'MEASURING' || s === 'NOISE_CHECK', 10000, 20);
+    await page.keyboard.press('Escape');
+    const aborted = await H.until(() => page.evaluate(() => ({
+      run: window.OSCILLA.studio.measurementRun.state,
+      text: window.OSCILLA.studio.measurementRun.text, state: window.OSCILLA.measure.state })),
+    (v) => v.run === 'failed' && v.state === 'ABORTED', 8000, 50);
+    const quiet2 = await H.quiet(page);
+    const live = await H.live(page);
+    await page.evaluate(() => window.OSCILLA.measure.useMicrophone());
+    return { ...H.verdict({
+      handedOff: during.state === 'MEASURING' && during.run === 'running'
+        && during.strip !== 'none' && during.label === 'Measuring from Studio',
+      exclusive: refusedPlay === false
+        && live.some((t) => /measurement owns the output/.test(t)),
+      complete: done.run === 'done' && done.state === 'COMPLETE'
+        && ['PREFLIGHT', 'NOISE_CHECK', 'MEASURING', 'ANALYZING', 'COMPLETE']
+          .every((s) => done.history.includes(s)),
+      saved: !!exp && exp.name === 'Measurement Sweep (Studio)'
+        && live.some((t) => t.startsWith('Measurement saved as experiment')),
+      studioBlock: !!exp && !!exp.studio && exp.studio.studioHash === studioHash(model)
+        && exp.studio.schemaVersion === model.schemaVersion,
+      recipe: !!exp && derived.ok
+        && JSON.stringify(exp.recipe.stimulus) === JSON.stringify(derived.recipe.stimulus)
+        && exp.recipe.analysis.noiseCheckS === 0.25,
+      testContext: !!exp && exp.runs.length > 0 && exp.runs.every((t) => t && t.label),
+      released: quiet1.engineNodes === 0 && quiet1.runtimeNodes === 0 && quiet1.ioNodes === 0
+        && quiet1.captures === 0,
+      escapeAborts: aborted.run === 'failed' && aborted.state === 'ABORTED'
+        && aborted.text === 'Measurement aborted.',
+      releasedAfterAbort: quiet2.engineNodes === 0 && quiet2.runtimeNodes === 0
+        && quiet2.ioNodes === 0 && quiet2.captures === 0,
+    }), during, done: { ...done, history: done.history.join(' → ') }, exp: exp && { name: exp.name,
+      hash: exp.studio && exp.studio.studioHash.slice(0, 12), stimulus: exp.recipe.stimulus },
+    derived: derived.ok ? derived.recipe.stimulus : derived.reason, aborted, quiet1, quiet2,
+    live: live.slice(-8) };
+  });
+
+  def('large-graph-render', async ({ page, browserName }) => {
+    await H.fresh(page);
+    const t = await page.evaluate(async (text) => {
+      const a = window.OSCILLA.app;
+      const s = window.OSCILLA.studio;
+      const raf = () => new Promise((r) => requestAnimationFrame(() => r()));
+      const t0 = performance.now();
+      const r = a.studioImportText(text);
+      await raf();
+      await raf();
+      const importMs = performance.now() - t0;
+      const info = s.editor.debugInfo();
+      const cards = document.querySelectorAll('.osc-sg-node').length;
+      const cables = document.querySelectorAll('.osc-sg-edge-line').length;
+      const med = (xs) => xs.slice().sort((x, y) => x - y)[Math.floor(xs.length / 2)];
+      const edit = [];
+      const move = [];
+      const frame = [];
+      for (let i = 0; i < 9; i++) {
+        let t1 = performance.now();
+        s.store.dispatch({ type: 'NODE_PARAM_SET', nodeId: 'filter-12', key: 'frequency',
+          value: 600 + 10 * i });
+        edit.push(performance.now() - t1);
+        t1 = performance.now();
+        s.store.dispatch({ type: 'NODE_MOVE', nodeId: 'osc-7', position: { x: 16 * i, y: 960 } });
+        move.push(performance.now() - t1);
+        t1 = performance.now();
+        s.editor.frameAll();
+        frame.push(performance.now() - t1);
+      }
+      return { ok: r.ok, importMs, nodes: info.nodes, edges: info.edges, cards, cables,
+        editMs: med(edit), moveMs: med(move), frameMs: med(frame) };
+    }, fx.largeText);
+    console.log(`   ${browserName} 100 nodes / 200 edges: import+render `
+      + `${t.importMs.toFixed(1)} ms, `
+      + `edit ${t.editMs.toFixed(2)} ms, move ${t.moveMs.toFixed(2)} ms, frame all `
+      + `${t.frameMs.toFixed(2)} ms (median of 9)`);
+    return { ...H.verdict({
+      imported: t.ok && t.nodes === 100 && t.edges === 200 && t.cards === 100 && t.cables === 200,
+      importBudget: t.importMs <= fx.budgets.importMs,
+      editBudget: t.editMs <= fx.budgets.editMs && t.moveMs <= fx.budgets.editMs
+        && t.frameMs <= fx.budgets.editMs,
+    }), t };
+  });
+
+  def('no-console-errors', async ({ errors }) => ({ ok: errors.length === 0,
+    errors: errors.slice(0, 8) }));
+  return checks;
+}
+
+// ------------------------------------------------------------------------------ runner
+async function runOne(browserName, origin, baseUrl, fx) {
+  const browser = await playwright[browserName].launch(LAUNCH[browserName]);
+  const context = await browser.newContext({ viewport: { width: 1536, height: 1024 },
+    acceptDownloads: true });
+  const page = await context.newPage();
+  page.setDefaultTimeout(15000);
+  const errors = [];
+  page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
+  page.on('pageerror', (e) => errors.push(`pageerror: ${e.message}`));
+  const results = {};
+  await page.goto(baseUrl, { waitUntil: 'load' });
+  await page.waitForSelector('html[data-ready="true"]', { timeout: 15000 });
+  await page.mouse.click(5, 300); // a user gesture so the audio context may start
+  await page.evaluate(() => { const a = window.OSCILLA.app; a.alerts = [];
+    if (!a.safetyCollapsed) a.collapseSafety(); });
+  for (const { name, fn } of defineChecks(fx)) {
+    if (ONLY && !ONLY.has(name) && name !== 'no-console-errors') continue;
+    if (origin === 'http' && !HTTP_CHECKS.has(name)) continue;
+    const t0 = Date.now();
+    try {
+      const v = await Promise.race([
+        fn({ page, context, browser, errors, browserName, origin, baseUrl }),
+        sleep(90000).then(() => ({ ok: false, detail: 'timeout 90 s' })),
+      ]);
+      results[name] = { ...v, ms: Date.now() - t0 };
+    } catch (e) {
+      results[name] = { ok: false, detail: String(e.message || e).split('\n')[0],
+        ms: Date.now() - t0 };
+    }
+    try {
+      await page.mouse.up();
+      await page.evaluate(() => {
+        for (const d of document.querySelectorAll('dialog[open]')) d.close();
+        window.OSCILLA.app.alerts = [];
+      });
+    } catch { /* page gone */ }
+  }
+  await browser.close();
+  return results;
+}
+
+(async () => {
+  if (!fs.existsSync(DIST)) {
+    console.error(`missing ${DIST}: run npm run build`);
+    process.exit(2);
+  }
+  // The §145 fixture, built through the store in Node, exported as a project file.
+  const { normalizeStudio } = await esm('src/js/studio/schema.js');
+  const { createIdGenerator, createStudioStore } = await esm('src/js/studio/actions.js');
+  const { exportProjectFile } = await esm('src/js/studio/library.js');
+  const { BROWSER_BUDGETS, buildLargeStudio } = await esm(
+    'tests/unit/fixtures/v31-large-studio.mjs');
+  const empty = normalizeStudio({ metadata: { title: 'Large graph (100 nodes)' } });
+  const store = createStudioStore(empty, { idGenerator: createIdGenerator(empty) });
+  buildLargeStudio(store);
+  const fx = { largeText: exportProjectFile(store.getModel()).text, budgets: BROWSER_BUDGETS };
+
+  const server = ORIGINS.includes('http') ? startServer() : null;
+  if (server) await waitForServer(server.url);
+  const all = {};
+  let failed = 0;
+  try {
+    for (const b of BROWSERS) {
+      for (const o of ORIGINS) {
+        const base = o === 'file' ? pathToFileURL(DIST).href : server.url;
+        const key = `${b}/${o}`;
+        const t0 = Date.now();
+        const res = await runOne(b, o, base, fx);
+        all[key] = res;
+        const names = Object.keys(res);
+        const bad = names.filter((n) => !res[n].ok);
+        failed += bad.length;
+        console.log(`${bad.length ? 'FAIL' : 'PASS'} ${key}/v31-studio-workflows: ${names.length
+          - bad.length}/${names.length} checks (${((Date.now() - t0) / 1000).toFixed(1)} s)`);
+        for (const n of bad) {
+          const why = res[n].failed ? `failed [${res[n].failed.join(', ')}] ` : '';
+          console.log(`   x ${n}: ${why}${JSON.stringify(res[n]).slice(0, 1400)}`);
+        }
+      }
+    }
+  } finally {
+    if (server) {
+      server.proc.kill();
+      fs.rmSync(server.root, { recursive: true, force: true });
+    }
+  }
+  if (JSON_OUT) fs.writeFileSync(JSON_OUT, `${JSON.stringify(all, null, 2)}\n`);
+  process.exit(failed ? 1 : 0);
+})();

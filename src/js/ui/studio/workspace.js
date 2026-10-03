@@ -19,6 +19,23 @@
 // output (stops the instrument and the sequencer; refused while a measurement owns it), and the
 // instrument or the sequencer starting stops the Studio.
 //
+// Measurement clips (§106-§110; plan V424, V425): the transport's onMeasurement hook is
+// src/js/studio/measurement-run.js. One pass of measurement clips is ONE measurement: its recipe
+// is derived from the topology (provenance.js recipeFromStudio), the Studio releases the output
+// at the first clip, and the MEASURE workspace's MeasurementEngine runs it (measure.js
+// measureRunRecipe: the same state machine, io, calibration, abort paths and exclusivity); the
+// experiment is saved with the Studio provenance block (withStudioProvenance). STOP, Escape,
+// page hide and leaving the workspace abort it as they abort any measurement.
+//
+// Render WAV (§105; plan V427): src/js/studio/offline.js renderStudioOffline on an
+// OfflineAudioContext at the render format of the plan (a Recorder node's, else 48 kHz stereo,
+// never the device rate, so the same Studio renders the same bytes everywhere), encoded by
+// audio/wav.js and downloaded with the exporters' downloadBlob. Progress is shown and announced;
+// Abort drops the render. Live-only nodes refuse with the plan's limitation.
+//
+// Find node (§250-§251; plan V428): `/` or the Find button opens graph-picker.js createFindNode;
+// a result is selected, framed and focused.
+//
 // Alpine holds only small plain view state (`studio`); the store, runtime, transport and view
 // controllers live in the closure `ctx`, never in reactive state.
 
@@ -27,22 +44,28 @@ import { createIdGenerator, createStudioStore } from '../../studio/actions.js';
 import { compileStudio } from '../../studio/compiler.js';
 import { createStudioRuntime } from '../../studio/runtime.js';
 import { createStudioTransport } from '../../studio/transport.js';
+import { createStudioMeasurementRun } from '../../studio/measurement-run.js';
+import { withStudioProvenance } from '../../studio/provenance.js';
+import { planOfflineRender, renderStudioOffline } from '../../studio/offline.js';
+import { timelineEnd } from '../../studio/timeline.js';
+import { DEFAULT_RENDER } from '../../audio/offline-renderer.js';
 import { resolveEscape } from '../../studio/timeline-compiler.js';
 import {
   REFERENCE_TEMPLATE_ID, listTemplates, templateModel,
 } from '../../studio/templates/index.js';
 import {
-  createDirtyTracker, createStudioLibrary, exportProjectFile, importStudioFile,
+  createDirtyTracker, createStudioLibrary, exportProjectFile, fileSlug, importStudioFile,
 } from '../../studio/library.js';
 import { announceRedo, announceUndo, announceAction } from '../../studio/a11y.js';
 import { openExperimentStoreOrMemory } from '../../experiments/store.js';
+import { pageIndexedDb } from '../experiments.js';
 import { KNOWN_ALGORITHM_IDS } from '../../measurement/algorithms.js';
 import { openModal, closeModal } from '../dialogs.js';
 import { downloadBlob, readFileText } from '../exporters.js';
 import { createGraphEditor } from './graph-editor.js';
 import { compiledStatus, nodeWarnings } from './graph-view.js';
 import { STUDIO_SHORTCUTS, isEditingTarget, resolveStudioKey } from './graph-keys.js';
-import { createConnectDialog, createQuickAdd } from './graph-picker.js';
+import { createConnectDialog, createFindNode, createQuickAdd } from './graph-picker.js';
 import { mountInspector } from './inspector.js';
 import { mountLibrary } from './library-panel.js';
 import { compactTime, mountCompact } from './compact.js';
@@ -52,6 +75,68 @@ import { mountStudioTimeline } from './timeline-editor.js';
 export const STUDIO_SUBVIEWS = Object.freeze(['graph', 'timeline', 'inspector']);
 /** Largest Studio file read from disk (the import pipeline re-checks every limit). */
 export const STUDIO_FILE_MAX_BYTES = 4 * 1024 * 1024;
+/** The idle Studio task view (render or measurement in progress). */
+export const IDLE_TASK = Object.freeze({ active: false, kind: '', label: '', pct: null, text: '',
+  abortable: false });
+
+/** The name of an experiment a Studio measurement saves (the MEASURE name when one is typed). */
+export function studioExperimentName(experiment, model) {
+  const typed = experiment && experiment.name && !/^TEST CONTEXT/.test(experiment.name)
+    && experiment.name !== 'Playback / capture chain' ? experiment.name : '';
+  return typed || `${model.metadata.title} (Studio)`;
+}
+
+/**
+ * The Studio task view of a WAV render progress report (offline.js onProgress) — plain data:
+ * { active, kind: 'render', label, pct, text, abortable }.
+ */
+export function renderTaskView(p) {
+  const stage = p && p.stage === 'encode' ? 'encode' : 'render';
+  const pct = Math.max(0, Math.min(100, Math.round(100 * (p && Number.isFinite(p.fraction)
+    ? p.fraction : 0))));
+  return { active: true, kind: 'render', label: stage === 'encode' ? 'Encoding WAV'
+    : 'Rendering WAV', pct, text: `${pct} %`, abortable: true };
+}
+
+/** The WAV file name of a Studio render. */
+export function renderFileName(model) {
+  return `${fileSlug(model.metadata.title)}.wav`;
+}
+
+/** Render length offered when the Studio has no timeline (a graph without clips), s. */
+export const RENDER_DEFAULT_S = 2;
+
+/**
+ * The Render WAV dialog's form for `model` (plain data): the duration offered (the timeline's
+ * end, else RENDER_DEFAULT_S), the format the plan renders, its limitations, and whether the
+ * plan refuses (a live input). opts: { registry, duration }.
+ */
+export function renderForm(model, { registry, duration = null } = {}) {
+  const end = timelineEnd(model);
+  const d = duration != null ? duration : (end > 0 ? Number(end.toFixed(3)) : RENDER_DEFAULT_S);
+  const plan = planOfflineRender(model, { duration: d, registry });
+  const r = plan.render;
+  return {
+    duration: String(d),
+    note: end > 0 ? `The timeline ends at ${Number(end.toFixed(3))} s.`
+      : `The Studio has no timeline: the graph is rendered for the duration given.`,
+    format: `${r.sampleRate / 1000} kHz · ${r.channels === 1 ? 'mono' : 'stereo'} · 16-bit WAV`
+      + ' · rendered offline, not from the device output',
+    limitations: plan.limitations.slice(),
+    refused: plan.refused,
+    error: '',
+  };
+}
+
+/** The render duration typed in the dialog: { ok, value } or { ok: false, error }. */
+export function parseRenderDuration(text) {
+  const v = Number(String(text ?? '').trim().replace(',', '.').replace(/\s*s$/i, ''));
+  if (!(Number.isFinite(v) && v > 0)) return { ok: false, error: 'Give a duration in seconds.' };
+  if (v > DEFAULT_RENDER.maxDuration) {
+    return { ok: false, error: `A render is limited to ${DEFAULT_RENDER.maxDuration} s.` };
+  }
+  return { ok: true, value: v };
+}
 
 /**
  * A stable handle over the current store (§9): the same object for every projection, the
@@ -121,6 +206,9 @@ export function createStudioUi(svc = {}) {
     compact: null,
     quickAdd: null,
     connect: null,
+    find: null,
+    measureRun: null,
+    render: null, // { controller } while a WAV render runs
     patches: null,
     timeline: null,
     status: new Map(),
@@ -251,11 +339,62 @@ export function createStudioUi(svc = {}) {
     }
   }
 
+  function setTask(view) {
+    const cmp = ctx.cmp;
+    if (!cmp) return;
+    const cur = cmp.studio.task;
+    if (Object.keys(view).every((k) => cur[k] === view[k])) return;
+    cmp.studio.task = { ...view };
+  }
+
+  /** The task strip while a Studio measurement runs: MEASURE's own state and progress. */
+  function measureTaskView() {
+    const cmp = ctx.cmp;
+    const run = ctx.measureRun ? ctx.measureRun.view : null;
+    if (!cmp || !run || (run.state !== 'pending' && run.state !== 'running')) return IDLE_TASK;
+    const m = cmp.meas || {};
+    const pct = run.state === 'running' && Number.isFinite(m.progressPct) ? m.progressPct : null;
+    const state = run.state === 'pending' ? 'armed' : String(m.state || 'starting')
+      .toLowerCase().replace(/_/g, ' ');
+    return { active: true, kind: 'measure', label: 'Measuring from Studio', pct,
+      text: pct === null ? state : `${state} · ${pct} %`, abortable: true };
+  }
+
+  function onMeasureRun(view) {
+    if (view.state === 'pending' || view.state === 'running') setTask(measureTaskView());
+    else if (ctx.cmp && ctx.cmp.studio.task.kind === 'measure') setTask(IDLE_TASK);
+    if (view.text) {
+      const bad = view.state === 'failed';
+      announce(view.text, { assertive: bad });
+      if (ctx.cmp && (view.state === 'done' || bad)) ctx.cmp.studio.measureNote = view.text;
+    }
+  }
+
+  function runMeasurement(recipe, model) {
+    const cmp = ctx.cmp;
+    if (!cmp || typeof cmp.measureRunRecipe !== 'function') {
+      return Promise.resolve({ ok: false, state: 'IDLE',
+        reason: 'The measurement workspace is not available.' });
+    }
+    return cmp.measureRunRecipe(recipe, { decorate: (e) => withStudioProvenance({ ...e,
+      name: studioExperimentName(e, model) }, model) });
+  }
+
   function setupAudio() {
     if (ctx.transport || !svc.engine) return;
-    ctx.runtime = createStudioRuntime({ engine: svc.engine, registry });
+    const engine = svc.engine;
+    ctx.runtime = createStudioRuntime({ engine, registry });
+    ctx.measureRun = createStudioMeasurementRun({
+      getModel: () => ctx.handle.getModel(),
+      sampleRate: () => (engine.ctx ? engine.ctx.sampleRate : engine.sampleRate),
+      now: () => (engine.ctx ? engine.ctx.currentTime : 0),
+      run: runMeasurement,
+      stopStudio: () => stopStudio({ fast: true }),
+      onChange: onMeasureRun,
+    });
     ctx.transport = createStudioTransport({ runtime: ctx.runtime, engine: svc.engine,
       store: ctx.handle, registry,
+      onMeasurement: (ev) => { if (ctx.measureRun) ctx.measureRun.hook(ev); },
       onClaimOutput: () => {
         const cmp = ctx.cmp;
         if (cmp && typeof cmp.measureOwnsOutput === 'function' && cmp.measureOwnsOutput()) {
@@ -291,7 +430,7 @@ export function createStudioUi(svc = {}) {
     if (ctx.lib) return Promise.resolve(ctx.lib);
     if (!ctx.libOpening) {
       ctx.libOpening = openExperimentStoreOrMemory({
-        indexedDB: typeof indexedDB !== 'undefined' ? indexedDB : null,
+        indexedDB: pageIndexedDb(), // guarded: reading it throws in some private modes
         storage: typeof navigator !== 'undefined' ? navigator.storage : null,
         knownAlgorithms: KNOWN_ALGORITHM_IDS,
       }).then((r) => {
@@ -375,6 +514,10 @@ export function createStudioUi(svc = {}) {
         consume();
         cmp.studioRedo();
         return;
+      case 'find':
+        consume();
+        cmp.studioFind();
+        return;
       default:
         break;
     }
@@ -436,6 +579,8 @@ export function createStudioUi(svc = {}) {
     const pickSvc = { store: ctx.handle, registry, editor: ctx.editor, announce, ...dialogSvc };
     ctx.quickAdd = createQuickAdd(document.getElementById('osc-dlg-studio-add'), pickSvc);
     ctx.connect = createConnectDialog(document.getElementById('osc-dlg-studio-connect'), pickSvc);
+    ctx.find = createFindNode(document.getElementById('osc-dlg-studio-find'), { ...pickSvc,
+      reveal: (id) => cmp.studioReveal(id) });
     const inspHost = document.querySelector('[data-osc="studio.inspector"]');
     ctx.inspector = mountInspector(inspHost, {
       store: ctx.handle,
@@ -530,6 +675,10 @@ export function createStudioUi(svc = {}) {
       counts: '',
       templates: listTemplates(),
       shortcuts: STUDIO_SHORTCUTS,
+      task: { ...IDLE_TASK },
+      measureNote: '',
+      renderForm: { duration: '', note: '', format: '', limitations: [], refused: false,
+        error: '' },
     },
 
     studioInit() {
@@ -544,6 +693,12 @@ export function createStudioUi(svc = {}) {
       window.addEventListener('keyup', onKeyUp);
       this.$watch('playing', (on) => { if (on && ctx.transport && ctx.transport.playing) stopStudio(); });
       this.$watch('seqPlaying', (on) => { if (on && ctx.transport && ctx.transport.playing) stopStudio(); });
+      // A Studio measurement shows MEASURE's own state and progress in the Studio task strip.
+      const follow = () => {
+        if (ctx.measureRun && ctx.measureRun.busy) setTask(measureTaskView());
+      };
+      this.$watch('meas.state', follow);
+      this.$watch('meas.progressPct', follow);
       this.$watch('workspace', (ws) => {
         if (ws === 'studio' && ctx.editor) requestAnimationFrame(() => ctx.editor.onShow());
       });
@@ -563,7 +718,14 @@ export function createStudioUi(svc = {}) {
     studioPlay() {
       setupAudio();
       if (!ctx.transport) return false;
+      if (typeof this.measureOwnsOutput === 'function' && this.measureOwnsOutput()) {
+        announce('Studio did not start: the measurement owns the output. Stop it first (Esc).',
+          { assertive: true });
+        return false;
+      }
       ensureAudio();
+      if (ctx.measureRun && !ctx.measureRun.busy) ctx.measureRun.reset();
+      this.studio.measureNote = '';
       const r = ctx.transport.start();
       if (!r.ok) {
         announce(`Studio did not start: ${r.reason}`, { assertive: true });
@@ -575,6 +737,10 @@ export function createStudioUi(svc = {}) {
     },
 
     studioStop() {
+      const run = ctx.measureRun;
+      if (run && run.view.state === 'running' && typeof this.measureAbort === 'function') {
+        this.measureAbort('user');
+      }
       const p = stopStudio();
       announce('Studio stopped');
       return p;
@@ -591,6 +757,137 @@ export function createStudioUi(svc = {}) {
         : ctx.handle.dispatch({ type: 'LOOP_SET', enabled: !loop.enabled });
       if (r.ok) announce(`Loop ${loop.enabled ? 'off' : 'on'}`);
       else announce(announceAction(r), { assertive: true });
+    },
+
+    /** Abort the running Studio task: a WAV render, or a measurement started from Studio. */
+    studioAbortTask() {
+      if (ctx.render) {
+        ctx.render.controller.abort();
+        return true;
+      }
+      const run = ctx.measureRun;
+      if (run && run.view.state === 'pending') {
+        run.abort('user');
+        stopStudio({ fast: true });
+        return true;
+      }
+      if (run && run.view.state === 'running' && typeof this.measureAbort === 'function') {
+        return this.measureAbort('user');
+      }
+      return false;
+    },
+
+    /**
+     * Render WAV (plan V427): the Studio offline through offline.js, encoded and downloaded.
+     * Resolves { ok, name, bytes, sampleRate, channels, duration, stats, limitations,
+     * warnings, wav } or { ok: false, aborted?, reason }.
+     */
+    /** Render WAV… (toolbar): the dialog with the duration, the format and the limitations. */
+    studioOpenRender() {
+      if (ctx.render) return false;
+      this.studio.renderForm = renderForm(ctx.handle.getModel(), { registry });
+      openModal('osc-dlg-studio-render');
+      requestAnimationFrame(() => {
+        const el = document.getElementById('osc-st-render-dur');
+        if (el) el.select();
+      });
+      return true;
+    },
+
+    /** The dialog's Render: validate the duration, close, render. */
+    studioRenderSubmit() {
+      const f = this.studio.renderForm;
+      const d = parseRenderDuration(f.duration);
+      if (!d.ok) {
+        f.error = d.error;
+        announce(d.error, { assertive: true });
+        return null;
+      }
+      closeModal('osc-dlg-studio-render');
+      return this.studioRenderWav({ duration: d.value });
+    },
+
+    async studioRenderWav({ duration = null } = {}) {
+      if (ctx.render) return { ok: false, reason: 'A render is already in progress.' };
+      const model = ctx.handle.getModel();
+      const plan = planOfflineRender(model, { registry, duration });
+      if (!plan.ok) {
+        const why = plan.limitations[0] || (plan.errors[0] && plan.errors[0].message)
+          || 'the Studio cannot be rendered';
+        const msg = `Not rendered: ${why}`;
+        this.studio.warning = msg;
+        announce(msg, { assertive: true });
+        return { ok: false, reason: msg, plan };
+      }
+      const controller = new AbortController();
+      ctx.render = { controller };
+      setTask(renderTaskView({ stage: 'render', fraction: 0 }));
+      announce('Rendering WAV');
+      let lastPct = 0;
+      try {
+        const r = await renderStudioOffline(model, { registry, wav: true, duration,
+          signal: controller.signal,
+          onProgress: (p) => {
+            const v = renderTaskView(p);
+            setTask(v);
+            if (v.pct >= lastPct + 50 && v.pct < 100) {
+              lastPct = v.pct;
+              announce(`Rendering WAV, ${v.pct} %`);
+            }
+          } });
+        if (r.aborted) {
+          announce('WAV render aborted');
+          return { ok: false, aborted: true, reason: r.errors[0] };
+        }
+        if (!r.ok) {
+          const msg = `Not rendered: ${r.limitations[0] || r.errors[0]}`;
+          this.studio.warning = msg;
+          announce(msg, { assertive: true });
+          return { ok: false, reason: msg };
+        }
+        const name = renderFileName(model);
+        downloadBlob(new Blob([r.wav], { type: 'audio/wav' }), name);
+        const b = r.buffer;
+        const peak = Number.isFinite(r.stats.peakDbfs)
+          ? `peak ${r.stats.peakDbfs.toFixed(1)} dBFS` : 'silent';
+        const notes = [...plan.limitations, ...r.warnings];
+        this.studio.warning = notes.length ? `Rendered with limits: ${notes[0]}${notes.length > 1
+          ? ` (+${notes.length - 1} more)` : ''}` : '';
+        announce(`Rendered ${name}: ${b.duration.toFixed(2)} s, ${b.sampleRate} Hz, `
+          + `${b.numberOfChannels === 1 ? 'mono' : 'stereo'}, 16-bit WAV, ${peak}`);
+        return { ok: true, name, bytes: r.wav.byteLength, sampleRate: b.sampleRate,
+          channels: b.numberOfChannels, duration: b.duration, stats: r.stats,
+          limitations: plan.limitations.slice(), warnings: r.warnings.slice(), wav: r.wav };
+      } catch (e) {
+        const msg = `Not rendered: ${(e && e.message) || e}`;
+        announce(msg, { assertive: true });
+        return { ok: false, reason: msg };
+      } finally {
+        ctx.render = null;
+        setTask(IDLE_TASK);
+      }
+    },
+
+    /** Find node (§251): the search dialog over the current graph. */
+    studioFind() {
+      if (ctx.find) ctx.find.open();
+    },
+
+    /** Select, frame and focus a node (a search result), on the graph subview. */
+    studioReveal(nodeId) {
+      const model = ctx.handle.getModel();
+      const n = model.graph.nodes.find((x) => x.id === nodeId);
+      if (!n) return false;
+      if (this.studio.subview !== 'graph') this.studioSetSubview('graph');
+      ctx.handle.dispatch({ type: 'SELECTION_CHANGE', selection: { nodes: [nodeId] } });
+      requestAnimationFrame(() => {
+        if (!ctx.editor) return;
+        ctx.editor.onShow();
+        ctx.editor.frameSelection();
+        ctx.editor.focusNode(nodeId);
+      });
+      announce(`Found ${n.metadata.name}: selected and framed`);
+      return true;
     },
 
     studioReturn() {
@@ -777,6 +1074,8 @@ export function createStudioUi(svc = {}) {
         get editor() { return ctx.editor; },
         get dirty() { return ctx.dirty ? ctx.dirty.isDirty(ctx.handle.getModel()) : false; },
         get projectId() { return ctx.projectId; },
+        get measurementRun() { return ctx.measureRun ? ctx.measureRun.view : null; },
+        get rendering() { return !!ctx.render; },
         library,
         counts() {
           const e = svc.engine;

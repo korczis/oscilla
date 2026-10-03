@@ -19,6 +19,7 @@ export const STUDIO_SHORTCUTS = Object.freeze([
   { id: 'redo', keys: 'Ctrl/⌘ Shift Z, Ctrl Y', text: 'Redo' },
   { id: 'select-all', keys: 'Ctrl/⌘ A', text: 'Select every node' },
   { id: 'quick-add', keys: 'N', text: 'Add a node (searchable picker)' },
+  { id: 'find', keys: '/', text: 'Find a node by name or type and frame it' },
   { id: 'connect', keys: 'C', text: 'Connect the selected node (list of compatible inputs)' },
   { id: 'frame-selection', keys: 'F', text: 'Frame the selection' },
   { id: 'frame-all', keys: 'A', text: 'Frame the whole graph' },
@@ -65,6 +66,8 @@ export function resolveStudioKey(e) {
   if (key === 'Escape') return { id: 'escape' };
   if (key === 'Delete' || key === 'Backspace') return { id: 'delete' };
   if (key.startsWith('Arrow')) return { id: 'nudge', key, large: !!e.shiftKey };
+  // '/' is Shift+7 on several layouts: the character decides, not the Shift state.
+  if (key === '/') return { id: 'find' };
   if (e.shiftKey && lower !== '+') return null;
   switch (lower) {
     case 'n': return { id: 'quick-add' };
