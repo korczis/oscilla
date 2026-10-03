@@ -600,11 +600,16 @@ function defineChecks() {
       // Light theme: text on its own surface >= 4.5:1.
       await page.evaluate(() => document.documentElement.setAttribute('data-theme', 'light'));
       await mount(page);
-      // Colours are measured after every running transition (e.g. .osc-btn's 0.12 s colour
-      // transition on the theme change) has finished; mid-transition values flaked on WebKit.
-      await page.evaluate(() => Promise.all(document.getAnimations()
-        .map((a) => a.finished.catch(() => null))));
-      const contrast = await page.evaluate(() => {
+      // Colours are measured once the theme has settled: a style flush and two frames (so the
+      // theme change has started its transitions, e.g. .osc-btn's 0.12 s colour transition),
+      // then every running animation finished, then two consecutive readings that agree
+      // (mid-change values flaked on WebKit in CI: time 1.1:1, help 3.41:1).
+      const settle = () => page.evaluate(async () => {
+        void document.body.offsetHeight;
+        await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+        await Promise.all(document.getAnimations().map((a) => a.finished.catch(() => null)));
+      });
+      const measure = () => page.evaluate(() => {
         const rgb = (s) => (s.match(/[\d.]+/g) || []).slice(0, 3).map(Number);
         const lum = ([r, g, b]) => {
           const f = (c) => { const v = c / 255; return v <= 0.03928 ? v / 12.92
@@ -630,6 +635,13 @@ function defineChecks() {
           sweep: ratio('[data-clip="clip-2"] .osc-block-name'),
           help: ratio('.osc-stl-help') };
       });
+      let contrast = null;
+      for (let i = 0; i < 20; i++) {
+        await settle();
+        const next = await measure();
+        if (contrast && JSON.stringify(next) === JSON.stringify(contrast)) break;
+        contrast = next;
+      }
       await page.evaluate(() => document.documentElement.removeAttribute('data-theme'));
       const light = Object.values(contrast).every((r) => r >= 4.5);
       return result({ noOverflow: ok, light }, { out, contrast });
