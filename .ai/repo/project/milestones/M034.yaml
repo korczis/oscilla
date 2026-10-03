@@ -12,3 +12,12 @@ validation:
 evidence_required:
   - "milestone_verified"
 created_at: 2026-10-02
+updated_at: 2026-10-03T13:04:48Z
+evidence:
+  - covers: milestone_verified
+    type: test
+    command: "npm run release-gate"
+    result: "Release gate passes at 6512083 (V250 lanes, V251 coherent times, V253 first cycle on main): unit incl. freeze, version/build/dist checks, doctor, engine, dsp, labs, sequencer, browser (app, layout, qa), visual, V3 and Studio suites. Every known V2 limitation is fixed and proven (V249, V250, V251, V253) or accepted with evidence (V252)"
+    artifact: "fix/v251-coherent-times"
+    commit: 6512083573aa786499ab821b1ca08543279f0d22
+    recorded_at: 2026-10-03T13:04:48Z

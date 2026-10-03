@@ -15,3 +15,14 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-03
+started_at: 2026-10-03T12:27:57Z
+updated_at: 2026-10-03T12:28:06Z
+completed_at: 2026-10-03T12:28:06Z
+evidence:
+  - covers: verified
+    type: test
+    command: "V249 stress harness (release scenario, chromium) before/after; npm test; npm run test:engine; npm run test:studio; npm run test:sequencer; npm run test:dsp"
+    result: "Cause identified: an engine bug, not the browser. The recorded schedule at the step has the next pulse's setValueAtTime(FLOOR) at 1.468 and the previous pulse's exponential release end at 1.4680000000000002: (t0 + t) + dur and t0 + (t + dur) differ by an ulp (about 17% of contiguous boundaries), the param orders by time, the release ramp collapses and the envelope is cut from full amplitude (window -0.0785, -0.0523, 0, 0). Reproduced in 6/20 runs before the limiter feed (#27) and 3-4/20 after it (not the limiter). Fixed with coherentTime (an event within 1 ns before its param's latest event takes its time): 0/20 chromium runs over the click bound (firefox 0/10 before and after). Unit: pulses (43 inverted boundaries without the snap) and ping-pong sweeps (51) now 0; 2047/2047 incl. freeze"
+    artifact: "fix/v251-coherent-times"
+    commit: 6512083573aa786499ab821b1ca08543279f0d22
+    recorded_at: 2026-10-03T12:28:03Z
