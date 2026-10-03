@@ -36,7 +36,7 @@ listed under [Gaps](#gaps), not resolved here.
 | (none) | `calibration/level.js` | [Level calibration, SPL](#level) |
 | (none) | `measurement/format.js` | [Resolution-aware formatting](#format) |
 | (none) | `experiments/*.js` | [Experiment hashing, encoding](#experiments) |
-| `oscilla.confidence.v2` (default), `oscilla.confidence.v1` (retained) | `measurement/quality.js` | [Quality](#quality) |
+| `oscilla.confidence.v3` (default), `oscilla.confidence.v2` and `oscilla.confidence.v1` (retained) | `measurement/quality.js` | [Quality](#quality) |
 | (all IDs) | `tests/unit/fixtures/v3/*.json` | [Golden outputs per ID](#golden) |
 
 ## Conventions
@@ -640,8 +640,8 @@ capture and phase, 8628438 vs this change alternated in one process (medians):
 | 3 runs, second session | 1560 ms (415) | 914 ms (519) |
 
 The total drops 30-41 %; the longest single main-thread block grows (transfer and IR are now one
-step), which matters until the analysis moves to a Worker
-([spike](spike-audioworklet-worker.md)). In headless browsers (same machine, 10 s sweep, separate
+step), which mattered until the analysis moved to a Worker in M10 (see
+[analysis execution](#analysis-memory); [spike](spike-audioworklet-worker.md)). In headless browsers (same machine, 10 s sweep, separate
 functions vs combined, both on this code): Chromium 153 ≈ 282 → 200 ms, Firefox 155 ≈ 370 →
 262 ms, WebKit 26.6 ≈ 245 → 173 ms.
 

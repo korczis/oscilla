@@ -21,7 +21,7 @@ tags: [v3, measurement]
 ## What it does
 
 `src/js/measurement/quality.js` computes the status from data under the versioned rule set
-`oscilla.confidence.v2` (v1 retained), each reason with its code, severity, value and unit,
+`oscilla.confidence.v3` (v1 and v2 retained so stored ratings reproduce), each reason with its code, severity, value and unit,
 together with frequency masks of reliable and calibrated bins (ADR 0025).
 `src/js/measurement/capture-checks.js` detects clipping, dropouts and discontinuities. The
 response chart draws unreliable stretches dashed and faded, and the quality panel shows
