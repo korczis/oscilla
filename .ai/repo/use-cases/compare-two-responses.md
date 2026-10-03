@@ -26,11 +26,14 @@ by:
 - `npm test` (tests/unit/v3-experiments.test.mjs compareExperiments and responseDelta; tests/unit/v3-views.test.mjs compare view; tests/unit/v3-storage.test.mjs aggregate used when present)
 - `npm run test:measure` (tests/browser/v3-ui.cjs, check experiments: an equivalent pair shows A - B, a non-equivalent pair is refused with the reason)
 
-A use-case/v1 scenario can only invoke `bin/majordomus`, and a live one only its read-only
-commands, so the scenario below does not play or capture audio. It proves the traceability
-instead: each claim's implementation and test are tracked files wired to the claim in the
-knowledge graph, so a renamed or deleted test breaks this use case rather than silently
-orphaning the claim.
+A use-case/v1 scenario can only invoke `bin/majordomus`, so the scenario below does not
+play or capture audio. It proves the traceability instead: each claim's implementation and
+test are tracked files wired to the claim in the knowledge graph, so a renamed or deleted
+test breaks this use case rather than silently orphaning the claim. Majordomus classes
+`knowledge` as state-mutating from 0.11 on, and a live scenario may run only read-only
+commands, so the setup `oscilla-tree` (`test/fixtures/commands/setup/oscilla-tree.sh`)
+copies the tracked files of this checkout into a disposable repository and the steps ask
+the knowledge graph of that copy.
 
 # What it cannot prove
 
@@ -39,7 +42,9 @@ The browser check compares deterministic TEST CONTEXT fixtures, not physical mea
 # Scenario
 
 ```yaml
-mode: live
+setup: oscilla-tree
+given:
+  - 'a disposable repository holding the tracked files of this checkout'
 steps:
   - id: measurement-comparison-implemented
     run: ['knowledge', 'edges', '--type', 'implemented_by']

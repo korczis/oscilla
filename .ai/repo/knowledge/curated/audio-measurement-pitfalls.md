@@ -14,13 +14,14 @@ tags:
 provenance:
   origin: authored
   derived_from:
-    - file:tests/engine.cjs
-    - file:tests/smoke.cjs
+    - commit:a7b7a23d7cc64e34b31fa2448d7281029d5918f1
+    - file:tests/browser/engine-v1port.cjs
 ---
 
 # Measuring the audio output in headless browsers
 
-Each of these produced a false result before the tap in `tests/engine.cjs` absorbed it.
+Each of these produced a false result before the tap in `tests/engine.cjs` (V1, tag `v1.0.0`;
+ported to `tests/browser/engine-v1port.cjs`) absorbed it.
 
 - **Analyser polling misses windows.** Polling an AnalyserNode from the main thread every few
   milliseconds returned 1–11 samples per 120 ms in Firefox and WebKit under load, and

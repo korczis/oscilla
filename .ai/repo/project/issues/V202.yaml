@@ -18,9 +18,11 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-02
-started_at: 2026-10-02T09:32:28Z
-updated_at: 2026-10-02T09:32:33Z
-completed_at: 2026-10-02T09:32:33Z
+started_at: 2026-10-03T22:02:43Z
+updated_at: 2026-10-03T22:02:48Z
+completed_at: 2026-10-03T22:02:48Z
+started_event: sha256:afbd36a3062780fdc8d67cf70b62173bdc84f4deb93b8fde3baba79f7edae394
+completed_event: sha256:61021250d196a9f2feb13d1490ea64b13a2e048c5ce7bbad21ed2c2d87978134
 evidence:
   - covers: verified
     type: manual

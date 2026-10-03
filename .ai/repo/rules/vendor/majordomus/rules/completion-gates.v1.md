@@ -16,7 +16,7 @@ x-majordomus:
   policy_key: gates_passed
   enforced_by: [check, finish]
   exit_code: 10
-  tests: [test/cases/131_completion_gates.sh]
+  tests: [test/cases/131_completion_gates.sh, test/cases/578_an_unknown_gate_refuses_completed.sh]
 ---
 
 # Rationale
@@ -62,10 +62,15 @@ Evidence that cannot expire is a claim about the past presented as a claim about
 present, which is the argument `majordomus.obligation-closure` already makes about
 obligations, applied to gates for the same reason.
 
-**Only what is known refuses.** With the outcome `completed`, a required gate that reported
-a non-zero exit, one whose run no longer describes the tree, and one that cannot run because
-something it depends on is in either state, each refuse. A gate that has never reported does
-not refuse: it is reported as unverified, by name, with the rule that says why silence is
+**Only a verdict that was read can back `completed`.** With the outcome `completed`, a
+required gate that reported a non-zero exit, one whose run no longer describes the tree, and
+one that cannot run because something it depends on is in either state, each refuse. So does
+a checkout that cannot read the verdict at all — a CI model that is declared and does not
+parse, a reader that is not built, that errors or answers nothing, no `jq`: that is `unknown`,
+and an unknown that let `completed` through would be a check that passes whenever it cannot
+look. A repository that declares no CI model has no gate to be unknown about and refuses
+nothing. A gate that has never reported does not refuse either — the executable did reach
+that verdict, `queued` — it is reported as unverified, by name, with the rule that says why silence is
 not green. An outcome other than `completed` refuses nothing at all — a task reporting
 itself blocked is being honest, and refusing that teaches a worker to claim completed
 instead.
@@ -80,12 +85,14 @@ the same work is finished.
 A violation is a `FAIL` finding under the category `gate`, naming the gate, its status, the
 reason in the vocabulary above — the exit status it reported, or both hashes when the
 evidence has gone stale — and the command that would settle it. `finish` exits 10 and writes
-nothing. A checkout that cannot reach the judgement at all (no CI model, no built reader)
-reports `unknown` and enforces nothing, because an honest gap beats a check that always
-passes.
+nothing. A checkout that cannot reach the judgement at all (an unreadable model, no built
+reader, a reader that fails) reports `unknown` by name and refuses `completed` with that
+finding; `check` and every other outcome report it without refusing.
 
 # Verification
 
 `mj_validate_completion_gates` decides it, dispatched from `check, finish`, reading the
 `gates.completion` capability rather than judging for itself. The behavioural case
-`test/cases/131_completion_gates.sh` proves it, and CI runs that case.
+`test/cases/131_completion_gates.sh` proves the verdicts, and
+`test/cases/578_an_unknown_gate_refuses_completed.sh` proves that an unreadable verdict refuses
+`completed` and nothing else; CI runs both.

@@ -26,11 +26,14 @@ by:
 - `npm run test:measure` (tests/browser/v3-ui.cjs and tests/browser/v3-measure.cjs, every check from file:// and from /oscilla/ in Chromium, Firefox and WebKit, ending with no-console-errors)
 - `npm run verify-dist` (scripts/verify-dist.mjs: no module script, no external script, no worklet loaded from a path)
 
-A use-case/v1 scenario can only invoke `bin/majordomus`, and a live one only its read-only
-commands, so the scenario below does not play or capture audio. It proves the traceability
-instead: each claim's implementation and test are tracked files wired to the claim in the
-knowledge graph, so a renamed or deleted test breaks this use case rather than silently
-orphaning the claim.
+A use-case/v1 scenario can only invoke `bin/majordomus`, so the scenario below does not
+play or capture audio. It proves the traceability instead: each claim's implementation and
+test are tracked files wired to the claim in the knowledge graph, so a renamed or deleted
+test breaks this use case rather than silently orphaning the claim. Majordomus classes
+`knowledge` as state-mutating from 0.11 on, and a live scenario may run only read-only
+commands, so the setup `oscilla-tree` (`test/fixtures/commands/setup/oscilla-tree.sh`)
+copies the tracked files of this checkout into a disposable repository and the steps ask
+the knowledge graph of that copy.
 
 # What it cannot prove
 
@@ -40,7 +43,9 @@ so (setup check blocker, memory store notice); serving the file on localhost avo
 # Scenario
 
 ```yaml
-mode: live
+setup: oscilla-tree
+given:
+  - 'a disposable repository holding the tracked files of this checkout'
 steps:
   - id: measure-from-file-and-subpath-implemented
     run: ['knowledge', 'edges', '--type', 'implemented_by']

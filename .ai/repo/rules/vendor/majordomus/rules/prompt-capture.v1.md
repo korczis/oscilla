@@ -49,8 +49,16 @@ happened to be captured cannot be read end to end and cannot be trusted to be co
 
 An enforcement entry of kind `provider-hook` holds only when the provider's configuration
 names the shim the tool wrote, the shim is executable, and a synthetic payload driven
-through it produces a record. A provider with no adapter is reported as unsupported, and a
-repository that wires nothing reports that it captures nothing.
+through it produces a record. A repository that wires nothing reports that it captures
+nothing.
+
+A provider is reported `unsupported` only when the declaration says it has **no such event**,
+with the citation that was verified from; a provider that documents one this distribution
+ships no adapter for is reported `unadapted`. The distinction is not pedantry: `unsupported`
+is a statement about somebody else's product, and equating it with "we have no adapter" made
+this tool say something untrue about two of them the day they shipped hook systems it had not
+been told about. Every capability cell carries its citation for that reason
+(`project.a-provider-capability-cites-its-evidence`).
 
 Under the archive directory, nothing is tracked by Git and the ignore boundary covers it.
 Every record begins with the schema identifier and carries the closed field set the writer

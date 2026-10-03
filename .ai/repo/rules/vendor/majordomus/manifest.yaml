@@ -23,6 +23,10 @@ rules:
     version: 1
     file: rules/bootstrap-integrity.v1.md
     sha256: 6cba4af621124f19136f2a12ce2f5f00f413f327da9497900397ce8616d6410c
+  - id: majordomus.candidates-reviewed
+    version: 1
+    file: rules/candidates-reviewed.v1.md
+    sha256: a8a1d647854c1cfda82d7461c41673883df509ed1049dd7e328c009fd321a980
   - id: majordomus.catalogue-integrity
     version: 1
     file: rules/catalogue-integrity.v1.md
@@ -42,7 +46,7 @@ rules:
   - id: majordomus.completion-gates
     version: 1
     file: rules/completion-gates.v1.md
-    sha256: d6b0e25cad31216d6f1b43d108121df7663a69b6658414b562aa499d88c5a44b
+    sha256: d93b58dd9754eba9936426262a6bbb1db800871613d80f740b01aa95eaffad6e
   - id: majordomus.context-budget
     version: 1
     file: rules/context-budget.v1.md
@@ -79,6 +83,14 @@ rules:
     version: 1
     file: rules/handover-integrity.v1.md
     sha256: db680840291e1d1217e5cc399d3154a4cb1086890327658e3679c3ba8117579e
+  - id: majordomus.knowledge-integrity
+    version: 1
+    file: rules/knowledge-integrity.v1.md
+    sha256: eec2b2184f6cd3fb640735a40dd21a4f6aaf49f4b8fd092da33abc9e7504f63e
+  - id: majordomus.knowledge-observed
+    version: 1
+    file: rules/knowledge-observed.v1.md
+    sha256: 33fc8bac42c8df5d1afa3c129d96667af7ab028a922b611d507a0a919ba217d7
   - id: majordomus.layout-integrity
     version: 1
     file: rules/layout-integrity.v1.md
@@ -162,7 +174,7 @@ rules:
   - id: majordomus.prompt-capture
     version: 1
     file: rules/prompt-capture.v1.md
-    sha256: 25a25ff7bf0915435dff35e3ad60baea0a107b6d70555365d87c434ed96bbf70
+    sha256: 6a768205d5ed1d005c3f3996102ccc05a86810a7ccedd8da52d815079a5014c3
   - id: majordomus.prompt-continuity
     version: 1
     file: rules/prompt-continuity.v1.md
@@ -174,7 +186,7 @@ rules:
   - id: majordomus.publication-currency
     version: 1
     file: rules/publication-currency.v1.md
-    sha256: a3851591e59c46e9c363ca9bdfdf0b2aa80db1404d70b09074883de0f191b797
+    sha256: fedcd1e8b4aecd3b69a77bd0c216fb146c34910f329b2f5d249606fca3f2b01b
   - id: majordomus.questions-store-integrity
     version: 1
     file: rules/questions-store-integrity.v1.md
@@ -230,4 +242,4 @@ rules:
   - id: majordomus.verification-integrity
     version: 1
     file: rules/verification-integrity.v1.md
-    sha256: 489da6725d95e03ce8cd44ddcfcfbe653994c2199707a8efa7001ffabfc3ca8a
+    sha256: 1a2e830a8912280b742e009f58fc0a685a7108bad56cc978589cadb5911f3910

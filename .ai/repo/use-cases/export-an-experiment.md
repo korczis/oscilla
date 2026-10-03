@@ -26,11 +26,14 @@ by:
 - `npm test` (tests/unit/v3-experiments.test.mjs: round trip, corrupt and future-schema files refused, CSV columns; tests/unit/v3-integration.test.mjs result hash; tests/unit/v3-golden.test.mjs algorithm IDs)
 - `npm run test:measure` (tests/browser/v3-ui.cjs, check experiments: export re-validates, CSV header and units, re-import of an existing ID refused)
 
-A use-case/v1 scenario can only invoke `bin/majordomus`, and a live one only its read-only
-commands, so the scenario below does not play or capture audio. It proves the traceability
-instead: each claim's implementation and test are tracked files wired to the claim in the
-knowledge graph, so a renamed or deleted test breaks this use case rather than silently
-orphaning the claim.
+A use-case/v1 scenario can only invoke `bin/majordomus`, so the scenario below does not
+play or capture audio. It proves the traceability instead: each claim's implementation and
+test are tracked files wired to the claim in the knowledge graph, so a renamed or deleted
+test breaks this use case rather than silently orphaning the claim. Majordomus classes
+`knowledge` as state-mutating from 0.11 on, and a live scenario may run only read-only
+commands, so the setup `oscilla-tree` (`test/fixtures/commands/setup/oscilla-tree.sh`)
+copies the tracked files of this checkout into a disposable repository and the steps ask
+the knowledge graph of that copy.
 
 # What it cannot prove
 
@@ -40,7 +43,9 @@ made carefully is what its quality status and notes say, not something an import
 # Scenario
 
 ```yaml
-mode: live
+setup: oscilla-tree
+given:
+  - 'a disposable repository holding the tracked files of this checkout'
 steps:
   - id: experiment-round-trip-implemented
     run: ['knowledge', 'edges', '--type', 'implemented_by']
