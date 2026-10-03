@@ -45,10 +45,13 @@ from both to source and tests is `docs/CLAIMS.yaml` (claim -> implementation -> 
 - A stable feature's mechanism floor (`modules`, `commands`, `kinds`) names Majordomus's own
   capability modules, shell commands and layer kinds, none of which is an OSCILLA mechanism,
   so `product validate` warns once per stable feature. The warning is expected.
-- use-case/v1 `commands` and every scenario step must be `bin/majordomus` commands; a fixture
-  scenario needs the tool's own fixture scripts and a live one only read-only commands. The
-  OSCILLA use cases are live scenarios over `majordomus knowledge edges` that prove each
-  claim's implementation and test are tracked; the npm scripts prove the behaviour.
+- use-case/v1 `commands` and every scenario step must be `bin/majordomus` commands, and a
+  live scenario may run only read-only ones. From 0.11 `knowledge` is state-mutating, so the
+  OSCILLA use cases are fixture scenarios: the tool reads setup scripts from
+  `test/fixtures/commands/setup/` of the repository before its own, and `oscilla-tree.sh`
+  there copies the tracked files of the checkout into the disposable repository, where
+  `majordomus knowledge edges` proves each claim's implementation and test are tracked. The
+  npm scripts prove the behaviour.
   `doctrines` accepts only rules with a validator, which no project rule has.
 - `usecase coverage` counts commands and guaranteed claims that carry a `responsibility`
   (a Majordomus responsibility), so OSCILLA claims are never coverage targets.
