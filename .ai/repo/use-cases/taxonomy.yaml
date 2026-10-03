@@ -33,7 +33,7 @@ categories:
     summary: What the repository declares about itself, and the plan, searched and validated.
     order: 70
   # OSCILLA Studio (V3.1) acceptance, specification section 14 UC1-UC14. Each use case
-  # names the claims of docs/CLAIMS.yaml that prove it; its live scenario checks that a
+  # names the claims of docs/CLAIMS.yaml that prove it; its scenario checks that a
   # guaranteed claim's implementation and test, or a planned claim's specification, are
   # tracked and wired.
   - id: studio
@@ -46,7 +46,7 @@ categories:
     order: 100
 
   # OSCILLA product acceptance. Each use case below names the claims of docs/CLAIMS.yaml
-  # that prove it; its live scenario checks that the claim's implementation and test are
+  # that prove it; its scenario checks that the claim's implementation and test are
   # tracked and wired, and the named npm script runs the test itself.
   - id: generate
     title: Generating sound

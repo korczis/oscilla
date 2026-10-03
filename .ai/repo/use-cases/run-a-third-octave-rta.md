@@ -28,11 +28,14 @@ by:
 - `npm test` (tests/unit/v3-rta-aggregate.test.mjs: band layout, power integration, averaging constants; tests/unit/v3-views.test.mjs RTA view, peak hold, freeze, SPL only under a valid level calibration)
 - `npm run test:measure` (tests/browser/v3-ui.cjs, check no-spl on the RTA tab)
 
-A use-case/v1 scenario can only invoke `bin/majordomus`, and a live one only its read-only
-commands, so the scenario below does not play or capture audio. It proves the traceability
-instead: each claim's implementation and test are tracked files wired to the claim in the
-knowledge graph, so a renamed or deleted test breaks this use case rather than silently
-orphaning the claim.
+A use-case/v1 scenario can only invoke `bin/majordomus`, so the scenario below does not
+play or capture audio. It proves the traceability instead: each claim's implementation and
+test are tracked files wired to the claim in the knowledge graph, so a renamed or deleted
+test breaks this use case rather than silently orphaning the claim. Majordomus classes
+`knowledge` as state-mutating from 0.11 on, and a live scenario may run only read-only
+commands, so the setup `oscilla-tree` (`test/fixtures/commands/setup/oscilla-tree.sh`)
+copies the tracked files of this checkout into a disposable repository and the steps ask
+the knowledge graph of that copy.
 
 # What it cannot prove
 
@@ -43,7 +46,9 @@ levels.
 # Scenario
 
 ```yaml
-mode: live
+setup: oscilla-tree
+given:
+  - 'a disposable repository holding the tracked files of this checkout'
 steps:
   - id: rta-bands-implemented
     run: ['knowledge', 'edges', '--type', 'implemented_by']

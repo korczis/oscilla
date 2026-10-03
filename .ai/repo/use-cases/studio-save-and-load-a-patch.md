@@ -35,12 +35,16 @@ by these, run by:
   a patch and insert it, undoable; malformed and hostile files refused), in Chromium, Firefox and
   WebKit.
 
-A use-case/v1 scenario can only invoke `bin/majordomus`, and a live one only its read-only
-commands, so the scenario below does not open a browser or play audio. It proves the
-traceability instead: each claim's implementation and test are tracked files wired to the
-claim in the knowledge graph, so a renamed or deleted test breaks this use case rather than
-silently orphaning the claim. The behaviour itself is proven by the commands above, which the
-release gate runs and CI blocks a merge on.
+A use-case/v1 scenario can only invoke `bin/majordomus`, so the scenario below does not
+open a browser or play audio. It proves the traceability instead: each claim's
+implementation and test are tracked files wired to the claim in the knowledge graph, so a
+renamed or deleted test breaks this use case rather than silently orphaning the claim.
+Majordomus classes `knowledge` as state-mutating from 0.11 on, and a live scenario may run
+only read-only commands, so the setup `oscilla-tree`
+(`test/fixtures/commands/setup/oscilla-tree.sh`) copies the tracked files of this checkout
+into a disposable repository and the steps ask the knowledge graph of that copy. The
+behaviour itself is proven by the commands above, which the release gate runs and CI blocks
+a merge on.
 
 # What it cannot prove
 
@@ -51,7 +55,9 @@ recovery are not built.
 # Scenario
 
 ```yaml
-mode: live
+setup: oscilla-tree
+given:
+  - 'a disposable repository holding the tracked files of this checkout'
 steps:
   - id: studio-patch-round-trip-implemented
     run: ['knowledge', 'edges', '--type', 'implemented_by']
