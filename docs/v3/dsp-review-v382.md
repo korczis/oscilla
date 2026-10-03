@@ -35,7 +35,7 @@ and keep the old ones reproducible (ADR 0024). This file is the record the issue
 
 ## Release readiness
 
-`npm run release-gate` passed on the fix branches (exit 0), and CI runs every suite in three
-browsers on each PR. Open, not defects: no confidence figure is shown for averaged RTA levels
+`npm run release-gate` passed (exit 0) on main at b36fb9c with every fix above merged, and CI ran
+every suite in three browsers on each PR; the deployment at b36fb9c passed verify-deploy. Open, not defects: no confidence figure is shown for averaged RTA levels
 (overlapping frames), and a −300 dB (zero-power) run makes the aggregate spread meaningless at
 that point; both are recorded for a later version.
