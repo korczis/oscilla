@@ -34,6 +34,7 @@ import {
 import { bandCenters, rtaResult } from '../../src/js/measurement/rta.js';
 import { createMeasurementEngine, assessMeasurement } from '../../src/js/measurement/engine.js';
 import { createLevelCalibration } from '../../src/js/calibration/level.js';
+import { createFrequencyProfile } from '../../src/js/calibration/profile.js';
 import {
   createExperiment, createRecipe, experimentToJson, formatErrors, withResults,
 } from '../../src/js/experiments/schema.js';
@@ -398,7 +399,10 @@ test('G19: absolute level only in level/RTA outputs under a valid level calibrat
     + 'level_db_spl') + 1, -1).map((r) => r.split(','));
   assert.deepEqual(rows[0].slice(3), ['-300', ''], 'zero power has no SPL');
   assert.deepEqual(rows[1].slice(3), ['-39', String(-39 + 124.5)]);
-  // Frequency-corrected band levels: their own column, and the SPL column follows them.
+  // Frequency-corrected band levels: their own column. V382: the level offset already holds the
+  // input's deviation at the reference frequency (X is read uncorrected), so the SPL column
+  // follows the corrected levels only with the profile itself, whose correction at 1 kHz is
+  // taken out of the offset; with only { id, name } it follows the uncorrected levels.
   const profileRef = { id: 'b'.repeat(64), name: 'mic' };
   const corrected = Float64Array.from(rta.levelsDb, (v) => v - 1);
   const both = rtaCsv(rta, meta({ frequency: profileRef, level }), { correctedDb: corrected })
@@ -406,9 +410,17 @@ test('G19: absolute level only in level/RTA outputs under a valid level calibrat
   assert.ok(both.includes('band_nominal_hz,band_lo_hz,band_hi_hz,level_db_relative,'
     + 'level_db_corrected,level_db_spl'));
   assert.ok(both.some((l) => l.startsWith('# column level_db_spl: dB SPL (CALIBRATED: '
-    + 'level_db_corrected + 124.5')));
+    + 'level_db_relative + 124.5')));
   const b1 = bands[1];
-  assert.ok(both.includes(`${b1.nominal},${b1.lo},${b1.hi},-39,-40,${-40 + 124.5}`));
+  assert.ok(both.includes(`${b1.nominal},${b1.lo},${b1.hi},-39,-40,${-39 + 124.5}`));
+  // a flat +1 dB deviation profile: corrected = relative − 1, SPL = corrected + (124.5 + 1)
+  const profile = createFrequencyProfile({ name: 'mic', points: [[20, 1], [20000, 1]],
+    convention: 'deviation' });
+  const full = rtaCsv(rta, meta({ frequency: profile, level }), { correctedDb: corrected })
+    .split('\n');
+  assert.ok(full.some((l) => l.startsWith('# column level_db_spl: dB SPL (CALIBRATED: '
+    + 'level_db_corrected + 125.5')));
+  assert.ok(full.includes(`${b1.nominal},${b1.lo},${b1.hi},-39,-40,${-40 + 125.5}`));
   assert.throws(() => rtaCsv(rta, meta({ frequency: null, level }), { correctedDb: corrected }),
     /no frequency calibration/);
   // Tampered level calibration: no SPL column, no "SPL" anywhere.
