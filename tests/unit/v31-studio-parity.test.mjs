@@ -32,6 +32,7 @@ function setup(model = templateModel(REFERENCE_TEMPLATE_ID)) {
   const fx = createFakeAudioEnv({ sampleRate: SR });
   const engine = new AudioEngine({ env: fx.env });
   assert.ok(engine.init(), 'engine.init');
+  if (engine.limiterFeed) engine.limiterFeed.infrastructure = true; // see liveAllSources
   const runtime = createStudioRuntime({ engine });
   const store = createStudioStore(model, { idGenerator: createIdGenerator(model) });
   const transport = createStudioTransport({ runtime, engine, store });

@@ -249,7 +249,11 @@ class FakeContext {
 
   // ---- test helpers
   get sources() { return this.created.filter((n) => n instanceof Source); }
-  get liveSources() { return this.sources.filter((s) => s.startAt !== null && !s.ended).length; }
+  // The engine's limiter feed (audio-engine.js feedLimiter) is master-chain infrastructure, not
+  // a Studio source: it lives as long as the context.
+  get liveSources() {
+    return this.sources.filter((s) => s.startAt !== null && !s.ended && !s.infrastructure).length;
+  }
   get liveConnections() { return this.created.reduce((n, x) => n + x.out.size, 0); }
   of(kind) { return this.created.filter((n) => n.kind === kind); }
 }
@@ -302,6 +306,7 @@ function setup(opts = {}) {
   const e = makeEnv(opts);
   const engine = new AudioEngine({ env: e.env });
   assert.ok(engine.init(), 'engine.init');
+  if (engine.limiterFeed) engine.limiterFeed.infrastructure = true;
   const runtime = createStudioRuntime({ engine, options: opts.runtime || {} });
   return { ...e, engine, runtime, ctx: e.ctx };
 }
@@ -388,7 +393,8 @@ const e = (id, from, fromPort, to, toPort, props) => ({ id, from: { node: from, 
 
 /** Every node the Studio created (not the engine's chain, not the destination). */
 const studioNodes = (s, chainCount) => s.ctx.created.slice(chainCount);
-const ENGINE_CHAIN_NODES = 6; // destination, master, limiter, trim, ceiling, analyser
+// destination, master, limiter, trim, ceiling, analyser, limiter feed
+const ENGINE_CHAIN_NODES = 7;
 
 // ---------------------------------------------------------------- compile (§41, §257, §258)
 

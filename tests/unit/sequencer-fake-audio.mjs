@@ -322,8 +322,10 @@ export class StudioFakeContext extends FakeContext {
     return this.created.filter((n) => n instanceof FakeSource);
   }
 
+  // Every source except the engine's limiter feed (feedLimiter), which lives with the context.
   get liveAllSources() {
-    return this.sources.filter((s) => s.startAt !== null && !s.endedFired).length;
+    return this.sources.filter((s) => s.startAt !== null && !s.endedFired && !s.infrastructure)
+      .length;
   }
 
   of(kind) {
