@@ -217,7 +217,7 @@ IndexedDB as an injected dependency. Signals are `Float32Array` and accumulators
 ALGORITHMS = { transfer: 'oscilla.transfer.v2', ir: 'oscilla.ir.log-sweep.v2',
   irFarina: 'oscilla.ir.farina-inverse.v2', rta: 'oscilla.rta.v1',
   smoothing: 'oscilla.smoothing.fractional-octave.v1', normalization: 'oscilla.normalization.v1',
-  align: 'oscilla.align.xcorr.v1', clip: 'oscilla.clip.v1',
+  align: 'oscilla.align.xcorr.v1', clip: 'oscilla.clip.v2',
   discontinuity: 'oscilla.discontinuity.v1', quality: 'oscilla.confidence.v3',
   calibration: 'oscilla.calibration.log-interp.v1', window: 'oscilla.window.hann.v1',
   windowBlackmanHarris: 'oscilla.window.blackman-harris.v1', aggregate: 'oscilla.aggregate.v1' }
