@@ -13,7 +13,9 @@
 //       className, sizeText, versionText, selected, actions: [{ id, label, destructive }] }
 // Nothing missing is invented (§249): it reads UNKNOWN / NOT ASSESSED.
 
-import { summarizeExperiment, describeStimulus } from '../../experiments/schema.js';
+import {
+  summarizeExperiment, describeStimulus, qualityVerdictText,
+} from '../../experiments/schema.js';
 import { qualityStatusPresentation, UNAVAILABLE } from './common.js';
 
 /** Row actions (§76); delete is the only destructive one and needs a confirmation (§225). */
@@ -57,7 +59,8 @@ export function experimentSummary(e) {
     { label: 'Created', text: timestampText(e.provenance && e.provenance.createdAt) },
     { label: 'Measured', text: timestampText(e.measurement && e.measurement.startedAt) },
     { label: 'Configuration hash', text: shortHash(e.provenance && e.provenance.configHash) },
-    { label: 'Result hash', text: shortHash(e.provenance && e.provenance.resultHash) },
+    { label: 'Result hash', text: resultHashText(e.provenance) },
+    { label: 'Quality verdict', text: qualityVerdictText(e) },
     { label: 'Repeat of', text: e.provenance && e.provenance.repeatOf ? e.provenance.repeatOf
       : 'none (original)' },
     { label: 'Build', text: build ? `${build.version || UNAVAILABLE.UNKNOWN} (${build.channel
@@ -81,6 +84,15 @@ export function experimentSummary(e) {
 
 function shortHash(h) {
   return typeof h === 'string' && h.length >= 12 ? `${h.slice(0, 12)}…` : UNAVAILABLE.UNKNOWN;
+}
+
+/** "3f2a…, v2 (results, quality, calibration, input, output)" (hash.js versions, M11). */
+function resultHashText(p) {
+  const h = p && p.resultHash;
+  if (typeof h !== 'string') return UNAVAILABLE.UNKNOWN;
+  const v = p.resultHashVersion === undefined ? 1 : p.resultHashVersion;
+  return `${shortHash(h)} v${v} (${v === 1 ? 'results only'
+    : 'results, quality, calibration, input, output'})`;
 }
 
 function algorithmsText(a) {

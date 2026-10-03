@@ -20,8 +20,8 @@ workspaces out; gated by `tests/browser/v3-ui.cjs`, `tests/unit/v3-ui.test.mjs` 
 | `views/common.js` | — | quantity kinds (REQUESTED, DIGITAL, OBSERVED, CALIBRATED, ESTIMATED, NORMALIZED, SMOOTHED, DELTA), UNKNOWN / NOT MEASURED / UNCALIBRATED words, colour roles, status presentation (glyph, icon, shape), line styles, mask splitting, axis helpers, `levelAxis()` |
 | `views/measure-flow.js` | engine state, preflight report, recipe, calibration, result, progress | `measureFlow()` 7 steps + primary action; `expertFields()` with basic/advanced disclosure; `recipeFromFields()`; `CHARACTERIZE_PLAYBACK_CHAIN`; `OUTPUT_LEVEL_CHOICES`; `safetyNotes()`; `ROOM_NOTES` |
 | `views/quality-bar.js` | engine events (incl. progress `capture` chunks) | `reduceQualityBar()` / `qualityBarView()` (INPUT, NOISE, CLIPPING, SIGNAL, CAPTURE); `qualityPanel(assessment)` |
-| `views/response-chart.js` | engine result or Experiment | `buildResponseView()`: x, axes, series, bands, markers, badges, notes, summary, `readout(i)` / `readoutAt(hz)` |
-| `views/ir-chart.js` | IrResult | `buildIrView()`: ms re direct peak, absolute origin, window region, decimated series |
+| `views/response-chart.js` | engine result or Experiment | `buildResponseView()`: x, axes, series, bands, markers, badges, notes, summary, `readout(i)` / `readoutAt(hz)` (phase line where measured), `normalizationApplied` / `normalizationNote`, `phase`, `masterGain`; `normalizationAvailability()`; `buildPhaseView()` (expert phase over frequency) |
+| `views/ir-chart.js` | IrResult | `buildIrView()`: ms re direct peak, absolute origin, window region, series decimated over the VISIBLE span only (`range` `[from, to]` or `'full'`) |
 | `views/rta-chart.js` | RtaResult (or FFT bins), averager state, a live-rta.js `viewInput()` | `buildRtaView()`: bars over band edges, peak ticks, labels, summary; `live` / `snapshotLabel` badge, fixed live axis (`liveRange`) |
 | `views/experiment-summary.js` | Experiment, store `list()` rows | `experimentSummary()` (§161), `experimentListRows()` |
 | `views/compare-view.js` | 2+ Experiments | `buildCompareView()`: common config, differences, overlay, A − B |
@@ -125,8 +125,17 @@ loop). From a view model:
   "Live RTA" below.
 - every chart has its text summary (`view.summary`) in an associated `aria-describedby`
   element (§150); points are never exposed to assistive technology.
-- views are rebuilt when a result or an option (smoothing, normalization, scale, window)
-  changes, not per frame.
+- views are rebuilt when a result or an option (smoothing, normalization, scale, window, IR
+  span, response quantity) changes, not per frame. The IR view slices the visible span before
+  it decimates, so every span change builds a new view (the Direct span of a 10 s sweep is
+  drawn sample by sample).
+- a view option never fails a measurement (M6): `measure.js` builds each view inside a guard
+  (a failing view becomes a note in its panel), presents the result only after the engine has
+  resolved, and disables a normalization whose reference lies outside the shown result's grid
+  (`normalizationAvailability()`, `meas.normAvail`); a selection the new result cannot use
+  resets to None.
+- smoothing never crosses a coverage or reliability edge (m1): `response-chart.js` smooths each
+  region (covered and reliable, covered and unreliable) with smoothing.js's `mask` option.
 
 ## Labels the UI must keep
 
@@ -141,6 +150,38 @@ loop). From a view model:
 - The device characterization preset's result is "OBSERVED PLAYBACK / CAPTURE CHAIN RESPONSE"
   (§106); output levels are LOW / MEDIUM / HIGH digital peaks, never SPL (§208).
 - Missing data reads UNKNOWN, NOT MEASURED, UNCALIBRATED, UNAVAILABLE or NOT ASSESSED (§249).
+- Every response states the master output gain included in its magnitudes (M9); a stored
+  quality verdict reads "as assessed by OSCILLA <version>, commit <c>, <rule set>" (M11), and
+  the result hash names its version and what it covers.
+- Phase (expert, m3): the response toolbar offers Magnitude / Phase; without a phase the panel
+  says why (`PHASE_REASON_TEXT`: not requested, no alignment, alignment not robust, aggregate).
+
+## Calibration in the MEASURE workspace
+
+- Level calibration (M3). The dialog names the scale of the reading (`LEVEL_SCALE`: the
+  one-third-octave band level at the reference frequency, dB re digital full scale on the
+  mean-square scale, where a full-scale sine reads −3.01 dB — the noise and RTA band scale).
+  "Capture reference" records `REFERENCE_CAPTURE_S` (3 s) through the SAME capture io as a
+  measurement (`io.captureNoise`, stimulus-free; microphone or the loopback TEST CONTEXT) and
+  reads the band with `calibration/reference.js`; a reading without a dominant tone or a
+  clipped one is refused. Stop, Cancel, Escape (the dialog's close event) and leaving the
+  workspace abort the capture; the input is released afterwards. The stored LevelCalibration
+  (schema 2) carries method `captured`, the scale and the capture's input (hashed deviceId,
+  sample rate, echo cancellation, noise suppression, AGC, channel count). Typing the reading is
+  an advanced switch labelled with the same scale (method `manual`, bound to the current input
+  when one is known).
+- The level indicator reads UNCALIBRATED, with the reason in the panel and the indicator's
+  title, whenever the current input (the latest setup check, result or reference capture)
+  differs from the calibration's; such a calibration is neither applied to a measurement nor
+  saved with an experiment. Before a measurement with a bound calibration and no known input,
+  the setup check runs first so the input is known.
+- Frequency profile (M4). The import states the sign convention and a one-point preview (the
+  profile's largest value: "At 10 kHz the file states +2.10 dB; a reading of 0.00 dB becomes
+  −2.10 dB"). A file whose header does not state the convention ("correction", "gain", "EQ",
+  "cal", "value") opens the convention dialog (`osc-dlg-cal-convention`): nothing is loaded
+  until "the microphone's deviation" or "a correction to add" is chosen, each with its preview.
+- Files are size-checked before they are read (m6): 1 MiB for calibration, 32 MiB for
+  experiments (`readFileText(file, { maxBytes })`).
 
 ## Visual identity constraints
 
@@ -234,6 +275,9 @@ Spec §44-§49, §122-§123, §150; plan V341-V344. The RTA tab of MEASURE analy
   `workspace`) that holds its own `.osc-panel`s in a 12-column grid, instead of loose panels in
   the V2 focus grid: the V2 panels are hidden in these workspaces at every width, and the V2
   focus/tablet rules stay untouched. The spans are the ones proposed above.
+- Noise check: 5 s by default (`DEFAULT_NOISE_CHECK_S`, preset and field). The SNR is assessed
+  only above about 10 / (0.1156 · T) Hz, so the V3.0 default of 1 s could never assess below
+  ~87 Hz and a default 20 Hz sweep could never be GOOD; the field help says so.
 - RTA: live input analysis as described in "Live RTA". Without it, the tab shows the noise
   check's stored one-third-octave band power (engine `summarizeNoise`, binHz from
   `NOISE_FFT`) badged NOISE CHECK SNAPSHOT (never LIVE), with its Welch averaging described as

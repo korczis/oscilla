@@ -160,7 +160,8 @@ const hasError = (errors, path, re) => errors.some((e) => e.path === path
 
 test('schema versions are four independent axes (§131)', () => {
   assert.strictEqual(EXPERIMENT_SCHEMA_VERSION, 1);
-  assert.strictEqual(CALIBRATION_SCHEMA_VERSION, 1);
+  // 2: frequency profiles carry their sign convention (M4); schema 1 migrates to it.
+  assert.strictEqual(CALIBRATION_SCHEMA_VERSION, 2);
   assert.strictEqual(CONFIG_SCHEMA_VERSION, CONFIG_FILE_VERSION);
   assert.ok(Object.isFrozen(SCHEMA_VERSIONS));
   assert.deepStrictEqual(Object.keys(SCHEMA_VERSIONS), ['experiment', 'calibration', 'config',
@@ -278,11 +279,13 @@ test('summarizeExperiment: compact lines; never invents data (§52, §161)', () 
     'Name: MacBook speakers — desk',
     'Stimulus: 20 Hz → 20 kHz log sweep, 10 s',
     'Output level: digital peak 0.5, -6.0 dB relative (dBFS-like)',
+    'Master output gain: Unknown (not recorded)',
     'Input: MacBook Pro Microphone',
     'Calibration: frequency profile "UMIK-1 #7001", SPL CALIBRATED (94 dB SPL at 1 kHz)',
     'Sample rate: 48000 Hz',
     'Runs: 5 of 5 requested',
-    'Quality: USABLE',
+    // M11: a stored verdict says which build and rule set gave it.
+    'Quality: USABLE (as assessed by OSCILLA 9.8.7, commit abc1234, oscilla.confidence.v1)',
     'OSCILLA 9.8.7, commit abc1234',
   ]);
   const bare = createExperiment({ recipe: { stimulus: { kind: 'pink', duration: 5, level: 0.1,
@@ -291,6 +294,7 @@ test('summarizeExperiment: compact lines; never invents data (§52, §161)', () 
     'Name: (unnamed)',
     'Stimulus: pink noise, 5 s',
     'Output level: digital peak 0.1, -20.0 dB relative (dBFS-like)',
+    'Master output gain: Unknown (not recorded)',
     `Input: ${UNKNOWN_DEVICE}`,
     'Calibration: frequency profile none, level UNCALIBRATED (Relative level · dBFS-like / '
       + 'analyser-relative scale)',
@@ -550,7 +554,8 @@ test('corrupt: malformed calibration', () => {
     ['calibration.level.offsetDb', (c) => { delete c.level.offsetDb; }],
     ['calibration.level.offsetDb', (c) => { c.level.offsetDb = '124'; }],
     ['calibration.level.kind', (c) => { c.level.kind = 'frequency'; }],
-    ['calibration.level.schemaVersion', (c) => { c.level.schemaVersion = 2; }],
+    ['calibration.level.schemaVersion', (c) => { c.level.schemaVersion = 3; }],
+    ['calibration.level.scale', (c) => { c.level.schemaVersion = 2; }],
     ['calibration.level.referenceDbSpl', (c) => { c.level.referenceDbSpl = 900; }],
     ['calibration.level.createdAt', (c) => { c.level.createdAt = 12; }],
     ['calibration.level', (c) => { c.level = [1, 2]; }],
@@ -870,11 +875,13 @@ test('transferCsv: metadata header, explicit unit columns, raw by default', () =
       + 'uncorrected',
     '# column magnitude_db_corrected: empty (no frequency calibration applied)',
     '# column snr_db: dB, ESTIMATED signal-to-noise ratio',
-    '# column reliable: 1 = inside the valid range 20-20000 Hz, 0 = outside',
-    'frequency_hz,magnitude_db_relative,magnitude_db_corrected,snr_db,reliable',
-    '10,-3,,5,0',
-    '1000,1.5,,30,1',
-    '20000,-0.25,,12.5,1',
+    '# column reliable: 1 = inside the valid range 20-20000 Hz, 0 = outside (quality mask not '
+      + 'available)',
+    '# column phase_deg: empty (phase not measured: no reason recorded)',
+    'frequency_hz,magnitude_db_relative,magnitude_db_corrected,snr_db,reliable,phase_deg',
+    '10,-3,,5,0,',
+    '1000,1.5,,30,1,',
+    '20000,-0.25,,12.5,1,',
     '',
   ].join('\n'));
   assert.ok(!/(^|\n)x,y/.test(csv));
@@ -898,11 +905,20 @@ test('transferCsv: corrected column and labelled derived view', () => {
   // G19: under a valid level calibration the transfer columns stay ratios, never dB SPL.
   assert.strictEqual(lines[10], '# column magnitude_db_corrected: dB re unity digital transfer '
     + '(capture/stimulus ratio), frequency-profile corrected (microphone deviation removed)');
-  assert.strictEqual(lines[12], '# column reliable: 1 = reliable, 0 = not (quality assessment)');
-  assert.strictEqual(lines[13],
-    'frequency_hz,magnitude_db_relative,magnitude_db_corrected,snr_db,reliable');
-  assert.deepStrictEqual(lines.slice(14, 17), ['10,-3,-2,5,1', '1000,1.5,1,30,1',
-    '20000,-0.25,0.5,12.5,0']);
+  assert.strictEqual(lines[12],
+    '# column reliable: 1 = reliable, 0 = not (quality assessment mask)');
+  assert.strictEqual(lines[14],
+    'frequency_hz,magnitude_db_relative,magnitude_db_corrected,snr_db,reliable,phase_deg');
+  assert.deepStrictEqual(lines.slice(15, 18), ['10,-3,-2,5,1,', '1000,1.5,1,30,1,',
+    '20000,-0.25,0.5,12.5,0,']);
+  // m3: a measured phase is exported in degrees.
+  const withPhase = transferCsv({ ...SHORT(), phaseDeg: Float64Array.from([10, -170.5, 0]) },
+    META).split('\n');
+  assert.ok(withPhase.includes('# column phase_deg: degrees, wrapped to (−180, 180], alignment '
+    + 'delay removed'));
+  assert.ok(withPhase.includes('1000,1.5,,30,1,-170.5'));
+  const notRequested = transferCsv({ ...SHORT(), phaseReason: 'NOT_REQUESTED' }, META);
+  assert.match(notRequested, /# column phase_deg: empty \(phase not measured: phase not requested\)/);
   assert.ok(lines.slice(8).every((l) => !/SPL/.test(l)), 'no SPL in transfer columns or rows');
   assert.throws(() => transferCsv(SHORT(), meta, { view: 'derived' }), /derived view needs/);
   assert.throws(() => transferCsv(SHORT(), meta, { correctedDb: [1] }), /expected 3/);
@@ -929,7 +945,9 @@ test('irCsv and rtaCsv: exact columns and units', () => {
     '# capture_offset_s: 0.0123',
     '# window_s: 0-0.08',
     '# column time_s: s from the first IR sample',
-    '# column amplitude: linear, relative to digital full scale (original scale, not normalized)',
+    // m4: an IR sample of the capture/stimulus transfer is a ratio, not a level re full scale.
+    '# column amplitude: dimensionless transfer ratio (impulse response of capture / stimulus; '
+      + 'a unity digital system peaks near 1), original scale, not normalized',
     'time_s,amplitude',
     '0,0',
     `${1 / 48000},0.5`,

@@ -897,7 +897,11 @@ test('experiment summary and list rows (§161, §76)', async () => {
   assert.deepEqual(s.lines, schema.summarizeExperiment(EXP_A));
   assert.ok(s.lines.some((l) => /Calibration: frequency profile none, level UNCALIBRATED/
     .test(l)));
-  assert.ok(s.provenance.some((p) => p.label === 'Result hash' && /^[0-9a-f]{12}…$/.test(p.text)));
+  // M11: the result hash names its version and what it covers; the verdict names its build.
+  assert.ok(s.provenance.some((p) => p.label === 'Result hash'
+    && /^[0-9a-f]{12}… v2 \(results, quality, calibration, input, output\)$/.test(p.text)));
+  assert.ok(s.provenance.some((p) => p.label === 'Quality verdict'
+    && /\(as assessed by OSCILLA /.test(p.text)));
   assert.doesNotMatch(allText(s), /SPL/);
 
   const store = createMemoryStore({ knownAlgorithms: ALGORITHMS });

@@ -8,14 +8,27 @@
 // Delete is the only destructive action and always asks first (§225); an import never
 // overwrites a stored experiment with the same ID (§104: never overwrite silently).
 // Decoded experiments (typed arrays) stay in the closure; Alpine holds summaries and text.
+//
+// Export (§88): exportableExperiment() hashes a raw input deviceId that an older record still
+// carries (schema.js sanitizeForExport) and re-stamps a version-2 result hash, which covers the
+// input; a version-1 hash covers the results only and stays valid. CSV (m4): the transfer CSV
+// carries the quality mask as its `reliable` column (when the mask lies on the transfer grid),
+// the frequency-corrected magnitude when the experiment's profile is loaded (same id), and the
+// phase when the transfer has one. Imports refuse a file larger than the limit before reading
+// it (m6).
 
 import { KNOWN_ALGORITHM_IDS } from '../measurement/algorithms.js';
 import { openExperimentStoreOrMemory } from '../experiments/store.js';
-import { validateExperiment } from '../experiments/validate.js';
+import { validateExperiment, DEFAULT_MAX_BYTES } from '../experiments/validate.js';
 import {
   experimentToJson, formatErrors, newExperimentId, EXPERIMENT_FILE_EXTENSION, LIMITS,
+  sanitizeForExport,
 } from '../experiments/schema.js';
-import { csvMeta, transferCsv, aggregateCsv, irCsv } from '../experiments/csv.js';
+import { resultHash, withResultHash, resultHashVersionOf } from '../experiments/hash.js';
+import {
+  csvMeta, transferCsv, aggregateCsv, irCsv, reliableFromQuality,
+} from '../experiments/csv.js';
+import { applyFrequencyCorrection } from '../calibration/interpolate.js';
 import { experimentSummary, experimentListRows } from '../measurement/views/experiment-summary.js';
 import { buildCompareView } from '../measurement/views/compare-view.js';
 import { buildResponseView } from '../measurement/views/response-chart.js';
@@ -46,6 +59,36 @@ export function fileStem(name, fallback = 'experiment') {
 
 const isTestContext = (e) => !!experimentTestContext(e);
 
+/**
+ * The experiment as it is exported (§88): no raw deviceId; a version-2 result hash re-stamped
+ * when sanitizing changed the input it covers (the record was verified when it was stored).
+ */
+export function exportableExperiment(e) {
+  const { experiment, changed } = sanitizeForExport(e);
+  if (!changed) return e;
+  const p = experiment.provenance;
+  if (p && typeof p.resultHash === 'string' && resultHashVersionOf(experiment) === 2) {
+    return withResultHash(experiment, resultHash(experiment, { version: 2 }), 2);
+  }
+  return experiment;
+}
+
+/**
+ * transferCsv options of an experiment (m4): the quality mask as `reliable`, and the corrected
+ * magnitude when `profile` is the experiment's frequency profile (same id).
+ */
+export function transferCsvOptions(e, profile = null) {
+  const t = e.results && e.results.transfer;
+  const opts = {};
+  const reliable = reliableFromQuality(e.quality, t);
+  if (reliable) opts.reliable = reliable;
+  const ref = e.calibration && e.calibration.frequency;
+  if (t && ref && profile && profile.id === ref.id) {
+    opts.correctedDb = applyFrequencyCorrection(t.magnitudeDb, t.frequencies, profile)
+      .correctedDb;
+  }
+  return opts;
+}
 export function createExperimentsUi() {
   const ctx = {
     cmp: null,
@@ -300,7 +343,7 @@ export function createExperimentsUi() {
     async experimentsExport(id) {
       const e = await get(this, id);
       if (!e) return null;
-      const text = experimentToJson(e, 2);
+      const text = experimentToJson(exportableExperiment(e), 2);
       downloadBlob(new Blob([`${text}\n`], { type: 'application/json' }),
         `${fileStem(e.name)}${EXPERIMENT_FILE_EXTENSION}`);
       return text;
@@ -312,7 +355,11 @@ export function createExperimentsUi() {
       const meta = csvMeta(e);
       let text = null;
       try {
-        if (what === 'transfer' && e.results.transfer) text = transferCsv(e.results.transfer, meta);
+        if (what === 'transfer' && e.results.transfer) {
+          const profile = typeof this.measureCurrentProfile === 'function'
+            ? this.measureCurrentProfile() : null;
+          text = transferCsv(e.results.transfer, meta, transferCsvOptions(e, profile));
+        }
         else if (what === 'aggregate' && e.results.aggregate) {
           text = aggregateCsv(e.results.aggregate, meta);
         } else if (what === 'ir' && e.results.ir) text = irCsv(e.results.ir, meta);
@@ -332,7 +379,8 @@ export function createExperimentsUi() {
       const file = ev && ev.target && ev.target.files && ev.target.files[0];
       if (!file) return null;
       try {
-        return await this.experimentsImportText(await readFileText(file));
+        return await this.experimentsImportText(await readFileText(file,
+          { maxBytes: DEFAULT_MAX_BYTES, what: `"${file.name}"` }));
       } catch (err) {
         this.notify('error', 'Import failed', err.message || String(err));
         return null;

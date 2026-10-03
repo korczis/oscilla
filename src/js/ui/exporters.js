@@ -162,8 +162,27 @@ export async function renderSequenceToWav(model, { sampleRate, level, waveform, 
   return { buffer, wav: encodeWav(buffer, { bitDepth: 16 }), stats: bufferStats(buffer) };
 }
 
-/** Read a File/Blob as text (FileReader; works from file://). */
-export function readFileText(file) {
+/** Error of a file refused by readFileText before reading (its size exceeds the limit). */
+export class FileTooLargeError extends RangeError {
+  constructor(size, maxBytes, what = 'The file') {
+    const mib = (b) => `${(b / 2 ** 20).toFixed(b < 2 ** 20 ? 2 : 1)} MiB`;
+    super(`${what} is ${mib(size)}, larger than the ${mib(maxBytes)} import limit; it was not `
+      + 'read.');
+    this.name = 'FileTooLargeError';
+    this.size = size;
+    this.maxBytes = maxBytes;
+  }
+}
+
+/**
+ * Read a File/Blob as text (FileReader; works from file://). With maxBytes, a file whose `size`
+ * exceeds it is refused BEFORE it is read (m6 of the V3 review: a huge file never reaches
+ * memory or the parser); the promise rejects with a FileTooLargeError.
+ */
+export function readFileText(file, { maxBytes = Infinity, what = 'The file' } = {}) {
+  if (file && typeof file.size === 'number' && file.size > maxBytes) {
+    return Promise.reject(new FileTooLargeError(file.size, maxBytes, what));
+  }
   return new Promise((resolve, reject) => {
     const r = new FileReader();
     r.onload = () => resolve(String(r.result));

@@ -32,6 +32,24 @@
 // the microphone with capture.js createLoopbackIo, a known synthetic digital system. The
 // workspace then says so in a banner and in every saved experiment; it is never presented as a
 // measurement of a physical system.
+//
+// Level calibration (M3 of the V3 review): the dialog measures the reference itself — "Capture
+// reference" records REFERENCE_CAPTURE_S seconds through the SAME capture io as a measurement
+// (io.captureNoise, stimulus-free) and reads the one-third-octave band level at the reference
+// frequency on the MEASURE mean-square scale (calibration/reference.js), names that scale, and
+// stores the capture's input (hashed deviceId, sample rate, applied processing) with the
+// LevelCalibration. The capture is abortable (Stop, Cancel, Escape, leaving the workspace) and
+// releases the input afterwards. Typing the reading is an advanced option labelled with the
+// same scale. A calibration whose input differs from the current one (latest preflight, result
+// or reference capture) is not applied: the indicator reads UNCALIBRATED and says why.
+//
+// Frequency profiles (M4): the import states the sign convention and a one-point preview; when
+// the file's header does not state it (correction / gain / EQ / cal), a dialog requires the
+// explicit choice before the profile is loaded (calibration/parse.js).
+//
+// View options never fail a measurement (M6): a normalization whose reference lies outside the
+// result's grid is disabled for that result (the selection resets to None), and a view that
+// still cannot be built is reported as a note, never as "Measurement failed".
 
 import { MEASUREMENT_STATES as S, isActiveState } from '../measurement/state-machine.js';
 import {
@@ -54,15 +72,20 @@ import {
   initialQualityBar, reduceQualityBar, qualityBarView, qualityPanel,
 } from '../measurement/views/quality-bar.js';
 import { initialAnnouncements, reduceAnnouncements } from '../measurement/views/announcements.js';
-import { buildResponseView } from '../measurement/views/response-chart.js';
+import {
+  buildResponseView, buildPhaseView, normalizationAvailability, responseSource,
+} from '../measurement/views/response-chart.js';
 import { buildIrView } from '../measurement/views/ir-chart.js';
 import { buildRtaView, RTA_MODE_LABELS, averagingLabel } from '../measurement/views/rta-chart.js';
 import { UNAVAILABLE } from '../measurement/views/common.js';
-import { parseCalibrationText } from '../calibration/parse.js';
+import { parseCalibrationText, MAX_IMPORT_BYTES } from '../calibration/parse.js';
 import { coverage as profileCoverage } from '../calibration/interpolate.js';
+import { PROFILE_CONVENTIONS } from '../calibration/profile.js';
 import {
-  createLevelCalibration, isValidLevelCalibration, levelLabel, LEVEL_LIMITS,
+  createLevelCalibration, isValidLevelCalibration, levelCalibrationApplies, LEVEL_LIMITS,
+  LEVEL_SCALE,
 } from '../calibration/level.js';
+import { measureReferenceLevel, REFERENCE_CAPTURE_S } from '../calibration/reference.js';
 import { newExperimentId, describeStimulus } from '../experiments/schema.js';
 import { experimentFromResult, experimentTestContext } from './measure-experiment.js';
 import { formatHz } from '../charts/axes.js';
@@ -95,10 +118,16 @@ export const RTA_AVERAGING_CHOICES = Object.freeze(['instant', 'fast', 'slow'].m
 /** Live RTA view-model rebuild interval (summary, badges, readout text); bars repaint per frame. */
 export const LIVE_VIEW_INTERVAL_MS = 250;
 
+/** Response chart quantities (phase is an expert view, m3). */
+export const RESPONSE_QUANTITIES = Object.freeze([
+  Object.freeze({ id: 'magnitude', label: 'Magnitude' }),
+  Object.freeze({ id: 'phase', label: 'Phase' }),
+]);
+
 /** Window region shown on the IR chart (view only) when enabled, ms re the direct peak. */
 export const IR_WINDOW_MS = Object.freeze([-1, 10]);
 
-const NORMALIZATIONS = Object.freeze({
+export const NORMALIZATIONS = Object.freeze({
   none: null,
   '1k': Object.freeze({ mode: 'at-frequency', hz: 1000 }),
   band: Object.freeze({ mode: 'band-mean', lo: 500, hi: 2000 }),
@@ -185,7 +214,22 @@ export function createMeasureUi(svc) {
     pending: null,         // the running measure()/preflight() promise
     lastRecipe: null,
     onStateHook: null,     // test seam only (onceInState)
+    inputNow: null,        // the current input { device, constraints, sampleRate } (binding check)
+    reference: null,       // { reading, input, referenceHz, testContext } of the last capture
+    refCapture: null,      // the running reference capture { io } (abortable)
+    pendingImport: null,   // { text, fileName } of a profile waiting for its sign convention
   };
+
+  /** The level calibration's applicability to the current input (level.js). */
+  function levelApplies() {
+    return levelCalibrationApplies(ctx.levelCal, ctx.inputNow);
+  }
+
+  /** The level calibration to display levels with: on, valid and taken with this input (M3). */
+  function levelInUse(m) {
+    return m.cal.useLevel && isValidLevelCalibration(ctx.levelCal) && levelApplies().applies
+      ? ctx.levelCal : null;
+  }
 
   function announce(message) {
     const m = ctx.cmp.meas.live;
@@ -198,8 +242,8 @@ export function createMeasureUi(svc) {
   function calibrationInput() {
     const cmp = ctx.cmp;
     const frequency = cmp.meas.cal.useFrequency && ctx.profile ? ctx.profile : null;
-    const level = cmp.meas.cal.useLevel && isValidLevelCalibration(ctx.levelCal) ? ctx.levelCal
-      : null;
+    const level = cmp.meas.cal.useLevel && isValidLevelCalibration(ctx.levelCal)
+      && levelApplies().applies ? ctx.levelCal : null;
     const prev = ctx.calibrationObj;
     if (prev && prev.frequency === frequency && prev.level === level) return prev;
     ctx.calibrationObj = frequency || level ? { frequency, level } : null;
@@ -222,6 +266,10 @@ export function createMeasureUi(svc) {
       case 'preflight':
         ctx.preflight = { ready: e.ready, warnings: e.warnings, blockers: e.blockers,
           facts: e.facts, sampleRate: e.sampleRate };
+        if (e.facts && e.facts.input && e.facts.input.ok) {
+          ctx.inputNow = { device: e.facts.input.device, constraints: e.facts.input.constraints,
+            sampleRate: e.sampleRate };
+        }
         break;
       case 'noise':
         ctx.noise = { rmsDb: e.rmsDb, peak: e.peak, reasons: e.reasons };
@@ -312,6 +360,8 @@ export function createMeasureUi(svc) {
     m.runText = m.flow.runText;
     if (lite) return;
     m.inputRows = inputFacts();
+    const lv = ctx.levelCal ? levelApplies() : null;
+    m.cal.levelVoid = lv && !lv.applies && lv.checked ? lv.reason : null;
     m.safety = safetyNotes({ recipe, preflight: ctx.preflight });
     m.stimulusText = describeStimulus({ ...recipe.stimulus, kind: 'log-sweep' });
     m.error = ctx.error ? { ...ctx.error } : null;
@@ -322,22 +372,56 @@ export function createMeasureUi(svc) {
     return ctx.shown ? ctx.shown.src : null;
   }
 
+  function hasResponse(src) {
+    return !!src && !!(src.transfer || (src.results && (src.results.transfer
+      || src.results.aggregate)));
+  }
+
+  /** Which normalizations the shown result can use (M6); plain for Alpine. */
+  function normalizationOptions(src) {
+    const out = {};
+    let f = null;
+    try {
+      const s = hasResponse(src) ? responseSource(src, { useCalibration: false }) : null;
+      f = s ? s.frequencies : null;
+    } catch (e) {
+      f = null;
+    }
+    for (const [id, spec] of Object.entries(NORMALIZATIONS)) {
+      const a = f ? normalizationAvailability(f, spec) : { ok: spec === null, reason: null };
+      out[id] = { ok: a.ok, reason: a.reason };
+    }
+    return out;
+  }
+
+  /** A new result or experiment: a normalization it cannot use resets to None (M6). */
+  function resetInvalidViewOptions(src) {
+    const m = ctx.cmp.meas;
+    m.normAvail = normalizationOptions(src);
+    const sel = m.normAvail[m.view.normalization];
+    if (sel && !sel.ok) m.view.normalization = 'none';
+  }
+
   function rebuildResponse() {
     const cmp = ctx.cmp;
     const m = cmp.meas;
     const src = shownSource();
+    const phase = m.expert && m.view.quantity === 'phase';
     let view = null;
-    if (src && (src.transfer || (src.results && (src.results.transfer || src.results.aggregate)))) {
-      view = buildResponseView(src, {
+    let magnitude = null;
+    if (hasResponse(src)) {
+      magnitude = buildResponseView(src, {
         smoothing: m.view.smoothing,
         normalization: NORMALIZATIONS[m.view.normalization] || null,
         useCalibration: true,
         showEnvelope: true,
         profile: ctx.profile,
-        levelCalibration: m.cal.useLevel ? ctx.levelCal : null,
+        levelCalibration: levelInUse(m),
       });
+      view = phase ? buildPhaseView(src) : magnitude;
     }
     m.response = view ? {
+      quantity: phase ? 'phase' : 'magnitude',
       summary: view.summary,
       badges: view.badges.slice(),
       notes: view.notes.slice(),
@@ -346,8 +430,10 @@ export function createMeasureUi(svc) {
       yLabel: `${view.axes.y.label} (${view.axes.y.unit})`,
       legend: view.series.filter((d) => !/^envelope-/.test(d.id) && !/-unreliable$/.test(d.id))
         .map((d) => ({ id: d.id, label: d.label, role: d.role, faded: d.alpha < 1 })),
-      envelope: view.bands.length ? view.bands[0].label : null,
-      authoritative: view.authoritative,
+      envelope: view.bands && view.bands.length ? view.bands[0].label : null,
+      authoritative: magnitude ? magnitude.authoritative : true,
+      phase: magnitude ? { available: magnitude.phase.available, text: magnitude.phase.text }
+        : null,
     } : null;
     if (ctx.charts.response) ctx.charts.response.setView(view);
     return view;
@@ -361,15 +447,11 @@ export function createMeasureUi(svc) {
     const span = IR_SPANS.find((s) => s.id === m.view.irSpan) || IR_SPANS[1];
     let view = null;
     if (ir) {
+      // The view slices the visible span before decimating (M7), so every span change
+      // rebuilds it; "Full" is the whole response (first to last sample).
       view = buildIrView(ir, { scale: m.view.irScale, normalize: m.view.irNormalize,
         window: m.view.irWindow ? IR_WINDOW_MS : null,
-        range: span.range ? [span.range[0], span.range[1]] : null });
-      if (!span.range) {
-        // "Full": the whole response (first to last sample), not the default early view.
-        const last = view.x[view.x.length - 1];
-        view = buildIrView(ir, { scale: m.view.irScale, normalize: m.view.irNormalize,
-          window: m.view.irWindow ? IR_WINDOW_MS : null, range: [view.x[0], last] });
-      }
+        range: span.range ? [span.range[0], span.range[1]] : 'full' });
     }
     m.ir = view ? { summary: view.summary, badges: view.badges.slice(), notes: view.notes.slice(),
       yLabel: `${view.axes.y.label}`, window: view.windowRegion ? view.windowRegion.label : null }
@@ -398,8 +480,7 @@ export function createMeasureUi(svc) {
 
   function liveCalibration(m) {
     return { profile: m.cal.useFrequency && ctx.profile ? ctx.profile : null,
-      levelCalibration: m.cal.useLevel && isValidLevelCalibration(ctx.levelCal) ? ctx.levelCal
-        : null };
+      levelCalibration: levelInUse(m) };
   }
 
   function rebuildLiveRta(m, L) {
@@ -437,7 +518,7 @@ export function createMeasureUi(svc) {
         averaging: { text: 'Welch average of the whole noise check (Hann, 50 % overlap); peak '
           + 'hold across successive noise checks' },
         binHz: st.binHz,
-        levelCalibration: m.cal.useLevel ? ctx.levelCal : null,
+        levelCalibration: levelInUse(m),
       });
     }
     m.rta = view ? { summary: view.summary, badges: view.badges.slice(), notes: view.notes.slice(),
@@ -590,10 +671,28 @@ export function createMeasureUi(svc) {
       : 0));
     updateRtaFrame();
   }
+  /** One view; a view that cannot be built is a note, never a failed measurement (M6). */
+  function safely(name, fn) {
+    try {
+      return fn();
+    } catch (e) {
+      console.error(`OSCILLA ${name} view:`, e);
+      const m = ctx.cmp.meas;
+      const note = `The ${name} view could not be drawn with these view options (${e.message
+        || e}); the measurement itself is kept.`;
+      const key = name === 'impulse response' ? 'ir' : name === 'RTA' ? 'rta' : 'response';
+      m[key] = { summary: note, badges: [], notes: [note], yLabel: '', legend: [], envelope: null,
+        authoritative: false, quality: null, phase: null, mode: '', source: '', window: null };
+      const c = ctx.charts[key];
+      if (c) c.setView(null);
+      return null;
+    }
+  }
+
   function rebuildAll() {
-    rebuildResponse();
-    rebuildIr();
-    rebuildRta();
+    safely('frequency response', rebuildResponse);
+    safely('impulse response', rebuildIr);
+    safely('RTA', rebuildRta);
     const cmp = ctx.cmp;
     const src = shownSource();
     const q = src ? src.quality || null : null;
@@ -605,6 +704,10 @@ export function createMeasureUi(svc) {
 
   function showResult(result) {
     ctx.result = result;
+    if (result && result.input && (result.input.device || result.input.constraints)) {
+      ctx.inputNow = { device: result.input.device, constraints: result.input.constraints,
+        sampleRate: result.sampleRate };
+    }
     if (result && (result.transfer || result.ir)) {
       const tc = result.testContext ? result.testContext.label || LOOPBACK_LABEL : null;
       ctx.shown = { kind: 'result', src: result, title: tc ? 'TEST CONTEXT result' : 'Latest '
@@ -612,18 +715,126 @@ export function createMeasureUi(svc) {
     } else if (result && result.state === S.INVALID) {
       ctx.shown = null;
     }
-    acceptResultForRta(result);
+    try {
+      acceptResultForRta(result);
+    } catch (e) {
+      console.error('OSCILLA RTA from the noise check:', e);
+    }
+    if (ctx.cmp) resetInvalidViewOptions(shownSource());
     rebuildAll();
   }
 
   // ---------------------------------------------------------------- experiment building
   function experimentOf(result, cmp) {
     const m = cmp.meas;
+    // The level calibration is saved only when it applies to the input of THIS result.
+    const resultInput = result.input ? { device: result.input.device,
+      constraints: result.input.constraints, sampleRate: result.sampleRate } : null;
+    const level = m.cal.useLevel && levelCalibrationApplies(ctx.levelCal, resultInput).applies
+      ? ctx.levelCal : null;
+    const st = ctx.lastRecipe && ctx.lastRecipe.stimulus;
     return experimentFromResult(result, {
       now: Date.now(), id: newExperimentId(randomBytes16()), build: svc.build,
       name: m.name, notes: m.notes, profile: ctx.profile,
-      levelCalibration: m.cal.useLevel ? ctx.levelCal : null, repeatOf: ctx.repeatOf,
+      levelCalibration: level, repeatOf: ctx.repeatOf,
+      requested: st ? { f1: Number(st.f1), f2: Number(st.f2) } : null,
     });
+  }
+
+  // ---------------------------------------------------------------- level reference capture
+  function referenceSummary(r, referenceHz) {
+    const db = (v) => `${v < 0 ? '−' : ''}${Math.abs(v).toFixed(2)} dB`;
+    return {
+      ok: r.ok,
+      referenceHz,
+      observedDb: r.ok ? r.observedDbRelative : null,
+      text: r.ok ? `Reading ${db(r.observedDbRelative)} relative, ${r.band.nominal} Hz `
+        + `one-third-octave band (${(100 * r.bandFraction).toFixed(0)} % of the captured power, `
+        + `${r.durationS.toFixed(1)} s at ${r.sampleRate} Hz)` : null,
+      errors: r.errors.slice(),
+      warnings: r.warnings.slice(),
+    };
+  }
+
+  async function captureReference(cmp) {
+    const f = cmp.meas.levelForm;
+    if (ctx.refCapture) return false;
+    if (ctx.me && isActiveState(ctx.me.state) && ctx.me.state !== S.READY) {
+      f.error = 'A measurement is running; stop it before capturing the reference.';
+      return false;
+    }
+    const referenceHz = Number(f.referenceHz);
+    if (!(referenceHz >= LEVEL_LIMITS.minReferenceHz && referenceHz <= LEVEL_LIMITS.maxReferenceHz)) {
+      f.error = `The reference frequency must be ${LEVEL_LIMITS.minReferenceHz}–`
+        + `${LEVEL_LIMITS.maxReferenceHz} Hz.`;
+      return false;
+    }
+    stopLive(); // the live RTA shares the capture io and its input
+    ensureEngine();
+    if (ctx.me.state === S.READY) ctx.me.reset(); // the reference capture owns the input now
+    svc.engine.init();
+    // A microphone reference must not hear the instrument; the loopback TEST CONTEXT captures
+    // the instrument's own output, which is its only possible reference.
+    if (ctx.ioKind !== 'loopback') svc.stopPlayback(cmp);
+    const io = ctx.io;
+    ctx.refCapture = { io };
+    ctx.reference = null;
+    f.capturing = true;
+    f.error = '';
+    f.reading = null;
+    try {
+      const cap = await io.captureNoise(REFERENCE_CAPTURE_S, {});
+      const r = measureReferenceLevel(cap, { referenceHz });
+      ctx.reference = { reading: r, referenceHz,
+        input: { device: cap.device || null, constraints: cap.constraints || null,
+          sampleRate: cap.sampleRate }, testContext: cap.testContext || null };
+      ctx.inputNow = ctx.reference.input;
+      f.reading = referenceSummary(r, referenceHz);
+      if (!r.ok) f.error = r.errors.join(' ');
+      return r.ok;
+    } catch (e) {
+      const aborted = e && (e.code === 'ABORTED' || e.name === 'AbortError');
+      f.error = aborted ? 'Reference capture stopped; nothing was stored.'
+        : `Reference capture failed: ${e && e.message ? e.message : String(e)}`;
+      return false;
+    } finally {
+      try { io.cancel('reference-done'); } catch (err) { /* already released */ }
+      ctx.refCapture = null;
+      f.capturing = false;
+      refresh();
+    }
+  }
+
+  function abortReference() {
+    if (!ctx.refCapture) return false;
+    try { ctx.refCapture.io.cancel('user'); } catch (e) { /* released */ }
+    return true;
+  }
+
+  // ---------------------------------------------------------------- frequency profile import
+  function loadProfile(cmp, r) {
+    ctx.profile = r.profile;
+    ctx.pendingImport = null;
+    cmp.meas.calImport = null;
+    const cov = profileCoverage(r.profile);
+    cmp.meas.cal.errors = [];
+    cmp.meas.cal.warnings = r.warnings.slice(0, 5).map((x) => (x.line ? `line ${x.line}: `
+      : '') + x.text);
+    cmp.meas.cal.profile = { name: r.profile.name, id: r.profile.id, points:
+      r.profile.points.length, coverageText: cov ? `${formatHz(cov[0])}–${formatHz(cov[1])}`
+        : UNAVAILABLE.UNKNOWN, convention: r.profile.convention,
+      conventionText: PROFILE_CONVENTIONS[r.profile.convention].label,
+      conventionBasis: r.convention ? r.convention.text : null,
+      preview: r.preview ? r.preview.text : null };
+    cmp.meas.cal.useFrequency = true;
+    if (ctx.me && ctx.me.state === S.READY) ctx.me.reset();
+    refresh();
+    rebuildAll();
+    cmp.notify('success', 'Frequency profile loaded', `"${r.profile.name}", `
+      + `${r.profile.points.length} points; applied only inside ${cmp.meas.cal.profile
+        .coverageText} (no extrapolation). Sign: ${cmp.meas.cal.profile.conventionText}. `
+      + `${r.preview ? r.preview.text : ''}`);
+    return true;
   }
 
   // ---------------------------------------------------------------- actions
@@ -650,6 +861,12 @@ export function createMeasureUi(svc) {
     }
   }
 
+  /** True when the level calibration in use is bound to an input this session has not seen. */
+  function levelNeedsInputCheck(cmp) {
+    return cmp.meas.cal.useLevel && isValidLevelCalibration(ctx.levelCal)
+      && ctx.levelCal.input && !ctx.inputNow;
+  }
+
   async function runMeasure(cmp) {
     stopLive();
     const me = ensureEngine();
@@ -663,16 +880,27 @@ export function createMeasureUi(svc) {
     rebuildAll();
     const recipe = recipeNow();
     ctx.lastRecipe = recipe;
+    let result = null;
     try {
+      // A bound level calibration is checked against the input before it is applied: without
+      // a known current input, the setup check opens it first (M3).
+      if (levelNeedsInputCheck(cmp) && me.state !== S.READY) {
+        ctx.pending = me.preflight(recipe, { calibration: calibrationInput() });
+        await ctx.pending;
+      }
       ctx.pending = me.measure(recipe, { calibration: calibrationInput() });
-      const result = await ctx.pending;
-      showResult(result);
+      result = await ctx.pending;
     } catch (e) {
       if (!(e && e.code === 'ABORTED')) {
         cmp.notify('error', 'Measurement failed', e.message || String(e));
       }
     } finally {
       ctx.pending = null;
+      refresh();
+    }
+    // Presenting the result is outside the measurement: a view problem never fails it (M6).
+    if (result) {
+      showResult(result);
       refresh();
     }
   }
@@ -686,6 +914,10 @@ export function createMeasureUi(svc) {
     ROOM_NOTES,
     CHARACTERIZE_PLAYBACK_CHAIN,
     LEVEL_LIMITS,
+    LEVEL_SCALE,
+    RESPONSE_QUANTITIES,
+    REFERENCE_CAPTURE_S,
+    PROFILE_CONVENTIONS,
     meas: {
       state: S.IDLE,
       active: false,
@@ -706,7 +938,10 @@ export function createMeasureUi(svc) {
       view: { smoothing: 0, normalization: 'none', irScale: 'linear', irNormalize: false,
         irWindow: false, irSpan: 'early', rtaPeakHold: false,
         rtaMode: FIELD_DEFAULTS.rtaMode, rtaAveraging: FIELD_DEFAULTS.averaging,
-        rtaFftSize: FIELD_DEFAULTS.fftSize, rtaWindow: FIELD_DEFAULTS.window },
+        rtaFftSize: FIELD_DEFAULTS.fftSize, rtaWindow: FIELD_DEFAULTS.window,
+        quantity: 'magnitude' },
+      normAvail: { none: { ok: true, reason: null }, '1k': { ok: true, reason: null },
+        band: { ok: true, reason: null } },
       rtaLive: { running: false, starting: false, error: null, kind: null,
         available: !!svc.loopback || hasMicrophoneApi(typeof navigator !== 'undefined'
           ? navigator : null), unavailableText: MIC_UNAVAILABLE_TEXT },
@@ -718,9 +953,10 @@ export function createMeasureUi(svc) {
       testContext: null,
       loopback: !!svc.loopback,
       cal: { useFrequency: true, useLevel: false, profile: null, level: null, errors: [],
-        warnings: [] },
+        warnings: [], levelVoid: null },
       levelForm: { referenceHz: '1000', referenceDb: '94', observedDb: '', conditions: '',
-        error: '' },
+        error: '', manual: false, capturing: false, reading: null },
+      calImport: null,
       name: '',
       notes: '',
       saved: false,
@@ -744,8 +980,9 @@ export function createMeasureUi(svc) {
             help: LIVE_FIELD_HELP } : f)) }));
     },
     get measureCalIndicator() {
-      const lvl = this.meas.cal.useLevel && this.meas.cal.level ? ctx.levelCal : null;
-      return levelLabel(lvl).indicator;
+      if (!(this.meas.cal.useLevel && this.meas.cal.level)) return 'UNCALIBRATED';
+      // meas.cal.levelVoid makes this getter reactive to the input check (refresh()).
+      return this.meas.cal.levelVoid || !levelApplies().applies ? 'UNCALIBRATED' : 'CALIBRATED';
     },
     get measureFreqIndicator() {
       return this.meas.cal.useFrequency && this.meas.cal.profile ? 'CALIBRATED' : 'UNCALIBRATED';
@@ -792,7 +1029,8 @@ export function createMeasureUi(svc) {
      */
     measureAbort(reason = 'user') {
       const live = stopLive();
-      if (!ctx.me || !isActiveState(ctx.me.state)) return live;
+      const ref = abortReference();
+      if (!ctx.me || !isActiveState(ctx.me.state)) return live || ref;
       const ok = ctx.me.abort(reason);
       refresh();
       return ok;
@@ -837,6 +1075,10 @@ export function createMeasureUi(svc) {
     },
     measureSetExpert(on) {
       this.meas.expert = !!on;
+      if (!this.meas.expert && this.meas.view.quantity !== 'magnitude') {
+        this.meas.view.quantity = 'magnitude';
+        safely('frequency response', rebuildResponse);
+      }
       refresh();
     },
     measureSetValue(id, raw, kind) {
@@ -870,10 +1112,17 @@ export function createMeasureUi(svc) {
       });
     },
     measureSetView(key, value) {
-      if (key === 'rtaMode' && !RTA_MODE_CHOICES.some((c) => c.id === value)) return;
-      if (key === 'rtaAveraging' && !RTA_AVERAGING_CHOICES.some((c) => c.id === value)) return;
-      if (key === 'rtaFftSize' && !LIVE_RTA_FFT_SIZES.includes(value)) return;
-      if (key === 'rtaWindow' && !LIVE_RTA_WINDOWS.includes(value)) return;
+      if (key === 'rtaMode' && !RTA_MODE_CHOICES.some((c) => c.id === value)) return false;
+      if (key === 'rtaAveraging' && !RTA_AVERAGING_CHOICES.some((c) => c.id === value)) {
+        return false;
+      }
+      if (key === 'rtaFftSize' && !LIVE_RTA_FFT_SIZES.includes(value)) return false;
+      if (key === 'rtaWindow' && !LIVE_RTA_WINDOWS.includes(value)) return false;
+      if (key === 'normalization') {
+        const a = this.meas.normAvail[value];
+        if (!Object.hasOwn(NORMALIZATIONS, value) || (a && !a.ok)) return false;
+      }
+      if (key === 'quantity' && !RESPONSE_QUANTITIES.some((q) => q.id === value)) return false;
       this.meas.view[key] = value;
       const field = Object.keys(LIVE_RTA_FIELDS).find((f) => LIVE_RTA_FIELDS[f] === key);
       if (field) this.meas.values[field] = value; // the expert field shows the same choice
@@ -883,11 +1132,13 @@ export function createMeasureUi(svc) {
       if (L && (key === 'rtaMode' || key === 'rtaAveraging')) this.meas.rtaFrozen = false;
       if (L && (key === 'rtaFftSize' || key === 'rtaWindow')) {
         reconfigureLive(this.meas);
-        return;
+        return true;
       }
-      if (['smoothing', 'normalization'].includes(key)) rebuildResponse();
-      else if (key.startsWith('ir')) rebuildIr();
-      else if (key.startsWith('rta')) rebuildRta();
+      if (['smoothing', 'normalization', 'quantity'].includes(key)) {
+        safely('frequency response', rebuildResponse);
+      } else if (key.startsWith('ir')) safely('impulse response', rebuildIr);
+      else if (key.startsWith('rta')) safely('RTA', rebuildRta);
+      return true;
     },
     /** Start or stop the live RTA (the RTA tab's button). */
     async measureRtaLiveToggle() {
@@ -936,38 +1187,54 @@ export function createMeasureUi(svc) {
       const file = e && e.target && e.target.files && e.target.files[0];
       if (!file) return false;
       try {
-        return this.measureImportCalibrationText(await readFileText(file), file.name);
+        // m6: the size is checked before the file is read (1 MiB calibration limit).
+        const text = await readFileText(file, { maxBytes: MAX_IMPORT_BYTES,
+          what: `"${file.name}"` });
+        return this.measureImportCalibrationText(text, file.name);
       } catch (err) {
+        this.meas.cal.errors = [err.message || String(err)];
         this.notify('error', 'Calibration not imported', err.message || String(err));
         return false;
       }
     },
-    /** Parse a CSV/TXT or JSON frequency profile (calibration/parse.js); never extrapolated. */
-    measureImportCalibrationText(text, fileName = 'profile') {
-      const r = parseCalibrationText(text, { name: String(fileName).replace(/\.[^.]+$/, ''),
-        importedAt: new Date().toISOString() });
+    /**
+     * Parse a CSV/TXT or JSON frequency profile (calibration/parse.js); never extrapolated.
+     * Returns true (loaded), false (rejected) or 'needs-choice' when the file does not state
+     * its sign convention: the convention dialog then asks for it (M4). opts.convention is an
+     * explicit choice ('deviation' | 'correction').
+     */
+    measureImportCalibrationText(text, fileName = 'profile', { convention } = {}) {
+      const name = String(fileName).replace(/\.[^.]+$/, '');
+      const r = parseCalibrationText(text, { name, importedAt: new Date().toISOString(),
+        convention });
       if (!r.ok) {
         this.meas.cal.errors = r.errors.slice(0, 5).map((x) => (x.line ? `line ${x.line}: `
           : '') + x.text);
         this.notify('error', 'Calibration not imported', this.meas.cal.errors.join(' '));
         return false;
       }
-      ctx.profile = r.profile;
-      const cov = profileCoverage(r.profile);
-      this.meas.cal.errors = [];
-      this.meas.cal.warnings = r.warnings.slice(0, 5).map((x) => (x.line ? `line ${x.line}: `
-        : '') + x.text);
-      this.meas.cal.profile = { name: r.profile.name, id: r.profile.id, points:
-        r.profile.points.length, coverageText: cov ? `${formatHz(cov[0])}–${formatHz(cov[1])}`
-          : UNAVAILABLE.UNKNOWN };
-      this.meas.cal.useFrequency = true;
-      if (ctx.me && ctx.me.state === S.READY) ctx.me.reset();
-      refresh();
-      rebuildAll();
-      this.notify('success', 'Frequency profile loaded', `"${r.profile.name}", `
-        + `${r.profile.points.length} points; applied only inside ${this.meas.cal.profile
-          .coverageText} (no extrapolation).`);
-      return true;
+      if (r.needsConvention) {
+        ctx.pendingImport = { text, fileName };
+        this.meas.calImport = { name, basis: r.convention.text, choice: null,
+          options: Object.values(PROFILE_CONVENTIONS).map((c) => ({ id: c.id, label: c.label,
+            preview: r.previews[c.id] ? r.previews[c.id].text : null })) };
+        this.openModal('osc-dlg-cal-convention');
+        return 'needs-choice';
+      }
+      return loadProfile(this, r);
+    },
+    /** The explicit sign convention of the pending import (M4); loads the profile. */
+    measureConfirmCalibrationConvention(choice = this.meas.calImport && this.meas.calImport.choice) {
+      const p = ctx.pendingImport;
+      if (!p || !Object.hasOwn(PROFILE_CONVENTIONS, choice)) return false;
+      const ok = this.measureImportCalibrationText(p.text, p.fileName, { convention: choice });
+      if (ok === true) this.closeModal('osc-dlg-cal-convention');
+      return ok === true;
+    },
+    measureCancelCalibrationImport() {
+      ctx.pendingImport = null;
+      this.meas.calImport = null;
+      this.closeModal('osc-dlg-cal-convention');
     },
     measureClearCalibration() {
       ctx.profile = null;
@@ -986,20 +1253,71 @@ export function createMeasureUi(svc) {
       this.meas.levelForm.error = '';
       this.openModal('osc-dlg-level-cal');
     },
-    /** Absolute level calibration (§23): an explicit external reference; no default exists. */
+    /** Capture the reference reading through the measurement input (M3). */
+    async measureCaptureLevelReference() {
+      return captureReference(this);
+    },
+    /** Stop a running reference capture (nothing is stored). */
+    measureAbortLevelReference() {
+      return abortReference();
+    },
+    measureCloseLevelCalibration() {
+      abortReference();
+      this.closeModal('osc-dlg-level-cal');
+    },
+    measureSetLevelManual(on) {
+      this.meas.levelForm.manual = !!on;
+      this.meas.levelForm.error = '';
+    },
+    /**
+     * Absolute level calibration (§23): an explicit external reference; no default exists. The
+     * reading is the captured one (method 'captured', bound to the capture's input) unless the
+     * advanced manual entry is on (method 'manual', bound to the current input when known); both
+     * are on LEVEL_SCALE.
+     */
     measureSaveLevelCalibration() {
       const f = this.meas.levelForm;
       try {
+        const referenceHz = Number(f.referenceHz);
+        let observed;
+        let input;
+        let method;
+        let conditions = f.conditions;
+        if (f.manual) {
+          observed = Number(f.observedDb === '' ? NaN : f.observedDb);
+          input = ctx.inputNow;
+          method = 'manual';
+        } else {
+          const ref = ctx.reference;
+          if (!ref || !ref.reading.ok) {
+            throw new Error('Capture the reference first (or enter the reading by hand under '
+              + 'Advanced).');
+          }
+          if (ref.referenceHz !== referenceHz) {
+            throw new Error(`The reference was captured at ${ref.referenceHz} Hz; capture it `
+              + `again at ${referenceHz} Hz.`);
+          }
+          observed = ref.reading.observedDbRelative;
+          input = ref.input;
+          method = 'captured';
+          if (ref.testContext) {
+            const tc = ref.testContext.label || LOOPBACK_LABEL;
+            conditions = [tc, conditions].filter((t) => t && String(t).trim()).join(' ');
+          }
+        }
         const cal = createLevelCalibration({
-          referenceHz: Number(f.referenceHz),
+          referenceHz,
           referenceDbSpl: Number(f.referenceDb),
-          observedDbRelative: Number(f.observedDb === '' ? NaN : f.observedDb),
-          conditions: f.conditions,
+          observedDbRelative: observed,
+          conditions,
           createdAt: new Date().toISOString(),
+          method,
+          input,
         });
         ctx.levelCal = cal;
         this.meas.cal.level = { referenceHz: cal.referenceHz, referenceDb: cal.referenceDbSpl,
-          observedDb: cal.observedDbRelative, offsetDb: cal.offsetDb, conditions: cal.conditions };
+          observedDb: cal.observedDbRelative, offsetDb: cal.offsetDb, conditions: cal.conditions,
+          method: cal.method, bound: !!cal.input };
         this.meas.cal.useLevel = true;
         f.error = '';
         this.closeModal('osc-dlg-level-cal');
@@ -1016,6 +1334,7 @@ export function createMeasureUi(svc) {
       ctx.levelCal = null;
       this.meas.cal.level = null;
       this.meas.cal.useLevel = false;
+      this.meas.cal.levelVoid = null;
       refresh();
       rebuildAll();
     },
@@ -1050,6 +1369,7 @@ export function createMeasureUi(svc) {
     measureShowExperiment(e, title) {
       ctx.shown = { kind: 'experiment', src: e, title: title || `Saved experiment "${e.name
         || '(unnamed)'}"`, testContext: experimentTestContext(e) };
+      resetInvalidViewOptions(e);
       rebuildAll();
     },
     /** Load a recipe (an experiment's) into the setup; the next save is a NEW experiment. */
@@ -1158,6 +1478,22 @@ export function createMeasureUi(svc) {
           return r ? { ...r, levelsDb: Array.from(r.levelsDb) } : null;
         },
         experimentFromResult: () => (ctx.result ? experimentOf(ctx.result, self) : null),
+        get levelCalibration() { return ctx.levelCal; },
+        get inputNow() { return ctx.inputNow; },
+        get reference() { return ctx.reference; },
+        get referenceCapturing() { return !!ctx.refCapture; },
+        /** Test hook: the current input (as a preflight would report it). */
+        setInputNow(input) {
+          ctx.inputNow = input;
+          refresh();
+        },
+        /** Test hook: show any engine-like result (view-option robustness, M6). */
+        showResult(result) {
+          showResult(result);
+          refresh();
+        },
+        get responseView() { return ctx.charts.response ? ctx.charts.response.view : null; },
+        get irView() { return ctx.charts.ir ? ctx.charts.ir.view : null; },
       };
     },
   };

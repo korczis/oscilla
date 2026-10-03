@@ -547,35 +547,71 @@ test('G11: a frequency profile applied to RTA bands, power-weighted, never extra
 
 // ----------------------------------------------------------------------------- G13
 
-test('G13: resultHash covers exactly the encoded results block', () => {
+test('G13: resultHash v1 covers exactly the encoded results block (old files)', () => {
   const e = experiment8({ transfer: TRANSFER8, ir: IR8 });
-  const h = resultHash(e);
+  const v1 = { version: 1 };
+  const h = resultHash(e, v1);
   assert.equal(h, sha256(canonicalJson({ v: 1, results: serializeExperiment(e.results) })));
-  assert.equal(resultHash(e, { sha256Hex: sha256 }), h);
+  assert.equal(resultHash(e, { sha256Hex: sha256, version: 1 }), h);
   // Name, notes, quality, provenance and key order do not enter it.
   const renamed = { ...e, name: 'other', quality: null, provenance: { ...e.provenance,
     configHash: 'f'.repeat(64) } };
-  assert.equal(resultHash(renamed), h);
+  assert.equal(resultHash(renamed, v1), h);
   const reordered = { ...e,
     results: { rta: null, ir: e.results.ir, transfer: e.results.transfer } };
-  assert.equal(resultHash(reordered), h);
+  assert.equal(resultHash(reordered, v1), h);
   // One flipped low bit of one IR sample, or the same values in another dtype, change it.
   const samples = IR8.samples.slice();
   new Uint8Array(samples.buffer)[0] ^= 1;
-  assert.notEqual(resultHash(withResults(e, { results: { ir: { ...IR8, samples } } })), h);
+  assert.notEqual(resultHash(withResults(e, { results: { ir: { ...IR8, samples } } }), v1), h);
   const f64 = { ...IR8, samples: Float64Array.from(IR8.samples) };
-  assert.notEqual(resultHash(withResults(e, { results: { ir: f64 } })), h);
-  // Stamping and clearing.
-  const stamped = withResultHash(e, h);
+  assert.notEqual(resultHash(withResults(e, { results: { ir: f64 } }), v1), h);
+  // Stamping and clearing; a v1 stamp has no resultHashVersion (the form of a v1 file).
+  const stamped = withResultHash(e, h, 1);
   assert.equal(stamped.provenance.resultHash, h);
+  assert.equal('resultHashVersion' in stamped.provenance, false);
   assert.equal(e.provenance.resultHash, null, 'input not modified');
   assert.equal(withResults(stamped, { results: { rta: null } }).provenance.resultHash, null);
-  assert.equal(withResults(stamped, { quality: null }).provenance.resultHash, h);
+  // Quality is covered by v2, so a new verdict clears the stamp too.
+  assert.equal(withResults(stamped, { quality: null }).provenance.resultHash, null);
   assert.throws(() => withResultHash(e, 'ABC'), TypeError);
+  assert.throws(() => withResultHash(e, h, 3), RangeError);
+});
+
+test('G13 / M11: resultHash v2 covers results, quality, calibration, input and output', () => {
+  const e = experiment8({ transfer: TRANSFER8, ir: IR8 });
+  const h = resultHash(e);
+  const part = (k) => (e[k] === undefined ? null : serializeExperiment(e[k]));
+  assert.equal(h, sha256(canonicalJson({ v: 2, results: serializeExperiment(e.results),
+    quality: part('quality'), calibration: part('calibration'), input: part('input'),
+    output: part('output') })));
+  assert.notEqual(h, resultHash(e, { version: 1 }));
+  // Name, notes, provenance and key order still do not enter it ...
+  assert.equal(resultHash({ ...e, name: 'other', environment: { notes: 'x' },
+    provenance: { ...e.provenance, configHash: 'f'.repeat(64) } }), h);
+  // ... but every editable verdict / calibration / input / output field does.
+  const q = { algorithm: 'oscilla.confidence.v2', status: 'GOOD', reasons: [], metrics: {} };
+  assert.notEqual(resultHash({ ...e, quality: q }), h);
+  assert.notEqual(resultHash({ ...e, calibration: { frequency: null, level: { schemaVersion: 1,
+    kind: 'level', referenceHz: 1000, referenceDbSpl: 94, observedDbRelative: -30,
+    offsetDb: 124, conditions: null, createdAt: null } } }), h);
+  assert.notEqual(resultHash({ ...e, input: { ...e.input, device: { label: 'other', id: null } } }),
+    h);
+  assert.notEqual(resultHash({ ...e, output: { level: e.output.level, masterGain: 0.1 } }), h);
+  const stamped = withResultHash(e, h);
+  assert.equal(stamped.provenance.resultHashVersion, 2);
 });
 
 test('G13: import verifies the result hash; a mismatch is the error "corrupt"', () => {
   const e = experiment8({ transfer: TRANSFER8, ir: IR8 });
+  // A version-1 file (no resultHashVersion) still verifies as version 1.
+  const old = withResultHash(e, resultHash(e, { version: 1 }), 1);
+  const vOld = validateExperiment(experimentToJson(old), OPTS);
+  assert.ok(vOld.ok, JSON.stringify(vOld.errors));
+  assert.deepStrictEqual(vOld.experiment, old);
+  const oldDoc = clone(serializeExperiment(old));
+  oldDoc.name = 'renamed';
+  assert.ok(validateExperiment(oldDoc, OPTS).ok, 'v1 does not cover the name');
   const stamped = withResultHash(e, resultHash(e));
   const v = validateExperiment(experimentToJson(stamped), OPTS);
   assert.ok(v.ok, JSON.stringify(v.errors));
@@ -592,6 +628,13 @@ test('G13: import verifies the result hash; a mismatch is the error "corrupt"', 
   const malformed = clone(serializeExperiment(stamped));
   malformed.provenance.resultHash = 'xyz';
   reject(malformed, 'provenance.resultHash', /format/);
+  // M11: the stored verdict, calibration and input are covered by version 2.
+  const verdict = clone(serializeExperiment(stamped));
+  verdict.input.device.label = 'edited';
+  reject(verdict, 'provenance.resultHash', /corrupt/);
+  const version = clone(serializeExperiment(stamped));
+  version.provenance.resultHashVersion = 3;
+  reject(version, 'provenance.resultHashVersion', /one of/);
   // null: not stamped, nothing to verify (an experiment still being measured).
   assert.ok(validateExperiment(experimentToJson(e), OPTS).ok);
 });

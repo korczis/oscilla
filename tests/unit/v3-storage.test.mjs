@@ -288,7 +288,10 @@ test('G20 CSV: a derived transfer names the aggregate centre; a run names its ru
   assert.ok(!run.some((l) => l.startsWith('# derived_from')));
   // The centre column of both CSVs carries the same numbers.
   const head = centre.indexOf('frequency_hz,magnitude_db_relative,magnitude_db_corrected,'
-    + 'snr_db,reliable');
+    + 'snr_db,reliable,phase_deg');
+  // m3: the aggregate centre has no phase column values and says why.
+  assert.ok(centre.includes('# column phase_deg: empty (phase not measured: aggregate of '
+    + 'repeated runs: phases are not averaged)'));
   const agg = aggregateCsv(e.results.aggregate, meta).split('\n');
   const aHead = agg.findIndex((l) => l.startsWith('frequency_hz,'));
   for (let i = 1; i <= 5; i++) {

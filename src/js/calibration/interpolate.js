@@ -14,12 +14,15 @@
 // say "calibrated to 15 kHz" and never present held values as calibrated. 0 Hz and negative
 // frequencies are below every profile (minimum 1 Hz).
 //
-// Sign convention: a profile states the measuring chain's DEVIATION from flat — "+2.1 dB at
-// 10 kHz" means the microphone reads 2.1 dB high there. This is the convention measurement-
-// microphone calibration files are distributed in (they publish the microphone's response), so
-//   corrected = observed + CORRECTION_SIGN · correction = observed − correction.
-// A profile holding the inverse (an EQ curve) must be negated before import; it is never
-// guessed.
+// Sign convention (profile.js PROFILE_CONVENTIONS, stored in the profile, never guessed):
+//   'deviation'  (default; schema 1 had no other) the profile states the measuring chain's
+//                DEVIATION from flat — "+2.1 dB at 10 kHz" means the microphone reads 2.1 dB high
+//                there, the way measurement-microphone calibration files are distributed:
+//                corrected = observed + CORRECTION_SIGN · value = observed − value;
+//   'correction' the profile states a CORRECTION TO ADD (an EQ curve):
+//                corrected = observed + value.
+// correctionAt / correctionCurve return the STATED value; the dB actually added is
+// conventionSign(profile) · value (appliedCorrectionDb, previewConvention).
 //
 // Limits: assumes a normalized FrequencyProfile from profile.js (sorted, unique, finite).
 // Pure; inputs are never mutated. Magnitude only — phase calibration is out of scope.
@@ -28,12 +31,24 @@
 // power-weighted correction across each band, flags uncovered bands and never extrapolates.
 
 import { ALGORITHMS } from '../measurement/algorithms.js';
+import { PROFILE_CONVENTIONS, conventionOf } from './profile.js';
 import { meanSquarePower } from '../measurement/rta.js';
 import { ZERO_POWER_DB } from '../measurement/transfer.js';
 
 export const CALIBRATION_ALGORITHM = ALGORITHMS.calibration;
-export const CORRECTION_SIGN = -1;
+/** Sign of the 'deviation' convention (the default): corrected = observed − value. */
+export const CORRECTION_SIGN = PROFILE_CONVENTIONS.deviation.sign;
 export const CORRECTION_CONVENTION = 'profile-states-deviation:corrected=observed-correction';
+/** Machine-readable text of each convention (corrected = observed ± value). */
+export const CONVENTION_RULES = Object.freeze({
+  deviation: CORRECTION_CONVENTION,
+  correction: 'profile-states-correction:corrected=observed+correction',
+});
+
+/** +1 or −1: corrected = observed + conventionSign(profile) · stated value. */
+export function conventionSign(profile) {
+  return PROFILE_CONVENTIONS[conventionOf(profile)].sign;
+}
 export const EXTRAPOLATION_POLICIES = Object.freeze(['none', 'hold']);
 
 function pointsOf(profile) {
@@ -125,19 +140,50 @@ export function applyFrequencyCorrection(magnitudeDb, frequencies, profile, opts
   }
   const policy = policyOf(opts);
   const { correctionDb, covered } = correctionCurve(profile, frequencies, { extrapolate: policy });
+  const sign = conventionSign(profile);
   const n = magnitudeDb.length;
   const correctedDb = new Float64Array(n);
   for (let i = 0; i < n; i++) {
     const c = correctionDb[i];
-    correctedDb[i] = Number.isNaN(c) ? magnitudeDb[i] : magnitudeDb[i] + CORRECTION_SIGN * c;
+    correctedDb[i] = Number.isNaN(c) ? magnitudeDb[i] : magnitudeDb[i] + sign * c;
   }
   return {
     algorithm: CALIBRATION_ALGORITHM,
     profileId: profile.id ?? null,
+    convention: conventionOf(profile),
     correctedDb,
     covered,
     coverage: coverage(profile),
     extrapolate: policy,
+  };
+}
+
+/**
+ * previewConvention(profile, { hz, observedDb = 0 }) → { hz, statedDb, addedDb, observedDb,
+ *   correctedDb, convention, text } | null
+ * The one-point preview shown at import (M4): what the profile does to a reading at hz under
+ * its convention. hz defaults to the profile point with the largest |value| (the most telling
+ * point; the first point when all are 0). null when hz is outside the profile's coverage.
+ */
+export function previewConvention(profile, { hz = null, observedDb = 0 } = {}) {
+  const pts = pointsOf(profile);
+  let f = hz;
+  if (f === null) {
+    let k = 0;
+    for (let i = 1; i < pts.length; i++) if (Math.abs(pts[i][1]) > Math.abs(pts[k][1])) k = i;
+    f = pts[k][0];
+  }
+  const r = evaluate(pts, f, 'none');
+  if (!r) return null;
+  const convention = conventionOf(profile);
+  const addedDb = conventionSign(profile) * r.db;
+  const correctedDb = observedDb + addedDb;
+  const fmtDb = (v) => `${v > 0 ? '+' : v < 0 ? '−' : ''}${Math.abs(v).toFixed(2)} dB`;
+  const fmtHz = (v) => (v >= 1000 ? `${+(v / 1000).toPrecision(4)} kHz` : `${+v.toPrecision(4)} Hz`);
+  return {
+    hz: f, statedDb: r.db, addedDb, observedDb, correctedDb, convention,
+    text: `At ${fmtHz(f)} the file states ${fmtDb(r.db)}; a reading of ${fmtDb(observedDb)} `
+      + `becomes ${fmtDb(correctedDb)}: ${PROFILE_CONVENTIONS[convention].label}.`,
   };
 }
 
@@ -146,7 +192,8 @@ export function applyFrequencyCorrection(magnitudeDb, frequencies, profile, opts
 // A band level is a sum of power over the band, so a frequency correction that varies inside
 // the band must be applied to the power before summing, never as one value at the centre:
 //   corrected band power = Σ_k W_k · 10^(−c(f_k)/10),   gain = that / Σ_k W_k
-//   correctedDb = levelDb + 10·log10(gain)          (CORRECTION_SIGN: observed − correction)
+//   correctedDb = levelDb + 10·log10(gain)          (deviation: observed − value; a
+//   'correction' profile uses 10^(+c(f)/10), conventionSign)
 // with c(f) the log-interpolated profile above. Weights W_k:
 //   'spectrum'  given the per-bin power spectrum the band was integrated from (`power`, a
 //               mean-square array or a spectrum.js welch() result, and `binHz`): W_k = P[k]·w[k],
@@ -165,16 +212,16 @@ export function applyFrequencyCorrection(magnitudeDb, frequencies, profile, opts
 /** Sub-bands of the 'flat' weighting (see above). */
 export const BAND_CORRECTION_STEPS = 256;
 
-function bandGainFlat(pts, lo, hi) {
+function bandGainFlat(pts, lo, hi, sign) {
   let s = 0;
   for (let j = 0; j < BAND_CORRECTION_STEPS; j++) {
     const f = lo + ((j + 0.5) * (hi - lo)) / BAND_CORRECTION_STEPS;
-    s += 10 ** ((CORRECTION_SIGN * interpolateDb(pts, f)) / 10);
+    s += 10 ** ((sign * interpolateDb(pts, f)) / 10);
   }
   return s / BAND_CORRECTION_STEPS;
 }
 
-function bandGainSpectrum(pts, power, binHz, lo, hi) {
+function bandGainSpectrum(pts, power, binHz, lo, hi, sign) {
   const a = lo / binHz + 0.5; // band edges in bin-cell units, cell k = [k, k + 1) (rta.js)
   const b = hi / binHz + 0.5;
   const k0 = Math.max(0, Math.floor(a));
@@ -185,7 +232,7 @@ function bandGainSpectrum(pts, power, binHz, lo, hi) {
     const w = (Math.min(b, k + 1) - Math.max(a, k)) * power[k];
     if (!(w > 0)) continue;
     const f = Math.min(hi, Math.max(lo, k * binHz));
-    num += w * 10 ** ((CORRECTION_SIGN * interpolateDb(pts, f)) / 10);
+    num += w * 10 ** ((sign * interpolateDb(pts, f)) / 10);
     den += w;
   }
   return den > 0 ? num / den : null;
@@ -218,6 +265,7 @@ export function applyFrequencyCorrectionToBands(rta, profile, opts = {}) {
   }
   const fLo = pts[0][0];
   const fHi = pts[pts.length - 1][0];
+  const sign = conventionSign(profile);
   const n = rta.bands.length;
   const out = opts.out && opts.out.correctedDb && opts.out.correctedDb.length === n
     && opts.out.correctionDb && opts.out.correctionDb.length === n
@@ -233,8 +281,8 @@ export function applyFrequencyCorrectionToBands(rta, profile, opts = {}) {
     covered[i] = 0;
     if (!(lo >= fLo && hi <= fHi && hi > lo)) continue;
     covered[i] = 1;
-    let gain = useSpectrum ? bandGainSpectrum(pts, power, opts.binHz, lo, hi) : null;
-    if (gain === null) gain = bandGainFlat(pts, lo, hi);
+    let gain = useSpectrum ? bandGainSpectrum(pts, power, opts.binHz, lo, hi, sign) : null;
+    if (gain === null) gain = bandGainFlat(pts, lo, hi, sign);
     correctionDb[i] = 10 * Math.log10(gain);
     if (level > ZERO_POWER_DB) correctedDb[i] = level + correctionDb[i];
   }

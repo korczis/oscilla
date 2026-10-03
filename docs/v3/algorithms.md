@@ -1160,7 +1160,9 @@ spread is NaN and it is left out of `repeatabilityDb`.
 
 ### Profile and identity (`profile.js`)
 
-A `FrequencyProfile` is `[hz, db]` pairs stating a measuring chain's **deviation from flat**.
+A `FrequencyProfile` (schema 2) is `[hz, db]` pairs plus the **sign convention** of the values:
+`convention: 'deviation'` (the measuring chain's deviation from flat, the meaning schema 1 had)
+or `'correction'` (a correction to add, see Interpolation).
 `normalizePoints` sorts ascending (stable, with a warning if unsorted), merges exact duplicates
 (same Hz and dB, warning), and rejects conflicting duplicates, non-finite values, frequencies
 outside 1 Hz-200 kHz, corrections beyond ±60 dB, and fewer than 1 or more than 2000 points
@@ -1168,17 +1170,21 @@ outside 1 Hz-200 kHz, corrections beyond ±60 dB, and fewer than 1 or more than 
 
 ```
 profileId = SHA-256( JSON.stringify({ schemaVersion: 1, kind: 'frequency',
-                     units: { frequency: 'Hz', correction: 'dB' }, points }) )   64 hex digits
+                     units: { frequency: 'Hz', correction: 'dB' }, points
+                     [, convention]  /* only when not 'deviation' */ }) )      64 hex digits
 ```
 
 with fixed key order and ECMAScript shortest round-trip number text, so the ID is stable across
 engines. Name, source, notes, file name and import time are excluded: renaming keeps the ID, any
-point change alters it (§200). SHA-256 is the synchronous FIPS 180-4 implementation in
+point change alters it (§200). The identity keeps the schema-1 form for a deviation profile, so
+every V3.0 profile keeps the id its experiments recorded, while the same points read as a
+correction get another id. `migrateProfileDocument` upgrades a schema-1 export (or a document
+without a version) to schema 2 with convention `deviation`; a newer schema is refused. SHA-256 is the synchronous FIPS 180-4 implementation in
 `sha256.js` (WebCrypto is asynchronous and unavailable in some file:// contexts). Missing
 provenance stays `null`; a missing name becomes `UNNAMED_PROFILE`.
 
-`exportProfile` writes `{ format: 'oscilla.calibration', schemaVersion, kind, id, name,
-[source], units, points, notes, importedAt }`; `source` appears only when given.
+`exportProfile` writes `{ format: 'oscilla.calibration', schemaVersion: 2, kind, id, name,
+convention, [source], units, points, notes, importedAt }`; `source` appears only when given.
 
 ### Import (`parse.js`): `parseCalibrationText(text, opts)`
 
@@ -1195,6 +1201,18 @@ they cannot be separators, with a warning. A "Sens Factor" line is quoted into t
 warning and **never applied** (it is neither a frequency correction nor an SPL calibration). For
 JSON with a stored `id` that does not match the points, the ID is recomputed with a warning.
 
+**Convention** — Changed (review M4). `parse.js` decides the sign convention from the file and
+never guesses: a header naming the value column as the microphone's response (deviation,
+response, SPL, magnitude, level, amplitude, a bare dB) states `deviation`; a header naming it
+correction, corr, gain, EQ, cal, calibration or value does not say which way the values go, so
+the result is `{ ok: true, needsConvention: true, profile: null, previews }` and the caller
+parses again with `opts.convention` (the user's explicit choice). A file without a header and a
+JSON point list read as `deviation` (the measurement-microphone convention), said so in
+`convention.text`; an OSCILLA export states its convention, and a schema-1 export is migrated.
+Every successful parse returns `convention` and a one-point `preview`
+(`previewConvention(profile)`: at the point with the largest |value|, "At 20 Hz the file states
++4.20 dB; a reading of 0.00 dB becomes −4.20 dB").
+
 ### Interpolation and application (`interpolate.js`)
 
 Piecewise linear in dB over log10(frequency):
@@ -1209,15 +1227,17 @@ c(f) = c0 + t·(c1 − c0)                                 exact stored value at
   `correctionCurve` gives NaN and `covered = 0`). The opt-in `'hold'` repeats the edge value but
   still marks the point uncovered (`held: true`). 0 Hz and negative frequencies are below every
   profile.
-- **Sign convention** (`CORRECTION_SIGN = −1`, `CORRECTION_CONVENTION`): "+2.1 dB at 10 kHz"
-  means the microphone reads 2.1 dB high there, as measurement-microphone calibration files are
-  distributed, so
+- **Sign convention** (`conventionSign(profile)`, `CONVENTION_RULES`), stored in the profile:
 
   ```
-  correctedDb = observedDb − correction       (uncovered points: observedDb unchanged)
+  deviation  ("+2.1 dB at 10 kHz" = the microphone reads 2.1 dB high there):
+             correctedDb = observedDb − value        (CORRECTION_SIGN = −1)
+  correction (the file states what to add, e.g. an EQ curve):
+             correctedDb = observedDb + value
   ```
 
-  An EQ-style (inverse) profile must be negated before import; the code never guesses.
+  Uncovered points keep observedDb. `correctionAt` / `correctionCurve` return the STATED value;
+  the dB actually added is `conventionSign · value`. The code never guesses a convention.
 - `applyFrequencyCorrection(magnitudeDb, frequencies, profile, opts)` returns
   `{ algorithm, profileId, correctedDb, covered, coverage, extrapolate }`; the input is not
   modified, so raw and corrected curves coexist (§18 overlay).
@@ -1228,8 +1248,8 @@ A band level is a sum of power, so a correction that varies inside the band is a
 power before summing, never as one value at the band centre:
 
 ```
-gain        = Σ_k W_k·10^(−c(f_k)/10) / Σ_k W_k          (CORRECTION_SIGN = −1)
-correctedDb = levelDb + 10·log10(gain)
+gain        = Σ_k W_k·10^(s·c(f_k)/10) / Σ_k W_k          (s = conventionSign: −1 deviation,
+correctedDb = levelDb + 10·log10(gain)                      +1 correction)
 ```
 
 - `'spectrum'` weighting, when the band's per-bin spectrum is given (`power`: a mean-square
@@ -1278,19 +1298,52 @@ can fail); exact points and offsets with strict equality.
 ## Level calibration and SPL labelling (`calibration/level.js`)
 
 One explicit reference reading (§23). The user applies a known external reference (typically a
-94 dB SPL calibrator at 1 kHz); OSCILLA observes its relative level X; then
+94 dB SPL calibrator at 1 kHz); OSCILLA observes its relative level X on a NAMED scale; then
 
 ```
 offsetDb       = referenceDbSpl − observedDbRelative          (createLevelCalibration)
 displayed SPL  = R + offsetDb                                 for a later relative reading R
 ```
 
+- **The reading X** — Changed (review M3). V3.0 took X typed by hand with no defined scale,
+  although OSCILLA has several "dB relative" scales (MEASURE mean-square band levels: a
+  full-scale sine reads −3.01 dB; the V2 analyser `levelDb`; a dBFS peak scale reading 0 dB).
+  Now X is `LEVEL_SCALE` `'band-mean-square'`: the one-third-octave band level (IEC 61260-1
+  base-ten edges, `rta.js bandCenters`) containing `referenceHz`, dB re digital full scale on
+  the mean-square scale — the scale of the MEASURE noise and RTA bands. `reference.js`
+  `measureReferenceLevel(capture, { referenceHz })` reads it from a stimulus-free capture of the
+  SAME capture io a measurement uses (`io.captureNoise`, 3 s):
+
+  ```
+  W   = welch(x, Hann, 8192 points, 50 % overlap)           tone scale
+  P_b = integrateBands(W → mean-square, binHz, [band])      fractional bin weights
+  X   = 10·log10(P_b)                                       = 20·log10(A) − 3.01 dB for a sine
+  bandFraction = P_b / mean(x²)                             < 0.25 refused, < 0.8 warned
+  ```
+
+  A clipped capture (|x| ≥ `CLIP_THRESHOLD`), no power in the band, a capture shorter than one
+  segment or a band holding less than a quarter of the power (no reference tone) is refused.
+  For a sine at the band centre the Hann leakage outside the band is < 0.01 dB, and X equals
+  the engine's `summarizeNoise` band level of the same capture (tested to 0.01 dB).
 - `createLevelCalibration({ referenceHz, referenceDbSpl, observedDbRelative, conditions,
-  createdAt })`: `referenceHz` in 20 Hz-20 kHz, `referenceDbSpl` in 40-140 dB, observed finite,
-  `createdAt` a caller timestamp (no clock in the module), `conditions` free text ≤ 2000 chars.
-- `isValidLevelCalibration(cal)` is true only for the right schema and kind, in-range fields and
-  an `offsetDb` that matches `referenceDbSpl − observedDbRelative` within `1e-9` dB (absorbs JSON
-  rounding only; a tampered offset fails).
+  createdAt, method, input })` (schema 2): `referenceHz` in 20 Hz-20 kHz, `referenceDbSpl` in
+  40-140 dB, observed finite, `createdAt` a caller timestamp (no clock in the module),
+  `conditions` free text ≤ 2000 chars, `method` `'captured'` | `'manual'` (typed by hand, an
+  advanced option on the same scale), `input` the capture facts, stored as the binding
+  `{ deviceId: hashDeviceId(id), sampleRate, echoCancellation, noiseSuppression,
+  autoGainControl, channelCount }` (unknown values null; `null` when nothing is known).
+  `hashDeviceId(id) = 'sha256:' + SHA-256('oscilla.device-id:' + id)[0..32)` (§88: the raw id is
+  never stored; equal inputs stay equal).
+- `levelCalibrationApplies(cal, current)`: a schema-2 calibration applies to the current input
+  only when every recorded binding field equals it; otherwise `{ applies: false, reason:
+  'UNCALIBRATED: the level calibration was taken with … at calibration, … now' }`. Without a
+  recorded or a current input nothing is compared (`checked: false`). `levelLabel(cal,
+  current)` carries that reason. Schema-1 records (no scale, method, input) stay valid as
+  stored records; the workspace creates schema 2 only.
+- `isValidLevelCalibration(cal)` is true only for a known schema (1 or 2) and kind, in-range
+  fields, an `offsetDb` that matches `referenceDbSpl − observedDbRelative` within `1e-9` dB
+  (absorbs JSON rounding only; a tampered offset fails) and, for schema 2, the known scale and
+  method and a well-formed binding (a raw deviceId fails).
 - `levelLabel(cal)` returns `{ unit: 'dB SPL', calibrated: true, indicator: 'CALIBRATED' }` only
   for a valid calibration, otherwise `{ unit: 'dB relative (dBFS-like)', calibrated: false,
   indicator: 'UNCALIBRATED' }`. `toDisplayLevel(R, cal)` adds the offset only under a valid
@@ -1371,21 +1424,32 @@ not the same result. `sha256Hex` defaults to `calibration/sha256.js` and may be 
 `withConfigHash(e, hex)` stamps `provenance.configHash`; `withResults` clears it when
 `algorithms` or `sampleRate` change.
 
-### Result hash (`hash.js`, §101) — New (integration), was G13
+### Result hash (`hash.js`, §101) — Changed (review M11), was G13
 
 ```
-resultHash = SHA-256 hex( canonicalJson({ v: 1,             RESULT_HASH_VERSION
-  results: serializeExperiment(results) }) )                 { transfer, ir, rta,
-                                                             aggregate? }, typed arrays as
-                                                             EncodedArray
+version 2 (RESULT_HASH_VERSION, provenance.resultHashVersion = 2):
+resultHash = SHA-256 hex( canonicalJson({ v: 2,
+  results, quality, calibration, input, output }) )       each serializeExperiment()'d,
+                                                           typed arrays as EncodedArray
+version 1 (files without resultHashVersion; still verified):
+resultHash = SHA-256 hex( canonicalJson({ v: 1, results: serializeExperiment(results) }) )
 ```
 
-(`aggregate` only when present: a results block without it hashes as before.)
+Version 1 covered the results only, so the stored quality verdict, the calibration and the
+input could be edited without detection (a POOR verdict edited to GOOD still verified). Version
+2 also covers the quality assessment (status, reasons, metrics, mask), the calibration, the
+input (device label, hashed id, constraints) and the output (level, master gain).
+`withResultHash(e, hex, version)` stamps both fields (version 1 omits `resultHashVersion`, the
+form of a version-1 file); validation recomputes the hash in the version the file declares.
+(`aggregate` only when present: a results block without it hashes as before.) Validation also
+requires `quality.mask.frequencies` to equal the stored response grid (results.transfer, else
+results.aggregate) bit for bit, and the experiment summary labels the stored verdict "as
+assessed by OSCILLA <version>, commit <c>, <rule set>".
 
 The typed arrays enter in their encoded form (dtype + little-endian bytes), so the hash covers
 the exact stored bits and the dtype; key order does not matter. `withResultHash(e, hex)` stamps
 `provenance.resultHash` (`null` from `createExperiment`); `withResults` clears it whenever
-`results` change. On import `validateExperiment` recomputes it over the decoded results when
+`results` or `quality` change. On import `validateExperiment` recomputes it over the decoded results when
 `provenance.resultHash` is a hash and reports a mismatch as `{ path: 'provenance.resultHash',
 code: 'corrupt', text: 'corrupt: …' }`; `null` (not stamped) is not verified. It detects
 corruption, not tampering (anyone can recompute it). Plain-number arrays in a file are hashed

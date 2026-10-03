@@ -110,12 +110,21 @@ by every release path). It is feedback in the sense of the rule above: only its 
 ### 4. Calibration
 
 `calibration/parse.js` reads CSV, TXT and JSON profiles. `profile.js` normalises a profile and
-identifies it by the SHA-256 of its points (`sha256.js`, so it works without
-`crypto.subtle` on `file://`). `interpolate.js` applies a profile to a transfer grid or to RTA
-bands inside its coverage only, and `level.js` holds the one rule for labelling a level dB
-SPL. The engine applies the frequency profile after the analysis into a separate `calibrated`
-curve, and the raw curve is never modified. Why two separate kinds: ADR 0020. Why SPL only
-under a level calibration: ADR 0017.
+identifies it by the SHA-256 of its points and sign convention (`sha256.js`, so it works
+without `crypto.subtle` on `file://`). The convention says what the values mean: `deviation`
+(the microphone's response, corrected = observed − value) or `correction` (a correction to add,
+corrected = observed + value). `parse.js` takes it from the file's column header, and a header
+that does not state it ("correction", "gain", "EQ", "cal") needs the user's explicit choice
+before anything is loaded. `interpolate.js` applies a profile with its convention's sign to a
+transfer grid or to RTA bands inside its coverage only. `level.js` holds the one rule for
+labelling a level dB SPL. A `LevelCalibration` names the scale of its reading (the
+one-third-octave band level on the MEASURE mean-square scale), how the reading was obtained
+(`captured` by `reference.js` through the measurement's own capture io, or typed by hand), and
+the input it was taken with (hashed device id, sample rate, applied processing).
+`levelCalibrationApplies` voids it, UNCALIBRATED with the reason, when the current input
+differs. The engine applies the frequency profile after the analysis into a separate
+`calibrated` curve, and the raw curve is never modified. Why two separate kinds: ADR 0020. Why
+SPL only under a level calibration: ADR 0017.
 
 ### 5. Result
 
@@ -139,8 +148,13 @@ are hatched. Why rules with reasons: ADR 0025.
 
 `ui/measure-experiment.js` `experimentFromResult` is pure. It builds the `Experiment` from a
 result, stores the frequency profile by name and identity only, and marks a TEST CONTEXT
-capture in every run and in the notes. It then stamps the configuration hash and the result
-hash. With two or more runs, `schema.js` `resultsFromMeasurement` stores the aggregate as the
+capture in every run and in the notes. It records the master output gain the stimulus passed
+(`output.masterGain`: 20·log10 of it is part of every magnitude), the engine's result notes,
+the frequencies the user asked for before the Nyquist clamp (`recipe.requested`) and the full
+algorithm map, and stores the input device id hashed (spec §88). It then stamps the
+configuration hash and the version-2 result hash, which covers the results, the quality
+verdict, the calibration, the input and the output (version 1, results only, still verifies
+in older files). With two or more runs, `schema.js` `resultsFromMeasurement` stores the aggregate as the
 primary response and the transfer as its marked centre (the G20 rule, enforced again by
 `validate.js`). `store.js` serialises the experiment to the file form, validates it on every
 put and get, and keeps it in the IndexedDB database `oscilla-experiments` (object stores
@@ -160,7 +174,9 @@ results go through the pure view builders (`measure-flow.js`, `response-chart.js
 `ir-chart.js`, `rta-chart.js`, `experiment-summary.js`, `compare-view.js`).
 `charts/measure-charts.js` draws the descriptors with uPlot. The UI computes no level, mask,
 range or label. While a measurement is active the instrument cannot play, and leaving the
-Measure workspace aborts it.
+Measure workspace aborts it. A view option never fails a measurement: a normalization whose
+reference is outside the result's grid is disabled for that result, and a view that cannot be
+built becomes a note.
 
 ## Layout
 
@@ -378,13 +394,23 @@ QualityAssessment = { algorithm, status: 'GOOD'|'USABLE'|'POOR'|'INVALID',
   mask: { frequencies: Float64Array, reliable: Uint8Array, calibrated: Uint8Array } }
 
 // calibration/profile.js — two kinds, never conflated (spec §17)
-FrequencyProfile = { schemaVersion: 1, kind: 'frequency', id /* sha-256 of normalized points */,
-  name, source: string|null, notes: string|null, units: { frequency: 'Hz', correction: 'dB' },
-  points: [[hz, db], ...] /* sorted, unique */, importedAt: string|null }
-LevelCalibration = { schemaVersion: 1, kind: 'level', referenceHz, referenceDbSpl,
-  observedDbRelative, offsetDb, conditions: string|null, createdAt }
+FrequencyProfile = { schemaVersion: 2, kind: 'frequency', id /* sha-256 of normalized points
+  and convention; a deviation profile keeps its schema-1 id */, name,
+  convention: 'deviation'|'correction', source: string|null, notes: string|null,
+  units: { frequency: 'Hz', correction: 'dB' }, points: [[hz, db], ...] /* sorted, unique */,
+  importedAt: string|null }
+migrateProfileDocument(doc) -> { ok, doc, from, migrated }   // schema 1 → 2: 'deviation'
+LevelCalibration = { schemaVersion: 2, kind: 'level', referenceHz, referenceDbSpl,
+  observedDbRelative, offsetDb, scale: 'band-mean-square', method: 'captured'|'manual',
+  input: { deviceId /* 'sha256:…' */, sampleRate, echoCancellation, noiseSuppression,
+    autoGainControl, channelCount }|null, conditions: string|null, createdAt }
+  // schema 1 (no scale, method, input) is still a valid stored record
+levelCalibrationApplies(cal, currentInput) -> { applies, checked, reason, differences }
 exportProfile(profile) -> { format: 'oscilla.calibration', schemaVersion, kind, id, name,
-  source? /* only when given */, units, points, notes, importedAt }
+  convention, source? /* only when given */, units, points, notes, importedAt }
+// calibration/reference.js — the captured reading (M3)
+measureReferenceLevel(capture, { referenceHz }) -> { ok, observedDbRelative, scale, band,
+  broadbandDb, bandFraction, peak, durationS, sampleRate, errors, warnings }
 // calibration/interpolate.js
 applyFrequencyCorrection(magnitudeDb, frequencies, profile, { extrapolate: 'none'|'hold' })
   -> { algorithm, profileId, correctedDb: Float64Array, covered: Uint8Array,
@@ -395,20 +421,23 @@ applyFrequencyCorrectionToBands(rta /* { bands, levelsDb } */, profile, { power,
 // calibration/level.js — the one uncalibrated label (spec §24)
 RELATIVE_UNIT = 'dB relative (dBFS-like)'
 RELATIVE_SCALE_LABEL = 'Relative level · dBFS-like / analyser-relative scale'
-levelLabel(levelCalibration) -> { unit: 'dB SPL'|RELATIVE_UNIT, calibrated,
-  indicator: 'CALIBRATED'|'UNCALIBRATED' }
+levelLabel(levelCalibration, currentInput?) -> { unit: 'dB SPL'|RELATIVE_UNIT, calibrated,
+  indicator: 'CALIBRATED'|'UNCALIBRATED', reason? /* another input */ }
 
 // experiments/schema.js — schema versions are independent of the product version (spec §131)
 Experiment = { kind: 'oscilla-experiment', schemaVersion: 1, oscillaVersion, oscillaCommit,
   experimentId, name, recipe: { stimulus /* = renderStimulus(spec).spec, incl. color, law */,
-  repeats, analysis }, output: { level },
-  input: { device: { label, id }, constraints: { requested, applied } },
+  repeats, analysis, requested? /* { f1, f2 } before the Nyquist clamp */ },
+  output: { level, masterGain? /* linear, (0, 1] */ },
+  input: { device: { label, id /* hashed 'sha256:…', §88 */ }, constraints: { requested,
+    applied } /* no raw deviceId */ },
   calibration: { frequency: { id, name }|null, level: {...}|null },
-  environment: { notes }, measurement: { startedAt, sampleRate, runs },
+  environment: { notes }, measurement: { startedAt, sampleRate, runs, notes? },
   quality, algorithms: { role: id }, results: { transfer, ir, rta /* RtaResult */,
     aggregate? /* AggregateResult, optional, presence kept */,
     runTransfers? /* [{ run, transfer }] ≤ LIMITS.runTransfers, only on request (G20) */ },
-  provenance: { configHash, resultHash /* SHA-256 of the encoded results, §101 */,
+  provenance: { configHash, resultHash /* SHA-256, §101 */, resultHashVersion? /* 2: results,
+    quality, calibration, input, output; absent: 1, results only */,
     createdAt, repeatOf /* source experimentId|null */,
     build /* { version, commit, shortCommit, sourceDate, channel, dirty, repository }|null */ } }
 // G20: with an aggregate of ≥ 2 runs, results.transfer is its derivedFrom 'aggregate' centre
@@ -423,8 +452,10 @@ responseDelta(a, b, { pointsPerOctave }) -> { ok, frequencies, aDb, bDb, deltaDb
   pointsPerOctave, label, sources, equivalent /* false: single run vs aggregate */, warnings,
   envelope /* both bounds, overlap, overlapFraction, dispersion, comparable */|null }
 // experiments/hash.js
-configHash(e) -> hex;  withConfigHash(e, hex);  resultHash(e) -> hex;  withResultHash(e, hex)
-// experiments/validate.js verifies resultHash on import: mismatch -> error code 'corrupt'
+configHash(e) -> hex;  withConfigHash(e, hex)
+resultHash(e, { version = 2 }) -> hex;  withResultHash(e, hex, version = 2)
+// experiments/validate.js verifies resultHash in the file's version on import (mismatch ->
+// error code 'corrupt') and that quality.mask.frequencies equals the stored response grid
 // In a file, typed arrays are EncodedArray { dtype: 'f32'|'f64'|'u8', length,
 // encoding: 'base64-le', data } (experiments/encode.js).
 ```
@@ -441,7 +472,9 @@ Notes on the shapes:
 - **RTA in experiments.** An experiment built by the Measure workspace has `results.rta`
   null. The noise check's band power is shown in the RTA tab but not stored.
 - **CSV.** Transfer columns are ratios (`magnitude_db_relative`, `magnitude_db_corrected`).
-  `level_db_spl` appears only in RTA CSVs under a valid level calibration.
+  `reliable` is the quality mask when it lies on the transfer grid, `phase_deg` the phase or
+  empty with the reason. IR amplitudes are a dimensionless transfer ratio. `level_db_spl`
+  appears only in RTA CSVs under a valid level calibration.
 - **G21 closed.** The analysis runs in a `data:` URL Worker built from `analysis-worker.js`
   (`scripts/build-analysis-worker.mjs`, embedded via the `__OSCILLA_ANALYSIS_WORKER__` define);
   `analysis-runner.js` posts the serializable message with transfer lists, relays steps,

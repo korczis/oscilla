@@ -40,7 +40,16 @@
 //                           reason shown, the mode and averaging controls stay disabled, nothing
 //                           stays open.
 //   calibration             CSV profile import -> Frequency CALIBRATED; level calibration dialog
-//                           (explicit values) -> Level CALIBRATED; invalid input refused
+//                           (advanced manual reading) -> Level CALIBRATED; invalid input refused
+//   level-reference         (M3) the dialog captures the reference through the loopback io (a
+//                           1 kHz instrument tone), names the scale, stores method 'captured'
+//                           with the input; another input voids it (UNCALIBRATED + reason);
+//                           Stop aborts a capture cleanly (0 nodes, captures, ports)
+//   profile-convention      (M4) a "Gain(dB)" profile asks for the sign convention before it
+//                           is loaded; the choice and a one-point preview are shown
+//   view-options            (M6, M7) a 2-20 kHz measurement with "0 dB at 1 kHz" selected
+//                           completes (no "Measurement failed"), the option is disabled and
+//                           reset; the IR Direct span is drawn sample by sample
 //   experiments             import of three fixtures, list, open, rename, duplicate, compare
 //                           (A, B equivalent: A − B shown; A, C: refused with the reason),
 //                           export .oscilla.json (re-validates), CSV, re-import refused (no
@@ -661,6 +670,11 @@ function defineChecks(fixtures) {
     res.freq = await page.textContent('[data-osc="measure.freqIndicator"]');
     res.name = await page.textContent('[data-osc="measure.calName"]');
     await page.click('[data-osc="measure.levelCal"]');
+    // Without a captured reference nothing is stored.
+    await page.click('[data-osc="levelCal.save"]');
+    res.needsCapture = await page.evaluate(() => window.OSCILLA.app.meas.levelForm.error);
+    res.scale = await page.textContent('[data-osc="levelCal.scale"]');
+    await page.click('[data-osc="levelCal.manual"]'); // advanced: the reading typed by hand
     await page.fill('#osc-lc-obs', '');
     await page.click('[data-osc="levelCal.save"]');
     res.refused = await page.evaluate(() => window.OSCILLA.app.meas.levelForm.error);
@@ -679,11 +693,158 @@ function defineChecks(fixtures) {
       a.alerts = [];
     });
     res.after = await page.textContent('[data-osc="measure.levelIndicator"]');
+    await page.evaluate(() => window.OSCILLA.app.measureSetLevelManual(false));
     const ok = res.bad === false && res.good === true && /CALIBRATED/.test(res.freq)
       && !/UNCALIBRATED/.test(res.freq) && /gate-mic/.test(res.name) && !!res.refused
+      && /Capture the reference first/.test(res.needsCapture)
+      && /mean-square scale/.test(res.scale)
       && /CALIBRATED/.test(res.level) && !/UNCALIBRATED/.test(res.level) && res.dialogClosed
       && /UNCALIBRATED/.test(res.after);
     return { ok, ...res };
+  });
+
+  def('level-reference', async ({ page }) => {
+    await H.workspace(page, 'measure');
+    await H.loopback(page);
+    // The loopback io captures the instrument output: a 1 kHz sine is the reference tone.
+    await page.evaluate(() => {
+      const a = window.OSCILLA.app;
+      a.setWaveform('sine');
+      a.setFrequency(1000);
+      a.safetyLimit = 10;
+    });
+    await page.click('[data-osc="measure.levelCal"]');
+    await page.evaluate(() => window.OSCILLA.app.play('hold'));
+    await sleep(300);
+    const captured = await page.evaluate(() => window.OSCILLA.app.measureCaptureLevelReference());
+    await page.evaluate(() => { window.OSCILLA.app.stopNow(); });
+    const res = { captured };
+    res.reading = await page.textContent('[data-osc="levelCal.reading"]');
+    res.form = await page.evaluate(() => ({ ...window.OSCILLA.app.meas.levelForm,
+      reading: window.OSCILLA.app.meas.levelForm.reading }));
+    await page.fill('#osc-lc-cond', 'gate: loopback reference');
+    await page.click('[data-osc="levelCal.save"]');
+    res.cal = await page.evaluate(() => {
+      const c = window.OSCILLA.measure.levelCalibration;
+      return c ? { method: c.method, scale: c.scale, schemaVersion: c.schemaVersion,
+        input: c.input, observed: c.observedDbRelative, conditions: c.conditions } : null;
+    });
+    res.dialogClosed = await page.evaluate(() => !document.getElementById('osc-dlg-level-cal')
+      .open);
+    res.indicator = await page.textContent('[data-osc="measure.levelIndicator"]');
+    // Another input (a different sample rate and device): the calibration does not apply.
+    await page.evaluate(() => window.OSCILLA.measure.setInputNow({
+      device: { label: 'other', id: 'other-device' },
+      constraints: { applied: { echoCancellation: false, noiseSuppression: false,
+        autoGainControl: false, channelCount: 1 } }, sampleRate: 22050 }));
+    res.voided = await page.textContent('[data-osc="measure.levelIndicator"]');
+    res.voidText = await page.textContent('[data-osc="measure.levelVoid"]');
+    // Stop: a capture aborted half-way stores nothing and leaves no node, capture or port.
+    await page.click('[data-osc="measure.levelCal"]');
+    const pending = page.evaluate(() => window.OSCILLA.app.measureCaptureLevelReference());
+    await page.waitForFunction(() => window.OSCILLA.measure.referenceCapturing, null,
+      { timeout: 5000 });
+    await sleep(400);
+    await page.click('[data-osc="levelCal.stop"]');
+    res.stopped = await pending;
+    res.stopError = await page.evaluate(() => window.OSCILLA.app.meas.levelForm.error);
+    res.counts = await H.until(() => H.counts(page), H.zero, 3000);
+    await page.evaluate(() => {
+      const a = window.OSCILLA.app;
+      a.measureCloseLevelCalibration();
+      a.measureClearLevelCalibration();
+      a.safetyLimit = 2;
+      a.setFrequency(440);
+      a.alerts = [];
+    });
+    const obs = res.cal ? res.cal.observed : NaN;
+    // master gain 0.08 → about −25 dB on the band scale (a few dB for the limiter chain)
+    return { ...res, ...H.verdict({
+      captured: captured === true,
+      readingText: /^Reading −\d+\.\d\d dB relative, 1000 Hz one-third-octave band/.test(
+        res.reading),
+      method: !!res.cal && res.cal.method === 'captured' && res.cal.scale === 'band-mean-square'
+        && res.cal.schemaVersion === 2,
+      bound: !!res.cal && !!res.cal.input && res.cal.input.sampleRate > 0,
+      testContextNamed: !!res.cal && /TEST CONTEXT/.test(res.cal.conditions || ''),
+      plausible: obs > -40 && obs < -15,
+      dialogClosed: res.dialogClosed,
+      calibrated: /CALIBRATED/.test(res.indicator) && !/UNCALIBRATED/.test(res.indicator),
+      voided: /UNCALIBRATED/.test(res.voided),
+      reason: /taken with a different input device.*sample rate/.test(res.voidText || ''),
+      stopped: res.stopped === false && /stopped/.test(res.stopError),
+      clean: H.zero(res.counts),
+    }) };
+  });
+
+  def('profile-convention', async ({ page }) => {
+    await H.workspace(page, 'measure');
+    const res = {};
+    res.ret = await page.evaluate(() => window.OSCILLA.app.measureImportCalibrationText(
+      'Freq(Hz)\tGain(dB)\n20\t4\n1000\t0\n10000\t2\n', 'eq-file.txt'));
+    res.open = await page.evaluate(() => document.getElementById('osc-dlg-cal-convention').open);
+    res.loadedBefore = await page.evaluate(() => !!window.OSCILLA.app.meas.cal.profile);
+    res.basis = await page.textContent('[data-osc="calConv.basis"]');
+    res.loadDisabled = await page.isDisabled('[data-osc="calConv.load"]');
+    await page.check('[data-osc="calConv.choice"][value="correction"]');
+    await page.click('[data-osc="calConv.load"]');
+    await page.waitForFunction(() => !document.getElementById('osc-dlg-cal-convention').open,
+      null, { timeout: 5000 });
+    res.profile = await page.evaluate(() => window.OSCILLA.app.meas.cal.profile);
+    res.text = await page.textContent('[data-osc="measure.calConvention"]');
+    await page.evaluate(() => { window.OSCILLA.app.measureClearCalibration();
+      window.OSCILLA.app.alerts = []; });
+    return { ...res, ...H.verdict({
+      asked: res.ret === 'needs-choice' && res.open && !res.loadedBefore,
+      basis: /"Gain\(dB\)" does not say/.test(res.basis),
+      disabledUntilChosen: res.loadDisabled === true,
+      loaded: !!res.profile && res.profile.convention === 'correction',
+      shown: /correction to add/.test(res.text) && /becomes \+4\.00 dB/.test(res.text),
+    }) };
+  });
+
+  def('view-options', async ({ page }) => {
+    await H.workspace(page, 'measure');
+    await H.loopback(page);
+    await page.evaluate(() => {
+      window.OSCILLA.measure.setValues({ repeats: 1, f1: 2000 });
+      window.OSCILLA.app.measureSetView('normalization', '1k');
+    });
+    const run = await H.run(page, () => page.evaluate(() => {
+      window.OSCILLA.app.measureStart();
+    }));
+    const res = await page.evaluate(() => {
+      const a = window.OSCILLA.app;
+      return {
+        alerts: (a.alerts || []).map((x) => x.title),
+        normalization: a.meas.view.normalization,
+        avail: a.meas.normAvail['1k'],
+        disabled: document.querySelector('#osc-m-normalization option[value="1k"]').disabled,
+        refused: a.measureSetView('normalization', '1k'),
+        summary: a.meas.response && a.meas.response.summary,
+      };
+    });
+    await page.evaluate(() => window.OSCILLA.app.measureSetView('irSpan', 'direct'));
+    res.ir = await page.evaluate(() => {
+      const v = window.OSCILLA.measure.irView;
+      return v ? { factor: v.decimation.factor, points: v.x.length,
+        inSpan: Array.from(v.x).filter((t) => t >= -2 && t <= 20).length } : null;
+    });
+    await page.evaluate(() => {
+      const a = window.OSCILLA.app;
+      a.measureSetView('irSpan', 'early');
+      window.OSCILLA.measure.setValues({ f1: 20 });
+      a.alerts = [];
+    });
+    return { run, ...res, ...H.verdict({
+      complete: run.state === 'COMPLETE',
+      noFailure: !res.alerts.includes('Measurement failed'),
+      reset: res.normalization === 'none',
+      disabled: res.disabled === true && res.avail.ok === false && /outside/.test(res.avail.reason),
+      refused: res.refused === false,
+      response: /^Frequency response/.test(res.summary || ''),
+      irDirect: !!res.ir && res.ir.factor === 1 && res.ir.inSpan > 1000,
+    }) };
   });
 
   def('experiments', async ({ page, context }) => {

@@ -329,7 +329,7 @@ test('G16: results.aggregate validates, hashes, round-trips and exports as CSV',
   const plain = createExperiment({ recipe: createRecipe({ stimulus: STIM.spec }), now: NOW,
     id: 'plain-1' });
   assert.deepEqual(Object.keys(plain.results), ['transfer', 'ir', 'rta']);
-  assert.equal(resultCanonical(plain),
+  assert.equal(resultCanonical(plain, { version: 1 }),
     '{"results":{"ir":null,"rta":null,"transfer":null},"v":1}');
   const nul = withResults(plain, { results: { aggregate: null } });
   assert.ok(validateExperiment(experimentToJson(nul), OPTS).ok);
@@ -421,7 +421,7 @@ test('G19: absolute level only in level/RTA outputs under a valid level calibrat
     .filter((l) => l.startsWith('# column ') || /^frequency_hz,/.test(l));
   assert.ok(columns.every((l) => !/SPL/.test(l)), columns.join('\n'));
   assert.ok(columns.includes('frequency_hz,magnitude_db_relative,magnitude_db_corrected,snr_db,'
-    + 'reliable'));
+    + 'reliable,phase_deg'));
 });
 
 // ----------------------------------------------------------------------------- G17

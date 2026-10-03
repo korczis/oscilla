@@ -6,23 +6,45 @@
 // A TEST CONTEXT capture (capture.js createLoopbackIo, or a synthetic fixture) is recorded in
 // every run entry (measurement.runs[i].testContext) and in the environment notes, so a saved
 // experiment can never be mistaken for a measurement of a physical system (§146, §249).
+//
+// Provenance (M9, M11 of the V3 review): the experiment also records the master output gain the
+// stimulus passed (output.masterGain, from the preflight facts; for a loopback the chain gain),
+// the engine's result notes (measurement.notes), the frequencies the user asked for before the
+// Nyquist clamp (recipe.requested, from the caller), the full algorithm map (the capture checks'
+// clip and discontinuity IDs included), the input with its device id hashed (schema.js
+// normalizeInput, §88), and is stamped with the version-2 result hash (results, quality,
+// calibration, input and output).
 
 import { ALGORITHMS } from '../measurement/algorithms.js';
 import { isValidLevelCalibration } from '../calibration/level.js';
 import { createExperiment, withResults, resultsFromMeasurement } from '../experiments/schema.js';
-import { configHash, withConfigHash, resultHash, withResultHash } from '../experiments/hash.js';
+import {
+  configHash, withConfigHash, resultHash, withResultHash, RESULT_HASH_VERSION,
+} from '../experiments/hash.js';
+
+/** The linear master output gain a measure() result records, or null. */
+export function resultMasterGain(result) {
+  const f = result && result.preflight && result.preflight.facts;
+  let g = f && f.output ? f.output.gain : null;
+  if (!(typeof g === 'number' && g > 0) && result && result.testContext) {
+    g = result.testContext.chainGain;
+  }
+  return typeof g === 'number' && Number.isFinite(g) && g > 0 && g <= 1 ? g : null;
+}
 
 export const DEFAULT_EXPERIMENT_NAME = 'Playback / capture chain';
 
 /**
  * experimentFromResult(result, { now, id, build, name, notes, profile, levelCalibration,
- *   repeatOf }) → a hashed Experiment (validate.js accepts it).
+ *   repeatOf, requested }) → a hashed Experiment (validate.js accepts it).
  *   profile           the FrequencyProfile the engine applied (stored as { id, name } only)
- *   levelCalibration  a VALID LevelCalibration in use, else ignored
+ *   levelCalibration  a VALID LevelCalibration in use (the caller has checked that it applies
+ *                     to the result's input), else ignored
+ *   requested         { f1, f2 } the user asked for (before the Nyquist clamp), or null
  */
 export function experimentFromResult(result, {
   now, id, build = null, name = '', notes = '', profile = null, levelCalibration = null,
-  repeatOf = null,
+  repeatOf = null, requested = null,
 } = {}) {
   if (!result || !result.recipe) {
     throw new TypeError('experimentFromResult needs a measure() result');
@@ -35,17 +57,28 @@ export function experimentFromResult(result, {
   if (result.ir && result.ir.algorithm) algorithms.ir = result.ir.algorithm;
   if (runs.length > 1) algorithms.aggregate = ALGORITHMS.aggregate;
   if (result.quality && result.quality.algorithm) algorithms.quality = result.quality.algorithm;
+  const checks = [...(Array.isArray(result.captureChecks) ? result.captureChecks : []),
+    ...runs.map((r) => r && r.checks)];
+  for (const c of checks) {
+    if (!c || !c.algorithms) continue;
+    for (const [k, v] of Object.entries(c.algorithms)) if (v && !algorithms[k]) algorithms[k] = v;
+  }
   const freq = result.calibrated && result.calibrated.frequency && profile ? profile : null;
   const lvl = isValidLevelCalibration(levelCalibration) ? levelCalibration : null;
   const noteText = [notes ? String(notes).trim() : '', tcLabel ? `${tcLabel.replace(/\.$/, '')}.`
     : ''].filter(Boolean).join(' ') || null;
   const title = (name && String(name).trim()) || (tc ? 'TEST CONTEXT · digital loopback'
     : DEFAULT_EXPERIMENT_NAME);
+  const req = requested && typeof requested === 'object'
+    && (Number.isFinite(requested.f1) || Number.isFinite(requested.f2))
+    ? { f1: Number.isFinite(requested.f1) ? requested.f1 : null,
+      f2: Number.isFinite(requested.f2) ? requested.f2 : null } : null;
   let e = createExperiment({
     recipe: { stimulus: result.recipe.stimulus, repeats: result.recipe.repeats,
-      analysis: result.recipe.analysis },
+      analysis: result.recipe.analysis, requested: req },
     build, now, id, name: title, sampleRate: result.sampleRate, input: result.input,
     calibration: { frequency: freq, level: lvl }, environment: { notes: noteText }, algorithms,
+    masterGain: resultMasterGain(result), notes: Array.isArray(result.notes) ? result.notes : null,
   });
   const finite = (v) => (Number.isFinite(v) ? v : null);
   e = withResults(e, {
@@ -64,7 +97,7 @@ export function experimentFromResult(result, {
   });
   if (repeatOf) e = { ...e, provenance: { ...e.provenance, repeatOf } };
   e = withConfigHash(e, configHash(e));
-  return withResultHash(e, resultHash(e));
+  return withResultHash(e, resultHash(e), RESULT_HASH_VERSION);
 }
 
 /** True when an experiment records a TEST CONTEXT capture (loopback or synthetic). */

@@ -467,7 +467,23 @@ function defineChecks() {
       await page.waitForSelector(`#osc-m-pane-${tab}`, { state: 'visible', timeout: 5000 });
       await collect();
     }
+    // A profile whose header does not state its sign: the convention dialog (M4).
+    await page.evaluate(() => window.OSCILLA.app.measureImportCalibrationText(
+      'Hz,Gain\n20,0\n20000,0\n', 'audit-gain.csv'));
+    await page.check('[data-osc="calConv.choice"][value="deviation"]');
+    await collect();
+    await page.evaluate(() => window.OSCILLA.app.measureCancelCalibrationImport());
     await page.click('[data-osc="measure.levelCal"]');
+    await collect();
+    // A reference capture in progress shows Stop (M3); it is stopped, nothing is stored.
+    const capturing = page.evaluate(() => window.OSCILLA.app.measureCaptureLevelReference());
+    await page.waitForSelector('[data-osc="levelCal.stop"]', { state: 'visible', timeout: 5000 })
+      .catch(() => {});
+    await collect();
+    await page.evaluate(() => window.OSCILLA.app.measureAbortLevelReference());
+    const capResult = await capturing;
+    if (capResult !== false) console.log('audit: reference capture was not stopped', capResult);
+    await page.click('[data-osc="levelCal.manual"]'); // the advanced manual reading (M3)
     await page.fill('#osc-lc-obs', '-30');
     await collect();
     await page.click('[data-osc="levelCal.save"]');

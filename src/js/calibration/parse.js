@@ -23,14 +23,35 @@
 // a frequency correction and not an SPL calibration: it is recorded in the profile notes and a
 // warning, and never applied (spec §17, §23).
 //
-// Result: { ok: true, profile, warnings: [{ line, text }] } or
-//         { ok: false, errors: [{ line, text }] }; `line` is 1-based, or null for whole-file
-//         and JSON issues. Pure; never throws for bad input text.
+// Sign convention (profile.js PROFILE_CONVENTIONS; M4 of the V3 review): what the values mean
+// is decided from the file, never guessed:
+//   • a header naming the column as the microphone's response — deviation, response, SPL,
+//     magnitude, level, amplitude or a bare dB — states the DEVIATION (corrected = observed −
+//     value), the convention of measurement-microphone files;
+//   • a header naming it correction, corr, gain, EQ, cal, calibration or value is AMBIGUOUS (a
+//     "correction" file may hold either the deviation or the inverse to add): the result then
+//     needs an explicit choice (needsConvention: true, profile: null, previews of both) and the
+//     caller parses again with opts.convention;
+//   • no header (two bare columns, the miniDSP/UMIK-style file) or a JSON point array states the
+//     deviation by the measurement-microphone convention, said so in `convention.text`;
+//   • an OSCILLA JSON export carries `convention` (schema 2); a schema-1 export is migrated to
+//     'deviation' (profile.js migrateProfileDocument), with a warning.
+// opts.convention ('deviation' | 'correction'), the user's explicit choice, overrides all of
+// these.
+//
+// Result: { ok: true, profile, warnings: [{ line, text }], convention: { value, source:
+//         'header'|'default'|'file'|'migrated'|'caller', header, needsChoice, text }, preview }
+//         or, when a choice is needed, { ok: true, needsConvention: true, profile: null,
+//         warnings, convention, previews: { deviation, correction } } (interpolate.js
+//         previewConvention of each reading) or { ok: false, errors: [{ line, text }] }; `line`
+//         is 1-based, or null for whole-file and JSON issues. Pure; never throws for bad input
+//         text.
 
 import {
-  createFrequencyProfile, normalizePoints, CalibrationError,
-  PROFILE_FORMAT, PROFILE_KIND, PROFILE_SCHEMA_VERSION, PROFILE_UNITS, PROFILE_LIMITS,
+  createFrequencyProfile, normalizePoints, CalibrationError, migrateProfileDocument,
+  PROFILE_FORMAT, PROFILE_KIND, PROFILE_UNITS, PROFILE_CONVENTIONS, DEFAULT_CONVENTION,
 } from './profile.js';
+import { previewConvention } from './interpolate.js';
 
 export const MAX_IMPORT_BYTES = 1024 * 1024;
 const MAX_REPORTED_ERRORS = 50;
@@ -69,7 +90,22 @@ const notData = (text) => `not a number, comment or header: "${clip(text)}"`;
 // --- header recognition --------------------------------------------------------------------
 
 const CORRECTION_NAMES = new Set(['correction', 'corr', 'gain', 'magnitude', 'mag', 'response',
-  'deviation', 'level', 'spl', 'amplitude', 'value', 'cal', 'calibration']);
+  'deviation', 'level', 'spl', 'amplitude', 'value', 'cal', 'calibration', 'eq']);
+/** Column names that state the microphone's response (the deviation convention). */
+const DEVIATION_NAMES = new Set(['deviation', 'response', 'spl', 'magnitude', 'mag', 'level',
+  'amplitude', '']);
+
+/** Base name of a correction column token: "Gain(dB)" → "gain", "SPL(dB)" → "spl", "dB" → "". */
+function correctionBase(token) {
+  const base = String(token).toLowerCase().replace(/[([][^)\]]*[)\]]/g, '')
+    .replace(/[^a-z]/g, '');
+  return base === 'db' ? '' : base.replace(/(?:dbspl|db)$/, '');
+}
+
+/** The convention a header token states, or null when it is ambiguous (see the header). */
+export function conventionFromHeader(token) {
+  return DEVIATION_NAMES.has(correctionBase(token)) ? 'deviation' : null;
+}
 
 function columnRole(token) {
   const lower = token.toLowerCase();
@@ -113,6 +149,7 @@ function parseHeader(text, mode) {
     corrCol: columns.indexOf('correction'),
     ignored: tokens.filter((_, i) => columns[i] === 'phase' || columns[i] === 'other'),
     tokens,
+    corrToken: tokens[columns.indexOf('correction')],
   };
 }
 
@@ -295,11 +332,26 @@ function parseDelimited(text, opts) {
   }
   if (errors.length) return fail(errors);
 
+  let convention;
+  if (header) {
+    const stated = conventionFromHeader(header.corrToken);
+    convention = stated
+      ? { value: stated, source: 'header', header: header.corrToken, needsChoice: false,
+        text: `the header "${header.corrToken}" names the microphone's response: `
+          + `${PROFILE_CONVENTIONS.deviation.label}` }
+      : { value: null, source: 'header', header: header.corrToken, needsChoice: true,
+        text: `the header "${header.corrToken}" does not say whether the values are the `
+          + "microphone's deviation or a correction to add: choose one" };
+  } else {
+    convention = { value: DEFAULT_CONVENTION, source: 'default', header: null,
+      needsChoice: false, text: 'no column header: read as the microphone\'s response, the '
+        + `convention of measurement-microphone files (${PROFILE_CONVENTIONS.deviation.label})` };
+  }
   return finish(points, (i) => pointLines[i], warnings, {
     name: opts.name, source: opts.source,
     notes: [opts.notes, ...notes].filter((n) => typeof n === 'string' && n.trim()).join('\n'),
     importedAt: opts.importedAt,
-  });
+  }, withCaller(convention, opts));
 }
 
 // --- JSON ------------------------------------------------------------------------------------
@@ -345,8 +397,18 @@ function parseJson(text, opts) {
     if (data.kind !== undefined && data.kind !== PROFILE_KIND) {
       errors.push({ line: null, text: `kind "${String(data.kind)}" is not a frequency profile` });
     }
-    if (data.schemaVersion !== undefined && data.schemaVersion !== PROFILE_SCHEMA_VERSION) {
-      errors.push({ line: null, text: `unsupported schemaVersion ${String(data.schemaVersion)}` });
+    const m = migrateProfileDocument(data);
+    if (!m.ok) errors.push({ line: null, text: m.text });
+    else if (data.format === PROFILE_FORMAT || data.schemaVersion !== undefined) {
+      if (!Object.hasOwn(PROFILE_CONVENTIONS, m.doc.convention)) {
+        errors.push({ line: null, text: 'convention must be "deviation" or "correction", got '
+          + `${JSON.stringify(m.doc.convention) ?? 'nothing'}` });
+      } else if (m.migrated) {
+        warnings.push({ line: null, text: `schema ${m.from} profile migrated to schema `
+          + `${m.doc.schemaVersion}: convention "deviation" (the only meaning schema ${m.from} `
+          + 'had)' });
+      }
+      meta = m.doc;
     }
     if (data.units !== undefined && (!data.units || data.units.frequency !== PROFILE_UNITS.frequency
       || data.units.correction !== PROFILE_UNITS.correction)) {
@@ -357,20 +419,29 @@ function parseJson(text, opts) {
     }
     if (errors.length) return fail(errors);
     list = data.points;
-    meta = data;
+    if (meta.format === undefined && meta.schemaVersion === undefined) meta = data;
   } else {
     return fail([{ line: null, text: 'JSON must be an object with "points" or an array' }]);
   }
   const points = jsonPoints(list, errors);
   if (errors.length) return fail(errors);
   const str = (v) => (typeof v === 'string' ? v : undefined);
+  const stated = typeof meta.convention === 'string' ? meta.convention : null;
+  const convention = stated
+    ? { value: stated, source: meta.schemaVersion !== data.schemaVersion ? 'migrated' : 'file',
+      header: null, needsChoice: false,
+      text: `stated by the file: ${PROFILE_CONVENTIONS[stated].label}` }
+    : { value: DEFAULT_CONVENTION, source: 'default', header: null, needsChoice: false,
+      text: 'a JSON point list without a convention: read as the microphone\'s response, the '
+        + `convention of measurement-microphone files (${PROFILE_CONVENTIONS.deviation.label})` };
   const result = finish(points, () => null, warnings, {
     name: str(meta.name) ?? opts.name,
     source: opts.source ?? meta.source,
     notes: opts.notes ?? meta.notes,
     importedAt: opts.importedAt ?? meta.importedAt,
-  });
-  if (result.ok && typeof meta.id === 'string' && meta.id !== result.profile.id) {
+  }, withCaller(convention, opts));
+  if (result.ok && result.profile && typeof meta.id === 'string'
+    && meta.id !== result.profile.id) {
     result.warnings.push({ line: null,
       text: 'the id stored in the file does not match its points; the id was recomputed' });
   }
@@ -387,7 +458,20 @@ function locate(text, lineOf) {
     .replace(/of point (\d+)/, (_, i) => `of ${where(Number(i))}`);
 }
 
-function finish(points, lineOf, warnings, fields) {
+// The caller's explicit convention (opts.convention) overrides what the file says.
+function withCaller(convention, opts) {
+  const c = opts.convention;
+  if (c === undefined || c === null) return convention;
+  return { value: c, source: 'caller', header: convention.header, needsChoice: false,
+    text: `chosen explicitly: ${Object.hasOwn(PROFILE_CONVENTIONS, c)
+      ? PROFILE_CONVENTIONS[c].label : String(c)}`, fileText: convention.text };
+}
+
+function finish(points, lineOf, warnings, fields, convention) {
+  if (convention.value !== null && !Object.hasOwn(PROFILE_CONVENTIONS, convention.value)) {
+    return fail([{ line: null, text: 'convention must be "deviation" or "correction", got '
+      + `${JSON.stringify(convention.value)}` }]);
+  }
   const norm = normalizePoints(points);
   const at = (index) => (index === null ? null : lineOf(index));
   if (norm.errors.length) {
@@ -396,8 +480,17 @@ function finish(points, lineOf, warnings, fields) {
   }
   for (const w of norm.warnings) warnings.push({ line: at(w.index), text: locate(w.text, lineOf) });
   try {
-    const profile = createFrequencyProfile({ ...fields, points: norm.points });
-    return { ok: true, profile, warnings };
+    if (convention.needsChoice) {
+      const previews = {};
+      for (const c of Object.keys(PROFILE_CONVENTIONS)) {
+        previews[c] = previewConvention(createFrequencyProfile({ ...fields, points: norm.points,
+          convention: c }));
+      }
+      return { ok: true, needsConvention: true, profile: null, warnings, convention, previews };
+    }
+    const profile = createFrequencyProfile({ ...fields, points: norm.points,
+      convention: convention.value });
+    return { ok: true, profile, warnings, convention, preview: previewConvention(profile) };
   } catch (e) {
     if (e instanceof CalibrationError) return fail([{ line: null, text: e.message }]);
     throw e;
@@ -405,7 +498,8 @@ function finish(points, lineOf, warnings, fields) {
 }
 
 // Parse calibration text (CSV/TSV/whitespace or JSON). Options: { name, source, notes,
-// importedAt } — metadata the user or caller supplies; nothing is inferred from file content
+// importedAt, convention } — metadata the user or caller supplies (convention: the explicit
+// sign choice, see the header); nothing is inferred from file content
 // except a sensitivity line, which is quoted into notes verbatim. For an OSCILLA JSON export the
 // file's own name wins over `name` (usually just the file name, the weaker label) and the
 // options' source, notes and importedAt win over the file's.

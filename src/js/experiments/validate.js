@@ -36,8 +36,18 @@
 // aggregate grid) holds individual runs when they were asked for; it needs such an aggregate.
 //
 // Result hash (spec §101): when provenance.resultHash is a hash, it is recomputed (hash.js
-// resultHash) over the decoded results; a mismatch is the error
-// { path: 'provenance.resultHash', code: 'corrupt' }. opts.sha256Hex may inject SHA-256.
+// resultHash) in the version the file declares (provenance.resultHashVersion; absent = 1, the
+// results only; 2 = results, quality, calibration, input and output) over the decoded
+// experiment; a mismatch is the error { path: 'provenance.resultHash', code: 'corrupt' }.
+// opts.sha256Hex may inject SHA-256.
+//
+// Quality mask (M11): quality.mask.frequencies must equal the grid of the stored response
+// (results.transfer, else results.aggregate) bit for bit; a mask on another grid would mark the
+// wrong points reliable.
+//
+// Optional provenance fields (schema.js header): recipe.requested, output.masterGain,
+// measurement.notes, provenance.resultHashVersion. calibration.level is a schema-1 or schema-2
+// LevelCalibration (calibration/level.js; schema 2 adds scale, method and the hashed input).
 //
 // knownAlgorithms: the allowed algorithm IDs (array, Set or an object such as ALGORITHMS whose
 // values are IDs). Without it only the ID format (oscilla.<name>.v<n>) is checked. For imports
@@ -45,13 +55,16 @@
 // the current defaults and would reject a stored 'oscilla.confidence.v1' assessment.
 
 import {
-  ALGORITHM_ID_PATTERN, CALIBRATION_SCHEMA_VERSION, COMMIT_PATTERN, EXPERIMENT_KIND,
+  ALGORITHM_ID_PATTERN, COMMIT_PATTERN, EXPERIMENT_KIND,
   EXPERIMENT_SCHEMA_VERSION, FORBIDDEN_KEYS, HEX64_PATTERN, ID_PATTERN, LIMITS, VERSION_PATTERN,
   checkRecipe, createChecker,
 } from './schema.js';
+import {
+  LEVEL_SCHEMA_VERSIONS, LEVEL_SCALE, LEVEL_METHODS, isInputBinding,
+} from '../calibration/level.js';
 import { DTYPES, decodeArray, dtypeOf, isEncodedArray } from './encode.js';
 import { migrateExperiment } from './migrate.js';
-import { resultHash } from './hash.js';
+import { resultHash, resultHashVersionOf, RESULT_HASH_VERSIONS } from './hash.js';
 import { PHASE_REASONS } from '../measurement/transfer.js';
 import {
   IR_ALGORITHMS, IR_ALGORITHMS_V1, IR_NOISE_FLOOR_METHODS,
@@ -239,25 +252,53 @@ function checkExperiment(c, e, ctx) {
     results: checkResults(c, e.results, 'results', ctx),
     provenance: checkProvenance(c, e.provenance, 'provenance'),
   };
-  if (c.keys(e.output, 'output', ['level'])) {
+  if (c.keys(e.output, 'output', ['level'], ['masterGain'])) {
     c.num(e.output.level, 'output.level', ...LIMITS.levelDigital, { nullable: true });
     out.output = { level: e.output.level };
+    if (has(e.output, 'masterGain')) {
+      if (c.num(e.output.masterGain, 'output.masterGain', ...LIMITS.masterGain)
+        && !(e.output.masterGain > 0)) {
+        c.add('output.masterGain', 'must be above 0 (a linear gain in (0, 1])');
+      }
+      out.output.masterGain = e.output.masterGain;
+    }
   }
   if (c.keys(e.environment, 'environment', ['notes'])) {
     c.str(e.environment.notes, 'environment.notes', LIMITS.notesChars,
       { nullable: true, multiline: true });
     out.environment = { notes: e.environment.notes };
   }
+  checkMaskGrid(c, out.quality, out.results);
   if (!c.errors.length && out.provenance && typeof out.provenance.resultHash === 'string') {
-    const opts = ctx.sha256Hex ? { sha256Hex: ctx.sha256Hex } : undefined;
+    const version = resultHashVersionOf(out);
+    const opts = { version };
+    if (ctx.sha256Hex) opts.sha256Hex = ctx.sha256Hex;
     const actual = resultHash(out, opts);
     if (actual !== out.provenance.resultHash) {
-      c.add('provenance.resultHash', 'corrupt: the results do not match their stored hash '
-        + `(stored ${out.provenance.resultHash.slice(0, 12)}…, computed ${actual.slice(0, 12)}…)`,
-      'corrupt');
+      const what = version === 1 ? 'the results do not'
+        : 'the results, quality, calibration, input or output do not';
+      c.add('provenance.resultHash', `corrupt: ${what} match their stored hash (version `
+        + `${version}; stored ${out.provenance.resultHash.slice(0, 12)}…, computed `
+        + `${actual.slice(0, 12)}…)`, 'corrupt');
     }
   }
   return c.errors.length ? null : out;
+}
+
+/** quality.mask must sit on the stored response grid (results.transfer, else aggregate). */
+function checkMaskGrid(c, q, r) {
+  if (!q || !q.mask || !q.mask.frequencies || !r) return;
+  const grid = (r.transfer && r.transfer.frequencies)
+    || (r.aggregate && r.aggregate.frequencies) || null;
+  const f = q.mask.frequencies;
+  // Without a stored response (an RTA, an IR alone) the mask marks nothing that is drawn.
+  if (!grid) return;
+  const bad = f.length !== grid.length ? 0 : f.findIndex((v, i) => v !== grid[i]);
+  if (f.length !== grid.length || bad >= 0) {
+    c.add(f.length !== grid.length ? 'quality.mask.frequencies'
+      : `quality.mask.frequencies[${bad}]`, 'must equal the frequency grid of the stored '
+      + `response (${grid.length} points); the mask marks other points than the response has`);
+  }
 }
 
 function algorithmId(c, v, path, ctx) {
@@ -301,10 +342,23 @@ function checkCalibration(c, v, path) {
   }
   const l = v.level;
   const p = `${path}.level`;
-  if (l !== null && c.keys(l, p, ['schemaVersion', 'kind', 'referenceHz', 'referenceDbSpl',
-    'observedDbRelative', 'offsetDb', 'conditions', 'createdAt'])) {
-    c.num(l.schemaVersion, `${p}.schemaVersion`, CALIBRATION_SCHEMA_VERSION,
-      CALIBRATION_SCHEMA_VERSION, { integer: true });
+  const v1Keys = ['schemaVersion', 'kind', 'referenceHz', 'referenceDbSpl',
+    'observedDbRelative', 'offsetDb', 'conditions', 'createdAt'];
+  const isV1 = !!l && typeof l === 'object' && l.schemaVersion === 1;
+  const isObj = l !== null && c.obj(l, p);
+  const known = isObj && LEVEL_SCHEMA_VERSIONS.includes(l.schemaVersion);
+  if (isObj && !known) {
+    c.oneOf(l.schemaVersion, `${p}.schemaVersion`, LEVEL_SCHEMA_VERSIONS);
+  } else if (known
+    && c.keys(l, p, isV1 ? v1Keys : [...v1Keys, 'scale', 'method', 'input'])) {
+    if (!isV1) {
+      c.oneOf(l.scale, `${p}.scale`, [LEVEL_SCALE.id]);
+      c.oneOf(l.method, `${p}.method`, LEVEL_METHODS);
+      if (!isInputBinding(l.input)) {
+        c.add(`${p}.input`, 'must be null or { deviceId (hashed), sampleRate, '
+          + 'echoCancellation, noiseSuppression, autoGainControl, channelCount }');
+      }
+    }
     c.oneOf(l.kind, `${p}.kind`, ['level']);
     c.num(l.referenceHz, `${p}.referenceHz`, 10, 24000);
     c.num(l.referenceDbSpl, `${p}.referenceDbSpl`, 0, 200);
@@ -313,12 +367,22 @@ function checkCalibration(c, v, path) {
     c.str(l.conditions, `${p}.conditions`, LIMITS.textChars, { nullable: true, multiline: true });
     c.iso(l.createdAt, `${p}.createdAt`, { nullable: true });
     out.level = { ...l };
+    if (!isV1 && l.input) out.level.input = { ...l.input };
   }
   return out;
 }
 
 function checkMeasurement(c, v, path) {
-  if (!c.keys(v, path, ['startedAt', 'sampleRate', 'runs'])) return null;
+  if (!c.keys(v, path, ['startedAt', 'sampleRate', 'runs'], ['notes'])) return null;
+  let notes;
+  if (has(v, 'notes')) {
+    if (!Array.isArray(v.notes) || v.notes.length > LIMITS.measurementNotes) {
+      c.add(`${path}.notes`, `must be an array of at most ${LIMITS.measurementNotes} texts`);
+    } else {
+      v.notes.forEach((t, i) => c.str(t, `${path}.notes[${i}]`, LIMITS.textChars, { min: 1 }));
+      notes = v.notes.slice();
+    }
+  }
   c.iso(v.startedAt, `${path}.startedAt`, { nullable: true });
   c.num(v.sampleRate, `${path}.sampleRate`, ...LIMITS.sampleRate, { nullable: true });
   const runs = [];
@@ -330,7 +394,9 @@ function checkMeasurement(c, v, path) {
       if (c.obj(r, p)) runs.push(c.json(r, p, { depth: 3, keys: 64, array: 64, string: 500 }));
     });
   }
-  return { startedAt: v.startedAt, sampleRate: v.sampleRate, runs };
+  const out = { startedAt: v.startedAt, sampleRate: v.sampleRate, runs };
+  if (notes !== undefined) out.notes = notes;
+  return out;
 }
 
 function checkQuality(c, q, path, ctx) {
@@ -767,12 +833,16 @@ function checkRta(c, r, path, ctx) {
 }
 
 function checkProvenance(c, p, path) {
-  if (!c.keys(p, path, ['configHash', 'createdAt', 'repeatOf', 'build'], ['resultHash'])) {
+  if (!c.keys(p, path, ['configHash', 'createdAt', 'repeatOf', 'build'],
+    ['resultHash', 'resultHashVersion'])) {
     return null;
   }
   c.str(p.configHash, `${path}.configHash`, 64, { nullable: true, pattern: HEX64_PATTERN });
   if (has(p, 'resultHash')) {
     c.str(p.resultHash, `${path}.resultHash`, 64, { nullable: true, pattern: HEX64_PATTERN });
+  }
+  if (has(p, 'resultHashVersion')) {
+    c.oneOf(p.resultHashVersion, `${path}.resultHashVersion`, RESULT_HASH_VERSIONS);
   }
   c.iso(p.createdAt, `${path}.createdAt`);
   c.str(p.repeatOf, `${path}.repeatOf`, LIMITS.idChars, { nullable: true, pattern: ID_PATTERN });
@@ -793,9 +863,12 @@ function checkProvenance(c, p, path) {
     c.str(b.repository, `${bp}.repository`, LIMITS.labelChars, { nullable: true });
     build = { ...b };
   }
-  const out = { configHash: p.configHash };
-  if (has(p, 'resultHash')) out.resultHash = p.resultHash;
-  return Object.assign(out, { createdAt: p.createdAt, repeatOf: p.repeatOf, build });
+  // The input's key order is kept (every key was checked above), so a file re-exports as is.
+  const vals = { configHash: p.configHash, resultHash: p.resultHash,
+    resultHashVersion: p.resultHashVersion, createdAt: p.createdAt, repeatOf: p.repeatOf, build };
+  const out = {};
+  for (const k of Object.keys(p)) out[k] = vals[k];
+  return out;
 }
 
 const pair = (v) => (Array.isArray(v) ? [v[0], v[1]] : null);
