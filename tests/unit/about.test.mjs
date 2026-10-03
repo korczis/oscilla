@@ -74,7 +74,7 @@ test('the stated duration matches the stated timestamps', () => {
 
 test('timeline timestamps are the commit times of the commits they name', (t) => {
   const marks = [...aboutView.matchAll(/data-osc-commit="([0-9a-f]+)"\s+datetime="([^"]+)"/g)];
-  assert.equal(marks.length, 4);
+  assert.equal(marks.length, 5);
   if (git('rev-parse', '--is-shallow-repository') !== 'false') {
     t.skip('no full git history here (shallow clone or no git)');
     return;
@@ -89,4 +89,6 @@ test('timeline timestamps are the commit times of the commits they name', (t) =>
   assert.ok(git('rev-parse', 'v1.0.0^{commit}').startsWith(marks[1][1]), 'V1 is the v1.0.0 tag');
   assert.ok(git('log', '-1', '--format=%s', marks[3][1]).startsWith('feat(v3): OSCILLA V3 MEASURE'),
     'Measure is the V3 merge');
+  const studio = git('log', '-1', '--format=%s', marks[4][1]);
+  assert.ok(studio.startsWith('feat(v3.1): OSCILLA V3.1 STUDIO'), 'Studio is the V3.1 merge');
 });

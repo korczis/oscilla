@@ -45,7 +45,7 @@ function studioExperiment(model = measurement(), id = 'studio-run-1') {
   const r = recipeFromStudio(model, { sampleRate: SR });
   assert.strictEqual(r.ok, true, r.reason);
   const e = createExperiment({ recipe: r.recipe, now: NOW, id, name: 'Desk speaker',
-    sampleRate: SR, build: { version: '3.1.0', commit: '8f38e3d' } });
+    sampleRate: SR, build: { version: '9.8.7', commit: '8f38e3d' } });
   return withStudioProvenance(withConfigHash(e, configHash(e)), model);
 }
 
@@ -123,7 +123,7 @@ test('ADR 0019: the recipe stays authoritative — Studio never enters configHas
   assert.strictEqual(e.provenance.configHash, configHash(plain));
   // A measurement run from the Measure workspace with the same recipe: same configHash.
   const measure = createExperiment({ recipe: e.recipe, now: '2026-10-03T08:00:00.000Z',
-    id: 'measure-run-1', sampleRate: SR, build: { version: '3.1.0', commit: '8f38e3d' } });
+    id: 'measure-run-1', sampleRate: SR, build: { version: '9.8.7', commit: '8f38e3d' } });
   assert.strictEqual(configHash(measure), configHash(e));
 });
 
