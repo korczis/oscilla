@@ -212,6 +212,11 @@ function auditControls() {
   document.querySelectorAll('[data-osc]').forEach((el) => {
     if (!el.matches(INTERACTIVE)) return;
     if (el.id === 'osc-import-file') return; // opened by the Import menu items
+    // The STUDIO workspace and its dialogs are audited, state by state, by
+    // tests/browser/v31-studio-graph.cjs (controls-labelled); its file input is opened by the
+    // Import button. The compact widget in the Playground stays in this audit.
+    if (el.id === 'osc-studio-import-file'
+      || el.closest('#osc-view-studio, [data-osc-studio-dialog]')) return;
     out.push({
       osc: el.dataset.osc, id: el.id || '', name: name(el), visible: visible(el),
       reachable: reachable(el), disabled: !!el.disabled,
@@ -1533,8 +1538,9 @@ function defineChecks() {
       const items = [...document.querySelectorAll('#osc-nav > li > a')].map((a) => a.dataset.osc);
       return { last: items.at(-1), count: items.length };
     });
-    // Tab order: Presets -> About (Safari/WebKit skips links on Tab unless the user opts in).
-    await page.focus('[data-osc="nav.presets"]');
+    // Tab order: Studio -> About (Safari/WebKit skips links on Tab unless the user opts in).
+    // V3.1: Studio is the last workspace before About (spec §198).
+    await page.focus('[data-osc="nav.studio"]');
     await page.keyboard.press('Tab');
     res.tabbedTo = await page.evaluate(() => document.activeElement && document.activeElement.dataset.osc);
     await page.focus('[data-osc="nav.about"]');

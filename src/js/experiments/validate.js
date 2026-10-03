@@ -27,6 +27,10 @@
 // `results.aggregate` is optional and keeps its presence: files written before it existed
 // validate, hash and re-export unchanged.
 //
+// Studio provenance (V3.1 spec §109-§110, ADR 0038): the optional top-level `studio` block keeps
+// its presence like results.aggregate; its studioHash is recomputed over `execution` and a
+// mismatch is the error { path: 'studio.studioHash', code: 'corrupt' } (checkStudio below).
+//
 // Repeated measurements (G20, aggregate.js "Storage rule"): with an aggregate of ≥ 2 runs,
 // results.transfer is null or the aggregate centre marked derivedFrom: 'aggregate' — on the
 // aggregate's grid, magnitudeDb bit-identical to centreDb, phaseDeg null, alignment null — and
@@ -64,7 +68,9 @@ import {
 } from '../calibration/level.js';
 import { DTYPES, decodeArray, dtypeOf, isEncodedArray } from './encode.js';
 import { migrateExperiment } from './migrate.js';
-import { resultHash, resultHashVersionOf, RESULT_HASH_VERSIONS } from './hash.js';
+import {
+  resultHash, resultHashVersionOf, RESULT_HASH_VERSIONS, studioExecutionHash,
+} from './hash.js';
 import { PHASE_REASONS } from '../measurement/transfer.js';
 import {
   IR_ALGORITHMS, IR_ALGORITHMS_V1, IR_NOISE_FLOOR_METHODS,
@@ -83,6 +89,13 @@ const STATUSES = ['GOOD', 'USABLE', 'POOR', 'INVALID'];
 const SEVERITIES = ['ok', 'warn', 'fail'];
 const SCOPES = ['quality', 'calibration'];
 const BIG = Number.MAX_VALUE;
+/**
+ * Bounds of studio.execution (generic JSON): the Studio import limits (studio/validate.js
+ * STUDIO_IMPORT_LIMITS: 20000 automation points, 2048 edges and clips, 256-character strings)
+ * with the nesting of execution → timeline → clips → clip → payload → params → value.
+ */
+export const STUDIO_EXECUTION_LIMITS = Object.freeze({ depth: 8, keys: 64, array: 20000,
+  string: 256 });
 const has = (o, k) => Object.prototype.hasOwnProperty.call(o, k);
 
 /** Validate an untrusted experiment document. Never throws. */
@@ -226,7 +239,7 @@ export function scanUntrusted(root, { maxBytes = Infinity, maxErrors = 50 } = {}
 // ---------------------------------------------------------------- strict schema
 
 function checkExperiment(c, e, ctx) {
-  if (!c.keys(e, '', TOP_KEYS)) return null;
+  if (!c.keys(e, '', TOP_KEYS, ['studio'])) return null;
   c.oneOf(e.kind, 'kind', [EXPERIMENT_KIND]);
   c.num(e.schemaVersion, 'schemaVersion', EXPERIMENT_SCHEMA_VERSION, EXPERIMENT_SCHEMA_VERSION,
     { integer: true });
@@ -252,6 +265,7 @@ function checkExperiment(c, e, ctx) {
     results: checkResults(c, e.results, 'results', ctx),
     provenance: checkProvenance(c, e.provenance, 'provenance'),
   };
+  if (has(e, 'studio')) out.studio = checkStudio(c, e.studio, 'studio', ctx);
   if (c.keys(e.output, 'output', ['level'], ['masterGain'])) {
     c.num(e.output.level, 'output.level', ...LIMITS.levelDigital, { nullable: true });
     out.output = { level: e.output.level };
@@ -830,6 +844,51 @@ function checkRta(c, r, path, ctx) {
   };
   if (has(r, 'windowAlgorithm')) out.windowAlgorithm = r.windowAlgorithm;
   return out;
+}
+
+/**
+ * The optional Studio provenance (V3.1 spec §109-§110, ADR 0038): { schemaVersion, studioHash,
+ * execution } where execution is the Studio execution state that ran (studio/schema.js
+ * executionState: graph, timeline, automation, transport — never view or selection) and
+ * studioHash its SHA-256 (studioExecutionHash, recomputed here: a mismatch is 'corrupt'). This
+ * module checks shape, bounds and integrity only; the Studio semantics (node types, ports,
+ * cycles) are checked by studio/provenance.js verifyExperimentStudio, so the experiment layer
+ * never imports the Studio layer. The recipe stays authoritative (ADR 0019): studio does not
+ * enter configHash.
+ */
+function checkStudio(c, s, path, ctx) {
+  if (!c.keys(s, path, ['schemaVersion', 'studioHash', 'execution'])) return null;
+  const okVersion = c.num(s.schemaVersion, `${path}.schemaVersion`, 1, 1000, { integer: true });
+  const okHash = c.str(s.studioHash, `${path}.studioHash`, 64, { pattern: HEX64_PATTERN });
+  const execution = c.json(s.execution, `${path}.execution`, STUDIO_EXECUTION_LIMITS);
+  if (execution === undefined) return null;
+  const ep = `${path}.execution`;
+  if (!c.keys(execution, ep, ['v', 'kind', 'schemaVersion', 'nodes', 'edges', 'timeline',
+    'transport'])) return null;
+  c.num(execution.v, `${ep}.v`, 1, 1000, { integer: true });
+  c.oneOf(execution.kind, `${ep}.kind`, ['oscilla-studio']);
+  if (okVersion && execution.schemaVersion !== s.schemaVersion) {
+    c.add(`${ep}.schemaVersion`, 'differs from studio.schemaVersion');
+  }
+  for (const k of ['nodes', 'edges']) {
+    if (!Array.isArray(execution[k])) c.add(`${ep}.${k}`, 'must be a list');
+  }
+  if (c.keys(execution.timeline, `${ep}.timeline`, ['tracks', 'clips', 'automation', 'loop'])) {
+    for (const k of ['tracks', 'clips', 'automation']) {
+      if (!Array.isArray(execution.timeline[k])) c.add(`${ep}.timeline.${k}`, 'must be a list');
+    }
+  }
+  c.obj(execution.transport, `${ep}.transport`);
+  if (okHash && !c.full()) {
+    const opts = ctx.sha256Hex ? { sha256Hex: ctx.sha256Hex } : undefined;
+    const actual = studioExecutionHash(execution, opts);
+    if (actual !== s.studioHash) {
+      c.add(`${path}.studioHash`, 'corrupt: the Studio execution state does not match its '
+        + `stored hash (stored ${s.studioHash.slice(0, 12)}…, computed ${actual.slice(0, 12)}…)`,
+      'corrupt');
+    }
+  }
+  return { schemaVersion: s.schemaVersion, studioHash: s.studioHash, execution };
 }
 
 function checkProvenance(c, p, path) {

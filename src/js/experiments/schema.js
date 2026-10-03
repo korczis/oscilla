@@ -23,6 +23,10 @@
 // spread, repeatability of repeated runs on their grid), added with withResults({ results:
 // { aggregate } }); createExperiment leaves it absent, so experiments without repeats and files
 // written before it existed keep their exact form and result hash.
+// studio (V3.1, optional, ADR 0038): { schemaVersion, studioHash, execution } — the Studio
+// execution state that ran (studio/provenance.js withStudioProvenance), validated and hash-checked
+// by validate.js; absent for experiments run outside Studio, so their form and hashes are
+// unchanged. The recipe stays authoritative (ADR 0019); studio never enters configHash.
 // Repeated measurements (G20, aggregate.js "Storage rule"): results.aggregate is the primary
 // response; results.transfer is the aggregate centre marked derivedFrom: 'aggregate' (or null),
 // never one run's transfer; individual runs only on request in the optional

@@ -37,6 +37,15 @@
 //     and provenance.resultHashVersion set (version 1 leaves resultHashVersion absent, the form
 //     of a version-1 file)
 //   resultHashVersionOf(e) -> 1 | 2
+//
+// Studio provenance hash (V3.1 spec §109, §162, ADR 0038): studioExecutionHash(execution) =
+// SHA-256 (lowercase hex) of the canonical JSON of an experiment's studio.execution, which is
+// studio/schema.js executionState(model); it therefore equals studio/schema.js studioHash(model)
+// of the model that ran. It is NOT part of configHash: the recipe alone identifies "the same
+// experiment setup" (ADR 0019), so a measurement run from Studio and the same measurement run
+// from the Measure workspace share a configHash; the Studio block is provenance beside it.
+//
+//   studioExecutionHash(execution, { sha256Hex }) -> hex
 
 import { canonicalJson } from './canonical-json.js';
 import { sha256Hex as defaultSha256Hex } from '../calibration/sha256.js';
@@ -137,4 +146,12 @@ export function withResultHash(e, hex, version = RESULT_HASH_VERSION) {
   if (version === 1) delete provenance.resultHashVersion;
   else provenance.resultHashVersion = version;
   return { ...e, provenance };
+}
+
+/** SHA-256 hex of the canonical JSON of a Studio execution state (see the header). */
+export function studioExecutionHash(execution, { sha256Hex = defaultSha256Hex } = {}) {
+  if (typeof sha256Hex !== 'function') {
+    throw new TypeError('studioExecutionHash: sha256Hex must be a function');
+  }
+  return sha256Hex(canonicalJson(execution));
 }

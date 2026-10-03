@@ -346,3 +346,164 @@ claims:
     test: tests/browser/analysis-worker.cjs
     status: guaranteed
     note: Gap G21 of docs/v3/algorithms.md, resolved in M10. Without Worker the engine falls back to analyzeInline, which yields between steps; tests/unit/v3-analysis-task.test.mjs runs the real bundle in a worker thread.
+
+  # ---- OSCILLA Studio (V3.1) ----
+  - id: studio-model-plain-data
+    claim: 'A StudioModel is plain serializable data: AudioNode, MediaStream, DOM, canvas, typed array, function and class-instance values are rejected before it is stored or serialized.'
+    source: docs/v31/studio-model.md
+    implementation: src/js/studio/schema.js
+    test: tests/unit/v31-studio-model.test.mjs
+    status: guaranteed
+    note: 'assertPlainData, run by normalizeStudio and so by serializeStudio; test "assertPlainData rejects runtime objects, typed arrays and unsafe values".'
+
+  - id: studio-deterministic-hash
+    claim: 'A normalized StudioModel serializes deterministically, and its studioHash covers execution state only: positions, names, markers, metadata, view and selection never change it.'
+    source: docs/v31/studio-model.md
+    implementation: src/js/studio/schema.js
+    test: tests/unit/v31-studio-model.test.mjs
+    status: guaranteed
+    note: 'Tests "serialization is deterministic and round-trips through normalize" and "studioHash covers execution state only".'
+
+  - id: studio-typed-connections
+    claim: 'Only compatible typed ports connect; every rejected connection carries a readable reason and leaves the model, history and revision unchanged.'
+    source: docs/v31/studio-model.md
+    implementation: src/js/studio/ports.js
+    test: tests/unit/v31-studio-model.test.mjs
+    status: guaranteed
+    note: 'canConnect; tests "port compatibility matrix", "ANALYSIS roles keep reference and observed apart", "canConnect rejects wrong direction, unknown ports and self-connection", "rejected EDGE_ADD leaves model, history and revision unchanged".'
+
+  - id: studio-feedback-rejected
+    claim: 'Instantaneous audio feedback, control cycles and analysis cycles are rejected with the cycle path and a reason before anything reaches Web Audio.'
+    source: docs/v31/studio-model.md
+    implementation: src/js/studio/validate.js
+    test: tests/unit/v31-studio-model.test.mjs
+    status: guaranteed
+    note: 'Tarjan components and Kahn order; tests "cycle detection: audio feedback rejected with the spec message", "control-cycle policy", "analysis cycles and live input to output are rejected".'
+
+  - id: studio-exact-undo-redo
+    claim: 'Undo and redo restore exact semantic state: undoing every action returns the initial model, a continuous drag is one history entry, and a new edit after undo clears redo.'
+    source: docs/v31/studio-model.md
+    implementation: src/js/studio/history.js
+    test: tests/unit/v31-studio-model.test.mjs
+    status: guaranteed
+    note: 'Immutable snapshots; tests "§208 history: undo all → exact initial state; redo all → exact final state" (reference equality and byte-equal serialization), "gesture coalescing: 400 NODE_MOVE dispatches are one history entry", "a new edit after undo clears redo".'
+
+  - id: studio-subgraph-paste
+    claim: 'Copying and pasting a subgraph creates fresh ids, keeps only the edges inside the selection and offsets positions, as one undoable step.'
+    source: docs/v31/studio-model.md
+    implementation: src/js/studio/actions.js
+    test: tests/unit/v31-studio-model.test.mjs
+    status: guaranteed
+    note: 'copySubgraph and PASTE; tests "copy/paste maps a subgraph to new ids with internal edges and an offset", "duplicate keeps relative geometry and payloads with new ids".'
+
+  - id: studio-untrusted-import
+    claim: 'Studio files are imported as untrusted data: size, nesting depth, counts and the strict schema are checked before use, nothing is evaluated, and a newer schema is refused.'
+    source: docs/v31/studio-model.md
+    implementation: src/js/studio/migrate.js
+    test: tests/unit/v31-studio-model.test.mjs
+    status: guaranteed
+    note: 'importStudio and validateStudioImport with STUDIO_IMPORT_LIMITS; tests "import rejects malicious and oversized input", "migration: synthetic schema 0 → 1 through the registry".'
+
+  - id: studio-schema-version
+    claim: 'The Studio schema version is its own integer, independent of the product and experiment versions, and changes only through registered stepwise migrations.'
+    source: docs/v31/studio-model.md
+    implementation: src/js/studio/schema.js
+    test: tests/unit/v31-studio-model.test.mjs
+    status: guaranteed
+    note: 'STUDIO_SCHEMA_VERSION = 1 (ADR 0023); test "Studio schema version is its own constant, independent of the experiment schema".'
+
+  - id: studio-timeline-model
+    claim: 'Timeline clips are placed in absolute seconds and carry sequencer block payloads checked by the sequencer block rules; timeline edits validate their track and target references and undo exactly.'
+    source: docs/v31/studio-model.md
+    implementation: src/js/studio/schema.js
+    test: tests/unit/v31-studio-model.test.mjs
+    status: guaranteed
+    note: 'normalizeClipPayload over sequencer/model.js BLOCK_SCHEMA; tests "timeline actions validate references and undo exactly", "Basic Synth topology builds and validates". Scheduling is the planned claim studio-transport-audio-clock.'
+
+  - id: studio-automation-model
+    claim: 'Automation lanes accept only automatable parameters, one lane per parameter, keep points sorted by time, and refuse an exponential ramp that touches zero.'
+    source: docs/v31/studio-model.md
+    implementation: src/js/studio/validate.js
+    test: tests/unit/v31-studio-model.test.mjs
+    status: guaranteed
+    note: 'Tests "timeline actions validate references and undo exactly" and "invalid parameters, edge properties and timeline references are reported". Compilation to AudioParam schedules is the planned claim studio-transport-audio-clock.'
+
+  - id: studio-measurement-topology
+    claim: 'A Studio measurement topology is typed analysis routing: the sweep reference and the calibrated microphone capture reach the Transfer Analyzer on separate ports that cannot be swapped, and a microphone can never reach Master Output.'
+    source: docs/v31/studio-model.md
+    implementation: src/js/studio/nodes/measurement.js
+    test: tests/unit/v31-studio-model.test.mjs
+    status: guaranteed
+    note: 'Tests "Measurement topology builds and validates" and "analysis cycles and live input to output are rejected". Running it through the measurement engine is the planned claim studio-experiment-provenance.'
+
+  - id: studio-registry-reuses-engine
+    claim: 'Every Studio node type names the existing engine export it compiles to, takes its defaults from the engine, and holds no audio object.'
+    source: docs/v31/studio-model.md
+    implementation: src/js/studio/registry.js
+    test: tests/unit/v31-studio-model.test.mjs
+    status: guaranteed
+    note: 'Tests "every compiler and reuse key names an existing export" and "node defaults match the existing engine defaults". The compiler itself is the planned claim studio-compiled-topology.'
+
+  - id: studio-one-store-projections
+    claim: 'Compact Studio, full Studio, Inspector, timeline and Signal Path all render one canonical StudioModel; no view keeps a synchronized copy.'
+    source: docs/specs/oscilla-v3.1-studio.md
+    implementation: '-'
+    test: '-'
+    status: planned
+    note: 'Specification sections 9 and 214; issues V421, V422, V430. The single store exists (src/js/studio/actions.js); the views do not yet.'
+
+  - id: studio-compiled-topology
+    claim: 'The running Web Audio topology is compiled from the StudioModel through the existing AudioEngine, so the screen never shows a topology other than the one that sounds.'
+    source: docs/specs/oscilla-v3.1-studio.md
+    implementation: '-'
+    test: '-'
+    status: planned
+    note: 'Specification sections 1, 41-43 and 209; issue V414; ADR 0035.'
+
+  - id: studio-click-free-live-edit
+    claim: 'Editing the graph while it plays patches the running graph click-free in transactions and leaves no node behind after stop.'
+    source: docs/specs/oscilla-v3.1-studio.md
+    implementation: '-'
+    test: '-'
+    status: planned
+    note: 'Specification sections 44-46, 182 and 213; issue V415; ADR 0035.'
+
+  - id: studio-transport-audio-clock
+    claim: 'Studio transport, clips, loop and automation are scheduled on AudioContext time through the sequencer compiler, and the playhead only observes the scheduler.'
+    source: docs/specs/oscilla-v3.1-studio.md
+    implementation: '-'
+    test: '-'
+    status: planned
+    note: 'Specification sections 93-99, 180-181, 211-212; issues V416, V418, V419; ADR 0036 and ADR 0037.'
+
+  - id: studio-patch-round-trip
+    claim: 'A saved patch loads back to the same graph, parameters and timeline, replacing or inserting only on explicit user intent.'
+    source: docs/specs/oscilla-v3.1-studio.md
+    implementation: '-'
+    test: '-'
+    status: planned
+    note: 'Specification sections 111-115 and 154-159; issue V426. The Studio file round trip already holds (claim studio-deterministic-hash); the patch format and its persistence do not exist yet.'
+
+  - id: studio-experiment-provenance
+    claim: 'An experiment run from Studio records the Studio schema version, the studioHash and the topology it ran, through the V3 measurement engine.'
+    source: docs/specs/oscilla-v3.1-studio.md
+    implementation: '-'
+    test: '-'
+    status: planned
+    note: 'Specification sections 106-110; issues V424, V425; ADR 0038.'
+
+  - id: studio-non-drag-operation
+    claim: 'Every Studio operation, connecting ports and moving nodes and clips included, can be done from the keyboard without pointer dragging.'
+    source: docs/specs/oscilla-v3.1-studio.md
+    implementation: '-'
+    test: '-'
+    status: planned
+    note: 'Specification sections 138-144 and 206; issue V428.'
+
+  - id: studio-file-protocol
+    claim: 'Studio opens and runs from file:// inside the single dist/index.html, with no network access.'
+    source: docs/specs/oscilla-v3.1-studio.md
+    implementation: '-'
+    test: '-'
+    status: planned
+    note: 'Specification sections 215-219; issue V430; rule project.single-file-deliverable v2.'

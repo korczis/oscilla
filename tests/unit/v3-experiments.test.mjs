@@ -1122,7 +1122,9 @@ test('IndexedDB store: open, upgrade from empty, CRUD, reopen keeps data', async
   const store = await openExperimentStore({ indexedDB: fake.indexedDB, name: 't1', ...OPTS });
   assert.strictEqual(store.kind, 'indexeddb');
   assert.deepStrictEqual(fake.state.upgrades, [[0, DB_VERSION]]);
-  assert.deepStrictEqual([...fake.dbs.get('t1').stores.keys()], ['experiments', 'summaries']);
+  // DB version 2 (V3.1, V426) adds the Studio partition next to the experiment stores.
+  assert.deepStrictEqual([...fake.dbs.get('t1').stores.keys()], ['experiments', 'summaries',
+    'studio', 'studioSummaries']);
   const e = fullExperiment();
   assert.strictEqual(await store.put(e), e.experimentId);
   assert.deepStrictEqual(await store.get(e.experimentId), e);
@@ -1136,7 +1138,8 @@ test('IndexedDB store: open, upgrade from empty, CRUD, reopen keeps data', async
   store.close();
 
   const again = await openExperimentStore({ indexedDB: fake.indexedDB, name: 't1', ...OPTS });
-  assert.deepStrictEqual(fake.state.upgrades, [[0, DB_VERSION]], 'no upgrade at version 1');
+  assert.deepStrictEqual(fake.state.upgrades, [[0, DB_VERSION]],
+    'no upgrade at the current DB version');
   assert.strictEqual((await again.list()).length, 2, 'reopening never deletes data');
   assert.strictEqual(await again.delete(e.experimentId), true);
   assert.strictEqual(await again.delete(e.experimentId), false);

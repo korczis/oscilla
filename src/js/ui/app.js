@@ -14,9 +14,10 @@ const THEME_KEY = 'oscilla.v2.theme';
 const ANALYSIS_TAB_KEY = 'oscilla.v2.analysisTab';
 const ANALYSIS_TABS = ['waveform', 'spectrum', 'spectrogram', 'harmonics', 'signalPath'];
 // §73 order: Measure and Experiments follow Playground; About stays the last item (PR #17).
+// V3.1 (spec §198): Studio is the last workspace before About.
 const MODES = [
   'playground', 'measure', 'experiments', 'sequencer', 'analyzer', 'filter', 'synthesis',
-  'compare', 'learn', 'presets', 'about',
+  'compare', 'learn', 'presets', 'studio', 'about',
 ];
 const WORKSPACE_TITLES = { about: 'About' };
 const ROVING_ROLES = ['tab', 'radio'];

@@ -56,10 +56,12 @@ import { keyGuard, openModal, closeModal, watchDialogs, focusSafely } from './ui
 import { createWorkbench, v1ModeFor, workspaceForV1Mode } from './ui/workbench.js';
 import { createMeasureUi } from './ui/measure.js';
 import { createExperimentsUi } from './ui/experiments.js';
+import { createStudioUi } from './ui/studio/workspace.js';
 import { createScopeView, createHarmonicBarsView } from './ui/p5-views.js';
 import { buildConfigExport, parseConfigImport, CONFIG_FILE_VERSION } from './ui/config-file.js';
 import { renderPlanToWav, renderSequenceToWav, screenshotCanvases } from './ui/exporters.js';
 import { BUILD } from './core/build-info.js';
+import { studioTimelineSeam } from './ui/studio/timeline-test-seam.js';
 
 import { mount as mountAnalysis } from './labs/analysis.js';
 import { mount as mountFilter } from './labs/filter-lab.js';
@@ -204,10 +206,14 @@ engine.play = (plan, o = {}) => {
   return basePlay(plan, { ...o, ...v2PlayOptions(plan, engine.ctx, true) });
 };
 
-/** Measure takes the output: stop the instrument and the sequencer (their voices fade). */
+/**
+ * Measure (and Studio PLAY) take the output: stop the instrument and the sequencer (their
+ * voices fade), and a playing Studio (V3.1; it is not playing while it claims the output).
+ */
 function stopPlayback(cmp) {
   if (cmp.seqPlaying && labs.sequencer) labs.sequencer.editor.stop();
   if (cmp.playing) cmp.stopNow();
+  if (typeof cmp.studioOwnsOutput === 'function' && cmp.studioOwnsOutput()) cmp.studioStop();
 }
 
 /** Revert the sounding voice from a PeriodicWave to its oscillator type (additive off). */
@@ -695,7 +701,8 @@ function createOscillaComponent(ui) {
     loopback: new URLSearchParams(window.location.search).get('measure') === 'loopback',
   });
   const experiments = createExperimentsUi();
-  const cmp = compose(instrument, ui, workbench, measure, experiments, provenancePart(),
+  const studio = createStudioUi({ engine, stopPlayback });
+  const cmp = compose(instrument, ui, workbench, measure, experiments, studio, provenancePart(),
     TEMPLATE_HELPERS);
   cmp.dismissAlert = focusSafeDismiss(cmp.dismissAlert);
   const baseRefreshDebug = cmp.refreshDebug;
@@ -713,6 +720,7 @@ function createOscillaComponent(ui) {
       shellInit.call(this);
       this.measureInit();
       this.experimentsInit();
+      this.studioInit(); // before integrationInit: Studio's key listener runs first (§125)
       integrationInit.call(this);
     },
     enumerable: true,
@@ -785,6 +793,8 @@ window.OSCILLA = {
   get host() { return host; },
   get measure() { return app ? app.measureTestSeam() : null; },
   get experiments() { return app ? app.experimentsTestSeam() : null; },
+  get studio() { return app ? app.studioTestSeam() : null; },
+  studioTimeline: studioTimelineSeam(engine),
   buildPlan,
   planFreqAt,
   parseFrequency,

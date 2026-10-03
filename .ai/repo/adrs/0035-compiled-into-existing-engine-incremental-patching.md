@@ -1,0 +1,87 @@
+---
+schema: adr/v1
+id: adr-0035
+kind: adr
+title: The StudioModel compiles into the existing AudioEngine and measurement engine, and edits patch the running graph incrementally in transactions
+status: proposed
+date: 2026-10-02
+tags:
+  - studio
+  - audio
+  - architecture
+  - v31
+related:
+  - rule:project.audio-engine-discipline
+  - rule:project.typed-ports
+  - claim:studio-registry-reuses-engine
+  - claim:studio-compiled-topology
+  - claim:studio-click-free-live-edit
+  - file:src/js/studio/registry.js
+  - test:tests/unit/v31-studio-model.test.mjs
+provenance:
+  origin: authored
+  derived_from:
+    - file:docs/specs/oscilla-v3.1-studio.md
+    - file:src/js/studio/registry.js
+    - issue:V402
+---
+
+# 35. The StudioModel compiles into the existing AudioEngine and measurement engine, and edits patch the running graph incrementally in transactions
+
+## Context
+
+The screen must never show one topology while Web Audio runs another (specification §1).
+OSCILLA already has an engine that owns every node through `track`/`source` accounting,
+schedules on the audio clock, releases click-free and leaves zero nodes after stop
+(ADR 0001-0005, ADR 0015, rule `project.audio-engine-discipline` v2), plus graph builders
+(filter, ADSR, additive, stereo, noise), analyzers, an offline renderer and the V3
+measurement engine. Studio must orchestrate these and never become a second audio engine
+(§41-§42). Users edit while sound plays (§44-§46, §182); tearing down and rebuilding the
+whole graph on every edit clicks, restarts envelopes and loses phase.
+
+## Decision
+
+Proposed:
+
+- A graph compiler turns a validated StudioModel into calls on the existing runtime:
+  resolve types through the node registry, walk the topological order (ADR 0033),
+  instantiate each node through the builder its registry entry names
+  (`compiler`/`reuses` keys such as `audio/filters.js#createFilterStage`), connect ports,
+  bind parameters and modulation, register everything with AudioEngine accounting, bind
+  analyzers, and return an ephemeral map from Studio node id to runtime handle with
+  `dispose()`. No node type owns DSP of its own when an engine builder exists.
+- Edits are applied as a diff between the previous and the new model, not a rebuild: a
+  parameter change updates one node; an added node is created; an added edge connects; a
+  removed edge or node crossfades out, disconnects and disposes. The master path is never
+  disconnected abruptly while playing.
+- Each runtime change is a transaction: validate the new model, prepare new nodes off the
+  live path, commit the model, connect and crossfade, then clean up. If preparation fails,
+  the model change is refused and the last valid runtime graph keeps running; the runtime is
+  never half-connected.
+- Offline rendering compiles the same model into an `OfflineAudioContext` through the same
+  builders; live-only nodes (Microphone) report an explicit limitation.
+
+## Alternatives rejected
+
+- A Studio audio engine beside AudioEngine: two engines to keep click-free and leak-free,
+  and the V1/V2 engine tests would no longer cover what Studio plays.
+- Full rebuild on every edit: audible clicks and restarts while playing, and a burst of
+  node creation per slider movement.
+- Mutating Web Audio directly from UI handlers and reconciling the model afterwards: the
+  model would follow the runtime instead of defining it.
+
+## Consequences
+
+- The compiler and patcher are the only code that maps Studio ids to runtime objects; leak
+  tests count engine nodes and independent oscillators after every edit and after stop
+  (specification §209, §213).
+- New node types arrive by extending engine builders and adding a registry entry; the
+  registry already names an existing export for every one of its 25 types, checked by the
+  unit tests.
+- Confirmation criteria: only the registry side exists (every compiler and reuse key names
+  an existing export; defaults equal engine defaults). Not yet built: the compiler (issue
+  V414) and the patcher (V415). The decision is confirmed when the browser audio-graph test
+  shows the compiled topology equal to the model for the §257 Basic Synth and §258
+  Measurement templates, edits during playback show no click above the existing click-check
+  threshold, and node counts return to zero after stop. It is revised if an edit class
+  cannot be patched without a click, which then gets its own documented rebuild path.

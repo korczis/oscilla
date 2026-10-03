@@ -203,7 +203,6 @@ sources:
     discovery: vcs
     pathspec: ':(glob)docs/claims/*.md'
     required: false
-
   # The implementation and test classes exist so that the chain a claim of docs/CLAIMS.yaml
   # declares (claim -> the file that implements it -> the test that proves it) resolves to
   # real nodes instead of three strings. The product's source modules, its single-file
@@ -237,4 +236,11 @@ sources:
     kind: test
     discovery: vcs
     pathspec: ':(glob)tests/browser/*.cjs'
+    required: false
+
+  # Studio (V3.1) design notes, named by Studio claims and use cases.
+  - id: design_note
+    kind: document
+    discovery: vcs
+    pathspec: ':(glob)docs/v31/*.md'
     required: false

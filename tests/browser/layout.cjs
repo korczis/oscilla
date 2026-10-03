@@ -38,8 +38,9 @@ const WORKSPACES = ['playground', 'sequencer', 'analyzer', 'filter', 'synthesis'
 // Full-width views: their content must stay inside the view's box. MEASURE and EXPERIMENTS
 // are views that hold their own panels, so the panel checks (squashed, overlapping, covered
 // primary/STOP) run for them too.
-const VIEWS = ['measure', 'experiments', 'about'];
-const PANEL_VIEWS = new Set(['measure', 'experiments']);
+// STUDIO (V3.1) is a view of panels too: toolbar, node library, graph, Inspector, timeline.
+const VIEWS = ['measure', 'experiments', 'studio', 'about'];
+const PANEL_VIEWS = new Set(['measure', 'experiments', 'studio']);
 const TOUCH_WIDTHS = [[320, 812], [375, 812], [768, 1024]];
 const TOUCH_WORKSPACES = [...WORKSPACES, 'learn', 'presets', ...VIEWS];
 // Product bugs found when this invariant was added (R007, 2026-10-02), reported, not yet fixed in
