@@ -42,7 +42,7 @@ const arg = (name, fallback) => {
   const i = argv.indexOf(`--${name}`);
   return i >= 0 && argv[i + 1] ? argv[i + 1] : fallback;
 };
-const BROWSERS = arg('browsers', 'chromium,firefox,webkit').split(',');
+const BROWSERS = arg('browsers', process.env.OSC_BROWSERS || 'chromium,firefox,webkit').split(',');
 const JSON_OUT = arg('json', '');
 const ENTRY = path.join(__dirname, 'fixtures', 'v31-studio-transport-entry.js');
 
@@ -146,12 +146,17 @@ async function runOne(browserName, url) {
       st.fineEnd !== null && Math.abs(st.fineEnd - 3) < s.fineStepS / 2,
       `last window above −40 dB ends at ${f(st.fineEnd, 5)} s`);
     const o = s.out;
+    // Compared on the fine grid: a 2 ms detection window is 88.2 frames at 44.1 kHz, and a gap
+    // straddling two windows can put the minimum one window late; 6 ms is 264.6 frames there,
+    // so the fine (0.5 ms) positions agree within one fine step.
     check(key, 'limiter look-ahead: the destination has the same boundary, 6 ms later',
-      Math.abs(o.dip - st.dip - LIMITER_LOOKAHEAD_S) < s.detectStepS / 2,
-      `dip at ${f(o.dip, 4)} s (${f(o.dipDb, 1)} dB), onset ${f(o.onset, 4)} s`);
+      Math.abs(o.fineDip - st.fineDip - LIMITER_LOOKAHEAD_S) <= s.fineStepS + 1e-9,
+      `fine dip at ${f(o.fineDip, 5)} s vs ${f(st.fineDip, 5)} s pre-limiter `
+        + `(${f(o.dipDb, 1)} dB), onset ${f(o.onset, 4)} s`);
     check(key, 'limiter look-ahead: the destination has the same end, 6 ms later',
-      o.end !== null && Math.abs(o.end - st.end - LIMITER_LOOKAHEAD_S) < s.detectStepS / 2,
-      `end ${f(o.end, 4)} s`);
+      o.fineEnd !== null && st.fineEnd !== null
+        && Math.abs(o.fineEnd - st.fineEnd - LIMITER_LOOKAHEAD_S) <= s.fineStepS + 1e-9,
+      `fine end ${f(o.fineEnd, 5)} s vs ${f(st.fineEnd, 5)} s pre-limiter`);
     check(key, 'silent after the timeline (< −50 dB)', s.tailDb < -50, `${f(s.tailDb, 1)} dB`);
     check(key, 'pattern-played oscillator: no free-running 220 Hz carrier inside the sweep',
       20 * Math.log10(s.sweepAt.f220 / s.sweepAt.f440) < -30,

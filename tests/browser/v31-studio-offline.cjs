@@ -27,7 +27,8 @@ const playwright = require('playwright');
 
 const argv = process.argv.slice(2);
 const i = argv.indexOf('--browsers');
-const BROWSERS = (i >= 0 && argv[i + 1] ? argv[i + 1] : 'chromium,firefox,webkit').split(',');
+const BROWSERS = (i >= 0 && argv[i + 1] ? argv[i + 1]
+  : process.env.OSC_BROWSERS || 'chromium,firefox,webkit').split(',');
 const ENTRY = path.join(__dirname, 'fixtures', 'v31-studio-offline-entry.js');
 // Goertzel with a Hann window over 0.6 s (264 periods of 440 Hz) reads a steady sine's amplitude
 // to < 0.01 %; 1 % covers the engines' oscillator wavetables.

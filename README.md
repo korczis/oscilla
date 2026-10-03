@@ -158,7 +158,7 @@ filter class is claimed. An experiment saved from Measure does not store band le
 ### Measurement quality
 
 Every measurement is rated GOOD, USABLE, POOR or INVALID by a versioned rule set
-(`oscilla.confidence.v2`). The rules use named metrics: signal-to-noise, clipping, dropouts,
+(`oscilla.confidence.v3` for new measurements; v1 and v2 are kept so stored ratings reproduce). The rules use named metrics: signal-to-noise, clipping, dropouts,
 discontinuities, frequency coverage and resolution, repeatability, and calibration. Each
 rating comes with its reasons, and each reason carries its value and unit. A check that was
 not made reads NOT MEASURED. Severe clipping, an empty capture, or a dropout or discontinuity
@@ -182,8 +182,9 @@ is in the proposed [ADR 0025](.ai/repo/adrs/0025-data-driven-quality-with-reason
   ([ADR 0018](.ai/repo/adrs/0018-measurement-from-captured-pcm-offline-dsp.md), proposed).
   Each stored result names its algorithm by a versioned ID
   ([ADR 0024](.ai/repo/adrs/0024-versioned-algorithm-ids.md), proposed).
-- **The analysis runs on the main thread.** It is one serializable task that yields between
-  steps. Moving it into a Worker is planned (gap G21 in the algorithm notes).
+- **The analysis runs in a Worker.** It is one serializable task, run in a Worker started from a
+  `data:` URL so that no step blocks the page; without Worker support it runs inline and yields
+  between steps, with identical results (gap G21 in the algorithm notes, resolved).
 - **What the tests prove.** The automated tests check the digital pipeline, the mathematics on
   synthetic systems with known answers, the browser APIs and the interface. They cannot prove
   how your hardware, room or browser behaves.

@@ -4,7 +4,8 @@
 `test:release` (`test:engine`, `test:dsp`, `test:labs`, `test:sequencer`, `test:measure`,
 `test:studio`, `test:browser`, `test:visual`). CI runs the same scripts as parallel jobs aggregated by the required `gate` job.
 `OSC_BROWSERS=chromium,firefox` narrows the multi-browser suites. `test:live` (post-deploy, needs
-the network) is run by the Pages workflow, not by release-gate.
+the network) is run by hand after a release (`release:publish` verifies the deploy itself), not by
+release-gate; the Pages workflow runs `verify-deploy` only.
 
 Classes: **GATE** fails a release · **SUPPORTING** data or helpers a gate needs · **DIAGNOSTIC**
 for people, never gating · **DELETED** removed, with its replacement.
@@ -71,6 +72,29 @@ for people, never gating · **DELETED** removed, with its replacement.
 | `../scripts/visual-gate.mjs` + `visual/baseline.json` | GATE | 1536x1024 `--play` scene vs accepted values per environment: per-region chrome (+0.5 pp) and data (+measured variance) mismatch, panel and control geometry within 2 px, totals |
 | `visual/reference.png`, `visual/regions.json` | SUPPORTING | the visual reference and its region and control boxes |
 | `../scripts/visual-compare.mjs` (`npm run visual`), `visual/preview-boot.mjs` | DIAGNOSTIC | side-by-side, crops, responsive shots; the gate reuses its capture |
+| `browser/analysis-worker.cjs` | GATE | the offline analysis in the `data:` URL Worker against the inline run in chromium, firefox and webkit, file:// and /oscilla/: identical results, the longest main-thread block, fallback when no Worker starts |
+| `browser/qa-regressions.cjs` | GATE | V2 final-QA regressions on dist (file://) in chromium, firefox, webkit, one fresh page per check; the pure halves are `unit/qa-regressions.test.mjs` |
+| `browser/v31-studio-audio.cjs` | GATE | the Studio graph compiler and incremental runtime on the real AudioEngine in chromium, firefox, webkit (file://): crossfaded patching, routes, release to 0 nodes |
+| `browser/v31-studio-transport.cjs` | GATE | the Studio transport playing the Basic Synth template on the real AudioEngine: onset, clip boundary and end on the audio clock, the limiter look-ahead (compared on a 0.5 ms grid), silence after the timeline, STOP |
+| `browser/v31-studio-offline.cjs` | GATE | Studio offline rendering of the shipped templates on an OfflineAudioContext through the Studio runtime, in chromium, firefox, webkit |
+| `unit/about.test.mjs` | GATE | the About workspace: navigation order, link targets, workspace title, and the stated timeline (commit times checked against git when history is available) |
+| `unit/qa-regressions.test.mjs` | GATE | V2 final-QA regressions on the recording mock AudioContext: dual phase offset, the engine-owned microphone graph, additive harmonics, signal path stages, scope window, correlation states, mic error texts |
+| `unit/release-analyze.test.mjs` | GATE | release:analyze and the version bump on fixtures (none, patch, minor, major, prerelease) and the confirm-the-untagged-version rule |
+| `unit/release-provenance.test.mjs` | GATE | source digest, the metadata region, the deploy stamp and its reversal, verify-dist's provenance gate and verify-deploy's live checks |
+| `unit/release-publish.test.mjs` | GATE | release:publish as a dry run against fake git/gh/npm runners (nothing tagged or pushed), the gate receipt and the release notes |
+| `unit/version-authority.test.mjs` | GATE | one product version from package.json: runtime, committed dist and config export derive from it; no hard-coded copy elsewhere |
+| `unit/v3-analysis-worker.test.mjs` | GATE | the real Worker bundle in a node worker thread, bit-identical to the inline analysis; the memory estimate, MEMORY_LIMIT and the IR cap |
+| `unit/v3-live-rta.test.mjs` | GATE | the live RTA on the one band-level scale, allocation-free push, averaging, peak hold, freeze, calibration and the snapshot |
+| `unit/v3-review-calibration.test.mjs` | GATE | the V3 pre-release review fixes for calibration, UI and provenance (M3, M4, M6, M7, M9, M11 and minors), each failing before its fix |
+| `unit/v3-review-fixes.test.mjs` | GATE | the V3 pre-release review fixes for quality and DSP (B1, M1, M2, M5, M8 and minors), each against a known truth |
+| `unit/v31-studio-model.test.mjs` | GATE | the Studio model core: schema, typed ports, registry, validation and cycle policy, actions and history, import and migration |
+| `unit/v31-studio-compiler.test.mjs` | GATE | the Studio graph compiler and incremental runtime on the real AudioEngine with a recording fake AudioContext |
+| `unit/v31-studio-timeline.test.mjs` | GATE | the Studio timeline, scheduling, automation and V2 sequence import, on a fake AudioContext and an explicit-clock scheduler |
+| `unit/v31-studio-transport.test.mjs` | GATE | the Studio transport on the real AudioEngine with a fake AudioContext sharing the engine's clock: STOP, Escape, edits during playback, no leaks |
+| `unit/v31-studio-parity.test.mjs` | GATE | offline/live parity, the owned-parameter adapter contract and modulation into a pattern-played oscillator's level |
+| `unit/v31-studio-patches.test.mjs` | GATE | Studio patches, local save/load, file import/export and dirty state, including the Studio partition of the experiment database |
+| `unit/v31-studio-provenance.test.mjs` | GATE | the Studio block of experiment provenance: shape, studioHash, recipe authority |
+| `unit/v31-studio-templates.test.mjs` | GATE | Studio templates, the accessible graph text and the offline rendering plan |
 | `browser/dist-gate.cjs` | DELETED | targeted skeleton ids and crashed; superseded by `app.cjs` and `verify-dist` |
 
 Visual baseline: `node scripts/visual-gate.mjs --update-baseline` re-accepts the current

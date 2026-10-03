@@ -42,7 +42,7 @@ const arg = (name, fallback) => {
   const i = argv.indexOf(`--${name}`);
   return i >= 0 && argv[i + 1] ? argv[i + 1] : fallback;
 };
-const BROWSERS = arg('browsers', 'chromium,firefox,webkit').split(',');
+const BROWSERS = arg('browsers', process.env.OSC_BROWSERS || 'chromium,firefox,webkit').split(',');
 const JSON_OUT = arg('json', '');
 const ENTRY = path.join(__dirname, 'fixtures', 'v31-studio-audio-entry.js');
 
