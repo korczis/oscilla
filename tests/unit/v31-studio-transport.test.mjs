@@ -13,10 +13,12 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { AudioEngine } from '../../src/js/audio/audio-engine.js';
+import { valueAtTime } from '../../src/js/audio/envelope.js';
 import {
   EDGE_S, GAIN_FLOOR, STOP_LEAD_S, STOP_PAD_S, STOP_RAMP_S,
 } from '../../src/js/sequencer/compiler.js';
 import { createIdGenerator, createStudioStore } from '../../src/js/studio/actions.js';
+import { laneValueAt } from '../../src/js/studio/automation.js';
 import { ROUTE_FLOOR, STUDIO_XFADE_S } from '../../src/js/studio/compiler.js';
 import { createStudioRuntime } from '../../src/js/studio/runtime.js';
 import {
@@ -37,7 +39,7 @@ function ok(r) {
 }
 
 function setup(model = templateModel(REFERENCE_TEMPLATE_ID), opts = {}) {
-  const fx = createFakeAudioEnv({ sampleRate: SR });
+  const fx = createFakeAudioEnv({ sampleRate: SR, holdSupported: !!opts.hold });
   const engine = new AudioEngine({ env: fx.env });
   assert.ok(engine.init(), 'engine.init');
   if (engine.limiterFeed) engine.limiterFeed.infrastructure = true; // see liveAllSources
@@ -519,3 +521,252 @@ test('measurement clips are handed to the measurement callback as plain data', a
   s.fx.advance(0.5);
   await done;
 });
+
+// ---------------------------------------------------------------- claim / release continuity
+
+/**
+ * A FakeParam's automation as a browser holds it, replayed from its calls: cancelScheduledValues
+ * drops the events at or after t; cancelAndHoldAtTime (Web Audio spec) re-ends a ramp in progress
+ * at t with the value it has there and drops the later events (it inserts nothing when t lies
+ * after the last event). setTargetAtTime only precedes PLAY on these params: taken as a set.
+ */
+function browserEvents(param, initial) {
+  const kinds = { setValueAtTime: 'set', setTargetAtTime: 'set',
+    linearRampToValueAtTime: 'linear', exponentialRampToValueAtTime: 'exp' };
+  let ev = [];
+  const sorted = () => ev.map((e, i) => ({ ...e, i })).sort((a, b) => a.time - b.time || a.i - b.i)
+    .map(({ kind, time, value }) => ({ kind, time, value }));
+  for (const [m, a, b] of param.calls) {
+    if (m === 'cancelScheduledValues') {
+      ev = ev.filter((e) => e.time < a);
+    } else if (m === 'cancelAndHoldAtTime') {
+      const all = sorted();
+      const v = valueAtTime(all, a, initial);
+      const next = all.find((e) => e.time > a);
+      ev = all.filter((e) => e.time <= a);
+      if (next && next.kind !== 'set') ev.push({ kind: next.kind, time: a, value: v });
+    } else {
+      ev.push({ kind: kinds[m], time: b, value: a });
+    }
+  }
+  return sorted();
+}
+
+/** The carrier level at any time, as the browser plays the param's automation. */
+function levelCurve(param, initial = 1) {
+  const ev = browserEvents(param, initial);
+  return (t) => valueAtTime(ev, t, initial);
+}
+
+/** Assert the carrier level has no step at t (the value just before t is the value at t). */
+function continuousAt(param, t, label) {
+  const v = levelCurve(param);
+  const before = v(t - 1e-9);
+  const atT = v(t);
+  assert.ok(Math.abs(before - atT) <= 1e-6, `${label}: ${before} just before ${t}, ${atT} at it`);
+  return atT;
+}
+
+const sourceClip = (s) => dispatch(s, { type: 'CLIP_ADD', trackId: 'track-1', kind: 'pattern',
+  start: 30, duration: 1, payload: { blockType: 'tone', params: { freq: 330 } } })
+  .created.clips[0];
+
+/** The time of the transport's last setValueAtTime on the level (its claim or release time). */
+const lastSetAt = (param) => param.calls.filter((c) => c[0] === 'setValueAtTime').at(-1)[2];
+
+/**
+ * Basic Synth playing; its pattern clips removed (the oscillator is released, free-running at
+ * its level 1), then a clip added: the sounding oscillator is claimed at fadeAt (level →
+ * ROUTE_FLOOR over STUDIO_XFADE_S).
+ */
+function claimedSounding(hold) {
+  const s = setup(templateModel(REFERENCE_TEMPLATE_ID), { hold });
+  ok(s.transport.start());
+  s.fx.advance(0.1);
+  dispatch(s, { type: 'CLIP_REMOVE', clipId: 'clip-1' });
+  dispatch(s, { type: 'CLIP_REMOVE', clipId: 'clip-2' });
+  s.transport.sync();
+  s.fx.advance(0.1);
+  assert.deepEqual(s.transport.debugInfo().claims, []);
+  const param = s.runtime.nodes.get('osc-1').modTarget('level', 'linear').param;
+  const clip = sourceClip(s);
+  s.transport.sync();
+  assert.deepEqual(s.transport.debugInfo().claims, ['osc-1']);
+  const fadeAt = lastSetAt(param);
+  assert.ok(fadeAt > s.ctx.currentTime, 'a sounding oscillator fades from hooks.soon()');
+  return { s, param, clip, fadeAt };
+}
+
+const OFFSETS = [0, 0.005, 0.01, 0.015, STUDIO_XFADE_S, 0.03];
+
+for (const hold of [false, true]) {
+  const how = hold ? 'cancelAndHoldAtTime' : 'cancelScheduledValues';
+
+  test(`pattern oscillator: a release inside the claim's fade holds its value (${how})`, () => {
+    for (const d of OFFSETS) {
+      const { s, param, clip, fadeAt } = claimedSounding(hold);
+      const fade = (t) => 1 + (ROUTE_FLOOR - 1) * Math.min(1, Math.max(0, t - fadeAt)
+        / STUDIO_XFADE_S);
+      if (d) s.fx.advance(d);
+      dispatch(s, { type: 'CLIP_REMOVE', clipId: clip });
+      s.transport.sync();
+      assert.deepEqual(s.transport.debugInfo().claims, []);
+      const rel = lastSetAt(param);
+      assert.ok(rel >= fadeAt, `released at ${rel}`);
+      const held = continuousAt(param, rel, `release ${d} s after the claim`);
+      near(held, fade(rel), 1e-6);
+      // Up to the release the level follows the claim's fade, then returns to 1 over the
+      // crossfade.
+      const v = levelCurve(param);
+      near(v((fadeAt + rel) / 2), fade((fadeAt + rel) / 2), 1e-6);
+      near(v(rel + STUDIO_XFADE_S), 1, 1e-9);
+    }
+  });
+
+  test(`pattern oscillator: a claim inside a release ramp holds the ramp's value (${how})`, () => {
+    for (const d of OFFSETS) {
+      const { s, param, clip } = claimedSounding(hold);
+      s.fx.advance(0.1); // the claim's fade has ended: the carrier is at the floor
+      dispatch(s, { type: 'CLIP_REMOVE', clipId: clip });
+      s.transport.sync();
+      const rel = lastSetAt(param);
+      const ramp = (t) => ROUTE_FLOOR + (1 - ROUTE_FLOOR) * Math.min(1, Math.max(0, t - rel)
+        / STUDIO_XFADE_S);
+      if (d) s.fx.advance(d);
+      sourceClip(s);
+      s.transport.sync();
+      assert.deepEqual(s.transport.debugInfo().claims, ['osc-1']);
+      const fadeAt = lastSetAt(param);
+      assert.ok(fadeAt >= rel, `claimed at ${fadeAt}`);
+      const held = continuousAt(param, fadeAt, `claim ${d} s after the release`);
+      near(held, ramp(fadeAt), 1e-6);
+      const v = levelCurve(param);
+      near(v((rel + fadeAt) / 2), ramp((rel + fadeAt) / 2), 1e-6);
+      near(v(fadeAt + STUDIO_XFADE_S), ROUTE_FLOOR, 1e-9);
+      // Released again at once (the same hold time): both holds stay continuous.
+      dispatch(s, { type: 'CLIP_REMOVE', clipId: s.store.getModel().timeline.clips.at(-1).id });
+      s.transport.sync();
+      assert.deepEqual(s.transport.debugInfo().claims, []);
+      assert.equal(lastSetAt(param), fadeAt);
+      near(continuousAt(param, fadeAt, `release with the claim ${d} s after a release`),
+        ramp(fadeAt), 1e-6);
+      continuousAt(param, rel, 'the first release');
+      near(levelCurve(param)((rel + fadeAt) / 2), ramp((rel + fadeAt) / 2), 1e-6);
+    }
+  });
+}
+
+// ------------------------------------------- claim / release continuity with a level lane
+
+/** A linear automation lane on osc-1 level: down 1 → 0.2 over 1.5 s, back up to 0.9 at 3 s. */
+const LEVEL_POINTS = [
+  { id: 'pt-11', time: 0, value: 1, curve: 'linear' },
+  { id: 'pt-12', time: 1.5, value: 0.2, curve: 'linear' },
+  { id: 'pt-13', time: 3, value: 0.9, curve: 'linear' },
+];
+
+function levelLaneModel() {
+  const m = templateModel(REFERENCE_TEMPLATE_ID);
+  return { ...m, timeline: { ...m.timeline, automation: [...m.timeline.automation,
+    { id: 'lane-11', target: { node: 'osc-1', param: 'level' }, points: LEVEL_POINTS }] } };
+}
+
+/** The time of the first cancel among the param's calls from index n (a claim's or release's). */
+const holdSince = (param, n) => param.calls.slice(n)
+  .find((c) => c[0] === 'cancelScheduledValues' || c[0] === 'cancelAndHoldAtTime')[1];
+
+/** Assert the carrier level has no step at any of its scheduled event times from t0 on. */
+function continuousFrom(param, t0, label) {
+  for (const e of browserEvents(param, 1)) {
+    if (e.time >= t0) continuousAt(param, e.time, `${label}, event at ${e.time}`);
+  }
+}
+
+/** Run `act` and sync: the hold time of the claim or release it causes on the carrier. */
+function syncHold(s, param, act) {
+  const n = param.calls.length;
+  act();
+  s.transport.sync();
+  return holdSince(param, n);
+}
+
+/**
+ * Basic Synth with the level lane, playing: osc-1 is pattern-played (its lane drives the pattern
+ * bus); its clips removed, it is released at `rel` and the lane drives its carrier.
+ */
+function releasedWithLane(hold) {
+  const s = setup(levelLaneModel(), { hold });
+  const b = ok(s.transport.start()).baseTime;
+  const lane = (t) => laneValueAt(LEVEL_POINTS, t - b);
+  s.fx.advance(0.1);
+  assert.deepEqual(s.transport.debugInfo().claims, ['osc-1']);
+  const param = s.runtime.nodes.get('osc-1').modTarget('level', 'linear').param;
+  const t0 = s.ctx.currentTime; // nothing after it is rendered yet
+  const rel = syncHold(s, param, () => {
+    dispatch(s, { type: 'CLIP_REMOVE', clipId: 'clip-1' });
+    dispatch(s, { type: 'CLIP_REMOVE', clipId: 'clip-2' });
+  });
+  assert.deepEqual(s.transport.debugInfo().claims, []);
+  return { s, param, lane, rel, t0 };
+}
+
+const LANE_OFFSETS = [...OFFSETS, 0.05, 0.2];
+
+for (const hold of [false, true]) {
+  const how = hold ? 'cancelAndHoldAtTime' : 'cancelScheduledValues';
+
+  test(`pattern oscillator: a release returns the carrier to its level lane (${how})`, () => {
+    const { s, param, lane, rel, t0 } = releasedWithLane(hold);
+    continuousFrom(param, t0, 'release');
+    const v = levelCurve(param);
+    near(v(rel), ROUTE_FLOOR, 1e-6);
+    // The crossfade ends on the lane; the lane then drives the carrier.
+    for (const t of [rel + STUDIO_XFADE_S, rel + 0.05, rel + 0.3, rel + 0.8]) {
+      near(v(t), lane(t), 1e-6);
+    }
+    s.fx.advance(1);
+    continuousFrom(param, t0, 'release, a second later');
+    near(levelCurve(param)(rel + 1.05), lane(rel + 1.05), 1e-6);
+  });
+
+  test(`pattern oscillator: a claim inside a level lane ramp starts from the lane (${how})`, () => {
+    for (const d of LANE_OFFSETS) {
+      const { s, param, lane, rel, t0 } = releasedWithLane(hold);
+      if (d) s.fx.advance(d);
+      const fadeAt = syncHold(s, param, () => sourceClip(s));
+      assert.deepEqual(s.transport.debugInfo().claims, ['osc-1']);
+      assert.ok(fadeAt >= rel, `claimed at ${fadeAt}`);
+      // Inside the release crossfade the claim holds that ramp's value; after it, the lane's.
+      const end = rel + STUDIO_XFADE_S;
+      const before = fadeAt < end
+        ? ROUTE_FLOOR + (lane(end) - ROUTE_FLOOR) * (fadeAt - rel) / STUDIO_XFADE_S
+        : lane(fadeAt);
+      near(continuousAt(param, fadeAt, `claim ${d} s after the release`), before, 1e-6);
+      continuousFrom(param, t0, `claim ${d} s after the release`);
+      const v = levelCurve(param);
+      near(v(fadeAt + STUDIO_XFADE_S), ROUTE_FLOOR, 1e-9);
+      near(v(fadeAt + 0.5), ROUTE_FLOOR, 1e-9);
+    }
+  });
+
+  test(`pattern oscillator: a release inside a level lane ramp continues it (${how})`, () => {
+    for (const d of LANE_OFFSETS) {
+      const { s, param, lane } = releasedWithLane(hold);
+      s.fx.advance(0.1);
+      let clip;
+      const t0 = s.ctx.currentTime;
+      const fadeAt = syncHold(s, param, () => { clip = sourceClip(s); });
+      assert.deepEqual(s.transport.debugInfo().claims, ['osc-1']);
+      near(levelCurve(param)(fadeAt), lane(fadeAt), 1e-6);
+      if (d) s.fx.advance(d);
+      const rel = syncHold(s, param, () => dispatch(s, { type: 'CLIP_REMOVE', clipId: clip }));
+      assert.deepEqual(s.transport.debugInfo().claims, []);
+      const fade = (t) => lane(fadeAt) + (ROUTE_FLOOR - lane(fadeAt))
+        * Math.min(1, Math.max(0, t - fadeAt) / STUDIO_XFADE_S);
+      near(continuousAt(param, rel, `release ${d} s after the claim`), fade(rel), 1e-6);
+      continuousFrom(param, t0, `release ${d} s after the claim`);
+      const v = levelCurve(param);
+      for (const t of [rel + STUDIO_XFADE_S, rel + 0.1, rel + 0.6]) near(v(t), lane(t), 1e-6);
+    }
+  });
+}
