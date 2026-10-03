@@ -14,7 +14,7 @@ import { fileURLToPath } from 'node:url';
 
 import { AudioEngine } from '../../src/js/audio/audio-engine.js';
 import {
-  freezeParam, makeAdsrEnvelope, recordEvent, trackParam, v1OpenEnvelope, valueAt,
+  coherentTime, freezeParam, makeAdsrEnvelope, recordEvent, trackParam, v1OpenEnvelope, valueAt,
 } from '../../src/js/audio/voice.js';
 import { buildPlan } from '../../src/js/audio/patterns.js';
 import { defaultInstrumentState } from '../../src/js/core/config.js';
@@ -834,3 +834,67 @@ test('V250: after a stalled top-up the lanes resume on the grid, idle lanes only
     }
     assert.ok(v.t0 + v.cycle * p.period - 40 > 9, 'the horizon is refilled');
   });
+
+// ---- V251: events meant to coincide keep the order of the calls
+/** Pairs (start, end) on one param where a start is placed before the end it follows. */
+function inversions(param) {
+  const ev = param.events.map((e, i) => ({ k: e[0], v: e[1], t: e[2], i }))
+    .filter((e) => e.k !== 'cancel' && e.k !== 'cancelAndHold')
+    .sort((a, b) => a.t - b.t || a.i - b.i); // the browser's order: time, then insertion
+  const out = [];
+  for (let j = 1; j < ev.length; j++) {
+    const a = ev[j - 1];
+    const b = ev[j];
+    // a set placed just before a ramp that was called earlier: the ramp collapses
+    if (a.k === 'set' && (b.k === 'linear' || b.k === 'exp') && b.i < a.i && b.t - a.t < 1e-6) {
+      out.push([a.t, b.t]);
+    }
+  }
+  return out;
+}
+
+test('V251: back-to-back pulses: no step starts before the previous release ends', { skip },
+  () => {
+    const { eng, advance } = setup();
+    eng.init();
+    let worst = 0;
+    // t0 values where (t0 + t) + dur and t0 + (t + dur) differ (1.348 inverted 4 boundaries)
+    for (const start of [1.328, 2.71, 5.5, 13.37, 77.123]) {
+      advance(start - 0.02);
+      eng.play(plan({ pattern: 'pulse', frequency: 440, pp: { pulse: { pulseMs: 40, pauseMs: 0, reps: 100 } } }),
+        opt({ mode: 'trigger' }));
+      const env = eng.voice.nodes[0].gain;
+      worst = Math.max(worst, inversions(env).length);
+      eng.stopAll();
+      advance(start + 5);
+    }
+    assert.strictEqual(worst, 0, 'every release ramp ends before the next pulse starts');
+  });
+
+test('V251: ping-pong sweep: every segment ramps (no start placed before an end)', { skip },
+  () => {
+    const { eng, advance } = setup();
+    eng.init();
+    let total = 0;
+    for (const start of [1.328, 2.71, 5.5, 13.37, 77.123]) {
+      advance(start - 0.02);
+      const p = buildPlan({
+        ...defaultInstrumentState(), source: 'sweep',
+        sweep: { start: 100, end: 1000, durationMs: 130, curve: 'log', direction: 'pingpong', repeat: 'continuous' },
+      }, ENV_S).plan;
+      eng.play(p, opt({ mode: 'trigger' }));
+      total += inversions(eng.voice.carrier.frequency).length;
+      eng.stopAll();
+      advance(start + 5);
+    }
+    assert.strictEqual(total, 0);
+  });
+
+test('V251: coherentTime keeps the call order of events an ulp apart, nothing else', () => {
+  const p = {};
+  assert.strictEqual(coherentTime(p, 1.4680000000000002), 1.4680000000000002);
+  assert.strictEqual(coherentTime(p, 1.468), 1.4680000000000002, 'an ulp earlier: snapped');
+  assert.strictEqual(coherentTime(p, 1.467), 1.467, 'a real earlier time stays');
+  assert.strictEqual(coherentTime(p, 2), 2);
+  assert.strictEqual(coherentTime({}, 1.468), 1.468, 'per param');
+});
