@@ -18,7 +18,10 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-02
-updated_at: 2026-10-03T06:51:20Z
+updated_at: 2026-10-03T11:41:57Z
+started_at: 2026-10-03T11:41:48Z
+verified_at: 2026-10-03T11:41:52Z
+completed_at: 2026-10-03T11:41:57Z
 evidence:
   - covers: verified
     type: manual
@@ -26,3 +29,10 @@ evidence:
     result: "PARTIAL (do not mark done): sequencer concepts mapped KEEP/REFACTOR/SUPERSEDE/MIGRATE in docs/v31/sequencer-migration.md (f8904f0, e1ee68d). Unmet: no written current-state audit of HEAD, release state, Signal Path, persistence, visual gate and Majordomus state; the spec 55 editor-vs-library evaluation is only prose in ADR 0034, whose confirmation criterion (a) says the measured comparison against at least two libraries (issue V401) is still to be written"
     commit: 320130f1a967e894002a55dd9ebb6c837eb2621f
     recorded_at: 2026-10-03T06:51:20Z
+  - covers: verified
+    type: manual
+    command: "npm pack litegraph.js@0.7.18 @comfyorg/litegraph@0.17.2 drawflow@0.0.60 rete@2.0.6 rete-area-plugin@2.3.2 rete-connection-plugin@2.0.5 rete-render-utils@2.0.3 rete-lit-plugin@2.0.3 (scratch dir); esbuild min bundles of the rete stacks and of src/js/ui/studio sets with gzip -9; npm run release:verify-deploy; npm run release-gate; majordomus plan validate; majordomus doctor; majordomus adr check"
+    result: "MET as a RETROSPECTIVE audit (performed 2026-10-03 after Studio was merged at 320130f and released on a810b94; it cannot show that the comparison informed ADR 0034, which was taken at 62ad1f3 before any measurement): docs/v31/audit-current-state.md records HEAD 535af3b, release and deployment (verify-deploy PASS), sequencer, Signal Path, audio graph abstractions, measurement and experiment architecture, persistence, visual gate and Majordomus state; maps the Studio-touched V2 concepts KEEP/REFACTOR/SUPERSEDE/MIGRATE and references docs/v31/sequencer-migration.md for the sequencer; and measures the shipped editor against Drawflow, Rete.js and LiteGraph (min+gzip: OSCILLA graph editor 14929 B, +library+inspector 22592 B; Drawflow 9207; Rete core without renderer 15365, with Lit renderer 43890; litegraph.js core 50565; @comfyorg/litegraph 88213; licences, dependencies, file:// and verify-dist fit, typed ports, undo, keyboard, ARIA, touch, styling). ADR 0034 criterion (a) now points to it; (b) frame-time remains open (V431). Release gate at 535af3b exit 0"
+    artifact: "docs/v31/audit-current-state.md"
+    commit: 535af3b347443dfa05c16cb5fb67128637e3db1f
+    recorded_at: 2026-10-03T11:41:55Z

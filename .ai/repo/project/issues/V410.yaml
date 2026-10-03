@@ -19,7 +19,10 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-02
-updated_at: 2026-10-03T06:50:48Z
+updated_at: 2026-10-03T11:43:59Z
+started_at: 2026-10-03T11:43:50Z
+verified_at: 2026-10-03T11:43:53Z
+completed_at: 2026-10-03T11:43:59Z
 evidence:
   - covers: verified
     type: test
@@ -27,3 +30,10 @@ evidence:
     result: "MET at 320130f: library-add, node-drag (snap, one history entry), cable-to-blank checks pass. Impl ui/studio/graph-editor.js: pointer capture, rAF coalescing, pointercancel/lostpointercapture/blur cleanup, ResizeObserver port anchors, quick add (N / double-click), z-order. Caveat: blur, pointercancel, ResizeObserver re-measure and quick add have no test. Commit e31ab23"
     commit: 320130f1a967e894002a55dd9ebb6c837eb2621f
     recorded_at: 2026-10-03T06:50:48Z
+  - covers: verified
+    type: test
+    command: "node tests/browser/v31-studio-graph.cjs"
+    result: "MET re-verified at 535af3b on 2026-10-03 (retrospective close, after V3.0 and V3.1 shipped; original evidence above): tests/browser/v31-studio-graph.cjs passed in the release-gate run at 535af3b"
+    artifact: "535af3b347443dfa05c16cb5fb67128637e3db1f"
+    commit: 535af3b347443dfa05c16cb5fb67128637e3db1f
+    recorded_at: 2026-10-03T11:43:57Z
