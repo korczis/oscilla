@@ -53,7 +53,7 @@ import {
   RTA_ALGORITHM, NYQUIST_FRACTION,
 } from './rta.js';
 import {
-  applyFrequencyCorrectionToBands, correctionCurve, CORRECTION_SIGN,
+  applyFrequencyCorrectionToBands, conventionSign, correctionCurve,
 } from '../calibration/interpolate.js';
 import { isValidLevelCalibration } from '../calibration/level.js';
 
@@ -205,9 +205,12 @@ export function createLiveRta({
     fftCorrection = null;
     if (curProfile) {
       const cc = correctionCurve(curProfile, shownFrequencies);
+      const sign = conventionSign(curProfile);
       const factor = new Float64Array(cc.correctionDb.length);
       for (let i = 0; i < factor.length; i++) {
-        factor[i] = cc.covered[i] ? CORRECTION_SIGN * cc.correctionDb[i] : 0;
+        // the profile's own convention, as the band modes apply it (V382: a 'correction'
+        // profile was subtracted here like a 'deviation' one)
+        factor[i] = cc.covered[i] ? sign * cc.correctionDb[i] : 0;
       }
       fftCorrection = { factor, covered: cc.covered };
     }

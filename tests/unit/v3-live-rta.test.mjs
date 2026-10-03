@@ -352,3 +352,26 @@ test('live RTA: expert FFT size and window keep the band scale; resolution follo
   }
   assert.throws(() => createLiveRta({ sampleRate: sr, window: 'kaiser' }), RangeError);
 });
+
+test('V382: FFT mode applies a profile in its own convention, as the band modes do', () => {
+  const sr = 48000;
+  const x = tones(sr, N, [{ f: 1000, a: 0.2 }]);
+  const points = [[20, 6], [20000, 6]];
+  const shift = (convention, mode) => {
+    const raw = createLiveRta({ sampleRate: sr, mode, averaging: 'instant' });
+    const cal = createLiveRta({ sampleRate: sr, mode, averaging: 'instant',
+      profile: createFrequencyProfile({ name: convention, points, convention }) });
+    const r = raw.push(x, 0);
+    const c = cal.push(x, 0);
+    const i = mode === 'fft'
+      ? r.values.indexOf(Math.max(...r.values))
+      : r.bands.findIndex((b) => b.lo <= 1000 && 1000 < b.hi);
+    return c.values[i] - r.values[i];
+  };
+  for (const [convention, expect] of [['deviation', -6], ['correction', 6]]) {
+    for (const mode of ['fft', 'third']) {
+      assert.ok(Math.abs(shift(convention, mode) - expect) < 1e-6,
+        `${convention} ${mode}: ${shift(convention, mode)} dB, expected ${expect}`);
+    }
+  }
+});
