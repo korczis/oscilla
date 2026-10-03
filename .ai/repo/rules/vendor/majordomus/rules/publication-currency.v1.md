@@ -16,7 +16,7 @@ x-majordomus:
   policy_key: publication_current
   enforced_by: [finish]
   exit_code: 10
-  tests: [test/cases/275_publication_is_current.sh]
+  tests: [test/cases/275_publication_is_current.sh, test/cases/578_an_unknown_gate_refuses_completed.sh]
 ---
 
 # Rationale
@@ -78,10 +78,11 @@ makes, applied here unchanged.
 
 **A verdict that could not be reached is reported, never inferred.** The gate distinguishes
 "the publication is not current" from "I could not find out" — no network, no published
-branch, no hosting API. The first refuses. The second is reported by name, with its reason,
-and refuses nothing: a session on a train is not evidence that the site is stale, and a
-requirement that cannot be satisfied offline would be waived within a week. Silence is not
-green and it is not red either; it is named — the argument this repository states as
+branch, no hosting API. The first refuses. The second is reported by name, with its exit and
+reason, and refuses `completed` too: a session on a train is not evidence that the site is
+stale, but `completed` claims it is current, and a requirement that passes whenever it cannot
+measure is decoration. It is never reported as the first, and an honest `partial` or
+`blocked` is never refused over it. Silence is not green; it is named — the argument this repository states as
 `project.never-reported-is-not-green`, which the package cannot depend on because a
 vendored rule must resolve inside the package it ships in.
 
@@ -98,5 +99,7 @@ not a flag.
 `mj_validate_publication_currency` decides it, dispatched from `finish`, reading the gates
 the CI model marks `at-finish` and running each one. `test/cases/275_publication_is_current.sh`
 proves it against fixture repositories whose gate scripts are written by the case: one that
-exits 0, one that exits 10, one that exits 12, one that declares no such gate, and one
-finishing with an outcome other than `completed`.
+exits 0, one that exits 10, one that exits 12 (refused, and named as unreachable), one that
+declares no such gate, and one finishing with an outcome other than `completed`;
+`test/cases/578_an_unknown_gate_refuses_completed.sh` proves the unreachable refusal beside the
+completion-gates reader's.
