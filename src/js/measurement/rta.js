@@ -52,6 +52,10 @@ import { POWER_SCALES, toneToMeanSquare, windowAlgorithm } from './spectrum.js';
 import { ZERO_POWER_DB } from './transfer.js';
 
 export const RTA_ALGORITHM = ALGORITHMS.rta;
+/** The retained first RTA method: one under-resolution limit of 2 bins for every window. */
+export const RTA_ALGORITHM_V1 = 'oscilla.rta.v1';
+/** Every RTA method this build reproduces (bandAnalysis options.algorithm). */
+export const RTA_ALGORITHMS = Object.freeze([RTA_ALGORITHM_V1, RTA_ALGORITHM]);
 
 /** Base-10 octave frequency ratio G = 10^(3/10) (IEC 61260-1 §5.2). */
 export const OCTAVE_RATIO_G = 10 ** (3 / 10);
@@ -61,8 +65,24 @@ export const REFERENCE_FREQUENCY_HZ = 1000;
 export const BANDS_PER_OCTAVE = Object.freeze({ octave: 1, third: 3 });
 /** Bands whose upper edge exceeds this fraction of Nyquist are excluded (engine discipline). */
 export const NYQUIST_FRACTION = 0.95;
-/** A band covering fewer FFT bins than this is flagged underResolved. */
-export const UNDER_RESOLVED_BINS = 2;
+/**
+ * A band covering fewer FFT bins than this, for the window the spectrum was analysed with, is
+ * flagged underResolved: a tone inside it loses part of the window's main lobe (±2 bins Hann,
+ * ±4 Blackman-Harris) to the neighbouring bands. V382: with the former single limit of 2 bins a
+ * mid-band tone read up to 0.91 dB (Hann) and 1.57 dB (Blackman-Harris) low in a band that was
+ * not flagged; at these limits the loss is below 0.01 dB. Band levels and stored RtaResults do
+ * not change; the flag is part of bandAnalysis()'s output, so it is 'oscilla.rta.v2' and v1
+ * (2 bins for every window) stays selectable.
+ */
+export const UNDER_RESOLVED_BINS_BY_WINDOW = Object.freeze({ hann: 6, 'blackman-harris': 8 });
+/** The Hann limit: spectra without a named window (the noise check's Welch average is Hann). */
+export const UNDER_RESOLVED_BINS = UNDER_RESOLVED_BINS_BY_WINDOW.hann;
+
+/** The under-resolution limit in bins for an analysis window name (and RTA method). */
+export function underResolvedBins(window = 'hann', algorithm = RTA_ALGORITHM) {
+  if (algorithm === RTA_ALGORITHM_V1) return 2;
+  return UNDER_RESOLVED_BINS_BY_WINDOW[window] ?? UNDER_RESOLVED_BINS;
+}
 /** FAST time constant (s), the conventional sound-level-meter value; not IEC-verified here. */
 export const RTA_TAU_FAST_S = 0.125;
 /** SLOW time constant (s), the conventional sound-level-meter value; not IEC-verified here. */
@@ -124,24 +144,26 @@ export function bandCenters(kind, fMin, fMax, sampleRate) {
 }
 
 /**
- * bandBinCounts(binHz, bands, binCount = Infinity) → { binCounts: Float64Array,
- *   underResolved: boolean[] }
+ * bandBinCounts(binHz, bands, binCount = Infinity, window = 'hann', algorithm = RTA_ALGORITHM)
+ *   → { binCounts: Float64Array, underResolved: boolean[] }
  *
  * Effective number of FFT bins each band integrates (the sum of the fractional weights: the
- * band width in bins where the spectrum covers it). A band under UNDER_RESOLVED_BINS bins is
+ * band width in bins where the spectrum covers it). A band under underResolvedBins(window) is
  * underResolved: its level is dominated by the window's main lobe and bin placement, not by the
  * band shape.
  */
-export function bandBinCounts(binHz, bands, binCount = Infinity) {
+export function bandBinCounts(binHz, bands, binCount = Infinity, window = 'hann',
+  algorithm = RTA_ALGORITHM) {
   checkBinHz(binHz);
   const binCounts = new Float64Array(bands.length);
   const underResolved = new Array(bands.length);
   const top = (binCount - 0.5) * binHz;
+  const limit = underResolvedBins(window, algorithm);
   for (let i = 0; i < bands.length; i++) {
     const lo = Math.max(bands[i].lo, -0.5 * binHz);
     const hi = Math.min(bands[i].hi, top);
     binCounts[i] = hi > lo ? (hi - lo) / binHz : 0;
-    underResolved[i] = binCounts[i] < UNDER_RESOLVED_BINS;
+    underResolved[i] = binCounts[i] < limit;
   }
   return { binCounts, underResolved };
 }
@@ -213,15 +235,19 @@ export function bandPowers(power, binHz, bands) {
 }
 
 /**
- * bandAnalysis(power, binHz, bands) → { algorithm, levelsDb: Float64Array,
+ * bandAnalysis(power, binHz, bands, { algorithm }) → { algorithm, levelsDb: Float64Array,
  *   power: Float64Array, binCounts: Float64Array, underResolved: boolean[] }
- * power: mean-square array or a welch() result.
+ * power: mean-square array or a welch() result (whose window sets the under-resolution limit;
+ * Hann for a bare array). algorithm: RTA_ALGORITHM (default) or RTA_ALGORITHM_V1.
  */
-export function bandAnalysis(spectrum, binHz, bands) {
+export function bandAnalysis(spectrum, binHz, bands, { algorithm = RTA_ALGORITHM } = {}) {
+  if (!RTA_ALGORITHMS.includes(algorithm)) throw new RangeError(`unknown RTA method '${algorithm}'`);
   const power = meanSquarePower(spectrum);
   const p = integrateBands(power, binHz, bands);
-  const { binCounts, underResolved } = bandBinCounts(binHz, bands, power.length);
-  return { algorithm: RTA_ALGORITHM, levelsDb: powerToDb(p), power: p, binCounts, underResolved };
+  const win = spectrum && !ArrayBuffer.isView(spectrum) && !Array.isArray(spectrum)
+    && typeof spectrum.window === 'string' ? spectrum.window : 'hann';
+  const { binCounts, underResolved } = bandBinCounts(binHz, bands, power.length, win, algorithm);
+  return { algorithm, levelsDb: powerToDb(p), power: p, binCounts, underResolved };
 }
 
 /**
