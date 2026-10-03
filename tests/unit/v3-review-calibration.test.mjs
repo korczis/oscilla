@@ -439,7 +439,9 @@ test('m7: the raw deviceId is never stored or exported, once or twice', () => {
   assert.ok(isHashedDeviceId(EXP.input.device.id));
   assert.equal(EXP.input.device.id, hashDeviceId('raw-mic-id-abcdef'));
   assert.equal('deviceId' in EXP.input.constraints.applied, false);
-  assert.equal('deviceId' in EXP.input.constraints.requested, false);
+  // The CHOSEN input (requested deviceId, V322) is kept as provenance, hashed like device.id.
+  assert.deepEqual(EXP.input.constraints.requested.deviceId,
+    { exact: hashDeviceId('raw-mic-id-abcdef') });
   const n = normalizeInput({ device: { id: '' }, constraints: { applied: { deviceId: 'x' } } });
   assert.equal(n.device.id, hashDeviceId('x'));
   // A record that predates the rule is sanitized on export; its v2 hash is re-stamped.

@@ -21,10 +21,17 @@
 //     on Envelopes, automation lanes on their AudioParam with the parameter owned by the lane and
 //     the modulation edges' constant offsets added. Everything else is listed as a limitation
 //     with the transport's reason; measurement clips run live through the measurement engine.
-//   renderStudioOffline(model, { duration, sampleRate, channels, OfflineAudioContext, wav })
+//   renderStudioOffline(model, { duration, sampleRate, channels, OfflineAudioContext, wav,
+//                                signal, onProgress })
 //     -> Promise<{ ok: true, plan, buffer, stats, wav, warnings, startTime,
 //                  debug: { transport, runtime } (their debugInfo() after scheduling) }>
-//        | { ok: false, plan, errors, limitations }
+//        | { ok: false, plan, errors, limitations, aborted? }
+//     Progress and abort (plan V427, the Studio "Render WAV"): onProgress({ stage, fraction })
+//     reports 'render' at PROGRESS_STEPS points of the render (OfflineAudioContext.suspend(t)
+//     then resume(); where suspend is not supported only 0 and 1) and 'encode' before the WAV
+//     is encoded. An AbortSignal `signal` resolves the call at once with { ok: false,
+//     aborted: true }; the context then finishes in the background and its buffer is dropped.
+//     Neither changes a sample: the same model renders the same bytes.
 //     Playback: createStudioTransport on the offline engine with a fixed store and
 //     lookAheadS = the render duration, then transport.start(): the one start schedules every
 //     item and automation event that begins inside the render, in one pass, with the times the
@@ -64,7 +71,12 @@ export const OFFLINE_TEXT = Object.freeze({
   afterEnd: 'Starts after the end of the render.',
   nodeNotRendered: (name) => `${name} is not rendered.`,
   silent: 'Nothing reaches the Master Output: the render will be silent.',
+  aborted: 'The render was aborted; nothing was exported.',
 });
+
+/** Progress points of a render (suspend/resume of the OfflineAudioContext). */
+export const PROGRESS_STEPS = 10;
+const ABORTED = Symbol('aborted');
 
 function nodeRole(def, node) {
   const c = def.capabilities;
@@ -191,6 +203,38 @@ function fixedStore(model) {
   });
 }
 
+/**
+ * Report render progress at PROGRESS_STEPS points: suspend the offline context at whole render
+ * quanta, report, resume. Browsers without OfflineAudioContext.suspend report 0 and 1 only.
+ */
+function trackProgress(ctx, duration, onProgress, aborted) {
+  const report = (fraction) => {
+    if (aborted()) return;
+    try { onProgress({ stage: 'render', fraction }); } catch (e) { /* the caller's own */ }
+  };
+  report(0);
+  if (typeof ctx.suspend !== 'function') return;
+  const quantum = 128 / ctx.sampleRate;
+  const seen = new Set();
+  for (let k = 1; k < PROGRESS_STEPS; k += 1) {
+    const t = Math.round((k * duration) / PROGRESS_STEPS / quantum) * quantum;
+    const key = t.toFixed(9);
+    if (!(t > 0 && t < duration) || seen.has(key)) continue;
+    seen.add(key);
+    try {
+      const p = ctx.suspend(t);
+      if (p && typeof p.then === 'function') {
+        p.then(() => {
+          report(t / duration);
+          return ctx.resume();
+        }, () => {});
+      }
+    } catch (e) {
+      return; // not supported for offline contexts here: start and end only
+    }
+  }
+}
+
 /** Render `model` offline (see the header). Rejects only on a browser/render failure. */
 export async function renderStudioOffline(model, opts = {}) {
   const plan = planOfflineRender(model, { duration: opts.duration ?? null,
@@ -199,6 +243,12 @@ export async function renderStudioOffline(model, opts = {}) {
     return { ok: false, plan, errors: plan.errors.map((e) => e.message),
       limitations: plan.limitations };
   }
+  const signal = opts.signal || null;
+  const aborted = () => !!(signal && signal.aborted);
+  const abortResult = () => ({ ok: false, aborted: true, plan, errors: [OFFLINE_TEXT.aborted],
+    limitations: plan.limitations });
+  if (aborted()) return abortResult();
+  const onProgress = typeof opts.onProgress === 'function' ? opts.onProgress : null;
   const o = normalizeRenderOptions({ duration: plan.duration,
     sampleRate: opts.sampleRate ?? plan.render.sampleRate,
     channels: opts.channels ?? plan.render.channels });
@@ -231,9 +281,37 @@ export async function renderStudioOffline(model, opts = {}) {
     const fadeAt = Math.max(t0, duration - STUDIO_STOP_S);
     master.gain.setValueAtTime(level, fadeAt);
     master.gain.linearRampToValueAtTime(0, duration);
+    if (onProgress) trackProgress(ctx, duration, onProgress, aborted);
   };
-  const buffer = await render(build, { duration: o.duration, sampleRate: o.sampleRate,
+  const rendering = render(build, { duration: o.duration, sampleRate: o.sampleRate,
     channels: o.channels, OfflineAudioContext: opts.OfflineAudioContext });
+  let buffer;
+  if (signal) {
+    let off = null;
+    const stop = new Promise((resolve) => {
+      const on = () => resolve(ABORTED);
+      signal.addEventListener('abort', on, { once: true });
+      off = () => signal.removeEventListener('abort', on);
+    });
+    try {
+      buffer = await Promise.race([rendering, stop]);
+    } finally {
+      off();
+    }
+    if (buffer === ABORTED) {
+      rendering.catch(() => {}); // finishes in the background; its buffer is dropped
+      return abortResult();
+    }
+  } else {
+    buffer = await rendering;
+  }
+  if (aborted()) return abortResult();
+  if (onProgress) {
+    try { onProgress({ stage: 'render', fraction: 1 }); } catch (e) { /* the caller's own */ }
+    if (opts.wav) {
+      try { onProgress({ stage: 'encode', fraction: 1 }); } catch (e) { /* the caller's own */ }
+    }
+  }
   return { ok: true, plan, buffer, stats: bufferStats(buffer),
     wav: opts.wav ? encodeWav(buffer) : null, warnings: [...new Set(warnings)], startTime,
     debug };

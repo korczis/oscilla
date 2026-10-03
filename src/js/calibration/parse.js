@@ -35,7 +35,14 @@
 //   • no header (two bare columns, the miniDSP/UMIK-style file) or a JSON point array states the
 //     deviation by the measurement-microphone convention, said so in `convention.text`;
 //   • an OSCILLA JSON export carries `convention` (schema 2); a schema-1 export is migrated to
-//     'deviation' (profile.js migrateProfileDocument), with a warning.
+//     'deviation' (profile.js migrateProfileDocument), with a warning;
+//   • an OSCILLA CSV export (export.js profileCsvText) states it on a `# convention: deviation`
+//     or `# convention: correction` comment line, which settles an ambiguous header; a
+//     directive that contradicts a header naming the microphone's response is an error.
+// OSCILLA CSV directives (`#` comment lines, export.js): `# convention: <deviation|correction>`,
+// `# name: <text>` (the file's own name wins over opts.name, as in a JSON export) and
+// `# id: <sha256>` (a mismatch with the recomputed id is a warning). A directive repeated with
+// a different value, or an unknown convention, is an error on its line.
 // opts.convention ('deviation' | 'correction'), the user's explicit choice, overrides all of
 // these.
 //
@@ -64,6 +71,8 @@ const SENS_RE = /sens(?:itivity)?\s*factor\s*=\s*([-+]?(?:\d+(?:\.\d*)?|\.\d+))\
 const COMMENT_RE = /^[#;*]/;
 const QUOTED_LINE_RE = /^"[^"]*"$/;
 const DATA_START_RE = /^"?[-+.\d]/;
+/** An OSCILLA CSV directive line (export.js): `# name: …`, `# id: …`, `# convention: …`. */
+const DIRECTIVE_RE = /^#\s*(name|id|convention)\s*:\s*(.*?)\s*$/i;
 
 function utf8Length(str) {
   let n = 0;
@@ -210,12 +219,26 @@ function parseDelimited(text, opts) {
 
   // Pass 1: classify lines.
   const content = []; // { line, text } — candidate header and data rows
+  const directives = {}; // name|id|convention → { value, line } (OSCILLA CSV export)
   // The comment nearest before the first content row may carry column names (`* Freq dB`).
   let lastComment = null;
   for (let i = 0; i < lines.length; i++) {
     const lineNo = i + 1;
     const t = lines[i].trim();
     if (t === '') continue;
+    const dir = DIRECTIVE_RE.exec(t);
+    if (dir) {
+      const key = dir[1].toLowerCase();
+      const value = key === 'convention' ? dir[2].toLowerCase() : dir[2];
+      if (key === 'convention' && !Object.hasOwn(PROFILE_CONVENTIONS, value)) {
+        push(errors, lineNo, `convention must be "deviation" or "correction", got "${
+          clip(dir[2])}"`);
+      } else if (directives[key] && directives[key].value !== value) {
+        push(errors, lineNo, `${key} stated twice with different values (line `
+          + `${directives[key].line} and line ${lineNo})`);
+      } else if (!directives[key] && value !== '') directives[key] = { value, line: lineNo };
+      continue;
+    }
     const sens = SENS_RE.exec(t);
     const isComment = COMMENT_RE.test(t);
     const isMeta = !isComment && (QUOTED_LINE_RE.test(t) || (sens && !DATA_START_RE.test(t)));
@@ -333,7 +356,17 @@ function parseDelimited(text, opts) {
   if (errors.length) return fail(errors);
 
   let convention;
-  if (header) {
+  const dc = directives.convention;
+  if (dc) {
+    const stated = header ? conventionFromHeader(header.corrToken) : null;
+    if (stated && stated !== dc.value) {
+      return fail([{ line: dc.line, text: `the convention line says "${dc.value}" but the `
+        + `header "${header.corrToken}" names the microphone's response (deviation)` }]);
+    }
+    convention = { value: dc.value, source: 'file', header: header ? header.corrToken : null,
+      needsChoice: false, text: `stated by the file (line ${dc.line}): `
+        + `${PROFILE_CONVENTIONS[dc.value].label}` };
+  } else if (header) {
     const stated = conventionFromHeader(header.corrToken);
     convention = stated
       ? { value: stated, source: 'header', header: header.corrToken, needsChoice: false,
@@ -347,11 +380,17 @@ function parseDelimited(text, opts) {
       needsChoice: false, text: 'no column header: read as the microphone\'s response, the '
         + `convention of measurement-microphone files (${PROFILE_CONVENTIONS.deviation.label})` };
   }
-  return finish(points, (i) => pointLines[i], warnings, {
-    name: opts.name, source: opts.source,
+  const result = finish(points, (i) => pointLines[i], warnings, {
+    name: directives.name ? directives.name.value : opts.name, source: opts.source,
     notes: [opts.notes, ...notes].filter((n) => typeof n === 'string' && n.trim()).join('\n'),
     importedAt: opts.importedAt,
   }, withCaller(convention, opts));
+  const di = directives.id;
+  if (di && result.ok && result.profile && di.value !== result.profile.id) {
+    result.warnings.push({ line: di.line,
+      text: 'the id stated in the file does not match its points; the id was recomputed' });
+  }
+  return result;
 }
 
 // --- JSON ------------------------------------------------------------------------------------

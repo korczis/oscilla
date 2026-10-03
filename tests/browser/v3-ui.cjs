@@ -54,6 +54,33 @@
 //                           (A, B equivalent: A − B shown; A, C: refused with the reason),
 //                           export .oscilla.json (re-validates), CSV, re-import refused (no
 //                           overwrite), explicit delete with confirmation, inspection in MEASURE
+//   experiments-ir          (V356) compare A, B (equivalent): the IR overlay is drawn (two curves,
+//                           -5..200 ms re each direct peak, original scale, no IR A − B) beside
+//                           A − B; A, C (not equivalent): refused with the reason, no chart
+//   calibration-export      (V315) Export CSV and Export JSON of the loaded profile download
+//                           deterministic files named after the profile and its id, and both
+//                           re-import (same id, name, convention); a correction profile (chosen
+//                           in the dialog) re-imports from its CSV without the question
+//   input-device            (V322) the input choice is disabled in TEST CONTEXT and starts at the
+//                           default; (chromium, firefox on http, fake microphone) the setup check
+//                           opens the default (no deviceId), the inputs are listed, a chosen
+//                           input reaches getUserMedia as deviceId { exact } and the input
+//                           record, a chosen input that disappears stays selected, is marked
+//                           "not available", announced (assertive) and refused by the setup
+//                           check with the readable reason; back to the default; 0 nodes/tracks
+//   recipe-link             (V355) a recipe in the hash (next to an instrument link) fills the
+//                           setup and opens MEASURE without starting anything; a bad recipe is
+//                           refused whole with the reason; Copy recipe link writes the hash and
+//                           the clipboard or the fallback dialog; a new page opened on the link
+//                           loads it the same way
+//   persistence             (V353) per browser and origin, in a fresh context: which store opens
+//                           (IndexedDB or the memory fallback) and whether an experiment survives
+//                           a reload (docs/v3/measurement-guide.md records it); with IndexedDB,
+//                           a QuotaExceededError on the experiment put fails the save with the
+//                           reason, keeps the result (COMPLETE, shown, Save enabled) and a save
+//                           after space is freed succeeds; with indexedDB.open throwing, the
+//                           Playground plays and stops and MEASURE measures and saves in memory,
+//                           with no page error
 //   no-spl                  no "SPL" in any rendered text or label of either workspace without a
 //                           valid level calibration
 //   light-theme             warning chips use --osc-text on --osc-warn-bg (orange is icon only)
@@ -973,6 +1000,442 @@ function defineChecks(fixtures) {
     return { ...v, ...res };
   });
 
+  def('experiments-ir', async ({ page }) => {
+    await H.workspace(page, 'experiments');
+    for (const k of ['a', 'b', 'c']) {
+      await page.evaluate((t) => window.OSCILLA.app.experimentsImportText(t), fixtures[k].json);
+    }
+    const compare = (ids) => page.evaluate(async (list) => {
+      const c = await window.OSCILLA.app.experimentsCompare(list);
+      return { ok: c.ir.ok, reason: c.ir.reason || null, labels: c.ir.labels || null };
+    }, ids);
+    const dom = (want) => H.until(() => page.evaluate(() => {
+      const host = document.querySelector('#osc-exp-chart-ir');
+      const v = window.OSCILLA.experiments.irView;
+      return { text: document.querySelector('[data-osc="exp.ir"]').textContent,
+        axis: document.querySelector('[data-osc="exp.irAxis"]').textContent,
+        shown: host.offsetParent !== null, chart: !!host.querySelector('.uplot'),
+        series: v ? v.series.length : 0, x: v ? [v.axes.x.range[0], v.axes.x.range[1]] : null,
+        delta: document.querySelector('[data-osc="exp.delta"]').textContent };
+    }), want, 5000);
+    const res = {};
+    res.ab = { ...(await compare(['fixture-a', 'fixture-b'])),
+      ...(await dom((d) => /^Impulse responses A, B overlaid/.test(d.text) && d.chart
+        && d.shown && d.series === 2)) };
+    res.ac = { ...(await compare(['fixture-a', 'fixture-c'])),
+      ...(await dom((d) => /^IR overlay not shown/.test(d.text) && !d.shown)) };
+    await page.evaluate(() => { window.OSCILLA.app.alerts = []; });
+    return { ...res, ...H.verdict({
+      abOverlay: res.ab.ok && res.ab.shown && res.ab.chart && res.ab.series === 2
+        && res.ab.x[0] === -5 && res.ab.x[1] === 200,
+      abLabels: /time re each direct peak/.test(res.ab.axis) && /original scale/.test(res.ab.text),
+      abNoIrDelta: /not defined for impulse responses/.test(res.ab.text),
+      abDeltaStill: /^A − B over/.test(res.ab.delta),
+      acRefused: !res.ac.ok && !res.ac.shown && res.ac.series === 0
+        && /not shown for non-equivalent experiments/.test(res.ac.text),
+    }) };
+  });
+
+  def('calibration-export', async ({ page }) => {
+    await H.workspace(page, 'measure');
+    const res = {};
+    const download = async (sel) => {
+      const [dl] = await Promise.all([page.waitForEvent('download'), page.click(sel)]);
+      return { name: dl.suggestedFilename(), text: fs.readFileSync(await dl.path(), 'utf8') };
+    };
+    res.loaded = await page.evaluate(() => window.OSCILLA.app.measureImportCalibrationText(
+      'Hz,dB\n20,0.5\n1000,0\n15000,-1.5\n', 'export-mic.csv'));
+    res.id = await page.evaluate(() => window.OSCILLA.app.meas.cal.profile.id);
+    res.buttons = await H.until(() => page.evaluate(() => ['calExportCsv', 'calExportJson']
+      .every((k) => document.querySelector(`[data-osc="measure.${k}"]`).offsetParent !== null)),
+    Boolean, 2000);
+    const csv = await download('[data-osc="measure.calExportCsv"]');
+    const csv2 = await download('[data-osc="measure.calExportCsv"]');
+    const json = await download('[data-osc="measure.calExportJson"]');
+    res.csvName = csv.name;
+    res.jsonName = json.name;
+    res.sameBytes = csv.text === csv2.text && csv.name === csv2.name;
+    // Both files import back through the same UI path: the same profile id and convention.
+    res.back = {};
+    for (const [k, f] of [['csv', csv], ['json', json]]) {
+      res.back[k] = await page.evaluate(([text, name]) => {
+        const a = window.OSCILLA.app;
+        a.measureClearCalibration();
+        const r = a.measureImportCalibrationText(text, name);
+        return { r, id: a.meas.cal.profile && a.meas.cal.profile.id,
+          name: a.meas.cal.profile && a.meas.cal.profile.name,
+          convention: a.meas.cal.profile && a.meas.cal.profile.convention };
+      }, [f.text, f.name]);
+    }
+    // A correction profile (the sign chosen in the dialog) re-imports without the question.
+    res.correction = await page.evaluate(async () => {
+      const a = window.OSCILLA.app;
+      a.measureClearCalibration();
+      const first = a.measureImportCalibrationText('Hz,Gain(dB)\n20,3\n1000,0\n', 'eq.csv');
+      const loaded = a.measureConfirmCalibrationConvention('correction');
+      const id = a.meas.cal.profile.id;
+      const text = a.measureExportCalibration('csv');
+      a.measureClearCalibration();
+      const again = a.measureImportCalibrationText(text, 'eq-copy.csv');
+      return { first, loaded, again, same: a.meas.cal.profile && a.meas.cal.profile.id === id,
+        convention: a.meas.cal.profile && a.meas.cal.profile.convention,
+        dialog: document.getElementById('osc-dlg-cal-convention').open };
+    });
+    await page.evaluate(() => {
+      const a = window.OSCILLA.app;
+      a.measureClearCalibration();
+      a.alerts = [];
+    });
+    res.hidden = await H.until(() => page.evaluate(() => document.querySelector(
+      '[data-osc="measure.calExportCsv"]').offsetParent === null), Boolean, 2000);
+    return { ...res, ...H.verdict({
+      loaded: res.loaded === true && /^[0-9a-f]{64}$/.test(res.id) && res.buttons,
+      names: res.csvName === `export-mic-${res.id.slice(0, 8)}.calibration.csv`
+        && res.jsonName === `export-mic-${res.id.slice(0, 8)}.calibration.json`,
+      deterministic: res.sameBytes,
+      csv: /^# OSCILLA frequency calibration profile/.test(csv.text)
+        && csv.text.includes(`# id: ${res.id}`) && /^frequency_hz,deviation_db$/m.test(csv.text),
+      json: JSON.parse(json.text).id === res.id && JSON.parse(json.text).format
+        === 'oscilla.calibration',
+      roundTrip: ['csv', 'json'].every((k) => res.back[k].r === true && res.back[k].id === res.id
+        && res.back[k].name === 'export-mic' && res.back[k].convention === 'deviation'),
+      correction: res.correction.first === 'needs-choice' && res.correction.loaded === true
+        && res.correction.again === true && res.correction.same
+        && res.correction.convention === 'correction' && !res.correction.dialog,
+      hiddenWithoutProfile: res.hidden,
+    }) };
+  });
+
+  def('input-device', async ({ page, browserName, origin }) => {
+    await H.workspace(page, 'measure');
+    const view = () => page.evaluate(() => {
+      const a = window.OSCILLA.app;
+      const el = document.getElementById('osc-m-input-device');
+      return { ...JSON.parse(JSON.stringify(a.meas.input)), value: el.value,
+        disabled: el.disabled, deviceId: window.OSCILLA.measure.deviceId,
+        msg: document.querySelector('[data-osc="measure.inputMissing"]').offsetParent !== null };
+    });
+    // TEST CONTEXT: no input device; the choice is disabled.
+    await page.evaluate(() => window.OSCILLA.measure.useLoopback());
+    const loop = await view();
+    await page.evaluate(() => window.OSCILLA.measure.useMicrophone());
+    const before = await view();
+    const base = { loopDisabled: loop.disabled && /TEST CONTEXT/.test(loop.status),
+      defaultFirst: before.options[0].value === '' && before.value === '' && !before.disabled
+        // Listed only after a check opened the microphone (earlier checks may have done so).
+        && /Run the setup check to list the inputs|listed by the browser|lists no input/
+          .test(before.status) };
+    if (!FAKE_MIC.has(browserName) || origin !== 'http') {
+      await page.evaluate(() => window.OSCILLA.measure.useLoopback());
+      return { skipped: 'no fake microphone', loop, before, ...H.verdict(base) };
+    }
+    // Record every getUserMedia constraint; let the test hide an input from the list and make
+    // it unopenable (an unplugged device), as the browser would.
+    await page.evaluate(() => {
+      const md = navigator.mediaDevices;
+      const gum = md.getUserMedia.bind(md);
+      const list = md.enumerateDevices.bind(md);
+      window.__oscDev = { calls: [], hide: null, gone: null };
+      md.getUserMedia = async (c) => {
+        window.__oscDev.calls.push(JSON.parse(JSON.stringify(c)));
+        const ex = c && c.audio && c.audio.deviceId && c.audio.deviceId.exact;
+        if (ex && ex === window.__oscDev.gone) {
+          throw Object.assign(new Error('Constraints could not be satisfied.'),
+            { name: 'OverconstrainedError' });
+        }
+        return gum(c);
+      };
+      md.enumerateDevices = async () => (await list())
+        .filter((d) => d.deviceId !== window.__oscDev.hide);
+    });
+    await H.recordLive(page);
+    const calls = () => page.evaluate(() => window.__oscDev.calls.map((c) => (c.audio
+      && c.audio.deviceId ? c.audio.deviceId.exact || null : null)));
+    const check = async () => {
+      await page.click('#osc-measure-primary');
+      return H.waitState(page, ['READY', 'IDLE', 'ERROR', 'INVALID'], 15000)
+        .then(() => page.evaluate(() => window.OSCILLA.measure.state));
+    };
+    const res = { loop, before };
+    res.firstState = await check();
+    res.listed = await H.until(view, (v) => v.options.length >= 2, 3000);
+    const chosen = res.listed.options.find((o) => o.value !== '');
+    if (chosen) {
+      await page.selectOption('#osc-m-input-device', chosen.value);
+      res.afterSelect = await view();
+      res.secondState = await check();
+      res.inputNow = await page.evaluate(() => {
+        const n = window.OSCILLA.measure.inputNow;
+        return n && n.constraints && n.constraints.requested
+          ? n.constraints.requested.deviceId : null;
+      });
+      res.ioDeviceId = await page.evaluate(() => window.OSCILLA.measure.ioDeviceId);
+      // The chosen input disappears: it stays selected, marked, announced; a check refuses it.
+      await page.evaluate((id) => {
+        window.__oscDev.hide = id;
+        window.__oscDev.gone = id;
+        window.OSCILLA.measure.engine.reset();
+        navigator.mediaDevices.dispatchEvent(new Event('devicechange'));
+      }, chosen.value);
+      res.gone = await H.until(view, (v) => v.missing && v.msg, 3000);
+      res.goneState = await check();
+      res.blockers = await page.evaluate(() => {
+        const m = window.OSCILLA.app.meas;
+        return [...(m.flow.blockers || []).map((b) => b.text || String(b)),
+          m.error ? m.error.message : '',
+          ...[...document.querySelectorAll('[data-osc="measure.step"]')].map((s) => s.textContent)]
+          .join(' ');
+      });
+      // Back to the default input: no deviceId again.
+      await page.selectOption('#osc-m-input-device', '');
+      res.defaultState = await check();
+      res.calls = await calls();
+      res.liveLog = await H.live(page);
+    }
+    await page.evaluate(() => {
+      window.__oscDev.hide = null;
+      window.__oscDev.gone = null;
+      if (window.OSCILLA.measure.engine) window.OSCILLA.measure.engine.reset();
+    });
+    res.counts = await H.until(() => H.counts(page), H.zero, 3000);
+    await page.evaluate(() => {
+      window.OSCILLA.measure.useLoopback();
+      window.OSCILLA.app.alerts = [];
+    });
+    const c = res.calls || [];
+    return { ...res, chosen, ...H.verdict({
+      ...base,
+      firstDefault: res.firstState === 'READY' && c[0] === null,
+      listed: !!chosen && !/Run the setup check/.test(res.listed.status),
+      selected: !!chosen && res.afterSelect.value === chosen.value
+        && res.afterSelect.deviceId === chosen.value,
+      exact: res.secondState === 'READY' && c.includes(chosen && chosen.value)
+        && !!res.inputNow && res.inputNow.exact === chosen.value
+        && res.ioDeviceId === chosen.value,
+      goneShown: !!res.gone && res.gone.missing && res.gone.msg && res.gone.value === chosen.value
+        && /no longer available/.test(res.gone.message)
+        && /not available$/.test(res.gone.options.at(-1).label),
+      goneAnnounced: (res.liveLog || []).some((t) => /no longer available/.test(t)),
+      goneRefused: res.goneState !== 'READY'
+        && /selected input device is not available/.test(res.blockers || ''),
+      backToDefault: res.defaultState === 'READY' && c.at(-1) === null,
+      zero: H.zero(res.counts),
+    }) };
+  });
+
+  def('recipe-link', async ({ page, context, baseUrl }) => {
+    await H.workspace(page, 'measure');
+    const res = {};
+    const RECIPE = { f1: 50, f2: 12000, duration: 3, level: 'medium', repeats: 2,
+      aggregation: 'median', noiseCheckS: 1, phase: true };
+    res.param = await page.evaluate((v) => {
+      const a = window.OSCILLA.app;
+      window.OSCILLA.measure.setValues(v);
+      return a.measureRecipeParam();
+    }, RECIPE);
+    const values = () => page.evaluate(() => {
+      const v = window.OSCILLA.app.meas.values;
+      return { f1: v.f1, f2: v.f2, duration: v.duration, level: v.level, repeats: v.repeats,
+        aggregation: v.aggregation, noiseCheckS: v.noiseCheckS, phase: v.phase };
+    });
+    const same = (v) => Object.keys(RECIPE).every((k) => v[k] === RECIPE[k]);
+    // A link opened in this page (hashchange): from Playground, with an instrument state too.
+    await page.evaluate(() => window.OSCILLA.measure.setValues({ f1: 20, f2: 20000, duration: 10,
+      level: 'low', repeats: 3, aggregation: 'mean', noiseCheckS: 5, phase: false }));
+    await H.workspace(page, 'playground');
+    await page.evaluate((p) => { window.location.hash = `v=1&f=440&mr=${p}`; }, res.param);
+    res.applied = await H.until(async () => ({ v: await values(), ws: await page.evaluate(() =>
+      document.querySelector('#osc-app').dataset.mode), freq: await page.evaluate(() =>
+      window.OSCILLA.app.frequency) }), (x) => same(x.v) && x.ws === 'measure', 3000);
+    await sleep(400);
+    res.idle = await page.evaluate(() => ({ state: window.OSCILLA.measure.state,
+      counts: window.OSCILLA.measure.counts(),
+      alerts: window.OSCILLA.app.alerts.map((a) => a.title) }));
+    // A bad link is refused whole: the setup stays as it was and says why.
+    const bad = Buffer.from(JSON.stringify({ v: 1, f1: -1, d: 2 })).toString('base64url');
+    await page.evaluate((p) => { window.location.hash = `mr=${p}`; }, bad);
+    res.refused = await H.until(() => page.evaluate(() => ({
+      errors: window.OSCILLA.app.meas.recipeLinkErrors.slice(),
+      shown: document.querySelector('[data-osc="measure.recipeLinkErrors"]').offsetParent !== null,
+      alerts: window.OSCILLA.app.alerts.map((a) => a.title) })),
+    (x) => x.errors.length > 0 && x.shown, 3000);
+    res.unchanged = same(await values());
+    // Copy: the address bar gets the recipe; the clipboard or the fallback dialog has the URL.
+    await page.evaluate(() => { window.OSCILLA.app.alerts = []; });
+    await page.click('[data-osc="measure.recipeLink"]');
+    res.copy = await H.until(() => page.evaluate(() => ({
+      hash: window.location.hash,
+      dialog: document.getElementById('osc-dlg-recipe-link').open,
+      url: window.OSCILLA.app.meas.recipeLink,
+      field: document.querySelector('[data-osc="measure.recipeLinkUrl"]').value,
+      alerts: window.OSCILLA.app.alerts.map((a) => a.title) })),
+    (x) => x.dialog || x.alerts.includes('Recipe link copied'), 3000);
+    if (res.copy.dialog) await page.click('[data-osc="measure.recipeLinkDone"]');
+    // A link opened in a new page (load): MEASURE opens with the recipe and nothing runs.
+    const p2 = await context.newPage();
+    const errors2 = [];
+    p2.on('pageerror', (e) => errors2.push(e.message));
+    await p2.goto(`${baseUrl.split('#')[0]}#mr=${res.param}`, { waitUntil: 'load' });
+    await p2.waitForSelector('html[data-ready="true"]', { timeout: 15000 });
+    await sleep(300);
+    res.load = await p2.evaluate(() => {
+      const v = window.OSCILLA.app.meas.values;
+      return { ws: document.querySelector('#osc-app').dataset.mode,
+        v: { f1: v.f1, f2: v.f2, duration: v.duration, level: v.level, repeats: v.repeats,
+          aggregation: v.aggregation, noiseCheckS: v.noiseCheckS, phase: v.phase },
+        state: window.OSCILLA.measure.state, counts: window.OSCILLA.measure.counts(),
+        stimulus: document.querySelector('[data-osc="measure.stimulusText"]').textContent };
+    });
+    res.loadErrors = errors2;
+    await p2.close();
+    // Leave the page as the other checks expect it.
+    await page.evaluate(() => {
+      window.history.replaceState(null, '', window.location.href.split('#')[0]);
+      window.OSCILLA.app.measureApplyRecipeHash('');
+      window.OSCILLA.measure.setValues({ f1: 20, f2: 20000, duration: 10, level: 'low',
+        repeats: 3, aggregation: 'mean', noiseCheckS: 5, phase: false });
+      window.OSCILLA.app.meas.recipeLinkErrors = [];
+      window.OSCILLA.app.alerts = [];
+    });
+    return { ...res, ...H.verdict({
+      param: /^[A-Za-z0-9_-]+$/.test(res.param) && res.param.length < 300,
+      applied: same(res.applied.v) && res.applied.ws === 'measure',
+      coexists: res.applied.freq === 440,
+      neverStarts: res.idle.state === 'IDLE' && H.zero(res.idle.counts)
+        && res.idle.alerts.includes('Measurement recipe loaded from the link'),
+      refused: res.refused.errors.some((t) => /Start frequency/.test(t)) && res.refused.shown
+        && res.refused.alerts.includes('Recipe link not applied') && res.unchanged,
+      copied: res.copy.hash.includes(`mr=${res.param}`) && res.copy.url.includes(`mr=${res.param}`)
+        && (res.copy.dialog ? res.copy.field === res.copy.url : true),
+      load: res.load.ws === 'measure' && same(res.load.v) && res.load.state === 'IDLE'
+        && H.zero(res.load.counts) && /50 Hz/.test(res.load.stimulus)
+        && res.loadErrors.length === 0,
+    }) };
+  });
+
+  def('persistence', async ({ browser, browserName, origin, baseUrl }) => {
+    // Per-browser behaviour of the experiment store on this origin, recorded in
+    // docs/v3/measurement-guide.md: a fresh context (no data), an import, a reload.
+    const res = { browser: browserName, origin };
+    const ctx2 = await browser.newContext({ viewport: { width: 1536, height: 1024 } });
+    const p = await ctx2.newPage();
+    const errs = [];
+    p.on('pageerror', (e) => errs.push(e.message));
+    p.on('console', (m) => { if (m.type() === 'error') errs.push(m.text()); });
+    const open = async () => {
+      await p.waitForSelector('html[data-ready="true"]', { timeout: 15000 });
+      await p.mouse.click(5, 300);
+      await H.clean(p);
+      await H.workspace(p, 'experiments');
+      return H.until(() => p.evaluate(() => ({ loaded: window.OSCILLA.app.exps.loaded,
+        kind: window.OSCILLA.app.exps.storeKind, note: window.OSCILLA.app.exps.storeNote,
+        ids: window.OSCILLA.app.exps.rows.map((r) => r.id) })), (x) => x.loaded, 5000);
+    };
+    await p.goto(baseUrl, { waitUntil: 'load' });
+    res.first = await open();
+    res.imported = await p.evaluate((t) => window.OSCILLA.app.experimentsImportText(t),
+      fixtures.a.json);
+    await p.reload({ waitUntil: 'load' });
+    res.reloaded = await open();
+    res.persists = res.reloaded.ids.includes('fixture-a');
+    // Quota exceeded on the real store path: the IndexedDB put of the experiment record throws
+    // QuotaExceededError (as the browser does when the origin is full). The save reports it,
+    // the result stays on screen, and a save after space is freed succeeds.
+    if (res.reloaded.kind === 'indexeddb') {
+      await H.workspace(p, 'measure');
+      await H.loopback(p);
+      res.run = await H.run(p, () => p.evaluate(() => { window.OSCILLA.app.measureStart(); }));
+      await p.evaluate(() => {
+        const orig = IDBObjectStore.prototype.put;
+        window.__oscQuota = { orig, hits: 0 };
+        IDBObjectStore.prototype.put = function quotaPut(...args) {
+          if (this.name === 'experiments') {
+            window.__oscQuota.hits += 1;
+            throw new DOMException('The quota has been exceeded.', 'QuotaExceededError');
+          }
+          return orig.apply(this, args);
+        };
+        window.OSCILLA.app.alerts = [];
+      });
+      await p.click('[data-osc="measure.save"]');
+      res.quota = await H.until(() => p.evaluate(() => {
+        const a = window.OSCILLA.app;
+        return { saving: a.meas.saving, saved: a.meas.saved, hits: window.__oscQuota.hits,
+          alerts: a.alerts.map((x) => `${x.title}: ${x.text || x.message || ''}`),
+          state: window.OSCILLA.measure.state, shown: a.meas.shownKind,
+          saveEnabled: !document.querySelector('[data-osc="measure.save"]').disabled };
+      }), (x) => !x.saving && x.alerts.length > 0, 5000);
+      await p.evaluate(() => {
+        IDBObjectStore.prototype.put = window.__oscQuota.orig;
+        window.OSCILLA.app.alerts = [];
+      });
+      await p.click('[data-osc="measure.save"]');
+      res.afterFree = await H.saved(p) || { saved: true };
+    }
+    res.errors = errs.slice(0, 5);
+    await ctx2.close();
+
+    // The experiment database cannot open at all (indexedDB.open throws, as on file:// or in
+    // private modes of some browsers): the Playground plays and stops, MEASURE measures and
+    // saves in memory and says so, and nothing throws into the page.
+    const ctx3 = await browser.newContext({ viewport: { width: 1536, height: 1024 } });
+    await ctx3.addInitScript(() => {
+      IDBFactory.prototype.open = function refusedOpen() {
+        throw new DOMException('The operation is insecure.', 'SecurityError');
+      };
+    });
+    const q = await ctx3.newPage();
+    const errs3 = [];
+    q.on('pageerror', (e) => errs3.push(e.message));
+    q.on('console', (m) => { if (m.type() === 'error') errs3.push(m.text()); });
+    await q.goto(baseUrl, { waitUntil: 'load' });
+    await q.waitForSelector('html[data-ready="true"]', { timeout: 15000 });
+    await q.mouse.click(5, 300);
+    await H.clean(q);
+    await q.evaluate(() => window.OSCILLA.app.trigger());
+    res.playground = await H.until(() => q.evaluate(() => ({
+      nodes: window.OSCILLA.engine.activeNodeCount, status: window.OSCILLA.app.status })),
+    (x) => x.nodes > 0, 3000);
+    await q.evaluate(() => window.OSCILLA.app.stop());
+    res.playgroundStopped = await H.until(() => q.evaluate(() => window.OSCILLA.engine
+      .activeNodeCount), (n) => n === 0, 3000);
+    await H.workspace(q, 'measure');
+    await H.loopback(q);
+    res.noStoreRun = await H.run(q, () => q.evaluate(() => {
+      window.OSCILLA.measure.setValues({ repeats: 1 });
+      window.OSCILLA.app.measureStart();
+    }));
+    await q.click('[data-osc="measure.save"]');
+    res.noStoreSaved = await H.saved(q);
+    res.noStore = await q.evaluate(() => ({ kind: window.OSCILLA.app.exps.storeKind,
+      persistent: window.OSCILLA.app.exps.persistent, note: window.OSCILLA.app.exps.storeNote,
+      error: window.OSCILLA.app.exps.storeError, saved: window.OSCILLA.app.meas.saved }));
+    await H.workspace(q, 'experiments');
+    res.noStoreRows = await q.evaluate(() => window.OSCILLA.app.exps.rows.length);
+    res.noStoreErrors = errs3.slice(0, 5);
+    await ctx3.close();
+
+    const quotaOk = !res.quota || (res.quota.hits >= 1 && !res.quota.saved
+      && res.quota.alerts.some((t) => /^Experiment not saved: .*browser storage is full/.test(t))
+      && res.quota.state === 'COMPLETE' && res.quota.shown === 'result' && res.quota.saveEnabled
+      && res.afterFree.saved === true);
+    return { ...res, ...H.verdict({
+      firstOpen: res.first.loaded && ['indexeddb', 'memory'].includes(res.first.kind),
+      imported: res.imported === 'fixture-a',
+      // IndexedDB keeps the experiment across a reload; the memory fallback says it does not.
+      reload: res.reloaded.kind === 'indexeddb' ? res.persists
+        : !res.persists && /memory for this page view/.test(res.reloaded.note || ''),
+      quota: quotaOk && (res.reloaded.kind !== 'indexeddb' || !!res.quota),
+      quotaRun: !res.run || res.run.state === 'COMPLETE',
+      cleanPage: res.errors.length === 0,
+      playground: res.playground.nodes > 0 && res.playgroundStopped === 0,
+      measureWithoutStore: res.noStoreRun.state === 'COMPLETE' && res.noStoreSaved === null
+        && res.noStore.saved && res.noStore.kind === 'memory' && res.noStore.persistent === false
+        && /memory for this page view/.test(res.noStore.note || '') && res.noStoreRows === 1,
+      noStoreClean: res.noStoreErrors.length === 0,
+    }) };
+  });
+
   def('no-spl', async ({ page }) => {
     const res = {};
     for (const ws of ['measure', 'experiments']) {
@@ -1036,7 +1499,7 @@ async function runOne(browserName, origin, baseUrl, fixtures) {
     const t0 = Date.now();
     try {
       const v = await Promise.race([
-        fn({ page, context, errors, browserName, origin }),
+        fn({ page, context, errors, browserName, origin, browser, baseUrl }),
         sleep(150000).then(() => ({ ok: false, detail: 'timeout 150 s' })),
       ]);
       results[name] = { ...v, ms: Date.now() - t0 };

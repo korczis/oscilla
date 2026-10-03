@@ -98,6 +98,8 @@
     <symbol id="s-import" viewBox="0 0 24 24"><!-- @icon:file-up --></symbol>
     <symbol id="s-export" viewBox="0 0 24 24"><!-- @icon:file-down --></symbol>
     <symbol id="s-back" viewBox="0 0 24 24"><!-- @icon:arrow-left --></symbol>
+    <symbol id="s-search" viewBox="0 0 24 24"><!-- @icon:search --></symbol>
+    <symbol id="s-wav" viewBox="0 0 24 24"><!-- @icon:file-audio --></symbol>
     <symbol id="w-sine" viewBox="0 0 24 18"><path d="M1.5 9c2.4-8.5 4.8-8.5 7 0s4.6 8.5 7 0 4.7-8.5 7 0"/></symbol>
     <symbol id="w-square" viewBox="0 0 24 18"><path d="M1.5 15.5h3.5v-13h14v13h3.5"/></symbol>
     <symbol id="w-triangle" viewBox="0 0 24 18"><path d="M1.5 15.5l10.5-13 10.5 13"/></symbol>
@@ -1435,6 +1437,19 @@
             <span class="osc-spacer"></span>
             <span class="osc-m-chip" x-text="meas.loopback ? 'TEST CONTEXT loopback' : 'Microphone'"></span>
           </div>
+          <div class="osc-m-field osc-m-inputsel">
+            <label class="osc-label" for="osc-m-input-device">Input device</label>
+            <div class="osc-select"><select id="osc-m-input-device" data-osc="measure.inputDevice"
+              aria-describedby="osc-m-input-status" :disabled="meas.input.disabled || meas.busy"
+              @change="measureSelectInput($event.target.value)">
+              <template x-for="o in meas.input.options" :key="o.value">
+                <option :value="o.value" x-text="o.label" :selected="o.value === meas.input.selected"></option>
+              </template>
+            </select></div>
+            <p class="osc-m-hint" id="osc-m-input-status" data-osc="measure.inputStatus" x-text="meas.input.status"></p>
+            <p class="osc-m-error" role="alert" data-osc="measure.inputMissing" x-show="meas.input.missing"
+              x-text="meas.input.message || ''" style="display: none"></p>
+          </div>
           <dl class="osc-m-rows" data-osc="measure.inputFacts">
             <template x-for="r in meas.inputRows" :key="r.id">
               <div class="osc-metric"><dt x-text="r.label"></dt><dd class="osc-num" x-text="r.text"></dd></div>
@@ -1662,6 +1677,13 @@
             </button>
           </div>
           <div class="osc-m-setup-body" id="osc-m-setup-body" :class="{ 'is-open': meas.setupOpen }">
+            <div class="osc-m-btnrow osc-m-recipelink">
+              <button type="button" class="osc-btn osc-btn-secondary osc-m-small" data-osc="measure.recipeLink"
+                aria-describedby="osc-m-recipelink-note" @click="measureCopyRecipeLink()">Copy recipe link</button>
+              <span class="osc-m-hint" id="osc-m-recipelink-note">Recipe only (sweep, level, runs, timing): no result, calibration or input device. Opening it never starts a measurement.</span>
+            </div>
+            <p class="osc-pp-error" role="status" data-osc="measure.recipeLinkErrors" x-show="meas.recipeLinkErrors.length"
+              x-text="'Recipe link not applied: ' + meas.recipeLinkErrors.join('; ')" style="display: none"></p>
             <template x-for="g in measureExpertGroups" :key="g.id">
               <fieldset class="osc-m-group">
                 <legend x-text="g.label"></legend>
@@ -1707,6 +1729,10 @@
               <div class="osc-m-btnrow">
                 <button type="button" class="osc-btn osc-btn-secondary osc-m-small" data-osc="measure.calImport"
                   :disabled="meas.busy" @click="measureImportCalibrationClick()">Import profile (CSV / JSON)…</button>
+                <button type="button" class="osc-btn osc-btn-secondary osc-m-small" data-osc="measure.calExportCsv"
+                  x-show="meas.cal.profile" @click="measureExportCalibration('csv')">Export CSV</button>
+                <button type="button" class="osc-btn osc-btn-secondary osc-m-small" data-osc="measure.calExportJson"
+                  x-show="meas.cal.profile" @click="measureExportCalibration('json')">Export JSON</button>
                 <button type="button" class="osc-btn osc-btn-secondary osc-m-small" data-osc="measure.calRemove"
                   x-show="meas.cal.profile" :disabled="meas.busy" @click="measureClearCalibration()">Remove profile</button>
                 <button type="button" class="osc-toggle" role="switch" aria-checked="true" data-osc="measure.calUse"
@@ -1892,6 +1918,16 @@
             x-show="exps.compare && exps.compare.delta.ok"></div>
           <p class="osc-m-summary" id="osc-x-sum-delta" data-osc="exp.delta"
             x-text="exps.compare ? (exps.compare.delta.ok ? exps.compare.delta.summary : 'A − B not shown: ' + exps.compare.delta.reason) : ''"></p>
+          <p class="osc-m-axis" data-osc="exp.irAxis"
+            x-text="exps.compare && exps.compare.ir.ok ? 'IR overlay: ' + exps.compare.ir.labels.join(', ') + ' · time re each direct peak (ms) · ' + exps.compare.ir.yLabel : 'IR overlay: not shown'"></p>
+          <div class="osc-chart-host osc-x-chart osc-x-chart--ir" id="osc-exp-chart-ir" role="img"
+            aria-label="Overlay of the compared impulse responses" aria-describedby="osc-x-sum-ir"
+            x-show="exps.compare && exps.compare.ir.ok"></div>
+          <p class="osc-m-summary" id="osc-x-sum-ir" data-osc="exp.ir"
+            x-text="exps.compare ? (exps.compare.ir.ok ? exps.compare.ir.summary + ' ' + exps.compare.ir.irDelta + '.' : 'IR overlay not shown: ' + exps.compare.ir.reason + '.') : ''"></p>
+          <ul class="osc-m-notes osc-m-notes--plain" data-osc="exp.irNotes" x-show="exps.compare && exps.compare.ir.ok" style="display: none">
+            <template x-for="(n, i) in (exps.compare && exps.compare.ir.ok ? exps.compare.ir.notes : [])" :key="i"><li x-text="n"></li></template>
+          </ul>
           <div class="osc-x-cols">
             <dl class="osc-m-rows" aria-label="Common configuration">
               <template x-for="c in (exps.compare ? exps.compare.common : [])" :key="c.field">
@@ -2064,6 +2100,10 @@
               <button type="button" class="osc-icon-btn osc-st-ico" data-osc="studio.export"
                 aria-label="Export project file" title="Export project (.oscilla-studio.json)"
                 @click="studioExport()"><svg aria-hidden="true"><use href="#s-export"/></svg></button>
+              <button type="button" class="osc-icon-btn osc-st-ico" data-osc="studio.renderWav"
+                aria-label="Render WAV" title="Render the Studio offline to a WAV file"
+                aria-haspopup="dialog" :disabled="studio.task.active" @click="studioOpenRender()">
+                <svg aria-hidden="true"><use href="#s-wav"/></svg></button>
               <button type="button" class="osc-icon-btn osc-st-ico" data-osc="studio.import"
                 aria-label="Import project or patch file" title="Import project or patch"
                 @click="studioImportClick()"><svg aria-hidden="true"><use href="#s-import"/></svg></button>
@@ -2074,6 +2114,22 @@
           </div>
           <p class="osc-st-note" data-osc="studio.storeNote" x-show="studio.storeNote" style="display: none"
             x-text="studio.storeNote"></p>
+          <!-- A WAV render or a measurement started from Studio: progress and Abort (V424, V427). -->
+          <div class="osc-st-task" data-osc="studio.task" hidden :hidden="!studio.task.active"
+            role="group" :aria-label="studio.task.label || 'Studio task'">
+            <span class="osc-st-task-label" x-text="studio.task.label"></span>
+            <div class="osc-st-progress" role="progressbar" :aria-label="studio.task.label"
+              aria-valuemin="0" aria-valuemax="100" :aria-valuenow="studio.task.pct ?? 0"
+              :aria-valuetext="studio.task.text">
+              <div class="osc-meter"><div class="osc-meter-fill"
+                :style="'--osc-meter-value: ' + (studio.task.pct ?? 0) + '%'"></div></div>
+            </div>
+            <span class="osc-num osc-st-task-text" data-osc="studio.task.text" x-text="studio.task.text"></span>
+            <button type="button" class="osc-btn osc-btn-secondary" data-osc="studio.task.abort"
+              :hidden="!studio.task.abortable" @click="studioAbortTask()">Abort</button>
+          </div>
+          <p class="osc-st-note" data-osc="studio.measureNote" x-show="studio.measureNote" style="display: none"
+            x-text="studio.measureNote"></p>
           <p class="osc-st-note osc-st-warn" data-osc="studio.warning" x-show="studio.warning" style="display: none"
             x-text="studio.warning"></p>
           <div class="osc-tabs osc-st-subviews" role="tablist" aria-label="Studio view">
@@ -2096,6 +2152,9 @@
             <h3 class="osc-panel-title" id="osc-st-graph-title">Signal graph</h3>
             <span class="osc-spacer"></span>
             <span class="osc-st-counts osc-num" data-osc="studio.counts" x-text="studio.counts"></span>
+            <button type="button" class="osc-icon-btn osc-st-ico" data-osc="studio.find"
+              aria-label="Find node" title="Find node (/)" aria-keyshortcuts="/" @click="studioFind()">
+              <svg aria-hidden="true"><use href="#s-search"/></svg></button>
           </div>
           <div class="osc-st-graphhost" data-osc="studio.graph"></div>
         </section>
@@ -2608,6 +2667,22 @@
     </form>
   </dialog>
 
+  <!-- MEASURE: the recipe link when the clipboard is unavailable (V355, spec §102). -->
+  <dialog class="osc-dialog" id="osc-dlg-recipe-link" data-oscilla-modal aria-labelledby="osc-dlg-recipe-title">
+    <div class="osc-dialog-body">
+      <h2 class="osc-dialog-title" id="osc-dlg-recipe-title">Recipe link</h2>
+      <p>The clipboard is not available here. Copy the link manually; opening it loads this
+        measurement recipe into the setup and never starts a measurement. It carries no result,
+        calibration or input device.</p>
+      <input class="osc-number osc-dialog-input" type="text" readonly :value="meas.recipeLink"
+        data-osc="measure.recipeLinkUrl" aria-label="Recipe link" @focus="$event.target.select()">
+      <div class="osc-dialog-actions">
+        <button type="button" class="osc-btn osc-btn-primary" data-osc="measure.recipeLinkDone"
+          @click="closeDialog('osc-dlg-recipe-link')">Done</button>
+      </div>
+    </div>
+  </dialog>
+
   <!-- EXPERIMENTS: rename and the explicit delete confirmation (spec §225). -->
   <dialog class="osc-dialog" id="osc-dlg-exp-rename" data-oscilla-modal aria-labelledby="osc-dlg-rename-title">
     <form method="dialog" class="osc-dialog-body" @submit.prevent="experimentsRename()">
@@ -2685,6 +2760,32 @@
   </dialog>
   <dialog class="osc-dialog" id="osc-dlg-studio-add" data-oscilla-modal data-osc-studio-dialog></dialog>
   <dialog class="osc-dialog" id="osc-dlg-studio-connect" data-oscilla-modal data-osc-studio-dialog></dialog>
+  <dialog class="osc-dialog" id="osc-dlg-studio-find" data-oscilla-modal data-osc-studio-dialog></dialog>
+  <!-- Render WAV (V427): the Studio offline (src/js/studio/offline.js), never the device output. -->
+  <dialog class="osc-dialog" id="osc-dlg-studio-render" data-oscilla-modal data-osc-studio-dialog
+    aria-labelledby="osc-dlg-st-render-title">
+    <form method="dialog" class="osc-dialog-body" @submit.prevent="studioRenderSubmit()">
+      <h2 class="osc-dialog-title" id="osc-dlg-st-render-title">Render WAV</h2>
+      <p class="osc-muted osc-dialog-note" data-osc="studio.render.note" x-text="studio.renderForm.note"></p>
+      <label class="osc-label" for="osc-st-render-dur">Duration (s)</label>
+      <input class="osc-number osc-dialog-input osc-num" id="osc-st-render-dur" type="text" inputmode="decimal"
+        autocomplete="off" spellcheck="false" data-osc="studio.render.duration" x-model="studio.renderForm.duration"
+        aria-describedby="osc-st-render-err" :aria-invalid="studio.renderForm.error ? 'true' : null">
+      <p class="osc-si-error" id="osc-st-render-err" role="alert" data-osc="studio.render.error"
+        x-show="studio.renderForm.error" style="display: none" x-text="studio.renderForm.error"></p>
+      <p class="osc-dialog-note" data-osc="studio.render.format" x-text="studio.renderForm.format"></p>
+      <ul class="osc-st-render-limits" data-osc="studio.render.limits" x-show="studio.renderForm.limitations.length"
+        style="display: none" aria-label="Limitations">
+        <template x-for="(t, i) in studio.renderForm.limitations" :key="i"><li x-text="t"></li></template>
+      </ul>
+      <div class="osc-dialog-actions">
+        <button type="button" class="osc-btn osc-btn-secondary" data-osc="studio.render.cancel"
+          @click="closeDialog('osc-dlg-studio-render')">Cancel</button>
+        <button type="submit" class="osc-btn osc-btn-primary" data-osc="studio.render.start"
+          :disabled="studio.renderForm.refused">Render</button>
+      </div>
+    </form>
+  </dialog>
   <dialog class="osc-dialog osc-dialog--wide" id="osc-dlg-studio-library" data-oscilla-modal
     data-osc-studio-dialog></dialog>
   <dialog class="osc-dialog" id="osc-dlg-studio-patch" data-oscilla-modal data-osc-studio-dialog></dialog>

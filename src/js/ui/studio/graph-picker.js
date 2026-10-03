@@ -9,12 +9,14 @@
 //
 //   createQuickAdd(dialog, svc) -> { open({ at, from }), close(), isOpen() }
 //   createConnectDialog(dialog, svc) -> { open(nodeId), close(), isOpen() }
+//   createFindNode(dialog, svc) -> { open(), close(), isOpen() }      graph search (§251)
 //   svc: { store, registry, editor, announce, openModal(id), closeModal(id) }
 
 import { NODE_REGISTRY } from '../../studio/registry.js';
 import { announceAction } from '../../studio/a11y.js';
 import { connectableTypes, connectionTargets, nodeOutputs } from './graph-view.js';
 import { libraryView } from './library-panel.js';
+import { searchAnnouncement, searchNodes } from './graph-search.js';
 import { h, replaceChildren } from './graph-dom.js';
 import { rovingKeydown } from '../app.js';
 
@@ -185,6 +187,91 @@ export function createConnectDialog(dialog, svc) {
         first.focus();
       }, 0);
       return true;
+    },
+    close,
+    isOpen: () => dialog.open,
+  };
+}
+
+/**
+ * Find node (spec §250-§251; plan V428): `/` or the graph's Find button. A search field over the
+ * nodes of the current graph (graph-search.js: name, type, aliases, category) and the list of
+ * matches; Enter or a click selects the node, frames it (editor.frameSelection) and focuses it
+ * (editor.focusNode). Escape or Cancel returns focus to where the search was opened from.
+ *   createFindNode(dialog, svc) -> { open(), close(), isOpen() }
+ *   svc as the other pickers, plus reveal(nodeId): show the graph and frame / focus the node
+ */
+export function createFindNode(dialog, svc) {
+  const registry = svc.registry || NODE_REGISTRY;
+  const title = h('h2', { class: 'osc-dialog-title', id: 'osc-dlg-studio-find-title',
+    text: 'Find node' });
+  const input = h('input', { class: 'osc-number osc-dialog-input', type: 'search',
+    autocomplete: 'off', spellcheck: 'false', 'aria-label': 'Find a node by name or type',
+    placeholder: 'Name or type: filter, lfo 1, master…', 'data-osc': 'studio.find.search',
+    'aria-describedby': 'osc-dlg-studio-find-status' });
+  const status = h('p', { class: 'osc-muted osc-dialog-note', id: 'osc-dlg-studio-find-status',
+    role: 'status', 'aria-live': 'polite', 'data-osc': 'studio.find.status' });
+  const list = h('div', { class: 'osc-sp-list', 'data-osc': 'studio.find.list' });
+  const cancel = h('button', { type: 'button', class: 'osc-btn osc-btn-secondary',
+    'data-osc': 'studio.find.cancel', text: 'Cancel' });
+  replaceChildren(dialog, h('div', { class: 'osc-dialog-body' }, [title, input, status, list,
+    h('div', { class: 'osc-dialog-actions' }, [cancel])]));
+  dialog.setAttribute('aria-labelledby', 'osc-dlg-studio-find-title');
+  let opener = null;
+  let chosen = false;
+
+  const close = () => svc.closeModal(dialog.id);
+  cancel.addEventListener('click', close);
+  dialog.addEventListener('close', () => {
+    if (chosen || !opener || !opener.isConnected) return;
+    const el = opener;
+    setTimeout(() => el.focus({ preventScroll: true }), 0);
+  });
+
+  function choose(id) {
+    chosen = true;
+    close();
+    svc.reveal(id);
+  }
+
+  function render() {
+    const r = searchNodes(svc.store.getModel(), input.value, { registry });
+    replaceChildren(list, r.items.length ? h('ul', { class: 'osc-sp-items' }, r.items.map((it) =>
+      h('li', {}, [h('button', { type: 'button', class: 'osc-sl-item', 'data-node': it.id,
+        'data-osc': 'studio.find.item', onClick: () => choose(it.id) }, [
+        h('span', { class: 'osc-sl-name', text: it.name }),
+        h('span', { class: 'osc-sl-what', text: `${it.typeLabel} · ${it.categoryLabel}` }),
+      ])]))) : h('p', { class: 'osc-sl-empty', text: 'No node matches.' }));
+    status.textContent = searchAnnouncement(r);
+    return r;
+  }
+
+  input.addEventListener('input', render);
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      const r = render();
+      if (r.items.length) choose(r.items[0].id);
+      else svc.announce(searchAnnouncement(r), { assertive: true });
+    } else if (e.key === 'Escape') {
+      // A search field would only clear itself: Escape closes the search, and nothing else
+      // (the Studio and the instrument never see it, so no audio stops).
+      e.preventDefault();
+      e.stopPropagation();
+      close();
+    } else listKeys(e, list, input);
+  });
+  list.addEventListener('keydown', (e) => listKeys(e, list, input));
+
+  return {
+    open() {
+      opener = document.activeElement instanceof HTMLElement
+        && document.activeElement !== document.body ? document.activeElement : null;
+      chosen = false;
+      input.value = '';
+      render();
+      svc.openModal(dialog.id);
+      setTimeout(() => input.focus(), 0);
     },
     close,
     isOpen: () => dialog.open,

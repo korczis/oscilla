@@ -13,6 +13,10 @@
 //   status bar     reads "OSCILLA v<version>"
 //   panels         every core panel is visible
 //   hold           one real pointer press on HOLD produces output, release leaves 0 nodes
+//   studio         STUDIO from the navigation; the Subtractive Synth opened from the template
+//                  gallery renders 6 nodes and 5 cables; PLAY sounds, STOP leaves 0 engine,
+//                  source and Studio runtime nodes (V3.1 public Studio smoke, plan V433)
+// --url also takes a file:// URL of dist/index.html (a local dry run of the same checks).
 // Firefox on a runner without a sound server needs the PulseAudio null sink (see ci.yml).
 // Exit code 1 when any check fails in any browser.
 'use strict';
@@ -65,7 +69,9 @@ async function runOne(name) {
       labErrors: window.OSCILLA && window.OSCILLA.labErrors
         ? Object.keys(window.OSCILLA.labErrors) : [],
     }));
-    check('boot', res && res.ok() && ready && boot.osc && !boot.labErrors.length,
+    // Firefox returns no response for a file:// navigation (a local dry run).
+    const loaded = res ? res.ok() : URL_.startsWith('file:');
+    check('boot', loaded && ready && boot.osc && !boot.labErrors.length,
       `http ${res && res.status()}, ready ${ready}, lab errors ${boot.labErrors.join(',') || 'none'}`);
 
     const prov = await page.evaluate(() => {
@@ -130,6 +136,43 @@ async function runOne(name) {
     check('HOLD press sounds, release leaves 0 nodes', playing.peak > 0.01 && playing.nodes > 0
       && nodes === 0, `peak ${playing.peak.toFixed(3)}, nodes while held ${playing.nodes}, `
       + `after ${nodes}, context ${playing.state}`);
+
+    // STUDIO (V3.1, plan V433 §259): opened from the navigation, a template opened from the
+    // gallery renders its graph, PLAY sounds through the Studio runtime, STOP leaves 0 nodes.
+    await page.click('[data-osc="nav.studio"]');
+    await page.waitForFunction(() => document.querySelector('#osc-app').dataset.mode === 'studio',
+      null, { timeout: 5000 });
+    await page.click('[data-osc="studio.templates"]');
+    await page.click('[data-osc="studio.template.open"][data-template="subtractive-synth"]');
+    const graph = await until(() => page.evaluate(() => ({
+      nodes: document.querySelectorAll('#osc-view-studio .osc-sg-node').length,
+      cables: document.querySelectorAll('#osc-view-studio .osc-sg-edge-line').length,
+      title: (document.querySelector('[data-osc="studio.title"]') || {}).textContent || '',
+      dialog: !!document.querySelector('dialog[open]') })),
+    (v) => v.nodes === 6 && !v.dialog, 5000);
+    check('STUDIO opens; the Subtractive Synth template renders 6 nodes, 5 cables',
+      graph.nodes === 6 && graph.cables === 5 && graph.title === 'Subtractive Synth',
+      `${graph.nodes} nodes, ${graph.cables} cables, "${graph.title}"`);
+    await page.click('[data-osc="studio.play"]');
+    const sounding = await until(() => page.evaluate(() => {
+      const e = window.OSCILLA.engine;
+      let pk = 0;
+      if (e.analyser) {
+        const d = new Float32Array(e.analyser.fftSize);
+        e.analyser.getFloatTimeDomainData(d);
+        for (let i = 0; i < d.length; i++) pk = Math.max(pk, Math.abs(d[i]));
+      }
+      return { peak: pk, ...window.OSCILLA.studio.counts() };
+    }), (v) => v.playing && v.runtimeNodes > 0 && v.peak > 0.005, 3000);
+    await page.click('[data-osc="studio.stop"]');
+    const released = await until(() => page.evaluate(() => window.OSCILLA.studio.counts()),
+      (c) => !c.playing && c.engineNodes === 0 && c.engineSources === 0 && c.runtimeNodes === 0,
+      3000);
+    check('Studio PLAY sounds, STOP leaves 0 nodes', sounding.playing && sounding.peak > 0.005
+      && released.engineNodes === 0 && released.engineSources === 0 && released.runtimeNodes === 0,
+      `peak ${sounding.peak.toFixed(3)}, runtime nodes while playing ${sounding.runtimeNodes}; `
+      + `after: engine ${released.engineNodes}, sources ${released.engineSources}, runtime `
+      + `${released.runtimeNodes}`);
 
     check('no console errors', errors.length === 0, errors.slice(0, 5).join(' | ') || 'none');
   } catch (e) {

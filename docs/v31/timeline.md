@@ -346,7 +346,7 @@ What plays where:
 | pattern clip on an Oscillator | the oscillator is **pattern-played**: its free-running carrier is held at `ROUTE_FLOOR` (its `level` AudioParam is owned by the transport; built in this transaction → set at once, already sounding → 20 ms ramp) and the voices (the oscillator's waveform, `clipSequence`) play into a pattern bus (gain = the oscillator's level + `runtime.baseOffset(id, 'level')`, the base the runtime would give the carrier) connected to every AUDIO route leaving the oscillator. They pass its routes, crossfades included, and everything downstream (OSC → ADSR → FILTER → MASTER in the Basic Synth). A level change glides the bus; a lane on the oscillator's level drives the bus (offsets added). **Modulation into its `level`** reaches the voices: every active CONTROL edge into `level` is re-routed from the carrier's level AudioParam onto the pattern bus gain — the edge's depth gain feeds a path gain into the bus (1) and one into the carrier's level (0). Claiming an oscillator that already sounds ramps the carrier path 1 → 0 together with the carrier's own 20 ms fade, releasing it ramps it 0 → 1 with the carrier's fade-in (click-free both ways); edges built during playback are silent when they are re-routed. Depth, polarity and offset edits keep acting on the edge (its gain, the bus base) |
 | gate event clip on an Envelope | `handle.gate(startTime, duration)`; an envelope the timeline gates is closed at PLAY (`release`) and opened again when no gate clip targets it any more |
 | automation lane | `applyAutomation(handle.modTarget(param, 'linear').param, events)`; the parameter is owned (`runtime.setOwnedParams`), so the runtime's base glide and live updates skip it (the adapters' explicit `owned` argument, `docs/v31/compiler.md` "Owned parameters"); `runtime.baseOffset` (linear modulation offsets) is added to the scheduled values (none in the templates: exact events) |
-| measurement clip | data only: `onMeasurement({ type: 'schedule', key, clipId, action, target, trackId, pass, position, startTime, endTime, duration, truncated })`, then `cancel` / `release` / `retime` / `stop` events; the V3 measurement engine integration is a later UI step |
+| measurement clip | data: `onMeasurement({ type: 'schedule', key, clipId, action, target, trackId, pass, position, startTime, endTime, duration, truncated })`, then `cancel` / `release` / `retime` / `stop` events. The Studio workspace supplies the hook (`studio/measurement-run.js`, see "Measurement clips" below) |
 | anything else | not played; listed in `debugInfo().unplayed` with its reason (`TRANSPORT_TEXT`): an event clip on a source, a `trigger` event clip, a target that is not ready |
 
 Edits during playback apply `scheduler.edit`'s plan as `EDIT_POLICY` says: `cancel` disposes the
@@ -378,6 +378,43 @@ transport's `clipPlayReason`, so the plan lists exactly what the transport would
 Basic Synth / Subtractive Synth lists nothing). `tests/unit/v31-studio-parity.test.mjs` compares
 the complete scheduled Web Audio trace of the Subtractive Synth, live and offline, at exact
 times.
+
+### Measurement clips (§106-§110; plan V424, V425)
+
+`src/js/studio/measurement-run.js` `createStudioMeasurementRun` is the transport's
+`onMeasurement` in the Studio workspace. It orchestrates the V3 measurement layer and never
+duplicates it:
+
+- **One pass is one measurement.** The first `schedule` of a pass derives the recipe from the
+  model (`provenance.js recipeFromStudio` at the running context's sample rate: the stimulus
+  from the Sweep wired to a Transfer Analyzer REFERENCE, pre-roll / tail / noise-check from
+  their clips) and arms the hand-off at that clip's `startTime` on the audio clock. The rest of
+  the pass joins it; nothing is measured twice. A topology that cannot be measured (no
+  Transfer Analyzer, no logarithmic Sweep reference) is reported with its reason and the pass
+  plays on.
+- **Hand-off.** A hand-off due within `HANDOFF_NOW_S` (50 ms, i.e. a clip at the start) runs in a
+  microtask, before the Studio's first scheduled sound (one scheduling lead ahead) is heard;
+  a later one is a bookkeeping timer, never audio timing. The Studio releases the output first
+  (`transport.stop({ fast: true })`, 0 nodes), then the MEASURE workspace's engine runs the
+  recipe (`measure.js measureRunRecipe`): the same MeasurementEngine state machine (PREFLIGHT,
+  NOISE_CHECK, READY, ARMED, MEASURING, ANALYZING, COMPLETE), capture io (microphone, or the
+  TEST CONTEXT loopback), calibration, abort paths and output exclusivity as a measurement
+  started in MEASURE. Its own stimulus is the very samples the Sweep node renders
+  (`renderStimulus` of the same spec).
+- **Result.** A COMPLETE result is saved as MEASURE saves one (`experimentFromResult`), named
+  after the Studio unless a name was typed in MEASURE, with `withStudioProvenance(experiment,
+  model)`: the block records the model that ran (schema version, `studioHash`, execution
+  state), beside the recipe, which stays authoritative (ADR 0019, `configHash` unchanged). The
+  result is shown in MEASURE as well.
+- **Stop and abort.** A `stop` or the `cancel` of the pass's clips before the hand-off disarms
+  it; the hand-off's own STOP is ignored. During the measurement, STOP, Escape, page hide and
+  leaving the workspace abort it like any measurement; Studio PLAY is refused while it owns the
+  output. The workspace's task strip shows MEASURE's state and progress with Abort.
+
+Tests: `tests/unit/v31-studio-gaps.test.mjs` (hand-off on the audio clock, refusals, a real
+MeasurementEngine on a synthetic io, the saved block verifying) and
+`tests/browser/v31-studio-workflows.cjs` (`measure-from-studio`, on the loopback in three
+browsers).
 
 Known limitations: `baseOffset` is read when events are scheduled, so a changed edge offset
 reaches the lane within one look-ahead (1 s); a lane on an Oscillator's `detune` owns the

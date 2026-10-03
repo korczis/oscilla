@@ -50,7 +50,9 @@
 // Input device ids (spec §88): normalizeInput() stores input.device.id hashed
 // (calibration/device-id.js) and drops the duplicate constraints.applied.deviceId, so a stored
 // or exported experiment never carries the raw identifier, once or twice; sanitizeForExport()
-// applies the same rule to a record that predates it.
+// applies the same rule to a record that predates it. An input the user CHOSE in MEASURE (plan
+// V322) is recorded as constraints.requested.deviceId { exact: <hashed id> }; the default input
+// records no requested deviceId, so its experiments keep their earlier form and hashes.
 //
 //   createRecipe(spec) -> Recipe                      (throws RangeError on an invalid recipe)
 //   createExperiment({ recipe, build, now, id, name, sampleRate, input, calibration,
@@ -439,9 +441,43 @@ function withoutDeviceId(c) {
 }
 
 /**
+ * The stored form of a requested deviceId constraint (plan V322): the device the user CHOSE,
+ * hashed like input.device.id (calibration/device-id.js) — '<id>' or { exact|ideal: '<id>' }
+ * keep their shape with every id hashed; anything else (null, the default input) is dropped.
+ * Returns undefined when nothing is to be stored.
+ */
+export function hashedDeviceConstraint(v) {
+  const h = (x) => (typeof x === 'string' && x ? hashDeviceId(x.slice(0, 4096)) : null);
+  if (typeof v === 'string') return h(v) ?? undefined;
+  if (!v || typeof v !== 'object' || Array.isArray(v)) return undefined;
+  const out = {};
+  for (const k of ['exact', 'ideal']) {
+    const x = h(v[k]);
+    if (x) out[k] = x;
+  }
+  return Object.keys(out).length ? out : undefined;
+}
+
+const isHashedConstraint = (v) => (typeof v === 'string' ? isHashedDeviceId(v)
+  : !!v && typeof v === 'object' && !Array.isArray(v) && Object.keys(v).length > 0
+    && Object.entries(v).every(([k, x]) => ['exact', 'ideal'].includes(k)
+      && isHashedDeviceId(x)));
+
+/** requested constraints: a chosen deviceId kept hashed (hashedDeviceConstraint), else none. */
+function requestedWithHashedDevice(c) {
+  const out = withoutDeviceId(c);
+  if (out && typeof out === 'object' && c && typeof c === 'object') {
+    const d = hashedDeviceConstraint(c.deviceId);
+    if (d !== undefined) out.deviceId = d;
+  }
+  return out;
+}
+
+/**
  * input: { device: { label, id }, constraints: { requested, applied } } — '' labels -> null;
  * device.id hashed (calibration/device-id.js, §88; the applied deviceId if device.id is
- * missing), constraints without any raw deviceId.
+ * missing), constraints without any raw deviceId: applied.deviceId (a duplicate of device.id)
+ * is dropped, a requested deviceId (the input the user chose, V322) is kept hashed.
  */
 export function normalizeInput(input) {
   const i = input && typeof input === 'object' ? input : {};
@@ -454,7 +490,8 @@ export function normalizeInput(input) {
       label: strOrNull(d.label, LIMITS.labelChars),
       id: rawId ? hashDeviceId(rawId) : null,
     },
-    constraints: { requested: withoutDeviceId(k.requested), applied: withoutDeviceId(k.applied) },
+    constraints: { requested: requestedWithHashedDevice(k.requested),
+      applied: withoutDeviceId(k.applied) },
   };
 }
 
@@ -471,15 +508,17 @@ export function sanitizeForExport(e) {
   const k = input.constraints || {};
   const raw = (c) => !!c && typeof c === 'object'
     && Object.prototype.hasOwnProperty.call(c, 'deviceId');
-  const clean = (id === null || id === undefined || isHashedDeviceId(id)) && !raw(k.requested)
+  const rawRequested = raw(k.requested) && !isHashedConstraint(k.requested.deviceId);
+  const clean = (id === null || id === undefined || isHashedDeviceId(id)) && !rawRequested
     && !raw(k.applied);
   if (clean) return { experiment: e, changed: false };
   return {
     experiment: { ...e, input: {
       device: { label: input.device ? input.device.label ?? null : null,
         id: typeof id === 'string' && id ? hashDeviceId(id) : null },
-      constraints: { requested: k.requested == null ? null : withoutDeviceId(k.requested),
-        applied: k.applied == null ? null : withoutDeviceId(k.applied) },
+      constraints: { requested: k.requested == null ? null
+        : requestedWithHashedDevice(k.requested),
+      applied: k.applied == null ? null : withoutDeviceId(k.applied) },
     } },
     changed: true,
   };

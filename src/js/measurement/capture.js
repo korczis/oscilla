@@ -943,10 +943,33 @@ async function queryMicPermission(env) {
 // ------------------------------------------------------------------------------- microphone
 
 /**
+ * The readable reason when a CHOSEN input device cannot be opened (plan V322): getUserMedia
+ * with deviceId { exact } rejects with OverconstrainedError or NotFoundError when that device
+ * has disappeared. The default input (no deviceId) keeps the browser's own error mapping.
+ */
+export const INPUT_DEVICE_UNAVAILABLE_TEXT = 'The selected input device is not available '
+  + '(unplugged, disabled or no longer offered by the browser). Choose another input or the '
+  + 'default input and check the setup again.';
+const DEVICE_GONE_ERRORS = new Set(['OverconstrainedError', 'NotFoundError',
+  'DevicesNotFoundError', 'ConstraintNotSatisfiedError']);
+
+/** A getUserMedia rejection for `deviceId` as the error the io throws (see above). */
+export function inputOpenError(err, deviceId) {
+  if (deviceId && err && DEVICE_GONE_ERRORS.has(err.name)) {
+    return new MeasurementError('NO_INPUT', INPUT_DEVICE_UNAVAILABLE_TEXT,
+      { cause: err, detail: { reason: 'device-unavailable' } });
+  }
+  return err;
+}
+
+/**
  * createCaptureIo({ engine, env, deviceId, mode, abortOnHidden }) → io (engine.js contract)
  *   engine         the application's AudioEngine (its context, master chain and accounting)
  *   env            window-like object (default window)
- *   deviceId       optional input device (getUserMedia deviceId: { exact })
+ *   deviceId       optional input device (getUserMedia deviceId: { exact }); null = the
+ *                  browser's default input. A chosen device that cannot be opened rejects with
+ *                  NO_INPUT and INPUT_DEVICE_UNAVAILABLE_TEXT. The raw id reaches the result's
+ *                  constraints.requested; experiments store it hashed (schema.js normalizeInput)
  *   mode           'auto' (AudioWorklet, else ScriptProcessor) | 'worklet' | 'scriptprocessor'
  *   abortOnHidden  abort a running capture when the document becomes hidden (default true)
  * Call engine.init() inside the user gesture that starts the measurement (autoplay policy);
@@ -960,7 +983,12 @@ export function createCaptureIo({ engine, env = defaultEnv(), deviceId = null, m
     if (!hasMicrophoneApi(nav)) throw new MeasurementError('NO_INPUT', MIC_UNAVAILABLE_TEXT);
     const audio = { ...REQUESTED_AUDIO_CONSTRAINTS };
     if (deviceId) audio.deviceId = { exact: deviceId };
-    const stream = await nav.mediaDevices.getUserMedia({ audio });
+    let stream;
+    try {
+      stream = await nav.mediaDevices.getUserMedia({ audio });
+    } catch (e) {
+      throw inputOpenError(e, deviceId);
+    }
     try {
       const track = stream.getAudioTracks()[0];
       if (!track) throw new MeasurementError('NO_INPUT');

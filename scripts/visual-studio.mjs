@@ -14,6 +14,8 @@
 //            editor and is not part of this reference
 //   compact  1536x1024, the compact Studio panel of the Playground
 //   phone    390x844, the GRAPH subview
+//   phone-timeline  390x844, the TIMELINE subview (tracks, clips, the cutoff automation lane;
+//            playhead at 0, nothing playing)
 // target: 'dist' (default) -> dist/index.html; any other path or http(s) URL as is.
 // Fails closed like scripts/visual-measure.mjs: a missing reference for this environment
 // (<platform>-<arch>), a page error, a different Chromium build or more than MAX_MISMATCH_PCT
@@ -41,6 +43,7 @@ const VIEWS = [
   { id: 'desktop', width: 1536, height: 1024 },
   { id: 'compact', width: 1536, height: 1024 },
   { id: 'phone', width: 390, height: 844 },
+  { id: 'phone-timeline', width: 390, height: 844 },
 ];
 
 const args = process.argv.slice(2);
@@ -86,6 +89,11 @@ async function capture(browser, view) {
     s.store.dispatch({ type: 'SELECTION_CHANGE', selection: { nodes: ['filter-1'] } });
   });
   await frames(page);
+  if (view.id === 'phone-timeline') {
+    await page.evaluate(() => window.OSCILLA.app.studioSetSubview('timeline'));
+    await frames(page);
+    await frames(page);
+  }
   if (view.id === 'compact') {
     await page.evaluate(() => window.OSCILLA.app.setWorkspace('playground'));
     await frames(page);

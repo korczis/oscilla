@@ -48,8 +48,9 @@
 //                                lane's parameter owned by the transport (runtime.setOwnedParams:
 //                                the runtime does not glide it); linear modulation offsets are
 //                                added (runtime.baseOffset)
-//   measurement clip             data only: onMeasurement({ type: 'schedule', ... }); the V3
-//                                measurement engine integration is a later UI step
+//   measurement clip             data: onMeasurement({ type: 'schedule', ... }); the Studio
+//                                workspace's hook (measurement-run.js) runs the pass through
+//                                the MEASURE MeasurementEngine (docs/v31/timeline.md)
 // Anything else (an event clip on a source, a trigger event, a node that is not ready) is not
 // played and listed with its reason in debugInfo().unplayed.
 //

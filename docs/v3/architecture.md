@@ -187,8 +187,10 @@ src/js/measurement/   algorithms.js  state-machine.js  stimulus.js  spectrum.js
                       analysis-task.js  quality.js  format.js  engine.js (orchestration; no DOM)
 src/js/measurement/views/   common.js  measure-flow.js  quality-bar.js  response-chart.js
                       ir-chart.js  rta-chart.js  experiment-summary.js  compare-view.js
-                      announcements.js
-src/js/calibration/   profile.js  parse.js  interpolate.js  level.js  sha256.js
+                      announcements.js  input-devices.js
+src/js/calibration/   profile.js  parse.js  export.js  interpolate.js  level.js  sha256.js
+                      device-id.js  reference.js
+src/js/core/          url-state-measure.js (the MEASURE recipe in the URL hash)
 src/js/experiments/   schema.js  migrate.js  validate.js  hash.js  csv.js  store.js  compare.js
                       canonical-json.js  encode.js
 src/js/ui/            measure.js  measure-experiment.js  experiments.js

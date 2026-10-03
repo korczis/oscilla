@@ -16,6 +16,15 @@
 // the frequency-corrected magnitude when the experiment's profile is loaded (same id), and the
 // phase when the transfer has one. Imports refuse a file larger than the limit before reading
 // it (m6).
+//
+// Compare (V356): the response overlay, A − B and the IR overlay (compare-view.js; only for an
+// equivalent set, ms re each direct peak, original scale; no A − B of impulse responses).
+//
+// Independence (§227, V353): the store opens lazily, on the first Experiments view or save, and
+// reading the IndexedDB factory never throws into the app (pageIndexedDb): a store that cannot
+// open falls back to memory and says so, and the Playground, the instrument and Studio never
+// wait for it. A failed save (quota, tests/browser/v3-ui.cjs `persistence`) reports the reason
+// and keeps the result on screen, to be saved again once space is freed.
 
 import { KNOWN_ALGORITHM_IDS } from '../measurement/algorithms.js';
 import { openExperimentStoreOrMemory } from '../experiments/store.js';
@@ -32,7 +41,7 @@ import { applyFrequencyCorrection } from '../calibration/interpolate.js';
 import { experimentSummary, experimentListRows } from '../measurement/views/experiment-summary.js';
 import { buildCompareView } from '../measurement/views/compare-view.js';
 import { buildResponseView } from '../measurement/views/response-chart.js';
-import { createResponseChart } from '../charts/measure-charts.js';
+import { createResponseChart, createIrChart } from '../charts/measure-charts.js';
 import { downloadBlob, readFileText } from './exporters.js';
 import { experimentTestContext } from './measure-experiment.js';
 
@@ -41,6 +50,28 @@ export const STORE_FALLBACK_TEXT = 'Experiments are kept in memory for this page
   + `${EXPERIMENT_FILE_EXTENSION} to keep it.`;
 
 const plain = (v) => (v == null ? null : JSON.parse(JSON.stringify(v)));
+
+/**
+ * The page's IndexedDB factory, or null where reading it throws (a SecurityError in some
+ * browsers on file:// and in private modes): the store then falls back to memory (§227), and
+ * nothing outside the Experiments/Measure save path ever touches the store.
+ */
+export function pageIndexedDb(scope = globalThis) {
+  try {
+    const idb = scope.indexedDB;
+    return idb && typeof idb.open === 'function' ? idb : null;
+  } catch (e) {
+    return null;
+  }
+}
+
+function pageStorageManager(scope = globalThis) {
+  try {
+    return scope.navigator ? scope.navigator.storage || null : null;
+  } catch (e) {
+    return null;
+  }
+}
 
 function randomBytes16() {
   const b = new Uint8Array(16);
@@ -97,21 +128,22 @@ export function createExperimentsUi() {
     cache: new Map(),   // id → decoded experiment (the ones opened or compared)
     detail: null,       // the experiment shown in the detail panel
     compare: [],        // experiments in the compare view
-    charts: { detail: null, overlay: null, delta: null },
+    charts: { detail: null, overlay: null, delta: null, ir: null },
   };
 
   async function store(cmp) {
     if (ctx.store) return ctx.store;
     if (!ctx.opening) {
       ctx.opening = openExperimentStoreOrMemory({
-        indexedDB: typeof indexedDB !== 'undefined' ? indexedDB : null,
-        storage: typeof navigator !== 'undefined' ? navigator.storage : null,
+        indexedDB: pageIndexedDb(),
+        storage: pageStorageManager(),
         knownAlgorithms: KNOWN_ALGORITHM_IDS,
       }).then((r) => {
         ctx.store = r.store;
         cmp.exps.persistent = r.persistent;
         cmp.exps.storeKind = r.store.kind;
         cmp.exps.storeNote = r.persistent ? null : STORE_FALLBACK_TEXT;
+        cmp.exps.storeError = r.error ? r.error.message : null;
         return r.store;
       });
     }
@@ -155,6 +187,7 @@ export function createExperimentsUi() {
       cmp.exps.compare = null;
       if (ctx.charts.overlay) ctx.charts.overlay.setView(null);
       if (ctx.charts.delta) ctx.charts.delta.setView(null);
+      if (ctx.charts.ir) ctx.charts.ir.setView(null);
       return;
     }
     const v = buildCompareView(list);
@@ -170,9 +203,14 @@ export function createExperimentsUi() {
         + 'magnitudes, unchanged).' : 'No experiment has a frequency response to overlay.',
       delta: v.delta.ok ? { ok: true, label: v.delta.label, summary: v.delta.summary,
         rangeText: v.delta.rangeText } : { ok: false, reason: v.delta.reason },
+      ir: v.irOverlay.ok ? { ok: true, summary: v.irOverlay.summary,
+        notes: v.irOverlay.notes.slice(), labels: v.irOverlay.labels.slice(),
+        yLabel: v.irOverlay.view.axes.y.label, irDelta: v.irDelta.reason }
+        : { ok: false, reason: v.irOverlay.reason, irDelta: v.irDelta.reason },
     };
     if (ctx.charts.overlay) ctx.charts.overlay.setView(v.overlay);
     if (ctx.charts.delta) ctx.charts.delta.setView(v.delta.ok ? v.delta : null);
+    if (ctx.charts.ir) ctx.charts.ir.setView(v.irOverlay.ok ? v.irOverlay.view : null);
   }
 
   return {
@@ -183,6 +221,7 @@ export function createExperimentsUi() {
       persistent: true,
       storeKind: null,
       storeNote: null,
+      storeError: null,
       rows: [],
       empty: null,
       selected: [],
@@ -209,6 +248,7 @@ export function createExperimentsUi() {
         ctx.charts.overlay = createResponseChart(host('osc-exp-chart-overlay'));
         ctx.charts.delta = createResponseChart(host('osc-exp-chart-delta'),
           { onReadout: (l) => { this.exps.readout = l ? { key: 'delta', lines: l } : null; } });
+        ctx.charts.ir = createIrChart(host('osc-exp-chart-ir'));
       } catch (e) {
         console.error('OSCILLA experiment charts failed:', e);
       }
@@ -270,6 +310,7 @@ export function createExperimentsUi() {
       this.$nextTick(() => {
         if (ctx.charts.overlay) ctx.charts.overlay.relayout();
         if (ctx.charts.delta) ctx.charts.delta.relayout();
+        if (ctx.charts.ir) ctx.charts.ir.relayout();
       });
       return this.exps.compare;
     },
@@ -432,6 +473,7 @@ export function createExperimentsUi() {
         get: (id) => ctx.cache.get(id) || null,
         detail: () => ctx.detail,
         compare: () => ctx.compare.slice(),
+        get irView() { return ctx.charts.ir ? ctx.charts.ir.view : null; },
       };
     },
   };

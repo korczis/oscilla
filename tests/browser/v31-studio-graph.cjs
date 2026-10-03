@@ -271,10 +271,17 @@ function defineChecks() {
       type: 'SELECTION_CHANGE', selection: { nodes: ['osc-1', 'env-1'] } })));
     await step(() => page.click(H.port('lfo-1', 'out', 'control'))); // tap-connect banner
     await page.keyboard.press('Escape');
-    for (const open of ['studio.templates', 'studio.keys', 'studio.add']) {
+    for (const open of ['studio.templates', 'studio.keys', 'studio.add', 'studio.find',
+      'studio.renderWav']) {
       await step(() => page.click(`[data-osc="${open}"]`));
       await close();
     }
+    // The task strip of a running render (its Abort button): a long render, aborted.
+    await page.evaluate(() => { window.__auditRender = window.OSCILLA.app.studioRenderWav({
+      duration: 60 }); });
+    await step(() => Promise.resolve());
+    await page.evaluate(() => { window.OSCILLA.app.studioAbortTask();
+      return window.__auditRender; });
     await page.click(H.nodeTitle('filter-1'));
     await step(() => page.click('[data-osc="studio.inspector.connect"]'));
     await close();

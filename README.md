@@ -71,6 +71,14 @@ is in the [algorithm notes](docs/v3/algorithms.md).
   device, the sample rate, the input level and the background noise. It requests echo
   cancellation, noise suppression and automatic gain control off, and reads back what the
   browser actually applied. A blocker stops the flow and a warning never does.
+- **Input device.** The default input stays the default. Once the browser has granted the
+  microphone, the Live input panel lists the inputs and you can choose one; the experiment
+  records it as a hashed identifier. An input that disappears stays selected and is reported as
+  not available; OSCILLA never switches microphones for you.
+- **Recipe link.** "Copy recipe link" puts the measurement recipe (sweep, level, runs, timing)
+  in the page address. Opening the link fills the setup and opens Measure without starting
+  anything; it never carries results, calibration or a device, and an altered link is refused
+  as a whole.
 - **During the run.** A quality bar reports INPUT, NOISE, CLIPPING, SIGNAL and CAPTURE, and a
   screen reader hears one announcement per stage. While a measurement owns the output, the
   instrument cannot play. Escape, STOP, hiding the page or leaving the workspace aborts the
@@ -90,7 +98,8 @@ is in the [algorithm notes](docs/v3/algorithms.md).
   Errors are reported with their line numbers. A profile is identified by the SHA-256 of its
   points and interpolated linearly in dB over log frequency. It applies only between its first
   and last frequency: outside that range the curve stays uncorrected and is marked
-  uncalibrated. The raw curve is always kept beside the CALIBRATED one.
+  uncalibrated. The raw curve is always kept beside the CALIBRATED one. The loaded profile
+  exports as CSV or JSON; both files are deterministic and import back to the same profile.
 - **Absolute level calibration.** You enter an external reference (for example 94 dB SPL at
   1 kHz from a calibrator) and the relative level OSCILLA observed. This is the only way to
   get dB SPL. It is valid only for the microphone, gain, browser settings and position it was
@@ -153,7 +162,14 @@ filter class is claimed. An experiment saved from Measure does not store band le
   ([ADR 0023](.ai/repo/adrs/0023-schema-versions-independent-of-product-version.md), proposed).
 - **Compare.** Comparing two or more experiments names every difference in calibration, sample
   rate, stimulus and algorithm. A minus B is shown only for equivalent experiments, and only
-  over their overlapping valid range.
+  over their overlapping valid range. Equivalent experiments also get an impulse-response
+  overlay, each response drawn from its own direct peak on its original scale (there is no A
+  minus B of impulse responses).
+- **Where they are kept.** In this browser's IndexedDB only, also from `file://` (tested in
+  Chromium, Firefox and WebKit, which keep an experiment across a reload). Where the database
+  cannot open, experiments are kept in memory for the page view and the page says so; a full
+  storage fails the save with its reason and keeps the result. The Playground never depends on
+  this storage.
 
 ### Measurement quality
 
@@ -195,6 +211,7 @@ is in the proposed [ADR 0025](.ai/repo/adrs/0025-data-driven-quality-with-reason
 
 **Studio** sits after Experiments and before About. It is a patching and composition workspace
 over the same audio engine: no second engine, and the engine's master chain and limits apply.
+How to use it, with the keyboard shortcuts, is the [Studio user guide](docs/v31/user-guide.md).
 
 - **The model is the source of truth.** A Studio document is a plain, versioned `StudioModel`:
   a graph of typed nodes and ports, a timeline of tracks and clips, automation lanes, and
@@ -210,7 +227,9 @@ over the same audio engine: no second engine, and the engine's master chain and 
   - a node library
   - dropping a cable on empty canvas to pick a compatible node
   - rectangle selection, copy, paste, duplicate and delete
-  - an inspector generated from each node's parameter schema, with units
+  - an inspector generated from each node's parameter schema, with units; with nothing
+    selected it edits the transport and document settings (tempo, time signature, loop, notes)
+  - search: `/` finds a node by name, type or category and frames it
 - **Timeline, transport and automation.** Tracks hold clips that you create, move, resize,
   split and delete with snapping. The timeline also has a loop region, markers, a playhead that
   follows the audio clock, and automation lanes in each parameter's own scale. STOP and Escape
@@ -225,6 +244,15 @@ over the same audio engine: no second engine, and the engine's master chain and 
   projects and patches. An import never overwrites silently, and a hostile file is refused.
   From `file://` the browser's storage may be unavailable; the library then uses memory and
   says so.
+- **Render WAV.** The Studio renders offline through the same compiler, runtime and transport
+  as live playback, with progress and Abort; the same Studio renders the same bytes. A live
+  input (Microphone) is refused with the reason.
+- **Measurement from Studio.** In the Measurement Sweep template, PLAY hands the measurement
+  clips to the Measure workspace's measurement engine: the recipe is derived from the graph and
+  the clips, and the saved experiment records the Studio that ran (schema version, hash,
+  execution state) beside its recipe.
+- **Performance.** Responsive at about 100 nodes and 200 connections; the numbers and budgets
+  are in [performance](docs/v31/performance.md).
 
 Studio output and Playground output are exclusive: starting one stops the other, and a
 measurement stops the Studio.
@@ -232,7 +260,7 @@ measurement stops the Studio.
 Not yet built:
 - browser fullscreen
 - deep links
-- a minimap and search
+- a minimap
 - node groups
 - dragging several clips at once
 - pinch zoom on the timeline

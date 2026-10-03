@@ -7,6 +7,10 @@
 //
 //   inspectorView(model, selection, opts) -> view           pure (unit-tested)
 //     kind 'studio' (nothing selected) | 'node' | 'multi' | 'edge' | 'clip' | 'point'
+//   studioSettingsView(model) -> settings                   pure: what the 'studio' view shows
+//     of the transport and the document (§78 "nothing → Studio/transport properties"): time
+//     mode, tempo, time signature, loop, length, notes; edited through TRANSPORT_SET, LOOP_SET
+//     and METADATA_SET like every other field (the store validates; a refusal is announced)
 //   formatParamValue(p, v), parseParamInput(p, text), sliderRange(p), valueToSlider(p, v),
 //   sliderToValue(p, pos)                                   pure helpers of the fields
 //   mountInspector(host, svc) -> { render(), destroy() }    DOM (graph-dom.js, no innerHTML)
@@ -14,11 +18,16 @@
 //            onConnect(nodeId), onSavePatch(nodeIds), onDelete(), onDuplicate(), focusGraph() }
 
 import { NODE_REGISTRY, validateParamValue } from '../../studio/registry.js';
+import {
+  MIN_CLIP_S, NOTES_MAX_CHARS, TEMPO_RANGE, TIME_SIGNATURE_DENOMINATORS,
+} from '../../studio/schema.js';
+import { secondsPerBar, timelineEnd } from '../../studio/timeline.js';
 import { PORT_VISUALS } from '../../studio/ports.js';
 import { describeEdge, summarizeGraph, announceAction } from '../../studio/a11y.js';
 import { formatFrequency, parseFrequency } from '../../core/frequency.js';
 import { sig } from '../../core/math.js';
 import { CATEGORY_LABELS, STATUS_LABELS, nodeConnections } from './graph-view.js';
+import { formatSecondsText } from './timeline-view.js';
 import { h, replaceChildren, setAttr, setText } from './graph-dom.js';
 import { sliderFill } from '../app.js';
 
@@ -136,6 +145,100 @@ function fieldOf(model, node, p, registry) {
     modulatedBy: mods,
     param: p,
   };
+}
+
+/** Time modes as the Inspector offers them (the model's TIME_MODES). */
+export const TIME_MODE_CHOICES = Object.freeze([
+  Object.freeze({ value: 'seconds', label: 'Seconds' }),
+  Object.freeze({ value: 'musical', label: 'Bars and beats' }),
+]);
+
+/**
+ * What the Inspector shows of the Studio itself when nothing is selected (§78): the transport
+ * and document settings, plain data. `length` is the end of the last clip or automation point
+ * (timeline.js timelineEnd); in musical mode it is also given in bars at the current tempo.
+ */
+export function studioSettingsView(model) {
+  const t = model.transport;
+  const loop = model.timeline.loop;
+  const [beats, unit] = t.timeSignature;
+  const length = timelineEnd(model);
+  const bars = length / secondsPerBar(t);
+  const barsText = `${Number(bars.toFixed(2))} bar${Math.abs(bars - 1) < 1e-9 ? '' : 's'}`;
+  return {
+    timeMode: t.timeMode,
+    timeModes: TIME_MODE_CHOICES.map((c) => ({ ...c })),
+    tempo: t.tempo,
+    tempoRange: [...TEMPO_RANGE],
+    beats,
+    unit,
+    units: [...TIME_SIGNATURE_DENOMINATORS],
+    signatureText: `${beats}/${unit}`,
+    loop: { enabled: !!loop.enabled, start: loop.start, end: loop.end },
+    loopText: `Loop ${loop.enabled ? 'on' : 'off'}, ${formatSecondsText(loop.start)} to `
+      + `${formatSecondsText(loop.end)}`,
+    length,
+    lengthText: length > 0 ? `${formatSecondsText(length)}${t.timeMode === 'musical'
+      ? ` · ${barsText}` : ''}` : 'Empty timeline',
+    notes: model.metadata.notes,
+    notesMax: NOTES_MAX_CHARS,
+  };
+}
+
+/** The store action of a Studio settings field edit, or { error } (pure, unit-tested). */
+export function settingsAction(model, key, raw) {
+  const t = model.transport;
+  const loop = model.timeline.loop;
+  const num = (v) => Number(String(v ?? '').trim().replace(',', '.'));
+  switch (key) {
+    case 'timeMode':
+      return TIME_MODE_CHOICES.some((c) => c.value === raw) ? { type: 'TRANSPORT_SET',
+        timeMode: raw } : { error: 'Unknown time mode.' };
+    case 'tempo': {
+      const v = num(raw);
+      if (!finite(v) || v < TEMPO_RANGE[0] || v > TEMPO_RANGE[1]) {
+        return { error: `Tempo must be ${TEMPO_RANGE[0]}-${TEMPO_RANGE[1]} BPM.` };
+      }
+      return { type: 'TRANSPORT_SET', tempo: v };
+    }
+    case 'beats': {
+      const v = num(raw);
+      if (!Number.isInteger(v) || v < 1 || v > 32) {
+        return { error: 'Beats per bar must be a whole number from 1 to 32.' };
+      }
+      return { type: 'TRANSPORT_SET', timeSignature: [v, t.timeSignature[1]] };
+    }
+    case 'unit': {
+      const v = num(raw);
+      if (!TIME_SIGNATURE_DENOMINATORS.includes(v)) {
+        return { error: `The beat unit must be one of ${TIME_SIGNATURE_DENOMINATORS.join(', ')}.` };
+      }
+      return { type: 'TRANSPORT_SET', timeSignature: [t.timeSignature[0], v] };
+    }
+    case 'loop':
+      return { type: 'LOOP_SET', enabled: raw === true || raw === 'true' };
+    case 'loopStart':
+    case 'loopEnd': {
+      const v = num(raw);
+      const start = key === 'loopStart' ? v : loop.start;
+      const end = key === 'loopEnd' ? v : loop.end;
+      if (!finite(v) || v < 0) return { error: 'Loop times must be 0 s or later.' };
+      if (!(end > start)) return { error: 'The loop end must be after its start.' };
+      if (loop.enabled && end - start < MIN_CLIP_S) {
+        return { error: `An active loop must be at least ${MIN_CLIP_S} s long.` };
+      }
+      return { type: 'LOOP_SET', start, end };
+    }
+    case 'notes': {
+      const v = String(raw ?? '');
+      if (v.length > NOTES_MAX_CHARS) {
+        return { error: `Notes must be at most ${NOTES_MAX_CHARS} characters.` };
+      }
+      return { type: 'METADATA_SET', notes: v };
+    }
+    default:
+      return { error: `Unknown Studio setting ${key}.` };
+  }
 }
 
 /**
@@ -262,6 +365,7 @@ export function inspectorView(model, selection, opts = {}) {
     summary: summarizeGraph(model, { registry }),
     counts: { nodes: model.graph.nodes.length, edges: model.graph.edges.length,
       clips: model.timeline.clips.length, lanes: model.timeline.automation.length },
+    settings: studioSettingsView(model),
   };
 }
 
@@ -660,17 +764,133 @@ export function mountInspector(host, svc) {
     ])];
   }
 
+  /** Apply a Studio settings edit (settingsAction): refused text is announced and reverted. */
+  function applySetting(key, raw, revert) {
+    const a = settingsAction(svc.store.getModel(), key, raw);
+    if (a.error) {
+      svc.announce(a.error, { assertive: true });
+      if (revert) revert();
+      return null;
+    }
+    const r = dispatch(a);
+    if (!r.ok && revert) revert();
+    return r;
+  }
+
+  function settingInput(key, label, value, unit, cls = 'osc-si-field osc-si-field--half') {
+    const id = `osc-si-studio-${key}`;
+    const dataOsc = `studio.inspector.${key}`;
+    const input = h('input', { class: 'osc-number osc-si-input osc-num', id, type: 'text',
+      inputmode: 'decimal', autocomplete: 'off', spellcheck: 'false', value: String(value),
+      'data-osc': dataOsc, 'data-key': dataOsc });
+    const ref = { input, field: { input: String(value) } };
+    input.addEventListener('change', () => applySetting(key, input.value, () => {
+      input.value = ref.field.input;
+    }));
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') input.value = ref.field.input;
+    });
+    refs.set(dataOsc, ref);
+    return h('div', { class: cls }, [
+      h('label', { class: 'osc-label osc-si-label', for: id, text: label }),
+      h('div', { class: 'osc-si-row osc-si-row--edit' }, [input,
+        unit ? h('span', { class: 'osc-si-unit', text: unit }) : null]),
+    ]);
+  }
+
+  function settingSelect(key, label, options, value, cls = 'osc-si-field') {
+    const id = `osc-si-studio-${key}`;
+    const dataOsc = `studio.inspector.${key}`;
+    const sel = h('select', { id, 'data-osc': dataOsc, 'data-key': dataOsc },
+      options.map((o) => h('option', { value: String(o.value), text: o.label })));
+    sel.value = String(value);
+    const ref = { input: sel, field: { value } };
+    sel.addEventListener('change', () => applySetting(key, sel.value, () => {
+      sel.value = String(ref.field.value);
+    }));
+    refs.set(dataOsc, ref);
+    return h('div', { class: cls }, [
+      h('label', { class: 'osc-label osc-si-label', for: id, text: label }),
+      h('div', { class: 'osc-select' }, [sel])]);
+  }
+
   function buildStudio(view) {
+    const st = view.settings;
+    const loopBtn = h('button', { type: 'button', class: 'osc-toggle osc-si-toggle',
+      role: 'switch', 'aria-checked': st.loop.enabled ? 'true' : 'false',
+      'data-osc': 'studio.inspector.loop', 'data-key': 'studio.inspector.loop' }, [
+      h('span', { class: 'osc-toggle-track', 'aria-hidden': 'true' }),
+      h('span', { class: 'osc-toggle-label', text: 'Loop' })]);
+    loopBtn.addEventListener('click', () => applySetting('loop',
+      loopBtn.getAttribute('aria-checked') !== 'true'));
+    refs.set('studio.inspector.loop', { input: loopBtn, toggle: true });
+    const notesId = 'osc-si-studio-notes';
+    const notes = h('textarea', { class: 'osc-number osc-si-input osc-si-textarea', id: notesId,
+      rows: '2', maxlength: String(st.notesMax), spellcheck: 'true',
+      'data-osc': 'studio.inspector.notes', 'data-key': 'studio.inspector.notes' });
+    notes.value = st.notes;
+    const notesRef = { input: notes, field: { input: st.notes } };
+    notes.addEventListener('change', () => applySetting('notes', notes.value, () => {
+      notes.value = notesRef.field.input;
+    }));
+    refs.set('studio.inspector.notes', notesRef);
+    const length = h('span', { class: 'osc-num', 'data-osc': 'studio.inspector.length',
+      text: st.lengthText });
+    refs.set('studio.inspector.lengthText', { readout: length });
     return [header('Studio', `${view.counts.nodes} nodes · ${view.counts.edges} connections · `
       + `${view.counts.clips} clips · ${view.counts.lanes} automation lanes`),
     textInput('osc-si-studio-title', 'Title', view.title, (v, input) => {
       const r = dispatch({ type: 'METADATA_SET', title: v.trim() || view.title });
       if (!r.ok) input.value = view.title;
     }, 'studio.inspector.studioTitle'),
+    h('section', { class: 'osc-si-section', 'aria-label': 'Transport',
+      'data-osc': 'studio.inspector.transport' }, [
+      h('h5', { class: 'osc-si-h5', text: 'Transport' }),
+      settingSelect('timeMode', 'Time', st.timeModes, st.timeMode),
+      h('div', { class: 'osc-si-pos' }, [
+        settingInput('tempo', 'Tempo', st.tempo, 'BPM'),
+        settingInput('beats', 'Beats per bar', st.beats, ''),
+      ]),
+      settingSelect('unit', 'Beat unit', st.units.map((u) => ({ value: u,
+        label: `1/${u} note` })), st.unit),
+      h('div', { class: 'osc-si-field' }, [loopBtn]),
+      h('div', { class: 'osc-si-pos' }, [
+        settingInput('loopStart', 'Loop start', st.loop.start, 's'),
+        settingInput('loopEnd', 'Loop end', st.loop.end, 's'),
+      ]),
+      h('div', { class: 'osc-si-row' }, [
+        h('span', { class: 'osc-label osc-si-label', text: 'Length' }), length]),
+    ]),
+    h('div', { class: 'osc-si-field' }, [
+      h('label', { class: 'osc-label osc-si-label', for: notesId, text: 'Notes' }), notes]),
     h('p', { class: 'osc-si-summary', 'data-osc': 'studio.inspector.summary',
       text: view.summary }),
     h('p', { class: 'osc-si-note', text: 'Select a node or a connection to edit it. Press N '
-      + 'to add a node, C to connect the selected node.' })];
+      + 'to add a node, C to connect the selected node, / to find a node.' })];
+  }
+
+  /** Refresh the Studio view's settings in place (a focused field keeps what is typed). */
+  function updateStudio(view) {
+    const st = view.settings;
+    const active = document.activeElement;
+    const put = (key, v) => {
+      const r = refs.get(`studio.inspector.${key}`);
+      if (!r) return;
+      if ('input' in r.field) r.field.input = String(v);
+      else r.field.value = v;
+      if (r.input !== active) r.input.value = String(v);
+    };
+    put('timeMode', st.timeMode);
+    put('tempo', st.tempo);
+    put('beats', st.beats);
+    put('unit', st.unit);
+    put('loopStart', st.loop.start);
+    put('loopEnd', st.loop.end);
+    put('notes', st.notes);
+    const loop = refs.get('studio.inspector.loop');
+    if (loop) setAttr(loop.input, 'aria-checked', st.loop.enabled ? 'true' : 'false');
+    const len = refs.get('studio.inspector.lengthText');
+    if (len) setText(len.readout, st.lengthText);
   }
 
   // ---------------------------------------------------------------- render
@@ -758,6 +978,7 @@ export function mountInspector(host, svc) {
       return;
     }
     if (current === view.key && view.kind === 'studio') {
+      updateStudio(view);
       const sum = host.querySelector('[data-osc="studio.inspector.summary"]');
       if (sum) setText(sum, view.summary);
       const t = refs.get('studio.inspector.studioTitle');

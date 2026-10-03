@@ -202,7 +202,10 @@ its recipe from the topology with `recipeFromStudio(model, { sampleRate })`:
 
 So a measurement run from Studio and the same measurement from the Measure workspace share a
 configHash; the Studio block is provenance beside it. `measurement/engine.js validateRecipe`
-accepts the derived recipe (unit test). The round trip (Measurement Sweep template →
+accepts the derived recipe (unit test). The product caller is the Studio workspace: a pass of
+measurement clips runs the derived recipe through the MEASURE engine and saves the experiment
+with `withStudioProvenance` (`docs/v31/timeline.md` "Measurement clips"). The round trip
+(Measurement Sweep template →
 `createExperiment` → `withStudioProvenance` → `experimentToJson` → `validateExperiment` →
 store put/get) keeps the block byte for byte and `verifyExperimentStudio` passes.
 
@@ -250,6 +253,21 @@ starts at the runtime's click-free start time (scheduling lead + render-quantum 
 21.3 ms at 48 kHz), fades in over `STUDIO_XFADE_S` and out over `STUDIO_STOP_S` before the end.
 A refused or invalid plan returns `{ ok: false }` before any audio object is created.
 
+`opts.onProgress({ stage, fraction })` reports `render` at `PROGRESS_STEPS` (10) points through
+`OfflineAudioContext.suspend(t)` on whole render quanta and `resume()` (start and end only where
+the browser has no offline `suspend`, Firefox), then `encode`. `opts.signal` (an AbortSignal)
+resolves the call at once with `{ ok: false, aborted: true }`; the context finishes in the
+background and its buffer is dropped. Neither changes a sample.
+
+The UI is the Studio toolbar's **Render WAV** (`src/js/ui/studio/workspace.js`
+`studioOpenRender` / `studioRenderWav`): a dialog with the duration (the timeline's end, or
+`RENDER_DEFAULT_S` = 2 s for a graph without a timeline), the plan's format (48 kHz stereo or a
+Recorder's) and limitations; Render is disabled when the plan refuses. The render runs at the
+plan's rate, never the device's, so the same Studio gives the same bytes on every machine; the
+16-bit WAV is downloaded with the exporters' `downloadBlob`, progress and Abort in the toolbar's
+task strip. Browser test: `tests/browser/v31-studio-workflows.cjs` `render-wav` (format,
+length, byte-identical repeat, abort, refusal).
+
 ## Accessible text (§143-§144, §249-§250)
 
 `summarizeGraph(model)` of the Subtractive Synth is exactly the §249 example: "6 nodes,
@@ -294,14 +312,10 @@ controls Filter 1 cutoff. Analysis: Spectrum 1 observes Filter 1 output."
 
 ## What remains
 
-- **Browser verification pending**: `node tests/browser/v31-studio-offline.cjs` (chromium,
-  firefox, webkit, file://) was written but not run in this change (the machine was reserved for
-  other realtime gates). It asserts the Basic Tone level and frequency, frames, fades, the Sweep
-  Sequence silence, the Subtractive Synth's Tone then Sweep content and the Measurement Sweep
-  refusal. The unit tests cover the plan and the
-  refusal paths; the render path itself is verified only by that browser test.
-- UI integration: Save/Load/Insert/Replace dialogs, file pickers, the dirty indicator, the
-  template picker with Learn text, live-region and aria-label wiring (`src/js/ui`, out of scope).
+- The render path in real browsers is `tests/browser/v31-studio-offline.cjs` (chromium,
+  firefox, webkit, in `npm run test:studio`): the Basic Tone level and frequency, frames, fades,
+  the Sweep Sequence silence, the Subtractive Synth's Tone then Sweep content and the
+  Measurement Sweep refusal; the unit tests cover the plan and the refusal paths.
 - `ports.js portAccessibleLabel` lower-cases every label, so the Q input reads "Filter 1 q
   control input"; a fix belongs in ports.js (all-capital labels should keep their case).
-- Autosave and crash recovery (§155, §157), graph groups (§116-§117), Studio search (§251).
+- Autosave and crash recovery (§155, §157), graph groups (§116-§117).
