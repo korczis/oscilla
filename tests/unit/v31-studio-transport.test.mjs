@@ -121,6 +121,58 @@ test('PLAY keeps the first clip when the audio clock moves during start()', () =
     [['setValueAtTime', 0, b], ['linearRampToValueAtTime', 1, b + STUDIO_XFADE_S]]);
 });
 
+test('PLAY keeps the first clip when the audio clock passes baseTime during start()', () => {
+  // CI (webkit, starved runner): the clock passed the anchor itself between runtime.start()
+  // choosing baseTime and the first advance — more than the scheduling lead, not two quanta —
+  // and the first-window cap (baseTime still ahead) no longer applied: the Tone clip was
+  // skipped as late. Nothing was scheduled under that anchor yet, so the first window anchors
+  // the playback at the first schedulable time instead, and every clip keeps its offset.
+  const s = setup();
+  const jump = 0.05; // > SAFE_HORIZON_S and > the lead baseTime carried
+  let chosen = null;
+  const runtime = Object.create(s.runtime, { start: { value: () => {
+    const r = s.runtime.start();
+    chosen = r.at;
+    s.ctx.advance(s.ctx.currentTime + jump);
+    return r;
+  } } });
+  const transport = createStudioTransport({ runtime, engine: s.engine, store: s.store });
+  const r = ok(transport.start());
+  const now = s.ctx.currentTime;
+  assert.ok(now > chosen, 'the clock is past the baseTime runtime.start() chose');
+  assert.equal(transport.debugInfo().skippedLate, 0, 'no clip skipped as late');
+  const b = r.baseTime;
+  const bF = Math.round(b * SR);
+  const q = 128 / SR;
+  assert.equal(b, Math.ceil((now + Math.max(SAFE_HORIZON_S, 2 * q)) / q - 1e-9) * q,
+    'anchored one scheduling lead after the clock, on a render quantum');
+  assert.ok(isFrame(b));
+  assert.deepEqual(transport.debugInfo().decisions.filter((d) => d.decision === 'reanchor')
+    .map((d) => [d.from, d.to]), [[chosen, b]]);
+  s.fx.advance(0.2);
+  const tone = voiceCarriers(s, 'sawtooth');
+  assert.deepEqual(tone.map((o) => o.startAt), [at(bF, 0)], 'the Tone voice starts at b');
+  const env = tone[0].outputs[0].outputs[0].gain;
+  const attack = env.scheduled.findIndex((e) => e.ramp === 'linear' && e.value === 1);
+  assert.deepEqual([env.scheduled[attack - 1].t, env.scheduled[attack - 1].value], [b, GAIN_FLOOR]);
+  s.fx.advance(1.3);
+  assert.deepEqual(voiceCarriers(s, 'sawtooth').map((o) => o.startAt), [at(bF, 0), at(bF, 1)],
+    'Tone at b, Sweep at b + 1 s');
+  // The cutoff lane is anchored there too (its first point at position 0).
+  const cutoff = s.runtime.nodes.get('filter-1').modTarget('frequency', 'linear').param;
+  assert.ok(cutoff.calls.some((c) => c[0] === 'setValueAtTime' && c[2] === b), 'lane at b');
+  assert.ok(cutoff.calls.every((c) => c[2] === undefined || c[2] < now || c[2] >= b),
+    'nothing scheduled between the clock and the anchor');
+  // Genuine lateness mid-play still skips (the grid is kept): a stall past the Sweep's start.
+  const s2 = setup();
+  const r2 = ok(s2.transport.start());
+  s2.ctx.advance(r2.baseTime + 1.5); // the clock only: the wake-up timer did not run
+  s2.fx.advance(0.01);
+  assert.equal(s2.transport.debugInfo().skippedLate, 1, 'the Sweep, late mid-play, is skipped');
+  assert.equal(s2.transport.debugInfo().decisions.filter((d) => d.decision === 'reanchor').length,
+    0);
+});
+
 test('Basic Synth: Tone and Sweep clips play on the oscillator at exact audio-clock times', () => {
   const s = setup();
   const r = ok(s.transport.start());

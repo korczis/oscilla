@@ -198,7 +198,17 @@ The first audible sample depends on what follows the voice, not on the clip:
   it came from, and the time the runtime starts the graph — but the first `advance(now)` reads
   the clock again; a fresh browser context had moved two render quanta by then (chromium:
   `baseTime` 0.021333 s, first advance at 0.005333 s) and PLAY skipped its first clip as late.
-  A stall past `baseTime` itself is handled as any other stall.
+- When the clock has already reached `baseTime` at the first window (a starved runner: the main
+  thread stalled inside PLAY, or the context rendered in bursts — webkit CI skipped the Tone
+  clip of the Basic Synth this way), nothing was scheduled under that anchor yet, so lateness is
+  measured against the anchor rather than the clock: the playback is re-anchored at
+  `startLeadTime(now)` (`now + SCHEDULE_LEAD_S`, at least two render quanta, on a render-quantum
+  boundary, as `hooks.soon()`) and every clip keeps its offset from the start. `advance()`
+  reports `reanchored: { from, to }`, the transport records a `reanchor` decision and
+  `start()` / `debugInfo()` return the new `baseTime`. The graph the runtime started at the old
+  `baseTime` is already sounding (its start ramps were themselves late); the clips, gates and
+  lanes follow the new anchor. A stall in any later window is handled as above: late items are
+  skipped.
 
 ## Edit during playback (§182-§183)
 

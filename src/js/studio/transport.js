@@ -27,7 +27,9 @@
 // (scheduler.nextWakeMs: half a look-ahead before the scheduled horizon, at most
 // TOP_UP_EVERY_MS): it decides when to compile the next window and never times a sound. The
 // graph is started by runtime.start(); its crossfade time is the transport's baseTime, so a clip
-// at position p sounds at baseTime + p on whole frames.
+// at position p sounds at baseTime + p on whole frames. When the clock has already reached that
+// time at the first window (a starved PLAY), the scheduler re-anchors at the first schedulable
+// time instead of skipping the first clips (decision 'reanchor'; start() returns that baseTime).
 //
 // What plays where (docs/v31/timeline.md "Transport integration"):
 //   pattern clip on a Sequence   compileSequence(item.sequence, ctx, handle.info.destination,
@@ -859,6 +861,12 @@ export function createStudioTransport({
     if (!playing) return;
     const now = ctx.currentTime;
     const r = scheduler.advance(now);
+    if (r.reanchored) {
+      // The clock reached the anchor before the first window (starved PLAY / locate): the
+      // playback starts at the first schedulable time instead of skipping its first clips.
+      record({ key: null, decision: 'reanchor', from: r.reanchored.from, to: r.reanchored.to,
+        at: now });
+    }
     for (const it of r.items) playItem(it);
     for (const a of r.automation) applyLane(a.laneId, a.target, a.events);
     for (const it of r.skipped) {
