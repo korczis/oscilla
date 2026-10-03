@@ -19,6 +19,7 @@ import {
   PHASE_REASONS,
 } from '../../src/js/measurement/transfer.js';
 import { align } from '../../src/js/measurement/align.js';
+import { renderStimulus as renderSweep } from '../../src/js/measurement/stimulus.js';
 import {
   computeImpulseResponse,
   irWindow,
@@ -188,7 +189,7 @@ for (const sr of RATES) {
       const { worst, at } = maxErrDb(r, () => gainDb);
       t.diagnostic(`max error ${worst.toExponential(2)} dB at ${at.toFixed(1)} Hz`);
       assert.ok(worst <= 0.1, `${worst.toFixed(4)} dB at ${at.toFixed(1)} Hz`);
-      assert.equal(r.algorithm, 'oscilla.transfer.v2');
+      assert.equal(r.algorithm, 'oscilla.transfer.v3');
       assert.deepEqual(r.requestedRange, [F1, F2]);
       assert.equal(r.phaseDeg, null);
       assert.equal(r.snrDb, null);
@@ -424,7 +425,7 @@ for (const sr of RATES) {
     const ir = computeImpulseResponse({ stimulus: x, captured: y, sampleRate: sr, f1: F1, f2: F2 });
     const expected = Math.round(PRE * sr);
     assert.ok(Math.abs(ir.peakIndex - expected) <= 1, `peak ${ir.peakIndex} vs ${expected}`);
-    assert.equal(ir.algorithm, 'oscilla.ir.log-sweep.v2');
+    assert.equal(ir.algorithm, 'oscilla.ir.log-sweep.v3');
     assert.equal(ir.window, null);
     assert.equal(ir.captureOffsetS, 0);
     assert.equal(ir.samples.length, y.length);
@@ -450,7 +451,8 @@ test('ir: delayed impulse (0.3 s) → peak at pre-roll + delay; lag keeps absolu
   const lagSamples = Math.round(PRE * sr); // e.g. an alignment that found the pre-roll only
   const aligned = computeImpulseResponse({ stimulus: x, captured: y, sampleRate: sr, f1: F1,
     f2: F2, lagSamples });
-  const guard = Math.round(0.005 * sr);
+  // ir.v3 guard: max(5 ms, 5 periods of f1) (V382)
+  const guard = Math.round(Math.max(0.005, 5 / F1) * sr);
   assert.equal(aligned.captureOffsetS, (lagSamples - guard) / sr);
   assert.ok(Math.abs(aligned.captureOffsetS + aligned.peakTimeS - total / sr) <= 1 / sr);
   assert.equal(aligned.samples.length, y.length - (lagSamples - guard));
@@ -612,4 +614,68 @@ test('realistic: 10 s 48 kHz sweep through a loudspeaker-like chain with noise',
     `IR peak ${ir.peakIndex}, arrival ${arrival}`);
   assert.ok(r.validRange[0] < 25 && r.validRange[1] > 19000, `${r.validRange}`);
   assert.ok(ms < 10000, `analysis took ${ms.toFixed(0)} ms`);
+});
+
+test('V382 transfer.v3: a unity system reads within 0.1 dB everywhere in its validRange', () => {
+  const render = renderSweep;
+  const worst = (t, gainDb) => {
+    let w = 0;
+    const [lo, hi] = t.validRange;
+    t.frequencies.forEach((f, i) => {
+      if (f >= lo && f <= hi && Math.abs(t.magnitudeDb[i] - gainDb) > Math.abs(w)) {
+        w = t.magnitudeDb[i] - gainDb;
+      }
+    });
+    return w;
+  };
+  for (const [sr, duration, f2] of [[48000, 1, 20000], [44100, 2, 22000]]) {
+    const r = render({ kind: 'log-sweep', sampleRate: sr, duration, f1: 20, f2, level: 0.5 });
+    const x = r.samples;
+    const y = new Float32Array(x.length + 600);
+    for (let i = 0; i < x.length; i++) y[i + 300] = 0.5 * x[i];
+    const args = { stimulus: x, captured: y, sampleRate: sr, f1: r.spec.f1, f2: r.spec.f2 };
+    const v2 = computeTransfer({ ...args, options: { algorithm: 'oscilla.transfer.v2' } });
+    const v3 = computeTransfer(args);
+    assert.equal(v3.algorithm, 'oscilla.transfer.v3');
+    const g = 20 * Math.log10(0.5);
+    assert.ok(worst(v2, g) < -0.3, `v2 kept a biased point: ${worst(v2, g)} dB`);
+    assert.ok(Math.abs(worst(v3, g)) <= 0.1 + 1e-9, `v3 worst ${worst(v3, g)} dB`);
+    assert.ok(v3.validRange[1] < v2.validRange[1] && v3.validRange[0] === v2.validRange[0]);
+    assert.ok(v3.validRange[1] > 0.8 * r.spec.f2, `v3 still reaches ${v3.validRange[1]} Hz`);
+  }
+});
+
+test('V382 ir.v3: the stored IR keeps the low-frequency precursor (0 dB at 30 Hz)', () => {
+  const sr = 48000;
+  const r = renderSweep({ kind: 'log-sweep', sampleRate: sr, duration: 2, f1: 20, f2: 20000,
+    level: 0.5 });
+  const x = r.samples;
+  const pre = Math.round(0.5 * sr);
+  const y = new Float32Array(x.length + pre + sr / 2);
+  for (let i = 0; i < x.length; i++) y[i + pre] = x[i];
+  const args = { stimulus: x, captured: y, sampleRate: sr, f1: r.spec.f1, f2: r.spec.f2,
+    lagSamples: pre };
+  // |DFT| of the stored samples at one frequency, in dB (a unity system: 0 dB in band)
+  const gainDb = (samples, hz) => {
+    let re = 0;
+    let im = 0;
+    const w = (2 * Math.PI * hz) / sr;
+    for (let n = 0; n < samples.length; n++) {
+      re += samples[n] * Math.cos(w * n);
+      im -= samples[n] * Math.sin(w * n);
+    }
+    return 10 * Math.log10(re * re + im * im);
+  };
+  const v2 = computeImpulseResponse({ ...args, algorithm: 'oscilla.ir.log-sweep.v2' });
+  const v3 = computeImpulseResponse(args);
+  assert.equal(v3.algorithm, 'oscilla.ir.log-sweep.v3');
+  assert.equal(pre - Math.round(v3.captureOffsetS * sr), Math.round((5 / 20) * sr), '250 ms');
+  for (const hz of [30, 60]) {
+    assert.ok(gainDb(v2.samples, hz) < -0.5, `v2 at ${hz} Hz: ${gainDb(v2.samples, hz)} dB`);
+    assert.ok(Math.abs(gainDb(v3.samples, hz)) < 0.05, `v3 at ${hz} Hz: ${gainDb(v3.samples, hz)}`);
+  }
+  assert.ok(Math.abs(gainDb(v3.samples, 1000) - gainDb(v2.samples, 1000)) < 0.01, '1 kHz alike');
+  // the absolute peak time is the same; only the stored window starts earlier
+  assert.ok(Math.abs((v3.captureOffsetS + v3.peakTimeS) - (v2.captureOffsetS + v2.peakTimeS))
+    < 1e-9);
 });

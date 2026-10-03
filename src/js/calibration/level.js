@@ -37,11 +37,15 @@
 // output of those modules contains "SPL" (asserted in tests). There is no default SPL
 // calibration anywhere in this module (spec §23).
 //
-// The reading X must be taken the same way it will later be applied (with or without frequency
-// correction), since a frequency correction at referenceHz would otherwise be counted twice.
+// X is read without frequency correction (reference.js), so the offset already contains the
+// input's deviation at referenceHz. A reading that a frequency profile corrected takes the
+// offset of levelOffsetWithProfile(), which removes the profile's correction at referenceHz
+// again: otherwise that correction is counted twice (V382: a 94 dB calibrator read 92 dB SPL
+// under a +2 dB deviation profile).
 // Pure; inputs are never mutated; throws RangeError/TypeError on invalid input.
 
 import { hashDeviceId, isHashedDeviceId } from './device-id.js';
+import { conventionSign, correctionAt } from './interpolate.js';
 
 /** Current LevelCalibration schema (2: scale, method and input binding). */
 export const LEVEL_SCHEMA_VERSION = 2;
@@ -248,10 +252,26 @@ export function levelLabel(levelCalibration, current = null) {
 }
 
 // Display value for a relative level: offset applied only under a valid calibration.
-export function toDisplayLevel(dbRelative, levelCalibration) {
+/**
+ * The offset to add to a relative reading; `profile`: the frequency profile that corrected the
+ * reading (null: an uncorrected reading). The profile's applied correction at referenceHz is
+ * taken out of the offset (see the header), so the reference frequency reads referenceDbSpl
+ * whatever the profile; a profile that does not cover referenceHz changes nothing there.
+ * 0 without a valid calibration.
+ */
+export function levelOffsetWithProfile(levelCalibration, profile = null) {
+  if (!isValidLevelCalibration(levelCalibration)) return 0;
+  const offset = levelCalibration.offsetDb;
+  if (!profile) return offset;
+  const c = correctionAt(profile, levelCalibration.referenceHz);
+  return c && c.covered ? offset - conventionSign(profile) * c.correctionDb : offset;
+}
+
+export function toDisplayLevel(dbRelative, levelCalibration, { profile = null } = {}) {
   if (typeof dbRelative !== 'number') throw new TypeError('dbRelative must be a number');
   if (isValidLevelCalibration(levelCalibration)) {
-    return { value: dbRelative + levelCalibration.offsetDb, unit: SPL_UNIT, calibrated: true };
+    return { value: dbRelative + levelOffsetWithProfile(levelCalibration, profile), unit: SPL_UNIT,
+      calibrated: true };
   }
   return { value: dbRelative, unit: RELATIVE_UNIT, calibrated: false };
 }
