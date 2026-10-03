@@ -2089,6 +2089,20 @@
                 aria-label="Frame all" title="Frame all (A)" @click="studioFrameAll()">
                 <svg aria-hidden="true"><use href="#s-frame"/></svg></button>
             </div>
+            <div class="osc-st-group" role="group" aria-label="View">
+              <button type="button" class="osc-icon-btn osc-st-ico" data-osc="studio.copyLink"
+                aria-label="Copy link to this Studio view"
+                title="Copy link: Studio, the view and an unmodified template" @click="studioCopyLink()">
+                <svg aria-hidden="true"><use href="#i-link"/></svg></button>
+              <button type="button" class="osc-icon-btn osc-st-ico osc-st-toggle" data-osc="studio.fullscreen"
+                :aria-pressed="String(studio.fullscreen)" aria-pressed="false"
+                :aria-disabled="String(!studio.fullscreenAvailable)"
+                :aria-label="studio.fullscreen ? 'Exit browser fullscreen' : 'Browser fullscreen'"
+                aria-label="Browser fullscreen"
+                :title="!studio.fullscreenAvailable ? studio.fullscreenReason
+                  : (studio.fullscreen ? 'Exit fullscreen (Esc)' : 'Fullscreen (Esc exits)')"
+                @click="studioToggleFullscreen()"><svg aria-hidden="true"><use href="#i-expand"/></svg></button>
+            </div>
             <span class="osc-spacer"></span>
             <div class="osc-st-group" role="group" aria-label="Project">
               <button type="button" class="osc-btn osc-btn-secondary" data-osc="studio.templates"
@@ -2717,6 +2731,10 @@
       <p class="osc-muted osc-dialog-note" x-show="studio.dirty" style="display: none"
         data-osc="studio.templates.dirty">Opening a template replaces the current Studio and its
         unsaved changes; save or export it first to keep them.</p>
+      <p class="osc-dialog-note" x-show="studio.linkPending" style="display: none"
+        data-osc="studio.templates.linkPending">The link you opened asks for
+        <strong x-text="studio.linkPending"></strong>. It was not opened because this Studio has
+        unsaved changes: choose Open on it below to replace the current Studio.</p>
       <ul class="osc-st-templates" data-osc="studio.templates.list">
         <template x-for="t in studio.templates" :key="t.id">
           <li class="osc-st-tpl">
@@ -2737,6 +2755,22 @@
       <div class="osc-dialog-actions">
         <button type="button" class="osc-btn osc-btn-secondary"
           @click="closeDialog('osc-dlg-studio-templates')">Close</button>
+      </div>
+    </div>
+  </dialog>
+  <!-- STUDIO: Copy link when the clipboard is unavailable (V422, spec §199). -->
+  <dialog class="osc-dialog" id="osc-dlg-studio-link" data-oscilla-modal data-osc-studio-dialog
+    aria-labelledby="osc-dlg-st-link-title">
+    <div class="osc-dialog-body">
+      <h2 class="osc-dialog-title" id="osc-dlg-st-link-title">Studio link</h2>
+      <p>The clipboard is not available here. Copy the link manually; opening it never starts
+        playback.</p>
+      <p class="osc-muted osc-dialog-note" data-osc="studio.linkNote" x-text="studio.linkNote"></p>
+      <input class="osc-number osc-dialog-input" type="text" readonly :value="studio.link"
+        data-osc="studio.linkUrl" aria-label="Studio link" @focus="$event.target.select()">
+      <div class="osc-dialog-actions">
+        <button type="button" class="osc-btn osc-btn-primary" data-osc="studio.linkDone"
+          @click="closeDialog('osc-dlg-studio-link')">Done</button>
       </div>
     </div>
   </dialog>
