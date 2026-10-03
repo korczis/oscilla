@@ -386,7 +386,7 @@ test('G19: absolute level only in level/RTA outputs under a valid level calibrat
     levelsDb: Float64Array.from(bands, (_, i) => (i === 0 ? -Infinity : -40 + i)) });
   const level = createLevelCalibration({ referenceHz: 1000, referenceDbSpl: 94,
     observedDbRelative: -30.5, createdAt: '2026-10-02T09:00:00.000Z' });
-  const meta = (cal) => ({ oscillaVersion: '3.0.0', experimentId: 'x', sampleRate: 48000,
+  const meta = (cal) => ({ oscillaVersion: '9.8.7', experimentId: 'x', sampleRate: 48000,
     calibration: cal });
   const uncal = rtaCsv(rta, meta({ frequency: null, level: null }));
   assert.doesNotMatch(uncal, /SPL|level_db_spl/);

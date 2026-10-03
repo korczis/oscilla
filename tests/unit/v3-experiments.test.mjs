@@ -47,7 +47,7 @@ const ALGORITHMS = Object.freeze({
 const OPTS = { knownAlgorithms: ALGORITHMS };
 const COMMIT = 'abc1234def5678abc1234def5678abc1234def56';
 const BUILD = Object.freeze({
-  version: '3.0.0', commit: COMMIT, shortCommit: 'abc1234', sourceDate: '2026-10-01T00:00:00Z',
+  version: '9.8.7', commit: COMMIT, shortCommit: 'abc1234', sourceDate: '2026-10-01T00:00:00Z',
   channel: 'release', dirty: false, repository: 'https://github.com/korczis/oscilla',
 });
 const SWEEP = Object.freeze({
@@ -166,7 +166,7 @@ test('schema versions are four independent axes (§131)', () => {
   assert.deepStrictEqual(Object.keys(SCHEMA_VERSIONS), ['experiment', 'calibration', 'config',
     'preset']);
   const e = baseExperiment();
-  assert.strictEqual(e.oscillaVersion, '3.0.0');
+  assert.strictEqual(e.oscillaVersion, '9.8.7');
   assert.notStrictEqual(e.oscillaVersion, String(e.schemaVersion));
 });
 
@@ -283,7 +283,7 @@ test('summarizeExperiment: compact lines; never invents data (§52, §161)', () 
     'Sample rate: 48000 Hz',
     'Runs: 5 of 5 requested',
     'Quality: USABLE',
-    'OSCILLA 3.0.0, commit abc1234',
+    'OSCILLA 9.8.7, commit abc1234',
   ]);
   const bare = createExperiment({ recipe: { stimulus: { kind: 'pink', duration: 5, level: 0.1,
     fade: 0.1 } }, now: 0, id: 'bare', input: { device: { label: '' } } });
@@ -849,7 +849,7 @@ const SHORT = () => {
   return t;
 };
 const META = Object.freeze({
-  oscillaVersion: '3.0.0', oscillaCommit: COMMIT, experimentId: 'exp-1', algorithm: null,
+  oscillaVersion: '9.8.7', oscillaCommit: COMMIT, experimentId: 'exp-1', algorithm: null,
   sampleRate: 48000, calibration: { frequency: null, level: null },
 });
 
@@ -857,7 +857,7 @@ test('transferCsv: metadata header, explicit unit columns, raw by default', () =
   const csv = transferCsv(SHORT(), META);
   assert.strictEqual(csv, [
     '# OSCILLA transfer function (frequency response)',
-    '# oscilla_version: 3.0.0',
+    '# oscilla_version: 9.8.7',
     `# oscilla_commit: ${COMMIT}`,
     '# experiment_id: exp-1',
     '# algorithm: oscilla.transfer.v1',

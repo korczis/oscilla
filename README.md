@@ -339,6 +339,10 @@ automated test proves how a physical speaker, room or microphone behaves.
   public contract (`type!:` or a `BREAKING CHANGE:` footer). MINOR means a new compatible
   capability (`feat:`). PATCH covers fixes, performance and any non-conventional commit.
   Commits that are only docs, chore, ci, test, refactor, style or build need no release.
+  A new product generation (a new primary workspace family, such as V3's measurement
+  workbench) may also take a MAJOR version without an incompatible change: the owner sets the
+  untagged version in `package.json`, and `release:prepare` confirms it because it covers the
+  level the commits require.
 - **Release flow.**
   1. `npm run release:analyze` reads the conventional commits since the last `v*` tag and
      proposes the level, with a reason for each commit.

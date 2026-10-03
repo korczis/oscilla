@@ -54,7 +54,7 @@ const SNR_DB = 30;
 const RUNS = 3;
 const NOW = '2026-10-02T10:00:00.000Z';
 const BUILD = Object.freeze({
-  version: '3.0.0-test', commit: 'abc1234def5678abc1234def5678abc1234def56',
+  version: '9.8.7-test', commit: 'abc1234def5678abc1234def5678abc1234def56',
   shortCommit: 'abc1234', sourceDate: '2026-10-01T00:00:00Z', channel: 'test', dirty: false,
   repository: null,
 });
