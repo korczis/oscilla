@@ -2,9 +2,9 @@
 id: studio-build-a-signal-path
 kind: use-case
 title: 'Build a simple signal path in Studio'
-summary: 'Place Oscillator, Envelope, Filter and Master Output nodes and connect them into a sounding chain.'
+summary: 'Place Oscillator, Envelope, Filter and Master Output nodes, connect them with typed cables and hear the chain.'
 category: studio
-status: draft
+status: active
 target: advisory
 weight: 300
 difficulty: basic
@@ -15,23 +15,32 @@ tags: [oscilla, studio, v31, product-acceptance]
 
 # Situation
 
-Someone opens Studio and builds Oscillator → ADSR → Filter → Master Output (specification §14 UC1, the §257 Basic Synth chain). They add each node from the library, drag a cable from each audio output to the next audio input, and press play.
+Someone opens **Studio** and builds Oscillator → Envelope → Filter → Master Output
+(specification §14 UC1, the §257 Basic Synth chain; the Subtractive Synth template is that
+chain). They add each node from the Node library (click, or drag onto the graph), drag a cable
+from each audio output to the next audio input, and press **Play** (docs/v31/user-guide.md,
+"Create a node" and "Connect nodes").
 
 # What proves it
 
-Status `draft`: Studio is not in the shipped product yet, so nobody can perform this task today. What the Studio model core already proves is named below with its test, run by `npm test` (`tests/unit/v31-studio-model.test.mjs`); what is not yet provable is named with the issue that will prove it.
+The behaviour is proven by the OSCILLA tests named in each claim of `docs/CLAIMS.yaml` and
+by these, run by:
 
-Proven now:
+- `npm test`: tests/unit/v31-studio-model.test.mjs ("§257 Basic Synth topology builds and
+  validates", "every compiler and reuse key names an existing export", "node defaults match the
+  existing engine defaults") and tests/unit/v31-studio-compiler.test.mjs ("§257 Basic Synth
+  compiles to a deterministic plan", "Master Output feeds only the engine safety chain").
+- `npm run test:studio`: tests/browser/v31-studio-graph.cjs checks library-add, cable-connect
+  and play-stop (0 engine nodes and sources after STOP), and tests/browser/v31-studio-audio.cjs
+  §209 (the filtered chain's harmonic matches the browser's own biquad response), in Chromium,
+  Firefox and WebKit.
 
-- The chain builds through the action layer and validates with no error and no warning, as `osc-1.audio → env-1.audio → filter-1.audio → master-1.audio` (test "§257 Basic Synth topology builds and validates").
-- Every node type names the existing engine builder it will compile to and takes the engine defaults (tests "every compiler and reuse key names an existing export (§28)" and "node defaults match the existing engine defaults").
-
-Not yet provable:
-
-- The node library, node drag and cable drag in the editor (issues V410, V411).
-- Hearing it: the graph compiler (issue V414) and the browser audio-graph test (specification §209). Claim `studio-compiled-topology` is planned.
-
-A use-case/v1 scenario can only invoke `bin/majordomus`, and a live one only its read-only commands, so the scenario below does not run Studio. It proves the traceability instead: each guaranteed claim resolves to a tracked implementation and a tracked test in the knowledge graph, and each planned claim to the document that specifies it, so a renamed or deleted test or specification breaks this use case rather than silently orphaning the claim.
+A use-case/v1 scenario can only invoke `bin/majordomus`, and a live one only its read-only
+commands, so the scenario below does not open a browser or play audio. It proves the
+traceability instead: each claim's implementation and test are tracked files wired to the
+claim in the knowledge graph, so a renamed or deleted test breaks this use case rather than
+silently orphaning the claim. The behaviour itself is proven by the commands above, which the
+release gate runs and CI blocks a merge on.
 
 # Scenario
 
@@ -62,16 +71,24 @@ steps:
     expect:
       exit: 0
       stdout_contains: ['claim:studio-registry-reuses-engine +test:tests/unit/v31-studio-model\.test\.mjs']
-  - id: studio-compiled-topology-specified
-    run: ['knowledge', 'edges', '--type', 'specified_by']
-    note: 'claim studio-compiled-topology is planned: specified by docs/specs/oscilla-v3.1-studio.md, with no implementation or test yet'
+  - id: studio-compiled-topology-implemented
+    run: ['knowledge', 'edges', '--type', 'implemented_by']
+    note: 'claim studio-compiled-topology is implemented by src/js/studio/compiler.js, a tracked file'
     expect:
       exit: 0
-      stdout_contains: ['claim:studio-compiled-topology +document:docs/specs/oscilla-v3\.1-studio\.md']
+      stdout_contains: ['claim:studio-compiled-topology +implementation:src/js/studio/compiler\.js']
+  - id: studio-compiled-topology-tested
+    run: ['knowledge', 'edges', '--type', 'tested_by']
+    note: 'claim studio-compiled-topology is proven by tests/browser/v31-studio-audio.cjs'
+    expect:
+      exit: 0
+      stdout_contains: ['claim:studio-compiled-topology +test:tests/browser/v31-studio-audio\.cjs']
 then:
-  - 'every guaranteed claim this use case names resolves to a tracked implementation and a tracked test, and every planned one to its specification'
+  - 'every claim this use case names resolves to a tracked implementation and a tracked test'
 ```
 
 # Outcome
 
-The chain is one valid StudioModel; once the compiler lands, the running Web Audio graph is exactly that chain, inside AudioEngine accounting, and stop leaves no node.
+The chain is one valid StudioModel and the running Web Audio graph is that chain, built
+from the existing engine builders inside AudioEngine accounting and leaving only through the
+engine's safety chain; STOP leaves no node.

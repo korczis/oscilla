@@ -13,8 +13,8 @@
 #   status          one of the statuses below
 #
 # Every guaranteed claim names a test that a release-gate script runs (`npm test`,
-# `npm run test:engine`, `npm run test:measure` or `npm run test:browser`), and CI blocks a
-# merge on its failure.
+# `npm run test:engine`, `npm run test:measure`, `npm run test:studio` or
+# `npm run test:browser`), and CI blocks a merge on its failure.
 # Majordomus's evidence ledger records only its own runners (test/run.sh, cargo test), so
 # `majordomus-cli evidence show` reports these claims `unrunnable`: the proof is the CI run,
 # not the ledger. That is a limit of the tool, stated here rather than hidden.
@@ -445,65 +445,65 @@ claims:
     note: 'Tests "every compiler and reuse key names an existing export" and "node defaults match the existing engine defaults". The compiler itself is the planned claim studio-compiled-topology.'
 
   - id: studio-one-store-projections
-    claim: 'Compact Studio, full Studio, Inspector, timeline and Signal Path all render one canonical StudioModel; no view keeps a synchronized copy.'
-    source: docs/specs/oscilla-v3.1-studio.md
-    implementation: '-'
-    test: '-'
-    status: planned
-    note: 'Specification sections 9 and 214; issues V421, V422, V430. The single store exists (src/js/studio/actions.js); the views do not yet.'
+    claim: 'The full Studio graph editor, the Inspector, the timeline and the compact Studio widget on the Playground all render one canonical StudioModel through one store; an edit in one is the model the others show, and no view keeps a synchronized copy.'
+    source: .ai/repo/rules/project/studio-model-is-canonical.v1.md
+    implementation: src/js/ui/studio/workspace.js
+    test: tests/browser/v31-studio-graph.cjs
+    status: guaranteed
+    note: 'Check compact-sync, in Chromium, Firefox and WebKit from file:// (a clip moved in the compact widget by keyboard is the clip the full Studio and the Inspector show; a Filter added in the full Studio appears in the compact signal path; the store object is the same); tests/unit/v31-studio-ui-graph-panels.test.mjs "the compact view is a projection of the same model" and "one store behind a stable handle". The Playground''s V2 Signal Path view (src/js/visualization/signal-path.js) is not a Studio projection: it still draws the Playground voice, and the compact widget draws the StudioModel through its own layout (docs/v31/audit-current-state.md).'
 
   - id: studio-compiled-topology
-    claim: 'The running Web Audio topology is compiled from the StudioModel through the existing AudioEngine, so the screen never shows a topology other than the one that sounds.'
-    source: docs/specs/oscilla-v3.1-studio.md
-    implementation: '-'
-    test: '-'
-    status: planned
-    note: 'Specification sections 1, 41-43 and 209; issue V414; ADR 0035.'
+    claim: 'The running Web Audio topology is compiled from the StudioModel through the existing AudioEngine, with Master Output feeding only the engine safety chain, so the graph that sounds is the graph on screen.'
+    source: docs/v31/compiler.md
+    implementation: src/js/studio/compiler.js
+    test: tests/browser/v31-studio-audio.cjs
+    status: guaranteed
+    note: 'Specification §209-§210 in Chromium, Firefox and WebKit: the filtered sawtooth''s 20th harmonic equals the browser''s own biquad response, and rises when the filter is removed; an LFO edge moves the cutoff by its depth. tests/unit/v31-studio-compiler.test.mjs asserts the deterministic plan, refusal of invalid models before Web Audio and "Master Output feeds only the engine safety chain". ADR 0035.'
 
   - id: studio-click-free-live-edit
-    claim: 'Editing the graph while it plays patches the running graph click-free in transactions and leaves no node behind after stop.'
-    source: docs/specs/oscilla-v3.1-studio.md
-    implementation: '-'
-    test: '-'
-    status: planned
-    note: 'Specification sections 44-46, 182 and 213; issue V415; ADR 0035.'
+    claim: 'Editing the graph while it plays patches the running graph in transactions with crossfaded routes, keeping the click ratio below a fixed threshold, and leaves no node, source or connection behind after stop.'
+    source: docs/v31/compiler.md
+    implementation: src/js/studio/runtime.js
+    test: tests/browser/v31-studio-audio.cjs
+    status: guaranteed
+    note: 'Specification §45 (click ratio for reconnect, filter insertion, waveform replacement, mute and stop) and §213 (20 edits during playback, then stop: 0 engine, runtime and live nodes, no growth over 3 cycles), in Chromium, Firefox and WebKit; tests/unit/v31-studio-compiler.test.mjs covers the diff, a failed transaction leaving the previous runtime intact, and the leak count. ADR 0035.'
 
   - id: studio-transport-audio-clock
-    claim: 'Studio transport, clips, loop and automation are scheduled on AudioContext time through the sequencer compiler, and the playhead only observes the scheduler.'
-    source: docs/specs/oscilla-v3.1-studio.md
-    implementation: '-'
-    test: '-'
-    status: planned
-    note: 'Specification sections 93-99, 180-181, 211-212; issues V416, V418, V419; ADR 0036 and ADR 0037.'
+    claim: 'Studio transport, clips, loop and automation are scheduled on AudioContext time, pattern clips through the existing sequencer compiler, and the playhead only observes the scheduler.'
+    source: docs/v31/timeline.md
+    implementation: src/js/studio/transport.js
+    test: tests/browser/v31-studio-transport.cjs
+    status: guaranteed
+    note: 'In Chromium, Firefox and WebKit the Subtractive Synth''s Tone and Sweep clips start, meet and end on the predicted frames and the cutoff automation shows in the spectrum; tests/unit/v31-studio-timeline.test.mjs (§211 exact AudioParam event lists, §212 schedule, loop passes without drift) and tests/unit/v31-studio-transport.test.mjs prove the schedule exactly; tests/browser/v31-studio-timeline.cjs check playback has the playhead follow transport.playhead(). ADR 0036, ADR 0037.'
 
   - id: studio-patch-round-trip
-    claim: 'A saved patch loads back to the same graph, parameters and timeline, replacing or inserting only on explicit user intent.'
-    source: docs/specs/oscilla-v3.1-studio.md
-    implementation: '-'
-    test: '-'
-    status: planned
-    note: 'Specification sections 111-115 and 154-159; issue V426. The Studio file round trip already holds (claim studio-deterministic-hash); the patch format and its persistence do not exist yet.'
+    claim: 'A saved project loads back to the exact model, and a saved patch (nodes, parameters, internal cables and their automation lanes, no tracks or clips) inserts or replaces only on explicit user intent; nothing saved is ever overwritten silently.'
+    source: docs/v31/patches-and-provenance.md
+    implementation: src/js/studio/patches.js
+    test: tests/unit/v31-studio-patches.test.mjs
+    status: guaranteed
+    note: 'Tests "§113 save and load a project: the exact model", "§114 insertPatch", "§114 replaceWithPatch", "§114 store PATCH_INSERT / PATCH_REPLACE are single undoable entries", "§155 patches are never silently overwritten", "§158 JSON export and import". tests/browser/v31-studio-graph.cjs check patches-files does it through the UI in three browsers. Autosave and crash recovery are not built.'
 
   - id: studio-experiment-provenance
-    claim: 'An experiment run from Studio records the Studio schema version, the studioHash and the topology it ran, through the V3 measurement engine.'
-    source: docs/specs/oscilla-v3.1-studio.md
-    implementation: '-'
-    test: '-'
-    status: planned
-    note: 'Specification sections 106-110; issues V424, V425; ADR 0038.'
+    claim: 'A measurement run from Studio goes through the V3 measurement engine with a recipe derived from the graph and its clips, and the saved experiment records the Studio schema version, the studioHash and the execution state that ran, outside configHash.'
+    source: .ai/repo/adrs/0038-measurement-topology-inside-studio.md
+    implementation: src/js/studio/provenance.js
+    test: tests/unit/v31-studio-provenance.test.mjs
+    status: guaranteed
+    note: 'Tests "§109 the Studio block is schema version, studioHash and the execution state only", "ADR 0019: the recipe stays authoritative", "ADR 0038 round trip", "tampering with the Studio block is corrupt"; tests/unit/v31-studio-gaps.test.mjs runs a real MeasurementEngine on the clip pass; tests/browser/v31-studio-workflows.cjs check measure-from-studio does it on the TEST CONTEXT loopback in three browsers. No automated test proves how a physical speaker, room or microphone behaves.'
 
   - id: studio-non-drag-operation
-    claim: 'Every Studio operation, connecting ports and moving nodes and clips included, can be done from the keyboard without pointer dragging.'
-    source: docs/specs/oscilla-v3.1-studio.md
-    implementation: '-'
-    test: '-'
-    status: planned
-    note: 'Specification sections 138-144 and 206; issue V428.'
+    claim: 'Connecting ports, moving nodes, moving, resizing, duplicating and deleting clips, and editing automation points each have a keyboard path that dispatches the same store actions as the pointer path, without pointer dragging; on touch, ports connect by tapping.'
+    source: docs/v31/user-guide.md
+    implementation: src/js/ui/studio/graph-keys.js
+    test: tests/browser/v31-studio-graph.cjs
+    status: guaranteed
+    note: 'Checks keyboard-connect (Tab to a node, C, Enter connects; arrows nudge) and mobile-tap-connect; tests/browser/v31-studio-timeline.cjs checks clip-keyboard (arrows, typed start and duration, Ctrl+D, Delete) and automation (arrow nudge, numeric entry). Not built: dragging several clips at once, by pointer or keyboard. The N add-node picker has a keyboard path but no browser check of its own.'
 
   - id: studio-file-protocol
-    claim: 'Studio opens and runs from file:// inside the single dist/index.html, with no network access.'
-    source: docs/specs/oscilla-v3.1-studio.md
-    implementation: '-'
-    test: '-'
-    status: planned
-    note: 'Specification sections 215-219; issue V430; rule project.single-file-deliverable v2.'
+    claim: 'The Studio workspace of the built page runs in Chromium, Firefox and WebKit from file:// and from a /oscilla/ sub-path with no console errors, inside the single dist/index.html that loads nothing at runtime.'
+    source: .ai/repo/rules/project/single-file-deliverable.v2.md
+    implementation: src/js/ui/studio/workspace.js
+    test: tests/browser/v31-studio-graph.cjs
+    status: guaranteed
+    note: 'Every v31-studio-graph.cjs check runs from file:// and the smoke checks from the sub-path, each ending with no-console-errors; tests/browser/v31-studio-timeline.cjs runs every check from both origins. That nothing is fetched is claim dist-self-contained (scripts/verify-dist.mjs). From file:// the browser''s storage may be unavailable; the library then keeps projects in memory and says so.'

@@ -27,7 +27,7 @@
 //   STOP: 0 engine nodes/sources, 0 runtime nodes, 0 live sources, 0 live connections; three
 //        PLAY → STOP cycles have the same peak counts (no growth);
 //   no console error or page error.
-// Not part of `npm run test:browser` yet (package.json is out of this change's scope).
+// Runs in `npm run test:studio` (release-gate and the CI studio job).
 'use strict';
 
 const fs = require('node:fs');

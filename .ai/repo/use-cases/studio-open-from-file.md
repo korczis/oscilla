@@ -4,7 +4,7 @@ kind: use-case
 title: 'Open Studio from file://'
 summary: 'Double-click the single dist/index.html and use Studio offline, with nothing fetched.'
 category: studio
-status: draft
+status: active
 target: advisory
 weight: 430
 difficulty: basic
@@ -15,37 +15,56 @@ tags: [oscilla, studio, v31, product-acceptance]
 
 # Situation
 
-Someone opens the downloaded `dist/index.html` from disk, without a network, and opens Studio (specification §14 UC14). The application-wide use case for `file://` (open-from-file, added with the product graph on main) covers the rest of the page.
+Someone opens the downloaded `dist/index.html` from disk, without a network, and opens
+**Studio** (specification §14 UC14). The application-wide use case `open-from-file` covers the
+rest of the page.
 
 # What proves it
 
-Status `draft`: Studio is not in the shipped product yet, so nobody can perform this task today. What the Studio model core already proves is named below with its test, run by `npm test` (`tests/unit/v31-studio-model.test.mjs`); what is not yet provable is named with the issue that will prove it.
+The behaviour is proven by the OSCILLA tests named in each claim of `docs/CLAIMS.yaml` and
+by these, run by:
 
-Proven now:
+- `npm run test:studio`: every check of tests/browser/v31-studio-graph.cjs runs from file://
+  and its smoke checks from a /oscilla/ sub-path; tests/browser/v31-studio-timeline.cjs runs every
+  check from both; each ends with no-console-errors, in Chromium, Firefox and WebKit.
+- `npm run verify`: scripts/verify-dist.mjs refuses any resource reference, module script,
+  fetch, XMLHttpRequest or dynamic import in dist/index.html (claim dist-self-contained).
 
-- Nothing Studio-specific yet. The model core is pure (no DOM, fetch, module loading or clock), which keeps it inside rule `project.single-file-deliverable`, but no test opens Studio from `file://`.
+A use-case/v1 scenario can only invoke `bin/majordomus`, and a live one only its read-only
+commands, so the scenario below does not open a browser or play audio. It proves the
+traceability instead: each claim's implementation and test are tracked files wired to the
+claim in the knowledge graph, so a renamed or deleted test breaks this use case rather than
+silently orphaning the claim. The behaviour itself is proven by the commands above, which the
+release gate runs and CI blocks a merge on.
 
-Not yet provable:
+# What it cannot prove
 
-- Studio in the built file, the `file://` browser test, bundle and dependency audit (issue V430, specification §215-§219). Claim `studio-file-protocol` is planned.
-
-A use-case/v1 scenario can only invoke `bin/majordomus`, and a live one only its read-only commands, so the scenario below does not run Studio. It proves the traceability instead: each guaranteed claim resolves to a tracked implementation and a tracked test in the knowledge graph, and each planned claim to the document that specifies it, so a renamed or deleted test or specification breaks this use case rather than silently orphaning the claim.
+From file:// the browser's storage may be unavailable; the Studio library then keeps
+projects and patches in memory for this page view and says so. Browser fullscreen and deep
+links into Studio are not built.
 
 # Scenario
 
 ```yaml
 mode: live
 steps:
-  - id: studio-file-protocol-specified
-    run: ['knowledge', 'edges', '--type', 'specified_by']
-    note: 'claim studio-file-protocol is planned: specified by docs/specs/oscilla-v3.1-studio.md, with no implementation or test yet'
+  - id: studio-file-protocol-implemented
+    run: ['knowledge', 'edges', '--type', 'implemented_by']
+    note: 'claim studio-file-protocol is implemented by src/js/ui/studio/workspace.js, a tracked file'
     expect:
       exit: 0
-      stdout_contains: ['claim:studio-file-protocol +document:docs/specs/oscilla-v3\.1-studio\.md']
+      stdout_contains: ['claim:studio-file-protocol +implementation:src/js/ui/studio/workspace\.js']
+  - id: studio-file-protocol-tested
+    run: ['knowledge', 'edges', '--type', 'tested_by']
+    note: 'claim studio-file-protocol is proven by tests/browser/v31-studio-graph.cjs'
+    expect:
+      exit: 0
+      stdout_contains: ['claim:studio-file-protocol +test:tests/browser/v31-studio-graph\.cjs']
 then:
-  - 'every guaranteed claim this use case names resolves to a tracked implementation and a tracked test, and every planned one to its specification'
+  - 'every claim this use case names resolves to a tracked implementation and a tracked test'
 ```
 
 # Outcome
 
-Studio works from `file://` and from the Pages sub-path with zero console errors and no network request.
+Studio works from `file://` and from the Pages sub-path with no console error, inside the
+one file that loads nothing at runtime.

@@ -2,9 +2,9 @@
 id: studio-define-a-measurement-pipeline
 kind: use-case
 title: 'Define a measurement pipeline in Studio'
-summary: 'Wire Sweep to Output and Microphone through Calibration into the Transfer Analyzer with the sweep as reference.'
+summary: 'Wire Sweep to Output and Microphone through Calibration into the Transfer Analyzer with the sweep as reference, and run it from the timeline.'
 category: studio
-status: draft
+status: active
 target: advisory
 weight: 400
 difficulty: advanced
@@ -15,22 +15,40 @@ tags: [oscilla, studio, v31, product-acceptance]
 
 # Situation
 
-Someone builds Sweep → Master Output, Sweep reference → Transfer Analyzer, Microphone capture → Calibration → Transfer Analyzer observed → Measurement Result (specification §14 UC11, the §258 template), places noise-check and stimulus clips on a measurement track, and runs it.
+Someone opens the **Measurement Sweep** template: Sweep → Master Output, the Sweep's
+reference → Transfer Analyzer REFERENCE, Microphone → Calibration → Transfer Analyzer OBSERVED
+→ Measurement Result, with noise-check, pre-roll, stimulus, tail and analysis clips on a
+measurement track (specification §14 UC11, the §258 template). They press **Play**
+(docs/v31/user-guide.md, "Measure with the Measurement Sweep template").
 
 # What proves it
 
-Status `draft`: Studio is not in the shipped product yet, so nobody can perform this task today. What the Studio model core already proves is named below with its test, run by `npm test` (`tests/unit/v31-studio-model.test.mjs`); what is not yet provable is named with the issue that will prove it.
+The behaviour is proven by the OSCILLA tests named in each claim of `docs/CLAIMS.yaml` and
+by these, run by:
 
-Proven now:
+- `npm test`: tests/unit/v31-studio-model.test.mjs ("§258 Measurement topology builds and
+  validates", "analysis cycles and live input to output are rejected"),
+  tests/unit/v31-studio-templates.test.mjs ("§258 Measurement Sweep is the measurement topology;
+  the microphone never sounds") and tests/unit/v31-studio-gaps.test.mjs (the first measurement
+  clip hands the derived recipe to the engine; a topology that cannot be measured is refused;
+  a real MeasurementEngine runs the clip pass).
+- `npm run test:studio`: tests/browser/v31-studio-workflows.cjs check measure-from-studio (on the
+  TEST CONTEXT loopback: PREFLIGHT … COMPLETE, the experiment saved, Studio PLAY refused while
+  the measurement owns the output, Escape aborts, 0 nodes afterwards) and
+  tests/browser/v31-studio-graph.cjs check templates (the Microphone shown as unavailable with a
+  reason where it is), in Chromium, Firefox and WebKit.
 
-- The topology validates as typed analysis routing, with deterministic order, and reference and observed cannot be swapped (test "§258 Measurement topology builds and validates").
-- A microphone with an audio path to Master Output is refused (test "analysis cycles and live input to output are rejected (§240)").
+A use-case/v1 scenario can only invoke `bin/majordomus`, and a live one only its read-only
+commands, so the scenario below does not open a browser or play audio. It proves the
+traceability instead: each claim's implementation and test are tracked files wired to the
+claim in the knowledge graph, so a renamed or deleted test breaks this use case rather than
+silently orphaning the claim. The behaviour itself is proven by the commands above, which the
+release gate runs and CI blocks a merge on.
 
-Not yet provable:
+# What it cannot prove
 
-- Measurement node adapters over the V3 measurement engine and measurement timeline orchestration (issue V424, ADR 0038). Claim `studio-experiment-provenance` is planned.
-
-A use-case/v1 scenario can only invoke `bin/majordomus`, and a live one only its read-only commands, so the scenario below does not run Studio. It proves the traceability instead: each guaranteed claim resolves to a tracked implementation and a tracked test in the knowledge graph, and each planned claim to the document that specifies it, so a renamed or deleted test or specification breaks this use case rather than silently orphaning the claim.
+The browser checks run on a digital loopback; no automated test proves how a physical
+speaker, room or microphone behaves. Measurement clips are not rendered offline: they run live.
 
 # Scenario
 
@@ -49,16 +67,23 @@ steps:
     expect:
       exit: 0
       stdout_contains: ['claim:studio-measurement-topology +test:tests/unit/v31-studio-model\.test\.mjs']
-  - id: studio-experiment-provenance-specified
-    run: ['knowledge', 'edges', '--type', 'specified_by']
-    note: 'claim studio-experiment-provenance is planned: specified by docs/specs/oscilla-v3.1-studio.md, with no implementation or test yet'
+  - id: studio-experiment-provenance-implemented
+    run: ['knowledge', 'edges', '--type', 'implemented_by']
+    note: 'claim studio-experiment-provenance is implemented by src/js/studio/provenance.js, a tracked file'
     expect:
       exit: 0
-      stdout_contains: ['claim:studio-experiment-provenance +document:docs/specs/oscilla-v3\.1-studio\.md']
+      stdout_contains: ['claim:studio-experiment-provenance +implementation:src/js/studio/provenance\.js']
+  - id: studio-experiment-provenance-tested
+    run: ['knowledge', 'edges', '--type', 'tested_by']
+    note: 'claim studio-experiment-provenance is proven by tests/unit/v31-studio-provenance.test.mjs'
+    expect:
+      exit: 0
+      stdout_contains: ['claim:studio-experiment-provenance +test:tests/unit/v31-studio-provenance\.test\.mjs']
 then:
-  - 'every guaranteed claim this use case names resolves to a tracked implementation and a tracked test, and every planned one to its specification'
+  - 'every claim this use case names resolves to a tracked implementation and a tracked test'
 ```
 
 # Outcome
 
-Running the pipeline drives the existing measurement state machine and produces the same result as the Measure workspace; levels stay relative unless calibrated.
+Running the pipeline drives the existing measurement state machine of the Measure workspace
+and produces its result; levels stay relative unless a valid calibration applies (ADR 0017).
