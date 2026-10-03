@@ -1,0 +1,100 @@
+{
+ "id": "oscilla.confidence.v1",
+ "digits": 10,
+ "output": {
+  "status": "GOOD",
+  "reasons": [
+   {
+    "code": "FREQUENCY_CALIBRATION",
+    "scope": "calibration",
+    "severity": "warn",
+    "text": "microphone calibration covers 63 Hz-2.9 kHz; uncalibrated below",
+    "value": 94.44444444,
+    "unit": "%",
+    "range": [62.99605249, 2850.875898]
+   },
+   {
+    "code": "CLIPPING",
+    "scope": "quality",
+    "severity": "ok",
+    "text": "no clipping",
+    "value": 0,
+    "unit": "%"
+   },
+   {
+    "code": "DROPOUT",
+    "scope": "quality",
+    "severity": "ok",
+    "text": "no dropouts",
+    "value": 0,
+    "unit": "dropouts"
+   },
+   {
+    "code": "SNR_MEDIAN",
+    "scope": "quality",
+    "severity": "ok",
+    "text": "56 dB median SNR",
+    "value": 56.40146528,
+    "unit": "dB"
+   },
+   {
+    "code": "COVERAGE",
+    "scope": "quality",
+    "severity": "ok",
+    "text": "valid range 50 Hz-2.9 kHz covers 98 % of the octaves requested (50 Hz-3.0 kHz)",
+    "value": 98.7547211,
+    "unit": "%",
+    "range": [50, 2850.875898]
+   },
+   {
+    "code": "REPEATABILITY",
+    "scope": "quality",
+    "severity": "ok",
+    "text": "2 runs agree within ±0.1 dB (median standard deviation across frequency)",
+    "value": 0.001198501143,
+    "unit": "dB"
+   },
+   {
+    "code": "RESOLUTION",
+    "scope": "quality",
+    "severity": "ok",
+    "text": "frequency resolution 0.24 Hz (finer than 1/6 octave from 50 Hz)",
+    "value": 0.244140625,
+    "unit": "Hz"
+   },
+   {
+    "code": "LEVEL_CALIBRATION",
+    "scope": "calibration",
+    "severity": "ok",
+    "text": "absolute level calibration: offset +125.3 dB from a 94.0 dB SPL reference at 1.000 kHz",
+    "value": 125.25,
+    "unit": "dB"
+   }
+  ],
+  "metrics": {
+   "snrMedianDb": 56.40146528,
+   "snrMinDb": 33.93364785,
+   "clippingRatio": 0,
+   "clippingRegions": 0,
+   "dropouts": 0,
+   "repeatabilityDb": 0.001198501143,
+   "runs": 2,
+   "requestedRange": [50, 3000],
+   "coverage": [50, 2850.875898],
+   "coverageFraction": 0.987547211,
+   "reliableRanges": [
+    [50, 2850.875898]
+   ],
+   "unreliableRanges": [],
+   "calibratedRange": [62.99605249, 2850.875898],
+   "frequencyCalibrated": false,
+   "levelCalibrated": true,
+   "resolutionHz": 0.244140625
+  },
+  "mask": {
+   "frequencies": [50, 56.12310242, 62.99605249, 70.71067812, 79.3700526, 89.08987181, 100, 112.2462048, 125.992105, 141.4213562, 158.7401052, 178.1797436, 200, 224.4924097, 251.98421, 282.8427125, 317.4802104, 356.3594873, 400, 448.9848193, 503.96842, 565.6854249, 634.9604208, 712.7189745, 800, 897.9696386, 1007.93684, 1131.37085, 1269.920842, 1425.437949, 1600, 1795.939277, 2015.87368, 2262.7417, 2539.841683, 2850.875898],
+   "reliable": [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+   "calibrated": [0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
+  }
+ }
+}

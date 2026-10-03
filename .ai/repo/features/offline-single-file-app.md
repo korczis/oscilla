@@ -13,7 +13,7 @@ rules: [project.single-file-deliverable]
 docs: [README.md]
 adrs: [adr-0011, adr-0012, adr-0013]
 claims: [single-file-build, dist-self-contained, opens-from-file-and-subpath]
-use_cases: [open-from-file, open-under-the-oscilla-sub-path]
+use_cases: [open-from-file, open-under-the-oscilla-sub-path, open-measure-from-file]
 tags: [delivery, v2]
 ---
 

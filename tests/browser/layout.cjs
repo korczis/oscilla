@@ -35,8 +35,11 @@ const LAUNCH = {
 };
 const WIDTHS = [[320, 640], [375, 812], [768, 1024], [1024, 768], [1280, 800], [1536, 1024]];
 const WORKSPACES = ['playground', 'sequencer', 'analyzer', 'filter', 'synthesis', 'compare'];
-// Full-width views (no .osc-panel): their content must stay inside the view's box.
-const VIEWS = ['about'];
+// Full-width views: their content must stay inside the view's box. MEASURE and EXPERIMENTS
+// are views that hold their own panels, so the panel checks (squashed, overlapping, covered
+// primary/STOP) run for them too.
+const VIEWS = ['measure', 'experiments', 'about'];
+const PANEL_VIEWS = new Set(['measure', 'experiments']);
 const TOUCH_WIDTHS = [[320, 812], [375, 812], [768, 1024]];
 const TOUCH_WORKSPACES = [...WORKSPACES, 'learn', 'presets', ...VIEWS];
 // Product bugs found when this invariant was added (R007, 2026-10-02), reported, not yet fixed in
@@ -81,7 +84,8 @@ function measure() {
     }
   }
   const covered = [];
-  for (const id of ['osc-hold-play', 'osc-trigger', 'osc-gain']) {
+  for (const id of ['osc-hold-play', 'osc-trigger', 'osc-gain', 'osc-measure-primary',
+    'osc-measure-stop']) {
     const el = document.getElementById(id);
     if (!el || !vis(el)) continue;
     el.scrollIntoView({ block: 'center' });
@@ -205,6 +209,12 @@ async function runOne(name) {
       for (const ws of VIEWS) {
         await setWorkspace(page, ws);
         const bad = await page.evaluate(measureView, ws);
+        if (PANEL_VIEWS.has(ws)) {
+          const m = await page.evaluate(measure);
+          bad.push(...m.squashed.map((x) => `squashed ${x}`),
+            ...m.overlaps.map((x) => `overlap ${x}`), ...m.covered.map((x) => `covered ${x}`));
+          if (!m.panels) bad.push('no visible panel');
+        }
         checks++;
         if (bad.length) failures.push(`${w}x${h} ${ws}: ${bad.slice(0, 6).join('; ')}`);
       }

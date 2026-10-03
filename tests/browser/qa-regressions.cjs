@@ -74,6 +74,38 @@ async function open(browser, { width = 1536, height = 1024 } = {}) {
   return { context, page, errors };
 }
 
+/**
+ * Wait, frame by frame, until the smooth scroll of .osc-main has reached its target and stopped:
+ * the panel `sel` within 0..24 px of the top of .osc-main (null: scrollTop 0), with scrollTop
+ * unchanged over 3 consecutive animation frames. Bounded at 3 s; resolves { ms, settled }.
+ * Firefox's smooth scroll from 466 px to 0 takes 670-850 ms (scrollend at 770-950 ms) with or
+ * without the V3 workspaces, so a fixed 700 ms wait sometimes read the last pixel (1).
+ */
+function scrollSettled(page, sel) {
+  return page.evaluate((s) => new Promise((resolve) => {
+    const main = document.querySelector('.osc-main');
+    const p = s ? document.querySelector(s) : null;
+    const t0 = performance.now();
+    let last = null;
+    let still = 0;
+    const atTarget = () => {
+      if (!p) return main.scrollTop === 0;
+      const top = p.getBoundingClientRect().top - main.getBoundingClientRect().top;
+      return top >= 0 && top <= 24;
+    };
+    const frame = () => {
+      const y = main.scrollTop;
+      still = y === last ? still + 1 : 0;
+      last = y;
+      const ms = Math.round(performance.now() - t0);
+      if (atTarget() && still >= 3) resolve({ ms, settled: true });
+      else if (ms > 3000) resolve({ ms, settled: false });
+      else requestAnimationFrame(frame);
+    };
+    requestAnimationFrame(frame);
+  }), sel);
+}
+
 /** Start audio inside a gesture and wait for a running context. */
 async function startAudio(page) {
   await page.mouse.click(2, 2);
@@ -616,10 +648,11 @@ function defineChecks() {
   def('tablet-nav-focus', async ({ browser }) => {
     const { page, context } = await open(browser, { width: 1024, height: 800 });
     const out = {};
+    const settle = {};
     for (const [ws, panel] of [['filter', '#osc-panel-filter'], ['sequencer',
       '#osc-panel-sequencer'], ['analyzer', '#osc-panel-mic']]) {
       await page.click(`[data-osc="nav.${ws}"]`);
-      await sleep(700); // smooth scroll
+      settle[ws] = await scrollSettled(page, panel);
       out[ws] = await page.evaluate((sel) => {
         const p = document.querySelector(sel);
         const main = document.querySelector('.osc-main').getBoundingClientRect();
@@ -631,14 +664,14 @@ function defineChecks() {
       }, panel);
     }
     await page.click('[data-osc="nav.playground"]');
-    await sleep(700);
+    settle.playground = await scrollSettled(page, null);
     const back = await page.evaluate(() => ({
       scrollTop: document.querySelector('.osc-main').scrollTop,
       focused: document.querySelectorAll('.osc-panel.is-focused').length }));
     await context.close();
     const ok = Object.entries(out).every(([ws, r]) => r.focused && r.ring && r.top >= 0
       && r.top <= 24 && r.current === `nav.${ws}`) && back.scrollTop === 0 && back.focused === 0;
-    return { ok, out, back };
+    return { ok, out, back, settle };
   });
 
   def('safety-notice', async ({ browser }) => {

@@ -24,6 +24,24 @@ export function requestMicrophoneStream(mediaDevices) {
   });
 }
 
+/** Default AnalyserNode FFT size of the microphone analysis (V2 mic lab, V3 live RTA). */
+export const MIC_ANALYSER_FFT_SIZE = 8192;
+
+/**
+ * Configure an AnalyserNode the way the microphone analysis uses it: fftSize (8192),
+ * smoothingTimeConstant (0.6; it affects getFloatFrequencyData only, never the time-domain
+ * samples), dB range −140 … 0. Returns the node. Shared by buildMicrophoneGraph and the V3
+ * live-RTA input tap (measurement/capture.js openLiveTap).
+ */
+export function configureAnalyser(analyser, options = {}) {
+  analyser.fftSize = options.fftSize || MIC_ANALYSER_FFT_SIZE;
+  analyser.smoothingTimeConstant = options.smoothingTimeConstant != null
+    ? options.smoothingTimeConstant : 0.6;
+  analyser.minDecibels = -140;
+  analyser.maxDecibels = 0;
+  return analyser;
+}
+
 /**
  * The analysis graph of an open stream on ctx: { stream, source, analyser, freqData }. Throws
  * if the graph cannot be built (the caller stops the tracks).
@@ -33,12 +51,7 @@ export function requestMicrophoneStream(mediaDevices) {
 export function buildMicrophoneGraph(ctx, stream, options = {}) {
   const track = options.track || ((n) => n);
   const source = track(ctx.createMediaStreamSource(stream));
-  const analyser = track(ctx.createAnalyser());
-  analyser.fftSize = options.fftSize || 8192;
-  analyser.smoothingTimeConstant = options.smoothingTimeConstant != null
-    ? options.smoothingTimeConstant : 0.6;
-  analyser.minDecibels = -140;
-  analyser.maxDecibels = 0;
+  const analyser = configureAnalyser(track(ctx.createAnalyser()), options);
   source.connect(analyser); // analysis only: never connected to the destination, never recorded
   return { stream, source, analyser, freqData: new Float32Array(analyser.frequencyBinCount) };
 }
