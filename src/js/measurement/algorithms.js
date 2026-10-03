@@ -31,7 +31,7 @@ export const ALGORITHMS = Object.freeze({
   rta: 'oscilla.rta.v2',
   smoothing: 'oscilla.smoothing.fractional-octave.v2',
   normalization: 'oscilla.normalization.v1',
-  align: 'oscilla.align.xcorr.v1',
+  align: 'oscilla.align.xcorr.v2',
   clip: 'oscilla.clip.v2',
   discontinuity: 'oscilla.discontinuity.v1',
   quality: 'oscilla.confidence.v4',
@@ -51,6 +51,7 @@ export const RETAINED_ALGORITHMS = Object.freeze({
     'oscilla.confidence.v3']),
   smoothing: Object.freeze(['oscilla.smoothing.fractional-octave.v1']),
   rta: Object.freeze(['oscilla.rta.v1']),
+  align: Object.freeze(['oscilla.align.xcorr.v1']),
 });
 
 /** Variant keys of ALGORITHMS and the role (family) whose alternative method they are. */

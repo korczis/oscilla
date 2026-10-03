@@ -271,7 +271,7 @@ test('transfer: phase only on request with a robust alignment; then matches anal
     const r = computeTransfer({ ...base, alignment, lagSamples: lag, options: { phase: true } });
     assert.ok(r.phaseDeg instanceof Float64Array);
     assert.equal(r.phaseReason, null);
-    assert.deepEqual(r.alignment, { algorithm: 'oscilla.align.xcorr.v1',
+    assert.deepEqual(r.alignment, { algorithm: 'oscilla.align.xcorr.v2',
       lagSamples: alignment.lagSamples, peakCorrelation: alignment.peakCorrelation,
       polarity: 1 });
     let worst = 0;
@@ -678,4 +678,52 @@ test('V382 ir.v3: the stored IR keeps the low-frequency precursor (0 dB at 30 Hz
   // the absolute peak time is the same; only the stored window starts earlier
   assert.ok(Math.abs((v3.captureOffsetS + v3.peakTimeS) - (v2.captureOffsetS + v2.peakTimeS))
     < 1e-9);
+});
+
+test('V382 align.v2: a fractional delay is found exactly; the transfer phase stays flat', async () => {
+  const { createFft } = await import('../../src/js/analysis/fft.js');
+  const np2 = (n) => 2 ** Math.ceil(Math.log2(n));
+  // an exact band-limited fractional delay (frequency-domain phase shift)
+  const delay = (x, total, d) => {
+    const N = np2(total + x.length);
+    const re = new Float64Array(N);
+    const im = new Float64Array(N);
+    re.set(x);
+    const fft = createFft(N);
+    fft.forward(re, im);
+    for (let k = 0; k < N; k++) {
+      const w = (-2 * Math.PI * (k <= N / 2 ? k : k - N) * d) / N;
+      const a = re[k] * Math.cos(w) - im[k] * Math.sin(w);
+      const b = re[k] * Math.sin(w) + im[k] * Math.cos(w);
+      re[k] = a;
+      im[k] = -b;
+    }
+    fft.forward(re, im);
+    return Float32Array.from({ length: total }, (_, i) => re[i] / N);
+  };
+  for (const sr of [44100, 48000]) {
+    const r = renderSweep({ kind: 'log-sweep', sampleRate: sr, duration: 1, f1: 20, f2: 20000,
+      level: 0.5 });
+    const x = r.samples;
+    for (const frac of [0.1, 0.25, 0.4, 0.75]) {
+      const d = 4800 + frac;
+      const y = delay(x, x.length + 2 * sr, d);
+      const v1 = align(x, y, sr, { algorithm: 'oscilla.align.xcorr.v1' });
+      const v2 = align(x, y, sr);
+      assert.equal(v2.algorithm, 'oscilla.align.xcorr.v2');
+      assert.ok(Math.abs(v2.lagSamples - d) < 1e-3, `${sr} ${frac}: v2 ${v2.lagSamples - d}`);
+      if (frac === 0.25) {
+        assert.ok(Math.abs(v1.lagSamples - d) > 0.04, `v1 biased: ${v1.lagSamples - d}`);
+        // the phase of a pure delay after alignment: 0° (v1 tilted it, −9.9° at 19 kHz)
+        const phaseAt = (alignment) => {
+          const t = computeTransfer({ stimulus: x, captured: y, sampleRate: sr, f1: r.spec.f1,
+            f2: r.spec.f2, alignment, options: { phase: true } });
+          const i = t.frequencies.findIndex((f) => f >= 19000);
+          return t.phaseDeg[i];
+        };
+        assert.ok(Math.abs(phaseAt(v2)) < 0.5, `v2 phase ${phaseAt(v2)}°`);
+        assert.ok(Math.abs(phaseAt(v1)) > 5, `v1 phase ${phaseAt(v1)}°`);
+      }
+    }
+  }
 });

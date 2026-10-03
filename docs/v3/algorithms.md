@@ -25,7 +25,7 @@ listed under [Gaps](#gaps), not resolved here.
 | (none; recorded through the recipe) | `measurement/stimulus.js` | [Stimuli](#stimuli) |
 | `oscilla.window.hann.v1`, `oscilla.window.blackman-harris.v1` | `measurement/spectrum.js` | [Windows, spectra, Welch](#windows) |
 | `oscilla.clip.v2` (retained `oscilla.clip.v1`), `oscilla.discontinuity.v1` | `measurement/capture-checks.js` | [Capture checks](#capture-checks) |
-| `oscilla.align.xcorr.v1` | `measurement/align.js` | [Alignment](#alignment) |
+| `oscilla.align.xcorr.v2` (retained `.v1`) | `measurement/align.js` | [Alignment](#alignment) |
 | `oscilla.transfer.v3` (retained `.v1`, `.v2`) | `measurement/transfer.js` | [Transfer function](#transfer) |
 | (none) | `measurement/analysis-task.js`, `analysis-runner.js`, `analysis-worker.js` | [Analysis execution and memory](#analysis-memory) |
 | `oscilla.ir.log-sweep.v3` (spectral), `oscilla.ir.farina-inverse.v3` (retained `.v1`, `.v2`) | `measurement/impulse-response.js` | [Impulse response](#ir) |
@@ -378,7 +378,7 @@ noise, a log sweep, 1- and 2-sample spikes, an abrupt onset after edge silence a
 a reported dropout. `v3-pipeline.test.mjs`: three noisy low-pass sweep captures pass.
 
 <a id="alignment"></a>
-## Alignment — `oscilla.align.xcorr.v1` (`measurement/align.js`)
+## Alignment — `oscilla.align.xcorr.v2` (`measurement/align.js`)
 
 `align(reference, captured, sampleRate, { maxLagS, minLagS = 0 }) → { algorithm, lagSamples,
 lagSeconds, peakCorrelation, polarity }` (`algorithm` = `ALIGN_ALGORITHM`, added by the
@@ -392,8 +392,14 @@ computed as `IFFT(conj(REF)·CAP)` with both signals zero-padded to
 `nextPow2(Nref + min(Ncap, maxLag + Nref) − 1)`, so the circular correlation equals the linear
 one for every searched lag. Both real inputs share one complex FFT (`ref + j·cap`, split by
 conjugate symmetry). The lag is the argmax of `|r|`; `polarity` is the sign of `r` there (−1
-for an inverted chain). A parabola through the three samples around the peak (V2
-`parabolicPeak`, offset clipped to ±0.5) refines it to a fractional lag. `minLag` defaults to 0,
+for an inverted chain). v2 (V382) refines it to a fractional lag at the maximum of the
+band-limited interpolant of `r`: a Blackman-windowed sinc over ±`ALIGN_SINC_HALF_WIDTH` (32)
+samples, maximized by golden-section search in (−1, 1). On exact band-limited fractional delays
+the error is below 5·10⁻⁵ samples (44.1 and 48 kHz, 20 Hz–20 kHz and 100 Hz–5 kHz sweeps).
+v1 (retained, `options.algorithm`) fitted a parabola through the three samples around the peak
+(V2 `parabolicPeak`), which is biased for a broadband peak: −0.061 samples at a fractional
+delay of 0.25 (44.1 kHz, 20 Hz–20 kHz), which tilts the transfer phase by −9.9° at 19 kHz.
+`minLag` defaults to 0,
 `maxLag` to the whole capture.
 
 ```

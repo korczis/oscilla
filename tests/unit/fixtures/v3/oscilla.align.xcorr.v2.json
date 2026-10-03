@@ -1,0 +1,10 @@
+{
+ "id": "oscilla.align.xcorr.v2",
+ "digits": 10,
+ "output": {
+  "lagSamples": 837.7161651,
+  "lagSeconds": 0.1047145206,
+  "peakCorrelation": 0.8813212889,
+  "polarity": 1
+ }
+}
