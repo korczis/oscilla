@@ -20,7 +20,7 @@
 // Frequency stays on the carrier: a flattened quantum of the frequency keeps the phase continuous.
 
 import { GAIN_FLOOR } from '../core/constants.js';
-import { trackedParam } from './voice.js';
+import { coherentTime, trackedParam } from './voice.js';
 
 // V1: SCHEDULE_LEAD_S, FAST_RELEASE_S, ESCAPE_RELEASE_S, WAVE_DIP_S, SCHEDULE_AHEAD_S,
 // TOP_UP_EVERY_MS (index.html@a7b7a23)
@@ -131,9 +131,11 @@ export function rampSegments(v, at, eg = v.eg) {
   const f = v.carrier.frequency;
   const short = plan.chirp ? Math.min(v.attack, plan.dur * 0.1) : v.attack;
   for (const s of plan.segments) {
-    f.setValueAtTime(this._f(s.f0), at + s.t);
-    if (s.curve === 'log') f.exponentialRampToValueAtTime(this._f(s.f1), at + s.t + s.dur);
-    else f.linearRampToValueAtTime(this._f(s.f1), at + s.t + s.dur);
+    // V251: the segment starts where the previous one ended, to the bit (voice.js coherentTime)
+    f.setValueAtTime(this._f(s.f0), coherentTime(f, at + s.t));
+    const end = coherentTime(f, at + s.t + s.dur);
+    if (s.curve === 'log') f.exponentialRampToValueAtTime(this._f(s.f1), end);
+    else f.linearRampToValueAtTime(this._f(s.f1), end);
     if (plan.envelope === 'segment') v.stepEnv(eg, at + s.t, s.dur, short, v.release);
   }
 }

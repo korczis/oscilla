@@ -19,13 +19,32 @@ import { clamp } from '../core/math.js';
 /** A tracked param: { param, ev: [{ kind, value, time }], initial }. */
 export function trackParam(param, initial) { return { param, ev: [], initial }; }
 
+// V251: events meant to coincide (a step's release end and the next step's start, a sweep
+// segment's end and the next segment's start) are computed through different sums, (t0 + t) +
+// dur against t0 + (t + dur), which differ by an ulp at about one boundary in six. A param
+// orders its events by time, so a start one ulp before the end it follows is placed first and
+// the ramp to that end collapses: a release becomes a cut (a click), a sweep pass holds its
+// start frequency and jumps. An event within TIME_EPS_S before the latest event of its param
+// takes that event's time instead, so the param keeps the order of the calls.
+export const TIME_EPS_S = 1e-9;
+const latestTime = new WeakMap();
+
+/** The time to schedule an event of `param` at: `time`, or its latest event's if just after. */
+export function coherentTime(param, time) {
+  const last = latestTime.get(param);
+  if (last !== undefined && time < last && last - time <= TIME_EPS_S) return last;
+  if (last === undefined || time > last) latestTime.set(param, time);
+  return time;
+}
+
 /**
  * Record and apply one automation event. V1 appends; events from V2 envelope hooks may arrive
  * out of time order (envelope.js pins the floor at time 0), so an earlier event is inserted at
  * its sorted position (after events with the same time). For V1's in-order calls this is V1's
  * push.
  */
-export function recordEvent(pt, kind, value, time) {
+export function recordEvent(pt, kind, value, at) {
+  const time = coherentTime(pt.param, at);
   const ev = pt.ev;
   const e = { kind, value, time };
   if (!ev.length || ev[ev.length - 1].time <= time) ev.push(e);
