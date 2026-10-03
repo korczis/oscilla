@@ -701,3 +701,136 @@ test('V253: a continuous repeat schedules its first cycle at t0; a stalled top-u
     assert.ok(after.length > 0 && v.t0 + after[0] * p.period >= 30, 'resumes on the grid');
     assert.ok(new Set(starts()).size === starts().length, 'no cycle twice');
   });
+
+// ---- V250: continuous segment sweeps write their envelopes into idle gain lanes
+const KIND = { set: 'setValueAtTime', linear: 'linearRampToValueAtTime', exp: 'exponentialRampToValueAtTime' };
+/** A mock param's timeline as a tracked record, evaluated with voice.js valueAt. */
+const timeline = (p) => ({
+  initial: p.value,
+  ev: p.events.filter((e) => KIND[e[0]]).map(([k, value, time]) => ({ kind: KIND[k], value, time }))
+    .sort((a, b) => a.time - b.time),
+});
+/** Does the param change anywhere in [t0, t1] (a ramp between different values, or a step)? */
+function changesIn(p, t0, t1) {
+  const pt = timeline(p);
+  const v0 = valueAt(pt, t0);
+  return pt.ev.some((e) => e.time > t0 && e.time <= t1 + 1e-12 && Math.abs(e.value - v0) > 1e-3)
+    || Math.abs(valueAt(pt, t1) - v0) > 1e-9
+    || pt.ev.some((e, i) => e.kind !== 'setValueAtTime' && e.time > t1 && i > 0
+      && pt.ev[i - 1].time < t1 && Math.abs(e.value - pt.ev[i - 1].value) > 1e-9);
+}
+
+/**
+ * Play a continuous segment sweep, then run the top-up timer every TOP_UP_EVERY_MS for 60 s
+ * (a 1 s step walks the write across every phase of the 0.53 s cycle). Every write to a gain (not
+ * a frequency) after play() is checked: the param must be constant from the clock to
+ * SCHEDULE_LEAD_S past it, where the render thread may be.
+ */
+function runContinuousSweep({ lanes }) {
+  const ctx0 = setup();
+  if (lanes) withConstantSource(ctx0.audio);
+  const { eng, advance, flush } = ctx0;
+  const proto = Object.getPrototypeOf(eng.ctx ? eng.ctx.createGain().gain : (eng.init(), eng.ctx.createGain().gain));
+  const writes = { checked: 0, ramping: [] };
+  let armed = false;
+  const wrapped = {};
+  for (const m of ['setValueAtTime', 'linearRampToValueAtTime', 'exponentialRampToValueAtTime']) {
+    wrapped[m] = proto[m];
+    proto[m] = function (value, time) {
+      if (armed && this.name === 'gain') {
+        const now = eng.ctx.currentTime;
+        writes.checked++;
+        if (changesIn(this, now, now + 0.02)) writes.ramping.push({ m, value, time, now });
+      }
+      return wrapped[m].call(this, value, time);
+    };
+  }
+  try {
+    const p = buildPlan({
+      ...defaultInstrumentState(), source: 'sweep',
+      sweep: { start: 200, end: 2000, durationMs: 500, curve: 'log', direction: 'up', repeat: 'continuous' },
+    }, ENV_S).plan;
+    assert.strictEqual(p.envelope, 'segment');
+    eng.play(p, opt({ mode: 'trigger' }));
+    const v = eng.voice;
+    const horizon = [];
+    armed = true;
+    for (let t = 1; t <= 60 + 1e-9; t += 1) {
+      advance(t);
+      flush();
+      horizon.push(v.t0 + v.cycle * p.period - t);
+    }
+    armed = false;
+    return { eng, v, p, writes, horizon, advance };
+  } finally {
+    Object.assign(proto, wrapped);
+  }
+}
+
+test('V250: top-ups write only into gain lanes that are constant (the V1 path does not)',
+  { skip }, () => {
+    const old = runContinuousSweep({ lanes: false });
+    assert.ok(old.writes.ramping.length > 10,
+      `the V1 path writes into its ramping envelope (${old.writes.ramping.length} writes)`);
+    const neu = runContinuousSweep({ lanes: true });
+    assert.ok(neu.v.lanes && neu.v.lanes.length === 3);
+    assert.ok(neu.writes.checked > 200, `${neu.writes.checked} gain writes checked`);
+    assert.deepStrictEqual(neu.writes.ramping, [], 'no write into a changing gain');
+    for (const h of neu.horizon) assert.ok(h > 5 && h < 15.5, `horizon ${h.toFixed(2)} s`);
+    assert.ok(Math.min(...neu.horizon) > 9, 'about 10 s ahead, like V1');
+  });
+
+test('V250: the lanes sum to the V1 envelope and keep the V1 cycle grid', { skip }, () => {
+  const old = runContinuousSweep({ lanes: false });
+  const neu = runContinuousSweep({ lanes: true });
+  assert.strictEqual(neu.v.t0, old.v.t0);
+  const envOld = old.v.nodes[0].gain;
+  const vca = neu.v.nodes.find((n) => n !== neu.v.nodes[0] && n.gain && n.gain.value === 0
+    && !n.offset);
+  assert.ok(vca, 'the lane gain');
+  const envNew = timeline(neu.v.nodes[0].gain);
+  const lanes = neu.v.lanes.map((l) => timeline(l.pt.param));
+  const tOld = timeline(envOld);
+  let worst = 0;
+  for (let t = neu.v.t0; t < 60; t += 0.001) {
+    const a = valueAt(tOld, t);
+    const b = valueAt(envNew, t) * lanes.reduce((s, l) => s + valueAt(l, t), 0);
+    worst = Math.max(worst, Math.abs(a - b));
+  }
+  assert.ok(worst < 1e-9, `largest difference ${worst}`);
+  // The carrier frequency follows the same grid: identical scheduled events.
+  const fq = (r) => r.v.carrier.frequency.events.filter((e) => e[2] < 60);
+  assert.deepStrictEqual(fq(neu), fq(old));
+  assert.strictEqual(neu.eng.revokeContinuous(), 1);
+  neu.advance(61);
+  assert.strictEqual(neu.eng.activeNodeCount, 0);
+});
+
+test('V250: after a stalled top-up the lanes resume on the grid, idle lanes only', { skip },
+  () => {
+    const { eng, audio, advance, flush } = setup();
+    withConstantSource(audio);
+    const p = buildPlan({
+      ...defaultInstrumentState(), source: 'sweep',
+      sweep: { start: 200, end: 2000, durationMs: 500, curve: 'log', direction: 'up', repeat: 'continuous' },
+    }, ENV_S).plan;
+    eng.play(p, opt({ mode: 'trigger' }));
+    const v = eng.voice;
+    advance(1);
+    flush();
+    const before = v.cycle;
+    advance(40); // a throttled timer: every scheduled block is over, every lane idle
+    const lanesAt = v.lanes.map((l) => timeline(l.pt.param));
+    assert.ok(lanesAt.every((l) => valueAt(l, 40) === 0), 'all lanes at 0 during the stall');
+    flush();
+    assert.ok(v.cycle > before);
+    const starts = v.lanes.flatMap((l) => l.pt.param.events)
+      .filter((e) => e[0] === 'set' && e[1] > 0 && e[1] < 1e-3 && e[2] >= 40)
+      .map((e) => e[2]).sort((a, b) => a - b);
+    assert.ok(starts.length > 0 && starts[0] >= 40, 'the next block starts after the clock');
+    for (const t of starts) {
+      const k = (t - v.t0) / p.period;
+      assert.ok(Math.abs(k - Math.round(k)) < 1e-6, `cycle start ${t} on the grid`);
+    }
+    assert.ok(v.t0 + v.cycle * p.period - 40 > 9, 'the horizon is refilled');
+  });

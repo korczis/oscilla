@@ -377,7 +377,7 @@ export class AudioEngine {
 
   // V1: AudioEngine: _rampSegments, _scheduleCycles, _armTopUp (index.html@a7b7a23), see
   // scheduler.js
-  _rampSegments(v, at) { rampSegments.call(this, v, at); }
+  _rampSegments(v, at, eg) { rampSegments.call(this, v, at, eg); }
   _scheduleCycles(v) { scheduleCycles.call(this, v); }
   _armTopUp(v) { armTopUp.call(this, v); }
 
@@ -414,7 +414,7 @@ export class AudioEngine {
     const v = {
       id: ++this._seq, ctx, plan, opts: o, t0: startAt, nodes: [], sources: [],
       freqParams: [], env: null, rel: null, carrier: null, live: {}, cycle: 0, topUp: null,
-      fade: null, cut: null,
+      fade: null, cut: null, lanes: null, laneNext: 0,
       endTime: Infinity, deadline: Infinity, releasing: false, ended: false, timers: [], dipping: false,
       attack: Math.max(0.001, adsr ? adsr.a : o.attackS), release: Math.max(0.005, adsr ? adsr.r : o.releaseS),
       limited: !!o.limited, extended: false,
@@ -663,6 +663,7 @@ export class AudioEngine {
     v.fade = null;
     v.cut = null;
     v.eg = null;
+    v.lanes = null;
     this.voices.delete(v);
     if (this.voice === v) {
       this.voice = null;

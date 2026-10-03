@@ -16,3 +16,14 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-03
+started_at: 2026-10-03T11:56:48Z
+updated_at: 2026-10-03T11:56:52Z
+completed_at: 2026-10-03T11:56:52Z
+evidence:
+  - covers: verified
+    type: test
+    command: "npm test; npm run test:engine; npm run test:studio; npm run test:browser; scratchpad append-storm.cjs (none/append/cancel/topup/lanes) and lanes-probe.cjs"
+    result: "Mechanism measured with a sample tap on a ramping gain: appends far in the future flatten whole quanta in Chromium (109/6 s) and WebKit (482/6 s; 890 in a rerun), one top-up-sized burst per second WebKit 17 and Chromium 1 per 60 s, Firefox 0; the lock is per param: the same storm into an idle lane while another lane ramps gives 0 flats in chromium (1.46M writes), webkit and firefox. Fix: three ConstantSourceNode gain lanes written only while idle. Unit: every top-up gain write lands on a constant param (the V1 path violates it); lanes sum to the V1 envelope within 1e-9 over 60 s with the identical frequency schedule; stalled top-ups resume on the grid; freeze unchanged (2044/2044). Real app in chromium, firefox, webkit: 3 lanes, a 16-cycle block per top-up, horizon 13.5-14.4 s, 0 nodes after stop. Engine 87/87 x2, studio all pass, app 28/28 x6, layout 99/99 x3"
+    artifact: "fix/v250-envelope-lanes"
+    commit: 6a27eda8ca174553ebd8851a6eedde63cc8f6d52
+    recorded_at: 2026-10-03T11:56:51Z
