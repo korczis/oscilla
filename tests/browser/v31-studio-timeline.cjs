@@ -600,6 +600,10 @@ function defineChecks() {
       // Light theme: text on its own surface >= 4.5:1.
       await page.evaluate(() => document.documentElement.setAttribute('data-theme', 'light'));
       await mount(page);
+      // Colours are measured after every running transition (e.g. .osc-btn's 0.12 s colour
+      // transition on the theme change) has finished; mid-transition values flaked on WebKit.
+      await page.evaluate(() => Promise.all(document.getAnimations()
+        .map((a) => a.finished.catch(() => null))));
       const contrast = await page.evaluate(() => {
         const rgb = (s) => (s.match(/[\d.]+/g) || []).slice(0, 3).map(Number);
         const lum = ([r, g, b]) => {
