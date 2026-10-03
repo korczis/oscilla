@@ -92,13 +92,15 @@ const assess = (captures, extra = {}) => assessQuality({ capture: captures.map(c
 
 // ----------------------------------------------------------------------------- G15
 
-test('G15: confidence.v3 is the default; v1 and v2 are retained and still selectable', () => {
-  assert.equal(QUALITY_ALGORITHM, 'oscilla.confidence.v3');
+test('G15: confidence.v4 is the default; v1-v3 are retained and still selectable', () => {
+  assert.equal(QUALITY_ALGORITHM, 'oscilla.confidence.v4');
   assert.equal(ALGORITHMS.quality, QUALITY_ALGORITHM);
-  assert.deepEqual(RETAINED_ALGORITHMS.quality, [QUALITY_ALGORITHM_V1, QUALITY_ALGORITHM_V2]);
+  assert.deepEqual(RETAINED_ALGORITHMS.quality,
+    [QUALITY_ALGORITHM_V1, QUALITY_ALGORITHM_V2, 'oscilla.confidence.v3']);
   assert.ok(isKnownAlgorithm(QUALITY_ALGORITHM_V1) && isKnownAlgorithm(QUALITY_ALGORITHM_V2));
   assert.deepEqual(Object.keys(QUALITY_RULESETS).sort(),
-    [QUALITY_ALGORITHM_V1, QUALITY_ALGORITHM_V2, QUALITY_ALGORITHM].sort());
+    [QUALITY_ALGORITHM_V1, QUALITY_ALGORITHM_V2, 'oscilla.confidence.v3', QUALITY_ALGORITHM]
+      .sort());
   const v1 = QUALITY_RULESETS[QUALITY_ALGORITHM_V1];
   const v2 = QUALITY_RULESETS[QUALITY_ALGORITHM_V2];
   const v3 = QUALITY_RULESETS[QUALITY_ALGORITHM];
@@ -126,7 +128,9 @@ test('G15: confidence.v3 is the default; v1 and v2 are retained and still select
   assert.deepEqual([...v3.invalidatingCodes], [...v2.invalidatingCodes]);
   assert.equal(v2.reasonCodes.DISCONTINUITY_NOT_MEASURED.notMeasured, true);
   assert.equal(v2.reasonCodes.OUTPUT_CHAIN_DEVIATION.dimension, 'range');
-  for (const bad of ['oscilla.confidence.v4', '__proto__', 'toString', null]) {
+  // v4 (V382) has the v3 codes; it differs in three rules, not in its codes.
+  assert.equal(QUALITY_RULESETS['oscilla.confidence.v3'].reasonCodes, v3.reasonCodes);
+  for (const bad of ['oscilla.confidence.v5', '__proto__', 'toString', null]) {
     assert.throws(() => assess(CLEAN, { algorithm: bad }), RangeError, String(bad));
   }
 });
@@ -140,8 +144,8 @@ test('G15: a discontinuity inside the sweep window invalidates under v2, not und
   assert.equal(q2.algorithm, 'oscilla.confidence.v2');
   assert.equal(q2.status, 'INVALID');
   const q3 = assess([spliced, CLEAN[1]]);
-  assert.equal(q3.algorithm, 'oscilla.confidence.v3');
-  assert.equal(q3.status, 'INVALID', 'v3 keeps the v2 discontinuity rule');
+  assert.equal(q3.algorithm, 'oscilla.confidence.v4');
+  assert.equal(q3.status, 'INVALID', 'v3 and v4 keep the v2 discontinuity rule');
   const r = reason(q2, 'DISCONTINUITY_IN_SWEEP');
   assert.equal(r.severity, 'fail');
   assert.equal(r.value, 2);
@@ -637,7 +641,7 @@ test('engine: io chain notes reach preflight, result, assess and the quality mas
   assert.deepEqual(r.chainNotes, { limiterDeviationAboveHz: 2000 });
   assert.deepEqual(seen, [{ limiterDeviationAboveHz: 2000 }]);
   const q = r.quality;
-  assert.equal(q.algorithm, 'oscilla.confidence.v3');
+  assert.equal(q.algorithm, 'oscilla.confidence.v4');
   assert.equal(q.metrics.outputChainLimitHz, 2000);
   assert.ok(q.reasons.some((x) => x.code === 'OUTPUT_CHAIN_DEVIATION' && x.severity === 'warn'));
   q.mask.frequencies.forEach((f, i) => { if (f > 2000) assert.equal(q.mask.reliable[i], 0); });

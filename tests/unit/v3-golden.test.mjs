@@ -35,7 +35,7 @@ import { welch, windowFn } from '../../src/js/measurement/spectrum.js';
 import { bandAnalysis, bandCenters, rtaResult } from '../../src/js/measurement/rta.js';
 import { aggregateResult, aggregateRuns } from '../../src/js/measurement/aggregate.js';
 import {
-  QUALITY_ALGORITHM_V1, QUALITY_ALGORITHM_V2, assessQuality,
+  QUALITY_ALGORITHM_V1, QUALITY_ALGORITHM_V2, QUALITY_ALGORITHM_V3, assessQuality,
 } from '../../src/js/measurement/quality.js';
 import { createFrequencyProfile } from '../../src/js/calibration/profile.js';
 import {
@@ -81,12 +81,16 @@ function capture(seed) {
 
 const CAP = [capture(1), capture(2)];
 const NOISE = noise(9, CAP[0].length, 2e-3);
-const ALIGN = align(STIM.samples, CAP[0], SR);
+// align.v1 inputs: the transfer, IR and quality fixtures predate align.v2 (V382), whose
+// unbiased sub-sample lag changes their phase input, not their method.
+const ALIGN_V1 = { algorithm: 'oscilla.align.xcorr.v1' };
+const ALIGN = align(STIM.samples, CAP[0], SR, ALIGN_V1);
+const ALIGN_V2 = align(STIM.samples, CAP[0], SR);
 const BASE = { stimulus: STIM.samples, sampleRate: SR, f1: SPEC.f1, f2: SPEC.f2 };
 /** Transfers of both captures under one transfer method (v1 inputs for the retained quality
  *  rule sets, which were assessed on transfer.v1 results). */
 const transfersOf = (algorithm) => CAP.map((captured) => computeTransfer({ ...BASE, captured,
-  noise: NOISE, alignment: align(STIM.samples, captured, SR),
+  noise: NOISE, alignment: align(STIM.samples, captured, SR, ALIGN_V1),
   options: { phase: true, pointsPerOctave: 6, algorithm } }));
 // transfer.v2 inputs: the quality and aggregate fixtures predate transfer.v3 (V382), whose
 // stricter validRange would change their input, not their method.
@@ -238,7 +242,10 @@ const CASES = {
       algorithm: IR_ALGORITHMS_V1['farina-inverse'] });
     return { id: ir.algorithm, output: irOutput(ir) };
   },
-  [ALGORITHMS.align]: () => ({ id: ALIGN.algorithm, output: { lagSamples: ALIGN.lagSamples,
+  [ALGORITHMS.align]: () => ({ id: ALIGN_V2.algorithm, output: { lagSamples: ALIGN_V2.lagSamples,
+    lagSeconds: ALIGN_V2.lagSeconds, peakCorrelation: ALIGN_V2.peakCorrelation,
+    polarity: ALIGN_V2.polarity } }),
+  'oscilla.align.xcorr.v1': () => ({ id: ALIGN.algorithm, output: { lagSamples: ALIGN.lagSamples,
     lagSeconds: ALIGN.lagSeconds, peakCorrelation: ALIGN.peakCorrelation,
     polarity: ALIGN.polarity } }),
   'oscilla.clip.v1': () => ({ id: CHECK_V1.algorithms.clip, output: {
@@ -319,6 +326,13 @@ const CASES = {
     const q = assessQuality({ ...qualityInput(), chainNotes: { limiterDeviationAboveHz: 2500 },
       noiseCheck: NOISE_CHECK, stimulus: STIM.spec,
       inputProcessing: { echoCancellation: false, noiseSuppression: null,
+        autoGainControl: false } });
+    return { id: q.algorithm, output: qualityOutput(q) };
+  },
+  [QUALITY_ALGORITHM_V3]: () => {
+    const q = assessQuality({ ...qualityInput(), algorithm: QUALITY_ALGORITHM_V3,
+      chainNotes: { limiterDeviationAboveHz: 2500 }, noiseCheck: NOISE_CHECK,
+      stimulus: STIM.spec, inputProcessing: { echoCancellation: false, noiseSuppression: null,
         autoGainControl: false } });
     return { id: q.algorithm, output: qualityOutput(q) };
   },

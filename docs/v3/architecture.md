@@ -217,8 +217,8 @@ IndexedDB as an injected dependency. Signals are `Float32Array` and accumulators
 ALGORITHMS = { transfer: 'oscilla.transfer.v3', ir: 'oscilla.ir.log-sweep.v3',
   irFarina: 'oscilla.ir.farina-inverse.v3', rta: 'oscilla.rta.v2',
   smoothing: 'oscilla.smoothing.fractional-octave.v2', normalization: 'oscilla.normalization.v1',
-  align: 'oscilla.align.xcorr.v1', clip: 'oscilla.clip.v2',
-  discontinuity: 'oscilla.discontinuity.v1', quality: 'oscilla.confidence.v3',
+  align: 'oscilla.align.xcorr.v2', clip: 'oscilla.clip.v2',
+  discontinuity: 'oscilla.discontinuity.v1', quality: 'oscilla.confidence.v4',
   calibration: 'oscilla.calibration.log-interp.v1', window: 'oscilla.window.hann.v1',
   windowBlackmanHarris: 'oscilla.window.blackman-harris.v1', aggregate: 'oscilla.aggregate.v1' }
 VARIANT_OF = { irFarina: 'ir', windowBlackmanHarris: 'window' }   // describeAlgorithm family
@@ -385,7 +385,7 @@ assessQuality({ capture, transfer, aggregate /* aggregateRuns() or AggregateResu
   inputProcessing /* v3: applied { echoCancellation, noiseSuppression, autoGainControl }
     | 'test-context' | null (none reported) | undefined (rule not applied) */,
   stimulus /* v3: StimulusSpec, names the sweep frequency of clipped regions */,
-  algorithm /* 'oscilla.confidence.v3' (default) | '…v2' | '…v1' (retained) */ })
+  algorithm /* 'oscilla.confidence.v4' (default) | '…v3' | '…v2' | '…v1' (retained) */ })
   -> QualityAssessment
 QualityAssessment = { algorithm, status: 'GOOD'|'USABLE'|'POOR'|'INVALID',
   reasons: [{ code, scope: 'quality'|'calibration', severity: 'ok'|'warn'|'fail', text, value,
