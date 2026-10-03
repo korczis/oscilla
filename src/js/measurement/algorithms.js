@@ -18,21 +18,23 @@
 // Superseded versions (ADR 0024: "old IDs stay in the registry as long as stored data may carry
 // them") are listed in RETAINED_ALGORITHMS by role. They are still implemented — e.g.
 // quality.js assessQuality({ algorithm: 'oscilla.confidence.v1' }) reproduces a v1 assessment
-// exactly — so isKnownAlgorithm() is true for them and KNOWN_ALGORITHM_IDS (the allow-list for
+// exactly, transfer.js computeTransfer({ options: { algorithm: 'oscilla.transfer.v1' } }) a v1
+// transfer and impulse-response.js computeImpulseResponse({ algorithm:
+// 'oscilla.ir.log-sweep.v1' }) a v1 IR — so isKnownAlgorithm() is true for them and KNOWN_ALGORITHM_IDS (the allow-list for
 // importing stored experiments) contains them, but ALGORITHMS names only the default each role
 // uses for new results.
 
 export const ALGORITHMS = Object.freeze({
-  transfer: 'oscilla.transfer.v1',
-  ir: 'oscilla.ir.log-sweep.v1',
-  irFarina: 'oscilla.ir.farina-inverse.v1',
+  transfer: 'oscilla.transfer.v2',
+  ir: 'oscilla.ir.log-sweep.v2',
+  irFarina: 'oscilla.ir.farina-inverse.v2',
   rta: 'oscilla.rta.v1',
   smoothing: 'oscilla.smoothing.fractional-octave.v1',
   normalization: 'oscilla.normalization.v1',
   align: 'oscilla.align.xcorr.v1',
   clip: 'oscilla.clip.v1',
   discontinuity: 'oscilla.discontinuity.v1',
-  quality: 'oscilla.confidence.v2',
+  quality: 'oscilla.confidence.v3',
   calibration: 'oscilla.calibration.log-interp.v1',
   window: 'oscilla.window.hann.v1',
   windowBlackmanHarris: 'oscilla.window.blackman-harris.v1',
@@ -41,7 +43,10 @@ export const ALGORITHMS = Object.freeze({
 
 /** Superseded IDs by role, still implemented for stored results (newest last). */
 export const RETAINED_ALGORITHMS = Object.freeze({
-  quality: Object.freeze(['oscilla.confidence.v1']),
+  transfer: Object.freeze(['oscilla.transfer.v1']),
+  ir: Object.freeze(['oscilla.ir.log-sweep.v1']),
+  irFarina: Object.freeze(['oscilla.ir.farina-inverse.v1']),
+  quality: Object.freeze(['oscilla.confidence.v1', 'oscilla.confidence.v2']),
 });
 
 /** Variant keys of ALGORITHMS and the role (family) whose alternative method they are. */

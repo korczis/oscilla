@@ -43,14 +43,19 @@ position, temperature. OSCILLA never senses these automatically.
 
 1. **Quiet room.** Switch off fans, air conditioning and music; close the door and windows. Use
    the background-noise check: it records the room without the sweep and is used to estimate the
-   signal-to-noise ratio per frequency.
+   signal-to-noise ratio per frequency. Its length sets how low the SNR can be assessed: below
+   about 87 Hz / (noise-check seconds) the check holds too few independent observations, and
+   that band is reported as "SNR not assessed" (1 s assesses from 87 Hz, 5 s from 17 Hz). A
+   noise check that is digital silence gives no SNR at all ("SNR not measured").
 2. **Fixed microphone.** Put the microphone on a stand or a stable surface, not in your hand.
    Note the distance and aim. Keep it in exactly the same place for every repeat and for any
    measurement you want to compare.
 3. **Disable input processing.** OSCILLA asks the browser to turn off echo cancellation, noise
    suppression and automatic gain control. Browsers and devices may ignore the request. When
    the settings cannot be confirmed, the result says "Input processing may have been applied by
-   browser/device", and the response may be altered in ways OSCILLA cannot correct. A USB
+   browser/device", and the response may be altered in ways OSCILLA cannot correct; the quality
+   assessment then stays at USABLE at best, and a browser that reports processing ON makes it
+   POOR. A USB
    measurement microphone or an audio interface is usually more predictable than a built-in
    microphone.
 4. **Check the sample rate and range.** The sweep cannot exceed 95 % of the Nyquist frequency

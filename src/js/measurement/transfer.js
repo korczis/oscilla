@@ -1,5 +1,8 @@
 // Transfer function H(f) of a measured system from a known stimulus x and its capture y
-// (spec §26-§27, §33, §157, §159). Algorithm ID: 'oscilla.transfer.v1'.
+// (spec §26-§27, §33, §157, §159). Algorithm IDs: 'oscilla.transfer.v2' (default) and
+// 'oscilla.transfer.v1' (retained: options.algorithm reproduces it exactly for stored results,
+// ADR 0024). The two differ ONLY in the SNR estimate and its fields (section "SNR" below); the
+// deconvolution, magnitude, phase and coverage are identical.
 //
 // Method — regularized frequency-domain deconvolution (Müller & Massarani 2001, "Transfer-
 // function measurement with sweeps", JAES 49(6), §5 "spectral division"; regularization after
@@ -38,22 +41,52 @@
 // down to ρ ≈ 0.7 (v3-measurement-core align tests), far above the cut. The result records the
 // alignment it used as `alignment` ({ algorithm, lagSamples, peakCorrelation, polarity }).
 //
-// SNR (§31-§32), when a separate noise capture n (stimulus silent) is given: for stationary
-// noise of power spectral density S, the zero-padded DFT of M samples has E|N[k]|² = M·S(f_k)
-// regardless of padding. The noise periodogram |N[k]|² (n padded to the same N, so bins
-// coincide) is therefore scaled by len(y)/len(n) to the noise energy per bin expected inside
-// the capture, Pn(f) = band mean of that. With Py(f) = band mean of |Y[k]|² (signal + noise),
-// snrDb = 10·log10((Py − Pn)/Pn), clamped to [−60, 200] dB. The per-bin SNR of Y equals that of
-// the H estimate, because division by X scales signal and noise alike.
+// SNR (§31-§32), when a separate noise capture n (stimulus silent) is given. For stationary
+// noise of power spectral density S (power per DFT bin per sample), the zero-padded N-point DFT
+// of M noise samples has E|N[k]|² = M·S(f_k) regardless of padding, so the noise energy per bin
+// expected inside the capture y is Pn(f) = len(y)·S(f). With Py(f) = band mean of |Y[k]|²
+// (signal + noise) on the grid band, snrDb = 10·log10((Py − Pn)/Pn), floored at −60 dB. The
+// per-bin SNR of Y equals that of the H estimate, because division by X scales signal and noise
+// alike.
+//   v2 (default) estimates S by WELCH averaging of the noise capture (Hann, 50 % overlap,
+//     segment L = the power of two ≥ len(n)/4, at most len(n): K ≈ 4-7 segments; NOISE_WELCH),
+//     S[k] = mean_seg |DFT(w·seg)[k]|² / Σw², taken onto each grid band as the mean of the Welch
+//     bins inside it (linear interpolation at f when the band holds none). A narrow line in the
+//     noise (mains hum) is spread over the Welch resolution (ENBW 1.5·fs/L ≤ 6/T_noise Hz), so
+//     beside a line the per-point SNR is pessimistic and on it optimistic; the pooled value
+//     below is unaffected where its band is wider than that, which the quality assessment's
+//     observation rule guarantees (quality.js minSnrObservations). Fields:
+//       snrDb            per grid point, as above
+//       snrPooledDb      (ΣPy − ΣPn)/ΣPn with Py and Pn power-averaged over 1/6 octave
+//                        (VALIDITY_SMOOTHING_FRACTION) around the point: the POOLED POWER RATIO.
+//                        Not a mean of per-point ratios: E[1/Pn] > 1/E[Pn] (Jensen), so a mean
+//                        of ratios over a pool of few noise observations is biased high (+3-4 dB
+//                        below 150 Hz with a 1 s noise check, review probe p2c).
+//       snrResolutionHz  sampleRate / len(n) = 1/T_noise, the frequency resolution of the noise
+//                        estimate: a 1/6-octave pool at f holds ≈ 0.1155·f/snrResolutionHz
+//                        independent noise observations (the time-bandwidth product).
+//       resolutionHz     max(binHz, sampleRate/len(y)): the zero-padded bin spacing is finer
+//                        than the capture can resolve (1/T_capture).
+//     SNR NOT MEASURED (snrDb = snrPooledDb = null, snrResolutionHz kept): when Pn is zero at
+//     any grid point (a digitally silent or gated noise capture) or any ratio reaches
+//     SNR_CEIL_DB. A noise capture without noise power is not a noise-floor measurement, and
+//     the 200 dB ceiling is never stored as a value (v1 stored it, review B1).
+//   v1 (retained) used the zero-padded N-point periodogram |N[k]|² of the noise scaled by
+//     len(y)/len(n), clamped snrDb to [−60, 200] dB (200 dB when Pn = 0) and stored no pooled
+//     SNR, snrResolutionHz or resolutionHz. Its per-point Pn is one periodogram: with
+//     N > len(n) the zero-padded bins are correlated, ≈ 1 independent observation per
+//     1/T_noise Hz, so per-point SNR scatters by several dB at low frequencies.
 //
 // validRange (§157): the longest contiguous run of grid points that are (a) covered by the
 // stimulus — the per-relative-bandwidth stimulus energy f·P_x(f), P_x the band mean of |X|²,
 // is within 20 dB of its maximum on the grid (flat for a log sweep or pink noise, so this
-// rejects leakage outside the swept band and a Nyquist clamp) — and (b), when noise is given,
-// reach 10 dB SNR with Py and Pn first power-averaged over 1/6 octave around the point (the
-// per-point estimate scatters by ≈ 4.34/√K dB for K independent bins, which would otherwise
-// fragment the range at the first dip; the reported snrDb stays per point). null when no point
-// qualifies. requestedRange is always [f1, f2] as requested, even past Nyquist; the grid
+// rejects leakage outside the swept band and a Nyquist clamp) — and (b), when an SNR is
+// measured, reach 10 dB pooled SNR (the 1/6-octave power ratio above; in v2 that is
+// snrPooledDb). Pooling matters: a power average over K independent observations of an
+// exponentially distributed bin power scatters by ≈ 4.34/√K dB, and K is the time-bandwidth
+// product B·T of the band (for the noise B·T_noise), NOT the number of zero-padded bins in it,
+// which are correlated whenever N exceeds the record length. Without pooling the range would
+// fragment at the first dip. null when no point qualifies. requestedRange is always [f1, f2] as requested, even past Nyquist; the grid
 // itself stops at Nyquist (§205).
 //
 // Assumptions: x and y share sampleRate and are mono, sample-synchronous (one clock) and
@@ -63,8 +96,16 @@
 import { createFft } from '../analysis/fft.js';
 import { smoothFractionalOctave } from './smoothing.js';
 import { ALGORITHMS } from './algorithms.js';
+import { welch } from './spectrum.js';
 
+/** Default method for new transfers: 'oscilla.transfer.v2'. */
 export const TRANSFER_ALGORITHM = ALGORITHMS.transfer;
+/** The retained first method (periodogram SNR, ceiling stored; see the header). */
+export const TRANSFER_ALGORITHM_V1 = 'oscilla.transfer.v1';
+/** Every transfer method this build reproduces (options.algorithm). */
+export const TRANSFER_ALGORITHMS = Object.freeze([TRANSFER_ALGORITHM_V1, TRANSFER_ALGORITHM]);
+/** v2 Welch estimate of the noise PSD (see the header). */
+export const NOISE_WELCH = Object.freeze({ window: 'hann', overlap: 0.5, segmentFraction: 1 / 4 });
 
 /** Regularization profile, in dB relative to max|X|² over the requested band. */
 export const REGULARIZATION = Object.freeze({
@@ -326,13 +367,18 @@ function alignmentSummary(alignment) {
  * Returns { pointsPerOctave, phase, aligned }.
  */
 export function checkTransferArgs({ lagSamples, alignment = null, noise = null, options = {} }) {
-  const { phase = false, pointsPerOctave = DEFAULT_POINTS_PER_OCTAVE } = options;
+  const {
+    phase = false, pointsPerOctave = DEFAULT_POINTS_PER_OCTAVE, algorithm = TRANSFER_ALGORITHM,
+  } = options;
+  if (!TRANSFER_ALGORITHMS.includes(algorithm))
+    throw new RangeError(`unknown transfer method '${algorithm}' (known: `
+      + `${TRANSFER_ALGORITHMS.join(', ')})`);
   if (!(pointsPerOctave > 0)) throw new RangeError('pointsPerOctave must be positive');
   if (lagSamples !== undefined && !Number.isFinite(lagSamples))
     throw new RangeError(`lagSamples must be finite, got ${lagSamples}`);
   const aligned = alignmentSummary(alignment);
   if (noise !== null) assertSignal('noise', noise);
-  return { pointsPerOctave, phase, aligned };
+  return { pointsPerOctave, phase, aligned, algorithm };
 }
 
 /**
@@ -344,7 +390,8 @@ export function checkTransferArgs({ lagSamples, alignment = null, noise = null, 
  *               reported only when its peakCorrelation ≥ PHASE_MIN_CORRELATION
  *   lagSamples  lag to remove from the phase; defaults to alignment.lagSamples
  *   noise       Float32Array|null, a stimulus-free capture for the SNR estimate
- *   options     { phase = false, pointsPerOctave = 48 }
+ *   options     { phase = false, pointsPerOctave = 48, algorithm = TRANSFER_ALGORITHM }
+ *               (algorithm: one of TRANSFER_ALGORITHMS; the v1 method for stored results)
  *   fft         optional FFT plan of the deconvolution size (fftPlan); never changes a result
  *   noiseSpectrum  optional noiseSpectrum(noise, fftSize) of this `noise` (reused across runs);
  *               never changes a result
@@ -371,23 +418,96 @@ export function computeTransfer({
 }
 
 /**
- * noiseSpectrum(noise, fftSize, fft) → { noise, fftSize, used, aRe, aIm }: the half spectrum of
- * a stimulus-free capture (its first `used` = min(len, fftSize) samples, zero padded) as
- * computeTransfer uses it for the SNR. It depends only on the noise capture and the FFT size,
- * so a caller analysing several runs against one noise capture computes it once and passes it
- * as `noiseSpectrum`; it is used only when its `noise` is the very array passed as `noise` and
- * its fftSize matches, otherwise recomputed (the result is the same either way).
+ * noiseSpectrum(noise, fftSize, fft, { algorithm }) → the noise estimate of a stimulus-free
+ * capture as computeTransfer's SNR uses it:
+ *   v2 (default)  { algorithm, noise, fftSize, used, segment, segments, psd }: the Welch PSD
+ *                 (NOISE_WELCH; psd[k] per sample per bin, bins of sampleRate/segment Hz)
+ *   v1            { algorithm, noise, fftSize, used, aRe, aIm }: the half spectrum of the first
+ *                 `used` = min(len, fftSize) samples, zero padded to fftSize
+ * It depends only on the noise capture, the FFT size and the method, so a caller analysing
+ * several runs against one noise capture computes it once and passes it as `noiseSpectrum`; it
+ * is used only when its `noise` is the very array passed as `noise` and its fftSize and
+ * algorithm match, otherwise recomputed (the result is the same either way).
  */
-export function noiseSpectrum(noise, fftSize, fft = null) {
+export function noiseSpectrum(noise, fftSize, fft = null, { algorithm = TRANSFER_ALGORITHM } = {}) {
   assertSignal('noise', noise);
-  return computeNoiseSpectrum(noise, fftSize, fftPlan(fftSize, fft), null);
+  if (algorithm === TRANSFER_ALGORITHM_V1)
+    return computeNoiseSpectrum(noise, fftSize, fftPlan(fftSize, fft), null);
+  return welchNoiseSpectrum(noise, fftSize);
 }
 
 function computeNoiseSpectrum(noise, fftSize, fft, work) {
   const used = Math.min(noise.length, fftSize);
   const { aRe, aIm } = realPairSpectra(fft, noise.length > used ? noise.subarray(0, used) : noise,
     null, work);
-  return { noise, fftSize, used, aRe, aIm };
+  return { algorithm: TRANSFER_ALGORITHM_V1, noise, fftSize, used, aRe, aIm };
+}
+
+/** Welch segment length for `len` noise samples: the power of two ≥ len·segmentFraction, at
+ *  most the largest power of two ≤ len (≥ 2), so there is always one full segment. */
+export function noiseWelchSegment(len) {
+  let floor = 1;
+  while (floor * 2 <= len) floor *= 2;
+  const want = Math.ceil(len * NOISE_WELCH.segmentFraction);
+  let seg = 1;
+  while (seg < want) seg *= 2;
+  return Math.max(2, Math.min(seg, floor));
+}
+
+/** v2: Welch PSD per sample per bin (|DFT(w·seg)|²/Σw², averaged); null when len < 2. */
+function welchNoiseSpectrum(noise, fftSize) {
+  const base = { algorithm: TRANSFER_ALGORITHM, noise, fftSize, used: noise.length };
+  if (noise.length < 2) return { ...base, segment: null, segments: 0, psd: null };
+  const segment = noiseWelchSegment(noise.length);
+  const w = welch(noise, { fftSize: segment, overlap: NOISE_WELCH.overlap,
+    window: NOISE_WELCH.window, scale: 'mean-square' });
+  // mean-square P[k] = c·|X[k]|²/(L·Σw²), c = 2 inside, 1 at DC and Nyquist → |X|²/Σw² = P·L/c.
+  const half = segment / 2;
+  const psd = new Float64Array(half + 1);
+  for (let k = 0; k <= half; k++)
+    psd[k] = w.power[k] * (k === 0 || k === half ? segment : segment / 2);
+  return { ...base, segment, segments: w.segments, psd };
+}
+
+/** v2: noise PSD (per sample per bin) on each grid band: mean of the Welch bins in it, else
+ *  linear interpolation at the band centre. */
+function psdOnGrid(spec, frequencies, pointsPerOctave, sampleRate) {
+  const { psd, segment } = spec;
+  const half = segment / 2;
+  const bw = sampleRate / segment;
+  const edge = 2 ** (1 / (2 * pointsPerOctave));
+  const out = new Float64Array(frequencies.length);
+  for (let i = 0; i < frequencies.length; i++) {
+    const f = frequencies[i];
+    const a = Math.ceil(f / edge / bw);
+    const b = Math.min(half, Math.ceil((f * edge) / bw) - 1);
+    if (b >= a) {
+      let s = 0;
+      for (let k = a; k <= b; k++) s += psd[k];
+      out[i] = s / (b - a + 1);
+    } else {
+      const x = Math.min(half, f / bw);
+      const k = Math.min(half - 1, Math.floor(x));
+      const t = x - k;
+      out[i] = psd[k] + t * (psd[k + 1] - psd[k]);
+    }
+  }
+  return out;
+}
+
+/** v2 per-point SNR: (Py − Pn)/Pn in dB floored at SNR_FLOOR_DB; null when any Pn is zero or
+ *  any ratio reaches SNR_CEIL_DB (no noise power: SNR NOT MEASURED, see the header). */
+function snrFromDbV2(pyDb, pnDb) {
+  const out = new Float64Array(pyDb.length);
+  for (let i = 0; i < out.length; i++) {
+    if (!(pnDb[i] > ZERO_POWER_DB)) return null;
+    const pn = 10 ** (pnDb[i] / 10);
+    const py = pyDb[i] > ZERO_POWER_DB ? 10 ** (pyDb[i] / 10) : 0;
+    const db = py > pn ? 10 * Math.log10((py - pn) / pn) : SNR_FLOOR_DB;
+    if (!(db < SNR_CEIL_DB)) return null;
+    out[i] = Math.max(SNR_FLOOR_DB, db);
+  }
+  return out;
 }
 
 /**
@@ -396,8 +516,9 @@ function computeNoiseSpectrum(noise, fftSize, fft, work) {
  */
 export function transferFromDeconvolution(dec, {
   captured, sampleRate, f1, f2, lagSamples, noise = null, noiseSpectrum = null, pointsPerOctave,
-  phase, aligned,
+  phase, aligned, algorithm = TRANSFER_ALGORITHM,
 }) {
+  const v1 = algorithm === TRANSFER_ALGORITHM_V1;
   const { fft, fftSize, binHz, half, xPow, yRe, yIm, hRe, hIm } = dec;
   const fTop = Math.min(f2, sampleRate / 2);
   const frequencies = logGrid(f1, fTop, pointsPerOctave);
@@ -440,9 +561,34 @@ export function transferFromDeconvolution(dec, {
 
   let snrDb = null;
   let snrValidDb = null;
-  if (noise !== null) {
-    const spec = noiseSpectrum !== null && noiseSpectrum.noise === noise
-      && noiseSpectrum.fftSize === fftSize
+  let snrResolutionHz = null;
+  const reuse = (alg) => noiseSpectrum !== null && noiseSpectrum.noise === noise
+    && noiseSpectrum.fftSize === fftSize && (noiseSpectrum.algorithm ?? TRANSFER_ALGORITHM_V1)
+    === alg;
+  if (noise !== null && !v1) {
+    snrResolutionHz = sampleRate / noise.length;
+    const spec = reuse(TRANSFER_ALGORITHM) ? noiseSpectrum : welchNoiseSpectrum(noise, fftSize);
+    if (spec.psd) {
+      const s = psdOnGrid(spec, frequencies, pointsPerOctave, sampleRate);
+      const pnDb = new Float64Array(n);
+      const pyDb = new Float64Array(n);
+      for (let i = 0; i < n; i++) {
+        pnDb[i] = powerToDb(captured.length * s[i]);
+        let py = 0;
+        for (let k = k0[i]; k <= k1[i]; k++) py += yRe[k] * yRe[k] + yIm[k] * yIm[k];
+        pyDb[i] = powerToDb(py / (k1[i] - k0[i] + 1));
+      }
+      snrDb = snrFromDbV2(pyDb, pnDb);
+      if (snrDb) {
+        snrValidDb = snrFromDbV2(
+          smoothFractionalOctave(frequencies, pyDb, VALIDITY_SMOOTHING_FRACTION),
+          smoothFractionalOctave(frequencies, pnDb, VALIDITY_SMOOTHING_FRACTION),
+        );
+        if (!snrValidDb) snrDb = null;
+      }
+    }
+  } else if (noise !== null) {
+    const spec = reuse(TRANSFER_ALGORITHM_V1)
       ? noiseSpectrum
       : computeNoiseSpectrum(noise, fftSize, fft, dec.work);
     const { used, aRe, aIm } = spec;
@@ -477,6 +623,22 @@ export function transferFromDeconvolution(dec, {
   const run = longestRun(valid);
   const validRange = run ? [frequencies[run[0]], frequencies[run[1]]] : null;
 
+  if (v1) {
+    return {
+      algorithm: TRANSFER_ALGORITHM_V1,
+      sampleRate,
+      frequencies,
+      magnitudeDb,
+      phaseDeg,
+      snrDb,
+      validRange,
+      requestedRange: [f1, f2],
+      fftSize,
+      binHz,
+      phaseReason,
+      alignment: aligned,
+    };
+  }
   return {
     algorithm: TRANSFER_ALGORITHM,
     sampleRate,
@@ -484,10 +646,13 @@ export function transferFromDeconvolution(dec, {
     magnitudeDb,
     phaseDeg,
     snrDb,
+    snrPooledDb: snrValidDb,
+    snrResolutionHz,
     validRange,
     requestedRange: [f1, f2],
     fftSize,
     binHz,
+    resolutionHz: Math.max(binHz, sampleRate / captured.length),
     phaseReason,
     alignment: aligned,
   };

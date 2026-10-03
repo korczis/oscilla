@@ -346,14 +346,14 @@ function metricRows(a) {
   const range = (r) => (Array.isArray(r) ? `${hz(r[0])}–${hz(r[1])}` : UNAVAILABLE.NOT_MEASURED);
   const rows = [
     ['snrMedian', 'Median SNR', db(m.snrMedianDb)],
-    ['snrMin', 'Minimum SNR', db(m.snrMinDb)],
+    ['snrMin', 'Minimum SNR (1/6-octave pooled, in valid range)', db(m.snrMinDb)],
     ['clipping', 'Clipped samples', Number.isFinite(m.clippingRatio)
       ? `${Number((m.clippingRatio * 100).toPrecision(2))} % of samples`
       : UNAVAILABLE.NOT_MEASURED],
     ['dropouts', 'Dropouts', Array.isArray(m.dropouts) ? String(m.dropouts.length)
       : (Number.isFinite(m.dropouts) ? String(m.dropouts) : UNAVAILABLE.NOT_MEASURED)],
-    ['repeatability', 'Repeatability (median run spread)', Number.isFinite(m.repeatabilityDb)
-      ? `±${db(m.repeatabilityDb)}` : UNAVAILABLE.NOT_MEASURED],
+    ['repeatability', 'Repeatability (median run-to-run SD)', Number.isFinite(m.repeatabilityDb)
+      ? db(m.repeatabilityDb) : UNAVAILABLE.NOT_MEASURED],
     ['runs', 'Runs', Number.isInteger(m.runs) ? String(m.runs) : UNAVAILABLE.UNKNOWN],
     ['requested', 'Requested range', range(m.requestedRange)],
     ['coverage', 'Valid range', range(m.coverage)],
@@ -363,6 +363,12 @@ function metricRows(a) {
     ['resolution', 'Frequency resolution', res ? `${Number(res.toPrecision(3))} Hz`
       : UNAVAILABLE.UNKNOWN],
   ];
+  // confidence.v3: the noise estimate's resolution (1/T_noise) and where the SNR is assessed.
+  if ('snrResolutionHz' in m) rows.push(['snrResolution', 'SNR resolution (1/noise-check time)',
+    m.snrResolutionHz > 0 ? `${Number(m.snrResolutionHz.toPrecision(3))} Hz`
+      : UNAVAILABLE.NOT_MEASURED]);
+  if ('snrAssessedFromHz' in m) rows.push(['snrAssessed', 'SNR assessed from',
+    Number.isFinite(m.snrAssessedFromHz) ? hz(m.snrAssessedFromHz) : UNAVAILABLE.NOT_MEASURED]);
   if ('outputChainLimitHz' in m) rows.push(['chain', 'Output-chain limit',
     m.outputChainLimitHz ? hz(m.outputChainLimitHz) : 'none reported']);
   rows.push(['algorithm', 'Quality rules', a.algorithm || UNAVAILABLE.UNKNOWN]);

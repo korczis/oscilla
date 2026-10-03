@@ -50,6 +50,9 @@ const STIM = renderStimulus({
   kind: 'log-sweep', sampleRate: SR, duration: 1, f1: F1, f2: F2, level: 0.5,
 }).samples;
 const LEN = PRE + STIM.length + POST;
+/** Noise capture: 5 s, so v3 assesses the SNR from 10/(0.1155 · 5 s) = 17.3 Hz, below F1
+ *  (confidence.v3 minSnrObservations); shorter checks are tested in v3-review-fixes. */
+const NOISE_LEN = 5 * SR;
 
 /** Seeded zero-mean Gaussian noise (mulberry32 + Box-Muller). */
 function gaussian(seed, n, sigma) {
@@ -101,7 +104,7 @@ function measure({ sigma = 1e-3, seed = 1, gainDb = 0, system = null, noise = tr
   for (let i = 0; i < LEN; i++) captured[i] += sys[i];
   const transfer = computeTransfer({
     stimulus: STIM, captured, sampleRate: SR, f1: F1, f2: F2,
-    noise: noise ? gaussian(seed + 7919, LEN, sigma) : null,
+    noise: noise ? gaussian(seed + 7919, NOISE_LEN, sigma) : null,
   });
   return { transfer, check: checkCapture({ sampleRate: SR, samples: captured }) };
 }
@@ -196,7 +199,7 @@ function assertWellFormed(q) {
 // ----------------------------------------------------------------------------- thresholds
 
 test('thresholds are frozen, named, and consistent with transfer.js validity', () => {
-  assert.equal(QUALITY_ALGORITHM, 'oscilla.confidence.v2');
+  assert.equal(QUALITY_ALGORITHM, 'oscilla.confidence.v3');
   assert.ok(Object.isFrozen(QUALITY_THRESHOLDS));
   assert.ok(Object.isFrozen(REASON_CODES));
   for (const [k, v] of Object.entries(QUALITY_THRESHOLDS))
@@ -225,15 +228,19 @@ test('clean high-SNR repeated response is GOOD with matching reasons', () => {
   assert.equal(snr.severity, 'ok');
   assert.ok(q.metrics.snrMedianDb > 40, `median SNR ${q.metrics.snrMedianDb}`);
   assert.equal(snr.value, q.metrics.snrMedianDb);
-  assert.equal(snr.text, `${Math.round(snr.value)} dB median SNR`);
+  assert.equal(snr.text, `${Math.round(snr.value)} dB median SNR (1/6-octave pooled)`);
   const rep = one(q, 'REPEATABILITY');
   assert.equal(rep.severity, 'ok');
   assert.equal(rep.value, CLEAN.aggregate.repeatabilityDb);
-  assert.match(rep.text, /^3 runs agree within ±0\.1 dB \(median standard deviation/);
+  assert.match(rep.text,
+    /^3 runs: median run-to-run SD 0\.1 dB \(per-frequency standard deviation, median/);
   const cov = one(q, 'COVERAGE');
   assert.equal(cov.severity, 'ok');
   assert.deepEqual(cov.range, CLEAN.transfer.validRange);
-  assert.equal(one(q, 'RESOLUTION').value, CLEAN.transfer.binHz);
+  // v3: resolution = max(fs/N, 1/T_capture), not the finer zero-padded bin spacing.
+  assert.equal(one(q, 'RESOLUTION').value, CLEAN.transfer.resolutionHz);
+  assert.equal(CLEAN.transfer.resolutionHz, Math.max(CLEAN.transfer.binHz, SR / LEN));
+  assert.ok(CLEAN.transfer.resolutionHz > CLEAN.transfer.binHz);
   assert.equal(q.metrics.clippingRatio, 0);
   assert.equal(q.metrics.dropouts, 0);
   assert.equal(q.metrics.runs, 3);
@@ -257,7 +264,7 @@ test('low-SNR response is USABLE and names the band lost in the noise', () => {
   const snr = one(q, 'SNR_MEDIAN');
   assert.equal(snr.severity, 'warn');
   assert.ok(snr.value >= T.snrUsableDb && snr.value < T.snrGoodDb, `SNR ${snr.value}`);
-  assert.match(snr.text, /^\d+\.\d dB median SNR \(GOOD needs ≥ 20 dB\)$/);
+  assert.match(snr.text, /^\d+\.\d dB median SNR \(1\/6-octave pooled; GOOD needs ≥ 20 dB\)$/);
   const bands = byCode(q, 'LOW_SNR_BAND');
   assert.ok(bands.length >= 1);
   const top = bands[bands.length - 1];
@@ -337,7 +344,7 @@ test('high-variance runs give a repeatability warn (±2 dB) or fail (±4 dB)', (
   assert.equal(r.severity, 'warn');
   assert.ok(Math.abs(r.value - 2) < 0.05, `repeatability ${r.value}`);
   assert.equal(r.value, q.metrics.repeatabilityDb);
-  assert.match(r.text, /^3 runs differ by ±2\.0 dB/);
+  assert.match(r.text, /^3 runs: median run-to-run SD 2\.0 dB .*GOOD needs ≤ 1 dB\)$/);
 
   const fail = repeated([0, 4, -4]);
   const qf = assessQuality(fail);
@@ -577,9 +584,17 @@ test('reliable mask is the pooled SNR test; ranges partition the grid', () => {
   for (const fx of [CLEAN, LOW, VERY_LOW, LOWPASS]) {
     const q = assessQuality({ capture: fx.capture || fx.check, transfer: fx.transfer });
     const f = fx.transfer.frequencies;
-    const pooled = smoothFractionalOctave(f, fx.transfer.snrDb, T.reliablePoolingFraction);
+    // v3: the pooled POWER ratio transfer.v2 stores (every point assessed: 5 s noise check).
+    const pooled = fx.transfer.snrPooledDb;
+    assert.ok(q.metrics.snrAssessedFromHz < f[0]);
     for (let i = 0; i < f.length; i++)
       assert.equal(q.mask.reliable[i], pooled[i] >= T.reliableMinSnrDb ? 1 : 0, `point ${i}`);
+    // The retained v2 rules pool the per-point ratios instead (mean of ratios).
+    const q2 = assessQuality({ capture: fx.capture || fx.check, transfer: fx.transfer,
+      algorithm: 'oscilla.confidence.v2' });
+    const meanOfRatios = smoothFractionalOctave(f, fx.transfer.snrDb, T.reliablePoolingFraction);
+    for (let i = 0; i < f.length; i++)
+      assert.equal(q2.mask.reliable[i], meanOfRatios[i] >= T.reliableMinSnrDb ? 1 : 0);
     assert.deepEqual(q.metrics.reliableRanges, maskRanges(f, q.mask.reliable));
     const all = [...q.metrics.reliableRanges, ...q.metrics.unreliableRanges]
       .sort((a, b) => a[0] - b[0]);

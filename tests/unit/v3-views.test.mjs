@@ -838,13 +838,17 @@ test('flow: warnings never block; READY → measure → review → save', async 
   assert.equal(saved.primaryAction.id, 'repeat');
 });
 
-test('flow: an invalid (clipped) run blocks MEASURE; expert mode can bypass', async () => {
+test('flow: a severely clipped measurement blocks REVIEW; expert mode can bypass', async () => {
+  // Review M8: clipping no longer invalidates the run before analysis; every run is captured
+  // and the quality assessment rejects the result (CLIPPING_SEVERE), so REVIEW is blocked.
   const { engine, result } = await RUN_CLIP;
   const recipe = engineRecipe({ repeats: 2 });
+  assert.equal(result.runs.length, 2, 'both runs captured');
+  assert.equal(result.quality.status, 'INVALID');
   const flow = measureFlow({ state: engine.state, preflight: result.preflight, recipe, result });
   const by = Object.fromEntries(flow.steps.map((s) => [s.id, s]));
-  assert.equal(by.measure.status, 'blocked');
-  assert.ok(by.measure.reasons.some((r) => r.code === 'CLIPPING'));
+  assert.equal(by.review.status, 'blocked');
+  assert.ok(by.review.reasons.some((r) => r.code === 'CLIPPING_SEVERE'));
   assert.equal(by.save.status, 'todo');
   assert.equal(flow.primaryAction.id, 'preflight');
   const expert = measureFlow({ state: S.IDLE, recipe, expert: true });

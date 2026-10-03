@@ -91,7 +91,7 @@ import { analysisMessage, estimateAnalysisMemory } from './analysis-task.js';
 import { defaultAnalyze } from './analysis-runner.js';
 import { assessQuality, normalizeChainNotes } from './quality.js';
 import { ALGORITHMS } from './algorithms.js';
-import { welch, windowFn } from './spectrum.js';
+import { toneToMeanSquare, welch } from './spectrum.js';
 import { bandCenters, integrateBands } from './rta.js';
 import { normalizePoints } from '../calibration/profile.js';
 import { applyFrequencyCorrection } from '../calibration/interpolate.js';
@@ -180,6 +180,21 @@ export const PREFLIGHT_THRESHOLDS = Object.freeze({
 export const ANALYSIS_PROGRESS_WEIGHT = 0.1;
 
 export const INPUT_PROCESSING_NOTE = 'Input processing may have been applied by browser/device.';
+
+/**
+ * Run-check codes that invalidate a run before any analysis (review M8): the capture holds no
+ * usable samples (NO_SAMPLES, BAD_SAMPLE_RATE, NON_FINITE, EMPTY / NO_INPUT), lost frames
+ * (FRAMES_MISSING), or a dropout certainly inside the sweep (DROPOUT_IN_SWEEP, see
+ * runChecks). CLIPPING, DISCONTINUITY and other dropouts do NOT: quality.js grades them
+ * (CLIPPING ok/warn/fail, CLIPPING_SEVERE and the in-sweep dropout/discontinuity rules
+ * invalidate there, against the aligned sweep window).
+ */
+export const RUN_INVALIDATING_CODES = Object.freeze(['NO_SAMPLES', 'BAD_SAMPLE_RATE',
+  'NON_FINITE', 'EMPTY', 'NO_INPUT', 'FRAMES_MISSING', 'DROPOUT_IN_SWEEP']);
+/** Noise-check codes that make the noise capture unusable (INVALID, NOISE_CAPTURE_INVALID). An
+ *  EMPTY noise check is not among them: the SNR is then NOT MEASURED (quality.js v3). */
+export const NOISE_INVALIDATING_CODES = Object.freeze(['NO_SAMPLES', 'BAD_SAMPLE_RATE',
+  'NON_FINITE']);
 
 // ------------------------------------------------------------------------------- errors
 
@@ -420,8 +435,9 @@ export const NOISE_FFT = 8192;
  * Broadband level is 20·log10(rms) re digital full scale (dB relative, dBFS-like); with a valid
  * LevelCalibration `level` also carries dB SPL (calibration/level.js), never otherwise (§31).
  * bands: one-third-octave band levels on the same reference from a Welch spectrum (Hann, 8192,
- * 50 %), when the capture holds at least one segment; band power = Σ tone-scaled bin power /
- * ENBW / 2 (mean square of the band, so the bands sum to the broadband mean square).
+ * 50 %), when the capture holds at least one segment; band power = Σ mean-square bin power
+ * (spectrum.js toneToMeanSquare: tone-scaled power / (2·ENBW) inside, / ENBW at DC and Nyquist),
+ * so the bands sum to the broadband mean square.
  */
 export function summarizeNoise(capture, levelCalibration = null) {
   const x = capture.samples;
@@ -430,9 +446,7 @@ export function summarizeNoise(capture, levelCalibration = null) {
   let bands = null;
   if (x.length >= NOISE_FFT) {
     const w = welch(x, { fftSize: NOISE_FFT, overlap: 0.5, window: 'hann' });
-    const enbw = windowFn('hann', NOISE_FFT).enbwBins;
-    const ms = new Float64Array(w.power.length);
-    for (let k = 0; k < ms.length; k++) ms[k] = w.power[k] / enbw / 2;
+    const ms = toneToMeanSquare(w.power, w.window);
     const centers = bandCenters('third', 20, 20000, sr);
     const power = integrateBands(ms, sr / NOISE_FFT, centers);
     bands = {
@@ -480,6 +494,22 @@ export function inputProcessingMayApply(applied) {
 }
 
 /**
+ * inputProcessingFacts(result) → the quality.js `inputProcessing` input of a result:
+ * 'test-context' for a digital test context (no microphone path), else the first capture's
+ * applied constraints { echoCancellation, noiseSuppression, autoGainControl } (each true, false
+ * or null when the browser did not report it), or null when none were reported at all.
+ */
+export function inputProcessingFacts(result) {
+  if (result && result.testContext) return 'test-context';
+  const applied = result && result.input && result.input.constraints
+    ? result.input.constraints.applied : null;
+  if (!applied || typeof applied !== 'object') return null;
+  const pick = (k) => (applied[k] === true || applied[k] === false ? applied[k] : null);
+  return { echoCancellation: pick('echoCancellation'), noiseSuppression: pick('noiseSuppression'),
+    autoGainControl: pick('autoGainControl') };
+}
+
+/**
  * The measurement's transfer (G20 storage rule, aggregate.js): one run → that run's
  * TransferResult; repeated runs → the aggregate centre as a storable TransferResult marked
  * derivedFrom 'aggregate' (magnitudeDb = aggregateResult().centreDb bit for bit, lowest run SNR,
@@ -497,6 +527,9 @@ function measurementTransfer(transfers, aggregate) {
  * applied frequency calibration (result.calibrated.frequency, on the transfer grid) and the
  * level calibration from the context, each run's sweep window [round(lag), round(lag) + frames)
  * from its alignment, and the output-chain note (context chainNotes, else result.chainNotes).
+ * For the v3 rules also the noise check (result.noise.checks; an EMPTY one makes the SNR NOT
+ * MEASURED), the input processing (context inputProcessing, else inputProcessingFacts(result))
+ * and the stimulus spec (to name the sweep frequency of clipped regions); v1/v2 ignore them.
  * `algorithm` selects the quality rule set (default quality.js QUALITY_ALGORITHM).
  */
 export function assessMeasurement(result, ctx = {}) {
@@ -514,6 +547,10 @@ export function assessMeasurement(result, ctx = {}) {
     calibration: { frequency: result.calibrated ? result.calibrated.frequency : null, level },
     sweepWindow: sweepWindow.length ? sweepWindow : null,
     chainNotes: ctx.chainNotes !== undefined ? ctx.chainNotes : result.chainNotes ?? null,
+    noiseCheck: result.noise && result.noise.checks ? result.noise.checks : null,
+    inputProcessing: ctx.inputProcessing !== undefined ? ctx.inputProcessing
+      : inputProcessingFacts(result),
+    stimulus: result.stimulus && result.stimulus.spec ? result.stimulus.spec : null,
   };
   if (ctx.algorithm !== undefined) opts.algorithm = ctx.algorithm;
   return assessQuality(opts);
@@ -553,8 +590,9 @@ const clamp01 = (v) => (v < 0 ? 0 : v > 1 ? 1 : v);
  *             'scheduled' | 'progress' | 'noise' | 'run' | 'analysis' | 'result' | 'error'
  *   limits    tightens CONTRACT_LIMITS (maxSweepS, maxRepeats, maxCaptureS, maxNoiseS,
  *             maxRawBytes, maxAnalysisFftSize, maxAnalysisBytes)
- *   assess    optional (result, { recipe, plan, calibration, chainNotes }) → QualityAssessment
- *             (quality.js); assessMeasurement is the standard one
+ *   assess    optional (result, { recipe, plan, calibration, chainNotes, inputProcessing }) →
+ *             QualityAssessment (quality.js); assessMeasurement is the standard one.
+ *             inputProcessing is inputProcessingFacts(result) (the applied constraints)
  *   analyze   optional (message, { now, yield, onStep, keepRaw, signal }) →
  *             Promise<AnalysisResult>: the offline analysis (analysis-task.js). Default
  *             defaultAnalyze() (analysis-runner.js): the data: URL Worker when the build embedded
@@ -911,7 +949,11 @@ export function createMeasurementEngine({ io, clock, onEvent, limits, assess, an
     return { cap, times };
   }
 
-  function runChecks(cap) {
+  // Run-level checks (M8): only what makes a capture unusable before alignment invalidates the
+  // run here (RUN_INVALIDATING_CODES); clipping, discontinuities and dropouts that may lie
+  // outside the sweep stay in `reasons` and are graded by the quality assessment against the
+  // ALIGNED sweep window. `sweep` = [from, to) is where the sweep's response certainly lies.
+  function runChecks(cap, sweep = null) {
     const checks = checkCapture(cap);
     const reasons = checks.reasons.slice();
     const integ = cap.integrity || null;
@@ -920,7 +962,30 @@ export function createMeasurementEngine({ io, clock, onEvent, limits, assess, an
         + `frames missing, ${integ.discontinuities} discontinuities in the capture.`));
     }
     if (checks.empty) reasons.push(reason('NO_INPUT', MEASUREMENT_ERRORS.NO_INPUT));
-    return { ...checks, integrity: integ, invalid: reasons.length > 0, reasons };
+    const inside = sweep ? checks.dropouts.filter((d) => d.start < sweep[1] && d.end > sweep[0])
+      : [];
+    if (inside.length) {
+      reasons.push(reason('DROPOUT_IN_SWEEP', `${inside.length} dropout(s) inside the sweep `
+        + `window (samples ${sweep[0]}-${sweep[1]}): the capture lost samples of the response.`));
+    }
+    const invalidating = reasons.filter((r) => RUN_INVALIDATING_CODES.includes(r.code));
+    return { ...checks, integrity: integ, invalid: invalidating.length > 0,
+      invalidating: invalidating.map((r) => r.code), reasons };
+  }
+
+  /**
+   * Capture samples where the sweep's response lies for EVERY latency the analysis accepts:
+   * the stimulus starts at s0 (its scheduled offset in the capture) plus an unknown latency
+   * L ∈ [0, post-roll] (a larger L puts the stimulus outside the capture, which the analysis
+   * rejects), so [s0 + post-roll, s0 + frames). null when that is empty (post-roll ≥ sweep).
+   */
+  function certainSweepWindow(times, frames, sampleRate, postRollS) {
+    if (!isNum(times.stimulusStartAt) || !isNum(times.captureStartAt) || !isNum(postRollS))
+      return null;
+    const s0 = Math.round((times.stimulusStartAt - times.captureStartAt) * sampleRate);
+    const from = s0 + Math.round(postRollS * sampleRate);
+    const to = s0 + frames;
+    return to > from ? [from, to] : null;
   }
 
   function invalidResult(s, extra) {
@@ -1074,10 +1139,18 @@ export function createMeasurementEngine({ io, clock, onEvent, limits, assess, an
         noise = summarizeNoise(ncap, report.calibration.level);
         emit(s, { type: 'noise', rmsDb: noise.rmsDb, peak: noise.peak,
           reasons: noise.checks.reasons });
-        if (noise.checks.clipping.regions.length) {
-          go(s, S.INVALID, { reasons: ['NOISE_CLIPPING'] });
-          const r = [reason('NOISE_CLIPPING', 'The background alone drives the input to full '
-            + 'scale: lower the input gain or the background noise.')];
+        // A clipping or broken noise capture invalidates; an EMPTY one (digital silence, a
+        // gate) does not: the runs can still be valid, the SNR is then NOT MEASURED
+        // (quality.js v3 reads noise.checks; transfer.js v2 derives no SNR without noise power).
+        const nc = noise.checks.reasons.map((x) => x.code);
+        const broken = nc.filter((c) => NOISE_INVALIDATING_CODES.includes(c));
+        if (noise.checks.clipping.regions.length || broken.length) {
+          const code = broken.length ? 'NOISE_CAPTURE_INVALID' : 'NOISE_CLIPPING';
+          go(s, S.INVALID, { reasons: [code] });
+          const r = [broken.length
+            ? reason(code, `The noise capture is unusable (${broken.join(', ')}).`)
+            : reason(code, 'The background alone drives the input to full '
+              + 'scale: lower the input gain or the background noise.')];
           releaseRaw(s);
           cancelIo('invalid');
           return invalidResult(s, { reasons: r, preflight: publicReport(report), noise });
@@ -1094,7 +1167,8 @@ export function createMeasurementEngine({ io, clock, onEvent, limits, assess, an
       for (let r = 0; r < plan.repeats; r++) {
         const { cap, times } = await captureRun(s, r, stimulus, notBefore);
         s.captures[r] = cap;
-        const checks = runChecks(cap);
+        const checks = runChecks(cap, certainSweepWindow(times, stimulus.samples.length,
+          cap.sampleRate, plan.timing.postRollS));
         captureChecks.push(checks);
         const run = {
           index: r,
@@ -1112,10 +1186,11 @@ export function createMeasurementEngine({ io, clock, onEvent, limits, assess, an
         runs.push(run);
         emit(s, { type: 'run', run: r, invalid: checks.invalid, reasons: checks.reasons });
         if (checks.invalid) {
-          go(s, S.INVALID, { run: r, reasons: checks.reasons.map((x) => x.code) });
+          const why = checks.reasons.filter((x) => checks.invalidating.includes(x.code));
+          go(s, S.INVALID, { run: r, reasons: why.map((x) => x.code) });
           releaseRaw(s);
           cancelIo('invalid');
-          return invalidResult(s, { reasons: checks.reasons.map((x) => ({ ...x, run: r })),
+          return invalidResult(s, { reasons: why.map((x) => ({ ...x, run: r })),
             preflight: publicReport(report), runs, captureChecks, noise });
         }
         notBefore = times.captureEndAt + plan.timing.gapS;
@@ -1175,7 +1250,7 @@ export function createMeasurementEngine({ io, clock, onEvent, limits, assess, an
         let q;
         try {
           q = assessFn(result, { recipe, plan, calibration: report.calibration,
-            chainNotes: report.chainNotes || null });
+            chainNotes: report.chainNotes || null, inputProcessing: inputProcessingFacts(result) });
         } catch (e) {
           throw mapError(e, 'ANALYSIS_FAILURE');
         }
@@ -1184,7 +1259,7 @@ export function createMeasurementEngine({ io, clock, onEvent, limits, assess, an
           result.state = S.INVALID;
           result.reasons = Array.isArray(q.reasons) ? q.reasons.filter((x) => x.severity
             === 'fail') : [];
-          go(s, S.INVALID, { quality: 'INVALID' });
+          go(s, S.INVALID, { quality: 'INVALID', reasons: result.reasons.map((x) => x.code) });
           cancelIo('invalid');
           return result;
         }

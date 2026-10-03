@@ -194,15 +194,17 @@ IndexedDB as an injected dependency. Signals are `Float32Array` and accumulators
 ```js
 // algorithms.js — stable IDs persisted in results (spec §43, §199); every result object
 // carries the IDs it used (docs/v3/algorithms.md, "Algorithm registry")
-ALGORITHMS = { transfer: 'oscilla.transfer.v1', ir: 'oscilla.ir.log-sweep.v1',
-  irFarina: 'oscilla.ir.farina-inverse.v1', rta: 'oscilla.rta.v1',
+ALGORITHMS = { transfer: 'oscilla.transfer.v2', ir: 'oscilla.ir.log-sweep.v2',
+  irFarina: 'oscilla.ir.farina-inverse.v2', rta: 'oscilla.rta.v1',
   smoothing: 'oscilla.smoothing.fractional-octave.v1', normalization: 'oscilla.normalization.v1',
   align: 'oscilla.align.xcorr.v1', clip: 'oscilla.clip.v1',
-  discontinuity: 'oscilla.discontinuity.v1', quality: 'oscilla.confidence.v2',
+  discontinuity: 'oscilla.discontinuity.v1', quality: 'oscilla.confidence.v3',
   calibration: 'oscilla.calibration.log-interp.v1', window: 'oscilla.window.hann.v1',
   windowBlackmanHarris: 'oscilla.window.blackman-harris.v1', aggregate: 'oscilla.aggregate.v1' }
 VARIANT_OF = { irFarina: 'ir', windowBlackmanHarris: 'window' }   // describeAlgorithm family
-RETAINED_ALGORITHMS = { quality: ['oscilla.confidence.v1'] }      // superseded, still implemented
+RETAINED_ALGORITHMS = { transfer: ['oscilla.transfer.v1'], ir: ['oscilla.ir.log-sweep.v1'],
+  irFarina: ['oscilla.ir.farina-inverse.v1'],
+  quality: ['oscilla.confidence.v1', 'oscilla.confidence.v2'] }  // superseded, still implemented
 KNOWN_ALGORITHM_IDS = [...ALGORITHMS values, ...retained]         // the import allow-list
 
 // stimulus.js
@@ -251,34 +253,45 @@ align(reference: Float32Array, captured: Float32Array, sampleRate, { maxLagS, mi
 // phase needs options.phase, an align() result and peakCorrelation ≥ PHASE_MIN_CORRELATION
 // (0.5); a bare lagSamples gives phaseDeg null with phaseReason 'NO_ALIGNMENT'
 computeTransfer({ stimulus, captured, sampleRate, f1, f2, alignment, lagSamples /* default
-  alignment.lagSamples */, noise, options: { phase = false, pointsPerOctave = 48 } })
+  alignment.lagSamples */, noise, options: { phase = false, pointsPerOctave = 48,
+  algorithm = 'oscilla.transfer.v2' /* | 'oscilla.transfer.v1' (retained) */ } })
   -> TransferResult
 TransferResult = { algorithm, sampleRate, frequencies: Float64Array /* Hz */,
   magnitudeDb: Float64Array /* raw, relative; zero power −300 */, phaseDeg: Float64Array|null,
-  snrDb: Float64Array|null, validRange: [fLo, fHi]|null, requestedRange: [f1, f2], fftSize,
-  binHz, phaseReason: null|'NOT_REQUESTED'|'NO_ALIGNMENT'|'ALIGNMENT_NOT_ROBUST'|'AGGREGATED',
+  snrDb: Float64Array|null /* null also when the noise capture holds no noise power (v2) */,
+  snrPooledDb /* v2: Float64Array|null, 1/6-octave pooled power ratio (ΣPy − ΣPn)/ΣPn */,
+  snrResolutionHz /* v2: sampleRate/len(noise) = 1/T_noise, null without noise */,
+  validRange: [fLo, fHi]|null, requestedRange: [f1, f2], fftSize, binHz,
+  resolutionHz /* v2: max(binHz, sampleRate/len(captured)) = max(fs/N, 1/T_capture) */,
+  phaseReason: null|'NOT_REQUESTED'|'NO_ALIGNMENT'|'ALIGNMENT_NOT_ROBUST'|'AGGREGATED',
   alignment: { algorithm, lagSamples, peakCorrelation, polarity }|null,
   derivedFrom? /* 'aggregate': the centre of repeated runs (G20), aggregate.js */ }
+  // v1 results have none of the three v2 fields and may hold snrDb = 200 (SNR_CEIL_DB) for
+  // Pn = 0; v2 never stores the ceiling (docs/v3/algorithms.md "SNR")
 
 // impulse-response.js
 computeImpulseResponse({ stimulus, captured, sampleRate, f1, f2, inverse, method,
-  lagSamples }) -> IrResult
-IrResult = { algorithm /* IR_ALGORITHMS[method]: spectral 'oscilla.ir.log-sweep.v1',
-  farina-inverse 'oscilla.ir.farina-inverse.v1' */, method: 'spectral'|'farina-inverse',
-  sampleRate, samples: Float32Array /* original scale */, peakIndex, peakTimeS,
-  captureOffsetS, noiseFloorDb, window: null|[t0, t1], fftSize }
+  lagSamples, algorithm /* default IR_ALGORITHMS[method]; IR_ALGORITHMS_V1[method] retained */ })
+  -> IrResult
+IrResult = { algorithm /* IR_ALGORITHMS[method]: spectral 'oscilla.ir.log-sweep.v2',
+  farina-inverse 'oscilla.ir.farina-inverse.v2' (v1 retained) */,
+  method: 'spectral'|'farina-inverse', sampleRate, samples: Float32Array /* original scale */,
+  peakIndex, peakTimeS, captureOffsetS,
+  noiseFloorDb /* dB re peak; v2: over the full-overlap lags after the peak, null if none */,
+  noiseFloorMethod /* v2 only: 'full-overlap-tail'|'none' */, window: null|[t0, t1], fftSize }
 irWindow(ir, t0, t1) -> { ...ir, window: [t0, t1], view: { startIndex, endIndex, samples } }
 normalizeIr(ir, 'peak-db'|'peak-linear') -> { kind: 'normalized', algorithm /* normalization */,
   mode, label, unit, referenceValue, values: Float64Array }
 // one spectral division for both (bit-identical to the two calls); fft / noiseSpectrum reuse
 computeTransferAndIr({ ...computeTransfer args, irLagSamples, method, inverse, fft,
-  noiseSpectrum }) -> { transfer: TransferResult, ir: IrResult }
+  noiseSpectrum, irAlgorithm }) -> { transfer: TransferResult, ir: IrResult }
 
 // smoothing.js — derived views; the raw response is never modified
-smoothFractionalOctave(frequencies, magnitudeDb, fraction /* 0 = none, N = 1/N octave */)
+smoothFractionalOctave(frequencies, magnitudeDb, fraction /* 0 = none, N = 1/N octave */,
+  { mask } /* optional: only masked-in finite points enter; NaN elsewhere (no edge leak) */)
   -> Float64Array
-smoothResponse(frequencies, magnitudeDb, fraction) -> { kind: 'smoothed', algorithm, fraction,
-  label, smoothedDb }
+smoothResponse(frequencies, magnitudeDb, fraction, { mask }) -> { kind: 'smoothed',
+  algorithm, fraction, label, smoothedDb, masked? /* true with a mask */ }
 normalizeResponse(frequencies, magnitudeDb, { mode: 'at-frequency', hz }
   | { mode: 'band-mean', lo, hi }) -> { algorithm, mode, normalizedDb, referenceDb, label }
 
@@ -320,7 +333,8 @@ AggregateResult = { algorithm, method, dispersion, runs, frequencies: Float64Arr
   // zero power −300 dB; validated lowerDb ≤ centreDb ≤ upperDb
 // G20 storage rule: with ≥ 2 runs the aggregate is the primary response and the transfer is
 transferFromAggregate(stored /* AggregateResult, runs ≥ 2 */, transfers) -> TransferResult
-  // magnitudeDb = stored.centreDb (same bits), lowest run snrDb, common validRange, phaseDeg
+  // magnitudeDb = stored.centreDb (same bits), lowest run snrDb (and snrPooledDb for v2 runs;
+  // coarsest snrResolutionHz / resolutionHz), common validRange, phaseDeg
   // null + phaseReason 'AGGREGATED', alignment null, derivedFrom: 'aggregate'
 
 // analysis-task.js — the offline analysis as ONE serializable task (G21 boundary)
@@ -345,9 +359,13 @@ capIrLength(ir, maxSamples = IR_MAX_SAMPLES) -> IrResult   // M10 stored IR leng
 
 // quality.js
 assessQuality({ capture, transfer, aggregate /* aggregateRuns() or AggregateResult */,
-  calibration, requestedRange, resolutionHz, sweepWindow,
-  chainNotes /* v2: { limiterDeviationAboveHz }|null */,
-  algorithm /* 'oscilla.confidence.v2' (default) | 'oscilla.confidence.v1' */ })
+  calibration, requestedRange, resolutionHz /* v3 default transfer.resolutionHz */,
+  sweepWindow, chainNotes /* v2: { limiterDeviationAboveHz }|null */,
+  noiseCheck /* v3: checkCapture() of the noise capture|null; EMPTY → SNR NOT MEASURED */,
+  inputProcessing /* v3: applied { echoCancellation, noiseSuppression, autoGainControl }
+    | 'test-context' | null (none reported) | undefined (rule not applied) */,
+  stimulus /* v3: StimulusSpec, names the sweep frequency of clipped regions */,
+  algorithm /* 'oscilla.confidence.v3' (default) | '…v2' | '…v1' (retained) */ })
   -> QualityAssessment
 QualityAssessment = { algorithm, status: 'GOOD'|'USABLE'|'POOR'|'INVALID',
   reasons: [{ code, scope: 'quality'|'calibration', severity: 'ok'|'warn'|'fail', text, value,
@@ -355,7 +373,8 @@ QualityAssessment = { algorithm, status: 'GOOD'|'USABLE'|'POOR'|'INVALID',
   metrics: { snrMedianDb, snrMinDb, clippingRatio, clippingRegions, dropouts,
     repeatabilityDb, runs, requestedRange, coverage: [fLo, fHi]|null, coverageFraction,
     reliableRanges, unreliableRanges, calibratedRange, frequencyCalibrated, levelCalibrated,
-    resolutionHz /* v2 also: discontinuities, outputChainLimitHz */ },
+    resolutionHz /* v2 also: discontinuities, outputChainLimitHz; v3 also: snrResolutionHz,
+    snrAssessedFromHz */ },
   mask: { frequencies: Float64Array, reliable: Uint8Array, calibrated: Uint8Array } }
 
 // calibration/profile.js — two kinds, never conflated (spec §17)
@@ -431,6 +450,15 @@ Notes on the shapes:
   and refuses with `MEMORY_LIMIT` above an FFT length of 2^22 or 1 GiB; preflight warns
   `ANALYSIS_MEMORY` above 512 MiB. Stored impulse responses are capped at 2^21 samples and
   record `ir.truncation` when cut.
+
+- **Run validity and assessment context (review M8, M2).** A run is invalid before analysis
+  only for `RUN_INVALIDATING_CODES` (no usable samples, missing frames, a dropout certainly
+  inside the sweep); clipping, other dropouts and discontinuities are graded by the quality
+  assessment, and an INVALID assessment carries its failing codes in the INVALID transition.
+  A noise capture invalidates only when clipping or broken (`NOISE_CLIPPING`,
+  `NOISE_CAPTURE_INVALID`); an EMPTY one does not (SNR NOT MEASURED). `assessMeasurement`
+  passes the noise check, `inputProcessingFacts(result)` (the first capture's applied
+  constraints, or `'test-context'`) and the stimulus spec.
 
 The remaining differences between the specification and the code are listed under "Gaps" in
 `docs/v3/algorithms.md`.

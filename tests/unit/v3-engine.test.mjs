@@ -18,6 +18,7 @@ import {
   CONTRACT_LIMITS,
   MEASUREMENT_LEVELS,
   INPUT_PROCESSING_NOTE,
+  assessMeasurement,
 } from '../../src/js/measurement/engine.js';
 import { MEASUREMENT_STATES as S } from '../../src/js/measurement/state-machine.js';
 import { createFrequencyProfile } from '../../src/js/calibration/profile.js';
@@ -245,8 +246,8 @@ test('legal flow IDLE → PREFLIGHT → NOISE_CHECK → READY → ARMED → MEAS
   assert.equal(result.state, S.COMPLETE);
   assert.equal(result.runs.length, 1);
   assert.ok(result.transfer && result.ir && result.aggregate && result.noise);
-  assert.equal(result.transfer.algorithm, 'oscilla.transfer.v1');
-  assert.equal(result.ir.algorithm, 'oscilla.ir.log-sweep.v1');
+  assert.equal(result.transfer.algorithm, 'oscilla.transfer.v2');
+  assert.equal(result.ir.algorithm, 'oscilla.ir.log-sweep.v2');
   assert.equal(result.captureChecks.length, 1);
   assert.equal(result.captureChecks[0].invalid, false);
   assert.ok(io.calls.cancel >= 1, 'resources released at completion');
@@ -550,13 +551,22 @@ test('invalid calibration is a blocker; analysis failure in assess → ANALYSIS_
     assert.equal(engine.state, S.ERROR);
   });
 
-test('capture checks: a clipping capture ends INVALID with the reason', async () => {
+test('capture checks: clipping is graded by quality, severe clipping ends INVALID', async () => {
+  // Review M8: CLIPPING is not a run-level invalidation; every run is captured and the quality
+  // assessment grades it (CLIPPING_SEVERE invalidates there).
   const { engine, events } = makeEngine({ system: gainDelaySystem(8, 0) });
-  const r = await engine.measure(sweepRecipe({ repeats: 3 }));
+  const r = await engine.measure(sweepRecipe({ repeats: 3 }), { assess: assessMeasurement });
   assert.equal(r.state, S.INVALID);
-  assert.ok(r.reasons.some((x) => x.code === 'CLIPPING'));
-  assert.equal(r.runs.length, 1, 'stops at the first invalid run');
+  assert.ok(r.reasons.some((x) => x.code === 'CLIPPING_SEVERE'), JSON.stringify(r.reasons));
+  assert.equal(r.runs.length, 3, 'all runs captured');
+  assert.ok(r.captureChecks.every((c) => c.reasons.some((x) => x.code === 'CLIPPING')
+    && c.invalid === false));
   assert.ok(states(events).includes(S.INVALID));
+  // Without an assessment the clipped result is COMPLETE, its checks keep the reason.
+  const plain = await makeEngine({ system: gainDelaySystem(8, 0) }).engine
+    .measure(sweepRecipe());
+  assert.equal(plain.state, S.COMPLETE);
+  assert.ok(plain.captureChecks[0].reasons.some((x) => x.code === 'CLIPPING'));
 });
 
 test('a silent capture ends INVALID with NO_INPUT', async () => {

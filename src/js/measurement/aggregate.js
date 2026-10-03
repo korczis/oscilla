@@ -238,7 +238,9 @@ export const DERIVED_FROM_AGGREGATE = 'aggregate';
  * The storable transfer of a repeated measurement (see the header, G20): magnitudeDb is a copy
  * of stored.centreDb; the other fields follow the first run except snrDb (lowest run per point,
  * null unless every run has one), validRange (intersection, null if empty or any run has none),
- * phaseDeg null, phaseReason AGGREGATED and alignment null. Inputs are not modified.
+ * phaseDeg null, phaseReason AGGREGATED and alignment null. For transfer.v2 runs also
+ * snrPooledDb (lowest run per point), snrResolutionHz and resolutionHz (coarsest run); v1 runs
+ * keep the v1 shape. Inputs are not modified.
  */
 export function transferFromAggregate(stored, transfers) {
   if (!stored || !stored.centreDb || !Number.isInteger(stored.runs) || stored.runs < 2)
@@ -267,6 +269,40 @@ export function transferFromAggregate(stored, transfers) {
     const hi = Math.min(...transfers.map((t) => t.validRange[1]));
     validRange = hi > lo ? [lo, hi] : null;
   }
+  const requestedRange = first.requestedRange
+    ? [first.requestedRange[0], first.requestedRange[1]] : first.requestedRange;
+  if (!('snrPooledDb' in first)) {
+    // A transfer.v1 run: the v1 TransferResult shape, unchanged.
+    return {
+      algorithm: first.algorithm,
+      sampleRate: first.sampleRate,
+      frequencies: Float64Array.from(stored.frequencies),
+      magnitudeDb: Float64Array.from(stored.centreDb),
+      phaseDeg: null,
+      snrDb,
+      validRange,
+      requestedRange,
+      fftSize: first.fftSize,
+      binHz: first.binHz,
+      phaseReason: PHASE_REASONS.AGGREGATED,
+      alignment: null,
+      derivedFrom: DERIVED_FROM_AGGREGATE,
+    };
+  }
+  // transfer.v2: the pooled SNR is the lowest run's per point too (null unless every run has
+  // one, and then snrDb is null as well); the noise resolution is the coarsest run's (all runs
+  // share one noise capture, so they are equal) and the frequency resolution likewise.
+  let snrPooledDb = null;
+  if (snrDb && transfers.every((t) => t.snrPooledDb)) {
+    snrPooledDb = new Float64Array(n);
+    for (let i = 0; i < n; i++) {
+      let m = Infinity;
+      for (const t of transfers) m = Math.min(m, t.snrPooledDb[i]);
+      snrPooledDb[i] = m;
+    }
+  } else snrDb = null;
+  const maxOf = (k) => (transfers.every((t) => Number.isFinite(t[k]))
+    ? Math.max(...transfers.map((t) => t[k])) : null);
   return {
     algorithm: first.algorithm,
     sampleRate: first.sampleRate,
@@ -274,11 +310,13 @@ export function transferFromAggregate(stored, transfers) {
     magnitudeDb: Float64Array.from(stored.centreDb),
     phaseDeg: null,
     snrDb,
+    snrPooledDb,
+    snrResolutionHz: maxOf('snrResolutionHz'),
     validRange,
-    requestedRange: first.requestedRange ? [first.requestedRange[0], first.requestedRange[1]]
-      : first.requestedRange,
+    requestedRange,
     fftSize: first.fftSize,
     binHz: first.binHz,
+    resolutionHz: maxOf('resolutionHz'),
     phaseReason: PHASE_REASONS.AGGREGATED,
     alignment: null,
     derivedFrom: DERIVED_FROM_AGGREGATE,

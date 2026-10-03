@@ -1,6 +1,7 @@
 // Data-driven measurement quality assessment (spec §64-§71, §143, §156-§158, §198-§199,
-// §220-§222, §237, §249; ADR 0025). Algorithm IDs: 'oscilla.confidence.v2' (default) and
-// 'oscilla.confidence.v1' (retained, reproduced exactly for stored assessments; ADR 0024).
+// §220-§222, §237, §249; ADR 0025). Algorithm IDs: 'oscilla.confidence.v3' (default),
+// 'oscilla.confidence.v2' and 'oscilla.confidence.v1' (retained, reproduced exactly for stored
+// assessments; ADR 0024).
 //
 // Method. A pure rule table maps measured metrics to one of four statuses and ALWAYS returns
 // the reasons, passing and failing alike, each backed by the number it was derived from. There
@@ -26,6 +27,53 @@
 //       the spike's Firefox 155 reading above 18 kHz (docs/v3/spike-audioworklet-worker.md,
 //       G12), since traced to a look-ahead replay that audio-engine.js feedLimiter removes; no
 //       platform layer sets the note today. Thresholds are unchanged.
+//   v3  v2 plus the fixes of the V3 pre-release review (B1, M1, M2, m2, m5, NITs):
+//       (a) SNR NOT MEASURED instead of a number when there is no noise power to divide by:
+//           the noise check (input `noiseCheck`, its checkCapture() result) is EMPTY (RMS below
+//           EMPTY_RMS_DBFS, digital silence included), or the transfer has no SNR although it
+//           had a noise capture (transfer.v2: zero noise power in some band), or a stored SNR
+//           sits at transfer.js SNR_CEIL_DB (transfer.v1 stored 200 dB for Pn = 0). Then
+//           SNR_NOT_MEASURED warns (caps USABLE) and no SNR value is reported. Decision: a
+//           silent noise check is NOT invalidating — the runs are valid captures and only the
+//           SNR is unknown; it is how a digital loopback looks, and for a microphone it points
+//           at a gate or input processing, which rule (c) judges from the applied constraints.
+//       (b) the SNR pooled over 1/6 octave is the POOLED POWER RATIO (ΣPy − ΣPn)/ΣPn
+//           (transfer.v2 snrPooledDb), never the mean of per-point ratios v1/v2 used, which is
+//           biased high by E[1/Pn] > 1/E[Pn] (+3-4 dB below 150 Hz with a 1 s noise check).
+//           snrMedianDb is the median of that pooled SNR over the ASSESSED points. A point is
+//           NOT ASSESSED when its pooling band holds fewer than minSnrObservations independent
+//           noise observations: B·T_noise < 10 with B = (2^(1/12) − 2^(−1/12))·f, i.e.
+//           f < 10·snrResolutionHz/0.1155 (86.6 Hz for a 1 s noise check, 20 Hz needs 4.3 s).
+//           Not-assessed points are not reliable (no SNR evidence) and SNR_NOT_ASSESSED warns
+//           (a NOT MEASURED code: caps USABLE, never pushes towards POOR). A transfer.v1 has
+//           neither snrPooledDb nor snrResolutionHz: its snrDb is pooled as in v2 and every
+//           point counts as assessed (documented fallback for re-assessing stored v1 data).
+//       (c) INPUT PROCESSING (input `inputProcessing`, the applied constraints): any of
+//           echoCancellation / noiseSuppression / autoGainControl reported true → INPUT_PROCESSING
+//           fail (POOR: the capture is the processed signal, not the microphone's); any not
+//           confirmed (null/absent) → INPUT_PROCESSING_NOT_CONFIRMED warn (caps USABLE); all
+//           false → ok; 'test-context' (a digital loopback, no input chain) → ok; null (no
+//           constraints reported at all) → NOT_CONFIRMED. Omitted (undefined) the rule is not
+//           applied: a caller without a microphone path; engine.js assessMeasurement always
+//           passes it.
+//       (d) resolution: metrics.resolutionHz defaults to transfer.resolutionHz =
+//           max(fs/N, 1/T_capture) (the zero-padded bin spacing claims more than the capture
+//           resolves); metrics.snrResolutionHz = 1/T_noise and metrics.snrAssessedFromHz are
+//           added.
+//       (e) texts: repeatability reads "median run-to-run SD x dB" (or "absolute deviation"
+//           for the median aggregation), a statistic, not a ± bound; clipping names the sweep
+//           frequency of the clipped regions when the stimulus spec and sweep window are given
+//           (input `stimulus`, stimulus.js instantaneousFrequency); and a capture whose peak
+//           reaches the rail (≥ CLIP_THRESHOLD) without a CLIP_MIN_RUN flat top warns
+//           CLIPPING_NOT_EXCLUDED instead of CLIPPING ok (a NOT MEASURED code: absence of the
+//           evidence "no clipping", capped at USABLE, never pushed towards POOR).
+//           A sine of amplitude A hard-clipped at rail r stays at the rail for acos(r/A)/π of
+//           each period, i.e. fewer than CLIP_MIN_RUN samples above f = acos(r/A)·fs/
+//           (π·CLIP_MIN_RUN): ≈ 2.4 kHz at 48 kHz for 1 dB of overdrive, 5.3 kHz for 6 dB. Such
+//           short flat tops are deliberately not clip regions in capture-checks.js (a lone
+//           full-scale sample is a legitimate transient; CLIP_MIN_RUN stays 3), so the rail
+//           peak is the only trace of high-frequency clipping and is reported, not ignored.
+//       Thresholds are unchanged except the new minSnrObservations.
 //
 // Reasons: { code, scope, severity: 'ok'|'warn'|'fail', text, value, unit, range? }.
 //   scope 'quality'      integrity and precision of the measurement; decides the status.
@@ -73,10 +121,11 @@
 //
 // Per-frequency masks (§156-§158, §221-§222), on the transfer grid:
 //   reliable[i]    with an SNR estimate: the 1/6-octave pooled SNR ≥ reliableMinSnrDb AND
-//                  f ≤ SAFE_NYQUIST_FRACTION·Nyquist. The pool is the power mean of the linear
-//                  per-point SNR (smoothFractionalOctave on snrDb), equal to transfer.js's
-//                  pooled (Py − Pn)/Pn when the noise floor is locally flat across the 1/6
-//                  octave. Bands the stimulus did not excite hold only noise and fail the SNR
+//                  f ≤ SAFE_NYQUIST_FRACTION·Nyquist (v3: AND the point is assessed). v1/v2
+//                  pool as the power mean of the linear per-point SNR (smoothFractionalOctave
+//                  on snrDb), which equals transfer.js's pooled (Py − Pn)/Pn only in
+//                  expectation of a noise-free Pn and is biased high otherwise (v3 header,
+//                  (b)); v3 uses that pooled power ratio itself (transfer.v2 snrPooledDb). Bands the stimulus did not excite hold only noise and fail the SNR
 //                  test by themselves; above the stimulus clamp (stimulus.js never generates
 //                  there) a clean digital loopback could still show sweep leakage above the
 //                  noise while |X|² sits below the regularization ε, hence the explicit limit.
@@ -105,16 +154,21 @@
 // Pure: no DOM, no Web Audio, no globals, no clock; inputs are never mutated.
 
 import { ALGORITHMS } from './algorithms.js';
-import { EMPTY_RMS_DBFS } from './capture-checks.js';
+import { CLIP_MIN_RUN, CLIP_THRESHOLD, EMPTY_RMS_DBFS } from './capture-checks.js';
 import { formatDb, formatFrequencyWithResolution } from './format.js';
 import { smoothFractionalOctave } from './smoothing.js';
-import { SAFE_NYQUIST_FRACTION } from './stimulus.js';
+import { SAFE_NYQUIST_FRACTION, instantaneousFrequency } from './stimulus.js';
+import { SNR_CEIL_DB } from './transfer.js';
 import { RELATIVE_UNIT, isValidLevelCalibration } from '../calibration/level.js';
 
-/** The default rule set for new assessments: 'oscilla.confidence.v2'. */
+/** The default rule set for new assessments: 'oscilla.confidence.v3'. */
 export const QUALITY_ALGORITHM = ALGORITHMS.quality;
 /** The retained first rule set (no discontinuity rule, no chain notes). */
 export const QUALITY_ALGORITHM_V1 = 'oscilla.confidence.v1';
+/** The retained second rule set (v1 + discontinuities + chain notes). */
+export const QUALITY_ALGORITHM_V2 = 'oscilla.confidence.v2';
+/** Relative width of a 1/6-octave pooling band: 2^(1/12) − 2^(−1/12). */
+const SIXTH_OCTAVE_WIDTH = 2 ** (1 / 12) - 2 ** (-1 / 12);
 
 export const QUALITY_THRESHOLDS = Object.freeze({
   /** Rail-sample ratio at or above which the run is INVALID: with mild overdrive only ~20-25 %
@@ -167,6 +221,11 @@ export const QUALITY_THRESHOLDS = Object.freeze({
   /** Low-SNR bands named as separate reasons (the widest ones); every band stays in
    *  metrics.unreliableRanges and the mask. A display limit, not a rule. */
   maxBandReasons: 3,
+  /** v3 only: independent noise observations (time-bandwidth product B·T_noise) a pooling band
+   *  needs for its SNR to count as assessed. 10 bounds the pooled noise estimate's scatter to
+   *  ≈ 4.34/√10 = 1.4 dB, inside the 2.4 dB error band that the 10 dB reliability margin
+   *  already allows (snrUsableDb). */
+  minSnrObservations: 10,
 });
 
 const Q = 'quality';
@@ -209,6 +268,15 @@ const V2_CODES = Object.freeze({
   OUTPUT_CHAIN_DEVIATION: code(Q, 'range'),
 });
 
+/** The v3 reason codes: v2 plus SNR assessment and input processing. */
+const V3_CODES = Object.freeze({
+  ...V2_CODES,
+  SNR_NOT_ASSESSED: code(Q, 'snr', false, true),
+  CLIPPING_NOT_EXCLUDED: code(Q, 'capture', false, true),
+  INPUT_PROCESSING: code(Q, 'input'),
+  INPUT_PROCESSING_NOT_CONFIRMED: code(Q, 'input', false, true),
+});
+
 const invalidating = (codes) => Object.freeze(
   Object.keys(codes).filter((k) => codes[k].invalidating),
 );
@@ -222,10 +290,15 @@ export const QUALITY_RULESETS = Object.freeze({
   [QUALITY_ALGORITHM_V1]: Object.freeze({
     algorithm: QUALITY_ALGORITHM_V1, thresholds: QUALITY_THRESHOLDS, reasonCodes: V1_CODES,
     invalidatingCodes: invalidating(V1_CODES), discontinuity: false, chainNotes: false,
+    v3: false,
   }),
-  'oscilla.confidence.v2': Object.freeze({
-    algorithm: 'oscilla.confidence.v2', thresholds: QUALITY_THRESHOLDS, reasonCodes: V2_CODES,
-    invalidatingCodes: invalidating(V2_CODES), discontinuity: true, chainNotes: true,
+  [QUALITY_ALGORITHM_V2]: Object.freeze({
+    algorithm: QUALITY_ALGORITHM_V2, thresholds: QUALITY_THRESHOLDS, reasonCodes: V2_CODES,
+    invalidatingCodes: invalidating(V2_CODES), discontinuity: true, chainNotes: true, v3: false,
+  }),
+  'oscilla.confidence.v3': Object.freeze({
+    algorithm: 'oscilla.confidence.v3', thresholds: QUALITY_THRESHOLDS, reasonCodes: V3_CODES,
+    invalidatingCodes: invalidating(V3_CODES), discontinuity: true, chainNotes: true, v3: true,
   }),
 });
 
@@ -415,7 +488,36 @@ function countNonFiniteAggregate(a) {
 
 // ----------------------------------------------------------------------------- assessment
 
-function assessCaptures(captures, sweepWindow, add, rules) {
+/**
+ * v3: ", at ≈ 1.2 kHz of the sweep" / ", at ≈ 1.2-8.5 kHz of the sweep" for the clip regions
+ * that lie inside their run's sweep window, from the stimulus spec; '' when unknown.
+ */
+function clipSweepText(captures, sweepWindow, stimulus) {
+  if (!stimulus || !(stimulus.sampleRate > 0) || !(stimulus.duration > 0)) return '';
+  let lo = Infinity;
+  let hi = -Infinity;
+  captures.forEach((c, i) => {
+    const w = windowFor(sweepWindow, i);
+    if (!w) return;
+    for (const r of c.clipping.regions) {
+      for (const s of [r.start, r.end - 1]) {
+        const t = (s - w[0]) / stimulus.sampleRate;
+        if (!(t >= 0 && t <= stimulus.duration)) continue;
+        const f = instantaneousFrequency(stimulus, t);
+        if (Number.isFinite(f) && f > 0) {
+          lo = Math.min(lo, f);
+          hi = Math.max(hi, f);
+        }
+      }
+    }
+  });
+  if (!Number.isFinite(lo)) return '';
+  const res = (hz) => formatFrequencyWithResolution(hz, hz / 10);
+  return hi / lo < 1.05 ? `, at ≈ ${res(lo)} of the sweep`
+    : `, at ≈ ${res(lo)}-${res(hi)} of the sweep`;
+}
+
+function assessCaptures(captures, sweepWindow, add, rules, stimulus = null) {
   const T = QUALITY_THRESHOLDS;
   const n = captures.length;
   const metrics = { clippingRatio: null, clippingRegions: null, dropouts: null };
@@ -470,8 +572,10 @@ function assessCaptures(captures, sweepWindow, add, rules) {
   metrics.clippingRatio = ratio;
   metrics.clippingRegions = regions;
   const where = n > 1 ? ` (worst: run ${worst + 1} of ${n})` : '';
+  const sweepAt = rules.v3 && regions > 0 ? clipSweepText(captures, sweepWindow, stimulus) : '';
   const clipText = `clipping at ${pct(ratio * 100)} % of samples ` +
-    `(${plural(regions, 'region')})${where}`;
+    `(${plural(regions, 'region')}${sweepAt})${where}`;
+  const peak = Math.max(...captures.map((c) => (Number.isFinite(c.peak) ? c.peak : 0)));
   if (ratio >= T.clipInvalidRatio) {
     add('CLIPPING_SEVERE', 'fail',
       `severe ${clipText}: at or above ${pct(T.clipInvalidRatio * 100)} % the response is ` +
@@ -481,6 +585,10 @@ function assessCaptures(captures, sweepWindow, add, rules) {
       ratio * 100, '%');
   } else if (regions > 0) {
     add('CLIPPING', 'warn', clipText, ratio * 100, '%');
+  } else if (rules.v3 && peak >= CLIP_THRESHOLD) {
+    add('CLIPPING_NOT_EXCLUDED', 'warn', `peak ${Number(peak.toPrecision(3))} reaches the rail ` +
+      `(≥ ${CLIP_THRESHOLD}) without a ${CLIP_MIN_RUN}-sample flat top: brief clipping (high ` +
+      'sweep frequencies) is not excluded', peak, 'peak');
   } else {
     add('CLIPPING', 'ok', 'no clipping', 0, '%');
   }
@@ -638,6 +746,155 @@ function assessSnr(transfer, fmt, add) {
   return out;
 }
 
+/** Why there is no SNR to report (v3), or null when there is one. */
+function snrAbsence(transfer, noiseCheck, captures) {
+  const runsCarrySignal = captures.length > 0 && captures.every((c) => !c.empty);
+  const tail = runsCarrySignal ? ' while the runs carry signal (a noise gate, input ' +
+    'processing or a digital loopback): no SNR is derived from it' : '';
+  if (noiseCheck && noiseCheck.empty) {
+    const rms = noiseCheck.rms;
+    const what = rms > 0
+      ? `RMS ${formatDb(20 * Math.log10(rms))}, below ${formatDb(EMPTY_RMS_DBFS)}`
+      : 'digital silence';
+    return `SNR not measured: the noise check is empty (${what})${tail}`;
+  }
+  if (!transfer.snrDb) {
+    if (Number.isFinite(transfer.snrResolutionHz) || noiseCheck)
+      return 'SNR not measured: the noise check holds no noise power in at least one band ' +
+        '(digital silence or a gate), so no SNR is derived from it';
+    return 'SNR not measured: no noise-floor capture';
+  }
+  for (let i = 0; i < transfer.snrDb.length; i++) {
+    if (transfer.snrDb[i] >= SNR_CEIL_DB)
+      return `SNR not measured: the stored SNR sits at the ${SNR_CEIL_DB} dB ceiling (no noise ` +
+        'power in the noise check)';
+  }
+  return null;
+}
+
+/**
+ * v3 SNR (see the header, v3 (a)-(b)): pooled power ratio, assessed points only.
+ * Returns { snrMedianDb, snrMinDb, pooled, assessed, snrResolutionHz, snrAssessedFromHz }.
+ */
+function assessSnrV3(transfer, noiseCheck, captures, fmt, add) {
+  const T = QUALITY_THRESHOLDS;
+  const f = transfer.frequencies;
+  const n = f.length;
+  const res = Number.isFinite(transfer.snrResolutionHz) && transfer.snrResolutionHz > 0
+    ? transfer.snrResolutionHz : null;
+  const out = { snrMedianDb: null, snrMinDb: null, pooled: null, assessed: null,
+    snrResolutionHz: res, snrAssessedFromHz: null };
+  const absent = snrAbsence(transfer, noiseCheck, captures);
+  if (absent) {
+    add('SNR_NOT_MEASURED', 'warn', absent, null, 'dB');
+    return out;
+  }
+  const pooled = transfer.snrPooledDb && transfer.snrPooledDb.length === n
+    ? Float64Array.from(transfer.snrPooledDb)
+    : smoothFractionalOctave(f, transfer.snrDb, T.reliablePoolingFraction);
+  const fA = res ? (T.minSnrObservations * res) / SIXTH_OCTAVE_WIDTH : null;
+  const assessed = new Uint8Array(n);
+  for (let i = 0; i < n; i++) assessed[i] = fA === null || f[i] >= fA ? 1 : 0;
+  out.pooled = pooled;
+  out.assessed = assessed;
+  out.snrAssessedFromHz = fA;
+  const firstAssessed = assessed.indexOf(1);
+  if (firstAssessed !== 0) {
+    const tNoise = 1 / res;
+    const need = T.minSnrObservations / (SIXTH_OCTAVE_WIDTH * f[0]);
+    const below = firstAssessed < 0 ? `in the whole measured range (${rangeText(fmt, f[0],
+      f[n - 1])})` : `below ${fmt(f[firstAssessed])}`;
+    add('SNR_NOT_ASSESSED', 'warn',
+      `SNR not assessed ${below}: the ${Number(tNoise.toPrecision(2))} s noise check gives ` +
+        `fewer than ${T.minSnrObservations} independent noise observations per 1/6 octave ` +
+        `there (${Number(Math.ceil(need * 10) / 10)} s would assess from ${fmt(f[0])})`,
+      fA, 'Hz', [f[0], firstAssessed < 0 ? f[n - 1] : f[firstAssessed - 1]]);
+  }
+  if (firstAssessed < 0) return out;
+
+  const med = median(pooled.filter((_, i) => assessed[i]));
+  out.snrMedianDb = med;
+  const r = ratioDb(med, 1);
+  const basis = '1/6-octave pooled';
+  if (med >= T.snrGoodDb)
+    add('SNR_MEDIAN', 'ok', `${ratioDb(med)} dB median SNR (${basis})`, med, 'dB');
+  else if (med >= T.snrUsableDb)
+    add('SNR_MEDIAN', 'warn', `${r} dB median SNR (${basis}; GOOD needs ≥ ${T.snrGoodDb} dB)`,
+      med, 'dB');
+  else
+    add('SNR_MEDIAN', 'fail',
+      `${r} dB median SNR (${basis}), below the ${T.snrUsableDb} dB minimum for USABLE`, med,
+      'dB');
+
+  const vr = transfer.validRange;
+  if (vr) {
+    let min = Infinity;
+    for (let i = 0; i < n; i++)
+      if (assessed[i] && f[i] >= vr[0] && f[i] <= vr[1] && pooled[i] < min) min = pooled[i];
+    out.snrMinDb = Number.isFinite(min) ? min : null;
+  }
+
+  const low = new Uint8Array(n);
+  for (let i = 0; i < n; i++) low[i] = assessed[i] && pooled[i] < T.reliableMinSnrDb ? 1 : 0;
+  const bands = maskRuns(low)
+    .map(([a, b]) => ({ a, b, width: octaves(f[a], f[b]) }))
+    .filter((band) => band.width >= T.lowSnrBandMinOctaves - 1e-9)
+    .sort((x, y) => y.width - x.width || x.a - y.a)
+    .slice(0, T.maxBandReasons)
+    .sort((x, y) => x.a - y.a);
+  for (const { a, b } of bands) {
+    const m = median(pooled.subarray(a, b + 1));
+    const range = rangeText(fmt, f[a], f[b]);
+    const text = m > 0
+      ? `${range} only ${ratioDb(m, 1)} dB above the noise floor`
+      : `${range} not above the noise floor (${ratioDb(m, 1)} dB SNR)`;
+    add('LOW_SNR_BAND', 'warn', `${text} (reliable needs ≥ ${T.reliableMinSnrDb} dB)`, m, 'dB',
+      [f[a], f[b]]);
+  }
+  return out;
+}
+
+/** v3 (c): input processing from the applied constraints (see the header). */
+const PROCESSING_KEYS = Object.freeze([
+  ['echoCancellation', 'echo cancellation'],
+  ['noiseSuppression', 'noise suppression'],
+  ['autoGainControl', 'automatic gain control'],
+]);
+
+function assessInputProcessing(ip, add) {
+  if (ip === undefined) return null;
+  if (ip === 'test-context') {
+    add('INPUT_PROCESSING', 'ok', 'no input processing: digital test context (no microphone ' +
+      'path)', 0, 'flags');
+    return { on: [], unconfirmed: [] };
+  }
+  if (ip !== null && (typeof ip !== 'object' || Array.isArray(ip)))
+    throw new TypeError("inputProcessing must be the applied constraints { echoCancellation, " +
+      "noiseSuppression, autoGainControl }, 'test-context' or null");
+  if (ip === null) {
+    add('INPUT_PROCESSING_NOT_CONFIRMED', 'warn', 'input processing not confirmed off: the ' +
+      'browser reported no applied constraints (echo cancellation, noise suppression and ' +
+      'automatic gain control may be active)', null, 'flags');
+    return { on: null, unconfirmed: null };
+  }
+  const on = PROCESSING_KEYS.filter(([k]) => ip[k] === true).map(([, w]) => w);
+  const unconfirmed = PROCESSING_KEYS.filter(([k]) => ip[k] !== true && ip[k] !== false)
+    .map(([, w]) => w);
+  const list = (ws) => (ws.length > 1 ? `${ws.slice(0, -1).join(', ')} and ${ws.at(-1)}` : ws[0]);
+  if (on.length) {
+    add('INPUT_PROCESSING', 'fail', `input processing active: ${list(on)} reported on by the ` +
+      "browser, so the capture is the processed signal, not the microphone's", on.length,
+    'flags');
+  } else if (unconfirmed.length) {
+    add('INPUT_PROCESSING_NOT_CONFIRMED', 'warn', `input processing not confirmed off: ` +
+      `${list(unconfirmed)} not reported by the browser`, unconfirmed.length, 'flags');
+  } else {
+    add('INPUT_PROCESSING', 'ok', 'input processing confirmed off (echo cancellation, noise ' +
+      'suppression, automatic gain control)', 0, 'flags');
+  }
+  return { on, unconfirmed };
+}
+
 function assessCoverage(transfer, requested, fmt, add) {
   const T = QUALITY_THRESHOLDS;
   const vr = transfer.validRange;
@@ -668,7 +925,22 @@ function assessCoverage(transfer, requested, fmt, add) {
   return { coverage: [vr[0], vr[1]], coverageFraction: fraction };
 }
 
-function assessRepeatability(aggregate, runs, add) {
+/** v3 (e): repeatability as the statistic it is, "median run-to-run SD x dB". */
+function repeatabilityTextV3(n, rep, kind, severity) {
+  const T = QUALITY_THRESHOLDS;
+  const stat = kind === 'std' ? 'SD' : 'absolute deviation';
+  const per = kind === 'std' ? 'standard deviation' : 'absolute deviation from the median';
+  const head = `${n} runs: median run-to-run ${stat}`;
+  const basis = `per-frequency ${per}, median across frequency`;
+  if (severity === 'ok')
+    return `${head} ${ratioDb(Math.max(0.1, Math.ceil(rep * 10) / 10), 1)} dB (${basis})`;
+  if (severity === 'warn')
+    return `${head} ${ratioDb(rep, 1)} dB (${basis}; GOOD needs ≤ ${T.repeatabilityGoodDb} dB)`;
+  return `${head} ${ratioDb(rep, 1)} dB (${basis}), above the ${T.repeatabilityUsableDb} dB ` +
+    'limit for USABLE';
+}
+
+function assessRepeatability(aggregate, runs, add, rules = { v3: false }) {
   const T = QUALITY_THRESHOLDS;
   const n = aggregate && Number.isInteger(aggregate.runs) ? aggregate.runs : runs;
   if (!aggregate || !(n >= T.minRunsForRepeatability)) {
@@ -684,6 +956,13 @@ function assessRepeatability(aggregate, runs, add) {
     add('REPEATABILITY_NOT_MEASURED', 'warn',
       `${n} runs: repeatability undefined (no frequency point has a finite spread)`, n, 'runs');
     return null;
+  }
+  if (rules.v3) {
+    const severity = rep <= T.repeatabilityGoodDb ? 'ok'
+      : rep <= T.repeatabilityUsableDb ? 'warn' : 'fail';
+    add('REPEATABILITY', severity, repeatabilityTextV3(n, rep,
+      aggregate.dispersion === 'std' ? 'std' : 'mad', severity), rep, 'dB');
+    return rep;
   }
   const kind = aggregate.dispersion === 'std' ? 'standard deviation' : 'absolute deviation';
   const x = ratioDb(rep, 1);
@@ -843,9 +1122,16 @@ function decideStatus(reasons, codes) {
  *                   it every interior dropout (discontinuity) invalidates.
  *   chainNotes      v2: optional output-chain facts, { limiterDeviationAboveHz } (see
  *                   normalizeChainNotes); grid points above it are marked unreliable
- *   algorithm       rule set: QUALITY_ALGORITHM (v2, default) or QUALITY_ALGORITHM_V1, which
- *                   reproduces a v1 assessment exactly (it reads neither discontinuities nor
- *                   chainNotes)
+ *   noiseCheck      v3: the checkCapture() result of the stimulus-free noise capture, or null
+ *                   (none taken); an EMPTY one makes the SNR NOT MEASURED
+ *   inputProcessing v3: the applied input constraints { echoCancellation, noiseSuppression,
+ *                   autoGainControl } (true / false / null each), 'test-context' (digital
+ *                   loopback), null (none reported) or undefined (rule not applied)
+ *   stimulus        v3: optional stimulus spec (stimulus.js) to name the sweep frequency of
+ *                   clipped regions (with sweepWindow)
+ *   algorithm       rule set: QUALITY_ALGORITHM (v3, default), QUALITY_ALGORITHM_V2 or
+ *                   QUALITY_ALGORITHM_V1, each reproducing its own assessments exactly (v1 reads
+ *                   neither discontinuities nor chainNotes; v1 and v2 ignore the v3 inputs)
  */
 export function assessQuality({
   capture,
@@ -856,6 +1142,9 @@ export function assessQuality({
   resolutionHz = null,
   sweepWindow = null,
   chainNotes = null,
+  noiseCheck = null,
+  inputProcessing = undefined,
+  stimulus = null,
   algorithm = QUALITY_ALGORITHM,
 } = {}) {
   const rules = QUALITY_RULESETS[algorithm];
@@ -865,6 +1154,8 @@ export function assessQuality({
   const codes = rules.reasonCodes;
   const chain = rules.chainNotes ? normalizeChainNotes(chainNotes) : null;
   const captures = normalizeCaptures(capture);
+  if (rules.v3 && noiseCheck !== null && noiseCheck !== undefined && !isCheckResult(noiseCheck))
+    throw new TypeError('noiseCheck is not a checkCapture() result');
   if (transfer !== null) validateTransfer(transfer);
   const freqCal = calibration && calibration.frequency ? calibration.frequency : null;
   const levelCal = calibration && calibration.level ? calibration.level : null;
@@ -873,6 +1164,8 @@ export function assessQuality({
     && Number.isFinite(requested[1])))
     throw new RangeError(`requestedRange must be [f1, f2] with 0 < f1 < f2, got ${requested}`);
   let resolution = resolutionHz;
+  if (rules.v3 && !(resolution > 0) && transfer && transfer.resolutionHz > 0)
+    resolution = transfer.resolutionHz;
   if (!(resolution > 0) && transfer && transfer.binHz > 0) resolution = transfer.binHz;
   if (!(resolution > 0) || !Number.isFinite(resolution)) resolution = null;
 
@@ -886,7 +1179,8 @@ export function assessQuality({
     reasons.push(r);
   };
 
-  const cap = assessCaptures(captures, sweepWindow, add, rules);
+  const cap = assessCaptures(captures, sweepWindow, add, rules, stimulus);
+  if (rules.v3) assessInputProcessing(inputProcessing, add);
 
   const nonFinite = (transfer ? countNonFiniteTransfer(transfer) : 0)
     + countNonFiniteAggregate(aggregate);
@@ -896,11 +1190,13 @@ export function assessQuality({
       nonFinite, 'points');
 
   let reliable = new Uint8Array(n);
-  let snr = { snrMedianDb: null, snrMinDb: null, pooled: null };
+  let snr = { snrMedianDb: null, snrMinDb: null, pooled: null, assessed: null,
+    snrResolutionHz: null, snrAssessedFromHz: null };
   let cov = { coverage: null, coverageFraction: null };
   const transferUsable = transfer && n > 0 && countNonFiniteTransfer(transfer) === 0;
   if (transferUsable) {
-    snr = assessSnr(transfer, fmt, add);
+    snr = rules.v3 ? assessSnrV3(transfer, noiseCheck, captures, fmt, add)
+      : assessSnr(transfer, fmt, add);
     if (requested) cov = assessCoverage(transfer, requested, fmt, add);
     const vr = transfer.validRange;
     const fMax = Number.isFinite(transfer.sampleRate)
@@ -909,7 +1205,8 @@ export function assessQuality({
     for (let i = 0; i < n; i++) {
       const f = frequencies[i];
       reliable[i] = snr.pooled
-        ? (snr.pooled[i] >= QUALITY_THRESHOLDS.reliableMinSnrDb && f <= fMax ? 1 : 0)
+        ? (snr.pooled[i] >= QUALITY_THRESHOLDS.reliableMinSnrDb && f <= fMax
+          && (!snr.assessed || snr.assessed[i]) ? 1 : 0)
         : (vr && f >= vr[0] && f <= vr[1] ? 1 : 0);
     }
   } else if (!transfer) {
@@ -920,7 +1217,7 @@ export function assessQuality({
     ? assessChainNotes(chain, frequencies, reliable, requested, fmt, add)
     : null;
 
-  const repeatabilityDb = assessRepeatability(aggregate, captures.length, add);
+  const repeatabilityDb = assessRepeatability(aggregate, captures.length, add, rules);
 
   if (resolution !== null) {
     const firstReliable = reliable.indexOf(1);
@@ -966,6 +1263,10 @@ export function assessQuality({
     resolutionHz: resolution,
   });
   if (rules.chainNotes) metrics.outputChainLimitHz = outputChainLimitHz;
+  if (rules.v3) {
+    metrics.snrResolutionHz = snr.snrResolutionHz;
+    metrics.snrAssessedFromHz = snr.snrAssessedFromHz;
+  }
   return {
     algorithm: rules.algorithm,
     status,

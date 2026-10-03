@@ -188,7 +188,7 @@ for (const sr of RATES) {
       const { worst, at } = maxErrDb(r, () => gainDb);
       t.diagnostic(`max error ${worst.toExponential(2)} dB at ${at.toFixed(1)} Hz`);
       assert.ok(worst <= 0.1, `${worst.toFixed(4)} dB at ${at.toFixed(1)} Hz`);
-      assert.equal(r.algorithm, 'oscilla.transfer.v1');
+      assert.equal(r.algorithm, 'oscilla.transfer.v2');
       assert.deepEqual(r.requestedRange, [F1, F2]);
       assert.equal(r.phaseDeg, null);
       assert.equal(r.snrDb, null);
@@ -424,7 +424,7 @@ for (const sr of RATES) {
     const ir = computeImpulseResponse({ stimulus: x, captured: y, sampleRate: sr, f1: F1, f2: F2 });
     const expected = Math.round(PRE * sr);
     assert.ok(Math.abs(ir.peakIndex - expected) <= 1, `peak ${ir.peakIndex} vs ${expected}`);
-    assert.equal(ir.algorithm, 'oscilla.ir.log-sweep.v1');
+    assert.equal(ir.algorithm, 'oscilla.ir.log-sweep.v2');
     assert.equal(ir.window, null);
     assert.equal(ir.captureOffsetS, 0);
     assert.equal(ir.samples.length, y.length);

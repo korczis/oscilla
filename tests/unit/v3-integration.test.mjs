@@ -382,19 +382,21 @@ test('G5: full-scale tones near Nyquist, noise, transients and explained steps a
 
 test('G6/G7/G9: every result carries the algorithm IDs it used (pinned)', () => {
   const ids = {
-    transfer: 'oscilla.transfer.v1', ir: 'oscilla.ir.log-sweep.v1',
-    irFarina: 'oscilla.ir.farina-inverse.v1', rta: 'oscilla.rta.v1',
+    transfer: 'oscilla.transfer.v2', ir: 'oscilla.ir.log-sweep.v2',
+    irFarina: 'oscilla.ir.farina-inverse.v2', rta: 'oscilla.rta.v1',
     smoothing: 'oscilla.smoothing.fractional-octave.v1', normalization: 'oscilla.normalization.v1',
     align: 'oscilla.align.xcorr.v1', clip: 'oscilla.clip.v1',
-    discontinuity: 'oscilla.discontinuity.v1', quality: 'oscilla.confidence.v2',
+    discontinuity: 'oscilla.discontinuity.v1', quality: 'oscilla.confidence.v3',
     calibration: 'oscilla.calibration.log-interp.v1', window: 'oscilla.window.hann.v1',
     windowBlackmanHarris: 'oscilla.window.blackman-harris.v1',
     aggregate: 'oscilla.aggregate.v1',
   };
   assert.deepEqual({ ...ALGORITHMS }, ids);
   for (const id of Object.values(ids)) assert.ok(isKnownAlgorithm(id), id);
-  // G15: confidence.v1 is superseded but retained (stored assessments carry it).
-  assert.ok(isKnownAlgorithm('oscilla.confidence.v1'));
+  // G15: confidence.v1 is superseded but retained (stored assessments carry it); so are
+  // confidence.v2, transfer.v1 and the v1 IR methods (V3 pre-release review).
+  for (const id of ['oscilla.confidence.v1', 'oscilla.confidence.v2', 'oscilla.transfer.v1',
+    'oscilla.ir.log-sweep.v1', 'oscilla.ir.farina-inverse.v1']) assert.ok(isKnownAlgorithm(id));
   // Windows (G6).
   assert.deepEqual({ ...WINDOW_ALGORITHMS }, { hann: ids.window,
     'blackman-harris': ids.windowBlackmanHarris });

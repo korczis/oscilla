@@ -53,7 +53,9 @@ import { DTYPES, decodeArray, dtypeOf, isEncodedArray } from './encode.js';
 import { migrateExperiment } from './migrate.js';
 import { resultHash } from './hash.js';
 import { PHASE_REASONS } from '../measurement/transfer.js';
-import { IR_ALGORITHMS } from '../measurement/impulse-response.js';
+import {
+  IR_ALGORITHMS, IR_ALGORITHMS_V1, IR_NOISE_FLOOR_METHODS,
+} from '../measurement/impulse-response.js';
 import { AGGREGATE_DISPERSION, DERIVED_FROM_AGGREGATE } from '../measurement/aggregate.js';
 
 export const DEFAULT_MAX_BYTES = 32 * 1024 * 1024;
@@ -602,8 +604,10 @@ function resultArray(c, v, path, dtype, ctx, o = {}) {
 function checkTransfer(c, t, path, ctx, { derived = false } = {}) {
   const keys = ['algorithm', 'sampleRate', 'frequencies', 'magnitudeDb', 'phaseDeg', 'snrDb',
     'validRange', 'requestedRange', 'fftSize', 'binHz'];
-  const optional = derived ? ['phaseReason', 'alignment', 'derivedFrom']
-    : ['phaseReason', 'alignment'];
+  // transfer.v2 adds snrPooledDb, snrResolutionHz and resolutionHz (transfer.js header).
+  const v2 = ['snrPooledDb', 'snrResolutionHz', 'resolutionHz'];
+  const optional = derived ? ['phaseReason', 'alignment', 'derivedFrom', ...v2]
+    : ['phaseReason', 'alignment', ...v2];
   if (!c.keys(t, path, keys, optional)) return null;
   if (derived && has(t, 'derivedFrom')) {
     c.oneOf(t.derivedFrom, `${path}.derivedFrom`, [DERIVED_FROM_AGGREGATE]);
@@ -633,11 +637,24 @@ function checkTransfer(c, t, path, ctx, { derived = false } = {}) {
     { length: n, lo: -1e7, hi: 1e7, nullable: true });
   const snrDb = resultArray(c, t.snrDb, `${path}.snrDb`, 'f64', ctx,
     { length: n, lo: -db, hi: db, nullable: true });
+  // Key order follows transfer.js (the re-export is byte-identical).
   const out = {
     algorithm: t.algorithm, sampleRate: t.sampleRate, frequencies, magnitudeDb, phaseDeg, snrDb,
-    validRange: pair(t.validRange), requestedRange: pair(t.requestedRange), fftSize: t.fftSize,
-    binHz: t.binHz,
   };
+  if (has(t, 'snrPooledDb')) {
+    out.snrPooledDb = resultArray(c, t.snrPooledDb, `${path}.snrPooledDb`, 'f64', ctx,
+      { length: n, lo: -db, hi: db, nullable: true });
+  }
+  if (has(t, 'snrResolutionHz')) {
+    c.num(t.snrResolutionHz, `${path}.snrResolutionHz`, 0, nyq, { nullable: true });
+    out.snrResolutionHz = t.snrResolutionHz;
+  }
+  Object.assign(out, { validRange: pair(t.validRange), requestedRange: pair(t.requestedRange),
+    fftSize: t.fftSize, binHz: t.binHz });
+  if (has(t, 'resolutionHz')) {
+    c.num(t.resolutionHz, `${path}.resolutionHz`, 0, nyq, { nullable: true });
+    out.resolutionHz = t.resolutionHz;
+  }
   if (has(t, 'phaseReason')) out.phaseReason = t.phaseReason;
   if (has(t, 'alignment')) out.alignment = alignment;
   if (derived && has(t, 'derivedFrom')) out.derivedFrom = t.derivedFrom;
@@ -659,11 +676,17 @@ function checkAlignment(c, a, path, ctx) {
 function checkIr(c, ir, path, ctx) {
   const keys = ['algorithm', 'sampleRate', 'samples', 'peakIndex', 'peakTimeS', 'captureOffsetS',
     'noiseFloorDb', 'window'];
-  if (!c.keys(ir, path, keys, ['method', 'fftSize', 'truncation'])) return null;
+  // ir.*.v2 adds noiseFloorMethod (impulse-response.js IR_NOISE_FLOOR_METHODS); a capped IR
+  // records truncation (analysis memory cap).
+  if (!c.keys(ir, path, keys, ['method', 'fftSize', 'truncation', 'noiseFloorMethod'])) return null;
+  if (has(ir, 'noiseFloorMethod')) {
+    c.oneOf(ir.noiseFloorMethod, `${path}.noiseFloorMethod`, IR_NOISE_FLOOR_METHODS);
+  }
   algorithmId(c, ir.algorithm, `${path}.algorithm`, ctx);
+  const irIds = [...Object.values(IR_ALGORITHMS), ...Object.values(IR_ALGORITHMS_V1)];
   if (has(ir, 'method') && c.oneOf(ir.method, `${path}.method`, Object.keys(IR_ALGORITHMS))
-    && Object.values(IR_ALGORITHMS).includes(ir.algorithm)
-    && IR_ALGORITHMS[ir.method] !== ir.algorithm) {
+    && irIds.includes(ir.algorithm)
+    && IR_ALGORITHMS[ir.method] !== ir.algorithm && IR_ALGORITHMS_V1[ir.method] !== ir.algorithm) {
     c.add(`${path}.method`, `does not match algorithm "${ir.algorithm}"`);
   }
   if (has(ir, 'fftSize')) {
@@ -685,8 +708,9 @@ function checkIr(c, ir, path, ctx) {
   Object.assign(out, {
     sampleRate: ir.sampleRate, samples, peakIndex: ir.peakIndex,
     peakTimeS: ir.peakTimeS, captureOffsetS: ir.captureOffsetS, noiseFloorDb: ir.noiseFloorDb,
-    window: ir.window === null ? null : pair(ir.window),
   });
+  if (has(ir, 'noiseFloorMethod')) out.noiseFloorMethod = ir.noiseFloorMethod;
+  out.window = ir.window === null ? null : pair(ir.window);
   if (has(ir, 'fftSize')) out.fftSize = ir.fftSize;
   if (truncation) out.truncation = truncation;
   return out;

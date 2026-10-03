@@ -93,7 +93,7 @@ Every result object now carries the IDs it used:
 | `bandAnalysis`, `rtaResult` | `algorithm`; `windowAlgorithm` (RtaResult) | rta; window |
 | `smoothResponse` | `algorithm` | smoothing |
 | `normalizeResponse`, `normalizeIr` | `algorithm` (+ `mode`) | normalization |
-| `assessQuality` | `algorithm` | quality (the rule set used: v2 by default, v1 on request) |
+| `assessQuality` | `algorithm` | quality (the rule set used: v3 by default, v1/v2 on request) |
 | `aggregateRuns`, `aggregateResult` | `algorithm` (+ `method`) | aggregate |
 | `applyFrequencyCorrection`, `applyFrequencyCorrectionToBands` | `algorithm` | calibration |
 
@@ -109,6 +109,22 @@ carry them"). `isKnownAlgorithm()` is true for current and retained IDs, and
 would reject a stored v1 assessment. New role `aggregate` (`oscilla.aggregate.v1`): the
 aggregate became a stored result, so it carries an ID (`aggregateRuns().algorithm`,
 `aggregateResult().algorithm`); mean or median is its recorded `method` parameter.
+
+**Changed (V3 pre-release review, quality and DSP group).** Four new IDs, each because a stored
+number changes (ADR 0024); every superseded ID stays implemented and in `RETAINED_ALGORITHMS`:
+
+| Role | New default | Retained (selectable) | What changed |
+| --- | --- | --- | --- |
+| `transfer` | `oscilla.transfer.v2` | `oscilla.transfer.v1` (`options.algorithm`) | SNR: Welch noise PSD, pooled power ratio stored, no 200 dB ceiling ([SNR](#transfer-snr)) |
+| `ir` | `oscilla.ir.log-sweep.v2` | `oscilla.ir.log-sweep.v1` (`algorithm`) | `noiseFloorDb` over the full-overlap lags, `noiseFloorMethod` ([IR](#ir)) |
+| `irFarina` | `oscilla.ir.farina-inverse.v2` | `oscilla.ir.farina-inverse.v1` (`algorithm`) | as `ir` |
+| `quality` | `oscilla.confidence.v3` | `oscilla.confidence.v2`, `oscilla.confidence.v1` | B1, M1, M2, m2, m5 and NIT rules ([quality](#quality)) |
+
+`RETAINED_ALGORITHMS = { transfer: ['oscilla.transfer.v1'], ir: ['oscilla.ir.log-sweep.v1'],
+irFarina: ['oscilla.ir.farina-inverse.v1'], quality: ['oscilla.confidence.v1',
+'oscilla.confidence.v2'] }`. The golden fixtures of the retained IDs are unchanged (they are
+computed with the retained method selected, and the retained quality rule sets are fed
+transfer.v1 results, the data they were assessed on); the four new IDs have new fixtures.
 
 Tests: `v3-measurement-core.test.mjs` "algorithms: frozen contract IDs ..." (exact equality,
 variants report their family); `v3-integration.test.mjs` "G6/G7/G9" pins every ID string and
@@ -391,11 +407,14 @@ Tests (`v3-measurement-core.test.mjs`):
 | silent capture | lag null, ρ 0 | pass |
 
 <a id="transfer"></a>
-## Transfer function — `oscilla.transfer.v1` (`measurement/transfer.js`)
+## Transfer function — `oscilla.transfer.v2`, `oscilla.transfer.v1` (`measurement/transfer.js`)
 
 `computeTransfer({ stimulus, captured, sampleRate, f1, f2, lagSamples, alignment, noise,
-options: { phase = false, pointsPerOctave = 48 } }) → TransferResult` (`alignment`,
-`phaseReason` and the result's `alignment` added by the integration fixes). Method: regularized
+options: { phase = false, pointsPerOctave = 48, algorithm = TRANSFER_ALGORITHM } }) →
+TransferResult` (`alignment`, `phaseReason` and the result's `alignment` added by the
+integration fixes; `options.algorithm` by the V3 pre-release review: `oscilla.transfer.v2`
+default, `oscilla.transfer.v1` reproduces a stored v1 result exactly). v1 and v2 differ only in
+the SNR and its fields; deconvolution, magnitude, phase and coverage are identical. Method: regularized
 spectral division (Müller & Massarani 2001, §5; regularization after Kirkeby et al. 1998),
 shared with the IR through `spectralDeconvolution`.
 
@@ -478,18 +497,55 @@ energy), where the single delay removed from the phase is not a meaningful refer
 `v3-gaps.test.mjs` "G17" pins ρ = 1/√(1 + 1/s) within ±0.01 at 0, −4.77 and −10 dB and the
 withheld phase for the noise-free 50 Hz low-pass. No per-point phase uncertainty is reported.
 
-### SNR (when a stimulus-free capture `noise` is given)
+<a id="transfer-snr"></a>
+### SNR (when a stimulus-free capture `noise` is given) — **Changed (V3 review B1, M1, m2)**
 
-For stationary noise of PSD S, the zero-padded DFT of M samples has `E|N[k]|² = M·S(f_k)`. So:
+For stationary noise of PSD S (power per DFT bin per sample), the zero-padded DFT of M samples
+has `E|N[k]|² = M·S(f_k)`, so the noise energy per bin expected inside the capture is
+`Pn(f) = len(y)·S(f)`. The per-bin SNR of Y equals that of H because dividing by X scales
+signal and noise alike.
+
+**v2 (default)**:
 
 ```
-Pn(f) = band mean of |N[k]|² · len(y)/len(n)     n padded to the same N (bins coincide);
-                                                 at most N samples of n are used
-Py(f) = band mean of |Y[k]|²                     signal + noise
-snrDb = 10·log10((Py − Pn)/Pn), clamped to [SNR_FLOOR_DB, SNR_CEIL_DB] = [−60, 200]
+S[k]        = Welch PSD of n: Hann, 50 % overlap, segment L = power of two ≥ len(n)/4 (at most
+              len(n)): mean over segments of |DFT(w·seg)[k]|² / Σw²     (NOISE_WELCH)
+S(f)        = mean of S over the Welch bins inside the grid band (linear interpolation at f
+              when the band holds none)
+Pn(f)       = len(y)·S(f);   Py(f) = band mean of |Y[k]|²
+snrDb       = 10·log10((Py − Pn)/Pn), floored at SNR_FLOOR_DB = −60
+snrPooledDb = 10·log10((ΣPy − ΣPn)/ΣPn), Py and Pn power-averaged over 1/6 octave
+              (VALIDITY_SMOOTHING_FRACTION): the POOLED POWER RATIO
+snrResolutionHz = sampleRate/len(n) = 1/T_noise
+resolutionHz    = max(binHz, sampleRate/len(y)) = max(fs/N, 1/T_capture)
 ```
 
-The per-bin SNR of Y equals that of H because dividing by X scales signal and noise alike.
+SNR NOT MEASURED: when Pn is zero at any grid point (digital silence, a gate) or any ratio
+reaches `SNR_CEIL_DB = 200`, `snrDb` and `snrPooledDb` are `null` (`snrResolutionHz` is kept, so
+a reader knows a noise capture was taken) and `validRange` uses coverage only. The ceiling is
+never stored as a value. Root cause of review B1: v1 set the SNR to the 200 dB ceiling when
+Pn = 0, the engine only rejected a clipping noise check, and quality pooled the ceiling as a
+measured SNR, so a silent noise check produced "200 dB median SNR" and GOOD.
+
+Why the pooled power ratio (review M1): the quality assessment pooled the per-point ratios
+(`smoothFractionalOctave(snrDb)`, a mean of ratios). With Pn from one noise record of
+T_noise seconds, a 1/6-octave pool at f holds only ≈ 0.1155·f·T_noise independent noise
+observations (the time-bandwidth product, whatever the number of zero-padded bins), and
+E[1/Pn] > 1/E[Pn] (Jensen) biases the mean of ratios high: +3-4 dB below 150 Hz with a 1 s noise
+check (review probe p2c; `v3-review-fixes` "M1" measures > 2 dB average bias over 30-150 Hz).
+The ratio of pooled powers has no such bias (within 1 dB of the analytic truth in the same
+test). Welch averaging also smooths the per-point `snrDb` (≈ 4-7 segments instead of one
+periodogram). A narrow line in the noise (hum) is spread over the Welch resolution (ENBW
+1.5·fs/L ≤ 6/T_noise Hz): beside a line the per-point SNR is pessimistic, on it optimistic; the
+pooled value is unaffected where the pool is wider than that, which the quality rule
+"assessed only with ≥ 10 observations per pool" guarantees (pool width ≥ 10/T_noise Hz).
+
+**v1 (retained)**: `Pn(f)` = band mean of the zero-padded N-point periodogram `|N[k]|²` of n
+(at most N samples) times `len(y)/len(n)`; `snrDb` clamped to [−60, 200] dB, 200 dB when
+Pn = 0; no `snrPooledDb`, `snrResolutionHz` or `resolutionHz`.
+
+`noiseSpectrum(noise, fftSize, fft, { algorithm })` returns the v2 Welch estimate (or the v1
+spectrum) for reuse across runs; `analysis-task.js` passes it unchanged.
 
 ### Valid range
 
@@ -498,10 +554,14 @@ The per-bin SNR of Y equals that of H because dividing by X scales signal and no
 1. **Coverage**: `f·P_x(f)` (P_x the band mean of `|X|²`) within `COVERAGE_DB = −20` dB of its
    maximum on the grid. For a log sweep or pink noise this per-relative-bandwidth energy is
    flat, so the test rejects leakage outside the swept band and a Nyquist clamp.
-2. **SNR** (only with `noise`): ≥ `VALID_MIN_SNR_DB = 10` dB, with Py and Pn first power-averaged
-   over 1/`VALIDITY_SMOOTHING_FRACTION` = 1/6 octave (`smoothFractionalOctave`), because the
-   per-point estimate scatters by ≈ 4.34/√K dB for K bins and would fragment the range at the
-   first dip. The reported `snrDb` stays per point.
+2. **SNR** (only when an SNR is measured): ≥ `VALID_MIN_SNR_DB = 10` dB, with Py and Pn first
+   power-averaged over 1/`VALIDITY_SMOOTHING_FRACTION` = 1/6 octave (`smoothFractionalOctave`;
+   in v2 this is `snrPooledDb`), because the per-point estimate would fragment the range at the
+   first dip. **Corrected (V3 review M1):** a power average of K independent exponentially
+   distributed bin powers scatters by ≈ 4.34/√K dB, but K is the time-bandwidth product of the
+   band (B·T, for the noise B·T_noise), NOT the number of bins in it: zero padding to N >
+   len(n) makes neighbouring bins correlated, so a band of many bins can still hold one
+   independent noise observation. The reported `snrDb` stays per point.
 
 `validRange` is `null` when no point qualifies. `requestedRange` is always `[f1, f2]` as
 requested, even above Nyquist; the grid stops at Nyquist (§205). The result also carries
@@ -656,10 +716,14 @@ regularization reported here; adopting it would need new golden outputs and new 
 (ADR 0024).
 
 <a id="ir"></a>
-## Impulse response — `oscilla.ir.log-sweep.v1`, `oscilla.ir.farina-inverse.v1` (`measurement/impulse-response.js`)
+## Impulse response — `oscilla.ir.log-sweep.v2`, `oscilla.ir.farina-inverse.v2` (v1 of both retained) (`measurement/impulse-response.js`)
 
-`computeImpulseResponse({ stimulus, captured, sampleRate, f1, f2, inverse, method, lagSamples })
-→ IrResult` with `method` and `fftSize`. **Changed (integration)** (was G3, G9): `algorithm` is
+`computeImpulseResponse({ stimulus, captured, sampleRate, f1, f2, inverse, method, lagSamples,
+algorithm }) → IrResult` with `method` and `fftSize` (and, in v2, `noiseFloorMethod`).
+**Changed (V3 review M5):** the current IDs are the v2 ones; `algorithm` may name the v1 ID of
+the same method (`IR_ALGORITHMS_V1[method]`) to reproduce a stored v1 result exactly (another
+method's ID throws). v1 and v2 differ only in `noiseFloorDb`; samples, peak and time origin are
+identical. `computeTransferAndIr` takes the IR version as `irAlgorithm`. **Changed (integration)** (was G3, G9): `algorithm` is
 `IR_ALGORITHMS[method]` — `'spectral'` → `oscilla.ir.log-sweep.v1` (`IR_ALGORITHM`),
 `'farina-inverse'` → `oscilla.ir.farina-inverse.v1` (`IR_FARINA_ALGORITHM`) — because the two
 methods' outputs differ (ADR 0024); validation accepts `method` and `fftSize` and rejects a
@@ -690,10 +754,28 @@ start          = lagSamples given ? clamp(round(lagSamples) − round(IR_PRE_GUA
 samples[i]     = h[start + i (+ shift)],  i = 0 … len(y) − start − 1   original scale, sign kept
 peakIndex      = argmax |samples|;  peakTimeS = peakIndex/sr (relative to samples[0])
 captureOffsetS = start/sr;  absolute peak time = captureOffsetS + peakTimeS
-noiseFloorDb   = 10·log10( mean h² over the last IR_TAIL_FRACTION (10 %) of the samples after
-                 the peak / h_peak² ),  floored at −300 dB
+fullEnd        = min(len − 1, len(y) − len(x) − start)   last index whose lag has the whole
+                 stimulus inside the capture
+noiseFloorDb   = v2: 10·log10( mean h² over the last IR_TAIL_FRACTION (10 %, at least
+                 IR_NOISE_MIN_SAMPLES = 16) of (peakIndex, fullEnd] / h_peak² ), floored at
+                 −300 dB; null when fewer than 16 such lags follow the peak
+                 v1: the same over the last 10 % of ALL samples after the peak
+noiseFloorMethod = v2 only: 'full-overlap-tail', or 'none' with noiseFloorDb null
 window         = null
 ```
+
+Why (review M5): the deconvolved noise at lag τ is `Σ_m n[m]·g[τ − m]` with g the regularized
+inverse of the stimulus (support ≈ len(x)), so its variance is `σ²·Σ g²` only while every
+sample of y meets g, i.e. τ ≤ len(y) − len(x) ("full overlap"); beyond that less and less of the
+capture's noise enters and the deconvolved noise falls away towards the end of the causal
+window. v1 read its floor exactly there: −159 dB against a true −100 dB for a 2 s sweep with a
+1.5 s post-roll (review probe p4). The full-overlap span after the peak is ≈ the post-roll
+minus the latency, so a decay longer than the post-roll makes the v2 figure an upper bound
+(decay, not noise). Known truth (`v3-review-fixes` "M5"): for white noise σ² in y the floor is
+`σ²·(1/N)·Σ_k |X[k]|²/(|X[k]|² + ε[k])² / h_peak²` (Parseval); the v2 estimate is within 0.5 dB
+of it (power mean of three noise seeds, each within 1.5 dB) and v1 reads > 20 dB below.
+`ir-chart.js` uses only the field name and its meaning (dB re peak, or non-finite → "—"),
+both unchanged.
 
 The full causal length is kept for later ETC, Schroeder, RT60 or EDT work (§90); none of those
 are implemented. **Changed (M10):** a result carries at most `IR_MAX_SAMPLES` = 2²¹ samples
@@ -743,7 +825,8 @@ stronger later.
 | identity at 44.1/48/96 kHz: peak index at the pre-roll | ±1 sample | pass |
 | identity: peak value vs `(f2 − f1)/(fs/2)` | ±2 % | pass |
 | identity: largest sample beyond ±1 ms | ≤ −40 dB | −45.0, −44.4, −44.0 dB |
-| identity: tail noise floor | < −60 dB | −162.2, −161.6, −161.6 dB |
+| identity: tail noise floor (v2: full-overlap tail) | < −60 dB | pass |
+| (`v3-review-fixes`) v2 noise floor vs the Parseval truth; v1 far below; no full overlap → null | 0.5 dB (3 seeds) | pass |
 | delayed impulse 0.3 s; with lag: offset `(lag − guard)/sr`, absolute time | ±1 sample | pass |
 | echo 0.5 at 12 ms, spectral and farina-inverse: positions | ±1 sample | pass |
 | echo ratio | −6.02 ± 0.5 dB | −6.0284, −6.0286 dB |
@@ -775,6 +858,17 @@ S_i      = 10·log10( mean_{j: f_j in window_i} 10^(L_j/10) )
 Each point in the window counts once, so on the log-spaced transfer grid the average is uniform
 in log-frequency. At the ends the window is truncated to existing points (no extrapolation). A
 window of identical values returns that value exactly; `fraction = 0` returns a copy.
+
+**New (V3 review m1): masked smoothing**, `smoothFractionalOctave(f, L, N, { mask })` and
+`smoothResponse(f, L, N, { mask })` (view gains `masked: true`). Only points with a truthy mask
+entry and a finite value enter any window; excluded points are missing, never 0 dB and never
+their raw value; the output is NaN at excluded points and where a window holds no included
+point, so a drawn curve has a gap instead of a leak. Root cause: smoothing the corrected curve
+where uncovered points still held raw values (or reliable next to unreliable points) power-
+averaged the two across the mask edge, e.g. a +20 dB unreliable band raised the reliable points
+within half a window of it. Same method on a subset of points, so the ID is unchanged; without
+`mask` the output is bit-identical. The views agent wires it (response chart calibration and
+reliability edges).
 `SMOOTHING_FRACTIONS = [0, 24, 12, 6, 3]` lists the specified choices (§35); any N > 0 is
 accepted. Frequencies must be positive and strictly increasing.
 
@@ -1027,7 +1121,10 @@ The aggregate is the primary response of a repeated measurement. With `runs ≥ 
   at −300 dB is the stored one), `snrDb` the lowest run SNR per point (null unless every run
   has one), `validRange` the intersection of the runs' valid ranges (null if empty), `phaseDeg`
   null with `phaseReason: 'AGGREGATED'` (phases of separate runs are not averaged, §27),
-  `alignment` null (each run has its own), the other fields from run 1. Why a marked transfer
+  `alignment` null (each run has its own), the other fields from run 1; for transfer.v2 runs
+  also `snrPooledDb` (lowest run per point; null, together with `snrDb`, unless every run has
+  both), `snrResolutionHz` and `resolutionHz` (the coarsest run's), while transfer.v1 runs keep
+  the v1 shape exactly (V3 review). Why a marked transfer
   rather than null: the aggregate has no valid range and no SNR, and both are what make its
   centre usable (quality, `responseDelta`); keeping them conservative (worst run, common range)
   never claims more than every run supports;
@@ -1389,6 +1486,16 @@ filed under. A self-check shows a 0.001 dB shift — inside every analytic toler
 Regenerate only after announcing an ID change: `OSCILLA_UPDATE_GOLDEN=1 node --test
 tests/unit/v3-golden.test.mjs`.
 
+**Changed (V3 pre-release review).** 19 IDs now: the four new defaults (`oscilla.transfer.v2`,
+`oscilla.ir.log-sweep.v2`, `oscilla.ir.farina-inverse.v2`, `oscilla.confidence.v3`) got new
+fixtures; the retained `oscilla.transfer.v1`, `oscilla.ir.*.v1` and `oscilla.confidence.v1/v2`
+keep their fixtures byte for byte, computed with the retained method selected (the retained
+quality rule sets on transfer.v1 inputs). The v3 case also passes the noise check, the
+stimulus spec and one unconfirmed input-processing flag, so the new inputs are pinned.
+Experiment validation (`validate.js`, additive) accepts the transfer.v2 keys `snrPooledDb`,
+`snrResolutionHz`, `resolutionHz` and the IR v2 key `noiseFloorMethod`, in the producing
+module's key order (byte-identical re-export), and accepts a v1 IR ID for its own method.
+
 ### Tests (`v3-experiments.test.mjs`)
 
 Encoding round trip is bitwise (including a float32 subnormal and `−0`); base64 matches `Buffer`
@@ -1407,17 +1514,68 @@ non-result fields and key order, changes with one flipped bit or a dtype change,
 modified result in a stamped file is rejected as `corrupt`.
 
 <a id="quality"></a>
-## Measurement quality — `oscilla.confidence.v2`, `oscilla.confidence.v1` (`measurement/quality.js`)
+## Measurement quality — `oscilla.confidence.v3`, `oscilla.confidence.v2`, `oscilla.confidence.v1` (`measurement/quality.js`)
 
 Documented from the code that landed in e89ff9f (was G14). ADR 0025: a pure rule table maps
 measured metrics to one of four statuses and always returns the reasons, passing and failing,
 each backed by the number it came from. There is no score and no "confidence" percentage.
 
 `assessQuality({ capture, transfer, aggregate, calibration, requestedRange, resolutionHz,
-sweepWindow, chainNotes, algorithm }) → { algorithm, status, reasons, metrics, mask }`
+sweepWindow, chainNotes, noiseCheck, inputProcessing, stimulus, algorithm }) → { algorithm,
+status, reasons, metrics, mask }`
+
+### confidence.v3 — **New (V3 pre-release review, quality and DSP group)**
+
+`QUALITY_ALGORITHM` = `oscilla.confidence.v3`; `QUALITY_ALGORITHM_V2` and `QUALITY_ALGORITHM_V1`
+stay selectable and reproduce their assessments exactly (golden fixtures unchanged); v1/v2
+ignore the three new inputs. v3 = v2 plus the rules below; thresholds are the same object plus
+`minSnrObservations = 10`; no new invalidating code.
+
+| Code (v3) | Dimension | Rule |
+| --- | --- | --- |
+| `SNR_NOT_MEASURED` (extended, B1) | snr | warn, value null, and no `SNR_MEDIAN` when the noise check (`noiseCheck`, its `checkCapture` result) is EMPTY (RMS < −90 dBFS, digital silence included; the text adds "while the runs carry signal (a noise gate, input processing or a digital loopback)" when they do), when the transfer has no SNR although a noise capture was taken (transfer.v2: zero noise power in a band), or when a stored SNR sits at `SNR_CEIL_DB` (transfer.v1's 200 dB) |
+| `SNR_NOT_ASSESSED` (M1) | snr, not measured | points with f < `minSnrObservations`·`snrResolutionHz`/0.1156 = 10/(0.1156·T_noise) (86.5 Hz for 1 s, 17.3 Hz for 5 s; 20 Hz needs 4.33 s) have fewer than 10 independent noise observations per 1/6-octave pool: warn with their range, not reliable; caps USABLE, never pushes to POOR |
+| `INPUT_PROCESSING` (M2) | input | any of echoCancellation, noiseSuppression, autoGainControl reported `true`: fail (POOR); all `false`, or `inputProcessing = 'test-context'` (digital loopback): ok |
+| `INPUT_PROCESSING_NOT_CONFIRMED` (M2) | input, not measured | any of the three not reported (null/absent), or no applied constraints at all (`null`): warn (caps USABLE). `inputProcessing` undefined: the rule is not applied (a caller without a microphone path) |
+| `CLIPPING_NOT_EXCLUDED` (NIT) | capture, not measured | no clip region but a peak ≥ `CLIP_THRESHOLD`: warn instead of `CLIPPING` ok (see below) |
+
+Other v3 changes:
+
+- **Pooled SNR (M1).** The 1/6-octave SNR behind the reliable mask, `LOW_SNR_BAND`, `snrMinDb`
+  and now also `snrMedianDb` is transfer.v2's `snrPooledDb`, the pooled power ratio
+  `(ΣPy − ΣPn)/ΣPn`, over the assessed points only. v1/v2 pooled the per-point ratios (mean of
+  ratios), biased high by +3-4 dB below 150 Hz with a 1 s noise check ([transfer SNR](#transfer-snr)).
+  A transfer.v1 (no `snrPooledDb`, no `snrResolutionHz`) is pooled as before and counts as
+  assessed everywhere (documented fallback for re-assessing stored v1 data). The SNR_MEDIAN text
+  says "(1/6-octave pooled)".
+- **Resolution (m2).** `resolutionHz` defaults to `transfer.resolutionHz` = max(fs/N,
+  1/T_capture) (v1/v2: `binHz`, the zero-padded spacing, finer than the capture resolves);
+  metrics add `snrResolutionHz` (1/T_noise) and `snrAssessedFromHz` after `outputChainLimitHz`.
+- **Repeatability text (m5).** "N runs: median run-to-run SD x dB (per-frequency standard
+  deviation, median across frequency)" (median aggregation: "absolute deviation"), a statistic,
+  not a "±" bound or an agreement claim.
+- **Clipping texts (NIT).** With `stimulus` (the spec) and `sweepWindow`, a clip text names the
+  sweep frequency of its regions, `stimulus.js` `instantaneousFrequency` at the region's time in
+  the sweep: "clipping at 0.0048 % of samples (2 regions, at ≈ 260 Hz of the sweep)".
+  `CLIP_MIN_RUN` stays 3 (decision): a sine of amplitude A hard-clipped at rail r stays at the
+  rail for acos(r/A)/π of each period, i.e. fewer than 3 samples above
+  f = acos(r/A)·fs/(3π) (≈ 2.4 kHz at 48 kHz for 1 dB of overdrive, 5.3 kHz for 6 dB), so mild
+  clipping at high sweep frequencies leaves no clip region; lowering the run length would count
+  lone full-scale transients as clipping. Instead the rail peak is reported:
+  `CLIPPING_NOT_EXCLUDED` "peak 0.99 reaches the rail (≥ 0.98) without a 3-sample flat top:
+  brief clipping (high sweep frequencies) is not excluded".
+
+Decision (B1): a silent or EMPTY noise check is **not invalidating**. The runs are valid
+captures; only the SNR is unknown, which is a NOT MEASURED warn. That is also how a digital
+loopback looks (its noise check is digital silence), and for a microphone a silent noise check
+next to signal-carrying runs points at a gate or input processing, which `INPUT_PROCESSING`
+judges from the applied constraints. A noise capture that is broken (NaN, no samples, bad rate)
+is invalidating in the engine (`NOISE_CAPTURE_INVALID`), as a clipping one was before.
+
+### confidence.v2 (retained) and v1
 
 **Changed (gaps)** (was G15, G12). Each ID is one rule set (`QUALITY_RULESETS`):
-`algorithm` defaults to `QUALITY_ALGORITHM` = `oscilla.confidence.v2`; `QUALITY_ALGORITHM_V1`
+`algorithm` defaulted to `oscilla.confidence.v2` (now v3, above); `QUALITY_ALGORITHM_V1`
 reproduces a v1 assessment exactly (verified against the 8628438 implementation in 45 input
 combinations, and by its golden fixture) and reads neither discontinuities nor chain notes.
 An unknown ID throws. Thresholds are the same object in both. v2 adds four codes, nothing else:
@@ -1452,7 +1610,7 @@ measured probe. v2 metrics add `discontinuities` (count, null when no run was ch
   `[start, end)` sample range of the stimulus in the capture (or one per run).
 - `summarizeQuality(assessment)` gives one or two sentences for screen readers (§150).
 
-### Thresholds (`QUALITY_THRESHOLDS`, shared by the v1 and v2 rule sets)
+### Thresholds (`QUALITY_THRESHOLDS`, shared by the v1, v2 and v3 rule sets)
 
 | Name | Value | Rationale (from the code) |
 | --- | --- | --- |
@@ -1472,6 +1630,7 @@ measured probe. v2 metrics add `discontinuities` (count, null when no run was ch
 | `poorWarnCount` | 3 | measured warns in three distinct dimensions compound to POOR |
 | `lowSnrBandMinOctaves` | 1/6 | narrowest low-SNR band named as its own reason |
 | `maxBandReasons` | 3 | display limit for named low-SNR bands (not a rule) |
+| `minSnrObservations` | 10 | v3 only: B·T_noise per 1/6-octave pool for an assessed SNR; bounds the pooled noise estimate's scatter to ≈ 4.34/√10 = 1.4 dB |
 
 ### Reasons and rules
 
@@ -1487,7 +1646,7 @@ not measured or absent. Only scope `quality` decides the status; `calibration` r
 | `DROPOUT_IN_SWEEP` / `DROPOUT` | capture | a dropout inside the sweep window (every interior dropout without a window) fails, invalidating; outside warns; none ok |
 | `NON_FINITE_ANALYSIS` | analysis | non-finite grid, magnitude, SNR, phase or aggregate centre: fail, invalidating |
 | `NO_VALID_RANGE` | range | `validRange` null: fail, invalidating |
-| `SNR_MEDIAN` / `SNR_NOT_MEASURED` | snr | median per-point `snrDb` over the whole grid ≥ 20 ok, ≥ 10 warn, < 10 fail; no noise capture or no transfer: not measured (warn) |
+| `SNR_MEDIAN` / `SNR_NOT_MEASURED` | snr | median per-point `snrDb` over the whole grid (v3: median pooled SNR over the assessed points) ≥ 20 ok, ≥ 10 warn, < 10 fail; no noise capture or no transfer (v3 also: an EMPTY noise check, no noise power, a stored ceiling): not measured (warn) |
 | `LOW_SNR_BAND` | range | each run of 1/6-octave-pooled SNR < 10 dB at least 1/6 octave wide (the 3 widest): warn |
 | `COVERAGE` | range | coverage fraction ≥ 0.9 ok, ≥ 0.5 warn, < 0.5 fail; mentions Nyquist when the request exceeds it |
 | `REPEATABILITY` / `REPEATABILITY_NOT_MEASURED` | repeatability | `aggregate.repeatabilityDb` ≤ 1 ok, ≤ 3 warn, > 3 fail; < 2 runs or no aggregate: not measured (warn) |
@@ -1510,19 +1669,22 @@ to POOR. An INVALID assessment keeps only its `fail` reasons and an all-zero rel
 
 ### Masks and metrics
 
-- `mask.reliable[i]`: with an SNR estimate, the 1/6-octave power mean of the linear per-point
-  SNR ≥ 10 dB **and** f ≤ 0.95 × Nyquist; without one, inside `validRange`. A point need not lie
-  in `validRange` (the longest run only) to be reliable.
+- `mask.reliable[i]`: with an SNR estimate, the 1/6-octave pooled SNR ≥ 10 dB **and**
+  f ≤ 0.95 × Nyquist (v1/v2: power mean of the linear per-point SNR; v3: transfer.v2's pooled
+  power ratio, and the point must be assessed); without one, inside `validRange`. A point need
+  not lie in `validRange` (the longest run only) to be reliable.
 - `mask.calibrated[i]`: the profile's `covered` flag on the same grid, else inside its
   `coverage`; never extrapolated.
 - `metrics`: `snrMedianDb`, `snrMinDb` (worst pooled SNR inside `validRange`), `clippingRatio`,
   `clippingRegions`, `dropouts`, `repeatabilityDb`, `runs`, `requestedRange`, `coverage`,
   `coverageFraction`, `reliableRanges`, `unreliableRanges`, `calibratedRange`,
-  `frequencyCalibrated`, `levelCalibrated`, `resolutionHz`.
+  `frequencyCalibrated`, `levelCalibrated`, `resolutionHz` (v2 adds `discontinuities`,
+  `outputChainLimitHz`; v3 adds `snrResolutionHz`, `snrAssessedFromHz`).
 - Text: frequencies through `formatFrequencyWithResolution` at the coarser of Δf and the grid
   step; levels through `formatDb` (`RELATIVE_UNIT` unless a valid level calibration applies);
   SNR and spreads as plain dB, whole dB in passing reasons and one decimal in warn/fail
-  reasons; a passing "agree within ±x dB" rounds x up to 0.1 dB. Never "high confidence".
+  reasons; a passing repeatability (v1/v2 "agree within ±x dB", v3 "median run-to-run SD x
+  dB") rounds x up to 0.1 dB. Never "high confidence".
 
 ### Assumptions and limits
 
@@ -1530,8 +1692,19 @@ Thresholds are engineering choices with stated rationale, versioned by the ID (�
 any threshold, rule or invalidating code mints the next ID (v2 did, for the discontinuity rule
 and the chain note). SNR, coverage and the masks come from the one `transfer` passed (with
 repeats, the caller chooses which run; the aggregate contributes only `repeatabilityDb`). The
-chain note caps the reliable mask, not `validRange`/`COVERAGE`. The engine's own capture checks
-still stop a run on any `DISCONTINUITY` (stricter than v2's window rule).
+chain note caps the reliable mask, not `validRange`/`COVERAGE`. **Changed (V3 review M8):** the
+engine no longer stops a run on every capture-check reason (before, any `CLIPPING`, `DROPOUT` or
+`DISCONTINUITY`, even outside the sweep, discarded the measurement, so quality's graded tiers
+were unreachable: one 4-sample flat top at 0.999 made it INVALID, probe p6). A run is invalid
+before analysis only for `engine.js` `RUN_INVALIDATING_CODES` — `NO_SAMPLES`,
+`BAD_SAMPLE_RATE`, `NON_FINITE`, `EMPTY`/`NO_INPUT`, `FRAMES_MISSING`, and `DROPOUT_IN_SWEEP`
+for a dropout CERTAINLY inside the sweep: `[s0 + postRoll, s0 + frames)` with s0 the scheduled
+stimulus offset in the capture, the samples the response covers for every latency in
+[0, post-roll] (a larger latency is rejected by the analysis as STIMULUS_OUTSIDE_CAPTURE;
+empty when the post-roll is longer than the sweep). Everything else is graded here against the
+ALIGNED sweep window (`CLIPPING` ok/warn/fail, `CLIPPING_SEVERE`, `DROPOUT[_IN_SWEEP]`,
+`DISCONTINUITY[_IN_SWEEP]`); an INVALID assessment makes the result INVALID with the failing
+codes in the state transition (so `announcements.js` still says "invalid due to clipping").
 
 ### Tests (`v3-quality.test.mjs`)
 
@@ -1557,6 +1730,21 @@ inputs they came from):
 | RTA-only (no transfer) | resolution judged against the requested range |
 | `maskRuns` / `maskRanges`; reliable mask = pooled SNR test | contiguous inclusive runs; ranges partition the grid |
 | inputs not mutated, deterministic output | exact |
+
+The fixtures' noise captures are 5 s long since v3, so every point from 20 Hz is assessed;
+texts and the resolution follow v3, and the reliable-mask test checks v3 (pooled power ratio)
+and v2 (mean of ratios) side by side.
+
+`v3-review-fixes.test.mjs` (one regression per review finding, each failing before the fix):
+B1 silent and −100 dBFS noise checks give SNR NOT MEASURED, USABLE, no "200 dB" anywhere, the
+retained v2 reproducing "200 dB median SNR" from a stored v1 transfer and v3 rejecting it, a
+NaN noise capture INVALID; M1 pooled SNR within 1 dB of the analytic truth at 30-150 Hz while
+the mean of ratios is > 2 dB high, NOT ASSESSED below 86.5 Hz with a 1 s check; M2 POOR /
+USABLE / ok by applied constraints and test context; M8 every tier reachable through the
+engine (one flat top warn, sustained fail, severe INVALID with all runs captured, dropout
+outside warn / certainly inside run-INVALID / aligned-inside quality-INVALID, discontinuity
+after the sweep warn, rail peak `CLIPPING_NOT_EXCLUDED`); M5 IR floor vs Parseval truth; m1
+masked smoothing; m2 resolutions; m9 band levels.
 
 `v3-integration.test.mjs` "G4" and `v3-pipeline.test.mjs` check that a real assessment (with
 `scope` and `mask`) is stored, validated and re-exported unchanged. `v3-gaps.test.mjs` (exact):
