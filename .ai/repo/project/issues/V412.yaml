@@ -18,7 +18,10 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-02
-updated_at: 2026-10-03T06:50:50Z
+updated_at: 2026-10-03T11:44:25Z
+started_at: 2026-10-03T11:44:16Z
+verified_at: 2026-10-03T11:44:19Z
+completed_at: 2026-10-03T11:44:25Z
 evidence:
   - covers: verified
     type: test
@@ -26,3 +29,10 @@ evidence:
     result: "MET at 320130f: shortcut table resolves keys without taking Tab or acting while typing, copy/paste maps a subgraph with new ids and internal edges, delete cascade; browser multi-select (rectangle, copy/paste, duplicate, delete). Impl ui/studio/graph-keys.js. Commit e31ab23"
     commit: 320130f1a967e894002a55dd9ebb6c837eb2621f
     recorded_at: 2026-10-03T06:50:50Z
+  - covers: verified
+    type: test
+    command: "node --test tests/unit/v31-studio-ui-graph-view.test.mjs tests/unit/v31-studio-model.test.mjs && node tests/browser/v31-studio-graph.cjs"
+    result: "MET re-verified at 535af3b on 2026-10-03 (retrospective close, after V3.0 and V3.1 shipped; original evidence above): unit v31-studio-ui-graph-view, v31-studio-model 50/50 pass; tests/browser/v31-studio-graph.cjs passed in the release-gate run at 535af3b"
+    artifact: "535af3b347443dfa05c16cb5fb67128637e3db1f"
+    commit: 535af3b347443dfa05c16cb5fb67128637e3db1f
+    recorded_at: 2026-10-03T11:44:23Z

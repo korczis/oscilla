@@ -18,7 +18,10 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-02
-updated_at: 2026-10-03T06:50:44Z
+updated_at: 2026-10-03T11:42:59Z
+started_at: 2026-10-03T11:42:50Z
+verified_at: 2026-10-03T11:42:53Z
+completed_at: 2026-10-03T11:42:59Z
 evidence:
   - covers: verified
     type: test
@@ -26,3 +29,10 @@ evidence:
     result: "MET at 320130f: port compatibility matrix with reasons, ANALYSIS REFERENCE/OBSERVED roles kept apart, parameter target ports, modulation edge properties; probeConnection agrees with the store. Impl studio/ports.js. Commit 90de098"
     commit: 320130f1a967e894002a55dd9ebb6c837eb2621f
     recorded_at: 2026-10-03T06:50:44Z
+  - covers: verified
+    type: test
+    command: "node --test tests/unit/v31-studio-model.test.mjs tests/unit/v31-studio-ui-graph-view.test.mjs"
+    result: "MET re-verified at 535af3b on 2026-10-03 (retrospective close, after V3.0 and V3.1 shipped; original evidence above): unit v31-studio-model, v31-studio-ui-graph-view 50/50 pass"
+    artifact: "535af3b347443dfa05c16cb5fb67128637e3db1f"
+    commit: 535af3b347443dfa05c16cb5fb67128637e3db1f
+    recorded_at: 2026-10-03T11:42:57Z

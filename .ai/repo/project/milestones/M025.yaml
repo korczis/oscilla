@@ -13,3 +13,12 @@ validation:
 evidence_required:
   - "milestone_verified"
 created_at: 2026-10-02
+updated_at: 2026-10-03T11:46:28Z
+evidence:
+  - covers: milestone_verified
+    type: ci
+    command: "npm run release-gate"
+    result: "Verified retrospectively on 2026-10-03 at 535af3b, after V3.1 shipped: V416-V418 done, each MET item re-run at 535af3b; multi-track timeline migrated from the sequencer (docs/v31/sequencer-migration.md) with clips, snapping, transport, loop and markers on the audio clock (v31-studio-timeline, v31-studio-ui-timeline, v31-studio-transport units; v31-studio-timeline and v31-studio-transport browser suites); release-gate exit 0"
+    artifact: "535af3b347443dfa05c16cb5fb67128637e3db1f"
+    commit: 535af3b347443dfa05c16cb5fb67128637e3db1f
+    recorded_at: 2026-10-03T11:46:28Z

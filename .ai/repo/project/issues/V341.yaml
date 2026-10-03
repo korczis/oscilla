@@ -19,7 +19,10 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-02
-updated_at: 2026-10-03T06:50:05Z
+updated_at: 2026-10-03T11:37:21Z
+started_at: 2026-10-03T11:36:52Z
+verified_at: 2026-10-03T11:37:03Z
+completed_at: 2026-10-03T11:37:21Z
 evidence:
   - covers: verified
     type: test
@@ -27,3 +30,10 @@ evidence:
     result: "MET at 320130f: 12 pass: FAST reaches 63.2 %, freeze keeps the frame, peak hold, profile per band and level offset when calibration enabled; browser live-rta passes. Impl measurement/live-rta.js over V2 analysis/analyser.js. Commits 1921010, ce879ce"
     commit: 320130f1a967e894002a55dd9ebb6c837eb2621f
     recorded_at: 2026-10-03T06:50:05Z
+  - covers: verified
+    type: test
+    command: "node --test tests/unit/v3-live-rta.test.mjs && node tests/browser/v3-ui.cjs"
+    result: "MET re-verified at 535af3b on 2026-10-03 (retrospective close, after V3.0 and V3.1 shipped; original evidence above): unit v3-live-rta 12/12 pass; tests/browser/v3-ui.cjs passed in the release-gate run at 535af3b"
+    artifact: "535af3b347443dfa05c16cb5fb67128637e3db1f"
+    commit: 535af3b347443dfa05c16cb5fb67128637e3db1f
+    recorded_at: 2026-10-03T11:37:14Z

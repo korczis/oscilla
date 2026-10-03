@@ -13,3 +13,12 @@ validation:
 evidence_required:
   - "milestone_verified"
 created_at: 2026-10-02
+updated_at: 2026-10-03T11:46:16Z
+evidence:
+  - covers: milestone_verified
+    type: ci
+    command: "npm run release-gate"
+    result: "Verified retrospectively on 2026-10-03 at 535af3b, after V3.0 shipped: V301 (retrospective baseline audit, docs/v3/audit-baseline.md) and V302-V308 done, each MET item re-run at 535af3b; stimulus, capture, offline analysis and result layers are pure tested modules behind the measurement state machine with versioned algorithm IDs (v3-measurement-core, v3-engine, v3-golden, v3-pipeline units; v3-measure and analysis-worker browser suites); release-gate exit 0 (unit 2040/2040, every browser suite, visual)"
+    artifact: "535af3b347443dfa05c16cb5fb67128637e3db1f"
+    commit: 535af3b347443dfa05c16cb5fb67128637e3db1f
+    recorded_at: 2026-10-03T11:46:16Z
