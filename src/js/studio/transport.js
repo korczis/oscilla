@@ -27,7 +27,9 @@
 // (scheduler.nextWakeMs: half a look-ahead before the scheduled horizon, at most
 // TOP_UP_EVERY_MS): it decides when to compile the next window and never times a sound. The
 // graph is started by runtime.start(); its crossfade time is the transport's baseTime, so a clip
-// at position p sounds at baseTime + p on whole frames.
+// at position p sounds at baseTime + p on whole frames. When the clock has already reached that
+// time at the first window (a starved PLAY), the scheduler re-anchors at the first schedulable
+// time instead of skipping the first clips (decision 'reanchor'; start() returns that baseTime).
 //
 // What plays where (docs/v31/timeline.md "Transport integration"):
 //   pattern clip on a Sequence   compileSequence(item.sequence, ctx, handle.info.destination,
@@ -91,6 +93,21 @@ const GATE_KEEP_S = 10;
 
 const finite = (v) => typeof v === 'number' && Number.isFinite(v);
 const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+/** A linear segment { t0, v0, t1, v1 } at time t: v0 before t0, v1 from t1. */
+const segValue = (g, t) => (t >= g.t1 || !(g.t1 > g.t0) ? g.v1
+  : g.v0 + (g.v1 - g.v0) * clamp((t - g.t0) / (g.t1 - g.t0), 0, 1));
+const LINEAR = 'linearRampToValueAtTime';
+/**
+ * The ramp a hold at t cuts on a param whose last transport segment is `g`: the segment itself
+ * while it runs (or ends at t), or the ramp re-ended at t when `g` starts there from a hold.
+ */
+const segRamp = (g, t) => (g.t0 < t && t <= g.t1 ? LINEAR : (g.t0 === t && g.reEnd) || null);
+/** The ramp a hold at t cuts on compiled automation `events` (timeline-compiler holdEvents). */
+function rampAcross(events, t) {
+  let next = null;
+  for (const e of events) if (e.time >= t && (!next || e.time < next.time)) next = e;
+  return next && next.method !== 'setValueAtTime' ? next.method : null;
+}
 const messageOf = (e) => (e && e.message) || String(e);
 
 const PATTERN_TARGETS = Object.freeze(['sequence', 'oscillator']);
@@ -132,7 +149,12 @@ export function createStudioTransport({
   const gates = new Map(); // gate key → { key, itemKey, clipId, nodeId, handle, start, end }
   const measures = new Map(); // item key → measurement data
   const lanes = new Map(); // lane id → { laneId, target, param, handle, events (as applied) }
-  const claims = new Map(); // oscillator id → { id, handle, bus, param, level, routes }
+  // oscillator id → { id, handle, bus, param, level, fadeAt (null: fresh), routes }
+  const claims = new Map();
+  // Carrier level AudioParam → the transport's last segment on it { t0, v0, t1, v1, reEnd }
+  // (claim fade or release ramp), so the next claim or release holds its value instead of
+  // stepping; after it ends, a level lane that drives the carrier (levelLane) has the value.
+  const levelSegs = new WeakMap();
   // Modulation edge gain → { id, handle, toBus, toCarrier, retiredAt }: a CONTROL edge into a
   // pattern-played oscillator's level, re-routed onto its pattern bus (levelMods).
   const levelTaps = new Map();
@@ -341,6 +363,38 @@ export function createStudioTransport({
     }
   }
 
+  /**
+   * Hold a carrier level at t without a step (envelope.js holdAt): v is the value its schedule
+   * has at t, `ramp` the ramp method in progress across t (segRamp, rampAcross) or null.
+   * cancelAndHoldAtTime when available; else cancelScheduledValues, which would drop that ramp
+   * (the param would jump back to its start), so it is re-ended at t with v. Either way anchored
+   * with setValueAtTime(v, t), as cancelAndHoldAtTime inserts nothing after the last event.
+   * Returns the method re-ended at t, or null.
+   */
+  function holdLevel(param, t, v, ramp) {
+    let reEnd = null;
+    if (typeof param.cancelAndHoldAtTime === 'function') param.cancelAndHoldAtTime(t);
+    else {
+      param.cancelScheduledValues(t);
+      if (ramp && (ramp === LINEAR || v > 0)) {
+        param[ramp](v, t);
+        reEnd = ramp;
+      }
+    }
+    param.setValueAtTime(v, t);
+    return reEnd;
+  }
+
+  /** The record of a lane on oscillator `id`'s level that drives `param` (or null). */
+  function levelLane(id, param) {
+    for (const rec of lanes.values()) {
+      if (rec.target.node === id && rec.target.param === 'level' && rec.param === param) {
+        return rec;
+      }
+    }
+    return null;
+  }
+
   function claimOscillator(id, fresh) {
     const h = ready(id);
     const n = nodeOf(model, id);
@@ -355,18 +409,34 @@ export function createStudioTransport({
     bus.gain.setValueAtTime(level, now);
     const param = t.param;
     let fadeAt = null;
+    let seg;
     if (fresh) {
       // Built in this transaction: its source starts at the crossfade time, nothing rendered.
       param.setValueAtTime(ROUTE_FLOOR, now);
+      seg = { t0: now, v0: ROUTE_FLOOR, t1: now, v1: ROUTE_FLOOR };
     } else {
       const s = hooks.soon();
       fadeAt = s;
-      if (typeof param.cancelAndHoldAtTime === 'function') param.cancelAndHoldAtTime(s);
-      else param.cancelScheduledValues(s);
-      param.setValueAtTime(level, s);
+      // The fade starts from the value the carrier's schedule has at s: the release ramp's while
+      // it runs; after it, the level lane's that drives the carrier (releaseClaim hands it
+      // over); otherwise its level (the runtime's base while it was not owned).
+      const prev = levelSegs.get(param);
+      const lane = levelLane(id, param);
+      let from = level;
+      let ramp = null;
+      if (prev && s <= prev.t1) {
+        from = segValue(prev, s);
+        ramp = segRamp(prev, s);
+      } else if (lane) {
+        from = scheduledValueAt(lane.events, s, level);
+        ramp = rampAcross(lane.events, s);
+      }
+      const reEnd = holdLevel(param, s, from, ramp);
       param.linearRampToValueAtTime(ROUTE_FLOOR, s + STUDIO_XFADE_S);
+      seg = { t0: s, v0: from, t1: s + STUDIO_XFADE_S, v1: ROUTE_FLOOR, reEnd };
     }
-    const claim = { id, handle: h, bus, param, level, routes: new Map() };
+    levelSegs.set(param, seg);
+    const claim = { id, handle: h, bus, param, level, fadeAt, routes: new Map() };
     claims.set(id, claim);
     connectRoutes(claim);
     levelMods(claim, fadeAt);
@@ -378,9 +448,27 @@ export function createStudioTransport({
     claims.delete(id);
     if (!c || ready(id) !== c.handle) return; // replaced or gone: its bus went with it
     const s = hooks.soon();
-    c.param.cancelScheduledValues(s);
-    c.param.setValueAtTime(ROUTE_FLOOR, s);
-    c.param.linearRampToValueAtTime(patternLevel(id), s + STUDIO_XFADE_S);
+    // Released while the claim's own fade runs (or right after a fresh claim): continue from
+    // the value that fade has at s, not from the floor.
+    const seg = levelSegs.get(c.param);
+    const held = seg ? segValue(seg, s) : ROUTE_FLOOR;
+    const end = s + STUDIO_XFADE_S;
+    // A level lane (on the pattern bus while claimed) drives the carrier again: the crossfade
+    // ends on the lane's value at its end and the lane continues on the carrier from there,
+    // so rebindLanes (which would re-anchor it at the earlier horizon) leaves it.
+    const lane = levelLane(id, c.bus.gain);
+    const to = lane ? scheduledValueAt(lane.events, end, patternLevel(id)) : patternLevel(id);
+    const reEnd = holdLevel(c.param, s, held, seg ? segRamp(seg, s) : null);
+    c.param.linearRampToValueAtTime(to, end);
+    levelSegs.set(c.param, { t0: s, v0: held, t1: end, v1: to, reEnd });
+    if (lane) {
+      try {
+        applyAutomation(c.param, lane.events.filter((e) => e.time > end));
+        lane.param = c.param;
+      } catch (e) {
+        warn(`Automation ${lane.laneId}: ${messageOf(e)}`);
+      }
+    }
     // The modulation returns to the carrier with its level.
     for (const tap of levelTaps.values()) {
       if (tap.id === id && tap.handle === c.handle) tap.toCarrier.ramp.to(1, s, STUDIO_XFADE_S);
@@ -773,6 +861,12 @@ export function createStudioTransport({
     if (!playing) return;
     const now = ctx.currentTime;
     const r = scheduler.advance(now);
+    if (r.reanchored) {
+      // The clock reached the anchor before the first window (starved PLAY / locate): the
+      // playback starts at the first schedulable time instead of skipping its first clips.
+      record({ key: null, decision: 'reanchor', from: r.reanchored.from, to: r.reanchored.to,
+        at: now });
+    }
     for (const it of r.items) playItem(it);
     for (const a of r.automation) applyLane(a.laneId, a.target, a.events);
     for (const it of r.skipped) {

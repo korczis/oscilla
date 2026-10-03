@@ -35,7 +35,8 @@ import {
 import {
   ESCAPE_PRIORITY, EDIT_POLICY, SAFE_HORIZON_S, STOP_POLICY, TIMELINE_LOOKAHEAD_S, audioTimeOf,
   compilePass, compileTimeline, createAnchor, createTimelineScheduler, frameCeil, holdEvents,
-  passInfo, positionAt, resolveEscape, safeHorizon, stopTime, truncatePatternPayload,
+  passInfo, positionAt, resolveEscape, safeHorizon, startLeadTime, stopTime,
+  truncatePatternPayload,
 } from '../../src/js/studio/timeline-compiler.js';
 import {
   AutomationError, applyAutomation, automateParameter, automationScale,
@@ -244,11 +245,22 @@ test('the first window keeps the clip at baseTime although the clock moved since
   const r = s.advance(10 - SAFE_HORIZON_S + 2 * q);
   assert.deepEqual(r.skipped, [], 'nothing skipped: baseTime is still ahead of the clock');
   assert.deepEqual(r.items.map((i) => i.startTime), [10]);
-  // A stall past baseTime itself still skips (the grid is kept).
+  // The clock already past baseTime at the first advance (a starved runner, webkit CI: the Tone
+  // clip was skipped): nothing was scheduled under that anchor, so the playback is re-anchored
+  // at the first schedulable time and keeps every clip at its offset.
   const late = createTimelineScheduler(store.getModel(), { sampleRate: SR, baseTime: 10 });
   const r2 = late.advance(10.5);
-  assert.deepEqual(r2.skipped.map((i) => i.startTime), [10]);
-  assert.deepEqual(r2.items.map((i) => i.startTime), [11]);
+  const b2 = startLeadTime(10.5, SR);
+  assert.equal(b2, Math.ceil((10.5 + SAFE_HORIZON_S) / q - 1e-9) * q);
+  assert.deepEqual(r2.reanchored, { from: 10, to: b2 });
+  assert.deepEqual(r2.skipped, []);
+  assert.deepEqual(r2.items.map((i) => i.startTime), [b2], 'the Tone at the new anchor');
+  assert.equal(late.getState().anchor.baseTime, b2);
+  assert.equal(r.reanchored, null, 'baseTime still ahead: the anchor is kept');
+  // A stall after the first window still skips (the grid is kept).
+  const r4 = late.advance(b2 + 3.1);
+  assert.equal(r4.reanchored, null);
+  assert.deepEqual(r4.skipped.map((i) => Math.round((i.startTime - b2) * SR) / SR), [1, 3]);
   // Later windows keep the full safe horizon.
   const r3 = s.advance(11 - SAFE_HORIZON_S + q);
   assert.deepEqual(r3.skipped.map((i) => i.startTime), [11]);
