@@ -13,3 +13,11 @@ validation:
 evidence_required:
   - "milestone_verified"
 created_at: 2026-10-02
+updated_at: 2026-10-03T13:13:53Z
+evidence:
+  - covers: milestone_verified
+    type: test
+    command: "npm test && node tests/browser/v31-studio-graph.cjs && node tests/browser/v31-studio-offline.cjs && node tests/browser/v31-studio-workflows.cjs"
+    result: "Verified at 6f47ab7 on 2026-10-03: V426, V427 done: patches save/load/import/export (patches-files), Render WAV shipped with progress and abort (render-wav), offline rendering 33/33 checks. Unit suite 2079/2079 pass; browser suites pass in chromium, firefox, webkit. Optional autosave/recovery not built (documented)"
+    commit: 6f47ab76768738e5b4fcd1754da68e72243e0930
+    recorded_at: 2026-10-03T13:13:53Z

@@ -20,7 +20,10 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-02
-updated_at: 2026-10-03T06:49:57Z
+updated_at: 2026-10-03T13:05:56Z
+started_at: 2026-10-03T13:05:42Z
+verified_at: 2026-10-03T13:05:48Z
+completed_at: 2026-10-03T13:05:56Z
 evidence:
   - covers: verified
     type: test
@@ -28,3 +31,9 @@ evidence:
     result: "PARTIAL (do not mark done): v3-ui calibration, level-reference, profile-convention checks pass (indicator, profile name, frequency and level toggles, import). Unmet: no calibration profile EXPORT in the UI; exportProfile (calibration/profile.js) is called by no UI module. Commits b0ad11e, 6d60332"
     commit: 320130f1a967e894002a55dd9ebb6c837eb2621f
     recorded_at: 2026-10-03T06:49:57Z
+  - covers: verified
+    type: test
+    command: "node --test tests/unit/v3-measure-gaps.test.mjs && node tests/browser/v3-ui.cjs"
+    result: "MET at 6f47ab7: calibration UI complete: UNCALIBRATED/CALIBRATED indicator, profile name, frequency and level toggles, import, and now EXPORT CSV/JSON in the UI (measure.js measureExportCalibration -> calibration/export.js exportProfileFile; index.html Export CSV / Export JSON). Unit v3-measure-gaps 15/15 (CSV/JSON round-trip, directives); browser v3-ui 19/19 checks in chromium, firefox, webkit on file:// and /oscilla/ incl. calibration, level-reference, profile-convention and calibration-export (deterministic files re-import with the same id, name, convention). PR #44"
+    commit: 6f47ab76768738e5b4fcd1754da68e72243e0930
+    recorded_at: 2026-10-03T13:05:39Z

@@ -18,7 +18,10 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-02
-updated_at: 2026-10-03T06:50:12Z
+updated_at: 2026-10-03T13:06:17Z
+started_at: 2026-10-03T13:06:10Z
+verified_at: 2026-10-03T13:06:14Z
+completed_at: 2026-10-03T13:06:17Z
 evidence:
   - covers: verified
     type: test
@@ -26,3 +29,9 @@ evidence:
     result: "PARTIAL (do not mark done): IndexedDB store CRUD/upgrade/reopen, quota and open failures mapped (in-process fake), memory store with explicit delete; browser experiments delete dialog passes. Unmet: file:// persistence per browser is neither tested nor recorded (v3-ui accepts indexeddb or memory and never reloads; ADR 0022 asks for the per-browser record); quota only on a fake; no test that Playground never depends on it. Commit 6ca33da"
     commit: 320130f1a967e894002a55dd9ebb6c837eb2621f
     recorded_at: 2026-10-03T06:50:12Z
+  - covers: verified
+    type: test
+    command: "node --test tests/unit/v3-experiments.test.mjs tests/unit/v3-storage.test.mjs tests/unit/v3-measure-gaps.test.mjs && node tests/browser/v3-ui.cjs"
+    result: "MET at 6f47ab7: IndexedDB store with memory fallback, explicit delete with confirmation, migrations (unit v3-experiments 37, v3-storage 6, v3-measure-gaps 15 pass: guarded indexedDB factory read, importers). Browser v3-ui 19/19 in chromium, firefox, webkit on file:// and /oscilla/, incl. persistence: per browser and origin which store opens and that an experiment survives a reload (recorded in docs/v3/measurement-guide.md: IndexedDB opens and survives reload in all three on file:// and http), a real QuotaExceededError on the put fails the save with the reason and keeps the result, a later save succeeds; indexedDB.open throwing leaves Playground playing/stopping and MEASURE measuring and saving in memory with no page error. PR #44"
+    commit: 6f47ab76768738e5b4fcd1754da68e72243e0930
+    recorded_at: 2026-10-03T13:06:08Z

@@ -13,3 +13,11 @@ validation:
 evidence_required:
   - "milestone_verified"
 created_at: 2026-10-02
+updated_at: 2026-10-03T13:13:41Z
+evidence:
+  - covers: milestone_verified
+    type: test
+    command: "npm test && node tests/browser/v3-measure.cjs && node tests/browser/v3-ui.cjs"
+    result: "Verified at 6f47ab7 on 2026-10-03: V321-V324 done; V322 closed with input device selection (deviceId exact, hashed in provenance, vanished device refused). Unit suite 2079/2079 pass; v3-measure ALL PASS (116 checks); v3-ui 19/19 (loopback-workflow, input-device) in chromium, firefox, webkit on file:// and /oscilla/"
+    commit: 6f47ab76768738e5b4fcd1754da68e72243e0930
+    recorded_at: 2026-10-03T13:13:41Z

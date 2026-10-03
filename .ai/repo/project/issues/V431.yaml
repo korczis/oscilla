@@ -19,7 +19,7 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-02
-updated_at: 2026-10-03T06:51:11Z
+updated_at: 2026-10-03T13:14:44Z
 evidence:
   - covers: verified
     type: manual
@@ -27,3 +27,9 @@ evidence:
     result: "PARTIAL (do not mark done): measured bundle budget (scripts/build-config.mjs) and licence notices checked by verify-dist; no runtime network. Unmet: no 100-node/200-edge performance test (only text-size bounds in spec 250), no recorded V3.1 cross-model architecture/UX/adversarial reviews, ADR 0034 confirmation (b) frame-time targets unmet"
     commit: 320130f1a967e894002a55dd9ebb6c837eb2621f
     recorded_at: 2026-10-03T06:51:11Z
+  - covers: verified
+    type: manual
+    command: "node --test tests/unit/v31-studio-performance.test.mjs && node tests/browser/v31-studio-workflows.cjs && node scripts/verify-dist.mjs"
+    result: "PARTIAL (do not mark done): at 6f47ab7 the 100-node/200-edge performance target is now tested with budgets (unit v31-studio-performance pass; browser large-graph-render: chromium import+render 48 ms, edit 4.1 ms; firefox 99 / 9 ms; webkit 511 / 7 ms, within BROWSER_BUDGETS) and recorded in docs/v31/performance.md; bundle budget, licence notices and no runtime network checked by verify-dist. Unmet: no recorded V3.1 cross-model architecture, UX or adversarial reviews (spec 235-237, 272)"
+    commit: 6f47ab76768738e5b4fcd1754da68e72243e0930
+    recorded_at: 2026-10-03T13:14:44Z

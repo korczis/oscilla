@@ -18,7 +18,7 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-02
-updated_at: 2026-10-03T06:50:32Z
+updated_at: 2026-10-03T13:14:37Z
 evidence:
   - covers: verified
     type: manual
@@ -26,3 +26,9 @@ evidence:
     result: "PARTIAL (do not mark done): README V3 section, docs/v3/measurement-guide.md, architecture.md with diagram, algorithms.md with references exist. Unmet: docs contradict shipped code: README says analysis runs on the main thread and Worker is planned (G21 resolved, CLAIMS guaranteed, 880264e), README names oscilla.confidence.v2 while the default is v3; architecture.md says no Worker yet"
     commit: 320130f1a967e894002a55dd9ebb6c837eb2621f
     recorded_at: 2026-10-03T06:50:32Z
+  - covers: verified
+    type: manual
+    command: "grep -n 'main thread\|no Worker yet\|confidence.v2. (default)' docs/v3/architecture.md docs/v3/algorithms.md .ai/repo/features/measurement-workbench.md .ai/repo/features/measurement-quality.md"
+    result: "PARTIAL (do not mark done): at 6f47ab7 README is fixed (#37: Worker analysis, oscilla.confidence.v3 default). Docs still contradict shipped code: docs/v3/architecture.md section 3 says the default analyze is analyzeInline on the main thread and a Worker is planned (claim analysis-off-main-thread is guaranteed in docs/CLAIMS.yaml) and line 83 'no Worker yet'; docs/v3/algorithms.md index table says 'oscilla.confidence.v2 (default)' (default is v3, quality.js) and line 643 'until the analysis moves to a Worker'; .ai/repo/features/measurement-workbench.md:39 calls the Worker 'planned', measurement-quality.md:24 names confidence v2"
+    commit: 6f47ab76768738e5b4fcd1754da68e72243e0930
+    recorded_at: 2026-10-03T13:14:37Z

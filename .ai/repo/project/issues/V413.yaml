@@ -19,7 +19,10 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-02
-updated_at: 2026-10-03T06:50:51Z
+updated_at: 2026-10-03T13:07:59Z
+started_at: 2026-10-03T13:07:45Z
+verified_at: 2026-10-03T13:07:52Z
+completed_at: 2026-10-03T13:07:59Z
 evidence:
   - covers: verified
     type: test
@@ -27,3 +30,9 @@ evidence:
     result: "PARTIAL (do not mark done): Inspector for node, multi, connection, clip and automation point generated from registry schemas, edits dispatch (inspector check passes). Unmet: no transport Inspector (spec 78 nothing selected shows Studio/transport properties): buildStudio shows title, counts and summary only; tempo/loop/time mode live in the transport bar. Commit e31ab23"
     commit: 320130f1a967e894002a55dd9ebb6c837eb2621f
     recorded_at: 2026-10-03T06:50:51Z
+  - covers: verified
+    type: test
+    command: "node --test tests/unit/v31-studio-ui-graph-panels.test.mjs tests/unit/v31-studio-gaps.test.mjs && node tests/browser/v31-studio-graph.cjs && node tests/browser/v31-studio-workflows.cjs"
+    result: "MET at 6f47ab7: contextual Inspector for node, multi, connection, clip, automation point and now nothing-selected Studio/transport properties (tempo, time signature, time mode, loop, length) generated from registry schemas; every edit dispatches a store action (refused tempo announced and reverted, undo restores). Unit graph-panels 7, studio-gaps 13 pass; browser v31-studio-graph 21/21 (file://) + 6/6 (/oscilla/) incl. inspector, and v31-studio-workflows 6/6 + 3/3 incl. transport-inspector, in chromium, firefox, webkit. PR #44"
+    commit: 6f47ab76768738e5b4fcd1754da68e72243e0930
+    recorded_at: 2026-10-03T13:07:40Z

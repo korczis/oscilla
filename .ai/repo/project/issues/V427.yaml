@@ -19,7 +19,10 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-02
-updated_at: 2026-10-03T06:51:06Z
+updated_at: 2026-10-03T13:13:05Z
+started_at: 2026-10-03T13:12:56Z
+verified_at: 2026-10-03T13:13:01Z
+completed_at: 2026-10-03T13:13:05Z
 evidence:
   - covers: verified
     type: test
@@ -27,3 +30,9 @@ evidence:
     result: "PARTIAL (do not mark done): studio/offline.js planOfflineRender/renderStudioOffline with explicit live-only limitation (Microphone refused) pass in unit tests; real browsers 33/33 checks pass in chromium, firefox, webkit (run at 320130f). Unmet: no UI or export path calls it and it is tree-shaken out of dist/index.html, so Studio WAV export is not shipped; the offline browser suite is ungated. Commits e6a9457, 62e432e"
     commit: 320130f1a967e894002a55dd9ebb6c837eb2621f
     recorded_at: 2026-10-03T06:51:06Z
+  - covers: verified
+    type: test
+    command: "node --test tests/unit/v31-studio-compiler.test.mjs tests/unit/v31-studio-gaps.test.mjs && node tests/browser/v31-studio-offline.cjs && node tests/browser/v31-studio-workflows.cjs"
+    result: "MET at 6f47ab7: graph and timeline compile into an OfflineAudioContext (studio/offline.js planOfflineRender/renderStudioOffline) with an explicit live-only limitation; now shipped: Render WAV in the Studio toolbar (ui/studio/workspace.js) with progress and abort. Unit compiler 19, studio-gaps 13 (progress, abort) pass; browser v31-studio-offline ALL PASS (33 checks, chromium/firefox/webkit) and v31-studio-workflows render-wav on dist (16-bit WAV at 48 kHz stereo, frames = duration x rate, byte-identical repeat, Abort drops the download, Measurement Sweep refused with the Microphone limitation) on file:// and /oscilla/. The offline suite is now gated in test:studio (package.json) and CI. PR #44"
+    commit: 6f47ab76768738e5b4fcd1754da68e72243e0930
+    recorded_at: 2026-10-03T13:12:54Z
