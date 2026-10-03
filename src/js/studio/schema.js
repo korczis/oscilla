@@ -19,8 +19,8 @@
 // stored, so it cannot disagree with them. Automation points are kept sorted by time.
 //
 // STUDIO_SCHEMA_VERSION is independent of the product, experiment, calibration and config
-// versions (§11, ADR 0023): a Studio file from the release that introduced Studio stays readable in later
-// releases.
+// versions (§11, ADR 0023): a Studio file from the release that introduced Studio stays
+// readable in later releases.
 //
 // Three layers of state (§163, §252-§255):
 //   EXECUTION     what the compiler turns into sound and measurement: node ids, types and
