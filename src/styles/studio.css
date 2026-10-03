@@ -137,9 +137,21 @@
   font-size: var(--osc-fs-md);
 }
 
-.osc-st-ico:disabled {
+.osc-st-ico:disabled,
+.osc-st-ico[aria-disabled="true"] {
   opacity: 0.45;
   cursor: not-allowed;
+}
+
+/* Browser fullscreen (§134, optional): the workspace element alone, on the page background,
+   with the panel gap as its margin; below 768 px it scrolls like the page does. */
+.osc-view--studio:fullscreen {
+  box-sizing: border-box;
+  width: 100%;
+  height: 100%;
+  padding: 9px;
+  overflow: auto;
+  background: var(--osc-bg);
 }
 
 .osc-st-toggle[aria-pressed="true"],

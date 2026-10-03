@@ -498,6 +498,8 @@ function integrationInit() {
   const hadMode = /(^|[#&])m=/.test(window.location.hash);
   cmp.restoreFromHash();
   if (hadMode) cmp.workspace = workspaceForV1Mode(cmp.mode);
+  // A Studio deep link (`m=studio`, V422) after the V1 `m` key, which it would otherwise lose to.
+  cmp.studioApplyLinkHash(window.location.hash, { origin: 'load' });
   if (cmp.source !== 'single' || cmp.pattern !== 'tone') cmp.sourceKind = 'pattern';
   engine.on((type, d) => {
     cmp.onEngine(type, d);

@@ -32,6 +32,7 @@ clock, no randomness. IDs come from an injected generator; inputs are never muta
 | `actions.js` | The store: `dispatch`, reducers, copy/paste, duplicate, id generator |
 | `history.js` | Undo/redo over immutable snapshots, gesture coalescing |
 | `migrate.js` | Migration registry and the import pipeline |
+| `playground-voice.js`, `signal-path-projection.js` | The Playground voice as a derived StudioModel, and the Signal Path projection of any StudioModel that the Playground's Signal Path draws (V421, `docs/v31/signal-path.md`) |
 
 ## StudioModel (schema 1)
 

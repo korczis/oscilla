@@ -40,7 +40,6 @@ import * as presets from '../../src/js/data/presets.js';
 import * as learn from '../../src/js/data/learn.js';
 import * as harmonics from '../../src/js/visualization/harmonics.js';
 import { waveSample } from '../../src/js/visualization/waveform.js';
-import { pathNodesFor } from '../../src/js/visualization/signal-path.js';
 import { VisualizationBridge } from '../../src/js/visualization/visualization-bridge.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -396,7 +395,6 @@ const NAMES = {
   ceilingCurve,
   planKey,
   waveSample,
-  pathNodesFor,
 };
 
 let loads = 0;

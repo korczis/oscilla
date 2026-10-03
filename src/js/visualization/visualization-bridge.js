@@ -16,7 +16,8 @@ import { isNum, sig } from '../core/math.js';
 import { formatFrequency, formatMs, formatPeriod, formatWavelength } from '../core/frequency.js';
 import { planFreqAt } from '../audio/patterns.js';
 import { additiveHarmonicTable, harmonicTable } from './harmonics.js';
-import { pathNodesFor } from './signal-path.js';
+import { playgroundVoiceModel } from '../studio/playground-voice.js';
+import { projectSignalPath } from '../studio/signal-path-projection.js';
 
 const defaultEnv = () => (typeof window !== 'undefined' ? window : globalThis);
 
@@ -108,6 +109,9 @@ export class VisualizationBridge {
         nyquist: '', motionSpan: '', motionA: '', motionB: '', beat: '', legendA: '', legendB: '',
         interNote: '', interNoteNarrow: '',
       },
+      // V3.1 (V421): the Playground voice as a StudioModel and its Signal Path projection
+      // ({ model, annotations, sources }); pathNodes is that projection's stage list.
+      signalPath: null,
       pathNodes: [],
       lab: null,
       harm: { list: [], below: 0, total: 0, shown: 0, capped: false, axisMax: 0, summary: '', summaryShort: '', summaryTiny: '' },
@@ -330,7 +334,13 @@ export class VisualizationBridge {
     // V2: the labs that shape the sounding voice (main.js labVizInputs), read on sync only.
     const lab = typeof this.labInputs === 'function' ? this.labInputs(u.plan) : null;
     s.lab = lab;
-    s.pathNodes = pathNodesFor(s.plan, s, lab);
+    // V3.1 (V421, spec §164): the Signal Path renders from a Studio graph — the Playground voice
+    // as a StudioModel, projected — not from a topology of its own.
+    const voice = playgroundVoiceModel({ plan: u.plan, waveform: u.waveform,
+      frequency: u.frequency, gain: u.gain, attackMs: u.attack, releaseMs: u.release, lab });
+    const path = projectSignalPath(voice.model, { annotations: voice.annotations });
+    s.signalPath = { model: voice.model, annotations: voice.annotations, sources: path.sources };
+    s.pathNodes = path.stages;
     const hf = u.source === 'dual' ? s.dual.fa : u.usesGlobal || !u.plan ? u.frequency : u.plan.freqs[0];
     s.harm = lab && lab.additive && u.source !== 'dual'
       ? additiveHarmonicTable(lab.additive, hf, u.nyquist)
