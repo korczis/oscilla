@@ -252,9 +252,12 @@ test('live RTA push() allocates nothing: no typed array, no GC churn, same objec
       // Per-frame object churn shows as young-generation scavenges (one small object per bin
       // and frame gave 40 in 1500 frames before interpolate.js stopped destructuring in its
       // bin loop); an unrelated scavenge may still land in the window. Major GCs are not
-      // counted: they follow the garbage of earlier tests, not of this loop.
+      // counted: they follow the garbage of earlier tests, not of this loop. Bound: the churn
+      // this guards against costs ~80 scavenges per 3000 frames, while unrelated scavenges from
+      // the runner and machine load were measured at up to 9 (5 in CI-like load), so 24 keeps a
+      // 3x margin on both sides. The exact guarantees are the two deterministic checks above.
       const events = gc.stop().statistics.filter((e) => e.gcType === 'Scavenge').length;
-      assert.ok(events <= 2, `${mode}: ${events} scavenges during 3000 pushes`);
+      assert.ok(events <= 24, `${mode}: ${events} scavenges during 3000 pushes`);
     }
   }
 });
