@@ -18,6 +18,7 @@ import {
   EDGE_S, GAIN_FLOOR, STOP_LEAD_S, STOP_PAD_S, STOP_RAMP_S,
 } from '../../src/js/sequencer/compiler.js';
 import { createIdGenerator, createStudioStore } from '../../src/js/studio/actions.js';
+import { laneValueAt } from '../../src/js/studio/automation.js';
 import { ROUTE_FLOOR, STUDIO_XFADE_S } from '../../src/js/studio/compiler.js';
 import { createStudioRuntime } from '../../src/js/studio/runtime.js';
 import {
@@ -651,6 +652,121 @@ for (const hold of [false, true]) {
         ramp(fadeAt), 1e-6);
       continuousAt(param, rel, 'the first release');
       near(levelCurve(param)((rel + fadeAt) / 2), ramp((rel + fadeAt) / 2), 1e-6);
+    }
+  });
+}
+
+// ------------------------------------------- claim / release continuity with a level lane
+
+/** A linear automation lane on osc-1 level: down 1 → 0.2 over 1.5 s, back up to 0.9 at 3 s. */
+const LEVEL_POINTS = [
+  { id: 'pt-11', time: 0, value: 1, curve: 'linear' },
+  { id: 'pt-12', time: 1.5, value: 0.2, curve: 'linear' },
+  { id: 'pt-13', time: 3, value: 0.9, curve: 'linear' },
+];
+
+function levelLaneModel() {
+  const m = templateModel(REFERENCE_TEMPLATE_ID);
+  return { ...m, timeline: { ...m.timeline, automation: [...m.timeline.automation,
+    { id: 'lane-11', target: { node: 'osc-1', param: 'level' }, points: LEVEL_POINTS }] } };
+}
+
+/** The time of the first cancel among the param's calls from index n (a claim's or release's). */
+const holdSince = (param, n) => param.calls.slice(n)
+  .find((c) => c[0] === 'cancelScheduledValues' || c[0] === 'cancelAndHoldAtTime')[1];
+
+/** Assert the carrier level has no step at any of its scheduled event times from t0 on. */
+function continuousFrom(param, t0, label) {
+  for (const e of browserEvents(param, 1)) {
+    if (e.time >= t0) continuousAt(param, e.time, `${label}, event at ${e.time}`);
+  }
+}
+
+/** Run `act` and sync: the hold time of the claim or release it causes on the carrier. */
+function syncHold(s, param, act) {
+  const n = param.calls.length;
+  act();
+  s.transport.sync();
+  return holdSince(param, n);
+}
+
+/**
+ * Basic Synth with the level lane, playing: osc-1 is pattern-played (its lane drives the pattern
+ * bus); its clips removed, it is released at `rel` and the lane drives its carrier.
+ */
+function releasedWithLane(hold) {
+  const s = setup(levelLaneModel(), { hold });
+  const b = ok(s.transport.start()).baseTime;
+  const lane = (t) => laneValueAt(LEVEL_POINTS, t - b);
+  s.fx.advance(0.1);
+  assert.deepEqual(s.transport.debugInfo().claims, ['osc-1']);
+  const param = s.runtime.nodes.get('osc-1').modTarget('level', 'linear').param;
+  const t0 = s.ctx.currentTime; // nothing after it is rendered yet
+  const rel = syncHold(s, param, () => {
+    dispatch(s, { type: 'CLIP_REMOVE', clipId: 'clip-1' });
+    dispatch(s, { type: 'CLIP_REMOVE', clipId: 'clip-2' });
+  });
+  assert.deepEqual(s.transport.debugInfo().claims, []);
+  return { s, param, lane, rel, t0 };
+}
+
+const LANE_OFFSETS = [...OFFSETS, 0.05, 0.2];
+
+for (const hold of [false, true]) {
+  const how = hold ? 'cancelAndHoldAtTime' : 'cancelScheduledValues';
+
+  test(`pattern oscillator: a release returns the carrier to its level lane (${how})`, () => {
+    const { s, param, lane, rel, t0 } = releasedWithLane(hold);
+    continuousFrom(param, t0, 'release');
+    const v = levelCurve(param);
+    near(v(rel), ROUTE_FLOOR, 1e-6);
+    // The crossfade ends on the lane; the lane then drives the carrier.
+    for (const t of [rel + STUDIO_XFADE_S, rel + 0.05, rel + 0.3, rel + 0.8]) {
+      near(v(t), lane(t), 1e-6);
+    }
+    s.fx.advance(1);
+    continuousFrom(param, t0, 'release, a second later');
+    near(levelCurve(param)(rel + 1.05), lane(rel + 1.05), 1e-6);
+  });
+
+  test(`pattern oscillator: a claim inside a level lane ramp starts from the lane (${how})`, () => {
+    for (const d of LANE_OFFSETS) {
+      const { s, param, lane, rel, t0 } = releasedWithLane(hold);
+      if (d) s.fx.advance(d);
+      const fadeAt = syncHold(s, param, () => sourceClip(s));
+      assert.deepEqual(s.transport.debugInfo().claims, ['osc-1']);
+      assert.ok(fadeAt >= rel, `claimed at ${fadeAt}`);
+      // Inside the release crossfade the claim holds that ramp's value; after it, the lane's.
+      const end = rel + STUDIO_XFADE_S;
+      const before = fadeAt < end
+        ? ROUTE_FLOOR + (lane(end) - ROUTE_FLOOR) * (fadeAt - rel) / STUDIO_XFADE_S
+        : lane(fadeAt);
+      near(continuousAt(param, fadeAt, `claim ${d} s after the release`), before, 1e-6);
+      continuousFrom(param, t0, `claim ${d} s after the release`);
+      const v = levelCurve(param);
+      near(v(fadeAt + STUDIO_XFADE_S), ROUTE_FLOOR, 1e-9);
+      near(v(fadeAt + 0.5), ROUTE_FLOOR, 1e-9);
+    }
+  });
+
+  test(`pattern oscillator: a release inside a level lane ramp continues it (${how})`, () => {
+    for (const d of LANE_OFFSETS) {
+      const { s, param, lane } = releasedWithLane(hold);
+      s.fx.advance(0.1);
+      let clip;
+      const t0 = s.ctx.currentTime;
+      const fadeAt = syncHold(s, param, () => { clip = sourceClip(s); });
+      assert.deepEqual(s.transport.debugInfo().claims, ['osc-1']);
+      near(levelCurve(param)(fadeAt), lane(fadeAt), 1e-6);
+      if (d) s.fx.advance(d);
+      const rel = syncHold(s, param, () => dispatch(s, { type: 'CLIP_REMOVE', clipId: clip }));
+      assert.deepEqual(s.transport.debugInfo().claims, []);
+      const fade = (t) => lane(fadeAt) + (ROUTE_FLOOR - lane(fadeAt))
+        * Math.min(1, Math.max(0, t - fadeAt) / STUDIO_XFADE_S);
+      near(continuousAt(param, rel, `release ${d} s after the claim`), fade(rel), 1e-6);
+      continuousFrom(param, t0, `release ${d} s after the claim`);
+      const v = levelCurve(param);
+      for (const t of [rel + STUDIO_XFADE_S, rel + 0.1, rel + 0.6]) near(v(t), lane(t), 1e-6);
     }
   });
 }
