@@ -30,9 +30,9 @@ for people, never gating · **DELETED** removed, with its replacement.
 | `unit/sequencer-compiler.test.mjs` | GATE | planned automation: sorted, never gain 0, frequencies in range |
 | `unit/sequencer-timeline.test.mjs` | GATE | time scale, ticks, block rectangles |
 | `unit/sequencer-editor.test.mjs` | GATE | editor state, no Web Audio in state, stop timing constants |
-| `unit/pack-single-file.test.mjs` | GATE | the packer inlines in order and escapes `</script` |
+| `unit/pack-single-file.test.mjs` | GATE | the packer inlines in order and escapes `</script`; the comment allow-list, the indentation rule (pre, textarea, script, style and attribute values verbatim), compact Lucide icons and their `:where(.lucide)` paint rule |
 | `unit/verify-dist.test.mjs` | GATE | verify-dist rejects modules, external scripts, altered vendors |
-| `unit/social-meta.test.mjs` | GATE | favicon, touch icon and Open Graph tags are complete and absolute |
+| `unit/social-meta.test.mjs` | GATE | favicon, touch icon and Open Graph tags are complete and absolute; the inline touch icon is an indexed PNG that re-encodes losslessly |
 | `unit/sequencer-fake-audio.mjs` | SUPPORTING | recording fake AudioContext for the sequencer units |
 | `freeze/vectors.cjs`, `freeze/extract.cjs`, `freeze/golden-a7b7a23.json`, `freeze/freeze-plan.txt` | SUPPORTING | inputs, V1 harness and golden of the freeze |
 | `browser/app.cjs` | GATE | dist in chromium, firefox, webkit from file:// and the /oscilla/ sub-path: boot, controls, audio, export, a11y, overflow at fine pointer; the grouped navigation (eight top-level entries, every workspace by Tab and by arrows, aria-current on group and item, Escape and outside click, dropdown inside the viewport at 1536 and 375 px) |
