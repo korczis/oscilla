@@ -301,7 +301,8 @@ Spec §44-§49, §122-§123, §150; plan V341-V344. The RTA tab of MEASURE analy
   node and every track (`counts()` all zero, asserted in `tests/browser/v3-ui.cjs` live-rta).
   "Live RTA started" / "Live RTA stopped" are announced once each (polite).
 - **Not stored**: live RTA is feedback. `snapshot()` gives the `RtaResult` (raw band levels,
-  `oscilla.rta.v1`, the window ID, fftSize) an explicit snapshot would store; saving it into an
+  the default `ALGORITHMS.rta`, `oscilla.rta.v2`, the window ID, fftSize) an explicit snapshot
+  would store; saving it into an
   experiment is not offered yet, because an experiment's recipe requires a stimulus and a live
   snapshot has none (a schema decision, not taken here).
 - **Browsers**: Chromium and Firefox run it on their fake microphones in the gate (a 1 kHz tone
