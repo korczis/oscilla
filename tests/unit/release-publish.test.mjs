@@ -2,7 +2,9 @@
 // nothing is tagged, pushed or released. Also covers the gate receipt and the release notes.
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { preconditionProblems, publish, releaseNotes } from '../../scripts/release-publish.mjs';
+import {
+  preconditionProblems, publish, releaseCreateFlags, releaseNotes,
+} from '../../scripts/release-publish.mjs';
 import { receiptProblems } from '../../scripts/release-prepare.mjs';
 
 const HEAD = 'f187f664893ce0444c03629b0d8afa66d6d9f715';
@@ -59,6 +61,28 @@ test('dry run with every precondition met: plans, prints notes, mutates nothing'
   assert.match(text, /git tag -a v40\.0\.0 .* f187f66/);
   assert.match(text, /gh release create v40\.0\.0/);
   assert.match(text, /### Breaking changes\n\n- drop v=0 links — old links fail/);
+});
+
+test('the GitHub Release attaches the committed dist; only a prerelease is marked so', async () => {
+  const createLine = async (fp) => {
+    const f = fakes();
+    const code = await publish({ argv: [], run: f.run, sh: f.sh, log: f.log,
+      receipt: { ...fp, result: 'passed' }, fingerprint: fp });
+    assert.equal(code, 0);
+    assert.deepEqual(f.calls.filter(MUTATING), []);
+    return f.out.find((l) => /gh release create/.test(l));
+  };
+  const stable = await createLine(FP);
+  assert.match(stable, /gh release create v40\.0\.0 oscilla-v40\.0\.0\.html --verify-tag /);
+  assert.match(stable, /the committed dist\/index\.html/);
+  assert.doesNotMatch(stable, /--prerelease|--latest/);
+  const rc = await createLine({ ...FP, version: '40.1.0-rc.1' });
+  assert.match(rc, /gh release create v40\.1\.0-rc\.1 oscilla-v40\.1\.0-rc\.1\.html /);
+  assert.match(rc, / --verify-tag --prerelease --latest=false --title OSCILLA v40\.1\.0-rc\.1 /);
+  assert.deepEqual(releaseCreateFlags('40.1.0', 'n.md'),
+    ['--verify-tag', '--title', 'OSCILLA v40.1.0', '--notes-file', 'n.md']);
+  assert.deepEqual(releaseCreateFlags('40.1.0-beta.2', 'n.md').slice(0, 3),
+    ['--verify-tag', '--prerelease', '--latest=false']);
 });
 
 test('dry run reports every blocked precondition and exits non-zero', async () => {

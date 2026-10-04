@@ -29,6 +29,7 @@ npm run release:analyze            # SemVer level needed by the commits since th
 npm run release:prepare            # clean tree -> bump once, rebuild, gate; restores on failure
 npm run release:publish            # dry run; `-- --yes` tags, waits for Pages, verifies, releases
 npm run release:verify-deploy      # prove the public page is the committed dist at HEAD
+npm run release:record -- --version X.Y.Z   # write the release record from the GitHub Release
 open dist/index.html               # run it (file://)
 majordomus plan status             # milestone progress
 ```
@@ -40,6 +41,9 @@ hard-coded copy of the current version anywhere else, this file included). `rele
 on a clean tree bumps it once and runs the gate; commit the result as `chore(release): vX.Y.Z`
 and land it on main by PR; then on main `release:publish` (dry run), `release:publish -- --yes`.
 Pages stamps the deployed commit into dist and `verify-deploy` fails the workflow on mismatch.
+Then `npm run release:record -- --version X.Y.Z` writes `.ai/repo/releases/vX.Y.Z.yaml` (the
+Majordomus release record, evidence read from the tag and the GitHub Release; `--check`
+refuses one that differs) and the record lands by a small PR (`release/record-vX.Y.Z`).
 
 ## Plan
 

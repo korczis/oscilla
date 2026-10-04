@@ -11,16 +11,30 @@
 // With --yes:
 //   git tag -a v<version> on HEAD; git push origin v<version>; wait for the Pages run of HEAD
 //   (gh run list/watch); node scripts/verify-deploy.mjs --commit <HEAD>; gh release create
-//   with notes generated from the commits since the previous tag. A failure after the push
-//   stops before the GitHub Release and says how to undo the tag.
+//   with notes generated from the commits since the previous tag and the committed
+//   dist/index.html attached as oscilla-v<version>.html (the artifact the release record of
+//   scripts/release-record.mjs names); a SemVer prerelease (X.Y.Z-rc.N) is created with
+//   --prerelease --latest=false, so GitHub never shows it as the latest release and its record
+//   lands on the prerelease channel. A failure after the push stops before the GitHub Release
+//   and says how to undo the tag.
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { analyzeCommits, lastReleaseTag, parseCommit, readCommits } from './release-analyze.mjs';
 import { PUBLIC_URL, REPO_URL, ROOT, gitRunner } from './release-metadata.mjs';
 import { currentFingerprint, readReceipt, receiptProblems } from './release-prepare.mjs';
+import { DIST_PATH, channelFor, releaseAssetName } from './release-record.mjs';
+
+/**
+ * The gh release create flags after the tag and the asset: a SemVer prerelease is marked
+ * prerelease and never latest; a stable release keeps GitHub's default (latest by date/SemVer).
+ */
+export function releaseCreateFlags(version, notesFile) {
+  const pre = channelFor(version) === 'prerelease' ? ['--prerelease', '--latest=false'] : [];
+  return ['--verify-tag', ...pre, '--title', `OSCILLA v${version}`, '--notes-file', notesFile];
+}
 
 /** Release notes from real history (commits since the previous tag), grouped by impact. */
 export function releaseNotes({ version, previousTag, commits, commit, sourceDigest,
@@ -97,6 +111,7 @@ export async function publish({
   const now = fingerprint || currentFingerprint(root);
   const version = now.version;
   const tag = `v${version}`;
+  const asset = releaseAssetName(version);
   const head = run(['rev-parse', 'HEAD']);
   const remoteMain = sh('git', ['ls-remote', 'origin', 'refs/heads/main']);
   const remoteTag = sh('git', ['ls-remote', '--tags', 'origin', `refs/tags/${tag}`]);
@@ -127,8 +142,8 @@ export async function publish({
     ['gh', ['run', 'list', '--workflow', 'pages.yml', '--commit', head, '--json',
       'databaseId,status,conclusion', '--limit', '1'], '(poll, then gh run watch --exit-status)'],
     ['node', ['scripts/verify-deploy.mjs', '--commit', head]],
-    ['gh', ['release', 'create', tag, '--verify-tag', '--title', `OSCILLA ${tag}`,
-      '--notes-file', '<generated notes>']],
+    ['gh', ['release', 'create', tag, asset, ...releaseCreateFlags(version, '<generated notes>')],
+      `(${asset} = the committed ${DIST_PATH})`],
   ];
   if (!yes) {
     log('\nWould run:');
@@ -168,8 +183,11 @@ export async function publish({
     const dir = mkdtempSync(path.join(os.tmpdir(), 'oscilla-release-'));
     const notesFile = path.join(dir, 'notes.md');
     writeFileSync(notesFile, notes);
-    must('gh', ['release', 'create', tag, '--verify-tag', '--title', `OSCILLA ${tag}`,
-      '--notes-file', notesFile], 'creating the GitHub Release');
+    // The clean tree and build:check above make the working-tree dist the committed one.
+    const assetFile = path.join(dir, asset);
+    writeFileSync(assetFile, readFileSync(path.join(root, DIST_PATH)));
+    must('gh', ['release', 'create', tag, assetFile, ...releaseCreateFlags(version, notesFile)],
+      'creating the GitHub Release');
   } catch (e) {
     log(`\nRELEASE:PUBLISH FAILED: ${e.message}`);
     if (pushed) {
@@ -179,6 +197,7 @@ export async function publish({
     return 1;
   }
   log(`\nPublished ${tag}: ${REPO_URL}/releases/tag/${tag}`);
+  log(`Record it: npm run release:record -- --version ${version}, then land the record by PR.`);
   return 0;
 }
 
