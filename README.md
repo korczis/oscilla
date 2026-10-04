@@ -313,7 +313,8 @@ and the rule [`project.no-fake-science`](.ai/repo/rules/project/no-fake-science.
 ```text
 src/  (ES modules, plain CSS, the src/index.html shell)
   -> scripts/build.mjs              esbuild (pinned): one IIFE app bundle + one stylesheet
-  -> scripts/pack-single-file.mjs   pure string assembly
+  -> scripts/pack-single-file.mjs   pure string assembly; drops developer comments and
+                                    markup indentation (pre, textarea, script, style verbatim)
   -> dist/index.html                the whole app: CSS, p5 block, app bundle, licence notices,
                                     one build-metadata region
 ```

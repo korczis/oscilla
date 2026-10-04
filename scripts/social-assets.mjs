@@ -4,13 +4,22 @@
 //
 //   npm run social            render site/og-image.png from dist/index.html and rewrite the
 //                             social block in src/index.html (then run npm run build)
+//   npm run social -- --icon-only  re-render only site/apple-touch-icon.png and the block
 //   npm run social -- --check verify src/index.html carries the current block (no rendering)
 //
 // The preview is a screenshot of the real built app while it plays a tone, never a mock-up.
 // The page does not load any of these files at runtime (project.single-file-deliverable).
+//
+// The touch icon is inlined into every page as a data: URL, so its screenshot is re-encoded as
+// an indexed (palette) PNG by palettePng below: deterministic, plain zlib, well under half the
+// size of the truecolour screenshot, with small per-channel errors on anti-aliased edges only.
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { deflateSync } from 'node:zlib';
+
+const require = createRequire(import.meta.url);
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const SRC_HTML = path.join(ROOT, 'src', 'index.html');
@@ -42,7 +51,173 @@ export const ICON_SVG = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 50
   + 'fill="none" stroke="url(#g)" stroke-width="4.4" stroke-linecap="round" '
   + 'stroke-linejoin="round"/></svg>';
 
-const esc = (s) => s.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+// ------------------------------------------------------------------------------- palette PNG
+// An opaque screenshot re-encoded as an indexed PNG (colour type 3). Up to PALETTE_SIZE colours
+// are chosen by median cut and refined by K_MEANS_ROUNDS of k-means over the distinct colours,
+// each weighted by the square root of its pixel count, so the few anti-aliased edge colours keep
+// entries of their own instead of being averaged into the background. Only integer histogram
+// work, + - * /, Math.round and Math.sqrt in a fixed order: the same pixels give the same
+// palette and indices on any machine. An image with at most PALETTE_SIZE colours is encoded
+// losslessly, so re-encoding an encoded icon gives back the same pixels and palette.
+const PALETTE_SIZE = 256;
+const K_MEANS_ROUNDS = 20;
+const CHANNELS = [16, 8, 0]; // bit offsets of R, G, B in a packed 0xRRGGBB colour
+const channel = (rgb, shift) => (rgb >> shift) & 255;
+
+function distance2(a, b) {
+  let d = 0;
+  for (const s of CHANNELS) d += (channel(a, s) - channel(b, s)) ** 2;
+  return d;
+}
+
+/** Palette (packed RGB) for the distinct colours of `colors` ({ rgb, weight }[], sorted). */
+function choosePalette(colors, size) {
+  const weightOf = (box) => box.reduce((a, c) => a + c.weight, 0);
+  const span = (box, s) => {
+    let lo = 255;
+    let hi = 0;
+    for (const c of box) {
+      lo = Math.min(lo, channel(c.rgb, s));
+      hi = Math.max(hi, channel(c.rgb, s));
+    }
+    return hi - lo;
+  };
+  // Median cut: split the box with the widest weighted channel span at its weighted median.
+  const boxes = [colors];
+  while (boxes.length < size) {
+    let best = -1;
+    let bestScore = 0;
+    let bestShift = 16;
+    boxes.forEach((box, i) => {
+      if (box.length < 2) return;
+      const w = Math.sqrt(weightOf(box));
+      for (const s of CHANNELS) {
+        const score = span(box, s) * w;
+        if (score > bestScore) [best, bestScore, bestShift] = [i, score, s];
+      }
+    });
+    if (best < 0) break;
+    const box = [...boxes[best]].sort((a, b) => (
+      channel(a.rgb, bestShift) - channel(b.rgb, bestShift) || a.rgb - b.rgb));
+    const half = weightOf(box) / 2;
+    let acc = 0;
+    let cut = box.length - 1;
+    for (let i = 0; i < box.length - 1; i++) {
+      acc += box[i].weight;
+      if (acc >= half) {
+        cut = i + 1;
+        break;
+      }
+    }
+    boxes.splice(best, 1, box.slice(0, cut), box.slice(cut));
+  }
+  const mean = (members, fallback) => {
+    const sum = [0, 0, 0];
+    let w = 0;
+    for (const c of members) {
+      CHANNELS.forEach((s, k) => { sum[k] += channel(c.rgb, s) * c.weight; });
+      w += c.weight;
+    }
+    if (!w) return fallback;
+    return sum.reduce((rgb, v, k) => rgb | (Math.round(v / w) << CHANNELS[k]), 0);
+  };
+  let palette = boxes.map((box) => mean(box, 0));
+  for (let round = 0; round < K_MEANS_ROUNDS; round++) {
+    const members = palette.map(() => []);
+    for (const c of colors) members[nearest(palette, c.rgb)].push(c);
+    palette = palette.map((p, i) => mean(members[i], p));
+  }
+  return palette;
+}
+
+function nearest(palette, rgb) {
+  let best = 0;
+  let bestD = Infinity;
+  for (let i = 0; i < palette.length; i++) {
+    const d = distance2(palette[i], rgb);
+    if (d < bestD) [best, bestD] = [i, d];
+  }
+  return best;
+}
+
+const CRC_TABLE = Array.from({ length: 256 }, (_, n) => {
+  let c = n;
+  for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+  return c >>> 0;
+});
+
+function crc32(buf) {
+  let c = 0xffffffff;
+  for (const byte of buf) c = CRC_TABLE[(c ^ byte) & 255] ^ (c >>> 8);
+  return (c ^ 0xffffffff) >>> 0;
+}
+
+function pngChunk(type, data) {
+  const head = Buffer.alloc(8);
+  head.writeUInt32BE(data.length, 0);
+  head.write(type, 4, 'ascii');
+  const crc = Buffer.alloc(4);
+  crc.writeUInt32BE(crc32(Buffer.concat([head.subarray(4), data])), 0);
+  return Buffer.concat([head, data, crc]);
+}
+
+/**
+ * Re-encode an opaque PNG as an indexed PNG (see above). Palette entries are ordered by pixel
+ * count (then colour), the smallest bit depth that holds them is used, rows are unfiltered
+ * (the best choice for indices) and IDAT is deflated at level 9.
+ * @param {Buffer} png  any PNG pngjs can read; every pixel must be opaque
+ * @returns {Buffer}
+ */
+export function palettePng(png) {
+  const { PNG } = require('pngjs');
+  const { width, height, data } = PNG.sync.read(png);
+  const pixels = new Uint32Array(width * height);
+  const counts = new Map();
+  for (let i = 0; i < pixels.length; i++) {
+    if (data[i * 4 + 3] !== 255) throw new Error('palettePng: the image must be opaque');
+    const rgb = (data[i * 4] << 16) | (data[i * 4 + 1] << 8) | data[i * 4 + 2];
+    pixels[i] = rgb;
+    counts.set(rgb, (counts.get(rgb) || 0) + 1);
+  }
+  const colors = [...counts].sort((a, b) => a[0] - b[0])
+    .map(([rgb, n]) => ({ rgb, weight: Math.sqrt(n) }));
+  const chosen = choosePalette(colors, PALETTE_SIZE);
+  const slot = new Map(colors.map((c) => [c.rgb, nearest(chosen, c.rgb)]));
+  // Keep the entries in use, most frequent first, so equal pixels give equal files.
+  const used = new Map();
+  for (const rgb of pixels) {
+    const p = chosen[slot.get(rgb)];
+    used.set(p, (used.get(p) || 0) + 1);
+  }
+  const palette = [...used].sort((a, b) => b[1] - a[1] || a[0] - b[0]).map(([p]) => p);
+  const index = new Map(palette.map((p, i) => [p, i]));
+  const depth = [1, 2, 4, 8].find((d) => palette.length <= 2 ** d);
+  const rowBytes = Math.ceil((width * depth) / 8);
+  const raw = Buffer.alloc((rowBytes + 1) * height); // filter byte 0 (None) per row
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const v = index.get(chosen[slot.get(pixels[y * width + x])]);
+      const bit = x * depth;
+      raw[y * (rowBytes + 1) + 1 + (bit >> 3)] |= v << (8 - depth - (bit & 7));
+    }
+  }
+  const ihdr = Buffer.alloc(13);
+  ihdr.writeUInt32BE(width, 0);
+  ihdr.writeUInt32BE(height, 4);
+  // Bit depth, colour type 3 (indexed), deflate, adaptive filtering, no interlace.
+  ihdr.set([depth, 3, 0, 0, 0], 8);
+  const plte = Buffer.alloc(palette.length * 3);
+  palette.forEach((p, i) => plte.set(CHANNELS.map((s) => channel(p, s)), i * 3));
+  return Buffer.concat([
+    Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+    pngChunk('IHDR', ihdr),
+    pngChunk('PLTE', plte),
+    pngChunk('IDAT', deflateSync(raw, { level: 9, memLevel: 9 })),
+    pngChunk('IEND', Buffer.alloc(0)),
+  ]);
+}
+
+const esc =(s) => s.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
 
 export function socialBlock(touchIconPng) {
   const icon = `data:image/svg+xml,${encodeURIComponent(ICON_SVG)}`;
@@ -87,15 +262,16 @@ function writeBlock(block) {
   writeFileSync(SRC_HTML, next);
 }
 
-async function render() {
+async function render({ iconOnly = false } = {}) {
   const { chromium } = await import('playwright');
   const browser = await chromium.launch({ args: ['--autoplay-policy=no-user-gesture-required'] });
   try {
     const iconPage = await browser.newPage({ viewport: { width: 180, height: 180 } });
     await iconPage.setContent(`<style>html,body{margin:0;background:#020b15}svg{display:block;
       width:180px;height:180px}</style>${ICON_SVG}`);
-    const touch = await iconPage.screenshot({ type: 'png' });
+    const touch = palettePng(await iconPage.screenshot({ type: 'png' }));
     writeFileSync(TOUCH_ICON, touch);
+    if (iconOnly) return touch;
 
     // 1536 x 806 at 0.78125 device pixels per CSS pixel is exactly 1200 x 630.
     const scale = OG_WIDTH / 1536;
@@ -133,9 +309,11 @@ async function main() {
     console.log('social: src/index.html carries the current block');
     return;
   }
-  const touch = await render();
+  const iconOnly = process.argv.includes('--icon-only');
+  const touch = await render({ iconOnly });
   writeBlock(socialBlock(touch));
-  console.log(`social: wrote ${path.relative(ROOT, OG_IMAGE)}, ${path.relative(ROOT, TOUCH_ICON)}`
+  const wrote = iconOnly ? [TOUCH_ICON] : [OG_IMAGE, TOUCH_ICON];
+  console.log(`social: wrote ${wrote.map((f) => path.relative(ROOT, f)).join(', ')}`
     + ' and the src/index.html block; run npm run build');
 }
 
