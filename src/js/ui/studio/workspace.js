@@ -462,6 +462,8 @@ export function createStudioUi(svc = {}) {
       run: runMeasurement,
       stopStudio: () => stopStudio({ fast: true }),
       onChange: onMeasureRun,
+      profileId: () => (ctx.cmp && typeof ctx.cmp.measureAppliedProfileId === 'function'
+        ? ctx.cmp.measureAppliedProfileId() : null),
     });
     ctx.transport = createStudioTransport({ runtime: ctx.runtime, engine: svc.engine,
       store: ctx.handle, registry,

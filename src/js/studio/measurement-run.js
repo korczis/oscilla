@@ -3,7 +3,8 @@
 // onMeasurement({ type: 'schedule' | 'cancel' | 'release' | 'retime' | 'stop', ... }). This
 // module is that hook. It orchestrates and never duplicates the V3 measurement layer:
 //
-//   createStudioMeasurementRun({ getModel, sampleRate, now, run, stopStudio, onChange, timers })
+//   createStudioMeasurementRun({ getModel, sampleRate, now, run, stopStudio, onChange, timers,
+//     profileId })
 //     getModel()      the store's current model (frozen plain data)
 //     sampleRate()    the running AudioContext's rate (recipeFromStudio renders the stimulus at it)
 //     now()           AudioContext.currentTime (the clips' startTime is on the audio clock)
@@ -14,6 +15,8 @@
 //                     supplies it (measure.js measureRunRecipe)
 //     stopStudio()    -> Promise: release the Studio output (the measurement then owns it)
 //     onChange(view)  the run's plain view after every change
+//     profileId()     the frequency profile id MEASURE will apply, or null: a graph that shows
+//                     another calibration is refused (recipeFromStudio, V431 review A1)
 //   run.hook(event)   the transport's onMeasurement
 //   run.abort(reason) cancel a pending hand-off; a running measurement is aborted by the caller
 //                     through the MEASURE engine (Escape, STOP, page hide, leaving the workspace)
@@ -51,7 +54,7 @@ export const MEASUREMENT_RUN_TEXT = Object.freeze({
 const messageOf = (e) => (e && e.message) || String(e);
 
 export function createStudioMeasurementRun({
-  getModel, sampleRate, now, run, stopStudio, onChange = null,
+  getModel, sampleRate, now, run, stopStudio, onChange = null, profileId = () => null,
   timers = { setTimeout: (fn, ms) => setTimeout(fn, ms), clearTimeout: (id) => clearTimeout(id) },
 } = {}) {
   if (typeof getModel !== 'function' || typeof run !== 'function') {
@@ -105,7 +108,8 @@ export function createStudioMeasurementRun({
     if (view.state === 'running' || handledPasses.has(ev.pass)) return;
     handledPasses.add(ev.pass);
     const model = getModel();
-    const r = recipeFromStudio(model, { sampleRate: sampleRate() });
+    const r = recipeFromStudio(model, { sampleRate: sampleRate(),
+      profileId: typeof profileId === 'function' ? profileId() : null });
     if (!r.ok) {
       set({ state: 'failed', pass: ev.pass, recipe: null,
         text: MEASUREMENT_RUN_TEXT.refused(r.reason) });

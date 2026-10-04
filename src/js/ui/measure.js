@@ -1626,6 +1626,10 @@ export function createMeasureUi(svc) {
     },
     /** The loaded FrequencyProfile (closure object, not reactive) for experiment views. */
     measureCurrentProfile() { return ctx.profile; },
+    /** The id of the frequency profile a measurement started now applies, or null. */
+    measureAppliedProfileId() {
+      return this.meas.cal.useFrequency && ctx.profile ? ctx.profile.id || null : null;
+    },
 
     // ------------------------------------------------------------------ experiment actions
     async measureSave({ decorate = null } = {}) {

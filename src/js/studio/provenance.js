@@ -20,13 +20,14 @@
 //   verifyExperimentStudio(experiment) -> { ok, present, model?, errors: [text] }
 //     the Studio semantics experiments/validate.js does not check (node types, ports, cycles),
 //     plus hash and canonical-form agreement; ok and present false when there is no block
-//   recipeFromStudio(model, { sampleRate, repeats }) -> { ok: true, recipe, sweepId,
+//   recipeFromStudio(model, { sampleRate, repeats, profileId }) -> { ok: true, recipe, sweepId,
 //     analyzerId } | { ok: false, reason }
 
 import { canonicalJson } from '../experiments/canonical-json.js';
 import { createRecipe } from '../experiments/schema.js';
 import { DEFAULT_TIMING, TIMING_LIMITS } from '../measurement/engine.js';
 import { normalizeStimulus } from '../measurement/stimulus.js';
+import { DEFAULT_POINTS_PER_OCTAVE } from '../measurement/transfer.js';
 import { SWEEP_FADE_S } from './adapters/nodes.js';
 import { STUDIO_KIND, executionState, studioHash } from './schema.js';
 import { validateStudioModel } from './validate.js';
@@ -117,6 +118,58 @@ const DURATION_TOLERANCE_S = 1e-6;
 
 const within = (v, [lo, hi]) => isNum(v) && v >= lo && v <= hi;
 
+const nameOf = (n) => (n.metadata && n.metadata.name) || n.id;
+
+/**
+ * Why the graph shows processing a MEASURE run does not do (null when it shows none): see
+ * recipeFromStudio (V431 review A1).
+ */
+function unusedProcessing(model, byId, sweep, analyzer, applied) {
+  const out = model.graph.edges.filter((e) => e.from.node === sweep.id && e.from.port === 'audio');
+  if (!out.length) {
+    return `${nameOf(sweep)} is not connected to the Master Output; the measurement plays the `
+      + 'sweep through the output, so the graph must show that route.';
+  }
+  for (const e of out) {
+    const to = byId.get(e.to.node);
+    if (!to || to.type !== 'master') {
+      return `${nameOf(sweep)} feeds ${to ? nameOf(to) : e.to.node} on its way out; the `
+        + 'measurement plays its own sweep straight to the output, so that processing would be '
+        + 'recorded and never measured. Connect the Sweep directly to the Master Output.';
+    }
+  }
+  const cals = [];
+  const seen = new Set();
+  let at = analyzer;
+  while (at && !seen.has(at.id)) {
+    seen.add(at.id);
+    const into = model.graph.edges.find((e) => e.to.node === at.id && e.to.port === 'observed');
+    at = into ? byId.get(into.from.node) : null;
+    if (at && at.type === 'calibration') cals.push(at);
+  }
+  for (const c of cals) {
+    const id = c.params.profileId || null;
+    if (id !== applied) {
+      return `${nameOf(c)} names ${id ? `profile ${id}` : 'no profile'}, but MEASURE applies `
+        + `${applied ? `profile ${applied}` : 'none'}; the run uses MEASURE's calibration. `
+        + 'Make them agree (the Calibration node, or frequency correction in MEASURE).';
+    }
+    if (id && c.params.extrapolate !== 'none') {
+      return `${nameOf(c)} holds the profile's edges; MEASURE never extrapolates a profile.`;
+    }
+  }
+  if (applied && !cals.length) {
+    return `MEASURE applies frequency profile ${applied}, and the graph shows no Calibration `
+      + 'node with it. Add one on the observed path, or turn frequency correction off.';
+  }
+  const ppo = analyzer.params.pointsPerOctave;
+  if (isNum(ppo) && ppo !== DEFAULT_POINTS_PER_OCTAVE) {
+    return `${nameOf(analyzer)} asks for ${ppo} points per octave; the measurement computes `
+      + `${DEFAULT_POINTS_PER_OCTAVE}.`;
+  }
+  return null;
+}
+
 /**
  * The measurement recipe a Studio measurement topology describes (§106, §110, ADR 0038):
  *   stimulus  the logarithmic Sweep wired to a Transfer Analyzer REFERENCE, exactly as the Sweep
@@ -132,10 +185,20 @@ const within = (v, [lo, hi]) => isNum(v) && v >= lo && v <= hi;
  * TIMING_LIMITS, when more than one clip has the same timing or stimulus action (the pass would
  * be ambiguous: `studioHash` sorts records by id, array order is not part of the setup), or when
  * a stimulus clip is shorter than the Sweep it plays (the engine always plays the whole sweep).
+ * It is also REFUSED when the graph shows processing the run does not do (V431 review A1), since
+ * the experiment records the whole Studio graph beside the recipe:
+ *   - the Sweep's audio output reaches anything but the Master Output directly, or nothing:
+ *     the engine plays its own stimulus straight into the output, so a filter in between would
+ *     be listed and never measured
+ *   - a Calibration node on the observed path names a profile other than `profileId`, the one
+ *     MEASURE applies (null or absent: none), or MEASURE applies one the graph does not show,
+ *     or it holds the profile's edges (MEASURE never extrapolates)
+ *   - the Transfer Analyzer's points per octave differ from the engine's
+ *     (DEFAULT_POINTS_PER_OCTAVE): the run computes the engine's grid
  * The result passes experiments/schema.js createRecipe; measurement/engine.js validateRecipe
  * accepts it (unit test). Never throws.
  */
-export function recipeFromStudio(model, { sampleRate, repeats = 1 } = {}) {
+export function recipeFromStudio(model, { sampleRate, repeats = 1, profileId = null } = {}) {
   const no = (reason) => ({ ok: false, reason });
   if (!isNum(sampleRate)) return no('A sample rate is needed to derive the stimulus.');
   const byId = new Map(model.graph.nodes.map((n) => [n.id, n]));
@@ -155,6 +218,8 @@ export function recipeFromStudio(model, { sampleRate, repeats = 1 } = {}) {
   if (!sweep) return no('No Sweep reference reaches a Transfer Analyzer.');
   const p = sweep.params;
   if (p.curve !== 'log') return no(`${sweep.metadata.name} is not logarithmic.`);
+  const unused = unusedProcessing(model, byId, sweep, analyzer, profileId || null);
+  if (unused) return no(unused);
   let stimulus;
   try {
     stimulus = normalizeStimulus({ kind: 'log-sweep', sampleRate, duration: p.duration,

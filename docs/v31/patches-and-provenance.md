@@ -191,7 +191,7 @@ every import (`studioExecutionHash` = SHA-256 of the canonical JSON, which equal
 
 Relationship to the recipe (ADR 0019): the recipe stays the one authoritative description of
 what the measurement does, and `configHash` does not include Studio state. A Studio run derives
-its recipe from the topology with `recipeFromStudio(model, { sampleRate })`:
+its recipe from the topology with `recipeFromStudio(model, { sampleRate, profileId })`:
 
 | Recipe field | From |
 | --- | --- |
@@ -204,6 +204,15 @@ The recipe is what the timeline shows, or nothing: `recipeFromStudio` refuses, w
 a timing clip outside the engine's `TIMING_LIMITS`, more than one noise-check, pre-roll,
 stimulus or tail clip, and a stimulus clip shorter than its Sweep (the engine always plays the
 whole sweep); it never substitutes a default for a clip that is there (review V431).
+
+The graph also shows only what the run does, because the experiment records the whole graph
+beside the recipe (review V431 A1). `recipeFromStudio` refuses a Sweep whose audio output
+reaches anything but the Master Output directly, or nothing (the engine plays its own sweep
+straight to the output, so a filter in between would be listed and never measured). It also
+refuses a Calibration node on the observed path that names a profile other than `profileId`,
+the one MEASURE applies (`measureAppliedProfileId`; null for none), a profile MEASURE applies
+that no Calibration node shows, a Calibration that holds the profile's edges (MEASURE never
+extrapolates), and a Transfer Analyzer whose points per octave differ from the engine's 48.
 
 So a measurement run from Studio and the same measurement from the Measure workspace share a
 configHash; the Studio block is provenance beside it. `measurement/engine.js validateRecipe`
