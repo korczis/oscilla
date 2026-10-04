@@ -618,6 +618,31 @@
   display: none;
 }
 
+/* The empty-graph hint (V431 U10): centred on the canvas, under the controls, inert. */
+.osc-sg-empty {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  display: none;
+  width: max-content;
+  max-width: calc(100% - 32px);
+  margin: 0;
+  padding: 8px 12px;
+  border: 1px solid var(--osc-border);
+  border-left: 3px solid var(--osc-cyan);
+  border-radius: var(--osc-radius-sm);
+  background: var(--osc-surface-1);
+  color: var(--osc-text-2);
+  font-size: var(--osc-fs-sm);
+  text-align: center;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+
+.osc-sg.is-empty .osc-sg-empty {
+  display: block;
+}
+
 .osc-sg-banner .osc-btn {
   height: var(--osc-control-h-sm);
   padding: 0 8px;

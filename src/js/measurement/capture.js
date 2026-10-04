@@ -846,12 +846,13 @@ function createIoCore({ engine, env = defaultEnv(), mode = 'auto', openInput, ki
       return facts;
     },
 
-    async captureNoise(seconds, { onScheduled, onChunk } = {}) {
+    async captureNoise(seconds, { notBefore = null, onScheduled, onChunk } = {}) {
       const since = epoch;
       const ctx = await ensureReady({ since });
       await freshClock(since);
       const sr = ctx.sampleRate;
-      const startFrame = ceilFrame(ctx.currentTime + SCHEDULE_LEAD_S, sr);
+      const startFrame = ceilFrame(Math.max(ctx.currentTime + SCHEDULE_LEAD_S, notBefore || 0),
+        sr);
       const frames = Math.round(seconds * sr);
       const t = { captureStartAt: startFrame / sr, captureEndAt: (startFrame + frames) / sr };
       const p = openWindow(ctx, startFrame, frames, onChunk);

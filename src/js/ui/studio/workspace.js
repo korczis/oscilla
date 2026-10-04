@@ -241,10 +241,17 @@ export function createStoreHandle(initialModel, { registry = NODE_REGISTRY, gate
       try { fn(ev); } catch (e) { console.error('OSCILLA Studio listener failed:', e); }
     }
   };
-  const make = (m) => createStudioStore(m, { registry, idGenerator: createIdGenerator(m),
-    onChange: (ev) => emit({ ...ev, revision: ev.revision + offset }),
-    gate: typeof gate === 'function'
-      ? (next, info) => gate(next, { ...info, revision: info.revision + offset }) : null });
+  // The id generator is seeded from the store's own (normalized, validated) model on first use,
+  // never from the raw argument: a partial model is a schema error, not a TypeError (V431 X10).
+  const make = (m) => {
+    let ids = null;
+    const st = createStudioStore(m, { registry,
+      idGenerator: (p) => (ids ||= createIdGenerator(st.getModel()))(p),
+      onChange: (ev) => emit({ ...ev, revision: ev.revision + offset }),
+      gate: typeof gate === 'function'
+        ? (next, info) => gate(next, { ...info, revision: info.revision + offset }) : null });
+    return st;
+  };
   store = make(initialModel);
   const adjust = (r) => (r && typeof r.revision === 'number'
     ? { ...r, revision: r.revision + offset } : r);
@@ -483,14 +490,14 @@ export function createStudioUi(svc = {}) {
     }
   }
 
-  function runMeasurement(recipe, model) {
+  function runMeasurement(recipe, model, { startAt = null } = {}) {
     const cmp = ctx.cmp;
     if (!cmp || typeof cmp.measureRunRecipe !== 'function') {
       return Promise.resolve({ ok: false, state: 'IDLE',
         reason: 'The measurement workspace is not available.' });
     }
-    return cmp.measureRunRecipe(recipe, { decorate: (e) => withStudioProvenance({ ...e,
-      name: studioExperimentName(e, model) }, model) });
+    return cmp.measureRunRecipe(recipe, { startAt, decorate: (e) => withStudioProvenance({
+      ...e, name: studioExperimentName(e, model) }, model) });
   }
 
   function setupAudio() {

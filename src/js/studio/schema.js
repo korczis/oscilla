@@ -464,5 +464,22 @@ export function collectIds(model) {
   return ids;
 }
 
+/**
+ * The node-removal cascade (§124), the one implementation (actions.js NODE_REMOVE, patches.js
+ * replaceWithPatch): the nodes `ids` go with their edges, the clips that target them and their
+ * automation lanes; tracks that target them keep their clips and lose the target.
+ */
+export function withoutNodes(model, ids) {
+  const gone = new Set(ids);
+  const t = model.timeline;
+  return { ...model,
+    graph: { ...model.graph, nodes: model.graph.nodes.filter((n) => !gone.has(n.id)),
+      edges: model.graph.edges.filter((e) => !gone.has(e.from.node) && !gone.has(e.to.node)) },
+    timeline: { ...t,
+      tracks: t.tracks.map((x) => (gone.has(x.target) ? { ...x, target: null } : x)),
+      clips: t.clips.filter((c) => !gone.has(c.target)),
+      automation: t.automation.filter((l) => !gone.has(l.target.node)) } };
+}
+
 /** Block types a pattern clip may carry (the sequencer's, §84). */
 export const PATTERN_BLOCK_TYPES = Object.freeze(Object.keys(BLOCK_SCHEMA));

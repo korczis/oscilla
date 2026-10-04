@@ -32,10 +32,10 @@
 //     to Master Output — it will not be heard; no-master-output: sounding sources but no Master
 //     Output; unconnected-input: a required input (analyzer tap, Transfer Analyzer reference /
 //     observed, ...) has no edge.
-// Timeline rules: track kinds, clip kinds per track, clip times (start >= 0, duration >=
-// MIN_CLIP_S, end <= TIMELINE_MAX_S), clip targets (node exists and accepts the clip kind),
-// pattern payloads (sequencer block types and parameter rules, duration within the block
-// bounds), measurement actions, automation targets (parameter exists and is automatable),
+// Timeline rules: track kinds; per clip the editor's rule table (timeline.js clipRules: kind
+// per track, times, duration bounds incl. measurement limits, target, actions, measurement
+// targets), pattern payloads (sequencer block types and parameter rules, duration within the
+// block bounds), tempo-linked clips (below), automation targets (parameter automatable),
 // points (sorted, in range, exponential ramps only between positive values and only on a
 // parameter whose domain is strictly positive, §98), markers, loop (an active loop is at least
 // MIN_CLIP_S long), transport and view values. Tempo-linked clips (`musical`, §90-§91):
@@ -49,11 +49,11 @@ import { BLOCK_SCHEMA, normalizeBlock } from '../sequencer/model.js';
 import { SAMPLE_RATE_LIMITS } from '../measurement/stimulus.js';
 import { canConnect, describePort, validateEdgeProps } from './ports.js';
 import { NODE_REGISTRY, validateParamValue } from './registry.js';
+import { clipRules } from './timeline.js';
 import {
-  AUTOMATION_CURVES, EVENT_ACTIONS, MARKER_KINDS, MEASUREMENT_ACTIONS, MIN_CLIP_S,
-  MUSICAL_TOLERANCE_S, NAME_MAX_CHARS,
+  AUTOMATION_CURVES, MARKER_KINDS, MIN_CLIP_S, MUSICAL_TOLERANCE_S, NAME_MAX_CHARS,
   NOTES_MAX_CHARS, POSITION_LIMIT, STUDIO_KIND, STUDIO_SCHEMA_VERSION, TEMPO_RANGE,
-  TIMELINE_MAX_S, TIME_MODES, TIME_SIGNATURE_DENOMINATORS, TITLE_MAX_CHARS, TRACK_CLIP_KINDS,
+  TIMELINE_MAX_S, TIME_MODES, TIME_SIGNATURE_DENOMINATORS, TITLE_MAX_CHARS,
   TRACK_KINDS, CLIP_KINDS, normalizeStudio,
 } from './schema.js';
 
@@ -447,17 +447,12 @@ function checkPattern(clip, path, sink) {
 }
 
 /**
- * A tempo-linked clip (§90-§91): beats finite and in range, never on a measurement clip (musical
- * time never enters a measurement experiment), and its seconds equal its beats at the tempo.
+ * A tempo-linked clip (§90-§91): beats finite and in range, and its seconds equal its beats at
+ * the tempo (a measurement clip is never musical: clipRules' musical-measurement).
  */
 function checkMusical(clip, transport, path, sink) {
   const mu = clip.musical;
   const at = { path: `${path}.musical` };
-  if (clip.kind === 'measurement') {
-    sink.error('musical-measurement', 'A measurement clip is always placed in seconds; musical '
-      + 'time never enters a measurement experiment.', at);
-    return;
-  }
   if (!mu || !finite(mu.startBeats) || mu.startBeats < 0 || !finite(mu.durationBeats)
     || !(mu.durationBeats > 0)) {
     sink.error('invalid-musical', 'A tempo-linked clip needs startBeats >= 0 and durationBeats '
@@ -494,52 +489,14 @@ function validateTimeline(model, registry, sink, ids, nodeById) {
   t.clips.forEach((clip, i) => {
     const path = `timeline.clips[${i}]`;
     checkId(clip.id, `${path}.id`, sink, ids);
-    const track = trackById.get(clip.trackId);
-    if (!track) {
-      sink.error('missing-track', 'The clip is on a track that does not exist.',
-        { path: `${path}.trackId` });
+    // The clip rule table the editor uses too (timeline.js clipRules, V431 review A9).
+    for (const d of clipRules(model, clip, { registry, trackById, nodeById })) {
+      sink.error(d.code, d.message, { ...d, path: `${path}.${d.path}` });
     }
-    if (!CLIP_KINDS.includes(clip.kind)) {
-      sink.error('invalid-clip', `Clip kind must be one of ${CLIP_KINDS.join(', ')}.`,
-        { path: `${path}.kind` });
-      return;
-    }
-    const allowed = track ? TRACK_CLIP_KINDS[track.kind] : null;
-    if (allowed && !allowed.includes(clip.kind)) {
-      sink.error('clip-kind-mismatch', `A ${clip.kind} clip cannot go on a ${track.kind} track.`,
-        { path: `${path}.kind` });
-    }
-    const okStart = checkTime(clip.start, `${path}.start`, sink, 'Clip start');
-    if (!finite(clip.duration) || clip.duration < MIN_CLIP_S) {
-      sink.error('invalid-time', `Clip duration must be at least ${MIN_CLIP_S} s.`,
-        { path: `${path}.duration` });
-    } else if (okStart && clip.start + clip.duration > TIMELINE_MAX_S) {
-      sink.error('invalid-time', `A clip must end by ${TIMELINE_MAX_S} s.`,
-        { path: `${path}.duration` });
-    }
-    const target = clip.target !== null ? clip.target : track ? track.target : null;
-    if (target !== null) {
-      const node = nodeById.get(target);
-      const def = node && registry.get(node.type);
-      if (!node) {
-        sink.error('missing-node', 'The clip targets a node that does not exist.',
-          { path: `${path}.target` });
-      } else if (def && !def.clipKinds.includes(clip.kind)) {
-        sink.error('invalid-clip-target', `${nameOf(node)} cannot play ${clip.kind} clips.`,
-          { path: `${path}.target`, nodeId: node.id });
-      }
-    }
+    if (!CLIP_KINDS.includes(clip.kind)) return;
     if (clip.kind === 'pattern' && finite(clip.duration)) checkPattern(clip, path, sink);
-    if (clip.musical !== undefined) checkMusical(clip, model.transport, path, sink);
-    if (clip.kind === 'event' && clip.payload && clip.payload.action !== undefined
-      && !EVENT_ACTIONS.includes(clip.payload.action)) {
-      sink.error('invalid-clip', `An event clip action must be one of `
-        + `${EVENT_ACTIONS.join(', ')}.`, { path: `${path}.payload.action` });
-    }
-    if (clip.kind === 'measurement'
-      && !MEASUREMENT_ACTIONS.includes(clip.payload && clip.payload.action)) {
-      sink.error('invalid-clip', `A measurement clip action must be one of `
-        + `${MEASUREMENT_ACTIONS.join(', ')}.`, { path: `${path}.payload.action` });
+    if (clip.musical !== undefined && clip.kind !== 'measurement') {
+      checkMusical(clip, model.transport, path, sink);
     }
   });
   const laneTargets = new Set();
@@ -863,49 +820,62 @@ function structure(c, doc, lim, registry) {
 
 const asError = (e, code = 'invalid-structure') => ({ code, severity: 'error',
   message: e.text, path: e.path });
+const failed = (path, message, code = 'invalid-structure') => ({ ok: false, warnings: [],
+  errors: [{ code, severity: 'error', message, path }] });
 
 /**
- * Validate an untrusted Studio document of the CURRENT schema (§115, §159, §238): JSON text or
- * a parsed object. Pipeline: size cap (before JSON.parse) → structural scan (plain data only, no
- * prototype keys, finite numbers, nesting depth) → kind and version → import limits (counts,
- * string lengths) → strict schema (unknown fields rejected, node types, parameters) → normalize
- * → semantic validation (validateStudioModel). The returned model is a normalized deep copy;
- * the input is never modified. Older schema versions go through migrate.js importStudio.
+ * The import front end, one implementation for validateStudioImport and migrate.js
+ * importStudio: the size cap (before JSON.parse) → JSON.parse → the structural scan (plain data
+ * only, no prototype keys, finite numbers) → nesting depth → a Studio object (`kind`). No
+ * version is looked at. Returns { ok: true, doc } or a failed import result.
  */
-export function validateStudioImport(input, limits = STUDIO_IMPORT_LIMITS,
-  { registry = NODE_REGISTRY } = {}) {
-  const lim = { ...STUDIO_IMPORT_LIMITS, ...limits };
-  const fail = (path, message, code = 'invalid-structure') => ({ ok: false, warnings: [],
-    errors: [{ code, severity: 'error', message, path }] });
+export function readStudioInput(input, lim) {
   let doc = input;
   if (typeof input === 'string') {
     if (utf8Length(input, lim.maxBytes) > lim.maxBytes) {
-      return fail('', `The file is larger than the ${lim.maxBytes}-byte import limit.`,
+      return failed('', `The file is larger than the ${lim.maxBytes}-byte import limit.`,
         'limit-exceeded');
     }
     try {
       doc = JSON.parse(input);
     } catch (err) {
-      return fail('', `Not valid JSON (${String(err && err.message).slice(0, 120)}).`);
+      return failed('', `Not valid JSON (${String(err && err.message).slice(0, 120)}).`);
     }
   }
   const scan = scanUntrusted(doc, { maxBytes: typeof input === 'string' ? Infinity : lim.maxBytes,
     maxErrors: lim.maxErrors });
   if (scan.length) return { ok: false, warnings: [], errors: scan.map((e) => asError(e)) };
   if (depthOf(doc, lim.depth) > lim.depth) {
-    return fail('', `The data is nested deeper than ${lim.depth} levels.`, 'limit-exceeded');
+    return failed('', `The data is nested deeper than ${lim.depth} levels.`, 'limit-exceeded');
   }
   if (!doc || typeof doc !== 'object' || Array.isArray(doc)) {
-    return fail('', 'The file does not contain a Studio object.');
+    return failed('', 'The file does not contain a Studio object.');
   }
   if (doc.kind !== STUDIO_KIND) {
-    return fail('kind', doc.kind === 'oscilla-experiment'
+    return failed('kind', doc.kind === 'oscilla-experiment'
       ? 'This is an OSCILLA experiment file, not a Studio file.'
       : `kind must be "${STUDIO_KIND}".`);
   }
+  return { ok: true, doc };
+}
+
+/**
+ * Validate an untrusted Studio document of the CURRENT schema (§115, §159, §238): JSON text or
+ * a parsed object. Pipeline: readStudioInput (size cap, structural scan, depth, kind) → version
+ * → import limits (counts, string lengths) → strict schema (unknown fields rejected, node types,
+ * parameters) → normalize → semantic validation (validateStudioModel). The returned model is a
+ * normalized deep copy; the input is never modified. Older schema versions go through
+ * migrate.js importStudio.
+ */
+export function validateStudioImport(input, limits = STUDIO_IMPORT_LIMITS,
+  { registry = NODE_REGISTRY } = {}) {
+  const lim = { ...STUDIO_IMPORT_LIMITS, ...limits };
+  const read = readStudioInput(input, lim);
+  if (!read.ok) return read;
+  const doc = read.doc;
   if (doc.schemaVersion !== STUDIO_SCHEMA_VERSION) {
-    return fail('schemaVersion', `Studio schema ${String(doc.schemaVersion).slice(0, 16)} is not `
-      + `${STUDIO_SCHEMA_VERSION}; import it through importStudio (migrate.js).`);
+    return failed('schemaVersion', `Studio schema ${String(doc.schemaVersion).slice(0, 16)} is `
+      + `not ${STUDIO_SCHEMA_VERSION}; import it through importStudio (migrate.js).`);
   }
   const c = createChecker(lim.maxErrors);
   let model;
@@ -913,7 +883,7 @@ export function validateStudioImport(input, limits = STUDIO_IMPORT_LIMITS,
     structure(c, doc, lim, registry);
     if (!c.errors.length) model = normalizeStudio(doc, { registry });
   } catch (err) {
-    return fail('', `The Studio file could not be checked (${String(err && err.message)
+    return failed('', `The Studio file could not be checked (${String(err && err.message)
       .slice(0, 120)}).`);
   }
   if (c.errors.length) {

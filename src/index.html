@@ -2072,8 +2072,7 @@
             </div>
             <div class="osc-st-group osc-st-transport" role="group" aria-label="Transport">
               <button type="button" class="osc-btn osc-btn-primary osc-st-play" data-osc="studio.play"
-                :aria-pressed="String(studio.playing)" aria-pressed="false"
-                :aria-label="studio.playing ? 'Stop the Studio' : 'Play the Studio'" aria-label="Play the Studio"
+                :aria-pressed="String(studio.playing)" aria-pressed="false" aria-label="Play the Studio"
                 aria-keyshortcuts="Space" @click="studioTogglePlay()">
                 <svg aria-hidden="true" x-show="!studio.playing"><use href="#i-play"/></svg>
                 <svg aria-hidden="true" x-show="studio.playing" style="display: none"><use href="#i-pause"/></svg>
@@ -2166,11 +2165,11 @@
             x-text="studio.warning"></p>
           <div class="osc-tabs osc-st-subviews" role="tablist" aria-label="Studio view">
             <button type="button" class="osc-tab" role="tab" data-osc="studio.subview" data-value="graph"
-              aria-controls="osc-st-graph" x-bind="studioSubview('graph')">Graph</button>
+              id="osc-st-tab-graph" aria-controls="osc-st-graph" x-bind="studioSubview('graph')">Graph</button>
             <button type="button" class="osc-tab" role="tab" data-osc="studio.subview" data-value="timeline"
-              aria-controls="osc-st-timeline" x-bind="studioSubview('timeline')">Timeline</button>
+              id="osc-st-tab-timeline" aria-controls="osc-st-timeline" x-bind="studioSubview('timeline')">Timeline</button>
             <button type="button" class="osc-tab" role="tab" data-osc="studio.subview" data-value="inspector"
-              aria-controls="osc-st-inspector" x-bind="studioSubview('inspector')">Inspector</button>
+              id="osc-st-tab-inspector" aria-controls="osc-st-inspector" x-bind="studioSubview('inspector')">Inspector</button>
           </div>
         </header>
 
@@ -2179,7 +2178,7 @@
           <div class="osc-st-libhost" data-osc="studio.library"></div>
         </section>
 
-        <section class="osc-panel osc-st-graph" id="osc-st-graph" aria-labelledby="osc-st-graph-title">
+        <section class="osc-panel osc-st-graph" id="osc-st-graph" role="tabpanel" aria-labelledby="osc-st-graph-title">
           <div class="osc-panel-header">
             <h3 class="osc-panel-title" id="osc-st-graph-title">Signal graph</h3>
             <span class="osc-spacer"></span>
@@ -2191,12 +2190,12 @@
           <div class="osc-st-graphhost" data-osc="studio.graph"></div>
         </section>
 
-        <section class="osc-panel osc-st-inspector" id="osc-st-inspector" aria-labelledby="osc-st-insp-title">
+        <section class="osc-panel osc-st-inspector" id="osc-st-inspector" role="tabpanel" aria-labelledby="osc-st-insp-title">
           <div class="osc-panel-header"><h3 class="osc-panel-title" id="osc-st-insp-title">Inspector</h3></div>
           <div class="osc-st-insphost" data-osc="studio.inspector"></div>
         </section>
 
-        <section class="osc-panel osc-st-timeline" id="osc-st-timeline" aria-labelledby="osc-st-tl-title">
+        <section class="osc-panel osc-st-timeline" id="osc-st-timeline" role="tabpanel" aria-labelledby="osc-st-tl-title">
           <div class="osc-panel-header"><h3 class="osc-panel-title" id="osc-st-tl-title">Timeline</h3></div>
           <div data-osc="studio.timeline" class="osc-studio-timeline-host"></div>
         </section>

@@ -91,7 +91,7 @@ The derived graph is the voice that `AudioEngine.play` builds for the plan with 
 | --- | --- | --- |
 | any single-oscillator plan | Oscillator `osc-1` (waveform, frequency = the frequency control) → Envelope → [Filter] → Master Output | OSCILLATOR · MODULATION … · ENVELOPE · [FILTER] · MASTER GAIN · LIMITER · ANALYSER · DEVICE OUTPUT |
 | fixed tone, finite tone, invalid plan | nothing modulates the oscillator | MODULATION "none · fixed frequency" (bypassed, arc) |
-| siren, wobble (`lfo`) | LFO → `osc-1.frequency`; edge depth = plan depth (Hz), edge offset = plan centre − frequency control, so base + offset is the sounding centre | LFO → FREQUENCY "rate · ±depth" |
+| siren, wobble (`lfo`) | LFO → `osc-1.frequency`; edge depth = plan depth (Hz), edge offset = plan centre − frequency control, so base + offset is the sounding centre | LFO → FREQUENCY "rate · ±depth" (a unipolar edge reads "+depth", its excursion [0, depth]; a muted edge adds "· muted" and is drawn bypassed, review V431 A8) |
 | FM (`fm`) | LFO node at modFreq → `osc-1.frequency`, depth in Hz | MODULATOR → FREQ |
 | AM (`am`) | Oscillator → Gain (1 − depth/2) → Envelope; LFO → `gain-1.gain`, depth depth/2 (`buildAm`'s amGain and lfoGain) | LFO → GAIN (AM) "rate · depth %" (depth = 2d / (g + d)) |
 | pulse, burst, alternating, random, octave, sequence (`steps`) | automation lane on `osc-1.frequency`, one step point per scheduled tone | FREQUENCY STEPS "n scheduled steps" |

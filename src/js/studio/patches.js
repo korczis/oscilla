@@ -40,7 +40,7 @@ import { scanUntrusted, utf8Length } from '../experiments/validate.js';
 import { NODE_REGISTRY } from './registry.js';
 import {
   DEFAULT_TRANSPORT, NAME_MAX_CHARS, STUDIO_KIND, STUDIO_SCHEMA_VERSION, collectIds, copyPlain,
-  normalizeStudio, studioHash,
+  normalizeStudio, studioHash, withoutNodes,
 } from './schema.js';
 import { validateStudioModel, STUDIO_IMPORT_LIMITS } from './validate.js';
 import { importStudio } from './migrate.js';
@@ -386,21 +386,10 @@ export function insertPatch(model, patch, at = null, { newId = null,
 export function replaceWithPatch(model, patch, { newId = null, registry = NODE_REGISTRY,
   at = { x: 0, y: 0 } } = {}) {
   validPatch(patch, registry);
-  const gone = new Set(model.graph.nodes.map((n) => n.id));
-  const t = model.timeline;
-  const emptied = {
-    ...model,
-    graph: { nodes: [], edges: [] },
-    timeline: {
-      ...t,
-      tracks: t.tracks.map((x) => (gone.has(x.target) ? { ...x, target: null } : x)),
-      clips: t.clips.filter((c) => !gone.has(c.target)),
-      automation: [],
-    },
-  };
+  const gone = model.graph.nodes.map((n) => n.id);
   const alloc = typeof newId === 'function' ? newId : allocator(model);
-  const r = insertPatch(emptied, patch, at, { newId: alloc, registry });
-  return { ...r, removed: [...gone] };
+  const r = insertPatch(withoutNodes(model, gone), patch, at, { newId: alloc, registry });
+  return { ...r, removed: gone };
 }
 
 /** Insert or replace, by explicit mode (no default: §114 "with explicit user intent"). */

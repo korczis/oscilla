@@ -31,6 +31,7 @@ import {
 import {
   HANDOFF_NOW_S, MEASUREMENT_RUN_TEXT, createStudioMeasurementRun,
 } from '../../src/js/studio/measurement-run.js';
+import * as measurementRun from '../../src/js/studio/measurement-run.js';
 import { recipeFromStudio, verifyExperimentStudio, withStudioProvenance } from
   '../../src/js/studio/provenance.js';
 import { OFFLINE_TEXT, PROGRESS_STEPS, renderStudioOffline } from '../../src/js/studio/offline.js';
@@ -204,8 +205,8 @@ function syntheticIo({ gain = 0.5, delay = 48 } = {}) {
           audibleVoices: 0 }, worklet: { supported: true, mode: 'audioworklet' },
         testContext: tc };
     },
-    async captureNoise(seconds) {
-      const startedAt = t + 0.1;
+    async captureNoise(seconds, { notBefore } = {}) {
+      const startedAt = Math.max(t + 0.1, notBefore ?? -Infinity);
       t = startedAt + seconds;
       const n = Math.round(seconds * SR);
       const samples = new Float32Array(n);
@@ -318,10 +319,10 @@ test('V424 a later clip is handed off on the audio clock; STOP or cancel before 
     const h = harness();
     h.runner.hook(scheduleEvent(h.model, 'clip-1', h.clock + 0.75));
     assert.equal(h.runner.view.state, 'pending');
-    assert.equal(h.timers.size, 1, 'a bookkeeping timer at the clip start');
-    h.timers.runUntil(749);
-    assert.equal(h.log.length, 0, 'not before the clip');
-    h.timers.runUntil(750);
+    assert.equal(h.timers.size, 1, 'a bookkeeping timer HANDOFF_LEAD_S before the clip start');
+    h.timers.runUntil(Math.round((0.75 - measurementRun.HANDOFF_LEAD_S) * 1000) - 1);
+    assert.equal(h.log.length, 0, 'not before the hand-off lead');
+    h.timers.runUntil(Math.round((0.75 - measurementRun.HANDOFF_LEAD_S) * 1000));
     await flush();
     await flush();
     assert.deepEqual(h.log.map((x) => (Array.isArray(x) ? x[0] : x)), ['stop', 'run']);
@@ -405,6 +406,46 @@ test('V424/V425 the MeasurementEngine runs the clip pass; the experiment carries
     assert.ok(v.ok, JSON.stringify(v.errors));
     const check = verifyExperimentStudio(v.experiment);
     assert.ok(check.ok, check.errors.join());
+  });
+
+test('V431 R1 the measurement starts on the clip\'s audio-clock time, not when a timer fires',
+  async () => {
+    // The hand-off passes the clip's startTime (startAt) and comes HANDOFF_LEAD_S before it.
+    let opts = null;
+    const h = harness({ run: async (recipe, m, o) => {
+      opts = o;
+      return { ok: true, state: 'COMPLETE', experimentId: 'e-1', name: 'Measurement Sweep' };
+    } });
+    h.runner.hook(scheduleEvent(h.model, 'clip-1', h.clock + 2));
+    h.timers.runUntil(Math.round((2 - measurementRun.HANDOFF_LEAD_S) * 1000));
+    await flush();
+    await flush();
+    assert.deepEqual(opts, { startAt: h.clock + 2 }, 'the clip\'s audio-clock start is passed');
+    // The engine schedules its first capture there: the noise check, or the first run.
+    const firstCapture = async (noiseCheckS) => {
+      const recipe = JSON.parse(JSON.stringify(recipeFromStudio(h.model, { sampleRate: SR })
+        .recipe));
+      recipe.analysis.noiseCheckS = noiseCheckS;
+      const io = syntheticIo();
+      const starts = [];
+      for (const k of ['captureNoise', 'runStimulus']) {
+        const fn = io[k];
+        io[k] = async (...a) => {
+          const cap = await fn(...a);
+          starts.push(cap.startedAt);
+          return cap;
+        };
+      }
+      const engine = createMeasurementEngine({ io, assess: assessMeasurement,
+        clock: { wall: () => 0, mono: () => 0 } });
+      const r = await engine.measure(recipe, { startAt: 50 });
+      return { state: r.state, starts };
+    };
+    for (const noise of [0.25, 0]) {
+      const { state, starts } = await firstCapture(noise);
+      assert.equal(state, 'COMPLETE');
+      assert.equal(starts[0], 50, `first capture at the anchor (noise check ${noise} s)`);
+    }
   });
 
 test('V425 the experiment name: the typed MEASURE name, else the Studio title', () => {
