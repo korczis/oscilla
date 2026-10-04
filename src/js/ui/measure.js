@@ -1617,6 +1617,13 @@ export function createMeasureUi(svc) {
       rebuildAll();
     },
     get measureFreqCalText() { return calText({ profile: this.meas.cal.profile }); },
+    /** Why "Save experiment" is disabled, or '' when it is enabled. */
+    get measureSaveReason() {
+      if (this.meas.saving) return 'Saving…';
+      if (this.meas.saved) return 'This measurement is already saved as an experiment.';
+      if (this.meas.state !== S.COMPLETE) return 'Available once a measurement is COMPLETE.';
+      return '';
+    },
     /** The loaded FrequencyProfile (closure object, not reactive) for experiment views. */
     measureCurrentProfile() { return ctx.profile; },
 

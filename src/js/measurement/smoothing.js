@@ -161,7 +161,9 @@ export function smoothResponse(frequencies, magnitudeDb, fraction, options = {})
     kind: 'smoothed',
     algorithm,
     fraction,
-    label: fraction === 0 ? 'RAW: unsmoothed' : `SMOOTHED: 1/${fraction} octave (power mean)`,
+    // V383: a transfer point is already the power mean of its grid band (transfer.js)
+    label: fraction === 0 ? 'RAW: no smoothing beyond the analysis grid'
+      : `SMOOTHED: 1/${fraction} octave (power mean)`,
     smoothedDb,
   };
   if (mask !== null) view.masked = true;

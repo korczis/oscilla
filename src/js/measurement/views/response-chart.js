@@ -243,6 +243,16 @@ function series(id, label, kind, role, values, style, extra = {}) {
     show: true, reliable: null, derivation: null, ...extra };
 }
 
+/**
+ * The analysis grid of a log-spaced response, '1/48-octave bands' (V383: each point is the power
+ * mean of its band, transfer.js, so "unsmoothed" overstated the detail; null off a log grid).
+ */
+function gridText(f) {
+  if (!f || f.length < 2 || !(f[0] > 0) || !(f[1] > f[0])) return null;
+  const ppo = Math.round(1 / Math.log2(f[1] / f[0]));
+  return ppo > 0 ? `1/${ppo}-octave bands` : null;
+}
+
 /** Text of the smoothing / normalization applied to the primary curve. */
 function derivationText(smoothed, normalized) {
   const parts = [];
@@ -316,7 +326,7 @@ export function buildResponseView(source, options = {}) {
   const runs = s.runs;
   const rawName = runs > 1
     ? `RAW · OBSERVED · ${s.method || 'mean'} of ${runs} runs`
-    : 'RAW · OBSERVED · unsmoothed';
+    : `RAW · OBSERVED · ${gridText(s.frequencies) || 'unsmoothed'}`;
   const calName = corr ? `CALIBRATED · profile "${corr.name || UNAVAILABLE.UNKNOWN}"` : null;
 
   const out = [];
@@ -371,8 +381,10 @@ export function buildResponseView(source, options = {}) {
   const primaryKind = normalized ? K.NORMALIZED : (smoothed ? K.SMOOTHED : baseKind);
   const role = corr ? 'calibrated' : 'observed';
   const primaryId = derived ? 'view' : (corr ? 'corrected' : 'raw');
+  // V383: both derivations named in the summary and the readout, not NORMALIZED alone
+  const kindText = smoothed && normalized ? `${K.SMOOTHED} + ${K.NORMALIZED}` : primaryKind;
   out.push(series(primaryId, primaryLabel, primaryKind, role, split.reliable,
-    { ...LINE_STYLES.primary }, { reliable: true, derivation }));
+    { ...LINE_STYLES.primary }, { reliable: true, derivation, kindText }));
   out.push(series(`${primaryId}-unreliable`, `${primaryLabel} · UNRELIABLE (dashed)`,
     primaryKind, role, split.unreliable, { ...LINE_STYLES.unreliable },
     { reliable: false, derivation }));
@@ -548,7 +560,8 @@ function responseSummary(view, s, { primaryValues, offset, include, mask }) {
   }
   const status = view.quality.word;
   const what = view.series.find((d) => d.id === view.primary);
-  const head = `Frequency response (${what.kind.toLowerCase()}${view.badges.includes(
+  const kindText = (what.kindText || what.kind).toLowerCase();
+  const head = `Frequency response (${kindText}${view.badges.includes(
     UNAVAILABLE.UNCALIBRATED) ? ', uncalibrated' : ''})`;
   if (lo < 0) return `${head}: no measured points; measurement quality: ${status}.`;
   const v = (i) => ratioDbText(primaryValues[i] + offset);
@@ -594,8 +607,10 @@ function responseReadout(view, s, index, ctx) {
     `RAW ${raw}`,
     `CALIBRATED ${corrected}`,
   ];
-  if (viewText !== null) lines.push(`${view.series.find((d) => d.id === 'view').kind} `
-    + `${viewText}`);
+  if (viewText !== null) {
+    const vs = view.series.find((d) => d.id === 'view');
+    lines.push(`${vs.kindText || vs.kind} ${viewText}`);
+  }
   lines.push(`SNR ${snr}`);
   if (phase) lines.push(`Phase ${phase}`);
   if (spread) lines.push(`Run spread ${spread}`);

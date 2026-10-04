@@ -328,6 +328,18 @@ export function qualityPanel(assessment) {
   };
 }
 
+/**
+ * The repeatability the REPEATABILITY reason judged, rounded as that reason rounds it: a
+ * passing spread is an upper bound to 0.1 dB, so the table and the reason never disagree
+ * (the stored metric stays the raw dispersion; v4 judges a MAD as its σ-equivalent).
+ */
+function repeatabilityText(a, m, db) {
+  const r = (a.reasons || []).find((x) => x.code === 'REPEATABILITY');
+  const v = r && Number.isFinite(r.value) ? r.value : m.repeatabilityDb;
+  if (!Number.isFinite(v)) return UNAVAILABLE.NOT_MEASURED;
+  return db(r && r.severity === 'ok' ? Math.max(0.1, Math.ceil(v * 10) / 10) : v);
+}
+
 /** Expert metric rows (§239): every number with its unit, or NOT MEASURED. */
 function metricRows(a) {
   const m = a.metrics || {};
@@ -352,8 +364,8 @@ function metricRows(a) {
       : UNAVAILABLE.NOT_MEASURED],
     ['dropouts', 'Dropouts', Array.isArray(m.dropouts) ? String(m.dropouts.length)
       : (Number.isFinite(m.dropouts) ? String(m.dropouts) : UNAVAILABLE.NOT_MEASURED)],
-    ['repeatability', 'Repeatability (median run-to-run SD)', Number.isFinite(m.repeatabilityDb)
-      ? db(m.repeatabilityDb) : UNAVAILABLE.NOT_MEASURED],
+    ['repeatability', 'Repeatability (median run-to-run spread, as judged)',
+      repeatabilityText(a, m, db)],
     ['runs', 'Runs', Number.isInteger(m.runs) ? String(m.runs) : UNAVAILABLE.UNKNOWN],
     ['requested', 'Requested range', range(m.requestedRange)],
     ['coverage', 'Valid range', range(m.coverage)],
