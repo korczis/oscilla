@@ -246,7 +246,7 @@ export function nodeCard(model, node, opts = {}) {
     statusLabel,
     reason: reason || (warnings[0] || null),
     ariaLabel: describeNode(model, node.id, { selected: flags.selected, status,
-      summary: true, registry }),
+      summary: true, connections: true, registry }),
   };
 }
 

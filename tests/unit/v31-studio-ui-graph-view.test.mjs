@@ -34,7 +34,8 @@ test('a node card is a Signal Path box with typed ports (§32, §74-§75, §143)
     ['Q', 'diamond', true, false], ['gain', 'diamond', true, false]]);
   assert.deepEqual(card.outputs.map((p) => [p.id, p.shape]), [['audio', 'circle']]);
   assert.equal(card.flags.selected, true);
-  assert.equal(card.ariaLabel, 'Filter 1, processing node, Low-pass · 500 Hz · Q 0.707, selected');
+  assert.equal(card.ariaLabel, 'Filter 1, processing node, Low-pass · 500 Hz · Q 0.707, '
+    + '2 input connections, 2 output connections, selected');
   assert.equal(card.inputs[1].ariaLabel, 'Filter 1 cutoff control input, connected to LFO 1');
   const env = nodeCard(m, m.graph.nodes.find((n) => n.id === 'env-1'));
   assert.equal(env.inputs.find((p) => p.id === 'gate').shape, 'triangle');

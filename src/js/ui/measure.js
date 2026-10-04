@@ -997,7 +997,7 @@ export function createMeasureUi(svc) {
   }
 
   /** Run one measurement of `given` (Studio, V424) or of the setup fields; resolves the result. */
-  async function runMeasure(cmp, given = null) {
+  async function runMeasure(cmp, given = null, startAt = null) {
     stopLive();
     const me = ensureEngine();
     svc.engine.init();
@@ -1018,7 +1018,7 @@ export function createMeasureUi(svc) {
         ctx.pending = me.preflight(recipe, { calibration: calibrationInput() });
         await ctx.pending;
       }
-      ctx.pending = me.measure(recipe, { calibration: calibrationInput() });
+      ctx.pending = me.measure(recipe, { calibration: calibrationInput(), startAt });
       result = await ctx.pending;
     } catch (e) {
       if (!(e && e.code === 'ABORTED')) {
@@ -1212,17 +1212,18 @@ export function createMeasureUi(svc) {
      * Studio topology's, studio/provenance.js recipeFromStudio) through THIS workspace's
      * MeasurementEngine (the same io, calibration, state machine, abort paths and output
      * exclusivity as MEASURE) and save it as measureSave does, with `decorate` (the Studio
-     * provenance block) applied to the experiment. Resolves { ok, state, experimentId, name,
-     * experiment, reason }; never rejects.
+     * provenance block) applied to the experiment, its first capture not before `startAt` (the
+     * clip's audio-clock time). Resolves { ok, state, experimentId, name, experiment, reason };
+     * never rejects.
      */
-    async measureRunRecipe(recipe, { decorate = null } = {}) {
+    async measureRunRecipe(recipe, { decorate = null, startAt = null } = {}) {
       if (this.measureOwnsOutput() || ctx.pending) {
         return { ok: false, state: ctx.me ? ctx.me.state : S.IDLE,
           reason: 'A measurement is already in progress.' };
       }
       let result = null;
       try {
-        result = await runMeasure(this, recipe);
+        result = await runMeasure(this, recipe, startAt);
       } catch (e) {
         return { ok: false, state: ctx.me ? ctx.me.state : S.IDLE, reason: e.message || String(e) };
       }

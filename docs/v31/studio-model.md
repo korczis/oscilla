@@ -214,7 +214,8 @@ delay/feedback nodes need their own feature and ADR (§39).
 `validateStudioImport(input, limits)` (current schema) and `importStudio(input)` (any supported
 schema) never eval and never throw. Pipeline: size cap before `JSON.parse` → structural scan
 (`experiments/validate.js` `scanUntrusted`: plain data, no `__proto__`/`constructor`/
-`prototype` keys, finite numbers) → nesting depth → kind and version → counts → strict schema
+`prototype` keys, finite numbers) → nesting depth → kind (these four are one function,
+`validate.js readStudioInput`, the front end of both) → version → counts → strict schema
 (unknown fields, node types, parameters) → normalize → `validateStudioModel`. Limits
 (`STUDIO_IMPORT_LIMITS`): 4 MiB, depth 12, 512 nodes, 2048 edges, 64 tracks, 2048 clips, 512
 automation lanes, 20000 points (4096 per lane), 512 markers, 256-character strings (names 64,
@@ -224,8 +225,9 @@ notes 10000).
 
 `studioMigrations[n]` upgrades schema n − 1 to n; schema 1 is the first, so `1` is an identity
 placeholder. `migrateStudio` reuses `experiments/migrate.js` (copying, stepwise application,
-refusal of newer versions). `importStudio` runs the safety scan before any migration step, then
-the strict current-schema validation after it; version numbers are read nowhere else.
+refusal of newer versions). `importStudio` runs the front end (safety scan, depth, kind) before
+any migration step, then the strict current-schema validation after it; version numbers are
+read nowhere else.
 
 ## Actions and history
 
@@ -234,7 +236,7 @@ the strict current-schema validation after it; version numbers are read nowhere 
 | Action | Payload | History label |
 | --- | --- | --- |
 | NODE_ADD | `nodeType, position?, params?, name?` | Add Filter 1 |
-| NODE_REMOVE | `nodeId` or `nodeIds` (cascade: edges, clips targeting it, its lanes; track targets cleared) | Delete Filter 1 |
+| NODE_REMOVE | `nodeId` or `nodeIds` (cascade `schema.js withoutNodes`, shared with PATCH_REPLACE: edges, clips targeting it, its lanes; track targets cleared) | Delete Filter 1 |
 | NODE_MOVE | `nodeId, position` or `nodeIds, delta` | Move Filter 1 |
 | NODE_PARAM_SET | `nodeId, key, value` or `nodeId, params` | Change Filter 1 Cutoff |
 | NODE_RENAME | `nodeId, name` | Rename Filter 1 to HF Filter |
@@ -303,6 +305,7 @@ fails when a value or a cited line stops matching the code.
 | Default grid (snapping on) | 8 units | `GRID` | `src/js/ui/studio/graph-geometry.js:23` |
 | Pointer-drag threshold | 4 px | `DRAG_THRESHOLD_PX` | `src/js/ui/studio/graph-geometry.js:25` |
 | Connection hit width | 12 px fine pointer, 24 px coarse pointer | `CABLE_HIT_PX` | `src/js/ui/studio/graph-geometry.js:26` |
+| Fit zoom floor, coarse pointer | 24/26 (port targets at least 24 px) | `COARSE_FIT_MIN_ZOOM` | `src/js/ui/studio/graph-geometry.js:35` |
 | Initial Studio schema version | 1 | `STUDIO_SCHEMA_VERSION` | `src/js/studio/schema.js:54` |
 | Studio project file extension | .oscilla-studio.json | `STUDIO_FILE_EXTENSION` | `src/js/studio/schema.js:56` |
 | Patch file extension | .oscilla-patch.json | `PATCH_FILE_EXTENSION` | `src/js/studio/patches.js:50` |
@@ -316,8 +319,10 @@ fails when a value or a cited line stops matching the code.
 
 The model stores the graph view's zoom as any finite number (`src/js/studio/schema.js:356`,
 default 1); the editor clamps every view it applies to the bounds above
-(`clampZoom`/`normalizeView`, `src/js/ui/studio/graph-geometry.js:33-43`), so an imported file
-with zoom 10 opens at 2.5. The bounds are view state, outside the studioHash. Below 0.25 the
+(`clampZoom`/`normalizeView`, `src/js/ui/studio/graph-geometry.js:40-50`), so an imported file
+with zoom 10 opens at 2.5. On a coarse pointer Frame all and Frame selection stop at
+`COARSE_FIT_MIN_ZOOM`, where a 26-unit port row is 24 px on screen (WCAG 2.5.8, review V431
+U9); a larger graph is centred and the rest is a pan away. The bounds are view state, outside the studioHash. Below 0.25 the
 10 px node titles are not legible on a 1x display; above 2.5 one 168-unit node fills a phone
 screen (`src/js/ui/studio/graph-geometry.js:9-10`).
 

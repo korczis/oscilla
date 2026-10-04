@@ -18,7 +18,8 @@
 //     from store.dispatch / undo / redo results: "Connected Oscillator 1 to Filter 1",
 //     "Connection rejected: incompatible port type", "Deleted Filter 1", "Undo: deleted Filter 1"
 //   announceLabel(label) -> past-tense sentence of a history label
-//   announceSelection(model, selection) -> "Filter 1 selected" | "3 nodes selected" | ...
+//   announceSelection(model, selection) -> "Filter 1 selected" | "Tone clip on Track 1
+//     selected" | "3 nodes selected" | ...     clipLabel(clip) -> "Tone", "Noise check", ...
 //
 // INVARIANTS: no text contains pointer coordinates, positions or per-frame values (§143-§144):
 // a move is "Moved Filter 1", never where to. Names come from node metadata as plain text; the
@@ -45,6 +46,21 @@ const STATUS_WORDS = Object.freeze({
 });
 
 const TAP_VERBS = Object.freeze({ recorder: 'records', capture: 'captures' });
+
+const CLIP_WORDS = Object.freeze({ 'noise-check': 'Noise check', 'pre-roll': 'Pre-roll',
+  stimulus: 'Stimulus', capture: 'Capture', tail: 'Tail', analysis: 'Analysis', gate: 'Gate',
+  trigger: 'Trigger' });
+
+/** A clip's short name: "Tone", "Sweep", "Noise check", "Gate", ... (clips carry no name). */
+export function clipLabel(clip) {
+  const p = clip.payload || {};
+  if (clip.kind === 'pattern') {
+    const b = String(p.blockType || 'pattern');
+    return b[0].toUpperCase() + b.slice(1);
+  }
+  if (clip.kind === 'measurement') return CLIP_WORDS[p.action] || 'Measurement';
+  return CLIP_WORDS[p.action || 'gate'] || 'Event';
+}
 
 export const SUMMARY_DEFAULTS = Object.freeze({ maxItems: 6, maxPaths: 3, maxPathNodes: 8 });
 
@@ -218,7 +234,10 @@ export function summarizeStudio(model, opts = {}) {
 
 /**
  * "Oscillator 1, source node, selected". opts: { selected, status (compiler.js node status),
- * summary (true: add the node card summary, e.g. "Sine · 440 Hz"), registry }.
+ * summary (true: add the node card summary, e.g. "Sine · 440 Hz"), connections (true: add the
+ * edge counts, "2 input connections, 1 output connection": the ports themselves are
+ * aria-hidden, their names are in the Inspector Connections list and the Connect dialog),
+ * registry }.
  */
 export function describeNode(model, nodeId, opts = {}) {
   const registry = opts.registry || NODE_REGISTRY;
@@ -228,6 +247,15 @@ export function describeNode(model, nodeId, opts = {}) {
   const parts = [n.metadata.name, def ? CATEGORY_NOUNS[def.category] || 'node' : 'unknown node'];
   if (opts.summary && def) parts.push(registry.summarize(n));
   if (opts.status && STATUS_WORDS[opts.status]) parts.push(STATUS_WORDS[opts.status]);
+  if (opts.connections && def) {
+    const edges = model.graph.edges;
+    if (def.inputs.length) {
+      parts.push(plural(edges.filter((e) => e.to.node === nodeId).length, 'input connection'));
+    }
+    if (def.outputs.length) {
+      parts.push(plural(edges.filter((e) => e.from.node === nodeId).length, 'output connection'));
+    }
+  }
   if (opts.selected) parts.push('selected');
   return parts.join(', ');
 }
@@ -326,7 +354,10 @@ export function announceRedo(result) {
   return `Redo: ${lowerFirst(announceLabel(result.label))}`;
 }
 
-/** "Filter 1 selected", "3 nodes selected", "Selection cleared" (names, never coordinates). */
+/**
+ * "Filter 1 selected", "Sweep clip on Track 1 selected", "3 nodes selected", "Selection
+ * cleared" (names, never coordinates).
+ */
 export function announceSelection(model, selection) {
   const ids = (selection && selection.nodes) || [];
   const edges = (selection && selection.edges) || [];
@@ -334,6 +365,12 @@ export function announceSelection(model, selection) {
   if (!ids.length && !edges.length && !clips.length) return 'Selection cleared';
   if (ids.length === 1 && !edges.length && !clips.length) {
     return `${nameOf(index(model), ids[0])} selected`;
+  }
+  const clip = clips.length === 1 && !ids.length && !edges.length
+    ? model.timeline.clips.find((c) => c.id === clips[0]) : null;
+  if (clip) {
+    const track = model.timeline.tracks.find((t) => t.id === clip.trackId);
+    return `${clipLabel(clip)} clip${track ? ` on ${track.name}` : ''} selected`;
   }
   const parts = [];
   if (ids.length) parts.push(plural(ids.length, 'node'));

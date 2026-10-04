@@ -40,8 +40,11 @@ sequence is.
 
 ### Clip validation (§87)
 
-`validateClip(model, clip)` returns `{ ok, errors, warnings }`; `clipDurationBounds(clip)` gives
-the duration range the resize gesture clamps to.
+`clipRules(model, clip)` is the one clip rule table: the store applies it to every clip
+(`validate.js validateStudioModel`, so every action and every import), and the editor's
+`validateClip(model, clip)` returns `{ ok, errors: clipRules, warnings }`, so the editor and the
+store refuse the same clips with the same sentence (review V431 #24). `clipDurationBounds(clip)`
+gives the duration range the resize gesture clamps to.
 
 | Clip | Duration bounds (s) | Other requirements |
 | --- | --- | --- |
@@ -56,10 +59,12 @@ the duration range the resize gesture clamps to.
 | measurement analysis | any | target Transfer Analyzer |
 | measurement, any | — | never tempo-linked (`musical-measurement`) |
 
-The measurement bounds come from the measurement engine's own constants; they are editor-level
-checks (the store accepts the V404 measurement fixtures, whose stimulus clip is shorter than its
-sweep). A measurement never runs outside them: `recipeFromStudio` refuses such a timeline
-instead of substituting defaults (review V431).
+The measurement bounds come from the measurement engine's own constants, and the store refuses a
+clip outside them (and a measurement clip on the wrong target type) with the editor's sentence.
+Only `stimulus-truncated` is a warning: the store accepts a stimulus clip shorter than its sweep
+(the V404 measurement fixtures have one), and `recipeFromStudio` refuses to run it. A model
+built in code outside the store cannot run out of bounds either: `recipeFromStudio` refuses
+such a timeline instead of substituting defaults (review V431).
 
 ## Time (§89-§91)
 
@@ -400,15 +405,22 @@ duplicates it:
 - **One pass is one measurement.** The first `schedule` of a pass derives the recipe from the
   model (`provenance.js recipeFromStudio` at the running context's sample rate: the stimulus
   from the Sweep wired to a Transfer Analyzer REFERENCE, pre-roll / tail / noise-check from
-  their clips) and arms the hand-off at that clip's `startTime` on the audio clock. The rest of
+  their clips) and arms the hand-off `HANDOFF_LEAD_S` (0.25 s) before that clip's `startTime`
+  on the audio clock. The rest of
   the pass joins it; nothing is measured twice. A topology that cannot be measured (no
   Transfer Analyzer, no logarithmic Sweep reference) is reported with its reason and the pass
   plays on.
 - **Hand-off.** A hand-off due within `HANDOFF_NOW_S` (50 ms, i.e. a clip at the start) runs in a
   microtask, before the Studio's first scheduled sound (one scheduling lead ahead) is heard;
   a later one is a bookkeeping timer, never audio timing. The Studio releases the output first
-  (`transport.stop({ fast: true })`, 0 nodes), then the MEASURE workspace's engine runs the
-  recipe (`measure.js measureRunRecipe`): the same MeasurementEngine state machine (PREFLIGHT,
+  (`transport.stop({ fast: true })`, 0 nodes), so Studio sound in the last 0.25 s before the
+  first measurement clip is cut. Then the MEASURE workspace's engine runs the recipe
+  (`measure.js measureRunRecipe`) **anchored on the clip**: `startAt` = the clip's `startTime`,
+  and the engine schedules its first capture (the noise check, else the first run) there on
+  the audio clock (`notBefore`), never before; when preflight ends after it, at once. So the
+  timer only decides when preflight starts: a late timer (background throttling) can delay a
+  start only past its anchor, not move it (review V431 R1). The engine is the same
+  MeasurementEngine state machine (PREFLIGHT,
   NOISE_CHECK, READY, ARMED, MEASURING, ANALYZING, COMPLETE), capture io (microphone, or the
   TEST CONTEXT loopback), calibration, abort paths and output exclusivity as a measurement
   started in MEASURE. Its own stimulus is the very samples the Sweep node renders
@@ -423,8 +435,9 @@ duplicates it:
   leaving the workspace abort it like any measurement; Studio PLAY is refused while it owns the
   output. The workspace's task strip shows MEASURE's state and progress with Abort.
 
-Tests: `tests/unit/v31-studio-gaps.test.mjs` (hand-off on the audio clock, refusals, a real
-MeasurementEngine on a synthetic io, the saved block verifying) and
+Tests: `tests/unit/v31-studio-gaps.test.mjs` (hand-off on the audio clock, the `startAt`
+anchor reaching the engine's first capture, refusals, a real MeasurementEngine on a synthetic
+io, the saved block verifying) and
 `tests/browser/v31-studio-workflows.cjs` (`measure-from-studio`, on the loopback in three
 browsers).
 

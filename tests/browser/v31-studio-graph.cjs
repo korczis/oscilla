@@ -67,6 +67,11 @@
 //                        insert it (undoable); malformed and hostile files are refused
 //   mobile-tap-connect   375 x 812 touch: GRAPH / TIMELINE / INSPECTOR subviews; tap an output,
 //                        tap a highlighted input → connected; 44 px toolbar targets
+//   review-open-ui       V431 U10-U12: the empty graph shows a hint (gone with the first node);
+//                        Play is "Play the Studio" in the toolbar and the compact widget and
+//                        only aria-pressed says it plays; each subview tab controls a tabpanel
+//   phone-port-targets   V431 U9, U10 at 390 x 844 touch: after Frame all every port target is
+//                        at least 24 px tall; the empty-graph hint shows on the phone
 //   light-theme          node titles, port labels and cables keep contrast on the light theme
 //   screenshots          tests/visual/out-studio/ (not committed): desktop, phone, light
 //   no-console-errors
@@ -1294,7 +1299,16 @@ function defineChecks() {
       await H.fresh(page);
       const id = await page.evaluate(() => window.OSCILLA.studio.store.dispatch({ type: 'NODE_ADD',
         nodeType: 'scope', position: { x: 240, y: 340 } }).created.nodes[0]);
-      await page.evaluate(() => window.OSCILLA.studio.editor.frameAll());
+      // On a coarse pointer a fit keeps ports >= 24 px (V431 U9), so the whole graph no longer
+      // fits a 375 px canvas: frame the two nodes this gesture joins, as a user would (F), with
+      // the canvas scrolled into the window.
+      await page.evaluate((nid) => {
+        const s = window.OSCILLA.studio;
+        s.store.dispatch({ type: 'SELECTION_CHANGE', selection: { nodes: ['env-1', nid] } });
+        s.editor.frameSelection();
+        s.store.dispatch({ type: 'SELECTION_CHANGE', selection: {} });
+        document.querySelector('.osc-sg-viewport').scrollIntoView({ block: 'center' });
+      }, id);
       await H.frames(page);
       const tabs = await page.evaluate(() => [...document.querySelectorAll(
         '[data-osc="studio.subview"]')].map((t) => t.getBoundingClientRect().height));
@@ -1375,6 +1389,98 @@ function defineChecks() {
     await page.screenshot({ path: path.join(OUT, `${browserName}-compact.png`) });
     await page.evaluate(() => window.OSCILLA.app.setWorkspace('studio'));
     return { ok: true };
+  });
+
+  def('review-open-ui', async ({ page }) => {
+    // V431 review #26-#28 (U10-U12): the empty graph says how to begin; Play keeps its name and
+    // carries its state in aria-pressed alone (toolbar and compact widget); the subview tabs
+    // control tab panels.
+    await H.fresh(page);
+    const hint = () => page.evaluate(() => {
+      const el = document.querySelector('[data-osc="studio.graph.empty"]');
+      if (!el) return { shown: false, text: null };
+      const r = el.getBoundingClientRect();
+      return { shown: r.width > 0 && r.height > 0 && getComputedStyle(el).display !== 'none',
+        text: el.textContent };
+    });
+    const withNodes = await hint();
+    await page.evaluate(() => {
+      const s = window.OSCILLA.studio.store;
+      s.dispatch({ type: 'NODE_REMOVE', nodeIds: s.getModel().graph.nodes.map((n) => n.id) });
+    });
+    await H.frames(page, 2);
+    const empty = await hint();
+    await page.evaluate(() => window.OSCILLA.studio.store.undo());
+    await H.frames(page, 2);
+    const restored = await hint();
+    await H.fresh(page);
+    const play = () => page.evaluate(() => ['studio.play', 'studio.compact.play'].map((k) => {
+      const b = document.querySelector(`[data-osc="${k}"]`);
+      return b ? { label: b.getAttribute('aria-label'), pressed: b.getAttribute('aria-pressed') }
+        : null;
+    }));
+    const idle = await play();
+    await page.click('[data-osc="studio.play"]');
+    await H.until(() => H.counts(page), (c) => c.playing, 3000);
+    await H.frames(page, 2);
+    const playing = await play();
+    await page.click('[data-osc="studio.stop"]');
+    await H.until(() => H.counts(page), (c) => !c.playing && c.engineNodes === 0, 3000);
+    const tabs = await page.evaluate(() => [...document.querySelectorAll(
+      '[data-osc="studio.subview"]')].map((t) => {
+      const panel = document.getElementById(t.getAttribute('aria-controls'));
+      return { id: t.id, role: panel ? panel.getAttribute('role') : null };
+    }));
+    const named = (list, pressed) => list.every((b) => b && b.label === 'Play the Studio'
+      && b.pressed === pressed);
+    return { ...H.verdict({
+      emptyHint: !withNodes.shown && empty.shown && /Empty graph/.test(empty.text || '')
+        && !restored.shown,
+      playName: named(idle, 'false') && named(playing, 'true'),
+      tabPanels: tabs.length === 3 && tabs.every((t) => t.id && t.role === 'tabpanel'),
+    }), withNodes, empty, restored, idle, playing, tabs };
+  });
+
+  def('phone-port-targets', async ({ browser, baseUrl }) => {
+    // V431 U9 (#21) and U10 (#26) at 390 x 844 touch: Frame all keeps every port target at
+    // least 24 px tall on a coarse pointer; the empty-graph hint shows on the phone too.
+    const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true,
+      isMobile: false });
+    const page = await ctx.newPage();
+    const errors = [];
+    page.on('pageerror', (e) => errors.push(e.message));
+    try {
+      await page.goto(baseUrl);
+      await page.waitForSelector('html[data-ready="true"]', { timeout: 15000 });
+      await page.evaluate(() => { const a = window.OSCILLA.app; a.alerts = [];
+        if (!a.safetyCollapsed) a.collapseSafety(); });
+      await H.fresh(page);
+      const ports = await page.evaluate(() => ({
+        coarse: window.matchMedia('(pointer: coarse)').matches,
+        zoom: window.OSCILLA.studio.model.view.graph.zoom,
+        heights: [...document.querySelectorAll('.osc-sg-port')]
+          .map((p) => p.getBoundingClientRect().height),
+      }));
+      await page.evaluate(() => {
+        const s = window.OSCILLA.studio.store;
+        s.dispatch({ type: 'NODE_REMOVE', nodeIds: s.getModel().graph.nodes.map((n) => n.id) });
+      });
+      await H.frames(page, 2);
+      const hint = await page.evaluate(() => {
+        const el = document.querySelector('[data-osc="studio.graph.empty"]');
+        const r = el ? el.getBoundingClientRect() : null;
+        return r ? { w: r.width, h: r.height, right: r.right, vw: window.innerWidth } : null;
+      });
+      const minH = Math.min(...ports.heights);
+      return { ...H.verdict({
+        coarse: ports.coarse,
+        portTargets: ports.heights.length > 0 && minH >= 23.5,
+        emptyHint: !!hint && hint.w > 0 && hint.h > 0 && hint.right <= hint.vw,
+        noErrors: errors.length === 0,
+      }), zoom: ports.zoom, minH, ports: ports.heights.length, hint, errors };
+    } finally {
+      await ctx.close();
+    }
   });
 
   def('no-console-errors', async ({ errors }) => ({ ok: errors.length === 0,

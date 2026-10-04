@@ -16,7 +16,7 @@
 //     sampleRate,                     the running context's rate (null before it exists)
 //     now(),                          the AUDIO clock in seconds (AudioContext.currentTime)
 //     preflight() → PreflightFacts,   opens/validates the context, permission, input, worklet
-//     captureNoise(seconds, { onScheduled, onChunk }) → Capture
+//     captureNoise(seconds, { notBefore, onScheduled, onChunk }) → Capture
 //     runStimulus(stimulus, { preRollS, postRollS, notBefore, onScheduled, onChunk }) → Capture
 //     cancel(reason),                 stop everything in flight and release session resources
 //                                     (input stream, nodes); idempotent; io stays usable
@@ -1096,6 +1096,8 @@ export function createMeasurementEngine({ io, clock, onEvent, limits, assess, an
 
   async function doMeasure(recipe, opts) {
     const calibration = opts.calibration === undefined ? null : opts.calibration;
+    // The first capture's audio-clock anchor (a Studio measurement clip's startTime).
+    const startAt = isNum(opts.startAt) ? opts.startAt : null;
     const reuse = machine.state === S.READY && samePrepared(recipe, calibration)
       && current && !current.dead;
     // A structurally invalid recipe is rejected before any state change.
@@ -1128,6 +1130,7 @@ export function createMeasurementEngine({ io, clock, onEvent, limits, assess, an
       if (plan.timing.noiseCheckS > 0) {
         go(s, S.NOISE_CHECK, { seconds: plan.timing.noiseCheckS });
         const ncap = await guard(s, io.captureNoise(plan.timing.noiseCheckS, {
+          notBefore: startAt,
           onScheduled: (t) => {
             if (s !== current || s.dead) return;
             s.currentAudio = { kind: 'noise', base: 0, start: t.captureStartAt,
@@ -1167,7 +1170,7 @@ export function createMeasurementEngine({ io, clock, onEvent, limits, assess, an
       // Runs (§219): sequential, gap on the audio clock, never overlapping.
       const runs = [];
       const captureChecks = [];
-      let notBefore = null;
+      let notBefore = noise ? null : startAt;
       for (let r = 0; r < plan.repeats; r++) {
         const { cap, times } = await captureRun(s, r, stimulus, notBefore);
         s.captures[r] = cap;
@@ -1318,7 +1321,8 @@ export function createMeasurementEngine({ io, clock, onEvent, limits, assess, an
     },
 
     /**
-     * measure(recipe, { calibration, keepRaw = false, assess }) → Promise<result>
+     * measure(recipe, { calibration, keepRaw = false, assess, startAt }) → Promise<result>
+     * startAt: audio-clock time before which the first capture is not scheduled.
      * Resolves with a COMPLETE or INVALID result; rejects with MeasurementError (code ABORTED
      * after abort(), or the mapped error code after ERROR). See the header for the shape.
      */

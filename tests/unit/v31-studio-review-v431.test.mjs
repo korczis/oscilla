@@ -127,16 +127,21 @@ test('A4 an event clip action outside gate / trigger is refused by the store', (
 
 // ---------------------------------------------------------------- the recipe is what is shown
 
+/** The measurement template with one clip's duration set, bypassing the store's validation. */
+function unvalidated(clipId, duration) {
+  const doc = copyPlain(templateModel(MEASUREMENT_TEMPLATE_ID));
+  doc.timeline.clips.find((c) => c.id === clipId).duration = duration;
+  return normalizeStudio(doc);
+}
+
 test('A3/X5 a timing clip outside the engine limits refuses the recipe; no silent default', () => {
-  const store = measurement();
-  assert.ok(store.dispatch({ type: 'CLIP_RESIZE', clipId: 'clip-2', duration: 8 }).ok,
-    'the store still accepts the edit (the editor flags it)');
-  const r = recipeFromStudio(store.getModel(), { sampleRate: SR });
+  // Since V431 #24 the store refuses these clips too; a model that never passed the store
+  // (built in code) still cannot give a recipe with engine defaults.
+  const r = recipeFromStudio(unvalidated('clip-2', 8), { sampleRate: SR });
   assert.equal(r.ok, false);
   assert.match(r.reason, /pre-roll clip lasts 8 s; the measurement engine accepts 0\.05-5 s/);
-  const tail = measurement();
-  tail.dispatch({ type: 'CLIP_RESIZE', clipId: 'clip-4', duration: 0.05 });
-  assert.match(recipeFromStudio(tail.getModel(), { sampleRate: SR }).reason, /tail clip/);
+  assert.match(recipeFromStudio(unvalidated('clip-4', 0.05), { sampleRate: SR }).reason,
+    /tail clip/);
   // In range: the clip's own duration, as before.
   const fine = measurement();
   fine.dispatch({ type: 'CLIP_RESIZE', clipId: 'clip-2', duration: 2 });
