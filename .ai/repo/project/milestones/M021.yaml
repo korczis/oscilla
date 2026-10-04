@@ -13,3 +13,11 @@ validation:
 evidence_required:
   - "milestone_verified"
 created_at: 2026-10-02
+updated_at: 2026-10-04T05:01:14Z
+evidence:
+  - covers: milestone_verified
+    type: test
+    command: "npm run release:prepare (release-gate) at release/v3.3.1 ea577ba; majordomus plan show V401 V402 V403"
+    result: "PASS: release gate passed for v3.3.1 (source c3a2a6f713dd, dist 77256947893f) on the tree containing all M021 work. V401 (Studio current-state audit), V402 (Studio ADRs 0030-0038) and V403 (features, use cases UC1-UC14, rules incl. visual-identity-lock, decisions table and ADR-recorded questions, evidence-backed claims) are DONE with recorded evidence"
+    commit: f2eeb014c3cadc9f2e905a8879a5ab0969227fdb
+    recorded_at: 2026-10-04T05:01:14Z
