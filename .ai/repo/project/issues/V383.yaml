@@ -18,7 +18,13 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-02
-updated_at: 2026-10-03T13:14:34Z
+updated_at: 2026-10-04T01:09:36Z
+started_at: 2026-10-04T01:09:25Z
+started_event: sha256:19e58b969fc868f5392dcfe8e98bb8fcb90e00261f3bd8501f7d4f2056cbe747
+verified_at: 2026-10-04T01:09:29Z
+verified_event: sha256:7c74ca5a4e38f940475af3c19907a4c4588c9d445aa24053a2a1baf5dcaf9ba5
+completed_at: 2026-10-04T01:09:36Z
+completed_event: sha256:45f26a6bbccd9888e36c56b22444feaaa2daf4e6385de268bc6fed5e4480cdb7
 evidence:
   - covers: verified
     type: test
@@ -32,3 +38,10 @@ evidence:
     result: "PARTIAL (do not mark done): re-checked at 6f47ab7; no SPL without calibration (v3-ui no-spl) and labelled smoothing/normalization enforced by tests; docs/v3/audit-baseline.md is the baseline audit only. Unmet: no recorded science, UX, expert, performance and memory audits per spec 237-242"
     commit: 6f47ab76768738e5b4fcd1754da68e72243e0930
     recorded_at: 2026-10-03T13:14:34Z
+  - covers: verified
+    type: test
+    command: "npm run release-gate"
+    result: "PASS (exit 0) on main d13ccd6 with the V383 fixes #65-#68 merged: unit 2139/0, every browser suite in chromium/firefox/webkit over file:// and http, visual + MEASURE + STUDIO references; science, UX, expert, performance, memory and file:// audits per spec 237-242 recorded in docs/v3/audits-v383.md (open items listed with reasons)"
+    artifact: "docs/v3/audits-v383.md"
+    commit: 6b58f360b314295a65eb86e35e7f95f9dd980acf
+    recorded_at: 2026-10-04T01:09:34Z

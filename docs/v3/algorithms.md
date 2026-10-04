@@ -879,7 +879,8 @@ own versioned methods (so their outputs are unchanged).
 Both are **derived views**: they return new arrays and never modify the raw response (§34, §35,
 §159). **Changed (integration)** (was G7): `smoothResponse(frequencies, magnitudeDb, fraction)`
 returns the labelled view `{ kind: 'smoothed', algorithm: SMOOTHING_ALGORITHM, fraction,
-label, smoothedDb }` ("SMOOTHED: 1/6 octave (power mean)", "RAW: unsmoothed" for 0);
+label, smoothedDb }` ("SMOOTHED: 1/6 octave (power mean)"; for 0 "RAW: no smoothing beyond the
+analysis grid", since RAW is already the band power mean of the 1/48-octave transfer grid);
 `normalizeResponse` and `impulse-response.js` `normalizeIr` results carry
 `algorithm: NORMALIZATION_ALGORITHM` (`oscilla.normalization.v1`) with their `mode`.
 
