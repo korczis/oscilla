@@ -9,7 +9,7 @@ target: advisory
 weight: 120
 difficulty: basic
 commands: [knowledge]
-claims: [about-is-last-workspace, about-provenance-matches-git]
+claims: [about-is-last-workspace, about-provenance-matches-git, about-names-current-release]
 tags: [oscilla, product-acceptance]
 ---
 
@@ -61,6 +61,12 @@ steps:
     expect:
       exit: 0
       stdout_contains: ['claim:about-provenance-matches-git +test:tests/unit/about\.test\.mjs']
+  - id: about-names-current-release-tested
+    run: ['knowledge', 'edges', '--type', 'tested_by']
+    note: 'claim about-names-current-release is proven by tests/unit/about.test.mjs'
+    expect:
+      exit: 0
+      stdout_contains: ['claim:about-names-current-release +test:tests/unit/about\.test\.mjs']
 then:
   - 'every claim this use case names resolves to a tracked implementation and a tracked test'
 ```
@@ -70,4 +76,5 @@ then:
 About is the last navigation item in Chromium, Firefox and WebKit, from file:// and from the
 /oscilla/ sub-path; it links exactly to https://github.com/korczis/oscilla,
 https://majordomus.dev/ and mailto:korczis@gmail.com, and every time it states is a commit
-time from the repository's own history.
+time from the repository's own history. Its timeline names every published release line and
+marks the line of the running build as current.

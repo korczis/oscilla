@@ -9,6 +9,14 @@ import { WORKSPACES, workspaceTitle } from '../../src/js/ui/app.js';
 
 const html = readFileSync(new URL('../../src/index.html', import.meta.url), 'utf8');
 const aboutView = html.slice(html.indexOf('id="osc-view-about"'), html.indexOf('</main>'));
+const pkg = JSON.parse(readFileSync(new URL('../../package.json', import.meta.url), 'utf8'));
+
+/** The evolution timeline: each station's state, release line (if any) and named commit. */
+function timeline() {
+  const list = aboutView.slice(aboutView.indexOf('osc-about-timeline'), aboutView.indexOf('</ol>'));
+  return [...list.matchAll(/<li data-state="([a-z]+)"(?: data-osc-release="([0-9]+\.[0-9]+)")?>\s*<span class="osc-about-step[^"]*">[^<]*<time data-osc-commit="([0-9a-f]+)"/g)]
+    .map(([, state, release, commit]) => ({ state, release: release || null, commit }));
+}
 
 function git(...args) {
   try {
@@ -74,7 +82,7 @@ test('the stated duration matches the stated timestamps', () => {
 
 test('timeline timestamps are the commit times of the commits they name', (t) => {
   const marks = [...aboutView.matchAll(/data-osc-commit="([0-9a-f]+)"\s+datetime="([^"]+)"/g)];
-  assert.equal(marks.length, 5);
+  assert.equal(marks.length, timeline().length);
   if (git('rev-parse', '--is-shallow-repository') !== 'false') {
     t.skip('no full git history here (shallow clone or no git)');
     return;
@@ -91,4 +99,42 @@ test('timeline timestamps are the commit times of the commits they name', (t) =>
     'Measure is the V3 merge');
   const studio = git('log', '-1', '--format=%s', marks[4][1]);
   assert.ok(studio.startsWith('feat(v3.1): OSCILLA V3.1 STUDIO'), 'Studio is the V3.1 merge');
+});
+
+// Rule project.about-names-current-release: the About view names the release line this build
+// belongs to as the current one, and every release line that was published. A minor or major
+// release fails here (and so in npm test, verify and the release gate) until its line is added.
+test('the About timeline marks the release line of package.json as current', () => {
+  const stations = timeline();
+  const line = pkg.version.split('-')[0].split('.').slice(0, 2).join('.');
+  const current = stations.filter((s) => s.state === 'current');
+  assert.equal(current.length, 1, 'exactly one station is current');
+  assert.equal(current[0].release, line,
+    `the current station is release line ${line} (package.json ${pkg.version}); add it to the About timeline`);
+  assert.equal(stations.at(-1), current[0], 'the current station is the last one');
+  for (const s of stations.slice(0, -1)) assert.equal(s.state, 'done', `station ${s.commit} is done`);
+  const lines = stations.filter((s) => s.release).map((s) => s.release);
+  assert.equal(new Set(lines).size, lines.length, 'each release line appears once');
+  const order = lines.map((l) => l.split('.').map(Number));
+  for (let i = 1; i < order.length; i++) {
+    const [a, b] = [order[i - 1], order[i]];
+    assert.ok(a[0] < b[0] || (a[0] === b[0] && a[1] < b[1]), `release lines ascend: ${lines}`);
+  }
+});
+
+test('every published release line is on the About timeline, at or before its release', (t) => {
+  const tags = git('tag', '--list', 'v*.*.0');
+  if (!tags) {
+    t.skip('no release tags here (CI checks out without tags)');
+    return;
+  }
+  const stations = timeline();
+  const named = new Map(stations.filter((s) => s.release).map((s) => [s.release, s.commit]));
+  for (const tag of tags.split('\n').filter((x) => /^v[0-9]+\.[0-9]+\.0$/.test(x))) {
+    const line = tag.slice(1).split('.').slice(0, 2).join('.');
+    assert.ok(named.has(line), `release line ${line} (${tag}) has a station on the About timeline`);
+    const commit = named.get(line);
+    assert.ok(git('merge-base', '--is-ancestor', commit, tag) !== null,
+      `the ${line} station's commit ${commit} is in ${tag}`);
+  }
 });

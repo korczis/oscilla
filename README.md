@@ -448,6 +448,11 @@ automated test proves how a physical speaker, room or microphone behaves.
      creates the GitHub Release with notes generated from the commits since the previous tag.
 - **Tags** are `vX.Y.Z`. V1, the original hand-written single file, is `v1.0.0` (deployed) and
   `v1.0.1` (a maintenance tag that was never deployed).
+- **About timeline.** A minor or major release adds its line to the About view's evolution
+  timeline (one station with `data-osc-release="X.Y"`, marked current) before
+  `release:prepare`. Rule `project.about-names-current-release` requires it, and
+  `tests/unit/about.test.mjs` refuses a bump to a line the page does not name, so `verify` and
+  the release gate fail until the station exists.
 - **In the app.** The About dialog shows the version, the commit (linked to GitHub, or
   "source build" for a local build), the channel and the source digest. Opening the page with
   `?debug=1` adds the full commit SHA, the source date, the artifact hash, the config schema
