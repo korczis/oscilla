@@ -1,8 +1,10 @@
 // The Worker side of the offline analysis (gap M10; ADR 0026; docs/v3/spike-audioworklet-
-// worker.md). scripts/build-analysis-worker.mjs bundles THIS file (with analysis-task.js and its
-// pure dependencies) into one classic script; the build embeds that script as a string in
-// dist/index.html and analysis-runner.js starts it from a data: URL, so the page still loads
-// no file (rule project.single-file-deliverable).
+// worker.md). scripts/build-analysis-worker.mjs bundles the closure of THIS file (analysis-task.js
+// and its pure dependencies) into one classic script, the analysis library: dist/index.html runs
+// it once as <script data-analysis> (the app imports the analysis from it) and
+// analysis-runner.js starts a Worker from a data: URL of the same text, where the entry guard
+// at the end of this file serves the analysis. The page still loads no file (rule
+// project.single-file-deliverable) and carries the analysis once.
 //
 // Protocol (one Worker per analysis; the main thread terminates it after the reply or on
 // abort):

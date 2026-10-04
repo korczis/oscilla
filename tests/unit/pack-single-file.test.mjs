@@ -27,6 +27,16 @@ test('inlines css, vendors in order, then the app, as classic scripts', () => {
   assert.doesNotMatch(html, /type="module"/);
 });
 
+test('the analysis library is its own classic script between the vendors and the app', () => {
+  const html = pack({ template, css: '', js: 'app()', analysis: 'lib()', icon,
+    vendors: [{ id: 'v1@1', code: 'one()' }] });
+  const order = [...html.matchAll(/<script([^>]*)>([^<]*)<\/script>/g)].map((m) => [m[1], m[2]]);
+  assert.deepEqual(order, [[` data-vendor="v1@1" data-sha256="${sha256('one()')}"`, 'one()'],
+    [' data-analysis', 'lib()'], [' data-app', 'app()']]);
+  assert.doesNotMatch(pack({ template, css: '', js: 'app()', icon }), /data-analysis/);
+  assert.throws(() => pack({ template, css: '', js: '', analysis: 's="<!--"', icon }), /<!--/);
+});
+
 test('replacement patterns in code are kept literally', () => {
   const js = 'a.replace(/x/g,"$&$1$\'$`")';
   assert.ok(pack({ template, css: '', js, icon }).includes(js));

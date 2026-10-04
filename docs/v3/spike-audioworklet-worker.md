@@ -223,7 +223,9 @@ file://): 18-20 kHz worst −0.000 dB at peaks 0.02 and 0.1, 20 Hz-18 kHz worst 
   main thread with `io.yield()` between steps. Since M10 a build sub-step bundles
   `measurement/analysis-worker.js` (with `analysis-task.js` and its pure dependencies) into a
   string inside `dist/index.html`, and the engine's default `analyze` starts it from a `data:`
-  URL.
+  URL. Since 2026-10-04 that string is gone: the analysis is bundled once, as the page's own
+  `<script data-analysis>`, and the Worker starts from a `data:` URL of that script's text
+  (ADR 0026, resolution note of 2026-10-04).
 - **WASM: not needed.** In the slowest engine, a full 2²¹-point analysis takes 1.0 s off the
   main thread (§83).
 
@@ -246,6 +248,10 @@ to save it.
   as written (its ban is on workers loaded from a path); `scripts/verify-dist.mjs` explains why
   and scans the embedded Worker text with every first-party pattern. `dist/index.html` grew by
   26 686 B raw and 7 705 B gzip (2 074 819 / 574 993 B, budget 2 250 000 / 630 000 B).
+  *2026-10-04:* the embedded string and the define are replaced by one copy of the analysis, the
+  analysis library (`<script data-analysis>`, imported by the app through its global, and the
+  Worker's script through a `data:` URL of its own text): ADR 0026, resolution note of
+  2026-10-04, which records the size change.
 - **Protocol.** One Worker per analysis. The Worker posts `ready`; only then the main thread
   posts the `AnalysisMessage` with `analysisTransferList(message, { keepRaw })` (captures and
   noise move, the stimulus is copied). The Worker drives the same `analysisSteps()` generator

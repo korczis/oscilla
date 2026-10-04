@@ -686,12 +686,13 @@ any number it produces. Measurements: [spike, section M10](spike-audioworklet-wo
 
 `analysisSteps(message)` (align every run → transfer per run, the representative run's transfer
 and IR from one division → aggregate) is the analysis. `analyzeInline` drives it on the calling
-thread with a yield between steps; the Worker (`analysis-worker.js`, bundled by
-`scripts/build-analysis-worker.mjs` into a string in `dist/index.html`, started from a `data:`
-URL by `analysis-runner.js`) drives the same generator and posts every step and the result. The
-engine's default is the Worker when the build embedded it and the platform has `Worker`,
-otherwise inline. Structured cloning copies every value bit for bit, so both give identical
-results (asserted byte for byte in node and in Chromium, Firefox and WebKit).
+thread with a yield between steps; the Worker (`analysis-worker.js`, started by
+`analysis-runner.js` from a `data:` URL of the page's analysis library script, the one copy of
+the analysis that `scripts/build-analysis-worker.mjs` bundles and the app imports) drives the
+same generator and posts every step and the result. The engine's default is the Worker when the
+page ran that script and the platform has `Worker`, otherwise inline. Both run the same code,
+and structured cloning copies every value bit for bit, so both give identical results (asserted
+byte for byte in node and in Chromium, Firefox and WebKit).
 
 ### Working-set estimate: `estimateAnalysisMemory({ stimulusFrames, captureFrames, runs, noiseFrames })`
 

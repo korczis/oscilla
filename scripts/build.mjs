@@ -16,16 +16,18 @@
 // top-of-file banner. No git state and no clock enter the file; the deploy stamp adds the
 // commit later (scripts/stamp-build.mjs).
 //
-// Analysis Worker (gap M10): scripts/build-analysis-worker.mjs bundles the offline analysis into
-// one Worker script first; its text enters the app bundle as the string define
-// __OSCILLA_ANALYSIS_WORKER__ and is started at runtime from a data: URL (analysis-runner.js).
+// Analysis library (gap M10; ADR 0026, resolution note of 2026-10-04): build-analysis-worker.mjs
+// bundles the offline analysis ONCE, into a classic script that pack-single-file.mjs places as
+// <script data-analysis> before the app. The app bundle imports the analysis modules from that
+// script's global (analysisLibraryPlugin), never bundles them itself (checked there), and
+// analysis-runner.js starts the Worker from a data: URL of the same script text.
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import * as esbuild from 'esbuild';
 import { pack } from './pack-single-file.mjs';
-import { ANALYSIS_WORKER_DEFINE, buildAnalysisWorker } from './build-analysis-worker.mjs';
+import { bundleWithAnalysisLibrary } from './build-analysis-worker.mjs';
 import {
   bannerComment, computeSourceDigest, readPackage, readVersion, renderRegion, sourceRecord,
 } from './release-metadata.mjs';
@@ -152,31 +154,36 @@ async function buildCss() {
   return { code: result.outputFiles[0].text.trim(), inputs: Object.keys(result.metafile.inputs) };
 }
 
-async function buildJs(worker) {
-  const result = await esbuild.build({
-    ...common,
-    entryPoints: [JS_ENTRY],
-    outfile: 'out.js',
-    format: 'iife',
-    platform: 'browser',
-    // An IIFE has no import.meta: fail instead of silently getting `{}`.
-    define: {
-      'process.env.NODE_ENV': DEBUG ? '"development"' : '"production"',
-      __OSCILLA_VERSION__: JSON.stringify(VERSION),
-      __OSCILLA_SOURCE_DIGEST__: JSON.stringify(SOURCE_DIGEST),
-      [ANALYSIS_WORKER_DEFINE]: JSON.stringify(worker.code),
-    },
-    plugins: [rawPlugin, vendorGlobalsPlugin],
-  });
+// The app bundle, built twice by bundleWithAnalysisLibrary (scripts/build-analysis-worker.mjs):
+// a pass that finds the analysis exports the app uses, then the bundle that imports them from
+// the analysis library script.
+async function buildJs() {
+  const { library, result } = await bundleWithAnalysisLibrary({ root: ROOT, minify: !DEBUG,
+    bundle: (analysisPlugin) => esbuild.build({
+      ...common,
+      entryPoints: [JS_ENTRY],
+      outfile: 'out.js',
+      format: 'iife',
+      platform: 'browser',
+      // An IIFE has no import.meta: fail instead of silently getting `{}`.
+      define: {
+        'process.env.NODE_ENV': DEBUG ? '"development"' : '"production"',
+        __OSCILLA_VERSION__: JSON.stringify(VERSION),
+        __OSCILLA_SOURCE_DIGEST__: JSON.stringify(SOURCE_DIGEST),
+      },
+      plugins: [rawPlugin, vendorGlobalsPlugin, analysisPlugin],
+    }) });
   const warnings = result.warnings.filter((w) => /import\.meta/.test(w.text));
   if (warnings.length) throw new Error(`import.meta used in an IIFE bundle: ${warnings[0].text}`);
-  return { code: result.outputFiles[0].text.trim(), inputs: Object.keys(result.metafile.inputs) };
+  // bundleWithAnalysisLibrary has checked that no analysis module is in the app bundle.
+  return { code: result.outputFiles[0].text.trim(), inputs: Object.keys(result.metafile.inputs),
+    library };
 }
 
 async function main() {
   const t0 = performance.now();
-  const worker = await buildAnalysisWorker({ root: ROOT, minify: !DEBUG });
-  const [css, js] = await Promise.all([buildCss(), buildJs(worker)]);
+  const [css, js] = await Promise.all([buildCss(), buildJs()]);
+  const { library } = js;
   const vendors = VENDOR_SCRIPTS.map(({ pkg, file }) => ({
     id: `${pkg}@${require(`${pkg}/package.json`).version}`,
     code: readFileSync(require.resolve(file), 'utf8').replace(/\r\n/g, '\n').trim(),
@@ -190,6 +197,7 @@ async function main() {
     template: readFileSync(path.join(ROOT, SRC_HTML), 'utf8').replace(/\r\n/g, '\n'),
     css: css.code,
     js: js.code,
+    analysis: library.code,
     vendors,
     notice: notice(pkgs),
     banner: bannerComment(VERSION),
@@ -210,8 +218,8 @@ async function main() {
   rmSync(path.dirname(OUT), { recursive: true, force: true });
   mkdirSync(path.dirname(OUT), { recursive: true });
   writeFileSync(OUT, html);
-  console.log(`analysis worker: ${(Buffer.byteLength(worker.code) / 1024).toFixed(1)} KiB from `
-    + `${worker.inputs.length} modules (data: URL Worker)`);
+  console.log(`analysis library: ${(Buffer.byteLength(library.code) / 1024).toFixed(1)} KiB from `
+    + `${library.inputs.length} modules, one copy (page script + data: URL Worker)`);
   console.log(`built ${rel}: ${(Buffer.byteLength(html) / 1024).toFixed(1)} KiB in `
     + `${(performance.now() - t0).toFixed(0)} ms; v${VERSION}, source ${SOURCE_DIGEST}; `
     + `contains ${[...pkgs].sort().join(', ')}`);

@@ -1,16 +1,22 @@
 // Where the offline analysis runs (gap M10; ADR 0026). engine.js calls an `analyze(message,
 // hooks) → Promise<AnalysisResult>`; this module picks the default:
 //
-//   defaultAnalyze()  the Worker (createWorkerAnalyze) when the build embedded the Worker
-//                     script (__OSCILLA_ANALYSIS_WORKER__, scripts/build-analysis-worker.mjs)
-//                     and the platform has Worker; analyzeInline otherwise (node unit tests,
-//                     test bundles without the define, a browser without Worker).
+//   defaultAnalyze()  the Worker (createWorkerAnalyze) when the page ran the analysis library
+//                     script (EMBEDDED_WORKER_SOURCE, scripts/build-analysis-worker.mjs) and
+//                     the platform has Worker; analyzeInline otherwise (node unit tests, test
+//                     bundles without the library, a browser without Worker).
 //
-// The Worker is started from a data: URL holding the embedded script, never from a path, so
-// dist/index.html stays the only file (rule project.single-file-deliverable; the spike loaded
-// data: Workers from file:// and http in Chromium, Firefox and WebKit). One Worker per
-// analysis: it is terminated when the result arrives, when the analysis fails and when the
-// engine aborts (hooks.signal), which also returns all of the Worker's memory at once.
+// One copy of the analysis (ADR 0026, resolution note of 2026-10-04): the build bundles the
+// analysis modules once, into the classic <script data-analysis> that runs before the app and
+// assigns the global ANALYSIS_LIBRARY_GLOBAL = { modules, source }. In dist the app's imports
+// of those modules (analyzeInline, analysisTransferList, ... below) resolve to that global, and
+// `source` is the text of that same script element. The Worker is started from a data: URL of
+// it, never from a path, so dist/index.html stays the only file (rule
+// project.single-file-deliverable; the spike loaded data: Workers from file:// and http in
+// Chromium, Firefox and WebKit), and the inline fallback and the Worker run the very same code.
+// One Worker per analysis: it is terminated when the result arrives, when the analysis fails
+// and when the engine aborts (hooks.signal), which also returns all of the Worker's memory at
+// once.
 //
 // Transfers: the message is posted with analysisTransferList(message, { keepRaw }) (captures
 // and the noise capture move to the Worker unless the caller keeps raw PCM; the stimulus is
@@ -22,14 +28,20 @@
 // platform) leaves every array untouched and the analysis runs inline instead; its reason is
 // in analyze.lastFallback. A failure after the post rejects (the captures have moved).
 
-/* global __OSCILLA_ANALYSIS_WORKER__ */
-
 import { analysisTransferList, analyzeInline } from './analysis-task.js';
 import { WORKER_ERROR, WORKER_READY, WORKER_RESULT, WORKER_STEP } from './analysis-worker.js';
 
-/** The Worker script embedded by the build, or null (node, test bundles). */
-export const EMBEDDED_WORKER_SOURCE = typeof __OSCILLA_ANALYSIS_WORKER__ === 'string'
-  ? __OSCILLA_ANALYSIS_WORKER__ : null;
+/** The global the analysis library script assigns (scripts/build-analysis-worker.mjs). */
+export const ANALYSIS_LIBRARY_GLOBAL = '__oscillaAnalysis';
+
+/**
+ * The Worker script: the text of the analysis library script the page ran, or null (node,
+ * test bundles without the library). Read once, when this module is evaluated.
+ */
+export const EMBEDDED_WORKER_SOURCE = (() => {
+  const lib = globalThis[ANALYSIS_LIBRARY_GLOBAL];
+  return lib && typeof lib.source === 'string' && lib.source !== '' ? lib.source : null;
+})();
 
 /** data: URL of a classic Worker script (the literal prefix is what verify-dist checks). */
 export function workerDataUrl(source) {
@@ -143,7 +155,8 @@ export function createWorkerAnalyze({ source, WorkerCtor, fallback = analyzeInli
 
 /**
  * defaultAnalyze({ source, WorkerCtor }) → analyze: the Worker when a source and a Worker
- * constructor exist (defaults: the embedded script and globalThis.Worker), else analyzeInline.
+ * constructor exist (defaults: the analysis library's script text and globalThis.Worker), else
+ * analyzeInline.
  */
 export function defaultAnalyze({ source = EMBEDDED_WORKER_SOURCE,
   WorkerCtor = typeof globalThis.Worker === 'function' ? globalThis.Worker : null } = {}) {

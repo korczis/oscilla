@@ -1,7 +1,8 @@
-// M10: the analysis in a data: URL Worker (analysis-worker.js + analysis-runner.js, bundled by
-// scripts/build-analysis-worker.mjs) and the analysis memory accounting (analysis-task.js
-// estimateAnalysisMemory / capIrLength, engine.js MEMORY_LIMIT and ANALYSIS_MEMORY). Checked:
-//   - the REAL Worker bundle, run in a node worker_thread behind a Worker-shaped shim fed the
+// M10: the analysis in a data: URL Worker (analysis-worker.js + analysis-runner.js; the Worker
+// script is the analysis library of scripts/build-analysis-worker.mjs) and the analysis memory
+// accounting (analysis-task.js estimateAnalysisMemory / capIrLength, engine.js MEMORY_LIMIT and
+// ANALYSIS_MEMORY). Checked:
+//   - the REAL library bundle, run in a node worker_thread behind a Worker-shaped shim fed the
 //     data: URL, returns results bit-identical to analyzeInline (1 and 3 runs, noise, phase),
 //     transfers the captures unless keepRaw, reports every step, and is terminated after the
 //     reply and on abort;
@@ -23,7 +24,8 @@ import {
 } from '../../src/js/measurement/analysis-task.js';
 import { serveAnalysis } from '../../src/js/measurement/analysis-worker.js';
 import {
-  createWorkerAnalyze, defaultAnalyze, workerDataUrl,
+  ANALYSIS_LIBRARY_GLOBAL as RUNNER_GLOBAL, EMBEDDED_WORKER_SOURCE, createWorkerAnalyze,
+  defaultAnalyze, workerDataUrl,
 } from '../../src/js/measurement/analysis-runner.js';
 import {
   CONTRACT_LIMITS, PREFLIGHT_THRESHOLDS, createMeasurementEngine, validateRecipe,
@@ -34,7 +36,9 @@ import {
 } from '../../src/js/experiments/schema.js';
 import { resultHash, withResultHash } from '../../src/js/experiments/hash.js';
 import { validateExperiment } from '../../src/js/experiments/validate.js';
-import { buildAnalysisWorker } from '../../scripts/build-analysis-worker.mjs';
+import {
+  ANALYSIS_LIBRARY_GLOBAL, buildAnalysisLibrary,
+} from '../../scripts/build-analysis-worker.mjs';
 
 const SR = 8000;
 const SPEC = { kind: 'log-sweep', sampleRate: SR, duration: 1, f1: 50, f2: 3000, level: 0.5,
@@ -63,7 +67,8 @@ const copyOf = (m) => ({ ...m, captures: m.captures.map((c) => c.slice()),
 const stepsless = (r) => ({ ...r, steps: r.steps.map((s) => ({ ...s, ms: null })) });
 
 // ----------------------------------------------------------------- the real Worker bundle
-const WORKER = await buildAnalysisWorker();
+// The library with every export of the closure (no page bundle to narrow it down).
+const WORKER = await buildAnalysisLibrary();
 const PREFIX = 'data:text/javascript;charset=utf-8,';
 
 /**
@@ -106,6 +111,10 @@ test('build: the Worker bundle is one classic script of src/ modules only', () =
   assert.ok(WORKER.inputs.includes('src/js/measurement/analysis-worker.js'));
   assert.ok(!/\bimportScripts\b|\bfetch\s*\(|\bimport\s*\(/.test(WORKER.code));
   assert.ok(workerDataUrl('x').startsWith(PREFIX));
+  // The runner reads the global the library assigns; under node there is none.
+  assert.equal(RUNNER_GLOBAL, ANALYSIS_LIBRARY_GLOBAL);
+  assert.ok(WORKER.code.includes(`globalThis.${ANALYSIS_LIBRARY_GLOBAL}=`));
+  assert.equal(EMBEDDED_WORKER_SOURCE, null);
 });
 
 for (const [name, opts] of [['1 run, noise', { runs: 1 }],

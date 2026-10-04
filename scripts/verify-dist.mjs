@@ -43,12 +43,14 @@ const DATA_SCRIPT_TYPES = new Set(['application/json', 'application/ld+json', 't
 // [pattern, message]. Applied to first-party (non-vendor) executable script text.
 //
 // Workers and worklets from data: URLs pass, and that is still ONE runtime file: the analysis
-// Worker (src/js/measurement/analysis-worker.js, gap M10) is bundled at build time into a string
-// literal INSIDE the first-party app script (scripts/build-analysis-worker.mjs) and started from
-// `data:text/javascript;charset=utf-8,<that text>` (analysis-runner.js workerDataUrl), exactly
-// like the capture worklet. Nothing is requested from a path or a server, and because the Worker
-// text sits in the app script it is scanned by every pattern below as well (an importScripts or
-// fetch in the Worker fails here like one in the page).
+// Worker's script is the analysis library (scripts/build-analysis-worker.mjs, gap M10; ADR 0026
+// resolution note of 2026-10-04), the first-party inline <script data-analysis> that also runs on
+// the page before the app; analysis-runner.js starts the Worker from
+// `data:text/javascript;charset=utf-8,<that element's text>` (workerDataUrl), the way the capture
+// worklet starts from its embedded text. Nothing is requested from a path or a server, and
+// because the Worker's script is a first-party script of the page it is scanned by every
+// pattern below like the app script (an importScripts or fetch in the Worker fails here like one
+// in the page).
 const FORBIDDEN_JS = [
   [/(^|[^.\w$])import\s*\(/, 'dynamic import()'],
   [/\bimport\.meta\b/, 'import.meta (module-only)'],
