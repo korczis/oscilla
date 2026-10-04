@@ -427,10 +427,13 @@ MeasurementEngine on a synthetic io, the saved block verifying) and
 `tests/browser/v31-studio-workflows.cjs` (`measure-from-studio`, on the loopback in three
 browsers).
 
+A lane on an Oscillator's `detune` owns the oscillator's `detune` AudioParam, which also carries
+the log-mapped frequency modulation's constant cents: `baseOffset(id, 'detune')` includes those
+cents, so the lane schedules them with its values and a removed lane glides back to base plus
+them (review V431 X2/X8).
+
 Known limitations: `baseOffset` is read when events are scheduled, so a changed edge offset
-reaches the lane within one look-ahead (1 s); a lane on an Oscillator's `detune` owns the
-oscillator's `detune` AudioParam, which also carries the log-mapped frequency modulation's
-constant cents (the runtime does not rewrite it while the lane plays); an offline render of a
+reaches the lane within one look-ahead (1 s); an offline render of a
 looping timeline compiles at most `MAX_PASSES_PER_WINDOW` (4096) loop passes.
 
 ## Model and action additions
