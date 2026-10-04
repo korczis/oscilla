@@ -19,6 +19,7 @@
 //     the source port type and role (create-node-from-cable, §66)
 //   firstCompatibleInput(def, sourcePort) -> port | null
 //   compiledStatus(plan) -> Map nodeId -> { status, reason }
+//   runtimeStatus(model, runtime) -> { nodes: Map, edges: Map }   what the running graph plays
 //
 // INVARIANT: probeConnection asks the same validator the store uses (validateStudioModel on the
 // model plus the candidate edge), so the live feedback of a cable drag and the store's verdict
@@ -78,6 +79,53 @@ export function compiledEdgeStatus(plan) {
   if (!plan || !plan.edges) return out;
   for (const [id, e] of plan.edges) out.set(id, { status: e.status, reason: e.reason || null });
   return out;
+}
+
+/** Reason of a model node or edge the running graph does not reflect (runtimeStatus). */
+export const notInRuntimeText = (lastError) => 'Not in the running graph: the last update was '
+  + `refused${lastError && lastError.message ? ` (${lastError.message})` : ''}. The last working `
+  + 'graph keeps playing.';
+
+/**
+ * Node and edge status from the RUNNING Studio runtime (runtime.js: plan, nodes, edges,
+ * lastError), the same shape as compiledStatus / compiledEdgeStatus (V431 review #15). A node
+ * shows its live handle's status (a Microphone waiting for permission, a builder that degraded
+ * at run time), an edge its route's. A model node or edge the runtime's plan does not reflect
+ * (the plan is of another model and the node's type or parameters, or the edge, differ) is
+ * `degraded` / `inactive` with the reason, so a graph that is not playing never looks live.
+ */
+export function runtimeStatus(model, runtime) {
+  const plan = runtime.plan;
+  const current = plan.model === model;
+  const reason = notInRuntimeText(runtime.lastError);
+  const planEdges = !current && plan.model
+    ? new Map(plan.model.graph.edges.map((e) => [e.id, e])) : null;
+  const nodes = new Map();
+  const stale = new Set();
+  for (const node of model.graph.nodes) {
+    const pn = plan.nodes.get(node.id);
+    if (!pn || (!current && (pn.type !== node.type || pn.params !== node.params))) {
+      stale.add(node.id);
+      nodes.set(node.id, { status: 'degraded', reason });
+      continue;
+    }
+    const h = runtime.nodes.get(node.id);
+    const st = h && h.status ? h : pn;
+    nodes.set(node.id, { status: st.status, reason: st.reason || null });
+  }
+  const edges = new Map();
+  for (const e of model.graph.edges) {
+    const pe = plan.edges.get(e.id);
+    if (!pe || stale.has(e.from.node) || stale.has(e.to.node)
+      || (planEdges && planEdges.get(e.id) !== e)) {
+      edges.set(e.id, { status: 'inactive', reason });
+      continue;
+    }
+    const eh = runtime.edges.get(e.id);
+    const st = eh && eh.status ? eh : pe;
+    edges.set(e.id, { status: st.status, reason: st.reason || null });
+  }
+  return { nodes, edges };
 }
 
 /** The filter adapter's reason for not applying Q modulation (adapters/nodes.js modTarget). */

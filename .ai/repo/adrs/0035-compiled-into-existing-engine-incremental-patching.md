@@ -85,3 +85,39 @@ Proposed:
   Measurement templates, edits during playback show no click above the existing click-check
   threshold, and node counts return to zero after stop. It is revised if an edit class
   cannot be patched without a click, which then gets its own documented rebuild path.
+
+## Resolution notes
+
+Appended; the sections above are left as written on 2026-10-02, and the status stays
+`proposed`.
+
+### 2026-10-04: "the model change is refused" is enforced by a commit gate (V431 review #15)
+
+The V431 review (finding #15, A6) showed the store committing first and the runtime failing
+afterwards: with an injected `createBiquadFilter` throw while playing, dispatch returned ok,
+the store moved to revision 2, the runtime stayed on revision 1 with `lastError: prepare`, and
+the node card looked healthy. The decision above stands; the fix makes the code keep it.
+
+- **Refused, not kept.** Dispatch, undo and redo are synchronous and so is `runtime.apply`, so
+  the runtime can answer before the store commits. The store asks an injected commit gate
+  (`src/js/studio/actions.js` `gate`) before every model change. While playing, the
+  workspace's gate is `transport.admit` (`src/js/studio/transport.js`), which applies the new
+  model to the running graph first. If the transaction fails (validate or prepare), the
+  edit is refused: dispatch returns `{ ok: false, refused: true, phase, reason }`, and the
+  model, revision, selection, undo stack and redo stack stay as they were. The runtime keeps
+  its last good revision and plan. A refused undo or redo leaves its entry where it was. A
+  refused return to a cancelled gesture's start keeps the gesture's edit as one undo entry.
+  The workspace announces the reason assertively and shows it in the Studio warning line.
+  While stopped, every valid edit commits, and PLAY applies the model. A store with no gate
+  (the offline render, tests) keeps the earlier behaviour: the runtime keeps its last good
+  graph, and the next apply retries.
+- **Order.** The prepare and the runtime's own commit and crossfade happen inside the gate,
+  just before the store commits, in the same synchronous task, so nothing can observe the
+  runtime ahead of the model. A split prepare/commit API in the runtime was not needed.
+- **Status from the runtime.** While the runtime runs, node and edge status come from it
+  (`src/js/ui/studio/graph-view.js` `runtimeStatus`, selected by `src/js/ui/studio/workspace.js`
+  `studioStatus`): live handle and route status, and `degraded` / `inactive` with the reason
+  for anything in the model that the running plan does not hold. While stopped, status comes
+  from a compile of the model, as before.
+- Proven by `tests/unit/v431-studio-refused-edit.test.mjs`. Each of its four tests fails on
+  the code before the fix.

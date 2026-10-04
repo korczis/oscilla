@@ -22,6 +22,7 @@
 //   history.record({ label, before, after, actionType })   (absorbed while a gesture is open)
 //   history.beginGesture(label, model), history.endGesture(model) -> entry | null
 //   history.cancelGesture() -> model at gesture begin | null
+//   history.gestureStart() -> model at the open gesture's begin | null (nothing changes)
 //   history.undo() -> entry | null (caller restores entry.before); history.redo() -> entry | null
 //   history.canUndo(), canRedo(), undoLabel(), redoLabel(), depth() -> { undo, redo },
 //   history.inGesture(), history.clear()
@@ -85,6 +86,7 @@ export function createHistory({ limit = STUDIO_HISTORY_LIMIT } = {}) {
       redoStack.push(...g.clearedRedo);
       return g.before;
     },
+    gestureStart: () => (gesture ? gesture.before : null),
     inGesture: () => !!gesture,
     undo() {
       const e = undoStack.pop();

@@ -274,6 +274,16 @@ undoable). Every committed model passes `assertPlainData`: an action that would 
 function or a prototype key into the model is refused. `debugInfo()` exposes undo/redo depth, last action,
 revision and counts for the debug mode (§52, §177).
 
+Commit gate (ADR 0035, V431 review #15): `createStudioStore(model, { gate })` asks
+`gate(next, { reason, action, label, revision })` before it commits a dispatch, an undo, a redo
+or a return to a cancelled gesture's start. `revision` is the revision the commit will get.
+The gate returns null to accept. It returns `{ ok: false, reason, phase }` to refuse, and a
+gate that throws also refuses. A refused dispatch returns `{ ok: false, refused: true, phase,
+reason }` and changes nothing: not the model, the revision, the selection, the undo stack or
+the redo stack. A refused undo or redo leaves its entry in place. A refused cancel keeps the
+gesture's edit as one undo entry. The Studio workspace passes `transport.admit`, so while
+playing, an edit the running graph cannot prepare is refused instead of committed.
+
 ## Decisions recorded in code
 
 Values future work depends on (specification §19). They were first listed here as candidates for
@@ -300,8 +310,8 @@ fails when a value or a cited line stops matching the code.
 | Timeline zoom bounds | 4-4000 px/s | `TIMELINE_ZOOM` | `src/js/ui/studio/timeline-view.js:26` |
 | Timeline snap default | 0.1 s time grid | `EDITOR_DEFAULT_SNAP` | `src/js/ui/studio/timeline-view.js:37` |
 | Maximum node import count | 512 nodes | `STUDIO_IMPORT_LIMITS` | `src/js/studio/validate.js:73` |
-| Undo history limit | 200 entries | `STUDIO_HISTORY_LIMIT` | `src/js/studio/history.js:33` |
-| Paste and duplicate offset | (24, 24) units | `PASTE_OFFSET` | `src/js/studio/actions.js:61` |
+| Undo history limit | 200 entries | `STUDIO_HISTORY_LIMIT` | `src/js/studio/history.js:34` |
+| Paste and duplicate offset | (24, 24) units | `PASTE_OFFSET` | `src/js/studio/actions.js:72` |
 <!-- studio-decisions:end -->
 
 The model stores the graph view's zoom as any finite number (`src/js/studio/schema.js:356`,
