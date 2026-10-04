@@ -174,7 +174,7 @@ filter class is claimed. An experiment saved from Measure does not store band le
 ### Measurement quality
 
 Every measurement is rated GOOD, USABLE, POOR or INVALID by a versioned rule set
-(`oscilla.confidence.v3` for new measurements; v1 and v2 are kept so stored ratings reproduce). The rules use named metrics: signal-to-noise, clipping, dropouts,
+(`oscilla.confidence.v4` for new measurements; v1-v3 are kept so stored ratings reproduce). The rules use named metrics: signal-to-noise, clipping, dropouts,
 discontinuities, frequency coverage and resolution, repeatability, and calibration. Each
 rating comes with its reasons, and each reason carries its value and unit. A check that was
 not made reads NOT MEASURED. Severe clipping, an empty capture, or a dropout or discontinuity

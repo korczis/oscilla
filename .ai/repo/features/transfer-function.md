@@ -24,7 +24,8 @@ tags: [v3, measurement]
 rendered canonical sweep with band-limited regularisation (ADR 0021) and resamples the
 result onto a log-frequency grid. `align.js` finds the lag by cross-correlation,
 `smoothing.js` derives fractional-octave and normalised views without touching the raw
-curve, and every result carries `oscilla.transfer.v1` (ADR 0024). The valid range ends where
+curve, and every result carries its algorithm ID, `oscilla.transfer.v3` by default with v1 and v2
+retained (ADR 0024). The valid range ends where
 the stimulus has no energy or, with a noise check, where the signal is less than 10 dB above
 the noise.
 
