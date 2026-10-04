@@ -50,7 +50,7 @@ changes, change it here in the same commit.
    ▼
  EXPERIMENT   ui/measure-experiment.js → experiments/schema.js → hash.js → encode.js
               → store.js (IndexedDB oscilla-experiments, or memory)
-              ⇄ export / import (validate.js, migrate.js) → compare.js, csv.js
+              ⇄ export / import (validate.js, migrate.js) → compare.js (semantic-diff.js), csv.js
 
  UI adapters  ui/measure.js, ui/experiments.js: engine events and results → the pure
               reducers and view builders of measurement/views/ → charts/measure-charts.js.
@@ -166,7 +166,14 @@ put and get, and keeps it in the IndexedDB database `oscilla-experiments` (objec
 `experiments` and `summaries`). When that database cannot be opened, it falls back to a memory
 store and says so. A stored completed run is never rewritten: `put` refuses a change
 (`immutable`), and rename goes through `annotate`, which touches only the name and the
-annotation notes (ADR 0040). Export writes the same file form. Import goes through `validate.js` (an
+annotation notes (ADR 0040) and the baseline mark (ADR 0041: `annotations.baseline`, at most one
+per store; marking a run clears the previous mark in the same transaction, a `put` of a marked
+record while another is the baseline is refused with `conflict`). Export writes the same file
+form. `semantic-diff.js` `runChanges(a, b)` lists the typed changes between two runs by domain
+(execution, presentation or metadata, with units from its descriptors, the algorithm registry
+and the Studio node registry); `compare.js` builds its N-way differences from the same
+descriptors and adds `semantic`. The Studio part is `studio/diff.js` `studioChanges`, injected
+by `compare-view.js`, so the experiment layer never imports the Studio layer. Import goes through `validate.js` (an
 untrusted input with size, type, finiteness, algorithm-ID and hash checks) and `migrate.js`.
 Why a recipe and an experiment are separate: ADR 0019. Why IndexedDB with export as the
 durable path: ADR 0022. Why schema versions are independent integers: ADR 0023.
@@ -199,6 +206,7 @@ src/js/calibration/   profile.js  parse.js  export.js  interpolate.js  level.js 
                       device-id.js  reference.js
 src/js/core/          url-state-measure.js (the MEASURE recipe in the URL hash)
 src/js/experiments/   schema.js  migrate.js  validate.js  hash.js  csv.js  store.js  compare.js
+                      semantic-diff.js
                       canonical-json.js  encode.js
 src/js/ui/            measure.js  measure-experiment.js  experiments.js
 src/js/charts/        measure-charts.js
@@ -457,7 +465,7 @@ Experiment = { kind: 'oscilla-experiment', schemaVersion: 2, oscillaVersion, osc
     duplicateOf? /* the experiment a duplicate copies (ADR 0040) */,
     build /* { version, commit, shortCommit, sourceDate, channel, dirty, repository,
       sourceDigest?, artifactSha256? }|null */ },
-  annotations? /* { notes }: user metadata, like name; no hash covers it */ }
+  annotations? /* { notes?, baseline?: true }: user metadata, like name; no hash covers it */ }
 // ADR 0040: a stored run with a stamped resultHash is immutable. store.put of it is a no-op when
 // identical, else ExperimentStoreError 'immutable' (err.fields); name / annotations change only
 // through store.annotate(id, { name, notes }); duplicateExperiment(e, { id, name }) keeps facts,
@@ -466,7 +474,13 @@ Experiment = { kind: 'oscilla-experiment', schemaVersion: 2, oscillaVersion, osc
 // or null (never one run's transfer); validate.js enforces it
 resultsFromMeasurement(engineResult, { runTransfers: false|true|[run indices] })
   -> { transfer, ir, rta: null, aggregate?, runTransfers? }   // schema.js
+// experiments/semantic-diff.js (ADR 0041)
+runChanges(a, b, { studioChanges }) -> [{ domain, path, kind: 'added'|'removed'|'changed'|
+  'unchanged', class: 'execution'|'presentation'|'metadata', before, after, unit?, label,
+  note? }]   // domains: recipe algorithms calibration conditions studio build result metadata
 // experiments/compare.js
+compareExperiments(list, { studioChanges }) -> { common, differences, compatible, warnings,
+  sameConfiguration, semantic: [{ index, changes /* runChanges(list[0], list[index]) */ }] }
 responseOf(experiment|TransferResult|AggregateResult) -> { kind: 'transfer'|'aggregate'|
   'aggregate-centre', frequencies, magnitudeDb, validRange, lowerDb, upperDb, dispersion,
   runs, method }|null          // the aggregate when present (≥ 2 runs), else the transfer

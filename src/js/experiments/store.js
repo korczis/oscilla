@@ -6,7 +6,7 @@
 //   createMemoryStore({ knownAlgorithms }) -> Store        (same API, nothing persists)
 //   openExperimentStoreOrMemory(opts) -> Promise<{ store, persistent, error }>
 //   Store = { kind: 'indexeddb'|'memory', list(), get(id), put(experiment),
-//             annotate(id, { name, notes }), delete(id), estimate(), close(),
+//             annotate(id, { name, notes, baseline }), delete(id), estimate(), close(),
 //             listStudio({ kind }), getStudio(id), putStudio(record), deleteStudio(id) }
 //
 // Records are stored in the portable file form (schema.serializeExperiment: EncodedArray
@@ -21,12 +21,17 @@
 // METADATA_KEYS) — changes only through annotate(id, { name, notes }), which reads the record,
 // applies schema.js annotateExperiment and verifies that no execution fact moved before it
 // writes. An unstamped record (resultHash null: still being measured) may be replaced.
+// Baseline (ADR 0041): at most one stored experiment carries annotations.baseline. annotate(id,
+// { baseline: true }) clears the mark on any other record in the same write (transaction), and
+// put() of a marked record while another one is the baseline is refused with code 'conflict'.
+// list() rows carry `baseline: true` for the marked record.
 // Deletion happens only through delete(id): the upgrade function creates stores and never
 // removes data (§225). Every failure rejects with an ExperimentStoreError whose `code` is
 //   'unavailable' (no IndexedDB, open failed or blocked), 'quota' (QuotaExceededError),
 //   'invalid' (put of an experiment that fails validation), 'corrupt' (stored record fails
 //   validation), 'immutable' (put that would change a completed run), 'missing' (annotate of
-//   an id that is not stored), 'failed' (any other storage error).
+//   an id that is not stored), 'conflict' (put of a baseline while another record is the
+//   baseline), 'failed' (any other storage error).
 // The app keeps working without persistence (§227): openExperimentStoreOrMemory falls back to
 // the memory store and says so.
 //
@@ -42,6 +47,7 @@
 
 import {
   serializeExperiment, formatErrors, annotateExperiment, executionFactChanges, isMetadataPath,
+  isBaseline,
 } from './schema.js';
 import { validateExperiment } from './validate.js';
 
@@ -196,7 +202,18 @@ export function summaryRecord(doc, sizeBytes) {
     oscillaVersion: doc.oscillaVersion,
     status: doc.quality ? doc.quality.status : null,
     sizeBytes,
+    ...(isBaseline(doc) ? { baseline: true } : {}),
   };
+}
+
+/** Ids of the other baseline rows; refuses a put of a baseline while one exists (ADR 0041). */
+function otherBaselines(rows, id, prepared) {
+  const ids = rows.filter((r) => r.baseline && r.experimentId !== id).map((r) => r.experimentId);
+  if (prepared && ids.length && isBaseline(prepared.experiment)) {
+    throw new ExperimentStoreError('conflict', `experiment ${id} is marked as the baseline but `
+      + `${ids[0]} already is; mark the baseline through annotate`);
+  }
+  return ids;
 }
 
 // Validate + serialize for writing: { experiment (validated, migrated), doc, summary }.
@@ -267,12 +284,18 @@ export function createMemoryStore({ knownAlgorithms } = {}) {
     put: (experiment) => wrap('put', () => {
       const prepared = prepare(experiment, knownAlgorithms);
       const id = prepared.doc.experimentId;
-      if (replaceVerdict(read(id), prepared.experiment) === 'write') write(prepared);
+      const verdict = replaceVerdict(read(id), prepared.experiment);
+      otherBaselines([...summaries.values()], id, prepared);
+      if (verdict === 'write') write(prepared);
       return id;
     }),
     annotate: (id, meta) => wrap('annotate', () => {
       const old = read(id);
       const { prepared, verdict } = prepareAnnotation(old, id, meta, knownAlgorithms);
+      const clear = meta && meta.baseline === true
+        ? otherBaselines([...summaries.values()], id).map((o) => prepareAnnotation(read(o), o,
+          { baseline: false }, knownAlgorithms).prepared) : [];
+      clear.forEach(write);
       if (verdict === 'write') write(prepared);
       return verdict === 'write' ? prepared.experiment : old;
     }),
@@ -355,6 +378,7 @@ export function openExperimentStore({ indexedDB, name = DB_NAME, storage = null,
 function idbStore(db, storage, knownAlgorithms) {
   const readIn = (tx, id) => request(tx.objectStore(RECORDS).get(id))
     .then((doc) => (doc == null ? null : decodeStored(doc, knownAlgorithms, id)));
+  const rowsIn = (tx) => request(tx.objectStore(SUMMARIES).getAll());
   const writeIn = (tx, { doc, summary }) => Promise.all([
     request(tx.objectStore(RECORDS).put(doc)),
     request(tx.objectStore(SUMMARIES).put(summary)),
@@ -409,14 +433,21 @@ function idbStore(db, storage, knownAlgorithms) {
       }
       const id = prepared.doc.experimentId;
       // Read, check and write in ONE transaction, so no other write slips in between.
-      return run('put', [RECORDS, SUMMARIES], 'readwrite', (tx) => readIn(tx, id)
-        .then((old) => (replaceVerdict(old, prepared.experiment) === 'write'
-          ? writeIn(tx, prepared) : null))).then(() => id);
+      return run('put', [RECORDS, SUMMARIES], 'readwrite', (tx) => Promise.all([readIn(tx, id),
+        rowsIn(tx)]).then(([old, rows]) => {
+        const verdict = replaceVerdict(old, prepared.experiment);
+        otherBaselines(rows, id, prepared);
+        return verdict === 'write' ? writeIn(tx, prepared) : null;
+      })).then(() => id);
     },
     annotate: (id, meta) => run('annotate', [RECORDS, SUMMARIES], 'readwrite',
-      (tx) => readIn(tx, id).then((old) => {
+      (tx) => Promise.all([readIn(tx, id), rowsIn(tx)]).then(([old, rows]) => {
         const { prepared, verdict } = prepareAnnotation(old, id, meta, knownAlgorithms);
-        return verdict === 'write' ? writeIn(tx, prepared).then(() => prepared.experiment) : old;
+        const clear = meta && meta.baseline === true ? otherBaselines(rows, id) : [];
+        return Promise.all(clear.map((o) => readIn(tx, o).then((x) => writeIn(tx,
+          prepareAnnotation(x, o, { baseline: false }, knownAlgorithms).prepared))))
+          .then(() => (verdict === 'write' ? writeIn(tx, prepared)
+            .then(() => prepared.experiment) : old));
       })),
     delete: (id) => run('delete', [RECORDS, SUMMARIES], 'readwrite', (tx) => {
       const records = tx.objectStore(RECORDS);

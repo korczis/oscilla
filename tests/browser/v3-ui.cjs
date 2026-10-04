@@ -60,6 +60,12 @@
 //   experiments-ir          (V356) compare A, B (equivalent): the IR overlay is drawn (two curves,
 //                           -5..200 ms re each direct peak, original scale, no IR A − B) beside
 //                           A − B; A, C (not equivalent): refused with the reason, no chart
+//   experiments-changes     (ADR 0041) compare A, C: the semantic change list (a real list under
+//                           h4/h5/h6 headings) names "Stimulus f1: 20 Hz → 50 Hz" in an open
+//                           Recipe group and the name change in a collapsed Metadata group that
+//                           Enter on its summary opens; nothing causal is said; C marked as the
+//                           baseline (aria-pressed, BASELINE chip) makes one selected run compare
+//                           against it (C first); the list fits 390 px; the mark is cleared again
 //   calibration-export      (V315) Export CSV and Export JSON of the loaded profile download
 //                           deterministic files named after the profile and its id, and both
 //                           re-import (same id, name, convention); a correction profile (chosen
@@ -1088,6 +1094,99 @@ function defineChecks(fixtures) {
       abDeltaStill: /^A − B over/.test(res.ab.delta),
       acRefused: !res.ac.ok && !res.ac.shown && res.ac.series === 0
         && /not shown for non-equivalent experiments/.test(res.ac.text),
+    }) };
+  });
+
+  def('experiments-changes', async ({ page }) => {
+    await H.workspace(page, 'experiments');
+    for (const k of ['a', 'b', 'c']) {
+      await page.evaluate((t) => window.OSCILLA.app.experimentsImportText(t), fixtures[k].json);
+    }
+    const read = () => page.evaluate(() => {
+      const sec = document.querySelector('[data-osc="exp.changes"]');
+      if (!sec) return { missing: true };
+      const pair = sec.querySelector('[data-osc="exp.changePair"]');
+      const groups = [...sec.querySelectorAll('details')];
+      const r = sec.getBoundingClientRect();
+      return {
+        shown: sec.offsetParent !== null,
+        h4: sec.querySelectorAll('h4').length, h5: [...sec.querySelectorAll('h5')]
+          .map((h) => h.textContent), h6: sec.querySelectorAll('h6').length,
+        lists: [...sec.querySelectorAll('ul')].every((u) => u.getAttribute('role') === 'list'),
+        groups: groups.map((d) => ({ label: d.querySelector('h6').textContent, open: d.open,
+          items: [...d.querySelectorAll('li')].map((li) => li.textContent) })),
+        text: sec.textContent, pair: !!pair,
+        fits: sec.scrollWidth <= sec.clientWidth + 1 && r.right <= window.innerWidth + 1,
+        first: (window.OSCILLA.app.exps.compare && window.OSCILLA.app.exps.compare.entries[0]
+          || {}).id || null,
+      };
+    });
+    const res = {};
+    await page.evaluate(() => window.OSCILLA.app.experimentsCompare(['fixture-a', 'fixture-c']));
+    res.ac = await H.until(read, (d) => d.pair && d.groups.length >= 2, 5000);
+    // Keyboard: Enter on the collapsed group's summary opens it.
+    res.meta = res.ac.groups ? res.ac.groups.findIndex((g) => g.label === 'Metadata') : -1;
+    if (res.meta >= 0) {
+      await page.evaluate((i) => document.querySelectorAll('[data-osc="exp.changes"] details')[i]
+        .querySelector('summary').focus(), res.meta);
+      await page.keyboard.press('Enter');
+      res.opened = await H.until(() => page.evaluate((i) => document.querySelectorAll(
+        '[data-osc="exp.changes"] details')[i].open, res.meta), Boolean, 2000);
+    }
+    // Baseline: mark C through the detail panel's button, then compare one selected run.
+    await page.evaluate(() => window.OSCILLA.app.experimentsOpen('fixture-c'));
+    await H.until(() => page.evaluate(() => !!window.OSCILLA.app.exps.detail
+      && window.OSCILLA.app.exps.detail.id === 'fixture-c'), Boolean, 5000);
+    await page.click('[data-osc="exp.baseline"]');
+    res.marked = await H.until(() => page.evaluate(() => ({
+      id: window.OSCILLA.app.exps.baselineId,
+      pressed: document.querySelector('[data-osc="exp.baseline"]').getAttribute('aria-pressed'),
+      chip: [...document.querySelectorAll('[data-osc="exp.row"]')].filter((r) => [...r
+        .querySelectorAll('.osc-m-chip')].some((c) => c.offsetParent !== null
+        && c.textContent.trim() === 'BASELINE')).map((r) => r.dataset.id) })),
+    (m) => m.id === 'fixture-c' && m.pressed === 'true' && m.chip.length === 1, 5000);
+    res.canCompare = await page.evaluate(() => {
+      const app = window.OSCILLA.app;
+      app.exps.selected = [];
+      app.exps.rows = app.exps.rows.map((r) => ({ ...r, selected: false }));
+      app.experimentsToggleSelect('fixture-a');
+      return app.exps.canCompare;
+    });
+    await page.click('[data-osc="exp.compare"]');
+    res.base = await H.until(read, (d) => d.first === 'fixture-c'
+      && d.h5.some((h) => /\(baseline\)/.test(h)), 5000);
+    // 390 px wide.
+    await page.setViewportSize({ width: 390, height: 844 });
+    res.narrow = await H.until(read, (d) => d.fits, 2000);
+    await page.setViewportSize({ width: 1536, height: 1024 });
+    // Clear the mark so later checks see no baseline.
+    await page.evaluate(() => window.OSCILLA.app.experimentsSetBaseline('fixture-c', false));
+    res.cleared = await H.until(() => page.evaluate(() => window.OSCILLA.app.exps.baselineId),
+      (x) => x === null, 5000);
+    await page.evaluate(() => {
+      window.OSCILLA.app.exps.selected = [];
+      window.OSCILLA.app.alerts = [];
+    });
+    const g = (d, label) => (d.groups || []).find((x) => x.label === label) || { items: [] };
+    return { ...res, ...H.verdict({
+      section: !res.ac.missing && res.ac.shown,
+      headings: res.ac.h4 === 1 && res.ac.h5[0] === 'Changed between runs A and B'
+        && res.ac.h6 >= 2 && res.ac.lists,
+      recipe: g(res.ac, 'Recipe').open && g(res.ac, 'Recipe').items
+        .includes('Stimulus f1: 20 Hz → 50 Hz'),
+      executionFirst: !!res.ac.groups && res.ac.groups[0].open
+        && res.ac.groups.findIndex((x) => !x.open) > 0,
+      metadataCollapsed: !g(res.ac, 'Metadata').open
+        && g(res.ac, 'Metadata').items.some((t) => /^Name: /.test(t)),
+      keyboard: res.opened === true,
+      notCausal: !/\bcaused\b|because|due to/i.test(res.ac.text.replace(
+        'it does not show what caused', '')),
+      baseline: res.marked.id === 'fixture-c' && res.marked.pressed === 'true'
+        && res.marked.chip.join() === 'fixture-c',
+      againstBaseline: res.canCompare === true && res.base.first === 'fixture-c'
+        && res.base.h5[0] === 'Changed between runs A (baseline) and B',
+      narrow: res.narrow.fits,
+      cleared: res.cleared === null,
     }) };
   });
 

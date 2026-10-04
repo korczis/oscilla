@@ -1,7 +1,12 @@
 // Experiment comparison (spec §59-§60, §105). Pure; no DOM, no globals.
 //
-//   compareExperiments(list) -> { common: { field: value }, differences: [{ field, values,
-//     severity: 'info'|'warn' }], compatible, warnings: [text], sameConfiguration }
+//   compareExperiments(list, { studioChanges }) -> { common: { field: value }, differences:
+//     [{ field, values, severity: 'info'|'warn' }], compatible, warnings: [text],
+//     sameConfiguration, semantic: [{ index, changes }] }
+// semantic (ADR 0041): semantic-diff.js runChanges(list[0], list[index]) for every other
+// experiment — typed changes by domain, execution vs presentation vs metadata; list[0] is the
+// reference (the baseline when one is set). common and differences come from the same field
+// descriptors (semantic-diff.js runFields, the ones with a severity), N-way.
 // Differences in calibration, sample rate, stimulus, analysis, algorithm versions or the master
 // output gain (output.masterGain: 20·log10 of it is part of every stored magnitude, so two
 // gains offset the curves by their ratio; a recorded gain against none is a difference too) are
@@ -31,21 +36,7 @@
 
 import { canonicalJson } from './canonical-json.js';
 import { configSelection } from './hash.js';
-
-const FIELDS = [
-  ['calibration.frequency', (e) => e.calibration?.frequency?.id ?? null, 'warn'],
-  ['calibration.level', (e) => levelIdentity(e.calibration?.level), 'warn'],
-  ['measurement.sampleRate', (e) => e.measurement?.sampleRate ?? null, 'warn'],
-  ['recipe.stimulus', (e) => e.recipe?.stimulus ?? null, 'warn'],
-  ['recipe.analysis', (e) => e.recipe?.analysis ?? null, 'warn'],
-  ['recipe.repeats', (e) => e.recipe?.repeats ?? null, 'info'],
-  ['output.level', (e) => e.output?.level ?? null, 'info'],
-  ['output.masterGain', (e) => e.output?.masterGain ?? null, 'warn'],
-  ['schemaVersion', (e) => e.schemaVersion ?? null, 'info'],
-  ['oscillaVersion', (e) => e.oscillaVersion ?? null, 'info'],
-  ['oscillaCommit', (e) => e.oscillaCommit ?? null, 'info'],
-  ['input.device.label', (e) => e.input?.device?.label ?? null, 'info'],
-];
+import { runFields, runChanges } from './semantic-diff.js';
 
 const WARN_TEXT = {
   'calibration.frequency': 'different frequency calibration profiles',
@@ -59,40 +50,20 @@ const WARN_TEXT = {
     + 'of different methods',
 };
 
-function levelIdentity(l) {
-  if (!l) return null;
-  return { referenceHz: l.referenceHz, referenceDbSpl: l.referenceDbSpl,
-    observedDbRelative: l.observedDbRelative, offsetDb: l.offsetDb };
-}
-
 const same = (a, b) => canonicalJson(a) === canonicalJson(b);
 
 /** Compare two or more experiments; never modifies them. */
-export function compareExperiments(list) {
+export function compareExperiments(list, { studioChanges = null } = {}) {
   if (!Array.isArray(list) || list.length < 2) {
     throw new RangeError('compareExperiments needs at least two experiments');
   }
   const common = {};
   const differences = [];
-  const add = (field, values, severity) => {
-    const allSame = values.every((v) => same(v, values[0]));
-    if (allSame) common[field] = values[0];
+  for (const { path: field, get, severity } of runFields(list)) {
+    if (!severity) continue;
+    const values = list.map(get);
+    if (values.every((v) => same(v, values[0]))) common[field] = values[0];
     else differences.push({ field, values, severity });
-  };
-  for (const [field, get, severity] of FIELDS) add(field, list.map(get), severity);
-  const roles = new Set(list.flatMap((e) => Object.keys(e.algorithms || {})));
-  for (const role of [...roles].sort()) {
-    add(`algorithms.${role}`, list.map((e) => (e.algorithms || {})[role] ?? null), 'warn');
-  }
-  for (const kind of ['transfer', 'ir', 'rta', 'aggregate']) {
-    const ids = list.map((e) => e.results?.[kind]?.algorithm ?? null);
-    if (ids.some((x) => x !== null)) add(`results.${kind}.algorithm`, ids, 'warn');
-  }
-  const kinds = list.map(responseKind);
-  if (kinds.some((k) => k !== null)) {
-    add('results.response', kinds.map((k) => (k ? k.label : null)), 'warn');
-    const runs = kinds.map((k) => (k ? k.runs : null));
-    if (runs.some((r) => r !== null)) add('results.aggregate.runs', runs, 'info');
   }
   const warnings = differences.filter((d) => d.severity === 'warn').map((d) => {
     const text = WARN_TEXT[d.field] || `different ${d.field}`;
@@ -105,6 +76,8 @@ export function compareExperiments(list) {
     compatible: warnings.length === 0,
     warnings,
     sameConfiguration: selections.every((s) => s === selections[0]),
+    semantic: list.slice(1).map((e, i) => ({ index: i + 1,
+      changes: runChanges(list[0], e, { studioChanges }) })),
   };
 }
 
@@ -115,17 +88,6 @@ function show(v) {
 }
 
 const isRepeated = (a) => !!a && Number.isInteger(a.runs) && a.runs >= 2 && !!a.centreDb;
-
-/** The stored response kind of an experiment: { label, runs } or null (no response). */
-function responseKind(e) {
-  const r = e && e.results;
-  if (!r) return null;
-  if (isRepeated(r.aggregate)) {
-    return { label: `aggregate (${r.aggregate.method})`, runs: r.aggregate.runs };
-  }
-  if (r.transfer) return { label: 'single run', runs: null };
-  return null;
-}
 
 /**
  * responseOf(x) → { kind: 'transfer'|'aggregate'|'aggregate-centre', frequencies, magnitudeDb,

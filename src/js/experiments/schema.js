@@ -56,8 +56,10 @@
 //   measurement.runs[i].id   'run-<i + 1>' (runId): the stable identity of a repeat within its
 //                        experiment, derived from its position in the immutable run list (not a
 //                        clock); covered by result hash version 3. migrate.js 1 → 2 assigns it.
-//   annotations          optional user metadata { notes } beside `name`; neither enters a hash
-//                        and both change only through annotateExperiment (store.js annotate).
+//   annotations          optional user metadata { notes?, baseline? } beside `name`; neither
+//                        enters a hash and both change only through annotateExperiment
+//                        (store.js annotate). baseline: true marks the reference run that
+//                        comparisons default to (ADR 0041; at most one per store).
 //                        EXECUTION FACTS are every other field (executionFactChanges).
 //   provenance.duplicateOf   the experiment a duplicate was copied from (duplicateExperiment):
 //                        the same run (same facts, hashes, createdAt) under a new id, never a
@@ -75,7 +77,8 @@
 //   withResults(experiment, { startedAt, sampleRate, runs, quality, algorithms, results })
 //   repeatExperiment(experiment, { now, id, build, sampleRate }) -> a NEW Experiment (§104)
 //   duplicateExperiment(experiment, { id, name }) -> a copy of the same run (duplicateOf)
-//   annotateExperiment(experiment, { name, notes }) -> a copy with only the metadata changed
+//   annotateExperiment(experiment, { name, notes, baseline }) -> a copy, only metadata changed
+//   isBaseline(experiment) -> boolean                (annotations.baseline, ADR 0041)
 //   executionFactChanges(a, b) -> changed paths (metadata paths included, see isMetadataPath)
 //   resultsFromMeasurement(result, { runTransfers }) -> { transfer, ir, rta, aggregate?,
 //     runTransfers? }                                (an engine.js measure() result, G20)
@@ -744,7 +747,8 @@ export function repeatExperiment(experiment, { now, id, build = null, sampleRate
 /**
  * DUPLICATE (ADR 0040): the same completed run under a new id — every execution fact, both
  * hashes and createdAt unchanged (it is not a new measurement), provenance.duplicateOf = the
- * source id, and `name` (default "<name> (copy)").
+ * source id, and `name` (default "<name> (copy)"). A baseline mark is not copied (ADR 0041:
+ * at most one baseline).
  */
 export function duplicateExperiment(experiment, { id, name } = {}) {
   const e = experiment;
@@ -752,7 +756,8 @@ export function duplicateExperiment(experiment, { id, name } = {}) {
     throw new RangeError('duplicateExperiment: the duplicate needs a new valid id');
   }
   const title = typeof name === 'string' ? name : `${e.name || '(unnamed)'} (copy)`;
-  return { ...e, experimentId: id, name: title.trim().slice(0, LIMITS.nameChars),
+  return { ...annotateExperiment(e, { baseline: false }), experimentId: id,
+    name: title.trim().slice(0, LIMITS.nameChars),
     provenance: { ...e.provenance, duplicateOf: e.experimentId } };
 }
 
@@ -761,25 +766,38 @@ export const METADATA_KEYS = Object.freeze(['name', 'annotations']);
 export const isMetadataPath = (path) => METADATA_KEYS.includes(path.split('.')[0]);
 
 /**
- * A copy with only the user metadata changed: `name` (trimmed, capped) and `notes` (the
- * annotations block; '' or null removes it). Fields not given are kept; nothing else changes.
+ * A copy with only the user metadata changed: `name` (trimmed, capped), `notes` ('' or null
+ * removes them) and `baseline` (ADR 0041: true marks the run as the reference comparisons
+ * default to, false clears it; stored only as annotations.baseline = true). The annotations
+ * block is removed when it holds nothing. Fields not given are kept; nothing else changes.
  */
-export function annotateExperiment(experiment, { name, notes } = {}) {
+export function annotateExperiment(experiment, { name, notes, baseline } = {}) {
   const out = { ...experiment };
   if (name !== undefined) {
     if (typeof name !== 'string') throw new TypeError('annotate: name must be a string');
     out.name = name.trim().slice(0, LIMITS.nameChars);
   }
+  const ann = { ...(experiment.annotations || {}) };
   if (notes !== undefined) {
     if (notes !== null && typeof notes !== 'string') {
       throw new TypeError('annotate: notes must be a string or null');
     }
     const text = notes ? notes.trim().slice(0, LIMITS.notesChars) : '';
-    delete out.annotations;
-    if (text) out.annotations = { notes: text };
+    delete ann.notes;
+    if (text) ann.notes = text;
   }
+  if (baseline !== undefined) {
+    if (typeof baseline !== 'boolean') throw new TypeError('annotate: baseline must be boolean');
+    delete ann.baseline;
+    if (baseline) ann.baseline = true;
+  }
+  delete out.annotations;
+  if (Object.keys(ann).length) out.annotations = ann;
   return out;
 }
+
+/** True when the experiment is marked as the baseline (annotations.baseline, ADR 0041). */
+export const isBaseline = (e) => !!(e && e.annotations && e.annotations.baseline === true);
 
 /**
  * The paths whose canonical (serialized) values differ between two experiments: top-level

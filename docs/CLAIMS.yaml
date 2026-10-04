@@ -339,6 +339,14 @@ claims:
     status: guaranteed
     note: The compare view is in tests/unit/v3-views.test.mjs; check experiments in tests/browser/v3-ui.cjs compares an equivalent pair (delta shown) and a non-equivalent pair (refused with the reason).
 
+  - id: semantic-run-comparison
+    claim: Comparing runs lists what changed between them by domain (recipe, algorithms, calibration, conditions, Studio graph, build, result, metadata) with units, classifies Studio layout and view changes as presentation and never as execution, and compares against the one run marked as the baseline, a mark that is metadata and leaves the run immutable
+    source: .ai/repo/adrs/0041-run-comparison-semantic-execution-vs-presentation.md
+    implementation: src/js/experiments/semantic-diff.js
+    test: tests/unit/v3-semantic-compare.test.mjs
+    status: guaranteed
+    note: The Studio comparator is src/js/studio/diff.js; check experiments-changes in tests/browser/v3-ui.cjs shows the change list, the collapsed metadata group (opened by Enter), the baseline compare and the 390 px layout in three browsers. The list states differences between records; it does not attribute a response difference to any of them.
+
   - id: aggregate-primary-response
     claim: A measurement of two or more runs stores the aggregate (centre, dispersion and repeatability) as its primary response; the stored transfer is the aggregate centre marked as derived, never one run, and comparison uses the aggregate
     source: .ai/repo/adrs/0019-recipe-versus-experiment.md
