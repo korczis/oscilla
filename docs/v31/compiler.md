@@ -96,7 +96,10 @@ The runtime then instantiates the plan in order and routes it:
   combination rule realised with AudioParam summing. Several edges on one parameter add.
 - **Safety clamp**: frequency parameters keep base + upward excursion ≤ 0.95 × Nyquist of the
   running context: the base is clamped and the edges' excursion scaled down to fit; such edges
-  are listed in `debugInfo().limitedEdges`. Other parameters are not clamped at audio rate
+  are listed in `debugInfo().limitedEdges`. A frequency an automation lane owns is sized from
+  the lane's peak (the transport claims it with `setOwnedParams([{ node, param, peak }])`),
+  not from the static value the lane overrides, and a changed peak re-sizes the node on the
+  next apply (review V431 X1). Other parameters are not clamped at audio rate
   (an AudioParam sum cannot be); when base ± modulation can leave the range it is listed in
   `debugInfo().exceeds` (§242: excessive gain made visible, the limiter is a last resort).
 - Unsupported modulation targets become **inactive routes with a reason**: Q of a low- or

@@ -609,6 +609,57 @@ test('computeBases: unipolar contour, offsets, several edges and the Nyquist cla
   assert.deepStrictEqual(r6.exceeds, ['gain']);
 });
 
+test('computeBases: an automation lane\'s peak sizes the frequency headroom (V431 X1)', () => {
+  const filterDef = NODE_REGISTRY.get('filter');
+  const plan = { def: filterDef, params: { type: 'lowpass', frequency: 440, Q: 0.7, gain: 0,
+    enabled: true } };
+  const hooks = { safeMaximum: 22800 };
+  const lg = { edge: { id: 'l', kind: 'control', to: { node: 'f', port: 'frequency' },
+    props: { muted: false, polarity: 'bipolar', mapping: 'log', offset: 0, depth: 2 } },
+  handle: { status: 'active', range: [-1, 1], scale: 1200 } };
+  const lin = { edge: { id: 'm', kind: 'control', to: { node: 'f', port: 'frequency' },
+    props: { muted: false, polarity: 'bipolar', mapping: 'linear', offset: 0, depth: 5000 } },
+  handle: { status: 'active', range: [-1, 1], scale: 1 } };
+  // static 440 Hz: two octaves up fit, nothing limited
+  const free = computeBases(plan, [lg], hooks);
+  assert.strictEqual(free.gains.get('l'), 2400);
+  assert.strictEqual(free.limited.size, 0);
+  // a lane held at 20 kHz owns the frequency: the excursion fits above 20 kHz, not above 440 Hz
+  const laned = computeBases(plan, [lg], hooks, { frequency: 20000 });
+  assert.ok(Math.abs(laned.gains.get('l') - 1200 * Math.log2(22800 / 20000)) < 1e-6);
+  assert.ok(laned.limited.has('l'));
+  assert.strictEqual(laned.base.frequency.value, 440, 'the static base is not moved');
+  const linLaned = computeBases(plan, [lin], hooks, { frequency: 20000 });
+  assert.ok(Math.abs(linLaned.gains.get('m') - 2800) < 1e-6);
+  // a peak above the cap leaves no upward room, never a negative gain
+  const over = computeBases(plan, [lin], hooks, { frequency: 30000 });
+  assert.strictEqual(over.gains.get('m'), 0);
+  // a peak below the base changes nothing
+  assert.strictEqual(computeBases(plan, [lg], hooks, { frequency: 100 }).gains.get('l'), 2400);
+});
+
+test('runtime: a changed lane peak re-sizes the modulation edge without a graph edit (X1)', () => {
+  const { store, b, ids } = basicSynth();
+  b.set(ids.filter, 'frequency', 440);
+  b.edge(ids.e4, { mapping: 'log', depth: 2 });
+  const s = setup();
+  s.runtime.apply(store.getModel());
+  s.runtime.start();
+  const edge = s.runtime.edges.get(ids.e4);
+  assert.ok(Math.abs(edge.ramp.target - 2400) < EPS, 'two octaves fit above 440 Hz');
+  s.runtime.setOwnedParams([{ node: ids.filter, param: 'frequency', peak: 20000 }]);
+  const r = s.runtime.apply(store.getModel());
+  assert.ok(r.ok);
+  const cap = Math.min(NODE_REGISTRY.param('filter', 'frequency').max,
+    0.95 * s.ctx.sampleRate / 2);
+  assert.ok(Math.abs(edge.ramp.target - 1200 * Math.log2(cap / 20000)) < 1e-6,
+    `${edge.ramp.target}`);
+  assert.ok(s.runtime.debugInfo().limitedEdges.includes(ids.e4));
+  s.runtime.setOwnedParams([]);
+  s.runtime.apply(store.getModel());
+  assert.ok(Math.abs(edge.ramp.target - 2400) < EPS, 'releasing the lane restores the room');
+});
+
 // ---------------------------------------------------------------- diff and patch (§44-§45)
 
 test('diff: a parameter change updates the existing node, nothing is rebuilt', () => {
