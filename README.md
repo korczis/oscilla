@@ -445,9 +445,22 @@ automated test proves how a physical speaker, room or microphone behaves.
      result on `main` through a pull request.
   3. `npm run release:publish` is a dry run by default. With `-- --yes`, on `main`, it creates
      the annotated tag `vX.Y.Z`, pushes it, waits for the Pages deployment, verifies it, and
-     creates the GitHub Release with notes generated from the commits since the previous tag.
+     creates the GitHub Release with notes generated from the commits since the previous tag,
+     with the committed `dist/index.html` attached as `oscilla-vX.Y.Z.html`.
+  4. `npm run release:record -- --version X.Y.Z` writes the release record
+     `.ai/repo/releases/vX.Y.Z.yaml` (Majordomus `release/v1`): the tag and its commit, the
+     channel, when the GitHub Release was published, its notes, and the attached file's
+     SHA-256 and size read off the downloaded bytes, which must equal the committed
+     `dist/index.html` at the tag (the artifact digest `verify-deploy` checks). A record is
+     evidence: `-- --check` refuses one that differs from what was published, naming the
+     field. Land it on `main` by a small pull request of its own (`release/record-vX.Y.Z`).
 - **Tags** are `vX.Y.Z`. V1, the original hand-written single file, is `v1.0.0` (deployed) and
   `v1.0.1` (a maintenance tag that was never deployed).
+- **About timeline.** A minor or major release adds its line to the About view's evolution
+  timeline (one station with `data-osc-release="X.Y"`, marked current) before
+  `release:prepare`. Rule `project.about-names-current-release` requires it, and
+  `tests/unit/about.test.mjs` refuses a bump to a line the page does not name, so `verify` and
+  the release gate fail until the station exists.
 - **In the app.** The About dialog shows the version, the commit (linked to GitHub, or
   "source build" for a local build), the channel and the source digest. Opening the page with
   `?debug=1` adds the full commit SHA, the source date, the artifact hash, the config schema

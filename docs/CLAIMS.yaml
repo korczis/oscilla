@@ -207,6 +207,14 @@ claims:
     status: guaranteed
     note: Checked against git history where it is complete; a shallow clone skips the comparison and still checks the stated duration against the stated times.
 
+  - id: about-names-current-release
+    claim: The About view's evolution timeline names every published release line and marks the release line of the running build (package.json MAJOR.MINOR) as current, so a minor or major release cannot ship with a stale About page
+    source: .ai/repo/rules/project/about-names-current-release.v1.md
+    implementation: src/index.html
+    test: tests/unit/about.test.mjs
+    status: guaranteed
+    note: The current-line check reads package.json and runs everywhere, so npm test, npm run verify and npm run release-gate refuse a bump to a line the page does not name; the published-lines check reads the vX.Y.0 tags and is skipped where tags are not fetched (CI).
+
   # ---- V3 MEASURE (milestones M012-M020), on feature/v3. `npm test` runs tests/unit/v3-*.test.mjs;
   # `npm run test:measure` runs tests/browser/v3-measure.cjs and tests/browser/v3-ui.cjs; both
   # are in the release gate. Every browser check runs on a TEST CONTEXT digital loopback or a
