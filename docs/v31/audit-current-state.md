@@ -88,7 +88,7 @@ limits are in `docs/v31/signal-path.md`.
 | OSCILLA Studio CSS | `studio.css` / `studio-timeline.css` | 19 385 / 12 897 | 3 878 / 2 801 |
 | Drawflow 0.0.60 | `dist/drawflow.min.js` + `drawflow.min.css` | 48 100 | 9 207 |
 | Rete.js 2.0.6 core | `rete` + `rete-area-plugin` 2.3.2 + `rete-connection-plugin` 2.0.5 + `@babel/runtime` helpers, **no renderer** | 62 652 | 15 365 |
-| Rete.js 2.0.6 with a framework-free renderer | the above + `rete-render-utils` 2.0.3 + `rete-lit-plugin` 2.0.3 (community) + Lit 3.3.3 | 270 518 | 43 890 |
+| Rete.js 2.0.6 with a framework-free renderer | the above + `rete-render-utils` 2.0.3 + `rete-lit-plugin` 2.0.3 (community) + `lit@3.3.3` | 270 518 | 43 890 |
 | litegraph.js 0.7.18 | `build/litegraph.core.min.js` + `css/litegraph.css` (core, no node library) | 189 145 | 50 565 |
 | @comfyorg/litegraph 0.17.2 (maintained fork) | `dist/litegraph.es.js` minified + `css/litegraph.css` | 312 155 | 88 213 |
 
