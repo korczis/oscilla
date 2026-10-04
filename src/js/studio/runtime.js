@@ -31,7 +31,9 @@
 //                                  a changed peak re-sizes that node on the next apply
 //   runtime.ownedParams()          the current claims, [{ node, param }]
 //   runtime.baseOffset(id, key)    the constant part the modulation edges add to a parameter's
-//                                  base (linear edges: unipolar polarity, offset), in its unit;
+//                                  base (linear edges: unipolar polarity, offset), in its unit,
+//                                  plus the constant cents of log edges that land on the same
+//                                  AudioParam (an Oscillator's detune, V431 X2);
 //                                  an owner adds it to the values it schedules (automation.js
 //                                  combineAutomationAndModulation: actual = base + Σ edges)
 //
@@ -264,8 +266,27 @@ export function createStudioRuntime({
     const cb = bases.get(id);
     const pn = plan.nodes.get(id);
     if (!cb || !pn || !cb.base[key] || typeof pn.params[key] !== 'number') return 0;
-    const d = cb.base[key].value - pn.params[key];
+    let d = cb.base[key].value - pn.params[key];
+    // An AudioParam that also carries log-mapped modulation (an Oscillator's detune holds the
+    // frequency edges' constant cents): the owner of that param must schedule those cents too,
+    // or a lane on it drops them (V431 review X2/X8).
+    const h = handles.get(id);
+    const target = h ? modParam(h, key, 'linear') : null;
+    if (target) {
+      for (const [k, b] of Object.entries(cb.base)) {
+        if (b.cents && modParam(h, k, 'log') === target) d += b.cents;
+      }
+    }
     return Number.isFinite(d) ? d : 0;
+  }
+
+  function modParam(h, key, mapping) {
+    try {
+      const t = h.modTarget(key, mapping);
+      return t && t.param ? t.param : null;
+    } catch (e) {
+      return null;
+    }
   }
 
   // ------------------------------------------------------------ transaction
