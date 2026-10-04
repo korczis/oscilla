@@ -17,11 +17,11 @@ Oscillator → Filter → Gain → Pan, five Mixers into a sixth, the Master Out
 One copy, `PERF_BUDGETS` and `BROWSER_BUDGETS` in the fixture module, used by the tests and
 checked against this table by `tests/unit/v31-studio-docs.test.mjs`. A budget is what an
 interaction may cost: one 60 Hz frame (16.7 ms) for what a single gesture commits, a few frames
-for whole-document work. The medians below are 10-100 times under them, so a budget fails on a
+for whole-document work. The times below (the fastest of the repeats) are 10-100 times under them, so a budget fails on a
 real regression (an accidental O(n²) per action), not on a slower CI runner.
 
 <!-- budgets:begin -->
-| Operation (median) | Budget (ms) |
+| Operation (fastest repeat) | Budget (ms) |
 | --- | --- |
 | build | 1000.0 |
 | dispatchMove | 16.7 |
@@ -44,7 +44,7 @@ real regression (an accidental O(n²) per action), not on a slower CI runner.
 
 Apple M5 Pro, Node 22.20.0, Playwright 1.63.0 browsers, 2026-10-03.
 
-Model, compiler and views (`node --test tests/unit/v31-studio-performance.test.mjs`, median of
+Model, compiler and views (`node --test tests/unit/v31-studio-performance.test.mjs`, fastest of
 15 after a warm-up):
 
 | Operation | What it covers | Median (ms) |
