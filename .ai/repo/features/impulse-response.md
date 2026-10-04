@@ -22,7 +22,8 @@ tags: [v3, measurement]
 
 `src/js/measurement/impulse-response.js` returns the impulse response at its original scale
 with its peak, the capture offset and a noise-floor estimate, under
-`oscilla.ir.log-sweep.v1`; Farina's inverse filter (`oscilla.ir.farina-inverse.v1`) is the
+`oscilla.ir.log-sweep.v3` (v1 and v2 retained); Farina's inverse filter
+(`oscilla.ir.farina-inverse.v3`) is the
 test oracle (ADR 0021). `irWindow` and `normalizeIr` return new objects, so a window or a
 dB-re-peak view never changes the stored response. The Impulse response tab of the Measure
 workspace zooms to the direct sound, the early part or the whole response.

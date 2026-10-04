@@ -222,9 +222,13 @@ ALGORITHMS = { transfer: 'oscilla.transfer.v3', ir: 'oscilla.ir.log-sweep.v3',
   calibration: 'oscilla.calibration.log-interp.v1', window: 'oscilla.window.hann.v1',
   windowBlackmanHarris: 'oscilla.window.blackman-harris.v1', aggregate: 'oscilla.aggregate.v1' }
 VARIANT_OF = { irFarina: 'ir', windowBlackmanHarris: 'window' }   // describeAlgorithm family
-RETAINED_ALGORITHMS = { transfer: ['oscilla.transfer.v1'], ir: ['oscilla.ir.log-sweep.v1'],
-  irFarina: ['oscilla.ir.farina-inverse.v1'],
-  quality: ['oscilla.confidence.v1', 'oscilla.confidence.v2'] }  // superseded, still implemented
+RETAINED_ALGORITHMS = { transfer: ['oscilla.transfer.v1', 'oscilla.transfer.v2'],
+  ir: ['oscilla.ir.log-sweep.v1', 'oscilla.ir.log-sweep.v2'],
+  irFarina: ['oscilla.ir.farina-inverse.v1', 'oscilla.ir.farina-inverse.v2'],
+  clip: ['oscilla.clip.v1'], smoothing: ['oscilla.smoothing.fractional-octave.v1'],
+  rta: ['oscilla.rta.v1'], align: ['oscilla.align.xcorr.v1'],
+  quality: ['oscilla.confidence.v1', 'oscilla.confidence.v2', 'oscilla.confidence.v3'] }
+                                                     // superseded, still implemented (V382)
 KNOWN_ALGORITHM_IDS = [...ALGORITHMS values, ...retained]         // the import allow-list
 
 // stimulus.js
@@ -274,7 +278,7 @@ align(reference: Float32Array, captured: Float32Array, sampleRate, { maxLagS, mi
 // (0.5); a bare lagSamples gives phaseDeg null with phaseReason 'NO_ALIGNMENT'
 computeTransfer({ stimulus, captured, sampleRate, f1, f2, alignment, lagSamples /* default
   alignment.lagSamples */, noise, options: { phase = false, pointsPerOctave = 48,
-  algorithm = 'oscilla.transfer.v2' /* | 'oscilla.transfer.v1' (retained) */ } })
+  algorithm = 'oscilla.transfer.v3' /* | 'oscilla.transfer.v1', 'oscilla.transfer.v2' (retained) */ } })
   -> TransferResult
 TransferResult = { algorithm, sampleRate, frequencies: Float64Array /* Hz */,
   magnitudeDb: Float64Array /* raw, relative; zero power −300 */, phaseDeg: Float64Array|null,
@@ -293,8 +297,8 @@ TransferResult = { algorithm, sampleRate, frequencies: Float64Array /* Hz */,
 computeImpulseResponse({ stimulus, captured, sampleRate, f1, f2, inverse, method,
   lagSamples, algorithm /* default IR_ALGORITHMS[method]; IR_ALGORITHMS_V1[method] retained */ })
   -> IrResult
-IrResult = { algorithm /* IR_ALGORITHMS[method]: spectral 'oscilla.ir.log-sweep.v2',
-  farina-inverse 'oscilla.ir.farina-inverse.v2' (v1 retained) */,
+IrResult = { algorithm /* IR_ALGORITHMS[method]: spectral 'oscilla.ir.log-sweep.v3',
+  farina-inverse 'oscilla.ir.farina-inverse.v3' (v1 and v2 retained) */,
   method: 'spectral'|'farina-inverse', sampleRate, samples: Float32Array /* original scale */,
   peakIndex, peakTimeS, captureOffsetS,
   noiseFloorDb /* dB re peak; v2: over the full-overlap lags after the peak, null if none */,
