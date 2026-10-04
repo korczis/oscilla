@@ -17,7 +17,7 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-02
-updated_at: 2026-10-03T06:50:33Z
+updated_at: 2026-10-03T23:43:08Z
 evidence:
   - covers: verified
     type: test
@@ -25,3 +25,15 @@ evidence:
     result: "MET at 320130f (blocked behind V382): V3 features (measurement-workbench, calibration-profiles, transfer-function, impulse-response, rta, reproducible-experiments, measurement-comparison, measurement-quality), 9 V3 use cases, ADRs 0017-0029, knowledge v3 docs; validate and doctor 0 failures. Caveat: features/measurement-workbench.md says Worker planned, measurement-quality.md names confidence v2"
     commit: 320130f1a967e894002a55dd9ebb6c837eb2621f
     recorded_at: 2026-10-03T06:50:33Z
+  - covers: verified
+    type: test
+    command: "majordomus plan validate && majordomus doctor && grep -n 'oscilla\.[a-z.-]*\.v[0-9]' .ai/repo/features/transfer-function.md .ai/repo/features/impulse-response.md .ai/repo/features/measurement-quality.md && sed -n 28,52p src/js/measurement/algorithms.js"
+    result: "PARTIAL (do not mark done): dependency V382 is now done; V3 features (8, status stable), 9 V3 use cases, ADRs 0017-0029, knowledge discovery exist and validate/doctor report 0 failures; measurement-workbench.md now states the Worker correctly. Unmet: stable V3 feature records state superseded algorithm IDs as what results carry, contradicting algorithms.js at HEAD: transfer-function.md:27 'every result carries oscilla.transfer.v1' (default transfer.v3), impulse-response.md:25 'under oscilla.ir.log-sweep.v1' / farina-inverse.v1 (defaults v3), measurement-quality.md:24 'oscilla.confidence.v3' (default confidence.v4). The MET of round 1 at 320130f overlooked transfer-function.md (transfer.v2 was already the default then)"
+    commit: 34f967a063ead9085b89faf32f748e4cf9aff301
+    recorded_at: 2026-10-03T23:36:16Z
+  - covers: verified
+    type: test
+    command: "majordomus knowledge nodes | grep -E '^unknown.*features/(measurement|calibration|transfer|impulse|rta|reproducible)'"
+    result: "PARTIAL (do not mark done), supplement at 34f967a for spec 136 (knowledge discovers the canonical objects): majordomus 0.12 knowledge has no extractor rule for kind 'feature' (WARN 'source class declares kind feature which this extractor has no rule for'), so the 8 V3 feature records are discovered only as 'unknown' nodes; V3 use cases, ADRs 0017-0029 and claims are typed nodes. A tool limitation, recorded so the gap is visible; the stale algorithm IDs of the previous row remain the repository-side gap"
+    commit: 34f967a063ead9085b89faf32f748e4cf9aff301
+    recorded_at: 2026-10-03T23:43:08Z

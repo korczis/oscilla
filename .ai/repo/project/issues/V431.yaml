@@ -19,7 +19,7 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-02
-updated_at: 2026-10-03T13:14:44Z
+updated_at: 2026-10-03T23:42:51Z
 evidence:
   - covers: verified
     type: manual
@@ -33,3 +33,9 @@ evidence:
     result: "PARTIAL (do not mark done): at 6f47ab7 the 100-node/200-edge performance target is now tested with budgets (unit v31-studio-performance pass; browser large-graph-render: chromium import+render 48 ms, edit 4.1 ms; firefox 99 / 9 ms; webkit 511 / 7 ms, within BROWSER_BUDGETS) and recorded in docs/v31/performance.md; bundle budget, licence notices and no runtime network checked by verify-dist. Unmet: no recorded V3.1 cross-model architecture, UX or adversarial reviews (spec 235-237, 272)"
     commit: 6f47ab76768738e5b4fcd1754da68e72243e0930
     recorded_at: 2026-10-03T13:14:44Z
+  - covers: verified
+    type: manual
+    command: "node --test tests/unit/v31-studio-performance.test.mjs && node scripts/verify-dist.mjs && ls docs/v31 docs/v3 | grep -i review"
+    result: "PARTIAL (do not mark done): re-checked at 34f967a; 100-node/200-edge performance target tested with budgets (v31-studio-performance 2/2; docs/v31/performance.md), bundle budget, licence notices and no runtime network checked by verify-dist (pass). Unmet, unchanged: no recorded V3.1 cross-model architecture, UX or adversarial review (spec 235-237, 272); the only recorded independent review is the V3 DSP review docs/v3/dsp-review-v382.md (V382), which does not cover the Studio"
+    commit: 34f967a063ead9085b89faf32f748e4cf9aff301
+    recorded_at: 2026-10-03T23:42:51Z

@@ -21,7 +21,7 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-02
-updated_at: 2026-10-03T13:15:47Z
+updated_at: 2026-10-03T23:41:19Z
 evidence:
   - covers: verified
     type: ci
@@ -41,3 +41,9 @@ evidence:
     result: "PARTIAL (do not mark done; blocked behind V432 and V386): at 6f47ab7 v3.1.0 is tagged with a GitHub Release; Pages serves 6f47ab7 (verify-deploy PASS attempt 1/10, artifact 15e9e594b2dc); test:live 10/10 in chromium, firefox, webkit incl. the new public Studio smoke (STUDIO from navigation, Subtractive Synth renders 6 nodes / 5 cables, PLAY sounds, STOP leaves 0 engine, source and runtime nodes). Unmet: spec 270 public smoke does not open the Measurement Sweep template and check its measurement nodes; no Majordomus deployment record (spec 227, 271; .ai/repo/deployments holds only its README); the deployed 6f47ab7 carries PR #44 features under the v3.1.0 label without a new release tag"
     commit: 6f47ab76768738e5b4fcd1754da68e72243e0930
     recorded_at: 2026-10-03T13:15:47Z
+  - covers: verified
+    type: test
+    command: "npm run release:verify-deploy && npm run test:live && grep -n -i 'measurement-sweep\|measure' tests/browser/live-smoke.cjs"
+    result: "PARTIAL (do not mark done; blocked behind V432 and V386): at 34f967a v3.1.0 and v3.2.0 are tagged with GitHub Releases (v3.2.0 at e494605 carries the post-3.1.0 Studio work, closing the round-2 'features under the v3.1.0 label' gap); Pages serves 34f967a, verify-deploy PASS attempt 1/10 (bounded retry, artifact e3a3165d6b78); test:live 10/10 in chromium, firefox, webkit incl. the public Studio smoke (STUDIO from navigation, Subtractive Synth 6 nodes / 5 cables, PLAY sounds, STOP leaves 0 engine, source and runtime nodes). Unmet: spec 270 public smoke does not open the Measurement Sweep template or check its measurement nodes; spec 227/271 deployment evidence: no deployment record (.ai/repo/deployments holds only its README; deployment/v1 has no object shape for a static Pages site, so a recorded decision on where spec 227 evidence lives is still needed)"
+    commit: 34f967a063ead9085b89faf32f748e4cf9aff301
+    recorded_at: 2026-10-03T23:41:19Z

@@ -19,7 +19,7 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-02
-updated_at: 2026-10-03T13:14:30Z
+updated_at: 2026-10-03T23:40:30Z
 evidence:
   - covers: verified
     type: test
@@ -33,3 +33,9 @@ evidence:
     result: "PARTIAL (do not mark done): re-checked at 6f47ab7; Measure and Experiments follow Playground (nav-order) and the experiment management surface passes (v3-ui 19/19 in chromium, firefox, webkit). Unmet, unchanged: navigation is not PLAYGROUND, MEASURE, EXPERIMENTS, ANALYZE, SYNTHESIS, LEARN (spec 73/75): src/index.html has 12 top-level tabs (Sequencer, Analyzer, Filter Lab, Compare, Presets, ... remain), no ANALYZE consolidation"
     commit: 6f47ab76768738e5b4fcd1754da68e72243e0930
     recorded_at: 2026-10-03T13:14:30Z
+  - covers: verified
+    type: test
+    command: "node --test tests/unit/v3-ui.test.mjs && node tests/browser/v3-ui.cjs && grep -o 'data-osc=\"nav\.[a-z-]*\"' src/index.html"
+    result: "PARTIAL (do not mark done): re-checked at 34f967a; Measure and Experiments follow Playground (nav-order), the experiment management surface passes, V2 functions preserved (v3-ui unit 5/5; browser 19/19 in chromium, firefox, webkit x file:// and http). Unmet, unchanged since round 2: navigation is not PLAYGROUND, MEASURE, EXPERIMENTS, ANALYZE, SYNTHESIS, LEARN (spec 73/75: no 14 top-level tabs, an ANALYZE consolidation of analyzer/spectrogram/RTA/mic analysis): src/index.html has 12 top-level tabs (playground, measure, experiments, sequencer, analyzer, filter, synthesis, compare, learn, presets, studio, about), no ANALYZE"
+    commit: 34f967a063ead9085b89faf32f748e4cf9aff301
+    recorded_at: 2026-10-03T23:40:30Z

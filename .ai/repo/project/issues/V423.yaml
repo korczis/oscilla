@@ -18,7 +18,13 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-02
-updated_at: 2026-10-03T13:15:58Z
+updated_at: 2026-10-03T23:35:02Z
+started_at: 2026-10-03T23:34:41Z
+started_event: sha256:40d275537cfd6f2d037ccf99675c1c0747628ce3fa2872681d9c1201fcbb4228
+verified_at: 2026-10-03T23:34:50Z
+verified_event: sha256:846c0e9e9d38a67be49517956f77f6956f0c9b3bf1a288039a2eda2385a9d41d
+completed_at: 2026-10-03T23:35:02Z
+completed_event: sha256:fc912b76b47444085956fa6af021cdb54e7e29d3c80303880fa68498014ce677
 evidence:
   - covers: verified
     type: test
@@ -32,3 +38,9 @@ evidence:
     result: "MET re-verified at 6f47ab7 (still blocked behind V422): templates unit 31 pass; v31-studio-graph templates check passes in chromium, firefox, webkit"
     commit: 6f47ab76768738e5b4fcd1754da68e72243e0930
     recorded_at: 2026-10-03T13:15:58Z
+  - covers: verified
+    type: test
+    command: "node --test tests/unit/v31-studio-templates.test.mjs && node tests/browser/v31-studio-graph.cjs"
+    result: "MET re-verified at 34f967a (dependency V422 now done): templates unit 31/31 pass (Basic Tone, Subtractive Synth, Sweep Sequence, Stereo Beat, Filter Automation, Measurement Sweep as versioned validated data with pinned hashes, each compiles; Learn summary/points within bounds); v31-studio-graph templates check passes in chromium, firefox, webkit (21/21 each); v31-studio-signal-path unit 'every template projects' passes"
+    commit: 34f967a063ead9085b89faf32f748e4cf9aff301
+    recorded_at: 2026-10-03T23:34:36Z
