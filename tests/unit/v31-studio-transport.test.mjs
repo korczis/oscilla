@@ -548,7 +548,7 @@ test('gate event clips gate their Envelope; unsupported clips are listed with a 
     && Math.abs(c[2] - (at(bF, 0.25) + 0.01)) < EPS), 'gate at 0.25 s');
   assert.ok(vca.calls.some((c) => c[0] === 'exponentialRampToValueAtTime'
     && Math.abs(c[2] - (at(bF, 0.75) + 0.2)) < EPS), 'released at 0.75 s over R');
-  assert.deepEqual(s.transport.debugInfo().unplayed, [{ id: trig,
+  assert.deepEqual(s.transport.debugInfo().unplayed, [{ id: trig, code: 'event-target',
     reason: TRANSPORT_TEXT.eventTarget('Envelope 1') }]);
 });
 

@@ -347,7 +347,7 @@ touches Web Audio objects, and it does so only through the runtime's handles.
 | `admit(next, { revision })` | the store's commit gate (ADR 0035, V431 review #15). While playing, it does what `sync()` does for `next`, before the store commits it. If the runtime refuses (validate or prepare), the owned parameters go back to the current model and `{ ok: false, phase, reason }` refuses the edit. While stopped it admits everything. The workspace passes it to `createStoreHandle({ gate })` |
 | `escape({ gesture, popup, selectionMode })` | `resolveEscape` with `audioActive` = playing or the runtime running; `stop-audio` stops fast (8 ms, `STUDIO_FAST_STOP_S`) |
 | `playhead()` | `positionAt(anchor, ctx.currentTime)` while playing, else the return point |
-| `debugInfo()` | playing, anchor, voices, gates, lanes, claims, gated envelopes, owned parameters, `unplayed` (id + reason), late skips, decisions, warnings |
+| `debugInfo()` | playing, anchor, voices, gates, lanes, claims, gated envelopes, owned parameters, `unplayed` (id, code, reason), late skips, decisions, `diagnostics` (owner `transport`, coded) and `warnings` (their text) (`docs/v31/compiler.md` "Diagnostics") |
 
 Timing. There is one timer, the bookkeeping wake-up: it is armed with `scheduler.nextWakeMs`
 (half a look-ahead before the scheduled horizon, at most `TOP_UP_EVERY_MS`), calls
@@ -364,7 +364,7 @@ What plays where:
 | gate event clip on an Envelope | `handle.gate(startTime, duration)`; an envelope the timeline gates is closed at PLAY (`release`) and opened again when no gate clip targets it any more |
 | automation lane | `applyAutomation(handle.modTarget(param, 'linear').param, events)`; the parameter is owned (`runtime.setOwnedParams`), so the runtime's base glide and live updates skip it (the adapters' explicit `owned` argument, `docs/v31/compiler.md` "Owned parameters"); `runtime.baseOffset` (linear modulation offsets) is added to the scheduled values (none in the templates: exact events) |
 | measurement clip | data: `onMeasurement({ type: 'schedule', key, clipId, action, target, trackId, pass, position, startTime, endTime, duration, truncated })`, then `cancel` / `release` / `retime` / `stop` events. The Studio workspace supplies the hook (`studio/measurement-run.js`, see "Measurement clips" below) |
-| anything else | not played; listed in `debugInfo().unplayed` with its reason (`TRANSPORT_TEXT`): an event clip on a source, a `trigger` event clip, a target that is not ready |
+| anything else | not played; listed in `debugInfo().unplayed` with its code and reason (`TRANSPORT_TEXT`): an event clip on a source (`event-target`), a `trigger` event clip (`event-target`), a target that is not ready (`target-unavailable`) |
 
 Edits during playback apply `scheduler.edit`'s plan as `EDIT_POLICY` says: `cancel` disposes the
 not-yet-started voice, `schedule` plays the rebuilt item, `release` / `retime-end` call

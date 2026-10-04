@@ -6,7 +6,7 @@
 //   analyzeCycles(model, { registry }) -> { order, cycles: [{ kind, nodes, edges }] }
 //   validateStudioImport(input, limits?, { registry }) ->
 //     { ok: true, model, warnings } | { ok: false, errors, warnings }
-// Diagnostic = { code, severity: 'error'|'warning', message, path, nodeId?, edgeId?, detail? }.
+// Diagnostic = studioDiagnostic (below, owner 'validate') + { path, nodeId?, edgeId?, detail? }.
 //
 // Graph rules (errors unless noted):
 //   unknown-node-type, missing-node, unknown-port, wrong-direction, self-connection,
@@ -88,12 +88,30 @@ export const STUDIO_IMPORT_LIMITS = Object.freeze({
 
 const CTRL = /[\u0000-\u001f\u007f]/;
 
+// ---------------------------------------------------------------- the Studio diagnostic
+
+/** Who reports a Studio diagnostic (docs/v31/compiler.md "Diagnostics"). */
+export const DIAGNOSTIC_OWNERS = Object.freeze(['validate', 'compiler', 'runtime', 'transport']);
+
+/**
+ * The one Studio diagnostic shape, shared by validation, the compiler, the runtime and the
+ * transport: { code, severity: 'error' | 'warning', owner, entity: { kind, id } | null, message,
+ * details? }. `code` is the machine reason (a consumer branches on it, never on `message`, which
+ * is display prose); `entity` names the node, edge, clip or lane it is about; `details` is
+ * optional plain data (reserved, set by no producer yet). Validation adds its compatibility
+ * fields { path, nodeId?, edgeId?, detail? } (detail: display prose).
+ */
+export const studioDiagnostic = (owner, code, message, entity = null, severity = 'warning') => ({
+  code, severity, owner, entity, message });
+
 // ---------------------------------------------------------------- semantic validation
 
 function makeSink() {
   const diagnostics = [];
   const add = (severity, code, message, extra = {}) => {
-    diagnostics.push({ code, severity, message, path: '', ...extra });
+    const id = extra.nodeId || extra.edgeId;
+    diagnostics.push({ ...studioDiagnostic('validate', code, message,
+      id ? { kind: extra.nodeId ? 'node' : 'edge', id } : null, severity), path: '', ...extra });
   };
   return {
     diagnostics,
@@ -818,10 +836,10 @@ function structure(c, doc, lim, registry) {
   return true;
 }
 
-const asError = (e, code = 'invalid-structure') => ({ code, severity: 'error',
-  message: e.text, path: e.path });
+const asError = (e, code = 'invalid-structure') => ({
+  ...studioDiagnostic('validate', code, e.text, null, 'error'), path: e.path });
 const failed = (path, message, code = 'invalid-structure') => ({ ok: false, warnings: [],
-  errors: [{ code, severity: 'error', message, path }] });
+  errors: [asError({ text: message, path }, code)] });
 
 /**
  * The import front end, one implementation for validateStudioImport and migrate.js

@@ -6,7 +6,7 @@
 // here. Every node is created through `acct.track` / `acct.source` (engine accounting).
 //
 // adapter = { compiler, structural: [paramKey], rebuildWhenOwned?: [paramKey],
-//             check?(params, caps) -> reason | null, create(env) -> handle }
+//             check?(params, caps) -> reason | { code, reason } | null, create(env) -> handle }
 // env     = { ctx, hooks, acct: { track, source }, now, at, params, node, def, options }
 // handle  = { inputs: { portId: AudioNode }, outputs: { portId: AudioNode },
 //             outputRange: { portId: [lo, hi] }        control signal range (default [-1, 1]),
@@ -19,7 +19,7 @@
 //             dispose()                   the builder's own dispose (the runtime then
 //                                         disconnects and untracks every tracked node),
 //             info, status: 'ready' | 'degraded' | 'offline-only' | 'data' | 'pending',
-//             reason }
+//             code?, reason }   code: machine reason (mic-pending, mic-error)
 // `structural` keys cannot change on a running node (OscillatorNode.type, a filter type that
 // would swap the biquad the modulation is wired to, a sweep's whole schedule, ...): the
 // runtime builds a replacement node and crossfades to it (spec §45).
@@ -271,10 +271,10 @@ const microphone = {
   compiler: 'audio/microphone.js#openMicrophone',
   structural: [],
   check(params, caps) {
-    if (!caps.microphone) return MIC_UNAVAILABLE_TEXT;
+    if (!caps.microphone) return { code: 'mic-unsupported', reason: MIC_UNAVAILABLE_TEXT };
     if (!caps.inputPermission) {
-      return 'Microphone input is off. Allow it from the Microphone node; nothing is recorded or '
-        + 'uploaded.';
+      return { code: 'mic-off', reason: 'Microphone input is off. Allow it from the Microphone '
+        + 'node; nothing is recorded or uploaded.' };
     }
     return null;
   },
@@ -295,6 +295,7 @@ const microphone = {
       },
       info: { analyser: null },
       status: 'pending',
+      code: 'mic-pending',
       reason: 'Waiting for microphone permission.',
     };
     openMicrophone(ctx, hooks.navigator.mediaDevices).then((m) => {
@@ -305,9 +306,10 @@ const microphone = {
       m.source.connect(out); // analysis only: validation keeps it away from Master Output
       handle.info.analyser = m.analyser;
       handle.status = 'ready';
-      handle.reason = null;
+      handle.code = handle.reason = null;
     }, (e) => {
       handle.status = 'degraded';
+      handle.code = 'mic-error';
       handle.reason = micErrorMessage(e);
     });
     return handle;

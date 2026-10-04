@@ -18,8 +18,9 @@
 //   connectableTypes(model, from, registry) -> [type]   node types with an input that accepts
 //     the source port type and role (create-node-from-cable, §66)
 //   firstCompatibleInput(def, sourcePort) -> port | null
-//   compiledStatus(plan) -> Map nodeId -> { status, reason }
-//   runtimeStatus(model, runtime) -> { nodes: Map, edges: Map }   what the running graph plays
+//   compiledStatus(plan) -> Map nodeId -> { status, code, reason }   (code: compiler.js)
+//   runtimeStatus(model, runtime, revision?) -> { nodes: Map, edges: Map }   what the running
+//     graph plays, judged by runtime.js studioDivergence
 //
 // INVARIANT: probeConnection asks the same validator the store uses (validateStudioModel on the
 // model plus the candidate edge), so the live feedback of a cable drag and the store's verdict
@@ -29,6 +30,7 @@ import { NODE_REGISTRY } from '../../studio/registry.js';
 import { PORT_VISUALS, canConnect, validateEdgeProps } from '../../studio/ports.js';
 import { validateStudioModel } from '../../studio/validate.js';
 import { describeEdge, describeNode, describePortLabel } from '../../studio/a11y.js';
+import { studioDivergence } from '../../studio/runtime.js';
 
 /** Short category labels on node cards (text, never colour alone, §32, §167). */
 export const CATEGORY_LABELS = Object.freeze({
@@ -65,19 +67,22 @@ export function nodeWarnings(model, registry = NODE_REGISTRY) {
   return out;
 }
 
-/** Node id -> { status, reason } of a compiled plan (compiler.js compileStudio). */
+/** { status, code, reason } of a plan node or edge, a runtime handle or route. */
+const statusOf = (x) => ({ status: x.status, code: x.code || null, reason: x.reason || null });
+
+/** Node id -> { status, code, reason } of a compiled plan (compiler.js compileStudio). */
 export function compiledStatus(plan) {
   const out = new Map();
   if (!plan || !plan.nodes) return out;
-  for (const [id, n] of plan.nodes) out.set(id, { status: n.status, reason: n.reason || null });
+  for (const [id, n] of plan.nodes) out.set(id, statusOf(n));
   return out;
 }
 
-/** Edge id -> { status, reason } of a compiled plan (PlanEdge status, compiler.js). */
+/** Edge id -> { status, code, reason } of a compiled plan (PlanEdge status, compiler.js). */
 export function compiledEdgeStatus(plan) {
   const out = new Map();
   if (!plan || !plan.edges) return out;
-  for (const [id, e] of plan.edges) out.set(id, { status: e.status, reason: e.reason || null });
+  for (const [id, e] of plan.edges) out.set(id, statusOf(e));
   return out;
 }
 
@@ -90,14 +95,17 @@ export const notInRuntimeText = (lastError) => 'Not in the running graph: the la
  * Node and edge status from the RUNNING Studio runtime (runtime.js: plan, nodes, edges,
  * lastError), the same shape as compiledStatus / compiledEdgeStatus (V431 review #15). A node
  * shows its live handle's status (a Microphone waiting for permission, a builder that degraded
- * at run time), an edge its route's. A model node or edge the runtime's plan does not reflect
- * (the plan is of another model and the node's type or parameters, or the edge, differ) is
- * `degraded` / `inactive` with the reason, so a graph that is not playing never looks live.
+ * at run time), an edge its route's. When the divergence verdict (runtime.js studioDivergence,
+ * for the store `revision` when given) is not in-sync, a model node or edge the runtime's plan
+ * does not reflect (the node's type or parameters, or the edge, differ) is `degraded` /
+ * `inactive` with code `not-in-runtime` and the reason, so a graph that is not playing never
+ * looks live.
  */
-export function runtimeStatus(model, runtime) {
+export function runtimeStatus(model, runtime, revision = null) {
   const plan = runtime.plan;
-  const current = plan.model === model;
-  const reason = notInRuntimeText(runtime.lastError);
+  const verdict = studioDivergence({ model, revision }, runtime);
+  const current = verdict.state === 'in-sync';
+  const reason = notInRuntimeText(verdict.reason || runtime.lastError);
   const planEdges = !current && plan.model
     ? new Map(plan.model.graph.edges.map((e) => [e.id, e])) : null;
   const nodes = new Map();
@@ -106,24 +114,24 @@ export function runtimeStatus(model, runtime) {
     const pn = plan.nodes.get(node.id);
     if (!pn || (!current && (pn.type !== node.type || pn.params !== node.params))) {
       stale.add(node.id);
-      nodes.set(node.id, { status: 'degraded', reason });
+      nodes.set(node.id, { status: 'degraded', code: 'not-in-runtime', reason });
       continue;
     }
     const h = runtime.nodes.get(node.id);
     const st = h && h.status ? h : pn;
-    nodes.set(node.id, { status: st.status, reason: st.reason || null });
+    nodes.set(node.id, statusOf(st));
   }
   const edges = new Map();
   for (const e of model.graph.edges) {
     const pe = plan.edges.get(e.id);
     if (!pe || stale.has(e.from.node) || stale.has(e.to.node)
       || (planEdges && planEdges.get(e.id) !== e)) {
-      edges.set(e.id, { status: 'inactive', reason });
+      edges.set(e.id, { status: 'inactive', code: 'not-in-runtime', reason });
       continue;
     }
     const eh = runtime.edges.get(e.id);
     const st = eh && eh.status ? eh : pe;
-    edges.set(e.id, { status: st.status, reason: st.reason || null });
+    edges.set(e.id, statusOf(st));
   }
   return { nodes, edges };
 }

@@ -23,8 +23,14 @@
 //   transport.escape({ gesture, popup, selectionMode }) -> action   resolveEscape (§185);
 //                                                'stop-audio' stops fast (8 ms)
 //   transport.playhead() -> { position, pass, playing }   from AudioContext.currentTime (§94)
-//   transport.debugInfo(), transport.on(fn) -> off ('state' | 'ended' | 'warning'),
-//   transport.dispose(), transport.playing
+//   transport.debugInfo(), transport.on(fn) -> off ('state' | 'ended' | 'warning': a
+//                                                Diagnostic), transport.dispose(), .playing
+// Diagnostics (validate.js studioDiagnostic, owner 'transport'): debugInfo().diagnostics, and
+// debugInfo().warnings as their message text. Codes: edit-refused, sync-refused (the runtime
+// refused a model: the transport keeps the last applied one), automation-failed (entity: the
+// lane), measurement-callback-failed, timeline (a timeline-compiler warning, its prose as the
+// message). debugInfo().unplayed = [{ id, code, reason }], code: no-target, pattern-target,
+// event-target, target-unavailable, no-parameter.
 //
 // Timing (§180-§181). createTimelineScheduler (timeline-compiler.js) compiles the timeline with
 // the sequencer compiler; this module only applies what it returns, at the audio-clock times it
@@ -80,6 +86,7 @@ import {
   anchorEndTime, createTimelineScheduler, resolveEscape, safeHorizon,
 } from './timeline-compiler.js';
 import { effectiveTarget } from './timeline.js';
+import { studioDiagnostic } from './validate.js';
 
 /** Reasons shown for what the transport does not play. */
 export const TRANSPORT_TEXT = Object.freeze({
@@ -116,6 +123,8 @@ function rampAcross(events, t) {
   return next && next.method !== 'setValueAtTime' ? next.method : null;
 }
 const messageOf = (e) => (e && e.message) || String(e);
+/** The message of a failed runtime result's first diagnostic, or `fallback`. */
+const errorOf = (r, fallback) => (r.errors && r.errors[0] && r.errors[0].message) || fallback;
 
 const PATTERN_TARGETS = Object.freeze(['sequence', 'oscillator']);
 
@@ -166,9 +175,9 @@ export function createStudioTransport({
   // pattern-played oscillator's level, re-routed onto its pattern bus (levelMods).
   const levelTaps = new Map();
   const gateOwned = new Map(); // envelope id → handle (closed at PLAY, gated by the timeline)
-  const unplayed = new Map(); // clip or lane id → reason
+  const unplayed = new Map(); // clip or lane id → { code, reason }
   const decisions = [];
-  const warnings = [];
+  const warnings = []; // Diagnostics, owner 'transport'
   let scheduler = null;
   let model = null;
   let playing = false;
@@ -184,12 +193,15 @@ export function createStudioTransport({
       try { fn(type, detail); } catch (e) { /* a listener's error is its own */ }
     }
   };
-  const warn = (msg) => {
-    if (warnings.includes(msg)) return;
-    warnings.push(msg);
+  const warn = (code, msg, entity = null) => {
+    if (warnings.some((w) => w.message === msg)) return;
+    const d = studioDiagnostic('transport', code, msg, entity);
+    warnings.push(d);
     if (warnings.length > 50) warnings.shift();
-    emit('warning', msg);
+    emit('warning', d);
   };
+  const laneWarn = (id, e) => warn('automation-failed', `Automation ${id}: ${messageOf(e)}`,
+    { kind: 'lane', id });
   const record = (d) => {
     decisions.push(d);
     if (decisions.length > 500) decisions.splice(0, decisions.length - 500);
@@ -210,7 +222,9 @@ export function createStudioTransport({
   };
   const measure = (event) => {
     if (typeof onMeasurement !== 'function') return;
-    try { onMeasurement(event); } catch (e) { warn(`Measurement callback: ${messageOf(e)}`); }
+    try { onMeasurement(event); } catch (e) {
+      warn('measurement-callback-failed', `Measurement callback: ${messageOf(e)}`);
+    }
   };
   const clearTimer = () => {
     if (timer != null) hooks.timers.clearTimeout(timer);
@@ -477,7 +491,7 @@ export function createStudioTransport({
         applyAutomation(c.param, lane.events.filter((e) => e.time > end));
         lane.param = c.param;
       } catch (e) {
-        warn(`Automation ${lane.laneId}: ${messageOf(e)}`);
+        laneWarn(lane.laneId, e);
       }
     }
     // The modulation returns to the carrier with its level.
@@ -501,17 +515,18 @@ export function createStudioTransport({
 
   // ------------------------------------------------------------ playing items
 
-  function skip(it, reason) {
-    unplayed.set(it.clipId, reason);
+  function skip(it, code, reason) {
+    unplayed.set(it.clipId, { code, reason });
   }
 
   function playPattern(it) {
     const n = nodeOf(model, it.target);
-    if (!n) return skip(it, TRANSPORT_TEXT.noTarget);
+    if (!n) return skip(it, 'no-target', TRANSPORT_TEXT.noTarget);
     const h = ready(it.target);
     if (!h) {
       const raw = runtime.nodes.get(it.target);
-      return skip(it, TRANSPORT_TEXT.unavailable(n.metadata.name, raw && raw.reason));
+      return skip(it, 'target-unavailable', TRANSPORT_TEXT.unavailable(n.metadata.name,
+        raw && raw.reason));
     }
     let dest = null;
     if (n.type === 'sequence') dest = h.info && h.info.destination;
@@ -519,7 +534,9 @@ export function createStudioTransport({
       const c = claims.get(it.target);
       dest = c && c.handle === h ? c.bus : null;
     }
-    if (!dest || !h.acct) return skip(it, TRANSPORT_TEXT.patternTarget(n.metadata.name));
+    if (!dest || !h.acct) {
+      return skip(it, 'pattern-target', TRANSPORT_TEXT.patternTarget(n.metadata.name));
+    }
     const acct = h.acct;
     const own = [];
     const voice = compileSequence(it.sequence, hooks.ctx, dest, it.startTime, {
@@ -546,7 +563,7 @@ export function createStudioTransport({
   function addGate(key, it, envId, start, end, deferred = null) {
     const h = ready(envId);
     if (!h || typeof h.gate !== 'function') {
-      return skip(it, TRANSPORT_TEXT.unavailable(nameOf(envId)));
+      return skip(it, 'target-unavailable', TRANSPORT_TEXT.unavailable(nameOf(envId)));
     }
     gates.set(key, { key, itemKey: it.key, clipId: it.clipId, nodeId: envId, handle: h, start,
       end });
@@ -557,9 +574,9 @@ export function createStudioTransport({
 
   function playEvent(it, deferred) {
     const n = nodeOf(model, it.target);
-    if (!n) return skip(it, TRANSPORT_TEXT.noTarget);
+    if (!n) return skip(it, 'no-target', TRANSPORT_TEXT.noTarget);
     if (n.type !== 'envelope' || it.action !== 'gate') {
-      return skip(it, TRANSPORT_TEXT.eventTarget(n.metadata.name));
+      return skip(it, 'event-target', TRANSPORT_TEXT.eventTarget(n.metadata.name));
     }
     unplayed.delete(it.clipId);
     return addGate(it.key, it, it.target, it.startTime, it.endTime, deferred);
@@ -614,7 +631,8 @@ export function createStudioTransport({
     const n = nodeOf(model, target.node);
     const h = ready(target.node);
     if (!n || !h) {
-      unplayed.set(reasonKey, TRANSPORT_TEXT.unavailable(n ? n.metadata.name : target.node));
+      unplayed.set(reasonKey, { code: 'target-unavailable',
+        reason: TRANSPORT_TEXT.unavailable(n ? n.metadata.name : target.node) });
       return null;
     }
     const def = registry.param(n.type, target.param);
@@ -629,8 +647,8 @@ export function createStudioTransport({
     let t = null;
     try { t = h.modTarget(target.param, 'linear'); } catch (e) { t = null; }
     if (!t || !t.param) {
-      unplayed.set(reasonKey, (t && t.reason)
-        || TRANSPORT_TEXT.noParameter(n.metadata.name, target.param));
+      unplayed.set(reasonKey, { code: 'no-parameter', reason: (t && t.reason)
+        || TRANSPORT_TEXT.noParameter(n.metadata.name, target.param) });
       return null;
     }
     return { param: t.param, handle: h, offset, bounds };
@@ -656,7 +674,7 @@ export function createStudioTransport({
     try {
       applyAutomation(dest.param, evs, { cancelFrom });
     } catch (e) {
-      warn(`Automation ${laneId}: ${messageOf(e)}`);
+      laneWarn(laneId, e);
       return;
     }
     let rec = lanes.get(laneId);
@@ -680,7 +698,7 @@ export function createStudioTransport({
       try {
         applyAutomation(dest.param, evs, { cancelFrom: horizon });
       } catch (e) {
-        warn(`Automation ${rec.laneId}: ${messageOf(e)}`);
+        laneWarn(rec.laneId, e);
         continue;
       }
       rec.events = rec.events.filter((e) => e.time < horizon).concat(evs);
@@ -711,7 +729,7 @@ export function createStudioTransport({
         dest.param.setTargetAtTime(v, a.cancelFrom, PARAM_TAU_S);
       }
     } catch (e) {
-      warn(`Automation ${a.laneId}: ${messageOf(e)}`);
+      laneWarn(a.laneId, e);
     }
   }
 
@@ -788,7 +806,7 @@ export function createStudioTransport({
       try {
         applyAutomation(dest.param, shift(a.events, dest), { cancelFrom: a.cancelFrom });
       } catch (e) {
-        warn(`Automation ${a.laneId}: ${messageOf(e)}`);
+        laneWarn(a.laneId, e);
       }
     }
     if (measures.size) measure({ type: 'stop', at: plan.at });
@@ -884,7 +902,7 @@ export function createStudioTransport({
       skippedLate++;
       record({ key: it.key, clipId: it.clipId, decision: 'skipped-late', at: now });
     }
-    for (const w of r.warnings) warn(w);
+    for (const w of r.warnings) warn('timeline', w);
     prune(now);
     for (const c of claims.values()) {
       if (ready(c.id) !== c.handle) continue;
@@ -908,15 +926,29 @@ export function createStudioTransport({
 
   // ------------------------------------------------------------ public API
 
+  /**
+   * The runtime refused `r` (validate or prepare): it keeps its last good graph, so the transport
+   * keeps the model, ownership and schedule of that graph; the refusal becomes lastError and a
+   * diagnostic. -> the refusal text.
+   */
+  function refusedBy(r, code) {
+    runtime.setOwnedParams(ownedFor(model));
+    const message = errorOf(r, 'unknown error');
+    lastError = { phase: r.phase, code, message };
+    const text = TRANSPORT_TEXT.editRefused(message);
+    warn(code, text);
+    return text;
+  }
+
   function syncNow() {
     const rev = store.getRevision();
-    lastRevision = rev;
+    lastRevision = rev; // not retried every wake-up; the next store change tries again
     const next = store.getModel();
     runtime.setOwnedParams(ownedFor(next));
     const r = runtime.apply(next, { revision: rev });
     if (!r.ok) {
-      lastError = { phase: r.phase, message: r.errors && r.errors[0] && r.errors[0].message };
-      warn(`The Studio graph could not be updated: ${lastError.message}`);
+      refusedBy(r, 'sync-refused');
+      return { ok: false, synced: false, revision: rev, applied: r };
     }
     model = next;
     afterApply(freshOf(r));
@@ -938,12 +970,7 @@ export function createStudioTransport({
     runtime.setOwnedParams(ownedFor(next));
     const r = runtime.apply(next, { revision });
     if (!r.ok) {
-      runtime.setOwnedParams(ownedFor(model));
-      const message = (r.errors && r.errors[0] && r.errors[0].message) || 'unknown error';
-      lastError = { phase: r.phase, message };
-      const reason = TRANSPORT_TEXT.editRefused(message);
-      warn(reason);
-      return { ok: false, phase: r.phase, reason };
+      return { ok: false, phase: r.phase, reason: refusedBy(r, 'edit-refused') };
     }
     lastRevision = revision;
     model = next;
@@ -984,8 +1011,7 @@ export function createStudioTransport({
     const applied = runtime.apply(m, { revision: rev });
     if (!applied.ok) {
       runtime.setOwnedParams([]);
-      return fail('apply', (applied.errors && applied.errors[0] && applied.errors[0].message)
-        || 'The Studio graph is invalid.');
+      return fail('apply', errorOf(applied, 'The Studio graph is invalid.'));
     }
     let baseTime;
     let fresh;
@@ -993,8 +1019,7 @@ export function createStudioTransport({
       const s = runtime.start();
       if (!s.ok) {
         runtime.setOwnedParams([]);
-        return fail('start', (s.errors && s.errors[0] && s.errors[0].message) || 'Audio could '
-          + 'not start.');
+        return fail('start', errorOf(s, 'Audio could not start.'));
       }
       baseTime = s.at;
       fresh = new Set(runtime.nodes.keys());
@@ -1130,10 +1155,11 @@ export function createStudioTransport({
       claims: [...claims.keys()],
       gatedEnvelopes: [...gateOwned.keys()],
       ownedParams: typeof runtime.ownedParams === 'function' ? runtime.ownedParams() : [],
-      unplayed: [...unplayed].map(([id, reason]) => ({ id, reason })),
+      unplayed: [...unplayed].map(([id, u]) => ({ id, ...u })),
       skippedLate,
       decisions: [...decisions],
-      warnings: [...warnings],
+      warnings: warnings.map((w) => w.message),
+      diagnostics: [...warnings],
       lastError,
     };
   }

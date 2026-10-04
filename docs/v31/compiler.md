@@ -152,7 +152,8 @@ wired to.
    refuses the dispatch, undo or redo, and model, revision and history stay as they were. The
    reason is announced and shown (V431 review #15,
    `tests/unit/v431-studio-refused-edit.test.mjs`). Node and edge status in the UI come from
-   the running runtime while it plays (`graph-view.js` `runtimeStatus`).
+   the running runtime while it plays (`graph-view.js` `runtimeStatus`, judged by the
+   divergence verdict, below).
 3. **commit**: swap the handle and route maps and the plan; `revision` (the store's, or an
    internal counter) now names the topology the runtime reflects (§178).
 4. **crossfade** at `t`: new routes ramp 0 → 1 and removed routes 1 → floor over
@@ -194,8 +195,115 @@ shaped it (`tests/browser/v31-studio-audio.cjs`):
 
 `debugInfo()` → `{ state, compiledRevision, modelNodeCount, modelEdgeCount, runtimeNodeCount,
 runtimeSourceCount, handleCount, routedEdgeCount, pendingCleanups, engineNodeCount,
-engineSourceCount, degraded, inactiveEdges, limitedEdges, exceeds, warnings, lastOps,
-lastError }`.
+engineSourceCount, degraded, inactiveEdges, limitedEdges, exceeds, warnings, diagnostics,
+lastOps, lastError, applied, ownedParams }`. `degraded` and `inactiveEdges` are
+`{ id, status, code, reason }` (the live handle's or route's, else the plan's); `diagnostics`
+holds validation's warnings and the runtime's own, structured; `warnings` is their message text.
+
+## Runtime truth (ADR 0039)
+
+The screen must never show one topology while Web Audio runs another (§1). These four pieces
+make "what runs" plain data that a view, a test or an agent can compare, instead of object
+identity or prose.
+
+### Diagnostics
+
+One shape (`validate.js` `studioDiagnostic`), used by validation, the compiler, the runtime and
+the transport:
+
+```js
+{ code, severity: 'error' | 'warning', owner, entity: { kind, id } | null, message, details? }
+```
+
+`owner` is one of `DIAGNOSTIC_OWNERS` (`validate`, `compiler`, `runtime`, `transport`).
+`code` is the machine reason that a consumer branches on, and `message` is display prose that
+nobody parses. `entity` names the node, edge, clip or lane the diagnostic is about. `details`
+is optional plain data, reserved: no producer sets it yet. Validation
+keeps its compatibility fields `path`, `nodeId?`, `edgeId?` and `detail?` (a cycle's node names,
+as prose). A plan node or edge, a runtime handle or route, and a transport `unplayed` entry carry
+the same `code` beside their display `reason`. `code` is `null` when there is no reason. The
+status maps the views read (`compiledStatus`, `compiledEdgeStatus`, `runtimeStatus`) are
+`{ status, code, reason }`.
+
+| Owner | Where | Codes |
+| --- | --- | --- |
+| validate | `validateStudioModel`, `validateStudioImport` | the rule codes of `validate.js` (header): `audio-feedback`, `unreachable-output`, `invalid-structure`, `limit-exceeded`, ... |
+| compiler | PlanNode `code` | `no-adapter`, `adapter-mismatch`, `offline-only`, `no-web-audio`, an adapter check's code: `mic-unsupported` (no `getUserMedia`), `mic-off` (no input permission); `unavailable` for a check that gives no code |
+| compiler | PlanEdge `code` | `endpoint-offline-only`, `endpoint-unavailable` (an end is not usable) |
+| compiler | a refused compile | `invalid-structure` (validation threw on a model of the wrong shape) |
+| runtime | handle `code` | `mic-pending` (waiting for permission), `mic-error` (the input failed to open); otherwise the plan node's |
+| runtime | route `code` | `no-output`, `no-input`, `no-mod-target` (the handles cannot make the route); otherwise the plan edge's |
+| runtime | `apply` warnings, `debugInfo().diagnostics` | `update-failed`, `parameters-failed`, `output-failed`, `stop-failed` (entity: node), `route-failed` (entity: edge): a guarded crossfade step that threw |
+| runtime | `lastError.errors`, a refused `apply` / `start` | `prepare-failed`, `start-failed`, `nothing-compiled`, `disposed`; a validation refusal carries validation's diagnostics |
+| transport | `debugInfo().diagnostics`, the `'warning'` event | `edit-refused` (the commit gate refused a live edit), `sync-refused` (the runtime refused a synced model), `automation-failed` (entity: lane), `measurement-callback-failed`, `timeline` (a timeline-compiler warning, its prose as the message) |
+| transport | `debugInfo().unplayed[].code` | `no-target`, `pattern-target`, `event-target`, `target-unavailable`, `no-parameter` |
+
+`runtime.apply` returns `warnings` as diagnostics in both branches, stopped and running. The
+transport's `'warning'` event passes the diagnostic. The workspace's warning line and the
+offline render's warnings use its `message`.
+
+### Plan identity
+
+`planHash(plan)` (`compiler.js`) is SHA-256 (lowercase hex) of the canonical JSON of:
+
+```js
+{ v: PLAN_HASH_VERSION,
+  studioHash,                                    // of the plan's model (execution state)
+  nodes: [[id, type, adapterCompilerKey, status, code], ...],          // topological order
+  edges: [[id, kind, fromNode, fromPort, toNode, toPort, status, code], ...] }  // edge order
+```
+
+It is computed with the same `canonicalJson` and synchronous `sha256Hex` as `studioHash`. It
+runs on first read and is memoized per plan object (plans and store models are immutable), so
+compiling and the audio path never wait for it. Equal models compiled with equal capabilities
+give equal hashes. Moving or renaming a node, metadata and view state change neither
+`studioHash` nor `planHash`. A parameter or route change changes both. A status change, for
+example the microphone permission or Web Audio availability, changes only `planHash`, because
+the plan that runs is different. A refused or empty plan has `null`.
+
+### Applied record
+
+`runtime.applied()` → `{ revision, studioHash, planHash, at } | null`, also
+`debugInfo().applied`. It is set only when a transaction commits: `start()`, and `apply` while
+running, including an apply that only changes presentation. A refused apply (validate or prepare)
+leaves it as it was, and so does an apply while stopped, which only stores the plan.
+`setOptions` (microphone permission) re-applies the same model at the same revision, so the
+record keeps its revision and gets the new `planHash`. It is
+`null` while stopped or before the first start, because nothing runs then. `at` is wall-clock ISO
+text for people reading a log. It is never used for audio timing. The hashes are computed on
+first read.
+
+`runtime.lastError` also names the `revision` it refused (the one passed to `apply`, or the
+compiled revision `start` could not build).
+
+### Divergence
+
+`studioDivergence({ model, revision }, runtime)` (`runtime.js`) is pure. It reads the runtime's
+`state`, `applied()` and `lastError` and changes nothing:
+
+```js
+{ state, desired: { revision, studioHash }, applied: record | null, reason: Diagnostic | null }
+```
+
+| State | When | `reason` |
+| --- | --- | --- |
+| `not-applied` | the runtime is not running (stopped, never started) | the refusal of this revision if PLAY failed on it, else `null` |
+| `in-sync` | the applied record is the desired revision; without a revision, the same `studioHash` | `null` |
+| `refused` | the runtime refused the desired revision (`lastError.revision`); without a revision, a refusal newer than the applied record | the runtime's diagnostic (`lastError.errors[0]`) |
+| `behind` | the applied record is another revision, normally older, and the desired one was not refused: it has not been applied yet | `null` |
+
+With the workspace's commit gate, a refused live edit never becomes the desired model, so the
+verdict stays `in-sync` and the refusal is the dispatch result. `refused` arises when a store
+commits first (no gate) and the runtime then refuses. `runtimeStatus(model, runtime, revision)`
+(`graph-view.js`) consumes the verdict. When it is not `in-sync`, a model node or edge that the
+running plan does not hold is `degraded` / `inactive` with code `not-in-runtime`. The workspace
+passes the store revision (`studioStatus(model, { runtime, revision })`).
+
+`transport.sync()` follows the same truth. When `runtime.apply` refuses the store's model, the
+transport keeps the model, owned parameters and schedule of the graph that still runs. It does
+not schedule clips or lanes of the refused model. It records the refusal (`lastError` with code
+`sync-refused`, and a diagnostic) and returns `{ ok: false, synced: false, applied }`. The next
+store change tries again.
 
 ## Engine hooks to add properly
 
@@ -262,7 +370,8 @@ method (an engine change, out of this issue's scope):
   `release(t)` (gate off from the current contour, `envelope.js releaseAt`) and `hold(t)`
   (`holdAt`: drop everything after t), which the transport uses to close a timeline-gated
   envelope at PLAY and to re-render its gates after an edit or a STOP.
-- Microphone permission: `runtime.setOptions({ inputPermission: true })` re-applies the model;
+- Microphone permission: `runtime.setOptions({ inputPermission: true })` re-applies the model
+  at the same revision;
   degraded microphones become `node-replace`d and open the input.
 - Output exclusivity is the transport's `onClaimOutput` hook (below); `engine.stopAll()` still
   does not reach the Studio graph, so the UI's Escape goes through `transport.escape()`.

@@ -10,7 +10,9 @@
 //                xfadeS: STUDIO_XFADE_S, stopS: STUDIO_STOP_S }
 //   runtime.apply(model, { revision }) -> result   compile, diff against the last applied
 //     model, patch the running graph (or only store the plan while stopped). result =
-//     { ok, applied, ops, revision, warnings } | { ok: false, phase, errors, revision }
+//     { ok, applied, ops, revision, warnings: [Diagnostic] } | { ok: false, phase, errors,
+//     revision }   (Diagnostic: validate.js studioDiagnostic; validation's warnings and the
+//     runtime's own, owner 'runtime', code <step>-failed for a guarded crossfade step)
 //   runtime.start() -> result      build the compiled graph and fade the Studio output in
 //   runtime.stop({ fast }) -> Promise<counts>   fade out, stop every source, dispose everything
 //                                                (§184); resolves when the nodes are released
@@ -18,9 +20,19 @@
 //   runtime.nodes                  read-only Map view: nodes.get('filter-1') -> handle (§43)
 //   runtime.edges                  read-only Map view of the routed edges
 //   runtime.bindings()             { triggers, data }: the logical TRIGGER / ANALYSIS edges
-//   runtime.setOptions({ inputPermission }) -> result   re-applies the current model
+//   runtime.setOptions({ inputPermission }) -> result   re-applies the current model at the
+//                                  same revision (a new planHash, not a new revision)
 //   runtime.flush({ force })       run due (or all) deferred disposals now
-//   runtime.debugInfo()            runtime node count, compiled revision, last error, ... (§177)
+//   runtime.debugInfo()            runtime node count, compiled revision, last error, applied
+//                                  record, diagnostics, ... (§177)
+//   runtime.applied() -> { revision, studioHash, planHash, at } | null   the applied record:
+//                                  what the running graph holds, set only when a transaction
+//                                  commits (start, apply while running), null while stopped;
+//                                  `at` is wall-clock ISO text for people, never audio timing;
+//                                  the hashes are computed on first read (compiler.js planHash)
+//   runtime.lastError              { phase, message, errors: [Diagnostic], at, revision }:
+//                                  revision is the one it refused (apply) or could not start
+//   studioDivergence({ model, revision }, runtime) -> verdict   divergence as data (below)
 //   runtime.on(fn) -> off          fn(type, detail): 'applied' | 'error' | 'state'
 //   runtime.setOwnedParams([{ node, param, peak? }]) -> list   parameters another owner drives
 //                                  (the transport: automation lanes, pattern-played oscillator
@@ -70,8 +82,10 @@ import { createEngineHooks } from './adapters/engine-hooks.js';
 import {
   CLEANUP_MARGIN_S, EMPTY_PLAN, ROUTE_FLOOR, SOURCE_STOP_PAD_S, STUDIO_STOP_S, STUDIO_XFADE_S,
   compileStudio,
-  computeBases, createEdgeHandle, diffPlans, disposeHandle, instantiateNode,
+  computeBases, createEdgeHandle, diffPlans, disposeHandle, instantiateNode, planHash,
+  studioHashOf,
 } from './compiler.js';
+import { studioDiagnostic } from './validate.js';
 
 /** Escape-speed stop (scheduler.js ESCAPE_RELEASE_S). */
 export const STUDIO_FAST_STOP_S = 0.008;
@@ -91,6 +105,34 @@ const readOnlyMap = (map) => Object.freeze({
 });
 
 const messageOf = (e) => (e && e.message) || String(e);
+
+/**
+ * Divergence as data (pure; reads the runtime, changes nothing): the desired model (the store's,
+ * with its revision when known) against what the runtime runs (its applied record and last
+ * refusal). -> { state, desired: { revision, studioHash }, applied: record | null,
+ * reason: Diagnostic | null }, state:
+ *   'not-applied'  the runtime is not running (stopped, never started): nothing is applied;
+ *                  reason is the refusal of this model if PLAY failed on it
+ *   'in-sync'      the applied record is the desired revision (without a revision: the same
+ *                  studioHash, so a presentation-only change stays in sync)
+ *   'refused'      the runtime refused the desired revision (lastError.revision; without a
+ *                  revision: a refusal newer than the applied record); reason is the runtime's
+ *                  diagnostic; the runtime keeps running its last applied record
+ *   'behind'       the applied record is another (normally older) revision and the desired one
+ *                  was not refused: it has not been applied yet
+ */
+export function studioDivergence({ model, revision = null }, runtime) {
+  const desired = { revision, studioHash: studioHashOf(model) };
+  const applied = runtime.state === 'running' ? runtime.applied() : null;
+  const same = (r) => !!r && (revision != null ? r.revision === revision
+    : r.studioHash === desired.studioHash);
+  const e = runtime.lastError;
+  const reason = e && (revision != null ? e.revision === revision
+    : applied && e.revision > applied.revision) ? e.errors[0] : null;
+  const state = !applied ? 'not-applied' : same(applied) ? 'in-sync'
+    : reason ? 'refused' : 'behind';
+  return { state, desired, applied, reason: state === 'in-sync' ? null : reason };
+}
 
 export function createStudioRuntime({
   engine, registry = NODE_REGISTRY, adapters = NODE_ADAPTERS, options = {},
@@ -118,6 +160,10 @@ export function createStudioRuntime({
   let lastOps = [];
   let lastWarnings = [];
   let disposed = false;
+  // The applied record (runtime.applied): set when a transaction commits, null while stopped.
+  let record = null;
+  // The revision being applied or started: what lastError names when it is refused.
+  let attempt = null;
 
   const emit = (type, detail) => {
     for (const fn of listeners) {
@@ -129,13 +175,22 @@ export function createStudioRuntime({
     state = s;
     emit('state', s);
   };
-  const fail = (phase, errors, extra = {}) => {
-    const list = Array.isArray(errors) ? errors : [{ code: 'runtime-error', severity: 'error',
-      message: messageOf(errors), path: '' }];
-    lastError = { phase, message: list[0].message, errors: list, at: Date.now() };
+  const fail = (phase, errors, extra = {}, code = `${phase}-failed`) => {
+    const list = Array.isArray(errors) ? errors : [{ ...studioDiagnostic('runtime', code,
+      messageOf(errors), null, 'error'), path: '' }];
+    lastError = { phase, message: list[0].message, errors: list, at: Date.now(),
+      revision: attempt };
     emit('error', lastError);
     return { ok: false, phase, errors: list, revision: compiledRevision, ...extra };
   };
+  /** A transaction committed `plan` as `compiledRevision`: the running graph holds it. */
+  const commit = () => {
+    record = { revision: compiledRevision, plan, at: new Date().toISOString() };
+  };
+  function applied() {
+    return record && { revision: record.revision, studioHash: studioHashOf(record.plan.model),
+      planHash: planHash(record.plan), at: record.at };
+  }
 
   const offEngine = hooks.on((type, detail) => {
     if (type === 'context' && detail === 'closed') dropAll();
@@ -157,6 +212,7 @@ export function createStudioRuntime({
     handles.clear();
     edges.clear();
     bases.clear();
+    record = null;
     setState('idle');
   }
 
@@ -359,8 +415,12 @@ export function createStudioRuntime({
     plan = next;
     // 4. crossfade
     const warnings = [];
-    const guard = (what, fn) => {
-      try { fn(); } catch (e) { warnings.push(`${what}: ${messageOf(e)}`); }
+    // A failed step is a warning (owner runtime, code <step>-failed), never a half-applied route.
+    const guard = (step, id, fn) => {
+      try { fn(); } catch (e) {
+        warnings.push(studioDiagnostic('runtime', `${step}-failed`,
+          `${step} ${id}: ${messageOf(e)}`, { kind: step === 'route' ? 'edge' : 'node', id }));
+      }
     };
     const affected = new Set(created.handles.keys());
     for (const o of ops) {
@@ -371,7 +431,7 @@ export function createStudioRuntime({
         if (live.length && h) {
           const changed = {};
           for (const k of live) changed[k] = pn.params[k];
-          guard(`update ${o.id}`, () => h.update(changed, ownedKeys(h)));
+          guard('update', o.id, () => h.update(changed, ownedKeys(h)));
         }
         if (live.length < o.keys.length) affected.add(o.id);
       } else if (o.op.startsWith('edge-')) {
@@ -392,17 +452,17 @@ export function createStudioRuntime({
         peaks.get(id) || null);
       bases.set(id, cb);
       if (!created.handles.has(id)) {
-        guard(`parameters ${id}`, () => h.applyBase(cb.base, false, ownedKeys(h)));
+        guard('parameters', id, () => h.applyBase(cb.base, false, ownedKeys(h)));
       }
       for (const [eid, g] of cb.gains) {
         const eh = edges.get(eid);
-        if (eh && eh.ramp && eh.ramp.target !== g) guard(`route ${eid}`, () => eh.ramp.to(g, t, X));
+        if (eh && eh.ramp && eh.ramp.target !== g) guard('route', eid, () => eh.ramp.to(g, t, X));
       }
     }
     for (const [id, eh] of created.edges) {
       if (eh.kind === 'audio' && eh.ramp) {
         const level = next.edges.get(id).props.muted ? ROUTE_FLOOR : 1;
-        guard(`route ${id}`, () => eh.ramp.to(level, t, X));
+        guard('route', id, () => eh.ramp.to(level, t, X));
       }
     }
     for (const o of ops) {
@@ -410,19 +470,19 @@ export function createStudioRuntime({
       const eh = edges.get(o.id);
       if (eh && eh.kind === 'audio' && eh.ramp) {
         const level = next.edges.get(o.id).props.muted ? ROUTE_FLOOR : 1;
-        guard(`route ${o.id}`, () => eh.ramp.to(level, t, X));
+        guard('route', o.id, () => eh.ramp.to(level, t, X));
       }
     }
     for (const h of created.handles.values()) {
-      if (typeof h.fade === 'function') guard(`output ${h.id}`, () => h.fade(1, t, X));
+      if (typeof h.fade === 'function') guard('output', h.id, () => h.fade(1, t, X));
     }
     for (const eh of retire.edges) {
       const floor = eh.kind === 'audio' ? ROUTE_FLOOR : 0;
-      if (eh.ramp) guard(`route ${eh.id}`, () => eh.ramp.to(floor, t, X));
+      if (eh.ramp) guard('route', eh.id, () => eh.ramp.to(floor, t, X));
     }
     for (const h of retire.handles) {
-      if (typeof h.fade === 'function') guard(`output ${h.id}`, () => h.fade(ROUTE_FLOOR, t, X));
-      guard(`stop ${h.id}`, () => h.stop(t + X + SOURCE_STOP_PAD_S));
+      if (typeof h.fade === 'function') guard('output', h.id, () => h.fade(ROUTE_FLOOR, t, X));
+      guard('stop', h.id, () => h.stop(t + X + SOURCE_STOP_PAD_S));
     }
     // 5. cleanup after the fade
     if (retire.handles.length || retire.edges.length) {
@@ -436,11 +496,12 @@ export function createStudioRuntime({
   // ------------------------------------------------------------ public API
 
   function apply(model, { revision = null } = {}) {
-    if (disposed) return fail('validate', 'The Studio runtime is disposed.');
+    const rev = revision != null ? revision : (compiledRevision == null ? 1 : compiledRevision + 1);
+    attempt = rev;
+    if (disposed) return fail('validate', 'The Studio runtime is disposed.', {}, 'disposed');
     const next = compileStudio(model, { engine, registry, adapters, options: opts });
     if (!next.ok) return fail('validate', next.errors, { kept: true });
     const ops = diffPlans(plan, next, { owned: ownedMap() });
-    const rev = revision != null ? revision : (compiledRevision == null ? 1 : compiledRevision + 1);
     if (state !== 'running' || !hooks.ctx) {
       plan = next;
       compiledRevision = rev;
@@ -452,17 +513,21 @@ export function createStudioRuntime({
     const r = transact(next, ops);
     if (!r.ok) return r;
     compiledRevision = rev;
-    const result = { ...r, revision: rev, warnings: [...next.warnings.map((w) => w.message),
-      ...r.warnings] };
+    commit();
+    const result = { ...r, revision: rev, warnings: [...next.warnings, ...r.warnings] };
     emit('applied', result);
     return result;
   }
 
   function start() {
-    if (disposed) return fail('start', 'The Studio runtime is disposed.');
+    attempt = compiledRevision;
+    if (disposed) return fail('start', 'The Studio runtime is disposed.', {}, 'disposed');
     if (state === 'running') return { ok: true, applied: false, ops: [],
       revision: compiledRevision };
-    if (!plan.model) return fail('start', 'Nothing is compiled yet: apply a Studio model first.');
+    if (!plan.model) {
+      return fail('start', 'Nothing is compiled yet: apply a Studio model first.', {},
+        'nothing-compiled');
+    }
     if (!hooks.ensure()) {
       return fail('start', (engine.lastError && engine.lastError.message) || 'Audio could not '
         + 'start.');
@@ -472,12 +537,14 @@ export function createStudioRuntime({
     setState('running');
     const r = transact(plan, diffPlans(EMPTY_PLAN, plan));
     if (!r.ok) setState('idle');
+    else commit();
     return r.ok ? { ...r, revision: compiledRevision } : r;
   }
 
   function stop({ fast = false } = {}) {
     const all = () => Promise.all([...pending].map((j) => j.done)).then(() => counts());
     if (state !== 'running') return all();
+    record = null;
     setState('idle');
     const ctx = hooks.ctx;
     const level = savedMasterLevel;
@@ -527,14 +594,18 @@ export function createStudioRuntime({
   function setOptions(next = {}) {
     if ('inputPermission' in next) opts.inputPermission = next.inputPermission === true;
     if ('masterLevel' in next) opts.masterLevel = next.masterLevel;
-    return plan.model ? apply(plan.model) : { ok: true, applied: false, ops: [] };
+    // The same model and revision under new capabilities: the record keeps its revision and
+    // gets the new planHash, so the store revision stays in sync.
+    return plan.model ? apply(plan.model, { revision: compiledRevision })
+      : { ok: true, applied: false, ops: [] };
   }
 
   function bindings() {
     const triggers = [];
     const data = [];
     for (const e of plan.edges.values()) {
-      const b = { id: e.id, from: e.from, to: e.to, status: e.status, reason: e.reason };
+      const b = { id: e.id, from: e.from, to: e.to, status: e.status, code: e.code,
+        reason: e.reason };
       if (e.kind === 'trigger') triggers.push(b);
       else if (e.kind === 'analysis') data.push(b);
     }
@@ -542,22 +613,22 @@ export function createStudioRuntime({
   }
 
   function debugInfo() {
+    // A live handle's or route's status, else the plan's, with its code (compiler.js).
+    const status = (x, live) => {
+      const st = live || x;
+      return { id: x.id, status: st.status, code: st.code || null, reason: st.reason || null };
+    };
     const degraded = [];
     for (const n of plan.nodes.values()) {
-      const h = handles.get(n.id);
-      const status = h ? h.status : n.status;
-      if (status !== 'ready' && status !== 'data') {
-        degraded.push({ id: n.id, status, reason: h ? h.reason : n.reason });
-      }
+      const st = status(n, handles.get(n.id));
+      if (st.status !== 'ready' && st.status !== 'data') degraded.push(st);
     }
     const inactiveEdges = [];
     for (const e of plan.edges.values()) {
-      const eh = edges.get(e.id);
-      const status = eh ? eh.status : e.status;
-      if (status === 'inactive') {
-        inactiveEdges.push({ id: e.id, reason: eh ? eh.reason : e.reason });
-      }
+      const st = status(e, edges.get(e.id));
+      if (st.status === 'inactive') inactiveEdges.push(st);
     }
+    const warned = [...plan.warnings, ...lastWarnings];
     const limitedEdges = [];
     const exceeds = [];
     for (const [id, cb] of bases) {
@@ -580,9 +651,11 @@ export function createStudioRuntime({
       inactiveEdges,
       limitedEdges,
       exceeds,
-      warnings: [...plan.warnings.map((w) => w.message), ...lastWarnings],
+      warnings: warned.map((w) => w.message),
+      diagnostics: warned,
       lastOps,
       lastError,
+      applied: applied(),
       ownedParams: ownedParams(),
     };
   }
@@ -599,6 +672,7 @@ export function createStudioRuntime({
     setOwnedParams,
     ownedParams,
     baseOffset,
+    applied,
     on(fn) {
       listeners.add(fn);
       return () => listeners.delete(fn);
