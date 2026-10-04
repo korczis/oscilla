@@ -7,6 +7,17 @@
 //
 //   inspectorView(model, selection, opts) -> view           pure (unit-tested)
 //     kind 'studio' (nothing selected) | 'node' | 'multi' | 'edge' | 'clip' | 'point'
+//   runtimeView(model, truth, opts) -> runtime              pure: the 'studio' view's Runtime
+//     section (ADR 0039): truth = { verdict: runtime.js studioDivergence, runtime: runtime
+//     debugInfo(), transport: transport debugInfo() }; opts: { registry, status, edgeStatus }.
+//     -> { state: runtimeState(verdict), label, text, code, desired: { revision, hash },
+//          applied: { revision, planHash, at } | null, nodes: { ready, degraded, offline },
+//          edges: { live, inactive, 'no-effect' }, lanes: [text], owned: [text],
+//          diagnostics: [{ code, severity, owner, message, entity: { kind, id, label,
+//          selection | null } | null }] }
+//   runtimeDiagnostics(truth) -> [Diagnostic]   the verdict's reason, then, while a graph runs,
+//     the runtime's and the transport's debugInfo().diagnostics (node and edge views list the
+//     ones naming them on their status line, with the code)
 //   studioSettingsView(model) -> settings                   pure: what the 'studio' view shows
 //     of the transport and the document (§78 "nothing → Studio/transport properties"): time
 //     mode, tempo, time signature, loop, length, notes; edited through TRANSPORT_SET, LOOP_SET
@@ -16,7 +27,8 @@
 //   mountInspector(host, svc) -> { render(), focusFirst(), focusHeading(), focusKey(key),
 //                                  destroy() }               DOM (graph-dom.js, no innerHTML)
 //     svc: { store, registry, announce(text, { assertive }), status() -> Map, warnings() -> Map,
-//            edgeStatus() -> Map edge id -> plan { status, reason }, onConnect(nodeId),
+//            edgeStatus() -> Map edge id -> plan { status, reason }, truth() -> truth (above;
+//            a changed runtime state is announced politely), onConnect(nodeId),
 //            onSavePatch(nodeIds), onDelete(), onDuplicate(), onShowLane(laneId, label) }
 //   Focus (§142; V431 U2): a rebuilt Inspector puts focus back on the control with the same
 //   data-key; when the action replaced the view (a connection link, Select source, Delete)
@@ -37,6 +49,9 @@ import { h, replaceChildren, setAttr, setText } from './graph-dom.js';
 import { sliderFill } from '../app.js';
 
 export const SLIDER_STEPS = 1000;
+
+/** Runtime states whose change Play and Stop already announce. */
+const QUIET = ['not-applied', 'in-sync'];
 
 const finite = (v) => typeof v === 'number' && Number.isFinite(v);
 
@@ -194,6 +209,113 @@ export function studioSettingsView(model) {
   };
 }
 
+/** What the Runtime section calls each divergence state ('failed': PLAY was refused). */
+export const RUNTIME_LABELS = Object.freeze({
+  'in-sync': 'Running',
+  'not-applied': 'Not applied',
+  behind: 'Previous configuration still running',
+  refused: 'Refused',
+  failed: 'Failed',
+});
+
+/** The divergence state, with a stopped runtime that refused PLAY as 'failed'. */
+export const runtimeState = (v) => (!v ? 'not-applied'
+  : v.state === 'not-applied' && v.reason ? 'failed' : v.state);
+
+/** The first 8 hex digits of a hash, '—' for none. */
+export const shortHash = (h) => (h ? h.slice(0, 8) : '—');
+
+export function runtimeDiagnostics(truth) {
+  const v = truth && truth.verdict;
+  if (!v) return [];
+  const of = (x) => (v.applied && x && x.diagnostics) || [];
+  return [...(v.reason ? [v.reason] : []), ...of(truth.runtime), ...of(truth.transport)];
+}
+
+/** A diagnostic's entity as the Inspector links it: its name and the selection showing it. */
+function entityRef(model, ent, registry) {
+  if (!ent) return null;
+  const { kind, id } = ent;
+  let label = null;
+  let selection = null;
+  if (kind === 'node') {
+    const n = nodeOf(model, id);
+    if (n) [label, selection] = [n.metadata.name, { nodes: [id] }];
+  } else if (kind === 'edge') {
+    if (model.graph.edges.some((e) => e.id === id)) {
+      const d = describeEdge(model, id, { registry });
+      [label, selection] = [`${d[0].toLowerCase()}${d.slice(1)}`, { edges: [id] }];
+    }
+  } else if (kind === 'clip') {
+    const c = model.timeline.clips.find((x) => x.id === id);
+    if (c) [label, selection] = [`${c.kind} clip`, { clips: [id] }];
+  } else if (kind === 'lane') {
+    const l = model.timeline.automation.find((x) => x.id === id);
+    if (l) {
+      label = `${paramText(model, l.target, registry)} lane`;
+      selection = { nodes: [l.target.node], points: l.points.map((p) => p.id) };
+    }
+  }
+  return { kind, id, label: label || id, selection };
+}
+
+/** "Filter Cutoff": a { node, param } target by name. */
+function paramText(model, t, registry) {
+  const n = nodeOf(model, t.node);
+  const p = n && registry.param(n.type, t.param);
+  return `${n ? n.metadata.name : t.node} ${p ? p.label : t.param}`;
+}
+
+export function runtimeView(model, truth, opts = {}) {
+  const registry = opts.registry || NODE_REGISTRY;
+  const v = (truth && truth.verdict) || null;
+  const state = runtimeState(v);
+  const a = v && v.applied;
+  const d = v ? v.desired : { revision: null, studioHash: null };
+  const why = v && v.reason ? v.reason.message : '';
+  const text = state === 'in-sync' ? `Revision ${a.revision} plays as edited.`
+    : state === 'behind' ? `Revision ${a.revision} plays; revision ${d.revision} is not `
+      + 'applied yet.'
+      : state === 'refused' ? `Revision ${d.revision} was refused (${why}). Revision `
+        + `${a.revision} keeps playing.`
+        : state === 'failed' ? `Play failed: ${why}`
+          : 'Nothing runs. Press Play to apply this Studio.';
+  const nodes = { ready: 0, degraded: 0, offline: 0 };
+  for (const n of model.graph.nodes) {
+    const s = ((opts.status && opts.status.get(n.id)) || {}).status;
+    if (s) nodes[s === 'offline-only' ? 'offline' : s === 'ready' || s === 'data' ? 'ready'
+      : 'degraded']++;
+  }
+  const edges = { live: 0, inactive: 0, 'no-effect': 0 };
+  for (const e of model.graph.edges) {
+    const r = edgeRoute(model, e, { registry,
+      status: opts.edgeStatus ? opts.edgeStatus.get(e.id) : null }).state;
+    edges[r === 'no-route' ? 'inactive' : r]++;
+  }
+  const targets = (x, key) => (a && x ? x[key].map((l) => paramText(model, l.target || l,
+    registry)) : []);
+  return {
+    state,
+    label: RUNTIME_LABELS[state],
+    text,
+    code: v && v.reason ? v.reason.code : null,
+    desired: { revision: d.revision, hash: shortHash(d.studioHash) },
+    applied: a ? { revision: a.revision, planHash: shortHash(a.planHash),
+      at: new Date(a.at).toLocaleTimeString() } : null,
+    nodes,
+    edges,
+    lanes: targets(truth && truth.transport, 'lanes'),
+    owned: targets(truth && truth.runtime, 'ownedParams'),
+    diagnostics: runtimeDiagnostics(truth).map((x) => ({ code: x.code, severity: x.severity,
+      owner: x.owner, message: x.message, entity: entityRef(model, x.entity, registry) })),
+  };
+}
+
+/** The diagnostics naming one entity, as status-line text with their code. */
+const entityNotes = (truth, kind, id, skip = []) => runtimeDiagnostics(truth)
+  .filter((x) => x.entity && x.entity.kind === kind && x.entity.id === id
+    && !skip.includes(x.message)).map((x) => `${x.message} (${x.code})`);
+
 /** The store action of a Studio settings field edit, or { error } (pure, unit-tested). */
 export function settingsAction(model, key, raw) {
   const t = model.transport;
@@ -253,9 +375,10 @@ export function settingsAction(model, key, raw) {
 /**
  * The Inspector view of the selection (§78): the primary node (the last selected), a
  * connection, a clip or automation point, several nodes, or the Studio itself.
- * opts: { registry, status: Map id -> { status, reason }, warnings: Map id -> [text],
- *         edgeStatus: Map edge id -> plan { status, reason } }. A connection that carries
- * nothing (graph-view.js edgeRoute) has route 'no-route' or 'no-effect' and its reason (§237).
+ * opts: { registry, status: Map id -> { status, code, reason }, warnings: Map id -> [text],
+ *         edgeStatus: Map edge id -> plan { status, code, reason }, truth (runtimeView) }.
+ * A connection that carries nothing (graph-view.js edgeRoute) has route 'no-route' or
+ * 'no-effect' and its reason (§237).
  */
 export function inspectorView(model, selection, opts = {}) {
   const registry = opts.registry || NODE_REGISTRY;
@@ -275,6 +398,9 @@ export function inspectorView(model, selection, opts = {}) {
     const warn = (opts.warnings && opts.warnings.get(node.id)) || [];
     const fields = def ? def.params.map((p) => fieldOf(model, node, p, registry,
       opts.edgeStatus)) : [];
+    const label = st ? STATUS_LABELS[st.status] || null : null;
+    const reason = st && st.reason ? st.reason : null;
+    const notes = entityNotes(opts.truth, 'node', node.id, warn);
     return {
       kind: 'node',
       key: `node:${node.id}:${fields.map((f) => f.key).join(',')}`,
@@ -285,9 +411,15 @@ export function inspectorView(model, selection, opts = {}) {
       categoryLabel: def ? CATEGORY_LABELS[def.category] : 'Unknown',
       help: def ? def.help : null,
       status: st ? st.status : null,
-      statusLabel: st ? STATUS_LABELS[st.status] || null : null,
-      reason: st && st.reason ? st.reason : null,
+      statusLabel: label,
+      code: st ? st.code || null : null,
+      reason,
       warnings: warn,
+      // The status line: label (code), the structured reason, validator warnings, then the
+      // runtime and transport diagnostics naming this node, each with its code.
+      statusText: [label && st.code ? `${label} (${st.code})` : label, reason,
+        ...warn.filter((w) => w !== reason), ...notes].filter(Boolean).join(' · '),
+      statusError: (st && st.status === 'degraded') || notes.length > 0,
       position: { x: node.position.x, y: node.position.y },
       fields,
       connections: nodeConnections(model, node.id, registry, opts.edgeStatus || null),
@@ -303,14 +435,19 @@ export function inspectorView(model, selection, opts = {}) {
       const tgt = registry.port(b.type, e.to.port, 'in');
       const control = src.type === 'CONTROL';
       const unit = tgt.param ? (e.props.mapping === 'log' ? 'octaves' : tgt.param.unit) : '';
-      const route = edgeRoute(model, e, { registry,
-        status: opts.edgeStatus ? opts.edgeStatus.get(e.id) : null });
+      const est = opts.edgeStatus ? opts.edgeStatus.get(e.id) : null;
+      const route = edgeRoute(model, e, { registry, status: est });
+      const code = route.state === 'no-route' && est ? est.code : null;
+      const statusText = [code ? `${route.text} (${code})` : route.text,
+        ...entityNotes(opts.truth, 'edge', e.id)].filter(Boolean).join(' · ');
       return {
         kind: 'edge',
-        key: `edge:${e.id}:${control ? 'c' : 'a'}:${route.state}:${route.reason || ''}`,
+        key: `edge:${e.id}:${control ? 'c' : 'a'}:${route.state}:${statusText}`,
         route: route.state,
         routeReason: route.reason,
         routeText: route.text,
+        routeCode: code,
+        statusText,
         id: e.id,
         title: 'Connection',
         text: describeEdge(model, e.id, { registry }),
@@ -383,6 +520,7 @@ export function inspectorView(model, selection, opts = {}) {
     counts: { nodes: model.graph.nodes.length, edges: model.graph.edges.length,
       clips: model.timeline.clips.length, lanes: model.timeline.automation.length },
     settings: studioSettingsView(model),
+    runtime: runtimeView(model, opts.truth, opts),
   };
 }
 
@@ -619,11 +757,9 @@ export function mountInspector(host, svc) {
 
   function buildNode(view) {
     const parts = [header(view.name, `${view.typeLabel} · ${view.categoryLabel}`)];
-    if (view.statusLabel || view.reason || view.warnings.length) {
-      parts.push(h('p', { class: `osc-si-status${view.status === 'degraded' ? ' is-error' : ''}`,
-        role: 'note', 'data-osc': 'studio.inspector.status',
-        text: [view.statusLabel, view.reason, ...view.warnings.filter((w) => w !== view.reason)]
-          .filter(Boolean).join(' · ') }));
+    if (view.statusText) {
+      parts.push(h('p', { class: `osc-si-status${view.statusError ? ' is-error' : ''}`,
+        role: 'note', 'data-osc': 'studio.inspector.status', text: view.statusText }));
     }
     parts.push(textInput(`osc-si-${view.id}-name`, 'Name', view.name, (v, input) => {
       const r = dispatch({ type: 'NODE_RENAME', nodeId: view.id, name: v });
@@ -680,10 +816,10 @@ export function mountInspector(host, svc) {
   function buildEdge(view) {
     const parts = [header('Connection', `${view.signalNoun[0].toUpperCase()}${
       view.signalNoun.slice(1)} · ${view.cable}`)];
-    if (view.routeText) {
+    if (view.statusText) {
       parts.push(h('p', { class: 'osc-si-status is-inactive', role: 'note',
         'data-osc': 'studio.inspector.edgeStatus', 'data-route': view.route,
-        text: view.routeText }));
+        text: view.statusText }));
     }
     parts.push(h('dl', { class: 'osc-si-dl', 'data-osc': 'studio.inspector.edge' }, [
       h('div', {}, [h('dt', { text: 'From' }), h('dd', { text: view.fromText })]),
@@ -868,6 +1004,7 @@ export function mountInspector(host, svc) {
     refs.set('studio.inspector.lengthText', { readout: length });
     return [header('Studio', `${view.counts.nodes} nodes · ${view.counts.edges} connections · `
       + `${view.counts.clips} clips · ${view.counts.lanes} automation lanes`),
+    buildRuntime(view.runtime),
     textInput('osc-si-studio-title', 'Title', view.title, (v, input) => {
       const r = dispatch({ type: 'METADATA_SET', title: v.trim() || view.title });
       if (!r.ok) input.value = view.title;
@@ -898,6 +1035,63 @@ export function mountInspector(host, svc) {
       + 'to add a node, C to connect the selected node, / to find a node.' })];
   }
 
+  // The Runtime section (ADR 0039): the state in words for everyone, the diagnostics with a
+  // button selecting the entity each names, and the identities and counts behind a disclosure.
+  // Rebuilt in place when it changes; the disclosure keeps its open state, a focused entity
+  // button its focus (data-key).
+  let rt = null;
+  function buildRuntime(rv) {
+    rt = { sig: '', status: h('p', { role: 'note', 'data-osc': 'studio.inspector.runtimeState' }),
+      list: h('ul', { class: 'osc-si-conns osc-si-diags', 'aria-label': 'Diagnostics',
+        'data-osc': 'studio.inspector.diagnostics' }),
+      dl: h('dl', { class: 'osc-si-dl' }) };
+    fillRuntime(rv);
+    return h('section', { class: 'osc-si-section', 'aria-label': 'Runtime',
+      'data-osc': 'studio.inspector.runtime' }, [
+      h('h5', { class: 'osc-si-h5', text: 'Runtime' }), rt.status, rt.list,
+      h('details', { class: 'osc-si-help' }, [h('summary', { text: 'Runtime details' }), rt.dl]),
+    ]);
+  }
+
+  function fillRuntime(rv) {
+    const sig = JSON.stringify(rv);
+    if (!rt || rt.sig === sig) return;
+    rt.sig = sig;
+    const bad = rv.state === 'refused' || rv.state === 'failed';
+    setAttr(rt.status, 'class', `osc-si-status${bad ? ' is-error' : ''}`);
+    setAttr(rt.status, 'data-state', rv.state);
+    replaceChildren(rt.status, [h('strong', { text: rv.label }),
+      ` · ${rv.text}${rv.code ? ` (${rv.code})` : ''}`]);
+    const active = document.activeElement;
+    const key = rt.list.contains(active) ? active.getAttribute('data-key') : null;
+    replaceChildren(rt.list, rv.diagnostics.map((d) => {
+      const e = d.entity;
+      return h('li', {}, [
+        h('p', { class: 'osc-si-note', text: `${d.message} (${d.code}, ${d.owner})` }),
+        e && e.selection ? h('button', { type: 'button', class: 'osc-si-link',
+          'data-key': `diag:${e.kind}:${e.id}`, text: `Select ${e.label}`,
+          onClick: () => svc.store.dispatch({ type: 'SELECTION_CHANGE',
+            selection: e.selection }) }) : null,
+      ]);
+    }));
+    rt.list.hidden = !rv.diagnostics.length;
+    const el = key && rt.list.querySelector(`[data-key="${CSS.escape(key)}"]`);
+    if (el) el.focus();
+    const a = rv.applied;
+    const list = (x) => x.join(', ') || 'None';
+    replaceChildren(rt.dl, [
+      ['Desired', `rev ${rv.desired.revision ?? '—'} · studio ${rv.desired.hash}`],
+      ['Applied', a ? `rev ${a.revision} · plan ${a.planHash} · ${a.at}` : 'Nothing'],
+      ['Nodes', `${rv.nodes.ready} ready · ${rv.nodes.degraded} degraded · `
+        + `${rv.nodes.offline} offline`],
+      ['Cables', `${rv.edges.live} live · ${rv.edges.inactive} inactive · `
+        + `${rv.edges['no-effect']} no effect`],
+      ['Lanes', list(rv.lanes)],
+      ['Owned', list(rv.owned)],
+    ].map(([k, v]) => h('div', {}, [h('dt', { text: k }),
+      h('dd', { class: 'osc-num', text: v })])));
+  }
+
   /** Refresh the Studio view's settings in place (a focused field keeps what is typed). */
   function updateStudio(view) {
     const st = view.settings;
@@ -920,13 +1114,14 @@ export function mountInspector(host, svc) {
     if (loop) setAttr(loop.input, 'aria-checked', st.loop.enabled ? 'true' : 'false');
     const len = refs.get('studio.inspector.lengthText');
     if (len) setText(len.readout, st.lengthText);
+    fillRuntime(view.runtime);
   }
 
   // ---------------------------------------------------------------- render
   /** The texts of a node view that update() does not refresh in place. */
   function textSig(view) {
     if (view.kind !== 'node') return '';
-    return [...view.connections.map((c) => c.text), ...view.fields.map((f) =>
+    return [!!view.statusText, ...view.connections.map((c) => c.text), ...view.fields.map((f) =>
       f.modulatedBy.join('|'))].join('\n');
   }
 
@@ -990,11 +1185,19 @@ export function mountInspector(host, svc) {
     return false;
   }
 
+  let said = null; // the runtime state last rendered
   function render() {
     const model = svc.store.getModel();
+    const truth = svc.truth ? svc.truth() : null;
     const view = inspectorView(model, svc.store.getSelection(), { registry,
       status: svc.status ? svc.status() : null, warnings: svc.warnings ? svc.warnings() : null,
-      edgeStatus: svc.edgeStatus ? svc.edgeStatus() : null });
+      edgeStatus: svc.edgeStatus ? svc.edgeStatus() : null, truth });
+    // A changed runtime state is announced politely; Play and Stop say their own.
+    const state = runtimeState(truth && truth.verdict);
+    if (said && state !== said && !(QUIET.includes(state) && QUIET.includes(said))) {
+      svc.announce(`Runtime: ${RUNTIME_LABELS[state]}`);
+    }
+    said = state;
     // Same target and same fields: update values in place (the focused field keeps focus and
     // what is being typed); the summary and status lines are rebuilt below.
     const sameTarget = current === view.key && view.kind !== 'studio' && view.kind !== 'multi'
@@ -1002,8 +1205,8 @@ export function mountInspector(host, svc) {
     if (sameTarget && update(view)) {
       const status = host.querySelector('[data-osc="studio.inspector.status"]');
       if (view.kind === 'node' && status) {
-        setText(status, [view.statusLabel, view.reason, ...view.warnings.filter((w) =>
-          w !== view.reason)].filter(Boolean).join(' · '));
+        setText(status, view.statusText);
+        status.classList.toggle('is-error', view.statusError);
       }
       // The connection list and the "Modulated" notes are text built with the view: rebuild
       // when they change (a connection added or removed, or one that stopped carrying anything
@@ -1029,6 +1232,7 @@ export function mountInspector(host, svc) {
     const hadFocus = host.contains(document.activeElement);
     const focusedKey = hadFocus ? document.activeElement.getAttribute('data-key') : null;
     refs = new Map();
+    rt = null;
     current = view.key;
     builtSig = textSig(view);
     const builders = { node: buildNode, edge: buildEdge, clip: buildClip, point: buildPoint,

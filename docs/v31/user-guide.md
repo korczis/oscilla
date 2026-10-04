@@ -101,6 +101,29 @@ beat unit, the loop switch with its start and end, and the timeline's length) an
 are document settings: each change is an undoable edit, and tempo changes move tempo-linked
 clips. The timeline's transport strip shows the same tempo.
 
+## Is what plays what you see? (Runtime)
+
+The same Studio view of the Inspector (nothing selected) starts with **Runtime**: whether the
+graph on screen is the one the audio engine runs.
+
+- **Not applied**: nothing runs; press Play to apply this Studio.
+- **Running**: the running graph is the current revision of the Studio.
+- **Previous configuration still running**: an older revision plays; the current one is not
+  applied yet.
+- **Refused**: the engine refused the current revision and keeps playing the last one; the
+  reason and its code follow.
+- **Failed**: Play was refused on this revision; the reason and its code follow.
+
+A change of state is announced to screen readers. Below it, the **diagnostics** of what runs
+(or failed to): each gives its message, code and owner (runtime or transport), and **Select …**
+selects the node, connection, clip or lane it names. A live edit the running graph cannot take
+is refused, so the state stays Running and the refusal is listed until a later edit is applied;
+the node's own status line in the Inspector gives the same reason with its code. **Runtime
+details** shows the desired revision with a short Studio hash, the applied revision with a short
+plan hash and the time it was applied, the nodes that are ready, degraded or offline-only, the
+cables that are live, inactive or have no audible effect, the automation lanes playing and the
+parameters they own. How these are computed is in [the compiler](compiler.md) "Runtime truth".
+
 ## Sequence on the timeline
 
 The **Timeline** holds tracks of clips: pattern clips (the sequencer's blocks) on a Sequence or

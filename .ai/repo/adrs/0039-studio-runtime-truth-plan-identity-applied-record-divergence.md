@@ -118,3 +118,25 @@ Proposed:
   sensitivity; the applied record only on commit; the four divergence states; the `syncNow`
   refusal). Revised if a consumer needs a reason the codes cannot express, which then gets a
   code, not a parsed message.
+
+## Resolution notes
+
+Appended; the decision and consequences above are left as written.
+
+### 2026-10-04: the verdict is shown to users in the Studio Inspector
+
+The consequence "no new UI surface; showing the verdict to users is a separate decision" is
+resolved by that decision: the Studio Inspector (nothing selected) carries a Runtime section
+built only from `studioDivergence`, `runtime.applied()` and the runtime and transport
+diagnostics (`inspector.js` `runtimeView`, a pure view model). Two facts the surface needed for a
+true answer were added to the record, not derived in the UI:
+
+- `lastError` records the refused model's `studioHash`, and a refusal counts only while that
+  hash is the desired model's: under the commit gate a refused revision number is reused by the
+  next commit, so revision equality alone reported "Failed" for a document that never played.
+  `lastError` is cleared when that revision later commits.
+- Transport diagnostics describe the current playback only (PLAY empties them; a refusal drops
+  out once a later model is applied), and `prepare-failed` / `edit-refused` / `sync-refused`
+  name the entity whose preparation threw.
+
+Tests: `tests/unit/v31-studio-runtime-view.test.mjs`, `tests/browser/v31-studio-runtime.cjs`.

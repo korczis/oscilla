@@ -832,6 +832,13 @@
   text-align: left;
 }
 
+/* Runtime diagnostics: the message, then the button selecting what it names (the gap clears
+   the 2 px focus outline at its 2 px offset). */
+.osc-si-diags li {
+  display: grid;
+  gap: 6px;
+}
+
 .osc-si-link:hover {
   border-color: var(--osc-border-soft);
   background: var(--osc-surface-2);

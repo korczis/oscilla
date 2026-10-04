@@ -30,8 +30,12 @@
 //                                  commits (start, apply while running), null while stopped;
 //                                  `at` is wall-clock ISO text for people, never audio timing;
 //                                  the hashes are computed on first read (compiler.js planHash)
-//   runtime.lastError              { phase, message, errors: [Diagnostic], at, revision }:
-//                                  revision is the one it refused (apply) or could not start
+//   runtime.lastError              { phase, message, errors: [Diagnostic], at, revision,
+//                                  studioHash (of the refused model, null if it has none) }:
+//                                  revision is the one it refused (apply) or could not start,
+//                                  cleared when that revision later commits;
+//                                  a prepare refusal's diagnostic names the node or edge that
+//                                  threw (entity)
 //   studioDivergence({ model, revision }, runtime) -> verdict   divergence as data (below)
 //   runtime.on(fn) -> off          fn(type, detail): 'applied' | 'error' | 'state'
 //   runtime.setOwnedParams([{ node, param, peak? }]) -> list   parameters another owner drives
@@ -109,8 +113,8 @@ const messageOf = (e) => (e && e.message) || String(e);
 /**
  * Divergence as data (pure; reads the runtime, changes nothing): the desired model (the store's,
  * with its revision when known) against what the runtime runs (its applied record and last
- * refusal). -> { state, desired: { revision, studioHash }, applied: record | null,
- * reason: Diagnostic | null }, state:
+ * refusal; a null runtime, none yet, is a stopped one). -> { state, desired: { revision,
+ * studioHash }, applied: record | null, reason: Diagnostic | null }, state:
  *   'not-applied'  the runtime is not running (stopped, never started): nothing is applied;
  *                  reason is the refusal of this model if PLAY failed on it
  *   'in-sync'      the applied record is the desired revision (without a revision: the same
@@ -123,12 +127,15 @@ const messageOf = (e) => (e && e.message) || String(e);
  */
 export function studioDivergence({ model, revision = null }, runtime) {
   const desired = { revision, studioHash: studioHashOf(model) };
-  const applied = runtime.state === 'running' ? runtime.applied() : null;
+  const applied = runtime && runtime.state === 'running' ? runtime.applied() : null;
   const same = (r) => !!r && (revision != null ? r.revision === revision
     : r.studioHash === desired.studioHash);
-  const e = runtime.lastError;
+  const e = runtime && runtime.lastError;
+  // A refusal of this model: by revision (or newer than the record), and by studioHash when it
+  // has one, since a refused attempt's revision number is the next commit's (the commit gate).
   const reason = e && (revision != null ? e.revision === revision
-    : applied && e.revision > applied.revision) ? e.errors[0] : null;
+    : applied && e.revision > applied.revision)
+    && (!e.studioHash || e.studioHash === desired.studioHash) ? e.errors[0] : null;
   const state = !applied ? 'not-applied' : same(applied) ? 'in-sync'
     : reason ? 'refused' : 'behind';
   return { state, desired, applied, reason: state === 'in-sync' ? null : reason };
@@ -164,6 +171,7 @@ export function createStudioRuntime({
   let record = null;
   // The revision being applied or started: what lastError names when it is refused.
   let attempt = null;
+  let attemptModel = null; // ... and its model: a revision number alone may be reused
 
   const emit = (type, detail) => {
     for (const fn of listeners) {
@@ -175,17 +183,26 @@ export function createStudioRuntime({
     state = s;
     emit('state', s);
   };
-  const fail = (phase, errors, extra = {}, code = `${phase}-failed`) => {
+  // entity: the node or edge being prepared when it threw (a refusal names what failed).
+  const fail = (phase, errors, extra = {}, code = `${phase}-failed`, entity = null) => {
     const list = Array.isArray(errors) ? errors : [{ ...studioDiagnostic('runtime', code,
-      messageOf(errors), null, 'error'), path: '' }];
+      messageOf(errors), entity, 'error'), path: '' }];
+    let studioHash = null;
+    try {
+      studioHash = attemptModel ? studioHashOf(attemptModel) : null;
+    } catch (e) { /* a model of the wrong shape has no hash */ }
     lastError = { phase, message: list[0].message, errors: list, at: Date.now(),
-      revision: attempt };
+      revision: attempt, studioHash };
     emit('error', lastError);
     return { ok: false, phase, errors: list, revision: compiledRevision, ...extra };
   };
-  /** A transaction committed `plan` as `compiledRevision`: the running graph holds it. */
+  /**
+   * A transaction committed `plan` as `compiledRevision`: the running graph holds it, and a
+   * refusal of that same revision (a PLAY that failed on it, then succeeded) is no longer true.
+   */
   const commit = () => {
     record = { revision: compiledRevision, plan, at: new Date().toISOString() };
+    if (lastError && lastError.revision === compiledRevision) lastError = null;
   };
   function applied() {
     return record && { revision: record.revision, studioHash: studioHashOf(record.plan.model),
@@ -369,16 +386,19 @@ export function createStudioRuntime({
       .map((o) => o.id));
     const created = { handles: new Map(), edges: new Map() };
     let t;
+    let doing = null; // the node or edge being prepared: what a refusal names
     // 2. prepare: silent until the crossfade
     try {
       t = hooks.soon();
       env.at = t;
       for (const id of next.order) {
+        doing = { kind: 'node', id };
         if (createIds.has(id)) created.handles.set(id, instantiateNode(next.nodes.get(id), env));
       }
       const handleOf = (id) => created.handles.get(id) || handles.get(id);
       for (const id of next.edgeOrder) {
         if (!edgeAdd.has(id)) continue;
+        doing = { kind: 'edge', id };
         const pe = next.edges.get(id);
         created.edges.set(id, createEdgeHandle(pe, handleOf(pe.from.node), handleOf(pe.to.node),
           env));
@@ -387,6 +407,7 @@ export function createStudioRuntime({
         || (edgeRemove.has(eid) ? null : edges.get(eid));
       for (const [id, h] of created.handles) {
         if (h.status !== 'ready' && h.status !== 'pending') continue;
+        doing = { kind: 'node', id };
         const cb = computeBases(next.nodes.get(id), incomingControl(next, id, edgeOf), hooks,
           peaks.get(id) || null);
         h.applyBase(cb.base, true, NONE_OWNED);
@@ -396,7 +417,7 @@ export function createStudioRuntime({
         try { eh.dispose(); } catch (e) { /* ignore */ }
       }
       for (const h of created.handles.values()) disposeHandle(h);
-      return fail('prepare', err, { kept: true });
+      return fail('prepare', err, { kept: true }, undefined, doing);
     }
     // 3. commit
     const retire = { handles: [], edges: [] };
@@ -498,6 +519,7 @@ export function createStudioRuntime({
   function apply(model, { revision = null } = {}) {
     const rev = revision != null ? revision : (compiledRevision == null ? 1 : compiledRevision + 1);
     attempt = rev;
+    attemptModel = model;
     if (disposed) return fail('validate', 'The Studio runtime is disposed.', {}, 'disposed');
     const next = compileStudio(model, { engine, registry, adapters, options: opts });
     if (!next.ok) return fail('validate', next.errors, { kept: true });
@@ -521,6 +543,7 @@ export function createStudioRuntime({
 
   function start() {
     attempt = compiledRevision;
+    attemptModel = plan.model;
     if (disposed) return fail('start', 'The Studio runtime is disposed.', {}, 'disposed');
     if (state === 'running') return { ok: true, applied: false, ops: [],
       revision: compiledRevision };

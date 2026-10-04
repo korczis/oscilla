@@ -234,12 +234,14 @@ status maps the views read (`compiledStatus`, `compiledEdgeStatus`, `runtimeStat
 | runtime | handle `code` | `mic-pending` (waiting for permission), `mic-error` (the input failed to open); otherwise the plan node's |
 | runtime | route `code` | `no-output`, `no-input`, `no-mod-target` (the handles cannot make the route); otherwise the plan edge's |
 | runtime | `apply` warnings, `debugInfo().diagnostics` | `update-failed`, `parameters-failed`, `output-failed`, `stop-failed` (entity: node), `route-failed` (entity: edge): a guarded crossfade step that threw |
-| runtime | `lastError.errors`, a refused `apply` / `start` | `prepare-failed`, `start-failed`, `nothing-compiled`, `disposed`; a validation refusal carries validation's diagnostics |
-| transport | `debugInfo().diagnostics`, the `'warning'` event | `edit-refused` (the commit gate refused a live edit), `sync-refused` (the runtime refused a synced model), `automation-failed` (entity: lane), `measurement-callback-failed`, `timeline` (a timeline-compiler warning, its prose as the message) |
+| runtime | `lastError.errors`, a refused `apply` / `start` | `prepare-failed` (entity: the node or edge whose preparation threw), `start-failed`, `nothing-compiled`, `disposed`; a validation refusal carries validation's diagnostics |
+| transport | `debugInfo().diagnostics`, the `'warning'` event | `edit-refused` (the commit gate refused a live edit), `sync-refused` (the runtime refused a synced model), both with the runtime diagnostic's entity, `automation-failed` (entity: lane), `measurement-callback-failed`, `timeline` (a timeline-compiler warning, its prose as the message) |
 | transport | `debugInfo().unplayed[].code` | `no-target`, `pattern-target`, `event-target`, `target-unavailable`, `no-parameter` |
 
 `runtime.apply` returns `warnings` as diagnostics in both branches, stopped and running. The
-transport's `'warning'` event passes the diagnostic. The workspace's warning line and the
+transport's diagnostics are those of the current playback: PLAY starts an empty list, and an
+`edit-refused` or `sync-refused` leaves it once a later model is applied. The transport's
+`'warning'` event passes the diagnostic. The workspace's warning line and the
 offline render's warnings use its `message`.
 
 ### Plan identity
@@ -274,12 +276,18 @@ text for people reading a log. It is never used for audio timing. The hashes are
 first read.
 
 `runtime.lastError` also names the `revision` it refused (the one passed to `apply`, or the
-compiled revision `start` could not build).
+compiled revision `start` could not build) and the `studioHash` of that model (`null` when it
+has none, a model of the wrong shape). It is cleared when a transaction later commits that same
+revision (a PLAY that failed, then succeeded).
 
 ### Divergence
 
 `studioDivergence({ model, revision }, runtime)` (`runtime.js`) is pure. It reads the runtime's
-`state`, `applied()` and `lastError` and changes nothing:
+`state`, `applied()` and `lastError` and changes nothing; a `null` runtime (none created yet) is
+a stopped one. A refusal is of the desired model when its revision matches (or, without a
+revision, it is newer than the applied record) and its `studioHash` is the desired one: under
+the commit gate a refused attempt's revision number is the next commit's, possibly of another
+document.
 
 ```js
 { state, desired: { revision, studioHash }, applied: record | null, reason: Diagnostic | null }
@@ -298,6 +306,15 @@ commits first (no gate) and the runtime then refuses. `runtimeStatus(model, runt
 (`graph-view.js`) consumes the verdict. When it is not `in-sync`, a model node or edge that the
 running plan does not hold is `degraded` / `inactive` with code `not-in-runtime`. The workspace
 passes the store revision (`studioStatus(model, { runtime, revision })`).
+
+The Inspector shows the verdict to users (`inspector.js` `runtimeView`, the Studio view's
+**Runtime** section, user guide "Is what plays what you see?"). It derives nothing: the state is
+the verdict's (`not-applied` with a reason is shown as Failed), the identities are the verdict's
+and `applied()`'s, the counts are the status maps the graph draws (`studioStatus`, `edgeRoute`),
+the lanes and owned parameters are `transport.debugInfo().lanes` and `runtime.ownedParams()`,
+and the diagnostics are the verdict's reason plus, while a graph runs, `debugInfo().diagnostics`
+of the runtime and the transport; each entity links to the selection that shows it. Node and
+connection status lines add the status `code` and the diagnostics that name them.
 
 `transport.sync()` follows the same truth. When `runtime.apply` refuses the store's model, the
 transport keeps the model, owned parameters and schedule of the graph that still runs. It does

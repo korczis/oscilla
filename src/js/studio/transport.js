@@ -26,11 +26,13 @@
 //   transport.debugInfo(), transport.on(fn) -> off ('state' | 'ended' | 'warning': a
 //                                                Diagnostic), transport.dispose(), .playing
 // Diagnostics (validate.js studioDiagnostic, owner 'transport'): debugInfo().diagnostics, and
-// debugInfo().warnings as their message text. Codes: edit-refused, sync-refused (the runtime
-// refused a model: the transport keeps the last applied one), automation-failed (entity: the
-// lane), measurement-callback-failed, timeline (a timeline-compiler warning, its prose as the
-// message). debugInfo().unplayed = [{ id, code, reason }], code: no-target, pattern-target,
-// event-target, target-unavailable, no-parameter.
+// debugInfo().warnings as their message text, are those of the current playback: PLAY starts an
+// empty list, and a refusal leaves it once a later model is applied. Codes: edit-refused,
+// sync-refused (the runtime refused a model: the transport keeps the last applied one; entity:
+// the runtime diagnostic's), automation-failed (entity: the lane), measurement-callback-failed,
+// timeline (a timeline-compiler warning, its prose as the message). debugInfo().unplayed =
+// [{ id, code, reason }], code: no-target, pattern-target, event-target, target-unavailable,
+// no-parameter.
 //
 // Timing (§180-§181). createTimelineScheduler (timeline-compiler.js) compiles the timeline with
 // the sequencer compiler; this module only applies what it returns, at the audio-clock times it
@@ -127,6 +129,7 @@ const messageOf = (e) => (e && e.message) || String(e);
 const errorOf = (r, fallback) => (r.errors && r.errors[0] && r.errors[0].message) || fallback;
 
 const PATTERN_TARGETS = Object.freeze(['sequence', 'oscillator']);
+const REFUSALS = Object.freeze(['edit-refused', 'sync-refused']);
 
 /**
  * Why the transport does not play a timeline clip, from the model alone (pure): null when it
@@ -199,6 +202,12 @@ export function createStudioTransport({
     warnings.push(d);
     if (warnings.length > 50) warnings.shift();
     emit('warning', d);
+  };
+  /** A later model was applied: the refusals before it are no longer current. */
+  const settled = () => {
+    for (let i = warnings.length; i-- > 0;) {
+      if (REFUSALS.includes(warnings[i].code)) warnings.splice(i, 1);
+    }
   };
   const laneWarn = (id, e) => warn('automation-failed', `Automation ${id}: ${messageOf(e)}`,
     { kind: 'lane', id });
@@ -936,7 +945,7 @@ export function createStudioTransport({
     const message = errorOf(r, 'unknown error');
     lastError = { phase: r.phase, code, message };
     const text = TRANSPORT_TEXT.editRefused(message);
-    warn(code, text);
+    warn(code, text, (r.errors && r.errors[0] && r.errors[0].entity) || null);
     return text;
   }
 
@@ -950,6 +959,7 @@ export function createStudioTransport({
       refusedBy(r, 'sync-refused');
       return { ok: false, synced: false, revision: rev, applied: r };
     }
+    settled();
     model = next;
     afterApply(freshOf(r));
     const plan = scheduler.edit(next, ctxNow());
@@ -973,6 +983,7 @@ export function createStudioTransport({
       return { ok: false, phase: r.phase, reason: refusedBy(r, 'edit-refused') };
     }
     lastRevision = revision;
+    settled();
     model = next;
     afterApply(freshOf(r));
     applyEdit(scheduler.edit(next, ctxNow()));
@@ -1032,6 +1043,7 @@ export function createStudioTransport({
     startPosition = pos;
     lastError = null;
     unplayed.clear();
+    warnings.length = 0;
     playing = true;
     scheduler = createTimelineScheduler(m, { sampleRate: hooks.ctx.sampleRate, baseTime,
       startPosition: pos, registry, lookAheadS });
