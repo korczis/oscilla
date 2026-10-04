@@ -716,16 +716,21 @@ function defineChecks() {
         stored: sessionStorage.getItem('oscilla.safetyNoticeCollapsed'),
         text: n.textContent.replace(/\s+/g, ' ').trim() };
     });
+    // Each step waits (bounded) for the focus handoff instead of a fixed sleep: on a loaded
+    // WebKit runner the handoff landed after 120 ms and the check read <body>.
+    const settle = async (want) => {
+      let v = await state();
+      for (let i = 0; i < 40 && !want(v); i++) { await sleep(50); v = await state(); }
+      return v;
+    };
     const first = await state();
     await page.focus('[data-osc="safety.dismiss"]');
     await page.keyboard.press('Enter');
-    await sleep(120);
-    const dismissed = await state();
+    const dismissed = await settle((v) => !v.shown && v.active === 'safety.reopen');
     await page.keyboard.press('Enter'); // focus is on the reopen control
-    await sleep(120);
-    const reopened = await state();
+    const reopened = await settle((v) => v.shown && v.active === 'safety.dismiss');
     await page.keyboard.press('Enter'); // focus is on dismiss again
-    await sleep(120);
+    await settle((v) => !v.shown);
     await page.reload({ waitUntil: 'load' });
     await page.waitForSelector('html[data-ready="true"]');
     await sleep(150);
