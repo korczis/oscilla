@@ -215,7 +215,9 @@ test('the restated contract equals the installed release/v1 schema', (t) => {
 
 const git = (args) => {
   try {
-    return execFileSync('git', args, { cwd: ROOT, stdio: ['ignore', 'pipe', 'ignore'] });
+    // dist/index.html is larger than execFileSync's 1 MiB default buffer
+    return execFileSync('git', args, { cwd: ROOT, stdio: ['ignore', 'pipe', 'ignore'],
+      maxBuffer: 64 * 1024 * 1024 });
   } catch {
     return null;
   }
@@ -243,6 +245,7 @@ test('every committed release record is valid, canonical and agrees with git', (
     if (!tagged) continue;
     assert.equal(tagged.toString().trim(), r.commit, `${f}: commit is the tag's`);
     const dist = git(['show', `${r.commit}:dist/index.html`]);
+    assert.ok(dist, `${f}: dist/index.html is readable at the tag`);
     assert.equal(hex(dist), web.sha256, `${f}: sha256 of dist/index.html at the tag`);
     assert.equal(dist.length, web.size, `${f}: size of dist/index.html at the tag`);
     const pkg = JSON.parse(git(['show', `${r.commit}:package.json`]).toString());
