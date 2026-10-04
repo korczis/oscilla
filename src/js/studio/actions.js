@@ -3,9 +3,10 @@
 // no other writer. Pure apart from the injected idGenerator and onChange callbacks: no DOM, no
 // Web Audio, no globals, no clock.
 //
-//   createStudioStore(initialModel, { idGenerator, onChange, registry, historyLimit }) -> store
+//   createStudioStore(initialModel, { idGenerator, onChange, registry, historyLimit, gate })
+//     -> store
 //   store.dispatch(action) -> { ok: true, changed, model, revision, label?, created? }
-//                           | { ok: false, reason, diagnostics }
+//                           | { ok: false, reason, diagnostics, refused?, phase? }
 //   store.undo() / store.redo() -> { ok, label? };  canUndo(), canRedo(), undoLabel(), redoLabel()
 //   store.beginGesture(label?), endGesture(), cancelGesture()      (§50, §185)
 //   store.getModel(), getSelection(), getRevision(), getState(), debugInfo()      (§52, §177)
@@ -41,6 +42,16 @@
 //     never reused within one action (§172). Display names are metadata (§173-§174).
 //   - NODE_REMOVE cascades (§124): connected edges, clips targeting the node and its automation
 //     lanes are removed, track targets cleared; one undo restores all of it.
+//   - The commit gate (ADR 0035, V431 review #15): `gate(next, { reason, action, label,
+//     revision })` is asked, synchronously, before a model change is committed: a semantic
+//     dispatch, undo, redo, and the return to a cancelled gesture's start. `revision` is the one
+//     the commit will get. It returns null to accept, or { ok: false, reason, phase } to refuse
+//     (a gate that throws refuses with its message). The workspace's gate applies the model to
+//     the running Studio graph first (transport.admit), so a runtime transaction that fails in
+//     prepare refuses the edit: dispatch returns { ok: false, refused: true, phase, reason },
+//     and model, history (undo and redo stacks), selection and revision stay as they were. A
+//     refused undo or redo leaves its entry where it was; a refused cancel keeps the gesture's
+//     edit as one undo entry. Without a gate every valid change commits.
 
 import { ID_PATTERN } from '../experiments/schema.js';
 import { canConnect, validateEdgeProps } from './ports.js';
@@ -796,6 +807,7 @@ function checkView(view, cur) {
  */
 export function createStudioStore(initialModel, {
   idGenerator, onChange = null, registry = NODE_REGISTRY, historyLimit = STUDIO_HISTORY_LIMIT,
+  gate = null,
 } = {}) {
   if (typeof idGenerator !== 'function') {
     throw new TypeError('createStudioStore: an idGenerator(prefix) function is required');
@@ -818,6 +830,19 @@ export function createStudioStore(initialModel, {
     }
   };
   const fail = (reason, diagnostics = []) => ({ ok: false, reason, diagnostics });
+  /** The commit gate's refusal of `next` as a failed result, or null when it may commit. */
+  const refusal = (next, info) => {
+    if (typeof gate !== 'function') return null;
+    let r;
+    try {
+      r = gate(next, { ...info, revision: revision + 1 });
+    } catch (e) {
+      r = { ok: false, reason: (e && e.message) || String(e), phase: 'gate' };
+    }
+    if (!r || r.ok !== false) return null;
+    return { ...fail(r.reason || 'The change was refused.'), refused: true,
+      phase: r.phase || null };
+  };
 
   // View state is persisted but not undoable (ADR 0030, 0031): a history snapshot carries the
   // view of its time, so undo, redo and cancel restore the document and keep the current view.
@@ -873,6 +898,8 @@ export function createStudioStore(initialModel, {
         }
       }
       const next = deepFreeze(result.model);
+      const refused = refusal(next, { reason: 'dispatch', action, label: result.label });
+      if (refused) return refused;
       history.record({ label: result.label, before: model, after: next,
         actionType: action.type });
       lastAction = { type: action.type, label: result.label };
@@ -901,14 +928,26 @@ export function createStudioStore(initialModel, {
       while (history.inGesture()) closeGesture();
       const e = history.undo();
       if (!e) return { ok: false, reason: 'Nothing to undo.' };
-      setModel(withCurrentView(e.before), 'undo', { label: e.label });
+      const target = withCurrentView(e.before);
+      const refused = refusal(target, { reason: 'undo', label: e.label });
+      if (refused) {
+        history.redo(); // the entry goes back on top of the undo stack
+        return refused;
+      }
+      setModel(target, 'undo', { label: e.label });
       return { ok: true, label: e.label, model, revision };
     },
     redo() {
       while (history.inGesture()) closeGesture();
       const e = history.redo();
       if (!e) return { ok: false, reason: 'Nothing to redo.' };
-      setModel(withCurrentView(e.after), 'redo', { label: e.label });
+      const target = withCurrentView(e.after);
+      const refused = refusal(target, { reason: 'redo', label: e.label });
+      if (refused) {
+        history.undo(); // the entry goes back on top of the redo stack
+        return refused;
+      }
+      setModel(target, 'redo', { label: e.label });
       return { ok: true, label: e.label, model, revision };
     },
     beginGesture(label = null) {
@@ -920,9 +959,17 @@ export function createStudioStore(initialModel, {
     },
     /** Abandon the open gesture and return to the model at its start (no history entry). */
     cancelGesture() {
-      const before = history.cancelGesture();
-      if (before && before !== model) setModel(withCurrentView(before), 'cancel');
-      return !!before;
+      const before = history.gestureStart();
+      if (!before) return false;
+      if (before === model) return !!history.cancelGesture();
+      const target = withCurrentView(before);
+      if (refusal(target, { reason: 'cancel' })) {
+        while (history.inGesture()) closeGesture(); // the edit stays, as one undo entry
+        return false;
+      }
+      history.cancelGesture();
+      setModel(target, 'cancel');
+      return true;
     },
     canUndo: () => history.canUndo(),
     canRedo: () => history.canRedo(),

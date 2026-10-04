@@ -147,6 +147,12 @@ wired to.
    here disposes everything prepared; the previous runtime keeps playing unchanged
    (`{ ok: false, phase: 'prepare', kept: true }`, `lastError` set). Never half-connected: the
    unit test injects a builder failure and compares maps, node counts and live connections.
+   In the Studio the edit is then refused, as ADR 0035 says. While playing, the store's commit
+   gate is `transport.admit`, which runs this transaction before the store commits. A failure
+   refuses the dispatch, undo or redo, and model, revision and history stay as they were. The
+   reason is announced and shown (V431 review #15,
+   `tests/unit/v431-studio-refused-edit.test.mjs`). Node and edge status in the UI come from
+   the running runtime while it plays (`graph-view.js` `runtimeStatus`).
 3. **commit**: swap the handle and route maps and the plan; `revision` (the store's, or an
    internal counter) now names the topology the runtime reflects (§178).
 4. **crossfade** at `t`: new routes ramp 0 → 1 and removed routes 1 → floor over

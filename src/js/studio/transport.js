@@ -15,6 +15,11 @@
 //   transport.setLoop({ enabled, start, end })  LOOP_SET through the store, then sync()
 //   transport.sync() -> result                  apply the store's model now (the UI's store
 //                                                onChange calls it; every wake-up checks too)
+//   transport.admit(next, { revision }) -> null | { ok: false, phase, reason }   the store's
+//                                                commit gate (actions.js `gate`): while playing,
+//                                                apply `next` to the running graph BEFORE the
+//                                                store commits it; a refused runtime transaction
+//                                                refuses the edit (ADR 0035, V431 review #15)
 //   transport.escape({ gesture, popup, selectionMode }) -> action   resolveEscape (§185);
 //                                                'stop-audio' stops fast (8 ms)
 //   transport.playhead() -> { position, pass, playing }   from AudioContext.currentTime (§94)
@@ -86,6 +91,8 @@ export const TRANSPORT_TEXT = Object.freeze({
   unavailable: (name, reason) => `${name} is not available${reason ? `: ${reason}` : '.'}`,
   noParameter: (name, param) => `${name} has no ${param} parameter to automate.`,
   claimRefused: 'The audio output is in use by another program.',
+  editRefused: (message) => `Edit refused: the running Studio graph could not take it `
+    + `(${message}). The last working graph keeps playing.`,
 });
 
 /** Gate records are kept this long after their release starts (bookkeeping only). */
@@ -918,6 +925,34 @@ export function createStudioTransport({
     return { ok: true, synced: true, revision: rev, applied: r, plan };
   }
 
+  /**
+   * The store's commit gate (ADR 0035 "the model change is refused"). While playing, `next` is
+   * applied to the running graph before the store commits it, as revision `revision`: on success
+   * the transport follows it (the store's onChange then finds nothing left to sync); when the
+   * runtime refuses (validate or prepare), the owned parameters go back to the current model,
+   * nothing else changed, and the refusal is returned for the store to refuse the edit with.
+   * While stopped every change is admitted: PLAY applies the model then.
+   */
+  function admit(next, { revision } = {}) {
+    if (!playing || disposed || !next) return null;
+    runtime.setOwnedParams(ownedFor(next));
+    const r = runtime.apply(next, { revision });
+    if (!r.ok) {
+      runtime.setOwnedParams(ownedFor(model));
+      const message = (r.errors && r.errors[0] && r.errors[0].message) || 'unknown error';
+      lastError = { phase: r.phase, message };
+      const reason = TRANSPORT_TEXT.editRefused(message);
+      warn(reason);
+      return { ok: false, phase: r.phase, reason };
+    }
+    lastRevision = revision;
+    model = next;
+    afterApply(freshOf(r));
+    applyEdit(scheduler.edit(next, ctxNow()));
+    if (playing && timer == null) arm(1);
+    return null;
+  }
+
   function sync() {
     if (!playing) return { ok: true, synced: false };
     if (store.getRevision() === lastRevision) return { ok: true, synced: false };
@@ -1110,6 +1145,7 @@ export function createStudioTransport({
     returnToStart: () => locate(0),
     setLoop,
     sync,
+    admit,
     escape,
     playhead,
     debugInfo,

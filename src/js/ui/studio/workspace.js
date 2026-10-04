@@ -9,12 +9,12 @@
 // template swaps the document behind the handle (a new history, like opening a file); the
 // handle's revision stays monotonic so the transport always re-applies.
 //
-// Audio (§41-§46, §180-§186; rule project.audio-engine-discipline): the transport
-// (src/js/studio/transport.js) plays the store's model on the ONE AudioEngine through the Studio
-// runtime (src/js/studio/runtime.js); every model change reaches the runtime through
-// transport.sync() (transactional, crossfaded by the runtime). The playhead text observes
-// AudioContext time through transport.playhead() in requestAnimationFrame: rAF only paints, it
-// never schedules audio. STOP and Escape release everything (runtime.stop: 0 nodes afterwards).
+// Audio (§41-§46, §180-§186; rule project.audio-engine-discipline): the transport plays the
+// store's model on the ONE AudioEngine through the Studio runtime. While playing, the store's
+// commit gate (admitEdit -> transport.admit) applies an edit to the running graph before it is
+// committed; an edit the runtime refuses is refused, announced and shown (ADR 0035). The
+// playhead text observes AudioContext time through transport.playhead() in rAF: rAF only paints,
+// it never schedules audio. STOP and Escape release everything (runtime.stop: 0 nodes after).
 // Exclusivity (decision "Studio output and the Playground voice are exclusive"): PLAY claims the
 // output (stops the instrument and the sequencer; refused while a measurement owns it), and the
 // instrument or the sequencer starting stops the Studio.
@@ -77,7 +77,7 @@ import { KNOWN_ALGORITHM_IDS } from '../../measurement/algorithms.js';
 import { openModal, closeModal } from '../dialogs.js';
 import { downloadBlob, readFileText } from '../exporters.js';
 import { createGraphEditor } from './graph-editor.js';
-import { compiledEdgeStatus, compiledStatus, nodeWarnings } from './graph-view.js';
+import { compiledEdgeStatus, compiledStatus, nodeWarnings, runtimeStatus } from './graph-view.js';
 import { STUDIO_SHORTCUTS, isEditingTarget, resolveStudioKey } from './graph-keys.js';
 import { createConnectDialog, createFindNode, createQuickAdd } from './graph-picker.js';
 import { mountInspector } from './inspector.js';
@@ -209,11 +209,30 @@ export function parseRenderDuration(text) {
 }
 
 /**
+ * The node and edge status the Studio shows (§170-§171): from the running runtime while it plays
+ * (what Web Audio actually runs, graph-view.js runtimeStatus), otherwise from a compile of the
+ * model. -> { nodes: Map id -> { status, reason }, edges: Map id -> { status, reason } }
+ */
+export function studioStatus(model, { runtime = null, engine = null,
+  registry = NODE_REGISTRY } = {}) {
+  if (runtime && runtime.state === 'running') return runtimeStatus(model, runtime);
+  let plan = null;
+  try {
+    plan = compileStudio(model, { engine, registry });
+  } catch (e) {
+    plan = null;
+  }
+  return { nodes: compiledStatus(plan), edges: compiledEdgeStatus(plan) };
+}
+
+/**
  * A stable handle over the current store (§9): the same object for every projection, the
  * document behind it replaceable (open project / template / import). Revisions are monotonic
  * across documents. subscribe(fn) -> off: fn(event) after every store change and replacement.
+ * `gate(next, info)`: the store's commit gate (actions.js), with info.revision in the handle's
+ * monotonic numbering (the workspace passes transport.admit).
  */
-export function createStoreHandle(initialModel, { registry = NODE_REGISTRY } = {}) {
+export function createStoreHandle(initialModel, { registry = NODE_REGISTRY, gate = null } = {}) {
   const listeners = new Set();
   let offset = 0;
   let store = null;
@@ -223,7 +242,9 @@ export function createStoreHandle(initialModel, { registry = NODE_REGISTRY } = {
     }
   };
   const make = (m) => createStudioStore(m, { registry, idGenerator: createIdGenerator(m),
-    onChange: (ev) => emit({ ...ev, revision: ev.revision + offset }) });
+    onChange: (ev) => emit({ ...ev, revision: ev.revision + offset }),
+    gate: typeof gate === 'function'
+      ? (next, info) => gate(next, { ...info, revision: info.revision + offset }) : null });
   store = make(initialModel);
   const adjust = (r) => (r && typeof r.revision === 'number'
     ? { ...r, revision: r.revision + offset } : r);
@@ -315,15 +336,25 @@ export function createStudioUi(svc = {}) {
   }
 
   function recompile(model) {
-    let plan = null;
-    try {
-      plan = compileStudio(model, { engine: svc.engine, registry });
-    } catch (e) {
-      plan = null;
-    }
-    ctx.status = compiledStatus(plan);
-    ctx.edgeStatus = compiledEdgeStatus(plan);
+    const st = studioStatus(model, { runtime: ctx.runtime, engine: svc.engine, registry });
+    ctx.status = st.nodes;
+    ctx.edgeStatus = st.edges;
     ctx.warnings = nodeWarnings(model, registry);
+  }
+
+  function statusSignature() {
+    const sig = (m) => [...m].map(([id, v]) => `${id}=${v.status}:${v.reason || ''}`).join('|');
+    return `${sig(ctx.status)}#${sig(ctx.edgeStatus)}`;
+  }
+
+  /** The store's commit gate: while playing, the running graph must take the edit first. */
+  function admitEdit(next, info) {
+    const r = ctx.transport ? ctx.transport.admit(next, info) : null;
+    if (r && r.ok === false) {
+      announce(r.reason, { assertive: true });
+      if (ctx.cmp) ctx.cmp.studio.warning = r.reason;
+    }
+    return r;
   }
 
   function refreshState() {
@@ -355,8 +386,8 @@ export function createStudioUi(svc = {}) {
     if (ev.type === 'view') return; // the editor applied its own view already
     const model = ctx.handle.getModel();
     if (ev.type === 'model') {
-      recompile(model);
       if (ctx.transport) ctx.transport.sync();
+      recompile(model); // after sync: the status shows what the runtime now runs
       const sig = limitSignature(model);
       if (sig !== ctx.limitSig && ctx.library) {
         ctx.limitSig = sig;
@@ -391,6 +422,15 @@ export function createStudioUi(svc = {}) {
       if (ctx.editor) ctx.editor.setRunning(playing);
       if (ctx.compact) ctx.compact.setTransport({ playing });
       if (playing && !ctx.raf) ctx.raf = requestAnimationFrame(tick);
+      if (ctx.handle && ctx.mounted) {
+        // Status follows the runtime while it plays and the compile while stopped.
+        const before = statusSignature();
+        recompile(ctx.handle.getModel());
+        if (statusSignature() !== before) {
+          if (ctx.editor) ctx.editor.render();
+          if (ctx.inspector) ctx.inspector.render();
+        }
+      }
       if (!playing) {
         tick();
         if (detail && detail.reason === 'end') announce('Studio playback ended');
@@ -783,7 +823,8 @@ export function createStudioUi(svc = {}) {
 
     studioInit() {
       ctx.cmp = this;
-      ctx.handle = createStoreHandle(templateModel(REFERENCE_TEMPLATE_ID), { registry });
+      ctx.handle = createStoreHandle(templateModel(REFERENCE_TEMPLATE_ID), { registry,
+        gate: admitEdit });
       ctx.dirty = createDirtyTracker(ctx.handle.getModel());
       ctx.templateBaseline = createDirtyTracker(ctx.handle.getModel());
       ctx.handle.subscribe(onStoreChange);

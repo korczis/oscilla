@@ -339,6 +339,7 @@ touches Web Audio objects, and it does so only through the runtime's handles.
 | `returnToStart()` / `locate(p)` | the return point becomes p; while playing, the current schedule is stopped as above (without stopping the graph) and a new anchor starts at `hooks.soon()` from p |
 | `setLoop({ enabled, start, end })` | `LOOP_SET` through the store, then `sync()` (the scheduler re-anchors, `EDIT_POLICY.loopChange`) |
 | `sync()` | the store's model now: owned parameters, `runtime.apply`, ownership and node rebinds, `scheduler.edit(model, now)` applied. The UI's store `onChange` calls it; every wake-up also compares the store revision |
+| `admit(next, { revision })` | the store's commit gate (ADR 0035, V431 review #15). While playing, it does what `sync()` does for `next`, before the store commits it. If the runtime refuses (validate or prepare), the owned parameters go back to the current model and `{ ok: false, phase, reason }` refuses the edit. While stopped it admits everything. The workspace passes it to `createStoreHandle({ gate })` |
 | `escape({ gesture, popup, selectionMode })` | `resolveEscape` with `audioActive` = playing or the runtime running; `stop-audio` stops fast (8 ms, `STUDIO_FAST_STOP_S`) |
 | `playhead()` | `positionAt(anchor, ctx.currentTime)` while playing, else the return point |
 | `debugInfo()` | playing, anchor, voices, gates, lanes, claims, gated envelopes, owned parameters, `unplayed` (id + reason), late skips, decisions, warnings |
