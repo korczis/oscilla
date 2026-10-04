@@ -850,6 +850,50 @@ test('stop releases every source and node; PLAY → STOP → PLAY repeats withou
   assert.strictEqual(s.runtime.apply(store.getModel()).ok, false, 'disposed');
 });
 
+test('V431 X4: STOP gives the engine its master level back after the fade-out', async () => {
+  const { store, b, ids } = basicSynth();
+  b.set(ids.master, 'level', 0.2);
+  const s = setup();
+  s.engine.setMasterGain(0.08); // the Playground's level before the Studio plays
+  s.runtime.apply(store.getModel());
+  assert.strictEqual(s.runtime.start().ok, true);
+  assert.strictEqual(s.engine.gainLevel, 0.2, 'the Master Output level drives the engine');
+  s.advance(0.2);
+  const done = s.runtime.stop();
+  // MEASURE and Labs read engine.gainLevel at once; the audible glide waits for the fade.
+  assert.strictEqual(s.engine.gainLevel, 0.08);
+  const glide = s.engine.master.gain.last('target');
+  assert.strictEqual(glide.v, 0.08);
+  assert.ok(glide.t > s.ctx.currentTime, 'held until the Studio bus has faded out');
+  s.advance(0.2);
+  await done;
+  // A restart during the hold drops the held glide: the Studio level stays in force.
+  assert.strictEqual(s.runtime.start().ok, true);
+  const stopAgain = s.runtime.stop();
+  assert.strictEqual(s.runtime.start().ok, true);
+  assert.strictEqual(s.engine.gainLevel, 0.2);
+  const calls = s.engine.master.gain.calls;
+  const lastCancel = calls.map((c) => c.kind).lastIndexOf('cancel');
+  assert.ok(lastCancel >= 0, 'the held glide was cancelled');
+  assert.ok(calls.slice(lastCancel + 1).every((c) => c.kind !== 'target' || c.v === 0.2),
+    JSON.stringify(calls.slice(lastCancel)));
+  s.advance(0.2);
+  await stopAgain;
+  const last = s.runtime.stop();
+  s.advance(0.2);
+  await last;
+  assert.strictEqual(s.engine.gainLevel, 0.08);
+  // masterLevel 'ignore' (offline shim, tests) never touches the engine level.
+  const q = setup({ runtime: { masterLevel: 'ignore' } });
+  q.engine.setMasterGain(0.1);
+  q.runtime.apply(store.getModel());
+  q.runtime.start();
+  const qDone = q.runtime.stop();
+  q.advance(0.2);
+  await qDone;
+  assert.strictEqual(q.engine.gainLevel, 0.1);
+});
+
 test('20 edits during playback then stop: 0 tracked nodes, 0 live sources (§213)', async () => {
   const s = setup();
   const { store, b, ids } = chain();

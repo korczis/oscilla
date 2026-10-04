@@ -106,12 +106,14 @@ export function verifyExperimentStudio(experiment) {
 
 const isNum = (v) => typeof v === 'number' && Number.isFinite(v);
 
-/** Duration of the first measurement clip with `action`, or null. */
-function clipDuration(model, action) {
-  const c = model.timeline.clips.find((x) => x.kind === 'measurement'
+/** The measurement clips with `action` (array order). */
+function measurementClips(model, action) {
+  return model.timeline.clips.filter((x) => x.kind === 'measurement'
     && x.payload && x.payload.action === action);
-  return c ? c.duration : null;
 }
+
+/** Two durations closer than this are the same (1 µs, timeline.js CONTIGUITY_TOLERANCE_S). */
+const DURATION_TOLERANCE_S = 1e-6;
 
 const within = (v, [lo, hi]) => isNum(v) && v >= lo && v <= hi;
 
@@ -122,9 +124,14 @@ const within = (v, [lo, hi]) => isNum(v) && v >= lo && v <= hi;
  *             f1 = start, f2 = end, duration, level, fade = min(SWEEP_FADE_S, duration / 4) }
  *             at `sampleRate`)
  *   analysis  timing from the measurement clips (pre-roll → preRollS, tail → postRollS,
- *             noise-check → noiseCheckS; engine DEFAULT_TIMING where a clip is absent or out of
- *             the engine's TIMING_LIMITS), phase from the Transfer Analyzer, aggregation 'mean'
+ *             noise-check → noiseCheckS; engine DEFAULT_TIMING only where a clip is absent),
+ *             phase from the Transfer Analyzer, aggregation 'mean'
  *   repeats   opts.repeats (1)
+ * The recipe must be what the timeline shows (V431 review A3/A7, X5), so it is REFUSED with a
+ * reason — never silently substituted — when a timing clip is outside the engine's
+ * TIMING_LIMITS, when more than one clip has the same timing or stimulus action (the pass would
+ * be ambiguous: `studioHash` sorts records by id, array order is not part of the setup), or when
+ * a stimulus clip is shorter than the Sweep it plays (the engine always plays the whole sweep).
  * The result passes experiments/schema.js createRecipe; measurement/engine.js validateRecipe
  * accepts it (unit test). Never throws.
  */
@@ -156,15 +163,35 @@ export function recipeFromStudio(model, { sampleRate, repeats = 1 } = {}) {
   } catch (e) {
     return no(`${sweep.metadata.name}: ${e && e.message}`);
   }
-  const pick = (action, key) => {
-    const d = clipDuration(model, action);
-    return within(d, TIMING_LIMITS[key]) ? d : DEFAULT_TIMING[key];
-  };
+  for (const action of ['noise-check', 'pre-roll', 'stimulus', 'tail']) {
+    if (measurementClips(model, action).length > 1) {
+      return no(`More than one ${action} clip: one pass of the timeline is one measurement.`);
+    }
+  }
+  const [stim] = measurementClips(model, 'stimulus');
+  if (stim && stim.duration < p.duration - DURATION_TOLERANCE_S) {
+    return no(`The stimulus clip (${stim.duration} s) is shorter than ${sweep.metadata.name} `
+      + `(${p.duration} s); the measurement plays the whole sweep.`);
+  }
+  const timing = {};
+  for (const [action, key] of [['pre-roll', 'preRollS'], ['tail', 'postRollS'],
+    ['noise-check', 'noiseCheckS']]) {
+    const [c] = measurementClips(model, action);
+    if (!c) {
+      timing[key] = DEFAULT_TIMING[key];
+    } else if (within(c.duration, TIMING_LIMITS[key])) {
+      timing[key] = c.duration;
+    } else {
+      const [lo, hi] = TIMING_LIMITS[key];
+      return no(`The ${action} clip lasts ${c.duration} s; the measurement engine accepts `
+        + `${lo}-${hi} s.`);
+    }
+  }
   const analysis = {
-    preRollS: pick('pre-roll', 'preRollS'),
-    postRollS: pick('tail', 'postRollS'),
+    preRollS: timing.preRollS,
+    postRollS: timing.postRollS,
     gapS: DEFAULT_TIMING.gapS,
-    noiseCheckS: pick('noise-check', 'noiseCheckS'),
+    noiseCheckS: timing.noiseCheckS,
     phase: analyzer.params.phase === true,
     aggregation: 'mean',
   };

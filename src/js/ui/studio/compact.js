@@ -237,6 +237,10 @@ export function mountCompact(host, svc) {
     setText(counts, view.counts);
     setText(summary, view.summary);
     pathGrid.style.gridTemplateColumns = `repeat(${Math.max(1, view.path.columns)}, max-content)`;
+    // The chips are rebuilt: a focused chip keeps focus on its rebuilt twin (V431 U5).
+    const had = document.activeElement;
+    const keepNode = had && pathGrid.contains(had) ? had.dataset.nodeId : null;
+    const keepClip = had && strip.contains(had) ? had.dataset.clipId : null;
     replaceChildren(pathGrid, view.path.nodes.map((n) => h('button', { type: 'button',
       class: `osc-sc-node osc-sc-node--${n.category}`, 'data-node-id': n.id,
       'data-osc': 'studio.compact.node', 'aria-pressed': n.selected ? 'true' : 'false',
@@ -272,6 +276,9 @@ export function mountCompact(host, svc) {
     if (!view.clips.items.length) {
       replaceChildren(strip, h('p', { class: 'osc-sc-empty', text: 'No clips.' }));
     }
+    const twin = keepNode ? pathGrid.querySelector(`[data-node-id="${CSS.escape(keepNode)}"]`)
+      : keepClip ? strip.querySelector(`[data-clip-id="${CSS.escape(keepClip)}"]`) : null;
+    if (twin) twin.focus({ preventScroll: true });
     setAttr(loopBtn, 'aria-pressed', model.timeline.loop.enabled ? 'true' : 'false');
     requestAnimationFrame(drawLinks);
   }

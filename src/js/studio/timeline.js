@@ -34,7 +34,7 @@ import { CONTRACT_LIMITS, TIMING_LIMITS } from '../measurement/engine.js';
 import { DURATION_LIMITS } from '../measurement/stimulus.js';
 import { NODE_REGISTRY } from './registry.js';
 import {
-  MARKER_KINDS, MIN_CLIP_S, TIMELINE_MAX_S, TRACK_CLIP_KINDS, TRACK_KINDS,
+  EVENT_ACTIONS, MARKER_KINDS, MIN_CLIP_S, TIMELINE_MAX_S, TRACK_CLIP_KINDS, TRACK_KINDS,
 } from './schema.js';
 
 // ---------------------------------------------------------------- constants
@@ -47,8 +47,8 @@ export const DEFAULT_TIME_MODE = 'seconds';
 export const CONTIGUITY_TOLERANCE_S = 1e-6;
 /** Shortest active loop region (s); validate.js enforces the same bound. */
 export const MIN_LOOP_S = MIN_CLIP_S;
-/** Event clip actions: gate (on for the clip's duration) or trigger (one pulse at its start). */
-export const EVENT_ACTIONS = Object.freeze(['gate', 'trigger']);
+/** Event clip actions (schema.js; the store validates them too). */
+export { EVENT_ACTIONS };
 
 /** Track types of the timeline view (§82). Only event and measurement are model tracks. */
 export const TRACK_TYPES = Object.freeze({
@@ -347,7 +347,8 @@ export function validateClip(model, clip, registry = NODE_REGISTRY) {
       }
       if (finite(clip.duration) && clip.duration + CONTIGUITY_TOLERANCE_S < node.params.duration) {
         warnings.push(diag('warning', 'stimulus-truncated', `The clip is shorter than the `
-          + `${node.params.duration} s sweep; the stimulus would be cut off.`, 'duration'));
+          + `${node.params.duration} s sweep; the measurement plays the whole sweep, so it will `
+          + 'refuse to start until they match.', 'duration'));
       }
     }
   }

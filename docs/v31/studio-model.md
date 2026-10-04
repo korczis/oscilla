@@ -268,7 +268,10 @@ hand-written inverses for ~25 actions and their cascades.
 with the gesture label or the first action's label (a 400-event drag is one "Move Filter 1");
 gestures nest; `cancelGesture()` returns to the model at gesture start without an entry (Escape,
 §185); undo and redo close an open gesture first. A new edit after undo clears redo, including
-the first change inside a gesture. `debugInfo()` exposes undo/redo depth, last action,
+the first change inside a gesture; a cancelled gesture puts those redo entries back. Undo, redo
+and cancel restore the document and keep the current view (the view is persisted, not
+undoable). Every committed model passes `assertPlainData`: an action that would bring a
+function or a prototype key into the model is refused. `debugInfo()` exposes undo/redo depth, last action,
 revision and counts for the debug mode (§52, §177).
 
 ## Decisions recorded in code
@@ -293,15 +296,15 @@ fails when a value or a cited line stops matching the code.
 | Initial Studio schema version | 1 | `STUDIO_SCHEMA_VERSION` | `src/js/studio/schema.js:54` |
 | Studio project file extension | .oscilla-studio.json | `STUDIO_FILE_EXTENSION` | `src/js/studio/schema.js:56` |
 | Patch file extension | .oscilla-patch.json | `PATCH_FILE_EXTENSION` | `src/js/studio/patches.js:50` |
-| Default timeline scale | 100 px/s | `pxPerSecond` | `src/js/studio/schema.js:98` |
+| Default timeline scale | 100 px/s | `pxPerSecond` | `src/js/studio/schema.js:100` |
 | Timeline zoom bounds | 4-4000 px/s | `TIMELINE_ZOOM` | `src/js/ui/studio/timeline-view.js:26` |
 | Timeline snap default | 0.1 s time grid | `EDITOR_DEFAULT_SNAP` | `src/js/ui/studio/timeline-view.js:37` |
 | Maximum node import count | 512 nodes | `STUDIO_IMPORT_LIMITS` | `src/js/studio/validate.js:73` |
-| Undo history limit | 200 entries | `STUDIO_HISTORY_LIMIT` | `src/js/studio/history.js:32` |
-| Paste and duplicate offset | (24, 24) units | `PASTE_OFFSET` | `src/js/studio/actions.js:60` |
+| Undo history limit | 200 entries | `STUDIO_HISTORY_LIMIT` | `src/js/studio/history.js:33` |
+| Paste and duplicate offset | (24, 24) units | `PASTE_OFFSET` | `src/js/studio/actions.js:61` |
 <!-- studio-decisions:end -->
 
-The model stores the graph view's zoom as any finite number (`src/js/studio/schema.js:354`,
+The model stores the graph view's zoom as any finite number (`src/js/studio/schema.js:356`,
 default 1); the editor clamps every view it applies to the bounds above
 (`clampZoom`/`normalizeView`, `src/js/ui/studio/graph-geometry.js:33-43`), so an imported file
 with zoom 10 opens at 2.5. The bounds are view state, outside the studioHash. Below 0.25 the

@@ -86,6 +86,16 @@ import { compactTime, mountCompact } from './compact.js';
 import { STUDIO_STORE_FALLBACK_TEXT, mountPatches, recordId } from './patches-panel.js';
 import { mountStudioTimeline } from './timeline-editor.js';
 
+/** First keyboard-reachable control inside a pane. */
+const TABBABLE = 'button:not([disabled]), input:not([disabled]), select:not([disabled]), '
+  + '[tabindex="0"]';
+
+/** The timeline or Inspector pane that holds focus, else null (studioKeepFocus). */
+function focusedPane() {
+  const a = document.activeElement;
+  return a && a.closest ? a.closest('.osc-st-timeline, .osc-st-inspector') : null;
+}
+
 export const STUDIO_SUBVIEWS = Object.freeze(['graph', 'timeline', 'inspector']);
 /** Largest Studio file read from disk (the import pipeline re-checks every limit). */
 export const STUDIO_FILE_MAX_BYTES = 4 * 1024 * 1024;
@@ -1007,13 +1017,45 @@ export function createStudioUi(svc = {}) {
 
     studioUndo() {
       if (ctx.editor) ctx.editor.endNudge();
+      const pane = focusedPane();
       const r = ctx.handle.undo();
       announce(announceUndo(r));
+      this.studioKeepFocus(pane);
     },
 
     studioRedo() {
+      const pane = focusedPane();
       const r = ctx.handle.redo();
       announce(announceRedo(r));
+      this.studioKeepFocus(pane);
+    },
+
+    /**
+     * Never leave focus on <body> (§142; V431 U3, U4): undo / redo may remove the focused node,
+     * clip or point, and the toolbar Undo / Redo button disables itself under focus. After the
+     * render, a lost focus goes to the first control of the timeline or Inspector pane that
+     * held it (when shown), else the graph canvas when shown, else the active subview tab.
+     */
+    studioKeepFocus(pane = null) {
+      requestAnimationFrame(() => {
+        const a = document.activeElement;
+        if (this.workspace !== 'studio' || (a && a !== document.body && a.isConnected
+          && !a.disabled)) return;
+        const first = pane && pane.isConnected && pane.getClientRects().length
+          ? pane.querySelector(TABBABLE) : null;
+        if (first) {
+          first.focus({ preventScroll: true });
+          return;
+        }
+        const vp = document.querySelector('[data-osc="studio.graph.viewport"]');
+        if (ctx.editor && vp && vp.getClientRects().length) {
+          ctx.editor.focusViewport();
+          return;
+        }
+        const tab = document.querySelector(`[data-osc="studio.subview"][data-value="${
+          this.studio.subview}"]`);
+        if (tab && tab.getClientRects().length) tab.focus({ preventScroll: true });
+      });
     },
 
     studioAddNode() {
@@ -1074,6 +1116,16 @@ export function createStudioUi(svc = {}) {
 
     studioBack() {
       this.setWorkspace('playground');
+      // The button that had focus is now hidden: focus the compact Studio's Expand (the way
+      // back), else the Playground tab, never <body> (WCAG 2.4.3; V431 U6).
+      requestAnimationFrame(() => {
+        const a = document.activeElement;
+        if (a && a !== document.body && a.getClientRects().length) return;
+        const to = [document.querySelector('[data-osc="studio.compact.expand"]'),
+          document.querySelector('.osc-nav .osc-tab.is-active')]
+          .find((el) => el && el.getClientRects().length);
+        if (to) to.focus({ preventScroll: true });
+      });
     },
 
     studioOpenTemplates() {

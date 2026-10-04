@@ -15,7 +15,8 @@
 // Gestures (§50): beginGesture(label, model) ... endGesture(model) folds every change made in
 // between into ONE entry from the model at begin to the model at end (a 400-event drag is one
 // "Move Filter 1"). Gestures nest by depth; only the outermost end commits. A new edit after
-// undo clears redo (§51), including the first change inside a gesture.
+// undo clears redo (§51), including the first change inside a gesture; cancelGesture puts the
+// cleared redo entries back, since the cancelled gesture leaves no edit behind.
 //
 //   createHistory({ limit }) -> history
 //   history.record({ label, before, after, actionType })   (absorbed while a gesture is open)
@@ -45,7 +46,7 @@ export function createHistory({ limit = STUDIO_HISTORY_LIMIT } = {}) {
   return {
     record(entry) {
       if (gesture) {
-        if (!gesture.changed) redoStack.length = 0;
+        if (!gesture.changed) gesture.clearedRedo = redoStack.splice(0);
         gesture.changed = true;
         if (!gesture.label) gesture.label = entry.label;
         if (!gesture.actionType) gesture.actionType = entry.actionType;
@@ -62,14 +63,17 @@ export function createHistory({ limit = STUDIO_HISTORY_LIMIT } = {}) {
         return;
       }
       gesture = { label: label || null, before: model, depth: 1, changed: false,
-        actionType: null };
+        actionType: null, clearedRedo: [] };
     },
     endGesture(model) {
       if (!gesture) return null;
       if (--gesture.depth > 0) return null;
       const g = gesture;
       gesture = null;
-      if (!g.changed || model === g.before) return null;
+      if (!g.changed || model === g.before) {
+        redoStack.push(...g.clearedRedo); // no net edit: nothing to invalidate redo
+        return null;
+      }
       push({ label: g.label || 'Edit', before: g.before, after: model,
         actionType: g.actionType });
       return undoStack[undoStack.length - 1];
@@ -78,6 +82,7 @@ export function createHistory({ limit = STUDIO_HISTORY_LIMIT } = {}) {
       if (!gesture) return null;
       const g = gesture;
       gesture = null;
+      redoStack.push(...g.clearedRedo);
       return g.before;
     },
     inGesture: () => !!gesture,

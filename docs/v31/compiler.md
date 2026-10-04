@@ -28,8 +28,10 @@ The runtime never creates an AudioContext or an output chain. It takes the appli
   Nothing in `src/js/studio/` connects to `ctx.destination` (§186, §240; asserted by the unit
   test that walks every Studio node's connections);
 - maps the Master Output level onto `engine.setMasterGain` (clamped to `MAX_OUTPUT_GAIN`,
-  smoothed), so the logical master gain is still one value. `options.masterLevel: 'ignore'`
-  leaves the engine gain alone.
+  smoothed) while it plays, so the logical master gain is still one value; STOP gives the
+  engine back the level it had before start (its glide held until the Studio bus has faded),
+  so MEASURE, Labs and the Playground never inherit the Studio's level.
+  `options.masterLevel: 'ignore'` leaves the engine gain alone.
 
 ### Adapters per node type
 

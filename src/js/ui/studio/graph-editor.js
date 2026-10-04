@@ -96,7 +96,12 @@ export function createGraphEditor(host, svc) {
   let clipboard = null;
   let pasteCount = 0;
   let nudging = false;
+  // True from a pointer press until the focus it causes (or the end of that event-loop turn):
+  // focus that a press moves does not select (the press selects on release). A press that
+  // moves no focus (a port, a cable, an already focused canvas) must not leave it set, or the
+  // next KEYBOARD focus would skip selection and Delete / C act on another node (V431 U1).
   let pointerFocus = false;
+  let pointerFocusTimer = null;
   let running = false;
   let rafId = 0;
   let pendingDrag = null;
@@ -511,6 +516,8 @@ export function createGraphEditor(host, svc) {
   function onPointerDown(e) {
     if (e.target.closest('.osc-sg-controls, .osc-sg-banner')) return;
     pointerFocus = true;
+    clearTimeout(pointerFocusTimer);
+    pointerFocusTimer = setTimeout(() => { pointerFocus = false; }, 0);
     if (e.pointerType === 'touch') {
       pointers.set(e.pointerId, local(e));
       if (pointers.size === 2) {
@@ -1015,8 +1022,9 @@ export function createGraphEditor(host, svc) {
     const next = primary ? nearestNodeTo(primary.position, gone) : null;
     requestAnimationFrame(() => {
       if (next) {
-        pointerFocus = true;
+        pointerFocus = true; // focus the neighbour without selecting it
         focusNode(next);
+        pointerFocus = false; // focusin has run (or the node could not take focus)
       } else viewport.focus({ preventScroll: true });
     });
     return true;
@@ -1178,6 +1186,7 @@ export function createGraphEditor(host, svc) {
     },
     destroy() {
       cancelGestureLocal();
+      clearTimeout(pointerFocusTimer);
       window.removeEventListener('blur', onBlur);
       if (ro) ro.disconnect();
       if (nodeRo) nodeRo.disconnect();

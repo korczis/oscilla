@@ -58,7 +58,8 @@ the duration range the resize gesture clamps to.
 
 The measurement bounds come from the measurement engine's own constants; they are editor-level
 checks (the store accepts the V404 measurement fixtures, whose stimulus clip is shorter than its
-sweep).
+sweep). A measurement never runs outside them: `recipeFromStudio` refuses such a timeline
+instead of substituting defaults (review V431).
 
 ## Time (§89-§91)
 

@@ -50,8 +50,8 @@ import { SAMPLE_RATE_LIMITS } from '../measurement/stimulus.js';
 import { canConnect, describePort, validateEdgeProps } from './ports.js';
 import { NODE_REGISTRY, validateParamValue } from './registry.js';
 import {
-  AUTOMATION_CURVES, MARKER_KINDS, MEASUREMENT_ACTIONS, MIN_CLIP_S, MUSICAL_TOLERANCE_S,
-  NAME_MAX_CHARS,
+  AUTOMATION_CURVES, EVENT_ACTIONS, MARKER_KINDS, MEASUREMENT_ACTIONS, MIN_CLIP_S,
+  MUSICAL_TOLERANCE_S, NAME_MAX_CHARS,
   NOTES_MAX_CHARS, POSITION_LIMIT, STUDIO_KIND, STUDIO_SCHEMA_VERSION, TEMPO_RANGE,
   TIMELINE_MAX_S, TIME_MODES, TIME_SIGNATURE_DENOMINATORS, TITLE_MAX_CHARS, TRACK_CLIP_KINDS,
   TRACK_KINDS, CLIP_KINDS, normalizeStudio,
@@ -531,6 +531,11 @@ function validateTimeline(model, registry, sink, ids, nodeById) {
     }
     if (clip.kind === 'pattern' && finite(clip.duration)) checkPattern(clip, path, sink);
     if (clip.musical !== undefined) checkMusical(clip, model.transport, path, sink);
+    if (clip.kind === 'event' && clip.payload && clip.payload.action !== undefined
+      && !EVENT_ACTIONS.includes(clip.payload.action)) {
+      sink.error('invalid-clip', `An event clip action must be one of `
+        + `${EVENT_ACTIONS.join(', ')}.`, { path: `${path}.payload.action` });
+    }
     if (clip.kind === 'measurement'
       && !MEASUREMENT_ACTIONS.includes(clip.payload && clip.payload.action)) {
       sink.error('invalid-clip', `A measurement clip action must be one of `
