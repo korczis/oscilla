@@ -12,11 +12,11 @@ tags:
   - provenance
   - v3
 related:
-  - adr:adr-0019
-  - adr:adr-0022
-  - adr:adr-0023
-  - adr:adr-0024
-  - adr:adr-0028
+  - file:.ai/repo/adrs/0019-recipe-versus-experiment.md
+  - file:.ai/repo/adrs/0022-experiment-persistence.md
+  - file:.ai/repo/adrs/0023-schema-versions-independent-of-product-version.md
+  - file:.ai/repo/adrs/0024-versioned-algorithm-ids.md
+  - file:.ai/repo/adrs/0028-provenance-without-a-fixed-point.md
   - rule:project.no-fake-science
   - file:src/js/experiments/schema.js
   - file:src/js/experiments/store.js
