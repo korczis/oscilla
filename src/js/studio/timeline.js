@@ -25,7 +25,8 @@
 // gap starts a new run and overlapping clips play as separate voices (the model allows overlap,
 // the editor warns about it).
 //
-//   validateClip(model, clip) -> { ok, errors, warnings }        clipDurationBounds(model, clip)
+//   clipRules(model, clip) -> errors (store and editor)   validateClip(model, clip) -> { ok,
+//     errors, warnings }   clipDurationBounds(clip)
 //   moveClipResult / resizeClipResult / duplicateClipPlacement / nudgeClipResult -> action data
 //   snapTime(t, snap, context)        musical conversion helpers        loop and marker helpers
 
@@ -34,7 +35,8 @@ import { CONTRACT_LIMITS, TIMING_LIMITS } from '../measurement/engine.js';
 import { DURATION_LIMITS } from '../measurement/stimulus.js';
 import { NODE_REGISTRY } from './registry.js';
 import {
-  EVENT_ACTIONS, MARKER_KINDS, MIN_CLIP_S, TIMELINE_MAX_S, TRACK_CLIP_KINDS, TRACK_KINDS,
+  CLIP_KINDS, EVENT_ACTIONS, MARKER_KINDS, MEASUREMENT_ACTIONS, MIN_CLIP_S, TIMELINE_MAX_S,
+  TRACK_CLIP_KINDS, TRACK_KINDS,
 } from './schema.js';
 
 // ---------------------------------------------------------------- constants
@@ -286,71 +288,93 @@ export function clipDurationBounds(clip) {
 }
 
 /**
- * Editor-level validation of one clip in `model` (it may be a proposed clip not yet in the
- * model). Errors are what the store would reject plus the measurement requirements (§87);
- * warnings do not block (overlap plays as a second voice; a stimulus shorter than its sweep
- * truncates it).
+ * The clip rule table (§87), ONE implementation for the store (validate.js validateStudioModel:
+ * every action and every import) and the editor (validateClip): track and clip kind, start,
+ * duration (MIN_CLIP_S and the timeline end, then clipDurationBounds: the pattern block's or the
+ * measurement engine's limits), target, event and measurement actions, a measurement clip's
+ * target type, a logarithmic stimulus sweep, and no musical time on a measurement clip. Returns
+ * error diagnostics with paths relative to the clip. opts: { registry, trackById, nodeById }.
  */
-export function validateClip(model, clip, registry = NODE_REGISTRY) {
+export function clipRules(model, clip, { registry = NODE_REGISTRY, trackById = null,
+  nodeById = null } = {}) {
   const errors = [];
-  const warnings = [];
-  const track = findTrack(model, clip.trackId);
-  if (!track) errors.push(diag('error', 'missing-track', 'The clip is on a track that does not '
-    + 'exist.', 'trackId'));
-  else if (!TRACK_CLIP_KINDS[track.kind] || !TRACK_CLIP_KINDS[track.kind].includes(clip.kind)) {
-    errors.push(diag('error', 'clip-kind-mismatch', `A ${clip.kind} clip cannot go on a `
-      + `${track.kind} track.`, 'kind'));
+  const err = (code, message, path, extra) => errors.push({ ...diag('error', code, message,
+    path), ...extra });
+  const track = trackById ? trackById.get(clip.trackId) : findTrack(model, clip.trackId);
+  if (!track) err('missing-track', 'The clip is on a track that does not exist.', 'trackId');
+  if (!CLIP_KINDS.includes(clip.kind)) {
+    err('invalid-clip', `Clip kind must be one of ${CLIP_KINDS.join(', ')}.`, 'kind');
+    return errors;
   }
-  if (!finite(clip.start) || clip.start < 0) {
-    errors.push(diag('error', 'invalid-time', 'Clip start must be 0 s or later.', 'start'));
+  const allowed = track && TRACK_CLIP_KINDS[track.kind];
+  if (allowed && !allowed.includes(clip.kind)) {
+    err('clip-kind-mismatch', `A ${clip.kind} clip cannot go on a ${track.kind} track.`, 'kind');
+  }
+  const okStart = finite(clip.start) && clip.start >= 0 && clip.start <= TIMELINE_MAX_S;
+  if (!okStart) {
+    err('invalid-time', `Clip start must be between 0 and ${TIMELINE_MAX_S} s.`, 'start');
   }
   const { min, max } = clipDurationBounds(clip);
-  if (!finite(clip.duration) || clip.duration < min - CONTIGUITY_TOLERANCE_S) {
-    errors.push(diag('error', 'duration-bounds', `This clip must last at least ${min} s.`,
-      'duration'));
+  if (!finite(clip.duration) || clip.duration < MIN_CLIP_S) {
+    err('invalid-time', `Clip duration must be at least ${MIN_CLIP_S} s.`, 'duration');
+  } else if (okStart && clip.start + clip.duration > TIMELINE_MAX_S) {
+    err('invalid-time', `A clip must end by ${TIMELINE_MAX_S} s.`, 'duration');
+  } else if (clip.duration < min - CONTIGUITY_TOLERANCE_S) {
+    err('duration-bounds', `This clip must last at least ${min} s.`, 'duration');
   } else if (clip.duration > max + CONTIGUITY_TOLERANCE_S) {
-    errors.push(diag('error', 'duration-bounds', `This clip may last at most ${cleanTime(max)} s.`,
-      'duration'));
+    err('duration-bounds', `This clip may last at most ${cleanTime(max)} s.`, 'duration');
   }
   if (clip.musical && clip.kind === 'measurement') {
-    errors.push(diag('error', 'musical-measurement', 'A measurement clip is always placed in '
-      + 'seconds; musical time never enters a measurement experiment.', 'musical'));
+    err('musical-measurement', 'A measurement clip is always placed in seconds; musical time '
+      + 'never enters a measurement experiment.', 'musical');
   }
-  const targetId = track ? effectiveTarget(model, clip) : clip.target;
-  const node = targetId ? model.graph.nodes.find((n) => n.id === targetId) : null;
+  const targetId = clip.target ?? (track ? track.target : null);
+  const node = targetId == null ? null
+    : (nodeById ? nodeById.get(targetId) : model.graph.nodes.find((n) => n.id === targetId));
   const def = node ? registry.get(node.type) : null;
-  if (targetId && !node) {
-    errors.push(diag('error', 'missing-node', 'The clip targets a node that does not exist.',
-      'target'));
+  if (targetId != null && !node) {
+    err('missing-node', 'The clip targets a node that does not exist.', 'target');
   } else if (def && !def.clipKinds.includes(clip.kind)) {
-    errors.push(diag('error', 'invalid-clip-target', `${node.metadata.name} cannot play `
-      + `${clip.kind} clips.`, 'target'));
+    err('invalid-clip-target', `${node.metadata.name} cannot play ${clip.kind} clips.`, 'target',
+      { nodeId: node.id });
   }
-  if (clip.kind === 'event') {
-    const action = clip.payload && clip.payload.action;
-    if (action !== undefined && !EVENT_ACTIONS.includes(action)) {
-      errors.push(diag('error', 'invalid-event', `An event clip action must be one of `
-        + `${EVENT_ACTIONS.join(', ')}.`, 'payload.action'));
-    }
+  const action = clip.payload && clip.payload.action;
+  if (clip.kind === 'event' && action !== undefined && !EVENT_ACTIONS.includes(action)) {
+    err('invalid-clip', `An event clip action must be one of ${EVENT_ACTIONS.join(', ')}.`,
+      'payload.action');
   }
   if (clip.kind === 'measurement') {
-    const action = clip.payload && clip.payload.action;
     const need = MEASUREMENT_TARGETS[action];
-    if (need && (!node || !need.includes(node.type))) {
-      errors.push(diag('error', 'measurement-target', `A ${action} clip needs a `
-        + `${need.join(' or ')} target.`, 'target'));
+    if (!MEASUREMENT_ACTIONS.includes(action)) {
+      err('invalid-clip', `A measurement clip action must be one of `
+        + `${MEASUREMENT_ACTIONS.join(', ')}.`, 'payload.action');
+    } else if (need && (!node || !need.includes(node.type))) {
+      err('measurement-target', `A ${action} clip needs a ${need.join(' or ')} target.`, 'target');
+    } else if (action === 'stimulus' && node.params.curve !== 'log') {
+      err('measurement-target', 'A measurement stimulus sweep must be logarithmic.', 'target');
     }
-    if (action === 'stimulus' && node && node.type === 'sweep') {
-      if (node.params.curve !== 'log') {
-        errors.push(diag('error', 'measurement-target', 'A measurement stimulus sweep must be '
-          + 'logarithmic.', 'target'));
-      }
-      if (finite(clip.duration) && clip.duration + CONTIGUITY_TOLERANCE_S < node.params.duration) {
-        warnings.push(diag('warning', 'stimulus-truncated', `The clip is shorter than the `
-          + `${node.params.duration} s sweep; the measurement plays the whole sweep, so it will `
-          + 'refuse to start until they match.', 'duration'));
-      }
-    }
+  }
+  return errors;
+}
+
+/**
+ * Editor-level validation of one clip in `model` (it may be a proposed clip not yet in the
+ * model): the errors are clipRules, exactly what the store refuses; warnings do not block
+ * (overlap plays as a second voice; a stimulus shorter than its sweep makes the measurement
+ * refuse to start).
+ */
+export function validateClip(model, clip, registry = NODE_REGISTRY) {
+  const errors = clipRules(model, clip, { registry });
+  const warnings = [];
+  const track = findTrack(model, clip.trackId);
+  const targetId = track ? effectiveTarget(model, clip) : clip.target;
+  const node = targetId ? model.graph.nodes.find((n) => n.id === targetId) : null;
+  if (clip.kind === 'measurement' && node && node.type === 'sweep'
+    && clip.payload && clip.payload.action === 'stimulus' && finite(clip.duration)
+    && clip.duration + CONTIGUITY_TOLERANCE_S < node.params.duration) {
+    warnings.push(diag('warning', 'stimulus-truncated', `The clip is shorter than the `
+      + `${node.params.duration} s sweep; the measurement plays the whole sweep, so it will `
+      + 'refuse to start until they match.', 'duration'));
   }
   if (clip.kind === 'pattern' && track && finite(clip.start) && finite(clip.duration)) {
     const others = overlappingClips(model, track.id, clip.start, clipEnd(clip), clip.id);

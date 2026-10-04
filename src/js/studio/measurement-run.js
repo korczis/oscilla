@@ -8,11 +8,13 @@
 //     getModel()      the store's current model (frozen plain data)
 //     sampleRate()    the running AudioContext's rate (recipeFromStudio renders the stimulus at it)
 //     now()           AudioContext.currentTime (the clips' startTime is on the audio clock)
-//     run(recipe, model) -> Promise<{ ok, state, experimentId?, experiment?, reason? }>
-//                     runs ONE measurement through the MeasurementEngine of the MEASURE workspace
-//                     (its state machine, io, calibration, abort paths and output exclusivity)
-//                     and saves the experiment with the Studio provenance block; the workspace
-//                     supplies it (measure.js measureRunRecipe)
+//     run(recipe, model, { startAt }) -> Promise<{ ok, state, experimentId?, experiment?,
+//                     reason? }>  runs ONE measurement through the MeasurementEngine of the
+//                     MEASURE workspace (its state machine, io, calibration, abort paths and
+//                     output exclusivity) and saves the experiment with the Studio provenance
+//                     block; the workspace supplies it (measure.js measureRunRecipe). `startAt`
+//                     is the first measurement clip's startTime on the audio clock: the engine
+//                     schedules its first capture there, never before (V431 review R1)
 //     stopStudio()    -> Promise: release the Studio output (the measurement then owns it)
 //     onChange(view)  the run's plain view after every change
 //     profileId()     the frequency profile id MEASURE will apply, or null: a graph that shows
@@ -27,12 +29,13 @@
 // pre-roll, stimulus, capture, tail, analysis) are the recipe (provenance.js recipeFromStudio:
 // stimulus from the Sweep wired to a Transfer Analyzer REFERENCE, timing from the clips), and
 // the MeasurementEngine's own state machine runs those phases with that timing. The first
-// 'schedule' of a pass arms the hand-off at that clip's start on the audio clock; at the
+// 'schedule' of a pass arms the hand-off HANDOFF_LEAD_S before that clip's start; at the
 // hand-off the Studio output is released (the transport's STOP path, 0 nodes), then the
-// measurement starts. A hand-off due within HANDOFF_NOW_S runs in a microtask: the Studio
-// releases its output before its first scheduled sound (one scheduling lead ahead) reaches the
-// speaker. The timer is bookkeeping (when to hand off), never audio timing: the measurement
-// engine schedules its own stimulus on the audio clock. A transport 'stop' or 'cancel' before
+// measurement starts, anchored on the clip: its first capture is scheduled at the clip's
+// startTime on the audio clock (`startAt`; at once when preflight ends after it). A hand-off
+// due within HANDOFF_NOW_S runs in a microtask. The timer is bookkeeping (when to release the
+// output and start preflight), never audio timing: a late timer (background throttling) delays
+// only a start already past its anchor. A transport 'stop' or 'cancel' before
 // the hand-off disarms it. Nothing is measured twice in one pass; a refused derivation (no
 // Transfer Analyzer, no logarithmic Sweep reference, ...) is reported with its reason and the
 // pass plays on.
@@ -41,6 +44,12 @@ import { recipeFromStudio } from './provenance.js';
 
 /** A hand-off due within this many seconds of now runs at once (microtask). */
 export const HANDOFF_NOW_S = 0.05;
+/**
+ * The hand-off comes this long before the first measurement clip: room for the engine's
+ * preflight and its capture scheduling lead (capture.js SCHEDULE_LEAD_S, 0.1 s), so the first
+ * capture can start on the clip's audio-clock time.
+ */
+export const HANDOFF_LEAD_S = 0.25;
 
 export const MEASUREMENT_RUN_TEXT = Object.freeze({
   pending: 'Measurement armed: it starts at the first measurement clip.',
@@ -78,13 +87,13 @@ export function createStudioMeasurementRun({
     pendingKeys = new Set();
   };
 
-  async function handOff(my, recipe, model) {
+  async function handOff(my, recipe, model, startAt) {
     if (my !== token || view.state !== 'pending') return;
     timer = null;
     set({ state: 'running', text: MEASUREMENT_RUN_TEXT.running });
     try {
       if (typeof stopStudio === 'function') await stopStudio();
-      const r = await run(recipe, model);
+      const r = await run(recipe, model, { startAt });
       if (my !== token) return;
       if (r && r.ok) {
         set({ state: 'done', experimentId: r.experimentId || null, result: r,
@@ -120,12 +129,11 @@ export function createStudioMeasurementRun({
     pendingKeys = new Set([ev.key]);
     set({ state: 'pending', pass: ev.pass, recipe: r.recipe, experimentId: null, result: null,
       text: MEASUREMENT_RUN_TEXT.pending });
-    const lead = Number.isFinite(ev.startTime) ? ev.startTime - now() : 0;
-    if (!(lead > HANDOFF_NOW_S)) {
-      queueMicrotask(() => handOff(my, r.recipe, model));
-    } else {
-      timer = timers.setTimeout(() => handOff(my, r.recipe, model), Math.round(lead * 1000));
-    }
+    const startAt = Number.isFinite(ev.startTime) ? ev.startTime : null;
+    const lead = startAt === null ? 0 : startAt - HANDOFF_LEAD_S - now();
+    const go = () => handOff(my, r.recipe, model, startAt);
+    if (!(lead > HANDOFF_NOW_S)) queueMicrotask(go);
+    else timer = timers.setTimeout(go, Math.round(lead * 1000));
   }
 
   function hook(ev) {

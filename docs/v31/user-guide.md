@@ -18,9 +18,14 @@ pressure.
    Filter Automation, Stereo Beat and Measurement Sweep. **Open** replaces the current Studio;
    if it has unsaved changes the dialog says so first.
 3. **Play** (Space) plays the graph and the timeline; **Stop** (Esc) releases every node. The
-   Playground voice and Studio are exclusive: starting one stops the other.
+   Playground voice and Studio are exclusive: starting one stops the other. For a screen
+   reader the button is always "Play the Studio", a toggle that reads as pressed while the
+   Studio plays.
 
-Below 768 px the workspace shows one of **Graph**, **Timeline** and **Inspector** at a time.
+Below 768 px the workspace shows one of **Graph**, **Timeline** and **Inspector** at a time
+(tabs and their panels). On a touch screen, **Frame all** and **Frame selection** do not zoom
+out so far that a port is smaller than 24 px: a large graph is centred, and you pan to the
+rest.
 
 ## Links and fullscreen
 
@@ -56,7 +61,7 @@ Below 768 px the workspace shows one of **Graph**, **Timeline** and **Inspector*
 - Click an item in the **Node library** to add it at the centre of the graph, or drag it onto
   the graph to place it.
 - Press **N** (or double-click empty canvas) for the searchable **Add node** picker; Enter adds
-  the first match.
+  the first match. An empty graph says so on the canvas, with these ways to begin.
 - A Studio has exactly one Master Output; the library says so instead of adding a second.
 
 ## Connect nodes
@@ -67,6 +72,9 @@ Below 768 px the workspace shows one of **Graph**, **Timeline** and **Inspector*
   list of inputs that can take its output; Enter connects. On a touch screen, tap an output,
   then tap a highlighted input.
 - Drop a cable on empty canvas to add a node that accepts it, already connected.
+- With a screen reader, a node reads its name, kind, settings and how many input and output
+  connections it has; the Inspector's Connections list and the Connect dialog name each port
+  and what it is connected to.
 - A connection that cannot work is refused with a sentence, for example an audio output on a
   trigger input, or a loop that would feed audio back into itself without a delay. Nothing is
   changed silently.
@@ -105,6 +113,10 @@ Space play or stop · Esc cancel or stop · Home return · ←/→ move (Shift f
 <!-- timeline-keys:end -->
 
 The details panel and the Inspector also edit a clip's start, duration and track as numbers.
+A clip that the measurement engine could not run (a pre-roll longer than 5 s, a stimulus clip
+on a Microphone, ...) is refused with the reason, whether you drag it, type it or import it.
+Selecting one clip announces it by name and track ("Sweep clip on Source selected" in the
+Subtractive Synth).
 
 ## Automate a parameter
 
@@ -147,8 +159,9 @@ capture window on a second track.
    sweep, and start with a low output level.
 2. The browser asks for the microphone when the measurement's setup check opens the input; the
    capture stays in this page (nothing is uploaded).
-3. Press **Play**. At the first measurement clip the Studio releases the output and hands the
-   measurement to the measurement engine of the **Measure** workspace: the stimulus and the
+3. Press **Play**. Just before the first measurement clip (a quarter of a second) the Studio
+   releases the output and hands the measurement to the measurement engine of the **Measure**
+   workspace, which starts capturing on the clip's own time: the stimulus and the
    timing come from the graph and the clips (sweep range, length and level from the Sweep;
    pre-roll, tail and noise-check lengths from their clips). The task strip under the toolbar
    shows the engine's state and progress; **Abort**, Stop or Esc abort it.

@@ -11,6 +11,7 @@
 //   parse      size cap before JSON.parse; JSON text or an already parsed object
 //   validate   version-independent safety scan BEFORE any migration code runs: plain data
 //              only, no prototype keys, finite numbers, bounded size and depth; kind check
+//              (validate.js readStudioInput, the one front end of every Studio import)
 //   migrate    stepwise n-1 → n through the registry
 //   validate   strict current-schema check and import limits (validate.js validateStudioImport)
 //   normalize  defaults filled, canonical shapes (schema.js normalizeStudio, inside the above)
@@ -23,9 +24,8 @@
 //     { ok: true, model, warnings, migratedFrom: n | null } | { ok: false, errors, warnings }
 
 import { migrateExperiment } from '../experiments/migrate.js';
-import { scanUntrusted, utf8Length } from '../experiments/validate.js';
-import { STUDIO_KIND, STUDIO_SCHEMA_VERSION } from './schema.js';
-import { STUDIO_IMPORT_LIMITS, validateStudioImport } from './validate.js';
+import { STUDIO_SCHEMA_VERSION } from './schema.js';
+import { STUDIO_IMPORT_LIMITS, readStudioInput, validateStudioImport } from './validate.js';
 
 export const studioMigrations = Object.freeze({
   1: (doc) => doc,
@@ -47,34 +47,9 @@ export function migrateStudio(doc, opts = {}) {
 /** The full parse → validate → migrate → validate/normalize pipeline for untrusted input. */
 export function importStudio(input, opts = {}) {
   const limits = { ...STUDIO_IMPORT_LIMITS, ...(opts.limits || {}) };
-  const fail = (path, message, code = 'invalid-structure') => ({ ok: false, warnings: [],
-    errors: [{ code, severity: 'error', message, path }] });
-  let doc = input;
-  if (typeof input === 'string') {
-    if (utf8Length(input, limits.maxBytes) > limits.maxBytes) {
-      return fail('', `The file is larger than the ${limits.maxBytes}-byte import limit.`,
-        'limit-exceeded');
-    }
-    try {
-      doc = JSON.parse(input);
-    } catch (err) {
-      return fail('', `Not valid JSON (${String(err && err.message).slice(0, 120)}).`);
-    }
-  }
-  const scan = scanUntrusted(doc, { maxBytes: typeof input === 'string' ? Infinity
-    : limits.maxBytes, maxErrors: limits.maxErrors });
-  if (scan.length) {
-    return { ok: false, warnings: [], errors: scan.map((e) => ({ code: 'invalid-structure',
-      severity: 'error', message: e.text, path: e.path })) };
-  }
-  if (!doc || typeof doc !== 'object' || Array.isArray(doc)) {
-    return fail('', 'The file does not contain a Studio object.');
-  }
-  if (doc.kind !== STUDIO_KIND) {
-    return fail('kind', doc.kind === 'oscilla-experiment'
-      ? 'This is an OSCILLA experiment file, not a Studio file.'
-      : `kind must be "${STUDIO_KIND}".`);
-  }
+  const read = readStudioInput(input, limits);
+  if (!read.ok) return read;
+  const doc = read.doc;
   const migrated = migrateStudio(doc, opts);
   if (!migrated.ok) {
     return { ok: false, warnings: [], errors: migrated.errors.map((e) => ({

@@ -21,7 +21,8 @@
 //      - the junction itself (dual oscillator: mix, stereo panners, stereo router);
 //      - a Gain right after the source whose gain a CONTROL edge modulates (AM);
 //      - a CONTROL edge into a parameter of the source (LFO, FM modulator), titled by the
-//        modulator's name;
+//        modulator's name; the depth reads ±d (bipolar) or +d (unipolar), and a muted edge
+//        (an unmuted one is preferred) is drawn bypassed (enabled: false, "· muted");
 //      - an automation lane on a parameter of the source ("FREQUENCY STEPS" when every point is
 //        a step, else "FREQUENCY RAMP");
 //      - otherwise the bypassed placeholder "MODULATION / none · fixed frequency"
@@ -96,12 +97,18 @@ function panWord(pan) {
   return `pan ${sig(pan, 2)}`;
 }
 
-/** Depth of a modulation edge in the target parameter's terms ("±40 Hz", "±1 oct"). */
+/**
+ * Depth of a modulation edge in the target parameter's terms: "±40 Hz", "±1 oct" (bipolar,
+ * [−depth, depth]); "+40 Hz" (unipolar, [0, depth]; "−" for a negative depth); "· muted".
+ */
 function depthText(props, paramDef) {
-  const d = Math.abs(Number(props.depth) || 0);
-  if (props.mapping === 'log') return `±${sig(d, 3)} oct`;
-  if (paramDef && paramDef.unit === 'Hz') return `±${formatFrequency(d)}`;
-  return `±${sig(d, 3)}${paramDef && paramDef.unit ? ` ${paramDef.unit}` : ''}`;
+  const v = Number(props.depth) || 0;
+  const d = Math.abs(v);
+  const sign = props.polarity === 'unipolar' ? (v < 0 ? '−' : '+') : '±';
+  const muted = props.muted ? ' · muted' : '';
+  if (props.mapping === 'log') return `${sign}${sig(d, 3)} oct${muted}`;
+  if (paramDef && paramDef.unit === 'Hz') return `${sign}${formatFrequency(d)}${muted}`;
+  return `${sign}${sig(d, 3)}${paramDef && paramDef.unit ? ` ${paramDef.unit}` : ''}${muted}`;
 }
 
 /** "5 Hz" for a modulator with a rate, else its card summary. */
@@ -184,9 +191,10 @@ export function projectSignalPath(model, { registry = NODE_REGISTRY, annotations
       { nodes: [src.id] });
     // 2. Modulation stage.
     const next = chain.length > 1 ? byId.get(chain[1]) : null;
+    const pick = (list) => list.find((e) => !e.props.muted) || list[0];
     const am = next && next.type === 'gain'
-      ? controlInto(next.id).find((e) => e.to.port === 'gain') : null;
-    const ctl = controlInto(src.id)[0];
+      ? pick(controlInto(next.id).filter((e) => e.to.port === 'gain')) : null;
+    const ctl = pick(controlInto(src.id));
     const lane = model.timeline.automation.find((l) => l.target.node === src.id
       && l.points.length);
     if (am) {
@@ -194,14 +202,15 @@ export function projectSignalPath(model, { registry = NODE_REGISTRY, annotations
       const g = Number(next.params.gain) || 0;
       const d = Math.abs(Number(am.props.depth) || 0);
       const depth = g + d > 0 ? clean((2 * d) / (g + d)) : 0;
-      push({ title: upper(next), sub: `${rateText(m, registry)} · ${Math.round(depth * 100)} %`,
-        mod: true, enabled: true }, { nodes: [next.id, m.id], edge: am.id });
+      push({ title: upper(next), sub: `${rateText(m, registry)} · ${Math.round(depth * 100)} %${
+        am.props.muted ? ' · muted' : ''}`, mod: true, enabled: !am.props.muted },
+      { nodes: [next.id, m.id], edge: am.id });
       rest = chain.slice(2);
     } else {
       if (ctl) {
         const m = byId.get(ctl.from.node);
         push({ title: upper(m), sub: `${rateText(m, registry)} · ${depthText(ctl.props,
-          registry.param(src.type, ctl.to.port))}`, mod: true, enabled: true },
+          registry.param(src.type, ctl.to.port))}`, mod: true, enabled: !ctl.props.muted },
         { nodes: [m.id], edge: ctl.id });
       } else if (lane) {
         const p = registry.param(src.type, lane.target.param);

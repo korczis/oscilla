@@ -40,8 +40,8 @@
 //     undo and redo, so a runtime can tell which topology it reflects. It is never persisted.
 //   - IDs come only from the injected generator, are checked against every id in the model and
 //     never reused within one action (§172). Display names are metadata (§173-§174).
-//   - NODE_REMOVE cascades (§124): connected edges, clips targeting the node and its automation
-//     lanes are removed, track targets cleared; one undo restores all of it.
+//   - NODE_REMOVE cascades (§124, schema.js withoutNodes): connected edges, clips targeting the
+//     node and its lanes are removed, track targets cleared; one undo restores all of it.
 //   - The commit gate (ADR 0035, V431 review #15): `gate(next, { reason, action, label,
 //     revision })` is asked, synchronously, before a model change is committed: a semantic
 //     dispatch, undo, redo, and the return to a cancelled gesture's start. `revision` is the one
@@ -60,7 +60,7 @@ import {
   CLIP_KINDS, CLIP_TIME_BASES, MARKER_KINDS, NAME_MAX_CHARS, POSITION_LIMIT, StudioSchemaError,
   TRACK_CLIP_KINDS,
   assertPlainData, collectIds, copyPlain, createStudioModel, normalizeClipPayload,
-  normalizeStudio, sortPoints,
+  normalizeStudio, sortPoints, withoutNodes,
 } from './schema.js';
 import { validateStudioModel } from './validate.js';
 import { createHistory, STUDIO_HISTORY_LIMIT } from './history.js';
@@ -323,18 +323,8 @@ const REDUCERS = {
     const ids = a.nodeIds || [a.nodeId];
     if (!Array.isArray(ids) || !ids.length) reject('No node to delete.');
     for (const id of ids) requireNode(model, id);
-    const gone = new Set(ids);
-    const t = model.timeline;
-    const next = withGraph(model, {
-      nodes: model.graph.nodes.filter((n) => !gone.has(n.id)),
-      edges: model.graph.edges.filter((e) => !gone.has(e.from.node) && !gone.has(e.to.node)),
-    });
     return {
-      model: withTimeline(next, {
-        tracks: t.tracks.map((x) => (gone.has(x.target) ? { ...x, target: null } : x)),
-        clips: t.clips.filter((c) => !gone.has(c.target)),
-        automation: t.automation.filter((l) => !gone.has(l.target.node)),
-      }),
+      model: withoutNodes(model, ids),
       label: countLabel(ids.length, `Delete ${nodeName(model, ids[0])}`, 'Delete # nodes'),
     };
   },

@@ -37,9 +37,10 @@ import { NODE_REGISTRY } from '../../studio/registry.js';
 import { summarizeGraph, announceAction } from '../../studio/a11y.js';
 import { copySubgraph } from '../../studio/actions.js';
 import {
-  CABLE_HIT_PX, GRID, NODE_WIDTH, boundsOf, cableCross, cablePath, clampZoom, dragPosition,
-  fitView, graphToScreen, idsInRect, mergeSelection, normalizeRect, normalizeView, nudgeDelta,
-  panBy, pastThreshold, pinchView, screenToGraph, snapPoint, toggleInSelection, zoomAt, ZOOM_STEP,
+  CABLE_HIT_PX, COARSE_FIT_MIN_ZOOM, GRID, NODE_WIDTH, boundsOf, cableCross, cablePath,
+  clampZoom, dragPosition, fitView, graphToScreen, idsInRect, mergeSelection, normalizeRect,
+  normalizeView, nudgeDelta, panBy, pastThreshold, pinchView, screenToGraph, snapPoint,
+  toggleInSelection, zoomAt, ZOOM_STEP,
 } from './graph-geometry.js';
 import {
   connectingText, connectionTargets, edgeView, nodeCard, probeConnection,
@@ -84,7 +85,11 @@ export function createGraphEditor(host, svc) {
     ctl('Frame all', 'studio.graph.frameAll', '⤢', () => frameAll()),
     ctl('Frame selection', 'studio.graph.frameSelection', '◎', () => frameSelection()),
   ]);
-  replaceChildren(host, [viewport, summary, banner, controls]);
+  // The empty canvas says how to begin (V431 U10); shown by CSS on .is-empty, also on phones,
+  // where the Inspector's hint is in another subview.
+  const empty = h('p', { class: 'osc-sg-empty', 'data-osc': 'studio.graph.empty',
+    text: 'Empty graph. Press N or use Add node, or open a setup from Templates.' });
+  replaceChildren(host, [viewport, empty, summary, banner, controls]);
   host.classList.add('osc-sg');
 
   // ---------------------------------------------------------------- state
@@ -161,9 +166,12 @@ export function createGraphEditor(host, svc) {
     return out;
   }
 
+  /** Fit options: a coarse pointer keeps port targets at least 24 px (COARSE_FIT_MIN_ZOOM). */
+  const fitOpts = () => (coarsePointer() ? { minZoom: COARSE_FIT_MIN_ZOOM } : {});
+
   function frameAll() {
     measureSize();
-    setView(fitView(boundsOf(nodeRects()), size));
+    setView(fitView(boundsOf(nodeRects()), size, fitOpts()));
     return true;
   }
 
@@ -171,7 +179,7 @@ export function createGraphEditor(host, svc) {
     const ids = selection().nodes;
     if (!ids.length) return frameAll();
     measureSize();
-    setView(fitView(boundsOf(nodeRects(ids)), size));
+    setView(fitView(boundsOf(nodeRects(ids)), size, fitOpts()));
     return true;
   }
 

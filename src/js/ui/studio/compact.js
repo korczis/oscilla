@@ -12,7 +12,9 @@
 //     svc: { store, registry, announce, play(), stop(), toggleLoop(), expand(nodeId?) }
 
 import { NODE_REGISTRY } from '../../studio/registry.js';
-import { announceAction, announceSelection, summarizeStudio } from '../../studio/a11y.js';
+import {
+  announceAction, announceSelection, clipLabel, summarizeStudio,
+} from '../../studio/a11y.js';
 import { moveClipResult, nudgeClipResult } from '../../studio/timeline.js';
 import { compactLayout } from './graph-layout.js';
 import { cablePath, pastThreshold } from './graph-geometry.js';
@@ -24,20 +26,8 @@ export function chipLabel(name) {
   return t.length > 14 ? `${t.slice(0, 13)}…` : t;
 }
 
-const CLIP_WORDS = Object.freeze({ 'noise-check': 'Noise check', 'pre-roll': 'Pre-roll',
-  stimulus: 'Stimulus', capture: 'Capture', tail: 'Tail', analysis: 'Analysis', gate: 'Gate',
-  trigger: 'Trigger' });
-
-/** "Tone", "Sweep", "Noise check", ... */
-export function clipLabel(clip) {
-  const p = clip.payload || {};
-  if (clip.kind === 'pattern') {
-    const b = String(p.blockType || 'pattern');
-    return b[0].toUpperCase() + b.slice(1);
-  }
-  if (clip.kind === 'measurement') return CLIP_WORDS[p.action] || 'Measurement';
-  return CLIP_WORDS[p.action || 'gate'] || 'Event';
-}
+/** "Tone", "Sweep", "Noise check", ... (a11y.js: the selection announcement names it too). */
+export { clipLabel };
 
 /** "00:04.210" (minutes, seconds, milliseconds). */
 export function compactTime(seconds) {
@@ -296,8 +286,7 @@ export function mountCompact(host, svc) {
   return {
     render,
     setTransport({ playing, timeText }) {
-      setAttr(playBtn, 'aria-pressed', playing ? 'true' : 'false');
-      setAttr(playBtn, 'aria-label', playing ? 'Stop the Studio' : 'Play the Studio');
+      setAttr(playBtn, 'aria-pressed', playing ? 'true' : 'false'); // the name stays (U11)
       const use = playBtn.querySelector('use');
       if (use) use.setAttribute('href', playing ? '#i-pause' : '#i-play');
       host.classList.toggle('is-playing', !!playing);

@@ -26,6 +26,13 @@ export const DRAG_THRESHOLD_PX = 4;
 export const CABLE_HIT_PX = Object.freeze({ fine: 12, coarse: 24 });
 /** Logical width of a node card (the CSS width of .osc-sg-node at zoom 1). */
 export const NODE_WIDTH = 168;
+/**
+ * The smallest zoom a fit (Frame all, Frame selection) picks on a coarse pointer (V431 U9): a
+ * port row is 26 units there (.osc-sg-port, studio.css coarse query), so each port target stays
+ * at least 24 px tall on screen (WCAG 2.5.8) instead of about 10 px at a phone's frame-all
+ * zoom. A graph that needs less is centred and the rest is a pan away.
+ */
+export const COARSE_FIT_MIN_ZOOM = 24 / 26;
 
 const finite = (v) => typeof v === 'number' && Number.isFinite(v);
 
@@ -90,17 +97,18 @@ export function boundsOf(rects) {
 
 /**
  * The view that fits `bounds` (logical) into a viewport of `size` { w, h } px with `padding`
- * px around it, centred (§59-§60). Never zooms past `maxZoom`; an empty bounds centres the
- * origin at zoom 1.
+ * px around it, centred (§59-§60). Never zooms past `maxZoom` nor below `minZoom`; an empty
+ * bounds centres the origin at zoom 1.
  */
-export function fitView(bounds, size, { padding = FIT_PADDING_PX, maxZoom = FIT_MAX_ZOOM } = {}) {
+export function fitView(bounds, size, { padding = FIT_PADDING_PX, maxZoom = FIT_MAX_ZOOM,
+  minZoom = ZOOM_MIN } = {}) {
   const w = size && finite(size.w) ? size.w : 0;
   const h = size && finite(size.h) ? size.h : 0;
   if (!bounds || w <= 0 || h <= 0) return { panX: w / 2, panY: h / 2, zoom: 1 };
   const availW = Math.max(1, w - 2 * padding);
   const availH = Math.max(1, h - 2 * padding);
-  const zoom = clampZoom(Math.min(maxZoom, availW / Math.max(1, bounds.w),
-    availH / Math.max(1, bounds.h)));
+  const zoom = clampZoom(Math.max(minZoom, Math.min(maxZoom, availW / Math.max(1, bounds.w),
+    availH / Math.max(1, bounds.h))));
   const cx = bounds.x + bounds.w / 2;
   const cy = bounds.y + bounds.h / 2;
   return { panX: w / 2 - cx * zoom, panY: h / 2 - cy * zoom, zoom };
