@@ -19,6 +19,16 @@ it computes the response of the whole playback and capture chain, rates the qual
 measurement and keeps it as a reproducible experiment. The app is a single HTML file. It needs no server, no account and no network once loaded, and it works
 when opened straight from disk.
 
+## Navigation
+
+The header has eight entries: **Playground**, **Measure**, **Experiments**, **Analyze**,
+**Synthesis**, **Learn**, **Studio** and **About**, in that order. Analyze and Synthesis are
+groups. Analyze opens Analyzer, Filter Lab and Compare; Synthesis opens Synthesis, Sequencer and
+Presets. A group is a button that shows its list of workspaces: Enter or Space opens it and Tab
+walks the list, or ArrowDown opens it on the current workspace and the arrow keys move. Escape
+closes it. Every V2 workspace is still there under the same name, and only the way to it has
+changed.
+
 ## The V2 laboratory
 
 - **Generator:** sine, triangle, sawtooth and square sources, set by frequency or by note, with
@@ -209,7 +219,7 @@ is in the proposed [ADR 0025](.ai/repo/adrs/0025-data-driven-quality-with-reason
 
 ## The V3.1 Studio
 
-**Studio** sits after Experiments and before About. It is a patching and composition workspace
+**Studio** is the last workspace before About. It is a patching and composition workspace
 over the same audio engine: no second engine, and the engine's master chain and limits apply.
 How to use it, with the keyboard shortcuts, is the [Studio user guide](docs/v31/user-guide.md).
 

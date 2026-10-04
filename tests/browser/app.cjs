@@ -151,8 +151,19 @@ const H = {
     if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
     document.body.focus();
   }),
+  /** Reach a workspace through the nav; a grouped one (ANALYZE, SYNTHESIS) opens its group. */
+  navTo: async (page, ws) => {
+    const item = `[data-osc="nav.${ws}"]`;
+    const group = await page.evaluate((s) => {
+      const el = document.querySelector(s);
+      const g = el && el.closest('[data-osc-nav-group]');
+      return g && el.offsetParent === null ? g.dataset.oscNavGroup : null;
+    }, item);
+    if (group) await page.click(`[data-osc="nav-group.${group}"]`);
+    await page.click(item);
+  },
   workspace: async (page, ws) => {
-    await page.click(`[data-osc="nav.${ws}"]`);
+    await H.navTo(page, ws);
     await page.waitForFunction((w) => document.querySelector('#osc-app').dataset.mode === w, ws);
     await sleep(150);
   },
@@ -410,7 +421,8 @@ function defineChecks() {
     await page.click('#osc-source-pattern');
     await collect();
     await page.click('#osc-source-osc');
-    for (const menu of ['#osc-overflow', '#osc-export', '#osc-seq-add']) {
+    for (const menu of ['#osc-nav-group-analyze', '#osc-nav-group-synthesis', '#osc-overflow',
+      '#osc-export', '#osc-seq-add']) {
       await page.click(menu);
       await collect();
       await page.keyboard.press('Escape');
@@ -824,6 +836,119 @@ function defineChecks() {
     const ok = Object.entries(res).every(([ws, r]) => r.shown && r.current === `nav.${ws}`)
       && res.filter.filterH > 300 && res.learn.sourceHiddenInLearn;
     return { ok, res };
+  });
+
+  // V371 (spec §73, §75, §198): eight top-level entries; ANALYZE and SYNTHESIS are disclosure
+  // groups whose items are the V2 workspaces with their old nav ids. Every workspace is reached
+  // by keyboard (Tab through an open group; arrows from its button), aria-current marks the item
+  // (page) and its group (true), Escape and a click outside close a group, focus never drops,
+  // and the dropdown stays inside the viewport at desktop and phone widths.
+  def('nav-groups-keyboard', async ({ page, browserName }) => {
+    const TOP = ['nav.playground', 'nav.measure', 'nav.experiments', 'nav-group.analyze',
+      'nav-group.synthesis', 'nav.learn', 'nav.studio', 'nav.about'];
+    const GROUPS = { analyze: ['analyzer', 'filter', 'compare'],
+      synthesis: ['synthesis', 'sequencer', 'presets'] };
+    const state = () => page.evaluate(() => {
+      const q = (s) => document.querySelector(s);
+      return { mode: q('#osc-app').dataset.mode,
+        active: document.activeElement && document.activeElement !== document.body
+          ? document.activeElement.dataset.osc : 'BODY',
+        current: [...document.querySelectorAll('#osc-nav [aria-current]')]
+          .map((e) => `${e.dataset.osc}=${e.getAttribute('aria-current')}`),
+        expanded: [...document.querySelectorAll('[data-osc^="nav-group."]')]
+          .filter((b) => b.getAttribute('aria-expanded') === 'true').map((b) => b.dataset.osc) };
+    });
+    const res = { bad: [] };
+    const want = (cond, msg) => { if (!cond) res.bad.push(msg); };
+    res.top = await page.evaluate(() => [...document.querySelectorAll('#osc-nav > li')]
+      .map((li) => li.querySelector(':scope > a, :scope > button').dataset.osc));
+    want(JSON.stringify(res.top) === JSON.stringify(TOP), `top level ${res.top.join(',')}`);
+    for (const w of [1536, 375]) {
+      await page.setViewportSize({ width: w, height: w > 400 ? 1024 : 812 });
+      await sleep(150);
+      // Tab order: the top level in order, an open group's items right after its button.
+      // WebKit (macOS default) skips links and buttons on Tab unless the user opts in, so the
+      // Tab paths run in chromium and firefox; the arrow paths run everywhere.
+      if (browserName !== 'webkit') {
+        await H.workspace(page, 'playground');
+        await page.focus('[data-osc="nav.playground"]');
+        const seen = ['nav.playground'];
+        for (let i = 0; i < TOP.length - 1; i++) {
+          await page.keyboard.press('Tab');
+          seen.push((await state()).active);
+        }
+        want(JSON.stringify(seen) === JSON.stringify(TOP), `${w} tab order ${seen.join(',')}`);
+      }
+      for (const [g, items] of Object.entries(GROUPS)) {
+        const btn = `[data-osc="nav-group.${g}"]`;
+        for (const [i, ws] of items.entries()) {
+          // Tab path: Enter opens, Tab walks into the list, Enter on the item navigates.
+          if (browserName !== 'webkit') {
+            await H.workspace(page, 'playground');
+            await page.focus(btn);
+            await page.keyboard.press('Enter');
+            for (let k = 0; k <= i; k++) await page.keyboard.press('Tab');
+            const at = (await state()).active;
+            want(at === `nav.${ws}`, `${w} tab into ${g} reached ${at}, not nav.${ws}`);
+            await page.keyboard.press('Enter');
+            await sleep(120);
+            const v = await state();
+            want(v.mode === ws, `${w} tab ${ws}: mode ${v.mode}`);
+          }
+          // Arrow path: ArrowDown opens on the current (or first) item, Home, then ArrowDown.
+          await H.workspace(page, 'playground');
+          await page.focus(btn);
+          await page.keyboard.press('ArrowDown');
+          await sleep(60);
+          const open = await page.evaluate((sel) => {
+            const panel = document.getElementById(document.querySelector(sel)
+              .getAttribute('aria-controls'));
+            const r = panel.getBoundingClientRect();
+            const items = [...panel.querySelectorAll('a')].map((a) => a.getBoundingClientRect());
+            const hit = items.every((b) => {
+              const el = document.elementFromPoint(b.left + b.width / 2, b.top + b.height / 2);
+              return el && panel.contains(el);
+            });
+            return { shown: r.width > 0 && r.height > 0, inside: r.left >= 0 && r.top >= 0
+              && r.right <= innerWidth && r.bottom <= innerHeight, hit,
+              minH: Math.min(...items.map((b) => b.height)) };
+          }, btn);
+          want(open.shown && open.inside && open.hit, `${w} ${g} panel ${JSON.stringify(open)}`);
+          await page.keyboard.press('Home');
+          for (let k = 0; k < i; k++) await page.keyboard.press('ArrowDown');
+          await page.keyboard.press('Enter');
+          await sleep(120);
+          const v = await state();
+          want(v.mode === ws && v.active === `nav-group.${g}` && !v.expanded.length
+            && v.current.includes(`nav.${ws}=page`) && v.current.includes(`nav-group.${g}=true`)
+            && v.current.length === 2, `${w} arrow ${ws}: ${JSON.stringify(v)}`);
+        }
+        // Escape closes and returns focus to the button; reopening marks the current item.
+        await page.focus(btn);
+        await page.keyboard.press('ArrowDown');
+        await sleep(60);
+        const reopened = await state();
+        want(reopened.active === `nav.${items.at(-1)}`, `${w} reopen ${g} at ${reopened.active}`);
+        await page.keyboard.press('Escape');
+        await sleep(60);
+        const esc = await state();
+        want(!esc.expanded.length && esc.active === `nav-group.${g}`,
+          `${w} escape ${g} ${JSON.stringify(esc)}`);
+        // Click toggles; a click elsewhere closes.
+        await page.click(btn);
+        want((await state()).expanded.includes(`nav-group.${g}`), `${w} click opens ${g}`);
+        await page.click('.osc-header', { position: { x: 3, y: 3 } });
+        await sleep(60);
+        want(!(await state()).expanded.length, `${w} outside click closes ${g}`);
+      }
+      // A top-level workspace clears the group mark.
+      await H.workspace(page, 'learn');
+      const learn = await state();
+      want(JSON.stringify(learn.current) === '["nav.learn=page"]', `${w} learn ${learn.current}`);
+    }
+    await page.setViewportSize({ width: 1536, height: 1024 });
+    await H.workspace(page, 'playground');
+    return { ok: !res.bad.length, top: res.top, bad: res.bad.slice(0, 8) };
   });
 
   def('theme-toggles', async ({ page }) => {

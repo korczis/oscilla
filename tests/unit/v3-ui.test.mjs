@@ -5,7 +5,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
-import { WORKSPACES } from '../../src/js/ui/app.js';
+import { WORKSPACES, NAV_GROUPS, navGroupOf } from '../../src/js/ui/app.js';
 import {
   experimentFromResult, experimentTestContext, DEFAULT_EXPERIMENT_NAME,
 } from '../../src/js/ui/measure-experiment.js';
@@ -27,6 +27,34 @@ test('Measure and Experiments follow Playground; About stays last', () => {
   const items = [...nav.matchAll(/data-osc="(nav\.[a-z]+)"/g)].map((m) => m[1]);
   assert.deepEqual(items.slice(0, 3), ['nav.playground', 'nav.measure', 'nav.experiments']);
   assert.equal(items.at(-1), 'nav.about');
+});
+
+test('the top level is §73 plus Studio (§198) and About; groups hold the V2 workspaces', () => {
+  const nav = between('id="osc-nav"', '</nav>');
+  const menuRe = /<ul class="osc-menu osc-nav-menu"[\s\S]*?<\/ul>/g;
+  const menus = [...nav.matchAll(menuRe)].map((m) => m[0]);
+  const top = nav.replace(menuRe, '');
+  const ids = [...top.matchAll(/data-osc="(nav(?:-group)?\.[a-z]+)"/g)].map((m) => m[1]);
+  assert.deepEqual(ids, ['nav.playground', 'nav.measure', 'nav.experiments', 'nav-group.analyze',
+    'nav-group.synthesis', 'nav.learn', 'nav.studio', 'nav.about']);
+  assert.deepEqual(Object.keys(NAV_GROUPS), ['analyze', 'synthesis']);
+  assert.equal(menus.length, 2);
+  for (const [i, g] of Object.keys(NAV_GROUPS).entries()) {
+    const items = [...menus[i].matchAll(/data-osc="nav\.([a-z]+)"/g)].map((m) => m[1]);
+    assert.deepEqual(items, [...NAV_GROUPS[g]]);
+    assert.match(menus[i], new RegExp(`id="osc-nav-menu-${g}" hidden`));
+    // A disclosure button controls the list: aria-expanded + aria-controls, no ARIA menu role.
+    assert.match(nav, new RegExp(`data-osc="nav-group\\.${g}" aria-expanded="false" `
+      + `aria-controls="osc-nav-menu-${g}"`));
+    assert.doesNotMatch(menus[i], /role="menu/);
+    for (const ws of NAV_GROUPS[g]) assert.equal(navGroupOf(ws), g);
+  }
+  // Every workspace keeps its nav id, once, in navigation order (V2 functions preserved, §183).
+  const all = [...nav.matchAll(/data-osc="nav\.([a-z]+)"/g)].map((m) => m[1]);
+  assert.deepEqual(all, WORKSPACES);
+  for (const ws of ['playground', 'measure', 'experiments', 'learn', 'studio', 'about']) {
+    assert.equal(navGroupOf(ws), null);
+  }
 });
 
 test('the workspaces are full-width views keyed on `workspace`, with their own panels', () => {

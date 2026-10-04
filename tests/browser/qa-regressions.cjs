@@ -64,6 +64,18 @@ try {
 } catch (e) { /* optional: npm i --no-save axe-core */ }
 
 // ------------------------------------------------------------------------------ page helpers
+/** Reach a workspace through the nav; a grouped one (ANALYZE, SYNTHESIS) opens its group. */
+async function navTo(page, ws) {
+  const item = `[data-osc="nav.${ws}"]`;
+  const group = await page.evaluate((s) => {
+    const el = document.querySelector(s);
+    const g = el && el.closest('[data-osc-nav-group]');
+    return g && el.offsetParent === null ? g.dataset.oscNavGroup : null;
+  }, item);
+  if (group) await page.click(`[data-osc="nav-group.${group}"]`);
+  await page.click(item);
+}
+
 async function open(browser, { width = 1536, height = 1024 } = {}) {
   const context = await browser.newContext({ viewport: { width, height }, acceptDownloads: true });
   const page = await context.newPage();
@@ -669,7 +681,7 @@ function defineChecks() {
     const settle = {};
     for (const [ws, panel] of [['filter', '#osc-panel-filter'], ['sequencer',
       '#osc-panel-sequencer'], ['analyzer', '#osc-panel-mic']]) {
-      await page.click(`[data-osc="nav.${ws}"]`);
+      await navTo(page, ws);
       settle[ws] = await scrollSettled(page, panel);
       out[ws] = await page.evaluate((sel) => {
         const p = document.querySelector(sel);

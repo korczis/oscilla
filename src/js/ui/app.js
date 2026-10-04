@@ -13,11 +13,17 @@
 const THEME_KEY = 'oscilla.v2.theme';
 const ANALYSIS_TAB_KEY = 'oscilla.v2.analysisTab';
 const ANALYSIS_TABS = ['waveform', 'spectrum', 'spectrogram', 'harmonics', 'signalPath'];
-// §73 order: Measure and Experiments follow Playground; About stays the last item (PR #17).
-// V3.1 (spec §198): Studio is the last workspace before About.
+// §73 top level: PLAYGROUND, MEASURE, EXPERIMENTS, ANALYZE, SYNTHESIS, LEARN ("no 14 top-level
+// tabs"); V3.1 §198 adds Studio alongside them; About stays the last item (PR #17). ANALYZE and
+// SYNTHESIS are disclosure groups whose items are the V2 workspaces (§183: none is removed).
+// MODES is the navigation order, groups expanded in place.
+const NAV_GROUPS = Object.freeze({
+  analyze: Object.freeze(['analyzer', 'filter', 'compare']),
+  synthesis: Object.freeze(['synthesis', 'sequencer', 'presets']),
+});
 const MODES = [
-  'playground', 'measure', 'experiments', 'sequencer', 'analyzer', 'filter', 'synthesis',
-  'compare', 'learn', 'presets', 'studio', 'about',
+  'playground', 'measure', 'experiments', ...NAV_GROUPS.analyze, ...NAV_GROUPS.synthesis,
+  'learn', 'studio', 'about',
 ];
 const WORKSPACE_TITLES = { about: 'About' };
 const ROVING_ROLES = ['tab', 'radio'];
@@ -113,6 +119,25 @@ export function rovingKeydown(event) {
 
 /** The Alpine component definition (plain object factory, testable without Alpine). */
 export const WORKSPACES = MODES;
+export { NAV_GROUPS };
+
+/** The navigation group holding a workspace, or null for a top-level workspace. */
+export function navGroupOf(mode) {
+  return Object.keys(NAV_GROUPS).find((g) => NAV_GROUPS[g].includes(mode)) || null;
+}
+
+/**
+ * Place a group's dropdown under its button. The panel is position: fixed because the nav strip
+ * scrolls (overflow-x), which would clip an absolutely positioned child; it stays in the viewport.
+ */
+export function placeNavPanel(button, panel, win = window) {
+  const b = button.getBoundingClientRect();
+  const gutter = 8;
+  const w = panel.offsetWidth;
+  const left = Math.max(gutter, Math.min(b.left, win.innerWidth - w - gutter));
+  panel.style.left = `${Math.round(left)}px`;
+  panel.style.top = `${Math.round(b.bottom - 6)}px`;
+}
 
 /** Document title for a workspace: the product title, or `OSCILLA · <page>` for a page-like one. */
 export function workspaceTitle(mode, base) {
@@ -137,6 +162,7 @@ export function createOscillaUi({ storedAnalysisTab = storageGet(ANALYSIS_TAB_KE
     stereoRoute: 'mono',
     dualRoute: 'mono',
     menus: { overflow: false, export: false, addBlock: false, actions: false },
+    navOpen: null,
     collapsed: { device: false, phase: false, bio: false },
 
     init() {
@@ -150,7 +176,14 @@ export function createOscillaUi({ storedAnalysisTab = storageGet(ANALYSIS_TAB_KE
       });
       document.addEventListener('click', (e) => {
         if (!e.target.closest('.osc-menu-anchor, .osc-sb-actions-wrap')) this.closeMenus();
+        if (this.navOpen && !e.target.closest('.osc-nav-group')) this.closeNavGroup();
       });
+      // The open group's dropdown follows its button; a resize closes it.
+      const nav = this.$root.querySelector('.osc-nav');
+      const follow = () => { if (this.navOpen) this.placeNavGroup(this.navOpen); };
+      if (nav) nav.addEventListener('scroll', follow, { passive: true });
+      window.addEventListener('scroll', follow, { passive: true });
+      window.addEventListener('resize', () => this.closeNavGroup());
       // Below 1280 px the nav scrolls in its own strip; browsers do not reliably scroll that strip
       // to a tab reached with Tab / Shift+Tab, so bring it fully into view (WCAG 2.4.11).
       this.$root.addEventListener('focusin', (e) => {
@@ -158,6 +191,10 @@ export function createOscillaUi({ storedAnalysisTab = storageGet(ANALYSIS_TAB_KE
         if (tab) keepNavTabInView(tab);
       });
       document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && this.navOpen) {
+          this.closeNavGroup(true);
+          return;
+        }
         if (e.key === 'Escape' && Object.values(this.menus).some(Boolean)) {
           const open = Object.keys(this.menus).find((k) => this.menus[k]);
           this.closeMenus();
@@ -215,8 +252,9 @@ export function createOscillaUi({ storedAnalysisTab = storageGet(ANALYSIS_TAB_KE
       this.$nextTick(() => this.focusWorkspace(mode));
     },
     focusWorkspace(mode) {
-      // Below 1280 px the nav scrolls in its own strip: keep the active tab in view (it may
-      // have been chosen elsewhere, e.g. About from the overflow menu).
+      // Below 1280 px the nav scrolls in its own strip: keep the active top-level entry (the
+      // workspace's tab, or its group's button) in view; it may have been chosen elsewhere,
+      // e.g. About from the overflow menu.
       const tab = this.$root.querySelector('.osc-nav .osc-tab.is-active');
       if (tab && tab.parentElement.offsetParent !== null) keepNavTabInView(tab, 'start');
       const panels = [...this.$root.querySelectorAll('[data-osc-modes]')];
@@ -246,7 +284,96 @@ export function createOscillaUi({ storedAnalysisTab = storageGet(ANALYSIS_TAB_KE
       return {
         ':class'() { return { 'is-active': this.workspace === mode }; },
         ':aria-current'() { return this.workspace === mode ? 'page' : false; },
-        '@click'(e) { e.preventDefault(); this.setWorkspace(mode); },
+        '@click'(e) {
+          e.preventDefault();
+          const group = navGroupOf(mode);
+          this.setWorkspace(mode);
+          // The item is now hidden: focus returns to its group's button, never to <body>.
+          if (group && this.navOpen === group) this.closeNavGroup(true);
+        },
+      };
+    },
+
+    // ---- navigation groups (disclosure: a button with aria-expanded and a list of links) ----
+    navGroupButtonEl(group) {
+      return this.$root.querySelector(`[data-osc="nav-group.${group}"]`);
+    },
+    placeNavGroup(group) {
+      const btn = this.navGroupButtonEl(group);
+      const panel = this.$root.querySelector(`[data-osc-nav-panel="${group}"]`);
+      if (btn && panel && !panel.hidden) placeNavPanel(btn, panel);
+    },
+    navGroupItems(group) {
+      const panel = this.$root.querySelector(`[data-osc-nav-panel="${group}"]`);
+      return panel ? [...panel.querySelectorAll('a[href]')] : [];
+    },
+    openNavGroup(group, focus = null) {
+      this.closeMenus();
+      this.navOpen = group;
+      this.$nextTick(() => {
+        this.placeNavGroup(group);
+        const items = this.navGroupItems(group);
+        if (!items.length || !focus) return;
+        const current = items.find((a) => a.classList.contains('is-active'));
+        const target = focus === 'last' ? items.at(-1) : focus === 'first' ? items[0]
+          : (current || items[0]);
+        target.focus();
+      });
+    },
+    closeNavGroup(refocus = false) {
+      const group = this.navOpen;
+      if (!group) return;
+      this.navOpen = null;
+      if (refocus) {
+        const btn = this.navGroupButtonEl(group);
+        if (btn) btn.focus();
+      }
+    },
+    navGroup(group) {
+      return {
+        ':class'() { return { 'is-open': this.navOpen === group }; },
+        // Focus moving to another control closes the group (a click on the page is handled by
+        // the document listener; relatedTarget is null when focus drops, e.g. WebKit clicks).
+        '@focusout'(e) {
+          const to = e.relatedTarget;
+          if (this.navOpen === group && to && !e.currentTarget.contains(to)) this.navOpen = null;
+        },
+      };
+    },
+    navGroupButton(group) {
+      return {
+        ':class'() { return { 'is-active': navGroupOf(this.workspace) === group }; },
+        ':aria-current'() { return navGroupOf(this.workspace) === group ? 'true' : false; },
+        ':aria-expanded'() { return String(this.navOpen === group); },
+        '@click'() {
+          if (this.navOpen === group) this.closeNavGroup();
+          else this.openNavGroup(group);
+        },
+        '@keydown'(e) {
+          if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
+          e.preventDefault();
+          this.openNavGroup(group, e.key === 'ArrowUp' ? 'last' : 'current');
+        },
+      };
+    },
+    navGroupPanel(group) {
+      return {
+        'data-osc-nav-panel': group,
+        ':hidden'() { return this.navOpen !== group; },
+        // Arrows/Home/End move among the group's links; Tab leaves in document order.
+        '@keydown'(e) {
+          const keys = ['ArrowDown', 'ArrowUp', 'Home', 'End'];
+          if (!keys.includes(e.key)) return;
+          const items = this.navGroupItems(group);
+          if (!items.length) return;
+          e.preventDefault();
+          const i = items.indexOf(document.activeElement);
+          let n = 0;
+          if (e.key === 'End') n = items.length - 1;
+          else if (e.key === 'ArrowDown') n = (i + 1) % items.length;
+          else if (e.key === 'ArrowUp') n = (i - 1 + items.length) % items.length;
+          items[n].focus();
+        },
       };
     },
 

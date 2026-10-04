@@ -188,8 +188,19 @@ const H = {
     && c.ports === 0 && c.tracks === 0,
   waitState: (page, states, ms = RUN_MS) => page.waitForFunction(
     (list) => list.includes(window.OSCILLA.measure.state), states, { timeout: ms, polling: 50 }),
+  /** Reach a workspace through the nav; a grouped one (ANALYZE, SYNTHESIS) opens its group. */
+  navTo: async (page, ws) => {
+    const item = `[data-osc="nav.${ws}"]`;
+    const group = await page.evaluate((s) => {
+      const el = document.querySelector(s);
+      const g = el && el.closest('[data-osc-nav-group]');
+      return g && el.offsetParent === null ? g.dataset.oscNavGroup : null;
+    }, item);
+    if (group) await page.click(`[data-osc="nav-group.${group}"]`);
+    await page.click(item);
+  },
   workspace: async (page, ws) => {
-    await page.click(`[data-osc="nav.${ws}"]`);
+    await H.navTo(page, ws);
     await page.waitForFunction((w) => document.querySelector('#osc-app').dataset.mode === w, ws);
     await sleep(120);
   },
@@ -279,10 +290,13 @@ function defineChecks(fixtures) {
   const def = (name, fn) => checks.push({ name, fn });
 
   def('nav-order', async ({ page }) => {
-    const items = await page.evaluate(() => [...document.querySelectorAll('#osc-nav > li > a')]
-      .map((a) => a.dataset.osc));
-    const ok = items[0] === 'nav.playground' && items[1] === 'nav.measure'
-      && items[2] === 'nav.experiments' && items.at(-1) === 'nav.about';
+    // §73 + §198 (V371): the top level is these eight entries; ANALYZE and SYNTHESIS group the
+    // V2 workspaces.
+    const items = await page.evaluate(() => [...document.querySelectorAll('#osc-nav > li')]
+      .map((li) => li.querySelector(':scope > a, :scope > button').dataset.osc));
+    const ok = JSON.stringify(items) === JSON.stringify(['nav.playground', 'nav.measure',
+      'nav.experiments', 'nav-group.analyze', 'nav-group.synthesis', 'nav.learn', 'nav.studio',
+      'nav.about']);
     await H.workspace(page, 'measure');
     const view = await page.evaluate(() => {
       const r = document.getElementById('osc-view-measure').getBoundingClientRect();
