@@ -18,7 +18,13 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-02
-updated_at: 2026-10-03T06:50:25Z
+updated_at: 2026-10-04T10:03:54Z
+started_at: 2026-10-04T10:03:34Z
+started_event: sha256:13b56588b1b50b8fd2371606db34cfa92a8617ae4bb79a95a2f6afcda97cf692
+verified_at: 2026-10-04T10:03:41Z
+verified_event: sha256:490e0d6694b0b678bc0cbd9703c036873d188ae8f0a24855b4e9e2a1df3f1f74
+completed_at: 2026-10-04T10:03:54Z
+completed_event: sha256:c533d2887c8efa1421cf4bec4b4ffdda580ebf59b2243205c97363e5cbb6a592
 evidence:
   - covers: verified
     type: test
@@ -26,3 +32,9 @@ evidence:
     result: "MET at 320130f (blocked behind V371): live regions and chart summaries, one announcement per stage, quality statuses with glyph and text (no colour-only meaning). Commits deb326d, b0ad11e"
     commit: 320130f1a967e894002a55dd9ebb6c837eb2621f
     recorded_at: 2026-10-03T06:50:25Z
+  - covers: verified
+    type: test
+    command: "npm run test:measure && node tests/browser/layout.cjs && node scripts/visual-measure.mjs dist"
+    result: "PASS at main 2dcf558 (V371 done, so no longer blocked): v3-measure 116/116, analysis-worker 42/42, v3-ui 19/19 in chromium/firefox/webkit over file:// and http, layout 99/99 in three browsers, MEASURE visual reference desktop 0.094 % / phone 0.078 % (darwin-arm64); live regions, one announcement per stage, statuses with glyph and text (v3-ui a11y checks)"
+    commit: 2dcf558ae14fc3be41e10237375970cca447d90b
+    recorded_at: 2026-10-04T10:03:49Z
