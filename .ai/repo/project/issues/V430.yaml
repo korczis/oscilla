@@ -26,7 +26,11 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-02
-updated_at: 2026-10-04T00:14:32Z
+updated_at: 2026-10-04T05:06:30Z
+started_at: 2026-10-04T05:06:13Z
+started_event: sha256:868d1b133650520c84cb619c14bf51d01aa78c45a50ba3c25513940094e82e65
+completed_at: 2026-10-04T05:06:30Z
+completed_event: sha256:a9e4a0eacebd70a859034701498d76fa7b5351b92641d92d528cc86c7cb86e40
 evidence:
   - covers: verified
     type: ci
@@ -46,3 +50,9 @@ evidence:
     result: "PARTIAL (do not mark done): at 34f967a every dependency is done (V421, V423, V429 closed this round); test:studio (inside the local release-gate run) passes: v31-studio-graph 21/21, timeline 14/14, workflows 6/6, links 7/7 per browser and origin in chromium, firefox, webkit; audio 81, transport 69, offline 33 checks all pass; CI runs test:studio per browser; unit 2135/2135; visual-studio passes desktop 0.006 %, compact 0 %, phone 0.017 %, phone-timeline 0.017 %; fast verify separate. Remaining gap, unchanged: the full desktop reference crops the timeline row (scripts/visual-studio.mjs header: 'the timeline row below ... is not part of this reference'), so the spec 203/204 Full Studio reference shows no clips or automation lane; those are pixel-gated only at phone width"
     commit: 34f967a063ead9085b89faf32f748e4cf9aff301
     recorded_at: 2026-10-04T00:14:32Z
+  - covers: verified
+    type: ci
+    command: "npm run release:prepare (release-gate, incl. npm test, test:studio, test:visual) at release/v3.3.1 ea577ba; CI gate on PR #83"
+    result: "PASS: unit 2182/2182; test:studio in chromium, firefox, webkit: v31-studio-graph 25/25 (file) 6/6 (http), timeline 14/14 and 14/14, workflows 6/6 and 3/3, links 7/7 and 7/7, audio 81, transport 69, offline 33 checks; CI runs test:studio per browser and test:visual in the linux-x64 Playwright container. visual-studio gates five views on darwin-arm64 and linux-x64: desktop 0.006 %, desktop-timeline 0 % (the spec 204 Full Studio reference with both clips and the cutoff automation lane, added by #72, fails closed unless they render), compact 0 %, phone, phone-timeline 0.222 %. Fast verify (npm run verify) stays separate from test:release. The prior gap (desktop reference cropped the timeline row) is closed"
+    commit: f2eeb014c3cadc9f2e905a8879a5ab0969227fdb
+    recorded_at: 2026-10-04T05:06:24Z
