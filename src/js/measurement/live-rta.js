@@ -279,6 +279,7 @@ export function createLiveRta({
         peakDb: Float64Array.from(frame.peaks, (x) => x - off),
         frequencyCovered: fftCorrection ? Uint8Array.from(fftCorrection.covered) : null,
         frozen, live: true, window, averaging: averagingInput, levelCalibration: curLevel,
+        profile: fftCorrection ? curProfile : null,
       };
     }
     const L = layouts[curMode];
@@ -303,6 +304,8 @@ export function createLiveRta({
         covered: Uint8Array.from(L.correction.covered),
         profileId: L.correction.profileId,
       };
+      // the view shows SPL with the same profile-aware offset the frame was drawn with (V383)
+      out.profile = curProfile;
     }
     return out;
   }

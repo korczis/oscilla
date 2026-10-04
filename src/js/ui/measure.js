@@ -601,8 +601,13 @@ export function createMeasureUi(svc) {
   }
 
   function liveCalibration(m) {
+    // V383: a level calibration bound to an input applies to the live RTA only once the input
+    // has been checked: the live tap reports no device facts, and with no input known
+    // levelCalibrationApplies() cannot tell mic B from the mic A it was taken with.
+    const level = levelInUse(m);
+    const unchecked = level && level.input && !ctx.inputNow;
     return { profile: m.cal.useFrequency && ctx.profile ? ctx.profile : null,
-      levelCalibration: levelInUse(m) };
+      levelCalibration: unchecked ? null : level };
   }
 
   function rebuildLiveRta(m, L) {
