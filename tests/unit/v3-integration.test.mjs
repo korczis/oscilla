@@ -577,12 +577,13 @@ test('G13: resultHash v1 covers exactly the encoded results block (old files)', 
   // Quality is covered by v2, so a new verdict clears the stamp too.
   assert.equal(withResults(stamped, { quality: null }).provenance.resultHash, null);
   assert.throws(() => withResultHash(e, 'ABC'), TypeError);
-  assert.throws(() => withResultHash(e, h, 3), RangeError);
+  assert.throws(() => withResultHash(e, h, 4), RangeError);
 });
 
 test('G13 / M11: resultHash v2 covers results, quality, calibration, input and output', () => {
   const e = experiment8({ transfer: TRANSFER8, ir: IR8 });
-  const h = resultHash(e);
+  const v2 = { version: 2 };
+  const h = resultHash(e, v2);
   const part = (k) => (e[k] === undefined ? null : serializeExperiment(e[k]));
   assert.equal(h, sha256(canonicalJson({ v: 2, results: serializeExperiment(e.results),
     quality: part('quality'), calibration: part('calibration'), input: part('input'),
@@ -590,17 +591,17 @@ test('G13 / M11: resultHash v2 covers results, quality, calibration, input and o
   assert.notEqual(h, resultHash(e, { version: 1 }));
   // Name, notes, provenance and key order still do not enter it ...
   assert.equal(resultHash({ ...e, name: 'other', environment: { notes: 'x' },
-    provenance: { ...e.provenance, configHash: 'f'.repeat(64) } }), h);
+    provenance: { ...e.provenance, configHash: 'f'.repeat(64) } }, v2), h);
   // ... but every editable verdict / calibration / input / output field does.
   const q = { algorithm: 'oscilla.confidence.v2', status: 'GOOD', reasons: [], metrics: {} };
-  assert.notEqual(resultHash({ ...e, quality: q }), h);
+  assert.notEqual(resultHash({ ...e, quality: q }, v2), h);
   assert.notEqual(resultHash({ ...e, calibration: { frequency: null, level: { schemaVersion: 1,
     kind: 'level', referenceHz: 1000, referenceDbSpl: 94, observedDbRelative: -30,
-    offsetDb: 124, conditions: null, createdAt: null } } }), h);
-  assert.notEqual(resultHash({ ...e, input: { ...e.input, device: { label: 'other', id: null } } }),
-    h);
-  assert.notEqual(resultHash({ ...e, output: { level: e.output.level, masterGain: 0.1 } }), h);
-  const stamped = withResultHash(e, h);
+    offsetDb: 124, conditions: null, createdAt: null } } }, v2), h);
+  assert.notEqual(resultHash({ ...e, input: { ...e.input, device: { label: 'other', id: null } } },
+    v2), h);
+  assert.notEqual(resultHash({ ...e, output: { level: e.output.level, masterGain: 0.1 } }, v2), h);
+  const stamped = withResultHash(e, h, 2);
   assert.equal(stamped.provenance.resultHashVersion, 2);
 });
 
@@ -635,7 +636,7 @@ test('G13: import verifies the result hash; a mismatch is the error "corrupt"', 
   verdict.input.device.label = 'edited';
   reject(verdict, 'provenance.resultHash', /corrupt/);
   const version = clone(serializeExperiment(stamped));
-  version.provenance.resultHashVersion = 3;
+  version.provenance.resultHashVersion = 4;
   reject(version, 'provenance.resultHashVersion', /one of/);
   // null: not stamped, nothing to verify (an experiment still being measured).
   assert.ok(validateExperiment(experimentToJson(e), OPTS).ok);

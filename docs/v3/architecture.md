@@ -156,14 +156,17 @@ capture in every run and in the notes. It records the master output gain the sti
 (`output.masterGain`: 20·log10 of it is part of every magnitude), the engine's result notes,
 the frequencies the user asked for before the Nyquist clamp (`recipe.requested`) and the full
 algorithm map, and stores the input device id hashed (spec §88). It then stamps the
-configuration hash and the version-2 result hash, which covers the results, the quality
-verdict, the calibration, the input and the output (version 1, results only, still verifies
-in older files). With two or more runs, `schema.js` `resultsFromMeasurement` stores the aggregate as the
+configuration hash and the version-3 result hash. Version 3 covers the results, the quality
+verdict, the calibration, the input, the output, the measurement block (the runs with their
+ids) and the build (ADR 0040). Versions 2 and 1 still verify in older files: version 2 lacks
+the measurement and build, and version 1 covers the results only. With two or more runs, `schema.js` `resultsFromMeasurement` stores the aggregate as the
 primary response and the transfer as its marked centre (the G20 rule, enforced again by
 `validate.js`). `store.js` serialises the experiment to the file form, validates it on every
 put and get, and keeps it in the IndexedDB database `oscilla-experiments` (object stores
 `experiments` and `summaries`). When that database cannot be opened, it falls back to a memory
-store and says so. Export writes the same file form. Import goes through `validate.js` (an
+store and says so. A stored completed run is never rewritten: `put` refuses a change
+(`immutable`), and rename goes through `annotate`, which touches only the name and the
+annotation notes (ADR 0040). Export writes the same file form. Import goes through `validate.js` (an
 untrusted input with size, type, finiteness, algorithm-ID and hash checks) and `migrate.js`.
 Why a recipe and an experiment are separate: ADR 0019. Why IndexedDB with export as the
 durable path: ADR 0022. Why schema versions are independent integers: ADR 0023.
@@ -436,21 +439,29 @@ levelLabel(levelCalibration, currentInput?) -> { unit: 'dB SPL'|RELATIVE_UNIT, c
   indicator: 'CALIBRATED'|'UNCALIBRATED', reason? /* another input */ }
 
 // experiments/schema.js — schema versions are independent of the product version (spec §131)
-Experiment = { kind: 'oscilla-experiment', schemaVersion: 1, oscillaVersion, oscillaCommit,
+Experiment = { kind: 'oscilla-experiment', schemaVersion: 2, oscillaVersion, oscillaCommit,
   experimentId, name, recipe: { stimulus /* = renderStimulus(spec).spec, incl. color, law */,
   repeats, analysis, requested? /* { f1, f2 } before the Nyquist clamp */ },
   output: { level, masterGain? /* linear, (0, 1] */ },
   input: { device: { label, id /* hashed 'sha256:…', §88 */ }, constraints: { requested,
     applied } /* no raw deviceId */ },
   calibration: { frequency: { id, name }|null, level: {...}|null },
-  environment: { notes }, measurement: { startedAt, sampleRate, runs, notes? },
+  environment: { notes }, measurement: { startedAt, sampleRate,
+    runs /* [{ id: 'run-<i + 1>', ... }], schema 2 */, notes? },
   quality, algorithms: { role: id }, results: { transfer, ir, rta /* RtaResult */,
     aggregate? /* AggregateResult, optional, presence kept */,
     runTransfers? /* [{ run, transfer }] ≤ LIMITS.runTransfers, only on request (G20) */ },
-  provenance: { configHash, resultHash /* SHA-256, §101 */, resultHashVersion? /* 2: results,
-    quality, calibration, input, output; absent: 1, results only */,
-    createdAt, repeatOf /* source experimentId|null */,
-    build /* { version, commit, shortCommit, sourceDate, channel, dirty, repository }|null */ } }
+  provenance: { configHash, resultHash /* SHA-256, §101 */, resultHashVersion? /* 3: v2 +
+    measurement + build; 2: results, quality, calibration, input, output; absent: 1, results
+    only */, createdAt, repeatOf /* source experimentId|null */,
+    duplicateOf? /* the experiment a duplicate copies (ADR 0040) */,
+    build /* { version, commit, shortCommit, sourceDate, channel, dirty, repository,
+      sourceDigest?, artifactSha256? }|null */ },
+  annotations? /* { notes }: user metadata, like name; no hash covers it */ }
+// ADR 0040: a stored run with a stamped resultHash is immutable. store.put of it is a no-op when
+// identical, else ExperimentStoreError 'immutable' (err.fields); name / annotations change only
+// through store.annotate(id, { name, notes }); duplicateExperiment(e, { id, name }) keeps facts,
+// hashes and createdAt and sets provenance.duplicateOf. migrate.js 1 → 2 adds the run ids.
 // G20: with an aggregate of ≥ 2 runs, results.transfer is its derivedFrom 'aggregate' centre
 // or null (never one run's transfer); validate.js enforces it
 resultsFromMeasurement(engineResult, { runTransfers: false|true|[run indices] })
@@ -464,7 +475,7 @@ responseDelta(a, b, { pointsPerOctave }) -> { ok, frequencies, aDb, bDb, deltaDb
   envelope /* both bounds, overlap, overlapFraction, dispersion, comparable */|null }
 // experiments/hash.js
 configHash(e) -> hex;  withConfigHash(e, hex)
-resultHash(e, { version = 2 }) -> hex;  withResultHash(e, hex, version = 2)
+resultHash(e, { version = 3 }) -> hex;  withResultHash(e, hex, version = 3)
 // experiments/validate.js verifies resultHash in the file's version on import (mismatch ->
 // error code 'corrupt') and that quality.mask.frequencies equals the stored response grid
 // In a file, typed arrays are EncodedArray { dtype: 'f32'|'f64'|'u8', length,

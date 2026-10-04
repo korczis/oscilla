@@ -5,18 +5,28 @@
 //   openExperimentStore({ indexedDB, name, storage, knownAlgorithms }) -> Promise<Store>
 //   createMemoryStore({ knownAlgorithms }) -> Store        (same API, nothing persists)
 //   openExperimentStoreOrMemory(opts) -> Promise<{ store, persistent, error }>
-//   Store = { kind: 'indexeddb'|'memory', list(), get(id), put(experiment), delete(id),
-//             estimate(), close(),
+//   Store = { kind: 'indexeddb'|'memory', list(), get(id), put(experiment),
+//             annotate(id, { name, notes }), delete(id), estimate(), close(),
 //             listStudio({ kind }), getStudio(id), putStudio(record), deleteStudio(id) }
 //
 // Records are stored in the portable file form (schema.serializeExperiment: EncodedArray
-// result arrays), validated (validate.js) on put and again on get, so a corrupt record is
-// reported rather than rendered. list() reads a small summary store, not the results.
+// result arrays) of the validated, migrated experiment (validate.js on put, and again on get),
+// so a corrupt record is reported rather than rendered. list() reads a small summary store,
+// not the results.
+//
+// Immutability (ADR 0019, ADR 0040): a stored experiment whose provenance.resultHash is stamped
+// is a COMPLETED run. put() of the same id may only repeat it unchanged (a no-op); any other
+// difference is refused with code 'immutable' (err.fields names what differs), checked inside
+// the write transaction. The user metadata — name and annotations.notes (schema.js
+// METADATA_KEYS) — changes only through annotate(id, { name, notes }), which reads the record,
+// applies schema.js annotateExperiment and verifies that no execution fact moved before it
+// writes. An unstamped record (resultHash null: still being measured) may be replaced.
 // Deletion happens only through delete(id): the upgrade function creates stores and never
 // removes data (§225). Every failure rejects with an ExperimentStoreError whose `code` is
 //   'unavailable' (no IndexedDB, open failed or blocked), 'quota' (QuotaExceededError),
 //   'invalid' (put of an experiment that fails validation), 'corrupt' (stored record fails
-//   validation), 'failed' (any other storage error).
+//   validation), 'immutable' (put that would change a completed run), 'missing' (annotate of
+//   an id that is not stored), 'failed' (any other storage error).
 // The app keeps working without persistence (§227): openExperimentStoreOrMemory falls back to
 // the memory store and says so.
 //
@@ -30,7 +40,9 @@
 // the Studio layer (src/js/studio/library.js), which also decodes every record it reads, so a
 // corrupt record is reported, never loaded. This module imports nothing from studio/.
 
-import { serializeExperiment, formatErrors } from './schema.js';
+import {
+  serializeExperiment, formatErrors, annotateExperiment, executionFactChanges, isMetadataPath,
+} from './schema.js';
 import { validateExperiment } from './validate.js';
 
 export const DB_NAME = 'oscilla-experiments';
@@ -46,12 +58,35 @@ export const STUDIO_RECORD_KINDS = Object.freeze(['oscilla-studio', 'oscilla-pat
 export const STUDIO_RECORD_MAX_CHARS = 8 * 1024 * 1024;
 
 export class ExperimentStoreError extends Error {
-  constructor(code, message, cause) {
+  constructor(code, message, cause, fields) {
     super(message);
     this.name = 'ExperimentStoreError';
     this.code = code;
     if (cause !== undefined) this.cause = cause;
+    if (fields) this.fields = fields;
   }
+}
+
+const isComplete = (e) => !!e && !!e.provenance && typeof e.provenance.resultHash === 'string';
+
+/**
+ * May `next` (validated) be written over the stored `old` (decoded, or null)? 'write' or 'same'
+ * (identical: nothing to write); throws 'immutable' when `old` is a completed run and an
+ * execution fact differs, or (unless `metadata`) any field differs.
+ */
+export function replaceVerdict(old, next, { metadata = false } = {}) {
+  if (!old) return 'write';
+  const changed = executionFactChanges(old, next);
+  if (!changed.length) return 'same';
+  if (!isComplete(old)) return 'write';
+  const facts = changed.filter((p) => !isMetadataPath(p));
+  if (!facts.length && metadata) return 'write';
+  const id = old.experimentId;
+  throw new ExperimentStoreError('immutable', facts.length
+    ? `experiment ${id} is a completed run and cannot be changed (${facts.slice(0, 6)
+      .join(', ')} differ); measure again or duplicate it instead`
+    : `experiment ${id} is a completed run: its name and notes change only through annotate`,
+  undefined, changed);
 }
 
 const isQuota = (err) => !!err && (err.name === 'QuotaExceededError' || err.code === 22
@@ -164,13 +199,11 @@ export function summaryRecord(doc, sizeBytes) {
   };
 }
 
-// Serialize + validate for writing: { doc, json, summary }.
+// Validate + serialize for writing: { experiment (validated, migrated), doc, summary }.
 function prepare(experiment, knownAlgorithms) {
-  let doc;
   let json;
   try {
-    doc = serializeExperiment(experiment);
-    json = JSON.stringify(doc);
+    json = JSON.stringify(serializeExperiment(experiment));
   } catch (err) {
     throw new ExperimentStoreError('invalid', `experiment cannot be serialized: ${err.message}`);
   }
@@ -178,7 +211,22 @@ function prepare(experiment, knownAlgorithms) {
   if (!v.ok) {
     throw new ExperimentStoreError('invalid', `experiment not stored: ${formatErrors(v.errors)}`);
   }
-  return { doc, summary: summaryRecord(doc, json.length) };
+  const doc = serializeExperiment(v.experiment);
+  const size = JSON.stringify(doc).length;
+  return { experiment: v.experiment, doc, summary: summaryRecord(doc, size) };
+}
+
+// The annotated copy of the stored `old`, prepared, with a check that no execution fact moved.
+function prepareAnnotation(old, id, meta, knownAlgorithms) {
+  if (!old) throw new ExperimentStoreError('missing', `experiment ${id} is not stored`);
+  let next;
+  try {
+    next = annotateExperiment(old, meta || {});
+  } catch (err) {
+    throw new ExperimentStoreError('invalid', `experiment ${id} not annotated: ${err.message}`);
+  }
+  const prepared = prepare(next, knownAlgorithms);
+  return { prepared, verdict: replaceVerdict(old, prepared.experiment, { metadata: true }) };
 }
 
 function decodeStored(doc, knownAlgorithms, id) {
@@ -206,16 +254,27 @@ export function createMemoryStore({ knownAlgorithms } = {}) {
       return Promise.reject(storeError(err, what));
     }
   };
+  const read = (id) => (records.has(id)
+    ? decodeStored(JSON.parse(records.get(id)), knownAlgorithms, id) : null);
+  const write = ({ doc, summary }) => {
+    records.set(doc.experimentId, JSON.stringify(doc));
+    summaries.set(doc.experimentId, summary);
+  };
   return {
     kind: 'memory',
     list: () => wrap('list', () => [...summaries.values()].map((s) => ({ ...s })).sort(byNewest)),
-    get: (id) => wrap('get', () => (records.has(id)
-      ? decodeStored(JSON.parse(records.get(id)), knownAlgorithms, id) : null)),
+    get: (id) => wrap('get', () => read(id)),
     put: (experiment) => wrap('put', () => {
-      const { doc, summary } = prepare(experiment, knownAlgorithms);
-      records.set(doc.experimentId, JSON.stringify(doc));
-      summaries.set(doc.experimentId, summary);
-      return doc.experimentId;
+      const prepared = prepare(experiment, knownAlgorithms);
+      const id = prepared.doc.experimentId;
+      if (replaceVerdict(read(id), prepared.experiment) === 'write') write(prepared);
+      return id;
+    }),
+    annotate: (id, meta) => wrap('annotate', () => {
+      const old = read(id);
+      const { prepared, verdict } = prepareAnnotation(old, id, meta, knownAlgorithms);
+      if (verdict === 'write') write(prepared);
+      return verdict === 'write' ? prepared.experiment : old;
     }),
     delete: (id) => wrap('delete', () => {
       summaries.delete(id);
@@ -294,6 +353,12 @@ export function openExperimentStore({ indexedDB, name = DB_NAME, storage = null,
 }
 
 function idbStore(db, storage, knownAlgorithms) {
+  const readIn = (tx, id) => request(tx.objectStore(RECORDS).get(id))
+    .then((doc) => (doc == null ? null : decodeStored(doc, knownAlgorithms, id)));
+  const writeIn = (tx, { doc, summary }) => Promise.all([
+    request(tx.objectStore(RECORDS).put(doc)),
+    request(tx.objectStore(SUMMARIES).put(summary)),
+  ]);
   // Run fn(tx) in a transaction; resolve with its value once the transaction completes.
   const run = (what, stores, mode, fn) => new Promise((resolve, reject) => {
     let tx;
@@ -342,12 +407,17 @@ function idbStore(db, storage, knownAlgorithms) {
       } catch (err) {
         return Promise.reject(err);
       }
-      const { doc, summary } = prepared;
-      return run('put', [RECORDS, SUMMARIES], 'readwrite', (tx) => Promise.all([
-        request(tx.objectStore(RECORDS).put(doc)),
-        request(tx.objectStore(SUMMARIES).put(summary)),
-      ])).then(() => doc.experimentId);
+      const id = prepared.doc.experimentId;
+      // Read, check and write in ONE transaction, so no other write slips in between.
+      return run('put', [RECORDS, SUMMARIES], 'readwrite', (tx) => readIn(tx, id)
+        .then((old) => (replaceVerdict(old, prepared.experiment) === 'write'
+          ? writeIn(tx, prepared) : null))).then(() => id);
     },
+    annotate: (id, meta) => run('annotate', [RECORDS, SUMMARIES], 'readwrite',
+      (tx) => readIn(tx, id).then((old) => {
+        const { prepared, verdict } = prepareAnnotation(old, id, meta, knownAlgorithms);
+        return verdict === 'write' ? writeIn(tx, prepared).then(() => prepared.experiment) : old;
+      })),
     delete: (id) => run('delete', [RECORDS, SUMMARIES], 'readwrite', (tx) => {
       const records = tx.objectStore(RECORDS);
       return Promise.all([
