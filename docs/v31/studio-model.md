@@ -271,11 +271,48 @@ gestures nest; `cancelGesture()` returns to the model at gesture start without a
 the first change inside a gesture. `debugInfo()` exposes undo/redo depth, last action,
 revision and counts for the debug mode (§52, §177).
 
-## Decision candidates
+## Decisions recorded in code
 
-Values future work depends on and that should be recorded as Majordomus decisions:
-`STUDIO_HISTORY_LIMIT` (200), `STUDIO_IMPORT_LIMITS` (above), the id scheme (`<prefix>-<n>` from
-`createIdGenerator`, ids shared across nodes, edges, tracks, clips, lanes, points and markers,
-`ID_PATTERN` of the experiment schema), `PASTE_OFFSET` (24, 24 logical units), the hash
-selection (positions, names and markers excluded), and the default timeline view
-(100 px/s). Zoom bounds are not decided yet: the model accepts any positive finite zoom.
+Values future work depends on (specification §19). They were first listed here as candidates for
+Majordomus decisions; the code has since decided each one, and this table states what it decided
+and where (corrected 2026-10-04). A `majordomus decision` record lives in one checkout's
+`.ai/local/` state, which is never committed, so the durable record is this table and the ADRs
+that repeat it (ADR 0030, ADR 0031, ADR 0032, ADR 0034); `tests/unit/v31-studio-self-knowledge.test.mjs`
+fails when a value or a cited line stops matching the code.
+
+<!-- studio-decisions:begin -->
+| Decision | Value | Name | Where |
+| --- | --- | --- | --- |
+| Graph coordinate unit | 1 logical unit = 1 CSS px at zoom 1 | `graph coordinate unit` | `src/js/ui/studio/graph-geometry.js:8` |
+| Graph zoom, minimum | 0.25 | `ZOOM_MIN` | `src/js/ui/studio/graph-geometry.js:16` |
+| Graph zoom, maximum | 2.5 | `ZOOM_MAX` | `src/js/ui/studio/graph-geometry.js:17` |
+| Graph zoom, one step | 1.2 | `ZOOM_STEP` | `src/js/ui/studio/graph-geometry.js:19` |
+| Default grid (snapping on) | 8 units | `GRID` | `src/js/ui/studio/graph-geometry.js:23` |
+| Pointer-drag threshold | 4 px | `DRAG_THRESHOLD_PX` | `src/js/ui/studio/graph-geometry.js:25` |
+| Connection hit width | 12 px fine pointer, 24 px coarse pointer | `CABLE_HIT_PX` | `src/js/ui/studio/graph-geometry.js:26` |
+| Initial Studio schema version | 1 | `STUDIO_SCHEMA_VERSION` | `src/js/studio/schema.js:54` |
+| Studio project file extension | .oscilla-studio.json | `STUDIO_FILE_EXTENSION` | `src/js/studio/schema.js:56` |
+| Patch file extension | .oscilla-patch.json | `PATCH_FILE_EXTENSION` | `src/js/studio/patches.js:50` |
+| Default timeline scale | 100 px/s | `pxPerSecond` | `src/js/studio/schema.js:98` |
+| Timeline zoom bounds | 4-4000 px/s | `TIMELINE_ZOOM` | `src/js/ui/studio/timeline-view.js:26` |
+| Timeline snap default | 0.1 s time grid | `EDITOR_DEFAULT_SNAP` | `src/js/ui/studio/timeline-view.js:37` |
+| Maximum node import count | 512 nodes | `STUDIO_IMPORT_LIMITS` | `src/js/studio/validate.js:73` |
+| Undo history limit | 200 entries | `STUDIO_HISTORY_LIMIT` | `src/js/studio/history.js:32` |
+| Paste and duplicate offset | (24, 24) units | `PASTE_OFFSET` | `src/js/studio/actions.js:60` |
+<!-- studio-decisions:end -->
+
+The model stores the graph view's zoom as any finite number (`src/js/studio/schema.js:354`,
+default 1); the editor clamps every view it applies to the bounds above
+(`clampZoom`/`normalizeView`, `src/js/ui/studio/graph-geometry.js:33-43`), so an imported file
+with zoom 10 opens at 2.5. The bounds are view state, outside the studioHash. Below 0.25 the
+10 px node titles are not legible on a 1x display; above 2.5 one 168-unit node fills a phone
+screen (`src/js/ui/studio/graph-geometry.js:9-10`).
+
+Also decided and described above: the id scheme (`<prefix>-<n>` from `createIdGenerator`, one
+namespace across nodes, edges, tracks, clips, lanes, points and markers, matching `ID_PATTERN`
+of the experiment schema), the remaining `STUDIO_IMPORT_LIMITS`, and the hash selection
+(positions, names, markers, metadata, view and selection excluded).
+
+Until 2026-10-04 this section listed the zoom bounds as still open, saying the model
+accepted any positive finite zoom. The bounds were chosen when the graph editor
+shipped (commit 320130f, #33, first released in v3.1.0); the text was not updated then.

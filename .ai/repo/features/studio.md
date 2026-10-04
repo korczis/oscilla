@@ -41,6 +41,15 @@ Proven by `npm test` (`tests/unit/v31-studio-*.test.mjs`) and `npm run test:stud
 (`tests/browser/v31-studio-graph.cjs`, `v31-studio-timeline.cjs`, `v31-studio-workflows.cjs`,
 `v31-studio-links.cjs` in Chromium, Firefox and WebKit), both in the release gate.
 
+First public release: `v3.1.0`, the release that introduced Studio; every later release
+contains it, and `npm run release:verify-deploy` proves the public page is the committed
+`dist/index.html`. Which claim and which test prove each Studio capability is
+`docs/CLAIMS.yaml` (the `studio-*` claims, all guaranteed); the values decided in code (zoom
+bounds, grid, hit widths, schema version, import limits) are tabled in
+`docs/v31/studio-model.md` ("Decisions recorded in code").
+`tests/unit/v31-studio-self-knowledge.test.mjs` fails when these records and the code disagree
+(specification §266).
+
 ## What it does not do
 
 Not built: a minimap, node groups, dragging several clips at once, pinch zoom on the

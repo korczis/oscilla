@@ -103,3 +103,29 @@ schema `ID_PATTERN`; the hash selection excludes positions, names, markers, meta
 and selection; the default timeline view is 100 px/s. Import limits are recorded in ADR 0032.
 Open: the file extension of a patch (issue V426), and whether groups and subgraphs belong in
 3.1.0 or 3.2 (specification §116-§117), which decides whether schema 1 needs a group record.
+
+## Resolution notes
+
+Appended; the sections above are left as written on 2026-10-02, and the status stays
+`proposed`.
+
+### 2026-10-04: the two open questions are answered by shipped code
+
+- **Patch file extension: `.oscilla-patch.json`** (`PATCH_FILE_EXTENSION`,
+  `src/js/studio/patches.js:50`), beside `.oscilla-studio.json` for projects
+  (`STUDIO_FILE_EXTENSION`, `src/js/studio/schema.js:56`). A patch is its own envelope with
+  its own `kind` and `schemaVersion` and an embedded `studioSchemaVersion`
+  (`docs/v31/patches-and-provenance.md`). Proven by `tests/unit/v31-studio-patches.test.mjs`
+  (claim `studio-patch-round-trip`); first released in v3.1.0.
+- **Groups and subgraphs: in neither 3.1.0 nor 3.2.0.** Schema 1 (`STUDIO_SCHEMA_VERSION = 1`,
+  `src/js/studio/schema.js:54`) has no group record, and no group is built: the `studio` and
+  `studio-signal-graph` features and the README list node groups as not built, and
+  `docs/v31/patches-and-provenance.md` lists graph groups (specification §116-§117) under
+  "What remains". Adding them later needs a schema version bump and a migration (ADR 0023);
+  which release takes them is not decided.
+- The values listed above as "recorded as Majordomus decisions (local state)" are also
+  decided in code, cited line by line in `docs/v31/studio-model.md` ("Decisions recorded in
+  code") and checked by `tests/unit/v31-studio-self-knowledge.test.mjs`. Majordomus decision
+  and question records live in one checkout's `.ai/local/` state, never committed; on
+  2026-10-04 the primary checkout's logs held none of the Studio ones, so these notes and
+  that table are the repository's record.

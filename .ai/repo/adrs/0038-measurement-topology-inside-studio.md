@@ -90,3 +90,28 @@ Proposed:
 Recorded as a Majordomus question and repeated here: whether AudioWorklet capture loads
 from `file://` in Safari (WebKit), which decides whether a Studio Capture node can use the
 worklet path of ADR 0026 there or must fall back.
+
+## Resolution notes
+
+Appended; the sections above are left as written on 2026-10-02, and the status stays
+`proposed`.
+
+### 2026-10-04: the open question is answered for the WebKit engine, not for Safari
+
+- **AudioWorklet capture from `file://` in WebKit: it loads.** The V3 spike measured a
+  worklet from a `data:` URL loading on `file://` in Chromium, Firefox and WebKit 26.6, where
+  a `blob:` worklet fails in Chromium and WebKit (`docs/v3/spike-audioworklet-worker.md`,
+  "Loading from `file://` and from http"). The capture worklet is loaded from a `data:` URL
+  (`src/js/measurement/capture.js:35-46`, `225-232`) and, in the default `auto` mode, falls
+  back to ScriptProcessor only when the worklet is missing or fails
+  (`src/js/measurement/capture.js:409-421`, ADR 0026). A Studio measurement does not have a
+  capture path of its own: PLAY hands the derived recipe to the V3 MeasurementEngine (claim
+  `studio-experiment-provenance`), whose `measure-from-studio` check in
+  `tests/browser/v31-studio-workflows.cjs` runs in Chromium, Firefox and WebKit from
+  `file://` (`npm run test:studio`). So no Studio-specific fallback is needed.
+- **Not answered: Apple Safari itself.** The evidence is Playwright's WebKit build, not a
+  shipped Safari on macOS or iOS, and the browser checks use the loopback test context, not a
+  physical microphone. The question stays open for real Safari with a real input device.
+- A `majordomus question` record lives in one checkout's `.ai/local/` state, never committed;
+  on 2026-10-04 the primary checkout's log held no such question, so this note is the
+  repository's record.
