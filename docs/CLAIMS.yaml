@@ -315,6 +315,14 @@ claims:
     status: guaranteed
     note: Proven on an in-process IndexedDB fake (open, upgrade, CRUD, reopen, quota, open failure, memory fallback); the UI path (list, rename, duplicate, delete with confirmation) is check experiments in tests/browser/v3-ui.cjs. No test reloads a real browser page and reads the record back.
 
+  - id: experiment-run-immutable
+    claim: A stored completed experiment run cannot be changed; only its name and annotation notes change, through a separate metadata operation, and a duplicate is the same run under a new ID that records its source
+    source: .ai/repo/adrs/0040-completed-experiment-run-immutable-metadata-separate.md
+    implementation: src/js/experiments/store.js
+    test: tests/unit/v3-experiment-immutable.test.mjs
+    status: guaranteed
+    note: put refuses every execution-fact change with code immutable (memory and IndexedDB); runs carry ids run-1..N covered by result hash v3; v1/v2 records and schema-1 files keep verifying. The UI rename, duplicate and refusal, and a rename kept across a reload, are checks experiments and persistence in tests/browser/v3-ui.cjs.
+
   - id: algorithm-ids-on-results
     claim: Every stored result names the algorithm that produced it by a versioned ID, an unknown ID is refused on import, and every known ID reproduces its golden output
     source: .ai/repo/adrs/0024-versioned-algorithm-ids.md

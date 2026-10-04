@@ -3,19 +3,32 @@
 // Registry: migrations[n] upgrades a document of schema n - 1 to schema n. Schema 1 is the
 // first released experiment schema (V3.0), so `1` is an identity placeholder: no released file
 // has schema 0, and a document claiming it is accepted only if it already has the schema-1
-// shape (validate.js still checks everything after migration). A schema 2 adds
-// `2: (e) => ({ ...e, ... })`. Steps run in order; the result's schemaVersion is set to n after
-// step n. Newer-than-supported versions are rejected with a clear message, never guessed at.
+// shape (validate.js still checks everything after migration). Steps run in order; the result's
+// schemaVersion is set to n after step n. Newer-than-supported versions are rejected with a
+// clear message, never guessed at.
+//
+// 1 → 2 (ADR 0040): every measurement.runs entry gets its id 'run-<position + 1>' (schema.js
+// runId), first among its fields; nothing else changes. Result hashes of versions 1 and 2 do
+// not cover the measurement block, so a migrated record verifies under the hash it was stamped
+// with (its provenance.resultHash and resultHashVersion are kept as they are).
 //
 //   migrateExperiment(json, { migrations, targetVersion }) ->
 //     { ok: true, experiment, from, to, applied: [n, ...] }
 //     | { ok: false, errors: [{ path, text }] }
 // The input is never modified (steps receive a copy).
 
-import { EXPERIMENT_SCHEMA_VERSION } from './schema.js';
+import { EXPERIMENT_SCHEMA_VERSION, withRunIds } from './schema.js';
+
+/** Schema 1 → 2: run ids (the rest of the document is unchanged). */
+function addRunIds(e) {
+  const m = e.measurement;
+  if (!m || typeof m !== 'object' || !Array.isArray(m.runs)) return e;
+  return { ...e, measurement: { ...m, runs: withRunIds(m.runs) } };
+}
 
 export const migrations = Object.freeze({
   1: (e) => e,
+  2: addRunIds,
 });
 
 /** Upgrade a parsed experiment document to `targetVersion` (default: the current schema). */

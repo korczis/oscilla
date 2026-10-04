@@ -13,13 +13,20 @@
 // sha256Hex defaults to the bundled synchronous calibration/sha256.js (WebCrypto is async and
 // missing in some file:// contexts); callers may inject another implementation.
 //
-// Result hash (spec §101), version 2 (current, M11 of the V3 review): resultHash = SHA-256
-// (lowercase hex) of the canonical JSON of
-//   { v: 2, results, quality, calibration, input, output }   (each serializeExperiment()'d)
+// Result hash (spec §101), version 3 (current, ADR 0040): resultHash = SHA-256 (lowercase hex)
+// of the canonical JSON of
+//   { v: 3, results, quality, calibration, input, output, measurement, build }
+// (each serializeExperiment()'d; build = provenance.build), i.e. version 2 plus the measurement
+// block (startedAt, sampleRate, the runs with their ids, notes) and the build that ran it
+// (version, commit, sourceDigest, artifactSha256), so a run cannot be added, dropped,
+// reordered or renamed, nor the result moved to another build, without the hash failing.
+// Name, annotations, experimentId and lineage (repeatOf, duplicateOf) are not covered: a
+// duplicate of a run keeps its hash. Version 2 (M11 of the V3 review):
+//   { v: 2, results, quality, calibration, input, output }
 // so the stored quality verdict and its mask, the calibration the result was shown with, the
 // input it was captured from and the output level / master gain cannot be edited without the
 // hash failing — version 1 covered the results only, so a file whose verdict was changed from
-// POOR to GOOD still verified. provenance.resultHashVersion (2) says which version a file
+// POOR to GOOD still verified. provenance.resultHashVersion (2, 3) says which version a file
 // carries; a file without it is version 1 and is still verified as version 1:
 //   { v: 1, results: serializeExperiment(e.results) }
 // i.e. the results block { transfer, ir, rta, aggregate?, runTransfers? } (optional fields only
@@ -36,7 +43,7 @@
 //   withResultHash(e, hex, version = RESULT_HASH_VERSION) -> a copy with provenance.resultHash
 //     and provenance.resultHashVersion set (version 1 leaves resultHashVersion absent, the form
 //     of a version-1 file)
-//   resultHashVersionOf(e) -> 1 | 2
+//   resultHashVersionOf(e) -> 1 | 2 | 3
 //
 // Studio provenance hash (V3.1 spec §109, §162, ADR 0038): studioExecutionHash(execution) =
 // SHA-256 (lowercase hex) of the canonical JSON of an experiment's studio.execution, which is
@@ -53,8 +60,8 @@ import { HEX64_PATTERN, serializeExperiment } from './schema.js';
 
 export const CONFIG_HASH_VERSION = 1;
 /** Current result hash version (see the header); RESULT_HASH_VERSIONS are verifiable. */
-export const RESULT_HASH_VERSION = 2;
-export const RESULT_HASH_VERSIONS = Object.freeze([1, 2]);
+export const RESULT_HASH_VERSION = 3;
+export const RESULT_HASH_VERSIONS = Object.freeze([1, 2, 3]);
 
 /** The configuration subset that the hash covers. */
 export function configSelection(e) {
@@ -107,7 +114,7 @@ export function resultHashVersionOf(e) {
 
 function checkVersion(version) {
   if (!RESULT_HASH_VERSIONS.includes(version)) {
-    throw new RangeError(`result hash version must be ${RESULT_HASH_VERSIONS.join(' or ')}`);
+    throw new RangeError(`result hash version must be one of ${RESULT_HASH_VERSIONS.join(', ')}`);
   }
   return version;
 }
@@ -120,8 +127,14 @@ export function resultCanonical(e, { version = RESULT_HASH_VERSION } = {}) {
     return canonicalJson({ v: 1, results: serializeExperiment(results) });
   }
   const part = (k) => (e && e[k] !== undefined ? serializeExperiment(e[k]) : null);
-  return canonicalJson({ v: 2, results: serializeExperiment(results), quality: part('quality'),
-    calibration: part('calibration'), input: part('input'), output: part('output') });
+  const block = { v: version, results: serializeExperiment(results), quality: part('quality'),
+    calibration: part('calibration'), input: part('input'), output: part('output') };
+  if (version === 3) {
+    block.measurement = part('measurement');
+    block.build = e && e.provenance && e.provenance.build
+      ? serializeExperiment(e.provenance.build) : null;
+  }
+  return canonicalJson(block);
 }
 
 /** SHA-256 hex of the canonical block of result hash `version` (spec §101). */

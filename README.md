@@ -156,7 +156,17 @@ filter class is claimed. An experiment saved from Measure does not store band le
   (stimulus, runs, analysis settings), the output level, the input device and the requested
   and applied constraints, the calibration (profile name and identity, level calibration), the
   sample rate and runs, the quality assessment and the algorithm ID of every result. It also
-  records the product version and build, with a configuration hash and a result hash.
+  records the product version and build (including the build's source digest and, for the
+  deployed page, the artifact SHA-256), with a configuration hash and a result hash. The
+  result hash (version 3) covers the results, the verdict, the calibration, the input, the
+  output, the runs (each with a stable id, `run-1`, `run-2`, ...) and the build. Files with a
+  version 1 or 2 hash still verify in their own version.
+- **A completed run cannot be changed.** Only the name and the annotation notes of a saved
+  experiment can be edited, and no hash covers them. The store refuses any other change to a
+  completed run, and rename edits only the name. A duplicate is the same run under a new ID,
+  with the same hashes and creation time, and it records which experiment it was copied from
+  ([ADR 0040](.ai/repo/adrs/0040-completed-experiment-run-immutable-metadata-separate.md),
+  proposed).
 - **Repeats.** With two or more runs, the stored response is the aggregate: a power mean with
   a standard-deviation envelope, or a median with a 10th-90th percentile band, plus a
   repeatability figure in dB. The stored transfer is the aggregate's centre, marked as
@@ -170,6 +180,7 @@ filter class is claimed. An experiment saved from Measure does not store band le
   each with its reason. The file format has its own schema version, independent of the
   product version
   ([ADR 0023](.ai/repo/adrs/0023-schema-versions-independent-of-product-version.md), proposed).
+  Schema 1 files import through a migration that adds the run ids and keeps their hash.
 - **Compare.** Comparing two or more experiments names every difference in calibration, sample
   rate, stimulus and algorithm. A minus B is shown only for equivalent experiments, and only
   over their overlapping valid range. Equivalent experiments also get an impulse-response

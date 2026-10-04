@@ -6,16 +6,19 @@
 // IndexedDB is unavailable (some browsers on file://, private modes) openExperimentStoreOrMemory
 // falls back to memory and the workspace says that nothing outlives the page view (§55).
 // Delete is the only destructive action and always asks first (§225); an import never
-// overwrites a stored experiment with the same ID (§104: never overwrite silently).
+// overwrites a stored experiment with the same ID (§104: never overwrite silently). A stored
+// run is immutable (ADR 0040): rename goes through store.annotate (metadata only), duplicate
+// stores schema.js duplicateExperiment (the same run under a new id, provenance.duplicateOf),
+// and a refused change ('immutable') is reported with its reason.
 // Decoded experiments (typed arrays) stay in the closure; Alpine holds summaries and text.
 //
 // Export (§88): exportableExperiment() hashes a raw input deviceId that an older record still
-// carries (schema.js sanitizeForExport) and re-stamps a version-2 result hash, which covers the
-// input; a version-1 hash covers the results only and stays valid. CSV (m4): the transfer CSV
-// carries the quality mask as its `reliable` column (when the mask lies on the transfer grid),
-// the frequency-corrected magnitude when the experiment's profile is loaded (same id), and the
-// phase when the transfer has one. Imports refuse a file larger than the limit before reading
-// it (m6).
+// carries (schema.js sanitizeForExport) and re-stamps a version-2 or -3 result hash (in its own
+// version), which covers the input; a version-1 hash covers the results only and stays valid.
+// CSV (m4): the transfer CSV carries the quality mask as its `reliable` column (when the mask
+// lies on the transfer grid), the frequency-corrected magnitude when the experiment's profile is
+// loaded (same id), and the phase when the transfer has one. Imports refuse a file larger than
+// the limit before reading it (m6).
 //
 // Compare (V356): the response overlay, A − B and the IR overlay (compare-view.js; only for an
 // equivalent set, ms re each direct peak, original scale; no A − B of impulse responses).
@@ -30,8 +33,8 @@ import { KNOWN_ALGORITHM_IDS } from '../measurement/algorithms.js';
 import { openExperimentStoreOrMemory } from '../experiments/store.js';
 import { validateExperiment, DEFAULT_MAX_BYTES } from '../experiments/validate.js';
 import {
-  experimentToJson, formatErrors, newExperimentId, EXPERIMENT_FILE_EXTENSION, LIMITS,
-  sanitizeForExport,
+  experimentToJson, formatErrors, newExperimentId, EXPERIMENT_FILE_EXTENSION,
+  sanitizeForExport, duplicateExperiment,
 } from '../experiments/schema.js';
 import { resultHash, withResultHash, resultHashVersionOf } from '../experiments/hash.js';
 import {
@@ -91,15 +94,17 @@ export function fileStem(name, fallback = 'experiment') {
 const isTestContext = (e) => !!experimentTestContext(e);
 
 /**
- * The experiment as it is exported (§88): no raw deviceId; a version-2 result hash re-stamped
- * when sanitizing changed the input it covers (the record was verified when it was stored).
+ * The experiment as it is exported (§88): no raw deviceId; a result hash of version 2 or 3
+ * re-stamped in its version when sanitizing changed the input it covers (the record was
+ * verified when it was stored).
  */
 export function exportableExperiment(e) {
   const { experiment, changed } = sanitizeForExport(e);
   if (!changed) return e;
   const p = experiment.provenance;
-  if (p && typeof p.resultHash === 'string' && resultHashVersionOf(experiment) === 2) {
-    return withResultHash(experiment, resultHash(experiment, { version: 2 }), 2);
+  const version = resultHashVersionOf(experiment);
+  if (p && typeof p.resultHash === 'string' && version >= 2) {
+    return withResultHash(experiment, resultHash(experiment, { version }), version);
   }
   return experiment;
 }
@@ -349,14 +354,12 @@ export function createExperimentsUi() {
       this.exps.renameName = row.name === '(unnamed)' ? '' : row.name;
       this.openModal('osc-dlg-exp-rename');
     },
+    /** Rename: metadata only (store.annotate); the run itself is never rewritten. */
     async experimentsRename() {
       const id = this.exps.renameId;
-      const e = await get(this, id);
-      if (!e) return false;
-      const name = String(this.exps.renameName || '').trim().slice(0, LIMITS.nameChars);
-      const next = { ...e, name };
       try {
-        await (await store(this)).put(next);
+        const next = await (await store(this)).annotate(id,
+          { name: String(this.exps.renameName || '') });
         remember(id, next);
         if (ctx.detail && ctx.detail.experimentId === id) setDetail(this, next);
         this.closeModal('osc-dlg-exp-rename');
@@ -367,17 +370,12 @@ export function createExperimentsUi() {
         return false;
       }
     },
-    /** A copy under a new ID (same configuration and results, so the same hashes). */
+    /** The same run under a new ID (same facts and hashes, provenance.duplicateOf). */
     async experimentsDuplicate(id) {
       const e = await get(this, id);
       if (!e) return null;
-      const copy = {
-        ...e,
-        experimentId: newExperimentId(randomBytes16()),
-        name: `${e.name || '(unnamed)'} (copy)`.slice(0, LIMITS.nameChars),
-        provenance: { ...e.provenance, createdAt: new Date().toISOString() },
-      };
       try {
+        const copy = duplicateExperiment(e, { id: newExperimentId(randomBytes16()) });
         const nid = await this.experimentsPut(copy);
         this.notify('success', 'Experiment duplicated', `"${copy.name}"`);
         return nid;

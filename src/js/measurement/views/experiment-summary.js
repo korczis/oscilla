@@ -63,8 +63,11 @@ export function experimentSummary(e) {
     { label: 'Quality verdict', text: qualityVerdictText(e) },
     { label: 'Repeat of', text: e.provenance && e.provenance.repeatOf ? e.provenance.repeatOf
       : 'none (original)' },
+    ...(e.provenance && e.provenance.duplicateOf ? [{ label: 'Duplicate of',
+      text: `${e.provenance.duplicateOf} (the same run, copied)` }] : []),
     { label: 'Build', text: build ? `${build.version || UNAVAILABLE.UNKNOWN} (${build.channel
-      || UNAVAILABLE.UNKNOWN}${build.dirty ? ', dirty' : ''})` : UNAVAILABLE.UNKNOWN },
+      || UNAVAILABLE.UNKNOWN}${build.dirty ? ', dirty' : ''}${build.sourceDigest
+      ? `, source ${build.sourceDigest.slice(0, 12)}…` : ''})` : UNAVAILABLE.UNKNOWN },
     { label: 'Algorithms', text: algorithmsText(e.algorithms) },
     { label: 'Schema', text: `oscilla-experiment v${e.schemaVersion ?? UNAVAILABLE.UNKNOWN}` },
   ];
@@ -92,7 +95,7 @@ function resultHashText(p) {
   if (typeof h !== 'string') return UNAVAILABLE.UNKNOWN;
   const v = p.resultHashVersion === undefined ? 1 : p.resultHashVersion;
   return `${shortHash(h)} v${v} (${v === 1 ? 'results only'
-    : 'results, quality, calibration, input, output'})`;
+    : `results, quality, calibration, input, output${v >= 3 ? ', runs, build' : ''}`})`;
 }
 
 function algorithmsText(a) {

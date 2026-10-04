@@ -16,7 +16,8 @@
 //     { requested, applied } }, calibration: { frequency: { id, name }|null, level|null },
 //     environment: { notes }, measurement: { startedAt, sampleRate, runs: [] }, quality,
 //     algorithms: { role: id }, results: { transfer, ir, rta, aggregate? },
-//     provenance: { configHash, resultHash, createdAt, repeatOf, build } }
+//     provenance: { configHash, resultHash, createdAt, repeatOf, build, duplicateOf? },
+//     annotations? }
 // provenance.resultHash (hash.js resultHash, spec §101) is null until stamped and is cleared by
 // withResults whenever the results change; validate.js verifies it on import.
 // results.aggregate (G16) is optional: an aggregate.js aggregateResult() (centre, envelope,
@@ -46,7 +47,21 @@
 //                        applied by browser/device."), at most LIMITS.measurementNotes texts
 //   provenance.resultHashVersion   which hash.js result hash provenance.resultHash is (absent:
 //                        version 1, results only; 2: results, quality, calibration, input and
-//                        output)
+//                        output; 3: version 2 plus the measurement block and provenance.build)
+//   provenance.build.sourceDigest / artifactSha256   the build's source digest and, for a
+//                        deployed (stamped) build, the SHA-256 of its artifact (build-info.js);
+//                        null when unknown, absent in experiments recorded before them
+//
+// Schema 2 (ADR 0040): a completed run is immutable; metadata is separate.
+//   measurement.runs[i].id   'run-<i + 1>' (runId): the stable identity of a repeat within its
+//                        experiment, derived from its position in the immutable run list (not a
+//                        clock); covered by result hash version 3. migrate.js 1 → 2 assigns it.
+//   annotations          optional user metadata { notes } beside `name`; neither enters a hash
+//                        and both change only through annotateExperiment (store.js annotate).
+//                        EXECUTION FACTS are every other field (executionFactChanges).
+//   provenance.duplicateOf   the experiment a duplicate was copied from (duplicateExperiment):
+//                        the same run (same facts, hashes, createdAt) under a new id, never a
+//                        new measurement.
 // Input device ids (spec §88): normalizeInput() stores input.device.id hashed
 // (calibration/device-id.js) and drops the duplicate constraints.applied.deviceId, so a stored
 // or exported experiment never carries the raw identifier, once or twice; sanitizeForExport()
@@ -59,6 +74,9 @@
 //     environment, algorithms }) -> Experiment
 //   withResults(experiment, { startedAt, sampleRate, runs, quality, algorithms, results })
 //   repeatExperiment(experiment, { now, id, build, sampleRate }) -> a NEW Experiment (§104)
+//   duplicateExperiment(experiment, { id, name }) -> a copy of the same run (duplicateOf)
+//   annotateExperiment(experiment, { name, notes }) -> a copy with only the metadata changed
+//   executionFactChanges(a, b) -> changed paths (metadata paths included, see isMetadataPath)
 //   resultsFromMeasurement(result, { runTransfers }) -> { transfer, ir, rta, aggregate?,
 //     runTransfers? }                                (an engine.js measure() result, G20)
 //   newExperimentId(randomBytes16) -> UUIDv4 string
@@ -67,6 +85,7 @@
 //   createChecker(), checkRecipe(c, value, path)     (shared with validate.js)
 
 import { CONFIG_FILE_VERSION } from '../ui/config-file.js';
+import { canonicalJson } from './canonical-json.js';
 import { PRESET_SCHEMA_VERSION } from '../core/constants.js';
 import { sig } from '../core/math.js';
 import { encodeArray } from './encode.js';
@@ -80,8 +99,11 @@ import {
 import { hashDeviceId, isHashedDeviceId } from '../calibration/device-id.js';
 import { aggregateResult, transferFromAggregate } from '../measurement/aggregate.js';
 
-/** Experiment file schema (§131-§132: V3.0 starts at 1, independent of the product version). */
-export const EXPERIMENT_SCHEMA_VERSION = 1;
+/**
+ * Experiment file schema (§131-§132: V3.0 starts at 1, independent of the product version).
+ * 2: run ids and the metadata/execution split (ADR 0040; migrate.js 1 → 2).
+ */
+export const EXPERIMENT_SCHEMA_VERSION = 2;
 /** Calibration record schema (FrequencyProfile / LevelCalibration, calibration/profile.js). */
 export const CALIBRATION_SCHEMA_VERSION = PROFILE_SCHEMA_VERSION;
 /** Instrument config file schema (ui/config-file.js CONFIG_FILE_VERSION). */
@@ -142,6 +164,7 @@ export const HEX64_PATTERN = /^[0-9a-f]{64}$/;
 export const COMMIT_PATTERN = /^[0-9a-f]{7,40}$/;
 export const VERSION_PATTERN = /^[0-9A-Za-z][0-9A-Za-z.+-]{0,63}$/;
 export const ALGORITHM_ID_PATTERN = /^oscilla(\.[a-z0-9-]+)+\.v[0-9]+$/;
+export const RUN_ID_PATTERN = /^run-[1-9][0-9]*$/;
 export const ISO_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,3})?Z$/;
 export const FORBIDDEN_KEYS = Object.freeze(['__proto__', 'constructor', 'prototype']);
 
@@ -414,6 +437,18 @@ export function toIsoTimestamp(now) {
 const strOrNull = (v, max, pattern) => (typeof v === 'string' && v.trim() !== ''
   && v.length <= max && !CTRL_SINGLE.test(v) && (!pattern || pattern.test(v)) ? v : null);
 
+/** The id of the run at `index` (0-based) of measurement.runs: 'run-1', 'run-2', ... */
+export const runId = (index) => `run-${index + 1}`;
+
+/** Runs with their ids (runId of the position), `id` first; other fields unchanged. */
+export function withRunIds(runs) {
+  return runs.map((r, i) => {
+    if (!isPlainObject(r)) return r;
+    const { id, ...rest } = r;
+    return { id: runId(i), ...rest };
+  });
+}
+
 /** The provenance block of a build-info record; anything missing or malformed is null. */
 export function normalizeBuild(build) {
   if (!build || typeof build !== 'object') return null;
@@ -426,6 +461,8 @@ export function normalizeBuild(build) {
     channel: strOrNull(build.channel, 32, /^[A-Za-z0-9._-]+$/),
     dirty: typeof build.dirty === 'boolean' ? build.dirty : null,
     repository: strOrNull(build.repository, LIMITS.labelChars),
+    sourceDigest: strOrNull(build.sourceDigest, 64, HEX64_PATTERN),
+    artifactSha256: strOrNull(build.artifactSha256, 64, HEX64_PATTERN),
   };
 }
 
@@ -498,8 +535,8 @@ export function normalizeInput(input) {
 /**
  * A copy of an experiment fit for export (§88): input.device.id hashed and no raw deviceId in
  * the constraints. Returns { experiment, changed }; an experiment already in that form comes
- * back unchanged (same object). The caller re-stamps a version-2 result hash, which covers the
- * input, when `changed` (hash.js).
+ * back unchanged (same object). The caller re-stamps a version-2 or -3 result hash (in its own
+ * version), which covers the input, when `changed` (hash.js).
  */
 export function sanitizeForExport(e) {
   const input = e && e.input;
@@ -606,23 +643,25 @@ export function createExperiment({
 
 /**
  * A copy of `experiment` with what was measured. Result typed arrays are referenced, not
- * copied (§172); the input experiment is not modified. A changed configuration (algorithms,
- * sampleRate) clears provenance.configHash, and new results clear provenance.resultHash; hash.js
- * recomputes both.
+ * copied (§172); the input experiment is not modified. Runs get their ids (runId). A changed
+ * configuration (algorithms, sampleRate) clears provenance.configHash, and new results,
+ * quality or measurement clear provenance.resultHash; hash.js recomputes both.
  */
 export function withResults(experiment, patch = {}) {
   const e = experiment;
   const m = e.measurement;
   const changesConfig = patch.algorithms !== undefined || patch.sampleRate !== undefined;
   let provenance = changesConfig ? { ...e.provenance, configHash: null } : e.provenance;
-  if (patch.results !== undefined) provenance = { ...provenance, resultHash: null };
+  const measured = ['results', 'quality', 'runs', 'startedAt', 'sampleRate'];
+  if (measured.some((k) => patch[k] !== undefined)) {
+    provenance = { ...provenance, resultHash: null };
+  }
   const measurement = {
     startedAt: patch.startedAt !== undefined ? toIsoTimestamp(patch.startedAt) : m.startedAt,
     sampleRate: patch.sampleRate !== undefined ? patch.sampleRate : m.sampleRate,
-    runs: patch.runs !== undefined ? patch.runs.map((r) => ({ ...r })) : m.runs,
+    runs: patch.runs !== undefined ? withRunIds(patch.runs.map((r) => ({ ...r }))) : m.runs,
   };
   if (m.notes !== undefined) measurement.notes = m.notes;
-  if (patch.quality !== undefined) provenance = { ...provenance, resultHash: null };
   return {
     ...e,
     measurement,
@@ -700,6 +739,67 @@ export function repeatExperiment(experiment, { now, id, build = null, sampleRate
   });
   next.provenance.repeatOf = e.experimentId;
   return next;
+}
+
+/**
+ * DUPLICATE (ADR 0040): the same completed run under a new id — every execution fact, both
+ * hashes and createdAt unchanged (it is not a new measurement), provenance.duplicateOf = the
+ * source id, and `name` (default "<name> (copy)").
+ */
+export function duplicateExperiment(experiment, { id, name } = {}) {
+  const e = experiment;
+  if (typeof id !== 'string' || !ID_PATTERN.test(id) || id === e.experimentId) {
+    throw new RangeError('duplicateExperiment: the duplicate needs a new valid id');
+  }
+  const title = typeof name === 'string' ? name : `${e.name || '(unnamed)'} (copy)`;
+  return { ...e, experimentId: id, name: title.trim().slice(0, LIMITS.nameChars),
+    provenance: { ...e.provenance, duplicateOf: e.experimentId } };
+}
+
+/** User metadata: the only fields annotateExperiment changes and no hash covers. */
+export const METADATA_KEYS = Object.freeze(['name', 'annotations']);
+export const isMetadataPath = (path) => METADATA_KEYS.includes(path.split('.')[0]);
+
+/**
+ * A copy with only the user metadata changed: `name` (trimmed, capped) and `notes` (the
+ * annotations block; '' or null removes it). Fields not given are kept; nothing else changes.
+ */
+export function annotateExperiment(experiment, { name, notes } = {}) {
+  const out = { ...experiment };
+  if (name !== undefined) {
+    if (typeof name !== 'string') throw new TypeError('annotate: name must be a string');
+    out.name = name.trim().slice(0, LIMITS.nameChars);
+  }
+  if (notes !== undefined) {
+    if (notes !== null && typeof notes !== 'string') {
+      throw new TypeError('annotate: notes must be a string or null');
+    }
+    const text = notes ? notes.trim().slice(0, LIMITS.notesChars) : '';
+    delete out.annotations;
+    if (text) out.annotations = { notes: text };
+  }
+  return out;
+}
+
+/**
+ * The paths whose canonical (serialized) values differ between two experiments: top-level
+ * keys, one level deeper inside objects ('provenance.build', 'measurement.runs'). Metadata
+ * paths (isMetadataPath) are included; a caller filters them.
+ */
+export function executionFactChanges(a, b) {
+  const x = serializeExperiment(a);
+  const y = serializeExperiment(b);
+  const out = [];
+  const walk = (p, u, v, deep) => {
+    if (deep && isPlainObject(u) && isPlainObject(v)) {
+      for (const k of [...new Set([...Object.keys(u), ...Object.keys(v)])].sort()) {
+        walk(p ? `${p}.${k}` : k, u[k], v[k], !p);
+      }
+    } else if (canonicalJson(u ?? null) !== canonicalJson(v ?? null)
+      || (u === undefined) !== (v === undefined)) out.push(p);
+  };
+  walk('', x, y, true);
+  return out;
 }
 
 /** A JSON-safe copy: typed arrays become EncodedArray objects; nothing else changes. */
