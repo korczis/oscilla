@@ -22,10 +22,13 @@
 //   runtime.flush({ force })       run due (or all) deferred disposals now
 //   runtime.debugInfo()            runtime node count, compiled revision, last error, ... (§177)
 //   runtime.on(fn) -> off          fn(type, detail): 'applied' | 'error' | 'state'
-//   runtime.setOwnedParams([{ node, param }]) -> list   parameters another owner drives (the
-//                                  transport: automation lanes, pattern-played oscillator
+//   runtime.setOwnedParams([{ node, param, peak? }]) -> list   parameters another owner drives
+//                                  (the transport: automation lanes, pattern-played oscillator
 //                                  levels). The runtime never glides their base value nor lets
-//                                  a live update rewrite them; [] releases every claim
+//                                  a live update rewrite them; [] releases every claim. `peak`,
+//                                  the highest value the owner gives the parameter, sizes a
+//                                  frequency's Nyquist headroom (computeBases peaks, V431 X1);
+//                                  a changed peak re-sizes that node on the next apply
 //   runtime.ownedParams()          the current claims, [{ node, param }]
 //   runtime.baseOffset(id, key)    the constant part the modulation edges add to a parameter's
 //                                  base (linear edges: unipolar polarity, offset), in its unit;
@@ -100,6 +103,8 @@ export function createStudioRuntime({
   const listeners = new Set();
   const bases = new Map(); // node id → last computeBases result (debug)
   const owned = new Map(); // node id → Set of parameter keys driven by another owner
+  const peaks = new Map(); // node id → { key: peak value } of owned parameters (computeBases)
+  const peaksDirty = new Set(); // node ids whose peaks changed since the last apply
   // The engine's master level before start: the Master Output level drives the ONE engine gain
   // only while the Studio plays; STOP gives it back so MEASURE, Labs and the Playground never
   // inherit the Studio's level (V431 review X4). null while nothing is to be restored.
@@ -231,10 +236,20 @@ export function createStudioRuntime({
 
   function setOwnedParams(list = []) {
     owned.clear();
+    const before = new Map(peaks);
+    peaks.clear();
     for (const e of Array.isArray(list) ? list : []) {
       if (!e || typeof e.node !== 'string' || typeof e.param !== 'string') continue;
       if (!owned.has(e.node)) owned.set(e.node, new Set());
       owned.get(e.node).add(e.param);
+      if (Number.isFinite(e.peak)) {
+        if (!peaks.has(e.node)) peaks.set(e.node, {});
+        peaks.get(e.node)[e.param] = e.peak;
+      }
+    }
+    const sig = (v) => (v ? JSON.stringify(Object.entries(v).sort()) : '');
+    for (const id of new Set([...before.keys(), ...peaks.keys()])) {
+      if (sig(before.get(id)) !== sig(peaks.get(id))) peaksDirty.add(id);
     }
     return ownedParams();
   }
@@ -295,7 +310,8 @@ export function createStudioRuntime({
         || (edgeRemove.has(eid) ? null : edges.get(eid));
       for (const [id, h] of created.handles) {
         if (h.status !== 'ready' && h.status !== 'pending') continue;
-        const cb = computeBases(next.nodes.get(id), incomingControl(next, id, edgeOf), hooks);
+        const cb = computeBases(next.nodes.get(id), incomingControl(next, id, edgeOf), hooks,
+          peaks.get(id) || null);
         h.applyBase(cb.base, true, NONE_OWNED);
       }
     } catch (err) {
@@ -344,11 +360,15 @@ export function createStudioRuntime({
     }
     // Targets of removed modulation edges drop their offsets (their plan entry may be gone).
     for (const eh of retire.edges) if (eh.kind === 'control') affected.add(eh.toNode);
+    // A lane whose peak changed re-sizes its node's headroom (no graph op names it).
+    for (const id of peaksDirty) if (next.nodes.has(id)) affected.add(id);
+    peaksDirty.clear();
     const edgeOf = (eid) => edges.get(eid) || null;
     for (const id of affected) {
       const h = handles.get(id);
       if (!h || (h.status !== 'ready' && h.status !== 'pending')) continue;
-      const cb = computeBases(next.nodes.get(id), incomingControl(next, id, edgeOf), hooks);
+      const cb = computeBases(next.nodes.get(id), incomingControl(next, id, edgeOf), hooks,
+        peaks.get(id) || null);
       bases.set(id, cb);
       if (!created.handles.has(id)) {
         guard(`parameters ${id}`, () => h.applyBase(cb.base, false, ownedKeys(h)));

@@ -26,7 +26,7 @@
 //   instantiateNode(planNode, ctxEnv) -> handle      (adapters/nodes.js handle + bookkeeping)
 //   createEdgeHandle(planEdge, fromHandle, toHandle, ctxEnv) -> edge handle (gain at 0;
 //                                                      fromNode, toNode, toPort, kind, gain)
-//   computeBases(planNode, incoming, hooks) -> { base, gains, limited, exceeds }
+//   computeBases(planNode, incoming, hooks, peaks) -> { base, gains, limited, exceeds }
 //   disposeHandle(handle, acct)                       stop, disconnect, untrack
 //
 // Routing semantics:
@@ -44,7 +44,9 @@
 //     cents on the node's detune AudioParam (frequency · 2^(cents/1200), exact). Several edges
 //     on one parameter add (§104). Frequency parameters are kept at or below 0.95 × Nyquist:
 //     the base is clamped and the upward excursion of the edges is scaled down to fit
-//     (`limited`, visible in debugInfo). Other parameters may exceed their range through
+//     (`limited`, visible in debugInfo). A frequency an automation lane owns is sized from the
+//     lane's peak, not from the static parameter it overrides (`peaks`, V431 review X1).
+//     Other parameters may exceed their range through
 //     modulation; that is reported (`exceeds`), never hidden (§242).
 //   - TRIGGER and ANALYSIS edges have no Web Audio connection: they are logical bindings for
 //     the timeline/scheduler and the measurement engine.
@@ -366,8 +368,13 @@ export function createEdgeHandle(planEdge, fromHandle, toHandle, ctxEnv) {
  *   gains:   Map<edgeId, edge GainNode value>   (muted edges: 0)
  *   limited: Set<edgeId>   upward excursion scaled down to stay ≤ 0.95 × Nyquist
  *   exceeds: [key]         base + modulation may leave the parameter range (reported, §242)
+ * peaks: { key: value } (optional) the highest value another owner (an automation lane) gives a
+ * parameter, in its unit and before the edges' offsets. A frequency's headroom is sized from
+ * the larger of its base and that peak (plus the same offsets), never above the cap: the lane
+ * overrides the static value, so a lane held at 20 kHz under a static 440 Hz still limits a
+ * two-octave LFO to 0.95 × Nyquist (V431 review X1).
  */
-export function computeBases(planNode, incoming, hooks) {
+export function computeBases(planNode, incoming, hooks, peaks = null) {
   const base = {};
   const defs = new Map();
   for (const p of planNode.def.params) {
@@ -401,24 +408,28 @@ export function computeBases(planNode, incoming, hooks) {
     const list = groups.get(key) || [];
     const isFreq = p.unit === 'Hz';
     const cap = isFreq && hooks ? Math.min(p.max, hooks.safeMaximum) : p.max;
+    const offset = Number.isFinite(b.value - planNode.params[key])
+      ? b.value - planNode.params[key] : 0;
     if (isFreq) {
       if (b.value > cap) b.value = cap;
       if (b.value < p.min) b.value = p.min;
     }
+    const peak = peaks && Number.isFinite(peaks[key]) ? peaks[key] + offset : -Infinity;
+    const ref = isFreq ? Math.min(cap, Math.max(b.value, peak)) : b.value;
     const lin = list.filter((x) => !x.log);
     const logs = list.filter((x) => x.log);
     let up = lin.reduce((s, x) => s + x.up, 0);
     let k = 1;
-    if (isFreq && up > 0 && b.value + up > cap) {
-      k = Math.max(0, cap - b.value) / up;
+    if (isFreq && up > 0 && ref + up > cap) {
+      k = Math.max(0, cap - ref) / up;
       for (const x of lin) limited.add(x.id);
       up *= k;
     }
     for (const x of lin) gains.set(x.id, x.a * k * x.scale);
     let kc = 1;
     if (logs.length) {
-      const peak = Math.max(b.value + up, 1e-9);
-      const room = CENTS_PER_OCTAVE * Math.log2(cap / peak);
+      const top = Math.max(ref + up, 1e-9);
+      const room = CENTS_PER_OCTAVE * Math.log2(cap / top);
       const upC = logs.reduce((s, x) => s + CENTS_PER_OCTAVE * x.up, 0);
       if (isFreq && b.cents > room) {
         b.cents = room;

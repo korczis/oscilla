@@ -252,7 +252,11 @@ export function createStudioTransport({
   }
 
   function ownedFor(m) {
-    const list = m.timeline.automation.map((l) => ({ node: l.target.node, param: l.target.param }));
+    // `peak`: the lane's highest point, so the runtime sizes a frequency's Nyquist headroom from
+    // what the lane plays, not from the static value it overrides (V431 review X1).
+    const list = m.timeline.automation.map((l) => ({ node: l.target.node, param: l.target.param,
+      peak: l.points.reduce((top, pt) => (finite(pt.value) && pt.value > top ? pt.value : top),
+        -Infinity) }));
     for (const id of patternOscillators(m)) list.push({ node: id, param: 'level' });
     return list;
   }
