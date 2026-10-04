@@ -603,17 +603,31 @@ function defineChecks() {
         if (v.page > v.inner || v.right > v.inner || v.host > 0) ok = false;
       }
       await page.setViewportSize({ width: 1536, height: 1024 });
-      // Light theme: text on its own surface >= 4.5:1.
+      // Light theme: text on its own surface >= 4.5:1. Measured with reduced motion, the app's
+      // own path that shortens every transition to 0.01 ms (base.css): on CI WebKit a reading
+      // taken before the theme's colour transitions had started agreed with the next one and
+      // failed at time 1.1:1, help 3.41:1, although the settled colours pass.
+      await page.emulateMedia({ reducedMotion: 'reduce' });
       await page.evaluate(() => document.documentElement.setAttribute('data-theme', 'light'));
       await mount(page);
       // Colours are measured once the theme has settled: a style flush and two frames (so the
       // theme change has started its transitions, e.g. .osc-btn's 0.12 s colour transition),
       // then every running animation finished, then two consecutive readings that agree
       // (mid-change values flaked on WebKit in CI: time 1.1:1, help 3.41:1).
+      // Only animations with a finite end are awaited, and never longer than 2 s: under reduced
+      // motion Firefox holds one whose finished promise never resolves, and an unbounded wait
+      // ran the check into its 60 s timeout.
       const settle = () => page.evaluate(async () => {
         void document.body.offsetHeight;
         await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
-        await Promise.all(document.getAnimations().map((a) => a.finished.catch(() => null)));
+        const finite = document.getAnimations().filter((a) => {
+          const end = a.effect && a.effect.getComputedTiming().endTime;
+          return Number.isFinite(end);
+        });
+        await Promise.race([
+          Promise.all(finite.map((a) => a.finished.catch(() => null))),
+          new Promise((r) => setTimeout(r, 2000)),
+        ]);
       });
       const measure = () => page.evaluate(() => {
         const rgb = (s) => (s.match(/[\d.]+/g) || []).slice(0, 3).map(Number);
@@ -649,6 +663,7 @@ function defineChecks() {
         contrast = next;
       }
       await page.evaluate(() => document.documentElement.removeAttribute('data-theme'));
+      await page.emulateMedia({ reducedMotion: null });
       const light = Object.values(contrast).every((r) => r >= 4.5);
       return result({ noOverflow: ok, light }, { out, contrast });
     } },
