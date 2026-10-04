@@ -6,11 +6,15 @@
 //     lines are experiments/schema.js summarizeExperiment() (the §161 lines); compact is one
 //     line "MacBook speakers — desk · 20 Hz → 20 kHz log sweep, 10 s · 5 runs · USABLE".
 //   experimentListRows(summaries, { selected = [] }) -> { rows: [Row], canCompare,
-//     compareIds, empty: text|null }
+//     compareIds, baselineId, empty: text|null }
+//   compareSelection(selected, baselineId) -> ids (≤ 4) | null   (ADR 0041) what Compare
+//     compares: the baseline first when it is selected, or the baseline and the one selected
+//     experiment; null when there is nothing to compare
 //     summaries: experiments/store.js list() entries ({ experimentId, name, createdAt,
 //     schemaVersion, oscillaVersion, status, sizeBytes }) or full experiments
 //     Row = { id, name, createdAt, createdText, status, statusText, glyph, icon, shape,
-//       className, sizeText, versionText, selected, actions: [{ id, label, destructive }] }
+//       className, sizeText, versionText, selected, baseline, actions: [{ id, label,
+//       destructive }] }
 // Nothing missing is invented (§249): it reads UNKNOWN / NOT ASSESSED.
 
 import {
@@ -109,7 +113,7 @@ function rowSource(x) {
     return { experimentId: x.experimentId, name: x.name,
       createdAt: x.provenance ? x.provenance.createdAt : null, schemaVersion: x.schemaVersion,
       oscillaVersion: x.oscillaVersion, status: x.quality ? x.quality.status : null,
-      sizeBytes: null };
+      sizeBytes: null, baseline: !!(x.annotations && x.annotations.baseline) };
   }
   return x || {};
 }
@@ -134,15 +138,29 @@ export function experimentListRows(summaries, { selected = [] } = {}) {
       versionText: `OSCILLA ${s.oscillaVersion || UNAVAILABLE.UNKNOWN}, schema v${
         s.schemaVersion ?? UNAVAILABLE.UNKNOWN}`,
       selected: sel.has(s.experimentId),
+      baseline: !!s.baseline,
       actions: EXPERIMENT_ACTIONS.map((a) => ({ ...a })),
     };
   });
   const compareIds = rows.filter((r) => r.selected).map((r) => r.id);
+  const base = rows.find((r) => r.baseline);
+  const baselineId = base ? base.id : null;
   return {
     rows,
-    canCompare: compareIds.length >= 2,
+    canCompare: !!compareSelection(compareIds, baselineId),
     compareIds,
+    baselineId,
     empty: rows.length ? null : 'No saved experiments in this browser. Measure and save one, '
       + 'or import an .oscilla.json file.',
   };
+}
+
+/** What Compare compares (ADR 0041; see the header). */
+export function compareSelection(selected, baselineId = null) {
+  const ids = [...new Set(selected)];
+  if (baselineId && ids.includes(baselineId)) {
+    ids.splice(ids.indexOf(baselineId), 1);
+    ids.unshift(baselineId);
+  } else if (baselineId && ids.length === 1) ids.unshift(baselineId);
+  return ids.length >= 2 ? ids.slice(0, 4) : null;
 }

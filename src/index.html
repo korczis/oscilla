@@ -1839,7 +1839,7 @@
                 <input type="checkbox" class="osc-x-check" data-osc="exp.select" :checked="r.selected"
                   :aria-label="'Select ' + r.name + ' for comparison'" @change="experimentsToggleSelect(r.id)">
                 <div class="osc-x-main" @click="experimentsOpen(r.id)">
-                  <span class="osc-x-name" x-text="r.name"></span>
+                  <span class="osc-x-name"><span x-text="r.name"></span> <span class="osc-m-chip" x-show="r.baseline" style="display: none">BASELINE</span></span>
                   <span class="osc-x-meta osc-num" x-text="r.createdText + ' · ' + r.sizeText + ' · ' + r.versionText"></span>
                 </div>
                 <span class="osc-q" :class="[r.className, r.shape]">
@@ -1874,6 +1874,10 @@
                 @click="experimentsAskRename({ id: exps.detail.id, name: exps.detail.title })">Rename…</button>
               <button type="button" class="osc-btn osc-btn-secondary osc-m-small" data-osc="exp.duplicate"
                 @click="experimentsDuplicate(exps.detail.id)">Duplicate</button>
+              <button type="button" class="osc-btn osc-btn-secondary osc-m-small" data-osc="exp.baseline"
+                :aria-pressed="String(!!(exps.detail && exps.detail.baseline))"
+                @click="experimentsSetBaseline(exps.detail.id, !exps.detail.baseline)"
+                x-text="exps.detail && exps.detail.baseline ? 'Clear baseline' : 'Mark as baseline'">Mark as baseline</button>
               <button type="button" class="osc-btn osc-btn-secondary osc-m-small" data-osc="exp.repeat"
                 @click="experimentsRepeat(exps.detail.id)">Repeat (new experiment)</button>
               <button type="button" class="osc-btn osc-btn-secondary osc-m-small" data-osc="exp.inspect"
@@ -1918,7 +1922,8 @@
           <ul class="osc-x-entries" aria-label="Compared experiments">
             <template x-for="en in (exps.compare ? exps.compare.entries : [])" :key="en.label">
               <li><span class="osc-m-swatch" :class="'is-' + en.role" aria-hidden="true"></span>
-                <strong x-text="en.label"></strong> <span x-text="en.compact"></span></li>
+                <strong x-text="en.label"></strong> <span x-text="en.compact"></span>
+                <span class="osc-m-chip" x-show="en.baseline">BASELINE</span></li>
             </template>
           </ul>
           <p class="osc-m-summary" data-osc="exp.compareSummary" x-text="exps.compare ? exps.compare.summary : ''"></p>
@@ -1926,6 +1931,22 @@
             <svg aria-hidden="true"><use href="#q-warn"/></svg>
             <p x-text="exps.compare ? 'Not equivalent: ' + exps.compare.warnings.join(' ') : ''"></p>
           </div>
+          <section class="osc-x-body osc-x-changes" data-osc="exp.changes" aria-labelledby="osc-x-changes-title">
+            <h4 id="osc-x-changes-title">Changed between runs</h4>
+            <template x-for="p in (exps.compare ? exps.compare.semantic : [])" :key="p.label">
+              <div data-osc="exp.changePair">
+                <h5 x-text="p.heading"></h5>
+                <p class="osc-m-hint" x-show="!p.executionCount" x-text="p.none"></p>
+                <template x-for="g in p.groups" :key="g.key">
+                  <details :open="!g.other">
+                    <summary><h6 x-text="g.label"></h6></summary>
+                    <ul class="osc-x-diffs" role="list"><template x-for="c in g.items" :key="c.path"><li x-text="c.text"></li></template></ul>
+                  </details>
+                </template>
+              </div>
+            </template>
+            <p class="osc-m-hint">A listed change is a difference between the two records; it does not show what caused any difference between the responses.</p>
+          </section>
           <p class="osc-m-axis">Overlay: raw magnitudes as measured (dB relative, capture/stimulus ratio)</p>
           <div class="osc-chart-host osc-x-chart" id="osc-exp-chart-overlay" role="img"
             aria-label="Overlay of the compared responses" aria-describedby="osc-x-sum-overlay"></div>

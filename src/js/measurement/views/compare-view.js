@@ -5,7 +5,7 @@
 //                 allowNonEquivalentDelta = false, irRange = null ([fromMs, toMs]; null =
 //                 ir-chart.js IR_OVERLAY_RANGE_MS) }
 //   CompareView = {
-//     entries: [{ label, id, title, compact, role }],
+//     entries: [{ label, id, title, compact, role, baseline }],
 //     common: [{ field, label, text }],
 //     differences: [{ field, label, severity: 'info'|'warn', glyph, icon, shape,
 //                     values: [{ label, text }] }],
@@ -16,7 +16,14 @@
 //     irOverlay: { ok: true, view (ir-chart.js IrOverlayView), summary, notes, labels }
 //              | { ok: false, reason },
 //     irDelta: { ok: false, reason },
+//     semantic: [{ label, heading, executionCount, otherCount, none, groups: [{ key, other,
+//       label, items: [{ path, kind, text }] }] }]
 //     summary }
+// Semantic changes (ADR 0041): compareExperiments' runChanges of A (the reference; the baseline
+// when it is marked) against each other experiment, grouped by domain. Execution changes come
+// first; presentation and metadata groups (other: true) are shown collapsed. Unchanged fields are
+// not listed. Values are formatted here only (the model keeps full precision). The wording says
+// what changed between the runs, never that a change caused a difference in the responses.
 //
 // Rules: the comparison metadata come from experiments/compare.js compareExperiments
 // (differences in calibration, sample rate, stimulus, analysis or algorithm versions are
@@ -35,7 +42,10 @@
 // docs/v3/algorithms.md defines none.
 
 import { compareExperiments, responseDelta } from '../../experiments/compare.js';
-import { describeStimulus } from '../../experiments/schema.js';
+import { describeStimulus, isBaseline } from '../../experiments/schema.js';
+import { DOMAIN_LABELS, runFields } from '../../experiments/semantic-diff.js';
+import { canonicalJson } from '../../experiments/canonical-json.js';
+import { studioChanges } from '../../studio/diff.js';
 import { isValidLevelCalibration } from '../../calibration/level.js';
 import { TRANSFER_RATIO_UNIT } from '../../experiments/csv.js';
 import { experimentSummary } from './experiment-summary.js';
@@ -45,29 +55,6 @@ import {
   splitByMask, extent, dbAxisRange, frequencyAxis, interpLogF, nearestIndex, maskOn, rangeText,
   ratioDbText, gridFrequencyText,
 } from './common.js';
-
-const FIELD_LABELS = Object.freeze({
-  'calibration.frequency': 'Frequency calibration profile',
-  'calibration.level': 'Level calibration',
-  'measurement.sampleRate': 'Sample rate',
-  'recipe.stimulus': 'Stimulus',
-  'recipe.analysis': 'Analysis settings',
-  'recipe.repeats': 'Repeats',
-  'output.level': 'Output level (digital peak)',
-  schemaVersion: 'Schema version',
-  oscillaVersion: 'OSCILLA version',
-  oscillaCommit: 'OSCILLA commit',
-  'input.device.label': 'Input device',
-});
-
-function fieldLabel(field) {
-  if (FIELD_LABELS[field]) return FIELD_LABELS[field];
-  const m = /^algorithms\.(.+)$/.exec(field);
-  if (m) return `Algorithm (${m[1]})`;
-  const r = /^results\.(.+)\.algorithm$/.exec(field);
-  if (r) return `Result algorithm (${r[1]})`;
-  return field;
-}
 
 /** Human text of one compared value; the level text names SPL only for a valid calibration. */
 function valueText(field, v, e) {
@@ -98,6 +85,56 @@ function valueText(field, v, e) {
     default:
       return typeof v === 'object' ? JSON.stringify(v).slice(0, 80) : String(v);
   }
+}
+
+const num = (v, unit) => `${+v.toPrecision(6)}${unit ? ` ${unit}` : ''}`;
+
+/** Display text of one side of a semantic change (formatting happens only here). */
+function changeValue(c, v, e) {
+  if (v === null) return 'none';
+  if (/^(calibration|measurement\.sampleRate|input\.device\.label|oscillaCommit)/.test(c.path)) {
+    return valueText(c.path, v, e);
+  }
+  if (typeof v === 'number') return num(v, c.unit);
+  if (typeof v === 'boolean') return v ? 'yes' : 'no';
+  if (typeof v === 'string') return /^[0-9a-f]{64}$/.test(v) ? `${v.slice(0, 12)}…` : v;
+  if (v.from && v.to) return `${v.from.node}.${v.from.port} → ${v.to.node}.${v.to.port}`;
+  if (v.points) return `${v.points.length} points`;
+  if ('severity' in v) return `${v.severity} ${changeValue(c, v.value, e)}`;
+  return canonicalJson(v).slice(0, 80);
+}
+
+function semanticView(experiments, labels, semantic) {
+  const ref = labels[0];
+  const base = isBaseline(experiments[0]);
+  return semantic.map(({ index, changes }) => {
+    const label = labels[index];
+    const listed = changes.filter((c) => c.kind !== 'unchanged');
+    const groups = (list) => {
+      const out = [];
+      for (const c of list) {
+        const key = `${c.domain}.${c.class}`;
+        let g = out.find((x) => x.key === key);
+        if (!g) {
+          g = { key, other: c.class !== 'execution', label: `${DOMAIN_LABELS[c.domain]}${
+            c.class === 'presentation' ? ' (layout and view)' : ''}`, items: [] };
+          out.push(g);
+        }
+        const b = changeValue(c, c.before, experiments[0]);
+        const a = changeValue(c, c.after, experiments[index]);
+        g.items.push({ path: c.path, kind: c.kind, text: c.kind === 'added'
+          ? `${c.label}: added (${a})` : c.kind === 'removed' ? `${c.label}: removed (was ${b})`
+            : `${c.label}: ${b} → ${a}${c.note ? ` (${c.note})` : ''}` });
+      }
+      return out;
+    };
+    const exe = listed.filter((c) => c.class === 'execution');
+    const n = listed.length - exe.length;
+    return { label, heading: `Changed between runs ${ref}${base ? ' (baseline)' : ''} and ${
+      label}`, executionCount: exe.length, otherCount: n,
+    none: `No execution change between runs ${ref} and ${label}.`,
+    groups: [...groups(exe), ...groups(listed.filter((c) => c.class !== 'execution'))] };
+  });
 }
 
 /** Magnitude, grid, validity and mask of an experiment (RAW; transfer or stored aggregate). */
@@ -295,12 +332,15 @@ export function buildCompareView(experiments, options = {}) {
     labels = experiments.map((_, i) => String.fromCharCode(65 + (i % 26))),
     deltaPair = [0, 1], pointsPerOctave = 48, allowNonEquivalentDelta = false, irRange = null,
   } = options;
-  const cmp = compareExperiments(experiments);
+  const cmp = compareExperiments(experiments, { studioChanges });
   const entries = experiments.map((e, i) => {
     const s = experimentSummary(e);
     return { label: labels[i], id: s.id, title: s.title, compact: s.compact,
-      role: COMPARE_ROLES[i % COMPARE_ROLES.length] };
+      role: COMPARE_ROLES[i % COMPARE_ROLES.length], baseline: isBaseline(e) };
   });
+  // Field labels from the shared descriptors (semantic-diff.js runFields), one source.
+  const labelOf = Object.fromEntries(runFields(experiments).map((f) => [f.path, f.label]));
+  const fieldLabel = (field) => labelOf[field] || field;
   const common = Object.keys(cmp.common).map((field) => ({ field, label: fieldLabel(field),
     text: valueText(field, cmp.common[field], experiments[0]) }));
   const differences = cmp.differences.map((d) => {
@@ -332,6 +372,7 @@ export function buildCompareView(experiments, options = {}) {
     delta,
     irOverlay,
     irDelta: { ok: false, reason: IR_DELTA_REASON },
+    semantic: semanticView(experiments, labels, cmp.semantic),
     summary,
   };
 }

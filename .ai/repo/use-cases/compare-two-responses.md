@@ -2,21 +2,22 @@
 id: compare-two-responses
 kind: use-case
 title: 'Compare two responses'
-summary: 'Select two saved experiments, see their common configuration and differences, and read A minus B only where the comparison is meaningful.'
+summary: 'Select two saved experiments (or one and the baseline), see what changed between the runs by domain, and read A minus B only where the comparison is meaningful.'
 category: experiments
 status: active
 target: advisory
 weight: 180
 difficulty: basic
 commands: [knowledge]
-claims: [measurement-comparison, aggregate-primary-response]
+claims: [measurement-comparison, aggregate-primary-response, semantic-run-comparison]
 tags: [oscilla, product-acceptance, v3]
 ---
 
 # Situation
 
 Someone measured the same speaker in two positions and saved both. In Experiments they
-select the two and press Compare.
+select the two and press Compare. Later they mark the first take as the baseline, select a
+new take alone and press Compare: it is compared with the baseline.
 
 # What proves it
 
@@ -24,7 +25,8 @@ The behaviour is proven by the OSCILLA test named in each claim of `docs/CLAIMS.
 by:
 
 - `npm test` (tests/unit/v3-experiments.test.mjs compareExperiments and responseDelta; tests/unit/v3-views.test.mjs compare view; tests/unit/v3-storage.test.mjs aggregate used when present)
-- `npm run test:measure` (tests/browser/v3-ui.cjs, check experiments: an equivalent pair shows A - B, a non-equivalent pair is refused with the reason)
+- `npm test` (tests/unit/v3-semantic-compare.test.mjs: the semantic changes by domain, execution vs presentation, the baseline)
+- `npm run test:measure` (tests/browser/v3-ui.cjs, check experiments: an equivalent pair shows A - B, a non-equivalent pair is refused with the reason; check experiments-changes: the change list, the collapsed metadata group, the baseline)
 
 A use-case/v1 scenario can only invoke `bin/majordomus`, so the scenario below does not
 play or capture audio. It proves the traceability instead: each claim's implementation and
@@ -58,6 +60,18 @@ steps:
     expect:
       exit: 0
       stdout_contains: ['claim:measurement-comparison +test:tests/unit/v3-experiments\.test\.mjs']
+  - id: semantic-run-comparison-implemented
+    run: ['knowledge', 'edges', '--type', 'implemented_by']
+    note: 'claim semantic-run-comparison is implemented by src/js/experiments/semantic-diff.js, a tracked file'
+    expect:
+      exit: 0
+      stdout_contains: ['claim:semantic-run-comparison +implementation:src/js/experiments/semantic-diff\.js']
+  - id: semantic-run-comparison-tested
+    run: ['knowledge', 'edges', '--type', 'tested_by']
+    note: 'claim semantic-run-comparison is proven by tests/unit/v3-semantic-compare.test.mjs'
+    expect:
+      exit: 0
+      stdout_contains: ['claim:semantic-run-comparison +test:tests/unit/v3-semantic-compare\.test\.mjs']
   - id: aggregate-primary-response-implemented
     run: ['knowledge', 'edges', '--type', 'implemented_by']
     note: 'claim aggregate-primary-response is implemented by src/js/measurement/aggregate.js, a tracked file'
@@ -77,5 +91,6 @@ then:
 # Outcome
 
 Both responses are overlaid. Differences in calibration, sample rate, stimulus or algorithm
-are named. A minus B appears only for equivalent experiments and only over their overlapping
+are named. What changed between the runs is listed by domain, execution changes first, with
+units; layout and metadata changes are collapsed; nothing is presented as a cause. A minus B appears only for equivalent experiments and only over their overlapping
 valid range, never normalised; otherwise the view says why it is not shown.
