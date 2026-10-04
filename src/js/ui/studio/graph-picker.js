@@ -10,7 +10,7 @@
 //   createQuickAdd(dialog, svc) -> { open({ at, from }), close(), isOpen() }
 //   createConnectDialog(dialog, svc) -> { open(nodeId), close(), isOpen() }
 //   createFindNode(dialog, svc) -> { open(), close(), isOpen() }      graph search (§251)
-//   svc: { store, registry, editor, announce, openModal(id), closeModal(id) }
+//   svc: { store, registry, editor, announce, openModal(id), closeModal(id), focusFallback()? }
 
 import { NODE_REGISTRY } from '../../studio/registry.js';
 import { announceAction } from '../../studio/a11y.js';
@@ -120,8 +120,13 @@ export function createConnectDialog(dialog, svc) {
 
   const close = () => svc.closeModal(dialog.id);
   cancel.addEventListener('click', close);
+  // Closing returns focus to the node; while the graph is hidden (a phone's Inspector subview)
+  // the node cannot take it and svc.focusFallback() places it in the visible pane (V431 U7).
   dialog.addEventListener('close', () => {
-    if (nodeId) setTimeout(() => svc.editor.focusNode(nodeId), 0);
+    if (!nodeId) return;
+    setTimeout(() => {
+      if (!svc.editor.focusNode(nodeId) && svc.focusFallback) svc.focusFallback();
+    }, 0);
   });
 
   function renderTargets() {

@@ -5,7 +5,12 @@
 //
 //   nodeCard(model, node, opts) -> { id, type, name, title, typeLabel, category, categoryLabel,
 //     summary, inputs: [port], outputs: [port], flags, status, reason, ariaLabel }
-//   edgeView(model, edge, opts) -> { id, type, cable, muted, from, to, ariaLabel, title }
+//   edgeView(model, edge, opts) -> { id, type, cable, muted, inactive, route, reason, from, to,
+//     ariaLabel, title }
+//   edgeRoute(model, edge, { registry, status }) -> { state: 'live' | 'no-route' | 'no-effect',
+//     reason, text, short }        a cable that carries nothing says why (§237)
+//   edgeEffectReason(model, edge, registry) -> reason | null   routed but inaudible modulation
+//   compiledEdgeStatus(plan) -> Map edgeId -> { status, reason }
 //   nodeWarnings(model, registry) -> Map nodeId -> [message]      (validator warnings, §77)
 //   probeConnection(model, from, to, registry) -> { allowed, reason, signalType }
 //   connectionTargets(model, from, registry) -> [{ node, port, nodeName, portLabel, type,
@@ -65,6 +70,72 @@ export function compiledStatus(plan) {
   if (!plan || !plan.nodes) return out;
   for (const [id, n] of plan.nodes) out.set(id, { status: n.status, reason: n.reason || null });
   return out;
+}
+
+/** Edge id -> { status, reason } of a compiled plan (PlanEdge status, compiler.js). */
+export function compiledEdgeStatus(plan) {
+  const out = new Map();
+  if (!plan || !plan.edges) return out;
+  for (const [id, e] of plan.edges) out.set(id, { status: e.status, reason: e.reason || null });
+  return out;
+}
+
+/** The filter adapter's reason for not applying Q modulation (adapters/nodes.js modTarget). */
+export const FILTER_Q_NOT_APPLIED = 'Low-/high-pass Q is a dB AudioParam in Web Audio; a linear Q '
+  + 'modulation would be mis-scaled, so it is not applied.';
+
+/**
+ * Why a modulation the compiler routes cannot be heard, or null (§237: a graph must not look
+ * live when it is not). Two rules, both from the node's own model:
+ *   - Filter Q on a low-pass or high-pass filter: the adapter does not apply it (Q is a dB
+ *     AudioParam there; adapters/nodes.js filter.modTarget, the same reason text; the parity
+ *     with the runtime's inactive edges is a unit test).
+ *   - Filter gain on any type but peaking: Web Audio ignores a biquad's gain for low-pass,
+ *     high-pass, band-pass and notch (the registry's own constraint: "gain applies to peaking
+ *     only").
+ */
+export function edgeEffectReason(model, edge, registry = NODE_REGISTRY) {
+  const b = nodeById(model, edge.to.node);
+  if (!b || b.type !== 'filter') return null;
+  const tgt = registry.port(b.type, edge.to.port, 'in');
+  if (!tgt || tgt.role !== 'PARAMETER') return null;
+  const type = b.params && b.params.type;
+  if (edge.to.port === 'Q' && (type === 'lowpass' || type === 'highpass')) {
+    return FILTER_Q_NOT_APPLIED;
+  }
+  if (edge.to.port === 'gain' && type !== 'peaking') {
+    const p = registry.param(b.type, 'type');
+    const o = p && (p.options || []).find((x) => x[0] === type);
+    return `Filter gain applies to peaking only; a ${o ? o[1] : type} filter ignores it.`;
+  }
+  return null;
+}
+
+/**
+ * Whether a cable carries anything (§237, docs/v31/compiler.md "inactive routes with a
+ * reason"): 'live', 'no-route' (the compiled plan has no Web Audio route for it: an unavailable
+ * or offline-only end) or 'no-effect' (routed, but the target cannot change the sound).
+ * opts: { registry, status: { status, reason } of the plan edge | null }.
+ * -> { state, reason, text, short }; text and short are what labels and notes say.
+ */
+export function edgeRoute(model, edge, opts = {}) {
+  const registry = opts.registry || NODE_REGISTRY;
+  const st = opts.status || null;
+  if (st && st.status === 'inactive') {
+    const a = nodeById(model, edge.from.node);
+    const src = a ? registry.port(a.type, edge.from.port, 'out') : null;
+    const routed = !src || src.type === 'AUDIO' || src.type === 'CONTROL';
+    const short = routed ? 'no Web Audio route' : 'inactive';
+    const reason = st.reason || 'An end of this connection is unavailable.';
+    return { state: 'no-route', reason, short,
+      text: `${short[0].toUpperCase()}${short.slice(1)}: ${reason}` };
+  }
+  const why = edgeEffectReason(model, edge, registry);
+  if (why) {
+    return { state: 'no-effect', reason: why, short: 'no audible effect',
+      text: `No audible effect: ${why}` };
+  }
+  return { state: 'live', reason: null, short: null, text: null };
 }
 
 function portView(model, node, port, connectedSet) {
@@ -131,7 +202,10 @@ export function nodeCard(model, node, opts = {}) {
   };
 }
 
-/** The view of one edge: its signal type (from the source port), cable style and labels. */
+/**
+ * The view of one edge: its signal type (from the source port), cable style, whether it is live
+ * (edgeRoute; opts.status is the plan edge's { status, reason }) and labels that say why not.
+ */
 export function edgeView(model, edge, opts = {}) {
   const registry = opts.registry || NODE_REGISTRY;
   const a = nodeById(model, edge.from.node);
@@ -139,13 +213,18 @@ export function edgeView(model, edge, opts = {}) {
   const src = a ? registry.port(a.type, edge.from.port, 'out') : null;
   const tgt = b ? registry.port(b.type, edge.to.port, 'in') : null;
   const type = src ? src.type : 'AUDIO';
-  const label = describeEdge(model, edge.id, { selected: !!opts.selected, registry });
+  const route = edgeRoute(model, edge, { registry, status: opts.status || null });
+  const described = describeEdge(model, edge.id, { selected: !!opts.selected, registry });
+  const label = route.text ? `${described}. ${route.text}` : described;
   return {
     id: edge.id,
     type,
     cable: PORT_VISUALS[type] ? PORT_VISUALS[type].cable : 'solid',
     muted: !!(edge.props && edge.props.muted),
     selected: !!opts.selected,
+    inactive: route.state !== 'live',
+    route: route.state,
+    reason: route.reason,
     from: { node: edge.from.node, port: edge.from.port },
     to: { node: edge.to.node, port: edge.to.port },
     targetRole: tgt ? tgt.role : null,
@@ -268,9 +347,18 @@ export function connectingText(model, from, registry = NODE_REGISTRY) {
   return a && p ? `Connecting from ${a.metadata.name} / ${p.label}` : 'Connecting';
 }
 
-/** The connections of a node for its Inspector: [{ edgeId, text, direction }]. */
-export function nodeConnections(model, nodeId, registry = NODE_REGISTRY) {
+/**
+ * The connections of a node for its Inspector: [{ edgeId, text, direction, route }]. A
+ * connection that carries nothing says so in its text (edgeRoute; edgeStatus: Map edge id ->
+ * the plan edge's { status, reason }).
+ */
+export function nodeConnections(model, nodeId, registry = NODE_REGISTRY, edgeStatus = null) {
   return model.graph.edges.filter((e) => e.from.node === nodeId || e.to.node === nodeId)
-    .map((e) => ({ edgeId: e.id, direction: e.from.node === nodeId ? 'out' : 'in',
-      text: describeEdge(model, e.id, { registry }) }));
+    .map((e) => {
+      const route = edgeRoute(model, e, { registry,
+        status: edgeStatus ? edgeStatus.get(e.id) : null });
+      const text = describeEdge(model, e.id, { registry });
+      return { edgeId: e.id, direction: e.from.node === nodeId ? 'out' : 'in',
+        route: route.state, text: route.short ? `${text} (${route.short})` : text };
+    });
 }

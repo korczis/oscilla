@@ -308,6 +308,22 @@
   stroke-dasharray: 1 4;
 }
 
+/* A cable that carries nothing (no Web Audio route, or a modulation the target cannot hear,
+   §237): a sparse dash and a cross at its midpoint, so it never reads as live by colour or
+   width; the reason is in its label and the Inspector. */
+.osc-sg-edge.is-inactive .osc-sg-edge-line {
+  opacity: 0.6;
+  stroke-dasharray: 3 7;
+}
+
+.osc-sg-edge-x {
+  fill: none;
+  stroke: var(--osc-text-muted);
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  pointer-events: none;
+}
+
 .osc-sg-edge.is-selected .osc-sg-edge-line {
   stroke-width: 3;
 }
@@ -317,7 +333,7 @@
 }
 
 /* Running: a static emphasis of the routed cables (activity, not level, §70). */
-.osc-sg.is-running .osc-sg-edge:not(.is-muted) .osc-sg-edge-line {
+.osc-sg.is-running .osc-sg-edge:not(.is-muted):not(.is-inactive) .osc-sg-edge-line {
   stroke-width: 2;
 }
 

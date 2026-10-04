@@ -13,9 +13,14 @@
 //     and METADATA_SET like every other field (the store validates; a refusal is announced)
 //   formatParamValue(p, v), parseParamInput(p, text), sliderRange(p), valueToSlider(p, v),
 //   sliderToValue(p, pos)                                   pure helpers of the fields
-//   mountInspector(host, svc) -> { render(), destroy() }    DOM (graph-dom.js, no innerHTML)
+//   mountInspector(host, svc) -> { render(), focusFirst(), focusHeading(), focusKey(key),
+//                                  destroy() }               DOM (graph-dom.js, no innerHTML)
 //     svc: { store, registry, announce(text, { assertive }), status() -> Map, warnings() -> Map,
-//            onConnect(nodeId), onSavePatch(nodeIds), onDelete(), onDuplicate(), focusGraph() }
+//            edgeStatus() -> Map edge id -> plan { status, reason }, onConnect(nodeId),
+//            onSavePatch(nodeIds), onDelete(), onDuplicate(), onShowLane(laneId, label) }
+//   Focus (§142; V431 U2): a rebuilt Inspector puts focus back on the control with the same
+//   data-key; when the action replaced the view (a connection link, Select source, Delete)
+//   and that control is gone, focus goes to the new view's heading, never to <body>.
 
 import { NODE_REGISTRY, validateParamValue } from '../../studio/registry.js';
 import {
@@ -26,7 +31,7 @@ import { PORT_VISUALS } from '../../studio/ports.js';
 import { describeEdge, summarizeGraph, announceAction } from '../../studio/a11y.js';
 import { formatFrequency, parseFrequency } from '../../core/frequency.js';
 import { sig } from '../../core/math.js';
-import { CATEGORY_LABELS, STATUS_LABELS, nodeConnections } from './graph-view.js';
+import { CATEGORY_LABELS, STATUS_LABELS, edgeRoute, nodeConnections } from './graph-view.js';
 import { formatSecondsText } from './timeline-view.js';
 import { h, replaceChildren, setAttr, setText } from './graph-dom.js';
 import { sliderFill } from '../app.js';
@@ -116,12 +121,16 @@ function nodeOf(model, id) {
   return model.graph.nodes.find((n) => n.id === id) || null;
 }
 
-function fieldOf(model, node, p, registry) {
+function fieldOf(model, node, p, registry, edgeStatus) {
   const value = node.params[p.key];
   const lane = model.timeline.automation.find((l) => l.target.node === node.id
     && l.target.param === p.key);
   const mods = model.graph.edges.filter((e) => e.to.node === node.id && e.to.port === p.key)
-    .map((e) => describeEdge(model, e.id, { registry }));
+    .map((e) => {
+      const r = edgeRoute(model, e, { registry, status: edgeStatus ? edgeStatus.get(e.id) : null });
+      const text = describeEdge(model, e.id, { registry });
+      return r.short ? `${text} (${r.short})` : text;
+    });
   const control = p.type === 'enum' ? 'select' : p.type === 'boolean' ? 'toggle'
     : p.type === 'id' ? 'readonly' : p.type === 'list' ? 'list' : 'number';
   return {
@@ -244,7 +253,9 @@ export function settingsAction(model, key, raw) {
 /**
  * The Inspector view of the selection (§78): the primary node (the last selected), a
  * connection, a clip or automation point, several nodes, or the Studio itself.
- * opts: { registry, status: Map id -> { status, reason }, warnings: Map id -> [text] }.
+ * opts: { registry, status: Map id -> { status, reason }, warnings: Map id -> [text],
+ *         edgeStatus: Map edge id -> plan { status, reason } }. A connection that carries
+ * nothing (graph-view.js edgeRoute) has route 'no-route' or 'no-effect' and its reason (§237).
  */
 export function inspectorView(model, selection, opts = {}) {
   const registry = opts.registry || NODE_REGISTRY;
@@ -262,7 +273,8 @@ export function inspectorView(model, selection, opts = {}) {
     const def = registry.get(node.type);
     const st = opts.status && opts.status.get(node.id);
     const warn = (opts.warnings && opts.warnings.get(node.id)) || [];
-    const fields = def ? def.params.map((p) => fieldOf(model, node, p, registry)) : [];
+    const fields = def ? def.params.map((p) => fieldOf(model, node, p, registry,
+      opts.edgeStatus)) : [];
     return {
       kind: 'node',
       key: `node:${node.id}:${fields.map((f) => f.key).join(',')}`,
@@ -278,7 +290,7 @@ export function inspectorView(model, selection, opts = {}) {
       warnings: warn,
       position: { x: node.position.x, y: node.position.y },
       fields,
-      connections: nodeConnections(model, node.id, registry),
+      connections: nodeConnections(model, node.id, registry, opts.edgeStatus || null),
       hasOutputs: !!(def && def.outputs.length),
     };
   }
@@ -291,9 +303,14 @@ export function inspectorView(model, selection, opts = {}) {
       const tgt = registry.port(b.type, e.to.port, 'in');
       const control = src.type === 'CONTROL';
       const unit = tgt.param ? (e.props.mapping === 'log' ? 'octaves' : tgt.param.unit) : '';
+      const route = edgeRoute(model, e, { registry,
+        status: opts.edgeStatus ? opts.edgeStatus.get(e.id) : null });
       return {
         kind: 'edge',
-        key: `edge:${e.id}:${control ? 'c' : 'a'}`,
+        key: `edge:${e.id}:${control ? 'c' : 'a'}:${route.state}:${route.reason || ''}`,
+        route: route.state,
+        routeReason: route.reason,
+        routeText: route.text,
         id: e.id,
         title: 'Connection',
         text: describeEdge(model, e.id, { registry }),
@@ -375,6 +392,7 @@ export function inspectorView(model, selection, opts = {}) {
 export function mountInspector(host, svc) {
   const registry = svc.registry || NODE_REGISTRY;
   let current = null; // the rendered view key
+  let builtSig = ''; // textSig of the rendered node view
   let refs = new Map(); // field key -> { input, slider, readout, error, field }
   let gestureOpen = false;
 
@@ -483,7 +501,10 @@ export function mountInspector(host, svc) {
     if (lane) {
       svc.store.dispatch({ type: 'SELECTION_CHANGE', selection: { nodes: [view.id],
         points: lane.points.map((p) => p.id) } });
-      svc.announce(`${view.name} ${f.label} automation lane shown`);
+      // The workspace reveals it (and opens the Timeline subview when it is not on screen,
+      // V431 U8) and says where it is.
+      if (svc.onShowLane) svc.onShowLane(lane.id, `${view.name} ${f.label}`);
+      else svc.announce(`${view.name} ${f.label} automation lane shown`);
       return;
     }
     dispatch({ type: 'AUTOMATION_POINT_ADD', target: { node: view.id, param: f.key }, time: 0,
@@ -580,15 +601,18 @@ export function mountInspector(host, svc) {
     ]);
   }
 
+  // data-key: a rebuilt view that has the same action (Duplicate on the copy) keeps focus on it.
   function actionButton(text, dataOsc, onClick, cls = 'osc-btn-secondary') {
-    return h('button', { type: 'button', class: `osc-btn ${cls}`, 'data-osc': dataOsc, text,
-      onClick });
+    return h('button', { type: 'button', class: `osc-btn ${cls}`, 'data-osc': dataOsc,
+      'data-key': dataOsc, text, onClick });
   }
 
   // ---------------------------------------------------------------- views
+  // The heading takes programmatic focus (tabindex -1) when an action replaced the view.
   function header(title, sub) {
     return h('div', { class: 'osc-si-head' }, [
-      h('h4', { class: 'osc-si-title', 'data-osc': 'studio.inspector.title', text: title }),
+      h('h4', { class: 'osc-si-title', 'data-osc': 'studio.inspector.title', tabindex: '-1',
+        text: title }),
       sub ? h('p', { class: 'osc-si-sub', text: sub }) : null,
     ]);
   }
@@ -656,6 +680,11 @@ export function mountInspector(host, svc) {
   function buildEdge(view) {
     const parts = [header('Connection', `${view.signalNoun[0].toUpperCase()}${
       view.signalNoun.slice(1)} · ${view.cable}`)];
+    if (view.routeText) {
+      parts.push(h('p', { class: 'osc-si-status is-inactive', role: 'note',
+        'data-osc': 'studio.inspector.edgeStatus', 'data-route': view.route,
+        text: view.routeText }));
+    }
     parts.push(h('dl', { class: 'osc-si-dl', 'data-osc': 'studio.inspector.edge' }, [
       h('div', {}, [h('dt', { text: 'From' }), h('dd', { text: view.fromText })]),
       h('div', {}, [h('dt', { text: 'To' }), h('dd', { text: view.toText })]),
@@ -894,6 +923,13 @@ export function mountInspector(host, svc) {
   }
 
   // ---------------------------------------------------------------- render
+  /** The texts of a node view that update() does not refresh in place. */
+  function textSig(view) {
+    if (view.kind !== 'node') return '';
+    return [...view.connections.map((c) => c.text), ...view.fields.map((f) =>
+      f.modulatedBy.join('|'))].join('\n');
+  }
+
   function update(view) {
     const active = document.activeElement;
     if (view.kind === 'node') {
@@ -957,7 +993,8 @@ export function mountInspector(host, svc) {
   function render() {
     const model = svc.store.getModel();
     const view = inspectorView(model, svc.store.getSelection(), { registry,
-      status: svc.status ? svc.status() : null, warnings: svc.warnings ? svc.warnings() : null });
+      status: svc.status ? svc.status() : null, warnings: svc.warnings ? svc.warnings() : null,
+      edgeStatus: svc.edgeStatus ? svc.edgeStatus() : null });
     // Same target and same fields: update values in place (the focused field keeps focus and
     // what is being typed); the summary and status lines are rebuilt below.
     const sameTarget = current === view.key && view.kind !== 'studio' && view.kind !== 'multi'
@@ -968,12 +1005,12 @@ export function mountInspector(host, svc) {
         setText(status, [view.statusLabel, view.reason, ...view.warnings.filter((w) =>
           w !== view.reason)].filter(Boolean).join(' · '));
       }
-      if (view.kind === 'node') {
-        const list = host.querySelector('[data-osc="studio.inspector.connections"]');
-        if (list && list.children.length !== view.connections.length) {
-          current = null;
-          return render();
-        }
+      // The connection list and the "Modulated" notes are text built with the view: rebuild
+      // when they change (a connection added or removed, or one that stopped carrying anything
+      // after a filter type change, §237). Focus is kept by data-key.
+      if (view.kind === 'node' && textSig(view) !== builtSig) {
+        current = null;
+        return render();
       }
       return;
     }
@@ -989,18 +1026,25 @@ export function mountInspector(host, svc) {
       return;
     }
     endSliderGesture();
-    const focusedKey = host.contains(document.activeElement)
-      ? document.activeElement.getAttribute('data-key') : null;
+    const hadFocus = host.contains(document.activeElement);
+    const focusedKey = hadFocus ? document.activeElement.getAttribute('data-key') : null;
     refs = new Map();
     current = view.key;
+    builtSig = textSig(view);
     const builders = { node: buildNode, edge: buildEdge, clip: buildClip, point: buildPoint,
       multi: buildMulti, studio: buildStudio };
     replaceChildren(host, h('div', { class: `osc-si osc-si--${view.kind}`,
       'data-kind': view.kind }, builders[view.kind](view)));
-    if (focusedKey) {
-      const el = host.querySelector(`[data-key="${CSS.escape(focusedKey)}"]`);
-      if (el) el.focus();
-    }
+    const el = focusedKey ? host.querySelector(`[data-key="${CSS.escape(focusedKey)}"]`) : null;
+    if (el) el.focus();
+    else if (hadFocus) focusHeading();
+  }
+
+  function focusHeading() {
+    const head = host.querySelector('[data-osc="studio.inspector.title"]');
+    if (!head || !head.getClientRects().length) return false;
+    head.focus({ preventScroll: false });
+    return true;
   }
 
   return {
@@ -1010,6 +1054,14 @@ export function mountInspector(host, svc) {
       const el = host.querySelector('input, select, button');
       if (el) el.focus();
       return !!el;
+    },
+    focusHeading,
+    /** Focus the shown control with this data-key; false when there is none. */
+    focusKey(key) {
+      const el = host.querySelector(`[data-key="${CSS.escape(key)}"]`);
+      if (!el || !el.getClientRects().length) return false;
+      el.focus();
+      return true;
     },
     destroy() {
       endSliderGesture();
