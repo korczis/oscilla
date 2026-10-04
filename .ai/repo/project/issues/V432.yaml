@@ -19,7 +19,7 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-02
-updated_at: 2026-10-03T13:14:46Z
+updated_at: 2026-10-03T23:42:54Z
 evidence:
   - covers: verified
     type: manual
@@ -33,3 +33,9 @@ evidence:
     result: "PARTIAL (do not mark done): at 6f47ab7 README Studio section, docs/v31 architecture docs, docs/v31/user-guide.md with the canonical shortcut table checked against STUDIO_SHORTCUTS and KEY_HELP (v31-studio-docs 5 pass), tests/README rows for every v31 suite. Unmet: no Majordomus knowledge/evidence audit (spec 225-226: all Studio features and use cases still draft, features/studio.md says Studio is not shipped) and no spec 266 repository self-knowledge test"
     commit: 6f47ab76768738e5b4fcd1754da68e72243e0930
     recorded_at: 2026-10-03T13:14:46Z
+  - covers: verified
+    type: manual
+    command: "node --test tests/unit/v31-studio-docs.test.mjs && majordomus knowledge check && majordomus knowledge nodes | grep -c '^unknown.*features/'"
+    result: "PARTIAL (do not mark done; blocked behind V431): at 34f967a README Studio section (incl. links and fullscreen), docs/v31 architecture docs, docs/v31/user-guide.md with the canonical shortcut table checked against STUDIO_SHORTCUTS and KEY_HELP (v31-studio-docs 5/5); Studio features stable and 14 use cases active (#49); knowledge check 4 records 0 failing; knowledge discovers 7 Studio ADRs, 20 Studio claims, 14 Studio use cases. Unmet: spec 266 repository self-knowledge test does not exist; spec 225 'Studio feature appears' is only partly true: majordomus 0.12 knowledge has no extractor rule for kind 'feature' (WARN), so all 29 feature records incl. studio.md and its 5 sub-features are 'unknown' nodes"
+    commit: 34f967a063ead9085b89faf32f748e4cf9aff301
+    recorded_at: 2026-10-03T23:42:54Z

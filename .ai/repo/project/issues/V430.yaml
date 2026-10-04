@@ -26,7 +26,7 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-02
-updated_at: 2026-10-03T13:15:44Z
+updated_at: 2026-10-04T00:14:32Z
 evidence:
   - covers: verified
     type: ci
@@ -40,3 +40,9 @@ evidence:
     result: "PARTIAL (do not mark done; also blocked behind V421, V423, V429): at 6f47ab7 test:studio now runs graph, timeline, audio, transport, offline and workflows (all pass in chromium, firefox, webkit; the prior ungated-suites gap is closed) and CI runs test:studio per browser; visual-studio gates desktop, compact, phone and the new phone-timeline view (0 % differ); model/history/compiler/timeline/leak/compact-full/file:// unit and browser tests pass (unit 2079/2079); fast verify separate. Remaining gap: the full desktop reference crops the timeline row (scripts/visual-studio.mjs header), so the spec 204 Full Studio reference shows no clips or automation lane; those are pixel-gated only at phone width"
     commit: 6f47ab76768738e5b4fcd1754da68e72243e0930
     recorded_at: 2026-10-03T13:15:44Z
+  - covers: verified
+    type: ci
+    command: "npm run test:studio && node scripts/visual-studio.mjs dist && npm test"
+    result: "PARTIAL (do not mark done): at 34f967a every dependency is done (V421, V423, V429 closed this round); test:studio (inside the local release-gate run) passes: v31-studio-graph 21/21, timeline 14/14, workflows 6/6, links 7/7 per browser and origin in chromium, firefox, webkit; audio 81, transport 69, offline 33 checks all pass; CI runs test:studio per browser; unit 2135/2135; visual-studio passes desktop 0.006 %, compact 0 %, phone 0.017 %, phone-timeline 0.017 %; fast verify separate. Remaining gap, unchanged: the full desktop reference crops the timeline row (scripts/visual-studio.mjs header: 'the timeline row below ... is not part of this reference'), so the spec 203/204 Full Studio reference shows no clips or automation lane; those are pixel-gated only at phone width"
+    commit: 34f967a063ead9085b89faf32f748e4cf9aff301
+    recorded_at: 2026-10-04T00:14:32Z

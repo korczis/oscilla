@@ -19,7 +19,13 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-02
-updated_at: 2026-10-03T13:14:27Z
+updated_at: 2026-10-03T23:34:19Z
+started_at: 2026-10-03T23:33:59Z
+started_event: sha256:9c71b1239e84e1214c152ed3524bff0859aba07e34b10ab3caa64f639179174c
+verified_at: 2026-10-03T23:34:09Z
+verified_event: sha256:1c4433df55d6e72f2cd494e8e00c97ae91a73916296cb7a55ed529e5d6dd6244
+completed_at: 2026-10-03T23:34:19Z
+completed_event: sha256:5a6b15258cb85e0fe1d074c852c637a9b294f578d67136127187a116a390e541
 evidence:
   - covers: verified
     type: test
@@ -33,3 +39,9 @@ evidence:
     result: "PARTIAL (do not mark done): re-checked at 6f47ab7; toolbar, library | graph | Inspector over timeline, maximized mode without the Fullscreen API, Studio in top-level navigation (nav-and-render passes in chromium, firefox, webkit). Unmet, unchanged by PR #44: no deep link to Studio or a template (spec 199; core/url-state.js restores V1 modes only) and no optional browser fullscreen command for Studio (spec 134); README 'Not yet built' and docs/v31/user-guide.md list both"
     commit: 6f47ab76768738e5b4fcd1754da68e72243e0930
     recorded_at: 2026-10-03T13:14:27Z
+  - covers: verified
+    type: test
+    command: "node --test tests/unit/v31-studio-links.test.mjs && node tests/browser/v31-studio-links.cjs && node tests/browser/v31-studio-graph.cjs"
+    result: "MET at 34f967a: the gaps of rounds 1-2 are closed by PR #54. Deep link (spec 199-200): #m=studio&st=<template>&sv=<view> opens Studio, a shipped template and subview, never starts playback, refuses invalid links whole, never overwrites unsaved changes; Copy link carries the template only while unmodified, no graph in the URL. Optional browser fullscreen (spec 134): feature-detected toolbar command on #osc-view-studio, aria-disabled with the reason when the API is absent; maximized mode does not depend on it. Escape (spec 135): browser owns Escape while fullscreen, otherwise resolveEscape gesture > popup > selection > stop-audio (escape-priority check); real behaviour recorded per browser (firefox/webkit exit fullscreen, chromium synthetic key stays). Toolbar, library | graph | Inspector over timeline, Studio in top-level nav (nav-and-render). Unit links 7/7; v31-studio-links 7/7 in chromium, firefox, webkit x file:// and Pages-like http sub-path; v31-studio-graph 21/21 per browser"
+    commit: 34f967a063ead9085b89faf32f748e4cf9aff301
+    recorded_at: 2026-10-03T23:33:32Z

@@ -13,3 +13,11 @@ validation:
 evidence_required:
   - "milestone_verified"
 created_at: 2026-10-02
+updated_at: 2026-10-04T00:16:58Z
+evidence:
+  - covers: milestone_verified
+    type: ci
+    command: "npm run release-gate; node tests/browser/layout.cjs --browsers chromium; node tests/browser/qa-regressions.cjs; npm run test:visual"
+    result: "V422 done (deep links, optional fullscreen, PR #54; v31-studio-links 7/7 per browser and origin) and V423 done (six versioned templates, Learn examples). release-gate at 34f967a (local, darwin-arm64): verify (unit 2135/2135, version:check, build:check, verify-dist, majordomus doctor 0 failures) and test:engine, test:dsp, test:labs, test:sequencer, test:measure, test:studio (graph, timeline, audio 81, transport 69, offline 33, workflows, links; chromium, firefox, webkit) and app.cjs pass; one chromium layout.cjs run failed 12/99 checks, all in the 375x812 touch context with 'pointer: coarse not emulated' while another session ran browser suites on this machine (320 and 768 px coarse contexts in the same run passed; firefox and webkit 99/99). Re-run standalone: node tests/browser/layout.cjs --browsers chromium 99/99; the steps the && chain then skipped re-run and pass: qa-regressions (15/14/14) and test:visual (visual gate 13 regions, MEASURE 2 views, STUDIO 4 views)."
+    commit: 34f967a063ead9085b89faf32f748e4cf9aff301
+    recorded_at: 2026-10-04T00:16:58Z
