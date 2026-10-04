@@ -77,7 +77,7 @@ import { KNOWN_ALGORITHM_IDS } from '../../measurement/algorithms.js';
 import { openModal, closeModal } from '../dialogs.js';
 import { downloadBlob, readFileText } from '../exporters.js';
 import { createGraphEditor } from './graph-editor.js';
-import { compiledStatus, nodeWarnings } from './graph-view.js';
+import { compiledEdgeStatus, compiledStatus, nodeWarnings } from './graph-view.js';
 import { STUDIO_SHORTCUTS, isEditingTarget, resolveStudioKey } from './graph-keys.js';
 import { createConnectDialog, createFindNode, createQuickAdd } from './graph-picker.js';
 import { mountInspector } from './inspector.js';
@@ -282,6 +282,7 @@ export function createStudioUi(svc = {}) {
     patches: null,
     timeline: null,
     status: new Map(),
+    edgeStatus: new Map(),
     warnings: new Map(),
     dirty: null,
     projectId: null,
@@ -321,6 +322,7 @@ export function createStudioUi(svc = {}) {
       plan = null;
     }
     ctx.status = compiledStatus(plan);
+    ctx.edgeStatus = compiledEdgeStatus(plan);
     ctx.warnings = nodeWarnings(model, registry);
   }
 
@@ -651,6 +653,7 @@ export function createStudioUi(svc = {}) {
       registry,
       announce,
       status: () => ctx.status,
+      edgeStatus: () => ctx.edgeStatus,
       warnings: () => ctx.warnings,
       onQuickAdd: (o) => ctx.quickAdd.open(o),
       onConnectDialog: (id) => ctx.connect.open(id),
@@ -660,7 +663,11 @@ export function createStudioUi(svc = {}) {
         requestAnimationFrame(() => ctx.inspector && ctx.inspector.focusFirst());
       },
     });
-    const pickSvc = { store: ctx.handle, registry, editor: ctx.editor, announce, ...dialogSvc };
+    const pickSvc = { store: ctx.handle, registry, editor: ctx.editor, announce, ...dialogSvc,
+      // The connect dialog closes onto its node; while the graph is hidden (a phone, Connect…
+      // from the Inspector) focus goes to the Inspector's Connect… instead (V431 U7).
+      focusFallback: () => !!ctx.inspector && (ctx.inspector.focusKey('studio.inspector.connect')
+        || ctx.inspector.focusHeading()) };
     ctx.quickAdd = createQuickAdd(document.getElementById('osc-dlg-studio-add'), pickSvc);
     ctx.connect = createConnectDialog(document.getElementById('osc-dlg-studio-connect'), pickSvc);
     ctx.find = createFindNode(document.getElementById('osc-dlg-studio-find'), { ...pickSvc,
@@ -671,11 +678,13 @@ export function createStudioUi(svc = {}) {
       registry,
       announce,
       status: () => ctx.status,
+      edgeStatus: () => ctx.edgeStatus,
       warnings: () => ctx.warnings,
       onConnect: (id) => ctx.connect.open(id),
       onSavePatch: (ids) => ctx.patches.openSavePatch(ids),
       onDelete: () => ctx.editor.deleteSelection(),
       onDuplicate: () => ctx.editor.duplicateSelection(),
+      onShowLane: (laneId, label) => cmp.studioShowLane(laneId, label),
     });
     const libHost = document.querySelector('[data-osc="studio.library"]');
     ctx.library = mountLibrary(libHost, {
@@ -1057,6 +1066,28 @@ export function createStudioUi(svc = {}) {
         const tab = document.querySelector(`[data-osc="studio.subview"][data-value="${
           this.studio.subview}"]`);
         if (tab && tab.getClientRects().length) tab.focus({ preventScroll: true });
+      });
+    },
+
+    /**
+     * "Automated · show lane" (§102; V431 U8): the lane is revealed in the timeline. When the
+     * timeline is not on screen (a phone shows one subview) the Timeline subview opens, the
+     * lane's add-point button takes focus and the announcement says where it went; otherwise
+     * the lane scrolls into view and focus stays in the Inspector.
+     */
+    studioShowLane(laneId, label) {
+      const pane = document.querySelector('.osc-st-timeline');
+      const shown = !!pane && pane.getClientRects().length > 0;
+      if (!ctx.timeline) {
+        announce(`${label} is automated; open the Timeline to see its lane`);
+        return;
+      }
+      if (!shown) this.studioSetSubview('timeline');
+      announce(shown ? `${label} automation lane shown`
+        : `${label} automation lane shown in the Timeline view`);
+      // After Alpine has applied the subview (its effect runs before the next frame).
+      requestAnimationFrame(() => {
+        if (ctx.timeline) ctx.timeline.revealLane(laneId, { focus: !shown });
       });
     },
 

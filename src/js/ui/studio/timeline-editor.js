@@ -3,8 +3,8 @@
 // DOM blocks on a time grid (seconds or bars and beats), automation lanes, the loop region,
 // markers and a playhead that follows the transport.
 //
-//   mountStudioTimeline(host, ctx) -> { element, destroy(), refresh(), setSnap(id), zoom(steps),
-//                                       debug() }
+//   mountStudioTimeline(host, ctx) -> { element, destroy(), refresh(), revealLane(id, { focus }),
+//                                       setSnap(id), zoom(steps), debug() }
 //   ctx = { store, transport, runtime, announce, getSelection, setSelection,
 //           subscribe?, sampleRate?, transportBar?, transportKeys? }
 // transportKeys: false keeps the strip's time mode and tempo but not its keys and clock (the
@@ -320,11 +320,12 @@ export function mountStudioTimeline(host, ctx) {
       render(true);
       return r;
     },
-    revealLane: (laneId) => {
+    revealLane: (laneId, { focus = true } = {}) => {
       render(true);
       const head = heads.querySelector(`[data-row="${CSS.escape(laneId)}"]`);
       if (head) head.scrollIntoView({ block: 'nearest' });
-      focusKey(`lane-add:${laneId}`);
+      if (focus) focusKey(`lane-add:${laneId}`);
+      return !!head;
     },
   };
   const lanes = createLaneEditor(api);
@@ -1107,6 +1108,8 @@ export function mountStudioTimeline(host, ctx) {
   return {
     element: root,
     refresh: () => render(true),
+    /** Scroll an automation lane into view; focus its add-point button unless focus: false. */
+    revealLane: (laneId, opts) => api.revealLane(laneId, opts),
     setSnap,
     zoom,
     commands,

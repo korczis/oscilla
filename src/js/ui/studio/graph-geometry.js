@@ -132,6 +132,21 @@ export function cablePath(sx, sy, tx, ty) {
   return `M ${r(sx)} ${r(sy)} C ${r(sx + dx)} ${r(sy)}, ${r(tx - dx)} ${r(ty)}, ${r(tx)} ${r(ty)}`;
 }
 
+/** Half the arm length of the cross on a cable that carries nothing (logical units). */
+export const CABLE_CROSS_HALF = 5;
+
+/**
+ * The cross drawn at the midpoint of a cablePath (the cubic's t = 0.5 point is the midpoint of
+ * its two ends, since its control points mirror each other): an SVG path of two strokes.
+ */
+export function cableCross(sx, sy, tx, ty, half = CABLE_CROSS_HALF) {
+  const r = (n) => Math.round(n * 100) / 100 + 0;
+  const mx = (sx + tx) / 2;
+  const my = (sy + ty) / 2;
+  return `M ${r(mx - half)} ${r(my - half)} L ${r(mx + half)} ${r(my + half)} `
+    + `M ${r(mx - half)} ${r(my + half)} L ${r(mx + half)} ${r(my - half)}`;
+}
+
 /** { x, y, w, h } of the rectangle spanned by two corners (any order). */
 export function normalizeRect(x0, y0, x1, y1) {
   return { x: Math.min(x0, x1), y: Math.min(y0, y1), w: Math.abs(x1 - x0),

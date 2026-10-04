@@ -39,6 +39,18 @@
 //                        focused node (Delete removes it, not the old selection); undo /
 //                        redo, a disabled Undo button, the timeline, the compact chips and
 //                        Back never leave focus on <body>
+//   inspector-focus      V431 U2: keyboard Enter on an Inspector connection link, "Select
+//                        source" and "Duplicate" lands on the resulting view's heading or the
+//                        same action of the copy, never <body>
+//   inspector-phone-focus  V431 U7, U8 at 390 x 844 touch: Inspector Connect… and Delete keep
+//                        focus in the visible Inspector (never the hidden graph, <body> or
+//                        main); "Automated · show lane" opens the Timeline subview, shows the
+//                        lane, focuses its add-point button and says so
+//   inactive-cables      V431 A5/X3: Osc → Recorder (no Web Audio route) and LFO → Q on a
+//                        low-pass filter (no audible effect) are drawn is-inactive with a
+//                        sparse dash and a midpoint cross, out of the running emphasis, with
+//                        the reason in their label and the connection Inspector; a band-pass
+//                        type makes the Q cable live again
 //   escape-priority      Escape cancels a cable drag (no edge), then tap-connect mode, and
 //                        only then stops audio (§185)
 //   play-stop            PLAY starts the runtime on the engine, edits while playing re-apply,
@@ -840,6 +852,204 @@ function defineChecks() {
         && afterClipChip === 'studio.compact.clip',
     }), tabbed, ids, afterUndo, afterUndoButton, afterClipUndo, afterBack, afterChip,
     afterClipChip };
+  });
+
+  /** In-page: where focus is (for the Inspector checks); `shown` when it can be seen. */
+  const focusAt = (page) => page.evaluate(() => {
+    const a = document.activeElement;
+    if (!a || a === document.body) return { at: 'BODY', shown: false, pane: null };
+    const pane = a.closest('.osc-st-inspector') ? 'inspector' : a.closest('.osc-st-timeline')
+      ? 'timeline' : a.closest('.osc-st-graph') ? 'graph' : a.closest('dialog') ? 'dialog' : null;
+    const at = a.dataset.nodeId ? `node:${a.dataset.nodeId}` : a.dataset.key
+      ? `key:${a.dataset.key}` : a.dataset.osc || a.id || a.tagName.toLowerCase();
+    return { at, shown: a.getClientRects().length > 0, pane, text: a.textContent.trim()
+      .slice(0, 40) };
+  });
+
+  def('inspector-focus', async ({ page }) => {
+    // V431 U2 (docs/v31/review-v431.md #18): the Inspector rebuilds for the new selection; focus
+    // goes to the same action when the new view has it, else the new view's heading.
+    await H.fresh(page);
+    await page.click(H.nodeTitle('filter-1'));
+    await H.frames(page);
+    const link = '[data-osc="studio.inspector.connections"] .osc-si-link[data-edge="edge-2"]';
+    await page.focus(link);
+    await page.keyboard.press('Enter');
+    await H.frames(page);
+    const afterLink = await focusAt(page);
+    const linkSel = (await H.sel(page)).edges;
+    await page.focus('[data-osc="studio.inspector.selectFrom"]');
+    await page.keyboard.press('Enter');
+    await H.frames(page);
+    const afterSource = await focusAt(page);
+    const sourceSel = (await H.sel(page)).nodes;
+    const n0 = (await H.model(page)).nodes.length;
+    await page.focus('[data-osc="studio.inspector.duplicate"]');
+    await page.keyboard.press('Enter');
+    await H.frames(page);
+    const afterDup = await focusAt(page);
+    const dupSel = (await H.sel(page)).nodes;
+    const n1 = (await H.model(page)).nodes.length;
+    const dupTitle = await page.$eval('[data-osc="studio.inspector.title"]', (t) => t.textContent);
+    return { ...H.verdict({
+      linkKeepsFocus: linkSel.join() === 'edge-2' && afterLink.at === 'studio.inspector.title'
+        && afterLink.pane === 'inspector' && afterLink.text === 'Connection',
+      selectSourceKeepsFocus: sourceSel.join() === 'env-1'
+        && afterSource.at === 'studio.inspector.title' && afterSource.text === 'Envelope 1',
+      duplicateKeepsFocus: n1 === n0 + 1 && dupSel.length === 1 && dupSel[0] !== 'env-1'
+        && afterDup.at === 'key:studio.inspector.duplicate' && afterDup.pane === 'inspector'
+        && dupTitle !== 'Envelope 1',
+    }), afterLink, afterSource, afterDup, dupSel, dupTitle };
+  });
+
+  def('inspector-phone-focus', async ({ browser, baseUrl }) => {
+    // V431 U7 (#19) and U8 (#20) at 390 x 844: the graph subview is display:none while the
+    // Inspector is shown, so nothing may send focus there.
+    const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true,
+      isMobile: false });
+    const page = await ctx.newPage();
+    const errors = [];
+    page.on('pageerror', (e) => errors.push(e.message));
+    try {
+      await page.goto(baseUrl);
+      await page.waitForSelector('html[data-ready="true"]', { timeout: 15000 });
+      await page.evaluate(() => { const a = window.OSCILLA.app; a.alerts = [];
+        if (!a.safetyCollapsed) a.collapseSafety(); });
+      const inspectorOf = async (nodeId) => {
+        await H.fresh(page);
+        await page.evaluate((id) => {
+          window.OSCILLA.studio.store.dispatch({ type: 'SELECTION_CHANGE',
+            selection: { nodes: [id] } });
+          window.OSCILLA.app.studioSetSubview('inspector');
+        }, nodeId);
+        await H.frames(page, 3);
+      };
+      // U7: Connect… → choose a target (the dialog closes onto the node, which is hidden).
+      await inspectorOf('lfo-1');
+      await page.focus('[data-osc="studio.inspector.connect"]');
+      await page.keyboard.press('Enter');
+      await page.waitForSelector('#osc-dlg-studio-connect[open] [data-osc="studio.connect.target"]');
+      const e0 = (await H.model(page)).edges.length;
+      await page.keyboard.press('Enter');
+      await page.waitForSelector('#osc-dlg-studio-connect:not([open])', { state: 'attached' });
+      await sleep(80);
+      await H.frames(page, 3);
+      const afterConnect = await focusAt(page);
+      const e1 = (await H.model(page)).edges.length;
+      // Connect… then Escape.
+      await page.focus('[data-osc="studio.inspector.connect"]');
+      await page.keyboard.press('Enter');
+      await page.waitForSelector('#osc-dlg-studio-connect[open]');
+      await page.keyboard.press('Escape');
+      await sleep(80);
+      await H.frames(page, 3);
+      const afterCancel = await focusAt(page);
+      // U7: Delete from the Inspector.
+      await inspectorOf('filter-1');
+      await page.focus('[data-osc="studio.inspector.delete"]');
+      await page.keyboard.press('Enter');
+      await H.frames(page, 4);
+      const afterDelete = await focusAt(page);
+      const deleted = !(await H.model(page)).nodes.some((n) => n.id === 'filter-1');
+      const subviewAfterDelete = await page.evaluate(() => window.OSCILLA.app.studio.subview);
+      // U8: "Automated · show lane" on Filter 1 cutoff (the template automates it).
+      await inspectorOf('filter-1');
+      await H.recordLive(page);
+      const laneId = await page.evaluate(() => window.OSCILLA.studio.model.timeline.automation
+        .find((l) => l.target.node === 'filter-1' && l.target.param === 'frequency').id);
+      await page.focus('.osc-si-field[data-field="frequency"] '
+        + '[data-osc="studio.inspector.automate"]');
+      await page.keyboard.press('Enter');
+      await H.frames(page, 4);
+      const afterLane = await focusAt(page);
+      const lane = await page.evaluate((id) => {
+        const row = document.querySelector(`.osc-stl-row--lane[data-lane-id="${CSS.escape(id)}"]`);
+        const r = row ? row.getBoundingClientRect() : null;
+        return { subview: window.OSCILLA.app.studio.subview,
+          timeline: document.querySelector('.osc-st-timeline').getBoundingClientRect().height,
+          row: r ? { top: r.top, bottom: r.bottom, h: r.height } : null,
+          vh: window.innerHeight };
+      }, laneId);
+      const live = await H.live(page);
+      return { ...H.verdict({
+        connectKeepsFocus: e1 === e0 + 1 && afterConnect.shown
+          && afterConnect.pane === 'inspector',
+        cancelKeepsFocus: afterCancel.shown && afterCancel.pane === 'inspector',
+        deleteKeepsFocus: deleted && afterDelete.shown && afterDelete.pane === 'inspector'
+          && subviewAfterDelete === 'inspector',
+        laneSubview: lane.subview === 'timeline' && lane.timeline > 0,
+        laneShown: !!lane.row && lane.row.h > 0 && lane.row.bottom > 0 && lane.row.top < lane.vh,
+        laneFocused: afterLane.at === `key:lane-add:${laneId}` && afterLane.shown,
+        laneAnnounced: live.some((t) => /automation lane shown in the Timeline view/.test(t)),
+        noErrors: errors.length === 0,
+      }), afterConnect, afterCancel, afterDelete, afterLane, lane, live: live.slice(-3),
+      errors };
+    } finally {
+      await ctx.close();
+    }
+  });
+
+  def('inactive-cables', async ({ page }) => {
+    // V431 A5/X3 (#14): cables that carry nothing are drawn and labelled as such (§237).
+    await H.fresh(page);
+    const ids = await page.evaluate(() => {
+      const s = window.OSCILLA.studio.store;
+      const rec = s.dispatch({ type: 'NODE_ADD', nodeType: 'recorder',
+        position: { x: 900, y: 420 } }).created.nodes[0];
+      const recEdge = s.dispatch({ type: 'EDGE_ADD', from: { node: 'osc-1', port: 'audio' },
+        to: { node: rec, port: 'audio' } }).created.edges[0];
+      const qEdge = s.dispatch({ type: 'EDGE_ADD', from: { node: 'lfo-1', port: 'control' },
+        to: { node: 'filter-1', port: 'Q' } }).created.edges[0];
+      return { rec, recEdge, qEdge };
+    });
+    await H.frames(page);
+    const read = () => page.evaluate((e) => {
+      const one = (id) => {
+        const g = document.querySelector(`[data-osc="studio.graph.edge"][data-edge-id="${id}"]`);
+        const line = g.querySelector('.osc-sg-edge-line');
+        const x = g.querySelector('.osc-sg-edge-x');
+        const cs = getComputedStyle(line);
+        return { cls: g.getAttribute('class'), route: g.dataset.route || null,
+          cross: (x && x.getAttribute('d')) || '',
+          title: (g.querySelector('title') || {}).textContent || '',
+          dash: cs.strokeDasharray, width: parseFloat(cs.strokeWidth) };
+      };
+      return { rec: one(e.recEdge), q: one(e.qEdge), live: one('edge-1'),
+        liveControl: one('edge-4') };
+    }, ids);
+    const idle = await read();
+    await page.evaluate(() => window.OSCILLA.studio.editor.setRunning(true));
+    const running = await read();
+    await page.evaluate(() => window.OSCILLA.studio.editor.setRunning(false));
+    await page.evaluate((id) => window.OSCILLA.studio.store.dispatch({ type: 'SELECTION_CHANGE',
+      selection: { edges: [id] } }), ids.qEdge);
+    await H.frames(page);
+    const note = await page.evaluate(() => {
+      const n = document.querySelector('[data-osc="studio.inspector.edgeStatus"]');
+      return n ? n.textContent : '';
+    });
+    await page.evaluate(() => window.OSCILLA.studio.store.dispatch({ type: 'NODE_PARAM_SET',
+      nodeId: 'filter-1', key: 'type', value: 'bandpass' }));
+    await H.frames(page);
+    const after = await read();
+    const noteAfter = await page.evaluate(() => !document.querySelector(
+      '[data-osc="studio.inspector.edgeStatus"]'));
+    return { ...H.verdict({
+      noRouteDrawn: /\bis-inactive\b/.test(idle.rec.cls) && idle.rec.route === 'no-route'
+        && idle.rec.cross !== ''
+        && /No Web Audio route: Recorder\/Export 1 is offline only/.test(idle.rec.title),
+      noEffectDrawn: /\bis-inactive\b/.test(idle.q.cls) && idle.q.route === 'no-effect'
+        && idle.q.cross !== '' && /No audible effect: .*not applied/.test(idle.q.title),
+      liveUnchanged: !/is-inactive/.test(idle.live.cls) && idle.live.cross === ''
+        && idle.live.route === 'live' && !/is-inactive/.test(idle.liveControl.cls),
+      distinctDash: idle.rec.dash !== idle.live.dash && idle.q.dash !== idle.liveControl.dash,
+      noRunningEmphasis: running.live.width === 2 && running.rec.width < 2
+        && running.q.width < 2,
+      inspectorReason: /^No audible effect: .*not applied/.test(note),
+      bandpassLive: !/is-inactive/.test(after.q.cls) && after.q.cross === '' && noteAfter
+        && /is-inactive/.test(after.rec.cls),
+    }), idle, running: { live: running.live.width, rec: running.rec.width, q: running.q.width },
+    note };
   });
 
   def('escape-priority', async ({ page }) => {

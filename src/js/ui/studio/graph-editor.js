@@ -6,7 +6,9 @@
 //
 //   createGraphEditor(host, svc) -> editor
 //     svc: { store, registry, announce(text, { assertive }), status() -> Map, warnings() -> Map,
-//            onQuickAdd({ at, from }), onConnectDialog(nodeId), onActivateNode(id) }
+//            edgeStatus() -> Map edge id -> plan { status, reason } (cables that carry nothing
+//            are drawn as such, §237), onQuickAdd({ at, from }), onConnectDialog(nodeId),
+//            onActivateNode(id) }
 //   editor.render()                     project the model and selection (keyed, incremental)
 //   editor.frameAll(), frameSelection(), zoomBy(f), panBy(dx, dy), setView(view)
 //   editor.addNodeAt(type, at?, { connectFrom }) -> result     at: logical point (default centre)
@@ -15,7 +17,9 @@
 //   editor.deleteSelection(), copySelection(), cutSelection(), paste(), duplicateSelection(),
 //   editor.selectAll(), nudge(key, large), endNudge()
 //   editor.startTapConnect(from), cancelTransient() -> bool, hasGesture(), inSelectionMode()
-//   editor.setRunning(bool), focusNode(id), focusViewport(), destroy()
+//   editor.setRunning(bool), focusNode(id) -> bool, focusViewport() -> bool, isShown(),
+//   destroy()        focusNode / focusViewport refuse (false) while the graph subview is hidden
+//                    (phones, §136): focus never goes to an element nobody can see (V431 U7)
 //
 // Pointer model (decision, docs in tests/browser/v31-studio-graph.cjs): mouse/pen — drag a node
 // to move it (snap to the 8-unit grid; Alt disables snapping), drag from an output port to draw
@@ -33,9 +37,9 @@ import { NODE_REGISTRY } from '../../studio/registry.js';
 import { summarizeGraph, announceAction } from '../../studio/a11y.js';
 import { copySubgraph } from '../../studio/actions.js';
 import {
-  CABLE_HIT_PX, GRID, NODE_WIDTH, boundsOf, cablePath, clampZoom, dragPosition, fitView,
-  graphToScreen, idsInRect, mergeSelection, normalizeRect, normalizeView, nudgeDelta, panBy,
-  pastThreshold, pinchView, screenToGraph, snapPoint, toggleInSelection, zoomAt, ZOOM_STEP,
+  CABLE_HIT_PX, GRID, NODE_WIDTH, boundsOf, cableCross, cablePath, clampZoom, dragPosition,
+  fitView, graphToScreen, idsInRect, mergeSelection, normalizeRect, normalizeView, nudgeDelta,
+  panBy, pastThreshold, pinchView, screenToGraph, snapPoint, toggleInSelection, zoomAt, ZOOM_STEP,
 } from './graph-geometry.js';
 import {
   connectingText, connectionTargets, edgeView, nodeCard, probeConnection,
@@ -281,6 +285,8 @@ export function createGraphEditor(host, svc) {
     const selEdges = new Set(sel.edges);
     const status = svc.status ? svc.status() : new Map();
     const warnings = svc.warnings ? svc.warnings() : new Map();
+    const edgeStatus = svc.edgeStatus ? svc.edgeStatus() : new Map();
+    const byId = new Map(m.graph.nodes.map((n) => [n.id, n]));
     const conns = edgeSigs(m);
     const seen = new Set();
     let prevEl = null;
@@ -331,16 +337,26 @@ export function createGraphEditor(host, svc) {
       if (!entry) {
         const hit = s('path', { class: 'osc-sg-edge-hit' });
         const line = s('path', { class: 'osc-sg-edge-line' });
-        const g = s('g', { 'data-edge-id': e.id, 'data-osc': 'studio.graph.edge' }, [hit, line]);
+        const mark = s('path', { class: 'osc-sg-edge-x' });
+        const g = s('g', { 'data-edge-id': e.id, 'data-osc': 'studio.graph.edge' },
+          [hit, line, mark]);
         edgesG.appendChild(g);
-        entry = { g, hit, line, edge: null, sig: '' };
+        entry = { g, hit, line, mark, edge: null, sig: '', inactive: false };
         edgeEls.set(e.id, entry);
       }
-      const sig = `${selected ? 1 : 0}`;
+      // The plan status and the target's parameters decide liveness (a filter type change
+      // alters it without touching the edge): both are in the signature.
+      const st = edgeStatus.get(e.id) || null;
+      const to = byId.get(e.to.node);
+      const sig = `${selected ? 1 : 0}#${st ? `${st.status}:${st.reason}` : ''}#${
+        to && to.type === 'filter' ? to.params.type : ''}`;
       if (entry.edge !== e || entry.sig !== sig) {
-        const v = edgeView(m, e, { registry, selected });
+        const v = edgeView(m, e, { registry, selected, status: st });
         entry.g.setAttribute('class', `osc-sg-edge is-${v.type.toLowerCase()} is-${v.cable}${
-          v.muted ? ' is-muted' : ''}${selected ? ' is-selected' : ''}`);
+          v.muted ? ' is-muted' : ''}${v.inactive ? ' is-inactive' : ''}${
+          selected ? ' is-selected' : ''}`);
+        setAttr(entry.g, 'data-route', v.route);
+        entry.inactive = v.inactive;
         setAttr(entry.g, 'data-label', v.ariaLabel);
         let title = entry.g.querySelector('title');
         if (!title) {
@@ -380,11 +396,14 @@ export function createGraphEditor(host, svc) {
     if (!a || !b) {
       entry.line.setAttribute('d', '');
       entry.hit.setAttribute('d', '');
+      entry.mark.setAttribute('d', '');
       return;
     }
     const d = cablePath(a.x, a.y, b.x, b.y);
     entry.line.setAttribute('d', d);
     entry.hit.setAttribute('d', d);
+    // A cable that carries nothing has a cross at its midpoint (shape, not colour alone, §167).
+    entry.mark.setAttribute('d', entry.inactive ? cableCross(a.x, a.y, b.x, b.y) : '');
   }
 
   function routeAll() {
@@ -1018,9 +1037,11 @@ export function createGraphEditor(host, svc) {
       announce(entry && entry.label && nodes.length && edges.length
         ? `Deleted ${nodes.length + edges.length} items` : announceAction(last));
     } else if (last) announce(announceAction(last), { assertive: true });
-    // Focus the nearest remaining node, else the canvas (§142): never <body>.
+    // Focus the nearest remaining node, else the canvas (§142): never <body>. While the graph
+    // subview is hidden (a phone, Delete from the Inspector) focus stays where it is (V431 U7).
     const next = primary ? nearestNodeTo(primary.position, gone) : null;
     requestAnimationFrame(() => {
+      if (!isShown()) return;
       if (next) {
         pointerFocus = true; // focus the neighbour without selecting it
         focusNode(next);
@@ -1104,9 +1125,14 @@ export function createGraphEditor(host, svc) {
       label: entry.label }));
   }
 
+  /** Whether the graph is rendered (not a hidden subview or workspace). */
+  function isShown() {
+    return viewport.isConnected && viewport.getClientRects().length > 0;
+  }
+
   function focusNode(id) {
     const entry = nodeEls.get(id);
-    if (!entry) return false;
+    if (!entry || !isShown()) return false;
     entry.el.focus({ preventScroll: true });
     // Keep it visible: pan when it lies outside the viewport.
     measureSize();
@@ -1167,7 +1193,12 @@ export function createGraphEditor(host, svc) {
       host.classList.toggle('is-running', running);
     },
     focusNode,
-    focusViewport: () => viewport.focus({ preventScroll: true }),
+    focusViewport() {
+      if (!isShown()) return false;
+      viewport.focus({ preventScroll: true });
+      return true;
+    },
+    isShown,
     onShow() {
       measureSize();
       for (const entry of nodeEls.values()) entry.anchors = null;
