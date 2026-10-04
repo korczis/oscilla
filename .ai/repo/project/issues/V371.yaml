@@ -19,7 +19,11 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-02
-updated_at: 2026-10-03T23:40:30Z
+updated_at: 2026-10-04T03:07:31Z
+started_at: 2026-10-04T03:07:19Z
+started_event: sha256:82257a5e80b31f38dac16a0be2fb8514d03298a92c660e53e7d6ca086ec20714
+completed_at: 2026-10-04T03:07:31Z
+completed_event: sha256:bc64fd489e9ed0f3693f850eaf5a617b5462dcd8d995e5f8fb2095e5c9b28703
 evidence:
   - covers: verified
     type: test
@@ -39,3 +43,9 @@ evidence:
     result: "PARTIAL (do not mark done): re-checked at 34f967a; Measure and Experiments follow Playground (nav-order), the experiment management surface passes, V2 functions preserved (v3-ui unit 5/5; browser 19/19 in chromium, firefox, webkit x file:// and http). Unmet, unchanged since round 2: navigation is not PLAYGROUND, MEASURE, EXPERIMENTS, ANALYZE, SYNTHESIS, LEARN (spec 73/75: no 14 top-level tabs, an ANALYZE consolidation of analyzer/spectrogram/RTA/mic analysis): src/index.html has 12 top-level tabs (playground, measure, experiments, sequencer, analyzer, filter, synthesis, compare, learn, presets, studio, about), no ANALYZE"
     commit: 34f967a063ead9085b89faf32f748e4cf9aff301
     recorded_at: 2026-10-03T23:40:30Z
+  - covers: verified
+    type: test
+    command: "node --test tests/unit/v3-ui.test.mjs && node tests/browser/v3-ui.cjs && grep -n 'data-osc=\"nav' src/index.html"
+    result: "PASS at d0eafe3: unit 6/6; v3-ui 19/19 in chromium, firefox, webkit (file and http). Top-level navigation is Playground, Measure, Experiments, Analyze (group: Analyzer, Filter Lab, Compare), Synthesis (group: Synthesis, Sequencer, Presets), Learn, plus Studio and About; V2 functions kept inside the groups (#71); experiment management surface passes"
+    commit: d0eafe396e86372b121d86e6f5ae34a03e737322
+    recorded_at: 2026-10-04T03:07:27Z

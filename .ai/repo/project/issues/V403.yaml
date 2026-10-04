@@ -17,7 +17,11 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-02
-updated_at: 2026-10-03T23:37:20Z
+updated_at: 2026-10-04T03:08:36Z
+started_at: 2026-10-04T03:08:25Z
+started_event: sha256:0453b424b47ffc131b0881fdb37215a76e29854c96e9681c4b70c17545ea1edb
+completed_at: 2026-10-04T03:08:36Z
+completed_event: sha256:7ed6239664cf01a5a77d05f0e5facee0b5ccd8cebcb60cce50c2416a6db42ad2
 evidence:
   - covers: verified
     type: test
@@ -37,3 +41,9 @@ evidence:
     result: "PARTIAL (do not mark done): at 34f967a PR #49 closed the feature/use-case/claim gaps: features/studio.md + 5 sub-features status stable and true to the shipped code (deep link and Signal Path projection described after #54/#56), 14 Studio use cases UC1-UC14 status active citing real tests, rules visual-identity-lock.v1, studio-model-is-canonical, typed-ports, no-silent-feedback, ADRs 0030-0038, Studio claims in docs/CLAIMS.yaml guaranteed with implementation and test; validate/doctor 0 failures. Unmet (spec 19-20, decisions and questions): none exists in the repository: majordomus question list --all and decision list are empty, although ADR 0034/0038 say their open questions are 'recorded as Majordomus questions'; two of them are answered by shipped code but still recorded as open: zoom bounds (graph-geometry.js ZOOM_MIN 0.25 / ZOOM_MAX 2.5, while docs/v31/studio-model.md:281 says 'Zoom bounds are not decided yet' and ADR 0034 lists it open) and browser Fullscreen (shipped by V422, still an open question in ADR 0034); the Safari file:// worklet question of ADR 0038 has no record; the spec 19 sub-ADR choices (grid, hit width, snap defaults, drag threshold, import limits) live only in code and docs, not as decisions"
     commit: 34f967a063ead9085b89faf32f748e4cf9aff301
     recorded_at: 2026-10-03T23:37:20Z
+  - covers: verified
+    type: test
+    command: "majordomus plan validate && node --test tests/unit/v31-studio-self-knowledge.test.mjs && sed -n '/studio-decisions:begin/,/studio-decisions:end/p' docs/v31/studio-model.md && grep -n 'Resolution notes' .ai/repo/adrs/0030-*.md .ai/repo/adrs/0034-*.md .ai/repo/adrs/0038-*.md"
+    result: "PASS at d0eafe3: the remaining gap (spec 19-20) is closed by #73. Spec 19 decisions (coordinate unit, zoom min/max, grid, hit width, schema version, timeline snap, drag threshold, import limit, plus file extensions) are the studio-decisions table in docs/v31/studio-model.md with source lines, enforced by v31-studio-self-knowledge 20/20; majordomus decision/question records live in uncommitted .ai/local, so the table and ADR resolution notes are the durable record. Spec 20 questions: zoom bounds and browser Fullscreen answered by shipped code (ADR 0034 notes), patch extension and groups/subgraphs answered (ADR 0030 notes: .oscilla-patch.json; groups in neither 3.1 nor 3.2), Safari file:// worklets answered for WebKit and kept open for real Safari with a real input (ADR 0038 notes). Features/use cases/claims/rules closed earlier by #49"
+    commit: d0eafe396e86372b121d86e6f5ae34a03e737322
+    recorded_at: 2026-10-04T03:08:33Z
