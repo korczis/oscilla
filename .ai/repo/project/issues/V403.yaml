@@ -17,7 +17,7 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-02
-updated_at: 2026-10-03T13:14:42Z
+updated_at: 2026-10-03T23:37:20Z
 evidence:
   - covers: verified
     type: test
@@ -31,3 +31,9 @@ evidence:
     result: "PARTIAL (do not mark done): re-checked at 6f47ab7; Studio feature + 5 sub-features, 14 Studio use cases, rules and ADRs 0030-0038 exist; validate/doctor 0 failures. Unmet, unchanged: every Studio feature and use case is still status draft and features/studio.md says 'Nothing of Studio is in the shipped product yet', false since v3.1.0; Studio claims in docs/CLAIMS.yaml not reconciled with the shipped tests"
     commit: 6f47ab76768738e5b4fcd1754da68e72243e0930
     recorded_at: 2026-10-03T13:14:42Z
+  - covers: verified
+    type: test
+    command: "majordomus plan validate && majordomus doctor && grep -n '^status:' .ai/repo/features/studio*.md .ai/repo/use-cases/studio-*.md && majordomus question list --all && majordomus decision list && grep -n 'Zoom bounds' docs/v31/studio-model.md && grep -n 'ZOOM_M' src/js/ui/studio/graph-geometry.js"
+    result: "PARTIAL (do not mark done): at 34f967a PR #49 closed the feature/use-case/claim gaps: features/studio.md + 5 sub-features status stable and true to the shipped code (deep link and Signal Path projection described after #54/#56), 14 Studio use cases UC1-UC14 status active citing real tests, rules visual-identity-lock.v1, studio-model-is-canonical, typed-ports, no-silent-feedback, ADRs 0030-0038, Studio claims in docs/CLAIMS.yaml guaranteed with implementation and test; validate/doctor 0 failures. Unmet (spec 19-20, decisions and questions): none exists in the repository: majordomus question list --all and decision list are empty, although ADR 0034/0038 say their open questions are 'recorded as Majordomus questions'; two of them are answered by shipped code but still recorded as open: zoom bounds (graph-geometry.js ZOOM_MIN 0.25 / ZOOM_MAX 2.5, while docs/v31/studio-model.md:281 says 'Zoom bounds are not decided yet' and ADR 0034 lists it open) and browser Fullscreen (shipped by V422, still an open question in ADR 0034); the Safari file:// worklet question of ADR 0038 has no record; the spec 19 sub-ADR choices (grid, hit width, snap defaults, drag threshold, import limits) live only in code and docs, not as decisions"
+    commit: 34f967a063ead9085b89faf32f748e4cf9aff301
+    recorded_at: 2026-10-03T23:37:20Z
