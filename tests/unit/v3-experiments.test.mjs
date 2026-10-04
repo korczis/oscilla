@@ -869,7 +869,8 @@ test('transferCsv: metadata header, explicit unit columns, raw by default', () =
     '# sample_rate_hz: 48000',
     '# calibration: UNCALIBRATED (frequency profile none; levels: Relative level · dBFS-like '
       + '/ analyser-relative scale)',
-    '# view: RAW (unsmoothed, not normalized)',
+    '# view: RAW (each point the power mean of its analysis-grid band; no smoothing beyond that, '
+      + 'not normalized)',
     '# column frequency_hz: Hz',
     '# column magnitude_db_relative: dB re unity digital transfer (capture/stimulus ratio), '
       + 'uncorrected',
@@ -940,7 +941,8 @@ test('irCsv and rtaCsv: exact columns and units', () => {
     peakTimeS: 1 / 48000 };
   const csv = irCsv(ir, META).split('\n');
   assert.deepStrictEqual(csv.slice(7, 16), [
-    '# view: RAW (unsmoothed, not normalized)',
+    '# view: RAW (each point the power mean of its analysis-grid band; no smoothing beyond that, '
+      + 'not normalized)',
     `# peak: sample 1, ${1 / 48000} s`,
     '# capture_offset_s: 0.0123',
     '# window_s: 0-0.08',

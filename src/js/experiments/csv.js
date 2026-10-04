@@ -107,7 +107,11 @@ const hasAnyCal = (cal) => !!(cal && (cal.frequency || hasLevelCal(cal)));
 
 function viewLine(opts) {
   const view = opts.view ?? 'raw';
-  if (view === 'raw') return '# view: RAW (unsmoothed, not normalized)';
+  if (view === 'raw') {
+    // V383: each point is the power mean of its analysis-grid band, not a single FFT bin
+    return '# view: RAW (each point the power mean of its analysis-grid band; no smoothing beyond '
+      + 'that, not normalized)';
+  }
   if (view !== 'derived') throw new RangeError('view must be "raw" or "derived"');
   const d = opts.derivation || {};
   const smoothing = d.smoothing ?? null;

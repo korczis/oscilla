@@ -425,7 +425,8 @@ test('G6/G7/G9: every result carries the algorithm IDs it used (pinned)', () => 
   assert.equal(sm.label, 'SMOOTHED: 1/6 octave (power mean)');
   assert.deepEqual(sm.smoothedDb, smoothFractionalOctave(frequencies, magnitudeDb, 6,
     { edgeTolerance: SMOOTHING_EDGE_TOLERANCE }));
-  assert.equal(smoothResponse(frequencies, magnitudeDb, 0).label, 'RAW: unsmoothed');
+  assert.equal(smoothResponse(frequencies, magnitudeDb, 0).label,
+    'RAW: no smoothing beyond the analysis grid');
   assert.equal(normalizeResponse(frequencies, magnitudeDb, { mode: 'at-frequency', hz: 1000 })
     .algorithm, ids.normalization);
   assert.equal(normalizeIr(IR8, 'peak-db').algorithm, ids.normalization);
