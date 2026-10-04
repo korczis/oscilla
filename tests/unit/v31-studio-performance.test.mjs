@@ -4,11 +4,13 @@
 // real browsers is tests/browser/v31-studio-workflows.cjs (check large-graph-render).
 //   node --test tests/unit/v31-studio-performance.test.mjs
 //
-// Method: each operation runs REPEATS times after one warm-up; the MEDIAN wall time
-// (performance.now) is compared with its budget. Budgets are what an interaction may cost: one
+// Method: each operation runs REPEATS times after one warm-up; the MINIMUM wall time
+// (performance.now) is compared with its budget. Other work on the machine only ever adds time
+// to a run, so the fastest repeat is the estimate of the operation's own cost; a median measured
+// contention instead and failed the release gate at a load average of 53. Budgets are what an interaction may cost: one
 // 60 Hz frame (16.7 ms) for anything a single gesture commits (one dispatch with its whole-model
 // validation, undo, redo, search), a few frames for whole-document work (compile, import,
-// hash), and one second for building the whole fixture action by action. The measured medians
+// hash), and one second for building the whole fixture action by action. The measured times
 // (docs/v31/performance.md) are 10-100 times below them on the development machine, so a budget
 // fails only on a real regression (an accidental O(n²) per action), never on a slow CI runner.
 // The numbers are printed as test diagnostics.
@@ -32,10 +34,6 @@ import {
 
 const REPEATS = 15;
 
-function median(xs) {
-  const s = [...xs].sort((a, b) => a - b);
-  return s[Math.floor(s.length / 2)];
-}
 
 function time(fn, repeats = REPEATS) {
   fn(-1); // warm-up
@@ -45,7 +43,7 @@ function time(fn, repeats = REPEATS) {
     fn(i);
     xs.push(performance.now() - t0);
   }
-  return median(xs);
+  return Math.min(...xs);
 }
 
 const freshStore = () => {
@@ -108,7 +106,7 @@ test('§145-§147 model operations, compile and views stay within their budgets'
   assert.ok(serializeStudio(base).length > 10000, 'a real document');
   const lines = Object.entries(measured).map(([k, v]) => `${k.padEnd(14)} ${v.toFixed(3)} ms `
     + `(budget ${PERF_BUDGETS[k].toFixed(1)})`);
-  t.diagnostic(`100 nodes / 200 edges, median of ${REPEATS}:`);
+  t.diagnostic(`100 nodes / 200 edges, fastest of ${REPEATS}:`);
   for (const line of lines) t.diagnostic(line);
   for (const [k, v] of Object.entries(measured)) {
     assert.ok(v <= PERF_BUDGETS[k], `${k}: ${v.toFixed(2)} ms > budget ${PERF_BUDGETS[k]} ms`);
