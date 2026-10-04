@@ -75,6 +75,14 @@ sources:
     pathspec: ':(glob).ai/repo/workflows/*.md'
     required: false
 
+  # The published releases (spec docs/specs/oscilla-v3-measure.md §181): one release/v1 record
+  # per tag, written by scripts/release-record.mjs from what was published.
+  - id: release
+    kind: release-record
+    discovery: vcs
+    pathspec: ':(glob).ai/repo/releases/*.yaml'
+    required: false
+
   - id: milestone
     kind: milestone
     discovery: vcs

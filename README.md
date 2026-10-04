@@ -445,7 +445,15 @@ automated test proves how a physical speaker, room or microphone behaves.
      result on `main` through a pull request.
   3. `npm run release:publish` is a dry run by default. With `-- --yes`, on `main`, it creates
      the annotated tag `vX.Y.Z`, pushes it, waits for the Pages deployment, verifies it, and
-     creates the GitHub Release with notes generated from the commits since the previous tag.
+     creates the GitHub Release with notes generated from the commits since the previous tag,
+     with the committed `dist/index.html` attached as `oscilla-vX.Y.Z.html`.
+  4. `npm run release:record -- --version X.Y.Z` writes the release record
+     `.ai/repo/releases/vX.Y.Z.yaml` (Majordomus `release/v1`): the tag and its commit, the
+     channel, when the GitHub Release was published, its notes, and the attached file's
+     SHA-256 and size read off the downloaded bytes, which must equal the committed
+     `dist/index.html` at the tag (the artifact digest `verify-deploy` checks). A record is
+     evidence: `-- --check` refuses one that differs from what was published, naming the
+     field. Land it on `main` by a small pull request of its own (`release/record-vX.Y.Z`).
 - **Tags** are `vX.Y.Z`. V1, the original hand-written single file, is `v1.0.0` (deployed) and
   `v1.0.1` (a maintenance tag that was never deployed).
 - **About timeline.** A minor or major release adds its line to the About view's evolution

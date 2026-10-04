@@ -21,6 +21,7 @@ sections:
   knowledge: repo/knowledge
   adrs: repo/adrs
   sessions: repo/sessions
+  releases: repo/releases
   project: repo/project
   use-cases: repo/use-cases
   applications: repo/applications
