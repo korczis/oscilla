@@ -327,18 +327,29 @@ async function runOne(name, origin, url) {
     check(key, 'Worker result bit-identical to analyzeInline (3 runs, noise, phase)',
       id.diffs.length === 0, id.diffs.join('; ') || `${id.steps}/${id.refSteps} steps`);
     check(key, 'captures and noise transferred to the Worker', id.transferred);
-    const w = (rec.worker10 = await page.evaluate(() => window.T.run({ seconds: 10, sr: 48000,
-      mode: 'worker' })));
     // Control: the same heartbeat over an idle window as long as the run; the analysis may add
     // less than MAX_WORKER_GAP_MS to what the machine itself imposes (on a quiet machine the
     // idle gap is a few ms, so the bound stays ~50 ms; under load it absorbs only the load).
-    const idleGapMs = (rec.idleGapMs = await page.evaluate((ms) => window.T.idleGap(ms),
-      Math.min(Math.max(w.totalMs, 1000), 10000)));
+    // A control above MAX_IDLE_ALLOWANCE_MS means the machine itself stalls the main thread
+    // longer than the bound can judge, so the run and its control are measured again, up to
+    // three times, and the first attempt with a quiet control is judged (never the best of
+    // several); if none is quiet the last is judged and the detail says so.
+    let w; let idleGapMs; let attempt = 0;
+    for (attempt = 1; attempt <= 3; attempt += 1) {
+      w = (rec.worker10 = await page.evaluate(() => window.T.run({ seconds: 10, sr: 48000,
+        mode: 'worker' })));
+      idleGapMs = (rec.idleGapMs = await page.evaluate((ms) => window.T.idleGap(ms),
+        Math.min(Math.max(w.totalMs, 1000), 10000)));
+      if (idleGapMs <= MAX_IDLE_ALLOWANCE_MS) break;
+    }
+    rec.responsivenessAttempts = Math.min(attempt, 3);
     check(key, `main thread responsive during a 10 s / 48 kHz Worker analysis (max gap < `
       + `${MAX_WORKER_GAP_MS} ms + idle control, at most ${MAX_IDLE_ALLOWANCE_MS} ms)`, w.mode === 'worker'
       && w.maxGapMs < MAX_WORKER_GAP_MS + Math.min(idleGapMs, MAX_IDLE_ALLOWANCE_MS),
     `max gap ${w.maxGapMs.toFixed(1)} ms vs idle ${idleGapMs.toFixed(1)} ms, total `
-      + `${w.totalMs.toFixed(0)} ms, longest Worker step ${w.longestStepMs.toFixed(0)} ms`);
+      + `${w.totalMs.toFixed(0)} ms, longest Worker step ${w.longestStepMs.toFixed(0)} ms, `
+      + `attempt ${rec.responsivenessAttempts}${idleGapMs > MAX_IDLE_ALLOWANCE_MS
+        ? ' (no quiet control in 3 attempts: the machine itself stalls the main thread)' : ''}`);
     const ab = (rec.abort = await page.evaluate(() => window.T.abort()));
     check(key, 'abort rejects with ABORTED while the Worker computes', ab.rejected
       && ab.code === 'ABORTED' && ab.afterMs < 1000, JSON.stringify(ab));
