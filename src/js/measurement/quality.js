@@ -1,7 +1,7 @@
 // Data-driven measurement quality assessment (spec §64-§71, §143, §156-§158, §198-§199,
-// §220-§222, §237, §249; ADR 0025). Algorithm IDs: 'oscilla.confidence.v3' (default),
-// 'oscilla.confidence.v2' and 'oscilla.confidence.v1' (retained, reproduced exactly for stored
-// assessments; ADR 0024).
+// §220-§222, §237, §249; ADR 0025). Algorithm IDs: 'oscilla.confidence.v4' (default),
+// 'oscilla.confidence.v3', 'oscilla.confidence.v2' and 'oscilla.confidence.v1' (retained,
+// reproduced exactly for stored assessments; ADR 0024).
 //
 // Method. A pure rule table maps measured metrics to one of four statuses and ALWAYS returns
 // the reasons, passing and failing alike, each backed by the number it was derived from. There

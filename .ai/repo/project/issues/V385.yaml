@@ -17,7 +17,11 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-02
-updated_at: 2026-10-03T23:43:08Z
+updated_at: 2026-10-04T10:19:18Z
+started_at: 2026-10-04T10:19:04Z
+started_event: sha256:0c346342269d1c841707c416884d1be821c9600bb85056ed369a2637d166197b
+completed_at: 2026-10-04T10:19:18Z
+completed_event: sha256:ca15d0ccdda4d7dd403ee7fa9b19deb89c43476388b4fa743baf134dab755461
 evidence:
   - covers: verified
     type: test
@@ -37,3 +41,9 @@ evidence:
     result: "PARTIAL (do not mark done), supplement at 34f967a for spec 136 (knowledge discovers the canonical objects): majordomus 0.12 knowledge has no extractor rule for kind 'feature' (WARN 'source class declares kind feature which this extractor has no rule for'), so the 8 V3 feature records are discovered only as 'unknown' nodes; V3 use cases, ADRs 0017-0029 and claims are typed nodes. A tool limitation, recorded so the gap is visible; the stale algorithm IDs of the previous row remain the repository-side gap"
     commit: 34f967a063ead9085b89faf32f748e4cf9aff301
     recorded_at: 2026-10-03T23:43:08Z
+  - covers: verified
+    type: test
+    command: "majordomus plan validate && majordomus doctor && majordomus knowledge nodes | grep -E 'adr:adr-00(1[7-9]|2[0-9])|use-case:' && grep -n -i 'worker\|confidence' .ai/repo/features/measurement-workbench.md .ai/repo/features/measurement-quality.md"
+    result: "PASS at a285b0b + docs/v384-v385: plan validate 0 failures, doctor 0 failures; V3 features (measurement-workbench, calibration-profiles, transfer-function, impulse-response, rta, reproducible-experiments, measurement-comparison, measurement-quality), V3 use cases, ADRs 0017-0029 and the docs/v3 knowledge documents are discovered by majordomus knowledge. The caveat recorded at 320130f is resolved: measurement-workbench.md says the analysis runs in a Worker (inline only without Worker support) and measurement-quality.md names oscilla.confidence.v4 as the default"
+    commit: a285b0b0dc54641dc2f0b32707ec52ed1fd62d24
+    recorded_at: 2026-10-04T10:19:13Z

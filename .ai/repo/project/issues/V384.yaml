@@ -18,7 +18,11 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-02
-updated_at: 2026-10-03T23:36:06Z
+updated_at: 2026-10-04T10:18:56Z
+started_at: 2026-10-04T10:18:43Z
+started_event: sha256:b46b96f65393e344254b36d4a4728f177df96bcba2b187061de198bd2176657e
+completed_at: 2026-10-04T10:18:56Z
+completed_event: sha256:42a434280bbca5cb6386be1ebaa587f2ba84b607e4f6a0daeb4d088cf901c381
 evidence:
   - covers: verified
     type: manual
@@ -38,3 +42,9 @@ evidence:
     result: "PARTIAL (do not mark done): at 34f967a PR #48 closed the round-2 gaps (Worker analysis, no 'no Worker yet', index table default) and PR #57 corrected the DSP docs; README V3 section, measurement-guide.md, architecture.md with diagram and algorithms.md with references exist (v31-studio-docs and unit suite pass). Unmet: the V382 fixes (#51-#60) left docs contradicting algorithms.js: README.md:177 says oscilla.confidence.v3 for new measurements (default is confidence.v4); docs/v3/architecture.md:225-227 lists RETAINED_ALGORITHMS without transfer.v2, ir v2, clip.v1, confidence.v3; architecture.md:277 gives computeTransfer default 'oscilla.transfer.v2' (now transfer.v3) and :296-297 IrResult defaults ir v2 (now v3)"
     commit: 34f967a063ead9085b89faf32f748e4cf9aff301
     recorded_at: 2026-10-03T23:36:06Z
+  - covers: verified
+    type: manual
+    command: "git grep -n -E \"main thread|no Worker|confidence\.v[0-9]. \(default\)\" -- README.md docs/v3 .ai/repo/features src/js/measurement/quality.js && npm test"
+    result: "PASS on docs/v384-v385 (from main a285b0b): README 'The V3 measurement workbench' section, docs/v3/measurement-guide.md, docs/v3/architecture.md with the layer diagram, docs/v3/algorithms.md with a References section exist and now match the code. The earlier contradictions are gone: architecture.md and features/measurement-workbench.md state Worker analysis by default (claim analysis-off-main-thread) with the inline main-thread path only as the no-Worker fallback; the default quality rule set is oscilla.confidence.v4 (algorithms.js ALGORITHMS.quality) in algorithms.md's index, architecture.md and features/measurement-quality.md; this change corrects the last two stale statements (quality.js header said v3 default; algorithms.md 'now v3'). Unit 2186/2186"
+    commit: a285b0b0dc54641dc2f0b32707ec52ed1fd62d24
+    recorded_at: 2026-10-04T10:18:51Z
