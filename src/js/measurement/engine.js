@@ -97,6 +97,10 @@ import { normalizePoints } from '../calibration/profile.js';
 import { applyFrequencyCorrection } from '../calibration/interpolate.js';
 import { isValidLevelCalibration, levelLabel, toDisplayLevel } from '../calibration/level.js';
 
+/** Where the input gain is: the page cannot change it (§238 recovery must be actionable). */
+const INPUT_GAIN_WHERE = 'the input gain (in the operating system\'s sound settings or on the '
+  + 'audio interface; OSCILLA has no input gain control)';
+
 // ------------------------------------------------------------------------------- constants
 
 /** Typed error codes (spec §112). `text` is the user-facing explanation. */
@@ -836,7 +840,7 @@ export function createMeasurementEngine({ io, clock, onEvent, limits, assess, an
     const lvl = facts.inputLevel;
     if (lvl && isNum(lvl.peak) && lvl.peak >= PREFLIGHT_THRESHOLDS.clipPeak)
       warnings.push(reason('INPUT_CLIPPING', 'The input reaches full scale before the '
-        + 'measurement: lower the input gain.', { value: lvl.peak, unit: 'peak' }));
+        + 'measurement: lower ' + INPUT_GAIN_WHERE + '.', { value: lvl.peak, unit: 'peak' }));
     if (lvl && isNum(lvl.rmsDb) && lvl.rmsDb > PREFLIGHT_THRESHOLDS.noisyRmsDb)
       warnings.push(reason('NOISE_HIGH', `Background level ${lvl.rmsDb.toFixed(1)} dB relative `
         + '(dBFS-like) is high; expect a low signal-to-noise ratio.',
@@ -1150,7 +1154,7 @@ export function createMeasurementEngine({ io, clock, onEvent, limits, assess, an
           const r = [broken.length
             ? reason(code, `The noise capture is unusable (${broken.join(', ')}).`)
             : reason(code, 'The background alone drives the input to full '
-              + 'scale: lower the input gain or the background noise.')];
+              + 'scale: lower ' + INPUT_GAIN_WHERE + ' or the background noise.')];
           releaseRaw(s);
           cancelIo('invalid');
           return invalidResult(s, { reasons: r, preflight: publicReport(report), noise });

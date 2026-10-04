@@ -1404,7 +1404,7 @@
           <div class="osc-panel-header"><h3 class="osc-panel-title" id="osc-m-stim-title">Stimulus</h3></div>
           <p class="osc-m-big osc-num" data-osc="measure.stimulusText" x-text="meas.stimulusText"></p>
           <dl class="osc-m-rows">
-            <div class="osc-metric"><dt>Runs</dt><dd class="osc-num" x-text="meas.values.repeats + ' (averaged: ' + meas.values.aggregation + ')'"></dd></div>
+            <div class="osc-metric"><dt>Runs</dt><dd class="osc-num" x-text="meas.values.repeats + (meas.values.aggregation === 'median' ? ' (median)' : ' (power mean)')"></dd></div>
             <div class="osc-metric"><dt>Noise check</dt><dd class="osc-num" x-text="meas.values.noiseCheckS > 0 ? meas.values.noiseCheckS + ' s before the sweep' : 'skipped (SNR NOT MEASURED)'"></dd></div>
           </dl>
           <div class="osc-m-field">
@@ -1822,7 +1822,7 @@
                 data-osc="exp.row" :data-id="r.id">
                 <input type="checkbox" class="osc-x-check" data-osc="exp.select" :checked="r.selected"
                   :aria-label="'Select ' + r.name + ' for comparison'" @change="experimentsToggleSelect(r.id)">
-                <div class="osc-x-main">
+                <div class="osc-x-main" @click="experimentsOpen(r.id)">
                   <span class="osc-x-name" x-text="r.name"></span>
                   <span class="osc-x-meta osc-num" x-text="r.createdText + ' · ' + r.sizeText + ' · ' + r.versionText"></span>
                 </div>
@@ -2222,7 +2222,7 @@
           <div><dt>Runtime</dt><dd>One self-contained HTML file</dd></div>
           <div><dt>Audio</dt><dd>Web Audio API, in the browser</dd></div>
           <div><dt>Network</dt><dd>None at runtime; nothing is sent anywhere, no analytics</dd></div>
-          <div><dt>Levels</dt><dd>Relative, never calibrated sound pressure</dd></div>
+          <div><dt>Levels</dt><dd>Relative (dBFS); dB SPL only with a level calibration in MEASURE</dd></div>
         </dl>
       </header>
 
