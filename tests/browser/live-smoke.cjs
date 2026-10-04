@@ -16,6 +16,17 @@
 //   studio         STUDIO from the navigation; the Subtractive Synth opened from the template
 //                  gallery renders 6 nodes and 5 cables; PLAY sounds, STOP leaves 0 engine,
 //                  source and Studio runtime nodes (V3.1 public Studio smoke, plan V433)
+//   measure        MEASURE from the navigation (V3 §230, plan V386): the guided flow renders
+//                  (seven steps, "Check setup" enabled, Stop disabled, Frequency and Level
+//                  indicators, result tabs, input panel); switched to TEST CONTEXT (the digital
+//                  loopback of OSCILLA.measure.useLoopback, as the browser suites do) the setup
+//                  check reaches READY with the TEST CONTEXT banner, and a reset leaves 0 engine,
+//                  io nodes, sources, captures, ports and tracks
+//   measurement sweep  the Measurement Sweep opened from the template gallery (V3.1 §270)
+//                  renders its six nodes (Sweep, Master, Microphone and the Measurement nodes
+//                  Calibration, Transfer Analyzer, Measurement Result) and 5 cables
+//   no microphone  navigator.mediaDevices.getUserMedia is never called during the whole smoke
+//                  (no permission prompt can block it; no physical microphone is needed)
 // --url also takes a file:// URL of dist/index.html (a local dry run of the same checks).
 // Firefox on a runner without a sound server needs the PulseAudio null sink (see ci.yml).
 // Exit code 1 when any check fails in any browser.
@@ -38,6 +49,13 @@ const LAUNCH = {
 };
 const PANELS = ['source', 'analysis', 'mic', 'device', 'spectrogram', 'sequencer', 'filter',
   'envelope', 'additive', 'phase', 'bio'].map((p) => `#osc-panel-${p}`);
+// The Measurement Sweep template (src/js/studio/templates/measurement-sweep.js): node id -> the
+// category label its card shows.
+const SWEEP_NODES = { 'sweep-1': 'Source', 'master-1': 'Output', 'mic-1': 'Source',
+  'cal-1': 'Measurement', 'transfer-1': 'Measurement', 'result-1': 'Measurement' };
+// Short TEST CONTEXT recipe of the browser suites (tests/browser/v3-ui.cjs SHORT).
+const SHORT = { duration: 1, repeats: 2, noiseCheckS: 0.5, preRollS: 0.25, postRollS: 0.5,
+  gapS: 0.2 };
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 async function until(fn, test, ms) {
@@ -59,6 +77,18 @@ async function runOne(name) {
     const errors = [];
     page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
     page.on('pageerror', (e) => errors.push(`pageerror: ${e.message}`));
+    // Count every microphone request: the smoke must never reach one (no prompt can block it).
+    await page.addInitScript(() => {
+      window.__oscGum = 0;
+      const md = navigator.mediaDevices;
+      if (md && md.getUserMedia) {
+        const real = md.getUserMedia.bind(md);
+        md.getUserMedia = (...a) => {
+          window.__oscGum += 1;
+          return real(...a);
+        };
+      }
+    });
     const res = await page.goto(URL_, { waitUntil: 'load', timeout: 30000 });
     let ready = true;
     await page.waitForSelector('html[data-ready="true"]', { timeout: 20000 })
@@ -137,6 +167,70 @@ async function runOne(name) {
       && nodes === 0, `peak ${playing.peak.toFixed(3)}, nodes while held ${playing.nodes}, `
       + `after ${nodes}, context ${playing.state}`);
 
+    // MEASURE (V3 §230, plan V386): the workspace opens from the navigation and its guided flow
+    // renders; the setup check runs in TEST CONTEXT (digital loopback, no microphone).
+    await page.click('[data-osc="nav.measure"]');
+    await page.waitForFunction(() => document.querySelector('#osc-app').dataset.mode === 'measure',
+      null, { timeout: 5000 });
+    await sleep(150);
+    const mui = await page.evaluate(() => {
+      const q = (s) => document.querySelector(s);
+      const shown = (el) => !!el && el.getBoundingClientRect().width > 0
+        && el.getBoundingClientRect().height > 0 && getComputedStyle(el).visibility !== 'hidden';
+      const primary = q('#osc-measure-primary');
+      const stop = q('#osc-measure-stop');
+      return {
+        view: shown(q('#osc-view-measure')),
+        current: (q('[aria-current="page"]') || { dataset: {} }).dataset.osc,
+        steps: [...document.querySelectorAll('[data-osc="measure.step"]')].filter(shown).length,
+        primary: primary && shown(primary) ? primary.textContent.trim() : null,
+        primaryEnabled: !!primary && !primary.disabled,
+        stopDisabled: !!stop && shown(stop) && stop.disabled,
+        indicators: ['freqIndicator', 'levelIndicator']
+          .every((k) => shown(q(`[data-osc="measure.${k}"]`))),
+        tabs: [...document.querySelectorAll('[data-osc="measure.tab"]')].filter(shown)
+          .map((t) => t.dataset.value),
+        input: shown(q('[data-osc="measure.inputFacts"]')),
+        state: window.OSCILLA.measure.state,
+      };
+    });
+    check('MEASURE opens; the guided flow and its controls render', mui.view
+      && mui.current === 'nav.measure' && mui.steps === 7 && mui.primary === 'Check setup'
+      && mui.primaryEnabled && mui.stopDisabled && mui.indicators && mui.tabs.length >= 3
+      && mui.input && mui.state === 'IDLE',
+    `view ${mui.view}, nav ${mui.current}, ${mui.steps} steps, primary "${mui.primary}" `
+      + `${mui.primaryEnabled ? 'enabled' : 'disabled'}, stop disabled ${mui.stopDisabled}, `
+      + `indicators ${mui.indicators}, tabs ${mui.tabs.join('/')}, input ${mui.input}, `
+      + `state ${mui.state}`);
+    const loop = await page.evaluate((values) => {
+      const m = window.OSCILLA.measure;
+      const ok = m.useLoopback();
+      m.setValues(values);
+      return ok;
+    }, SHORT);
+    const banner = await page.waitForSelector('[data-osc="measure.testContext"]',
+      { state: 'visible', timeout: 3000 }).then(() => true, () => false);
+    await page.click('#osc-measure-primary');
+    await page.waitForFunction(() => ['READY', 'INVALID', 'ERROR']
+      .includes(window.OSCILLA.measure.state), null, { timeout: 20000, polling: 50 })
+      .catch(() => {});
+    const setup = await page.evaluate(() => ({ state: window.OSCILLA.measure.state,
+      kind: window.OSCILLA.measure.ioKind,
+      primary: document.querySelector('#osc-measure-primary').textContent.trim() }));
+    await page.evaluate(() => {
+      const m = window.OSCILLA.measure;
+      if (m.engine) m.engine.reset();
+    });
+    const zero = (c) => c.engineNodes === 0 && c.ioNodes === 0 && c.ioSources === 0
+      && c.captures === 0 && c.ports === 0 && c.tracks === 0;
+    const mc = await until(() => page.evaluate(() => window.OSCILLA.measure.counts()), zero, 3000);
+    await page.evaluate(() => window.OSCILLA.measure.useMicrophone());
+    check('MEASURE setup check in TEST CONTEXT reaches READY, reset leaves 0 nodes',
+      loop && banner && setup.state === 'READY' && zero(mc),
+    `loopback ${loop}, banner ${banner}, state ${setup.state} (io ${setup.kind}), primary `
+      + `"${setup.primary}"; after reset: engine ${mc.engineNodes}, io ${mc.ioNodes}, sources `
+      + `${mc.ioSources}, captures ${mc.captures}, ports ${mc.ports}, tracks ${mc.tracks}`);
+
     // STUDIO (V3.1, plan V433 §259): opened from the navigation, a template opened from the
     // gallery renders its graph, PLAY sounds through the Studio runtime, STOP leaves 0 nodes.
     await page.click('[data-osc="nav.studio"]');
@@ -173,6 +267,32 @@ async function runOne(name) {
       `peak ${sounding.peak.toFixed(3)}, runtime nodes while playing ${sounding.runtimeNodes}; `
       + `after: engine ${released.engineNodes}, sources ${released.engineSources}, runtime `
       + `${released.runtimeNodes}`);
+
+    // The Measurement Sweep template (V3.1 §270): opened from the gallery, its measurement
+    // nodes render; nothing asks for the microphone (the Microphone node stays unavailable).
+    await page.click('[data-osc="studio.templates"]');
+    await page.click('[data-osc="studio.template.open"][data-template="measurement-sweep"]');
+    const sweep = await until(() => page.evaluate(() => ({
+      nodes: [...document.querySelectorAll('#osc-view-studio .osc-sg-node')].map((n) => ({
+        id: n.dataset.nodeId,
+        title: (n.querySelector('.osc-sg-title') || {}).textContent || '',
+        cat: (n.querySelector('.osc-sg-cat') || {}).textContent || '',
+        shown: n.getBoundingClientRect().width > 0 })),
+      cables: document.querySelectorAll('#osc-view-studio .osc-sg-edge-line').length,
+      title: (document.querySelector('[data-osc="studio.title"]') || {}).textContent || '',
+      dialog: !!document.querySelector('dialog[open]') })),
+    (v) => v.nodes.length === 6 && v.title === 'Measurement Sweep' && !v.dialog, 5000);
+    const sweepIds = Object.keys(SWEEP_NODES);
+    const ids = sweep.nodes.map((n) => n.id);
+    check('the Measurement Sweep template renders its 6 nodes and 5 cables',
+      sweep.title === 'Measurement Sweep' && ids.length === sweepIds.length
+      && sweep.nodes.every((n) => n.shown && n.title && SWEEP_NODES[n.id] === n.cat)
+      && sweep.cables === 5,
+    `"${sweep.title}": ${sweep.nodes.map((n) => `${n.title} [${n.cat}]`).join(', ')}; `
+      + `${sweep.cables} cables`);
+
+    const gum = await page.evaluate(() => window.__oscGum);
+    check('no microphone request (getUserMedia never called)', gum === 0, `${gum} call(s)`);
 
     check('no console errors', errors.length === 0, errors.slice(0, 5).join(' | ') || 'none');
   } catch (e) {

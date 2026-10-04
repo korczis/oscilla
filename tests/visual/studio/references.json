@@ -6,6 +6,7 @@
       "template": "subtractive-synth",
       "views": [
         "desktop 1536x1024",
+        "desktop-timeline 1536x1024",
         "compact 1536x1024",
         "phone 390x844",
         "phone-timeline 390x844"
@@ -16,6 +17,7 @@
       "template": "subtractive-synth",
       "views": [
         "desktop 1536x1024",
+        "desktop-timeline 1536x1024",
         "compact 1536x1024",
         "phone 390x844",
         "phone-timeline 390x844"
