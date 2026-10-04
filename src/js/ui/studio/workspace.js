@@ -210,12 +210,13 @@ export function parseRenderDuration(text) {
 
 /**
  * The node and edge status the Studio shows (§170-§171): from the running runtime while it plays
- * (what Web Audio actually runs, graph-view.js runtimeStatus), otherwise from a compile of the
- * model. -> { nodes: Map id -> { status, reason }, edges: Map id -> { status, reason } }
+ * (what Web Audio actually runs, graph-view.js runtimeStatus, judged by the divergence verdict
+ * for the store `revision` when given), otherwise from a compile of the model.
+ * -> { nodes: Map id -> { status, code, reason }, edges: Map id -> { status, code, reason } }
  */
-export function studioStatus(model, { runtime = null, engine = null,
+export function studioStatus(model, { runtime = null, engine = null, revision = null,
   registry = NODE_REGISTRY } = {}) {
-  if (runtime && runtime.state === 'running') return runtimeStatus(model, runtime);
+  if (runtime && runtime.state === 'running') return runtimeStatus(model, runtime, revision);
   let plan = null;
   try {
     plan = compileStudio(model, { engine, registry });
@@ -343,7 +344,8 @@ export function createStudioUi(svc = {}) {
   }
 
   function recompile(model) {
-    const st = studioStatus(model, { runtime: ctx.runtime, engine: svc.engine, registry });
+    const st = studioStatus(model, { runtime: ctx.runtime, engine: svc.engine, registry,
+      revision: ctx.handle.getRevision() });
     ctx.status = st.nodes;
     ctx.edgeStatus = st.edges;
     ctx.warnings = nodeWarnings(model, registry);
@@ -443,7 +445,7 @@ export function createStudioUi(svc = {}) {
         if (detail && detail.reason === 'end') announce('Studio playback ended');
       }
     } else if (type === 'warning') {
-      cmp.studio.warning = String(detail || '');
+      cmp.studio.warning = (detail && detail.message) || '';
     }
   }
 

@@ -13,10 +13,15 @@
 //     Audio never discovers a topology (§38). Unsupported or unavailable nodes compile to an
 //     explicit status with a reason instead of throwing (§170-§171).
 //     PlanNode = { id, type, name, def, adapter, params, status: 'ready' | 'degraded' |
-//                  'offline-only' | 'data', reason }
+//                  'offline-only' | 'data', code, reason }
 //     PlanEdge = { id, kind: 'audio' | 'control' | 'trigger' | 'analysis', from, to, fromPort,
 //                  toPort, paramDef, props (complete), status: 'active' | 'inactive' |
-//                  'logical' | 'data', reason }
+//                  'logical' | 'data', code, reason }
+//     `code` is the machine reason of a status (null when there is none), `reason` its display
+//     prose (docs/v31/compiler.md "Diagnostics"): node no-adapter, adapter-mismatch,
+//     offline-only, no-web-audio, or an adapter check's code (mic-unsupported, mic-off);
+//     edge endpoint-offline-only, endpoint-unavailable.
+//   planHash(plan) -> hex | null   the plan's identity (below); studioHashOf(model) memoized
 //   diffPlans(prev, next, { owned }) -> [op]   the minimal patch (§44), deterministic order;
 //     owned: Map<node id, Set<param key>> of parameters another owner drives (runtime
 //     setOwnedParams): a change of an adapter's `rebuildWhenOwned` key on such a node is a
@@ -56,7 +61,10 @@
 
 import { NODE_REGISTRY } from './registry.js';
 import { validateEdgeProps } from './ports.js';
-import { validateStudioModel } from './validate.js';
+import { studioDiagnostic, validateStudioModel } from './validate.js';
+import { studioHash } from './schema.js';
+import { canonicalJson } from '../experiments/canonical-json.js';
+import { sha256Hex } from '../calibration/sha256.js';
 import { NODE_ADAPTERS, inertHandle } from './adapters/nodes.js';
 import { createAccounting } from './adapters/engine-hooks.js';
 import { createRamp } from './adapters/ramp.js';
@@ -112,8 +120,8 @@ export function compileStudio(model, {
   try {
     report = validateStudioModel(model, { registry });
   } catch (e) {
-    return refused([{ code: 'invalid-structure', severity: 'error', path: '',
-      message: `The Studio model has an invalid structure: ${e && e.message}` }]);
+    return refused([{ ...studioDiagnostic('compiler', 'invalid-structure',
+      `The Studio model has an invalid structure: ${e && e.message}`, null, 'error'), path: '' }]);
   }
   if (!report.ok) return refused(report.errors, report.warnings);
   const caps = studioCapabilities(engine, options);
@@ -125,31 +133,34 @@ export function compileStudio(model, {
     const def = registry.get(node.type);
     const adapter = Object.prototype.hasOwnProperty.call(adapters, node.type)
       ? adapters[node.type] : null;
-    let status = 'ready';
+    let status = 'degraded';
+    let code = null;
     let reason = null;
+    // An adapter check returns null, display prose, or { code, reason }.
+    const why = adapter && adapter.check ? adapter.check(node.params, caps) : null;
     if (!adapter) {
-      status = 'degraded';
+      code = 'no-adapter';
       reason = `No Studio compiler adapter for ${def.compiler}.`;
     } else if (adapter.compiler !== def.compiler) {
-      status = 'degraded';
+      code = 'adapter-mismatch';
       reason = `Compiler key mismatch: the registry names ${def.compiler}, the adapter `
         + `implements ${adapter.compiler}.`;
     } else if (!def.capabilities.realtime) {
-      status = 'offline-only';
-      reason = (adapter.check && adapter.check(node.params, caps))
+      status = code = 'offline-only';
+      reason = (why && (why.reason || why))
         || `${def.displayName} works only in offline rendering.`;
     } else if (adapter.data) {
       status = 'data';
     } else if (!caps.realtime) {
-      status = 'degraded';
+      code = 'no-web-audio';
       reason = 'The Web Audio API is not available in this browser.';
-    } else if (adapter.check) {
-      const why = adapter.check(node.params, caps);
-      if (why) { status = 'degraded'; reason = why; }
-    }
+    } else if (why) {
+      code = why.code || 'unavailable';
+      reason = why.reason || why;
+    } else status = 'ready';
     if (node.type === 'master') masterId = id;
     nodes.set(id, Object.freeze({ id, type: node.type, name: nameOf(node, def), def, adapter,
-      params: node.params, status, reason }));
+      params: node.params, status, code, reason }));
   }
   const rank = new Map(report.order.map((id, i) => [id, i]));
   const edges = new Map();
@@ -164,17 +175,20 @@ export function compileStudio(model, {
     const paramDef = toPort.param ? registry.param(to.type, toPort.param.key) : null;
     const props = validateEdgeProps(e.props, fromPort.type, toPort, paramDef).props;
     let status = kind === 'trigger' ? 'logical' : kind === 'analysis' ? 'data' : 'active';
+    let code = null;
     let reason = null;
     const usable = (n) => n.status === 'ready' || (kind === 'analysis' && n.status === 'data');
     for (const n of [from, to]) {
       if (!usable(n) && status !== 'inactive') {
+        const off = n.status === 'offline-only';
         status = 'inactive';
-        reason = `${n.name} is ${n.status === 'offline-only' ? 'offline only' : 'unavailable'}`
+        code = off ? 'endpoint-offline-only' : 'endpoint-unavailable';
+        reason = `${n.name} is ${off ? 'offline only' : 'unavailable'}`
           + `${n.reason ? `: ${n.reason}` : '.'}`;
       }
     }
     edges.set(e.id, Object.freeze({ id: e.id, kind, from: e.from, to: e.to, fromPort, toPort,
-      paramDef, props, status, reason }));
+      paramDef, props, status, code, reason }));
   }
   return { ok: true, errors: [], warnings: report.warnings, order: report.order, nodes, edges,
     edgeOrder: [...edges.keys()], masterId, model };
@@ -183,6 +197,44 @@ export function compileStudio(model, {
 /** The empty plan (nothing compiled yet). */
 export const EMPTY_PLAN = Object.freeze({ ok: true, errors: [], warnings: [], order: [],
   nodes: new Map(), edges: new Map(), edgeOrder: [], masterId: null, model: null });
+
+// ---------------------------------------------------------------- plan identity
+
+/** Version of the planHash selection; bump when what it covers changes. */
+export const PLAN_HASH_VERSION = 1;
+
+// Store model or plan → its hash (a hex string, never empty): both are immutable once made.
+const hashes = new WeakMap();
+const memo = (key, fn) => hashes.get(key) || hashes.set(key, fn()).get(key);
+
+/** studioHash (schema.js) of a store model, computed once per model object. */
+export const studioHashOf = (model) => memo(model, () => studioHash(model));
+
+/**
+ * The identity of a compiled plan: SHA-256 (hex) of canonicalJson({ v, studioHash, nodes, edges })
+ * where nodes are [id, type, adapter compiler key, status, code] in topological order and edges
+ * [id, kind, from node, from port, to node, to port, status, code] in edge order. Equal models
+ * compiled with equal capabilities give equal hashes; a layout, name or view change does not
+ * change it (studioHash covers execution state only); a parameter change, a status change
+ * (a capability: microphone permission, Web Audio) or a route change does. Plain data in,
+ * computed lazily on first read and memoized per plan: never on the audio path. null for a
+ * refused or empty plan.
+ */
+export function planHash(plan) {
+  if (!plan || !plan.ok || !plan.model) return null;
+  return memo(plan, () => sha256Hex(canonicalJson({
+    v: PLAN_HASH_VERSION,
+    studioHash: studioHashOf(plan.model),
+    nodes: plan.order.map((id) => {
+      const n = plan.nodes.get(id);
+      return [id, n.type, n.adapter ? n.adapter.compiler : null, n.status, n.code];
+    }),
+    edges: plan.edgeOrder.map((id) => {
+      const e = plan.edges.get(id);
+      return [id, e.kind, e.from.node, e.from.port, e.to.node, e.to.port, e.status, e.code];
+    }),
+  })));
+}
 
 // ---------------------------------------------------------------- diff (§44)
 
@@ -279,7 +331,8 @@ export function instantiateNode(planNode, ctxEnv) {
   const own = { nodes: new Set(), sources: new Set() };
   const base = { id: planNode.id, type: planNode.type, name: planNode.name, ...own };
   if (planNode.status !== 'ready') {
-    return { ...inertHandle(planNode.status, planNode.reason), ...base, acct: null };
+    return { ...inertHandle(planNode.status, planNode.reason), code: planNode.code, ...base,
+      acct: null };
   }
   const { hooks } = ctxEnv;
   const acct = createAccounting(hooks, [own, ...ctxEnv.owners]);
@@ -306,30 +359,37 @@ export function disposeHandle(handle) {
 
 /**
  * Route one edge (gain at 0; the transaction ramps it). ctxEnv = { hooks, owners, now }.
- * Returns { id, kind, status: 'active' | 'inactive' | 'logical' | 'data', reason, gain, ramp,
- * scale, range, dispose() }.
+ * Returns { id, kind, status: 'active' | 'inactive' | 'logical' | 'data', code, reason, gain,
+ * ramp, scale, range, dispose() }; a route the handles cannot make is inactive with code
+ * no-output, no-input or no-mod-target (the plan's code otherwise).
  */
 export function createEdgeHandle(planEdge, fromHandle, toHandle, ctxEnv) {
   const base = { id: planEdge.id, kind: planEdge.kind, fromNode: planEdge.from.node,
     toNode: planEdge.to.node, toPort: planEdge.to.port, gain: null, ramp: null, scale: 1,
     range: null, dispose() {} };
   if (planEdge.status !== 'active') {
-    return { ...base, status: planEdge.status, reason: planEdge.reason };
+    return { ...base, status: planEdge.status, code: planEdge.code, reason: planEdge.reason };
   }
-  const inactive = (reason) => ({ ...base, status: 'inactive', reason });
+  const inactive = (code, reason) => ({ ...base, status: 'inactive', code, reason });
   const out = fromHandle && fromHandle.outputs[planEdge.from.port];
-  if (!out) return inactive(`${fromHandle ? fromHandle.name : planEdge.from.node} has no `
-    + `${planEdge.from.port} output here${fromHandle && fromHandle.reason
-      ? `: ${fromHandle.reason}` : '.'}`);
+  if (!out) {
+    return inactive('no-output', `${fromHandle ? fromHandle.name : planEdge.from.node} has no `
+      + `${planEdge.from.port} output here${fromHandle && fromHandle.reason
+        ? `: ${fromHandle.reason}` : '.'}`);
+  }
   let target;
   let scale = 1;
   if (planEdge.kind === 'audio') {
     target = toHandle && toHandle.inputs[planEdge.to.port];
-    if (!target) return inactive(`${toHandle ? toHandle.name : planEdge.to.node} has no `
-      + `${planEdge.to.port} input here.`);
+    if (!target) {
+      return inactive('no-input', `${toHandle ? toHandle.name : planEdge.to.node} has no `
+        + `${planEdge.to.port} input here.`);
+    }
   } else {
     const t = toHandle.modTarget(planEdge.to.port, planEdge.props.mapping);
-    if (!t || !t.param) return inactive(t && t.reason ? t.reason : 'No modulation target.');
+    if (!t || !t.param) {
+      return inactive('no-mod-target', t && t.reason ? t.reason : 'No modulation target.');
+    }
     target = t.param;
     scale = t.scale;
   }
@@ -344,6 +404,7 @@ export function createEdgeHandle(planEdge, fromHandle, toHandle, ctxEnv) {
   return {
     ...base,
     status: 'active',
+    code: null,
     reason: null,
     gain,
     ramp,
