@@ -41,9 +41,15 @@
 //
 // Result hash (spec §101): when provenance.resultHash is a hash, it is recomputed (hash.js
 // resultHash) in the version the file declares (provenance.resultHashVersion; absent = 1, the
-// results only; 2 = results, quality, calibration, input and output) over the decoded
-// experiment; a mismatch is the error { path: 'provenance.resultHash', code: 'corrupt' }.
-// opts.sha256Hex may inject SHA-256.
+// results only; 2 = results, quality, calibration, input and output; 3 = version 2 plus the
+// measurement block and provenance.build) over the decoded experiment; a mismatch is the error
+// { path: 'provenance.resultHash', code: 'corrupt' }. opts.sha256Hex may inject SHA-256.
+//
+// Schema 2 (ADR 0040, after migrate.js 1 → 2): every measurement.runs[i] is an object whose
+// `id` is 'run-<i + 1>' (schema.js runId); the optional `annotations` { notes } (user metadata)
+// and provenance.duplicateOf (an id other than experimentId) keep their presence;
+// provenance.build may carry sourceDigest and artifactSha256 (SHA-256 hex or null), absent in
+// records made before them.
 //
 // Quality mask (M11): quality.mask.frequencies must equal the grid of the stored response
 // (results.transfer, else results.aggregate) bit for bit; a mask on another grid would mark the
@@ -61,7 +67,7 @@
 import {
   ALGORITHM_ID_PATTERN, COMMIT_PATTERN, EXPERIMENT_KIND,
   EXPERIMENT_SCHEMA_VERSION, FORBIDDEN_KEYS, HEX64_PATTERN, ID_PATTERN, LIMITS, VERSION_PATTERN,
-  checkRecipe, createChecker,
+  checkRecipe, createChecker, runId,
 } from './schema.js';
 import {
   LEVEL_SCHEMA_VERSIONS, LEVEL_SCALE, LEVEL_METHODS, isInputBinding,
@@ -239,7 +245,7 @@ export function scanUntrusted(root, { maxBytes = Infinity, maxErrors = 50 } = {}
 // ---------------------------------------------------------------- strict schema
 
 function checkExperiment(c, e, ctx) {
-  if (!c.keys(e, '', TOP_KEYS, ['studio'])) return null;
+  if (!c.keys(e, '', TOP_KEYS, ['studio', 'annotations'])) return null;
   c.oneOf(e.kind, 'kind', [EXPERIMENT_KIND]);
   c.num(e.schemaVersion, 'schemaVersion', EXPERIMENT_SCHEMA_VERSION, EXPERIMENT_SCHEMA_VERSION,
     { integer: true });
@@ -266,6 +272,14 @@ function checkExperiment(c, e, ctx) {
     provenance: checkProvenance(c, e.provenance, 'provenance'),
   };
   if (has(e, 'studio')) out.studio = checkStudio(c, e.studio, 'studio', ctx);
+  if (has(e, 'annotations') && c.keys(e.annotations, 'annotations', ['notes'])) {
+    c.str(e.annotations.notes, 'annotations.notes', LIMITS.notesChars, { multiline: true, min: 1 });
+    out.annotations = { notes: e.annotations.notes };
+  }
+  const dup = out.provenance && out.provenance.duplicateOf;
+  if (dup && dup === e.experimentId) {
+    c.add('provenance.duplicateOf', 'must name another experiment than experimentId');
+  }
   if (c.keys(e.output, 'output', ['level'], ['masterGain'])) {
     c.num(e.output.level, 'output.level', ...LIMITS.levelDigital, { nullable: true });
     out.output = { level: e.output.level };
@@ -289,8 +303,9 @@ function checkExperiment(c, e, ctx) {
     if (ctx.sha256Hex) opts.sha256Hex = ctx.sha256Hex;
     const actual = resultHash(out, opts);
     if (actual !== out.provenance.resultHash) {
-      const what = version === 1 ? 'the results do not'
-        : 'the results, quality, calibration, input or output do not';
+      const what = ['', 'the results do not',
+        'the results, quality, calibration, input or output do not',
+        'the results, quality, calibration, input, output, runs or build do not'][version];
       c.add('provenance.resultHash', `corrupt: ${what} match their stored hash (version `
         + `${version}; stored ${out.provenance.resultHash.slice(0, 12)}…, computed `
         + `${actual.slice(0, 12)}…)`, 'corrupt');
@@ -405,7 +420,9 @@ function checkMeasurement(c, v, path) {
   else {
     v.runs.forEach((r, i) => {
       const p = `${path}.runs[${i}]`;
-      if (c.obj(r, p)) runs.push(c.json(r, p, { depth: 3, keys: 64, array: 64, string: 500 }));
+      if (!c.obj(r, p)) return;
+      if (r.id !== runId(i)) c.add(`${p}.id`, `must be "${runId(i)}" (the run's position)`);
+      runs.push(c.json(r, p, { depth: 3, keys: 64, array: 64, string: 500 }));
     });
   }
   const out = { startedAt: v.startedAt, sampleRate: v.sampleRate, runs };
@@ -893,7 +910,7 @@ function checkStudio(c, s, path, ctx) {
 
 function checkProvenance(c, p, path) {
   if (!c.keys(p, path, ['configHash', 'createdAt', 'repeatOf', 'build'],
-    ['resultHash', 'resultHashVersion'])) {
+    ['resultHash', 'resultHashVersion', 'duplicateOf'])) {
     return null;
   }
   c.str(p.configHash, `${path}.configHash`, 64, { nullable: true, pattern: HEX64_PATTERN });
@@ -905,11 +922,17 @@ function checkProvenance(c, p, path) {
   }
   c.iso(p.createdAt, `${path}.createdAt`);
   c.str(p.repeatOf, `${path}.repeatOf`, LIMITS.idChars, { nullable: true, pattern: ID_PATTERN });
+  if (has(p, 'duplicateOf')) {
+    c.str(p.duplicateOf, `${path}.duplicateOf`, LIMITS.idChars, { pattern: ID_PATTERN });
+  }
   let build = null;
   const b = p.build;
   const bp = `${path}.build`;
   if (b !== null && c.keys(b, bp, ['version', 'commit', 'shortCommit', 'sourceDate', 'channel',
-    'dirty', 'repository'])) {
+    'dirty', 'repository'], ['sourceDigest', 'artifactSha256'])) {
+    for (const k of ['sourceDigest', 'artifactSha256']) {
+      if (has(b, k)) c.str(b[k], `${bp}.${k}`, 64, { nullable: true, pattern: HEX64_PATTERN });
+    }
     c.str(b.version, `${bp}.version`, 64, { nullable: true, pattern: VERSION_PATTERN });
     c.str(b.commit, `${bp}.commit`, 40, { nullable: true, pattern: COMMIT_PATTERN });
     c.str(b.shortCommit, `${bp}.shortCommit`, 40, { nullable: true, pattern: COMMIT_PATTERN });
@@ -924,7 +947,8 @@ function checkProvenance(c, p, path) {
   }
   // The input's key order is kept (every key was checked above), so a file re-exports as is.
   const vals = { configHash: p.configHash, resultHash: p.resultHash,
-    resultHashVersion: p.resultHashVersion, createdAt: p.createdAt, repeatOf: p.repeatOf, build };
+    resultHashVersion: p.resultHashVersion, createdAt: p.createdAt, repeatOf: p.repeatOf, build,
+    duplicateOf: p.duplicateOf };
   const out = {};
   for (const k of Object.keys(p)) out[k] = vals[k];
   return out;

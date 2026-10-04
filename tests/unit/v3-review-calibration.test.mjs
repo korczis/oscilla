@@ -391,9 +391,10 @@ test('M9: master gain, result notes, requested f2 and the full algorithm map are
   assert.ok(c.warnings.some((w) => /different master output gains/.test(w)));
 });
 
-test('M11: the v2 result hash covers the verdict, calibration and input', () => {
-  assert.equal(RESULT_HASH_VERSION, 2);
-  assert.equal(EXP.provenance.resultHashVersion, 2);
+test('M11: the result hash (v2, and v3 since ADR 0040) covers the verdict, calibration and input',
+  () => {
+  assert.equal(RESULT_HASH_VERSION, 3);
+  assert.equal(EXP.provenance.resultHashVersion, 3);
   const doc = clone(serializeExperiment(EXP));
   assert.ok(validateExperiment(doc, OPTS).ok);
   // The review's case: the stored verdict edited to GOOD with the hash left as it was.

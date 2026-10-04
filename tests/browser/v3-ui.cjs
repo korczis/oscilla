@@ -956,6 +956,34 @@ function defineChecks(fixtures) {
     res.renamed = await timed('renamed', H.until(() => page.evaluate(() => window.OSCILLA.app
       .exps.rows.some((r) => r.name === 'TEST CONTEXT · renamed B')), Boolean, 5000));
     res.dup = await page.evaluate(() => window.OSCILLA.app.experimentsDuplicate('fixture-b'));
+    // ADR 0040: rename is metadata only (hashes kept), the duplicate is the same run
+    // (duplicateOf, same hashes), and a put that changes a completed run is refused.
+    res.immutable = await page.evaluate(async ({ dupId, before }) => {
+      const app = window.OSCILLA.app;
+      const s = app.experimentsTestSeam().store();
+      const b = await s.get('fixture-b');
+      const d = await s.get(dupId);
+      // A changed fact that no hash covers (the notes recorded at measurement time) is refused
+      // as immutable; an edited verdict without a matching hash already fails validation.
+      let refused = null;
+      try {
+        await s.put({ ...b, environment: { notes: 'rewritten afterwards' } });
+      } catch (err) { refused = err.code; }
+      let forged = null;
+      try {
+        await s.put({ ...b, quality: { ...b.quality, status: 'GOOD' } });
+      } catch (err) { forged = err.code; }
+      let renamedByPut = null;
+      try {
+        await s.put({ ...b, name: 'renamed by put' });
+      } catch (err) { renamedByPut = err.code; }
+      return { name: b.name, hashKept: b.provenance.resultHash === before,
+        runIds: b.measurement.runs.map((r) => r.id).join(','),
+        dupOf: d.provenance.duplicateOf, dupHash: d.provenance.resultHash === before,
+        dupCreated: d.provenance.createdAt === b.provenance.createdAt, refused, forged,
+        renamedByPut, stillGood: (await s.get('fixture-b')).quality.status === b.quality.status
+          && (await s.get('fixture-b')).environment.notes === b.environment.notes };
+    }, { dupId: res.dup, before: fixtures.b.experiment.provenance.resultHash });
     const [dl] = await Promise.all([page.waitForEvent('download'),
       page.click('[data-osc="exp.export"]')]);
     const file = await dl.path();
@@ -1004,6 +1032,12 @@ function defineChecks(fixtures) {
       ac: !res.ac.compatible && !res.ac.delta && /not shown/.test(res.ac.text),
       renamed: res.renamed,
       dup: typeof res.dup === 'string',
+      immutable: res.immutable.name === 'TEST CONTEXT · renamed B' && res.immutable.hashKept
+        && res.immutable.runIds === 'run-1,run-2,run-3' && res.immutable.dupOf === 'fixture-b'
+        && res.immutable.dupHash && res.immutable.dupCreated
+        && res.immutable.refused === 'immutable' && res.immutable.forged === 'invalid'
+        && res.immutable.renamedByPut === 'immutable'
+        && res.immutable.stillGood,
       export: /\.oscilla\.json$/.test(res.exportName) && res.exportValid,
       csv: /\.csv$/.test(res.csv.name) && /^# OSCILLA/.test(res.csv.head) && !res.csv.spl
         && res.csv.unit,
@@ -1349,9 +1383,21 @@ function defineChecks(fixtures) {
     res.first = await open();
     res.imported = await p.evaluate((t) => window.OSCILLA.app.experimentsImportText(t),
       fixtures.a.json);
+    // A rename (store.annotate, ADR 0040) survives the reload with the run's hash unchanged.
+    await p.evaluate(() => {
+      const app = window.OSCILLA.app;
+      app.exps.renameId = 'fixture-a';
+      app.exps.renameName = 'TEST CONTEXT · A kept across reload';
+      return app.experimentsRename();
+    });
     await p.reload({ waitUntil: 'load' });
     res.reloaded = await open();
     res.persists = res.reloaded.ids.includes('fixture-a');
+    res.renamedKept = res.persists && await p.evaluate(async (h) => {
+      const e = await window.OSCILLA.app.experimentsOpen('fixture-a');
+      return !!e && e.name === 'TEST CONTEXT · A kept across reload'
+        && e.provenance.resultHash === h;
+    }, fixtures.a.experiment.provenance.resultHash);
     // Quota exceeded on the real store path: the IndexedDB put of the experiment record throws
     // QuotaExceededError (as the browser does when the origin is full). The save reports it,
     // the result stays on screen, and a save after space is freed succeeds.
@@ -1437,7 +1483,7 @@ function defineChecks(fixtures) {
       firstOpen: res.first.loaded && ['indexeddb', 'memory'].includes(res.first.kind),
       imported: res.imported === 'fixture-a',
       // IndexedDB keeps the experiment across a reload; the memory fallback says it does not.
-      reload: res.reloaded.kind === 'indexeddb' ? res.persists
+      reload: res.reloaded.kind === 'indexeddb' ? res.persists && res.renamedKept
         : !res.persists && /memory for this page view/.test(res.reloaded.note || ''),
       quota: quotaOk && (res.reloaded.kind !== 'indexeddb' || !!res.quota),
       quotaRun: !res.run || res.run.state === 'COMPLETE',

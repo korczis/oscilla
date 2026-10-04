@@ -12,8 +12,8 @@
 // the engine's result notes (measurement.notes), the frequencies the user asked for before the
 // Nyquist clamp (recipe.requested, from the caller), the full algorithm map (the capture checks'
 // clip and discontinuity IDs included), the input with its device id hashed (schema.js
-// normalizeInput, §88), and is stamped with the version-2 result hash (results, quality,
-// calibration, input and output).
+// normalizeInput, §88), and is stamped with the version-3 result hash (results, quality,
+// calibration, input, output, the runs with their ids 'run-1'.. and the build; ADR 0040).
 
 import { ALGORITHMS } from '../measurement/algorithms.js';
 import { isValidLevelCalibration } from '../calibration/level.js';
