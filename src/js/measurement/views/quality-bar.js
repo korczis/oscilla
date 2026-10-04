@@ -31,6 +31,10 @@ import {
   gridResolutionHz, nearestIndex,
 } from './common.js';
 
+/** Clipping is judged against digital full scale only. */
+const ANALOG_CLIP_NOTE = 'clipping before the converter, in a preamp or by automatic gain, '
+  + 'cannot be seen';
+
 /**
  * Margin (dB) by which the live capture RMS must exceed the measured background for SIGNAL
  * ACTIVE: 10 dB, the same criterion as a reliable grid point (quality.js reliableMinSnrDb,
@@ -186,7 +190,8 @@ export function reduceQualityBar(state, event) {
         s.clipping = item('fail', 'DETECTED', clip.text);
         s.clipSeen = true;
       } else if (!s.clipSeen && s.clipping.status !== 'fail') {
-        s.clipping = item('ok', 'NONE', `Run ${s.run + 1}: no clipped samples.`);
+        s.clipping = item('ok', 'NONE', `Run ${s.run + 1}: no sample at digital full scale `
+          + `(${ANALOG_CLIP_NOTE}).`);
       }
       if (empty) s.signal = item('fail', 'NONE', empty.text);
       else if (!event.invalid && s.signal.status !== 'ok')
@@ -226,7 +231,8 @@ function liveChunk(s, c, phase) {
     s.clipping = item('fail', 'DETECTED', 'The live input reached full scale.');
     s.clipSeen = true;
   } else if (Number.isFinite(c.peak) && !s.clipSeen && s.clipping.status !== 'fail') {
-    s.clipping = item('ok', 'NONE', `Live peak ${fixedText(c.peak, 3)} of full scale so far.`);
+    s.clipping = item('ok', 'NONE', `Live peak ${fixedText(c.peak, 3)} of digital full scale so `
+      + `far (${ANALOG_CLIP_NOTE}).`);
   }
   if (Number.isFinite(c.rmsDb) && phase === 'sweep') {
     s.signalLive = true;

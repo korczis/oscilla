@@ -719,6 +719,7 @@
   flex-direction: column;
   gap: 2px;
   min-width: 0;
+  cursor: pointer; /* a pointer shortcut; the Open button is the keyboard path */
 }
 
 .osc-x-name {

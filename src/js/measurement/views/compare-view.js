@@ -125,7 +125,7 @@ export function experimentResponse(e) {
   const mask = q && q.mask && q.mask.frequencies && q.mask.frequencies.length
     === frequencies.length ? maskOn(q.mask.reliable, frequencies.length) : null;
   return { frequencies, magnitudeDb, validRange, mask, source,
-    runs: a && Number.isInteger(a.runs) ? a.runs : 1 };
+    runs: a && Number.isInteger(a.runs) ? a.runs : 1, method: a ? a.method || null : null };
 }
 
 function sameGrid(list) {
@@ -174,7 +174,10 @@ function overlayView(exps, responses, labels, ppo) {
     }
     const split = splitByMask(values, mask);
     const role = COMPARE_ROLES[i % COMPARE_ROLES.length];
-    const name = `${labels[i]} · RAW · OBSERVED · ${exps[i].name || '(unnamed)'}`;
+    // Named as the response view names it: a multi-run curve is the aggregate of its runs.
+    const raw = r.runs > 1 ? `RAW · OBSERVED · ${r.method || 'mean'} of ${r.runs} runs`
+      : 'RAW · OBSERVED';
+    const name = `${labels[i]} · ${raw} · ${exps[i].name || '(unnamed)'}`;
     series.push({ id: `exp-${i}`, label: name, kind: K.OBSERVED, role, values: split.reliable,
       width: LINE_STYLES.primary.width, dash: null, alpha: 1, show: true, reliable: true,
       derivation: null });

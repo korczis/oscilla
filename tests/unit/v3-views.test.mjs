@@ -937,6 +937,8 @@ test('compare: equivalent experiments overlay RAW; A − B only over the valid o
   assert.deepEqual(v.overlay.series.map((s) => s.id), ['exp-0', 'exp-0-unreliable', 'exp-1',
     'exp-1-unreliable']);
   const a = v.overlay.series[0];
+  // V383: a multi-run curve is named as the response view names it, not as one RAW run.
+  assert.match(a.label, /^A · RAW · OBSERVED · mean of 3 runs · /);
   a.values.forEach((x, i) => {
     if (x !== null) assert.equal(x, EXP_A.results.aggregate.centreDb[i], 'not normalized');
   });
@@ -976,6 +978,7 @@ test('compare: non-equivalent or non-overlapping experiments get no delta', () =
   assert.equal(d.glyph, '!');
   assert.match(d.values[0].text, /20 Hz → 200 Hz log sweep/);
   assert.equal(v.overlay.grid, 'resampled');
+  assert.match(v.overlay.series[0].label, /^A · RAW · OBSERVED · low band$/, 'one run');
   assert.match(v.summary, /NOT EQUIVALENT/);
   const forced = buildCompareView([eLow, eHigh], { allowNonEquivalentDelta: true });
   assert.equal(forced.delta.ok, false);
