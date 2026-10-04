@@ -94,3 +94,37 @@ Recorded as Majordomus questions and repeated here: the graph zoom bounds (the m
 any positive zoom; the specification suggests 0.25x-2.5x, to be chosen by testing, §58);
 whether browser Fullscreen is worth its cleanup cost beside a maximized Studio
 (§133-§135).
+
+## Resolution notes
+
+Appended; the context, decision, consequences and open questions above are left as written
+on 2026-10-02, and the status stays `proposed`.
+
+### 2026-10-04: both open questions are answered by shipped code
+
+- **Graph zoom bounds: 0.25x-2.5x.** `ZOOM_MIN = 0.25` and `ZOOM_MAX = 2.5`
+  (`src/js/ui/studio/graph-geometry.js:16-17`); every view the editor applies goes through
+  `clampZoom`/`normalizeView` (`src/js/ui/studio/graph-geometry.js:33-43`), with the reason at
+  lines 9-10 (below 0.25 the node titles are illegible, above 2.5 one node fills a phone
+  screen). Proven by `tests/unit/v31-studio-ui-graph-geometry.test.mjs` ("zoom is clamped to
+  the decided bounds; invalid zoom becomes 1"). The model still stores any finite zoom
+  (`src/js/studio/schema.js:354`): the bound is view behaviour, not a schema rule, and view
+  state is outside the studioHash. Shipped with the graph editor in commit 320130f (#33),
+  first released in v3.1.0. `docs/v31/studio-model.md` ("Decisions recorded in code") now
+  says so; until 2026-10-04 it said the bounds were not decided.
+- **Browser Fullscreen: built, as an optional command beside the maximized workspace.**
+  The Studio toolbar's Fullscreen button puts `#osc-view-studio` fullscreen through the
+  standard or WebKit-prefixed API when `fullscreenSupport` finds one
+  (`src/js/ui/studio/workspace.js:47-50`, `92-116`); without it the button stays focusable,
+  `aria-disabled`, with the reason; leaving the Studio workspace exits fullscreen; Escape
+  belongs to the browser. The maximized workspace never depends on it, which is what kept the
+  cleanup cost small. Proven by `tests/unit/v31-studio-links.test.mjs` ("§134 fullscreen is
+  feature-detected, with the reason when it is not offered") and the `fullscreen` and
+  `fullscreen-absent` checks of `tests/browser/v31-studio-links.cjs` (`npm run test:studio`).
+  Shipped in commit a3699eb (#54, issue V422), first released in v3.2.0.
+- The "Open questions" section says they were recorded as Majordomus questions. A
+  `majordomus question` record lives in one checkout's `.ai/local/` state, which is never
+  committed; on 2026-10-04 the primary checkout's log (`majordomus question list --all`) held
+  neither, so this note is the repository's record of the answers.
+- Not assessed here: confirmation criteria (b) and (c) above, and acceptance, which needs a
+  person.
