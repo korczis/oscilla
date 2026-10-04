@@ -120,12 +120,33 @@ export function transferCsvOptions(e, profile = null) {
   }
   return opts;
 }
+/** Experiments kept decoded beyond the ones shown in detail and compare. */
+export const CACHE_RECENT = 4;
+
+/**
+ * Put `id → e` in `cache` as the most recent entry and evict the least recently used ones
+ * beyond `keep`, never an id in `pinned` (the experiments on screen). A decoded experiment
+ * holds its raw captures (about 2 MB for a 10 s sweep) off the JS heap and the store already
+ * has every record, so caching all of them would pin each saved run for the page's lifetime.
+ */
+export function rememberBounded(cache, id, e, pinned = [], keep = CACHE_RECENT) {
+  cache.delete(id);
+  cache.set(id, e);
+  const held = new Set(pinned);
+  let spare = [...cache.keys()].filter((k) => !held.has(k)).length - keep;
+  for (const k of [...cache.keys()]) {
+    if (spare <= 0) break;
+    if (k !== id && !held.has(k)) { cache.delete(k); spare -= 1; }
+  }
+  return cache;
+}
+
 export function createExperimentsUi() {
   const ctx = {
     cmp: null,
     store: null,
     opening: null,
-    cache: new Map(),   // id → decoded experiment (the ones opened or compared)
+    cache: new Map(),   // id → decoded experiment: detail, compare and the last few opened
     detail: null,       // the experiment shown in the detail panel
     compare: [],        // experiments in the compare view
     charts: { detail: null, overlay: null, delta: null, ir: null },
@@ -150,11 +171,20 @@ export function createExperimentsUi() {
     return ctx.opening;
   }
 
+  function remember(id, e) {
+    rememberBounded(ctx.cache, id, e, [ctx.detail, ...ctx.compare].filter(Boolean)
+      .map((x) => x.experimentId));
+  }
+
   async function get(cmp, id) {
-    if (ctx.cache.has(id)) return ctx.cache.get(id);
+    if (ctx.cache.has(id)) {
+      const hit = ctx.cache.get(id);
+      remember(id, hit);
+      return hit;
+    }
     const s = await store(cmp);
     const e = await s.get(id);
-    if (e) ctx.cache.set(id, e);
+    if (e) remember(id, e);
     return e;
   }
 
@@ -264,7 +294,7 @@ export function createExperimentsUi() {
     async experimentsPut(e) {
       const s = await store(this);
       const id = await s.put(e);
-      ctx.cache.set(id, e);
+      remember(id, e);
       await this.experimentsRefresh();
       return id;
     },
@@ -327,7 +357,7 @@ export function createExperimentsUi() {
       const next = { ...e, name };
       try {
         await (await store(this)).put(next);
-        ctx.cache.set(id, next);
+        remember(id, next);
         if (ctx.detail && ctx.detail.experimentId === id) setDetail(this, next);
         this.closeModal('osc-dlg-exp-rename');
         await this.experimentsRefresh();
