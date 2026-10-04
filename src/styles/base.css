@@ -1,4 +1,16 @@
 /* OSCILLA V2 base: reset, document, accessibility helpers, dev mock outlines. */
+
+/* Lucide icons inlined by scripts/pack-single-file.mjs (inlineIcon) carry no paint attributes;
+   this is the same paint at specificity 0, ahead of every other author rule that paints an SVG,
+   which is the cascade position of the presentation attributes it replaces. Keep it first; the
+   values are pinned to LUCIDE_PAINT by tests/unit/pack-single-file.test.mjs. */
+:where(.lucide) {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
 *,
 *::before,
 *::after {
