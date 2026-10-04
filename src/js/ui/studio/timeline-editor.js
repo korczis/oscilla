@@ -232,10 +232,30 @@ export function mountStudioTimeline(host, ctx) {
   }
 
   function undoRedo(redo) {
+    const back = focusFallbacks(document.activeElement);
     const r = redo ? store.redo() : store.undo();
     if (r.ok && transport.playing) transport.sync();
     say(redo ? announceRedo(r) : announceUndo(r));
     render(true);
+    // Undo / redo may remove the focused clip, point or marker: never leave focus on <body>
+    // (§142; V431 U3). Its track's or lane's add button, else the matching tool.
+    const a = document.activeElement;
+    if (back.length && (!a || a === document.body || !a.isConnected)) {
+      const key = back.find((k) => root.querySelector(`[data-key="${CSS.escape(k)}"]`));
+      if (key) focusKey(key);
+    }
+  }
+
+  /** Where focus goes when the element `node` held disappears (data-key candidates). */
+  function focusFallbacks(node) {
+    const key = node && root.contains(node) && node.dataset ? node.dataset.key || '' : '';
+    if (key.startsWith('clip:')) {
+      const c = findClip(model(), key.slice(5));
+      return [...(c ? [`track-add:${c.trackId}`] : []), 'tool:track'];
+    }
+    if (key.startsWith('pt:')) return [`lane-add:${key.split(':')[1]}`, 'tool:track'];
+    if (key.startsWith('marker:')) return ['tool:marker'];
+    return [];
   }
 
   // ------------------------------------------------------------ gestures (§86, §246-§247)

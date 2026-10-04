@@ -35,6 +35,10 @@
 //                        rename; clip start/duration
 //   keyboard-connect     keyboard only: focus a node, C opens the list of compatible inputs,
 //                        Enter connects; arrows nudge (one entry per key sequence)
+//   focus-never-body     V431 review: Tab after a press that moved no focus selects the
+//                        focused node (Delete removes it, not the old selection); undo /
+//                        redo, a disabled Undo button, the timeline, the compact chips and
+//                        Back never leave focus on <body>
 //   escape-priority      Escape cancels a cable drag (no edge), then tap-connect mode, and
 //                        only then stops audio (§185)
 //   play-stop            PLAY starts the runtime on the engine, edits while playing re-apply,
@@ -749,6 +753,93 @@ function defineChecks() {
       connected: !!edge, focusReturns: back === 'filter-1',
       nudged: x1 === x0 + 8 + 32, nudgeEntries: depth1 === depth0 + 2,
     }), list, focused, back, x0, x1 };
+  });
+
+  def('focus-never-body', async ({ page }) => {
+    // V431 review U1, U3-U6 (docs/v31/review-v431.md): keyboard focus selects the focused node
+    // even after a press that moved no focus; undo / redo, a disabled Undo button, the compact
+    // chips and Back never leave focus on <body>.
+    const where = () => page.evaluate(() => {
+      const a = document.activeElement;
+      if (!a || a === document.body) return 'BODY';
+      return a.dataset.nodeId ? `node:${a.dataset.nodeId}` : a.dataset.key ? `key:${a.dataset.key}`
+        : a.dataset.osc || a.tagName.toLowerCase();
+    });
+    await H.fresh(page);
+    // U1: canvas click, then a press on an input port (moves no focus), then Tab + Delete.
+    const box = await page.$eval('.osc-sg-viewport', (v) => {
+      const r = v.getBoundingClientRect();
+      return { x: r.left + 20, y: r.bottom - 20 };
+    });
+    await page.mouse.click(box.x, box.y);
+    const gain = await H.center(page, H.port('filter-1', 'in', 'gain'));
+    await page.mouse.click(gain.x, gain.y);
+    await H.frames(page);
+    await page.keyboard.press('Tab');
+    await H.frames(page);
+    const tabbed = await where();
+    const tabbedSel = (await H.sel(page)).nodes;
+    await page.keyboard.press('Delete');
+    await H.frames(page, 4);
+    const ids = (await H.model(page)).nodes.map((n) => n.id);
+    const tabbedId = tabbed.startsWith('node:') ? tabbed.slice(5) : null;
+    // U3: undo that removes the focused (just added) node.
+    await H.fresh(page);
+    await page.focus('.osc-sg-viewport');
+    await page.keyboard.press('n');
+    await page.waitForSelector('#osc-dlg-studio-add[open] input');
+    await page.keyboard.type('gain');
+    await page.keyboard.press('Enter');
+    await H.frames(page, 4);
+    const added = await where();
+    await page.keyboard.press(`${MOD}+z`);
+    await H.frames(page, 4);
+    const afterUndo = await where();
+    // U4: the toolbar Undo button disables itself under focus.
+    await H.fresh(page);
+    await page.evaluate(() => window.OSCILLA.studio.store.dispatch({ type: 'NODE_ADD',
+      nodeType: 'gain', position: { x: 0, y: 600 } }));
+    await H.frames(page);
+    await page.focus('[data-osc="studio.undo"]');
+    await page.keyboard.press('Enter');
+    await H.frames(page, 4);
+    const undoDisabled = await page.$eval('[data-osc="studio.undo"]', (b) => b.disabled);
+    const afterUndoButton = await where();
+    // U3 (timeline): undo a keyboard duplicate of the focused clip.
+    await H.fresh(page);
+    await page.focus('[data-key="clip:clip-1"]');
+    await page.keyboard.press(`${MOD}+d`);
+    await H.frames(page, 4);
+    const dup = await where();
+    await page.keyboard.press(`${MOD}+z`);
+    await H.frames(page, 4);
+    const afterClipUndo = await where();
+    // U6: Back to the Playground; U5: compact node and clip chips keep focus when activated.
+    await H.fresh(page);
+    await page.focus('[data-osc="studio.back"]');
+    await page.keyboard.press('Enter');
+    await H.frames(page, 4);
+    const afterBack = await where();
+    await page.waitForSelector('[data-osc="studio.compact.node"]', { state: 'visible' });
+    await page.focus('[data-osc="studio.compact.node"][data-node-id="filter-1"]');
+    await page.keyboard.press('Enter');
+    await H.frames(page, 3);
+    const afterChip = await where();
+    await page.focus('[data-osc="studio.compact.clip"]');
+    await page.keyboard.press('Space');
+    await H.frames(page, 3);
+    const afterClipChip = await where();
+    return { ...H.verdict({
+      tabSelectsFocused: !!tabbedId && tabbedSel.length === 1 && tabbedSel[0] === tabbedId,
+      deleteRemovesFocused: !!tabbedId && !ids.includes(tabbedId) && ids.includes('filter-1'),
+      undoKeepsFocus: added.startsWith('node:') && afterUndo !== 'BODY',
+      disabledUndoKeepsFocus: undoDisabled && afterUndoButton !== 'BODY',
+      clipUndoKeepsFocus: dup.startsWith('key:clip:') && afterClipUndo !== 'BODY',
+      backKeepsFocus: afterBack === 'studio.compact.expand',
+      compactChipsKeepFocus: afterChip === 'node:filter-1'
+        && afterClipChip === 'studio.compact.clip',
+    }), tabbed, ids, afterUndo, afterUndoButton, afterClipUndo, afterBack, afterChip,
+    afterClipChip };
   });
 
   def('escape-priority', async ({ page }) => {

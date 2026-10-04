@@ -196,9 +196,14 @@ its recipe from the topology with `recipeFromStudio(model, { sampleRate })`:
 | Recipe field | From |
 | --- | --- |
 | `stimulus` | the logarithmic Sweep wired to a Transfer Analyzer REFERENCE, normalized by `measurement/stimulus.js` exactly as the Sweep adapter renders it (fade = min(`SWEEP_FADE_S`, duration / 4)) |
-| `analysis.preRollS`, `postRollS`, `noiseCheckS` | the pre-roll, tail and noise-check clips (engine `DEFAULT_TIMING` when absent or out of `TIMING_LIMITS`) |
+| `analysis.preRollS`, `postRollS`, `noiseCheckS` | the pre-roll, tail and noise-check clips (engine `DEFAULT_TIMING` only when absent) |
 | `analysis.gapS`, `aggregation` | engine defaults (0.5 s, mean) |
 | `analysis.phase` | the Transfer Analyzer's `phase` |
+
+The recipe is what the timeline shows, or nothing: `recipeFromStudio` refuses, with a reason,
+a timing clip outside the engine's `TIMING_LIMITS`, more than one noise-check, pre-roll,
+stimulus or tail clip, and a stimulus clip shorter than its Sweep (the engine always plays the
+whole sweep); it never substitutes a default for a clip that is there (review V431).
 
 So a measurement run from Studio and the same measurement from the Measure workspace share a
 configHash; the Studio block is provenance beside it. `measurement/engine.js validateRecipe`

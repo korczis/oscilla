@@ -64,6 +64,8 @@ export const TRACK_CLIP_KINDS = Object.freeze({
   event: Object.freeze(['pattern', 'event']),
   measurement: Object.freeze(['measurement']),
 });
+/** Event clip actions: gate (on for the clip's duration) or trigger (one pulse at its start). */
+export const EVENT_ACTIONS = Object.freeze(['gate', 'trigger']);
 /** Steps of a measurement run that a measurement clip orchestrates (§108). */
 export const MEASUREMENT_ACTIONS = Object.freeze(['noise-check', 'pre-roll', 'stimulus',
   'capture', 'tail', 'analysis']);

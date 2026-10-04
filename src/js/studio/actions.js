@@ -48,7 +48,8 @@ import { NODE_REGISTRY, projectParams, validateParamValue } from './registry.js'
 import {
   CLIP_KINDS, CLIP_TIME_BASES, MARKER_KINDS, NAME_MAX_CHARS, POSITION_LIMIT, StudioSchemaError,
   TRACK_CLIP_KINDS,
-  collectIds, copyPlain, createStudioModel, normalizeClipPayload, normalizeStudio, sortPoints,
+  assertPlainData, collectIds, copyPlain, createStudioModel, normalizeClipPayload,
+  normalizeStudio, sortPoints,
 } from './schema.js';
 import { validateStudioModel } from './validate.js';
 import { createHistory, STUDIO_HISTORY_LIMIT } from './history.js';
@@ -818,6 +819,10 @@ export function createStudioStore(initialModel, {
   };
   const fail = (reason, diagnostics = []) => ({ ok: false, reason, diagnostics });
 
+  // View state is persisted but not undoable (ADR 0030, 0031): a history snapshot carries the
+  // view of its time, so undo, redo and cancel restore the document and keep the current view.
+  const withCurrentView = (snapshot) => (snapshot.view === model.view ? snapshot
+    : deepFreeze({ ...snapshot, view: model.view }));
   const setModel = (next, reason, extra = {}) => {
     model = next;
     revision++;
@@ -857,6 +862,9 @@ export function createStudioStore(initialModel, {
       };
       const result = reducer(model, action, { registry, newId });
       if (result.model === model) return { ok: true, changed: false, model, revision };
+      // The model holds plain JSON data only (§10, ADR 0030), whatever an action carried in
+      // (a function or a prototype-setting key in a payload or pasted props: V431 A4, X9).
+      if (action.type !== 'NODE_MOVE') assertPlainData(result.model);
       if (action.type !== 'NODE_MOVE') {
         const report = validateStudioModel(result.model, { registry });
         if (!report.ok) {
@@ -876,6 +884,7 @@ export function createStudioStore(initialModel, {
         created: result.created || null, skipped: result.skipped || [] };
     } catch (err) {
       if (err instanceof ActionRejected) return fail(err.message, err.diagnostics);
+      if (err instanceof StudioSchemaError) return fail(err.message);
       throw err;
     }
   }
@@ -892,14 +901,14 @@ export function createStudioStore(initialModel, {
       while (history.inGesture()) closeGesture();
       const e = history.undo();
       if (!e) return { ok: false, reason: 'Nothing to undo.' };
-      setModel(e.before, 'undo', { label: e.label });
+      setModel(withCurrentView(e.before), 'undo', { label: e.label });
       return { ok: true, label: e.label, model, revision };
     },
     redo() {
       while (history.inGesture()) closeGesture();
       const e = history.redo();
       if (!e) return { ok: false, reason: 'Nothing to redo.' };
-      setModel(e.after, 'redo', { label: e.label });
+      setModel(withCurrentView(e.after), 'redo', { label: e.label });
       return { ok: true, label: e.label, model, revision };
     },
     beginGesture(label = null) {
@@ -912,7 +921,7 @@ export function createStudioStore(initialModel, {
     /** Abandon the open gesture and return to the model at its start (no history entry). */
     cancelGesture() {
       const before = history.cancelGesture();
-      if (before && before !== model) setModel(before, 'cancel');
+      if (before && before !== model) setModel(withCurrentView(before), 'cancel');
       return !!before;
     },
     canUndo: () => history.canUndo(),

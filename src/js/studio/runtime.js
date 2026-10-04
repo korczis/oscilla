@@ -3,7 +3,9 @@
 // in line with the canonical model by incremental, transactional, click-free patches.
 //
 //   createStudioRuntime({ engine, registry, adapters, options }) -> runtime
-//     options: { masterLevel: 'engine' | 'ignore'  Master Output level → engine.setMasterGain,
+//     options: { masterLevel: 'engine' | 'ignore'  Master Output level → engine.setMasterGain
+//                                                  while running; STOP restores the engine's
+//                                                  level from before start (after the fade),
 //                inputPermission: false             Microphone nodes may open the input,
 //                xfadeS: STUDIO_XFADE_S, stopS: STUDIO_STOP_S }
 //   runtime.apply(model, { revision }) -> result   compile, diff against the last applied
@@ -98,6 +100,10 @@ export function createStudioRuntime({
   const listeners = new Set();
   const bases = new Map(); // node id → last computeBases result (debug)
   const owned = new Map(); // node id → Set of parameter keys driven by another owner
+  // The engine's master level before start: the Master Output level drives the ONE engine gain
+  // only while the Studio plays; STOP gives it back so MEASURE, Labs and the Playground never
+  // inherit the Studio's level (V431 review X4). null while nothing is to be restored.
+  let savedMasterLevel = null;
   let plan = EMPTY_PLAN;
   let state = 'idle';
   let compiledRevision = null;
@@ -421,6 +427,7 @@ export function createStudioRuntime({
         + 'start.');
     }
     if (typeof engine.resume === 'function') engine.resume();
+    if (opts.masterLevel !== 'ignore') savedMasterLevel = hooks.masterLevel;
     setState('running');
     const r = transact(plan, diffPlans(EMPTY_PLAN, plan));
     if (!r.ok) setState('idle');
@@ -432,9 +439,16 @@ export function createStudioRuntime({
     if (state !== 'running') return all();
     setState('idle');
     const ctx = hooks.ctx;
-    if (!ctx) { dropAll(); return Promise.resolve(counts()); }
+    const level = savedMasterLevel;
+    savedMasterLevel = null;
+    if (!ctx) {
+      if (level !== null) hooks.setMasterLevel(level);
+      dropAll();
+      return Promise.resolve(counts());
+    }
     const S = fast ? STUDIO_FAST_STOP_S : opts.stopS;
     const t = hooks.soon();
+    if (level !== null) hooks.restoreMasterLevel(level, t + S);
     const retire = { handles: [...handles.values()], edges: [...edges.values()] };
     for (const h of retire.handles) {
       try {
