@@ -60,9 +60,9 @@
   white-space: nowrap;
 }
 
-/* The nav scrolls inside its own strip at every width, never over the header actions: with
-   twelve workspaces it overflows 1280-1535 px (and can at 1536 with wider system fonts), and
-   focusing a tab scrolls it into view. When the tabs fit, nothing changes. */
+/* The nav scrolls inside its own strip at every width, never over the header actions: the
+   eight top-level entries (§73, §198) fit from 1280 px, the strip scrolls below that, and
+   focusing an entry scrolls it into view. When the entries fit, nothing changes. */
 .osc-nav {
   align-self: stretch;
   display: flex;
@@ -109,6 +109,59 @@
 
 .osc-nav .osc-tab:hover {
   color: var(--osc-text);
+}
+
+/* Navigation groups (ANALYZE, SYNTHESIS): the button is a header tab with a caret; its items are
+   the existing menu primitive, fixed under the button so the scrolling strip cannot clip them. */
+.osc-nav-group-btn {
+  gap: 5px;
+  border: 0;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.osc-nav-caret {
+  width: 12px;
+  height: 12px;
+  fill: none;
+  stroke: currentcolor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  transition: transform 0.12s;
+}
+
+.osc-nav-group.is-open .osc-nav-caret {
+  transform: rotate(180deg);
+}
+
+.osc-nav-menu {
+  position: fixed;
+  min-width: 168px;
+  margin: 0;
+  list-style: none;
+}
+
+.osc-nav-item {
+  position: relative;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.osc-nav-item.is-active {
+  color: var(--osc-text);
+  font-weight: var(--osc-fw-semibold);
+}
+
+.osc-nav-item.is-active::before {
+  content: "";
+  position: absolute;
+  top: 7px;
+  bottom: 7px;
+  left: 2px;
+  width: 3px;
+  border-radius: 2px;
+  background: var(--osc-blue-underline);
 }
 
 .osc-header-actions {
