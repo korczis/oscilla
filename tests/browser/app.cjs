@@ -1110,11 +1110,12 @@ function defineChecks() {
   });
 
   // ---- accessibility residuals of the final V1 probe (WCAG 2.4.11, focus loss, overlap)
-  def('a11y-alerts-never-cover-focus', async ({ page, browserName }) => {
+  def('a11y-alerts-never-cover-focus', async ({ page, browserName, run }) => {
     const res = {};
     // WebKit (macOS) tabs only to form fields unless Option is held: Option+Tab reaches all.
     const TAB = browserName === 'webkit' ? 'Alt+Tab' : 'Tab';
     for (const w of [768, 1024, 1280, 1536]) {
+      if (run.aborted) break;
       await page.setViewportSize({ width: w, height: 900 });
       await page.evaluate(() => {
         const a = window.OSCILLA.app;
@@ -1127,7 +1128,7 @@ function defineChecks() {
       const seen = new Set();
       let steps = 0;
       let covered = [];
-      for (; steps < 320; steps++) {
+      for (; steps < 320 && !run.aborted; steps++) {
         await page.keyboard.press(TAB);
         await H.frames(page); // focus scrolling settled (slow runners measured mid-scroll)
         const r = await page.evaluate(() => {
@@ -1156,7 +1157,7 @@ function defineChecks() {
     await sleep(150);
     const ok = Object.values(res).every((r) => !r.covered.length && r.distinct > 60);
     return { ok, res };
-  });
+  }, { timeoutMs: 240000 }); // four widths, ~100 focus steps each, a frame wait per step
 
   def('a11y-focus-never-body', async ({ page }) => {
     const out = {};
