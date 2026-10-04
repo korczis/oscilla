@@ -18,7 +18,13 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-02
-updated_at: 2026-10-03T06:50:22Z
+updated_at: 2026-10-04T10:02:40Z
+started_at: 2026-10-04T10:02:18Z
+started_event: sha256:049e0a4ad0261538eaa96193c6eacc1723bd2352ffe8820bb8415a203ece27e4
+verified_at: 2026-10-04T10:02:26Z
+verified_event: sha256:c76fcb5761d8be5d55251f9c6f2e0471fe27ea5e1edeb9bf21f13eaba4b796c7
+completed_at: 2026-10-04T10:02:40Z
+completed_event: sha256:c062b333ac1da6497e933d68342ab992f5c806d81ffd2e60016a9562ee5fa099
 evidence:
   - covers: verified
     type: test
@@ -26,3 +32,9 @@ evidence:
     result: "MET at 320130f (blocked behind V371): seven FLOW_STEPS, expert mode can bypass, warnings never block, CHARACTERIZE PLAYBACK CHAIN preset with honest chain wording, expert fields disclosure. Impl views/measure-flow.js. Commits deb326d, 6d60332"
     commit: 320130f1a967e894002a55dd9ebb6c837eb2621f
     recorded_at: 2026-10-03T06:50:22Z
+  - covers: verified
+    type: test
+    command: "npm run test:measure && node tests/browser/layout.cjs && node scripts/visual-measure.mjs dist"
+    result: "PASS at main 2dcf558 (V371 done, so no longer blocked): v3-measure 116/116, analysis-worker 42/42, v3-ui 19/19 in chromium/firefox/webkit over file:// and http, layout 99/99 in three browsers, MEASURE visual reference desktop 0.094 % / phone 0.078 % (darwin-arm64); seven guided FLOW_STEPS, expert bypass, warnings never block (v3-ui guided/expert checks)"
+    commit: 2dcf558ae14fc3be41e10237375970cca447d90b
+    recorded_at: 2026-10-04T10:02:35Z
