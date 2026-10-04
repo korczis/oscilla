@@ -1740,7 +1740,7 @@ is invalidating in the engine (`NOISE_CAPTURE_INVALID`), as a clipping one was b
 ### confidence.v2 (retained) and v1
 
 **Changed (gaps)** (was G15, G12). Each ID is one rule set (`QUALITY_RULESETS`):
-`algorithm` defaulted to `oscilla.confidence.v2` (now v3, above); `QUALITY_ALGORITHM_V1`
+`algorithm` defaulted to `oscilla.confidence.v2` (then v3, now v4, above); `QUALITY_ALGORITHM_V1`
 reproduces a v1 assessment exactly (verified against the 8628438 implementation in 45 input
 combinations, and by its golden fixture) and reads neither discontinuities nor chain notes.
 An unknown ID throws. Thresholds are the same object in both. v2 adds four codes, nothing else:
