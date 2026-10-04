@@ -6,14 +6,18 @@
 //                                          [--bench [--rates 48000,96000] [--seconds 10,30]
 //                                                   [--modes inline,worker]]
 //
-// The fixture is one HTML file with one classic inline script (the constraints of
-// dist/index.html): an esbuild bundle of analysis-task.js + analysis-runner.js with the define
-// __OSCILLA_ANALYSIS_WORKER__ set to scripts/build-analysis-worker.mjs's Worker script, exactly
-// as scripts/build.mjs builds the app. It is opened from file:// and from
+// The fixture is one HTML file with two classic inline scripts, laid out like dist/index.html
+// (ADR 0026, resolution note of 2026-10-04): <script data-analysis> holds the analysis library
+// and the page script is an esbuild bundle of a test entry (stimulus.js, analysis-task.js,
+// analysis-runner.js) built by scripts/build-analysis-worker.mjs bundleWithAnalysisLibrary,
+// exactly as scripts/build.mjs builds the app: the page bundle imports the analysis from the
+// library's global and carries no copy of it. It is opened from file:// and from
 // http://127.0.0.1:<port>/oscilla/.
 //
 // Asserted per browser and origin:
-//   - the Worker starts from the data: URL (no inline fallback);
+//   - the Worker script is the text of the page's own <script data-analysis> (one copy), the
+//     page bundle has no analysis code, and the Worker starts from the data: URL of that text
+//     (mode 'worker', no inline fallback, the Worker's ready/step/result messages seen);
 //   - its result is bit-identical to analyzeInline on a copy of the same message (3 runs of a
 //     2 s sweep at 48 kHz with a noise capture and phase: every typed array compared byte for
 //     byte, every other field by value), and the captures were transferred;
@@ -164,16 +168,40 @@ function sameBits(a, b, where, out) {
 
 T.hasWorker = () => typeof EMBEDDED_WORKER_SOURCE === 'string'
   && EMBEDDED_WORKER_SOURCE.length > 1000;
+// One copy: the Worker's script is the page's own analysis library element, and the analysis
+// functions the page calls are that library's (not a second bundled copy).
+T.oneCopy = () => {
+  const el = document.querySelector('script[data-analysis]');
+  const lib = globalThis.__oscillaAnalysis;
+  return { sameText: !!el && EMBEDDED_WORKER_SOURCE === el.text,
+    inlineFromLibrary: !!lib && lib.modules['src/js/measurement/analysis-task.js']
+      .analyzeInline === analyzeInline };
+};
+// Every Worker the page constructs, with the kinds of message it posted back.
+T.workers = [];
+const NativeWorker = window.Worker;
+window.Worker = class extends NativeWorker {
+  constructor(url, opts) {
+    super(url, opts);
+    const rec = { dataUrl: String(url).startsWith('data:text/javascript;'), kinds: [] };
+    T.workers.push(rec);
+    this.addEventListener('message', (e) => rec.kinds.push(e.data && e.data.kind));
+  }
+};
 
 T.identity = async () => {
   const m = T.message({ seconds: 2, sr: 48000, runs: 3, phase: true });
   const ref = await analyzeInline(copy(m));
   const analyze = defaultAnalyze();
   const steps = [];
+  const before = T.workers.length;
   const res = await analyze(m, { onStep: (s) => steps.push(s) });
   const diffs = [];
   sameBits(res, ref, '', diffs);
+  const started = T.workers.slice(before);
   return { mode: analyze.mode || 'inline', fallback: analyze.lastFallback || null,
+    workers: started.length, dataUrl: started.every((w) => w.dataUrl),
+    kinds: started.length ? [...new Set(started[0].kinds)].join(',') : '',
     diffs: diffs.slice(0, 5), steps: steps.length, refSteps: ref.steps.length,
     transferred: m.captures.every((c) => c.length === 0) && m.noise.length === 0,
     irLength: res.ir.samples.length };
@@ -212,20 +240,24 @@ T.abort = async () => {
 };
 `;
 
-const HTML = (js) => `<!doctype html>
+const guard = (js) => js.replace(/<\/script/gi, '<\\/script');
+const HTML = ({ library, app }) => `<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><title>OSCILLA M10 analysis worker</title></head>
-<body><script>${js.replace(/<\/script/gi, '<\\/script')}</script></body></html>`;
+<body><script data-analysis>${guard(library)}</script>
+<script>${guard(app)}</script></body></html>`;
+// A distinctive literal of analysis-task.js: present in the library, absent from the page bundle.
+const ANALYSIS_MARKER = 'message.captures must be a non-empty array of Float32Array';
 
 async function bundle() {
-  const { buildAnalysisWorker } = await import(
+  const { bundleWithAnalysisLibrary } = await import(
     pathToFileURL(path.join(ROOT, 'scripts', 'build-analysis-worker.mjs')).href);
-  const worker = await buildAnalysisWorker({ root: ROOT });
-  const r = await esbuild.build({
-    stdin: { contents: ENTRY, resolveDir: SRC, sourcefile: 'analysis-worker-entry.js' },
-    bundle: true, format: 'iife', write: false, target: 'es2020', logLevel: 'silent',
-    define: { __OSCILLA_ANALYSIS_WORKER__: JSON.stringify(worker.code) },
-  });
-  return r.outputFiles[0].text;
+  const { library, result } = await bundleWithAnalysisLibrary({ root: ROOT,
+    bundle: (plugin) => esbuild.build({
+      stdin: { contents: ENTRY, resolveDir: SRC, sourcefile: 'analysis-worker-entry.js' },
+      bundle: true, format: 'iife', write: false, metafile: true, target: 'es2020',
+      logLevel: 'silent', minify: true, plugins: [plugin],
+    }) });
+  return { library: library.code, app: result.outputFiles[0].text };
 }
 
 function startServer(html) {
@@ -283,9 +315,15 @@ async function runOne(name, origin, url) {
   try {
     await page.goto(url, { waitUntil: 'load' });
     check(key, 'Worker script embedded', await page.evaluate(() => window.T.hasWorker()));
+    const one = await page.evaluate(() => window.T.oneCopy());
+    check(key, 'one copy: the Worker script is the page\'s <script data-analysis> text and the '
+      + 'inline analysis is that library\'s', one.sameText && one.inlineFromLibrary,
+    JSON.stringify(one));
     const id = (rec.identity = await page.evaluate(() => window.T.identity()));
-    check(key, 'analysis runs in the data: URL Worker', id.mode === 'worker' && !id.fallback,
-      `${id.mode}${id.fallback ? `, fallback: ${id.fallback}` : ''}`);
+    check(key, 'analysis runs in the data: URL Worker (no inline fallback)', id.mode === 'worker'
+      && !id.fallback && id.workers === 1 && id.dataUrl && id.kinds === 'ready,step,result',
+    `${id.mode}, ${id.workers} Worker(s), messages ${id.kinds}`
+      + `${id.fallback ? `, fallback: ${id.fallback}` : ''}`);
     check(key, 'Worker result bit-identical to analyzeInline (3 runs, noise, phase)',
       id.diffs.length === 0, id.diffs.join('; ') || `${id.steps}/${id.refSteps} steps`);
     check(key, 'captures and noise transferred to the Worker', id.transferred);
@@ -355,8 +393,12 @@ async function benchOne(name, url, cfg) {
 }
 
 (async () => {
-  const js = await bundle();
-  const html = HTML(js);
+  const scripts = await bundle();
+  const html = HTML(scripts);
+  const once = scripts.library.includes(ANALYSIS_MARKER) && !scripts.app.includes(ANALYSIS_MARKER);
+  console.log(`  ${once ? 'PASS' : 'FAIL'} fixture: the analysis code is in the library script `
+    + 'only, not in the page bundle');
+  if (once) passes += 1; else failures += 1;
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'oscilla-m10-'));
   const file = path.join(dir, 'index.html');
   fs.writeFileSync(file, html);

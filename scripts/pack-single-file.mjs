@@ -3,7 +3,8 @@
 //
 // Template markers (each exactly once; icons any number of times):
 //   <!-- @inline-css -->    -> <style>…</style>
-//   <!-- @inline-js -->     -> vendor <script>s in order, then the app <script>
+//   <!-- @inline-js -->     -> vendor <script>s in order, the analysis library <script
+//                              data-analysis> when given (o.analysis), then the app <script>
 //   <!-- @icon:<name> -->   -> inline SVG from lucide-static/icons/<name>.svg
 //   <!-- @build-info -->    -> the one metadata region (o.buildInfo, rendered by
 //                              release-metadata.mjs renderRegion); required when given
@@ -177,6 +178,9 @@ function replaceOnce(html, marker, replacement) {
  * @param {string} o.template  source HTML containing the markers
  * @param {string} o.css       compiled, minified CSS
  * @param {string} o.js        app bundle (IIFE)
+ * @param {string} [o.analysis]  the analysis library (scripts/build-analysis-worker.mjs), placed
+ *   before the app, whose bundle imports it through its global; its element text is also the
+ *   analysis Worker's script (analysis-runner.js), so it is first-party code and inlined once
  * @param {{id: string, code: string}[]} [o.vendors]  verbatim vendor scripts, in load order
  * @param {string} [o.notice]  third-party notice, emitted as an HTML comment after the doctype
  * @param {string} [o.banner]  one-line HTML comment emitted first after the doctype
@@ -185,7 +189,8 @@ function replaceOnce(html, marker, replacement) {
  * @returns {string} the complete HTML document
  */
 export function pack({
-  template, css, js, vendors = [], notice = '', banner = '', buildInfo = '', icon = inlineIcon,
+  template, css, js, analysis = '', vendors = [], notice = '', banner = '', buildInfo = '',
+  icon = inlineIcon,
 }) {
   if (!/^<!doctype html>/i.test(template)) throw new Error('template must start with a doctype');
   let html = compactMarkup(template)
@@ -200,6 +205,10 @@ export function pack({
     `<script data-vendor="${id}" data-sha256="${sha256(code)}">`
     + `${guardRawText(code, 'script', id)}</script>`
   ));
+  if (analysis) {
+    scripts.push(`<script data-analysis>${guardRawText(analysis, 'script', 'analysis library')}`
+      + '</script>');
+  }
   scripts.push(`<script data-app>${guardRawText(js, 'script', 'app bundle')}</script>`);
   html = replaceOnce(html, '<!-- @inline-js -->', scripts.join('\n'));
 

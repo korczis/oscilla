@@ -16,7 +16,10 @@
 // Checks per browser and origin (asserted):
 //   nav-order               Measure and Experiments follow Playground; About stays last
 //   loopback-workflow       Check setup -> READY -> measure -> COMPLETE through the UI: the
-//                           seven steps, quality bar, quality status with reasons, response / IR
+//                           analysis ran in ONE Worker started from a data: URL of the page's
+//                           own <script data-analysis> text (ready ... result; no silent inline
+//                           fallback), the seven steps, quality bar, quality status with reasons,
+//                           response / IR
 //                           summaries, TEST CONTEXT banner, one announcement per stage and no
 //                           progress chatter, save, repeat (new experiment, repeatOf), 0 engine
 //                           and io nodes, sources, captures and ports afterwards
@@ -325,8 +328,10 @@ function defineChecks(fixtures) {
         .replace('osc-m-step ', '')),
       input: document.querySelector('[data-osc="measure.bar"]').textContent.replace(/\s+/g, ' '),
     }));
+    const workers0 = await page.evaluate(() => window.__oscWorkers.length);
     res.run1 = await H.run(page, () => page.click('#osc-measure-primary')); // Start measurement
     if (res.run1.state !== 'COMPLETE') return { ok: false, failed: ['run1'], ...res };
+    res.workers = await page.evaluate((n) => window.__oscWorkers.slice(n), workers0);
     await sleep(200);
     res.done = await page.evaluate(() => {
       const q = (s) => document.querySelector(s);
@@ -392,6 +397,8 @@ function defineChecks(fixtures) {
       preflightReady: res.afterPreflight.state === 'READY'
         && res.afterPreflight.primary === 'Start measurement',
       run1: res.run1.state === 'COMPLETE',
+      analysisWorker: res.workers.length === 1 && res.workers[0].sameText
+        && res.workers[0].kinds[0] === 'ready' && res.workers[0].kinds.at(-1) === 'result',
       history: d.state === 'COMPLETE' && d.history.includes('ANALYZING')
         && d.history.includes('ARMED'),
       bar: d.bar.length === 5 && d.bar.includes('CAPTURE COMPLETE') && d.bar.includes('INPUT OK'),
@@ -1540,10 +1547,36 @@ function defineChecks(fixtures) {
 }
 
 // ------------------------------------------------------------------------------ runner
+/**
+ * Init script: record every Worker the page constructs (the analysis Worker, analysis-runner.js)
+ * in window.__oscWorkers: whether its data: URL holds exactly the text of the page's own
+ * <script data-analysis> (the one copy of the analysis), and the kinds of message it posted.
+ */
+function workerProbe() {
+  const Native = window.Worker;
+  const log = [];
+  window.__oscWorkers = log;
+  if (typeof Native !== 'function') return;
+  const prefix = 'data:text/javascript;charset=utf-8,';
+  window.Worker = class extends Native {
+    constructor(url, opts) {
+      super(url, opts);
+      const u = String(url);
+      const el = document.querySelector('script[data-analysis]');
+      const rec = { dataUrl: u.startsWith(prefix), kinds: [],
+        sameText: !!el && u.startsWith(prefix) && decodeURIComponent(u.slice(prefix.length))
+          === el.text };
+      log.push(rec);
+      this.addEventListener('message', (e) => rec.kinds.push(e.data && e.data.kind));
+    }
+  };
+}
+
 async function runOne(browserName, origin, baseUrl, fixtures) {
   const browser = await playwright[browserName].launch(LAUNCH[browserName]);
   const context = await browser.newContext({ viewport: { width: 1536, height: 1024 },
     acceptDownloads: true });
+  await context.addInitScript(workerProbe);
   const page = await context.newPage();
   page.setDefaultTimeout(10000);
   const errors = [];

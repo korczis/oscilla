@@ -220,8 +220,9 @@ is in the proposed [ADR 0025](.ai/repo/adrs/0025-data-driven-quality-with-reason
   Each stored result names its algorithm by a versioned ID
   ([ADR 0024](.ai/repo/adrs/0024-versioned-algorithm-ids.md), proposed).
 - **The analysis runs in a Worker.** It is one serializable task, run in a Worker started from a
-  `data:` URL so that no step blocks the page; without Worker support it runs inline and yields
-  between steps, with identical results (gap G21 in the algorithm notes, resolved).
+  `data:` URL of the page's own analysis script so that no step blocks the page; without Worker
+  support the same code runs inline and yields between steps, with identical results (gap G21
+  in the algorithm notes, resolved).
 - **What the tests prove.** The automated tests check the digital pipeline, the mathematics on
   synthetic systems with known answers, the browser APIs and the interface. They cannot prove
   how your hardware, room or browser behaves.
@@ -324,10 +325,11 @@ and the rule [`project.no-fake-science`](.ai/repo/rules/project/no-fake-science.
 ```text
 src/  (ES modules, plain CSS, the src/index.html shell)
   -> scripts/build.mjs              esbuild (pinned): one IIFE app bundle + one stylesheet
+     scripts/build-analysis-worker.mjs   the analysis library (one IIFE), imported by the app
   -> scripts/pack-single-file.mjs   pure string assembly; drops developer comments and
                                     markup indentation (pre, textarea, script, style verbatim)
-  -> dist/index.html                the whole app: CSS, p5 block, app bundle, licence notices,
-                                    one build-metadata region
+  -> dist/index.html                the whole app: CSS, p5 block, analysis library, app
+                                    bundle, licence notices, one build-metadata region
 ```
 
 - **Deterministic build.** There are no timestamps or absolute paths, so the same inputs give
@@ -340,6 +342,13 @@ src/  (ES modules, plain CSS, the src/index.html shell)
   ([ADR 0013](.ai/repo/adrs/0013-p5-unmodified-separable-block.md)). Alpine.js and uPlot are
   bundled; Lucide icons are inlined at build time
   ([ADR 0012](.ai/repo/adrs/0012-self-contained-runtime.md)).
+- **One copy of the analysis.** The offline analysis (the closure of
+  `src/js/measurement/analysis-worker.js`) is bundled once, into its own classic
+  `<script data-analysis>` before the app. The app imports it through that script's global and
+  carries no copy; the analysis Worker is started from a `data:` URL of that same script text,
+  so the Worker and the inline fallback run the same code and no file is loaded. The build
+  fails if an analysis module is bundled into the app as well
+  ([ADR 0026](.ai/repo/adrs/0026-audioworklet-and-worker-by-spike.md), resolution note).
 - **dist/ is committed.** A clone runs without npm, every pull request shows how the artifact
   changed, and GitHub Pages serves the bytes CI checked (only the metadata region below is
   stamped) instead of running its own build.

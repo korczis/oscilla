@@ -92,8 +92,10 @@ capture as it returns; a failing capture ends the measurement INVALID before any
 result, in steps that can yield: alignment per run, one spectral division per run for the
 transfer and the impulse response, and aggregation over runs. The engine calls
 it through its injected `analyze`. The default, `defaultAnalyze` (`analysis-runner.js`), posts
-the same message to a Worker started from a `data:` URL when the build embedded the Worker and
-the platform has `Worker` (claim `analysis-off-main-thread`, guaranteed); otherwise
+the same message to a Worker started from a `data:` URL of the page's analysis library script
+(`<script data-analysis>`, the one copy of the analysis that the app also imports) when the page
+ran that script and the platform has `Worker` (claim `analysis-off-main-thread`, guaranteed);
+otherwise
 `analyzeInline` runs it on the main thread and yields between steps. Either way an abort can
 land between steps, and the results are bit-identical. The noise check produces
 Welch power and one-third-octave band power through `spectrum.js` and `rta.js`. Why the
@@ -379,8 +381,9 @@ analysisTransferList(message, { keepRaw }) / analysisResultTransferList(result) 
 estimateAnalysisMemory({ stimulusFrames, captureFrames, runs, noiseFrames })
   -> { fftSize, bytes, model }                     // M10 working-set model
 capIrLength(ir, maxSamples = IR_MAX_SAMPLES) -> IrResult   // M10 stored IR length
-// analysis-runner.js (M10): defaultAnalyze() -> the data: URL Worker (analysis-worker.js,
-// embedded by the build) or analyzeInline; createWorkerAnalyze({ source, WorkerCtor })
+// analysis-runner.js (M10): defaultAnalyze() -> the data: URL Worker (the text of the page's
+// analysis library script, EMBEDDED_WORKER_SOURCE) or analyzeInline;
+// createWorkerAnalyze({ source, WorkerCtor })
 // engine.js: createMeasurementEngine({ ..., analyze /* (message, { now, yield, onStep,
 // keepRaw, signal }) -> Promise<AnalysisResult>, default defaultAnalyze() */ })
 
@@ -494,10 +497,13 @@ Notes on the shapes:
   `reliable` is the quality mask when it lies on the transfer grid, `phase_deg` the phase or
   empty with the reason. IR amplitudes are a dimensionless transfer ratio. `level_db_spl`
   appears only in RTA CSVs under a valid level calibration.
-- **G21 closed.** The analysis runs in a `data:` URL Worker built from `analysis-worker.js`
-  (`scripts/build-analysis-worker.mjs`, embedded via the `__OSCILLA_ANALYSIS_WORKER__` define);
-  `analysis-runner.js` posts the serializable message with transfer lists, relays steps,
-  terminates on abort and falls back inline when no Worker starts. Results are bit-identical.
+- **G21 closed.** The analysis runs in a `data:` URL Worker whose script is the analysis
+  library: the closure of `analysis-worker.js`, bundled once by
+  `scripts/build-analysis-worker.mjs` into the page's `<script data-analysis>`, which the app
+  bundle imports through its global instead of bundling a second copy (ADR 0026, resolution
+  note of 2026-10-04); `analysis-runner.js` starts the Worker from that script's own text,
+  posts the serializable message with transfer lists, relays steps, terminates on abort and
+  falls back inline when no Worker starts. Results are bit-identical.
 - **Memory.** `validateRecipe` estimates the analysis working set (`estimateAnalysisMemory`)
   and refuses with `MEMORY_LIMIT` above an FFT length of 2^22 or 1 GiB; preflight warns
   `ANALYSIS_MEMORY` above 512 MiB. Stored impulse responses are capped at 2^21 samples and

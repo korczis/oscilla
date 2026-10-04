@@ -9,12 +9,14 @@
 // The engine (engine.js) builds the message from its captures and calls an injected
 // `analyze(message, hooks) → Promise<result>`. analyzeInline runs the steps on the calling
 // thread with hooks.yield() between them (abort and the UI land between steps). In the built
-// page the engine's default is the Worker (analysis-runner.js): analysis-worker.js, bundled by
-// scripts/build-analysis-worker.mjs into a string inside dist/index.html and started from a
-// data: URL, drives the same analysisSteps() generator, posts each step and then the result
-// with analysisResultTransferList(result); the message goes in with
-// analysisTransferList(message). Under node and in bundles without that string the default
-// stays analyzeInline. Both paths compute the same numbers (tests/unit/v3-analysis-worker).
+// page the engine's default is the Worker (analysis-runner.js): this module, analysis-worker.js
+// and their dependencies are bundled ONCE by scripts/build-analysis-worker.mjs into the page's
+// <script data-analysis> (the app imports them from it), and the Worker is started from a data:
+// URL of that script's text; there analysis-worker.js drives the same analysisSteps()
+// generator, posts each step and then the result with analysisResultTransferList(result); the
+// message goes in with analysisTransferList(message). Under node and in bundles without that
+// script the default stays analyzeInline. Both paths run the same code and compute the same
+// numbers (tests/unit/v3-analysis-worker).
 //
 // Memory (gap M10): estimateAnalysisMemory() is the working-set model the engine checks before
 // a measurement (engine.js validateRecipe, MEMORY_LIMIT); the stored impulse response is capped

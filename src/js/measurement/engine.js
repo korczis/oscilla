@@ -70,8 +70,8 @@
 // explicit SAVE RAW choice).
 //
 // Analysis thread: the injected `analyze`, default defaultAnalyze() of analysis-runner.js (a
-// data: URL Worker in the built page, analyzeInline under node and in bundles without the
-// embedded Worker script). An abort terminates the Worker (hooks.signal).
+// data: URL Worker of the page's analysis library script in the built page, analyzeInline under
+// node and in bundles without that script). An abort terminates the Worker (hooks.signal).
 //
 // Results are relative digital quantities: the transfer magnitude is dB re a unity digital
 // transfer (capture/stimulus), noise levels are dB re digital full scale (20·log10 rms, so a
@@ -599,8 +599,9 @@ const clamp01 = (v) => (v < 0 ? 0 : v > 1 ? 1 : v);
  *             inputProcessing is inputProcessingFacts(result) (the applied constraints)
  *   analyze   optional (message, { now, yield, onStep, keepRaw, signal }) →
  *             Promise<AnalysisResult>: the offline analysis (analysis-task.js). Default
- *             defaultAnalyze() (analysis-runner.js): the data: URL Worker when the build embedded
- *             it, else analyzeInline (this thread, yields between steps). `signal` is an
+ *             defaultAnalyze() (analysis-runner.js): the data: URL Worker when the page ran the
+ *             analysis library script, else analyzeInline (this thread, yields between steps).
+ *             `signal` is an
  *             AbortSignal aborted when the measurement is aborted or fails
  *
  * engine = { state, history, limits, preflight(recipe, opts), measure(recipe, opts),
