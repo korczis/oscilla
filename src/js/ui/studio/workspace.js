@@ -55,7 +55,7 @@
 import { NODE_REGISTRY } from '../../studio/registry.js';
 import { createIdGenerator, createStudioStore } from '../../studio/actions.js';
 import { compileStudio } from '../../studio/compiler.js';
-import { createStudioRuntime } from '../../studio/runtime.js';
+import { createStudioRuntime, studioDivergence } from '../../studio/runtime.js';
 import { createStudioTransport } from '../../studio/transport.js';
 import { createStudioMeasurementRun } from '../../studio/measurement-run.js';
 import { withStudioProvenance } from '../../studio/provenance.js';
@@ -435,10 +435,8 @@ export function createStudioUi(svc = {}) {
         // Status follows the runtime while it plays and the compile while stopped.
         const before = statusSignature();
         recompile(ctx.handle.getModel());
-        if (statusSignature() !== before) {
-          if (ctx.editor) ctx.editor.render();
-          if (ctx.inspector) ctx.inspector.render();
-        }
+        if (statusSignature() !== before && ctx.editor) ctx.editor.render();
+        if (ctx.inspector) ctx.inspector.render(); // its Runtime section and state
       }
       if (!playing) {
         tick();
@@ -446,6 +444,8 @@ export function createStudioUi(svc = {}) {
       }
     } else if (type === 'warning') {
       cmp.studio.warning = (detail && detail.message) || '';
+      // Possibly inside the store's commit gate: show the diagnostic once the dispatch is done.
+      queueMicrotask(() => { if (ctx.inspector) ctx.inspector.render(); });
     }
   }
 
@@ -729,6 +729,11 @@ export function createStudioUi(svc = {}) {
       status: () => ctx.status,
       edgeStatus: () => ctx.edgeStatus,
       warnings: () => ctx.warnings,
+      // Runtime truth (ADR 0039) as the domain states it: verdict and both debugInfo records.
+      truth: () => ({ verdict: studioDivergence({ model: ctx.handle.getModel(),
+        revision: ctx.handle.getRevision() }, ctx.runtime),
+      runtime: ctx.runtime && ctx.runtime.debugInfo(),
+      transport: ctx.transport && ctx.transport.debugInfo() }),
       onConnect: (id) => ctx.connect.open(id),
       onSavePatch: (ids) => ctx.patches.openSavePatch(ids),
       onDelete: () => ctx.editor.deleteSelection(),
@@ -909,6 +914,7 @@ export function createStudioUi(svc = {}) {
       const r = ctx.transport.start();
       if (!r.ok) {
         announce(`Studio did not start: ${r.reason}`, { assertive: true });
+        if (ctx.inspector) ctx.inspector.render(); // the Runtime section says it failed
         return false;
       }
       onTransport('state', { reason: 'play' });
