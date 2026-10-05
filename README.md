@@ -531,6 +531,20 @@ issues in [`.ai/repo/project/`](.ai/repo/project/)), the architecture decisions
 `majordomus plan status` shows milestone progress. AI workers start at
 [`AGENTS.md`](AGENTS.md) (Claude Code: [`CLAUDE.md`](CLAUDE.md)).
 
+What is checked, and where:
+
+- **On a commit and a push** (the git hooks Majordomus wires into a checkout): `majordomus
+  doctor` validates the layer before a commit, and `majordomus finish --check` refuses a push
+  outside the active task's scope. `npm run verify` runs `majordomus doctor` too.
+- **In CI, on every pull request** (`.github/workflows/ci.yml`, all required through `gate`):
+  the test suites; `tests/unit/knowledge-integrity.test.mjs`, which fails when a claim, rule,
+  bootstrap or this README names a file or test that does not exist or that CI does not
+  run; `tests/unit/no-fake-science.test.mjs`; and `majordomus doctor` at a pinned version.
+- **Not checked by a machine**: a project rule is enforced by tests only where its
+  `x-majordomus` block names them (`project.no-fake-science`), otherwise by review; use-case
+  coverage of the claims is advisory; the worktree layout is a convention. An ADR's status
+  `proposed` means recorded, not accepted (see [`.ai/repo/adrs/README.md`](.ai/repo/adrs/README.md)).
+
 V3 Measure is specified in [`docs/specs/oscilla-v3-measure.md`](docs/specs/oscilla-v3-measure.md)
 (milestones M012-M020). Its features, use cases and claims are under
 [`.ai/repo/features/`](.ai/repo/features/), [`.ai/repo/use-cases/`](.ai/repo/use-cases/) and
