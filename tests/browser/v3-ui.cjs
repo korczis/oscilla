@@ -61,9 +61,13 @@
 //                           and carries the edited text as annotations.notes only; the stored
 //                           noise-check RTA keeps the run's calibration (relative, no "SPL")
 //   resave-after-link       a saved COMPLETE result stays saved when a recipe link is applied
-//                           (Save stays disabled); Save pressed again with an edited name and
-//                           notes updates the stored run's metadata through annotate (same id,
-//                           no second record, never "Experiment not saved")
+//                           (the button reads "Update name and notes"); pressed with an edited
+//                           name and notes it updates the stored run's metadata through annotate
+//                           (same id, no second record, never "Experiment not saved")
+//   notes-after-save        notes typed after the Save are announced as NOT stored yet; "Update
+//                           name and notes" stores them as annotations.notes and the status then
+//                           says so; an annotation added in Experiments survives a later update
+//                           from MEASURE with no notes, which reports "Nothing to update"
 //   older-claim             (ADR 0040 resolution) a file as an earlier version saved it, naming a
 //                           level calibration made after the uncalibrated run: it imports with
 //                           a warning naming the field and the reason, the stored record reads
@@ -1026,7 +1030,7 @@ function defineChecks(fixtures) {
     });
     await sleep(100);
     res.afterLink = await page.evaluate(() => ({ saved: window.OSCILLA.app.meas.saved,
-      disabled: document.querySelector('#osc-measure-save').disabled }));
+      label: document.querySelector('#osc-measure-save').textContent.trim() }));
     // Save once more (as a programmatic caller can) after a metadata edit.
     await page.fill('#osc-m-name', 'Gate resave renamed');
     await page.fill('#osc-m-notes', 'typed after the save');
@@ -1047,13 +1051,83 @@ function defineChecks(fixtures) {
     });
     return { ...res, ...H.verdict({
       applied: res.applied === true,
-      staysSaved: res.afterLink.saved === true && res.afterLink.disabled === true,
+      staysSaved: res.afterLink.saved === true
+        && res.afterLink.label === 'Update name and notes',
       sameRun: res.again === res.id,
       neverNotSaved: !res.alerts.some((t) => /not saved/.test(t))
         && res.alerts.includes('Experiment updated'),
       annotated: res.stored.name === 'Gate resave renamed'
         && res.stored.notes === 'typed after the save',
       oneRecord: res.stored.records === 1,
+    }) };
+  });
+
+  def('notes-after-save', async ({ page }) => {
+    await H.workspace(page, 'measure');
+    await H.loopback(page);
+    await page.fill('#osc-m-name', 'Gate notes after save');
+    await page.fill('#osc-m-notes', 'at start');
+    await page.click('#osc-measure-primary'); // Check setup
+    await H.waitState(page, ['READY', 'INVALID', 'ERROR'], 15000);
+    const res = {};
+    res.run = await H.run(page, () => page.click('#osc-measure-primary'));
+    if (res.run.state !== 'COMPLETE') return { ok: false, failed: ['run'], ...res };
+    await page.click('#osc-measure-save');
+    res.save = await H.saved(page);
+    if (res.save) return { ok: false, failed: ['save'], ...res };
+    res.id = await page.evaluate(() => window.OSCILLA.app.meas.savedId);
+    const status = () => page.evaluate(() => {
+      const el = document.querySelector('[data-osc="measure.evidenceNotes"]');
+      return el && el.offsetParent !== null ? el.textContent.trim() : '';
+    });
+    const stored = () => page.evaluate(async (id) => {
+      const e = await window.OSCILLA.experiments.store().get(id);
+      return { env: e.environment.notes, ann: e.annotations ? e.annotations.notes : null };
+    }, res.id);
+    await page.fill('#osc-m-notes', 'typed after the save');
+    await sleep(150);
+    res.pending = await status();
+    res.button = await page.evaluate(() => {
+      const b = document.querySelector('#osc-measure-save');
+      return { label: b.textContent.trim(), disabled: b.disabled };
+    });
+    res.before = await stored();
+    if (res.button.disabled) {
+      return { ok: false, failed: ['button', ...(/not stored yet/.test(res.pending) ? []
+        : ['notYet'])], ...res };
+    }
+    await page.evaluate(() => { window.OSCILLA.app.alerts = []; });
+    await page.click('#osc-measure-save');
+    await sleep(300);
+    res.after = await stored();
+    res.stated = await status();
+    res.alerts1 = await page.evaluate(() => window.OSCILLA.app.alerts.map((a) => a.title));
+    // An annotation written in Experiments is never cleared by an update without notes.
+    await page.evaluate((id) => window.OSCILLA.app.experimentsAnnotate(id,
+      { notes: 'from Experiments' }), res.id);
+    await page.fill('#osc-m-notes', '');
+    await page.evaluate(() => { window.OSCILLA.app.alerts = []; });
+    await page.click('#osc-measure-save');
+    await sleep(300);
+    res.kept = await stored();
+    res.alerts2 = await page.evaluate(() => window.OSCILLA.app.alerts.map((a) => a.title));
+    await page.evaluate(() => {
+      const a = window.OSCILLA.app;
+      a.meas.name = '';
+      a.meas.notes = '';
+      a.alerts = [];
+    });
+    return { ...res, ...H.verdict({
+      notYet: /^These notes are not stored yet: "Update name and notes" saves them/
+        .test(res.pending) && !/are saved as an annotation/.test(res.pending),
+      button: res.button.label === 'Update name and notes' && res.button.disabled === false,
+      notStoredBefore: res.before.ann === null,
+      stored: res.after.ann === 'typed after the save'
+        && /^at start\b/.test(res.after.env || ''),
+      statedStored: /are stored as its annotation/.test(res.stated),
+      updated: res.alerts1.includes('Experiment updated'),
+      kept: res.kept.ann === 'from Experiments' && res.alerts2.includes('Nothing to update')
+        && !res.alerts2.some((t) => /not saved/.test(t)),
     }) };
   });
 

@@ -211,6 +211,14 @@ test('the workspace states what differs from the evidence, and what a save keeps
   assert.doesNotMatch(lvl.join(' '), /SPL/);
   const notes = me.evidenceChanges(ev, { calibration: same, notes: 'floor' });
   assert.match(notes[0], /saved as an annotation/);
+  // After the Save the text never claims an unsaved edit is saved (review F1).
+  const pending = me.evidenceChanges(ev, { calibration: same, notes: 'floor',
+    saved: { annotation: null } });
+  assert.match(pending[0], /^These notes are not stored yet/);
+  assert.doesNotMatch(pending[0], /are saved as an annotation/);
+  const stored = me.evidenceChanges(ev, { calibration: same, notes: 'floor',
+    saved: { annotation: 'floor' } });
+  assert.match(stored[0], /are stored as its annotation/);
 });
 
 test('validate: a contradicted calibration claim is a finding; strict validation refuses it',

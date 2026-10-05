@@ -174,22 +174,28 @@ Resolved without a schema change (experiment schema 2, result hash version 3):
   inspection in MEASURE use `withoutContradictedCalibration`, a presentation copy without the
   contradicted claim, so such a record never shows dB SPL and Compare treats it as uncalibrated
   (and says so in its warnings). Export and duplicate keep the record as stored.
-- **Strict for what is written now.** `validateExperiment(json, { calibrationClaims: 'strict' })`
-  refuses any finding, with the same code and text, and MEASURE's Save refuses to store a record
-  with a finding; what the application now writes passes strict validation.
+- **Strict for new measurements.** `validateExperiment(json, { calibrationClaims: 'strict' })`
+  refuses any finding, with the same code and text, and MEASURE's Save (also used by Studio's
+  measurement clips) refuses to store a record with a finding: every new measurement the
+  application saves passes strict validation. Records it copies or reads keep what they say:
+  Duplicate copies a stored record as it is, a contradicted claim and its finding included, and
+  an imported file is stored as imported.
 - **The stored noise-check snapshot follows the run.** The RTA of a completed measurement's
   noise check is drawn with the level calibration that measurement applied, not with one
   selected afterwards; the live RTA keeps using the current one, since it is measured now.
 - **A run is saved once.** The saved state belongs to the result shown, not to the setup:
   applying a recipe link or loading a recipe no longer clears it, so a stored run cannot be
   saved a second time (before, that stored a second record of the same run, and with an
-  idempotent save key it would be refused as `immutable` and reported as "not saved"). Save
-  called again for a stored run updates only its name and annotation notes through
-  `store.annotate` ("Experiment updated"); the run itself is unchanged.
+  idempotent save key it would be refused as `immutable` and reported as "not saved"). Once
+  the run is saved the button reads "Update name and notes": it sends through `store.annotate`
+  only what differs from the stored record (an annotation added in Experiments is never cleared
+  from MEASURE), says "Nothing to update" when nothing does, and stores a record deleted since
+  again under its id, creation time and repeat link. Until then the panel says that notes typed
+  after the Save are not stored yet, and never that they were saved.
 - **The limit.** The check is on presence, not identity: a record stores a profile's id and name
   but not its points, so one saved by an earlier build naming profile B for a run profile A
   corrected has no finding; nothing in the record can tell the two apart.
 
 Proven by `tests/unit/v3-evidence-at-completion.test.mjs` and checks `evidence-at-completion`,
-`resave-after-link` and `older-claim` in `tests/browser/v3-ui.cjs` (chromium, firefox, webkit;
-file:// and /oscilla/).
+`resave-after-link`, `notes-after-save` and `older-claim` in `tests/browser/v3-ui.cjs`
+(chromium, firefox, webkit; file:// and /oscilla/).

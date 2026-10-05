@@ -84,7 +84,8 @@ const FACT_EDITS = [
   ['measurement.runs', (x) => { x.measurement.runs = x.measurement.runs.slice(0, 2); }],
   ['measurement.startedAt', (x) => { x.measurement.startedAt = '2026-10-02T11:00:00.000Z'; }],
   // A consistent claim: the quality says the level calibration was applied (a record naming one
-  // its results do not show is corrupt, ADR 0040 resolution 2026-10-05).
+  // its results do not show carries the finding calibration-claim-contradicted, ADR 0040
+  // resolution 2026-10-05).
   ['calibration.level', (x) => {
     x.calibration.level = { schemaVersion: 1, kind: 'level', referenceHz: 1000,
       referenceDbSpl: 94, observedDbRelative: -30, offsetDb: 124, conditions: null,

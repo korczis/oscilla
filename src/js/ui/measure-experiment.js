@@ -75,11 +75,13 @@ const calibrationKey = (cal) => JSON.stringify([cal && cal.frequency ? cal.frequ
   cal && cal.level ? cal.level : null]);
 
 /**
- * evidenceChanges(evidence, { calibration, notes }) → texts saying what differs between the
- * evidence of a completed result and the workspace now (`calibration` as appliedCalibration
- * shapes it, `notes` the current text), and what a save records; [] when nothing differs.
+ * evidenceChanges(evidence, { calibration, notes, saved }) → texts saying what differs between
+ * the evidence of a completed result and the workspace now (`calibration` as
+ * appliedCalibration shapes it, `notes` the current text), and what a save records or has
+ * recorded (`saved`: null before the result is saved, else { annotation } the stored
+ * annotation notes); [] when nothing differs.
  */
-export function evidenceChanges(evidence, { calibration = null, notes = '' } = {}) {
+export function evidenceChanges(evidence, { calibration = null, notes = '', saved = null } = {}) {
   if (!evidence) return [];
   const out = [];
   if (calibrationKey(evidence.calibration) !== calibrationKey(calibration)) {
@@ -89,9 +91,18 @@ export function evidenceChanges(evidence, { calibration = null, notes = '' } = {
         : 'no frequency profile'}, ${evidence.calibration.level ? 'level calibrated'
         : 'levels relative'}).`);
   }
-  if (trimmed(notes) && trimmed(notes) !== (evidence.notes || '')) {
-    out.push('Notes edited after this measurement started are saved as an annotation; the '
-      + 'record keeps the notes it started with.');
+  const later = trimmed(notes);
+  if (later && later !== (evidence.notes || '')) {
+    if (!saved) {
+      out.push('Notes edited after this measurement started are saved as an annotation; the '
+        + 'record keeps the notes it started with.');
+    } else if (later === (saved.annotation || '')) {
+      out.push('Notes edited after this measurement started are stored as its annotation; the '
+        + 'record keeps the notes it started with.');
+    } else {
+      out.push('These notes are not stored yet: "Update name and notes" saves them as an '
+        + 'annotation of the saved run; its record keeps the notes it started with.');
+    }
   }
   return out;
 }

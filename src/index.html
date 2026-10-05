@@ -1796,7 +1796,8 @@
           <div class="osc-m-btnrow">
             <button type="button" class="osc-btn osc-btn-primary" id="osc-measure-save" data-osc="measure.save"
               aria-describedby="osc-measure-save-why" :title="measureSaveReason || null"
-              :disabled="meas.state !== 'COMPLETE' || meas.saved || meas.saving" @click="measureSave()">Save experiment</button>
+              :disabled="meas.state !== 'COMPLETE' || meas.saving" @click="measureSave()"
+              x-text="meas.saved ? 'Update name and notes' : 'Save experiment'">Save experiment</button>
             <span class="osc-sr-only" id="osc-measure-save-why" x-text="measureSaveReason"></span>
             <button type="button" class="osc-btn osc-btn-secondary" data-osc="measure.repeat"
               :disabled="meas.state !== 'COMPLETE'" @click="measureRepeat()">Repeat (new experiment)</button>

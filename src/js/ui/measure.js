@@ -112,7 +112,7 @@ import {
   LEVEL_SCALE,
 } from '../calibration/level.js';
 import { measureReferenceLevel, REFERENCE_CAPTURE_S } from '../calibration/reference.js';
-import { newExperimentId, describeStimulus } from '../experiments/schema.js';
+import { newExperimentId, describeStimulus, annotateExperiment } from '../experiments/schema.js';
 import { calibrationClaimFindings } from '../experiments/validate.js';
 import {
   experimentFromResult, experimentTestContext, measuredEvidence, evidenceChanges,
@@ -896,39 +896,58 @@ export function createMeasureUi(svc) {
   }
 
   /**
-   * Save pressed again for a stored run: the run is immutable (ADR 0040), so only its name and
-   * annotation notes are updated, through annotate; the UI never says "not saved" for it.
+   * "Update name and notes" for a stored run: the run is immutable (ADR 0040), so only its name
+   * and annotation notes change, through annotate, and only what differs from the stored record
+   * is sent (an annotation added in Experiments is never cleared from here). A record deleted
+   * since is stored again as it was saved (same id, creation time and repeat link), with the
+   * current name and notes. The UI never says "not saved" for a stored run.
    */
   async function updateSaved(cmp, result) {
     const m = cmp.meas;
-    const { id } = ctx.saved;
+    const sv = ctx.saved;
+    const ev = evidenceOf(result);
+    const later = typeof m.notes === 'string' ? m.notes.trim() : '';
+    const notes = later && later !== (ev.notes || '') ? later : null; // an annotation, or none
     m.saving = true;
-    let gone = false;
     try {
-      const e = experimentOf(result, cmp);
-      const ann = e.annotations && e.annotations.notes ? e.annotations.notes : null;
-      await cmp.experimentsAnnotate(id, { name: e.name, notes: ann });
-      cmp.notify('success', 'Experiment updated', `"${e.name}": the name and annotation notes `
-        + 'were updated; the measured run is stored unchanged.');
-    } catch (err) {
-      gone = !!err && err.code === 'missing'; // deleted in Experiments since: store it again
-      if (!gone) {
-        cmp.notify('error', 'Experiment name and notes not updated', 'The measured run is '
-          + `stored (${id}); only the metadata change failed: ${err.message || String(err)}`);
+      const stored = await cmp.experimentsGet(sv.id);
+      const name = (typeof m.name === 'string' && m.name.trim()) || (stored || sv.experiment).name;
+      if (!stored) {
+        const again = annotateExperiment(sv.experiment, notes === null ? { name }
+          : { name, notes });
+        await cmp.experimentsPut(again);
+        sv.experiment = again;
+        m.savedAnnotation = again.annotations && again.annotations.notes || null;
+        cmp.notify('success', 'Experiment saved again', `"${name}" was no longer stored; the `
+          + 'same run is stored again under its id.');
+        return sv.id;
       }
+      const storedNotes = stored.annotations && stored.annotations.notes || null;
+      const meta = {};
+      if (name !== stored.name) meta.name = name;
+      if (notes !== null && notes !== storedNotes) meta.notes = notes;
+      if (!Object.keys(meta).length) {
+        m.savedAnnotation = storedNotes;
+        cmp.notify('info', 'Nothing to update', `"${stored.name}" already has this name and `
+          + 'these notes.');
+        return sv.id;
+      }
+      const next = await cmp.experimentsAnnotate(sv.id, meta);
+      m.savedAnnotation = next.annotations && next.annotations.notes || null;
+      cmp.notify('success', 'Experiment updated', `"${next.name}": ${Object.keys(meta)
+        .map((k) => (k === 'name' ? 'name' : 'annotation notes')).join(' and ')} updated; the `
+        + 'measured run is stored unchanged.');
+      return sv.id;
+    } catch (err) {
+      cmp.notify('error', 'Experiment name and notes not updated', 'The measured run is '
+        + `stored (${sv.id}); only the metadata change failed: ${err.message || String(err)}`);
+      return sv.id;
     } finally {
       m.saving = false;
+      m.saved = true;
+      m.savedId = sv.id;
+      refresh();
     }
-    if (gone) {
-      ctx.saved = null;
-      m.saved = false;
-      m.savedId = null;
-      return cmp.measureSave();
-    }
-    m.saved = true;
-    m.savedId = id;
-    refresh();
-    return id;
   }
 
   // ---------------------------------------------------------------- level reference capture
@@ -1070,6 +1089,7 @@ export function createMeasureUi(svc) {
     ctx.result = null;
     ctx.evidence = null;
     ctx.saved = null;
+    cmp.meas.savedAnnotation = null;
     if (ctx.shown && ctx.shown.kind === 'result') ctx.shown = null;
     rebuildAll();
     const notesAtStart = cmp.meas.notes; // the conditions as stated when the run starts
@@ -1165,6 +1185,7 @@ export function createMeasureUi(svc) {
       saved: false,
       savedId: null,
       evidenceRun: 0,
+      savedAnnotation: null, // the annotation notes the saved record of this result holds
       saving: false,
       error: null,
       setupOpen: false,
@@ -1197,13 +1218,14 @@ export function createMeasureUi(svc) {
       // Read first, so the binding follows them (ctx is not reactive): the state, the evidence
       // token, the calibration (profile, switches, level, levelVoid) and the notes.
       const deps = [m.state, m.evidenceRun, m.cal.useFrequency, m.cal.profile, m.cal.useLevel,
-        m.cal.level, m.cal.levelVoid, m.notes];
+        m.cal.level, m.cal.levelVoid, m.notes, m.saved, m.savedAnnotation];
       const ev = ctx.evidence;
       if (deps[0] !== S.COMPLETE || !ev || ev.result !== ctx.result) return [];
       const frequency = m.cal.useFrequency && m.cal.profile && ctx.profile
         ? { id: ctx.profile.id, name: ctx.profile.name } : null;
       const level = m.cal.level && !m.cal.levelVoid ? levelInUse(m) : null;
-      return evidenceChanges(ev, { calibration: { frequency, level }, notes: m.notes });
+      return evidenceChanges(ev, { calibration: { frequency, level }, notes: m.notes,
+        saved: m.saved ? { annotation: m.savedAnnotation } : null });
     },
     get measureFreqIndicator() {
       return this.meas.cal.useFrequency && this.meas.cal.profile ? 'CALIBRATED' : 'UNCALIBRATED';
@@ -1707,7 +1729,10 @@ export function createMeasureUi(svc) {
     /** Why "Save experiment" is disabled, or '' when it is enabled. */
     get measureSaveReason() {
       if (this.meas.saving) return 'Saving…';
-      if (this.meas.saved) return 'This measurement is already saved as an experiment.';
+      if (this.meas.saved) {
+        return 'This measurement is saved; Update name and notes stores a new name or notes as '
+          + 'metadata (the run is unchanged).';
+      }
       if (this.meas.state !== S.COMPLETE) return 'Available once a measurement is COMPLETE.';
       return '';
     },
@@ -1732,7 +1757,8 @@ export function createMeasureUi(svc) {
         const claim = calibrationClaimFindings(e);
         if (claim.length) throw new Error(claim.map((f) => `${f.path}: ${f.text}`).join('; '));
         const id = await this.experimentsPut(e);
-        ctx.saved = { result, id };
+        ctx.saved = { result, id, experiment: e };
+        this.meas.savedAnnotation = e.annotations && e.annotations.notes || null;
         this.meas.saved = true;
         this.meas.savedId = id;
         ctx.repeatOf = null;

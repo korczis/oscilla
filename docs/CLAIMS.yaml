@@ -297,7 +297,7 @@ claims:
     implementation: src/js/ui/measure-experiment.js
     test: tests/unit/v3-evidence-at-completion.test.mjs
     status: guaranteed
-    note: Through the real UI, checks evidence-at-completion (profile A measured, profile B and a level calibration made after COMPLETE, notes edited, then Save) and older-claim (a file as an earlier version saved it) in tests/browser/v3-ui.cjs. The cross-check is src/js/experiments/validate.js calibrationClaimFindings (code calibration-claim-contradicted; strict for what the app writes now). It checks presence, not identity, since a record keeps a profile's id and name but not its points.
+    note: Through the real UI, checks evidence-at-completion (profile A measured, profile B and a level calibration made after COMPLETE, notes edited, then Save) and older-claim (a file as an earlier version saved it) in tests/browser/v3-ui.cjs. The cross-check is src/js/experiments/validate.js calibrationClaimFindings (code calibration-claim-contradicted; strict for new MEASURE and Studio saves, while Duplicate and import keep a record as it is, finding included). It checks presence, not identity, since a record keeps a profile's id and name but not its points.
 
   - id: experiment-round-trip
     claim: An experiment survives create, encode, JSON and validate identically, its typed arrays written as explicit little-endian base64 that decodes bit for bit

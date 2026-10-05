@@ -410,12 +410,20 @@ export function createExperimentsUi() {
         return false;
       }
     },
+    /** The stored experiment `id`, or null when it is not stored (MEASURE's update). */
+    async experimentsGet(id) {
+      return (await get(this, id)) || null;
+    },
     /** Metadata of a stored run ({ name, notes }) through store.annotate; the run is kept. */
     async experimentsAnnotate(id, meta) {
       const next = await (await store(this)).annotate(id, meta);
       remember(id, next);
       if (ctx.detail && ctx.detail.experimentId === id) setDetail(this, next);
-      await this.experimentsRefresh();
+      try {
+        await this.experimentsRefresh(); // the annotate is committed whatever the list does
+      } catch (err) {
+        console.error('OSCILLA experiments list:', err);
+      }
       return next;
     },
     /** Mark (or clear) the baseline: metadata only (store.annotate), at most one (ADR 0041). */
