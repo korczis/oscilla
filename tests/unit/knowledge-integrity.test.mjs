@@ -174,11 +174,11 @@ test('CLAUDE.md names every project rule in force, and only those', () => {
   const active = RULE_FILES.map(frontMatter).filter((fm) => fm.status === 'active')
     .map((fm) => fm.id);
   for (const id of active) assert.ok(hand.includes(`\`${id}\``), `CLAUDE.md names ${id}`);
-  const named = [...hand.matchAll(/`(project\.[a-z-]+)`/g)].map(([, id]) => id);
+  const named = [...hand.matchAll(/`(project\.[a-z0-9-]+)`/g)].map(([, id]) => id);
   for (const id of named) assert.ok(active.includes(id), `CLAUDE.md names ${id}, not in force`);
 });
 
-test('every rule a claim or a feature cites as its source is a rule file in force', () => {
+test('every rule a claim cites as its source is a rule file in force', () => {
   const files = new Map(RULE_FILES.map((rel) => [rel, frontMatter(rel)]));
   for (const c of CLAIMS) {
     if (!/^\.ai\/repo\/rules\/project\//.test(c.source || '')) continue;
@@ -247,6 +247,41 @@ test('the external-reference allowlist is small, explained and still needed', ()
 test('every repository path the current-state documents name resolves', () => {
   const bad = scannedDocuments().flatMap((f) => unresolved(f, read(f)));
   assert.deepEqual(bad, [], `unresolved references:\n  ${bad.join('\n  ')}`);
+});
+
+/**
+ * tests/README.md names its files relative to tests/ (`unit/…`, `browser/…`) in the first
+ * cell of each table row. A row's files must exist, except on a DELETED row, whose files must
+ * not. Returns the problems, one string each.
+ */
+export function testsReadmeProblems(text, fileExists = exists) {
+  const problems = [];
+  for (const row of text.split('\n').filter((l) => l.startsWith('| `'))) {
+    const cells = row.split('|').slice(1, -1).map((c) => c.trim());
+    const deleted = /^DELETED\b/.test(cells[1] || '');
+    for (const [, rel] of cells[0].matchAll(/`((?:unit|browser|visual|freeze)\/[^`*{}<>\s]+)`/g)) {
+      const p = `tests/${rel}`;
+      if (deleted && fileExists(p)) problems.push(`${p} is listed as DELETED but exists`);
+      if (!deleted && !fileExists(p)) problems.push(`${p} is listed but does not exist`);
+    }
+  }
+  return problems;
+}
+
+test('every file tests/README.md lists, relative to tests/, exists unless it is DELETED', () => {
+  const text = read('tests/README.md');
+  assert.deepEqual(testsReadmeProblems(text), []);
+  assert.ok((text.match(/^\| `unit\//gm) || []).length > 20, 'the relative rows are read');
+});
+
+test('mutation: a tests/README.md row renamed to a missing file is caught', () => {
+  const text = read('tests/README.md');
+  const renamed = text.replace('| `unit/about.test.mjs` |', '| `unit/abuot.test.mjs` |');
+  assert.notEqual(renamed, text, 'the row to rename exists');
+  assert.deepEqual(testsReadmeProblems(renamed),
+    ['tests/unit/abuot.test.mjs is listed but does not exist']);
+  // The general path scan alone does not see a relative path: that is why this check exists.
+  assert.ok(!namedPaths(renamed).has('tests/unit/abuot.test.mjs'));
 });
 
 test('every path a claim names, in its fields or its note, resolves', () => {
