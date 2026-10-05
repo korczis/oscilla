@@ -285,7 +285,11 @@ export function createStudioRuntime({
   const globalFx = Object.freeze({
     setMasterLevel(g) {
       if (opts.masterLevel === 'ignore') return false;
-      if (savedMasterLevel === null) savedMasterLevel = hooks.masterLevel;
+      // Someone else wrote the level since the Studio's last write (the Playground's gain): that
+      // level is the one to give back now, not the one saved before it (PR #119 D2b).
+      const other = ownWrite && (ownWrite.count !== null ? hooks.masterWrites !== ownWrite.count
+        : hooks.masterLevel !== ownWrite.level);
+      if (savedMasterLevel === null || other) savedMasterLevel = hooks.masterLevel;
       hooks.setMasterLevel(g);
       ownWrite = { count: hooks.masterWrites, level: hooks.masterLevel };
       return true;

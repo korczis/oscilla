@@ -720,3 +720,49 @@ test('D4 the compile-failure warning is cleared once the status compiles again',
   assert.deepEqual(workspace.compileWarningLine({ warning: 'Edit refused', shown: error.message },
     null), { warning: 'Edit refused', shown: '' });
 });
+
+// ---------------------------------------------------------------- PR #119 second review
+// D2b a Studio write after the user's own write brought the level saved before both back at
+// STOP; S1 settleMicrophones waited its whole timeout across a STOP and the outcome then read
+// "open" for a Studio that no longer played.
+
+test('D2b STOP gives back the user\'s latest level even after a later Studio write', async () => {
+  const a = audio();
+  const store = studioModel();
+  ok(a.runtime.apply(store.getModel(), { revision: store.getRevision() }));
+  ok(a.runtime.start());
+  a.engine.setMasterGain(0.05); // the Playground's gain while the Studio plays
+  ok(store.dispatch({ type: 'NODE_PARAM_SET', nodeId: 'master-1', key: 'level', value: 0.1 }));
+  ok(a.runtime.apply(store.getModel(), { revision: store.getRevision() }));
+  assert.equal(a.engine.gainLevel, 0.1, 'the Studio drives the level while it plays');
+  const done = a.runtime.stop();
+  a.fx.advance(0.3);
+  await done;
+  assert.equal(a.engine.gainLevel, 0.05, 'the user\'s latest level, not the one saved before it');
+});
+
+test('S1 a STOP while a Microphone is still opening ends the wait; the outcome is not "open"',
+  async () => {
+    let answer = null;
+    const navigator = { mediaDevices: { getUserMedia: () => new Promise((res) => {
+      answer = res;
+    }) } };
+    const a = audio({ navigator, options: { inputPermission: true } });
+    const { store, mic } = micModel();
+    ok(a.runtime.apply(store.getModel(), { revision: store.getRevision() }));
+    ok(a.runtime.start());
+    assert.equal(a.runtime.nodes.get(mic).status, 'pending');
+    const t0 = Date.now();
+    const waiting = workspace.settleMicrophones(a.runtime, { timeoutMs: 5000 });
+    a.runtime.stop();
+    const mics = await waiting;
+    const ms = Date.now() - t0;
+    assert.ok(ms < 1000, `resolved on STOP, not at the timeout (${ms} ms)`);
+    assert.deepEqual(mics, []);
+    for (const playing of [a.runtime.state === 'running', true]) {
+      const o = workspace.microphoneOutcome(mics, { playing });
+      assert.doesNotMatch(o.text, /Microphone open/);
+      assert.match(o.text, /when the Studio plays/);
+    }
+    answer(fakeStream()); // the late answer is released by the disposed handle
+  });

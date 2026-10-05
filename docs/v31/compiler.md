@@ -197,7 +197,8 @@ prepare, or a refused live edit that added a Master Output, left the Studio's le
 The level is given back only while it is still the Studio's own. The engine counts every write
 (`engine.masterWrites`); when anyone else wrote the level after the Studio's last write (the
 Playground's gain slider while the Studio played, through `main.js`'s watcher), the newer level is
-kept and the saved one dropped. STOP's restore is held until the fade ends
+kept and the saved one dropped; a Studio write after it re-saves that newer level, so STOP gives
+back the user's latest level, never the one saved before it (D2b). STOP's restore is held until the fade ends
 (`engine.holdMasterGain(g, at)`), and any `setMasterGain` before `at` cancels the held glide, so a
 level set during the fade is not undone 15-35 ms later (PR #119 review D2).
 
@@ -514,8 +515,9 @@ method (an engine change, out of this issue's scope):
   at the same revision. While playing, every running Microphone whose input failed or ended is
   rebuilt (a forced `node-replace`, `diffPlans` `replace`, listed in the result's `reopened`):
   the plan itself is unchanged when the permission was already on, so a diff alone would leave
-  it degraded. The workspace then waits for the inputs to open (`settleMicrophones`) and
-  announces what happened (`microphoneOutcome`): open, or the reason it is not. While stopped,
+  it degraded. The workspace then waits for the inputs to open (`settleMicrophones`, which also
+  ends at STOP) and announces what happened (`microphoneOutcome`, judged after the wait): open,
+  the reason it is not, or that it opens at the next PLAY. While stopped,
   the status compile uses `runtime.options`, so the node shows ready and opens at PLAY. A
   refusal (`micErrorMessage`: permission denied, no device) keeps the input off; its reason is
   kept per node and shown in the Inspector as an alert (not announced a second time). One

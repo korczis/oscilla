@@ -272,13 +272,16 @@ export const MIC_SETTLE_MS = 15000;
 
 /**
  * The running Microphone handles once none is pending (a permission prompt answered, the input
- * opened or failed), or at `timeoutMs`: [{ id, status, code, reason }] (runtime 'handle' events).
+ * opened or failed), the runtime stopped (STOP drops its handles without a 'handle' event; then
+ * []), or at `timeoutMs`: [{ id, status, code, reason }] (runtime 'handle' and 'state' events).
  */
 export function settleMicrophones(runtime, { timeoutMs = MIC_SETTLE_MS } = {}) {
-  const list = () => (runtime ? [...runtime.nodes.values()] : [])
+  // Nothing runs once stopped (STOP announces 'state' before it drops its handles).
+  const list = () => (runtime && runtime.state === 'running' ? [...runtime.nodes.values()] : [])
     .filter((h) => h.type === 'microphone')
     .map((h) => ({ id: h.id, status: h.status, code: h.code || null, reason: h.reason || null }));
-  const waiting = () => list().some((m) => m.status === 'pending');
+  const waiting = () => !!runtime && runtime.state === 'running'
+    && list().some((m) => m.status === 'pending');
   if (!waiting()) return Promise.resolve(list());
   return new Promise((resolve) => {
     let off = null;
@@ -288,17 +291,20 @@ export function settleMicrophones(runtime, { timeoutMs = MIC_SETTLE_MS } = {}) {
       resolve(list());
     };
     const timer = setTimeout(done, timeoutMs);
-    off = runtime.on((type) => { if (type === 'handle' && !waiting()) done(); });
+    off = runtime.on((type) => {
+      if ((type === 'handle' || type === 'state') && !waiting()) done();
+    });
   });
 }
 
 /**
  * What Allow microphone achieved (pure): { ok, text, failed: [{ id, reason }] }. While stopped
- * the input opens at PLAY; while playing, from the running Microphones (settleMicrophones): all
+ * (or with no running Microphone) the input opens at PLAY; while playing, from the running Microphones (settleMicrophones): all
  * open, or the reason of each that is not.
  */
 export function microphoneOutcome(mics, { playing = false } = {}) {
-  if (!playing) {
+  // No running Microphone (a STOP during the wait drops them): nothing is open yet.
+  if (!playing || !(mics && mics.length)) {
     return { ok: true, failed: [], text: 'Microphone allowed. The Microphone node opens the '
       + 'input when the Studio plays.' };
   }
@@ -507,9 +513,10 @@ export function createStudioUi(svc = {}) {
         }
       }
       if (!error) {
-        const playing = ctx.runtime.state === 'running';
-        outcome = microphoneOutcome(playing ? await settleMicrophones(ctx.runtime) : [],
-          { playing });
+        // Whether it plays is read after the wait: a STOP meanwhile means the input opens at the
+        // next PLAY, not that it is open now (PR #119 S1).
+        const mics = ctx.runtime.state === 'running' ? await settleMicrophones(ctx.runtime) : [];
+        outcome = microphoneOutcome(mics, { playing: ctx.runtime.state === 'running' });
       }
     } finally {
       ctx.micBusy = false;
