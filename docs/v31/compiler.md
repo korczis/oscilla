@@ -194,6 +194,13 @@ from outside. Before v4.0 the Master adapter wrote the level in `create`, so a P
 prepare, or a refused live edit that added a Master Output, left the Studio's level on the engine
 (after STOP too), and MEASURE then played its stimulus at that level.
 
+The level is given back only while it is still the Studio's own. The engine counts every write
+(`engine.masterWrites`); when anyone else wrote the level after the Studio's last write (the
+Playground's gain slider while the Studio played, through `main.js`'s watcher), the newer level is
+kept and the saved one dropped. STOP's restore is held until the fade ends
+(`engine.holdMasterGain(g, at)`), and any `setMasterGain` before `at` cancels the held glide, so a
+level set during the fade is not undone 15-35 ms later (PR #119 review D2).
+
 ### Click-free routes (§45)
 
 `createRamp` keeps the last segment of each route gain and, like the engine's `_freeze`
@@ -256,7 +263,7 @@ status maps the views read (`compiledStatus`, `compiledEdgeStatus`, `runtimeStat
 | compiler | `studioStatus(...).error`, every node and edge status | `compile-failed`: `compileStudio` threw after validation (it should not); the Studio shows the reason instead of a blank status |
 | runtime | handle `code` | `mic-pending` (waiting for the input), `mic-error` (the input failed to open), `mic-ended` (its track ended by itself: permission withdrawn, device gone); otherwise the plan node's. A settled handle is announced as the runtime event `'handle'` |
 | runtime | route `code` | `no-output`, `no-input`, `no-mod-target` (the handles cannot make the route); otherwise the plan edge's |
-| runtime | `apply` warnings, `debugInfo().diagnostics` | `update-failed`, `parameters-failed`, `output-failed`, `engage-failed`, `stop-failed` (entity: node), `route-failed` (entity: edge): a guarded step after the commit that threw; `commit-failed` (no entity): any other throw after the commit |
+| runtime | `apply` warnings, `debugInfo().diagnostics` | `update-failed`, `parameters-failed`, `output-failed`, `engage-failed`, `stop-failed` (entity: node), `route-failed` (entity: edge): a guarded step after the commit that threw; `commit-failed` (no entity): any other throw after the commit. `engage-failed` and `commit-failed` stay in `diagnostics` while unresolved (`runtime.unresolved()`, the `degraded` verdict) |
 | runtime | `lastError.errors`, a refused `apply` / `start` | `prepare-failed` (entity: the node or edge whose preparation threw), `start-failed`, `nothing-compiled`, `disposed`; a validation refusal carries validation's diagnostics |
 | transport | `debugInfo().diagnostics`, the `'warning'` event | `edit-refused` (the commit gate refused a live edit), `sync-refused` (the runtime refused a synced model), both with the runtime diagnostic's entity, `automation-failed` (entity: lane), `measurement-callback-failed`, `timeline` (a timeline-compiler warning, its prose as the message). One diagnostic per code and entity (per code and message without an entity); a newer one replaces the older |
 | transport | `debugInfo().lastError` (a Diagnostic plus `phase`), `start()`'s `code` | PLAY refused: `disposed`, `claim-failed` (the output claim threw), `claim-refused`, `play-refused` (the runtime refused to apply or start the model; entity: the runtime diagnostic's); or a live edit's `edit-refused` / `sync-refused` |
@@ -321,6 +328,7 @@ document.
 | --- | --- | --- |
 | `not-applied` | the runtime is not running (stopped, never started) | the refusal of this revision if PLAY failed on it, else `null` |
 | `in-sync` | the applied record is the desired revision; without a revision, the same `studioHash` | `null` |
+| `degraded` | in sync, but a failure after the commit is still in effect (`runtime.unresolved()`: `engage-failed` until that node engages, which every later transaction retries, or is removed; `commit-failed` until STOP). The graph runs, short of its plan | the first unresolved diagnostic |
 | `refused` | the runtime refused the desired revision (`lastError.revision`); without a revision, a refusal newer than the applied record | the runtime's diagnostic (`lastError.errors[0]`) |
 | `behind` | the applied record is another revision, normally older, and the desired one was not refused: it has not been applied yet | `null` |
 
@@ -503,10 +511,22 @@ method (an engine change, out of this issue's scope):
   `mic-off`, `mic-error` or `mic-ended`) asks the browser through `audio/microphone.js`
   `requestMicrophonePermission` (the request `openMicrophone` makes; the probe's tracks stop at
   once), then calls `runtime.setOptions({ inputPermission: true })`, which re-applies the model
-  at the same revision: while playing, degraded microphones become `node-replace`d and open the
-  input; while stopped, the status compile uses `runtime.options`, so the node shows ready and
-  opens at PLAY. A refusal (`micErrorMessage`: permission denied, no device) keeps the input off
-  and is shown in the Inspector as an alert.
+  at the same revision. While playing, every running Microphone whose input failed or ended is
+  rebuilt (a forced `node-replace`, `diffPlans` `replace`, listed in the result's `reopened`):
+  the plan itself is unchanged when the permission was already on, so a diff alone would leave
+  it degraded. The workspace then waits for the inputs to open (`settleMicrophones`) and
+  announces what happened (`microphoneOutcome`): open, or the reason it is not. While stopped,
+  the status compile uses `runtime.options`, so the node shows ready and opens at PLAY. A
+  refusal (`micErrorMessage`: permission denied, no device) keeps the input off; its reason is
+  kept per node and shown in the Inspector as an alert (not announced a second time). One
+  request runs at a time: the action is `aria-disabled` and `aria-busy` meanwhile. A Microphone
+  the browser denies at PLAY turns `inputPermission` off, so the stopped status shows the input
+  off rather than ready.
+- Known limitation: Allow microphone asks once (the probe) and the node asks again when it opens
+  at PLAY. Chromium remembers the grant for the page; Firefox and Safari may prompt a second
+  time, depending on how the first prompt was answered. Handing the probe's stream to the node
+  would avoid it, but the stream would then outlive the request with no node to own it while
+  stopped; the existing microphone infrastructure opens per consumer.
 - Output exclusivity is the transport's `onClaimOutput` hook (below); `engine.stopAll()` still
   does not reach the Studio graph, so the UI's Escape goes through `transport.escape()`.
 

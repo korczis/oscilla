@@ -478,3 +478,245 @@ test('a deleted saved copy leaves the document unsaved until the next save', () 
   d.markSaved(m, { id: 'project-y' });
   assert.equal(d.isDirty(m), false);
 });
+
+// ---------------------------------------------------------------- PR #119 adversarial review
+// D1 Allow microphone again while playing rebuilt nothing (0 ops) and announced success; D2 the
+// restored master level overwrote a level set elsewhere while the Studio played, also during
+// STOP's held glide; D3 an engage or commit failure vanished at the next transaction and the
+// verdict stayed in-sync; D4 a compile-failure warning was never cleared; and the plausible
+// findings (a denied PLAY left the permission on, the Allow control's busy state and per-node
+// error text).
+
+/** A Microphone → Spectrum Studio playing with getUserMedia under the test's control. */
+async function playingMic(mode) {
+  const streams = [];
+  const navigator = { mediaDevices: { getUserMedia: async () => {
+    if (mode.value === 'deny') {
+      throw Object.assign(new Error('denied'), { name: 'NotAllowedError' });
+    }
+    const st = fakeStream();
+    streams.push(st);
+    return st;
+  } } };
+  const a = audio({ navigator, options: { inputPermission: true } });
+  const { store, mic } = micModel();
+  ok(a.runtime.apply(store.getModel(), { revision: store.getRevision() }));
+  ok(a.runtime.start());
+  await new Promise((res) => setImmediate(res));
+  return { ...a, store, mic, streams };
+}
+
+test('D1 Allow microphone again while playing reopens a Microphone whose input was denied',
+  async () => {
+    const mode = { value: 'deny' };
+    const s = await playingMic(mode);
+    assert.equal(s.runtime.nodes.get(s.mic).code, 'mic-error');
+    mode.value = 'allow';
+    const r = ok(s.runtime.setOptions({ inputPermission: true }));
+    assert.deepEqual(r.reopened, [s.mic]);
+    assert.ok(r.ops.some((o) => o.op === 'node-replace' && o.id === s.mic), JSON.stringify(r.ops));
+    const mics = await workspace.settleMicrophones(s.runtime, { timeoutMs: 1000 });
+    assert.deepEqual(mics.map((m) => [m.id, m.status]), [[s.mic, 'ready']]);
+    assert.equal(s.streams.length, 1, 'the input opened again');
+    assert.equal(workspace.microphoneOutcome(mics, { playing: true }).ok, true);
+    s.runtime.stop();
+  });
+
+test('D1 Allow microphone again while playing reopens a Microphone whose input ended', async () => {
+  const s = await playingMic({ value: 'allow' });
+  assert.equal(s.runtime.nodes.get(s.mic).status, 'ready');
+  s.streams[0].tracks[0].onended();
+  assert.equal(s.runtime.nodes.get(s.mic).code, 'mic-ended');
+  assert.equal(s.runtime.options.inputPermission, true, 'an ended track is not a denial');
+  const r = ok(s.runtime.setOptions({ inputPermission: true }));
+  assert.deepEqual(r.reopened, [s.mic]);
+  const mics = await workspace.settleMicrophones(s.runtime, { timeoutMs: 1000 });
+  assert.equal(mics[0].status, 'ready');
+  assert.equal(s.streams.length, 2);
+  s.runtime.stop();
+});
+
+test('D1 the announcement is the outcome: a reopen the browser refuses again is not success',
+  async () => {
+    const mode = { value: 'deny' };
+    const s = await playingMic(mode);
+    ok(s.runtime.setOptions({ inputPermission: true }));
+    const mics = await workspace.settleMicrophones(s.runtime, { timeoutMs: 1000 });
+    const o = workspace.microphoneOutcome(mics, { playing: true });
+    assert.equal(o.ok, false);
+    assert.match(o.text, /permission was denied/);
+    assert.deepEqual(o.failed.map((f) => f.id), [s.mic]);
+    assert.match(workspace.microphoneOutcome([], { playing: false }).text, /when the Studio plays/);
+    s.runtime.stop();
+  });
+
+test('PR119 a Microphone denied at PLAY turns the permission off: the stopped status says so',
+  async () => {
+    const s = await playingMic({ value: 'deny' });
+    assert.equal(s.runtime.options.inputPermission, false);
+    const done = s.runtime.stop();
+    s.fx.advance(0.3);
+    await done;
+    const st = workspace.studioStatus(s.store.getModel(), { runtime: s.runtime,
+      engine: s.engine });
+    assert.equal(st.nodes.get(s.mic).code, 'mic-off', 'not "ready" while the browser refuses');
+  });
+
+test('PR119 the Allow control: busy while a request runs, its error per node, never doubled',
+  () => {
+  const off = { status: 'degraded', code: 'mic-off', reason: nodes.MIC_OFF_TEXT };
+  const busy = inspector.microphoneView(off, '', true);
+  assert.equal(busy.busy, true);
+  assert.match(busy.action, /Waiting/);
+  const denied = inspector.microphoneView(off, 'Microphone permission was denied.');
+  assert.equal(denied.action, 'Allow microphone again');
+  assert.equal(denied.error, 'Microphone permission was denied.');
+  const live = { status: 'degraded', code: 'mic-error', reason: 'No microphone was found.' };
+  assert.equal(inspector.microphoneView(live, 'No microphone was found.').error, '',
+    'the status line already says it');
+  const { store, mic } = micModel();
+  const other = ok(store.dispatch({ type: 'NODE_ADD', nodeType: 'microphone',
+    position: { x: 0, y: 0 } })).created.nodes[0];
+  const status = new Map([[mic, off], [other, off]]);
+  const micError = (id) => (id === mic ? 'Microphone permission was denied.' : '');
+  const a = inspector.inspectorView(store.getModel(), { nodes: [mic] }, { status, micError });
+  const b = inspector.inspectorView(store.getModel(), { nodes: [other] }, { status, micError });
+  assert.match(a.mic.error, /denied/);
+  assert.equal(b.mic.error, '', 'another Microphone does not show the first one\'s denial');
+});
+
+test('D2 STOP keeps a master level set elsewhere while the Studio played', async () => {
+  const a = audio();
+  const store = studioModel();
+  ok(a.runtime.apply(store.getModel(), { revision: store.getRevision() }));
+  ok(a.runtime.start());
+  assert.equal(a.engine.gainLevel, STUDIO_LEVEL);
+  a.engine.setMasterGain(0.05); // the Playground's gain watcher (main.js)
+  const done = a.runtime.stop();
+  a.fx.advance(0.3);
+  await done;
+  assert.equal(a.engine.gainLevel, 0.05, 'the newer level is kept');
+  // A level that is still the Studio's own is given back, as before.
+  ok(a.runtime.start());
+  const again = a.runtime.stop();
+  a.fx.advance(0.3);
+  await again;
+  assert.equal(a.engine.gainLevel, 0.05, 'the level before this session');
+});
+
+test('D2 a level set during STOP\'s fade cancels the held restore', () => {
+  const a = audio();
+  const store = studioModel();
+  ok(a.runtime.apply(store.getModel(), { revision: store.getRevision() }));
+  ok(a.runtime.start());
+  a.runtime.stop();
+  const p = a.engine.master.gain;
+  const now = a.fx.ctx.currentTime;
+  assert.ok(p.events.some((e) => e.value === ENGINE_LEVEL && e.t > now), 'the restore is held');
+  a.engine.setMasterGain(0.05);
+  assert.equal(a.engine.gainLevel, 0.05);
+  assert.ok(!p.events.some((e) => e.value === ENGINE_LEVEL && e.t >= now),
+    `no held glide back to ${ENGINE_LEVEL}: ${JSON.stringify(p.events.slice(-3))}`);
+  assert.equal(p.events.at(-1).value, 0.05);
+});
+
+/** The reference Studio whose Master Output engage fails while `fail.value`. */
+function failingEngage(fail) {
+  const real = nodes.NODE_ADAPTERS.master;
+  const adapters = { ...nodes.NODE_ADAPTERS, master: { ...real, create(env) {
+    const h = real.create(env);
+    const engage = h.engage;
+    h.engage = () => {
+      if (fail.value) throw new Error('injected engage failure');
+      engage();
+    };
+    return h;
+  } } };
+  const a = audio({ adapters });
+  const store = studioModel();
+  const verdict = () => studioDivergence({ model: store.getModel(),
+    revision: store.getRevision() }, a.runtime);
+  const codes = () => a.runtime.debugInfo().diagnostics.map((d) => d.code);
+  return { ...a, store, verdict, codes };
+}
+
+test('D3 a failed engage stays visible and the verdict is degraded until it engages', () => {
+  const fail = { value: true };
+  const s = failingEngage(fail);
+  ok(s.runtime.apply(s.store.getModel(), { revision: s.store.getRevision() }));
+  ok(s.runtime.start());
+  assert.equal(s.verdict().state, 'degraded');
+  assert.equal(s.verdict().reason.code, 'engage-failed');
+  assert.equal(s.engine.gainLevel, ENGINE_LEVEL, 'the Master level was not engaged');
+  // An unrelated edit: the failure is still in effect, so it is still shown.
+  ok(s.store.dispatch({ type: 'NODE_PARAM_SET', nodeId: 'osc-1', key: 'frequency', value: 330 }));
+  ok(s.runtime.apply(s.store.getModel(), { revision: s.store.getRevision() }));
+  assert.ok(s.codes().includes('engage-failed'), JSON.stringify(s.codes()));
+  assert.equal(s.verdict().state, 'degraded');
+  // The next transaction engages it: resolved.
+  fail.value = false;
+  ok(s.store.dispatch({ type: 'NODE_PARAM_SET', nodeId: 'osc-1', key: 'frequency', value: 440 }));
+  ok(s.runtime.apply(s.store.getModel(), { revision: s.store.getRevision() }));
+  assert.equal(s.verdict().state, 'in-sync');
+  assert.ok(!s.codes().includes('engage-failed'));
+  assert.equal(s.engine.gainLevel, STUDIO_LEVEL);
+  s.runtime.stop();
+});
+
+test('D3 a throw in the commit\'s own bookkeeping is commit-failed and stays until STOP',
+  async () => {
+    let armed = false;
+    const trace = { run: (fn) => fn(), record(owner, kind, f) {
+      if (armed && owner === 'runtime' && kind === 'apply' && f.outcome === 'applied') {
+        armed = false;
+        throw new Error('injected trace failure');
+      }
+    } };
+    const fx = createFakeAudioEnv({ sampleRate: SR });
+    const engine = new AudioEngine({ env: fx.env });
+    assert.ok(engine.init());
+    const runtime = createStudioRuntime({ engine, trace });
+    const store = studioModel();
+    const verdict = () => studioDivergence({ model: store.getModel(),
+      revision: store.getRevision() }, runtime);
+    ok(runtime.apply(store.getModel(), { revision: store.getRevision() }));
+    ok(runtime.start());
+    armed = true;
+    ok(store.dispatch({ type: 'NODE_PARAM_SET', nodeId: 'osc-1', key: 'frequency', value: 330 }));
+    const r = runtime.apply(store.getModel(), { revision: store.getRevision() });
+    assert.equal(r.ok, true, 'the committed transaction is not refused');
+    assert.equal(verdict().state, 'degraded');
+    assert.equal(verdict().reason.code, 'commit-failed');
+    ok(store.dispatch({ type: 'NODE_PARAM_SET', nodeId: 'osc-1', key: 'frequency', value: 440 }));
+    ok(runtime.apply(store.getModel(), { revision: store.getRevision() }));
+    assert.equal(verdict().state, 'degraded', 'still unresolved');
+    const done = runtime.stop();
+    fx.advance(0.3);
+    await done;
+    assert.deepEqual(runtime.unresolved(), []);
+  });
+
+test('D3 the Inspector names a degraded runtime and lists its reason once', () => {
+  const s = failingEngage({ value: true });
+  ok(s.runtime.apply(s.store.getModel(), { revision: s.store.getRevision() }));
+  ok(s.runtime.start());
+  const truth = { verdict: s.verdict(), runtime: s.runtime.debugInfo(), transport: null };
+  const rv = inspector.runtimeView(s.store.getModel(), truth);
+  assert.equal(rv.state, 'degraded');
+  assert.equal(rv.label, 'Running, degraded');
+  assert.match(rv.text, /injected engage failure/);
+  assert.equal(inspector.runtimeDiagnostics(truth).filter((d) => d.code === 'engage-failed')
+    .length, 1);
+  s.runtime.stop();
+});
+
+test('D4 the compile-failure warning is cleared once the status compiles again', () => {
+  assert.equal(typeof workspace.compileWarningLine, 'function');
+  const error = { message: 'The Studio could not be compiled: x' };
+  const failed = workspace.compileWarningLine({ warning: '', shown: '' }, error);
+  assert.deepEqual(failed, { warning: error.message, shown: error.message });
+  assert.deepEqual(workspace.compileWarningLine(failed, null), { warning: '', shown: '' });
+  // Another warning written meanwhile (an edit refused) is not the compile's to clear.
+  assert.deepEqual(workspace.compileWarningLine({ warning: 'Edit refused', shown: error.message },
+    null), { warning: 'Edit refused', shown: '' });
+});

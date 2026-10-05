@@ -351,6 +351,8 @@ const microphone = {
       handle.status = 'degraded';
       handle.code = 'mic-error';
       handle.reason = micErrorMessage(e);
+      // The browser refused: the runtime turns the input permission off (runtime.js settled).
+      handle.denied = !!e && (e.name === 'NotAllowedError' || e.name === 'SecurityError');
       settle();
     });
     return handle;

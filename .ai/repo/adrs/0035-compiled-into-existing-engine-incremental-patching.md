@@ -153,3 +153,17 @@ An independent v4.0 closure audit found two places where the transaction above d
 Proven by `tests/unit/v40-studio-runtime-closure.test.mjs` (F1: refused PLAY, refused live edit
 that adds a Master, context closed, `masterLevel: 'ignore'`; F4: a one-shot throw after the plan
 swap). Each fails on the code before the change.
+
+An adversarial review of that change (PR #119) sharpened both:
+
+- **Giving the level back must not take a newer one (D2).** Restoring the saved level at STOP
+  overwrote a level the user had set in the Playground while the Studio played, and a level set
+  during STOP's fade was undone by the held restore. The level is now given back only while it is
+  still the Studio's own write (`engine.masterWrites`), and any later write cancels a held
+  restore (`engine.holdMasterGain`).
+- **A failure after the commit must stay visible (D3).** The warnings of one transaction were
+  replaced by the next one's, so a Master level that never engaged looked healthy after one
+  unrelated edit. `engage-failed` now stays unresolved until that node engages (every later
+  transaction retries it) or is removed, `commit-failed` until STOP, and the divergence verdict
+  of the applied revision is `degraded` meanwhile. The commit's own bookkeeping (trace steps,
+  the cleanup timer) moved inside the guarded region.

@@ -90,8 +90,11 @@ A **Microphone** node starts with its input off. Select it and choose **Allow mi
 Inspector: the browser asks for permission, and once it is given the node opens the input when
 the Studio plays (at once if it is playing). If the browser refuses, or no microphone is found,
 the Inspector says why and the input stays off; allow it in the browser's site settings and try
-again. The input is used for analysis only: it is never recorded, stored or uploaded, and it can
-only feed analysis nodes, never the speakers.
+again. If the input fails or ends while the Studio plays (the device was unplugged, the
+permission withdrawn), choose **Allow microphone again**: the Inspector says when it is open, or
+why it is not. The input is used for analysis only: it is never recorded, stored or uploaded, and
+it can only feed analysis nodes, never the speakers. Firefox and Safari may ask a second time
+when the Studio first plays with the microphone.
 
 ## Find a node
 

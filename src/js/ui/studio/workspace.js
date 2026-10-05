@@ -178,6 +178,12 @@ export function renderTaskView(p) {
     : 'Rendering WAV', pct, text: `${pct} %`, abortable: true };
 }
 
+/** Why Render WAV is unavailable while a Studio task runs (its aria-describedby note). */
+export function renderBlockedText(task) {
+  return `Render WAV is unavailable while a Studio task runs${task && task.label
+    ? ` (${task.label})` : ''}: let it finish or abort it first.`;
+}
+
 /** The WAV file name of a Studio render. */
 export function renderFileName(model) {
   return `${fileSlug(model.metadata.title)}.wav`;
@@ -249,6 +255,59 @@ export function studioStatus(model, { runtime = null, engine = null, revision = 
       edges: new Map(list(graph.edges).map((x) => [x.id, st('inactive')])) };
   }
   return { nodes: compiledStatus(plan), edges: compiledEdgeStatus(plan), error: null };
+}
+
+/**
+ * The warning line after a status compile (pure): a compile failure shows its message; once
+ * the status compiles again the line is cleared, unless it shows something else by then.
+ * { warning (the line), shown (the compile failure it shows, '' for none) } -> the same.
+ */
+export function compileWarningLine({ warning = '', shown = '' } = {}, error = null) {
+  if (error) return { warning: error.message, shown: error.message };
+  return { warning: shown && warning === shown ? '' : warning, shown: '' };
+}
+
+/** How long Allow microphone waits for the browser to open a running Microphone's input. */
+export const MIC_SETTLE_MS = 15000;
+
+/**
+ * The running Microphone handles once none is pending (a permission prompt answered, the input
+ * opened or failed), or at `timeoutMs`: [{ id, status, code, reason }] (runtime 'handle' events).
+ */
+export function settleMicrophones(runtime, { timeoutMs = MIC_SETTLE_MS } = {}) {
+  const list = () => (runtime ? [...runtime.nodes.values()] : [])
+    .filter((h) => h.type === 'microphone')
+    .map((h) => ({ id: h.id, status: h.status, code: h.code || null, reason: h.reason || null }));
+  const waiting = () => list().some((m) => m.status === 'pending');
+  if (!waiting()) return Promise.resolve(list());
+  return new Promise((resolve) => {
+    let off = null;
+    const done = () => {
+      if (off) off();
+      clearTimeout(timer);
+      resolve(list());
+    };
+    const timer = setTimeout(done, timeoutMs);
+    off = runtime.on((type) => { if (type === 'handle' && !waiting()) done(); });
+  });
+}
+
+/**
+ * What Allow microphone achieved (pure): { ok, text, failed: [{ id, reason }] }. While stopped
+ * the input opens at PLAY; while playing, from the running Microphones (settleMicrophones): all
+ * open, or the reason of each that is not.
+ */
+export function microphoneOutcome(mics, { playing = false } = {}) {
+  if (!playing) {
+    return { ok: true, failed: [], text: 'Microphone allowed. The Microphone node opens the '
+      + 'input when the Studio plays.' };
+  }
+  const failed = (mics || []).filter((m) => m.status !== 'ready')
+    .map((m) => ({ id: m.id, reason: m.status === 'pending'
+      ? 'The browser has not opened the microphone yet.'
+      : m.reason || 'The input did not open.' }));
+  return failed.length ? { ok: false, failed, text: failed[0].reason }
+    : { ok: true, failed, text: 'Microphone open: the Microphone node analyses the input now.' };
 }
 
 /**
@@ -358,7 +417,9 @@ export function createStudioUi(svc = {}) {
     liveToggle: false,
     alertToggle: false,
     mounted: false,
-    micError: '', // the last refused microphone permission request (Inspector)
+    micErrors: new Map(), // Microphone node id → why its input is not open (Inspector)
+    micBusy: false, // a permission request or an input opening is in flight
+    compileWarning: '', // the warning a failed status compile set (cleared on recovery)
     trace: null,
     tracePending: false,
   };
@@ -395,7 +456,11 @@ export function createStudioUi(svc = {}) {
     ctx.status = st.nodes;
     ctx.edgeStatus = st.edges;
     ctx.warnings = nodeWarnings(model, registry);
-    if (st.error && ctx.cmp) ctx.cmp.studio.warning = st.error.message;
+    if (!ctx.cmp) return;
+    const line = compileWarningLine({ warning: ctx.cmp.studio.warning,
+      shown: ctx.compileWarning }, st.error);
+    if (ctx.cmp.studio.warning !== line.warning) ctx.cmp.studio.warning = line.warning;
+    ctx.compileWarning = line.shown;
   }
 
   /** Status, graph and Inspector again (a runtime handle settled, a capability changed). */
@@ -407,43 +472,57 @@ export function createStudioUi(svc = {}) {
   }
 
   /**
-   * Allow microphone (the Inspector, on a Microphone node): the browser is asked through
+   * Allow microphone (the Inspector, on Microphone node `id`): the browser is asked through
    * audio/microphone.js (the request openMicrophone makes; the probe's tracks stop at once),
-   * then the runtime lets Microphone nodes open the input (setOptions: while playing they open
-   * now, else at PLAY). A refusal keeps the input off and says why in the Inspector.
-   * -> Promise<boolean> allowed.
+   * then the runtime lets Microphone nodes open the input (setOptions: while playing they open,
+   * or reopen after a failure, now; else at PLAY). The announcement is what happened: while
+   * playing it waits for the inputs to open (settleMicrophones). A refusal keeps the input off,
+   * and its reason is shown on that node in the Inspector (an alert there, not announced twice).
+   * One request at a time. -> Promise<boolean> allowed and open (or to open at PLAY).
    */
-  async function allowMicrophone() {
+  async function allowMicrophone(id = null) {
+    if (ctx.micBusy) return false;
+    ctx.micBusy = true;
+    if (ctx.inspector) ctx.inspector.render();
     const env = svc.engine && svc.engine._env;
     const nav = (env && env.navigator) || (typeof navigator !== 'undefined' ? navigator : null);
     let error = '';
-    if (!hasMicrophoneApi(nav)) error = MIC_UNAVAILABLE_TEXT;
-    else {
-      announce('Asking the browser for microphone permission.');
-      try {
-        await requestMicrophonePermission(nav.mediaDevices);
-      } catch (e) {
-        error = micErrorMessage(e);
+    let outcome = null;
+    try {
+      if (!hasMicrophoneApi(nav)) error = MIC_UNAVAILABLE_TEXT;
+      else {
+        announce('Asking the browser for microphone permission.');
+        try {
+          await requestMicrophonePermission(nav.mediaDevices);
+        } catch (e) {
+          error = micErrorMessage(e);
+        }
       }
-    }
-    if (!error && !ctx.runtime) error = 'The Studio audio is not available here.';
-    let r = null;
-    if (!error) {
-      r = ctx.runtime.setOptions({ inputPermission: true });
-      if (r && r.ok === false) {
-        error = `The microphone was allowed, but the Studio could not apply it: ${
-          (r.errors && r.errors[0] && r.errors[0].message) || 'unknown error'}`;
+      if (!error && !ctx.runtime) error = 'The Studio audio is not available here.';
+      if (!error) {
+        const r = ctx.runtime.setOptions({ inputPermission: true });
+        if (r && r.ok === false) {
+          error = `The microphone was allowed, but the Studio could not apply it: ${
+            (r.errors && r.errors[0] && r.errors[0].message) || 'unknown error'}`;
+        }
       }
+      if (!error) {
+        const playing = ctx.runtime.state === 'running';
+        outcome = microphoneOutcome(playing ? await settleMicrophones(ctx.runtime) : [],
+          { playing });
+      }
+    } finally {
+      ctx.micBusy = false;
     }
-    ctx.micError = error;
-    refreshStatus();
     if (error) {
-      announce(error, { assertive: true });
-      return false;
+      if (id) ctx.micErrors.set(id, error);
+    } else {
+      ctx.micErrors.clear();
+      for (const f of outcome.failed) ctx.micErrors.set(f.id, f.reason);
     }
-    const playing = !!(ctx.transport && ctx.transport.playing);
-    announce(`Microphone allowed. ${playing ? 'The Microphone node opens the input now.'
-      : 'The Microphone node opens the input when the Studio plays.'} ${MIC_PRIVACY_NOTICE}`);
+    refreshStatus();
+    if (error || !outcome.ok) return false; // the Inspector's alert says why
+    announce(`${outcome.text} ${MIC_PRIVACY_NOTICE}`);
     return true;
   }
 
@@ -602,9 +681,16 @@ export function createStudioUi(svc = {}) {
     if (ctx.transport || !svc.engine) return;
     const engine = svc.engine;
     ctx.runtime = createStudioRuntime({ engine, registry, trace: ctx.trace });
-    // A pending handle settled (a Microphone opened, failed or ended): show its status.
-    ctx.runtime.on((type) => {
-      if (type === 'handle') queueMicrotask(refreshStatus);
+    // A pending handle settled (a Microphone opened, failed or ended): show its status, and
+    // keep why an input is not open on that node (the stopped status shows it too).
+    ctx.runtime.on((type, d) => {
+      if (type !== 'handle') return;
+      const h = ctx.runtime.nodes.get(d.id);
+      if (h && h.type === 'microphone') {
+        if (d.code === 'mic-error' || d.code === 'mic-ended') ctx.micErrors.set(d.id, h.reason);
+        else if (h.status === 'ready') ctx.micErrors.delete(d.id);
+      }
+      queueMicrotask(refreshStatus);
     });
     ctx.measureRun = createStudioMeasurementRun({
       getModel: () => ctx.handle.getModel(),
@@ -853,8 +939,9 @@ export function createStudioUi(svc = {}) {
       onDelete: () => ctx.editor.deleteSelection(),
       onDuplicate: () => ctx.editor.duplicateSelection(),
       onShowLane: (laneId, label) => cmp.studioShowLane(laneId, label),
-      onAllowMicrophone: () => allowMicrophone(),
-      micError: () => ctx.micError,
+      onAllowMicrophone: (id) => allowMicrophone(id),
+      micError: (id) => ctx.micErrors.get(id) || '',
+      micBusy: () => ctx.micBusy,
     });
     const libHost = document.querySelector('[data-osc="studio.library"]');
     ctx.library = mountLibrary(libHost, {
@@ -1086,8 +1173,18 @@ export function createStudioUi(svc = {}) {
      * warnings, wav } or { ok: false, aborted?, reason }.
      */
     /** Render WAV… (toolbar): the dialog with the duration, the format and the limitations. */
+    /** Why Render WAV is unavailable now ('' when it is available). */
+    studioRenderBlocked() {
+      return this.studio.task.active ? renderBlockedText(this.studio.task) : '';
+    },
+
     studioOpenRender() {
       if (ctx.render) return false;
+      if (this.studio.task.active) {
+        // aria-disabled, not disabled: the reason stays reachable (focus, the note it names).
+        announce(renderBlockedText(this.studio.task), { assertive: true });
+        return false;
+      }
       this.studio.renderForm = renderForm(ctx.handle.getModel(), { registry });
       openModal('osc-dlg-studio-render');
       requestAnimationFrame(() => {

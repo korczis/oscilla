@@ -2154,8 +2154,10 @@
                 @click="studioExport()"><svg aria-hidden="true"><use href="#s-export"/></svg></button>
               <button type="button" class="osc-icon-btn osc-st-ico" data-osc="studio.renderWav"
                 aria-label="Render WAV" title="Render the Studio offline to a WAV file"
-                :title="studio.task.active ? 'Render WAV is unavailable while a Studio task runs (' + studio.task.label + '): let it finish or abort it first.' : 'Render the Studio offline to a WAV file'"
-                aria-haspopup="dialog" :disabled="studio.task.active" @click="studioOpenRender()">
+                :title="studioRenderBlocked() || 'Render the Studio offline to a WAV file'"
+                :aria-disabled="String(studio.task.active)"
+                :aria-describedby="studio.task.active ? 'osc-st-render-why' : null"
+                aria-haspopup="dialog" @click="studioOpenRender()">
                 <svg aria-hidden="true"><use href="#s-wav"/></svg></button>
               <button type="button" class="osc-icon-btn osc-st-ico" data-osc="studio.import"
                 aria-label="Import project or patch file" title="Import project or patch"
@@ -2178,6 +2180,8 @@
                 :style="'--osc-meter-value: ' + (studio.task.pct ?? 0) + '%'"></div></div>
             </div>
             <span class="osc-num osc-st-task-text" data-osc="studio.task.text" x-text="studio.task.text"></span>
+            <span class="osc-st-task-why" id="osc-st-render-why" data-osc="studio.task.renderWhy"
+              x-text="studioRenderBlocked()"></span>
             <button type="button" class="osc-btn osc-btn-secondary" data-osc="studio.task.abort"
               :hidden="!studio.task.abortable" @click="studioAbortTask()">Abort</button>
           </div>

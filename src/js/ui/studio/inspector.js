@@ -19,10 +19,12 @@
 //     [{ text, outcome, code }] }], shown, total }   pure: the Trace section (ADR 0042), the
 //     operations of core/trace.js steps newest first (at most TRACE_OPS_SHOWN), only those with
 //     a step naming node `nodeId` when given; every outcome and code is text
-//   microphoneView(status, error) -> { action, note, error } | null   pure: a Microphone node's
-//     input control: "Allow microphone" while its input is off, failed or ended (codes mic-off,
-//     mic-error, mic-ended); none when the browser has no input (mic-unsupported, its reason
-//     says why) or the input is open or opening
+//   microphoneView(status, error, busy) -> { action, note, error, busy } | null   pure: a
+//     Microphone node's input control: "Allow microphone" while its input is off, failed or ended
+//     (codes mic-off, mic-error, mic-ended); none when the browser has no input (mic-unsupported,
+//     its reason says why) or the input is open or opening. `error`: why this node's input is not
+//     open (shown unless the status line already says it); `busy`: a request is in flight (the
+//     action is aria-disabled and says so)
 //   runtimeDiagnostics(truth) -> [Diagnostic]   the verdict's reason, then, while a graph runs,
 //     the runtime's and the transport's debugInfo().diagnostics (node and edge views list the
 //     ones naming them on their status line, with the code)
@@ -39,8 +41,9 @@
 //            edgeStatus() -> Map edge id -> plan { status, reason }, truth() -> truth (above;
 //            a changed runtime state is announced politely), trace() -> [step], onConnect(nodeId),
 //            onSavePatch(nodeIds), onDelete(), onDuplicate(), onShowLane(laneId, label),
-//            onAllowMicrophone() (asks for permission, then enables Microphone nodes),
-//            micError() -> text | '' (the last refused permission request) }
+//            onAllowMicrophone(nodeId) (asks for permission, then enables Microphone nodes),
+//            micError(nodeId) -> text | '' (why that node's input is not open),
+//            micBusy() -> boolean (a permission request is in flight) }
 //   Focus (§142; V431 U2): a rebuilt Inspector puts focus back on the control with the same
 //   data-key; when the action replaced the view (a connection link, Select source, Delete)
 //   and that control is gone, focus goes to the new view's heading, never to <body>.
@@ -223,6 +226,7 @@ export function studioSettingsView(model) {
 /** What the Runtime section calls each divergence state ('failed': PLAY was refused). */
 export const RUNTIME_LABELS = Object.freeze({
   'in-sync': 'Running',
+  degraded: 'Running, degraded',
   'not-applied': 'Not applied',
   behind: 'Previous configuration still running',
   refused: 'Refused',
@@ -240,7 +244,9 @@ export function runtimeDiagnostics(truth) {
   const v = truth && truth.verdict;
   if (!v) return [];
   const of = (x) => (v.applied && x && x.diagnostics) || [];
-  return [...(v.reason ? [v.reason] : []), ...of(truth.runtime), ...of(truth.transport)];
+  // Once each: a degraded verdict's reason is also one of the runtime's diagnostics.
+  return [...new Set([...(v.reason ? [v.reason] : []), ...of(truth.runtime),
+    ...of(truth.transport)])];
 }
 
 /** A diagnostic's entity as the Inspector links it: its name and the selection showing it. */
@@ -285,6 +291,7 @@ export function runtimeView(model, truth, opts = {}) {
   const d = v ? v.desired : { revision: null, studioHash: null };
   const why = v && v.reason ? v.reason.message : '';
   const text = state === 'in-sync' ? `Revision ${a.revision} plays as edited.`
+    : state === 'degraded' ? `Revision ${a.revision} plays, short of its plan: ${why}`
     : state === 'behind' ? `Revision ${a.revision} plays; revision ${d.revision} is not `
       + 'applied yet.'
       : state === 'refused' ? `Revision ${d.revision} was refused (${why}). Revision `
@@ -386,13 +393,15 @@ function traceText(model, x, registry) {
 const MIC_ALLOWABLE = Object.freeze(['mic-off', 'mic-error', 'mic-ended']);
 
 /** A Microphone node's input control (see the header); `status` is its { status, code }. */
-export function microphoneView(status, error = '') {
+export function microphoneView(status, error = '', busy = false) {
   const code = status && status.code;
   if (!MIC_ALLOWABLE.includes(code)) return null;
-  return { action: code === 'mic-off' ? 'Allow microphone' : 'Allow microphone again',
-    note: 'The browser asks for permission. The input is used for analysis only: nothing is '
+  const again = code !== 'mic-off' || !!error;
+  return { action: busy ? 'Waiting for the browser…'
+    : again ? 'Allow microphone again' : 'Allow microphone',
+  note: 'The browser asks for permission. The input is used for analysis only: nothing is '
       + 'recorded, stored or uploaded, and it never reaches the speakers.',
-    error: error || '' };
+  error: error && error !== status.reason ? error : '', busy: !!busy };
 }
 
 /** The diagnostics naming one entity, as status-line text with their code. */
@@ -461,7 +470,8 @@ export function settingsAction(model, key, raw) {
  * connection, a clip or automation point, several nodes, or the Studio itself.
  * opts: { registry, status: Map id -> { status, code, reason }, warnings: Map id -> [text],
  *         edgeStatus: Map edge id -> plan { status, code, reason }, truth (runtimeView),
- *         trace: [step] (traceView), micError: text of a refused microphone request }.
+ *         trace: [step] (traceView), micError: (nodeId) -> why its input is not open,
+ *         micBusy: a microphone request in flight }.
  * A connection that carries nothing (graph-view.js edgeRoute) has route 'no-route' or
  * 'no-effect' and its reason (§237).
  */
@@ -510,7 +520,8 @@ export function inspectorView(model, selection, opts = {}) {
       connections: nodeConnections(model, node.id, registry, opts.edgeStatus || null),
       hasOutputs: !!(def && def.outputs.length),
       trace: traceView(model, opts.trace, { registry, nodeId: node.id }),
-      mic: node.type === 'microphone' ? microphoneView(st, opts.micError) : null,
+      mic: node.type === 'microphone' ? microphoneView(st, opts.micError ? opts.micError(node.id)
+        : '', !!opts.micBusy) : null,
     };
   }
   if (edges.length) {
@@ -827,6 +838,16 @@ export function mountInspector(host, svc) {
     ]);
   }
 
+  /** Allow microphone: aria-disabled (still focusable) while a request is in flight. */
+  function micButton(view) {
+    const b = actionButton(view.mic.action, 'studio.inspector.allowMic', () => {
+      if (!(svc.micBusy && svc.micBusy()) && svc.onAllowMicrophone) svc.onAllowMicrophone(view.id);
+    }, 'osc-btn-primary');
+    setAttr(b, 'aria-disabled', String(view.mic.busy));
+    setAttr(b, 'aria-busy', String(view.mic.busy));
+    return b;
+  }
+
   // data-key: a rebuilt view that has the same action (Duplicate on the copy) keeps focus on it.
   function actionButton(text, dataOsc, onClick, cls = 'osc-btn-secondary') {
     return h('button', { type: 'button', class: `osc-btn ${cls}`, 'data-osc': dataOsc,
@@ -851,8 +872,7 @@ export function mountInspector(host, svc) {
     }
     if (view.mic) {
       parts.push(h('div', { class: 'osc-si-section', 'data-osc': 'studio.inspector.mic' }, [
-        actionButton(view.mic.action, 'studio.inspector.allowMic',
-          () => svc.onAllowMicrophone && svc.onAllowMicrophone(), 'osc-btn-primary'),
+        micButton(view),
         h('p', { class: 'osc-si-note', text: view.mic.note }),
         view.mic.error ? h('p', { class: 'osc-si-error', role: 'alert',
           'data-osc': 'studio.inspector.micError', text: view.mic.error }) : null,
@@ -1157,7 +1177,7 @@ export function mountInspector(host, svc) {
     const sig = JSON.stringify(rv);
     if (!rt || rt.sig === sig) return;
     rt.sig = sig;
-    const bad = rv.state === 'refused' || rv.state === 'failed';
+    const bad = rv.state === 'refused' || rv.state === 'failed' || rv.state === 'degraded';
     setAttr(rt.status, 'class', `osc-si-status${bad ? ' is-error' : ''}`);
     setAttr(rt.status, 'data-state', rv.state);
     replaceChildren(rt.status, [h('strong', { text: rv.label }),
@@ -1260,7 +1280,8 @@ export function mountInspector(host, svc) {
   /** The texts of a node view that update() does not refresh in place. */
   function textSig(view) {
     if (view.kind !== 'node') return '';
-    return [!!view.statusText, view.mic ? `${view.mic.action}|${view.mic.error}` : '',
+    return [!!view.statusText, view.mic ? `${view.mic.action}|${view.mic.error}|${view.mic.busy}`
+      : '',
       ...view.connections.map((c) => c.text), ...view.fields.map((f) =>
         f.modulatedBy.join('|'))].join('\n');
   }
@@ -1332,7 +1353,8 @@ export function mountInspector(host, svc) {
     const view = inspectorView(model, svc.store.getSelection(), { registry,
       status: svc.status ? svc.status() : null, warnings: svc.warnings ? svc.warnings() : null,
       edgeStatus: svc.edgeStatus ? svc.edgeStatus() : null, truth,
-      trace: svc.trace ? svc.trace() : null, micError: svc.micError ? svc.micError() : '' });
+      trace: svc.trace ? svc.trace() : null, micError: svc.micError || null,
+      micBusy: svc.micBusy ? svc.micBusy() : false });
     // A changed runtime state is announced politely; Play and Stop say their own.
     const state = runtimeState(truth && truth.verdict);
     if (said && state !== said && !(QUIET.includes(state) && QUIET.includes(said))) {

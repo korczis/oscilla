@@ -20,7 +20,11 @@
 //   runtime.edges                  read-only Map view of the routed edges
 //   runtime.bindings()             { triggers, data }: the logical TRIGGER / ANALYSIS edges
 //   runtime.setOptions({ inputPermission }) -> result   re-applies the current model at the
-//                                  same revision (a new planHash, not a new revision)
+//                                  same revision (a new planHash, not a new revision); with
+//                                  inputPermission true, running Microphones that failed or ended
+//                                  are rebuilt (result.reopened: their ids)
+//   runtime.unresolved() -> [Diagnostic]   commit-phase failures still in effect (engage-failed,
+//                                  commit-failed), see "Commit atomicity"
 //   runtime.options                { masterLevel, inputPermission }: a frozen copy of the
 //                                  capabilities the next compile uses (the stopped status)
 //   runtime.flush({ force })       run due (or all) deferred disposals now
@@ -79,14 +83,25 @@
 // after the commit too. The first write of a running session saves the engine's level, and that
 // level is given back on every way out: STOP (after the fade), a PLAY whose transaction failed,
 // `setOptions({ masterLevel: 'ignore' })`, dispose, and a context closed from outside (dropAll).
-// A refused transaction (validate or prepare) never wrote it.
+// A refused transaction (validate or prepare) never wrote it. It is given back only if nobody
+// else wrote the level since the Studio's last write (engine.masterWrites; PR #119 D2): a level
+// the user set elsewhere while the Studio played (the Playground's gain) is newer and is kept,
+// and a write during STOP's fade cancels the held restore (engine.holdMasterGain).
 //
 // Commit atomicity (F4). Once step 3 has swapped the maps and the plan, the transaction is
 // committed: everything after it (parameter bases, ramps, fades, stops, `engage`) is guarded, and
 // a throw there is a warning with its <step>-failed code (`commit-failed` for a throw outside a
 // guarded step), never an exception out of `apply`. So `apply` returns ok, the applied record
 // names the revision whose plan the maps hold, and the store's commit gate never refuses an edit
-// the runtime already holds.
+// the runtime already holds. A failure that leaves the running graph short of its plan stays
+// visible until it is resolved (runtime.unresolved(), PR #119 D3): `engage-failed` until that
+// node engages (every later transaction retries it) or is removed, `commit-failed` until STOP.
+// While any is unresolved the divergence verdict of the applied revision is 'degraded'.
+//
+// Microphone input (F2). `setOptions({ inputPermission: true })` also rebuilds every running
+// Microphone whose input failed or ended (a forced node-replace, `reopened` in the result): the
+// plan is unchanged, so a diff alone would leave it degraded. A Microphone whose permission the
+// browser denied turns `inputPermission` off (the stopped status then shows the input off).
 //
 // Operation trace (ADR 0042; `trace`: the core/trace.js port, default NO_TRACE). apply, start and
 // stop are one operation each, or join the caller's (the store's commit gate). Steps, owner
@@ -152,6 +167,8 @@ const messageOf = (e) => (e && e.message) || String(e);
  *                  reason is the refusal of this model if PLAY failed on it
  *   'in-sync'      the applied record is the desired revision (without a revision: the same
  *                  studioHash, so a presentation-only change stays in sync)
+ *   'degraded'     in sync, but a failure after its commit is still in effect (engage-failed,
+ *                  commit-failed: runtime.unresolved()); reason is the first of them
  *   'refused'      the runtime refused the desired revision (lastError.revision; without a
  *                  revision: a refusal newer than the applied record); reason is the runtime's
  *                  diagnostic; the runtime keeps running its last applied record
@@ -169,9 +186,14 @@ export function studioDivergence({ model, revision = null }, runtime) {
   const reason = e && (revision != null ? e.revision === revision
     : applied && e.revision > applied.revision)
     && (!e.studioHash || e.studioHash === desired.studioHash) ? e.errors[0] : null;
-  const state = !applied ? 'not-applied' : same(applied) ? 'in-sync'
+  // The applied revision with a commit-phase failure still in effect (runtime.unresolved):
+  // it runs, short of its plan.
+  const open = applied && same(applied) && typeof runtime.unresolved === 'function'
+    ? runtime.unresolved() : [];
+  const state = !applied ? 'not-applied' : same(applied) ? (open.length ? 'degraded' : 'in-sync')
     : reason ? 'refused' : 'behind';
-  return { state, desired, applied, reason: state === 'in-sync' ? null : reason };
+  return { state, desired, applied,
+    reason: state === 'in-sync' ? null : state === 'degraded' ? open[0] : reason };
 }
 
 export function createStudioRuntime({
@@ -257,30 +279,49 @@ export function createStudioRuntime({
    * The adapters' only way to the engine's master level (see "Global side effects"): saves the
    * engine's level on the first write, -> whether it wrote (false with masterLevel 'ignore').
    */
+  // The Studio's last write: the engine's write count after it (and the level, for an engine
+  // that does not count writes). Someone else wrote the level when either differs.
+  let ownWrite = null;
   const globalFx = Object.freeze({
     setMasterLevel(g) {
       if (opts.masterLevel === 'ignore') return false;
       if (savedMasterLevel === null) savedMasterLevel = hooks.masterLevel;
       hooks.setMasterLevel(g);
+      ownWrite = { count: hooks.masterWrites, level: hooks.masterLevel };
       return true;
     },
   });
 
-  /** Give the engine its level back: at once, or held until audio time `at` (after a fade). */
+  /**
+   * Give the engine its level back: at once, or held until audio time `at` (after a fade). Only
+   * while the level is still the Studio's own write: a newer level set elsewhere is kept.
+   */
   function restoreMaster(at = null) {
     const level = savedMasterLevel;
+    const own = ownWrite;
     savedMasterLevel = null;
+    ownWrite = null;
     if (level === null) return;
+    const ours = !own || (own.count !== null ? hooks.masterWrites === own.count
+      : hooks.masterLevel === own.level);
+    if (!ours) return;
     if (at === null) hooks.setMasterLevel(level);
     else hooks.restoreMasterLevel(level, at);
   }
 
-  /** A pending handle settled (a Microphone opened or failed): the views refresh its status. */
+  /**
+   * A pending handle settled (a Microphone opened, failed or ended): the views refresh its
+   * status. A Microphone the browser refused (`denied`) turns the input permission off.
+   */
   const settled = (h) => {
-    if (h && handles.get(h.id) === h) {
-      emit('handle', { id: h.id, status: h.status, code: h.code || null });
-    }
+    if (!h || handles.get(h.id) !== h) return;
+    if (h.code === 'mic-error' && h.denied) opts.inputPermission = false;
+    emit('handle', { id: h.id, status: h.status, code: h.code || null });
   };
+
+  // Commit-phase failures still in effect (see "Commit atomicity"): key → Diagnostic.
+  const unresolvedMap = new Map();
+  const unresolved = () => [...unresolvedMap.values()];
 
   /** A handle's builder dispose only (no node is touched): releases what is not audio. */
   const release = (h) => {
@@ -314,6 +355,7 @@ export function createStudioRuntime({
     edges.clear();
     bases.clear();
     written.clear();
+    unresolvedMap.clear();
     record = null;
     restoreMaster();
     setState('idle');
@@ -349,9 +391,16 @@ export function createStudioRuntime({
       }
       finish(job);
     };
-    // A suspended or closed context renders nothing: its scheduled stops never fire.
-    if (!ctx || ctx.state !== 'running') finish(job);
-    else job.timer = hooks.timers.setTimeout(arm, Math.max(5, (at - ctx.currentTime) * 1000 + 5));
+    // A suspended or closed context renders nothing: its scheduled stops never fire. A timer
+    // that cannot be armed releases at once rather than leave a job nothing resolves (D3).
+    try {
+      if (!ctx || ctx.state !== 'running') finish(job);
+      else {
+        job.timer = hooks.timers.setTimeout(arm, Math.max(5, (at - ctx.currentTime) * 1000 + 5));
+      }
+    } catch (e) {
+      finish(job);
+    }
     return job;
   }
 
@@ -526,27 +575,26 @@ export function createStudioRuntime({
     for (const [id, h] of created.handles) handles.set(id, h);
     for (const [id, eh] of created.edges) edges.set(id, eh);
     plan = next;
-    trace.record('runtime', 'apply', { revision: rev, outcome: 'applied',
-      detail: { at: t, ops: ops.length, nodes: handles.size, edges: edges.size } });
-    note = (kind, id, outcome, detail = null, code = null) => (fresh && !code ? null
-      : trace.record('runtime', kind, { revision: rev, entity: { kind: kind === 'route' ? 'edge'
-        : 'node', id }, outcome, code, detail }));
-    for (const o of ops) {
-      if (o.op === 'node-add' || o.op === 'node-replace') {
-        note('node', o.id, o.op === 'node-add' ? 'built' : 'replaced');
-      } else if (o.op === 'node-remove') note('node', o.id, 'retired');
-    }
-    // 4. crossfade
+    // 4. crossfade. Committed: from here nothing may throw out of apply (F4), or the store would
+    // refuse a revision whose plan the maps already hold. Every step below is guarded or inside
+    // the try; a throw outside a guarded step is commit-failed, and the cleanup still runs.
     const warnings = [];
+    note = () => null; // until the trace's note is set (inside the try)
     // A failed step is a warning (owner runtime, code <step>-failed), never a half-applied route.
     const guard = (step, id, fn) => {
       try { fn(); } catch (e) {
-        warnings.push(studioDiagnostic('runtime', `${step}-failed`,
-          `${step} ${id}: ${messageOf(e)}`, { kind: step === 'route' ? 'edge' : 'node', id }));
-        note(step === 'route' ? step : 'node', id, 'failed', { step, reason: messageOf(e) },
-          `${step}-failed`);
+        const d = studioDiagnostic('runtime', `${step}-failed`, `${step} ${id}: ${messageOf(e)}`,
+          { kind: step === 'route' ? 'edge' : 'node', id });
+        warnings.push(d);
+        // An engage that failed leaves the running graph short of its plan: it stays visible.
+        if (step === 'engage') unresolvedMap.set(`engage|${id}`, d);
+        try {
+          note(step === 'route' ? step : 'node', id, 'failed', { step, reason: messageOf(e) },
+            `${step}-failed`);
+        } catch (e2) { /* the trace's error is its own */ }
         return;
       }
+      if (step === 'engage') unresolvedMap.delete(`engage|${id}`);
       return true;
     };
     // A route step: the gain an edge ramps to, from `at` until `end` (ramp.js returns it).
@@ -556,10 +604,25 @@ export function createStudioRuntime({
         note('route', id, 'scheduled', { gain, at: t, end });
       }
     };
-    // Committed: from here nothing may throw out of apply (F4), or the store would refuse a
-    // revision whose plan the maps already hold. A throw outside a guarded step is
-    // commit-failed; the cleanup below still runs.
     try {
+      trace.record('runtime', 'apply', { revision: rev, outcome: 'applied',
+        detail: { at: t, ops: ops.length, nodes: handles.size, edges: edges.size } });
+      note = (kind, id, outcome, detail = null, code = null) => (fresh && !code ? null
+        : trace.record('runtime', kind, { revision: rev, entity: { kind: kind === 'route'
+          ? 'edge' : 'node', id }, outcome, code, detail }));
+      for (const o of ops) {
+        if (o.op === 'node-add' || o.op === 'node-replace') {
+          note('node', o.id, o.op === 'node-add' ? 'built' : 'replaced');
+        } else if (o.op === 'node-remove') note('node', o.id, 'retired');
+      }
+      // An engage that failed earlier: retried on its node, dropped with it (D3).
+      for (const key of [...unresolvedMap.keys()]) {
+        if (!key.startsWith('engage|')) continue;
+        const id = key.slice('engage|'.length);
+        const h = handles.get(id);
+        if (!h || typeof h.engage !== 'function') unresolvedMap.delete(key);
+        else if (!created.handles.has(id)) guard('engage', id, () => h.engage());
+      }
       const unit = (type, k) => (registry.param(type, k) || {}).unit || null;
       const affected = new Set(created.handles.keys());
       for (const o of ops) {
@@ -659,8 +722,10 @@ export function createStudioRuntime({
         guard('stop', h.id, () => h.stop(t + X + SOURCE_STOP_PAD_S));
       }
     } catch (e) {
-      warnings.push(studioDiagnostic('runtime', 'commit-failed', `The running graph took `
-        + `revision ${rev}, but a step after the commit failed: ${messageOf(e)}`));
+      const d = studioDiagnostic('runtime', 'commit-failed', `The running graph took `
+        + `revision ${rev}, but a step after the commit failed: ${messageOf(e)}`);
+      warnings.push(d);
+      unresolvedMap.set('commit', d); // what failed is unknown: visible until STOP
       try {
         trace.record('runtime', 'apply', { revision: rev, outcome: 'failed',
           code: 'commit-failed', detail: { reason: messageOf(e) } });
@@ -681,14 +746,14 @@ export function createStudioRuntime({
     return trace.run(() => applyNow(model, args));
   }
 
-  function applyNow(model, { revision = null } = {}) {
+  function applyNow(model, { revision = null, replace = null } = {}) {
     const rev = revision != null ? revision : (compiledRevision == null ? 1 : compiledRevision + 1);
     attempt = rev;
     attemptModel = model;
     if (disposed) return fail('validate', 'The Studio runtime is disposed.', {}, 'disposed');
     const next = compileStudio(model, { engine, registry, adapters, options: opts });
     if (!next.ok) return fail('validate', next.errors, { kept: true });
-    const ops = diffPlans(plan, next, { owned: ownedMap() });
+    const ops = diffPlans(plan, next, { owned: ownedMap(), replace });
     trace.record('runtime', 'compile', { revision: rev, outcome: 'compiled',
       detail: { planHash: tracing && planHash(next), ops: ops.length } });
     if (state !== 'running' || !hooks.ctx) {
@@ -742,6 +807,7 @@ export function createStudioRuntime({
     const all = () => Promise.all([...pending].map((j) => j.done)).then(() => counts());
     if (state !== 'running') return all();
     record = null;
+    unresolvedMap.clear(); // the graph they were about is torn down
     setState('idle');
     const ctx = hooks.ctx;
     if (!ctx) {
@@ -795,10 +861,21 @@ export function createStudioRuntime({
       opts.masterLevel = next.masterLevel;
       if (opts.masterLevel === 'ignore') restoreMaster(); // the Studio no longer owns it
     }
+    // Running Microphones whose input failed or ended: the plan does not change (the permission
+    // already was on), so they are rebuilt explicitly, which opens the input again (D1).
+    const reopened = [];
+    if (next.inputPermission === true && state === 'running') {
+      for (const [id, h] of handles) {
+        if (h.type === 'microphone' && h.status !== 'ready' && h.status !== 'pending'
+          && plan.nodes.has(id)) reopened.push(id);
+      }
+    }
     // The same model and revision under new capabilities: the record keeps its revision and
     // gets the new planHash, so the store revision stays in sync.
-    return plan.model ? apply(plan.model, { revision: compiledRevision })
-      : { ok: true, applied: false, ops: [] };
+    if (!plan.model) return { ok: true, applied: false, ops: [], reopened };
+    const r = apply(plan.model, { revision: compiledRevision,
+      replace: reopened.length ? new Set(reopened) : null });
+    return { ...r, reopened: r.ok ? reopened : [] };
   }
 
   function bindings() {
@@ -829,7 +906,8 @@ export function createStudioRuntime({
       const st = status(e, edges.get(e.id));
       if (st.status === 'inactive') inactiveEdges.push(st);
     }
-    const warned = [...plan.warnings, ...lastWarnings];
+    // Validation's warnings, the last transaction's, and failures still in effect (once each).
+    const warned = [...new Set([...plan.warnings, ...lastWarnings, ...unresolved()])];
     const limitedEdges = [];
     const exceeds = [];
     for (const [id, cb] of bases) {
@@ -874,6 +952,7 @@ export function createStudioRuntime({
     ownedParams,
     baseOffset,
     applied,
+    unresolved,
     on(fn) {
       listeners.add(fn);
       return () => listeners.delete(fn);

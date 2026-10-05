@@ -163,3 +163,9 @@ Tests: `tests/unit/v31-studio-runtime-view.test.mjs`, `tests/browser/v31-studio-
 
 Tests: `tests/unit/v40-studio-runtime-closure.test.mjs`; codes listed in `docs/v31/compiler.md`
 "Diagnostics".
+
+PR #119 review (D3): "in-sync" said only that the applied revision is the desired one, while a
+step after its commit had failed (a Master level never engaged). The verdict gains a fifth state,
+`degraded`: in sync, with a commit-phase failure still in effect (`runtime.unresolved()`), its
+reason the first of them. The Inspector shows it as "Running, degraded" and lists the reason
+once; node status still comes from the running graph.
