@@ -19,6 +19,9 @@ it computes the response of the whole playback and capture chain, rates the qual
 measurement and keeps it as a reproducible experiment. The app is a single HTML file. It needs no server, no account and no network once loaded, and it works
 when opened straight from disk.
 
+The words OSCILLA uses for its objects (project, Studio, runtime, measurement, experiment,
+run and repeat, calibration, trace) are defined in the [glossary](docs/GLOSSARY.md).
+
 ## Navigation
 
 The header has eight entries: **Playground**, **Measure**, **Experiments**, **Analyze**,
