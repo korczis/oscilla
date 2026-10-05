@@ -4,18 +4,20 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-OSCILLA — Interactive Sound & Frequency Lab: a dense browser-based acoustic laboratory (V2).
-Modular source in `src/` (ES modules, plain token-based CSS, Alpine.js, p5.js, uPlot, native
-Web Audio API) builds with esbuild and a custom packer into ONE static `dist/index.html`, which
-is committed and is what GitHub Pages serves (only its build-metadata region is stamped at
-deploy). It must run from `file://` and from the Pages sub-path. V1, the hand-written single
-file, is tagged `v1.0.0`. `README.md` covers features, limits, architecture, testing, releases,
-privacy and licences; the reasons are the ADRs in `.ai/repo/adrs/` (0011-0029 for V2/V3).
-Read those instead of restating them here.
+OSCILLA — Interactive Sound & Frequency Lab: a browser acoustic laboratory on its V3 line (V3
+MEASURE, the V3.1 Studio and later 3.x minors; `package.json` holds the version). Modular `src/`
+(ES modules, token-based CSS, Alpine.js, p5.js, uPlot, native Web Audio) builds with esbuild and
+a custom packer into ONE static `dist/index.html`, committed and served by GitHub Pages (only
+its build-metadata region is stamped at deploy); it must run from `file://` and the Pages
+sub-path. V1 is tagged `v1.0.0`. `README.md` covers features, limits, testing, releases and
+privacy; `docs/GLOSSARY.md` the terms; the reasons are the ADRs in `.ai/repo/adrs/` (0011 on
+for V2 and later; all `proposed`, see its README).
 
-The binding constraints are project rules under `.ai/repo/rules/project/`:
-`project.single-file-deliverable` (v2), `project.audio-engine-discipline` (v2) and
-`project.no-fake-science`. Read them before changing `src/`.
+The binding constraints are the project rules in `.ai/repo/rules/project/` (version in the file
+name): `project.single-file-deliverable`, `project.audio-engine-discipline`,
+`project.no-fake-science`, `project.about-names-current-release`,
+`project.studio-model-is-canonical`, `project.typed-ports`, `project.no-silent-feedback`,
+`project.visual-identity-lock`. Read them before changing `src/`.
 
 ## Commands
 
@@ -28,49 +30,41 @@ npm run visual                     # compare against the visual reference at 153
 npm run release:analyze            # SemVer level needed by the commits since the last v* tag
 npm run release:prepare            # clean tree -> bump once, rebuild, gate; restores on failure
 npm run release:publish            # dry run; `-- --yes` tags, waits for Pages, verifies, releases
-npm run release:verify-deploy      # prove the public page is the committed dist at HEAD
-npm run release:record -- --version X.Y.Z   # write the release record from the GitHub Release
-open dist/index.html               # run it (file://)
+npm run release:record -- --version X.Y.Z   # .ai/repo/releases/vX.Y.Z.yaml from the Release
 majordomus plan status             # milestone progress
 ```
 
-Ship through small PRs with `gh pr merge --auto --squash`; the `gate` check is required on main.
+Ship through small PRs with `gh pr merge --auto --squash`; the required `gate` check
+aggregates the CI jobs, whose `npm test` includes `tests/unit/knowledge-integrity.test.mjs`
+(what the claims, rules and bootstraps name exists and runs). `majordomus doctor` runs in the
+pre-commit hook, `npm run verify` and CI; `majordomus finish --check` before a push.
 
-Releases: the product version lives only in `package.json` (`version:check` rejects a
-hard-coded copy of the current version anywhere else, this file included). `release:prepare`
-on a clean tree bumps it once and runs the gate; commit the result as `chore(release): vX.Y.Z`
-and land it on main by PR; then on main `release:publish` (dry run), `release:publish -- --yes`.
-Pages stamps the deployed commit into dist and `verify-deploy` fails the workflow on mismatch.
-Then `npm run release:record -- --version X.Y.Z` writes `.ai/repo/releases/vX.Y.Z.yaml` (the
-Majordomus release record, evidence read from the tag and the GitHub Release; `--check`
-refuses one that differs) and the record lands by a small PR (`release/record-vX.Y.Z`).
+Releases: the version lives only in `package.json` (`version:check` rejects a hard-coded copy
+of the current version elsewhere, this file included). On a clean tree `release:prepare`
+bumps it and runs the gate; land `chore(release): vX.Y.Z` by PR; on main `release:publish`,
+then `-- --yes`; `verify-deploy` fails Pages on a mismatch; land the release record by a small
+PR (`release/record-vX.Y.Z`).
 
 ## Plan
 
-V1 issues `S001`–`S063` (M001–M004) and `D001`–`D003` are done; `S064`–`S095` stay blocked on
-`S000`. V2 is the `V2xx` issues across `M007`–`M010`; release engineering, provenance and the
-product graph are `R001`–`R017` (M011); V3 MEASURE is the `V3xx` issues across `M012`–`M020`.
-Status is derived from recorded evidence: `majordomus plan evidence <id> ...` then
-`majordomus plan done <id>`.
+`.ai/repo/project/`: V1 `S001`–`S063` and `D001`–`D003` (M001–M004; `S064`–`S095` blocked on
+`S000`); V2 `V2xx` (M007–M010, maintenance M034); release engineering `R001`–`R017` (M011);
+V3 MEASURE `V3xx` (M012–M020); the V3.1 Studio `V4xx` (M021–M033). Status is derived from
+evidence (`majordomus plan evidence <id> ...`, `majordomus plan done <id>`); `majordomus plan
+status` is the truth, not this paragraph.
 
-## Architecture of `src/`
+## Architecture of `src/js/`
 
-- `js/core/` — constants, frequency/music maths, safety rules, storage, URL state, pure config,
-  `build-info.js` (runtime build provenance; the only place the runtime learns the version)
-  and `instrument.js` (the V1 component logic without its DOM).
-- `js/audio/` — `audio-engine.js` (owns the context, voices, master chain; V2 hooks `inserts`,
-  `periodicWave`, `adsr`, `dualRouter`), `voice/scheduler/modulation/patterns`, plus graph
-  builders (`filters`, `stereo`, `additive`, `envelope`, `noise`) and `wav`/`offline-renderer`.
-- `js/analysis/` — analyser reader, peak/pitch estimation, correlation, compare, spectrogram.
-- `js/sequencer/` — block model, compiler to scheduled Web Audio events, timeline, editor.
-- `js/visualization/` (p5 views via the bridge and `engine.snapshot()`), `js/charts/` (uPlot and
-  canvas renderers on one frame loop), `js/labs/` (panel controllers), `js/ui/` (Alpine shell,
-  dialogs, workbench, exporters), `js/main.js` (composition and bootstrapping).
-- Build and release scripts: `scripts/build.mjs`, `pack-single-file.mjs`, `verify-dist.mjs`;
-  `release-metadata.mjs` (the one version/provenance helper) and the `release-*.mjs`,
-  `stamp-build.mjs`, `verify-deploy.mjs` scripts that consume it.
-- Tests: `tests/unit/` (including the V1 freeze in `tests/freeze/`), `tests/browser/` (release
-  gate, V1 engine port, DSP, sequencer, labs), `tests/visual/` (regions of the reference).
+- `core/` (constants, maths, safety, storage, URL state, `build-info.js`, the V1 `instrument.js`,
+  the Studio `trace.js`); `audio/` (`audio-engine.js` and its graph builders, scheduler, `wav`);
+  `analysis/`, `sequencer/`, `visualization/`, `charts/`, `labs/`, `data/`.
+- `measurement/` (V3 engine: state machine, capture, transfer, IR, RTA, quality, algorithm IDs,
+  Worker, `views/`), `calibration/` (profiles, level), `experiments/` (schema, validate, store).
+- `studio/` (StudioModel, actions, history, ports, compiler, runtime, transport, patches,
+  provenance, templates); `ui/studio/` (workspace, graph and timeline editors, Inspector).
+- `ui/` (Alpine shell, Measure and Experiments adapters, dialogs), `main.js` (composition).
+- Build and release: `scripts/`. Tests: `tests/unit/`, `tests/browser/`, `tests/visual/`;
+  `tests/README.md` says what each proves and which gate runs it.
 
 <!-- majordomus:begin 9535da72e6a6 fe92884bb1b4f83a -->
 # CLAUDE.md
