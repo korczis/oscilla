@@ -11,11 +11,11 @@
 //   - every project rule's `x-majordomus` block names tests that exist and that CI runs, and
 //     claims that exist;
 //   - every repository path named in the bootstraps, the .ai/ layer's protocol, rules,
-//     workflows and skills, the glossary, the README, the feature front matter and the claims
-//     resolves, apart from a small allowlist of intentional external references, each with
-//     its reason;
-//   - the README's browser-storage inventory is exactly the keys and IndexedDB stores the
-//     code declares.
+//     workflows and skills, the glossary, the README, tests/README.md (whose paths are
+//     relative to tests/), the feature front matter and the claims exists, apart from a small
+//     allowlist of intentional external references, each with its reason. Only claim tests
+//     and rule x-majordomus tests are also checked to be run by CI; other paths only exist.
+// The README's storage inventory is tests/unit/storage-inventory.test.mjs.
 //
 // Exempt: ADR bodies, dated audits and the specifications under docs/specs/ and docs/v3*/.
 // They are history: they say what was true, or asked for, when they were written.
@@ -27,10 +27,6 @@ import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { STORAGE_KEYS } from '../../src/js/core/constants.js';
-import {
-  DB_NAME, DB_VERSION, RECORDS, STUDIO_RECORDS, STUDIO_SUMMARIES, SUMMARIES,
-} from '../../src/js/experiments/store.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const read = (rel) => readFileSync(path.join(ROOT, rel), 'utf8');
@@ -272,57 +268,3 @@ test('every path in feature front matter and in a use case resolves', () => {
   for (const f of useCaseFiles()) bad.push(...unresolved(f, read(f)));
   assert.deepEqual(bad, [], `unresolved references:\n  ${bad.join('\n  ')}`);
 });
-
-// ---------------------------------------------------------------- privacy inventory
-
-test('the README browser-storage table is exactly the keys and stores the code declares', () => {
-  const readme = read('README.md');
-  const start = readme.indexOf('Browser storage holds only these keys');
-  assert.ok(start >= 0, 'README states the storage inventory');
-  const rows = readme.slice(start).split('\n\n')[1].split('\n').slice(2)
-    .map((r) => r.split('|').slice(1, -1).map((c) => c.trim()));
-  const stated = rows.map(([storage, key]) => `${storage} ${key.replace(/`/g, '')}`).sort();
-
-  // Every Web Storage key the code reads or writes. app.js keeps its own two keys.
-  const app = read('src/js/ui/app.js');
-  const appKeys = [...app.matchAll(/^const \w+_KEY = '([^']+)';$/gm)].map(([, k]) => k);
-  assert.ok(appKeys.length >= 2, 'app.js keys found');
-  const source = walk('src/js').map((f) => [f, read(f)]);
-  const used = (name) => source.some(([f, t]) => f !== 'src/js/core/constants.js'
-    && new RegExp(`STORAGE_KEYS\\.${name}\\b`).test(t));
-  const expected = [
-    ...appKeys.map((k) => `localStorage ${k}`),
-    `localStorage ${STORAGE_KEYS.presets}`,
-    `sessionStorage ${STORAGE_KEYS.history}`,
-    `sessionStorage ${STORAGE_KEYS.safetySeen}`,
-  ];
-  // A STORAGE_KEYS entry the code uses and the inventory above does not account for fails here.
-  for (const name of Object.keys(STORAGE_KEYS)) {
-    if (!used(name)) continue;
-    assert.ok(['presets', 'history', 'safetySeen'].includes(name),
-      `STORAGE_KEYS.${name} is used; add it to the README storage table and to this test`);
-  }
-  // Only these modules touch Web Storage or IndexedDB directly.
-  const touches = /\bwindow\.(?:localStorage|sessionStorage)\b|safeStorage\('\w+'\)|\bindexedDB\.open\(/;
-  const direct = source.filter(([, t]) => touches.test(t.replace(/^\s*(?:\/\/|\*).*$/gm, '')))
-    .map(([f]) => f).sort();
-  assert.deepEqual(direct, ['src/js/core/storage.js', 'src/js/experiments/store.js',
-    'src/js/ui/app.js'], 'the modules that reach browser storage');
-  // Every object store the IndexedDB upgrade creates.
-  const store = read('src/js/experiments/store.js');
-  const constants = { RECORDS, SUMMARIES, STUDIO_RECORDS, STUDIO_SUMMARIES };
-  const created = [...store.matchAll(/ensure\((\w+),/g)].map(([, c]) => constants[c]);
-  assert.deepEqual(created.slice().sort(), Object.values(constants).sort(), 'object stores');
-  for (const s of created) expected.push(`IndexedDB ${DB_NAME}, object store ${s}`);
-  assert.deepEqual(stated, expected.sort(), 'README storage table');
-  assert.ok(readme.includes(`\`${DB_NAME}\` (version ${DB_VERSION})`),
-    `README names the database version ${DB_VERSION}`);
-});
-
-function walk(rel) {
-  return readdirSync(path.join(ROOT, rel), { withFileTypes: true }).flatMap((d) => {
-    const p = `${rel}/${d.name}`;
-    if (d.isDirectory()) return walk(p);
-    return p.endsWith('.js') ? [p] : [];
-  });
-}
