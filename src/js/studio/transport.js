@@ -2,7 +2,7 @@
 // Studio runtime. It plays the store's model — graph and timeline — on the ONE AudioEngine:
 //
 //   createStudioTransport({ runtime, engine, store, onClaimOutput, onMeasurement, registry,
-//                           lookAheadS })   lookAheadS: the scheduler's window (default
+//                           lookAheadS, trace })   lookAheadS: the scheduler's window (default
 //                                           TIMELINE_LOOKAHEAD_S); offline.js passes the render
 //                                           length, so one start() schedules the whole render
 //   clipPlayReason(model, clip) -> reason | null   what the transport plays, from the model
@@ -33,6 +33,13 @@
 // timeline (a timeline-compiler warning, its prose as the message). debugInfo().unplayed =
 // [{ id, code, reason }], code: no-target, pattern-target, event-target, target-unavailable,
 // no-parameter.
+//
+// Operation trace (ADR 0042; `trace`: the core/trace.js port, default NO_TRACE). start, stop,
+// sync and admit are one operation each, or join the caller's. Steps, owner 'transport': `play`
+// (playing from `position` at `baseTime` | refused with the failed phase), `stop`, `admit`
+// (admitted | refused, code edit-refused | not-applied: stopped, PLAY applies the model) and
+// `sync` (applied | refused, code sync-refused). The timeline's wake-ups schedule clips and
+// lanes outside any operation and are not traced.
 //
 // Timing (§180-§181). createTimelineScheduler (timeline-compiler.js) compiles the timeline with
 // the sequencer compiler; this module only applies what it returns, at the audio-clock times it
@@ -89,6 +96,7 @@ import {
 } from './timeline-compiler.js';
 import { effectiveTarget } from './timeline.js';
 import { studioDiagnostic } from './validate.js';
+import { NO_TRACE } from '../core/trace.js';
 
 /** Reasons shown for what the transport does not play. */
 export const TRANSPORT_TEXT = Object.freeze({
@@ -154,7 +162,7 @@ export function clipPlayReason(model, clip) {
 
 export function createStudioTransport({
   runtime, engine, store, onClaimOutput = null, onMeasurement = null,
-  registry = NODE_REGISTRY, lookAheadS = null,
+  registry = NODE_REGISTRY, lookAheadS = null, trace = NO_TRACE,
 } = {}) {
   if (!runtime || typeof runtime.apply !== 'function') {
     throw new TypeError('createStudioTransport: a Studio runtime is required');
@@ -217,8 +225,14 @@ export function createStudioTransport({
   };
   const fail = (phase, error) => {
     lastError = { phase, message: messageOf(error) };
+    trace.record('transport', 'play', { outcome: 'refused', detail: { phase,
+      reason: lastError.message } });
     return { ok: false, phase, reason: lastError.message };
   };
+  /** A step of this transport under the current operation. */
+  const note = (kind, revision, outcome, r = null, code = null) => trace.record('transport',
+    kind, { revision, outcome, code, entity: r && r.errors && r.errors[0] && r.errors[0].entity,
+      detail: r && !r.ok ? { reason: errorOf(r, '') } : null });
   const ctxNow = () => hooks.ctx.currentTime;
   const nodeOf = (m, id) => (m && id ? m.graph.nodes.find((n) => n.id === id) || null : null);
   const nameOf = (id) => {
@@ -895,7 +909,7 @@ export function createStudioTransport({
       abort('context');
       return;
     }
-    if (store.getRevision() !== lastRevision) syncNow();
+    if (store.getRevision() !== lastRevision) trace.run(syncNow);
     if (!playing) return;
     const now = ctx.currentTime;
     const r = scheduler.advance(now);
@@ -940,8 +954,9 @@ export function createStudioTransport({
    * keeps the model, ownership and schedule of that graph; the refusal becomes lastError and a
    * diagnostic. -> the refusal text.
    */
-  function refusedBy(r, code) {
+  function refusedBy(r, code, revision) {
     runtime.setOwnedParams(ownedFor(model));
+    note(code === 'sync-refused' ? 'sync' : 'admit', revision, 'refused', r, code);
     const message = errorOf(r, 'unknown error');
     lastError = { phase: r.phase, code, message };
     const text = TRANSPORT_TEXT.editRefused(message);
@@ -956,9 +971,10 @@ export function createStudioTransport({
     runtime.setOwnedParams(ownedFor(next));
     const r = runtime.apply(next, { revision: rev });
     if (!r.ok) {
-      refusedBy(r, 'sync-refused');
+      refusedBy(r, 'sync-refused', rev);
       return { ok: false, synced: false, revision: rev, applied: r };
     }
+    note('sync', rev, 'applied');
     settled();
     model = next;
     afterApply(freshOf(r));
@@ -975,13 +991,22 @@ export function createStudioTransport({
    * nothing else changed, and the refusal is returned for the store to refuse the edit with.
    * While stopped every change is admitted: PLAY applies the model then.
    */
-  function admit(next, { revision } = {}) {
-    if (!playing || disposed || !next) return null;
+  function admit(next, info) {
+    return trace.run(() => admitNow(next, info));
+  }
+
+  function admitNow(next, { revision } = {}) {
+    if (!playing || disposed || !next) {
+      trace.record('transport', 'admit', { revision, outcome: 'not-applied',
+        detail: { playing, disposed } });
+      return null;
+    }
     runtime.setOwnedParams(ownedFor(next));
     const r = runtime.apply(next, { revision });
     if (!r.ok) {
-      return { ok: false, phase: r.phase, reason: refusedBy(r, 'edit-refused') };
+      return { ok: false, phase: r.phase, reason: refusedBy(r, 'edit-refused', revision) };
     }
+    note('admit', revision, 'admitted');
     lastRevision = revision;
     settled();
     model = next;
@@ -994,7 +1019,7 @@ export function createStudioTransport({
   function sync() {
     if (!playing) return { ok: true, synced: false };
     if (store.getRevision() === lastRevision) return { ok: true, synced: false };
-    const result = syncNow();
+    const result = trace.run(syncNow);
     if (playing && timer == null) arm(1);
     return result;
   }
@@ -1003,7 +1028,11 @@ export function createStudioTransport({
     return finite(p) ? Math.max(0, p) : startPosition;
   }
 
-  function start({ position } = {}) {
+  function start(args) {
+    return trace.run(() => startNow(args));
+  }
+
+  function startNow({ position } = {}) {
     if (disposed) return fail('start', 'The Studio transport is disposed.');
     if (playing) return { ok: true, playing: true, already: true };
     const pos = clampPosition(position);
@@ -1050,6 +1079,8 @@ export function createStudioTransport({
     afterApply(fresh);
     emit('state', { playing: true });
     tick();
+    trace.record('transport', 'play', { revision: rev, outcome: 'playing',
+      detail: { position: pos, baseTime: scheduler.getState().anchor.baseTime } });
     return { ok: true, playing: true, baseTime: scheduler.getState().anchor.baseTime,
       startPosition: pos, revision: rev };
   }
@@ -1075,8 +1106,14 @@ export function createStudioTransport({
 
   const counts = (c) => ({ ...c, voices: voices.size });
 
-  function stop({ fast = false, reason = 'stop' } = {}) {
+  function stop(args) {
+    return trace.run(() => stopNow(args));
+  }
+
+  function stopNow({ fast = false, reason = 'stop' } = {}) {
     if (!playing) return runtime.stop({ fast }).then(counts);
+    trace.record('transport', 'stop', { revision: lastRevision, outcome: 'stopped',
+      detail: { reason, fast } });
     clearTimer();
     const ctx = hooks.ctx;
     if (ctx && ctx.state !== 'closed') applyStop(scheduler.stop(ctx.currentTime));

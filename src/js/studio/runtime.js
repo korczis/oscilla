@@ -2,7 +2,7 @@
 // V415): the ephemeral map Studio node id → runtime handle on the ONE existing AudioEngine, kept
 // in line with the canonical model by incremental, transactional, click-free patches.
 //
-//   createStudioRuntime({ engine, registry, adapters, options }) -> runtime
+//   createStudioRuntime({ engine, registry, adapters, options, trace }) -> runtime
 //     options: { masterLevel: 'engine' | 'ignore'  Master Output level → engine.setMasterGain
 //                                                  while running; STOP restores the engine's
 //                                                  level from before start (after the fade),
@@ -68,6 +68,18 @@
 // The master graph is never disconnected while sounding (§45): Studio output leaves only
 // through the Master Output bus into engine.master, and that bus is faded, not cut.
 //
+// Operation trace (ADR 0042; `trace`: the core/trace.js port, default NO_TRACE). apply, start and
+// stop are one operation each, or join the caller's (the store's commit gate). Steps, owner
+// 'runtime': `compile` (compiled with the planHash and op count | refused with the validation
+// code), `apply` (applied at the crossfade time | not-applied: the runtime is not running, the
+// plan is kept for PLAY | refused with the runtime code, e.g. prepare-failed, and its entity),
+// then for an apply while running the transaction's own steps: `node` built | replaced |
+// retired, `route` (an edge gain ramped to `gain` from `at`, reached at `end`), `param` (scheduled:
+// the value given to the node's adapter, in the parameter's unit, at audio time `at`; owned: not
+// written, another owner drives it), `<step>` failed with its <step>-failed code; `stop`.
+// A param step is what the runtime handed the adapter, not a read-back of the AudioParam: an
+// adapter clamps where its builder does (an oscillator frequency below 0.95 × Nyquist).
+//
 // Owned parameters (docs/v31/compiler.md decision "Automated parameters belong to their lane").
 // An explicit adapter contract (adapters/nodes.js header): the runtime calls
 // applyBase(base, false, owned) and update(changed, owned) with `owned`, the Set of the node's
@@ -90,6 +102,7 @@ import {
   studioHashOf,
 } from './compiler.js';
 import { studioDiagnostic } from './validate.js';
+import { NO_TRACE } from '../core/trace.js';
 
 /** Escape-speed stop (scheduler.js ESCAPE_RELEASE_S). */
 export const STUDIO_FAST_STOP_S = 0.008;
@@ -142,7 +155,7 @@ export function studioDivergence({ model, revision = null }, runtime) {
 }
 
 export function createStudioRuntime({
-  engine, registry = NODE_REGISTRY, adapters = NODE_ADAPTERS, options = {},
+  engine, registry = NODE_REGISTRY, adapters = NODE_ADAPTERS, options = {}, trace = NO_TRACE,
 } = {}) {
   const hooks = createEngineHooks(engine);
   const opts = { masterLevel: 'engine', inputPermission: false, xfadeS: STUDIO_XFADE_S,
@@ -193,6 +206,10 @@ export function createStudioRuntime({
     } catch (e) { /* a model of the wrong shape has no hash */ }
     lastError = { phase, message: list[0].message, errors: list, at: Date.now(),
       revision: attempt, studioHash };
+    trace.record('runtime', phase === 'start' ? phase : Array.isArray(errors) ? 'compile'
+      : 'apply',
+      { revision: attempt, entity: list[0].entity, outcome: 'refused', code: list[0].code,
+        detail: { reason: list[0].message } });
     emit('error', lastError);
     return { ok: false, phase, errors: list, revision: compiledRevision, ...extra };
   };
@@ -373,7 +390,9 @@ export function createStudioRuntime({
     return out;
   }
 
-  function transact(next, ops) {
+  /** A step of the running transaction (detail only for a live apply, not a fresh start). */
+  let note = null;
+  function transact(next, ops, rev, fresh = false) {
     const ctx = hooks.ctx;
     const now = ctx.currentTime;
     const X = opts.xfadeS;
@@ -434,6 +453,16 @@ export function createStudioRuntime({
     for (const [id, h] of created.handles) handles.set(id, h);
     for (const [id, eh] of created.edges) edges.set(id, eh);
     plan = next;
+    trace.record('runtime', 'apply', { revision: rev, outcome: 'applied',
+      detail: { at: t, ops: ops.length, nodes: handles.size, edges: edges.size } });
+    note = (kind, id, outcome, detail = null, code = null) => (fresh && !code ? null
+      : trace.record('runtime', kind, { revision: rev, entity: { kind: kind === 'route' ? 'edge'
+        : 'node', id }, outcome, code, detail }));
+    for (const o of ops) {
+      if (o.op === 'node-add' || o.op === 'node-replace') {
+        note('node', o.id, o.op === 'node-add' ? 'built' : 'replaced');
+      } else if (o.op === 'node-remove') note('node', o.id, 'retired');
+    }
     // 4. crossfade
     const warnings = [];
     // A failed step is a warning (owner runtime, code <step>-failed), never a half-applied route.
@@ -441,8 +470,20 @@ export function createStudioRuntime({
       try { fn(); } catch (e) {
         warnings.push(studioDiagnostic('runtime', `${step}-failed`,
           `${step} ${id}: ${messageOf(e)}`, { kind: step === 'route' ? 'edge' : 'node', id }));
+        note(step === 'route' ? step : 'node', id, 'failed', { step, reason: messageOf(e) },
+          `${step}-failed`);
+        return;
+      }
+      return true;
+    };
+    // A route step: the gain an edge ramps to, from `at` until `end` (ramp.js returns it).
+    const ramp = (id, eh, gain) => {
+      let end = null;
+      if (guard('route', id, () => { end = eh.ramp.to(gain, t, X); })) {
+        note('route', id, 'scheduled', { gain, at: t, end });
       }
     };
+    const unit = (type, k) => (registry.param(type, k) || {}).unit || null;
     const affected = new Set(created.handles.keys());
     for (const o of ops) {
       if (o.op === 'node-params') {
@@ -452,7 +493,13 @@ export function createStudioRuntime({
         if (live.length && h) {
           const changed = {};
           for (const k of live) changed[k] = pn.params[k];
-          guard('update', o.id, () => h.update(changed, ownedKeys(h)));
+          const own = ownedKeys(h);
+          if (guard('update', o.id, () => h.update(changed, own))) {
+            for (const k of live) {
+              note('param', o.id, own.has(k) ? 'owned' : 'scheduled', { param: k,
+                value: pn.params[k], unit: unit(pn.type, k), at: now, via: 'update' });
+            }
+          }
         }
         if (live.length < o.keys.length) affected.add(o.id);
       } else if (o.op.startsWith('edge-')) {
@@ -469,37 +516,45 @@ export function createStudioRuntime({
     for (const id of affected) {
       const h = handles.get(id);
       if (!h || (h.status !== 'ready' && h.status !== 'pending')) continue;
-      const cb = computeBases(next.nodes.get(id), incomingControl(next, id, edgeOf), hooks,
+      const pn = next.nodes.get(id);
+      const cb = computeBases(pn, incomingControl(next, id, edgeOf), hooks,
         peaks.get(id) || null);
+      const prev = bases.get(id);
       bases.set(id, cb);
       if (!created.handles.has(id)) {
-        guard('parameters', id, () => h.applyBase(cb.base, false, ownedKeys(h)));
+        const own = ownedKeys(h);
+        if (guard('parameters', id, () => h.applyBase(cb.base, false, own))) {
+          // The keys whose base changed: what this apply asked the adapter to move.
+          for (const [k, b] of Object.entries(cb.base)) {
+            const p = prev && prev.base[k];
+            if (p && p.value === b.value && p.cents === b.cents) continue;
+            note('param', id, own.has(k) ? 'owned' : 'scheduled', { param: k, value: b.value,
+              cents: b.cents || 0, unit: unit(pn.type, k), at: now, via: 'base' });
+          }
+        }
       }
       for (const [eid, g] of cb.gains) {
         const eh = edges.get(eid);
-        if (eh && eh.ramp && eh.ramp.target !== g) guard('route', eid, () => eh.ramp.to(g, t, X));
+        if (eh && eh.ramp && eh.ramp.target !== g) ramp(eid, eh, g);
       }
     }
     for (const [id, eh] of created.edges) {
       if (eh.kind === 'audio' && eh.ramp) {
-        const level = next.edges.get(id).props.muted ? ROUTE_FLOOR : 1;
-        guard('route', id, () => eh.ramp.to(level, t, X));
+        ramp(id, eh, next.edges.get(id).props.muted ? ROUTE_FLOOR : 1);
       }
     }
     for (const o of ops) {
       if (o.op !== 'edge-props') continue;
       const eh = edges.get(o.id);
       if (eh && eh.kind === 'audio' && eh.ramp) {
-        const level = next.edges.get(o.id).props.muted ? ROUTE_FLOOR : 1;
-        guard('route', o.id, () => eh.ramp.to(level, t, X));
+        ramp(o.id, eh, next.edges.get(o.id).props.muted ? ROUTE_FLOOR : 1);
       }
     }
     for (const h of created.handles.values()) {
       if (typeof h.fade === 'function') guard('output', h.id, () => h.fade(1, t, X));
     }
     for (const eh of retire.edges) {
-      const floor = eh.kind === 'audio' ? ROUTE_FLOOR : 0;
-      if (eh.ramp) guard('route', eh.id, () => eh.ramp.to(floor, t, X));
+      if (eh.ramp) ramp(eh.id, eh, eh.kind === 'audio' ? ROUTE_FLOOR : 0);
     }
     for (const h of retire.handles) {
       if (typeof h.fade === 'function') guard('output', h.id, () => h.fade(ROUTE_FLOOR, t, X));
@@ -516,7 +571,11 @@ export function createStudioRuntime({
 
   // ------------------------------------------------------------ public API
 
-  function apply(model, { revision = null } = {}) {
+  function apply(model, args) {
+    return trace.run(() => applyNow(model, args));
+  }
+
+  function applyNow(model, { revision = null } = {}) {
     const rev = revision != null ? revision : (compiledRevision == null ? 1 : compiledRevision + 1);
     attempt = rev;
     attemptModel = model;
@@ -524,7 +583,11 @@ export function createStudioRuntime({
     const next = compileStudio(model, { engine, registry, adapters, options: opts });
     if (!next.ok) return fail('validate', next.errors, { kept: true });
     const ops = diffPlans(plan, next, { owned: ownedMap() });
+    trace.record('runtime', 'compile', { revision: rev, outcome: 'compiled',
+      detail: { planHash: planHash(next), ops: ops.length } });
     if (state !== 'running' || !hooks.ctx) {
+      trace.record('runtime', 'apply', { revision: rev, outcome: 'not-applied',
+        detail: { state } });
       plan = next;
       compiledRevision = rev;
       lastOps = ops;
@@ -532,7 +595,7 @@ export function createStudioRuntime({
       emit('applied', result);
       return result;
     }
-    const r = transact(next, ops);
+    const r = transact(next, ops, rev);
     if (!r.ok) return r;
     compiledRevision = rev;
     commit();
@@ -542,6 +605,10 @@ export function createStudioRuntime({
   }
 
   function start() {
+    return trace.run(startNow);
+  }
+
+  function startNow() {
     attempt = compiledRevision;
     attemptModel = plan.model;
     if (disposed) return fail('start', 'The Studio runtime is disposed.', {}, 'disposed');
@@ -558,7 +625,7 @@ export function createStudioRuntime({
     if (typeof engine.resume === 'function') engine.resume();
     if (opts.masterLevel !== 'ignore') savedMasterLevel = hooks.masterLevel;
     setState('running');
-    const r = transact(plan, diffPlans(EMPTY_PLAN, plan));
+    const r = transact(plan, diffPlans(EMPTY_PLAN, plan), compiledRevision, true);
     if (!r.ok) setState('idle');
     else commit();
     return r.ok ? { ...r, revision: compiledRevision } : r;
@@ -579,6 +646,8 @@ export function createStudioRuntime({
     }
     const S = fast ? STUDIO_FAST_STOP_S : opts.stopS;
     const t = hooks.soon();
+    trace.record('runtime', 'stop', { revision: compiledRevision, outcome: 'stopped',
+      detail: { at: t, fade: S, nodes: handles.size } });
     if (level !== null) hooks.restoreMasterLevel(level, t + S);
     const retire = { handles: [...handles.values()], edges: [...edges.values()] };
     for (const h of retire.handles) {

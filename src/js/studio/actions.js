@@ -3,10 +3,10 @@
 // no other writer. Pure apart from the injected idGenerator and onChange callbacks: no DOM, no
 // Web Audio, no globals, no clock.
 //
-//   createStudioStore(initialModel, { idGenerator, onChange, registry, historyLimit, gate })
-//     -> store
+//   createStudioStore(initialModel, { idGenerator, onChange, registry, historyLimit, gate,
+//     trace }) -> store
 //   store.dispatch(action) -> { ok: true, changed, model, revision, label?, created? }
-//                           | { ok: false, reason, diagnostics, refused?, phase? }
+//                           | { ok: false, reason, diagnostics, refused?, phase?, label? }
 //   store.undo() / store.redo() -> { ok, label? };  canUndo(), canRedo(), undoLabel(), redoLabel()
 //   store.beginGesture(label?), endGesture(), cancelGesture()      (§50, §185)
 //   store.getModel(), getSelection(), getRevision(), getState(), debugInfo()      (§52, §177)
@@ -48,10 +48,15 @@
 //     the commit will get. It returns null to accept, or { ok: false, reason, phase } to refuse
 //     (a gate that throws refuses with its message). The workspace's gate applies the model to
 //     the running Studio graph first (transport.admit), so a runtime transaction that fails in
-//     prepare refuses the edit: dispatch returns { ok: false, refused: true, phase, reason },
+//     prepare refuses it: dispatch returns { ok: false, refused: true, phase, reason, label },
 //     and model, history (undo and redo stacks), selection and revision stay as they were. A
 //     refused undo or redo leaves its entry where it was; a refused cancel keeps the gesture's
 //     edit as one undo entry. Without a gate every valid change commits.
+//   - The operation trace (ADR 0042, core/trace.js port, default NO_TRACE): a semantic dispatch,
+//     undo and redo are one operation each. The store reports the intent (`action`, `undo`,
+//     `redo`) before anything runs and its verdict (`commit`: committed | unchanged | rejected |
+//     refused, with the revision and the first diagnostic's code) after; what the gate does in
+//     between reports under the same op. Selection and view changes are not traced.
 
 import { ID_PATTERN } from '../experiments/schema.js';
 import { canConnect, validateEdgeProps } from './ports.js';
@@ -65,6 +70,7 @@ import {
 import { validateStudioModel } from './validate.js';
 import { createHistory, STUDIO_HISTORY_LIMIT } from './history.js';
 import { PatchError, insertPatch, replaceWithPatch } from './patches.js';
+import { NO_TRACE } from '../core/trace.js';
 
 export { STUDIO_HISTORY_LIMIT };
 export const CLIPBOARD_KIND = 'oscilla-studio-clipboard';
@@ -797,7 +803,7 @@ function checkView(view, cur) {
  */
 export function createStudioStore(initialModel, {
   idGenerator, onChange = null, registry = NODE_REGISTRY, historyLimit = STUDIO_HISTORY_LIMIT,
-  gate = null,
+  gate = null, trace = NO_TRACE,
 } = {}) {
   if (typeof idGenerator !== 'function') {
     throw new TypeError('createStudioStore: an idGenerator(prefix) function is required');
@@ -845,10 +851,30 @@ export function createStudioStore(initialModel, {
     emit('model', { reason, ...extra });
   };
 
+  /** One traced operation: the intent, `fn`, then the store's verdict on it. */
+  const traced = (kind, action, fn) => trace.run(() => {
+    trace.record('store', kind, { outcome: 'requested', entity: action && (action.nodeId
+      ? { kind: 'node', id: action.nodeId } : action.edgeId ? { kind: 'edge', id: action.edgeId }
+        : null),
+    detail: action && { type: action.type, key: action.key, value: action.value } });
+    const r = fn();
+    const d = r.diagnostics && r.diagnostics[0];
+    trace.record('store', 'commit', { revision: r.ok ? r.revision : null,
+      outcome: !r.ok ? (r.refused ? 'refused' : 'rejected') : r.changed === false ? 'unchanged'
+        : 'committed', code: d && d.code, detail: { label: r.label || null,
+        reason: r.reason || null } });
+    return r;
+  });
+
   function dispatch(action) {
     if (!action || typeof action !== 'object' || typeof action.type !== 'string') {
       return fail('An action needs a type.');
     }
+    if (action.type === 'SELECTION_CHANGE' || action.type === 'VIEW_SET') return act(action);
+    return traced('action', action, () => act(action));
+  }
+
+  function act(action) {
     try {
       if (action.type === 'SELECTION_CHANGE') {
         selection = pruneSelection(action.selection || {}, model);
@@ -889,7 +915,7 @@ export function createStudioStore(initialModel, {
       }
       const next = deepFreeze(result.model);
       const refused = refusal(next, { reason: 'dispatch', action, label: result.label });
-      if (refused) return refused;
+      if (refused) return { ...refused, label: result.label };
       history.record({ label: result.label, before: model, after: next,
         actionType: action.type });
       lastAction = { type: action.type, label: result.label };
@@ -914,7 +940,7 @@ export function createStudioStore(initialModel, {
 
   return Object.freeze({
     dispatch,
-    undo() {
+    undo: () => traced('undo', null, () => {
       while (history.inGesture()) closeGesture();
       const e = history.undo();
       if (!e) return { ok: false, reason: 'Nothing to undo.' };
@@ -926,8 +952,8 @@ export function createStudioStore(initialModel, {
       }
       setModel(target, 'undo', { label: e.label });
       return { ok: true, label: e.label, model, revision };
-    },
-    redo() {
+    }),
+    redo: () => traced('redo', null, () => {
       while (history.inGesture()) closeGesture();
       const e = history.redo();
       if (!e) return { ok: false, reason: 'Nothing to redo.' };
@@ -939,7 +965,7 @@ export function createStudioStore(initialModel, {
       }
       setModel(target, 'redo', { label: e.label });
       return { ok: true, label: e.label, model, revision };
-    },
+    }),
     beginGesture(label = null) {
       history.beginGesture(label, model);
     },
