@@ -542,6 +542,32 @@ function defineChecks() {
     await page.waitForSelector('[data-osc="exp.backToDetail"]', { state: 'visible', timeout: 5000 })
       .catch(() => {});
     await collect();
+    // Definitions (ADR 0043): the dialog new and in edit (with its setup choice), a listed
+    // definition's buttons, and a definition loaded into MEASURE.
+    await page.evaluate(() => window.OSCILLA.app.experimentsDefAsk());
+    await sleep(120);
+    await collect();
+    await page.fill('#osc-def-name', 'audit definition');
+    await page.click('[data-osc="def.save"]');
+    await page.waitForSelector('[data-osc="def.edit"]', { state: 'visible', timeout: 5000 })
+      .catch(() => {});
+    await collect();
+    await page.click('[data-osc="def.edit"]');
+    await sleep(120);
+    await collect();
+    await page.evaluate(() => window.OSCILLA.app.closeModal('osc-dlg-def'));
+    await page.evaluate(async () => {
+      const a = window.OSCILLA.app;
+      if (a.exps.rows[0]) await a.experimentsRepeat(a.exps.rows[0].id);
+    });
+    await page.waitForSelector('[data-osc="measure.clearDefinition"]', { state: 'visible',
+      timeout: 5000 }).catch(() => {});
+    await collect();
+    await page.evaluate(() => {
+      window.OSCILLA.app.measureClearDefinition();
+      window.OSCILLA.app.alerts = [];
+    });
+    await H.workspace(page, 'experiments');
     await page.evaluate(async () => {
       const a = window.OSCILLA.app;
       for (const r of a.exps.rows.slice()) {
