@@ -278,10 +278,12 @@ jobs:
     # release and checked against its SHA-256 here (the digest of v0.12.0's x86_64 Linux glibc
     # archive in https://majordomus.dev/releases/v0.12.0.json), so neither the installer script
     # nor the latest release can change what CI runs. Bump the version and the digest together.
-    # Every doctor FAIL fails the job except the two git-hook wiring entries of policy
-    # `enforcement` (doctor-on-commit, finish-on-push): they describe a developer checkout's
-    # hooks, which a CI runner does not have. Full history, because curated knowledge cites V1
-    # commits and the ADR check reads every ref.
+    # The verdict is .github/doctor-verdict.jq (tested by tests/unit/ci-knowledge-job.test.mjs):
+    # every doctor FAIL fails the job except the two git-hook wiring entries of policy
+    # `enforcement` (doctor-on-commit, finish-on-push), which describe a developer checkout's
+    # hooks that a CI runner does not have, and an output without an OK layout line fails.
+    # The download retries, so one transient asset error does not stall every merge. Full
+    # history, because curated knowledge cites V1 commits and the ADR check reads every ref.
     name: .ai layer (majordomus doctor 0.12.0)
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -296,7 +298,8 @@ jobs:
       - name: Install Majordomus ${{ env.MJ_VERSION }} (pinned version and digest)
         run: |
           a="majordomus-v${MJ_VERSION}-${MJ_TARGET}.tar.gz"
-          curl -fsSL --proto '=https' -o "$RUNNER_TEMP/$a" \
+          curl -fsSL --proto '=https' --retry 5 --retry-all-errors --retry-delay 5 --connect-timeout 20 \
+            -o "$RUNNER_TEMP/$a" \
             "https://github.com/korczis/prismatic-majordomus/releases/download/v${MJ_VERSION}/$a"
           echo "${MJ_SHA256}  $RUNNER_TEMP/$a" | sha256sum -c -
           mkdir -p "$RUNNER_TEMP/mj" && tar -xzf "$RUNNER_TEMP/$a" -C "$RUNNER_TEMP/mj"
@@ -309,11 +312,8 @@ jobs:
           jq -r 'select(.level == "FAIL" or .level == "WARN")
             | "\(.level) \(.category) \(.subject): \(.message)"' doctor.jsonl
           case "$code" in 0|10) ;; *) echo "::error::majordomus doctor exited $code"; exit 1 ;; esac
-          jq -e -s '[.[] | select(.level == "FAIL")
-            | select(.category == "wiring"
-                and (.subject == "doctor-on-commit" or .subject == "finish-on-push") | not)]
-            | length == 0' doctor.jsonl > /dev/null \
-            || { echo "::error::majordomus doctor reported a failure (listed above)"; exit 1; }
+          jq -e -s -f .github/doctor-verdict.jq doctor.jsonl > /dev/null \
+            || { echo "::error::majordomus doctor: a failure (listed above), or no OK layout"; exit 1; }
 
   gate:
     name: gate
