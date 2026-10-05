@@ -669,7 +669,7 @@ function structure(c, doc, lim, registry) {
   const list = (v, p, max, what) => {
     if (!Array.isArray(v)) return c.add(p, 'must be a list') && [];
     if (v.length > max) {
-      c.add(p, `more than ${max} ${what} (import limit)`);
+      c.add(p, `more than ${max} ${what} (import limit)`, 'limit-exceeded');
       return null;
     }
     return v;
@@ -691,7 +691,7 @@ function structure(c, doc, lim, registry) {
   for (const lane of lanes) points += Array.isArray(lane && lane.points) ? lane.points.length : 0;
   if (points > lim.automationPoints) {
     c.add('timeline.automation', `more than ${lim.automationPoints} automation points (import `
-      + 'limit)');
+      + 'limit)', 'limit-exceeded');
     return false;
   }
   nodes.forEach((n, i) => {
@@ -905,8 +905,8 @@ export function validateStudioImport(input, limits = STUDIO_IMPORT_LIMITS,
       .slice(0, 120)}).`);
   }
   if (c.errors.length) {
-    const errors = c.errors.map((e) => asError(e, /import limit/.test(e.text) ? 'limit-exceeded'
-      : 'invalid-structure'));
+    // The code is the check's own (createChecker add(path, text, code)), never read from text.
+    const errors = c.errors.map((e) => asError(e, e.code || 'invalid-structure'));
     return { ok: false, errors, warnings: [] };
   }
   const report = validateStudioModel(model, { registry });

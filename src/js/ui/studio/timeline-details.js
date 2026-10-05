@@ -39,14 +39,17 @@ export function createDetails(api, container) {
     else delete status.dataset.bad;
   };
 
-  /** A labelled field: { row, input }. */
-  function field(key, label, input) {
+  /** A labelled field: { row, input }; `hint`: visible text the control is described by. */
+  function field(key, label, input, hint = null) {
     const id = `${uid}-${key}`;
     const control = input.tagName === 'DIV' ? input.querySelector('select') : input;
     control.id = id;
     control.dataset.field = key;
+    if (hint) control.setAttribute('aria-describedby', `${id}-hint`);
     return el('div', { class: 'osc-stl-field' }, [
-      el('label', { class: 'osc-label', for: id }, [label]), input]);
+      el('label', { class: 'osc-label', for: id }, [label]), input,
+      hint ? el('p', { class: 'osc-stl-fhint', id: `${id}-hint`,
+        'data-osc': `studio.tl.d-${key}Hint` }, [hint]) : null]);
   }
   const numberInput = (attrs = {}) => el('input', { class: 'osc-number osc-stl-input',
     type: 'text', inputmode: 'decimal', autocomplete: 'off', spellcheck: 'false', ...attrs });
@@ -157,7 +160,9 @@ export function createDetails(api, container) {
       field('duration', 'Duration (s)', duration),
       field('track', 'Track', track),
       field('target', 'Target', target),
-      field('timebase', 'Time base', timeBase),
+      // Why the select is disabled, not only that it is (v4.0 audit F10).
+      field('timebase', 'Time base', timeBase, clip.kind === 'measurement' ? 'A measurement '
+        + 'clip always runs in seconds: musical time never enters a measurement.' : null),
       field('type', clip.kind === 'pattern' ? 'Block' : 'Action', type),
       el('span', { class: 'osc-sr-only', id: `${uid}-unit-s` }, ['seconds']),
     ], [

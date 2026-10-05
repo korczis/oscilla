@@ -13,7 +13,8 @@
 //     dialogs: { library: <dialog>, savePatch: <dialog> }
 //     svc: { store, library() -> Promise<library>, persistent() -> bool, announce,
 //            openProject({ model, summary }), downloadFile({ name, type, text }),
-//            openModal(id), closeModal(id) }
+//            recordDeleted(id) -> announcement | null (the workspace detaches the open document
+//            when its project record was deleted), openModal(id), closeModal(id) }
 
 import { ID_PATTERN } from '../../experiments/schema.js';
 import { createPatch } from '../../studio/patches.js';
@@ -163,7 +164,8 @@ export function mountPatches(dialogs, svc) {
     try {
       const lib = await svc.library();
       await lib.remove(id);
-      svc.announce('Deleted the saved record');
+      const said = typeof svc.recordDeleted === 'function' ? svc.recordDeleted(id) : null;
+      svc.announce(said || 'Deleted the saved record', { assertive: !!said });
     } catch (e) {
       fail(e);
     }

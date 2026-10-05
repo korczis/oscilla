@@ -30,8 +30,12 @@
 // empty list, and a refusal leaves it once a later model is applied. Codes: edit-refused,
 // sync-refused (the runtime refused a model: the transport keeps the last applied one; entity:
 // the runtime diagnostic's), automation-failed (entity: the lane), measurement-callback-failed,
-// timeline (a timeline-compiler warning, its prose as the message). debugInfo().unplayed =
-// [{ id, code, reason }], code: no-target, pattern-target, event-target, target-unavailable,
+// timeline (a timeline-compiler warning, its prose as the message). One diagnostic per code and
+// entity (or code and text without an entity); a newer one replaces it. debugInfo().lastError is
+// a Diagnostic plus its `phase`: PLAY refused (start returns its code too) with disposed,
+// claim-failed, claim-refused or play-refused (the runtime refused to apply or start the model;
+// entity: the runtime diagnostic's), or a live edit's edit-refused / sync-refused.
+// debugInfo().unplayed = [{ id, code, reason }], code: no-target, pattern-target, event-target, target-unavailable,
 // no-parameter.
 //
 // Operation trace (ADR 0042; `trace`: the core/trace.js port, default NO_TRACE). start, stop,
@@ -205,9 +209,17 @@ export function createStudioTransport({
       try { fn(type, detail); } catch (e) { /* a listener's error is its own */ }
     }
   };
+  // One diagnostic per identity: its code and entity (a lane, a node), or its code and text for
+  // one about no entity (a timeline warning is its prose). A newer one of the same identity
+  // replaces the older, so two codes with one text stay two diagnostics (v4.0 audit F5).
+  const sameAs = (d) => (w) => w.code === d.code && (d.entity
+    ? !!w.entity && w.entity.kind === d.entity.kind && w.entity.id === d.entity.id
+    : !w.entity && w.message === d.message);
   const warn = (code, msg, entity = null) => {
-    if (warnings.some((w) => w.message === msg)) return;
     const d = studioDiagnostic('transport', code, msg, entity);
+    const i = warnings.findIndex(sameAs(d));
+    if (i >= 0 && warnings[i].message === msg) return;
+    if (i >= 0) warnings.splice(i, 1);
     warnings.push(d);
     if (warnings.length > 50) warnings.shift();
     emit('warning', d);
@@ -224,12 +236,19 @@ export function createStudioTransport({
     decisions.push(d);
     if (decisions.length > 500) decisions.splice(0, decisions.length - 500);
   };
-  const fail = (phase, error) => {
-    lastError = { phase, message: messageOf(error) };
-    trace.record('transport', 'play', { outcome: 'refused', detail: { phase,
+  /**
+   * PLAY refused in `phase` with Diagnostic code `code` (see the header), entity: what failed
+   * when known (the runtime diagnostic's). lastError is that Diagnostic plus `phase`.
+   */
+  const fail = (phase, error, code, entity = null) => {
+    lastError = { ...studioDiagnostic('transport', code, messageOf(error), entity, 'error'),
+      phase };
+    trace.record('transport', 'play', { outcome: 'refused', code, entity, detail: { phase,
       reason: lastError.message } });
-    return { ok: false, phase, reason: lastError.message };
+    return { ok: false, phase, code, reason: lastError.message };
   };
+  /** The entity of a failed runtime result's first diagnostic, or null. */
+  const entityOf = (r) => (r && r.errors && r.errors[0] && r.errors[0].entity) || null;
   /** A step of this transport under the current operation. */
   const note = (kind, revision, outcome, r = null, code = null) => trace.record('transport',
     kind, { revision, outcome, code, entity: r && r.errors && r.errors[0] && r.errors[0].entity,
@@ -959,9 +978,10 @@ export function createStudioTransport({
     runtime.setOwnedParams(ownedFor(model));
     note(code === 'sync-refused' ? 'sync' : 'admit', revision, 'refused', r, code);
     const message = errorOf(r, 'unknown error');
-    lastError = { phase: r.phase, code, message };
+    lastError = { ...studioDiagnostic('transport', code, message, entityOf(r), 'error'),
+      phase: r.phase };
     const text = TRANSPORT_TEXT.editRefused(message);
-    warn(code, text, (r.errors && r.errors[0] && r.errors[0].entity) || null);
+    warn(code, text, entityOf(r));
     return text;
   }
 
@@ -1034,7 +1054,7 @@ export function createStudioTransport({
   }
 
   function startNow({ position } = {}) {
-    if (disposed) return fail('start', 'The Studio transport is disposed.');
+    if (disposed) return fail('start', 'The Studio transport is disposed.', 'disposed');
     if (playing) return { ok: true, playing: true, already: true };
     const pos = clampPosition(position);
     if (typeof onClaimOutput === 'function') {
@@ -1042,9 +1062,9 @@ export function createStudioTransport({
       try {
         claimed = onClaimOutput({ owner: 'studio', position: pos });
       } catch (e) {
-        return fail('claim', e);
+        return fail('claim', e, 'claim-failed');
       }
-      if (claimed === false) return fail('claim', TRANSPORT_TEXT.claimRefused);
+      if (claimed === false) return fail('claim', TRANSPORT_TEXT.claimRefused, 'claim-refused');
     }
     const m = store.getModel();
     const rev = store.getRevision();
@@ -1052,7 +1072,8 @@ export function createStudioTransport({
     const applied = runtime.apply(m, { revision: rev });
     if (!applied.ok) {
       runtime.setOwnedParams([]);
-      return fail('apply', errorOf(applied, 'The Studio graph is invalid.'));
+      return fail('apply', errorOf(applied, 'The Studio graph is invalid.'), 'play-refused',
+        entityOf(applied));
     }
     let baseTime;
     let fresh;
@@ -1060,7 +1081,7 @@ export function createStudioTransport({
       const s = runtime.start();
       if (!s.ok) {
         runtime.setOwnedParams([]);
-        return fail('start', errorOf(s, 'Audio could not start.'));
+        return fail('start', errorOf(s, 'Audio could not start.'), 'play-refused', entityOf(s));
       }
       baseTime = s.at;
       fresh = new Set(runtime.nodes.keys());

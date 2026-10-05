@@ -104,7 +104,8 @@ export const notInRuntimeText = (lastError) => 'Not in the running graph: the la
 export function runtimeStatus(model, runtime, revision = null) {
   const plan = runtime.plan;
   const verdict = studioDivergence({ model, revision }, runtime);
-  const current = verdict.state === 'in-sync';
+  // degraded: the applied revision runs, short of a failed step (its diagnostic names it).
+  const current = verdict.state === 'in-sync' || verdict.state === 'degraded';
   const reason = notInRuntimeText(verdict.reason || runtime.lastError);
   const planEdges = !current && plan.model
     ? new Map(plan.model.graph.edges.map((e) => [e.id, e])) : null;
