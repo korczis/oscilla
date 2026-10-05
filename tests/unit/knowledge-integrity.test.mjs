@@ -267,7 +267,7 @@ test('every path in feature front matter and in a use case resolves', () => {
 
 test('the README browser-storage table is exactly the keys and stores the code declares', () => {
   const readme = read('README.md');
-  const start = readme.indexOf('Browser storage holds only these keys and one database');
+  const start = readme.indexOf('Browser storage holds only these keys');
   assert.ok(start >= 0, 'README states the storage inventory');
   const rows = readme.slice(start).split('\n\n')[1].split('\n').slice(2)
     .map((r) => r.split('|').slice(1, -1).map((c) => c.trim()));
