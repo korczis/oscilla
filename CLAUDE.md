@@ -72,7 +72,7 @@ Status is derived from recorded evidence: `majordomus plan evidence <id> ...` th
 - Tests: `tests/unit/` (including the V1 freeze in `tests/freeze/`), `tests/browser/` (release
   gate, V1 engine port, DSP, sequencer, labs), `tests/visual/` (regions of the reference).
 
-<!-- majordomus:begin 9535da72e6a6 c99ef4280d2c8948 -->
+<!-- majordomus:begin 9535da72e6a6 fe92884bb1b4f83a -->
 # CLAUDE.md
 
 Claude Code bootstrap. The repository's provider-neutral AI context lives under
@@ -92,13 +92,15 @@ the task lifecycle is `.ai/repo/workflows/task-lifecycle.md`; the default profil
 `implementation`. `AGENTS.md` carries the same bootstrap for every
 other worker, and a rule that exists in one of these files and not in `.ai/` is a bug.
 
-Linked git worktrees of this repository live at `<repository>-wt/<branch>` — the primary
-checkout's sibling named with `-wt`, then the branch name with its hierarchy kept — derived
-from git and never chosen or registered; the primary checkout hosts the trunk. Before
-implementing, run `majordomus worktree` to see which branch and worktree you are in and
-whether that is where the branch belongs; start new work with `majordomus worktree create
-<branch>` and continue in the path it prints; bring a misplaced worktree home with
-`majordomus worktree migrate` rather than continuing where you are. The pre-commit hook
-refuses a feature branch committed from anywhere but its canonical worktree. The rule is
-`project.worktree-topology`; the mechanism is `docs/WORKTREES.md`.
+<!-- Repository override .ai/repo/providers/claude-code.tmpl of the Majordomus 0.12.0 template:
+only this paragraph differs, because the shipped one describes a guard this repository does
+not have (fixed upstream, majordomus #783). Delete the override once Majordomus 0.13.2 or
+later is installed. -->
+Linked git worktrees of this repository live at `<repository>-wt/<branch>` by convention:
+the primary checkout's sibling named with `-wt`, then the branch name with its hierarchy
+kept; the primary checkout hosts the trunk. The installed Majordomus front door has no
+`worktree` command, so create one from the primary checkout with `git worktree add
+../<repository>-wt/<branch> -b <branch>`. Nothing enforces the layout: no rule names it,
+and the git hooks a checkout wires run `majordomus doctor` before a commit and `majordomus
+finish --check` before a push, neither of which looks at where a worktree is.
 <!-- majordomus:end -->
