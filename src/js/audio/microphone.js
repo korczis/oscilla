@@ -78,6 +78,17 @@ export async function openMicrophone(ctx, mediaDevices) {
   }
 }
 
+/**
+ * Ask for microphone permission without keeping the input open (Studio's Allow microphone): the
+ * same request as openMicrophone, whose stream's tracks are stopped at once. Resolves true;
+ * rejects with the getUserMedia error (micErrorMessage gives its text). The node that needs the
+ * input opens its own stream through openMicrophone when it runs.
+ */
+export async function requestMicrophonePermission(mediaDevices) {
+  stopStreamTracks(await requestMicrophoneStream(mediaDevices));
+  return true;
+}
+
 /** Stop every track and disconnect. V1: AudioEngine.stopMic (index.html@a7b7a23) */
 export function closeMicrophone(mic) {
   stopStreamTracks(mic.stream);

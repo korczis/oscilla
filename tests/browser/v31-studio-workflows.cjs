@@ -33,6 +33,17 @@
 //                        BROWSER_BUDGETS.editMs (median of 9; tests/unit/fixtures/
 //                        v31-large-studio.mjs, docs/v31/performance.md); the numbers are printed
 //                        (V431)
+//   deleted-project-detaches  Save, Open that project, Delete + Confirm delete: the document is
+//                        detached (no project id), counts as unsaved (the indicator shows), the
+//                        announcement says so; Templates then shows its unsaved-changes note and
+//                        a template link waits instead of replacing the graph (v4.0 workspace
+//                        audit: before, the graph was replaced unasked and the work was lost)
+//   mic-allow            a Microphone node is off with an "Allow microphone" action in the
+//                        Inspector; a denied request (getUserMedia stubbed to NotAllowedError)
+//                        keeps it off with the actionable text in an alert; an allowed request
+//                        (keyboard: Enter on the action) stops its probe stream, turns the node
+//                        on, and PLAY opens the input (live status ready); STOP stops the node's
+//                        tracks and leaves 0 engine nodes (v4.0 closure audit F2, F8)
 //   no-console-errors
 'use strict';
 const { spawn } = require('node:child_process');
@@ -511,6 +522,151 @@ function defineChecks(fx) {
       editBudget: t.editMs <= fx.budgets.editMs && t.moveMs <= fx.budgets.editMs
         && t.frameMs <= fx.budgets.editMs,
     }), t };
+  });
+
+  def('deleted-project-detaches', async ({ page }) => {
+    await H.fresh(page);
+    await H.recordLive(page);
+    const id = await page.evaluate(async () => {
+      const a = window.OSCILLA.app;
+      const s = await a.studioSave();
+      return s && s.id;
+    });
+    // Open it through the library, as a user does.
+    await page.evaluate(() => window.OSCILLA.app.studioOpenLibrary());
+    const row = (osc) => `[data-osc="studio.saved.list"] [data-id="${id}"] [data-osc="${osc}"]`;
+    await page.click(row('studio.saved.open'));
+    await H.frames(page);
+    const opened = await page.evaluate(() => ({ projectId: window.OSCILLA.studio.projectId,
+      dirty: window.OSCILLA.studio.dirty }));
+    await page.evaluate(() => window.OSCILLA.app.studioOpenLibrary());
+    await page.click(row('studio.saved.delete'));
+    await page.waitForFunction((sel) => {
+      const b = document.querySelector(sel);
+      return b && b.textContent === 'Confirm delete';
+    }, row('studio.saved.delete'));
+    await page.click(row('studio.saved.delete'));
+    await H.until(() => page.evaluate(() => window.OSCILLA.studio.projectId), (v) => v === null);
+    await H.frames(page);
+    const after = await page.evaluate(async () => {
+      const s = window.OSCILLA.studio;
+      const lib = await s.library();
+      const el = document.querySelector('[data-osc="studio.dirty"]');
+      return { projectId: s.projectId, dirty: s.dirty, projects: (await lib.list({
+        kind: 'oscilla-studio' })).length, indicator: !!el && el.getClientRects().length > 0 };
+    });
+    const live = await H.live(page);
+    await page.evaluate(() => { for (const d of document.querySelectorAll('dialog[open]')) {
+      d.close(); } });
+    // Templates warns before replacing; a template link waits for an explicit Open.
+    await page.evaluate(() => window.OSCILLA.app.studioOpenTemplates());
+    await H.frames(page);
+    const note = await page.evaluate(() => {
+      const el = document.querySelector('[data-osc="studio.templates.dirty"]');
+      return !!el && el.getClientRects().length > 0;
+    });
+    await page.evaluate(() => { for (const d of document.querySelectorAll('dialog[open]')) {
+      d.close(); } });
+    const link = await page.evaluate(() => {
+      const before = window.OSCILLA.studio.model;
+      const r = window.OSCILLA.app.studioApplyLinkHash('#m=studio&st=basic-tone');
+      return { r, kept: window.OSCILLA.studio.model === before,
+        pending: window.OSCILLA.app.studio.linkPending };
+    });
+    await page.evaluate(() => { for (const d of document.querySelectorAll('dialog[open]')) {
+      d.close(); } });
+    return { ...H.verdict({
+      saved: !!id && opened.projectId === id && opened.dirty === false,
+      detached: after.projectId === null && after.projects === 0,
+      unsaved: after.dirty === true && after.indicator,
+      announced: live.some((t) => /open project was deleted from this browser; the graph is still /
+        .test(t) && /unsaved/.test(t)),
+      templatesWarn: note,
+      linkWaits: link.r === true && link.kept && link.pending === 'Basic Tone',
+    }), id, opened, after, link, live: live.slice(-3) };
+  });
+
+  def('mic-allow', async ({ page }) => {
+    await H.fresh(page);
+    await H.recordLive(page);
+    // getUserMedia stubbed: a real MediaStream of a helper context (no device, no prompt).
+    await page.evaluate(() => {
+      const md = navigator.mediaDevices || {};
+      if (!navigator.mediaDevices) {
+        Object.defineProperty(navigator, 'mediaDevices', { value: md, configurable: true });
+      }
+      window.__mic = { mode: 'deny', streams: [] };
+      md.getUserMedia = async () => {
+        if (window.__mic.mode === 'deny') {
+          throw new DOMException('Permission denied', 'NotAllowedError');
+        }
+        const C = window.AudioContext || window.webkitAudioContext;
+        window.__mic.ctx ||= new C();
+        const c = window.__mic.ctx;
+        const o = c.createOscillator();
+        const d = c.createMediaStreamDestination();
+        o.connect(d);
+        o.start();
+        window.__mic.streams.push(d.stream);
+        return d.stream;
+      };
+      const s = window.OSCILLA.studio;
+      const add = (nodeType) => s.store.dispatch({ type: 'NODE_ADD', nodeType,
+        position: { x: 40, y: 600 } }).created.nodes[0];
+      const mic = add('microphone');
+      const sp = add('spectrum');
+      s.store.dispatch({ type: 'EDGE_ADD', from: { node: mic, port: 'audio' },
+        to: { node: sp, port: 'audio' } });
+      s.store.dispatch({ type: 'SELECTION_CHANGE', selection: { nodes: [mic] } });
+      window.__mic.id = mic;
+    });
+    await H.frames(page);
+    const btn = '[data-osc="studio.inspector.allowMic"]';
+    const status = () => page.evaluate(() => {
+      const el = document.querySelector('[data-osc="studio.inspector.status"]');
+      const b = document.querySelector('[data-osc="studio.inspector.allowMic"]');
+      const err = document.querySelector('[data-osc="studio.inspector.micError"]');
+      return { status: el ? el.textContent : '', button: b ? b.textContent : null,
+        error: err ? err.textContent : null, errorRole: err ? err.getAttribute('role') : null,
+        allowed: window.OSCILLA.studio.runtime.options.inputPermission };
+    });
+    const off = await status();
+    await page.click(btn);
+    const denied = await H.until(status, (v) => !!v.error);
+    await page.evaluate(() => { window.__mic.mode = 'allow'; });
+    await page.focus(btn);
+    await page.keyboard.press('Enter');
+    const allowed = await H.until(status, (v) => v.allowed && v.button === null);
+    const probe = await page.evaluate(() => window.__mic.streams.map((x) => x.getTracks()
+      .every((t) => t.readyState === 'ended')));
+    await page.evaluate(() => window.OSCILLA.app.studioPlay());
+    const live = await H.until(() => page.evaluate(() => {
+      const h = window.OSCILLA.studio.runtime.nodes.get(window.__mic.id);
+      return { status: h ? h.status : null, analyser: !!(h && h.info.analyser),
+        streams: window.__mic.streams.length };
+    }), (v) => v.status === 'ready', 4000);
+    await page.evaluate(() => window.OSCILLA.app.studioStop());
+    const quiet = await H.quiet(page);
+    const ended = await page.evaluate(() => window.__mic.streams.map((x) => x.getTracks()
+      .every((t) => t.readyState === 'ended')));
+    const said = await H.live(page);
+    await page.evaluate(() => {
+      window.OSCILLA.studio.runtime.setOptions({ inputPermission: false });
+      if (window.__mic.ctx) window.__mic.ctx.close();
+    });
+    return { ...H.verdict({
+      offWithAction: off.button === 'Allow microphone' && /mic-off/.test(off.status)
+        && /Allow microphone in the Inspector/.test(off.status) && off.allowed === false,
+      deniedSaysWhy: /permission was denied/.test(denied.error || '') && denied.errorRole === 'alert'
+        && denied.allowed === false,
+      allowedOn: allowed.allowed === true && allowed.button === null
+        && !/mic-off/.test(allowed.status),
+      probeReleased: probe.length === 1 && probe[0] === true,
+      openedOnPlay: live.status === 'ready' && live.analyser && live.streams === 2,
+      stoppedTracks: ended.length === 2 && ended.every(Boolean),
+      zeroNodes: quiet.engineNodes === 0 && quiet.runtimeNodes === 0,
+      announced: said.some((t) => /Microphone allowed/.test(t)),
+    }), off, denied, allowed, probe, live, ended, quiet };
   });
 
   def('no-console-errors', async ({ errors }) => ({ ok: errors.length === 0,

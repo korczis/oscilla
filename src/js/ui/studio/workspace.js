@@ -59,6 +59,11 @@
 import { NODE_REGISTRY } from '../../studio/registry.js';
 import { createIdGenerator, createStudioStore } from '../../studio/actions.js';
 import { compileStudio } from '../../studio/compiler.js';
+import { studioDiagnostic } from '../../studio/validate.js';
+import {
+  MIC_PRIVACY_NOTICE, MIC_UNAVAILABLE_TEXT, hasMicrophoneApi, micErrorMessage,
+  requestMicrophonePermission,
+} from '../../audio/microphone.js';
 import { createStudioRuntime, studioDivergence } from '../../studio/runtime.js';
 import { createStudioTransport } from '../../studio/transport.js';
 import { createStudioMeasurementRun } from '../../studio/measurement-run.js';
@@ -216,19 +221,34 @@ export function parseRenderDuration(text) {
 /**
  * The node and edge status the Studio shows (§170-§171): from the running runtime while it plays
  * (what Web Audio actually runs, graph-view.js runtimeStatus, judged by the divergence verdict
- * for the store `revision` when given), otherwise from a compile of the model.
- * -> { nodes: Map id -> { status, code, reason }, edges: Map id -> { status, code, reason } }
+ * for the store `revision` when given), otherwise from a compile of the model under the
+ * runtime's capabilities (runtime.options: an allowed microphone is ready, not off).
+ * -> { nodes: Map id -> { status, code, reason }, edges: Map id -> { status, code, reason },
+ *      error: Diagnostic | null }
+ * compileStudio refuses an invalid model without throwing; if it throws all the same, the status
+ * is not blank: every node is degraded and every edge inactive with code `compile-failed`, and
+ * `error` is that diagnostic (owner compiler).
  */
 export function studioStatus(model, { runtime = null, engine = null, revision = null,
   registry = NODE_REGISTRY } = {}) {
-  if (runtime && runtime.state === 'running') return runtimeStatus(model, runtime, revision);
-  let plan = null;
-  try {
-    plan = compileStudio(model, { engine, registry });
-  } catch (e) {
-    plan = null;
+  if (runtime && runtime.state === 'running') {
+    return { ...runtimeStatus(model, runtime, revision), error: null };
   }
-  return { nodes: compiledStatus(plan), edges: compiledEdgeStatus(plan) };
+  const options = runtime && runtime.options ? runtime.options : {};
+  let plan;
+  try {
+    plan = compileStudio(model, { engine, registry, options });
+  } catch (e) {
+    const error = studioDiagnostic('compiler', 'compile-failed', 'The Studio could not be '
+      + `compiled: ${(e && e.message) || e}`, null, 'error');
+    const st = (status) => ({ status, code: error.code, reason: error.message });
+    const graph = (model && model.graph) || {};
+    const list = (x) => (Array.isArray(x) ? x : []);
+    return { error,
+      nodes: new Map(list(graph.nodes).map((n) => [n.id, st('degraded')])),
+      edges: new Map(list(graph.edges).map((x) => [x.id, st('inactive')])) };
+  }
+  return { nodes: compiledStatus(plan), edges: compiledEdgeStatus(plan), error: null };
 }
 
 /**
@@ -338,6 +358,7 @@ export function createStudioUi(svc = {}) {
     liveToggle: false,
     alertToggle: false,
     mounted: false,
+    micError: '', // the last refused microphone permission request (Inspector)
     trace: null,
     tracePending: false,
   };
@@ -374,6 +395,56 @@ export function createStudioUi(svc = {}) {
     ctx.status = st.nodes;
     ctx.edgeStatus = st.edges;
     ctx.warnings = nodeWarnings(model, registry);
+    if (st.error && ctx.cmp) ctx.cmp.studio.warning = st.error.message;
+  }
+
+  /** Status, graph and Inspector again (a runtime handle settled, a capability changed). */
+  function refreshStatus() {
+    if (!ctx.handle || !ctx.mounted) return;
+    recompile(ctx.handle.getModel());
+    if (ctx.editor) ctx.editor.render();
+    if (ctx.inspector) ctx.inspector.render();
+  }
+
+  /**
+   * Allow microphone (the Inspector, on a Microphone node): the browser is asked through
+   * audio/microphone.js (the request openMicrophone makes; the probe's tracks stop at once),
+   * then the runtime lets Microphone nodes open the input (setOptions: while playing they open
+   * now, else at PLAY). A refusal keeps the input off and says why in the Inspector.
+   * -> Promise<boolean> allowed.
+   */
+  async function allowMicrophone() {
+    const env = svc.engine && svc.engine._env;
+    const nav = (env && env.navigator) || (typeof navigator !== 'undefined' ? navigator : null);
+    let error = '';
+    if (!hasMicrophoneApi(nav)) error = MIC_UNAVAILABLE_TEXT;
+    else {
+      announce('Asking the browser for microphone permission.');
+      try {
+        await requestMicrophonePermission(nav.mediaDevices);
+      } catch (e) {
+        error = micErrorMessage(e);
+      }
+    }
+    if (!error && !ctx.runtime) error = 'The Studio audio is not available here.';
+    let r = null;
+    if (!error) {
+      r = ctx.runtime.setOptions({ inputPermission: true });
+      if (r && r.ok === false) {
+        error = `The microphone was allowed, but the Studio could not apply it: ${
+          (r.errors && r.errors[0] && r.errors[0].message) || 'unknown error'}`;
+      }
+    }
+    ctx.micError = error;
+    refreshStatus();
+    if (error) {
+      announce(error, { assertive: true });
+      return false;
+    }
+    const playing = !!(ctx.transport && ctx.transport.playing);
+    announce(`Microphone allowed. ${playing ? 'The Microphone node opens the input now.'
+      : 'The Microphone node opens the input when the Studio plays.'} ${MIC_PRIVACY_NOTICE}`);
+    return true;
   }
 
   function statusSignature() {
@@ -531,6 +602,10 @@ export function createStudioUi(svc = {}) {
     if (ctx.transport || !svc.engine) return;
     const engine = svc.engine;
     ctx.runtime = createStudioRuntime({ engine, registry, trace: ctx.trace });
+    // A pending handle settled (a Microphone opened, failed or ended): show its status.
+    ctx.runtime.on((type) => {
+      if (type === 'handle') queueMicrotask(refreshStatus);
+    });
     ctx.measureRun = createStudioMeasurementRun({
       getModel: () => ctx.handle.getModel(),
       sampleRate: () => (engine.ctx ? engine.ctx.sampleRate : engine.sampleRate),
@@ -574,6 +649,19 @@ export function createStudioUi(svc = {}) {
     ctx.templateBaseline = templateId ? createDirtyTracker(ctx.handle.getModel()) : null;
     if (ctx.editor) requestAnimationFrame(() => ctx.editor.frameAll());
     refreshState();
+  }
+
+  /**
+   * A saved record was deleted. When it is the open project, the document is detached: no
+   * project id, and unsaved (dirty) since no saved copy is left, so a template, a link or an
+   * open asks before replacing it. -> the announcement, or null for another record.
+   */
+  function detachDeleted(id) {
+    if (!id || id !== ctx.projectId) return null;
+    ctx.projectId = null;
+    if (ctx.dirty) ctx.dirty.markUnsaved();
+    refreshState();
+    return 'The open project was deleted from this browser; the graph is still open, unsaved.';
   }
 
   function library() {
@@ -765,6 +853,8 @@ export function createStudioUi(svc = {}) {
       onDelete: () => ctx.editor.deleteSelection(),
       onDuplicate: () => ctx.editor.duplicateSelection(),
       onShowLane: (laneId, label) => cmp.studioShowLane(laneId, label),
+      onAllowMicrophone: () => allowMicrophone(),
+      micError: () => ctx.micError,
     });
     const libHost = document.querySelector('[data-osc="studio.library"]');
     ctx.library = mountLibrary(libHost, {
@@ -802,6 +892,7 @@ export function createStudioUi(svc = {}) {
         refreshState();
         announce(`Opened ${r.summary.name}`);
       },
+      recordDeleted: (id) => detachDeleted(id),
       downloadFile,
       ...dialogSvc,
     });

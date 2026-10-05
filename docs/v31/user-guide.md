@@ -86,6 +86,13 @@ Select a node: the **Inspector** shows its parameters with their units and range
 edit is one undo step (Ctrl/⌘ Z). **Automate** creates the parameter's automation lane, or shows
 it when it exists.
 
+A **Microphone** node starts with its input off. Select it and choose **Allow microphone** in the
+Inspector: the browser asks for permission, and once it is given the node opens the input when
+the Studio plays (at once if it is playing). If the browser refuses, or no microphone is found,
+the Inspector says why and the input stays off; allow it in the browser's site settings and try
+again. The input is used for analysis only: it is never recorded, stored or uploaded, and it can
+only feed analysis nodes, never the speakers.
+
 ## Find a node
 
 Press **/** (or the search button in the Signal graph header) and type part of a name, a type
@@ -170,6 +177,9 @@ cables add to the automated value.
   with the reason.
 - Select nodes and choose **Save as patch…** in the Inspector to reuse them; inserting a patch
   never overwrites existing nodes.
+- Deleting the project that is open from **Open** keeps the graph on screen, but it is no longer
+  saved anywhere: it shows "unsaved changes", and a template or a link asks before replacing it.
+  Save it again to keep it.
 
 ## Render WAV
 

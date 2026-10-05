@@ -19,6 +19,10 @@
 //     [{ text, outcome, code }] }], shown, total }   pure: the Trace section (ADR 0042), the
 //     operations of core/trace.js steps newest first (at most TRACE_OPS_SHOWN), only those with
 //     a step naming node `nodeId` when given; every outcome and code is text
+//   microphoneView(status, error) -> { action, note, error } | null   pure: a Microphone node's
+//     input control: "Allow microphone" while its input is off, failed or ended (codes mic-off,
+//     mic-error, mic-ended); none when the browser has no input (mic-unsupported, its reason
+//     says why) or the input is open or opening
 //   runtimeDiagnostics(truth) -> [Diagnostic]   the verdict's reason, then, while a graph runs,
 //     the runtime's and the transport's debugInfo().diagnostics (node and edge views list the
 //     ones naming them on their status line, with the code)
@@ -34,7 +38,9 @@
 //     svc: { store, registry, announce(text, { assertive }), status() -> Map, warnings() -> Map,
 //            edgeStatus() -> Map edge id -> plan { status, reason }, truth() -> truth (above;
 //            a changed runtime state is announced politely), trace() -> [step], onConnect(nodeId),
-//            onSavePatch(nodeIds), onDelete(), onDuplicate(), onShowLane(laneId, label) }
+//            onSavePatch(nodeIds), onDelete(), onDuplicate(), onShowLane(laneId, label),
+//            onAllowMicrophone() (asks for permission, then enables Microphone nodes),
+//            micError() -> text | '' (the last refused permission request) }
 //   Focus (§142; V431 U2): a rebuilt Inspector puts focus back on the control with the same
 //   data-key; when the action replaced the view (a connection link, Select source, Delete)
 //   and that control is gone, focus goes to the new view's heading, never to <body>.
@@ -376,6 +382,19 @@ function traceText(model, x, registry) {
     ? ` · rev ${x.revision}` : ''} · ${what.filter(Boolean).join(', ')}`.replace(/ · $/, '');
 }
 
+/** Codes of a Microphone node whose input the user can (re)allow. */
+const MIC_ALLOWABLE = Object.freeze(['mic-off', 'mic-error', 'mic-ended']);
+
+/** A Microphone node's input control (see the header); `status` is its { status, code }. */
+export function microphoneView(status, error = '') {
+  const code = status && status.code;
+  if (!MIC_ALLOWABLE.includes(code)) return null;
+  return { action: code === 'mic-off' ? 'Allow microphone' : 'Allow microphone again',
+    note: 'The browser asks for permission. The input is used for analysis only: nothing is '
+      + 'recorded, stored or uploaded, and it never reaches the speakers.',
+    error: error || '' };
+}
+
 /** The diagnostics naming one entity, as status-line text with their code. */
 const entityNotes = (truth, kind, id, skip = []) => runtimeDiagnostics(truth)
   .filter((x) => x.entity && x.entity.kind === kind && x.entity.id === id
@@ -442,7 +461,7 @@ export function settingsAction(model, key, raw) {
  * connection, a clip or automation point, several nodes, or the Studio itself.
  * opts: { registry, status: Map id -> { status, code, reason }, warnings: Map id -> [text],
  *         edgeStatus: Map edge id -> plan { status, code, reason }, truth (runtimeView),
- *         trace: [step] (traceView) }.
+ *         trace: [step] (traceView), micError: text of a refused microphone request }.
  * A connection that carries nothing (graph-view.js edgeRoute) has route 'no-route' or
  * 'no-effect' and its reason (§237).
  */
@@ -491,6 +510,7 @@ export function inspectorView(model, selection, opts = {}) {
       connections: nodeConnections(model, node.id, registry, opts.edgeStatus || null),
       hasOutputs: !!(def && def.outputs.length),
       trace: traceView(model, opts.trace, { registry, nodeId: node.id }),
+      mic: node.type === 'microphone' ? microphoneView(st, opts.micError) : null,
     };
   }
   if (edges.length) {
@@ -828,6 +848,15 @@ export function mountInspector(host, svc) {
     if (view.statusText) {
       parts.push(h('p', { class: `osc-si-status${view.statusError ? ' is-error' : ''}`,
         role: 'note', 'data-osc': 'studio.inspector.status', text: view.statusText }));
+    }
+    if (view.mic) {
+      parts.push(h('div', { class: 'osc-si-section', 'data-osc': 'studio.inspector.mic' }, [
+        actionButton(view.mic.action, 'studio.inspector.allowMic',
+          () => svc.onAllowMicrophone && svc.onAllowMicrophone(), 'osc-btn-primary'),
+        h('p', { class: 'osc-si-note', text: view.mic.note }),
+        view.mic.error ? h('p', { class: 'osc-si-error', role: 'alert',
+          'data-osc': 'studio.inspector.micError', text: view.mic.error }) : null,
+      ]));
     }
     parts.push(textInput(`osc-si-${view.id}-name`, 'Name', view.name, (v, input) => {
       const r = dispatch({ type: 'NODE_RENAME', nodeId: view.id, name: v });
@@ -1231,8 +1260,9 @@ export function mountInspector(host, svc) {
   /** The texts of a node view that update() does not refresh in place. */
   function textSig(view) {
     if (view.kind !== 'node') return '';
-    return [!!view.statusText, ...view.connections.map((c) => c.text), ...view.fields.map((f) =>
-      f.modulatedBy.join('|'))].join('\n');
+    return [!!view.statusText, view.mic ? `${view.mic.action}|${view.mic.error}` : '',
+      ...view.connections.map((c) => c.text), ...view.fields.map((f) =>
+        f.modulatedBy.join('|'))].join('\n');
   }
 
   function update(view) {
@@ -1302,7 +1332,7 @@ export function mountInspector(host, svc) {
     const view = inspectorView(model, svc.store.getSelection(), { registry,
       status: svc.status ? svc.status() : null, warnings: svc.warnings ? svc.warnings() : null,
       edgeStatus: svc.edgeStatus ? svc.edgeStatus() : null, truth,
-      trace: svc.trace ? svc.trace() : null });
+      trace: svc.trace ? svc.trace() : null, micError: svc.micError ? svc.micError() : '' });
     // A changed runtime state is announced politely; Play and Stop say their own.
     const state = runtimeState(truth && truth.verdict);
     if (said && state !== said && !(QUIET.includes(state) && QUIET.includes(said))) {

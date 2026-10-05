@@ -1145,12 +1145,6 @@
   font-size: var(--osc-fs-xs);
 }
 
-.osc-st-placeholder {
-  margin: 0;
-  color: var(--osc-text-muted);
-  font-size: var(--osc-fs-sm);
-}
-
 /* ================= Compact Studio widget (Playground) ================= */
 .osc-p-studio {
   gap: 8px;

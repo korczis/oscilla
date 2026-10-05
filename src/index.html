@@ -2154,6 +2154,7 @@
                 @click="studioExport()"><svg aria-hidden="true"><use href="#s-export"/></svg></button>
               <button type="button" class="osc-icon-btn osc-st-ico" data-osc="studio.renderWav"
                 aria-label="Render WAV" title="Render the Studio offline to a WAV file"
+                :title="studio.task.active ? 'Render WAV is unavailable while a Studio task runs (' + studio.task.label + '): let it finish or abort it first.' : 'Render the Studio offline to a WAV file'"
                 aria-haspopup="dialog" :disabled="studio.task.active" @click="studioOpenRender()">
                 <svg aria-hidden="true"><use href="#s-wav"/></svg></button>
               <button type="button" class="osc-icon-btn osc-st-ico" data-osc="studio.import"

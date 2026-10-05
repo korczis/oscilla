@@ -324,10 +324,11 @@ function stopAndDisconnect(nodes, sources) {
 }
 
 /**
- * Build one node. ctxEnv = { hooks, owners: [{ nodes, sources }], now, at, options }. Returns
- * the adapter handle plus { id, type, name, nodes, sources, acct }. A non-ready plan node
- * becomes an inert handle carrying its status and reason. A builder that throws leaves no
- * tracked node behind (the error propagates to the transaction).
+ * Build one node. ctxEnv = { hooks, owners: [{ nodes, sources }], now, at, options, global?,
+ * settled? } (global: runtime.js "Global side effects"; settled(handle): a pending handle has
+ * settled). Returns the adapter handle plus { id, type, name, nodes, sources, acct }. A
+ * non-ready plan node becomes an inert handle carrying its status and reason. A builder that
+ * throws leaves no tracked node behind (the error propagates to the transaction).
  */
 export function instantiateNode(planNode, ctxEnv) {
   const own = { nodes: new Set(), sources: new Set() };
@@ -341,7 +342,8 @@ export function instantiateNode(planNode, ctxEnv) {
   try {
     const h = planNode.adapter.create({ ctx: hooks.ctx, hooks, acct, now: ctxEnv.now,
       at: ctxEnv.at, params: planNode.params, node: planNode, def: planNode.def,
-      options: ctxEnv.options || {} });
+      options: ctxEnv.options || {}, global: ctxEnv.global || null,
+      settled: ctxEnv.settled || null });
     return Object.assign(h, base, { nodes: own.nodes, sources: own.sources, acct });
   } catch (e) {
     stopAndDisconnect(own.nodes, own.sources);

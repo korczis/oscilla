@@ -7,7 +7,9 @@
 //
 // adapter = { compiler, structural: [paramKey], rebuildWhenOwned?: [paramKey],
 //             check?(params, caps) -> reason | { code, reason } | null, create(env) -> handle }
-// env     = { ctx, hooks, acct: { track, source }, now, at, params, node, def, options }
+// env     = { ctx, hooks, acct: { track, source }, now, at, params, node, def, options,
+//             global: { setMasterLevel(g) -> wrote },  the runtime's gate to global engine state
+//             settled(handle) }                        a pending handle has settled (async)
 // handle  = { inputs: { portId: AudioNode }, outputs: { portId: AudioNode },
 //             outputRange: { portId: [lo, hi] }        control signal range (default [-1, 1]),
 //             modTarget(key, mapping) -> { param: AudioParam, scale } | { reason },
@@ -21,11 +23,15 @@
 //                                         'set' | 'glide' (from now) | 'crossfade' |
 //                                         'next-gate'; a key it does not act on is not reported
 //             (`w` is the operation trace's record, ADR 0042: optional, plain object)
+//             engage?()                   global side effects (the engine's master level), called
+//                                         by the runtime only once the transaction committed;
+//                                         `create` never writes global state (runtime.js "Global
+//                                         side effects"), so a refused transaction leaves none
 //             stop(at)                    sources stop at `at` (the route fades end before it),
 //             dispose()                   the builder's own dispose (the runtime then
 //                                         disconnects and untracks every tracked node),
 //             info, status: 'ready' | 'degraded' | 'offline-only' | 'data' | 'pending',
-//             code?, reason }   code: machine reason (mic-pending, mic-error)
+//             code?, reason }   code: machine reason (mic-pending, mic-error, mic-ended)
 // `structural` keys cannot change on a running node (OscillatorNode.type, a filter type that
 // would swap the biquad the modulation is wired to, a sweep's whole schedule, ...): the
 // runtime builds a replacement node and crossfades to it (spec §45).
@@ -284,21 +290,26 @@ const sequence = {
   },
 };
 
+/** Why a Microphone node is off; the Inspector's Allow microphone action turns it on. */
+export const MIC_OFF_TEXT = 'Microphone input is off. Choose Allow microphone in the Inspector; '
+  + 'nothing is recorded or uploaded.';
+/** A Microphone whose input track ended by itself. */
+export const MIC_ENDED_TEXT = 'The microphone stopped (its permission was withdrawn or the '
+  + 'device was disconnected). Choose Allow microphone in the Inspector to open it again.';
+
 const microphone = {
   compiler: 'audio/microphone.js#openMicrophone',
   structural: [],
   check(params, caps) {
     if (!caps.microphone) return { code: 'mic-unsupported', reason: MIC_UNAVAILABLE_TEXT };
-    if (!caps.inputPermission) {
-      return { code: 'mic-off', reason: 'Microphone input is off. Allow it from the Microphone '
-        + 'node; nothing is recorded or uploaded.' };
-    }
+    if (!caps.inputPermission) return { code: 'mic-off', reason: MIC_OFF_TEXT };
     return null;
   },
-  create({ ctx, hooks, acct }) {
+  create({ ctx, hooks, acct, settled }) {
     const out = acct.track(ctx.createGain());
     let mic = null;
     let disposed = false;
+    const settle = () => { if (typeof settled === 'function') settled(handle); };
     const handle = {
       inputs: {},
       outputs: { audio: out },
@@ -324,10 +335,23 @@ const microphone = {
       handle.info.analyser = m.analyser;
       handle.status = 'ready';
       handle.code = handle.reason = null;
+      // A track that ends by itself (permission revoked, device unplugged): say so.
+      for (const t of m.stream.getTracks()) {
+        t.onended = () => {
+          if (disposed || mic !== m) return;
+          handle.status = 'degraded';
+          handle.code = 'mic-ended';
+          handle.reason = MIC_ENDED_TEXT;
+          settle();
+        };
+      }
+      settle();
     }, (e) => {
+      if (disposed) return;
       handle.status = 'degraded';
       handle.code = 'mic-error';
       handle.reason = micErrorMessage(e);
+      settle();
     });
     return handle;
   },
@@ -731,25 +755,30 @@ const mixer = {
 const master = {
   compiler: 'audio/audio-engine.js#AudioEngine',
   structural: [],
-  create({ ctx, hooks, acct, params, options }) {
+  create({ ctx, hooks, acct, params, options, global }) {
     // The Studio bus feeds engine.master — the head of the existing safety chain (master gain
     // ≤ MAX_OUTPUT_GAIN → limiter → trim → ceiling → analyser → destination). It is the only
     // Studio node connected outside the Studio graph; nothing reaches ctx.destination directly.
+    // The bus is silent (0) until the crossfade, so connecting it while prepared changes nothing.
     const out = hooks.masterInput();
     if (!out) throw new Error('The engine has no master output chain.');
     const bus = acct.track(ctx.createGain());
     const ramp = createRamp(bus.gain, 0, ctx.currentTime, ctx.sampleRate);
     bus.connect(out);
-    if (options.masterLevel !== 'ignore') hooks.setMasterLevel(params.level);
+    // The engine's master level is shared with MEASURE, Labs and the Playground: written only
+    // through the runtime's gate, and only once the transaction committed (engage, update).
+    const level = global || { setMasterLevel: (g) => options.masterLevel !== 'ignore'
+      && (hooks.setMasterLevel(g), true) };
     return {
       inputs: { audio: bus },
       outputs: {},
       outputRange: {},
       modTarget: () => ({ reason: 'The master level is neither automatable nor modulatable.' }),
       applyBase() {},
+      engage() { level.setMasterLevel(params.level); },
       update(changed, owned, w) {
-        if ('level' in changed && options.masterLevel !== 'ignore') {
-          hooks.setMasterLevel(changed.level); // engine.setMasterGain: clamped and smoothed
+        // engine.setMasterGain: clamped and smoothed
+        if ('level' in changed && level.setMasterLevel(changed.level)) {
           did(w, changed, ['level'], 'glide');
         }
       },

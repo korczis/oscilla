@@ -20,6 +20,8 @@
 // against the real context rate, so a model edited on a 96 kHz device still plays safely on a
 // 44.1 kHz one.
 
+import { WAVEFORMS } from '../core/constants.js';
+
 // ============================================================ constants
 
 export const SEQUENCE_VERSION = 1;
@@ -35,8 +37,9 @@ export const MAX_TEMPO_BPM = 300;
 export const DEFAULT_TEMPO_BPM = 120;
 // V1 DEFAULT_PATTERN_PARAMS.random.seed (index.html@95dfa81:1155)
 export const DEFAULT_SEED = 20261001;
-// from V1 WAVEFORMS (index.html@95dfa81:1006)
-export const WAVEFORMS = ['sine', 'triangle', 'sawtooth', 'square'];
+// V1 WAVEFORMS (index.html@95dfa81:1006): one owner, core/constants.js; re-exported for the
+// sequencer's importers (v4.0 audit F11).
+export { WAVEFORMS };
 
 export const BLOCK_TYPES = [
   'tone',
