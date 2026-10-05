@@ -191,8 +191,13 @@ measurement starts:
   experiment id and timestamp chosen once, whether it is stored, and the record stored). A
   retry writes the same record, never a second copy (ADR 0043's idempotent save). When a write
   reports an error the store is read back; a record that is there (a lost acknowledgement) is
-  the saved run, and the save continues as "Update name and notes", so a metadata edit before
-  the retry is annotated rather than refused as `immutable` and reported as "not saved".
+  the saved run only when its result hash is the one written (a different record under the id
+  is reported, and a retry stores the run under a new id), and the save continues as "Update
+  name and notes", so a metadata edit before the retry is annotated rather than refused as
+  `immutable` and reported as "not saved". A Studio save's decoration (its provenance block) is
+  kept in the save record, so a retry from MEASURE writes the same facts. A record deleted since
+  the save whose re-store fails is reported as not stored, and the run is no longer marked
+  saved.
 - **A run is saved once.** The saved state belongs to the result shown, not to the setup:
   applying a recipe link or loading a recipe no longer clears it, so a stored run cannot be
   saved a second time (before, that stored a second record of the same run, and with an

@@ -89,8 +89,9 @@
 // Saving is idempotent per result: one save record per result (ctx.save { result, id, now,
 // stored, experiment }) chooses the experiment id and timestamp once, so a retry writes the same
 // record and never a second copy of one run. When a write reports an error, the store is read
-// back: a record that is there (a lost acknowledgement) is the saved run, and the save goes on
-// as "Update name and notes". Once stored, a run is never put again: its name and annotation
+// back: a record that is there with the result hash written (a lost acknowledgement) is the
+// saved run, and the save goes on as "Update name and notes"; a Studio save's decoration is
+// kept in the save record, so a retry from MEASURE writes the same facts. Once stored, a run is never put again: its name and annotation
 // notes change through annotate (only what differs), and a record deleted since is stored again
 // as saved (same id, timestamp and repeat link). The notes, the repeat link, the definition
 // reference and the requested range are evidence taken when the measurement starts.
@@ -974,10 +975,19 @@ export function createMeasureUi(svc) {
     const later = typeof m.notes === 'string' ? m.notes.trim() : '';
     const notes = later && later !== (ev.notes || '') ? later : null; // an annotation, or none
     m.saving = true;
+    let lostRun = false; // the record was gone and storing it again failed: not stored
     const storeAgain = async (name) => {
       const again = annotateExperiment(sv.experiment, notes === null ? { name }
         : { name, notes });
-      await cmp.experimentsPut(again);
+      try {
+        await cmp.experimentsPut(again);
+      } catch (err) {
+        lostRun = true;
+        sv.stored = false;
+        cmp.notify('error', 'Experiment not stored', `"${name}" was no longer stored, and storing `
+          + `it again failed: ${err.message || String(err)}. The run is not stored; save again.`);
+        return null;
+      }
       sv.experiment = again;
       m.savedAnnotation = again.annotations && again.annotations.notes || null;
       cmp.notify('success', 'Experiment saved again', `"${name}" was no longer stored; the `
@@ -1021,8 +1031,9 @@ export function createMeasureUi(svc) {
       return sv.id;
     } finally {
       m.saving = false;
-      m.saved = true;
-      m.savedId = sv.id;
+      m.saved = !lostRun;
+      m.savedId = lostRun ? null : sv.id;
+      if (lostRun) m.savedAnnotation = null;
       refresh();
     }
   }
@@ -1838,9 +1849,14 @@ export function createMeasureUi(svc) {
         return updateSaved(this, result);
       }
       this.meas.saving = true;
+      // A retry writes the same facts: the Studio decoration of the first attempt is kept.
+      const sv0 = saveOf(result);
+      if (decorate) sv0.decorate = decorate;
+      const dec = sv0.decorate || null;
+      let e = null;
       try {
         const base = experimentOf(result, this);
-        const e = decorate ? decorate(base) : base;
+        e = dec ? dec(base) : base;
         // A new measurement never stores a calibration claim its results contradict.
         const claim = calibrationClaimFindings(e);
         if (claim.length) throw new Error(claim.map((f) => `${f.path}: ${f.text}`).join('; '));
@@ -1860,14 +1876,24 @@ export function createMeasureUi(svc) {
         let there = null;
         let unread = false;
         try {
-          there = sv ? await this.experimentsGet(sv.id) : null;
+          there = sv && e ? await this.experimentsGet(sv.id) : null;
         } catch (e2) {
           unread = true;
         }
-        if (there) {
+        // The stored record is this run only when its result hash is the one written.
+        const same = !!there && !!e && !!there.provenance && there.provenance.resultHash
+          === e.provenance.resultHash;
+        if (same) {
           markStored(this, there);
           this.meas.saving = false;
           return await updateSaved(this, result, { confirmed: true });
+        }
+        if (there) {
+          ctx.save = null; // a retry stores this run under a new id, with the same decoration
+          saveOf(result).decorate = sv.decorate || null;
+          this.notify('error', 'Experiment not saved', `A different record is stored under this `
+            + `id (${sv.id}); this run was not saved. Save again to store it under a new id.`);
+          return null;
         }
         if (unread) {
           this.notify('error', 'Experiment not confirmed', `${err.message || String(err)}. The `

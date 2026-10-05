@@ -18,6 +18,8 @@ import { KNOWN_ALGORITHM_IDS } from '../../src/js/measurement/algorithms.js';
 import { createMeasureUi } from '../../src/js/ui/measure.js';
 import { createExperimentsUi } from '../../src/js/ui/experiments.js';
 import { experimentFromResult } from '../../src/js/ui/measure-experiment.js';
+import { withStudioProvenance } from '../../src/js/studio/provenance.js';
+import { templateModel } from '../../src/js/studio/templates/index.js';
 import { buildFixtures, NOW, FIXTURE_RECIPE } from '../browser/fixtures/v3-experiments.mjs';
 import { fakeIndexedDB } from './fixtures/fake-indexeddb.mjs';
 
@@ -227,6 +229,79 @@ test('save model: an update with nothing changed annotates nothing and says so',
   assert.deepEqual(notes.slice(before).map((n) => n.title), ['Nothing to update']);
   assert.equal((await s.get(id)).annotations.notes, 'from Experiments', 'never cleared');
 });
+
+test('save model: a failed re-store of a deleted record is never announced as stored',
+  async () => {
+    const { cmp, notes, store } = await makeUi();
+    await cmp.experimentsRefresh();
+    await showResult(cmp);
+    const id = await cmp.measureSave();
+    const s = store();
+    cmp.exps.deleteId = id;
+    cmp.exps.deleteName = 'x';
+    assert.equal(await cmp.experimentsDelete(), true);
+    const put = s.put;
+    s.put = () => Promise.reject(Object.assign(new Error('storage is full'), { code: 'quota' }));
+    cmp.meas.name = 'renamed';
+    const before = notes.length;
+    assert.equal(await cmp.measureSave(), null, 'nothing is stored');
+    assert.equal(cmp.meas.saved, false);
+    assert.equal(await s.get(id), null);
+    const said = notes.slice(before);
+    assert.ok(said.some((n) => n.title === 'Experiment not stored' && /save again/.test(n.text)));
+    assert.ok(!said.some((n) => /is stored|only the metadata/.test(n.text)), JSON.stringify(said));
+    // Space freed: Save stores the same run under its id.
+    s.put = put;
+    assert.equal(await cmp.measureSave(), id);
+    assert.equal((await s.get(id)).name, 'renamed');
+    assert.equal(cmp.meas.saved, true);
+  });
+
+test('save model: a read-back is the run only when its result hash matches', async () => {
+  const { cmp, notes, store } = await makeUi();
+  await cmp.experimentsRefresh();
+  await showResult(cmp);
+  const s = store();
+  const put = s.put;
+  // Another record lands under the id (different facts), and the write reports an error.
+  s.put = async (e) => {
+    s.put = put;
+    const other = { ...e, quality: { ...e.quality, status: 'GOOD' } };
+    await put(hash.withResultHash(other, hash.resultHash(other), hash.RESULT_HASH_VERSION));
+    throw new Error('ack lost');
+  };
+  const before = notes.length;
+  assert.equal(await cmp.measureSave(), null);
+  assert.equal(cmp.meas.saved, false);
+  const said = notes.slice(before);
+  assert.ok(said.some((n) => n.title === 'Experiment not saved'
+    && /different record is stored under this id/.test(n.text)), JSON.stringify(said));
+  assert.ok(!said.some((n) => n.title === 'Experiment saved'));
+  // A retry stores this run under a new id, beside the other record.
+  const id = await cmp.measureSave();
+  assert.ok(id);
+  assert.equal((await s.list()).length, 2);
+  assert.notEqual((await s.get(id)).quality.status, 'GOOD');
+});
+
+test('save model: a retry from MEASURE keeps the Studio provenance of a failed Studio save',
+  async () => {
+    const { cmp, notes, store } = await makeUi();
+    await cmp.experimentsRefresh();
+    await showResult(cmp);
+    const s = store();
+    const put = s.put;
+    s.put = () => Promise.reject(Object.assign(new Error('storage is full'), { code: 'quota' }));
+    const model = JSON.parse(JSON.stringify(templateModel('filter-automation')));
+    const decorate = (e) => withStudioProvenance({ ...e, name: 'Studio run' }, model);
+    assert.equal(await cmp.measureSave({ decorate }), null, 'the Studio save stored nothing');
+    s.put = put;
+    const id = await cmp.measureSave(); // the MEASURE button: no decorate of its own
+    assert.ok(id, JSON.stringify(notes));
+    const back = await s.get(id);
+    assert.ok(back.studio, 'the Studio provenance block is kept');
+    assert.equal(back.studio.studioHash, decorate({}).studio.studioHash);
+  });
 
 /** A run imported from elsewhere that claims the id of the local definition, version 7. */
 async function foreignRun() {
