@@ -364,7 +364,7 @@ claims:
     test: tests/unit/v3-experiments.test.mjs
     status: guaranteed
     responsibility: product
-    note: Proven on an in-process IndexedDB fake (open, upgrade, CRUD, reopen, quota, open failure, memory fallback); the UI path (list, rename, duplicate, delete with confirmation) is check experiments in tests/browser/v3-ui.cjs. No test reloads a real browser page and reads the record back.
+    note: Proven on an in-process IndexedDB fake (open, upgrade, CRUD, reopen, quota, open failure, memory fallback); the UI path (list, rename, duplicate, delete with confirmation) is check experiments in tests/browser/v3-ui.cjs, and check persistence there reloads the page per browser and origin and reads the record back, or reports the memory fallback.
 
   - id: experiment-run-immutable
     claim: A stored completed experiment run cannot be changed; only its name and annotation notes change, through a separate metadata operation, and a duplicate is the same run under a new ID that records its source
