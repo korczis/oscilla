@@ -1734,6 +1734,12 @@ function defineChecks() {
           if (Math.min(a.right, b.right) - Math.max(a.left, b.left) > 1
             && Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top) > 1) bad.push(`stations ${i + 1}/${j + 1} overlap`);
         }
+        // A station's text stays inside its station: squeezed columns let it run into the next.
+        view.querySelectorAll('.osc-about-timeline > li').forEach((li, i) => {
+          if ([...li.children].some((c) => c.scrollWidth > li.clientWidth + 1)) {
+            bad.push(`station ${i + 1} text wider than the station`);
+          }
+        });
         for (const a of view.querySelectorAll('a[href]')) {
           if (a.getBoundingClientRect().height < 23.5) bad.push(`small target ${a.dataset.osc}`);
         }
