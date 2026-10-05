@@ -538,8 +538,9 @@ What is checked, and where:
   outside the active task's scope. `npm run verify` runs `majordomus doctor` too.
 - **In CI, on every pull request** (`.github/workflows/ci.yml`, all required through `gate`):
   the test suites; `tests/unit/knowledge-integrity.test.mjs`, which fails when a claim, rule,
-  bootstrap or this README names a file or test that does not exist or that CI does not
-  run; `tests/unit/no-fake-science.test.mjs`; and `majordomus doctor` at a pinned version.
+  bootstrap or this README names a file that does not exist, and when a claim's test or a
+  rule's `x-majordomus` test is not run by CI (other paths are checked only to exist);
+  `tests/unit/storage-inventory.test.mjs`, which holds the privacy table below to the code; `tests/unit/no-fake-science.test.mjs`; and `majordomus doctor` at a pinned version.
 - **Not checked by a machine**: a project rule is enforced by tests only where its
   `x-majordomus` block names them (`project.no-fake-science`), otherwise by review; use-case
   coverage of the claims is advisory; the worktree layout is a convention. An ADR's status

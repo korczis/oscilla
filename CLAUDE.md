@@ -36,8 +36,9 @@ majordomus plan status             # milestone progress
 
 Ship through small PRs with `gh pr merge --auto --squash`; the required `gate` check
 aggregates the CI jobs, whose `npm test` includes `tests/unit/knowledge-integrity.test.mjs`
-(what the claims, rules and bootstraps name exists and runs). `majordomus doctor` runs in the
-pre-commit hook, `npm run verify` and CI; `majordomus finish --check` before a push.
+(the paths the claims, rules and bootstraps name exist; claim and rule tests run in CI).
+`majordomus doctor` runs in the pre-commit hook, `npm run verify` and CI; `majordomus finish
+--check` before a push.
 
 Releases: the version lives only in `package.json` (`version:check` rejects a hard-coded copy
 of the current version elsewhere, this file included). On a clean tree `release:prepare`
@@ -66,7 +67,7 @@ status` is the truth, not this paragraph.
 - Build and release: `scripts/`. Tests: `tests/unit/`, `tests/browser/`, `tests/visual/`;
   `tests/README.md` says what each proves and which gate runs it.
 
-<!-- majordomus:begin 6d09b7b9c1bb dec3fa03e34d2faf -->
+<!-- majordomus:begin 216241813e0b dec3fa03e34d2faf -->
 # CLAUDE.md
 
 Claude Code bootstrap. The repository's provider-neutral AI context lives under
