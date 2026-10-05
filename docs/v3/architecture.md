@@ -165,11 +165,15 @@ validation (`calibrationClaims: 'strict'`) refuses it; a new MEASURE or Studio s
 as it is, finding included). It records the master output gain the stimulus passed
 (`output.masterGain`: 20·log10 of it is part of every magnitude), the engine's result notes,
 the frequencies the user asked for before the Nyquist clamp (`recipe.requested`) and the full
-algorithm map, and stores the input device id hashed (spec §88). It then stamps the
-configuration hash and the version-3 result hash. Version 3 covers the results, the quality
-verdict, the calibration, the input, the output, the measurement block (the runs with their
-ids) and the build (ADR 0040). Versions 2 and 1 still verify in older files: version 2 lacks
-the measurement and build, and version 1 covers the results only. With two or more runs, `schema.js` `resultsFromMeasurement` stores the aggregate as the
+algorithm map, and stores the input device id hashed (spec §88). It records the definition
+version the measurement was started from (`definition`, ADR 0043), but only when the recipe
+that ran is what that version asks for; otherwise the run carries the definition derived from
+its own recipe, marked `derived: true`. It then stamps the configuration hash and the
+version-4 result hash. Version 4 covers the results, the quality verdict, the calibration, the
+input, the output, the measurement block (the runs with their ids), the build, the recipe and
+the definition. Versions 3, 2 and 1 still verify in older files: version 3 lacks the recipe
+and the definition (ADR 0040), version 2 also the measurement and build, and version 1 covers
+the results only. With two or more runs, `schema.js` `resultsFromMeasurement` stores the aggregate as the
 primary response and the transfer as its marked centre (the G20 rule, enforced again by
 `validate.js`). `store.js` serialises the experiment to the file form, validates it on every
 put and get, and keeps it in the IndexedDB database `oscilla-experiments` (object stores
@@ -185,8 +189,18 @@ and the Studio node registry); `compare.js` builds its N-way differences from th
 descriptors and adds `semantic`. The Studio part is `studio/diff.js` `studioChanges`, injected
 by `compare-view.js`, so the experiment layer never imports the Studio layer. Import goes through `validate.js` (an
 untrusted input with size, type, finiteness, algorithm-ID and hash checks) and `migrate.js`.
+Definitions (ADR 0043) are `experiments/definition.js`: a versioned record of what to measure
+and how (the recipe as asked for, at no rate; the declared conditions; the lowest acceptable
+quality verdict), hashed over those execution fields only, its versions append-only. They live
+in the same database (object store `definitions`, database version 3); `validate.js` checks a
+run's definition against its own hash and the run's recipe (`recipeMismatches`), and
+`migrate.js` 2 → 3 gives every earlier run its derived definition (the recipe as played;
+`requested` is not checked against a derived definition, so every earlier valid file opens).
+`listDefinitions` returns `{ definitions, unreadable }`, so an unreadable definition never fails
+the list of runs.
 Why a recipe and an experiment are separate: ADR 0019. Why IndexedDB with export as the
-durable path: ADR 0022. Why schema versions are independent integers: ADR 0023.
+durable path: ADR 0022. Why schema versions are independent integers: ADR 0023. Why a run is
+executed from a versioned definition: ADR 0043.
 
 ### The UI adapters
 
@@ -457,9 +471,11 @@ levelLabel(levelCalibration, currentInput?) -> { unit: 'dB SPL'|RELATIVE_UNIT, c
   indicator: 'CALIBRATED'|'UNCALIBRATED', reason? /* another input */ }
 
 // experiments/schema.js — schema versions are independent of the product version (spec §131)
-Experiment = { kind: 'oscilla-experiment', schemaVersion: 2, oscillaVersion, oscillaCommit,
+Experiment = { kind: 'oscilla-experiment', schemaVersion: 3, oscillaVersion, oscillaCommit,
   experimentId, name, recipe: { stimulus /* = renderStimulus(spec).spec, incl. color, law */,
   repeats, analysis, requested? /* { f1, f2 } before the Nyquist clamp */ },
+  definition: { id, version, hash, derived /* true: from the run's own recipe */,
+    execution /* the definition version's, see definition.js */ } /* schema 3 */,
   output: { level, masterGain? /* linear, (0, 1] */ },
   input: { device: { label, id /* hashed 'sha256:…', §88 */ }, constraints: { requested,
     applied } /* no raw deviceId */ },
@@ -469,9 +485,9 @@ Experiment = { kind: 'oscilla-experiment', schemaVersion: 2, oscillaVersion, osc
   quality, algorithms: { role: id }, results: { transfer, ir, rta /* RtaResult */,
     aggregate? /* AggregateResult, optional, presence kept */,
     runTransfers? /* [{ run, transfer }] ≤ LIMITS.runTransfers, only on request (G20) */ },
-  provenance: { configHash, resultHash /* SHA-256, §101 */, resultHashVersion? /* 3: v2 +
-    measurement + build; 2: results, quality, calibration, input, output; absent: 1, results
-    only */, createdAt, repeatOf /* source experimentId|null */,
+  provenance: { configHash, resultHash /* SHA-256, §101 */, resultHashVersion? /* 4: v3 +
+    recipe + definition; 3: v2 + measurement + build; 2: results, quality, calibration, input,
+    output; absent: 1, results only */, createdAt, repeatOf /* source experimentId|null */,
     duplicateOf? /* the experiment a duplicate copies (ADR 0040) */,
     build /* { version, commit, shortCommit, sourceDate, channel, dirty, repository,
       sourceDigest?, artifactSha256? }|null */ },
@@ -479,7 +495,17 @@ Experiment = { kind: 'oscilla-experiment', schemaVersion: 2, oscillaVersion, osc
 // ADR 0040: a stored run with a stamped resultHash is immutable. store.put of it is a no-op when
 // identical, else ExperimentStoreError 'immutable' (err.fields); name / annotations change only
 // through store.annotate(id, { name, notes }); duplicateExperiment(e, { id, name }) keeps facts,
-// hashes and createdAt and sets provenance.duplicateOf. migrate.js 1 → 2 adds the run ids.
+// hashes and createdAt and sets provenance.duplicateOf. migrate.js 1 → 2 adds the run ids,
+// 2 → 3 the derived definition (ADR 0043).
+// experiments/definition.js (ADR 0043)
+Definition = { kind: 'oscilla-definition', schemaVersion: 1, id, name, notes, createdAt,
+  versions: [{ version, hash, createdAt, execution: { recipe /* sampleRate null */,
+    conditions: { notes }, acceptance: { minimumQuality: 'GOOD'|'USABLE'|'POOR'|null } } }] }
+definitionHash(execution) -> hex   // SHA-256 of canonical { v: 1, ...execution }; no metadata
+reviseDefinition(def, execution, { now }) -> { definition, changed }   // appends a version
+definitionRef(def, version?) | derivedRef(recipe) -> experiment.definition
+recipeMismatches(runRecipe, runReference) -> [path]   // [] = the run is that definition's
+storedMatch(runReference, storedDefinition) -> 'derived'|'match'|'mismatch'|'absent'
 // G20: with an aggregate of ≥ 2 runs, results.transfer is its derivedFrom 'aggregate' centre
 // or null (never one run's transfer); validate.js enforces it
 resultsFromMeasurement(engineResult, { runTransfers: false|true|[run indices] })
@@ -487,7 +513,8 @@ resultsFromMeasurement(engineResult, { runTransfers: false|true|[run indices] })
 // experiments/semantic-diff.js (ADR 0041)
 runChanges(a, b, { studioChanges }) -> [{ domain, path, kind: 'added'|'removed'|'changed'|
   'unchanged', class: 'execution'|'presentation'|'metadata', before, after, unit?, label,
-  note? }]   // domains: recipe algorithms calibration conditions studio build result metadata
+  note? }]   // domains: definition recipe algorithms calibration conditions studio build
+             // result metadata
 // experiments/compare.js
 compareExperiments(list, { studioChanges }) -> { common, differences, compatible, warnings,
   sameConfiguration, semantic: [{ index, changes /* runChanges(list[0], list[index]) */ }] }
@@ -499,7 +526,7 @@ responseDelta(a, b, { pointsPerOctave }) -> { ok, frequencies, aDb, bDb, deltaDb
   envelope /* both bounds, overlap, overlapFraction, dispersion, comparable */|null }
 // experiments/hash.js
 configHash(e) -> hex;  withConfigHash(e, hex)
-resultHash(e, { version = 3 }) -> hex;  withResultHash(e, hex, version = 3)
+resultHash(e, { version = 4 }) -> hex;  withResultHash(e, hex, version = 4)
 // experiments/validate.js verifies resultHash in the file's version on import (mismatch ->
 // error code 'corrupt') and that quality.mask.frequencies equals the stored response grid
 // In a file, typed arrays are EncodedArray { dtype: 'f32'|'f64'|'u8', length,

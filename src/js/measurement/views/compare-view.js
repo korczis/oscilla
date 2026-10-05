@@ -2,7 +2,8 @@
 //
 //   buildCompareView(experiments, options) -> CompareView
 //     options = { labels = ['A', 'B', …], deltaPair = [0, 1], pointsPerOctave = 48,
-//                 allowNonEquivalentDelta = false, irRange = null ([fromMs, toMs]; null =
+//                 allowNonEquivalentDelta = false, definitions = null (id → stored definition,
+//                 semantic-diff.js), irRange = null ([fromMs, toMs]; null =
 //                 ir-chart.js IR_OVERLAY_RANGE_MS) }
 //   CompareView = {
 //     entries: [{ label, id, title, compact, role, baseline }],
@@ -98,6 +99,10 @@ function changeValue(c, v, e) {
   if (typeof v === 'number') return num(v, c.unit);
   if (typeof v === 'boolean') return v ? 'yes' : 'no';
   if (typeof v === 'string') return /^[0-9a-f]{64}$/.test(v) ? `${v.slice(0, 12)}…` : v;
+  if (c.domain === 'definition') {
+    return v.derived ? "none (derived from the run's own recipe)" : `version ${v.version} (${
+      v.hash.slice(0, 12)}…)`;
+  }
   if (v.from && v.to) return `${v.from.node}.${v.from.port} → ${v.to.node}.${v.to.port}`;
   if (v.points) return `${v.points.length} points`;
   if ('severity' in v) return `${v.severity} ${changeValue(c, v.value, e)}`;
@@ -332,7 +337,8 @@ export function buildCompareView(experiments, options = {}) {
     labels = experiments.map((_, i) => String.fromCharCode(65 + (i % 26))),
     deltaPair = [0, 1], pointsPerOctave = 48, allowNonEquivalentDelta = false, irRange = null,
   } = options;
-  const cmp = compareExperiments(experiments, { studioChanges });
+  const cmp = compareExperiments(experiments, { studioChanges,
+    definitions: options.definitions || null });
   const entries = experiments.map((e, i) => {
     const s = experimentSummary(e);
     return { label: labels[i], id: s.id, title: s.title, compact: s.compact,

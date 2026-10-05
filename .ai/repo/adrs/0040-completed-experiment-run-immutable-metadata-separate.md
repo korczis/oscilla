@@ -135,7 +135,11 @@ store's immutability applies:
   showed dB SPL for a run measured uncalibrated. `environment.notes` was also read at Save,
   although the decision above calls it the notes at measurement time.
 
-Resolved without a schema change (experiment schema 2, result hash version 3):
+Resolved without a schema or hash version of its own. It was written against experiment
+schema 2 and result hash version 3; since ADR 0043 new records are schema 3 with result hash
+version 4 (recipe and definition covered), and everything below applies to them unchanged. The
+record's definition reference, like its notes and repeat link, is evidence taken when the
+measurement starts:
 
 - **The engine reports what it applied.** `result.calibrated.frequency` already names the
   profile by `profileId` (its SHA-256, ADR 0020) and name; `result.calibrated.level.calibration`
@@ -183,6 +187,12 @@ Resolved without a schema change (experiment schema 2, result hash version 3):
 - **The stored noise-check snapshot follows the run.** The RTA of a completed measurement's
   noise check is drawn with the level calibration that measurement applied, not with one
   selected afterwards; the live RTA keeps using the current one, since it is measured now.
+- **One save record per result.** MEASURE keeps one record per result (`ctx.save`: the
+  experiment id and timestamp chosen once, whether it is stored, and the record stored). A
+  retry writes the same record, never a second copy (ADR 0043's idempotent save). When a write
+  reports an error the store is read back; a record that is there (a lost acknowledgement) is
+  the saved run, and the save continues as "Update name and notes", so a metadata edit before
+  the retry is annotated rather than refused as `immutable` and reported as "not saved".
 - **A run is saved once.** The saved state belongs to the result shown, not to the setup:
   applying a recipe link or loading a recipe no longer clears it, so a stored run cannot be
   saved a second time (before, that stored a second record of the same run, and with an

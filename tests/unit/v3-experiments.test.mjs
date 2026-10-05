@@ -161,7 +161,8 @@ const hasError = (errors, path, re) => errors.some((e) => e.path === path
 
 test('schema versions are four independent axes (§131)', () => {
   // 2: run ids and the metadata/execution split (ADR 0040); schema 1 migrates to it.
-  assert.strictEqual(EXPERIMENT_SCHEMA_VERSION, 2);
+  // 3: the definition a run was executed from (ADR 0043); schema 2 migrates to it.
+  assert.strictEqual(EXPERIMENT_SCHEMA_VERSION, 3);
   // 2: frequency profiles carry their sign convention (M4); schema 1 migrates to it.
   assert.strictEqual(CALIBRATION_SCHEMA_VERSION, 2);
   assert.strictEqual(CONFIG_SCHEMA_VERSION, CONFIG_FILE_VERSION);
@@ -180,7 +181,8 @@ test('createExperiment: contract shape, unknowns null, inputs not mutated', () =
     input });
   assert.deepStrictEqual(input, snapshot);
   assert.deepStrictEqual(Object.keys(e), ['kind', 'schemaVersion', 'oscillaVersion',
-    'oscillaCommit', 'experimentId', 'name', 'recipe', 'output', 'input', 'calibration',
+    'oscillaCommit', 'experimentId', 'name', 'recipe', 'definition', 'output', 'input',
+    'calibration',
     'environment', 'measurement', 'quality', 'algorithms', 'results', 'provenance']);
   assert.strictEqual(e.oscillaVersion, null);
   assert.strictEqual(e.oscillaCommit, null);
@@ -608,8 +610,8 @@ test('corrupt: input larger than maxBytes is rejected before parsing', () => {
 
 test('future schema version is rejected clearly', () => {
   const doc = docOf(fullExperiment());
-  const errors = reject({ ...doc, schemaVersion: 3 });
-  assert.ok(hasError(errors, 'schemaVersion', /newer than this OSCILLA supports \(2\)/));
+  const errors = reject({ ...doc, schemaVersion: 4 });
+  assert.ok(hasError(errors, 'schemaVersion', /newer than this OSCILLA supports \(3\)/));
   const m = migrateExperiment({ ...doc, schemaVersion: 99 });
   assert.strictEqual(m.ok, false);
   assert.match(m.errors[0].text, /schema 99 is newer/);
@@ -654,7 +656,7 @@ test('migration fixture: a synthetic schema 0 document imports as schema 1', () 
   // Synthetic "schema 0": the stimulus at top level, `title` instead of `name`, no analysis.
   const target = fullExperiment();
   const v1 = docOf(target);
-  const { name, recipe, ...rest } = v1;
+  const { name, recipe, definition, ...rest } = v1;
   const v0 = { ...rest, schemaVersion: 0, title: name, stimulus: recipe.stimulus,
     repeats: recipe.repeats };
   const fixture = {
@@ -662,6 +664,7 @@ test('migration fixture: a synthetic schema 0 document imports as schema 1', () 
       recipe: { stimulus, repeats, analysis: { fftSize: 65536, smoothing: '1/6',
         window: ALGORITHMS.window } } }),
     2: migrations[2],
+    3: migrations[3],
   };
   const v0Text = JSON.stringify(v0);
   const v = validateExperiment(v0Text, { ...OPTS, migrations: fixture });
@@ -987,7 +990,7 @@ test('memory store: CRUD with validation and explicit delete', async () => {
   const list = await store.list();
   assert.strictEqual(list.length, 1);
   assert.deepStrictEqual(Object.keys(list[0]), ['experimentId', 'name', 'createdAt',
-    'schemaVersion', 'oscillaVersion', 'status', 'sizeBytes']);
+    'schemaVersion', 'oscillaVersion', 'status', 'sizeBytes', 'definition']);
   assert.strictEqual(list[0].status, 'USABLE');
   const later = fullExperiment({ id: 'later', now: '2026-10-05T00:00:00.000Z' });
   await store.put(later);
@@ -1008,9 +1011,10 @@ test('IndexedDB store: open, upgrade from empty, CRUD, reopen keeps data', async
   const store = await openExperimentStore({ indexedDB: fake.indexedDB, name: 't1', ...OPTS });
   assert.strictEqual(store.kind, 'indexeddb');
   assert.deepStrictEqual(fake.state.upgrades, [[0, DB_VERSION]]);
-  // DB version 2 (V3.1, V426) adds the Studio partition next to the experiment stores.
+  // DB version 2 (V3.1, V426) adds the Studio partition next to the experiment stores, version
+  // 3 the definitions (ADR 0043).
   assert.deepStrictEqual([...fake.dbs.get('t1').stores.keys()], ['experiments', 'summaries',
-    'studio', 'studioSummaries']);
+    'studio', 'studioSummaries', 'definitions']);
   const e = fullExperiment();
   assert.strictEqual(await store.put(e), e.experimentId);
   assert.deepStrictEqual(await store.get(e.experimentId), e);

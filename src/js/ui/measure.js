@@ -76,6 +76,24 @@
 // the instrument's own hash state. A link read at load or on hashchange is validated like every
 // import and refused whole when anything is wrong; a valid one fills the setup and opens
 // MEASURE, and never starts a check or a measurement.
+//
+// Definitions (ADR 0043): measureLoadDefinition fills the setup from a definition version's
+// recipe and keeps that version's run reference. A measurement records it only when the setup
+// it starts with is exactly that recipe (definition.js setupRecipe, compared canonically) and
+// the recipe that ran is what the version asks for (measure-experiment.js); otherwise the run
+// carries the definition derived from its own recipe, and the panel and a notification say so.
+// The reference is taken when the measurement starts: a later edit of the setup never moves
+// the run to another definition. A Studio run (measureRunRecipe) never takes it. A derived
+// reference (a saved run's own recipe) is not kept loaded: only its recipe fills the setup.
+//
+// Saving is idempotent per result: one save record per result (ctx.save { result, id, now,
+// stored, experiment }) chooses the experiment id and timestamp once, so a retry writes the same
+// record and never a second copy of one run. When a write reports an error, the store is read
+// back: a record that is there (a lost acknowledgement) is the saved run, and the save goes on
+// as "Update name and notes". Once stored, a run is never put again: its name and annotation
+// notes change through annotate (only what differs), and a record deleted since is stored again
+// as saved (same id, timestamp and repeat link). The notes, the repeat link, the definition
+// reference and the requested range are evidence taken when the measurement starts.
 
 import { MEASUREMENT_STATES as S, isActiveState } from '../measurement/state-machine.js';
 import {
@@ -114,6 +132,9 @@ import {
 import { measureReferenceLevel, REFERENCE_CAPTURE_S } from '../calibration/reference.js';
 import { newExperimentId, describeStimulus, annotateExperiment } from '../experiments/schema.js';
 import { calibrationClaimFindings } from '../experiments/validate.js';
+import { setupRecipe } from '../experiments/definition.js';
+import { canonicalJson } from '../experiments/canonical-json.js';
+import { definitionText } from '../measurement/views/experiment-summary.js';
 import {
   experimentFromResult, experimentTestContext, measuredEvidence, evidenceChanges,
 } from './measure-experiment.js';
@@ -238,7 +259,6 @@ export function createMeasureUi(svc) {
     loopbackSystem: { type: 'biquad', filter: 'lowpass', frequency: 1000, Q: Math.SQRT1_2 },
     result: null,          // last engine result (COMPLETE or INVALID)
     evidence: null,        // frozen { result, calibration, notes } of it, as measured
-    saved: null,           // { result, id } once that result is stored (a run is saved once)
     shown: null,           // what the result panel shows: { kind: 'result'|'experiment', src }
     preflight: null,
     noise: null,
@@ -269,7 +289,21 @@ export function createMeasureUi(svc) {
     devices: [],           // the last enumerateDevices() result (plain { kind, deviceId, label })
     devicesEnumerated: false,
     lastRecipeParam: null, // the `mr` hash value last applied or written (V355)
+    definition: null,      // the loaded definition version's run reference (ADR 0043)
+    save: null,            // { result, id, now, stored, experiment }: one per result
+    runDefinition: null,   // the reference the running / last measurement started with
   };
+
+  /** Is `recipe` (a setup recipe) exactly what the loaded definition version asks for? */
+  function setupIsDefinition(recipe) {
+    if (!ctx.definition) return false;
+    try {
+      return canonicalJson(setupRecipe(recipe)) === canonicalJson(ctx.definition.execution
+        .recipe);
+    } catch (e) {
+      return false;
+    }
+  }
 
   /** The level calibration's applicability to the current input (level.js). */
   function levelApplies() {
@@ -500,6 +534,7 @@ export function createMeasureUi(svc) {
     m.safety = safetyNotes({ recipe, preflight: ctx.preflight });
     m.stimulusText = describeStimulus({ ...recipe.stimulus, kind: 'log-sweep' });
     m.error = ctx.error ? { ...ctx.error } : null;
+    if (m.definition) m.definition.differs = !setupIsDefinition(recipe);
   }
 
   // ---------------------------------------------------------------- result presentation
@@ -877,22 +912,52 @@ export function createMeasureUi(svc) {
   }
 
   // ---------------------------------------------------------------- experiment building
-  /** The evidence of `result` as measured; a result shown without a run has no start notes. */
+  /** The { f1, f2 } a recipe asked for (before the Nyquist clamp), or null. */
+  function requestedOf(recipe) {
+    const st = recipe && recipe.stimulus;
+    return st ? { f1: Number(st.f1), f2: Number(st.f2) } : null;
+  }
+
+  /**
+   * The evidence of `result` as measured (taken at its start, measuredEvidence); a result shown
+   * without a run (test seam) has no start notes and takes the rest from the workspace now.
+   */
   function evidenceOf(result) {
     return ctx.evidence && ctx.evidence.result === result ? ctx.evidence
-      : measuredEvidence(result, { notes: null });
+      : { ...measuredEvidence(result, { notes: null }), repeatOf: ctx.repeatOf,
+        definition: ctx.runDefinition, requested: requestedOf(ctx.lastRecipe) };
+  }
+
+  /** The one save record of `result`: its id and timestamp are chosen once (idempotent). */
+  function saveOf(result) {
+    if (!ctx.save || ctx.save.result !== result) {
+      ctx.save = { result, id: newExperimentId(randomBytes16()), now: Date.now(), stored: false,
+        experiment: null };
+    }
+    return ctx.save;
   }
 
   function experimentOf(result, cmp) {
     const m = cmp.meas;
-    // Calibration and notes come from the evidence fixed when the run completed (ADR 0040).
+    // Calibration, notes, repeat link and definition come from the evidence (ADR 0040).
     const ev = evidenceOf(result);
-    const st = ctx.lastRecipe && ctx.lastRecipe.stimulus;
+    const sv = saveOf(result);
     return experimentFromResult(result, {
-      now: Date.now(), id: newExperimentId(randomBytes16()), build: svc.build,
-      name: m.name, notes: ev.notes, laterNotes: m.notes, repeatOf: ctx.repeatOf,
-      requested: st ? { f1: Number(st.f1), f2: Number(st.f2) } : null,
+      now: sv.now, id: sv.id, build: svc.build,
+      name: m.name, notes: ev.notes, laterNotes: m.notes, repeatOf: ev.repeatOf,
+      requested: ev.requested, definition: ev.definition,
     });
+  }
+
+  /** `e` (the record of the current save) is stored: the run is saved, once. */
+  function markStored(cmp, e) {
+    const sv = ctx.save;
+    sv.stored = true;
+    sv.experiment = e;
+    cmp.meas.saved = true;
+    cmp.meas.savedId = sv.id;
+    cmp.meas.savedAnnotation = e.annotations && e.annotations.notes || null;
+    ctx.repeatOf = null;
   }
 
   /**
@@ -902,41 +967,53 @@ export function createMeasureUi(svc) {
    * since is stored again as it was saved (same id, creation time and repeat link), with the
    * current name and notes. The UI never says "not saved" for a stored run.
    */
-  async function updateSaved(cmp, result) {
+  async function updateSaved(cmp, result, { confirmed = false } = {}) {
     const m = cmp.meas;
-    const sv = ctx.saved;
+    const sv = ctx.save;
     const ev = evidenceOf(result);
     const later = typeof m.notes === 'string' ? m.notes.trim() : '';
     const notes = later && later !== (ev.notes || '') ? later : null; // an annotation, or none
     m.saving = true;
+    const storeAgain = async (name) => {
+      const again = annotateExperiment(sv.experiment, notes === null ? { name }
+        : { name, notes });
+      await cmp.experimentsPut(again);
+      sv.experiment = again;
+      m.savedAnnotation = again.annotations && again.annotations.notes || null;
+      cmp.notify('success', 'Experiment saved again', `"${name}" was no longer stored; the `
+        + 'same run is stored again under its id.');
+      return sv.id;
+    };
     try {
       const stored = await cmp.experimentsGet(sv.id);
       const name = (typeof m.name === 'string' && m.name.trim()) || (stored || sv.experiment).name;
-      if (!stored) {
-        const again = annotateExperiment(sv.experiment, notes === null ? { name }
-          : { name, notes });
-        await cmp.experimentsPut(again);
-        sv.experiment = again;
-        m.savedAnnotation = again.annotations && again.annotations.notes || null;
-        cmp.notify('success', 'Experiment saved again', `"${name}" was no longer stored; the `
-          + 'same run is stored again under its id.');
-        return sv.id;
-      }
+      if (!stored) return await storeAgain(name);
       const storedNotes = stored.annotations && stored.annotations.notes || null;
       const meta = {};
       if (name !== stored.name) meta.name = name;
       if (notes !== null && notes !== storedNotes) meta.notes = notes;
+      // A lost acknowledgement: the write reported an error, yet the run is stored.
+      const lost = confirmed ? ' (the write reported an error, but the run is stored)' : '';
       if (!Object.keys(meta).length) {
         m.savedAnnotation = storedNotes;
-        cmp.notify('info', 'Nothing to update', `"${stored.name}" already has this name and `
-          + 'these notes.');
+        if (confirmed) cmp.notify('success', 'Experiment saved', `"${stored.name}"${lost}.`);
+        else {
+          cmp.notify('info', 'Nothing to update', `"${stored.name}" already has this name and `
+            + 'these notes.');
+        }
         return sv.id;
       }
-      const next = await cmp.experimentsAnnotate(sv.id, meta);
+      let next;
+      try {
+        next = await cmp.experimentsAnnotate(sv.id, meta);
+      } catch (err) {
+        if (err && err.code === 'missing') return await storeAgain(name); // deleted meanwhile
+        throw err;
+      }
       m.savedAnnotation = next.annotations && next.annotations.notes || null;
-      cmp.notify('success', 'Experiment updated', `"${next.name}": ${Object.keys(meta)
-        .map((k) => (k === 'name' ? 'name' : 'annotation notes')).join(' and ')} updated; the `
-        + 'measured run is stored unchanged.');
+      cmp.notify('success', confirmed ? 'Experiment saved' : 'Experiment updated',
+        `"${next.name}"${lost}: ${Object.keys(meta).map((k) => (k === 'name' ? 'name'
+          : 'annotation notes')).join(' and ')} updated; the measured run is stored unchanged.`);
       return sv.id;
     } catch (err) {
       cmp.notify('error', 'Experiment name and notes not updated', 'The measured run is '
@@ -1088,13 +1165,20 @@ export function createMeasureUi(svc) {
     cmp.meas.savedId = null;
     ctx.result = null;
     ctx.evidence = null;
-    ctx.saved = null;
+    ctx.save = null;
     cmp.meas.savedAnnotation = null;
     if (ctx.shown && ctx.shown.kind === 'result') ctx.shown = null;
     rebuildAll();
     const notesAtStart = cmp.meas.notes; // the conditions as stated when the run starts
+    const repeatOfAtStart = ctx.repeatOf;
     const recipe = given || recipeNow();
     ctx.lastRecipe = recipe;
+    ctx.runDefinition = !given && setupIsDefinition(recipe) ? ctx.definition : null;
+    const definitionAtStart = ctx.runDefinition;
+    if (!given && ctx.definition && !ctx.runDefinition) {
+      cmp.notify('warning', 'Not run from the definition', 'The setup differs from the loaded '
+        + 'definition, so this run records the definition derived from its own recipe.');
+    }
     let result = null;
     try {
       // A bound level calibration is checked against the input before it is applied: without
@@ -1116,7 +1200,8 @@ export function createMeasureUi(svc) {
     // Presenting the result is outside the measurement: a view problem never fails it (M6).
     if (result) {
       ctx.evidence = Object.freeze({ result, ...measuredEvidence(result,
-        { notes: notesAtStart }) });
+        { notes: notesAtStart }), repeatOf: repeatOfAtStart, definition: definitionAtStart,
+        requested: requestedOf(recipe) });
       showResult(result);
       cmp.meas.evidenceRun += 1; // the reactive token of ctx.evidence
       refresh();
@@ -1180,6 +1265,7 @@ export function createMeasureUi(svc) {
         disabled: true },
       recipeLink: '',
       recipeLinkErrors: [],
+      definition: null,      // { text, conditions, differs } of the loaded definition
       name: '',
       notes: '',
       saved: false,
@@ -1747,28 +1833,47 @@ export function createMeasureUi(svc) {
     async measureSave({ decorate = null } = {}) {
       const result = ctx.result;
       if (!result || result.state !== S.COMPLETE || this.meas.saving) return null;
-      // A stored run is never saved twice: a later name or notes edit is metadata (annotate).
-      if (ctx.saved && ctx.saved.result === result) return updateSaved(this, result);
+      // A stored run is never put again: a later name or notes edit is metadata (annotate).
+      if (ctx.save && ctx.save.result === result && ctx.save.stored) {
+        return updateSaved(this, result);
+      }
       this.meas.saving = true;
       try {
         const base = experimentOf(result, this);
         const e = decorate ? decorate(base) : base;
-        // Written from now on: a calibration claim its results contradict is never stored.
+        // A new measurement never stores a calibration claim its results contradict.
         const claim = calibrationClaimFindings(e);
         if (claim.length) throw new Error(claim.map((f) => `${f.path}: ${f.text}`).join('; '));
         const id = await this.experimentsPut(e);
-        ctx.saved = { result, id, experiment: e };
-        this.meas.savedAnnotation = e.annotations && e.annotations.notes || null;
-        this.meas.saved = true;
-        this.meas.savedId = id;
-        ctx.repeatOf = null;
+        markStored(this, e);
         refresh();
-        this.notify('success', 'Experiment saved', `"${e.name}" (${this.exps.persistent
+        const d = evidenceOf(result).definition;
+        const from = !d ? '' : e.definition.hash === d.hash ? `from definition ${definitionText(d,
+          d)}, ` : 'NOT from the loaded definition (the recipe that ran differs), ';
+        this.notify('success', 'Experiment saved', `"${e.name}" (${from}${this.exps.persistent
           ? 'stored in this browser' : 'kept in memory for this page view only: export it to keep '
           + 'it'}).`);
         return id;
       } catch (err) {
-        this.notify('error', 'Experiment not saved', err.message || String(err));
+        // The write may have been stored with its acknowledgement lost: read it back.
+        const sv = ctx.save && ctx.save.result === result ? ctx.save : null;
+        let there = null;
+        let unread = false;
+        try {
+          there = sv ? await this.experimentsGet(sv.id) : null;
+        } catch (e2) {
+          unread = true;
+        }
+        if (there) {
+          markStored(this, there);
+          this.meas.saving = false;
+          return await updateSaved(this, result, { confirmed: true });
+        }
+        if (unread) {
+          this.notify('error', 'Experiment not confirmed', `${err.message || String(err)}. The `
+            + 'store could not be read back to see whether the run was stored; save again (a '
+            + 'retry never stores a second copy).');
+        } else this.notify('error', 'Experiment not saved', err.message || String(err));
         return null;
       } finally {
         this.meas.saving = false;
@@ -1780,6 +1885,33 @@ export function createMeasureUi(svc) {
         || '(unnamed)'}"`, testContext: experimentTestContext(e) };
       resetInvalidViewOptions(e);
       rebuildAll();
+    },
+    /** The current setup's recipe (measure-flow.js recipeFromFields). */
+    measureSetupRecipe() {
+      return recipeNow();
+    },
+    /**
+     * Load a definition version (its run reference, definition.js definitionRef or an
+     * experiment's `definition`) into the setup. An authored one stays loaded (the panel shows
+     * it; `name` and `match` say how it relates to the stored definition, and a 'match' names
+     * the run); a derived one is a saved run's recipe as played and only fills the setup.
+     */
+    measureLoadDefinition(ref, { name = null, match = 'absent', repeatOf = null } = {}) {
+      this.measureLoadRecipe(ref.execution.recipe, { repeatOf });
+      if (ref.derived) {
+        this.measureClearDefinition();
+        return;
+      }
+      ctx.definition = { ...ref, name, match };
+      if (name && match === 'match') this.meas.name = name;
+      this.meas.definition = { text: definitionText(ref, { name, match }),
+        conditions: ref.execution.conditions.notes, differs: false };
+      refresh();
+    },
+    /** Stop using the loaded definition (the next run derives its own). */
+    measureClearDefinition() {
+      ctx.definition = null;
+      this.meas.definition = null;
     },
     /** Load a recipe (an experiment's) into the setup; the next save is a NEW experiment. */
     measureLoadRecipe(recipe, { repeatOf = null } = {}) {

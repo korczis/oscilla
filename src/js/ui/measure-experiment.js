@@ -13,7 +13,14 @@
 // Nyquist clamp (recipe.requested, from the caller), the full algorithm map (the capture checks'
 // clip and discontinuity IDs included), the input with its device id hashed (schema.js
 // normalizeInput, §88), and is stamped with the version-3 result hash (results, quality,
-// calibration, input, output, the runs with their ids 'run-1'.. and the build; ADR 0040).
+// calibration, input, output, the runs with their ids 'run-1'.. and the build; ADR 0040), now
+// version 4 (plus the recipe and the definition, ADR 0043).
+//
+// Definition (ADR 0043): `definition` is the run reference of the definition version the
+// measurement was started from (definition.js definitionRef). It is recorded only when the
+// recipe that ran is what that version asks for (recipeMismatches); otherwise, and without
+// one, the experiment carries the definition derived from its own recipe (derived: true). The
+// caller compares the saved reference with the one it passed to say which happened.
 //
 // Evidence as measured (ADR 0040, resolution 2026-10-05): the calibration of the record is the
 // one the engine APPLIED, read from result.calibrated (appliedCalibration), never the profile or
@@ -25,8 +32,9 @@
 import { ALGORITHMS } from '../measurement/algorithms.js';
 import { isValidLevelCalibration } from '../calibration/level.js';
 import {
-  createExperiment, withResults, resultsFromMeasurement, annotateExperiment,
+  createExperiment, createRecipe, withResults, resultsFromMeasurement, annotateExperiment,
 } from '../experiments/schema.js';
+import { recipeMismatches } from '../experiments/definition.js';
 import {
   configHash, withConfigHash, resultHash, withResultHash, RESULT_HASH_VERSION,
 } from '../experiments/hash.js';
@@ -114,10 +122,11 @@ export function evidenceChanges(evidence, { calibration = null, notes = '', save
  *   laterNotes  the notes as they are now; when they differ from `notes` they are stored as
  *               annotations.notes (metadata), never as a measurement condition
  *   requested   { f1, f2 } the user asked for (before the Nyquist clamp), or null
+ *   definition  the run reference the measurement was started from, or null
  */
 export function experimentFromResult(result, {
   now, id, build = null, name = '', notes = '', laterNotes = null, repeatOf = null,
-  requested = null,
+  requested = null, definition = null,
 } = {}) {
   if (!result || !result.recipe) {
     throw new TypeError('experimentFromResult needs a measure() result');
@@ -145,9 +154,12 @@ export function experimentFromResult(result, {
     && (Number.isFinite(requested.f1) || Number.isFinite(requested.f2))
     ? { f1: Number.isFinite(requested.f1) ? requested.f1 : null,
       f2: Number.isFinite(requested.f2) ? requested.f2 : null } : null;
+  const recipe = { stimulus: result.recipe.stimulus, repeats: result.recipe.repeats,
+    analysis: result.recipe.analysis, requested: req };
+  const bound = definition
+    && !recipeMismatches(createRecipe(recipe), definition).length;
   let e = createExperiment({
-    recipe: { stimulus: result.recipe.stimulus, repeats: result.recipe.repeats,
-      analysis: result.recipe.analysis, requested: req },
+    recipe, definition: bound ? definition : null,
     build, now, id, name: title, sampleRate: result.sampleRate, input: result.input,
     calibration: applied, environment: { notes: noteText }, algorithms,
     masterGain: resultMasterGain(result), notes: Array.isArray(result.notes) ? result.notes : null,

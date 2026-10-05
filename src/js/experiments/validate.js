@@ -45,8 +45,14 @@
 // Result hash (spec §101): when provenance.resultHash is a hash, it is recomputed (hash.js
 // resultHash) in the version the file declares (provenance.resultHashVersion; absent = 1, the
 // results only; 2 = results, quality, calibration, input and output; 3 = version 2 plus the
-// measurement block and provenance.build) over the decoded experiment; a mismatch is the error
+// measurement block and provenance.build; 4 = version 3 plus the recipe and the definition)
+// over the decoded experiment; a mismatch is the error
 // { path: 'provenance.resultHash', code: 'corrupt' }. opts.sha256Hex may inject SHA-256.
+//
+// Schema 3 (ADR 0043, after migrate.js 2 → 3): `definition` is required, its hash is recomputed
+// over its execution and the run's recipe must be what it asks for (definition.js
+// checkDefinitionRef, recipeMismatches); either failure is code 'corrupt'. Result hash version
+// 4 covers it with the recipe.
 //
 // Schema 2 (ADR 0040, after migrate.js 1 → 2): every measurement.runs[i] is an object whose
 // `id` is 'run-<i + 1>' (schema.js runId); the optional `annotations` { notes?, baseline? } (user
@@ -95,6 +101,7 @@ import {
 } from '../calibration/level.js';
 import { DTYPES, decodeArray, dtypeOf, isEncodedArray } from './encode.js';
 import { migrateExperiment } from './migrate.js';
+import { checkDefinitionRef, recipeMismatches } from './definition.js';
 import {
   resultHash, resultHashVersionOf, RESULT_HASH_VERSIONS, studioExecutionHash,
 } from './hash.js';
@@ -108,8 +115,8 @@ export const DEFAULT_MAX_BYTES = 32 * 1024 * 1024;
 export const DEFAULT_MAX_ARRAY = 4_000_000;
 const MAX_DEPTH = 32;
 const TOP_KEYS = ['kind', 'schemaVersion', 'oscillaVersion', 'oscillaCommit', 'experimentId',
-  'name', 'recipe', 'output', 'input', 'calibration', 'environment', 'measurement', 'quality',
-  'algorithms', 'results', 'provenance'];
+  'name', 'recipe', 'definition', 'output', 'input', 'calibration', 'environment', 'measurement',
+  'quality', 'algorithms', 'results', 'provenance'];
 const ROLE_PATTERN = /^[a-z][A-Za-z0-9]{0,31}$/;
 const CODE_PATTERN = /^[A-Za-z0-9_.-]{1,64}$/;
 const STATUSES = ['GOOD', 'USABLE', 'POOR', 'INVALID'];
@@ -287,6 +294,8 @@ function checkExperiment(c, e, ctx) {
     experimentId: e.experimentId,
     name: e.name,
     recipe: checkRecipe(c, e.recipe, 'recipe'),
+    definition: checkDefinitionRef(c, e.definition, 'definition',
+      ctx.sha256Hex ? { sha256Hex: ctx.sha256Hex } : {}),
     output: null,
     input: checkInput(c, e.input, 'input'),
     calibration: checkCalibration(c, e.calibration, 'calibration'),
@@ -332,6 +341,12 @@ function checkExperiment(c, e, ctx) {
     out.environment = { notes: e.environment.notes };
   }
   checkMaskGrid(c, out.quality, out.results);
+  const bad = out.recipe && out.definition
+    ? recipeMismatches(out.recipe, out.definition) : [];
+  if (bad.length) {
+    c.add('definition', `corrupt: the run's recipe is not what its definition asks for (${
+      bad.slice(0, 4).join(', ')})`, 'corrupt');
+  }
   if (!c.errors.length && out.provenance && typeof out.provenance.resultHash === 'string') {
     const version = resultHashVersionOf(out);
     const opts = { version };
@@ -340,7 +355,9 @@ function checkExperiment(c, e, ctx) {
     if (actual !== out.provenance.resultHash) {
       const what = ['', 'the results do not',
         'the results, quality, calibration, input or output do not',
-        'the results, quality, calibration, input, output, runs or build do not'][version];
+        'the results, quality, calibration, input, output, runs or build do not',
+        'the results, quality, calibration, input, output, runs, build, recipe or definition '
+          + 'do not'][version];
       c.add('provenance.resultHash', `corrupt: ${what} match their stored hash (version `
         + `${version}; stored ${out.provenance.resultHash.slice(0, 12)}…, computed `
         + `${actual.slice(0, 12)}…)`, 'corrupt');

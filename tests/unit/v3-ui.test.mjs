@@ -61,7 +61,8 @@ test('the workspaces are full-width views keyed on `workspace`, with their own p
   assert.match(measureView, /:hidden="workspace !== 'measure'"/);
   assert.match(experimentsView, /:hidden="workspace !== 'experiments'"/);
   assert.equal((measureView.match(/<section class="osc-panel /g) || []).length, 7);
-  assert.equal((experimentsView.match(/<section class="osc-panel /g) || []).length, 3);
+  // Definitions (ADR 0043), saved experiments, detail, compare.
+  assert.equal((experimentsView.match(/<section class="osc-panel /g) || []).length, 4);
   for (const id of ['osc-measure-primary', 'osc-measure-stop', 'osc-measure-save']) {
     assert.match(measureView, new RegExp(`id="${id}"`));
   }

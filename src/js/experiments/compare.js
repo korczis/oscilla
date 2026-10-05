@@ -1,6 +1,7 @@
 // Experiment comparison (spec §59-§60, §105). Pure; no DOM, no globals.
 //
-//   compareExperiments(list, { studioChanges }) -> { common: { field: value }, differences:
+//   compareExperiments(list, { studioChanges, definitions }) -> { common: { field: value },
+//     differences:
 //     [{ field, values, severity: 'info'|'warn' }], compatible, warnings: [text],
 //     sameConfiguration, semantic: [{ index, changes }] }
 // semantic (ADR 0041): semantic-diff.js runChanges(list[0], list[index]) for every other
@@ -53,7 +54,7 @@ const WARN_TEXT = {
 const same = (a, b) => canonicalJson(a) === canonicalJson(b);
 
 /** Compare two or more experiments; never modifies them. */
-export function compareExperiments(list, { studioChanges = null } = {}) {
+export function compareExperiments(list, { studioChanges = null, definitions = null } = {}) {
   if (!Array.isArray(list) || list.length < 2) {
     throw new RangeError('compareExperiments needs at least two experiments');
   }
@@ -77,7 +78,7 @@ export function compareExperiments(list, { studioChanges = null } = {}) {
     warnings,
     sameConfiguration: selections.every((s) => s === selections[0]),
     semantic: list.slice(1).map((e, i) => ({ index: i + 1,
-      changes: runChanges(list[0], e, { studioChanges }) })),
+      changes: runChanges(list[0], e, { studioChanges, definitions }) })),
   };
 }
 
