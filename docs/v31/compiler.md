@@ -322,6 +322,69 @@ not schedule clips or lanes of the refused model. It records the refusal (`lastE
 `sync-refused`, and a diagnostic) and returns `{ ok: false, synced: false, applied }`. The next
 store change tries again.
 
+### Operation trace (ADR 0042)
+
+The verdict says *whether* what plays is what the model says. The trace says *what happened*
+to one edit. `core/trace.js` `createTrace({ cap, now, onIdle })` keeps the last `TRACE_CAP`
+(256) steps in a ring. When it is full, each new step drops the oldest and `stats().dropped`
+counts it. Producers get one port, `{ run(fn), record(owner, kind, fields) }`, at the Studio
+composition point (`workspace.js`): the store handle, the runtime and the transport. None of
+them imports another to report, and each defaults to `NO_TRACE`, which records nothing.
+
+```js
+{ op, seq, at, owner, kind, revision, entity: { kind, id } | null, outcome, code, detail }
+```
+
+A step is frozen plain data, and `detail` is a flat object of primitives. `op` (`op-<n>`) is
+the correlation id. The outermost `run` assigns it: `store.dispatch`, `undo` and `redo`,
+`transport.start`, `stop` and `sync`, `runtime.apply` and `start`. Everything called inside that
+run reports under the same op, which includes the commit gate's `transport.admit` and
+`runtime.apply`. The ids the code already shares end to end are kept: `revision` is the store
+revision (in the handle's numbering) that the gate offers and the runtime applies, and `entity`
+is the model's node or edge id, which is also the plan entry's and the handle's id. `code` is a
+Diagnostic code from the table above whenever a step is a refusal or a failure.
+
+| Owner | Kind | Outcome, detail |
+| --- | --- | --- |
+| store | `action`, `undo`, `redo` | `requested`; the action type, key and value (a primitive, else `null`) |
+| store | `commit` | `committed` (with the revision), `unchanged`, `rejected` (validation code), `refused` (the gate's reason) |
+| runtime | `compile` | `compiled`: `planHash` and the number of diff ops; `refused`: validation's code |
+| runtime | `apply` | `applied`: `at` (the crossfade time), ops, nodes, edges; `not-applied`: the runtime `state` (stopped: the plan is kept for PLAY); `refused`: `prepare-failed` or `disposed` with the entity that threw |
+| runtime | `node` | `built`, `replaced`, `retired` |
+| runtime | `route` | `scheduled`: the edge `gain`, from `at`, reached at `end` (the value `ramp.to` returned) |
+| runtime | `param` | `scheduled`: `param`, `value`, `cents`, `unit`, `at`, `via` (`base`: `applyBase`, `update`: a live non-modulatable key); `owned`: not written, another owner drives it |
+| runtime | `update`, `parameters`, `output`, `stop`, `route` | `failed`, with its `<step>-failed` code |
+| runtime | `start`, `stop` | `start` refused (`start-failed`, `nothing-compiled`); `stop`: `at`, `fade` |
+| transport | `play`, `stop` | `playing`: `position`, `baseTime`; `refused`: the failed `phase` and reason; `stopped`: the reason |
+| transport | `admit` | `admitted`; `refused` (`edit-refused`); `not-applied`: `playing: false`, so the edit commits and PLAY applies it |
+| transport | `sync` | `applied`; `refused` (`sync-refused`) |
+
+A `param` step records what the runtime handed the node's adapter: the base value in the
+parameter's unit (including the constant offsets of modulation edges) at the audio time the
+adapter schedules from. It is recorded only for the keys whose base changed in this apply. It is
+not a read-back of the AudioParam. An adapter clamps where its builder does, for example an
+Oscillator frequency below 0.95 × Nyquist, and the Filter stage glides with its own time
+constant. A PLAY records `apply` with its counts, not every node and route it builds, so a large
+Studio does not flush the ring. The timeline's wake-ups (clips, lanes) run outside any operation
+and are not traced.
+
+Cost. A dispatch while stopped records three steps (action, admit, commit). A live parameter
+edit records six or more, each one small frozen object, and memory is bounded by the cap. The
+`compile` step's `planHash` is computed in `runtime.apply`. That runs at PLAY, on `setOptions`,
+and while running for every edit, when `applied()` (read by every Graph and Inspector render)
+hashes the same plan anyway. The hash is memoized per plan. The traced edit on the 100-node fixture while playing is measured in
+`tests/unit/v31-studio-trace.test.mjs` against the one-frame `dispatchParam` budget.
+
+The Inspector's **Trace** section (`inspector.js` `traceView`, pure) groups the steps by op,
+newest first, at most `TRACE_OPS_SHOWN` (12). The node view keeps the ops with a step that
+names the node. Each op is a disclosure, and each step is text:
+`<owner> <kind>: <outcome> (<code>) · rev <n> · <what>`. The section refreshes when an operation
+ends (`onIdle`), never halfway through one. `?debug=1` shows the counts (`studio trace`), and
+the test seam exposes the live trace (`window.OSCILLA.studio.trace`).
+
+The trace is not evidence. It lives in memory, is never persisted, is never exported with a
+project or an experiment, and no hash covers it (`studioHash`, `planHash`, `resultHash`).
+
 ## Engine hooks to add properly
 
 The adapter uses these engine internals on the instance; each should become a public engine

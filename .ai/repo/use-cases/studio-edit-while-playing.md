@@ -9,7 +9,7 @@ target: advisory
 weight: 350
 difficulty: advanced
 commands: [knowledge]
-claims: [studio-click-free-live-edit, studio-compiled-topology]
+claims: [studio-click-free-live-edit, studio-compiled-topology, studio-operation-trace]
 tags: [oscilla, studio, v31, product-acceptance]
 ---
 
@@ -32,6 +32,11 @@ by these, run by:
   for reconnect, filter insertion, waveform replacement, mute and stop) and §213 (20 edits, then
   0 engine, runtime and live nodes, no growth over 3 cycles), and tests/browser/v31-studio-graph.cjs
   check play-stop, in Chromium, Firefox and WebKit.
+- `npm test`: tests/unit/v31-studio-trace.test.mjs follows each edit under one operation id
+  from the action through the compiled plan and the runtime apply to the AudioParam value
+  scheduled, and traces a refused edit with its codes; `npm run test:studio`:
+  tests/browser/v31-studio-runtime.cjs checks trace-edit and trace-refused show it in the
+  Inspector's Trace section.
 
 A use-case/v1 scenario can only invoke `bin/majordomus`, so the scenario below does not
 open a browser or play audio. It proves the traceability instead: each claim's
@@ -75,12 +80,25 @@ steps:
     expect:
       exit: 0
       stdout_contains: ['claim:studio-compiled-topology +test:tests/browser/v31-studio-audio\.cjs']
+  - id: studio-operation-trace-implemented
+    run: ['knowledge', 'edges', '--type', 'implemented_by']
+    note: 'claim studio-operation-trace is implemented by src/js/core/trace.js, a tracked file'
+    expect:
+      exit: 0
+      stdout_contains: ['claim:studio-operation-trace +implementation:src/js/core/trace\.js']
+  - id: studio-operation-trace-tested
+    run: ['knowledge', 'edges', '--type', 'tested_by']
+    note: 'claim studio-operation-trace is proven by tests/unit/v31-studio-trace.test.mjs'
+    expect:
+      exit: 0
+      stdout_contains: ['claim:studio-operation-trace +test:tests/unit/v31-studio-trace\.test\.mjs']
 then:
   - 'every claim this use case names resolves to a tracked implementation and a tracked test'
 ```
 
 # Outcome
 
-Each edit is heard without a click, the runtime is never half-connected, and after stop the
+Each edit is heard without a click, the runtime is never half-connected, the Inspector's Trace
+says what each edit did to the running graph (or why it did not), and after stop the
 engine and independent node counts are zero. `engine.stopAll()` does not reach the Studio
 graph; Studio STOP and Escape do (docs/v31/compiler.md, "Known limitations").

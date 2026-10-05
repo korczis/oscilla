@@ -124,6 +124,16 @@ plan hash and the time it was applied, the nodes that are ready, degraded or off
 cables that are live, inactive or have no audible effect, the automation lanes playing and the
 parameters they own. How these are computed is in [the compiler](compiler.md) "Runtime truth".
 
+Below the state, **Trace** lists what the last operations did, newest first: your edit, Play,
+Stop or an undo. Open one (Enter or Space on its line) to read its steps in words: the change
+you made, the plan the runtime compiled (with a short plan hash), whether the running graph
+applied it, refused it (with the code) or had nothing to apply because playback was stopped, and
+each parameter value and connection gain it scheduled, with the audio time. When an automation
+lane drives a parameter, the step says the parameter is owned: the lane writes it, not your
+edit. With a node selected, its Inspector shows only the operations that touched that node. The
+trace is kept in memory for the current session only, is never saved, and holds the most recent
+steps.
+
 ## Sequence on the timeline
 
 The **Timeline** holds tracks of clips: pattern clips (the sequencer's blocks) on a Sequence or

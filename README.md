@@ -267,6 +267,19 @@ How to use it, with the keyboard shortcuts, is the [Studio user guide](docs/v31/
   split and delete with snapping. The timeline also has a loop region, markers, a playhead that
   follows the audio clock, and automation lanes in each parameter's own scale. STOP and Escape
   release every node and source.
+- **What runs, and what each edit did.** With nothing selected, the Inspector's Runtime section
+  says whether the graph on screen is the one that plays: running, not applied, a previous
+  configuration still running, refused or failed, with the diagnostic codes
+  ([ADR 0039](.ai/repo/adrs/0039-studio-runtime-truth-plan-identity-applied-record-divergence.md),
+  proposed). Its Trace section follows each recent edit, undo, Play and Stop under one
+  operation id. It shows the action, the compiled plan with its hash, whether the running graph
+  applied it, and each parameter value and connection gain the runtime scheduled at its audio
+  time. A refused edit shows its code, an edit made while stopped says it was not applied, and
+  a parameter an automation lane drives is shown as owned. A selected node's Inspector lists only
+  the operations that touched it. The trace is kept in memory for the session and is never saved
+  or hashed
+  ([ADR 0042](.ai/repo/adrs/0042-studio-operation-trace-one-correlation-id-bounded-not-evidence.md),
+  proposed).
 - **Keyboard and touch.** Every editor has a keyboard path: a "Connect…" dialog instead of
   dragging a cable, a details panel instead of dragging a clip, and arrow-key nudges. Changes
   are announced to screen readers. On coarse pointers the targets are 44 px. Below 768 px the
