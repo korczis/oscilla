@@ -8,7 +8,11 @@
 //     share: { path, domain, label, get, unit?, severity?, expand? }. `severity` marks the
 //     fields of compareExperiments' differences ('warn' decides equivalence, 'info' is shown).
 //
-// Domains, in display order (DOMAINS): recipe (stimulus and analysis key by key, with Hz and s
+// Domains, in display order (DOMAINS): definition (ADR 0043: the authored definition version
+// each run was executed from, { id, version, hash }, or { derived: true } for a run with none
+// (its definition is its own recipe, which the recipe domain compares); `note` says plainly
+// when the same definition was edited between the runs, or that they come from different ones),
+// recipe (stimulus and analysis key by key, with Hz and s
 // units; repeats; the requested range), algorithms (per role; `note` names a version step of
 // one method), calibration (profile id, level calibration identity), conditions (sample rate,
 // input device and constraints, output level and master gain, notes recorded at measurement
@@ -29,10 +33,10 @@ import { canonicalJson } from './canonical-json.js';
 import { describeAlgorithm } from '../measurement/algorithms.js';
 import { TIMING_LIMITS } from '../measurement/engine.js';
 
-export const DOMAINS = Object.freeze(['recipe', 'algorithms', 'calibration', 'conditions',
-  'studio', 'build', 'result', 'metadata']);
-export const DOMAIN_LABELS = Object.freeze({ recipe: 'Recipe', algorithms: 'Algorithms',
-  calibration: 'Calibration', conditions: 'Input and output conditions',
+export const DOMAINS = Object.freeze(['definition', 'recipe', 'algorithms', 'calibration',
+  'conditions', 'studio', 'build', 'result', 'metadata']);
+export const DOMAIN_LABELS = Object.freeze({ definition: 'Definition', recipe: 'Recipe',
+  algorithms: 'Algorithms', calibration: 'Calibration', conditions: 'Input and output conditions',
   studio: 'Studio graph and timeline', build: 'Build provenance', result: 'Result and quality',
   metadata: 'Metadata' });
 
@@ -68,6 +72,11 @@ const keyed = (name, unit) => (x, y) => keysOf(x, y).map((k) => [k, `${name} ${k
 
 const FIXED = [
   // [path, domain, label, unit, severity, get, expand] in compareExperiments' order
+  ['definition', 'definition', 'Definition version', null, null, (e) => {
+    const d = e.definition;
+    return !d ? null : d.derived ? { derived: true } : { id: d.id, version: d.version,
+      hash: d.hash };
+  }],
   ['calibration.frequency', 'calibration', 'Frequency calibration profile', null, 'warn',
     (e) => at(e, 'calibration.frequency.id')],
   ['calibration.level', 'calibration', 'Level calibration', null, 'warn',
@@ -145,6 +154,16 @@ function algorithmNote(x, y) {
   return p.family === q.family ? `another ${p.family} method` : null;
 }
 
+/** What a definition change means (ADR 0043), in words; null when nothing changed. */
+function definitionNote(x, y) {
+  if (!x || !y || same(x, y)) return null;
+  if (x.id !== y.id) {
+    return x.derived || y.derived ? 'not run from the same definition' : 'another definition';
+  }
+  return `version ${x.version} → ${y.version} of the same definition: its execution fields `
+    + 'were edited between the runs';
+}
+
 /** Quality reasons keyed by code (a repeated code gets '#<position>'). */
 function reasonsByCode(e) {
   const m = new Map();
@@ -166,7 +185,8 @@ export function runChanges(a, b, { studioChanges = null } = {}) {
       }
     } else {
       const c = change(d.domain, d.path, d.label, x, y, d.unit);
-      const note = d.domain === 'algorithms' ? algorithmNote(x, y) : null;
+      const note = d.domain === 'algorithms' ? algorithmNote(x, y)
+        : d.domain === 'definition' ? definitionNote(x, y) : null;
       out.push(note ? { ...c, note } : c);
     }
   }

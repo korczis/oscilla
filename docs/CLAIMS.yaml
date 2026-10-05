@@ -321,7 +321,7 @@ claims:
     implementation: src/js/experiments/store.js
     test: tests/unit/v3-experiment-immutable.test.mjs
     status: guaranteed
-    note: put refuses every execution-fact change with code immutable (memory and IndexedDB); runs carry ids run-1..N covered by result hash v3; v1/v2 records and schema-1 files keep verifying. The UI rename, duplicate and refusal, and a rename kept across a reload, are checks experiments and persistence in tests/browser/v3-ui.cjs.
+    note: put refuses every execution-fact change with code immutable (memory and IndexedDB); runs carry ids run-1..N covered by result hash v3 (and v4, ADR 0043); v1/v2 records and schema-1 files keep verifying. The UI rename, duplicate and refusal, and a rename kept across a reload, are checks experiments and persistence in tests/browser/v3-ui.cjs.
 
   - id: algorithm-ids-on-results
     claim: Every stored result names the algorithm that produced it by a versioned ID, an unknown ID is refused on import, and every known ID reproduces its golden output
@@ -346,6 +346,14 @@ claims:
     test: tests/unit/v3-semantic-compare.test.mjs
     status: guaranteed
     note: The Studio comparator is src/js/studio/diff.js; check experiments-changes in tests/browser/v3-ui.cjs shows the change list, the collapsed metadata group (opened by Enter), the baseline compare and the 390 px layout in three browsers. The list states differences between records; it does not attribute a response difference to any of them.
+
+  - id: experiment-definitions
+    claim: A run records the version of the experiment definition it was executed from, only when it ran exactly that version's recipe; a definition's hash covers its recipe, declared conditions and acceptance criterion but not its name or notes, an edit of those fields appends a version that earlier runs never move to, and a run without an authored definition carries one derived from its own recipe and marked as derived
+    source: .ai/repo/adrs/0043-runs-executed-from-versioned-experiment-definitions.md
+    implementation: src/js/experiments/definition.js
+    test: tests/unit/v3-experiment-definitions.test.mjs
+    status: guaranteed
+    note: Result hash v4 covers the recipe and the definition; schema-2 files migrate to schema 3 with a derived definition and keep their hash. Check definitions in tests/browser/v3-ui.cjs creates a definition, runs it twice (same version), edits it, runs it again (version 2), compares the runs, records a changed setup as derived and fits 390 px in three browsers. The acceptance criterion compares the stored quality verdict with a minimum; it adds no threshold.
 
   - id: aggregate-primary-response
     claim: A measurement of two or more runs stores the aggregate (centre, dispersion and repeatability) as its primary response; the stored transfer is the aggregate centre marked as derived, never one run, and comparison uses the aggregate

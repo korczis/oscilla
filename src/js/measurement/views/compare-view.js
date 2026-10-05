@@ -98,6 +98,10 @@ function changeValue(c, v, e) {
   if (typeof v === 'number') return num(v, c.unit);
   if (typeof v === 'boolean') return v ? 'yes' : 'no';
   if (typeof v === 'string') return /^[0-9a-f]{64}$/.test(v) ? `${v.slice(0, 12)}…` : v;
+  if (c.domain === 'definition') {
+    return v.derived ? "none (derived from the run's own recipe)" : `version ${v.version} (${
+      v.hash.slice(0, 12)}…)`;
+  }
   if (v.from && v.to) return `${v.from.node}.${v.from.port} → ${v.to.node}.${v.to.port}`;
   if (v.points) return `${v.points.length} points`;
   if ('severity' in v) return `${v.severity} ${changeValue(c, v.value, e)}`;

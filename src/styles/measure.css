@@ -41,7 +41,8 @@
 }
 
 .osc-measure > .osc-panel,
-.osc-experiments > .osc-panel {
+.osc-experiments > .osc-panel,
+.osc-x-side > .osc-panel {
   gap: 8px;
   height: auto;
 }
@@ -55,7 +56,14 @@
 .osc-m-result { grid-column: 1 / -1; }
 .osc-m-setup { grid-column: 1 / span 7; }
 .osc-m-experiment { grid-column: 8 / span 5; align-self: start; }
-.osc-x-list { grid-column: 1 / span 5; align-self: start; }
+.osc-x-side {
+  display: flex;
+  flex-direction: column;
+  grid-column: 1 / span 5;
+  align-self: start;
+  gap: 9px;
+  min-width: 0;
+}
 .osc-x-detail,
 .osc-x-compare { grid-column: 6 / span 7; align-self: start; }
 
@@ -739,6 +747,30 @@
   white-space: nowrap;
 }
 
+/* Definitions (ADR 0043): name and meta over two buttons; the meta wraps. */
+.osc-x-def {
+  grid-template-columns: minmax(0, 1fr) auto auto;
+}
+
+.osc-x-def .osc-x-main {
+  cursor: auto;
+}
+
+.osc-x-def .osc-x-name {
+  margin: 0;
+}
+
+.osc-x-def .osc-x-meta {
+  white-space: normal;
+}
+
+.osc-m-defnote {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+}
+
 .osc-x-empty {
   color: var(--osc-text-muted);
   font-size: var(--osc-fs-sm);
@@ -838,7 +870,7 @@
   .osc-m-input { grid-column: 2; }
   .osc-m-setup { grid-column: 1; }
   .osc-m-experiment { grid-column: 2; }
-  .osc-x-list,
+  .osc-x-side,
   .osc-x-detail,
   .osc-x-compare { grid-column: 1 / -1; }
 
@@ -917,6 +949,14 @@
   .osc-x-row .osc-q {
     grid-column: 2;
     justify-self: start;
+  }
+
+  .osc-x-def {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .osc-x-def .osc-x-main {
+    grid-column: 1 / -1;
   }
 }
 

@@ -1,10 +1,15 @@
 // EXPERIMENTS workspace: compact experiment summary and list rows (spec §50-§57, §76,
 // §103-§104, §161, §225, §249). Pure.
 //
-//   experimentSummary(experiment) -> { id, title, compact, lines: [text], quality, repeatOf,
-//     provenance: [{ label, text }] }
+//   experimentSummary(experiment, { definitionName }) -> { id, title, compact, lines: [text],
+//     quality, repeatOf, definition, provenance: [{ label, text }] }
 //     lines are experiments/schema.js summarizeExperiment() (the §161 lines); compact is one
 //     line "MacBook speakers — desk · 20 Hz → 20 kHz log sweep, 10 s · 5 runs · USABLE".
+//     definition (ADR 0043) is { id, version, hash, derived } of the definition version the run
+//     was executed from, or null; its provenance rows say which version, whether it was derived
+//     from the run's own recipe (never presented as authored), the declared conditions and
+//     whether the stored verdict meets its acceptance criterion. definitionName is the stored
+//     definition's current name (metadata: the run does not carry it).
 //   experimentListRows(summaries, { selected = [] }) -> { rows: [Row], canCompare,
 //     compareIds, baselineId, empty: text|null }
 //   compareSelection(selected, baselineId) -> ids (≤ 4) | null   (ADR 0041) what Compare
@@ -13,13 +18,14 @@
 //     summaries: experiments/store.js list() entries ({ experimentId, name, createdAt,
 //     schemaVersion, oscillaVersion, status, sizeBytes }) or full experiments
 //     Row = { id, name, createdAt, createdText, status, statusText, glyph, icon, shape,
-//       className, sizeText, versionText, selected, baseline, actions: [{ id, label,
-//       destructive }] }
+//       className, sizeText, versionText, selected, baseline, definition: { id, version,
+//       derived } | null, actions: [{ id, label, destructive }] }
 // Nothing missing is invented (§249): it reads UNKNOWN / NOT ASSESSED.
 
 import {
   summarizeExperiment, describeStimulus, qualityVerdictText,
 } from '../../experiments/schema.js';
+import { acceptanceOf } from '../../experiments/definition.js';
 import { qualityStatusPresentation, UNAVAILABLE } from './common.js';
 
 /** Row actions (§76); delete is the only destructive one and needs a confirmation (§225). */
@@ -49,7 +55,7 @@ export function sizeText(bytes) {
 }
 
 /** experimentSummary(experiment) → the §161 summary (see the header). */
-export function experimentSummary(e) {
+export function experimentSummary(e, { definitionName = null } = {}) {
   const lines = summarizeExperiment(e);
   const status = e.quality && e.quality.status ? e.quality.status : null;
   const q = qualityStatusPresentation(status || 'NOT_ASSESSED');
@@ -72,6 +78,7 @@ export function experimentSummary(e) {
     { label: 'Build', text: build ? `${build.version || UNAVAILABLE.UNKNOWN} (${build.channel
       || UNAVAILABLE.UNKNOWN}${build.dirty ? ', dirty' : ''}${build.sourceDigest
       ? `, source ${build.sourceDigest.slice(0, 12)}…` : ''})` : UNAVAILABLE.UNKNOWN },
+    ...definitionRows(e.definition, status, definitionName),
     { label: 'Algorithms', text: algorithmsText(e.algorithms) },
     { label: 'Schema', text: `oscilla-experiment v${e.schemaVersion ?? UNAVAILABLE.UNKNOWN}` },
   ];
@@ -83,6 +90,8 @@ export function experimentSummary(e) {
     quality: { status: status || 'NOT_ASSESSED', text: q.text, glyph: q.glyph, icon: q.icon,
       shape: q.shape, className: q.className },
     repeatOf: e.provenance ? e.provenance.repeatOf ?? null : null,
+    definition: e.definition ? { id: e.definition.id, version: e.definition.version,
+      hash: e.definition.hash, derived: e.definition.derived } : null,
     environment: e.environment && e.environment.notes ? e.environment.notes
       : 'No location or distance notes recorded.',
     provenance,
@@ -99,7 +108,22 @@ function resultHashText(p) {
   if (typeof h !== 'string') return UNAVAILABLE.UNKNOWN;
   const v = p.resultHashVersion === undefined ? 1 : p.resultHashVersion;
   return `${shortHash(h)} v${v} (${v === 1 ? 'results only'
-    : `results, quality, calibration, input, output${v >= 3 ? ', runs, build' : ''}`})`;
+    : `results, quality, calibration, input, output${v >= 3 ? ', runs, build' : ''}${v >= 4
+      ? ', recipe, definition' : ''}`})`;
+}
+
+/** "Definition" version text (or the derived wording), conditions and acceptance. */
+export function definitionText(d, name = null) {
+  if (!d) return UNAVAILABLE.UNKNOWN;
+  if (d.derived) return `derived from a run's own recipe, not authored (${shortHash(d.hash)})`;
+  return `${name ? `"${name}"` : d.id} version ${d.version} (${shortHash(d.hash)})`;
+}
+
+function definitionRows(d, status, name) {
+  if (!d) return [];
+  return [{ label: 'Definition', text: definitionText(d, name) },
+    { label: 'Declared conditions', text: d.execution.conditions.notes || 'none declared' },
+    { label: 'Acceptance', text: acceptanceOf(d.execution, status).text }];
 }
 
 function algorithmsText(a) {
@@ -113,7 +137,8 @@ function rowSource(x) {
     return { experimentId: x.experimentId, name: x.name,
       createdAt: x.provenance ? x.provenance.createdAt : null, schemaVersion: x.schemaVersion,
       oscillaVersion: x.oscillaVersion, status: x.quality ? x.quality.status : null,
-      sizeBytes: null, baseline: !!(x.annotations && x.annotations.baseline) };
+      sizeBytes: null, baseline: !!(x.annotations && x.annotations.baseline),
+      definition: x.definition || null };
   }
   return x || {};
 }
@@ -139,6 +164,8 @@ export function experimentListRows(summaries, { selected = [] } = {}) {
         s.schemaVersion ?? UNAVAILABLE.UNKNOWN}`,
       selected: sel.has(s.experimentId),
       baseline: !!s.baseline,
+      definition: s.definition ? { id: s.definition.id, version: s.definition.version,
+        derived: s.definition.derived } : null,
       actions: EXPERIMENT_ACTIONS.map((a) => ({ ...a })),
     };
   });

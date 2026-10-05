@@ -7,7 +7,8 @@
 //   openExperimentStoreOrMemory(opts) -> Promise<{ store, persistent, error }>
 //   Store = { kind: 'indexeddb'|'memory', list(), get(id), put(experiment),
 //             annotate(id, { name, notes, baseline }), delete(id), estimate(), close(),
-//             listStudio({ kind }), getStudio(id), putStudio(record), deleteStudio(id) }
+//             listStudio({ kind }), getStudio(id), putStudio(record), deleteStudio(id),
+//             listDefinitions(), getDefinition(id), putDefinition(definition) }
 //
 // Records are stored in the portable file form (schema.serializeExperiment: EncodedArray
 // result arrays) of the validated, migrated experiment (validate.js on put, and again on get),
@@ -44,20 +45,33 @@
 // stores it as given; content validation (parse → validate → normalize → migrate) belongs to
 // the Studio layer (src/js/studio/library.js), which also decodes every record it reads, so a
 // corrupt record is reported, never loaded. This module imports nothing from studio/.
+//
+// Definitions (ADR 0043; DB_VERSION 3 adds the DEFINITIONS store, keyPath 'id'): authored
+// experiment definitions (definition.js), validated on put and on read. putDefinition creates
+// one or writes its next state: the name and notes may change, versions may only be appended,
+// and a stored version that differs is refused with 'immutable' (err.fields names it). list()
+// rows carry the run's `definition` { id, version, hash, derived } (schema 3), so a definition's
+// runs are found without reading the records.
 
 import {
   serializeExperiment, formatErrors, annotateExperiment, executionFactChanges, isMetadataPath,
   isBaseline,
 } from './schema.js';
 import { validateExperiment } from './validate.js';
+import { validateDefinition } from './definition.js';
+import { canonicalJson } from './canonical-json.js';
 
 export const DB_NAME = 'oscilla-experiments';
-/** Version 1: experiments; version 2 adds the Studio partition (never deletes anything). */
-export const DB_VERSION = 2;
+/**
+ * Version 1: experiments; version 2 adds the Studio partition; version 3 the definitions
+ * (never deletes anything).
+ */
+export const DB_VERSION = 3;
 export const RECORDS = 'experiments';
 export const SUMMARIES = 'summaries';
 export const STUDIO_RECORDS = 'studio';
 export const STUDIO_SUMMARIES = 'studioSummaries';
+export const DEFINITIONS = 'definitions';
 /** Kinds of Studio records (studio/schema.js STUDIO_KIND, studio/patches.js PATCH_KIND). */
 export const STUDIO_RECORD_KINDS = Object.freeze(['oscilla-studio', 'oscilla-patch']);
 /** Largest stored Studio document (JSON characters): twice the 4 MiB Studio import limit. */
@@ -126,7 +140,36 @@ export function upgradeExperimentDb(db, oldVersion) {
     ensure(STUDIO_RECORDS, 'id');
     ensure(STUDIO_SUMMARIES, 'id');
   }
+  if (oldVersion < 3) ensure(DEFINITIONS, 'id');
 }
+
+// ---------------------------------------------------------------- definitions
+
+/** A validated definition copy, or throws 'invalid' / 'corrupt' (`code`). */
+function checkedDefinition(def, code, id) {
+  const v = validateDefinition(def);
+  if (!v.ok) {
+    throw new ExperimentStoreError(code, `${code === 'corrupt' ? `stored definition ${id} is`
+      : 'definition not stored:'} invalid: ${formatErrors(v.errors.slice(0, 5))}`);
+  }
+  return v.definition;
+}
+
+/** May `next` replace the stored `old`? Only metadata and appended versions (ADR 0043). */
+export function definitionVerdict(old, next) {
+  if (!old) return;
+  const fields = old.versions.map((x, i) => `versions[${i}]`).filter((p, i) => !next.versions[i]
+    || canonicalJson(old.versions[i]) !== canonicalJson(next.versions[i]));
+  if (old.createdAt !== next.createdAt) fields.push('createdAt');
+  if (fields.length) {
+    throw new ExperimentStoreError('immutable', `definition ${old.id}: a stored version never `
+      + `changes (${fields.slice(0, 4).join(', ')}); an edit appends a new version`, undefined,
+    fields);
+  }
+}
+
+const defNewest = (a, b) => String(b.createdAt).localeCompare(String(a.createdAt))
+  || String(a.id).localeCompare(String(b.id));
 
 // ---------------------------------------------------------------- Studio records (envelope)
 
@@ -203,6 +246,8 @@ export function summaryRecord(doc, sizeBytes) {
     status: doc.quality ? doc.quality.status : null,
     sizeBytes,
     ...(isBaseline(doc) ? { baseline: true } : {}),
+    ...(doc.definition ? { definition: { id: doc.definition.id, version: doc.definition.version,
+      hash: doc.definition.hash, derived: doc.definition.derived } } : {}),
   };
 }
 
@@ -264,6 +309,9 @@ export function createMemoryStore({ knownAlgorithms } = {}) {
   const summaries = new Map();
   const studio = new Map();
   const studioSummaries = new Map();
+  const defs = new Map();
+  const readDef = (id) => (defs.has(id) ? checkedDefinition(JSON.parse(defs.get(id)), 'corrupt',
+    id) : null);
   const wrap = (what, fn) => {
     try {
       return Promise.resolve(fn());
@@ -322,6 +370,15 @@ export function createMemoryStore({ knownAlgorithms } = {}) {
     deleteStudio: (id) => wrap('deleteStudio', () => {
       studioSummaries.delete(id);
       return studio.delete(id);
+    }),
+    listDefinitions: () => wrap('listDefinitions', () => [...defs.keys()].map(readDef)
+      .sort(defNewest)),
+    getDefinition: (id) => wrap('getDefinition', () => readDef(id)),
+    putDefinition: (def) => wrap('putDefinition', () => {
+      const next = checkedDefinition(def, 'invalid');
+      definitionVerdict(readDef(next.id), next);
+      defs.set(next.id, JSON.stringify(next));
+      return next;
     }),
     close() {},
   };
@@ -498,6 +555,29 @@ function idbStore(db, storage, knownAlgorithms) {
           request(tx.objectStore(STUDIO_SUMMARIES).delete(id)),
         ]).then(([existed]) => existed);
       }),
+    listDefinitions: () => run('listDefinitions', [DEFINITIONS], 'readonly',
+      (tx) => request(tx.objectStore(DEFINITIONS).getAll()))
+      .then((rows) => rows.map((d) => checkedDefinition(d, 'corrupt', d && d.id))
+        .sort(defNewest)),
+    getDefinition: (id) => run('getDefinition', [DEFINITIONS], 'readonly',
+      (tx) => request(tx.objectStore(DEFINITIONS).get(id)))
+      .then((d) => (d == null ? null : checkedDefinition(d, 'corrupt', id))),
+    putDefinition(def) {
+      let next;
+      try {
+        next = checkedDefinition(def, 'invalid');
+      } catch (err) {
+        return Promise.reject(err);
+      }
+      // Read, check and write in ONE transaction (as put).
+      return run('putDefinition', [DEFINITIONS], 'readwrite', (tx) => {
+        const os = tx.objectStore(DEFINITIONS);
+        return request(os.get(next.id)).then((old) => {
+          definitionVerdict(old == null ? null : checkedDefinition(old, 'corrupt', next.id), next);
+          return request(os.put(next));
+        });
+      }).then(() => next);
+    },
     close: () => db.close(),
   };
 }

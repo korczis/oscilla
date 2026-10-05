@@ -68,6 +68,14 @@
 // the instrument's own hash state. A link read at load or on hashchange is validated like every
 // import and refused whole when anything is wrong; a valid one fills the setup and opens
 // MEASURE, and never starts a check or a measurement.
+//
+// Definitions (ADR 0043): measureLoadDefinition fills the setup from a definition version's
+// recipe and keeps that version's run reference. A measurement records it only when the setup
+// it starts with is exactly that recipe (definition.js setupRecipe, compared canonically) and
+// the recipe that ran is what the version asks for (measure-experiment.js); otherwise the run
+// carries the definition derived from its own recipe, and the panel and a notification say so.
+// The reference is taken when the measurement starts: a later edit of the setup never moves
+// the run to another definition. A Studio run (measureRunRecipe) never takes it.
 
 import { MEASUREMENT_STATES as S, isActiveState } from '../measurement/state-machine.js';
 import {
@@ -105,6 +113,9 @@ import {
 } from '../calibration/level.js';
 import { measureReferenceLevel, REFERENCE_CAPTURE_S } from '../calibration/reference.js';
 import { newExperimentId, describeStimulus } from '../experiments/schema.js';
+import { setupRecipe } from '../experiments/definition.js';
+import { canonicalJson } from '../experiments/canonical-json.js';
+import { definitionText } from '../measurement/views/experiment-summary.js';
 import { experimentFromResult, experimentTestContext } from './measure-experiment.js';
 import { formatHz } from '../charts/axes.js';
 import { createResponseChart, createIrChart, createRtaChart } from '../charts/measure-charts.js';
@@ -256,7 +267,20 @@ export function createMeasureUi(svc) {
     devices: [],           // the last enumerateDevices() result (plain { kind, deviceId, label })
     devicesEnumerated: false,
     lastRecipeParam: null, // the `mr` hash value last applied or written (V355)
+    definition: null,      // the loaded definition version's run reference (ADR 0043)
+    runDefinition: null,   // the reference the running / last measurement started with
   };
+
+  /** Is `recipe` (a setup recipe) exactly what the loaded definition version asks for? */
+  function setupIsDefinition(recipe) {
+    if (!ctx.definition) return false;
+    try {
+      return canonicalJson(setupRecipe(recipe)) === canonicalJson(ctx.definition.execution
+        .recipe);
+    } catch (e) {
+      return false;
+    }
+  }
 
   /** The level calibration's applicability to the current input (level.js). */
   function levelApplies() {
@@ -487,6 +511,7 @@ export function createMeasureUi(svc) {
     m.safety = safetyNotes({ recipe, preflight: ctx.preflight });
     m.stimulusText = describeStimulus({ ...recipe.stimulus, kind: 'log-sweep' });
     m.error = ctx.error ? { ...ctx.error } : null;
+    if (m.definition) m.definition.differs = !setupIsDefinition(recipe);
   }
 
   // ---------------------------------------------------------------- result presentation
@@ -866,6 +891,7 @@ export function createMeasureUi(svc) {
       name: m.name, notes: m.notes, profile: ctx.profile,
       levelCalibration: level, repeatOf: ctx.repeatOf,
       requested: st ? { f1: Number(st.f1), f2: Number(st.f2) } : null,
+      definition: ctx.runDefinition,
     });
   }
 
@@ -1010,6 +1036,11 @@ export function createMeasureUi(svc) {
     rebuildAll();
     const recipe = given || recipeNow();
     ctx.lastRecipe = recipe;
+    ctx.runDefinition = !given && setupIsDefinition(recipe) ? ctx.definition : null;
+    if (!given && ctx.definition && !ctx.runDefinition) {
+      cmp.notify('warning', 'Not run from the definition', 'The setup differs from the loaded '
+        + 'definition, so this run records the definition derived from its own recipe.');
+    }
     let result = null;
     try {
       // A bound level calibration is checked against the input before it is applied: without
@@ -1092,6 +1123,7 @@ export function createMeasureUi(svc) {
         disabled: true },
       recipeLink: '',
       recipeLinkErrors: [],
+      definition: null,      // { text, conditions, differs } of the loaded definition
       name: '',
       notes: '',
       saved: false,
@@ -1645,7 +1677,10 @@ export function createMeasureUi(svc) {
         this.meas.savedId = id;
         ctx.repeatOf = null;
         refresh();
-        this.notify('success', 'Experiment saved', `"${e.name}" (${this.exps.persistent
+        const d = ctx.runDefinition;
+        const from = !d ? '' : e.definition.hash === d.hash ? `from definition ${definitionText(d,
+          d.name)}, ` : 'NOT from the loaded definition (the recipe that ran differs), ';
+        this.notify('success', 'Experiment saved', `"${e.name}" (${from}${this.exps.persistent
           ? 'stored in this browser' : 'kept in memory for this page view only: export it to keep '
           + 'it'}).`);
         return id;
@@ -1662,6 +1697,27 @@ export function createMeasureUi(svc) {
         || '(unnamed)'}"`, testContext: experimentTestContext(e) };
       resetInvalidViewOptions(e);
       rebuildAll();
+    },
+    /** The current setup's recipe (measure-flow.js recipeFromFields). */
+    measureSetupRecipe() {
+      return recipeNow();
+    },
+    /**
+     * Load a definition version (its run reference, definition.js definitionRef or an
+     * experiment's `definition`) into the setup; `name` (the definition's) names the run.
+     */
+    measureLoadDefinition(ref, { name = null, repeatOf = null } = {}) {
+      this.measureLoadRecipe(ref.execution.recipe, { repeatOf });
+      ctx.definition = { ...ref, name };
+      if (name) this.meas.name = name;
+      this.meas.definition = { text: definitionText(ref, name),
+        conditions: ref.execution.conditions.notes, differs: false };
+      refresh();
+    },
+    /** Stop using the loaded definition (the next run derives its own). */
+    measureClearDefinition() {
+      ctx.definition = null;
+      this.meas.definition = null;
     },
     /** Load a recipe (an experiment's) into the setup; the next save is a NEW experiment. */
     measureLoadRecipe(recipe, { repeatOf = null } = {}) {

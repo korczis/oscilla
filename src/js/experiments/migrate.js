@@ -12,12 +12,18 @@
 // not cover the measurement block, so a migrated record verifies under the hash it was stamped
 // with (its provenance.resultHash and resultHashVersion are kept as they are).
 //
+// 2 → 3 (ADR 0043): every run gets `definition`, derived from its own recipe (definition.js
+// derivedRef: derived: true — never presented as an authored definition). Result hashes of
+// versions 1-3 do not cover it, so the stored hash and version are kept and still verify. A
+// recipe a definition cannot be derived from is left without one, and validation names it.
+//
 //   migrateExperiment(json, { migrations, targetVersion }) ->
 //     { ok: true, experiment, from, to, applied: [n, ...] }
 //     | { ok: false, errors: [{ path, text }] }
 // The input is never modified (steps receive a copy).
 
 import { EXPERIMENT_SCHEMA_VERSION, withRunIds } from './schema.js';
+import { derivedRef } from './definition.js';
 
 /** Schema 1 → 2: run ids (the rest of the document is unchanged). */
 function addRunIds(e) {
@@ -26,9 +32,24 @@ function addRunIds(e) {
   return { ...e, measurement: { ...m, runs: withRunIds(m.runs) } };
 }
 
+/** Schema 2 → 3: the definition derived from the run's own recipe. */
+function addDerivedDefinition(e) {
+  if (Object.prototype.hasOwnProperty.call(e, 'definition')) {
+    throw new Error('a schema-2 experiment has no definition field');
+  }
+  let definition;
+  try {
+    definition = derivedRef(e.recipe);
+  } catch (err) {
+    return e;
+  }
+  return { ...e, definition };
+}
+
 export const migrations = Object.freeze({
   1: (e) => e,
   2: addRunIds,
+  3: addDerivedDefinition,
 });
 
 /** Upgrade a parsed experiment document to `targetVersion` (default: the current schema). */

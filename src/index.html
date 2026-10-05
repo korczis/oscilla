@@ -1803,6 +1803,15 @@
             <button type="button" class="osc-btn osc-btn-secondary" data-osc="measure.toExperiments"
               @click="setWorkspace('experiments')">Experiments</button>
           </div>
+          <div class="osc-m-defnote" data-osc="measure.definition" x-show="meas.definition" style="display: none">
+            <p class="osc-m-hint"><strong>Definition:</strong> <span x-text="meas.definition ? meas.definition.text : ''"></span><span
+              x-text="meas.definition && meas.definition.conditions ? '. Declared conditions: ' + meas.definition.conditions : ''"></span></p>
+            <div class="osc-warning osc-x-warn" role="note" data-osc="measure.definitionDiffers" x-show="meas.definition && meas.definition.differs" style="display: none">
+              <svg aria-hidden="true"><use href="#q-warn"/></svg><p>The setup differs from this definition: the next run is not recorded as from it.</p>
+            </div>
+            <button type="button" class="osc-btn osc-btn-secondary osc-m-small" data-osc="measure.clearDefinition"
+              @click="measureClearDefinition()">Stop using this definition</button>
+          </div>
           <p class="osc-m-hint" data-osc="measure.savedText"
             x-text="meas.saved ? 'Saved as an experiment' + (exps.persistent ? ' in this browser.' : ' in memory for this page view.') : 'Saved experiments stay in this browser only (no cloud).'"></p>
           <p class="osc-m-hint" x-show="exps.storeNote" x-text="exps.storeNote"></p>
@@ -1816,6 +1825,31 @@
       aria-labelledby="osc-exp-title" tabindex="-1">
       <h2 class="osc-sr-only" id="osc-exp-title">Experiments</h2>
       <div class="osc-experiments">
+        <div class="osc-x-side">
+        <section class="osc-panel osc-x-defs" id="osc-exp-defs" data-osc="exp.defs" aria-labelledby="osc-x-defs-title">
+          <div class="osc-panel-header osc-x-head">
+            <h3 class="osc-panel-title" id="osc-x-defs-title">Definitions</h3>
+            <span class="osc-m-chip osc-num" x-text="exps.defs.length"></span>
+            <span class="osc-spacer"></span>
+            <button type="button" class="osc-btn osc-btn-secondary osc-m-small" data-osc="def.new"
+              @click="experimentsDefAsk()">New from Measure setup…</button>
+          </div>
+          <ul class="osc-x-rows" role="list">
+            <template x-for="d in exps.defs" :key="d.id">
+              <li class="osc-x-row osc-x-def" data-osc="def.row" :data-id="d.id">
+                <div class="osc-x-main">
+                  <h4 class="osc-x-name" x-text="d.name"></h4>
+                  <span class="osc-x-meta osc-num" x-text="d.meta"></span>
+                </div>
+                <button type="button" class="osc-btn osc-btn-primary osc-m-small" data-osc="def.run"
+                  :aria-label="'Run this definition: ' + d.name" @click="experimentsDefRun(d.id)">Run this definition</button>
+                <button type="button" class="osc-btn osc-btn-secondary osc-m-small" data-osc="def.edit"
+                  :aria-label="'Edit ' + d.name" @click="experimentsDefAsk(d.id)">Edit…</button>
+              </li>
+            </template>
+            <li class="osc-x-empty" x-show="exps.loaded && !exps.defs.length">No definitions yet. A definition fixes what to measure and how; every run started from it records its version.</li>
+          </ul>
+        </section>
         <section class="osc-panel osc-x-list" id="osc-exp-list" aria-labelledby="osc-x-list-title">
           <div class="osc-panel-header osc-x-head">
             <h3 class="osc-panel-title" id="osc-x-list-title">Saved experiments</h3>
@@ -1840,7 +1874,7 @@
                   :aria-label="'Select ' + r.name + ' for comparison'" @change="experimentsToggleSelect(r.id)">
                 <div class="osc-x-main" @click="experimentsOpen(r.id)">
                   <span class="osc-x-name"><span x-text="r.name"></span> <span class="osc-m-chip" x-show="r.baseline" style="display: none">BASELINE</span></span>
-                  <span class="osc-x-meta osc-num" x-text="r.createdText + ' · ' + r.sizeText + ' · ' + r.versionText"></span>
+                  <span class="osc-x-meta osc-num" x-text="r.createdText + ' · ' + r.sizeText + ' · ' + r.versionText + r.defText"></span>
                 </div>
                 <span class="osc-q" :class="[r.className, r.shape]">
                   <svg class="osc-q-icon" aria-hidden="true"><use :href="'#q-' + r.className.slice(7)"/></svg>
@@ -1853,6 +1887,7 @@
             <li class="osc-x-empty" x-show="exps.loaded && !exps.rows.length" x-text="exps.empty"></li>
           </ul>
         </section>
+        </div>
 
         <section class="osc-panel osc-x-detail" id="osc-exp-detail" aria-labelledby="osc-x-detail-title"
           x-show="exps.panel === 'detail'">
@@ -2787,6 +2822,36 @@
       <div class="osc-dialog-actions">
         <button type="button" class="osc-btn osc-btn-secondary" @click="closeDialog('osc-dlg-exp-rename')">Cancel</button>
         <button type="submit" class="osc-btn osc-btn-primary" data-osc="exp.renameSave">Rename</button>
+      </div>
+    </form>
+  </dialog>
+  <dialog class="osc-dialog" id="osc-dlg-def" data-oscilla-modal aria-labelledby="osc-dlg-def-title">
+    <form method="dialog" class="osc-dialog-body" @submit.prevent="experimentsDefSave()">
+      <h2 class="osc-dialog-title" id="osc-dlg-def-title" x-text="exps.defForm.mode === 'edit' ? 'Edit definition' : 'New definition'">New definition</h2>
+      <label class="osc-label" for="osc-def-name">Name</label>
+      <input class="osc-number osc-dialog-input" id="osc-def-name" type="text" maxlength="200"
+        autocomplete="off" data-osc="def.name" x-model="exps.defForm.name">
+      <label class="osc-label" for="osc-def-notes">Notes (a rename or a note never makes a new version)</label>
+      <textarea class="osc-number osc-m-text osc-m-textarea" id="osc-def-notes" rows="2" maxlength="10000"
+        data-osc="def.notes" x-model="exps.defForm.notes"></textarea>
+      <label class="osc-label" for="osc-def-conditions">Declared conditions for every run</label>
+      <textarea class="osc-number osc-m-text osc-m-textarea" id="osc-def-conditions" rows="2" maxlength="10000"
+        data-osc="def.conditions" x-model="exps.defForm.conditions" placeholder="Room, microphone distance and angle"></textarea>
+      <label class="osc-label" for="osc-def-min">Acceptance: lowest quality verdict that meets it</label>
+      <div class="osc-select">
+        <select id="osc-def-min" data-osc="def.minimumQuality" x-model="exps.defForm.minimumQuality">
+          <option value="">No criterion</option>
+          <template x-for="q in ACCEPTANCE_LEVELS" :key="q"><option :value="q" x-text="q"></option></template>
+        </select>
+      </div>
+      <p class="osc-dialog-note osc-num" x-text="(exps.defForm.mode === 'edit' ? 'Recipe of the latest version: ' + exps.defForm.recipeText : 'Recipe from the Measure setup: ' + exps.defForm.setupText)"></p>
+      <label class="osc-dialog-note" x-show="exps.defForm.mode === 'edit'"><input type="checkbox" data-osc="def.useSetup"
+        x-model="exps.defForm.useSetup"> Use the Measure setup instead (<span class="osc-num" x-text="exps.defForm.setupText"></span>)</label>
+      <p class="osc-dialog-note">Changing the recipe, the conditions or the acceptance creates a new version; runs keep the version they ran.</p>
+      <p class="osc-dialog-note" role="alert" data-osc="def.error" x-show="exps.defForm.error" x-text="exps.defForm.error"></p>
+      <div class="osc-dialog-actions">
+        <button type="button" class="osc-btn osc-btn-secondary" @click="closeDialog('osc-dlg-def')">Cancel</button>
+        <button type="submit" class="osc-btn osc-btn-primary" data-osc="def.save">Save</button>
       </div>
     </form>
   </dialog>
