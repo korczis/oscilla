@@ -1,6 +1,6 @@
 {
   "name": "oscilla",
-  "version": "3.6.1",
+  "version": "3.7.0",
   "private": true,
   "description": "OSCILLA - Interactive Sound & Frequency Lab. Builds into one static dist/index.html.",
   "license": "MIT",
