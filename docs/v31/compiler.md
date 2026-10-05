@@ -41,7 +41,7 @@ The runtime never creates an AudioContext or an output chain. It takes the appli
 | Noise | `audio/noise.js#createNoiseSource` | `createNoiseSource` (its start/stop fades, colour crossfade) |
 | Sweep | `audio/patterns.js#buildPlan` | log, 1-30 s, start < end: `renderStimulus` buffer (the exact digital reference); otherwise the engine `ramps` topology (`engine._osc`, frequency ramp, linear fades) and no reference, with a reason |
 | Sequence | `sequencer/compiler.js#compileSequence` | a level bus exposed as `info.destination` + `info.accounting` for the timeline's `compileSequence` voices |
-| Microphone | `audio/microphone.js#openMicrophone` | `openMicrophone` → output gain (analysis only); degraded without getUserMedia or permission |
+| Microphone | `audio/microphone.js#openMicrophone` | `openMicrophone` → output gain (analysis only); degraded without getUserMedia or until the Inspector's Allow microphone; its tracks stop on dispose, also when the context closes |
 | LFO | `audio/modulation.js#buildLfo` | `engine._osc` as modulator; the depth gain belongs to the edge |
 | Envelope | `audio/envelope.js#applyAdsr` | `applyAdsr` / `releaseAt` on a VCA gain and on a ConstantSourceNode offset (contour 0..1) |
 | Random | `audio/noise.js#mulberry32` | seeded values in a looping AudioBuffer (`steppedControl`) |
@@ -149,18 +149,26 @@ wired to.
    unit test injects a builder failure and compares maps, node counts and live connections.
    In the Studio the edit is then refused, as ADR 0035 says. While playing, the store's commit
    gate is `transport.admit`, which runs this transaction before the store commits. A failure
-   refuses the dispatch, undo or redo, and model, revision and history stay as they were. The
+   refuses the dispatch, undo or redo, and model, revision and history stay as they were.
+   Nothing global is written while preparing: an adapter's `create` never changes engine state
+   outside the Studio graph (below, "Global side effects"), so a refusal leaves none. The
    reason is announced and shown (V431 review #15,
    `tests/unit/v431-studio-refused-edit.test.mjs`). Node and edge status in the UI come from
    the running runtime while it plays (`graph-view.js` `runtimeStatus`, judged by the
    divergence verdict, below).
 3. **commit**: swap the handle and route maps and the plan; `revision` (the store's, or an
-   internal counter) now names the topology the runtime reflects (§178).
+   internal counter) now names the topology the runtime reflects (§178). From here the
+   transaction is committed and `apply` does not throw: every later step is guarded, a guarded
+   step that throws is its `<step>-failed` warning and any other throw is `commit-failed`, the
+   result is `ok` with those warnings, and the applied record names this revision. A throw
+   escaping here would make the commit gate refuse an edit whose plan the runtime already holds
+   (v4.0 closure audit F4, `tests/unit/v40-studio-runtime-closure.test.mjs`).
 4. **crossfade** at `t`: new routes ramp 0 → 1 and removed routes 1 → floor over
    `STUDIO_XFADE_S` (20 ms, `filters.js` CROSSFADE_S) in the same window (equal-gain linear
    crossfade; the two paths of a reconnect are usually correlated, where equal-power would bump
-   the level); parameter bases glide; retired sources stop 10 ms after the fade. Each step is
-   guarded; a failure there becomes a warning, never a half-applied route.
+   the level); parameter bases glide; new nodes `engage` their global side effects; retired
+   sources stop 10 ms after the fade. Each step is guarded; a failure there becomes a warning,
+   never a half-applied route.
 5. **cleanup** `CLEANUP_MARGIN_S` (50 ms) after the fade: retired routes and nodes are
    disconnected, disposed and removed from the engine accounting. The timer is UI bookkeeping
    (`engine._timers`); on a suspended or closed context cleanup runs at once, as the engine does.
@@ -170,7 +178,29 @@ from the empty plan; `stop()` fades the Master bus to the floor over `STUDIO_STO
 the engine's fast release; `{ fast: true }`: 8 ms, Escape), stops every source after it,
 disposes everything and resolves with the counts once released (§184). PLAY → STOP → PLAY
 repeats without growth. `dispose()` stops and detaches from the engine. If the context is
-closed from outside, the runtime drops its graph and removes its nodes from the engine sets.
+closed from outside, the runtime drops its graph and removes its nodes from the engine sets; it
+still disposes each builder, so a Microphone's MediaStream tracks stop.
+
+### Global side effects
+
+One Studio parameter changes state outside the Studio graph: the Master Output `level` drives the
+ONE engine master gain (`engine.setMasterGain`), which MEASURE's stimulus, Labs and the Playground
+also pass. An adapter reaches it only through `env.global.setMasterLevel`, from `engage()` (called
+by the runtime after the commit, for each node the transaction created) and from `update` (also
+after the commit); `create` never writes it. The first write of a running session saves the
+engine's level, and every way out gives it back: STOP (held until the fade ends), a PLAY whose
+transaction failed, `setOptions({ masterLevel: 'ignore' })`, `dispose()`, and a context closed
+from outside. Before v4.0 the Master adapter wrote the level in `create`, so a PLAY refused in
+prepare, or a refused live edit that added a Master Output, left the Studio's level on the engine
+(after STOP too), and MEASURE then played its stimulus at that level.
+
+The level is given back only while it is still the Studio's own. The engine counts every write
+(`engine.masterWrites`); when anyone else wrote the level after the Studio's last write (the
+Playground's gain slider while the Studio played, through `main.js`'s watcher), the newer level is
+kept and the saved one dropped; a Studio write after it re-saves that newer level, so STOP gives
+back the user's latest level, never the one saved before it (D2b). STOP's restore is held until the fade ends
+(`engine.holdMasterGain(g, at)`), and any `setMasterGain` before `at` cancels the held glide, so a
+level set during the fade is not undone 15-35 ms later (PR #119 review D2).
 
 ### Click-free routes (§45)
 
@@ -231,11 +261,13 @@ status maps the views read (`compiledStatus`, `compiledEdgeStatus`, `runtimeStat
 | compiler | PlanNode `code` | `no-adapter`, `adapter-mismatch`, `offline-only`, `no-web-audio`, an adapter check's code: `mic-unsupported` (no `getUserMedia`), `mic-off` (no input permission); `unavailable` for a check that gives no code |
 | compiler | PlanEdge `code` | `endpoint-offline-only`, `endpoint-unavailable` (an end is not usable) |
 | compiler | a refused compile | `invalid-structure` (validation threw on a model of the wrong shape) |
-| runtime | handle `code` | `mic-pending` (waiting for permission), `mic-error` (the input failed to open); otherwise the plan node's |
+| compiler | `studioStatus(...).error`, every node and edge status | `compile-failed`: `compileStudio` threw after validation (it should not); the Studio shows the reason instead of a blank status |
+| runtime | handle `code` | `mic-pending` (waiting for the input), `mic-error` (the input failed to open), `mic-ended` (its track ended by itself: permission withdrawn, device gone); otherwise the plan node's. A settled handle is announced as the runtime event `'handle'` |
 | runtime | route `code` | `no-output`, `no-input`, `no-mod-target` (the handles cannot make the route); otherwise the plan edge's |
-| runtime | `apply` warnings, `debugInfo().diagnostics` | `update-failed`, `parameters-failed`, `output-failed`, `stop-failed` (entity: node), `route-failed` (entity: edge): a guarded crossfade step that threw |
+| runtime | `apply` warnings, `debugInfo().diagnostics` | `update-failed`, `parameters-failed`, `output-failed`, `engage-failed`, `stop-failed` (entity: node), `route-failed` (entity: edge): a guarded step after the commit that threw; `commit-failed` (no entity): any other throw after the commit. `engage-failed` and `commit-failed` stay in `diagnostics` while unresolved (`runtime.unresolved()`, the `degraded` verdict) |
 | runtime | `lastError.errors`, a refused `apply` / `start` | `prepare-failed` (entity: the node or edge whose preparation threw), `start-failed`, `nothing-compiled`, `disposed`; a validation refusal carries validation's diagnostics |
-| transport | `debugInfo().diagnostics`, the `'warning'` event | `edit-refused` (the commit gate refused a live edit), `sync-refused` (the runtime refused a synced model), both with the runtime diagnostic's entity, `automation-failed` (entity: lane), `measurement-callback-failed`, `timeline` (a timeline-compiler warning, its prose as the message) |
+| transport | `debugInfo().diagnostics`, the `'warning'` event | `edit-refused` (the commit gate refused a live edit), `sync-refused` (the runtime refused a synced model), both with the runtime diagnostic's entity, `automation-failed` (entity: lane), `measurement-callback-failed`, `timeline` (a timeline-compiler warning, its prose as the message). One diagnostic per code and entity (per code and message without an entity); a newer one replaces the older |
+| transport | `debugInfo().lastError` (a Diagnostic plus `phase`), `start()`'s `code` | PLAY refused: `disposed`, `claim-failed` (the output claim threw), `claim-refused`, `play-refused` (the runtime refused to apply or start the model; entity: the runtime diagnostic's); or a live edit's `edit-refused` / `sync-refused` |
 | transport | `debugInfo().unplayed[].code` | `no-target`, `pattern-target`, `event-target`, `target-unavailable`, `no-parameter` |
 
 `runtime.apply` returns `warnings` as diagnostics in both branches, stopped and running. The
@@ -297,6 +329,7 @@ document.
 | --- | --- | --- |
 | `not-applied` | the runtime is not running (stopped, never started) | the refusal of this revision if PLAY failed on it, else `null` |
 | `in-sync` | the applied record is the desired revision; without a revision, the same `studioHash` | `null` |
+| `degraded` | in sync, but a failure after the commit is still in effect (`runtime.unresolved()`: `engage-failed` until that node engages, which every later transaction retries, or is removed; `commit-failed` until STOP). The graph runs, short of its plan | the first unresolved diagnostic |
 | `refused` | the runtime refused the desired revision (`lastError.revision`); without a revision, a refusal newer than the applied record | the runtime's diagnostic (`lastError.errors[0]`) |
 | `behind` | the applied record is another revision, normally older, and the desired one was not refused: it has not been applied yet | `null` |
 
@@ -475,9 +508,27 @@ method (an engine change, out of this issue's scope):
   `release(t)` (gate off from the current contour, `envelope.js releaseAt`) and `hold(t)`
   (`holdAt`: drop everything after t), which the transport uses to close a timeline-gated
   envelope at PLAY and to re-render its gates after an edit or a STOP.
-- Microphone permission: `runtime.setOptions({ inputPermission: true })` re-applies the model
-  at the same revision;
-  degraded microphones become `node-replace`d and open the input.
+- Microphone permission: the Inspector's **Allow microphone** on a Microphone node (code
+  `mic-off`, `mic-error` or `mic-ended`) asks the browser through `audio/microphone.js`
+  `requestMicrophonePermission` (the request `openMicrophone` makes; the probe's tracks stop at
+  once), then calls `runtime.setOptions({ inputPermission: true })`, which re-applies the model
+  at the same revision. While playing, every running Microphone whose input failed or ended is
+  rebuilt (a forced `node-replace`, `diffPlans` `replace`, listed in the result's `reopened`):
+  the plan itself is unchanged when the permission was already on, so a diff alone would leave
+  it degraded. The workspace then waits for the inputs to open (`settleMicrophones`, which also
+  ends at STOP) and announces what happened (`microphoneOutcome`, judged after the wait): open,
+  the reason it is not, or that it opens at the next PLAY. While stopped,
+  the status compile uses `runtime.options`, so the node shows ready and opens at PLAY. A
+  refusal (`micErrorMessage`: permission denied, no device) keeps the input off; its reason is
+  kept per node and shown in the Inspector as an alert (not announced a second time). One
+  request runs at a time: the action is `aria-disabled` and `aria-busy` meanwhile. A Microphone
+  the browser denies at PLAY turns `inputPermission` off, so the stopped status shows the input
+  off rather than ready.
+- Known limitation: Allow microphone asks once (the probe) and the node asks again when it opens
+  at PLAY. Chromium remembers the grant for the page; Firefox and Safari may prompt a second
+  time, depending on how the first prompt was answered. Handing the probe's stream to the node
+  would avoid it, but the stream would then outlive the request with no node to own it while
+  stopped; the existing microphone infrastructure opens per consumer.
 - Output exclusivity is the transport's `onClaimOutput` hook (below); `engine.stopAll()` still
   does not reach the Studio graph, so the UI's Escape goes through `transport.escape()`.
 

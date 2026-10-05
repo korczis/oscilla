@@ -22,7 +22,8 @@
 //     offline-only, no-web-audio, or an adapter check's code (mic-unsupported, mic-off);
 //     edge endpoint-offline-only, endpoint-unavailable.
 //   planHash(plan) -> hex | null   the plan's identity (below); studioHashOf(model) memoized
-//   diffPlans(prev, next, { owned }) -> [op]   the minimal patch (§44), deterministic order;
+//   diffPlans(prev, next, { owned, replace }) -> [op]   the minimal patch (§44), deterministic
+//     order; replace: node ids rebuilt although unchanged (see diffPlans);
 //     owned: Map<node id, Set<param key>> of parameters another owner drives (runtime
 //     setOwnedParams): a change of an adapter's `rebuildWhenOwned` key on such a node is a
 //     node-replace (see diffPlans)
@@ -259,16 +260,18 @@ const changedKeys = (a, b) => [...new Set([...Object.keys(a), ...Object.keys(b)]
  * `edge-props`. `owned` (Map node id → Set of owned parameter keys): on a node with an owned
  * parameter, a change of one of its adapter's `rebuildWhenOwned` keys is a `node-replace` too —
  * the builder's live update for that key rewrites every parameter and cannot skip an owned one
- * (adapters/nodes.js, the owned-parameter contract).
+ * (adapters/nodes.js, the owned-parameter contract). `replace` (Set of node ids): nodes rebuilt
+ * although their plan entry is unchanged (runtime setOptions: a Microphone whose input failed).
  */
-export function diffPlans(prev, next, { owned = null } = {}) {
+export function diffPlans(prev, next, { owned = null, replace = null } = {}) {
   const ops = [];
   const replaced = new Set();
   const removed = new Set();
   for (const [id, n] of next.nodes) {
     const p = prev.nodes.get(id);
     if (!p) { ops.push({ op: 'node-add', id }); continue; }
-    if (p.type !== n.type || p.status !== n.status || p.reason !== n.reason) {
+    if (p.type !== n.type || p.status !== n.status || p.reason !== n.reason
+      || (replace && replace.has(id))) {
       replaced.add(id);
       ops.push({ op: 'node-replace', id, keys: [] });
       continue;
@@ -324,10 +327,11 @@ function stopAndDisconnect(nodes, sources) {
 }
 
 /**
- * Build one node. ctxEnv = { hooks, owners: [{ nodes, sources }], now, at, options }. Returns
- * the adapter handle plus { id, type, name, nodes, sources, acct }. A non-ready plan node
- * becomes an inert handle carrying its status and reason. A builder that throws leaves no
- * tracked node behind (the error propagates to the transaction).
+ * Build one node. ctxEnv = { hooks, owners: [{ nodes, sources }], now, at, options, global?,
+ * settled? } (global: runtime.js "Global side effects"; settled(handle): a pending handle has
+ * settled). Returns the adapter handle plus { id, type, name, nodes, sources, acct }. A
+ * non-ready plan node becomes an inert handle carrying its status and reason. A builder that
+ * throws leaves no tracked node behind (the error propagates to the transaction).
  */
 export function instantiateNode(planNode, ctxEnv) {
   const own = { nodes: new Set(), sources: new Set() };
@@ -341,7 +345,8 @@ export function instantiateNode(planNode, ctxEnv) {
   try {
     const h = planNode.adapter.create({ ctx: hooks.ctx, hooks, acct, now: ctxEnv.now,
       at: ctxEnv.at, params: planNode.params, node: planNode, def: planNode.def,
-      options: ctxEnv.options || {} });
+      options: ctxEnv.options || {}, global: ctxEnv.global || null,
+      settled: ctxEnv.settled || null });
     return Object.assign(h, base, { nodes: own.nodes, sources: own.sources, acct });
   } catch (e) {
     stopAndDisconnect(own.nodes, own.sources);

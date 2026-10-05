@@ -146,6 +146,10 @@ export class AudioEngine {
     this.timeData = null;
     this.freqData = null;
     this.gainLevel = DEFAULT_GAIN; // requested master level, applied when a context is built
+    // Every write of the master level counts (setMasterGain, holdMasterGain): a client that
+    // borrowed the level (the Studio) gives it back only if nobody wrote it since (PR #119 D2).
+    this.masterWrites = 0;
+    this._masterHeldUntil = null; // audio time a holdMasterGain glide starts at, or null
     this.voice = null;           // the current voice
     // current + every earlier voice not freed yet: releasing ones, and released ones that are
     // already silent but wait for their sources' onended (or the fallback timer). During rapid
@@ -320,7 +324,30 @@ export class AudioEngine {
 
   setMasterGain(g) {
     this.gainLevel = clamp(toNumber(g, DEFAULT_GAIN), 0, MAX_OUTPUT_GAIN);
-    if (this.master) this.master.gain.setTargetAtTime(this.gainLevel, this.ctx.currentTime, 0.02);
+    this.masterWrites += 1;
+    if (!this.master) return;
+    const now = this.ctx.currentTime;
+    // A held glide still waiting (holdMasterGain) would override this newer level: drop it.
+    if (this._masterHeldUntil !== null && now < this._masterHeldUntil) {
+      this.master.gain.cancelScheduledValues(now);
+    }
+    this._masterHeldUntil = null;
+    this.master.gain.setTargetAtTime(this.gainLevel, now, 0.02);
+  }
+
+  /**
+   * setMasterGain whose glide starts at audio time `at` (a level given back after a fade, the
+   * Studio's STOP): gainLevel is `g` at once, the master gain keeps its course until `at`. Any
+   * later setMasterGain before `at` cancels the held glide, so the newer level wins.
+   */
+  holdMasterGain(g, at) {
+    this.setMasterGain(g);
+    const ctx = this.ctx;
+    if (!this.master || !ctx || !(at > ctx.currentTime)) return;
+    const p = this.master.gain;
+    p.cancelScheduledValues(ctx.currentTime); // the glide setMasterGain just scheduled
+    p.setTargetAtTime(this.gainLevel, at, 0.02);
+    this._masterHeldUntil = at;
   }
 
   /** performance.now() of the engine's environment, or null (then the clock is currentTime). */

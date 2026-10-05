@@ -2,14 +2,14 @@
 id: compare-two-responses
 kind: use-case
 title: 'Compare two responses'
-summary: 'Select two saved experiments (or one and the baseline), see what changed between the runs by domain, and read A minus B only where the comparison is meaningful.'
+summary: 'Run one definition again, select two saved experiments (or one and the baseline), see what changed between the runs by domain, including an edit of the definition, and read A minus B only where the comparison is meaningful.'
 category: experiments
 status: active
 target: advisory
 weight: 180
 difficulty: basic
 commands: [knowledge]
-claims: [measurement-comparison, aggregate-primary-response, semantic-run-comparison]
+claims: [measurement-comparison, aggregate-primary-response, semantic-run-comparison, experiment-definitions]
 tags: [oscilla, product-acceptance, v3]
 ---
 
@@ -19,6 +19,12 @@ Someone measured the same speaker in two positions and saved both. In Experiment
 select the two and press Compare. Later they mark the first take as the baseline, select a
 new take alone and press Compare: it is compared with the baseline.
 
+To make the takes comparable on purpose, they save the setup as a definition ("Desk
+speaker, 1 m") and press "Run this definition" for each take: every saved run records the
+same definition version. When they later edit the definition's declared conditions, the next
+run records version 2, and comparing it with the baseline says that the definition was edited
+between the runs.
+
 # What proves it
 
 The behaviour is proven by the OSCILLA test named in each claim of `docs/CLAIMS.yaml`, run
@@ -26,7 +32,8 @@ by:
 
 - `npm test` (tests/unit/v3-experiments.test.mjs compareExperiments and responseDelta; tests/unit/v3-views.test.mjs compare view; tests/unit/v3-storage.test.mjs aggregate used when present)
 - `npm test` (tests/unit/v3-semantic-compare.test.mjs: the semantic changes by domain, execution vs presentation, the baseline)
-- `npm run test:measure` (tests/browser/v3-ui.cjs, check experiments: an equivalent pair shows A - B, a non-equivalent pair is refused with the reason; check experiments-changes: the change list, the collapsed metadata group, the baseline)
+- `npm test` (tests/unit/v3-experiment-definitions.test.mjs: the definition hash and its versions, the run bound to its version in result hash v4, migration of earlier files, the version change in compare)
+- `npm run test:measure` (tests/browser/v3-ui.cjs, check experiments: an equivalent pair shows A - B, a non-equivalent pair is refused with the reason; check experiments-changes: the change list, the collapsed metadata group, the baseline; check definitions: two runs of one definition version, an edit, a run of version 2, the version change in compare)
 
 A use-case/v1 scenario can only invoke `bin/majordomus`, so the scenario below does not
 play or capture audio. It proves the traceability instead: each claim's implementation and
@@ -84,6 +91,18 @@ steps:
     expect:
       exit: 0
       stdout_contains: ['claim:aggregate-primary-response +test:tests/unit/v3-storage\.test\.mjs']
+  - id: experiment-definitions-implemented
+    run: ['knowledge', 'edges', '--type', 'implemented_by']
+    note: 'claim experiment-definitions is implemented by src/js/experiments/definition.js, a tracked file'
+    expect:
+      exit: 0
+      stdout_contains: ['claim:experiment-definitions +implementation:src/js/experiments/definition\.js']
+  - id: experiment-definitions-tested
+    run: ['knowledge', 'edges', '--type', 'tested_by']
+    note: 'claim experiment-definitions is proven by tests/unit/v3-experiment-definitions.test.mjs'
+    expect:
+      exit: 0
+      stdout_contains: ['claim:experiment-definitions +test:tests/unit/v3-experiment-definitions\.test\.mjs']
 then:
   - 'every claim this use case names resolves to a tracked implementation and a tracked test'
 ```
@@ -92,5 +111,8 @@ then:
 
 Both responses are overlaid. Differences in calibration, sample rate, stimulus or algorithm
 are named. What changed between the runs is listed by domain, execution changes first, with
-units; layout and metadata changes are collapsed; nothing is presented as a cause. A minus B appears only for equivalent experiments and only over their overlapping
+units; layout and metadata changes are collapsed; nothing is presented as a cause. Runs of
+one definition version show no definition change; a run of an edited definition is named as
+version n → m of the same definition. A run whose setup was changed is not recorded as from
+the definition. A minus B appears only for equivalent experiments and only over their overlapping
 valid range, never normalised; otherwise the view says why it is not shown.

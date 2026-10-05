@@ -33,6 +33,25 @@
 //                        BROWSER_BUDGETS.editMs (median of 9; tests/unit/fixtures/
 //                        v31-large-studio.mjs, docs/v31/performance.md); the numbers are printed
 //                        (V431)
+//   deleted-project-detaches  Save, Open that project, Delete + Confirm delete: the document is
+//                        detached (no project id), counts as unsaved (the indicator shows), the
+//                        announcement says so; Templates then shows its unsaved-changes note and
+//                        a template link waits instead of replacing the graph (v4.0 workspace
+//                        audit: before, the graph was replaced unasked and the work was lost)
+//   mic-allow            a Microphone node is off with an "Allow microphone" action in the
+//                        Inspector; a denied request (getUserMedia stubbed to NotAllowedError)
+//                        keeps it off with the actionable text in an alert; an allowed request
+//                        (keyboard: Enter on the action) stops its probe stream, turns the node
+//                        on, and PLAY opens the input (live status ready); STOP stops the node's
+//                        tracks and leaves 0 engine nodes (v4.0 closure audit F2, F8)
+//   mic-reopen-playing   while the Studio plays: the browser denies the input at PLAY (the node
+//                        says why, "Allow microphone again"); Allow again (Enter) reopens it and
+//                        announces it open; its track then ends by itself (mic-ended) and Allow
+//                        again reopens it once more; a denial is announced once, not as success
+//                        (PR #119 review D1)
+//   render-wav-busy      while a render runs Render WAV is aria-disabled, still focusable, and
+//                        described by a visible reason; activating it opens nothing and says why
+//                        (PR #119 review, F10)
 //   no-console-errors
 'use strict';
 const { spawn } = require('node:child_process');
@@ -511,6 +530,288 @@ function defineChecks(fx) {
       editBudget: t.editMs <= fx.budgets.editMs && t.moveMs <= fx.budgets.editMs
         && t.frameMs <= fx.budgets.editMs,
     }), t };
+  });
+
+  def('deleted-project-detaches', async ({ page }) => {
+    await H.fresh(page);
+    await H.recordLive(page);
+    const id = await page.evaluate(async () => {
+      const a = window.OSCILLA.app;
+      const s = await a.studioSave();
+      return s && s.id;
+    });
+    // Open it through the library, as a user does.
+    await page.evaluate(() => window.OSCILLA.app.studioOpenLibrary());
+    const row = (osc) => `[data-osc="studio.saved.list"] [data-id="${id}"] [data-osc="${osc}"]`;
+    await page.click(row('studio.saved.open'));
+    await H.frames(page);
+    const opened = await page.evaluate(() => ({ projectId: window.OSCILLA.studio.projectId,
+      dirty: window.OSCILLA.studio.dirty }));
+    await page.evaluate(() => window.OSCILLA.app.studioOpenLibrary());
+    await page.click(row('studio.saved.delete'));
+    await page.waitForFunction((sel) => {
+      const b = document.querySelector(sel);
+      return b && b.textContent === 'Confirm delete';
+    }, row('studio.saved.delete'));
+    await page.click(row('studio.saved.delete'));
+    await H.until(() => page.evaluate(() => window.OSCILLA.studio.projectId), (v) => v === null);
+    await H.frames(page);
+    const after = await page.evaluate(async () => {
+      const s = window.OSCILLA.studio;
+      const lib = await s.library();
+      const el = document.querySelector('[data-osc="studio.dirty"]');
+      return { projectId: s.projectId, dirty: s.dirty, projects: (await lib.list({
+        kind: 'oscilla-studio' })).length, indicator: !!el && el.getClientRects().length > 0 };
+    });
+    const live = await H.live(page);
+    await page.evaluate(() => { for (const d of document.querySelectorAll('dialog[open]')) {
+      d.close(); } });
+    // Templates warns before replacing; a template link waits for an explicit Open.
+    await page.evaluate(() => window.OSCILLA.app.studioOpenTemplates());
+    await H.frames(page);
+    const note = await page.evaluate(() => {
+      const el = document.querySelector('[data-osc="studio.templates.dirty"]');
+      return !!el && el.getClientRects().length > 0;
+    });
+    await page.evaluate(() => { for (const d of document.querySelectorAll('dialog[open]')) {
+      d.close(); } });
+    const link = await page.evaluate(() => {
+      const before = window.OSCILLA.studio.model;
+      const r = window.OSCILLA.app.studioApplyLinkHash('#m=studio&st=basic-tone');
+      return { r, kept: window.OSCILLA.studio.model === before,
+        pending: window.OSCILLA.app.studio.linkPending };
+    });
+    await page.evaluate(() => { for (const d of document.querySelectorAll('dialog[open]')) {
+      d.close(); } });
+    return { ...H.verdict({
+      saved: !!id && opened.projectId === id && opened.dirty === false,
+      detached: after.projectId === null && after.projects === 0,
+      unsaved: after.dirty === true && after.indicator,
+      announced: live.some((t) => /open project was deleted from this browser; the graph is still /
+        .test(t) && /unsaved/.test(t)),
+      templatesWarn: note,
+      linkWaits: link.r === true && link.kept && link.pending === 'Basic Tone',
+    }), id, opened, after, link, live: live.slice(-3) };
+  });
+
+  def('mic-allow', async ({ page }) => {
+    await H.fresh(page);
+    await H.recordLive(page);
+    // getUserMedia stubbed: a real MediaStream of a helper context (no device, no prompt).
+    await page.evaluate(() => {
+      const md = navigator.mediaDevices || {};
+      if (!navigator.mediaDevices) {
+        Object.defineProperty(navigator, 'mediaDevices', { value: md, configurable: true });
+      }
+      window.__mic = { mode: 'deny', streams: [] };
+      md.getUserMedia = async () => {
+        if (window.__mic.mode === 'deny') {
+          throw new DOMException('Permission denied', 'NotAllowedError');
+        }
+        const C = window.AudioContext || window.webkitAudioContext;
+        window.__mic.ctx ||= new C();
+        const c = window.__mic.ctx;
+        const o = c.createOscillator();
+        const d = c.createMediaStreamDestination();
+        o.connect(d);
+        o.start();
+        window.__mic.streams.push(d.stream);
+        return d.stream;
+      };
+      const s = window.OSCILLA.studio;
+      const add = (nodeType) => s.store.dispatch({ type: 'NODE_ADD', nodeType,
+        position: { x: 40, y: 600 } }).created.nodes[0];
+      const mic = add('microphone');
+      const sp = add('spectrum');
+      s.store.dispatch({ type: 'EDGE_ADD', from: { node: mic, port: 'audio' },
+        to: { node: sp, port: 'audio' } });
+      s.store.dispatch({ type: 'SELECTION_CHANGE', selection: { nodes: [mic] } });
+      window.__mic.id = mic;
+    });
+    await H.frames(page);
+    const btn = '[data-osc="studio.inspector.allowMic"]';
+    const status = () => page.evaluate(() => {
+      const el = document.querySelector('[data-osc="studio.inspector.status"]');
+      const b = document.querySelector('[data-osc="studio.inspector.allowMic"]');
+      const err = document.querySelector('[data-osc="studio.inspector.micError"]');
+      return { status: el ? el.textContent : '', button: b ? b.textContent : null,
+        error: err ? err.textContent : null, errorRole: err ? err.getAttribute('role') : null,
+        allowed: window.OSCILLA.studio.runtime.options.inputPermission };
+    });
+    const off = await status();
+    await page.click(btn);
+    const denied = await H.until(status, (v) => !!v.error);
+    await page.evaluate(() => { window.__mic.mode = 'allow'; });
+    await page.focus(btn);
+    await page.keyboard.press('Enter');
+    const allowed = await H.until(status, (v) => v.allowed && v.button === null);
+    const probe = await page.evaluate(() => window.__mic.streams.map((x) => x.getTracks()
+      .every((t) => t.readyState === 'ended')));
+    await page.evaluate(() => window.OSCILLA.app.studioPlay());
+    const live = await H.until(() => page.evaluate(() => {
+      const h = window.OSCILLA.studio.runtime.nodes.get(window.__mic.id);
+      return { status: h ? h.status : null, analyser: !!(h && h.info.analyser),
+        streams: window.__mic.streams.length };
+    }), (v) => v.status === 'ready', 4000);
+    await page.evaluate(() => window.OSCILLA.app.studioStop());
+    const quiet = await H.quiet(page);
+    const ended = await page.evaluate(() => window.__mic.streams.map((x) => x.getTracks()
+      .every((t) => t.readyState === 'ended')));
+    const said = await H.live(page);
+    await page.evaluate(() => {
+      window.OSCILLA.studio.runtime.setOptions({ inputPermission: false });
+      if (window.__mic.ctx) window.__mic.ctx.close();
+    });
+    return { ...H.verdict({
+      offWithAction: off.button === 'Allow microphone' && /mic-off/.test(off.status)
+        && /Allow microphone in the Inspector/.test(off.status) && off.allowed === false,
+      deniedSaysWhy: /permission was denied/.test(denied.error || '') && denied.errorRole === 'alert'
+        && denied.allowed === false,
+      allowedOn: allowed.allowed === true && allowed.button === null
+        && !/mic-off/.test(allowed.status),
+      probeReleased: probe.length === 1 && probe[0] === true,
+      openedOnPlay: live.status === 'ready' && live.analyser && live.streams === 2,
+      stoppedTracks: ended.length === 2 && ended.every(Boolean),
+      zeroNodes: quiet.engineNodes === 0 && quiet.runtimeNodes === 0,
+      announced: said.some((t) => /Microphone allowed/.test(t)),
+    }), off, denied, allowed, probe, live, ended, quiet };
+  });
+
+  def('mic-reopen-playing', async ({ page }) => {
+    await H.fresh(page);
+    await H.recordLive(page);
+    await page.evaluate(() => {
+      const md = navigator.mediaDevices || {};
+      if (!navigator.mediaDevices) {
+        Object.defineProperty(navigator, 'mediaDevices', { value: md, configurable: true });
+      }
+      window.__mic = { mode: 'deny', streams: [] };
+      md.getUserMedia = async () => {
+        if (window.__mic.mode === 'deny') {
+          throw new DOMException('Permission denied', 'NotAllowedError');
+        }
+        const C = window.AudioContext || window.webkitAudioContext;
+        window.__mic.ctx ||= new C();
+        const c = window.__mic.ctx;
+        const o = c.createOscillator();
+        const d = c.createMediaStreamDestination();
+        o.connect(d);
+        o.start();
+        window.__mic.streams.push(d.stream);
+        return d.stream;
+      };
+      const s = window.OSCILLA.studio;
+      const add = (nodeType) => s.store.dispatch({ type: 'NODE_ADD', nodeType,
+        position: { x: 40, y: 600 } }).created.nodes[0];
+      const mic = add('microphone');
+      const sp = add('spectrum');
+      s.store.dispatch({ type: 'EDGE_ADD', from: { node: mic, port: 'audio' },
+        to: { node: sp, port: 'audio' } });
+      s.store.dispatch({ type: 'SELECTION_CHANGE', selection: { nodes: [mic] } });
+      window.__mic.id = mic;
+      // Allowed earlier (as after an Allow while stopped): PLAY asks the browser for the node.
+      s.runtime.setOptions({ inputPermission: true });
+    });
+    await page.evaluate(() => window.OSCILLA.app.studioPlay());
+    const btn = '[data-osc="studio.inspector.allowMic"]';
+    const view = () => page.evaluate(() => {
+      const h = window.OSCILLA.studio.runtime.nodes.get(window.__mic.id);
+      const b = document.querySelector('[data-osc="studio.inspector.allowMic"]');
+      const st = document.querySelector('[data-osc="studio.inspector.status"]');
+      return { code: h ? h.code || null : null, status: h ? h.status : null,
+        button: b ? b.textContent : null, line: st ? st.textContent : '',
+        streams: window.__mic.streams.length };
+    });
+    const denied = await H.until(view, (v) => v.code === 'mic-error' && v.button !== null);
+    // Allow again, from the keyboard: the browser allows the probe and the node's request now.
+    await page.evaluate(() => { window.__mic.mode = 'allow'; });
+    await page.focus(btn);
+    await page.keyboard.press('Enter');
+    const reopened = await H.until(view, (v) => v.status === 'ready' && v.button === null);
+    const saidOpen = await H.until(() => H.live(page), (l) => l.some((t) => /Microphone open/
+      .test(t)));
+    // The node's track ends by itself (device unplugged): mic-ended, Allow again reopens.
+    await page.evaluate(() => {
+      const st = window.__mic.streams.at(-1); // none when the input never reopened
+      for (const t of st ? st.getTracks() : []) t.dispatchEvent(new Event('ended'));
+    });
+    const ended = await H.until(view, (v) => v.code === 'mic-ended' && v.button !== null);
+    await page.click(btn);
+    const again = await H.until(view, (v) => v.status === 'ready' && v.button === null);
+    // A request the browser refuses is not announced as success; the alert says why.
+    await page.evaluate(() => { window.__mic.mode = 'deny'; });
+    await page.evaluate(() => {
+      const st = window.__mic.streams.at(-1);
+      for (const t of st ? st.getTracks() : []) t.dispatchEvent(new Event('ended'));
+    });
+    await H.until(view, (v) => v.code === 'mic-ended');
+    await H.recordLive(page);
+    await page.click(btn);
+    const refused = await H.until(() => page.evaluate(() => {
+      const e = document.querySelector('[data-osc="studio.inspector.micError"]');
+      return e ? e.textContent : '';
+    }), (t) => /denied/.test(t));
+    const saidAfter = await H.live(page);
+    await page.evaluate(() => window.OSCILLA.app.studioStop());
+    const quiet = await H.quiet(page);
+    await page.evaluate(() => {
+      window.OSCILLA.studio.runtime.setOptions({ inputPermission: false });
+      if (window.__mic.ctx) window.__mic.ctx.close();
+    });
+    return { ...H.verdict({
+      deniedSaysWhy: denied.button === 'Allow microphone again'
+        && /permission was denied/.test(denied.line),
+      reopenedOnAllow: reopened.status === 'ready' && reopened.streams >= 2,
+      announcedOpen: saidOpen.some((t) => /Microphone open/.test(t)),
+      endedOffered: ended.button === 'Allow microphone again',
+      reopenedAfterEnd: again.status === 'ready',
+      refusalNotSuccess: /permission was denied/.test(refused)
+        && !saidAfter.some((t) => /Microphone open|Microphone allowed/.test(t))
+        && !saidAfter.some((t) => /permission was denied/.test(t)), // the alert, not twice
+      zeroNodes: quiet.engineNodes === 0 && quiet.runtimeNodes === 0,
+    }), denied, reopened, ended, again, refused, saidAfter, quiet };
+  });
+
+  def('render-wav-busy', async ({ page }) => {
+    await H.fresh(page, 'basic-tone');
+    await H.recordLive(page);
+    // A task in progress as the strip shows it (a real render of this graph ends too quickly to
+    // be caught reliably): the button reads only studio.task.
+    await page.evaluate(() => { const a = window.OSCILLA.app;
+      a.studio.task = { active: true, kind: 'render', label: 'Rendering WAV', pct: 40,
+        text: '40 %', abortable: false }; });
+    await H.frames(page);
+    const btn = '[data-osc="studio.renderWav"]';
+    const state = await page.evaluate((sel) => {
+      const b = document.querySelector(sel);
+      const id = b.getAttribute('aria-describedby');
+      const why = id ? document.getElementById(id) : null;
+      return { disabled: b.disabled, aria: b.getAttribute('aria-disabled'),
+        why: why ? why.textContent : null,
+        visible: !!why && why.getClientRects().length > 0 };
+    }, btn);
+    await page.focus(btn);
+    const focused = await page.evaluate((sel) => document.activeElement
+      === document.querySelector(sel), btn);
+    await page.keyboard.press('Enter');
+    await H.frames(page);
+    const opened = await page.evaluate(() => !!document.querySelector(
+      '#osc-dlg-studio-render[open]'));
+    const said = await H.live(page);
+    await page.evaluate(() => { const a = window.OSCILLA.app;
+      a.studio.task = { active: false, kind: '', label: '', pct: null, text: '',
+        abortable: false }; });
+    const after = await H.until(() => page.evaluate((sel) => document.querySelector(sel)
+      .getAttribute('aria-disabled'), btn), (v) => v === 'false');
+    return { ...H.verdict({
+      ariaDisabled: state.aria === 'true' && state.disabled === false,
+      reasonVisible: /unavailable while a Studio task runs \(Rendering WAV\)/
+        .test(state.why || '') && state.visible,
+      focusable: focused,
+      nothingOpened: !opened,
+      saidWhy: said.some((t) => /Render WAV is unavailable/.test(t)),
+      availableAfter: after === 'false',
+    }), state, said: said.slice(-2) };
   });
 
   def('no-console-errors', async ({ errors }) => ({ ok: errors.length === 0,

@@ -700,6 +700,13 @@
   display: flex;
 }
 
+/* Why a field is as it is (a disabled time base): visible text the control is described by. */
+.osc-stl-fhint {
+  margin: 0;
+  color: var(--osc-text-muted);
+  font-size: var(--osc-fs-sm);
+}
+
 .osc-stl-input {
   height: var(--osc-control-h);
 }

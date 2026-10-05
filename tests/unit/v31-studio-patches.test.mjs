@@ -374,19 +374,20 @@ test('§114 store PATCH_INSERT / PATCH_REPLACE are single undoable entries', () 
 // ---------------------------------------------------------------- store partition (§154, §225)
 
 test('§225 DB version 2 adds the Studio stores and never deletes anything', async () => {
-  assert.strictEqual(DB_VERSION, 2);
+  // Version 3 (ADR 0043) adds the definitions after them.
+  assert.strictEqual(DB_VERSION, 3);
   const fake = fakeIndexedDB();
   const fresh = await openExperimentStore({ indexedDB: fake.indexedDB, name: 'fresh' });
-  assert.deepStrictEqual(fake.state.upgrades, [[0, 2]]);
+  assert.deepStrictEqual(fake.state.upgrades, [[0, 3]]);
   assert.deepStrictEqual([...fake.dbs.get('fresh').stores.keys()], ['experiments', 'summaries',
-    STUDIO_RECORDS, STUDIO_SUMMARIES]);
+    STUDIO_RECORDS, STUDIO_SUMMARIES, 'definitions']);
   fresh.close();
   v1Database(fake, 'old');
   const upgraded = await openExperimentStore({ indexedDB: fake.indexedDB, name: 'old' });
-  assert.deepStrictEqual(fake.state.upgrades, [[0, 2], [1, 2]]);
+  assert.deepStrictEqual(fake.state.upgrades, [[0, 3], [1, 3]]);
   const rec = fake.dbs.get('old');
   assert.deepStrictEqual([...rec.stores.keys()], ['experiments', 'summaries', 'studio',
-    'studioSummaries']);
+    'studioSummaries', 'definitions']);
   assert.deepStrictEqual(rec.stores.get('experiments').data.get('old-1'), { experimentId: 'old-1',
     name: 'kept', note: 'a V3.0 record' }, 'the V3.0 experiment is untouched');
   assert.deepStrictEqual(await upgraded.listStudio(), []);
@@ -396,7 +397,7 @@ test('§225 DB version 2 adds the Studio stores and never deletes anything', asy
   const db = { objectStoreNames: { contains: (k) => ['experiments', 'summaries', 'studio']
     .includes(k) }, createObjectStore: (k) => created.push(k) };
   upgradeExperimentDb(db, 1);
-  assert.deepStrictEqual(created, ['studioSummaries']);
+  assert.deepStrictEqual(created, ['studioSummaries', 'definitions']);
 });
 
 for (const kind of ['memory', 'indexeddb']) {

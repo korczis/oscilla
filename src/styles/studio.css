@@ -210,6 +210,13 @@
   background: var(--osc-blue);
 }
 
+/* Why Render WAV waits (the button's aria-describedby): visible, not only a tooltip. */
+.osc-st-task-why {
+  flex-basis: 100%;
+  color: var(--osc-text-muted);
+  font-size: var(--osc-fs-xs);
+}
+
 .osc-st-task .osc-btn {
   height: var(--osc-control-h-sm);
   padding: 0 9px;
@@ -1143,12 +1150,6 @@
   padding-left: 16px;
   color: var(--osc-text-muted);
   font-size: var(--osc-fs-xs);
-}
-
-.osc-st-placeholder {
-  margin: 0;
-  color: var(--osc-text-muted);
-  font-size: var(--osc-fs-sm);
 }
 
 /* ================= Compact Studio widget (Playground) ================= */

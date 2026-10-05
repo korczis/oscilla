@@ -161,9 +161,21 @@ filter class is claimed. An experiment saved from Measure does not store band le
   sample rate and runs, the quality assessment and the algorithm ID of every result. It also
   records the product version and build (including the build's source digest and, for the
   deployed page, the artifact SHA-256), with a configuration hash and a result hash. The
-  result hash (version 3) covers the results, the verdict, the calibration, the input, the
-  output, the runs (each with a stable id, `run-1`, `run-2`, ...) and the build. Files with a
-  version 1 or 2 hash still verify in their own version.
+  result hash (version 4) covers the results, the verdict, the calibration, the input, the
+  output, the runs (each with a stable id, `run-1`, `run-2`, ...), the build, the recipe and
+  the definition the run was executed from. Files with a version 1, 2 or 3 hash still verify
+  in their own version.
+- **Definitions.** A definition says what to measure and how: the recipe as asked for, the
+  conditions declared for every run and, optionally, the lowest quality verdict that meets it.
+  Its hash covers only those fields, so a rename never changes it. Editing them creates a new
+  version; earlier runs keep the version they ran. "Run this definition" runs its latest
+  version, and Repeat loads a saved run's version again. A run records the version only when
+  it ran exactly that recipe. A run without one, or whose setup was changed, records a
+  definition derived from the recipe it played and marked as derived, never as authored. A
+  run is shown under a stored definition's name only when that definition has its version
+  with its hash
+  ([ADR 0043](.ai/repo/adrs/0043-runs-executed-from-versioned-experiment-definitions.md),
+  proposed).
 - **A completed run cannot be changed.** Only the name, the annotation notes and the baseline
   mark of a saved
   experiment can be edited, and no hash covers them. The store refuses any other change to a
@@ -176,7 +188,9 @@ filter class is claimed. An experiment saved from Measure does not store band le
   repeatability figure in dB. The stored transfer is the aggregate's centre, marked as
   derived, never a single run.
 - **The Experiments workspace.** It lists, opens, renames, duplicates, repeats (as a new
-  experiment), exports and deletes experiments. It also shows an experiment in Measure.
+  experiment from the same definition version), exports and deletes experiments. It also
+  shows an experiment in Measure. Its Definitions panel lists each definition with its version
+  count and last run, creates one from the Measure setup, renames and edits it, and runs it.
   Export gives an `.oscilla.json` file or CSV (transfer, impulse response, aggregate) with a
   metadata header and explicit unit columns.
 - **Import.** An imported file is untrusted. Oversized files, wrong types, non-finite numbers,
@@ -185,9 +199,12 @@ filter class is claimed. An experiment saved from Measure does not store band le
   product version
   ([ADR 0023](.ai/repo/adrs/0023-schema-versions-independent-of-product-version.md), proposed).
   Schema 1 files import through a migration that adds the run ids and keeps their hash.
+  Schema 2 files import through a migration that gives each run the definition derived from
+  its own recipe (marked as derived) and keeps their hash.
 - **Compare.** Comparing two or more experiments names every difference in calibration, sample
   rate, stimulus and algorithm. It also lists what changed between the runs, grouped by
-  domain: recipe (stimulus and analysis field by field, with units), algorithms (with the
+  domain: the definition version (an edit of the same definition between two runs is said
+  plainly), recipe (stimulus and analysis field by field, with units), algorithms (with the
   version step), calibration, input and output conditions, the Studio graph a run recorded
   (nodes and connections added or removed, parameters with their units, automation lanes),
   build provenance and the quality verdict and reasons. Execution changes come first. Layout,
