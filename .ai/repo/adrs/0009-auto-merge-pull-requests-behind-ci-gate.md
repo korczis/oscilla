@@ -47,7 +47,7 @@ Appended; the sections above are left as written, and the status stays `proposed
 V1's single file in the V2 change (9fe0a15, #3) and stay readable at tag `v1.0.0`. The `gate`
 job of `.github/workflows/ci.yml` now aggregates parallel jobs (unit and build checks, the V1
 engine port, DSP/labs/sequencer, Measure, Studio, the browser gate in Chromium, Firefox and
-WebKit, the visual gate, and a pinned `majordomus doctor` of the `.ai/` layer); `tests/README.md`
-lists what each runs. Pages deploys `dist/`
-(ADR 0011), not `index.html`. Work ships from its own worktree and branch, not from the trunk
-checkout (see the note on ADR 0008).
+WebKit, the visual gate, and a pinned `majordomus doctor` of the `.ai/` layer);
+`tests/README.md` lists what each runs. Pages deploys `dist/` (ADR 0011), not `index.html`.
+Work ships from its own worktree and branch, not from the trunk checkout (see the note on ADR
+0008).

@@ -172,6 +172,16 @@ test('every project rule is well formed, and an x-majordomus block names tests C
   for (const [id, n] of byId) assert.equal(n, 1, `${id} is active at exactly one version`);
 });
 
+test('CLAUDE.md names every project rule in force, and only those', () => {
+  const claude = read('CLAUDE.md');
+  const hand = claude.slice(0, claude.indexOf('<!-- majordomus:begin'));
+  const active = RULE_FILES.map(frontMatter).filter((fm) => fm.status === 'active')
+    .map((fm) => fm.id);
+  for (const id of active) assert.ok(hand.includes(`\`${id}\``), `CLAUDE.md names ${id}`);
+  const named = [...hand.matchAll(/`(project\.[a-z-]+)`/g)].map(([, id]) => id);
+  for (const id of named) assert.ok(active.includes(id), `CLAUDE.md names ${id}, not in force`);
+});
+
 test('every rule a claim or a feature cites as its source is a rule file in force', () => {
   const files = new Map(RULE_FILES.map((rel) => [rel, frontMatter(rel)]));
   for (const c of CLAIMS) {
