@@ -1871,6 +1871,8 @@
           <p class="osc-m-hint" x-show="!exps.detail">Open an experiment from the list to see its summary, provenance and response.</p>
           <div x-show="exps.detail" class="osc-x-body">
             <p class="osc-m-summary osc-num" data-osc="exp.compact" x-text="exps.detail ? exps.detail.compact : ''"></p>
+            <p class="osc-pp-error" role="status" data-osc="exp.calibrationClaim" x-show="exps.detail && exps.detail.calibrationClaim" style="display: none"
+              x-text="exps.detail && exps.detail.calibrationClaim ? exps.detail.calibrationClaim.text + ' ' + exps.detail.calibrationClaim.findings.join(' ') : ''"></p>
             <div class="osc-m-btnrow">
               <button type="button" class="osc-btn osc-btn-secondary osc-m-small" data-osc="exp.rename"
                 @click="experimentsAskRename({ id: exps.detail.id, name: exps.detail.title })">Rename…</button>

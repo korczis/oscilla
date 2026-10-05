@@ -5,8 +5,10 @@
 //   - a level calibration created after an uncalibrated run is never recorded as used, and the
 //     record shows no dB SPL (P0-2);
 //   - environment.notes are the notes at the start of the run; later text is an annotation;
-//   - the validator rejects (code 'corrupt') a record whose named calibration its own results
-//     contradict, even when both hashes were re-stamped over the claim.
+//   - a record whose named calibration its own results contradict (as earlier builds saved one)
+//     is a non-fatal finding 'calibration-claim-contradicted': it stays readable from the store,
+//     imports, keeps its verified hash, and is presented without the claim (never dB SPL,
+//     compared as uncalibrated); strict validation, what the app now writes, refuses it.
 // The results come from the real MeasurementEngine on a synthetic microphone-like io.
 //   node --test tests/unit/v3-evidence-at-completion.test.mjs
 //
@@ -25,8 +27,16 @@ import { createLevelCalibration } from '../../src/js/calibration/level.js';
 import { KNOWN_ALGORITHM_IDS, ALGORITHMS } from '../../src/js/measurement/algorithms.js';
 import { mulberry32 } from '../../src/js/audio/noise.js';
 import * as summary from '../../src/js/measurement/views/experiment-summary.js';
+import * as validate from '../../src/js/experiments/validate.js';
+import * as store from '../../src/js/experiments/store.js';
+import * as ui from '../../src/js/ui/experiments.js';
+import { compareExperiments } from '../../src/js/experiments/compare.js';
+import { csvMeta, transferCsv } from '../../src/js/experiments/csv.js';
+import { fakeIndexedDB } from './fixtures/fake-indexeddb.mjs';
 
 const OPTS = { knownAlgorithms: KNOWN_ALGORITHM_IDS };
+const STRICT = { ...OPTS, calibrationClaims: 'strict' };
+const CODE = 'calibration-claim-contradicted';
 const SR = 8000;
 const NOW = '2026-10-05T10:00:00.000Z';
 const BUILD = { version: '9.9.9-test', commit: 'abcdef1234567', channel: 'test' };
@@ -103,11 +113,22 @@ const valid = (e) => {
 /** Re-stamp both hashes over an edit, as any writer can: the check is on facts, not hashes. */
 const restamp = (e) => hash.withResultHash(hash.withConfigHash(e, hash.configHash(e)),
   hash.resultHash(e), hash.RESULT_HASH_VERSION);
-const corruptAt = (e, path) => {
-  const v = validateExperiment(schema.experimentToJson(e), OPTS);
-  assert.equal(v.ok, false, `expected ${path} to be refused`);
-  assert.ok(v.errors.some((x) => x.path === path && x.code === 'corrupt'
-    && /^corrupt: /.test(x.text)), JSON.stringify(v.errors));
+/**
+ * A contradicted claim: readable by default (finding at `path`, hash verified), refused by
+ * strict validation with the same code, path and reason; never the bare word "corrupt".
+ */
+const contradictedAt = (e, path) => {
+  const json = schema.experimentToJson(e);
+  const v = validateExperiment(json, OPTS);
+  assert.ok(v.ok, v.ok ? '' : schema.formatErrors(v.errors));
+  assert.ok(v.findings.some((x) => x.path === path && x.code === CODE
+    && /^calibration claim contradicted by the record's own results: /.test(x.text)),
+  JSON.stringify(v.findings));
+  const strict = validateExperiment(json, STRICT);
+  assert.equal(strict.ok, false, `strict validation refuses ${path}`);
+  assert.ok(strict.errors.some((x) => x.path === path && x.code === CODE),
+    JSON.stringify(strict.errors));
+  return v.experiment;
 };
 
 test('the runs complete; the engine reports what it applied, frozen at completion', () => {
@@ -192,28 +213,89 @@ test('the workspace states what differs from the evidence, and what a save keeps
   assert.match(notes[0], /saved as an annotation/);
 });
 
-test('validate: a record naming a calibration its results contradict is corrupt', () => {
-  const uncal = build(UNCAL);
-  const withA = build(WITH_A);
-  const withLevel = build(WITH_LEVEL);
-  for (const e of [uncal, withA, withLevel]) valid(e); // what the app writes stays valid
+test('validate: a contradicted calibration claim is a finding; strict validation refuses it',
+  () => {
+    const uncal = build(UNCAL);
+    const withA = build(WITH_A);
+    const withLevel = build(WITH_LEVEL);
+    for (const e of [uncal, withA, withLevel]) {
+      // What the app writes passes strict validation and has no finding.
+      const v = validateExperiment(schema.experimentToJson(e), STRICT);
+      assert.ok(v.ok, v.ok ? '' : schema.formatErrors(v.errors));
+      assert.deepEqual(v.findings, []);
+    }
+    const level = schema.normalizeCalibration({ level: LEVEL }).level;
+    // A level calibration attached after an uncalibrated run, both hashes re-stamped.
+    contradictedAt(restamp({ ...uncal, calibration: { ...uncal.calibration, level } }),
+      'calibration.level');
+    // A frequency profile named for a run no profile corrected.
+    contradictedAt(restamp({ ...uncal, calibration: { ...uncal.calibration,
+      frequency: { id: PROFILE_A.id, name: 'Mic A' } } }), 'calibration.frequency');
+    // The profile cleared before Save on a run that profile A corrected.
+    contradictedAt(restamp({ ...withA, calibration: { ...withA.calibration, frequency: null } }),
+      'calibration.frequency');
+    // The level calibration dropped from a run it calibrated.
+    contradictedAt(restamp({ ...withLevel, calibration: { ...withLevel.calibration,
+      level: null } }), 'calibration.level');
+    // Another level calibration than the one applied (offset differs).
+    const other = schema.normalizeCalibration({ level: createLevelCalibration({
+      referenceHz: 1000, referenceDbSpl: 94, observedDbRelative: -20, conditions: null,
+      createdAt: NOW, method: 'manual', input: null }) }).level;
+    contradictedAt(restamp({ ...withLevel, calibration: { ...withLevel.calibration,
+      level: other } }), 'calibration.level.offsetDb');
+  });
+
+/** A record as the build before the fix saved it: a level calibration made after the run. */
+function olderBuildRecord() {
+  const uncal = build(UNCAL, { id: 'older-build' });
   const level = schema.normalizeCalibration({ level: LEVEL }).level;
-  // A level calibration attached after an uncalibrated run, both hashes re-stamped.
-  corruptAt(restamp({ ...uncal, calibration: { ...uncal.calibration, level } }),
-    'calibration.level');
-  // A frequency profile named for a run no profile corrected.
-  corruptAt(restamp({ ...uncal, calibration: { ...uncal.calibration,
-    frequency: { id: PROFILE_A.id, name: 'Mic A' } } }), 'calibration.frequency');
-  // The profile cleared before Save on a run that profile A corrected.
-  corruptAt(restamp({ ...withA, calibration: { ...withA.calibration, frequency: null } }),
-    'calibration.frequency');
-  // The level calibration dropped from a run it calibrated.
-  corruptAt(restamp({ ...withLevel, calibration: { ...withLevel.calibration, level: null } }),
-    'calibration.level');
-  // Another level calibration than the one applied (offset differs).
-  const other = schema.normalizeCalibration({ level: createLevelCalibration({ referenceHz: 1000,
-    referenceDbSpl: 94, observedDbRelative: -20, conditions: null, createdAt: NOW,
-    method: 'manual', input: null }) }).level;
-  corruptAt(restamp({ ...withLevel, calibration: { ...withLevel.calibration, level: other } }),
-    'calibration.level.offsetDb');
+  return restamp({ ...uncal, calibration: { ...uncal.calibration, level } });
+}
+
+test('a stored contradicted record (older build) stays readable, unchanged and verified',
+  async () => {
+    const old = olderBuildRecord();
+    const fake = fakeIndexedDB();
+    const opens = [['memory', async () => store.createMemoryStore(OPTS)],
+      ['indexeddb', () => store.openExperimentStore({ indexedDB: fake.indexedDB,
+        name: `evidence-${Math.random()}`, ...OPTS })]];
+    for (const [kind, open] of opens) {
+      const s = await open();
+      await s.put(old);
+      const back = await s.get('older-build');
+      assert.ok(back, `${kind}: readable`);
+      assert.equal(schema.experimentToJson(back), schema.experimentToJson(old),
+        `${kind}: never rewritten`);
+      assert.equal(hash.resultHash(back), back.provenance.resultHash, `${kind}: hash verifies`);
+      const f = validate.calibrationClaimFindings(back);
+      assert.deepEqual(f.map((x) => [x.path, x.code]), [['calibration.level', CODE]]);
+      // Presented without the claim: no dB SPL anywhere, the statement says why.
+      const shown = ui.presented(back);
+      assert.equal(shown.calibration.level, null);
+      assert.notEqual(back.calibration.level, null, 'the stored record keeps what it says');
+      const text = [...schema.summarizeExperiment(shown),
+        ...summary.experimentSummary(shown).lines,
+        transferCsv(shown.results.transfer, csvMeta(shown))].join('\n');
+      assert.doesNotMatch(text, /SPL/, `${kind}: never presented as dB SPL`);
+      assert.match(schema.summarizeExperiment(back).join(' '), /SPL/,
+        'the raw record would have shown SPL');
+      assert.match(ui.CALIBRATION_CLAIM_TEXT, /not trustworthy/);
+      // Compared as uncalibrated: no level-calibration difference against an uncalibrated run.
+      const other = build(UNCAL, { id: 'uncal-peer' });
+      const levelDiff = (list) => compareExperiments(list).differences
+        .some((d) => d.field === 'calibration.level');
+      assert.ok(levelDiff([back, other]), 'the raw claim would differ as a level calibration');
+      assert.ok(!levelDiff([shown, ui.presented(other)]), `${kind}: compared as uncalibrated`);
+    }
+  });
+
+test('importing a contradicted file: accepted with the finding, never as SPL', () => {
+  const json = schema.experimentToJson(olderBuildRecord());
+  const v = validateExperiment(json, OPTS);
+  assert.ok(v.ok, 'an exported file from an earlier version opens');
+  assert.equal(v.findings.length, 1);
+  assert.equal(v.findings[0].code, CODE);
+  assert.match(v.findings[0].text, /levelCalibrated false/, 'the reason names the evidence');
+  assert.equal(ui.presented(v.experiment).calibration.level, null);
+  assert.equal(v.experiment.provenance.resultHash, olderBuildRecord().provenance.resultHash);
 });

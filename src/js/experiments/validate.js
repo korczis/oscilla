@@ -2,9 +2,12 @@
 // text or an already parsed object. Pure; never evals, never throws, no DOM, no globals.
 //
 //   validateExperiment(json, { maxBytes = 32 MiB, maxArray = 4_000_000, knownAlgorithms,
-//     migrations, maxErrors = 50, sha256Hex }) ->
-//     { ok: true, experiment, migratedFrom: n|null }
+//     migrations, maxErrors = 50, sha256Hex, calibrationClaims = 'report' }) ->
+//     { ok: true, experiment, migratedFrom: n|null, findings: [{ path, text, code }] }
 //     | { ok: false, errors: [{ path, text, code? }] }
+//   calibrationClaimFindings(experiment) -> [{ path, text, code }]   (see "Calibration as applied")
+//   withoutContradictedCalibration(experiment, findings?) -> the experiment, or a copy for
+//     presentation whose contradicted calibration claims are removed (never stored)
 //
 // Pipeline: size cap (before JSON.parse) -> structural scan (depth, plain objects only, no
 // `__proto__` / `constructor` / `prototype` keys, finite numbers) -> schema migration
@@ -58,14 +61,20 @@
 //
 // Calibration as applied (ADR 0040, resolution 2026-10-05): a record whose quality assessment
 // judged the calibration (quality.js always gives a FREQUENCY_CALIBRATION and a
-// LEVEL_CALIBRATION reason) must name the calibration its results say was applied. A frequency
-// profile is named exactly when algorithms.calibration (the engine's correction algorithm) is
-// recorded, and a record naming none has no calibrated point in quality.mask.calibrated. A level
-// calibration is named exactly when quality.metrics.levelCalibrated is true (or, without that
-// metric, when the LEVEL_CALIBRATION reason passed), and its offsetDb is that reason's value.
-// Any disagreement is { path: 'calibration.…', code: 'corrupt' }: the record claims a
-// calibration its own results contradict, whatever its hash says. A record without that
-// evidence (no quality, or an assessment that did not judge calibration) is not cross-checked.
+// LEVEL_CALIBRATION reason) should name the calibration its results say was applied. A
+// frequency profile is named exactly when algorithms.calibration (the engine's correction
+// algorithm) is recorded, and a record naming none has no calibrated point in
+// quality.mask.calibrated. A level calibration is named exactly when
+// quality.metrics.levelCalibrated is true (or, without that metric, when the LEVEL_CALIBRATION
+// reason passed), and its offsetDb is that reason's value. A disagreement is a finding with
+// code CALIBRATION_CLAIM_CONTRADICTED and a text naming the field, the rule and the evidence.
+// Earlier builds saved such records (a calibration loaded or created after the run), so by
+// default (calibrationClaims 'report') the finding is NOT fatal: the record validates, its hash
+// is verified as stored, and `findings` carries it; the workspace states it and presents the
+// record without the contradicted claim (withoutContradictedCalibration), never as dB SPL.
+// calibrationClaims 'strict' makes every finding an error, for records written from now on.
+// A record without that evidence (no quality, or an assessment that did not judge calibration)
+// has no finding.
 //
 // Optional provenance fields (schema.js header): recipe.requested, output.masterGain,
 // measurement.notes, provenance.resultHashVersion. calibration.level is a schema-1 or schema-2
@@ -164,7 +173,12 @@ export function validateExperiment(json, opts = {}) {
   if (c.errors.length || !experiment) {
     return { ok: false, errors: c.errors.length ? c.errors : [{ path: '', text: 'invalid' }] };
   }
-  return { ok: true, experiment, migratedFrom: migrated.applied.length ? migrated.from : null };
+  const findings = calibrationClaimFindings(experiment);
+  if (findings.length && opts.calibrationClaims === 'strict') {
+    return { ok: false, errors: findings };
+  }
+  return { ok: true, experiment, migratedFrom: migrated.applied.length ? migrated.from : null,
+    findings };
 }
 
 /** UTF-8 byte length of a string, stopping early once it exceeds `stopAbove`. */
@@ -318,7 +332,6 @@ function checkExperiment(c, e, ctx) {
     out.environment = { notes: e.environment.notes };
   }
   checkMaskGrid(c, out.quality, out.results);
-  if (!c.errors.length) checkCalibrationApplied(c, out);
   if (!c.errors.length && out.provenance && typeof out.provenance.resultHash === 'string') {
     const version = resultHashVersionOf(out);
     const opts = { version };
@@ -336,47 +349,71 @@ function checkExperiment(c, e, ctx) {
   return c.errors.length ? null : out;
 }
 
-/** The calibration a measured record names must be the one its results say was applied. */
-function checkCalibrationApplied(c, e) {
-  const q = e.quality;
-  const cal = e.calibration;
-  if (!q || !cal || !e.algorithms) return;
-  const corrupt = (path, text) => c.add(path, `corrupt: ${text}`, 'corrupt');
-  const judged = (code) => q.reasons.some((x) => x.code === code);
+export const CALIBRATION_CLAIM_CONTRADICTED = 'calibration-claim-contradicted';
+
+/**
+ * The calibration claims of a decoded experiment that its own results contradict (see the
+ * header): [{ path, code: CALIBRATION_CLAIM_CONTRADICTED, text }], [] when there is none.
+ */
+export function calibrationClaimFindings(e) {
+  const out = [];
+  const q = e && e.quality;
+  const cal = e && e.calibration;
+  if (!q || !cal || !e.algorithms || !Array.isArray(q.reasons)) return out;
+  const add = (path, text) => out.push({ path, code: CALIBRATION_CLAIM_CONTRADICTED,
+    text: `calibration claim contradicted by the record's own results: ${text}` });
+  const judged = (code) => q.reasons.some((x) => x && x.code === code);
   const corrected = has(e.algorithms, 'calibration');
+  const marked = q.mask && q.mask.calibrated
+    && Array.prototype.some.call(q.mask.calibrated, (v) => v);
   if (!judged('FREQUENCY_CALIBRATION')) {
     // No frequency-calibration evidence in this assessment.
   } else if (cal.frequency && !corrected) {
-    corrupt('calibration.frequency', 'names a frequency profile, but the results record no '
-      + 'frequency correction (no algorithms.calibration)');
+    add('calibration.frequency', `it names the frequency profile "${cal.frequency.name}", but `
+      + 'no frequency correction was applied to the results (no algorithms.calibration)');
   } else if (!cal.frequency && corrected) {
-    corrupt('calibration.frequency', 'names no frequency profile, but the results were '
+    add('calibration.frequency', 'it names no frequency profile, but the results were '
       + `frequency-corrected (${e.algorithms.calibration})`);
-  } else if (!cal.frequency && q.mask && q.mask.calibrated
-    && q.mask.calibrated.some((v) => v)) {
-    corrupt('calibration.frequency', 'names no frequency profile, but quality.mask.calibrated '
+  } else if (!cal.frequency && marked) {
+    add('calibration.frequency', 'it names no frequency profile, but quality.mask.calibrated '
       + 'marks calibrated points');
   }
   const m = q.metrics;
   const levelApplied = m && typeof m.levelCalibrated === 'boolean' ? m.levelCalibrated : null;
+  const passed = q.reasons.find((x) => x && x.code === 'LEVEL_CALIBRATION'
+    && x.severity === 'ok');
   if (levelApplied !== null && levelApplied !== !!cal.level) {
-    corrupt('calibration.level', cal.level ? 'names a level calibration, but the quality '
-      + 'assessment says the levels were not calibrated (metrics.levelCalibrated false)'
-      : 'names no level calibration, but the quality assessment says the levels were '
-        + 'calibrated (metrics.levelCalibrated true)');
-    return;
+    add('calibration.level', cal.level ? 'it names a level calibration, but the quality '
+      + 'assessment says the levels were not calibrated (quality.metrics.levelCalibrated false)'
+      : 'it names no level calibration, but the quality assessment says the levels were '
+        + 'calibrated (quality.metrics.levelCalibrated true)');
+  } else if (levelApplied === null && judged('LEVEL_CALIBRATION') && !passed && cal.level) {
+    add('calibration.level', 'it names a level calibration, but the quality assessment says '
+      + 'the levels were not calibrated (LEVEL_CALIBRATION not passed)');
+  } else if (passed && !cal.level) {
+    add('calibration.level', 'it names no level calibration, but the quality assessment '
+      + 'applied one (LEVEL_CALIBRATION passed)');
+  } else if (passed && cal.level && typeof passed.value === 'number'
+    && Math.abs(passed.value - cal.level.offsetDb) > 1e-9) {
+    add('calibration.level.offsetDb', `it names an offset of ${cal.level.offsetDb} dB, but the `
+      + `results were calibrated with ${passed.value} dB`);
   }
-  const r = q.reasons.find((x) => x.code === 'LEVEL_CALIBRATION' && x.severity === 'ok');
-  if (levelApplied === null && judged('LEVEL_CALIBRATION') && !r && cal.level) {
-    corrupt('calibration.level', 'names a level calibration, but the quality assessment says '
-      + 'the levels were not calibrated');
-  } else if (r && !cal.level) {
-    corrupt('calibration.level', 'names no level calibration, but the quality assessment '
-      + 'applied one');
-  } else if (r && typeof r.value === 'number' && Math.abs(r.value - cal.level.offsetDb) > 1e-9) {
-    corrupt('calibration.level.offsetDb', `is ${cal.level.offsetDb} dB, but the results were `
-      + `calibrated with an offset of ${r.value} dB`);
-  }
+  return out;
+}
+
+/**
+ * The experiment to PRESENT (views, summary, CSV, compare): unchanged without findings, else a
+ * copy whose contradicted claims are removed, so a level calibration the results never applied
+ * never shows dB SPL and a profile that corrected nothing is never applied by a view. The
+ * copy's hashes no longer cover it: it is never stored or exported.
+ */
+export function withoutContradictedCalibration(e, findings = calibrationClaimFindings(e)) {
+  if (!findings.length) return e;
+  const paths = findings.map((f) => f.path);
+  const cal = { ...e.calibration };
+  if (paths.some((p) => p.startsWith('calibration.level'))) cal.level = null;
+  if (paths.includes('calibration.frequency')) cal.frequency = null;
+  return { ...e, calibration: cal };
 }
 
 /** quality.mask must sit on the stored response grid (results.transfer, else aggregate). */

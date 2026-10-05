@@ -113,6 +113,7 @@ import {
 } from '../calibration/level.js';
 import { measureReferenceLevel, REFERENCE_CAPTURE_S } from '../calibration/reference.js';
 import { newExperimentId, describeStimulus } from '../experiments/schema.js';
+import { calibrationClaimFindings } from '../experiments/validate.js';
 import {
   experimentFromResult, experimentTestContext, measuredEvidence, evidenceChanges,
 } from './measure-experiment.js';
@@ -639,6 +640,16 @@ export function createMeasureUi(svc) {
     return view;
   }
 
+  /**
+   * The level calibration of a stored noise-check snapshot: the one its measurement applied
+   * (the evidence of that result), never one loaded or created afterwards; the current one only
+   * for a result shown without a run (test seam).
+   */
+  function snapshotLevel(st, m) {
+    const ev = ctx.evidence;
+    return ev && st.result && ev.result === st.result ? ev.calibration.level : levelInUse(m);
+  }
+
   function rebuildRta() {
     const cmp = ctx.cmp;
     const m = cmp.meas;
@@ -656,7 +667,7 @@ export function createMeasureUi(svc) {
         averaging: { text: 'Welch average of the whole noise check (Hann, 50 % overlap); peak '
           + 'hold across successive noise checks' },
         binHz: st.binHz,
-        levelCalibration: levelInUse(m),
+        levelCalibration: snapshotLevel(st, m),
       });
     }
     m.rta = view ? { summary: view.summary, badges: view.badges.slice(), notes: view.notes.slice(),
@@ -806,6 +817,7 @@ export function createMeasureUi(svc) {
         bands: r.rta.bands, sampleRate: r.sampleRate, binHz: r.binHz, last: null,
         lastPower: null };
     }
+    ctx.rta.result = result; // the measurement the snapshot belongs to (its calibration)
     ctx.rta.lastPower = Float64Array.from(r.rta.levelsDb, (db) => (db > -300 ? 10 ** (db / 10)
       : 0));
     updateRtaFrame();
@@ -1676,6 +1688,9 @@ export function createMeasureUi(svc) {
       try {
         const base = experimentOf(result, this);
         const e = decorate ? decorate(base) : base;
+        // Written from now on: a calibration claim its results contradict is never stored.
+        const claim = calibrationClaimFindings(e);
+        if (claim.length) throw new Error(claim.map((f) => `${f.path}: ${f.text}`).join('; '));
         const id = await this.experimentsPut(e);
         this.meas.saved = true;
         this.meas.savedId = id;

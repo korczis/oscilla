@@ -58,7 +58,13 @@
 //                           and the notes are edited; the Experiment panel says the saved record
 //                           keeps the calibration it was measured with, and the saved record
 //                           names A, has no level calibration (no "SPL"), keeps the start notes
-//                           and carries the edited text as annotations.notes only
+//                           and carries the edited text as annotations.notes only; the stored
+//                           noise-check RTA keeps the run's calibration (relative, no "SPL")
+//   older-claim             (ADR 0040 resolution) a file as an earlier version saved it, naming a
+//                           level calibration made after the uncalibrated run: it imports with
+//                           a warning naming the field and the reason, the stored record reads
+//                           back unchanged, the detail states that its calibration claim is
+//                           contradicted and presents it as uncalibrated: no "SPL" anywhere
 //   experiments             import of three fixtures, list, open, rename, duplicate, compare
 //                           (A, B equivalent: A − B shown; A, C: refused with the reason),
 //                           export .oscilla.json (re-validates), CSV, re-import refused (no
@@ -950,6 +956,11 @@ function defineChecks(fixtures) {
     await sleep(100);
     res.level = await page.textContent('[data-osc="measure.levelIndicator"]');
     res.after = await evidence();
+    // The stored noise-check snapshot keeps the calibration its run applied (none).
+    res.rtaY = await page.evaluate(() => {
+      const r = window.OSCILLA.app.meas.rta;
+      return r ? `${r.yLabel} ${r.badges.join(' ')}` : null;
+    });
     await page.click('#osc-measure-save');
     res.save = await H.saved(page);
     if (res.save) return { ok: false, failed: ['save'], ...res };
@@ -974,6 +985,7 @@ function defineChecks(fixtures) {
     return { ...res, ...H.verdict({
       imported: res.importA === true && res.importB === true,
       calibratedNow: /CALIBRATED/.test(res.level) && !/UNCALIBRATED/.test(res.level),
+      rtaAsMeasured: !!res.rtaY && !/SPL/.test(res.rtaY),
       quietBefore: res.before === '',
       stated: res.after.startsWith('Calibration changed after this measurement; the saved '
         + 'record keeps the calibration it was measured with (frequency profile "mic-a", levels '
@@ -984,6 +996,41 @@ function defineChecks(fixtures) {
       noLevel: r.level === null && r.levelCalibrated === false,
       startNotes: /^start notes\b/.test(r.notes || '') && !/edited/.test(r.notes || ''),
       annotation: !!r.annotations && r.annotations.notes === 'edited after',
+    }) };
+  });
+
+  def('older-claim', async ({ page }) => {
+    await H.workspace(page, 'experiments');
+    await page.evaluate(() => { window.OSCILLA.app.alerts = []; });
+    const res = {};
+    res.id = await page.evaluate((json) => window.OSCILLA.app.experimentsImportText(json),
+      fixtures.older.json);
+    res.alert = await page.evaluate(() => (window.OSCILLA.app.alerts || [])
+      .map((a) => ({ title: a.title, text: a.message || '' })).at(-1) || null);
+    if (!res.id) return { ok: false, failed: ['imported'], ...res };
+    res.stored = await page.evaluate(async (id) => {
+      const e = await window.OSCILLA.experiments.store().get(id);
+      return e ? { level: !!e.calibration.level, hash: e.provenance.resultHash } : null;
+    }, res.id);
+    await page.evaluate((id) => window.OSCILLA.app.experimentsOpen(id), res.id);
+    await sleep(200);
+    res.statement = await page.evaluate(() => {
+      const el = document.querySelector('[data-osc="exp.calibrationClaim"]');
+      return el && el.offsetParent !== null ? el.textContent.trim() : '';
+    });
+    res.spl = await page.evaluate(splMentions);
+    res.lines = await page.evaluate(() => window.OSCILLA.app.exps.detail.lines.join(' | '));
+    await page.evaluate(() => { window.OSCILLA.app.alerts = []; });
+    return { ...res, ...H.verdict({
+      imported: !!res.alert && res.alert.title === 'Experiment imported with a warning'
+        && /calibration\.level: calibration claim contradicted/.test(res.alert.text)
+        && /levelCalibrated false/.test(res.alert.text),
+      storedUnchanged: !!res.stored && res.stored.level
+        && res.stored.hash === fixtures.older.experiment.provenance.resultHash,
+      stated: /^This record names a calibration its own results say was not applied/
+        .test(res.statement) && /not trustworthy/.test(res.statement),
+      uncalibrated: /level UNCALIBRATED/.test(res.lines),
+      noSpl: res.spl.length === 0,
     }) };
   });
 

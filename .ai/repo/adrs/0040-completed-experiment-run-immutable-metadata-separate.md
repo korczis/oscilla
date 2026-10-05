@@ -155,18 +155,34 @@ Resolved without a schema change (experiment schema 2, result hash version 3):
   Experiment panel states it: "Calibration changed after this measurement; the saved record
   keeps the calibration it was measured with (...)", and that later notes are saved as an
   annotation. Saving is not refused: the record keeps what was used.
-- **Cross-checked on validation.** `validate.js` refuses as `corrupt` a record whose quality
-  assessment judged the calibration (FREQUENCY_CALIBRATION and LEVEL_CALIBRATION reasons) when
-  its named calibration contradicts its results: a profile named without
-  `algorithms.calibration` or the reverse, a calibrated point in `quality.mask.calibrated` with
-  no profile named, a level calibration named while `quality.metrics.levelCalibrated` is false
-  or the reverse, or an `offsetDb` other than the LEVEL_CALIBRATION reason's value. Records the
-  application wrote with the calibration it applied keep validating, and their hashes are
-  unchanged. A record an earlier build saved with a level calibration created after the run, or
-  with no profile for a run a profile corrected, no longer validates, which is what it is. The
-  check is on presence, not identity: a record stores a profile's id and name but not its
-  points, so one saved by an earlier build naming profile B for a run profile A corrected still
-  validates; nothing in the record can tell the two apart.
+- **Cross-checked on validation, without losing data.** `validate.js`
+  `calibrationClaimFindings` compares the calibration a record names with what its results say
+  was applied, when its quality assessment judged the calibration (FREQUENCY_CALIBRATION and
+  LEVEL_CALIBRATION reasons): a profile named without `algorithms.calibration` or the reverse, a
+  calibrated point in `quality.mask.calibrated` with no profile named, a level calibration named
+  while `quality.metrics.levelCalibrated` is false or the reverse, or an `offsetDb` other than
+  the LEVEL_CALIBRATION reason's value. Each disagreement is a finding with code
+  `calibration-claim-contradicted` and a text naming the field, the rule and the evidence.
+- **Earlier records stay readable.** Earlier builds saved such records, and a user's stored
+  experiments and exported files must keep opening. By default a finding is not fatal:
+  `validateExperiment` returns the record with `findings`, the stored record reads back from
+  IndexedDB unchanged, its hash verifies as stored, and an exported file imports with a warning
+  that names the field and the reason. Nothing is rewritten. The Experiments detail states: "This
+  record names a calibration its own results say was not applied (earlier versions of OSCILLA
+  could save it after a calibration changed). Its calibrated values are not trustworthy: it is
+  shown and compared as uncalibrated." The detail, its summary, the CSV export, Compare and the
+  inspection in MEASURE use `withoutContradictedCalibration`, a presentation copy without the
+  contradicted claim, so such a record never shows dB SPL and Compare treats it as uncalibrated
+  (and says so in its warnings). Export and duplicate keep the record as stored.
+- **Strict for what is written now.** `validateExperiment(json, { calibrationClaims: 'strict' })`
+  refuses any finding, with the same code and text, and MEASURE's Save refuses to store a record
+  with a finding; what the application now writes passes strict validation.
+- **The stored noise-check snapshot follows the run.** The RTA of a completed measurement's
+  noise check is drawn with the level calibration that measurement applied, not with one
+  selected afterwards; the live RTA keeps using the current one, since it is measured now.
+- **The limit.** The check is on presence, not identity: a record stores a profile's id and name
+  but not its points, so one saved by an earlier build naming profile B for a run profile A
+  corrected has no finding; nothing in the record can tell the two apart.
 
-Proven by `tests/unit/v3-evidence-at-completion.test.mjs` and check `evidence-at-completion` in
-`tests/browser/v3-ui.cjs` (chromium, firefox, webkit; file:// and /oscilla/).
+Proven by `tests/unit/v3-evidence-at-completion.test.mjs` and checks `evidence-at-completion` and
+`older-claim` in `tests/browser/v3-ui.cjs` (chromium, firefox, webkit; file:// and /oscilla/).
