@@ -1075,8 +1075,7 @@ export function mountInspector(host, svc) {
     return [header('Studio', `${view.counts.nodes} nodes · ${view.counts.edges} connections · `
       + `${view.counts.clips} clips · ${view.counts.lanes} automation lanes`),
     buildRuntime(view.runtime),
-    buildTrace(view.trace, 'What each recent operation did, newest first: the edit, the '
-      + 'compiled plan, the runtime apply and every parameter and route it scheduled.'),
+    buildTrace(view.trace, 'What each recent operation did, newest first.'),
     textInput('osc-si-studio-title', 'Title', view.title, (v, input) => {
       const r = dispatch({ type: 'METADATA_SET', title: v.trim() || view.title });
       if (!r.ok) input.value = view.title;

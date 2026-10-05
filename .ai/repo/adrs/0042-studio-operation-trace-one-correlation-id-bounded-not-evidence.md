@@ -152,7 +152,7 @@ Proposed:
 - Cost. A dispatch while stopped records three steps, and a live parameter edit six or more.
   The Inspector rebuilds its operation list once per operation, after it has ended.
   The traced `NODE_PARAM_SET` on the 100-node fixture while playing stays within the one-frame
-  `dispatchParam` budget (`tests/unit/v31-studio-trace.test.mjs`). Bundle: about +2.9 KB gzip
+  `dispatchParam` budget (`tests/unit/v31-studio-trace.test.mjs`). Bundle: about +3.4 KB gzip
   (measured with zlib level 9 against main, see the change's report).
 - The adapter contract gains the optional report argument `w` on `applyBase` and `update`
   (`adapters/nodes.js` header). Adapters that write nothing report nothing.
