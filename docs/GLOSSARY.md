@@ -46,8 +46,13 @@ rate, repeats, quality, algorithm IDs, product version and build, with a configu
 and a result hash (claim `reproducible-experiments`). Once its result hash is stamped it is
 immutable; only its name and notes change (ADR 0040).
 
-**Experiment definition.** Planned in #116: a versioned definition that experiments are
-executed from. It is not in the product yet.
+**Experiment definition.** What to measure and how, kept apart from any result (ADR 0043,
+`src/js/experiments/definition.js`, kind `oscilla-definition`): a recipe, the conditions
+declared for every run and an optional acceptance criterion, with append-only versions,
+each identified by a hash over those execution fields (not the name or notes). A run records
+the definition version it was executed from; a run without an authored definition carries
+one derived from its own recipe and marked as derived (claim `experiment-definitions`).
+Definitions are stored in the `definitions` object store of the experiments database.
 
 **Run** and **repeat.** See "One word, two meanings" below.
 
@@ -101,10 +106,11 @@ ADRs, and the curated notes and source declarations under `.ai/repo/knowledge/`.
    - ADR 0041 ("run comparison"), claim `semantic-run-comparison`, the Experiments heading
      "Changed between runs" (`src/index.html`,
      `src/js/measurement/views/compare-view.js`) and the About timeline's Comparison step;
-   - #116 ("runs are executed from a versioned definition").
+   - ADR 0043 and claim `experiment-definitions` ("a run records the version of the
+     experiment definition it was executed from").
 
 Recommended canonical terms: **run** for meaning 2, one execution of an experiment and its
-stored record, which is where #116 takes the word; **repeat** for meaning 1, one capture
+stored record, which is how ADR 0043 uses the word; **repeat** for meaning 1, one capture
 inside a measurement, which is what the recipe field `repeats` already calls it. Decision
 recorded here, not yet applied: this change renames no interface copy, and the stored field
 `measurement.runs` and the id `run-<n>` are schema and would change only with a schema
