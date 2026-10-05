@@ -11,10 +11,15 @@
 #   implementation  the file that implements it, or "-" when nothing does
 #   test            the test that proves it, or "-" when none does
 #   status          one of the statuses below
+#   responsibility  `product` on every guaranteed claim: it makes the claim a target of
+#                   `majordomus usecase coverage` (policy use_cases.coverage.claims)
+#   note            where else the claim is proven, and what is not
 #
 # Every guaranteed claim names a test that a release-gate script runs (`npm test`,
 # `npm run test:engine`, `npm run test:measure`, `npm run test:studio` or
 # `npm run test:browser`), and CI blocks a merge on its failure.
+# tests/unit/knowledge-integrity.test.mjs (in `npm test`) checks that: every path a claim
+# names exists, and its test is run by a script .github/workflows/ci.yml runs.
 # Majordomus's evidence ledger records only its own runners (test/run.sh, cargo test), so
 # `majordomus-cli evidence show` reports these claims `unrunnable`: the proof is the CI run,
 # not the ledger. That is a limit of the tool, stated here rather than hidden.
@@ -34,6 +39,7 @@ claims:
     implementation: src/js/audio/audio-engine.js
     test: tests/browser/app.cjs
     status: guaranteed
+    responsibility: product
     note: Check hold-plays-release-zero-nodes, in Chromium, Firefox and WebKit, from file:// and from a /oscilla/ sub-path.
 
   - id: patterns-match-v1
@@ -42,6 +48,7 @@ claims:
     implementation: src/js/audio/patterns.js
     test: tests/unit/freeze.test.mjs
     status: guaranteed
+    responsibility: product
     note: Golden vectors from index.html@a7b7a23 (tests/freeze/golden-a7b7a23.json) replayed against the V2 modules.
 
   - id: sweep-rises-through-range
@@ -50,6 +57,7 @@ claims:
     implementation: src/js/audio/scheduler.js
     test: tests/browser/app.cjs
     status: guaranteed
+    responsibility: product
     note: Check pattern-select-plays-sweep (200 Hz to 4 kHz in 2 s, so the run stays short); the default sweep is 20 Hz to 20 kHz log over 10 s.
 
   - id: dual-oscillator-beats
@@ -58,6 +66,7 @@ claims:
     implementation: src/js/audio/modulation.js
     test: tests/browser/engine-v1port.cjs
     status: guaranteed
+    responsibility: product
 
   - id: spectrum-peak-accuracy
     claim: The spectrum reads a bin-centred full-scale sine at 0 dB relative to full scale and interpolates the peak frequency between bins
@@ -65,6 +74,7 @@ claims:
     implementation: src/js/analysis/peak-detector.js
     test: tests/unit/analysis-peak.test.mjs
     status: guaranteed
+    responsibility: product
 
   - id: spectrogram-mapping
     claim: The spectrogram maps relative level to colour through a monotone lookup table on a log or linear frequency axis
@@ -72,6 +82,7 @@ claims:
     implementation: src/js/analysis/spectrogram.js
     test: tests/unit/analysis-spectrogram.test.mjs
     status: guaranteed
+    responsibility: product
 
   - id: microphone-analysis-only
     claim: Starting the microphone requests audio with echo cancellation, noise suppression and automatic gain control off, feeds it to an analyser and never to the output, and stopping it ends every track
@@ -79,6 +90,7 @@ claims:
     implementation: src/js/audio/microphone.js
     test: tests/unit/engine.test.mjs
     status: guaranteed
+    responsibility: product
 
   - id: generator-mic-compare
     claim: The generator-versus-microphone comparison reports the frequency difference in hertz and cents and flags a match, a harmonic, a mismatch or no signal
@@ -86,6 +98,7 @@ claims:
     implementation: src/js/analysis/compare.js
     test: tests/unit/analysis-misc.test.mjs
     status: guaranteed
+    responsibility: product
     note: Uncalibrated by design; the level is a relative analyser level.
 
   - id: sequencer-safe-automation
@@ -94,6 +107,7 @@ claims:
     implementation: src/js/sequencer/compiler.js
     test: tests/unit/sequencer-compiler.test.mjs
     status: guaranteed
+    responsibility: product
 
   - id: lowpass-attenuates
     claim: An enabled 500 Hz low-pass attenuates a 5 kHz tone below a fifth of its level, and bypassing it restores the level
@@ -101,6 +115,7 @@ claims:
     implementation: src/js/audio/filters.js
     test: tests/browser/app.cjs
     status: guaranteed
+    responsibility: product
     note: Check labs-basic; the filter response curve is also compared with getFrequencyResponse in tests/browser/labs.cjs, not yet in the gate.
 
   - id: adsr-envelope-semantics
@@ -109,6 +124,7 @@ claims:
     implementation: src/js/audio/envelope.js
     test: tests/unit/audio-envelope.test.mjs
     status: guaranteed
+    responsibility: product
 
   - id: additive-coefficients-play
     claim: Additive synthesis plays a PeriodicWave whose harmonic coefficients are exactly the ones the harmonic bars draw
@@ -116,6 +132,7 @@ claims:
     implementation: src/js/audio/additive.js
     test: tests/unit/audio-synthesis.test.mjs
     status: guaranteed
+    responsibility: product
 
   - id: phase-and-lissajous-model
     claim: The phase view and the Lissajous figure are computed from the two frequencies and phases, one period for near-unison pairs
@@ -123,6 +140,7 @@ claims:
     implementation: src/js/charts/phase-model.js
     test: tests/unit/charts.test.mjs
     status: guaranteed
+    responsibility: product
 
   - id: stereo-correlation-meter
     claim: The stereo correlation meter reads +1 in phase, -1 inverted and about 0 in quadrature, and resets on silence
@@ -130,6 +148,7 @@ claims:
     implementation: src/js/analysis/correlation.js
     test: tests/unit/analysis-misc.test.mjs
     status: guaranteed
+    responsibility: product
 
   - id: bioacoustics-cited
     claim: Every hearing range and call band shown comes from a cited publication, carries its criterion, and is shown with a disclaimer
@@ -137,6 +156,7 @@ claims:
     implementation: src/js/data/bioacoustics.js
     test: tests/unit/bioacoustics.test.mjs
     status: guaranteed
+    responsibility: product
 
   - id: link-restores-configuration
     claim: A copied link restores the instrument configuration through the validated path, with the gain capped
@@ -144,6 +164,7 @@ claims:
     implementation: src/js/core/url-state.js
     test: tests/unit/core.test.mjs
     status: guaranteed
+    responsibility: product
     note: The browser round trip is check url-copy-round-trip in tests/browser/app.cjs.
 
   - id: presets-save-and-load
@@ -152,6 +173,7 @@ claims:
     implementation: src/js/core/storage.js
     test: tests/browser/app.cjs
     status: guaranteed
+    responsibility: product
     note: Check presets-save-load; storage migration and blocked storage in tests/unit/core.test.mjs.
 
   - id: wav-export-valid
@@ -160,6 +182,7 @@ claims:
     implementation: src/js/audio/wav.js
     test: tests/unit/audio-wav.test.mjs
     status: guaranteed
+    responsibility: product
     note: The exported file from the running app is checked by wav-export-valid in tests/browser/app.cjs (format 1, 16 bits, 2 channels).
 
   - id: config-file-round-trip
@@ -168,6 +191,7 @@ claims:
     implementation: src/js/ui/config-file.js
     test: tests/unit/integration-ui.test.mjs
     status: guaranteed
+    responsibility: product
     note: The browser round trip is check config-export-import-round-trip in tests/browser/app.cjs.
 
   - id: single-file-build
@@ -176,6 +200,7 @@ claims:
     implementation: scripts/pack-single-file.mjs
     test: tests/unit/pack-single-file.test.mjs
     status: guaranteed
+    responsibility: product
 
   - id: dist-self-contained
     claim: The committed dist/index.html loads nothing at runtime; module scripts, import maps, external scripts and runtime fetches are refused
@@ -183,6 +208,7 @@ claims:
     implementation: scripts/verify-dist.mjs
     test: tests/unit/verify-dist.test.mjs
     status: guaranteed
+    responsibility: product
 
   - id: opens-from-file-and-subpath
     claim: The built page boots without console errors and plays in Chromium, Firefox and WebKit, both from file:// and from a /oscilla/ sub-path as GitHub Pages serves it
@@ -190,6 +216,7 @@ claims:
     implementation: src/index.html
     test: tests/browser/app.cjs
     status: guaranteed
+    responsibility: product
 
   - id: about-is-last-workspace
     claim: About is the last primary navigation item; it opens a full-width view that explains OSCILLA, with exact source, Majordomus and contact links, laid out without overflow from 320 to 1536 px
@@ -197,6 +224,7 @@ claims:
     implementation: src/index.html
     test: tests/browser/app.cjs
     status: guaranteed
+    responsibility: product
     note: Check about-page, in Chromium, Firefox and WebKit, from file:// and from a /oscilla/ sub-path; tests/browser/layout.cjs keeps the view's content inside its box.
 
   - id: about-provenance-matches-git
@@ -205,6 +233,7 @@ claims:
     implementation: src/index.html
     test: tests/unit/about.test.mjs
     status: guaranteed
+    responsibility: product
     note: Checked against git history where it is complete; a shallow clone skips the comparison and still checks the stated duration against the stated times.
 
   - id: about-names-current-release
@@ -213,6 +242,7 @@ claims:
     implementation: src/index.html
     test: tests/unit/about.test.mjs
     status: guaranteed
+    responsibility: product
     note: The current-line check reads package.json and runs everywhere, so npm test, npm run verify and npm run release-gate refuse a bump to a line the page does not name; the published-lines check reads the vX.Y.0 tags and is skipped where tags are not fetched (CI).
 
   - id: no-fake-science-in-shipped-copy
@@ -221,6 +251,7 @@ claims:
     implementation: src/index.html
     test: tests/unit/no-fake-science.test.mjs
     status: guaranteed
+    responsibility: product
     note: Scans src/index.html without comments and the string literals of src/js/ui/ and src/js/data/; the matcher is proven on positive and negated examples. Whether dB SPL is shown only under a level calibration is claim spl-only-with-level-calibration.
 
   # ---- V3 MEASURE (milestones M012-M020), on feature/v3. `npm test` runs tests/unit/v3-*.test.mjs;
@@ -233,6 +264,7 @@ claims:
     implementation: src/js/ui/measure.js
     test: tests/browser/v3-ui.cjs
     status: guaranteed
+    responsibility: product
     note: Checks loopback-workflow and output-exclusive, in Chromium, Firefox and WebKit, from file:// and from a /oscilla/ sub-path; the state machine and the engine flow are in tests/unit/v3-measurement-core.test.mjs and tests/unit/v3-engine.test.mjs.
 
   - id: measurement-abort-releases-everything
@@ -241,6 +273,7 @@ claims:
     implementation: src/js/measurement/capture.js
     test: tests/browser/v3-ui.cjs
     status: guaranteed
+    responsibility: product
     note: Check abort-stages; tests/browser/v3-measure.cjs counts nodes and unended sources independently after an abort mid-sweep, and tests/unit/v3-engine.test.mjs aborts from every active state on a fake io.
 
   - id: measure-from-file-and-subpath
@@ -249,6 +282,7 @@ claims:
     implementation: src/js/measurement/capture.js
     test: tests/browser/v3-ui.cjs
     status: guaranteed
+    responsibility: product
     note: Every v3-ui.cjs check runs per browser and origin and ends with no-console-errors; tests/browser/v3-measure.cjs loads the worklet from a data URL (or the documented ScriptProcessor fallback) on both origins.
 
   - id: calibration-profiles
@@ -257,6 +291,7 @@ claims:
     implementation: src/js/calibration/interpolate.js
     test: tests/unit/v3-calibration.test.mjs
     status: guaranteed
+    responsibility: product
     note: Parsing is src/js/calibration/parse.js, identity src/js/calibration/profile.js; the import through the UI is check calibration in tests/browser/v3-ui.cjs. Profiles are kept in page memory only.
 
   - id: spl-only-with-level-calibration
@@ -265,6 +300,7 @@ claims:
     implementation: src/js/calibration/level.js
     test: tests/unit/v3-calibration.test.mjs
     status: guaranteed
+    responsibility: product
     note: The rendered workspaces are searched for SPL by check no-spl in tests/browser/v3-ui.cjs; views, CSV and quality reasons in tests/unit/v3-views.test.mjs, tests/unit/v3-gaps.test.mjs (G19) and tests/unit/v3-quality.test.mjs.
 
   - id: transfer-function
@@ -273,6 +309,7 @@ claims:
     implementation: src/js/measurement/transfer.js
     test: tests/unit/v3-transfer-ir.test.mjs
     status: guaranteed
+    responsibility: product
     note: Synthetic systems with mathematically known answers; the real-browser loopback through a BiquadFilterNode is tests/browser/v3-measure.cjs.
 
   - id: impulse-response
@@ -281,6 +318,7 @@ claims:
     implementation: src/js/measurement/impulse-response.js
     test: tests/unit/v3-transfer-ir.test.mjs
     status: guaranteed
+    responsibility: product
     note: The Farina inverse filter (oscilla.ir.farina-inverse.v1) is the test oracle and agrees on peak index and in-band scale.
 
   - id: rta-bands
@@ -289,6 +327,7 @@ claims:
     implementation: src/js/measurement/rta.js
     test: tests/unit/v3-rta-aggregate.test.mjs
     status: guaranteed
+    responsibility: product
     note: No IEC 61260-1 class is claimed. The RTA view (bars over band edges, peak hold, freeze, relative unless calibrated) is tested in tests/unit/v3-views.test.mjs.
 
   - id: reproducible-experiments
@@ -297,6 +336,7 @@ claims:
     implementation: src/js/experiments/schema.js
     test: tests/unit/v3-experiments.test.mjs
     status: guaranteed
+    responsibility: product
     note: The experiment the UI builds from a measurement is checked in tests/unit/v3-ui.test.mjs; repeating it creates a new experiment with repeatOf (check loopback-workflow in tests/browser/v3-ui.cjs).
 
   - id: experiment-round-trip
@@ -305,6 +345,7 @@ claims:
     implementation: src/js/experiments/encode.js
     test: tests/unit/v3-experiments.test.mjs
     status: guaranteed
+    responsibility: product
     note: The pipeline from a sweep to a validated experiment is in tests/unit/v3-pipeline.test.mjs, with repeated runs in tests/unit/v3-storage.test.mjs; the exported file re-validates in check experiments of tests/browser/v3-ui.cjs.
 
   - id: experiment-import-validated
@@ -313,6 +354,7 @@ claims:
     implementation: src/js/experiments/validate.js
     test: tests/unit/v3-experiments.test.mjs
     status: guaranteed
+    responsibility: product
     note: The result-hash check is in tests/unit/v3-integration.test.mjs (G13); import through the UI, and the refused re-import of an existing ID, is check experiments in tests/browser/v3-ui.cjs.
 
   - id: experiment-persistence
@@ -321,6 +363,7 @@ claims:
     implementation: src/js/experiments/store.js
     test: tests/unit/v3-experiments.test.mjs
     status: guaranteed
+    responsibility: product
     note: Proven on an in-process IndexedDB fake (open, upgrade, CRUD, reopen, quota, open failure, memory fallback); the UI path (list, rename, duplicate, delete with confirmation) is check experiments in tests/browser/v3-ui.cjs. No test reloads a real browser page and reads the record back.
 
   - id: experiment-run-immutable
@@ -329,6 +372,7 @@ claims:
     implementation: src/js/experiments/store.js
     test: tests/unit/v3-experiment-immutable.test.mjs
     status: guaranteed
+    responsibility: product
     note: put refuses every execution-fact change with code immutable (memory and IndexedDB); runs carry ids run-1..N covered by result hash v3; v1/v2 records and schema-1 files keep verifying. The UI rename, duplicate and refusal, and a rename kept across a reload, are checks experiments and persistence in tests/browser/v3-ui.cjs.
 
   - id: algorithm-ids-on-results
@@ -337,6 +381,7 @@ claims:
     implementation: src/js/measurement/algorithms.js
     test: tests/unit/v3-golden.test.mjs
     status: guaranteed
+    responsibility: product
     note: Fixtures under tests/unit/fixtures/v3/; the IDs stamped on real results are pinned in tests/unit/v3-integration.test.mjs (G6, G7, G9) and unknown IDs refused in tests/unit/v3-experiments.test.mjs.
 
   - id: measurement-comparison
@@ -345,6 +390,7 @@ claims:
     implementation: src/js/experiments/compare.js
     test: tests/unit/v3-experiments.test.mjs
     status: guaranteed
+    responsibility: product
     note: The compare view is in tests/unit/v3-views.test.mjs; check experiments in tests/browser/v3-ui.cjs compares an equivalent pair (delta shown) and a non-equivalent pair (refused with the reason).
 
   - id: semantic-run-comparison
@@ -353,6 +399,7 @@ claims:
     implementation: src/js/experiments/semantic-diff.js
     test: tests/unit/v3-semantic-compare.test.mjs
     status: guaranteed
+    responsibility: product
     note: The Studio comparator is src/js/studio/diff.js; check experiments-changes in tests/browser/v3-ui.cjs shows the change list, the collapsed metadata group (opened by Enter), the baseline compare and the 390 px layout in three browsers. The list states differences between records; it does not attribute a response difference to any of them.
 
   - id: aggregate-primary-response
@@ -361,6 +408,7 @@ claims:
     implementation: src/js/measurement/aggregate.js
     test: tests/unit/v3-storage.test.mjs
     status: guaranteed
+    responsibility: product
     note: Gap G20 of docs/v3/algorithms.md, enforced by src/js/experiments/schema.js and validate.js. The engine runs repeats without overlapping captures (tests/unit/v3-engine.test.mjs, three runs); the recipe allows 1 to 10.
 
   - id: measurement-quality
@@ -369,6 +417,7 @@ claims:
     implementation: src/js/measurement/quality.js
     test: tests/unit/v3-quality.test.mjs
     status: guaranteed
+    responsibility: product
     note: oscilla.confidence.v1 to v3 are retained so stored ratings reproduce, v1 selectable (tests/unit/v3-gaps.test.mjs, G15); the quality panel never relies on colour alone (tests/unit/v3-views.test.mjs).
 
   - id: analysis-off-main-thread
@@ -377,6 +426,7 @@ claims:
     implementation: src/js/measurement/analysis-runner.js
     test: tests/browser/analysis-worker.cjs
     status: guaranteed
+    responsibility: product
     note: Gap G21 of docs/v3/algorithms.md, resolved in M10. Without Worker the engine falls back to analyzeInline, which yields between steps; tests/unit/v3-analysis-task.test.mjs runs the real bundle in a worker thread.
 
   # ---- OSCILLA Studio (V3.1) ----
@@ -386,6 +436,7 @@ claims:
     implementation: src/js/studio/schema.js
     test: tests/unit/v31-studio-model.test.mjs
     status: guaranteed
+    responsibility: product
     note: 'assertPlainData, run by normalizeStudio and so by serializeStudio; test "assertPlainData rejects runtime objects, typed arrays and unsafe values".'
 
   - id: studio-deterministic-hash
@@ -394,6 +445,7 @@ claims:
     implementation: src/js/studio/schema.js
     test: tests/unit/v31-studio-model.test.mjs
     status: guaranteed
+    responsibility: product
     note: 'Tests "serialization is deterministic and round-trips through normalize" and "studioHash covers execution state only".'
 
   - id: studio-typed-connections
@@ -402,6 +454,7 @@ claims:
     implementation: src/js/studio/ports.js
     test: tests/unit/v31-studio-model.test.mjs
     status: guaranteed
+    responsibility: product
     note: 'canConnect; tests "port compatibility matrix", "ANALYSIS roles keep reference and observed apart", "canConnect rejects wrong direction, unknown ports and self-connection", "rejected EDGE_ADD leaves model, history and revision unchanged".'
 
   - id: studio-feedback-rejected
@@ -410,6 +463,7 @@ claims:
     implementation: src/js/studio/validate.js
     test: tests/unit/v31-studio-model.test.mjs
     status: guaranteed
+    responsibility: product
     note: 'Tarjan components and Kahn order; tests "cycle detection: audio feedback rejected with the spec message", "control-cycle policy", "analysis cycles and live input to output are rejected".'
 
   - id: studio-exact-undo-redo
@@ -418,6 +472,7 @@ claims:
     implementation: src/js/studio/history.js
     test: tests/unit/v31-studio-model.test.mjs
     status: guaranteed
+    responsibility: product
     note: 'Immutable snapshots; tests "§208 history: undo all → exact initial state; redo all → exact final state" (reference equality and byte-equal serialization), "gesture coalescing: 400 NODE_MOVE dispatches are one history entry", "a new edit after undo clears redo".'
 
   - id: studio-subgraph-paste
@@ -426,6 +481,7 @@ claims:
     implementation: src/js/studio/actions.js
     test: tests/unit/v31-studio-model.test.mjs
     status: guaranteed
+    responsibility: product
     note: 'copySubgraph and PASTE; tests "copy/paste maps a subgraph to new ids with internal edges and an offset", "duplicate keeps relative geometry and payloads with new ids".'
 
   - id: studio-untrusted-import
@@ -434,6 +490,7 @@ claims:
     implementation: src/js/studio/migrate.js
     test: tests/unit/v31-studio-model.test.mjs
     status: guaranteed
+    responsibility: product
     note: 'importStudio and validateStudioImport with STUDIO_IMPORT_LIMITS; tests "import rejects malicious and oversized input", "migration: synthetic schema 0 → 1 through the registry".'
 
   - id: studio-schema-version
@@ -442,6 +499,7 @@ claims:
     implementation: src/js/studio/schema.js
     test: tests/unit/v31-studio-model.test.mjs
     status: guaranteed
+    responsibility: product
     note: 'STUDIO_SCHEMA_VERSION = 1 (ADR 0023); test "Studio schema version is its own constant, independent of the experiment schema".'
 
   - id: studio-timeline-model
@@ -450,6 +508,7 @@ claims:
     implementation: src/js/studio/schema.js
     test: tests/unit/v31-studio-model.test.mjs
     status: guaranteed
+    responsibility: product
     note: 'normalizeClipPayload over sequencer/model.js BLOCK_SCHEMA; tests "timeline actions validate references and undo exactly", "Basic Synth topology builds and validates". Scheduling is the planned claim studio-transport-audio-clock.'
 
   - id: studio-automation-model
@@ -458,6 +517,7 @@ claims:
     implementation: src/js/studio/validate.js
     test: tests/unit/v31-studio-model.test.mjs
     status: guaranteed
+    responsibility: product
     note: 'Tests "timeline actions validate references and undo exactly" and "invalid parameters, edge properties and timeline references are reported". Compilation to AudioParam schedules is the planned claim studio-transport-audio-clock.'
 
   - id: studio-measurement-topology
@@ -466,6 +526,7 @@ claims:
     implementation: src/js/studio/nodes/measurement.js
     test: tests/unit/v31-studio-model.test.mjs
     status: guaranteed
+    responsibility: product
     note: 'Tests "Measurement topology builds and validates" and "analysis cycles and live input to output are rejected". Running it through the measurement engine is the planned claim studio-experiment-provenance.'
 
   - id: studio-registry-reuses-engine
@@ -474,6 +535,7 @@ claims:
     implementation: src/js/studio/registry.js
     test: tests/unit/v31-studio-model.test.mjs
     status: guaranteed
+    responsibility: product
     note: 'Tests "every compiler and reuse key names an existing export" and "node defaults match the existing engine defaults". The compiler itself is the planned claim studio-compiled-topology.'
 
   - id: studio-one-store-projections
@@ -482,6 +544,7 @@ claims:
     implementation: src/js/ui/studio/workspace.js
     test: tests/browser/v31-studio-graph.cjs
     status: guaranteed
+    responsibility: product
     note: 'Check compact-sync, in Chromium, Firefox and WebKit from file:// (a clip moved in the compact widget by keyboard is the clip the full Studio and the Inspector show; a Filter added in the full Studio appears in the compact signal path; the store object is the same); tests/unit/v31-studio-ui-graph-panels.test.mjs "the compact view is a projection of the same model" and "one store behind a stable handle". The Playground''s Signal Path view (src/js/visualization/signal-path.js) draws the Playground voice, not the Studio document: since V421 that voice is a derived StudioModel (src/js/studio/playground-voice.js) and the view draws its Signal Path projection (src/js/studio/signal-path-projection.js); it is never stored or synchronized, so it is not a second Studio state (docs/v31/signal-path.md, tests/unit/v31-studio-signal-path.test.mjs).'
 
   - id: studio-compiled-topology
@@ -490,6 +553,7 @@ claims:
     implementation: src/js/studio/compiler.js
     test: tests/browser/v31-studio-audio.cjs
     status: guaranteed
+    responsibility: product
     note: 'Specification §209-§210 in Chromium, Firefox and WebKit: the filtered sawtooth''s 20th harmonic equals the browser''s own biquad response, and rises when the filter is removed; an LFO edge moves the cutoff by its depth. tests/unit/v31-studio-compiler.test.mjs asserts the deterministic plan, refusal of invalid models before Web Audio and "Master Output feeds only the engine safety chain". ADR 0035.'
 
   - id: studio-click-free-live-edit
@@ -498,6 +562,7 @@ claims:
     implementation: src/js/studio/runtime.js
     test: tests/browser/v31-studio-audio.cjs
     status: guaranteed
+    responsibility: product
     note: 'Specification §45 (click ratio for reconnect, filter insertion, waveform replacement, mute and stop) and §213 (20 edits during playback, then stop: 0 engine, runtime and live nodes, no growth over 3 cycles), in Chromium, Firefox and WebKit; tests/unit/v31-studio-compiler.test.mjs covers the diff, a failed transaction leaving the previous runtime intact, and the leak count. ADR 0035.'
 
   - id: studio-operation-trace
@@ -506,6 +571,7 @@ claims:
     implementation: src/js/core/trace.js
     test: tests/unit/v31-studio-trace.test.mjs
     status: guaranteed
+    responsibility: product
     note: 'Tests "a parameter edit while playing: one op on the action, the compile with its planHash..." (the step value and time are the AudioParam call the fake context recorded), "a live edit the running graph cannot take: the refusal is traced..." (prepare-failed, edit-refused), "the trace is not evidence..." (equal studioHash, planHash and document with and without it), "a live parameter step says only what the adapter did..." (set, stored, next gate), "without a trace, runtime.apply computes no planHash" and the ring tests; tests/browser/v31-studio-runtime.cjs checks trace-edit, trace-stopped, trace-refused, trace-phone, trace-themes, trace-one-fill and trace-focus in Chromium, Firefox and WebKit. A param step is what the adapter reports it wrote, not a read-back of what the AudioParam renders; the timeline''s scheduled clips and lane events, pending handles settling and deferred disposals are not traced, and a long drag evicts older operations from the 256-step ring. ADR 0042.'
 
   - id: studio-transport-audio-clock
@@ -514,6 +580,7 @@ claims:
     implementation: src/js/studio/transport.js
     test: tests/browser/v31-studio-transport.cjs
     status: guaranteed
+    responsibility: product
     note: 'In Chromium, Firefox and WebKit the Subtractive Synth''s Tone and Sweep clips start, meet and end on the predicted frames and the cutoff automation shows in the spectrum; tests/unit/v31-studio-timeline.test.mjs (§211 exact AudioParam event lists, §212 schedule, loop passes without drift) and tests/unit/v31-studio-transport.test.mjs prove the schedule exactly; tests/browser/v31-studio-timeline.cjs check playback has the playhead follow transport.playhead(). ADR 0036, ADR 0037.'
 
   - id: studio-patch-round-trip
@@ -522,6 +589,7 @@ claims:
     implementation: src/js/studio/patches.js
     test: tests/unit/v31-studio-patches.test.mjs
     status: guaranteed
+    responsibility: product
     note: 'Tests "§113 save and load a project: the exact model", "§114 insertPatch", "§114 replaceWithPatch", "§114 store PATCH_INSERT / PATCH_REPLACE are single undoable entries", "§155 patches are never silently overwritten", "§158 JSON export and import". tests/browser/v31-studio-graph.cjs check patches-files does it through the UI in three browsers. Autosave and crash recovery are not built.'
 
   - id: studio-experiment-provenance
@@ -530,6 +598,7 @@ claims:
     implementation: src/js/studio/provenance.js
     test: tests/unit/v31-studio-provenance.test.mjs
     status: guaranteed
+    responsibility: product
     note: 'Tests "§109 the Studio block is schema version, studioHash and the execution state only", "ADR 0019: the recipe stays authoritative", "ADR 0038 round trip", "tampering with the Studio block is corrupt"; tests/unit/v31-studio-gaps.test.mjs runs a real MeasurementEngine on the clip pass; tests/browser/v31-studio-workflows.cjs check measure-from-studio does it on the TEST CONTEXT loopback in three browsers. No automated test proves how a physical speaker, room or microphone behaves.'
 
   - id: studio-non-drag-operation
@@ -538,6 +607,7 @@ claims:
     implementation: src/js/ui/studio/graph-keys.js
     test: tests/browser/v31-studio-graph.cjs
     status: guaranteed
+    responsibility: product
     note: 'Checks keyboard-connect (Tab to a node, C, Enter connects; arrows nudge) and mobile-tap-connect; tests/browser/v31-studio-timeline.cjs checks clip-keyboard (arrows, typed start and duration, Ctrl+D, Delete) and automation (arrow nudge, numeric entry). Not built: dragging several clips at once, by pointer or keyboard. The N add-node picker has a keyboard path but no browser check of its own.'
 
   - id: studio-file-protocol
@@ -546,4 +616,5 @@ claims:
     implementation: src/js/ui/studio/workspace.js
     test: tests/browser/v31-studio-graph.cjs
     status: guaranteed
+    responsibility: product
     note: 'Every v31-studio-graph.cjs check runs from file:// and the smoke checks from the sub-path, each ending with no-console-errors; tests/browser/v31-studio-timeline.cjs runs every check from both origins. That nothing is fetched is claim dist-self-contained (scripts/verify-dist.mjs). From file:// the browser''s storage may be unavailable; the library then keeps projects in memory and says so.'
