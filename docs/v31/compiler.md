@@ -322,6 +322,94 @@ not schedule clips or lanes of the refused model. It records the refusal (`lastE
 `sync-refused`, and a diagnostic) and returns `{ ok: false, synced: false, applied }`. The next
 store change tries again.
 
+### Operation trace (ADR 0042)
+
+The verdict says *whether* what plays is what the model says. The trace says *what happened*
+to one edit. `core/trace.js` `createTrace({ cap, now, onIdle })` keeps the last `TRACE_CAP`
+(256) steps in a ring. When it is full, each new step drops the oldest and `stats().dropped`
+counts it. Producers get one port, `{ run(fn), record(owner, kind, fields) }`, at the Studio
+composition point (`workspace.js`): the store handle, the runtime and the transport. None of
+them imports another to report, and each defaults to `NO_TRACE`, which records nothing.
+
+```js
+{ op, seq, at, owner, kind, revision, entity: { kind, id } | null, outcome, code, detail }
+```
+
+A step is frozen plain data, and `detail` is a flat object of primitives. `op` (`op-<n>`) is
+the correlation id, assigned at the first step of the outermost `run`. Ids are gapless, and
+`stats().ops` counts only operations that recorded a step. Everything called inside that run
+reports under the same op, including the commit gate's `transport.admit` and `runtime.apply`.
+
+These are operations:
+
+- the store's semantic `dispatch`, `undo`, `redo` and a cancelled gesture's return (`cancel`);
+- the handle's `replace` (opening a project, template or file);
+- `transport.start`, `stop`, `sync` (including a wake-up's sync) and `admit`;
+- the transport's abort (`stop`, `aborted`);
+- `runtime.apply` and `start` when called alone.
+
+These are not traced: selection and view changes, `endGesture` (no model change), the
+timeline's scheduled clips and lane events, a pending handle settling, and deferred disposals. The ids the code already shares end to end are kept: `revision` is the store
+revision (in the handle's numbering) that the gate offers and the runtime applies, and `entity`
+is the model's node or edge id, which is also the plan entry's and the handle's id. `code` is a
+Diagnostic code from the table above whenever a step is a refusal or a failure.
+
+| Owner | Kind | Outcome, detail |
+| --- | --- | --- |
+| store | `action`, `undo`, `redo`, `cancel` | `requested`; the action type, key and value (a primitive, else `null`) |
+| store | `replace` | `committed`: the revision and the reason (open, template, import) |
+| store | `commit` | `committed` (with the revision), `unchanged`, `rejected` (validation code), `refused` (the gate's reason) |
+| runtime | `compile` | `compiled`: `planHash` and the number of diff ops; `refused`: validation's code |
+| runtime | `apply` | `applied`: `at` (the crossfade time), ops, nodes, edges; `not-applied`: the runtime `state` (stopped: the plan is kept for PLAY); `refused`: `prepare-failed` or `disposed` with the entity that threw |
+| runtime | `node` | `built`, `replaced`, `retired` |
+| runtime | `route` | `scheduled`: the edge `gain`, from `at`, reached at `end` (the value `ramp.to` returned) |
+| runtime | `param` | `scheduled`: `param`, `value`, `unit`, `via` and `at` for `set` and `glide` (none for a `crossfade`); `stored`: not written now (`via` `next-gate` for an Envelope, else `null`), no `at`; `owned`: not written, another owner drives it |
+| runtime | `update`, `parameters`, `output`, `stop`, `route` | `failed`, with its `<step>-failed` code |
+| runtime | `start`, `stop` | `start` refused (`start-failed`, `nothing-compiled`); `stop`: `at`, `fade` |
+| transport | `play`, `stop` | `playing`: `position`, `baseTime`; `refused`: the failed `phase` and reason; `stopped`: the reason; `aborted`: the context closed or the runtime stopped elsewhere |
+| transport | `admit` | `admitted`; `refused` (`edit-refused`); `not-applied`: `playing: false`, so the edit commits and PLAY applies it |
+| transport | `sync` | `applied`; `refused` (`sync-refused`) |
+
+A `param` step is what the node's adapter reports it did (the optional report argument `w` of
+`applyBase` and `update`, `adapters/nodes.js`):
+
+- **`applyBase`** reports each AudioParam value it wrote after its own clamp or conversion: an
+  Oscillator's clamped frequency, a Filter's normalized frequency and node Q, and a log edge's
+  cents as `detune`. A write that differs from the node's previous write is a `scheduled` glide
+  from `at`.
+- **`update`** reports how it acted on each live key: `set`, `glide`, `crossfade` or
+  `next-gate`. A key the adapter did not act on is `stored`, with no audio time. A Spectrum's
+  scale, for example, is read by the view from the plan.
+
+It is not a read-back of what the AudioParam renders. A PLAY records `apply` with its counts, not every node and route it builds, so a large
+Studio does not flush the ring. The timeline's wake-ups (clips, lanes) run outside any operation
+and are not traced.
+
+Cost. A dispatch while stopped records three steps (action, admit, commit). A live parameter
+edit records six or more, each one small frozen object, and memory is bounded by the cap. The
+`compile` step's `planHash` and the adapters' write reports exist only with a real trace. With
+`NO_TRACE` (offline render, tests) the runtime neither hashes nor collects anything. A traced
+`runtime.apply` hashes before its transaction. That runs at PLAY, on `setOptions` and, while
+running, for every edit, when `applied()` (read by every Graph and Inspector render) hashes the
+same memoized plan anyway. The traced edit on the 100-node fixture while playing is measured in
+`tests/unit/v31-studio-trace.test.mjs` against the one-frame `dispatchParam` budget. The ring's
+cap is per step: a slider drag of 60 inputs records about 360 steps and evicts older operations,
+and `stats().dropped` counts them.
+
+The Inspector's **Trace** section (`inspector.js` `traceView`, pure) groups the steps by op,
+newest first, at most `TRACE_OPS_SHOWN` (12). The node view keeps the ops with a step that
+names the node. Each op is a disclosure, and each step is text:
+`<owner> <kind>: <outcome> (<code>) · rev <n> · <what>`. An operation's headline is the store's
+verdict (else its first refusal, else its last step). A step that failed after a commit is
+listed after the headline (`· failed: route-failed`), not in its place. The section is built
+from the settled operations (`steps(true)`) and refilled once an operation ends (`onIdle`),
+never halfway through one. When the focused operation is no longer listed, focus goes to the
+Inspector heading. `?debug=1` shows the counts (`studio trace`), and
+the test seam exposes the live trace (`window.OSCILLA.studio.trace`).
+
+The trace is not evidence. It lives in memory, is never persisted, is never exported with a
+project or an experiment, and no hash covers it (`studioHash`, `planHash`, `resultHash`).
+
 ## Engine hooks to add properly
 
 The adapter uses these engine internals on the instance; each should become a public engine

@@ -711,7 +711,8 @@ function createOscillaComponent(ui) {
   Object.defineProperty(cmp, 'refreshDebug', {
     value() {
       baseRefreshDebug.call(this);
-      this.debugInfo = { ...provenanceDebug(), ...this.debugInfo, ...runtimeDebug() };
+      this.debugInfo = { ...provenanceDebug(), ...this.debugInfo, ...runtimeDebug(),
+        'studio trace': this.studioTraceText() };
     },
     enumerable: true,
     configurable: true,

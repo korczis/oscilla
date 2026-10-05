@@ -15,6 +15,10 @@
 //          edges: { live, inactive, 'no-effect' }, lanes: [text], owned: [text],
 //          diagnostics: [{ code, severity, owner, message, entity: { kind, id, label,
 //          selection | null } | null }] }
+//   traceView(model, steps, { registry, nodeId }) -> { ops: [{ op, title, outcome, steps:
+//     [{ text, outcome, code }] }], shown, total }   pure: the Trace section (ADR 0042), the
+//     operations of core/trace.js steps newest first (at most TRACE_OPS_SHOWN), only those with
+//     a step naming node `nodeId` when given; every outcome and code is text
 //   runtimeDiagnostics(truth) -> [Diagnostic]   the verdict's reason, then, while a graph runs,
 //     the runtime's and the transport's debugInfo().diagnostics (node and edge views list the
 //     ones naming them on their status line, with the code)
@@ -24,11 +28,12 @@
 //     and METADATA_SET like every other field (the store validates; a refusal is announced)
 //   formatParamValue(p, v), parseParamInput(p, text), sliderRange(p), valueToSlider(p, v),
 //   sliderToValue(p, pos)                                   pure helpers of the fields
-//   mountInspector(host, svc) -> { render(), focusFirst(), focusHeading(), focusKey(key),
-//                                  destroy() }               DOM (graph-dom.js, no innerHTML)
+//   mountInspector(host, svc) -> { render(), renderTrace(), focusFirst(), focusHeading(),
+//                                  focusKey(key), destroy() } DOM (graph-dom.js, no innerHTML);
+//                                  renderTrace refreshes only the Trace section
 //     svc: { store, registry, announce(text, { assertive }), status() -> Map, warnings() -> Map,
 //            edgeStatus() -> Map edge id -> plan { status, reason }, truth() -> truth (above;
-//            a changed runtime state is announced politely), onConnect(nodeId),
+//            a changed runtime state is announced politely), trace() -> [step], onConnect(nodeId),
 //            onSavePatch(nodeIds), onDelete(), onDuplicate(), onShowLane(laneId, label) }
 //   Focus (§142; V431 U2): a rebuilt Inspector puts focus back on the control with the same
 //   data-key; when the action replaced the view (a connection link, Select source, Delete)
@@ -311,6 +316,66 @@ export function runtimeView(model, truth, opts = {}) {
   };
 }
 
+/** Operations the Trace section lists. */
+export const TRACE_OPS_SHOWN = 12;
+const TRACE_SECONDS = ['at', 'end', 'baseTime', 'fade', 'position'];
+const BAD = ['refused', 'failed', 'rejected'];
+
+export function traceView(model, steps, opts = {}) {
+  const registry = opts.registry || NODE_REGISTRY;
+  const byOp = new Map();
+  for (const st of steps || []) {
+    if (!byOp.has(st.op)) byOp.set(st.op, []);
+    byOp.get(st.op).push(st);
+  }
+  const all = [...byOp].reverse().filter(([, list]) => !opts.nodeId || list.some((x) =>
+    x.entity && x.entity.kind === 'node' && x.entity.id === opts.nodeId));
+  const ops = all.slice(0, TRACE_OPS_SHOWN).map(([op, list]) => {
+    const first = list.find((x) => x.owner === 'store') || list.find((x) => x.owner
+      === 'transport') || list[0];
+    const commit = list.find((x) => x.kind === 'commit');
+    // The headline is the store's verdict (else the first refusal, else the last step); a
+    // committed edit lists the steps that failed after it separately.
+    const bad = list.filter((x) => BAD.includes(x.outcome));
+    const end = commit || bad[0] || list[list.length - 1];
+    const ill = BAD.includes(end.outcome);
+    const code = end.code || (ill && bad[0] ? bad[0].code : null);
+    const failed = ill ? [] : bad.map((x) => x.code || x.kind);
+    const label = commit && commit.detail.label;
+    const title = first.owner === 'store' ? label || (first.detail && first.detail.type)
+      || first.kind : `${first.owner} ${first.kind}`;
+    return {
+      op,
+      title: first.kind === 'undo' || first.kind === 'redo' ? `${first.kind} ${label || ''}`.trim()
+        : title,
+      outcome: `${end.outcome}${code ? ` (${code})` : ''}${commit && commit.revision != null
+        ? `, revision ${commit.revision}` : ''}${failed.length ? ` · failed: ${failed.join(', ')}`
+        : ''}`,
+      steps: list.map((x) => ({ text: traceText(model, x, registry), outcome: x.outcome,
+        code: x.code })),
+    };
+  });
+  return { ops, shown: ops.length, total: all.length };
+}
+
+/** One step in words: owner, kind, outcome (code), what it names and its detail. */
+function traceText(model, x, registry) {
+  const n = x.entity && x.entity.kind === 'node' ? nodeOf(model, x.entity.id) : null;
+  const d = { ...x.detail };
+  const p = n && d.param ? registry.param(n.type, d.param) : null;
+  const what = [x.entity ? `${n ? n.metadata.name : `${x.entity.kind} ${x.entity.id}`}${d.param
+    ? ` ${p ? p.label : d.param}` : ''}` : ''];
+  if (p && typeof d.value === 'number') what[0] += ` ${formatParamValue(p, d.value)}`;
+  else if (d.param) what[0] += ` ${d.value} ${d.unit || ''}`.trimEnd();
+  if (d.param) for (const k of ['param', 'value', 'unit']) delete d[k];
+  if (!d.cents) delete d.cents;
+  what.push(...Object.entries(d).filter(([, v]) => v !== null && v !== '').map(([k, v]) => (
+    k === 'planHash' ? `plan ${shortHash(v)}` : typeof v === 'number' ? `${k} ${sig(v, 4)}${
+      TRACE_SECONDS.includes(k) ? ' s' : ''}` : `${k} ${v}`)));
+  return `${x.owner} ${x.kind}: ${x.outcome}${x.code ? ` (${x.code})` : ''}${x.revision != null
+    ? ` · rev ${x.revision}` : ''} · ${what.filter(Boolean).join(', ')}`.replace(/ · $/, '');
+}
+
 /** The diagnostics naming one entity, as status-line text with their code. */
 const entityNotes = (truth, kind, id, skip = []) => runtimeDiagnostics(truth)
   .filter((x) => x.entity && x.entity.kind === kind && x.entity.id === id
@@ -376,7 +441,8 @@ export function settingsAction(model, key, raw) {
  * The Inspector view of the selection (§78): the primary node (the last selected), a
  * connection, a clip or automation point, several nodes, or the Studio itself.
  * opts: { registry, status: Map id -> { status, code, reason }, warnings: Map id -> [text],
- *         edgeStatus: Map edge id -> plan { status, code, reason }, truth (runtimeView) }.
+ *         edgeStatus: Map edge id -> plan { status, code, reason }, truth (runtimeView),
+ *         trace: [step] (traceView) }.
  * A connection that carries nothing (graph-view.js edgeRoute) has route 'no-route' or
  * 'no-effect' and its reason (§237).
  */
@@ -424,6 +490,7 @@ export function inspectorView(model, selection, opts = {}) {
       fields,
       connections: nodeConnections(model, node.id, registry, opts.edgeStatus || null),
       hasOutputs: !!(def && def.outputs.length),
+      trace: traceView(model, opts.trace, { registry, nodeId: node.id }),
     };
   }
   if (edges.length) {
@@ -521,6 +588,7 @@ export function inspectorView(model, selection, opts = {}) {
       clips: model.timeline.clips.length, lanes: model.timeline.automation.length },
     settings: studioSettingsView(model),
     runtime: runtimeView(model, opts.truth, opts),
+    trace: traceView(model, opts.trace, { registry }),
   };
 }
 
@@ -801,6 +869,8 @@ export function mountInspector(host, svc) {
       actionButton('Delete', 'studio.inspector.delete', () => svc.onDelete(),
         'osc-btn-secondary osc-si-danger'),
     ]));
+    parts.push(buildTrace(view.trace, 'Operations that touched this node, newest first.',
+      view.id));
     if (view.help) {
       parts.push(h('details', { class: 'osc-si-help' }, [
         h('summary', { text: `About ${view.typeLabel}` }),
@@ -1005,6 +1075,7 @@ export function mountInspector(host, svc) {
     return [header('Studio', `${view.counts.nodes} nodes · ${view.counts.edges} connections · `
       + `${view.counts.clips} clips · ${view.counts.lanes} automation lanes`),
     buildRuntime(view.runtime),
+    buildTrace(view.trace, 'What each recent operation did, newest first.'),
     textInput('osc-si-studio-title', 'Title', view.title, (v, input) => {
       const r = dispatch({ type: 'METADATA_SET', title: v.trim() || view.title });
       if (!r.ok) input.value = view.title;
@@ -1090,6 +1161,45 @@ export function mountInspector(host, svc) {
       ['Owned', list(rv.owned)],
     ].map(([k, v]) => h('div', {}, [h('dt', { text: k }),
       h('dd', { class: 'osc-num', text: v })])));
+  }
+
+  // The Trace section (ADR 0042): one disclosure per operation, its steps in words. Built with
+  // the view from the settled operations, then refilled only by renderTrace once an operation
+  // has ended; an open disclosure stays open and a focused one keeps focus (data-key), or
+  // focus goes to the heading when that operation is no longer listed.
+  let tr = null;
+  const traceOpen = new Set();
+  function buildTrace(tv, intro, nodeId = null) {
+    tr = { sig: '', note: h('p', { class: 'osc-si-note' }), list: h('ol', {
+      class: 'osc-si-conns osc-si-trace', 'aria-label': 'Operations',
+      'data-osc': 'studio.inspector.traceOps' }), intro, nodeId };
+    fillTrace(tv);
+    return h('section', { class: 'osc-si-section', 'aria-label': 'Trace',
+      'data-osc': 'studio.inspector.trace' }, [h('h5', { class: 'osc-si-h5', text: 'Trace' }),
+      tr.note, tr.list]);
+  }
+
+  function fillTrace(tv) {
+    const sig = JSON.stringify(tv);
+    if (!tr || tr.sig === sig) return;
+    tr.sig = sig;
+    setText(tr.note, tv.total ? `${tr.intro} ${tv.shown} of ${tv.total} shown; kept in memory `
+      + 'only, never saved.' : 'Nothing traced yet: edit, play or stop to see what happens.');
+    const active = document.activeElement;
+    const key = tr.list.contains(active) ? active.getAttribute('data-key') : null;
+    replaceChildren(tr.list, tv.ops.map((o) => {
+      const d = h('details', { class: 'osc-si-help', 'data-op': o.op }, [
+        h('summary', { 'data-key': `trace:${o.op}`, text: `${o.op} · ${o.title} · ${o.outcome}` }),
+        h('ol', { class: 'osc-si-trace-steps' }, o.steps.map((x) => h('li', {
+          class: BAD.includes(x.outcome) ? 'is-error' : null, text: x.text })))]);
+      d.open = traceOpen.has(o.op);
+      d.addEventListener('toggle', () => (d.open ? traceOpen.add(o.op)
+        : traceOpen.delete(o.op)));
+      return h('li', {}, [d]);
+    }));
+    const el = key && tr.list.querySelector(`[data-key="${CSS.escape(key)}"]`);
+    if (el) el.focus();
+    else if (key) focusHeading(); // the focused operation is no longer shown
   }
 
   /** Refresh the Studio view's settings in place (a focused field keeps what is typed). */
@@ -1191,7 +1301,8 @@ export function mountInspector(host, svc) {
     const truth = svc.truth ? svc.truth() : null;
     const view = inspectorView(model, svc.store.getSelection(), { registry,
       status: svc.status ? svc.status() : null, warnings: svc.warnings ? svc.warnings() : null,
-      edgeStatus: svc.edgeStatus ? svc.edgeStatus() : null, truth });
+      edgeStatus: svc.edgeStatus ? svc.edgeStatus() : null, truth,
+      trace: svc.trace ? svc.trace() : null });
     // A changed runtime state is announced politely; Play and Stop say their own.
     const state = runtimeState(truth && truth.verdict);
     if (said && state !== said && !(QUIET.includes(state) && QUIET.includes(said))) {
@@ -1233,6 +1344,7 @@ export function mountInspector(host, svc) {
     const focusedKey = hadFocus ? document.activeElement.getAttribute('data-key') : null;
     refs = new Map();
     rt = null;
+    tr = null;
     current = view.key;
     builtSig = textSig(view);
     const builders = { node: buildNode, edge: buildEdge, clip: buildClip, point: buildPoint,
@@ -1253,6 +1365,11 @@ export function mountInspector(host, svc) {
 
   return {
     render,
+    renderTrace() {
+      if (tr && svc.trace) {
+        fillTrace(traceView(svc.store.getModel(), svc.trace(), { registry, nodeId: tr.nodeId }));
+      }
+    },
     /** Focus the first editable field (Enter on a node, §142). */
     focusFirst() {
       const el = host.querySelector('input, select, button');

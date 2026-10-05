@@ -906,6 +906,22 @@
   align-self: flex-start;
 }
 
+/* Trace (ADR 0042): long ids wrap at 390 px; a refused or failed step says so in its text and
+   is set in the stronger weight as well, never told apart by colour. */
+.osc-si-trace {
+  overflow-wrap: anywhere;
+}
+
+.osc-si-trace-steps {
+  margin: 4px 0 0;
+  padding-left: 18px;
+}
+
+.osc-si-trace-steps .is-error {
+  color: var(--osc-text);
+  font-weight: var(--osc-fw-semibold);
+}
+
 /* ================= Node library and pickers ================= */
 .osc-st-libhost {
   display: flex;

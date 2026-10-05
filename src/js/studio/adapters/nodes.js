@@ -11,10 +11,16 @@
 // handle  = { inputs: { portId: AudioNode }, outputs: { portId: AudioNode },
 //             outputRange: { portId: [lo, hi] }        control signal range (default [-1, 1]),
 //             modTarget(key, mapping) -> { param: AudioParam, scale } | { reason },
-//             applyBase(base, immediate, owned)  base = { key: { value, cents } } for
+//             applyBase(base, immediate, owned, w)  base = { key: { value, cents } } for
 //                                         modulatable keys (value in the parameter's unit incl.
-//                                         edge offsets, cents from log-mapped edges),
-//             update(changed, owned)      live change of non-modulatable, non-structural keys,
+//                                         edge offsets, cents from log-mapped edges); every
+//                                         AudioParam it writes is reported as w[key] = the
+//                                         value written (a log edge's cents as w.detune),
+//             update(changed, owned, w)   live change of non-modulatable, non-structural keys;
+//                                         each key it acts on is reported as w[key] = how:
+//                                         'set' | 'glide' (from now) | 'crossfade' |
+//                                         'next-gate'; a key it does not act on is not reported
+//             (`w` is the operation trace's record, ADR 0042: optional, plain object)
 //             stop(at)                    sources stop at `at` (the route fades end before it),
 //             dispose()                   the builder's own dispose (the runtime then
 //                                         disconnects and untracks every tracked node),
@@ -68,10 +74,16 @@ const FILTER_KEYS = Object.freeze(['frequency', 'Q', 'gain']);
 const BIPOLAR = Object.freeze([-1, 1]);
 const UNIPOLAR = Object.freeze([0, 1]);
 
-function setParam(param, value, immediate, now) {
+function setParam(param, value, immediate, now, w, key) {
   if (immediate) param.setValueAtTime(value, now);
   else param.setTargetAtTime(value, now, PARAM_TAU_S);
+  if (w) w[key] = value;
 }
+
+/** update()'s report: every key of `keys` present in `changed` acted on as `how`. */
+const did = (w, changed, keys, how) => {
+  for (const k of keys) if (w && k in changed) w[k] = how;
+};
 
 /** Whether the runtime lets the adapter write parameter `key` (not driven by another owner). */
 const free = (owned, key) => !(owned && owned.has(key));
@@ -113,17 +125,18 @@ const oscillator = {
         if (key === 'level') return linearOnly(level.gain)(key, mapping);
         return { reason: `unknown parameter ${key}` };
       },
-      applyBase(b, immediate, owned) {
+      applyBase(b, immediate, owned, w) {
         const now = ctx.currentTime;
         if (free(owned, 'frequency')) {
-          setParam(osc.frequency, hooks.clampFrequency(b.frequency.value), immediate, now);
+          setParam(osc.frequency, hooks.clampFrequency(b.frequency.value), immediate, now, w,
+            'frequency');
         }
         // detune carries the log-mapped frequency offsets too: an owned detune owns them.
         if (free(owned, 'detune')) {
           setParam(osc.detune, b.detune.value + b.detune.cents + b.frequency.cents, immediate,
-            now);
+            now, w, 'detune');
         }
-        if (free(owned, 'level')) setParam(level.gain, b.level.value, immediate, now);
+        if (free(owned, 'level')) setParam(level.gain, b.level.value, immediate, now, w, 'level');
       },
       update() {},
       stop(t) { try { osc.stop(t); } catch (e) { /* already stopped */ } },
@@ -148,16 +161,18 @@ const noise = {
       outputRange: {},
       modTarget: (key, mapping) => (key === 'level' ? linearOnly(n.output.gain)(key, mapping)
         : { reason: `unknown parameter ${key}` }),
-      applyBase(b, immediate, owned) {
+      applyBase(b, immediate, owned, w) {
         if (!free(owned, 'level')) return;
         if (immediate) n.output.gain.setValueAtTime(Math.max(1e-4, b.level.value), ctx.currentTime);
         else n.update({ level: b.level.value });
+        if (w) w.level = Math.max(1e-4, b.level.value);
       },
-      update(changed) {
+      update(changed, owned, w) {
         const next = {};
         if ('color' in changed) next.color = changed.color;
         if ('seed' in changed) next.seed = changed.seed;
         if (Object.keys(next).length) n.update(next); // regenerates and crossfades (noise.js)
+        did(w, changed, ['color', 'seed'], 'crossfade');
       },
       stop(t) { n.stop(t); }, // noise.js fades 20 ms from t, then stops its buffer source
       dispose() { n.dispose(); },
@@ -255,8 +270,10 @@ const sequence = {
       outputRange: {},
       modTarget: (key, mapping) => (key === 'level' ? linearOnly(bus.gain)(key, mapping)
         : { reason: `unknown parameter ${key}` }),
-      applyBase(b, immediate, owned) {
-        if (free(owned, 'level')) setParam(bus.gain, b.level.value, immediate, ctx.currentTime);
+      applyBase(b, immediate, owned, w) {
+        if (free(owned, 'level')) {
+          setParam(bus.gain, b.level.value, immediate, ctx.currentTime, w, 'level');
+        }
       },
       update() {}, stop() {}, dispose() {},
       info: { destination: bus, accounting: { track: acct.track, source: acct.source },
@@ -334,12 +351,12 @@ const lfo = {
         return mapping === 'log' ? { param: osc.detune, scale: CENTS_PER_OCTAVE }
           : { param: osc.frequency, scale: 1 };
       },
-      applyBase(b, immediate, owned) {
+      applyBase(b, immediate, owned, w) {
         const now = ctx.currentTime;
         if (free(owned, 'rate')) {
-          setParam(osc.frequency, Math.max(0.01, b.rate.value), immediate, now);
+          setParam(osc.frequency, Math.max(0.01, b.rate.value), immediate, now, w, 'rate');
         }
-        setParam(osc.detune, b.rate.cents, immediate, now); // log-mapped edges only
+        setParam(osc.detune, b.rate.cents, immediate, now, w, 'detune'); // log-mapped edges only
       },
       update() {},
       stop(t) { try { osc.stop(t); } catch (e) { /* already stopped */ } },
@@ -376,7 +393,10 @@ const envelope = {
       outputRange: { control: UNIPOLAR },
       modTarget: (key) => ({ reason: `${key} is not modulatable` }),
       applyBase() {},
-      update(changed) { adsr = adsrOf({ ...params, ...changed }); }, // next gate
+      update(changed, owned, w) { // the next gate
+        adsr = adsrOf({ ...params, ...changed });
+        did(w, changed, Object.keys(changed), 'next-gate');
+      },
       /** Gate on at t (retriggered from the current value), off after durS (timeline hook). */
       gate(t, durS) {
         for (const p of params2()) {
@@ -440,12 +460,13 @@ function steppedControl({ ctx, acct, at, values, smooth, holdLast, rate }) {
       }
       return { param: src.playbackRate, scale: 1 / refRate };
     },
-    applyBase(b, immediate, owned) {
+    applyBase(b, immediate, owned, w) {
       const now = ctx.currentTime;
       if (free(owned, 'rate')) {
         setParam(src.playbackRate, Math.max(0, b.rate.value) / refRate, immediate, now);
+        if (w) w.rate = Math.max(0, b.rate.value); // in the parameter's unit (Hz)
       }
-      if (src.detune) setParam(src.detune, b.rate.cents, immediate, now); // log-mapped edges
+      if (src.detune) setParam(src.detune, b.rate.cents, immediate, now, w, 'detune'); // log edges
     },
   };
 }
@@ -503,8 +524,10 @@ const gain = {
       outputRange: {},
       modTarget: (key, mapping) => (key === 'gain' ? linearOnly(g.gain)(key, mapping)
         : { reason: `unknown parameter ${key}` }),
-      applyBase(b, immediate, owned) {
-        if (free(owned, 'gain')) setParam(g.gain, b.gain.value, immediate, ctx.currentTime);
+      applyBase(b, immediate, owned, w) {
+        if (free(owned, 'gain')) {
+          setParam(g.gain, b.gain.value, immediate, ctx.currentTime, w, 'gain');
+        }
       },
       update() {}, stop() {}, dispose() {},
       info: {},
@@ -547,8 +570,12 @@ const filter = {
         if (key === 'gain') return linearOnly(biquad.gain)(key, mapping);
         return { reason: `unknown parameter ${key}` };
       },
-      applyBase(b, immediate, owned) {
+      applyBase(b, immediate, owned, w) {
         last = { frequency: b.frequency.value, Q: b.Q.value, gain: b.gain.value };
+        const c = normalizeFilter({ ...stage.config, ...last }, ctx.sampleRate);
+        // What reaches the biquad: clamped frequency, Q converted for the node, gain.
+        for (const [k, v] of [['frequency', c.frequency], ['Q', nodeQ(c.type, c.Q)],
+          ['gain', c.gain]]) if (w && free(owned, k)) w[k] = v;
         if (FILTER_KEYS.every((k) => free(owned, k))) {
           // createFilterStage.update glides (τ 10 ms), clamps to 10 Hz … 0.95 × Nyquist and
           // converts Q for the node (dB for low-/high-pass).
@@ -557,7 +584,6 @@ const filter = {
         } else {
           // An owner drives one of them: the stage's glide, clamp and Q conversion
           // (filters.js normalizeFilter, nodeQ) on the others only.
-          const c = normalizeFilter({ ...stage.config, ...last }, ctx.sampleRate);
           const t = ctx.currentTime;
           if (free(owned, 'frequency')) {
             biquad.frequency.setTargetAtTime(c.frequency, t, FILTER_GLIDE_TAU_S);
@@ -567,13 +593,15 @@ const filter = {
           }
           if (free(owned, 'gain')) biquad.gain.setTargetAtTime(c.gain, t, FILTER_GLIDE_TAU_S);
         }
-        setParam(biquad.detune, b.frequency.cents, immediate, ctx.currentTime); // log edges
+        // log edges
+        setParam(biquad.detune, b.frequency.cents, immediate, ctx.currentTime, w, 'detune');
       },
-      update(changed, owned) {
+      update(changed, owned, w) {
         if (!('enabled' in changed)) return;
         // With an owned parameter the runtime rebuilds the node instead (rebuildWhenOwned).
         if (!FILTER_KEYS.every((k) => free(owned, k))) return;
         stage.update({ ...last, enabled: changed.enabled }); // crossfaded
+        did(w, changed, ['enabled'], 'crossfade');
       },
       stop() {},
       dispose() { stage.dispose(); },
@@ -604,8 +632,10 @@ const pan = {
         outputRange: {},
         modTarget: (key, mapping) => (key === 'pan' ? linearOnly(p.pan)(key, mapping)
           : { reason: `unknown parameter ${key}` }),
-        applyBase(b, immediate, owned) {
-          if (free(owned, 'pan')) setParam(p.pan, b.pan.value, immediate, ctx.currentTime);
+        applyBase(b, immediate, owned, w) {
+          if (free(owned, 'pan')) {
+            setParam(p.pan, b.pan.value, immediate, ctx.currentTime, w, 'pan');
+          }
         },
         update() {}, stop() {}, dispose() {},
         info: {},
@@ -621,7 +651,10 @@ const pan = {
       outputs: { audio: router.output },
       outputRange: {},
       modTarget: () => ({ reason: 'Pan modulation needs StereoPannerNode (not available).' }),
-      applyBase(b) { router.update({ panA: b.pan.value }); },
+      applyBase(b, immediate, owned, w) {
+        router.update({ panA: b.pan.value });
+        if (w) w.pan = b.pan.value;
+      },
       update() {}, stop() {},
       dispose() { router.dispose(); },
       info: { router },
@@ -643,7 +676,10 @@ const stereoSplit = {
       outputRange: {},
       modTarget: (key) => ({ reason: `${key} is not modulatable` }),
       applyBase() {},
-      update(changed) { router.update(changed); }, // glides (stereo.js)
+      update(changed, owned, w) { // glides (stereo.js)
+        router.update(changed);
+        did(w, changed, Object.keys(changed), 'glide');
+      },
       stop() {},
       dispose() { router.dispose(); },
       info: { router },
@@ -675,9 +711,11 @@ const mixer = {
       outputRange: {},
       modTarget: (key, mapping) => (levels[key] ? linearOnly(levels[key].gain)(key, mapping)
         : { reason: `unknown parameter ${key}` }),
-      applyBase(b, immediate, owned) {
+      applyBase(b, immediate, owned, w) {
         for (const [key, g] of Object.entries(levels)) {
-          if (free(owned, key)) setParam(g.gain, b[key].value, immediate, ctx.currentTime);
+          if (free(owned, key)) {
+            setParam(g.gain, b[key].value, immediate, ctx.currentTime, w, key);
+          }
         }
       },
       update() {}, stop() {}, dispose() {},
@@ -709,9 +747,10 @@ const master = {
       outputRange: {},
       modTarget: () => ({ reason: 'The master level is neither automatable nor modulatable.' }),
       applyBase() {},
-      update(changed) {
+      update(changed, owned, w) {
         if ('level' in changed && options.masterLevel !== 'ignore') {
           hooks.setMasterLevel(changed.level); // engine.setMasterGain: clamped and smoothed
+          did(w, changed, ['level'], 'glide');
         }
       },
       /** Fade the whole Studio output (start, stop, Master removal). */
@@ -751,9 +790,10 @@ function analyserTap({ ctx, acct, params, fftSize = 8192, smoothing = 0.55, extr
     outputRange: {},
     modTarget: (key) => ({ reason: `${key} is not modulatable` }),
     applyBase() {},
-    update(changed) {
+    update(changed, owned, w) {
       if ('fftSize' in changed) { analyser.fftSize = changed.fftSize; reader.sync(); }
       if ('smoothing' in changed) analyser.smoothingTimeConstant = changed.smoothing;
+      did(w, changed, ['fftSize', 'smoothing'], 'set');
     },
     stop() {}, dispose() {},
     info: { analyser, reader, params: { ...params }, ...extra },

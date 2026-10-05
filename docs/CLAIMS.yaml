@@ -500,6 +500,14 @@ claims:
     status: guaranteed
     note: 'Specification §45 (click ratio for reconnect, filter insertion, waveform replacement, mute and stop) and §213 (20 edits during playback, then stop: 0 engine, runtime and live nodes, no growth over 3 cycles), in Chromium, Firefox and WebKit; tests/unit/v31-studio-compiler.test.mjs covers the diff, a failed transaction leaving the previous runtime intact, and the leak count. ADR 0035.'
 
+  - id: studio-operation-trace
+    claim: 'Each Studio dispatch, undo, redo, cancelled gesture, document replace, Play, Stop and sync is traced under one correlation id from the intent through the compiled plan (with its planHash) and the runtime apply to each AudioParam value and route gain the node adapters report they wrote, a key no adapter wrote is traced as stored or owned with no audio time, and a refused or unapplied edit is traced as refused with its diagnostic code or as not applied; the trace is bounded, in memory only and covered by no hash.'
+    source: .ai/repo/adrs/0042-studio-operation-trace-one-correlation-id-bounded-not-evidence.md
+    implementation: src/js/core/trace.js
+    test: tests/unit/v31-studio-trace.test.mjs
+    status: guaranteed
+    note: 'Tests "a parameter edit while playing: one op on the action, the compile with its planHash..." (the step value and time are the AudioParam call the fake context recorded), "a live edit the running graph cannot take: the refusal is traced..." (prepare-failed, edit-refused), "the trace is not evidence..." (equal studioHash, planHash and document with and without it), "a live parameter step says only what the adapter did..." (set, stored, next gate), "without a trace, runtime.apply computes no planHash" and the ring tests; tests/browser/v31-studio-runtime.cjs checks trace-edit, trace-stopped, trace-refused, trace-phone, trace-themes, trace-one-fill and trace-focus in Chromium, Firefox and WebKit. A param step is what the adapter reports it wrote, not a read-back of what the AudioParam renders; the timeline''s scheduled clips and lane events, pending handles settling and deferred disposals are not traced, and a long drag evicts older operations from the 256-step ring. ADR 0042.'
+
   - id: studio-transport-audio-clock
     claim: 'Studio transport, clips, loop and automation are scheduled on AudioContext time, pattern clips through the existing sequencer compiler, and the playhead only observes the scheduler.'
     source: docs/v31/timeline.md
