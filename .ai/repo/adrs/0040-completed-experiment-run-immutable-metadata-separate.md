@@ -180,9 +180,16 @@ Resolved without a schema change (experiment schema 2, result hash version 3):
 - **The stored noise-check snapshot follows the run.** The RTA of a completed measurement's
   noise check is drawn with the level calibration that measurement applied, not with one
   selected afterwards; the live RTA keeps using the current one, since it is measured now.
+- **A run is saved once.** The saved state belongs to the result shown, not to the setup:
+  applying a recipe link or loading a recipe no longer clears it, so a stored run cannot be
+  saved a second time (before, that stored a second record of the same run, and with an
+  idempotent save key it would be refused as `immutable` and reported as "not saved"). Save
+  called again for a stored run updates only its name and annotation notes through
+  `store.annotate` ("Experiment updated"); the run itself is unchanged.
 - **The limit.** The check is on presence, not identity: a record stores a profile's id and name
   but not its points, so one saved by an earlier build naming profile B for a run profile A
   corrected has no finding; nothing in the record can tell the two apart.
 
-Proven by `tests/unit/v3-evidence-at-completion.test.mjs` and checks `evidence-at-completion` and
-`older-claim` in `tests/browser/v3-ui.cjs` (chromium, firefox, webkit; file:// and /oscilla/).
+Proven by `tests/unit/v3-evidence-at-completion.test.mjs` and checks `evidence-at-completion`,
+`resave-after-link` and `older-claim` in `tests/browser/v3-ui.cjs` (chromium, firefox, webkit;
+file:// and /oscilla/).

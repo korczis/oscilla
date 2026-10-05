@@ -238,6 +238,7 @@ export function createMeasureUi(svc) {
     loopbackSystem: { type: 'biquad', filter: 'lowpass', frequency: 1000, Q: Math.SQRT1_2 },
     result: null,          // last engine result (COMPLETE or INVALID)
     evidence: null,        // frozen { result, calibration, notes } of it, as measured
+    saved: null,           // { result, id } once that result is stored (a run is saved once)
     shown: null,           // what the result panel shows: { kind: 'result'|'experiment', src }
     preflight: null,
     noise: null,
@@ -894,6 +895,42 @@ export function createMeasureUi(svc) {
     });
   }
 
+  /**
+   * Save pressed again for a stored run: the run is immutable (ADR 0040), so only its name and
+   * annotation notes are updated, through annotate; the UI never says "not saved" for it.
+   */
+  async function updateSaved(cmp, result) {
+    const m = cmp.meas;
+    const { id } = ctx.saved;
+    m.saving = true;
+    let gone = false;
+    try {
+      const e = experimentOf(result, cmp);
+      const ann = e.annotations && e.annotations.notes ? e.annotations.notes : null;
+      await cmp.experimentsAnnotate(id, { name: e.name, notes: ann });
+      cmp.notify('success', 'Experiment updated', `"${e.name}": the name and annotation notes `
+        + 'were updated; the measured run is stored unchanged.');
+    } catch (err) {
+      gone = !!err && err.code === 'missing'; // deleted in Experiments since: store it again
+      if (!gone) {
+        cmp.notify('error', 'Experiment name and notes not updated', 'The measured run is '
+          + `stored (${id}); only the metadata change failed: ${err.message || String(err)}`);
+      }
+    } finally {
+      m.saving = false;
+    }
+    if (gone) {
+      ctx.saved = null;
+      m.saved = false;
+      m.savedId = null;
+      return cmp.measureSave();
+    }
+    m.saved = true;
+    m.savedId = id;
+    refresh();
+    return id;
+  }
+
   // ---------------------------------------------------------------- level reference capture
   function referenceSummary(r, referenceHz) {
     const db = (v) => `${v < 0 ? '−' : ''}${Math.abs(v).toFixed(2)} dB`;
@@ -1032,6 +1069,7 @@ export function createMeasureUi(svc) {
     cmp.meas.savedId = null;
     ctx.result = null;
     ctx.evidence = null;
+    ctx.saved = null;
     if (ctx.shown && ctx.shown.kind === 'result') ctx.shown = null;
     rebuildAll();
     const notesAtStart = cmp.meas.notes; // the conditions as stated when the run starts
@@ -1403,8 +1441,8 @@ export function createMeasureUi(svc) {
       Object.assign(this.meas.values, r.values);
       this.meas.recipeLinkErrors = [];
       ctx.repeatOf = null;
-      this.meas.saved = false;
-      this.meas.savedId = null;
+      // meas.saved belongs to the result shown, not to the setup: a stored run stays saved (a
+      // second save of it would be refused as immutable and read as "not saved").
       if (ctx.me && ctx.me.state === S.READY) ctx.me.reset(); // the recipe changed
       refresh();
       if (origin === 'load') this.workspace = 'measure';
@@ -1684,6 +1722,8 @@ export function createMeasureUi(svc) {
     async measureSave({ decorate = null } = {}) {
       const result = ctx.result;
       if (!result || result.state !== S.COMPLETE || this.meas.saving) return null;
+      // A stored run is never saved twice: a later name or notes edit is metadata (annotate).
+      if (ctx.saved && ctx.saved.result === result) return updateSaved(this, result);
       this.meas.saving = true;
       try {
         const base = experimentOf(result, this);
@@ -1692,6 +1732,7 @@ export function createMeasureUi(svc) {
         const claim = calibrationClaimFindings(e);
         if (claim.length) throw new Error(claim.map((f) => `${f.path}: ${f.text}`).join('; '));
         const id = await this.experimentsPut(e);
+        ctx.saved = { result, id };
         this.meas.saved = true;
         this.meas.savedId = id;
         ctx.repeatOf = null;
@@ -1726,8 +1767,7 @@ export function createMeasureUi(svc) {
         if (val !== undefined && val !== null) v[k] = val;
       }
       ctx.repeatOf = repeatOf;
-      this.meas.saved = false;
-      this.meas.savedId = null;
+      // The next measurement resets meas.saved; the stored run shown now stays saved.
       if (ctx.me && !isActiveState(ctx.me.state)) ctx.me.reset();
       refresh();
     },

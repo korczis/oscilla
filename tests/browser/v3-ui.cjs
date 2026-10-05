@@ -60,6 +60,10 @@
 //                           names A, has no level calibration (no "SPL"), keeps the start notes
 //                           and carries the edited text as annotations.notes only; the stored
 //                           noise-check RTA keeps the run's calibration (relative, no "SPL")
+//   resave-after-link       a saved COMPLETE result stays saved when a recipe link is applied
+//                           (Save stays disabled); Save pressed again with an edited name and
+//                           notes updates the stored run's metadata through annotate (same id,
+//                           no second record, never "Experiment not saved")
 //   older-claim             (ADR 0040 resolution) a file as an earlier version saved it, naming a
 //                           level calibration made after the uncalibrated run: it imports with
 //                           a warning naming the field and the reason, the stored record reads
@@ -996,6 +1000,60 @@ function defineChecks(fixtures) {
       noLevel: r.level === null && r.levelCalibrated === false,
       startNotes: /^start notes\b/.test(r.notes || '') && !/edited/.test(r.notes || ''),
       annotation: !!r.annotations && r.annotations.notes === 'edited after',
+    }) };
+  });
+
+  def('resave-after-link', async ({ page }) => {
+    await H.workspace(page, 'measure');
+    await H.loopback(page);
+    await page.fill('#osc-m-name', 'Gate resave');
+    await page.fill('#osc-m-notes', '');
+    await page.click('#osc-measure-primary'); // Check setup
+    await H.waitState(page, ['READY', 'INVALID', 'ERROR'], 15000);
+    const res = {};
+    res.run = await H.run(page, () => page.click('#osc-measure-primary'));
+    if (res.run.state !== 'COMPLETE') return { ok: false, failed: ['run'], ...res };
+    await page.click('#osc-measure-save');
+    res.save = await H.saved(page);
+    if (res.save) return { ok: false, failed: ['save'], ...res };
+    res.id = await page.evaluate(() => window.OSCILLA.app.meas.savedId);
+    // A recipe link applied while the saved result is shown.
+    res.applied = await page.evaluate(() => {
+      const a = window.OSCILLA.app;
+      a.alerts = [];
+      return a.measureApplyRecipeHash(new URL(a.measureRecipeUrl()).hash,
+        { origin: 'hashchange' });
+    });
+    await sleep(100);
+    res.afterLink = await page.evaluate(() => ({ saved: window.OSCILLA.app.meas.saved,
+      disabled: document.querySelector('#osc-measure-save').disabled }));
+    // Save once more (as a programmatic caller can) after a metadata edit.
+    await page.fill('#osc-m-name', 'Gate resave renamed');
+    await page.fill('#osc-m-notes', 'typed after the save');
+    res.again = await page.evaluate(() => window.OSCILLA.app.measureSave());
+    res.alerts = await page.evaluate(() => window.OSCILLA.app.alerts.map((a) => a.title));
+    res.stored = await page.evaluate(async (id) => {
+      const s = window.OSCILLA.experiments.store();
+      const e = await s.get(id);
+      const list = await s.list();
+      return { name: e.name, notes: e.annotations ? e.annotations.notes : null,
+        records: list.filter((x) => /^Gate resave/.test(x.name)).length };
+    }, res.id);
+    await page.evaluate(() => {
+      const a = window.OSCILLA.app;
+      a.meas.name = '';
+      a.meas.notes = '';
+      a.alerts = [];
+    });
+    return { ...res, ...H.verdict({
+      applied: res.applied === true,
+      staysSaved: res.afterLink.saved === true && res.afterLink.disabled === true,
+      sameRun: res.again === res.id,
+      neverNotSaved: !res.alerts.some((t) => /not saved/.test(t))
+        && res.alerts.includes('Experiment updated'),
+      annotated: res.stored.name === 'Gate resave renamed'
+        && res.stored.notes === 'typed after the save',
+      oneRecord: res.stored.records === 1,
     }) };
   });
 
