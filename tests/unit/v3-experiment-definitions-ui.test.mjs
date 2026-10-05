@@ -17,6 +17,7 @@ import { DB_NAME, openExperimentStore } from '../../src/js/experiments/store.js'
 import { KNOWN_ALGORITHM_IDS } from '../../src/js/measurement/algorithms.js';
 import { createMeasureUi } from '../../src/js/ui/measure.js';
 import { createExperimentsUi } from '../../src/js/ui/experiments.js';
+import { experimentFromResult } from '../../src/js/ui/measure-experiment.js';
 import { buildFixtures, NOW, FIXTURE_RECIPE } from '../browser/fixtures/v3-experiments.mjs';
 import { fakeIndexedDB } from './fixtures/fake-indexeddb.mjs';
 
@@ -159,13 +160,24 @@ async function foreignRun() {
 }
 
 test('review D2: a run that only shares a stored id is not shown under its name', async () => {
-  const { cmp, notes } = await makeUi(async (s) => { await s.putDefinition(loopbackDef()); });
+  const { a } = await fx();
+  const local = loopbackDef();
+  const own = experimentFromResult(a.result, { now: NOW, id: 'own-run',
+    definition: definition.definitionRef(local) });
+  const { cmp, notes } = await makeUi(async (s) => {
+    await s.putDefinition(local);
+    await s.put(own);
+  });
   assert.ok(await cmp.experimentsImportText(await foreignRun()), JSON.stringify(notes));
+  // A run of the stored version is shown under its name (the row carries the hash).
+  assert.equal(cmp.exps.rows.find((r) => r.id === 'own-run').defText,
+    ' · "Loopback" version 1');
   const row = cmp.exps.rows.find((r) => r.id === 'imported-run');
   assert.equal(row.defText, ' · definition version 7, does not match the stored definition with '
     + 'this id');
   assert.doesNotMatch(row.defText, /Loopback/);
-  assert.match(cmp.exps.defs[0].meta, /not run yet$/, 'not counted as a run of Loopback');
+  assert.match(cmp.exps.defs[0].meta, /last run 2026-10-02 10:00 UTC \(v1\)$/,
+    'the imported run is not counted as a run of Loopback');
   await cmp.experimentsOpen('imported-run');
   const def = cmp.exps.detail.provenance.find((p) => p.label === 'Definition').text;
   assert.match(def, /^definition def-loopback version 7 \([0-9a-f]{12}…\), does not match/);

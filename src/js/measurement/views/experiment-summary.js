@@ -21,7 +21,7 @@
 //     schemaVersion, oscillaVersion, status, sizeBytes }) or full experiments
 //     Row = { id, name, createdAt, createdText, status, statusText, glyph, icon, shape,
 //       className, sizeText, versionText, selected, baseline, definition: { id, version,
-//       derived } | null, actions: [{ id, label, destructive }] }
+//       hash, derived } | null, actions: [{ id, label, destructive }] }
 // Nothing missing is invented (§249): it reads UNKNOWN / NOT ASSESSED.
 
 import {
@@ -179,7 +179,7 @@ export function experimentListRows(summaries, { selected = [] } = {}) {
       selected: sel.has(s.experimentId),
       baseline: !!s.baseline,
       definition: s.definition ? { id: s.definition.id, version: s.definition.version,
-        derived: s.definition.derived } : null,
+        hash: s.definition.hash, derived: s.definition.derived } : null,
       actions: EXPERIMENT_ACTIONS.map((a) => ({ ...a })),
     };
   });

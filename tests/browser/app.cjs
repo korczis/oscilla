@@ -557,8 +557,16 @@ function defineChecks() {
     await collect();
     await page.evaluate(() => window.OSCILLA.app.closeModal('osc-dlg-def'));
     await page.evaluate(async () => {
+      // An authored definition stays loaded in MEASURE (a derived one only fills the setup).
       const a = window.OSCILLA.app;
-      if (a.exps.rows[0]) await a.experimentsRepeat(a.exps.rows[0].id);
+      const d = a.exps.defs[0]
+        && await window.OSCILLA.experiments.store().getDefinition(a.exps.defs[0].id);
+      if (d) {
+        const v = d.versions[d.versions.length - 1];
+        a.measureLoadDefinition({ id: d.id, version: v.version, hash: v.hash, derived: false,
+          execution: v.execution }, { name: d.name, match: 'match' });
+        a.setWorkspace('measure');
+      }
     });
     await page.waitForSelector('[data-osc="measure.clearDefinition"]', { state: 'visible',
       timeout: 5000 }).catch(() => {});
