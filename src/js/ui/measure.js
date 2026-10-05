@@ -51,6 +51,14 @@
 // result's grid is disabled for that result (the selection resets to None), and a view that
 // still cannot be built is reported as a note, never as "Measurement failed".
 //
+// Evidence as measured (ADR 0040, resolution 2026-10-05): when a measurement returns, MEASURE
+// keeps a frozen companion of its result (measure-experiment.js measuredEvidence): the
+// calibration the engine applied (result.calibrated) and the notes as they were when the
+// measurement started. Save builds the experiment from that companion only. Loading another
+// profile, switching a correction off or creating a level calibration after the run changes the
+// next measurement, not this one; the Experiment panel then says that the saved record keeps
+// the calibration it was measured with, and notes edited later are saved as an annotation.
+//
 // Profile export (V315): the loaded frequency profile exports as CSV or JSON
 // (calibration/export.js); both files are deterministic and parse back to the same profile id.
 //
@@ -105,7 +113,9 @@ import {
 } from '../calibration/level.js';
 import { measureReferenceLevel, REFERENCE_CAPTURE_S } from '../calibration/reference.js';
 import { newExperimentId, describeStimulus } from '../experiments/schema.js';
-import { experimentFromResult, experimentTestContext } from './measure-experiment.js';
+import {
+  experimentFromResult, experimentTestContext, measuredEvidence, evidenceChanges,
+} from './measure-experiment.js';
 import { formatHz } from '../charts/axes.js';
 import { createResponseChart, createIrChart, createRtaChart } from '../charts/measure-charts.js';
 import { readFileText, downloadBlob } from './exporters.js';
@@ -226,6 +236,7 @@ export function createMeasureUi(svc) {
     loopback: !!svc.loopback,
     loopbackSystem: { type: 'biquad', filter: 'lowpass', frequency: 1000, Q: Math.SQRT1_2 },
     result: null,          // last engine result (COMPLETE or INVALID)
+    evidence: null,        // frozen { result, calibration, notes } of it, as measured
     shown: null,           // what the result panel shows: { kind: 'result'|'experiment', src }
     preflight: null,
     noise: null,
@@ -853,18 +864,20 @@ export function createMeasureUi(svc) {
   }
 
   // ---------------------------------------------------------------- experiment building
+  /** The evidence of `result` as measured; a result shown without a run has no start notes. */
+  function evidenceOf(result) {
+    return ctx.evidence && ctx.evidence.result === result ? ctx.evidence
+      : measuredEvidence(result, { notes: null });
+  }
+
   function experimentOf(result, cmp) {
     const m = cmp.meas;
-    // The level calibration is saved only when it applies to the input of THIS result.
-    const resultInput = result.input ? { device: result.input.device,
-      constraints: result.input.constraints, sampleRate: result.sampleRate } : null;
-    const level = m.cal.useLevel && levelCalibrationApplies(ctx.levelCal, resultInput).applies
-      ? ctx.levelCal : null;
+    // Calibration and notes come from the evidence fixed when the run completed (ADR 0040).
+    const ev = evidenceOf(result);
     const st = ctx.lastRecipe && ctx.lastRecipe.stimulus;
     return experimentFromResult(result, {
       now: Date.now(), id: newExperimentId(randomBytes16()), build: svc.build,
-      name: m.name, notes: m.notes, profile: ctx.profile,
-      levelCalibration: level, repeatOf: ctx.repeatOf,
+      name: m.name, notes: ev.notes, laterNotes: m.notes, repeatOf: ctx.repeatOf,
       requested: st ? { f1: Number(st.f1), f2: Number(st.f2) } : null,
     });
   }
@@ -1006,8 +1019,10 @@ export function createMeasureUi(svc) {
     cmp.meas.saved = false;
     cmp.meas.savedId = null;
     ctx.result = null;
+    ctx.evidence = null;
     if (ctx.shown && ctx.shown.kind === 'result') ctx.shown = null;
     rebuildAll();
+    const notesAtStart = cmp.meas.notes; // the conditions as stated when the run starts
     const recipe = given || recipeNow();
     ctx.lastRecipe = recipe;
     let result = null;
@@ -1030,7 +1045,10 @@ export function createMeasureUi(svc) {
     }
     // Presenting the result is outside the measurement: a view problem never fails it (M6).
     if (result) {
+      ctx.evidence = Object.freeze({ result, ...measuredEvidence(result,
+        { notes: notesAtStart }) });
       showResult(result);
+      cmp.meas.evidenceRun += 1; // the reactive token of ctx.evidence
       refresh();
     }
     return result;
@@ -1096,6 +1114,7 @@ export function createMeasureUi(svc) {
       notes: '',
       saved: false,
       savedId: null,
+      evidenceRun: 0,
       saving: false,
       error: null,
       setupOpen: false,
@@ -1118,6 +1137,23 @@ export function createMeasureUi(svc) {
       if (!(this.meas.cal.useLevel && this.meas.cal.level)) return 'UNCALIBRATED';
       // meas.cal.levelVoid makes this getter reactive to the input check (refresh()).
       return this.meas.cal.levelVoid || !levelApplies().applies ? 'UNCALIBRATED' : 'CALIBRATED';
+    },
+    /**
+     * What differs between the completed result's evidence and the workspace now (calibration,
+     * notes), and what a save records instead; [] when nothing does.
+     */
+    get measureEvidenceNotes() {
+      const m = this.meas;
+      // Read first, so the binding follows them (ctx is not reactive): the state, the evidence
+      // token, the calibration (profile, switches, level, levelVoid) and the notes.
+      const deps = [m.state, m.evidenceRun, m.cal.useFrequency, m.cal.profile, m.cal.useLevel,
+        m.cal.level, m.cal.levelVoid, m.notes];
+      const ev = ctx.evidence;
+      if (deps[0] !== S.COMPLETE || !ev || ev.result !== ctx.result) return [];
+      const frequency = m.cal.useFrequency && m.cal.profile && ctx.profile
+        ? { id: ctx.profile.id, name: ctx.profile.name } : null;
+      const level = m.cal.level && !m.cal.levelVoid ? levelInUse(m) : null;
+      return evidenceChanges(ev, { calibration: { frequency, level }, notes: m.notes });
     },
     get measureFreqIndicator() {
       return this.meas.cal.useFrequency && this.meas.cal.profile ? 'CALIBRATED' : 'UNCALIBRATED';

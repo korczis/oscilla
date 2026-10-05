@@ -14,10 +14,19 @@
 // clip and discontinuity IDs included), the input with its device id hashed (schema.js
 // normalizeInput, §88), and is stamped with the version-3 result hash (results, quality,
 // calibration, input, output, the runs with their ids 'run-1'.. and the build; ADR 0040).
+//
+// Evidence as measured (ADR 0040, resolution 2026-10-05): the calibration of the record is the
+// one the engine APPLIED, read from result.calibrated (appliedCalibration), never the profile or
+// level calibration the workspace has loaded when Save is pressed; a calibration changed or
+// created after the run is not recorded as used. environment.notes are the notes as they were
+// when the measurement started (measuredEvidence, kept beside the result); text edited later is
+// user metadata and goes to annotations.notes (`laterNotes`), which no hash covers.
 
 import { ALGORITHMS } from '../measurement/algorithms.js';
 import { isValidLevelCalibration } from '../calibration/level.js';
-import { createExperiment, withResults, resultsFromMeasurement } from '../experiments/schema.js';
+import {
+  createExperiment, withResults, resultsFromMeasurement, annotateExperiment,
+} from '../experiments/schema.js';
 import {
   configHash, withConfigHash, resultHash, withResultHash, RESULT_HASH_VERSION,
 } from '../experiments/hash.js';
@@ -34,17 +43,70 @@ export function resultMasterGain(result) {
 
 export const DEFAULT_EXPERIMENT_NAME = 'Playback / capture chain';
 
+const trimmed = (t) => (typeof t === 'string' ? t.trim() : '');
+
 /**
- * experimentFromResult(result, { now, id, build, name, notes, profile, levelCalibration,
- *   repeatOf, requested }) → a hashed Experiment (validate.js accepts it).
- *   profile           the FrequencyProfile the engine applied (stored as { id, name } only)
- *   levelCalibration  a VALID LevelCalibration in use (the caller has checked that it applies
- *                     to the result's input), else ignored
- *   requested         { f1, f2 } the user asked for (before the Nyquist clamp), or null
+ * appliedCalibration(result) → frozen { frequency: { id, name } | null, level: LevelCalibration
+ * | null }: what the engine applied to this result (engine.js result.calibrated), nothing else.
+ */
+export function appliedCalibration(result) {
+  const c = result && result.calibrated ? result.calibrated : null;
+  const f = c && c.frequency && typeof c.frequency.profileId === 'string' ? c.frequency : null;
+  const l = c && c.level && c.level.calibrated === true ? c.level.calibration : null;
+  return Object.freeze({
+    frequency: f ? Object.freeze({ id: f.profileId, name: typeof f.name === 'string' ? f.name
+      : '' }) : null,
+    level: isValidLevelCalibration(l) ? l : null,
+  });
+}
+
+/**
+ * measuredEvidence(result, { notes }) → frozen { calibration, notes }: the companion of a result
+ * kept by MEASURE from the moment it completes; `notes` are the environment notes as they were
+ * when the measurement started (null when empty).
+ */
+export function measuredEvidence(result, { notes = null } = {}) {
+  return Object.freeze({ calibration: appliedCalibration(result),
+    notes: trimmed(notes) || null });
+}
+
+/** A calibration's identity for comparison: profile id and the level calibration's fields. */
+const calibrationKey = (cal) => JSON.stringify([cal && cal.frequency ? cal.frequency.id : null,
+  cal && cal.level ? cal.level : null]);
+
+/**
+ * evidenceChanges(evidence, { calibration, notes }) → texts saying what differs between the
+ * evidence of a completed result and the workspace now (`calibration` as appliedCalibration
+ * shapes it, `notes` the current text), and what a save records; [] when nothing differs.
+ */
+export function evidenceChanges(evidence, { calibration = null, notes = '' } = {}) {
+  if (!evidence) return [];
+  const out = [];
+  if (calibrationKey(evidence.calibration) !== calibrationKey(calibration)) {
+    const f = evidence.calibration.frequency;
+    out.push('Calibration changed after this measurement; the saved record keeps the '
+      + `calibration it was measured with (${f ? `frequency profile "${f.name || f.id}"`
+        : 'no frequency profile'}, ${evidence.calibration.level ? 'level calibrated'
+        : 'levels relative'}).`);
+  }
+  if (trimmed(notes) && trimmed(notes) !== (evidence.notes || '')) {
+    out.push('Notes edited after this measurement started are saved as an annotation; the '
+      + 'record keeps the notes it started with.');
+  }
+  return out;
+}
+
+/**
+ * experimentFromResult(result, { now, id, build, name, notes, laterNotes, repeatOf, requested })
+ * → a hashed Experiment (validate.js accepts it). Its calibration is appliedCalibration(result).
+ *   notes       the environment notes as they were when the measurement started
+ *   laterNotes  the notes as they are now; when they differ from `notes` they are stored as
+ *               annotations.notes (metadata), never as a measurement condition
+ *   requested   { f1, f2 } the user asked for (before the Nyquist clamp), or null
  */
 export function experimentFromResult(result, {
-  now, id, build = null, name = '', notes = '', profile = null, levelCalibration = null,
-  repeatOf = null, requested = null,
+  now, id, build = null, name = '', notes = '', laterNotes = null, repeatOf = null,
+  requested = null,
 } = {}) {
   if (!result || !result.recipe) {
     throw new TypeError('experimentFromResult needs a measure() result');
@@ -63,8 +125,7 @@ export function experimentFromResult(result, {
     if (!c || !c.algorithms) continue;
     for (const [k, v] of Object.entries(c.algorithms)) if (v && !algorithms[k]) algorithms[k] = v;
   }
-  const freq = result.calibrated && result.calibrated.frequency && profile ? profile : null;
-  const lvl = isValidLevelCalibration(levelCalibration) ? levelCalibration : null;
+  const applied = appliedCalibration(result);
   const noteText = [notes ? String(notes).trim() : '', tcLabel ? `${tcLabel.replace(/\.$/, '')}.`
     : ''].filter(Boolean).join(' ') || null;
   const title = (name && String(name).trim()) || (tc ? 'TEST CONTEXT · digital loopback'
@@ -77,7 +138,7 @@ export function experimentFromResult(result, {
     recipe: { stimulus: result.recipe.stimulus, repeats: result.recipe.repeats,
       analysis: result.recipe.analysis, requested: req },
     build, now, id, name: title, sampleRate: result.sampleRate, input: result.input,
-    calibration: { frequency: freq, level: lvl }, environment: { notes: noteText }, algorithms,
+    calibration: applied, environment: { notes: noteText }, algorithms,
     masterGain: resultMasterGain(result), notes: Array.isArray(result.notes) ? result.notes : null,
   });
   const finite = (v) => (Number.isFinite(v) ? v : null);
@@ -97,7 +158,9 @@ export function experimentFromResult(result, {
   });
   if (repeatOf) e = { ...e, provenance: { ...e.provenance, repeatOf } };
   e = withConfigHash(e, configHash(e));
-  return withResultHash(e, resultHash(e), RESULT_HASH_VERSION);
+  e = withResultHash(e, resultHash(e), RESULT_HASH_VERSION);
+  const later = trimmed(laterNotes);
+  return later && later !== trimmed(notes) ? annotateExperiment(e, { notes: later }) : e;
 }
 
 /** True when an experiment records a TEST CONTEXT capture (loopback or synthetic). */

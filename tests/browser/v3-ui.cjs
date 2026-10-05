@@ -53,6 +53,12 @@
 //   view-options            (M6, M7) a 2-20 kHz measurement with "0 dB at 1 kHz" selected
 //                           completes (no "Measurement failed"), the option is disabled and
 //                           reset; the IR Direct span is drawn sample by sample
+//   evidence-at-completion  (ADR 0040 resolution) measured with profile A and notes "start":
+//                           after COMPLETE, profile B is loaded, a level calibration is created
+//                           and the notes are edited; the Experiment panel says the saved record
+//                           keeps the calibration it was measured with, and the saved record
+//                           names A, has no level calibration (no "SPL"), keeps the start notes
+//                           and carries the edited text as annotations.notes only
 //   experiments             import of three fixtures, list, open, rename, duplicate, compare
 //                           (A, B equivalent: A − B shown; A, C: refused with the reason),
 //                           export .oscilla.json (re-validates), CSV, re-import refused (no
@@ -911,6 +917,73 @@ function defineChecks(fixtures) {
       // Undecimated: every sample of the 22 ms span (1056 at 48 kHz, 970 at 44.1 kHz).
       irDirect: !!res.ir && res.ir.factor === 1
         && res.ir.inSpan >= Math.floor(0.022 * res.ir.sampleRate) - 1,
+    }) };
+  });
+
+  def('evidence-at-completion', async ({ page }) => {
+    await H.workspace(page, 'measure');
+    await H.loopback(page);
+    const res = {};
+    res.importA = await page.evaluate(() => window.OSCILLA.app.measureImportCalibrationText(
+      'Hz,dB\n20,0.5\n1000,0\n15000,-1.5\n', 'mic-a.csv'));
+    res.profileA = await page.evaluate(() => window.OSCILLA.app.meas.cal.profile.id);
+    await page.fill('#osc-m-name', 'Gate evidence');
+    await page.fill('#osc-m-notes', 'start notes');
+    await page.click('#osc-measure-primary'); // Check setup
+    await H.waitState(page, ['READY', 'INVALID', 'ERROR'], 15000);
+    res.run = await H.run(page, () => page.click('#osc-measure-primary')); // Start measurement
+    if (res.run.state !== 'COMPLETE') return { ok: false, failed: ['run'], ...res };
+    const evidence = () => page.evaluate(() => {
+      const el = document.querySelector('[data-osc="measure.evidenceNotes"]');
+      return el && el.offsetParent !== null ? el.textContent.trim() : '';
+    });
+    res.before = await evidence();
+    // After COMPLETE: another profile, a level calibration made now, notes edited.
+    res.importB = await page.evaluate(() => window.OSCILLA.app.measureImportCalibrationText(
+      'Hz,dB\n20,-3\n1000,2\n15000,4\n', 'mic-b.csv'));
+    await page.click('[data-osc="measure.levelCal"]');
+    await page.click('[data-osc="levelCal.manual"]');
+    await page.fill('#osc-lc-obs', '-32.5');
+    await page.fill('#osc-lc-cond', 'gate: created after the measurement');
+    await page.click('[data-osc="levelCal.save"]');
+    await page.fill('#osc-m-notes', 'edited after');
+    await sleep(100);
+    res.level = await page.textContent('[data-osc="measure.levelIndicator"]');
+    res.after = await evidence();
+    await page.click('#osc-measure-save');
+    res.save = await H.saved(page);
+    if (res.save) return { ok: false, failed: ['save'], ...res };
+    res.record = await page.evaluate(async () => {
+      const id = window.OSCILLA.app.meas.savedId;
+      const e = await window.OSCILLA.experiments.store().get(id);
+      return { frequency: e.calibration.frequency, level: e.calibration.level,
+        notes: e.environment.notes, annotations: e.annotations || null,
+        levelCalibrated: e.quality.metrics.levelCalibrated,
+        corrected: e.algorithms.calibration || null };
+    });
+    await page.evaluate(() => {
+      const a = window.OSCILLA.app;
+      a.measureClearLevelCalibration();
+      a.measureClearCalibration();
+      a.measureSetLevelManual(false);
+      a.meas.notes = '';
+      a.meas.name = '';
+      a.alerts = [];
+    });
+    const r = res.record;
+    return { ...res, ...H.verdict({
+      imported: res.importA === true && res.importB === true,
+      calibratedNow: /CALIBRATED/.test(res.level) && !/UNCALIBRATED/.test(res.level),
+      quietBefore: res.before === '',
+      stated: res.after.startsWith('Calibration changed after this measurement; the saved '
+        + 'record keeps the calibration it was measured with (frequency profile "mic-a", levels '
+        + 'relative).') && /Notes edited after this measurement started are saved as an /
+        .test(res.after) && !/SPL/.test(res.after),
+      namesA: !!r.frequency && r.frequency.id === res.profileA && r.frequency.name === 'mic-a'
+        && !!r.corrected,
+      noLevel: r.level === null && r.levelCalibrated === false,
+      startNotes: /^start notes\b/.test(r.notes || '') && !/edited/.test(r.notes || ''),
+      annotation: !!r.annotations && r.annotations.notes === 'edited after',
     }) };
   });
 

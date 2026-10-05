@@ -85,6 +85,8 @@ export function experimentSummary(e) {
     repeatOf: e.provenance ? e.provenance.repeatOf ?? null : null,
     environment: e.environment && e.environment.notes ? e.environment.notes
       : 'No location or distance notes recorded.',
+    // User metadata added after the measurement (ADR 0040): shown apart from the conditions.
+    annotation: e.annotations && e.annotations.notes ? e.annotations.notes : null,
     provenance,
   };
 }

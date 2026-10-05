@@ -1803,6 +1803,8 @@
             <button type="button" class="osc-btn osc-btn-secondary" data-osc="measure.toExperiments"
               @click="setWorkspace('experiments')">Experiments</button>
           </div>
+          <p class="osc-m-hint" role="status" data-osc="measure.evidenceNotes" x-show="measureEvidenceNotes.length"
+            x-text="measureEvidenceNotes.join(' ')" style="display: none"></p>
           <p class="osc-m-hint" data-osc="measure.savedText"
             x-text="meas.saved ? 'Saved as an experiment' + (exps.persistent ? ' in this browser.' : ' in memory for this page view.') : 'Saved experiments stay in this browser only (no cloud).'"></p>
           <p class="osc-m-hint" x-show="exps.storeNote" x-text="exps.storeNote"></p>
@@ -1900,6 +1902,8 @@
               <ul class="osc-x-lines" aria-label="Summary">
                 <template x-for="(l, i) in (exps.detail ? exps.detail.lines : [])" :key="i"><li x-text="l"></li></template>
                 <li x-text="exps.detail ? 'Notes: ' + exps.detail.environment : ''"></li>
+                <li data-osc="exp.annotation" x-show="exps.detail && exps.detail.annotation" style="display: none"
+                  x-text="exps.detail && exps.detail.annotation ? 'Annotation (added after the measurement): ' + exps.detail.annotation : ''"></li>
               </ul>
               <dl class="osc-m-rows osc-x-prov" aria-label="Provenance">
                 <template x-for="p in (exps.detail ? exps.detail.provenance : [])" :key="p.label">

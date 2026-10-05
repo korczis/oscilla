@@ -161,6 +161,11 @@ filter class is claimed. An experiment saved from Measure does not store band le
   result hash (version 3) covers the results, the verdict, the calibration, the input, the
   output, the runs (each with a stable id, `run-1`, `run-2`, ...) and the build. Files with a
   version 1 or 2 hash still verify in their own version.
+- **Recorded as measured.** The calibration saved is the one the measurement applied, and the
+  notes are those at its start. A profile loaded, a correction switched or a level calibration
+  made after the run never becomes part of its record, and the Experiment panel says so; notes
+  edited later are saved as an annotation. An imported experiment whose named calibration its
+  own results contradict is refused as corrupt.
 - **A completed run cannot be changed.** Only the name, the annotation notes and the baseline
   mark of a saved
   experiment can be edited, and no hash covers them. The store refuses any other change to a

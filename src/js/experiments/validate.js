@@ -56,6 +56,17 @@
 // (results.transfer, else results.aggregate) bit for bit; a mask on another grid would mark the
 // wrong points reliable.
 //
+// Calibration as applied (ADR 0040, resolution 2026-10-05): a record whose quality assessment
+// judged the calibration (quality.js always gives a FREQUENCY_CALIBRATION and a
+// LEVEL_CALIBRATION reason) must name the calibration its results say was applied. A frequency
+// profile is named exactly when algorithms.calibration (the engine's correction algorithm) is
+// recorded, and a record naming none has no calibrated point in quality.mask.calibrated. A level
+// calibration is named exactly when quality.metrics.levelCalibrated is true (or, without that
+// metric, when the LEVEL_CALIBRATION reason passed), and its offsetDb is that reason's value.
+// Any disagreement is { path: 'calibration.…', code: 'corrupt' }: the record claims a
+// calibration its own results contradict, whatever its hash says. A record without that
+// evidence (no quality, or an assessment that did not judge calibration) is not cross-checked.
+//
 // Optional provenance fields (schema.js header): recipe.requested, output.masterGain,
 // measurement.notes, provenance.resultHashVersion. calibration.level is a schema-1 or schema-2
 // LevelCalibration (calibration/level.js; schema 2 adds scale, method and the hashed input).
@@ -307,6 +318,7 @@ function checkExperiment(c, e, ctx) {
     out.environment = { notes: e.environment.notes };
   }
   checkMaskGrid(c, out.quality, out.results);
+  if (!c.errors.length) checkCalibrationApplied(c, out);
   if (!c.errors.length && out.provenance && typeof out.provenance.resultHash === 'string') {
     const version = resultHashVersionOf(out);
     const opts = { version };
@@ -322,6 +334,49 @@ function checkExperiment(c, e, ctx) {
     }
   }
   return c.errors.length ? null : out;
+}
+
+/** The calibration a measured record names must be the one its results say was applied. */
+function checkCalibrationApplied(c, e) {
+  const q = e.quality;
+  const cal = e.calibration;
+  if (!q || !cal || !e.algorithms) return;
+  const corrupt = (path, text) => c.add(path, `corrupt: ${text}`, 'corrupt');
+  const judged = (code) => q.reasons.some((x) => x.code === code);
+  const corrected = has(e.algorithms, 'calibration');
+  if (!judged('FREQUENCY_CALIBRATION')) {
+    // No frequency-calibration evidence in this assessment.
+  } else if (cal.frequency && !corrected) {
+    corrupt('calibration.frequency', 'names a frequency profile, but the results record no '
+      + 'frequency correction (no algorithms.calibration)');
+  } else if (!cal.frequency && corrected) {
+    corrupt('calibration.frequency', 'names no frequency profile, but the results were '
+      + `frequency-corrected (${e.algorithms.calibration})`);
+  } else if (!cal.frequency && q.mask && q.mask.calibrated
+    && q.mask.calibrated.some((v) => v)) {
+    corrupt('calibration.frequency', 'names no frequency profile, but quality.mask.calibrated '
+      + 'marks calibrated points');
+  }
+  const m = q.metrics;
+  const levelApplied = m && typeof m.levelCalibrated === 'boolean' ? m.levelCalibrated : null;
+  if (levelApplied !== null && levelApplied !== !!cal.level) {
+    corrupt('calibration.level', cal.level ? 'names a level calibration, but the quality '
+      + 'assessment says the levels were not calibrated (metrics.levelCalibrated false)'
+      : 'names no level calibration, but the quality assessment says the levels were '
+        + 'calibrated (metrics.levelCalibrated true)');
+    return;
+  }
+  const r = q.reasons.find((x) => x.code === 'LEVEL_CALIBRATION' && x.severity === 'ok');
+  if (levelApplied === null && judged('LEVEL_CALIBRATION') && !r && cal.level) {
+    corrupt('calibration.level', 'names a level calibration, but the quality assessment says '
+      + 'the levels were not calibrated');
+  } else if (r && !cal.level) {
+    corrupt('calibration.level', 'names no level calibration, but the quality assessment '
+      + 'applied one');
+  } else if (r && typeof r.value === 'number' && Math.abs(r.value - cal.level.offsetDb) > 1e-9) {
+    corrupt('calibration.level.offsetDb', `is ${cal.level.offsetDb} dB, but the results were `
+      + `calibrated with an offset of ${r.value} dB`);
+  }
 }
 
 /** quality.mask must sit on the stored response grid (results.transfer, else aggregate). */

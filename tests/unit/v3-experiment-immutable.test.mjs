@@ -83,9 +83,16 @@ const FACT_EDITS = [
   ['recipe.repeats', (x) => { x.recipe.repeats = 2; }],
   ['measurement.runs', (x) => { x.measurement.runs = x.measurement.runs.slice(0, 2); }],
   ['measurement.startedAt', (x) => { x.measurement.startedAt = '2026-10-02T11:00:00.000Z'; }],
-  ['calibration.level', (x) => { x.calibration.level = { schemaVersion: 1, kind: 'level',
-    referenceHz: 1000, referenceDbSpl: 94, observedDbRelative: -30, offsetDb: 124,
-    conditions: null, createdAt: null }; }],
+  // A consistent claim: the quality says the level calibration was applied (a record naming one
+  // its results do not show is corrupt, ADR 0040 resolution 2026-10-05).
+  ['calibration.level', (x) => {
+    x.calibration.level = { schemaVersion: 1, kind: 'level', referenceHz: 1000,
+      referenceDbSpl: 94, observedDbRelative: -30, offsetDb: 124, conditions: null,
+      createdAt: null };
+    x.quality.metrics.levelCalibrated = true;
+    const r = x.quality.reasons.find((y) => y.code === 'LEVEL_CALIBRATION');
+    Object.assign(r, { severity: 'ok', value: 124 });
+  }],
   ['input.device', (x) => { x.input.device.label = 'Another mic'; }],
   ['output.level', (x) => { x.output.level = 0.01; }],
   ['environment.notes', (x) => { x.environment.notes = 'rewritten conditions'; }],

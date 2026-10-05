@@ -116,3 +116,57 @@ Proposed:
   - Run ids are deterministic.
   - Version 1 and 2 records and schema-1 files keep verifying.
   - The build digests round-trip.
+
+## Resolution notes
+
+Appended; the sections above are left as written on 2026-10-04, and the status stays
+`proposed`.
+
+### 2026-10-05: calibration and notes are recorded as measured, not as they are at Save
+
+An audit found two false-provenance defects in how MEASURE built the record, both before the
+store's immutability applies:
+
+- The frequency profile was read when the user pressed Save. A run measured with profile A and
+  saved after loading profile B was recorded, hash-verified, as measured with B, while its
+  quality mask came from A's coverage; clearing the profile before Save recorded "none" for a
+  run A had corrected.
+- A level calibration created after an uncalibrated run was recorded as used, so the record
+  showed dB SPL for a run measured uncalibrated. `environment.notes` was also read at Save,
+  although the decision above calls it the notes at measurement time.
+
+Resolved without a schema change (experiment schema 2, result hash version 3):
+
+- **The engine reports what it applied.** `result.calibrated.frequency` already names the
+  profile by `profileId` (its SHA-256, ADR 0020) and name; `result.calibrated.level.calibration`
+  is now a frozen copy of the LevelCalibration the engine applied, or null
+  (`src/js/measurement/engine.js` `applyCalibration`).
+- **The record is built from that only.** `measure-experiment.js` `appliedCalibration(result)`
+  is the record's calibration; `experimentFromResult` no longer takes a profile or a level
+  calibration from its caller. A calibration loaded, switched or created after the run changes
+  the next measurement, never this record.
+- **Notes at the start.** When a measurement starts, MEASURE keeps the notes as they are; when
+  it returns, it keeps a frozen companion of the result (`measuredEvidence`: the applied
+  calibration and those notes). Save builds `environment.notes` from it. Text edited later is
+  user metadata and is saved as `annotations.notes`, which no hash covers. The start is chosen
+  over the completion because a measurement can take a minute and the notes describe the set-up
+  it ran with, not an edit typed while it ran.
+- **Said in the UI.** While a completed result differs from what the workspace now holds, the
+  Experiment panel states it: "Calibration changed after this measurement; the saved record
+  keeps the calibration it was measured with (...)", and that later notes are saved as an
+  annotation. Saving is not refused: the record keeps what was used.
+- **Cross-checked on validation.** `validate.js` refuses as `corrupt` a record whose quality
+  assessment judged the calibration (FREQUENCY_CALIBRATION and LEVEL_CALIBRATION reasons) when
+  its named calibration contradicts its results: a profile named without
+  `algorithms.calibration` or the reverse, a calibrated point in `quality.mask.calibrated` with
+  no profile named, a level calibration named while `quality.metrics.levelCalibrated` is false
+  or the reverse, or an `offsetDb` other than the LEVEL_CALIBRATION reason's value. Records the
+  application wrote with the calibration it applied keep validating, and their hashes are
+  unchanged. A record an earlier build saved with a level calibration created after the run, or
+  with no profile for a run a profile corrected, no longer validates, which is what it is. The
+  check is on presence, not identity: a record stores a profile's id and name but not its
+  points, so one saved by an earlier build naming profile B for a run profile A corrected still
+  validates; nothing in the record can tell the two apart.
+
+Proven by `tests/unit/v3-evidence-at-completion.test.mjs` and check `evidence-at-completion` in
+`tests/browser/v3-ui.cjs` (chromium, firefox, webkit; file:// and /oscilla/).
