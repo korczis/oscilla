@@ -204,21 +204,31 @@ export function importPatch(input, opts = {}) {
   }
   const p = migrated.experiment;
   const c = createChecker(lim.maxErrors);
+  // Codes are given where each check is made (createChecker add(path, text, code)), never read
+  // back from the message: a length over its limit is limit-exceeded, a Studio schema newer
+  // than this build is unsupported-version, anything else invalid-structure.
+  const text = (v, path, max, o) => (typeof v === 'string' && v.length > max
+    ? c.add(path, `longer than ${max} characters`, 'limit-exceeded') : c.str(v, path, max, o));
   if (c.keys(p, '', ENVELOPE.req, ENVELOPE.opt)) {
-    c.str(p.name, 'name', NAME_MAX_CHARS, { min: 1 });
+    text(p.name, 'name', NAME_MAX_CHARS, { min: 1 });
     if (p.description !== undefined) {
-      c.str(p.description, 'description', PATCH_DESCRIPTION_MAX_CHARS, { multiline: true });
+      text(p.description, 'description', PATCH_DESCRIPTION_MAX_CHARS, { multiline: true });
     }
-    c.num(p.studioSchemaVersion, 'studioSchemaVersion', 1, STUDIO_SCHEMA_VERSION,
-      { integer: true });
+    const v = p.studioSchemaVersion;
+    if (Number.isInteger(v) && v > STUDIO_SCHEMA_VERSION) {
+      c.add('studioSchemaVersion', `Studio schema ${v} is newer than this version of OSCILLA `
+        + `supports (${STUDIO_SCHEMA_VERSION}); open the patch in a newer version.`,
+      'unsupported-version');
+    } else {
+      c.num(v, 'studioSchemaVersion', 1, STUDIO_SCHEMA_VERSION, { integer: true });
+    }
     if (p.automation !== undefined && !Array.isArray(p.automation)) {
       c.add('automation', 'must be a list');
     }
   }
   if (c.errors.length) {
     return { ok: false, warnings: [], errors: c.errors.map((e) => ({
-      code: /longer than|between/.test(e.text) ? 'limit-exceeded' : 'invalid-structure',
-      severity: 'error', message: e.text, path: e.path })) };
+      code: e.code || 'invalid-structure', severity: 'error', message: e.text, path: e.path })) };
   }
   const studio = importStudio(asStudioDoc(p), { limits: lim, registry: opts.registry });
   if (!studio.ok) {

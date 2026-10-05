@@ -59,6 +59,11 @@
 import { NODE_REGISTRY } from '../../studio/registry.js';
 import { createIdGenerator, createStudioStore } from '../../studio/actions.js';
 import { compileStudio } from '../../studio/compiler.js';
+import { studioDiagnostic } from '../../studio/validate.js';
+import {
+  MIC_PRIVACY_NOTICE, MIC_UNAVAILABLE_TEXT, hasMicrophoneApi, micErrorMessage,
+  requestMicrophonePermission,
+} from '../../audio/microphone.js';
 import { createStudioRuntime, studioDivergence } from '../../studio/runtime.js';
 import { createStudioTransport } from '../../studio/transport.js';
 import { createStudioMeasurementRun } from '../../studio/measurement-run.js';
@@ -173,6 +178,12 @@ export function renderTaskView(p) {
     : 'Rendering WAV', pct, text: `${pct} %`, abortable: true };
 }
 
+/** Why Render WAV is unavailable while a Studio task runs (its aria-describedby note). */
+export function renderBlockedText(task) {
+  return `Render WAV is unavailable while a Studio task runs${task && task.label
+    ? ` (${task.label})` : ''}: let it finish or abort it first.`;
+}
+
 /** The WAV file name of a Studio render. */
 export function renderFileName(model) {
   return `${fileSlug(model.metadata.title)}.wav`;
@@ -216,19 +227,93 @@ export function parseRenderDuration(text) {
 /**
  * The node and edge status the Studio shows (§170-§171): from the running runtime while it plays
  * (what Web Audio actually runs, graph-view.js runtimeStatus, judged by the divergence verdict
- * for the store `revision` when given), otherwise from a compile of the model.
- * -> { nodes: Map id -> { status, code, reason }, edges: Map id -> { status, code, reason } }
+ * for the store `revision` when given), otherwise from a compile of the model under the
+ * runtime's capabilities (runtime.options: an allowed microphone is ready, not off).
+ * -> { nodes: Map id -> { status, code, reason }, edges: Map id -> { status, code, reason },
+ *      error: Diagnostic | null }
+ * compileStudio refuses an invalid model without throwing; if it throws all the same, the status
+ * is not blank: every node is degraded and every edge inactive with code `compile-failed`, and
+ * `error` is that diagnostic (owner compiler).
  */
 export function studioStatus(model, { runtime = null, engine = null, revision = null,
   registry = NODE_REGISTRY } = {}) {
-  if (runtime && runtime.state === 'running') return runtimeStatus(model, runtime, revision);
-  let plan = null;
-  try {
-    plan = compileStudio(model, { engine, registry });
-  } catch (e) {
-    plan = null;
+  if (runtime && runtime.state === 'running') {
+    return { ...runtimeStatus(model, runtime, revision), error: null };
   }
-  return { nodes: compiledStatus(plan), edges: compiledEdgeStatus(plan) };
+  const options = runtime && runtime.options ? runtime.options : {};
+  let plan;
+  try {
+    plan = compileStudio(model, { engine, registry, options });
+  } catch (e) {
+    const error = studioDiagnostic('compiler', 'compile-failed', 'The Studio could not be '
+      + `compiled: ${(e && e.message) || e}`, null, 'error');
+    const st = (status) => ({ status, code: error.code, reason: error.message });
+    const graph = (model && model.graph) || {};
+    const list = (x) => (Array.isArray(x) ? x : []);
+    return { error,
+      nodes: new Map(list(graph.nodes).map((n) => [n.id, st('degraded')])),
+      edges: new Map(list(graph.edges).map((x) => [x.id, st('inactive')])) };
+  }
+  return { nodes: compiledStatus(plan), edges: compiledEdgeStatus(plan), error: null };
+}
+
+/**
+ * The warning line after a status compile (pure): a compile failure shows its message; once
+ * the status compiles again the line is cleared, unless it shows something else by then.
+ * { warning (the line), shown (the compile failure it shows, '' for none) } -> the same.
+ */
+export function compileWarningLine({ warning = '', shown = '' } = {}, error = null) {
+  if (error) return { warning: error.message, shown: error.message };
+  return { warning: shown && warning === shown ? '' : warning, shown: '' };
+}
+
+/** How long Allow microphone waits for the browser to open a running Microphone's input. */
+export const MIC_SETTLE_MS = 15000;
+
+/**
+ * The running Microphone handles once none is pending (a permission prompt answered, the input
+ * opened or failed), the runtime stopped (STOP drops its handles without a 'handle' event; then
+ * []), or at `timeoutMs`: [{ id, status, code, reason }] (runtime 'handle' and 'state' events).
+ */
+export function settleMicrophones(runtime, { timeoutMs = MIC_SETTLE_MS } = {}) {
+  // Nothing runs once stopped (STOP announces 'state' before it drops its handles).
+  const list = () => (runtime && runtime.state === 'running' ? [...runtime.nodes.values()] : [])
+    .filter((h) => h.type === 'microphone')
+    .map((h) => ({ id: h.id, status: h.status, code: h.code || null, reason: h.reason || null }));
+  const waiting = () => !!runtime && runtime.state === 'running'
+    && list().some((m) => m.status === 'pending');
+  if (!waiting()) return Promise.resolve(list());
+  return new Promise((resolve) => {
+    let off = null;
+    const done = () => {
+      if (off) off();
+      clearTimeout(timer);
+      resolve(list());
+    };
+    const timer = setTimeout(done, timeoutMs);
+    off = runtime.on((type) => {
+      if ((type === 'handle' || type === 'state') && !waiting()) done();
+    });
+  });
+}
+
+/**
+ * What Allow microphone achieved (pure): { ok, text, failed: [{ id, reason }] }. While stopped
+ * (or with no running Microphone) the input opens at PLAY; while playing, from the running Microphones (settleMicrophones): all
+ * open, or the reason of each that is not.
+ */
+export function microphoneOutcome(mics, { playing = false } = {}) {
+  // No running Microphone (a STOP during the wait drops them): nothing is open yet.
+  if (!playing || !(mics && mics.length)) {
+    return { ok: true, failed: [], text: 'Microphone allowed. The Microphone node opens the '
+      + 'input when the Studio plays.' };
+  }
+  const failed = (mics || []).filter((m) => m.status !== 'ready')
+    .map((m) => ({ id: m.id, reason: m.status === 'pending'
+      ? 'The browser has not opened the microphone yet.'
+      : m.reason || 'The input did not open.' }));
+  return failed.length ? { ok: false, failed, text: failed[0].reason }
+    : { ok: true, failed, text: 'Microphone open: the Microphone node analyses the input now.' };
 }
 
 /**
@@ -338,6 +423,9 @@ export function createStudioUi(svc = {}) {
     liveToggle: false,
     alertToggle: false,
     mounted: false,
+    micErrors: new Map(), // Microphone node id → why its input is not open (Inspector)
+    micBusy: false, // a permission request or an input opening is in flight
+    compileWarning: '', // the warning a failed status compile set (cleared on recovery)
     trace: null,
     tracePending: false,
   };
@@ -374,6 +462,75 @@ export function createStudioUi(svc = {}) {
     ctx.status = st.nodes;
     ctx.edgeStatus = st.edges;
     ctx.warnings = nodeWarnings(model, registry);
+    if (!ctx.cmp) return;
+    const line = compileWarningLine({ warning: ctx.cmp.studio.warning,
+      shown: ctx.compileWarning }, st.error);
+    if (ctx.cmp.studio.warning !== line.warning) ctx.cmp.studio.warning = line.warning;
+    ctx.compileWarning = line.shown;
+  }
+
+  /** Status, graph and Inspector again (a runtime handle settled, a capability changed). */
+  function refreshStatus() {
+    if (!ctx.handle || !ctx.mounted) return;
+    recompile(ctx.handle.getModel());
+    if (ctx.editor) ctx.editor.render();
+    if (ctx.inspector) ctx.inspector.render();
+  }
+
+  /**
+   * Allow microphone (the Inspector, on Microphone node `id`): the browser is asked through
+   * audio/microphone.js (the request openMicrophone makes; the probe's tracks stop at once),
+   * then the runtime lets Microphone nodes open the input (setOptions: while playing they open,
+   * or reopen after a failure, now; else at PLAY). The announcement is what happened: while
+   * playing it waits for the inputs to open (settleMicrophones). A refusal keeps the input off,
+   * and its reason is shown on that node in the Inspector (an alert there, not announced twice).
+   * One request at a time. -> Promise<boolean> allowed and open (or to open at PLAY).
+   */
+  async function allowMicrophone(id = null) {
+    if (ctx.micBusy) return false;
+    ctx.micBusy = true;
+    if (ctx.inspector) ctx.inspector.render();
+    const env = svc.engine && svc.engine._env;
+    const nav = (env && env.navigator) || (typeof navigator !== 'undefined' ? navigator : null);
+    let error = '';
+    let outcome = null;
+    try {
+      if (!hasMicrophoneApi(nav)) error = MIC_UNAVAILABLE_TEXT;
+      else {
+        announce('Asking the browser for microphone permission.');
+        try {
+          await requestMicrophonePermission(nav.mediaDevices);
+        } catch (e) {
+          error = micErrorMessage(e);
+        }
+      }
+      if (!error && !ctx.runtime) error = 'The Studio audio is not available here.';
+      if (!error) {
+        const r = ctx.runtime.setOptions({ inputPermission: true });
+        if (r && r.ok === false) {
+          error = `The microphone was allowed, but the Studio could not apply it: ${
+            (r.errors && r.errors[0] && r.errors[0].message) || 'unknown error'}`;
+        }
+      }
+      if (!error) {
+        // Whether it plays is read after the wait: a STOP meanwhile means the input opens at the
+        // next PLAY, not that it is open now (PR #119 S1).
+        const mics = ctx.runtime.state === 'running' ? await settleMicrophones(ctx.runtime) : [];
+        outcome = microphoneOutcome(mics, { playing: ctx.runtime.state === 'running' });
+      }
+    } finally {
+      ctx.micBusy = false;
+    }
+    if (error) {
+      if (id) ctx.micErrors.set(id, error);
+    } else {
+      ctx.micErrors.clear();
+      for (const f of outcome.failed) ctx.micErrors.set(f.id, f.reason);
+    }
+    refreshStatus();
+    if (error || !outcome.ok) return false; // the Inspector's alert says why
+    announce(`${outcome.text} ${MIC_PRIVACY_NOTICE}`);
+    return true;
   }
 
   function statusSignature() {
@@ -531,6 +688,17 @@ export function createStudioUi(svc = {}) {
     if (ctx.transport || !svc.engine) return;
     const engine = svc.engine;
     ctx.runtime = createStudioRuntime({ engine, registry, trace: ctx.trace });
+    // A pending handle settled (a Microphone opened, failed or ended): show its status, and
+    // keep why an input is not open on that node (the stopped status shows it too).
+    ctx.runtime.on((type, d) => {
+      if (type !== 'handle') return;
+      const h = ctx.runtime.nodes.get(d.id);
+      if (h && h.type === 'microphone') {
+        if (d.code === 'mic-error' || d.code === 'mic-ended') ctx.micErrors.set(d.id, h.reason);
+        else if (h.status === 'ready') ctx.micErrors.delete(d.id);
+      }
+      queueMicrotask(refreshStatus);
+    });
     ctx.measureRun = createStudioMeasurementRun({
       getModel: () => ctx.handle.getModel(),
       sampleRate: () => (engine.ctx ? engine.ctx.sampleRate : engine.sampleRate),
@@ -574,6 +742,19 @@ export function createStudioUi(svc = {}) {
     ctx.templateBaseline = templateId ? createDirtyTracker(ctx.handle.getModel()) : null;
     if (ctx.editor) requestAnimationFrame(() => ctx.editor.frameAll());
     refreshState();
+  }
+
+  /**
+   * A saved record was deleted. When it is the open project, the document is detached: no
+   * project id, and unsaved (dirty) since no saved copy is left, so a template, a link or an
+   * open asks before replacing it. -> the announcement, or null for another record.
+   */
+  function detachDeleted(id) {
+    if (!id || id !== ctx.projectId) return null;
+    ctx.projectId = null;
+    if (ctx.dirty) ctx.dirty.markUnsaved();
+    refreshState();
+    return 'The open project was deleted from this browser; the graph is still open, unsaved.';
   }
 
   function library() {
@@ -765,6 +946,9 @@ export function createStudioUi(svc = {}) {
       onDelete: () => ctx.editor.deleteSelection(),
       onDuplicate: () => ctx.editor.duplicateSelection(),
       onShowLane: (laneId, label) => cmp.studioShowLane(laneId, label),
+      onAllowMicrophone: (id) => allowMicrophone(id),
+      micError: (id) => ctx.micErrors.get(id) || '',
+      micBusy: () => ctx.micBusy,
     });
     const libHost = document.querySelector('[data-osc="studio.library"]');
     ctx.library = mountLibrary(libHost, {
@@ -802,6 +986,7 @@ export function createStudioUi(svc = {}) {
         refreshState();
         announce(`Opened ${r.summary.name}`);
       },
+      recordDeleted: (id) => detachDeleted(id),
       downloadFile,
       ...dialogSvc,
     });
@@ -995,8 +1180,18 @@ export function createStudioUi(svc = {}) {
      * warnings, wav } or { ok: false, aborted?, reason }.
      */
     /** Render WAV… (toolbar): the dialog with the duration, the format and the limitations. */
+    /** Why Render WAV is unavailable now ('' when it is available). */
+    studioRenderBlocked() {
+      return this.studio.task.active ? renderBlockedText(this.studio.task) : '';
+    },
+
     studioOpenRender() {
       if (ctx.render) return false;
+      if (this.studio.task.active) {
+        // aria-disabled, not disabled: the reason stays reachable (focus, the note it names).
+        announce(renderBlockedText(this.studio.task), { assertive: true });
+        return false;
+      }
       this.studio.renderForm = renderForm(ctx.handle.getModel(), { registry });
       openModal('osc-dlg-studio-render');
       requestAnimationFrame(() => {

@@ -140,3 +140,32 @@ true answer were added to the record, not derived in the UI:
   name the entity whose preparation threw.
 
 Tests: `tests/unit/v31-studio-runtime-view.test.mjs`, `tests/browser/v31-studio-runtime.cjs`.
+
+### 2026-10-05: the record is true after a failure in commit; codes are never read from text (v4.0 closure audit)
+
+- **Applied record (F4).** "Set only when a transaction commits" assumed the commit could not
+  fail halfway. It could: a throw after the plan swap left `plan` on the new revision and the
+  record on the old one, and the store refused the edit, so the verdict said in-sync while the
+  runtime ran another model. A throw after the swap is now a runtime warning (`<step>-failed` or
+  `commit-failed`) and the transaction commits, so the record, the store revision and the plan
+  agree (ADR 0035 resolution note of the same date).
+- **One diagnostic shape (F5).** Four producers still derived a code from prose or carried no
+  code: `patches.js` mapped `/longer than|between/` to `limit-exceeded` (a future
+  `studioSchemaVersion` got "must be between 1 and 1", `limit-exceeded`); `validateStudioImport`
+  mapped `/import limit/` (an unknown node type quoting those words got `limit-exceeded`); the
+  transport de-duplicated warnings by message, so a `sync-refused` with the text of an earlier
+  `edit-refused` was dropped; and a refused PLAY stored `{ phase, message }`. Codes are now given
+  where each check is made (`createChecker` `add(path, text, code)`; `unsupported-version` for a
+  newer Studio schema), the transport keeps one diagnostic per code and entity, and its
+  `lastError` is a Diagnostic plus `phase` with `disposed`, `claim-failed`, `claim-refused` or
+  `play-refused`. The workspace's status compile that throws shows `compile-failed` on every node
+  instead of a blank status.
+
+Tests: `tests/unit/v40-studio-runtime-closure.test.mjs`; codes listed in `docs/v31/compiler.md`
+"Diagnostics".
+
+PR #119 review (D3): "in-sync" said only that the applied revision is the desired one, while a
+step after its commit had failed (a Master level never engaged). The verdict gains a fifth state,
+`degraded`: in sync, with a commit-phase failure still in effect (`runtime.unresolved()`), its
+reason the first of them. The Inspector shows it as "Running, degraded" and lists the reason
+once; node status still comes from the running graph.

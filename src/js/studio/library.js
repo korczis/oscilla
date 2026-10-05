@@ -20,9 +20,10 @@
 //     importStudioFile(text) -> { ok, kind: 'project' | 'patch', model | patch, warnings }
 //     | { ok: false, errors } — recognises either file by its `kind`.
 //   Dirty state (§156, §254): createDirtyTracker(baseline) -> { markSaved(model, info),
-//     isDirty(model), status(model) }. Dirty = execution or presentation state differs from the
-//     last explicit save (schema.js semanticState); pan, zoom, timeline scale and selection
-//     never make a document dirty.
+//     markUnsaved(), isDirty(model), status(model) }. Dirty = execution or presentation state
+//     differs from the last explicit save (schema.js semanticState); pan, zoom, timeline scale
+//     and selection never make a document dirty. markUnsaved: the saved copy is gone (its
+//     record was deleted), so every model is dirty until the next save.
 //
 // Nothing leaves the browser: no network, no telemetry (§239); a file exists only when the
 // user exports one.
@@ -202,6 +203,11 @@ export function createDirtyTracker(baseline) {
     markSaved(model, { id = null, savedAt = null, target = 'local' } = {}) {
       saved = digest(model);
       info = { id, savedAt, target };
+    },
+    /** The saved copy no longer exists (deleted): nothing is saved until the next save. */
+    markUnsaved() {
+      saved = null;
+      info = null;
     },
     isDirty: (model) => digest(model) !== saved,
     status: (model) => ({ dirty: digest(model) !== saved, lastSave: info }),

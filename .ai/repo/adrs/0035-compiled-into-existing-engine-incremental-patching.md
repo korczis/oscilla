@@ -121,3 +121,49 @@ the node card looked healthy. The decision above stands; the fix makes the code 
   from a compile of the model, as before.
 - Proven by `tests/unit/v431-studio-refused-edit.test.mjs`. Each of its four tests fails on
   the code before the fix.
+
+### 2026-10-05: global side effects only at commit; the commit cannot throw (v4.0 closure audit F1, F4)
+
+An independent v4.0 closure audit found two places where the transaction above did not hold.
+
+- **F1, a global side effect in prepare.** The Master Output adapter called
+  `engine.setMasterGain` from `create`, so preparing it changed the ONE engine master gain before
+  the transaction committed. When prepare then failed, the catch released the prepared nodes but
+  not the level; STOP returned early (nothing ran), and the context-closed path did not restore
+  it either. Repro: engine level 0.2, Studio Master 0.15, a `createGain` failure after the Master
+  was built: PLAY refused, the engine level 0.15 after STOP. MEASURE's stimulus passes
+  `engine.master` (`measurement/capture.js`: stimulus → fade → master → limiter → …), so the next
+  measurement played at the Studio's level. Its result recorded that gain truthfully
+  (`output.masterGain`), but it was not the level the user had set.
+  Resolution: "prepare new nodes off the live path" now also means "write no global state". An
+  adapter reaches global engine state only through the runtime's `env.global.setMasterLevel`,
+  from `engage()` (called for each created node after the commit) and `update` (after the commit
+  too). The runtime saves the engine's level at the first write of a running session and gives it
+  back on every way out: STOP, a failed PLAY, `masterLevel: 'ignore'`, dispose, and a context
+  closed from outside (`runtime.js` "Global side effects").
+- **F4, a commit that could throw.** After the maps and the plan were swapped, `computeBases` and
+  the parameter loop ran unguarded. A throw there escaped `apply`; the commit gate turned it into
+  a refusal, so the store kept the old revision while the runtime held the new plan, and the
+  divergence verdict read in-sync by revision: a hidden divergence. Resolution: the commit is
+  the point of no return. Every later step is guarded (`<step>-failed`), any other throw after it
+  is `commit-failed`, `apply` returns ok with those warnings, and the applied record names the
+  revision whose plan the maps hold. The record always describes what is running; what failed
+  inside it is a diagnostic.
+
+Proven by `tests/unit/v40-studio-runtime-closure.test.mjs` (F1: refused PLAY, refused live edit
+that adds a Master, context closed, `masterLevel: 'ignore'`; F4: a one-shot throw after the plan
+swap). Each fails on the code before the change.
+
+An adversarial review of that change (PR #119) sharpened both:
+
+- **Giving the level back must not take a newer one (D2).** Restoring the saved level at STOP
+  overwrote a level the user had set in the Playground while the Studio played, and a level set
+  during STOP's fade was undone by the held restore. The level is now given back only while it is
+  still the Studio's own write (`engine.masterWrites`), and any later write cancels a held
+  restore (`engine.holdMasterGain`).
+- **A failure after the commit must stay visible (D3).** The warnings of one transaction were
+  replaced by the next one's, so a Master level that never engaged looked healthy after one
+  unrelated edit. `engage-failed` now stays unresolved until that node engages (every later
+  transaction retries it) or is removed, `commit-failed` until STOP, and the divergence verdict
+  of the applied revision is `degraded` meanwhile. The commit's own bookkeeping (trace steps,
+  the cleanup timer) moved inside the guarded region.

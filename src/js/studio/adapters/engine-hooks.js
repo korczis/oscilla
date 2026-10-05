@@ -17,8 +17,11 @@
 //                                started at `at` (the engine's own oscillator factory)
 //     hooks.setMasterLevel(g)    engine.setMasterGain(g) (clamped to MAX_OUTPUT_GAIN, smoothed)
 //     hooks.masterLevel          engine.gainLevel: the engine's requested master level
-//     hooks.restoreMasterLevel(g, at)  engine.setMasterGain(g), its glide held until `at` (audio
-//                                clock) so a level restored after STOP waits for the fade-out
+//     hooks.masterWrites         engine.masterWrites: how many times anyone wrote the level
+//                                (null on an engine that does not count)
+//     hooks.restoreMasterLevel(g, at)  engine.holdMasterGain(g, at): its glide held until `at`
+//                                (audio clock) so a level restored after STOP waits for the
+//                                fade-out; any later setMasterGain cancels the held glide
 //     hooks.timers               engine._timers (UI bookkeeping only: cleanup after a fade)
 //     hooks.navigator            engine._env.navigator (capability checks: microphone)
 //     hooks.on(fn)               engine.on(fn): 'context' closed → the runtime drops its graph
@@ -69,7 +72,8 @@ export function createEngineHooks(engine) {
       return o;
     },
     setMasterLevel(g) {
-      // A restart during a held restore: drop the restore's later glide first.
+      // A restart during a held restore: drop the restore's later glide first (an engine with
+      // holdMasterGain does this itself, for every writer).
       if (held && engine.ctx && engine.master && engine.ctx.currentTime < held.at) {
         engine.master.gain.cancelScheduledValues(engine.ctx.currentTime);
       }
@@ -77,7 +81,15 @@ export function createEngineHooks(engine) {
       engine.setMasterGain(g);
     },
     get masterLevel() { return engine.gainLevel; },
+    get masterWrites() {
+      return Number.isInteger(engine.masterWrites) ? engine.masterWrites : null;
+    },
     restoreMasterLevel(g, at) {
+      if (typeof engine.holdMasterGain === 'function') {
+        held = null;
+        engine.holdMasterGain(g, at);
+        return;
+      }
       held = null;
       engine.setMasterGain(g);
       const p = engine.master && engine.master.gain;
