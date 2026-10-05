@@ -958,6 +958,10 @@
   .osc-x-def .osc-x-main {
     grid-column: 1 / -1;
   }
+
+  .osc-x-def > .osc-btn {
+    justify-self: start;
+  }
 }
 
 /* ---------- Touch: 44 px targets for the controls these workspaces add ---------- */
