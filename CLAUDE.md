@@ -66,7 +66,7 @@ status` is the truth, not this paragraph.
 - Build and release: `scripts/`. Tests: `tests/unit/`, `tests/browser/`, `tests/visual/`;
   `tests/README.md` says what each proves and which gate runs it.
 
-<!-- majordomus:begin 9535da72e6a6 fe92884bb1b4f83a -->
+<!-- majordomus:begin 6d09b7b9c1bb dec3fa03e34d2faf -->
 # CLAUDE.md
 
 Claude Code bootstrap. The repository's provider-neutral AI context lives under
@@ -88,8 +88,9 @@ other worker, and a rule that exists in one of these files and not in `.ai/` is 
 
 <!-- Repository override .ai/repo/providers/claude-code.tmpl of the Majordomus 0.12.0 template:
 only this paragraph differs, because the shipped one describes a guard this repository does
-not have (fixed upstream, majordomus #783). Delete the override once Majordomus 0.13.2 or
-later is installed. -->
+not have. The fix is proposed upstream in majordomus #783 (open). Delete this override once a
+Majordomus release that contains it is installed (check that the shipped templates no longer
+name project.worktree-topology). -->
 Linked git worktrees of this repository live at `<repository>-wt/<branch>` by convention:
 the primary checkout's sibling named with `-wt`, then the branch name with its hierarchy
 kept; the primary checkout hosts the trunk. The installed Majordomus front door has no

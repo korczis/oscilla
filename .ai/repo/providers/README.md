@@ -28,7 +28,9 @@ the same either way.
 Each is the shipped template with one paragraph replaced. The shipped paragraph says a
 pre-commit hook refuses a branch committed outside its canonical worktree, under a rule
 `project.worktree-topology` with a mechanism document; none of that exists in this
-repository, whose hooks run `majordomus doctor` and `majordomus finish --check`. Upstream
-fixed the templates (majordomus #783). Delete all three files, then run `majordomus update`,
-once Majordomus 0.13.2 or later is installed; until then a change to a shipped template does
-not reach these files, so compare them with the installed ones when upgrading.
+repository, whose hooks run `majordomus doctor` and `majordomus finish --check`. The fix is
+proposed upstream in majordomus #783 (open). Delete all three files, then run `majordomus
+update`, once a Majordomus release that contains it is installed: check that the templates it
+ships under `share/providers/` no longer name `project.worktree-topology`. Until then a change
+to a shipped template does not reach these files, so compare them with the installed ones
+when upgrading.
