@@ -1,0 +1,17 @@
+# Written by scripts/release-record.mjs from what was published.
+# Evidence, not a plan: every digest and size below was read off the published bytes.
+schema: release/v1
+version: "3.9.0"
+tag: v3.9.0
+channel: stable
+commit: 291bcdef562981b18dfc696ade19207ac8ca95c3
+published_at: "2026-10-05T22:50:58Z"
+notes_url: https://github.com/korczis/oscilla/releases/tag/v3.9.0
+required_targets:
+  - web
+artifacts:
+  - target: web
+    name: oscilla-v3.9.0.html
+    url: https://github.com/korczis/oscilla/releases/download/v3.9.0/oscilla-v3.9.0.html
+    sha256: 2bc6957e905d77c8954e2d5a411fa3c4b102d12547bb594c9bd419376c5087d3
+    size: 2640479
