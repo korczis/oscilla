@@ -58,3 +58,17 @@ there (`knowledge/curated/audio-measurement-pitfalls.md`).
   the spike collects before the rule's `data:` requirement changes.
 - p5 contains `fetch` for `loadJSON`/`httpDo`; vendor code is verified by identity, not by
   pattern scan, and those functions are not called.
+
+## Resolution notes
+
+Appended; the sections above are left as written, and the status stays `proposed`.
+
+### 2026-10-05: the size budget is 1 000 000 B gzip / 3 500 000 B raw
+
+The budget in the decision (2 000 000 B raw / 560 000 B gzip) has been raised three times,
+each recorded in `scripts/build-config.mjs` (`BUDGET`): V3 to 2 250 000 / 630 000 and V3.1 to
+2 700 000 / 760 000, each after measuring the contributors, and on 2026-10-05 to 3 500 000 /
+1 000 000 by owner decision (#114, f8515f7), as a stopgap: v3.7.0 measured 751 494 B of the
+760 000 B gzip budget. Raw follows gzip at the measured ratio (3.47), so gzip stays the binding
+limit. Replacing p5 (about 245 KB of the gzip, about 28 of its drawing functions in use) is
+the deferred alternative; see the note on ADR 0013. The rest of this decision stands.

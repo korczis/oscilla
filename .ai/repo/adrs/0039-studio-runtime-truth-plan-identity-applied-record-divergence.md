@@ -140,3 +140,11 @@ true answer were added to the record, not derived in the UI:
   name the entity whose preparation threw.
 
 Tests: `tests/unit/v31-studio-runtime-view.test.mjs`, `tests/browser/v31-studio-runtime.cjs`.
+
+### 2026-10-05: the budget headroom named under Consequences
+
+"Against a budget that had less than 1 KB of headroom" was true of the 760 000 B gzip budget
+when this was written. On 2026-10-05 the budget became 1 000 000 B gzip / 3 500 000 B raw
+(#114, owner decision, a stopgap; ADR 0012 note), and v3.8.0 uses about 755 KB of it. The
+gzip budget is still the constraint a further runtime surface is weighed against; it is no
+longer within 1 KB.

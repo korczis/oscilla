@@ -66,3 +66,15 @@ render position, so the ramp started partly done (`holdRelease400ms` steps up to
 - Step ratio after the change (firefox / chromium / webkit, `p10`): hold release 1 / 1 / 1,
   stop mid-attack 0.4 / 0.4 / 0.4, stop mid-step-release 1 / 1 / 1. Enforced by
   `tests/engine.cjs` (click ratio < 3) and `tests/smoke.cjs` (release probes on the tap).
+
+## Resolution notes
+
+Appended; the sections above are left as written, and the status stays `proposed`.
+
+### 2026-10-05: where the cited checks live now
+
+`tests/engine.cjs`, `tests/smoke.cjs` and `tests/spec.cjs` were V1's test files; they left with
+V1's single file in the V2 change (9fe0a15, #3) and stay readable at tag `v1.0.0`. The
+click-ratio and release checks on the output tap run on the current engine as
+`tests/browser/engine-v1port.cjs` (`npm run test:engine`, in CI); V1's schedules are replayed
+as golden vectors by `tests/unit/freeze.test.mjs`.

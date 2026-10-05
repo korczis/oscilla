@@ -45,3 +45,15 @@ onset spacing, limits and lifecycle. "No samples captured" is its own failure.
 - The tests prove the before-state failing: against the pre-fix build the engine suite fails
   stacking, Escape mid-release, revocation, limit scope, Nyquist/detune, continuous scheduling
   and click checks.
+
+## Resolution notes
+
+Appended; the sections above are left as written, and the status stays `proposed`.
+
+### 2026-10-05: where the instrumentation lives now
+
+`tests/engine.cjs`, `tests/smoke.cjs` and `tests/spec.cjs` were V1's test files; they left with
+V1's single file in the V2 change (9fe0a15, #3) and stay readable at tag `v1.0.0`. The
+instrumentation this decision describes (independent oscillator accounting, the AudioParam log
+and the frame-indexed output tap) is carried verbatim by `tests/browser/engine-v1port.cjs`
+(`npm run test:engine`, in CI), which runs V1's engine checks against the current modules.

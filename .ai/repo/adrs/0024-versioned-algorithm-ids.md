@@ -54,3 +54,17 @@ Proposed:
   unannounced numeric change fails.
 - Confirmation criteria: a fixture test fails when an algorithm's output changes while its ID does
   not; an import with an unknown ID is rejected (§145).
+
+## Resolution notes
+
+Appended; the sections above are left as written, and the status stays `proposed`.
+
+### 2026-10-05: implemented as decided (V3.0, 14c7d5f, #29)
+
+"Not yet implemented" above is history. `src/js/measurement/algorithms.js` is the registry:
+the current ID of each family (`ALGORITHMS`), the retained older IDs that still reproduce
+stored results (`RETAINED_ALGORITHMS`, e.g. `oscilla.confidence.v1` to `v3` beside the
+current `v4`), and the import allow-list (`KNOWN_ALGORITHM_IDS`). Several IDs have since been
+minted anew for material changes, as decided (V382 among them). Golden fixtures under
+`tests/unit/fixtures/v3/` pin each ID's output (`tests/unit/v3-golden.test.mjs`), and an
+unknown ID is refused on import. Proven by claim `algorithm-ids-on-results`.

@@ -36,3 +36,14 @@ freeze tests), also truncated (mid-section 14), and a v2.0 mockup.
 
 - The deployed site is V1 until V2's gate passes.
 - V2 ports V1 fixes from `index.html` diffs into its modules after each V1 merge.
+
+## Resolution notes
+
+Appended; the sections above are left as written, and the status stays `proposed`.
+
+### 2026-10-05: complete
+
+Done as decided. V1 (sections 1-63) was finished, verified and deployed from `main` and tagged
+`v1.0.0`; V2 was built on its own branch and shipped as its own pull request (9fe0a15, #3);
+S064-S095 remain blocked on S000. V3 and the V3.1 Studio followed the same pattern. The
+`oscilla-wt/feature/v2` worktree and the V1-only file layout it names no longer exist.

@@ -66,3 +66,20 @@ Proposed:
   §203); repeated analysis of one capture is bit-identical; abort tests leave zero sources and
   zero capture tasks (§218). Revise if alignment proves unreliable on real devices (then add a
   timing marker to the stimulus).
+
+## Resolution notes
+
+Appended; the sections above are left as written, and the status stays `proposed`.
+
+### 2026-10-05: implemented as decided (V3.0, 14c7d5f, #29)
+
+"Not yet implemented" above is history. The layers exist under `src/js/measurement/`: the
+stimulus is rendered from one specification (`stimulus.js`), played through the existing
+engine, captured as bounded PCM (`capture.js`), aligned by cross-correlation (`align.js`) and
+analysed offline by pure functions (`transfer.js`, `impulse-response.js`, `rta.js`,
+`quality.js`, `aggregate.js`). The orchestration is the state machine of `state-machine.js`
+(IDLE ... COMPLETE, INVALID, ABORTED, ERROR) driven by `engine.js`, outside Alpine. An
+AnalyserNode is used only for live feedback (the input tap of `capture.js`, `live-rta.js`).
+The offline analysis runs in a Worker when the platform has one (ADR 0026, claim
+`analysis-off-main-thread`). Proven by claims `transfer-function`, `impulse-response` and
+`measurement-abort-releases-everything` in `docs/CLAIMS.yaml`.
