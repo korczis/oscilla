@@ -49,6 +49,10 @@
 // depends on it. While fullscreen, Escape belongs to the browser (it exits fullscreen); leaving
 // the Studio workspace exits it too.
 //
+// Operation trace (ADR 0042): ONE core/trace.js trace per workspace, its port handed to the
+// store handle, the runtime and the transport here; the Inspector reads its steps (svc.trace)
+// and ?debug=1 its counts (studioTraceText). In memory only, never saved.
+//
 // Alpine holds only small plain view state (`studio`); the store, runtime, transport and view
 // controllers live in the closure `ctx`, never in reactive state.
 
@@ -58,6 +62,7 @@ import { compileStudio } from '../../studio/compiler.js';
 import { createStudioRuntime, studioDivergence } from '../../studio/runtime.js';
 import { createStudioTransport } from '../../studio/transport.js';
 import { createStudioMeasurementRun } from '../../studio/measurement-run.js';
+import { NO_TRACE, createTrace } from '../../core/trace.js';
 import { withStudioProvenance } from '../../studio/provenance.js';
 import { planOfflineRender, renderStudioOffline } from '../../studio/offline.js';
 import { timelineEnd } from '../../studio/timeline.js';
@@ -231,9 +236,12 @@ export function studioStatus(model, { runtime = null, engine = null, revision = 
  * document behind it replaceable (open project / template / import). Revisions are monotonic
  * across documents. subscribe(fn) -> off: fn(event) after every store change and replacement.
  * `gate(next, info)`: the store's commit gate (actions.js), with info.revision in the handle's
- * monotonic numbering (the workspace passes transport.admit).
+ * monotonic numbering (the workspace passes transport.admit). `trace`: the operation trace port
+ * (core/trace.js), its store steps carrying the handle's revision.
  */
-export function createStoreHandle(initialModel, { registry = NODE_REGISTRY, gate = null } = {}) {
+export function createStoreHandle(initialModel, {
+  registry = NODE_REGISTRY, gate = null, trace = NO_TRACE,
+} = {}) {
   const listeners = new Set();
   let offset = 0;
   let store = null;
@@ -250,7 +258,9 @@ export function createStoreHandle(initialModel, { registry = NODE_REGISTRY, gate
       idGenerator: (p) => (ids ||= createIdGenerator(st.getModel()))(p),
       onChange: (ev) => emit({ ...ev, revision: ev.revision + offset }),
       gate: typeof gate === 'function'
-        ? (next, info) => gate(next, { ...info, revision: info.revision + offset }) : null });
+        ? (next, info) => gate(next, { ...info, revision: info.revision + offset }) : null,
+      trace: { run: trace.run, record: (o, k, f) => trace.record(o, k, f.revision == null ? f
+        : { ...f, revision: f.revision + offset }) } });
     return st;
   };
   store = make(initialModel);
@@ -281,8 +291,12 @@ export function createStoreHandle(initialModel, { registry = NODE_REGISTRY, gate
       const next = make(model);
       offset = handle.getRevision() + 1;
       store = next;
-      emit({ type: 'model', reason, model: store.getModel(), selection: store.getSelection(),
-        revision: handle.getRevision() });
+      trace.run(() => {
+        trace.record('store', 'replace', { revision: handle.getRevision(),
+          outcome: 'committed', detail: { reason } });
+        emit({ type: 'model', reason, model: store.getModel(), selection: store.getSelection(),
+          revision: handle.getRevision() });
+      });
       return store.getModel();
     },
     /** The current store itself (tests: assert there is exactly one). */
@@ -324,7 +338,18 @@ export function createStudioUi(svc = {}) {
     liveToggle: false,
     alertToggle: false,
     mounted: false,
+    trace: null,
+    tracePending: false,
   };
+  // The Inspector's Trace refreshes once an operation has ended (coalesced per task).
+  ctx.trace = createTrace({ now: Date.now, onIdle: () => {
+    if (ctx.tracePending) return;
+    ctx.tracePending = true;
+    queueMicrotask(() => {
+      ctx.tracePending = false;
+      if (ctx.inspector) ctx.inspector.renderTrace();
+    });
+  } });
 
   const viewEl = () => document.getElementById('osc-view-studio');
   const compactEl = () => document.querySelector('[data-osc="studio.compact"]');
@@ -505,7 +530,7 @@ export function createStudioUi(svc = {}) {
   function setupAudio() {
     if (ctx.transport || !svc.engine) return;
     const engine = svc.engine;
-    ctx.runtime = createStudioRuntime({ engine, registry });
+    ctx.runtime = createStudioRuntime({ engine, registry, trace: ctx.trace });
     ctx.measureRun = createStudioMeasurementRun({
       getModel: () => ctx.handle.getModel(),
       sampleRate: () => (engine.ctx ? engine.ctx.sampleRate : engine.sampleRate),
@@ -517,7 +542,7 @@ export function createStudioUi(svc = {}) {
         ? ctx.cmp.measureAppliedProfileId() : null),
     });
     ctx.transport = createStudioTransport({ runtime: ctx.runtime, engine: svc.engine,
-      store: ctx.handle, registry,
+      store: ctx.handle, registry, trace: ctx.trace,
       onMeasurement: (ev) => { if (ctx.measureRun) ctx.measureRun.hook(ev); },
       onClaimOutput: () => {
         const cmp = ctx.cmp;
@@ -734,6 +759,7 @@ export function createStudioUi(svc = {}) {
         revision: ctx.handle.getRevision() }, ctx.runtime),
       runtime: ctx.runtime && ctx.runtime.debugInfo(),
       transport: ctx.transport && ctx.transport.debugInfo() }),
+      trace: () => ctx.trace.steps(true), // settled operations only
       onConnect: (id) => ctx.connect.open(id),
       onSavePatch: (ids) => ctx.patches.openSavePatch(ids),
       onDelete: () => ctx.editor.deleteSelection(),
@@ -838,7 +864,7 @@ export function createStudioUi(svc = {}) {
     studioInit() {
       ctx.cmp = this;
       ctx.handle = createStoreHandle(templateModel(REFERENCE_TEMPLATE_ID), { registry,
-        gate: admitEdit });
+        gate: admitEdit, trace: ctx.trace });
       ctx.dirty = createDirtyTracker(ctx.handle.getModel());
       ctx.templateBaseline = createDirtyTracker(ctx.handle.getModel());
       ctx.handle.subscribe(onStoreChange);
@@ -1433,6 +1459,12 @@ export function createStudioUi(svc = {}) {
       }
     },
 
+    /** ?debug=1: the operation trace's counts (ADR 0042). */
+    studioTraceText() {
+      const t = ctx.trace.stats();
+      return `${t.size}/${t.cap} steps · ${t.ops} operations · ${t.dropped} dropped`;
+    },
+
     /** Test seam (window.OSCILLA.studio): the live objects, never copies. */
     studioTestSeam() {
       return {
@@ -1447,6 +1479,7 @@ export function createStudioUi(svc = {}) {
         get templateId() { return ctx.templateId; },
         get measurementRun() { return ctx.measureRun ? ctx.measureRun.view : null; },
         get rendering() { return !!ctx.render; },
+        get trace() { return ctx.trace; },
         library,
         counts() {
           const e = svc.engine;

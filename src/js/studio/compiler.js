@@ -217,7 +217,9 @@ export const studioHashOf = (model) => memo(model, () => studioHash(model));
  * compiled with equal capabilities give equal hashes; a layout, name or view change does not
  * change it (studioHash covers execution state only); a parameter change, a status change
  * (a capability: microphone permission, Web Audio) or a route change does. Plain data in,
- * computed lazily on first read and memoized per plan: never on the audio path. null for a
+ * computed on first read and memoized per plan; compileStudio never reads it. Readers:
+ * runtime.applied() (after a transaction) and, only with a real operation trace (ADR 0042),
+ * runtime.apply's compile step, which hashes before its transaction is scheduled. null for a
  * refused or empty plan.
  */
 export function planHash(plan) {

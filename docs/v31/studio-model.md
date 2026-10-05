@@ -314,7 +314,7 @@ fails when a value or a cited line stops matching the code.
 | Timeline snap default | 0.1 s time grid | `EDITOR_DEFAULT_SNAP` | `src/js/ui/studio/timeline-view.js:37` |
 | Maximum node import count | 512 nodes | `STUDIO_IMPORT_LIMITS` | `src/js/studio/validate.js:73` |
 | Undo history limit | 200 entries | `STUDIO_HISTORY_LIMIT` | `src/js/studio/history.js:34` |
-| Paste and duplicate offset | (24, 24) units | `PASTE_OFFSET` | `src/js/studio/actions.js:72` |
+| Paste and duplicate offset | (24, 24) units | `PASTE_OFFSET` | `src/js/studio/actions.js:78` |
 <!-- studio-decisions:end -->
 
 The model stores the graph view's zoom as any finite number (`src/js/studio/schema.js:356`,

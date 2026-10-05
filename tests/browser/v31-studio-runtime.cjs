@@ -2,7 +2,8 @@
 // OSCILLA Studio runtime truth in the Inspector (ADR 0039): the built dist/index.html in
 // chromium, firefox and webkit from file://. With nothing selected the Inspector's Runtime
 // section says what runs, from runtime.js studioDivergence, runtime.applied() and the runtime
-// and transport debugInfo diagnostics; node status lines carry the diagnostic code.
+// and transport debugInfo diagnostics; node status lines carry the diagnostic code. The Trace
+// section (ADR 0042) lists what each recent operation did, from core/trace.js steps.
 //
 //   node tests/browser/v31-studio-runtime.cjs [--browsers chromium,firefox,webkit]
 //        [--only name1,name2] [--json out.json]   (or OSC_BROWSERS=...)
@@ -24,6 +25,22 @@
 //                        politely ("Runtime: Failed"); STOP state is "Not applied" again
 //   phone                390 x 844 touch: the Inspector subview shows the Runtime section within
 //                        the width (no horizontal overflow)
+//   trace-edit           an edit while playing: the Trace section (a real h5 heading, an
+//                        ordered list) shows it first as "<op> · Change ... Detune · committed,
+//                        revision n"; opened from the keyboard (focus, Enter) its steps say in
+//                        words that the runtime compiled, applied and scheduled Detune 7 cents
+//                        at an audio time; with the oscillator selected its own Inspector lists
+//                        the same op and not the PLAY that never named it
+//   trace-stopped        an edit while stopped: its admit step says not-applied, playing false
+//   trace-refused        the refused live filter type change: the filter's Trace lists the op
+//                        as refused (prepare-failed) and its steps name edit-refused
+//   trace-phone          390 x 844 touch: the Trace section with an open operation fits the
+//                        width (no horizontal overflow)
+//   trace-themes         step text keeps contrast >= 4.5:1 on its surface in dark and light
+//   trace-one-fill       one live edit rebuilds the operation list once, after the operation
+//                        has ended (never with a half-finished operation)
+//   trace-focus          a focused operation pushed out of the list leaves focus on the
+//                        Inspector heading, never on <body>
 //   screenshots          tests/visual/out-studio/runtime-*.png (not committed)
 //   no-console-errors
 'use strict';
@@ -50,6 +67,7 @@ const LAUNCH = {
 };
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const RT = '[data-osc="studio.inspector.runtime"]';
+const TR = '[data-osc="studio.inspector.trace"]';
 
 const H = {
   verdict: (conds) => {
@@ -106,6 +124,33 @@ const H = {
       visible: r.width > 0 && r.height > 0,
     };
   }, RT),
+  /** The Trace section as a user reads it. */
+  trace: (page) => page.evaluate((sel) => {
+    const sec = document.querySelector(sel);
+    if (!sec) return null;
+    const r = sec.getBoundingClientRect();
+    const list = sec.querySelector('ol');
+    return {
+      heading: (sec.querySelector('h5') || {}).textContent || null,
+      note: sec.querySelector('p').textContent,
+      list: list.tagName,
+      ops: [...list.children].map((li) => ({ summary: li.querySelector('summary').textContent,
+        open: li.querySelector('details').open,
+        steps: [...li.querySelectorAll('details li')].map((x) => x.textContent) })),
+      visible: r.width > 0 && r.height > 0,
+    };
+  }, TR),
+  /** Open the first operation of the Trace section from the keyboard (focus, Enter). */
+  openFirstOp: async (page) => {
+    await page.focus(`${TR} summary`);
+    await page.keyboard.press('Enter');
+    await H.frames(page);
+  },
+  select: async (page, nodes) => {
+    await page.evaluate((n) => window.OSCILLA.studio.store.dispatch({ type: 'SELECTION_CHANGE',
+      selection: { nodes: n } }), nodes);
+    await H.frames(page);
+  },
   waitState: (page, state, ms = 3000) => H.until(() => H.runtime(page),
     (v) => v && v.state === state, ms),
   live: (page) => page.evaluate(() => (window.__rtLive || []).slice()),
@@ -294,6 +339,209 @@ function defineChecks() {
     } finally {
       await ctx.close();
     }
+  });
+
+  def('trace-edit', async ({ page }) => {
+    await H.fresh(page);
+    await page.click('[data-osc="studio.play"]');
+    await H.waitState(page, 'in-sync');
+    const r = await page.evaluate(() => window.OSCILLA.studio.store.dispatch({
+      type: 'NODE_PARAM_SET', nodeId: 'osc-1', key: 'detune', value: 7 }));
+    await H.frames(page);
+    await H.openFirstOp(page);
+    const tr = await H.trace(page);
+    const first = tr.ops[0] || { steps: [] };
+    const has = (re) => first.steps.some((x) => re.test(x));
+    await H.select(page, ['osc-1']);
+    const node = await H.trace(page);
+    const seam = await page.evaluate(() => {
+      const t = window.OSCILLA.studio.trace;
+      return { size: t.stats().size, frozen: Object.isFrozen(t.steps()[0]) };
+    });
+    await page.evaluate(() => window.OSCILLA.app.studioStop());
+    return { ...H.verdict({
+      section: !!tr && tr.visible && tr.heading === 'Trace' && tr.list === 'OL',
+      newest: new RegExp(`^op-\\d+ · Change .+ Detune · committed, revision ${r.revision}$`)
+        .test(first.summary || ''),
+      keyboardOpen: first.open === true,
+      compiled: has(new RegExp(`^runtime compile: compiled · rev ${r.revision} · `
+        + 'plan [0-9a-f]{8}')),
+      applied: has(new RegExp(`^runtime apply: applied · rev ${r.revision} · at [\\d.]+ s`)),
+      scheduled: has(new RegExp(`^runtime param: scheduled · rev ${r.revision} · .+ Detune `
+        + '7 cents, at [\\d.]+ s, via glide$')),
+      admitted: has(/^transport admit: admitted/),
+      filtered: !!node && node.ops.length >= 1 && node.ops[0].summary === first.summary
+        && !node.ops.some((o) => /transport play/.test(o.summary)),
+      unfilteredHasPlay: tr.ops.some((o) => /transport play · playing/.test(o.summary)),
+      seam: seam.size > 0 && seam.frozen,
+    }), first, nodeOps: node && node.ops.map((o) => o.summary), r: r.revision };
+  });
+
+  def('trace-stopped', async ({ page }) => {
+    await H.fresh(page);
+    const r = await page.evaluate(() => window.OSCILLA.studio.store.dispatch({
+      type: 'NODE_PARAM_SET', nodeId: 'osc-1', key: 'detune', value: 3 }));
+    await H.frames(page);
+    await H.openFirstOp(page);
+    const first = (await H.trace(page)).ops[0] || { steps: [] };
+    return { ...H.verdict({
+      committed: /committed, revision \d+$/.test(first.summary || ''),
+      notApplied: first.steps.some((x) => new RegExp(`^transport admit: not-applied · rev `
+        + `${r.revision} · playing false`).test(x)),
+      noRuntime: !first.steps.some((x) => /^runtime /.test(x)),
+    }), first };
+  });
+
+  def('trace-refused', async ({ page }) => {
+    await H.fresh(page);
+    await page.click('[data-osc="studio.play"]');
+    await H.waitState(page, 'in-sync');
+    await H.select(page, ['filter-1']);
+    await H.failNextBiquad(page);
+    await page.selectOption('[data-osc="studio.inspector.param"][data-key="type"]', 'highpass');
+    await H.frames(page);
+    await H.openFirstOp(page);
+    const tr = await H.trace(page);
+    const first = tr.ops[0] || { steps: [] };
+    await page.evaluate(() => window.OSCILLA.app.studioStop());
+    return { ...H.verdict({
+      listed: /^op-\d+ · Change .+ · refused \(prepare-failed\)$/.test(first.summary || ''),
+      runtime: first.steps.some((x) => /^runtime apply: refused \(prepare-failed\)/.test(x)
+        && /injected biquad failure/.test(x)),
+      transport: first.steps.some((x) => /^transport admit: refused \(edit-refused\)/.test(x)),
+      store: first.steps.some((x) => /^store commit: refused/.test(x)),
+      nothingApplied: !first.steps.some((x) => /: applied|: scheduled/.test(x)),
+    }), first };
+  });
+
+  def('trace-phone', async ({ browser, baseUrl, browserName }) => {
+    const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true,
+      isMobile: browserName !== 'firefox' });
+    const page = await ctx.newPage();
+    try {
+      await page.goto(baseUrl, { waitUntil: 'load' });
+      await page.waitForSelector('html[data-ready="true"]', { timeout: 15000 });
+      await page.evaluate(() => { const a = window.OSCILLA.app; a.alerts = [];
+        if (!a.safetyCollapsed) a.collapseSafety(); });
+      await H.fresh(page);
+      await page.evaluate(() => window.OSCILLA.studio.store.dispatch({ type: 'NODE_PARAM_SET',
+        nodeId: 'osc-1', key: 'detune', value: 5 }));
+      await page.evaluate(() => window.OSCILLA.app.studioSetSubview('inspector'));
+      await H.frames(page);
+      await page.evaluate((sel) => document.querySelector(sel).scrollIntoView(), TR);
+      await page.evaluate((sel) => { document.querySelector(`${sel} details`).open = true; }, TR);
+      await H.frames(page);
+      const tr = await H.trace(page);
+      const fit = await page.evaluate((sel) => {
+        const sec = document.querySelector(sel);
+        const r = sec.getBoundingClientRect();
+        return { left: r.left, right: r.right, vw: document.documentElement.clientWidth,
+          scroll: document.documentElement.scrollWidth,
+          overflow: [...sec.querySelectorAll('*')].some((el) => el.getBoundingClientRect().right
+            > r.right + 0.5 || (el.scrollWidth > el.clientWidth + 1
+              && getComputedStyle(el).overflowX !== 'visible')) };
+      }, TR);
+      await page.screenshot({ path: path.join(OUT, `trace-phone-${browserName}.png`) });
+      return { ...H.verdict({
+        shown: !!tr && tr.visible && tr.ops.length > 0 && tr.ops[0].open,
+        within: fit.left >= 0 && fit.right <= fit.vw + 0.5 && fit.scroll <= fit.vw,
+        noOverflow: !fit.overflow,
+      }), fit, first: tr && tr.ops[0] };
+    } finally {
+      await ctx.close();
+    }
+  });
+
+  def('trace-themes', async ({ page, browserName }) => {
+    await H.fresh(page);
+    await page.evaluate(() => window.OSCILLA.studio.store.dispatch({ type: 'NODE_PARAM_SET',
+      nodeId: 'osc-1', key: 'detune', value: 4 }));
+    await H.frames(page);
+    await page.evaluate((sel) => { document.querySelector(`${sel} details`).open = true; }, TR);
+    const measure = () => page.evaluate((sel) => {
+      const parse = (x) => (x.match(/[\d.]+/g) || []).slice(0, 4).map(Number);
+      const lum = ([r, g, b]) => {
+        const f = (v) => { const x = v / 255; return x <= 0.03928 ? x / 12.92
+          : ((x + 0.055) / 1.055) ** 2.4; };
+        return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b);
+      };
+      const ratio = (a, b) => { const [x, y] = [lum(a), lum(b)].sort((p, q) => q - p);
+        return (x + 0.05) / (y + 0.05); };
+      const bgOf = (el) => {
+        for (let e = el; e; e = e.parentElement) {
+          const c = parse(getComputedStyle(e).backgroundColor);
+          if (c.length === 3 || (c.length === 4 && c[3] > 0.9)) return c.slice(0, 3);
+        }
+        return [255, 255, 255];
+      };
+      const sec = document.querySelector(sel);
+      const els = [sec.querySelector('summary'), sec.querySelector('details li'),
+        sec.querySelector('p')];
+      return Math.min(...els.map((el) => ratio(parse(getComputedStyle(el).color).slice(0, 3),
+        bgOf(el))));
+    }, TR);
+    const dark = await measure();
+    const theme = (t) => page.evaluate((x) => {
+      if (window.OSCILLA.app.theme !== x) window.OSCILLA.app.toggleTheme();
+    }, t);
+    await theme('light');
+    await sleep(250); // the controls' 0.12 s colour transitions
+    const light = await measure();
+    await page.screenshot({ path: path.join(OUT, `trace-light-${browserName}.png`) });
+    await theme('dark');
+    return { ...H.verdict({ dark: dark >= 4.5, light: light >= 4.5 }), dark, light };
+  });
+
+  def('trace-one-fill', async ({ page }) => {
+    await H.fresh(page);
+    await page.click('[data-osc="studio.play"]');
+    await H.waitState(page, 'in-sync');
+    const r = await page.evaluate(() => new Promise((resolve) => {
+      const list = document.querySelector('[data-osc="studio.inspector.traceOps"]');
+      const seen = [];
+      // One callback per batch of DOM changes: a fill is one batch, read once it is done.
+      const obs = new MutationObserver(() => {
+        seen.push(list.querySelector('summary').textContent);
+      });
+      obs.observe(list, { childList: true });
+      window.OSCILLA.studio.store.dispatch({ type: 'NODE_PARAM_SET', nodeId: 'osc-1',
+        key: 'detune', value: 11 });
+      requestAnimationFrame(() => requestAnimationFrame(() => {
+        obs.disconnect();
+        resolve(seen);
+      }));
+    }));
+    await page.evaluate(() => window.OSCILLA.app.studioStop());
+    return { ...H.verdict({
+      once: r.length === 1,
+      complete: /Detune · committed, revision \d+$/.test(r[0] || ''),
+    }), r };
+  });
+
+  def('trace-focus', async ({ page }) => {
+    await H.fresh(page);
+    await page.evaluate(() => window.OSCILLA.studio.store.dispatch({ type: 'NODE_PARAM_SET',
+      nodeId: 'osc-1', key: 'detune', value: 1 }));
+    await H.frames(page);
+    await page.focus(`${TR} summary`);
+    const before = await page.evaluate(() => document.activeElement.getAttribute('data-key'));
+    for (let i = 0; i < 13; i += 1) {
+      await page.evaluate((v) => window.OSCILLA.studio.store.dispatch({ type: 'NODE_PARAM_SET',
+        nodeId: 'osc-1', key: 'detune', value: v }), i + 2);
+    }
+    await H.frames(page);
+    const after = await page.evaluate(() => ({
+      body: document.activeElement === document.body,
+      osc: document.activeElement.getAttribute('data-osc'),
+      listed: [...document.querySelectorAll('[data-osc="studio.inspector.traceOps"] summary')]
+        .length,
+    }));
+    return { ...H.verdict({
+      focusedOp: /^trace:op-\d+$/.test(before || ''),
+      notBody: !after.body,
+      heading: after.osc === 'studio.inspector.title',
+      capped: after.listed === 12,
+    }), before, after };
   });
 
   def('screenshots', async ({ page, browserName }) => {
