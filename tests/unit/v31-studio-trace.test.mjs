@@ -269,8 +269,11 @@ test('the trace is not evidence: the same edits give the same hashes with and wi
     s.transport.stop();
     return out;
   };
-  const traced = run(newTrace());
+  const trace = newTrace();
+  const traced = run(trace);
   const plain = run(null);
+  assert.ok(trace.steps().some((x) => x.kind === 'compile' && x.detail.planHash === traced.plan),
+    'the traced run did trace, down to the plan that runs');
   assert.deepEqual(traced, plain);
   assert.ok(!/op-\d/.test(traced.text), 'nothing of the trace is in the document');
 });
@@ -279,8 +282,11 @@ test('the traced drag: a parameter dispatch on the 100-node Studio while playing
   + 'one frame', (t) => {
   const s = gated(normalizeStudio({}), newTrace());
   buildLargeStudio(s.store);
+  // The fixture has no clips: a loop region keeps it playing, so every edit is a live one.
+  ok(s.store.dispatch({ type: 'LOOP_SET', enabled: true, start: 0, end: 8 }));
   ok(s.transport.start());
   s.fx.advance(0.1);
+  assert.ok(s.transport.playing, 'playing while measured');
   const xs = [];
   for (let i = -1; i < 15; i++) {
     const t0 = performance.now();
@@ -292,6 +298,9 @@ test('the traced drag: a parameter dispatch on the 100-node Studio while playing
   t.diagnostic(`traced dispatchParam while playing, 100 nodes: ${min.toFixed(3)} ms `
     + `(budget ${PERF_BUDGETS.dispatchParam.toFixed(1)})`);
   assert.ok(min <= PERF_BUDGETS.dispatchParam, `${min.toFixed(2)} ms`);
+  const last = s.trace.steps().filter((x) => x.op === s.trace.steps().at(-1).op);
+  assert.ok(last.some((x) => x.kind === 'compile') && last.some((x) => x.kind === 'param'
+    && x.entity.id === 'filter-12'), 'every measured dispatch was traced to its parameter');
   assert.ok(s.trace.steps().length <= traceModule.TRACE_CAP);
   s.transport.stop();
 });
