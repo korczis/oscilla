@@ -36,7 +36,12 @@ export const BUILD_TIME_ASSETS = ['lucide-static'];
 // transport and automation editors 66 KB; about 14 KB of markup and 42 KB of CSS. The integrated
 // dist measured 2 559 785 B raw / 724 680 B gzip (+413 KB raw over V3.0); the budget keeps the
 // V3 headroom of about 5 %.
+// V3.7 raised it from 2 700 000 / 760 000 by owner decision (2026-10-05), as a stopgap: the V3.7
+// release measured 2 610 384 B raw / 751 494 B gzip, too little for the next slices. p5 is
+// ~245 KB of the gzip, while the views call only about 28 of its 2D drawing functions; replacing
+// it is the deferred alternative. Raw follows gzip at the measured ratio (3.47), so gzip stays
+// the binding limit.
 export const BUDGET = {
-  rawBytes: 2_700_000,
-  gzipBytes: 760_000,
+  rawBytes: 3_500_000,
+  gzipBytes: 1_000_000,
 };
