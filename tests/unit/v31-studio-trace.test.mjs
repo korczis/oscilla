@@ -18,6 +18,8 @@ import { performance } from 'node:perf_hooks';
 import { AudioEngine } from '../../src/js/audio/audio-engine.js';
 import * as traceModule from '../../src/js/core/trace.js';
 import { planHash, ROUTE_FLOOR, STUDIO_XFADE_S } from '../../src/js/studio/compiler.js';
+import { createIdGenerator, createStudioStore } from '../../src/js/studio/actions.js';
+import { NODE_ADAPTERS } from '../../src/js/studio/adapters/nodes.js';
 import { createStudioRuntime } from '../../src/js/studio/runtime.js';
 import { normalizeStudio, serializeStudio, studioHash } from '../../src/js/studio/schema.js';
 import { REFERENCE_TEMPLATE_ID, templateModel } from '../../src/js/studio/templates/index.js';
@@ -69,9 +71,10 @@ function failNextBiquad(ctx) {
 
 /** The steps recorded by `fn` (the trace's new tail). */
 function stepsOf(s, fn) {
-  const before = s.trace.stats().ops;
+  const all = s.trace.steps();
+  const before = all.length ? all.at(-1).seq : 0;
   const r = fn();
-  const steps = s.trace.steps().filter((x) => Number(x.op.slice(3)) > before);
+  const steps = s.trace.steps().filter((x) => x.seq > before);
   return { r, steps };
 }
 const find = (steps, owner, kind) => steps.find((x) => x.owner === owner && x.kind === kind);
@@ -89,14 +92,22 @@ test('the trace ring keeps the last cap steps in order, counts the dropped ones 
   const solo = t.record('c', 'three');
   assert.equal(solo.op, 'op-2', 'a step outside any run is an operation of its own');
   assert.throws(() => t.run(() => { throw new Error('producer broke'); }), /producer broke/);
-  t.run(() => t.record('d', 'four'));
-  assert.equal(t.steps().at(-1).op, 'op-4', 'a throwing producer closes its operation');
+  t.run(() => {}); // records nothing: no operation
+  let open = null;
+  t.run(() => {
+    t.record('d', 'four');
+    open = t.steps(true).map((x) => x.kind);
+  });
+  assert.deepEqual(open, ['one', 'two', 'three'], 'settled steps leave out the open operation');
+  assert.equal(t.steps().at(-1).op, 'op-3', 'a throwing producer closes its operation; ids '
+    + 'count only operations that recorded a step');
   t.record('e', 'five');
   const steps = t.steps();
   assert.equal(steps.length, 4, 'the cap holds');
   assert.deepEqual(steps.map((x) => x.kind), ['two', 'three', 'four', 'five'], 'oldest first');
   assert.deepEqual(steps.map((x) => x.seq), [2, 3, 4, 5], 'seq is monotonic');
-  assert.deepEqual(t.stats(), { cap: 4, size: 4, dropped: 1, ops: 5 });
+  assert.deepEqual(t.stats(), { cap: 4, size: 4, dropped: 1, ops: 4 },
+    'ops counts the operations that recorded a step');
   for (const x of steps) {
     assert.ok(Object.isFrozen(x), 'every step is frozen');
     assert.deepEqual(Object.keys(x), ['op', 'seq', 'at', 'owner', 'kind', 'revision', 'entity',
@@ -145,7 +156,7 @@ test('a parameter edit while playing: one op on the action, the compile with its
   const param = find(steps, 'runtime', 'param');
   assert.deepEqual([param.outcome, param.entity, param.detail.param, param.detail.value,
     param.detail.unit, param.detail.via], ['scheduled', { kind: 'node', id: 'osc-1' },
-    'detune', 7, 'cents', 'base']);
+    'detune', 7, 'cents', 'glide']);
   // The step is what reached the AudioParam: the same value at the same audio time.
   const audioParam = s.runtime.nodes.get('osc-1').modTarget('detune', 'linear').param;
   assert.deepEqual(audioParam.calls.at(-1).slice(0, 3), ['setTargetAtTime', 7, param.detail.at]);
@@ -303,4 +314,123 @@ test('the traced drag: a parameter dispatch on the 100-node Studio while playing
     && x.entity.id === 'filter-12'), 'every measured dispatch was traced to its parameter');
   assert.ok(s.trace.steps().length <= traceModule.TRACE_CAP);
   s.transport.stop();
+});
+
+test('a live parameter step says only what the adapter did: set, glide, stored for the next '
+  + 'gate, or stored without touching audio', () => {
+  const s = gated();
+  ok(s.transport.start());
+  s.fx.advance(0.1);
+  const param = (action) => find(stepsOf(s, () => ok(s.store.dispatch(action))).steps,
+    'runtime', 'param');
+  const set = (nodeId, key, value) => ({ type: 'NODE_PARAM_SET', nodeId, key, value });
+  // An analyser property the tap writes at once.
+  const smooth = param(set('spectrum-1', 'smoothing', 0.3));
+  assert.deepEqual([smooth.outcome, smooth.detail.via], ['scheduled', 'set']);
+  assert.equal(typeof smooth.detail.at, 'number');
+  // A view setting the tap ignores: kept in the plan, nothing scheduled, no audio time.
+  const scale = param(set('spectrum-1', 'scale', 'linear'));
+  assert.deepEqual([scale.outcome, scale.detail.via, scale.detail.at], ['stored', null, null]);
+  // An envelope stage: stored for the next gate, not scheduled now.
+  const attack = param(set('env-1', 'attack', 0.05));
+  assert.deepEqual([attack.outcome, attack.detail.via, attack.detail.at],
+    ['stored', 'next-gate', null]);
+  s.transport.stop();
+});
+
+test('a base step names the AudioParam values the adapter wrote, not keys it skipped', () => {
+  const run = (ownDetune) => {
+    const fx = createFakeAudioEnv({ sampleRate: SR });
+    const engine = new AudioEngine({ env: fx.env });
+    engine.init();
+    const trace = newTrace();
+    const runtime = createStudioRuntime({ engine, trace });
+    const model = templateModel(REFERENCE_TEMPLATE_ID);
+    const store = createStudioStore(model, { idGenerator: createIdGenerator(model) });
+    ok(runtime.apply(store.getModel(), { revision: 0 }));
+    ok(runtime.start());
+    fx.advance(0.1);
+    if (ownDetune) runtime.setOwnedParams([{ node: 'osc-1', param: 'detune' }]);
+    // A log-mapped modulation edge into the oscillator frequency: its constant cents land on
+    // the oscillator's detune AudioParam (an owned detune is not written).
+    ok(store.dispatch({ type: 'EDGE_ADD', from: { node: 'lfo-1', port: 'control' },
+      to: { node: 'osc-1', port: 'frequency' },
+      props: { mapping: 'log', polarity: 'unipolar', depth: 1, offset: 0.5 } }));
+    const before = trace.steps().at(-1).seq;
+    ok(runtime.apply(store.getModel(), { revision: 1 }));
+    const steps = trace.steps().filter((x) => x.seq > before && x.kind === 'param'
+      && x.entity.id === 'osc-1');
+    const detune = runtime.nodes.get('osc-1').modTarget('detune', 'linear').param;
+    runtime.stop();
+    return { steps, call: detune.calls.at(-1) };
+  };
+  const free = run(false);
+  const written = free.steps.find((x) => x.detail.param === 'detune');
+  assert.ok(written && written.outcome === 'scheduled', JSON.stringify(free.steps));
+  assert.ok(written.detail.value !== 0, 'the cents of the log edge');
+  assert.deepEqual(free.call.slice(0, 3), ['setTargetAtTime', written.detail.value,
+    written.detail.at], 'the value and time the AudioParam got');
+  assert.ok(!free.steps.some((x) => x.detail.param === 'frequency'),
+    'the frequency AudioParam did not move');
+  const owned = run(true);
+  assert.ok(!owned.steps.some((x) => x.outcome === 'scheduled'),
+    `an owned detune is not written, and nothing claims it: ${JSON.stringify(owned.steps)}`);
+});
+
+test('without a trace, runtime.apply computes no planHash', () => {
+  let reads = 0;
+  // planHash reads each plan node's adapter compiler key; compileStudio does too, so the
+  // proof is that a later planHash of the running plan is not a memoized hit.
+  const adapters = Object.fromEntries(Object.entries(NODE_ADAPTERS).map(([k, a]) => [k,
+    Object.create(a, { compiler: { get: () => { reads++; return a.compiler; } } })]));
+  const probe = (trace) => {
+    const fx = createFakeAudioEnv({ sampleRate: SR });
+    const engine = new AudioEngine({ env: fx.env });
+    engine.init();
+    const runtime = createStudioRuntime({ engine, adapters, trace });
+    const model = templateModel(REFERENCE_TEMPLATE_ID);
+    const store = createStudioStore(model, { idGenerator: createIdGenerator(model) });
+    ok(runtime.apply(store.getModel(), { revision: 0 }));
+    ok(runtime.start());
+    ok(store.dispatch(DETUNE));
+    ok(runtime.apply(store.getModel(), { revision: 1 }));
+    const before = reads;
+    const hash = planHash(runtime.plan);
+    runtime.stop();
+    return { hashed: reads > before, hash };
+  };
+  const plain = probe(traceModule.NO_TRACE);
+  assert.equal(plain.hashed, true, 'NO_TRACE: the plan was not hashed during apply');
+  const traced = probe(newTrace());
+  assert.equal(traced.hashed, false, 'a real trace hashed it (a memoized hit now)');
+  assert.equal(plain.hash, traced.hash);
+});
+
+test('the Trace headline is the store verdict; a failed step after a commit is listed apart',
+  () => {
+  const t = newTrace();
+  t.run(() => {
+    t.record('store', 'action', { outcome: 'requested', detail: { type: 'EDGE_ADD' } });
+    t.record('runtime', 'route', { outcome: 'failed', code: 'route-failed',
+      entity: { kind: 'edge', id: 'edge-9' } });
+    t.record('store', 'commit', { revision: 4, outcome: 'committed',
+      detail: { label: 'Connect' } });
+  });
+  const model = templateModel(REFERENCE_TEMPLATE_ID);
+  const [op] = inspector.traceView(model, t.steps()).ops;
+  assert.equal(op.outcome, 'committed, revision 4 · failed: route-failed');
+});
+
+test('a cancelled gesture and an opened document are operations of their own', () => {
+  const s = gated();
+  s.store.beginGesture('Move');
+  ok(s.store.dispatch({ type: 'NODE_MOVE', nodeId: 'osc-1', position: { x: 9, y: 9 } }));
+  const cancel = stepsOf(s, () => assert.equal(s.store.cancelGesture(), true)).steps;
+  assert.deepEqual(cancel.map((x) => `${x.owner} ${x.kind} ${x.outcome}`), [
+    'store cancel requested', 'transport admit not-applied', 'store commit committed']);
+  assert.equal(new Set(cancel.map((x) => x.op)).size, 1);
+  const open = stepsOf(s, () => s.store.replace(templateModel(REFERENCE_TEMPLATE_ID), 'open'))
+    .steps;
+  assert.deepEqual([open[0].owner, open[0].kind, open[0].detail.reason,
+    open[0].revision], ['store', 'replace', 'open', s.store.getRevision()]);
 });

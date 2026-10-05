@@ -334,8 +334,13 @@ export function traceView(model, steps, opts = {}) {
     const first = list.find((x) => x.owner === 'store') || list.find((x) => x.owner
       === 'transport') || list[0];
     const commit = list.find((x) => x.kind === 'commit');
-    const bad = list.find((x) => BAD.includes(x.outcome));
-    const end = bad || commit || list[list.length - 1];
+    // The headline is the store's verdict (else the first refusal, else the last step); a
+    // committed edit lists the steps that failed after it separately.
+    const bad = list.filter((x) => BAD.includes(x.outcome));
+    const end = commit || bad[0] || list[list.length - 1];
+    const ill = BAD.includes(end.outcome);
+    const code = end.code || (ill && bad[0] ? bad[0].code : null);
+    const failed = ill ? [] : bad.map((x) => x.code || x.kind);
     const label = commit && commit.detail.label;
     const title = first.owner === 'store' ? label || (first.detail && first.detail.type)
       || first.kind : `${first.owner} ${first.kind}`;
@@ -343,8 +348,9 @@ export function traceView(model, steps, opts = {}) {
       op,
       title: first.kind === 'undo' || first.kind === 'redo' ? `${first.kind} ${label || ''}`.trim()
         : title,
-      outcome: `${end.outcome}${end.code ? ` (${end.code})` : ''}${commit && commit.revision
-        != null ? `, revision ${commit.revision}` : ''}`,
+      outcome: `${end.outcome}${code ? ` (${code})` : ''}${commit && commit.revision != null
+        ? `, revision ${commit.revision}` : ''}${failed.length ? ` · failed: ${failed.join(', ')}`
+        : ''}`,
       steps: list.map((x) => ({ text: traceText(model, x, registry), outcome: x.outcome,
         code: x.code })),
     };
@@ -1158,8 +1164,10 @@ export function mountInspector(host, svc) {
       h('dd', { class: 'osc-num', text: v })])));
   }
 
-  // The Trace section (ADR 0042): one disclosure per operation, its steps in words. Rebuilt when
-  // it changes; an open disclosure stays open and a focused one keeps focus (data-key).
+  // The Trace section (ADR 0042): one disclosure per operation, its steps in words. Built with
+  // the view from the settled operations, then refilled only by renderTrace once an operation
+  // has ended; an open disclosure stays open and a focused one keeps focus (data-key), or
+  // focus goes to the heading when that operation is no longer listed.
   let tr = null;
   const traceOpen = new Set();
   function buildTrace(tv, intro, nodeId = null) {
@@ -1192,6 +1200,7 @@ export function mountInspector(host, svc) {
     }));
     const el = key && tr.list.querySelector(`[data-key="${CSS.escape(key)}"]`);
     if (el) el.focus();
+    else if (key) focusHeading(); // the focused operation is no longer shown
   }
 
   /** Refresh the Studio view's settings in place (a focused field keeps what is typed). */
@@ -1217,7 +1226,6 @@ export function mountInspector(host, svc) {
     const len = refs.get('studio.inspector.lengthText');
     if (len) setText(len.readout, st.lengthText);
     fillRuntime(view.runtime);
-    fillTrace(view.trace);
   }
 
   // ---------------------------------------------------------------- render
@@ -1307,7 +1315,6 @@ export function mountInspector(host, svc) {
     const sameTarget = current === view.key && view.kind !== 'studio' && view.kind !== 'multi'
       && view.kind !== 'point';
     if (sameTarget && update(view)) {
-      if (view.trace) fillTrace(view.trace);
       const status = host.querySelector('[data-osc="studio.inspector.status"]');
       if (view.kind === 'node' && status) {
         setText(status, view.statusText);

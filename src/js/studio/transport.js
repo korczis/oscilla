@@ -36,7 +36,8 @@
 //
 // Operation trace (ADR 0042; `trace`: the core/trace.js port, default NO_TRACE). start, stop,
 // sync and admit are one operation each, or join the caller's. Steps, owner 'transport': `play`
-// (playing from `position` at `baseTime` | refused with the failed phase), `stop`, `admit`
+// (playing from `position` at `baseTime` | refused with the failed phase), `stop` (stopped |
+// aborted: the context closed or the runtime stopped elsewhere), `admit`
 // (admitted | refused, code edit-refused | not-applied: stopped, PLAY applies the model) and
 // `sync` (applied | refused, code sync-refused). The timeline's wake-ups schedule clips and
 // lanes outside any operation and are not traced.
@@ -1089,6 +1090,7 @@ export function createStudioTransport({
   function abort(reason) {
     clearTimer();
     playing = false;
+    trace.record('transport', 'stop', { outcome: 'aborted', detail: { reason } });
     for (const v of voices.values()) {
       try { v.voice.dispose(); } catch (e) { /* the context is gone */ }
     }

@@ -166,6 +166,10 @@ export function createStudioRuntime({
   const pending = new Set();
   const listeners = new Set();
   const bases = new Map(); // node id → last computeBases result (debug)
+  // Tracing (ADR 0042): what each adapter last wrote, { key: value } per node id; nothing is
+  // collected, and no planHash computed for the trace, with the NO_TRACE port.
+  const tracing = trace !== NO_TRACE;
+  const written = new Map();
   const owned = new Map(); // node id → Set of parameter keys driven by another owner
   const peaks = new Map(); // node id → { key: peak value } of owned parameters (computeBases)
   const peaksDirty = new Set(); // node ids whose peaks changed since the last apply
@@ -246,6 +250,7 @@ export function createStudioRuntime({
     handles.clear();
     edges.clear();
     bases.clear();
+    written.clear();
     record = null;
     setState('idle');
   }
@@ -429,7 +434,9 @@ export function createStudioRuntime({
         doing = { kind: 'node', id };
         const cb = computeBases(next.nodes.get(id), incomingControl(next, id, edgeOf), hooks,
           peaks.get(id) || null);
-        h.applyBase(cb.base, true, NONE_OWNED);
+        const w = tracing ? {} : null;
+        h.applyBase(cb.base, true, NONE_OWNED, w);
+        written.set(id, w);
       }
     } catch (err) {
       for (const eh of created.edges.values()) {
@@ -449,6 +456,7 @@ export function createStudioRuntime({
       const h = handles.get(o.id);
       if (h) { retire.handles.push(h); handles.delete(o.id); }
       bases.delete(o.id);
+      written.delete(o.id);
     }
     for (const [id, h] of created.handles) handles.set(id, h);
     for (const [id, eh] of created.edges) edges.set(id, eh);
@@ -494,10 +502,15 @@ export function createStudioRuntime({
           const changed = {};
           for (const k of live) changed[k] = pn.params[k];
           const own = ownedKeys(h);
-          if (guard('update', o.id, () => h.update(changed, own))) {
+          const w = tracing ? {} : null;
+          // What the adapter reports it did (w[key] = how): only 'set' and 'glide' act now; a
+          // key it did not act on is only stored in the plan (the next gate, a rebuild, a view).
+          if (guard('update', o.id, () => h.update(changed, own, w)) && w) {
             for (const k of live) {
-              note('param', o.id, own.has(k) ? 'owned' : 'scheduled', { param: k,
-                value: pn.params[k], unit: unit(pn.type, k), at: now, via: 'update' });
+              const how = w[k] || null;
+              note('param', o.id, how && how !== 'next-gate' ? 'scheduled' : own.has(k) ? 'owned'
+                : 'stored', { param: k, value: pn.params[k], unit: unit(pn.type, k),
+                at: how === 'set' || how === 'glide' ? now : null, via: how });
             }
           }
         }
@@ -523,13 +536,23 @@ export function createStudioRuntime({
       bases.set(id, cb);
       if (!created.handles.has(id)) {
         const own = ownedKeys(h);
-        if (guard('parameters', id, () => h.applyBase(cb.base, false, own))) {
-          // The keys whose base changed: what this apply asked the adapter to move.
+        const w = tracing ? {} : null;
+        if (guard('parameters', id, () => h.applyBase(cb.base, false, own, w)) && w) {
+          // Each AudioParam value the adapter reports it wrote that differs from its last
+          // write (a glide from now), then each key whose base changed but was not written.
+          const was = written.get(id) || {};
+          written.set(id, w);
+          for (const [k, v] of Object.entries(w)) {
+            if (was[k] !== v) {
+              note('param', id, 'scheduled', { param: k, value: v, unit: unit(pn.type, k),
+                at: now, via: 'glide' });
+            }
+          }
           for (const [k, b] of Object.entries(cb.base)) {
             const p = prev && prev.base[k];
-            if (p && p.value === b.value && p.cents === b.cents) continue;
-            note('param', id, own.has(k) ? 'owned' : 'scheduled', { param: k, value: b.value,
-              cents: b.cents || 0, unit: unit(pn.type, k), at: now, via: 'base' });
+            if (k in w || (p && p.value === b.value && p.cents === b.cents)) continue;
+            note('param', id, own.has(k) ? 'owned' : 'stored', { param: k, value: b.value,
+              unit: unit(pn.type, k) });
           }
         }
       }
@@ -584,7 +607,7 @@ export function createStudioRuntime({
     if (!next.ok) return fail('validate', next.errors, { kept: true });
     const ops = diffPlans(plan, next, { owned: ownedMap() });
     trace.record('runtime', 'compile', { revision: rev, outcome: 'compiled',
-      detail: { planHash: planHash(next), ops: ops.length } });
+      detail: { planHash: tracing && planHash(next), ops: ops.length } });
     if (state !== 'running' || !hooks.ctx) {
       trace.record('runtime', 'apply', { revision: rev, outcome: 'not-applied',
         detail: { state } });
@@ -661,6 +684,7 @@ export function createStudioRuntime({
     handles.clear();
     edges.clear();
     bases.clear();
+    written.clear();
     schedule(t + S + CLEANUP_MARGIN_S, retire);
     return all();
   }

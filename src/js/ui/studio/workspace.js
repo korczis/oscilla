@@ -291,8 +291,12 @@ export function createStoreHandle(initialModel, {
       const next = make(model);
       offset = handle.getRevision() + 1;
       store = next;
-      emit({ type: 'model', reason, model: store.getModel(), selection: store.getSelection(),
-        revision: handle.getRevision() });
+      trace.run(() => {
+        trace.record('store', 'replace', { revision: handle.getRevision(),
+          outcome: 'committed', detail: { reason } });
+        emit({ type: 'model', reason, model: store.getModel(), selection: store.getSelection(),
+          revision: handle.getRevision() });
+      });
       return store.getModel();
     },
     /** The current store itself (tests: assert there is exactly one). */
@@ -755,7 +759,7 @@ export function createStudioUi(svc = {}) {
         revision: ctx.handle.getRevision() }, ctx.runtime),
       runtime: ctx.runtime && ctx.runtime.debugInfo(),
       transport: ctx.transport && ctx.transport.debugInfo() }),
-      trace: () => ctx.trace.steps(),
+      trace: () => ctx.trace.steps(true), // settled operations only
       onConnect: (id) => ctx.connect.open(id),
       onSavePatch: (ids) => ctx.patches.openSavePatch(ids),
       onDelete: () => ctx.editor.deleteSelection(),

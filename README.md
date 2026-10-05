@@ -273,9 +273,10 @@ How to use it, with the keyboard shortcuts, is the [Studio user guide](docs/v31/
   ([ADR 0039](.ai/repo/adrs/0039-studio-runtime-truth-plan-identity-applied-record-divergence.md),
   proposed). Its Trace section follows each recent edit, undo, Play and Stop under one
   operation id. It shows the action, the compiled plan with its hash, whether the running graph
-  applied it, and each parameter value and connection gain the runtime scheduled at its audio
-  time. A refused edit shows its code, an edit made while stopped says it was not applied, and
-  a parameter an automation lane drives is shown as owned. A selected node's Inspector lists only
+  applied it, and each parameter value and connection gain the audio nodes report they were
+  given, at its audio time. A setting that changes nothing audible at once is shown as stored. A
+  refused edit shows its code, an edit made while stopped says it was not applied, and a
+  parameter an automation lane drives is shown as owned. A selected node's Inspector lists only
   the operations that touched it. The trace is kept in memory for the session and is never saved
   or hashed
   ([ADR 0042](.ai/repo/adrs/0042-studio-operation-trace-one-correlation-id-bounded-not-evidence.md),

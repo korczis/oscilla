@@ -53,8 +53,8 @@
 //     refused undo or redo leaves its entry where it was; a refused cancel keeps the gesture's
 //     edit as one undo entry. Without a gate every valid change commits.
 //   - The operation trace (ADR 0042, core/trace.js port, default NO_TRACE): a semantic dispatch,
-//     undo and redo are one operation each. The store reports the intent (`action`, `undo`,
-//     `redo`) before anything runs and its verdict (`commit`: committed | unchanged | rejected |
+//     undo, redo and a cancelled gesture's return are one operation each. The store reports
+//     the intent (`action`, `undo`, `redo`, `cancel`) before anything runs and its verdict (`commit`: committed | unchanged | rejected |
 //     refused, with the revision and the first diagnostic's code) after; what the gate does in
 //     between reports under the same op. Selection and view changes are not traced.
 
@@ -979,13 +979,16 @@ export function createStudioStore(initialModel, {
       if (!before) return false;
       if (before === model) return !!history.cancelGesture();
       const target = withCurrentView(before);
-      if (refusal(target, { reason: 'cancel' })) {
-        while (history.inGesture()) closeGesture(); // the edit stays, as one undo entry
-        return false;
-      }
-      history.cancelGesture();
-      setModel(target, 'cancel');
-      return true;
+      return traced('cancel', null, () => {
+        const refused = refusal(target, { reason: 'cancel' });
+        if (refused) {
+          while (history.inGesture()) closeGesture(); // the edit stays, as one undo entry
+          return refused;
+        }
+        history.cancelGesture();
+        setModel(target, 'cancel');
+        return { ok: true, revision };
+      }).ok;
     },
     canUndo: () => history.canUndo(),
     canRedo: () => history.canRedo(),

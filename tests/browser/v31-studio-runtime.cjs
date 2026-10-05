@@ -37,6 +37,10 @@
 //   trace-phone          390 x 844 touch: the Trace section with an open operation fits the
 //                        width (no horizontal overflow)
 //   trace-themes         step text keeps contrast >= 4.5:1 on its surface in dark and light
+//   trace-one-fill       one live edit rebuilds the operation list once, after the operation
+//                        has ended (never with a half-finished operation)
+//   trace-focus          a focused operation pushed out of the list leaves focus on the
+//                        Inspector heading, never on <body>
 //   screenshots          tests/visual/out-studio/runtime-*.png (not committed)
 //   no-console-errors
 'use strict';
@@ -364,7 +368,7 @@ function defineChecks() {
         + 'plan [0-9a-f]{8}')),
       applied: has(new RegExp(`^runtime apply: applied · rev ${r.revision} · at [\\d.]+ s`)),
       scheduled: has(new RegExp(`^runtime param: scheduled · rev ${r.revision} · .+ Detune `
-        + '7 cents, at [\\d.]+ s, via base$')),
+        + '7 cents, at [\\d.]+ s, via glide$')),
       admitted: has(/^transport admit: admitted/),
       filtered: !!node && node.ops.length >= 1 && node.ops[0].summary === first.summary
         && !node.ops.some((o) => /transport play/.test(o.summary)),
@@ -486,6 +490,58 @@ function defineChecks() {
     await page.screenshot({ path: path.join(OUT, `trace-light-${browserName}.png`) });
     await theme('dark');
     return { ...H.verdict({ dark: dark >= 4.5, light: light >= 4.5 }), dark, light };
+  });
+
+  def('trace-one-fill', async ({ page }) => {
+    await H.fresh(page);
+    await page.click('[data-osc="studio.play"]');
+    await H.waitState(page, 'in-sync');
+    const r = await page.evaluate(() => new Promise((resolve) => {
+      const list = document.querySelector('[data-osc="studio.inspector.traceOps"]');
+      const seen = [];
+      // One callback per batch of DOM changes: a fill is one batch, read once it is done.
+      const obs = new MutationObserver(() => {
+        seen.push(list.querySelector('summary').textContent);
+      });
+      obs.observe(list, { childList: true });
+      window.OSCILLA.studio.store.dispatch({ type: 'NODE_PARAM_SET', nodeId: 'osc-1',
+        key: 'detune', value: 11 });
+      requestAnimationFrame(() => requestAnimationFrame(() => {
+        obs.disconnect();
+        resolve(seen);
+      }));
+    }));
+    await page.evaluate(() => window.OSCILLA.app.studioStop());
+    return { ...H.verdict({
+      once: r.length === 1,
+      complete: /Detune · committed, revision \d+$/.test(r[0] || ''),
+    }), r };
+  });
+
+  def('trace-focus', async ({ page }) => {
+    await H.fresh(page);
+    await page.evaluate(() => window.OSCILLA.studio.store.dispatch({ type: 'NODE_PARAM_SET',
+      nodeId: 'osc-1', key: 'detune', value: 1 }));
+    await H.frames(page);
+    await page.focus(`${TR} summary`);
+    const before = await page.evaluate(() => document.activeElement.getAttribute('data-key'));
+    for (let i = 0; i < 13; i += 1) {
+      await page.evaluate((v) => window.OSCILLA.studio.store.dispatch({ type: 'NODE_PARAM_SET',
+        nodeId: 'osc-1', key: 'detune', value: v }), i + 2);
+    }
+    await H.frames(page);
+    const after = await page.evaluate(() => ({
+      body: document.activeElement === document.body,
+      osc: document.activeElement.getAttribute('data-osc'),
+      listed: [...document.querySelectorAll('[data-osc="studio.inspector.traceOps"] summary')]
+        .length,
+    }));
+    return { ...H.verdict({
+      focusedOp: /^trace:op-\d+$/.test(before || ''),
+      notBody: !after.body,
+      heading: after.osc === 'studio.inspector.title',
+      capped: after.listed === 12,
+    }), before, after };
   });
 
   def('screenshots', async ({ page, browserName }) => {
