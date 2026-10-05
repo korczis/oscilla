@@ -54,10 +54,15 @@ cannot decide is a review rejection.
 
 - `tests/unit/no-fake-science.test.mjs` (claim `no-fake-science-in-shipped-copy`) scans what
   a user can be shown: `src/index.html` without its comments and the string literals of
-  every module under `src/js/`. It refuses each banned claim phrase by kind; a negation
-  excuses a phrase only within its own clause, a few words before it ("not ultrasound"). The
-  test proves its matcher on claims, disclaimers and legitimate copy that only looks like a
-  claim ("sleep mode", "cognitive load", "harmless default").
+  every module under `src/js/` (concatenated literals joined). It first normalises the text
+  (HTML entities decoded, tags as clause boundaries with their attribute text kept,
+  whitespace and hand-wrapped lines collapsed), then refuses each banned claim phrase by
+  kind. A negation excuses a phrase only when it governs it: a few words before it in its own
+  clause ("not ultrasound"), a negated list of claim nouns ("no medical, therapeutic or
+  wellness claims"), a negation right after it ("are not affected"), or the same phrase
+  negated in its sentence. The test proves its matcher on claims, disclaimers and
+  legitimate copy that only looks like a claim ("sleep mode", "cognitive load", "harmless
+  default").
 - The SPL condition is runtime state, so it is proven by claim
   `spl-only-with-level-calibration`: `tests/unit/v3-calibration.test.mjs` for the label
   function in both states, and check no-spl in `tests/browser/v3-ui.cjs` for the rendered

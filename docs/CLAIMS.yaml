@@ -252,7 +252,7 @@ claims:
     test: tests/unit/no-fake-science.test.mjs
     status: guaranteed
     responsibility: product
-    note: Scans src/index.html without comments and the string literals of every module under src/js/; a negation excuses a phrase only in its own clause; the matcher is proven on claims, disclaimers and legitimate look-alike copy. Whether dB SPL is shown only under a level calibration is claim spl-only-with-level-calibration.
+    note: Scans src/index.html without comments and the string literals of every module under src/js/, normalised (entities, tags as clause boundaries, collapsed whitespace, concatenated literals); a negation excuses a phrase only where it governs it (its own clause, a negated list of claim nouns, a negation right after it); the matcher is proven on claims, disclaimers and legitimate look-alike copy. Whether dB SPL is shown only under a level calibration is claim spl-only-with-level-calibration.
 
   # ---- V3 MEASURE (milestones M012-M020), on feature/v3. `npm test` runs tests/unit/v3-*.test.mjs;
   # `npm run test:measure` runs tests/browser/v3-measure.cjs and tests/browser/v3-ui.cjs; both
