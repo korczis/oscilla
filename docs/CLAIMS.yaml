@@ -246,13 +246,13 @@ claims:
     note: The current-line check reads package.json and runs everywhere, so npm test, npm run verify and npm run release-gate refuse a bump to a line the page does not name; the published-lines check reads the vX.Y.0 tags and is skipped where tags are not fetched (CI).
 
   - id: no-fake-science-in-shipped-copy
-    claim: No text the page or its UI and data modules can show claims a medical, therapeutic, wellness, cognitive, pseudoscientific or animal-specific effect, inaudibility, the safety of a frequency, ultrasound below 20 kHz or certification, except in a sentence that negates it
+    claim: No text the page or its modules can show claims a medical, therapeutic, wellness, cognitive, pseudoscientific or animal-specific effect, inaudibility, the safety of a frequency, ultrasound below 20 kHz or certification, except in a sentence that negates it
     source: .ai/repo/rules/project/no-fake-science.v2.md
     implementation: src/index.html
     test: tests/unit/no-fake-science.test.mjs
     status: guaranteed
     responsibility: product
-    note: Scans src/index.html without comments and the string literals of src/js/ui/ and src/js/data/; the matcher is proven on positive and negated examples. Whether dB SPL is shown only under a level calibration is claim spl-only-with-level-calibration.
+    note: Scans src/index.html without comments and the string literals of every module under src/js/; a negation excuses a phrase only in its own clause; the matcher is proven on claims, disclaimers and legitimate look-alike copy. Whether dB SPL is shown only under a level calibration is claim spl-only-with-level-calibration.
 
   # ---- V3 MEASURE (milestones M012-M020), on feature/v3. `npm test` runs tests/unit/v3-*.test.mjs;
   # `npm run test:measure` runs tests/browser/v3-measure.cjs and tests/browser/v3-ui.cjs; both
