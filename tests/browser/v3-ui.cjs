@@ -66,6 +66,17 @@
 //                           Enter on its summary opens; nothing causal is said; C marked as the
 //                           baseline (aria-pressed, BASELINE chip) makes one selected run compare
 //                           against it (C first); the list fits 390 px; the mark is cleared again
+//   definitions             (ADR 0043) a definition created from the Measure setup through its
+//                           dialog (name, declared conditions, minimum verdict) is listed under a
+//                           real heading with its version count; "Run this definition" twice:
+//                           both saved runs reference version 1 (same id and hash); Edit (the
+//                           conditions) creates version 2, a third run references it and the
+//                           list and detail show it; compare run 1 (baseline) with run 3 names
+//                           the version change of the same definition in an open Definition
+//                           group, run 1 with run 2 lists none; a setup changed after loading
+//                           the definition is flagged and its run records a derived definition;
+//                           keyboard (Enter opens the dialog, Escape closes it); the panel and
+//                           the dialog fit 390 px
 //   calibration-export      (V315) Export CSV and Export JSON of the loaded profile download
 //                           deterministic files named after the profile and its id, and both
 //                           re-import (same id, name, convention); a correction profile (chosen
@@ -1123,7 +1134,8 @@ function defineChecks(fixtures) {
     });
     const res = {};
     await page.evaluate(() => window.OSCILLA.app.experimentsCompare(['fixture-a', 'fixture-c']));
-    res.ac = await H.until(read, (d) => d.pair && d.groups.length >= 2, 5000);
+    // Poll for everything the verdict asserts (the panel shown too), not only the list.
+    res.ac = await H.until(read, (d) => d.pair && d.groups.length >= 2 && d.shown, 5000);
     // Keyboard: Enter on the collapsed group's summary opens it.
     res.meta = res.ac.groups ? res.ac.groups.findIndex((g) => g.label === 'Metadata') : -1;
     if (res.meta >= 0) {
@@ -1187,6 +1199,168 @@ function defineChecks(fixtures) {
         && res.base.h5[0] === 'Changed between runs A (baseline) and B',
       narrow: res.narrow.fits,
       cleared: res.cleared === null,
+    }) };
+  });
+
+  def('definitions', async ({ page }) => {
+    await H.workspace(page, 'measure');
+    await H.loopback(page);
+    await H.workspace(page, 'experiments');
+    const res = {};
+    const app = (fn, arg) => page.evaluate(fn, arg);
+    const defs = () => app(() => window.OSCILLA.app.exps.defs.map((d) => ({ ...d })));
+    const before = (await defs()).length;
+    // Create through the dialog: the recipe is the Measure setup's.
+    await page.click('[data-osc="def.new"]');
+    await page.fill('#osc-def-name', 'Loopback definition');
+    await page.fill('#osc-def-conditions', 'Digital loopback, no room');
+    await page.selectOption('#osc-def-min', 'USABLE');
+    await page.click('[data-osc="def.save"]');
+    res.created = await H.until(defs, (d) => d.length === before + 1, 5000);
+    const def = res.created.find((d) => d.name === 'Loopback definition') || {};
+    const row = `[data-osc="def.row"][data-id="${def.id}"]`;
+    res.listed = await app((sel) => {
+      const li = document.querySelector(sel);
+      return li ? { heading: li.querySelector('h4') && li.querySelector('h4').textContent,
+        list: li.parentElement.getAttribute('role'), meta: li.querySelector('.osc-x-meta')
+          .textContent } : null;
+    }, row);
+    // Run it: loads the latest version into MEASURE and starts; then save.
+    const runDef = async () => {
+      await app(() => {
+        const m = window.OSCILLA.measure;
+        if (m.engine && ['COMPLETE', 'INVALID', 'ABORTED'].includes(m.state)) m.engine.reset();
+      });
+      await H.workspace(page, 'experiments');
+      const r = await H.run(page, () => page.click(`${row} [data-osc="def.run"]`));
+      if (r.state !== 'COMPLETE') return { r };
+      await page.click('#osc-measure-save');
+      const saved = await H.saved(page);
+      return saved || app(() => window.OSCILLA.app.meas.savedId);
+    };
+    const ref = (id) => app(async (x) => {
+      const e = await window.OSCILLA.experiments.store().get(x);
+      const d = e.definition;
+      return { id: d.id, version: d.version, hash: d.hash, derived: d.derived,
+        conditions: d.execution.conditions.notes };
+    }, id);
+    res.run1 = await runDef();
+    res.run2 = await runDef();
+    if (typeof res.run1 !== 'string' || typeof res.run2 !== 'string') {
+      return { ok: false, failed: ['runs'], ...res };
+    }
+    res.ref1 = await ref(res.run1);
+    res.ref2 = await ref(res.run2);
+    // Edit (keyboard: Enter on the row's Edit button opens the dialog): a new version.
+    await H.workspace(page, 'experiments');
+    await page.focus(`${row} [data-osc="def.edit"]`);
+    await page.keyboard.press('Enter');
+    res.dialog = await H.until(() => app(() => document.getElementById('osc-dlg-def').open),
+      Boolean, 3000);
+    await page.fill('#osc-def-conditions', 'Digital loopback, no room, second session');
+    await page.click('[data-osc="def.save"]');
+    res.edited = await H.until(defs, (d) => d.some((x) => x.id === def.id && x.versions === 2),
+      5000);
+    res.run3 = await runDef();
+    if (typeof res.run3 !== 'string') return { ok: false, failed: ['run3'], ...res };
+    res.ref3 = await ref(res.run3);
+    await H.workspace(page, 'experiments');
+    res.meta = await app((sel) => document.querySelector(`${sel} .osc-x-meta`).textContent, row);
+    res.rowText = await app((id) => {
+      const r = document.querySelector(`[data-osc="exp.row"][data-id="${id}"] .osc-x-meta`);
+      return r ? r.textContent : null;
+    }, res.run3);
+    await app((id) => window.OSCILLA.app.experimentsOpen(id), res.run3);
+    res.detail = await H.until(() => app(() => [...document.querySelectorAll(
+      '.osc-x-prov .osc-metric')].map((m) => `${m.querySelector('dt').textContent}: ${
+      m.querySelector('dd').textContent}`).filter((t) => /^(Definition|Acceptance|Declared)/
+      .test(t))), (x) => x.length === 3, 3000);
+    // Compare: run 1 as the baseline against run 3 (another version), then run 1 with run 2.
+    const changes = () => app(() => [...document.querySelectorAll(
+      '[data-osc="exp.changes"] details')].map((d) => ({ label: d.querySelector('h6')
+      .textContent, open: d.open, items: [...d.querySelectorAll('li')].map((li) =>
+      li.textContent) })));
+    await app((id) => window.OSCILLA.app.experimentsSetBaseline(id, true), res.run1);
+    await app((id) => window.OSCILLA.app.experimentsCompare([id]), res.run3);
+    res.cmp13 = await H.until(changes, (g) => g.some((x) => x.label === 'Definition'), 5000);
+    res.heading = await app(() => document.querySelector('[data-osc="exp.changes"] h5')
+      .textContent);
+    await app((id) => window.OSCILLA.app.experimentsSetBaseline(id, false), res.run1);
+    await app((ids) => window.OSCILLA.app.experimentsCompare(ids), [res.run1, res.run2]);
+    res.cmp12 = await H.until(changes, (g) => !g.some((x) => x.label === 'Definition'), 3000);
+    // Truth: a setup changed after the definition was loaded is not recorded as from it.
+    await app((id) => window.OSCILLA.app.experimentsRepeat(id), res.run3);
+    await app(() => window.OSCILLA.app.measureSetValue('duration', 1.5, 'number'));
+    res.differs = await H.until(() => app(() => {
+      const el = document.querySelector('[data-osc="measure.definitionDiffers"]');
+      return !!el && el.offsetParent !== null;
+    }), Boolean, 2000);
+    await app(() => {
+      const m = window.OSCILLA.measure;
+      if (m.engine && ['COMPLETE', 'INVALID', 'ABORTED'].includes(m.state)) m.engine.reset();
+    });
+    const r4 = await H.run(page, () => app(() => { window.OSCILLA.app.measureStart(); }));
+    if (r4.state === 'COMPLETE') {
+      await page.click('#osc-measure-save');
+      res.save4 = await H.saved(page);
+      res.ref4 = await ref(await app(() => window.OSCILLA.app.meas.savedId));
+    }
+    await app(() => {
+      const a = window.OSCILLA.app;
+      a.measureClearDefinition();
+      window.OSCILLA.measure.setValues({ duration: 1 });
+    });
+    // 390 px: the panel and the dialog fit.
+    await page.setViewportSize({ width: 390, height: 844 });
+    await H.workspace(page, 'experiments');
+    res.narrow = await H.until(() => app(() => {
+      const sec = document.querySelector('[data-osc="exp.defs"]');
+      const r = sec.getBoundingClientRect();
+      const btns = [...sec.querySelectorAll('[data-osc="def.row"] button')]
+        .map((b) => b.getBoundingClientRect());
+      return { fits: sec.scrollWidth <= sec.clientWidth + 1 && r.right <= window.innerWidth + 1
+        && document.documentElement.scrollWidth <= window.innerWidth + 1,
+      buttons: btns.length > 0 && btns.every((b) => b.width > 0 && b.right <= window.innerWidth
+        + 1) };
+    }), (x) => x.fits && x.buttons, 2000);
+    await page.click(`${row} [data-osc="def.edit"]`);
+    res.narrowDialog = await H.until(() => app(() => {
+      const d = document.getElementById('osc-dlg-def');
+      const r = d.getBoundingClientRect();
+      return d.open && r.left >= 0 && r.right <= window.innerWidth + 1
+        && d.scrollWidth <= d.clientWidth + 1;
+    }), Boolean, 2000);
+    await page.keyboard.press('Escape');
+    res.closed = await H.until(() => app(() => !document.getElementById('osc-dlg-def').open),
+      Boolean, 2000);
+    await page.setViewportSize({ width: 1536, height: 1024 });
+    await app(() => { window.OSCILLA.app.alerts = []; window.OSCILLA.app.exps.selected = []; });
+    const g13 = (res.cmp13 || []).find((x) => x.label === 'Definition') || { items: [] };
+    return { ...res, ...H.verdict({
+      created: !!def.id && /^1 version · latest v1 /.test(def.meta)
+        && /not run yet/.test(def.meta),
+      listed: !!res.listed && res.listed.heading === 'Loopback definition'
+        && res.listed.list === 'list',
+      sameVersion: res.ref1.id === def.id && res.ref1.version === 1 && !res.ref1.derived
+        && res.ref2.id === def.id && res.ref2.hash === res.ref1.hash && res.ref2.version === 1
+        && res.ref1.conditions === 'Digital loopback, no room',
+      dialogKeyboard: res.dialog === true,
+      newVersion: res.ref3.id === def.id && res.ref3.version === 2
+        && res.ref3.hash !== res.ref1.hash,
+      listShows: /^2 versions · latest v2 /.test(res.meta) && /last run .* \(v2\)$/.test(res.meta)
+        && / · "Loopback definition" version 2$/.test(res.rowText),
+      detailShows: res.detail.includes(`Definition: "Loopback definition" version 2 (${
+        res.ref3.hash.slice(0, 12)}…)`) && res.detail.some((t) => /^Acceptance: verdict USABLE or /
+        .test(t) && / better required: (met|NOT met) \(/.test(t)),
+      compareSaysVersion: g13.open && g13.items.some((t) => t === 'Definition version: version 1 '
+        + `(${res.ref1.hash.slice(0, 12)}…) → version 2 (${res.ref3.hash.slice(0, 12)}…) (version `
+        + '1 → 2 of the same definition: its execution fields were edited between the runs)')
+        && res.heading === 'Changed between runs A (baseline) and B',
+      sameVersionNoChange: !res.cmp12.some((x) => x.label === 'Definition'),
+      truth: res.differs === true && !!res.ref4 && res.ref4.derived === true
+        && res.ref4.id !== def.id,
+      narrow: res.narrow.fits && res.narrow.buttons && res.narrowDialog === true,
+      closed: res.closed === true,
     }) };
   });
 

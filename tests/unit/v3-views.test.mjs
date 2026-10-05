@@ -899,7 +899,8 @@ test('experiment summary and list rows (§161, §76)', async () => {
     .test(l)));
   // M11: the result hash names its version and what it covers; the verdict names its build.
   assert.ok(s.provenance.some((p) => p.label === 'Result hash'
-    && /^[0-9a-f]{12}… v3 \(results, quality, calibration, input, output, runs, build\)$/
+    && /^[0-9a-f]{12}… v4 \(results, quality, calibration, input, output, runs, build, recipe,/
+      .test(p.text) && / definition\)$/
       .test(p.text)));
   assert.ok(s.provenance.some((p) => p.label === 'Quality verdict'
     && /\(as assessed by OSCILLA /.test(p.text)));
