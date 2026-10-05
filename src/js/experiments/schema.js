@@ -12,7 +12,7 @@
 // rendered spec. An omitted seed/color/law stays null (stimulus.js then uses its default).
 // EXPERIMENT = what was done plus the result:
 //   { kind: 'oscilla-experiment', schemaVersion, oscillaVersion, oscillaCommit, experimentId,
-//     name, recipe, output: { level }, input: { device: { label, id }, constraints:
+//     name, recipe, definition, output: { level }, input: { device: { label, id }, constraints:
 //     { requested, applied } }, calibration: { frequency: { id, name }|null, level|null },
 //     environment: { notes }, measurement: { startedAt, sampleRate, runs: [] }, quality,
 //     algorithms: { role: id }, results: { transfer, ir, rta, aggregate? },
@@ -64,6 +64,14 @@
 //   provenance.duplicateOf   the experiment a duplicate was copied from (duplicateExperiment):
 //                        the same run (same facts, hashes, createdAt) under a new id, never a
 //                        new measurement.
+//
+// Schema 3 (ADR 0043): a run is executed from a versioned definition.
+//   definition           { id, version, hash, derived, execution } (definition.js): the
+//                        definition version the run was executed from, an execution fact
+//                        covered by result hash version 4. createExperiment derives one from the
+//                        run's own recipe (derived: true) unless the caller passes the authored
+//                        one it ran, which must ask for exactly that recipe (recipeMismatches).
+//                        migrate.js 2 → 3 derives it for every earlier run.
 // Input device ids (spec §88): normalizeInput() stores input.device.id hashed
 // (calibration/device-id.js) and drops the duplicate constraints.applied.deviceId, so a stored
 // or exported experiment never carries the raw identifier, once or twice; sanitizeForExport()
@@ -73,7 +81,7 @@
 //
 //   createRecipe(spec) -> Recipe                      (throws RangeError on an invalid recipe)
 //   createExperiment({ recipe, build, now, id, name, sampleRate, input, calibration,
-//     environment, algorithms }) -> Experiment
+//     environment, algorithms, definition }) -> Experiment
 //   withResults(experiment, { startedAt, sampleRate, runs, quality, algorithms, results })
 //   repeatExperiment(experiment, { now, id, build, sampleRate }) -> a NEW Experiment (§104)
 //   duplicateExperiment(experiment, { id, name }) -> a copy of the same run (duplicateOf)
@@ -101,12 +109,14 @@ import {
 } from '../calibration/level.js';
 import { hashDeviceId, isHashedDeviceId } from '../calibration/device-id.js';
 import { aggregateResult, transferFromAggregate } from '../measurement/aggregate.js';
+import { derivedRef, recipeMismatches } from './definition.js';
 
 /**
  * Experiment file schema (§131-§132: V3.0 starts at 1, independent of the product version).
  * 2: run ids and the metadata/execution split (ADR 0040; migrate.js 1 → 2).
+ * 3: the definition a run was executed from (ADR 0043; migrate.js 2 → 3).
  */
-export const EXPERIMENT_SCHEMA_VERSION = 2;
+export const EXPERIMENT_SCHEMA_VERSION = 3;
 /** Calibration record schema (FrequencyProfile / LevelCalibration, calibration/profile.js). */
 export const CALIBRATION_SCHEMA_VERSION = PROFILE_SCHEMA_VERSION;
 /** Instrument config file schema (ui/config-file.js CONFIG_FILE_VERSION). */
@@ -601,7 +611,7 @@ export function normalizeCalibration(calibration) {
  */
 export function createExperiment({
   recipe, build = null, now, id, name = '', sampleRate = null, input = null, calibration = null,
-  environment = null, algorithms = {}, masterGain = null, notes = null,
+  environment = null, algorithms = {}, masterGain = null, notes = null, definition = null,
 } = {}) {
   const createdAt = toIsoTimestamp(now);
   if (typeof id !== 'string' || !ID_PATTERN.test(id)) {
@@ -623,6 +633,11 @@ export function createExperiment({
     .slice(0, LIMITS.measurementNotes).map((t) => t.slice(0, LIMITS.textChars)) : [];
   const measurement = { startedAt: null, sampleRate, runs: [] };
   if (runNotes.length) measurement.notes = runNotes;
+  const bad = definition ? recipeMismatches(r, definition) : [];
+  if (bad.length) {
+    throw new RangeError(`createExperiment: the recipe is not definition ${definition.id} `
+      + `version ${definition.version}'s (${bad.join(', ')})`);
+  }
   return {
     kind: EXPERIMENT_KIND,
     schemaVersion: EXPERIMENT_SCHEMA_VERSION,
@@ -631,6 +646,9 @@ export function createExperiment({
     experimentId: id,
     name: typeof name === 'string' ? name.trim().slice(0, LIMITS.nameChars) : '',
     recipe: r,
+    definition: definition ? plainCopy({ id: definition.id, version: definition.version,
+      hash: definition.hash, derived: definition.derived, execution: definition.execution })
+      : derivedRef(r),
     output: masterGain !== null ? { level: r.stimulus.level, masterGain }
       : { level: r.stimulus.level },
     input: normalizeInput(input),
@@ -728,9 +746,10 @@ export function resultsFromMeasurement(result, { runTransfers = false } = {}) {
 }
 
 /**
- * REPEAT (§104): a NEW experiment with the same recipe, calibration, name, requested input
- * constraints and notes, empty results and provenance.repeatOf = the source id. `build` is
- * the build doing the repeat (not copied: a newer OSCILLA must not claim the old version).
+ * REPEAT (§104): a NEW experiment with the same recipe and definition, calibration, name,
+ * requested input constraints and notes, empty results and provenance.repeatOf = the source id.
+ * `build` is the build doing the repeat (not copied: a newer OSCILLA must not claim the old
+ * version).
  */
 export function repeatExperiment(experiment, { now, id, build = null, sampleRate = null } = {}) {
   const e = experiment;
@@ -739,6 +758,7 @@ export function repeatExperiment(experiment, { now, id, build = null, sampleRate
     recipe: plainCopy(e.recipe), build, now, id, name: e.name, sampleRate,
     input: { constraints: { requested: e.input?.constraints?.requested ?? null } },
     calibration: plainCopy(e.calibration), environment: plainCopy(e.environment),
+    definition: e.definition || null,
   });
   next.provenance.repeatOf = e.experimentId;
   return next;

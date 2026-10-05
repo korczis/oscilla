@@ -577,7 +577,7 @@ test('G13: resultHash v1 covers exactly the encoded results block (old files)', 
   // Quality is covered by v2, so a new verdict clears the stamp too.
   assert.equal(withResults(stamped, { quality: null }).provenance.resultHash, null);
   assert.throws(() => withResultHash(e, 'ABC'), TypeError);
-  assert.throws(() => withResultHash(e, h, 4), RangeError);
+  assert.throws(() => withResultHash(e, h, 5), RangeError);
 });
 
 test('G13 / M11: resultHash v2 covers results, quality, calibration, input and output', () => {
@@ -636,7 +636,7 @@ test('G13: import verifies the result hash; a mismatch is the error "corrupt"', 
   verdict.input.device.label = 'edited';
   reject(verdict, 'provenance.resultHash', /corrupt/);
   const version = clone(serializeExperiment(stamped));
-  version.provenance.resultHashVersion = 4;
+  version.provenance.resultHashVersion = 5;
   reject(version, 'provenance.resultHashVersion', /one of/);
   // null: not stamped, nothing to verify (an experiment still being measured).
   assert.ok(validateExperiment(experimentToJson(e), OPTS).ok);

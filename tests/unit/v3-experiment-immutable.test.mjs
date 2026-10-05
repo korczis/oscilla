@@ -17,6 +17,7 @@ import * as schema from '../../src/js/experiments/schema.js';
 import * as hash from '../../src/js/experiments/hash.js';
 import * as store from '../../src/js/experiments/store.js';
 import * as migrate from '../../src/js/experiments/migrate.js';
+import * as definition from '../../src/js/experiments/definition.js';
 import { validateExperiment } from '../../src/js/experiments/validate.js';
 import { canonicalJson } from '../../src/js/experiments/canonical-json.js';
 import { sha256Hex } from '../../src/js/calibration/sha256.js';
@@ -42,6 +43,8 @@ const restamp = (e, version = hash.RESULT_HASH_VERSION) => hash.withResultHash(
 function schema1Doc(e, version = 2) {
   const d = docOf(e);
   d.schemaVersion = 1;
+  delete d.definition; // ADR 0043: schema 3
+
   d.measurement.runs = d.measurement.runs.map(({ id, ...rest }) => rest);
   if (d.provenance.build) {
     delete d.provenance.build.sourceDigest;
@@ -79,8 +82,14 @@ const FACT_EDITS = [
   ['results.ir', (x) => { x.results.ir.samples[5] += 0.001; }],
   ['results.aggregate', (x) => { x.results.aggregate.repeatabilityDb = 0; }],
   ['quality.status', (x) => { x.quality.status = 'GOOD'; }],
-  ['recipe.stimulus', (x) => { x.recipe.stimulus.duration = 1.5; }],
-  ['recipe.repeats', (x) => { x.recipe.repeats = 2; }],
+  // A recipe edit takes the definition derived from the edited recipe along (ADR 0043), or the
+  // file would be refused before the store sees it.
+  ['recipe.stimulus', (x) => { x.recipe.stimulus.duration = 1.5;
+    x.definition = definition.derivedRef(x.recipe); }],
+  ['recipe.repeats', (x) => { x.recipe.repeats = 2;
+    x.definition = definition.derivedRef(x.recipe); }],
+  ['definition.id', (x) => { x.definition = definition.definitionRef(definition.createDefinition({
+    id: 'other-definition', now: NOW, execution: x.definition.execution })); }],
   ['measurement.runs', (x) => { x.measurement.runs = x.measurement.runs.slice(0, 2); }],
   ['measurement.startedAt', (x) => { x.measurement.startedAt = '2026-10-02T11:00:00.000Z'; }],
   ['calibration.level', (x) => { x.calibration.level = { schemaVersion: 1, kind: 'level',
@@ -241,14 +250,13 @@ test('ADR 0040: runs carry deterministic ids run-1..N, first among their fields'
 
 // ---------------------------------------------------------------- result hash versions
 
-test('ADR 0040: result hash v3 covers measurement and build; new records use it', async () => {
+test('ADR 0040: result hash v3 covers measurement and build', async () => {
   const { a } = await fx();
   const e = a.experiment;
-  assert.equal(hash.RESULT_HASH_VERSION, 3);
-  assert.deepEqual(hash.RESULT_HASH_VERSIONS, [1, 2, 3]);
-  assert.equal(e.provenance.resultHashVersion, 3);
+  // ADR 0043: new records use version 4 (v3 + recipe and definition); v3 stays verifiable.
+  assert.deepEqual(hash.RESULT_HASH_VERSIONS, [1, 2, 3, 4]);
   const part = (k) => clone(schema.serializeExperiment(e[k]));
-  assert.equal(e.provenance.resultHash, sha256Hex(canonicalJson({ v: 3,
+  assert.equal(hash.resultHash(e, { version: 3 }), sha256Hex(canonicalJson({ v: 3,
     results: part('results'), quality: part('quality'), calibration: part('calibration'),
     input: part('input'), output: part('output'), measurement: part('measurement'),
     build: clone(e.provenance.build) })));
@@ -265,7 +273,7 @@ test('ADR 0040: result hash v3 covers measurement and build; new records use it'
     { name: 'other', notes: 'n' });
   assert.equal(hash.resultHash(meta, { version: 3 }), h);
   // A v3 record whose runs were edited is corrupt on import.
-  const doc = docOf(e);
+  const doc = docOf(restamp(e, 3));
   doc.measurement.runs[2].frames += 1;
   const r = validateExperiment(doc, OPTS);
   assert.ok(r.errors.some((x) => x.path === 'provenance.resultHash' && x.code === 'corrupt'
@@ -289,7 +297,7 @@ test('ADR 0040: v1 and v2 records keep verifying; export re-stamps in their own 
       decode(schema.experimentToJson(out));
     }
     const v3 = restamp({ ...c.experiment, input: { device: { label: 'mic', id: 'raw-id' },
-      constraints: { requested: null, applied: null } } });
+      constraints: { requested: null, applied: null } } }, 3);
     const out = exportableExperiment(v3);
     assert.equal(out.provenance.resultHashVersion, 3);
     assert.doesNotMatch(schema.experimentToJson(out), /raw-id/);
@@ -301,31 +309,33 @@ test('ADR 0040: v1 and v2 records keep verifying; export re-stamps in their own 
 test('ADR 0040: schema 1 records and export files migrate to schema 2 and still verify',
   async () => {
     const { a } = await fx();
-    assert.equal(schema.EXPERIMENT_SCHEMA_VERSION, 2);
+    assert.equal(schema.EXPERIMENT_SCHEMA_VERSION, 3);
     assert.equal(typeof migrate.migrations[2], 'function');
     for (const version of [1, 2]) {
       const old = schema1Doc(a.experiment, version);
       const text = JSON.stringify(old, null, 2);
       const v = decode(text);
       assert.equal(v.migratedFrom, 1);
-      assert.equal(v.experiment.schemaVersion, 2);
+      assert.equal(v.experiment.schemaVersion, 3);
       assert.deepEqual(v.experiment.measurement.runs.map((r) => r.id),
         ['run-1', 'run-2', 'run-3']);
       assert.equal(v.experiment.provenance.resultHash, old.provenance.resultHash,
         'the stored hash is kept');
       assert.equal(hash.resultHashVersionOf(v.experiment), version);
       assert.equal('sourceDigest' in v.experiment.provenance.build, false, 'not invented');
-      // The migrated record re-exports as a valid schema-2 file with the same hash.
+      // The migrated record re-exports as a valid schema-3 file with the same hash.
       const again = decode(schema.experimentToJson(v.experiment));
       assert.equal(again.migratedFrom, null);
       assert.equal(again.experiment.provenance.resultHash, old.provenance.resultHash);
       // The step itself: ids only, input untouched.
       const before = JSON.stringify(old);
       const m = migrate.migrateExperiment(old);
-      assert.deepEqual(m.applied, [2]);
+      assert.deepEqual(m.applied, [2, 3]);
       assert.equal(JSON.stringify(old), before);
       const stripped = clone(m.experiment);
       stripped.measurement.runs = stripped.measurement.runs.map(({ id, ...rest }) => rest);
+      assert.equal(stripped.definition.derived, true, 'ADR 0043: derived, never authored');
+      delete stripped.definition;
       assert.deepEqual({ ...stripped, schemaVersion: 1 }, old);
     }
   });
@@ -339,7 +349,7 @@ test('ADR 0040: a schema 1 record stored before the upgrade reads, annotates and
     const old = schema1Doc(b.experiment, 2);
     fake.dbs.get('old').stores.get('experiments').data.set('fixture-b', clone(old));
     const read = await s.get('fixture-b');
-    assert.equal(read.schemaVersion, 2);
+    assert.equal(read.schemaVersion, 3);
     assert.equal(read.measurement.runs[0].id, 'run-1');
     assert.equal(await s.put(read), 'fixture-b', 'the same run again is a no-op');
     await assert.rejects(s.put(restamp({ ...read, quality: { ...read.quality, status: 'GOOD' } },
@@ -348,7 +358,7 @@ test('ADR 0040: a schema 1 record stored before the upgrade reads, annotates and
     assert.equal(named.provenance.resultHash, old.provenance.resultHash);
     assert.equal(named.provenance.resultHashVersion, 2);
     const raw = fake.dbs.get('old').stores.get('experiments').data.get('fixture-b');
-    assert.equal(raw.schemaVersion, 2, 'written back in the current schema');
+    assert.equal(raw.schemaVersion, 3, 'written back in the current schema');
     decode(raw);
   });
 

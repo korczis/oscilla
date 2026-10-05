@@ -28,6 +28,20 @@
 // and one selected run is compared with it. An imported file marked as the baseline keeps the
 // mark only when no other run is the baseline.
 //
+// Definitions (ADR 0043): the Definitions panel lists the authored definitions (store.js
+// listDefinitions) with their version count and last run (the newest list row naming the
+// definition). "New definition" takes the current MEASURE setup's recipe (definition.js
+// setupRecipe) with the declared conditions and acceptance; "Edit" renames (metadata) and
+// appends a version only when an execution field changed (reviseDefinition); "Run this
+// definition" loads its latest version into MEASURE and starts the measurement, which records
+// that version only when it ran exactly its recipe (measure.js). Repeat loads a saved run's own
+// definition version (an authored one stays loaded, with its banner in MEASURE; a derived one is
+// only its recipe). A run's definition version is shown in its detail and list row under the
+// stored definition's name only when that definition has that version with that hash
+// (definition.js storedMatch); otherwise the text says it is not stored here, does not match or
+// could not be read. A stored definition that cannot be read never fails the list of runs, and
+// a stored change is never reported as failed because the list could not be read again after it.
+//
 // Independence (§227, V353): the store opens lazily, on the first Experiments view or save, and
 // reading the IndexedDB factory never throws into the app (pageIndexedDb): a store that cannot
 // open falls back to memory and says so, and the Playground, the instrument and Studio never
@@ -39,7 +53,7 @@ import { openExperimentStoreOrMemory } from '../experiments/store.js';
 import { validateExperiment, DEFAULT_MAX_BYTES } from '../experiments/validate.js';
 import {
   experimentToJson, formatErrors, newExperimentId, EXPERIMENT_FILE_EXTENSION,
-  sanitizeForExport, duplicateExperiment, annotateExperiment, isBaseline,
+  sanitizeForExport, duplicateExperiment, annotateExperiment, isBaseline, describeStimulus,
 } from '../experiments/schema.js';
 import { resultHash, withResultHash, resultHashVersionOf } from '../experiments/hash.js';
 import {
@@ -54,6 +68,11 @@ import { buildResponseView } from '../measurement/views/response-chart.js';
 import { createResponseChart, createIrChart } from '../charts/measure-charts.js';
 import { downloadBlob, readFileText } from './exporters.js';
 import { experimentTestContext } from './measure-experiment.js';
+import {
+  ACCEPTANCE_LEVELS, buildExecution, createDefinition, definitionRef, latestVersion,
+  renameDefinition, reviseDefinition, setupRecipe, storedMatch,
+} from '../experiments/definition.js';
+import { timestampText, definitionText } from '../measurement/views/experiment-summary.js';
 
 export const STORE_FALLBACK_TEXT = 'Experiments are kept in memory for this page view only: this '
   + 'browser does not allow IndexedDB here (for example on file://). Export each experiment as '
@@ -80,6 +99,17 @@ function pageStorageManager(scope = globalThis) {
     return scope.navigator ? scope.navigator.storage || null : null;
   } catch (e) {
     return null;
+  }
+}
+
+/** "20 Hz → 20 kHz log sweep, 10 s · 3 runs" of a recipe (or a setup recipe). */
+function describeRecipe(r) {
+  if (!r) return '';
+  try {
+    const x = setupRecipe(r);
+    return `${describeStimulus(x.stimulus)} · ${x.repeats} run${x.repeats === 1 ? '' : 's'}`;
+  } catch (e) {
+    return e.message;
   }
 }
 
@@ -132,6 +162,22 @@ export function transferCsvOptions(e, profile = null) {
   }
   return opts;
 }
+/**
+ * Definitions panel rows (ADR 0043): name, version count, latest version and the last run
+ * (summaries newest first, as store.js list() returns them).
+ */
+export function definitionRows(defs, summaries = []) {
+  return defs.map((d) => {
+    const last = latestVersion(d);
+    const run = summaries.find((s) => s.definition && storedMatch(s.definition, d) === 'match');
+    const n = d.versions.length;
+    return { id: d.id, name: d.name || '(unnamed)', versions: n,
+      meta: `${n} version${n === 1 ? '' : 's'} · latest v${last.version} (${last.hash
+        .slice(0, 12)}…) · ${run ? `last run ${timestampText(run.createdAt)} (v${
+        run.definition.version})` : 'not run yet'}` };
+  });
+}
+
 /** Experiments kept decoded beyond the ones shown in detail and compare. */
 export const CACHE_RECENT = 4;
 
@@ -160,6 +206,8 @@ export function createExperimentsUi() {
     opening: null,
     cache: new Map(),   // id → decoded experiment: detail, compare and the last few opened
     detail: null,       // the experiment shown in the detail panel
+    defs: new Map(),    // stored definition id → definition (names are metadata; runs lack them)
+    unreadable: new Set(), // ids of stored definitions that could not be read
     compare: [],        // experiments in the compare view
     charts: { detail: null, overlay: null, delta: null, ir: null },
   };
@@ -181,6 +229,29 @@ export function createExperimentsUi() {
       });
     }
     return ctx.opening;
+  }
+
+  /** { name, match } of a run reference against the stored definitions (storedMatch). */
+  function matchOf(ref) {
+    const d = ctx.defs.get(ref.id) || null;
+    const match = !ref.derived && !d && ctx.unreadable.has(ref.id) ? 'unreadable'
+      : storedMatch(ref, d);
+    return { match, name: match === 'match' || match === 'mismatch' ? d.name || null : null };
+  }
+
+  /**
+   * After a stored change: read the list again; a failure there is reported as what it is and
+   * never as a failure of the change (it is stored).
+   */
+  async function refreshAfter(cmp) {
+    try {
+      await cmp.experimentsRefresh();
+      return true;
+    } catch (err) {
+      cmp.notify('warning', 'List not refreshed', 'The change is stored, but the list could not '
+        + `be read again: ${err.message || String(err)}`);
+      return false;
+    }
   }
 
   function remember(id, e) {
@@ -207,7 +278,7 @@ export function createExperimentsUi() {
       if (ctx.charts.detail) ctx.charts.detail.setView(null);
       return;
     }
-    const s = experimentSummary(e);
+    const s = experimentSummary(e, e.definition ? matchOf(e.definition) : {});
     const view = buildResponseView(e, { profile: typeof cmp.measureCurrentProfile === 'function'
       ? cmp.measureCurrentProfile() : null });
     cmp.exps.detail = {
@@ -233,7 +304,7 @@ export function createExperimentsUi() {
       if (ctx.charts.ir) ctx.charts.ir.setView(null);
       return;
     }
-    const v = buildCompareView(list);
+    const v = buildCompareView(list, { definitions: (id) => ctx.defs.get(id) || null });
     cmp.exps.compare = {
       entries: plain(v.entries),
       common: plain(v.common),
@@ -280,7 +351,12 @@ export function createExperimentsUi() {
       deleteName: '',
       importErrors: [],
       readout: null,
+      defs: [],
+      defsNote: null,
+      defForm: { mode: 'new', id: null, name: '', notes: '', conditions: '', minimumQuality: '',
+        useSetup: false, recipeText: '', setupText: '', error: '' },
     },
+    ACCEPTANCE_LEVELS,
 
     experimentsInit() {
       ctx.cmp = this;
@@ -310,7 +386,7 @@ export function createExperimentsUi() {
       const s = await store(this);
       const id = await s.put(e);
       remember(id, e);
-      await this.experimentsRefresh();
+      await refreshAfter(this);
       return id;
     },
     async experimentsRefresh() {
@@ -319,7 +395,22 @@ export function createExperimentsUi() {
       const ids = new Set(list.map((x) => x.experimentId));
       this.exps.selected = this.exps.selected.filter((id) => ids.has(id));
       const v = experimentListRows(list, { selected: this.exps.selected });
-      this.exps.rows = v.rows.map((r) => ({ ...r, actions: undefined }));
+      // The definitions are read apart: one that cannot be read never fails the runs' list.
+      try {
+        const { definitions, unreadable } = await s.listDefinitions();
+        ctx.defs = new Map(definitions.map((d) => [d.id, d]));
+        ctx.unreadable = new Set(unreadable.map((u) => u.id));
+        const n = unreadable.length;
+        this.exps.defsNote = n ? `${n} stored definition${n === 1 ? '' : 's'} could not be read `
+          + `and ${n === 1 ? 'is' : 'are'} not listed (${unreadable.map((u) => u.id || 'no id')
+            .slice(0, 3).join(', ')}).` : null;
+        this.exps.defs = definitionRows(definitions, list);
+      } catch (err) {
+        this.exps.defsNote = `The definitions could not be read: ${err.message || String(err)}`;
+      }
+      this.exps.rows = v.rows.map((r) => ({ ...r, actions: undefined,
+        defText: r.definition && !r.definition.derived ? ` · ${definitionText(r.definition,
+          { ...matchOf(r.definition), short: true })}` : '' }));
       this.exps.empty = v.empty;
       this.exps.baselineId = v.baselineId;
       this.exps.canCompare = v.canCompare;
@@ -376,12 +467,12 @@ export function createExperimentsUi() {
         remember(id, next);
         if (ctx.detail && ctx.detail.experimentId === id) setDetail(this, next);
         this.closeModal('osc-dlg-exp-rename');
-        await this.experimentsRefresh();
-        return true;
       } catch (err) {
         this.notify('error', 'Rename failed', err.message || String(err));
         return false;
       }
+      await refreshAfter(this);
+      return true;
     },
     /** Mark (or clear) the baseline: metadata only (store.annotate), at most one (ADR 0041). */
     async experimentsSetBaseline(id, on = true) {
@@ -391,12 +482,12 @@ export function createExperimentsUi() {
         for (const [k, x] of ctx.cache) if (k !== id && isBaseline(x)) ctx.cache.delete(k);
         remember(id, next);
         if (ctx.detail && ctx.detail.experimentId === id) setDetail(this, next);
-        await this.experimentsRefresh();
-        return true;
       } catch (err) {
         this.notify('error', 'Baseline not changed', err.message || String(err));
         return false;
       }
+      await refreshAfter(this);
+      return true;
     },
     /** The same run under a new ID (same facts and hashes, provenance.duplicateOf). */
     async experimentsDuplicate(id) {
@@ -428,14 +519,14 @@ export function createExperimentsUi() {
         if (ctx.compare.some((e) => e.experimentId === id)) setCompare(this, []);
         this.exps.deleteId = null;
         this.closeModal('osc-dlg-exp-delete');
-        await this.experimentsRefresh();
-        this.notify('success', 'Experiment deleted', `"${this.exps.deleteName}" was removed from `
-          + 'this browser.');
-        return true;
       } catch (err) {
         this.notify('error', 'Delete failed', err.message || String(err));
         return false;
       }
+      this.notify('success', 'Experiment deleted', `"${this.exps.deleteName}" was removed from `
+        + 'this browser.');
+      await refreshAfter(this);
+      return true;
     },
     async experimentsExport(id) {
       const e = await get(this, id);
@@ -510,14 +601,79 @@ export function createExperimentsUi() {
         ? ` (migrated from schema v${v.migratedFrom})` : ''}.${kept}`);
       return id;
     },
-    /** REPEAT (§104): load the recipe into MEASURE; the result is saved as a new experiment. */
+    /**
+     * REPEAT (§104): load the run's definition version (ADR 0043) into MEASURE: an authored one
+     * stays loaded (MEASURE shows it), a derived one is only the recipe the run played. The new
+     * run is saved as a new experiment (repeat of the original); its save says whether it was
+     * run from the definition.
+     */
     async experimentsRepeat(id) {
       const e = await get(this, id);
       if (!e) return false;
-      this.measureLoadRecipe(e.recipe, { repeatOf: e.experimentId });
+      const m = matchOf(e.definition);
+      this.measureLoadDefinition(e.definition, { repeatOf: e.experimentId, ...m });
       this.setWorkspace('measure');
-      this.notify('info', 'Recipe loaded for a repeat', `"${e.name || '(unnamed)'}": run the `
-        + 'measurement; it is saved as a new experiment (repeat of the original).');
+      this.notify('info', e.definition.derived ? 'Recipe loaded for a repeat'
+        : 'Definition loaded for a repeat', `"${e.name || '(unnamed)'}": run the measurement; it `
+        + 'is saved as a new experiment (a repeat of the original).');
+      return true;
+    },
+    /** The definition dialog: new from the MEASURE setup, or edit `id`. */
+    async experimentsDefAsk(id = null) {
+      const f = this.exps.defForm;
+      const d = id ? await (await store(this)).getDefinition(id) : null;
+      const x = d ? latestVersion(d).execution : null;
+      Object.assign(f, { mode: d ? 'edit' : 'new', id, name: d ? d.name : '',
+        notes: d && d.notes ? d.notes : '', conditions: x && x.conditions.notes || '',
+        minimumQuality: x && x.acceptance.minimumQuality || '', useSetup: false, error: '',
+        recipeText: describeRecipe(x ? x.recipe : null), setupText: describeRecipe(
+          this.measureSetupRecipe()) });
+      this.openModal('osc-dlg-def');
+    },
+    /**
+     * Create, or edit: the name and notes change in place (metadata); a changed execution field
+     * appends a version. Returns the stored definition, or null (the reason is in the dialog).
+     */
+    async experimentsDefSave() {
+      const f = this.exps.defForm;
+      let def;
+      try {
+        const s = await store(this);
+        const now = Date.now();
+        const old = f.mode === 'edit' ? await s.getDefinition(f.id) : null;
+        const recipe = old && !f.useSetup ? latestVersion(old).execution.recipe
+          : setupRecipe(this.measureSetupRecipe());
+        const execution = buildExecution({ recipe, conditions: f.conditions,
+          minimumQuality: f.minimumQuality || null });
+        let changed = true;
+        if (old) ({ definition: def, changed } = reviseDefinition(old, execution, { now }));
+        else {
+          def = createDefinition({ id: newExperimentId(randomBytes16()), now, execution });
+        }
+        def = await s.putDefinition(renameDefinition(def, { name: f.name, notes: f.notes }));
+        this.closeModal('osc-dlg-def');
+        const v = latestVersion(def).version;
+        this.notify('success', old ? 'Definition saved' : 'Definition created', `"${def.name
+          || '(unnamed)'}": ${!old ? 'version 1' : changed ? `version ${v} created (an execution `
+          + 'field changed)' : `no execution field changed, still version ${v}`}.`);
+      } catch (err) {
+        f.error = err.message || String(err);
+        return null;
+      }
+      await refreshAfter(this);
+      return def;
+    },
+    /** Load the latest version of definition `id` into MEASURE and start the measurement. */
+    async experimentsDefRun(id) {
+      const d = await (await store(this)).getDefinition(id);
+      if (!d) return false;
+      if (this.measureOwnsOutput()) {
+        this.notify('warning', 'Definition not run', 'A measurement is in progress.');
+        return false;
+      }
+      this.measureLoadDefinition(definitionRef(d), { name: d.name || null, match: 'match' });
+      this.setWorkspace('measure');
+      await this.measureStart();
       return true;
     },
     /** Inspect an experiment's result in the MEASURE result panel. */
