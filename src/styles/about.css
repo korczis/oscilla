@@ -191,13 +191,13 @@
   margin: 0 4px;
 }
 
-/* The evolution strip reads like the sequencer lane: one line, one station per entry (a
-   release line adds a station without a style change). */
+/* The evolution strip reads like the sequencer lane: one station per entry, continuing on a
+   further lane when another station would be narrower than its text (a release line adds a
+   station without a style change). */
 .osc-about-timeline {
   display: grid;
-  grid-auto-columns: minmax(0, 1fr);
-  grid-auto-flow: column;
-  gap: 0 12px;
+  grid-template-columns: repeat(auto-fit, minmax(112px, 1fr));
+  gap: 24px 12px;
   margin: 0;
   padding: 0;
   list-style: none;
@@ -570,7 +570,6 @@
 
   /* The strip turns vertical: the wire runs down the left edge. */
   .osc-about-timeline {
-    grid-auto-flow: row;
     grid-template-columns: minmax(0, 1fr);
     gap: 0;
   }
