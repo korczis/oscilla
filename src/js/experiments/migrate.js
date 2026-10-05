@@ -14,8 +14,9 @@
 //
 // 2 → 3 (ADR 0043): every run gets `definition`, derived from its own recipe as played
 // (definition.js derivedRef: derived: true — never presented as an authored definition; its
-// `requested` is kept and not checked against it, so every schema-valid earlier file opens). Result hashes of
-// versions 1-3 do not cover it, so the stored hash and version are kept and still verify. A
+// `requested` is kept and not checked against it, so every schema-valid earlier file opens).
+// Result hashes of versions 1-3 do not cover it, so the stored hash and version are kept and
+// still verify. A
 // recipe a definition cannot be derived from is left without one, and validation names it.
 //
 //   migrateExperiment(json, { migrations, targetVersion }) ->

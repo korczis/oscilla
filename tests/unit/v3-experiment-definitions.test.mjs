@@ -340,7 +340,7 @@ test('ADR 0043: schema 2 files migrate to 3 with a derived definition, and round
     assert.deepEqual(migrate.migrateExperiment(schema2Doc(a.experiment)).applied, [3]);
   });
 
-test('ADR 0043 review D3: schema-2 files with any schema-valid `requested` still open', async () => {
+test('ADR 0043 review D3: schema-2 files with any schema-valid `requested` open', async () => {
   // Earlier builds accepted these (the request is a recorded fact, never checked against the
   // played stimulus); the migration must not turn them into "corrupt".
   const { a, c } = await fx();

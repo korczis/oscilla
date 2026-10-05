@@ -1,7 +1,7 @@
 // Semantic run comparison (ADR 0041). Pure: plain data in, plain data out; no DOM, no clock.
 //
-//   runChanges(a, b, { studioChanges, definitions }) -> [Change]   what changed between run a (the
-//     reference: the baseline when one is set) and run b. Never modifies either run.
+//   runChanges(a, b, { studioChanges, definitions }) -> [Change]   what changed between run a
+//     (the reference: the baseline when one is set) and run b. Never modifies either run.
 //   Change = { domain, path, kind: 'added'|'removed'|'changed'|'unchanged',
 //     class: 'execution'|'presentation'|'metadata', before, after, unit?, label, note? }
 //   runFields(list) -> [Field]   the descriptors runChanges and compare.js compareExperiments

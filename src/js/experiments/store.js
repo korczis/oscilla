@@ -50,8 +50,8 @@
 // Definitions (ADR 0043; DB_VERSION 3 adds the DEFINITIONS store, keyPath 'id'): authored
 // experiment definitions (definition.js), validated on put and on read. listDefinitions never
 // fails on one bad record: it lists the readable ones and names the others in `unreadable`, so a
-// damaged definition can neither hide the rest nor fail a refresh of the runs. putDefinition creates
-// one or writes its next state: the name and notes may change, versions may only be appended,
+// damaged definition can neither hide the rest nor fail a refresh of the runs. putDefinition
+// creates one or writes its next state: the name and notes may change, versions may only be appended,
 // and a stored version that differs is refused with 'immutable' (err.fields names it). list()
 // rows carry the run's `definition` { id, version, hash, derived } (schema 3), so a definition's
 // runs are found without reading the records.
