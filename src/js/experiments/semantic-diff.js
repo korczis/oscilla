@@ -1,6 +1,6 @@
 // Semantic run comparison (ADR 0041). Pure: plain data in, plain data out; no DOM, no clock.
 //
-//   runChanges(a, b, { studioChanges }) -> [Change]   what changed between run a (the
+//   runChanges(a, b, { studioChanges, definitions }) -> [Change]   what changed between run a (the
 //     reference: the baseline when one is set) and run b. Never modifies either run.
 //   Change = { domain, path, kind: 'added'|'removed'|'changed'|'unchanged',
 //     class: 'execution'|'presentation'|'metadata', before, after, unit?, label, note? }
@@ -11,7 +11,10 @@
 // Domains, in display order (DOMAINS): definition (ADR 0043: the authored definition version
 // each run was executed from, { id, version, hash }, or { derived: true } for a run with none
 // (its definition is its own recipe, which the recipe domain compares); `note` says plainly
-// when the same definition was edited between the runs, or that they come from different ones),
+// when the same definition was edited between the runs — only when `definitions` (id → the
+// stored definition, injected) holds both versions with their hashes (definition.js
+// storedMatch); otherwise it says that the shared id could not be checked — or that they come
+// from different ones),
 // recipe (stimulus and analysis key by key, with Hz and s
 // units; repeats; the requested range), algorithms (per role; `note` names a version step of
 // one method), calibration (profile id, level calibration identity), conditions (sample rate,
@@ -32,6 +35,7 @@
 import { canonicalJson } from './canonical-json.js';
 import { describeAlgorithm } from '../measurement/algorithms.js';
 import { TIMING_LIMITS } from '../measurement/engine.js';
+import { storedMatch } from './definition.js';
 
 export const DOMAINS = Object.freeze(['definition', 'recipe', 'algorithms', 'calibration',
   'conditions', 'studio', 'build', 'result', 'metadata']);
@@ -154,14 +158,22 @@ function algorithmNote(x, y) {
   return p.family === q.family ? `another ${p.family} method` : null;
 }
 
-/** What a definition change means (ADR 0043), in words; null when nothing changed. */
-function definitionNote(x, y) {
+/**
+ * What a definition change means (ADR 0043), in words; null when nothing changed. "The same
+ * definition" only when the stored definition of that id holds both versions with their hashes.
+ */
+function definitionNote(x, y, definitions) {
   if (!x || !y || same(x, y)) return null;
   if (x.id !== y.id) {
     return x.derived || y.derived ? 'not run from the same definition' : 'another definition';
   }
-  return `version ${x.version} → ${y.version} of the same definition: its execution fields `
-    + 'were edited between the runs';
+  const d = definitions ? definitions(x.id) : null;
+  if (storedMatch(x, d) === 'match' && storedMatch(y, d) === 'match') {
+    return `version ${x.version} → ${y.version} of the same definition: its execution fields `
+      + 'were edited between the runs';
+  }
+  return `the same definition id, not checked: ${d ? 'a version does not match the stored '
+    + 'definition' : 'no definition with this id is stored in this browser'}`;
 }
 
 /** Quality reasons keyed by code (a repeated code gets '#<position>'). */
@@ -174,7 +186,7 @@ function reasonsByCode(e) {
 }
 
 /** What changed between run a (reference) and run b (see the header). */
-export function runChanges(a, b, { studioChanges = null } = {}) {
+export function runChanges(a, b, { studioChanges = null, definitions = null } = {}) {
   const out = [];
   for (const d of runFields([a, b])) {
     const x = d.get(a);
@@ -186,7 +198,7 @@ export function runChanges(a, b, { studioChanges = null } = {}) {
     } else {
       const c = change(d.domain, d.path, d.label, x, y, d.unit);
       const note = d.domain === 'algorithms' ? algorithmNote(x, y)
-        : d.domain === 'definition' ? definitionNote(x, y) : null;
+        : d.domain === 'definition' ? definitionNote(x, y, definitions) : null;
       out.push(note ? { ...c, note } : c);
     }
   }

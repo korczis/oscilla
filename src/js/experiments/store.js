@@ -8,7 +8,8 @@
 //   Store = { kind: 'indexeddb'|'memory', list(), get(id), put(experiment),
 //             annotate(id, { name, notes, baseline }), delete(id), estimate(), close(),
 //             listStudio({ kind }), getStudio(id), putStudio(record), deleteStudio(id),
-//             listDefinitions(), getDefinition(id), putDefinition(definition) }
+//             listDefinitions() -> { definitions, unreadable: [{ id, reason }] },
+//             getDefinition(id), putDefinition(definition) }
 //
 // Records are stored in the portable file form (schema.serializeExperiment: EncodedArray
 // result arrays) of the validated, migrated experiment (validate.js on put, and again on get),
@@ -47,7 +48,9 @@
 // corrupt record is reported, never loaded. This module imports nothing from studio/.
 //
 // Definitions (ADR 0043; DB_VERSION 3 adds the DEFINITIONS store, keyPath 'id'): authored
-// experiment definitions (definition.js), validated on put and on read. putDefinition creates
+// experiment definitions (definition.js), validated on put and on read. listDefinitions never
+// fails on one bad record: it lists the readable ones and names the others in `unreadable`, so a
+// damaged definition can neither hide the rest nor fail a refresh of the runs. putDefinition creates
 // one or writes its next state: the name and notes may change, versions may only be appended,
 // and a stored version that differs is refused with 'immutable' (err.fields names it). list()
 // rows carry the run's `definition` { id, version, hash, derived } (schema 3), so a definition's
@@ -170,6 +173,21 @@ export function definitionVerdict(old, next) {
 
 const defNewest = (a, b) => String(b.createdAt).localeCompare(String(a.createdAt))
   || String(a.id).localeCompare(String(b.id));
+
+/** { definitions (valid, newest first), unreadable: [{ id, reason }] } of stored rows. */
+function definitionList(rows) {
+  const definitions = [];
+  const unreadable = [];
+  for (const row of rows) {
+    const id = row && typeof row.id === 'string' ? row.id : null;
+    try {
+      definitions.push(checkedDefinition(row, 'corrupt', id));
+    } catch (err) {
+      unreadable.push({ id, reason: err.message });
+    }
+  }
+  return { definitions: definitions.sort(defNewest), unreadable };
+}
 
 // ---------------------------------------------------------------- Studio records (envelope)
 
@@ -371,8 +389,8 @@ export function createMemoryStore({ knownAlgorithms } = {}) {
       studioSummaries.delete(id);
       return studio.delete(id);
     }),
-    listDefinitions: () => wrap('listDefinitions', () => [...defs.keys()].map(readDef)
-      .sort(defNewest)),
+    listDefinitions: () => wrap('listDefinitions', () => definitionList([...defs.values()]
+      .map((t) => JSON.parse(t)))),
     getDefinition: (id) => wrap('getDefinition', () => readDef(id)),
     putDefinition: (def) => wrap('putDefinition', () => {
       const next = checkedDefinition(def, 'invalid');
@@ -556,9 +574,7 @@ function idbStore(db, storage, knownAlgorithms) {
         ]).then(([existed]) => existed);
       }),
     listDefinitions: () => run('listDefinitions', [DEFINITIONS], 'readonly',
-      (tx) => request(tx.objectStore(DEFINITIONS).getAll()))
-      .then((rows) => rows.map((d) => checkedDefinition(d, 'corrupt', d && d.id))
-        .sort(defNewest)),
+      (tx) => request(tx.objectStore(DEFINITIONS).getAll())).then(definitionList),
     getDefinition: (id) => run('getDefinition', [DEFINITIONS], 'readonly',
       (tx) => request(tx.objectStore(DEFINITIONS).get(id)))
       .then((d) => (d == null ? null : checkedDefinition(d, 'corrupt', id))),

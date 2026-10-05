@@ -317,7 +317,7 @@ function checkExperiment(c, e, ctx) {
   }
   checkMaskGrid(c, out.quality, out.results);
   const bad = out.recipe && out.definition
-    ? recipeMismatches(out.recipe, out.definition.execution.recipe) : [];
+    ? recipeMismatches(out.recipe, out.definition) : [];
   if (bad.length) {
     c.add('definition', `corrupt: the run's recipe is not what its definition asks for (${
       bad.slice(0, 4).join(', ')})`, 'corrupt');

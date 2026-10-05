@@ -633,7 +633,7 @@ export function createExperiment({
     .slice(0, LIMITS.measurementNotes).map((t) => t.slice(0, LIMITS.textChars)) : [];
   const measurement = { startedAt: null, sampleRate, runs: [] };
   if (runNotes.length) measurement.notes = runNotes;
-  const bad = definition ? recipeMismatches(r, definition.execution.recipe) : [];
+  const bad = definition ? recipeMismatches(r, definition) : [];
   if (bad.length) {
     throw new RangeError(`createExperiment: the recipe is not definition ${definition.id} `
       + `version ${definition.version}'s (${bad.join(', ')})`);

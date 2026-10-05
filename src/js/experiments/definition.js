@@ -25,9 +25,10 @@
 // recomputes the hash over `execution` and requires the run's recipe to be what that
 // execution asks for (recipeMismatches). derived: true marks a definition derived from the
 // run's own recipe (derivedRef): a run not started from an authored definition, or recorded
-// before definitions existed (migrate.js 2 → 3). Its id is DERIVED_PREFIX + the first 32 hex
-// digits of its hash, so equal recipes derive one definition. It was never authored and is
-// never presented as one.
+// before definitions existed (migrate.js 2 → 3). It is the recipe as PLAYED (no rate), so it
+// is consistent with its run by construction, whatever `requested` the run records; its id is
+// DERIVED_PREFIX + the first 32 hex digits of its hash, so equal recipes derive one definition.
+// It was never authored and is never presented as one.
 //
 //   setupRecipe(recipe) -> Recipe            (a MEASURE setup recipe as a definition holds it)
 //   buildExecution({ recipe, conditions, minimumQuality }) -> execution   (throws RangeError)
@@ -37,7 +38,8 @@
 //   renameDefinition(def, { name, notes }) -> a copy, only metadata changed
 //   latestVersion(def), definitionRef(def, version?) -> run reference (derived: false)
 //   derivedRef(experimentRecipe) -> run reference (derived: true)
-//   recipeMismatches(runRecipe, definitionRecipe) -> [path]   (empty: consistent)
+//   recipeMismatches(runRecipe, runReference) -> [path]   (empty: consistent)
+//   storedMatch(ref, storedDefinition|null) -> 'derived'|'match'|'mismatch'|'absent'
 //   acceptanceOf(execution, status) -> { met: true|false|null, text }
 //   checkExecution / checkDefinitionRef / validateDefinition   (shared with validate.js, store)
 
@@ -174,24 +176,13 @@ export function definitionRef(def, version = latestVersion(def).version) {
 }
 
 /**
- * The definition derived from a run's own recipe (validated schema.js Recipe): its stimulus at
- * no rate, with the frequencies the user asked for (recipe.requested) where they are playable,
- * else the ones played; repeats and analysis as they are.
+ * The definition derived from a run's own recipe (validated schema.js Recipe): the stimulus as
+ * played, at no rate; repeats and analysis as they are. `requested` is not used: a recorded
+ * request is the run's fact, and an earlier file may hold one that no rate explains.
  */
 export function derivedRef(recipe, opts) {
-  const st = recipe.stimulus;
-  const req = recipe.requested || {};
-  const stimulus = { ...st, sampleRate: null };
-  for (const k of FREQUENCIES) {
-    if (typeof req[k] === 'number' && req[k] <= TOP_HZ && st[k] !== null) stimulus[k] = req[k];
-  }
-  const base = { repeats: recipe.repeats, analysis: recipe.analysis };
-  let execution;
-  try {
-    execution = buildExecution({ recipe: { stimulus, ...base } });
-  } catch (err) {
-    execution = buildExecution({ recipe: { stimulus: { ...st, sampleRate: null }, ...base } });
-  }
+  const execution = buildExecution({ recipe: { stimulus: { ...recipe.stimulus, sampleRate: null },
+    repeats: recipe.repeats, analysis: recipe.analysis } });
   const hash = definitionHash(execution, opts);
   return { id: `${DERIVED_PREFIX}${hash.slice(0, 32)}`, version: 1, hash, derived: true,
     execution };
@@ -199,11 +190,14 @@ export function derivedRef(recipe, opts) {
 
 /**
  * Paths at which a run's recipe is NOT what a definition recipe asks for: repeats and analysis
- * equal; every stimulus field but the rate equal, except that a frequency may be lowered to
- * 0.95 × Nyquist of the run's rate exactly as stimulus.js clamps it, and a playable frequency
- * the run records as requested must be the definition's.
+ * equal; every stimulus field but the rate equal. For an authored definition a frequency may be
+ * lowered to 0.95 × Nyquist of the run's rate exactly as stimulus.js clamps it, and a playable
+ * frequency the run records as requested must be the definition's. A derived definition is the
+ * played recipe, so only equality applies (`requested` is not checked).
  */
-export function recipeMismatches(run, def) {
+export function recipeMismatches(run, ref) {
+  const def = ref.execution.recipe;
+  const derived = ref.derived === true;
   const out = [];
   if (run.repeats !== def.repeats) out.push('recipe.repeats');
   if (canonicalJson(run.analysis) !== canonicalJson(def.analysis)) out.push('recipe.analysis');
@@ -213,7 +207,7 @@ export function recipeMismatches(run, def) {
   for (const k of Object.keys(b)) {
     if (k === 'sampleRate') continue;
     let ok = a[k] === b[k];
-    if (FREQUENCIES.includes(k) && typeof b[k] === 'number') {
+    if (!derived && FREQUENCIES.includes(k) && typeof b[k] === 'number') {
       ok = a[k] === (sr ? Math.min(b[k], safeMaxFrequency(sr)) : b[k]);
       const r = run.requested ? run.requested[k] : null;
       if (typeof r === 'number' && r <= TOP_HZ && r !== b[k]) ok = false;
@@ -221,6 +215,20 @@ export function recipeMismatches(run, def) {
     if (!ok) out.push(`recipe.stimulus.${k}`);
   }
   return out;
+}
+
+/**
+ * Is a run reference (or a list row's { id, version, hash, derived }) a version of the stored
+ * definition? 'match' only when that definition has that version with that hash; 'mismatch'
+ * when it has the id but not that version and hash (an imported run of another definition that
+ * shares the id, or an altered one); 'absent' when nothing is stored; 'derived' for a derived
+ * reference. Only 'match' may borrow the stored name or the words "the same definition".
+ */
+export function storedMatch(ref, stored) {
+  if (!ref || ref.derived) return 'derived';
+  if (!stored || stored.id !== ref.id) return 'absent';
+  const v = stored.versions[ref.version - 1];
+  return v && v.version === ref.version && v.hash === ref.hash ? 'match' : 'mismatch';
 }
 
 /** Does a stored verdict meet the definition's minimum? (null: no criterion or no verdict) */

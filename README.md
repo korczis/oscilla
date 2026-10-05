@@ -166,9 +166,11 @@ filter class is claimed. An experiment saved from Measure does not store band le
   conditions declared for every run and, optionally, the lowest quality verdict that meets it.
   Its hash covers only those fields, so a rename never changes it. Editing them creates a new
   version; earlier runs keep the version they ran. "Run this definition" runs its latest
-  version, and Repeat runs a saved run's version again. A run records the version only when it
-  ran exactly that recipe. A run without one, or whose setup was changed, records a definition
-  derived from its own recipe and marked as derived, never as authored
+  version, and Repeat loads a saved run's version again. A run records the version only when
+  it ran exactly that recipe. A run without one, or whose setup was changed, records a
+  definition derived from the recipe it played and marked as derived, never as authored. A
+  run is shown under a stored definition's name only when that definition has its version
+  with its hash
   ([ADR 0043](.ai/repo/adrs/0043-runs-executed-from-versioned-experiment-definitions.md),
   proposed).
 - **A completed run cannot be changed.** Only the name, the annotation notes and the baseline

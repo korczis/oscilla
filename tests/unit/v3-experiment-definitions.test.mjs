@@ -24,7 +24,7 @@ import { sha256Hex } from '../../src/js/calibration/sha256.js';
 import { KNOWN_ALGORITHM_IDS } from '../../src/js/measurement/algorithms.js';
 import { safeMaxFrequency } from '../../src/js/measurement/stimulus.js';
 import { experimentFromResult } from '../../src/js/ui/measure-experiment.js';
-import { exportableExperiment } from '../../src/js/ui/experiments.js';
+import { exportableExperiment, definitionRows } from '../../src/js/ui/experiments.js';
 import { experimentSummary } from '../../src/js/measurement/views/experiment-summary.js';
 import { buildCompareView } from '../../src/js/measurement/views/compare-view.js';
 import {
@@ -178,7 +178,8 @@ test('ADR 0043: stored versions are append-only; name and notes change in place'
     forged.versions[1].execution.conditions.notes = 'forged';
     await assert.rejects(s.putDefinition(forged), (err) => err.code === 'invalid'
       && /corrupt/.test(err.message), kind);
-    assert.deepEqual((await s.listDefinitions()).map((d) => d.id), ['def-loopback'], kind);
+    assert.deepEqual((await s.listDefinitions()).definitions.map((d) => d.id),
+      ['def-loopback'], kind);
   }
 });
 
@@ -233,19 +234,44 @@ test('ADR 0043: a clamped run is still from the definition that asked for more',
   // The definition asks for 30 kHz; at 44.1 kHz stimulus.js plays 0.95 × Nyquist.
   const def = definition.setupRecipe({ ...FIXTURE_RECIPE, stimulus: {
     ...FIXTURE_RECIPE.stimulus, f2: 30000 } });
+  const ref = { derived: false, execution: { recipe: def } };
   const top = safeMaxFrequency(44100);
   const ran = schema.createRecipe({ stimulus: { ...def.stimulus, sampleRate: 44100, f2: top },
     repeats: def.repeats, analysis: def.analysis, requested: { f1: 20, f2: 30000 } });
-  assert.deepEqual(definition.recipeMismatches(ran, def), []);
+  assert.deepEqual(definition.recipeMismatches(ran, ref), []);
   // Another requested value, or a played value that is not the clamp, is not.
   assert.deepEqual(definition.recipeMismatches({ ...ran, requested: { f1: 20, f2: 25000 } },
-    def), ['recipe.stimulus.f2']);
+    ref), ['recipe.stimulus.f2']);
   assert.deepEqual(definition.recipeMismatches({ ...ran, stimulus: { ...ran.stimulus,
-    f2: top - 1 } }, def), ['recipe.stimulus.f2']);
-  // Derived from that run: the requested 30 kHz, not the played value.
+    f2: top - 1 } }, ref), ['recipe.stimulus.f2']);
+  // Derived from that run: the recipe as played (review D3/D4), consistent by construction.
   const d = definition.derivedRef(ran);
-  assert.equal(d.execution.recipe.stimulus.f2, 30000);
+  assert.equal(d.execution.recipe.stimulus.f2, top);
   assert.equal(d.derived, true);
+  assert.deepEqual(definition.recipeMismatches(ran, d), []);
+});
+
+test('ADR 0043 review D3: a derived definition never checks `requested`', () => {
+  // Recipes a schema-valid file may hold: a request no rate explains, a stimulus without
+  // frequencies, a request of 0 Hz on a band (Studio), a request below what was played.
+  const recipes = [
+    { stimulus: { kind: 'white', sampleRate: 48000, duration: 2, level: 0.1, fade: 0.01,
+      seed: 1 }, requested: { f1: 0, f2: 0 } },
+    { stimulus: { kind: 'sine', sampleRate: 44100, duration: 2, level: 0.1, fade: 0.01,
+      f: 20947.5 }, requested: { f1: 0, f2: 0 } },
+    { stimulus: { kind: 'band-noise', sampleRate: 48000, duration: 2, level: 0.1, fade: 0.01,
+      f1: 100, f2: 1000, seed: 1, color: 'pink' }, requested: { f1: 0, f2: 0 } },
+    { stimulus: { kind: 'log-sweep', sampleRate: null, duration: 2, level: 0.1, fade: 0.01,
+      f1: 20, f2: 20000 }, requested: { f1: 20, f2: 21000 } },
+    { stimulus: { kind: 'log-sweep', sampleRate: 96000, duration: 2, level: 0.1, fade: 0.01,
+      f1: 20, f2: 20000 }, requested: { f1: 20, f2: 30000 } },
+  ];
+  for (const r of recipes) {
+    const recipe = schema.createRecipe({ ...r, repeats: 1, analysis: {} });
+    const d = definition.derivedRef(recipe);
+    assert.deepEqual(definition.recipeMismatches(recipe, d), [], r.stimulus.kind);
+    assert.equal(d.execution.recipe.stimulus.f2, recipe.stimulus.f2, 'as played');
+  }
 });
 
 test('ADR 0043: acceptance compares the stored verdict with the minimum only', () => {
@@ -261,10 +287,11 @@ test('ADR 0043: acceptance compares the stored verdict with the minimum only', (
 // ---------------------------------------------------------------- migration 2 → 3
 
 /** A schema-2 record as written before ADR 0043: no definition, a v3 result hash. */
-function schema2Doc(e) {
+function schema2Doc(e, mutate = null) {
   const d = docOf(e);
   d.schemaVersion = 2;
   delete d.definition;
+  if (mutate) mutate(d);
   d.provenance.resultHash = hash.resultHash(d, { version: 3 });
   d.provenance.resultHashVersion = 3;
   return d;
@@ -285,7 +312,7 @@ test('ADR 0043: schema 2 files migrate to 3 with a derived definition, and round
       assert.equal(e.definition.derived, true, 'derived: never presented as authored');
       assert.equal(e.definition.version, 1);
       assert.equal(e.definition.id, `derived-${e.definition.hash.slice(0, 32)}`);
-      assert.deepEqual(definition.recipeMismatches(e.recipe, e.definition.execution.recipe), []);
+      assert.deepEqual(definition.recipeMismatches(e.recipe, e.definition), []);
       assert.equal(e.definition.execution.conditions.notes, null, 'nothing invented');
       assert.equal(e.definition.execution.acceptance.minimumQuality, null);
       // The stored v3 hash is kept and verifies (v3 never covered the definition).
@@ -312,6 +339,40 @@ test('ADR 0043: schema 2 files migrate to 3 with a derived definition, and round
     assert.match(r.errors[0].text, /migration 2 → 3 failed: a schema-2 experiment has no /);
     assert.deepEqual(migrate.migrateExperiment(schema2Doc(a.experiment)).applied, [3]);
   });
+
+test('ADR 0043 review D3: schema-2 files with any schema-valid `requested` still open', async () => {
+  // Earlier builds accepted these (the request is a recorded fact, never checked against the
+  // played stimulus); the migration must not turn them into "corrupt".
+  const { a, c } = await fx();
+  const cases = {
+    'no rate, requested above played': (d) => {
+      d.recipe.stimulus.sampleRate = null;
+      d.recipe.requested = { f1: d.recipe.stimulus.f1, f2: d.recipe.stimulus.f2 + 1000 };
+    },
+    'requested below played': (d) => {
+      d.recipe.requested = { f1: d.recipe.stimulus.f1, f2: d.recipe.stimulus.f2 - 1000 };
+    },
+    'a rate the clamp does not explain': (d) => {
+      d.recipe.stimulus.sampleRate = 96000;
+      d.recipe.requested = { f1: d.recipe.stimulus.f1, f2: 30000 };
+    },
+  };
+  for (const [name, mutate] of Object.entries(cases)) {
+    for (const fixture of [a, c]) {
+      const old = schema2Doc(fixture.experiment, mutate);
+      const v = validateExperiment(clone(old), OPTS);
+      assert.ok(v.ok, `${name}: ${v.ok ? '' : schema.formatErrors(v.errors)}`);
+      const e = v.experiment;
+      assert.equal(v.migratedFrom, 2, name);
+      assert.equal(e.definition.derived, true, name);
+      assert.equal(e.definition.execution.recipe.stimulus.f2, old.recipe.stimulus.f2,
+        `${name}: the derived definition is the recipe as played`);
+      assert.deepEqual(e.recipe.requested, old.recipe.requested, `${name}: kept as recorded`);
+      assert.equal(e.provenance.resultHash, old.provenance.resultHash, `${name}: hash kept`);
+      decode(schema.experimentToJson(e));
+    }
+  }
+});
 
 test('ADR 0043: a stored schema-2 record reads as schema 3 and stays immutable', async () => {
   const { b } = await fx();
@@ -364,10 +425,11 @@ test('ADR 0043: compare says plainly when the definition version changed', async
   const r2 = await runOf(definition.definitionRef(d2), 'r2');
   const { a } = await fx();
   const def = (list) => list.find((c) => c.domain === 'definition');
+  const stored = { definitions: (id) => (id === d2.id ? d2 : null) };
   // Same version: unchanged.
-  assert.equal(def(runChanges(r1, r1b)).kind, 'unchanged');
-  // Version 1 → 2 of the same definition: an execution change with its note.
-  const c = def(runChanges(r1, r2));
+  assert.equal(def(runChanges(r1, r1b, stored)).kind, 'unchanged');
+  // Version 1 → 2 of the stored definition: an execution change with its note.
+  const c = def(runChanges(r1, r2, stored));
   assert.equal(c.kind, 'changed');
   assert.equal(c.class, 'execution');
   assert.equal(c.note, 'version 1 → 2 of the same definition: its execution fields were edited '
@@ -378,18 +440,70 @@ test('ADR 0043: compare says plainly when the definition version changed', async
   assert.equal(def(runChanges(a.experiment, fixtures.c.experiment)).kind, 'unchanged',
     'derived definitions are their recipes; the recipe domain names the difference');
   // The compare view: first among the execution groups, under its own heading.
-  const v = buildCompareView([schema.annotateExperiment(r1, { baseline: true }), r2]);
+  const v = buildCompareView([schema.annotateExperiment(r1, { baseline: true }), r2], stored);
   const g = v.semantic[0].groups[0];
   assert.equal(g.label, 'Definition');
   assert.equal(g.other, false);
   assert.match(g.items[0].text, /^Definition version: version 1 \([0-9a-f]{12}…\) → version 2 /);
   assert.equal(v.semantic[0].heading, 'Changed between runs A (baseline) and B');
-  assert.equal(compareExperiments([r1, r2]).semantic[0].changes[0].domain, 'definition');
+  assert.equal(compareExperiments([r1, r2], stored).semantic[0].changes[0].domain,
+    'definition');
   // The run detail names the version (with the stored name) and the acceptance.
-  const s = experimentSummary(r2, { definitionName: 'Loopback' });
+  const s = experimentSummary(r2, { name: 'Loopback', match: 'match' });
   const row = (label) => s.provenance.find((p) => p.label === label).text;
   assert.equal(row('Definition'), `"Loopback" version 2 (${d2.versions[1].hash.slice(0, 12)}…)`);
   assert.equal(row('Declared conditions'), 'desk, 2 m');
   assert.match(experimentSummary(a.experiment).provenance.find((p) => p.label
     === 'Definition').text, /^derived from a run's own recipe, not authored/);
 });
+
+/** An imported run that claims the id of a local definition (review D2, repro 1b/1c). */
+async function foreignRun(mutate) {
+  const { a } = await fx();
+  const doc = docOf(a.experiment);
+  doc.experimentId = 'imported-run';
+  doc.definition = { ...doc.definition, id: 'def-loopback', derived: false };
+  mutate(doc.definition);
+  doc.definition.hash = definition.definitionHash(doc.definition.execution);
+  doc.provenance.resultHash = null; // re-stamped below, as anyone can
+  const v = decode(doc);
+  return decode(schema.experimentToJson(restamp(v.experiment))).experiment;
+}
+
+test('ADR 0043 review D2: only a stored version with its hash is "the same definition"',
+  async () => {
+    const d1 = authored({ conditions: 'desk' });
+    const local = await runOf(definition.definitionRef(d1), 'local');
+    const v7 = await foreignRun((x) => { x.version = 7; });
+    const v1Other = await foreignRun((x) => { x.execution.conditions.notes = 'not ours'; });
+    assert.equal(definition.storedMatch(local.definition, d1), 'match');
+    assert.equal(definition.storedMatch(v7.definition, d1), 'mismatch');
+    assert.equal(definition.storedMatch(v1Other.definition, d1), 'mismatch');
+    assert.equal(definition.storedMatch(v7.definition, null), 'absent');
+    assert.equal(definition.storedMatch(fixtures.a.experiment.definition, d1), 'derived');
+    // Compare never says "edited" for a shared id it cannot check.
+    const note = (x, y, d) => runChanges(x, y, { definitions: () => d })
+      .find((c) => c.domain === 'definition').note;
+    assert.equal(note(local, v7, d1), 'the same definition id, not checked: a version does not '
+      + 'match the stored definition');
+    assert.equal(note(local, v1Other, d1), note(local, v7, d1), 'same version, other hash');
+    assert.equal(note(local, v7, null), 'the same definition id, not checked: no definition with '
+      + 'this id is stored in this browser');
+    assert.doesNotMatch(runChanges(local, v7).find((c) => c.domain === 'definition').note,
+      /edited/, 'without the stored definitions nothing is claimed');
+    // The run detail borrows the stored name only for a match.
+    const text = (e, m) => experimentSummary(e, m).provenance.find((p) => p.label
+      === 'Definition').text;
+    assert.equal(text(v7, { name: 'Loopback', match: 'mismatch' }), `definition def-loopback `
+      + `version 7 (${v7.definition.hash.slice(0, 12)}…), does not match the stored definition `
+      + 'with this id');
+    assert.match(text(v7, { match: 'absent' }), /, not stored in this browser$/);
+    assert.match(text(v7, { match: 'unreadable' }), /, its stored definition could not be read$/);
+    assert.doesNotMatch(text(v7, { name: 'Loopback', match: 'mismatch' }), /Loopback/);
+    // The panel's last run counts only runs of a stored version.
+    const rows = definitionRows([d1], [{ createdAt: LATER, definition: v7.definition },
+      { createdAt: NOW, definition: local.definition }]);
+    assert.match(rows[0].meta, /last run 2026-10-02 10:00 UTC \(v1\)$/);
+    assert.match(definitionRows([d1], [{ createdAt: LATER, definition: v7.definition }])[0].meta,
+      /not run yet$/);
+  });

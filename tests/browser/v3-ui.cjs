@@ -1134,7 +1134,8 @@ function defineChecks(fixtures) {
     });
     const res = {};
     await page.evaluate(() => window.OSCILLA.app.experimentsCompare(['fixture-a', 'fixture-c']));
-    res.ac = await H.until(read, (d) => d.pair && d.groups.length >= 2, 5000);
+    // Poll for everything the verdict asserts (the panel shown too), not only the list.
+    res.ac = await H.until(read, (d) => d.pair && d.groups.length >= 2 && d.shown, 5000);
     // Keyboard: Enter on the collapsed group's summary opens it.
     res.meta = res.ac.groups ? res.ac.groups.findIndex((g) => g.label === 'Metadata') : -1;
     if (res.meta >= 0) {
@@ -1347,7 +1348,7 @@ function defineChecks(fixtures) {
       newVersion: res.ref3.id === def.id && res.ref3.version === 2
         && res.ref3.hash !== res.ref1.hash,
       listShows: /^2 versions · latest v2 /.test(res.meta) && /last run .* \(v2\)$/.test(res.meta)
-        && / · "Loopback definition" v2$/.test(res.rowText),
+        && / · "Loopback definition" version 2$/.test(res.rowText),
       detailShows: res.detail.includes(`Definition: "Loopback definition" version 2 (${
         res.ref3.hash.slice(0, 12)}…)`) && res.detail.some((t) => /^Acceptance: verdict USABLE or /
         .test(t) && / better required: (met|NOT met) \(/.test(t)),

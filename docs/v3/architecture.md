@@ -184,7 +184,10 @@ and how (the recipe as asked for, at no rate; the declared conditions; the lowes
 quality verdict), hashed over those execution fields only, its versions append-only. They live
 in the same database (object store `definitions`, database version 3); `validate.js` checks a
 run's definition against its own hash and the run's recipe (`recipeMismatches`), and
-`migrate.js` 2 → 3 gives every earlier run its derived definition.
+`migrate.js` 2 → 3 gives every earlier run its derived definition (the recipe as played;
+`requested` is not checked against a derived definition, so every earlier valid file opens).
+`listDefinitions` returns `{ definitions, unreadable }`, so an unreadable definition never fails
+the list of runs.
 Why a recipe and an experiment are separate: ADR 0019. Why IndexedDB with export as the
 durable path: ADR 0022. Why schema versions are independent integers: ADR 0023. Why a run is
 executed from a versioned definition: ADR 0043.
@@ -491,7 +494,8 @@ Definition = { kind: 'oscilla-definition', schemaVersion: 1, id, name, notes, cr
 definitionHash(execution) -> hex   // SHA-256 of canonical { v: 1, ...execution }; no metadata
 reviseDefinition(def, execution, { now }) -> { definition, changed }   // appends a version
 definitionRef(def, version?) | derivedRef(recipe) -> experiment.definition
-recipeMismatches(runRecipe, definitionRecipe) -> [path]   // [] = the run is that definition's
+recipeMismatches(runRecipe, runReference) -> [path]   // [] = the run is that definition's
+storedMatch(runReference, storedDefinition) -> 'derived'|'match'|'mismatch'|'absent'
 // G20: with an aggregate of ≥ 2 runs, results.transfer is its derivedFrom 'aggregate' centre
 // or null (never one run's transfer); validate.js enforces it
 resultsFromMeasurement(engineResult, { runTransfers: false|true|[run indices] })

@@ -87,7 +87,7 @@ export function experimentFromResult(result, {
   const recipe = { stimulus: result.recipe.stimulus, repeats: result.recipe.repeats,
     analysis: result.recipe.analysis, requested: req };
   const bound = definition
-    && !recipeMismatches(createRecipe(recipe), definition.execution.recipe).length;
+    && !recipeMismatches(createRecipe(recipe), definition).length;
   let e = createExperiment({
     recipe, definition: bound ? definition : null,
     build, now, id, name: title, sampleRate: result.sampleRate, input: result.input,

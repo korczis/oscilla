@@ -2,7 +2,8 @@
 //
 //   buildCompareView(experiments, options) -> CompareView
 //     options = { labels = ['A', 'B', …], deltaPair = [0, 1], pointsPerOctave = 48,
-//                 allowNonEquivalentDelta = false, irRange = null ([fromMs, toMs]; null =
+//                 allowNonEquivalentDelta = false, definitions = null (id → stored definition,
+//                 semantic-diff.js), irRange = null ([fromMs, toMs]; null =
 //                 ir-chart.js IR_OVERLAY_RANGE_MS) }
 //   CompareView = {
 //     entries: [{ label, id, title, compact, role, baseline }],
@@ -336,7 +337,8 @@ export function buildCompareView(experiments, options = {}) {
     labels = experiments.map((_, i) => String.fromCharCode(65 + (i % 26))),
     deltaPair = [0, 1], pointsPerOctave = 48, allowNonEquivalentDelta = false, irRange = null,
   } = options;
-  const cmp = compareExperiments(experiments, { studioChanges });
+  const cmp = compareExperiments(experiments, { studioChanges,
+    definitions: options.definitions || null });
   const entries = experiments.map((e, i) => {
     const s = experimentSummary(e);
     return { label: labels[i], id: s.id, title: s.title, compact: s.compact,

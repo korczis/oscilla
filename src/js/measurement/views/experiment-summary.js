@@ -1,15 +1,17 @@
 // EXPERIMENTS workspace: compact experiment summary and list rows (spec §50-§57, §76,
 // §103-§104, §161, §225, §249). Pure.
 //
-//   experimentSummary(experiment, { definitionName }) -> { id, title, compact, lines: [text],
+//   experimentSummary(experiment, { name, match }) -> { id, title, compact, lines: [text],
 //     quality, repeatOf, definition, provenance: [{ label, text }] }
 //     lines are experiments/schema.js summarizeExperiment() (the §161 lines); compact is one
 //     line "MacBook speakers — desk · 20 Hz → 20 kHz log sweep, 10 s · 5 runs · USABLE".
 //     definition (ADR 0043) is { id, version, hash, derived } of the definition version the run
 //     was executed from, or null; its provenance rows say which version, whether it was derived
 //     from the run's own recipe (never presented as authored), the declared conditions and
-//     whether the stored verdict meets its acceptance criterion. definitionName is the stored
-//     definition's current name (metadata: the run does not carry it).
+//     whether the stored verdict meets its acceptance criterion. `match` is definition.js
+//     storedMatch of the run against this browser's stored definition (or 'unreadable'), and
+//     `name` that definition's name (metadata: the run does not carry it); the name is used only
+//     for a 'match'.
 //   experimentListRows(summaries, { selected = [] }) -> { rows: [Row], canCompare,
 //     compareIds, baselineId, empty: text|null }
 //   compareSelection(selected, baselineId) -> ids (≤ 4) | null   (ADR 0041) what Compare
@@ -55,7 +57,7 @@ export function sizeText(bytes) {
 }
 
 /** experimentSummary(experiment) → the §161 summary (see the header). */
-export function experimentSummary(e, { definitionName = null } = {}) {
+export function experimentSummary(e, { name = null, match = 'absent' } = {}) {
   const lines = summarizeExperiment(e);
   const status = e.quality && e.quality.status ? e.quality.status : null;
   const q = qualityStatusPresentation(status || 'NOT_ASSESSED');
@@ -78,7 +80,7 @@ export function experimentSummary(e, { definitionName = null } = {}) {
     { label: 'Build', text: build ? `${build.version || UNAVAILABLE.UNKNOWN} (${build.channel
       || UNAVAILABLE.UNKNOWN}${build.dirty ? ', dirty' : ''}${build.sourceDigest
       ? `, source ${build.sourceDigest.slice(0, 12)}…` : ''})` : UNAVAILABLE.UNKNOWN },
-    ...definitionRows(e.definition, status, definitionName),
+    ...definitionRows(e.definition, status, { name, match }),
     { label: 'Algorithms', text: algorithmsText(e.algorithms) },
     { label: 'Schema', text: `oscilla-experiment v${e.schemaVersion ?? UNAVAILABLE.UNKNOWN}` },
   ];
@@ -112,16 +114,28 @@ function resultHashText(p) {
       ? ', recipe, definition' : ''}`})`;
 }
 
-/** "Definition" version text (or the derived wording), conditions and acceptance. */
-export function definitionText(d, name = null) {
+const STORED = {
+  absent: 'not stored in this browser',
+  mismatch: 'does not match the stored definition with this id',
+  unreadable: 'its stored definition could not be read',
+};
+
+/**
+ * The definition a run reference names, in words: the stored name only for a 'match' (see the
+ * header); otherwise its id and what is known about it. `short` (list rows) omits the hash.
+ */
+export function definitionText(d, { name = null, match = 'absent', short = false } = {}) {
   if (!d) return UNAVAILABLE.UNKNOWN;
   if (d.derived) return `derived from a run's own recipe, not authored (${shortHash(d.hash)})`;
-  return `${name ? `"${name}"` : d.id} version ${d.version} (${shortHash(d.hash)})`;
+  const hash = short ? '' : ` (${shortHash(d.hash)})`;
+  if (match === 'match') return `${name ? `"${name}"` : d.id} version ${d.version}${hash}`;
+  return `definition ${short ? '' : `${d.id} `}version ${d.version}${hash}, ${
+    STORED[match] || STORED.absent}`;
 }
 
-function definitionRows(d, status, name) {
+function definitionRows(d, status, m) {
   if (!d) return [];
-  return [{ label: 'Definition', text: definitionText(d, name) },
+  return [{ label: 'Definition', text: definitionText(d, m) },
     { label: 'Declared conditions', text: d.execution.conditions.notes || 'none declared' },
     { label: 'Acceptance', text: acceptanceOf(d.execution, status).text }];
 }

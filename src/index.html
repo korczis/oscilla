@@ -1834,6 +1834,7 @@
             <button type="button" class="osc-btn osc-btn-secondary osc-m-small" data-osc="def.new"
               @click="experimentsDefAsk()">New from Measure setup…</button>
           </div>
+          <p class="osc-m-hint" role="note" data-osc="exp.defsNote" x-show="exps.defsNote" style="display: none" x-text="exps.defsNote"></p>
           <ul class="osc-x-rows" role="list">
             <template x-for="d in exps.defs" :key="d.id">
               <li class="osc-x-row osc-x-def" data-osc="def.row" :data-id="d.id">

@@ -75,7 +75,12 @@
 // the recipe that ran is what the version asks for (measure-experiment.js); otherwise the run
 // carries the definition derived from its own recipe, and the panel and a notification say so.
 // The reference is taken when the measurement starts: a later edit of the setup never moves
-// the run to another definition. A Studio run (measureRunRecipe) never takes it.
+// the run to another definition. A Studio run (measureRunRecipe) never takes it. A derived
+// reference (a saved run's own recipe) is not kept loaded: only its recipe fills the setup.
+//
+// Saving is idempotent per result: the experiment id and timestamp are chosen once for a
+// result (saveKey), so a retry after a failed save writes the same record (a no-op when the first
+// write was stored) and never a second copy of one run.
 
 import { MEASUREMENT_STATES as S, isActiveState } from '../measurement/state-machine.js';
 import {
@@ -268,6 +273,7 @@ export function createMeasureUi(svc) {
     devicesEnumerated: false,
     lastRecipeParam: null, // the `mr` hash value last applied or written (V355)
     definition: null,      // the loaded definition version's run reference (ADR 0043)
+    saveKey: null,         // { result, id, now }: one id and timestamp per result (idempotent)
     runDefinition: null,   // the reference the running / last measurement started with
   };
 
@@ -886,8 +892,11 @@ export function createMeasureUi(svc) {
     const level = m.cal.useLevel && levelCalibrationApplies(ctx.levelCal, resultInput).applies
       ? ctx.levelCal : null;
     const st = ctx.lastRecipe && ctx.lastRecipe.stimulus;
+    if (!ctx.saveKey || ctx.saveKey.result !== result) {
+      ctx.saveKey = { result, id: newExperimentId(randomBytes16()), now: Date.now() };
+    }
     return experimentFromResult(result, {
-      now: Date.now(), id: newExperimentId(randomBytes16()), build: svc.build,
+      now: ctx.saveKey.now, id: ctx.saveKey.id, build: svc.build,
       name: m.name, notes: m.notes, profile: ctx.profile,
       levelCalibration: level, repeatOf: ctx.repeatOf,
       requested: st ? { f1: Number(st.f1), f2: Number(st.f2) } : null,
@@ -1679,7 +1688,7 @@ export function createMeasureUi(svc) {
         refresh();
         const d = ctx.runDefinition;
         const from = !d ? '' : e.definition.hash === d.hash ? `from definition ${definitionText(d,
-          d.name)}, ` : 'NOT from the loaded definition (the recipe that ran differs), ';
+          d)}, ` : 'NOT from the loaded definition (the recipe that ran differs), ';
         this.notify('success', 'Experiment saved', `"${e.name}" (${from}${this.exps.persistent
           ? 'stored in this browser' : 'kept in memory for this page view only: export it to keep '
           + 'it'}).`);
@@ -1704,13 +1713,19 @@ export function createMeasureUi(svc) {
     },
     /**
      * Load a definition version (its run reference, definition.js definitionRef or an
-     * experiment's `definition`) into the setup; `name` (the definition's) names the run.
+     * experiment's `definition`) into the setup. An authored one stays loaded (the panel shows
+     * it; `name` and `match` say how it relates to the stored definition, and a 'match' names
+     * the run); a derived one is a saved run's recipe as played and only fills the setup.
      */
-    measureLoadDefinition(ref, { name = null, repeatOf = null } = {}) {
+    measureLoadDefinition(ref, { name = null, match = 'absent', repeatOf = null } = {}) {
       this.measureLoadRecipe(ref.execution.recipe, { repeatOf });
-      ctx.definition = { ...ref, name };
-      if (name) this.meas.name = name;
-      this.meas.definition = { text: definitionText(ref, name),
+      if (ref.derived) {
+        this.measureClearDefinition();
+        return;
+      }
+      ctx.definition = { ...ref, name, match };
+      if (name && match === 'match') this.meas.name = name;
+      this.meas.definition = { text: definitionText(ref, { name, match }),
         conditions: ref.execution.conditions.notes, differs: false };
       refresh();
     },
