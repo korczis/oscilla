@@ -161,7 +161,8 @@ filter class is claimed. An experiment saved from Measure does not store band le
   result hash (version 3) covers the results, the verdict, the calibration, the input, the
   output, the runs (each with a stable id, `run-1`, `run-2`, ...) and the build. Files with a
   version 1 or 2 hash still verify in their own version.
-- **A completed run cannot be changed.** Only the name and the annotation notes of a saved
+- **A completed run cannot be changed.** Only the name, the annotation notes and the baseline
+  mark of a saved
   experiment can be edited, and no hash covers them. The store refuses any other change to a
   completed run, and rename edits only the name. A duplicate is the same run under a new ID,
   with the same hashes and creation time, and it records which experiment it was copied from
@@ -182,7 +183,17 @@ filter class is claimed. An experiment saved from Measure does not store band le
   ([ADR 0023](.ai/repo/adrs/0023-schema-versions-independent-of-product-version.md), proposed).
   Schema 1 files import through a migration that adds the run ids and keeps their hash.
 - **Compare.** Comparing two or more experiments names every difference in calibration, sample
-  rate, stimulus and algorithm. A minus B is shown only for equivalent experiments, and only
+  rate, stimulus and algorithm. It also lists what changed between the runs, grouped by
+  domain: recipe (stimulus and analysis field by field, with units), algorithms (with the
+  version step), calibration, input and output conditions, the Studio graph a run recorded
+  (nodes and connections added or removed, parameters with their units, automation lanes),
+  build provenance and the quality verdict and reasons. Execution changes come first. Layout,
+  view and metadata changes are collapsed and never counted as execution changes. The list
+  says what differs between the two records, not what caused a difference in the responses.
+  One run can be marked as the baseline: Compare then shows it first and compares a single
+  selected run with it. The mark is metadata, kept in the file, and at most one run carries it
+  ([ADR 0041](.ai/repo/adrs/0041-run-comparison-semantic-execution-vs-presentation.md),
+  proposed). A minus B is shown only for equivalent experiments, and only
   over their overlapping valid range. Equivalent experiments also get an impulse-response
   overlay, each response drawn from its own direct peak on its original scale (there is no A
   minus B of impulse responses).

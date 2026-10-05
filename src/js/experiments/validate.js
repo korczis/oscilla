@@ -46,7 +46,8 @@
 // { path: 'provenance.resultHash', code: 'corrupt' }. opts.sha256Hex may inject SHA-256.
 //
 // Schema 2 (ADR 0040, after migrate.js 1 → 2): every measurement.runs[i] is an object whose
-// `id` is 'run-<i + 1>' (schema.js runId); the optional `annotations` { notes } (user metadata)
+// `id` is 'run-<i + 1>' (schema.js runId); the optional `annotations` { notes?, baseline? } (user
+// metadata; baseline is true when present, ADR 0041; the block is never empty)
 // and provenance.duplicateOf (an id other than experimentId) keep their presence;
 // provenance.build may carry sourceDigest and artifactSha256 (SHA-256 hex or null), absent in
 // records made before them.
@@ -272,9 +273,18 @@ function checkExperiment(c, e, ctx) {
     provenance: checkProvenance(c, e.provenance, 'provenance'),
   };
   if (has(e, 'studio')) out.studio = checkStudio(c, e.studio, 'studio', ctx);
-  if (has(e, 'annotations') && c.keys(e.annotations, 'annotations', ['notes'])) {
-    c.str(e.annotations.notes, 'annotations.notes', LIMITS.notesChars, { multiline: true, min: 1 });
-    out.annotations = { notes: e.annotations.notes };
+  if (has(e, 'annotations') && c.keys(e.annotations, 'annotations', [], ['notes', 'baseline'])) {
+    const a = e.annotations;
+    out.annotations = {};
+    if (has(a, 'notes')) {
+      c.str(a.notes, 'annotations.notes', LIMITS.notesChars, { multiline: true, min: 1 });
+      out.annotations.notes = a.notes;
+    }
+    if (has(a, 'baseline')) {
+      if (a.baseline !== true) c.add('annotations.baseline', 'must be true when present');
+      out.annotations.baseline = true;
+    }
+    if (!Object.keys(a).length) c.add('annotations', 'must not be empty');
   }
   const dup = out.provenance && out.provenance.duplicateOf;
   if (dup && dup === e.experimentId) {

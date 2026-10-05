@@ -22,6 +22,11 @@
 //
 // Compare (V356): the response overlay, A − B and the IR overlay (compare-view.js; only for an
 // equivalent set, ms re each direct peak, original scale; no A − B of impulse responses).
+// Semantic changes and baseline (ADR 0041): the compare panel lists what changed between the
+// runs by domain (execution first, presentation and metadata collapsed). A run is marked as
+// the baseline through store.annotate (metadata, at most one); Compare then puts it first (A),
+// and one selected run is compared with it. An imported file marked as the baseline keeps the
+// mark only when no other run is the baseline.
 //
 // Independence (§227, V353): the store opens lazily, on the first Experiments view or save, and
 // reading the IndexedDB factory never throws into the app (pageIndexedDb): a store that cannot
@@ -34,14 +39,16 @@ import { openExperimentStoreOrMemory } from '../experiments/store.js';
 import { validateExperiment, DEFAULT_MAX_BYTES } from '../experiments/validate.js';
 import {
   experimentToJson, formatErrors, newExperimentId, EXPERIMENT_FILE_EXTENSION,
-  sanitizeForExport, duplicateExperiment,
+  sanitizeForExport, duplicateExperiment, annotateExperiment, isBaseline,
 } from '../experiments/schema.js';
 import { resultHash, withResultHash, resultHashVersionOf } from '../experiments/hash.js';
 import {
   csvMeta, transferCsv, aggregateCsv, irCsv, reliableFromQuality,
 } from '../experiments/csv.js';
 import { applyFrequencyCorrection } from '../calibration/interpolate.js';
-import { experimentSummary, experimentListRows } from '../measurement/views/experiment-summary.js';
+import {
+  experimentSummary, experimentListRows, compareSelection,
+} from '../measurement/views/experiment-summary.js';
 import { buildCompareView } from '../measurement/views/compare-view.js';
 import { buildResponseView } from '../measurement/views/response-chart.js';
 import { createResponseChart, createIrChart } from '../charts/measure-charts.js';
@@ -206,6 +213,7 @@ export function createExperimentsUi() {
     cmp.exps.detail = {
       ...plain(s),
       testContext: isTestContext(e),
+      baseline: isBaseline(e),
       notes: e.environment && e.environment.notes ? e.environment.notes : null,
       response: view ? { summary: view.summary, badges: view.badges.slice(),
         notes: view.notes.slice() } : null,
@@ -233,6 +241,7 @@ export function createExperimentsUi() {
       compatible: v.compatible,
       warnings: v.warnings.slice(),
       summary: v.summary,
+      semantic: plain(v.semantic),
       overlayNotes: v.overlay ? v.overlay.notes.slice() : [],
       overlaySummary: v.overlay ? `Overlay of ${v.entries.length} raw responses (relative `
         + 'magnitudes, unchanged).' : 'No experiment has a frequency response to overlay.',
@@ -260,6 +269,7 @@ export function createExperimentsUi() {
       rows: [],
       empty: null,
       selected: [],
+      baselineId: null,
       canCompare: false,
       detail: null,
       compare: null,
@@ -311,6 +321,7 @@ export function createExperimentsUi() {
       const v = experimentListRows(list, { selected: this.exps.selected });
       this.exps.rows = v.rows.map((r) => ({ ...r, actions: undefined }));
       this.exps.empty = v.empty;
+      this.exps.baselineId = v.baselineId;
       this.exps.canCompare = v.canCompare;
       this.exps.loaded = true;
       return list;
@@ -331,12 +342,14 @@ export function createExperimentsUi() {
       if (sel.has(id)) sel.delete(id); else sel.add(id);
       this.exps.selected = [...sel];
       this.exps.rows = this.exps.rows.map((r) => ({ ...r, selected: sel.has(r.id) }));
-      this.exps.canCompare = sel.size >= 2;
+      this.exps.canCompare = !!compareSelection([...sel], this.exps.baselineId);
     },
+    /** Compare (ADR 0041): the baseline first, or the baseline and one selected run. */
     async experimentsCompare(ids = this.exps.selected) {
-      if (ids.length < 2) return null;
+      const order = compareSelection(ids, this.exps.baselineId);
+      if (!order) return null;
       const list = [];
-      for (const id of ids.slice(0, 4)) {
+      for (const id of order) {
         const e = await get(this, id);
         if (e) list.push(e);
       }
@@ -367,6 +380,21 @@ export function createExperimentsUi() {
         return true;
       } catch (err) {
         this.notify('error', 'Rename failed', err.message || String(err));
+        return false;
+      }
+    },
+    /** Mark (or clear) the baseline: metadata only (store.annotate), at most one (ADR 0041). */
+    async experimentsSetBaseline(id, on = true) {
+      try {
+        const next = await (await store(this)).annotate(id, { baseline: !!on });
+        // Another run lost its mark in the same write: read it again when it is next shown.
+        for (const [k, x] of ctx.cache) if (k !== id && isBaseline(x)) ctx.cache.delete(k);
+        remember(id, next);
+        if (ctx.detail && ctx.detail.experimentId === id) setDetail(this, next);
+        await this.experimentsRefresh();
+        return true;
+      } catch (err) {
+        this.notify('error', 'Baseline not changed', err.message || String(err));
         return false;
       }
     },
@@ -463,8 +491,13 @@ export function createExperimentsUi() {
         this.notify('error', 'Experiment not imported', formatErrors(v.errors.slice(0, 3)));
         return null;
       }
-      const e = v.experiment;
+      let e = v.experiment;
       const s = await store(this);
+      let kept = '';
+      if (isBaseline(e) && (await s.list()).some((x) => x.baseline)) {
+        e = annotateExperiment(e, { baseline: false });
+        kept = ' It was marked as the baseline; the current baseline is kept.';
+      }
       if (await s.get(e.experimentId)) {
         this.exps.importErrors = [`an experiment with ID ${e.experimentId} is already stored; `
           + 'it was not overwritten'];
@@ -474,7 +507,7 @@ export function createExperimentsUi() {
       this.exps.importErrors = [];
       const id = await this.experimentsPut(e);
       this.notify('success', 'Experiment imported', `"${e.name || '(unnamed)'}"${v.migratedFrom
-        ? ` (migrated from schema v${v.migratedFrom})` : ''}.`);
+        ? ` (migrated from schema v${v.migratedFrom})` : ''}.${kept}`);
       return id;
     },
     /** REPEAT (§104): load the recipe into MEASURE; the result is saved as a new experiment. */
