@@ -51,3 +51,17 @@ SPL figure possible in one defined case.
 - Confirmation for V3: the final science audit (V3 specification §237) finds no "SPL" string
   reachable without a valid level calibration, and a unit test asserts the label function's
   output for both states.
+
+## Resolution notes
+
+Appended; the sections above are left as written, and the status stays `proposed`.
+
+### 2026-10-05: rule `project.no-fake-science` v2 permits dB SPL exactly under this condition
+
+V3 shipped the absolute level calibration (`src/js/calibration/level.js`), so the conflict
+the first consequence foresaw existed from V3.0 until this note: v1 said "never dB SPL" while
+the product showed SPL under a valid level calibration. Version 2 of the rule
+(`.ai/repo/rules/project/no-fake-science.v2.md`) states this decision's condition, and claim
+`spl-only-with-level-calibration` names the tests that prove it (the label function in both
+states in `tests/unit/v3-calibration.test.mjs`, and check no-spl in `tests/browser/v3-ui.cjs`
+for the rendered workspaces).

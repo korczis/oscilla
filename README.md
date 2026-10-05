@@ -343,7 +343,7 @@ Not yet built:
   differing published values.
 
 The reasoning is in the proposed [ADR 0017](.ai/repo/adrs/0017-relative-levels-spl-only-when-calibrated.md)
-and the rule [`project.no-fake-science`](.ai/repo/rules/project/no-fake-science.v1.md).
+and the rule [`project.no-fake-science`](.ai/repo/rules/project/no-fake-science.v2.md).
 
 ## Architecture
 

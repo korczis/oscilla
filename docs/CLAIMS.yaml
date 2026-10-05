@@ -75,14 +75,14 @@ claims:
 
   - id: microphone-analysis-only
     claim: Starting the microphone requests audio with echo cancellation, noise suppression and automatic gain control off, feeds it to an analyser and never to the output, and stopping it ends every track
-    source: .ai/repo/rules/project/no-fake-science.v1.md
+    source: .ai/repo/rules/project/no-fake-science.v2.md
     implementation: src/js/audio/microphone.js
     test: tests/unit/engine.test.mjs
     status: guaranteed
 
   - id: generator-mic-compare
     claim: The generator-versus-microphone comparison reports the frequency difference in hertz and cents and flags a match, a harmonic, a mismatch or no signal
-    source: .ai/repo/rules/project/no-fake-science.v1.md
+    source: .ai/repo/rules/project/no-fake-science.v2.md
     implementation: src/js/analysis/compare.js
     test: tests/unit/analysis-misc.test.mjs
     status: guaranteed
@@ -133,7 +133,7 @@ claims:
 
   - id: bioacoustics-cited
     claim: Every hearing range and call band shown comes from a cited publication, carries its criterion, and is shown with a disclaimer
-    source: .ai/repo/rules/project/no-fake-science.v1.md
+    source: .ai/repo/rules/project/no-fake-science.v2.md
     implementation: src/js/data/bioacoustics.js
     test: tests/unit/bioacoustics.test.mjs
     status: guaranteed
@@ -214,6 +214,14 @@ claims:
     test: tests/unit/about.test.mjs
     status: guaranteed
     note: The current-line check reads package.json and runs everywhere, so npm test, npm run verify and npm run release-gate refuse a bump to a line the page does not name; the published-lines check reads the vX.Y.0 tags and is skipped where tags are not fetched (CI).
+
+  - id: no-fake-science-in-shipped-copy
+    claim: No text the page or its UI and data modules can show claims a medical, therapeutic, wellness, cognitive, pseudoscientific or animal-specific effect, inaudibility, the safety of a frequency, ultrasound below 20 kHz or certification, except in a sentence that negates it
+    source: .ai/repo/rules/project/no-fake-science.v2.md
+    implementation: src/index.html
+    test: tests/unit/no-fake-science.test.mjs
+    status: guaranteed
+    note: Scans src/index.html without comments and the string literals of src/js/ui/ and src/js/data/; the matcher is proven on positive and negated examples. Whether dB SPL is shown only under a level calibration is claim spl-only-with-level-calibration.
 
   # ---- V3 MEASURE (milestones M012-M020), on feature/v3. `npm test` runs tests/unit/v3-*.test.mjs;
   # `npm run test:measure` runs tests/browser/v3-measure.cjs and tests/browser/v3-ui.cjs; both
@@ -356,12 +364,12 @@ claims:
     note: Gap G20 of docs/v3/algorithms.md, enforced by src/js/experiments/schema.js and validate.js. The engine runs repeats without overlapping captures (tests/unit/v3-engine.test.mjs, three runs); the recipe allows 1 to 10.
 
   - id: measurement-quality
-    claim: Every measurement is rated GOOD, USABLE, POOR or INVALID by the versioned rule set oscilla.confidence.v2 from named metrics (signal-to-noise, clipping, dropouts, discontinuities, coverage, repeatability, calibration), always with its reasons
+    claim: Every measurement is rated GOOD, USABLE, POOR or INVALID by the versioned rule set oscilla.confidence.v4 from named metrics (signal-to-noise, clipping, dropouts, discontinuities, coverage, repeatability, calibration), always with its reasons
     source: .ai/repo/adrs/0025-data-driven-quality-with-reasons.md
     implementation: src/js/measurement/quality.js
     test: tests/unit/v3-quality.test.mjs
     status: guaranteed
-    note: oscilla.confidence.v1 is retained and selectable (tests/unit/v3-gaps.test.mjs, G15); the quality panel never relies on colour alone (tests/unit/v3-views.test.mjs).
+    note: oscilla.confidence.v1 to v3 are retained so stored ratings reproduce, v1 selectable (tests/unit/v3-gaps.test.mjs, G15); the quality panel never relies on colour alone (tests/unit/v3-views.test.mjs).
 
   - id: analysis-off-main-thread
     claim: OSCILLA runs the offline measurement analysis in a Worker loaded from a data URL when the platform has Worker, so that no analysis step blocks the main thread, with results bit-identical to the inline fallback
