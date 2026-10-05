@@ -69,8 +69,12 @@ function createFakeAdapter() {
     silent.gain.value = 0;
     router.output.connect(silent);
     silent.connect(ctx.destination);
-    origStart.call(a);
-    origStart.call(b, ctx.currentTime + 0.25 / 440); // B lags A by a quarter period
+    // B lags A by a quarter period. Both start against one time in the future: the main
+    // thread's currentTime trails the render thread, so "now + 0.57 ms" can already be past
+    // when the start arrives, B then starts at once, in phase with A, and correlation reads 1.
+    const t0 = ctx.currentTime + 0.1;
+    origStart.call(a, t0);
+    origStart.call(b, t0 + 0.25 / 440);
   }
 
   const listeners = new Set();
