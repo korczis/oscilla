@@ -28,9 +28,9 @@ gap.
 
 <!-- Repository override .ai/repo/providers/agents.tmpl of the Majordomus 0.12.0 template:
 only this paragraph differs, because the shipped one describes a guard this repository does
-not have. The fix is proposed upstream in majordomus #783 (open). Delete this override once a
-Majordomus release that contains it is installed (check that the shipped templates no longer
-name project.worktree-topology). -->
+not have. Fixed upstream in majordomus #783 (merged via #786). Delete this override once a
+Majordomus release containing it (expected 0.13.2) is installed and its shipped templates no
+longer name project.worktree-topology. -->
 Linked git worktrees of this repository live at `<repository>-wt/<branch>` by convention:
 the primary checkout's sibling named with `-wt`, then the branch name with its hierarchy
 kept; the primary checkout hosts the trunk. The installed Majordomus front door has no
