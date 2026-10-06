@@ -78,7 +78,7 @@ import {
 } from './schema.js';
 import { validateExperiment } from './validate.js';
 import { validateDefinition } from './definition.js';
-import { validateFinding } from './findings.js';
+import { validateFinding, importPlan } from './findings.js';
 import { canonicalJson } from './canonical-json.js';
 
 export const DB_NAME = 'oscilla-experiments';
@@ -223,22 +223,14 @@ function checkedBatch(list) {
 
 /** The import verdict over the stored copies (null when absent): { write, same } or throws. */
 function batchVerdict(batch, olds) {
-  const same = [];
-  const write = [];
-  const conflicts = [];
-  batch.forEach((f, i) => {
-    const old = olds[i];
-    if (!old) write.push(f);
-    else if (canonicalJson(old) === canonicalJson(f)) same.push(f.id);
-    else conflicts.push(f.id);
-  });
-  if (conflicts.length) {
-    throw new ExperimentStoreError('conflict', `${conflicts.length === 1 ? 'a finding' : 'findings'
-    } with the same id ${conflicts.length === 1 ? 'is' : 'are'} already stored with different `
-      + `content (${conflicts.slice(0, 4).join(', ')}); nothing was imported`, undefined,
-    conflicts);
+  const plan = importPlan(batch, olds.filter(Boolean));
+  if (plan.conflicts.length) {
+    const n = plan.conflicts.length;
+    throw new ExperimentStoreError('conflict', `${n === 1 ? 'a finding' : 'findings'} with the `
+      + `same id ${n === 1 ? 'is' : 'are'} already stored with different content (${plan.conflicts
+        .slice(0, 4).join(', ')}); nothing was imported`, undefined, plan.conflicts);
   }
-  return { write, same };
+  return { write: plan.add, same: plan.same };
 }
 
 // ---------------------------------------------------------------- definitions

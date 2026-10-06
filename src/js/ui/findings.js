@@ -18,7 +18,7 @@
 import {
   FINDING_STATUSES, STATUS_TEXT, STATUS_HINT, FINDINGS_FILE_EXTENSION, FINDING_LIMITS,
   createFinding, updateFinding, findingIssues, findingsCiting, refText, refKey, refRunIds,
-  citedRunIds, exportFindings, findingsToJson, parseFindingsFile, importPlan, exactHzText,
+  citedRunIds, exportFindings, findingsToJson, parseFindingsFile, exactHzText,
 } from '../experiments/findings.js';
 import { newExperimentId } from '../experiments/schema.js';
 import { timestampText } from '../measurement/views/experiment-summary.js';
@@ -453,16 +453,15 @@ export function createFindingsUi() {
       const p = parseFindingsFile(text);
       if (!p.ok) return refuse(p.errors.map((e) => `${e.path || 'file'}: ${e.text}`));
       const s = await this.experimentsStore();
-      const plan = importPlan(p.findings, (await s.listFindings()).findings);
-      if (plan.conflicts.length) {
-        return refuse(plan.conflicts.map((id) => `${id} is already stored with different `
-          + 'content; nothing was imported'));
-      }
       let r;
       try {
+        // The store decides the import in one transaction (findings.js importPlan): a finding
+        // stored here with different content refuses all of it; an identical one is skipped.
         r = await s.putFindings(p.findings);
       } catch (err) {
-        return refuse([err.message || String(err)]);
+        return refuse(err && err.code === 'conflict' && Array.isArray(err.fields)
+          ? err.fields.map((id) => `${id} is already stored with different content; nothing `
+            + 'was imported') : [err.message || String(err)]);
       }
       this.fnd.importErrors = [];
       await this.findingsRefresh();

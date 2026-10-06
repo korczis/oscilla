@@ -759,3 +759,23 @@ test('review 1.10: export says how many unreadable findings it left out', async 
   assert.equal(notes.at(-1).kind, 'warning');
   assert.match(notes.at(-1).text, /1 stored finding could not be read and was left out \(bad\)/);
 });
+
+test('review 1.11: one import rule: importPlan is the store\'s verdict, and the UI maps its refusal', async () => {
+  const f = ok(raw());
+  const reordered = Object.fromEntries(Object.entries(f).reverse());
+  assert.deepEqual(F.importPlan([f], [reordered]).same, ['f-1'], 'key order is not content');
+  const store = readFileSync(path.join(ROOT, 'src/js/experiments/store.js'), 'utf8');
+  const ui = readFileSync(path.join(ROOT, 'src/js/ui/findings.js'), 'utf8');
+  assert.match(store, /importPlan\(/, 'the store decides an import with importPlan');
+  assert.ok(!/importPlan\(/.test(ui), 'the workspace does not pre-check with a second copy');
+  const { cmp } = harness();
+  await cmp.experimentsRefresh();
+  const g = ok(raw({ id: 'f-c1' }));
+  assert.equal(await cmp.findingsImportText(F.findingsToJson(F.exportFindings([g],
+    { now: LATER }))), 1);
+  assert.equal(await cmp.findingsImportText(F.findingsToJson(F.exportFindings([{ ...g,
+    statement: 'changed' }, ok(raw({ id: 'f-c2' }))], { now: LATER }))), null);
+  assert.deepEqual(cmp.fnd.importErrors, ['f-c1 is already stored with different content; '
+    + 'nothing was imported']);
+  assert.equal(await (await cmp.experimentsStore()).getFinding('f-c2'), null);
+});

@@ -40,6 +40,7 @@
 //   parseFindingsFile(text, { maxBytes }) -> { ok, findings, errors, newer }   (all or nothing)
 //   importPlan(incoming, stored) -> { add: [finding], same: [id], conflicts: [id] }
 
+import { canonicalJson } from './canonical-json.js';
 import {
   HEX64_PATTERN, ID_PATTERN, LIMITS, VERSION_PATTERN, createChecker,
   formatErrors, toIsoTimestamp,
@@ -435,9 +436,12 @@ export function parseFindingsFile(text, { maxBytes = FINDING_LIMITS.fileBytes } 
   return { ok: true, findings, errors: [], newer: false };
 }
 
-const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+const same = (a, b) => canonicalJson(a) === canonicalJson(b);
 
-/** What an import would do over the stored findings: add, skip identical, refuse different. */
+/**
+ * What an import does over the stored findings: add, skip identical (same canonical content),
+ * refuse different. The one rule: store.js putFindings decides an import with it.
+ */
 export function importPlan(incoming, stored) {
   const byId = new Map(stored.map((f) => [f.id, f]));
   const plan = { add: [], same: [], conflicts: [] };
