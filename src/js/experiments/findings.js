@@ -83,9 +83,10 @@ const has = (o, k) => Object.prototype.hasOwnProperty.call(o, k);
 const MARKUP = /<[A-Za-z!/?]/;
 // Characters that hide or reorder text, or are not text at all: directional marks, embeddings,
 // overrides and isolates (LRM, RLM, ALM, U+202A-202E, U+2066-2069), C1 controls (U+0080-009F,
-// U+0085 included), the line and paragraph separators, the zero-width space, joiners and word
-// joiner, the byte order mark, and an unpaired surrogate (malformed UTF-16).
-const INVISIBLE = new RegExp('[\\u0080-\\u009F\\u061C\\u200B-\\u200F\\u2028\\u2029'
+// U+0085 included), the line and paragraph separators, the zero-width space, the word joiner
+// and invisible operators (U+2060-2064), the byte order mark, and an unpaired surrogate.
+// ZWNJ and ZWJ (U+200C, U+200D) are text: Persian, Devanagari and emoji sequences need them.
+const INVISIBLE = new RegExp('[\\u0080-\\u009F\\u061C\\u200B\\u200E\\u200F\\u2028\\u2029'
   + '\\u202A-\\u202E\\u2060-\\u2064\\u2066-\\u2069\\uFEFF]');
 const LONE_SURROGATE = /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?:^|[^\uD800-\uDBFF])[\uDC00-\uDFFF]/;
 const HZ_MAX = LIMITS.frequencyHz[1];
