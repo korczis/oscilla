@@ -3,7 +3,7 @@ schema: context/v1
 id: ai.repo.providers
 kind: context
 title: Provider template overrides
-description: The provider templates this repository overrides, why, and when each override can go.
+description: Where this repository's provider templates come from, and how to override one.
 status: active
 scope: subtree
 providers: ["*"]
@@ -19,18 +19,13 @@ from a provider template. It takes `<provider>.tmpl` from this directory when on
 the template shipped with the installed Majordomus otherwise; the policy and the hashes are
 the same either way.
 
-| template | overrides | why |
-|---|---|---|
-| `agents.tmpl` | the Majordomus 0.12.0 `agents` template | worktree paragraph |
-| `claude-code.tmpl` | the Majordomus 0.12.0 `claude-code` template | worktree paragraph |
-| `gemini.tmpl` | the Majordomus 0.12.0 `gemini` template | worktree paragraph |
+This repository currently overrides no template: every bootstrap is rendered from the
+templates the installed Majordomus ships. Until 2026-10-06 it overrode `agents`,
+`claude-code` and `gemini` to correct a worktree paragraph that promised a pre-commit guard
+and a rule this repository did not have; Majordomus 0.13.2 ships templates that promise only
+what an adopter has (majordomus #783), so the overrides were deleted.
 
-Each is the shipped template with one paragraph replaced. The shipped paragraph says a
-pre-commit hook refuses a branch committed outside its canonical worktree, under a rule
-`project.worktree-topology` with a mechanism document; none of that exists in this
-repository, whose hooks run `majordomus doctor` and `majordomus finish --check`. It is fixed
-upstream in majordomus #783 (merged via #786), and no tagged release contains it yet. Delete
-all three files, then run `majordomus update`, once a Majordomus release containing it
-(expected 0.13.2) is installed and the templates it ships under `share/providers/` no longer
-name `project.worktree-topology`. Until then a change to a shipped template does not reach
-these files, so compare them with the installed ones when upgrading.
+An override is a copy of a shipped template with a deliberate change. When one is added,
+record here which template it overrides, why, and the condition under which it can go, and
+compare it with the installed template on every Majordomus upgrade: a change to a shipped
+template does not reach an override.
