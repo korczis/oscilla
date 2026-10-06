@@ -1821,7 +1821,9 @@ async function runOne(browserName, origin, baseUrl) {
   const errors = [];
   page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
   page.on('pageerror', (e) => errors.push(`pageerror: ${e.message}`));
-  page.on('dialog', (d) => d.dismiss().catch(() => {}));
+  // A beforeunload question (unsaved work, ADR 0045) is accepted so the recovery reload runs.
+  page.on('dialog', (d) => (d.type() === 'beforeunload' ? d.accept() : d.dismiss())
+    .catch(() => {}));
   const results = {};
   await page.goto(baseUrl, { waitUntil: 'load' });
   try {

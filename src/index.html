@@ -1783,7 +1783,9 @@
 
         <!-- ---------- Experiment: name, notes, save, repeat ---------- -->
         <section class="osc-panel osc-m-experiment" id="osc-measure-experiment" aria-labelledby="osc-m-exp-title">
-          <div class="osc-panel-header"><h3 class="osc-panel-title" id="osc-m-exp-title">Experiment</h3></div>
+          <div class="osc-panel-header"><h3 class="osc-panel-title" id="osc-m-exp-title">Experiment</h3>
+            <span class="osc-m-unsaved" data-osc="measure.unsaved" x-show="measureUnsaved"
+              style="display: none">unsaved result</span></div>
           <div class="osc-m-form">
             <label class="osc-label" for="osc-m-name">Name</label>
             <input class="osc-number osc-m-text" id="osc-m-name" type="text" maxlength="200" autocomplete="off"
@@ -1816,7 +1818,7 @@
           <p class="osc-m-hint" role="status" data-osc="measure.evidenceNotes" x-show="measureEvidenceNotes.length"
             x-text="measureEvidenceNotes.join(' ')" style="display: none"></p>
           <p class="osc-m-hint" data-osc="measure.savedText"
-            x-text="meas.saved ? 'Saved as an experiment' + (exps.persistent ? ' in this browser.' : ' in memory for this page view.') : 'Saved experiments stay in this browser only (no cloud).'"></p>
+            x-text="meas.saved ? 'Saved as an experiment' + (exps.persistent ? ' in this browser.' : ' in memory for this page view.') : (measureUnsaved ? 'Not saved yet: reloading or closing the page loses this result. ' : '') + 'Saved experiments stay in this browser only (no cloud).'"></p>
           <p class="osc-m-hint" x-show="exps.storeNote" x-text="exps.storeNote"></p>
         </section>
       </div>
@@ -2753,7 +2755,8 @@
         level through the same input as a measurement; the offset is the reference minus the
         reading. It is valid only for this microphone, input gain, browser settings and
         position: OSCILLA records the input and stops applying the calibration when the input
-        changes.</p>
+        changes. It is kept in page memory only: a reload or a closed tab discards it, and the
+        browser asks first while one is set.</p>
       <p class="osc-m-hint" data-osc="levelCal.scale"><strong>Scale of the reading:</strong>
         <span x-text="LEVEL_SCALE.label"></span>.</p>
       <div class="osc-settings-grid">

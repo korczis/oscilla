@@ -22,7 +22,7 @@
     "release:stamp": "node scripts/stamp-build.mjs",
     "release:verify-deploy": "node scripts/verify-deploy.mjs",
     "test": "node --test \"tests/unit/**/*.test.mjs\"",
-    "test:browser": "node tests/browser/app.cjs && node tests/browser/layout.cjs && node tests/browser/qa-regressions.cjs",
+    "test:browser": "node tests/browser/app.cjs && node tests/browser/layout.cjs && node tests/browser/qa-regressions.cjs && node tests/browser/navigation.cjs",
     "test:dsp": "node tests/browser/dsp.cjs",
     "test:labs": "node tests/browser/labs.cjs",
     "test:sequencer": "node tests/browser/sequencer.cjs",

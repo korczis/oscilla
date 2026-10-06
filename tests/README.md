@@ -2,7 +2,7 @@
 
 `npm run release-gate` runs, in order: `npm test`, `build:check`, `verify-dist`, then
 `test:release` (`test:engine`, `test:dsp`, `test:labs`, `test:sequencer`, `test:measure`,
-`test:studio`, `test:browser`, `test:visual`); `npm run verify` also runs `version:check` and
+`test:studio`, `test:browser` (app, layout, qa-regressions, navigation), `test:visual`); `npm run verify` also runs `version:check` and
 `majordomus doctor`. CI runs the same scripts as parallel jobs aggregated by the required `gate`
 job, plus a `knowledge` job that runs a pinned `majordomus doctor` (`.github/workflows/ci.yml`).
 `OSC_BROWSERS=chromium,firefox` narrows the multi-browser suites. `test:live` (post-deploy, needs
@@ -38,6 +38,8 @@ for people, never gating · **DELETED** removed, with its replacement.
 | `unit/sequencer-fake-audio.mjs` | SUPPORTING | recording fake AudioContext for the sequencer units |
 | `freeze/vectors.cjs`, `freeze/extract.cjs`, `freeze/golden-a7b7a23.json`, `freeze/freeze-plan.txt` | SUPPORTING | inputs, V1 harness and golden of the freeze |
 | `browser/app.cjs` | GATE | dist in chromium, firefox, webkit from file:// and the /oscilla/ sub-path: boot, controls, audio, export, a11y, overflow at fine pointer; the grouped navigation (eight top-level entries, every workspace by Tab and by arrows, aria-current on group and item, Escape and outside click, dropdown inside the viewport at 1536 and 375 px) |
+| `browser/navigation.cjs` | GATE | dist in chromium, firefox, webkit, file:// and /oscilla/ (every check), ledger W2 and W4 (ADR 0045): a clean page holds no `beforeunload` listener and a reload asks nothing; unsaved Studio changes, a completed measurement that is not saved and a level calibration each hold exactly one, a reload meets the browser's own dialog (dismissed, the work stays) and Save or Clear removes it; MEASURE shows "unsaved result"; every workspace switch is one history entry, Back and Forward move between workspaces with focus on the workspace heading, no notification, the instrument setting and the unsaved Studio changes kept and no unload question; a reload reopens the workspace the address names; a hash set after load moves workspace and V1 mode together; precedence Studio keys > `m` > `mr`; Copy config URL keeps `mr` and the Studio keys and names the workspace; the skip link leaves the address naming the workspace |
+| `unit/navigation.test.mjs` | GATE | the pure halves of `ui/navigation.js` and `ui/unsaved.js`: every workspace id and V1 mode id in `m` routes to one workspace and the V1 mode follows from workspace and source (the one mapping load and hashchange share); the precedence Studio keys > `m` > `mr` > Playground; anchors are not routes; a switch writes `m` and drops the Studio keys off STUDIO; Copy config URL keeps `mr` and the Studio keys; the guard holds one `beforeunload` listener exactly while a source reports something |
 | `browser/layout.cjs` | GATE | 320-1536 px, every workspace: no squashed or overlapping panel, transport hit-testable, no page overflow; coarse pointer at 320/375/768: no overflow, 44 px targets; Escape and page hide stop the sequencer |
 | `browser/engine-v1port.cjs` | GATE | V1's 77 engine checks on the V2 engine; teardown bounded on the audio clock (deadline polls) |
 | `browser/dsp.cjs` | GATE | DSP modules in real browsers: analyser calibration, filter responses, panning, noise |

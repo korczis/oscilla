@@ -73,9 +73,14 @@
 //
 // Recipe link (V355, spec §102): "Copy recipe link" writes the setup's recipe into the URL hash
 // (`mr`, core/url-state-measure.js; recipe only, never results, calibration or device) next to
-// the instrument's own hash state. A link read at load or on hashchange is validated like every
-// import and refused whole when anything is wrong; a valid one fills the setup and opens
-// MEASURE, and never starts a check or a measurement.
+// the instrument's own hash state, with `m=measure`. A link read at load or as a new hash is
+// handed here by the one hash dispatcher (ui/navigation.js, which also chooses the workspace,
+// ADR 0045); it is validated like every import and refused whole when anything is wrong; a
+// valid one fills the setup, and never starts a check or a measurement.
+//
+// Unsaved work (ADR 0045): measureWhatWouldBeLost() reports a completed measurement that is
+// not saved and a level calibration (page memory only; a reload discards it) to the
+// unsaved-work guard (ui/unsaved.js); the Experiment panel shows "unsaved result".
 //
 // Definitions (ADR 0043): measureLoadDefinition fills the setup from a definition version's
 // recipe and keeps that version's run reference. A measurement records it only when the setup
@@ -147,7 +152,7 @@ import { inputDeviceView } from '../measurement/views/input-devices.js';
 import {
   encodeRecipeLink, decodeRecipeLink, recipeParamOf, withRecipeParam, RECIPE_WIRE_KEYS,
 } from '../core/url-state-measure.js';
-import { withoutStudioParams } from '../core/url-state-studio.js';
+import { hashForWorkspace } from './navigation.js';
 
 /** Result tabs (role=tab via the shell's tab binding is not used: these are measure-local). */
 export const MEASURE_RESULT_TABS = Object.freeze([
@@ -1340,11 +1345,7 @@ export function createMeasureUi(svc) {
       if (md && typeof md.addEventListener === 'function') {
         md.addEventListener('devicechange', () => { if (ctx.devicesEnumerated) refreshInputs(); });
       }
-      if (typeof window !== 'undefined' && window.location) {
-        this.measureApplyRecipeHash(window.location.hash, { origin: 'load' });
-        window.addEventListener('hashchange', () => this.measureApplyRecipeHash(window.location
-          .hash, { origin: 'hashchange' }));
-      }
+      // Recipe links reach measureApplyRecipeHash through the hash dispatcher (main.js).
     },
     /** Mount the charts once the view exists (main.js, after the labs). */
     measureMountCharts(root) {
@@ -1503,16 +1504,19 @@ export function createMeasureUi(svc) {
     measureRecipeUrl() {
       const loc = typeof window !== 'undefined' ? window.location : null;
       if (!loc) return null;
-      // A recipe link opens MEASURE: the Studio deep-link keys (V422) are not carried along.
-      return `${loc.href.split('#')[0]}#${withRecipeParam(withoutStudioParams(loc.hash),
-        this.measureRecipeParam())}`;
+      // A recipe link opens MEASURE (m=measure): the Studio deep-link keys (V422) are not
+      // carried along.
+      return `${loc.href.split('#')[0]}#${hashForWorkspace(withRecipeParam(loc.hash,
+        this.measureRecipeParam()), 'measure')}`;
     },
     /** Put the recipe link in the address bar and on the clipboard (dialog when unavailable). */
     async measureCopyRecipeLink() {
       const url = this.measureRecipeUrl();
       if (!url) return null;
       ctx.lastRecipeParam = this.measureRecipeParam(); // our own link is not one to apply
-      try { window.history.replaceState(null, '', url); } catch (e) { /* file:// in some */ }
+      try {
+        window.history.replaceState(window.history.state, '', url);
+      } catch (e) { /* file:// in some */ }
       this.meas.recipeLink = url;
       let copied = false;
       try {
@@ -1533,9 +1537,10 @@ export function createMeasureUi(svc) {
     /**
      * Apply a recipe link from a location hash (V355): validated like every import, refused
      * whole when invalid, never starts anything. Returns true (applied), false (refused) or
-     * null (no recipe in the hash, or the one already applied).
+     * null (no recipe in the hash, or the one already applied). The workspace is the hash
+     * dispatcher's choice (ui/navigation.js): `mr` alone opens MEASURE, an `m` key wins.
      */
-    measureApplyRecipeHash(hash, { origin = 'link' } = {}) {
+    measureApplyRecipeHash(hash) {
       const param = recipeParamOf(hash);
       if (param === null) {
         ctx.lastRecipeParam = null;
@@ -1564,8 +1569,6 @@ export function createMeasureUi(svc) {
       // second save of it would be refused as immutable and read as "not saved").
       if (ctx.me && ctx.me.state === S.READY) ctx.me.reset(); // the recipe changed
       refresh();
-      if (origin === 'load') this.workspace = 'measure';
-      else if (this.workspace !== 'measure') this.setWorkspace('measure');
       this.notify('info', 'Measurement recipe loaded from the link', `${this.meas.stimulusText}, `
         + `${this.meas.values.repeats} run(s). Nothing runs until you press Check setup or Start `
         + 'measurement.');
@@ -1823,6 +1826,25 @@ export function createMeasureUi(svc) {
       rebuildAll();
     },
     get measureFreqCalText() { return calText({ profile: this.meas.cal.profile }); },
+    /** A completed measurement whose result is not saved (the "unsaved result" indicator). */
+    get measureUnsaved() {
+      return this.meas.state === S.COMPLETE && !this.meas.saved;
+    },
+    /**
+     * What a reload or a closed tab would lose here (ui/unsaved.js): the completed result that
+     * is not saved, and a level calibration, which lives in page memory only (a frequency
+     * profile is not listed: its file can be imported again).
+     */
+    measureWhatWouldBeLost() {
+      const lost = [];
+      if (this.measureUnsaved) {
+        lost.push({ domain: 'measure', label: 'A completed measurement that is not saved' });
+      }
+      if (this.meas.cal.level) {
+        lost.push({ domain: 'measure', label: 'The level calibration (kept in page memory only)' });
+      }
+      return lost;
+    },
     /** Why "Save experiment" is disabled, or '' when it is enabled. */
     get measureSaveReason() {
       if (this.meas.saving) return 'Saving…';

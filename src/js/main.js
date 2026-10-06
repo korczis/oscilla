@@ -53,7 +53,9 @@ import { serializeSequence } from './sequencer/model.js';
 
 import { registerOscillaUi, workspaceTitle } from './ui/app.js';
 import { keyGuard, openModal, closeModal, watchDialogs, focusSafely } from './ui/dialogs.js';
-import { createWorkbench, v1ModeFor, workspaceForV1Mode } from './ui/workbench.js';
+import { createWorkbench } from './ui/workbench.js';
+import { createNavigation, v1ModeFor } from './ui/navigation.js';
+import { createUnsavedGuard } from './ui/unsaved.js';
 import { createMeasureUi } from './ui/measure.js';
 import { createExperimentsUi } from './ui/experiments.js';
 import { createStudioUi } from './ui/studio/workspace.js';
@@ -468,6 +470,12 @@ function mountLabs(root) {
 }
 
 // ------------------------------------------------------------------------------ component
+// The domains that can hold unsaved work, each asked through whatWouldBeLost (reactive reads).
+const unsavedGuard = createUnsavedGuard({ sources: [
+  () => (app ? app.studioWhatWouldBeLost() : []),
+  () => (app ? app.measureWhatWouldBeLost() : []),
+] });
+
 function compose(...parts) {
   const target = {};
   for (const part of parts) {
@@ -495,11 +503,13 @@ function integrationInit() {
   cmp.customPresets = cmp.loadCustomPresets();
   cmp.history = cmp.loadHistory();
   cmp.safetyCollapsed = sessionStore.get(STORAGE_KEYS.safetySeen) === '1';
-  const hadMode = /(^|[#&])m=/.test(window.location.hash);
-  cmp.restoreFromHash();
-  if (hadMode) cmp.workspace = workspaceForV1Mode(cmp.mode);
-  // A Studio deep link (`m=studio`, V422) after the V1 `m` key, which it would otherwise lose to.
-  cmp.studioApplyLinkHash(window.location.hash, { origin: 'load' });
+  // ONE hash dispatcher (ui/navigation.js, ADR 0045): each domain applies its own keys, in this
+  // order, and the dispatcher alone chooses the workspace (Studio keys > m > mr > Playground).
+  // It applies the hash the page opened at, new links, and Back / Forward between workspaces.
+  cmp.navRegister('instrument', () => cmp.restoreFromHash());
+  cmp.navRegister('measure', (hash) => cmp.measureApplyRecipeHash(hash));
+  cmp.navRegister('studio', (hash) => cmp.studioApplyLinkHash(hash));
+  cmp.navStart();
   if (cmp.source !== 'single' || cmp.pattern !== 'tone') cmp.sourceKind = 'pattern';
   engine.on((type, d) => {
     cmp.onEngine(type, d);
@@ -527,7 +537,6 @@ function integrationInit() {
   });
   window.addEventListener('keyup', (e) => cmp.onKeyUp(e));
   window.addEventListener('blur', () => cmp.releaseHold());
-  window.addEventListener('hashchange', () => cmp.restoreFromHash());
   const hide = () => {
     cmp.releaseHold();
     stopSequencer();
@@ -552,6 +561,9 @@ function integrationInit() {
     else if (['PLAYING', 'STOPPED', 'ERROR'].includes(st)) cmp.announceText = `Playback ${st}`;
   });
   Alpine.effect(() => { cmp.mode = v1ModeFor(cmp.workspace, cmp.source); });
+  // The unsaved-work guard (ui/unsaved.js, ADR 0045): each domain reports what a reload or a
+  // closed tab would lose; a beforeunload listener exists only while that list is not empty.
+  Alpine.effect(() => unsavedGuard.update());
   Alpine.effect(() => { cmp.inputMode = cmp.noteMode ? 'note' : 'frequency'; });
   Alpine.effect(() => { cmp.dualRoute = cmp.dual.stereo ? 'stereo' : 'mono'; });
   Alpine.effect(() => {
@@ -584,6 +596,7 @@ function integrationInit() {
   });
   const baseTitle = document.title;
   cmp.$watch('workspace', (ws) => { document.title = workspaceTitle(ws, baseTitle); });
+  document.title = workspaceTitle(cmp.workspace, baseTitle); // a reload restores About too
   // R3: Pause animation. The p5 views pause through bridge.state.paused (syncViz); the uPlot
   // spectrum and the analysis-tab spectrogram hold their last real frame through their public
   // setFreeze(); setFramesPaused() stops every other renderer on the shared frame loop.
@@ -704,8 +717,9 @@ function createOscillaComponent(ui) {
   });
   const experiments = createExperimentsUi();
   const studio = createStudioUi({ engine, stopPlayback });
-  const cmp = compose(instrument, ui, workbench, measure, experiments, studio, provenancePart(),
-    TEMPLATE_HELPERS);
+  const navigation = createNavigation();
+  const cmp = compose(instrument, ui, workbench, measure, experiments, studio, navigation,
+    provenancePart(), TEMPLATE_HELPERS);
   cmp.dismissAlert = focusSafeDismiss(cmp.dismissAlert);
   const baseRefreshDebug = cmp.refreshDebug;
   Object.defineProperty(cmp, 'refreshDebug', {
@@ -797,6 +811,11 @@ window.OSCILLA = {
   get measure() { return app ? app.measureTestSeam() : null; },
   get experiments() { return app ? app.experimentsTestSeam() : null; },
   get studio() { return app ? app.studioTestSeam() : null; },
+  get navigation() { return app ? app.navTestSeam() : null; },
+  unsaved: {
+    get armed() { return unsavedGuard.armed; },
+    whatWouldBeLost: () => unsavedGuard.update(),
+  },
   studioTimeline: studioTimelineSeam(engine),
   buildPlan,
   planFreqAt,

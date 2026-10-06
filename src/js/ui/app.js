@@ -139,6 +139,44 @@ export function placeNavPanel(button, panel, win = window) {
   panel.style.top = `${Math.round(b.bottom - 6)}px`;
 }
 
+/**
+ * The heading of a workspace: the heading its own view is labelled by (MEASURE, STUDIO, …), the
+ * title of the visually first of its panels on the Playground grid (Analyzer, Filter Lab, …),
+ * or the page heading for the Playground. null when none is shown.
+ */
+export function workspaceHeading(root, mode) {
+  const shown = (el) => !!el && el.getClientRects().length > 0;
+  const labelOf = (el) => {
+    if (!el) return null;
+    const id = el.getAttribute('aria-labelledby');
+    return (id && root.querySelector(`#${id}`)) || el.querySelector('h2, h3');
+  };
+  if (mode === 'playground') return root.querySelector('#osc-main > h1');
+  const own = [...root.querySelectorAll('[data-osc-modes]')]
+    .filter((p) => p.dataset.oscModes.split(/\s+/).includes(mode));
+  const view = own.find((p) => p.classList.contains('osc-view') && shown(p));
+  if (view) return labelOf(view);
+  const panel = own.filter((p) => p.classList.contains('osc-panel') && shown(p)
+    && !p.matches('.osc-p-source, .osc-p-analysis'))
+    .sort((a, b) => a.getBoundingClientRect().top - b.getBoundingClientRect().top
+      || a.getBoundingClientRect().left - b.getBoundingClientRect().left)[0];
+  return labelOf(panel);
+}
+
+/**
+ * Move focus to the workspace heading (a navigation the user did not make on a control: Back,
+ * Forward, a link). It is focusable only by script (tabindex -1) and never steals focus from an
+ * open dialog; the workspace is already scrolled into view, so the focus does not scroll.
+ */
+export function focusWorkspaceHeading(root, mode) {
+  if (document.querySelector('dialog[open]')) return false;
+  const h = workspaceHeading(root, mode);
+  if (!h) return false;
+  if (!h.hasAttribute('tabindex')) h.setAttribute('tabindex', '-1');
+  h.focus({ preventScroll: true });
+  return document.activeElement === h;
+}
+
 /** Document title for a workspace: the product title, or `OSCILLA · <page>` for a page-like one. */
 export function workspaceTitle(mode, base) {
   return WORKSPACE_TITLES[mode] ? `OSCILLA · ${WORKSPACE_TITLES[mode]}` : base;
@@ -245,11 +283,19 @@ export function createOscillaUi({ storedAnalysisTab = storageGet(ANALYSIS_TAB_KE
     },
 
     // ---- workspace navigation ----
-    setWorkspace(mode) {
+    /**
+     * Switch workspace. The address follows (ui/navigation.js: one history entry per switch).
+     * focusHeading: focus moves to the workspace heading (Back / Forward, a link), where a nav
+     * click leaves it on the control that was pressed.
+     */
+    setWorkspace(mode, { focusHeading = false } = {}) {
       if (!MODES.includes(mode)) return;
       this.workspace = mode;
       this.emit('mode', 'mode', mode);
-      this.$nextTick(() => this.focusWorkspace(mode));
+      this.$nextTick(() => {
+        this.focusWorkspace(mode);
+        if (focusHeading) focusWorkspaceHeading(this.$root, mode);
+      });
     },
     focusWorkspace(mode) {
       // Below 1280 px the nav scrolls in its own strip: keep the active top-level entry (the

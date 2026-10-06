@@ -120,7 +120,12 @@ device, name or notes. Opening it fills the setup and opens Measure; it never st
 check or a measurement. A link that has been altered or does not fit (an unknown field, a value
 out of range, a start frequency above the end) is refused as a whole and the setup is left as
 it was. The recipe can sit next to a Playground link in the same address; each restores its own
-part.
+part. An address that also names a workspace (`m=…`) opens that workspace and still fills the
+setup.
+
+A completed measurement that is not saved shows "unsaved result" in the Experiment panel; while
+it is there, or while a level calibration is set, a reload, a closed tab or leaving the page
+makes the browser ask first.
 
 ## Where experiments are kept
 
@@ -168,7 +173,8 @@ working, with saves kept in memory.
 - The two are separate. A frequency profile alone does not give dB SPL.
 - Calibrations are kept for the page view only. A saved experiment records which frequency
   profile it used (name and identity) and the level calibration, so reload the profile file
-  before a new session.
+  before a new session. While a level calibration is set, a reload or a closed tab asks first
+  (ADR 0045).
 - **Export CSV** and **Export JSON** save the loaded frequency profile. Both files are the same
   for the same profile (name, identity, sign convention and points; the JSON also keeps the
   source and notes) and import back unchanged, without asking for the sign convention again.

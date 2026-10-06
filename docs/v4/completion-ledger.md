@@ -69,7 +69,7 @@ mobile, significant performance), **P2** (polish, debt).
 | R2 | Runtime commit phase not exception-safe: a throw after the plan swap leaves the applied record stale (hidden divergence) | **closed** #119: post-swap failures are sticky Diagnostics, verdict `degraded` |
 | R3 | Studio Microphone node can never be enabled; help text points to a control that does not exist | **closed** #119: Allow microphone, including re-allow while playing |
 | W1 | Deleting the open Studio project leaves it looking saved; the next template replaces the graph without the unsaved-changes prompt (data loss) | **closed** #119: the open document detaches and stays unsaved |
-| W2 | No `beforeunload` guard, no history entries; reload/Back silently loses unsaved Studio work and an unsaved measurement | open |
+| W2 | No `beforeunload` guard, no history entries; reload/Back silently loses unsaved Studio work and an unsaved measurement | fixing: branch `fix/unsaved-work-is-protected` (ADR 0045) |
 | W3 | README privacy statement omits the `studio` / `studioSummaries` stores | **closed** #120: inventory test derives keys and stores from code |
 | C1 | Unbound manual level calibration applies to every input | open |
 | D3 | Studio provenance hashes unconnected nodes, so identical measurements read as an execution change | open |
@@ -84,7 +84,7 @@ mobile, significant performance), **P2** (polish, debt).
 Diagnostic codes derived from message text (R5, fixing); clip-target policy duplicated between
 registry, timeline UI and transport (R7); pattern-played Oscillator frequency lanes drive a
 silent carrier (R8); presentation-only edits pay a full compile while playing (R9);
-`mode`/`workspace` split state and three hash routers (W4); Space has two meanings and two
+`mode`/`workspace` split state and three hash routers (W4, fixing with W2: one dispatcher, ADR 0045); Space has two meanings and two
 shortcut dialogs (W5); disabled controls without a reason (W6, partly fixing); WebKit absent from
 engine/dsp/labs/sequencer CI and the About provenance tests skip in CI's shallow clone (CI1);
 no startup budget or large-library fixture (P1); `window.OSCILLA` test seam and `?mock=1` ship

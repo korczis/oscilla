@@ -405,8 +405,9 @@ export function expertFields({ disclosure = 'basic', sampleRate = null } = {}) {
         kind: 'toggle', default: true, help: 'Applies the loaded microphone profile where it '
           + 'covers; RAW is always kept.' }),
       field({ id: 'levelCalibration', path: null, label: 'Absolute level calibration',
-        kind: 'toggle', default: false, help: 'Only a stored reference calibration enables '
-          + 'absolute levels; there is no default.' }),
+        kind: 'toggle', default: false, help: 'Only a level calibration you make from an '
+          + 'external reference enables absolute levels; it is kept in page memory only (a '
+          + 'reload discards it) and there is no default.' }),
     ] },
     { id: 'view', label: 'View', disclosure: 'basic', fields: [
       field({ id: 'smoothing', path: null, label: 'Smoothing', kind: 'choice',
