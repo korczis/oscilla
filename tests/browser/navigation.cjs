@@ -20,6 +20,8 @@
 //                     no notification is raised, a changed instrument setting and unsaved Studio
 //                     changes survive Back / Forward, and the guard asks nothing for them; a
 //                     reload reopens the workspace the address names
+//   open-every-workspace  a fresh page at `#m=<id>` opens each of the twelve workspaces; the
+//                     Experiments list loads, About sets its title
 //   hashchange-mode   a hash set after load moves the workspace AND the V1 mode together
 //                     (`m=learn` → Learn, `m=dual` → Synthesis/dual, `m=sweep` → Playground/sweep)
 //   precedence        `#m=studio&st=…&sv=…&mr=…` opens STUDIO with the template and view and
@@ -364,6 +366,26 @@ function defineChecks() {
       reloadRestores: !reload.stayed && reload.dialog === null && at(reloaded, 'analyzer'),
     }), start: { hash: start.hash, length: start.length }, switched, b1, b2, b3, f1, f2, f3,
     reloaded };
+  });
+
+  def('open-every-workspace', async (ctx) => {
+    // A reload or a shared address opens each workspace as a switch would: the heading shown,
+    // the title, and what entering it loads (the Experiments list).
+    const ids = ['playground', 'measure', 'experiments', 'analyzer', 'filter', 'compare',
+      'synthesis', 'sequencer', 'presets', 'learn', 'studio', 'about'];
+    const rows = [];
+    for (const ws of ids) {
+      const page = await H.open(ctx, `${ctx.baseUrl}#m=${ws}`);
+      const st = await H.state(page);
+      const extra = await H.until(() => page.evaluate(() => ({
+        title: document.title, loaded: window.OSCILLA.app.exps.loaded })),
+      (x) => ws !== 'experiments' || x.loaded, 5000);
+      rows.push({ ws, workspace: st.workspace, dataMode: st.dataMode, ...extra });
+      await page.close();
+    }
+    const bad = rows.filter((r) => r.workspace !== r.ws || r.dataMode !== r.ws
+      || (r.ws === 'experiments' && !r.loaded) || (r.ws === 'about' && !/About/.test(r.title)));
+    return { ok: bad.length === 0, bad };
   });
 
   def('hashchange-mode', async (ctx) => {

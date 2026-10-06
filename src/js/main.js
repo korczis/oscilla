@@ -585,15 +585,19 @@ function integrationInit() {
     });
   });
   cmp.$watch('tabs.analysis', (tab) => setAnalysisTab(tab));
-  cmp.$watch('workspace', (ws) => {
-    // A measurement does not keep running unseen: leaving MEASURE stops it.
-    if (ws !== 'measure') cmp.measureAbort('workspace');
+  const loadExperiments = (ws) => {
     if (ws === 'experiments' && !cmp.exps.loaded) {
       cmp.experimentsRefresh().catch((err) => cmp.notify('error', 'Experiments unavailable',
         err.message || String(err)));
     }
+  };
+  cmp.$watch('workspace', (ws) => {
+    // A measurement does not keep running unseen: leaving MEASURE stops it.
+    if (ws !== 'measure') cmp.measureAbort('workspace');
+    loadExperiments(ws);
     repairCharts();
   });
+  loadExperiments(cmp.workspace); // the address opened Experiments (a reload, a shared link)
   const baseTitle = document.title;
   cmp.$watch('workspace', (ws) => { document.title = workspaceTitle(ws, baseTitle); });
   document.title = workspaceTitle(cmp.workspace, baseTitle); // a reload restores About too
