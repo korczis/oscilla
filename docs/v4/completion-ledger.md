@@ -133,5 +133,4 @@ C1, D3 and D4 are closed by #PR, each with tests that failed before the change (
 what a record holds: an unbound level calibration stays partial, a stimulus this build cannot
 measure keeps "Recipe recorded" partial, and the Studio link names the measured path.
 
-Open from this ledger's findings: W2 (unsaved-work guard and navigation history) and the P2
-list.
+With W2 handled by #130 (ADR 0045), the findings of this ledger still open are the P2 list.
