@@ -45,7 +45,9 @@
 //                profile: { id, name } | null (the frequency profile loaded in Measure) }
 //     Each list is bounded by CONNECTION_LIMIT; `more` counts what was left out.
 //   runTargets(result) -> [experimentId]   the runs a result names, to be read and verified
-//   Connection = { direction, relation, label, from: { kind, id }, to: { kind, id, version? },
+//   Connection = { direction, relation, label, from: { kind, id },
+//     to: { kind, id, version?, hash? }   hash: the result hash a present run target was verified
+//                                         with (following it checks the record is unchanged),
 //     field, fieldOf, state, target, text, href, open }
 //     field    the stored field the connection comes from (a path on the record `fieldOf`
 //              names: 'this run', 'that run', 'this finding', 'that finding')
@@ -520,6 +522,15 @@ export function connectionsOf(subject, index = {}) {
     notes.push({ field: null, text: 'A Studio project stores no reference to another record.' });
     down = studioDown(r, v, { kind: 'studio', id });
     unknownRunsNote(v, notes, 'studio.studioHash');
+  }
+  // A run target read and verified here carries the result hash it was verified with, so that
+  // following the link can check that the same record is still stored (ui/connections.js).
+  for (const c of [...up, ...down]) {
+    if (c.to.kind !== 'run' || c.state !== 'present') continue;
+    const row = v.run.get(c.to.id);
+    const hash = c.to.id === id && subject.kind === 'run' ? runLinks(r).resultHash
+      : row && obj(row.links) ? row.links.resultHash : null;
+    if (hash) c.to = { ...c.to, hash };
   }
   const u = bounded(up);
   const d = bounded(down);

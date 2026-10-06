@@ -294,12 +294,48 @@ export function createConnectionsUi() {
         }
         return true;
       }
+      if (c.to && c.to.kind === 'run' && c.to.hash && c.href) {
+        // A run shown as "stored here" is opened only while the same record is stored: it is
+        // read again first, and a record that changed since the list was read is refused.
+        if (ev) ev.preventDefault();
+        track(this.connectionsVerifyAndGo(c));
+        return true;
+      }
       if (c.href && typeof location !== 'undefined' && location.hash === c.href) {
         if (ev) ev.preventDefault();
         this.recordsApplyHash(c.href, 'link');
         return true;
       }
       return false;
+    },
+    /**
+     * Read run target `c.to` from the store again; follow `c.href` only when the record stored
+     * under its id still has the result hash it was verified with. Returns true when followed.
+     */
+    async connectionsVerifyAndGo(c) {
+      const name = c.target;
+      let e = null;
+      try {
+        e = await (await this.experimentsStore()).get(c.to.id);
+      } catch (err) {
+        this.notify('warning', 'Run not opened', `${name} is stored here but cannot be read now (${
+          err.message || String(err)}). Nothing was opened.`);
+        this.connectionsRefreshOpen();
+        return false;
+      }
+      const now = e ? runLinks(e).resultHash : null;
+      if (!e || now !== c.to.hash) {
+        this.notify('warning', 'Run not opened', `${name} changed since this list was read: ${e
+          ? 'a different record is stored under its id now' : 'it is no longer stored here'}. `
+          + 'Nothing was opened; the connections are read again.');
+        this.connectionsRefreshOpen();
+        return false;
+      }
+      if (typeof location !== 'undefined') {
+        if (location.hash === c.href) this.recordsApplyHash(c.href, 'link');
+        else location.hash = c.href;
+      } else this.recordsApplyHash(c.href, 'link');
+      return true;
     },
 
     /**

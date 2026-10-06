@@ -2403,6 +2403,15 @@ function defineChecks(fixtures) {
       .filter((x) => x.dataset.relation === 'cited-by').map((x) => ({ state: x.dataset.state,
         text: x.textContent.replace(/\s+/g, ' ').trim() })), RUN);
     res.before = await H.until(cited, (l) => l.length === 1 && l[0].state === 'present', 10000);
+    // The finding's connections, listed now: B "stored here", its link verified with B's hash.
+    await page.evaluate((id) => window.OSCILLA.app.connectionsToggle('finding', id, true),
+      res.setup);
+    const CITES = `[data-osc="fnd.row"][data-id="${res.setup}"] [data-osc="fnd.connections"] `
+      + 'li[data-relation="cites"]';
+    res.listed = await H.until(() => page.evaluate((q) => {
+      const li = document.querySelector(q);
+      return li ? li.dataset.state : null;
+    }, CITES), (x) => x === 'present', 10000);
     const page2 = await context.newPage();
     try {
       await page2.goto(page.url(), { waitUntil: 'load' });
@@ -2421,7 +2430,15 @@ function defineChecks(fixtures) {
     } finally {
       await page2.close();
     }
-    // This tab, no reload: back to Experiments (Studio and back), which reads them again.
+    // This tab, no reload, the list not read again: following the link reads B first and
+    // refuses, since a different record is stored under its id now.
+    await page.evaluate(() => { window.OSCILLA.app.alerts = []; });
+    await page.click(`${CITES} a`);
+    res.refused = await H.until(() => page.evaluate(() => ({
+      alerts: window.OSCILLA.app.alerts.map((x) => `${x.title}: ${x.message || x.text || ''}`),
+      hash: location.hash })), (x) => x.alerts.some((t) => /changed since this list was read/
+      .test(t)), 8000);
+    // Back to Experiments (Measure and back), which reads the connections again.
     await page.evaluate(() => window.OSCILLA.app.setWorkspace('measure'));
     await page.evaluate(() => window.OSCILLA.app.setWorkspace('experiments'));
     res.after = await H.until(cited, (l) => l.length === 1 && l[0].state !== 'present', 10000);
@@ -2437,7 +2454,8 @@ function defineChecks(fixtures) {
     }, fixtures.b.json);
     return { ...res, ...H.verdict({
       before: res.before[0] && res.before[0].state === 'present',
-      replaced: res.tab2 === 'fixture-b',
+      replaced: res.tab2 === 'fixture-b' && res.listed === 'present',
+      'open-refused': res.refused.alerts.some((t) => /Run not opened: .*changed since this list was read: a different record is stored under its id now/.test(t)),
       'not-present': res.after[0] && res.after[0].state === 'mismatch'
         && /does not match: .*different record/.test(res.after[0].text),
       finding: res.finding.join() === 'mismatch',

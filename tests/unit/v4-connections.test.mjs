@@ -405,7 +405,7 @@ function harness() {
 test('the workspace: a duplicate, a finding and a deleted original, in both directions',
   async () => {
     const { a, b } = await fx();
-    const { cmp } = harness();
+    const { cmp, notes } = harness();
     await cmp.experimentsImportText(a.json);
     await cmp.experimentsImportText(b.json);
     const dupId = await cmp.experimentsDuplicate('fixture-a');
@@ -417,7 +417,13 @@ test('the workspace: a duplicate, a finding and a deleted original, in both dire
     assert.deepEqual(fromA.downstream.map((c) => [c.relation, c.to.id, c.state]), [
       ['cited-by', saved.id, 'present'], ['duplicated-as', dupId, 'present']]);
     const fromDup = await cmp.connectionsOfRun(dupId);
-    assert.equal(one(fromDup.upstream, 'duplicate-of').state, 'present');
+    const dupOf = one(fromDup.upstream, 'duplicate-of');
+    assert.equal(dupOf.state, 'present');
+    assert.equal(dupOf.to.hash, a.experiment.provenance.resultHash, 'verified with this hash');
+    // Following it reads the record again first: unchanged, the original opens.
+    assert.equal(await cmp.connectionsVerifyAndGo(dupOf), true);
+    await cmp.cnxSettled();
+    assert.equal(cmp.exps.detail.id, 'fixture-a');
     const fromF = await cmp.connectionsOfFinding(saved.id);
     assert.equal(fromF.upstream[0].state, 'present');
     assert.equal(cmp.cnx.findings[saved.id].upstream.length, 1, 'kept for the finding row');
@@ -432,6 +438,9 @@ test('the workspace: a duplicate, a finding and a deleted original, in both dire
     const impostor = JSON.parse(c.json);
     impostor.experimentId = 'fixture-a';
     await cmp.experimentsImportText(JSON.stringify(impostor));
+    // The listed connection was verified against the earlier record: following it now refuses.
+    assert.equal(await cmp.connectionsVerifyAndGo(dupOf), false);
+    assert.match(notes.at(-1).text, /changed since this list was read: a different record is /);
     const re = (await cmp.connectionsOfFinding(saved.id)).upstream[0];
     assert.equal(re.state, 'mismatch');
     assert.match(re.text, /^does not match: .*a different record is stored under this id/);
