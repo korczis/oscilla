@@ -56,6 +56,18 @@
 .osc-m-result { grid-column: 1 / -1; }
 .osc-m-setup { grid-column: 1 / span 7; }
 .osc-m-experiment { grid-column: 8 / span 5; align-self: start; }
+
+/* A completed result that is not saved (ADR 0045), like Studio's "unsaved changes". */
+.osc-m-unsaved {
+  color: var(--osc-text-muted);
+  font-size: var(--osc-fs-xs);
+  white-space: nowrap;
+}
+
+.osc-m-unsaved::before {
+  content: "● ";
+  color: var(--osc-orange);
+}
 .osc-x-side {
   display: flex;
   flex-direction: column;

@@ -946,10 +946,17 @@ export function createInstrument(deps = {}) {
       if (r.mode) this.mode = r.mode;
       for (const n of r.notices) this.notify(n.level, n.title, n.message);
     },
+    /**
+     * The hash Copy config URL writes: V1 wrote the instrument hash alone; V2 (ui/navigation.js)
+     * replaces this with one that keeps the other domains' keys and names the workspace.
+     */
+    configLinkHash() { return this.serializeHash(); },
     // V1: oscillaApp.copyConfigLink (index.html@a7b7a23); browser APIs via deps.env
     async copyConfigLink() {
-      const url = `${location.href.split('#')[0]}#${this.serializeHash()}`;
-      try { host.history.replaceState(null, '', url); } catch (e) { /* file:// in some browsers */ }
+      const url = `${location.href.split('#')[0]}#${this.configLinkHash()}`;
+      try {
+        host.history.replaceState(host.history.state ?? null, '', url);
+      } catch (e) { /* file:// in some browsers */ }
       this.copyUrl = url;
       let copied = false;
       try {

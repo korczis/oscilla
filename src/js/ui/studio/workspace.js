@@ -37,9 +37,10 @@
 // a result is selected, framed and focused.
 //
 // Deep link (§199-§200; plan V422): `#m=studio[&st=<template id>][&sv=<subview>]`
-// (core/url-state-studio.js). A link read at load (main.js, after the V1 `m` key) or on
-// hashchange is validated like an import and refused whole with a readable message; it opens the
-// workspace, the subview and a shipped template, never starts playback, and never replaces a
+// (core/url-state-studio.js). A link read at load or as a new hash reaches studioApplyLinkHash
+// through the one hash dispatcher (ui/navigation.js, which also opens the workspace: Studio keys
+// take precedence, ADR 0045); it is validated like an import and refused whole with a readable
+// message; it opens the subview and a shipped template, never starts playback, and never replaces a
 // document with unsaved changes (the Templates dialog and its "unsaved changes" note open
 // instead, the usual explicit Open). Copy link writes the current view: the template id only
 // while the document is that template unmodified, otherwise the workspace and subview alone.
@@ -81,7 +82,7 @@ import {
   createDirtyTracker, createStudioLibrary, exportProjectFile, fileSlug, importStudioFile,
 } from '../../studio/library.js';
 import { announceRedo, announceUndo, announceAction } from '../../studio/a11y.js';
-import { openExperimentStoreOrMemory } from '../../experiments/store.js';
+import { observeMemoryStore, openExperimentStoreOrMemory } from '../../experiments/store.js';
 import { pageIndexedDb } from '../experiments.js';
 import { KNOWN_ALGORITHM_IDS } from '../../measurement/algorithms.js';
 import { openModal, closeModal } from '../dialogs.js';
@@ -765,7 +766,10 @@ export function createStudioUi(svc = {}) {
         storage: typeof navigator !== 'undefined' ? navigator.storage : null,
         knownAlgorithms: KNOWN_ALGORITHM_IDS,
       }).then((r) => {
-        ctx.lib = createStudioLibrary(r.store);
+        // The memory fallback says what it holds: a reload discards it (ui/unsaved.js).
+        ctx.lib = createStudioLibrary(observeMemoryStore(r.store, (held) => {
+          if (ctx.cmp) ctx.cmp.studio.memoryHeld = held.studio;
+        }));
         if (ctx.cmp) {
           ctx.cmp.studio.persistent = ctx.lib.persistent;
           ctx.cmp.studio.storeNote = ctx.lib.persistent ? '' : STUDIO_STORE_FALLBACK_TEXT;
@@ -1020,6 +1024,7 @@ export function createStudioUi(svc = {}) {
       title: '',
       dirty: false,
       persistent: true,
+      memoryHeld: 0, // Studio projects and patches held by the memory fallback store
       storeNote: '',
       playing: false,
       loop: false,
@@ -1095,9 +1100,7 @@ export function createStudioUi(svc = {}) {
       };
       document.addEventListener('fullscreenchange', onFullscreen);
       document.addEventListener('webkitfullscreenchange', onFullscreen);
-      // Deep links after load (the load itself is applied by main.js after the V1 `m` key).
-      window.addEventListener('hashchange', () => this.studioApplyLinkHash(window.location.hash,
-        { origin: 'hashchange' }));
+      // Deep links reach studioApplyLinkHash through the hash dispatcher (main.js).
       const hide = () => { if (ctx.transport && ctx.transport.playing) stopStudio({ fast: true }); };
       document.addEventListener('visibilitychange', () => { if (document.hidden) hide(); });
       window.addEventListener('pagehide', hide);
@@ -1536,6 +1539,24 @@ export function createStudioUi(svc = {}) {
       return { ok: true, kind: 'project' };
     },
 
+    /**
+     * What a reload or a closed tab would lose here (ui/unsaved.js): unsaved changes, and the
+     * projects and patches a memory-only library holds (no IndexedDB here).
+     */
+    studioWhatWouldBeLost() {
+      const lost = [];
+      if (this.studio.dirty) {
+        lost.push({ domain: 'studio',
+          label: `Unsaved changes to ${this.studio.title || 'the Studio document'}` });
+      }
+      const n = this.studio.memoryHeld;
+      if (!this.studio.persistent && n > 0) {
+        lost.push({ domain: 'studio', label: `${n} Studio project${n === 1 ? '' : 's'} or `
+          + `patch${n === 1 ? '' : 'es'} kept in page memory only` });
+      }
+      return lost;
+    },
+
     // ------------------------------------------------------------ deep link (V422, §199)
     /** The view a Studio link carries now (studioLinkView). */
     studioLinkView() {
@@ -1556,7 +1577,9 @@ export function createStudioUi(svc = {}) {
       const view = this.studioLinkView();
       const url = this.studioLinkUrl();
       if (!url) return null;
-      try { window.history.replaceState(null, '', url); } catch (e) { /* file:// in some */ }
+      try {
+        window.history.replaceState(window.history.state, '', url);
+      } catch (e) { /* file:// in some */ }
       this.studio.link = url;
       this.studio.linkNote = view.note;
       let copied = false;
@@ -1579,9 +1602,10 @@ export function createStudioUi(svc = {}) {
      * Apply a Studio link from a location hash (§199): validated like an import, refused whole
      * with a message when invalid, never starts playback, never replaces unsaved changes.
      * Returns true (applied, perhaps waiting for an explicit Open), false (refused) or null (no
-     * Studio link in the hash). origin: 'load' | 'hashchange' | 'link'.
+     * Studio link in the hash). The hash dispatcher (ui/navigation.js) opens the workspace
+     * unless this refuses.
      */
-    studioApplyLinkHash(hash, { origin = 'link' } = {}) {
+    studioApplyLinkHash(hash) {
       const r = decodeStudioLink(hash);
       if (r === null) return null;
       if (!r.ok) {
@@ -1590,8 +1614,6 @@ export function createStudioUi(svc = {}) {
         announce(`Studio link not applied: ${why}`, { assertive: true });
         return false;
       }
-      if (origin === 'load') this.workspace = 'studio';
-      else if (this.workspace !== 'studio') this.setWorkspace('studio');
       if (r.subview) this.studioSetSubview(r.subview);
       const view = r.subview ? `${r.subview.charAt(0).toUpperCase()}${r.subview.slice(1)} view`
         : 'Studio';
