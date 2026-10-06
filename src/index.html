@@ -3083,13 +3083,23 @@
       <textarea class="osc-number osc-m-text osc-m-textarea" id="osc-fnd-notes" rows="2" maxlength="10000"
         data-osc="fnd.notes" x-model="fnd.form.notes"></textarea>
       <p class="osc-dialog-note" role="alert" data-osc="fnd.error" x-show="fnd.form.error" x-text="fnd.form.error"></p>
+      <div class="osc-m-btnrow" x-show="fnd.form.conflict" style="display: none">
+        <button type="button" class="osc-btn osc-btn-primary osc-m-small" data-osc="fnd.loadStored"
+          @click="findingsLoadStored()">Load the stored version</button>
+      </div>
+      <div class="osc-f-mine" x-show="fnd.form.mine || fnd.form.mineNotes" style="display: none">
+        <label class="osc-label" for="osc-fnd-mine">Your text from before (not saved; copy what you need)</label>
+        <textarea class="osc-number osc-m-text osc-m-textarea" id="osc-fnd-mine" data-osc="fnd.mine" rows="2" readonly
+          :value="fnd.form.mine + (fnd.form.mineNotes ? '\n\nNotes: ' + fnd.form.mineNotes : '')"></textarea>
+      </div>
       <p class="osc-dialog-note" x-show="findingsDraftDirty()" style="display: none">Closing keeps this draft in this page until you save or discard it; a reload loses it.</p>
       <div class="osc-dialog-actions">
         <button type="button" class="osc-btn osc-btn-secondary osc-x-delete" data-osc="fnd.discard"
           x-show="findingsDraftDirty()" style="display: none" @click="findingsDiscardDraft()">Discard draft</button>
         <button type="button" class="osc-btn osc-btn-secondary" data-osc="fnd.close" @click="closeDialog('osc-dlg-finding')"
           x-text="findingsDraftDirty() ? 'Close (keep draft)' : 'Cancel'">Cancel</button>
-        <button type="submit" class="osc-btn osc-btn-primary" data-osc="fnd.save">Save</button>
+        <button type="submit" class="osc-btn osc-btn-primary" data-osc="fnd.save"
+          :disabled="fnd.form.conflict">Save</button>
       </div>
     </form>
   </dialog>

@@ -33,14 +33,18 @@ const formState = (f) => JSON.stringify([f.statement.trim(), f.status, f.notes.t
 const blankForm = () => {
   const f = { open: false, mode: 'new', id: null, loadedUpdatedAt: null, statement: '',
     status: 'observation', notes: '', evidence: [], runs: [], base: '', error: '', addRun: '',
-    cmpA: '', cmpB: '' };
+    cmpA: '', cmpB: '',
+    // A save refused because the finding changed elsewhere: `conflict` until the stored version
+    // is loaded; `mine` / `mineNotes` keep the text typed here, shown to copy, until a save.
+    conflict: false, mine: '', mineNotes: '' };
   f.base = formState(f);
   return f;
 };
-const dirty = (f) => formState(f) !== f.base;
-const changedElsewhere = () => new Error('This finding was changed in another tab or window since '
-  + 'you opened it, so it was not saved. Your text is kept here: copy it, close this dialog and '
-  + 'edit the finding again.');
+const dirty = (f) => formState(f) !== f.base || !!f.mine || !!f.mineNotes;
+const CONFLICT = Symbol('changed elsewhere');
+const CHANGED_ELSEWHERE = 'This finding was changed in another tab or window since you opened it, '
+  + 'so it was not saved. Load the stored version to continue; the text you typed stays shown '
+  + 'below to copy.';
 
 /**
  * The view row of a stored finding: its statement and status in words, each reference with its
@@ -206,11 +210,41 @@ export function createFindingsUi() {
       f.open = false;
       this.fnd.draftKept = dirty(f);
     },
-    /** Reopen the kept draft. */
-    findingsContinueDraft() {
+    /**
+     * Reopen the kept draft. A draft whose save was refused as changed elsewhere never reopens
+     * stale: the stored version is loaded first, with the typed text kept beside it.
+     */
+    async findingsContinueDraft() {
       if (!this.fnd.draftKept) return false;
+      if (this.fnd.form.conflict) await this.findingsLoadStored();
       this.fnd.form.open = true;
       this.openModal(DIALOG);
+      return true;
+    },
+    /**
+     * After a refused save: load the finding as it is stored now (its fields and its updatedAt,
+     * so the next save is checked against it), keeping the text typed here in `mine` to copy.
+     * Returns false when it is no longer stored.
+     */
+    async findingsLoadStored() {
+      const f = this.fnd.form;
+      const s = await this.experimentsStore();
+      const now = f.id ? await s.getFinding(f.id).catch(() => null) : null;
+      if (!now) {
+        f.error = 'This finding is no longer stored; save it as a new finding or discard it.';
+        f.mode = 'new';
+        f.id = null;
+        f.conflict = false;
+        return false;
+      }
+      if (f.statement.trim() !== now.statement) f.mine = f.mine || f.statement;
+      if (f.notes.trim() !== (now.notes || '')) f.mineNotes = f.mineNotes || f.notes;
+      Object.assign(f, { loadedUpdatedAt: now.updatedAt, statement: now.statement,
+        status: now.status, notes: now.notes || '', runs: plain(now.runs),
+        evidence: now.evidence.map((ref) => ({ key: refKey(ref), ref: plain(ref),
+          text: refText(ref, nameOf, { storedPoint: storedPointOf(ref) }) })),
+        conflict: false, error: '' });
+      f.base = formState(f);
       return true;
     },
     /** Drop the draft (the only way a typed finding is discarded without a save). */
@@ -283,7 +317,7 @@ export function createFindingsUi() {
     async findingsAskNew(refs = [], id = null) {
       if (this.fnd.draftKept && dirty(this.fnd.form)) {
         // Never replace a kept draft: reopen it, and say so.
-        this.findingsContinueDraft();
+        await this.findingsContinueDraft();
         this.notify('info', 'Finding draft reopened', 'Your unsaved finding draft was reopened: '
           + 'save it or discard it before starting another.');
         return true;
@@ -367,14 +401,19 @@ export function createFindingsUi() {
         const now = Date.now();
         const old = f.mode === 'edit' ? await s.getFinding(f.id) : null;
         if (f.mode === 'edit' && !old) throw new Error('This finding is no longer stored.');
-        if (old && old.updatedAt !== f.loadedUpdatedAt) throw changedElsewhere();
+        if (old && old.updatedAt !== f.loadedUpdatedAt) throw CONFLICT;
         const next = old ? updateFinding(old, fields, { now: Math.max(now,
           Date.parse(old.updatedAt)) }) : createFinding({ id: newExperimentId(randomBytes16()),
           now, ...fields });
         // The store checks the version again inside its write, so two tabs never overwrite.
         saved = await s.putFinding(next, old ? { expectedUpdatedAt: f.loadedUpdatedAt } : {})
-          .catch((err) => { throw err && err.code === 'conflict' ? changedElsewhere() : err; });
+          .catch((err) => { throw err && err.code === 'conflict' ? CONFLICT : err; });
       } catch (err) {
+        if (err === CONFLICT) {
+          f.conflict = true;
+          f.error = CHANGED_ELSEWHERE;
+          return null;
+        }
         f.error = (err.message || String(err)).replace(/^Invalid finding: /, '');
         return null;
       }

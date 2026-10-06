@@ -584,6 +584,33 @@ function defineChecks() {
     await sleep(120);
     await collect();
     await page.click('[data-osc="fnd.deleteConfirm"]');
+    // A refused stale edit: "Load the stored version", then the typed text kept to copy.
+    await page.evaluate(async () => {
+      const a = window.OSCILLA.app;
+      await a.findingsAskRun(a.exps.rows[0].id);
+      a.fnd.form.statement = 'audit conflict';
+      const f = await a.findingsSave();
+      if (!f) return;
+      await a.findingsAskEdit(f.id);
+      a.fnd.form.statement = 'audit edit';
+      const s = await a.experimentsStore();
+      const now = await s.getFinding(f.id);
+      await s.putFinding({ ...now, statement: 'audit other tab',
+        updatedAt: new Date(Date.parse(now.updatedAt) + 1000).toISOString() });
+      await a.findingsSave();
+    });
+    await page.waitForSelector('[data-osc="fnd.loadStored"]', { state: 'visible', timeout: 5000 })
+      .catch(() => {});
+    await collect();
+    await page.click('[data-osc="fnd.loadStored"]');
+    await page.waitForSelector('[data-osc="fnd.mine"]', { state: 'visible', timeout: 5000 })
+      .catch(() => {});
+    await collect();
+    await page.evaluate(async () => {
+      const a = window.OSCILLA.app;
+      a.findingsDiscardDraft();
+      for (const r of a.fnd.rows.slice()) await a.findingsDeleteNow(r.id);
+    });
     // A draft kept after Escape: the panel's note offers to continue or discard it.
     await page.click('[data-osc="exp.findingNew"]');
     await page.waitForSelector('#osc-fnd-statement', { state: 'visible', timeout: 5000 })
