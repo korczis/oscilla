@@ -173,6 +173,37 @@ test('PLAY keeps the first clip when the audio clock passes baseTime during star
     0);
 });
 
+test('a PLAY starved past the graph start never sounds the pattern-played carrier', () => {
+  // A main thread that stalls inside PLAY after runtime.start() lets the audio thread render the
+  // graph from its crossfade time, routes ramping open, before the transport claims the
+  // oscillator (measured in chromium and webkit: the free-running carrier up to +6 dB re the
+  // Tone before the re-anchored baseTime). The carrier is therefore built at ROUTE_FLOOR: its
+  // schedule as runtime.start() leaves it, which is all the audio thread has during the stall,
+  // holds the floor from the graph start on, while its routes open there.
+  const s = setup();
+  const jump = 0.05; // > SAFE_HORIZON_S: the clock passes the graph start during the stall
+  let graph = null;
+  const runtime = Object.create(s.runtime, { start: { value: () => {
+    const r = s.runtime.start();
+    const level = s.runtime.nodes.get('osc-1').modTarget('level', 'linear').param;
+    const route = s.runtime.edges.get('edge-1').gain.gain;
+    graph = { at: r.at, level: { calls: level.calls.map((c) => [...c]) },
+      route: { calls: route.calls.map((c) => [...c]) } };
+    s.ctx.advance(s.ctx.currentTime + jump);
+    return r;
+  } } });
+  const transport = createStudioTransport({ runtime, engine: s.engine, store: s.store });
+  const r = ok(transport.start());
+  assert.ok(r.baseTime > graph.at, 're-anchored after the graph start');
+  const level = levelCurve(graph.level);
+  const route = levelCurve(graph.route, 0);
+  for (let t = graph.at; t <= graph.at + jump; t += 0.0025) {
+    assert.equal(level(t), ROUTE_FLOOR, `carrier at the floor at ${t}`);
+  }
+  near(route(graph.at + STUDIO_XFADE_S), 1, 1e-9);
+  assert.ok(s.runtime.ownedParams().some((o) => o.node === 'osc-1' && o.param === 'level'));
+});
+
 test('Basic Synth: Tone and Sweep clips play on the oscillator at exact audio-clock times', () => {
   const s = setup();
   const r = ok(s.transport.start());
