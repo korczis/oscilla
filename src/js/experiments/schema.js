@@ -118,11 +118,23 @@ import { derivedRef, recipeMismatches } from './definition.js';
  * Experiment file schema (§131-§132: V3.0 starts at 1, independent of the product version).
  * 2: run ids and the metadata/execution split (ADR 0040; migrate.js 1 → 2).
  * 3: the definition a run was executed from (ADR 0043; migrate.js 2 → 3).
- * 4: the Studio block may name its measured path, `studio.measured` (ledger D3, ADR 0038
+ * 4: the Studio block names its measured path, `studio.measured` (ledger D3, ADR 0038
  *    resolution 2026-10-06; migrate.js 3 → 4 changes nothing: an earlier block records the
  *    whole graph and says so).
+ * EXPERIMENT_SCHEMA_VERSION is the newest schema this build reads. A record is WRITTEN in the
+ * lowest schema that describes it (experimentSchemaVersionFor, review F4 of #139): 4 only when
+ * its Studio block has a measured path, else 3, so a plain MEASURE run still opens in a build
+ * that reads schema 3. A document of schema 3 or earlier is read as schema 3 (migrate.js).
  */
 export const EXPERIMENT_SCHEMA_VERSION = 4;
+/** The schema every earlier document is migrated to, and plain records are written in. */
+export const EXPERIMENT_BASE_SCHEMA_VERSION = 3;
+
+/** The lowest experiment schema that describes `e` (see EXPERIMENT_SCHEMA_VERSION). */
+export function experimentSchemaVersionFor(e) {
+  return e && e.studio && typeof e.studio === 'object' && Object.hasOwn(e.studio, 'measured')
+    ? 4 : EXPERIMENT_BASE_SCHEMA_VERSION;
+}
 /** Calibration record schema (FrequencyProfile / LevelCalibration, calibration/profile.js). */
 export const CALIBRATION_SCHEMA_VERSION = PROFILE_SCHEMA_VERSION;
 /** Instrument config file schema (ui/config-file.js CONFIG_FILE_VERSION). */
@@ -646,7 +658,7 @@ export function createExperiment({
   }
   return {
     kind: EXPERIMENT_KIND,
-    schemaVersion: EXPERIMENT_SCHEMA_VERSION,
+    schemaVersion: EXPERIMENT_BASE_SCHEMA_VERSION, // no Studio block yet (see above)
     oscillaVersion: b ? b.version : null,
     oscillaCommit: b ? b.commit : null,
     experimentId: id,

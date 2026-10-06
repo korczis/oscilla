@@ -142,7 +142,8 @@ that.
   Studio output is released before the engine plays its own sweep (`measurement-run.js`). The
   Measurement Result node only displays a result and is not on the path. A graph with no Sweep
   reference into a Transfer Analyzer has no measured path, and its block has no `measured`.
-- **Versioned.** Experiment schema 4 (ADR 0023) allows `studio.measured`. `validate.js` checks
+- **Versioned.** Experiment schema 4 (ADR 0023) allows `studio.measured` (and, after the
+  review below, is written only for a record that has one). `validate.js` checks
   its shape, that every id is in the execution state, and recomputes the hash (a mismatch is
   `corrupt`). `verifyExperimentStudio` checks that the ids are the path of the block's own
   graph. No result hash and no configHash covers the Studio block, so neither changes.
@@ -162,7 +163,22 @@ that.
   recorded, not used. For a block without one it says the record does not say which nodes the
   measurement used.
 
+Review of #139, same day:
+
+- **Ids with a dot.** Studio ids may contain dots (`ID_PATTERN`), and compare cut a change path
+  at the first dot, so a change of a Sweep named `sweep.a` read as `unmeasured`. A change path is
+  now matched against the known ids as `studio.<list>.<id>` followed by its end or a dot, the
+  longest id winning.
+- **Written in the lowest schema.** Every record of this build was written as schema 4, so a
+  plain MEASURE run would not open in a build that reads schema 3. A record is now written in the
+  lowest schema that describes it (`schema.js` `experimentSchemaVersionFor`): 4 only when its
+  Studio block has a measured path, else 3. Documents of schema 3 or earlier are read as schema 3,
+  a schema-4 document stays 4, the validator accepts 3 and 4 and refuses a schema-3 document that
+  claims a measured path. The limit that remains: a Studio run with a measured path is schema 4,
+  and a build that reads only schema 3 refuses it as newer than it supports.
+
 Proven by `tests/unit/v4-measurement-truth.test.mjs` (the D3 tests, which failed before the
-change), `tests/unit/v31-studio-provenance.test.mjs` and check `measure-from-studio` in
+change), `tests/unit/v4-review-139.test.mjs` (F2, F4), `tests/unit/v31-studio-provenance.test.mjs`
+and check `measure-from-studio` in
 `tests/browser/v31-studio-workflows.cjs` (a run from a graph with an unconnected Oscillator
 records a measured path without it; chromium, firefox and webkit).

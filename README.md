@@ -136,8 +136,12 @@ is in the [algorithm notes](docs/v3/algorithms.md).
   get dB SPL. It is valid only for the microphone, gain, browser settings and position it was
   taken with. There is no default calibration. OSCILLA stores one only once it knows the input
   (the setup check or the reference capture), binds it to that input and stops applying it when
-  the input changes; a reading typed before any setup check is refused with the reason. A
-  record from an earlier version whose calibration has no input says "not bound to an input".
+  the input changes; a reading typed before any setup check is refused with the reason. The
+  measurement itself checks the input it captures from and never applies a calibration bound
+  to another one (the record then says why it is uncalibrated); until an input is checked the
+  indicator reads PENDING INPUT CHECK. A browser that exposes no device id binds the sample rate
+  and processing settings only, "as far as the browser reports it". A record from an earlier
+  version whose calibration has no input says "not bound to an input".
 
 ### Transfer Function
 
@@ -368,7 +372,9 @@ How to use it, with the keyboard shortcuts, is the [Studio user guide](docs/v31/
   the clips, and the saved experiment records the Studio graph it was run from (schema version,
   hash, execution state) beside its recipe, and the measured path the recipe was derived from
   with its own hash. A node the measurement never reads, such as an unconnected Oscillator, is
-  recorded but is not an execution change when two runs are compared.
+  recorded but is not an execution change when two runs are compared. Such a record needs
+  experiment schema 4, which OSCILLA 3.10 and earlier refuse as newer than they support; every
+  other record is still written as schema 3 and opens there.
 - **Performance.** Responsive at about 100 nodes and 200 connections; the numbers and budgets
   are in [performance](docs/v31/performance.md).
 - **Links and fullscreen.** `#m=studio&st=<template id>&sv=<graph|timeline|inspector>` opens

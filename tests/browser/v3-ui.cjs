@@ -46,6 +46,9 @@
 //                           (advanced manual reading): refused with the reason while no input is
 //                           known (ledger C1), stored after the setup check bound to that input
 //                           -> Level CALIBRATED, void for another input; invalid input refused
+//   level-wrong-input       (review F1 of #139) a calibration bound to "Mic A" while the run
+//                           captures from another input (the loopback): the engine does not
+//                           apply it; the result, quality reason and record say uncalibrated
 //   level-reference         (M3) the dialog captures the reference through the loopback io (a
 //                           1 kHz instrument tone), names the scale, stores method 'captured'
 //                           with the input; another input voids it (UNCALIBRATED + reason);
@@ -835,6 +838,13 @@ function defineChecks(fixtures) {
       constraints: { applied: { echoCancellation: false, noiseSuppression: false,
         autoGainControl: false, channelCount: 1 } }, sampleRate: 22050 }));
     res.voided = await page.textContent('[data-osc="measure.levelIndicator"]');
+    // Review F3 of #139: no input known (another input chosen, the default changed): pending.
+    await page.evaluate(() => window.OSCILLA.measure.setInputNow(null));
+    res.pending = await page.textContent('[data-osc="measure.levelIndicator"]');
+    res.pendingText = await page.evaluate(() => {
+      const el = document.querySelector('[data-osc="measure.levelVoid"]');
+      return el && el.offsetParent !== null ? el.textContent.trim() : '';
+    });
     // Back to the uncalibrated, idle state for the checks that follow.
     await page.evaluate(() => {
       const a = window.OSCILLA.app;
@@ -860,7 +870,64 @@ function defineChecks(fixtures) {
       boundCalibrated: calibrated(res.level) && res.bound && res.dialogClosed
         && /entered by hand, bound to the input checked when it was stored/.test(res.state),
       otherInputVoids: /UNCALIBRATED/.test(res.voided),
+      pendingCheck: /PENDING INPUT CHECK/.test(res.pending)
+        && /^Pending input check:/.test(res.pendingText),
       cleared: /UNCALIBRATED/.test(res.after),
+    }) };
+  });
+
+  def('level-wrong-input', async ({ page }) => {
+    // Review F1 of #139: the workspace believes the input is "Mic A" (its check is stale), the
+    // measurement opens another input (here the TEST CONTEXT loopback). The engine compares the
+    // calibration's binding with the input it captured from and does not apply it.
+    await H.workspace(page, 'measure');
+    await H.loopback(page);
+    const res = {};
+    res.stored = await page.evaluate(() => {
+      const a = window.OSCILLA.app;
+      window.OSCILLA.measure.setInputNow({ device: { label: 'Mic A', id: 'mic-a' },
+        constraints: { applied: { echoCancellation: false, noiseSuppression: false,
+          autoGainControl: false, channelCount: 1 } }, sampleRate: 48000 });
+      a.measureSetLevelManual(true);
+      Object.assign(a.meas.levelForm, { referenceHz: '1000', referenceDb: '94',
+        observedDb: '-32.5', conditions: 'gate: bound to Mic A' });
+      return a.measureSaveLevelCalibration();
+    });
+    res.before = await page.textContent('[data-osc="measure.levelIndicator"]');
+    res.run = await H.run(page, () => page.evaluate(() => {
+      window.OSCILLA.app.measureStart();
+    }));
+    res.result = await page.evaluate(() => {
+      const r = window.OSCILLA.measure.result;
+      const lv = r && r.calibrated ? r.calibrated.level : null;
+      const q = r && r.quality ? r.quality.reasons.find((x) => x.code === 'LEVEL_CALIBRATION')
+        : null;
+      const e = window.OSCILLA.measure.experimentFromResult();
+      return { applied: !!(lv && lv.calibration), unit: lv && lv.unit, voided: lv && lv.voided,
+        quality: q && q.text, recorded: !!(e && e.calibration.level),
+        levelCalibrated: r && r.quality ? r.quality.metrics.levelCalibrated : null };
+    });
+    res.after = await page.textContent('[data-osc="measure.levelIndicator"]');
+    res.spl = await page.evaluate(splMentions);
+    await page.evaluate(() => {
+      const a = window.OSCILLA.app;
+      a.measureClearLevelCalibration();
+      a.measureSetLevelManual(false);
+      a.alerts = [];
+    });
+    await H.loopback(page);
+    const r = res.result;
+    return { ...res, ...H.verdict({
+      stored: res.stored === true && /CALIBRATED/.test(res.before)
+        && !/UNCALIBRATED/.test(res.before),
+      complete: res.run.state === 'COMPLETE',
+      notApplied: !r.applied && r.unit === 'dB relative (dBFS-like)'
+        && /a different input device/.test(r.voided || ''),
+      qualitySays: /^level calibration not applied/.test(r.quality || '')
+        && r.levelCalibrated === false,
+      recordUncalibrated: r.recorded === false,
+      indicatorFollows: /UNCALIBRATED/.test(res.after),
+      noSpl: res.spl.length === 0,
     }) };
   });
 

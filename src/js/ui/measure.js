@@ -204,6 +204,14 @@ export const LIVE_RTA_FIELDS = Object.freeze({
   rtaMode: 'rtaMode', averaging: 'rtaAveraging', fftSize: 'rtaFftSize', window: 'rtaWindow',
 });
 const LIVE_FIELD_HELP = 'Live RTA (RTA tab); not part of the measurement recipe.';
+/**
+ * A level calibration is on but no input has been checked since the input may have changed
+ * (review F3 of #139): no display applies it until the setup check or a measurement confirms
+ * the input it belongs to, so the indicator does not say CALIBRATED.
+ */
+export const LEVEL_PENDING_TEXT = 'Pending input check: the level calibration is applied only '
+  + 'once the setup check or a measurement confirms the input it was taken with; until then '
+  + 'levels are relative (dBFS-like).';
 /** Why a level calibration cannot be stored before an input is known (ledger C1). */
 export const LEVEL_NEEDS_INPUT = 'Run the setup check first: a level calibration is valid only '
   + 'for the input it was taken with, and no input has been checked yet, so a reading typed now '
@@ -542,6 +550,8 @@ export function createMeasureUi(svc) {
     m.inputRows = inputFacts();
     const lv = ctx.levelCal ? levelApplies() : null;
     m.cal.levelVoid = lv && !lv.applies && lv.checked ? lv.reason : null;
+    m.cal.levelPending = lv && m.cal.useLevel && lv.applies && !lv.checked ? LEVEL_PENDING_TEXT
+      : null;
     m.safety = safetyNotes({ recipe, preflight: ctx.preflight });
     m.stimulusText = describeStimulus({ ...recipe.stimulus, kind: 'log-sweep' });
     m.error = ctx.error ? { ...ctx.error } : null;
@@ -1285,7 +1295,7 @@ export function createMeasureUi(svc) {
       testContext: null,
       loopback: !!svc.loopback,
       cal: { useFrequency: true, useLevel: false, profile: null, level: null, errors: [],
-        warnings: [], levelVoid: null },
+        warnings: [], levelVoid: null, levelPending: null },
       levelForm: { referenceHz: '1000', referenceDb: '94', observedDb: '', conditions: '',
         error: '', manual: false, capturing: false, reading: null },
       calImport: null,
@@ -1321,8 +1331,19 @@ export function createMeasureUi(svc) {
     },
     get measureCalIndicator() {
       if (!(this.meas.cal.useLevel && this.meas.cal.level)) return 'UNCALIBRATED';
-      // meas.cal.levelVoid makes this getter reactive to the input check (refresh()).
-      return this.meas.cal.levelVoid || !levelApplies().applies ? 'UNCALIBRATED' : 'CALIBRATED';
+      // meas.cal.levelVoid and levelPending make this getter follow the input check (refresh()).
+      const pending = this.meas.cal.levelPending;
+      const a = levelApplies();
+      if (this.meas.cal.levelVoid || !a.applies) return 'UNCALIBRATED';
+      return pending || !a.checked ? 'PENDING INPUT CHECK' : 'CALIBRATED';
+    },
+    /** The "Levels" row of the setup summary, in words. */
+    get measureLevelsText() {
+      if (!(this.meas.cal.level && this.meas.cal.useLevel)) return 'relative (dBFS-like)';
+      const ind = this.measureCalIndicator;
+      if (ind === 'CALIBRATED') return 'CALIBRATED (reference offset applied)';
+      if (ind === 'PENDING INPUT CHECK') return 'relative until the input is checked';
+      return 'UNCALIBRATED (the calibration is not valid for this input)';
     },
     /**
      * What differs between the completed result's evidence and the workspace now (calibration,
@@ -1356,7 +1377,17 @@ export function createMeasureUi(svc) {
       refresh();
       const md = mediaDevices();
       if (md && typeof md.addEventListener === 'function') {
-        md.addEventListener('devicechange', () => { if (ctx.devicesEnumerated) refreshInputs(); });
+        md.addEventListener('devicechange', () => {
+          // The system default input may have changed underneath "default input" (a microphone
+          // plugged in): the input checked last is no longer known to be the one in use, so a
+          // level calibration waits for the next check (review F1/F3 of #139; the engine checks
+          // the input it measures in any case).
+          if (!ctx.deviceId && !ctx.pending && !ctx.refCapture && ctx.inputNow) {
+            ctx.inputNow = null;
+            refresh();
+          }
+          if (ctx.devicesEnumerated) refreshInputs();
+        });
       }
       // Recipe links reach measureApplyRecipeHash through the hash dispatcher (main.js).
     },
@@ -1823,7 +1854,8 @@ export function createMeasureUi(svc) {
         ctx.levelCal = cal;
         this.meas.cal.level = { referenceHz: cal.referenceHz, referenceDb: cal.referenceDbSpl,
           observedDb: cal.observedDbRelative, offsetDb: cal.offsetDb, conditions: cal.conditions,
-          method: cal.method, bound: isBoundLevelCalibration(cal) };
+          method: cal.method, bound: isBoundLevelCalibration(cal),
+          deviceKnown: !!(cal.input && cal.input.deviceId) };
         this.meas.cal.useLevel = true;
         f.error = '';
         this.closeModal('osc-dlg-level-cal');
@@ -1855,8 +1887,12 @@ export function createMeasureUi(svc) {
     get measureLevelStateText() {
       const l = this.meas.cal.level;
       if (!l) return 'none: levels are relative (dBFS-like)';
-      const how = l.method === 'captured' ? 'captured, bound to the input it was captured with'
-        : `entered by hand, ${l.bound ? 'bound to the input checked when it was stored'
+      // Review F5 of #139: without a device id the binding is the rate and processing flags only.
+      const far = l.deviceKnown ? '' : ' as far as the browser reports it (no device id: sample '
+        + 'rate and processing only)';
+      const how = l.method === 'captured'
+        ? `captured, bound to the input it was captured with${far}`
+        : `entered by hand, ${l.bound ? `bound to the input checked when it was stored${far}`
           : UNBOUND_TEXT}`;
       return `reference reading stored (${how}; offset ${l.offsetDb >= 0 ? '+' : '−'}${
         Math.abs(l.offsetDb).toFixed(1)} dB at ${l.referenceHz} Hz)`;

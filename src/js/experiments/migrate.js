@@ -30,7 +30,9 @@
 //     | { ok: false, errors: [{ path, text }] }
 // The input is never modified (steps receive a copy).
 
-import { EXPERIMENT_SCHEMA_VERSION, withRunIds } from './schema.js';
+import {
+  EXPERIMENT_BASE_SCHEMA_VERSION, EXPERIMENT_SCHEMA_VERSION, withRunIds,
+} from './schema.js';
 import { derivedRef } from './definition.js';
 
 /** Schema 1 → 2: run ids (the rest of the document is unchanged). */
@@ -70,10 +72,18 @@ export const migrations = Object.freeze({
   4: keepWholeGraph,
 });
 
-/** Upgrade a parsed experiment document to `targetVersion` (default: the current schema). */
+/**
+ * Upgrade a parsed experiment document to `targetVersion` (default: schema 3 for a document of
+ * schema 3 or earlier, which every later reader takes as it is; a schema-4 document stays 4;
+ * anything newer than EXPERIMENT_SCHEMA_VERSION is refused). Step 3 → 4 runs only when asked
+ * for: schema 4 is written only for a record with a measured Studio path (schema.js).
+ */
 export function migrateExperiment(json, opts = {}) {
   const registry = opts.migrations || migrations;
-  const target = opts.targetVersion ?? EXPERIMENT_SCHEMA_VERSION;
+  const newest = opts.targetVersion ?? EXPERIMENT_SCHEMA_VERSION;
+  const from0 = json && typeof json === 'object' ? json.schemaVersion : null;
+  const target = opts.targetVersion ?? (Number.isSafeInteger(from0) && from0 > newest ? newest
+    : Math.min(newest, Math.max(from0 || 0, EXPERIMENT_BASE_SCHEMA_VERSION)));
   const fail = (text) => ({ ok: false, errors: [{ path: 'schemaVersion', text }] });
   if (!json || typeof json !== 'object' || Array.isArray(json)) {
     return { ok: false, errors: [{ path: '', text: 'not an experiment object' }] };

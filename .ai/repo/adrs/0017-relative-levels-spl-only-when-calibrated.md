@@ -111,3 +111,35 @@ Proven by `tests/unit/v4-measurement-truth.test.mjs` (the C1 tests, which failed
 change) and check `calibration` in `tests/browser/v3-ui.cjs` (refused before any input, stored
 and bound after the setup check, void for another input; chromium, firefox and webkit over
 file:// and /oscilla/).
+
+Review of #139, same day: the workspace's check alone was not enough. It compares the binding
+with the input checked last, and that can be stale: the system default input can change under
+"default input" (a microphone plugged in only refreshed the list), and a measurement started
+from an engine that is not READY runs its own preflight on whatever input is the default now.
+A calibration bound to microphone A was then applied to a run on microphone B, recorded as
+applied, and summarized as "SPL CALIBRATED" with no finding. Added:
+
+- **The engine decides.** `measurement/engine.js` applies a level calibration only while
+  `levelCalibrationApplies(level, input)` holds for the input the measurement uses: checked
+  against the preflight's input and again against the first run capture's own device,
+  constraints and rate, whose facts become the record's `input`. When it does not apply, the
+  whole measurement is uncalibrated (noise levels, result, quality), and the reason is kept: a
+  `LEVEL_CALIBRATION_VOID` preflight warning, `result.calibrated.level.voided`, and the
+  `LEVEL_CALIBRATION` quality reason "level calibration not applied (…): uncalibrated, levels are
+  dB relative (dBFS-like)". An unbound calibration is never applied to a known input either.
+- **Records are cross-checked.** `validate.js` `calibrationClaimFindings` adds a finding at
+  `calibration.level.input` (code `calibration-claim-contradicted`) when a bound calibration names
+  another input than the record's own `input` and sample rate. As with the other contradicted
+  claims, such a record is kept, presented and compared as uncalibrated, and strict validation
+  (every record the application writes) refuses it.
+- **The indicator waits for the check.** Between an input change and the next setup check, the
+  MEASURE level indicator reads "PENDING INPUT CHECK" with the reason, and the setup summary says
+  levels are relative until the input is checked; no display applies the calibration then. A
+  `devicechange` while the default input is in use makes the checked input unknown again.
+- **"As far as the browser reports it."** A binding without a device id (a browser that does
+  not expose one) is the sample rate and the processing flags only. MEASURE, the dialog and the
+  evidence lineage say so in those words, never implying the identity of the microphone.
+
+Proven by `tests/unit/v4-review-139.test.mjs` (each test failed before) and checks
+`level-wrong-input` (a calibration bound to "Mic A" while the run captures from the loopback:
+not applied, no "SPL") and `calibration` (the pending state) in `tests/browser/v3-ui.cjs`.

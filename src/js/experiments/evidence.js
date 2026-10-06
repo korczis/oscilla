@@ -216,7 +216,11 @@ function bindingText(b) {
   }
   const parts = [str(b.deviceId) ? 'device (hashed)' : null,
     num(b.sampleRate) ? hzText(b.sampleRate) : null].filter(Boolean);
-  return `bound to its input${parts.length ? ` (${parts.join(', ')})` : ''}`;
+  // Review F5 of #139: without a device id two inputs with one rate and the same flags bind
+  // alike, so the binding is only as far as the browser reports it.
+  return `bound to the input this run recorded${parts.length ? ` (${parts.join(', ')})` : ''}${
+    str(b.deviceId) ? '' : ', as far as the browser reports it (no device id: sample rate and '
+      + 'processing only)'}`;
 }
 
 /** Which stored claims are contradicted, and whether each named something (ADR 0040). */

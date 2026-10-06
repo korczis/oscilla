@@ -233,7 +233,8 @@ test('lineage of a calibrated microphone run: device, flags, profile and bound l
     .slice(0, 12)}…\\)`));
   assert.match(t('calibration'), /oscilla\.calibration\.log-interp\.v1/);
   assert.match(t('calibration'), /level calibration offset \+124\.00 dB/);
-  assert.match(t('calibration'), /bound to its input/);
+  assert.match(t('calibration'), /bound to the input this run recorded \(device \(hashed\)/);
+  assert.doesNotMatch(t('calibration'), /as far as the browser reports/, 'a device id is known');
   assert.match(t('calibration'), /applies to levels, not to this ratio/);
   assert.match(t('build'), /source digest dddddddddddd…/);
   assert.match(t('build'), /artifact SHA-256 aaaaaaaaaaaa…/);
@@ -244,9 +245,21 @@ test('lineage of a calibrated microphone run: device, flags, profile and bound l
   assert.equal(c('build').state, 'recorded');
   assert.equal(c('environment').state, 'recorded');
   assert.match(c('environment').reason, /Desk, 1 m/);
-  // A level calibration bound to no input: the record cannot tie it to the run's input, so
-  // partial (ledger C1).
-  const unbound = runEvidence(await mic({ frequency: null, level: level(null) }), { hz: 1000 });
+  // A level calibration bound to no input: the engine no longer applies one to a known input
+  // (ledger C1, review F1 of #139) ...
+  const refused = await mic({ frequency: null, level: level(null) });
+  assert.equal(refused.calibration.level, null);
+  // ... and a record an earlier version saved with one cannot tie it to the run's input, so
+  // partial.
+  const old = clone(e);
+  old.calibration = { frequency: null, level: { ...e.calibration.level, input: null } };
+  old.algorithms = { ...old.algorithms };
+  delete old.algorithms.calibration;
+  old.quality.reasons = old.quality.reasons.filter((x) => x.code !== 'FREQUENCY_CALIBRATION');
+  if (old.quality.mask) {
+    old.quality.mask.calibrated = new Uint8Array(old.quality.mask.calibrated.length);
+  }
+  const unbound = runEvidence(valid(restamp(old)), { hz: 1000 });
   assert.match(byId(unbound.lineage, 'calibration').text, /not bound to an input/);
   assert.equal(byId(unbound.checklist, 'calibration').state, 'partial');
 });

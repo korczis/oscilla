@@ -331,13 +331,13 @@ claims:
     note: No IEC 61260-1 class is claimed. The RTA view (bars over band edges, peak hold, freeze, relative unless calibrated) is tested in tests/unit/v3-views.test.mjs.
 
   - id: level-calibration-bound-to-input
-    claim: A level calibration is stored only with the input it was taken with and applies only while that input is in use; a reading typed before any input is known is refused with the reason, a calibration without a binding (an earlier record) never applies to a known input, and records say it is not bound to an input
+    claim: A level calibration is stored only with the input it was taken with and applies only to a measurement captured from that input, as the measurement engine checks against the input it captures from; a reading typed before any input is known is refused with the reason, a calibration without a binding (an earlier record) never applies to a known input, a record whose calibration is bound to another input than its own is a finding, and records say when a calibration is not bound to an input
     source: .ai/repo/adrs/0017-relative-levels-spl-only-when-calibrated.md
     implementation: src/js/calibration/level.js
     test: tests/unit/v4-measurement-truth.test.mjs
     status: guaranteed
     responsibility: product
-    note: Ledger C1 (ADR 0017 resolution 2026-10-06). The MEASURE adapter refusal and the binding are tested in Node through src/js/ui/measure.js; check calibration in tests/browser/v3-ui.cjs refuses a typed reading before the setup check, stores it bound after it and voids it for another input in three browsers over file:// and /oscilla/. A browser that exposes no device id binds the sample rate and processing flags only; gain and microphone position are never bound.
+    note: Ledger C1 (ADR 0017 resolution 2026-10-06, with the review of #139). The engine check, the record finding at calibration.level.input, the PENDING INPUT CHECK indicator and the devicechange reset are tests/unit/v4-review-139.test.mjs; the MEASURE adapter refusal and the binding are tested in Node through src/js/ui/measure.js; check calibration in tests/browser/v3-ui.cjs refuses a typed reading before the setup check, stores it bound after it, voids it for another input and shows the pending state, and check level-wrong-input runs a measurement on another input than the binding's and finds no dB SPL, in three browsers over file:// and /oscilla/. A browser that exposes no device id binds the sample rate and processing flags only, said as "as far as the browser reports it"; gain and microphone position are never bound.
 
   - id: measurable-stimulus-only
     claim: A record whose stimulus this build's engine cannot measure (anything but a log sweep) is kept on import with a finding that says so, and Repeat and "Run this definition" refuse it rather than run a log sweep in its place; records the application saves are log sweeps only

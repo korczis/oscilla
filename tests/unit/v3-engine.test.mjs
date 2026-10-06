@@ -673,8 +673,11 @@ test('known biquad recovered through the engine (magnitude within 0.05 dB, 50 Hz
 test('known gain + delay recovered exactly: −6.02 dB, lag = pre-roll + latency + delay; '
   + 'calibration correction applied separately', async () => {
   const profile = createFrequencyProfile({ name: 'flat +2', points: [[10, 2], [30000, 2]] });
+  // Bound to the input this io reports (ledger C1: the engine applies it to that input only).
   const level = createLevelCalibration({ referenceHz: 1000, referenceDbSpl: 94,
-    observedDbRelative: -30, createdAt: '2026-10-02T00:00:00Z' });
+    observedDbRelative: -30, createdAt: '2026-10-02T00:00:00Z', input: { device: null,
+      constraints: { applied: { echoCancellation: false, noiseSuppression: false,
+        autoGainControl: false } }, sampleRate: SR } });
   const { engine } = makeEngine({ system: gainDelaySystem(0.5, 100), latencySamples: 50 });
   const r = await engine.measure(sweepRecipe({ repeats: 2, analysis: { phase: true } }),
     { calibration: { frequency: profile, level } });

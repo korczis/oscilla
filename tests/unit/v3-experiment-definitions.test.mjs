@@ -300,8 +300,10 @@ function schema2Doc(e, mutate = null) {
 test('ADR 0043: schema 2 files migrate to 3 with a derived definition, and round-trip',
   async () => {
     const { a, c } = await fx();
-    // Schema 4 (ledger D3) only adds the Studio block's measured path: 3 → 4 changes nothing.
+    // Schema 4 (ledger D3) only adds the Studio block's measured path: a record without one is
+    // read and written as schema 3 (review F4 of #139).
     assert.equal(schema.EXPERIMENT_SCHEMA_VERSION, 4);
+    assert.equal(schema.EXPERIMENT_BASE_SCHEMA_VERSION, 3);
     for (const fixture of [a, c]) {
       const old = schema2Doc(fixture.experiment);
       const before = JSON.stringify(old);
@@ -309,7 +311,7 @@ test('ADR 0043: schema 2 files migrate to 3 with a derived definition, and round
       assert.equal(JSON.stringify(old), before, 'input untouched');
       assert.equal(v.migratedFrom, 2);
       const e = v.experiment;
-      assert.equal(e.schemaVersion, 4);
+      assert.equal(e.schemaVersion, 3);
       assert.equal(e.definition.derived, true, 'derived: never presented as authored');
       assert.equal(e.definition.version, 1);
       assert.equal(e.definition.id, `derived-${e.definition.hash.slice(0, 32)}`);
@@ -338,7 +340,7 @@ test('ADR 0043: schema 2 files migrate to 3 with a derived definition, and round
     const r = validateExperiment(claim, OPTS);
     assert.equal(r.ok, false);
     assert.match(r.errors[0].text, /migration 2 → 3 failed: a schema-2 experiment has no /);
-    assert.deepEqual(migrate.migrateExperiment(schema2Doc(a.experiment)).applied, [3, 4]);
+    assert.deepEqual(migrate.migrateExperiment(schema2Doc(a.experiment)).applied, [3]);
   });
 
 test('ADR 0043 review D3: schema-2 files with any schema-valid `requested` open', async () => {
@@ -375,7 +377,7 @@ test('ADR 0043 review D3: schema-2 files with any schema-valid `requested` open'
   }
 });
 
-test('ADR 0043: a stored schema-2 record reads as schema 4 and stays immutable', async () => {
+test('ADR 0043: a stored schema-2 record reads as schema 3 and stays immutable', async () => {
   const { b } = await fx();
   const fake = fakeIndexedDB();
   const s = await store.openExperimentStore({ indexedDB: fake.indexedDB, name: 'old2', ...OPTS });
@@ -383,13 +385,13 @@ test('ADR 0043: a stored schema-2 record reads as schema 4 and stays immutable',
   const old = schema2Doc(b.experiment);
   fake.dbs.get('old2').stores.get('experiments').data.set('fixture-b', clone(old));
   const read = await s.get('fixture-b');
-  assert.equal(read.schemaVersion, 4);
+  assert.equal(read.schemaVersion, 3);
   assert.equal(read.definition.derived, true);
   assert.equal(await s.put(read), 'fixture-b', 'the same run again is a no-op');
   const named = await s.annotate('fixture-b', { name: 'renamed v2 run' });
   assert.equal(named.provenance.resultHash, old.provenance.resultHash);
   const raw = fake.dbs.get('old2').stores.get('experiments').data.get('fixture-b');
-  assert.equal(raw.schemaVersion, 4, 'written back in the current schema');
+  assert.equal(raw.schemaVersion, 3, 'written back in the lowest schema that describes it');
   decode(raw);
 });
 

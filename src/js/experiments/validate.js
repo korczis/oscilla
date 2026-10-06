@@ -74,7 +74,9 @@
 // algorithm) is recorded, and a record naming none has no calibrated point in
 // quality.mask.calibrated. A level calibration is named exactly when
 // quality.metrics.levelCalibrated is true (or, without that metric, when the LEVEL_CALIBRATION
-// reason passed), and its offsetDb is that reason's value. A disagreement is a finding with
+// reason passed), and its offsetDb is that reason's value; a level calibration bound to an input
+// is bound to the input the record itself names (`input` and `measurement.sampleRate`; ledger
+// C1, review F1 of #139: path calibration.level.input). A disagreement is a finding with
 // code CALIBRATION_CLAIM_CONTRADICTED and a text naming the field, the rule and the evidence.
 // Earlier builds saved such records (a calibration loaded or created after the run), so by
 // default (calibrationClaims 'report') the finding is NOT fatal: the record validates, its hash
@@ -104,11 +106,13 @@
 
 import {
   ALGORITHM_ID_PATTERN, COMMIT_PATTERN, EXPERIMENT_KIND,
-  EXPERIMENT_SCHEMA_VERSION, FORBIDDEN_KEYS, HEX64_PATTERN, ID_PATTERN, LIMITS, VERSION_PATTERN,
+  EXPERIMENT_SCHEMA_VERSION, EXPERIMENT_BASE_SCHEMA_VERSION, FORBIDDEN_KEYS, HEX64_PATTERN,
+  ID_PATTERN, LIMITS, VERSION_PATTERN,
   checkRecipe, createChecker, runId,
 } from './schema.js';
 import {
-  LEVEL_SCHEMA_VERSIONS, LEVEL_SCALE, LEVEL_METHODS, isInputBinding,
+  LEVEL_SCHEMA_VERSIONS, LEVEL_SCALE, LEVEL_METHODS, isInputBinding, isBoundLevelCalibration,
+  levelCalibrationApplies,
 } from '../calibration/level.js';
 import { DTYPES, decodeArray, dtypeOf, isEncodedArray } from './encode.js';
 import { migrateExperiment } from './migrate.js';
@@ -293,8 +297,15 @@ export function scanUntrusted(root, { maxBytes = Infinity, maxErrors = 50 } = {}
 function checkExperiment(c, e, ctx) {
   if (!c.keys(e, '', TOP_KEYS, ['studio', 'annotations'])) return null;
   c.oneOf(e.kind, 'kind', [EXPERIMENT_KIND]);
-  c.num(e.schemaVersion, 'schemaVersion', EXPERIMENT_SCHEMA_VERSION, EXPERIMENT_SCHEMA_VERSION,
-    { integer: true });
+  // Schema 3 or 4 (schema.js EXPERIMENT_SCHEMA_VERSION): 4 adds only studio.measured, which a
+  // schema-3 document never has (review F4 of #139: plain records stay schema 3).
+  c.num(e.schemaVersion, 'schemaVersion', EXPERIMENT_BASE_SCHEMA_VERSION,
+    EXPERIMENT_SCHEMA_VERSION, { integer: true });
+  if (e.schemaVersion < 4 && e.studio && typeof e.studio === 'object'
+    && has(e.studio, 'measured')) {
+    c.add('studio.measured', `a schema-${e.schemaVersion} experiment has no studio.measured field `
+      + '(it needs schema 4)');
+  }
   c.str(e.oscillaVersion, 'oscillaVersion', 64, { nullable: true, pattern: VERSION_PATTERN });
   c.str(e.oscillaCommit, 'oscillaCommit', 40, { nullable: true, pattern: COMMIT_PATTERN });
   c.str(e.experimentId, 'experimentId', LIMITS.idChars, { pattern: ID_PATTERN });
@@ -442,6 +453,19 @@ export function calibrationClaimFindings(e) {
     && Math.abs(passed.value - cal.level.offsetDb) > 1e-9) {
     add('calibration.level.offsetDb', `it names an offset of ${cal.level.offsetDb} dB, but the `
       + `results were calibrated with ${passed.value} dB`);
+  } else if (cal.level && isBoundLevelCalibration(cal.level) && e.input
+    && typeof e.input === 'object') {
+    // Ledger C1, review F1 of #139: a level calibration is valid only for the input it was taken
+    // with; one bound to another input than the run recorded was never valid for this run.
+    const a = levelCalibrationApplies(cal.level, { device: e.input.device || null,
+      constraints: e.input.constraints || null,
+      sampleRate: e.measurement ? e.measurement.sampleRate : null });
+    if (!a.applies && a.checked) {
+      out.push({ path: 'calibration.level.input', code: CALIBRATION_CLAIM_CONTRADICTED,
+        text: 'calibration claim contradicted by the record\'s own input: it names a level '
+          + `calibration bound to another input than the one this run recorded (${a.differences
+            .map((d) => d.text).join('; ')})` });
+    }
   }
   return out;
 }

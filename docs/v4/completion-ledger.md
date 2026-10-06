@@ -133,4 +133,11 @@ C1, D3 and D4 are closed by #139, each with tests that failed before the change 
 what a record holds: an unbound level calibration stays partial, a stimulus this build cannot
 measure keeps "Recipe recorded" partial, and the Studio link names the measured path.
 
+An independent review of #139 found that C1 was not yet closed in the engine: a calibration
+bound to one input could be applied to a run captured from another when the workspace's input
+check was stale. The engine now checks the input it captures from, records are cross-checked,
+and the indicator waits for the input check (ADR 0017, review note); the review's other
+findings (ids with a dot, records written as schema 4 without need, wording without a device
+id) are fixed in the same pull request (`tests/unit/v4-review-139.test.mjs`).
+
 With W2 handled by #130 (ADR 0045), the findings of this ledger still open are the P2 list.

@@ -159,19 +159,52 @@ export const WHOLE_GRAPH_NOTE = 'a run records the whole Studio graph without na
   + 'measured path (an earlier version wrote it so), so whether its measurement used this is not '
   + 'recorded';
 
-/** The measured path's item for a Studio change path, or null (not a node, edge or clip). */
-function studioItem(path) {
-  const m = /^studio\.(nodes|edges|clips)\.([^.]+)/.exec(path);
-  return m ? { list: m[1], id: m[2] } : null;
+const ITEM_LISTS = Object.freeze(['nodes', 'edges', 'clips']);
+
+/** The ids of a recorded execution state's nodes, edges and clips, per list. */
+function executionIds(x) {
+  const ids = (l) => (Array.isArray(l) ? l.map((r) => r && r.id).filter((v) => typeof v
+    === 'string') : []);
+  return { nodes: ids(x && x.nodes), edges: ids(x && x.edges),
+    clips: ids(x && x.timeline && x.timeline.clips) };
+}
+
+/**
+ * The item a Studio change path names: { list, id } or null (not a node, edge or clip). An id
+ * may contain dots (schema.js ID_PATTERN), so the path is matched against the known ids as
+ * `studio.<list>.<id>` followed by its end or a dot, the longest id winning ("sweep.a" over
+ * "sweep" for studio.nodes.sweep.a.params.level); never cut at the first dot (review F2, #139).
+ */
+function studioItem(path, known) {
+  let best = null;
+  for (const list of ITEM_LISTS) {
+    const head = `studio.${list}.`;
+    if (!path.startsWith(head)) continue;
+    for (const id of known[list]) {
+      const at = head + id;
+      if ((path === at || path.startsWith(`${at}.`)) && (!best || id.length > best.id.length)) {
+        best = { list, id };
+      }
+    }
+  }
+  return best;
 }
 
 /** The Studio changes between two runs' blocks, classified by the measured paths (see header). */
 function studioRunChanges(sa, sb, studioChanges) {
   if (!sa && !sb) return [];
   const paths = sa && sb && sa.measured && sb.measured ? [sa.measured, sb.measured] : null;
+  const known = { nodes: [], edges: [], clips: [] };
+  for (const src of [sa && executionIds(sa.execution), sb && executionIds(sb.execution),
+    ...(paths || [])]) {
+    if (!src) continue;
+    for (const list of ITEM_LISTS) {
+      if (Array.isArray(src[list])) known[list].push(...src[list]);
+    }
+  }
   const on = (path) => {
     if (path === 'studio.schemaVersion') return true;
-    const it = studioItem(path);
+    const it = studioItem(path, known);
     return !!it && paths.some((m) => Array.isArray(m[it.list]) && m[it.list].includes(it.id));
   };
   const classify = (c) => {

@@ -324,21 +324,21 @@ test('ADR 0040: schema 1 records and export files migrate to schema 2 and still 
       const text = JSON.stringify(old, null, 2);
       const v = decode(text);
       assert.equal(v.migratedFrom, 1);
-      assert.equal(v.experiment.schemaVersion, 4);
+      assert.equal(v.experiment.schemaVersion, 3);
       assert.deepEqual(v.experiment.measurement.runs.map((r) => r.id),
         ['run-1', 'run-2', 'run-3']);
       assert.equal(v.experiment.provenance.resultHash, old.provenance.resultHash,
         'the stored hash is kept');
       assert.equal(hash.resultHashVersionOf(v.experiment), version);
       assert.equal('sourceDigest' in v.experiment.provenance.build, false, 'not invented');
-      // The migrated record re-exports as a valid schema-4 file with the same hash.
+      // The migrated record re-exports as a valid schema-3 file with the same hash.
       const again = decode(schema.experimentToJson(v.experiment));
       assert.equal(again.migratedFrom, null);
       assert.equal(again.experiment.provenance.resultHash, old.provenance.resultHash);
       // The step itself: ids only, input untouched.
       const before = JSON.stringify(old);
       const m = migrate.migrateExperiment(old);
-      assert.deepEqual(m.applied, [2, 3, 4]);
+      assert.deepEqual(m.applied, [2, 3]);
       assert.equal(JSON.stringify(old), before);
       const stripped = clone(m.experiment);
       stripped.measurement.runs = stripped.measurement.runs.map(({ id, ...rest }) => rest);
@@ -357,7 +357,7 @@ test('ADR 0040: a schema 1 record stored before the upgrade reads, annotates and
     const old = schema1Doc(b.experiment, 2);
     fake.dbs.get('old').stores.get('experiments').data.set('fixture-b', clone(old));
     const read = await s.get('fixture-b');
-    assert.equal(read.schemaVersion, 4);
+    assert.equal(read.schemaVersion, 3);
     assert.equal(read.measurement.runs[0].id, 'run-1');
     assert.equal(await s.put(read), 'fixture-b', 'the same run again is a no-op');
     await assert.rejects(s.put(restamp({ ...read, quality: { ...read.quality, status: 'GOOD' } },
@@ -366,7 +366,7 @@ test('ADR 0040: a schema 1 record stored before the upgrade reads, annotates and
     assert.equal(named.provenance.resultHash, old.provenance.resultHash);
     assert.equal(named.provenance.resultHashVersion, 2);
     const raw = fake.dbs.get('old').stores.get('experiments').data.get('fixture-b');
-    assert.equal(raw.schemaVersion, 4, 'written back in the current schema');
+    assert.equal(raw.schemaVersion, 3, 'written back in the lowest schema that describes it');
     decode(raw);
   });
 

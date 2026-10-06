@@ -345,8 +345,10 @@ test('D3: an earlier record keeps its hash, verifies and is flagged as the whole
     const va = validateExperiment(legacy(ea), OPTS);
     const vb = validateExperiment(legacy(eb), OPTS);
     assert.equal(va.ok, true, JSON.stringify(va.errors));
-    assert.equal(va.migratedFrom, 3);
-    assert.equal(va.experiment.schemaVersion, 4);
+    // Read as it is: schema 4 is only for a block with a measured path (review F4 of #139).
+    assert.equal(va.migratedFrom, null);
+    assert.equal(va.experiment.schemaVersion, 3);
+    assert.equal(ea.schemaVersion, 4, 'a Studio run with a measured path is written as 4');
     assert.equal(va.experiment.studio.studioHash, ea.studio.studioHash);
     assert.equal(va.experiment.provenance.resultHash, ea.provenance.resultHash);
     assert.equal('measured' in va.experiment.studio, false, 'nothing is inferred');

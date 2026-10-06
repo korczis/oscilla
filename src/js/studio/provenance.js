@@ -39,7 +39,7 @@
 
 import { canonicalJson } from '../experiments/canonical-json.js';
 import { MEASURED_PATH_VERSION, measuredPathHash } from '../experiments/hash.js';
-import { createRecipe } from '../experiments/schema.js';
+import { createRecipe, experimentSchemaVersionFor } from '../experiments/schema.js';
 import { DEFAULT_TIMING, TIMING_LIMITS } from '../measurement/engine.js';
 import { normalizeStimulus } from '../measurement/stimulus.js';
 import { DEFAULT_POINTS_PER_OCTAVE } from '../measurement/transfer.js';
@@ -67,7 +67,11 @@ export function studioProvenance(model) {
 
 /** A copy of `experiment` that records the Studio model it ran (ADR 0038). */
 export function withStudioProvenance(experiment, model) {
-  return { ...experiment, studio: studioProvenance(model) };
+  const out = { ...experiment, studio: studioProvenance(model) };
+  // A measured path needs experiment schema 4; a block without one keeps the record's schema
+  // (schema.js experimentSchemaVersionFor: written in the lowest schema that describes it).
+  return { ...out, schemaVersion: Math.max(experiment.schemaVersion ?? 0,
+    experimentSchemaVersionFor(out)) };
 }
 
 /** The normalized model an execution state describes (presentation and view at defaults). */
