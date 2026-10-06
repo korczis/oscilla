@@ -97,7 +97,7 @@ import {
 import { timestampText, definitionText } from '../measurement/views/experiment-summary.js';
 import {
   runEvidence, evidenceLineage, resultPoint, reproducibilityChecklist, evidenceDifferences,
-  evidenceDifferencesText, identityDifferences, defaultEvidenceHz,
+  evidenceDifferencesText, identityDifferences, defaultEvidenceHz, storedResponseFrequencies,
 } from '../experiments/evidence.js';
 
 export const STORE_FALLBACK_TEXT = 'Experiments are kept in memory for this page view only: this '
@@ -483,7 +483,8 @@ export function createExperimentsUi() {
       return { experimentId: e.experimentId, name: e.name || null,
         resultHash: e.provenance && typeof e.provenance.resultHash === 'string'
           ? e.provenance.resultHash : null,
-        hasResponse: defaultEvidenceHz(e) !== null }; // the lineage point exists (ADR 0044)
+        hasResponse: defaultEvidenceHz(e) !== null, // the lineage point exists (ADR 0044)
+        frequencies: storedResponseFrequencies(e) };
     },
     /** Store a validated experiment (store.put validates again); returns its id. */
     async experimentsPut(e) {

@@ -257,7 +257,7 @@ test('findingsCiting names each finding that cites a run, and how', () => {
   assert.deepEqual(F.findingsCiting([a, b, c], 'run-a').map((x) => [x.finding.id, x.how]),
     [['f-a', ['this run']], ['f-b', ['a comparison with run-b']]]);
   assert.deepEqual(F.findingsCiting([a, b, c], 'run-b').map((x) => [x.finding.id, x.how]),
-    [['f-b', ['a comparison with run-a']], ['f-c', ['its value at 4.974 kHz']]]);
+    [['f-b', ['a comparison with run-a']], ['f-c', ['its value at 4974.2 Hz']]]);
   assert.deepEqual(F.findingsCiting([a, b, c], 'nope'), []);
 });
 
@@ -266,8 +266,8 @@ test('reference text never claims a cause; a comparison says what changed betwee
   assert.equal(F.refText({ kind: 'run', experimentId: 'run-a' }, name), 'Run "A"');
   assert.equal(F.refText({ kind: 'compare', a: 'run-a', b: 'run-b' }, name),
     'Comparison of "A" with "B" (what changed between the runs, not why)');
-  assert.equal(F.refText({ kind: 'value', experimentId: 'run-b', at: { hz: 1000 } }, name),
-    'Value of "B" at 1 kHz (the stored point)');
+  assert.equal(F.refText({ kind: 'value', experimentId: 'run-b', at: { hz: 1000 } }, name,
+    { storedPoint: true }), 'Value of "B" at 1000 Hz (a stored grid point)');
   assert.equal(F.refText({ kind: 'run', experimentId: '0123456789abcdef-x' }, () => null),
     'Run 0123456789ab…');
   const texts = F.FINDING_STATUSES.map((s) => `${F.STATUS_TEXT[s]} ${F.STATUS_HINT[s]}`).join(' ');

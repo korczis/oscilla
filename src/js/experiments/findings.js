@@ -29,8 +29,9 @@
 //   createFinding({ id, now, statement, status, evidence, runs, notes }) -> Finding  (RangeError)
 //   updateFinding(finding, patch, { now }) -> Finding         (id and createdAt kept)
 //   findingIssues(finding, lookup) -> [{ code, index, experimentId, text }]
-//     lookup(experimentId) -> { kind: 'run', name, resultHash, hasResponse, readable, reason }
-//       | { kind, name } | null
+//     lookup(experimentId) -> { kind: 'run', name, resultHash, hasResponse, frequencies,
+//       readable, reason } | { kind, name } | null   (frequencies: the stored response grid; a
+//       value reference must name one of them exactly, else 'not-a-grid-point')
 //     A cited run is present only when it is readable and its stored result hash equals the
 //     cited one; a hash missing on either side (or not read) is 'unverifiable-identity', never ok.
 //   findingsCiting(findings, experimentId) -> [{ finding, how: [text] }]   (backlinks)
@@ -54,7 +55,8 @@ export const FINDING_STATUSES = Object.freeze(['observation', 'hypothesis', 'sup
 export const EVIDENCE_REQUIRED_STATUSES = Object.freeze(['supported', 'contradicted']);
 export const EVIDENCE_KINDS = Object.freeze(['run', 'compare', 'value']);
 export const ISSUE_CODES = Object.freeze(['missing-run', 'wrong-kind', 'unreadable-run',
-  'different-run', 'unverifiable-identity', 'no-response', 'unsupported-status']);
+  'different-run', 'unverifiable-identity', 'no-response', 'unsupported-status',
+  'not-a-grid-point']);
 export const FINDING_LIMITS = Object.freeze({
   statementChars: 1000,
   notesChars: LIMITS.notesChars,
@@ -291,6 +293,10 @@ export function findingIssues(finding, lookup) {
           + 'result hash differs from the one cited)');
       } else if (ref.kind === 'value' && got.hasResponse === false) {
         issue('no-response', `run ${name} stores no frequency response to take a value from`);
+      } else if (ref.kind === 'value' && Array.isArray(got.frequencies)
+        && !got.frequencies.includes(ref.at.hz)) {
+        issue('not-a-grid-point', `${exactHzText(ref.at.hz)} is not a frequency the run stores `
+          + `(run ${name}): the value is not a stored point`);
       }
     }
   });
@@ -303,8 +309,26 @@ export function findingIssues(finding, lookup) {
   return out;
 }
 
-/** How a reference reads: what it names, and for a comparison that it says what, not why. */
-export function refText(ref, nameOf = () => null) {
+/**
+ * A frequency with enough digits that distinct stored grid points never read the same: the
+ * shortest decimal that is the same single-precision value for a single-precision frequency,
+ * else every digit of the number.
+ */
+export function exactHzText(hz) {
+  if (Math.fround(hz) === hz) {
+    for (let p = 1; p <= 9; p++) {
+      const t = Number(hz.toPrecision(p));
+      if (Math.fround(t) === hz) return `${t} Hz`;
+    }
+  }
+  return `${hz} Hz`;
+}
+
+/**
+ * How a reference reads: what it names, and for a comparison that it says what, not why. A value
+ * reference says "(a stored grid point)" only when the caller checked it (`storedPoint: true`).
+ */
+export function refText(ref, nameOf = () => null, { storedPoint = false } = {}) {
   const nm = (id) => {
     const n = nameOf(id);
     return n ? `"${n}"` : shortId(id);
@@ -312,8 +336,10 @@ export function refText(ref, nameOf = () => null) {
   if (ref.kind === 'compare') {
     return `Comparison of ${nm(ref.a)} with ${nm(ref.b)} (what changed between the runs, not why)`;
   }
-  if (ref.kind === 'value') return `Value of ${nm(ref.experimentId)} at ${hzText(ref.at.hz)} (the `
-    + 'stored point)';
+  if (ref.kind === 'value') {
+    return `Value of ${nm(ref.experimentId)} at ${exactHzText(ref.at.hz)}${storedPoint
+      ? ' (a stored grid point)' : ''}`;
+  }
   return `Run ${nm(ref.experimentId)}`;
 }
 
@@ -328,7 +354,7 @@ export function findingsCiting(findings, id) {
     for (const ref of finding.evidence) {
       if (ref.kind === 'run' && ref.experimentId === id) how.push('this run');
       else if (ref.kind === 'value' && ref.experimentId === id) {
-        how.push(`its value at ${hzText(ref.at.hz)}`);
+        how.push(`its value at ${exactHzText(ref.at.hz)}`);
       } else if (ref.kind === 'compare' && (ref.a === id || ref.b === id)) {
         how.push(`a comparison with ${ref.a === id ? ref.b : ref.a}`);
       }

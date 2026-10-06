@@ -18,7 +18,7 @@
 import {
   FINDING_STATUSES, STATUS_TEXT, STATUS_HINT, FINDINGS_FILE_EXTENSION, FINDING_LIMITS,
   createFinding, updateFinding, findingIssues, findingsCiting, refText, refKey, refRunIds,
-  citedRunIds, exportFindings, findingsToJson, parseFindingsFile, importPlan, hzText,
+  citedRunIds, exportFindings, findingsToJson, parseFindingsFile, importPlan, exactHzText,
 } from '../experiments/findings.js';
 import { newExperimentId } from '../experiments/schema.js';
 import { timestampText } from '../measurement/views/experiment-summary.js';
@@ -48,7 +48,9 @@ export function findingRow(f, lookup, nameOf) {
       ? ` · changed ${timestampText(f.updatedAt)}` : ''}`,
     evidence: f.evidence.map((ref, i) => {
       const mine = issues.filter((x) => x.index === i);
-      return { key: refKey(ref), ref, text: refText(ref, nameOf),
+      const got = ref.kind === 'value' && !mine.length ? lookup(ref.experimentId) : null;
+      return { key: refKey(ref), ref, text: refText(ref, nameOf, { storedPoint: !!(got
+        && Array.isArray(got.frequencies)) }),
         state: !mine.length ? 'ok' : mine.some((x) => x.code === 'missing-run') ? 'missing'
           : 'broken', issue: mine.length ? mine.map((x) => x.text).join('; ') : null };
     }),
@@ -66,6 +68,11 @@ export function createFindingsUi() {
     defs: new Map(),     // definition id -> name (a reference to one is the wrong kind)
   };
   const nameOf = (id) => ctx.names.get(id) || null;
+  /** Is a value reference exactly a point of its run's stored grid (as last read)? */
+  const storedPointOf = (ref) => {
+    const x = ref.kind === 'value' ? ctx.identity.get(ref.experimentId) : null;
+    return !!(x && x.frequencies && x.frequencies.includes(ref.at.hz));
+  };
 
   /**
    * The identity of a stored run (cached unless `fresh`); null when it is not stored. A record
@@ -85,7 +92,8 @@ export function createFindingsUi() {
       ctx.identity.delete(id);
       return null;
     }
-    const v = { readable: true, resultHash: x.resultHash, hasResponse: x.hasResponse };
+    const v = { readable: true, resultHash: x.resultHash, hasResponse: x.hasResponse,
+      frequencies: x.frequencies || null };
     ctx.identity.set(id, v);
     return v;
   }
@@ -96,7 +104,7 @@ export function createFindingsUi() {
       // Listed but not read: its identity is unknown, so findingIssues cannot call it present.
       if (!x) return { kind: 'run', name: ctx.names.get(id) };
       return { kind: 'run', name: ctx.names.get(id), readable: x.readable, reason: x.reason,
-        resultHash: x.resultHash, hasResponse: x.hasResponse };
+        resultHash: x.resultHash, hasResponse: x.hasResponse, frequencies: x.frequencies };
     }
     if (ctx.defs.has(id)) return { kind: 'definition', name: ctx.defs.get(id) };
     return null;
@@ -131,7 +139,8 @@ export function createFindingsUi() {
         }
         f.runs = [...f.runs, { experimentId: id, resultHash: x.resultHash }];
       }
-      f.evidence = [...f.evidence, { key, ref, text: refText(ref, nameOf) }];
+      f.evidence = [...f.evidence, { key, ref, text: refText(ref, nameOf,
+        { storedPoint: storedPointOf(ref) }) }];
     }
     return true;
   }
@@ -228,7 +237,7 @@ export function createFindingsUi() {
       const f = Object.assign(blankForm(), old ? { mode: 'edit', id, statement: old.statement,
         status: old.status, notes: old.notes || '', runs: plain(old.runs),
         evidence: old.evidence.map((ref) => ({ key: refKey(ref), ref: plain(ref),
-          text: refText(ref, nameOf) })) } : {});
+          text: refText(ref, nameOf, { storedPoint: storedPointOf(ref) }) })) } : {});
       this.fnd.form = f;
       if (refs.length && !await link(this, refs)) {
         this.notify('error', 'Finding not started', this.fnd.form.error);
@@ -256,7 +265,7 @@ export function createFindingsUi() {
     findingsValueLabel() {
       const d = this.exps.detail;
       const p = d && d.evidence && d.evidence.point;
-      return p ? `Record a finding about the value at ${hzText(p.hz)}` : '';
+      return p ? `Record a finding about the value at ${exactHzText(p.hz)}` : '';
     },
     /** A finding about the open comparison: A compared with each other run. */
     findingsAskCompare() {
