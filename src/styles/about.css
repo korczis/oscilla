@@ -256,6 +256,14 @@
   font-weight: var(--osc-fw-semibold);
 }
 
+/* A station word longer than its column wraps (hyphenated where the language allows) instead
+   of running into the next station: column width depends on the station count and the fonts. */
+.osc-about-timeline strong,
+.osc-about-timeline span:not(.osc-about-step) {
+  overflow-wrap: anywhere;
+  hyphens: auto;
+}
+
 .osc-about-timeline span:not(.osc-about-step) {
   color: var(--osc-text-2);
   font-size: var(--osc-fs-sm);
