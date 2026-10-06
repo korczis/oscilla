@@ -28,11 +28,15 @@ import { randomBytes16 } from './experiments.js';
 const DIALOG = 'osc-dlg-finding';
 const DELETE_DIALOG = 'osc-dlg-finding-delete';
 const plain = (v) => JSON.parse(JSON.stringify(v));
-const blankForm = () => ({ open: false, mode: 'new', id: null, statement: '',
-  status: 'observation', notes: '', evidence: [], runs: [], base: '', error: '', addRun: '',
-  cmpA: '', cmpB: '' });
 const formState = (f) => JSON.stringify([f.statement.trim(), f.status, f.notes.trim(),
   f.evidence.map((e) => e.key)]);
+const blankForm = () => {
+  const f = { open: false, mode: 'new', id: null, statement: '', status: 'observation',
+    notes: '', evidence: [], runs: [], base: '', error: '', addRun: '', cmpA: '', cmpB: '' };
+  f.base = formState(f);
+  return f;
+};
+const dirty = (f) => formState(f) !== f.base;
 
 /**
  * The view row of a stored finding: its statement and status in words, each reference with its
@@ -158,6 +162,9 @@ export function createFindingsUi() {
       note: null,       // stored findings that could not be read
       importErrors: [],
       form: blankForm(),
+      // A changed form whose dialog was closed (Escape, a backdrop click, Close): it is kept,
+      // reported to the unsaved-work guard and offered again; only Discard drops it.
+      draftKept: false,
       deleteId: null,
       deleteText: '',
     },
@@ -165,7 +172,7 @@ export function createFindingsUi() {
     findingsInit() {
       const dlg = typeof document !== 'undefined' ? document.getElementById(DIALOG) : null;
       // Cancel or Escape discards the draft; until then the unsaved-work guard reports it.
-      if (dlg) dlg.addEventListener('close', () => { this.fnd.form.open = false; });
+      if (dlg) dlg.addEventListener('close', () => this.findingsDialogClosed());
       // Another tab may have changed the runs or findings: read them again when this tab is
       // shown, so a reference is checked against what is stored now.
       if (typeof document !== 'undefined') {
@@ -179,11 +186,34 @@ export function createFindingsUi() {
       }
     },
 
-    /** What a reload would lose here: a finding being written (ADR 0045). */
+    /** What a reload would lose here: a finding being written or a kept draft (ADR 0045). */
     findingsWhatWouldBeLost() {
       const f = this.fnd.form;
-      return f.open && formState(f) !== f.base
+      return (f.open || this.fnd.draftKept) && dirty(f)
         ? [{ domain: 'findings', label: 'A finding being written' }] : [];
+    },
+    /** Has the form changed since it was opened (a draft that would be lost)? */
+    findingsDraftDirty() {
+      return dirty(this.fnd.form);
+    },
+    /** The dialog closed without a save: a changed form is kept as a draft. */
+    findingsDialogClosed() {
+      const f = this.fnd.form;
+      f.open = false;
+      this.fnd.draftKept = dirty(f);
+    },
+    /** Reopen the kept draft. */
+    findingsContinueDraft() {
+      if (!this.fnd.draftKept) return false;
+      this.fnd.form.open = true;
+      this.openModal(DIALOG);
+      return true;
+    },
+    /** Drop the draft (the only way a typed finding is discarded without a save). */
+    findingsDiscardDraft() {
+      this.fnd.form = blankForm();
+      this.fnd.draftKept = false;
+      this.closeModal(DIALOG);
     },
 
     /** Read the findings again and check their references against `list` (the run rows). */
@@ -233,6 +263,14 @@ export function createFindingsUi() {
 
     /** Open the dialog: a new finding seeded with `refs`, or `id` to edit. */
     async findingsAskNew(refs = [], id = null) {
+      if (this.fnd.draftKept && dirty(this.fnd.form)) {
+        // Never replace a kept draft: reopen it, and say so.
+        this.findingsContinueDraft();
+        this.notify('info', 'Finding draft reopened', 'Your unsaved finding draft was reopened: '
+          + 'save it or discard it before starting another.');
+        return true;
+      }
+      this.fnd.draftKept = false;
       const old = id ? this.fnd.all.find((x) => x.id === id) : null;
       const f = Object.assign(blankForm(), old ? { mode: 'edit', id, statement: old.statement,
         status: old.status, notes: old.notes || '', runs: plain(old.runs),
@@ -314,8 +352,9 @@ export function createFindingsUi() {
         return null;
       }
       f.open = false;
-      this.closeModal(DIALOG);
       this.fnd.form = blankForm();
+      this.fnd.draftKept = false;
+      this.closeModal(DIALOG);
       await this.findingsRefresh();
       return saved;
     },

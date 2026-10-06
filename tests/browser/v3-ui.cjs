@@ -2239,12 +2239,12 @@ function defineChecks(fixtures) {
     await H.until(open, Boolean, 3000);
     await page.fill('#osc-fnd-statement', 'a long careful draft');
     await page.keyboard.press('Escape');
-    res.escape = await H.until(state, (x) => !x.open, 3000);
+    res.escape = await H.until(state, (x) => !x.open && x.note, 3000);
     const cont = await page.$('[data-osc="fnd.draftContinue"]');
     if (cont) await cont.click();
-    res.continued = await H.until(state, (x) => x.open, 3000);
+    res.continued = await H.until(state, (x) => x.open && !x.note, 3000);
     await page.mouse.click(3, 3); // the backdrop
-    res.backdrop = await H.until(state, (x) => !x.open, 3000);
+    res.backdrop = await H.until(state, (x) => !x.open && x.note, 3000);
     if (cont) await page.click('[data-osc="fnd.draftContinue"]');
     await H.until(open, Boolean, 3000);
     const discard = await page.$('[data-osc="fnd.discard"]');

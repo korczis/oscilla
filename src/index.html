@@ -1909,6 +1909,14 @@
           </div>
           <p class="osc-m-hint">A finding is your interpretation, linked to the evidence it rests on. A measurement is what was observed or computed; recording a finding never changes it.</p>
           <p class="osc-m-hint" role="note" data-osc="fnd.note" x-show="fnd.note" style="display: none" x-text="fnd.note"></p>
+          <div class="osc-warning osc-f-draft" role="status" data-osc="fnd.draftNote" x-show="fnd.draftKept && !fnd.form.open" style="display: none">
+            <svg aria-hidden="true"><use href="#q-warn"/></svg>
+            <p>A finding draft is kept in this page only (a reload loses it).</p>
+            <button type="button" class="osc-btn osc-btn-secondary osc-m-small" data-osc="fnd.draftContinue"
+              @click="findingsContinueDraft()">Continue writing</button>
+            <button type="button" class="osc-btn osc-btn-secondary osc-m-small osc-x-delete" data-osc="fnd.draftDiscard"
+              @click="findingsDiscardDraft()">Discard draft</button>
+          </div>
           <ul class="osc-m-notes osc-m-notes--plain" role="alert" data-osc="fnd.importErrors" x-show="fnd.importErrors.length" style="display: none">
             <template x-for="(t, i) in fnd.importErrors" :key="i"><li x-text="t"></li></template>
           </ul>
@@ -3076,8 +3084,12 @@
       <textarea class="osc-number osc-m-text osc-m-textarea" id="osc-fnd-notes" rows="2" maxlength="10000"
         data-osc="fnd.notes" x-model="fnd.form.notes"></textarea>
       <p class="osc-dialog-note" role="alert" data-osc="fnd.error" x-show="fnd.form.error" x-text="fnd.form.error"></p>
+      <p class="osc-dialog-note" x-show="findingsDraftDirty()" style="display: none">Closing keeps this draft in this page until you save or discard it; a reload loses it.</p>
       <div class="osc-dialog-actions">
-        <button type="button" class="osc-btn osc-btn-secondary" @click="closeDialog('osc-dlg-finding')">Cancel</button>
+        <button type="button" class="osc-btn osc-btn-secondary osc-x-delete" data-osc="fnd.discard"
+          x-show="findingsDraftDirty()" style="display: none" @click="findingsDiscardDraft()">Discard draft</button>
+        <button type="button" class="osc-btn osc-btn-secondary" data-osc="fnd.close" @click="closeDialog('osc-dlg-finding')"
+          x-text="findingsDraftDirty() ? 'Close (keep draft)' : 'Cancel'">Cancel</button>
         <button type="submit" class="osc-btn osc-btn-primary" data-osc="fnd.save">Save</button>
       </div>
     </form>

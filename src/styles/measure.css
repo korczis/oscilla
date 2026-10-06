@@ -1004,6 +1004,22 @@ ul.osc-x-ev-list {
   font-size: var(--osc-fs-sm);
 }
 
+.osc-f-draft {
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 8px;
+}
+
+.osc-f-draft p {
+  flex: 1 1 14em;
+  margin: 0;
+  font-size: var(--osc-fs-sm);
+}
+
+.osc-f-draft svg {
+  color: var(--osc-orange);
+}
+
 .osc-f-cite-warn {
   padding: 6px 8px;
   border-left: 2px solid var(--osc-orange);

@@ -584,6 +584,18 @@ function defineChecks() {
     await sleep(120);
     await collect();
     await page.click('[data-osc="fnd.deleteConfirm"]');
+    // A draft kept after Escape: the panel's note offers to continue or discard it.
+    await page.click('[data-osc="exp.findingNew"]');
+    await page.waitForSelector('#osc-fnd-statement', { state: 'visible', timeout: 5000 })
+      .catch(() => {});
+    await page.fill('#osc-fnd-statement', 'audit draft');
+    await sleep(120);
+    await collect();
+    await page.keyboard.press('Escape');
+    await page.waitForSelector('[data-osc="fnd.draftNote"]', { state: 'visible', timeout: 5000 })
+      .catch(() => {});
+    await collect();
+    await page.click('[data-osc="fnd.draftDiscard"]');
     await page.evaluate(async () => {
       // An authored definition stays loaded in MEASURE (a derived one only fills the setup).
       const a = window.OSCILLA.app;
