@@ -840,6 +840,12 @@ function defineChecks(fixtures) {
     res.voided = await page.textContent('[data-osc="measure.levelIndicator"]');
     // Review F3 of #139: no input known (another input chosen, the default changed): pending.
     await page.evaluate(() => window.OSCILLA.measure.setInputNow(null));
+    // Alpine renders on a later frame: wait (bounded) for the state asserted, never a sleep.
+    await page.waitForFunction(() => {
+      const el = document.querySelector('[data-osc="measure.levelVoid"]');
+      return /PENDING INPUT CHECK/.test(document.querySelector(
+        '[data-osc="measure.levelIndicator"]').textContent) && el && el.offsetParent !== null;
+    }, null, { timeout: 3000, polling: 50 }).catch(() => {});
     res.pending = await page.textContent('[data-osc="measure.levelIndicator"]');
     res.pendingText = await page.evaluate(() => {
       const el = document.querySelector('[data-osc="measure.levelVoid"]');
