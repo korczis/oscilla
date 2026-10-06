@@ -79,6 +79,10 @@ jobs:
     # clock stalls behind that sink (ci.yml `suites`), so the sink exists only in the Firefox
     # job. Only that job's browser is installed. The expected version and commit are the ones
     # release:publish verifies (package.json, the deployed commit).
+    # Measured on ubuntu-latest (run 37511872556, the same steps against the public page): the
+    # smoke itself 3.1 s chromium, 5.9 s firefox, 10.8 s webkit; whole jobs 33 s, 53 s, 79 s,
+    # mostly the browser install (21 s, 30 s + 7 s sink, 57 s). The legs run in parallel, so
+    # the smoke adds about 80 s to a deployment.
     name: Public smoke (${{ matrix.browser }})
     needs: deploy
     runs-on: ubuntu-latest
