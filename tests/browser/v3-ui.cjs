@@ -140,6 +140,10 @@
 //   findings-delete-focus   (review 1 of #149, item 12) a finding deleted with the keyboard moves
 //                           focus to the next finding's Edit, or to "New finding" when none is
 //                           left; the status reads "Your judgement: …"
+//   findings-two-tabs       (review 2 of #149, item 1) a second tab replaces a cited run with a
+//                           different stamped record; after an unrelated save here, and after a
+//                           list refresh, the citing reference reads broken ("different record"),
+//                           with no Open
 //   calibration-export      (V315) Export CSV and Export JSON of the loaded profile download
 //                           deterministic files named after the profile and its id, and both
 //                           re-import (same id, name, convention); a correction profile (chosen
@@ -2316,6 +2320,80 @@ function defineChecks(fixtures) {
       next: res.afterFirst.osc === 'fnd.edit' && !!res.afterFirst.row
         && res.afterFirst.row !== res.deleted,
       none: res.afterLast.osc === 'fnd.new',
+    }) };
+  });
+
+  // Review 2 of #149, item 1: a second tab replaces a cited run with a different stamped
+  // record; in this tab an unrelated finding is saved (a findings refresh without a list
+  // refresh). The citing finding must read broken, with no Open, then and after a list refresh.
+  def('findings-two-tabs', async ({ page, context }) => {
+    await H.workspace(page, 'experiments');
+    const as = (k, id, name = null) => {
+      const j = JSON.parse(fixtures[k].json);
+      j.experimentId = id;
+      if (name) j.name = name;
+      return JSON.stringify(j);
+    };
+    const res = {};
+    res.setup = await page.evaluate(async ([t, u]) => {
+      const a = window.OSCILLA.app;
+      await a.experimentsImportText(t);
+      await a.experimentsImportText(u);
+      await a.findingsAskRun('fixture-tab');
+      a.fnd.form.statement = 'cites the run another tab replaces';
+      a.fnd.form.status = 'supported';
+      return !!(await a.findingsSave());
+    }, [as('b', 'fixture-tab'), as('a', 'fixture-tab-u')]);
+    const row = (p) => p.evaluate(() => {
+      const li = [...document.querySelectorAll('[data-osc="fnd.row"]')]
+        .find((x) => x.querySelector('h4').textContent === 'cites the run another tab replaces');
+      const r = li && li.querySelector('[data-osc="fnd.ref"]');
+      return r ? { state: r.dataset.state, open: !!r.querySelector('[data-osc="fnd.openRef"]'),
+        text: r.textContent.replace(/\s+/g, ' ').trim() } : { missing: true };
+    });
+    res.before = await row(page);
+    const page2 = await context.newPage();
+    try {
+      await page2.goto(page.url(), { waitUntil: 'load' });
+      await page2.waitForSelector('html[data-ready="true"]', { timeout: 15000 });
+      await page2.evaluate(() => window.OSCILLA.app.setWorkspace('experiments'));
+      await page2.waitForFunction(() => window.OSCILLA.app.exps.loaded, null, { timeout: 15000 });
+      res.tab2 = await page2.evaluate(async (t) => {
+        const a = window.OSCILLA.app;
+        a.exps.deleteId = 'fixture-tab';
+        const deleted = await a.experimentsDelete();
+        const imported = await a.experimentsImportText(t);
+        return { deleted, imported };
+      }, as('c', 'fixture-tab', 'TEST CONTEXT · the record another tab stored'));
+    } finally {
+      await page2.close();
+    }
+    // This tab: an unrelated finding is saved, then the list is refreshed.
+    await page.evaluate(async () => {
+      const a = window.OSCILLA.app;
+      await a.findingsAskRun('fixture-tab-u');
+      a.fnd.form.statement = 'an unrelated finding';
+      await a.findingsSave();
+    });
+    res.afterSave = await H.until(() => row(page), (r) => r.state !== 'ok', 4000);
+    await page.evaluate(() => window.OSCILLA.app.experimentsRefresh());
+    res.afterRefresh = await H.until(() => row(page), (r) => r.state !== 'ok', 4000);
+    await page.evaluate(async () => {
+      const a = window.OSCILLA.app;
+      for (const r of a.fnd.rows.slice()) await a.findingsDeleteNow(r.id);
+      for (const id of ['fixture-tab', 'fixture-tab-u']) {
+        a.exps.deleteId = id;
+        await a.experimentsDelete();
+      }
+      a.alerts = [];
+    });
+    const broken = (r) => r.state === 'broken' && !r.open
+      && /different record is stored under this id/.test(r.text);
+    return { ...res, ...H.verdict({
+      setup: res.setup === true && res.before.state === 'ok',
+      'tab2-replaced': !!res.tab2 && res.tab2.deleted === true && !!res.tab2.imported,
+      'broken-after-save': broken(res.afterSave),
+      'broken-after-refresh': broken(res.afterRefresh),
     }) };
   });
 
