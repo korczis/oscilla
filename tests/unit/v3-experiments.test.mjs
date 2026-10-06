@@ -1016,9 +1016,9 @@ test('IndexedDB store: open, upgrade from empty, CRUD, reopen keeps data', async
   assert.strictEqual(store.kind, 'indexeddb');
   assert.deepStrictEqual(fake.state.upgrades, [[0, DB_VERSION]]);
   // DB version 2 (V3.1, V426) adds the Studio partition next to the experiment stores, version
-  // 3 the definitions (ADR 0043).
+  // 3 the definitions (ADR 0043), version 4 the findings (ADR 0046).
   assert.deepStrictEqual([...fake.dbs.get('t1').stores.keys()], ['experiments', 'summaries',
-    'studio', 'studioSummaries', 'definitions']);
+    'studio', 'studioSummaries', 'definitions', 'findings']);
   const e = fullExperiment();
   assert.strictEqual(await store.put(e), e.experimentId);
   assert.deepStrictEqual(await store.get(e.experimentId), e);

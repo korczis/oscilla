@@ -55,6 +55,11 @@
 // user enters; 1 kHz or the grid centre by default) and the reproducibility checklist. Compare
 // adds one line naming the checklist items whose state differs between the compared runs.
 //
+// Findings (ADR 0046, ui/findings.js): the store is shared (experimentsStore); every refresh of
+// the runs' list refreshes the findings, so a deleted run reads as missing where it is cited; the
+// delete dialog says how many findings cite the run (exps.deleteCiting). A finding never changes
+// a run, and deleting a run never changes a finding.
+//
 // Independence (§227, V353): the store opens lazily, on the first Experiments view or save, and
 // reading the IndexedDB factory never throws into the app (pageIndexedDb): a store that cannot
 // open falls back to memory and says so, and the Playground, the instrument and Studio never
@@ -92,7 +97,7 @@ import {
 import { timestampText, definitionText } from '../measurement/views/experiment-summary.js';
 import {
   runEvidence, evidenceLineage, resultPoint, reproducibilityChecklist, evidenceDifferences,
-  evidenceDifferencesText, identityDifferences,
+  evidenceDifferencesText, identityDifferences, defaultEvidenceHz,
 } from '../experiments/evidence.js';
 
 export const STORE_FALLBACK_TEXT = 'Experiments are kept in memory for this page view only: this '
@@ -134,7 +139,7 @@ function describeRecipe(r) {
   }
 }
 
-function randomBytes16() {
+export function randomBytes16() {
   const b = new Uint8Array(16);
   if (typeof crypto !== 'undefined' && typeof crypto.getRandomValues === 'function') {
     crypto.getRandomValues(b);
@@ -405,6 +410,7 @@ export function createExperimentsUi() {
       memoryHeld: null,     // { experiments, definitions } held by the memory fallback store
       deleteId: null,
       deleteName: '',
+      deleteCiting: '',     // "N findings cite this run…" (ADR 0046), or ''
       importErrors: [],
       readout: null,
       defs: [],
@@ -430,8 +436,8 @@ export function createExperimentsUi() {
       const h = this.exps.memoryHeld;
       if (!this.exps.persistent && h) {
         const n = (k, one) => (h[k] ? `${h[k]} ${one}${h[k] === 1 ? '' : 's'}` : '');
-        const what = [n('experiments', 'experiment'), n('definitions', 'definition')]
-          .filter(Boolean).join(' and ');
+        const what = [n('experiments', 'experiment'), n('definitions', 'definition'),
+          n('findings', 'finding')].filter(Boolean).join(', ').replace(/, ([^,]*)$/, ' and $1');
         if (what) {
           lost.push({ domain: 'experiments', label: `${what} kept in page memory only` });
         }
@@ -462,6 +468,22 @@ export function createExperimentsUi() {
       for (const c of Object.values(ctx.charts)) if (c) c.relayout();
     },
 
+    /** The store (opened on first use; the memory fallback where IndexedDB is unavailable). */
+    experimentsStore() {
+      return store(this);
+    },
+    /**
+     * The identity of stored run `id` as a finding cites it (ADR 0046): { experimentId, name,
+     * resultHash, hasResponse }, or null when it is not stored.
+     */
+    async experimentsIdentity(id) {
+      const e = await get(this, id);
+      if (!e) return null;
+      return { experimentId: e.experimentId, name: e.name || null,
+        resultHash: e.provenance && typeof e.provenance.resultHash === 'string'
+          ? e.provenance.resultHash : null,
+        hasResponse: defaultEvidenceHz(e) !== null }; // the lineage point exists (ADR 0044)
+    },
     /** Store a validated experiment (store.put validates again); returns its id. */
     async experimentsPut(e) {
       const s = await store(this);
@@ -496,6 +518,14 @@ export function createExperimentsUi() {
       this.exps.baselineId = v.baselineId;
       this.exps.canCompare = v.canCompare;
       this.exps.loaded = true;
+      // The findings are read apart too: one that cannot be read never fails the runs' list.
+      if (typeof this.findingsRefresh === 'function') {
+        try {
+          await this.findingsRefresh(list);
+        } catch (err) {
+          this.fnd.note = `The findings could not be read: ${err.message || String(err)}`;
+        }
+      }
       return list;
     },
     async experimentsOpen(id) {
@@ -624,6 +654,9 @@ export function createExperimentsUi() {
     experimentsAskDelete(row) {
       this.exps.deleteId = row.id;
       this.exps.deleteName = row.name;
+      const n = typeof this.findingsCiting === 'function' ? this.findingsCiting(row.id) : 0;
+      this.exps.deleteCiting = n ? `${n} finding${n === 1 ? ' cites' : 's cite'} this run. ${n === 1
+        ? 'It keeps' : 'They keep'} the reference, which will then read "missing".` : '';
       this.openModal('osc-dlg-exp-delete');
     },
     /** Explicit, confirmed delete (§225). */

@@ -45,8 +45,9 @@ changed.
 - **Unsaved work.** While something would be lost, a reload, a closed tab or leaving the page
   makes the browser ask first: unsaved Studio changes, a completed measurement that is not
   saved, a saved run's name or notes not yet stored with "Update name and notes", a rename being
-  typed, or a level calibration (it is kept in page memory only). Where the browser allows no
-  IndexedDB, saved experiments and Studio projects live in page memory too and count as well.
+  typed, a finding being written, or a level calibration (it is kept in page memory only). Where
+  the browser allows no IndexedDB, saved experiments, findings and Studio projects live in page
+  memory too and count as well.
   Studio shows "unsaved changes" and Measure "unsaved result" or "unsaved name or notes". With
   nothing to lose the page asks nothing. Sequencer patterns are not guarded yet.
 
@@ -223,6 +224,21 @@ filter class is claimed. An experiment saved from Measure does not store band le
   derived result. Anything the record does not store reads "not recorded"
   ([ADR 0044](.ai/repo/adrs/0044-evidence-on-a-run-lineage-and-reproducibility-checklist.md),
   proposed).
+- **Findings.** A finding is your interpretation, linked to the evidence it rests on, and kept
+  apart from what was measured: a measurement is what was observed or computed, an observation
+  is what you recorded, and a finding interprets evidence. Its status is one of observation,
+  hypothesis, supported, contradicted or inconclusive (a category, never a confidence number),
+  and a supported or contradicted finding cites at least one piece of evidence: a run, a
+  comparison of two runs, or the stored value of a run at a frequency (the point the evidence
+  lineage traces). Record one from a run's detail ("Record a finding about this run") or from a
+  comparison; a comparison says what changed between the runs, not why. Each run's detail lists
+  the findings that cite it. A finding never changes a run. Deleting a cited run keeps the
+  reference, which then reads "missing", and the delete dialog says how many findings cite the
+  run. A finding records each cited run's id with its result hash, so a different record later
+  stored under that id is named as different. Findings export as `.oscilla-findings.json` with
+  that identity; an import is validated whole before anything is stored, a newer schema is
+  refused, and a cited run that is not in this browser reads "not stored here"
+  ([ADR 0046](.ai/repo/adrs/0046-findings-interpretation-linked-to-evidence.md), proposed).
 - **A completed run cannot be changed.** Only the name, the annotation notes and the baseline
   mark of a saved
   experiment can be edited, and no hash covers them. The store refuses any other change to a
@@ -238,6 +254,8 @@ filter class is claimed. An experiment saved from Measure does not store band le
   experiment from the same definition version), exports and deletes experiments. It also
   shows an experiment in Measure. Its Definitions panel lists each definition with its version
   count and last run, creates one from the Measure setup, renames and edits it, and runs it.
+  Its Findings panel lists each finding with its status and its references, and creates,
+  edits, deletes, exports and imports them.
   Export gives an `.oscilla.json` file or CSV (transfer, impulse response, aggregate) with a
   metadata header and explicit unit columns.
 - **Import.** An imported file is untrusted. Oversized files, wrong types, non-finite numbers,
@@ -642,7 +660,7 @@ when the browser reports them, along with your notes and the results. Both go in
 file, so check it before you share it. Calibration profiles and level calibrations are kept in
 page memory only.
 
-Browser storage holds only these keys and one database, `oscilla-experiments` (version 3):
+Browser storage holds only these keys and one database, `oscilla-experiments` (version 4):
 
 | Storage | Key | Contents |
 | --- | --- | --- |
@@ -656,8 +674,9 @@ Browser storage holds only these keys and one database, `oscilla-experiments` (v
 | IndexedDB | `oscilla-experiments`, object store `studio` | Your saved Studio projects and patches (name, save time, studioHash and the document) |
 | IndexedDB | `oscilla-experiments`, object store `studioSummaries` | One small row per Studio project or patch for the library list |
 | IndexedDB | `oscilla-experiments`, object store `definitions` | Your experiment definitions, each with its versions (recipe, declared conditions, acceptance criterion, name and notes) |
+| IndexedDB | `oscilla-experiments`, object store `findings` | Your findings (statement, status, notes, the evidence each cites and the id and result hash of each cited run) |
 
-Experiments are deleted only when you delete them. Permission to play continuously is never
+Experiments and findings are deleted only when you delete them. Permission to play continuously is never
 stored.
 
 ## Licences

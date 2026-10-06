@@ -11,9 +11,11 @@
 //             annotate(id, { name, notes, baseline }), delete(id), estimate(), close(),
 //             listStudio({ kind }), getStudio(id), putStudio(record), deleteStudio(id),
 //             listDefinitions() -> { definitions, unreadable: [{ id, reason }] },
-//             getDefinition(id), putDefinition(definition) }
-//   memory Store only: held() -> { experiments, definitions, studio } (records it holds, which a
-//   reload discards: the unsaved-work guard reports them)
+//             getDefinition(id), putDefinition(definition),
+//             listFindings() -> { findings, unreadable: [{ id, reason }] }, getFinding(id),
+//             putFinding(finding), putFindings([finding]) -> { stored, same }, deleteFinding(id) }
+//   memory Store only: held() -> { experiments, definitions, studio, findings } (records it
+//   holds, which a reload discards: the unsaved-work guard reports them)
 //
 // Records are stored in the portable file form (schema.serializeExperiment: EncodedArray
 // result arrays) of the validated, migrated experiment (validate.js on put, and again on get),
@@ -59,6 +61,15 @@
 // and a stored version that differs is refused with 'immutable' (err.fields names it). list()
 // rows carry the run's `definition` { id, version, hash, derived } (schema 3), so a definition's
 // runs are found without reading the records.
+//
+// Findings (ADR 0046; DB_VERSION 4 adds the FINDINGS store, keyPath 'id'): user metadata, an
+// interpretation linked to the runs it cites (findings.js). Validated on put and on read; a stored
+// finding that cannot be read is named in `unreadable` and never hides the others. putFinding
+// creates or edits one (its createdAt never changes: 'immutable'); putFindings is an import, all
+// or nothing in one transaction: a different finding stored under an incoming id refuses the whole
+// batch with 'conflict' (err.fields names the ids), an identical one is skipped. No finding write
+// touches a run, and delete(id) of a run never touches a finding: a reference to a deleted run
+// stays and reads missing (findings.js findingIssues).
 
 import {
   serializeExperiment, formatErrors, annotateExperiment, executionFactChanges, isMetadataPath,
@@ -66,19 +77,21 @@ import {
 } from './schema.js';
 import { validateExperiment } from './validate.js';
 import { validateDefinition } from './definition.js';
+import { validateFinding } from './findings.js';
 import { canonicalJson } from './canonical-json.js';
 
 export const DB_NAME = 'oscilla-experiments';
 /**
- * Version 1: experiments; version 2 adds the Studio partition; version 3 the definitions
- * (never deletes anything).
+ * Version 1: experiments; version 2 adds the Studio partition; version 3 the definitions;
+ * version 4 the findings (never deletes anything).
  */
-export const DB_VERSION = 3;
+export const DB_VERSION = 4;
 export const RECORDS = 'experiments';
 export const SUMMARIES = 'summaries';
 export const STUDIO_RECORDS = 'studio';
 export const STUDIO_SUMMARIES = 'studioSummaries';
 export const DEFINITIONS = 'definitions';
+export const FINDINGS = 'findings';
 /** Kinds of Studio records (studio/schema.js STUDIO_KIND, studio/patches.js PATCH_KIND). */
 export const STUDIO_RECORD_KINDS = Object.freeze(['oscilla-studio', 'oscilla-patch']);
 /** Largest stored Studio document (JSON characters): twice the 4 MiB Studio import limit. */
@@ -148,6 +161,75 @@ export function upgradeExperimentDb(db, oldVersion) {
     ensure(STUDIO_SUMMARIES, 'id');
   }
   if (oldVersion < 3) ensure(DEFINITIONS, 'id');
+  if (oldVersion < 4) ensure(FINDINGS, 'id');
+}
+
+// ---------------------------------------------------------------- findings
+
+/** A validated finding copy, or throws 'invalid' / 'corrupt' (`code`). */
+function checkedFinding(f, code, id) {
+  const v = validateFinding(f);
+  if (!v.ok) {
+    throw new ExperimentStoreError(code, `${code === 'corrupt' ? `stored finding ${id} is`
+      : 'finding not stored:'} invalid: ${formatErrors(v.errors.slice(0, 5))}`);
+  }
+  return v.finding;
+}
+
+/** May `next` replace the stored `old`? Its creation time never changes. */
+function findingVerdict(old, next) {
+  if (old && old.createdAt !== next.createdAt) {
+    throw new ExperimentStoreError('immutable', `finding ${next.id}: its creation time never `
+      + 'changes', undefined, ['createdAt']);
+  }
+}
+
+const findingNewest = (a, b) => String(b.updatedAt).localeCompare(String(a.updatedAt))
+  || String(a.id).localeCompare(String(b.id));
+
+/** { findings (valid, newest change first), unreadable: [{ id, reason }] } of stored rows. */
+function findingList(rows) {
+  const findings = [];
+  const unreadable = [];
+  for (const row of rows) {
+    const id = row && typeof row.id === 'string' ? row.id : null;
+    try {
+      findings.push(checkedFinding(row, 'corrupt', id));
+    } catch (err) {
+      unreadable.push({ id, reason: err.message });
+    }
+  }
+  return { findings: findings.sort(findingNewest), unreadable };
+}
+
+/** Validate an import batch: [finding] (copies), or throws 'invalid'. */
+function checkedBatch(list) {
+  if (!Array.isArray(list)) throw new ExperimentStoreError('invalid', 'findings must be a list');
+  const out = list.map((f) => checkedFinding(f, 'invalid'));
+  const ids = out.map((f) => f.id);
+  const dup = ids.find((id, i) => ids.indexOf(id) !== i);
+  if (dup) throw new ExperimentStoreError('invalid', `finding ${dup} appears more than once`);
+  return out;
+}
+
+/** The import verdict over the stored copies (null when absent): { write, same } or throws. */
+function batchVerdict(batch, olds) {
+  const same = [];
+  const write = [];
+  const conflicts = [];
+  batch.forEach((f, i) => {
+    const old = olds[i];
+    if (!old) write.push(f);
+    else if (canonicalJson(old) === canonicalJson(f)) same.push(f.id);
+    else conflicts.push(f.id);
+  });
+  if (conflicts.length) {
+    throw new ExperimentStoreError('conflict', `${conflicts.length === 1 ? 'a finding' : 'findings'
+    } with the same id ${conflicts.length === 1 ? 'is' : 'are'} already stored with different `
+      + `content (${conflicts.slice(0, 4).join(', ')}); nothing was imported`, undefined,
+    conflicts);
+  }
+  return { write, same };
 }
 
 // ---------------------------------------------------------------- definitions
@@ -332,6 +414,9 @@ export function createMemoryStore({ knownAlgorithms } = {}) {
   const studio = new Map();
   const studioSummaries = new Map();
   const defs = new Map();
+  const finds = new Map();
+  const readFinding = (id) => (finds.has(id) ? checkedFinding(JSON.parse(finds.get(id)),
+    'corrupt', id) : null);
   const readDef = (id) => (defs.has(id) ? checkedDefinition(JSON.parse(defs.get(id)), 'corrupt',
     id) : null);
   const wrap = (what, fn) => {
@@ -377,6 +462,7 @@ export function createMemoryStore({ knownAlgorithms } = {}) {
       let usage = 0;
       for (const v of records.values()) usage += v.length;
       for (const v of studio.values()) usage += v.length;
+      for (const v of finds.values()) usage += v.length;
       return { usage, quota: null, persistent: false };
     }),
     listStudio: ({ kind } = {}) => wrap('listStudio', () => [...studioSummaries.values()]
@@ -402,13 +488,30 @@ export function createMemoryStore({ knownAlgorithms } = {}) {
       defs.set(next.id, JSON.stringify(next));
       return next;
     }),
+    listFindings: () => wrap('listFindings', () => findingList([...finds.values()]
+      .map((t) => JSON.parse(t)))),
+    getFinding: (id) => wrap('getFinding', () => readFinding(id)),
+    putFinding: (f) => wrap('putFinding', () => {
+      const next = checkedFinding(f, 'invalid');
+      findingVerdict(readFinding(next.id), next);
+      finds.set(next.id, JSON.stringify(next));
+      return next;
+    }),
+    putFindings: (list) => wrap('putFindings', () => {
+      const batch = checkedBatch(list);
+      const { write, same } = batchVerdict(batch, batch.map((f) => readFinding(f.id)));
+      for (const f of write) finds.set(f.id, JSON.stringify(f));
+      return { stored: write.map((f) => f.id), same };
+    }),
+    deleteFinding: (id) => wrap('deleteFinding', () => finds.delete(id)),
     held: () => ({ experiments: summaries.size, definitions: defs.size,
-      studio: studioSummaries.size }),
+      studio: studioSummaries.size, findings: finds.size }),
     close() {},
   };
 }
 
-const MEMORY_WRITES = ['put', 'annotate', 'delete', 'putStudio', 'deleteStudio', 'putDefinition'];
+const MEMORY_WRITES = ['put', 'annotate', 'delete', 'putStudio', 'deleteStudio', 'putDefinition',
+  'putFinding', 'putFindings', 'deleteFinding'];
 
 /**
  * The memory store with `onChange(store.held())` called after each write settles (a refused
@@ -621,6 +724,49 @@ function idbStore(db, storage, knownAlgorithms) {
         });
       }).then(() => next);
     },
+    listFindings: () => run('listFindings', [FINDINGS], 'readonly',
+      (tx) => request(tx.objectStore(FINDINGS).getAll())).then(findingList),
+    getFinding: (id) => run('getFinding', [FINDINGS], 'readonly',
+      (tx) => request(tx.objectStore(FINDINGS).get(id)))
+      .then((f) => (f == null ? null : checkedFinding(f, 'corrupt', id))),
+    putFinding(f) {
+      let next;
+      try {
+        next = checkedFinding(f, 'invalid');
+      } catch (err) {
+        return Promise.reject(err);
+      }
+      return run('putFinding', [FINDINGS], 'readwrite', (tx) => {
+        const os = tx.objectStore(FINDINGS);
+        return request(os.get(next.id)).then((old) => {
+          findingVerdict(old == null ? null : checkedFinding(old, 'corrupt', next.id), next);
+          return request(os.put(next));
+        });
+      }).then(() => next);
+    },
+    putFindings(list) {
+      let batch;
+      try {
+        batch = checkedBatch(list);
+      } catch (err) {
+        return Promise.reject(err);
+      }
+      // Read, check and write in ONE transaction: a refused batch writes nothing.
+      return run('putFindings', [FINDINGS], 'readwrite', (tx) => {
+        const os = tx.objectStore(FINDINGS);
+        return Promise.all(batch.map((f) => request(os.get(f.id)))).then((olds) => {
+          const { write, same } = batchVerdict(batch, olds.map((o, i) => (o == null ? null
+            : checkedFinding(o, 'corrupt', batch[i].id))));
+          return Promise.all(write.map((f) => request(os.put(f))))
+            .then(() => ({ stored: write.map((f) => f.id), same }));
+        });
+      });
+    },
+    deleteFinding: (id) => run('deleteFinding', [FINDINGS], 'readwrite', (tx) => {
+      const os = tx.objectStore(FINDINGS);
+      return Promise.all([request(os.get(id)).then((v) => v != null), request(os.delete(id))])
+        .then(([existed]) => existed);
+    }),
     close: () => db.close(),
   };
 }

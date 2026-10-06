@@ -58,6 +58,7 @@ import { createNavigation, v1ModeFor } from './ui/navigation.js';
 import { createUnsavedGuard } from './ui/unsaved.js';
 import { createMeasureUi } from './ui/measure.js';
 import { createExperimentsUi } from './ui/experiments.js';
+import { createFindingsUi } from './ui/findings.js';
 import { createStudioUi } from './ui/studio/workspace.js';
 import { createScopeView, createHarmonicBarsView } from './ui/p5-views.js';
 import { buildConfigExport, parseConfigImport, CONFIG_FILE_VERSION } from './ui/config-file.js';
@@ -475,6 +476,7 @@ const unsavedGuard = createUnsavedGuard({ sources: [
   () => (app ? app.studioWhatWouldBeLost() : []),
   () => (app ? app.measureWhatWouldBeLost() : []),
   () => (app ? app.experimentsWhatWouldBeLost() : []),
+  () => (app ? app.findingsWhatWouldBeLost() : []),
 ] });
 
 function compose(...parts) {
@@ -721,10 +723,11 @@ function createOscillaComponent(ui) {
     loopback: new URLSearchParams(window.location.search).get('measure') === 'loopback',
   });
   const experiments = createExperimentsUi();
+  const findings = createFindingsUi();
   const studio = createStudioUi({ engine, stopPlayback });
   const navigation = createNavigation();
-  const cmp = compose(instrument, ui, workbench, measure, experiments, studio, navigation,
-    provenancePart(), TEMPLATE_HELPERS);
+  const cmp = compose(instrument, ui, workbench, measure, experiments, findings, studio,
+    navigation, provenancePart(), TEMPLATE_HELPERS);
   cmp.dismissAlert = focusSafeDismiss(cmp.dismissAlert);
   const baseRefreshDebug = cmp.refreshDebug;
   Object.defineProperty(cmp, 'refreshDebug', {
@@ -742,6 +745,7 @@ function createOscillaComponent(ui) {
       shellInit.call(this);
       this.measureInit();
       this.experimentsInit();
+      this.findingsInit();
       this.studioInit(); // before integrationInit: Studio's key listener runs first (§125)
       integrationInit.call(this);
     },
