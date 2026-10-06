@@ -144,6 +144,10 @@
 //                           different stamped record; after an unrelated save here, and after a
 //                           list refresh, the citing reference reads broken ("different record"),
 //                           with no Open
+//   findings-views-two-tabs (review 3 of #149) with no event in tab 1, tab 2 replaces runs:
+//                           recording a finding from tab 1's out-of-date detail or comparison is
+//                           refused ("replaced in another tab … reopen it"), and Open of a
+//                           reference to the replaced run opens nothing and re-checks the row
 //   calibration-export      (V315) Export CSV and Export JSON of the loaded profile download
 //                           deterministic files named after the profile and its id, and both
 //                           re-import (same id, name, convention); a correction profile (chosen
@@ -2394,6 +2398,102 @@ function defineChecks(fixtures) {
       'tab2-replaced': !!res.tab2 && res.tab2.deleted === true && !!res.tab2.imported,
       'broken-after-save': broken(res.afterSave),
       'broken-after-refresh': broken(res.afterRefresh),
+    }) };
+  });
+
+  // Review 3 of #149: views carry the hash of the record on screen, and Open re-checks. Tab 2
+  // replaces runs while tab 1 receives no event: recording a finding from tab 1's out-of-date
+  // detail or comparison is refused, and Open of a reference to the replaced run opens nothing.
+  def('findings-views-two-tabs', async ({ page, context }) => {
+    await H.workspace(page, 'experiments');
+    const as = (k, id, name = null) => {
+      const j = JSON.parse(fixtures[k].json);
+      j.experimentId = id;
+      if (name) j.name = name;
+      return JSON.stringify(j);
+    };
+    const tab2 = async (fn, arg) => {
+      const p2 = await context.newPage();
+      try {
+        await p2.goto(page.url(), { waitUntil: 'load' });
+        await p2.waitForSelector('html[data-ready="true"]', { timeout: 15000 });
+        await p2.evaluate(() => window.OSCILLA.app.setWorkspace('experiments'));
+        await p2.waitForFunction(() => window.OSCILLA.app.exps.loaded, null, { timeout: 15000 });
+        return await p2.evaluate(fn, arg);
+      } finally {
+        await p2.close();
+      }
+    };
+    const replace = (id, json) => tab2(async ([i, t]) => {
+      const a = window.OSCILLA.app;
+      a.exps.deleteId = i;
+      await a.experimentsDelete();
+      return a.experimentsImportText(t);
+    }, [id, json]);
+    const alertsText = () => page.evaluate(() => (window.OSCILLA.app.alerts || [])
+      .map((x) => `${x.title}: ${x.text || x.message || ''}`).join(' | '));
+    const res = {};
+    res.setup = await page.evaluate(async ([x, y]) => {
+      const a = window.OSCILLA.app;
+      await a.experimentsImportText(x);
+      await a.experimentsImportText(y);
+      await a.findingsAskRun('fixture-vx');
+      a.fnd.form.statement = 'cites X';
+      a.fnd.form.status = 'supported';
+      const f = await a.findingsSave();
+      await a.experimentsOpen('fixture-vx');
+      a.alerts = [];
+      return !!f;
+    }, [as('b', 'fixture-vx'), as('a', 'fixture-vy')]);
+    res.replacedX = await replace('fixture-vx', as('c', 'fixture-vx', 'TEST CONTEXT · X replaced'));
+    // 1. The detail tab 1 shows is out of date: "Record a finding about this run" is refused.
+    const before = await page.evaluate(() => window.OSCILLA.app.fnd.all.length);
+    await page.click('[data-osc="exp.findingNew"]');
+    await sleep(400);
+    res.detail = { dialog: await page.evaluate(() => document.getElementById('osc-dlg-finding')
+      .open), alerts: await alertsText(), count: await page.evaluate(() => window.OSCILLA.app
+      .fnd.all.length) - before };
+    await page.evaluate(() => { window.OSCILLA.app.alerts = []; });
+    // 2. Open of the reference to X (its row still reads ok here: no event) opens nothing.
+    res.open = await page.evaluate(async () => {
+      const a = window.OSCILLA.app;
+      const r = a.fnd.rows.find((x) => x.statement === 'cites X');
+      const stateBefore = r.evidence[0].state;
+      const opened = await a.findingsOpenRef(r.evidence[0].ref, r.id);
+      const after = a.fnd.rows.find((x) => x.statement === 'cites X').evidence[0];
+      return { stateBefore, opened: !!opened, stateAfter: after.state };
+    });
+    res.openAlerts = await alertsText();
+    await page.evaluate(() => { window.OSCILLA.app.alerts = []; });
+    // 3. The comparison tab 1 shows is out of date: recording a finding about it is refused.
+    await page.evaluate(() => window.OSCILLA.app.experimentsCompare(['fixture-vy',
+      'fixture-vx']));
+    await H.until(() => page.evaluate(() => !!window.OSCILLA.app.exps.compare), Boolean, 5000);
+    res.replacedY = await replace('fixture-vy', as('b', 'fixture-vy', 'TEST CONTEXT · Y replaced'));
+    await page.click('[data-osc="exp.findingCompare"]');
+    await sleep(400);
+    res.compare = { dialog: await page.evaluate(() => document.getElementById('osc-dlg-finding')
+      .open), alerts: await alertsText() };
+    await page.evaluate(async () => {
+      const a = window.OSCILLA.app;
+      a.closeModal('osc-dlg-finding');
+      a.findingsDiscardDraft();
+      for (const r of a.fnd.rows.slice()) await a.findingsDeleteNow(r.id);
+      for (const id of ['fixture-vx', 'fixture-vy']) {
+        a.exps.deleteId = id;
+        await a.experimentsDelete();
+      }
+      a.exps.panel = 'detail';
+      a.alerts = [];
+    });
+    const refused = /replaced in another tab since it was shown here; reopen it/;
+    return { ...res, ...H.verdict({
+      setup: res.setup === true && !!res.replacedX && !!res.replacedY,
+      'detail-refused': !res.detail.dialog && res.detail.count === 0
+        && refused.test(res.detail.alerts),
+      'open-refused': res.open.stateBefore === 'ok' && !res.open.opened
+        && res.open.stateAfter === 'broken' && /different record/.test(res.openAlerts),
+      'compare-refused': !res.compare.dialog && refused.test(res.compare.alerts),
     }) };
   });
 
