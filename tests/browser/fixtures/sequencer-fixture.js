@@ -201,18 +201,42 @@ async function stopMidPlay(playMs) {
   return { during, after: { ...probeSnapshot(), stats: editor.stats(), playing: editor.playing, waitedMs } };
 }
 
-async function restartMany(n, gapMs) {
+/**
+ * Restart n times, gapMs apart. Growth means a source or voice of an earlier pass outlives the
+ * restarts after it, so each restart is judged by what remains of the earlier passes once their
+ * stop has had time to complete: after the gap, wait (deadline settleMs) until every source that
+ * was live before this restart has fired `ended`, then count the live sources this restart did
+ * not start (`foreign`, 0 without growth) and the editor's voices (1 without growth). The stop
+ * fades for STOP_RAMP_S + STOP_PAD_S, but under load the browser can deliver `ended` much later;
+ * a count taken before that delivery measures event latency, not growth. The unsettled counts
+ * (`rawLive`, `rawVoices`) are kept for the failure detail. A source that is never stopped never
+ * fires `ended`: its settle times out and it stays foreign in every later restart.
+ */
+async function restartMany(n, gapMs, settleMs = 1000) {
   const { editor } = rt;
   resetProbe();
   const perRestart = [];
   for (let i = 0; i < n; i++) {
+    const earlier = new Set(probe.live);
     editor.restart();
+    const mine = new Set([...probe.live].filter((s) => !earlier.has(s)));
     await sleep(gapMs);
-    perRestart.push({ live: probe.live.size, voices: editor.stats().voices });
+    const rawLive = probe.live.size;
+    const rawVoices = editor.stats().voices;
+    const settledMs = await until(() => [...earlier].every((s) => !probe.live.has(s)), settleMs);
+    perRestart.push({
+      started: mine.size,
+      live: probe.live.size,
+      foreign: [...probe.live].filter((s) => !mine.has(s)).length,
+      voices: editor.stats().voices,
+      rawLive,
+      rawVoices,
+      settledMs,
+    });
   }
   const beforeStop = probeSnapshot();
   editor.stop();
-  const waitedMs = await until(() => torn(editor), 400);
+  const waitedMs = await until(() => torn(editor), settleMs);
   return { perRestart, beforeStop, after: { ...probeSnapshot(), stats: editor.stats(), waitedMs } };
 }
 

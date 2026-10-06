@@ -13,7 +13,8 @@
 //       also for modulated blocks and for stop() mid-ramp with and without cancelAndHoldAtTime;
 //   (c) stop mid-play on a realtime AudioContext leaves 0 live sources (OscillatorNode
 //       start/stop/ended are wrapped), also after a looped run;
-//   (d) restart 20x without growth.
+//   (d) restart 20x without growth: once each restart's earlier passes have delivered `ended`
+//       (bounded wait), none of their sources is live and only the current voice remains.
 // Exit code 0 only when every check passes in every browser.
 'use strict';
 
@@ -451,22 +452,30 @@ async function runEngine(engine, bundle) {
         cap,
       );
     }
+    // Growth is judged per restart once the earlier passes' `ended` events have arrived (the
+    // fixture waits up to 1 s for them): no source of an earlier pass is still live and the
+    // editor holds exactly the current voice. Counting before that delivery measured event
+    // latency under load, not growth. A source that is never stopped stays foreign.
     const many = await page.evaluate(() => window.seqFixture.restartMany(20, 60));
     const perPass = 4; // carrier + siren LFO + AM LFO + FM modulator (random/burst have none)
-    const maxLive = Math.max(...many.perRestart.map((p) => p.live));
-    const maxVoices = Math.max(...many.perRestart.map((p) => p.voices));
-    const lastLive = many.perRestart.slice(-5).map((p) => p.live);
+    const pr = many.perRestart;
+    const maxOf = (k) => Math.max(...pr.map((p) => p[k]));
+    const grown = pr.findIndex((p) => p.foreign !== 0 || p.voices !== 1 || p.live > perPass);
     check(
       engine,
       '(d) restart 20x without growth',
-      maxVoices <= 2 &&
-        maxLive <= 2 * perPass &&
+      grown === -1 &&
+        pr.every((p) => p.started === perPass) &&
         many.after.live === 0 &&
         many.after.started === many.after.ended &&
         many.after.stats.voices === 0 &&
         many.after.started === 20 * perPass,
-      `max voices ${maxVoices}, max live ${maxLive}, last live ${lastLive.join('/')}, ` +
-        `started ${many.after.started}, ended ${many.after.ended}`,
+      (grown === -1 ? 'settled: ' : `restart ${grown + 1} grew: ${JSON.stringify(pr[grown])}; `) +
+        `max foreign ${maxOf('foreign')}, max voices ${maxOf('voices')}, ` +
+        `max live ${maxOf('live')} (unsettled: voices ${maxOf('rawVoices')}, ` +
+        `live ${maxOf('rawLive')}), slowest settle ${maxOf('settledMs')} ms, ` +
+        `started ${many.after.started}, ended ${many.after.ended}, live after ${many.after.live} ` +
+        `(${many.after.waitedMs} ms)`,
     );
     const final = await page.evaluate(() => window.seqFixture.realtimeTeardown());
     check(engine, 'no live sources after teardown', final.live === 0, JSON.stringify(final));
