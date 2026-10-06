@@ -19,7 +19,7 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-02
-updated_at: 2026-10-03T23:42:51Z
+updated_at: 2026-10-06T18:12:38Z
 evidence:
   - covers: verified
     type: manual
@@ -39,3 +39,9 @@ evidence:
     result: "PARTIAL (do not mark done): re-checked at 34f967a; 100-node/200-edge performance target tested with budgets (v31-studio-performance 2/2; docs/v31/performance.md), bundle budget, licence notices and no runtime network checked by verify-dist (pass). Unmet, unchanged: no recorded V3.1 cross-model architecture, UX or adversarial review (spec 235-237, 272); the only recorded independent review is the V3 DSP review docs/v3/dsp-review-v382.md (V382), which does not cover the Studio"
     commit: 34f967a063ead9085b89faf32f748e4cf9aff301
     recorded_at: 2026-10-03T23:42:51Z
+  - covers: verified
+    type: manual
+    command: "node --test tests/unit/v31-studio-review-v431.test.mjs tests/unit/v31-studio-review-v431-ui.test.mjs tests/unit/v431-*.test.mjs tests/unit/v31-studio-performance.test.mjs && node scripts/verify-dist.mjs && for n in 116 119 120 121 129 130 139 140; do gh pr view $n --comments; done"
+    result: "PARTIAL (do not mark done): at caf7764 spec 235-237 are MET: docs/v31/review-v431.md (#75, landed after the 34f967a round) records three independent architecture (A), UX/accessibility (U) and adversarial (X) reviews of the Studio at 10fafa1, each finding backed by a failing check; 30 findings (19 defects, 2 risks, 9 nits), all fixed with tests that fail before the fix (#75-#89); the 237 questions are answered there (topology divergence #14/#15, leaks, undo/runtime drift, hostile import, JS time #22, compact/full one store, modulation vs automation #16/#17, measurement graph lying #13, inactive cable #14, feedback, master safety, runtime objects #2, migration); 'cross-model' became independent contexts of one model by the owner's ruling, stated in the doc (spec: 'where available'). Review tests 34/34 pass; 145 performance target and 216-220 bundle, licence, no runtime network pass (verify-dist: gzip 762.9/976.6 KiB). Unmet: spec 272 final review: the V431 review's lenses exclude 'Majordomus completeness' and 'release integrity'; the later reviews are change-scoped (two adversarial reviews per PR on #116-#140 review a diff, not the architecture), and the v4 audit at 27f7c62 that covered the .ai layer, artifact and CI is kept only as the docs/v4/completion-ledger.md summary with valid findings in those areas still open (ADR status never leaves proposed; CI1 WebKit absent from engine/dsp/labs/sequencer CI; and tests/browser/live-smoke.cjs says the Pages workflow runs it, but no workflow or release script does)"
+    commit: caf7764ce6fec9329de43254328170255faa6dad
+    recorded_at: 2026-10-06T18:12:38Z

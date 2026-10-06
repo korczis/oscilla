@@ -9,7 +9,7 @@
 // instrumentation (oscillator accounting, AudioParam log, frame-indexed AudioWorklet output tap)
 // and the same assertions.
 //
-//   node tests/browser/engine-v1port.cjs                       # chromium and firefox
+//   node tests/browser/engine-v1port.cjs                       # chromium, firefox and webkit
 //   node tests/browser/engine-v1port.cjs --browser firefox     # one browser (or webkit)
 //   OSC_BROWSERS=firefox node tests/browser/engine-v1port.cjs  # the same, from the environment (CI)
 //
@@ -25,7 +25,11 @@ const os = require('os');
 
 const args = process.argv.slice(2);
 const BROWSERS = args.includes('--browser') ? [args[args.indexOf('--browser') + 1]]
-  : (process.env.OSC_BROWSERS || 'chromium,firefox').split(',');
+  : (process.env.OSC_BROWSERS || 'chromium,firefox,webkit').split(',');
+if (!BROWSERS.length || BROWSERS.some((b) => !['chromium', 'firefox', 'webkit'].includes(b))) {
+  console.error(`unknown browser(s) in ${JSON.stringify(BROWSERS)}; expected chromium, firefox, webkit`);
+  process.exit(2);
+}
 const APP_JS = path.resolve(__dirname, '..', '..', 'src', 'js');
 let ENGINE = BROWSERS[0];
 let BASE = null; // file:// URL of the built fixture (buildFixture)
@@ -210,10 +214,14 @@ function instrument(opts) {
       },
     });
   }
-  // Keep every microphone stream so the test can check its tracks.
-  if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-    const gum = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
-    navigator.mediaDevices.getUserMedia = async (c) => { const s = await gum(c); T.streams.push(s); return s; };
+  // Keep every microphone stream so the test can check its tracks. Wrapped on the prototype:
+  // in WebKit an instance wrapper set here is gone from navigator.mediaDevices by the time the
+  // page asks for the microphone (no own getUserMedia, no stream recorded), so the microphone
+  // checks would see no stream; the prototype is shared and holds in every engine.
+  const MD = window.MediaDevices && window.MediaDevices.prototype;
+  if (MD && MD.getUserMedia) {
+    const gum = MD.getUserMedia;
+    MD.getUserMedia = async function (c) { const s = await gum.call(this, c); T.streams.push(s); return s; };
   }
 
   // Output tap: the node the application connects to the destination also feeds a recorder.
@@ -364,7 +372,10 @@ function instrument(opts) {
 }
 
 async function openPage(browser, { hash = '', query = '', instrumentOpts = {}, init = null } = {}) {
-  const context = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+  // Chromium and Firefox grant the fake microphone through launch flags and prefs (LAUNCH);
+  // Playwright's WebKit has mock capture devices but refuses getUserMedia without the grant.
+  const context = await browser.newContext({ viewport: { width: 1280, height: 900 },
+    ...(ENGINE === 'webkit' ? { permissions: ['microphone'] } : {}) });
   await context.addInitScript(instrument, instrumentOpts);
   if (init) await context.addInitScript(init);
   const page = await context.newPage();
@@ -1065,7 +1076,7 @@ async function runBrowser() {
   }
 
   // ------------------------------------------------------------------ microphone
-  if (ENGINE !== 'webkit') {
+  {
     console.log('microphone');
     const { page, problems, context } = await openPage(browser);
     const r = await app(page, async (a, e, O, T) => {

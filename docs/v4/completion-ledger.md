@@ -86,11 +86,13 @@ registry, timeline UI and transport (R7); pattern-played Oscillator frequency la
 silent carrier (R8); presentation-only edits pay a full compile while playing (R9);
 `mode`/`workspace` split state and three hash routers (W4, fixing with W2: one dispatcher, ADR 0045); Space has two meanings and two
 shortcut dialogs (W5); disabled controls without a reason (W6, partly fixing); WebKit absent from
-engine/dsp/labs/sequencer CI and the About provenance tests skip in CI's shallow clone (CI1);
+engine/dsp/labs/sequencer CI and the About provenance tests skip in CI's shallow clone (CI1,
+**closed** #147: WebKit legs in both jobs, nothing narrowed; the unit job checks out full
+history and tags, and the About checks fail instead of skipping under CI without them);
 no startup budget or large-library fixture (P1); `window.OSCILLA` test seam and `?mock=1` ship
 in production (W7); five dead CSS classes; an import without a hash shows no "unverified"
 marker; an unreadable stored record fails silently; ADR status never leaves `proposed`; the plan
-contradicts git (V386 READY, M033 BLOCKED); "run" means both a repeat and a completed
+contradicts git (V386 READY, M033 BLOCKED; **closed** #144, see "plan reconciled" below); "run" means both a repeat and a completed
 experiment, and "project" both a Studio file and OSCILLA; no glossary.
 
 ## What v4.0 still lacks entirely
@@ -141,3 +143,25 @@ findings (ids with a dot, records written as schema 4 without need, wording with
 id) are fixed in the same pull request (`tests/unit/v4-review-139.test.mjs`).
 
 With W2 handled by #130 (ADR 0045), the findings of this ledger still open are the P2 list.
+
+## Update 2026-10-06 — plan reconciled with main (#144)
+
+The stale V3 and V3.1 release issues were re-checked against `main` at caf7764, the latest release line.
+Each issue now carries evidence recorded at that commit (`majordomus plan show <id>`), and its
+derived status matches git. None of them is done: each one still lacks something real, named
+below. Nothing was closed because a file exists.
+
+| Issue | Now met | Still unmet |
+|---|---|---|
+| V386 Release 3.0.0 (M020) | public verify (spec 230): `verify-deploy` PASS, `test:live` 14/14 in three browsers incl. MEASURE and the Playground | rc first (spec 233). It cannot become true now, and `majordomus decision` writes only untracked `.ai/local`, so the deviation needs a tracked ADR (the owner decides). No release/v1 record for v3.0.0, because its GitHub Release has no asset |
+| V431 Reviews (M032) | spec 235-237: `docs/v31/review-v431.md`, 30 findings, all fixed with tests; performance, bundle, licence, no runtime network | spec 272 final review: its "Majordomus completeness" and "release integrity" lenses are not covered by a recorded review whose findings are fixed. The PR reviews only cover their own diffs |
+| V432 Studio docs and self-knowledge (M032) | spec 266 test `tests/unit/v31-studio-self-knowledge.test.mjs` (#73) passes | blocked behind V431. Spec 225: majordomus 0.13.2 indexes Studio feature records as kind `unknown`, which is an upstream gap |
+| V433 Release 3.1 (M033) | public Studio smoke, including the Measurement Sweep template (spec 270); release/v1 records (the latest one passes `--check`) | blocked behind V432 and V386. Spec 269: no workflow or release script runs `test:live`, although its header says Pages does, and the smoke checks neither the compact Studio nor the timeline. Spec 270 checks node counts, not node kinds. Spec 259: no final Studio report. v3.1.0 has no release record |
+
+## Update 2026-10-06 — CI1
+
+CI1 is closed by #147. The engine and DSP/labs/sequencer jobs run WebKit (Linux runner, 44.1 kHz)
+with every check, the five engine microphone checks included (Playwright's WebKit mock device,
+granted by permission). Two of the suites could not have run WebKit before: `dsp.cjs` ran 0 checks
+and `labs.cjs` launched Chromium under any other name; every suite now refuses an unknown browser.
+The About timeline checks run in CI against full history and tags (`tests/unit/about.test.mjs`).

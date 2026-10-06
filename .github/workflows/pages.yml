@@ -1,7 +1,10 @@
 # Publish OSCILLA to GitHub Pages. The site is dist/index.html, the same file that is committed
 # and that CI gated on the pull request, with only its metadata region stamped with this commit
 # (scripts/stamp-build.mjs); repository tooling is never served. The deployment is verified
-# after deploy-pages and any mismatch fails the workflow (scripts/verify-deploy.mjs).
+# after deploy-pages and any mismatch fails the workflow (scripts/verify-deploy.mjs). Once the
+# page is proven to be the committed dist, the public smoke (tests/browser/live-smoke.cjs, spec
+# V3.1 §269-§270) runs against it in chromium, firefox and webkit; a failed check fails the
+# workflow.
 name: Deploy to GitHub Pages
 
 on:
@@ -14,13 +17,24 @@ permissions:
   pages: write
   id-token: write
 
+# One run at a time, and the smoke is part of the run: a newer deploy waits for it, so the smoke
+# always checks the page its own run deployed and verified (a cancelled smoke would hide a
+# broken page). The run is bounded by the jobs' timeout-minutes, so a stuck browser cannot hold
+# the next deploy for longer than that.
 concurrency:
   group: pages
   cancel-in-progress: false
 
+defaults:
+  run:
+    shell: bash
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      page_url: ${{ steps.deployment.outputs.page_url }}
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
@@ -58,3 +72,43 @@ jobs:
         run: >-
           node scripts/verify-deploy.mjs --url "${{ steps.deployment.outputs.page_url }}"
           --commit "$GITHUB_SHA" --attempts 10 --delay 10
+
+  smoke:
+    # The public smoke of the page deployed and verified above, one browser per job: Firefox
+    # needs a PulseAudio null sink to run an AudioContext on the runner, and Chromium's realtime
+    # clock stalls behind that sink (ci.yml `suites`), so the sink exists only in the Firefox
+    # job. Only that job's browser is installed. The expected version and commit are the ones
+    # release:publish verifies (package.json, the deployed commit).
+    # Measured on ubuntu-latest (run 37511872556, the same steps against the public page): the
+    # smoke itself 3.1 s chromium, 5.9 s firefox, 10.8 s webkit; whole jobs 33 s, 53 s, 79 s,
+    # mostly the browser install (21 s, 30 s + 7 s sink, 57 s). The legs run in parallel, so
+    # the smoke adds about 80 s to a deployment.
+    name: Public smoke (${{ matrix.browser }})
+    needs: deploy
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        browser: [chromium, firefox, webkit]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Install ${{ matrix.browser }}
+        run: npx playwright install --with-deps ${{ matrix.browser }}
+      - name: Audio sink for headless Firefox (no sound server on the runner)
+        if: matrix.browser == 'firefox'
+        run: |
+          sudo apt-get update -q && sudo apt-get install -y --no-install-recommends pulseaudio
+          pulseaudio --start --exit-idle-time=-1
+          pactl load-module module-null-sink sink_name=ci_null
+          pactl set-default-sink ci_null
+      - name: Public smoke of the deployed page (fatal)
+        run: >-
+          npm run test:live -- --url "${{ needs.deploy.outputs.page_url }}"
+          --expect-version "$(node -p "require('./package.json').version")"
+          --expect-commit "$GITHUB_SHA" --browsers ${{ matrix.browser }}

@@ -2,7 +2,7 @@
 // OSCILLA V2 chart renderers and lab controllers: browser checks with a fake engine adapter.
 //
 //   NODE_PATH=/Users/korczis/dev/oscilla/tests/node_modules node tests/browser/labs.cjs
-//   node tests/browser/labs.cjs --browser firefox        # chromium | firefox (default: both)
+//   node tests/browser/labs.cjs --browser firefox        # chromium | firefox | webkit (default: all)
 //   node tests/browser/labs.cjs --build <dir>             # write labs-fixture.html and
 //                                                         # labs-visual.html (15.5 kHz) to <dir>
 //   node tests/browser/labs.cjs --screenshot <file.png>  # 1536x1024 after an 11 s live run
@@ -23,8 +23,14 @@ const playwright = require('playwright');
 const ROOT = path.resolve(__dirname, '..', '..');
 const args = process.argv.slice(2);
 const opt = (name) => (args.includes(name) ? args[args.indexOf(name) + 1] : null);
+const KNOWN = ['chromium', 'firefox', 'webkit'];
 const ENGINES = opt('--browser') ? [opt('--browser')]
-  : (process.env.OSC_BROWSERS ? process.env.OSC_BROWSERS.split(',') : ['chromium', 'firefox']);
+  : (process.env.OSC_BROWSERS ? process.env.OSC_BROWSERS.split(',') : KNOWN);
+if (!ENGINES.length || ENGINES.some((e) => !KNOWN.includes(e))) {
+  // An unknown name must not fall through to another browser and pass under its label.
+  console.error(`unknown browser(s) in ${JSON.stringify(ENGINES)}; expected ${KNOWN.join(', ')}`);
+  process.exit(2);
+}
 
 // ---------------------------------------------------------------- fixture build
 
@@ -72,7 +78,14 @@ function serve(pages) {
 
 // Chromium's built-in fake capture device is silent in this version, so it gets a WAV with a
 // known tone; Firefox's fake device (media.navigator.streams.fake) produces a 1 kHz tone.
-const FAKE_MIC_HZ = { chromium: 2000, firefox: 1000 };
+// Playwright's WebKit has mock capture devices once the microphone permission is granted.
+// "Mock audio device 1" plays a continuous 150 Hz hum at amplitude 0.1, a 70 ms 1500 Hz "bip"
+// and, one second later, a 70 ms 500 Hz "bop" (0.5), repeating every two seconds; with echo
+// cancellation off (as the lab asks) the GStreamer port CI runs adds a continuous 3 kHz tone
+// at 0.05 (WebKit MockRealtimeAudioSourceGStreamer.cpp: s_HumFrequency 150, s_HumVolume 0.1).
+// The hum is the steady, loudest component, so it is the tone to detect; a window holding a
+// bip or a bop is not a detection, and the poll below waits past it.
+const FAKE_MIC_HZ = { chromium: 2000, firefox: 1000, webkit: 150 };
 // Analyser level (est.levelDb) below which the fake tone is not being delivered yet. Steady
 // readings: Chromium -25.6 dB (the WAV's 0.25 amplitude: 20·log10(0.25 · 0.42 / 2), Blackman
 // coherent gain, one-sided spectrum), Firefox -33.5 dB. While the stream starts, a window the
@@ -115,6 +128,7 @@ function launch(engine) {
       },
     });
   }
+  if (engine === 'webkit') return playwright.webkit.launch();
   return playwright.chromium.launch({
     args: [
       '--use-fake-device-for-media-stream',
@@ -127,6 +141,18 @@ function launch(engine) {
 
 // ---------------------------------------------------------------- checks
 
+// The fixture's context starts running only where autoplay is allowed at launch (Chromium's
+// flag, Firefox's prefs). WebKit has no such switch: it holds the context and a resume() made
+// while the page loads until a later resume(). The real engine resumes on the first gesture,
+// after load (audio-engine.js resume); this does the same, after load, and a refusal fails.
+async function startContext(page) {
+  const state = await page.evaluate(async () => {
+    await window.__labs.ctx.resume();
+    return window.__labs.ctx.state;
+  });
+  if (state !== 'running') throw new Error(`fixture AudioContext ${state} after resume()`);
+}
+
 async function runEngine(engine, base) {
   const results = [];
   const check = (name, ok, detail = '') => {
@@ -135,8 +161,11 @@ async function runEngine(engine, base) {
   };
   const browser = await launch(engine);
   const context = await browser.newContext({ viewport: { width: 1536, height: 1024 } });
-  if (engine === 'chromium') {
-    await context.grantPermissions(['microphone'], { origin: base }).catch(() => {});
+  if (engine !== 'firefox') {
+    // Firefox needs no grant (media.navigator.permission.disabled); WebKit refuses
+    // getUserMedia without it, so a failed grant there must fail the run, not be swallowed.
+    const grant = context.grantPermissions(['microphone'], { origin: base });
+    await (engine === 'webkit' ? grant : grant.catch(() => {}));
   }
   const page = await context.newPage();
   const errors = [];
@@ -144,22 +173,40 @@ async function runEngine(engine, base) {
   // src/js/ui/app.js, owned by the visual shell / integration) are reported separately: they
   // are not produced by the charts or the lab controllers under test.
   const shellErrors = [];
-  const onPageError = (tag) => (e) => {
-    const msg = `${tag}: ${e.message}`;
-    // Chromium tags Alpine evaluator frames "[Alpine] <expr>", Firefox shows Alpine's
-    // generateEvaluatorFromString frame; the object form of x-bind (x-bind="obj", used by the
-    // Studio markup) fails inside Alpine's applyBindingsObject when the shell's state is absent.
-    if (/\[Alpine\]|generateEvaluatorFromString|applyBindingsObject/.test(e.stack || '')) {
-      shellErrors.push(msg);
-    } else errors.push(msg);
+  // Chromium tags Alpine evaluator frames "[Alpine] <expr>", Firefox shows Alpine's
+  // generateEvaluatorFromString frame; the object form of x-bind (x-bind="obj", used by the
+  // Studio markup) fails inside Alpine's applyBindingsObject when the shell's state is absent.
+  // WebKit reports only the frame of Alpine's handleError, which rethrows the error from a
+  // timer after warning "Alpine Expression Error: <message>"; so a page error is Alpine's when
+  // its stack says so or when it pairs with one such warning not yet paired (each warning
+  // accounts for exactly one rethrow). Page errors are classified once the run is over, when
+  // every warning has arrived.
+  const ALPINE_FRAMES = /\[Alpine\]|generateEvaluatorFromString|applyBindingsObject/;
+  const alpineWarnings = new Map(); // message -> warnings not yet paired with a page error
+  const pageErrors = [];
+  const onPageError = (tag) => (e) => pageErrors.push({ tag, e });
+  const onConsole = (tag) => (m) => {
+    if (m.type() === 'error') errors.push(`${tag}: ${m.text()}`);
+    const w = m.type() === 'warning' && /^Alpine Expression Error: ([^\n]*)/.exec(m.text());
+    if (w) alpineWarnings.set(w[1], (alpineWarnings.get(w[1]) || 0) + 1);
+  };
+  const classifyPageErrors = () => {
+    for (const { tag, e } of pageErrors.splice(0)) {
+      const msg = `${tag}: ${e.message}`;
+      const warned = alpineWarnings.get(e.message) || 0;
+      if (ALPINE_FRAMES.test(e.stack || '')) shellErrors.push(msg);
+      else if (warned > 0) {
+        alpineWarnings.set(e.message, warned - 1);
+        shellErrors.push(msg);
+      } else errors.push(msg);
+    }
   };
   page.on('pageerror', onPageError('pageerror'));
-  page.on('console', (m) => {
-    if (m.type() === 'error') errors.push(`console: ${m.text()}`);
-  });
+  page.on('console', onConsole('console'));
   console.log(`\n${engine} ${browser.version()}`);
   await page.goto(`${base}/labs.html`);
   await page.waitForFunction(() => window.__oscReady && window.__labs, null, { timeout: 10000 });
+  await startContext(page);
   // Wait on the audio clock, not wall time: a starved CI runner renders far less than 1.5 s of
   // audio in 1.5 s, and the charts would read a nearly silent analyser (deadline 10 s).
   await page.waitForFunction(() => window.__labs.ctx.currentTime >= 1.2, null, { timeout: 10000 })
@@ -525,11 +572,10 @@ async function runEngine(engine, base) {
   // (11) Stereo live: correlation from the L/R analysers.
   const page2 = await context.newPage();
   page2.on('pageerror', onPageError('pageerror(stereo)'));
-  page2.on('console', (m) => {
-    if (m.type() === 'error') errors.push(`console(stereo): ${m.text()}`);
-  });
+  page2.on('console', onConsole('console(stereo)'));
   await page2.goto(`${base}/labs-stereo.html`);
   await page2.waitForFunction(() => window.__oscReady && window.__labs, null, { timeout: 10000 });
+  await startContext(page2);
   await page2.waitForTimeout(1200);
   const st = await page2.evaluate(() => ({ source: window.__labs.labs.phase.source,
     corr: document.querySelector('#osc-corr-value').textContent,
@@ -540,6 +586,7 @@ async function runEngine(engine, base) {
       && /estimated/.test(st.meter), JSON.stringify(st));
   await page2.close();
 
+  classifyPageErrors();
   check('0 console errors from charts/labs', errors.length === 0, errors.slice(0, 5).join(' | '));
   if (shellErrors.length) {
     // The fixture registers the bare shell component; markup bound to the composed component
