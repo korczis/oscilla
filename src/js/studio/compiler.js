@@ -30,8 +30,11 @@
 //     op = { op: 'node-add' | 'node-remove' | 'node-replace' | 'node-params', id, keys? }
 //        | { op: 'edge-add' | 'edge-remove' | 'edge-rewire' | 'edge-props', id, keys? }
 //   instantiateNode(planNode, ctxEnv) -> handle      (adapters/nodes.js handle + bookkeeping)
-//   createEdgeHandle(planEdge, fromHandle, toHandle, ctxEnv) -> edge handle (gain at 0;
-//                                                      fromNode, toNode, toPort, kind, gain)
+//   createEdgeHandle(planEdge, fromHandle, toHandle, ctxEnv, { connect = true })
+//                                                   -> edge handle (gain at 0; fromNode, toNode,
+//                                                      toPort, kind, gain, detached); connect
+//                                                      false: the gain is not connected to its
+//                                                      target (an owner wires it, runtime.js)
 //   computeBases(planNode, incoming, hooks, peaks) -> { base, gains, limited, exceeds }
 //   disposeHandle(handle, acct)                       stop, disconnect, untrack
 //
@@ -370,10 +373,11 @@ export function disposeHandle(handle) {
  * ramp, scale, range, dispose() }; a route the handles cannot make is inactive with code
  * no-output, no-input or no-mod-target (the plan's code otherwise).
  */
-export function createEdgeHandle(planEdge, fromHandle, toHandle, ctxEnv) {
+export function createEdgeHandle(planEdge, fromHandle, toHandle, ctxEnv,
+  { connect = true } = {}) {
   const base = { id: planEdge.id, kind: planEdge.kind, fromNode: planEdge.from.node,
     toNode: planEdge.to.node, toPort: planEdge.to.port, gain: null, ramp: null, scale: 1,
-    range: null, dispose() {} };
+    range: null, detached: false, dispose() {} };
   if (planEdge.status !== 'active') {
     return { ...base, status: planEdge.status, code: planEdge.code, reason: planEdge.reason };
   }
@@ -407,9 +411,10 @@ export function createEdgeHandle(planEdge, fromHandle, toHandle, ctxEnv) {
   const gain = acct.track(ctx.createGain());
   const ramp = createRamp(gain.gain, 0, ctxEnv.now, ctx.sampleRate);
   out.connect(gain);
-  gain.connect(target);
+  if (connect) gain.connect(target);
   return {
     ...base,
+    detached: !connect,
     status: 'active',
     code: null,
     reason: null,

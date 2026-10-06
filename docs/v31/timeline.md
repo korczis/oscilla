@@ -213,7 +213,9 @@ The first audible sample depends on what follows the voice, not on the clip:
   reports `reanchored: { from, to }`, the transport records a `reanchor` decision and
   `start()` / `debugInfo()` return the new `baseTime`. The graph the runtime started at the old
   `baseTime` is already sounding (its start ramps were themselves late); the clips, gates and
-  lanes follow the new anchor. A stall in any later window is handled as above: late items are
+  lanes follow the new anchor. A pattern-played Oscillator in it was built with its carrier at
+  `ROUTE_FLOOR` (the transport's owned `level` with `initial`, docs/v31/compiler.md), so until
+  the first clip only that floor sounds (−74 dB re the Basic Synth's Tone, measured). A stall in any later window is handled as above: late items are
   skipped.
 
 ## Edit during playback (§182-§183)
