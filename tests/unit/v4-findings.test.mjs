@@ -870,3 +870,14 @@ test('review 2.2: a refused stale edit offers the stored version and never loops
   assert.equal(cmp.fnd.form.mine, 'second edit');
   assert.ok(await cmp.findingsSave(), cmp.fnd.form.error);
 });
+
+test('review 2.4: updatedAt always advances, in the same millisecond or after a clock step back', () => {
+  const f = ok(raw({ updatedAt: LATER }));
+  const t = Date.parse(LATER);
+  assert.equal(F.updateFinding(f, { statement: 'same ms' }, { now: t }).updatedAt,
+    new Date(t + 1).toISOString());
+  assert.equal(F.updateFinding(f, { statement: 'clock back' }, { now: t - 60000 }).updatedAt,
+    new Date(t + 1).toISOString());
+  assert.equal(F.updateFinding(f, { statement: 'later' }, { now: t + 5000 }).updatedAt,
+    new Date(t + 5000).toISOString());
+});

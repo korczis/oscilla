@@ -402,9 +402,8 @@ export function createFindingsUi() {
         const old = f.mode === 'edit' ? await s.getFinding(f.id) : null;
         if (f.mode === 'edit' && !old) throw new Error('This finding is no longer stored.');
         if (old && old.updatedAt !== f.loadedUpdatedAt) throw CONFLICT;
-        const next = old ? updateFinding(old, fields, { now: Math.max(now,
-          Date.parse(old.updatedAt)) }) : createFinding({ id: newExperimentId(randomBytes16()),
-          now, ...fields });
+        const next = old ? updateFinding(old, fields, { now })
+          : createFinding({ id: newExperimentId(randomBytes16()), now, ...fields });
         // The store checks the version again inside its write, so two tabs never overwrite.
         saved = await s.putFinding(next, old ? { expectedUpdatedAt: f.loadedUpdatedAt } : {})
           .catch((err) => { throw err && err.code === 'conflict' ? CONFLICT : err; });

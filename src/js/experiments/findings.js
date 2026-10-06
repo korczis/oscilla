@@ -27,7 +27,8 @@
 //
 //   validateFinding(value) -> { ok, finding, errors }        (never throws; a clean copy)
 //   createFinding({ id, now, statement, status, evidence, runs, notes }) -> Finding  (RangeError)
-//   updateFinding(finding, patch, { now }) -> Finding         (id and createdAt kept)
+//   updateFinding(finding, patch, { now }) -> Finding   (id and createdAt kept; updatedAt is
+//     max(now, previous + 1 ms), so it always advances)
 //   findingIssues(finding, lookup) -> [{ code, index, experimentId, text }]
 //     lookup(experimentId) -> { kind: 'run', name, resultHash, hasResponse, frequencies,
 //       readable, reason } | { kind, name } | null   (frequencies: the stored response grid; a
@@ -259,7 +260,12 @@ export function updateFinding(finding, patch = {}, { now } = {}) {
       throw new RangeError(`Invalid finding: ${k} cannot be changed`);
     }
   }
-  const next = { ...finding, ...patch, updatedAt: toIsoTimestamp(now) };
+  // updatedAt is the edit's version (store.putFinding expectedUpdatedAt): it always advances,
+  // even in the same millisecond or after the clock stepped back.
+  const after = Date.parse(finding.updatedAt) + 1;
+  const at = Date.parse(toIsoTimestamp(now));
+  const next = { ...finding, ...patch, updatedAt: toIsoTimestamp(Number.isFinite(after)
+    ? Math.max(at, after) : at) };
   if (has(patch, 'statement')) next.statement = trimmed(patch.statement);
   if (has(patch, 'notes')) next.notes = noteOf(patch.notes);
   return valid(next);
