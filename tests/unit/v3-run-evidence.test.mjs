@@ -528,7 +528,8 @@ test('the Experiments detail carries the evidence; compare carries its differenc
     .startsWith('uncalibrated (the stored claim is contradicted)'));
   await cmp.experimentsCompare(['fixture-a', 'fixture-older']);
   assert.equal(cmp.exps.compare.evidenceDiff, 'Checklist differences (states only): Calibration '
-    + 'identity recorded (A recorded, B partial). Recorded identities that differ: calibration.');
+    + 'identity recorded (A recorded, B partial). No difference in the recorded build, '
+    + 'definition, calibration or input device.');
 });
 
 // ---------------------------------------------------------------- review of #129
@@ -579,7 +580,7 @@ test('review E2: the hash item names what its version covers and what no hash co
     const v4 = item(a.experiment);
     assert.equal(v4.stateText, 'verified');
     assert.match(v4.reason, /version 4 covers the results, quality, calibration, input, output, /);
-    assert.match(v4.reason, /the measurement block \(runs, startedAt, notes\), build, recipe and /);
+    assert.match(v4.reason, /block \(runs, startedAt, sampleRate, notes\), build, recipe and/);
     assert.match(v4.reason, /not covered by any result hash: the algorithm ids, the environment /);
     assert.match(v4.reason, /notes and the lineage \(created time, repeat and duplicate links\)/);
     // An edited algorithm id still verifies, and the items say why.
@@ -591,7 +592,7 @@ test('review E2: the hash item names what its version covers and what no hash co
     assert.match(byId(reproducibilityChecklist(edited.experiment), 'algorithms').reason,
       /not covered by the result hash/);
     const v2 = item(restamp(clone(a.experiment), 2));
-    assert.match(v2.reason, /; it leaves out the measurement block \(runs, startedAt, notes\)/);
+    assert.match(v2.reason, /leaves out the measurement block \(runs, startedAt, sampleRate, /);
     assert.match(v2.reason, /, build, recipe and definition/);
     assert.match(item(restamp(clone(a.experiment), 3)).reason,
       /; it leaves out recipe and definition;/);
@@ -617,8 +618,8 @@ test('review E3: an invalid frequency is refused with a message and the last poi
     for (const bad of [0, -5, '', 'abc']) {
       assert.equal(cmp.experimentsEvidenceAt(bad), null);
       assert.equal(cmp.exps.detail.evidence.hz, 1000);
-      assert.equal(cmp.exps.detail.evidence.hzError, 'Enter a frequency above 0 Hz; the value '
-        + 'shown is still at 1000 Hz.');
+      assert.equal(cmp.exps.detail.evidence.hzError, 'Enter a frequency above 0 Hz; the lineage '
+        + 'still shows 1000 Hz.');
     }
     cmp.experimentsEvidenceAt(2000);
     assert.equal(cmp.exps.detail.evidence.hzError, null);
@@ -695,11 +696,47 @@ test('review: the lineage names the stimulus, the clamp, the output level and en
     assert.match(st, /^20 Hz → 20 kHz log sweep, 2 s/);
     assert.match(st, /output level digital peak 0\.125 \(−18\.1 dB relative \(dBFS-like\)\)/);
     const clamped = clone(a.experiment);
-    clamped.recipe = { ...clamped.recipe, requested: { f1: 20, f2: 30000 } };
+    clamped.recipe = { ...clamped.recipe, requested: { f1: 20, f2: 30000 },
+      stimulus: { ...clamped.recipe.stimulus, f2: 22800 } };
     assert.match(byId(evidenceLineage(clamped), 'stimulus').text,
-      /requested up to 30 kHz, played up to 20 kHz \(0\.95 × the Nyquist frequency\)/);
+      /requested up to 30 kHz, played up to 22\.8 kHz \(lowered to 0\.95 × the Nyquist /);
     const noted = clone(a.experiment);
     noted.measurement.notes = ['Input processing may have been applied by browser/device.'];
     assert.match(byId(evidenceLineage(noted), 'capture').text,
       /engine note: Input processing may have been applied by browser\/device\./);
+  });
+
+// ---------------------------------------------------------------- second review of #129
+
+test('review N1: the Nyquist clamp is named only when the record shows it', async () => {
+  const { evidenceLineage } = await ev();
+  const { a } = await fx();
+  /** Fixture A with a recorded request and an edited played stimulus (schema-2-like files). */
+  const st = (req, played = {}) => {
+    const e = clone(a.experiment);
+    e.recipe = { ...e.recipe, requested: req, stimulus: { ...e.recipe.stimulus, ...played } };
+    return byId(evidenceLineage(e), 'stimulus').text;
+  };
+  // A real clamp at 48 kHz: 22.8 kHz is stimulus.js safeMaxFrequency(48000).
+  const clamp = st({ f1: 20, f2: 30000 }, { f2: 22800 });
+  assert.match(clamp, /requested up to 30 kHz, played up to 22\.8 kHz /);
+  assert.match(clamp, /\(lowered to 0\.95 × the Nyquist frequency of 48 kHz\)/);
+  // Requested below what was played, or above it without the clamp: no cause is claimed.
+  for (const [req, played] of [[19000, '20 kHz'], [21000, '20 kHz']]) {
+    const t = st({ f1: 20, f2: req });
+    assert.match(t, new RegExp(`requested up to ${req / 1000} kHz, played up to ${played}; the `
+      + 'record does not say why'));
+    assert.ok(!/Nyquist/.test(t), t);
+  }
+  // A difference in f1 is shown, also without a claimed cause.
+  const f1 = st({ f1: 10, f2: 20000 });
+  assert.match(f1, /requested from 10 Hz, played from 20 Hz; the record does not say why/);
+  assert.ok(!/Nyquist/.test(f1), f1);
+});
+
+test('review N2: identities compare the calibration as presented, not a contradicted claim',
+  async () => {
+    const { identityDifferences } = await ev();
+    const { a, older } = await fx();
+    assert.deepEqual(identityDifferences([a.experiment, older.experiment]), []);
   });

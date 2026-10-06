@@ -105,7 +105,8 @@
 //                           "verified"), each with an icon beside its words and no score; the
 //                           frequency field is labelled and keyboard-reachable (typed 5000 +
 //                           Enter traces the point at 5 kHz; 0 is refused: the field shows 5000
-//                           again, marked invalid, and a status region says why); it fits 390 px;
+//                           again, never left marked invalid, a status region says the lineage
+//                           still shows 5000 Hz, and a valid entry clears it); it fits 390 px;
 //                           light theme; the
 //                           contradicted older record reads "uncalibrated (the stored claim is
 //                           contradicted)", no "SPL"; Compare A with it names the differing item
@@ -1685,6 +1686,14 @@ function defineChecks(fixtures) {
         describedBy: f.getAttribute('aria-describedby'), role: m.getAttribute('role'),
         id: m.id, text: m.textContent.trim(), shown: m.getBoundingClientRect().height > 2 };
     }), (r) => r.text.length > 0 && r.value === '5000', 3000);
+    // A valid entry clears the refusal; another run shows its own frequency in the field.
+    await page.fill('#osc-x-ev-hz', '4000');
+    await page.keyboard.press('Enter');
+    await page.keyboard.press('Tab');
+    res.cleared = await H.until(() => page.evaluate(() => ({
+      invalid: document.getElementById('osc-x-ev-hz').getAttribute('aria-invalid'),
+      text: document.querySelector('[data-osc="exp.evidenceHzError"]').textContent.trim() })),
+    (r) => r.text === '', 3000);
     // 390 px wide, light theme: the section fits and its state words stay readable text.
     await page.setViewportSize({ width: 390, height: 844 });
     res.narrow = await H.until(read, (d) => d.fits, 2000);
@@ -1738,10 +1747,10 @@ function defineChecks(fixtures) {
           + 'derived result, not the raw capture)'
         && res.a.checklist.every((c) => c.icon) && !/%|\bscore:/i.test(res.a.text),
       label: res.a.label && res.a.hz === '1000',
-      refused: res.refused.value === '5000' && res.refused.invalid === 'true'
+      refused: res.refused.value === '5000' && res.refused.invalid !== 'true'
         && res.refused.describedBy === res.refused.id && res.refused.role === 'status'
-        && res.refused.shown && res.refused.text === 'Enter a frequency above 0 Hz; the value '
-          + 'shown is still at 5000 Hz.',
+        && res.refused.shown && res.refused.text === 'Enter a frequency above 0 Hz; the lineage '
+          + 'still shows 5000 Hz.' && res.cleared.invalid !== 'true' && res.cleared.text === '',
       keyboard: res.focused === true && /at 4\.974 kHz \(the stored grid point nearest 5 kHz\)/
         .test(res.at5k.lineage[0].text),
       narrow: res.narrow.fits,
@@ -1751,7 +1760,8 @@ function defineChecks(fixtures) {
         === 'partial',
       noSpl: res.spl.length === 0,
       compare: res.diff === 'Checklist differences (states only): Calibration identity recorded '
-        + '(A recorded, B partial). Recorded identities that differ: calibration.',
+        + '(A recorded, B partial). No difference in the recorded build, definition, calibration '
+        + 'or input device.',
     }) };
   });
 
