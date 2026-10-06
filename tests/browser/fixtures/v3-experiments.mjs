@@ -9,10 +9,17 @@
 //     a  low-pass 6 kHz, 3 runs                       (reference)
 //     b  the same system 0.9 dB quieter, same recipe   (equivalent to a: A − B is shown)
 //     c  a different sweep range                       (not equivalent: A − B is refused)
+//     older  A as the build before ADR 0040's 2026-10-05 resolution could save it: a level
+//            calibration made AFTER the uncalibrated run recorded as used, hashes stamped over
+//            it (a contradicted calibration claim; json only, never built by the app now)
 
 import { createMeasurementEngine, assessMeasurement } from '../../../src/js/measurement/engine.js';
 import { mulberry32 } from '../../../src/js/audio/noise.js';
-import { experimentToJson } from '../../../src/js/experiments/schema.js';
+import { experimentToJson, normalizeCalibration } from '../../../src/js/experiments/schema.js';
+import {
+  configHash, withConfigHash, resultHash, withResultHash, RESULT_HASH_VERSION,
+} from '../../../src/js/experiments/hash.js';
+import { createLevelCalibration } from '../../../src/js/calibration/level.js';
 import { experimentFromResult } from '../../../src/js/ui/measure-experiment.js';
 
 export const SR = 48000;
@@ -128,5 +135,14 @@ export async function buildFixtures() {
     { f0: 6000, seed: 2, gain: 0.25 * 10 ** (-0.9 / 20) });
   const c = await fixture('fixture-c', 'TEST CONTEXT · synthetic C (other sweep range)',
     { f0: 6000, seed: 3 }, { ...FIXTURE_RECIPE, stimulus: { ...FIXTURE_RECIPE.stimulus, f1: 50 } });
-  return { a, b, c };
+  const level = normalizeCalibration({ level: createLevelCalibration({ referenceHz: 1000,
+    referenceDbSpl: 94, observedDbRelative: -32.5, conditions: 'made after the run', createdAt:
+    NOW, method: 'manual', input: null }) }).level;
+  let o = { ...a.experiment, experimentId: 'fixture-older',
+    name: 'TEST CONTEXT · synthetic A, level calibration added after the run (older version)',
+    calibration: { ...a.experiment.calibration, level } };
+  o = withConfigHash(o, configHash(o));
+  o = withResultHash(o, resultHash(o), RESULT_HASH_VERSION);
+  const older = { experiment: o, json: experimentToJson(o), name: o.name, result: null };
+  return { a, b, c, older };
 }

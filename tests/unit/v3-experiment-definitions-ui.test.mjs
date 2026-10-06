@@ -18,6 +18,8 @@ import { KNOWN_ALGORITHM_IDS } from '../../src/js/measurement/algorithms.js';
 import { createMeasureUi } from '../../src/js/ui/measure.js';
 import { createExperimentsUi } from '../../src/js/ui/experiments.js';
 import { experimentFromResult } from '../../src/js/ui/measure-experiment.js';
+import { withStudioProvenance } from '../../src/js/studio/provenance.js';
+import { templateModel } from '../../src/js/studio/templates/index.js';
 import { buildFixtures, NOW, FIXTURE_RECIPE } from '../browser/fixtures/v3-experiments.mjs';
 import { fakeIndexedDB } from './fixtures/fake-indexeddb.mjs';
 
@@ -125,18 +127,19 @@ test('review D1: a retried save stores one run, never a second copy', async () =
   await showResult(cmp);
   const s = store();
   const put = s.put;
-  // The first write is stored but its report fails (a lost acknowledgement).
+  // The first write is stored but its report fails (a lost acknowledgement): the store is read
+  // back, the run is saved, and the UI never says "not saved" for it (ADR 0040 resolution).
   s.put = async (e) => {
     await put(e);
     s.put = put;
     throw new Error('the acknowledgement was lost');
   };
-  assert.equal(await cmp.measureSave(), null);
-  assert.equal(cmp.meas.saved, false);
-  assert.ok(errors(notes).some((n) => n.title === 'Experiment not saved'));
   const id = await cmp.measureSave();
   assert.ok(id);
   assert.equal(cmp.meas.saved, true);
+  assert.deepEqual(errors(notes), []);
+  assert.ok(notes.some((n) => n.title === 'Experiment saved' && /reported an error/.test(n.text)));
+  assert.equal(await cmp.measureSave(), id, 'saving again is the same run');
   assert.deepEqual((await s.list()).map((r) => r.experimentId), [id], 'one run, one record');
   // A failed write (nothing stored) of the next measurement, retried, writes it once.
   await showResult(cmp);
@@ -147,6 +150,158 @@ test('review D1: a retried save stores one run, never a second copy', async () =
   assert.ok(id2 && id2 !== id);
   assert.equal((await s.list()).length, 2);
 });
+
+test('save model: a lost acknowledgement, a metadata edit, then a retry annotates the run',
+  async () => {
+    const { cmp, notes, store } = await makeUi();
+    await cmp.experimentsRefresh();
+    await showResult(cmp);
+    const s = store();
+    const { put, get } = s;
+    // Stored, but the report fails and the store cannot be read back at that moment.
+    s.put = async (e) => {
+      await put(e);
+      s.put = put;
+      throw new Error('the acknowledgement was lost');
+    };
+    s.get = () => {
+      s.get = get;
+      return Promise.reject(new Error('read failed'));
+    };
+    assert.equal(await cmp.measureSave(), null);
+    assert.ok(errors(notes).some((n) => n.title === 'Experiment not confirmed'));
+    assert.ok(!errors(notes).some((n) => n.title === 'Experiment not saved'));
+    // The user edits the name and notes, then retries: the same id, never "immutable".
+    cmp.meas.name = 'edited before the retry';
+    cmp.meas.notes = 'typed before the retry';
+    const before = notes.length;
+    const id = await cmp.measureSave();
+    assert.ok(id, JSON.stringify(notes.slice(before)));
+    assert.deepEqual(errors(notes.slice(before)), []);
+    assert.equal(cmp.meas.saved, true);
+    const rows = await s.list();
+    assert.deepEqual(rows.map((r) => r.experimentId), [id], 'one run, one record');
+    const back = await s.get(id);
+    assert.equal(back.name, 'edited before the retry');
+    assert.equal(back.annotations.notes, 'typed before the retry');
+  });
+
+test('save model: a record deleted after the save is stored again with its id and repeat link',
+  async () => {
+    const { cmp, notes, store } = await makeUi();
+    await cmp.experimentsRefresh();
+    const { a } = await fx();
+    cmp.measureLoadRecipe(a.experiment.recipe, { repeatOf: 'the-original' });
+    await showResult(cmp);
+    const id = await cmp.measureSave();
+    const s = store();
+    const first = await s.get(id);
+    assert.equal(first.provenance.repeatOf, 'the-original');
+    cmp.exps.deleteId = id; // the confirmed delete of the Experiments workspace
+    cmp.exps.deleteName = first.name;
+    assert.equal(await cmp.experimentsDelete(), true);
+    assert.equal(await s.get(id), null);
+    cmp.meas.name = 'stored again';
+    assert.equal(await cmp.measureSave(), id, 'the same id');
+    const again = await s.get(id);
+    assert.equal(again.provenance.createdAt, first.provenance.createdAt, 'the same timestamp');
+    assert.equal(again.provenance.repeatOf, 'the-original', 'the repeat link is kept');
+    assert.equal(again.provenance.resultHash, first.provenance.resultHash);
+    assert.equal(again.name, 'stored again');
+    assert.equal((await s.list()).length, 1);
+    assert.deepEqual(errors(notes), []);
+  });
+
+test('save model: an update with nothing changed annotates nothing and says so', async () => {
+  const { cmp, notes, store } = await makeUi();
+  await cmp.experimentsRefresh();
+  await showResult(cmp);
+  const id = await cmp.measureSave();
+  const s = store();
+  // An annotation written in Experiments; MEASURE's notes are empty.
+  await cmp.experimentsAnnotate(id, { notes: 'from Experiments' });
+  const annotate = s.annotate;
+  let calls = 0;
+  s.annotate = (...args) => { calls += 1; return annotate(...args); };
+  const before = notes.length;
+  assert.equal(await cmp.measureSave(), id);
+  assert.equal(calls, 0, 'no annotate is sent');
+  assert.deepEqual(notes.slice(before).map((n) => n.title), ['Nothing to update']);
+  assert.equal((await s.get(id)).annotations.notes, 'from Experiments', 'never cleared');
+});
+
+test('save model: a failed re-store of a deleted record is never announced as stored',
+  async () => {
+    const { cmp, notes, store } = await makeUi();
+    await cmp.experimentsRefresh();
+    await showResult(cmp);
+    const id = await cmp.measureSave();
+    const s = store();
+    cmp.exps.deleteId = id;
+    cmp.exps.deleteName = 'x';
+    assert.equal(await cmp.experimentsDelete(), true);
+    const put = s.put;
+    s.put = () => Promise.reject(Object.assign(new Error('storage is full'), { code: 'quota' }));
+    cmp.meas.name = 'renamed';
+    const before = notes.length;
+    assert.equal(await cmp.measureSave(), null, 'nothing is stored');
+    assert.equal(cmp.meas.saved, false);
+    assert.equal(await s.get(id), null);
+    const said = notes.slice(before);
+    assert.ok(said.some((n) => n.title === 'Experiment not stored' && /save again/.test(n.text)));
+    assert.ok(!said.some((n) => /is stored|only the metadata/.test(n.text)), JSON.stringify(said));
+    // Space freed: Save stores the same run under its id.
+    s.put = put;
+    assert.equal(await cmp.measureSave(), id);
+    assert.equal((await s.get(id)).name, 'renamed');
+    assert.equal(cmp.meas.saved, true);
+  });
+
+test('save model: a read-back is the run only when its result hash matches', async () => {
+  const { cmp, notes, store } = await makeUi();
+  await cmp.experimentsRefresh();
+  await showResult(cmp);
+  const s = store();
+  const put = s.put;
+  // Another record lands under the id (different facts), and the write reports an error.
+  s.put = async (e) => {
+    s.put = put;
+    const other = { ...e, quality: { ...e.quality, status: 'GOOD' } };
+    await put(hash.withResultHash(other, hash.resultHash(other), hash.RESULT_HASH_VERSION));
+    throw new Error('ack lost');
+  };
+  const before = notes.length;
+  assert.equal(await cmp.measureSave(), null);
+  assert.equal(cmp.meas.saved, false);
+  const said = notes.slice(before);
+  assert.ok(said.some((n) => n.title === 'Experiment not saved'
+    && /different record is stored under this id/.test(n.text)), JSON.stringify(said));
+  assert.ok(!said.some((n) => n.title === 'Experiment saved'));
+  // A retry stores this run under a new id, beside the other record.
+  const id = await cmp.measureSave();
+  assert.ok(id);
+  assert.equal((await s.list()).length, 2);
+  assert.notEqual((await s.get(id)).quality.status, 'GOOD');
+});
+
+test('save model: a retry from MEASURE keeps the Studio provenance of a failed Studio save',
+  async () => {
+    const { cmp, notes, store } = await makeUi();
+    await cmp.experimentsRefresh();
+    await showResult(cmp);
+    const s = store();
+    const put = s.put;
+    s.put = () => Promise.reject(Object.assign(new Error('storage is full'), { code: 'quota' }));
+    const model = JSON.parse(JSON.stringify(templateModel('filter-automation')));
+    const decorate = (e) => withStudioProvenance({ ...e, name: 'Studio run' }, model);
+    assert.equal(await cmp.measureSave({ decorate }), null, 'the Studio save stored nothing');
+    s.put = put;
+    const id = await cmp.measureSave(); // the MEASURE button: no decorate of its own
+    assert.ok(id, JSON.stringify(notes));
+    const back = await s.get(id);
+    assert.ok(back.studio, 'the Studio provenance block is kept');
+    assert.equal(back.studio.studioHash, decorate({}).studio.studioHash);
+  });
 
 /** A run imported from elsewhere that claims the id of the local definition, version 7. */
 async function foreignRun() {

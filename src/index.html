@@ -1796,7 +1796,8 @@
           <div class="osc-m-btnrow">
             <button type="button" class="osc-btn osc-btn-primary" id="osc-measure-save" data-osc="measure.save"
               aria-describedby="osc-measure-save-why" :title="measureSaveReason || null"
-              :disabled="meas.state !== 'COMPLETE' || meas.saved || meas.saving" @click="measureSave()">Save experiment</button>
+              :disabled="meas.state !== 'COMPLETE' || meas.saving" @click="measureSave()"
+              x-text="meas.saved ? 'Update name and notes' : 'Save experiment'">Save experiment</button>
             <span class="osc-sr-only" id="osc-measure-save-why" x-text="measureSaveReason"></span>
             <button type="button" class="osc-btn osc-btn-secondary" data-osc="measure.repeat"
               :disabled="meas.state !== 'COMPLETE'" @click="measureRepeat()">Repeat (new experiment)</button>
@@ -1812,6 +1813,8 @@
             <button type="button" class="osc-btn osc-btn-secondary osc-m-small" data-osc="measure.clearDefinition"
               @click="measureClearDefinition()">Stop using this definition</button>
           </div>
+          <p class="osc-m-hint" role="status" data-osc="measure.evidenceNotes" x-show="measureEvidenceNotes.length"
+            x-text="measureEvidenceNotes.join(' ')" style="display: none"></p>
           <p class="osc-m-hint" data-osc="measure.savedText"
             x-text="meas.saved ? 'Saved as an experiment' + (exps.persistent ? ' in this browser.' : ' in memory for this page view.') : 'Saved experiments stay in this browser only (no cloud).'"></p>
           <p class="osc-m-hint" x-show="exps.storeNote" x-text="exps.storeNote"></p>
@@ -1905,6 +1908,8 @@
           <p class="osc-m-hint" x-show="!exps.detail">Open an experiment from the list to see its summary, provenance and response.</p>
           <div x-show="exps.detail" class="osc-x-body">
             <p class="osc-m-summary osc-num" data-osc="exp.compact" x-text="exps.detail ? exps.detail.compact : ''"></p>
+            <p class="osc-pp-error" role="status" data-osc="exp.calibrationClaim" x-show="exps.detail && exps.detail.calibrationClaim" style="display: none"
+              x-text="exps.detail && exps.detail.calibrationClaim ? exps.detail.calibrationClaim.text + ' ' + exps.detail.calibrationClaim.findings.join(' ') : ''"></p>
             <div class="osc-m-btnrow">
               <button type="button" class="osc-btn osc-btn-secondary osc-m-small" data-osc="exp.rename"
                 @click="experimentsAskRename({ id: exps.detail.id, name: exps.detail.title })">Rename…</button>
@@ -1936,6 +1941,8 @@
               <ul class="osc-x-lines" aria-label="Summary">
                 <template x-for="(l, i) in (exps.detail ? exps.detail.lines : [])" :key="i"><li x-text="l"></li></template>
                 <li x-text="exps.detail ? 'Notes: ' + exps.detail.environment : ''"></li>
+                <li data-osc="exp.annotation" x-show="exps.detail && exps.detail.annotation" style="display: none"
+                  x-text="exps.detail && exps.detail.annotation ? 'Annotation (added after the measurement): ' + exps.detail.annotation : ''"></li>
               </ul>
               <dl class="osc-m-rows osc-x-prov" aria-label="Provenance">
                 <template x-for="p in (exps.detail ? exps.detail.provenance : [])" :key="p.label">

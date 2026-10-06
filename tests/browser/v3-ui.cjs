@@ -53,6 +53,26 @@
 //   view-options            (M6, M7) a 2-20 kHz measurement with "0 dB at 1 kHz" selected
 //                           completes (no "Measurement failed"), the option is disabled and
 //                           reset; the IR Direct span is drawn sample by sample
+//   evidence-at-completion  (ADR 0040 resolution) measured with profile A and notes "start":
+//                           after COMPLETE, profile B is loaded, a level calibration is created
+//                           and the notes are edited; the Experiment panel says the saved record
+//                           keeps the calibration it was measured with, and the saved record
+//                           names A, has no level calibration (no "SPL"), keeps the start notes
+//                           and carries the edited text as annotations.notes only; the stored
+//                           noise-check RTA keeps the run's calibration (relative, no "SPL")
+//   resave-after-link       a saved COMPLETE result stays saved when a recipe link is applied
+//                           (the button reads "Update name and notes"); pressed with an edited
+//                           name and notes it updates the stored run's metadata through annotate
+//                           (same id, no second record, never "Experiment not saved")
+//   notes-after-save        notes typed after the Save are announced as NOT stored yet; "Update
+//                           name and notes" stores them as annotations.notes and the status then
+//                           says so; an annotation added in Experiments survives a later update
+//                           from MEASURE with no notes, which reports "Nothing to update"
+//   older-claim             (ADR 0040 resolution) a file as an earlier version saved it, naming a
+//                           level calibration made after the uncalibrated run: it imports with
+//                           a warning naming the field and the reason, the stored record reads
+//                           back unchanged, the detail states that its calibration claim is
+//                           contradicted and presents it as uncalibrated: no "SPL" anywhere
 //   experiments             import of three fixtures, list, open, rename, duplicate, compare
 //                           (A, B equivalent: A − B shown; A, C: refused with the reason),
 //                           export .oscilla.json (re-validates), CSV, re-import refused (no
@@ -922,6 +942,238 @@ function defineChecks(fixtures) {
       // Undecimated: every sample of the 22 ms span (1056 at 48 kHz, 970 at 44.1 kHz).
       irDirect: !!res.ir && res.ir.factor === 1
         && res.ir.inSpan >= Math.floor(0.022 * res.ir.sampleRate) - 1,
+    }) };
+  });
+
+  def('evidence-at-completion', async ({ page }) => {
+    await H.workspace(page, 'measure');
+    await H.loopback(page);
+    const res = {};
+    res.importA = await page.evaluate(() => window.OSCILLA.app.measureImportCalibrationText(
+      'Hz,dB\n20,0.5\n1000,0\n15000,-1.5\n', 'mic-a.csv'));
+    res.profileA = await page.evaluate(() => window.OSCILLA.app.meas.cal.profile.id);
+    await page.fill('#osc-m-name', 'Gate evidence');
+    await page.fill('#osc-m-notes', 'start notes');
+    await page.click('#osc-measure-primary'); // Check setup
+    await H.waitState(page, ['READY', 'INVALID', 'ERROR'], 15000);
+    res.run = await H.run(page, () => page.click('#osc-measure-primary')); // Start measurement
+    if (res.run.state !== 'COMPLETE') return { ok: false, failed: ['run'], ...res };
+    const evidence = () => page.evaluate(() => {
+      const el = document.querySelector('[data-osc="measure.evidenceNotes"]');
+      return el && el.offsetParent !== null ? el.textContent.trim() : '';
+    });
+    res.before = await evidence();
+    // After COMPLETE: another profile, a level calibration made now, notes edited.
+    res.importB = await page.evaluate(() => window.OSCILLA.app.measureImportCalibrationText(
+      'Hz,dB\n20,-3\n1000,2\n15000,4\n', 'mic-b.csv'));
+    await page.click('[data-osc="measure.levelCal"]');
+    await page.click('[data-osc="levelCal.manual"]');
+    await page.fill('#osc-lc-obs', '-32.5');
+    await page.fill('#osc-lc-cond', 'gate: created after the measurement');
+    await page.click('[data-osc="levelCal.save"]');
+    await page.fill('#osc-m-notes', 'edited after');
+    await sleep(100);
+    res.level = await page.textContent('[data-osc="measure.levelIndicator"]');
+    res.after = await evidence();
+    // The stored noise-check snapshot keeps the calibration its run applied (none).
+    res.rtaY = await page.evaluate(() => {
+      const r = window.OSCILLA.app.meas.rta;
+      return r ? `${r.yLabel} ${r.badges.join(' ')}` : null;
+    });
+    await page.click('#osc-measure-save');
+    res.save = await H.saved(page);
+    if (res.save) return { ok: false, failed: ['save'], ...res };
+    res.record = await page.evaluate(async () => {
+      const id = window.OSCILLA.app.meas.savedId;
+      const e = await window.OSCILLA.experiments.store().get(id);
+      return { frequency: e.calibration.frequency, level: e.calibration.level,
+        notes: e.environment.notes, annotations: e.annotations || null,
+        levelCalibrated: e.quality.metrics.levelCalibrated,
+        corrected: e.algorithms.calibration || null };
+    });
+    await page.evaluate(() => {
+      const a = window.OSCILLA.app;
+      a.measureClearLevelCalibration();
+      a.measureClearCalibration();
+      a.measureSetLevelManual(false);
+      a.meas.notes = '';
+      a.meas.name = '';
+      a.alerts = [];
+    });
+    const r = res.record;
+    return { ...res, ...H.verdict({
+      imported: res.importA === true && res.importB === true,
+      calibratedNow: /CALIBRATED/.test(res.level) && !/UNCALIBRATED/.test(res.level),
+      rtaAsMeasured: !!res.rtaY && !/SPL/.test(res.rtaY),
+      quietBefore: res.before === '',
+      stated: res.after.startsWith('Calibration changed after this measurement; the saved '
+        + 'record keeps the calibration it was measured with (frequency profile "mic-a", levels '
+        + 'relative).') && /Notes edited after this measurement started are saved as an /
+        .test(res.after) && !/SPL/.test(res.after),
+      namesA: !!r.frequency && r.frequency.id === res.profileA && r.frequency.name === 'mic-a'
+        && !!r.corrected,
+      noLevel: r.level === null && r.levelCalibrated === false,
+      startNotes: /^start notes\b/.test(r.notes || '') && !/edited/.test(r.notes || ''),
+      annotation: !!r.annotations && r.annotations.notes === 'edited after',
+    }) };
+  });
+
+  def('resave-after-link', async ({ page }) => {
+    await H.workspace(page, 'measure');
+    await H.loopback(page);
+    await page.fill('#osc-m-name', 'Gate resave');
+    await page.fill('#osc-m-notes', '');
+    await page.click('#osc-measure-primary'); // Check setup
+    await H.waitState(page, ['READY', 'INVALID', 'ERROR'], 15000);
+    const res = {};
+    res.run = await H.run(page, () => page.click('#osc-measure-primary'));
+    if (res.run.state !== 'COMPLETE') return { ok: false, failed: ['run'], ...res };
+    await page.click('#osc-measure-save');
+    res.save = await H.saved(page);
+    if (res.save) return { ok: false, failed: ['save'], ...res };
+    res.id = await page.evaluate(() => window.OSCILLA.app.meas.savedId);
+    // A recipe link applied while the saved result is shown.
+    res.applied = await page.evaluate(() => {
+      const a = window.OSCILLA.app;
+      a.alerts = [];
+      return a.measureApplyRecipeHash(new URL(a.measureRecipeUrl()).hash,
+        { origin: 'hashchange' });
+    });
+    await sleep(100);
+    res.afterLink = await page.evaluate(() => ({ saved: window.OSCILLA.app.meas.saved,
+      label: document.querySelector('#osc-measure-save').textContent.trim() }));
+    // Save once more (as a programmatic caller can) after a metadata edit.
+    await page.fill('#osc-m-name', 'Gate resave renamed');
+    await page.fill('#osc-m-notes', 'typed after the save');
+    res.again = await page.evaluate(() => window.OSCILLA.app.measureSave());
+    res.alerts = await page.evaluate(() => window.OSCILLA.app.alerts.map((a) => a.title));
+    res.stored = await page.evaluate(async (id) => {
+      const s = window.OSCILLA.experiments.store();
+      const e = await s.get(id);
+      const list = await s.list();
+      return { name: e.name, notes: e.annotations ? e.annotations.notes : null,
+        records: list.filter((x) => /^Gate resave/.test(x.name)).length };
+    }, res.id);
+    await page.evaluate(() => {
+      const a = window.OSCILLA.app;
+      a.meas.name = '';
+      a.meas.notes = '';
+      a.alerts = [];
+    });
+    return { ...res, ...H.verdict({
+      applied: res.applied === true,
+      staysSaved: res.afterLink.saved === true
+        && res.afterLink.label === 'Update name and notes',
+      sameRun: res.again === res.id,
+      neverNotSaved: !res.alerts.some((t) => /not saved/.test(t))
+        && res.alerts.includes('Experiment updated'),
+      annotated: res.stored.name === 'Gate resave renamed'
+        && res.stored.notes === 'typed after the save',
+      oneRecord: res.stored.records === 1,
+    }) };
+  });
+
+  def('notes-after-save', async ({ page }) => {
+    await H.workspace(page, 'measure');
+    await H.loopback(page);
+    await page.fill('#osc-m-name', 'Gate notes after save');
+    await page.fill('#osc-m-notes', 'at start');
+    await page.click('#osc-measure-primary'); // Check setup
+    await H.waitState(page, ['READY', 'INVALID', 'ERROR'], 15000);
+    const res = {};
+    res.run = await H.run(page, () => page.click('#osc-measure-primary'));
+    if (res.run.state !== 'COMPLETE') return { ok: false, failed: ['run'], ...res };
+    await page.click('#osc-measure-save');
+    res.save = await H.saved(page);
+    if (res.save) return { ok: false, failed: ['save'], ...res };
+    res.id = await page.evaluate(() => window.OSCILLA.app.meas.savedId);
+    const status = () => page.evaluate(() => {
+      const el = document.querySelector('[data-osc="measure.evidenceNotes"]');
+      return el && el.offsetParent !== null ? el.textContent.trim() : '';
+    });
+    const stored = () => page.evaluate(async (id) => {
+      const e = await window.OSCILLA.experiments.store().get(id);
+      return { env: e.environment.notes, ann: e.annotations ? e.annotations.notes : null };
+    }, res.id);
+    await page.fill('#osc-m-notes', 'typed after the save');
+    await sleep(150);
+    res.pending = await status();
+    res.button = await page.evaluate(() => {
+      const b = document.querySelector('#osc-measure-save');
+      return { label: b.textContent.trim(), disabled: b.disabled };
+    });
+    res.before = await stored();
+    if (res.button.disabled) {
+      return { ok: false, failed: ['button', ...(/not stored yet/.test(res.pending) ? []
+        : ['notYet'])], ...res };
+    }
+    await page.evaluate(() => { window.OSCILLA.app.alerts = []; });
+    await page.click('#osc-measure-save');
+    await sleep(300);
+    res.after = await stored();
+    res.stated = await status();
+    res.alerts1 = await page.evaluate(() => window.OSCILLA.app.alerts.map((a) => a.title));
+    // An annotation written in Experiments is never cleared by an update without notes.
+    await page.evaluate((id) => window.OSCILLA.app.experimentsAnnotate(id,
+      { notes: 'from Experiments' }), res.id);
+    await page.fill('#osc-m-notes', '');
+    await page.evaluate(() => { window.OSCILLA.app.alerts = []; });
+    await page.click('#osc-measure-save');
+    await sleep(300);
+    res.kept = await stored();
+    res.alerts2 = await page.evaluate(() => window.OSCILLA.app.alerts.map((a) => a.title));
+    await page.evaluate(() => {
+      const a = window.OSCILLA.app;
+      a.meas.name = '';
+      a.meas.notes = '';
+      a.alerts = [];
+    });
+    return { ...res, ...H.verdict({
+      notYet: /^These notes are not stored yet: "Update name and notes" saves them/
+        .test(res.pending) && !/are saved as an annotation/.test(res.pending),
+      button: res.button.label === 'Update name and notes' && res.button.disabled === false,
+      notStoredBefore: res.before.ann === null,
+      stored: res.after.ann === 'typed after the save'
+        && /^at start\b/.test(res.after.env || ''),
+      statedStored: /are stored as its annotation/.test(res.stated),
+      updated: res.alerts1.includes('Experiment updated'),
+      kept: res.kept.ann === 'from Experiments' && res.alerts2.includes('Nothing to update')
+        && !res.alerts2.some((t) => /not saved/.test(t)),
+    }) };
+  });
+
+  def('older-claim', async ({ page }) => {
+    await H.workspace(page, 'experiments');
+    await page.evaluate(() => { window.OSCILLA.app.alerts = []; });
+    const res = {};
+    res.id = await page.evaluate((json) => window.OSCILLA.app.experimentsImportText(json),
+      fixtures.older.json);
+    res.alert = await page.evaluate(() => (window.OSCILLA.app.alerts || [])
+      .map((a) => ({ title: a.title, text: a.message || '' })).at(-1) || null);
+    if (!res.id) return { ok: false, failed: ['imported'], ...res };
+    res.stored = await page.evaluate(async (id) => {
+      const e = await window.OSCILLA.experiments.store().get(id);
+      return e ? { level: !!e.calibration.level, hash: e.provenance.resultHash } : null;
+    }, res.id);
+    await page.evaluate((id) => window.OSCILLA.app.experimentsOpen(id), res.id);
+    await sleep(200);
+    res.statement = await page.evaluate(() => {
+      const el = document.querySelector('[data-osc="exp.calibrationClaim"]');
+      return el && el.offsetParent !== null ? el.textContent.trim() : '';
+    });
+    res.spl = await page.evaluate(splMentions);
+    res.lines = await page.evaluate(() => window.OSCILLA.app.exps.detail.lines.join(' | '));
+    await page.evaluate(() => { window.OSCILLA.app.alerts = []; });
+    return { ...res, ...H.verdict({
+      imported: !!res.alert && res.alert.title === 'Experiment imported with a warning'
+        && /calibration\.level: calibration claim contradicted/.test(res.alert.text)
+        && /levelCalibrated false/.test(res.alert.text),
+      storedUnchanged: !!res.stored && res.stored.level
+        && res.stored.hash === fixtures.older.experiment.provenance.resultHash,
+      stated: /^This record names a calibration its own results say was not applied/
+        .test(res.statement) && /not trustworthy/.test(res.statement),
+      uncalibrated: /level UNCALIBRATED/.test(res.lines),
+      noSpl: res.spl.length === 0,
     }) };
   });
 

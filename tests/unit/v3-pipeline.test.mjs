@@ -189,6 +189,9 @@ function sweepExperiment({ calibration = null, quality = QUALITY, id = 1 } = {})
       transfer: t.algorithm, ir: ir.algorithm, align: RUN[0].alignment.algorithm,
       clip: RUN[0].check.algorithms.clip, discontinuity: RUN[0].check.algorithms.discontinuity,
       quality: quality.algorithm, aggregate: AGGREGATE.algorithm,
+      // A profile is applied by the engine's correction algorithm, recorded beside it (the
+      // validator cross-checks the two, ADR 0040 resolution).
+      ...(calibration && calibration.frequency ? { calibration: ALGORITHMS.calibration } : {}),
     },
   });
   const measured = schemaMod.withResults(created, {

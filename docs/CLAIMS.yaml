@@ -339,6 +339,14 @@ claims:
     responsibility: product
     note: The experiment the UI builds from a measurement is checked in tests/unit/v3-ui.test.mjs; repeating it creates a new experiment with repeatOf (check loopback-workflow in tests/browser/v3-ui.cjs).
 
+  - id: experiment-calibration-as-measured
+    claim: A saved experiment records the calibration the measurement engine applied and the notes as they were when the measurement started, never a frequency profile or level calibration loaded or created after the run; a stored or imported experiment whose named calibration its own results contradict stays readable, is marked with that finding and is presented and compared as uncalibrated, never as dB SPL
+    source: .ai/repo/adrs/0040-completed-experiment-run-immutable-metadata-separate.md
+    implementation: src/js/ui/measure-experiment.js
+    test: tests/unit/v3-evidence-at-completion.test.mjs
+    status: guaranteed
+    note: Through the real UI, checks evidence-at-completion (profile A measured, profile B and a level calibration made after COMPLETE, notes edited, then Save) and older-claim (a file as an earlier version saved it) in tests/browser/v3-ui.cjs. The cross-check is src/js/experiments/validate.js calibrationClaimFindings (code calibration-claim-contradicted; strict for new MEASURE and Studio saves, while Duplicate and import keep a record as it is, finding included). It checks presence, not identity, since a record keeps a profile's id and name but not its points.
+
   - id: experiment-round-trip
     claim: An experiment survives create, encode, JSON and validate identically, its typed arrays written as explicit little-endian base64 that decodes bit for bit
     source: .ai/repo/adrs/0023-schema-versions-independent-of-product-version.md

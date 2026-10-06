@@ -42,6 +42,14 @@
 // could not be read. A stored definition that cannot be read never fails the list of runs, and
 // a stored change is never reported as failed because the list could not be read again after it.
 //
+// Contradicted calibration claims (ADR 0040, resolution 2026-10-05): earlier versions could
+// save a record naming a calibration its results never applied (loaded or created after the
+// run). validate.js reports it as a non-fatal finding (calibration-claim-contradicted), so such
+// a stored record stays readable and such a file imports, with the reason. The record is never
+// rewritten (its hash still verifies); the detail states the contradiction, and the detail,
+// CSV, compare and MEASURE inspection present it without the contradicted claim
+// (presented()), so it is never shown as dB SPL or compared as calibrated.
+//
 // Independence (§227, V353): the store opens lazily, on the first Experiments view or save, and
 // reading the IndexedDB factory never throws into the app (pageIndexedDb): a store that cannot
 // open falls back to memory and says so, and the Playground, the instrument and Studio never
@@ -50,7 +58,9 @@
 
 import { KNOWN_ALGORITHM_IDS } from '../measurement/algorithms.js';
 import { openExperimentStoreOrMemory } from '../experiments/store.js';
-import { validateExperiment, DEFAULT_MAX_BYTES } from '../experiments/validate.js';
+import {
+  validateExperiment, DEFAULT_MAX_BYTES, calibrationClaimFindings, withoutContradictedCalibration,
+} from '../experiments/validate.js';
 import {
   experimentToJson, formatErrors, newExperimentId, EXPERIMENT_FILE_EXTENSION,
   sanitizeForExport, duplicateExperiment, annotateExperiment, isBaseline, describeStimulus,
@@ -129,6 +139,16 @@ export function fileStem(name, fallback = 'experiment') {
 }
 
 const isTestContext = (e) => !!experimentTestContext(e);
+
+/** The statement shown for a record whose calibration claim its own results contradict. */
+export const CALIBRATION_CLAIM_TEXT = 'This record names a calibration its own results say was '
+  + 'not applied (earlier versions of OSCILLA could save it after a calibration changed). Its '
+  + 'calibrated values are not trustworthy: it is shown and compared as uncalibrated.';
+
+/** The experiment as the workspace presents it: without a contradicted calibration claim. */
+export function presented(e) {
+  return e ? withoutContradictedCalibration(e) : e;
+}
 
 /**
  * The experiment as it is exported (§88): no raw deviceId; a result hash of version 2 or 3
@@ -278,11 +298,15 @@ export function createExperimentsUi() {
       if (ctx.charts.detail) ctx.charts.detail.setView(null);
       return;
     }
-    const s = experimentSummary(e, e.definition ? matchOf(e.definition) : {});
-    const view = buildResponseView(e, { profile: typeof cmp.measureCurrentProfile === 'function'
-      ? cmp.measureCurrentProfile() : null });
+    const findings = calibrationClaimFindings(e);
+    const shown = withoutContradictedCalibration(e, findings);
+    const s = experimentSummary(shown, e.definition ? matchOf(e.definition) : {});
+    const view = buildResponseView(shown, { profile: typeof cmp.measureCurrentProfile
+      === 'function' ? cmp.measureCurrentProfile() : null });
     cmp.exps.detail = {
       ...plain(s),
+      calibrationClaim: findings.length ? { text: CALIBRATION_CLAIM_TEXT,
+        findings: findings.map((f) => `${f.path}: ${f.text}`) } : null,
       testContext: isTestContext(e),
       baseline: isBaseline(e),
       notes: e.environment && e.environment.notes ? e.environment.notes : null,
@@ -304,13 +328,17 @@ export function createExperimentsUi() {
       if (ctx.charts.ir) ctx.charts.ir.setView(null);
       return;
     }
-    const v = buildCompareView(list, { definitions: (id) => ctx.defs.get(id) || null });
+    const v = buildCompareView(list.map(presented),
+      { definitions: (id) => ctx.defs.get(id) || null });
+    const contradicted = list.filter((e) => calibrationClaimFindings(e).length)
+      .map((e) => `"${e.name || '(unnamed)'}" names a calibration its own results say was not `
+        + 'applied: it is compared as uncalibrated.');
     cmp.exps.compare = {
       entries: plain(v.entries),
       common: plain(v.common),
       differences: plain(v.differences),
       compatible: v.compatible,
-      warnings: v.warnings.slice(),
+      warnings: [...contradicted, ...v.warnings],
       summary: v.summary,
       semantic: plain(v.semantic),
       overlayNotes: v.overlay ? v.overlay.notes.slice() : [],
@@ -474,6 +502,18 @@ export function createExperimentsUi() {
       await refreshAfter(this);
       return true;
     },
+    /** The stored experiment `id`, or null when it is not stored (MEASURE's update). */
+    async experimentsGet(id) {
+      return (await get(this, id)) || null;
+    },
+    /** Metadata of a stored run ({ name, notes }) through store.annotate; the run is kept. */
+    async experimentsAnnotate(id, meta) {
+      const next = await (await store(this)).annotate(id, meta);
+      remember(id, next);
+      if (ctx.detail && ctx.detail.experimentId === id) setDetail(this, next);
+      await refreshAfter(this); // the annotate is committed whatever the list does
+      return next;
+    },
     /** Mark (or clear) the baseline: metadata only (store.annotate), at most one (ADR 0041). */
     async experimentsSetBaseline(id, on = true) {
       try {
@@ -538,7 +578,7 @@ export function createExperimentsUi() {
     },
     /** CSV of the raw result (§163, §223): transfer, aggregate or IR, with metadata lines. */
     async experimentsExportCsv(id, what) {
-      const e = await get(this, id);
+      const e = presented(await get(this, id));
       if (!e || !e.results) return null;
       const meta = csvMeta(e);
       let text = null;
@@ -582,6 +622,8 @@ export function createExperimentsUi() {
         this.notify('error', 'Experiment not imported', formatErrors(v.errors.slice(0, 3)));
         return null;
       }
+      const claim = v.findings && v.findings.length ? ` ${CALIBRATION_CLAIM_TEXT} (${v.findings
+        .map((f) => `${f.path}: ${f.text}`).join('; ')})` : '';
       let e = v.experiment;
       const s = await store(this);
       let kept = '';
@@ -597,8 +639,9 @@ export function createExperimentsUi() {
       }
       this.exps.importErrors = [];
       const id = await this.experimentsPut(e);
-      this.notify('success', 'Experiment imported', `"${e.name || '(unnamed)'}"${v.migratedFrom
-        ? ` (migrated from schema v${v.migratedFrom})` : ''}.${kept}`);
+      this.notify(claim ? 'warning' : 'success', claim ? 'Experiment imported with a warning'
+        : 'Experiment imported', `"${e.name || '(unnamed)'}"${v.migratedFrom
+        ? ` (migrated from schema v${v.migratedFrom})` : ''}.${kept}${claim}`);
       return id;
     },
     /**
@@ -680,7 +723,7 @@ export function createExperimentsUi() {
     async experimentsShowInMeasure(id) {
       const e = await get(this, id);
       if (!e) return false;
-      this.measureShowExperiment(e);
+      this.measureShowExperiment(presented(e));
       this.setWorkspace('measure');
       return true;
     },
