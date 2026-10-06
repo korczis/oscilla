@@ -21,7 +21,7 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-02
-updated_at: 2026-10-03T23:41:05Z
+updated_at: 2026-10-06T18:12:16Z
 evidence:
   - covers: verified
     type: ci
@@ -41,3 +41,9 @@ evidence:
     result: "PARTIAL (do not mark done; also blocked: dependency V383 not done, V384/V385 PARTIAL): at 34f967a the release line is v3.0.0 -> v3.1.0 -> v3.2.0 (tag v3.2.0 at e494605, GitHub Release 2026-10-03T21:40Z), package.json single source; Pages serves 34f967a: verify-deploy PASS attempt 1/10 (artifact e3a3165d6b78), test:live 10/10 in chromium, firefox, webkit (provenance, status bar OSCILLA v3.2.0, Playground HOLD, Studio PLAY/STOP, no console errors). Unmet: (1) no release candidate ever preceded 3.0.0 (no *rc* tag) although release-analyze/prepare support --prerelease (spec 233) - now only a recorded deviation can close it; (2) no public MEASURE smoke (spec 230: live-smoke.cjs has no Measure check). Release record: .ai/repo/deployments holds only its README; deployment/v1 is a container-service schema (port, routes, machines) with no supported object for a static Pages site, so this plan evidence is the supported record (spec 181 'where supported')"
     commit: 34f967a063ead9085b89faf32f748e4cf9aff301
     recorded_at: 2026-10-03T23:41:05Z
+  - covers: verified
+    type: ci
+    command: "npm run release:verify-deploy && npm run test:live && git tag -l '*rc*' && gh release view v3.0.0 --json assets && ls .ai/repo/releases && git show v3.0.0:scripts/release-prepare.mjs | grep -n prerelease && majordomus decision --help"
+    result: "PARTIAL (do not mark done): at caf7764 (v3.10.2 line), dependencies V383/V384/V385 DONE; Pages serves caf7764, verify-deploy PASS attempt 1/10 (artifact 1d20acfd89a9); test:live 14/14 in chromium, firefox, webkit incl. the MEASURE checks (guided flow renders; TEST CONTEXT setup check reaches READY, reset leaves 0 nodes), Playground HOLD and no console errors, so spec 230 public verify is now MET. Unmet: (1) spec 233 rc first: no *rc* tag; at v3.0.0 (5d94576) release-analyze/prepare already took --prerelease (release-publish gained a prerelease channel only in #93), so this cannot become true; the deviation needs a tracked record, and 'majordomus decision add' writes only .ai/local/state/decisions.md (untracked, never shared, not normative per .ai/README.md; the manifest has no tracked decisions section), so it does not fit; the tracked route is an ADR (majordomus adr propose), an owner decision; (2) spec 181 release record: release/v1 records exist from v3.4.0 (.ai/repo/releases, scripts/release-record.mjs, #93), none for v3.0.0 because its GitHub Release has no asset (assets: []); one needs dist/index.html at v3.0.0 attached as oscilla-v3.0.0.html, then npm run release:record -- --version 3.0.0"
+    commit: caf7764ce6fec9329de43254328170255faa6dad
+    recorded_at: 2026-10-06T18:12:16Z

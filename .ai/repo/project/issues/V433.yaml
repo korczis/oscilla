@@ -21,7 +21,7 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-02
-updated_at: 2026-10-03T23:41:19Z
+updated_at: 2026-10-06T18:13:42Z
 evidence:
   - covers: verified
     type: ci
@@ -47,3 +47,9 @@ evidence:
     result: "PARTIAL (do not mark done; blocked behind V432 and V386): at 34f967a v3.1.0 and v3.2.0 are tagged with GitHub Releases (v3.2.0 at e494605 carries the post-3.1.0 Studio work, closing the round-2 'features under the v3.1.0 label' gap); Pages serves 34f967a, verify-deploy PASS attempt 1/10 (bounded retry, artifact e3a3165d6b78); test:live 10/10 in chromium, firefox, webkit incl. the public Studio smoke (STUDIO from navigation, Subtractive Synth 6 nodes / 5 cables, PLAY sounds, STOP leaves 0 engine, source and runtime nodes). Unmet: spec 270 public smoke does not open the Measurement Sweep template or check its measurement nodes; spec 227/271 deployment evidence: no deployment record (.ai/repo/deployments holds only its README; deployment/v1 has no object shape for a static Pages site, so a recorded decision on where spec 227 evidence lives is still needed)"
     commit: 34f967a063ead9085b89faf32f748e4cf9aff301
     recorded_at: 2026-10-03T23:41:19Z
+  - covers: verified
+    type: test
+    command: "npm run release:verify-deploy; npm run test:live; node scripts/release-record.mjs --version 3.10.2 --check; gh release view v3.1.0 --json assets; gh run view 37508930870 --json conclusion,headSha; grep -rn 'live-smoke\|test:live' .github scripts; grep -n -i 'compact\|timeline' tests/browser/live-smoke.cjs; ls docs/v31"
+    result: "PARTIAL (do not mark done; blocked behind V432 and V386): at caf7764 SemVer from history holds (v3.0.0 -> v3.1.0 Studio -> v3.10.2, package.json single source); Pages run 37508930870 (success) serves caf7764 and verify-deploy PASS attempt 1/10 with bounded retry (artifact 1d20acfd89a9); test:live 14/14 in chromium, firefox, webkit: STUDIO from navigation, Subtractive Synth 6 nodes / 5 cables, PLAY sounds, STOP leaves 0 engine/source/runtime nodes, and the Measurement Sweep template renders its six nodes with their Measurement categories and 5 cables, no microphone request, no console errors, so the round-3 spec 270 gap is closed; deployment evidence now exists through release/v1 (.ai/repo/releases, #93): v3.10.2 record at 531544b matches what GitHub serves (release-record --check), with version, commit, artifact sha256, date, while public URL, Pages run and smoke result live in this plan evidence (deployment/v1 has no static-site shape). Unmet: (1) dependencies V432 and V386 not done; (2) spec 269: Studio post-deploy checks are not part of deployment: pages.yml and release:publish run only verify-deploy, test:live is run by hand (no workflow or script references it, although its header says the Pages workflow runs it), and it checks neither the compact Studio nor the timeline render; (3) spec 270 checks node and cable counts of the Subtractive Synth (no Basic Synth template exists), not that Oscillator, Envelope, Filter and Master are present; (4) spec 259: no final Studio report (schema, node and port types, test counts, artifact size delta, Majordomus artifacts, public version, commit, deployment run); (5) v3.1.0 itself has no release/v1 record (its GitHub Release has no asset; records start at v3.4.0)"
+    commit: caf7764ce6fec9329de43254328170255faa6dad
+    recorded_at: 2026-10-06T18:13:42Z
