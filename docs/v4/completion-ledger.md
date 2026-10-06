@@ -90,7 +90,7 @@ engine/dsp/labs/sequencer CI and the About provenance tests skip in CI's shallow
 no startup budget or large-library fixture (P1); `window.OSCILLA` test seam and `?mock=1` ship
 in production (W7); five dead CSS classes; an import without a hash shows no "unverified"
 marker; an unreadable stored record fails silently; ADR status never leaves `proposed`; the plan
-contradicts git (V386 READY, M033 BLOCKED; **closed**, see "plan reconciled" below); "run" means both a repeat and a completed
+contradicts git (V386 READY, M033 BLOCKED; **closed** #144, see "plan reconciled" below); "run" means both a repeat and a completed
 experiment, and "project" both a Studio file and OSCILLA; no glossary.
 
 ## What v4.0 still lacks entirely
@@ -142,7 +142,7 @@ id) are fixed in the same pull request (`tests/unit/v4-review-139.test.mjs`).
 
 With W2 handled by #130 (ADR 0045), the findings of this ledger still open are the P2 list.
 
-## Update 2026-10-06 — plan reconciled with main
+## Update 2026-10-06 — plan reconciled with main (#144)
 
 The stale V3 and V3.1 release issues were re-checked against `main` at caf7764, the latest release line.
 Each issue now carries evidence recorded at that commit (`majordomus plan show <id>`), and its
