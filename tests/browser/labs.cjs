@@ -73,6 +73,12 @@ function serve(pages) {
 // Chromium's built-in fake capture device is silent in this version, so it gets a WAV with a
 // known tone; Firefox's fake device (media.navigator.streams.fake) produces a 1 kHz tone.
 const FAKE_MIC_HZ = { chromium: 2000, firefox: 1000 };
+// Analyser level (est.levelDb) below which the fake tone is not being delivered yet. Steady
+// readings: Chromium -25.6 dB (the WAV's 0.25 amplitude: 20·log10(0.25 · 0.42 / 2), Blackman
+// coherent gain, one-sided spectrum), Firefox -33.5 dB. While the stream starts, a window the
+// tone has barely entered reads far lower (-110 dB seen in a release gate) and its peak is
+// smeared off the tone, so such an estimate is not a detection of the tone.
+const FAKE_MIC_MIN_LEVEL_DB = -60;
 
 function writeToneWav(file, hz, seconds = 4, sr = 48000) {
   const n = seconds * sr;
@@ -460,8 +466,17 @@ async function runEngine(engine, base) {
   const micBefore = await page.evaluate(() =>
     document.querySelector('#osc-mic-detected').textContent);
   await page.click('#osc-mic-toggle');
+  // The wait ends on exactly what the check asserts (and the level shows the tone has arrived),
+  // so a transient estimate while the fake stream starts can neither end it nor be judged.
+  const want = FAKE_MIC_HZ[engine];
+  const micDetects = (m) => !!(m && m.active && m.est && m.ref
+    && m.est.levelDb >= FAKE_MIC_MIN_LEVEL_DB
+    && Math.abs(m.est.frequencyHz - m.ref.hz) <= 2 * m.ref.binHz
+    && Math.abs(m.est.frequencyHz - want) <= Math.max(m.est.uncertaintyHz, 1));
   let mic = null;
+  let polls = 0;
   for (let i = 0; i < 40; i++) {
+    polls = i + 1;
     await page.waitForTimeout(150);
     mic = await page.evaluate(() => {
       const m = window.__labs.labs.mic;
@@ -479,16 +494,15 @@ async function runEngine(engine, base) {
         text: document.querySelector('#osc-mic-detected').textContent,
         label: m.stream ? m.stream.getAudioTracks()[0].label : null };
     });
-    if (mic.est && Math.abs(mic.est.frequencyHz - FAKE_MIC_HZ[engine]) < 5) break;
+    if (micDetects(mic)) break;
   }
-  const want = FAKE_MIC_HZ[engine];
-  const micOk = mic.active && mic.est && mic.ref
-    && Math.abs(mic.est.frequencyHz - mic.ref.hz) <= 2 * mic.ref.binHz
-    && Math.abs(mic.est.frequencyHz - want) <= Math.max(mic.est.uncertaintyHz, 1);
-  check(`mic (fake device) detects the fake ${want} Hz tone within ± its uncertainty`, micOk,
+  check(`mic (fake device) detects the fake ${want} Hz tone within ± its uncertainty`,
+    micDetects(mic),
     mic.est ? `${mic.est.frequencyHz.toFixed(2)} ± ${mic.est.uncertaintyHz.toFixed(2)} Hz `
-      + `vs peak bin ${mic.ref.hz.toFixed(1)} Hz; "${mic.text}"; device "${mic.label}"`
-      : `active ${mic.active} error "${mic.error}" text "${mic.text}"`);
+      + `at ${mic.est.levelDb.toFixed(1)} dB (min ${FAKE_MIC_MIN_LEVEL_DB}) vs peak bin `
+      + `${mic.ref ? `${mic.ref.hz.toFixed(1)} Hz at ${mic.ref.db.toFixed(1)} dB` : 'none'}; `
+      + `"${mic.text}"; device "${mic.label}"; after ${polls} polls`
+      : `active ${mic.active} error "${mic.error}" text "${mic.text}"; after ${polls} polls`);
   check('mic readout before enabling says it is off', /microphone off/i.test(micBefore), micBefore);
   await page.click('#osc-mtab-compare');
   await page.waitForTimeout(250);
