@@ -19,12 +19,20 @@
 // still verify. A
 // recipe a definition cannot be derived from is left without one, and validation names it.
 //
+// 3 → 4 (ledger D3, ADR 0038 resolution 2026-10-06): the Studio block may name its measured
+// path (`studio.measured`). An earlier block has none, and none is inferred: it keeps its
+// studioHash, still verifies, and is read as recording the whole graph. No hash covers the
+// Studio block, so the stored result hash and version are kept. A schema-3 document that already
+// has `studio.measured` is refused, not trusted.
+//
 //   migrateExperiment(json, { migrations, targetVersion }) ->
 //     { ok: true, experiment, from, to, applied: [n, ...] }
 //     | { ok: false, errors: [{ path, text }] }
 // The input is never modified (steps receive a copy).
 
-import { EXPERIMENT_SCHEMA_VERSION, withRunIds } from './schema.js';
+import {
+  EXPERIMENT_BASE_SCHEMA_VERSION, EXPERIMENT_SCHEMA_VERSION, withRunIds,
+} from './schema.js';
 import { derivedRef } from './definition.js';
 
 /** Schema 1 → 2: run ids (the rest of the document is unchanged). */
@@ -48,16 +56,34 @@ function addDerivedDefinition(e) {
   return { ...e, definition };
 }
 
+/** Schema 3 → 4: nothing changes; a measured path is never inferred for an earlier block. */
+function keepWholeGraph(e) {
+  const s = e.studio;
+  if (s && typeof s === 'object' && Object.prototype.hasOwnProperty.call(s, 'measured')) {
+    throw new Error('a schema-3 experiment has no studio.measured field');
+  }
+  return e;
+}
+
 export const migrations = Object.freeze({
   1: (e) => e,
   2: addRunIds,
   3: addDerivedDefinition,
+  4: keepWholeGraph,
 });
 
-/** Upgrade a parsed experiment document to `targetVersion` (default: the current schema). */
+/**
+ * Upgrade a parsed experiment document to `targetVersion` (default: schema 3 for a document of
+ * schema 3 or earlier, which every later reader takes as it is; a schema-4 document stays 4;
+ * anything newer than EXPERIMENT_SCHEMA_VERSION is refused). Step 3 → 4 runs only when asked
+ * for: schema 4 is written only for a record with a measured Studio path (schema.js).
+ */
 export function migrateExperiment(json, opts = {}) {
   const registry = opts.migrations || migrations;
-  const target = opts.targetVersion ?? EXPERIMENT_SCHEMA_VERSION;
+  const newest = opts.targetVersion ?? EXPERIMENT_SCHEMA_VERSION;
+  const from0 = json && typeof json === 'object' ? json.schemaVersion : null;
+  const target = opts.targetVersion ?? (Number.isSafeInteger(from0) && from0 > newest ? newest
+    : Math.min(newest, Math.max(from0 || 0, EXPERIMENT_BASE_SCHEMA_VERSION)));
   const fail = (text) => ({ ok: false, errors: [{ path: 'schemaVersion', text }] });
   if (!json || typeof json !== 'object' || Array.isArray(json)) {
     return { ok: false, errors: [{ path: '', text: 'not an experiment object' }] };

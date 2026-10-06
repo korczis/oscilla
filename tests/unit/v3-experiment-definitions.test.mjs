@@ -300,7 +300,10 @@ function schema2Doc(e, mutate = null) {
 test('ADR 0043: schema 2 files migrate to 3 with a derived definition, and round-trip',
   async () => {
     const { a, c } = await fx();
-    assert.equal(schema.EXPERIMENT_SCHEMA_VERSION, 3);
+    // Schema 4 (ledger D3) only adds the Studio block's measured path: a record without one is
+    // read and written as schema 3 (review F4 of #139).
+    assert.equal(schema.EXPERIMENT_SCHEMA_VERSION, 4);
+    assert.equal(schema.EXPERIMENT_BASE_SCHEMA_VERSION, 3);
     for (const fixture of [a, c]) {
       const old = schema2Doc(fixture.experiment);
       const before = JSON.stringify(old);
@@ -388,7 +391,7 @@ test('ADR 0043: a stored schema-2 record reads as schema 3 and stays immutable',
   const named = await s.annotate('fixture-b', { name: 'renamed v2 run' });
   assert.equal(named.provenance.resultHash, old.provenance.resultHash);
   const raw = fake.dbs.get('old2').stores.get('experiments').data.get('fixture-b');
-  assert.equal(raw.schemaVersion, 3, 'written back in the current schema');
+  assert.equal(raw.schemaVersion, 3, 'written back in the lowest schema that describes it');
   decode(raw);
 });
 

@@ -95,9 +95,13 @@ const PROFILE_A = createFrequencyProfile({ name: 'Mic A', points: [[20, 1], [100
   [4000, -1]] });
 const PROFILE_B = createFrequencyProfile({ name: 'Mic B', points: [[20, -3], [1000, 2],
   [4000, 4]] });
+// Bound to the synthetic microphone (ledger C1: the engine applies it to that input only).
+const MIC_INPUT = Object.freeze({ device: { id: 'synthetic-mic' }, constraints: { applied: {
+  echoCancellation: false, noiseSuppression: false, autoGainControl: false, sampleRate: SR,
+  channelCount: 1 } }, sampleRate: SR });
 const LEVEL = createLevelCalibration({ referenceHz: 1000, referenceDbSpl: 94,
   observedDbRelative: -30, conditions: 'unit: calibrator', createdAt: NOW, method: 'manual',
-  input: null });
+  input: MIC_INPUT });
 
 const UNCAL = await measure(null);
 const WITH_A = await measure({ frequency: PROFILE_A, level: null });

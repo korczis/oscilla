@@ -7,24 +7,39 @@
 //     setup" and never includes Studio state, so a measurement run from Studio and the same
 //     measurement run from the Measure workspace share a configHash.
 //   STUDIO block (ADR 0038) is provenance BESIDE the recipe: experiment.studio =
-//     { schemaVersion, studioHash, execution } — the Studio schema version, the execution state
-//     that ran (schema.js executionState: nodes, parameters, edges, tracks, clips, automation,
-//     loop, transport) and its SHA-256. Never view state, selection, positions, names or
-//     markers (§163, §252, §255); never results; never a patch id alone (a patch can change
-//     after the run). A Studio run DERIVES its recipe from the topology (recipeFromStudio), so
-//     the two cannot disagree about the stimulus.
+//     { schemaVersion, studioHash, execution, measured } — the Studio schema version, the
+//     execution state of the graph the measurement was run from (schema.js executionState:
+//     nodes, parameters, edges, tracks, clips, automation, loop, transport), its SHA-256, and the
+//     measured path. Never view state, selection, positions, names or markers (§163, §252,
+//     §255); never results; never a patch id alone (a patch can change after the run). A Studio
+//     run DERIVES its recipe from the topology (recipeFromStudio), so the two cannot disagree
+//     about the stimulus.
+//   MEASURED PATH (ledger D3, ADR 0038 resolution 2026-10-06): studioHash covers the whole
+//     graph, so an Oscillator nobody connected changed it. `measured` = { v, nodes, edges, clips,
+//     hash } names what the measurement depended on — exactly what recipeFromStudio reads: the
+//     Sweep wired to a Transfer Analyzer REFERENCE, the Sweep's audio route to the Master Output,
+//     that analyzer, its observed chain (Calibration, Microphone, ... walked back through
+//     OBSERVED inputs) and the measurement clips — with the SHA-256 of those records
+//     (experiments/hash.js measuredPathHash). Nothing else in the graph sounds or is read during
+//     the measurement: the Studio output is released before the engine plays its own sweep
+//     (measurement-run.js). A model with no Sweep reference into a Transfer Analyzer has no
+//     measured path and its block has no `measured`, like a block written before it existed
+//     (experiment schema 3), which records the whole graph only.
 //
-//   studioProvenance(model) -> { schemaVersion, studioHash, execution }
+//   studioProvenance(model) -> { schemaVersion, studioHash, execution, measured? }
+//   measuredPath(model) -> { nodes, edges, clips } (ids, sorted by code unit) | null
 //   withStudioProvenance(experiment, model) -> a copy of the experiment with `studio` set
 //   executionToModel(execution) -> normalized StudioModel (default names, positions at 0)
 //   verifyExperimentStudio(experiment) -> { ok, present, model?, errors: [text] }
 //     the Studio semantics experiments/validate.js does not check (node types, ports, cycles),
-//     plus hash and canonical-form agreement; ok and present false when there is no block
+//     plus hash and canonical-form agreement and, when the block has one, that `measured` names
+//     the measured path of its own graph; ok and present false when there is no block
 //   recipeFromStudio(model, { sampleRate, repeats, profileId }) -> { ok: true, recipe, sweepId,
 //     analyzerId } | { ok: false, reason }
 
 import { canonicalJson } from '../experiments/canonical-json.js';
-import { createRecipe } from '../experiments/schema.js';
+import { MEASURED_PATH_VERSION, measuredPathHash } from '../experiments/hash.js';
+import { createRecipe, experimentSchemaVersionFor } from '../experiments/schema.js';
 import { DEFAULT_TIMING, TIMING_LIMITS } from '../measurement/engine.js';
 import { normalizeStimulus } from '../measurement/stimulus.js';
 import { DEFAULT_POINTS_PER_OCTAVE } from '../measurement/transfer.js';
@@ -40,16 +55,23 @@ export function studioProvenance(model) {
     throw new TypeError(`studioProvenance: the Studio model is invalid: ${report.errors[0]
       .message}`);
   }
-  return {
-    schemaVersion: model.schemaVersion,
-    studioHash: studioHash(model),
-    execution: JSON.parse(canonicalJson(executionState(model))),
-  };
+  const execution = JSON.parse(canonicalJson(executionState(model)));
+  const out = { schemaVersion: model.schemaVersion, studioHash: studioHash(model), execution };
+  const path = measuredPath(model);
+  if (path) {
+    out.measured = { v: MEASURED_PATH_VERSION, ...path,
+      hash: measuredPathHash(execution, path) };
+  }
+  return out;
 }
 
 /** A copy of `experiment` that records the Studio model it ran (ADR 0038). */
 export function withStudioProvenance(experiment, model) {
-  return { ...experiment, studio: studioProvenance(model) };
+  const out = { ...experiment, studio: studioProvenance(model) };
+  // A measured path needs experiment schema 4; a block without one keeps the record's schema
+  // (schema.js experimentSchemaVersionFor: written in the lowest schema that describes it).
+  return { ...out, schemaVersion: Math.max(experiment.schemaVersion ?? 0,
+    experimentSchemaVersionFor(out)) };
 }
 
 /** The normalized model an execution state describes (presentation and view at defaults). */
@@ -100,6 +122,16 @@ export function verifyExperimentStudio(experiment) {
     errors.push('studio.execution is not in the normalized form of its own model');
   }
   if (studioHash(model) !== s.studioHash) errors.push('studio.studioHash does not match');
+  if (s.measured) {
+    const path = measuredPath(model);
+    const same = !!path && ['nodes', 'edges', 'clips'].every((k) => canonicalJson(path[k])
+      === canonicalJson(s.measured[k]));
+    if (!same) {
+      errors.push('studio.measured does not name the path the recipe is derived from in its own '
+        + `graph (${path ? `that path has nodes ${path.nodes.join(', ')}` : 'that graph has no '
+          + 'Sweep reference into a Transfer Analyzer'})`);
+    }
+  }
   return { ok: errors.length === 0, present: true, model, errors };
 }
 
@@ -119,13 +151,71 @@ const DURATION_TOLERANCE_S = 1e-6;
 const within = (v, [lo, hi]) => isNum(v) && v >= lo && v <= hi;
 
 const nameOf = (n) => (n.metadata && n.metadata.name) || n.id;
+const byCode = (x, y) => (x < y ? -1 : x > y ? 1 : 0);
+
+/**
+ * The measurement reference of a model: the first Transfer Analyzer (array order) whose
+ * REFERENCE input comes from a Sweep's reference output, with that Sweep and edge; null when
+ * there is none. { byId, analyzer, sweep, edge } | null; `analyzers` counts the analyzers.
+ */
+function measurementReference(model) {
+  const byId = new Map(model.graph.nodes.map((n) => [n.id, n]));
+  const analyzers = model.graph.nodes.filter((n) => n.type === 'transfer-analyzer');
+  for (const a of analyzers) {
+    const ref = model.graph.edges.find((e) => e.to.node === a.id && e.to.port === 'reference');
+    const src = ref ? byId.get(ref.from.node) : null;
+    if (src && src.type === 'sweep' && ref.from.port === 'reference') {
+      return { byId, analyzer: a, sweep: src, edge: ref, analyzers: analyzers.length };
+    }
+  }
+  return { byId, analyzer: null, sweep: null, edge: null, analyzers: analyzers.length };
+}
+
+/** The analyzer's observed chain, walked back through OBSERVED inputs: { nodes, edges }. */
+function observedWalk(model, byId, analyzer) {
+  const nodes = [];
+  const edges = [];
+  const seen = new Set();
+  let at = analyzer;
+  while (at && !seen.has(at.id)) {
+    seen.add(at.id);
+    const into = model.graph.edges.find((e) => e.to.node === at.id && e.to.port === 'observed');
+    at = into ? byId.get(into.from.node) : null;
+    if (into) edges.push(into);
+    if (at) nodes.push(at);
+  }
+  return { nodes, edges };
+}
+
+/** The Sweep's audio output edges (its route out). */
+const sweepRoute = (model, sweep) => model.graph.edges.filter((e) => e.from.node === sweep.id
+  && e.from.port === 'audio');
+
+/**
+ * The measured path of a model (see the header): the ids, each list sorted by code unit, of the
+ * nodes, edges and measurement clips recipeFromStudio reads; null without a Sweep reference
+ * into a Transfer Analyzer. The path is reported whether or not recipeFromStudio would accept
+ * the graph; a Studio run records it only after the recipe was derived.
+ */
+export function measuredPath(model) {
+  const { byId, analyzer, sweep, edge } = measurementReference(model);
+  if (!sweep) return null;
+  const route = sweepRoute(model, sweep);
+  const walk = observedWalk(model, byId, analyzer);
+  const nodes = new Set([sweep.id, analyzer.id, ...walk.nodes.map((n) => n.id)]);
+  for (const e of route) if (byId.has(e.to.node)) nodes.add(e.to.node);
+  const edges = new Set([edge.id, ...route.map((e) => e.id), ...walk.edges.map((e) => e.id)]);
+  const clips = model.timeline.clips.filter((c) => c.kind === 'measurement').map((c) => c.id);
+  return { nodes: [...nodes].sort(byCode), edges: [...edges].sort(byCode),
+    clips: [...new Set(clips)].sort(byCode) };
+}
 
 /**
  * Why the graph shows processing a MEASURE run does not do (null when it shows none): see
  * recipeFromStudio (V431 review A1).
  */
 function unusedProcessing(model, byId, sweep, analyzer, applied) {
-  const out = model.graph.edges.filter((e) => e.from.node === sweep.id && e.from.port === 'audio');
+  const out = sweepRoute(model, sweep);
   if (!out.length) {
     return `${nameOf(sweep)} is not connected to the Master Output; the measurement plays the `
       + 'sweep through the output, so the graph must show that route.';
@@ -138,15 +228,7 @@ function unusedProcessing(model, byId, sweep, analyzer, applied) {
         + 'recorded and never measured. Connect the Sweep directly to the Master Output.';
     }
   }
-  const cals = [];
-  const seen = new Set();
-  let at = analyzer;
-  while (at && !seen.has(at.id)) {
-    seen.add(at.id);
-    const into = model.graph.edges.find((e) => e.to.node === at.id && e.to.port === 'observed');
-    at = into ? byId.get(into.from.node) : null;
-    if (at && at.type === 'calibration') cals.push(at);
-  }
+  const cals = observedWalk(model, byId, analyzer).nodes.filter((n) => n.type === 'calibration');
   for (const c of cals) {
     const id = c.params.profileId || null;
     if (id !== applied) {
@@ -201,20 +283,8 @@ function unusedProcessing(model, byId, sweep, analyzer, applied) {
 export function recipeFromStudio(model, { sampleRate, repeats = 1, profileId = null } = {}) {
   const no = (reason) => ({ ok: false, reason });
   if (!isNum(sampleRate)) return no('A sample rate is needed to derive the stimulus.');
-  const byId = new Map(model.graph.nodes.map((n) => [n.id, n]));
-  const analyzers = model.graph.nodes.filter((n) => n.type === 'transfer-analyzer');
-  if (!analyzers.length) return no('The Studio has no Transfer Analyzer.');
-  let analyzer = null;
-  let sweep = null;
-  for (const a of analyzers) {
-    const ref = model.graph.edges.find((e) => e.to.node === a.id && e.to.port === 'reference');
-    const src = ref ? byId.get(ref.from.node) : null;
-    if (src && src.type === 'sweep' && ref.from.port === 'reference') {
-      analyzer = a;
-      sweep = src;
-      break;
-    }
-  }
+  const { byId, analyzer, sweep, analyzers } = measurementReference(model);
+  if (!analyzers) return no('The Studio has no Transfer Analyzer.');
   if (!sweep) return no('No Sweep reference reaches a Transfer Analyzer.');
   const p = sweep.params;
   if (p.curve !== 'log') return no(`${sweep.metadata.name} is not logarithmic.`);

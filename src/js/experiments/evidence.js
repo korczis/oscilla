@@ -38,6 +38,7 @@ import { resultHash, resultHashVersionOf, RESULT_HASH_VERSION } from './hash.js'
 import { calibrationClaimFindings, withoutContradictedCalibration } from './validate.js';
 import { RELATIVE_UNIT } from '../calibration/level.js';
 import { safeMaxFrequency } from '../measurement/stimulus.js';
+import { measurableStimulusRefusal } from '../measurement/engine.js';
 import { TRANSFER_RATIO_UNIT } from './csv.js';
 import { describeAlgorithm, isKnownAlgorithm } from '../measurement/algorithms.js';
 
@@ -209,10 +210,17 @@ function stimulusText(e) {
 }
 
 function bindingText(b) {
-  if (!obj(b)) return 'not bound to an input (it applies to every input)';
+  if (!obj(b)) {
+    return 'not bound to an input: the record cannot show which input it was taken with '
+      + '(earlier versions stored a reading typed before any input was checked this way)';
+  }
   const parts = [str(b.deviceId) ? 'device (hashed)' : null,
     num(b.sampleRate) ? hzText(b.sampleRate) : null].filter(Boolean);
-  return `bound to its input${parts.length ? ` (${parts.join(', ')})` : ''}`;
+  // Review F5 of #139: without a device id two inputs with one rate and the same flags bind
+  // alike, so the binding is only as far as the browser reports it.
+  return `bound to the input this run recorded${parts.length ? ` (${parts.join(', ')})` : ''}${
+    str(b.deviceId) ? '' : ', as far as the browser reports it (no device id: sample rate and '
+      + 'processing only)'}`;
 }
 
 /** Which stored claims are contradicted, and whether each named something (ADR 0040). */
@@ -310,13 +318,26 @@ function buildText(b) {
   `commit ${str(b.commit) ? b.commit.slice(0, 7) : NR}`].join('; ');
 }
 
+const count = (l, one, many) => (Array.isArray(l) ? `${l.length} ${l.length === 1 ? one : many}`
+  : `${many} ${NR}`);
+
 function studioText(s) {
   const x = obj(s.execution) ? s.execution : {};
-  const n = Array.isArray(x.nodes) ? x.nodes.length : null;
-  const k = Array.isArray(x.edges) ? x.edges.length : null;
-  return `the Studio graph the recipe was derived from: studioHash ${short(s.studioHash)}; ${
-    n ?? NR} nodes, ${k ?? NR} edges. The hash covers the whole graph, including nodes the `
-    + 'measurement did not use; it does not show which of them sounded';
+  const whole = `the Studio graph the recipe was derived from: studioHash ${short(s.studioHash)}; ${
+    count(x.nodes, 'node', 'nodes')}, ${count(x.edges, 'edge', 'edges')}`;
+  const m = obj(s.measured) ? s.measured : null;
+  if (!m) {
+    return `${whole}; the block records the whole graph without naming the measured path (an `
+      + 'earlier version wrote it so, or the graph has no Sweep reference into a Transfer '
+      + 'Analyzer): the hash covers nodes the measurement may not have used, and the record does '
+      + 'not say which ones it used (ledger D3)';
+  }
+  return `${whole} (the whole graph); the measured path: ${count(m.nodes, 'node', 'nodes')} (${
+    Array.isArray(m.nodes) ? m.nodes.join(', ') : NR}), ${count(m.edges, 'connection',
+    'connections')} and ${count(m.clips, 'measurement clip', 'measurement clips')}, hash ${
+    short(m.hash)}. The recipe was derived from that path (the Sweep, its route to the Master `
+    + 'Output and its reference into the Transfer Analyzer, the observed chain and the '
+    + 'measurement clips); the other nodes were recorded, not used by the measurement';
 }
 
 /** See the header. */
@@ -383,9 +404,10 @@ function definitionItem(d, match, name) {
 
 function recipeItem(r) {
   if (!obj(r) || !obj(r.stimulus)) return item('recipe', 'missing', 'no recipe is stored');
-  if (r.stimulus.kind !== 'log-sweep') {
-    return item('recipe', 'partial', `recorded, but this build's measurement engine runs only log `
-      + `sweeps (stimulus kind ${r.stimulus.kind})`);
+  const why = measurableStimulusRefusal(r.stimulus.kind);
+  if (why) {
+    return item('recipe', 'partial', `recorded, but this run used ${why}, so Repeat is refused `
+      + '(ledger D4)');
   }
   return item('recipe', 'recorded', 'stimulus, repeats and analysis timing as played are stored');
 }
@@ -425,8 +447,8 @@ function calibrationItem(e) {
     return item('calibration', 'partial', 'a frequency profile is named without its id');
   }
   if (obj(l) && !obj(l.input)) {
-    return item('calibration', 'partial', 'the level calibration is not bound to an input (it '
-      + 'applies to every input)');
+    return item('calibration', 'partial', 'the level calibration is not bound to an input: the '
+      + 'record cannot show it was taken with the input this run measured (ledger C1)');
   }
   return item('calibration', 'recorded', [obj(f) ? `frequency profile id ${short(f.id)}` : null,
     obj(l) ? 'level calibration with its offset and input binding' : null].filter(Boolean)

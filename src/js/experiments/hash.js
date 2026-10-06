@@ -58,6 +58,20 @@
 // from the Measure workspace share a configHash; the Studio block is provenance beside it.
 //
 //   studioExecutionHash(execution, { sha256Hex }) -> hex
+//
+// Measured path hash (ledger D3, ADR 0038 resolution 2026-10-06): an experiment's
+// studio.measured = { v, nodes, edges, clips, hash } names, by id, the part of the recorded
+// execution state the measurement depended on (studio/provenance.js measuredPath: the Sweep, its
+// route to the Master Output, its reference into the Transfer Analyzer, the analyzer's observed
+// chain and the measurement clips). measuredSelection(execution, ids) picks those records out of
+// the execution state exactly as stored (and its schema version); measuredPathHash is the
+// SHA-256 of its canonical JSON. Two runs with the same measured hash used the same Studio
+// measurement whatever else their graphs held. Like studioHash it is outside configHash and every
+// result hash; validate.js recomputes it, and studio/provenance.js verifyExperimentStudio checks
+// that the ids are the path the graph really has.
+//
+//   measuredSelection(execution, { nodes, edges, clips }) -> plain data
+//   measuredPathHash(execution, { nodes, edges, clips }, { sha256Hex }) -> hex
 
 import { canonicalJson } from './canonical-json.js';
 import { sha256Hex as defaultSha256Hex } from '../calibration/sha256.js';
@@ -176,4 +190,32 @@ export function studioExecutionHash(execution, { sha256Hex = defaultSha256Hex } 
     throw new TypeError('studioExecutionHash: sha256Hex must be a function');
   }
   return sha256Hex(canonicalJson(execution));
+}
+
+/** Version of the measured path selection and hash (the `v` of studio.measured). */
+export const MEASURED_PATH_VERSION = 1;
+
+/** The records of a Studio execution state that a measured path names (see the header). */
+export function measuredSelection(execution, { nodes = [], edges = [], clips = [] } = {}) {
+  const x = execution || {};
+  const pick = (list, ids) => {
+    const want = new Set(ids);
+    return (Array.isArray(list) ? list : []).filter((r) => r && want.has(r.id));
+  };
+  return {
+    v: MEASURED_PATH_VERSION,
+    kind: 'oscilla-studio-measured-path',
+    schemaVersion: x.schemaVersion ?? null,
+    nodes: pick(x.nodes, nodes),
+    edges: pick(x.edges, edges),
+    clips: pick(x.timeline && x.timeline.clips, clips),
+  };
+}
+
+/** SHA-256 hex of the canonical JSON of measuredSelection (see the header). */
+export function measuredPathHash(execution, ids, { sha256Hex = defaultSha256Hex } = {}) {
+  if (typeof sha256Hex !== 'function') {
+    throw new TypeError('measuredPathHash: sha256Hex must be a function');
+  }
+  return sha256Hex(canonicalJson(measuredSelection(execution, ids)));
 }

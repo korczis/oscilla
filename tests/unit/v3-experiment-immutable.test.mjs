@@ -317,7 +317,7 @@ test('ADR 0040: v1 and v2 records keep verifying; export re-stamps in their own 
 test('ADR 0040: schema 1 records and export files migrate to schema 2 and still verify',
   async () => {
     const { a } = await fx();
-    assert.equal(schema.EXPERIMENT_SCHEMA_VERSION, 3);
+    assert.equal(schema.EXPERIMENT_SCHEMA_VERSION, 4);
     assert.equal(typeof migrate.migrations[2], 'function');
     for (const version of [1, 2]) {
       const old = schema1Doc(a.experiment, version);
@@ -366,7 +366,7 @@ test('ADR 0040: a schema 1 record stored before the upgrade reads, annotates and
     assert.equal(named.provenance.resultHash, old.provenance.resultHash);
     assert.equal(named.provenance.resultHashVersion, 2);
     const raw = fake.dbs.get('old').stores.get('experiments').data.get('fixture-b');
-    assert.equal(raw.schemaVersion, 3, 'written back in the current schema');
+    assert.equal(raw.schemaVersion, 3, 'written back in the lowest schema that describes it');
     decode(raw);
   });
 

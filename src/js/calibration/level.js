@@ -25,6 +25,14 @@
 // recorded value differs. Input gain and microphone position are not observable by a browser;
 // `conditions` records them in the user's words.
 //
+// Unbound (ledger C1, ADR 0017 resolution 2026-10-06): a calibration without a binding (schema 1,
+// or schema 2 with `input: null`, which earlier builds made for a reading typed before any input
+// was checked) cannot be shown to belong to any input. Against a KNOWN current input it does not
+// apply (checked, UNCALIBRATED, the reason says it is not bound); only with no current input at
+// all — a stored record read on its own — is nothing compared. The workspace no longer creates
+// one: a reading is stored only once an input is known, and bound to it. isBoundLevelCalibration
+// tells the two apart for the texts that describe a record ("not bound to an input").
+//
 // Schema 1 (V3.0) records have no scale and no input; they stay valid as stored records (an
 // experiment keeps what it was measured with) but the workspace only creates schema 2.
 //
@@ -204,6 +212,14 @@ export function isValidLevelCalibration(cal) {
     && isInputBinding(cal.input ?? null);
 }
 
+/** True for a valid calibration that records the input it was taken with (see "Unbound"). */
+export function isBoundLevelCalibration(cal) {
+  return isValidLevelCalibration(cal) && cal.schemaVersion !== 1 && !!cal.input;
+}
+
+/** The words for a calibration without an input binding (records, evidence, compare). */
+export const UNBOUND_TEXT = 'not bound to an input';
+
 const BINDING_WORDS = Object.freeze({
   deviceId: 'input device', sampleRate: 'sample rate', echoCancellation: 'echo cancellation',
   noiseSuppression: 'noise suppression', autoGainControl: 'automatic gain control',
@@ -221,8 +237,11 @@ function bindingValueText(k, v) {
  * levelCalibrationApplies(cal, current) → { applies, checked, reason, differences }
  * current: the input in use now (capture facts or a binding, inputBinding()), null when it is
  * not known yet. A schema-2 calibration whose recorded input differs in any field from the
- * current one does NOT apply (reason says what differs); without a recorded or a current input
- * nothing can be compared (checked false, applies true for a valid calibration).
+ * current one does NOT apply (reason says what differs). A calibration without a binding does
+ * NOT apply to a known current input either (C1: nothing shows it was taken with that one).
+ * Without a current input nothing can be compared (checked false, applies true for a valid
+ * calibration): the case of a stored record read on its own; the workspace checks the input
+ * before it applies a calibration.
  */
 export function levelCalibrationApplies(cal, current) {
   if (!isValidLevelCalibration(cal)) {
@@ -231,7 +250,13 @@ export function levelCalibrationApplies(cal, current) {
   }
   const was = cal.schemaVersion === 1 ? null : cal.input ?? null;
   const now = current ? inputBinding(current) : null;
-  if (!was || !now) return { applies: true, checked: false, reason: null, differences: [] };
+  if (!now) return { applies: true, checked: false, reason: null, differences: [] };
+  if (!was) {
+    return { applies: false, checked: true, differences: [],
+      reason: `UNCALIBRATED: the level calibration is ${UNBOUND_TEXT} (it was stored without the `
+        + 'input it was taken with), so it cannot be shown to apply to this one. Calibrate again '
+        + 'for this input.' };
+  }
   const differences = [];
   for (const k of BINDING_KEYS) {
     if (was[k] !== now[k]) {
