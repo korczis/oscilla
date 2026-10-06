@@ -1292,7 +1292,8 @@ export function mountInspector(host, svc) {
     return [!!view.statusText, view.mic ? `${view.mic.action}|${view.mic.error}|${view.mic.busy}`
       : '',
       ...view.connections.map((c) => c.text), ...view.fields.map((f) =>
-        f.modulatedBy.join('|'))].join('\n');
+        // Whether Automate is offered can change with another parameter (a filter type, R7).
+        `${f.modulatedBy.join('|')}|${f.automatable}|${f.automateReason || ''}`)].join('\n');
   }
 
   function update(view) {
