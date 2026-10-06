@@ -37,6 +37,7 @@ import { UNKNOWN_DEVICE, describeStimulus, formatHz } from './schema.js';
 import { resultHash, resultHashVersionOf, RESULT_HASH_VERSION } from './hash.js';
 import { calibrationClaimFindings, withoutContradictedCalibration } from './validate.js';
 import { RELATIVE_UNIT } from '../calibration/level.js';
+import { safeMaxFrequency } from '../measurement/stimulus.js';
 import { TRANSFER_RATIO_UNIT } from './csv.js';
 import { describeAlgorithm, isKnownAlgorithm } from '../measurement/algorithms.js';
 
@@ -191,9 +192,15 @@ function stimulusText(e) {
   const r = e.recipe;
   const st = r.stimulus;
   const req = r.requested;
-  const clamp = obj(req) && num(req.f2) && num(st.f2) && req.f2 !== st.f2
-    ? `; requested up to ${formatHz(req.f2)}, played up to ${formatHz(st.f2)} (0.95 × the `
-      + 'Nyquist frequency)' : '';
+  // The clamp is named only when the record shows it: a request above what was played, and the
+  // played value exactly stimulus.js's limit for the stimulus rate. Any other difference (an
+  // earlier file may hold one) is stated without a cause.
+  const limit = num(st.sampleRate) ? safeMaxFrequency(st.sampleRate) : null;
+  const clamp = obj(req) ? [['f1', 'from'], ['f2', 'up to']].filter(([k]) => num(req[k])
+    && num(st[k]) && req[k] !== st[k]).map(([k, w]) => `; requested ${w} ${formatHz(req[k])}, `
+    + `played ${w} ${formatHz(st[k])}${req[k] > st[k] && st[k] === limit ? ` (lowered to 0.95 × `
+      + `the Nyquist frequency of ${formatHz(st.sampleRate)})` : '; the record does not say why'}`)
+    .join('') : '';
   const lv = obj(e.output) && num(e.output.level) ? e.output.level : null;
   const level = lv === null ? `output level ${NR}` : lv > 0 ? `output level digital peak ${
     +lv.toPrecision(3)} (${(20 * Math.log10(lv)).toFixed(1).replace('-', '−')} ${RELATIVE_UNIT})`
@@ -466,7 +473,8 @@ function buildItem(b) {
 
 /** What each result hash version adds to the one before (hash.js resultCanonical). */
 const HASH_ADDS = [['the results'], ['quality', 'calibration', 'input', 'output'],
-  ['the measurement block (runs, startedAt, notes)', 'build'], ['recipe', 'definition']];
+  ['the measurement block (runs, startedAt, sampleRate, notes)', 'build'],
+  ['recipe', 'definition']];
 const words = (l) => (l.length > 1 ? `${l.slice(0, -1).join(', ')} and ${l[l.length - 1]}` : l[0]);
 const hashCovers = (v) => words(HASH_ADDS.slice(0, v).flat());
 const hashLeaves = (v) => words(HASH_ADDS.slice(v).flat());
@@ -477,9 +485,11 @@ const verified = new WeakMap();
 
 /**
  * The result hash recomputed over a stored record in its declared version: { stored, version,
- * actual, equal } or null without a stored hash. A record object is checked once (records are
- * not changed in place: annotate and duplicate make new objects); an injected sha256Hex is
- * never cached.
+ * actual, equal } or null without a stored hash. A record object is checked once. Invariant
+ * the cache relies on: a record is never changed in place (the store, annotate, duplicate and
+ * import all make new objects, and a completed run is immutable, ADR 0040), so a cached check
+ * is reused only for the same object with the same stored hash and version. An injected
+ * sha256Hex is never cached.
  */
 export function hashVerification(e, sha256Hex = null) {
   const p = obj(e) && obj(e.provenance) ? e.provenance : {};
@@ -569,9 +579,12 @@ const IDENTITIES = Object.freeze([
   ['build', (e) => (obj(e.provenance) ? e.provenance.build : null)],
   ['definition', (e) => (obj(e.definition) ? [e.definition.id, e.definition.version,
     e.definition.hash] : null)],
-  ['calibration', (e) => (obj(e.calibration) ? [obj(e.calibration.frequency)
-    ? e.calibration.frequency.id : null, obj(e.calibration.level) ? e.calibration.level.offsetDb
-    : null] : null)],
+  // The calibration as the detail and compare present it (a contradicted claim removed).
+  ['calibration', (e) => {
+    const c = obj(e.calibration) ? withoutContradictedCalibration(e).calibration : null;
+    return c ? [obj(c.frequency) ? c.frequency.id : null, obj(c.level) ? c.level.offsetDb
+      : null] : null;
+  }],
   ['input device', (e) => (obj(e.input) && obj(e.input.device) ? [e.input.device.id,
     e.input.device.label] : null)],
 ]);

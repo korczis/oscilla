@@ -1960,9 +1960,8 @@
                 <input class="osc-number osc-x-ev-hz" id="osc-x-ev-hz" data-osc="exp.evidenceHz" type="number"
                   min="1" step="any" inputmode="decimal"
                   aria-describedby="osc-x-ev-hz-err"
-                  :aria-invalid="String(!!(exps.detail && exps.detail.evidence && exps.detail.evidence.hzError))"
                   :value="exps.detail && exps.detail.evidence ? exps.detail.evidence.hz : ''"
-                  @change="experimentsEvidenceAt($event.target.value) || ($event.target.value = exps.detail.evidence.hz)">
+                  @change="experimentsEvidenceAt($event.target.value)">
               </div>
               <p class="osc-pp-error" id="osc-x-ev-hz-err" role="status" data-osc="exp.evidenceHzError"
                 x-text="exps.detail && exps.detail.evidence && exps.detail.evidence.hzError ? exps.detail.evidence.hzError : ''"></p>

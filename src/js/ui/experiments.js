@@ -477,8 +477,9 @@ export function createExperimentsUi() {
     },
     /**
      * The evidence lineage at another frequency (Hz) of the open run. An entry that is not a
-     * frequency above 0 Hz is refused with a message (hzError) and the last point kept; returns
-     * the point, or null when refused (the field then shows the kept frequency again).
+     * frequency above 0 Hz is refused with a message (hzError, in the field's status region) and
+     * the last point kept; the field shows the kept frequency again, so it is never left marked
+     * invalid while it holds a valid value. Returns the point, or null.
      */
     experimentsEvidenceAt(value) {
       const ev = this.exps.detail && this.exps.detail.evidence;
@@ -486,8 +487,8 @@ export function createExperimentsUi() {
       if (!e || !ev) return null;
       const hz = typeof value === 'string' && value.trim() === '' ? NaN : Number(value);
       if (!Number.isFinite(hz) || hz <= 0) {
-        this.exps.detail.evidence = { ...ev, hzError: 'Enter a frequency above 0 Hz; the value '
-          + `shown is still at ${ev.hz} Hz.` };
+        this.exps.detail.evidence = { ...ev, hzError: 'Enter a frequency above 0 Hz; the lineage '
+          + `still shows ${ev.hz} Hz.` };
         return null;
       }
       const m = e.definition ? matchOf(e.definition) : {};
