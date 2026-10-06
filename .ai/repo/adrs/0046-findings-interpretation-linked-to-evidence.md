@@ -166,6 +166,12 @@ Proposed:
     saved, deleted or imported, so a record replaced in another tab is caught at the next refresh
     of either list. The Experiments refresh also evicts a decoded record whose row changed.
   - A tab that becomes visible again re-reads the list.
+- **Edits from two tabs.** `updatedAt` is an edit's version and always advances (at least 1 ms
+  past the previous one). The dialog records the version it loaded. A save whose stored version
+  differs is refused; `store.putFinding(finding, { expectedUpdatedAt })` checks the same inside
+  its write transaction. The refused form offers "Load the stored version", which loads the
+  stored fields and version and keeps the typed text beside them to copy. A refused draft
+  reopened later loads the stored version first, so it never reopens stale.
 - **Drafts.** Closing the finding dialog without a save (Cancel, Escape or a backdrop click)
   keeps a changed form as a draft. The guard keeps reporting it, the panel offers to continue or
   discard it, and only Discard drops it. A reload still loses it, and the guard says so before
