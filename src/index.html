@@ -1953,6 +1953,38 @@
                 </template>
               </dl>
             </div>
+            <section class="osc-x-evidence" data-osc="exp.evidence" aria-labelledby="osc-x-ev-title"
+              x-show="exps.detail && exps.detail.evidence" style="display: none">
+              <h4 id="osc-x-ev-title">Evidence</h4>
+              <p class="osc-m-hint">Only what this record stores: a field it does not store reads "not recorded".</p>
+              <h5 id="osc-x-ev-value">What produced this value?</h5>
+              <div class="osc-x-ev-at">
+                <label class="osc-label" for="osc-x-ev-hz">Value at frequency (Hz)</label>
+                <input class="osc-number osc-x-ev-hz" id="osc-x-ev-hz" data-osc="exp.evidenceHz" type="number"
+                  min="1" step="any" inputmode="decimal"
+                  aria-describedby="osc-x-ev-hz-err"
+                  :value="exps.detail && exps.detail.evidence ? exps.detail.evidence.hz : ''"
+                  @change="experimentsEvidenceAt($event.target.value)">
+              </div>
+              <p class="osc-pp-error" id="osc-x-ev-hz-err" role="status" data-osc="exp.evidenceHzError"
+                x-text="exps.detail && exps.detail.evidence && exps.detail.evidence.hzError ? exps.detail.evidence.hzError : ''"></p>
+              <ol class="osc-x-ev-list" data-osc="exp.lineage" aria-labelledby="osc-x-ev-value">
+                <template x-for="l in (exps.detail && exps.detail.evidence ? exps.detail.evidence.lineage : [])" :key="l.id">
+                  <li :data-id="l.id"><strong x-text="l.label"></strong>: <span x-text="l.text"></span></li>
+                </template>
+              </ol>
+              <h5 id="osc-x-ev-repeat">Can I repeat this?</h5>
+              <ul class="osc-x-ev-list" data-osc="exp.checklist" aria-labelledby="osc-x-ev-repeat" role="list">
+                <template x-for="c in (exps.detail && exps.detail.evidence ? exps.detail.evidence.checklist : [])" :key="c.id">
+                  <li class="osc-q-reason" :data-id="c.id" :data-state="c.state"
+                    :class="{ recorded: 'osc-q--ok', partial: 'osc-q--warn', missing: 'osc-x-ev-missing' }[c.state]">
+                    <svg class="osc-q-icon" aria-hidden="true"><use :href="{ recorded: '#q-ok', partial: '#q-warn', missing: '#q-fail' }[c.state]"/></svg>
+                    <span><strong x-text="c.label"></strong>: <span x-text="c.stateText + ' (' + c.reason + ')'"></span></span>
+                  </li>
+                </template>
+              </ul>
+              <p class="osc-m-hint">A checklist of what is recorded, not a score.</p>
+            </section>
           </div>
         </section>
 
@@ -1973,6 +2005,7 @@
             </template>
           </ul>
           <p class="osc-m-summary" data-osc="exp.compareSummary" x-text="exps.compare ? exps.compare.summary : ''"></p>
+          <p class="osc-m-summary" data-osc="exp.evidenceDiff" x-text="exps.compare ? exps.compare.evidenceDiff : ''"></p>
           <div class="osc-warning osc-x-warn" role="note" x-show="exps.compare && exps.compare.warnings.length" style="display: none">
             <svg aria-hidden="true"><use href="#q-warn"/></svg>
             <p x-text="exps.compare ? 'Not equivalent: ' + exps.compare.warnings.join(' ') : ''"></p>
@@ -2410,11 +2443,18 @@
             <span>One edit followed from intent to the running graph: applied, stored or refused (V3.8)</span>
             <em>Released</em>
           </li>
-          <li data-state="current" data-osc-release="3.9">
+          <li data-state="done" data-osc-release="3.9">
             <span class="osc-about-step osc-num">13 · <time data-osc-commit="8c22376"
               datetime="2026-10-06T00:02:15+02:00">00:02</time></span>
             <strong>Definitions</strong>
             <span>A run is executed from a versioned definition and records which version it ran (V3.9)</span>
+            <em>Released</em>
+          </li>
+          <li data-state="current" data-osc-release="3.10">
+            <span class="osc-about-step osc-num">14 · <time data-osc-commit="7fc5001"
+              datetime="2026-10-06T06:11:53+02:00">06:11</time></span>
+            <strong>Lineage</strong>
+            <span>A run states what produced each value and what repeating it would need, from what it stored (V3.10)</span>
             <em>Current</em>
           </li>
         </ol>
