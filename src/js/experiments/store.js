@@ -13,8 +13,8 @@
 //             listDefinitions() -> { definitions, unreadable: [{ id, reason }] },
 //             getDefinition(id), putDefinition(definition),
 //             listFindings() -> { findings, unreadable: [{ id, reason }] }, getFinding(id),
-//             putFinding(finding, { expectedUpdatedAt }), putFindings([finding]) -> { stored, same },
-//             deleteFinding(id) }
+//             putFinding(finding, { expectedUpdatedAt }),
+//             putFindings([finding]) -> { stored, same }, deleteFinding(id) }
 //   memory Store only: held() -> { experiments, definitions, studio, findings } (records it
 //   holds, which a reload discards: the unsaved-work guard reports them)
 //

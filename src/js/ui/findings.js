@@ -260,7 +260,7 @@ export function createFindingsUi() {
     },
     /** Backlinks of run `id`: the findings citing it, with how. */
     findingsBacklinks(id) {
-      return findingsCiting(this.fnd.all, id).map(({ finding, how }) => ({ id: finding.id,
+      return findingsCiting(this.fnd.all, id, nameOf).map(({ finding, how }) => ({ id: finding.id,
         statement: finding.statement, statusText: STATUS_TEXT[finding.status],
         how: how.join('; ') }));
     },
@@ -380,8 +380,21 @@ export function createFindingsUi() {
       this.openModal(DELETE_DIALOG);
     },
     async findingsDelete() {
+      const at = this.fnd.rows.findIndex((r) => r.id === this.fnd.deleteId);
       const ok = await this.findingsDeleteNow(this.fnd.deleteId);
-      if (ok) this.closeModal(DELETE_DIALOG);
+      if (!ok) return ok;
+      this.closeModal(DELETE_DIALOG);
+      // Focus goes to the finding now in that place (its Edit), else the one before it, else
+      // "New finding"; never back to the page start (the deleted row's button is gone).
+      if (typeof document !== 'undefined') {
+        setTimeout(() => {
+          const rows = document.querySelectorAll('[data-osc="fnd.row"]');
+          const row = rows[Math.min(Math.max(at, 0), rows.length - 1)];
+          const target = row ? row.querySelector('[data-osc="fnd.edit"]')
+            : document.querySelector('[data-osc="fnd.new"]');
+          if (target) target.focus();
+        }, 60);
+      }
       return ok;
     },
     /** Delete finding `id` (the runs it cites are not touched). */

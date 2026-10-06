@@ -137,6 +137,9 @@
 //   findings-draft          (review 1 of #149, item 5) a typed draft survives Escape and a
 //                           backdrop click: the guard still reports it, the panel offers to
 //                           continue it, and only Discard drops it
+//   findings-delete-focus   (review 1 of #149, item 12) a finding deleted with the keyboard moves
+//                           focus to the next finding's Edit, or to "New finding" when none is
+//                           left; the status reads "Your judgement: …"
 //   calibration-export      (V315) Export CSV and Export JSON of the loaded profile download
 //                           deterministic files named after the profile and its id, and both
 //                           re-import (same id, name, convention); a correction profile (chosen
@@ -2260,6 +2263,59 @@ function defineChecks(fixtures) {
       continue: res.continued.open && res.continued.value === 'a long careful draft',
       backdrop: kept(res.backdrop),
       discard: !res.discarded.open && !res.discarded.lost.length && !res.discarded.note,
+    }) };
+  });
+
+  // Review 1 of #149, item 12: after a finding is deleted with the keyboard, focus moves to the
+  // next finding (its Edit) or, with none left, to "New finding"; never to the page start.
+  def('findings-delete-focus', async ({ page }) => {
+    await H.workspace(page, 'experiments');
+    const stored = await page.evaluate(async () => !!(await window.OSCILLA.experiments.store()
+      .get('fixture-a')));
+    if (!stored) {
+      await page.evaluate((t) => window.OSCILLA.app.experimentsImportText(t), fixtures.a.json);
+    }
+    await page.evaluate(async () => {
+      const a = window.OSCILLA.app;
+      for (const st of ['first finding', 'second finding']) {
+        await a.findingsAskRun('fixture-a');
+        a.fnd.form.statement = st;
+        await a.findingsSave();
+      }
+    });
+    const res = {};
+    res.rows = await H.until(() => page.evaluate(() => document.querySelectorAll(
+      '[data-osc="fnd.row"]').length), (n) => n === 2, 5000);
+    res.judgement = await page.evaluate(() => document.querySelector('[data-osc="fnd.row"]')
+      .textContent.replace(/\s+/g, ' ').includes('Your judgement: Observation'));
+    const del = async () => {
+      await page.focus('[data-osc="fnd.row"] [data-osc="fnd.delete"]');
+      await page.keyboard.press('Enter');
+      await H.until(() => page.evaluate(() => document.getElementById('osc-dlg-finding-delete')
+        .open), Boolean, 3000);
+      await page.focus('[data-osc="fnd.deleteConfirm"]');
+      await page.keyboard.press('Enter');
+    };
+    const focus = () => page.evaluate(() => {
+      const e = document.activeElement;
+      const row = e && e.closest('[data-osc="fnd.row"]');
+      return { osc: e && e.dataset ? e.dataset.osc || e.id || e.tagName : null,
+        row: row ? row.querySelector('h4').textContent : null,
+        rows: document.querySelectorAll('[data-osc="fnd.row"]').length };
+    });
+    res.deleted = await page.evaluate(() => document.querySelector('[data-osc="fnd.row"] h4')
+      .textContent);
+    await del();
+    res.afterFirst = await H.until(focus, (f) => f.rows === 1 && f.osc === 'fnd.edit', 3000);
+    await del();
+    res.afterLast = await H.until(focus, (f) => f.rows === 0 && f.osc === 'fnd.new', 3000);
+    await page.evaluate(() => { window.OSCILLA.app.alerts = []; });
+    return { ...res, ...H.verdict({
+      setup: res.rows === 2,
+      judgement: res.judgement === true,
+      next: res.afterFirst.osc === 'fnd.edit' && !!res.afterFirst.row
+        && res.afterFirst.row !== res.deleted,
+      none: res.afterLast.osc === 'fnd.new',
     }) };
   });
 

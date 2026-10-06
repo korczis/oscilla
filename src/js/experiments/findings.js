@@ -356,8 +356,9 @@ export function refText(ref, nameOf = () => null, { storedPoint = false } = {}) 
 /** Does `finding` cite run `id`? */
 export const findingCites = (finding, id) => citedRunIds(finding).includes(id);
 
-/** Backlinks: each finding citing run `id`, with how it cites it. */
-export function findingsCiting(findings, id) {
+/** Backlinks: each finding citing run `id`, with how it cites it (other runs by `nameOf`). */
+export function findingsCiting(findings, id, nameOf = () => null) {
+  const nm = (x) => (nameOf(x) ? `"${nameOf(x)}"` : x);
   const out = [];
   for (const finding of findings) {
     const how = [];
@@ -366,7 +367,7 @@ export function findingsCiting(findings, id) {
       else if (ref.kind === 'value' && ref.experimentId === id) {
         how.push(`its value at ${exactHzText(ref.at.hz)}`);
       } else if (ref.kind === 'compare' && (ref.a === id || ref.b === id)) {
-        how.push(`a comparison with ${ref.a === id ? ref.b : ref.a}`);
+        how.push(`a comparison with ${nm(ref.a === id ? ref.b : ref.a)}`);
       }
     }
     if (how.length) out.push({ finding, how });

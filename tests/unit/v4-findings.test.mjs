@@ -471,7 +471,7 @@ test('the workspace: record from a run, link a compare, support it, see backlink
   assert.equal(cmp.fnd.rows[0].statusText, F.STATUS_TEXT.supported);
   assert.deepEqual(cmp.fnd.rows[0].evidence.map((e) => e.state), ['ok', 'ok']);
   assert.deepEqual(cmp.findingsBacklinks('fixture-b').map((x) => x.how), [
-    'a comparison with fixture-a']);
+    `a comparison with "${a.name}"`]);
   assert.equal(cmp.findingsCiting('fixture-a'), 1);
   // Delete the cited run: the dialog says one finding cites it; the reference reads missing.
   cmp.experimentsAskDelete({ id: 'fixture-b', name: 'B' });
@@ -778,4 +778,17 @@ test('review 1.11: one import rule: importPlan is the store\'s verdict, and the 
   assert.deepEqual(cmp.fnd.importErrors, ['f-c1 is already stored with different content; '
     + 'nothing was imported']);
   assert.equal(await (await cmp.experimentsStore()).getFinding('f-c2'), null);
+});
+
+test('review 1.12: backlinks name the runs; the status reads as the user\'s judgement', async () => {
+  const b = ok(raw({ id: 'f-b', evidence: [{ kind: 'compare', a: 'run-b', b: 'run-a' }],
+    runs: both }));
+  assert.deepEqual(F.findingsCiting([b], 'run-a', (id) => ({ 'run-b': 'B' }[id] || null))
+    .map((x) => x.how), [['a comparison with "B"']]);
+  assert.deepEqual(F.findingsCiting([b], 'run-a').map((x) => x.how),
+    [['a comparison with run-b']], 'without names, the id (unchanged API)');
+  const html = readFileSync(path.join(ROOT, 'src/index.html'), 'utf8');
+  assert.match(html, /Your judgement: <span[^>]*data-osc="fnd\.status"/);
+  assert.match(html, /<label class="osc-label" for="osc-fnd-status">Status \(your judgement\)<\/label>/);
+  assert.match(html, /x-text="b\.statusText \+ ' \(your judgement\)'"/);
 });
