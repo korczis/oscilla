@@ -168,8 +168,8 @@ test('lineage of a derived, uncalibrated TEST CONTEXT run: every link from a sto
     const { runEvidence } = await ev();
     const { a } = await fx();
     const r = runEvidence(a.experiment, { hz: 1000 });
-    assert.deepEqual(ids(r.lineage), ['result', 'analysis', 'capture', 'calibration', 'run',
-      'definition', 'build'], 'no Studio link: the run has no Studio block');
+    assert.deepEqual(ids(r.lineage), ['result', 'analysis', 'capture', 'stimulus', 'calibration',
+      'run', 'definition', 'build'], 'no Studio link: the run has no Studio block');
     const t = (id) => byId(r.lineage, id).text;
     assert.match(t('result'), /dB re unity digital transfer/);
     assert.match(t('analysis'), /oscilla\.transfer\.v3 \(transfer, version 3\)/);
@@ -376,7 +376,7 @@ test('checklist: the result hash is verified by recomputing it over the stored r
     assert.equal(item(tampered).stateText, 'does not verify');
     const v1 = restamp(clone(a.experiment), 1);
     assert.equal(item(v1).state, 'partial');
-    assert.match(item(v1).reason, /version 1 covers the results only/);
+    assert.match(item(v1).reason, /version 1 covers the results; it leaves out quality/);
     // An injected SHA-256 is used (the check is the recomputation, not the stored field).
     let calls = 0;
     const counted = () => { calls += 1; return '0'.repeat(64); };
@@ -463,14 +463,15 @@ test('evidence differences between runs list only the items whose state differs'
   const ab = evidenceDifferences([reproducibilityChecklist(a.experiment),
     reproducibilityChecklist(b.experiment)]);
   assert.deepEqual(ab, []);
-  assert.equal(evidenceDifferencesText(ab, ['A', 'B']), 'Evidence differences: none (every '
-    + 'checklist item has the same state in each run).');
+  assert.equal(evidenceDifferencesText(ab, ['A', 'B']), 'Checklist differences (states only): '
+    + 'none. No difference in the recorded build, definition, calibration or input device.');
   const ao = evidenceDifferences([reproducibilityChecklist(a.experiment),
     reproducibilityChecklist(older.experiment)]);
   assert.deepEqual(ao.map((d) => d.id), ['calibration']);
   assert.deepEqual(ao[0].states, ['recorded', 'partial']);
-  assert.equal(evidenceDifferencesText(ao, ['A', 'B']), 'Evidence differences: Calibration '
-    + 'identity recorded (A recorded, B partial).');
+  assert.equal(evidenceDifferencesText(ao, ['A', 'B'], ['calibration']), 'Checklist differences '
+    + '(states only): Calibration identity recorded (A recorded, B partial). Recorded identities '
+    + 'that differ: calibration.');
 });
 
 // ---------------------------------------------------------------- the copy
@@ -526,6 +527,179 @@ test('the Experiments detail carries the evidence; compare carries its differenc
   assert.ok(cmp.exps.detail.evidence.lineage.find((l) => l.id === 'calibration').text
     .startsWith('uncalibrated (the stored claim is contradicted)'));
   await cmp.experimentsCompare(['fixture-a', 'fixture-older']);
-  assert.equal(cmp.exps.compare.evidenceDiff, 'Evidence differences: Calibration identity '
-    + 'recorded (A recorded, B partial).');
+  assert.equal(cmp.exps.compare.evidenceDiff, 'Checklist differences (states only): Calibration '
+    + 'identity recorded (A recorded, B partial). Recorded identities that differ: calibration.');
 });
+
+// ---------------------------------------------------------------- review of #129
+
+/** A run measured with profile A, its record edited as an earlier build could save it. */
+const contradicted = async (edit) => {
+  const withA = await mic({ frequency: PROFILE, level: null });
+  return restamp(edit(withA));
+};
+
+test('review E1: a profile applied but not named is never called a calibration not applied',
+  async () => {
+    const { evidenceLineage, reproducibilityChecklist } = await ev();
+    const e = await contradicted((x) => ({ ...x, calibration: { ...x.calibration,
+      frequency: null } }));
+    const cal = byId(evidenceLineage(e), 'calibration').text;
+    assert.match(cal, /^frequency profile not recorded; no level calibration; /);
+    assert.match(cal, /calibration\.frequency: calibration claim contradicted by the record's /);
+    assert.match(cal, /it names no frequency profile, but the results were frequency-corrected/);
+    assert.ok(!/names a calibration the record's own results say was not applied/.test(cal), cal);
+    const item = byId(reproducibilityChecklist(e), 'calibration');
+    assert.equal(item.state, 'partial');
+    assert.match(item.reason, /it names no frequency profile, but the results were /);
+  });
+
+test('review E1: a profile that holds is kept beside a contradicted level calibration',
+  async () => {
+    const { evidenceLineage, reproducibilityChecklist, CONTRADICTED_TEXT } = await ev();
+    const lv = schema.normalizeCalibration({ level: level(BINDING) }).level;
+    const e = await contradicted((x) => ({ ...x, calibration: { ...x.calibration, level: lv } }));
+    const cal = byId(evidenceLineage(e), 'calibration').text;
+    assert.ok(!cal.startsWith(CONTRADICTED_TEXT), cal);
+    assert.match(cal, /^frequency profile "Mic A" \(id /);
+    assert.match(cal, /level: uncalibrated \(the stored claim is contradicted\)/);
+    assert.match(cal, /calibration\.level: .*levelCalibrated false/);
+    assert.ok(!/offset \+124/.test(cal), 'the contradicted offset is not presented as applied');
+    const item = byId(reproducibilityChecklist(e), 'calibration');
+    assert.equal(item.state, 'partial');
+    assert.match(item.reason, /frequency profile id [0-9a-f]{12}… holds/);
+    assert.match(item.reason, /calibration\.level: .*levelCalibrated false/);
+  });
+
+test('review E2: the hash item names what its version covers and what no hash covers',
+  async () => {
+    const { reproducibilityChecklist } = await ev();
+    const { a } = await fx();
+    const item = (x) => byId(reproducibilityChecklist(x), 'hash');
+    const v4 = item(a.experiment);
+    assert.equal(v4.stateText, 'verified');
+    assert.match(v4.reason, /version 4 covers the results, quality, calibration, input, output, /);
+    assert.match(v4.reason, /the measurement block \(runs, startedAt, notes\), build, recipe and /);
+    assert.match(v4.reason, /not covered by any result hash: the algorithm ids, the environment /);
+    assert.match(v4.reason, /notes and the lineage \(created time, repeat and duplicate links\)/);
+    // An edited algorithm id still verifies, and the items say why.
+    const doc = JSON.parse(schema.experimentToJson(a.experiment));
+    doc.algorithms.ir = doc.algorithms.transfer;
+    const edited = validateExperiment(JSON.stringify(doc), OPTS);
+    assert.ok(edited.ok);
+    assert.equal(item(edited.experiment).stateText, 'verified');
+    assert.match(byId(reproducibilityChecklist(edited.experiment), 'algorithms').reason,
+      /not covered by the result hash/);
+    const v2 = item(restamp(clone(a.experiment), 2));
+    assert.match(v2.reason, /; it leaves out the measurement block \(runs, startedAt, notes\)/);
+    assert.match(v2.reason, /, build, recipe and definition/);
+    assert.match(item(restamp(clone(a.experiment), 3)).reason,
+      /; it leaves out recipe and definition;/);
+  });
+
+test('review E3: an invalid frequency is refused with a message and the last point kept',
+  async () => {
+    const fake = fakeIndexedDB();
+    globalThis.indexedDB = fake.indexedDB;
+    const cmp = {};
+    for (const part of [createMeasureUi({ engine: { init() {}, activeNodeCount: 0 },
+      stopPlayback() {}, loopback: true, build: null }), createExperimentsUi()]) {
+      Object.defineProperties(cmp, Object.getOwnPropertyDescriptors(part));
+    }
+    Object.assign(cmp, { notify() {}, $nextTick: (f) => f && f(), openModal() {},
+      closeModal() {}, setWorkspace() {} });
+    cmp.measureInit();
+    cmp.experimentsInit();
+    const { a } = await fx();
+    await cmp.experimentsImportText(a.json);
+    await cmp.experimentsOpen('fixture-a');
+    assert.equal(cmp.exps.detail.evidence.hzError, null);
+    for (const bad of [0, -5, '', 'abc']) {
+      assert.equal(cmp.experimentsEvidenceAt(bad), null);
+      assert.equal(cmp.exps.detail.evidence.hz, 1000);
+      assert.equal(cmp.exps.detail.evidence.hzError, 'Enter a frequency above 0 Hz; the value '
+        + 'shown is still at 1000 Hz.');
+    }
+    cmp.experimentsEvidenceAt(2000);
+    assert.equal(cmp.exps.detail.evidence.hzError, null);
+  });
+
+test('review E4: a grid that starts at 0 Hz defaults to its first positive point', async () => {
+  const { defaultEvidenceHz, resultPoint } = await ev();
+  const { a } = await fx();
+  const e = { ...a.experiment, quality: null, results: { ...a.experiment.results,
+    aggregate: undefined, transfer: { ...a.experiment.results.transfer,
+      frequencies: Float64Array.from([0, 100, 200, 400, 800]),
+      magnitudeDb: Float64Array.from([1, 2, 3, 4, 5]), derivedFrom: undefined } } };
+  assert.equal(defaultEvidenceHz(e), 282.8);
+  const p = resultPoint(e, null);
+  assert.equal(p.hz, 200);
+  assert.equal(resultPoint(e, 1).hz, 100, 'the 0 Hz point is never the nearest');
+  assert.ok(!/at 0 Hz/.test(p.text));
+});
+
+test('review E5: a TEST CONTEXT label is not counted as environment notes', async () => {
+  const { reproducibilityChecklist } = await ev();
+  const { a } = await fx();
+  const label = a.experiment.measurement.runs[0].testContext.label;
+  const item = byId(reproducibilityChecklist(a.experiment), 'environment');
+  assert.equal(item.state, 'recorded');
+  assert.ok(!item.reason.includes('TEST CONTEXT'), item.reason);
+  const only = clone(a.experiment);
+  only.environment.notes = `${label}.`;
+  const none = byId(reproducibilityChecklist(only), 'environment');
+  assert.equal(none.state, 'missing');
+  assert.match(none.reason, /only the TEST CONTEXT label/);
+});
+
+test('review E6: compare says it compares states, and names differing recorded identities',
+  async () => {
+    const { reproducibilityChecklist, evidenceDifferences, evidenceDifferencesText,
+      identityDifferences } = await ev();
+    const { a, b, c } = await fx();
+    const states = (x, y) => evidenceDifferences([reproducibilityChecklist(x),
+      reproducibilityChecklist(y)]);
+    assert.deepEqual(identityDifferences([a.experiment, b.experiment]), []);
+    assert.equal(evidenceDifferencesText(states(a.experiment, b.experiment), ['A', 'B'],
+      identityDifferences([a.experiment, b.experiment])), 'Checklist differences (states only): '
+      + 'none. No difference in the recorded build, definition, calibration or input device.');
+    const base = clone(c.experiment);
+    const other = restamp({ ...base, provenance: { ...base.provenance,
+      build: { ...base.provenance.build, version: '0.0.1-other' } } });
+    assert.deepEqual(identityDifferences([a.experiment, other]), ['build', 'definition']);
+    assert.equal(evidenceDifferencesText(states(a.experiment, other), ['A', 'B'],
+      identityDifferences([a.experiment, other])), 'Checklist differences (states only): none. '
+      + 'Recorded identities that differ: build, definition.');
+  });
+
+test('review: the hash is recomputed once per record object, not on every view', async () => {
+  const { hashVerification } = await ev();
+  const { a } = await fx();
+  const first = hashVerification(a.experiment);
+  assert.equal(first.equal, true);
+  assert.equal(hashVerification(a.experiment), first, 'the same record reuses its check');
+  const tampered = clone(a.experiment);
+  tampered.environment.notes = 'x';
+  tampered.measurement.startedAt = '2026-10-03T00:00:00.000Z';
+  assert.equal(hashVerification(tampered).equal, false, 'another object is checked again');
+});
+
+test('review: the lineage names the stimulus, the clamp, the output level and engine notes',
+  async () => {
+    const { evidenceLineage } = await ev();
+    const { a } = await fx();
+    const l = evidenceLineage(a.experiment);
+    assert.deepEqual(ids(l), ['result', 'analysis', 'capture', 'stimulus', 'calibration', 'run',
+      'definition', 'build']);
+    const st = byId(l, 'stimulus').text;
+    assert.match(st, /^20 Hz → 20 kHz log sweep, 2 s/);
+    assert.match(st, /output level digital peak 0\.125 \(−18\.1 dB relative \(dBFS-like\)\)/);
+    const clamped = clone(a.experiment);
+    clamped.recipe = { ...clamped.recipe, requested: { f1: 20, f2: 30000 } };
+    assert.match(byId(evidenceLineage(clamped), 'stimulus').text,
+      /requested up to 30 kHz, played up to 20 kHz \(0\.95 × the Nyquist frequency\)/);
+    const noted = clone(a.experiment);
+    noted.measurement.notes = ['Input processing may have been applied by browser/device.'];
+    assert.match(byId(evidenceLineage(noted), 'capture').text,
+      /engine note: Input processing may have been applied by browser\/device\./);
+  });
