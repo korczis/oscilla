@@ -278,7 +278,8 @@ test('run: the frequency profile by id (loaded or not) and the build (this one o
 // ---------------------------------------------------------------- run: downstream
 
 test('run: the findings citing it, the runs repeating or duplicating it', () => {
-  const a = run('a');
+  const a = run('a', { results: { transfer: { frequencies: [500, 1000, 2000],
+    magnitudeDb: [0, -1, -3] } } });
   const rep = run('rep', { provenance: { repeatOf: 'a', resultHash: H('2') } });
   const dup = run('dup', { provenance: { duplicateOf: 'a' } });
   const f1 = finding('f-1', [{ kind: 'run', experimentId: 'a' },
@@ -294,8 +295,20 @@ test('run: the findings citing it, the runs repeating or duplicating it', () => 
     ['f-2', 'mismatch']]);
   assert.equal(cites[0].field, 'evidence[0], evidence[1] (identity: runs[0].resultHash)');
   assert.equal(cites[0].fieldOf, 'that finding');
-  assert.match(cites[0].text, /this run; its value at 1 kHz/);
+  assert.match(cites[0].text, /this run; its value at 1000 Hz/);
   assert.match(cites[1].text, /different record/);
+  // A value at a frequency the run does not store: findingIssues's not-a-grid-point, mismatch.
+  const off = finding('f-3', [{ kind: 'value', experimentId: 'a', at: { hz: 1001 } }],
+    [{ experimentId: 'a', resultHash: H('1') }]);
+  const o = one(C.connectionsOf({ kind: 'run', record: a }, index([a], { findings: [off] }))
+    .downstream, 'cited-by');
+  assert.equal(o.state, 'mismatch');
+  assert.match(o.text, /1001 Hz is not a frequency the run stores/);
+  // Cited without a result hash: findingIssues's unverifiable-identity.
+  const bare = finding('f-4', [{ kind: 'run', experimentId: 'a' }],
+    [{ experimentId: 'a', resultHash: null }]);
+  assert.equal(one(C.connectionsOf({ kind: 'run', record: a }, index([a],
+    { findings: [bare] })).downstream, 'cited-by').state, 'unverifiable');
   assert.equal(cites[0].href, '#m=experiments&finding=f-1');
   const rb = one(out.downstream, 'repeated-by');
   assert.deepEqual([rb.to, rb.state], [{ kind: 'run', id: 'rep' }, 'unverifiable']);
@@ -355,7 +368,7 @@ test('finding: each run it cites, by the identity it recorded', () => {
     ['gone', 'evidence[2].experimentId (identity: runs[2].resultHash)', 'missing'],
     ['def-x', 'evidence[3].experimentId (identity: runs[3].resultHash)', 'mismatch'],
   ]);
-  assert.match(out.upstream[4].text, /names a stored definition, not a run/);
+  assert.match(out.upstream[4].text, /^does not match: def-x names a definition, not a run/);
   assert.deepEqual(out.downstream, []);
   assert.ok(out.notes.some((n) => /No record stores a reference to a finding/.test(n.text)));
 });
@@ -421,7 +434,7 @@ test('the workspace: a duplicate, a finding and a deleted original, in both dire
     await cmp.experimentsImportText(JSON.stringify(impostor));
     const re = (await cmp.connectionsOfFinding(saved.id)).upstream[0];
     assert.equal(re.state, 'mismatch');
-    assert.match(re.text, /^does not match: a different record is stored under this id/);
+    assert.match(re.text, /^does not match: .*a different record is stored under this id/);
     assert.equal(one((await cmp.connectionsOfRun(dupId)).upstream, 'duplicate-of').state,
       'mismatch');
     assert.equal(JSON.stringify(cmp.cnx), JSON.stringify(JSON.parse(JSON.stringify(cmp.cnx))),

@@ -27,6 +27,7 @@
 // link never loads a project over the open graph).
 
 import { connectionsOf, runLinks, runTargets } from '../experiments/connections.js';
+import { defaultEvidenceHz, storedResponseFrequencies } from '../experiments/evidence.js';
 import { decodeRecordLink } from '../core/url-state-records.js';
 import { createStudioLibrary } from '../studio/library.js';
 import { studioProvenance } from '../studio/provenance.js';
@@ -60,7 +61,8 @@ export function createConnectionsUi() {
     let x;
     try {
       const e = await store.get(row.experimentId);
-      x = e ? { readable: true, reason: null, links: runLinks(e) }
+      x = e ? { readable: true, reason: null, links: runLinks(e),
+        hasResponse: defaultEvidenceHz(e) !== null, frequencies: storedResponseFrequencies(e) }
         : { readable: false, reason: 'it was not found when read', links: null };
     } catch (err) {
       x = { readable: false, reason: err.message || String(err), links: null };
@@ -115,7 +117,9 @@ export function createConnectionsUi() {
       const x = r.links ? ctx.reads.get(rowKey(r)) : await readRun(s, r);
       runs.push({ experimentId: r.experimentId, name: r.name || null, definition: r.definition
         || null, links: r.links || (x && x.links) || null, readable: x ? x.readable : undefined,
-      reason: x ? x.reason : null, sizeBytes: r.sizeBytes, createdAt: r.createdAt });
+      reason: x ? x.reason : null, hasResponse: x ? x.hasResponse : undefined,
+      frequencies: x ? x.frequencies : undefined, sizeBytes: r.sizeBytes,
+      createdAt: r.createdAt });
     }
     let definitions = [];
     let unreadableDefinitions = [];
@@ -154,7 +158,8 @@ export function createConnectionsUi() {
       const r = byId.get(id);
       if (!r || r.readable !== undefined) continue;
       const x = await readRun(store, r);
-      Object.assign(r, { readable: x.readable, reason: x.reason, links: r.links || x.links });
+      Object.assign(r, { readable: x.readable, reason: x.reason, links: r.links || x.links,
+        hasResponse: x.hasResponse, frequencies: x.frequencies });
       read = true;
     }
     if (read) out = connectionsOf(subject, { ...index, runs: index.runs.slice() });

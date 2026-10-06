@@ -31,9 +31,12 @@
 //              | { kind: 'definition', record: definition } | { kind: 'finding', record }
 //              | { kind: 'studio', record: { id, name, studioHash, measured } }
 //     index    what this browser stores, as the caller read it:
-//              { runs: [{ experimentId, name, definition, links, readable, reason }]
+//              { runs: [{ experimentId, name, definition, links, readable, reason,
+//                         hasResponse, frequencies }]
 //                  links null: not known; readable true (the record was read and verified),
-//                  false (it could not be read, `reason` says why), absent (not read),
+//                  false (it could not be read, `reason` says why), absent (not read);
+//                  hasResponse and frequencies (evidence.js storedResponseFrequencies) of a
+//                  record that was read,
 //                definitions: [definition], unreadableDefinitions: [id],
 //                findings: [finding],
 //                studio: { projects: [{ id, name, studioHash, measured }], unreadable: [id] }
@@ -58,7 +61,8 @@
 // caller recomputes it over each project as it loads; this module compares hashes only.
 
 import { storedMatch } from './definition.js';
-import { refRunIds, hzText } from './findings.js';
+import { findingIssues, refRunIds, exactHzText } from './findings.js';
+import { defaultEvidenceHz, storedResponseFrequencies } from './evidence.js';
 import { MEASURED_PATH_VERSION } from './hash.js';
 import { calibrationClaimFindings } from './validate.js';
 import { encodeRecordLink } from '../core/url-state-records.js';
@@ -308,7 +312,7 @@ function citations(f, id) {
   f.evidence.forEach((ref, index) => {
     if (ref.kind === 'run' && ref.experimentId === id) out.push({ index, words: 'this run' });
     else if (ref.kind === 'value' && ref.experimentId === id) {
-      out.push({ index, words: `its value at ${hzText(ref.at.hz)}` });
+      out.push({ index, words: `its value at ${exactHzText(ref.at.hz)}` });
     } else if (ref.kind === 'compare' && (ref.a === id || ref.b === id)) {
       out.push({ index, words: `a comparison with ${short(ref.a === id ? ref.b : ref.a)}` });
     }
@@ -331,23 +335,22 @@ function runDown(e, v, me) {
   const id = e.experimentId;
   const mine = runLinks(e).resultHash;
   const out = [];
+  const lookup = issueLookup(v, e);
   for (const f of v.findings) {
     const how = citations(f, id);
     if (!how.length) continue;
     const j = f.runs.findIndex((r) => r.experimentId === id);
-    const cited = j >= 0 ? f.runs[j].resultHash : null;
+    const issues = findingIssues(f, lookup);
     const words = `it cites ${how.map((x) => x.words).join('; ')}`;
-    let state;
-    if (!cited || !mine) {
-      state = ['unverifiable', `${words}, but ${!mine ? 'this run has no result hash' : 'the '
-        + 'finding records no result hash for it'}, so it cannot be shown to cite this record`];
-    } else if (cited !== mine) {
-      state = ['mismatch', `${words}, but with another result hash: it rests on a different `
-        + 'record stored under this id'];
-    } else state = ['present', `${words}, with this run's result hash`];
+    // The worst state among its references to this run (one connection per finding).
+    const states = how.map((x) => citedState(issues, x.index, id, `${words}, with this run's `
+      + 'result hash'));
+    const rank = ['unreadable', 'mismatch', 'unverifiable', 'missing', 'present'];
+    const [state, why] = states.sort((a, b) => rank.indexOf(a[0]) - rank.indexOf(b[0]))[0];
     out.push(connection('downstream', 'cited-by', 'Cited by', me, { kind: 'finding', id: f.id },
       `${how.map((x) => `evidence[${x.index}]`).join(', ')} (identity: runs[${j}].resultHash)`,
-      'that finding', state, `finding "${statementOf(f)}"`, { href: link('finding', f.id) }));
+      'that finding', [state, state === 'present' ? why : `${words}; ${why}`],
+      `finding "${statementOf(f)}"`, { href: link('finding', f.id) }));
   }
   for (const row of v.runs) {
     if (!obj(row.links) || row.experimentId === id) continue;
@@ -381,25 +384,56 @@ function unknownRunsNote(v, notes, what) {
 
 // ---------------------------------------------------------------- the other subjects
 
+/** findingIssues code -> connection state (see the header). */
+const ISSUE_STATE = Object.freeze({ 'missing-run': 'missing', 'unreadable-run': 'unreadable',
+  'unverifiable-identity': 'unverifiable', 'different-run': 'mismatch', 'wrong-kind': 'mismatch',
+  'no-response': 'mismatch', 'not-a-grid-point': 'mismatch' });
+
+/** The findingIssues lookup over the index (and the subject run, read and verified). */
+function issueLookup(v, self = null) {
+  return (id) => {
+    if (self && id === self.experimentId) {
+      return { kind: 'run', name: self.name || null, readable: true,
+        resultHash: runLinks(self).resultHash, hasResponse: defaultEvidenceHz(self) !== null,
+        frequencies: storedResponseFrequencies(self) };
+    }
+    const row = v.run.get(id);
+    if (!row) return v.defs.has(id) ? { kind: 'definition', name: v.defs.get(id).name } : null;
+    const read = row.readable === true;
+    return { kind: 'run', name: row.name || null,
+      readable: row.readable === false ? false : read ? true : undefined, reason: row.reason,
+      // A row that was not read has no verified hash: "its stored result hash has not been read".
+      resultHash: read && obj(row.links) ? row.links.resultHash : undefined,
+      hasResponse: read ? row.hasResponse : undefined,
+      frequencies: read ? row.frequencies : undefined };
+  };
+}
+
+/** The state of finding `f`'s reference `index` to run `id`, by findingIssues. */
+function citedState(issues, index, id, okWords) {
+  const x = issues.find((i) => i.index === index && i.experimentId === id);
+  if (!x) return ['present', okWords];
+  return [ISSUE_STATE[x.code] || 'mismatch', x.text.replace(/^missing: /, '')];
+}
+
 function findingUp(f, v, me) {
   const out = [];
-  const hashOf = new Map(f.runs.map((r, j) => [r.experimentId, { j, hash: r.resultHash }]));
+  const issues = findingIssues(f, issueLookup(v));
+  const j = (id) => f.runs.findIndex((r) => r.experimentId === id);
   f.evidence.forEach((ref, i) => {
     refRunIds(ref).forEach((id, k) => {
       const key = ref.kind === 'compare' ? (k === 0 ? 'a' : 'b') : 'experimentId';
-      const cite = hashOf.get(id) || { j: -1, hash: null };
-      const label = ref.kind === 'value' ? `Cites the value at ${hzText(ref.at.hz)} of`
+      const label = ref.kind === 'value' ? `Cites the value at ${exactHzText(ref.at.hz)} of`
         : ref.kind === 'compare' ? `Cites a comparison (${k === 0 ? 'A' : 'B'}) with` : 'Cites';
-      const args = ['upstream', 'cites', label, me, { kind: 'run', id },
-        `evidence[${i}].${key} (identity: runs[${cite.j}].resultHash)`, 'this finding'];
       const row = v.run.get(id) || null;
-      if (!row && v.defs.has(id)) {
-        out.push(connection(...args, ['mismatch', 'this id names a stored definition, not a run'],
-          defName(v.defs.get(id), id), { href: link('definition', id) }));
-        return;
-      }
-      out.push(connection(...args, runState(row, cite.hash), runName(row, id),
-        { href: link('run', id) }));
+      const isDef = !row && v.defs.has(id);
+      const state = citedState(issues, i, id, ref.kind === 'value' ? 'with the cited result hash, '
+        + 'at a frequency the run stores' : 'with the cited result hash, recomputed when it was '
+        + 'read');
+      out.push(connection('upstream', 'cites', label, me, { kind: 'run', id },
+        `evidence[${i}].${key} (identity: runs[${j(id)}].resultHash)`, 'this finding', state,
+        isDef ? defName(v.defs.get(id), id) : runName(row, id),
+        { href: isDef ? link('definition', id) : link('run', id) }));
     });
   });
   return out;

@@ -2159,8 +2159,8 @@ function defineChecks(fixtures) {
     await page.evaluate(() => { location.hash = '#m=experiments&run=fixture-a'; });
     res.linked = await H.until(state, (x) => x.id === 'fixture-a'
       && x.focus === 'osc-x-detail-title', 5000);
-    res.a = await H.until(() => items(RUN), (x) => x.down && x.down.length === 2 && !x.status,
-      10000);
+    res.a = await H.until(() => items(RUN), (x) => x.shown && x.down && x.down.length === 2
+      && !x.status, 10000);
     // 2. Keyboard: Enter on "Duplicated as" follows the link to the duplicate.
     await page.focus(`${RUN} li[data-relation="duplicated-as"] a`);
     await page.keyboard.press('Enter');
@@ -2263,11 +2263,11 @@ function defineChecks(fixtures) {
       finding: res.finding.up[0] && res.finding.up[0].state === 'present'
         && /^Cites run "TEST CONTEXT · synthetic A/.test(res.finding.up[0].text)
         && res.findingFocus === true,
-      impostor: /^Cites run "IMPOSTOR under fixture-a" — does not match: a different record/
+      impostor: /^Cites run "IMPOSTOR under fixture-a" — does not match: .*a different record/
         .test((res.impostorFinding.up || [{}])[0].text || '')
         && by(res.impostorDup.up, 'duplicate-of')[0].state === 'mismatch',
       corrupt: res.storeKind !== 'indexeddb' || (res.corrupt.up && res.corrupt.up[0].state
-        === 'unreadable' && /— unreadable: a record is stored under this id, but it cannot be read/
+        === 'unreadable' && /— unreadable: run .* is stored here but cannot be read/
         .test(res.corrupt.up[0].text)),
       narrow: res.narrow.fits === true,
     }) };

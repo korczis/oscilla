@@ -84,6 +84,13 @@ Proposed:
   - *unreadable*: a record is stored under the id, but it fails validation or its result hash
     does not verify.
 
+  Between a finding and the runs it cites, the states are not derived a second time: they are
+  `findings.js` `findingIssues` (ADR 0046, after review 1 of #149) mapped one to one. No issue
+  is *stored here*, `missing-run` is *missing*, `unreadable-run` *unreadable*,
+  `unverifiable-identity` *not verifiable*, and `different-run`, `wrong-kind`, `no-response` and
+  `not-a-grid-point` *does not match*, each with the issue's own words. The findings panel and
+  the connected records therefore never disagree about one reference.
+
   Each state is a word at the start of the sentence, and a state other than *stored here* also
   has a border, so colour is never the only signal.
 - **The connections implemented, each with its field:**
@@ -97,11 +104,11 @@ Proposed:
   | run | measured path held by a Studio project (up) | `studio.measured.hash` | a stored project's measured path, recomputed by `measuredPath` and `measuredPathHash` in the same version, has that hash (only for projects whose whole graph differs) |
   | run | frequency profile named (up) | `calibration.frequency.id` | the profile loaded in Measure has that id (the SHA-256 of its points) |
   | run | made by build (up) | `provenance.build` | the running build has that version and source digest (and artifact SHA-256 when both are stamped) |
-  | run | cited by finding (down) | the finding's `evidence[i]` with `runs[j].resultHash` | the finding's recorded hash equals the run's |
+  | run | cited by finding (down) | the finding's `evidence[i]` with `runs[j].resultHash` | `findingIssues` reports nothing for that reference (the recorded hash equals the run's; a value names a stored grid point) |
   | run | repeated by (down) | the repeat's `provenance.repeatOf` | never: *not verifiable*, as above |
   | run | duplicated as (down) | the copy's `provenance.duplicateOf` | equal result hashes |
   | definition | executed by run (down) | the run's `definition` | `storedMatch` is `match` |
-  | finding | cites run (up), per run id of each reference (a, b of a comparison) | `evidence[i]` with `runs[j].resultHash` | the stored run's recomputed hash equals the recorded one |
+  | finding | cites run (up), per run id of each reference (a, b of a comparison) | `evidence[i]` with `runs[j].resultHash` | `findingIssues` reports nothing for that reference |
   | Studio project | measured from this graph, or its measured path, by run (down) | the run's `studio.studioHash` / `studio.measured.hash` | equal recomputed hashes |
 
   The Studio connection is a stored relation because a run stores the hashes of the graph it
