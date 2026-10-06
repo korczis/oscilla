@@ -1,0 +1,525 @@
+// Findings (ADR 0046): a user's interpretive statement linked to the evidence it rests on, kept
+// apart from measurement truth. A measurement is what was observed or computed; an observation is
+// what the user recorded; a finding is an interpretation linked to evidence.
+//
+//   - validation: categorical status only, typed evidence references, evidence required for
+//     supported / contradicted, the identity (id + result hash) of each cited run, unsafe input
+//     (prototype pollution, HTML markup, control and bidirectional characters, sizes) refused;
+//   - integrity: findingIssues names a missing (deleted, or never stored here) run, a reference
+//     to something that is not a run, a different record under a cited id, a value reference to
+//     a run without a stored response, and a claimed status none of whose evidence is here;
+//   - the store: the findings object store (DB version 4) in memory and IndexedDB, an atomic
+//     import, deletion of a cited run that never touches a finding, and the memory observer;
+//   - export / import: the file round-trips with each cited run's id and result hash, a newer
+//     schema is refused clearly, and one bad finding refuses the whole file;
+//   - the workspace adapter: backlinks, the delete warning, the unsaved draft and the memory
+//     fallback reported to the unsaved-work guard (ADR 0045).
+//   node --test tests/unit/v4-findings.test.mjs
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+import * as F from '../../src/js/experiments/findings.js';
+import {
+  DB_VERSION, FINDINGS, ExperimentStoreError, createMemoryStore, observeMemoryStore,
+  openExperimentStore, upgradeExperimentDb,
+} from '../../src/js/experiments/store.js';
+import { KNOWN_ALGORITHM_IDS } from '../../src/js/measurement/algorithms.js';
+import { createExperimentsUi } from '../../src/js/ui/experiments.js';
+import { createFindingsUi } from '../../src/js/ui/findings.js';
+import { buildFixtures, NOW } from '../browser/fixtures/v3-experiments.mjs';
+import { fakeIndexedDB } from './fixtures/fake-indexeddb.mjs';
+
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
+const OPTS = { knownAlgorithms: KNOWN_ALGORITHM_IDS };
+const LATER = '2026-10-02T11:00:00.000Z';
+const H1 = 'a'.repeat(64);
+const H2 = 'b'.repeat(64);
+
+let fixtures;
+const fx = async () => {
+  fixtures = fixtures || await buildFixtures();
+  return fixtures;
+};
+
+/** A valid finding as plain JSON, with overrides. */
+function raw(over = {}) {
+  return {
+    kind: F.FINDING_KIND, schemaVersion: F.FINDING_SCHEMA_VERSION, id: 'f-1',
+    statement: 'The response falls above 6 kHz.', status: 'observation',
+    evidence: [{ kind: 'run', experimentId: 'run-a' }],
+    runs: [{ experimentId: 'run-a', resultHash: H1 }],
+    notes: null, createdAt: NOW, updatedAt: NOW, ...over,
+  };
+}
+const ok = (v) => {
+  const r = F.validateFinding(v);
+  assert.ok(r.ok, r.ok ? '' : JSON.stringify(r.errors));
+  return r.finding;
+};
+const refused = (v, re, what) => {
+  const r = F.validateFinding(v);
+  assert.equal(r.ok, false, `${what}: refused`);
+  assert.ok(r.errors.some((e) => re.test(`${e.path}: ${e.text}`)),
+    `${what}: ${JSON.stringify(r.errors)}`);
+};
+
+// ---------------------------------------------------------------- validation
+
+test('a finding is categorical: five statuses, no confidence number', () => {
+  assert.deepEqual(F.FINDING_STATUSES, ['observation', 'hypothesis', 'supported',
+    'contradicted', 'inconclusive']);
+  for (const status of F.FINDING_STATUSES) assert.equal(ok(raw({ status })).status, status);
+  refused(raw({ status: 'likely' }), /status: must be one of/, 'an unknown status');
+  refused(raw({ status: 'SUPPORTED' }), /status/, 'case matters');
+  refused({ ...raw(), confidence: 0.8 }, /confidence: unknown field/, 'a confidence number');
+  refused(raw({ status: 3 }), /status/, 'a number as status');
+});
+
+test('supported and contradicted must cite evidence; the others need not', () => {
+  for (const status of ['supported', 'contradicted']) {
+    refused(raw({ status, evidence: [], runs: [] }), /evidence: .*at least one/,
+      `${status} without evidence`);
+    assert.equal(ok(raw({ status })).evidence.length, 1, `${status} with evidence`);
+  }
+  for (const status of ['observation', 'hypothesis', 'inconclusive']) {
+    assert.deepEqual(ok(raw({ status, evidence: [], runs: [] })).evidence, [], status);
+  }
+  assert.deepEqual(F.EVIDENCE_REQUIRED_STATUSES, ['supported', 'contradicted']);
+});
+
+test('evidence references are typed and unambiguous', () => {
+  const compare = { kind: 'compare', a: 'run-a', b: 'run-b' };
+  const value = { kind: 'value', experimentId: 'run-a', at: { hz: 1000 } };
+  const both = [{ experimentId: 'run-a', resultHash: H1 }, { experimentId: 'run-b',
+    resultHash: H2 }];
+  const f = ok(raw({ evidence: [{ kind: 'run', experimentId: 'run-a' }, compare, value],
+    runs: both }));
+  assert.deepEqual(f.evidence.map((r) => r.kind), ['run', 'compare', 'value']);
+  assert.deepEqual(F.citedRunIds(f), ['run-a', 'run-b']);
+  refused(raw({ evidence: [{ kind: 'compare', a: 'run-a', b: 'run-a' }] }),
+    /evidence\[0\].*two different runs/, 'a run compared with itself');
+  refused(raw({ evidence: [{ kind: 'run', experimentId: 'run-a', hz: 3 }] }),
+    /evidence\[0\]\.hz: unknown field/, 'an extra field');
+  refused(raw({ evidence: [{ kind: 'definition', id: 'd' }] }), /evidence\[0\]\.kind/,
+    'an unknown kind');
+  refused(raw({ evidence: [{ kind: 'run' }] }), /evidence\[0\]\.experimentId: missing/,
+    'a reference without its run');
+  refused(raw({ evidence: [{ kind: 'run', experimentId: '../x' }] }),
+    /evidence\[0\]\.experimentId: has an invalid format/, 'an id that is not an id');
+  for (const hz of [0, -1, Infinity, 'x', 200000]) {
+    refused(raw({ evidence: [{ kind: 'value', experimentId: 'run-a', at: { hz } }] }),
+      /evidence\[0\]\.at\.hz/, `value at ${hz}`);
+  }
+  refused(raw({ evidence: [{ kind: 'run', experimentId: 'run-a' }, { kind: 'run',
+    experimentId: 'run-a' }] }), /evidence\[1\]: .*already cited/, 'a duplicate reference');
+  refused(raw({ evidence: Array.from({ length: F.FINDING_LIMITS.evidence + 1 },
+    (_, i) => ({ kind: 'run', experimentId: `r${i}` })), runs: Array.from({ length:
+    F.FINDING_LIMITS.evidence + 1 }, (_, i) => ({ experimentId: `r${i}`, resultHash: null })) }),
+  /evidence: more than/, 'too many references');
+});
+
+test('each cited run carries its identity (id + result hash), exactly once', () => {
+  refused(raw({ runs: [] }), /runs: .*run-a/, 'a cited run without its identity');
+  refused(raw({ runs: [{ experimentId: 'run-a', resultHash: H1 }, { experimentId: 'run-z',
+    resultHash: H1 }] }), /runs\[1\]: .*not cited/, 'an identity of a run that is not cited');
+  refused(raw({ runs: [{ experimentId: 'run-a', resultHash: H1 }, { experimentId: 'run-a',
+    resultHash: H1 }] }), /runs\[1\]/, 'a duplicate identity');
+  refused(raw({ runs: [{ experimentId: 'run-a', resultHash: 'nope' }] }),
+    /runs\[0\]\.resultHash/, 'a hash that is not a SHA-256');
+  assert.equal(ok(raw({ runs: [{ experimentId: 'run-a', resultHash: null }] })).runs[0]
+    .resultHash, null, 'an unstamped run has no hash');
+});
+
+test('unsafe input is refused: prototype pollution, markup, control characters, sizes', () => {
+  const polluted = JSON.parse(`{"kind":"${F.FINDING_KIND}","schemaVersion":1,"id":"f-1",`
+    + '"statement":"x","status":"observation","evidence":[],"runs":[],"notes":null,'
+    + `"createdAt":"${NOW}","updatedAt":"${NOW}","__proto__":{"polluted":true}}`);
+  refused(polluted, /__proto__: unknown field/, '__proto__ on the finding');
+  const ref = JSON.parse('{"kind":"run","experimentId":"run-a","__proto__":{"polluted":1}}');
+  refused(raw({ evidence: [ref] }), /evidence\[0\]\.__proto__: unknown field/,
+    '__proto__ on a reference');
+  refused({ ...raw(), constructor: { prototype: { polluted: 1 } } }, /constructor: unknown/,
+    'constructor');
+  assert.equal(({}).polluted, undefined, 'nothing reached Object.prototype');
+  refused(Object.assign(Object.create({ inherited: 1 }), raw()), /must be an object/,
+    'an object with a foreign prototype');
+  for (const s of ['<script>alert(1)</script>', 'see <img src=x onerror=alert(1)>',
+    '<!-- x -->', 'a</p>', '<svg/onload=alert(1)>']) {
+    refused(raw({ statement: s }), /statement: .*markup/, `statement ${s}`);
+    refused(raw({ notes: s }), /notes: .*markup/, `notes ${s}`);
+  }
+  for (const s of ['A < B by 3 dB', 'level <= -20 dB', 'x < 1 kHz & y > 2 kHz', 'a <-> b']) {
+    assert.equal(ok(raw({ statement: s })).statement, s, `plain text ${s}`);
+  }
+  refused(raw({ statement: 'a\u0000b' }), /statement: contains control/, 'NUL');
+  refused(raw({ statement: 'two\nlines' }), /statement: contains control/,
+    'a statement is one line');
+  assert.equal(ok(raw({ notes: 'two\nlines' })).notes, 'two\nlines', 'notes may wrap');
+  refused(raw({ statement: 'abc‮dcb' }), /statement: .*bidirectional/, 'a bidi override');
+  refused(raw({ statement: '   ' }), /statement: must not be empty/, 'blank');
+  refused(raw({ statement: 'x'.repeat(F.FINDING_LIMITS.statementChars + 1) }),
+    /statement: longer than/, 'too long');
+  refused(raw({ notes: 'x'.repeat(F.FINDING_LIMITS.notesChars + 1) }), /notes: longer than/,
+    'notes too long');
+  refused(raw({ updatedAt: '2026-10-01T00:00:00.000Z' }), /updatedAt: .*before createdAt/,
+    'updated before created');
+  refused(raw({ id: '__proto__' }), /id: has an invalid format/, 'an id that is a key');
+});
+
+test('a finding from a newer schema is refused with the reason, not misread', () => {
+  const r = F.validateFinding(raw({ schemaVersion: F.FINDING_SCHEMA_VERSION + 1 }));
+  assert.equal(r.ok, false);
+  assert.match(r.errors[0].text, /newer than this OSCILLA reads/);
+  refused(raw({ kind: 'oscilla-experiment' }), /kind: must be oscilla-finding/, 'another kind');
+});
+
+test('create and update: the id and creation time stay, updatedAt moves, input is trimmed', () => {
+  const f = F.createFinding({ id: 'f-9', now: NOW, statement: '  Falls above 6 kHz. ',
+    status: 'hypothesis' });
+  assert.deepEqual({ ...f }, { kind: F.FINDING_KIND, schemaVersion: F.FINDING_SCHEMA_VERSION,
+    id: 'f-9', statement: 'Falls above 6 kHz.', status: 'hypothesis', evidence: [], runs: [],
+    notes: null, createdAt: NOW, updatedAt: NOW });
+  assert.throws(() => F.createFinding({ id: 'f-9', now: NOW, statement: 'x',
+    status: 'supported' }), /at least one/);
+  const g = F.updateFinding(f, { status: 'supported', evidence: [{ kind: 'run',
+    experimentId: 'run-a' }], runs: [{ experimentId: 'run-a', resultHash: H1 }] },
+  { now: LATER });
+  assert.equal(g.id, 'f-9');
+  assert.equal(g.createdAt, NOW);
+  assert.equal(g.updatedAt, LATER);
+  assert.equal(g.status, 'supported');
+  assert.equal(f.status, 'hypothesis', 'the input is not mutated');
+  assert.throws(() => F.updateFinding(f, { id: 'other' }, { now: LATER }), /id/);
+});
+
+// ---------------------------------------------------------------- integrity
+
+/** A lookup over a table { id: { kind, name, resultHash, hasResponse } }. */
+const lookupOf = (table) => (id) => (Object.prototype.hasOwnProperty.call(table, id)
+  ? table[id] : null);
+const RUNS = {
+  'run-a': { kind: 'run', name: 'A', resultHash: H1, hasResponse: true },
+  'run-b': { kind: 'run', name: 'B', resultHash: H2, hasResponse: true },
+  'def-1': { kind: 'definition', name: 'Desk speaker' },
+};
+const both = [{ experimentId: 'run-a', resultHash: H1 }, { experimentId: 'run-b',
+  resultHash: H2 }];
+
+test('findingIssues: a whole finding has none', () => {
+  const f = ok(raw({ status: 'supported', evidence: [{ kind: 'run', experimentId: 'run-a' },
+    { kind: 'compare', a: 'run-a', b: 'run-b' }, { kind: 'value', experimentId: 'run-b',
+      at: { hz: 1000 } }], runs: both }));
+  assert.deepEqual(F.findingIssues(f, lookupOf(RUNS)), []);
+});
+
+test('findingIssues: a deleted or never-stored run reads as missing, never as nothing', () => {
+  const f = ok(raw({ status: 'supported', evidence: [{ kind: 'compare', a: 'run-a',
+    b: 'run-b' }], runs: both }));
+  const { 'run-b': gone, ...rest } = RUNS; // eslint-disable-line no-unused-vars
+  const issues = F.findingIssues(f, lookupOf(rest));
+  assert.deepEqual(issues.map((i) => [i.code, i.index, i.experimentId]),
+    [['missing-run', 0, 'run-b'], ['unsupported-status', null, null]]);
+  assert.match(issues[0].text, /^missing: run "?run-b"? is not stored here/);
+  assert.match(issues[1].text, /supported.*none of the evidence it cites is stored here/);
+  // A finding whose other evidence is here keeps its status without that issue.
+  const g = ok(raw({ status: 'supported', evidence: [{ kind: 'run', experimentId: 'run-a' },
+    { kind: 'run', experimentId: 'run-b' }], runs: both }));
+  assert.deepEqual(F.findingIssues(g, lookupOf(rest)).map((i) => i.code), ['missing-run']);
+});
+
+test('findingIssues: wrong kind, a different record, a value without a response', () => {
+  const wrong = ok(raw({ evidence: [{ kind: 'run', experimentId: 'def-1' }],
+    runs: [{ experimentId: 'def-1', resultHash: null }] }));
+  const [w] = F.findingIssues(wrong, lookupOf(RUNS));
+  assert.equal(w.code, 'wrong-kind');
+  assert.match(w.text, /names a definition, not a run/);
+  const other = ok(raw({ runs: [{ experimentId: 'run-a', resultHash: H2 }] }));
+  const [d] = F.findingIssues(other, lookupOf(RUNS));
+  assert.equal(d.code, 'different-run');
+  assert.match(d.text, /different record.*result hash/);
+  const value = ok(raw({ evidence: [{ kind: 'value', experimentId: 'run-a', at: { hz: 1000 } }] }));
+  const noResponse = { ...RUNS, 'run-a': { ...RUNS['run-a'], hasResponse: false } };
+  assert.deepEqual(F.findingIssues(value, lookupOf(noResponse)).map((i) => i.code),
+    ['no-response']);
+  assert.deepEqual(F.ISSUE_CODES, ['missing-run', 'wrong-kind', 'different-run', 'no-response',
+    'unsupported-status']);
+});
+
+test('findingsCiting names each finding that cites a run, and how', () => {
+  const a = ok(raw({ id: 'f-a' }));
+  const b = ok(raw({ id: 'f-b', evidence: [{ kind: 'compare', a: 'run-b', b: 'run-a' }],
+    runs: both }));
+  const c = ok(raw({ id: 'f-c', evidence: [{ kind: 'value', experimentId: 'run-b',
+    at: { hz: 4974.2 } }], runs: [{ experimentId: 'run-b', resultHash: H2 }] }));
+  assert.deepEqual(F.findingsCiting([a, b, c], 'run-a').map((x) => [x.finding.id, x.how]),
+    [['f-a', ['this run']], ['f-b', ['a comparison with run-b']]]);
+  assert.deepEqual(F.findingsCiting([a, b, c], 'run-b').map((x) => [x.finding.id, x.how]),
+    [['f-b', ['a comparison with run-a']], ['f-c', ['its value at 4.974 kHz']]]);
+  assert.deepEqual(F.findingsCiting([a, b, c], 'nope'), []);
+});
+
+test('reference text never claims a cause; a comparison says what changed between runs', () => {
+  const name = (id) => ({ 'run-a': 'A', 'run-b': 'B' }[id] || null);
+  assert.equal(F.refText({ kind: 'run', experimentId: 'run-a' }, name), 'Run "A"');
+  assert.equal(F.refText({ kind: 'compare', a: 'run-a', b: 'run-b' }, name),
+    'Comparison of "A" with "B" (what changed between the runs, not why)');
+  assert.equal(F.refText({ kind: 'value', experimentId: 'run-b', at: { hz: 1000 } }, name),
+    'Value of "B" at 1 kHz (the stored point)');
+  assert.equal(F.refText({ kind: 'run', experimentId: '0123456789abcdef-x' }, () => null),
+    'Run 0123456789ab…');
+  const texts = F.FINDING_STATUSES.map((s) => `${F.STATUS_TEXT[s]} ${F.STATUS_HINT[s]}`).join(' ');
+  assert.ok(!/\b(caus|because|due to|proves?)\b/i.test(texts), texts);
+});
+
+// ---------------------------------------------------------------- the store
+
+test('DB version 4 adds the findings store and never deletes anything', async () => {
+  assert.equal(DB_VERSION, 4);
+  assert.equal(FINDINGS, 'findings');
+  const fake = fakeIndexedDB();
+  const fresh = await openExperimentStore({ indexedDB: fake.indexedDB, name: 'fresh' });
+  assert.deepEqual(fake.state.upgrades, [[0, 4]]);
+  assert.deepEqual([...fake.dbs.get('fresh').stores.keys()], ['experiments', 'summaries',
+    'studio', 'studioSummaries', 'definitions', 'findings']);
+  fresh.close();
+  // A version-3 database as v3.10 left it, with a run, a Studio record and a definition.
+  const stores = new Map();
+  const keep = { experiments: 'experimentId', summaries: 'experimentId', studio: 'id',
+    studioSummaries: 'id', definitions: 'id' };
+  for (const [k, keyPath] of Object.entries(keep)) {
+    stores.set(k, { keyPath, data: new Map([[`${k}-1`, { [keyPath]: `${k}-1`, v: k }]]) });
+  }
+  fake.dbs.set('v3', { version: 3, stores });
+  const up = await openExperimentStore({ indexedDB: fake.indexedDB, name: 'v3' });
+  assert.deepEqual(fake.state.upgrades.at(-1), [3, 4]);
+  const rec = fake.dbs.get('v3');
+  for (const [k, keyPath] of Object.entries(keep)) {
+    assert.deepEqual(rec.stores.get(k).data.get(`${k}-1`), { [keyPath]: `${k}-1`, v: k },
+      `${k} untouched`);
+  }
+  assert.deepEqual((await up.listFindings()).findings, []);
+  // A partial earlier upgrade completes; an existing store is never recreated.
+  const created = [];
+  upgradeExperimentDb({ objectStoreNames: { contains: (k) => k !== 'findings' },
+    createObjectStore: (k) => created.push(k) }, 3);
+  assert.deepEqual(created, ['findings']);
+});
+
+for (const kind of ['memory', 'indexeddb']) {
+  test(`the ${kind} store keeps findings: round trip, refusals, atomic import`, async () => {
+    const fake = fakeIndexedDB();
+    const store = kind === 'memory' ? createMemoryStore(OPTS)
+      : await openExperimentStore({ indexedDB: fake.indexedDB, name: 'f', ...OPTS });
+    const f = ok(raw());
+    const g = ok(raw({ id: 'f-2', statement: 'Second', updatedAt: LATER }));
+    assert.deepEqual(await store.putFinding(f), f);
+    await store.putFinding(g);
+    assert.deepEqual(await store.getFinding('f-1'), f);
+    assert.equal(await store.getFinding('none'), null);
+    assert.deepEqual((await store.listFindings()).findings.map((x) => x.id), ['f-2', 'f-1'],
+      'newest change first');
+    // An edit keeps the creation time; changing it is refused.
+    const edited = F.updateFinding(f, { status: 'supported' }, { now: LATER });
+    assert.equal((await store.putFinding(edited)).status, 'supported');
+    await assert.rejects(store.putFinding({ ...edited, createdAt: LATER }),
+      (e) => e instanceof ExperimentStoreError && e.code === 'immutable');
+    await assert.rejects(store.putFinding({ ...f, status: 'supported', evidence: [], runs: [] }),
+      (e) => e instanceof ExperimentStoreError && e.code === 'invalid'
+        && /at least one/.test(e.message));
+    // Import: all or nothing. A different finding under a stored id refuses the whole batch.
+    const h = ok(raw({ id: 'f-3', statement: 'Third' }));
+    await assert.rejects(store.putFindings([h, { ...g, statement: 'changed elsewhere' }]),
+      (e) => e.code === 'conflict' && e.fields.join() === 'f-2');
+    assert.equal(await store.getFinding('f-3'), null, 'nothing of a refused import is stored');
+    await assert.rejects(store.putFindings([h, { ...h, id: 'f-4', status: 'supported',
+      evidence: [], runs: [] }]), (e) => e.code === 'invalid');
+    assert.equal(await store.getFinding('f-3'), null, 'an invalid finding refuses the batch');
+    assert.deepEqual(await store.putFindings([h, g]), { stored: ['f-3'], same: ['f-2'] });
+    assert.deepEqual(await store.getFinding('f-3'), h);
+    // Deleting a cited run never touches a finding.
+    const { a } = await fx();
+    await store.put(a.experiment);
+    const cites = ok(raw({ id: 'f-5', status: 'supported', evidence: [{ kind: 'run',
+      experimentId: 'fixture-a' }], runs: [{ experimentId: 'fixture-a',
+      resultHash: a.experiment.provenance.resultHash }] }));
+    await store.putFinding(cites);
+    assert.equal(await store.delete('fixture-a'), true);
+    assert.deepEqual(await store.getFinding('f-5'), cites, 'the finding is unchanged');
+    assert.equal(await store.deleteFinding('f-5'), true);
+    assert.equal(await store.deleteFinding('f-5'), false);
+    if (kind === 'indexeddb') {
+      // A damaged stored finding is listed as unreadable, never fails the others.
+      fake.dbs.get('f').stores.get('findings').data.set('bad', { id: 'bad', kind: 'x' });
+      const l = await store.listFindings();
+      assert.deepEqual(l.unreadable.map((u) => u.id), ['bad']);
+      assert.ok(l.findings.length >= 3);
+      await assert.rejects(store.getFinding('bad'), (e) => e.code === 'corrupt');
+    }
+  });
+}
+
+test('the memory store reports the findings it holds (losable work, ADR 0045)', async () => {
+  const seen = [];
+  const store = observeMemoryStore(createMemoryStore(OPTS), (h) => seen.push(h));
+  await store.putFinding(ok(raw()));
+  await store.putFindings([ok(raw({ id: 'f-2' }))]);
+  await store.deleteFinding('f-2');
+  assert.deepEqual(seen.map((h) => h.findings), [1, 2, 1]);
+  assert.deepEqual(Object.keys(store.held()).sort(), ['definitions', 'experiments', 'findings',
+    'studio']);
+});
+
+// ---------------------------------------------------------------- export / import
+
+test('export and import round-trip, with each cited run\'s id and result hash', () => {
+  const f = ok(raw({ status: 'supported', evidence: [{ kind: 'compare', a: 'run-a',
+    b: 'run-b' }], runs: both, notes: 'Two lines\nof notes' }));
+  const g = ok(raw({ id: 'f-2', status: 'hypothesis', evidence: [], runs: [] }));
+  const doc = F.exportFindings([f, g], { now: LATER, oscillaVersion: '9.9.9' });
+  assert.deepEqual(Object.keys(doc), ['kind', 'schemaVersion', 'exportedAt', 'oscillaVersion',
+    'findings']);
+  assert.equal(doc.kind, F.FINDINGS_FILE_KIND);
+  assert.deepEqual(doc.findings[0].runs, both, 'the evidence identity travels with the file');
+  const text = F.findingsToJson(doc);
+  const back = F.parseFindingsFile(text);
+  assert.ok(back.ok, JSON.stringify(back.errors));
+  assert.deepEqual(back.findings, [f, g]);
+  assert.equal(F.FINDINGS_FILE_EXTENSION, '.oscilla-findings.json');
+});
+
+test('import validates the whole file first: one bad finding refuses all of it', () => {
+  const doc = F.exportFindings([ok(raw()), ok(raw({ id: 'f-2' }))], { now: LATER });
+  doc.findings[1].statement = '<b>bold</b>';
+  const r = F.parseFindingsFile(JSON.stringify(doc));
+  assert.equal(r.ok, false);
+  assert.deepEqual(r.findings, []);
+  assert.match(r.errors[0].path, /^findings\[1\]\.statement/);
+  const dup = F.exportFindings([ok(raw()), ok(raw())], { now: LATER });
+  assert.match(F.parseFindingsFile(JSON.stringify(dup)).errors[0].text, /f-1.*more than once/);
+  for (const [text, re] of [
+    ['not json', /not valid JSON/],
+    ['[]', /must be an object/],
+    [JSON.stringify({ ...doc, kind: 'oscilla-experiment' }), /kind: must be oscilla-findings/],
+    [JSON.stringify({ ...doc, extra: 1 }), /extra: unknown field/],
+    [`{"__proto__":{"x":1},"kind":"${F.FINDINGS_FILE_KIND}"}`, /__proto__: unknown field/],
+  ]) {
+    const x = F.parseFindingsFile(text);
+    assert.equal(x.ok, false, text.slice(0, 30));
+    assert.ok(x.errors.some((e) => re.test(`${e.path}: ${e.text}`)), JSON.stringify(x.errors));
+  }
+  assert.match(F.parseFindingsFile('x'.repeat(50), { maxBytes: 10 }).errors[0].text,
+    /larger than/);
+});
+
+test('a findings file from a newer schema is refused clearly', () => {
+  const doc = F.exportFindings([ok(raw())], { now: LATER });
+  const r = F.parseFindingsFile(JSON.stringify({ ...doc, schemaVersion: 2 }));
+  assert.equal(r.ok, false);
+  assert.equal(r.newer, true);
+  assert.match(r.errors[0].text, /schema v2.*newer than this OSCILLA reads \(v1\)/);
+});
+
+test('importPlan: new findings are added, identical ones skipped, different ones refused', () => {
+  const f = ok(raw());
+  const g = ok(raw({ id: 'f-2' }));
+  const p = F.importPlan([f, g, ok(raw({ id: 'f-3' }))], [f, { ...g, statement: 'other' }]);
+  assert.deepEqual({ add: p.add.map((x) => x.id), same: p.same, conflicts: p.conflicts },
+    { add: ['f-3'], same: ['f-1'], conflicts: ['f-2'] });
+});
+
+// ---------------------------------------------------------------- the workspace adapter
+
+function harness() {
+  const fake = fakeIndexedDB();
+  globalThis.indexedDB = fake.indexedDB;
+  const cmp = {};
+  for (const part of [createExperimentsUi(), createFindingsUi()]) {
+    Object.defineProperties(cmp, Object.getOwnPropertyDescriptors(part));
+  }
+  const notes = [];
+  Object.assign(cmp, { notify: (kind, title, text) => notes.push({ kind, title, text }),
+    $nextTick: (f) => f && f(), openModal() {}, closeModal() {}, setWorkspace() {},
+    measureCurrentProfile: () => null });
+  cmp.experimentsInit();
+  cmp.findingsInit();
+  return { cmp, notes, fake };
+}
+
+test('the workspace: record from a run, link a compare, support it, see backlinks', async () => {
+  const { a, b } = await fx();
+  const { cmp } = harness();
+  await cmp.experimentsImportText(a.json);
+  await cmp.experimentsImportText(b.json);
+  await cmp.experimentsOpen('fixture-a');
+  assert.equal(cmp.findingsWhatWouldBeLost().length, 0, 'nothing typed, nothing to lose');
+  await cmp.findingsAskRun('fixture-a');
+  assert.deepEqual(cmp.fnd.form.evidence.map((x) => x.ref), [{ kind: 'run',
+    experimentId: 'fixture-a' }]);
+  cmp.fnd.form.statement = 'A falls above 6 kHz.';
+  assert.deepEqual(cmp.findingsWhatWouldBeLost(), [{ domain: 'findings',
+    label: 'A finding being written' }]);
+  await cmp.findingsAddCompare('fixture-a', 'fixture-b');
+  cmp.fnd.form.status = 'supported';
+  const saved = await cmp.findingsSave();
+  assert.ok(saved, cmp.fnd.form.error);
+  assert.deepEqual(saved.runs.map((r) => r.experimentId), ['fixture-a', 'fixture-b']);
+  assert.equal(saved.runs[0].resultHash, a.experiment.provenance.resultHash);
+  assert.equal(cmp.findingsWhatWouldBeLost().length, 0, 'saved: nothing to lose');
+  assert.equal(cmp.fnd.rows.length, 1);
+  assert.equal(cmp.fnd.rows[0].statusText, F.STATUS_TEXT.supported);
+  assert.deepEqual(cmp.fnd.rows[0].evidence.map((e) => e.state), ['ok', 'ok']);
+  assert.deepEqual(cmp.findingsBacklinks('fixture-b').map((x) => x.how), [
+    'a comparison with fixture-a']);
+  assert.equal(cmp.findingsCiting('fixture-a'), 1);
+  // Delete the cited run: the dialog says one finding cites it; the reference reads missing.
+  cmp.experimentsAskDelete({ id: 'fixture-b', name: 'B' });
+  assert.match(cmp.exps.deleteCiting, /^1 finding cites this run/);
+  assert.equal(await cmp.experimentsDelete(), true);
+  const row = cmp.fnd.rows[0];
+  assert.deepEqual(row.evidence.map((e) => e.state), ['ok', 'missing']);
+  assert.match(row.evidence[1].issue, /^missing: run .* is not stored here/);
+  assert.equal(row.status, 'supported', 'the finding keeps its status and its reference');
+  assert.equal(JSON.stringify(cmp.fnd.rows), JSON.stringify(JSON.parse(JSON.stringify(
+    cmp.fnd.rows))), 'plain data for Alpine');
+});
+
+test('the workspace: import refuses a conflict whole and names runs not stored here', async () => {
+  const { cmp, notes } = harness();
+  await cmp.experimentsRefresh();
+  const f = ok(raw({ id: 'f-imp', status: 'supported' }));
+  const text = F.findingsToJson(F.exportFindings([f], { now: LATER }));
+  assert.equal(await cmp.findingsImportText(text), 1);
+  assert.match(notes.at(-1).text, /1 cited run is not stored here/);
+  assert.match(cmp.fnd.rows[0].evidence[0].issue, /not stored here/);
+  const changed = F.findingsToJson(F.exportFindings([{ ...f, statement: 'Other' },
+    ok(raw({ id: 'f-new' }))], { now: LATER }));
+  assert.equal(await cmp.findingsImportText(changed), null);
+  assert.match(cmp.fnd.importErrors[0], /f-imp is already stored with different content/);
+  assert.equal(cmp.fnd.rows.length, 1, 'nothing of the refused file was stored');
+  const newer = text.replace('"schemaVersion": 1', '"schemaVersion": 7');
+  assert.equal(await cmp.findingsImportText(newer), null);
+  assert.match(cmp.fnd.importErrors[0], /newer than this OSCILLA reads/);
+});
+
+test('the memory fallback counts its findings as losable work', async () => {
+  const cmp = {};
+  for (const part of [createExperimentsUi(), createFindingsUi()]) {
+    Object.defineProperties(cmp, Object.getOwnPropertyDescriptors(part));
+  }
+  cmp.exps.persistent = false;
+  cmp.exps.memoryHeld = { experiments: 0, definitions: 0, studio: 0, findings: 2 };
+  assert.deepEqual(cmp.experimentsWhatWouldBeLost(), [{ domain: 'experiments',
+    label: '2 findings kept in page memory only' }]);
+});
+
+test('findings are rendered as text: no x-html or innerHTML on the findings path', () => {
+  const html = readFileSync(path.join(ROOT, 'src/index.html'), 'utf8');
+  const ui = readFileSync(path.join(ROOT, 'src/js/ui/findings.js'), 'utf8');
+  assert.ok(!/x-html/.test(html), 'no x-html anywhere in the page');
+  assert.ok(!/innerHTML|insertAdjacentHTML|outerHTML/.test(ui));
+  assert.match(html, /data-osc="fnd\.panel"/, 'the Findings panel is in the page');
+  assert.match(html, /data-osc="exp\.findings"/, 'the run detail lists the findings citing it');
+});

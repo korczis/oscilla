@@ -118,6 +118,17 @@
 //                           light theme; the
 //                           contradicted older record reads "uncalibrated (the stored claim is
 //                           contradicted)", no "SPL"; Compare A with it names the differing item
+//   findings                (ADR 0046) "Record a finding about this run" on A's detail (focus +
+//                           Enter) opens the finding dialog with A cited; while a statement is
+//                           typed the unsaved-work guard reports "A finding being written"; a
+//                           comparison of A with B is linked (with its "not why" hint), the
+//                           status (five categorical values) is set to supported and saved: the
+//                           Findings panel (h3) lists it as a real list item (h4 statement,
+//                           status in words, its references in a list), both runs' details list
+//                           it under "Findings that cite this run", the export carries A's
+//                           result hash; deleting B warns "1 finding cites this run", and the
+//                           comparison then reads "missing: run ... is not stored here" while the
+//                           finding keeps its status; no causal wording; 390 px; light theme
 //   calibration-export      (V315) Export CSV and Export JSON of the loaded profile download
 //                           deterministic files named after the profile and its id, and both
 //                           re-import (same id, name, convention); a correction profile (chosen
@@ -1946,6 +1957,148 @@ function defineChecks(fixtures) {
       compare: res.diff === 'Checklist differences (states only): Calibration identity recorded '
         + '(A recorded, B partial). No difference in the recorded build, definition, calibration '
         + 'or input device.',
+    }) };
+  });
+
+  def('findings', async ({ page }) => {
+    await H.workspace(page, 'experiments');
+    for (const k of ['a', 'b']) {
+      const stored = await page.evaluate(async (x) => !!(await window.OSCILLA.experiments.store()
+        .get(x)), `fixture-${k}`);
+      if (!stored) {
+        await page.evaluate((t) => window.OSCILLA.app.experimentsImportText(t), fixtures[k].json);
+      }
+    }
+    const res = {};
+    const panel = () => page.evaluate(() => {
+      const sec = document.querySelector('[data-osc="fnd.panel"]');
+      if (!sec) return { missing: true };
+      const r = sec.getBoundingClientRect();
+      const rows = [...sec.querySelectorAll('[data-osc="fnd.row"]')].map((li) => ({
+        tag: li.tagName, h4: (li.querySelector('h4') || {}).textContent || null,
+        status: (li.querySelector('[data-osc="fnd.status"]') || {}).textContent || null,
+        evidence: [...li.querySelectorAll('[data-osc="fnd.ref"]')].map((x) => ({
+          state: x.dataset.state, text: x.textContent.replace(/\s+/g, ' ').trim(),
+          inList: x.parentElement.tagName === 'UL' })) }));
+      return { shown: sec.offsetParent !== null, h3: (sec.querySelector('h3') || {}).textContent,
+        rows, text: sec.textContent.replace(/\s+/g, ' '),
+        fits: sec.scrollWidth <= sec.clientWidth + 1 && r.right <= window.innerWidth + 1
+          && document.documentElement.scrollWidth <= window.innerWidth + 1 };
+    });
+    const backlinks = () => page.evaluate(() => {
+      const sec = document.querySelector('[data-osc="exp.findings"]');
+      if (!sec) return { missing: true };
+      return { shown: sec.offsetParent !== null, h4: (sec.querySelector('h4') || {}).textContent,
+        items: [...sec.querySelectorAll('li')].map((li) => li.textContent.replace(/\s+/g, ' ')
+          .trim()) };
+    });
+    const dialogOpen = () => page.evaluate(() => {
+      const d = document.getElementById('osc-dlg-finding');
+      return !!d && d.open;
+    });
+    // 1. From a run's detail: "Record a finding about this run" (keyboard: focus + Enter).
+    await page.evaluate(() => window.OSCILLA.app.experimentsOpen('fixture-a'));
+    const button = await H.until(() => page.evaluate(() => {
+      const b = document.querySelector('[data-osc="exp.findingNew"]');
+      return !!b && b.offsetParent !== null;
+    }), Boolean, 5000);
+    if (!button) {
+      return { ok: false, failed: ['record-from-run'], detail: 'no "Record a finding" button' };
+    }
+    await page.focus('[data-osc="exp.findingNew"]');
+    await page.keyboard.press('Enter');
+    res.opened = await H.until(dialogOpen, Boolean, 3000);
+    res.prefilled = await page.evaluate(() => [...document.querySelectorAll(
+      '#osc-dlg-finding [data-osc="fnd.formRef"]')].map((li) => li.textContent
+      .replace(/\s+/g, ' ').trim()));
+    await page.fill('#osc-fnd-statement', 'A falls above 6 kHz; B is 0.9 dB quieter.');
+    res.guard = await page.evaluate(() => window.OSCILLA.unsaved.whatWouldBeLost()
+      .filter((x) => x.domain === 'findings').map((x) => x.label));
+    // 2. Link a comparison.
+    await page.selectOption('#osc-fnd-cmp-a', 'fixture-a');
+    await page.selectOption('#osc-fnd-cmp-b', 'fixture-b');
+    await page.click('[data-osc="fnd.addCompare"]');
+    res.linked = await H.until(() => page.evaluate(() => ({
+      refs: [...document.querySelectorAll('#osc-dlg-finding [data-osc="fnd.formRef"]')]
+        .map((li) => li.textContent.replace(/\s+/g, ' ').trim()),
+      // offsetParent is null inside a top-layer dialog: visibility is a rendered box.
+      hint: ((el) => !!el && el.getClientRects().length > 0)(document.querySelector(
+        '[data-osc="fnd.compareHint"]')) })), (x) => x.refs.length === 2 && x.hint, 3000);
+    // 3. A categorical status; supported needs evidence (it has two references now).
+    res.statuses = await page.evaluate(() => [...document.querySelectorAll(
+      '#osc-fnd-status option')].map((o) => o.value));
+    await page.selectOption('#osc-fnd-status', 'supported');
+    await page.click('[data-osc="fnd.save"]');
+    res.closed = await H.until(dialogOpen, (o) => o === false, 5000);
+    res.guardAfter = await page.evaluate(() => window.OSCILLA.unsaved.whatWouldBeLost()
+      .filter((x) => x.domain === 'findings').length);
+    res.saved = await H.until(panel, (p) => p.rows && p.rows.length === 1
+      && p.rows[0].evidence.length === 2, 5000);
+    // 4. Backlinks on both runs' details.
+    res.backA = await H.until(backlinks, (b) => b.items && b.items.length === 1, 5000);
+    await page.evaluate(() => window.OSCILLA.app.experimentsOpen('fixture-b'));
+    res.backB = await H.until(backlinks, (b) => b.items && b.items.length === 1
+      && /comparison/.test(b.items[0]), 5000);
+    res.exported = await page.evaluate(() => window.OSCILLA.app.findingsExport());
+    res.hashA = fixtures.a.experiment.provenance.resultHash;
+    // 5. Delete the cited run B: the dialog says that a finding cites it; the reference then
+    // reads missing, and the finding keeps its status.
+    await page.click('[data-osc="exp.delete"]');
+    res.warning = await H.until(() => page.evaluate(() => {
+      const el = document.querySelector('[data-osc="exp.deleteCiting"]');
+      return el && el.offsetParent !== null ? el.textContent.replace(/\s+/g, ' ').trim() : '';
+    }), (t) => t.length > 0, 3000);
+    await page.click('[data-osc="exp.deleteConfirm"]');
+    res.afterDelete = await H.until(panel, (p) => p.rows && p.rows[0]
+      && p.rows[0].evidence.some((e) => e.state === 'missing'), 5000);
+    // 6. 390 px and the light theme.
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.evaluate(() => document.querySelector('[data-osc="fnd.panel"]').scrollIntoView());
+    res.narrow = await H.until(panel, (p) => p.fits, 2000);
+    await page.evaluate(() => window.OSCILLA.app.toggleTheme());
+    res.light = await page.evaluate(() => ({
+      theme: document.documentElement.dataset.theme,
+      color: getComputedStyle(document.querySelector('[data-osc="fnd.row"] h4')).color,
+      text: getComputedStyle(document.documentElement).getPropertyValue('--osc-text').trim() }));
+    await page.evaluate(() => window.OSCILLA.app.toggleTheme());
+    await page.setViewportSize({ width: 1536, height: 1024 });
+    // Leave the store as later checks expect it: no finding, B stored again.
+    await page.evaluate(async (t) => {
+      const app = window.OSCILLA.app;
+      for (const r of app.fnd.rows.slice()) await app.findingsDeleteNow(r.id);
+      await app.experimentsImportText(t);
+      app.alerts = [];
+    }, fixtures.b.json);
+    const hex = (c) => { const m = String(c).match(/\d+/g) || []; return `#${m.slice(0, 3)
+      .map((v) => Number(v).toString(16).padStart(2, '0')).join('')}`; };
+    const row = (res.saved.rows || [])[0] || { evidence: [] };
+    const after = (res.afterDelete.rows || [])[0] || { evidence: [] };
+    const out = { ...res, exported: res.exported ? res.exported.length : null };
+    for (const k of ['saved', 'afterDelete', 'narrow']) if (out[k]) out[k] = { ...out[k], text: '' };
+    return { ...out, ...H.verdict({
+      'record-from-run': res.opened === true && res.prefilled.length === 1
+        && /^Run "TEST CONTEXT · synthetic A/.test(res.prefilled[0]),
+      guard: res.guard.join() === 'A finding being written' && res.guardAfter === 0,
+      'link-compare': res.linked.refs.length === 2 && /^Comparison of ".*" with ".*" \(what changed between the runs, not why\)/
+        .test(res.linked.refs[1]) && res.linked.hint,
+      categorical: res.statuses.join() === 'observation,hypothesis,supported,contradicted,'
+        + 'inconclusive',
+      supported: res.closed === false && row.status === 'Supported' && row.tag === 'LI'
+        && row.h4 === 'A falls above 6 kHz; B is 0.9 dB quieter.'
+        && row.evidence.every((e) => e.state === 'ok' && e.inList),
+      panel: res.saved.shown && res.saved.h3 === 'Findings',
+      backlinks: res.backA.shown && res.backA.h4 === 'Findings that cite this run'
+        && /A falls above 6 kHz/.test(res.backA.items[0]) && /Supported/.test(res.backA.items[0])
+        && /comparison/.test(res.backB.items[0]),
+      export: typeof res.exported === 'string' && res.exported.includes(res.hashA)
+        && res.exported.includes('"kind": "oscilla-findings"'),
+      'delete-warning': /^1 finding cites this run/.test(res.warning),
+      missing: after.status === 'Supported' && after.evidence.length === 2
+        && after.evidence[0].state === 'ok' && after.evidence[1].state === 'missing'
+        && /missing: run .* is not stored here/.test(after.evidence[1].text),
+      notCausal: !/\bcaused\b|because|due to/i.test(res.saved.text || ''),
+      narrow: res.narrow.fits,
+      light: res.light.theme === 'light' && hex(res.light.color) === res.light.text.toLowerCase(),
     }) };
   });
 
