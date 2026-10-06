@@ -58,25 +58,44 @@ export function findingRow(f, lookup, nameOf) {
 
 export function createFindingsUi() {
   const ctx = {
-    identity: new Map(), // experimentId -> { resultHash, hasResponse } of a stored run
+    // experimentId -> { readable: true, resultHash, hasResponse } of a stored run, or
+    // { readable: false, reason } when its record cannot be read (a corrupt record)
+    identity: new Map(),
     names: new Map(),    // experimentId -> name, of the runs listed
     defs: new Map(),     // definition id -> name (a reference to one is the wrong kind)
   };
   const nameOf = (id) => ctx.names.get(id) || null;
 
-  /** The identity of a stored run, read once per id; null when it is not stored. */
-  async function identity(cmp, id) {
-    if (ctx.identity.has(id)) return ctx.identity.get(id);
-    const x = await cmp.experimentsIdentity(id);
-    if (x) ctx.identity.set(id, { resultHash: x.resultHash, hasResponse: x.hasResponse });
-    return x ? ctx.identity.get(id) : null;
+  /**
+   * The identity of a stored run (cached unless `fresh`); null when it is not stored. A record
+   * that cannot be read is { readable: false, reason }, never treated as present.
+   */
+  async function identity(cmp, id, { fresh = false } = {}) {
+    if (!fresh && ctx.identity.has(id)) return ctx.identity.get(id);
+    let x;
+    try {
+      x = await cmp.experimentsIdentity(id);
+    } catch (err) {
+      const v = { readable: false, reason: String(err && err.message || err).slice(0, 160) };
+      ctx.identity.set(id, v);
+      return v;
+    }
+    if (!x) {
+      ctx.identity.delete(id);
+      return null;
+    }
+    const v = { readable: true, resultHash: x.resultHash, hasResponse: x.hasResponse };
+    ctx.identity.set(id, v);
+    return v;
   }
 
   function lookup(id) {
     if (ctx.names.has(id)) {
-      const x = ctx.identity.get(id) || {};
-      return { kind: 'run', name: ctx.names.get(id), resultHash: x.resultHash || null,
-        hasResponse: x.hasResponse ?? null };
+      const x = ctx.identity.get(id);
+      // Listed but not read: its identity is unknown, so findingIssues cannot call it present.
+      if (!x) return { kind: 'run', name: ctx.names.get(id) };
+      return { kind: 'run', name: ctx.names.get(id), readable: x.readable, reason: x.reason,
+        resultHash: x.resultHash, hasResponse: x.hasResponse };
     }
     if (ctx.defs.has(id)) return { kind: 'definition', name: ctx.defs.get(id) };
     return null;
@@ -94,9 +113,19 @@ export function createFindingsUi() {
       }
       for (const id of refRunIds(ref)) {
         if (f.runs.some((r) => r.experimentId === id)) continue;
-        const x = await identity(cmp, id);
+        const x = await identity(cmp, id, { fresh: true });
+        const label = nameOf(id) ? `"${nameOf(id)}"` : id;
         if (!x) {
-          f.error = `Run ${id} is not stored here; only a stored run can be linked.`;
+          f.error = `Run ${label} is not stored here; only a stored run can be linked.`;
+          return false;
+        }
+        if (!x.readable) {
+          f.error = `Run ${label} cannot be read (${x.reason}); it cannot be linked.`;
+          return false;
+        }
+        if (!x.resultHash) {
+          f.error = `Run ${label} has no result hash, so a finding could not tell it from a `
+            + 'different record later; only a completed run can be linked.';
           return false;
         }
         f.runs = [...f.runs, { experimentId: id, resultHash: x.resultHash }];
@@ -145,7 +174,7 @@ export function createFindingsUi() {
       for (const id of [...ctx.identity.keys()]) if (!ctx.names.has(id)) ctx.identity.delete(id);
       const { findings, unreadable } = await s.listFindings();
       for (const id of new Set(findings.flatMap(citedRunIds))) {
-        if (ctx.names.has(id)) await identity(this, id).catch(() => null);
+        if (ctx.names.has(id)) await identity(this, id);
       }
       const n = unreadable.length;
       this.fnd.note = n ? `${n} stored finding${n === 1 ? '' : 's'} could not be read and ${

@@ -29,8 +29,10 @@
 //   createFinding({ id, now, statement, status, evidence, runs, notes }) -> Finding  (RangeError)
 //   updateFinding(finding, patch, { now }) -> Finding         (id and createdAt kept)
 //   findingIssues(finding, lookup) -> [{ code, index, experimentId, text }]
-//     lookup(experimentId) -> { kind: 'run', name, resultHash, hasResponse } | { kind, name }
-//       | null
+//     lookup(experimentId) -> { kind: 'run', name, resultHash, hasResponse, readable, reason }
+//       | { kind, name } | null
+//     A cited run is present only when it is readable and its stored result hash equals the
+//     cited one; a hash missing on either side (or not read) is 'unverifiable-identity', never ok.
 //   findingsCiting(findings, experimentId) -> [{ finding, how: [text] }]   (backlinks)
 //   refText(ref, nameOf) -> text that never claims a cause
 //   exportFindings(findings, { now, oscillaVersion }) -> file document; findingsToJson(doc)
@@ -51,8 +53,8 @@ export const FINDING_STATUSES = Object.freeze(['observation', 'hypothesis', 'sup
   'contradicted', 'inconclusive']);
 export const EVIDENCE_REQUIRED_STATUSES = Object.freeze(['supported', 'contradicted']);
 export const EVIDENCE_KINDS = Object.freeze(['run', 'compare', 'value']);
-export const ISSUE_CODES = Object.freeze(['missing-run', 'wrong-kind', 'different-run',
-  'no-response', 'unsupported-status']);
+export const ISSUE_CODES = Object.freeze(['missing-run', 'wrong-kind', 'unreadable-run',
+  'different-run', 'unverifiable-identity', 'no-response', 'unsupported-status']);
 export const FINDING_LIMITS = Object.freeze({
   statementChars: 1000,
   notesChars: LIMITS.notesChars,
@@ -269,12 +271,22 @@ export function findingIssues(finding, lookup) {
         out.push({ code, index, experimentId: id, text });
         broken.add(index);
       };
+      const cited = hashOf.get(id) || null;
       if (!got) issue('missing-run', `missing: run ${shortId(id)} is not stored here (deleted, or `
         + 'never stored in this browser)');
       else if (got.kind !== 'run') {
         issue('wrong-kind', `${shortId(id)} names a ${got.kind}, not a run`);
-      }
-      else if (got.resultHash && hashOf.get(id) && got.resultHash !== hashOf.get(id)) {
+      } else if (got.readable === false) {
+        issue('unreadable-run', `run ${name} is stored here but cannot be read${got.reason
+          ? ` (${got.reason})` : ''}; it cannot be checked`);
+      } else if (!cited) {
+        issue('unverifiable-identity', `run ${name}: its identity cannot be verified: it was cited `
+          + 'without a result hash');
+      } else if (typeof got.resultHash !== 'string' || !got.resultHash) {
+        issue('unverifiable-identity', `run ${name}: its identity cannot be verified: ${
+          got.resultHash === null ? 'the record stored under this id has no result hash'
+            : 'its stored result hash has not been read'}`);
+      } else if (got.resultHash !== cited) {
         issue('different-run', `run ${name}: a different record is stored under this id (its `
           + 'result hash differs from the one cited)');
       } else if (ref.kind === 'value' && got.hasResponse === false) {
@@ -285,7 +297,8 @@ export function findingIssues(finding, lookup) {
   const n = (finding.evidence || []).length;
   if (EVIDENCE_REQUIRED_STATUSES.includes(finding.status) && n && broken.size === n) {
     out.push({ code: 'unsupported-status', index: null, experimentId: null,
-      text: `The status is ${finding.status}, but none of the evidence it cites is stored here.` });
+      text: `The status is ${finding.status}, but none of the evidence it cites can be checked `
+        + 'here.' });
   }
   return out;
 }

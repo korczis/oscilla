@@ -234,8 +234,11 @@ filter class is claimed. An experiment saved from Measure does not store band le
   comparison; a comparison says what changed between the runs, not why. Each run's detail lists
   the findings that cite it. A finding never changes a run. Deleting a cited run keeps the
   reference, which then reads "missing", and the delete dialog says how many findings cite the
-  run. A finding records each cited run's id with its result hash, so a different record later
-  stored under that id is named as different. Findings export as `.oscilla-findings.json` with
+  run. A finding records each cited run's id with its result hash, and a reference counts as
+  present only when the run stored here has that hash: a different record under the id is named
+  as different, a record whose hash is missing on either side as one whose identity cannot be
+  verified, and a stored record that cannot be read as unreadable. Only a run with a result hash
+  can be linked. Findings export as `.oscilla-findings.json` with
   that identity; an import is validated whole before anything is stored, a newer schema is
   refused, and a cited run that is not in this browser reads "not stored here"
   ([ADR 0046](.ai/repo/adrs/0046-findings-interpretation-linked-to-evidence.md), proposed).

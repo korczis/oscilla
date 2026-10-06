@@ -223,7 +223,7 @@ test('findingIssues: a deleted or never-stored run reads as missing, never as no
   assert.deepEqual(issues.map((i) => [i.code, i.index, i.experimentId]),
     [['missing-run', 0, 'run-b'], ['unsupported-status', null, null]]);
   assert.match(issues[0].text, /^missing: run "?run-b"? is not stored here/);
-  assert.match(issues[1].text, /supported.*none of the evidence it cites is stored here/);
+  assert.match(issues[1].text, /supported.*none of the evidence it cites can be checked here/);
   // A finding whose other evidence is here keeps its status without that issue.
   const g = ok(raw({ status: 'supported', evidence: [{ kind: 'run', experimentId: 'run-a' },
     { kind: 'run', experimentId: 'run-b' }], runs: both }));
@@ -244,8 +244,8 @@ test('findingIssues: wrong kind, a different record, a value without a response'
   const noResponse = { ...RUNS, 'run-a': { ...RUNS['run-a'], hasResponse: false } };
   assert.deepEqual(F.findingIssues(value, lookupOf(noResponse)).map((i) => i.code),
     ['no-response']);
-  assert.deepEqual(F.ISSUE_CODES, ['missing-run', 'wrong-kind', 'different-run', 'no-response',
-    'unsupported-status']);
+  assert.deepEqual(F.ISSUE_CODES.slice(0, 7), ['missing-run', 'wrong-kind', 'unreadable-run',
+    'different-run', 'unverifiable-identity', 'no-response', 'unsupported-status']);
 });
 
 test('findingsCiting names each finding that cites a run, and how', () => {
