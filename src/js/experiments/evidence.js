@@ -20,7 +20,10 @@
 //     itemText(c): "<stateText> (<reason>)", e.g. RAW_CAPTURE_TEXT.
 //   runEvidence(e, opts) -> { hz, point, lineage, checklist }
 //   evidenceDifferences(checklists) -> [{ id, label, states }]  items whose state differs
-//   evidenceDifferencesText(diffs, labels) -> one line for the compare view
+//   identityDifferences(experiments) -> names of the recorded identities that differ (build,
+//     definition, calibration, input device): equal states can hide different identities
+//   evidenceDifferencesText(diffs, labels, identities) -> one line for the compare view
+//   hashVerification(e, sha256Hex?) -> the result hash recomputed, once per record object
 //
 // Truth rules: a calibration claim the record's own results contradict (validate.js
 // calibrationClaimFindings, ADR 0040 resolution) is presented as "uncalibrated (the stored
@@ -30,9 +33,10 @@
 // Times: the record's createdAt and measurement.startedAt are wall-clock times; capture
 // lengths are frames at the capture sample rate (the audio clock). Each is labelled as such.
 
-import { UNKNOWN_DEVICE } from './schema.js';
+import { UNKNOWN_DEVICE, describeStimulus, formatHz } from './schema.js';
 import { resultHash, resultHashVersionOf, RESULT_HASH_VERSION } from './hash.js';
-import { calibrationClaimFindings } from './validate.js';
+import { calibrationClaimFindings, withoutContradictedCalibration } from './validate.js';
+import { RELATIVE_UNIT } from '../calibration/level.js';
 import { TRANSFER_RATIO_UNIT } from './csv.js';
 import { describeAlgorithm, isKnownAlgorithm } from '../measurement/algorithms.js';
 
@@ -77,21 +81,28 @@ function responseOf(e) {
   return null;
 }
 
-/** Index of the grid point nearest `hz` (on a log scale). */
+/** Index of the positive grid point nearest `hz` (on a log scale); -1 when there is none. */
 function nearest(f, hz) {
-  let best = 0;
-  for (let i = 1; i < f.length; i++) {
-    if (Math.abs(Math.log(f[i] / hz)) < Math.abs(Math.log(f[best] / hz))) best = i;
+  let best = -1;
+  for (let i = 0; i < f.length; i++) {
+    if (f[i] > 0 && (best < 0 || Math.abs(Math.log(f[i] / hz))
+      < Math.abs(Math.log(f[best] / hz)))) best = i;
   }
   return best;
+}
+
+/** [lowest positive, highest] frequency of a grid (a grid may start at 0 Hz), or null. */
+function span(f) {
+  const i = nearest(f, Number.MIN_VALUE);
+  return i < 0 ? null : [f[i], f[f.length - 1]];
 }
 
 /** See the header. */
 export function defaultEvidenceHz(e) {
   const r = responseOf(e);
-  if (!r) return null;
-  const lo = r.frequencies[0];
-  const hi = r.frequencies[r.frequencies.length - 1];
+  const g = r ? span(r.frequencies) : null;
+  if (!g) return null;
+  const [lo, hi] = g;
   if (lo <= 1000 && hi >= 1000) return 1000;
   return +Math.sqrt(lo * hi).toPrecision(4);
 }
@@ -101,7 +112,8 @@ export function resultPoint(e, hz) {
   const r = responseOf(e);
   if (!r) return null;
   const want = num(hz) && hz > 0 ? hz : defaultEvidenceHz(e);
-  const i = nearest(r.frequencies, want);
+  const i = want ? nearest(r.frequencies, want) : -1;
+  if (i < 0) return null;
   const f = r.frequencies[i];
   const value = r.db[i];
   const mask = obj(e.quality) && obj(e.quality.mask) ? e.quality.mask : null;
@@ -109,8 +121,8 @@ export function resultPoint(e, hz) {
     && mask.frequencies.length === r.frequencies.length ? mask.reliable[i] === 1 : null;
   const what = r.source === 'aggregate' ? `the aggregate centre (${r.method || 'centre'} of ${
     r.repeats} repeats)` : 'one repeat';
-  const n = r.frequencies.length;
-  const outside = want < r.frequencies[0] || want > r.frequencies[n - 1];
+  const [lo, hi] = span(r.frequencies);
+  const outside = want < lo || want > hi;
   const where = Math.abs(f / want - 1) < 1e-3 ? 'stored grid point' : `the stored grid point `
     + `nearest ${hzText(want)}${outside ? ', which lies outside the stored range' : ''}`;
   const v = num(value) ? `${dbText(value)} re unity digital transfer (capture/stimulus ratio)`
@@ -169,7 +181,24 @@ function captureText(e) {
   const flags = flagsText(k);
   const gain = obj(e.output) && num(e.output.masterGain) ? `; master output gain ${
     +e.output.masterGain.toPrecision(3)} (included in every magnitude)` : '';
-  return `${device}; ${sr}; ${flags || `processing flags ${NR}`}${gain}`;
+  const notes = obj(e.measurement) && Array.isArray(e.measurement.notes)
+    ? e.measurement.notes.filter(str).map((n) => `; engine note: ${n}`).join('') : '';
+  return `${device}; ${sr}; ${flags || `processing flags ${NR}`}${gain}${notes}`;
+}
+
+/** The stimulus as played, the requested range when the Nyquist limit lowered it, the level. */
+function stimulusText(e) {
+  const r = e.recipe;
+  const st = r.stimulus;
+  const req = r.requested;
+  const clamp = obj(req) && num(req.f2) && num(st.f2) && req.f2 !== st.f2
+    ? `; requested up to ${formatHz(req.f2)}, played up to ${formatHz(st.f2)} (0.95 × the `
+      + 'Nyquist frequency)' : '';
+  const lv = obj(e.output) && num(e.output.level) ? e.output.level : null;
+  const level = lv === null ? `output level ${NR}` : lv > 0 ? `output level digital peak ${
+    +lv.toPrecision(3)} (${(20 * Math.log10(lv)).toFixed(1).replace('-', '−')} ${RELATIVE_UNIT})`
+    : 'output level digital peak 0 (silent)';
+  return `${describeStimulus(st)}${clamp}; ${level}`;
 }
 
 function bindingText(b) {
@@ -179,30 +208,55 @@ function bindingText(b) {
   return `bound to its input${parts.length ? ` (${parts.join(', ')})` : ''}`;
 }
 
+/** Which stored claims are contradicted, and whether each named something (ADR 0040). */
+function claimsOf(e, findings) {
+  const at = (k) => findings.filter((f) => f.path.startsWith(`calibration.${k}`));
+  return { f: at('frequency'), l: at('level'), named: { f: obj(e.calibration.frequency),
+    l: obj(e.calibration.level) } };
+}
+
+const findingText = (findings) => findings.map((f) => `${f.path}: ${f.text}`).join('; ');
+
+function profileText(e, f) {
+  const alg = obj(e.algorithms) && str(e.algorithms.calibration) ? `, applied by ${
+    e.algorithms.calibration}` : '';
+  return `frequency profile "${f.name || NR}" (id ${short(f.id)})${alg}; the record keeps its `
+    + 'identity, not its points, and the stored magnitude stays RAW';
+}
+
+function levelText(l) {
+  const off = num(l.offsetDb) ? `offset ${dbText(l.offsetDb)}` : `offset ${NR}`;
+  const ref = num(l.referenceHz) ? `, reference at ${hzText(l.referenceHz)}` : '';
+  const method = str(l.method) ? `, method ${l.method}` : '';
+  return `level calibration ${off}${ref}${method}, ${bindingText(l.input)}; it applies to `
+    + 'levels, not to this ratio';
+}
+
+/**
+ * The calibration as applied: the claims that hold (validate.js withoutContradictedCalibration,
+ * as the detail and compare present them), each contradicted claim said for what it is, and
+ * each finding in its own words.
+ */
 function calibrationText(e, findings) {
-  if (findings.length) {
-    return `${CONTRADICTED_TEXT}: ${findings.map((f) => f.path).join(', ')} names a `
-      + 'calibration the record\'s own results say was not applied';
+  const held = withoutContradictedCalibration(e, findings).calibration;
+  const f = obj(held.frequency) ? held.frequency : null;
+  const l = obj(held.level) ? held.level : null;
+  if (!findings.length && !f && !l) {
+    return 'uncalibrated: no frequency profile and no level calibration applied';
   }
-  const c = e.calibration;
-  const f = obj(c.frequency) ? c.frequency : null;
-  const l = obj(c.level) ? c.level : null;
-  if (!f && !l) return 'uncalibrated: no frequency profile and no level calibration applied';
-  const parts = [];
-  if (f) {
-    const alg = obj(e.algorithms) && str(e.algorithms.calibration) ? `, applied by ${
-      e.algorithms.calibration}` : '';
-    parts.push(`frequency profile "${f.name || NR}" (id ${short(f.id)})${alg}; the record keeps `
-      + 'its identity, not its points, and the stored magnitude stays RAW');
-  } else parts.push('no frequency profile');
-  if (l) {
-    const off = num(l.offsetDb) ? `offset ${dbText(l.offsetDb)}` : `offset ${NR}`;
-    const ref = num(l.referenceHz) ? `, reference at ${hzText(l.referenceHz)}` : '';
-    const method = str(l.method) ? `, method ${l.method}` : '';
-    parts.push(`level calibration ${off}${ref}${method}, ${bindingText(l.input)}; it applies to `
-      + 'levels, not to this ratio');
-  } else parts.push('no level calibration');
-  return parts.join('; ');
+  const c = claimsOf(e, findings);
+  if (findings.length && !f && !l && (!c.f.length || c.named.f) && (!c.l.length || c.named.l)) {
+    return `${CONTRADICTED_TEXT}; ${findingText(findings)}`;
+  }
+  const part = (held1, claims, named, text, what) => {
+    if (held1) return text(held1);
+    if (!claims.length) return `no ${what}`;
+    return named ? `${what === 'frequency profile' ? 'frequency' : 'level'}: ${CONTRADICTED_TEXT}`
+      : `${what} not recorded`;
+  };
+  const parts = [part(f, c.f, c.named.f, (x) => profileText(e, x), 'frequency profile'),
+    part(l, c.l, c.named.l, levelText, 'level calibration')];
+  return `${parts.join('; ')}${findings.length ? `; ${findingText(findings)}` : ''}`;
 }
 
 function runText(e) {
@@ -275,6 +329,7 @@ export function evidenceLineage(e, { hz = null, match = 'absent', name = null } 
   if (obj(e.input) || (obj(e.measurement) && 'sampleRate' in e.measurement)) {
     add('capture', 'Capture', captureText(e));
   }
+  if (obj(e.recipe) && obj(e.recipe.stimulus)) add('stimulus', 'Stimulus', stimulusText(e));
   if (obj(e.calibration)) {
     add('calibration', 'Calibration as applied', calibrationText(e, calibrationClaimFindings(e)));
   }
@@ -341,15 +396,17 @@ function algorithmsItem(a) {
       + 'recorded');
   }
   return item('algorithms', 'recorded', `${keys.length} versioned ids, each implemented by this `
-    + 'build');
+    + 'build; the ids are not covered by the result hash');
 }
 
 function calibrationItem(e) {
   if (!obj(e.calibration)) return item('calibration', 'missing', 'no calibration block is stored');
   const findings = calibrationClaimFindings(e);
   if (findings.length) {
-    return item('calibration', 'partial', `${CONTRADICTED_TEXT}: the record's own results `
-      + `contradict ${findings.map((f) => f.path).join(', ')}`);
+    const held = withoutContradictedCalibration(e, findings).calibration;
+    const kept = [obj(held.frequency) ? `frequency profile id ${short(held.frequency.id)} holds`
+      : null, obj(held.level) ? 'the level calibration holds' : null].filter(Boolean);
+    return item('calibration', 'partial', [...kept, findingText(findings)].join('; '));
   }
   const f = e.calibration.frequency;
   const l = e.calibration.level;
@@ -407,28 +464,55 @@ function buildItem(b) {
   return item('build', 'recorded', `version ${b.version} with ${ids.join(', ')}`);
 }
 
-function hashItem(e, sha256Hex) {
-  const p = obj(e.provenance) ? e.provenance : {};
-  if (!str(p.resultHash)) return item('hash', 'missing', 'no result hash is stored');
+/** What each result hash version adds to the one before (hash.js resultCanonical). */
+const HASH_ADDS = [['the results'], ['quality', 'calibration', 'input', 'output'],
+  ['the measurement block (runs, startedAt, notes)', 'build'], ['recipe', 'definition']];
+const words = (l) => (l.length > 1 ? `${l.slice(0, -1).join(', ')} and ${l[l.length - 1]}` : l[0]);
+const hashCovers = (v) => words(HASH_ADDS.slice(0, v).flat());
+const hashLeaves = (v) => words(HASH_ADDS.slice(v).flat());
+const NOT_HASHED = 'not covered by any result hash: the algorithm ids, the environment notes '
+  + 'and the lineage (created time, repeat and duplicate links)';
+
+const verified = new WeakMap();
+
+/**
+ * The result hash recomputed over a stored record in its declared version: { stored, version,
+ * actual, equal } or null without a stored hash. A record object is checked once (records are
+ * not changed in place: annotate and duplicate make new objects); an injected sha256Hex is
+ * never cached.
+ */
+export function hashVerification(e, sha256Hex = null) {
+  const p = obj(e) && obj(e.provenance) ? e.provenance : {};
+  if (!str(p.resultHash)) return null;
   const version = resultHashVersionOf(e);
+  const hit = !sha256Hex && verified.get(e);
+  if (hit && hit.stored === p.resultHash && hit.version === version) return hit;
   let actual = null;
   try {
     actual = resultHash(e, sha256Hex ? { version, sha256Hex } : { version });
   } catch (err) {
     actual = null;
   }
-  if (actual !== p.resultHash) {
+  const out = Object.freeze({ stored: p.resultHash, version, actual,
+    equal: actual === p.resultHash });
+  if (!sha256Hex) verified.set(e, out);
+  return out;
+}
+
+function hashItem(e, sha256Hex) {
+  const v = hashVerification(e, sha256Hex);
+  if (!v) return item('hash', 'missing', 'no result hash is stored');
+  if (!v.equal) {
     return item('hash', 'missing', 'a result hash is stored, but recomputing it over the record '
       + 'gives another value', 'does not verify');
   }
-  if (version < RESULT_HASH_VERSION) {
-    const covers = { 1: 'covers the results only', 2: 'leaves out the repeats, build, recipe and '
-      + 'definition', 3: 'leaves out the recipe and definition' }[version];
-    return item('hash', 'partial', `recomputed and equal; version ${version} ${covers}`,
-      'verified, partial');
+  if (v.version < RESULT_HASH_VERSION) {
+    return item('hash', 'partial', `recomputed and equal; version ${v.version} covers ${
+      hashCovers(v.version)}; it leaves out ${hashLeaves(v.version)}; ${NOT_HASHED}`,
+    'verified, partial');
   }
-  return item('hash', 'recorded', `recomputed over the stored record and equal (version ${
-    version}, recipe and definition included)`, 'verified');
+  return item('hash', 'recorded', `recomputed over the stored record and equal; version ${
+    v.version} covers ${hashCovers(v.version)}; ${NOT_HASHED}`, 'verified');
 }
 
 function environmentItem(e) {
@@ -437,8 +521,15 @@ function environmentItem(e) {
     return item('environment', 'missing', 'no location or set-up notes were recorded at '
       + 'measurement time');
   }
-  const t = n.replace(/\s+/g, ' ').trim();
-  return item('environment', 'recorded', `"${t.length > 80 ? `${t.slice(0, 79)}…` : t}"`);
+  // MEASURE appends a TEST CONTEXT run's label to its notes: the label is not a user's note.
+  const label = testContextOf(e);
+  const own = (label ? n.split(label.replace(/\.$/, '')).join(' ') : n).replace(/\s+/g, ' ')
+    .replace(/^[\s.]+|\s+\.$/g, '').trim();
+  if (!own) {
+    return item('environment', 'missing', 'the notes hold only the TEST CONTEXT label, no '
+      + 'location or set-up notes');
+  }
+  return item('environment', 'recorded', `"${own.length > 80 ? `${own.slice(0, 79)}…` : own}"`);
 }
 
 /** See the header. */
@@ -474,11 +565,33 @@ export function evidenceDifferences(checklists) {
     .filter((d) => d.states.some((s) => s !== d.states[0]));
 }
 
+const IDENTITIES = Object.freeze([
+  ['build', (e) => (obj(e.provenance) ? e.provenance.build : null)],
+  ['definition', (e) => (obj(e.definition) ? [e.definition.id, e.definition.version,
+    e.definition.hash] : null)],
+  ['calibration', (e) => (obj(e.calibration) ? [obj(e.calibration.frequency)
+    ? e.calibration.frequency.id : null, obj(e.calibration.level) ? e.calibration.level.offsetDb
+    : null] : null)],
+  ['input device', (e) => (obj(e.input) && obj(e.input.device) ? [e.input.device.id,
+    e.input.device.label] : null)],
+]);
+
+/** The recorded identities (build, definition, calibration, input device) that differ. */
+export function identityDifferences(experiments) {
+  const list = Array.isArray(experiments) ? experiments.filter(obj) : [];
+  if (list.length < 2) return [];
+  return IDENTITIES.filter(([, of]) => {
+    const keys = list.map((e) => JSON.stringify(of(e) ?? null));
+    return keys.some((k) => k !== keys[0]);
+  }).map(([name]) => name);
+}
+
 /** See the header. */
-export function evidenceDifferencesText(diffs, labels = []) {
-  if (!diffs.length) {
-    return 'Evidence differences: none (every checklist item has the same state in each run).';
-  }
-  return `Evidence differences: ${diffs.map((d) => `${d.label} (${d.states.map((s, i) => `${
-    labels[i] || String.fromCharCode(65 + i)} ${STATE_TEXT[s]}`).join(', ')})`).join('; ')}.`;
+export function evidenceDifferencesText(diffs, labels = [], identities = []) {
+  const states = diffs.length ? diffs.map((d) => `${d.label} (${d.states.map((s, i) => `${
+    labels[i] || String.fromCharCode(65 + i)} ${STATE_TEXT[s]}`).join(', ')})`).join('; ')
+    : 'none';
+  return `Checklist differences (states only): ${states}. ${identities.length
+    ? `Recorded identities that differ: ${identities.join(', ')}.`
+    : 'No difference in the recorded build, definition, calibration or input device.'}`;
 }

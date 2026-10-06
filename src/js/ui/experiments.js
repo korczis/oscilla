@@ -90,7 +90,7 @@ import {
 import { timestampText, definitionText } from '../measurement/views/experiment-summary.js';
 import {
   runEvidence, evidenceLineage, resultPoint, reproducibilityChecklist, evidenceDifferences,
-  evidenceDifferencesText,
+  evidenceDifferencesText, identityDifferences,
 } from '../experiments/evidence.js';
 
 export const STORE_FALLBACK_TEXT = 'Experiments are kept in memory for this page view only: this '
@@ -329,7 +329,7 @@ export function createExperimentsUi() {
       hasTransfer: !!(e.results && e.results.transfer),
       hasIr: !!(e.results && e.results.ir),
       // Over the stored record, never the presented copy (ADR 0044).
-      evidence: plain(runEvidence(e, { ...m, hz: was })),
+      evidence: { ...plain(runEvidence(e, { ...m, hz: was })), hzError: null },
     };
     if (ctx.charts.detail) ctx.charts.detail.setView(view);
   }
@@ -359,7 +359,7 @@ export function createExperimentsUi() {
       summary: v.summary,
       semantic: plain(v.semantic),
       evidenceDiff: evidenceDifferencesText(evidenceDifferences(checklists),
-        v.entries.map((x) => x.label)),
+        v.entries.map((x) => x.label), identityDifferences(list)),
       overlayNotes: v.overlay ? v.overlay.notes.slice() : [],
       overlaySummary: v.overlay ? `Overlay of ${v.entries.length} raw responses (relative `
         + 'magnitudes, unchanged).' : 'No experiment has a frequency response to overlay.',
@@ -475,14 +475,24 @@ export function createExperimentsUi() {
       this.$nextTick(() => { if (ctx.charts.detail) ctx.charts.detail.relayout(); });
       return e;
     },
-    /** The evidence lineage at another frequency (Hz) of the open run; null when not valid. */
+    /**
+     * The evidence lineage at another frequency (Hz) of the open run. An entry that is not a
+     * frequency above 0 Hz is refused with a message (hzError) and the last point kept; returns
+     * the point, or null when refused (the field then shows the kept frequency again).
+     */
     experimentsEvidenceAt(value) {
-      const hz = Number(value);
+      const ev = this.exps.detail && this.exps.detail.evidence;
       const e = ctx.detail;
-      if (!e || !this.exps.detail || !Number.isFinite(hz) || hz <= 0) return null;
+      if (!e || !ev) return null;
+      const hz = typeof value === 'string' && value.trim() === '' ? NaN : Number(value);
+      if (!Number.isFinite(hz) || hz <= 0) {
+        this.exps.detail.evidence = { ...ev, hzError: 'Enter a frequency above 0 Hz; the value '
+          + `shown is still at ${ev.hz} Hz.` };
+        return null;
+      }
       const m = e.definition ? matchOf(e.definition) : {};
       const point = resultPoint(e, hz);
-      this.exps.detail.evidence = { ...this.exps.detail.evidence, hz, point: plain(point),
+      this.exps.detail.evidence = { ...ev, hz, hzError: null, point: plain(point),
         lineage: plain(evidenceLineage(e, { ...m, hz })) };
       return point;
     },
