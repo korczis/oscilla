@@ -348,6 +348,10 @@ export function summaryRecord(doc, sizeBytes) {
     schemaVersion: doc.schemaVersion,
     oscillaVersion: doc.oscillaVersion,
     status: doc.quality ? doc.quality.status : null,
+    // The run's identity (ADR 0046): a finding's reference is checked against it on every
+    // refresh. A row written by an earlier build lacks it and the record is read instead.
+    resultHash: doc.provenance && typeof doc.provenance.resultHash === 'string'
+      ? doc.provenance.resultHash : null,
     sizeBytes,
     ...(isBaseline(doc) ? { baseline: true } : {}),
     ...(doc.definition ? { definition: { id: doc.definition.id, version: doc.definition.version,

@@ -61,6 +61,7 @@ export function createFindingsUi() {
     // experimentId -> { readable: true, resultHash, hasResponse } of a stored run, or
     // { readable: false, reason } when its record cannot be read (a corrupt record)
     identity: new Map(),
+    rowKey: new Map(),   // experimentId -> the summary row the identity was read under
     names: new Map(),    // experimentId -> name, of the runs listed
     defs: new Map(),     // definition id -> name (a reference to one is the wrong kind)
   };
@@ -156,6 +157,17 @@ export function createFindingsUi() {
       const dlg = typeof document !== 'undefined' ? document.getElementById(DIALOG) : null;
       // Cancel or Escape discards the draft; until then the unsaved-work guard reports it.
       if (dlg) dlg.addEventListener('close', () => { this.fnd.form.open = false; });
+      // Another tab may have changed the runs or findings: read them again when this tab is
+      // shown, so a reference is checked against what is stored now.
+      if (typeof document !== 'undefined') {
+        let pending = null;
+        document.addEventListener('visibilitychange', () => {
+          if (document.hidden || pending || this.workspace !== 'experiments'
+            || !this.exps.loaded) return;
+          pending = this.experimentsRefresh().catch(() => null)
+            .finally(() => { pending = null; });
+        });
+      }
     },
 
     /** What a reload would lose here: a finding being written (ADR 0045). */
@@ -171,10 +183,23 @@ export function createFindingsUi() {
       const rows = list || await s.list();
       ctx.names = new Map(rows.map((r) => [r.experimentId, r.name || '(unnamed)']));
       ctx.defs = new Map((this.exps.defs || []).map((d) => [d.id, d.name]));
-      for (const id of [...ctx.identity.keys()]) if (!ctx.names.has(id)) ctx.identity.delete(id);
+      // An identity is kept only while its summary row is unchanged: a record replaced under the
+      // id (here or in another tab) changes the row (its result hash, time, size), so it is read
+      // again. A row from an earlier build carries no result hash and is read on every refresh.
+      const keys = new Map(rows.map((r) => [r.experimentId, Object.prototype.hasOwnProperty
+        .call(r, 'resultHash') ? JSON.stringify(r) : null]));
+      for (const id of [...ctx.identity.keys()]) {
+        const k = keys.get(id);
+        if (!k || k !== ctx.rowKey.get(id)) {
+          ctx.identity.delete(id);
+          ctx.rowKey.delete(id);
+        }
+      }
       const { findings, unreadable } = await s.listFindings();
       for (const id of new Set(findings.flatMap(citedRunIds))) {
-        if (ctx.names.has(id)) await identity(this, id);
+        if (!ctx.names.has(id)) continue;
+        await identity(this, id);
+        if (keys.get(id)) ctx.rowKey.set(id, keys.get(id));
       }
       const n = unreadable.length;
       this.fnd.note = n ? `${n} stored finding${n === 1 ? '' : 's'} could not be read and ${

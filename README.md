@@ -673,7 +673,7 @@ Browser storage holds only these keys and one database, `oscilla-experiments` (v
 | sessionStorage | `oscilla.history` | Recently played configurations (this tab only) |
 | sessionStorage | `oscilla.safetyNoticeCollapsed` | Whether the safety notice was collapsed |
 | IndexedDB | `oscilla-experiments`, object store `experiments` | Your saved experiments, in the exported file form |
-| IndexedDB | `oscilla-experiments`, object store `summaries` | One small row per experiment for the list (name, date, schema and product version, quality status, size) |
+| IndexedDB | `oscilla-experiments`, object store `summaries` | One small row per experiment for the list (name, date, schema and product version, quality status, result hash, size) |
 | IndexedDB | `oscilla-experiments`, object store `studio` | Your saved Studio projects and patches (name, save time, studioHash and the document) |
 | IndexedDB | `oscilla-experiments`, object store `studioSummaries` | One small row per Studio project or patch for the library list |
 | IndexedDB | `oscilla-experiments`, object store `definitions` | Your experiment definitions, each with its versions (recipe, declared conditions, acceptance criterion, name and notes) |
