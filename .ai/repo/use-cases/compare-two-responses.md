@@ -9,7 +9,7 @@ target: advisory
 weight: 180
 difficulty: basic
 commands: [knowledge]
-claims: [measurement-comparison, aggregate-primary-response, semantic-run-comparison, experiment-definitions]
+claims: [measurement-comparison, aggregate-primary-response, semantic-run-comparison, experiment-definitions, run-evidence]
 tags: [oscilla, product-acceptance, v3]
 ---
 
@@ -25,6 +25,11 @@ same definition version. When they later edit the definition's declared conditio
 run records version 2, and comparing it with the baseline says that the definition was edited
 between the runs.
 
+Before trusting a difference, they open each run's Evidence: the value at 1 kHz traced
+through the analysis, capture, calibration, run, definition version and build, and a
+checklist of what each record stores. Compare names the checklist items whose state differs
+between the two runs, for example a calibration recorded in one and not in the other.
+
 # What proves it
 
 The behaviour is proven by the OSCILLA test named in each claim of `docs/CLAIMS.yaml`, run
@@ -33,7 +38,8 @@ by:
 - `npm test` (tests/unit/v3-experiments.test.mjs compareExperiments and responseDelta; tests/unit/v3-views.test.mjs compare view; tests/unit/v3-storage.test.mjs aggregate used when present)
 - `npm test` (tests/unit/v3-semantic-compare.test.mjs: the semantic changes by domain, execution vs presentation, the baseline)
 - `npm test` (tests/unit/v3-experiment-definitions.test.mjs: the definition hash and its versions, the run bound to its version in result hash v4, migration of earlier files, the version change in compare)
-- `npm run test:measure` (tests/browser/v3-ui.cjs, check experiments: an equivalent pair shows A - B, a non-equivalent pair is refused with the reason; check experiments-changes: the change list, the collapsed metadata group, the baseline; check definitions: two runs of one definition version, an edit, a run of version 2, the version change in compare)
+- `npm test` (tests/unit/v3-run-evidence.test.mjs: the lineage and checklist of a run from its stored fields, and the evidence differences between runs)
+- `npm run test:measure` (tests/browser/v3-ui.cjs, check experiments: an equivalent pair shows A - B, a non-equivalent pair is refused with the reason; check experiments-changes: the change list, the collapsed metadata group, the baseline; check definitions: two runs of one definition version, an edit, a run of version 2, the version change in compare; check evidence: the Evidence section of a run and the evidence differences line in compare)
 
 A use-case/v1 scenario can only invoke `bin/majordomus`, so the scenario below does not
 play or capture audio. It proves the traceability instead: each claim's implementation and
@@ -103,6 +109,18 @@ steps:
     expect:
       exit: 0
       stdout_contains: ['claim:experiment-definitions +test:tests/unit/v3-experiment-definitions\.test\.mjs']
+  - id: run-evidence-implemented
+    run: ['knowledge', 'edges', '--type', 'implemented_by']
+    note: 'claim run-evidence is implemented by src/js/experiments/evidence.js, a tracked file'
+    expect:
+      exit: 0
+      stdout_contains: ['claim:run-evidence +implementation:src/js/experiments/evidence\.js']
+  - id: run-evidence-tested
+    run: ['knowledge', 'edges', '--type', 'tested_by']
+    note: 'claim run-evidence is proven by tests/unit/v3-run-evidence.test.mjs'
+    expect:
+      exit: 0
+      stdout_contains: ['claim:run-evidence +test:tests/unit/v3-run-evidence\.test\.mjs']
 then:
   - 'every claim this use case names resolves to a tracked implementation and a tracked test'
 ```
@@ -115,4 +133,6 @@ units; layout and metadata changes are collapsed; nothing is presented as a caus
 one definition version show no definition change; a run of an edited definition is named as
 version n → m of the same definition. A run whose setup was changed is not recorded as from
 the definition. A minus B appears only for equivalent experiments and only over their overlapping
-valid range, never normalised; otherwise the view says why it is not shown.
+valid range, never normalised; otherwise the view says why it is not shown. The evidence
+checklist differences line lists only items whose state differs, or says there are none, and
+names the recorded identities (build, definition, calibration, input device) that differ.
