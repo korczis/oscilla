@@ -681,3 +681,23 @@ test('review 1.5: closing the dialog keeps a typed draft; only Discard drops it'
   assert.equal(cmp.fnd.draftKept, false);
   assert.deepEqual(cmp.findingsWhatWouldBeLost(), []);
 });
+
+test('review 1.7: removing the last reference to a run drops its identity; relinking reads it anew', async () => {
+  const { cmp } = harness();
+  await cmp.experimentsImportText(await recordAs('b', 'run-r'));
+  await cmp.findingsAskRun('run-r');
+  cmp.fnd.form.statement = 'cites R';
+  const first = await cmp.findingsSave();
+  assert.ok(first, cmp.fnd.form.error);
+  cmp.experimentsAskDelete({ id: 'run-r', name: 'R' });
+  await cmp.experimentsDelete();
+  await cmp.experimentsImportText(await recordAs('c', 'run-r', { name: 'another record' }));
+  await cmp.findingsAskEdit(first.id);
+  cmp.findingsRemoveRef(0);
+  assert.deepEqual(cmp.fnd.form.runs, [], 'no identity is kept for a run no longer cited');
+  assert.ok(await cmp.findingsAddRun('run-r'), cmp.fnd.form.error);
+  const saved = await cmp.findingsSave();
+  assert.ok(saved, cmp.fnd.form.error);
+  assert.equal(saved.runs[0].resultHash, (await fx()).c.experiment.provenance.resultHash);
+  assert.equal(rowOf(cmp, 'cites R').evidence[0].state, 'ok');
+});

@@ -327,6 +327,9 @@ export function createFindingsUi() {
     findingsRemoveRef(i) {
       const f = this.fnd.form;
       f.evidence = f.evidence.filter((x, j) => j !== i);
+      // A run no longer cited loses its recorded identity: linking it again reads it anew.
+      const cited = new Set(f.evidence.flatMap((e) => refRunIds(e.ref)));
+      f.runs = f.runs.filter((r) => cited.has(r.experimentId));
       f.error = '';
     },
 
