@@ -3,7 +3,8 @@
 //   runChanges(a, b, { studioChanges, definitions }) -> [Change]   what changed between run a
 //     (the reference: the baseline when one is set) and run b. Never modifies either run.
 //   Change = { domain, path, kind: 'added'|'removed'|'changed'|'unchanged',
-//     class: 'execution'|'presentation'|'metadata', before, after, unit?, label, note? }
+//     class: 'execution'|'presentation'|'metadata'|'unmeasured', before, after, unit?, label,
+//     note? }
 //   runFields(list) -> [Field]   the descriptors runChanges and compare.js compareExperiments
 //     share: { path, domain, label, get, unit?, severity?, expand? }. `severity` marks the
 //     fields of compareExperiments' differences ('warn' decides equivalence, 'info' is shown).
@@ -24,6 +25,12 @@
 // source digest, artifact SHA-256), result (quality verdict and reasons by code, stored
 // response kind, aggregated runs, result algorithms) and metadata (name, annotations).
 // Everything else is class 'execution'; only studioChanges reports 'presentation'.
+// Studio changes and the measured path (ledger D3, ADR 0038 resolution 2026-10-06): when both
+// runs name their measured path (studio.measured), a Studio change outside both paths is class
+// 'unmeasured' — recorded in the graph, not used by either measurement — and only a change of a
+// node, connection or measurement clip on either path (or of the Studio schema version) is
+// execution. A run whose block records the whole graph (experiment schema 3 and earlier) cannot
+// say what its measurement used: its Studio changes stay execution, each with a note saying so.
 // Identity and time (experimentId, createdAt, startedAt, hashes, lineage) are not compared:
 // two runs always differ there. Fixed fields and algorithm roles are listed even when
 // unchanged; collections (quality reasons, Studio items) list only what differs. Order is
@@ -148,6 +155,75 @@ function change(domain, path, label, before, after, unit, cls) {
     before: b, after: a, ...(unit ? { unit } : {}), label };
 }
 
+export const WHOLE_GRAPH_NOTE = 'a run records the whole Studio graph without naming its '
+  + 'measured path (an earlier version wrote it so), so whether its measurement used this is not '
+  + 'recorded';
+
+const ITEM_LISTS = Object.freeze(['nodes', 'edges', 'clips']);
+
+/** The ids of a recorded execution state's nodes, edges and clips, per list. */
+function executionIds(x) {
+  const ids = (l) => (Array.isArray(l) ? l.map((r) => r && r.id).filter((v) => typeof v
+    === 'string') : []);
+  return { nodes: ids(x && x.nodes), edges: ids(x && x.edges),
+    clips: ids(x && x.timeline && x.timeline.clips) };
+}
+
+/**
+ * The item a Studio change path names: { list, id } or null (not a node, edge or clip). An id
+ * may contain dots (schema.js ID_PATTERN), so the path is matched against the known ids as
+ * `studio.<list>.<id>` followed by its end or a dot, the longest id winning ("sweep.a" over
+ * "sweep" for studio.nodes.sweep.a.params.level); never cut at the first dot (review F2, #139).
+ */
+function studioItem(path, known) {
+  let best = null;
+  for (const list of ITEM_LISTS) {
+    const head = `studio.${list}.`;
+    if (!path.startsWith(head)) continue;
+    for (const id of known[list]) {
+      const at = head + id;
+      if ((path === at || path.startsWith(`${at}.`)) && (!best || id.length > best.id.length)) {
+        best = { list, id };
+      }
+    }
+  }
+  return best;
+}
+
+/** The Studio changes between two runs' blocks, classified by the measured paths (see header). */
+function studioRunChanges(sa, sb, studioChanges) {
+  if (!sa && !sb) return [];
+  const paths = sa && sb && sa.measured && sb.measured ? [sa.measured, sb.measured] : null;
+  const known = { nodes: [], edges: [], clips: [] };
+  for (const src of [sa && executionIds(sa.execution), sb && executionIds(sb.execution),
+    ...(paths || [])]) {
+    if (!src) continue;
+    for (const list of ITEM_LISTS) {
+      if (Array.isArray(src[list])) known[list].push(...src[list]);
+    }
+  }
+  const on = (path) => {
+    if (path === 'studio.schemaVersion') return true;
+    const it = studioItem(path, known);
+    return !!it && paths.some((m) => Array.isArray(m[it.list]) && m[it.list].includes(it.id));
+  };
+  const classify = (c) => {
+    if (c.class !== 'execution') return c;
+    if (!paths) return sa && sb ? { ...c, note: WHOLE_GRAPH_NOTE } : c;
+    return on(c.path) ? c : { ...c, class: 'unmeasured' };
+  };
+  if (sa && sb && sa.studioHash !== sb.studioHash && studioChanges) {
+    return studioChanges(sa.execution, sb.execution).map(classify);
+  }
+  const whole = change('studio', 'studio', 'Studio execution state (studioHash)',
+    sa && sa.studioHash, sb && sb.studioHash);
+  if (!paths) return [whole.kind === 'unchanged' ? whole : classify(whole)];
+  const measured = change('studio', 'studio.measured', 'Studio measured path (hash)',
+    sa.measured.hash, sb.measured.hash);
+  return [measured, measured.kind === 'unchanged' && whole.kind !== 'unchanged'
+    ? { ...whole, class: 'unmeasured' } : whole];
+}
+
 /** "version 3 → 4 of oscilla.confidence" / "another ir method" (describeAlgorithm). */
 function algorithmNote(x, y) {
   const p = describeAlgorithm(x);
@@ -212,14 +288,7 @@ export function runChanges(a, b, { studioChanges = null, definitions = null } = 
       (q || p).unit);
     if (c.kind !== 'unchanged') out.push(c);
   }
-  const sa = a.studio || null;
-  const sb = b.studio || null;
-  if (sa && sb && sa.studioHash !== sb.studioHash && studioChanges) {
-    out.push(...studioChanges(sa.execution, sb.execution));
-  } else if (sa || sb) {
-    out.push(change('studio', 'studio', 'Studio execution state (studioHash)',
-      sa && sa.studioHash, sb && sb.studioHash));
-  }
+  out.push(...studioRunChanges(a.studio || null, b.studio || null, studioChanges));
   const rank = (c) => DOMAINS.indexOf(c.domain);
   return out.map((c, i) => [c, i]).sort((p, q) => rank(p[0]) - rank(q[0]) || p[1] - q[1])
     .map(([c]) => c);

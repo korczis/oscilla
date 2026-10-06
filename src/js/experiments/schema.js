@@ -24,10 +24,12 @@
 // spread, repeatability of repeated runs on their grid), added with withResults({ results:
 // { aggregate } }); createExperiment leaves it absent, so experiments without repeats and files
 // written before it existed keep their exact form and result hash.
-// studio (V3.1, optional, ADR 0038): { schemaVersion, studioHash, execution } — the Studio
-// execution state that ran (studio/provenance.js withStudioProvenance), validated and hash-checked
-// by validate.js; absent for experiments run outside Studio, so their form and hashes are
-// unchanged. The recipe stays authoritative (ADR 0019); studio never enters configHash.
+// studio (V3.1, optional, ADR 0038): { schemaVersion, studioHash, execution, measured? } — the
+// Studio execution state the measurement was run from (studio/provenance.js
+// withStudioProvenance) and, since schema 4, its measured path { v, nodes, edges, clips, hash }
+// (ledger D3), validated and hash-checked by validate.js; absent for experiments run outside
+// Studio, so their form and hashes are unchanged. The recipe stays authoritative (ADR 0019);
+// studio never enters configHash or a result hash.
 // Repeated measurements (G20, aggregate.js "Storage rule"): results.aggregate is the primary
 // response; results.transfer is the aggregate centre marked derivedFrom: 'aggregate' (or null),
 // never one run's transfer; individual runs only on request in the optional
@@ -105,7 +107,8 @@ import {
   DURATION_LIMITS, MIN_FREQUENCY_HZ, SAMPLE_RATE_LIMITS, STIMULUS_KINDS, safeMaxFrequency,
 } from '../measurement/stimulus.js';
 import {
-  RELATIVE_SCALE_LABEL, RELATIVE_UNIT, isValidLevelCalibration,
+  RELATIVE_SCALE_LABEL, RELATIVE_UNIT, UNBOUND_TEXT, isBoundLevelCalibration,
+  isValidLevelCalibration,
 } from '../calibration/level.js';
 import { hashDeviceId, isHashedDeviceId } from '../calibration/device-id.js';
 import { aggregateResult, transferFromAggregate } from '../measurement/aggregate.js';
@@ -115,8 +118,23 @@ import { derivedRef, recipeMismatches } from './definition.js';
  * Experiment file schema (§131-§132: V3.0 starts at 1, independent of the product version).
  * 2: run ids and the metadata/execution split (ADR 0040; migrate.js 1 → 2).
  * 3: the definition a run was executed from (ADR 0043; migrate.js 2 → 3).
+ * 4: the Studio block names its measured path, `studio.measured` (ledger D3, ADR 0038
+ *    resolution 2026-10-06; migrate.js 3 → 4 changes nothing: an earlier block records the
+ *    whole graph and says so).
+ * EXPERIMENT_SCHEMA_VERSION is the newest schema this build reads. A record is WRITTEN in the
+ * lowest schema that describes it (experimentSchemaVersionFor, review F4 of #139): 4 only when
+ * its Studio block has a measured path, else 3, so a plain MEASURE run still opens in a build
+ * that reads schema 3. A document of schema 3 or earlier is read as schema 3 (migrate.js).
  */
-export const EXPERIMENT_SCHEMA_VERSION = 3;
+export const EXPERIMENT_SCHEMA_VERSION = 4;
+/** The schema every earlier document is migrated to, and plain records are written in. */
+export const EXPERIMENT_BASE_SCHEMA_VERSION = 3;
+
+/** The lowest experiment schema that describes `e` (see EXPERIMENT_SCHEMA_VERSION). */
+export function experimentSchemaVersionFor(e) {
+  return e && e.studio && typeof e.studio === 'object' && Object.hasOwn(e.studio, 'measured')
+    ? 4 : EXPERIMENT_BASE_SCHEMA_VERSION;
+}
 /** Calibration record schema (FrequencyProfile / LevelCalibration, calibration/profile.js). */
 export const CALIBRATION_SCHEMA_VERSION = PROFILE_SCHEMA_VERSION;
 /** Instrument config file schema (ui/config-file.js CONFIG_FILE_VERSION). */
@@ -640,7 +658,7 @@ export function createExperiment({
   }
   return {
     kind: EXPERIMENT_KIND,
-    schemaVersion: EXPERIMENT_SCHEMA_VERSION,
+    schemaVersion: EXPERIMENT_BASE_SCHEMA_VERSION, // no Studio block yet (see above)
     oscillaVersion: b ? b.version : null,
     oscillaCommit: b ? b.commit : null,
     experimentId: id,
@@ -896,14 +914,16 @@ export function describeStimulus(s) {
 /**
  * The calibration state in words: frequency profile name or none; "SPL CALIBRATED (…)" only for
  * a valid LevelCalibration (calibration/level.js), otherwise "level UNCALIBRATED (<spec §24
- * scale label>)" — never the string "SPL" without a valid level calibration.
+ * scale label>)" — never the string "SPL" without a valid level calibration. A calibration
+ * without an input binding says so (ledger C1): nothing in the record ties it to the input.
  */
 export function describeCalibration(cal) {
   const f = cal && cal.frequency;
   const l = cal && cal.level;
   const freq = f ? `frequency profile "${f.name || UNKNOWN}"` : 'frequency profile none';
   const spl = isValidLevelCalibration(l)
-    ? `SPL CALIBRATED (${sig(l.referenceDbSpl, 4)} dB SPL at ${formatHz(l.referenceHz)})`
+    ? `SPL CALIBRATED (${sig(l.referenceDbSpl, 4)} dB SPL at ${formatHz(l.referenceHz)}${
+      isBoundLevelCalibration(l) ? '' : `; ${UNBOUND_TEXT}`})`
     : `level UNCALIBRATED (${RELATIVE_SCALE_LABEL})`;
   return `${freq}, ${spl}`;
 }

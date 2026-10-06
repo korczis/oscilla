@@ -170,8 +170,11 @@ loop). From a view model:
   workspace abort the capture; the input is released afterwards. The stored LevelCalibration
   (schema 2) carries method `captured`, the scale and the capture's input (hashed deviceId,
   sample rate, echo cancellation, noise suppression, AGC, channel count). Typing the reading is
-  an advanced switch labelled with the same scale (method `manual`, bound to the current input
-  when one is known).
+  an advanced switch labelled with the same scale (method `manual`, bound to the input checked
+  last). It is refused, with the reason in the dialog, while no input is known (ledger C1), so
+  no calibration is ever stored without its input. While no input is known (another input
+  chosen, or a device change under the default input) the indicator reads PENDING INPUT CHECK;
+  the engine itself never applies a calibration to another input than its binding's.
 - The level indicator reads UNCALIBRATED, with the reason in the panel and the indicator's
   title, whenever the current input (the latest setup check, result or reference capture)
   differs from the calibration's; such a calibration is neither applied to a measurement nor

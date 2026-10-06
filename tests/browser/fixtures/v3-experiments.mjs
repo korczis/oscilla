@@ -12,6 +12,9 @@
 //     older  A as the build before ADR 0040's 2026-10-05 resolution could save it: a level
 //            calibration made AFTER the uncalibrated run recorded as used, hashes stamped over
 //            it (a contradicted calibration claim; json only, never built by the app now)
+//     white  A's results under a white-noise recipe: a stimulus this build's engine cannot
+//            measure (ledger D4; a schema-3 file from elsewhere, json only, never built by the
+//            app)
 
 import { createMeasurementEngine, assessMeasurement } from '../../../src/js/measurement/engine.js';
 import { mulberry32 } from '../../../src/js/audio/noise.js';
@@ -20,6 +23,8 @@ import {
   configHash, withConfigHash, resultHash, withResultHash, RESULT_HASH_VERSION,
 } from '../../../src/js/experiments/hash.js';
 import { createLevelCalibration } from '../../../src/js/calibration/level.js';
+import { normalizeStimulus } from '../../../src/js/measurement/stimulus.js';
+import { derivedRef } from '../../../src/js/experiments/definition.js';
 import { experimentFromResult } from '../../../src/js/ui/measure-experiment.js';
 
 export const SR = 48000;
@@ -144,5 +149,16 @@ export async function buildFixtures() {
   o = withConfigHash(o, configHash(o));
   o = withResultHash(o, resultHash(o), RESULT_HASH_VERSION);
   const older = { experiment: o, json: experimentToJson(o), name: o.name, result: null };
-  return { a, b, c, older };
+  const { requested, ...played } = a.experiment.recipe; // eslint-disable-line no-unused-vars
+  const recipe = { ...played, stimulus: normalizeStimulus({ kind: 'white', sampleRate: SR,
+    duration: played.stimulus.duration, level: played.stimulus.level }).spec };
+  let w = { ...a.experiment, experimentId: 'fixture-white', recipe, definition: derivedRef(recipe),
+    name: 'TEST CONTEXT · white-noise record (a stimulus this version cannot measure)' };
+  w = withConfigHash(w, configHash(w));
+  w = withResultHash(w, resultHash(w), RESULT_HASH_VERSION);
+  // Written as a schema-3 file (no hash covers the schema version): every build since ADR 0043
+  // reads it, so the same file shows what an earlier build did with it.
+  const white = { experiment: w, json: experimentToJson({ ...w, schemaVersion: 3 }), name: w.name,
+    result: null };
+  return { a, b, c, older, white };
 }

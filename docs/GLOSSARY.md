@@ -46,6 +46,13 @@ rate, repeats, quality, algorithm IDs, product version and build, with a configu
 and a result hash (claim `reproducible-experiments`). Once its result hash is stamped it is
 immutable; only its name and notes change (ADR 0040).
 
+**Measured path.** The part of a Studio graph a measurement run from Studio depended on: the
+Sweep wired to a Transfer Analyzer reference, the Sweep's route to the Master Output, the
+analyzer's observed chain and the measurement clips, exactly what `recipeFromStudio` reads
+(`src/js/studio/provenance.js` `measuredPath`, ADR 0038 resolution 2026-10-06). An experiment's
+Studio block records it by id with its own hash beside the whole graph's `studioHash`; a block
+from experiment schema 3 or earlier records the whole graph only.
+
 **Experiment definition.** What to measure and how, kept apart from any result (ADR 0043,
 `src/js/experiments/definition.js`, kind `oscilla-definition`): a recipe, the conditions
 declared for every run and an optional acceptance criterion, with append-only versions,
@@ -57,16 +64,17 @@ Definitions are stored in the `definitions` object store of the experiments data
 **Evidence.** What a stored run's record says about how one of its values was produced and
 whether the run can be repeated (ADR 0044, `src/js/experiments/evidence.js`): a *lineage* of
 one stored result point (analysis, capture, calibration as applied, run, definition version,
-build, Studio graph) and a *reproducibility checklist* whose items are recorded, partial or not
-recorded. It is derived from stored fields only, never stored itself, and never a score.
+build, Studio graph and its measured path) and a *reproducibility checklist* whose items are
+recorded, partial or not recorded. It is derived from stored fields only, never stored itself, and never a score.
 
 **Run** and **repeat.** See "One word, two meanings" below.
 
 **Calibration.** Two separate kinds that are never mixed (ADR 0020, `src/js/calibration/`):
 
 - a *level calibration* (`LevelCalibration`, `level.js`): one reading of an external
-  acoustic reference that sets an absolute offset; it is the only thing that lets a level be
-  labelled dB SPL (ADR 0017);
+  acoustic reference that sets an absolute offset, bound to the input it was taken with; it is
+  the only thing that lets a level be labelled dB SPL (ADR 0017), and only while that input is
+  in use. One without a binding, from an earlier record, is "not bound to an input";
 - a *frequency profile* (`FrequencyProfile`, `profile.js`, `interpolate.js`): a microphone
   correction curve, identified by the SHA-256 of its points, applied between its points and
   never extrapolated by default; it changes a response's shape, never its scale.

@@ -100,7 +100,8 @@ not-readable and unsupported mic errors end INVALID with readable text and no op
   "device busy" reason would read better. Minor.
 - **A manual level calibration saved before any input is known** binds to no device and applies to
   every input. It is the user's own statement, labelled as manual; binding it needs a product
-  decision.
+  decision. (Decided 2026-10-06, ledger C1: such a reading is refused until an input is known,
+  and an unbound calibration never applies to a known input; ADR 0017 resolution.)
 - **A level calibration taken in TEST CONTEXT loopback** can show dB SPL on a digital loop; the
   conditions are prefixed TEST CONTEXT and the binding voids it for a real microphone.
 - **Sweep range and duration** are under "Measurement setup", below the result (collapsed on the

@@ -1094,7 +1094,7 @@ function assessFrequencyCalibration(freqCal, frequencies, calMask, reliable, req
   return { calibratedRange, frequencyCalibrated: ok };
 }
 
-function assessLevelCalibration(level, add) {
+function assessLevelCalibration(level, add, voided = null) {
   if (isValidLevelCalibration(level)) {
     const offset = level.offsetDb;
     const sign = offset > 0 ? '+' : '';
@@ -1106,7 +1106,9 @@ function assessLevelCalibration(level, add) {
   }
   const text = level
     ? `level calibration is not valid: uncalibrated, levels are ${RELATIVE_UNIT}`
-    : `no absolute level calibration: uncalibrated, levels are ${RELATIVE_UNIT}`;
+    : voided ? `level calibration not applied (${voided.replace(/^UNCALIBRATED: /, '')}): `
+      + `uncalibrated, levels are ${RELATIVE_UNIT}`
+      : `no absolute level calibration: uncalibrated, levels are ${RELATIVE_UNIT}`;
   add('LEVEL_CALIBRATION', 'warn', text, null, 'dB');
   return false;
 }
@@ -1135,7 +1137,9 @@ function decideStatus(reasons, codes) {
  *   transfer        computeTransfer() result or null (e.g. an RTA-only measurement)
  *   aggregate       aggregateRuns() result or null
  *   calibration     { frequency: { covered: Uint8Array (transfer grid), coverage: [fLo, fHi] }
- *                   | null, level: LevelCalibration | null }
+ *                   | null, level: LevelCalibration | null, levelVoid?: text } — levelVoid: why
+ *                   a level calibration the user had on was NOT applied (engine.js: bound to
+ *                   another input); the LEVEL_CALIBRATION reason then says so
  *   requestedRange  [f1, f2] in Hz; default transfer.requestedRange
  *   resolutionHz    bin resolution Δf; default transfer.binHz
  *   sweepWindow     optional [start, end) samples of the stimulus inside the capture (or one per
@@ -1255,7 +1259,8 @@ export function assessQuality({
   const calMask = calibratedMask(frequencies, freqCal);
   const fc = assessFrequencyCalibration(freqCal, frequencies, calMask, reliable, requested, fmt,
     add);
-  const levelCalibrated = assessLevelCalibration(levelCal, add);
+  const levelCalibrated = assessLevelCalibration(levelCal, add,
+    calibration && typeof calibration.levelVoid === 'string' ? calibration.levelVoid : null);
 
   const status = decideStatus(reasons, codes);
   if (status === 'INVALID') reliable = new Uint8Array(n);

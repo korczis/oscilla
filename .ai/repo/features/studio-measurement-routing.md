@@ -5,7 +5,7 @@ kind: feature
 title: 'Lay out a measurement as a Studio graph and keep it in experiment provenance'
 short_title: 'Measurement routing'
 headline: 'Wire stimulus, capture, calibration and analysis visually, run them through the Measure engine, and record the topology with the experiment it produced.'
-summary: 'ANALYSIS ports with reference, observed and result roles; measurement clips that hand a recipe derived from the graph to the V3 measurement engine; the Studio schema version, studioHash and execution state recorded in the experiment.'
+summary: 'ANALYSIS ports with reference, observed and result roles; measurement clips that hand a recipe derived from the graph to the V3 measurement engine; the Studio schema version, studioHash, execution state and measured path recorded in the experiment.'
 status: stable
 weight: 450
 featured: false
@@ -28,8 +28,12 @@ Master Output. On PLAY, the first measurement clip of a pass hands a recipe deri
 graph and the clips (`src/js/studio/measurement-run.js`, `provenance.js` `recipeFromStudio`)
 to the Measure workspace's MeasurementEngine, which runs its own state machine, capture,
 calibration and abort paths (ADR 0038). The saved experiment carries a Studio block: the
-Studio schema version, the `studioHash` and the execution state that ran, verified on import
-and kept out of `configHash`, so the recipe stays authoritative (ADR 0019).
+Studio schema version, the `studioHash` and the execution state of the graph it was run from,
+and the measured path the recipe was derived from (the nodes, connections and measurement clips
+it read, with their own hash; ADR 0038 resolution 2026-10-06), verified on import and kept out
+of `configHash`, so the recipe stays authoritative (ADR 0019). A node the measurement never
+reads changes the `studioHash`, never the measured path, and compare does not list it as an
+execution change.
 
 Proven by `npm test` (`tests/unit/v31-studio-provenance.test.mjs`,
 `v31-studio-gaps.test.mjs` with a real MeasurementEngine, `v31-studio-model.test.mjs`) and

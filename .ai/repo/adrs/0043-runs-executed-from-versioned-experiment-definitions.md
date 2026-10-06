@@ -168,3 +168,42 @@ Proposed:
   stored versions append-only and stored runs immutable; compare naming the version change;
   through the UI in three browsers: create, run twice (same version), edit, run (version 2),
   compare, a changed setup recorded as derived, and the panel at 390 px.
+
+## Resolution notes
+
+Appended; the sections above are left as written on 2026-10-05, and the status stays
+`proposed`.
+
+### 2026-10-06: a recipe this build cannot run is never repeated (ledger D4)
+
+The v4.0 completion ledger (finding D4) showed that the experiment schema is wider than the
+engine. The schema accepts all six stimulus.js kinds (sine, white, pink, band-noise, chirp,
+log-sweep), and the measurement engine measures log sweeps only (`engine.js` `validateRecipe`).
+A white-noise record with transfer and impulse-response results imported without a word, and
+Repeat loaded it through `measureLoadRecipe`, which never copied `kind`: the setup kept a log
+sweep (with the previous f1 and f2, since a noise recipe has none), so the repeat measured a log
+sweep while recording `repeatOf`. No OSCILLA build has measured such a record, so it is a file
+from elsewhere or an edited one.
+
+Decided:
+
+- **Kept, with a finding.** Refusing such a file would lose data a user may need to keep. It
+  validates with a finding of code `stimulus-not-measurable` at `recipe.stimulus.kind`: "this run
+  used a white noise stimulus, which this version of OSCILLA cannot measure (its measurement
+  engine plays log sweeps only); the record is kept as stored, and Repeat is refused"
+  (`validate.js` `stimulusFindings`, with `engine.js` `MEASURABLE_STIMULUS_KINDS` as the one list
+  of what the engine measures). The import says so as a warning, the record is stored as
+  imported, and its Experiments detail states it. The evidence checklist item "Recipe recorded"
+  was already partial for such a record (ADR 0044) and now gives the same reason.
+- **Never repeated, never run.** Repeat refuses plainly ("Repeat refused: This run used a white
+  noise stimulus, which this version of OSCILLA cannot measure ... Nothing was loaded."), and so
+  does "Run this definition" for a definition whose recipe has such a stimulus ("Definition not
+  run"). MEASURE's `measureLoadRecipe` and `measureLoadDefinition` refuse the recipe themselves
+  and change nothing, whoever calls them. Substituting a log sweep is never done.
+- **Records the application writes stay log sweeps.** MEASURE's Save validates strictly
+  (`recordFindings`, the calibration claims of ADR 0040 and this finding), so no saved run can
+  carry a stimulus this build cannot measure.
+
+Proven by `tests/unit/v4-measurement-truth.test.mjs` (the D4 tests, which failed before the
+change) and check `unmeasurable-stimulus` in `tests/browser/v3-ui.cjs` (chromium, firefox and
+webkit over file:// and /oscilla/).

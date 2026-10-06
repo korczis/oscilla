@@ -83,6 +83,17 @@
 // resolution 2026-10-05): `frequency` names the profile by profileId (its SHA-256) and name, and
 // `level.calibration` is a frozen copy of the LevelCalibration that was applied, or null. An
 // experiment takes its calibration from here, never from what the workspace has loaded at Save.
+//
+// A level calibration belongs to its input (ledger C1, review F1 of #139): the engine applies
+// one only while levelCalibrationApplies(level, the input measured) holds — checked against the
+// preflight's input, then against the first run capture's own device, constraints and rate,
+// whose facts become result.input (noise levels are summarized again without it when that
+// second check voids it). The workspace's own check can be
+// stale (the system default input changed underneath "default input", or this measurement's
+// preflight opened another device), so the engine does not rely on it. A calibration that does
+// not apply is dropped for the whole measurement — noise levels, result and quality — and the
+// reason is kept: a LEVEL_CALIBRATION_VOID preflight warning, `result.calibrated.level.voided`
+// and the LEVEL_CALIBRATION quality reason ("level calibration not applied: …").
 
 import {
   MEASUREMENT_STATES as S,
@@ -100,7 +111,9 @@ import { toneToMeanSquare, welch } from './spectrum.js';
 import { bandCenters, integrateBands } from './rta.js';
 import { normalizePoints } from '../calibration/profile.js';
 import { applyFrequencyCorrection } from '../calibration/interpolate.js';
-import { isValidLevelCalibration, levelLabel, toDisplayLevel } from '../calibration/level.js';
+import {
+  isValidLevelCalibration, levelCalibrationApplies, levelLabel, toDisplayLevel,
+} from '../calibration/level.js';
 
 /** Where the input gain is: the page cannot change it (§238 recovery must be actionable). */
 const INPUT_GAIN_WHERE = 'the input gain (in the operating system\'s sound settings or on the '
@@ -189,6 +202,29 @@ export const PREFLIGHT_THRESHOLDS = Object.freeze({
 export const ANALYSIS_PROGRESS_WEIGHT = 0.1;
 
 export const INPUT_PROCESSING_NOTE = 'Input processing may have been applied by browser/device.';
+
+/**
+ * The stimulus kinds this engine measures (validateRecipe refuses the others): transfer and
+ * impulse response are deconvolved from a log sweep (ADR 0021). The experiment schema accepts
+ * every stimulus.js kind, so a record of another kind is readable and never repeatable here
+ * (ledger D4): measurableStimulusRefusal names it.
+ */
+export const MEASURABLE_STIMULUS_KINDS = Object.freeze(['log-sweep']);
+const STIMULUS_WORDS = Object.freeze({ sine: 'sine', white: 'white noise', pink: 'pink noise',
+  'band-noise': 'band-limited noise', chirp: 'chirp', 'log-sweep': 'log sweep' });
+
+/**
+ * null when this engine can measure a stimulus of `kind`, else the words of the refusal: "a
+ * white noise stimulus, which this version of OSCILLA cannot measure (its measurement engine
+ * plays log sweeps only)". Callers say whose stimulus it is ("This run used …").
+ */
+export function measurableStimulusRefusal(kind) {
+  if (MEASURABLE_STIMULUS_KINDS.includes(kind)) return null;
+  const words = typeof kind === 'string' && Object.hasOwn(STIMULUS_WORDS, kind)
+    ? STIMULUS_WORDS[kind] : `"${String(kind)}"`;
+  return `a ${words} stimulus, which this version of OSCILLA cannot measure (its measurement `
+    + 'engine plays log sweeps only)';
+}
 
 /**
  * Run-check codes that invalidate a run before any analysis (review M8): the capture holds no
@@ -300,7 +336,7 @@ export function validateRecipe(recipe, { sampleRate, limits = CONTRACT_LIMITS } 
   }
   const st = recipe.stimulus;
   if (!isObj(st)) problems.push('stimulus must be an object');
-  else if (st.kind !== 'log-sweep')
+  else if (!MEASURABLE_STIMULUS_KINDS.includes(st.kind))
     problems.push('stimulus.kind must be "log-sweep" (transfer and impulse response need it)');
 
   const repeats = recipe.repeats === undefined ? 1 : recipe.repeats;
@@ -553,7 +589,8 @@ export function assessMeasurement(result, ctx = {}) {
     capture: result.captureChecks,
     transfer: result.transfer,
     aggregate: result.aggregate,
-    calibration: { frequency: result.calibrated ? result.calibrated.frequency : null, level },
+    calibration: { frequency: result.calibrated ? result.calibrated.frequency : null, level,
+      levelVoid: ctx.levelVoid || null },
     sweepWindow: sweepWindow.length ? sweepWindow : null,
     chainNotes: ctx.chainNotes !== undefined ? ctx.chainNotes : result.chainNotes ?? null,
     noiseCheck: result.noise && result.noise.checks ? result.noise.checks : null,
@@ -572,6 +609,18 @@ function irMeta(ir) {
 
 function reason(code, text, extra) {
   return Object.freeze({ code, text, ...(extra || {}) });
+}
+
+/**
+ * Why `level` must not be applied to the input `facts` ({ device, constraints } of a preflight
+ * or a capture) at `sampleRate`, or null when it applies (see the header). An input that reports
+ * nothing about itself, not even its rate, cannot void it: there is nothing to compare.
+ */
+export function levelVoidFor(level, facts, sampleRate) {
+  const f = facts || {};
+  const a = levelCalibrationApplies(level, { device: f.device || null,
+    constraints: f.constraints || null, sampleRate: isNum(sampleRate) ? sampleRate : null });
+  return a.applies ? null : a.reason;
 }
 
 const defaultMono = () => (typeof performance !== 'undefined' && performance.now
@@ -840,6 +889,14 @@ export function createMeasurementEngine({ io, clock, onEvent, limits, assess, an
         : new MeasurementError('NO_INPUT');
       blockers.push(reason(me.code, me.message));
     }
+    let levelVoid = null;
+    if (cal.level && input && input.ok) {
+      levelVoid = levelVoidFor(cal.level, input, sampleRate);
+      if (levelVoid) {
+        cal = { ...cal, level: null };
+        warnings.push(reason('LEVEL_CALIBRATION_VOID', levelVoid));
+      }
+    }
     const applied = input && input.constraints ? input.constraints.applied : null;
     if (input && input.ok && !facts.testContext && inputProcessingMayApply(applied))
       warnings.push(reason('INPUT_PROCESSING', INPUT_PROCESSING_NOTE));
@@ -890,7 +947,7 @@ export function createMeasurementEngine({ io, clock, onEvent, limits, assess, an
     if (!cal.frequency)
       warnings.push(reason('UNCALIBRATED', 'No frequency calibration profile: the response '
         + 'includes the microphone and is UNCALIBRATED.', { severity: 'info' }));
-    if (!cal.level)
+    if (!cal.level && !levelVoid)
       warnings.push(reason('LEVEL_RELATIVE', 'No level calibration: levels are dB relative '
         + '(dBFS-like), not dB SPL.', { severity: 'info' }));
 
@@ -901,6 +958,7 @@ export function createMeasurementEngine({ io, clock, onEvent, limits, assess, an
       facts,
       plan,
       calibration: cal,
+      levelVoid,
       chainNotes,
       sampleRate,
     };
@@ -1090,9 +1148,10 @@ export function createMeasurementEngine({ io, clock, onEvent, limits, assess, an
     return { invalid: false, transfer, ir, aggregate: out.aggregate };
   }
 
-  function applyCalibration(cal, transfer) {
+  function applyCalibration(cal, transfer, voided = null) {
     const level = cal.level ? Object.freeze(JSON.parse(JSON.stringify(cal.level))) : null;
-    const out = { frequency: null, level: { ...levelLabel(cal.level), calibration: level } };
+    const out = { frequency: null, level: { ...levelLabel(cal.level), calibration: level,
+      ...(voided && !level ? { voided } : {}) } };
     if (cal.frequency) {
       const c = applyFrequencyCorrection(transfer.magnitudeDb, transfer.frequencies,
         cal.frequency);
@@ -1131,6 +1190,17 @@ export function createMeasurementEngine({ io, clock, onEvent, limits, assess, an
       s.timeline = { items: tl.items, audioS: tl.audioS, actual: [], analysis: null };
       const stimulus = renderStimulus(plan.stimulusSpec); // the ONE canonical stimulus (§206)
       const assessFn = typeof opts.assess === 'function' ? opts.assess : defaultAssess;
+      // The level calibration of THIS measurement: dropped as soon as a capture shows another
+      // input than the one it is bound to (see the header).
+      const lv = { level: report.calibration.level, voided: report.levelVoid || null };
+      const bindLevel = (cap) => {
+        if (!lv.level || !cap) return;
+        const why = levelVoidFor(lv.level, cap, cap.sampleRate);
+        if (why) {
+          lv.level = null;
+          lv.voided = why;
+        }
+      };
 
       // Noise floor (§31).
       let noise = null;
@@ -1150,7 +1220,7 @@ export function createMeasurementEngine({ io, clock, onEvent, limits, assess, an
         if (!ncap || !(ncap.samples instanceof Float32Array))
           throw new MeasurementError('INTERNAL', 'The noise capture returned no samples.');
         s.noiseCapture = ncap;
-        noise = summarizeNoise(ncap, report.calibration.level);
+        noise = summarizeNoise(ncap, lv.level);
         emit(s, { type: 'noise', rmsDb: noise.rmsDb, peak: noise.peak,
           reasons: noise.checks.reasons });
         // A clipping or broken noise capture invalidates; an EMPTY one (digital silence, a
@@ -1217,6 +1287,12 @@ export function createMeasurementEngine({ io, clock, onEvent, limits, assess, an
       const first = s.captures[0];
       const input = { device: first.device || { label: null, id: null },
         constraints: first.constraints || { requested: null, applied: null } };
+      const hadLevel = !!lv.level;
+      bindLevel({ ...input, sampleRate: first.sampleRate });
+      if (hadLevel && !lv.level && noise && s.noiseCapture) {
+        noise = summarizeNoise(s.noiseCapture, null); // its levels were calibrated above
+      }
+      const measuredCal = { ...report.calibration, level: lv.level };
       const analysis = await analyzeRuns(s, stimulus, runs, opts);
       if (analysis.invalid) {
         go(s, S.INVALID, { reasons: analysis.reasons.map((x) => x.code) });
@@ -1225,7 +1301,7 @@ export function createMeasurementEngine({ io, clock, onEvent, limits, assess, an
         return invalidResult(s, { reasons: analysis.reasons, preflight: publicReport(report),
           runs, captureChecks, noise });
       }
-      const calibrated = applyCalibration(report.calibration, analysis.transfer);
+      const calibrated = applyCalibration(measuredCal, analysis.transfer, lv.voided);
       if (noise && !opts.keepRaw) noise.raw = null;
       else if (noise) noise.raw = s.noiseCapture.samples;
       const notes = [];
@@ -1263,7 +1339,7 @@ export function createMeasurementEngine({ io, clock, onEvent, limits, assess, an
         await guard(s, null);
         let q;
         try {
-          q = assessFn(result, { recipe, plan, calibration: report.calibration,
+          q = assessFn(result, { recipe, plan, calibration: measuredCal, levelVoid: lv.voided,
             chainNotes: report.chainNotes || null, inputProcessing: inputProcessingFacts(result) });
         } catch (e) {
           throw mapError(e, 'ANALYSIS_FAILURE');
