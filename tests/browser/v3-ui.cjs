@@ -97,6 +97,16 @@
 //                           the definition is flagged and its run records a derived definition;
 //                           keyboard (Enter opens the dialog, Escape closes it); the panel and
 //                           the dialog fit 390 px
+//   evidence                (ADR 0044) fixture A's detail has an Evidence section under real
+//                           headings (h4, two h5): an ordered lineage (result at 1 kHz, analysis,
+//                           capture, calibration, run with wall-clock and audio-clock labels,
+//                           derived definition, build) and a checklist list of nine items whose
+//                           states and words are right (raw capture "not retained (...)", hash
+//                           "verified"), each with an icon beside its words and no score; the
+//                           frequency field is labelled and keyboard-reachable (typed 5000 +
+//                           Enter traces the point at 5 kHz); it fits 390 px; light theme; the
+//                           contradicted older record reads "uncalibrated (the stored claim is
+//                           contradicted)", no "SPL"; Compare A with it names the differing item
 //   calibration-export      (V315) Export CSV and Export JSON of the loaded profile download
 //                           deterministic files named after the profile and its id, and both
 //                           re-import (same id, name, convention); a correction profile (chosen
@@ -1613,6 +1623,117 @@ function defineChecks(fixtures) {
         && res.ref4.id !== def.id,
       narrow: res.narrow.fits && res.narrow.buttons && res.narrowDialog === true,
       closed: res.closed === true,
+    }) };
+  });
+
+  def('evidence', async ({ page }) => {
+    await H.workspace(page, 'experiments');
+    for (const [k, id] of [['a', 'fixture-a'], ['older', 'fixture-older']]) {
+      const stored = await page.evaluate(async (x) => !!(await window.OSCILLA.experiments.store()
+        .get(x)), id);
+      if (!stored) {
+        await page.evaluate((t) => window.OSCILLA.app.experimentsImportText(t), fixtures[k].json);
+      }
+    }
+    const read = () => page.evaluate(() => {
+      const sec = document.querySelector('[data-osc="exp.evidence"]');
+      if (!sec) return { missing: true };
+      const r = sec.getBoundingClientRect();
+      const lin = sec.querySelector('[data-osc="exp.lineage"]');
+      const chk = sec.querySelector('[data-osc="exp.checklist"]');
+      const li = (el) => [...el.querySelectorAll('li')].map((x) => ({ id: x.dataset.id,
+        state: x.dataset.state || null, text: x.textContent.replace(/\s+/g, ' ').trim(),
+        icon: !!x.querySelector('svg[aria-hidden="true"] use') }));
+      return {
+        shown: sec.offsetParent !== null,
+        h4: [...sec.querySelectorAll('h4')].map((h) => h.textContent.trim()),
+        h5: [...sec.querySelectorAll('h5')].map((h) => h.textContent.trim()),
+        ol: lin.tagName, ul: chk.tagName, role: chk.getAttribute('role'),
+        lineage: li(lin), checklist: li(chk), text: sec.textContent,
+        hz: document.getElementById('osc-x-ev-hz').value,
+        label: !!document.querySelector('label[for="osc-x-ev-hz"]'),
+        fits: sec.scrollWidth <= sec.clientWidth + 1 && r.right <= window.innerWidth + 1
+          && document.documentElement.scrollWidth <= window.innerWidth + 1,
+      };
+    });
+    const res = {};
+    await page.evaluate(() => window.OSCILLA.app.experimentsOpen('fixture-a'));
+    res.a = await H.until(read, (d) => d.shown && d.checklist && d.checklist.length === 9
+      && d.lineage.length > 0 && d.lineage[d.lineage.length - 1].id === 'build', 5000);
+    if (res.a.missing) return { ok: false, failed: ['section'], ...res };
+    // Keyboard: the frequency field takes focus; a typed value + Enter traces the stored point
+    // nearest it.
+    await page.focus('#osc-x-ev-hz');
+    res.focused = await page.evaluate(() => document.activeElement
+      && document.activeElement.id === 'osc-x-ev-hz' && document.activeElement.tabIndex >= 0);
+    await page.fill('#osc-x-ev-hz', '5000');
+    await page.keyboard.press('Enter');
+    await page.keyboard.press('Tab');
+    res.at5k = await H.until(read, (d) => d.lineage && /nearest 5 kHz\)/.test(d.lineage[0].text),
+      3000);
+    // 390 px wide, light theme: the section fits and its state words stay readable text.
+    await page.setViewportSize({ width: 390, height: 844 });
+    res.narrow = await H.until(read, (d) => d.fits, 2000);
+    await page.evaluate(() => window.OSCILLA.app.toggleTheme());
+    res.light = await page.evaluate(() => {
+      const span = document.querySelector('[data-osc="exp.checklist"] li span');
+      const root = getComputedStyle(document.documentElement);
+      return { theme: document.documentElement.dataset.theme, color: getComputedStyle(span).color,
+        text2: root.getPropertyValue('--osc-text-2').trim() };
+    });
+    await page.evaluate(() => window.OSCILLA.app.toggleTheme());
+    await page.setViewportSize({ width: 1536, height: 1024 });
+    // The contradicted older record.
+    await page.evaluate(() => window.OSCILLA.app.experimentsOpen('fixture-older'));
+    res.older = await H.until(read, (d) => d.shown && d.lineage && d.lineage.some((l) => l.id
+      === 'calibration' && /contradicted/.test(l.text)), 5000);
+    res.spl = await page.evaluate(splMentions);
+    // Compare: one line naming the checklist items whose state differs.
+    await page.evaluate(() => window.OSCILLA.app.experimentsCompare(['fixture-a',
+      'fixture-older']));
+    res.diff = await H.until(() => page.evaluate(() => {
+      const el = document.querySelector('[data-osc="exp.evidenceDiff"]');
+      return el && el.offsetParent !== null ? el.textContent.trim() : '';
+    }), (t) => t.length > 0, 5000);
+    await page.evaluate(() => {
+      window.OSCILLA.app.exps.panel = 'detail';
+      window.OSCILLA.app.alerts = [];
+    });
+    const hex = (c) => { const m = String(c).match(/\d+/g) || []; return `#${m.slice(0, 3)
+      .map((v) => Number(v).toString(16).padStart(2, '0')).join('')}`; };
+    const st = (d, id) => (d.checklist || []).find((c) => c.id === id) || {};
+    const ln = (d, id) => (d.lineage || []).find((c) => c.id === id) || { text: '' };
+    const out = { ...res };
+    for (const k of ['a', 'older', 'at5k', 'narrow']) if (out[k]) out[k] = { ...out[k], text: '' };
+    return { ...out, ...H.verdict({
+      section: res.a.shown && res.a.h4.join() === 'Evidence'
+        && res.a.h5.join('|') === 'What produced this value?|Can I repeat this?',
+      lists: res.a.ol === 'OL' && res.a.ul === 'UL' && res.a.role === 'list',
+      lineage: res.a.lineage.map((l) => l.id).join() === 'result,analysis,capture,calibration,'
+        + 'run,definition,build' && /dB re unity digital transfer/.test(ln(res.a, 'result').text)
+        && /at 1\.001 kHz/.test(ln(res.a, 'result').text)
+        && /\(wall clock\)/.test(ln(res.a, 'run').text)
+        && /audio clock/.test(ln(res.a, 'run').text)
+        && /^Definition: derived from the run's own recipe/.test(ln(res.a, 'definition').text),
+      states: st(res.a, 'definition').state === 'partial' && st(res.a, 'recipe').state
+        === 'recorded' && st(res.a, 'calibration').state === 'recorded'
+        && st(res.a, 'device').state === 'missing' && st(res.a, 'hash').state === 'recorded'
+        && st(res.a, 'raw').state === 'missing' && st(res.a, 'environment').state === 'recorded',
+      words: /: verified \(recomputed/.test(st(res.a, 'hash').text)
+        && st(res.a, 'raw').text === 'Raw capture retained: not retained (OSCILLA stores the '
+          + 'derived result, not the raw capture)'
+        && res.a.checklist.every((c) => c.icon) && !/%|\bscore:/i.test(res.a.text),
+      label: res.a.label && res.a.hz === '1000',
+      keyboard: res.focused === true && /at 4\.974 kHz \(the stored grid point nearest 5 kHz\)/
+        .test(res.at5k.lineage[0].text),
+      narrow: res.narrow.fits,
+      light: res.light.theme === 'light' && hex(res.light.color) === res.light.text2.toLowerCase(),
+      contradicted: /^Calibration as applied: uncalibrated \(the stored claim is contradicted\)/
+        .test(ln(res.older, 'calibration').text) && st(res.older, 'calibration').state
+        === 'partial',
+      noSpl: res.spl.length === 0,
+      compare: res.diff === 'Evidence differences: Calibration identity recorded (A recorded, '
+        + 'B partial).',
     }) };
   });
 
