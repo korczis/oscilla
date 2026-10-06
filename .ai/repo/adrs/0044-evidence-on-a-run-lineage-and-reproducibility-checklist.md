@@ -71,8 +71,11 @@ Proposed:
   version); capture (the device label or "not exposed", whether a hashed device id is stored,
   the sample rate, the applied processing flags, the master output gain that every magnitude
   includes, the engine's notes such as the input-processing warning, and a TEST CONTEXT label
-  when the run carries one); stimulus (as played, the requested range when the Nyquist limit
-  lowered it, and the digital output level); calibration as applied (the
+  when the run carries one); stimulus (as played, and the digital output level; a recorded
+  request that differs from what was played is shown for f1 and f2, and attributed to the
+  Nyquist limit only when the request is higher and the played value is exactly stimulus.js
+  `safeMaxFrequency` of the stimulus rate, otherwise "the record does not say why");
+  calibration as applied (the
   frequency profile's name and id and the algorithm that applied it; the level calibration's
   offset, reference, method and input binding, which applies to levels and not to the ratio;
   or "uncalibrated"); run (id, repeats with their ids and capture length in frames at the
@@ -128,13 +131,14 @@ Proposed:
 - **Compare.** Comparing runs adds one line, "Checklist differences (states only):", naming
   the checklist items whose state differs with each run's state, or "none". Equal states can
   hide different identities, so the line also names the recorded identities that differ
-  (build, definition, calibration, input device), or says there is no difference in them.
+  (build, definition, calibration as presented without a contradicted claim, input device), or
+  says there is no difference in them.
 - **UI.** The run detail gets an Evidence section under a real heading (h4), with "What
   produced this value?" and "Can I repeat this?" as h5, a labelled frequency field, an ordered
   list and a checklist list. Each item's icon (the existing quality icons) sits beside its state
   in words; colour is never the only signal. A frequency that is not above 0 Hz is refused:
-  the field shows the kept frequency again, is marked invalid and is described by a status
-  region that says why. It uses the existing tokens and fits 390 px.
+  the field shows the kept frequency again (so it is never left marked invalid while it holds
+  a valid value) and is described by a status region that says why. It uses the existing tokens and fits 390 px.
 
 ## Alternatives rejected
 
@@ -155,8 +159,11 @@ Proposed:
 
 - No schema, hash or storage change; a record of any schema version gets its evidence.
 - Opening a run recomputes its result hash once per record object (the store already does on
-  every read); a rename or another view of the same object reuses the check.
-- The bundle grows by about 6.3 KB gzip (zlib level 9).
+  every read); a rename or another view of the same object reuses the check. The cache relies
+  on records never being changed in place (a completed run is immutable, ADR 0040; the store,
+  annotate, duplicate and import make new objects); a hit also requires the same stored hash
+  and version.
+- The bundle grows by about 6.4 KB gzip (zlib level 9).
 - Confirmation criteria: `tests/unit/v3-run-evidence.test.mjs` (each lineage link present or
   absent per stored field; checklist states for authored, derived, calibrated, uncalibrated,
   contradicted, Studio, label-less and unverified records; raw capture never retained; no item
