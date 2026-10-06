@@ -7,8 +7,8 @@
 //     existed is read once from its record (store.get) instead;
 //   - every stored run a connection names, read once (store.get validates the record and
 //     recomputes its result hash), so a connection is 'present' only for a record that reads
-//     and verifies; one that cannot be read is 'unreadable'. A read is cached per id, size and
-//     creation time, and forgotten when the id leaves the list;
+//     and verifies; one that cannot be read is 'unreadable'. A read is cached per list row (id,
+//     size, creation time, recorded result hash) and forgotten when that row leaves the list;
 //   - the definitions and findings (listDefinitions, listFindings: validated on read);
 //   - the stored Studio projects through Studio's own library (studioLibrary, the store Studio
 //     saves to), each loaded through the full import pipeline once per saved version, its
@@ -32,7 +32,11 @@ import { createStudioLibrary } from '../studio/library.js';
 import { studioProvenance } from '../studio/provenance.js';
 
 const plain = (v) => JSON.parse(JSON.stringify(v));
-const rowKey = (r) => `${r.experimentId}|${r.sizeBytes}|${r.createdAt}`;
+// A read is reused only for the same list row: id, size, creation time and the result hash the
+// row records. A record deleted and stored again under its id (in this tab or another) writes a
+// new row, so it is read again.
+const rowKey = (r) => `${r.experimentId}|${r.sizeBytes}|${r.createdAt}|${r.links
+  ? r.links.resultHash : 'no links'}`;
 const CHECKING = 'Checking the records stored in this browser…';
 const NOUN = { run: 'Run', definition: 'Definition', finding: 'Finding' };
 

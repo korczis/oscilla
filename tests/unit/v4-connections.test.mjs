@@ -414,6 +414,16 @@ test('the workspace: a duplicate, a finding and a deleted original, in both dire
     assert.equal(one((await cmp.connectionsOfRun(dupId)).upstream, 'duplicate-of').state,
       'missing');
     assert.equal((await cmp.connectionsOfFinding(saved.id)).upstream[0].state, 'missing');
+    // A different record stored under the id: read again (not the earlier cached read).
+    const { c } = await fx();
+    const impostor = JSON.parse(c.json);
+    impostor.experimentId = 'fixture-a';
+    await cmp.experimentsImportText(JSON.stringify(impostor));
+    const re = (await cmp.connectionsOfFinding(saved.id)).upstream[0];
+    assert.equal(re.state, 'mismatch');
+    assert.match(re.text, /^does not match: a different record is stored under this id/);
+    assert.equal(one((await cmp.connectionsOfRun(dupId)).upstream, 'duplicate-of').state,
+      'mismatch');
     assert.equal(JSON.stringify(cmp.cnx), JSON.stringify(JSON.parse(JSON.stringify(cmp.cnx))),
       'plain data for Alpine');
   });

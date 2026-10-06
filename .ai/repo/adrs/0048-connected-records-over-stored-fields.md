@@ -128,7 +128,9 @@ Proposed:
   every record. A row written before this version has no `links`; the adapter reads that record
   once per page view instead and rewrites nothing. Every run a connection names is read once
   through `store.get`, which validates the record and recomputes its result hash. The read is
-  cached per id, size and creation time, and forgotten when the row leaves the list.
+  cached per list row (id, size, creation time and the result hash the row records), so a
+  record deleted and stored again under its id, in this tab or another, is read again; a record
+  altered in place beneath an unchanged row (by hand, outside OSCILLA) is read again on reload.
 - **Navigation (amends ADR 0045).** A fourth hash domain, `records`: `m=experiments` with one of
   `run=<id>`, `def=<id>` or `finding=<id>` (`core/url-state-records.js`). It is refused whole
   when malformed, like the Studio and recipe links. Without `m`, a record key routes to
