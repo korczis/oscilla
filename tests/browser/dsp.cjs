@@ -1,7 +1,8 @@
 #!/usr/bin/env node
-// Browser verification of the DSP modules (Chromium and Firefox).
+// Browser verification of the DSP modules (Chromium, Firefox and WebKit).
 //
-//   node tests/browser/dsp.cjs [--browser chromium|firefox] [--json]
+//   node tests/browser/dsp.cjs [--browser chromium|firefox|webkit] [--json]
+//   OSC_BROWSERS=webkit node tests/browser/dsp.cjs     # the same, from the environment (CI)
 //
 // Bundles tests/browser/fixtures/dsp-entry.js in memory with esbuild and serves it with
 // fixtures/dsp.html through page.route (nothing is written to disk). Resolves esbuild and
@@ -12,7 +13,7 @@
 const path = require('path');
 const fs = require('fs');
 const esbuild = require('esbuild');
-const { chromium, firefox } = require('playwright');
+const { chromium, firefox, webkit } = require('playwright');
 
 const FIX = path.join(__dirname, 'fixtures');
 const ORIGIN = 'http://dsp.test';
@@ -42,12 +43,13 @@ async function bundle() {
 }
 
 async function runBrowser(name, type, js) {
-  const launchOpts =
-    name === 'chromium'
-      ? { args: ['--autoplay-policy=no-user-gesture-required'] }
-      : {
-          firefoxUserPrefs: { 'media.autoplay.default': 0, 'media.autoplay.block-webaudio': false },
-        };
+  const launchOpts = {
+    chromium: { args: ['--autoplay-policy=no-user-gesture-required'] },
+    firefox: {
+      firefoxUserPrefs: { 'media.autoplay.default': 0, 'media.autoplay.block-webaudio': false },
+    },
+    webkit: {}, // Playwright's WebKit starts an AudioContext without a gesture
+  }[name];
   const browser = await type.launch(launchOpts);
   const page = await browser.newPage();
   const errors = [];
@@ -276,11 +278,16 @@ async function runBrowser(name, type, js) {
 
 (async () => {
   const js = await bundle();
-  const targets = [
-    ['chromium', chromium],
-    ['firefox', firefox],
-  ].filter(([n]) => (only ? n === only
-    : !process.env.OSC_BROWSERS || process.env.OSC_BROWSERS.split(',').includes(n)));
+  const engines = { chromium, firefox, webkit };
+  const names = only ? [only]
+    : (process.env.OSC_BROWSERS ? process.env.OSC_BROWSERS.split(',') : Object.keys(engines));
+  const unknown = names.filter((n) => !engines[n]);
+  if (unknown.length || names.length === 0) {
+    // A browser this suite cannot launch must not pass as "0 checks, ALL PASS".
+    console.error(`unknown browser(s): ${unknown.join(', ') || '(none given)'}`);
+    process.exit(2);
+  }
+  const targets = names.map((n) => [n, engines[n]]);
   for (const [name, type] of targets) {
     try {
       await runBrowser(name, type, js);
