@@ -881,3 +881,30 @@ test('review 2.4: updatedAt always advances, in the same millisecond or after a 
   assert.equal(F.updateFinding(f, { statement: 'later' }, { now: t + 5000 }).updatedAt,
     new Date(t + 5000).toISOString());
 });
+
+test('review 2.6: a list row from an earlier build gets its result hash once, then is not re-read', async () => {
+  const fake = fakeIndexedDB();
+  const { cmp } = harness(fake);
+  await cmp.experimentsImportText(await recordAs('a', 'run-old'));
+  await cmp.findingsAskRun('run-old');
+  cmp.fnd.form.statement = 'cites an old row';
+  assert.ok(await cmp.findingsSave(), cmp.fnd.form.error);
+  // The row as an earlier build wrote it: no resultHash field.
+  const rows = fake.dbs.get('oscilla-experiments').stores.get('summaries').data;
+  const old = rows.get('run-old');
+  delete old.resultHash;
+  const s = await cmp.experimentsStore();
+  const listed = (await s.list()).find((r) => r.experimentId === 'run-old');
+  const hash = (await fx()).a.experiment.provenance.resultHash;
+  assert.equal(listed.resultHash, hash, 'filled in from the stored record');
+  assert.equal(rows.get('run-old').resultHash, hash, 'and written back to the row');
+  // With the hash in the row, the identity is read once, not on every refresh.
+  const second = harness(fake).cmp;
+  let reads = 0;
+  const real = second.experimentsIdentity;
+  second.experimentsIdentity = function (id) { reads += 1; return real.call(this, id); };
+  await second.experimentsRefresh();
+  await second.experimentsRefresh();
+  assert.equal(reads, 1);
+  assert.equal(rowOf(second, 'cites an old row').evidence[0].state, 'ok');
+});
