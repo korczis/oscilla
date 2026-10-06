@@ -1925,8 +1925,9 @@
               <li class="osc-x-row osc-f-row" data-osc="fnd.row" :data-id="r.id">
                 <div class="osc-f-head">
                   <h4 class="osc-f-statement" x-text="r.statement"></h4>
-                  <span class="osc-m-chip osc-f-status" :title="r.statusHint">Your judgement: <span data-osc="fnd.status" :data-status="r.status" x-text="r.statusText"></span></span>
+                  <span class="osc-m-chip osc-f-status">Your judgement: <span data-osc="fnd.status" :data-status="r.status" x-text="r.statusText"></span></span>
                 </div>
+                <p class="osc-x-meta osc-f-meta" data-osc="fnd.statusHint" x-text="r.statusHint"></p>
                 <p class="osc-f-issue" data-osc="fnd.statusIssue" x-show="r.statusIssue" style="display: none" x-text="r.statusIssue"></p>
                 <ul class="osc-f-refs" role="list" :aria-label="'Evidence: ' + r.statement">
                   <template x-for="e in r.evidence" :key="e.key">

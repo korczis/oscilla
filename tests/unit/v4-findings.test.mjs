@@ -908,3 +908,20 @@ test('review 2.6: a list row from an earlier build gets its result hash once, th
   assert.equal(reads, 1);
   assert.equal(rowOf(second, 'cites an old row').evidence[0].state, 'ok');
 });
+
+test('review 2.7: short Hz that still tells neighbouring grid points apart; hints are the user\'s', () => {
+  const grid = [998.4375, 1000.0471801757812, 1001.0943603515625, 1500.25];
+  assert.equal(F.gridHzText(grid[1], grid), '1000 Hz');
+  assert.equal(F.gridHzText(grid[2], grid), '1001 Hz');
+  assert.equal(F.gridHzText(1000.04, [1000.03, 1000.04, 1000.05]), '1000.04 Hz');
+  assert.equal(F.gridHzText(1234.56789, grid), '1234.56789 Hz', 'off the grid: every digit');
+  const v = { kind: 'value', experimentId: 'run-a', at: { hz: grid[2] } };
+  assert.equal(F.refText(v, () => 'A', { storedPoint: true, frequencies: grid }),
+    'Value of "A" at 1001 Hz (a stored grid point)');
+  for (const s of F.FINDING_STATUSES) {
+    assert.match(F.STATUS_HINT[s], /\byou(r)?\b/, `${s} reads as the user's judgement`);
+  }
+  const html = readFileSync(path.join(ROOT, 'src/index.html'), 'utf8');
+  assert.match(html, /data-osc="fnd\.statusHint"[^>]*x-text="r\.statusHint"/,
+    'the hint is visible text, not only a title');
+});
