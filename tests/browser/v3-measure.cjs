@@ -251,17 +251,41 @@ T.loopback = async (o = {}) => {
       // Sample-exactness of a pure-gain loopback: max |capture[lag + i] − g · stimulus[i]| at
       // the integer lag, with each run's stale-clock corrections. Any misplaced quantum makes
       // it the size of the signal; Float32 arithmetic keeps it near 1e-8.
+      // When it is not exact, "departs" says where and how (diagnostic only, never asserted):
+      // the first stimulus frame that departs from g · stimulus at the scheduled position
+      // (preF, the pre-limiter tap adds no delay) and the whole-quantum shift that fits the rest
+      // of the sweep. WebKit CI once delivered a complete capture (no missing frame, no clock
+      // correction) whose stimulus paused for one render quantum of silence 16128 frames in and
+      // continued 128 frames late (shift +128): the engine run on that capture reproduces the
+      // reported lag, maxAbs and 76 Hz deviation to the last digit.
       residual: o.residual && system.type === 'gain' ? result.runs.map((r) => {
         const st = renderStimulus(result.stimulus.spec).samples;
         const lag = Math.round(r.alignment.lagSamples);
         const g = chainGain * system.gain;
+        const err = (at, i) => Math.abs(r.raw[at + i] - g * st[i]);
         let m = 0;
         for (let i = 0; i < st.length; i++) {
-          const d = Math.abs(r.raw[lag + i] - g * st[i]);
+          const d = err(lag, i);
           if (!(d <= m)) m = d;
         }
+        let departs;
+        if (!(m <= o.residualTol)) {
+          let i0 = 0;
+          while (i0 < st.length && err(preF, i0) <= o.residualTol) i0++;
+          let fit = { shift: null, maxAbs: Infinity };
+          for (let shift = -512; shift <= 512; shift += 128) {
+            let e = 0;
+            for (let i = Math.min(st.length, i0 + 512); i < st.length; i++) {
+              const d = err(preF + shift, i);
+              if (!(d <= e)) e = d;
+            }
+            if (e < fit.maxAbs) fit = { shift, maxAbs: e };
+          }
+          departs = { atFrame: i0, atS: i0 / sr, shiftAfter: fit.shift, maxAbsAfter: fit.maxAbs };
+        }
         return { maxAbs: m, lagFrames: lag, clockCorrections: r.checks.integrity
-          && r.checks.integrity.timing ? r.checks.integrity.timing.clockCorrections : null };
+          && r.checks.integrity.timing ? r.checks.integrity.timing.clockCorrections : null,
+        ...(departs ? { departs } : {}) };
       }) : undefined,
       actual: result.timeline.actual,
     };
@@ -652,7 +676,7 @@ async function runOne(browserName, origin, url, workerSource, micDone) {
       const sys = { type: 'gain', gain: 1 };
       const pre = await page.evaluate((o) => window.T.loopback(o), { seconds: 2, level,
         masterGain, tap: 'pre-limiter', system: sys, noiseCheckS: 0, keepCurve: true,
-        residual: true });
+        residual: true, residualTol: SAMPLE_EXACT_TOLERANCE });
       const post = await page.evaluate((o) => window.T.loopback(o), { seconds: 2, level,
         masterGain, tap: 'post-chain', system: sys, noiseCheckS: 0, keepCurve: true });
       noteClock(key, `G12 ${label} pre-limiter`, pre);
