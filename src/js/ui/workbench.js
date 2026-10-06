@@ -38,18 +38,8 @@ export function groupedHz(f) {
   return GROUP.format(f);
 }
 
-/** Workspace -> the V1 mode id the URL `m` key stores. */
-export function v1ModeFor(workspace, source) {
-  if (workspace === 'presets' || workspace === 'learn') return workspace;
-  if (source === 'dual') return 'dual';
-  if (source === 'sweep') return 'sweep';
-  return 'playground';
-}
-
-/** V1 mode id (URL `m`) -> workspace. */
-export function workspaceForV1Mode(mode) {
-  return { dual: 'synthesis', presets: 'presets', learn: 'learn' }[mode] || 'playground';
-}
+/** Workspace <-> V1 mode id: one mapping, in ui/navigation.js (ADR 0045). */
+export { v1ModeFor, workspaceForV1Mode } from './navigation.js';
 
 export const SWEEP_FORM = SWEEP_PARAMS;
 

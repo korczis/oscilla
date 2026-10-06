@@ -73,9 +73,14 @@
 //
 // Recipe link (V355, spec §102): "Copy recipe link" writes the setup's recipe into the URL hash
 // (`mr`, core/url-state-measure.js; recipe only, never results, calibration or device) next to
-// the instrument's own hash state. A link read at load or on hashchange is validated like every
-// import and refused whole when anything is wrong; a valid one fills the setup and opens
-// MEASURE, and never starts a check or a measurement.
+// the instrument's own hash state, with `m=measure`. A link read at load or as a new hash is
+// handed here by the one hash dispatcher (ui/navigation.js, which also chooses the workspace,
+// ADR 0045); it is validated like every import and refused whole when anything is wrong; a
+// valid one fills the setup, and never starts a check or a measurement.
+//
+// Unsaved work (ADR 0045): measureWhatWouldBeLost() reports a completed measurement that is
+// not saved and a level calibration (page memory only; a reload discards it) to the
+// unsaved-work guard (ui/unsaved.js); the Experiment panel shows "unsaved result".
 //
 // Definitions (ADR 0043): measureLoadDefinition fills the setup from a definition version's
 // recipe and keeps that version's run reference. A measurement records it only when the setup
@@ -148,7 +153,7 @@ import { inputDeviceView } from '../measurement/views/input-devices.js';
 import {
   encodeRecipeLink, decodeRecipeLink, recipeParamOf, withRecipeParam, RECIPE_WIRE_KEYS,
 } from '../core/url-state-measure.js';
-import { withoutStudioParams } from '../core/url-state-studio.js';
+import { hashForWorkspace } from './navigation.js';
 
 /** Result tabs (role=tab via the shell's tab binding is not used: these are measure-local). */
 export const MEASURE_RESULT_TABS = Object.freeze([
@@ -963,6 +968,7 @@ export function createMeasureUi(svc) {
     cmp.meas.saved = true;
     cmp.meas.savedId = sv.id;
     cmp.meas.savedAnnotation = e.annotations && e.annotations.notes || null;
+    cmp.meas.savedName = e.name;
     ctx.repeatOf = null;
   }
 
@@ -995,6 +1001,7 @@ export function createMeasureUi(svc) {
       }
       sv.experiment = again;
       m.savedAnnotation = again.annotations && again.annotations.notes || null;
+      m.savedName = again.name;
       cmp.notify('success', 'Experiment saved again', `"${name}" was no longer stored; the `
         + 'same run is stored again under its id.');
       return sv.id;
@@ -1011,6 +1018,7 @@ export function createMeasureUi(svc) {
       const lost = confirmed ? ' (the write reported an error, but the run is stored)' : '';
       if (!Object.keys(meta).length) {
         m.savedAnnotation = storedNotes;
+        m.savedName = stored.name;
         if (confirmed) cmp.notify('success', 'Experiment saved', `"${stored.name}"${lost}.`);
         else {
           cmp.notify('info', 'Nothing to update', `"${stored.name}" already has this name and `
@@ -1026,6 +1034,7 @@ export function createMeasureUi(svc) {
         throw err;
       }
       m.savedAnnotation = next.annotations && next.annotations.notes || null;
+      m.savedName = next.name;
       cmp.notify('success', confirmed ? 'Experiment saved' : 'Experiment updated',
         `"${next.name}"${lost}: ${Object.keys(meta).map((k) => (k === 'name' ? 'name'
           : 'annotation notes')).join(' and ')} updated; the measured run is stored unchanged.`);
@@ -1038,7 +1047,7 @@ export function createMeasureUi(svc) {
       m.saving = false;
       m.saved = !lostRun;
       m.savedId = lostRun ? null : sv.id;
-      if (lostRun) m.savedAnnotation = null;
+      if (lostRun) { m.savedAnnotation = null; m.savedName = null; }
       refresh();
     }
   }
@@ -1185,6 +1194,7 @@ export function createMeasureUi(svc) {
     ctx.evidence = null;
     ctx.save = null;
     cmp.meas.savedAnnotation = null;
+    cmp.meas.savedName = null;
     if (ctx.shown && ctx.shown.kind === 'result') ctx.shown = null;
     rebuildAll();
     const notesAtStart = cmp.meas.notes; // the conditions as stated when the run starts
@@ -1290,6 +1300,7 @@ export function createMeasureUi(svc) {
       savedId: null,
       evidenceRun: 0,
       savedAnnotation: null, // the annotation notes the saved record of this result holds
+      savedName: null,       // the name the saved record of this result holds
       saving: false,
       error: null,
       setupOpen: false,
@@ -1347,11 +1358,7 @@ export function createMeasureUi(svc) {
       if (md && typeof md.addEventListener === 'function') {
         md.addEventListener('devicechange', () => { if (ctx.devicesEnumerated) refreshInputs(); });
       }
-      if (typeof window !== 'undefined' && window.location) {
-        this.measureApplyRecipeHash(window.location.hash, { origin: 'load' });
-        window.addEventListener('hashchange', () => this.measureApplyRecipeHash(window.location
-          .hash, { origin: 'hashchange' }));
-      }
+      // Recipe links reach measureApplyRecipeHash through the hash dispatcher (main.js).
     },
     /** Mount the charts once the view exists (main.js, after the labs). */
     measureMountCharts(root) {
@@ -1510,16 +1517,19 @@ export function createMeasureUi(svc) {
     measureRecipeUrl() {
       const loc = typeof window !== 'undefined' ? window.location : null;
       if (!loc) return null;
-      // A recipe link opens MEASURE: the Studio deep-link keys (V422) are not carried along.
-      return `${loc.href.split('#')[0]}#${withRecipeParam(withoutStudioParams(loc.hash),
-        this.measureRecipeParam())}`;
+      // A recipe link opens MEASURE (m=measure): the Studio deep-link keys (V422) are not
+      // carried along.
+      return `${loc.href.split('#')[0]}#${hashForWorkspace(withRecipeParam(loc.hash,
+        this.measureRecipeParam()), 'measure')}`;
     },
     /** Put the recipe link in the address bar and on the clipboard (dialog when unavailable). */
     async measureCopyRecipeLink() {
       const url = this.measureRecipeUrl();
       if (!url) return null;
       ctx.lastRecipeParam = this.measureRecipeParam(); // our own link is not one to apply
-      try { window.history.replaceState(null, '', url); } catch (e) { /* file:// in some */ }
+      try {
+        window.history.replaceState(window.history.state, '', url);
+      } catch (e) { /* file:// in some */ }
       this.meas.recipeLink = url;
       let copied = false;
       try {
@@ -1540,9 +1550,10 @@ export function createMeasureUi(svc) {
     /**
      * Apply a recipe link from a location hash (V355): validated like every import, refused
      * whole when invalid, never starts anything. Returns true (applied), false (refused) or
-     * null (no recipe in the hash, or the one already applied).
+     * null (no recipe in the hash, or the one already applied). The workspace is the hash
+     * dispatcher's choice (ui/navigation.js): `mr` alone opens MEASURE, an `m` key wins.
      */
-    measureApplyRecipeHash(hash, { origin = 'link' } = {}) {
+    measureApplyRecipeHash(hash) {
       const param = recipeParamOf(hash);
       if (param === null) {
         ctx.lastRecipeParam = null;
@@ -1571,8 +1582,6 @@ export function createMeasureUi(svc) {
       // second save of it would be refused as immutable and read as "not saved").
       if (ctx.me && ctx.me.state === S.READY) ctx.me.reset(); // the recipe changed
       refresh();
-      if (origin === 'load') this.workspace = 'measure';
-      else if (this.workspace !== 'measure') this.setWorkspace('measure');
       this.notify('info', 'Measurement recipe loaded from the link', `${this.meas.stimulusText}, `
         + `${this.meas.values.repeats} run(s). Nothing runs until you press Check setup or Start `
         + 'measurement.');
@@ -1851,6 +1860,43 @@ export function createMeasureUi(svc) {
           : UNBOUND_TEXT}`;
       return `reference reading stored (${how}; offset ${l.offsetDb >= 0 ? '+' : '−'}${
         Math.abs(l.offsetDb).toFixed(1)} dB at ${l.referenceHz} Hz)`;
+    },
+    /** A completed measurement whose result is not saved (the "unsaved result" indicator). */
+    get measureUnsaved() {
+      return this.meas.state === S.COMPLETE && !this.meas.saved;
+    },
+    /**
+     * What a reload or a closed tab would lose here (ui/unsaved.js): the completed result that
+     * is not saved, and a level calibration, which lives in page memory only (a frequency
+     * profile is not listed: its file can be imported again).
+     */
+    /**
+     * A saved run whose name or notes typed since are not stored yet ("Update name and notes"
+     * not pressed, or it failed): what updateSaved would send differs from the stored record.
+     */
+    get measureMetadataPending() {
+      const m = this.meas;
+      const name = typeof m.name === 'string' ? m.name.trim() : '';
+      const later = typeof m.notes === 'string' ? m.notes.trim() : '';
+      if (!m.saved || !ctx.save || !ctx.save.stored) return false;
+      if (name && name !== (m.savedName || '')) return true;
+      const started = evidenceOf(ctx.save.result).notes || '';
+      const notes = later && later !== started ? later : null;
+      return notes !== null && notes !== (m.savedAnnotation || null);
+    },
+    measureWhatWouldBeLost() {
+      const lost = [];
+      if (this.measureUnsaved) {
+        lost.push({ domain: 'measure', label: 'A completed measurement that is not saved' });
+      }
+      if (this.measureMetadataPending) {
+        lost.push({ domain: 'measure', label: 'A name or notes not stored yet (Update name and '
+          + 'notes)' });
+      }
+      if (this.meas.cal.level) {
+        lost.push({ domain: 'measure', label: 'The level calibration (kept in page memory only)' });
+      }
+      return lost;
     },
     /** Why "Save experiment" is disabled, or '' when it is enabled. */
     get measureSaveReason() {

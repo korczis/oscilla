@@ -32,6 +32,24 @@ walks the list, or ArrowDown opens it on the current workspace and the arrow key
 closes it. Every V2 workspace is still there under the same name, and only the way to it has
 changed.
 
+- **The address names the workspace.** Each switch writes `m=<workspace>` into the page address
+  (`#m=measure`, `#m=analyzer`, …) and adds one browser history entry, also from `file://`.
+  Back and Forward move between workspaces, keep what each workspace holds and move focus to the
+  workspace heading; a reload reopens the workspace. A link is read by one dispatcher: the
+  Studio keys win over `m`, and `m` wins over a recipe link's `mr`, so `#m=studio&mr=…` opens
+  Studio and still loads the recipe into Measure
+  ([ADR 0045](.ai/repo/adrs/0045-workspace-in-history-one-hash-dispatcher-unsaved-guard.md)).
+  **Copy config URL** keeps the recipe and Studio keys that are in the address. Each nav item
+  links to its workspace's address, so opening it in a new tab opens that workspace. A link
+  that is refused does not stay in the address or in history.
+- **Unsaved work.** While something would be lost, a reload, a closed tab or leaving the page
+  makes the browser ask first: unsaved Studio changes, a completed measurement that is not
+  saved, a saved run's name or notes not yet stored with "Update name and notes", a rename being
+  typed, or a level calibration (it is kept in page memory only). Where the browser allows no
+  IndexedDB, saved experiments and Studio projects live in page memory too and count as well.
+  Studio shows "unsaved changes" and Measure "unsaved result" or "unsaved name or notes". With
+  nothing to lose the page asks nothing. Sequencer patterns are not guarded yet.
+
 ## The V2 laboratory
 
 - **Generator:** sine, triangle, sawtooth and square sources, set by frequency or by note, with
@@ -502,7 +520,7 @@ GitHub-Pages-like `/oscilla/` sub-path, and the run must produce zero console er
 | --- | --- | --- |
 | Unit | `tests/unit/` | Pure modules (DSP, analysis, sequencer, charts), the packer, the artifact rules and the release tooling, all under `node --test` |
 | V1 freeze | `tests/freeze/` | Golden vectors that pin V1 behaviour ([ADR 0014](.ai/repo/adrs/0014-v1-behaviour-frozen-by-golden-vectors.md)) |
-| Browser | `tests/browser/` | Playwright suites for the app gate, layout, V1 engine port, DSP, labs and sequencer |
+| Browser | `tests/browser/` | Playwright suites for the app gate, layout, navigation history and unsaved work, V1 engine port, DSP, labs and sequencer |
 | Visual | `tests/visual/` | The 1536x1024 reference and named regions, compared region by region with thresholds measured from run-to-run variance ([ADR 0029](.ai/repo/adrs/0029-visual-regression-in-the-release-gate.md)) |
 | V3 unit | `tests/unit/v3-*.test.mjs` | Measurement core, transfer and impulse response on synthetic systems with known answers, RTA and aggregation, calibration, quality, experiments (schema, round trip, corrupt imports, store), goldens per algorithm ID, the engine on a fake io and the view models, all in `npm test` |
 | V3 browser | `npm run test:measure` | `tests/browser/v3-measure.cjs`: the measurement engine on real Web Audio, a recovered digital loopback response, limiter transparency, 0 nodes after finish and abort. `tests/browser/v3-ui.cjs`: Measure and Experiments of the built page, guided flow, abort at every stage, calibration, experiment import, compare and export, and no "SPL" without a level calibration. Both run in Chromium, Firefox and WebKit, from `file://` and `/oscilla/` |

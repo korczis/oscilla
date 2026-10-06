@@ -44,7 +44,11 @@ rest.
   and repeats the unsaved-changes note, and **Open** is your choice.
 - The Studio keys sit beside the Playground's own link and the Measure recipe link; each reads
   only its own keys. Copy link in Studio writes the Studio keys alone, and a recipe link copied
-  in Measure leaves them out.
+  in Measure leaves them out. When an address carries both, the Studio keys win: Studio opens
+  and the recipe still fills the Measure setup (ADR 0045).
+- **Unsaved changes.** While the document has unsaved changes ("unsaved changes" next to its
+  title), a reload, a closed tab or leaving the page makes the browser ask first. Switching
+  workspace, Back and Forward never ask: they stay in the page and keep the document.
 - **Fullscreen** (the button with two diagonal arrows, next to Copy link) shows the
   Studio workspace alone on the screen through the browser's fullscreen; press it again, or
   Esc, to leave. Leaving the Studio workspace leaves fullscreen too. It is optional: the

@@ -213,12 +213,14 @@ loop). From a view model:
 ## Recipe link (V355)
 
 - "Copy recipe link" (top of Measurement setup, `measureCopyRecipeLink`) writes
-  `#…&mr=<base64url JSON>` with `history.replaceState`, keeping every other hash parameter (the
-  instrument link), and copies the URL; without a clipboard the dialog `osc-dlg-recipe-link`
+  `#…&m=measure&mr=<base64url JSON>` with `history.replaceState`, keeping every other hash
+  parameter (the instrument link) except the Studio keys, and copies the URL; without a clipboard the dialog `osc-dlg-recipe-link`
   shows it. The link holds the recipe fields only (`RECIPE_WIRE_KEYS`).
-- `measureApplyRecipeHash` runs at start-up (from `measureInit`) and on `hashchange`. A valid
+- `measureApplyRecipeHash` is called by the one hash dispatcher (`ui/navigation.js`, ADR 0045)
+  at start-up and for a new hash, never for Back / Forward. A valid
   recipe fills `meas.values` (absent keys take the CHARACTERIZE PLAYBACK CHAIN preset), resets a
-  READY check, opens MEASURE and notifies "Measurement recipe loaded from the link"; it never
+  READY check and notifies "Measurement recipe loaded from the link"; the dispatcher opens
+  MEASURE unless the address names another workspace (`m`, or the Studio keys). It never
   starts a check or a measurement. An invalid one is refused whole (notification "Recipe link
   not applied" and the reasons under the button); a link opened while a measurement runs is
   refused too. The same `mr` value is applied once (the one this page wrote is not re-applied).

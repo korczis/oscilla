@@ -1808,6 +1808,18 @@ function defineChecks() {
   def('no-console-errors-after-run', async ({ errors }) => ({ ok: errors.length === 0,
     errors: errors.slice(0, 8) }));
 
+  // The unsaved-work guard asks only while work would be lost: a beforeunload question the run
+  // did not expect means a guard armed by mistake. A reload of the page proves it is quiet now.
+  def('no-unexpected-unload-prompt', async ({ page, unload, baseUrl }) => {
+    const armed = await page.evaluate(() => window.OSCILLA.unsaved.armed);
+    const lost = await page.evaluate(() => window.OSCILLA.unsaved.whatWouldBeLost());
+    if (!armed) {
+      await page.goto(baseUrl, { waitUntil: 'load' });
+      await H.ready(page);
+    }
+    return { ok: unload.unexpected.length === 0, unexpected: unload.unexpected, armed, lost };
+  });
+
   return checks;
 }
 
@@ -1821,7 +1833,15 @@ async function runOne(browserName, origin, baseUrl) {
   const errors = [];
   page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
   page.on('pageerror', (e) => errors.push(`pageerror: ${e.message}`));
-  page.on('dialog', (d) => d.dismiss().catch(() => {}));
+  // A beforeunload question (unsaved work, ADR 0045) is expected only on the recovery reload
+  // after a timeout, and only while the page's guard is armed. Any other one is recorded and
+  // fails no-unexpected-unload-prompt (it is accepted so the run can go on).
+  const unload = { expected: false, unexpected: [] };
+  page.on('dialog', (d) => {
+    if (d.type() !== 'beforeunload') return d.dismiss().catch(() => {});
+    if (!unload.expected) unload.unexpected.push(page.url());
+    return d.accept().catch(() => {});
+  });
   const results = {};
   await page.goto(baseUrl, { waitUntil: 'load' });
   try {
@@ -1839,7 +1859,7 @@ async function runOne(browserName, origin, baseUrl) {
     const run = { aborted: false };
     try {
       const v = await Promise.race([
-        fn({ page, context, errors, baseUrl, browserName, origin, run }),
+        fn({ page, context, errors, baseUrl, browserName, origin, run, unload }),
         sleep(timeoutMs).then(() => {
           run.aborted = true;
           return { ok: false, detail: `timeout ${timeoutMs / 1000} s`, timedOut: true };
@@ -1847,7 +1867,10 @@ async function runOne(browserName, origin, baseUrl) {
       ]);
       results[name] = { ...v, ms: Date.now() - t0 };
       if (v.timedOut) {
+        unload.expected = await page.evaluate(() => !!(window.OSCILLA.unsaved
+          && window.OSCILLA.unsaved.armed)).catch(() => false);
         await page.goto(baseUrl, { waitUntil: 'load' });
+        unload.expected = false;
         await H.ready(page);
       }
     } catch (e) {
