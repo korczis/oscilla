@@ -321,7 +321,11 @@ export function createStudioTransport({
     const list = m.timeline.automation.map((l) => ({ node: l.target.node, param: l.target.param,
       peak: l.points.reduce((top, pt) => (finite(pt.value) && pt.value > top ? pt.value : top),
         -Infinity) }));
-    for (const id of patternOscillators(m)) list.push({ node: id, param: 'level' });
+    // `initial`: a pattern-played carrier is built silent, so it cannot sound from the graph's
+    // start until claimOscillator holds it (a PLAY starved past its crossfade time).
+    for (const id of patternOscillators(m)) {
+      list.push({ node: id, param: 'level', initial: ROUTE_FLOOR });
+    }
     return list;
   }
 
@@ -381,8 +385,11 @@ export function createStudioTransport({
    * integration"): every active CONTROL edge into its `level` is re-routed from the carrier's
    * level AudioParam (held at ROUTE_FLOOR) onto the pattern bus gain, so it modulates the voices.
    * The edge's depth gain feeds two path gains: toBus → bus.gain (1) and toCarrier → the
-   * carrier's level (0). `fadeAt` (a sounding oscillator claimed now): toCarrier ramps 1 → 0 with
-   * the carrier's own fade, so the move is click-free; edges built in this transaction are silent
+   * carrier's level (0). An edge the runtime built while the level was claimed with its
+   * `initial` (ownedFor) arrives `detached`, never connected to the carrier, so a PLAY starved
+   * past the graph start cannot sound the carrier through it before this runs (review D1).
+   * `fadeAt` (a sounding oscillator claimed now): toCarrier ramps 1 → 0 with the carrier's own
+   * fade, so the move is click-free; edges built in this transaction are silent
    * (their ramp starts at the crossfade time) and move at once. Taps of retired edges leave
    * after the runtime's crossfade, like the bus routes.
    */
@@ -479,7 +486,9 @@ export function createStudioTransport({
     let fadeAt = null;
     let seg;
     if (fresh) {
-      // Built in this transaction: its source starts at the crossfade time, nothing rendered.
+      // Built in this transaction at ROUTE_FLOOR (ownedFor's `initial`): the runtime gave it the
+      // floor before any route to it opened, so it is silent even when the clock has passed the
+      // crossfade time by now (a starved PLAY). This keeps it there.
       param.setValueAtTime(ROUTE_FLOOR, now);
       seg = { t0: now, v0: ROUTE_FLOOR, t1: now, v1: ROUTE_FLOOR };
     } else {
