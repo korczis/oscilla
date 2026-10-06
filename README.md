@@ -238,7 +238,11 @@ filter class is claimed. An experiment saved from Measure does not store band le
   present only when the run stored here has that hash: a different record under the id is named
   as different, a record whose hash is missing on either side as one whose identity cannot be
   verified, and a stored record that cannot be read as unreadable. Only a run with a result hash
-  can be linked. Findings export as `.oscilla-findings.json` with
+  can be linked. A value reference must name exactly a frequency of the run's stored response
+  grid; only then does it read "(a stored grid point)". A status is shown as your judgement.
+  Closing the finding dialog without saving keeps a changed draft (offered again, guarded against
+  a reload) until you save or discard it, and an edit is refused when another tab changed the
+  finding since you opened it. Findings export as `.oscilla-findings.json` with
   that identity; an import is validated whole before anything is stored, a newer schema is
   refused, and a cited run that is not in this browser reads "not stored here"
   ([ADR 0046](.ai/repo/adrs/0046-findings-interpretation-linked-to-evidence.md), proposed).
