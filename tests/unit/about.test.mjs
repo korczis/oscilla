@@ -18,6 +18,16 @@ function timeline() {
     .map(([, state, release, commit]) => ({ state, release: release || null, commit }));
 }
 
+// CI's unit job (.github/workflows/ci.yml) checks out full history and tags, so there the
+// provenance checks below must run: missing history fails them instead of skipping them.
+// Elsewhere (a shallow clone, an export without .git) they skip and say why.
+function withoutHistory(t, why) {
+  if (process.env.GITHUB_ACTIONS === 'true') {
+    assert.fail(`${why}: the CI unit job must check out with fetch-depth: 0`);
+  }
+  t.skip(why);
+}
+
 function git(...args) {
   try {
     return execFileSync('git', args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
@@ -84,7 +94,7 @@ test('timeline timestamps are the commit times of the commits they name', (t) =>
   const marks = [...aboutView.matchAll(/data-osc-commit="([0-9a-f]+)"\s+datetime="([^"]+)"/g)];
   assert.equal(marks.length, timeline().length);
   if (git('rev-parse', '--is-shallow-repository') !== 'false') {
-    t.skip('no full git history here (shallow clone or no git)');
+    withoutHistory(t, 'no full git history here (shallow clone or no git)');
     return;
   }
   for (const [, sha, datetime] of marks) {
@@ -125,7 +135,7 @@ test('the About timeline marks the release line of package.json as current', () 
 test('every published release line is on the About timeline, at or before its release', (t) => {
   const tags = git('tag', '--list', 'v*.*.0');
   if (!tags) {
-    t.skip('no release tags here (CI checks out without tags)');
+    withoutHistory(t, 'no release tags here (a checkout without tags)');
     return;
   }
   const stations = timeline();
