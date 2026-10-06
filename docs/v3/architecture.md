@@ -152,7 +152,17 @@ are hatched. Why rules with reasons: ADR 0025.
 
 `ui/measure-experiment.js` `experimentFromResult` is pure. It builds the `Experiment` from a
 result, stores the frequency profile by name and identity only, and marks a TEST CONTEXT
-capture in every run and in the notes. It records the master output gain the stimulus passed
+capture in every run and in the notes. The calibration it records is the one the engine
+applied (`result.calibrated`: the profile id and name, and a frozen copy of the level
+calibration), never what MEASURE has loaded at Save; the environment notes are those at the
+start of the run, and text edited later is stored as `annotations.notes` (ADR 0040, resolution
+2026-10-05). `validate.js` `calibrationClaimFindings` reports a record whose named calibration
+contradicts its results (`algorithms.calibration`, `quality.mask.calibrated`,
+`quality.metrics.levelCalibrated` and the LEVEL_CALIBRATION reason) as the non-fatal finding
+`calibration-claim-contradicted`: such a record, as earlier versions saved it, stays readable and
+importable, and the Experiments workspace states it and presents it as uncalibrated. Strict
+validation (`calibrationClaims: 'strict'`) refuses it; a new MEASURE or Studio save never stores one (Duplicate and import keep a record
+as it is, finding included). It records the master output gain the stimulus passed
 (`output.masterGain`: 20·log10 of it is part of every magnitude), the engine's result notes,
 the frequencies the user asked for before the Nyquist clamp (`recipe.requested`) and the full
 algorithm map, and stores the input device id hashed (spec §88). It records the definition

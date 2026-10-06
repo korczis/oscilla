@@ -78,6 +78,11 @@
 // full-scale sine reads −3.01 dB). dB SPL appears only through a valid LevelCalibration
 // (calibration/level.js); a frequency profile corrects the magnitude into a separate CALIBRATED
 // curve, the raw one is kept (§24, §159).
+//
+// result.calibrated is the record of what this run applied, fixed when it completes (ADR 0040,
+// resolution 2026-10-05): `frequency` names the profile by profileId (its SHA-256) and name, and
+// `level.calibration` is a frozen copy of the LevelCalibration that was applied, or null. An
+// experiment takes its calibration from here, never from what the workspace has loaded at Save.
 
 import {
   MEASUREMENT_STATES as S,
@@ -1086,7 +1091,8 @@ export function createMeasurementEngine({ io, clock, onEvent, limits, assess, an
   }
 
   function applyCalibration(cal, transfer) {
-    const out = { frequency: null, level: levelLabel(cal.level) };
+    const level = cal.level ? Object.freeze(JSON.parse(JSON.stringify(cal.level))) : null;
+    const out = { frequency: null, level: { ...levelLabel(cal.level), calibration: level } };
     if (cal.frequency) {
       const c = applyFrequencyCorrection(transfer.magnitudeDb, transfer.frequencies,
         cal.frequency);

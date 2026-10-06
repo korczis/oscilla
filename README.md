@@ -173,6 +173,12 @@ filter class is claimed. An experiment saved from Measure does not store band le
   with its hash
   ([ADR 0043](.ai/repo/adrs/0043-runs-executed-from-versioned-experiment-definitions.md),
   proposed).
+- **Recorded as measured.** The calibration saved is the one the measurement applied, and the
+  notes are those at its start. A profile loaded, a correction switched or a level calibration
+  made after the run never becomes part of its record, and the Experiment panel says so; notes
+  edited later are saved as an annotation. An experiment from an earlier version whose named
+  calibration its own results contradict still opens and imports, and is marked as such: it is
+  shown and compared as uncalibrated, never in dB SPL.
 - **A completed run cannot be changed.** Only the name, the annotation notes and the baseline
   mark of a saved
   experiment can be edited, and no hash covers them. The store refuses any other change to a
