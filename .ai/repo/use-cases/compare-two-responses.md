@@ -134,4 +134,5 @@ one definition version show no definition change; a run of an edited definition 
 version n → m of the same definition. A run whose setup was changed is not recorded as from
 the definition. A minus B appears only for equivalent experiments and only over their overlapping
 valid range, never normalised; otherwise the view says why it is not shown. The evidence
-differences line lists only checklist items whose state differs, or says there are none.
+checklist differences line lists only items whose state differs, or says there are none, and
+names the recorded identities (build, definition, calibration, input device) that differ.

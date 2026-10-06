@@ -188,7 +188,9 @@ filter class is claimed. An experiment saved from Measure does not store band le
   the calibration as applied, the run, the definition version, the build and, for a Studio run,
   the Studio graph the recipe was derived from (its hash covers nodes the measurement did not
   use). "Can I repeat this?" is a checklist: each item is recorded, partial or not recorded,
-  with its reason, and there is no score. The raw capture is never retained: OSCILLA stores the
+  with its reason, and there is no score. The result hash is recomputed and its reason says what
+  it covers; the algorithm ids, environment notes and lineage are covered by no result hash.
+  The raw capture is never retained: OSCILLA stores the
   derived result. Anything the record does not store reads "not recorded"
   ([ADR 0044](.ai/repo/adrs/0044-evidence-on-a-run-lineage-and-reproducibility-checklist.md),
   proposed).
@@ -226,7 +228,8 @@ filter class is claimed. An experiment saved from Measure does not store band le
   build provenance and the quality verdict and reasons. Execution changes come first. Layout,
   view and metadata changes are collapsed and never counted as execution changes. The list
   says what differs between the two records, not what caused a difference in the responses.
-  A line names the evidence checklist items whose state differs between the runs.
+  A line names the evidence checklist items whose state differs between the runs and the
+  recorded identities (build, definition, calibration, input device) that differ.
   One run can be marked as the baseline: Compare then shows it first and compares a single
   selected run with it. The mark is metadata, kept in the file, and at most one run carries it
   ([ADR 0041](.ai/repo/adrs/0041-run-comparison-semantic-execution-vs-presentation.md),

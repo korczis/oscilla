@@ -70,7 +70,9 @@ Proposed:
 - **The lineage.** An ordered list: result; analysis (each `algorithms` role with its id and
   version); capture (the device label or "not exposed", whether a hashed device id is stored,
   the sample rate, the applied processing flags, the master output gain that every magnitude
-  includes, and a TEST CONTEXT label when the run carries one); calibration as applied (the
+  includes, the engine's notes such as the input-processing warning, and a TEST CONTEXT label
+  when the run carries one); stimulus (as played, the requested range when the Nyquist limit
+  lowered it, and the digital output level); calibration as applied (the
   frequency profile's name and id and the algorithm that applied it; the level calibration's
   offset, reference, method and input binding, which applies to levels and not to the ratio;
   or "uncalibrated"); run (id, repeats with their ids and capture length in frames at the
@@ -79,9 +81,15 @@ Proposed:
   (version, channel, source digest, artifact SHA-256, commit); and, only for a Studio run, the
   Studio block. A link whose block the record does not store is left out; a field missing
   inside a link reads "not recorded". Nothing is inferred.
-- **Truth in three places.** A record whose calibration claim its own results contradict
-  (`calibrationClaimFindings`) reads "uncalibrated (the stored claim is contradicted)", names
-  the contradicted path and never shows the claimed offset as applied. The Studio link is "the
+- **Truth in three places.** A calibration claim its own results contradict
+  (`calibrationClaimFindings`) is presented as the detail and compare present it
+  (`withoutContradictedCalibration`): the claims that hold are described (a profile that the
+  results confirm stays named beside a contradicted level calibration), a contradicted claim
+  that named a calibration reads "uncalibrated (the stored claim is contradicted)" for that
+  kind, a claim of none contradicted by corrected results reads "not recorded" for that kind,
+  and each finding follows in its own words. When nothing holds and every contradicted claim
+  named a calibration, the link starts "uncalibrated (the stored claim is contradicted)". A
+  contradicted offset is never shown as applied. The Studio link is "the
   Studio graph the recipe was derived from", with its studioHash and node and edge counts, and
   says that the hash covers nodes the measurement did not use and does not show which of them
   sounded (ledger D3). Times are labelled: `createdAt` and `measurement.startedAt` are wall
@@ -95,28 +103,38 @@ Proposed:
   - *Recipe recorded*: partial when this build's engine cannot run its stimulus kind (it runs
     log sweeps only; ledger D4).
   - *Algorithm versions recorded*: partial when a recorded id is not implemented by this build
-    or the transfer id is missing.
+    or the transfer id is missing; the reason says that no result hash covers the ids.
   - *Calibration identity recorded*: "uncalibrated, stated" is recorded; partial for a
-    contradicted claim, a profile without its id, or a level calibration not bound to an input
-    (it applies to every input; ledger C1).
+    contradicted claim (the reason names what holds and quotes each finding), a profile
+    without its id, or a level calibration not bound to an input (it applies to every input;
+    ledger C1).
   - *Input device identity recorded*: recorded with a label and processing flags; partial with
     only a hashed id or without flags; not recorded when the browser exposed neither (or a TEST
     CONTEXT run has no device).
   - *Build identity recorded*: partial for a version alone or a build with uncommitted changes.
-  - *Result hash verified*: recomputed over the stored record in its declared version. Equal
-    and version 4 is "verified"; equal in an earlier version is partial (what it leaves out is
-    named); unequal is "does not verify"; absent is not recorded.
+  - *Result hash verified*: recomputed over the stored record in its declared version, once
+    per record object (`hashVerification`; the store already verifies on read). Equal and
+    version 4 is "verified"; equal in an earlier version is partial; unequal is "does not
+    verify"; absent is not recorded. The reason names what the version covers (hash.js:
+    results; + quality, calibration, input, output; + the measurement block and build; +
+    recipe and definition) and what no result hash covers: the algorithm ids, the environment
+    notes and the lineage (created time, repeat and duplicate links).
   - *Raw capture retained*: always "not retained (OSCILLA stores the derived result, not the
     raw capture)".
-  - *Environment notes recorded*: the notes at measurement time, not a later annotation.
+  - *Environment notes recorded*: the notes at measurement time, not a later annotation; the
+    TEST CONTEXT label MEASURE appends to them is not counted as a note.
   No item is recorded without the field that records it, and there is no count, percentage or
   overall verdict.
-- **Compare.** Comparing runs adds one line, "Evidence differences:", naming the checklist
-  items whose state differs between them with each run's state, or "none".
+- **Compare.** Comparing runs adds one line, "Checklist differences (states only):", naming
+  the checklist items whose state differs with each run's state, or "none". Equal states can
+  hide different identities, so the line also names the recorded identities that differ
+  (build, definition, calibration, input device), or says there is no difference in them.
 - **UI.** The run detail gets an Evidence section under a real heading (h4), with "What
   produced this value?" and "Can I repeat this?" as h5, a labelled frequency field, an ordered
   list and a checklist list. Each item's icon (the existing quality icons) sits beside its state
-  in words; colour is never the only signal. It uses the existing tokens and fits 390 px.
+  in words; colour is never the only signal. A frequency that is not above 0 Hz is refused:
+  the field shows the kept frequency again, is marked invalid and is described by a status
+  region that says why. It uses the existing tokens and fits 390 px.
 
 ## Alternatives rejected
 
@@ -136,8 +154,9 @@ Proposed:
 ## Consequences
 
 - No schema, hash or storage change; a record of any schema version gets its evidence.
-- Opening a run recomputes its result hash once more (the store already does on every read).
-- The bundle grows by about 5.2 KB gzip (zlib level 9).
+- Opening a run recomputes its result hash once per record object (the store already does on
+  every read); a rename or another view of the same object reuses the check.
+- The bundle grows by about 6.3 KB gzip (zlib level 9).
 - Confirmation criteria: `tests/unit/v3-run-evidence.test.mjs` (each lineage link present or
   absent per stored field; checklist states for authored, derived, calibrated, uncalibrated,
   contradicted, Studio, label-less and unverified records; raw capture never retained; no item
