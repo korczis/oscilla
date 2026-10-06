@@ -50,6 +50,11 @@
 // CSV, compare and MEASURE inspection present it without the contradicted claim
 // (presented()), so it is never shown as dB SPL or compared as calibrated.
 //
+// Evidence (ADR 0044): the detail carries experiments/evidence.js runEvidence over the STORED
+// record (not the presented copy): the lineage of one stored result point (the frequency the
+// user enters; 1 kHz or the grid centre by default) and the reproducibility checklist. Compare
+// adds one line naming the checklist items whose state differs between the compared runs.
+//
 // Independence (§227, V353): the store opens lazily, on the first Experiments view or save, and
 // reading the IndexedDB factory never throws into the app (pageIndexedDb): a store that cannot
 // open falls back to memory and says so, and the Playground, the instrument and Studio never
@@ -83,6 +88,10 @@ import {
   renameDefinition, reviseDefinition, setupRecipe, storedMatch,
 } from '../experiments/definition.js';
 import { timestampText, definitionText } from '../measurement/views/experiment-summary.js';
+import {
+  runEvidence, evidenceLineage, resultPoint, reproducibilityChecklist, evidenceDifferences,
+  evidenceDifferencesText,
+} from '../experiments/evidence.js';
 
 export const STORE_FALLBACK_TEXT = 'Experiments are kept in memory for this page view only: this '
   + 'browser does not allow IndexedDB here (for example on file://). Export each experiment as '
@@ -300,7 +309,11 @@ export function createExperimentsUi() {
     }
     const findings = calibrationClaimFindings(e);
     const shown = withoutContradictedCalibration(e, findings);
-    const s = experimentSummary(shown, e.definition ? matchOf(e.definition) : {});
+    const m = e.definition ? matchOf(e.definition) : {};
+    const s = experimentSummary(shown, m);
+    // The same run shown again (a rename, the baseline mark) keeps the frequency entered.
+    const was = cmp.exps.detail && cmp.exps.detail.id === e.experimentId
+      && cmp.exps.detail.evidence ? cmp.exps.detail.evidence.hz : null;
     const view = buildResponseView(shown, { profile: typeof cmp.measureCurrentProfile
       === 'function' ? cmp.measureCurrentProfile() : null });
     cmp.exps.detail = {
@@ -315,6 +328,8 @@ export function createExperimentsUi() {
       hasAggregate: !!(e.results && e.results.aggregate),
       hasTransfer: !!(e.results && e.results.transfer),
       hasIr: !!(e.results && e.results.ir),
+      // Over the stored record, never the presented copy (ADR 0044).
+      evidence: plain(runEvidence(e, { ...m, hz: was })),
     };
     if (ctx.charts.detail) ctx.charts.detail.setView(view);
   }
@@ -330,6 +345,8 @@ export function createExperimentsUi() {
     }
     const v = buildCompareView(list.map(presented),
       { definitions: (id) => ctx.defs.get(id) || null });
+    const checklists = list.map((e) => reproducibilityChecklist(e, e.definition
+      ? matchOf(e.definition) : {}));
     const contradicted = list.filter((e) => calibrationClaimFindings(e).length)
       .map((e) => `"${e.name || '(unnamed)'}" names a calibration its own results say was not `
         + 'applied: it is compared as uncalibrated.');
@@ -341,6 +358,8 @@ export function createExperimentsUi() {
       warnings: [...contradicted, ...v.warnings],
       summary: v.summary,
       semantic: plain(v.semantic),
+      evidenceDiff: evidenceDifferencesText(evidenceDifferences(checklists),
+        v.entries.map((x) => x.label)),
       overlayNotes: v.overlay ? v.overlay.notes.slice() : [],
       overlaySummary: v.overlay ? `Overlay of ${v.entries.length} raw responses (relative `
         + 'magnitudes, unchanged).' : 'No experiment has a frequency response to overlay.',
@@ -455,6 +474,17 @@ export function createExperimentsUi() {
       this.exps.panel = 'detail';
       this.$nextTick(() => { if (ctx.charts.detail) ctx.charts.detail.relayout(); });
       return e;
+    },
+    /** The evidence lineage at another frequency (Hz) of the open run; null when not valid. */
+    experimentsEvidenceAt(value) {
+      const hz = Number(value);
+      const e = ctx.detail;
+      if (!e || !this.exps.detail || !Number.isFinite(hz) || hz <= 0) return null;
+      const m = e.definition ? matchOf(e.definition) : {};
+      const point = resultPoint(e, hz);
+      this.exps.detail.evidence = { ...this.exps.detail.evidence, hz, point: plain(point),
+        lineage: plain(evidenceLineage(e, { ...m, hz })) };
+      return point;
     },
     experimentsToggleSelect(id) {
       const sel = new Set(this.exps.selected);

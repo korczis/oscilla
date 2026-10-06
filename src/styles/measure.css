@@ -841,6 +841,55 @@
   display: inline;
 }
 
+/* Evidence on a run (ADR 0044): headings, an ordered lineage and a checklist; state in words. */
+.osc-x-evidence {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.osc-x-evidence :is(h4, h5) {
+  margin: 0;
+  color: var(--osc-text-2);
+  font-size: var(--osc-fs-xs);
+}
+
+.osc-x-evidence .osc-m-hint {
+  margin: 0;
+}
+
+.osc-x-ev-at {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 8px;
+}
+
+.osc-x-ev-hz {
+  width: 9em;
+  max-width: 100%;
+}
+
+.osc-x-ev-list {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin: 0;
+  padding: 0 0 0 18px;
+  color: var(--osc-text-2);
+  font-size: var(--osc-fs-xs);
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+ul.osc-x-ev-list {
+  padding: 0;
+  list-style: none;
+}
+
+.osc-q-reason.osc-x-ev-missing .osc-q-icon { color: var(--osc-text-muted); }
+
 .osc-x-delete {
   border-color: var(--osc-red);
 }
