@@ -83,7 +83,8 @@ import { canonicalJson } from './canonical-json.js';
 export const DB_NAME = 'oscilla-experiments';
 /**
  * Version 1: experiments; version 2 adds the Studio partition; version 3 the definitions;
- * version 4 the findings (never deletes anything).
+ * version 4 the findings (never deletes anything). One-way: a build with a lower version cannot
+ * open the database, so a revert keeps this version and its upgrade step (ADR 0046).
  */
 export const DB_VERSION = 4;
 export const RECORDS = 'experiments';
