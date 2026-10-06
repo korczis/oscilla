@@ -373,8 +373,8 @@ How to use it, with the keyboard shortcuts, is the [Studio user guide](docs/v31/
   hash, execution state) beside its recipe, and the measured path the recipe was derived from
   with its own hash. A node the measurement never reads, such as an unconnected Oscillator, is
   recorded but is not an execution change when two runs are compared. Such a record needs
-  experiment schema 4, which OSCILLA 3.10 and earlier refuse as newer than they support; every
-  other record is still written as schema 3 and opens there.
+  experiment schema 4, which earlier versions of OSCILLA refuse as newer than they support;
+  every other record is still written as schema 3 and opens in them.
 - **Performance.** Responsive at about 100 nodes and 200 connections; the numbers and budgets
   are in [performance](docs/v31/performance.md).
 - **Links and fullscreen.** `#m=studio&st=<template id>&sv=<graph|timeline|inspector>` opens
