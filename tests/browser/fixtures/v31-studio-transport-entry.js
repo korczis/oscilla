@@ -338,3 +338,47 @@ T.basicSynth = async ({ stallMs = 0 } = {}) => {
     detectStepS: DETECT_STEP_S, fineStepS: FINE_STEP_S, tailDb: db(tail / ref), sweepAt,
     spectrum, counts, stopped, cycles, debug: transport.debugInfo().unplayed };
 };
+
+/**
+ * A starved PLAY of the Basic Synth with an LFO on the pattern-played oscillator's level (review
+ * D1 of #140): the main thread stalls `stallMs` after runtime.start(), so the clock passes the
+ * graph start and the transport re-anchors the clips. Before the claim, the LFO's edge must not
+ * reach the carrier (it was wired straight into the carrier's level, its route opening at the
+ * graph start). Returns the peaks before the graph start and between it and baseTime, re the
+ * Tone (b + 0.3 … b + 0.7), with the re-anchor decision (null when the clock did not pass the
+ * graph start: Firefox's currentTime stands still within a task).
+ */
+T.starvedLevelLfo = async ({ stallMs = 60 } = {}) => {
+  installPreTap();
+  const model = templateModel(REFERENCE_TEMPLATE_ID);
+  const store = createStudioStore(model, { idGenerator: createIdGenerator(model) });
+  const lfo = store.dispatch({ type: 'NODE_ADD', nodeType: 'lfo', position: { x: 0, y: 0 } });
+  if (!lfo.ok) throw new Error(`lfo: ${lfo.reason}`);
+  const edge = store.dispatch({ type: 'EDGE_ADD', from: { node: lfo.created.nodes[0],
+    port: 'control' }, to: { node: 'osc-1', port: 'level' } });
+  if (!edge.ok) throw new Error(`edge: ${edge.reason}`);
+  const runtime = Object.create(T.runtime, { start: { value: (...a) => {
+    const r = T.runtime.start(...a);
+    const t0 = performance.now();
+    while (performance.now() - t0 < stallMs) { /* the stall */ }
+    return r;
+  } } });
+  const transport = createStudioTransport({ runtime, engine: T.engine, store });
+  const started = transport.start();
+  if (!started.ok) throw new Error(`start: ${started.reason}`);
+  const b = started.baseTime;
+  const reanchor = transport.debugInfo().decisions.find((d) => d.decision === 'reanchor') || null;
+  const g = reanchor ? reanchor.from : b;
+  await T.until(b + 0.8);
+  await preUntil(b + 0.8);
+  const ref = rms(preWindow(b + REF_WINDOW[0], b + REF_WINDOW[1]));
+  const peak = (t0, t1) => preWindow(t0, t1).reduce((m, x) => Math.max(m, Math.abs(x)), 0);
+  const out = { reanchor, beforeDb: db(peak(g + DETECT_FROM_S, g) / ref),
+    floorDb: b > g ? db(peak(g, b) / ref) : null,
+    floorBoundDb: db(ROUTE_FLOOR) + FLOOR_MARGIN_DB };
+  const done = transport.stop();
+  await T.until(T.engine.ctx.currentTime + 0.2);
+  await done;
+  out.stopped = await settle(transport);
+  return out;
+};

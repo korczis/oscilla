@@ -208,6 +208,24 @@ async function runOne(browserName, url) {
     const peaks = s.cycles.map((c) => [c.peak.engineNodes, c.peak.engineSources]);
     check(key, 'no growth over PLAY → STOP cycles (same peak counts)',
       peaks.every((p) => p[0] === peaks[0][0] && p[1] === peaks[0][1]), JSON.stringify(peaks));
+    // A starved PLAY with an LFO on the oscillator's level (review D1 of #140): the LFO's edge
+    // must not sound the carrier before the claim. The stall re-anchors in chromium and webkit;
+    // Firefox's clock stands still within the task, so there is no gap to measure there.
+    const lv = (rec.starvedLevelLfo = await page.evaluate(() => window.T.starvedLevelLfo(
+      { stallMs: 100 })));
+    const lvAt = lv.reanchor ? `re-anchored from ${f(lv.reanchor.from, 5)} s to `
+      + `${f(lv.reanchor.to, 5)} s` : 'not re-anchored';
+    check(key, 'LFO on the level, starved PLAY: nothing before the graph starts (< −100 dB)',
+      lv.beforeDb < -100, `${f(lv.beforeDb, 1)} dB; ${lvAt}`);
+    if (lv.reanchor) {
+      check(key, 'LFO on the level, starved PLAY: only the carrier floor before baseTime '
+        + `(< ${f(lv.floorBoundDb, 0)} dB)`, lv.floorDb !== null && lv.floorDb < lv.floorBoundDb,
+      `${f(lv.floorDb, 1)} dB; ${lvAt}`);
+    } else {
+      console.log(`  INFO [${key}] LFO on the level, starved PLAY: ${lvAt} (no gap to measure)`);
+    }
+    check(key, 'LFO on the level, starved PLAY: 0 nodes, sources, connections after STOP',
+      zero(lv.stopped), JSON.stringify(lv.stopped));
     check(key, 'no console errors', errors.length === 0, errors.join(' | '));
   } catch (err) {
     check(key, 'run completed', false, err && err.stack);

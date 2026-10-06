@@ -45,13 +45,20 @@
 //   runtime.on(fn) -> off          fn(type, detail): 'applied' | 'error' | 'state' | 'handle'
 //                                  ('handle': { id, status, code }, a pending handle settled:
 //                                  a Microphone opened or failed after its permission prompt)
-//   runtime.setOwnedParams([{ node, param, peak? }]) -> list   parameters another owner drives
-//                                  (the transport: automation lanes, pattern-played oscillator
-//                                  levels). The runtime never glides their base value nor lets
-//                                  a live update rewrite them; [] releases every claim. `peak`,
-//                                  the highest value the owner gives the parameter, sizes a
-//                                  frequency's Nyquist headroom (computeBases peaks, V431 X1);
-//                                  a changed peak re-sizes that node on the next apply
+//   runtime.setOwnedParams([{ node, param, peak?, initial? }]) -> list   parameters another
+//                                  owner drives (the transport: automation lanes, pattern-played
+//                                  oscillator levels). The runtime never glides their base value
+//                                  nor lets a live update rewrite them; [] releases every claim.
+//                                  `peak`, the highest value the owner gives the parameter, sizes
+//                                  a frequency's Nyquist headroom (computeBases peaks, V431 X1);
+//                                  a changed peak re-sizes that node on the next apply.
+//                                  `initial`, the value the owner holds the parameter at, is what
+//                                  the node's first write gives it when the runtime builds the
+//                                  node (instead of its base), before any route to it opens; a
+//                                  CONTROL edge into such a parameter is built `detached` (its
+//                                  gain ramps as any edge's but is not connected to the
+//                                  parameter): the owner wires it (the transport's levelMods taps
+//                                  it onto the pattern bus and, closed, onto the carrier)
 //   runtime.ownedParams()          the current claims, [{ node, param }]
 //   runtime.baseOffset(id, key)    the constant part the modulation edges add to a parameter's
 //                                  base (linear edges: unipolar polarity, offset), in its unit,
@@ -122,7 +129,14 @@
 // automates), and the adapter does not write those AudioParams. Every other parameter of the node
 // (its detune, which carries log-mapped modulation offsets, its Q, ...) is applied as before. A
 // node's first applyBase (immediate, the node is still silent) gets no owned keys: it gives the
-// parameter its initial value and the owner schedules from there. diffPlans receives the same
+// parameter its initial value — the owner's `initial` when its claim names one, else the base —
+// and the owner schedules from there. The owner's own first event can come later than the
+// graph's start: a main thread that stalls inside PLAY past the crossfade time lets the audio
+// thread render the routes this transaction opened before the owner runs, so a parameter the
+// owner silences (a pattern-played oscillator's free-running carrier, held at ROUTE_FLOOR) must
+// already be silent when its node is built, not only from the owner's first event (measured: the
+// Basic Synth's carrier sounded up to +6 dB re its Tone before a re-anchored baseTime in
+// chromium and webkit; tests/browser/v31-studio-transport.cjs). diffPlans receives the same
 // map, so a key whose builder update cannot skip an owned parameter (an adapter's
 // `rebuildWhenOwned`, the filter bypass) rebuilds the node instead. No AudioParam method is ever
 // reassigned.
@@ -141,6 +155,14 @@ import { NO_TRACE } from '../core/trace.js';
 
 /** Escape-speed stop (scheduler.js ESCAPE_RELEASE_S). */
 export const STUDIO_FAST_STOP_S = 0.008;
+
+/** `base` with the value of each key in `init` (an owner's initial values) replaced. */
+function withInitials(base, init) {
+  if (!init) return base;
+  const out = { ...base };
+  for (const [k, v] of Object.entries(init)) if (out[k]) out[k] = { ...out[k], value: v };
+  return out;
+}
 
 /** The owned keys of a node no other owner drives (shared, never mutated). */
 const NONE_OWNED = Object.freeze(new Set());
@@ -214,6 +236,7 @@ export function createStudioRuntime({
   const written = new Map();
   const owned = new Map(); // node id → Set of parameter keys driven by another owner
   const peaks = new Map(); // node id → { key: peak value } of owned parameters (computeBases)
+  const initials = new Map(); // node id → { key: value } an owned parameter is built at
   const peaksDirty = new Set(); // node ids whose peaks changed since the last apply
   // The engine's master level before the Studio first wrote it: the Master Output level drives
   // the ONE engine gain only while the Studio plays; every way out gives it back, so MEASURE,
@@ -452,10 +475,15 @@ export function createStudioRuntime({
     owned.clear();
     const before = new Map(peaks);
     peaks.clear();
+    initials.clear();
     for (const e of Array.isArray(list) ? list : []) {
       if (!e || typeof e.node !== 'string' || typeof e.param !== 'string') continue;
       if (!owned.has(e.node)) owned.set(e.node, new Set());
       owned.get(e.node).add(e.param);
+      if (Number.isFinite(e.initial)) {
+        if (!initials.has(e.node)) initials.set(e.node, {});
+        initials.get(e.node)[e.param] = e.initial;
+      }
       if (Number.isFinite(e.peak)) {
         if (!peaks.has(e.node)) peaks.set(e.node, {});
         peaks.get(e.node)[e.param] = e.peak;
@@ -542,8 +570,11 @@ export function createStudioRuntime({
         if (!edgeAdd.has(id)) continue;
         doing = { kind: 'edge', id };
         const pe = next.edges.get(id);
+        // Into a parameter its owner holds at an `initial` value: not connected (header).
+        const held = pe.kind === 'control' && Object.hasOwn(initials.get(pe.to.node) || {},
+          pe.to.port);
         created.edges.set(id, createEdgeHandle(pe, handleOf(pe.from.node), handleOf(pe.to.node),
-          env));
+          env, { connect: !held }));
       }
       const edgeOf = (eid) => created.edges.get(eid)
         || (edgeRemove.has(eid) ? null : edges.get(eid));
@@ -553,7 +584,7 @@ export function createStudioRuntime({
         const cb = computeBases(next.nodes.get(id), incomingControl(next, id, edgeOf), hooks,
           peaks.get(id) || null);
         const w = tracing ? {} : null;
-        h.applyBase(cb.base, true, NONE_OWNED, w);
+        h.applyBase(withInitials(cb.base, initials.get(id)), true, NONE_OWNED, w);
         written.set(id, w);
       }
     } catch (err) {
