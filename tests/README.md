@@ -6,8 +6,9 @@
 `majordomus doctor`. CI runs the same scripts as parallel jobs aggregated by the required `gate`
 job, plus a `knowledge` job that runs a pinned `majordomus doctor` (`.github/workflows/ci.yml`).
 `OSC_BROWSERS=chromium,firefox` narrows the multi-browser suites. `test:live` (post-deploy, needs
-the network) is run by hand after a release (`release:publish` verifies the deploy itself), not by
-release-gate; the Pages workflow runs `verify-deploy` only.
+the network) is not in release-gate: the Pages workflow (`.github/workflows/pages.yml`) runs it on
+every deployment, one browser per job, after `verify-deploy` has proven the page is the committed
+dist, and a failed check fails the workflow; it can also be run by hand against the public site.
 
 Classes: **GATE** fails a release · **SUPPORTING** data or helpers a gate needs · **DIAGNOSTIC**
 for people, never gating · **DELETED** removed, with its replacement.
@@ -79,7 +80,7 @@ for people, never gating · **DELETED** removed, with its replacement.
 | `unit/v3-analysis-task.test.mjs` | GATE | the analysis as one serializable task, bit-identical to the inline engine analysis (the Worker boundary, G21) |
 | `unit/v3-views.test.mjs` | GATE | MEASURE and EXPERIMENTS view models: labels, masks, cursor readouts, quality bar, announcements, guided flow, compare, no SPL without a level calibration |
 | `../scripts/visual-measure.mjs` + `visual/measure/*` | GATE | MEASURE at 1536x1024 and 390x844 showing a deterministic TEST CONTEXT experiment, against the accepted reference per environment (≤ 0.5 % differing pixels) |
-| `browser/live-smoke.cjs` | GATE (post-deploy) | the public site boots, its provenance region matches the runtime, HOLD sounds and cleans up; MEASURE opens with its guided flow and controls, and its setup check reaches READY in TEST CONTEXT (digital loopback) with 0 nodes after a reset; STUDIO opens, the Subtractive Synth from the template gallery renders 6 nodes and 5 cables, PLAY sounds and STOP leaves 0 nodes; the Measurement Sweep template renders its six nodes (three Measurement nodes) and 5 cables; getUserMedia is never called, so no microphone prompt can block it (`--url file://…/dist/index.html` runs the same checks locally) |
+| `browser/live-smoke.cjs` | GATE (post-deploy) | the public site boots, its provenance region matches the runtime, HOLD sounds and cleans up; MEASURE opens with its guided flow and controls, and its setup check reaches READY in TEST CONTEXT (digital loopback) with 0 nodes after a reset; the Playground's compact Studio loads with the Studio document (title, node chips and clip chips are the model's); STUDIO opens, the Subtractive Synth from the template gallery renders Oscillator, Envelope, Filter, Master, LFO and Spectrum by node kind and its 5 connections, its timeline renders the Source track with the Tone and Sweep clips, PLAY sounds and STOP leaves 0 nodes; the Measurement Sweep template renders Sweep, Master, Microphone, Calibration, Transfer Analyzer and Measurement Result by node kind and its 5 connections; getUserMedia is never called, so no microphone prompt can block it (`--url file://…/dist/index.html` runs the same checks locally) |
 | `browser/fixtures/*` | SUPPORTING | in-memory esbuild entries and pages for dsp, labs, sequencer |
 | `../scripts/visual-gate.mjs` + `visual/baseline.json` | GATE | 1536x1024 `--play` scene vs accepted values per environment: per-region chrome (+0.5 pp) and data (+measured variance) mismatch, panel and control geometry within 2 px, totals |
 | `visual/reference.png`, `visual/regions.json` | SUPPORTING | the visual reference and its region and control boxes |

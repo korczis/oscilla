@@ -21,7 +21,7 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-02
-updated_at: 2026-10-06T18:13:42Z
+updated_at: 2026-10-06T18:30:56Z
 evidence:
   - covers: verified
     type: ci
@@ -53,3 +53,9 @@ evidence:
     result: "PARTIAL (do not mark done; blocked behind V432 and V386): at caf7764 SemVer from history holds (v3.0.0 -> v3.1.0 Studio -> v3.10.2, package.json single source); Pages run 37508930870 (success) serves caf7764 and verify-deploy PASS attempt 1/10 with bounded retry (artifact 1d20acfd89a9); test:live 14/14 in chromium, firefox, webkit: STUDIO from navigation, Subtractive Synth 6 nodes / 5 cables, PLAY sounds, STOP leaves 0 engine/source/runtime nodes, and the Measurement Sweep template renders its six nodes with their Measurement categories and 5 cables, no microphone request, no console errors, so the round-3 spec 270 gap is closed; deployment evidence now exists through release/v1 (.ai/repo/releases, #93): v3.10.2 record at 531544b matches what GitHub serves (release-record --check), with version, commit, artifact sha256, date, while public URL, Pages run and smoke result live in this plan evidence (deployment/v1 has no static-site shape). Unmet: (1) dependencies V432 and V386 not done; (2) spec 269: Studio post-deploy checks are not part of deployment: pages.yml and release:publish run only verify-deploy, test:live is run by hand (no workflow or script references it, although its header says the Pages workflow runs it), and it checks neither the compact Studio nor the timeline render; (3) spec 270 checks node and cable counts of the Subtractive Synth (no Basic Synth template exists), not that Oscillator, Envelope, Filter and Master are present; (4) spec 259: no final Studio report (schema, node and port types, test counts, artifact size delta, Majordomus artifacts, public version, commit, deployment run); (5) v3.1.0 itself has no release/v1 record (its GitHub Release has no asset; records start at v3.4.0)"
     commit: caf7764ce6fec9329de43254328170255faa6dad
     recorded_at: 2026-10-06T18:13:42Z
+  - covers: verified
+    type: test
+    command: "npm run test:live -- --expect-version 3.10.2 --expect-commit caf7764ce6fec9329de43254328170255faa6dad"
+    result: "PARTIAL (do not mark done; blocked behind V432 and V386): with live-smoke.cjs of branch ci/pages-runs-live-smoke (PR #146) against the public page serving caf7764 (v3.10.2): 16/16 checks PASS in chromium, firefox and webkit, incl. spec 269 compact Studio loads in the Playground with the Studio document (node and clip chips = model), STUDIO from navigation, Subtractive Synth renders by node kind oscillator/envelope/filter/master/lfo/spectrum with its 5 connections by ends, its timeline renders track-1 with the Tone and Sweep clips, PLAY sounds and STOP leaves 0 nodes; spec 270 Measurement Sweep renders sweep/master/microphone/calibration/transfer-analyzer/measurement-result with its 5 connections; no getUserMedia call; no console error. PR #146 makes pages.yml run this smoke (one job per browser) after verify-deploy on every deployment, a failure failing the workflow. Unmet: spec 227/271 deployment record"
+    commit: b8c59532fa90bf6ff6719c856bfeb7228f84ce95
+    recorded_at: 2026-10-06T18:30:56Z
