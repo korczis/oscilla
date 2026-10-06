@@ -330,6 +330,24 @@ claims:
     responsibility: product
     note: No IEC 61260-1 class is claimed. The RTA view (bars over band edges, peak hold, freeze, relative unless calibrated) is tested in tests/unit/v3-views.test.mjs.
 
+  - id: level-calibration-bound-to-input
+    claim: A level calibration is stored only with the input it was taken with and applies only while that input is in use; a reading typed before any input is known is refused with the reason, a calibration without a binding (an earlier record) never applies to a known input, and records say it is not bound to an input
+    source: .ai/repo/adrs/0017-relative-levels-spl-only-when-calibrated.md
+    implementation: src/js/calibration/level.js
+    test: tests/unit/v4-measurement-truth.test.mjs
+    status: guaranteed
+    responsibility: product
+    note: Ledger C1 (ADR 0017 resolution 2026-10-06). The MEASURE adapter refusal and the binding are tested in Node through src/js/ui/measure.js; check calibration in tests/browser/v3-ui.cjs refuses a typed reading before the setup check, stores it bound after it and voids it for another input in three browsers over file:// and /oscilla/. A browser that exposes no device id binds the sample rate and processing flags only; gain and microphone position are never bound.
+
+  - id: measurable-stimulus-only
+    claim: A record whose stimulus this build's engine cannot measure (anything but a log sweep) is kept on import with a finding that says so, and Repeat and "Run this definition" refuse it rather than run a log sweep in its place; records the application saves are log sweeps only
+    source: .ai/repo/adrs/0043-runs-executed-from-versioned-experiment-definitions.md
+    implementation: src/js/experiments/validate.js
+    test: tests/unit/v4-measurement-truth.test.mjs
+    status: guaranteed
+    responsibility: product
+    note: Ledger D4 (ADR 0043 resolution 2026-10-06). The one list of what the engine measures is src/js/measurement/engine.js MEASURABLE_STIMULUS_KINDS; MEASURE's measureLoadRecipe refuses such a recipe for every caller. Check unmeasurable-stimulus in tests/browser/v3-ui.cjs imports a white-noise record, shows the finding and refuses Repeat in three browsers over file:// and /oscilla/.
+
   - id: reproducible-experiments
     claim: Every saved measurement is an experiment that records its recipe, output level, input device and constraints, calibration, sample rate, runs, quality, algorithm IDs, product version and build, with a configuration hash and a result hash
     source: .ai/repo/adrs/0019-recipe-versus-experiment.md
@@ -402,7 +420,7 @@ claims:
     note: The compare view is in tests/unit/v3-views.test.mjs; check experiments in tests/browser/v3-ui.cjs compares an equivalent pair (delta shown) and a non-equivalent pair (refused with the reason).
 
   - id: semantic-run-comparison
-    claim: Comparing runs lists what changed between them by domain (recipe, algorithms, calibration, conditions, Studio graph, build, result, metadata) with units, classifies Studio layout and view changes as presentation and never as execution, and compares against the one run marked as the baseline, a mark that is metadata and leaves the run immutable
+    claim: Comparing runs lists what changed between them by domain (recipe, algorithms, calibration, conditions, Studio graph, build, result, metadata) with units, classifies Studio layout and view changes as presentation and Studio changes outside both runs' measured paths as not used by the measurement, never as execution, and compares against the one run marked as the baseline, a mark that is metadata and leaves the run immutable
     source: .ai/repo/adrs/0041-run-comparison-semantic-execution-vs-presentation.md
     implementation: src/js/experiments/semantic-diff.js
     test: tests/unit/v3-semantic-compare.test.mjs
@@ -426,7 +444,7 @@ claims:
     test: tests/unit/v3-run-evidence.test.mjs
     status: guaranteed
     responsibility: product
-    note: A contradicted calibration claim is presented as the detail presents it (the claims that hold, each contradicted one as "uncalibrated (the stored claim is contradicted)" or "not recorded", and each finding in its own words); the hash reason names what its version covers and that algorithm ids, environment notes and lineage are covered by no result hash; the Studio link is the graph the recipe was derived from, whose hash covers nodes the measurement did not use (ledger D3); the raw capture is never retained, and the checklist says so. The result hash is recomputed over the stored record. Check evidence in tests/browser/v3-ui.cjs shows the section, its headings, lists and states in words, the keyboard-reachable frequency field, 390 px, the contradicted older record without "SPL" and the compare line in three browsers over file:// and /oscilla/.
+    note: A contradicted calibration claim is presented as the detail presents it (the claims that hold, each contradicted one as "uncalibrated (the stored claim is contradicted)" or "not recorded", and each finding in its own words); the hash reason names what its version covers and that algorithm ids, environment notes and lineage are covered by no result hash; the Studio link is the graph the recipe was derived from with the measured path it names (ledger D3, closed), or says that an earlier block records the whole graph and not which nodes the measurement used; a level calibration without an input binding is said to be not bound (ledger C1) and a stimulus this build cannot measure makes the recipe item partial with the import finding's reason (ledger D4); the raw capture is never retained, and the checklist says so. The result hash is recomputed over the stored record. Check evidence in tests/browser/v3-ui.cjs shows the section, its headings, lists and states in words, the keyboard-reachable frequency field, 390 px, the contradicted older record without "SPL" and the compare line in three browsers over file:// and /oscilla/.
 
   - id: aggregate-primary-response
     claim: A measurement of two or more runs stores the aggregate (centre, dispersion and repeatability) as its primary response; the stored transfer is the aggregate centre marked as derived, never one run, and comparison uses the aggregate
@@ -619,13 +637,13 @@ claims:
     note: 'Tests "§113 save and load a project: the exact model", "§114 insertPatch", "§114 replaceWithPatch", "§114 store PATCH_INSERT / PATCH_REPLACE are single undoable entries", "§155 patches are never silently overwritten", "§158 JSON export and import". tests/browser/v31-studio-graph.cjs check patches-files does it through the UI in three browsers. Autosave and crash recovery are not built.'
 
   - id: studio-experiment-provenance
-    claim: 'A measurement run from Studio goes through the V3 measurement engine with a recipe derived from the graph and its clips, and the saved experiment records the Studio schema version, the studioHash and the execution state that ran, outside configHash.'
+    claim: 'A measurement run from Studio goes through the V3 measurement engine with a recipe derived from the graph and its clips, and the saved experiment records the Studio schema version, the studioHash and the execution state of the graph it was run from, and the measured path the recipe was derived from with its own hash, all outside configHash.'
     source: .ai/repo/adrs/0038-measurement-topology-inside-studio.md
     implementation: src/js/studio/provenance.js
     test: tests/unit/v31-studio-provenance.test.mjs
     status: guaranteed
     responsibility: product
-    note: 'Tests "§109 the Studio block is schema version, studioHash and the execution state only", "ADR 0019: the recipe stays authoritative", "ADR 0038 round trip", "tampering with the Studio block is corrupt"; tests/unit/v31-studio-gaps.test.mjs runs a real MeasurementEngine on the clip pass; tests/browser/v31-studio-workflows.cjs check measure-from-studio does it on the TEST CONTEXT loopback in three browsers. No automated test proves how a physical speaker, room or microphone behaves.'
+    note: 'Tests "§109 the Studio block is schema version, studioHash, execution state, measured path", "ADR 0019: the recipe stays authoritative", "ADR 0038 round trip", "tampering with the Studio block is corrupt"; the measured path (ledger D3: an unconnected node changes studioHash, never the measured path; a change outside it is not an execution change in compare; an earlier block records the whole graph and says so) is tests/unit/v4-measurement-truth.test.mjs; tests/unit/v31-studio-gaps.test.mjs runs a real MeasurementEngine on the clip pass; tests/browser/v31-studio-workflows.cjs check measure-from-studio does it on the TEST CONTEXT loopback in three browsers, from a graph with an unconnected Oscillator that the measured path leaves out. No automated test proves how a physical speaker, room or microphone behaves.'
 
   - id: studio-non-drag-operation
     claim: 'Connecting ports, moving nodes, moving, resizing, duplicating and deleting clips, and editing automation points each have a keyboard path that dispatches the same store actions as the pointer path, without pointer dragging; on touch, ports connect by tapping.'

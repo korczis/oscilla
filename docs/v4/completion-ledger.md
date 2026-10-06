@@ -35,12 +35,12 @@ mobile, significant performance), **P2** (polish, debt).
 | Studio Microphone node | ✓ | ✓ | ✓ (#119) | – | Allow microphone | – | ✓ | ✓ | EXISTS |
 | Experiment definition | ✓ (#116) | ✓ | engine runs the bound recipe | ✓ (append-only versions) | ✓ | definition ref in result hash v4 | ✓ | ✓ | EXISTS (no separate plan compiler) |
 | Measurement run (state machine, cancel, repeats) | ✓ | ✓ | ✓ | aggregate only | ✓ | ✓ | ✓ | ✓ | EXISTS (no retry/attempt record) |
-| Calibration (level, frequency profile) | ✓ | ✓ | ✓ | session only | ✓ | as applied (#121) | ✓ | ✓ | EXISTS (C1 open) |
+| Calibration (level, frequency profile) | ✓ | ✓ | ✓ | session only | ✓ | as applied (#121); bound to its input (C1, #PR) | ✓ | ✓ | EXISTS |
 | Quality | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | glyph + shape | ✓ | EXISTS |
 | Run store, immutability, baseline | ✓ | ✓ | – | IndexedDB / memory | ✓ | ✓ | ✓ | ✓ | EXISTS (unverified-import marker missing) |
 | Import / export / migration | ✓ | ✓ (validate before put) | – | ✓ | ✓ | hash recomputed | – | ✓ | EXISTS |
 | Semantic comparison | ✓ | – | – | – | ✓ | ✓ | ✓ | ✓ | EXISTS |
-| Studio provenance on a measurement | ✓ | ✓ | ✓ | ✓ | – | over-records unused nodes | – | partial | PARTIAL (D3) |
+| Studio provenance on a measurement | ✓ | ✓ | ✓ | ✓ | evidence, compare | whole graph + measured path (D3, #PR) | – | ✓ | EXISTS |
 | Raw data retention | – | – | engine `keepRaw` | none | none | – | – | – | MISSING (no stated policy) |
 | Findings | – | – | – | – | – | – | – | – | MISSING |
 | Cross-domain Trace (result → run → definition → build → Studio) | – | – | – | – | – | – | – | – | MISSING |
@@ -71,9 +71,9 @@ mobile, significant performance), **P2** (polish, debt).
 | W1 | Deleting the open Studio project leaves it looking saved; the next template replaces the graph without the unsaved-changes prompt (data loss) | **closed** #119: the open document detaches and stays unsaved |
 | W2 | No `beforeunload` guard, no history entries; reload/Back silently loses unsaved Studio work and an unsaved measurement | open |
 | W3 | README privacy statement omits the `studio` / `studioSummaries` stores | **closed** #120: inventory test derives keys and stores from code |
-| C1 | Unbound manual level calibration applies to every input | open |
-| D3 | Studio provenance hashes unconnected nodes, so identical measurements read as an execution change | open |
-| D4 | Schema accepts five stimulus kinds the engine cannot run; Repeat of such a record silently runs a log sweep | open |
+| C1 | Unbound manual level calibration applies to every input | **closed** #PR: a reading is stored only once an input is known and bound to it; an unbound calibration never applies to a known input; records say "not bound to an input" (ADR 0017 resolution) |
+| D3 | Studio provenance hashes unconnected nodes, so identical measurements read as an execution change | **closed** #PR: the Studio block also names the measured path with its own hash (experiment schema 4); compare classes changes outside it as unmeasured; earlier blocks record the whole graph and say so (ADR 0038 resolution) |
+| D4 | Schema accepts five stimulus kinds the engine cannot run; Repeat of such a record silently runs a log sweep | **closed** #PR: such a record imports with a finding and is kept; Repeat and "Run this definition" refuse it (ADR 0043 resolution) |
 | K3 | No CI job consumes the `.ai/` layer; claim guarding stops at Studio claims | **closed** #120: knowledge-integrity test plus required CI `knowledge` job (pinned doctor) |
 | K4 | Hand-written CLAUDE.md is stale (V2, ADRs 0011-0029, 3 of 8 rules) | **closed** #120 |
 | A1 | About page overstates enforcement | **closed** #120 |
@@ -123,3 +123,15 @@ unconnected nodes), D4 (schema wider than the engine), and the P2 list.
 **Release decision now: NOT READY FOR v4.0 RELEASE.** No P0 remains; the blockers are the
 v4.0 capabilities no code implements yet: evidence on a run (value trace and reproducibility
 checklist), findings linked to evidence, cross-domain Trace, and W2.
+
+## Update 2026-10-06 — measurement truth
+
+C1, D3 and D4 are closed by #PR, each with tests that failed before the change (unit
+`tests/unit/v4-measurement-truth.test.mjs`; browser checks `calibration` and
+`unmeasurable-stimulus` in `tests/browser/v3-ui.cjs` and `measure-from-studio` in
+`tests/browser/v31-studio-workflows.cjs`). The evidence checklist of #129 keeps saying exactly
+what a record holds: an unbound level calibration stays partial, a stimulus this build cannot
+measure keeps "Recipe recorded" partial, and the Studio link names the measured path.
+
+Open from this ledger's findings: W2 (unsaved-work guard and navigation history) and the P2
+list.

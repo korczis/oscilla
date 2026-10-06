@@ -65,7 +65,9 @@ import { KNOWN_ALGORITHM_IDS } from '../measurement/algorithms.js';
 import { openExperimentStoreOrMemory } from '../experiments/store.js';
 import {
   validateExperiment, DEFAULT_MAX_BYTES, calibrationClaimFindings, withoutContradictedCalibration,
+  stimulusFindings, CALIBRATION_CLAIM_CONTRADICTED,
 } from '../experiments/validate.js';
+import { measurableStimulusRefusal } from '../measurement/engine.js';
 import {
   experimentToJson, formatErrors, newExperimentId, EXPERIMENT_FILE_EXTENSION,
   sanitizeForExport, duplicateExperiment, annotateExperiment, isBaseline, describeStimulus,
@@ -316,10 +318,13 @@ export function createExperimentsUi() {
       && cmp.exps.detail.evidence ? cmp.exps.detail.evidence.hz : null;
     const view = buildResponseView(shown, { profile: typeof cmp.measureCurrentProfile
       === 'function' ? cmp.measureCurrentProfile() : null });
+    const stimulus = stimulusFindings(e);
     cmp.exps.detail = {
       ...plain(s),
       calibrationClaim: findings.length ? { text: CALIBRATION_CLAIM_TEXT,
         findings: findings.map((f) => `${f.path}: ${f.text}`) } : null,
+      // Ledger D4: a stimulus this build cannot measure; the record is shown, never repeated.
+      stimulusFinding: stimulus.length ? `${stimulus[0].path}: ${stimulus[0].text}.` : null,
       testContext: isTestContext(e),
       baseline: isBaseline(e),
       notes: e.environment && e.environment.notes ? e.environment.notes : null,
@@ -663,8 +668,11 @@ export function createExperimentsUi() {
         this.notify('error', 'Experiment not imported', formatErrors(v.errors.slice(0, 3)));
         return null;
       }
-      const claim = v.findings && v.findings.length ? ` ${CALIBRATION_CLAIM_TEXT} (${v.findings
-        .map((f) => `${f.path}: ${f.text}`).join('; ')})` : '';
+      const claims = v.findings.filter((f) => f.code === CALIBRATION_CLAIM_CONTRADICTED);
+      const others = v.findings.filter((f) => f.code !== CALIBRATION_CLAIM_CONTRADICTED);
+      const claim = `${claims.length ? ` ${CALIBRATION_CLAIM_TEXT} (${claims.map((f) => `${
+        f.path}: ${f.text}`).join('; ')})` : ''}${others.map((f) => ` ${f.path}: ${f.text}.`)
+        .join('')}`;
       let e = v.experiment;
       const s = await store(this);
       let kept = '';
@@ -694,8 +702,19 @@ export function createExperimentsUi() {
     async experimentsRepeat(id) {
       const e = await get(this, id);
       if (!e) return false;
+      // Ledger D4: never a log sweep in place of a stimulus this build cannot measure.
+      const why = measurableStimulusRefusal(e.recipe && e.recipe.stimulus
+        ? e.recipe.stimulus.kind : undefined);
+      if (why) {
+        this.notify('error', 'Repeat refused', `This run used ${why}. Nothing was loaded.`);
+        return false;
+      }
       const m = matchOf(e.definition);
-      this.measureLoadDefinition(e.definition, { repeatOf: e.experimentId, ...m });
+      if (!this.measureLoadDefinition(e.definition, { repeatOf: e.experimentId, ...m })) {
+        this.notify('error', 'Repeat refused', `${this.measureRecipeRefusal(e.definition
+          .execution.recipe)} Nothing was loaded.`);
+        return false;
+      }
       this.setWorkspace('measure');
       this.notify('info', e.definition.derived ? 'Recipe loaded for a repeat'
         : 'Definition loaded for a repeat', `"${e.name || '(unnamed)'}": run the measurement; it `
@@ -755,7 +774,13 @@ export function createExperimentsUi() {
         this.notify('warning', 'Definition not run', 'A measurement is in progress.');
         return false;
       }
-      this.measureLoadDefinition(definitionRef(d), { name: d.name || null, match: 'match' });
+      const ref = definitionRef(d);
+      const why = this.measureRecipeRefusal(ref.execution.recipe, { whose: 'This definition' });
+      if (why || !this.measureLoadDefinition(ref, { name: d.name || null, match: 'match' })) {
+        this.notify('error', 'Definition not run', `${why || 'The definition could not be loaded.'
+        } Nothing was measured.`);
+        return false;
+      }
       this.setWorkspace('measure');
       await this.measureStart();
       return true;

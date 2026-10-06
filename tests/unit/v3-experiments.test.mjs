@@ -162,7 +162,8 @@ const hasError = (errors, path, re) => errors.some((e) => e.path === path
 test('schema versions are four independent axes (§131)', () => {
   // 2: run ids and the metadata/execution split (ADR 0040); schema 1 migrates to it.
   // 3: the definition a run was executed from (ADR 0043); schema 2 migrates to it.
-  assert.strictEqual(EXPERIMENT_SCHEMA_VERSION, 3);
+  // 4: the Studio block's measured path (ledger D3); schema 3 migrates to it unchanged.
+  assert.strictEqual(EXPERIMENT_SCHEMA_VERSION, 4);
   // 2: frequency profiles carry their sign convention (M4); schema 1 migrates to it.
   assert.strictEqual(CALIBRATION_SCHEMA_VERSION, 2);
   assert.strictEqual(CONFIG_SCHEMA_VERSION, CONFIG_FILE_VERSION);
@@ -285,7 +286,9 @@ test('summarizeExperiment: compact lines; never invents data (§52, §161)', () 
     'Output level: digital peak 0.5, -6.0 dB relative (dBFS-like)',
     'Master output gain: Unknown (not recorded)',
     'Input: MacBook Pro Microphone',
-    'Calibration: frequency profile "UMIK-1 #7001", SPL CALIBRATED (94 dB SPL at 1 kHz)',
+    // A schema-1 level calibration records no input (ledger C1).
+    'Calibration: frequency profile "UMIK-1 #7001", SPL CALIBRATED (94 dB SPL at 1 kHz; not bound '
+      + 'to an input)',
     'Sample rate: 48000 Hz',
     'Runs: 5 of 5 requested',
     // M11: a stored verdict says which build and rule set gave it.
@@ -610,8 +613,8 @@ test('corrupt: input larger than maxBytes is rejected before parsing', () => {
 
 test('future schema version is rejected clearly', () => {
   const doc = docOf(fullExperiment());
-  const errors = reject({ ...doc, schemaVersion: 4 });
-  assert.ok(hasError(errors, 'schemaVersion', /newer than this OSCILLA supports \(3\)/));
+  const errors = reject({ ...doc, schemaVersion: 5 });
+  assert.ok(hasError(errors, 'schemaVersion', /newer than this OSCILLA supports \(4\)/));
   const m = migrateExperiment({ ...doc, schemaVersion: 99 });
   assert.strictEqual(m.ok, false);
   assert.match(m.errors[0].text, /schema 99 is newer/);
@@ -665,6 +668,7 @@ test('migration fixture: a synthetic schema 0 document imports as schema 1', () 
         window: ALGORITHMS.window } } }),
     2: migrations[2],
     3: migrations[3],
+    4: migrations[4],
   };
   const v0Text = JSON.stringify(v0);
   const v = validateExperiment(v0Text, { ...OPTS, migrations: fixture });
@@ -906,7 +910,7 @@ test('transferCsv: corrected column and labelled derived view', () => {
   });
   const lines = csv.split('\n');
   assert.strictEqual(lines[6], '# calibration: frequency profile "UMIK-1 #7001", '
-    + 'SPL CALIBRATED (94 dB SPL at 1 kHz)');
+    + 'SPL CALIBRATED (94 dB SPL at 1 kHz; not bound to an input)');
   assert.strictEqual(lines[7], '# view: DERIVED, not raw data (smoothing: 1/6 octave '
     + '(oscilla.smoothing.fractional-octave.v1); normalization: none)');
   // G19: under a valid level calibration the transfer columns stay ratios, never dB SPL.

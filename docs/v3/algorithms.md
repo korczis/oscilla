@@ -1399,9 +1399,12 @@ displayed SPL  = R + offsetDb                                 for a later relati
   never stored; equal inputs stay equal).
 - `levelCalibrationApplies(cal, current)`: a schema-2 calibration applies to the current input
   only when every recorded binding field equals it; otherwise `{ applies: false, reason:
-  'UNCALIBRATED: the level calibration was taken with … at calibration, … now' }`. Without a
-  recorded or a current input nothing is compared (`checked: false`). `levelLabel(cal,
-  current)` carries that reason. Schema-1 records (no scale, method, input) stay valid as
+  'UNCALIBRATED: the level calibration was taken with … at calibration, … now' }`. A
+  calibration without a recorded input (schema 1, or `input: null`) does not apply to a known
+  current input either (`checked: true`, reason "… is not bound to an input …", ledger C1);
+  only without a current input is nothing compared (`checked: false`), the case of a stored
+  record read on its own. `levelLabel(cal, current)` carries that reason.
+  `isBoundLevelCalibration(cal)` tells a bound calibration from an unbound one. Schema-1 records (no scale, method, input) stay valid as
   stored records; the workspace creates schema 2 only.
 - `isValidLevelCalibration(cal)` is true only for a known schema (1 or 2) and kind, in-range
   fields, an `offsetDb` that matches `referenceDbSpl − observedDbRelative` within `1e-9` dB

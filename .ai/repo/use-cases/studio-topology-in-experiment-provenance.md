@@ -2,7 +2,7 @@
 id: studio-topology-in-experiment-provenance
 kind: use-case
 title: 'Keep the Studio topology in experiment provenance'
-summary: 'Run a measurement from Studio and find the Studio schema version, studioHash and execution state recorded in the experiment.'
+summary: 'Run a measurement from Studio and find the Studio schema version, studioHash, execution state and measured path recorded in the experiment.'
 category: studio
 status: active
 target: advisory
@@ -25,7 +25,7 @@ The behaviour is proven by the OSCILLA tests named in each claim of `docs/CLAIMS
 by these, run by:
 
 - `npm test`: tests/unit/v31-studio-provenance.test.mjs ("§109 the Studio block is schema
-  version, studioHash and the execution state only", "§255 view state and presentation never
+  version, studioHash, execution state, measured path", "§255 view state and presentation never
   change the provenance; parameters do", "ADR 0019: the recipe stays authoritative — Studio
   never enters configHash", "ADR 0038 round trip: export → validate → import keeps the Studio
   block byte for byte", "§109 tampering with the Studio block is corrupt") and
@@ -82,6 +82,8 @@ then:
 
 # Outcome
 
-The experiment states which Studio graph and timeline ran, by schema version, hash and
-execution state; two layouts of one topology carry the same studioHash, and the recipe, not
-the Studio, decides the experiment's configHash.
+The experiment states which Studio graph and timeline the measurement was run from, by
+schema version, hash and execution state, and which part of it the measurement depended on (the
+measured path and its hash, ledger D3); two layouts of one topology carry the same studioHash,
+a node the measurement never reads changes the studioHash but not the measured path, and the
+recipe, not the Studio, decides the experiment's configHash.

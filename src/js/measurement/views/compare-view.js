@@ -22,7 +22,8 @@
 //     summary }
 // Semantic changes (ADR 0041): compareExperiments' runChanges of A (the reference; the baseline
 // when it is marked) against each other experiment, grouped by domain. Execution changes come
-// first; presentation and metadata groups (other: true) are shown collapsed. Unchanged fields are
+// first; presentation, metadata and Studio groups outside the measured path (class 'unmeasured',
+// ledger D3) are other: true and shown collapsed. Unchanged fields are
 // not listed. Values are formatted here only (the model keeps full precision). The wording says
 // what changed between the runs, never that a change caused a difference in the responses.
 //
@@ -47,7 +48,9 @@ import { describeStimulus, isBaseline } from '../../experiments/schema.js';
 import { DOMAIN_LABELS, runFields } from '../../experiments/semantic-diff.js';
 import { canonicalJson } from '../../experiments/canonical-json.js';
 import { studioChanges } from '../../studio/diff.js';
-import { isValidLevelCalibration } from '../../calibration/level.js';
+import {
+  UNBOUND_TEXT, isBoundLevelCalibration, isValidLevelCalibration,
+} from '../../calibration/level.js';
 import { TRANSFER_RATIO_UNIT } from '../../experiments/csv.js';
 import { experimentSummary } from './experiment-summary.js';
 import { buildIrOverlayView } from './ir-chart.js';
@@ -74,7 +77,8 @@ function valueText(field, v, e) {
     case 'calibration.level': {
       const l = e && e.calibration ? e.calibration.level : null;
       return isValidLevelCalibration(l)
-        ? `CALIBRATED: ${l.referenceDbSpl} dB SPL reference at ${l.referenceHz} Hz`
+        ? `CALIBRATED: ${l.referenceDbSpl} dB SPL reference at ${l.referenceHz} Hz${
+          isBoundLevelCalibration(l) ? '' : ` (${UNBOUND_TEXT})`}`
         : 'present but invalid (not applied)';
     }
     case 'measurement.sampleRate': return `${v} Hz`;
@@ -122,7 +126,9 @@ function semanticView(experiments, labels, semantic) {
         let g = out.find((x) => x.key === key);
         if (!g) {
           g = { key, other: c.class !== 'execution', label: `${DOMAIN_LABELS[c.domain]}${
-            c.class === 'presentation' ? ' (layout and view)' : ''}`, items: [] };
+            c.class === 'presentation' ? ' (layout and view)' : c.class === 'unmeasured'
+              ? ' (not on the measured path: recorded, not used by either measurement)' : ''}`,
+          items: [] };
           out.push(g);
         }
         const b = changeValue(c, c.before, experiments[0]);

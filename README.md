@@ -116,7 +116,10 @@ is in the [algorithm notes](docs/v3/algorithms.md).
 - **Absolute level calibration.** You enter an external reference (for example 94 dB SPL at
   1 kHz from a calibrator) and the relative level OSCILLA observed. This is the only way to
   get dB SPL. It is valid only for the microphone, gain, browser settings and position it was
-  taken with. There is no default calibration.
+  taken with. There is no default calibration. OSCILLA stores one only once it knows the input
+  (the setup check or the reference capture), binds it to that input and stops applying it when
+  the input changes; a reading typed before any setup check is refused with the reason. A
+  record from an earlier version whose calibration has no input says "not bound to an input".
 
 ### Transfer Function
 
@@ -182,12 +185,16 @@ filter class is claimed. An experiment saved from Measure does not store band le
   edited later are saved as an annotation. An experiment from an earlier version whose named
   calibration its own results contradict still opens and imports, and is marked as such: it is
   shown and compared as uncalibrated, never in dB SPL.
+- **Only a log sweep is repeated.** The measurement engine measures log sweeps only. A file
+  whose stimulus is anything else (white or pink noise, a sine, a chirp) still imports and is
+  kept as it is, with a warning that this version cannot measure it; Repeat and "Run this
+  definition" refuse it rather than run a log sweep in its place.
 - **Evidence.** A saved run's detail answers two questions from what its record stores. "What
   produced this value?" traces the stored response value at a frequency you enter (1 kHz by
   default) through the analysis algorithms, the capture (input, sample rate, processing flags),
   the calibration as applied, the run, the definition version, the build and, for a Studio run,
-  the Studio graph the recipe was derived from (its hash covers nodes the measurement did not
-  use). "Can I repeat this?" is a checklist: each item is recorded, partial or not recorded,
+  the Studio graph the recipe was derived from with the measured path it names (the nodes,
+  connections and measurement clips the measurement used). "Can I repeat this?" is a checklist: each item is recorded, partial or not recorded,
   with its reason, and there is no score. The result hash is recomputed and its reason says what
   it covers; the algorithm ids, environment notes and lineage are covered by no result hash.
   The raw capture is never retained: OSCILLA stores the
@@ -340,8 +347,10 @@ How to use it, with the keyboard shortcuts, is the [Studio user guide](docs/v31/
   input (Microphone) is refused with the reason.
 - **Measurement from Studio.** In the Measurement Sweep template, PLAY hands the measurement
   clips to the Measure workspace's measurement engine: the recipe is derived from the graph and
-  the clips, and the saved experiment records the Studio that ran (schema version, hash,
-  execution state) beside its recipe.
+  the clips, and the saved experiment records the Studio graph it was run from (schema version,
+  hash, execution state) beside its recipe, and the measured path the recipe was derived from
+  with its own hash. A node the measurement never reads, such as an unconnected Oscillator, is
+  recorded but is not an execution change when two runs are compared.
 - **Performance.** Responsive at about 100 nodes and 200 connections; the numbers and budgets
   are in [performance](docs/v31/performance.md).
 - **Links and fullscreen.** `#m=studio&st=<template id>&sv=<graph|timeline|inspector>` opens

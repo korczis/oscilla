@@ -19,6 +19,12 @@
 // still verify. A
 // recipe a definition cannot be derived from is left without one, and validation names it.
 //
+// 3 → 4 (ledger D3, ADR 0038 resolution 2026-10-06): the Studio block may name its measured
+// path (`studio.measured`). An earlier block has none, and none is inferred: it keeps its
+// studioHash, still verifies, and is read as recording the whole graph. No hash covers the
+// Studio block, so the stored result hash and version are kept. A schema-3 document that already
+// has `studio.measured` is refused, not trusted.
+//
 //   migrateExperiment(json, { migrations, targetVersion }) ->
 //     { ok: true, experiment, from, to, applied: [n, ...] }
 //     | { ok: false, errors: [{ path, text }] }
@@ -48,10 +54,20 @@ function addDerivedDefinition(e) {
   return { ...e, definition };
 }
 
+/** Schema 3 → 4: nothing changes; a measured path is never inferred for an earlier block. */
+function keepWholeGraph(e) {
+  const s = e.studio;
+  if (s && typeof s === 'object' && Object.prototype.hasOwnProperty.call(s, 'measured')) {
+    throw new Error('a schema-3 experiment has no studio.measured field');
+  }
+  return e;
+}
+
 export const migrations = Object.freeze({
   1: (e) => e,
   2: addRunIds,
   3: addDerivedDefinition,
+  4: keepWholeGraph,
 });
 
 /** Upgrade a parsed experiment document to `targetVersion` (default: the current schema). */

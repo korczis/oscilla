@@ -24,7 +24,9 @@
 //                        hands the derived recipe to the MeasurementEngine at the first
 //                        measurement clip; MEASURE runs PREFLIGHT … COMPLETE; the experiment is
 //                        saved with the Studio block (studioHash of the model that ran, the
-//                        recipe derived from the topology, TEST CONTEXT runs); Studio PLAY is
+//                        measured path without the unconnected Oscillator added to the graph,
+//                        ledger D3, the recipe derived from the topology, TEST CONTEXT runs);
+//                        Studio PLAY is
 //                        refused while the measurement owns the output; Escape aborts a second
 //                        run; 0 engine, Studio runtime and capture nodes after each (V424, V425)
 //   large-graph-render   the 100-node / 200-edge fixture imported through the UI path renders
@@ -415,6 +417,9 @@ function defineChecks(fx) {
         { type: 'NODE_PARAM_SET', nodeId: 'sweep-1', key: 'level', value: 0.25 },
         { type: 'CLIP_RESIZE', clipId: 'clip-1', duration: 0.25 },
         { type: 'CLIP_RESIZE', clipId: 'clip-3', duration: 1 },
+        // Ledger D3: a node the measurement never reads; recorded, outside the measured path.
+        { type: 'NODE_ADD', nodeType: 'oscillator', position: { x: 600, y: 420 },
+          params: { frequency: 440 } },
       ]) {
         const r = s.dispatch(a);
         if (!r.ok) throw new Error(r.reason);
@@ -443,8 +448,12 @@ function defineChecks(fx) {
     }, done.id) : null;
     // Node side: the hash of the model that ran and the recipe its topology describes.
     const { normalizeStudio, studioHash } = await esm('src/js/studio/schema.js');
-    const { recipeFromStudio } = await esm('src/js/studio/provenance.js');
+    const { recipeFromStudio, measuredPath } = await esm('src/js/studio/provenance.js');
+    const { measuredPathHash } = await esm('src/js/experiments/hash.js');
     const model = normalizeStudio(JSON.parse(modelText));
+    const path = measuredPath(model);
+    const osc = model.graph.nodes.find((n) => n.type === 'oscillator');
+    const m = exp && exp.studio ? exp.studio.measured : null;
     const sr = await page.evaluate(() => window.OSCILLA.engine.ctx.sampleRate);
     const derived = recipeFromStudio(model, { sampleRate: sr });
     // A second run aborted by Escape mid-measurement.
@@ -471,6 +480,11 @@ function defineChecks(fx) {
         && live.some((t) => t.startsWith('Measurement saved as experiment')),
       studioBlock: !!exp && !!exp.studio && exp.studio.studioHash === studioHash(model)
         && exp.studio.schemaVersion === model.schemaVersion,
+      measuredPath: !!m && !!path && !!osc && m.v === 1
+        && JSON.stringify([m.nodes, m.edges, m.clips])
+          === JSON.stringify([path.nodes, path.edges, path.clips])
+        && !m.nodes.includes(osc.id) && exp.studio.execution.nodes.some((n) => n.id === osc.id)
+        && m.hash === measuredPathHash(exp.studio.execution, m),
       recipe: !!exp && derived.ok
         && JSON.stringify(exp.recipe.stimulus) === JSON.stringify(derived.recipe.stimulus)
         && exp.recipe.analysis.noiseCheckS === 0.25,
@@ -482,7 +496,8 @@ function defineChecks(fx) {
       releasedAfterAbort: quiet2.engineNodes === 0 && quiet2.runtimeNodes === 0
         && quiet2.ioNodes === 0 && quiet2.captures === 0,
     }), during, done: { ...done, history: done.history.join(' → ') }, exp: exp && { name: exp.name,
-      hash: exp.studio && exp.studio.studioHash.slice(0, 12), stimulus: exp.recipe.stimulus },
+      hash: exp.studio && exp.studio.studioHash.slice(0, 12), stimulus: exp.recipe.stimulus,
+      measured: m && m.nodes },
     derived: derived.ok ? derived.recipe.stimulus : derived.reason, aborted, quiet1, quiet2,
     live: live.slice(-8) };
   });

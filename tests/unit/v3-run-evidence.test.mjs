@@ -244,7 +244,8 @@ test('lineage of a calibrated microphone run: device, flags, profile and bound l
   assert.equal(c('build').state, 'recorded');
   assert.equal(c('environment').state, 'recorded');
   assert.match(c('environment').reason, /Desk, 1 m/);
-  // A level calibration bound to no input applies to every input: partial (ledger C1).
+  // A level calibration bound to no input: the record cannot tie it to the run's input, so
+  // partial (ledger C1).
   const unbound = runEvidence(await mic({ frequency: null, level: level(null) }), { hz: 1000 });
   assert.match(byId(unbound.lineage, 'calibration').text, /not bound to an input/);
   assert.equal(byId(unbound.checklist, 'calibration').state, 'partial');
@@ -281,7 +282,9 @@ test('Studio provenance: the graph the recipe was derived from, not a claim that
     assert.match(studio.text, new RegExp(`studioHash ${e.studio.studioHash.slice(0, 12)}…`));
     assert.match(studio.text, new RegExp(`${e.studio.execution.nodes.length} nodes, ${
       e.studio.execution.edges.length} edges`));
-    assert.match(studio.text, /including nodes the measurement did not use/);
+    // No measured path in this graph (no Sweep reference): said, never inferred (ledger D3).
+    assert.match(studio.text, /records the whole graph without naming the measured path/);
+    assert.match(studio.text, /the record does not say which ones it used/);
     assert.ok(!/\ball (?:of it|nodes) ran\b/.test(studio.text));
     assert.equal(byId(runEvidence(a.experiment).lineage, 'studio'), undefined);
   });
@@ -442,7 +445,8 @@ test('recipe: recorded, and partial when this build cannot run its stimulus kind
     f1: null, f2: null } };
   const item = byId(reproducibilityChecklist(noise), 'recipe');
   assert.equal(item.state, 'partial');
-  assert.match(item.reason, /runs only log sweeps/);
+  assert.match(item.reason, /a pink noise stimulus, which this version of OSCILLA cannot measure/);
+  assert.match(item.reason, /Repeat is refused/);
 });
 
 test('algorithms: partial when a recorded version is not implemented by this build', async () => {

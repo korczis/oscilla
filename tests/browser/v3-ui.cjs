@@ -43,7 +43,9 @@
 //                           reason shown, the mode and averaging controls stay disabled, nothing
 //                           stays open.
 //   calibration             CSV profile import -> Frequency CALIBRATED; level calibration dialog
-//                           (advanced manual reading) -> Level CALIBRATED; invalid input refused
+//                           (advanced manual reading): refused with the reason while no input is
+//                           known (ledger C1), stored after the setup check bound to that input
+//                           -> Level CALIBRATED, void for another input; invalid input refused
 //   level-reference         (M3) the dialog captures the reference through the loopback io (a
 //                           1 kHz instrument tone), names the scale, stores method 'captured'
 //                           with the input; another input voids it (UNCALIBRATED + reason);
@@ -73,6 +75,9 @@
 //                           a warning naming the field and the reason, the stored record reads
 //                           back unchanged, the detail states that its calibration claim is
 //                           contradicted and presents it as uncalibrated: no "SPL" anywhere
+//   unmeasurable-stimulus   (ledger D4) a white-noise record imports with a warning naming the
+//                           stimulus, is stored as imported, its detail states that this version
+//                           cannot measure it, and Repeat refuses it: nothing is loaded
 //   experiments             import of three fixtures, list, open, rename, duplicate, compare
 //                           (A, B equivalent: A − B shown; A, C: refused with the reason),
 //                           export .oscilla.json (re-validates), CSV, re-import refused (no
@@ -783,6 +788,32 @@ function defineChecks(fixtures) {
     res.needsCapture = await page.evaluate(() => window.OSCILLA.app.meas.levelForm.error);
     res.scale = await page.textContent('[data-osc="levelCal.scale"]');
     await page.click('[data-osc="levelCal.manual"]'); // advanced: the reading typed by hand
+    // Ledger C1: before any input is known a typed reading cannot be bound, so it is refused
+    // with the reason (it was stored unbound and applied to whatever input came next).
+    await page.evaluate(() => window.OSCILLA.measure.setInputNow(null));
+    const noteText = () => page.evaluate(() => {
+      const el = document.querySelector('[data-osc="levelCal.manualNote"]');
+      return el ? el.textContent.trim() : '';
+    });
+    res.noInputNote = await noteText();
+    await page.fill('#osc-lc-obs', '-32.5');
+    await page.click('[data-osc="levelCal.save"]');
+    res.unbound = await page.evaluate(() => ({ error: window.OSCILLA.app.meas.levelForm.error,
+      stored: !!window.OSCILLA.measure.levelCalibration,
+      open: document.getElementById('osc-dlg-level-cal').open }));
+    res.unboundLevel = await page.textContent('[data-osc="measure.levelIndicator"]');
+    // The setup check through the UI (TEST CONTEXT loopback) makes the input known.
+    await page.evaluate(() => {
+      const a = window.OSCILLA.app;
+      a.measureCloseLevelCalibration();
+      a.measureClearLevelCalibration(); // whatever an earlier build stored above
+    });
+    await H.loopback(page);
+    await page.click('#osc-measure-primary'); // Check setup
+    await H.waitState(page, ['READY', 'INVALID', 'ERROR'], 15000);
+    res.checked = await page.evaluate(() => window.OSCILLA.measure.state);
+    await page.click('[data-osc="measure.levelCal"]');
+    res.boundNote = await noteText();
     await page.fill('#osc-lc-obs', '');
     await page.click('[data-osc="levelCal.save"]');
     res.refused = await page.evaluate(() => window.OSCILLA.app.meas.levelForm.error);
@@ -791,24 +822,46 @@ function defineChecks(fixtures) {
     await page.click('[data-osc="levelCal.save"]');
     await sleep(100);
     res.level = await page.textContent('[data-osc="measure.levelIndicator"]');
+    res.state = await page.textContent('[data-osc="measure.levelState"]');
+    res.bound = await page.evaluate(() => {
+      const c = window.OSCILLA.measure.levelCalibration;
+      return !!c && !!c.input && c.input.sampleRate > 0;
+    });
     res.dialogClosed = await page.evaluate(() => !document.getElementById('osc-dlg-level-cal')
       .open);
-    // Back to the uncalibrated state for the checks that follow.
+    // Another microphone is checked: the calibration no longer applies, with the reason.
+    await page.evaluate(() => window.OSCILLA.measure.setInputNow({
+      device: { label: 'other', id: 'other-device' },
+      constraints: { applied: { echoCancellation: false, noiseSuppression: false,
+        autoGainControl: false, channelCount: 1 } }, sampleRate: 22050 }));
+    res.voided = await page.textContent('[data-osc="measure.levelIndicator"]');
+    // Back to the uncalibrated, idle state for the checks that follow.
     await page.evaluate(() => {
       const a = window.OSCILLA.app;
       a.measureClearLevelCalibration();
       a.measureClearCalibration();
       a.alerts = [];
     });
+    await H.loopback(page);
     res.after = await page.textContent('[data-osc="measure.levelIndicator"]');
     await page.evaluate(() => window.OSCILLA.app.measureSetLevelManual(false));
-    const ok = res.bad === false && res.good === true && /CALIBRATED/.test(res.freq)
-      && !/UNCALIBRATED/.test(res.freq) && /gate-mic/.test(res.name) && !!res.refused
-      && /Capture the reference first/.test(res.needsCapture)
-      && /mean-square scale/.test(res.scale)
-      && /CALIBRATED/.test(res.level) && !/UNCALIBRATED/.test(res.level) && res.dialogClosed
-      && /UNCALIBRATED/.test(res.after);
-    return { ok, ...res };
+    const calibrated = (t) => /CALIBRATED/.test(t) && !/UNCALIBRATED/.test(t);
+    return { ...res, ...H.verdict({
+      profile: res.bad === false && res.good === true && calibrated(res.freq)
+        && /gate-mic/.test(res.name),
+      needsCapture: /Capture the reference first/.test(res.needsCapture),
+      scale: /mean-square scale/.test(res.scale),
+      unboundRefused: /^Run the setup check first/.test(res.noInputNote)
+        && /^Run the setup check first: a level calibration is valid only for the input/
+          .test(res.unbound.error) && !res.unbound.stored && res.unbound.open
+        && /UNCALIBRATED/.test(res.unboundLevel),
+      checked: res.checked === 'READY' && /bound to the input checked last/.test(res.boundNote),
+      invalidRefused: !!res.refused,
+      boundCalibrated: calibrated(res.level) && res.bound && res.dialogClosed
+        && /entered by hand, bound to the input checked when it was stored/.test(res.state),
+      otherInputVoids: /UNCALIBRATED/.test(res.voided),
+      cleared: /UNCALIBRATED/.test(res.after),
+    }) };
   });
 
   def('level-reference', async ({ page }) => {
@@ -1187,6 +1240,64 @@ function defineChecks(fixtures) {
         .test(res.statement) && /not trustworthy/.test(res.statement),
       uncalibrated: /level UNCALIBRATED/.test(res.lines),
       noSpl: res.spl.length === 0,
+    }) };
+  });
+
+  def('unmeasurable-stimulus', async ({ page }) => {
+    // Ledger D4: the engine measures log sweeps only. A white-noise record (a file from
+    // elsewhere) imports with a finding, its detail says so, and Repeat refuses it instead of
+    // running a log sweep while recording repeatOf.
+    await H.workspace(page, 'measure');
+    const values = await page.evaluate(() => JSON.stringify(window.OSCILLA.app.meas.values));
+    await H.workspace(page, 'experiments');
+    await page.evaluate(() => { window.OSCILLA.app.alerts = []; });
+    const res = {};
+    const lastAlert = () => page.evaluate(() => (window.OSCILLA.app.alerts || [])
+      .map((a) => ({ title: a.title, text: a.message || '' })).at(-1) || null);
+    res.id = await page.evaluate((json) => window.OSCILLA.app.experimentsImportText(json),
+      fixtures.white.json);
+    res.imported = await lastAlert();
+    if (!res.id) return { ok: false, failed: ['imported'], ...res };
+    await page.evaluate((id) => window.OSCILLA.app.experimentsOpen(id), res.id);
+    await page.waitForFunction(() => {
+      const el = document.querySelector('[data-osc="exp.stimulusFinding"]');
+      return el && el.offsetParent !== null;
+    }, null, { timeout: 5000 }).catch(() => {});
+    res.statement = await page.evaluate(() => {
+      const el = document.querySelector('[data-osc="exp.stimulusFinding"]');
+      return el && el.offsetParent !== null ? el.textContent.trim() : '';
+    });
+    await page.click('[data-osc="exp.repeat"]', { timeout: 5000 })
+      .catch(() => page.evaluate((id) => window.OSCILLA.app.experimentsRepeat(id), res.id));
+    await sleep(150);
+    res.repeat = await lastAlert();
+    res.workspace = await page.evaluate(() => window.OSCILLA.app.workspace);
+    res.valuesKept = await page.evaluate((v) => JSON.stringify(window.OSCILLA.app.meas.values)
+      === v, values);
+    res.stored = await page.evaluate(async (id) => {
+      const e = await window.OSCILLA.experiments.store().get(id);
+      return e ? { kind: e.recipe.stimulus.kind, hash: e.provenance.resultHash } : null;
+    }, res.id);
+    // Leave the store as the checks that follow expect it (the explicit, confirmed delete).
+    res.deleted = await page.evaluate(async (id) => {
+      const a = window.OSCILLA.app;
+      a.exps.deleteId = id;
+      a.exps.deleteName = 'white-noise record';
+      const ok = await a.experimentsDelete();
+      a.alerts = [];
+      return ok;
+    }, res.id);
+    return { ...res, ...H.verdict({
+      imported: !!res.imported && res.imported.title === 'Experiment imported with a warning'
+        && /white noise stimulus, which this version of OSCILLA cannot measure/
+          .test(res.imported.text) && !/names a calibration/.test(res.imported.text),
+      storedAsImported: !!res.stored && res.stored.kind === 'white'
+        && res.stored.hash === fixtures.white.experiment.provenance.resultHash,
+      stated: /^recipe\.stimulus\.kind: this run used a white noise stimulus/.test(res.statement)
+        && /Repeat is refused/.test(res.statement),
+      repeatRefused: !!res.repeat && res.repeat.title === 'Repeat refused'
+        && /This run used a white noise stimulus/.test(res.repeat.text),
+      nothingLoaded: res.workspace === 'experiments' && res.valuesKept,
     }) };
   });
 

@@ -27,7 +27,7 @@ import {
 } from '../../src/js/experiments/schema.js';
 import { validateExperiment } from '../../src/js/experiments/validate.js';
 import {
-  configHash, studioExecutionHash, withConfigHash,
+  configHash, studioExecutionHash, withConfigHash, measuredPathHash,
 } from '../../src/js/experiments/hash.js';
 import { createMemoryStore } from '../../src/js/experiments/store.js';
 import { normalizeStimulus } from '../../src/js/measurement/stimulus.js';
@@ -51,10 +51,13 @@ function studioExperiment(model = measurement(), id = 'studio-run-1') {
 
 // ---------------------------------------------------------------- the block (§109, §163)
 
-test('§109 the Studio block is schema version, studioHash and the execution state only', () => {
+test('§109 the Studio block is schema version, studioHash, execution state, measured path', () => {
   const m = measurement();
   const s = studioProvenance(m);
-  assert.deepStrictEqual(Object.keys(s), ['schemaVersion', 'studioHash', 'execution']);
+  // Ledger D3: the measured path names what the measurement depended on (v4-measurement-truth).
+  assert.deepStrictEqual(Object.keys(s), ['schemaVersion', 'studioHash', 'execution',
+    'measured']);
+  assert.strictEqual(s.measured.hash, measuredPathHash(s.execution, s.measured));
   assert.strictEqual(s.schemaVersion, STUDIO_SCHEMA_VERSION);
   assert.strictEqual(s.studioHash, studioHash(m));
   assert.strictEqual(s.studioHash, nodeSha(canonicalJson(executionState(m))));
@@ -180,8 +183,9 @@ test('§109 tampering with the Studio block is corrupt; malformed blocks are rej
   };
   const param = doc();
   param.studio.execution.nodes.find((x) => x.id === 'sweep-1').params.level = 0.9;
+  // The Sweep is on the measured path: both hashes catch it.
   assert.deepStrictEqual(errs(param).map((x) => [x.path, x.code]),
-    [['studio.studioHash', 'corrupt']]);
+    [['studio.studioHash', 'corrupt'], ['studio.measured.hash', 'corrupt']]);
   const hash = doc();
   hash.studio.studioHash = '0'.repeat(64);
   assert.strictEqual(errs(hash)[0].code, 'corrupt');
@@ -212,6 +216,7 @@ test('§109 a hash-consistent but semantically invalid execution state fails ver
   edges.find((x) => x.id === 'edge-2').to.port = 'observed';
   edges.find((x) => x.id === 'edge-4').to.port = 'reference';
   forged.studio.studioHash = studioExecutionHash(forged.studio.execution);
+  forged.studio.measured.hash = measuredPathHash(forged.studio.execution, forged.studio.measured);
   const v = validateExperiment(forged, OPTS);
   assert.strictEqual(v.ok, true, 'shape and integrity only at the experiment layer');
   const check = verifyExperimentStudio(v.experiment);
@@ -221,6 +226,8 @@ test('§109 a hash-consistent but semantically invalid execution state fails ver
   const partial = JSON.parse(experimentToJson(e));
   delete partial.studio.execution.nodes.find((x) => x.id === 'transfer-1').params.phase;
   partial.studio.studioHash = studioExecutionHash(partial.studio.execution);
+  partial.studio.measured.hash = measuredPathHash(partial.studio.execution,
+    partial.studio.measured);
   const p = verifyExperimentStudio(validateExperiment(partial, OPTS).experiment);
   assert.deepStrictEqual(p.errors, ['studio.execution is not in the normalized form of its own '
     + 'model', 'studio.studioHash does not match']);

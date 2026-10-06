@@ -99,7 +99,7 @@
 import { MEASUREMENT_STATES as S, isActiveState } from '../measurement/state-machine.js';
 import {
   createMeasurementEngine, assessMeasurement, mapError, MEASUREMENT_ERRORS, MEASUREMENT_LEVELS,
-  NOISE_FFT,
+  NOISE_FFT, measurableStimulusRefusal,
 } from '../measurement/engine.js';
 import {
   createLiveRta, LIVE_RTA_FFT_SIZES, LIVE_RTA_WINDOWS,
@@ -128,11 +128,12 @@ import { coverage as profileCoverage } from '../calibration/interpolate.js';
 import { PROFILE_CONVENTIONS } from '../calibration/profile.js';
 import {
   createLevelCalibration, isValidLevelCalibration, levelCalibrationApplies, LEVEL_LIMITS,
+  inputBinding, isBoundLevelCalibration, UNBOUND_TEXT,
   LEVEL_SCALE,
 } from '../calibration/level.js';
 import { measureReferenceLevel, REFERENCE_CAPTURE_S } from '../calibration/reference.js';
 import { newExperimentId, describeStimulus, annotateExperiment } from '../experiments/schema.js';
-import { calibrationClaimFindings } from '../experiments/validate.js';
+import { recordFindings } from '../experiments/validate.js';
 import { setupRecipe } from '../experiments/definition.js';
 import { canonicalJson } from '../experiments/canonical-json.js';
 import { definitionText } from '../measurement/views/experiment-summary.js';
@@ -198,6 +199,10 @@ export const LIVE_RTA_FIELDS = Object.freeze({
   rtaMode: 'rtaMode', averaging: 'rtaAveraging', fftSize: 'rtaFftSize', window: 'rtaWindow',
 });
 const LIVE_FIELD_HELP = 'Live RTA (RTA tab); not part of the measurement recipe.';
+/** Why a level calibration cannot be stored before an input is known (ledger C1). */
+export const LEVEL_NEEDS_INPUT = 'Run the setup check first: a level calibration is valid only '
+  + 'for the input it was taken with, and no input has been checked yet, so a reading typed now '
+  + 'could not be bound to one.';
 
 const FIELD_DEFAULTS = (() => {
   const out = {};
@@ -650,11 +655,11 @@ export function createMeasureUi(svc) {
   }
 
   function liveCalibration(m) {
-    // V383: a level calibration bound to an input applies to the live RTA only once the input
-    // has been checked: the live tap reports no device facts, and with no input known
-    // levelCalibrationApplies() cannot tell mic B from the mic A it was taken with.
+    // V383: a level calibration applies to the live RTA only once the input has been checked:
+    // the live tap reports no device facts, and with no input known levelCalibrationApplies()
+    // cannot tell mic B from the mic A it was taken with (nor refuse an unbound one, C1).
     const level = levelInUse(m);
-    const unchecked = level && level.input && !ctx.inputNow;
+    const unchecked = level && !ctx.inputNow;
     return { profile: m.cal.useFrequency && ctx.profile ? ctx.profile : null,
       levelCalibration: unchecked ? null : level };
   }
@@ -1159,10 +1164,12 @@ export function createMeasureUi(svc) {
     }
   }
 
-  /** True when the level calibration in use is bound to an input this session has not seen. */
+  /**
+   * True when a level calibration is in use and no input is known: it is checked against the
+   * input before it is applied (bound: the same input; unbound: never, C1).
+   */
   function levelNeedsInputCheck(cmp) {
-    return cmp.meas.cal.useLevel && isValidLevelCalibration(ctx.levelCal)
-      && ctx.levelCal.input && !ctx.inputNow;
+    return cmp.meas.cal.useLevel && isValidLevelCalibration(ctx.levelCal) && !ctx.inputNow;
   }
 
   /** Run one measurement of `given` (Studio, V424) or of the setup fields; resolves the result. */
@@ -1192,8 +1199,8 @@ export function createMeasureUi(svc) {
     }
     let result = null;
     try {
-      // A bound level calibration is checked against the input before it is applied: without
-      // a known current input, the setup check opens it first (M3).
+      // A level calibration is checked against the input before it is applied: without a
+      // known current input, the setup check opens it first (M3, C1).
       if (levelNeedsInputCheck(cmp) && me.state !== S.READY) {
         ctx.pending = me.preflight(recipe, { calibration: calibrationInput() });
         await ctx.pending;
@@ -1756,8 +1763,9 @@ export function createMeasureUi(svc) {
     /**
      * Absolute level calibration (§23): an explicit external reference; no default exists. The
      * reading is the captured one (method 'captured', bound to the capture's input) unless the
-     * advanced manual entry is on (method 'manual', bound to the current input when known); both
-     * are on LEVEL_SCALE.
+     * advanced manual entry is on (method 'manual', bound to the input checked last); both are on
+     * LEVEL_SCALE. A calibration is never stored without the input it belongs to (ledger C1):
+     * a reading typed before any input is known is refused with the reason.
      */
     measureSaveLevelCalibration() {
       const f = this.meas.levelForm;
@@ -1768,6 +1776,7 @@ export function createMeasureUi(svc) {
         let method;
         let conditions = f.conditions;
         if (f.manual) {
+          if (!inputBinding(ctx.inputNow)) throw new Error(LEVEL_NEEDS_INPUT);
           observed = Number(f.observedDb === '' ? NaN : f.observedDb);
           input = ctx.inputNow;
           method = 'manual';
@@ -1780,6 +1789,10 @@ export function createMeasureUi(svc) {
           if (ref.referenceHz !== referenceHz) {
             throw new Error(`The reference was captured at ${ref.referenceHz} Hz; capture it `
               + `again at ${referenceHz} Hz.`);
+          }
+          if (!inputBinding(ref.input)) {
+            throw new Error('The capture did not report its input, so the reading could not be '
+              + 'bound to it. Run the setup check, then capture the reference again.');
           }
           observed = ref.reading.observedDbRelative;
           input = ref.input;
@@ -1801,7 +1814,7 @@ export function createMeasureUi(svc) {
         ctx.levelCal = cal;
         this.meas.cal.level = { referenceHz: cal.referenceHz, referenceDb: cal.referenceDbSpl,
           observedDb: cal.observedDbRelative, offsetDb: cal.offsetDb, conditions: cal.conditions,
-          method: cal.method, bound: !!cal.input };
+          method: cal.method, bound: isBoundLevelCalibration(cal) };
         this.meas.cal.useLevel = true;
         f.error = '';
         this.closeModal('osc-dlg-level-cal');
@@ -1823,6 +1836,22 @@ export function createMeasureUi(svc) {
       rebuildAll();
     },
     get measureFreqCalText() { return calText({ profile: this.meas.cal.profile }); },
+    /** Why a hand-typed reading cannot be stored now (no input known yet), or ''. */
+    get measureLevelManualNote() {
+      // meas.inputRows makes this getter follow the setup check (refresh()).
+      return this.meas.levelForm.manual && this.meas.inputRows && !inputBinding(ctx.inputNow)
+        ? LEVEL_NEEDS_INPUT : '';
+    },
+    /** The stored level calibration in words: how it was obtained and what it is bound to. */
+    get measureLevelStateText() {
+      const l = this.meas.cal.level;
+      if (!l) return 'none: levels are relative (dBFS-like)';
+      const how = l.method === 'captured' ? 'captured, bound to the input it was captured with'
+        : `entered by hand, ${l.bound ? 'bound to the input checked when it was stored'
+          : UNBOUND_TEXT}`;
+      return `reference reading stored (${how}; offset ${l.offsetDb >= 0 ? '+' : '−'}${
+        Math.abs(l.offsetDb).toFixed(1)} dB at ${l.referenceHz} Hz)`;
+    },
     /** Why "Save experiment" is disabled, or '' when it is enabled. */
     get measureSaveReason() {
       if (this.meas.saving) return 'Saving…';
@@ -1857,8 +1886,9 @@ export function createMeasureUi(svc) {
       try {
         const base = experimentOf(result, this);
         e = dec ? dec(base) : base;
-        // A new measurement never stores a calibration claim its results contradict.
-        const claim = calibrationClaimFindings(e);
+        // A new measurement never stores a finding: a calibration claim its results contradict,
+        // or a stimulus this build cannot measure (ledger D4).
+        const claim = recordFindings(e);
         if (claim.length) throw new Error(claim.map((f) => `${f.path}: ${f.text}`).join('; '));
         const id = await this.experimentsPut(e);
         markStored(this, e);
@@ -1923,24 +1953,39 @@ export function createMeasureUi(svc) {
      * the run); a derived one is a saved run's recipe as played and only fills the setup.
      */
     measureLoadDefinition(ref, { name = null, match = 'absent', repeatOf = null } = {}) {
-      this.measureLoadRecipe(ref.execution.recipe, { repeatOf });
+      if (!this.measureLoadRecipe(ref.execution.recipe, { repeatOf })) return false;
       if (ref.derived) {
         this.measureClearDefinition();
-        return;
+        return true;
       }
       ctx.definition = { ...ref, name, match };
       if (name && match === 'match') this.meas.name = name;
       this.meas.definition = { text: definitionText(ref, { name, match }),
         conditions: ref.execution.conditions.notes, differs: false };
       refresh();
+      return true;
+    },
+    /**
+     * Why this build cannot run `recipe` (ledger D4: a stimulus kind the engine does not
+     * measure), in words for the user, or null. The setup has fields for a log sweep only, so
+     * loading any other recipe would silently run a log sweep in its place.
+     */
+    measureRecipeRefusal(recipe, { whose = 'This recipe' } = {}) {
+      const kind = recipe && recipe.stimulus ? recipe.stimulus.kind : undefined;
+      const why = measurableStimulusRefusal(kind);
+      return why ? `${whose} uses ${why}.` : null;
     },
     /** Stop using the loaded definition (the next run derives its own). */
     measureClearDefinition() {
       ctx.definition = null;
       this.meas.definition = null;
     },
-    /** Load a recipe (an experiment's) into the setup; the next save is a NEW experiment. */
+    /**
+     * Load a recipe (an experiment's) into the setup; the next save is a NEW experiment. Refused
+     * (false, nothing changed) for a recipe this build cannot run (measureRecipeRefusal).
+     */
     measureLoadRecipe(recipe, { repeatOf = null } = {}) {
+      if (this.measureRecipeRefusal(recipe)) return false;
       const st = recipe.stimulus || {};
       const a = recipe.analysis || {};
       const v = this.meas.values;
@@ -1954,6 +1999,7 @@ export function createMeasureUi(svc) {
       // The next measurement resets meas.saved; the stored run shown now stays saved.
       if (ctx.me && !isActiveState(ctx.me.state)) ctx.me.reset();
       refresh();
+      return true;
     },
 
     // ------------------------------------------------------------------ test seam

@@ -172,3 +172,25 @@ Proposed:
   words, the keyboard-reachable frequency field, 390 px, light theme, the contradicted older
   record without "SPL", and the compare line; chromium, firefox and webkit over file:// and
   /oscilla/).
+
+## Resolution notes
+
+Appended; the sections above are left as written on 2026-10-06, and the status stays
+`proposed`.
+
+### 2026-10-06: the three ledger caveats this decision named are closed
+
+This decision stated three facts of the ledger it must not contradict. Each was closed on
+2026-10-06, and the evidence now says what the record holds:
+
+- **D3, the Studio link.** A Studio block of experiment schema 4 names its measured path (ADR
+  0038, resolution 2026-10-06). The Studio link names that path (its nodes, connections,
+  measurement clips and hash) beside the whole graph, and says the other nodes were recorded,
+  not used by the measurement. For a block that records the whole graph only, it says so and that
+  the record does not say which nodes the measurement used. The alternative this decision
+  rejected, presenting the Studio graph as what ran, stays rejected.
+- **C1, the calibration item.** A level calibration without an input binding no longer
+  "applies to every input" (ADR 0017, resolution 2026-10-06). The lineage says the record cannot
+  show which input it was taken with, and the item stays partial for it.
+- **D4, the recipe item.** It stays partial for a stimulus this build cannot measure and gives
+  the reason the import finding gives (ADR 0043, resolution 2026-10-06).

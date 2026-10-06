@@ -191,6 +191,29 @@ export const ANALYSIS_PROGRESS_WEIGHT = 0.1;
 export const INPUT_PROCESSING_NOTE = 'Input processing may have been applied by browser/device.';
 
 /**
+ * The stimulus kinds this engine measures (validateRecipe refuses the others): transfer and
+ * impulse response are deconvolved from a log sweep (ADR 0021). The experiment schema accepts
+ * every stimulus.js kind, so a record of another kind is readable and never repeatable here
+ * (ledger D4): measurableStimulusRefusal names it.
+ */
+export const MEASURABLE_STIMULUS_KINDS = Object.freeze(['log-sweep']);
+const STIMULUS_WORDS = Object.freeze({ sine: 'sine', white: 'white noise', pink: 'pink noise',
+  'band-noise': 'band-limited noise', chirp: 'chirp', 'log-sweep': 'log sweep' });
+
+/**
+ * null when this engine can measure a stimulus of `kind`, else the words of the refusal: "a
+ * white noise stimulus, which this version of OSCILLA cannot measure (its measurement engine
+ * plays log sweeps only)". Callers say whose stimulus it is ("This run used …").
+ */
+export function measurableStimulusRefusal(kind) {
+  if (MEASURABLE_STIMULUS_KINDS.includes(kind)) return null;
+  const words = typeof kind === 'string' && Object.hasOwn(STIMULUS_WORDS, kind)
+    ? STIMULUS_WORDS[kind] : `"${String(kind)}"`;
+  return `a ${words} stimulus, which this version of OSCILLA cannot measure (its measurement `
+    + 'engine plays log sweeps only)';
+}
+
+/**
  * Run-check codes that invalidate a run before any analysis (review M8): the capture holds no
  * usable samples (NO_SAMPLES, BAD_SAMPLE_RATE, NON_FINITE, EMPTY / NO_INPUT), lost frames
  * (FRAMES_MISSING), or a dropout certainly inside the sweep (DROPOUT_IN_SWEEP, see
@@ -300,7 +323,7 @@ export function validateRecipe(recipe, { sampleRate, limits = CONTRACT_LIMITS } 
   }
   const st = recipe.stimulus;
   if (!isObj(st)) problems.push('stimulus must be an object');
-  else if (st.kind !== 'log-sweep')
+  else if (!MEASURABLE_STIMULUS_KINDS.includes(st.kind))
     problems.push('stimulus.kind must be "log-sweep" (transfer and impulse response need it)');
 
   const repeats = recipe.repeats === undefined ? 1 : recipe.repeats;

@@ -2,10 +2,12 @@
 // text or an already parsed object. Pure; never evals, never throws, no DOM, no globals.
 //
 //   validateExperiment(json, { maxBytes = 32 MiB, maxArray = 4_000_000, knownAlgorithms,
-//     migrations, maxErrors = 50, sha256Hex, calibrationClaims = 'report' }) ->
+//     migrations, maxErrors = 50, sha256Hex, findings = 'report' }) ->
 //     { ok: true, experiment, migratedFrom: n|null, findings: [{ path, text, code }] }
 //     | { ok: false, errors: [{ path, text, code? }] }
+//   recordFindings(experiment) -> [{ path, text, code }]   every finding below, in this order
 //   calibrationClaimFindings(experiment) -> [{ path, text, code }]   (see "Calibration as applied")
+//   stimulusFindings(experiment) -> [{ path, text, code }]   (see "Stimulus this build measures")
 //   withoutContradictedCalibration(experiment, findings?) -> the experiment, or a copy for
 //     presentation whose contradicted calibration claims are removed (never stored)
 //
@@ -78,9 +80,18 @@
 // default (calibrationClaims 'report') the finding is NOT fatal: the record validates, its hash
 // is verified as stored, and `findings` carries it; the workspace states it and presents the
 // record without the contradicted claim (withoutContradictedCalibration), never as dB SPL.
-// calibrationClaims 'strict' makes every finding an error, for records written from now on.
+// findings 'strict' (also spelled calibrationClaims 'strict') makes every finding an error, for
+// records written from now on.
 // A record without that evidence (no quality, or an assessment that did not judge calibration)
 // has no finding.
+//
+// Stimulus this build measures (ledger D4, ADR 0043 resolution 2026-10-06): the schema accepts
+// every stimulus.js kind and the engine measures log sweeps only (engine.js
+// MEASURABLE_STIMULUS_KINDS). A record of another kind (no OSCILLA build has measured one: a file
+// from elsewhere or edited) is kept, not lost: it validates with a finding of code
+// STIMULUS_NOT_MEASURABLE that says this version cannot measure it, the Experiments detail shows
+// it, and Repeat and "Run this definition" refuse it rather than run a log sweep in its place.
+// Strict validation refuses it, so the application never writes one.
 //
 // Optional provenance fields (schema.js header): recipe.requested, output.masterGain,
 // measurement.notes, provenance.resultHashVersion. calibration.level is a schema-1 or schema-2
@@ -104,8 +115,10 @@ import { migrateExperiment } from './migrate.js';
 import { checkDefinitionRef, recipeMismatches } from './definition.js';
 import {
   resultHash, resultHashVersionOf, RESULT_HASH_VERSIONS, studioExecutionHash,
+  MEASURED_PATH_VERSION, measuredPathHash,
 } from './hash.js';
 import { PHASE_REASONS } from '../measurement/transfer.js';
+import { measurableStimulusRefusal } from '../measurement/engine.js';
 import {
   IR_ALGORITHMS, IR_ALGORITHMS_V1, IR_NOISE_FLOOR_METHODS,
 } from '../measurement/impulse-response.js';
@@ -180,8 +193,8 @@ export function validateExperiment(json, opts = {}) {
   if (c.errors.length || !experiment) {
     return { ok: false, errors: c.errors.length ? c.errors : [{ path: '', text: 'invalid' }] };
   }
-  const findings = calibrationClaimFindings(experiment);
-  if (findings.length && opts.calibrationClaims === 'strict') {
+  const findings = recordFindings(experiment);
+  if (findings.length && (opts.findings === 'strict' || opts.calibrationClaims === 'strict')) {
     return { ok: false, errors: findings };
   }
   return { ok: true, experiment, migratedFrom: migrated.applied.length ? migrated.from : null,
@@ -367,6 +380,21 @@ function checkExperiment(c, e, ctx) {
 }
 
 export const CALIBRATION_CLAIM_CONTRADICTED = 'calibration-claim-contradicted';
+export const STIMULUS_NOT_MEASURABLE = 'stimulus-not-measurable';
+
+/** A stimulus this build's engine cannot measure (see the header); [] for a log sweep. */
+export function stimulusFindings(e) {
+  const kind = e && e.recipe && e.recipe.stimulus ? e.recipe.stimulus.kind : undefined;
+  if (kind === undefined) return [];
+  const why = measurableStimulusRefusal(kind);
+  return why ? [{ path: 'recipe.stimulus.kind', code: STIMULUS_NOT_MEASURABLE,
+    text: `this run used ${why}; the record is kept as stored, and Repeat is refused` }] : [];
+}
+
+/** Every finding of a decoded experiment: contradicted calibration claims, then the stimulus. */
+export function recordFindings(e) {
+  return [...calibrationClaimFindings(e), ...stimulusFindings(e)];
+}
 
 /**
  * The calibration claims of a decoded experiment that its own results contradict (see the
@@ -993,7 +1021,7 @@ function checkRta(c, r, path, ctx) {
  * enter configHash.
  */
 function checkStudio(c, s, path, ctx) {
-  if (!c.keys(s, path, ['schemaVersion', 'studioHash', 'execution'])) return null;
+  if (!c.keys(s, path, ['schemaVersion', 'studioHash', 'execution'], ['measured'])) return null;
   const okVersion = c.num(s.schemaVersion, `${path}.schemaVersion`, 1, 1000, { integer: true });
   const okHash = c.str(s.studioHash, `${path}.studioHash`, 64, { pattern: HEX64_PATTERN });
   const execution = c.json(s.execution, `${path}.execution`, STUDIO_EXECUTION_LIMITS);
@@ -1024,7 +1052,53 @@ function checkStudio(c, s, path, ctx) {
       'corrupt');
     }
   }
-  return { schemaVersion: s.schemaVersion, studioHash: s.studioHash, execution };
+  const out = { schemaVersion: s.schemaVersion, studioHash: s.studioHash, execution };
+  if (has(s, 'measured')) out.measured = checkMeasured(c, s.measured, `${path}.measured`,
+    execution, ctx);
+  return out;
+}
+
+/**
+ * studio.measured (schema 4, ledger D3): { v, nodes, edges, clips, hash } — the ids of the
+ * execution records the measurement depended on, each list unique and sorted by code unit, each
+ * id present in its list of the execution state, and the SHA-256 of those records
+ * (hash.js measuredPathHash, recomputed: a mismatch is 'corrupt'). That the ids are the path the
+ * graph really has is Studio semantics: studio/provenance.js verifyExperimentStudio.
+ */
+function checkMeasured(c, m, path, execution, ctx) {
+  if (!c.keys(m, path, ['v', 'nodes', 'edges', 'clips', 'hash'])) return null;
+  c.oneOf(m.v, `${path}.v`, [MEASURED_PATH_VERSION]);
+  const okHash = c.str(m.hash, `${path}.hash`, 64, { pattern: HEX64_PATTERN });
+  const lists = { nodes: execution.nodes, edges: execution.edges,
+    clips: execution.timeline && execution.timeline.clips };
+  let okIds = true;
+  for (const [k, list] of Object.entries(lists)) {
+    const ids = m[k];
+    const p = `${path}.${k}`;
+    if (!Array.isArray(ids) || ids.some((x) => typeof x !== 'string')) {
+      okIds = c.add(p, 'must be a list of ids');
+      continue;
+    }
+    const known = new Set((Array.isArray(list) ? list : []).map((r) => r && r.id));
+    const missing = ids.filter((x) => !known.has(x));
+    if (missing.length) {
+      okIds = c.add(p, `names ${missing.length === 1 ? 'an id' : 'ids'} the execution state `
+        + `does not hold (${missing.slice(0, 3).join(', ')})`);
+    }
+    if (ids.some((x, i) => i > 0 && !(ids[i - 1] < x))) {
+      okIds = c.add(p, 'must be unique and sorted');
+    }
+  }
+  if (Array.isArray(m.nodes) && !m.nodes.length) okIds = c.add(`${path}.nodes`, 'must not be empty');
+  if (okHash && okIds && !c.full()) {
+    const opts = ctx.sha256Hex ? { sha256Hex: ctx.sha256Hex } : undefined;
+    const actual = measuredPathHash(execution, m, opts);
+    if (actual !== m.hash) {
+      c.add(`${path}.hash`, 'corrupt: the measured path does not match its stored hash (stored '
+        + `${m.hash.slice(0, 12)}…, computed ${actual.slice(0, 12)}…)`, 'corrupt');
+    }
+  }
+  return { v: m.v, nodes: m.nodes, edges: m.edges, clips: m.clips, hash: m.hash };
 }
 
 function checkProvenance(c, p, path) {
