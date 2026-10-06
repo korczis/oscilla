@@ -392,12 +392,48 @@ async function openPage(browser, { hash = '', query = '', instrumentOpts = {}, i
   return { context, page, problems };
 }
 
+// Every wait in this suite is bounded in wall time, so a stalled audio clock or page fails the
+// check it stalls in, by name, instead of running into the CI job's timeout. The in-page waits
+// below follow the audio clock (a starved runner renders slower than real time) and also stop at
+// a wall deadline; app() gives up on a page that does not answer within APP_TIMEOUT_MS. The
+// longest single app() call measured 16.9 s ('limit scope and continuous scheduling', Chromium
+// and WebKit in the Linux Playwright container); the deadline is generous on purpose: it only
+// has to end a stall, never to judge timing.
+const APP_TIMEOUT_MS = 60000;
+const UNTIL_AUDIO_MAX_MS = 15000; // the longest audio-clock wait is 2.6 s of audio
+let SECTION = '(setup)';
+function section(name) {
+  SECTION = name;
+  console.log(name);
+}
+
 // Run fn(app, engine, O, T, arg) in the page; helpers sleep / untilAudio are in scope.
-const app = (page, fn, arg) => page.evaluate(([src, a]) => {
+const app = (page, fn, arg) => {
+  let timer;
+  const stalled = new Promise((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`${SECTION}: the page did not answer within `
+      + `${APP_TIMEOUT_MS / 1000} s (a stalled page or audio clock)`)), APP_TIMEOUT_MS);
+  });
+  const run = evaluateApp(page, fn, arg).catch((e) => {
+    throw new Error(`${SECTION}: ${e.message}`);
+  });
+  return Promise.race([run, stalled]).finally(() => clearTimeout(timer));
+};
+const evaluateApp = (page, fn, arg) => page.evaluate(([src, a, untilMax]) => {
   const data = window.Alpine.$data(document.body);
   const prelude = `
     const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-    const untilAudio = async (t) => { const c = window.OSCILLA.engine.ctx; while (c.currentTime < t) await sleep(3); };
+    const untilAudio = async (t) => {
+      const c = window.OSCILLA.engine.ctx;
+      const wall = Date.now();
+      while (c.currentTime < t) {
+        if (Date.now() - wall > ${untilMax}) {
+          throw new Error('audio clock stalled: currentTime ' + c.currentTime.toFixed(3) + ' s, state '
+            + c.state + ', still short of ' + t.toFixed(3) + ' s after ${untilMax} ms');
+        }
+        await sleep(3);
+      }
+    };
     // Deadline-based teardown probe. Polls until the audio graph is empty or maxS of audio time
     // passed, and reports: after (audio time when the poll SAW it empty), stopAt (the latest
     // time a stop() takes effect on the audio clock for the oscillators live at t0 or started
@@ -409,7 +445,12 @@ const app = (page, fn, arg) => page.evaluate(([src, a]) => {
       const liveAtT0 = window.__T.oscs.filter((r) => r.started && !r.ended);
       let tick = 0;
       let last = c.currentTime;
+      // maxS of audio time, or that plus 10 s of wall time if the clock stalls (stalled: true;
+      // the graph is then still live and the teardown checks fail on it)
+      const wall = Date.now();
+      let stalled = false;
       while (c.currentTime - t0 < maxS && (window.__T.liveOscs() || window.OSCILLA.engine.voices.size)) {
+        if (Date.now() - wall > maxS * 1000 + 10000) { stalled = true; break; }
         await sleep(2);
         tick = Math.max(tick, c.currentTime - last);
         last = c.currentTime;
@@ -418,10 +459,11 @@ const app = (page, fn, arg) => page.evaluate(([src, a]) => {
       const live = [...liveAtT0, ...window.__T.oscs.slice(first).filter((r) => r.started)];
       const stops = live.map((r) => (r.stopEff == null ? Infinity : Math.max(r.stopEff, t0) - t0));
       return { after: c.currentTime - t0, stopAt: stops.length ? Math.max(...stops) : 0, tick,
-        oscs: window.__T.liveOscs(), voices: window.OSCILLA.engine.voices.size, nodes: window.OSCILLA.engine.activeNodeCount };
+        oscs: window.__T.liveOscs(), voices: window.OSCILLA.engine.voices.size, nodes: window.OSCILLA.engine.activeNodeCount,
+        ...(stalled ? { stalled, state: c.state } : {}) };
     };`;
   return new Function('app', 'engine', 'O', 'T', 'arg', `${prelude} return (${src})(app, engine, O, T, arg);`)(data, window.OSCILLA.engine, window.OSCILLA, window.__T, a);
-}, [fn.toString(), arg]);
+}, [fn.toString(), arg, UNTIL_AUDIO_MAX_MS]);
 
 // Observation margin for teardown checks: the poll in gone() can only see the empty graph at
 // the first poll after the audio thread has rendered past the stop, so the observed time lags
@@ -467,7 +509,7 @@ async function runBrowser() {
   const t0 = Date.now();
 
   // ------------------------------------------------------------------ accounting, silence, gain cap
-  console.log('oscillator accounting and silence');
+  section('oscillator accounting and silence');
   {
     const { page, problems, context } = await openPage(browser);
     const tap = await startAudio(page);
@@ -534,7 +576,7 @@ async function runBrowser() {
     await context.close();
   }
 
-  console.log('gain cap');
+  section('gain cap');
   {
     const { page, problems, context } = await openPage(browser);
     await startAudio(page);
@@ -603,7 +645,7 @@ async function runBrowser() {
   }
 
   // ------------------------------------------------------------------ clicks
-  console.log('click-free transitions');
+  section('click-free transitions');
   {
     const { page, problems, context } = await openPage(browser);
     await startAudio(page);
@@ -734,7 +776,7 @@ async function runBrowser() {
   }
 
   // ------------------------------------------------------------------ hold edge cases, Escape, revoke
-  console.log('hold edge cases, Escape, continuous revoke');
+  section('hold edge cases, Escape, continuous revoke');
   {
     const { page, problems, context } = await openPage(browser);
     await startAudio(page);
@@ -808,7 +850,7 @@ async function runBrowser() {
   }
 
   // ------------------------------------------------------------------ measured signal content
-  console.log('stereo split, beating, pulse timing');
+  section('stereo split, beating, pulse timing');
   {
     const { page, problems, context } = await openPage(browser);
     await startAudio(page);
@@ -888,7 +930,7 @@ async function runBrowser() {
   }
 
   // ------------------------------------------------------------------ limits and long patterns
-  console.log('limit scope and continuous scheduling');
+  section('limit scope and continuous scheduling');
   {
     const { page, problems, context } = await openPage(browser);
     await startAudio(page);
@@ -954,7 +996,7 @@ async function runBrowser() {
   }
 
   // ------------------------------------------------------------------ live changes and plans
-  console.log('live changes and plans');
+  section('live changes and plans');
   {
     const { page, problems, context } = await openPage(browser);
     await startAudio(page);
@@ -1021,7 +1063,7 @@ async function runBrowser() {
   }
 
   // ------------------------------------------------------------------ context lifecycle
-  console.log('context lifecycle');
+  section('context lifecycle');
   {
     const { page, problems, context } = await openPage(browser);
     const r = await app(page, async (a, e, O, T) => {
@@ -1077,7 +1119,7 @@ async function runBrowser() {
 
   // ------------------------------------------------------------------ microphone
   {
-    console.log('microphone');
+    section('microphone');
     const { page, problems, context } = await openPage(browser);
     const r = await app(page, async (a, e, O, T) => {
       const out = {};
@@ -1123,7 +1165,7 @@ async function runBrowser() {
   // (-80 dB) of the sound, held through the 10 ms stop margin, so what the frozen line replays
   // is that floor: gain 0.25 (UI 100 %) x 1e-4 = 2.5e-5. Threshold 1e-6 (-120 dBFS): 28 dB
   // under the smallest replay and above the exact 0 of a correct chain.
-  console.log('limiter look-ahead: no replay of the previous sound at the next onset');
+  section('limiter look-ahead: no replay of the previous sound at the next onset');
   {
     const { page, problems, context } = await openPage(browser);
     await startAudio(page);
@@ -1192,7 +1234,7 @@ async function runBrowser() {
   // ------------------------------------------------------------------ V2 extension points
   // Not part of V1's suite: the V2 hooks on the ported engine, measured the same way (click
   // ratio from the output tap, oscillator accounting).
-  console.log('V2 extension points on the ported engine');
+  section('V2 extension points on the ported engine');
   {
     const { page, problems, context } = await openPage(browser);
     await startAudio(page);
@@ -1273,7 +1315,7 @@ async function main() {
       await runBrowser();
     } catch (e) {
       failed++;
-      failures.push(`[${b}] crashed: ${e && e.stack}`);
+      failures.push(`crashed: ${e && e.stack}`); // prefixed with [browser] below
       console.error(e);
     }
     summary.push(`${b}: ${passed - before.passed} passed, ${failed - before.failed} failed`);
