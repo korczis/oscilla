@@ -29,8 +29,8 @@ false`): the format they follow is the one stated here, once.
 
 A skill is one directory `<id>/` in this section holding `SKILL.md`, and nothing else
 registers it: the source class `skill` in `../knowledge/sources.yaml` discovers every
-`*/SKILL.md` here, and that one declaration is what `majordomus skills`, `doctor`, the
-website and the MCP server all read. Adding the directory and tracking it in git is the
+`*/SKILL.md` here, and that one declaration is what `majordomus skills`, `doctor` and the
+MCP server read. Adding the directory and tracking it in git is the
 whole act of adding a skill; removing it removes the skill from every surface.
 
 `SKILL.md` is YAML front matter over a Markdown body. The front matter satisfies
@@ -66,12 +66,11 @@ documents, rendered on the skill's page, and checked for their heading.
 ## Adding one
 
 ```bash
-mkdir -p .ai/repo/skills/my-skill/examples
-$EDITOR .ai/repo/skills/my-skill/SKILL.md      # the front matter and the three sections above
-git add .ai/repo/skills/my-skill
+mkdir -p .ai/repo/skills/<id>/examples
+$EDITOR .ai/repo/skills/<id>/SKILL.md          # the front matter and the three sections above
+git add .ai/repo/skills/<id>
 majordomus skills check                        # every reason, or the counts of what passed
-majordomus skills show my-skill
-scripts/generate-site-data                     # the site's skills.json and page (this repository)
+majordomus skills show <id>
 ```
 
 `majordomus skills list` shows every skill in discovery order; `skills check` (and
@@ -90,10 +89,7 @@ is typed.
 
 ## What is derived, and must not be edited
 
-`share/allow/skill.txt` (from the schema, by `majordomus generate allow`), the MCP
-resources `majordomus://skill/<id>` and the entries `majordomus_list` returns for the
-kind, `site/data/generated/skills.json` and `site/content/skills/` (by
-`scripts/generate-site-data`), and the pages under `/skills/` on the website. Each is
-regenerated from the files here, and the drift checks CI runs (`generate --check`,
-`generate-site-data --check`) fail while one is behind. No list of skills exists anywhere
-by hand; the inventory is this directory.
+The MCP resources `majordomus://skill/<id>` and the entries `majordomus_list` returns for the
+kind are derived from the files here. This repository publishes no skills page and has no
+site generator, so nothing else is derived. No list of skills exists anywhere by hand; the
+inventory is this directory, which today holds no skill.

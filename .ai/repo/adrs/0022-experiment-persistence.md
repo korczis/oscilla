@@ -60,3 +60,19 @@ Proposed:
   whether IndexedDB persists; a forced open failure and a forced quota error leave the app usable
   with export. Revise toward export-only on `file://` if IndexedDB proves unreliable there in a
   target browser.
+
+## Resolution notes
+
+Appended; the sections above are left as written, and the status stays `proposed`.
+
+### 2026-10-05: implemented as decided (V3.0, issue V353)
+
+"Not yet implemented" above is history. `src/js/experiments/store.js` opens the IndexedDB
+database `oscilla-experiments` and falls back to an in-memory store that the UI names ("in
+memory for this page view"); `validate.js` treats an import as untrusted, capped at 32 MiB.
+Since V3.1 the same database, at version 2, also holds Studio projects and patches in the
+object stores `studio` and `studioSummaries`; no second persistence layer was added. Since
+V3.6 a completed run is immutable in the store (ADR 0040). The confirmation criterion is
+check persistence in `tests/browser/v3-ui.cjs`, per browser and origin, which reloads the
+page and reads the record back or reports the memory fallback. Proven by claims
+`experiment-persistence`, `experiment-import-validated` and `experiment-run-immutable`.

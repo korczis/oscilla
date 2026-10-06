@@ -41,3 +41,14 @@ running.
 - Revocation stops latch, hold and continuous sweep within 100 ms (`tests/engine.cjs`).
 - `durationText` and the Playback-safety note in the markup are owned by the UI and must say
   the same thing.
+
+## Resolution notes
+
+Appended; the sections above are left as written, and the status stays `proposed`.
+
+### 2026-10-05: where the cited check lives now
+
+`tests/engine.cjs`, `tests/smoke.cjs` and `tests/spec.cjs` were V1's test files; they left with
+V1's single file in the V2 change (9fe0a15, #3) and stay readable at tag `v1.0.0`. The
+revocation checks run on the current engine as `tests/browser/engine-v1port.cjs` (`npm run
+test:engine`, in CI).

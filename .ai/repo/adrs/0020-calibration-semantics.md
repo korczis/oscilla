@@ -63,3 +63,19 @@ Proposed:
 - Confirmation criteria: unit tests for exact point, between points, below and above range,
   unsorted, duplicate, NaN, infinite and huge inputs pass (§142); revise the interpolation only if
   a documented method is shown to be more accurate on real correction files.
+
+## Resolution notes
+
+Appended; the sections above are left as written, and the status stays `proposed`.
+
+### 2026-10-05: implemented as decided (V3.0, 14c7d5f, #29)
+
+"Not yet implemented" above is history. `src/js/calibration/` holds the two kinds:
+`profile.js` and `parse.js` (the frequency profile: strict import of CSV, TXT or JSON with
+line-numbered errors, at most 2000 points, identity the SHA-256 of the normalised points) and
+`level.js` (the `LevelCalibration`, the only thing that permits dB SPL). `interpolate.js`
+interpolates linearly in dB over log frequency as `oscilla.calibration.log-interp.v1`; its
+default extrapolation policy is `none` (uncovered, marked), and holding the edge value exists
+only as the explicit policy `hold`, still flagged uncovered. Profiles and level calibrations
+are kept in page memory only. Proven by claims `calibration-profiles` and
+`spl-only-with-level-calibration`.

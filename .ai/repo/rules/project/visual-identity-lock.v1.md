@@ -46,9 +46,13 @@ functional test passes.
 
 # Verification
 
-The visual regression check of ADR 0029 (`scripts/visual-compare.mjs`, `npm run visual`,
-regions in `tests/visual/regions.json`, reference `tests/visual/reference.png`) catches
-regressions of the existing surfaces; ADR 0029 puts it in the release gate (plan R006).
-Planned (issue V430, specification §203-§205): deterministic compact and full Studio
-references with per-region thresholds join that check. Reviewers apply the hidden-logo
-question to every new surface; the cross-model UX review (§236) records the answer.
+`npm run test:visual`, in the release gate and in CI's visual job (ADR 0029), compares the
+built app against accepted references in Playwright's Chromium and fails closed:
+`scripts/visual-gate.mjs` (the Playground `--play` scene of `scripts/visual-compare.mjs`,
+regions in `tests/visual/regions.json`, accepted values in `tests/visual/baseline.json`),
+`scripts/visual-measure.mjs` (Measure, `tests/visual/measure/`) and
+`scripts/visual-studio.mjs` (issue V430, done: the compact Studio, the full Studio with and
+without the timeline, and the phone graph and timeline views, `tests/visual/studio/`). That
+catches regressions of surfaces that have a reference; it cannot answer the hidden-logo
+question for a new surface. Reviewers apply that question to every new surface; the
+cross-model UX review (§236) records the answer.

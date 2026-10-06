@@ -2452,7 +2452,8 @@
           <ol class="osc-about-chain" role="list">
             <li><b>Human judgment</b> defined the product and the architecture.</li>
             <li><b>AI</b> accelerated implementation.</li>
-            <li><b>Majordomus</b> constrained, organised and verified the process.</li>
+            <li><b>Majordomus</b> kept the rules, plan and decisions in the repository and
+              checked them.</li>
             <li><b>The repository</b> remained the source of truth.</li>
           </ol>
         </section>
@@ -2465,14 +2466,16 @@
           <p class="osc-about-sub">A repository-native engineering control plane for human and
             AI contributors.</p>
           <p>Instead of depending on an AI conversation to remember how the project should work,
-            the repository carries its own machine-readable engineering context. Every
-            contributor, person or model, starts from the same rules, plan and evidence and
-            finishes against the same checks.</p>
+            the repository carries its own machine-readable engineering context: every
+            contributor, person or model, starts from the same rules and plan. Where it is
+            checked: on each commit and in CI, Majordomus validates that context; before a
+            push, a task's scope; and every pull request runs the test suites and a test that
+            each path the claims, rules and guides name exists and each claim's test runs in CI.
+            Review covers what no check can.</p>
           <ul class="osc-about-chips" role="list" aria-label="What Majordomus keeps explicit">
             <li>Architectural rules</li><li>Repository context</li><li>Task scope</li>
-            <li>Plans &amp; milestones</li><li>Implementation evidence</li>
-            <li>Use-case coverage</li><li>Workflows</li><li>Worktree discipline</li>
-            <li>Verification</li>
+            <li>Plans &amp; milestones</li><li>Decision records</li>
+            <li>Claims &amp; tests</li><li>Workflows</li>
           </ul>
           <p class="osc-about-coda">AI accelerated implementation.<br>
             Majordomus supplied structure, memory and constraints.<br>

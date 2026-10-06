@@ -26,7 +26,7 @@ shared by every checkout. The sections, and what each one is for:
 | `skills/` | reusable provider-neutral operational procedures |
 | `workflows/` | multi-step processes a worker follows: the task lifecycle, taking work from the plan, continuity |
 | `knowledge/` | declarations of where repository knowledge lives; curated notes, never copies of the repository |
-| `adrs/` | accepted, durable architecture decisions |
+| `adrs/` | recorded architecture decisions; every one is `proposed` until the owner accepts it |
 | `project/` | the plan: milestones as outcome specifications, issues as execution contracts |
 | `providers/` | optional: a provider adapter this repository overrides; absent means the tool's default |
 | `templates/` | optional: record templates this repository customised |

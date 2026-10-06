@@ -19,6 +19,9 @@ it computes the response of the whole playback and capture chain, rates the qual
 measurement and keeps it as a reproducible experiment. The app is a single HTML file. It needs no server, no account and no network once loaded, and it works
 when opened straight from disk.
 
+The words OSCILLA uses for its objects (project, Studio, runtime, measurement, experiment,
+run and repeat, calibration, trace) are defined in the [glossary](docs/GLOSSARY.md).
+
 ## Navigation
 
 The header has eight entries: **Playground**, **Measure**, **Experiments**, **Analyze**,
@@ -366,7 +369,7 @@ Not yet built:
   differing published values.
 
 The reasoning is in the proposed [ADR 0017](.ai/repo/adrs/0017-relative-levels-spl-only-when-calibrated.md)
-and the rule [`project.no-fake-science`](.ai/repo/rules/project/no-fake-science.v1.md).
+and the rule [`project.no-fake-science`](.ai/repo/rules/project/no-fake-science.v2.md).
 
 ## Architecture
 
@@ -551,6 +554,21 @@ issues in [`.ai/repo/project/`](.ai/repo/project/)), the architecture decisions
 `majordomus plan status` shows milestone progress. AI workers start at
 [`AGENTS.md`](AGENTS.md) (Claude Code: [`CLAUDE.md`](CLAUDE.md)).
 
+What is checked, and where:
+
+- **On a commit and a push** (the git hooks Majordomus wires into a checkout): `majordomus
+  doctor` validates the layer before a commit, and `majordomus finish --check` refuses a push
+  outside the active task's scope. `npm run verify` runs `majordomus doctor` too.
+- **In CI, on every pull request** (`.github/workflows/ci.yml`, all required through `gate`):
+  the test suites; `tests/unit/knowledge-integrity.test.mjs`, which fails when a claim, rule,
+  bootstrap or this README names a file that does not exist, and when a claim's test or a
+  rule's `x-majordomus` test is not run by CI (other paths are checked only to exist);
+  `tests/unit/storage-inventory.test.mjs`, which holds the privacy table below to the code; `tests/unit/no-fake-science.test.mjs`; and `majordomus doctor` at a pinned version.
+- **Not checked by a machine**: a project rule is enforced by tests only where its
+  `x-majordomus` block names them (`project.no-fake-science`), otherwise by review; use-case
+  coverage of the claims is advisory; the worktree layout is a convention. An ADR's status
+  `proposed` means recorded, not accepted (see [`.ai/repo/adrs/README.md`](.ai/repo/adrs/README.md)).
+
 V3 Measure is specified in [`docs/specs/oscilla-v3-measure.md`](docs/specs/oscilla-v3-measure.md)
 (milestones M012-M020). Its features, use cases and claims are under
 [`.ai/repo/features/`](.ai/repo/features/), [`.ai/repo/use-cases/`](.ai/repo/use-cases/) and
@@ -577,7 +595,7 @@ when the browser reports them, along with your notes and the results. Both go in
 file, so check it before you share it. Calibration profiles and level calibrations are kept in
 page memory only.
 
-Browser storage holds only these keys and databases:
+Browser storage holds only these keys and one database, `oscilla-experiments` (version 3):
 
 | Storage | Key | Contents |
 | --- | --- | --- |
@@ -588,6 +606,9 @@ Browser storage holds only these keys and databases:
 | sessionStorage | `oscilla.safetyNoticeCollapsed` | Whether the safety notice was collapsed |
 | IndexedDB | `oscilla-experiments`, object store `experiments` | Your saved experiments, in the exported file form |
 | IndexedDB | `oscilla-experiments`, object store `summaries` | One small row per experiment for the list (name, date, schema and product version, quality status, size) |
+| IndexedDB | `oscilla-experiments`, object store `studio` | Your saved Studio projects and patches (name, save time, studioHash and the document) |
+| IndexedDB | `oscilla-experiments`, object store `studioSummaries` | One small row per Studio project or patch for the library list |
+| IndexedDB | `oscilla-experiments`, object store `definitions` | Your experiment definitions, each with its versions (recipe, declared conditions, acceptance criterion, name and notes) |
 
 Experiments are deleted only when you delete them. Permission to play continuously is never
 stored.

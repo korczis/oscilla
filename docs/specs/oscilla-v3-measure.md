@@ -770,6 +770,9 @@ logic. Do not accept blindly; write synthetic proofs/tests.
 
 ## 187. DSP reference
 Reputable primary/technical references, recorded in docs/knowledge.
+[Repository note, 2026-10-05: there is no `docs/knowledge`; the references are recorded in
+`docs/v3/algorithms.md` (section References) and the curated notes under
+`.ai/repo/knowledge/curated/`. The requirement above is quoted as written.]
 
 ## 188. No medical claims
 No hearing/tinnitus diagnosis, clinical thresholds or audiometry; human-hearing exploration is

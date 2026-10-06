@@ -51,3 +51,15 @@ library, which the LGPL requires to remain possible for a combined work. A singl
   notice. Patching p5 in place is not possible without abandoning this decision.
 - New vendor libraries with copyleft licences follow the same pattern; permissive ones are
   bundled.
+
+## Resolution notes
+
+Appended; the sections above are left as written, and the status stays `proposed`.
+
+### 2026-10-05: p5 is the budget's largest line, and replacing it is deferred
+
+When the dist budget was raised to 1 000 000 B gzip / 3 500 000 B raw (#114, owner decision
+2026-10-05, a stopgap; see the note on ADR 0012), replacing p5 was named as the alternative
+and deferred: p5 is about 245 KB of the gzip while the views call about 28 of its 2D drawing
+functions. This decision stands until that replacement is decided; it would supersede the
+first rejected alternative above.

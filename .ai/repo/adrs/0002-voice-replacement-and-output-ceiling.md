@@ -46,3 +46,14 @@ but skipped any already releasing, so 20 HOLD presses 100 ms apart with a 3000 m
 - Retrigger latency is 35 ms instead of 20 ms. At most two voices exist at once, briefly.
 - Measured: 20 retriggers with release 3000 ms → 1 voice at a time, peak 0.25 (cap 0.25);
   `tests/engine.cjs` checks peak ≤ 0.2625 with the ceiling bypassed and ≤ 2 voices.
+
+## Resolution notes
+
+Appended; the sections above are left as written, and the status stays `proposed`.
+
+### 2026-10-05: where the cited check lives now
+
+`tests/engine.cjs`, `tests/smoke.cjs` and `tests/spec.cjs` were V1's test files; they left with
+V1's single file in the V2 change (9fe0a15, #3) and stay readable at tag `v1.0.0`. The
+voice-count and peak checks run on the current engine as `tests/browser/engine-v1port.cjs`
+(`npm run test:engine`, in CI).

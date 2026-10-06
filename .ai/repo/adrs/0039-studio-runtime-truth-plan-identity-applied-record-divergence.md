@@ -169,3 +169,11 @@ step after its commit had failed (a Master level never engaged). The verdict gai
 `degraded`: in sync, with a commit-phase failure still in effect (`runtime.unresolved()`), its
 reason the first of them. The Inspector shows it as "Running, degraded" and lists the reason
 once; node status still comes from the running graph.
+
+### 2026-10-05: the budget headroom named under Consequences
+
+"Against a budget that had less than 1 KB of headroom" was true of the 760 000 B gzip budget
+when this was written. On 2026-10-05 the budget became 1 000 000 B gzip / 3 500 000 B raw
+(#114, owner decision, a stopgap; ADR 0012 note), and v3.8.0 uses about 755 KB of it. The
+gzip budget is still the constraint a further runtime surface is weighed against; it is no
+longer within 1 KB.

@@ -122,13 +122,21 @@ benchmark:
     enter_ms: 750                        # a `cd` into a checkout whose runtime is already up
     enter_cold_ms: 1000                  # the one that starts a server — and returns, never waits
 
-# Use-case coverage: which gaps `doctor` reports and which it fails on. A fresh repository
-# has no use cases yet, so nothing is required until it says so.
+# Use-case coverage: which gaps `doctor` reports and which it fails on. The targets that mean
+# something for OSCILLA are its product claims: every guaranteed claim in docs/CLAIMS.yaml
+# carries `responsibility: product`, which is how the tool selects a claim as a coverage
+# target. `product` is a sentinel the tool only tests for being present and not `none`; it is
+# not an id in a docs/RESPONSIBILITIES.yaml, which this repository does not have. Majordomus's
+# own public commands and MCP tools are the tool's capabilities, not this product's, so they
+# are off. Claims stay advisory: a covered claim is one an active use case names and runs a
+# fixture scenario for, and those scenarios prove traceability (the claim's implementation and
+# test are tracked and wired), not behaviour, which the claim's own test proves in CI.
+# `majordomus usecase coverage` lists the gaps.
 use_cases:
   coverage:
-    commands: advisory
+    commands: off
     claims: advisory
-    mcp_tools: advisory
+    mcp_tools: off
 
 # Every entry here is reconciled by `majordomus doctor`: the path must resolve (on PATH,
 # repo-relative, or absolute in the hook line), be executable, and be invoked by the
