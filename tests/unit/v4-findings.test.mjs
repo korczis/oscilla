@@ -432,8 +432,7 @@ test('importPlan: new findings are added, identical ones skipped, different ones
 
 // ---------------------------------------------------------------- the workspace adapter
 
-function harness() {
-  const fake = fakeIndexedDB();
+function harness(fake = fakeIndexedDB()) {
   globalThis.indexedDB = fake.indexedDB;
   const cmp = {};
   for (const part of [createExperimentsUi(), createFindingsUi()]) {
@@ -522,4 +521,163 @@ test('findings are rendered as text: no x-html or innerHTML on the findings path
   assert.ok(!/innerHTML|insertAdjacentHTML|outerHTML/.test(ui));
   assert.match(html, /data-osc="fnd\.panel"/, 'the Findings panel is in the page');
   assert.match(html, /data-osc="exp\.findings"/, 'the run detail lists the findings citing it');
+});
+
+// ---------------------------------------------------------------- adversarial review 1 of #149
+
+/** fixture `k` stored under `id` (the id is not hashed), optionally without its result hash. */
+const recordAs = async (k, id, { unstamped = false, name = null } = {}) => {
+  const j = JSON.parse((await fx())[k].json);
+  j.experimentId = id;
+  if (name) j.name = name;
+  if (unstamped) {
+    delete j.provenance.resultHash;
+    delete j.provenance.resultHashVersion;
+  }
+  return JSON.stringify(j);
+};
+/** The stored record of `id` as the store keeps it (file form), for in-place corruption. */
+const rawRecord = (fake, id) => fake.dbs.get('oscilla-experiments').stores.get('experiments')
+  .data.get(id);
+const rowOf = (cmp, statement) => cmp.fnd.rows.find((r) => r.statement === statement);
+
+test('review 1.1: an identity that cannot be verified is an issue, never ok', () => {
+  const f = ok(raw({ status: 'supported' }));
+  const stored = (o) => lookupOf({ 'run-a': { kind: 'run', name: 'A', resultHash: H1,
+    hasResponse: true, ...o } });
+  let is = F.findingIssues(f, stored({ resultHash: null }));
+  assert.deepEqual(is.map((i) => i.code), ['unverifiable-identity', 'unsupported-status']);
+  assert.match(is[0].text, /cannot be verified: the record stored under this id has no result hash/);
+  const g = ok(raw({ status: 'supported', runs: [{ experimentId: 'run-a', resultHash: null }] }));
+  is = F.findingIssues(g, stored({}));
+  assert.deepEqual(is.map((i) => i.code), ['unverifiable-identity', 'unsupported-status']);
+  assert.match(is[0].text, /cannot be verified: it was cited without a result hash/);
+  is = F.findingIssues(f, lookupOf({ 'run-a': { kind: 'run', name: 'A' } }));
+  assert.deepEqual(is.map((i) => i.code), ['unverifiable-identity', 'unsupported-status'],
+    'an identity the lookup does not know is not verified either');
+  assert.ok(F.ISSUE_CODES.includes('unverifiable-identity'));
+});
+
+test('review 1.1: a different, hash-less record under a cited id is not shown as the run', async () => {
+  const { cmp, notes } = harness();
+  await cmp.experimentsImportText(await recordAs('b', 'run-x'));
+  await cmp.findingsAskRun('run-x');
+  cmp.fnd.form.statement = 'cites X';
+  cmp.fnd.form.status = 'supported';
+  assert.ok(await cmp.findingsSave(), cmp.fnd.form.error);
+  assert.equal(rowOf(cmp, 'cites X').evidence[0].state, 'ok');
+  cmp.experimentsAskDelete({ id: 'run-x', name: 'X' });
+  await cmp.experimentsDelete();
+  await cmp.experimentsImportText(await recordAs('c', 'run-x', { unstamped: true,
+    name: 'impostor' }));
+  const row = rowOf(cmp, 'cites X');
+  assert.equal(row.evidence[0].state, 'broken');
+  assert.match(row.evidence[0].issue, /cannot be verified: the record stored under this id has no result hash/);
+  assert.match(row.statusIssue, /none of the evidence it cites/);
+  // A run without a result hash cannot be linked in the first place.
+  assert.equal(await cmp.findingsAskRun('run-x'), false);
+  assert.match(notes.at(-1).text, /has no result hash/);
+});
+
+test('review 1.2: a cited run that is stored but cannot be read is unreadable, not ok', async () => {
+  const fake = fakeIndexedDB();
+  const first = harness(fake).cmp;
+  await first.experimentsImportText(await recordAs('a', 'run-y'));
+  await first.findingsAskRun('run-y');
+  first.fnd.form.statement = 'cites Y';
+  first.fnd.form.status = 'supported';
+  assert.ok(await first.findingsSave(), first.fnd.form.error);
+  rawRecord(fake, 'run-y').provenance.resultHash = 'e'.repeat(64); // fails verification on read
+  const { cmp } = harness(fake); // a reload: nothing cached
+  await cmp.experimentsRefresh();
+  const row = rowOf(cmp, 'cites Y');
+  assert.equal(row.evidence[0].state, 'broken');
+  assert.match(row.evidence[0].issue, /^run .* is stored here but cannot be read/);
+  assert.match(row.statusIssue, /none of the evidence it cites/);
+  const is = F.findingIssues(ok(raw()), lookupOf({ 'run-a': { kind: 'run', name: 'A',
+    readable: false, reason: 'stored experiment run-a is invalid' } }));
+  assert.deepEqual(is.map((i) => i.code), ['unreadable-run']);
+  assert.ok(F.ISSUE_CODES.includes('unreadable-run'));
+});
+
+test('review 1.3: a record replaced under a cited id elsewhere is caught on the next refresh', async () => {
+  const fake = fakeIndexedDB();
+  const { cmp } = harness(fake);
+  await cmp.experimentsImportText(await recordAs('b', 'run-z'));
+  await cmp.findingsAskRun('run-z');
+  cmp.fnd.form.statement = 'cites Z';
+  assert.ok(await cmp.findingsSave(), cmp.fnd.form.error);
+  assert.equal(rowOf(cmp, 'cites Z').evidence[0].state, 'ok');
+  // Another tab deletes the run and stores a different, stamped record under its id.
+  const other = await openExperimentStore({ indexedDB: fake.indexedDB, ...OPTS });
+  await other.delete('run-z');
+  const { validateExperiment } = await import('../../src/js/experiments/validate.js');
+  await other.put(validateExperiment(await recordAs('c', 'run-z', { name: 'impostor' }), OPTS)
+    .experiment);
+  await cmp.experimentsRefresh();
+  const e = rowOf(cmp, 'cites Z').evidence[0];
+  assert.equal(e.state, 'broken');
+  assert.match(e.issue, /different record is stored under this id/);
+});
+
+test('review 1.4: a value reference names a stored grid point exactly, or says it does not', async () => {
+  const name = () => 'A';
+  const v = (hz) => ({ kind: 'value', experimentId: 'run-a', at: { hz } });
+  const grid = { 'run-a': { kind: 'run', name: 'A', resultHash: H1, hasResponse: true,
+    frequencies: [1000.5, 2000.25] } };
+  const on = ok(raw({ evidence: [v(1000.5)] }));
+  const off = ok(raw({ evidence: [v(1234.56789)] }));
+  assert.deepEqual(F.findingIssues(on, lookupOf(grid)), []);
+  const [x] = F.findingIssues(off, lookupOf(grid));
+  assert.equal(x.code, 'not-a-grid-point');
+  assert.match(x.text, /1234\.56789 Hz is not a frequency the run stores/);
+  assert.ok(F.ISSUE_CODES.includes('not-a-grid-point'));
+  assert.match(F.refText(v(1000.5), name, { storedPoint: true }), /\(a stored grid point\)$/);
+  assert.ok(!/stored/.test(F.refText(v(1234.56789), name)), 'no claim without the check');
+  assert.notEqual(F.refText(v(1000), name), F.refText(v(1000.0001), name),
+    'distinct frequencies never read the same');
+  // In the workspace: the value the evidence shows is a grid point; a crafted one is not.
+  const { cmp } = harness();
+  await cmp.experimentsImportText(await recordAs('a', 'run-v'));
+  await cmp.experimentsOpen('run-v');
+  assert.ok(await cmp.findingsAskValue());
+  cmp.fnd.form.statement = 'value on the grid';
+  assert.ok(await cmp.findingsSave(), cmp.fnd.form.error);
+  const good = rowOf(cmp, 'value on the grid').evidence[0];
+  assert.equal(good.state, 'ok');
+  assert.match(good.text, /\(a stored grid point\)$/);
+  const crafted = ok(raw({ id: 'f-off', statement: 'value off the grid', evidence: [{ kind: 'value',
+    experimentId: 'run-v', at: { hz: 1234.56789 } }], runs: [{ experimentId: 'run-v',
+    resultHash: (await fx()).a.experiment.provenance.resultHash }] }));
+  assert.equal(await cmp.findingsImportText(F.findingsToJson(F.exportFindings([crafted],
+    { now: LATER }))), 1);
+  const bad = rowOf(cmp, 'value off the grid').evidence[0];
+  assert.equal(bad.state, 'broken');
+  assert.ok(!/stored grid point\)/.test(bad.text), bad.text);
+  assert.match(bad.issue, /not a frequency the run stores/);
+});
+
+test('review 1.5: closing the dialog keeps a typed draft; only Discard drops it', async () => {
+  const { cmp, notes } = harness();
+  await cmp.experimentsImportText(await recordAs('a', 'run-d'));
+  await cmp.findingsAskRun('run-d');
+  cmp.fnd.form.statement = 'a long careful draft';
+  cmp.findingsDialogClosed(); // Escape, a backdrop click or Close
+  assert.equal(cmp.fnd.form.open, false);
+  assert.deepEqual(cmp.findingsWhatWouldBeLost(), [{ domain: 'findings',
+    label: 'A finding being written' }], 'the guard still reports the kept draft');
+  assert.equal(cmp.fnd.draftKept, true);
+  // Starting another finding reopens the kept draft instead of replacing it.
+  assert.equal(await cmp.findingsAskRun('run-d'), true);
+  assert.equal(cmp.fnd.form.statement, 'a long careful draft');
+  assert.match(notes.at(-1).text, /draft/);
+  cmp.findingsDiscardDraft();
+  assert.equal(cmp.fnd.form.statement, '');
+  assert.equal(cmp.fnd.draftKept, false);
+  assert.deepEqual(cmp.findingsWhatWouldBeLost(), []);
+  // An untouched form closes without leaving a draft.
+  await cmp.findingsAskRun('run-d');
+  cmp.findingsDialogClosed();
+  assert.equal(cmp.fnd.draftKept, false);
+  assert.deepEqual(cmp.findingsWhatWouldBeLost(), []);
 });
