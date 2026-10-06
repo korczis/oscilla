@@ -154,7 +154,7 @@ test('run: the definition it was executed from, present, mismatched, missing or 
     [{ definitions: [def('def-1', [H('a'), H('b')])] }, 'present', /stored with the same hash/],
     [{ definitions: [def('def-1', [H('a'), H('c')])] }, 'mismatch', /has no version 2 with/],
     [{}, 'missing', /not stored in this browser/],
-    [{ unreadableDefinitions: ['def-1'] }, 'missing', /could not be read/],
+    [{ unreadableDefinitions: ['def-1'] }, 'unreadable', /cannot be read/],
   ];
   for (const [over, state, re] of cases) {
     const c = one(C.connectionsOf({ kind: 'run', record: r }, index([r], over)).upstream,
@@ -165,7 +165,8 @@ test('run: the definition it was executed from, present, mismatched, missing or 
     assert.equal(c.field, 'definition (id, version and hash)');
     assert.equal(c.fieldOf, 'this run');
     assert.deepEqual(c.to, { kind: 'definition', id: 'def-1', version: 2 });
-    assert.equal(c.href, state === 'missing' ? null : '#m=experiments&def=def-1');
+    assert.equal(c.href, ['missing', 'unreadable'].includes(state) ? null
+      : '#m=experiments&def=def-1');
   }
   const derived = C.connectionsOf({ kind: 'run', record: run('r2') }, index([run('r2')]));
   assert.equal(of(derived.upstream, 'definition').length, 0, 'a derived definition is no record');
@@ -254,8 +255,8 @@ test('run: Studio projects by the hash recomputed over them, whole graph or meas
 
 test('run: the frequency profile by id (loaded or not) and the build (this one or another)', () => {
   const r = run('c', { calibration: { frequency: { id: H('7'), name: 'Mic A' }, level: null },
-    provenance: { build: { version: '3.10.2', sourceDigest: H('s'), artifactSha256: null } } });
-  const cur = { version: '3.10.2', sourceDigest: H('s'), artifactSha256: H('x') };
+    provenance: { build: { version: '9.8.7', sourceDigest: H('s'), artifactSha256: null } } });
+  const cur = { version: '9.8.7', sourceDigest: H('s'), artifactSha256: H('x') };
   const up = (over) => C.connectionsOf({ kind: 'run', record: r }, index([r], over)).upstream;
   assert.equal(one(up({ profile: { id: H('7'), name: 'Mic A' } }), 'profile').state, 'present');
   const p = one(up({ profile: { id: H('8'), name: 'Other' } }), 'profile');
@@ -264,10 +265,11 @@ test('run: the frequency profile by id (loaded or not) and the build (this one o
   assert.equal(p.field, 'calibration.frequency.id');
   assert.equal(one(up({ build: cur }), 'build').state, 'present');
   assert.equal(one(up({ build: { ...cur, sourceDigest: H('t') } }), 'build').state, 'mismatch');
-  const older = one(up({ build: { ...cur, version: '3.11.0' } }), 'build');
+  const older = one(up({ build: { ...cur, version: '9.9.0' } }), 'build');
   assert.equal(older.state, 'missing');
-  assert.match(older.text, /this page runs OSCILLA 3\.11\.0/);
-  assert.equal(one(up({ build: { ...cur, sourceDigest: null } }), 'build').state, 'missing');
+  assert.match(older.text, /this page runs OSCILLA 9\.9\.0/);
+  assert.equal(one(up({ build: { ...cur, sourceDigest: null } }), 'build').state,
+    'unverifiable');
   const none = C.connectionsOf({ kind: 'run', record: run('n') }, index([run('n')],
     { build: cur }));
   assert.ok(none.notes.some((n) => n.field === 'provenance.build'));
@@ -450,12 +452,23 @@ test('the workspace: a run measured from Studio connects to the stored project',
   assert.deepEqual([g.state, g.to.id], ['present', 'project-sweep']);
   const down = (await cmp.connectionsOfStudioProject('project-sweep')).downstream;
   assert.deepEqual(down.map((c) => [c.relation, c.to.id]), [['measured-graph', 'from-studio']]);
-  // The project edited and saved again: the connection follows the recomputed hash.
+  // The project edited outside the measured path and saved again: the whole graph no longer
+  // matches, the measured path still does (recomputed as the project loads).
   const edited = { ...model, graph: { ...model.graph, nodes: model.graph.nodes.map((n) => (
-    n.type === 'oscillator' ? { ...n, params: { ...n.params, frequency: 1234 } } : n)) } };
+    n.id === 'result-1' ? { ...n, params: { ...n.params, smoothing: 3 } } : n)) } };
   await lib.saveProject(edited, { id: 'project-sweep', now: '2026-10-02T11:00:00.000Z' });
-  const after = one((await cmp.connectionsOfRun('from-studio')).upstream, 'studio-graph');
-  assert.ok(['present', 'missing'].includes(after.state));
+  const after = (await cmp.connectionsOfRun('from-studio')).upstream;
+  assert.equal(of(after, 'studio-graph').length, 0);
+  assert.deepEqual([one(after, 'studio-path').state, one(after, 'studio-path').to.id],
+    ['present', 'project-sweep']);
+  assert.deepEqual((await cmp.connectionsOfStudioProject('project-sweep')).downstream
+    .map((c) => c.relation), ['measured-path']);
+  // Saved again with the measured Sweep changed: no project holds it; that reads missing.
+  const swept = { ...model, graph: { ...model.graph, nodes: model.graph.nodes.map((n) => (
+    n.id === 'sweep-1' ? { ...n, params: { ...n.params, duration: 4 } } : n)) } };
+  await lib.saveProject(swept, { id: 'project-sweep', now: '2026-10-02T12:00:00.000Z' });
+  assert.equal(one((await cmp.connectionsOfRun('from-studio')).upstream, 'studio-graph').state,
+    'missing');
 });
 
 test('the workspace: a record link opens the record; a malformed one is refused', async () => {

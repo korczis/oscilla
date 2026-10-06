@@ -1166,3 +1166,58 @@ ul.osc-x-ev-list {
     min-width: 44px;
   }
 }
+
+/* Connected records (ADR 0048): each connection in words, its state first, its stored field
+   named; a state other than "stored here" is marked by a border as well as by its words. */
+.osc-x-cn-dir {
+  margin: 0;
+  color: var(--osc-text-2);
+  font-size: var(--osc-fs-xs);
+  font-weight: var(--osc-fw-medium);
+}
+
+.osc-x-cn-item {
+  min-width: 0;
+}
+
+.osc-x-cn-item:not([data-state="present"]) {
+  padding-left: 6px;
+  border-left: 2px solid var(--osc-orange);
+}
+
+.osc-x-cn-link {
+  color: var(--osc-link);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.osc-x-cn-field,
+.osc-x-cn-more {
+  color: var(--osc-text-muted);
+}
+
+.osc-x-row > .osc-x-cn--row {
+  grid-column: 1 / -1;
+  min-width: 0;
+}
+
+.osc-x-cn--row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: var(--osc-fs-xs);
+}
+
+.osc-x-cn--row:not([open]) {
+  gap: 0;
+}
+
+.osc-x-cn-summary {
+  width: fit-content;
+  color: var(--osc-text-2);
+  cursor: pointer;
+}
+
+.osc-x-cn--row > .osc-m-hint {
+  margin: 0;
+}

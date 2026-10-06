@@ -105,6 +105,17 @@ remain with their own meaning: the repository's audits and reviews (for example
 `docs/v3/audits-v383.md`) call a defect a reviewer reported a finding, and `validate.js` names a
 non-fatal check of a record a finding (`calibrationClaimFindings`, `stimulusFindings`).
 
+**Connected records** (one of them: a **connection**). What a stored record is connected to
+(upstream: what it was made from or rests on) and what depends on it (downstream: what cites
+it or was made from it), between records (ADR 0048, `src/js/experiments/connections.js`). Each
+connection comes from one field a record stores, and names it; nothing is inferred from names,
+recipes or times. Its state is a word: *stored here* only when the identity verifies (the
+target is stored, it was read and its result hash recomputed, and it is the record the field
+names), else *missing*, *does not match*, *not verifiable* or *unreadable*. It is computed when
+shown and never stored. Not to be confused with the two words beside it: the *lineage* of
+evidence (ADR 0044) traces one value within one run, and the Studio operation *trace* (ADR
+0042) follows one Studio operation in memory; a connection links two records.
+
 ## Repository
 
 **Knowledge.** What the repository knows about itself, outside the code: the claims matrix

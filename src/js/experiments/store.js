@@ -70,6 +70,11 @@
 // batch with 'conflict' (err.fields names the ids), an identical one is skipped. No finding write
 // touches a run, and delete(id) of a run never touches a finding: a reference to a deleted run
 // stays and reads missing (findings.js findingIssues).
+//
+// Connected records (ADR 0048): list() rows carry `links` (connections.js runLinks: the result
+// hash, repeatOf, duplicateOf and the Studio hashes the run stores), so the runs that name a
+// record are found without reading every record. A row written before this version has no
+// `links`; ui/connections.js reads that record once instead. Nothing is rewritten.
 
 import {
   serializeExperiment, formatErrors, annotateExperiment, executionFactChanges, isMetadataPath,
@@ -78,6 +83,7 @@ import {
 import { validateExperiment } from './validate.js';
 import { validateDefinition } from './definition.js';
 import { validateFinding } from './findings.js';
+import { runLinks } from './connections.js';
 import { canonicalJson } from './canonical-json.js';
 
 export const DB_NAME = 'oscilla-experiments';
@@ -352,6 +358,7 @@ export function summaryRecord(doc, sizeBytes) {
     ...(isBaseline(doc) ? { baseline: true } : {}),
     ...(doc.definition ? { definition: { id: doc.definition.id, version: doc.definition.version,
       hash: doc.definition.hash, derived: doc.definition.derived } } : {}),
+    links: runLinks(doc),
   };
 }
 

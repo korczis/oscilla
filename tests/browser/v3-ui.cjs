@@ -2102,6 +2102,166 @@ function defineChecks(fixtures) {
     }) };
   });
 
+  // Connected records (ADR 0048): a record link through the hash dispatcher, both directions,
+  // keyboard and Back / Forward, focus, and the identity states: a different record stored
+  // under a cited id reads "does not match", a stored record that fails to verify reads
+  // "unreadable", never as fine.
+  def('connections', async ({ page }) => {
+    await H.workspace(page, 'experiments');
+    for (const k of ['a', 'b']) {
+      const stored = await page.evaluate(async (x) => !!(await window.OSCILLA.experiments.store()
+        .get(x).catch(() => null)), `fixture-${k}`);
+      if (!stored) {
+        await page.evaluate((t) => window.OSCILLA.app.experimentsImportText(t), fixtures[k].json);
+      }
+    }
+    const res = {};
+    const ids = await page.evaluate(async () => {
+      const app = window.OSCILLA.app;
+      const dup = await app.experimentsDuplicate('fixture-a');
+      await app.findingsAskRun('fixture-a');
+      app.fnd.form.statement = 'Connections: A falls above 6 kHz.';
+      const f = await app.findingsSave();
+      app.alerts = [];
+      return { dup, finding: f ? f.id : null };
+    });
+    const items = (sel) => page.evaluate((q) => {
+      const sec = document.querySelector(q);
+      if (!sec) return { missing: true };
+      const lists = [...sec.querySelectorAll('.osc-x-cn-list')];
+      const li = (ul) => (ul ? [...ul.querySelectorAll('li.osc-x-cn-item')].map((x) => ({
+        state: x.dataset.state, relation: x.dataset.relation,
+        href: (x.querySelector('a') || { getAttribute: () => null }).getAttribute('href'),
+        text: x.textContent.replace(/\s+/g, ' ').trim() })) : []);
+      const st = sec.querySelector('[role="status"]');
+      const r = sec.getBoundingClientRect();
+      return { shown: sec.getClientRects().length > 0, h4: (sec.querySelector('h4') || {})
+        .textContent || null, status: st ? st.textContent.trim() : '', up: li(lists[0]),
+      down: li(lists[1]), fits: r.right <= window.innerWidth + 1
+          && document.documentElement.scrollWidth <= window.innerWidth + 1 };
+    }, sel);
+    const RUN = '[data-osc="exp.connections"]';
+    const state = () => page.evaluate(() => ({ id: window.OSCILLA.app.exps.detail
+      ? window.OSCILLA.app.exps.detail.id : null, hash: location.hash,
+    focus: document.activeElement ? document.activeElement.id : null }));
+    // 1. A record link (typed into the address): the run opens, focus on its heading.
+    await page.evaluate(() => { location.hash = '#m=experiments&run=fixture-a'; });
+    res.linked = await H.until(state, (x) => x.id === 'fixture-a'
+      && x.focus === 'osc-x-detail-title', 5000);
+    res.a = await H.until(() => items(RUN), (x) => x.down && x.down.length === 2 && !x.status,
+      10000);
+    // 2. Keyboard: Enter on "Duplicated as" follows the link to the duplicate.
+    await page.focus(`${RUN} li[data-relation="duplicated-as"] a`);
+    await page.keyboard.press('Enter');
+    res.toDup = await H.until(state, (x) => x.id === ids.dup && x.focus === 'osc-x-detail-title'
+      && x.hash.includes(`run=${ids.dup}`), 5000);
+    res.dup = await H.until(() => items(RUN), (x) => x.up && x.up.some((c) => c.relation
+      === 'duplicate-of') && !x.status, 10000);
+    // 3. Back returns to the run the link was followed from; Forward to the duplicate.
+    await page.goBack();
+    res.back = await H.until(state, (x) => x.id === 'fixture-a'
+      && x.hash.includes('run=fixture-a'), 5000);
+    await page.goForward();
+    res.forward = await H.until(state, (x) => x.id === ids.dup, 5000);
+    await page.goBack();
+    await H.until(state, (x) => x.id === 'fixture-a', 5000);
+    // 4. "Cited by": the finding's connected records open, focus on its statement.
+    await H.until(() => items(RUN), (x) => x.down && x.down.length === 2 && !x.status, 10000);
+    await page.click(`${RUN} li[data-relation="cited-by"] a`);
+    const FND = `[data-osc="fnd.row"][data-id="${ids.finding}"] [data-osc="fnd.connections"]`;
+    res.finding = await H.until(() => items(FND), (x) => x.shown && x.up.length === 1
+      && !x.status, 10000);
+    res.findingFocus = await H.until(() => page.evaluate((id) => {
+      const el = document.activeElement;
+      return !!el && el.tagName === 'H4' && !!el.closest(`[data-id="${id}"]`);
+    }, ids.finding), Boolean, 3000);
+    // 5. A different record stored under the cited id: never shown as fine.
+    await page.evaluate(async (t) => {
+      const app = window.OSCILLA.app;
+      app.exps.deleteId = 'fixture-a';
+      await app.experimentsDelete();
+      const d = JSON.parse(t);
+      d.experimentId = 'fixture-a';
+      d.name = 'IMPOSTOR under fixture-a';
+      await app.experimentsImportText(JSON.stringify(d));
+      app.alerts = [];
+    }, fixtures.c.json);
+    res.impostorFinding = await H.until(() => items(FND), (x) => x.up && x.up[0]
+      && x.up[0].state === 'mismatch', 10000);
+    await page.evaluate((id) => { location.hash = `#m=experiments&run=${id}`; }, ids.dup);
+    res.impostorDup = await H.until(() => items(RUN), (x) => x.up && x.up.some((c) => c.relation
+      === 'duplicate-of' && c.state === 'mismatch'), 10000);
+    // 6. The stored record altered under its hash (IndexedDB only): unreadable after a reload.
+    res.storeKind = await page.evaluate(() => window.OSCILLA.app.exps.storeKind);
+    if (res.storeKind === 'indexeddb') {
+      await page.evaluate(async () => {
+        const db = await new Promise((ok) => { const r = indexedDB.open('oscilla-experiments');
+          r.onsuccess = () => ok(r.result); });
+        const doc = await new Promise((ok) => { const q = db.transaction('experiments')
+          .objectStore('experiments').get('fixture-a'); q.onsuccess = () => ok(q.result); });
+        const t = JSON.stringify(doc).replace(/"resultHash":"[0-9a-f]{64}"/,
+          `"resultHash":"${'e'.repeat(64)}"`);
+        await new Promise((ok) => { const tx = db.transaction('experiments', 'readwrite');
+          tx.objectStore('experiments').put(JSON.parse(t)); tx.oncomplete = ok; });
+        db.close();
+      });
+      await page.evaluate((id) => { location.hash = `#m=experiments&finding=${id}`; },
+        ids.finding);
+      await page.reload();
+      await page.waitForFunction(() => window.OSCILLA && window.OSCILLA.app
+        && window.OSCILLA.app.fnd.loaded, null, { timeout: 30000 }).catch(() => {});
+      res.corrupt = await H.until(() => items(FND), (x) => x.up && x.up[0]
+        && x.up[0].state === 'unreadable', 10000);
+    }
+    // 7. 390 px.
+    await page.evaluate((id) => { location.hash = `#m=experiments&run=${id}`; }, ids.dup);
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.evaluate(() => document.querySelector('[data-osc="exp.connections"]')
+      .scrollIntoView());
+    res.narrow = await H.until(() => items(RUN), (x) => x.fits && x.up.length > 0, 3000);
+    await page.setViewportSize({ width: 1536, height: 1024 });
+    // Leave the store as later checks expect it: a and b, no finding, no duplicate.
+    await page.evaluate(async ({ a, dup }) => {
+      const app = window.OSCILLA.app;
+      const s = await window.OSCILLA.experiments.store();
+      for (const r of app.fnd.rows.slice()) await app.findingsDeleteNow(r.id);
+      await s.delete('fixture-a');
+      await s.delete(dup);
+      await app.experimentsImportText(a);
+      location.hash = '#m=experiments';
+      app.alerts = [];
+    }, { a: fixtures.a.json, dup: ids.dup });
+    const by = (list, rel) => (list || []).filter((c) => c.relation === rel);
+    const a = res.a.down || [];
+    const cite = by(a, 'cited-by')[0] || {};
+    const dupOf = by(res.dup.up, 'duplicate-of')[0] || {};
+    const build = by(res.a.up, 'build')[0] || {};
+    return { ...res, ...H.verdict({
+      'link-opens': res.linked.id === 'fixture-a' && res.linked.focus === 'osc-x-detail-title'
+        && res.a.shown && res.a.h4 === 'Connected records',
+      downstream: cite.state === 'present' && cite.href === `#m=experiments&finding=${ids.finding}`
+        && /Cited by finding "Connections: A falls above 6 kHz\."/.test(cite.text)
+        && /Field: evidence\[0\] \(identity: runs\[0\]\.resultHash\), on that finding\./
+          .test(cite.text)
+        && by(a, 'duplicated-as').length === 1 && by(a, 'duplicated-as')[0].state === 'present',
+      upstream: dupOf.state === 'present' && dupOf.href === '#m=experiments&run=fixture-a'
+        && /Field: provenance\.duplicateOf, on this run\./.test(dupOf.text)
+        && build.state === 'missing' && /this page runs OSCILLA/.test(build.text),
+      keyboard: res.toDup.id === ids.dup && res.toDup.focus === 'osc-x-detail-title',
+      history: res.back.id === 'fixture-a' && res.forward.id === ids.dup,
+      finding: res.finding.up[0] && res.finding.up[0].state === 'present'
+        && /^Cites run "TEST CONTEXT · synthetic A/.test(res.finding.up[0].text)
+        && res.findingFocus === true,
+      impostor: /^Cites run "IMPOSTOR under fixture-a" — does not match: a different record/
+        .test((res.impostorFinding.up || [{}])[0].text || '')
+        && by(res.impostorDup.up, 'duplicate-of')[0].state === 'mismatch',
+      corrupt: res.storeKind !== 'indexeddb' || (res.corrupt.up && res.corrupt.up[0].state
+        === 'unreadable' && /— unreadable: a record is stored under this id, but it cannot be read/
+        .test(res.corrupt.up[0].text)),
+      narrow: res.narrow.fits === true,
+    }) };
+  });
+
   def('calibration-export', async ({ page }) => {
     await H.workspace(page, 'measure');
     const res = {};

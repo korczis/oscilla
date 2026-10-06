@@ -60,6 +60,10 @@
 // delete dialog says how many findings cite the run (exps.deleteCiting). A finding never changes
 // a run, and deleting a run never changes a finding.
 //
+// Connected records (ADR 0048, ui/connections.js): the detail shows what the run is connected to
+// and what depends on it, read after the detail is shown; opening a run names it in the address
+// (ui/navigation.js navNameRecord, no new history entry), and deleting the open run names none.
+//
 // Independence (§227, V353): the store opens lazily, on the first Experiments view or save, and
 // reading the IndexedDB factory never throws into the app (pageIndexedDb): a store that cannot
 // open falls back to memory and says so, and the Playground, the instrument and Studio never
@@ -313,6 +317,7 @@ export function createExperimentsUi() {
     if (!e) {
       cmp.exps.detail = null;
       if (ctx.charts.detail) ctx.charts.detail.setView(null);
+      if (typeof cmp.connectionsClearRun === 'function') cmp.connectionsClearRun();
       return;
     }
     const findings = calibrationClaimFindings(e);
@@ -343,6 +348,12 @@ export function createExperimentsUi() {
       evidence: { ...plain(runEvidence(e, { ...m, hz: was })), hzError: null },
     };
     if (ctx.charts.detail) ctx.charts.detail.setView(view);
+    // Connected records (ADR 0048): read after the detail shows; never blocks it.
+    if (typeof cmp.connectionsOfRun === 'function') {
+      cmp.connectionsOfRun(e.experimentId).catch((err) => {
+        console.error('OSCILLA: connected records could not be read:', err);
+      });
+    }
   }
 
   function setCompare(cmp, list) {
@@ -526,6 +537,8 @@ export function createExperimentsUi() {
           this.fnd.note = `The findings could not be read: ${err.message || String(err)}`;
         }
       }
+      // Connected records shown elsewhere are read again (a stored change may move a state).
+      if (typeof this.connectionsRefreshOpen === 'function') this.connectionsRefreshOpen();
       return list;
     },
     async experimentsOpen(id) {
@@ -536,6 +549,8 @@ export function createExperimentsUi() {
       }
       setDetail(this, e);
       this.exps.panel = 'detail';
+      // The address names the open run (no new entry): Back from a connected record returns here.
+      if (typeof this.navNameRecord === 'function') this.navNameRecord({ kind: 'run', id });
       this.$nextTick(() => { if (ctx.charts.detail) ctx.charts.detail.relayout(); });
       return e;
     },
@@ -666,7 +681,10 @@ export function createExperimentsUi() {
       try {
         await (await store(this)).delete(id);
         ctx.cache.delete(id);
-        if (ctx.detail && ctx.detail.experimentId === id) setDetail(this, null);
+        if (ctx.detail && ctx.detail.experimentId === id) {
+          setDetail(this, null);
+          if (typeof this.navNameRecord === 'function') this.navNameRecord(null);
+        }
         if (ctx.compare.some((e) => e.experimentId === id)) setCompare(this, []);
         this.exps.deleteId = null;
         this.closeModal('osc-dlg-exp-delete');

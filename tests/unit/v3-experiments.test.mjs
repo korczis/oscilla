@@ -994,7 +994,7 @@ test('memory store: CRUD with validation and explicit delete', async () => {
   const list = await store.list();
   assert.strictEqual(list.length, 1);
   assert.deepStrictEqual(Object.keys(list[0]), ['experimentId', 'name', 'createdAt',
-    'schemaVersion', 'oscillaVersion', 'status', 'sizeBytes', 'definition']);
+    'schemaVersion', 'oscillaVersion', 'status', 'sizeBytes', 'definition', 'links']);
   assert.strictEqual(list[0].status, 'USABLE');
   const later = fullExperiment({ id: 'later', now: '2026-10-05T00:00:00.000Z' });
   await store.put(later);

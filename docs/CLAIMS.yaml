@@ -455,6 +455,15 @@ claims:
     responsibility: product
     note: Validation refuses prototype pollution, HTML-like markup, control and bidirectional characters and oversized input, and the page renders findings as text. The findings object store comes with experiments DB version 4 (the upgrade deletes nothing); the memory fallback reports the findings it holds to the unsaved-work guard, as it does a finding being written. Export carries each cited run's identity; an import is validated whole, refuses a newer schema and any finding stored here with different content, and writes nothing when refused. Check findings in tests/browser/v3-ui.cjs records a finding from a run, links a comparison, sets it supported, shows the backlinks, deletes the cited run (the dialog warns, the reference reads missing), at 390 px and in the light theme, in three browsers over file:// and /oscilla/.
 
+  - id: connected-records
+    claim: From a stored run, definition, finding or Studio project, OSCILLA lists what it is connected to and what depends on it, each connection from one stored field that it names, never inferred from names, recipes or times; a connection reads present only when the target is stored, readable (its result hash recomputed) and the record the field names, and otherwise says missing, does not match, not verifiable or unreadable, never hiding or repairing the reference
+    source: .ai/repo/adrs/0048-connected-records-over-stored-fields.md
+    implementation: src/js/experiments/connections.js
+    test: tests/unit/v4-connections.test.mjs
+    status: guaranteed
+    responsibility: product
+    note: The connections are a run's definition version, the run it repeats or duplicates, the Studio project whose saved graph (or measured path), recomputed as it loads, has the hash the run stores, the frequency profile it names and the build that made it; downstream the findings citing a run, the runs repeating or duplicating it, the runs a definition's versions executed and the runs measured from a project's graph. A repeat records no identity of its original, so it reads not verifiable. List rows carry each run's links (no database version), an older row is read once from its record. A record is named in the address (m=experiments with run, def or finding), a fourth domain of the one hash dispatcher that Back and Forward re-apply. Check connections in tests/browser/v3-ui.cjs (a record link, both directions, keyboard, Back and Forward, focus, an impostor under a cited id, a record altered under its hash, 390 px; three browsers over file:// and /oscilla/) and check connections-from-studio in tests/browser/v31-studio-workflows.cjs.
+
   - id: aggregate-primary-response
     claim: A measurement of two or more runs stores the aggregate (centre, dispersion and repeatability) as its primary response; the stored transfer is the aggregate centre marked as derived, never one run, and comparison uses the aggregate
     source: .ai/repo/adrs/0019-recipe-versus-experiment.md

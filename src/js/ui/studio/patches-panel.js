@@ -14,7 +14,9 @@
 //     svc: { store, library() -> Promise<library>, persistent() -> bool, announce,
 //            openProject({ model, summary }), downloadFile({ name, type, text }),
 //            recordDeleted(id) -> announcement | null (the workspace detaches the open document
-//            when its project record was deleted), openModal(id), closeModal(id) }
+//            when its project record was deleted), connections(id) -> Promise<view | null>
+//            (ui/connections.js connectionsOfStudioProject, ADR 0048), openModal(id),
+//            closeModal(id) }
 
 import { ID_PATTERN } from '../../experiments/schema.js';
 import { createPatch } from '../../studio/patches.js';
@@ -98,6 +100,7 @@ export function mountPatches(dialogs, svc) {
           h('span', { class: 'osc-sl-name', text: r.name }),
           h('span', { class: 'osc-sl-what osc-num', text: `${r.kindLabel} · ${r.when}` }),
         ]),
+        r.kind === 'project' ? connectionsOf(r) : null,
         h('div', { class: 'osc-sp-acts' }, r.kind === 'project' ? [
           btn('Open', 'studio.saved.open', () => openProject(r.id)),
           btn(confirmDelete === r.id ? 'Confirm delete' : 'Delete', 'studio.saved.delete',
@@ -111,6 +114,54 @@ export function mountPatches(dialogs, svc) {
         ]),
       ]))) : h('p', { class: 'osc-sl-empty', text: 'Nothing saved yet. Save the project from the '
       + 'toolbar, or select nodes and choose Save as patch.' }));
+  }
+
+  // Connected records of a stored project (ADR 0048): the runs measured from its graph, found
+  // by the hash recomputed over it as it loads; computed when the disclosure is opened.
+  function connectionsOf(r) {
+    if (typeof svc.connections !== 'function') return null;
+    const cstatus = h('p', { class: 'osc-muted osc-dialog-note', role: 'status' });
+    const body = h('div', { class: 'osc-sp-cnx-body' });
+    const det = h('details', { class: 'osc-sp-cnx', 'data-osc': 'studio.saved.connections' }, [
+      h('summary', { class: 'osc-sp-cnx-summary', text: 'Connected records' }), cstatus, body]);
+    const follow = (e) => {
+      if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button > 0) return;
+      svc.closeModal(libDlg.id);
+    };
+    const item = (c) => h('li', { class: 'osc-x-cn-item', 'data-state': c.state,
+      'data-relation': c.relation }, [
+      h('strong', { text: c.label }), ' ',
+      c.href ? h('a', { class: 'osc-x-cn-link', href: c.href, text: c.target,
+        'data-osc': 'studio.saved.cnxLink', onClick: follow }) : h('span', { text: c.target }),
+      h('span', { class: 'osc-x-cn-state', text: ` — ${c.text}.` }), ' ',
+      h('span', { class: 'osc-x-cn-field', text: `Field: ${c.field}, on ${c.fieldOf}.` }),
+    ]);
+    det.addEventListener('toggle', async () => {
+      if (!det.open) return;
+      cstatus.textContent = 'Checking the records stored in this browser…';
+      let v;
+      try {
+        v = await svc.connections(r.id);
+      } catch (e) {
+        v = { status: (e && e.message) || String(e), downstream: [], notes: [], more: {} };
+      }
+      if (!v) return;
+      cstatus.textContent = v.status || '';
+      const notes = (v.notes || []).filter((n) => n.field);
+      replaceChildren(body, [
+        h('p', { class: 'osc-x-cn-dir', text: 'What depends on it?' }),
+        h('ul', { class: 'osc-x-ev-list osc-x-cn-list', role: 'list',
+          'aria-label': `What depends on ${r.name}` }, v.downstream.length
+          ? v.downstream.map(item) : [h('li', { class: 'osc-x-empty', text: v.status ? ''
+            : 'No stored run was measured from this graph or its measured path.' })]),
+        v.more && v.more.downstream ? h('p', { class: 'osc-x-cn-more',
+          text: `And ${v.more.downstream} more, not listed.` }) : null,
+        notes.length ? h('ul', { class: 'osc-x-ev-list', role: 'list',
+          'aria-label': 'Notes on fields' }, notes.map((n) => h('li',
+          { text: `${n.field}: ${n.text}` }))) : null,
+      ]);
+    });
+    return det;
   }
 
   async function openProject(id) {
@@ -256,12 +307,20 @@ export function mountPatches(dialogs, svc) {
   });
 
   return {
-    async openLibrary() {
+    /** Open the dialog; `focusId`: a stored project to show, focused, with its connections. */
+    async openLibrary({ focusId = null } = {}) {
       confirmDelete = null;
       svc.openModal(libDlg.id);
       await refresh();
-      const first = list.querySelector('button') || close;
+      const row = focusId ? list.querySelector(`[data-id="${CSS.escape(focusId)}"]`) : null;
+      if (focusId && !row) svc.announce('That project is no longer saved.', { assertive: true });
+      if (row) {
+        const det = row.querySelector('details');
+        if (det) det.open = true;
+      }
+      const first = (row && row.querySelector('button')) || list.querySelector('button') || close;
       first.focus();
+      return !!row || !focusId;
     },
     openSavePatch(nodeIds) {
       const m = svc.store.getModel();

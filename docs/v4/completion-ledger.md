@@ -43,7 +43,7 @@ mobile, significant performance), **P2** (polish, debt).
 | Studio provenance on a measurement | ✓ | ✓ | ✓ | ✓ | evidence, compare | whole graph + measured path (D3, #139) | – | ✓ | EXISTS |
 | Raw data retention | – | – | engine `keepRaw` | none | none | – | – | – | MISSING (no stated policy) |
 | Findings | – | – | – | – | – | – | – | – | MISSING |
-| Cross-domain Trace (result → run → definition → build → Studio) | – | – | – | – | – | – | – | – | MISSING |
+| Cross-domain Trace (result → run → definition → build → Studio) | ✓ (connections.js, ADR 0048) | record links refused whole | – | list-row links, no DB version | run detail, definition and finding rows, Studio dialog | every connection names its stored field; present only when the identity verifies | keyboard, focus, state in words | ✓ | in review (branch `feat/record-relations`, after #149) |
 | Knowledge explorer | – | – | – | – | static About | – | – | – | MISSING |
 | Project model | singletons | – | – | split by domain | – | – | – | – | PARTIAL |
 | Workspace navigation / history / deep links | ✓ | – | – | URL only | ✓ | – | ✓ | ✓ | PARTIAL (W2, W3) |
@@ -103,7 +103,8 @@ as real, tested slices, in dependency order, never as placeholders:
 1. Experiment definition separate from run (#116, in review).
 2. Evidence on a run: a value traced through stored provenance, and a reproducibility checklist.
 3. Findings linked to evidence (ADR 0046, branch `feat/findings`, in review).
-4. Cross-domain Trace over real stored relations.
+4. Cross-domain Trace over real stored relations ("Connected records", ADR 0048, branch
+   `feat/record-relations`, in review; lands after #149).
 5. Unsaved-work protection and navigation history in the workspace.
 6. A knowledge explorer fed by a build-time index of claims, features, rules, ADRs and releases.
 
