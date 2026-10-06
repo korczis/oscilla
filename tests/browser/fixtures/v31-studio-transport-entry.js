@@ -16,7 +16,7 @@ import { adsrEvents, valueAtTime } from '../../../src/js/audio/envelope.js';
 import { nodeQ } from '../../../src/js/audio/filters.js';
 import { automationValueAt } from '../../../src/js/sequencer/compiler.js';
 import { createIdGenerator, createStudioStore } from '../../../src/js/studio/actions.js';
-import { STUDIO_XFADE_S } from '../../../src/js/studio/compiler.js';
+import { ROUTE_FLOOR, STUDIO_XFADE_S } from '../../../src/js/studio/compiler.js';
 import { compileTimeline } from '../../../src/js/studio/timeline-compiler.js';
 import { REFERENCE_TEMPLATE_ID, templateModel } from '../../../src/js/studio/templates/index.js';
 import { createStudioTransport } from '../../../src/js/studio/transport.js';
@@ -113,16 +113,25 @@ function preWindow(t0, t1) {
 // ---------------------------------------------------------------- detector
 // RMS envelope in DETECT_STEP_S windows from b − 0.05 to b + 3.3 against −40 dB of the Tone's
 // level (b + 0.3 … b + 0.7): onset = start of the first window above, end = end of the last
-// window above, dip = the quietest window in b + 1 ± 0.02 s; beforeDb = the peak before b.
+// window above, dip = the quietest window in b + 1 ± 0.02 s; beforeDb = the peak in the 50 ms
+// before the graph start g (g = b unless the PLAY was re-anchored, see basicSynth);
+// floorDb = the peak in [g, b) (null when g = b).
 // fineDip / fineEnd: the same in FINE_STEP_S windows on a grid from b (boundary ± 10 ms,
 // end ± 10 ms), fine enough to tell a one-render-quantum (2.67 ms) shift.
+// Between a re-anchored graph start and baseTime the graph runs with the pattern-played
+// oscillator's free-running carrier held at ROUTE_FLOOR (−80 dB of its level) and no voice yet:
+// measured −74.8 dB re the Tone at 44.1 kHz and −73.8 dB at 48 kHz (peak against the Tone's RMS:
+// the sawtooth's crest factor and the envelope's attack peak over its sustain). FLOOR_MARGIN_DB
+// above the floor bounds that; a carrier that sounds is within a few dB of the Tone (measured
+// −30 to +6 dB re the Tone on a starved run).
+const FLOOR_MARGIN_DB = 20;
 const DETECT_STEP_S = 0.002;
 const FINE_STEP_S = 0.0005;
 const DETECT_FROM_S = -0.05;
 const DETECT_DB = -40;
 const REF_WINDOW = [0.3, 0.7];
 
-function detect(get, b) {
+function detect(get, b, g = b) {
   const env = [];
   for (let t = b + DETECT_FROM_S; t < b + 3.3; t += DETECT_STEP_S) {
     env.push([t, rms(get(t, t + DETECT_STEP_S))]);
@@ -134,7 +143,12 @@ function detect(get, b) {
   const dip = env.filter(([t]) => t > b + 0.98 && t < b + 1.02)
     .reduce((m, x) => (x[1] < m[1] ? x : m), [0, Infinity]);
   let peakBefore = 0;
-  for (const x of get(b + DETECT_FROM_S, b)) peakBefore = Math.max(peakBefore, Math.abs(x));
+  for (const x of get(g + DETECT_FROM_S, g)) peakBefore = Math.max(peakBefore, Math.abs(x));
+  let peakFloor = null;
+  if (b > g) {
+    peakFloor = 0;
+    for (const x of get(g, b)) peakFloor = Math.max(peakFloor, Math.abs(x));
+  }
   // Fine: FINE_STEP_S windows on a grid from b, around the boundary and the end.
   const fine = (from, to) => {
     const out = [];
@@ -149,13 +163,16 @@ function detect(get, b) {
   return { ref, onset: first ? first[0] - b : null,
     end: last ? last[0] + DETECT_STEP_S - b : null, dip: dip[0] - b, dipDb: db(dip[1] / ref),
     fineDip: fineDip[0] - b, fineEnd: fineLast ? fineLast[0] + FINE_STEP_S - b : null,
-    beforeDb: db(peakBefore / ref) };
+    beforeDb: db(peakBefore / ref), floorDb: peakFloor === null ? null : db(peakFloor / ref) };
 }
 
 /**
  * Where the detector must find the Tone's onset (§212: the clip starts where its voice envelope
  * leaves the floor, at baseTime), derived from the documented start ramps, all of which begin at
- * baseTime because runtime.start's crossfade time is the transport anchor:
+ * the graph start: runtime.start's crossfade time, which is the transport anchor baseTime unless
+ * the first window re-anchored the clips `lead` seconds later (docs/v31/timeline.md: the graph
+ * already started at the old baseTime keeps sounding, the clips, gates and lanes follow the new
+ * one; the carrier floor it adds before the voice, −80 dB, is far below the threshold):
  *   - every AUDIO route on the path OSC → … → MASTER and the Master Output bus ramp linearly
  *     0 → 1 over STUDIO_XFADE_S (runtime crossfade, adapters/ramp.js);
  *   - the Envelope (no gate edge: opened at the graph start) runs its ADSR from the floor
@@ -166,9 +183,11 @@ function detect(get, b) {
  *     response, harmonic k at 1/k).
  * The predicted window RMS goes through the measurement's window grid and threshold. The product
  * rises like t^6 from baseTime (four ramps × the attack × the edge): the first window above
- * −40 dB starts 6 ms after baseTime at 48 kHz although nothing sounds before baseTime.
+ * −40 dB starts 6 ms after baseTime at 48 kHz although nothing sounds before baseTime. After a
+ * re-anchor (lead ≥ STUDIO_XFADE_S, startLeadTime) the ramps are complete at baseTime and only
+ * the voice edge, scaled by the envelope where it then is, remains.
  */
-function predictedOnset(model, cutoff, Q, sr) {
+function predictedOnset(model, cutoff, Q, sr, lead = 0) {
   const nodeOf = (id) => model.graph.nodes.find((n) => n.id === id);
   const walk = (id, n) => { // audio routes from the oscillator to the Master
     if (nodeOf(id).type === 'master') return n;
@@ -186,8 +205,8 @@ function predictedOnset(model, cutoff, Q, sr) {
   const tl = compileTimeline(model, { sampleRate: sr, baseTime: 0 });
   const voiceEnv = tl.items[0].events.filter((e) => e.kind === 'gain')
     .map((e) => ({ t: e.time, value: e.value, ramp: e.ramp }));
-  const gainAt = (t) => (t < 0 ? 0 : Math.min(1, t / STUDIO_XFADE_S) ** ramps
-    * valueAtTime(adsr, t) * automationValueAt(voiceEnv, t, 0));
+  const gainAt = (t) => (t < 0 ? 0 : Math.min(1, (t + lead) / STUDIO_XFADE_S) ** ramps
+    * valueAtTime(adsr, t + lead) * automationValueAt(voiceEnv, t, 0));
   // Filtered sawtooth RMS at cutoff c (common factors cancel against the reference).
   const K = Math.floor((0.5 * sr) / 220);
   const harmonics = Float32Array.from({ length: K }, (_, i) => 220 * (i + 1));
@@ -214,10 +233,10 @@ function predictedOnset(model, cutoff, Q, sr) {
     let sq = 0;
     for (let f = f0; f < f1; f++) sq += gainAt(f / sr) ** 2;
     if (Math.sqrt(sq / (f1 - f0)) * sawRms(cutoff(Math.max(0, t))) > thr) {
-      return { onset: t, routes, ramps };
+      return { onset: t, routes, ramps, lead };
     }
   }
-  return { onset: null, routes, ramps };
+  return { onset: null, routes, ramps, lead };
 }
 
 async function settle(transport) {
@@ -236,42 +255,66 @@ async function settle(transport) {
  *   the 8th-harmonic ratio of the Tone clip at 0.15 s and 0.85 s against the browser's own
  *   biquad response at the predicted cutoff (automation × LFO), and the counts after STOP.
  */
-T.basicSynth = async () => {
+T.basicSynth = async ({ stallMs = 0 } = {}) => {
   const sr = T.engine.ctx.sampleRate;
   installPreTap();
   const model = templateModel(REFERENCE_TEMPLATE_ID);
   const store = createStudioStore(model, { idGenerator: createIdGenerator(model) });
   let claims = 0;
-  const transport = createStudioTransport({ runtime: T.runtime, engine: T.engine, store,
+  // Diagnostic (runner --stall-ms): the main thread stalls right after runtime.start() inside
+  // PLAY, as a slow runner does, which forces the re-anchor path on demand.
+  const runtime = stallMs > 0 ? Object.create(T.runtime, { start: { value: (...a) => {
+    const r = T.runtime.start(...a);
+    const t0 = performance.now();
+    while (performance.now() - t0 < stallMs) { /* the stall */ }
+    return r;
+  } } }) : T.runtime;
+  const transport = createStudioTransport({ runtime, engine: T.engine, store,
     onClaimOutput: () => { claims += 1; } });
   const started = transport.start();
   if (!started.ok) throw new Error(`start: ${started.reason}`);
   const b = started.baseTime;
+  // The graph start. runtime.start() schedules the graph at its crossfade time and the transport
+  // anchors the clips there (baseTime), unless the clock had already reached that time when the
+  // first window was compiled (a main thread or a fresh context slower than the scheduling lead:
+  // measured on CI and in a loaded linux container in chromium and webkit): the transport then
+  // re-anchors the clips at the first schedulable time and records a 'reanchor' decision
+  // { from, to } (timeline-compiler.js, docs/v31/timeline.md), while the graph keeps its start.
+  const reanchor = transport.debugInfo().decisions.find((d) => d.decision === 'reanchor') || null;
+  const g = reanchor ? reanchor.from : b;
+  const lead = b - g;
   await T.until(b + 3.4);
   await preUntil(b + 3.4);
   const peak = T.counts();
   // The Studio's clock (pre-limiter) and what reaches the destination (post-limiter).
-  const studio = detect(preWindow, b);
-  const out = detect(window_, b);
+  const studio = detect(preWindow, b, g);
+  const out = detect(window_, b, g);
   const ref = out.ref;
   const tail = rms(window_(b + 3.1, b + 3.3));
   // Inside the sweep at clip time 1.0 s (440 Hz): the free-running carrier (220 Hz) is gone.
   const mid = window_(b + 1.95, b + 2.05);
   const sweepAt = { f440: amplitudeAt(mid, 440, sr), f220: amplitudeAt(mid, 220, sr) };
-  // Cutoff over the Tone clip: automation 500·16^(t/3), LFO ±1 octave at 0.5 Hz (sine, phase 0
-  // at the graph start b): cutoff(t) = 500·16^(t/3)·2^sin(πt).
+  // Cutoff over the Tone clip: automation 500·16^(t/3) (the lane follows the clips' anchor b),
+  // LFO ±1 octave at 0.5 Hz (sine, phase 0 at the graph start g = b − lead):
+  // cutoff(t) = 500·16^(t/3)·2^sin(π(t + lead)).
   const node = (id) => model.graph.nodes.find((n) => n.id === id);
   const Q = node('filter-1').params.Q;
-  const cutoff = (t) => 500 * 16 ** (t / 3) * 2 ** Math.sin(Math.PI * t);
-  const predicted = predictedOnset(model, cutoff, Q, sr);
+  const automated = (t) => 500 * 16 ** (t / 3);
+  const lfo = (t) => 2 ** Math.sin(Math.PI * (t + lead));
+  const cutoff = (t) => automated(t) * lfo(t);
+  const predicted = predictedOnset(model, cutoff, Q, sr, lead);
   const ratioAt = (t) => {
     const w = window_(b + t - 0.025, b + t + 0.025);
     return db(amplitudeAt(w, 8 * 220, sr) / amplitudeAt(w, 220, sr));
   };
-  const expectedRatio = (t) => db(biquadMag('lowpass', cutoff(t), Q, 8 * 220)
-    / biquadMag('lowpass', cutoff(t), Q, 220)) - db(8); // sawtooth: harmonic k at 1/k
+  const ratioFor = (fc) => db(biquadMag('lowpass', fc, Q, 8 * 220)
+    / biquadMag('lowpass', fc, Q, 220)) - db(8); // sawtooth: harmonic k at 1/k
+  const expectedRatio = (t) => ratioFor(cutoff(t));
+  // The LFO's share of the change from 0.15 s to 0.85 s, the automation held at its 0.15 s value:
+  // 0 without a re-anchor (sin 0.15π = sin 0.85π), so the change is the automation's alone.
+  const lfoShare = ratioFor(automated(0.15) * lfo(0.85)) - ratioFor(automated(0.15) * lfo(0.15));
   const spectrum = { early: ratioAt(0.15), late: ratioAt(0.85),
-    expectedEarly: expectedRatio(0.15), expectedLate: expectedRatio(0.85) };
+    expectedEarly: expectedRatio(0.15), expectedLate: expectedRatio(0.85), lfoShare };
   const skippedLate = transport.debugInfo().skippedLate;
   const done = transport.stop();
   const atStop = T.engine.ctx.currentTime;
@@ -290,7 +333,8 @@ T.basicSynth = async () => {
     cycles.push({ peak: p, after: await settle(transport) });
   }
   const strip = ({ ref: _ref, ...d }) => d;
-  return { b, claims, peak, skippedLate, studio: strip(studio), out: strip(out), predicted,
+  return { b, graphStart: g, reanchor, floorBoundDb: db(ROUTE_FLOOR) + FLOOR_MARGIN_DB, claims,
+    peak, skippedLate, studio: strip(studio), out: strip(out), predicted,
     detectStepS: DETECT_STEP_S, fineStepS: FINE_STEP_S, tailDb: db(tail / ref), sweepAt,
     spectrum, counts, stopped, cycles, debug: transport.debugInfo().unplayed };
 };

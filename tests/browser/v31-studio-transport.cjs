@@ -4,6 +4,11 @@
 // chromium, firefox and webkit, from file://.
 //
 //   node tests/browser/v31-studio-transport.cjs [--browsers chromium,firefox,webkit] [--json out]
+//                                               [--stall-ms <ms>]
+//
+// --stall-ms (diagnostic, never in the gate) stalls the main thread for <ms> right after
+// runtime.start() inside PLAY, which re-anchors the PLAY on demand (≈ 45 ms and more on a fresh
+// context at 48 kHz); every check below must still hold.
 //
 // The fixture (tests/browser/fixtures/v31-studio-transport-entry.js, which reuses the Studio
 // audio fixture's instrumentation and output tap) is bundled with esbuild into an IIFE inlined
@@ -12,8 +17,10 @@
 // Checks per browser (asserted):
 //   clips on the audio clock, measured on the Studio's output at engine.master (before the
 //        engine's limiter): no clip skipped as late (the first window of a PLAY on a fresh
-//        context, timeline-compiler.js); nothing before baseTime; the Tone's onset in the window
-//        the start ramps predict (fixture predictedOnset); the Tone → Sweep boundary dips at
+//        context, timeline-compiler.js); nothing before the graph starts; between a re-anchored
+//        graph start and baseTime nothing above the free-running carrier's floor (an
+//        unclaimed carrier would sound there); the Tone's onset in the window the start ramps
+//        predict (fixture predictedOnset); the Tone → Sweep boundary dips at
 //        baseTime + 1 s (within BOUNDARY_S); the Sweep ends at baseTime + 3 s (within END_S);
 //   the engine's limiter: what reaches the destination is the same boundary and end, delayed
 //        by LIMITER_LOOKAHEAD_S; it is silent after the timeline (< −50 dB);
@@ -21,8 +28,9 @@
 //        220 Hz carrier is absent (< −30 dB relative to 440 Hz);
 //   cutoff automation changes the spectrum: the 8th harmonic of the 220 Hz Tone, relative to
 //        the fundamental, at 0.15 s and 0.85 s equals the browser's own biquad response at the
-//        predicted cutoff (500·16^(t/3) automation × 2^sin(πt) LFO) within SPECTRUM_TOL_DB, and
-//        rises by more than 6 dB between the two;
+//        predicted cutoff (500·16^(t/3) automation × 2^sin(π(t + lead)) LFO, lead = 0 unless
+//        re-anchored) within SPECTRUM_TOL_DB, and rises by more than 6 dB between the two (less
+//        the LFO's share, 0 when lead = 0);
 //   exclusivity: onClaimOutput fired once per PLAY;
 //   STOP: 0 engine nodes/sources, 0 runtime nodes, 0 live sources, 0 live connections; three
 //        PLAY → STOP cycles have the same peak counts (no growth);
@@ -44,6 +52,7 @@ const arg = (name, fallback) => {
 };
 const BROWSERS = arg('browsers', process.env.OSC_BROWSERS || 'chromium,firefox,webkit').split(',');
 const JSON_OUT = arg('json', '');
+const STALL_MS = Number(arg('stall-ms', '0'));
 const ENTRY = path.join(__dirname, 'fixtures', 'v31-studio-transport-entry.js');
 
 // Timing semantics (§212, docs/v31/timeline.md "Clip start"): a clip starts at the frame where
@@ -66,6 +75,12 @@ const ENTRY = path.join(__dirname, 'fixtures', 'v31-studio-transport-entry.js');
 //   end       the last window above −40 dB ends with the Sweep's release edge, on the clip end
 //             frame: 3.0000 s in 2 ms and in 0.5 ms windows.
 // All five values were measured identically in chromium, firefox and webkit.
+// A re-anchored PLAY (docs/v31/timeline.md: the clock reached baseTime before the first window,
+// a main thread or a fresh context slower than the scheduling lead; seen on CI and in a loaded
+// linux container) starts the graph at the old baseTime and the clips at the new one: the
+// fixture measures "before" from that graph start, bounds what sounds between the two at the
+// carrier floor, and predicts the onset with the graph's ramps and envelope `lead` seconds in.
+// Without the re-anchor the graph start is baseTime and the checks are the plain ones.
 // The engine's limiter (DynamicsCompressorNode) delays the destination by its look-ahead: 6 ms in
 // Blink, Gecko and WebKit (measured 288 frames at 48 kHz in each), which is why the analyser tap
 // read the onset at 14 ms and the boundary at 1.006 s. Firefox's limiter also lags the first
@@ -123,18 +138,27 @@ async function runOne(browserName, url) {
     rec.start = await page.evaluate(() => window.T.started);
     check(key, 'AudioContext running', rec.start.state === 'running', JSON.stringify(rec.start));
 
-    const s = (rec.basicSynth = await page.evaluate(() => window.T.basicSynth()));
+    const s = (rec.basicSynth = await page.evaluate((stallMs) => window.T.basicSynth({ stallMs }),
+      STALL_MS));
     const st = s.studio;
     const p = s.predicted;
     check(key, 'no clip skipped as late (PLAY on a fresh context)', s.skippedLate === 0,
       `${s.skippedLate}`);
-    check(key, 'nothing sounds before baseTime (< −100 dB)', st.beforeDb < -100,
-      `${f(st.beforeDb, 1)} dB`);
+    const re = s.reanchor;
+    const startedAt = re ? `graph started ${f((s.b - s.graphStart) * 1000, 2)} ms before `
+      + `baseTime (re-anchored from ${f(re.from, 5)} s to ${f(re.to, 5)} s at ${f(re.at, 5)} s)`
+      : 'graph started at baseTime';
+    if (re) console.log(`  INFO [${key}] PLAY re-anchored: ${startedAt}`);
+    check(key, 'nothing sounds before the graph starts (< −100 dB)', st.beforeDb < -100,
+      `${f(st.beforeDb, 1)} dB; ${startedAt}`);
+    check(key, 'between the graph start and baseTime only the carrier floor sounds '
+      + `(< ${f(s.floorBoundDb, 0)} dB)`, st.floorDb === null || st.floorDb < s.floorBoundDb,
+      st.floorDb === null ? startedAt : `${f(st.floorDb, 1)} dB; ${startedAt}`);
     check(key, 'the Tone clip sounds from baseTime (onset where the start ramps put it)',
       st.onset !== null && p.onset !== null
       && Math.abs(st.onset - p.onset) <= ONSET_WINDOWS * s.detectStepS + 1e-9,
       `onset ${f(st.onset, 4)} s after baseTime, predicted ${f(p.onset, 4)} s (${p.ramps} route `
-      + 'ramps × ADSR attack × voice edge)');
+      + `ramps × ADSR attack × voice edge, ${f(p.lead * 1000, 2)} ms into the graph)`);
     check(key, 'the Tone → Sweep boundary is at baseTime + 1 s',
       Math.abs(st.dip - 1) < BOUNDARY_S, `dip at ${f(st.dip, 4)} s (${f(st.dipDb, 1)} dB)`);
     check(key, 'the boundary frame is the quietest 0.5 ms window (exact to the window)',
@@ -169,7 +193,9 @@ async function runOne(browserName, url) {
       Math.abs(sp.late - sp.expectedLate) < SPECTRUM_TOL_DB,
       `${f(sp.late, 2)} dB, expected ${f(sp.expectedLate, 2)} dB`);
     check(key, 'cutoff automation changes the spectrum over time (> 6 dB)',
-      sp.late - sp.early > 6, `${f(sp.late - sp.early, 2)} dB`);
+      sp.late - sp.early - sp.lfoShare > 6, `${f(sp.late - sp.early - sp.lfoShare, 2)} dB`
+        + (sp.lfoShare ? ` from the automation (measured ${f(sp.late - sp.early, 2)} dB, the `
+        + `LFO's share ${f(sp.lfoShare, 2)} dB after the re-anchor)` : ''));
     check(key, 'exclusivity hook fired once per PLAY', s.claims === 1 + s.cycles.length,
       `${s.claims}`);
     check(key, 'nothing unplayed', s.debug.length === 0, JSON.stringify(s.debug));
