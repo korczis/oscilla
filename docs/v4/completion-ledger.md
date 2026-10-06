@@ -86,7 +86,9 @@ registry, timeline UI and transport (R7); pattern-played Oscillator frequency la
 silent carrier (R8); presentation-only edits pay a full compile while playing (R9);
 `mode`/`workspace` split state and three hash routers (W4, fixing with W2: one dispatcher, ADR 0045); Space has two meanings and two
 shortcut dialogs (W5); disabled controls without a reason (W6, partly fixing); WebKit absent from
-engine/dsp/labs/sequencer CI and the About provenance tests skip in CI's shallow clone (CI1);
+engine/dsp/labs/sequencer CI and the About provenance tests skip in CI's shallow clone (CI1,
+**closed** #147: WebKit legs in both jobs, nothing narrowed; the unit job checks out full
+history and tags, and the About checks fail instead of skipping under CI without them);
 no startup budget or large-library fixture (P1); `window.OSCILLA` test seam and `?mock=1` ship
 in production (W7); five dead CSS classes; an import without a hash shows no "unverified"
 marker; an unreadable stored record fails silently; ADR status never leaves `proposed`; the plan
@@ -141,3 +143,11 @@ findings (ids with a dot, records written as schema 4 without need, wording with
 id) are fixed in the same pull request (`tests/unit/v4-review-139.test.mjs`).
 
 With W2 handled by #130 (ADR 0045), the findings of this ledger still open are the P2 list.
+
+## Update 2026-10-06 — CI1
+
+CI1 is closed by #147. The engine and DSP/labs/sequencer jobs run WebKit (Linux runner, 44.1 kHz)
+with every check, the five engine microphone checks included (Playwright's WebKit mock device,
+granted by permission). Two of the suites could not have run WebKit before: `dsp.cjs` ran 0 checks
+and `labs.cjs` launched Chromium under any other name; every suite now refuses an unknown browser.
+The About timeline checks run in CI against full history and tags (`tests/unit/about.test.mjs`).
