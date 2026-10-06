@@ -4,12 +4,15 @@
 //
 // What it reads, each time a view is computed (always from the store, never from the decoded
 // records ui/experiments.js keeps, which another tab may have replaced):
-//   - the runs' list rows (store.list), each with its `links`; a row written before links
-//     existed is read once from its record (store.get) instead;
-//   - every stored run a connection names, read once (store.get validates the record and
-//     recomputes its result hash), so a connection is 'present' only for a record that reads
-//     and verifies; one that cannot be read is 'unreadable'. A read is cached per list row (id,
-//     size, creation time, recorded result hash) and forgotten when that row leaves the list;
+//   - the runs' list rows (store.list), each with its `links` (what the run names, to find
+//     dependents); a row written before links existed is read once from its record for its
+//     links only, never for an identity;
+//   - every stored run a connection names, verified at THE verification point of review 3 of
+//     #149, findingsVerifyCitedRun (ui/findings.js: fresh from the store, never a cache), on
+//     every compute: its answer (ok / different / unverifiable / unreadable / missing, the stored
+//     result hash and grid) is the only identity connections.js sees, so a connection is
+//     'present' only for a record that reads and verifies now. Nothing keeps an identity between
+//     computes; following a present run's link verifies it again (connectionsVerifyAndGo);
 //   - the definitions and findings (listDefinitions, listFindings: validated on read);
 //   - the stored Studio projects through Studio's own library (studioLibrary, the store Studio
 //     saves to), each loaded through the full import pipeline once per saved version, its
@@ -28,23 +31,20 @@
 // link never loads a project over the open graph).
 
 import { connectionsOf, runLinks, runTargets } from '../experiments/connections.js';
-import { defaultEvidenceHz, storedResponseFrequencies } from '../experiments/evidence.js';
 import { decodeRecordLink } from '../core/url-state-records.js';
 import { createStudioLibrary } from '../studio/library.js';
 import { studioProvenance } from '../studio/provenance.js';
 
 const plain = (v) => JSON.parse(JSON.stringify(v));
-// A read is reused only for the same list row: id, size, creation time and the result hash the
-// row records. A record deleted and stored again under its id (in this tab or another) writes a
-// new row, so it is read again.
-const rowKey = (r) => `${r.experimentId}|${r.sizeBytes}|${r.createdAt}|${r.links
-  ? r.links.resultHash : 'no links'}`;
+// The links of a row written before links existed, read once per list row (id, size, creation
+// time): discovery only, never an identity.
+const rowKey = (r) => `${r.experimentId}|${r.sizeBytes}|${r.createdAt}`;
 const CHECKING = 'Checking the records stored in this browser…';
 const NOUN = { run: 'Run', definition: 'Definition', finding: 'Finding' };
 
 export function createConnectionsUi() {
   const ctx = {
-    reads: new Map(),     // rowKey -> { readable, reason, links } of a stored run, read once
+    links: new Map(),     // rowKey -> links of a row written before links existed
     projects: new Map(),  // `${id}|${savedAt}` -> a Studio project's recomputed identity
     token: { run: 0, definition: {}, finding: {}, studio: {} },
     pending: new Set(),
@@ -56,20 +56,32 @@ export function createConnectionsUi() {
     return p;
   };
 
-  async function readRun(store, row) {
+  /** The links of a legacy row, from its record (discovery only; null when unreadable). */
+  async function legacyLinks(store, row) {
     const key = rowKey(row);
-    if (ctx.reads.has(key)) return ctx.reads.get(key);
-    let x;
-    try {
-      const e = await store.get(row.experimentId);
-      x = e ? { readable: true, reason: null, links: runLinks(e),
-        hasResponse: defaultEvidenceHz(e) !== null, frequencies: storedResponseFrequencies(e) }
-        : { readable: false, reason: 'it was not found when read', links: null };
-    } catch (err) {
-      x = { readable: false, reason: err.message || String(err), links: null };
+    if (!ctx.links.has(key)) {
+      let l = null;
+      try {
+        const e = await store.get(row.experimentId);
+        l = e ? runLinks(e) : null;
+      } catch (err) { /* unreadable: its identity is reported by the verification point */ }
+      ctx.links.set(key, l);
     }
-    ctx.reads.set(key, x);
-    return x;
+    return ctx.links.get(key);
+  }
+
+  /** Verify run `row` now (findingsVerifyCitedRun) and write the answer into the row. */
+  async function verify(cmp, row) {
+    const v = await cmp.findingsVerifyCitedRun(row.experimentId, null);
+    if (v.state === 'missing' || v.state === 'unreadable') {
+      Object.assign(row, { readable: false, reason: v.state === 'missing'
+        ? 'it was not found when read' : v.reason || null });
+      return;
+    }
+    // The verified hash replaces the one the list row records.
+    Object.assign(row, { readable: true, reason: null, hasResponse: v.hasResponse,
+      frequencies: v.frequencies, links: { ...(row.links || runLinks(null)),
+        resultHash: v.resultHash || null } });
   }
 
   async function studioIndex(cmp, store) {
@@ -112,15 +124,13 @@ export function createConnectionsUi() {
     const s = await cmp.experimentsStore();
     const list = await s.list();
     const keys = new Set(list.map(rowKey));
-    for (const k of [...ctx.reads.keys()]) if (!keys.has(k)) ctx.reads.delete(k);
+    for (const k of [...ctx.links.keys()]) if (!keys.has(k)) ctx.links.delete(k);
     const runs = [];
     for (const r of list) {
-      const x = r.links ? ctx.reads.get(rowKey(r)) : await readRun(s, r);
+      const links = r.links || await legacyLinks(s, r);
+      // Not verified yet (readable absent): never 'present' until verify() answers.
       runs.push({ experimentId: r.experimentId, name: r.name || null, definition: r.definition
-        || null, links: r.links || (x && x.links) || null, readable: x ? x.readable : undefined,
-      reason: x ? x.reason : null, hasResponse: x ? x.hasResponse : undefined,
-      frequencies: x ? x.frequencies : undefined, sizeBytes: r.sizeBytes,
-      createdAt: r.createdAt });
+        || null, links: links ? { ...links } : null });
     }
     let definitions = [];
     let unreadableDefinitions = [];
@@ -158,9 +168,7 @@ export function createConnectionsUi() {
     for (const id of runTargets(out)) {
       const r = byId.get(id);
       if (!r || r.readable !== undefined) continue;
-      const x = await readRun(store, r);
-      Object.assign(r, { readable: x.readable, reason: x.reason, links: r.links || x.links,
-        hasResponse: x.hasResponse, frequencies: x.frequencies });
+      await verify(cmp, r);
       read = true;
     }
     if (read) out = connectionsOf(subject, { ...index, runs: index.runs.slice() });
@@ -313,21 +321,14 @@ export function createConnectionsUi() {
      * under its id still has the result hash it was verified with. Returns true when followed.
      */
     async connectionsVerifyAndGo(c) {
-      const name = c.target;
-      let e = null;
-      try {
-        e = await (await this.experimentsStore()).get(c.to.id);
-      } catch (err) {
-        this.notify('warning', 'Run not opened', `${name} is stored here but cannot be read now (${
-          err.message || String(err)}). Nothing was opened.`);
-        this.connectionsRefreshOpen();
-        return false;
-      }
-      const now = e ? runLinks(e).resultHash : null;
-      if (!e || now !== c.to.hash) {
-        this.notify('warning', 'Run not opened', `${name} changed since this list was read: ${e
-          ? 'a different record is stored under its id now' : 'it is no longer stored here'}. `
-          + 'Nothing was opened; the connections are read again.');
+      const v = await this.findingsVerifyCitedRun(c.to.id, c.to.hash);
+      if (v.state !== 'ok') {
+        const why = { missing: 'it is no longer stored here', unreadable: `it is stored here but `
+          + `cannot be read now${v.reason ? ` (${v.reason})` : ''}`, different: 'a different '
+          + 'record is stored under its id now', unverifiable: 'the record stored under its id '
+          + 'has no result hash now' }[v.state] || 'it cannot be verified now';
+        this.notify('warning', 'Run not opened', `${c.target} changed since this list was read: ${
+          why}. Nothing was opened; the connections are read again.`);
         this.connectionsRefreshOpen();
         return false;
       }
@@ -337,7 +338,6 @@ export function createConnectionsUi() {
       } else this.recordsApplyHash(c.href, 'link');
       return true;
     },
-
     /**
      * The `records` domain of the hash dispatcher: true (applied; the record opens when it is
      * read), false (refused, with a message) or null (no record key in the hash).

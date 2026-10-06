@@ -482,25 +482,28 @@ test('two tabs: a run replaced in another tab is never present from this tab\'s 
     assert.equal((await one2.cmp.connectionsOfFinding(f.id)).upstream[0].state, 'mismatch');
   });
 
-test('the workspace: a list row written before links existed is read once from its record',
-  async () => {
-    const { a } = await fx();
-    const { cmp } = harness();
-    const store = createMemoryStore(OPTS);
-    await store.put(a.experiment);
-    let reads = 0;
-    const legacy = { ...store,
-      list: async () => (await store.list()).map(({ links, ...r }) => r),
-      get: async (id) => { reads += 1; return store.get(id); } };
-    cmp.experimentsStore = async () => legacy;
-    const f = finding('f-1', [{ kind: 'run', experimentId: 'fixture-a' }],
-      [{ experimentId: 'fixture-a', resultHash: H('0') }]);
-    await store.putFinding(f);
-    const out = await cmp.connectionsOfFinding('f-1');
-    assert.equal(out.upstream[0].state, 'mismatch', 'the identity is checked from the record');
-    await cmp.connectionsOfFinding('f-1');
-    assert.equal(reads, 1, 'read once per id');
-  });
+test('the workspace: a row written before links existed is read for its links once; identity is '
+  + 'verified on every compute', async () => {
+  const { a } = await fx();
+  const { cmp } = harness();
+  await cmp.experimentsImportText(a.json);
+  const dupId = await cmp.experimentsDuplicate('fixture-a');
+  const s = await cmp.experimentsStore();
+  const list = s.list.bind(s);
+  const get = s.get.bind(s);
+  const reads = new Map();
+  s.list = async () => (await list()).map(({ links, ...r }) => r); // rows of an earlier build
+  s.get = async (id) => { reads.set(id, (reads.get(id) || 0) + 1); return get(id); };
+  const first = await cmp.connectionsOfRun('fixture-a');
+  const d = one(first.downstream, 'duplicated-as');
+  assert.equal(d.state, 'present', 'found from the record of a row without links, then verified');
+  assert.equal(reads.get(dupId), 2, 'its links once, its identity once');
+  await cmp.connectionsOfRun('fixture-a');
+  assert.equal(reads.get(dupId), 3, 'the links are kept; the identity is verified again');
+  await s.putFinding(finding('f-1', [{ kind: 'run', experimentId: 'fixture-a' }],
+    [{ experimentId: 'fixture-a', resultHash: H('0') }]));
+  assert.equal((await cmp.connectionsOfFinding('f-1')).upstream[0].state, 'mismatch');
+});
 
 test('the workspace: a run measured from Studio connects to the stored project', async () => {
   const { a } = await fx();

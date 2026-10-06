@@ -133,11 +133,15 @@ Proposed:
   (`runLinks`: the result hash, `repeatOf`, `duplicateOf` and the Studio hashes a run stores),
   written by `put` and `annotate`, so the runs that name a record are found without reading
   every record. A row written before this version has no `links`; the adapter reads that record
-  once per page view instead and rewrites nothing. Every run a connection names is read once
-  through `store.get`, which validates the record and recomputes its result hash. The read is
-  cached per list row (id, size, creation time and the result hash the row records), so a
-  record deleted and stored again under its id, in this tab or another, is read again; a record
-  altered in place beneath an unchanged row (by hand, outside OSCILLA) is read again on reload.
+  once per page view for its links (discovery only, never an identity) and rewrites nothing.
+- **One verification point.** Every run a connection names is verified, on every compute, by
+  `findingsVerifyCitedRun` (ui/findings.js, review 3 of #149): fresh from the store, which
+  validates the record and recomputes its result hash, never from a cache. Its answer (ok,
+  different, unverifiable, unreadable, missing; the stored hash and grid) is the only identity
+  `connections.js` sees, so the findings panel and the connected records share one check and
+  no identity is kept between computes. Following a link to a run shown as stored here verifies
+  it again at that moment, with the hash it was listed with: a run that changed since the list
+  was read is not opened, the notice says why, and the list is read again.
 - **Never the workspace's decoded copy.** The record a view is about, and every run it names, is
   read from the store, never from the decoded records `ui/experiments.js` keeps. Another tab
   may have replaced a run under its id since this tab decoded it (review 2 of #149): returning
