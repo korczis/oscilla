@@ -31,12 +31,16 @@ const plain = (v) => JSON.parse(JSON.stringify(v));
 const formState = (f) => JSON.stringify([f.statement.trim(), f.status, f.notes.trim(),
   f.evidence.map((e) => e.key)]);
 const blankForm = () => {
-  const f = { open: false, mode: 'new', id: null, statement: '', status: 'observation',
-    notes: '', evidence: [], runs: [], base: '', error: '', addRun: '', cmpA: '', cmpB: '' };
+  const f = { open: false, mode: 'new', id: null, loadedUpdatedAt: null, statement: '',
+    status: 'observation', notes: '', evidence: [], runs: [], base: '', error: '', addRun: '',
+    cmpA: '', cmpB: '' };
   f.base = formState(f);
   return f;
 };
 const dirty = (f) => formState(f) !== f.base;
+const changedElsewhere = () => new Error('This finding was changed in another tab or window since '
+  + 'you opened it, so it was not saved. Your text is kept here: copy it, close this dialog and '
+  + 'edit the finding again.');
 
 /**
  * The view row of a stored finding: its statement and status in words, each reference with its
@@ -271,8 +275,11 @@ export function createFindingsUi() {
         return true;
       }
       this.fnd.draftKept = false;
-      const old = id ? this.fnd.all.find((x) => x.id === id) : null;
-      const f = Object.assign(blankForm(), old ? { mode: 'edit', id, statement: old.statement,
+      // An edit starts from the stored finding (another tab may have changed it since the list).
+      const old = id ? await (await this.experimentsStore()).getFinding(id)
+        .catch(() => null) || this.fnd.all.find((x) => x.id === id) || null : null;
+      const f = Object.assign(blankForm(), old ? { mode: 'edit', id,
+        loadedUpdatedAt: old.updatedAt, statement: old.statement,
         status: old.status, notes: old.notes || '', runs: plain(old.runs),
         evidence: old.evidence.map((ref) => ({ key: refKey(ref), ref: plain(ref),
           text: refText(ref, nameOf, { storedPoint: storedPointOf(ref) }) })) } : {});
@@ -346,10 +353,13 @@ export function createFindingsUi() {
         const now = Date.now();
         const old = f.mode === 'edit' ? await s.getFinding(f.id) : null;
         if (f.mode === 'edit' && !old) throw new Error('This finding is no longer stored.');
+        if (old && old.updatedAt !== f.loadedUpdatedAt) throw changedElsewhere();
         const next = old ? updateFinding(old, fields, { now: Math.max(now,
           Date.parse(old.updatedAt)) }) : createFinding({ id: newExperimentId(randomBytes16()),
           now, ...fields });
-        saved = await s.putFinding(next);
+        // The store checks the version again inside its write, so two tabs never overwrite.
+        saved = await s.putFinding(next, old ? { expectedUpdatedAt: f.loadedUpdatedAt } : {})
+          .catch((err) => { throw err && err.code === 'conflict' ? changedElsewhere() : err; });
       } catch (err) {
         f.error = (err.message || String(err)).replace(/^Invalid finding: /, '');
         return null;

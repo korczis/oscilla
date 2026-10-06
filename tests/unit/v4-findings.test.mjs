@@ -716,3 +716,31 @@ test('review 1.8: invisible, directional and malformed characters are refused', 
   assert.equal(ok(raw({ statement: 'Sweep 🎵 at 1 kHz: −3 dB, café' })).statement,
     'Sweep 🎵 at 1 kHz: −3 dB, café', 'paired surrogates and ordinary Unicode pass');
 });
+
+test('review 1.9: an edit is refused when the finding changed since the form loaded it', async () => {
+  for (const kind of ['memory', 'indexeddb']) {
+    const store = kind === 'memory' ? createMemoryStore(OPTS)
+      : await openExperimentStore({ indexedDB: fakeIndexedDB().indexedDB, ...OPTS });
+    const f = await store.putFinding(ok(raw()));
+    const mine = F.updateFinding(f, { statement: 'mine' }, { now: LATER });
+    const theirs = F.updateFinding(f, { statement: 'theirs' }, { now: '2026-10-02T11:30:00.000Z' });
+    await store.putFinding(theirs, { expectedUpdatedAt: f.updatedAt });
+    await assert.rejects(store.putFinding(mine, { expectedUpdatedAt: f.updatedAt }),
+      (e) => e.code === 'conflict' && /changed elsewhere/.test(e.message), kind);
+    assert.equal((await store.getFinding(f.id)).statement, 'theirs', `${kind}: not overwritten`);
+  }
+  const { cmp } = harness();
+  await cmp.experimentsImportText(await recordAs('a', 'run-e'));
+  await cmp.findingsAskRun('run-e');
+  cmp.fnd.form.statement = 'first';
+  const saved = await cmp.findingsSave();
+  await cmp.findingsAskEdit(saved.id);
+  cmp.fnd.form.statement = 'my edit';
+  const s = await cmp.experimentsStore();
+  await s.putFinding(F.updateFinding(await s.getFinding(saved.id), { statement: 'other tab' },
+    { now: Date.now() + 1000 }));
+  assert.equal(await cmp.findingsSave(), null);
+  assert.match(cmp.fnd.form.error, /changed in another tab or window/);
+  assert.equal(cmp.fnd.form.statement, 'my edit', 'the text typed here is kept');
+  assert.equal((await s.getFinding(saved.id)).statement, 'other tab');
+});

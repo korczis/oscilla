@@ -13,7 +13,8 @@
 //             listDefinitions() -> { definitions, unreadable: [{ id, reason }] },
 //             getDefinition(id), putDefinition(definition),
 //             listFindings() -> { findings, unreadable: [{ id, reason }] }, getFinding(id),
-//             putFinding(finding), putFindings([finding]) -> { stored, same }, deleteFinding(id) }
+//             putFinding(finding, { expectedUpdatedAt }), putFindings([finding]) -> { stored, same },
+//             deleteFinding(id) }
 //   memory Store only: held() -> { experiments, definitions, studio, findings } (records it
 //   holds, which a reload discards: the unsaved-work guard reports them)
 //
@@ -177,11 +178,18 @@ function checkedFinding(f, code, id) {
   return v.finding;
 }
 
-/** May `next` replace the stored `old`? Its creation time never changes. */
-function findingVerdict(old, next) {
+/**
+ * May `next` replace the stored `old`? Its creation time never changes; with `expectedUpdatedAt`
+ * (the version an edit was made from) a finding changed since then is refused with 'conflict'.
+ */
+function findingVerdict(old, next, expectedUpdatedAt) {
   if (old && old.createdAt !== next.createdAt) {
     throw new ExperimentStoreError('immutable', `finding ${next.id}: its creation time never `
       + 'changes', undefined, ['createdAt']);
+  }
+  if (expectedUpdatedAt !== undefined && (old ? old.updatedAt : null) !== expectedUpdatedAt) {
+    throw new ExperimentStoreError('conflict', `finding ${next.id} was changed elsewhere since it `
+      + 'was opened here (another tab or window); nothing was overwritten', undefined, [next.id]);
   }
 }
 
@@ -496,9 +504,9 @@ export function createMemoryStore({ knownAlgorithms } = {}) {
     listFindings: () => wrap('listFindings', () => findingList([...finds.values()]
       .map((t) => JSON.parse(t)))),
     getFinding: (id) => wrap('getFinding', () => readFinding(id)),
-    putFinding: (f) => wrap('putFinding', () => {
+    putFinding: (f, { expectedUpdatedAt } = {}) => wrap('putFinding', () => {
       const next = checkedFinding(f, 'invalid');
-      findingVerdict(readFinding(next.id), next);
+      findingVerdict(readFinding(next.id), next, expectedUpdatedAt);
       finds.set(next.id, JSON.stringify(next));
       return next;
     }),
@@ -734,7 +742,7 @@ function idbStore(db, storage, knownAlgorithms) {
     getFinding: (id) => run('getFinding', [FINDINGS], 'readonly',
       (tx) => request(tx.objectStore(FINDINGS).get(id)))
       .then((f) => (f == null ? null : checkedFinding(f, 'corrupt', id))),
-    putFinding(f) {
+    putFinding(f, { expectedUpdatedAt } = {}) {
       let next;
       try {
         next = checkedFinding(f, 'invalid');
@@ -744,7 +752,8 @@ function idbStore(db, storage, knownAlgorithms) {
       return run('putFinding', [FINDINGS], 'readwrite', (tx) => {
         const os = tx.objectStore(FINDINGS);
         return request(os.get(next.id)).then((old) => {
-          findingVerdict(old == null ? null : checkedFinding(old, 'corrupt', next.id), next);
+          findingVerdict(old == null ? null : checkedFinding(old, 'corrupt', next.id), next,
+            expectedUpdatedAt);
           return request(os.put(next));
         });
       }).then(() => next);
