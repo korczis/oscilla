@@ -701,3 +701,18 @@ test('review 1.7: removing the last reference to a run drops its identity; relin
   assert.equal(saved.runs[0].resultHash, (await fx()).c.experiment.provenance.resultHash);
   assert.equal(rowOf(cmp, 'cites R').evidence[0].state, 'ok');
 });
+
+test('review 1.8: invisible, directional and malformed characters are refused', () => {
+  const bad = {
+    LRM: '‎', RLM: '‏', ALM: '؜', NEL: '\u0085', 'C1 0x9B': '\u009B',
+    LS: ' ', PS: ' ', BOM: '﻿', ZWSP: '​', ZWNJ: '‌', ZWJ: '‍',
+    'word joiner': '⁠', 'lone high surrogate': '\uD800', 'lone low surrogate': '\uDC00',
+    RLO: '‮', LRI: '⁦',
+  };
+  for (const [what, ch] of Object.entries(bad)) {
+    refused(raw({ statement: `gain${ch}is 3 dB` }), /statement: contains/, `statement ${what}`);
+    refused(raw({ notes: `line${ch}two` }), /notes: contains/, `notes ${what}`);
+  }
+  assert.equal(ok(raw({ statement: 'Sweep 🎵 at 1 kHz: −3 dB, café' })).statement,
+    'Sweep 🎵 at 1 kHz: −3 dB, café', 'paired surrogates and ordinary Unicode pass');
+});

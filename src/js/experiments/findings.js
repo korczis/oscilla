@@ -80,7 +80,13 @@ export const STATUS_HINT = Object.freeze({
 
 const has = (o, k) => Object.prototype.hasOwnProperty.call(o, k);
 const MARKUP = /<[A-Za-z!/?]/;
-const BIDI = /[‪-‮⁦-⁩]/;
+// Characters that hide or reorder text, or are not text at all: directional marks, embeddings,
+// overrides and isolates (LRM, RLM, ALM, U+202A-202E, U+2066-2069), C1 controls (U+0080-009F,
+// U+0085 included), the line and paragraph separators, the zero-width space, joiners and word
+// joiner, the byte order mark, and an unpaired surrogate (malformed UTF-16).
+const INVISIBLE = new RegExp('[\\u0080-\\u009F\\u061C\\u200B-\\u200F\\u2028\\u2029'
+  + '\\u202A-\\u202E\\u2060-\\u2064\\u2066-\\u2069\\uFEFF]');
+const LONE_SURROGATE = /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?:^|[^\uD800-\uDBFF])[\uDC00-\uDFFF]/;
 const HZ_MAX = LIMITS.frequencyHz[1];
 const FINDING_KEYS = ['kind', 'schemaVersion', 'id', 'statement', 'status', 'evidence', 'runs',
   'createdAt', 'updatedAt'];
@@ -115,7 +121,10 @@ function plainText(c, v, path, max, { multiline = false, nullable = false } = {}
     return c.add(path, 'looks like HTML markup; a finding is plain text (write "< " with a space '
       + 'for a comparison)');
   }
-  if (BIDI.test(v)) return c.add(path, 'contains bidirectional control characters');
+  if (INVISIBLE.test(v)) {
+    return c.add(path, 'contains invisible, bidirectional or line-separator characters');
+  }
+  if (LONE_SURROGATE.test(v)) return c.add(path, 'contains an unpaired surrogate (malformed text)');
   return true;
 }
 
