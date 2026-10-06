@@ -474,6 +474,7 @@ function mountLabs(root) {
 const unsavedGuard = createUnsavedGuard({ sources: [
   () => (app ? app.studioWhatWouldBeLost() : []),
   () => (app ? app.measureWhatWouldBeLost() : []),
+  () => (app ? app.experimentsWhatWouldBeLost() : []),
 ] });
 
 function compose(...parts) {

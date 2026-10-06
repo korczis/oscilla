@@ -82,7 +82,7 @@ import {
   createDirtyTracker, createStudioLibrary, exportProjectFile, fileSlug, importStudioFile,
 } from '../../studio/library.js';
 import { announceRedo, announceUndo, announceAction } from '../../studio/a11y.js';
-import { openExperimentStoreOrMemory } from '../../experiments/store.js';
+import { observeMemoryStore, openExperimentStoreOrMemory } from '../../experiments/store.js';
 import { pageIndexedDb } from '../experiments.js';
 import { KNOWN_ALGORITHM_IDS } from '../../measurement/algorithms.js';
 import { openModal, closeModal } from '../dialogs.js';
@@ -766,7 +766,10 @@ export function createStudioUi(svc = {}) {
         storage: typeof navigator !== 'undefined' ? navigator.storage : null,
         knownAlgorithms: KNOWN_ALGORITHM_IDS,
       }).then((r) => {
-        ctx.lib = createStudioLibrary(r.store);
+        // The memory fallback says what it holds: a reload discards it (ui/unsaved.js).
+        ctx.lib = createStudioLibrary(observeMemoryStore(r.store, (held) => {
+          if (ctx.cmp) ctx.cmp.studio.memoryHeld = held.studio;
+        }));
         if (ctx.cmp) {
           ctx.cmp.studio.persistent = ctx.lib.persistent;
           ctx.cmp.studio.storeNote = ctx.lib.persistent ? '' : STUDIO_STORE_FALLBACK_TEXT;
@@ -1021,6 +1024,7 @@ export function createStudioUi(svc = {}) {
       title: '',
       dirty: false,
       persistent: true,
+      memoryHeld: 0, // Studio projects and patches held by the memory fallback store
       storeNote: '',
       playing: false,
       loop: false,
@@ -1535,10 +1539,22 @@ export function createStudioUi(svc = {}) {
       return { ok: true, kind: 'project' };
     },
 
-    /** What a reload or a closed tab would lose here (ui/unsaved.js): unsaved changes. */
+    /**
+     * What a reload or a closed tab would lose here (ui/unsaved.js): unsaved changes, and the
+     * projects and patches a memory-only library holds (no IndexedDB here).
+     */
     studioWhatWouldBeLost() {
-      return this.studio.dirty ? [{ domain: 'studio',
-        label: `Unsaved changes to ${this.studio.title || 'the Studio document'}` }] : [];
+      const lost = [];
+      if (this.studio.dirty) {
+        lost.push({ domain: 'studio',
+          label: `Unsaved changes to ${this.studio.title || 'the Studio document'}` });
+      }
+      const n = this.studio.memoryHeld;
+      if (!this.studio.persistent && n > 0) {
+        lost.push({ domain: 'studio', label: `${n} Studio project${n === 1 ? '' : 's'} or `
+          + `patch${n === 1 ? '' : 'es'} kept in page memory only` });
+      }
+      return lost;
     },
 
     // ------------------------------------------------------------ deep link (V422, §199)

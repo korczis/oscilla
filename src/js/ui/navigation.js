@@ -14,11 +14,16 @@
 //   2. m = a workspace id or a V1 mode id            → that workspace (owner: workspace)
 //   3. mr (a recipe link without m)                  → MEASURE (owner: measure)
 //   4. none of these (an empty hash, bare `v=1&f=…`) → PLAYGROUND
-//   An in-page anchor (`#osc-main`, no `=`) is not a route. The V1 mode follows from the
+//   An in-page anchor (`#osc-main`, no `=`) is not a route: a click on one (the skip link, the
+//   brand) moves focus with no fragment navigation, so it adds no history entry. The nav items'
+//   hrefs are the workspaces' addresses (`#m=measure`): a modified click or "open in new tab"
+//   opens that workspace; a plain click goes through the router. The V1 mode follows from the
 //   workspace and the source (v1ModeFor), so `mode` and `workspace` cannot disagree.
 // A domain applies its own keys whatever the route: `#m=studio&mr=…` opens STUDIO and still
 // loads the recipe into the MEASURE setup (and says so). A link whose route owner refuses it
-// (an invalid Studio link, an invalid recipe link without m) changes no workspace.
+// (an invalid Studio link, an invalid recipe link without m) changes no workspace, and a refused
+// link is not kept: the entry is replaced by hashAfterRefusal (the refused domain's keys out, m
+// the workspace the user stays in), so neither Back / Forward nor a reload brings it back.
 //
 // Three origins reach the dispatcher:
 //   load       the page opened at a hash: every domain applies its keys, then the route.
@@ -33,12 +38,15 @@
 //   routeOfHash(hash) -> { workspace, owner } | null
 //   navigationStateOf(hash, source) -> { workspace, owner, mode } | null
 //   hashForWorkspace(hash, workspace) -> string        (m set; Studio keys out off STUDIO)
+//   hashAfterRefusal(hash, results, workspace) -> string  (a refused link's keys out)
 //   configLinkHash(hash, instrumentHash, workspace) -> string
 //                                                      (Copy config URL: other keys kept)
 
 import { APP_MODES } from '../core/constants.js';
-import { STUDIO_LINK_KEYS, STUDIO_LINK_MODE } from '../core/url-state-studio.js';
-import { RECIPE_HASH_KEY } from '../core/url-state-measure.js';
+import {
+  STUDIO_LINK_KEYS, STUDIO_LINK_MODE, withoutStudioParams,
+} from '../core/url-state-studio.js';
+import { RECIPE_HASH_KEY, withRecipeParam } from '../core/url-state-measure.js';
 import { WORKSPACES } from './app.js';
 
 export const ROUTE_KEY = 'm';
@@ -116,6 +124,21 @@ export function hashForWorkspace(hash, workspace) {
   q.set(ROUTE_KEY, workspace);
   return q.toString();
 }
+
+/**
+ * The address to keep for a link some domain refused: the refused domain's keys leave (a Studio
+ * link, a recipe), `m` names the workspace the user stays in. So a refused link never comes
+ * back through Back / Forward or a reload. results: { instrument, measure, studio } as the
+ * dispatcher collected them; false = refused.
+ */
+export function hashAfterRefusal(hash, results, workspace) {
+  let h = isAnchorHash(hash) ? '' : strip(hash);
+  if (results.studio === false) h = withoutStudioParams(h);
+  if (results.measure === false) h = withRecipeParam(h, null);
+  return hashForWorkspace(h, workspace);
+}
+
+const refusedAny = (results) => Object.values(results).includes(false);
 
 /**
  * Copy config URL: the instrument's keys from `instrumentHash` (url-state.js serializeHash)
@@ -218,8 +241,11 @@ export function createNavigation(svc = {}) {
       route(hash, 'history', {});
       return;
     }
-    route(hash, 'link', dispatch(hash, 'link'));
-    write(strip(hash), 'replace'); // a later Back / Forward to it is a traversal
+    const results = dispatch(hash, 'link');
+    route(hash, 'link', results);
+    // Stamped, a later Back / Forward to it is a traversal; a refused link is not kept.
+    write(refusedAny(results) ? hashAfterRefusal(hash, results, nav.cmp.workspace)
+      : strip(hash), 'replace');
   }
 
   return {
@@ -239,12 +265,34 @@ export function createNavigation(svc = {}) {
       nav.cmp = this;
       const w = win();
       const hash = loc().hash;
-      if (!isAnchorHash(hash)) route(hash, 'load', dispatch(hash, 'load'));
-      else route('', 'load', {});
-      try {
-        w.history.replaceState(HISTORY_STAMP, '', loc().href);
-      } catch (e) { /* the entry stays unstamped: Back to it re-applies its link */ }
+      const results = isAnchorHash(hash) ? {} : dispatch(hash, 'load');
+      route(isAnchorHash(hash) ? '' : hash, 'load', results);
+      if (refusedAny(results)) write(hashAfterRefusal(hash, results, this.workspace), 'replace');
+      else {
+        try {
+          w.history.replaceState(HISTORY_STAMP, '', loc().href);
+        } catch (e) { /* the entry stays unstamped: Back to it re-applies its link */ }
+      }
       nav.routed = { href: loc().href, workspace: this.workspace };
+      // In-page anchors (the skip link, the brand) move focus without a fragment navigation, so
+      // they add no history entry and the address keeps naming the workspace.
+      const doc = w.document;
+      if (doc) {
+        doc.addEventListener('click', (e) => {
+          const a = e.target && e.target.closest ? e.target.closest('a[href^="#"]') : null;
+          if (!a || e.defaultPrevented || e.button > 0 || e.metaKey || e.ctrlKey || e.shiftKey
+            || e.altKey) return;
+          const href = a.getAttribute('href');
+          if (!isAnchorHash(href)) return;
+          const target = doc.getElementById(decodeURIComponent(href.slice(1)));
+          if (!target) return;
+          e.preventDefault();
+          if (!target.hasAttribute('tabindex') && target.tabIndex < 0) {
+            target.setAttribute('tabindex', '-1');
+          }
+          target.focus();
+        });
+      }
       w.addEventListener('popstate', () => {
         nav.pendingPop = loc().href;
         onNavigate();

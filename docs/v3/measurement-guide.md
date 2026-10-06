@@ -123,9 +123,10 @@ it was. The recipe can sit next to a Playground link in the same address; each r
 part. An address that also names a workspace (`m=…`) opens that workspace and still fills the
 setup.
 
-A completed measurement that is not saved shows "unsaved result" in the Experiment panel; while
-it is there, or while a level calibration is set, a reload, a closed tab or leaving the page
-makes the browser ask first.
+A completed measurement that is not saved shows "unsaved result" in the Experiment panel, and a
+saved one whose name or notes are not stored yet shows "unsaved name or notes". While either is
+there, while a level calibration is set, or while experiments are kept in page memory only (no
+IndexedDB), a reload, a closed tab or leaving the page makes the browser ask first.
 
 ## Where experiments are kept
 

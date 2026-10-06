@@ -39,11 +39,16 @@ changed.
   Studio keys win over `m`, and `m` wins over a recipe link's `mr`, so `#m=studio&mr=…` opens
   Studio and still loads the recipe into Measure
   ([ADR 0045](.ai/repo/adrs/0045-workspace-in-history-one-hash-dispatcher-unsaved-guard.md)).
-  **Copy config URL** keeps the recipe and Studio keys that are in the address.
+  **Copy config URL** keeps the recipe and Studio keys that are in the address. Each nav item
+  links to its workspace's address, so opening it in a new tab opens that workspace. A link
+  that is refused does not stay in the address or in history.
 - **Unsaved work.** While something would be lost, a reload, a closed tab or leaving the page
   makes the browser ask first: unsaved Studio changes, a completed measurement that is not
-  saved, or a level calibration (it is kept in page memory only). Studio shows "unsaved changes"
-  and Measure "unsaved result". With nothing to lose the page asks nothing.
+  saved, a saved run's name or notes not yet stored with "Update name and notes", a rename being
+  typed, or a level calibration (it is kept in page memory only). Where the browser allows no
+  IndexedDB, saved experiments and Studio projects live in page memory too and count as well.
+  Studio shows "unsaved changes" and Measure "unsaved result" or "unsaved name or notes". With
+  nothing to lose the page asks nothing. Sequencer patterns are not guarded yet.
 
 ## The V2 laboratory
 

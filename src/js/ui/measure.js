@@ -963,6 +963,7 @@ export function createMeasureUi(svc) {
     cmp.meas.saved = true;
     cmp.meas.savedId = sv.id;
     cmp.meas.savedAnnotation = e.annotations && e.annotations.notes || null;
+    cmp.meas.savedName = e.name;
     ctx.repeatOf = null;
   }
 
@@ -995,6 +996,7 @@ export function createMeasureUi(svc) {
       }
       sv.experiment = again;
       m.savedAnnotation = again.annotations && again.annotations.notes || null;
+      m.savedName = again.name;
       cmp.notify('success', 'Experiment saved again', `"${name}" was no longer stored; the `
         + 'same run is stored again under its id.');
       return sv.id;
@@ -1011,6 +1013,7 @@ export function createMeasureUi(svc) {
       const lost = confirmed ? ' (the write reported an error, but the run is stored)' : '';
       if (!Object.keys(meta).length) {
         m.savedAnnotation = storedNotes;
+        m.savedName = stored.name;
         if (confirmed) cmp.notify('success', 'Experiment saved', `"${stored.name}"${lost}.`);
         else {
           cmp.notify('info', 'Nothing to update', `"${stored.name}" already has this name and `
@@ -1026,6 +1029,7 @@ export function createMeasureUi(svc) {
         throw err;
       }
       m.savedAnnotation = next.annotations && next.annotations.notes || null;
+      m.savedName = next.name;
       cmp.notify('success', confirmed ? 'Experiment saved' : 'Experiment updated',
         `"${next.name}"${lost}: ${Object.keys(meta).map((k) => (k === 'name' ? 'name'
           : 'annotation notes')).join(' and ')} updated; the measured run is stored unchanged.`);
@@ -1038,7 +1042,7 @@ export function createMeasureUi(svc) {
       m.saving = false;
       m.saved = !lostRun;
       m.savedId = lostRun ? null : sv.id;
-      if (lostRun) m.savedAnnotation = null;
+      if (lostRun) { m.savedAnnotation = null; m.savedName = null; }
       refresh();
     }
   }
@@ -1183,6 +1187,7 @@ export function createMeasureUi(svc) {
     ctx.evidence = null;
     ctx.save = null;
     cmp.meas.savedAnnotation = null;
+    cmp.meas.savedName = null;
     if (ctx.shown && ctx.shown.kind === 'result') ctx.shown = null;
     rebuildAll();
     const notesAtStart = cmp.meas.notes; // the conditions as stated when the run starts
@@ -1288,6 +1293,7 @@ export function createMeasureUi(svc) {
       savedId: null,
       evidenceRun: 0,
       savedAnnotation: null, // the annotation notes the saved record of this result holds
+      savedName: null,       // the name the saved record of this result holds
       saving: false,
       error: null,
       setupOpen: false,
@@ -1835,10 +1841,28 @@ export function createMeasureUi(svc) {
      * is not saved, and a level calibration, which lives in page memory only (a frequency
      * profile is not listed: its file can be imported again).
      */
+    /**
+     * A saved run whose name or notes typed since are not stored yet ("Update name and notes"
+     * not pressed, or it failed): what updateSaved would send differs from the stored record.
+     */
+    get measureMetadataPending() {
+      const m = this.meas;
+      const name = typeof m.name === 'string' ? m.name.trim() : '';
+      const later = typeof m.notes === 'string' ? m.notes.trim() : '';
+      if (!m.saved || !ctx.save || !ctx.save.stored) return false;
+      if (name && name !== (m.savedName || '')) return true;
+      const started = evidenceOf(ctx.save.result).notes || '';
+      const notes = later && later !== started ? later : null;
+      return notes !== null && notes !== (m.savedAnnotation || null);
+    },
     measureWhatWouldBeLost() {
       const lost = [];
       if (this.measureUnsaved) {
         lost.push({ domain: 'measure', label: 'A completed measurement that is not saved' });
+      }
+      if (this.measureMetadataPending) {
+        lost.push({ domain: 'measure', label: 'A name or notes not stored yet (Update name and '
+          + 'notes)' });
       }
       if (this.meas.cal.level) {
         lost.push({ domain: 'measure', label: 'The level calibration (kept in page memory only)' });

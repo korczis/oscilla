@@ -162,3 +162,36 @@ Proposed:
   in the Playground, and Copy config URL drops `mr` and the Studio keys.
 - Revisit this decision if a workspace needs state of its own in the address, such as a
   Studio subview on every switch. That state would belong to its domain's keys, never to `m`.
+
+## Resolution notes
+
+### 2026-10-06: independent review of #130
+
+The review found no P0 or P1 issue. It found the gaps below, and each is now closed with a
+check that failed first. The browser checks are in `tests/browser/navigation.cjs`; the unit
+checks are in `tests/unit/navigation.test.mjs`.
+
+- **Saved is not kept without IndexedDB.** When the store falls back to memory (blocked site
+  data, some `file://` pages), a saved experiment and a saved Studio project were reported as
+  nothing to lose. The memory store now has `held()`. `observeMemoryStore` reports each write
+  to `exps.memoryHeld` and `studio.memoryHeld`, and Experiments and Studio report "N … kept in
+  page memory only". The Experiments store promise used to return the raw store to its first
+  callers, so their writes went unobserved; it now returns the observed one. Check:
+  `guard-memory-store`.
+- **More losable work.** These are now reported, and MEASURE shows "unsaved name or notes":
+  - a saved run's name or notes typed but not stored by "Update name and notes";
+  - an update that failed, where the run stays stored and the edit stays pending;
+  - a rename being typed in Experiments.
+
+  Check: `guard-saved-metadata`. Sequencer patterns are not guarded. The editor has no dirty
+  flag and its state is not reactive, so this is left as a follow-up.
+- **A refused link no longer stays in history.** On load and for a new hash, a refused link's
+  entry is replaced by `hashAfterRefusal`: the refused domain's keys are removed and `m` names
+  the workspace the user stays in. Check: `refused-link-not-in-history`.
+- **The skip link and the brand link add no history entry.** A click on an in-page anchor moves
+  focus without a fragment navigation. Check: `anchor`.
+- **Nav items are real links.** Their hrefs are `#m=<id>`, so "open in new tab" and a modified
+  click open that workspace, and a plain click goes through the router. Check: `nav-links`.
+- **An unexpected prompt fails the app gate.** `tests/browser/app.cjs` accepts a beforeunload
+  prompt only on its recovery reload, and only while the guard is armed. Any other prompt fails
+  `no-unexpected-unload-prompt`.

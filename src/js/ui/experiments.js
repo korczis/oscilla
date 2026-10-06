@@ -57,7 +57,7 @@
 // and keeps the result on screen, to be saved again once space is freed.
 
 import { KNOWN_ALGORITHM_IDS } from '../measurement/algorithms.js';
-import { openExperimentStoreOrMemory } from '../experiments/store.js';
+import { observeMemoryStore, openExperimentStoreOrMemory } from '../experiments/store.js';
 import {
   validateExperiment, DEFAULT_MAX_BYTES, calibrationClaimFindings, withoutContradictedCalibration,
 } from '../experiments/validate.js';
@@ -240,12 +240,13 @@ export function createExperimentsUi() {
         storage: pageStorageManager(),
         knownAlgorithms: KNOWN_ALGORITHM_IDS,
       }).then((r) => {
-        ctx.store = r.store;
+        // The memory fallback says what it holds: a reload discards it (ui/unsaved.js).
+        ctx.store = observeMemoryStore(r.store, (held) => { cmp.exps.memoryHeld = held; });
         cmp.exps.persistent = r.persistent;
         cmp.exps.storeKind = r.store.kind;
         cmp.exps.storeNote = r.persistent ? null : STORE_FALLBACK_TEXT;
         cmp.exps.storeError = r.error ? r.error.message : null;
-        return r.store;
+        return ctx.store;
       });
     }
     return ctx.opening;
@@ -375,6 +376,9 @@ export function createExperimentsUi() {
       panel: 'detail',      // 'detail' | 'compare'
       renameName: '',
       renameId: null,
+      renameFrom: '',       // the name the rename dialog opened with
+      renameOpen: false,
+      memoryHeld: null,     // { experiments, definitions } held by the memory fallback store
       deleteId: null,
       deleteName: '',
       importErrors: [],
@@ -388,6 +392,31 @@ export function createExperimentsUi() {
 
     experimentsInit() {
       ctx.cmp = this;
+      const dlg = typeof document !== 'undefined'
+        ? document.getElementById('osc-dlg-exp-rename') : null;
+      if (dlg) dlg.addEventListener('close', () => { this.exps.renameOpen = false; });
+    },
+    /**
+     * What a reload or a closed tab would lose here (ui/unsaved.js, ADR 0045): the experiments
+     * and definitions the memory fallback holds (no IndexedDB here, e.g. some file:// pages or
+     * blocked site data), and a rename being typed.
+     */
+    experimentsWhatWouldBeLost() {
+      const lost = [];
+      const h = this.exps.memoryHeld;
+      if (!this.exps.persistent && h) {
+        const n = (k, one) => (h[k] ? `${h[k]} ${one}${h[k] === 1 ? '' : 's'}` : '');
+        const what = [n('experiments', 'experiment'), n('definitions', 'definition')]
+          .filter(Boolean).join(' and ');
+        if (what) {
+          lost.push({ domain: 'experiments', label: `${what} kept in page memory only` });
+        }
+      }
+      const e = this.exps;
+      if (e.renameOpen && String(e.renameName || '').trim() !== String(e.renameFrom || '').trim()) {
+        lost.push({ domain: 'experiments', label: 'A rename being typed' });
+      }
+      return lost;
     },
     experimentsMountCharts(root) {
       const host = (id) => root.querySelector(`#${id}`);
@@ -484,6 +513,8 @@ export function createExperimentsUi() {
     experimentsAskRename(row) {
       this.exps.renameId = row.id;
       this.exps.renameName = row.name === '(unnamed)' ? '' : row.name;
+      this.exps.renameFrom = this.exps.renameName;
+      this.exps.renameOpen = true;
       this.openModal('osc-dlg-exp-rename');
     },
     /** Rename: metadata only (store.annotate); the run itself is never rewritten. */
@@ -494,6 +525,7 @@ export function createExperimentsUi() {
           { name: String(this.exps.renameName || '') });
         remember(id, next);
         if (ctx.detail && ctx.detail.experimentId === id) setDetail(this, next);
+        this.exps.renameOpen = false;
         this.closeModal('osc-dlg-exp-rename');
       } catch (err) {
         this.notify('error', 'Rename failed', err.message || String(err));

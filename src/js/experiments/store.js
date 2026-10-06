@@ -5,11 +5,15 @@
 //   openExperimentStore({ indexedDB, name, storage, knownAlgorithms }) -> Promise<Store>
 //   createMemoryStore({ knownAlgorithms }) -> Store        (same API, nothing persists)
 //   openExperimentStoreOrMemory(opts) -> Promise<{ store, persistent, error }>
+//   observeMemoryStore(store, onChange) -> Store   (onChange(store.held()) after every write;
+//                                                   the memory store only, ADR 0045)
 //   Store = { kind: 'indexeddb'|'memory', list(), get(id), put(experiment),
 //             annotate(id, { name, notes, baseline }), delete(id), estimate(), close(),
 //             listStudio({ kind }), getStudio(id), putStudio(record), deleteStudio(id),
 //             listDefinitions() -> { definitions, unreadable: [{ id, reason }] },
 //             getDefinition(id), putDefinition(definition) }
+//   memory Store only: held() -> { experiments, definitions, studio } (records it holds, which a
+//   reload discards: the unsaved-work guard reports them)
 //
 // Records are stored in the portable file form (schema.serializeExperiment: EncodedArray
 // result arrays) of the validated, migrated experiment (validate.js on put, and again on get),
@@ -398,8 +402,31 @@ export function createMemoryStore({ knownAlgorithms } = {}) {
       defs.set(next.id, JSON.stringify(next));
       return next;
     }),
+    held: () => ({ experiments: summaries.size, definitions: defs.size,
+      studio: studioSummaries.size }),
     close() {},
   };
+}
+
+const MEMORY_WRITES = ['put', 'annotate', 'delete', 'putStudio', 'deleteStudio', 'putDefinition'];
+
+/**
+ * The memory store with `onChange(store.held())` called after each write settles (a refused
+ * write too: it may have changed nothing). Any other store is returned as it is.
+ */
+export function observeMemoryStore(store, onChange) {
+  if (!store || store.kind !== 'memory' || typeof store.held !== 'function') return store;
+  const out = { ...store };
+  for (const k of MEMORY_WRITES) {
+    out[k] = (...args) => {
+      const settle = () => {
+        try { onChange(store.held()); } catch (e) { /* the observer's own failure */ }
+      };
+      return store[k](...args).then((v) => { settle(); return v; },
+        (err) => { settle(); throw err; });
+    };
+  }
+  return out;
 }
 
 // ---------------------------------------------------------------- IndexedDB

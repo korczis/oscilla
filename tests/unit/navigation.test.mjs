@@ -6,10 +6,12 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
+import { readFileSync } from 'node:fs';
 import {
-  HASH_DOMAINS, configLinkHash, hashForWorkspace, isAnchorHash, navigationStateOf, routeOfHash,
-  v1ModeFor, workspaceForV1Mode,
+  HASH_DOMAINS, configLinkHash, hashAfterRefusal, hashForWorkspace, isAnchorHash,
+  navigationStateOf, routeOfHash, v1ModeFor, workspaceForV1Mode,
 } from '../../src/js/ui/navigation.js';
+import { createMemoryStore, observeMemoryStore } from '../../src/js/experiments/store.js';
 import { WORKSPACES } from '../../src/js/ui/app.js';
 import { collectUnsaved, createUnsavedGuard } from '../../src/js/ui/unsaved.js';
 import { decodeHash, serializeHash } from '../../src/js/core/url-state.js';
@@ -172,4 +174,45 @@ test('the listener asks the browser to confirm; a failing source reports nothing
   } finally {
     console.error = quiet;
   }
+});
+
+test('a refused link leaves the address: its keys out, m the workspace the user stays in', () => {
+  const studio = hashAfterRefusal('#m=studio&st=no-such-template&v=1&f=440',
+    { instrument: undefined, measure: null, studio: false }, 'playground');
+  assert.deepEqual(q(studio), { m: 'playground', v: '1', f: '440' });
+  assert.equal(routeOfHash(studio).workspace, 'playground');
+  const recipe = hashAfterRefusal('#mr=bad', { measure: false, studio: null }, 'analyzer');
+  assert.deepEqual(q(recipe), { m: 'analyzer' });
+  const both = hashAfterRefusal(`#m=learn&mr=bad&sv=mixer`, { measure: false, studio: false },
+    'learn');
+  assert.deepEqual(q(both), { m: 'learn' });
+  // A domain that accepted keeps its keys.
+  const kept = hashAfterRefusal(`#m=studio&st=basic-tone&mr=bad`, { measure: false, studio: true },
+    'studio');
+  assert.deepEqual(q(kept), { m: 'studio', st: 'basic-tone' });
+});
+
+test('every nav item links to its workspace address (a new tab opens it)', () => {
+  const html = readFileSync(new URL('../../src/index.html', import.meta.url), 'utf8');
+  const links = [...html.matchAll(/<a [^>]*href="([^"]+)"[^>]*data-osc="nav\.([a-z]+)"/g)]
+    .map((m) => ({ href: m[1], id: m[2] }));
+  assert.deepEqual(links.map((l) => l.id).sort(), [...WORKSPACES].sort());
+  for (const l of links) {
+    assert.equal(l.href, `#m=${l.id}`);
+    assert.equal(routeOfHash(l.href).workspace, l.id);
+  }
+});
+
+test('the memory store says what it holds, and an observer hears every write', async () => {
+  const seen = [];
+  const raw = createMemoryStore();
+  const store = observeMemoryStore(raw, (h) => seen.push(h));
+  assert.deepEqual(raw.held(), { experiments: 0, definitions: 0, studio: 0 });
+  await store.putStudio({ id: 'p1', kind: 'oscilla-studio-patch', name: 'x',
+    savedAt: '2026-10-06T00:00:00.000Z', studioHash: 'h', doc: {} }).catch(() => {});
+  await store.put({}).catch(() => {}); // refused: the observer still hears it
+  assert.equal(seen.length, 2);
+  assert.deepEqual(seen.at(-1), raw.held());
+  const idb = { kind: 'indexeddb' };
+  assert.equal(observeMemoryStore(idb, () => {}), idb, 'a persistent store is left as it is');
 });

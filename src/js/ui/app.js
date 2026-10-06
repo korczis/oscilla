@@ -331,6 +331,9 @@ export function createOscillaUi({ storedAnalysisTab = storageGet(ANALYSIS_TAB_KE
         ':class'() { return { 'is-active': this.workspace === mode }; },
         ':aria-current'() { return this.workspace === mode ? 'page' : false; },
         '@click'(e) {
+          // The href is the workspace's address (#m=<id>): a modified click opens it in a new
+          // tab or window, as the browser does with any link.
+          if (e.button > 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
           e.preventDefault();
           const group = navGroupOf(mode);
           this.setWorkspace(mode);

@@ -133,18 +133,18 @@
 
     <nav class="osc-nav" aria-label="Workspace">
       <ul class="osc-tabs osc-tabs--underline" id="osc-nav">
-        <li><a class="osc-tab is-active" href="#osc-main" aria-current="page" data-osc="nav.playground" x-bind="navItem('playground')">Playground</a></li>
-        <li><a class="osc-tab" href="#osc-view-measure" data-osc="nav.measure" x-bind="navItem('measure')">Measure</a></li>
-        <li><a class="osc-tab" href="#osc-view-experiments" data-osc="nav.experiments" x-bind="navItem('experiments')">Experiments</a></li>
+        <li><a class="osc-tab is-active" href="#m=playground" aria-current="page" data-osc="nav.playground" x-bind="navItem('playground')">Playground</a></li>
+        <li><a class="osc-tab" href="#m=measure" data-osc="nav.measure" x-bind="navItem('measure')">Measure</a></li>
+        <li><a class="osc-tab" href="#m=experiments" data-osc="nav.experiments" x-bind="navItem('experiments')">Experiments</a></li>
         <li class="osc-nav-group" data-osc-nav-group="analyze" x-bind="navGroup('analyze')">
           <button type="button" class="osc-tab osc-nav-group-btn" id="osc-nav-group-analyze"
             data-osc="nav-group.analyze" aria-expanded="false" aria-controls="osc-nav-menu-analyze"
             x-bind="navGroupButton('analyze')"><span>Analyze</span><svg class="osc-nav-caret" aria-hidden="true" focusable="false"><use href="#i-down"/></svg></button>
           <ul class="osc-menu osc-nav-menu" id="osc-nav-menu-analyze" hidden
             aria-labelledby="osc-nav-group-analyze" x-bind="navGroupPanel('analyze')">
-            <li><a class="osc-menu-item osc-nav-item" href="#osc-panel-mic" data-osc="nav.analyzer" x-bind="navItem('analyzer')">Analyzer</a></li>
-            <li><a class="osc-menu-item osc-nav-item" href="#osc-panel-filter" data-osc="nav.filter" x-bind="navItem('filter')">Filter Lab</a></li>
-            <li><a class="osc-menu-item osc-nav-item" href="#osc-panel-bio" data-osc="nav.compare" x-bind="navItem('compare')">Compare</a></li>
+            <li><a class="osc-menu-item osc-nav-item" href="#m=analyzer" data-osc="nav.analyzer" x-bind="navItem('analyzer')">Analyzer</a></li>
+            <li><a class="osc-menu-item osc-nav-item" href="#m=filter" data-osc="nav.filter" x-bind="navItem('filter')">Filter Lab</a></li>
+            <li><a class="osc-menu-item osc-nav-item" href="#m=compare" data-osc="nav.compare" x-bind="navItem('compare')">Compare</a></li>
           </ul>
         </li>
         <li class="osc-nav-group" data-osc-nav-group="synthesis" x-bind="navGroup('synthesis')">
@@ -153,14 +153,14 @@
             x-bind="navGroupButton('synthesis')"><span>Synthesis</span><svg class="osc-nav-caret" aria-hidden="true" focusable="false"><use href="#i-down"/></svg></button>
           <ul class="osc-menu osc-nav-menu" id="osc-nav-menu-synthesis" hidden
             aria-labelledby="osc-nav-group-synthesis" x-bind="navGroupPanel('synthesis')">
-            <li><a class="osc-menu-item osc-nav-item" href="#osc-panel-envelope" data-osc="nav.synthesis" x-bind="navItem('synthesis')">Synthesis</a></li>
-            <li><a class="osc-menu-item osc-nav-item" href="#osc-panel-sequencer" data-osc="nav.sequencer" x-bind="navItem('sequencer')">Sequencer</a></li>
-            <li><a class="osc-menu-item osc-nav-item" href="#osc-main" data-osc="nav.presets" x-bind="navItem('presets')">Presets</a></li>
+            <li><a class="osc-menu-item osc-nav-item" href="#m=synthesis" data-osc="nav.synthesis" x-bind="navItem('synthesis')">Synthesis</a></li>
+            <li><a class="osc-menu-item osc-nav-item" href="#m=sequencer" data-osc="nav.sequencer" x-bind="navItem('sequencer')">Sequencer</a></li>
+            <li><a class="osc-menu-item osc-nav-item" href="#m=presets" data-osc="nav.presets" x-bind="navItem('presets')">Presets</a></li>
           </ul>
         </li>
-        <li><a class="osc-tab" href="#osc-main" data-osc="nav.learn" x-bind="navItem('learn')">Learn</a></li>
-        <li><a class="osc-tab" href="#osc-view-studio" data-osc="nav.studio" x-bind="navItem('studio')">Studio</a></li>
-        <li><a class="osc-tab" href="#osc-view-about" data-osc="nav.about" x-bind="navItem('about')">About</a></li>
+        <li><a class="osc-tab" href="#m=learn" data-osc="nav.learn" x-bind="navItem('learn')">Learn</a></li>
+        <li><a class="osc-tab" href="#m=studio" data-osc="nav.studio" x-bind="navItem('studio')">Studio</a></li>
+        <li><a class="osc-tab" href="#m=about" data-osc="nav.about" x-bind="navItem('about')">About</a></li>
       </ul>
     </nav>
 
@@ -1784,8 +1784,9 @@
         <!-- ---------- Experiment: name, notes, save, repeat ---------- -->
         <section class="osc-panel osc-m-experiment" id="osc-measure-experiment" aria-labelledby="osc-m-exp-title">
           <div class="osc-panel-header"><h3 class="osc-panel-title" id="osc-m-exp-title">Experiment</h3>
-            <span class="osc-m-unsaved" data-osc="measure.unsaved" x-show="measureUnsaved"
-              style="display: none">unsaved result</span></div>
+            <span class="osc-m-unsaved" data-osc="measure.unsaved"
+              x-show="measureUnsaved || measureMetadataPending" style="display: none"
+              x-text="measureUnsaved ? 'unsaved result' : 'unsaved name or notes'">unsaved result</span></div>
           <div class="osc-m-form">
             <label class="osc-label" for="osc-m-name">Name</label>
             <input class="osc-number osc-m-text" id="osc-m-name" type="text" maxlength="200" autocomplete="off"
