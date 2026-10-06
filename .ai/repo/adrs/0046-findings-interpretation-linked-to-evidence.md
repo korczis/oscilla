@@ -157,12 +157,21 @@ Proposed:
   revert of this decision must therefore keep `DB_VERSION` 4 and its upgrade step, even if it
   removes the findings interface.
 - **Identity checks.** A run's identity (its result hash, whether it has a response, its stored
-  grid) is read through the experiments store, which verifies the record on read.
-  - It is kept only while the run's list row is unchanged. List rows now carry the result hash.
-    A record replaced under its id changes the row, so it is read again; a row from an earlier
-    build, without the hash, is read on every refresh.
-  - The Experiments refresh evicts a decoded record whose row changed.
+  grid) is read from the store itself, which verifies the record on read, never from the
+  workspace's decoded-record cache: another tab may have replaced the record since it was cached.
+  - The identity is kept only while the run's list row is unchanged and names the same result
+    hash. List rows carry the hash, and rows written by earlier builds get it on their first read
+    (taken from the stored record, which stays unchanged).
+  - Every findings refresh reads the run list first. That includes the refresh after a finding is
+    saved, deleted or imported, so a record replaced in another tab is caught at the next refresh
+    of either list. The Experiments refresh also evicts a decoded record whose row changed.
   - A tab that becomes visible again re-reads the list.
+- **Edits from two tabs.** `updatedAt` is an edit's version and always advances (at least 1 ms
+  past the previous one). The dialog records the version it loaded. A save whose stored version
+  differs is refused; `store.putFinding(finding, { expectedUpdatedAt })` checks the same inside
+  its write transaction. The refused form offers "Load the stored version", which loads the
+  stored fields and version and keeps the typed text beside them to copy. A refused draft
+  reopened later loads the stored version first, so it never reopens stale.
 - **Drafts.** Closing the finding dialog without a save (Cancel, Escape or a backdrop click)
   keeps a changed form as a draft. The guard keeps reporting it, the panel offers to continue or
   discard it, and only Discard drops it. A reload still loses it, and the guard says so before

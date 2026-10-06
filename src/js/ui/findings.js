@@ -8,17 +8,20 @@
 // markup in the first place.
 //
 // Integrity: each reference is checked against this browser's runs (findingIssues). A run's
-// identity (its stored result hash, whether it stores a response) is read once per id through
-// the experiments store and forgotten when the id leaves the list, so a different record stored
-// later under a deleted id is read again and named as different.
+// identity (its stored result hash, whether it stores a response, its stored response grid) is
+// read from the store itself (experimentsIdentity, never the decoded cache) and kept only while
+// the run's list row is unchanged and names the same hash; every findings refresh reads the run
+// list first. A record replaced under a cited id, here or in another tab, is therefore read again
+// and named as different; one that cannot be read is named unreadable.
 //
-// Losable work (ADR 0045): a finding being written in the dialog (findingsWhatWouldBeLost); the
+// Losable work (ADR 0045): a finding being written in the dialog, a draft kept after the dialog
+// closed without a save, and text kept after a refused stale edit (findingsWhatWouldBeLost); the
 // findings the memory fallback holds are reported by experimentsWhatWouldBeLost.
 
 import {
   FINDING_STATUSES, STATUS_TEXT, STATUS_HINT, FINDINGS_FILE_EXTENSION, FINDING_LIMITS,
   createFinding, updateFinding, findingIssues, findingsCiting, refText, refKey, refRunIds,
-  citedRunIds, exportFindings, findingsToJson, parseFindingsFile, exactHzText,
+  citedRunIds, exportFindings, findingsToJson, parseFindingsFile, hzText, gridHzText,
 } from '../experiments/findings.js';
 import { newExperimentId } from '../experiments/schema.js';
 import { timestampText } from '../measurement/views/experiment-summary.js';
@@ -33,14 +36,18 @@ const formState = (f) => JSON.stringify([f.statement.trim(), f.status, f.notes.t
 const blankForm = () => {
   const f = { open: false, mode: 'new', id: null, loadedUpdatedAt: null, statement: '',
     status: 'observation', notes: '', evidence: [], runs: [], base: '', error: '', addRun: '',
-    cmpA: '', cmpB: '' };
+    cmpA: '', cmpB: '',
+    // A save refused because the finding changed elsewhere: `conflict` until the stored version
+    // is loaded; `mine` / `mineNotes` keep the text typed here, shown to copy, until a save.
+    conflict: false, mine: '', mineNotes: '' };
   f.base = formState(f);
   return f;
 };
-const dirty = (f) => formState(f) !== f.base;
-const changedElsewhere = () => new Error('This finding was changed in another tab or window since '
-  + 'you opened it, so it was not saved. Your text is kept here: copy it, close this dialog and '
-  + 'edit the finding again.');
+const dirty = (f) => formState(f) !== f.base || !!f.mine || !!f.mineNotes;
+const CONFLICT = Symbol('changed elsewhere');
+const CHANGED_ELSEWHERE = 'This finding was changed in another tab or window since you opened it, '
+  + 'so it was not saved. Load the stored version to continue; the text you typed stays shown '
+  + 'below to copy.';
 
 /**
  * The view row of a stored finding: its statement and status in words, each reference with its
@@ -58,7 +65,7 @@ export function findingRow(f, lookup, nameOf) {
       const mine = issues.filter((x) => x.index === i);
       const got = ref.kind === 'value' && !mine.length ? lookup(ref.experimentId) : null;
       return { key: refKey(ref), ref, text: refText(ref, nameOf, { storedPoint: !!(got
-        && Array.isArray(got.frequencies)) }),
+        && Array.isArray(got.frequencies)), frequencies: got && got.frequencies }),
         state: !mine.length ? 'ok' : mine.some((x) => x.code === 'missing-run') ? 'missing'
           : 'broken', issue: mine.length ? mine.map((x) => x.text).join('; ') : null };
     }),
@@ -76,6 +83,14 @@ export function createFindingsUi() {
     defs: new Map(),     // definition id -> name (a reference to one is the wrong kind)
   };
   const nameOf = (id) => ctx.names.get(id) || null;
+  /** The stored grid of a value reference's run (as last read), or null. */
+  const gridOf = (ref) => {
+    const x = ref.kind === 'value' ? ctx.identity.get(ref.experimentId) : null;
+    return x && x.frequencies ? x.frequencies : null;
+  };
+  /** A reference as the dialog lists it ("(a stored grid point)" only when checked). */
+  const refAsText = (ref) => refText(ref, nameOf, { storedPoint: storedPointOf(ref),
+    frequencies: gridOf(ref) });
   /** Is a value reference exactly a point of its run's stored grid (as last read)? */
   const storedPointOf = (ref) => {
     const x = ref.kind === 'value' ? ctx.identity.get(ref.experimentId) : null;
@@ -148,7 +163,7 @@ export function createFindingsUi() {
         f.runs = [...f.runs, { experimentId: id, resultHash: x.resultHash }];
       }
       f.evidence = [...f.evidence, { key, ref, text: refText(ref, nameOf,
-        { storedPoint: storedPointOf(ref) }) }];
+        { storedPoint: storedPointOf(ref), frequencies: gridOf(ref) }) }];
     }
     return true;
   }
@@ -175,7 +190,7 @@ export function createFindingsUi() {
 
     findingsInit() {
       const dlg = typeof document !== 'undefined' ? document.getElementById(DIALOG) : null;
-      // Cancel or Escape discards the draft; until then the unsaved-work guard reports it.
+      // Closing without a save (Cancel, Escape, a backdrop click) keeps a changed form as a draft.
       if (dlg) dlg.addEventListener('close', () => this.findingsDialogClosed());
       // Another tab may have changed the runs or findings: read them again when this tab is
       // shown, so a reference is checked against what is stored now.
@@ -206,11 +221,41 @@ export function createFindingsUi() {
       f.open = false;
       this.fnd.draftKept = dirty(f);
     },
-    /** Reopen the kept draft. */
-    findingsContinueDraft() {
+    /**
+     * Reopen the kept draft. A draft whose save was refused as changed elsewhere never reopens
+     * stale: the stored version is loaded first, with the typed text kept beside it.
+     */
+    async findingsContinueDraft() {
       if (!this.fnd.draftKept) return false;
+      if (this.fnd.form.conflict) await this.findingsLoadStored();
       this.fnd.form.open = true;
       this.openModal(DIALOG);
+      return true;
+    },
+    /**
+     * After a refused save: load the finding as it is stored now (its fields and its updatedAt,
+     * so the next save is checked against it), keeping the text typed here in `mine` to copy.
+     * Returns false when it is no longer stored.
+     */
+    async findingsLoadStored() {
+      const f = this.fnd.form;
+      const s = await this.experimentsStore();
+      const now = f.id ? await s.getFinding(f.id).catch(() => null) : null;
+      if (!now) {
+        f.error = 'This finding is no longer stored; save it as a new finding or discard it.';
+        f.mode = 'new';
+        f.id = null;
+        f.conflict = false;
+        return false;
+      }
+      if (f.statement.trim() !== now.statement) f.mine = f.mine || f.statement;
+      if (f.notes.trim() !== (now.notes || '')) f.mineNotes = f.mineNotes || f.notes;
+      Object.assign(f, { loadedUpdatedAt: now.updatedAt, statement: now.statement,
+        status: now.status, notes: now.notes || '', runs: plain(now.runs),
+        evidence: now.evidence.map((ref) => ({ key: refKey(ref), ref: plain(ref),
+          text: refAsText(ref) })),
+        conflict: false, error: '' });
+      f.base = formState(f);
       return true;
     },
     /** Drop the draft (the only way a typed finding is discarded without a save). */
@@ -220,15 +265,26 @@ export function createFindingsUi() {
       this.closeModal(DIALOG);
     },
 
-    /** Read the findings again and check their references against `list` (the run rows). */
+    /**
+     * Read the findings again and check their references against `list` (the run rows, as
+     * experimentsRefresh read them). Without a list (after a finding is saved, deleted or
+     * imported) the whole Experiments list is read again first, so the runs, the decoded-record
+     * cache and the findings are checked against the same, current rows.
+     */
     async findingsRefresh(list = null) {
+      if (!list && typeof this.experimentsRefresh === 'function') {
+        await this.experimentsRefresh(); // reads the rows, then calls findingsRefresh(rows)
+        return this.fnd.rows;
+      }
       const s = await this.experimentsStore();
       const rows = list || await s.list();
       ctx.names = new Map(rows.map((r) => [r.experimentId, r.name || '(unnamed)']));
       ctx.defs = new Map((this.exps.defs || []).map((d) => [d.id, d.name]));
-      // An identity is kept only while its summary row is unchanged: a record replaced under the
-      // id (here or in another tab) changes the row (its result hash, time, size), so it is read
-      // again. A row from an earlier build carries no result hash and is read on every refresh.
+      // An identity is kept only while its list row is unchanged: a record replaced under the id
+      // (here or in another tab) changes the row (its result hash, time, size), so it is read
+      // again. The IndexedDB store fills a missing row hash in on first read (store.js), so only
+      // a row without one (none in practice) is read on every refresh.
+      const byId = new Map(rows.map((r) => [r.experimentId, r]));
       const keys = new Map(rows.map((r) => [r.experimentId, Object.prototype.hasOwnProperty
         .call(r, 'resultHash') ? JSON.stringify(r) : null]));
       for (const id of [...ctx.identity.keys()]) {
@@ -241,8 +297,12 @@ export function createFindingsUi() {
       const { findings, unreadable } = await s.listFindings();
       for (const id of new Set(findings.flatMap(citedRunIds))) {
         if (!ctx.names.has(id)) continue;
-        await identity(this, id);
-        if (keys.get(id)) ctx.rowKey.set(id, keys.get(id));
+        const x = await identity(this, id);
+        // Kept under this row only when the record read is the one the row names (same hash);
+        // otherwise it is read again at the next refresh.
+        if (keys.get(id) && x && x.readable && x.resultHash === byId.get(id).resultHash) {
+          ctx.rowKey.set(id, keys.get(id));
+        } else ctx.rowKey.delete(id);
       }
       const n = unreadable.length;
       this.fnd.note = n ? `${n} stored finding${n === 1 ? '' : 's'} could not be read and ${
@@ -260,7 +320,10 @@ export function createFindingsUi() {
     },
     /** Backlinks of run `id`: the findings citing it, with how. */
     findingsBacklinks(id) {
-      return findingsCiting(this.fnd.all, id, nameOf).map(({ finding, how }) => ({ id: finding.id,
+      const grid = (ctx.identity.get(id) || {}).frequencies || null;
+      const brief = (hz) => gridHzText(hz, grid);
+      return findingsCiting(this.fnd.all, id, nameOf, brief).map(({ finding, how }) => ({
+        id: finding.id,
         statement: finding.statement, statusText: STATUS_TEXT[finding.status],
         how: how.join('; ') }));
     },
@@ -269,7 +332,7 @@ export function createFindingsUi() {
     async findingsAskNew(refs = [], id = null) {
       if (this.fnd.draftKept && dirty(this.fnd.form)) {
         // Never replace a kept draft: reopen it, and say so.
-        this.findingsContinueDraft();
+        await this.findingsContinueDraft();
         this.notify('info', 'Finding draft reopened', 'Your unsaved finding draft was reopened: '
           + 'save it or discard it before starting another.');
         return true;
@@ -282,7 +345,7 @@ export function createFindingsUi() {
         loadedUpdatedAt: old.updatedAt, statement: old.statement,
         status: old.status, notes: old.notes || '', runs: plain(old.runs),
         evidence: old.evidence.map((ref) => ({ key: refKey(ref), ref: plain(ref),
-          text: refText(ref, nameOf, { storedPoint: storedPointOf(ref) }) })) } : {});
+          text: refAsText(ref) })) } : {});
       this.fnd.form = f;
       if (refs.length && !await link(this, refs)) {
         this.notify('error', 'Finding not started', this.fnd.form.error);
@@ -310,7 +373,7 @@ export function createFindingsUi() {
     findingsValueLabel() {
       const d = this.exps.detail;
       const p = d && d.evidence && d.evidence.point;
-      return p ? `Record a finding about the value at ${exactHzText(p.hz)}` : '';
+      return p ? `Record a finding about the value at ${hzText(p.hz)}` : '';
     },
     /** A finding about the open comparison: A compared with each other run. */
     findingsAskCompare() {
@@ -353,14 +416,18 @@ export function createFindingsUi() {
         const now = Date.now();
         const old = f.mode === 'edit' ? await s.getFinding(f.id) : null;
         if (f.mode === 'edit' && !old) throw new Error('This finding is no longer stored.');
-        if (old && old.updatedAt !== f.loadedUpdatedAt) throw changedElsewhere();
-        const next = old ? updateFinding(old, fields, { now: Math.max(now,
-          Date.parse(old.updatedAt)) }) : createFinding({ id: newExperimentId(randomBytes16()),
-          now, ...fields });
+        if (old && old.updatedAt !== f.loadedUpdatedAt) throw CONFLICT;
+        const next = old ? updateFinding(old, fields, { now })
+          : createFinding({ id: newExperimentId(randomBytes16()), now, ...fields });
         // The store checks the version again inside its write, so two tabs never overwrite.
         saved = await s.putFinding(next, old ? { expectedUpdatedAt: f.loadedUpdatedAt } : {})
-          .catch((err) => { throw err && err.code === 'conflict' ? changedElsewhere() : err; });
+          .catch((err) => { throw err && err.code === 'conflict' ? CONFLICT : err; });
       } catch (err) {
+        if (err === CONFLICT) {
+          f.conflict = true;
+          f.error = CHANGED_ELSEWHERE;
+          return null;
+        }
         f.error = (err.message || String(err)).replace(/^Invalid finding: /, '');
         return null;
       }

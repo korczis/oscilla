@@ -486,11 +486,20 @@ export function createExperimentsUi() {
     },
     /**
      * The identity of stored run `id` as a finding cites it (ADR 0046): { experimentId, name,
-     * resultHash, hasResponse }, or null when it is not stored.
+     * resultHash, hasResponse, frequencies (the stored response grid, or null) }, or null when it
+     * is not stored; rejects when its record cannot be read. It is read from the STORE, never
+     * from the decoded cache: another tab may have replaced the record under this id since it
+     * was cached (review 2 of #149). A cached copy that differs is replaced by what is stored.
      */
     async experimentsIdentity(id) {
-      const e = await get(this, id);
-      if (!e) return null;
+      const e = await (await store(this)).get(id);
+      if (!e) {
+        ctx.cache.delete(id);
+        return null;
+      }
+      const cached = ctx.cache.get(id);
+      const hashOf = (x) => (x && x.provenance ? x.provenance.resultHash : undefined);
+      if (cached && hashOf(cached) !== hashOf(e)) remember(id, e);
       return { experimentId: e.experimentId, name: e.name || null,
         resultHash: e.provenance && typeof e.provenance.resultHash === 'string'
           ? e.provenance.resultHash : null,

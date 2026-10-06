@@ -704,17 +704,23 @@ test('review 1.7: removing the last reference to a run drops its identity; relin
 
 test('review 1.8: invisible, directional and malformed characters are refused', () => {
   const bad = {
-    LRM: '‎', RLM: '‏', ALM: '؜', NEL: '\u0085', 'C1 0x9B': '\u009B',
-    LS: ' ', PS: ' ', BOM: '﻿', ZWSP: '​', ZWNJ: '‌', ZWJ: '‍',
-    'word joiner': '⁠', 'lone high surrogate': '\uD800', 'lone low surrogate': '\uDC00',
-    RLO: '‮', LRI: '⁦',
+    LRM: '\u200E', RLM: '\u200F', ALM: '\u061C', NEL: '\u0085', 'C1 0x9B': '\u009B',
+    LS: '\u2028', PS: '\u2029', BOM: '\uFEFF', ZWSP: '\u200B',
+    'word joiner': '\u2060', 'lone high surrogate': '\uD800', 'lone low surrogate': '\uDC00',
+    RLO: '\u202E', LRI: '\u2066',
   };
   for (const [what, ch] of Object.entries(bad)) {
     refused(raw({ statement: `gain${ch}is 3 dB` }), /statement: contains/, `statement ${what}`);
     refused(raw({ notes: `line${ch}two` }), /notes: contains/, `notes ${what}`);
   }
-  assert.equal(ok(raw({ statement: 'Sweep 🎵 at 1 kHz: −3 dB, café' })).statement,
-    'Sweep 🎵 at 1 kHz: −3 dB, café', 'paired surrogates and ordinary Unicode pass');
+  // Review 2 item 3: ZWNJ and ZWJ are text (Persian, Devanagari, emoji sequences), never refused.
+  for (const s of ['Sweep \u{1F3B5} at 1 kHz: \u22123 dB, caf\u00E9',
+    'Checked by \u{1F469}\u200D\u{1F52C}', // a ZWJ emoji sequence
+    '\u0645\u06CC\u200C\u062E\u0648\u0627\u0647\u0645', // Persian with ZWNJ
+    '\u0915\u094D\u200D\u0937']) { // Devanagari with ZWJ
+    assert.equal(ok(raw({ statement: s })).statement, s, JSON.stringify(s));
+    assert.equal(ok(raw({ notes: s })).notes, s);
+  }
 });
 
 test('review 1.9: an edit is refused when the finding changed since the form loaded it', async () => {
@@ -791,4 +797,131 @@ test('review 1.12: backlinks name the runs; the status reads as the user\'s judg
   assert.match(html, /Your judgement: <span[^>]*data-osc="fnd\.status"/);
   assert.match(html, /<label class="osc-label" for="osc-fnd-status">Status \(your judgement\)<\/label>/);
   assert.match(html, /x-text="b\.statusText \+ ' \(your judgement\)'"/);
+});
+
+// ---------------------------------------------------------------- adversarial review 2 of #149
+
+test('review 2.1: a run replaced from another tab is caught by a refresh from a save, too', async () => {
+  const fake = fakeIndexedDB();
+  const { cmp } = harness(fake);
+  await cmp.experimentsImportText(await recordAs('b', 'run-t'));
+  await cmp.experimentsImportText(await recordAs('a', 'run-u'));
+  await cmp.findingsAskRun('run-t');
+  cmp.fnd.form.statement = 'cites T';
+  cmp.fnd.form.status = 'supported';
+  assert.ok(await cmp.findingsSave(), cmp.fnd.form.error);
+  assert.equal(rowOf(cmp, 'cites T').evidence[0].state, 'ok');
+  // Another tab: delete T and store a different, stamped record under its id.
+  const other = await openExperimentStore({ indexedDB: fake.indexedDB, ...OPTS });
+  await other.delete('run-t');
+  const { validateExperiment } = await import('../../src/js/experiments/validate.js');
+  await other.put(validateExperiment(await recordAs('c', 'run-t', { name: 'impostor' }), OPTS)
+    .experiment);
+  // This tab, no list refresh in between: an unrelated finding is saved.
+  await cmp.findingsAskRun('run-u');
+  cmp.fnd.form.statement = 'cites U';
+  assert.ok(await cmp.findingsSave(), cmp.fnd.form.error);
+  let e = rowOf(cmp, 'cites T').evidence[0];
+  assert.equal(e.state, 'broken', 'right after the unrelated save');
+  assert.match(e.issue, /different record is stored under this id/);
+  await cmp.experimentsRefresh();
+  e = rowOf(cmp, 'cites T').evidence[0];
+  assert.equal(e.state, 'broken', 'and after the list refresh');
+  // The run detail never shows the replaced record as the cited one either.
+  const shown = await cmp.experimentsOpen('run-t');
+  assert.equal(shown.name, 'impostor');
+});
+
+test('review 2.2: a refused stale edit offers the stored version and never loops', async () => {
+  const { cmp } = harness();
+  await cmp.experimentsImportText(await recordAs('a', 'run-w'));
+  await cmp.findingsAskRun('run-w');
+  cmp.fnd.form.statement = 'first';
+  const saved = await cmp.findingsSave();
+  const s = await cmp.experimentsStore();
+  // Edit here; another tab changes the finding; save is refused.
+  await cmp.findingsAskEdit(saved.id);
+  cmp.fnd.form.statement = 'my edit';
+  const theirs = await s.putFinding(F.updateFinding(await s.getFinding(saved.id),
+    { statement: 'other tab' }, { now: Date.now() + 1000 }));
+  assert.equal(await cmp.findingsSave(), null);
+  assert.equal(cmp.fnd.form.conflict, true);
+  assert.match(cmp.fnd.form.error, /changed in another tab or window/);
+  assert.match(cmp.fnd.form.error, /Load the stored version/);
+  // Closing and editing again never reopens the stale form.
+  cmp.findingsDialogClosed();
+  await cmp.findingsAskEdit(saved.id);
+  assert.equal(cmp.fnd.form.loadedUpdatedAt, theirs.updatedAt, 'the stored version is loaded');
+  assert.equal(cmp.fnd.form.statement, 'other tab');
+  assert.equal(cmp.fnd.form.mine, 'my edit', 'the typed text stays visible to copy');
+  assert.equal(cmp.fnd.form.conflict, false);
+  cmp.fnd.form.statement = 'other tab, and my edit';
+  const again = await cmp.findingsSave();
+  assert.ok(again, cmp.fnd.form.error);
+  assert.equal(again.statement, 'other tab, and my edit');
+  // The same through "Load the stored version" in the open dialog.
+  await cmp.findingsAskEdit(saved.id);
+  cmp.fnd.form.statement = 'second edit';
+  await s.putFinding(F.updateFinding(await s.getFinding(saved.id), { statement: 'third tab' },
+    { now: Date.now() + 5000 }));
+  assert.equal(await cmp.findingsSave(), null);
+  assert.ok(await cmp.findingsLoadStored());
+  assert.equal(cmp.fnd.form.statement, 'third tab');
+  assert.equal(cmp.fnd.form.mine, 'second edit');
+  assert.ok(await cmp.findingsSave(), cmp.fnd.form.error);
+});
+
+test('review 2.4: updatedAt always advances, in the same millisecond or after a clock step back', () => {
+  const f = ok(raw({ updatedAt: LATER }));
+  const t = Date.parse(LATER);
+  assert.equal(F.updateFinding(f, { statement: 'same ms' }, { now: t }).updatedAt,
+    new Date(t + 1).toISOString());
+  assert.equal(F.updateFinding(f, { statement: 'clock back' }, { now: t - 60000 }).updatedAt,
+    new Date(t + 1).toISOString());
+  assert.equal(F.updateFinding(f, { statement: 'later' }, { now: t + 5000 }).updatedAt,
+    new Date(t + 5000).toISOString());
+});
+
+test('review 2.6: a list row from an earlier build gets its result hash once, then is not re-read', async () => {
+  const fake = fakeIndexedDB();
+  const { cmp } = harness(fake);
+  await cmp.experimentsImportText(await recordAs('a', 'run-old'));
+  await cmp.findingsAskRun('run-old');
+  cmp.fnd.form.statement = 'cites an old row';
+  assert.ok(await cmp.findingsSave(), cmp.fnd.form.error);
+  // The row as an earlier build wrote it: no resultHash field.
+  const rows = fake.dbs.get('oscilla-experiments').stores.get('summaries').data;
+  const old = rows.get('run-old');
+  delete old.resultHash;
+  const s = await cmp.experimentsStore();
+  const listed = (await s.list()).find((r) => r.experimentId === 'run-old');
+  const hash = (await fx()).a.experiment.provenance.resultHash;
+  assert.equal(listed.resultHash, hash, 'filled in from the stored record');
+  assert.equal(rows.get('run-old').resultHash, hash, 'and written back to the row');
+  // With the hash in the row, the identity is read once, not on every refresh.
+  const second = harness(fake).cmp;
+  let reads = 0;
+  const real = second.experimentsIdentity;
+  second.experimentsIdentity = function (id) { reads += 1; return real.call(this, id); };
+  await second.experimentsRefresh();
+  await second.experimentsRefresh();
+  assert.equal(reads, 1);
+  assert.equal(rowOf(second, 'cites an old row').evidence[0].state, 'ok');
+});
+
+test('review 2.7: short Hz that still tells neighbouring grid points apart; hints are the user\'s', () => {
+  const grid = [998.4375, 1000.0471801757812, 1001.0943603515625, 1500.25];
+  assert.equal(F.gridHzText(grid[1], grid), '1000 Hz');
+  assert.equal(F.gridHzText(grid[2], grid), '1001 Hz');
+  assert.equal(F.gridHzText(1000.04, [1000.03, 1000.04, 1000.05]), '1000.04 Hz');
+  assert.equal(F.gridHzText(1234.56789, grid), '1234.56789 Hz', 'off the grid: every digit');
+  const v = { kind: 'value', experimentId: 'run-a', at: { hz: grid[2] } };
+  assert.equal(F.refText(v, () => 'A', { storedPoint: true, frequencies: grid }),
+    'Value of "A" at 1001 Hz (a stored grid point)');
+  for (const s of F.FINDING_STATUSES) {
+    assert.match(F.STATUS_HINT[s], /\byou(r)?\b/, `${s} reads as the user's judgement`);
+  }
+  const html = readFileSync(path.join(ROOT, 'src/index.html'), 'utf8');
+  assert.match(html, /data-osc="fnd\.statusHint"[^>]*x-text="r\.statusHint"/,
+    'the hint is visible text, not only a title');
 });

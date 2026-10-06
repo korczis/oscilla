@@ -27,7 +27,8 @@
 //
 //   validateFinding(value) -> { ok, finding, errors }        (never throws; a clean copy)
 //   createFinding({ id, now, statement, status, evidence, runs, notes }) -> Finding  (RangeError)
-//   updateFinding(finding, patch, { now }) -> Finding         (id and createdAt kept)
+//   updateFinding(finding, patch, { now }) -> Finding   (id and createdAt kept; updatedAt is
+//     max(now, previous + 1 ms), so it always advances)
 //   findingIssues(finding, lookup) -> [{ code, index, experimentId, text }]
 //     lookup(experimentId) -> { kind: 'run', name, resultHash, hasResponse, frequencies,
 //       readable, reason } | { kind, name } | null   (frequencies: the stored response grid; a
@@ -73,19 +74,20 @@ export const STATUS_TEXT = Object.freeze({
 });
 export const STATUS_HINT = Object.freeze({
   observation: 'what you recorded, not yet interpreted',
-  hypothesis: 'an interpretation not yet checked against the cited evidence',
+  hypothesis: 'your interpretation, not yet checked against the cited evidence',
   supported: 'you judge the cited evidence to agree with the statement',
   contradicted: 'you judge the cited evidence to disagree with the statement',
-  inconclusive: 'the cited evidence does not decide it',
+  inconclusive: 'you judge that the cited evidence does not decide it',
 });
 
 const has = (o, k) => Object.prototype.hasOwnProperty.call(o, k);
 const MARKUP = /<[A-Za-z!/?]/;
 // Characters that hide or reorder text, or are not text at all: directional marks, embeddings,
 // overrides and isolates (LRM, RLM, ALM, U+202A-202E, U+2066-2069), C1 controls (U+0080-009F,
-// U+0085 included), the line and paragraph separators, the zero-width space, joiners and word
-// joiner, the byte order mark, and an unpaired surrogate (malformed UTF-16).
-const INVISIBLE = new RegExp('[\\u0080-\\u009F\\u061C\\u200B-\\u200F\\u2028\\u2029'
+// U+0085 included), the line and paragraph separators, the zero-width space, the word joiner
+// and invisible operators (U+2060-2064), the byte order mark, and an unpaired surrogate.
+// ZWNJ and ZWJ (U+200C, U+200D) are text: Persian, Devanagari and emoji sequences need them.
+const INVISIBLE = new RegExp('[\\u0080-\\u009F\\u061C\\u200B\\u200E\\u200F\\u2028\\u2029'
   + '\\u202A-\\u202E\\u2060-\\u2064\\u2066-\\u2069\\uFEFF]');
 const LONE_SURROGATE = /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?:^|[^\uD800-\uDBFF])[\uDC00-\uDFFF]/;
 const HZ_MAX = LIMITS.frequencyHz[1];
@@ -258,7 +260,12 @@ export function updateFinding(finding, patch = {}, { now } = {}) {
       throw new RangeError(`Invalid finding: ${k} cannot be changed`);
     }
   }
-  const next = { ...finding, ...patch, updatedAt: toIsoTimestamp(now) };
+  // updatedAt is the edit's version (store.putFinding expectedUpdatedAt): it always advances,
+  // even in the same millisecond or after the clock stepped back.
+  const after = Date.parse(finding.updatedAt) + 1;
+  const at = Date.parse(toIsoTimestamp(now));
+  const next = { ...finding, ...patch, updatedAt: toIsoTimestamp(Number.isFinite(after)
+    ? Math.max(at, after) : at) };
   if (has(patch, 'statement')) next.statement = trimmed(patch.statement);
   if (has(patch, 'notes')) next.notes = noteOf(patch.notes);
   return valid(next);
@@ -335,10 +342,27 @@ export function exactHzText(hz) {
 }
 
 /**
- * How a reference reads: what it names, and for a comparison that it says what, not why. A value
- * reference says "(a stored grid point)" only when the caller checked it (`storedPoint: true`).
+ * A stored grid point with the fewest digits (at least four) that still tell it from its
+ * neighbours on `frequencies`; a frequency not on the grid prints every digit (exactHzText).
  */
-export function refText(ref, nameOf = () => null, { storedPoint = false } = {}) {
+export function gridHzText(hz, frequencies) {
+  const i = Array.isArray(frequencies) ? frequencies.indexOf(hz) : -1;
+  if (i < 0) return exactHzText(hz);
+  const near = [frequencies[i - 1], frequencies[i + 1]].filter((x) => typeof x === 'number');
+  for (let p = 4; p <= 17; p++) {
+    const t = Number(hz.toPrecision(p));
+    if (near.every((n) => Number(n.toPrecision(p)) !== t)) return `${t} Hz`;
+  }
+  return exactHzText(hz);
+}
+
+/**
+ * How a reference reads: what it names, and for a comparison that it says what, not why. A value
+ * reference says "(a stored grid point)" only when the caller checked it (`storedPoint: true`);
+ * with the run's `frequencies` it prints the point as briefly as its neighbours allow.
+ */
+export function refText(ref, nameOf = () => null, { storedPoint = false, frequencies = null }
+  = {}) {
   const nm = (id) => {
     const n = nameOf(id);
     return n ? `"${n}"` : shortId(id);
@@ -347,8 +371,10 @@ export function refText(ref, nameOf = () => null, { storedPoint = false } = {}) 
     return `Comparison of ${nm(ref.a)} with ${nm(ref.b)} (what changed between the runs, not why)`;
   }
   if (ref.kind === 'value') {
-    return `Value of ${nm(ref.experimentId)} at ${exactHzText(ref.at.hz)}${storedPoint
-      ? ' (a stored grid point)' : ''}`;
+    const hz = storedPoint && frequencies ? gridHzText(ref.at.hz, frequencies)
+      : exactHzText(ref.at.hz);
+    return `Value of ${nm(ref.experimentId)} at ${hz}${storedPoint ? ' (a stored grid point)'
+      : ''}`;
   }
   return `Run ${nm(ref.experimentId)}`;
 }
@@ -356,8 +382,11 @@ export function refText(ref, nameOf = () => null, { storedPoint = false } = {}) 
 /** Does `finding` cite run `id`? */
 export const findingCites = (finding, id) => citedRunIds(finding).includes(id);
 
-/** Backlinks: each finding citing run `id`, with how it cites it (other runs by `nameOf`). */
-export function findingsCiting(findings, id, nameOf = () => null) {
+/**
+ * Backlinks: each finding citing run `id`, with how it cites it (other runs by `nameOf`, a
+ * value's frequency by `hzTextOf`, every digit by default).
+ */
+export function findingsCiting(findings, id, nameOf = () => null, hzTextOf = exactHzText) {
   const nm = (x) => (nameOf(x) ? `"${nameOf(x)}"` : x);
   const out = [];
   for (const finding of findings) {
@@ -365,7 +394,7 @@ export function findingsCiting(findings, id, nameOf = () => null) {
     for (const ref of finding.evidence) {
       if (ref.kind === 'run' && ref.experimentId === id) how.push('this run');
       else if (ref.kind === 'value' && ref.experimentId === id) {
-        how.push(`its value at ${exactHzText(ref.at.hz)}`);
+        how.push(`its value at ${hzTextOf(ref.at.hz)}`);
       } else if (ref.kind === 'compare' && (ref.a === id || ref.b === id)) {
         how.push(`a comparison with ${nm(ref.a === id ? ref.b : ref.a)}`);
       }

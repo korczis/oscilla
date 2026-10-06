@@ -247,8 +247,9 @@ filter class is claimed. An experiment saved from Measure does not store band le
   can be linked. A value reference must name exactly a frequency of the run's stored response
   grid; only then does it read "(a stored grid point)". A status is shown as your judgement.
   Closing the finding dialog without saving keeps a changed draft (offered again, guarded against
-  a reload) until you save or discard it, and an edit is refused when another tab changed the
-  finding since you opened it. Findings export as `.oscilla-findings.json` with
+  a reload) until you save or discard it. An edit is refused when another tab changed the finding
+  since you opened it; the dialog then offers to load the stored version and keeps the text you
+  typed beside it to copy. Findings export as `.oscilla-findings.json` with
   that identity; an import is validated whole before anything is stored, a newer schema is
   refused, and a cited run that is not in this browser reads "not stored here"
   ([ADR 0046](.ai/repo/adrs/0046-findings-interpretation-linked-to-evidence.md), proposed).

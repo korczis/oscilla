@@ -416,6 +416,7 @@ function decodeStored(doc, knownAlgorithms, id) {
   return v.experiment;
 }
 
+const lacksHash = (row) => !!row && !Object.prototype.hasOwnProperty.call(row, 'resultHash');
 const byNewest = (a, b) => String(b.createdAt).localeCompare(String(a.createdAt))
   || String(a.experimentId).localeCompare(String(b.experimentId));
 
@@ -633,10 +634,27 @@ function idbStore(db, storage, knownAlgorithms) {
     }
     Promise.resolve(pending).then((v) => { value = v; }, abort);
   });
+  // A row written by an earlier build has no resultHash (ADR 0046). On its first read it is
+  // filled in from the stored record's provenance (the record itself is not changed), so later
+  // refreshes need not read the record to know the run's identity. One transaction; a row whose
+  // record is gone or carries no hash gets null.
+  const backfillHashes = () => run('list', [RECORDS, SUMMARIES], 'readwrite', (tx) => {
+    const sums = tx.objectStore(SUMMARIES);
+    return request(sums.getAll()).then((rows) => Promise.all(rows.map((row) => {
+      if (!lacksHash(row)) return row;
+      return request(tx.objectStore(RECORDS).get(row.experimentId)).then((doc) => {
+        const p = doc && doc.provenance;
+        const next = { ...row, resultHash: p && typeof p.resultHash === 'string'
+          ? p.resultHash : null };
+        return request(sums.put(next)).then(() => next);
+      });
+    })));
+  });
   return {
     kind: 'indexeddb',
     list: () => run('list', [SUMMARIES], 'readonly',
       (tx) => request(tx.objectStore(SUMMARIES).getAll()))
+      .then((rows) => (rows.some(lacksHash) ? backfillHashes() : rows))
       .then((rows) => rows.map((s) => ({ ...s })).sort(byNewest)),
     get: (id) => run('get', [RECORDS], 'readonly',
       (tx) => request(tx.objectStore(RECORDS).get(id)))
