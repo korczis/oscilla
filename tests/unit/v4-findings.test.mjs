@@ -882,7 +882,7 @@ test('review 2.4: updatedAt always advances, in the same millisecond or after a 
     new Date(t + 5000).toISOString());
 });
 
-test('review 2.6: a list row from an earlier build gets its result hash once, then is not re-read', async () => {
+test('review 2.6: a list row from an earlier build gets its result hash once', async () => {
   const fake = fakeIndexedDB();
   const { cmp } = harness(fake);
   await cmp.experimentsImportText(await recordAs('a', 'run-old'));
@@ -898,30 +898,192 @@ test('review 2.6: a list row from an earlier build gets its result hash once, th
   const hash = (await fx()).a.experiment.provenance.resultHash;
   assert.equal(listed.resultHash, hash, 'filled in from the stored record');
   assert.equal(rows.get('run-old').resultHash, hash, 'and written back to the row');
-  // With the hash in the row, the identity is read once, not on every refresh.
+  // Review 3 (A): a cited run is verified fresh on every refresh, whatever the row says.
   const second = harness(fake).cmp;
   let reads = 0;
   const real = second.experimentsIdentity;
   second.experimentsIdentity = function (id) { reads += 1; return real.call(this, id); };
   await second.experimentsRefresh();
   await second.experimentsRefresh();
-  assert.equal(reads, 1);
+  assert.equal(reads, 2);
   assert.equal(rowOf(second, 'cites an old row').evidence[0].state, 'ok');
 });
 
-test('review 2.7: short Hz that still tells neighbouring grid points apart; hints are the user\'s', () => {
+test('review 2.7: hints are the user\'s, visible; (review 3: one exact Hz formatter)', () => {
+  // Review 3 (D7) replaced the short grid text: one exact formatter for every stored point.
   const grid = [998.4375, 1000.0471801757812, 1001.0943603515625, 1500.25];
-  assert.equal(F.gridHzText(grid[1], grid), '1000 Hz');
-  assert.equal(F.gridHzText(grid[2], grid), '1001 Hz');
-  assert.equal(F.gridHzText(1000.04, [1000.03, 1000.04, 1000.05]), '1000.04 Hz');
-  assert.equal(F.gridHzText(1234.56789, grid), '1234.56789 Hz', 'off the grid: every digit');
-  const v = { kind: 'value', experimentId: 'run-a', at: { hz: grid[2] } };
-  assert.equal(F.refText(v, () => 'A', { storedPoint: true, frequencies: grid }),
-    'Value of "A" at 1001 Hz (a stored grid point)');
+  assert.equal(F.gridHzText(grid[2], grid), '1001.0943603515625 Hz');
+  assert.equal(F.gridHzText(1234.56789, grid), '1234.56789 Hz');
   for (const s of F.FINDING_STATUSES) {
     assert.match(F.STATUS_HINT[s], /\byou(r)?\b/, `${s} reads as the user's judgement`);
   }
   const html = readFileSync(path.join(ROOT, 'src/index.html'), 'utf8');
   assert.match(html, /data-osc="fnd\.statusHint"[^>]*x-text="r\.statusHint"/,
     'the hint is visible text, not only a title');
+});
+
+// ---------------------------------------------------------------- adversarial review 3 of #149
+
+/** Replace run `id` through a second connection (another tab), with fixture `k` renamed. */
+const replaceElsewhere = async (fake, id, k = 'c', name = 'impostor') => {
+  const other = await openExperimentStore({ indexedDB: fake.indexedDB, ...OPTS });
+  await other.delete(id);
+  const { validateExperiment } = await import('../../src/js/experiments/validate.js');
+  await other.put(validateExperiment(await recordAs(k, id, { name }), OPTS).experiment);
+};
+const cite = async (cmp, id, statement, status = 'supported') => {
+  await cmp.findingsAskRun(id);
+  cmp.fnd.form.statement = statement;
+  cmp.fnd.form.status = status;
+  const f = await cmp.findingsSave();
+  assert.ok(f, cmp.fnd.form.error);
+  return f;
+};
+
+test('review 3.A: one verification point; identity is read fresh from the store on every path', async () => {
+  const fake = fakeIndexedDB();
+  const { cmp } = harness(fake);
+  await cmp.experimentsImportText(await recordAs('a', 'run-p'));
+  await cmp.experimentsImportText(await recordAs('b', 'run-q'));
+  const calls = [];
+  const real = cmp.findingsVerifyCitedRun;
+  assert.equal(typeof real, 'function', 'the verification point exists');
+  cmp.findingsVerifyCitedRun = function (id, hash) {
+    calls.push(id);
+    return real.call(this, id, hash);
+  };
+  await cite(cmp, 'run-p', 'cites P');
+  assert.ok(calls.includes('run-p'), 'linking verifies');
+  calls.length = 0;
+  await cmp.experimentsRefresh();
+  assert.deepEqual(calls, ['run-p'], 'the row state verifies');
+  calls.length = 0;
+  const row = rowOf(cmp, 'cites P');
+  await cmp.findingsOpenRef(row.evidence[0].ref, row.id);
+  assert.deepEqual(calls, ['run-p'], 'Open verifies');
+  calls.length = 0;
+  await cmp.findingsAskNew();
+  await cmp.findingsAddCompare('run-p', 'run-q');
+  assert.deepEqual(calls.sort(), ['run-p', 'run-q'], 'linking a comparison verifies both');
+  cmp.findingsDiscardDraft();
+  // The identity read itself never comes from a cache: two reads, two store reads.
+  const s = await cmp.experimentsStore();
+  const get = s.get;
+  let reads = 0;
+  s.get = (id) => { reads += 1; return get(id); };
+  await cmp.experimentsIdentity('run-p');
+  await cmp.experimentsIdentity('run-p');
+  s.get = get;
+  assert.equal(reads, 2);
+  const src = readFileSync(path.join(ROOT, 'src/js/ui/findings.js'), 'utf8');
+  assert.equal((src.match(/experimentsIdentity\(/g) || []).length, 1,
+    'the identity is read in exactly one place');
+  assert.ok(!/ctx\.identity/.test(src), 'no identity cache in the findings adapter');
+});
+
+test('review 3.A: Open re-checks the run first and opens nothing that is no longer the cited one', async () => {
+  const fake = fakeIndexedDB();
+  let { cmp, notes } = harness(fake);
+  await cmp.experimentsImportText(await recordAs('b', 'run-o'));
+  await cite(cmp, 'run-o', 'cites O');
+  ({ cmp, notes } = harness(fake)); // a reload
+  await cmp.experimentsRefresh();
+  assert.equal(rowOf(cmp, 'cites O').evidence[0].state, 'ok');
+  await replaceElsewhere(fake, 'run-o'); // no event reaches this tab
+  const row = rowOf(cmp, 'cites O');
+  assert.equal(await cmp.findingsOpenRef(row.evidence[0].ref, row.id), null, 'not opened');
+  assert.equal(cmp.exps.detail, null, 'the replaced record is not shown');
+  assert.match(notes.at(-1).text, /different record is stored under this id/);
+  assert.equal(rowOf(cmp, 'cites O').evidence[0].state, 'broken', 'the row was re-checked');
+  // Backlinks carry the reference's state and the hash of the record on screen.
+  const impostor = (await cmp.experimentsIdentity('run-o')).resultHash;
+  const [b] = cmp.findingsBacklinks('run-o', impostor);
+  assert.notEqual(b.state, 'ok');
+  assert.match(b.issue, /different record/);
+});
+
+test('review 3.B: a finding recorded from a detail or Compare that is out of date is refused', async () => {
+  const fake = fakeIndexedDB();
+  const { cmp, notes } = harness(fake);
+  await cmp.experimentsImportText(await recordAs('b', 'run-d1'));
+  await cmp.experimentsImportText(await recordAs('a', 'run-d2'));
+  await cmp.experimentsOpen('run-d1');
+  await replaceElsewhere(fake, 'run-d1');
+  assert.equal(await cmp.findingsAskRun('run-d1'), false, 'from the out-of-date detail');
+  assert.match(notes.at(-1).text, /replaced in another tab since it was shown here; reopen it/);
+  await cmp.experimentsCompare(['run-d2', 'run-d1']);
+  await replaceElsewhere(fake, 'run-d2', 'b', 'impostor 2');
+  assert.equal(await cmp.findingsAskCompare(), false, 'from the out-of-date comparison');
+  assert.match(notes.at(-1).text, /replaced in another tab since it was shown here; reopen it/);
+  assert.equal(cmp.fnd.all.length, 0, 'nothing was recorded');
+  // A list refresh re-reads a detail whose row changed, and closes it when the row is gone.
+  await cmp.experimentsOpen('run-d1');
+  await replaceElsewhere(fake, 'run-d1', 'b', 'impostor 3');
+  await cmp.experimentsRefresh();
+  assert.equal(cmp.exps.detail.title, 'impostor 3');
+  const other = await openExperimentStore({ indexedDB: fake.indexedDB, ...OPTS });
+  await other.delete('run-d1');
+  await cmp.experimentsRefresh();
+  assert.equal(cmp.exps.detail, null, 'a run gone elsewhere closes its detail');
+});
+
+test('review 3.C: editing a finding another tab deleted goes through the conflict path', async () => {
+  const { cmp } = harness();
+  await cmp.experimentsImportText(await recordAs('a', 'run-c'));
+  const f = await cite(cmp, 'run-c', 'to be edited', 'observation');
+  await cmp.findingsAskEdit(f.id);
+  cmp.fnd.form.statement = 'my long careful edit';
+  await (await cmp.experimentsStore()).deleteFinding(f.id); // another tab
+  assert.equal(await cmp.findingsSave(), null);
+  assert.equal(cmp.fnd.form.conflict, true, 'Load is offered');
+  assert.match(cmp.fnd.form.error, /deleted in another tab or window/);
+  assert.equal(await cmp.findingsLoadStored(), true);
+  assert.equal(cmp.fnd.form.mode, 'new');
+  assert.equal(cmp.fnd.form.conflict, false);
+  assert.equal(cmp.fnd.form.statement, 'my long careful edit', 'the typed text is the new finding');
+  const saved = await cmp.findingsSave();
+  assert.ok(saved, cmp.fnd.form.error);
+  assert.notEqual(saved.id, f.id);
+});
+
+test('review 3.D: Load keeps the latest typed text, status and references beside the stored ones', async () => {
+  const { cmp } = harness();
+  await cmp.experimentsImportText(await recordAs('a', 'run-m'));
+  await cmp.experimentsImportText(await recordAs('b', 'run-n'));
+  const f = await cite(cmp, 'run-m', 'v0', 'observation');
+  const s = await cmp.experimentsStore();
+  const bump = async (statement) => s.putFinding(F.updateFinding(await s.getFinding(f.id),
+    { statement }, { now: Date.now() + 10000 }));
+  await cmp.findingsAskEdit(f.id);
+  cmp.fnd.form.statement = 'first edit';
+  cmp.fnd.form.status = 'supported';
+  await cmp.findingsAddRun('run-n');
+  await bump('other tab 1');
+  assert.equal(await cmp.findingsSave(), null);
+  await cmp.findingsLoadStored();
+  assert.equal(cmp.fnd.form.mine, 'first edit');
+  assert.equal(cmp.fnd.form.mineStatus, 'Supported', 'the dropped status is shown');
+  assert.equal(cmp.fnd.form.mineRefs.length, 2, 'the dropped references are shown');
+  assert.match(cmp.findingsMineText(), /first edit[\s\S]*Status: Supported[\s\S]*Evidence:/);
+  assert.equal(cmp.findingsDraftDirty(), true, 'and count as unsaved');
+  // A second conflict keeps the latest typed text, not the first.
+  cmp.fnd.form.statement = 'second edit';
+  await bump('other tab 2');
+  assert.equal(await cmp.findingsSave(), null);
+  await cmp.findingsLoadStored();
+  assert.equal(cmp.fnd.form.mine, 'second edit');
+});
+
+test('review 3.D: one exact formatter for every stored point; on-grid and off-grid never read alike', () => {
+  const grid = [998.4375, 1000.0471801757812, 1001.0943603515625];
+  const on = { kind: 'value', experimentId: 'run-a', at: { hz: grid[2] } };
+  assert.equal(F.refText(on, () => 'A', { storedPoint: true, frequencies: grid }),
+    'Value of "A" at 1001.0943603515625 Hz (a stored grid point)');
+  assert.equal(F.exactHzText(grid[2]), '1001.0943603515625 Hz');
+  assert.equal(F.gridHzText(grid[2], grid), F.exactHzText(grid[2]), 'one formatter');
+  // An off-grid value that a shortened single-precision text would print like the grid point.
+  const off = Number(Math.fround(grid[2]).toPrecision(8));
+  assert.notEqual(F.exactHzText(off), F.exactHzText(grid[2]));
+  const html = readFileSync(path.join(ROOT, 'src/js/ui/findings.js'), 'utf8');
+  assert.ok(!/\bhzText\(/.test(html), 'the detail button uses the same formatter');
 });

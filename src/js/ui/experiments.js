@@ -313,6 +313,59 @@ export function createExperimentsUi() {
     return e;
   }
 
+  const hashOf = (e) => (e && e.provenance && typeof e.provenance.resultHash === 'string'
+    ? e.provenance.resultHash : null);
+
+  /**
+   * Views carry the record they render (review 3 of #149): after the list is read, a detail or
+   * comparison whose run is gone is closed, and one whose run's row names another result hash
+   * (replaced here or in another tab) is read again from the store. `list` rows carry resultHash.
+   */
+  async function syncViews(cmp, s, list) {
+    const rows = new Map(list.map((x) => [x.experimentId, x]));
+    const stale = (e) => {
+      const r = rows.get(e.experimentId);
+      if (!r) return 'gone';
+      return Object.prototype.hasOwnProperty.call(r, 'resultHash') && r.resultHash !== hashOf(e)
+        ? 'changed' : null;
+    };
+    const fresh = async (id) => {
+      try {
+        const e = await s.get(id);
+        if (e) remember(id, e);
+        return e || null;
+      } catch (err) {
+        return null; // unreadable: the view closes rather than show what is not stored
+      }
+    };
+    if (ctx.detail) {
+      const st = stale(ctx.detail);
+      if (st) {
+        const e = st === 'changed' ? await fresh(ctx.detail.experimentId) : null;
+        setDetail(cmp, e);
+        cmp.notify('info', e ? 'Run changed elsewhere' : 'Run no longer shown', e
+          ? 'The run shown was replaced (here or in another tab); its detail now shows the stored '
+            + 'record.' : 'The run shown is no longer stored or cannot be read; its detail was '
+            + 'closed.');
+      }
+    }
+    if (ctx.compare.length && ctx.compare.some((e) => stale(e))) {
+      const next = [];
+      for (const e of ctx.compare) {
+        const st = stale(e);
+        if (!st) next.push(e);
+        else if (st === 'changed') {
+          const f = await fresh(e.experimentId);
+          if (f) next.push(f);
+        }
+      }
+      setCompare(cmp, next);
+      cmp.notify('info', 'Comparison changed elsewhere', next.length >= 2 ? 'A compared run was '
+        + 'replaced or deleted (here or in another tab); the comparison now shows the stored '
+        + 'records.' : 'A compared run is no longer stored; the comparison was closed.');
+    }
+  }
+
   function setDetail(cmp, e) {
     ctx.detail = e;
     if (!e) {
@@ -480,6 +533,25 @@ export function createExperimentsUi() {
       for (const c of Object.values(ctx.charts)) if (c) c.relayout();
     },
 
+    /**
+     * The result hash of run `id` as this page shows it (review 3 of #149): the open detail's
+     * record, else a compared record, else the list row as last read; null when none shows it.
+     * A finding recorded from a view cites this hash, and linking is refused when the store
+     * now holds another record under the id.
+     */
+    experimentsShownHash(id) {
+      if (ctx.detail && ctx.detail.experimentId === id) return hashOf(ctx.detail);
+      const c = ctx.compare.find((e) => e.experimentId === id);
+      if (c) return hashOf(c);
+      const row = ctx.rows.get(id);
+      if (!row) return null;
+      try {
+        const r = JSON.parse(row);
+        return typeof r.resultHash === 'string' ? r.resultHash : null;
+      } catch (e) {
+        return null;
+      }
+    },
     /** The store (opened on first use; the memory fallback where IndexedDB is unavailable). */
     experimentsStore() {
       return store(this);
@@ -498,7 +570,6 @@ export function createExperimentsUi() {
         return null;
       }
       const cached = ctx.cache.get(id);
-      const hashOf = (x) => (x && x.provenance ? x.provenance.resultHash : undefined);
       if (cached && hashOf(cached) !== hashOf(e)) remember(id, e);
       return { experimentId: e.experimentId, name: e.name || null,
         resultHash: e.provenance && typeof e.provenance.resultHash === 'string'
@@ -525,6 +596,7 @@ export function createExperimentsUi() {
         if (ctx.rows.has(id) && rows.get(id) !== ctx.rows.get(id)) ctx.cache.delete(id);
       }
       ctx.rows = rows;
+      await syncViews(this, s, list);
       this.exps.selected = this.exps.selected.filter((id) => ids.has(id));
       const v = experimentListRows(list, { selected: this.exps.selected });
       // The definitions are read apart: one that cannot be read never fails the runs' list.

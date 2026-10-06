@@ -1956,7 +1956,7 @@
                 <ul class="osc-f-refs" role="list" :aria-label="'Evidence: ' + r.statement">
                   <template x-for="e in r.evidence" :key="e.key">
                     <li class="osc-f-ref" data-osc="fnd.ref" :data-state="e.state"><span x-text="e.text"></span><template x-if="e.issue"><span class="osc-f-issue" x-text="' ' + e.issue"></span></template><template x-if="e.state === 'ok'"><button type="button" class="osc-btn osc-btn-secondary osc-m-small" data-osc="fnd.openRef"
-                        :aria-label="'Open: ' + e.text" @click="findingsOpenRef(e.ref)">Open</button></template></li>
+                        :aria-label="'Open: ' + e.text" @click="findingsOpenRef(e.ref, r.id)">Open</button></template></li>
                   </template>
                   <li class="osc-x-empty" x-show="!r.evidence.length">No evidence linked.</li>
                 </ul>
@@ -2128,7 +2128,7 @@
               </div>
               <ul class="osc-x-ev-list" role="list" data-osc="exp.findingsList" aria-labelledby="osc-x-fnd-of-title">
                 <template x-for="b in (exps.detail ? findingsBacklinks(exps.detail.id) : [])" :key="b.id">
-                  <li><strong x-text="b.statusText + ' (your judgement)'"></strong>: <span x-text="b.statement"></span> <span class="osc-f-how" x-text="'(cites ' + b.how + ')'"></span></li>
+                  <li><strong x-text="b.statusText + ' (your judgement)'"></strong>: <span x-text="b.statement"></span> <span class="osc-f-how" x-text="'(cites ' + b.how + ')'"></span><template x-if="b.issue"><span class="osc-f-issue" data-osc="exp.findingIssue" x-text="' Not this run: ' + b.issue"></span></template></li>
                 </template>
               </ul>
               <p class="osc-m-hint" x-show="exps.detail && !findingsBacklinks(exps.detail.id).length">No finding cites this run.</p>
@@ -3162,10 +3162,10 @@
         <button type="button" class="osc-btn osc-btn-primary osc-m-small" data-osc="fnd.loadStored"
           @click="findingsLoadStored()">Load the stored version</button>
       </div>
-      <div class="osc-f-mine" x-show="fnd.form.mine || fnd.form.mineNotes" style="display: none">
+      <div class="osc-f-mine" x-show="findingsMineText()" style="display: none">
         <label class="osc-label" for="osc-fnd-mine">Your text from before (not saved; copy what you need)</label>
         <textarea class="osc-number osc-m-text osc-m-textarea" id="osc-fnd-mine" data-osc="fnd.mine" rows="2" readonly
-          :value="fnd.form.mine + (fnd.form.mineNotes ? '\n\nNotes: ' + fnd.form.mineNotes : '')"></textarea>
+          :value="findingsMineText()"></textarea>
       </div>
       <p class="osc-dialog-note" x-show="findingsDraftDirty()" style="display: none">Closing keeps this draft in this page until you save or discard it; a reload loses it.</p>
       <div class="osc-dialog-actions">
