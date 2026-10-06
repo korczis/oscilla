@@ -206,8 +206,7 @@ Proposed:
   and Forward, a finding's connections, an impostor under a cited id reads "does not match",
   a record altered under its hash reads "unreadable" after a reload, 390 px) and check
   `connections-two-tabs` (a run replaced from another tab is never "stored here" from this
-  tab's decoded copy) in Chromium,
-  Firefox and WebKit over file:// and /oscilla/); check `connections-from-studio` in
+  tab's decoded copy), in Chromium, Firefox and WebKit over file:// and /oscilla/; check `connections-from-studio` in
   `tests/browser/v31-studio-workflows.cjs` (a run measured from a saved project names it, the
   dialog names the run back, both links work, and a node added outside the measured path
   leaves only the measured-path connection).
