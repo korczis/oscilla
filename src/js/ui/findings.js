@@ -220,8 +220,17 @@ export function createFindingsUi() {
       this.closeModal(DIALOG);
     },
 
-    /** Read the findings again and check their references against `list` (the run rows). */
+    /**
+     * Read the findings again and check their references against `list` (the run rows, as
+     * experimentsRefresh read them). Without a list (after a finding is saved, deleted or
+     * imported) the whole Experiments list is read again first, so the runs, the decoded-record
+     * cache and the findings are checked against the same, current rows.
+     */
     async findingsRefresh(list = null) {
+      if (!list && typeof this.experimentsRefresh === 'function') {
+        await this.experimentsRefresh(); // reads the rows, then calls findingsRefresh(rows)
+        return this.fnd.rows;
+      }
       const s = await this.experimentsStore();
       const rows = list || await s.list();
       ctx.names = new Map(rows.map((r) => [r.experimentId, r.name || '(unnamed)']));
@@ -229,6 +238,7 @@ export function createFindingsUi() {
       // An identity is kept only while its summary row is unchanged: a record replaced under the
       // id (here or in another tab) changes the row (its result hash, time, size), so it is read
       // again. A row from an earlier build carries no result hash and is read on every refresh.
+      const byId = new Map(rows.map((r) => [r.experimentId, r]));
       const keys = new Map(rows.map((r) => [r.experimentId, Object.prototype.hasOwnProperty
         .call(r, 'resultHash') ? JSON.stringify(r) : null]));
       for (const id of [...ctx.identity.keys()]) {
@@ -241,8 +251,12 @@ export function createFindingsUi() {
       const { findings, unreadable } = await s.listFindings();
       for (const id of new Set(findings.flatMap(citedRunIds))) {
         if (!ctx.names.has(id)) continue;
-        await identity(this, id);
-        if (keys.get(id)) ctx.rowKey.set(id, keys.get(id));
+        const x = await identity(this, id);
+        // Kept under this row only when the record read is the one the row names (same hash);
+        // otherwise it is read again at the next refresh.
+        if (keys.get(id) && x && x.readable && x.resultHash === byId.get(id).resultHash) {
+          ctx.rowKey.set(id, keys.get(id));
+        } else ctx.rowKey.delete(id);
       }
       const n = unreadable.length;
       this.fnd.note = n ? `${n} stored finding${n === 1 ? '' : 's'} could not be read and ${
