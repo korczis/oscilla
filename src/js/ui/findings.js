@@ -405,13 +405,22 @@ export function createFindingsUi() {
       return e;
     },
 
-    /** Export every stored finding, each with the identity of the runs it cites. */
-    async findingsExport() {
-      const { findings } = await (await this.experimentsStore()).listFindings();
+    /**
+     * Export every stored finding, each with the identity of the runs it cites. A stored finding
+     * that cannot be read is left out, and the notification says so. Returns the file text.
+     */
+    async findingsExport({ download = downloadBlob } = {}) {
+      const { findings, unreadable } = await (await this.experimentsStore()).listFindings();
       const text = findingsToJson(exportFindings(findings, { now: Date.now(),
         oscillaVersion: this.BUILD ? this.BUILD.version : null }));
-      downloadBlob(new Blob([`${text}\n`], { type: 'application/json' }),
+      download(new Blob([`${text}\n`], { type: 'application/json' }),
         `findings${FINDINGS_FILE_EXTENSION}`);
+      const n = unreadable.length;
+      if (n) {
+        this.notify('warning', 'Findings exported with a gap', `${findings.length} exported. ${n} `
+          + `stored finding${n === 1 ? '' : 's'} could not be read and ${n === 1 ? 'was' : 'were'} `
+          + `left out (${unreadable.map((u) => u.id || 'no id').slice(0, 3).join(', ')}).`);
+      }
       return text;
     },
     findingsImportClick() {

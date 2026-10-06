@@ -744,3 +744,18 @@ test('review 1.9: an edit is refused when the finding changed since the form loa
   assert.equal(cmp.fnd.form.statement, 'my edit', 'the text typed here is kept');
   assert.equal((await s.getFinding(saved.id)).statement, 'other tab');
 });
+
+test('review 1.10: export says how many unreadable findings it left out', async () => {
+  const fake = fakeIndexedDB();
+  const { cmp, notes } = harness(fake);
+  await cmp.experimentsRefresh();
+  const s = await cmp.experimentsStore();
+  await s.putFinding(ok(raw()));
+  fake.dbs.get('oscilla-experiments').stores.get('findings').data.set('bad', { id: 'bad' });
+  let file = null;
+  const text = await cmp.findingsExport({ download: (blob, name) => { file = name; } });
+  assert.equal(F.parseFindingsFile(text).findings.length, 1);
+  assert.equal(file, 'findings.oscilla-findings.json');
+  assert.equal(notes.at(-1).kind, 'warning');
+  assert.match(notes.at(-1).text, /1 stored finding could not be read and was left out \(bad\)/);
+});
