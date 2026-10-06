@@ -441,6 +441,38 @@ test('the workspace: a duplicate, a finding and a deleted original, in both dire
       'plain data for Alpine');
   });
 
+test('two tabs: a run replaced in another tab is never present from this tab\'s decoded copy',
+  async () => {
+    const { b, c } = await fx();
+    const one2 = harness();
+    await one2.cmp.experimentsImportText(b.json);
+    await one2.cmp.findingsAskRun('fixture-b');
+    one2.cmp.fnd.form.statement = 'B is quieter.';
+    const f = await one2.cmp.findingsSave();
+    await one2.cmp.experimentsOpen('fixture-b'); // this tab now holds B decoded
+    assert.equal(one((await one2.cmp.connectionsOfRun('fixture-b')).downstream, 'cited-by').state,
+      'present');
+    // Another tab on the same database: B deleted, a different record stored under its id.
+    const cmp2 = {};
+    for (const part of [createExperimentsUi(), createFindingsUi(), createConnectionsUi()]) {
+      Object.defineProperties(cmp2, Object.getOwnPropertyDescriptors(part));
+    }
+    Object.assign(cmp2, { notify() {}, $nextTick: (fn) => fn && fn(), openModal() {},
+      closeModal() {}, setWorkspace() {}, measureCurrentProfile: () => null });
+    cmp2.experimentsInit();
+    cmp2.findingsInit();
+    await cmp2.experimentsRefresh();
+    cmp2.exps.deleteId = 'fixture-b';
+    assert.equal(await cmp2.experimentsDelete(), true);
+    const imp = JSON.parse(c.json);
+    imp.experimentId = 'fixture-b';
+    assert.equal(await cmp2.experimentsImportText(JSON.stringify(imp)), 'fixture-b');
+    // This tab, without a reload.
+    const down = (await one2.cmp.connectionsOfRun('fixture-b')).downstream;
+    assert.equal(one(down, 'cited-by').state, 'mismatch');
+    assert.equal((await one2.cmp.connectionsOfFinding(f.id)).upstream[0].state, 'mismatch');
+  });
+
 test('the workspace: a list row written before links existed is read once from its record',
   async () => {
     const { a } = await fx();

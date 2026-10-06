@@ -2,7 +2,8 @@
 // Composed into the ONE OSCILLA component by main.js, next to ui/experiments.js and
 // ui/findings.js, whose store it reads (experimentsStore) and never writes.
 //
-// What it reads, each time a view is computed:
+// What it reads, each time a view is computed (always from the store, never from the decoded
+// records ui/experiments.js keeps, which another tab may have replaced):
 //   - the runs' list rows (store.list), each with its `links`; a row written before links
 //     existed is read once from its record (store.get) instead;
 //   - every stored run a connection names, read once (store.get validates the record and
@@ -148,7 +149,7 @@ export function createConnectionsUi() {
    */
   async function compute(cmp, subjectOf) {
     const { store, index } = await readIndex(cmp);
-    const subject = await subjectOf(index);
+    const subject = await subjectOf(index, store);
     if (typeof subject === 'string') return { status: subject, upstream: [], downstream: [],
       notes: [], more: { upstream: 0, downstream: 0 } };
     let out = connectionsOf(subject, index);
@@ -198,8 +199,15 @@ export function createConnectionsUi() {
     async connectionsOfRun(id) {
       const t = ++ctx.token.run;
       if (!this.cnx.run || this.cnx.run.id !== id) this.cnx.run = checking(id);
-      const r = await track(compute(this, async () => {
-        const e = await this.experimentsGet(id);
+      const r = await track(compute(this, async (ix, store) => {
+        // Read from the store, never from the workspace's decoded cache: another tab may have
+        // replaced the run under its id since it was cached (review 2 of #149).
+        let e;
+        try {
+          e = await store.get(id);
+        } catch (err) {
+          return `Run ${id} is stored here but cannot be read (${err.message || String(err)}).`;
+        }
         return e ? { kind: 'run', record: e } : `Run ${id} is not stored in this browser.`;
       }));
       if (t === ctx.token.run) this.cnx.run = view(id, r);
@@ -319,7 +327,7 @@ export function createConnectionsUi() {
       try {
         if (kind === 'run') {
           if (!(this.exps.detail && this.exps.detail.id === id)) {
-            if (!await this.experimentsGet(id)) return missing();
+            if (!await (await this.experimentsStore()).get(id)) return missing();
             await this.experimentsOpen(id);
           } else await this.connectionsOfRun(id);
           this.exps.panel = 'detail';

@@ -138,6 +138,11 @@ Proposed:
   cached per list row (id, size, creation time and the result hash the row records), so a
   record deleted and stored again under its id, in this tab or another, is read again; a record
   altered in place beneath an unchanged row (by hand, outside OSCILLA) is read again on reload.
+- **Never the workspace's decoded copy.** The record a view is about, and every run it names, is
+  read from the store, never from the decoded records `ui/experiments.js` keeps. Another tab
+  may have replaced a run under its id since this tab decoded it (review 2 of #149): returning
+  to Experiments or any stored change reads the shown connections again, and the replaced run
+  then reads *does not match*.
 - **Navigation (amends ADR 0045).** A fourth hash domain, `records`: `m=experiments` with one of
   `run=<id>`, `def=<id>` or `finding=<id>` (`core/url-state-records.js`). It is refused whole
   when malformed, like the Studio and recipe links. Without `m`, a record key routes to
@@ -199,7 +204,9 @@ Proposed:
   record link); check `connections` in `tests/browser/v3-ui.cjs` (a record link opens the run
   with focus on its heading, both directions with their fields, Enter on a connection, Back
   and Forward, a finding's connections, an impostor under a cited id reads "does not match",
-  a record altered under its hash reads "unreadable" after a reload, 390 px; Chromium,
+  a record altered under its hash reads "unreadable" after a reload, 390 px) and check
+  `connections-two-tabs` (a run replaced from another tab is never "stored here" from this
+  tab's decoded copy) in Chromium,
   Firefox and WebKit over file:// and /oscilla/); check `connections-from-studio` in
   `tests/browser/v31-studio-workflows.cjs` (a run measured from a saved project names it, the
   dialog names the run back, both links work, and a node added outside the measured path

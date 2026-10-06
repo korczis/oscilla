@@ -2374,6 +2374,72 @@ function defineChecks(fixtures) {
     }) };
   });
 
+  // Connected records across two tabs (review 2 of #149): the run open in this tab is replaced
+  // in another tab by a different record under its id. The connections of the open run and of
+  // the finding citing it are read from the store, never from this tab's decoded copy, so they
+  // say "does not match", not "stored here". IndexedDB only (two tabs share no page memory).
+  def('connections-two-tabs', async ({ page, context }) => {
+    await H.workspace(page, 'experiments');
+    const res = {};
+    res.kind = await page.evaluate(() => window.OSCILLA.app.exps.storeKind);
+    if (res.kind !== 'indexeddb') return { ok: true, skipped: `store ${res.kind}` };
+    res.setup = await page.evaluate(async (t) => {
+      const app = window.OSCILLA.app;
+      const s = await window.OSCILLA.experiments.store();
+      if (!(await s.get('fixture-b').catch(() => null))) await app.experimentsImportText(t);
+      await app.findingsAskRun('fixture-b');
+      app.fnd.form.statement = 'Two tabs: B is quieter.';
+      const f = await app.findingsSave();
+      await app.experimentsOpen('fixture-b');
+      app.alerts = [];
+      return f ? f.id : null;
+    }, fixtures.b.json);
+    const RUN = '[data-osc="exp.connections"] li.osc-x-cn-item';
+    const cited = () => page.evaluate((q) => [...document.querySelectorAll(q)]
+      .filter((x) => x.dataset.relation === 'cited-by').map((x) => ({ state: x.dataset.state,
+        text: x.textContent.replace(/\s+/g, ' ').trim() })), RUN);
+    res.before = await H.until(cited, (l) => l.length === 1 && l[0].state === 'present', 10000);
+    const page2 = await context.newPage();
+    try {
+      await page2.goto(page.url(), { waitUntil: 'load' });
+      await page2.waitForSelector('html[data-ready="true"]', { timeout: 15000 });
+      res.tab2 = await page2.evaluate(async (t) => {
+        const app = window.OSCILLA.app;
+        app.setWorkspace('experiments');
+        await app.experimentsRefresh();
+        app.exps.deleteId = 'fixture-b';
+        await app.experimentsDelete();
+        const d = JSON.parse(t);
+        d.experimentId = 'fixture-b';
+        d.name = 'IMPOSTOR under fixture-b';
+        return app.experimentsImportText(JSON.stringify(d));
+      }, fixtures.c.json);
+    } finally {
+      await page2.close();
+    }
+    // This tab, no reload: back to Experiments (Studio and back), which reads them again.
+    await page.evaluate(() => window.OSCILLA.app.setWorkspace('measure'));
+    await page.evaluate(() => window.OSCILLA.app.setWorkspace('experiments'));
+    res.after = await H.until(cited, (l) => l.length === 1 && l[0].state !== 'present', 10000);
+    res.finding = await page.evaluate((id) => window.OSCILLA.app.connectionsOfFinding(id)
+      .then((v) => v.upstream.map((c) => c.state)), res.setup);
+    await page.evaluate(async (t) => {
+      const app = window.OSCILLA.app;
+      for (const r of app.fnd.rows.slice()) await app.findingsDeleteNow(r.id);
+      app.exps.deleteId = 'fixture-b';
+      await app.experimentsDelete();
+      await app.experimentsImportText(t);
+      app.alerts = [];
+    }, fixtures.b.json);
+    return { ...res, ...H.verdict({
+      before: res.before[0] && res.before[0].state === 'present',
+      replaced: res.tab2 === 'fixture-b',
+      'not-present': res.after[0] && res.after[0].state === 'mismatch'
+        && /does not match: .*different record/.test(res.after[0].text),
+      finding: res.finding.join() === 'mismatch',
+    }) };
+  });
+
   // Review 1 of #149, item 5: Escape and a backdrop click keep a typed draft; the guard keeps
   // reporting it; only Discard drops it.
   def('findings-draft', async ({ page }) => {
