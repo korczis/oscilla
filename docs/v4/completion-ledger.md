@@ -29,13 +29,13 @@ mobile, significant performance), **P2** (polish, debt).
 | Capability | Model | Validate | Execute | Persist | UI | Provenance | A11y | Tests | Status |
 |---|---|---|---|---|---|---|---|---|---|
 | Studio model, desired/plan/applied, divergence | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | EXISTS — but see R1, R2 |
-| Runtime transaction (prepare/commit) | ✓ | ✓ | partial | – | ✓ | – | ✓ | prepare only | PARTIAL (R1, R2) |
+| Runtime transaction (prepare/commit) | ✓ | ✓ | ✓ (#119) | – | ✓ | – | ✓ | prepare + commit injection | EXISTS |
 | Operation trace (Studio) | ✓ | – | ✓ | ephemeral by design | ✓ | – | ✓ | ✓ | EXISTS (gaps: locate, edges) |
 | Sequencer / timeline / automation | ✓ | ✓ | ✓ | ✓ | ✓ | – | ✓ | ✓ | PARTIAL (clip-target policy duplicated, R7) |
-| Studio Microphone node | ✓ | ✓ | never enabled | – | inert | – | – | asserts degraded | BROKEN (R3) |
-| Experiment definition / plan | recipe only | recipe | engine runs recipe directly | ✓ | setup | configHash | – | ✓ | MISSING → #116 |
+| Studio Microphone node | ✓ | ✓ | ✓ (#119) | – | Allow microphone | – | ✓ | ✓ | EXISTS |
+| Experiment definition | ✓ (#116) | ✓ | engine runs the bound recipe | ✓ (append-only versions) | ✓ | definition ref in result hash v4 | ✓ | ✓ | EXISTS (no separate plan compiler) |
 | Measurement run (state machine, cancel, repeats) | ✓ | ✓ | ✓ | aggregate only | ✓ | ✓ | ✓ | ✓ | EXISTS (no retry/attempt record) |
-| Calibration (level, frequency profile) | ✓ | ✓ | ✓ | session only | ✓ | **wrong at Save** | ✓ | ✓ | BROKEN (D1, D2) |
+| Calibration (level, frequency profile) | ✓ | ✓ | ✓ | session only | ✓ | as applied (#121) | ✓ | ✓ | EXISTS (C1 open) |
 | Quality | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | glyph + shape | ✓ | EXISTS |
 | Run store, immutability, baseline | ✓ | ✓ | – | IndexedDB / memory | ✓ | ✓ | ✓ | ✓ | EXISTS (unverified-import marker missing) |
 | Import / export / migration | ✓ | ✓ (validate before put) | – | ✓ | ✓ | hash recomputed | – | ✓ | EXISTS |
@@ -48,7 +48,7 @@ mobile, significant performance), **P2** (polish, debt).
 | Project model | singletons | – | – | split by domain | – | – | – | – | PARTIAL |
 | Workspace navigation / history / deep links | ✓ | – | – | URL only | ✓ | – | ✓ | ✓ | PARTIAL (W2, W3) |
 | Unsaved-work protection | – | – | – | – | – | – | – | – | MISSING (W2) |
-| `.ai/` knowledge layer | ✓ | doctor (local only) | – | – | – | – | – | Studio claims only | PARTIAL (K1–K4) |
+| `.ai/` knowledge layer | ✓ | doctor (local + CI) | – | – | – | – | – | all claims, rules, refs | EXISTS (ADRs still `proposed`; plan stale) |
 
 ## Findings and where they stand
 
@@ -56,28 +56,28 @@ mobile, significant performance), **P2** (polish, debt).
 
 | Id | Finding | Evidence | Status |
 |---|---|---|---|
-| D1 | Frequency-profile calibration is snapshotted at Save, not at completion: measure with A, load B, Save → record names B while its quality mask came from A | `ui/measure.js` experimentOf, `measure-experiment.js:66`; probe | fixing: branch `fix/measurement-evidence-at-completion` |
-| D2 | A level calibration made after an uncalibrated measurement is recorded as used (dB SPL for an uncalibrated run); environment notes read at Save | `ui/measure.js:1557-1601`, `:861`; probe | same branch |
-| K1 | Generated bootstraps claim a worktree pre-commit guard, rule `project.worktree-topology` and `docs/WORKTREES.md` — none exist | AGENTS.md:38, CLAUDE.md:103, GEMINI.md:29 (from Majordomus 0.12 templates; fixed upstream in majordomus #783) | fixing: branch `docs/knowledge-tells-the-truth` (repo override) |
-| K2 | `project.no-fake-science` claims a grep enforcement nothing performs, and contradicts dB SPL under level calibration (ADR 0017) | rule v1 Verification; no test | same branch (rule v2 + real test) |
-| R1 | A refused PLAY leaves the Studio Master level on the shared engine (MEASURE, Labs, Playground inherit it); `dropAll` does not restore it | `adapters/nodes.js:743`, `runtime.js:441-447, 649, 659`; master-leak.mjs | fixing: branch `fix/studio-runtime-closure` (P0 if MEASURE output passes through it — being verified) |
+| D1 | Frequency-profile calibration is snapshotted at Save, not at completion: measure with A, load B, Save → record names B while its quality mask came from A | `ui/measure.js` experimentOf, `measure-experiment.js:66`; probe | **closed** #121 (V3.9.2): the engine-applied calibration is recorded |
+| D2 | A level calibration made after an uncalibrated measurement is recorded as used (dB SPL for an uncalibrated run); environment notes read at Save | `ui/measure.js:1557-1601`, `:861`; probe | **closed** #121 (V3.9.2); older contradicted records read as uncalibrated |
+| K1 | Generated bootstraps claim a worktree pre-commit guard, rule `project.worktree-topology` and `docs/WORKTREES.md` — none exist | AGENTS.md:38, CLAUDE.md:103, GEMINI.md:29 (from Majordomus 0.12 templates; fixed upstream in majordomus #783) | **closed** #120: repo override states the convention; majordomus #783 merged upstream (via #786), not yet in a tagged release |
+| K2 | `project.no-fake-science` claims a grep enforcement nothing performs, and contradicts dB SPL under level calibration (ADR 0017) | rule v1 Verification; no test | **closed** #120: rule v2 with a real scanner over all of `src/js` and `src/index.html` |
+| R1 | A refused PLAY leaves the Studio Master level on the shared engine (MEASURE, Labs, Playground inherit it); `dropAll` does not restore it | `adapters/nodes.js:743`, `runtime.js:441-447, 649, 659`; master-leak.mjs | **closed** #119 (V3.9.1): confirmed P0 — MEASURE's stimulus plays through that gain |
 
 ### P1
 
 | Id | Finding | Status |
 |---|---|---|
-| R2 | Runtime commit phase not exception-safe: a throw after the plan swap leaves the applied record stale (hidden divergence) | fixing: `fix/studio-runtime-closure` |
-| R3 | Studio Microphone node can never be enabled; help text points to a control that does not exist | fixing: `fix/studio-runtime-closure` |
-| W1 | Deleting the open Studio project leaves it looking saved; the next template replaces the graph without the unsaved-changes prompt (data loss) | fixing: `fix/studio-runtime-closure` |
+| R2 | Runtime commit phase not exception-safe: a throw after the plan swap leaves the applied record stale (hidden divergence) | **closed** #119: post-swap failures are sticky Diagnostics, verdict `degraded` |
+| R3 | Studio Microphone node can never be enabled; help text points to a control that does not exist | **closed** #119: Allow microphone, including re-allow while playing |
+| W1 | Deleting the open Studio project leaves it looking saved; the next template replaces the graph without the unsaved-changes prompt (data loss) | **closed** #119: the open document detaches and stays unsaved |
 | W2 | No `beforeunload` guard, no history entries; reload/Back silently loses unsaved Studio work and an unsaved measurement | open |
-| W3 | README privacy statement omits the `studio` / `studioSummaries` stores | fixing: `docs/knowledge-tells-the-truth` |
+| W3 | README privacy statement omits the `studio` / `studioSummaries` stores | **closed** #120: inventory test derives keys and stores from code |
 | C1 | Unbound manual level calibration applies to every input | open |
 | D3 | Studio provenance hashes unconnected nodes, so identical measurements read as an execution change | open |
 | D4 | Schema accepts five stimulus kinds the engine cannot run; Repeat of such a record silently runs a log sweep | open |
-| K3 | No CI job consumes the `.ai/` layer; claim guarding stops at Studio claims | fixing: `docs/knowledge-tells-the-truth` |
-| K4 | Hand-written CLAUDE.md is stale (V2, ADRs 0011-0029, 3 of 8 rules) | same branch |
-| A1 | About page overstates enforcement | same branch |
-| X1 | #116 review: one invalid definition row breaks the Experiments workspace and save retries duplicate runs | fixing in #116 |
+| K3 | No CI job consumes the `.ai/` layer; claim guarding stops at Studio claims | **closed** #120: knowledge-integrity test plus required CI `knowledge` job (pinned doctor) |
+| K4 | Hand-written CLAUDE.md is stale (V2, ADRs 0011-0029, 3 of 8 rules) | **closed** #120 |
+| A1 | About page overstates enforcement | **closed** #120 |
+| X1 | #116 review: one invalid definition row breaks the Experiments workspace and save retries duplicate runs | **closed** in #116 before merge (V3.9.0) |
 
 ### P2 (tracked)
 
@@ -109,3 +109,17 @@ as real, tested slices, in dependency order, never as placeholders:
 
 **NOT READY FOR v4.0 RELEASE.** Blockers: D1, D2, K1, K2, R1 (P0); the missing capabilities
 above that v4.0 promises (definition/run, evidence, findings, Trace).
+
+## Update 2026-10-06 — after the closure PRs
+
+Shipped: V3.9.0 (#116 experiment definitions), V3.9.1 (#119 runtime closure), V3.9.2 (#121
+calibration as measured); #120 (knowledge truth) is live on Pages at b73e18b without a version
+bump (docs-only by the release analyser). Every one passed two independent adversarial reviews.
+
+**All five P0 findings are closed.** Open from this ledger: W2 (unsaved-work guard and
+navigation history), C1 (unbound manual level calibration), D3 (Studio provenance over-records
+unconnected nodes), D4 (schema wider than the engine), and the P2 list.
+
+**Release decision now: NOT READY FOR v4.0 RELEASE.** No P0 remains; the blockers are the
+v4.0 capabilities no code implements yet: evidence on a run (value trace and reproducibility
+checklist), findings linked to evidence, cross-domain Trace, and W2.
