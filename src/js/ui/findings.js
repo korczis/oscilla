@@ -88,6 +88,9 @@ export function createFindingsUi() {
     const x = ref.kind === 'value' ? ctx.identity.get(ref.experimentId) : null;
     return x && x.frequencies ? x.frequencies : null;
   };
+  /** A reference as the dialog lists it ("(a stored grid point)" only when checked). */
+  const refAsText = (ref) => refText(ref, nameOf, { storedPoint: storedPointOf(ref),
+    frequencies: gridOf(ref) });
   /** Is a value reference exactly a point of its run's stored grid (as last read)? */
   const storedPointOf = (ref) => {
     const x = ref.kind === 'value' ? ctx.identity.get(ref.experimentId) : null;
@@ -250,7 +253,7 @@ export function createFindingsUi() {
       Object.assign(f, { loadedUpdatedAt: now.updatedAt, statement: now.statement,
         status: now.status, notes: now.notes || '', runs: plain(now.runs),
         evidence: now.evidence.map((ref) => ({ key: refKey(ref), ref: plain(ref),
-          text: refText(ref, nameOf, { storedPoint: storedPointOf(ref), frequencies: gridOf(ref) }) })),
+          text: refAsText(ref) })),
         conflict: false, error: '' });
       f.base = formState(f);
       return true;
@@ -318,7 +321,9 @@ export function createFindingsUi() {
     /** Backlinks of run `id`: the findings citing it, with how. */
     findingsBacklinks(id) {
       const grid = (ctx.identity.get(id) || {}).frequencies || null;
-      return findingsCiting(this.fnd.all, id, nameOf, (hz) => gridHzText(hz, grid)).map(({ finding, how }) => ({ id: finding.id,
+      const brief = (hz) => gridHzText(hz, grid);
+      return findingsCiting(this.fnd.all, id, nameOf, brief).map(({ finding, how }) => ({
+        id: finding.id,
         statement: finding.statement, statusText: STATUS_TEXT[finding.status],
         how: how.join('; ') }));
     },
@@ -340,7 +345,7 @@ export function createFindingsUi() {
         loadedUpdatedAt: old.updatedAt, statement: old.statement,
         status: old.status, notes: old.notes || '', runs: plain(old.runs),
         evidence: old.evidence.map((ref) => ({ key: refKey(ref), ref: plain(ref),
-          text: refText(ref, nameOf, { storedPoint: storedPointOf(ref), frequencies: gridOf(ref) }) })) } : {});
+          text: refAsText(ref) })) } : {});
       this.fnd.form = f;
       if (refs.length && !await link(this, refs)) {
         this.notify('error', 'Finding not started', this.fnd.form.error);
