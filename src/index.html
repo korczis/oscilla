@@ -2039,8 +2039,10 @@
               <div class="osc-m-btnrow">
                 <button type="button" class="osc-btn osc-btn-secondary osc-m-small" data-osc="exp.findingNew"
                   @click="findingsAskRun(exps.detail.id)">Record a finding about this run</button>
-                <button type="button" class="osc-btn osc-btn-secondary osc-m-small" data-osc="exp.findingValue"
-                  x-show="findingsValueLabel()" @click="findingsAskValue()" x-text="findingsValueLabel()"></button>
+                <template x-if="findingsValueLabel()">
+                  <button type="button" class="osc-btn osc-btn-secondary osc-m-small" data-osc="exp.findingValue"
+                    @click="findingsAskValue()" x-text="findingsValueLabel()"></button>
+                </template>
               </div>
               <ul class="osc-x-ev-list" role="list" data-osc="exp.findingsList" aria-labelledby="osc-x-fnd-of-title">
                 <template x-for="b in (exps.detail ? findingsBacklinks(exps.detail.id) : [])" :key="b.id">

@@ -556,6 +556,34 @@ function defineChecks() {
     await sleep(120);
     await collect();
     await page.evaluate(() => window.OSCILLA.app.closeModal('osc-dlg-def'));
+    // Findings (ADR 0046): the run detail's buttons, the dialog with a comparison linked, a
+    // listed finding's buttons and its delete dialog.
+    await page.evaluate(async () => {
+      const a = window.OSCILLA.app;
+      if (a.exps.rows[0]) await a.experimentsOpen(a.exps.rows[0].id);
+    });
+    await page.waitForSelector('[data-osc="exp.findingNew"]', { state: 'visible', timeout: 5000 })
+      .catch(() => {});
+    await collect();
+    await page.click('[data-osc="exp.findingNew"]');
+    await page.waitForSelector('#osc-fnd-statement', { state: 'visible', timeout: 5000 })
+      .catch(() => {});
+    await page.fill('#osc-fnd-statement', 'audit finding');
+    await page.evaluate(async () => {
+      const a = window.OSCILLA.app;
+      const [x, y] = a.exps.rows;
+      if (x && y) await a.findingsAddCompare(x.id, y.id);
+    });
+    await sleep(120);
+    await collect();
+    await page.click('[data-osc="fnd.save"]');
+    await page.waitForSelector('[data-osc="fnd.edit"]', { state: 'visible', timeout: 5000 })
+      .catch(() => {});
+    await collect();
+    await page.click('[data-osc="fnd.delete"]');
+    await sleep(120);
+    await collect();
+    await page.click('[data-osc="fnd.deleteConfirm"]');
     await page.evaluate(async () => {
       // An authored definition stays loaded in MEASURE (a derived one only fills the setup).
       const a = window.OSCILLA.app;
