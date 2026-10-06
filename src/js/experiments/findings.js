@@ -327,39 +327,23 @@ export function findingIssues(finding, lookup) {
 }
 
 /**
- * A frequency with enough digits that distinct stored grid points never read the same: the
- * shortest decimal that is the same single-precision value for a single-precision frequency,
- * else every digit of the number.
+ * The one formatter of a stored point's frequency (review 3 of #149): the shortest decimal that
+ * is exactly this number (JavaScript's own shortest round-trip text), so two different
+ * frequencies, on the grid or off it, never print the same.
  */
 export function exactHzText(hz) {
-  if (Math.fround(hz) === hz) {
-    for (let p = 1; p <= 9; p++) {
-      const t = Number(hz.toPrecision(p));
-      if (Math.fround(t) === hz) return `${t} Hz`;
-    }
-  }
   return `${hz} Hz`;
 }
 
-/**
- * A stored grid point with the fewest digits (at least four) that still tell it from its
- * neighbours on `frequencies`; a frequency not on the grid prints every digit (exactHzText).
- */
-export function gridHzText(hz, frequencies) {
-  const i = Array.isArray(frequencies) ? frequencies.indexOf(hz) : -1;
-  if (i < 0) return exactHzText(hz);
-  const near = [frequencies[i - 1], frequencies[i + 1]].filter((x) => typeof x === 'number');
-  for (let p = 4; p <= 17; p++) {
-    const t = Number(hz.toPrecision(p));
-    if (near.every((n) => Number(n.toPrecision(p)) !== t)) return `${t} Hz`;
-  }
+/** Kept for callers of the earlier API: the same text as exactHzText (one formatter). */
+export function gridHzText(hz, frequencies) { // eslint-disable-line no-unused-vars
   return exactHzText(hz);
 }
 
 /**
  * How a reference reads: what it names, and for a comparison that it says what, not why. A value
- * reference says "(a stored grid point)" only when the caller checked it (`storedPoint: true`);
- * with the run's `frequencies` it prints the point as briefly as its neighbours allow.
+ * reference says "(a stored grid point)" only when the caller checked it (`storedPoint: true`).
+ * `frequencies` is accepted for the earlier API and does not change the text.
  */
 export function refText(ref, nameOf = () => null, { storedPoint = false, frequencies = null }
   = {}) {
@@ -371,10 +355,8 @@ export function refText(ref, nameOf = () => null, { storedPoint = false, frequen
     return `Comparison of ${nm(ref.a)} with ${nm(ref.b)} (what changed between the runs, not why)`;
   }
   if (ref.kind === 'value') {
-    const hz = storedPoint && frequencies ? gridHzText(ref.at.hz, frequencies)
-      : exactHzText(ref.at.hz);
-    return `Value of ${nm(ref.experimentId)} at ${hz}${storedPoint ? ' (a stored grid point)'
-      : ''}`;
+    return `Value of ${nm(ref.experimentId)} at ${exactHzText(ref.at.hz)}${storedPoint
+      ? ' (a stored grid point)' : ''}`;
   }
   return `Run ${nm(ref.experimentId)}`;
 }

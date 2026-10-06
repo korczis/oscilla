@@ -7,12 +7,14 @@
 // writes a run. Every text is rendered with x-text (never as markup), and the model refuses
 // markup in the first place.
 //
-// Integrity: each reference is checked against this browser's runs (findingIssues). A run's
-// identity (its stored result hash, whether it stores a response, its stored response grid) is
-// read from the store itself (experimentsIdentity, never the decoded cache) and kept only while
-// the run's list row is unchanged and names the same hash; every findings refresh reads the run
-// list first. A record replaced under a cited id, here or in another tab, is therefore read again
-// and named as different; one that cannot be read is named unreadable.
+// Integrity (review 3 of #149): ONE verification point, findingsVerifyCitedRun(id, citedHash),
+// reads a run's identity fresh from the store every time (experimentsIdentity -> store.get, which
+// verifies the record; never the decoded cache) and says ok, different, unverifiable, unreadable or
+// missing. Every claim this adapter shows about a cited run is derived from it at the moment of
+// use: a row's reference states and "(a stored grid point)" (verified on every refresh), Open
+// (verified again first; refused, re-checked and said otherwise), linking (verified against the
+// hash of the record on screen, experimentsShownHash), and backlinks (the row's state, and the
+// cited hash against the record shown). Nothing keeps an identity between refreshes.
 //
 // Losable work (ADR 0045): a finding being written in the dialog, a draft kept after the dialog
 // closed without a save, and text kept after a refused stale edit (findingsWhatWouldBeLost); the
@@ -21,7 +23,7 @@
 import {
   FINDING_STATUSES, STATUS_TEXT, STATUS_HINT, FINDINGS_FILE_EXTENSION, FINDING_LIMITS,
   createFinding, updateFinding, findingIssues, findingsCiting, refText, refKey, refRunIds,
-  citedRunIds, exportFindings, findingsToJson, parseFindingsFile, hzText, gridHzText,
+  citedRunIds, exportFindings, findingsToJson, parseFindingsFile, exactHzText,
 } from '../experiments/findings.js';
 import { newExperimentId } from '../experiments/schema.js';
 import { timestampText } from '../measurement/views/experiment-summary.js';
@@ -37,14 +39,20 @@ const blankForm = () => {
   const f = { open: false, mode: 'new', id: null, loadedUpdatedAt: null, statement: '',
     status: 'observation', notes: '', evidence: [], runs: [], base: '', error: '', addRun: '',
     cmpA: '', cmpB: '',
-    // A save refused because the finding changed elsewhere: `conflict` until the stored version
-    // is loaded; `mine` / `mineNotes` keep the text typed here, shown to copy, until a save.
-    conflict: false, mine: '', mineNotes: '' };
+    // A save refused because the finding changed or was deleted elsewhere: `conflict` until the
+    // stored version is loaded; `mine*` keep what was typed here (statement, notes, status,
+    // references), shown to copy, until a save.
+    conflict: false, deleted: false, mine: '', mineNotes: '', mineStatus: '', mineRefs: [] };
   f.base = formState(f);
   return f;
 };
-const dirty = (f) => formState(f) !== f.base || !!f.mine || !!f.mineNotes;
+const dirty = (f) => formState(f) !== f.base || !!f.mine || !!f.mineNotes || !!f.mineStatus
+  || f.mineRefs.length > 0;
 const CONFLICT = Symbol('changed elsewhere');
+const DELETED = Symbol('deleted elsewhere');
+const DELETED_ELSEWHERE = 'This finding was deleted in another tab or window since you opened it, '
+  + 'so it was not saved. Load the stored version to continue: what you typed then becomes a new '
+  + 'finding.';
 const CHANGED_ELSEWHERE = 'This finding was changed in another tab or window since you opened it, '
   + 'so it was not saved. Load the stored version to continue; the text you typed stays shown '
   + 'below to copy.';
@@ -75,97 +83,94 @@ export function findingRow(f, lookup, nameOf) {
 
 export function createFindingsUi() {
   const ctx = {
-    // experimentId -> { readable: true, resultHash, hasResponse } of a stored run, or
-    // { readable: false, reason } when its record cannot be read (a corrupt record)
-    identity: new Map(),
-    rowKey: new Map(),   // experimentId -> the summary row the identity was read under
     names: new Map(),    // experimentId -> name, of the runs listed
     defs: new Map(),     // definition id -> name (a reference to one is the wrong kind)
+    // experimentId -> the verification of the last refresh (findingsVerifyCitedRun), used only
+    // to draw that refresh's rows; every new claim verifies again
+    checked: new Map(),
   };
   const nameOf = (id) => ctx.names.get(id) || null;
-  /** The stored grid of a value reference's run (as last read), or null. */
-  const gridOf = (ref) => {
-    const x = ref.kind === 'value' ? ctx.identity.get(ref.experimentId) : null;
-    return x && x.frequencies ? x.frequencies : null;
-  };
-  /** A reference as the dialog lists it ("(a stored grid point)" only when checked). */
-  const refAsText = (ref) => refText(ref, nameOf, { storedPoint: storedPointOf(ref),
-    frequencies: gridOf(ref) });
-  /** Is a value reference exactly a point of its run's stored grid (as last read)? */
-  const storedPointOf = (ref) => {
-    const x = ref.kind === 'value' ? ctx.identity.get(ref.experimentId) : null;
-    return !!(x && x.frequencies && x.frequencies.includes(ref.at.hz));
-  };
+
+  /** A findingIssues lookup entry from a verification (null: nothing stored under the id). */
+  function entryOf(id, v) {
+    if (!v || v.state === 'missing') {
+      return ctx.defs.has(id) ? { kind: 'definition', name: ctx.defs.get(id) } : null;
+    }
+    const name = nameOf(id) || v.name || null;
+    if (v.state === 'unreadable') return { kind: 'run', name, readable: false, reason: v.reason };
+    return { kind: 'run', name, readable: true, resultHash: v.resultHash,
+      hasResponse: v.hasResponse, frequencies: v.frequencies };
+  }
+  function lookup(id) {
+    if (ctx.checked.has(id)) return entryOf(id, ctx.checked.get(id));
+    if (ctx.names.has(id)) return { kind: 'run', name: nameOf(id) }; // listed, not verified
+    return entryOf(id, null);
+  }
+  /** Is a value reference exactly a point of the grid `v` verified? */
+  const onGrid = (ref, v) => !!(ref.kind === 'value' && v && v.state === 'ok' && v.frequencies
+    && v.frequencies.includes(ref.at.hz));
+
+  /** Why a verification does not let a run be linked (null when it does). */
+  function linkRefusal(v, label) {
+    if (v.state === 'ok') return null;
+    if (v.state === 'different') {
+      return `Run ${label} was replaced in another tab since it was shown here; reopen it.`;
+    }
+    if (v.state === 'missing') {
+      return `Run ${label} is not stored here (deleted, perhaps in another tab); only a stored `
+        + 'run can be linked.';
+    }
+    if (v.state === 'unreadable') return `Run ${label} cannot be read (${v.reason}); it cannot be `
+      + 'linked.';
+    return `Run ${label} has no result hash, so a finding could not tell it from a different `
+      + 'record later; only a completed run can be linked.';
+  }
 
   /**
-   * The identity of a stored run (cached unless `fresh`); null when it is not stored. A record
-   * that cannot be read is { readable: false, reason }, never treated as present.
+   * Add `refs` to the open form. Each run is verified against the hash of the record this page
+   * shows for it (`shown`, else experimentsShownHash) and cited with that hash.
    */
-  async function identity(cmp, id, { fresh = false } = {}) {
-    if (!fresh && ctx.identity.has(id)) return ctx.identity.get(id);
-    let x;
-    try {
-      x = await cmp.experimentsIdentity(id);
-    } catch (err) {
-      const v = { readable: false, reason: String(err && err.message || err).slice(0, 160) };
-      ctx.identity.set(id, v);
-      return v;
-    }
-    if (!x) {
-      ctx.identity.delete(id);
-      return null;
-    }
-    const v = { readable: true, resultHash: x.resultHash, hasResponse: x.hasResponse,
-      frequencies: x.frequencies || null };
-    ctx.identity.set(id, v);
-    return v;
-  }
-
-  function lookup(id) {
-    if (ctx.names.has(id)) {
-      const x = ctx.identity.get(id);
-      // Listed but not read: its identity is unknown, so findingIssues cannot call it present.
-      if (!x) return { kind: 'run', name: ctx.names.get(id) };
-      return { kind: 'run', name: ctx.names.get(id), readable: x.readable, reason: x.reason,
-        resultHash: x.resultHash, hasResponse: x.hasResponse, frequencies: x.frequencies };
-    }
-    if (ctx.defs.has(id)) return { kind: 'definition', name: ctx.defs.get(id) };
-    return null;
-  }
-
-  /** Add `refs` to the open form, with the identity of each run they cite. */
-  async function link(cmp, refs) {
+  async function link(cmp, refs, shown = null) {
     const f = cmp.fnd.form;
     f.error = '';
+    const shownOf = (id) => (shown && Object.prototype.hasOwnProperty.call(shown, id) ? shown[id]
+      : typeof cmp.experimentsShownHash === 'function' ? cmp.experimentsShownHash(id) : null);
     for (const ref of refs) {
       const key = refKey(ref);
       if (f.evidence.some((e) => e.key === key)) {
         f.error = `${refText(ref, nameOf)} is already linked.`;
         return false;
       }
+      let grid = null;
       for (const id of refRunIds(ref)) {
-        if (f.runs.some((r) => r.experimentId === id)) continue;
-        const x = await identity(cmp, id, { fresh: true });
-        const label = nameOf(id) ? `"${nameOf(id)}"` : id;
-        if (!x) {
-          f.error = `Run ${label} is not stored here; only a stored run can be linked.`;
+        const v = await cmp.findingsVerifyCitedRun(id, shownOf(id));
+        const why = linkRefusal(v, nameOf(id) ? `"${nameOf(id)}"` : id);
+        if (why) {
+          f.error = why;
           return false;
         }
-        if (!x.readable) {
-          f.error = `Run ${label} cannot be read (${x.reason}); it cannot be linked.`;
-          return false;
+        if (ref.kind === 'value') {
+          if (!onGrid(ref, v)) {
+            f.error = `${exactHzText(ref.at.hz)} is not a frequency the run stores; reopen `
+              + 'the run.';
+            return false;
+          }
+          grid = v;
         }
-        if (!x.resultHash) {
-          f.error = `Run ${label} has no result hash, so a finding could not tell it from a `
-            + 'different record later; only a completed run can be linked.';
-          return false;
-        }
-        f.runs = [...f.runs, { experimentId: id, resultHash: x.resultHash }];
+        f.runs = [...f.runs.filter((r) => r.experimentId !== id), { experimentId: id,
+          resultHash: v.resultHash }];
       }
       f.evidence = [...f.evidence, { key, ref, text: refText(ref, nameOf,
-        { storedPoint: storedPointOf(ref), frequencies: gridOf(ref) }) }];
+        { storedPoint: onGrid(ref, grid) }) }];
     }
     return true;
+  }
+
+  /** The first issue of reference `ref` (citing `runs`) under fresh verifications, or null. */
+  function refIssue(ref, runs, verified) {
+    const probe = { status: 'observation', evidence: [ref], runs };
+    const [x] = findingIssues(probe, (id) => entryOf(id, verified.get(id)));
+    return x ? x.text : null;
   }
 
   return {
@@ -205,6 +210,29 @@ export function createFindingsUi() {
       }
     },
 
+    /**
+     * THE verification point (review 3 of #149): run `id` as stored now, read fresh (never from a
+     * cache), against `citedHash`. { id, state: 'ok' | 'different' | 'unverifiable' |
+     * 'unreadable' | 'missing', resultHash, hasResponse, frequencies, name, reason }.
+     * 'unverifiable': the cited or the stored hash is missing (with no cited hash it reports the
+     * stored identity only).
+     */
+    async findingsVerifyCitedRun(id, citedHash = null) {
+      const none = { id, resultHash: null, hasResponse: null, frequencies: null, name: null };
+      let x;
+      try {
+        x = await this.experimentsIdentity(id);
+      } catch (err) {
+        return { ...none, state: 'unreadable',
+          reason: String(err && err.message || err).slice(0, 160) };
+      }
+      if (!x) return { ...none, state: 'missing' };
+      const state = !citedHash || !x.resultHash ? 'unverifiable'
+        : x.resultHash === citedHash ? 'ok' : 'different';
+      return { id, state, resultHash: x.resultHash, hasResponse: x.hasResponse,
+        frequencies: x.frequencies || null, name: x.name };
+    },
+
     /** What a reload would lose here: a finding being written or a kept draft (ADR 0045). */
     findingsWhatWouldBeLost() {
       const f = this.fnd.form;
@@ -233,30 +261,39 @@ export function createFindingsUi() {
       return true;
     },
     /**
-     * After a refused save: load the finding as it is stored now (its fields and its updatedAt,
-     * so the next save is checked against it), keeping the text typed here in `mine` to copy.
-     * Returns false when it is no longer stored.
+     * After a refused save: load the finding as it is stored now (its fields and updatedAt, so
+     * the next save is checked against them). What was typed here and differs is kept beside it
+     * to copy: the statement, notes, status and references, always the latest typed. When the
+     * finding was deleted elsewhere, the form becomes a new finding holding what was typed.
      */
     async findingsLoadStored() {
       const f = this.fnd.form;
       const s = await this.experimentsStore();
       const now = f.id ? await s.getFinding(f.id).catch(() => null) : null;
       if (!now) {
-        f.error = 'This finding is no longer stored; save it as a new finding or discard it.';
-        f.mode = 'new';
-        f.id = null;
-        f.conflict = false;
-        return false;
+        Object.assign(f, { mode: 'new', id: null, loadedUpdatedAt: null, conflict: false,
+          deleted: false, error: 'This finding was deleted in another tab or window. Save stores '
+            + 'what you typed as a new finding, or discard it.' });
+        return true;
       }
-      if (f.statement.trim() !== now.statement) f.mine = f.mine || f.statement;
-      if (f.notes.trim() !== (now.notes || '')) f.mineNotes = f.mineNotes || f.notes;
+      const typed = { statement: f.statement.trim(), notes: f.notes.trim(), status: f.status,
+        keys: f.evidence.map((e) => e.key).sort().join('|'), texts: f.evidence.map((e) => e.text) };
+      if (typed.statement !== now.statement) f.mine = typed.statement;
+      if (typed.notes !== (now.notes || '')) f.mineNotes = typed.notes;
+      if (typed.status !== now.status) f.mineStatus = STATUS_TEXT[typed.status];
+      if (typed.keys !== now.evidence.map(refKey).sort().join('|')) f.mineRefs = typed.texts;
       Object.assign(f, { loadedUpdatedAt: now.updatedAt, statement: now.statement,
         status: now.status, notes: now.notes || '', runs: plain(now.runs),
-        evidence: now.evidence.map((ref) => ({ key: refKey(ref), ref: plain(ref),
-          text: refAsText(ref) })),
-        conflict: false, error: '' });
+        evidence: await this.findingsFormRefs(now), conflict: false, deleted: false, error: '' });
       f.base = formState(f);
       return true;
+    },
+    /** What was typed before a refused save, as one text to copy (empty when nothing). */
+    findingsMineText() {
+      const f = this.fnd.form;
+      return [f.mine, f.mineStatus ? `Status: ${f.mineStatus} (your judgement)` : '',
+        f.mineRefs.length ? `Evidence: ${f.mineRefs.join('; ')}` : '',
+        f.mineNotes ? `Notes: ${f.mineNotes}` : ''].filter(Boolean).join('\n\n');
     },
     /** Drop the draft (the only way a typed finding is discarded without a save). */
     findingsDiscardDraft() {
@@ -280,30 +317,13 @@ export function createFindingsUi() {
       const rows = list || await s.list();
       ctx.names = new Map(rows.map((r) => [r.experimentId, r.name || '(unnamed)']));
       ctx.defs = new Map((this.exps.defs || []).map((d) => [d.id, d.name]));
-      // An identity is kept only while its list row is unchanged: a record replaced under the id
-      // (here or in another tab) changes the row (its result hash, time, size), so it is read
-      // again. The IndexedDB store fills a missing row hash in on first read (store.js), so only
-      // a row without one (none in practice) is read on every refresh.
-      const byId = new Map(rows.map((r) => [r.experimentId, r]));
-      const keys = new Map(rows.map((r) => [r.experimentId, Object.prototype.hasOwnProperty
-        .call(r, 'resultHash') ? JSON.stringify(r) : null]));
-      for (const id of [...ctx.identity.keys()]) {
-        const k = keys.get(id);
-        if (!k || k !== ctx.rowKey.get(id)) {
-          ctx.identity.delete(id);
-          ctx.rowKey.delete(id);
-        }
-      }
       const { findings, unreadable } = await s.listFindings();
+      // Every cited run that is listed is verified now, fresh from the store.
+      const checked = new Map();
       for (const id of new Set(findings.flatMap(citedRunIds))) {
-        if (!ctx.names.has(id)) continue;
-        const x = await identity(this, id);
-        // Kept under this row only when the record read is the one the row names (same hash);
-        // otherwise it is read again at the next refresh.
-        if (keys.get(id) && x && x.readable && x.resultHash === byId.get(id).resultHash) {
-          ctx.rowKey.set(id, keys.get(id));
-        } else ctx.rowKey.delete(id);
+        if (ctx.names.has(id)) checked.set(id, await this.findingsVerifyCitedRun(id));
       }
+      ctx.checked = checked;
       const n = unreadable.length;
       this.fnd.note = n ? `${n} stored finding${n === 1 ? '' : 's'} could not be read and ${
         n === 1 ? 'is' : 'are'} not listed (${unreadable.map((u) => u.id || 'no id').slice(0, 3)
@@ -318,18 +338,31 @@ export function createFindingsUi() {
     findingsCiting(id) {
       return findingsCiting(this.fnd.all, id).length;
     },
-    /** Backlinks of run `id`: the findings citing it, with how. */
-    findingsBacklinks(id) {
-      const grid = (ctx.identity.get(id) || {}).frequencies || null;
-      const brief = (hz) => gridHzText(hz, grid);
-      return findingsCiting(this.fnd.all, id, nameOf, brief).map(({ finding, how }) => ({
-        id: finding.id,
-        statement: finding.statement, statusText: STATUS_TEXT[finding.status],
-        how: how.join('; ') }));
+    /**
+     * Backlinks of run `id`: the findings citing it, with how, and the state of those references
+     * as the last check found them (findingIssues). A finding whose cited hash is not the hash of
+     * the record shown (`shownHash`, else experimentsShownHash) never reads ok for it.
+     */
+    findingsBacklinks(id, shownHash) {
+      const shown = shownHash !== undefined ? shownHash
+        : typeof this.experimentsShownHash === 'function' ? this.experimentsShownHash(id) : null;
+      return findingsCiting(this.fnd.all, id, nameOf).map(({ finding, how }) => {
+        const row = this.fnd.rows.find((r) => r.id === finding.id);
+        const refs = row ? row.evidence.filter((e) => refRunIds(e.ref).includes(id)) : [];
+        const cited = (finding.runs.find((r) => r.experimentId === id) || {}).resultHash || null;
+        let issue = refs.map((e) => e.issue).filter(Boolean).join('; ') || null;
+        let state = refs.length && refs.every((e) => e.state === 'ok') ? 'ok' : 'broken';
+        if (state === 'ok' && cited !== shown) {
+          state = 'broken';
+          issue = 'it cites a different record stored earlier under this id, not the one shown';
+        }
+        return { id: finding.id, statement: finding.statement,
+          statusText: STATUS_TEXT[finding.status], how: how.join('; '), state, issue };
+      });
     },
 
     /** Open the dialog: a new finding seeded with `refs`, or `id` to edit. */
-    async findingsAskNew(refs = [], id = null) {
+    async findingsAskNew(refs = [], id = null, shown = null) {
       if (this.fnd.draftKept && dirty(this.fnd.form)) {
         // Never replace a kept draft: reopen it, and say so.
         await this.findingsContinueDraft();
@@ -344,10 +377,9 @@ export function createFindingsUi() {
       const f = Object.assign(blankForm(), old ? { mode: 'edit', id,
         loadedUpdatedAt: old.updatedAt, statement: old.statement,
         status: old.status, notes: old.notes || '', runs: plain(old.runs),
-        evidence: old.evidence.map((ref) => ({ key: refKey(ref), ref: plain(ref),
-          text: refAsText(ref) })) } : {});
+        evidence: await this.findingsFormRefs(old) } : {});
       this.fnd.form = f;
-      if (refs.length && !await link(this, refs)) {
+      if (refs.length && !await link(this, refs, shown)) {
         this.notify('error', 'Finding not started', this.fnd.form.error);
         this.fnd.form = blankForm();
         return false;
@@ -360,20 +392,37 @@ export function createFindingsUi() {
     findingsAskEdit(id) {
       return this.findingsAskNew([], id);
     },
-    findingsAskRun(id) {
-      return this.findingsAskNew([{ kind: 'run', experimentId: id }]);
+    /**
+     * A finding about run `id`, citing the record this page shows for it (`shownHash`, else
+     * experimentsShownHash: the open detail, a compared record or the list row).
+     */
+    findingsAskRun(id, shownHash) {
+      return this.findingsAskNew([{ kind: 'run', experimentId: id }], null,
+        shownHash !== undefined ? { [id]: shownHash } : null);
+    },
+    /** The dialog's entries of a stored finding's references, value points verified now. */
+    async findingsFormRefs(finding) {
+      const hashOf = new Map(finding.runs.map((r) => [r.experimentId, r.resultHash]));
+      const out = [];
+      for (const ref of finding.evidence) {
+        const v = ref.kind === 'value' ? await this.findingsVerifyCitedRun(ref.experimentId,
+          hashOf.get(ref.experimentId) || null) : null;
+        out.push({ key: refKey(ref), ref: plain(ref), text: refText(ref, nameOf,
+          { storedPoint: onGrid(ref, v) }) });
+      }
+      return out;
     },
     /** A finding about the stored point the open run's evidence shows (ADR 0044's lineage). */
     findingsAskValue() {
       const d = this.exps.detail;
       const p = d && d.evidence && d.evidence.point;
-      return p ? this.findingsAskNew([{ kind: 'value', experimentId: d.id, at: { hz: p.hz } }])
-        : false;
+      return p ? this.findingsAskNew([{ kind: 'value', experimentId: d.id, at: { hz: p.hz } }],
+        null) : false; // linked against the detail's record (experimentsShownHash)
     },
     findingsValueLabel() {
       const d = this.exps.detail;
       const p = d && d.evidence && d.evidence.point;
-      return p ? `Record a finding about the value at ${hzText(p.hz)}` : '';
+      return p ? `Record a finding about the value at ${exactHzText(p.hz)}` : '';
     },
     /** A finding about the open comparison: A compared with each other run. */
     findingsAskCompare() {
@@ -415,7 +464,7 @@ export function createFindingsUi() {
           runs: f.runs.filter((r) => cited.has(r.experimentId)) };
         const now = Date.now();
         const old = f.mode === 'edit' ? await s.getFinding(f.id) : null;
-        if (f.mode === 'edit' && !old) throw new Error('This finding is no longer stored.');
+        if (f.mode === 'edit' && !old) throw DELETED;
         if (old && old.updatedAt !== f.loadedUpdatedAt) throw CONFLICT;
         const next = old ? updateFinding(old, fields, { now })
           : createFinding({ id: newExperimentId(randomBytes16()), now, ...fields });
@@ -423,9 +472,12 @@ export function createFindingsUi() {
         saved = await s.putFinding(next, old ? { expectedUpdatedAt: f.loadedUpdatedAt } : {})
           .catch((err) => { throw err && err.code === 'conflict' ? CONFLICT : err; });
       } catch (err) {
-        if (err === CONFLICT) {
-          f.conflict = true;
-          f.error = CHANGED_ELSEWHERE;
+        if (err === CONFLICT || err === DELETED) {
+          // Deleted or changed elsewhere: the conflict path (Load), never a stale retry.
+          const gone = err === DELETED || !(await (await this.experimentsStore())
+            .getFinding(f.id).catch(() => null));
+          Object.assign(f, { conflict: true, deleted: gone,
+            error: gone ? DELETED_ELSEWHERE : CHANGED_ELSEWHERE });
           return null;
         }
         f.error = (err.message || String(err)).replace(/^Invalid finding: /, '');
@@ -477,8 +529,27 @@ export function createFindingsUi() {
       return true;
     },
 
-    /** Open what a reference names: the run, the comparison, or the run at the value. */
-    async findingsOpenRef(ref) {
+    /**
+     * Open what a reference of finding `findingId` names: the run, the comparison, or the run at
+     * the value. Each run is verified first against the hash the finding cites; when that no
+     * longer holds, nothing is opened, the findings are checked again and the reason is said.
+     */
+    async findingsOpenRef(ref, findingId = null) {
+      const f = (findingId && this.fnd.all.find((x) => x.id === findingId))
+        || this.fnd.all.find((x) => x.evidence.some((r) => refKey(r) === refKey(ref))) || null;
+      const runs = f ? f.runs : [];
+      const cited = new Map(runs.map((r) => [r.experimentId, r.resultHash]));
+      const verified = new Map();
+      for (const id of refRunIds(ref)) {
+        verified.set(id, await this.findingsVerifyCitedRun(id, cited.get(id) || null));
+      }
+      const why = refIssue(ref, runs, verified);
+      if (why) {
+        await this.findingsRefresh();
+        this.notify('warning', 'Not opened', `${why}. The finding's references were checked `
+          + 'again.');
+        return null;
+      }
       if (ref.kind === 'compare') return this.experimentsCompare([ref.a, ref.b]);
       const e = await this.experimentsOpen(ref.experimentId);
       if (e && ref.kind === 'value') this.experimentsEvidenceAt(ref.at.hz);
