@@ -84,7 +84,7 @@ mobile, significant performance), **P2** (polish, debt).
 Diagnostic codes derived from message text (R5, fixing); clip-target policy duplicated between
 registry, timeline UI and transport (R7); pattern-played Oscillator frequency lanes drive a
 silent carrier (R8); presentation-only edits pay a full compile while playing (R9, **closed**
-#PRNUM: while playing, an edit that leaves the execution state as it was takes the revision with
+#155: while playing, an edit that leaves the execution state as it was takes the revision with
 no compile, no runtime transaction and no timeline re-plan, the plan identity unchanged and the
 verdict in-sync, `tests/unit/v4-presentation-edits.test.mjs` and `presentation-edit` in
 `tests/browser/v31-studio-runtime.cjs`);
