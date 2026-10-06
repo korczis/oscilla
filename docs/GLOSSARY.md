@@ -54,6 +54,12 @@ the definition version it was executed from; a run without an authored definitio
 one derived from its own recipe and marked as derived (claim `experiment-definitions`).
 Definitions are stored in the `definitions` object store of the experiments database.
 
+**Evidence.** What a stored run's record says about how one of its values was produced and
+whether the run can be repeated (ADR 0044, `src/js/experiments/evidence.js`): a *lineage* of
+one stored result point (analysis, capture, calibration as applied, run, definition version,
+build, Studio graph) and a *reproducibility checklist* whose items are recorded, partial or not
+recorded. It is derived from stored fields only, never stored itself, and never a score.
+
 **Run** and **repeat.** See "One word, two meanings" below.
 
 **Calibration.** Two separate kinds that are never mixed (ADR 0020, `src/js/calibration/`):
