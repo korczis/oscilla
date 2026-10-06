@@ -156,21 +156,42 @@ Proposed:
   (IndexedDB refuses a lower version). It falls back to page memory and shows nothing stored. A
   revert of this decision must therefore keep `DB_VERSION` 4 and its upgrade step, even if it
   removes the findings interface.
-- **Identity checks.** A run's identity (its result hash, whether it has a response, its stored
-  grid) is read from the store itself, which verifies the record on read, never from the
-  workspace's decoded-record cache: another tab may have replaced the record since it was cached.
-  - The identity is kept only while the run's list row is unchanged and names the same result
-    hash. List rows carry the hash, and rows written by earlier builds get it on their first read
-    (taken from the stored record, which stays unchanged).
-  - Every findings refresh reads the run list first. That includes the refresh after a finding is
-    saved, deleted or imported, so a record replaced in another tab is caught at the next refresh
-    of either list. The Experiments refresh also evicts a decoded record whose row changed.
-  - A tab that becomes visible again re-reads the list.
+- **Identity is verified at one point, at the moment of use** (review 3 of #149).
+  `findingsVerifyCitedRun(id, citedHash)` (`ui/findings.js`) reads the run fresh from the store,
+  through `experimentsIdentity`, which calls `store.get` (it verifies the record's result hash on
+  read) and never the decoded-record cache. It answers ok, different, unverifiable, unreadable or
+  missing, with the stored grid. Nothing keeps an identity between uses. Every claim about a
+  cited run comes from it:
+  - **Reference states and "(a stored grid point)".** Every refresh verifies each listed cited
+    run (findingIssues over those verifications). Every findings refresh reads the run list
+    first, including the one after a finding is saved, deleted or imported.
+  - **Open.** It verifies against the cited hash first. When that no longer holds, nothing is
+    opened, the findings are checked again and the reason is notified.
+  - **Linking.** The run is verified against the hash of the record the page shows for it
+    (`experimentsShownHash`: the open detail, a compared record, else the list row as last read),
+    and that hash is cited. A record replaced in another tab since it was shown is refused:
+    "replaced in another tab since it was shown here; reopen it".
+  - **Backlinks.** They carry the state of the citing references, and a finding whose cited hash
+    is not the hash of the record shown never reads as citing it.
+
+  List rows carry the result hash; rows written by earlier builds get it on their first read
+  (from the stored record, which stays unchanged). A list refresh re-reads a detail or comparison
+  whose run's row names another hash, and closes one whose run is gone. A tab that becomes
+  visible again re-reads the list. A unit test asserts that the identity is read in exactly one
+  place, with no identity cache in the findings adapter, and that refresh, Open and linking each
+  call the verification point.
+- **Known limit.** A record corrupted in place while its list row stays the same (possible only
+  with developer tools) is caught when the run is next verified: at the next refresh, Open or
+  link. A view opened before the corruption keeps showing its decoded copy until it is reopened
+  or the page is reloaded.
 - **Edits from two tabs.** `updatedAt` is an edit's version and always advances (at least 1 ms
   past the previous one). The dialog records the version it loaded. A save whose stored version
-  differs is refused; `store.putFinding(finding, { expectedUpdatedAt })` checks the same inside
-  its write transaction. The refused form offers "Load the stored version", which loads the
-  stored fields and version and keeps the typed text beside them to copy. A refused draft
+  differs (or that was deleted elsewhere) is refused;
+  `store.putFinding(finding, { expectedUpdatedAt })` checks the same inside its write
+  transaction. The refused form offers "Load the stored version", which loads the
+  stored fields and version (or, for a deleted finding, turns the form into a new finding) and
+  keeps the latest typed statement, status, references and notes beside them to copy, counted as
+  unsaved work. A refused draft
   reopened later loads the stored version first, so it never reopens stale.
 - **Drafts.** Closing the finding dialog without a save (Cancel, Escape or a backdrop click)
   keeps a changed form as a draft. The guard keeps reporting it, the panel offers to continue or
