@@ -30,11 +30,17 @@ concurrency:
 
 jobs:
   unit:
+    # Full history and tags: tests/unit/about.test.mjs checks the About timeline's commit times
+    # against git and every published v*.*.0 tag against its station, and fails rather than
+    # skips under CI without them (a full checkout measured 4 s against 2 s shallow, in the
+    # knowledge job).
     name: unit, build, artifact rules
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
       - uses: actions/setup-node@v7
         with:
           node-version: 22
@@ -56,7 +62,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        browser: [chromium, firefox]
+        browser: [chromium, firefox, webkit]
     env:
       OSC_BROWSERS: ${{ matrix.browser }}
     steps:
@@ -94,7 +100,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        browser: [chromium, firefox]
+        browser: [chromium, firefox, webkit]
     env:
       OSC_BROWSERS: ${{ matrix.browser }}
     steps:

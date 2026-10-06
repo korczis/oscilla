@@ -2,7 +2,7 @@
 // OSCILLA V2 pattern sequencer: browser checks against the real Web Audio implementation.
 //
 //   NODE_PATH=/Users/korczis/dev/oscilla/tests/node_modules node tests/browser/sequencer.cjs
-//   node tests/browser/sequencer.cjs --browser firefox     # chromium | firefox (default: both)
+//   node tests/browser/sequencer.cjs --browser firefox     # chromium | firefox | webkit (default: all)
 //   (stop and teardown checks poll against a deadline; no fixed sleep precedes an assertion)
 //
 // The fixture (tests/browser/fixtures/sequencer-fixture.js) is bundled in memory with esbuild
@@ -24,8 +24,13 @@ const playwright = require('playwright');
 
 const args = process.argv.slice(2);
 const only = args.includes('--browser') ? args[args.indexOf('--browser') + 1] : null;
+const KNOWN = ['chromium', 'firefox', 'webkit'];
 const ENGINES = only ? [only]
-  : (process.env.OSC_BROWSERS ? process.env.OSC_BROWSERS.split(',') : ['chromium', 'firefox']);
+  : (process.env.OSC_BROWSERS ? process.env.OSC_BROWSERS.split(',') : KNOWN);
+if (!ENGINES.length || ENGINES.some((e) => !KNOWN.includes(e))) {
+  console.error(`unknown browser(s) in ${JSON.stringify(ENGINES)}; expected ${KNOWN.join(', ')}`);
+  process.exit(2);
+}
 const FIXTURE = path.join(__dirname, 'fixtures', 'sequencer-fixture.js');
 const SR = 48000;
 // The spec's shortest allowed edge ramp (2-5 ms). Bounds use this fixed value, never the
@@ -355,6 +360,7 @@ async function runEngine(engine, bundle) {
     firefox: {
       firefoxUserPrefs: { 'media.autoplay.default': 0, 'media.autoplay.block-webaudio': false },
     },
+    webkit: {},
   }[engine];
   const browser = await playwright[engine].launch(launch);
   const errors = [];
