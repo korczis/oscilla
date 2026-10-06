@@ -8,11 +8,14 @@
 // markup in the first place.
 //
 // Integrity: each reference is checked against this browser's runs (findingIssues). A run's
-// identity (its stored result hash, whether it stores a response) is read once per id through
-// the experiments store and forgotten when the id leaves the list, so a different record stored
-// later under a deleted id is read again and named as different.
+// identity (its stored result hash, whether it stores a response, its stored response grid) is
+// read from the store itself (experimentsIdentity, never the decoded cache) and kept only while
+// the run's list row is unchanged and names the same hash; every findings refresh reads the run
+// list first. A record replaced under a cited id, here or in another tab, is therefore read again
+// and named as different; one that cannot be read is named unreadable.
 //
-// Losable work (ADR 0045): a finding being written in the dialog (findingsWhatWouldBeLost); the
+// Losable work (ADR 0045): a finding being written in the dialog, a draft kept after the dialog
+// closed without a save, and text kept after a refused stale edit (findingsWhatWouldBeLost); the
 // findings the memory fallback holds are reported by experimentsWhatWouldBeLost.
 
 import {
@@ -179,7 +182,7 @@ export function createFindingsUi() {
 
     findingsInit() {
       const dlg = typeof document !== 'undefined' ? document.getElementById(DIALOG) : null;
-      // Cancel or Escape discards the draft; until then the unsaved-work guard reports it.
+      // Closing without a save (Cancel, Escape, a backdrop click) keeps a changed form as a draft.
       if (dlg) dlg.addEventListener('close', () => this.findingsDialogClosed());
       // Another tab may have changed the runs or findings: read them again when this tab is
       // shown, so a reference is checked against what is stored now.
@@ -269,9 +272,10 @@ export function createFindingsUi() {
       const rows = list || await s.list();
       ctx.names = new Map(rows.map((r) => [r.experimentId, r.name || '(unnamed)']));
       ctx.defs = new Map((this.exps.defs || []).map((d) => [d.id, d.name]));
-      // An identity is kept only while its summary row is unchanged: a record replaced under the
-      // id (here or in another tab) changes the row (its result hash, time, size), so it is read
-      // again. A row from an earlier build carries no result hash and is read on every refresh.
+      // An identity is kept only while its list row is unchanged: a record replaced under the id
+      // (here or in another tab) changes the row (its result hash, time, size), so it is read
+      // again. The IndexedDB store fills a missing row hash in on first read (store.js), so only
+      // a row without one (none in practice) is read on every refresh.
       const byId = new Map(rows.map((r) => [r.experimentId, r]));
       const keys = new Map(rows.map((r) => [r.experimentId, Object.prototype.hasOwnProperty
         .call(r, 'resultHash') ? JSON.stringify(r) : null]));
