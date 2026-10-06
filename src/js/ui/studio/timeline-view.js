@@ -8,6 +8,7 @@
 // words for the screen and for screen readers (§143: names, kinds, times; never coordinates).
 
 import { BLOCK_SCHEMA, BLOCK_TYPES, describeBlock } from '../../sequencer/model.js';
+import { clipTarget } from '../../studio/clip-targets.js';
 import { NODE_REGISTRY } from '../../studio/registry.js';
 import {
   MEASUREMENT_ACTIONS, TIMELINE_MAX_S, TRACK_CLIP_KINDS,
@@ -368,21 +369,32 @@ export function focusAfterDelete(model, ids) {
 
 // ---------------------------------------------------------------- clip creation and split
 
-/** Node ids that can be a track's target: nodes whose type plays one of the track's clip kinds. */
-export function trackTargetOptions(model, kind, registry = NODE_REGISTRY) {
-  const kinds = TRACK_CLIP_KINDS[kind] || [];
-  return model.graph.nodes.filter((n) => {
-    const def = registry.get(n.type);
-    return def && def.clipKinds.some((k) => kinds.includes(k));
-  }).map((n) => ({ id: n.id, name: n.metadata.name }));
+/** Every clip use of a kind: its actions (a pattern clip has none). */
+function usesOf(kind) {
+  if (kind === 'event') return EVENT_ACTIONS.map((action) => ({ kind, action }));
+  if (kind === 'measurement') return MEASUREMENT_ACTIONS.map((action) => ({ kind, action }));
+  return [{ kind }];
 }
 
-/** Nodes a clip of `kind` may target (its own target overriding the track's). */
-export function clipTargetOptions(model, kind, registry = NODE_REGISTRY) {
-  return model.graph.nodes.filter((n) => {
-    const def = registry.get(n.type);
-    return def && def.clipKinds.includes(kind);
-  }).map((n) => ({ id: n.id, name: n.metadata.name }));
+/**
+ * Node ids that can be a track's target: nodes on which the transport plays some clip the track
+ * holds (clip-targets.js, R7).
+ */
+export function trackTargetOptions(model, kind, registry = NODE_REGISTRY) {
+  const uses = (TRACK_CLIP_KINDS[kind] || []).flatMap(usesOf);
+  return model.graph.nodes.filter((n) => uses.some((u) => clipTarget(n, u, registry).plays))
+    .map((n) => ({ id: n.id, name: n.metadata.name }));
+}
+
+/**
+ * Nodes a clip of `kind` may target (its own target overriding the track's): those on which the
+ * transport plays it, for its `action` when given, else for any action of the kind
+ * (clip-targets.js, R7).
+ */
+export function clipTargetOptions(model, kind, registry = NODE_REGISTRY, action = undefined) {
+  const uses = action === undefined ? usesOf(kind) : [{ kind, action }];
+  return model.graph.nodes.filter((n) => uses.some((u) => clipTarget(n, u, registry).plays))
+    .map((n) => ({ id: n.id, name: n.metadata.name }));
 }
 
 /** Tracks a clip may move to (§86 vertical: a compatible track). */
@@ -393,9 +405,10 @@ export function compatibleTracks(model, clip) {
 
 /**
  * The CLIP_ADD the editor dispatches to add a clip on a track at `time` (§84): a pattern clip
- * (Tone) when the track's target plays patterns or has none, else a gate event; a measurement
- * track gets a pre-roll step (it needs no particular target). The start is clamped so the clip
- * fits the timeline. Returns { action } or { reason }.
+ * (Tone) when the track's target plays patterns or has none, else a gate event when it plays
+ * gates, else the reason why nothing would play there; a measurement track gets a pre-roll step
+ * (it needs no particular target). The start is clamped so the clip fits the timeline. Returns
+ * { action } or { reason }.
  */
 export function addClipAction(model, trackId, time, registry = NODE_REGISTRY) {
   const track = model.timeline.tracks.find((t) => t.id === trackId);
@@ -406,9 +419,18 @@ export function addClipAction(model, trackId, time, registry = NODE_REGISTRY) {
     kind = 'measurement';
     payload = { action: 'pre-roll' };
   } else {
+    // The first of a pattern clip and a gate event that plays on the track's target
+    // (clip-targets.js, R7); a track without a target gets a pattern clip.
     const node = nodeOf(model, track.target);
-    const def = node ? registry.get(node.type) : null;
-    kind = !def || def.clipKinds.includes('pattern') ? 'pattern' : 'event';
+    const pattern = { kind: 'pattern' };
+    const gate = { kind: 'event', action: 'gate' };
+    const use = !node ? pattern
+      : [pattern, gate].find((u) => clipTarget(node, u, registry).plays);
+    if (!use) {
+      return { reason: `${node.metadata.name} plays no pattern or event clips; choose a `
+        + 'Sequence, an Oscillator or an Envelope as the track target.' };
+    }
+    kind = use.kind;
     payload = kind === 'pattern' ? { blockType: 'tone' } : { action: 'gate' };
   }
   const duration = NEW_CLIP_DURATION_S[kind];

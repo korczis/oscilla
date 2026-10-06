@@ -48,6 +48,7 @@
 //   data-key; when the action replaced the view (a connection link, Select source, Delete)
 //   and that control is gone, focus goes to the new view's heading, never to <body>.
 
+import { clipTarget } from '../../studio/clip-targets.js';
 import { NODE_REGISTRY, validateParamValue } from '../../studio/registry.js';
 import {
   MIN_CLIP_S, NOTES_MAX_CHARS, TEMPO_RANGE, TIME_SIGNATURE_DENOMINATORS,
@@ -160,6 +161,7 @@ function fieldOf(model, node, p, registry, edgeStatus) {
       const text = describeEdge(model, e.id, { registry });
       return r.short ? `${text} (${r.short})` : text;
     });
+  const lanePlays = clipTarget(node, { kind: 'automation', param: p.key }, registry);
   const control = p.type === 'enum' ? 'select' : p.type === 'boolean' ? 'toggle'
     : p.type === 'id' ? 'readonly' : p.type === 'list' ? 'list' : 'number';
   return {
@@ -176,7 +178,10 @@ function fieldOf(model, node, p, registry, edgeStatus) {
     max: p.max,
     slider: control === 'number' ? valueToSlider(p, value) : null,
     options: (p.options || []).map(([v, l]) => ({ value: v, label: l })),
-    automatable: !!p.automatable,
+    // Automate is offered where a lane plays (clip-targets.js, R7), not merely where one is
+    // held; a parameter the registry calls automatable says why no lane would play here.
+    automatable: lanePlays.plays,
+    automateReason: p.automatable && !lanePlays.plays ? lanePlays.reason : null,
     modulatable: !!p.modulatable,
     automated: !!lane,
     laneId: lane ? lane.id : null,
@@ -716,6 +721,10 @@ export function mountInspector(host, svc) {
     const notes = [];
     if (f.modulatedBy.length) {
       notes.push(h('p', { class: 'osc-si-note', text: `Modulated: ${f.modulatedBy.join('; ')}` }));
+    }
+    if (f.automateReason) {
+      notes.push(h('p', { class: 'osc-si-note', 'data-osc': 'studio.inspector.no-automate',
+        text: `No automation: ${f.automateReason}` }));
     }
     if (f.automatable) {
       notes.push(h('button', { type: 'button', class: 'osc-btn osc-btn-secondary osc-si-auto',

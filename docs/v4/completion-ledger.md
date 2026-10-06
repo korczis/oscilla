@@ -31,7 +31,7 @@ mobile, significant performance), **P2** (polish, debt).
 | Studio model, desired/plan/applied, divergence | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | EXISTS — but see R1, R2 |
 | Runtime transaction (prepare/commit) | ✓ | ✓ | ✓ (#119) | – | ✓ | – | ✓ | prepare + commit injection | EXISTS |
 | Operation trace (Studio) | ✓ | – | ✓ | ephemeral by design | ✓ | – | ✓ | ✓ | EXISTS (gaps: locate, edges) |
-| Sequencer / timeline / automation | ✓ | ✓ | ✓ | ✓ | ✓ | – | ✓ | ✓ | PARTIAL (clip-target policy duplicated, R7) |
+| Sequencer / timeline / automation | ✓ | ✓ | ✓ | ✓ | ✓ | – | ✓ | ✓ | EXISTS (one clip-target policy, R7 **closed** #PRNUM) |
 | Studio Microphone node | ✓ | ✓ | ✓ (#119) | – | Allow microphone | – | ✓ | ✓ | EXISTS |
 | Experiment definition | ✓ (#116) | ✓ | engine runs the bound recipe | ✓ (append-only versions) | ✓ | definition ref in result hash v4 | ✓ | ✓ | EXISTS (no separate plan compiler) |
 | Measurement run (state machine, cancel, repeats) | ✓ | ✓ | ✓ | aggregate only | ✓ | ✓ | ✓ | ✓ | EXISTS (no retry/attempt record) |
@@ -82,7 +82,10 @@ mobile, significant performance), **P2** (polish, debt).
 ### P2 (tracked)
 
 Diagnostic codes derived from message text (R5, fixing); clip-target policy duplicated between
-registry, timeline UI and transport (R7); pattern-played Oscillator frequency lanes drive a
+registry, timeline UI and transport (R7, **closed** #PRNUM: one pure function,
+`studio/clip-targets.js` `clipTarget`, read by the store, the timeline UI and the transport; the
+UI had offered event-clip targets, measurement targets and Automate on parameters the transport
+never plays, `tests/unit/v4-clip-target-policy.test.mjs`); pattern-played Oscillator frequency lanes drive a
 silent carrier (R8); presentation-only edits pay a full compile while playing (R9);
 `mode`/`workspace` split state and three hash routers (W4, fixing with W2: one dispatcher, ADR 0045); Space has two meanings and two
 shortcut dialogs (W5); disabled controls without a reason (W6, partly fixing); WebKit absent from
