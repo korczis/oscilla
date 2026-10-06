@@ -1280,8 +1280,12 @@ async function runBrowser() {
         const wave = V2.buildPeriodicWave(e.ctx, [{ n: 1, gain: 1, phase: 0 }, { n: 2, gain: 0.3, phase: 0 }]).wave;
         e.play(plan, { ...base, periodicWave: wave });
         await sleep(200);
+        const tClear = e.ctx.currentTime;
         const cleared = e.clearPeriodicWave();
-        await sleep(100);
+        // The engine swaps the waveform once its 5 ms dip has rendered on the audio clock
+        // (_switchWaves); 100 ms of wall time is less than that on a starved runner (seen: the
+        // carrier still 'custom' with 45 ms clock ticks), so wait 100 ms of audio time.
+        await untilAudio(tClear + 0.1);
         const type = e.voice && e.voice.carrier.type;
         e.stopAll();
         return { cleared, type };
