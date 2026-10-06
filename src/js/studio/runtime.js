@@ -54,7 +54,11 @@
 //                                  a changed peak re-sizes that node on the next apply.
 //                                  `initial`, the value the owner holds the parameter at, is what
 //                                  the node's first write gives it when the runtime builds the
-//                                  node (instead of its base), before any route to it opens
+//                                  node (instead of its base), before any route to it opens; a
+//                                  CONTROL edge into such a parameter is built `detached` (its
+//                                  gain ramps as any edge's but is not connected to the
+//                                  parameter): the owner wires it (the transport's levelMods taps
+//                                  it onto the pattern bus and, closed, onto the carrier)
 //   runtime.ownedParams()          the current claims, [{ node, param }]
 //   runtime.baseOffset(id, key)    the constant part the modulation edges add to a parameter's
 //                                  base (linear edges: unipolar polarity, offset), in its unit,
@@ -566,8 +570,11 @@ export function createStudioRuntime({
         if (!edgeAdd.has(id)) continue;
         doing = { kind: 'edge', id };
         const pe = next.edges.get(id);
+        // Into a parameter its owner holds at an `initial` value: not connected (header).
+        const held = pe.kind === 'control' && Object.hasOwn(initials.get(pe.to.node) || {},
+          pe.to.port);
         created.edges.set(id, createEdgeHandle(pe, handleOf(pe.from.node), handleOf(pe.to.node),
-          env));
+          env, { connect: !held }));
       }
       const edgeOf = (eid) => created.edges.get(eid)
         || (edgeRemove.has(eid) ? null : edges.get(eid));

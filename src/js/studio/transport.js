@@ -385,8 +385,11 @@ export function createStudioTransport({
    * integration"): every active CONTROL edge into its `level` is re-routed from the carrier's
    * level AudioParam (held at ROUTE_FLOOR) onto the pattern bus gain, so it modulates the voices.
    * The edge's depth gain feeds two path gains: toBus → bus.gain (1) and toCarrier → the
-   * carrier's level (0). `fadeAt` (a sounding oscillator claimed now): toCarrier ramps 1 → 0 with
-   * the carrier's own fade, so the move is click-free; edges built in this transaction are silent
+   * carrier's level (0). An edge the runtime built while the level was claimed with its
+   * `initial` (ownedFor) arrives `detached`, never connected to the carrier, so a PLAY starved
+   * past the graph start cannot sound the carrier through it before this runs (review D1).
+   * `fadeAt` (a sounding oscillator claimed now): toCarrier ramps 1 → 0 with the carrier's own
+   * fade, so the move is click-free; edges built in this transaction are silent
    * (their ramp starts at the crossfade time) and move at once. Taps of retired edges leave
    * after the runtime's crossfade, like the bus routes.
    */

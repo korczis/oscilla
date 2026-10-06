@@ -204,6 +204,53 @@ test('a PLAY starved past the graph start never sounds the pattern-played carrie
   assert.ok(s.runtime.ownedParams().some((o) => o.node === 'osc-1' && o.param === 'level'));
 });
 
+test('a PLAY starved past the graph start never sounds a level modulation into the carrier', () => {
+  // An LFO on the pattern-played oscillator's level (review D1 of #140): the runtime wired the
+  // edge's depth gain straight into the carrier's level AudioParam and ramped it open from the
+  // graph start, and only the transport's claim (levelMods) moved it onto the pattern bus, so a
+  // stalled PLAY sounded the carrier at the LFO's depth before the first clip. An edge into a
+  // parameter claimed with an `initial` value is built unconnected to it; the owner taps it.
+  const model = templateModel(REFERENCE_TEMPLATE_ID);
+  const store = createStudioStore(model, { idGenerator: createIdGenerator(model) });
+  const lfo = ok(store.dispatch({ type: 'NODE_ADD', nodeType: 'lfo', position: { x: 0, y: 0 } }));
+  const lfoId = lfo.created.nodes[0];
+  const e = ok(store.dispatch({ type: 'EDGE_ADD', from: { node: lfoId, port: 'control' },
+    to: { node: 'osc-1', port: 'level' } }));
+  const edgeId = e.created.edges[0];
+  const s = setup(store.getModel());
+  const jump = 0.05; // > SAFE_HORIZON_S: the clock passes the graph start during the stall
+  let graph = null;
+  const runtime = Object.create(s.runtime, { start: { value: () => {
+    const r = s.runtime.start();
+    const level = s.runtime.nodes.get('osc-1').modTarget('level', 'linear').param;
+    const eh = s.runtime.edges.get(edgeId);
+    graph = { at: r.at, level, gain: eh.gain, outputs: [...eh.gain.outputs],
+      route: { calls: eh.gain.gain.calls.map((c) => [...c]) } };
+    s.ctx.advance(s.ctx.currentTime + jump);
+    return r;
+  } } });
+  const transport = createStudioTransport({ runtime, engine: s.engine, store: s.store });
+  const r = ok(transport.start());
+  assert.ok(r.baseTime > graph.at, 're-anchored after the graph start');
+  assert.ok(levelCurve(graph.route, 0)(graph.at + STUDIO_XFADE_S) > 0, 'the LFO route opens');
+  assert.ok(!graph.outputs.includes(graph.level),
+    'at runtime.start() the LFO edge does not reach the carrier level');
+  // After the claim: every path from the edge to the carrier level is held at 0 from the graph
+  // start on, and the modulation reaches the pattern bus.
+  const toLevel = graph.gain.outputs.filter((n) => n.outputs && n.outputs.includes(graph.level));
+  assert.ok(!graph.gain.outputs.includes(graph.level), 'no direct route after the claim');
+  assert.equal(toLevel.length, 1, 'one tap toward the carrier');
+  const tap = levelCurve(toLevel[0].gain, 0);
+  for (let t = graph.at; t <= graph.at + jump; t += 0.0025) {
+    assert.equal(tap(t), 0, `the carrier tap closed at ${t}`);
+  }
+  const claim = transport.debugInfo().claims;
+  assert.deepEqual(claim, ['osc-1']);
+  assert.ok(graph.gain.outputs.some((n) => n !== toLevel[0] && n.outputs
+    && n.outputs.some((d) => d instanceof FakeParam && d !== graph.level)),
+  'the LFO modulates the pattern bus');
+});
+
 test('Basic Synth: Tone and Sweep clips play on the oscillator at exact audio-clock times', () => {
   const s = setup();
   const r = ok(s.transport.start());

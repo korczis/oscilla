@@ -487,7 +487,11 @@ method (an engine change, out of this issue's scope):
     is silent before any route to it opens, not only from the transport's own first event, which
     a main thread stalled inside PLAY past the crossfade time issues after the audio thread has
     rendered the opened routes (the carrier sounded up to +6 dB re the Tone before a re-anchored
-    `baseTime` in chromium and webkit);
+    `baseTime` in chromium and webkit). A CONTROL edge into a parameter claimed with `initial`
+    is built `detached` (`createEdgeHandle(..., { connect: false })`): its gain ramps open like
+    any edge's but is not connected to the parameter, and the owner wires it — the transport's
+    `levelMods` taps it onto the pattern bus and, closed, onto the carrier. Wired straight in,
+    an LFO on the level sounded the carrier at its depth (−1.1 dB re the Tone) until the claim;
   - the Filter's `createFilterStage.update` writes frequency, Q and gain together: with an owned
     key the adapter applies the others itself with the stage's glide (τ 10 ms), clamp
     (`normalizeFilter`) and Q conversion (`nodeQ`), and always hands the stage the full base
