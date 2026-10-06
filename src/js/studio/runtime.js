@@ -150,6 +150,7 @@ import {
   computeBases, createEdgeHandle, diffPlans, disposeHandle, instantiateNode, planHash,
   studioHashOf,
 } from './compiler.js';
+import { sameExecutionState } from './schema.js';
 import { studioDiagnostic } from './validate.js';
 import { NO_TRACE } from '../core/trace.js';
 
@@ -249,6 +250,9 @@ export function createStudioRuntime({
   let lastError = null;
   let lastOps = [];
   let lastWarnings = [];
+  // The capabilities `plan` was compiled under (setOptions changes them: a recompile).
+  const optsKey = () => `${opts.inputPermission}|${opts.masterLevel}`;
+  let planOpts = null;
   let disposed = false;
   // The applied record (runtime.applied): set when a transaction commits, null while stopped.
   let record = null;
@@ -786,6 +790,8 @@ export function createStudioRuntime({
     attempt = rev;
     attemptModel = model;
     if (disposed) return fail('validate', 'The Studio runtime is disposed.', {}, 'disposed');
+    if (replace == null && presentationOnly(model)) return adopt(rev);
+    const key = optsKey();
     const next = compileStudio(model, { engine, registry, adapters, options: opts });
     if (!next.ok) return fail('validate', next.errors, { kept: true });
     const ops = diffPlans(plan, next, { owned: ownedMap(), replace });
@@ -795,6 +801,7 @@ export function createStudioRuntime({
       trace.record('runtime', 'apply', { revision: rev, outcome: 'not-applied',
         detail: { state } });
       plan = next;
+      planOpts = key;
       compiledRevision = rev;
       lastOps = ops;
       const result = { ok: true, applied: false, ops, revision: rev, warnings: next.warnings };
@@ -803,9 +810,39 @@ export function createStudioRuntime({
     }
     const r = transact(next, ops, rev);
     if (!r.ok) return r;
+    planOpts = key;
     compiledRevision = rev;
     commit();
     const result = { ...r, revision: rev, warnings: [...next.warnings, ...r.warnings] };
+    emit('applied', result);
+    return result;
+  }
+
+  /**
+   * Presentation-only (R9): while the graph runs, a model with the execution state of the
+   * applied plan's model (schema.js sameExecutionState: positions, names, markers and metadata
+   * differ at most) compiles to that same plan, so nothing the audio graph depends on changed.
+   */
+  function presentationOnly(model) {
+    return state === 'running' && !!hooks.ctx && !!record && record.plan === plan
+      && !!plan.model && planOpts === optsKey() && peaksDirty.size === 0
+      && sameExecutionState(plan.model, model);
+  }
+
+  /**
+   * Take revision `rev` without a compile or a transaction: the running graph already is what it
+   * compiles to. The applied record names `rev` with the same plan (planHash, studioHash and `at`
+   * unchanged: nothing was applied), so the divergence verdict stays in-sync; a refusal of that
+   * revision number is cleared as by a commit. The plan keeps the model it was compiled from:
+   * names reach only the plan's display reasons, which a transaction's next compile refreshes.
+   */
+  function adopt(rev) {
+    compiledRevision = rev;
+    record = { ...record, revision: rev };
+    if (lastError && lastError.revision === rev) lastError = null;
+    trace.record('runtime', 'apply', { revision: rev, outcome: 'presentation-only' });
+    const result = { ok: true, applied: false, presentation: true, ops: [], revision: rev,
+      warnings: [] };
     emit('applied', result);
     return result;
   }

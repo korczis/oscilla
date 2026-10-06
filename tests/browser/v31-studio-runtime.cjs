@@ -16,6 +16,14 @@
 //                        plan hash and the applied time; the automation lane and its owned
 //                        parameter are listed
 //   edit-in-sync         an edit while playing: still Running, at the new revision
+//   presentation-edit    ledger R9: the Basic Tone playing, a node dragged with the pointer and
+//                        moved 12 more times through the store (the drag's commit): no compile
+//                        and no runtime transaction (trace: every runtime step is an apply
+//                        `presentation-only`), Running at the store revision with the plan hash
+//                        it had, and no glitch on the output (engine.analyser, an AudioWorklet
+//                        tap): the largest one-sample step within contiguous audio stays below
+//                        CLICK_MAX times the 440 Hz sine's own largest step; then one parameter
+//                        edit compiles exactly once
 //   refused-edit         a live filter type change whose biquad cannot be created (one injected
 //                        createBiquadFilter throw): refused, the node status line gives the why
 //                        and the code (edit-refused); the Runtime diagnostics name Filter 1 and
@@ -67,6 +75,9 @@ const LAUNCH = {
 };
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const RT = '[data-osc="studio.inspector.runtime"]';
+// Click ratio bound: the largest one-sample step over the sine's own largest one (2π f A / sr);
+// the engine and Studio audio tests' measure and bound (v31-studio-audio.cjs CLICK_MAX).
+const CLICK_MAX = 3;
 const TR = '[data-osc="studio.inspector.trace"]';
 
 const H = {
@@ -166,6 +177,64 @@ const H = {
       }).observe(el, { childList: true, characterData: true, subtree: true });
     }
   }),
+  /**
+   * An output tap on engine.analyser (the end of the master chain): a frame-indexed AudioWorklet
+   * (data: URL, file://-safe, as the Studio audio fixture's), recording into window.__rtTap.
+   */
+  tap: (page) => page.evaluate(async () => {
+    const ctx = window.OSCILLA.engine.ctx;
+    window.__rtTap = [];
+    if (window.__rtTapNode) return ctx.sampleRate;
+    const W = `class Tap extends AudioWorkletProcessor {
+      constructor() { super(); this.N = 4096; this.L = new Float32Array(this.N); this.n = 0;
+        this.f0 = 0; }
+      flush() { if (this.n) this.port.postMessage({ f: this.f0, L: this.L.slice(0, this.n) });
+        this.n = 0; }
+      process(inputs) { const i = inputs[0];
+        if (this.n && currentFrame !== this.f0 + this.n) this.flush();
+        if (!this.n) this.f0 = currentFrame;
+        const L = i && i.length ? i[0] : null; const len = L ? L.length : 128;
+        if (L) this.L.set(L, this.n); else this.L.fill(0, this.n, this.n + len);
+        this.n += len; if (this.n + 128 > this.N) this.flush(); return true; } }
+      registerProcessor('osc-rt-tap', Tap);`;
+    await ctx.audioWorklet.addModule(`data:application/javascript;charset=utf-8,${
+      encodeURIComponent(W)}`);
+    const node = new AudioWorkletNode(ctx, 'osc-rt-tap', { numberOfInputs: 1,
+      numberOfOutputs: 1, channelCount: 1, channelCountMode: 'explicit' });
+    const sink = ctx.createGain();
+    sink.gain.value = 0;
+    window.OSCILLA.engine.analyser.connect(node);
+    node.connect(sink);
+    sink.connect(ctx.destination);
+    node.port.onmessage = (e) => window.__rtTap.push(e.data);
+    window.__rtTapNode = node;
+    return ctx.sampleRate;
+  }),
+  /**
+   * The largest one-sample step and the peak in [t0, t1) (context seconds), within contiguous
+   * runs of tapped audio only (a block the tap did not receive is a gap, counted, never a step).
+   */
+  steps: (page, t0, t1) => page.evaluate(([a, b]) => {
+    const sr = window.OSCILLA.engine.ctx.sampleRate;
+    const f0 = Math.round(a * sr);
+    const f1 = Math.round(b * sr);
+    let max = 0; let peak = 0; let n = 0; let gaps = 0; let prev = null; let prevEnd = null;
+    for (const c of window.__rtTap) {
+      const lo = Math.max(f0, c.f);
+      const hi = Math.min(f1, c.f + c.L.length);
+      if (hi <= lo) continue;
+      if (prevEnd !== null && lo !== prevEnd) { gaps += 1; prev = null; }
+      for (let k = lo; k < hi; k += 1) {
+        const v = c.L[k - c.f];
+        peak = Math.max(peak, Math.abs(v));
+        if (prev !== null) max = Math.max(max, Math.abs(v - prev));
+        prev = v;
+        n += 1;
+      }
+      prevEnd = hi;
+    }
+    return { max, peak, n, gaps, sr };
+  }, [t0, t1]),
   /** The next createBiquadFilter on the engine's context throws (one shot). */
   failNextBiquad: (page) => page.evaluate(() => {
     const ctx = window.OSCILLA.engine.ctx;
@@ -223,6 +292,86 @@ function defineChecks() {
       inSync: rv.state === 'in-sync' && rv.text.includes(`Revision ${r.revision} plays`),
       applied: (rv.rows.Applied || '').startsWith(`rev ${r.revision} · `),
     }), rv, revision: r.revision };
+  });
+
+  def('presentation-edit', async ({ page }) => {
+    await H.fresh(page);
+    await page.evaluate(() => window.OSCILLA.app.studioLoadTemplate('basic-tone'));
+    await H.frames(page);
+    await H.tap(page);
+    await page.click('[data-osc="studio.play"]');
+    await H.waitState(page, 'in-sync');
+    await sleep(500);
+    const before = await page.evaluate(() => {
+      const s = window.OSCILLA.studio;
+      const st = s.trace.steps();
+      return { seq: st.length ? st[st.length - 1].seq : 0, applied: s.runtime.applied(),
+        t: window.OSCILLA.engine.ctx.currentTime,
+        pos: s.model.graph.nodes.find((n) => n.id === 'osc-1').position };
+    });
+    // One real pointer drag of the oscillator's card (the graph editor commits one NODE_MOVE)…
+    const card = await page.evaluate(() => document.querySelector(
+      '.osc-sg-node[data-node-id="osc-1"] .osc-sg-title').getBoundingClientRect().toJSON());
+    const x = card.left + card.width / 2;
+    const y = card.top + card.height / 2;
+    await page.mouse.move(x, y);
+    await page.mouse.down();
+    for (let i = 1; i <= 10; i += 1) await page.mouse.move(x + 6 * i, y + 3 * i);
+    await page.mouse.up();
+    await H.frames(page);
+    // … then the same commit repeatedly, one per frame.
+    for (let i = 1; i <= 12; i += 1) {
+      await page.evaluate((k) => {
+        const s = window.OSCILLA.studio;
+        const p = s.model.graph.nodes.find((n) => n.id === 'osc-1').position;
+        s.store.dispatch({ type: 'NODE_MOVE', nodeId: 'osc-1', position: { x: p.x + 8,
+          y: p.y + (k % 2 ? 8 : -8) } });
+      }, i);
+      await H.frames(page, 1);
+    }
+    await sleep(300);
+    const after = await page.evaluate((seq) => {
+      const s = window.OSCILLA.studio;
+      const steps = s.trace.steps().filter((x) => x.seq > seq);
+      const runtime = steps.filter((x) => x.owner === 'runtime');
+      return { applied: s.runtime.applied(), revision: s.store.getRevision(),
+        t: window.OSCILLA.engine.ctx.currentTime,
+        pos: s.model.graph.nodes.find((n) => n.id === 'osc-1').position,
+        compiles: runtime.filter((x) => x.kind === 'compile').length,
+        presentation: runtime.filter((x) => x.kind === 'apply'
+          && x.outcome === 'presentation-only').length,
+        otherRuntime: runtime.filter((x) => !(x.kind === 'apply'
+          && x.outcome === 'presentation-only')).map((x) => `${x.kind}:${x.outcome}`),
+        playing: s.transport.playing };
+    }, before.seq);
+    const rv = await H.runtime(page);
+    const audio = await H.steps(page, before.t, after.t);
+    const slope = (2 * Math.PI * 440 * audio.peak) / audio.sr;
+    const ratio = slope > 0 ? audio.max / slope : Infinity;
+    // One audio edit: exactly one compile.
+    const audioEdit = await page.evaluate(() => {
+      const s = window.OSCILLA.studio;
+      const st = s.trace.steps();
+      const seq = st[st.length - 1].seq;
+      const r = s.store.dispatch({ type: 'NODE_PARAM_SET', nodeId: 'osc-1', key: 'detune',
+        value: 5 });
+      return { ok: r.ok, compiles: s.trace.steps().filter((x) => x.seq > seq
+        && x.owner === 'runtime' && x.kind === 'compile').length };
+    });
+    await page.evaluate(() => window.OSCILLA.app.studioStop());
+    return { ...H.verdict({
+      dragged: after.pos.x !== before.pos.x,
+      noCompile: after.compiles === 0,
+      noTransaction: after.otherRuntime.length === 0 && after.presentation >= 13,
+      samePlan: after.applied.planHash === before.applied.planHash,
+      appliedRevision: after.applied.revision === after.revision,
+      running: rv.state === 'in-sync' && after.playing,
+      audio: audio.n > 0.5 * audio.sr && audio.peak > 0.01,
+      noGlitch: ratio < CLICK_MAX,
+      audioEditCompilesOnce: audioEdit.ok && audioEdit.compiles === 1,
+    }), compiles: after.compiles, presentation: after.presentation,
+    otherRuntime: after.otherRuntime.slice(0, 6), ratio: +ratio.toFixed(2), gaps: audio.gaps,
+    samples: audio.n, peak: +audio.peak.toFixed(4), audioEdit };
   });
 
   def('refused-edit', async ({ page, browserName }) => {
