@@ -13,7 +13,8 @@
 //             listDefinitions() -> { definitions, unreadable: [{ id, reason }] },
 //             getDefinition(id), putDefinition(definition),
 //             listFindings() -> { findings, unreadable: [{ id, reason }] }, getFinding(id),
-//             putFinding(finding), putFindings([finding]) -> { stored, same }, deleteFinding(id) }
+//             putFinding(finding, { expectedUpdatedAt }),
+//             putFindings([finding]) -> { stored, same }, deleteFinding(id) }
 //   memory Store only: held() -> { experiments, definitions, studio, findings } (records it
 //   holds, which a reload discards: the unsaved-work guard reports them)
 //
@@ -82,14 +83,15 @@ import {
 } from './schema.js';
 import { validateExperiment } from './validate.js';
 import { validateDefinition } from './definition.js';
-import { validateFinding } from './findings.js';
+import { validateFinding, importPlan } from './findings.js';
 import { runLinks } from './connections.js';
 import { canonicalJson } from './canonical-json.js';
 
 export const DB_NAME = 'oscilla-experiments';
 /**
  * Version 1: experiments; version 2 adds the Studio partition; version 3 the definitions;
- * version 4 the findings (never deletes anything).
+ * version 4 the findings (never deletes anything). One-way: a build with a lower version cannot
+ * open the database, so a revert keeps this version and its upgrade step (ADR 0046).
  */
 export const DB_VERSION = 4;
 export const RECORDS = 'experiments';
@@ -182,11 +184,18 @@ function checkedFinding(f, code, id) {
   return v.finding;
 }
 
-/** May `next` replace the stored `old`? Its creation time never changes. */
-function findingVerdict(old, next) {
+/**
+ * May `next` replace the stored `old`? Its creation time never changes; with `expectedUpdatedAt`
+ * (the version an edit was made from) a finding changed since then is refused with 'conflict'.
+ */
+function findingVerdict(old, next, expectedUpdatedAt) {
   if (old && old.createdAt !== next.createdAt) {
     throw new ExperimentStoreError('immutable', `finding ${next.id}: its creation time never `
       + 'changes', undefined, ['createdAt']);
+  }
+  if (expectedUpdatedAt !== undefined && (old ? old.updatedAt : null) !== expectedUpdatedAt) {
+    throw new ExperimentStoreError('conflict', `finding ${next.id} was changed elsewhere since it `
+      + 'was opened here (another tab or window); nothing was overwritten', undefined, [next.id]);
   }
 }
 
@@ -220,22 +229,14 @@ function checkedBatch(list) {
 
 /** The import verdict over the stored copies (null when absent): { write, same } or throws. */
 function batchVerdict(batch, olds) {
-  const same = [];
-  const write = [];
-  const conflicts = [];
-  batch.forEach((f, i) => {
-    const old = olds[i];
-    if (!old) write.push(f);
-    else if (canonicalJson(old) === canonicalJson(f)) same.push(f.id);
-    else conflicts.push(f.id);
-  });
-  if (conflicts.length) {
-    throw new ExperimentStoreError('conflict', `${conflicts.length === 1 ? 'a finding' : 'findings'
-    } with the same id ${conflicts.length === 1 ? 'is' : 'are'} already stored with different `
-      + `content (${conflicts.slice(0, 4).join(', ')}); nothing was imported`, undefined,
-    conflicts);
+  const plan = importPlan(batch, olds.filter(Boolean));
+  if (plan.conflicts.length) {
+    const n = plan.conflicts.length;
+    throw new ExperimentStoreError('conflict', `${n === 1 ? 'a finding' : 'findings'} with the `
+      + `same id ${n === 1 ? 'is' : 'are'} already stored with different content (${plan.conflicts
+        .slice(0, 4).join(', ')}); nothing was imported`, undefined, plan.conflicts);
   }
-  return { write, same };
+  return { write: plan.add, same: plan.same };
 }
 
 // ---------------------------------------------------------------- definitions
@@ -354,6 +355,10 @@ export function summaryRecord(doc, sizeBytes) {
     schemaVersion: doc.schemaVersion,
     oscillaVersion: doc.oscillaVersion,
     status: doc.quality ? doc.quality.status : null,
+    // The run's identity (ADR 0046): a finding's reference is checked against it on every
+    // refresh. A row written by an earlier build lacks it and the record is read instead.
+    resultHash: doc.provenance && typeof doc.provenance.resultHash === 'string'
+      ? doc.provenance.resultHash : null,
     sizeBytes,
     ...(isBaseline(doc) ? { baseline: true } : {}),
     ...(doc.definition ? { definition: { id: doc.definition.id, version: doc.definition.version,
@@ -498,9 +503,9 @@ export function createMemoryStore({ knownAlgorithms } = {}) {
     listFindings: () => wrap('listFindings', () => findingList([...finds.values()]
       .map((t) => JSON.parse(t)))),
     getFinding: (id) => wrap('getFinding', () => readFinding(id)),
-    putFinding: (f) => wrap('putFinding', () => {
+    putFinding: (f, { expectedUpdatedAt } = {}) => wrap('putFinding', () => {
       const next = checkedFinding(f, 'invalid');
-      findingVerdict(readFinding(next.id), next);
+      findingVerdict(readFinding(next.id), next, expectedUpdatedAt);
       finds.set(next.id, JSON.stringify(next));
       return next;
     }),
@@ -736,7 +741,7 @@ function idbStore(db, storage, knownAlgorithms) {
     getFinding: (id) => run('getFinding', [FINDINGS], 'readonly',
       (tx) => request(tx.objectStore(FINDINGS).get(id)))
       .then((f) => (f == null ? null : checkedFinding(f, 'corrupt', id))),
-    putFinding(f) {
+    putFinding(f, { expectedUpdatedAt } = {}) {
       let next;
       try {
         next = checkedFinding(f, 'invalid');
@@ -746,7 +751,8 @@ function idbStore(db, storage, knownAlgorithms) {
       return run('putFinding', [FINDINGS], 'readwrite', (tx) => {
         const os = tx.objectStore(FINDINGS);
         return request(os.get(next.id)).then((old) => {
-          findingVerdict(old == null ? null : checkedFinding(old, 'corrupt', next.id), next);
+          findingVerdict(old == null ? null : checkedFinding(old, 'corrupt', next.id), next,
+            expectedUpdatedAt);
           return request(os.put(next));
         });
       }).then(() => next);

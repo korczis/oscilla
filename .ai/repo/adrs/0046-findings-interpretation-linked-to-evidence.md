@@ -85,14 +85,26 @@ Proposed:
   finding write touches a run, and deleting a run never touches a finding. A stored finding
   that fails validation is listed as unreadable and never hides the others; its `createdAt`
   never changes.
-- **Integrity is reported, never repaired.** `findingIssues(finding, lookup)` returns, in
-  reference order: `missing-run` (the run is not stored here: deleted, or never imported; the
-  reference reads "missing: … is not stored here"), `wrong-kind` (the id names a stored
-  definition, not a run), `different-run` (a run is stored under the id, but its result hash
-  differs from the cited one), `no-response` (a value reference to a run that stores no
-  frequency response), and `unsupported-status` (the finding claims supported or contradicted
-  but none of its references resolve here). The finding keeps its status and its references;
-  the user decides. The delete dialog of a run says how many findings cite it.
+- **Integrity is reported, never repaired.** A reference counts as present only when its run is
+  stored here, its record can be read, and its stored result hash equals the cited one.
+  `findingIssues(finding, lookup)` returns, in reference order:
+  - `missing-run`: the run is not stored here (deleted, or never imported). The reference reads
+    "missing: … is not stored here".
+  - `wrong-kind`: the id names a stored definition, not a run.
+  - `unreadable-run`: the run is listed but its record cannot be read (a corrupt record).
+  - `different-run`: a run is stored under the id, but its result hash differs from the cited
+    one.
+  - `unverifiable-identity`: the hash is missing on either side (the citation, or the record
+    stored under the id), or the stored identity was not read. Each case is worded as such.
+  - `no-response`: a value reference to a run that stores no frequency response.
+  - `not-a-grid-point`: a value reference whose frequency is not exactly a point of the run's
+    stored response grid. "(a stored grid point)" is said only when that check holds, and
+    frequencies print with enough digits that distinct grid points never read the same.
+  - `unsupported-status`: the finding claims supported or contradicted, but none of its
+    references can be checked here.
+
+  The finding keeps its status and its references; the user decides. Only a readable run with a
+  result hash can be linked. The delete dialog of a run says how many findings cite it.
 - **Export and import.** `.oscilla-findings.json`:
   `{ kind: 'oscilla-findings', schemaVersion: 1, exportedAt, oscillaVersion, findings }`.
   The whole file is validated before anything is stored; a newer file or finding schema is
@@ -134,12 +146,27 @@ Proposed:
 
 ## Consequences
 
-- DB version 4. A tab still holding version 3 open blocks the upgrade, which the store already
-  reports as unavailable and falls back to memory for.
-- A finding's identity of a run is read once per id per page view (the experiments store
-  verifies the record on read) and forgotten when the id leaves the list.
-- Closing the finding dialog (Cancel or Escape) discards the draft; the guard protects it only
-  against leaving the page.
+- **DB version 4, with a version-3 tab open.** An open tab of an earlier build holding the
+  version-3 database does not block the upgrade: it receives `versionchange` and closes its
+  connection (`db.onversionchange = () => db.close()`, already in earlier builds). The upgrade
+  then proceeds, and every record in every store is kept. The old tab's later store calls fail
+  with their error until it is reloaded. Review 1 of #149 verified this in Chromium, Firefox and
+  WebKit, over `file://` and http.
+- **DB version 4 is one-way.** A build with `DB_VERSION` 3 cannot open a version-4 database
+  (IndexedDB refuses a lower version). It falls back to page memory and shows nothing stored. A
+  revert of this decision must therefore keep `DB_VERSION` 4 and its upgrade step, even if it
+  removes the findings interface.
+- **Identity checks.** A run's identity (its result hash, whether it has a response, its stored
+  grid) is read through the experiments store, which verifies the record on read.
+  - It is kept only while the run's list row is unchanged. List rows now carry the result hash.
+    A record replaced under its id changes the row, so it is read again; a row from an earlier
+    build, without the hash, is read on every refresh.
+  - The Experiments refresh evicts a decoded record whose row changed.
+  - A tab that becomes visible again re-reads the list.
+- **Drafts.** Closing the finding dialog without a save (Cancel, Escape or a backdrop click)
+  keeps a changed form as a draft. The guard keeps reporting it, the panel offers to continue or
+  discard it, and only Discard drops it. A reload still loses it, and the guard says so before
+  one.
 - Confirmation criteria: `tests/unit/v4-findings.test.mjs` (statuses, evidence required for
   supported and contradicted, typed references, the identity list, prototype pollution, markup,
   control and bidirectional characters, sizes, a newer schema; every integrity issue; the memory

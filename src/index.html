@@ -1933,6 +1933,14 @@
           </div>
           <p class="osc-m-hint">A finding is your interpretation, linked to the evidence it rests on. A measurement is what was observed or computed; recording a finding never changes it.</p>
           <p class="osc-m-hint" role="note" data-osc="fnd.note" x-show="fnd.note" style="display: none" x-text="fnd.note"></p>
+          <div class="osc-warning osc-f-draft" role="status" data-osc="fnd.draftNote" x-show="fnd.draftKept && !fnd.form.open" style="display: none">
+            <svg aria-hidden="true"><use href="#q-warn"/></svg>
+            <p>A finding draft is kept in this page only (a reload loses it).</p>
+            <button type="button" class="osc-btn osc-btn-secondary osc-m-small" data-osc="fnd.draftContinue"
+              @click="findingsContinueDraft()">Continue writing</button>
+            <button type="button" class="osc-btn osc-btn-secondary osc-m-small osc-x-delete" data-osc="fnd.draftDiscard"
+              @click="findingsDiscardDraft()">Discard draft</button>
+          </div>
           <ul class="osc-m-notes osc-m-notes--plain" role="alert" data-osc="fnd.importErrors" x-show="fnd.importErrors.length" style="display: none">
             <template x-for="(t, i) in fnd.importErrors" :key="i"><li x-text="t"></li></template>
           </ul>
@@ -1941,8 +1949,7 @@
               <li class="osc-x-row osc-f-row" data-osc="fnd.row" :data-id="r.id">
                 <div class="osc-f-head">
                   <h4 class="osc-f-statement" x-text="r.statement"></h4>
-                  <span class="osc-m-chip osc-f-status" data-osc="fnd.status" :data-status="r.status"
-                    :title="r.statusHint" x-text="r.statusText"></span>
+                  <span class="osc-m-chip osc-f-status" :title="r.statusHint">Your judgement: <span data-osc="fnd.status" :data-status="r.status" x-text="r.statusText"></span></span>
                 </div>
                 <p class="osc-f-issue" data-osc="fnd.statusIssue" x-show="r.statusIssue" style="display: none" x-text="r.statusIssue"></p>
                 <ul class="osc-f-refs" role="list" :aria-label="'Evidence: ' + r.statement">
@@ -2120,7 +2127,7 @@
               </div>
               <ul class="osc-x-ev-list" role="list" data-osc="exp.findingsList" aria-labelledby="osc-x-fnd-of-title">
                 <template x-for="b in (exps.detail ? findingsBacklinks(exps.detail.id) : [])" :key="b.id">
-                  <li><strong x-text="b.statusText"></strong>: <span x-text="b.statement"></span> <span class="osc-f-how" x-text="'(cites ' + b.how + ')'"></span></li>
+                  <li><strong x-text="b.statusText + ' (your judgement)'"></strong>: <span x-text="b.statement"></span> <span class="osc-f-how" x-text="'(cites ' + b.how + ')'"></span></li>
                 </template>
               </ul>
               <p class="osc-m-hint" x-show="exps.detail && !findingsBacklinks(exps.detail.id).length">No finding cites this run.</p>
@@ -3099,7 +3106,7 @@
       <label class="osc-label" for="osc-fnd-statement">Statement</label>
       <input class="osc-number osc-dialog-input" id="osc-fnd-statement" type="text" maxlength="1000"
         autocomplete="off" data-osc="fnd.statement" x-model="fnd.form.statement">
-      <label class="osc-label" for="osc-fnd-status">Status</label>
+      <label class="osc-label" for="osc-fnd-status">Status (your judgement)</label>
       <div class="osc-select">
         <select id="osc-fnd-status" data-osc="fnd.statusSelect" x-model="fnd.form.status" aria-describedby="osc-fnd-status-hint">
           <template x-for="s in FINDING_STATUSES" :key="s"><option :value="s" x-text="FINDING_STATUS_TEXT[s]"></option></template>
@@ -3150,8 +3157,12 @@
       <textarea class="osc-number osc-m-text osc-m-textarea" id="osc-fnd-notes" rows="2" maxlength="10000"
         data-osc="fnd.notes" x-model="fnd.form.notes"></textarea>
       <p class="osc-dialog-note" role="alert" data-osc="fnd.error" x-show="fnd.form.error" x-text="fnd.form.error"></p>
+      <p class="osc-dialog-note" x-show="findingsDraftDirty()" style="display: none">Closing keeps this draft in this page until you save or discard it; a reload loses it.</p>
       <div class="osc-dialog-actions">
-        <button type="button" class="osc-btn osc-btn-secondary" @click="closeDialog('osc-dlg-finding')">Cancel</button>
+        <button type="button" class="osc-btn osc-btn-secondary osc-x-delete" data-osc="fnd.discard"
+          x-show="findingsDraftDirty()" style="display: none" @click="findingsDiscardDraft()">Discard draft</button>
+        <button type="button" class="osc-btn osc-btn-secondary" data-osc="fnd.close" @click="closeDialog('osc-dlg-finding')"
+          x-text="findingsDraftDirty() ? 'Close (keep draft)' : 'Cancel'">Cancel</button>
         <button type="submit" class="osc-btn osc-btn-primary" data-osc="fnd.save">Save</button>
       </div>
     </form>
