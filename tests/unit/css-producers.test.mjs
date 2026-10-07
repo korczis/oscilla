@@ -12,6 +12,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
 import { test } from 'node:test';
+import { fileURLToPath } from 'node:url';
 import { MEASUREMENT_ROLES } from '../../src/js/measurement/views/common.js';
 import { BLOCK_TYPES } from '../../src/js/sequencer/model.js';
 import { PORT_VISUALS } from '../../src/js/studio/ports.js';
@@ -66,10 +67,11 @@ function stripComments(text) {
     .replace(/(^|\s)\/\/[^\n]*/g, '$1');
 }
 
+const ROOT_PATH = fileURLToPath(ROOT);
 function filesUnder(rel) {
   return readdirSync(new URL(rel, ROOT), { recursive: true, withFileTypes: true })
     .filter((e) => e.isFile())
-    .map((e) => `${e.parentPath.slice(new URL(ROOT).pathname.length)}/${e.name}`);
+    .map((e) => `${e.parentPath.slice(ROOT_PATH.length)}/${e.name}`);
 }
 
 const STYLE_FILES = filesUnder('src/styles').filter((f) => f.endsWith('.css')).sort();
