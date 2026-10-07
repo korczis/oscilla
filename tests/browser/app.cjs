@@ -415,10 +415,12 @@ function defineChecks() {
   // Ledger W7 (ADR 0052): the seam ships in the page, so its surface is pinned here. A key is
   // added or removed only by editing these lists; every hook observes, drives an action a user
   // already has, or injects only inside TEST CONTEXT (tests/unit/v4-seam-contract.test.mjs).
+  // `studioTimeline` left the list with ledger W7a: it built a second Studio store and
+  // transport, and the timeline suite now drives the canonical ones.
   def('seam-surface-pinned', async ({ page }) => {
     const OSCILLA_KEYS = ['engine', 'viz', 'adapter', 'labs', 'labErrors', 'app', 'host',
-      'measure', 'experiments', 'studio', 'navigation', 'unsaved', 'studioTimeline', 'buildPlan',
-      'planFreqAt', 'parseFrequency', 'parseFrequencyList', 'formatFrequency', 'formatPeriod',
+      'measure', 'experiments', 'studio', 'navigation', 'unsaved', 'buildPlan', 'planFreqAt',
+      'parseFrequency', 'parseFrequencyList', 'formatFrequency', 'formatPeriod',
       'formatWavelength', 'frequencyToNormalized', 'normalizedToFrequency', 'nearestNote',
       'noteToFrequency', 'regionFor', 'harmonicTable', 'BUILTIN_PRESETS', 'LEARN_TOPICS',
       'PATTERNS', 'parseWav', 'encodeWav', 'buildConfigExport', 'parseConfigImport', 'version',

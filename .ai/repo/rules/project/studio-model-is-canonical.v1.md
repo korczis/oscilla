@@ -52,6 +52,16 @@ mutation that bypasses the store is a defect even when the screen happens to loo
 
 `tests/unit/v31-studio-model.test.mjs`: `assertPlainData` rejects runtime objects; store
 models are frozen plain data; a rejected action leaves model, history and revision
-unchanged; undo all restores the initial model by reference and by serialization. Planned
-(issue V430, specification §214): one store drives compact and full Studio in the browser
-and both show the same topology after every action.
+unchanged; undo all restores the initial model by reference and by serialization.
+
+`tests/unit/v4-one-studio-store.test.mjs` (static, over `src/js` with comments and strings
+removed): `createStudioStore` is called only by the STUDIO workspace, `createStudioRuntime` and
+`createStudioTransport` only by the workspace and by the offline WAV render, the workspace
+calls each once, and `src/js/main.js` puts no Studio context of its own on `window.OSCILLA`.
+It does not see a factory reached through an alias or a re-export.
+
+`tests/browser/v31-studio-timeline.cjs` runs on that one store (`window.OSCILLA.studio`): its
+`workspace` check requires one timeline editor in the page, and its `compact` check that a
+clip duplicated in the timeline, and then its undo, are the clip chips of the Playground's
+compact Studio. Planned (issue V430, specification §214): both show the same topology after
+every action.
