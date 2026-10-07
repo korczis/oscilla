@@ -265,13 +265,18 @@ What these budgets do and do not hold:
 | `1e1bf20` | chromium | 24.5 -> 25.1 | 333.9 (58 %) | 339.2 (57 %) | 202.1 (58 %) | 102.2 (49 %) | 158.4 (51 %) |
 | `1e1bf20` | firefox | 25.1 -> 31.8 | 598 (40 %) | 922 (65 %) | 814 (97 %) | 239 (82 %) | 316 (73 %) |
 | `1e1bf20` | webkit | 31.8 -> 35.4 | 452 (58 %) | 453 (58 %) | 335 (60 %) | 99 (55 %) | 147 (51 %) |
+| `103d5c0` | chromium | 34.8 -> 31.2 | 298.8 (52 %) | 254 (42 %) | 153.4 (44 %) | 91.6 (44 %) | 141.9 (46 %) |
+| `103d5c0` | firefox | 31.2 -> 38.6 | 1282 (87 %) | 652 (46 %) | 421 (50 %) | 105 (36 %) | 181 (42 %) |
+| `103d5c0` | webkit | 38.6 -> 35.5 | 358 (46 %) | 392 (50 %) | 278 (50 %) | 85 (47 %) | 135 (47 %) |
 <!-- asserting:end -->
 
   All of them passed every check. In the session on `1e1bf20`, at a lower load than any
   measuring session, the Firefox list took 814 ms against a budget of 840 ms (samples 687 to
   1101 ms), about twice its median over the measuring sessions, with the detail, Compare and
-  the start over the library also 1.3 to 1.7 times theirs. In the session on `baf3cd4`
-  Firefox was faster than in any measuring session. Firefox session medians of this page on
+  the start over the library also 1.3 to 1.7 times theirs. In the session on `103d5c0` the
+  Firefox start took 1282 ms against 1480 ms (samples 658 to 2848 ms) while everything over
+  the library was at or below its median. In the session on `baf3cd4` Firefox was faster
+  than in any measuring session. Firefox session medians of this page on
   this machine therefore range over a factor of about 2.7 between sessions that are not
   outliers (306 to 814 ms for the list), and the recorded 1-minute load does not order them;
   an earlier version of this document attributed the spread to the host, which the
@@ -306,8 +311,8 @@ but `release-gate`, `test:release`, `verify`, `test:browser` and the workflows u
   would only be noticed by the next person who measures.
 
 What would let it join: budgets measured on the CI runners over enough sessions to know their
-spread, or a measure that does not depend on wall time (for example a count of rows rendered
-per interaction, or of bytes hashed per open).
+spread, or a measure that does not depend on wall time (for example a count of bindings
+evaluated per interaction, or of bytes hashed per open).
 
 ## Measuring again
 
