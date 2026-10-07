@@ -19,6 +19,14 @@ name): `project.single-file-deliverable`, `project.audio-engine-discipline`,
 `project.studio-model-is-canonical`, `project.typed-ports`, `project.no-silent-feedback`,
 `project.visual-identity-lock`. Read them before changing `src/`.
 
+Two more bind `tests/browser/`: `project.bounded-test-timing` (a wait is a condition poll with
+a named wall-clock deadline through `tests/browser/lib/wait.cjs`; no fixed sleep, frame count or
+assumed sample rate) and `project.suite-harness` (every suite runs through
+`tests/browser/lib/suite.cjs`). Read them before adding or changing a browser check. Outside CI
+each suite waits for the 1-minute load to fall below `OSC_LOAD_MAX` (default 2 x cores) and then
+fails without running, so `release-gate` and `release:prepare` need a quiet machine or a stated
+limit (`OSC_LOAD_MAX`, `OSC_LOAD_WAIT_MS`; see `tests/README.md`).
+
 ## Commands
 
 ```bash
