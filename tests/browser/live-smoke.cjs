@@ -43,7 +43,7 @@
 // Firefox on a runner without a sound server needs the PulseAudio null sink (pages.yml, ci.yml).
 // Exit code 1 when any check fails in any browser.
 'use strict';
-const playwright = require('playwright');
+const suite = require('./lib/suite.cjs');
 
 const argv = process.argv.slice(2);
 const arg = (name, fallback) => {
@@ -53,7 +53,9 @@ const arg = (name, fallback) => {
 const URL_ = arg('url', 'https://korczis.github.io/oscilla/');
 const EXPECT_VERSION = arg('expect-version', '');
 const EXPECT_COMMIT = arg('expect-commit', '');
-const BROWSERS = arg('browsers', process.env.OSC_BROWSERS || 'chromium,firefox,webkit').split(',');
+const RUN = suite.open({ name: 'live-smoke', browsers: arg('browsers') });
+const playwright = RUN.playwright;
+const BROWSERS = RUN.browsers;
 const LAUNCH = {
   chromium: { args: ['--autoplay-policy=no-user-gesture-required'] },
   firefox: { firefoxUserPrefs: { 'media.autoplay.default': 0, 'media.autoplay.blocking_policy': 0 } },
@@ -408,12 +410,14 @@ async function runOne(name) {
 }
 
 (async () => {
+  await RUN.ready();
   console.log(`live smoke ${URL_}${EXPECT_VERSION ? ` expect v${EXPECT_VERSION}` : ''}`
     + `${EXPECT_COMMIT ? ` @ ${EXPECT_COMMIT.slice(0, 7)}` : ''}`);
   let failed = 0;
   for (const b of BROWSERS) {
     const t0 = Date.now();
     const results = await runOne(b);
+    RUN.reportLeg({ leg: b, checks: results.length });
     const bad = results.filter((r) => !r.ok);
     failed += bad.length;
     console.log(`${bad.length ? 'FAIL' : 'PASS'} ${b}/live: ${results.length - bad.length}/`

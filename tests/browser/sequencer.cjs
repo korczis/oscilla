@@ -20,18 +20,15 @@
 
 const path = require('path');
 const esbuild = require('esbuild');
-const playwright = require('playwright');
+const suite = require('./lib/suite.cjs');
 
 const args = process.argv.slice(2);
 const only = args.includes('--browser') ? args[args.indexOf('--browser') + 1] : null;
-const KNOWN = ['chromium', 'firefox', 'webkit'];
-const ENGINES = only ? [only]
-  : (process.env.OSC_BROWSERS ? process.env.OSC_BROWSERS.split(',') : KNOWN);
-if (!ENGINES.length || ENGINES.some((e) => !KNOWN.includes(e))) {
-  console.error(`unknown browser(s) in ${JSON.stringify(ENGINES)}; expected ${KNOWN.join(', ')}`);
-  process.exit(2);
-}
+const RUN = suite.open({ name: 'sequencer', browsers: only === null ? undefined : only });
+const playwright = RUN.playwright;
+const ENGINES = RUN.browsers;
 const FIXTURE = path.join(__dirname, 'fixtures', 'sequencer-fixture.js');
+// timing-allow: the OfflineAudioContext render rate of the reference renders
 const SR = 48000;
 // The spec's shortest allowed edge ramp (2-5 ms). Bounds use this fixed value, never the
 // implementation's own constant, so a broken envelope cannot loosen its own test.
@@ -158,6 +155,7 @@ function stepBound(fMax, sr, edgeS) {
 
 const results = [];
 function check(engine, name, ok, detail) {
+  RUN.tally(engine);
   results.push({ engine, name, ok: !!ok, detail });
   const mark = ok ? 'PASS' : 'FAIL';
   console.log(`  ${mark}  ${name}${detail ? ` — ${detail}` : ''}`);
@@ -379,11 +377,13 @@ async function runEngine(engine, bundle) {
       route.fulfill({ status: 200, contentType: 'text/html', body: html }),
     );
     await page.goto('http://localhost/sequencer-fixture.html');
-    await page.waitForFunction(() => window.seqFixtureReady === true);
+    await page.waitForFunction(() => window.seqFixtureReady === true, null,
+      { timeout: 30000 });
     const native = await page.evaluate(() => window.seqFixture.hasCancelAndHold());
     console.log(`  (cancelAndHoldAtTime native: ${native})`);
 
     // (a) + (b) offline renders.
+    // timing-allow: the second OfflineAudioContext render rate, on purpose not the first
     for (const sr of [SR, 44100]) {
       const ref = await page.evaluate((r) => window.seqFixture.renderReference(r), sr);
       if (sr === SR) checkDominant(engine, ref);
@@ -492,6 +492,7 @@ async function runEngine(engine, bundle) {
 }
 
 (async () => {
+  await RUN.ready();
   const built = await esbuild.build({
     entryPoints: [FIXTURE],
     bundle: true,

@@ -1,8 +1,8 @@
 # OSCILLA glossary
 
-The words OSCILLA's code, interface and records use, each with what it names today. Where a
-word has two meanings, both are given with the places that use each, and the term to prefer.
-The reasons are in the ADRs under `.ai/repo/adrs/`; this page only names things.
+The words OSCILLA's code, interface and records use, each with what it names. The names a
+format already persists decide the word the user sees (ADR 0053). The reasons are in the ADRs
+under `.ai/repo/adrs/`; this page only names things.
 
 ## Product
 
@@ -12,13 +12,14 @@ document, the StudioModel (`src/js/studio/schema.js`, ADR 0030), changed only th
 store's actions (`src/js/studio/actions.js`) and shown by the graph editor, the Inspector, the
 timeline and the compact Studio widget on the Playground.
 
-**Project.** Today a saved Studio document: a StudioModel of kind `oscilla-studio`, exported
-as a `.oscilla-studio.json` file ("Export project", "Import project or patch") or kept in the
+**OSCILLA.** The app. Product text does not call it "the project".
+
+**Project.** A saved Studio document: a StudioModel of kind `oscilla-studio`, exported as a
+`.oscilla-studio.json` file ("Export project", "Import project or patch") or kept in the
 Studio library of this browser. A **patch** is the smaller sibling: nodes, parameters, inner
 cables and their automation lanes, of kind `oscilla-patch` (`.oscilla-patch.json`,
-`src/js/studio/patches.js`). OSCILLA uses "project" for nothing else in the product. Outside
-it, "the project" in the About view and the README means OSCILLA itself, and the Majordomus
-"project" (`.ai/repo/project/`) is the plan of milestones and issues.
+`src/js/studio/patches.js`). The Majordomus "project" (the `project.*` rules,
+`.ai/repo/project/`) is repository vocabulary, not the product's.
 
 **Runtime.** The running Web Audio graph compiled from a StudioModel through the existing
 engine (`src/js/studio/runtime.js`, ADR 0035). Its truth has three stages (ADR 0039):
@@ -32,17 +33,29 @@ engine (`src/js/studio/runtime.js`, ADR 0035). Its truth has three stages (ADR 0
 `refused` or `behind`; the Studio Inspector shows that verdict.
 
 **Measurement.** One guided session in the Measure workspace: setup check, noise check,
-sweep, analysis and review, run by the measurement engine's state machine
+sweep, analysis and review, driven by the measurement engine's state machine
 (`src/js/measurement/state-machine.js`, ADR 0018), ending COMPLETE, INVALID, ABORTED or
-ERROR. A completed measurement is saved as an experiment.
+ERROR. Once saved, a completed measurement is an experiment.
 
-**Recipe.** The reusable configuration of a measurement (stimulus, level, repeats, timing,
+**Run.** One capture of the sweep inside one measurement: `measurement.runs[i]`, identified by
+`run-<i + 1>` (`src/js/experiments/schema.js` `runId`, `RUN_ID_PATTERN`). A measurement has
+one to ten runs, and with two or more the stored response is their aggregate
+(`results.aggregate.runs`, claim `aggregate-primary-response`). The number of runs is stored
+as `recipe.repeats`, a historical field name. The Measure field "Runs", the export "Runs CSV",
+the CSV line `# run: N` and the quality reasons counted in `runs` all mean this. As a noun,
+"run" never names a stored record. As a verb it means to execute ("Run this definition").
+
+**Repeat.** The verb: to execute a stored experiment again as a new experiment ("Repeat (new
+experiment)", `provenance.repeatOf`). The Playground pattern setting "Repeats" is a separate
+domain, frozen with V1.
+
+**Recipe.** The reusable configuration of a measurement (stimulus, level, runs, timing,
 analysis) without any result, calibration or input device (ADR 0019,
 `src/js/experiments/schema.js` `createRecipe`). A recipe link carries only this.
 
 **Experiment.** The stored record of a completed measurement (`oscilla-experiment`,
 `.oscilla.json`): its recipe, output level, input device and constraints, calibration, sample
-rate, repeats, quality, algorithm IDs, product version and build, with a configuration hash
+rate, runs, quality, algorithm IDs, product version and build, with a configuration hash
 and a result hash (claim `reproducible-experiments`). Once its result hash is stamped it is
 immutable; only its name and notes change (ADR 0040).
 
@@ -55,19 +68,20 @@ from experiment schema 3 or earlier records the whole graph only.
 
 **Experiment definition.** What to measure and how, kept apart from any result (ADR 0043,
 `src/js/experiments/definition.js`, kind `oscilla-definition`): a recipe, the conditions
-declared for every run and an optional acceptance criterion, with append-only versions,
-each identified by a hash over those execution fields (not the name or notes). A run records
-the definition version it was executed from; a run without an authored definition carries
-one derived from its own recipe and marked as derived (claim `experiment-definitions`).
+declared for every experiment and an optional acceptance criterion. An experiment records the
+definition version it was executed from; one without an authored definition carries a version
+derived from its own recipe and marked as derived (claim `experiment-definitions`).
 Definitions are stored in the `definitions` object store of the experiments database.
 
-**Evidence.** What a stored run's record says about how one of its values was produced and
-whether the run can be repeated (ADR 0044, `src/js/experiments/evidence.js`): a *lineage* of
-one stored result point (analysis, capture, calibration as applied, run, definition version,
+**Definition version.** One append-only version of a definition ("definition v2"), identified
+by a hash over its execution fields (recipe, conditions, acceptance), not its name or notes.
+The recipe is the configuration part inside a version.
+
+**Evidence.** What a stored experiment's record says about how one of its values was produced
+and whether it can be repeated (ADR 0044, `src/js/experiments/evidence.js`): a *lineage* of
+one stored result point (analysis, capture, calibration as applied, runs, definition version,
 build, Studio graph and its measured path) and a *reproducibility checklist* whose items are
 recorded, partial or not recorded. It is derived from stored fields only, never stored itself, and never a score.
-
-**Run** and **repeat.** See "One word, two meanings" below.
 
 **Calibration.** Two separate kinds that are never mixed (ADR 0020, `src/js/calibration/`):
 
@@ -100,32 +114,9 @@ ADRs, and the curated notes and source declarations under `.ai/repo/knowledge/`.
 `majordomus knowledge edges` turns the claims into a graph, and
 `tests/unit/knowledge-integrity.test.mjs` checks in CI that what it names exists and runs.
 
-## One word, two meanings: run
+## Historical names
 
-"Run" names two different things today.
-
-1. **A repeat inside one measurement.** A measurement can capture the sweep up to ten times;
-   each capture is `measurement.runs[i]`, identified by `run-<i + 1>`, and the aggregate of
-   all of them is the stored response. Used by:
-   - `src/js/experiments/schema.js` (`measurement.runs[i]`, `runId`, `RUN_ID_PATTERN`) and
-     `src/js/measurement/aggregate.js` (`runs[r]`);
-   - the recipe and engine field `repeats` (`src/js/measurement/engine.js`), which already
-     says "repeat";
-   - the Measure setup metric "Runs" and the Experiments export "Runs CSV" (`src/index.html`);
-   - claim `aggregate-primary-response`, ADR 0040 "Run identity", and the use case
-     `repeat-a-measurement-five-times`.
-2. **A completed experiment.** One stored execution, compared with another. Used by:
-   - ADR 0040's title and decision ("a completed run is immutable", "duplicate is the same
-     run") and claim `experiment-run-immutable`;
-   - ADR 0041 ("run comparison"), claim `semantic-run-comparison`, the Experiments heading
-     "Changed between runs" (`src/index.html`,
-     `src/js/measurement/views/compare-view.js`) and the About timeline's Comparison step;
-   - ADR 0043 and claim `experiment-definitions` ("a run records the version of the
-     experiment definition it was executed from").
-
-Recommended canonical terms: **run** for meaning 2, one execution of an experiment and its
-stored record, which is how ADR 0043 uses the word; **repeat** for meaning 1, one capture
-inside a measurement, which is what the recipe field `repeats` already calls it. Decision
-recorded here, not yet applied: this change renames no interface copy, and the stored field
-`measurement.runs` and the id `run-<n>` are schema and would change only with a schema
-version (ADR 0023).
+Written before ADR 0053, these say "run" for an experiment and keep their names: ADR files
+0040, 0041, 0043 and 0044, the claim ids `experiment-run-immutable`, `semantic-run-comparison`
+and `run-evidence`, and the prose under `docs/v3`, `docs/v31` and `docs/specs`. The use case
+`repeat-a-measurement-five-times` says "repeat" for a run.

@@ -218,7 +218,8 @@ function bindingText(b) {
     num(b.sampleRate) ? hzText(b.sampleRate) : null].filter(Boolean);
   // Review F5 of #139: without a device id two inputs with one rate and the same flags bind
   // alike, so the binding is only as far as the browser reports it.
-  return `bound to the input this run recorded${parts.length ? ` (${parts.join(', ')})` : ''}${
+  return `bound to the input this experiment recorded${
+    parts.length ? ` (${parts.join(', ')})` : ''}${
     str(b.deviceId) ? '' : ', as far as the browser reports it (no device id: sample rate and '
       + 'processing only)'}`;
 }
@@ -293,7 +294,9 @@ function runText(e) {
   const parts = [e.experimentId || `id ${NR}`, reps, `created ${wallText(p.createdAt)}`,
     `measurement started ${wallText(m.startedAt)}`,
     str(p.repeatOf) ? `a repeat of ${p.repeatOf}` : 'original (not a repeat)'];
-  if (str(p.duplicateOf)) parts.push(`a duplicate of ${p.duplicateOf} (the same run, copied)`);
+  if (str(p.duplicateOf)) {
+    parts.push(`a duplicate of ${p.duplicateOf} (the same experiment, copied)`);
+  }
   return parts.join('; ');
 }
 
@@ -406,8 +409,8 @@ function recipeItem(r) {
   if (!obj(r) || !obj(r.stimulus)) return item('recipe', 'missing', 'no recipe is stored');
   const why = measurableStimulusRefusal(r.stimulus.kind);
   if (why) {
-    return item('recipe', 'partial', `recorded, but this run used ${why}, so Repeat is refused `
-      + '(ledger D4)');
+    return item('recipe', 'partial', `recorded, but this experiment used ${why}, so Repeat is `
+      + 'refused (ledger D4)');
   }
   return item('recipe', 'recorded', 'stimulus, repeats and analysis timing as played are stored');
 }
@@ -448,7 +451,7 @@ function calibrationItem(e) {
   }
   if (obj(l) && !obj(l.input)) {
     return item('calibration', 'partial', 'the level calibration is not bound to an input: the '
-      + 'record cannot show it was taken with the input this run measured (ledger C1)');
+      + 'record cannot show it was taken with the input this experiment measured (ledger C1)');
   }
   return item('calibration', 'recorded', [obj(f) ? `frequency profile id ${short(f.id)}` : null,
     obj(l) ? 'level calibration with its offset and input binding' : null].filter(Boolean)

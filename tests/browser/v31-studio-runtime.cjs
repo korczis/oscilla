@@ -55,7 +55,8 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const { pathToFileURL } = require('node:url');
-const playwright = require('playwright');
+const suite = require('./lib/suite.cjs');
+const { until } = require('./lib/wait.cjs');
 
 const argv = process.argv.slice(2);
 const arg = (name, fallback) => {
@@ -64,7 +65,9 @@ const arg = (name, fallback) => {
 };
 const DIST = path.resolve(__dirname, '..', '..', 'dist', 'index.html');
 const OUT = path.resolve(__dirname, '..', 'visual', 'out-studio');
-const BROWSERS = arg('browsers', process.env.OSC_BROWSERS || 'chromium,firefox,webkit').split(',');
+const RUN = suite.open({ name: 'v31-studio-runtime', browsers: arg('browsers') });
+const playwright = RUN.playwright;
+const BROWSERS = RUN.browsers;
 const ONLY = arg('only', '') ? new Set(arg('only', '').split(',')) : null;
 const JSON_OUT = arg('json', '');
 const LAUNCH = {
@@ -110,7 +113,8 @@ const H = {
       a.studioLoadTemplate('subtractive-synth');
       s.store.dispatch({ type: 'SELECTION_CHANGE', selection: {} });
     });
-    await page.waitForFunction(() => document.querySelector('#osc-app').dataset.mode === 'studio');
+    await page.waitForFunction(() => document.querySelector('#osc-app').dataset.mode === 'studio',
+      null, { timeout: 10000 });
     await H.frames(page);
   },
   /** The Runtime section as a user and a developer read it. */
@@ -306,7 +310,10 @@ function defineChecks() {
     await H.tap(page);
     await page.click('[data-osc="studio.play"]');
     await H.waitState(page, 'in-sync');
-    await sleep(500);
+    // The tone is on the tap before anything is moved.
+    await until(() => page.evaluate(() => window.__rtTap.some((c) => c.L.some((v) =>
+      Math.abs(v) > 0.01))), { ms: 10000, what: 'presentation-edit: the Basic Tone reaches the '
+      + 'output tap' });
     const before = await page.evaluate(() => {
       const s = window.OSCILLA.studio;
       const st = s.trace.steps();
@@ -334,13 +341,18 @@ function defineChecks() {
       }, i);
       await H.frames(page, 1);
     }
-    await sleep(300);
+    // The tap holds the audio of the whole edit window before it is judged.
+    const moved = await page.evaluate(() => window.OSCILLA.engine.ctx.currentTime);
+    await until(() => page.evaluate((t) => {
+      const c = window.__rtTap[window.__rtTap.length - 1];
+      return !!c && (c.f + c.L.length) / window.OSCILLA.engine.ctx.sampleRate >= t;
+    }, moved), { ms: 10000, what: 'presentation-edit: the output tap recorded past the last '
+      + 'move' });
     const after = await page.evaluate((seq) => {
       const s = window.OSCILLA.studio;
       const steps = s.trace.steps().filter((x) => x.seq > seq);
       const runtime = steps.filter((x) => x.owner === 'runtime');
       return { applied: s.runtime.applied(), revision: s.store.getRevision(),
-        t: window.OSCILLA.engine.ctx.currentTime,
         pos: s.model.graph.nodes.find((n) => n.id === 'osc-1').position,
         compiles: runtime.filter((x) => x.kind === 'compile').length,
         presentation: runtime.filter((x) => x.kind === 'apply'
@@ -351,7 +363,7 @@ function defineChecks() {
     }, before.seq);
     await H.select(page, []); // the drag selected the node; the Runtime section needs none
     const rv = await H.runtime(page);
-    const audio = await H.steps(page, before.t, after.t);
+    const audio = await H.steps(page, before.t, moved);
     const slope = (2 * Math.PI * 440 * audio.peak) / audio.sr;
     const ratio = slope > 0 ? audio.max / slope : Infinity;
     // One audio edit: exactly one compile.
@@ -751,6 +763,7 @@ async function runOne(browserName, baseUrl) {
 }
 
 (async () => {
+  await RUN.ready();
   if (!fs.existsSync(DIST)) {
     console.error(`missing ${DIST}: run npm run build`);
     process.exit(2);
@@ -764,6 +777,7 @@ async function runOne(browserName, baseUrl) {
     const res = await runOne(b, pathToFileURL(DIST).href);
     all[key] = res;
     const names = Object.keys(res);
+    RUN.reportLeg({ leg: key, checks: names.length });
     const bad = names.filter((n) => !res[n].ok);
     failed += bad.length;
     console.log(`${bad.length ? 'FAIL' : 'PASS'} ${key}/v31-studio-runtime: ${names.length
