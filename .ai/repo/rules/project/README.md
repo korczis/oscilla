@@ -52,4 +52,6 @@ rule files in this directory, and fails when a row is missing, extra or stale.
 | `project.no-conflict-markers` v1 | blocking | no conflict marker in a tracked file or a staged change | `tests/unit/repo-hygiene.test.mjs`, pre-commit `git diff --cached --check` |
 | `project.worktree-topology` v1 | blocking | a branch is committed from its canonical worktree; no stash advice | pre-commit `majordomus worktree guard`, `tests/unit/repo-hygiene.test.mjs` |
 | `project.majordomus-layer-current` v1 | blocking | the local Majordomus is the pinned one; no missing policy key | `scripts/majordomus-pin-check.mjs` in `npm run verify`, `.github/doctor-verdict.jq` |
+| `project.bounded-test-timing` v1 | blocking | a browser check waits for its condition against a named wall-clock deadline; no fixed sleep in the suite or the page, frame count or assumed rate | `tests/unit/browser-timing.test.mjs` |
+| `project.suite-harness` v1 | blocking | every browser suite runs through one harness: no unknown or empty selection, no leg without checks or on another engine, no undeclared skip in CI, no start on a loaded machine | `tests/unit/browser-suite-contract.test.mjs` |
 | `project.shared-machine-discipline` v1 | advisory | how a session behaves on the shared machine and clone | none: see its `# Why advisory` |

@@ -448,7 +448,7 @@ test('ADR 0043: compare says plainly when the definition version changed', async
   assert.equal(g.label, 'Definition');
   assert.equal(g.other, false);
   assert.match(g.items[0].text, /^Definition version: version 1 \([0-9a-f]{12}…\) → version 2 /);
-  assert.equal(v.semantic[0].heading, 'Changed between runs A (baseline) and B');
+  assert.equal(v.semantic[0].heading, 'Changed between experiments A (baseline) and B');
   assert.equal(compareExperiments([r1, r2], stored).semantic[0].changes[0].domain,
     'definition');
   // The run detail names the version (with the stored name) and the acceptance.
