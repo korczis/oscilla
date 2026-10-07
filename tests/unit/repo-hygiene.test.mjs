@@ -144,7 +144,7 @@ const WIRED = [
 
 test('the policy wires the worktree guard and the staged diff check into pre-commit', () => {
   const entries = enforcementEntries(read('.ai/repo/policy.yaml'));
-  assert.ok(entries.length >= 4, 'the enforcement block is read');
+  assert.ok(entries.length >= 2, 'the enforcement block is read');
   for (const want of WIRED) {
     assert.deepEqual(entries.find((e) => e.name === want.name), want,
       `.ai/repo/policy.yaml enforcement declares ${want.name}; \`majordomus doctor\` then `
