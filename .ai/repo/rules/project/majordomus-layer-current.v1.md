@@ -33,6 +33,10 @@ layer is judged by two tools.
   and the new version; (2) land that by pull request; (3) move `MJ_VERSION` and `MJ_SHA256`
   together, by pull request; (4) the owner flips the machine-wide launcher. Step 4 is the
   owner's: it changes the binary every session's hooks run.
+- Between steps 3 and 4 the pin names the new version while the launcher still selects the
+  old one, so `npm run verify` refuses in every checkout that has the new pin. Until the
+  flip it is run with the new versioned binary first on the PATH:
+  `PATH="$HOME/.local/share/majordomus/versions/<new>/bin:$PATH" npm run verify`.
 - `.ai/repo/policy.yaml` declares every key the pinned version requires. A "missing required
   key" line is fixed in the policy, never waved through as a warning.
 

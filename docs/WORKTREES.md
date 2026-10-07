@@ -63,9 +63,13 @@ majordomus doctor || exit $?
 
 Git hooks are not tracked, so each clone writes these lines once into the hook file that
 `git rev-parse --git-path hooks/pre-commit` names (every worktree of the clone then has
-them). `majordomus doctor` reads the policy and fails a checkout whose hook does not run a
-declared entry, or runs it with its exit code swallowed; `npm run verify` and the hook itself
-run doctor, so a clone cannot commit with the guard unwired. The CI runner has no hooks: the
+them). `majordomus doctor` reads the policy and the hook's text. Version 0.13.2 fails a
+checkout with no hook file, a hook that does not name a declared entry, and an entry followed
+by `|| true`. It does not execute the hook: a line that is commented out, sits in a branch
+never taken or below an early `exit 0`, or is not followed by `|| exit $?`, counts as wired.
+`npm run verify` and the hook itself run doctor; a clone that never wrote the hook file runs
+nothing at commit, and is caught by `npm run verify`, not at the commit. The CI runner has no
+hooks: the
 verdict in `.github/doctor-verdict.jq` excuses exactly the git-hook entries of the policy, and
 `tests/unit/repo-hygiene.test.mjs` proves in CI that the policy still declares the guard.
 
@@ -81,17 +85,25 @@ verdict in `.github/doctor-verdict.jq` excuses exactly the git-hook entries of t
 - **A session's scratch checkout.** A worktree a provider created elsewhere (for example
   under `.claude/worktrees/`) is refused when it holds a branch; the refusal prints the
   remedy (`majordomus worktree migrate --include-ephemeral --only <branch>`).
+- **A second branch in the same worktree.** `git switch -c wip/x` inside a canonical worktree
+  puts a branch where it does not belong (`wip/x` belongs at `oscilla-wt/wip/x`), and the
+  guard refuses its commits with `worktree.path_mismatch`.
 
 ## Setting work aside
 
 `refs/stash` is one ref for the whole clone. An entry pushed from one worktree is on top of
 the list in every other, and a `pop` there applies a peer's work to the wrong tree (it
 happened on 2026-10-06, #136). The stash is therefore never used in this repository, in any
-checkout. Set work aside in one of two ways:
+checkout. Set work aside in one of two ways the guard permits:
 
 - copy the files out of the tree (a scratch directory outside the repository), or
-- commit them on a throwaway branch in the same worktree.
+- make a work-in-progress commit on the branch itself, in its canonical worktree, and undo
+  it with `git reset --soft HEAD~1` before it is pushed.
 
-No tracked script, message or document may recommend the stash; the scan in
+Work that needs a branch of its own gets one with `majordomus worktree create <branch>`, and
+the files are copied there.
+
+The stash is never recommended by a tracked script, message, rule or document; the scan in
 `tests/unit/repo-hygiene.test.mjs` refuses a line under `scripts/`, `src/`, `docs/`,
-`.github/` or a root Markdown file that mentions it without forbidding it.
+`.github/`, a root Markdown file, `tests/README.md` or the `.ai/` layer's rules, workflows,
+providers and skills that mentions it without a prohibition governing the word.

@@ -150,8 +150,9 @@ use_cases:
     mcp_tools: off
 
 # Every entry here is reconciled by `majordomus doctor`: the path must resolve (on PATH,
-# repo-relative, or absolute in the hook line), be executable, and be invoked by the
-# artifact named in wired_by without its exit code being swallowed.
+# repo-relative, or absolute in the hook line), be executable, and be named by the
+# artifact named in wired_by without `|| true` after it. Doctor reads the hook's text; it
+# does not execute it (docs/WORKTREES.md says what that leaves unproven).
 enforcement:
   - name: doctor-on-commit
     path: majordomus
@@ -169,7 +170,8 @@ enforcement:
     args: [worktree, guard]
     wired_by: git-hook:pre-commit
   # project.no-conflict-markers: git refuses a staged line that is a leftover conflict
-  # marker (and a whitespace error) before the commit exists.
+  # marker before the commit exists. .gitattributes sets -whitespace on every path, so the
+  # check reports markers only (a merge commit stages the other side's whitespace).
   - name: diff-check-on-commit
     path: git
     args: [diff, --cached, --check]

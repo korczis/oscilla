@@ -48,7 +48,9 @@ export const PROCEDURE = [
   '  3. move MJ_VERSION and MJ_SHA256 in .github/workflows/ci.yml together, by pull request;',
   '  4. only then does the owner flip the machine-wide launcher (owner-only: it changes the',
   '     binary every session\'s git hooks run).',
-  'Until step 4, run the pinned version: the launcher at ~/.local/bin/majordomus selects it.',
+  'Until step 3 lands, run the pinned version: the launcher at ~/.local/bin/majordomus selects it.',
+  'Between steps 3 and 4 the pin is the new version and the launcher is not: run verify with',
+  '  PATH="$HOME/.local/share/majordomus/versions/<new>/bin:$PATH" npm run verify',
 ];
 
 /** The lines to print when the versions disagree; an empty list when they agree. */

@@ -604,7 +604,7 @@ issues in [`.ai/repo/project/`](.ai/repo/project/)), the architecture decisions
 What is checked, and where:
 
 - **On a commit and a push** (the git hooks a checkout wires, declared in
-  `.ai/repo/policy.yaml` and proven by `majordomus doctor`): before a commit, `majordomus
+  `.ai/repo/policy.yaml`; `majordomus doctor` checks that the hook names each one): before a commit, `majordomus
   worktree guard` refuses a branch committed outside its canonical worktree
   ([`docs/WORKTREES.md`](docs/WORKTREES.md)), `git diff --cached --check` refuses a staged
   conflict marker, and `majordomus doctor` validates the layer; `majordomus finish --check`

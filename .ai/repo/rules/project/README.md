@@ -26,19 +26,21 @@ so a rule that contradicts its baseline is two rules in force at once.
 A rule with an `x-majordomus` block claims the tool enforces it, and that claim is checked
 in both directions. A rule without one names its mechanism under `# Enforcement` (older
 rules: `# Verification`): the files it names in backticks exist, its tests and scripts are
-run, and CI runs at least one of them. A rule no mechanism can decide is `class: advisory`
+run, and at least one of them is a test or script file CI executes (an npm script alone is
+not a rule's own mechanism). A rule no mechanism can decide is `class: advisory`
 and says why under `# Why advisory` — a validator that always passes is worse than admitting
 a reviewer owns it. `project.rules-name-their-enforcement` holds every rule here to that, in
 `tests/unit/knowledge-integrity.test.mjs`.
 
 ## Index
 
-Every rule in force. `CLAUDE.md` names the same set, and the same test fails when the two
-differ from the files in this directory.
+Every rule in force, with its version and class. `tests/unit/knowledge-integrity.test.mjs`
+compares these rows, and separately the list in `CLAUDE.md`, with the front matter of the
+rule files in this directory, and fails when a row is missing, extra or stale.
 
 | Rule | Class | What it binds | Mechanism |
 | --- | --- | --- | --- |
-| `project.single-file-deliverable` v2 | blocking | one static `dist/index.html`, no runtime fetch | `npm run verify-dist`, browser gate, `scripts/verify-deploy.mjs` |
+| `project.single-file-deliverable` v2 | blocking | one static `dist/index.html`, no runtime fetch | `scripts/verify-dist.mjs`, browser gate, `scripts/verify-deploy.mjs` |
 | `project.audio-engine-discipline` v2 | blocking | nodes and timing only inside the engine's accounting | `tests/unit/freeze.test.mjs`, `tests/browser/engine-v1port.cjs` |
 | `project.no-fake-science` v2 | blocking | no unsupported claim; dB SPL only when calibrated | `x-majordomus` tests |
 | `project.about-names-current-release` v1 | blocking | the About timeline names the release line | `tests/unit/about.test.mjs` |

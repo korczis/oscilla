@@ -42,9 +42,10 @@ Processes and load
 Git
 
 4. Never use `git stash` in any checkout of a repository that has linked worktrees:
-   `refs/stash` is shared. Set work aside by copying files to a scratch directory or by
-   committing on a throwaway branch. (What the repository itself may say about the stash is
-   enforced by `project.worktree-topology`.)
+   `refs/stash` is shared. Set work aside by copying files to a scratch directory, or by a
+   work-in-progress commit on the branch itself in its canonical worktree (`git reset --soft
+   HEAD~1` undoes it before a push); a second branch in the same worktree is refused by the
+   guard. (Stash advice in the repository itself is refused by `project.worktree-topology`.)
 5. Never put a `git merge`, `rebase` or `pull` in the same command as `git add` or
    `git commit`. After a merge, check `git diff --name-only --diff-filter=U` and search for
    markers before staging. When the branch already contains main's squashed content, use
@@ -105,5 +106,5 @@ request and by the coordinator of the sessions, and a violation is reported, not
 # Failure behaviour
 
 A violation is reported to the coordinator and in the pull request, with what it may have
-broken for peers (a killed browser fails a peer's gate; a pattern kill, a stash or a forced
-push is said out loud so the affected work is re-run). It is not grounds to rewrite history.
+broken for peers (a killed browser fails a peer's gate; a pattern kill, a use of `refs/stash` or a
+forced push is said out loud so the affected work is re-run). It is not grounds to rewrite history.

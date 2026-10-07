@@ -312,9 +312,10 @@ jobs:
     # archive in https://majordomus.dev/releases/v0.13.2.json), so neither the installer script
     # nor the latest release can change what CI runs. Bump the version and the digest together.
     # The verdict is .github/doctor-verdict.jq (tested by tests/unit/ci-knowledge-job.test.mjs):
-    # every doctor FAIL fails the job except the two git-hook wiring entries of policy
-    # `enforcement` (doctor-on-commit, finish-on-push), which describe a developer checkout's
-    # hooks that a CI runner does not have, and an output without an OK layout line fails.
+    # every doctor FAIL fails the job except the git-hook wiring entries of policy
+    # `enforcement`, which describe a developer checkout's hooks that a CI runner does not
+    # have; a line saying the policy lacks a required key fails at any level, and so does an
+    # output without an OK layout line.
     # The download retries, so one transient asset error does not stall every merge. Full
     # history, because curated knowledge cites V1 commits and the ADR check reads every ref.
     name: .ai layer (majordomus doctor 0.13.2)
