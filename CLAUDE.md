@@ -22,9 +22,10 @@ name): `project.single-file-deliverable`, `project.audio-engine-discipline`,
 How a change reaches `main` is ruled too: `project.ci-bounded` (every workflow job and
 network step bounded, pinned, retried), `project.fail-first` (a `feat`/`fix` PR's unit tests
 fail on the merge base, or the body says `fail-first: n/a <reason>`) and
-`project.review-verdict` (a PR touching the audio, analysis, experiments, studio, storage,
-release-script or workflow paths needs a reviewer's `.ai/repo/reviews/<pr>.yaml` for the
-head tree). The builder of a change never writes its own verdict.
+`project.review-verdict` (a PR touching the audio, analysis, experiments, studio, storage or
+release-script paths, anything under `.github/`, or the programs and tests of these three
+rules needs a reviewer's `.ai/repo/reviews/<pr>.yaml` for the head tree). The builder of a
+change never writes its own verdict, and the base branch's copy of each program judges.
 
 ## Commands
 

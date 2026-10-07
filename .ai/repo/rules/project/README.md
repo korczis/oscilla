@@ -36,6 +36,6 @@ section, and the mechanism is in the repository.
 
 | rule | class | enforced by |
 |---|---|---|
-| [`project.ci-bounded@1`](ci-bounded.v1.md) | blocking | `tests/unit/ci-workflows.test.mjs` over `scripts/ci-workflow-rules.mjs`, in `npm test` |
-| [`project.fail-first@1`](fail-first.v1.md) | blocking | the `fail-first` job of `ci.yml` (`scripts/fail-first.mjs`), needed by `gate`; `tests/unit/fail-first.test.mjs` |
-| [`project.review-verdict@1`](review-verdict.v1.md) | blocking | the `review-verdict` job of `ci.yml` (`scripts/review-verdict.mjs`), needed by `gate`; `tests/unit/review-verdict.test.mjs`; reviewer independence is reviewer-owned |
+| [`project.ci-bounded@1`](ci-bounded.v1.md) | blocking | `tests/unit/ci-workflows.test.mjs` over `scripts/ci-workflow-rules.mjs`, in `npm test`; a pull request that rewrites the workflow is held only by `project.review-verdict` |
+| [`project.fail-first@1`](fail-first.v1.md) | blocking | the `fail-first` job of `ci.yml` (the base branch's `scripts/fail-first.mjs` through `.github/scripts/base-rule.sh`), needed by `gate`; `tests/unit/fail-first.test.mjs`, `tests/unit/base-rule.test.mjs`; a retitle nobody re-runs is not caught |
+| [`project.review-verdict@1`](review-verdict.v1.md) | blocking | the `review-verdict` job of `ci.yml` (the base branch's `scripts/review-verdict.mjs` through `.github/scripts/base-rule.sh`), needed by `gate`; `tests/unit/review-verdict.test.mjs`, `tests/unit/base-rule.test.mjs`; reviewer independence is reviewer-owned, and a pull request that removes the job itself is not stopped |

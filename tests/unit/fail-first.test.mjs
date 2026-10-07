@@ -10,6 +10,7 @@ import { writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { gitRepo } from './fixtures/git-repo.mjs';
+import { waiver } from '../../scripts/fail-first.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const SCRIPT = path.join(ROOT, 'scripts', 'fail-first.mjs');
@@ -193,4 +194,76 @@ test('tool is new', () => assert.equal(tool(), 'new'));
   const r = run(repo, 'fix(scripts): the tool is new');
   assert.equal(r.status, 0, r.out);
   assert.match(r.out, /tool\.test\.mjs: fails without the change \(assertion\), passes with it/);
+});
+
+test('a title that reads as feat or fix is one, in any case and spacing', (t) => {
+  const repo = fixture();
+  t.after(() => repo.dispose());
+  repo.commit('fix', {
+    'src/value.mjs': 'export const value = () => 1; // tidied\n',
+    'tests/unit/tidy.test.mjs': VALUE_TEST(1),
+  });
+  for (const title of ['Fix(x): add', 'fix (x): add', '[WIP] fix(x): add', 'FEAT!: add',
+    ' feat(x) : add', '[draft][wip] Feat: add', 'fix(x)!: add']) {
+    const r = run(repo, title);
+    assert.equal(r.status, 1, `${title}: ${r.out}`);
+    assert.match(r.out, /passes without the change - not evidence/);
+  }
+});
+
+test('a waiver is a line of the body\'s own prose, its reason not the placeholder', (t) => {
+  const repo = fixture();
+  t.after(() => repo.dispose());
+  repo.commit('fix', { 'tests/unit/tidy.test.mjs': VALUE_TEST(1) });
+  const title = 'fix(x): tidy the value';
+  const refused = {
+    'the placeholder of the advice': '- fail-first: n/a <reason>\n',
+    'punctuation for a reason': 'fail-first: n/a ...\n',
+    'a fenced code block': 'Output:\n\n```\nfail-first: n/a docs-only\n```\n',
+    'an indented, tagged fence': 'Output:\n\n  ```text\n  fail-first: n/a docs-only\n  ```\n\nEnd.',
+    'a tilde fence left open': '~~~\nfail-first: n/a docs-only\n',
+    'a blockquote': '> fail-first: n/a docs-only\n',
+    'an HTML comment': '<!--\nfail-first: n/a docs-only\n-->\n',
+    'the middle of a sentence': 'We could say fail-first: n/a docs-only here.\n',
+  };
+  for (const [what, body] of Object.entries(refused)) {
+    const r = run(repo, title, body);
+    assert.equal(r.status, 1, `${what}: ${r.out}`);
+    assert.doesNotMatch(r.out, /waived by the PR body/, what);
+  }
+  assert.match(run(repo, title, '- fail-first: n/a <reason>\n').out, /a waiver needs one/);
+  const accepted = [
+    '- fail-first: n/a only a browser suite can observe it\n',
+    '```\nnpm test\n```\n\nFail-First: N/A docs-only\n',
+    '* fail-first: n/a <css only> no unit test reaches the stylesheet\r\n',
+  ];
+  for (const body of accepted) {
+    const r = run(repo, title, body);
+    assert.equal(r.status, 0, `${JSON.stringify(body)}: ${r.out}`);
+    assert.match(r.out, /waived by the PR body/);
+  }
+  assert.equal(waiver('fail-first: n/a <reason>').reason, '');
+  assert.equal(waiver('fail-first: n/a x').reason, 'x');
+  assert.equal(waiver('```\nfail-first: n/a x\n```'), null);
+});
+
+test('a test that asks git for the tracked files can be evidence', (t) => {
+  const repo = fixture();
+  t.after(() => repo.dispose());
+  repo.commit('feat', {
+    'src/extra.mjs': 'export const extra = () => 3;\n',
+    'tests/unit/tracked.test.mjs': `import test from 'node:test';
+import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
+test('extra is tracked', () => {
+  const files = execFileSync('git', ['ls-files'], { encoding: 'utf8' }).split('\\n');
+  assert.ok(files.includes('README.md'));
+  assert.ok(files.includes('src/extra.mjs'), 'src/extra.mjs is tracked');
+  assert.ok(!files.includes('node_modules'));
+});
+`,
+  });
+  const r = run(repo, 'feat(x): extra');
+  assert.equal(r.status, 0, r.out);
+  assert.match(r.out, /tracked\.test\.mjs: fails without the change \(assertion\), passes with it/);
 });

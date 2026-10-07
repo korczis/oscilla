@@ -1,7 +1,8 @@
 // project.ci-bounded: every job of every workflow is bounded, every step that installs,
 // downloads or runs a browser suite is bounded by itself, installs go through
 // .github/scripts/ci-install.sh, downloads retry and are digest-checked, actions are pinned and
-// `gate` needs every other job of ci.yml. The checker is scripts/ci-workflow-rules.mjs; this
+// `gate` needs every other job of ci.yml, nothing is made non-fatal, and ci.yml starts on a
+// pull request only. The checker is scripts/ci-workflow-rules.mjs; this
 // file runs it on the repository (no violation) and on mutated copies of the real workflows
 // (each mutation is found, by rule and by job), so the checker cannot pass by checking nothing.
 // It generalises what tests/unit/ci-knowledge-job.test.mjs asserts of the `knowledge` job.
@@ -9,13 +10,15 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync, readdirSync } from 'node:fs';
+import { cpSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync }
+  from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseYaml as parse } from '../../scripts/yaml-subset.mjs';
 import {
-  browserSuites, checkRepository, checkScript, checkWorkflow, format, logicalLines,
-  stepNeedsTimeout,
+  actionNeedsTimeout, browserSuites, checkAction, checkRepository, checkScript, checkWorkflow,
+  format, logicalLines, stepNeedsTimeout,
 } from '../../scripts/ci-workflow-rules.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
@@ -34,6 +37,28 @@ function mutate(text, from, to) {
 }
 const rules = (violations) => violations.map((v) => `${v.rule}@${v.job ?? '-'}`);
 const ci = (text) => checkWorkflow('.github/workflows/ci.yml', text, SUITES);
+
+/** ci.yml with one more step at the head of the `unit` job (bounded unless `timeout` is 0). */
+function withStep(run, { timeout = 3, extra = '' } = {}) {
+  const body = run.split('\n').map((l) => `          ${l}\n`).join('');
+  return mutate(CI, '      - name: Unit and freeze suites\n',
+    `      - name: Probe\n${timeout ? `        timeout-minutes: ${timeout}\n` : ''}${extra}`
+    + `        run: |\n${body}      - name: Unit and freeze suites\n`);
+}
+const CURL = 'curl -fsSL --retry 3 --connect-timeout 5';
+
+/** A scratch copy of .github and package.json, with more files; removed after the test. */
+function scratch(t, files) {
+  const dir = mkdtempSync(path.join(os.tmpdir(), 'oscilla-ci-rules-'));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  cpSync(path.join(ROOT, '.github'), path.join(dir, '.github'), { recursive: true });
+  cpSync(path.join(ROOT, 'package.json'), path.join(dir, 'package.json'));
+  for (const [rel, text] of Object.entries(files)) {
+    mkdirSync(path.dirname(path.join(dir, rel)), { recursive: true });
+    writeFileSync(path.join(dir, rel), text);
+  }
+  return dir;
+}
 
 test('the repository has no violation', () => {
   const found = checkRepository(ROOT);
@@ -180,4 +205,173 @@ test('shell lines: continuations are one command, comments are not commands', ()
     ['curl -f    --retry 3 x', 'echo ok']);
   const commented = '# sudo apt-get install -y pulseaudio\necho ok\n';
   assert.deepEqual(checkScript('.github/scripts/x.sh', commented), []);
+});
+
+test('mutation: apt behind an option that takes a value, or any other apt command', () => {
+  for (const run of [
+    'sudo apt-get -o Acquire::Retries=3 install -y pulseaudio',
+    'sudo apt-get -t noble install -y pulseaudio',
+    'sudo apt-get --option Acquire::Retries=3 update',
+    'sudo DEBIAN_FRONTEND=noninteractive apt install pulseaudio',
+    'sh -c "apt-get -o Dpkg::Use-Pty=0 install -y jq"',
+    'sudo dpkg --force-all -i pulseaudio.deb',
+  ]) {
+    assert.deepEqual(rules(ci(withStep(run, { timeout: 0 }))),
+      ['install-wrapper@unit', 'step-timeout@unit'], run);
+    assert.deepEqual(rules(ci(withStep(run))), ['install-wrapper@unit'], run);
+    assert.deepEqual(checkScript('scripts/setup-ci.sh', `${run}\n`).map((v) => v.rule),
+      ['install-wrapper'], run);
+  }
+  // the wrapper's own mode word and a path that contains the name are not the program
+  for (const run of ['.github/scripts/ci-install.sh apt pulseaudio', 'ls /etc/apt/sources.list.d',
+    'dpkg -l pulseaudio']) {
+    assert.deepEqual(rules(ci(withStep(run))), [], run);
+  }
+});
+
+test('mutation: a download kept by a redirect, a tee or the log, with no digest check', () => {
+  for (const run of [
+    `${CURL} https://x.example/t.tgz > t.tgz\ntar xzf t.tgz`,
+    `${CURL} https://x.example/t.tgz >> t.tgz`,
+    `${CURL} https://x.example/t.tgz | tee t.tgz > /dev/null`,
+    `${CURL} https://x.example/version.txt`,
+    `${CURL} -o i.sh https://x.example/i.sh && sh i.sh`,
+    'wget --tries=3 --connect-timeout=5 https://x.example/t.tgz',
+  ]) {
+    assert.deepEqual(rules(ci(withStep(run))), ['download-digest@unit'], run);
+  }
+  const checked = `${CURL} https://x.example/t.tgz > t.tgz\n`
+    + `echo "${'a'.repeat(64)}  t.tgz" | sha256sum -c -`;
+  assert.deepEqual(rules(ci(withStep(checked))), [], 'checked against a pinned digest');
+  // a probe that says it keeps nothing needs only the flags, and still its own time limit
+  const probe = `${CURL} -o /dev/null https://x.example/health`;
+  assert.deepEqual(rules(ci(withStep(probe))), []);
+  assert.deepEqual(rules(ci(withStep(probe, { timeout: 0 }))), ['step-timeout@unit']);
+  assert.deepEqual(rules(ci(withStep(`${CURL} -o /dev/null https://x.example/i.sh | sh`))),
+    ['pipe-to-shell@unit'], 'a discarded output that is piped on is not discarded');
+});
+
+test('mutation: a download that is executed, in every form', () => {
+  for (const run of [
+    `bash <(${CURL} https://x.example/install.sh)`,
+    `sh -c "$(${CURL} https://x.example/install.sh)"`,
+    `s=$(${CURL} https://x.example/install.sh); eval "$s"`,
+    `s=\`${CURL} https://x.example/install.sh\``,
+    `${CURL} https://x.example/install.sh > i.txt\neval "$(cat i.txt)"`,
+    `${CURL} https://x.example/install.py | python3 -`,
+    `${CURL} https://x.example/install.js | node`,
+    `${CURL} https://x.example/install.pl | perl`,
+    `${CURL} https://x.example/install.rb | ruby`,
+    `${CURL} https://x.example/install.sh | sudo -E bash -s -- --yes`,
+    `${CURL} https://x.example/install.sh | env A=1 /bin/sh`,
+    `${CURL} https://x.example/install.sh.gz | gunzip | zsh`,
+    'wget --tries=3 --connect-timeout=5 -qO- https://x.example/install.sh | sh',
+  ]) {
+    assert.deepEqual(rules(ci(withStep(run))), ['pipe-to-shell@unit'], run);
+  }
+  // a digest check does not excuse running what was fetched before it was checked
+  const late = `${CURL} https://x.example/i.sh | bash\n`
+    + `echo "${'a'.repeat(64)}  i.sh" | sha256sum -c -`;
+  assert.deepEqual(rules(ci(withStep(late))), ['pipe-to-shell@unit']);
+});
+
+test('mutation: a job, a step or a suite made non-fatal', () => {
+  const job = mutate(CI, '    name: review-verdict (guarded paths need a recorded review)\n',
+    '    name: review-verdict (guarded paths need a recorded review)\n'
+    + '    continue-on-error: true\n');
+  assert.deepEqual(rules(ci(job)), ['non-fatal@review-verdict']);
+  const step = mutate(CI, '      - name: A guarded change carries a verdict for the head tree\n',
+    '      - name: A guarded change carries a verdict for the head tree\n'
+    + '        continue-on-error: true\n');
+  assert.deepEqual(rules(ci(step)), ['non-fatal@review-verdict']);
+  const expression = mutate(CI, '      - name: Unit and freeze suites\n',
+    '      - name: Unit and freeze suites\n        continue-on-error: ${{ matrix.soft }}\n');
+  assert.deepEqual(rules(ci(expression)), ['non-fatal@unit']);
+  for (const run of ['npm run test:studio 2>&1 || true | tee studio.log',
+    'npm run test:engine || :', '.github/scripts/ci-install.sh browser webkit || true',
+    'node tests/browser/dsp.cjs || true']) {
+    assert.deepEqual(rules(ci(withStep(run))), ['non-fatal@unit'], run);
+  }
+  assert.deepEqual(rules(ci(withStep('rm -f old.log || true'))), [], 'cleanup may fail');
+  const pages = mutate(PAGES, '    name: Public smoke (${{ matrix.browser }})\n',
+    '    name: Public smoke (${{ matrix.browser }})\n    continue-on-error: true\n');
+  assert.deepEqual(rules(checkWorkflow('pages.yml', pages, SUITES)), ['non-fatal@smoke']);
+});
+
+test('mutation: a browser suite started without its npm script, or gh, with no step limit', () => {
+  for (const run of ['cd tests/browser && node dsp.cjs', 'npx playwright test',
+    'node tests/visual/compare.mjs', '(cd tests/browser; node engine.cjs)',
+    'gh search prs --repo x/y', 'n=$(gh label list | wc -l)']) {
+    assert.deepEqual(rules(ci(withStep(run, { timeout: 0 }))), ['step-timeout@unit'], run);
+    assert.deepEqual(rules(ci(withStep(run))), [], run);
+  }
+});
+
+test('mutation: an install in a composite action or in a script outside .github', (t) => {
+  const action = 'name: setup\nruns:\n  using: composite\n  steps:\n'
+    + '    - name: Browsers\n      shell: bash\n      run: npx playwright install --with-deps\n'
+    + '    - uses: actions/setup-node@main\n';
+  assert.deepEqual(checkAction('.github/actions/setup/action.yml', action, SUITES)
+    .map((v) => `${v.rule}@${v.step}`),
+  ['install-wrapper@Browsers', 'pinned@actions/setup-node@main']);
+  assert.match(actionNeedsTimeout(action, SUITES), /uses an action that runs playwright install/);
+
+  const wrapped = 'name: setup\nruns:\n  using: composite\n  steps:\n'
+    + '    - shell: bash\n      run: .github/scripts/ci-install.sh browser chromium\n';
+  const uses = (limit) => mutate(CI, '      - name: Unit and freeze suites\n',
+    `      - uses: ./.github/actions/setup\n${limit}      - name: Unit and freeze suites\n`);
+  const root = scratch(t, {
+    '.github/actions/setup/action.yml': wrapped,
+    '.github/workflows/ci.yml': uses(''),
+    'scripts/setup-ci.sh': '#!/bin/sh\nnpx playwright install --with-deps\n',
+    'scripts/fetch.sh': `${CURL} https://x.example/i.sh | sh\n`,
+  });
+  assert.deepEqual(checkRepository(root).map((v) => `${v.rule}@${v.file}`).sort(), [
+    'install-wrapper@scripts/setup-ci.sh',
+    'pipe-to-shell@scripts/fetch.sh',
+    'step-timeout@.github/workflows/ci.yml',
+  ]);
+  const bounded = scratch(t, {
+    '.github/actions/setup/action.yml': wrapped,
+    '.github/workflows/ci.yml': uses('        timeout-minutes: 15\n'),
+  });
+  assert.deepEqual(checkRepository(bounded).map(format), []);
+  const bare = scratch(t, { '.github/actions/setup/action.yml': action });
+  assert.deepEqual(checkRepository(bare).map((v) => v.rule), ['install-wrapper', 'pinned']);
+});
+
+test('a job that calls a reusable workflow carries no limit of its own, but is pinned', () => {
+  const job = (uses) => mutate(CI, '\n  gate:\n', `\n  reuse:\n    uses: ${uses}\n\n  gate:\n`)
+    .replace('needs: [unit,', 'needs: [reuse, unit,');
+  assert.deepEqual(rules(ci(job('./.github/workflows/pages.yml'))), []);
+  assert.deepEqual(rules(ci(job('octo/shared/.github/workflows/x.yml@v2'))), []);
+  assert.deepEqual(rules(ci(job('octo/shared/.github/workflows/x.yml@main'))), ['pinned@reuse']);
+});
+
+test('mutation: ci.yml started by anything but a pull request', () => {
+  assert.deepEqual(Object.keys(parse(CI).on), ['pull_request']);
+  const manual = mutate(CI, '\non:\n  pull_request:\n',
+    '\non:\n  pull_request:\n  workflow_dispatch:\n');
+  assert.deepEqual(rules(ci(manual)), ['triggers@-']);
+  assert.match(ci(manual)[0].message, /not by: pull_request, workflow_dispatch/);
+  const push = mutate(CI, '\non:\n  pull_request:\n', '\non: [push]\n');
+  assert.deepEqual(rules(ci(push)), ['triggers@-']);
+  // pages.yml has no gate: it deploys main and may be started by hand
+  assert.deepEqual(checkWorkflow('pages.yml', PAGES, SUITES), []);
+});
+
+test('the pull-request rules are judged by the base branch\'s programs, and need a PR', () => {
+  const jobs = parse(CI).jobs;
+  for (const [job, program] of [['fail-first', 'scripts/fail-first.mjs'],
+    ['review-verdict', 'scripts/review-verdict.mjs']]) {
+    const run = logicalLines(jobs[job].steps.map((s) => s.run || '').join('\n'));
+    const call = run.filter((l) => l.includes(program));
+    assert.equal(call.length, 1, `${job} runs ${program} once`);
+    assert.ok(call[0].replace(/\s+/g, ' ')
+      .startsWith(`.github/scripts/base-rule.sh "origin/$GITHUB_BASE_REF" ${program} `), call[0]);
+    assert.ok(run.some((l) => /^if \[ -z "\$PR" \]; then .*exit 1; fi$/.test(l)),
+      `${job} fails when there is no pull request`);
+    assert.ok(!run.some((l) => /exit 0/.test(l)), `${job} has no early success`);
+    assert.equal(jobs[job].steps.at(-1).env.PR, '${{ github.event.pull_request.number }}');
+  }
 });

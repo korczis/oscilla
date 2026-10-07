@@ -16,8 +16,9 @@ order: 100
 
 One file per pull request, `<pr number>.yaml`, required by rule `project.review-verdict` when
 the pull request changes a guarded path (the list is `GUARDED` in `scripts/review-verdict.mjs`
-and in the rule). The `review-verdict` job of `.github/workflows/ci.yml` refuses the pull request
-without a valid one, and `gate` needs that job.
+and in the rule; the copy that judges a pull request is the base branch's). The
+`review-verdict` job of `.github/workflows/ci.yml` refuses the pull request without a valid
+one, and `gate` needs that job.
 
 ```yaml
 schema: review-verdict/v1

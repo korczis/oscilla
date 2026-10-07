@@ -5,14 +5,17 @@
 //   node scripts/fail-first.mjs --pr-json <file>          # {"title": ..., "body": ...}
 //        [--repo <dir>] [--head <ref>] [--base <ref> | --base-branch <ref>]
 //
-// For a PR whose title starts with feat or fix, the unit test files the PR adds or changes
-// (tests/unit/**/*.test.mjs between the merge base and the head) are run twice with
-// `node --test`, in two trees extracted with `git archive`:
+// For a PR whose title starts with feat or fix (in any case, behind bracketed tags), the unit
+// test files the PR adds or changes (tests/unit/**/*.test.mjs between the merge base and the
+// head) are run twice with `node --test`, in two trees extracted with `git archive` and made
+// git repositories with their files staged (so `git ls-files` answers; there is no history):
 //   with     the head commit as it is;
 //   without  the merge base's tree (src/, dist/, scripts/, everything outside tests/) with the
 //            head's tests/ put in its place.
 // A file is evidence when it passes `with` and fails `without`. At least one file must be, or
-// the PR body carries a line `fail-first: n/a <reason>`, which is printed. A file that fails in
+// the PR body carries a line `fail-first: n/a <reason>`, which is printed: a line of the body's
+// own prose (not in a code block, an HTML comment or a blockquote) with a reason that is not
+// the placeholder. A file that fails in
 // both trees proves nothing (the harness, not the change, fails it) and is reported as such;
 // a failure with the change is retried once and printed, so a load-sensitive test is not
 // mistaken for that.
@@ -23,20 +26,36 @@
 // Exit 0: nothing to prove, waived, or proven. Exit 1: not proven. Exit 2: usage.
 
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdtempSync, readFileSync, rmSync, symlinkSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync }
+  from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-export const TITLE = /^(feat|fix)(\([^)]*\))?!?:/;
-export const WAIVER = /^[ \t>*-]*fail-first:[ \t]*n\/a\b[ \t]*(.*)$/im;
+// Any case, any spacing, and behind bracketed tags ("[WIP] Fix (x) : ..."): a title that reads
+// as feat or fix is one, whatever a stricter parser downstream makes of it.
+export const TITLE = /^\s*(?:\[[^\]]*\]\s*)*(feat|fix)\s*(\([^)]*\))?\s*!?\s*:/i;
+export const WAIVER = /^[ \t]*(?:[*-][ \t]+)?fail-first:[ \t]*n\/a\b[ \t]*(.*)$/im;
 const TEST_FILE = /^tests\/unit\/.+\.test\.mjs$/;
 const FILE_TIMEOUT_MS = 180_000;
 
-/** null when the body carries no waiver line, else { reason } (reason may be empty). */
+/** The body without what quotes rather than says: fenced code, HTML comments, blockquotes. */
+export function proseOf(body) {
+  return String(body || '').replace(/\r\n?/g, '\n')
+    .replace(/^[ \t]*(`{3,}|~{3,})[^\n]*\n[\s\S]*?(?:^[ \t]*\1[`~]*[ \t]*$|(?![\s\S]))/gm, '\n')
+    .replace(/<!--[\s\S]*?(?:-->|(?![\s\S]))/g, '')
+    .replace(/^[ \t]*>.*$/gm, '');
+}
+
+/**
+ * null when the body carries no waiver line of its own, else { reason }. The reason is empty
+ * when none was given, or when it is only a placeholder (`<reason>`) or punctuation.
+ */
 export function waiver(body) {
-  const m = WAIVER.exec(String(body || ''));
-  return m ? { reason: m[1].trim() } : null;
+  const m = WAIVER.exec(proseOf(body));
+  if (!m) return null;
+  const reason = m[1].trim();
+  return { reason: /[\p{L}\p{N}]/u.test(reason.replace(/<[^>]*>/g, '')) ? reason : '' };
 }
 
 /** The kind of a failed `node --test` run, from its output. */
@@ -65,6 +84,16 @@ function extract(repo, ref, dir, sub) {
     + ' else git -C "$1" archive "$2" | tar -x -C "$3"; fi', 'sh', repo, ref, dir, sub || ''],
   { encoding: 'utf8' });
   if (r.status !== 0) throw new Error(`git archive ${ref} ${sub || ''}: ${r.stderr.trim()}`);
+}
+
+/** Make an extracted tree a git repository with its files staged (no commit, no hooks). */
+function stage(tree) {
+  const env = { ...process.env, GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_SYSTEM: '/dev/null' };
+  for (const k of ['GIT_DIR', 'GIT_WORK_TREE', 'GIT_INDEX_FILE']) delete env[k];
+  for (const args of [['init', '-q', '-b', 'main'], ['add', '-A']]) {
+    const r = spawnSync('git', ['-C', tree, ...args], { encoding: 'utf8', env });
+    if (r.status !== 0) throw new Error(`git ${args.join(' ')} in ${tree}: ${r.stderr.trim()}`);
+  }
 }
 
 function runFile(tree, file) {
@@ -100,7 +129,10 @@ export function failFirst({ repo, title, body, head = 'HEAD', base, baseBranch =
     say('fail-first: waived by the PR body; whether the reason holds is for the reviewer');
     return { status: 'waived', lines };
   }
-  if (w) say('fail-first: the PR body says `fail-first: n/a` without a reason; a waiver needs one');
+  if (w) {
+    say('fail-first: the PR body says `fail-first: n/a` without a reason (a placeholder such as'
+      + ' `<reason>` is not one); a waiver needs one');
+  }
 
   const headSha = git(repo, ['rev-parse', '--verify', `${head}^{commit}`]);
   const baseSha = base ? git(repo, ['rev-parse', '--verify', `${base}^{commit}`])
@@ -112,7 +144,7 @@ export function failFirst({ repo, title, body, head = 'HEAD', base, baseBranch =
     say('fail-first: the PR adds or changes no tests/unit/**/*.test.mjs file, so nothing fails'
       + ' without the change');
     say('fail-first: add a unit test that fails on the merge base, or put'
-      + ' `fail-first: n/a <reason>` in the PR body');
+      + ' `fail-first: n/a` and the reason on one line of the PR body');
     return { status: 'not-proven', lines };
   }
 
@@ -125,6 +157,9 @@ export function failFirst({ repo, title, body, head = 'HEAD', base, baseBranch =
     extract(repo, baseSha, withoutTree);
     rmSync(path.join(withoutTree, 'tests'), { recursive: true, force: true });
     extract(repo, headSha, withoutTree, 'tests');
+    // A test that asks git for the tracked files (`git ls-files`) must find them in both
+    // trees: each becomes a repository with everything staged and no history.
+    for (const tree of [withTree, withoutTree]) stage(tree);
     const modules = path.join(repo, 'node_modules');
     if (existsSync(modules)) {
       for (const tree of [withTree, withoutTree]) {
@@ -164,7 +199,7 @@ export function failFirst({ repo, title, body, head = 'HEAD', base, baseBranch =
     say(`fail-first: none of the ${files.length} added or changed unit test file(s) fails on the`
       + ' merge base and passes on the head');
     say('fail-first: make a test exercise the path the change fixes, or put'
-      + ' `fail-first: n/a <reason>` in the PR body');
+      + ' `fail-first: n/a` and the reason on one line of the PR body');
     return { status: 'not-proven', lines };
   }
   const kinds = [...new Set(evidence.map((e) => e.kind))].join(', ');
@@ -180,7 +215,10 @@ function usage(message) {
   process.exit(2);
 }
 
-const isMain = process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+// (real paths: started through a symlink, the program must still know it is the one run,
+// or it would do nothing and exit 0)
+const isMain = process.argv[1] && existsSync(process.argv[1])
+  && realpathSync(process.argv[1]) === realpathSync(fileURLToPath(import.meta.url));
 if (isMain) {
   const opts = { repo: process.cwd() };
   const argv = process.argv.slice(2);

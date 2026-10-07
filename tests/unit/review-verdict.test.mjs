@@ -6,6 +6,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
+import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { gitRepo } from './fixtures/git-repo.mjs';
@@ -142,17 +143,47 @@ test('a deleted guarded file needs a verdict too', (t) => {
 
 test('the guarded paths are the rule\'s list', () => {
   assert.deepEqual(GUARDED, ['src/js/audio/*', 'src/js/analysis/*', 'src/js/experiments/*',
-    'src/js/studio/*', 'src/js/core/storage*', 'scripts/release-*', '.github/workflows/*']);
+    'src/js/studio/*', 'src/js/core/storage*', 'scripts/release-*',
+    '.github/*', 'scripts/review-verdict.mjs', 'scripts/fail-first.mjs',
+    'scripts/ci-workflow-rules.mjs', 'scripts/yaml-subset.mjs',
+    'tests/unit/review-verdict.test.mjs', 'tests/unit/fail-first.test.mjs',
+    'tests/unit/ci-workflows.test.mjs', 'tests/unit/ci-knowledge-job.test.mjs',
+    'tests/unit/yaml-subset.test.mjs', 'tests/unit/base-rule.test.mjs',
+    'tests/unit/fixtures/git-repo.mjs']);
   for (const f of ['src/js/audio/voice.js', 'src/js/analysis/peak.js',
     'src/js/experiments/store.js', 'src/js/studio/runtime/x.js', 'src/js/core/storage.js',
     'src/js/core/storage-inventory.js', 'scripts/release-publish.mjs',
-    '.github/workflows/ci.yml']) {
+    '.github/workflows/ci.yml', '.github/scripts/ci-install.sh', '.github/scripts/base-rule.sh',
+    '.github/actions/setup/action.yml', '.github/doctor-verdict.jq',
+    ...GUARDED.filter((g) => !g.endsWith('*'))]) {
     assert.equal(isGuarded(f), true, f);
   }
   for (const f of ['src/js/core/safety.js', 'src/js/ui/findings.js', 'scripts/build.mjs',
-    '.github/scripts/ci-install.sh', 'tests/unit/v3-engine.test.mjs', 'docs/src/js/audio/x.md',
-    '.ai/repo/reviews/1.yaml']) {
+    'scripts/review-verdict.mjs.bak', 'tests/unit/v3-engine.test.mjs', 'docs/src/js/audio/x.md',
+    'docs/.github/workflows/ci.yml', '.ai/repo/reviews/1.yaml']) {
     assert.equal(isGuarded(f), false, f);
+  }
+  // every guarded file that is not a pattern exists: a renamed program would otherwise leave
+  // the list guarding a name nothing has
+  for (const f of GUARDED.filter((g) => !g.endsWith('*'))) {
+    assert.ok(existsSync(path.join(ROOT, f)), `${f} exists`);
+  }
+});
+
+test('a PR changing what enforces the process rules needs a verdict', (t) => {
+  for (const file of ['scripts/review-verdict.mjs', 'scripts/fail-first.mjs',
+    'scripts/ci-workflow-rules.mjs', 'scripts/yaml-subset.mjs', '.github/scripts/ci-install.sh',
+    '.github/actions/setup/action.yml', '.github/doctor-verdict.jq',
+    'tests/unit/review-verdict.test.mjs', 'tests/unit/fixtures/git-repo.mjs']) {
+    const repo = gitRepo('oscilla-review-verdict-');
+    t.after(() => repo.dispose());
+    repo.commit('base', { [file]: '# base\n', 'README.md': 'fixture\n' });
+    repo.branch('pr');
+    repo.commit('change', { [file]: '# changed\n' });
+    const r = check(repo);
+    assert.equal(r.status, 1, `${file}: ${r.out}`);
+    assert.ok(r.out.includes(`  ${file}\n`), r.out);
+    assert.match(r.out, /REFUSED: \.ai\/repo\/reviews\/42\.yaml is not in the head commit/);
   }
 });
 

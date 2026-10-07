@@ -23,7 +23,7 @@
 // Exit 0: no guarded path changed, or a valid verdict. Exit 1: refused. Exit 2: usage.
 
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, realpathSync, rmSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -32,7 +32,12 @@ import { parseYaml as parse } from './yaml-subset.mjs';
 export const REVIEWS_DIR = '.ai/repo/reviews';
 export const SCHEMA = 'review-verdict/v1';
 
-/** A changed path under one of these needs a verdict. A trailing `*` matches any suffix. */
+/**
+ * A changed path matching one of these needs a verdict. A trailing `*` matches any suffix;
+ * an entry without one is that file. The second group is what enforces the process rules
+ * (project.ci-bounded, project.fail-first, project.review-verdict): the workflows and
+ * everything else under .github/, the three programs with their parser, and their tests.
+ */
 export const GUARDED = [
   'src/js/audio/*',
   'src/js/analysis/*',
@@ -40,7 +45,19 @@ export const GUARDED = [
   'src/js/studio/*',
   'src/js/core/storage*',
   'scripts/release-*',
-  '.github/workflows/*',
+
+  '.github/*',
+  'scripts/review-verdict.mjs',
+  'scripts/fail-first.mjs',
+  'scripts/ci-workflow-rules.mjs',
+  'scripts/yaml-subset.mjs',
+  'tests/unit/review-verdict.test.mjs',
+  'tests/unit/fail-first.test.mjs',
+  'tests/unit/ci-workflows.test.mjs',
+  'tests/unit/ci-knowledge-job.test.mjs',
+  'tests/unit/yaml-subset.test.mjs',
+  'tests/unit/base-rule.test.mjs',
+  'tests/unit/fixtures/git-repo.mjs',
 ];
 
 const SEVERITIES = ['P0', 'P1', 'P2', 'P3'];
@@ -48,7 +65,7 @@ const BLOCKING = new Set(['P0', 'P1']);
 const STATUSES = ['open', 'closed'];
 
 export function isGuarded(file) {
-  return GUARDED.some((g) => file.startsWith(g.slice(0, -1)));
+  return GUARDED.some((g) => (g.endsWith('*') ? file.startsWith(g.slice(0, -1)) : file === g));
 }
 
 function git(repo, args, env) {
@@ -178,7 +195,10 @@ function usage(message) {
   process.exit(2);
 }
 
-const isMain = process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+// (real paths: started through a symlink, the program must still know it is the one run,
+// or it would do nothing and exit 0)
+const isMain = process.argv[1] && existsSync(process.argv[1])
+  && realpathSync(process.argv[1]) === realpathSync(fileURLToPath(import.meta.url));
 if (isMain) {
   const opts = { repo: process.cwd() };
   let treeOnly = false;
