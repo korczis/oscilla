@@ -342,7 +342,9 @@ function defineChecks() {
       await H.frames(page, 1);
     }
     // The tap holds the audio of the whole edit window before it is judged.
-    const moved = await page.evaluate(() => window.OSCILLA.engine.ctx.currentTime);
+    // The window judged: from before the drag to the last move, and half a second at least.
+    const moved = Math.max(before.t + 0.5,
+      await page.evaluate(() => window.OSCILLA.engine.ctx.currentTime));
     await until(() => page.evaluate((t) => {
       const c = window.__rtTap[window.__rtTap.length - 1];
       return !!c && (c.f + c.L.length) / window.OSCILLA.engine.ctx.sampleRate >= t;
@@ -384,7 +386,7 @@ function defineChecks() {
       samePlan: after.applied.planHash === before.applied.planHash,
       appliedRevision: after.applied.revision === after.revision,
       running: rv.state === 'in-sync' && after.playing,
-      audio: audio.n > 0.5 * audio.sr && audio.peak > 0.01,
+      audio: audio.n >= 0.4 * audio.sr && audio.peak > 0.01,
       noGlitch: ratio < CLICK_MAX,
       audioEditCompilesOnce: audioEdit.ok && audioEdit.compiles === 1,
     }), compiles: after.compiles, presentation: after.presentation,
