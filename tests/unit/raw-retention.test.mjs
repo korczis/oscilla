@@ -17,7 +17,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import v8 from 'node:v8';
 import vm from 'node:vm';
-import { createMeasurementEngine } from '../../src/js/measurement/engine.js';
+import { assessMeasurement, createMeasurementEngine } from '../../src/js/measurement/engine.js';
 import { experimentFromResult } from '../../src/js/ui/measure-experiment.js';
 import {
   experimentToJson, sanitizeForExport,
@@ -55,9 +55,11 @@ function voiceAt(i) {
 /**
  * engine.js io whose capture is the stimulus at `gain` after the pre-roll, seeded noise and,
  * when `voice` = { from, frames } (capture frames), a voice in that span. It keeps no strong
- * reference to anything it returns: `refs` holds a WeakRef to every capture buffer.
+ * reference to anything it returns: `refs` holds a WeakRef to every capture buffer. Run
+ * `failRun` rejects (the device is lost); run `emptyRun` is captured as digital silence.
  */
-function syntheticIo({ gain = 0.3, voice = null, onYield = null, failRun = -1 } = {}) {
+function syntheticIo({ gain = 0.3, voice = null, onYield = null, failRun = -1,
+  emptyRun = -1 } = {}) {
   let t = 1;
   let run = 0;
   const rnd = seeded(11);
@@ -84,13 +86,16 @@ function syntheticIo({ gain = 0.3, voice = null, onYield = null, failRun = -1 } 
         device };
     },
     async runStimulus(stimulus, { preRollS, postRollS, notBefore, onScheduled }) {
-      if (run++ === failRun) throw Object.assign(new Error('device lost'), { code: 'NO_INPUT' });
+      const index = run++;
+      if (index === failRun) throw Object.assign(new Error('device lost'), { code: 'NO_INPUT' });
       const pre = Math.round(preRollS * SR);
       const x = stimulus.samples;
       const frames = pre + x.length + Math.round(postRollS * SR);
       const samples = new Float32Array(frames);
-      for (let i = 0; i < frames; i++) samples[i] = 1e-4 * rnd();
-      for (let i = 0; i < x.length; i++) samples[pre + i] += gain * x[i];
+      if (index !== emptyRun) {
+        for (let i = 0; i < frames; i++) samples[i] = 1e-4 * rnd();
+        for (let i = 0; i < x.length; i++) samples[pre + i] += gain * x[i];
+      }
       if (voice) {
         for (let i = voice.from; i < voice.from + voice.frames; i++) samples[i] += voiceAt(i);
       }
@@ -118,11 +123,23 @@ const RECIPE = Object.freeze({
 });
 const recipe = (over = {}) => ({ ...JSON.parse(JSON.stringify(RECIPE)), ...over });
 
-/** Collects garbage after the current job, so WeakRefs made in it can be cleared. */
-async function collect() {
-  for (let i = 0; i < 3; i++) {
-    await new Promise((r) => setImmediate(r));
+/**
+ * Collects garbage after the current job, so WeakRefs made in it can be cleared. Without
+ * `refs`: three rounds, for an assertion that buffers are still alive. With `refs`: at least
+ * three rounds, then until every ref is cleared or COLLECT_DEADLINE_MS has passed. A fixed
+ * number of rounds is not enough for "released": V8's concurrent optimizing compile (OSR of
+ * the loop that fills the first capture) can pin that buffer for a few more event-loop turns
+ * after the engine has let go of it, and how many depends on the machine's load. A buffer the
+ * engine really holds never clears, so the assertion after this still fails on the deadline.
+ */
+const COLLECT_DEADLINE_MS = 10000;
+async function collect(refs = null) {
+  const deadline = Date.now() + COLLECT_DEADLINE_MS;
+  const pending = () => refs !== null && refs.some((r) => r.deref() !== undefined);
+  for (let i = 0; i < 3 || (pending() && Date.now() < deadline); i++) {
+    await new Promise((r) => setTimeout(r, i < 3 ? 0 : 25));
     gc();
+    await new Promise((r) => setImmediate(r));
   }
 }
 
@@ -139,7 +156,7 @@ test('the engine keeps no capture once measure() has resolved (default, no keepR
     assert.equal(io.refs.length, 3, 'the noise check and two runs were captured');
     assert.ok(result.runs.every((r) => r.raw === null));
     assert.equal(result.noise.raw, null);
-    await collect();
+    await collect(io.refs);
     assert.equal(alive(io.refs), 0, 'every capture buffer was collected while the result and '
       + 'the engine are still reachable');
     assert.ok(result.transfer && engine.state === 'COMPLETE');
@@ -156,7 +173,7 @@ test('keepRaw: the captures live exactly as long as the caller keeps the result'
   assert.equal(result.noise.raw, io.refs[0].deref());
   result.runs.forEach((r, i) => assert.equal(r.raw, io.refs[i + 1].deref()));
   result = null;
-  await collect();
+  await collect(io.refs);
   assert.equal(alive(io.refs), 0, 'nothing in the engine kept them');
   assert.equal(engine.state, 'COMPLETE');
 });
@@ -168,7 +185,7 @@ test('an aborted measurement leaves no capture behind, with or without keepRaw',
     engine = createMeasurementEngine({ io });
     await assert.rejects(engine.measure(recipe(), { keepRaw }), (e) => e.code === 'ABORTED');
     assert.ok(io.refs.length >= 1, 'the abort landed after a capture');
-    await collect();
+    await collect(io.refs);
     assert.equal(alive(io.refs), 0, `keepRaw ${keepRaw}: nothing kept a capture`);
   }
 });
@@ -180,8 +197,40 @@ test('a failed measurement leaves no capture behind, with or without keepRaw', a
     await assert.rejects(engine.measure(recipe(), { keepRaw }), (e) => e.code === 'NO_INPUT');
     assert.equal(engine.state, 'ERROR');
     assert.equal(io.refs.length, 2, 'the noise check and the first run were captured');
-    await collect();
+    await collect(io.refs);
     assert.equal(alive(io.refs), 0, `keepRaw ${keepRaw}: nothing kept a capture`);
+  }
+});
+
+// INVALID is a resolved result, reached two ways: a run check before the analysis (here a run
+// captured as digital silence) and the quality assessment after it (here a clipped sweep; the
+// product passes the same assessMeasurement). Both must have let go of every capture.
+const INVALID_CASES = Object.freeze([
+  { name: 'a silent run (run check)', io: { emptyRun: 0 }, engine: {}, captures: 2,
+    code: /^(EMPTY|NO_INPUT)$/ },
+  { name: 'a clipped sweep (quality assessment)', io: { gain: 5 },
+    engine: { assess: assessMeasurement }, captures: 3, code: /CLIP/ },
+]);
+
+test('an INVALID measurement leaves no capture behind, with or without keepRaw', async () => {
+  for (const c of INVALID_CASES) {
+    for (const keepRaw of [false, true]) {
+      const what = `${c.name}, keepRaw ${keepRaw}`;
+      const io = syntheticIo(c.io);
+      const engine = createMeasurementEngine({ io, ...c.engine });
+      let result = await engine.measure(recipe(), { keepRaw });
+      assert.equal(result.state, 'INVALID', what);
+      assert.ok(result.reasons.some((r) => c.code.test(r.code)),
+        `${what}: ${JSON.stringify(result.reasons.map((r) => r.code))}`);
+      assert.equal(io.refs.length, c.captures, `${what}: captures taken`);
+      assert.equal(engine.state, 'INVALID', what);
+      // Under keepRaw the caller's result may hold captures (that is what keepRaw means), so
+      // "the engine keeps none" is judged once the caller has dropped the result.
+      if (keepRaw) result = null;
+      await collect(io.refs);
+      assert.equal(alive(io.refs), 0, `${what}: nothing in the engine kept a capture`);
+      result = null;
+    }
   }
 });
 
@@ -320,4 +369,30 @@ test('the product states the policy where a run is saved, in About and in the RE
   const privacy = readme.slice(readme.indexOf('## Privacy'), readme.indexOf('## Licences'));
   assert.match(privacy, /0049-raw-capture-retention\.md/);
   assert.match(privacy.replace(/\s+/g, ' '), /impulse response/);
+});
+
+// The engine's captures are not the only raw PCM of MEASURE: the level-calibration reference
+// capture (ui/measure.js captureReference, REFERENCE_CAPTURE_S through io.captureNoise) and the
+// setup check's level window (capture.js PREFLIGHT_LEVEL_S) record through the same io, outside
+// the engine. Both are locals reduced to a level reading; the policy has to name them.
+test('the policy names every raw capture of MEASURE, the reference capture included', () => {
+  const flat = (t) => t.replace(/\s+/g, ' ');
+  const readme = read('README.md');
+  const privacy = flat(readme.slice(readme.indexOf('## Privacy'), readme.indexOf('## Licences')));
+  assert.match(privacy, new RegExp('opens only for the setup check, a measurement, '
+    + 'a level-calibration reference capture or the live RTA'));
+  assert.match(privacy, /reference capture[^.]*keeps? only[^.]*level reading/);
+  const adr = flat(read('.ai/repo/adrs/0049-raw-capture-retention.md'));
+  assert.match(adr, /reference capture/, 'ADR 0049 names the reference capture');
+  assert.match(adr, /0\.3 s level window/, 'ADR 0049 names the setup check level window');
+  const html = read('src/index.html');
+  const hint = html.match(/data-osc="levelCal\.retention"[^>]*>([\s\S]*?)<\/p>/);
+  assert.ok(hint, 'the level calibration dialog says what happens to the reference capture');
+  assert.match(flat(hint[1]), /discarded/);
+  assert.match(flat(hint[1]), /only the level reading/);
+  // The code the sentence describes: the capture is a local of captureReference.
+  const ui = read('src/js/ui/measure.js');
+  assert.match(ui, /const cap = await io\.captureNoise\(REFERENCE_CAPTURE_S, \{\}\);/);
+  assert.doesNotMatch(ui, /ctx\.reference = \{[^}]*\bcap\b[,\s}]/,
+    'ctx.reference keeps the reading and the input facts, not the capture');
 });
