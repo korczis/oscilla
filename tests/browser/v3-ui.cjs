@@ -122,8 +122,9 @@
 //                           deterministic files named after the profile and its id, and both
 //                           re-import (same id, name, convention); a correction profile (chosen
 //                           in the dialog) re-imports from its CSV without the question
-//   input-device            (V322) the input choice is disabled in TEST CONTEXT and starts at the
-//                           default; (chromium, firefox on http, fake microphone) the setup check
+//   input-device            (V322) the input choice shows TEST CONTEXT as its selected option
+//                           while the loopback is on (ledger W7b) and starts at the default;
+//                           (chromium, firefox on http, fake microphone) the setup check
 //                           opens the default (no deviceId), the inputs are listed, a chosen
 //                           input reaches getUserMedia as deviceId { exact } and the input
 //                           record, a chosen input that disappears stays selected, is marked
@@ -2028,12 +2029,13 @@ function defineChecks(fixtures) {
         disabled: el.disabled, deviceId: window.OSCILLA.measure.deviceId,
         msg: document.querySelector('[data-osc="measure.inputMissing"]').offsetParent !== null };
     });
-    // TEST CONTEXT: no input device; the choice is disabled.
+    // TEST CONTEXT: no input device; it is the selected choice, and the list can leave it.
     await page.evaluate(() => window.OSCILLA.measure.useLoopback());
     const loop = await view();
     await page.evaluate(() => window.OSCILLA.measure.useMicrophone());
     const before = await view();
-    const base = { loopDisabled: loop.disabled && /TEST CONTEXT/.test(loop.status),
+    const base = { loopChoice: !loop.disabled && /TEST CONTEXT/.test(loop.status)
+        && loop.options.some((o) => o.testContext && o.value === loop.value),
       defaultFirst: before.options[0].value === '' && before.value === '' && !before.disabled
         // Listed only after a check opened the microphone (earlier checks may have done so).
         && /Run the setup check to list the inputs|listed by the browser|lists no input/
@@ -2071,8 +2073,9 @@ function defineChecks(fixtures) {
     };
     const res = { loop, before };
     res.firstState = await check();
-    res.listed = await H.until(view, (v) => v.options.length >= 2, 3000);
-    const chosen = res.listed.options.find((o) => o.value !== '');
+    res.listed = await H.until(view, (v) => v.options.filter((o) => !o.testContext).length >= 2,
+      3000);
+    const chosen = res.listed.options.find((o) => o.value !== '' && !o.testContext);
     if (chosen) {
       await page.selectOption('#osc-m-input-device', chosen.value);
       res.afterSelect = await view();
@@ -2127,7 +2130,7 @@ function defineChecks(fixtures) {
         && res.ioDeviceId === chosen.value,
       goneShown: !!res.gone && res.gone.missing && res.gone.msg && res.gone.value === chosen.value
         && /no longer available/.test(res.gone.message)
-        && /not available$/.test(res.gone.options.at(-1).label),
+        && /not available$/.test(res.gone.options.findLast((o) => !o.testContext).label),
       goneAnnounced: (res.liveLog || []).some((t) => /no longer available/.test(t)),
       goneRefused: res.goneState !== 'READY'
         && /selected input device is not available/.test(res.blockers || ''),

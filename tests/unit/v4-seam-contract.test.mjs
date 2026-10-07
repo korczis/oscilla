@@ -3,9 +3,10 @@
 //   inject  a direct setInputNow call is refused outside TEST CONTEXT loopback; showResult
 //           refuses a result without a testContext, so no injected result is titled or saved as
 //           a measurement.
-//           NOT covered, and open as ledger W7f: an input named in TEST CONTEXT stays known after
-//           useMicrophone(), and showResult adopts the input of a TEST CONTEXT result outside
-//           loopback; a typed level reading can bind to either.
+//           Leaving TEST CONTEXT clears an input named in it (ledger W7b: useMicrophone is the
+//           page's own "choose an input", v4-test-context-choice.test.mjs).
+//           NOT covered, and open as ledger W7f: showResult adopts the input of a TEST CONTEXT
+//           result outside loopback, and a typed level reading can bind to it.
 //   drive   setValues is the validated recipe-link action: unknown keys, out-of-range values and
 //           calls while a measurement runs are refused whole; a change resets a READY check.
 // In Node (no DOM: the adapters' Alpine state is a plain object, IndexedDB the in-process fake).
@@ -81,10 +82,12 @@ test('inject: setInputNow works in TEST CONTEXT loopback; a direct call is refus
     typeReading(cmp);
     assert.equal(cmp.measureSaveLevelCalibration(), true);
     assert.equal(cmp.measureCalIndicator, 'CALIBRATED');
-    // After TEST CONTEXT is left (a drive action) a direct call is refused. What the input is
-    // at this point is deliberately not asserted: it is still the injected one, which is the
-    // open ledger line W7f, not a contract.
+    // Leaving TEST CONTEXT (a drive action: the page's "choose an input") clears the injected
+    // input and the calibration stored on it, and a direct call is refused from then on.
     assert.equal(seam.useMicrophone(), true);
+    assert.equal(seam.inputNow, null);
+    assert.equal(seam.levelCalibration, null);
+    assert.notEqual(cmp.measureCalIndicator, 'CALIBRATED');
     assert.equal(seam.setInputNow(null), false);
     assert.equal(seam.useLoopback(), true);
     assert.equal(seam.setInputNow(null), true);
