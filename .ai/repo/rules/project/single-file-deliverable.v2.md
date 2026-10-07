@@ -51,7 +51,7 @@ committed `dist/index.html` that differs from a rebuild is a review rejection an
 
 # Verification
 
-`npm run verify-dist` rejects banned constructs and missing notices; the browser gate loads
+`npm run verify-dist` (`scripts/verify-dist.mjs`) rejects banned constructs and missing notices; the browser gate loads
 `dist/index.html` from `file://` and from a sub-path in Chromium, Firefox and WebKit with zero
 console errors; after every Pages deployment `scripts/verify-deploy.mjs` fails the workflow
 unless the live page, with its region normalised back, is byte-equal to the committed dist and

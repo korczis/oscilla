@@ -588,6 +588,20 @@ automated test proves how a physical speaker, room or microphone behaves.
   `?debug=1` adds the full commit SHA, the source date, the artifact hash, the config schema
   version and live engine state: sample rate, Nyquist, AudioContext state, voices, nodes,
   microphone state and the last error.
+- **Inspection and test surface.** The page carries `window.OSCILLA`, the surface its own
+  browser tests and the post-deployment smoke use, so the bytes that are tested are the bytes
+  that are served. The stable reads are `version`, `build`, `measure.state`, `measure.counts()`,
+  `studio.counts()`, `studio.model` and `studio.trace.steps()`; everything else may change
+  without notice. Every member except `studioTimeline` (a second Studio context that one test
+  suite builds; it is due to leave the page) is one of three kinds: it observes; it drives an
+  action you already have in the page, through the same validation (`measure.useLoopback()` is
+  `?measure=loopback`, `measure.setValues()` is a recipe link); or it injects test data.
+  `measure.showResult()` refuses a result that is not marked TEST CONTEXT, so no injected result
+  is shown or saved as a measurement, and a direct `measure.setInputNow()` is refused outside
+  TEST CONTEXT. One gap is open: an input named while in TEST CONTEXT, or carried by an injected
+  result, stays known afterwards, and a typed level reading can then bind to it. It is
+  not a security boundary: any script running in the page can reach the same code without it.
+  `?mock=1` only outlines the chart and view areas for layout comparison and never draws data.
 - **Proof of deployment.** After every Pages deployment, `scripts/verify-deploy.mjs` fetches the
   public page, retrying a bounded number of times. It reverses the stamp and requires the
   result to be byte-identical to the committed `dist/index.html`. It also requires the stamped
@@ -606,17 +620,26 @@ issues in [`.ai/repo/project/`](.ai/repo/project/)), the architecture decisions
 
 What is checked, and where:
 
-- **On a commit and a push** (the git hooks Majordomus wires into a checkout): `majordomus
-  doctor` validates the layer before a commit, and `majordomus finish --check` refuses a push
-  outside the active task's scope. `npm run verify` runs `majordomus doctor` too.
+- **On a commit and a push** (the git hooks a checkout wires, declared in
+  `.ai/repo/policy.yaml`; `majordomus doctor` checks that the hook names each one): before a commit, `majordomus
+  worktree guard` refuses a branch committed outside its canonical worktree
+  ([`docs/WORKTREES.md`](docs/WORKTREES.md)), `git diff --cached --check` refuses a staged
+  conflict marker, and `majordomus doctor` validates the layer; `majordomus finish --check`
+  refuses a push outside the active task's scope. `npm run verify` first checks that the
+  local `majordomus` is the version CI pins (`scripts/majordomus-pin-check.mjs`), then runs
+  `majordomus doctor` too.
 - **In CI, on every pull request** (`.github/workflows/ci.yml`, all required through `gate`):
   the test suites; `tests/unit/knowledge-integrity.test.mjs`, which fails when a claim, rule,
   bootstrap or this README names a file that does not exist, and when a claim's test or a
-  rule's `x-majordomus` test is not run by CI (other paths are checked only to exist);
+  rule's `x-majordomus` test is not run by CI (other paths are checked only to exist), when a
+  rule's enforcement section names nothing CI runs, when a document names a project rule
+  that is not in force, and when a script header says a workflow runs a file it does not run;
+  `tests/unit/repo-hygiene.test.mjs`, which fails on a conflict marker in a tracked file;
   `tests/unit/storage-inventory.test.mjs`, which holds the privacy table below to the code; `tests/unit/no-fake-science.test.mjs`; and `majordomus doctor` at a pinned version.
-- **Not checked by a machine**: a project rule is enforced by tests only where its
-  `x-majordomus` block names them (`project.no-fake-science`), otherwise by review; use-case
-  coverage of the claims is advisory; the worktree layout is a convention. An ADR's status
+- **Not checked by a machine**: whether the test a project rule names actually decides the
+  rule (`project.rules-name-their-enforcement` checks that it exists and runs); the advisory
+  session guidance in `project.shared-machine-discipline`; use-case coverage of the claims
+  is advisory; the worktree guard passes a detached HEAD and sees only commits. An ADR's status
   `proposed` means recorded, not accepted (see [`.ai/repo/adrs/README.md`](.ai/repo/adrs/README.md)).
 
 V3 Measure is specified in [`docs/specs/oscilla-v3-measure.md`](docs/specs/oscilla-v3-measure.md)
