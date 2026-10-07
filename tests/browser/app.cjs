@@ -470,9 +470,11 @@ function defineChecks() {
 
   // Ledger W7b (ADR 0052): TEST CONTEXT is a choice of the MEASURE Input device list. It is
   // entered and left from the page; leaving clears what was produced in it (here a setup
-  // check and a level calibration typed on it; the result is in the unit suite,
+  // check, a level calibration typed on it and an INVALID result with its noise-check
+  // snapshot; a COMPLETE result is in the unit suite,
   // tests/unit/v4-test-context-choice.test.mjs). With the fake microphone (chromium, firefox on
-  // http) a level calibration stored on a real input survives entering and leaving.
+  // http) a level calibration stored on a real input survives entering and leaving and reads
+  // UNCALIBRATED, with the reason, while the page is in TEST CONTEXT.
   def('test-context-from-the-page', async ({ page, browserName, origin }) => {
     const TC_LABEL = 'TEST CONTEXT · digital loopback (no microphone)';
     const SELECT = '#osc-m-input-device';
@@ -491,6 +493,13 @@ function defineChecks() {
         flag: new URLSearchParams(window.location.search).get('measure'),
         state: m.state, ioKind: m.ioKind, inputNow: !!m.inputNow, level: !!m.levelCalibration,
         indicator: a.measureCalIndicator, polite: a.meas.live.polite,
+        assertive: a.meas.live.assertive, levelVoid: a.meas.cal.levelVoid,
+        result: m.result ? m.result.state : null,
+        resultLabel: m.result && m.result.testContext ? m.result.testContext.kind : null,
+        reasons: m.result ? m.result.reasons.map((r) => r.code) : null,
+        rta: a.meas.rta ? a.meas.rta.badges.slice() : null,
+        noiseStep: a.meas.flow.steps.find((s) => s.id === 'noise').status,
+        primary: text(document.getElementById('osc-measure-primary')),
         toasts: a.alerts.map((t) => `${t.title}: ${t.message}`) };
     });
     const typeLevel = () => page.evaluate(() => {
@@ -556,6 +565,44 @@ function defineChecks() {
     };
     const detail = { before, entered, checked, calibrated, left, counts };
     await page.evaluate(() => { window.OSCILLA.app.alerts = []; });
+    // Review of #167: an INVALID result made in TEST CONTEXT, by page actions only (the volume
+    // at 0: the loopback hears digital silence). It has no transfer and nothing titled
+    // "TEST CONTEXT result"; it, its noise-check snapshot and the outcome said for it must not
+    // stay under the input chosen next.
+    const gain = () => page.$eval('#osc-gain', (el) => Number(el.value));
+    const setGain = async (pct) => {
+      await page.$eval('#osc-gain', (el, v) => {
+        el.value = String(v);
+        el.dispatchEvent(new Event('input', { bubbles: true }));
+      }, pct);
+      return H.until(gain, (v) => v === pct, 3000);
+    };
+    const gainWas = await gain();
+    await enter();
+    // A short recipe, as a recipe link would set it (the seam's setValues is that validation).
+    const shortened = await page.evaluate(() => window.OSCILLA.measure.setValues({ duration: 1,
+      repeats: 1, noiseCheckS: 0.5, preRollS: 0.25, postRollS: 0.5 }));
+    // The setup check refuses a zero output level, so the volume goes down after it is READY.
+    await check();
+    await setGain(0);
+    await page.click('#osc-measure-primary');
+    const invalid = await H.until(view, (v) => ['INVALID', 'COMPLETE', 'ABORTED', 'ERROR']
+      .includes(v.state) && v.result !== null && v.assertive !== '', 45000);
+    const leftInvalid = await leave();
+    res.invalidInIt = shortened === true && invalid.state === 'INVALID'
+      && invalid.result === 'INVALID' && invalid.reasons.includes('NO_INPUT')
+      && invalid.resultLabel === 'digital-loopback' && invalid.noiseStep === 'done'
+      && Array.isArray(invalid.rta) && invalid.rta.includes('NOISE CHECK SNAPSHOT')
+      && /^Measurement invalid/.test(invalid.assertive);
+    res.invalidCleared = leftInvalid.result === null && leftInvalid.rta === null
+      && leftInvalid.noiseStep !== 'done' && leftInvalid.state === 'IDLE'
+      && leftInvalid.assertive === '' && leftInvalid.chip === 'Microphone'
+      && /Cleared: the invalid TEST CONTEXT result/.test(leftInvalid.polite)
+      && leftInvalid.toasts.some((t) => /the invalid TEST CONTEXT result/.test(t));
+    await setGain(gainWas);
+    res.releasedAfterInvalid = zero(await released());
+    Object.assign(detail, { gainWas, shortened, invalid, leftInvalid });
+    await page.evaluate(() => { window.OSCILLA.app.alerts = []; });
     if (FAKE_MIC.has(browserName) && origin === 'http') {
       // A real input: its check ends when TEST CONTEXT is entered, its calibration stays.
       const mic = await check();
@@ -565,7 +612,9 @@ function defineChecks() {
       const back = await leave();
       res.realInputKept = mic.ioKind === 'microphone' && micStored === true
         && micCal.indicator === 'CALIBRATED' && inIt.level && !inIt.inputNow
-        && inIt.indicator !== 'CALIBRATED' && back.level && !back.inputNow
+        && inIt.indicator === 'UNCALIBRATED'
+        && /stored outside TEST CONTEXT/.test(inIt.levelVoid || '') && back.level
+        && !back.inputNow && back.levelVoid === null
         && back.indicator === 'PENDING INPUT CHECK'
         && !back.toasts.some((t) => /level calibration/.test(t));
       Object.assign(detail, { mic, micCal, inIt, back });

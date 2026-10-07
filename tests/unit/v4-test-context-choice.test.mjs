@@ -7,7 +7,14 @@
 //   leave   choosing an input turns it off and clears what was produced in TEST CONTEXT (its
 //           result, the input check, a level calibration stored in it), says what was cleared,
 //           and a typed level reading then has no input to bind to.
-//   seam    useLoopback / useMicrophone are that same transition (ADR 0052 "drive").
+//   seam    useLoopback / useMicrophone are that same transition (ADR 0052 "drive"), behind the
+//           same "the input is in use" refusal as the choice.
+//   origin  (review of #167) what was produced in TEST CONTEXT is known from where it was
+//           produced, not from a label on it: an INVALID result is cleared and named like a
+//           COMPLETE one and carries the engine's testContext; a pending repeat link does not
+//           cross the transition; the outcome in the assertive live region goes with it; an
+//           INVALID result of a real input is not kept inside TEST CONTEXT, where nothing would
+//           say whose it is; a level calibration stored on one side does not apply on the other.
 // NOT covered here: that a result measured with a real input, and a level calibration stored
 // with one, survive entering and leaving. Node has no input to check; the browser check
 // `test-context-from-the-page` (tests/browser/app.cjs) covers the calibration on the fake
@@ -281,3 +288,146 @@ test('seam: useLoopback and useMicrophone are the same transition as the choice'
   assert.equal(seam.levelCalibration, null);
   assert.equal(cmp.measureCalIndicator, 'UNCALIBRATED');
 });
+
+test('seam: useLoopback and useMicrophone are refused where the choice is refused', () => {
+  const { cmp, seam } = makeUi();
+  cmp.meas.busy = true; // what the page reads while a measurement uses the input
+  assert.equal(cmp.measureSelectInput(TC), false);
+  assert.equal(seam.useLoopback(), false, 'the seam drives no transition the page refuses');
+  assert.equal(cmp.meas.loopback, false);
+  cmp.meas.busy = false;
+  assert.equal(seam.useLoopback(), true);
+  cmp.meas.busy = true;
+  assert.equal(cmp.measureSelectInput(''), false);
+  assert.equal(seam.useMicrophone(), false);
+  assert.equal(cmp.meas.loopback, true);
+  assert.equal(cmp.meas.input.selected, TC);
+});
+
+// ================================================================= origin
+
+/** The assertive live region's text once it matches (set 30 ms after the announcement). */
+const saidAssertive = async (cmp, wanted) => {
+  const until = Date.now() + 2000;
+  while (!wanted.test(cmp.meas.live.assertive) && Date.now() < until) {
+    await new Promise((r) => { setTimeout(r, 10); });
+  }
+  return cmp.meas.live.assertive;
+};
+const flowStatus = (cmp, id) => cmp.meas.flow.steps.find((s) => s.id === id).status;
+
+test('origin: an INVALID result made in TEST CONTEXT is cleared on leaving, and it is said',
+  async () => {
+    const { cmp, seam, notes } = makeUi({ loopback: true });
+    // Node has no Web Audio, so the engine's own setup check blocks: a real INVALID result of
+    // the loopback engine (engine.js invalidResult), with no transfer and nothing to show.
+    await cmp.measureStart();
+    const invalid = seam.result;
+    assert.equal(invalid.state, 'INVALID');
+    assert.equal(invalid.transfer, null);
+    assert.equal(flowStatus(cmp, 'input'), 'blocked');
+    assert.match(await saidAssertive(cmp, /./), /^Setup check failed/);
+
+    assert.equal(cmp.measureSelectInput(''), true);
+    assert.equal(cmp.meas.loopback, false);
+    assert.equal(seam.result, null, 'the INVALID result does not outlive TEST CONTEXT');
+    assert.equal(cmp.meas.rta, null);
+    assert.notEqual(flowStatus(cmp, 'input'), 'blocked');
+    assert.notEqual(flowStatus(cmp, 'noise'), 'done');
+    assert.equal(cmp.meas.live.assertive, '', 'the outcome said in TEST CONTEXT is not left');
+    const text = await said(cmp, /^Left TEST CONTEXT/);
+    assert.match(text, /Cleared: the invalid TEST CONTEXT result/);
+    assert.match(notes.at(-1).text, /the invalid TEST CONTEXT result/);
+    assert.equal(cmp.meas.live.assertive, '');
+  });
+
+test('origin: an INVALID result of the loopback engine carries the TEST CONTEXT label',
+  async () => {
+    const { cmp, seam } = makeUi({ loopback: true });
+    await cmp.measureStart();
+    assert.equal(seam.result.state, 'INVALID');
+    assert.equal(seam.result.testContext && seam.result.testContext.kind, 'digital-loopback',
+      'every result of the loopback says so, whatever its state');
+    assert.match(seam.result.testContext.label, /^TEST CONTEXT/);
+  });
+
+test('origin: a result shown while the page is in TEST CONTEXT is cleared whatever it carries',
+  async () => {
+    const { a } = await fx();
+    const { cmp, seam } = makeUi({ loopback: true });
+    const result = { ...a.result };
+    assert.equal(seam.showResult(result), true);
+    // The label is not what the reset reads: the page knows where the result was produced.
+    result.testContext = null;
+    assert.equal(cmp.measureSelectInput(''), true);
+    assert.equal(seam.result, null);
+    assert.equal(cmp.meas.response, null);
+    assert.equal(cmp.meas.rta, null);
+  });
+
+test('origin: a repeat link pending in TEST CONTEXT does not cross the transition', async () => {
+  const { a } = await fx();
+  const { cmp, seam } = makeUi({ loopback: true });
+  assert.equal(seam.showResult({ ...a.result }), true);
+  const first = await cmp.measureSave();
+  assert.ok(first);
+  await cmp.measureRepeat(); // no audio in Node: the repeat ends INVALID and is never saved
+  assert.equal(cmp.measureSelectInput(''), true);
+  assert.equal(cmp.measureSelectInput(TC), true);
+  assert.equal(seam.showResult({ ...a.result }), true);
+  const second = await cmp.measureSave();
+  assert.ok(second);
+  assert.notEqual(second, first);
+  const stored = await cmp.experimentsGet(second);
+  assert.equal(stored.provenance.repeatOf ?? null, null,
+    'a measurement started after the transition repeats nothing');
+});
+
+test('origin: an INVALID result of a real input is not kept inside TEST CONTEXT', async () => {
+  const { cmp, seam } = makeUi();
+  await cmp.measureStart(); // no Web Audio in Node: INVALID, with the microphone engine
+  assert.equal(seam.result.state, 'INVALID');
+  assert.equal(seam.result.testContext ?? null, null, 'a real input result has no such label');
+  assert.equal(flowStatus(cmp, 'input'), 'blocked');
+  await saidAssertive(cmp, /./);
+
+  assert.equal(cmp.measureSelectInput(TC), true);
+  assert.equal(seam.result, null, 'nothing on the page would say it is the microphone\'s');
+  assert.equal(cmp.meas.rta, null);
+  assert.notEqual(flowStatus(cmp, 'input'), 'blocked');
+  assert.equal(cmp.meas.live.assertive, '');
+  assert.match(await said(cmp, /^TEST CONTEXT/),
+    /Cleared: the invalid result of the previous input\.$/);
+});
+
+test('origin: a level calibration stored outside TEST CONTEXT never applies inside it',
+  async () => {
+    const { a } = await fx();
+    // An input that reports no facts at all: its binding equals the loopback's but for nothing.
+    const bare = { device: { label: null, id: null },
+      constraints: { requested: null, applied: null } };
+    const { cmp, seam } = makeUi();
+    // Outside TEST CONTEXT the seam's showResult adopts result.input (ledger W7f route B, still
+    // open): the only way Node has to a known input on this side. When route B closes, this
+    // case needs another way in.
+    assert.equal(seam.showResult({ ...a.result, input: bare }), true);
+    typeReading(cmp);
+    assert.equal(cmp.measureSaveLevelCalibration(), true);
+    assert.equal(cmp.measureCalIndicator, 'CALIBRATED');
+
+    assert.equal(cmp.measureSelectInput(TC), true);
+    assert.ok(seam.levelCalibration, 'it is kept for the input it was taken with');
+    assert.equal(cmp.measureCalIndicator, 'UNCALIBRATED');
+    assert.match(cmp.meas.cal.levelVoid, /stored outside TEST CONTEXT/);
+    // The loopback's input facts equal the binding; the context still decides.
+    assert.equal(seam.setInputNow({ ...bare, sampleRate: a.result.sampleRate }), true);
+    assert.equal(cmp.measureCalIndicator, 'UNCALIBRATED');
+    assert.match(cmp.meas.cal.levelVoid, /stored outside TEST CONTEXT/);
+    assert.equal(cmp.measureLevelsText,
+      'UNCALIBRATED (the calibration is not valid for this input)');
+
+    assert.equal(cmp.measureSelectInput(''), true);
+    assert.ok(seam.levelCalibration);
+    assert.equal(cmp.measureCalIndicator, 'PENDING INPUT CHECK');
+    assert.equal(cmp.meas.cal.levelVoid, null);
+  });
