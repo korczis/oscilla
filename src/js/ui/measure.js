@@ -700,7 +700,7 @@ export function createMeasureUi(svc) {
   /**
    * The level calibration of a stored noise-check snapshot: the one its measurement applied
    * (the evidence of that result), never one loaded or created afterwards; the current one only
-   * for a result shown without a run (test seam).
+   * for a TEST CONTEXT result shown without a run (test seam).
    */
   function snapshotLevel(st, m) {
     const ev = ctx.evidence;
@@ -932,6 +932,21 @@ export function createMeasureUi(svc) {
     rebuildAll();
   }
 
+  /**
+   * Put validated recipe values (decodeRecipeLink) into the setup, as an edit does: refused
+   * while a measurement or a reference capture runs, and a READY setup check is reset because
+   * the recipe changed. Returns { ok: true } or { ok: false, errors }. Says nothing itself.
+   */
+  function applyRecipeValues(cmp, values) {
+    if (cmp.meas.busy || ctx.refCapture) return { ok: false, errors: ['a measurement is running'] };
+    Object.assign(cmp.meas.values, values);
+    // meas.saved belongs to the result shown, not to the setup: a stored run stays saved (a
+    // second save of it would be refused as immutable and read as "not saved").
+    if (ctx.me && ctx.me.state === S.READY) ctx.me.reset(); // the recipe changed
+    refresh();
+    return { ok: true };
+  }
+
   // ---------------------------------------------------------------- experiment building
   /** The { f1, f2 } a recipe asked for (before the Nyquist clamp), or null. */
   function requestedOf(recipe) {
@@ -940,8 +955,9 @@ export function createMeasureUi(svc) {
   }
 
   /**
-   * The evidence of `result` as measured (taken at its start, measuredEvidence); a result shown
-   * without a run (test seam) has no start notes and takes the rest from the workspace now.
+   * The evidence of `result` as measured (taken at its start, measuredEvidence); a TEST CONTEXT
+   * result shown without a run (test seam) has no start notes and takes the rest from the
+   * workspace now.
    */
   function evidenceOf(result) {
     return ctx.evidence && ctx.evidence.result === result ? ctx.evidence
@@ -1599,20 +1615,17 @@ export function createMeasureUi(svc) {
           + 'The measurement setup is unchanged.');
         return false;
       }
-      if (this.meas.busy || ctx.refCapture) {
-        this.meas.recipeLinkErrors = ['a measurement is running'];
+      // Refused while a measurement runs; otherwise applied as an edit (a READY check resets).
+      const applied = applyRecipeValues(this, r.values);
+      if (!applied.ok) {
+        this.meas.recipeLinkErrors = applied.errors;
         this.notify('warning', 'Recipe link not applied', 'A measurement is running; stop it and '
           + 'open the link again.');
         ctx.lastRecipeParam = null;
         return false;
       }
-      Object.assign(this.meas.values, r.values);
       this.meas.recipeLinkErrors = [];
       ctx.repeatOf = null;
-      // meas.saved belongs to the result shown, not to the setup: a stored run stays saved (a
-      // second save of it would be refused as immutable and read as "not saved").
-      if (ctx.me && ctx.me.state === S.READY) ctx.me.reset(); // the recipe changed
-      refresh();
       this.notify('info', 'Measurement recipe loaded from the link', `${this.meas.stimulusText}, `
         + `${this.meas.values.repeats} run(s). Nothing runs until you press Check setup or Start `
         + 'measurement.');
@@ -2085,6 +2098,11 @@ export function createMeasureUi(svc) {
     },
 
     // ------------------------------------------------------------------ test seam
+    // window.OSCILLA.measure (ADR 0052). Every member is one of three kinds: it OBSERVES (the
+    // getters, counts(), liveRta()); it DRIVES an action a user already has, through the user's
+    // validation (useLoopback = ?measure=loopback, useMicrophone, setValues = a recipe link); or
+    // it INJECTS, and then only inside TEST CONTEXT (setInputNow, showResult). The key list is
+    // pinned by tests/browser/app.cjs `seam-surface-pinned`.
     measureTestSeam() {
       const self = this;
       return {
@@ -2136,9 +2154,24 @@ export function createMeasureUi(svc) {
         },
         clearStateHook() { ctx.onStateHook = null; },
         get live() { return { ...self.meas.live }; },
+        /**
+         * Drive: set recipe values (field id → value) as a recipe link does. The whole call is
+         * refused with { ok: false, errors } for a key that is not a recipe field, a value
+         * outside its field's range, or while a measurement runs; otherwise it returns true, and
+         * a READY setup check is reset as by any edit. No toast, and no link state changes.
+         */
         setValues(values) {
-          Object.assign(self.meas.values, values);
-          refresh();
+          const given = values && typeof values === 'object' ? Object.keys(values) : null;
+          const unknown = given ? given.filter((k) => !RECIPE_FIELD_IDS.includes(k)) : [];
+          if (!given || unknown.length) {
+            return { ok: false, errors: given ? unknown.map((k) => `unknown recipe field `
+              + `"${String(k).slice(0, 20)}"`) : ['the values must be an object'] };
+          }
+          const r = decodeRecipeLink(encodeRecipeLink(recipeValues({ ...self.meas.values,
+            ...values })), { defaults: recipeValues(FIELD_DEFAULTS) });
+          if (!r.ok) return { ok: false, errors: r.errors };
+          const applied = applyRecipeValues(self, r.values);
+          return applied.ok ? true : applied;
         },
         counts() {
           const io = ctx.io;
@@ -2178,15 +2211,26 @@ export function createMeasureUi(svc) {
         get inputNow() { return ctx.inputNow; },
         get reference() { return ctx.reference; },
         get referenceCapturing() { return !!ctx.refCapture; },
-        /** Test hook: the current input (as a preflight would report it). */
+        /**
+         * Test hook (TEST CONTEXT only): the current input, as a preflight would report it.
+         * Refused (false) unless the page is in TEST CONTEXT loopback: a level calibration binds
+         * to this input, and outside TEST CONTEXT only a real setup check may name one.
+         */
         setInputNow(input) {
+          if (!ctx.loopback) return false;
           ctx.inputNow = input;
           refresh();
+          return true;
         },
-        /** Test hook: show any engine-like result (view-option robustness, M6). */
+        /**
+         * Test hook: show a TEST CONTEXT engine-like result; a result without testContext is
+         * refused (false), never shown as a measurement.
+         */
         showResult(result) {
+          if (!result || !result.testContext) return false;
           showResult(result);
           refresh();
+          return true;
         },
         get responseView() { return ctx.charts.response ? ctx.charts.response.view : null; },
         /** The chosen input (raw id, page only) and the one the current io was opened with. */
