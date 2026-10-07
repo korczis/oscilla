@@ -1,4 +1,4 @@
-// Vocabulary (ADR 0051, docs/GLOSSARY.md): the names a format already persists decide the word
+// Vocabulary (ADR 0053, docs/GLOSSARY.md): the names a format already persists decide the word
 // the user sees. A run is one capture inside a measurement; an experiment is the stored record
 // of a completed measurement; a project is a saved Studio document; the app is OSCILLA.
 //
