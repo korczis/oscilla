@@ -17,7 +17,12 @@ The binding constraints are the project rules in `.ai/repo/rules/project/` (vers
 name): `project.single-file-deliverable`, `project.audio-engine-discipline`,
 `project.no-fake-science`, `project.about-names-current-release`,
 `project.studio-model-is-canonical`, `project.typed-ports`, `project.no-silent-feedback`,
-`project.visual-identity-lock`. Read them before changing `src/`.
+`project.visual-identity-lock`. Read them before changing `src/`. Four more bind how the
+repository is worked on: `project.rules-name-their-enforcement`,
+`project.no-conflict-markers`, `project.worktree-topology` (mechanism: `docs/WORKTREES.md`),
+`project.majordomus-layer-current`; `project.shared-machine-discipline` is the advisory
+session guidance (no pattern kills, no stash, no chained merge-and-commit, owner-only
+actions). Read those before the first command.
 
 ## Commands
 
@@ -67,7 +72,7 @@ status` is the truth, not this paragraph.
 - Build and release: `scripts/`. Tests: `tests/unit/`, `tests/browser/`, `tests/visual/`;
   `tests/README.md` says what each proves and which gate runs it.
 
-<!-- majordomus:begin 216241813e0b f2d9a1017395dba3 -->
+<!-- majordomus:begin c624a658e5e3 f2d9a1017395dba3 -->
 # CLAUDE.md
 
 Claude Code bootstrap. The repository's provider-neutral AI context lives under

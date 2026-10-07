@@ -77,6 +77,17 @@ session:
     fresh_minutes: 720                   # 12h: within a working day either side, current
     stale_minutes: 2880                  # 48h: beyond this it is history, never current
 
+# A candidate is a knowledge record the deriver wrote and nobody has judged. The queue is
+# measured, never emptied by a machine: more candidates than the cap, or one waiting longer
+# than the age, is a doctor finding that names them. Majordomus 0.13 requires this block;
+# without it doctor printed "policy is missing required key knowledge.candidates_max_files"
+# as a WARN that CI ignored while candidates piled up untracked. The CI verdict
+# (.github/doctor-verdict.jq) now fails on a missing required key
+# (project.majordomus-layer-current). The values are the ones the 0.13.2 skeleton ships.
+knowledge:
+  candidates_max_files: 40               # more candidates than this awaiting review is a WARN
+  candidate_max_age_minutes: 20160       # 14d: a candidate this old was ignored, not reviewed
+
 # `majordomus bench` samples every public command this many times after the warm-up runs;
 # `bench --check` refuses a regression larger than these fractions of the baseline's
 # p50, p95 and p99; doctor and watch report their own wall time against these budgets
@@ -150,6 +161,19 @@ enforcement:
     path: majordomus
     args: [finish, --check]
     wired_by: git-hook:pre-push
+  # project.worktree-topology: a feature branch is committed only from its canonical
+  # worktree. Exit 10 with the reason anywhere else; the primary checkout on the trunk and a
+  # detached HEAD pass.
+  - name: worktree-guard
+    path: majordomus
+    args: [worktree, guard]
+    wired_by: git-hook:pre-commit
+  # project.no-conflict-markers: git refuses a staged line that is a leftover conflict
+  # marker (and a whitespace error) before the commit exists.
+  - name: diff-check-on-commit
+    path: git
+    args: [diff, --cached, --check]
+    wired_by: git-hook:pre-commit
 
 # mode: file (the default) generates the whole target; mode: region generates only the
 # text between the <!-- majordomus:begin --> and <!-- majordomus:end --> markers and
