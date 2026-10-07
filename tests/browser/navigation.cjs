@@ -40,14 +40,21 @@
 //   anchor            the skip link moves focus to the main region with no history entry and the
 //                     address unchanged
 //   space-one-meaning  (ledger W5, ADR 0050) Space with nothing focused does what the workspace
-//                     in view owns, and nothing else: the instrument's Hold to Play in the six
-//                     instrument workspaces, the Studio transport in Studio, nothing at all in
-//                     Measure, Experiments, Learn, Presets and About; a focused link in Studio
-//                     keeps Space (nothing starts)
+//                     in view owns, and nothing else: the instrument's Hold to Play in the seven
+//                     workspaces that play, load or analyse its signal, the Studio transport in
+//                     Studio, nothing at all in Measure, Experiments, Learn and About (the key is
+//                     not claimed: read from the keydown, not from a window of time); a focused
+//                     link in Studio keeps Space (nothing starts)
+//   space-after-preset-load  (review of #159) Load in Presets stays in Presets and says "Press
+//                     TRIGGER (or Space)"; with focus off a control, Space plays the preset
+//   space-compact-studio-panel  (review of #159) in the Playground and the Sequencer the compact
+//                     Studio panel takes focus only on its buttons; after a click on its title,
+//                     Space is the instrument's, never the Studio transport's
 //   one-shortcut-dialog  (W5) one dialog lists shortcuts: Help, the overflow menu and Studio's
 //                     keyboard button open the same dialog, which names the Space meaning of the
-//                     workspace in view and lists that workspace's keys (Studio: its table and
-//                     the timeline keys) and the global ones
+//                     workspace in view and lists that workspace's keys (Studio: its table, the
+//                     timeline keys and the note on keyboard paths) and the global ones; no key
+//                     is listed twice in one view and a kbd holds keys only
 //   no-console-errors
 'use strict';
 const { spawn } = require('node:child_process');
@@ -56,6 +63,7 @@ const os = require('node:os');
 const path = require('node:path');
 const { pathToFileURL } = require('node:url');
 const suite = require('./lib/suite.cjs');
+const { until } = require('./lib/wait.cjs');
 
 const argv = process.argv.slice(2);
 const arg = (name, fallback) => {
@@ -711,34 +719,60 @@ function defineChecks() {
   // W5 / ADR 0050: what Space (nothing focused) starts in each workspace.
   const SPACE_EXPECTED = { playground: 'instrument', measure: 'none', experiments: 'none',
     analyzer: 'instrument', filter: 'instrument', compare: 'instrument', synthesis: 'instrument',
-    sequencer: 'instrument', presets: 'none', learn: 'none', studio: 'studio', about: 'none' };
+    sequencer: 'instrument', presets: 'instrument', learn: 'none', studio: 'studio',
+    about: 'none' };
   const sounding = (page) => page.evaluate(() => ({ instrument: !!window.OSCILLA.app.playing,
     studio: !!window.OSCILLA.app.studio.playing }));
   const heardOf = (v) => (v.instrument && v.studio ? 'both'
     : v.instrument ? 'instrument' : v.studio ? 'studio' : 'none');
-  /** Press Space at `focus` ('body' or a selector) and report what started, then stop it. */
+  /**
+   * Press Space at `focus` ('body': nothing focused; null: wherever focus is; else a selector)
+   * and report what started, then stop it. Both owners claim the key inside its keydown
+   * (preventDefault), so "nothing started" is read from the event itself and never from a
+   * window of time: an unclaimed key with nothing sounding is 'none' at once, and a claimed
+   * key must be heard within the deadline ('claimed-silent' otherwise).
+   */
   const pressSpace = async (page, focus) => {
     if (focus === 'body') {
       await page.evaluate(() => {
         const a = document.activeElement;
         if (a && a !== document.body && a.blur) a.blur();
       });
-    } else {
+    } else if (focus) {
       await page.focus(focus);
     }
+    await page.evaluate(() => {
+      window.__oscSpace = null;
+      window.addEventListener('keydown', (e) => { window.__oscSpace = e; },
+        { capture: true, once: true });
+    });
     await page.keyboard.down(' ');
-    const v = await H.until(() => sounding(page), (x) => x.instrument || x.studio, 1200);
+    const key = await until(() => page.evaluate(() => (window.__oscSpace
+      ? { claimed: window.__oscSpace.defaultPrevented } : null)),
+    { ms: 5000, what: 'the page receives the Space keydown' });
+    let heard;
+    if (key.claimed) {
+      heard = await until(async () => {
+        const v = heardOf(await sounding(page));
+        return v === 'none' ? null : v;
+      }, { ms: 8000, what: 'a claimed Space is heard (instrument or Studio playing)' })
+        .catch(() => 'claimed-silent');
+    } else {
+      heard = heardOf(await sounding(page));
+    }
+    const focusAt = await page.evaluate(() => {
+      const a = document.activeElement;
+      return a ? (a.dataset.osc || a.id || a.tagName) : null;
+    });
     await page.keyboard.up(' ');
     await page.evaluate(() => {
       const a = window.OSCILLA.app;
       a.stopNow();
       if (a.studio.playing) a.studioStop();
     });
-    await H.until(() => sounding(page), (x) => !x.instrument && !x.studio, 3000);
-    return { heard: heardOf(v), focus: await page.evaluate(() => {
-      const a = document.activeElement;
-      return a ? (a.dataset.osc || a.id || a.tagName) : null;
-    }) };
+    await until(async () => heardOf(await sounding(page)) === 'none',
+      { ms: 8000, what: 'the instrument and Studio are silent after the Space check' });
+    return { heard, claimed: key.claimed, focus: focusAt };
   };
 
   def('space-one-meaning', async (ctx) => {
@@ -749,7 +783,6 @@ function defineChecks() {
     const got = {};
     for (const ws of Object.keys(SPACE_EXPECTED)) {
       await H.navTo(page, ws);
-      await sleep(100);
       got[ws] = (await pressSpace(page, 'body')).heard;
     }
     await H.navTo(page, 'studio');
@@ -758,7 +791,61 @@ function defineChecks() {
     await page.close();
     const wrong = Object.keys(SPACE_EXPECTED).filter((ws) => got[ws] !== SPACE_EXPECTED[ws]);
     return { ...H.verdict({ everyWorkspace: wrong.length === 0,
-      focusedLinkKeepsSpace: onLink.heard === 'none' }), wrong, got, onLink };
+      focusedLinkKeepsSpace: onLink.heard === 'none' && !onLink.claimed }), wrong, got, onLink };
+  });
+
+  // Review of #159: Presets says "Press TRIGGER (or Space) to play it" after Load and stays in
+  // Presets, where no Play control is shown at this width. Space must do what the notice says.
+  def('space-after-preset-load', async (ctx) => {
+    const page = await H.open(ctx, ctx.baseUrl);
+    await H.navTo(page, 'presets');
+    await page.click('[data-osc="presets.load"]:not([disabled])');
+    const loaded = await until(() => page.evaluate(() => {
+      const a = window.OSCILLA.app;
+      const alert = a.alerts.find((x) => /^Loaded/.test(x.title));
+      const said = alert ? `${alert.title} ${alert.message}` : '';
+      return said ? { workspace: a.workspace, said } : null;
+    }), { ms: 8000, what: 'Load in Presets announces the loaded preset' });
+    const controls = await page.evaluate(() => ['source.hold', 'source.trigger', 'status.play']
+      .filter((k) => {
+        const el = document.querySelector(`[data-osc="${k}"]`);
+        return !!el && el.getClientRects().length > 0;
+      }));
+    const space = await pressSpace(page, 'body');
+    await page.close();
+    return { ...H.verdict({
+      staysInPresets: loaded.workspace === 'presets',
+      noticeNamesSpace: /Space/.test(loaded.said),
+      spacePlaysIt: space.heard === 'instrument',
+    }), loaded, controls, space };
+  });
+
+  // Review of #159: the compact Studio panel (Playground, Sequencer) has no Space of its own.
+  // Every focus target in it is a button, which keeps the key; a click on its title or counts
+  // focuses nothing in it, and Space is then the workspace's (the instrument), never Studio's.
+  def('space-compact-studio-panel', async (ctx) => {
+    const page = await H.open(ctx, ctx.baseUrl);
+    await page.evaluate(() => window.OSCILLA.app.setContinuous(true));
+    const got = {};
+    for (const ws of ['playground', 'sequencer']) {
+      await H.navTo(page, ws);
+      const panel = '[data-osc="studio.compact"]';
+      await page.locator(`${panel} #osc-sc-title`).scrollIntoViewIfNeeded({ timeout: 5000 });
+      const focusables = await page.evaluate((sel) => [...document.querySelector(sel)
+        .querySelectorAll('[tabindex], a[href], button, input, select, textarea, summary')]
+        .filter((el) => el.tabIndex >= 0 && el.tagName !== 'BUTTON')
+        .map((el) => el.dataset.osc || el.tagName), panel);
+      await page.click(`${panel} #osc-sc-title`);
+      const onTitle = await pressSpace(page, null);
+      got[ws] = { focusables, heard: onTitle.heard, focus: onTitle.focus };
+    }
+    await page.evaluate(() => window.OSCILLA.app.setContinuous(false));
+    await page.close();
+    const each = (f) => Object.values(got).every(f);
+    return { ...H.verdict({
+      onlyButtonsTakeFocus: each((g) => g.focusables.length === 0),
+      spaceIsTheInstruments: each((g) => g.heard === 'instrument'),
+    }), got };
   });
 
   def('one-shortcut-dialog', async (ctx) => {
@@ -776,6 +863,12 @@ function defineChecks() {
         space: text('[data-osc="help.space"] dd'),
         rows: d ? [...d.querySelectorAll('[data-osc="help.workspace"] [data-osc-shortcut]')]
           .map((x) => x.dataset.oscShortcut) : [],
+        // What each row is keyed by, as shown (the kbd and what follows it in the dt).
+        keys: d ? [...d.querySelectorAll('[data-osc-shortcut] dt')]
+          .map((x) => x.textContent.replace(/\s+/g, ' ').trim()) : [],
+        kbd: d ? [...d.querySelectorAll('[data-osc-shortcut] kbd')]
+          .map((x) => x.textContent.replace(/\s+/g, ' ').trim()) : [],
+        note: text('[data-osc="help.note"]'),
         global: d ? d.querySelectorAll('[data-osc="help.global"] [data-osc-shortcut]').length
           : 0,
         timeline: text('[data-osc="help.timeline"]') };
@@ -799,7 +892,18 @@ function defineChecks() {
     await page.close();
     const same = [play, studio, studioHelp, measure].every((r) => r.open.length === 1
       && r.open[0] === 'osc-dlg-help' && r.global > 0);
+    const views = { play, studio, measure };
+    const repeated = Object.keys(views).filter((k) => new Set(views[k].keys).size
+      !== views[k].keys.length);
+    // A kbd holds keys, never a sentence about where they apply.
+    const prose = Object.keys(views).filter((k) => views[k].kbd.some((t) => / (on|in) /.test(t)
+      || /timeline:/.test(t)));
     return { ...H.verdict({
+      eachKeyOnce: repeated.length === 0,
+      kbdHoldsKeysOnly: prose.length === 0,
+      noCompactPanelSpace: !play.rows.includes('studio-panel-space'),
+      studioKeyboardPaths: /Every drag has a keyboard path/.test(studio.note || '')
+        && play.note === null,
       oneDialog: lists.length === 1 && lists[0] === 'osc-dlg-help',
       sameDialog: same,
       playground: play.title === 'Playground' && /^Hold to play/.test(play.space || '')
@@ -812,7 +916,7 @@ function defineChecks() {
       measure: measure.title === 'Measure' && /^Nothing/.test(measure.space || '')
         && measure.rows.includes('measure-abort') && !measure.rows.includes('trigger')
         && !measure.rows.includes('quick-add'),
-    }), lists, play, studio, measure };
+    }), repeated, prose, lists, play, studio, measure };
   });
 
   def('no-console-errors', async (ctx) => ({ ok: ctx.errors.length === 0,

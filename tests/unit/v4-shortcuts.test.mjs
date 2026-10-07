@@ -7,7 +7,7 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -22,8 +22,12 @@ import {
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const read = (rel) => readFileSync(path.join(ROOT, rel), 'utf8');
 
-const INSTRUMENT = ['playground', 'analyzer', 'filter', 'compare', 'synthesis', 'sequencer'];
-const NONE = ['measure', 'experiments', 'learn', 'presets', 'about'];
+// Presets is the instrument's: Load readies it and says "Press TRIGGER (or Space)" (review of
+// #159), and the workspace does not change.
+const INSTRUMENT = ['playground', 'analyzer', 'filter', 'compare', 'synthesis', 'sequencer',
+  'presets'];
+const NONE = ['measure', 'experiments', 'learn', 'about'];
+const shown = (r) => (r.where ? `${r.keys} ${r.where}` : r.keys);
 
 test('every workspace has exactly one Space owner, and every owner is known', () => {
   assert.deepEqual(Object.keys(SPACE_OWNER).sort(), [...WORKSPACES].sort());
@@ -65,8 +69,8 @@ test('the dialog names the Space meaning of the workspace in view', () => {
 
 test('Studio lists STUDIO_SHORTCUTS in order (Space first) and the timeline keys', () => {
   const h = shortcutHelp('studio');
-  const shown = [h.space, ...h.rows].map((r) => `${r.keys}|${r.text}`);
-  assert.deepEqual(shown, STUDIO_SHORTCUTS.map((s) => `${s.keys}|${s.text}`));
+  const listed = [h.space, ...h.rows].map((r) => `${r.keys}|${r.text}`);
+  assert.deepEqual(listed, STUDIO_SHORTCUTS.map((s) => `${s.keys}|${s.text}`));
   assert.equal(h.timeline, KEY_HELP);
 });
 
@@ -76,7 +80,10 @@ test('a workspace lists only its own shortcuts, plus the global ones', () => {
   studioIds.delete('focus-next');
   for (const ws of WORKSPACES) {
     const h = shortcutHelp(ws);
-    assert.deepEqual(h.global, GLOBAL_SHORTCUTS);
+    // The global keys, less any the workspace's own rows already state (each key once).
+    const own = new Set(h.rows.map(shown));
+    assert.deepEqual(h.global, GLOBAL_SHORTCUTS.filter((g) => !own.has(shown(g))), ws);
+    assert.ok(h.global.length > 0, ws);
     const ids = h.rows.map((r) => r.id);
     assert.equal(new Set(ids).size, ids.length, `${ws}: duplicate rows`);
     if (ws !== 'studio') {
@@ -89,11 +96,77 @@ test('a workspace lists only its own shortcuts, plus the global ones', () => {
   }
   assert.ok(shortcutHelp('sequencer').rows.some((r) => r.id === 'sequencer-timeline'));
   assert.ok(!shortcutHelp('playground').rows.some((r) => r.id === 'sequencer-timeline'));
-  // The compact Studio panel sits in the Playground and the Sequencer: Space there is Studio's.
-  for (const ws of ['playground', 'sequencer']) {
-    assert.ok(shortcutHelp(ws).rows.some((r) => r.id === 'studio-panel-space'), ws);
-  }
   assert.ok(shortcutHelp('measure').rows.some((r) => r.id === 'measure-abort'));
+});
+
+test('review of #159: no row claims a Space for the compact Studio panel', () => {
+  // Every focus target in that panel is a button, which keeps Space; nothing there reaches the
+  // Studio transport by Space (tests/browser/navigation.cjs space-compact-studio-panel).
+  for (const ws of WORKSPACES) {
+    const h = shortcutHelp(ws);
+    assert.ok(!h.rows.some((r) => r.id === 'studio-panel-space'), ws);
+    if (ws !== 'studio') {
+      assert.ok(![...h.rows, ...h.global].some((r) => /Studio/.test(`${shown(r)} ${r.text}`)), ws);
+    }
+  }
+});
+
+test('review of #159: no key is listed twice in one view', () => {
+  for (const ws of WORKSPACES) {
+    const h = shortcutHelp(ws);
+    const keys = [h.space, ...h.rows, ...h.global].map(shown);
+    assert.equal(new Set(keys).size, keys.length, `${ws}: ${keys.join(' | ')}`);
+  }
+  // Studio's table already has Esc and Tab; Measure's Esc row is the global one plus the abort.
+  const ids = (ws) => shortcutHelp(ws).global.map((g) => g.id);
+  assert.deepEqual(ids('studio'), ['roving']);
+  assert.deepEqual(ids('measure'), ['roving', 'tab']);
+  assert.match(shortcutHelp('measure').rows.find((r) => r.id === 'measure-abort').text,
+    /^Stop immediately and abort a running measurement/);
+  assert.deepEqual(ids('playground'), ['escape', 'roving', 'tab']);
+});
+
+test('review of #159: keys are keys; where they apply is stated beside them', () => {
+  for (const ws of WORKSPACES) {
+    const h = shortcutHelp(ws);
+    for (const r of [h.space, ...h.rows, ...h.global]) {
+      assert.ok(!/ (on|in) |timeline:/.test(r.keys), `${ws} ${r.id}: prose in keys "${r.keys}"`);
+      assert.ok(r.where === undefined || (typeof r.where === 'string' && r.where), r.id);
+    }
+  }
+  assert.equal(SPACE_MEANING.instrument.keys, 'Space');
+  assert.equal(SPACE_MEANING.instrument.where, '(hold)');
+  // Hold, Trigger and the frequency slider are not on screen in every instrument workspace at
+  // every width: their rows say so instead of implying the control is there.
+  const play = shortcutHelp('analyzer').rows;
+  for (const id of ['trigger', 'octave']) {
+    assert.match(play.find((r) => r.id === id).where, /where shown/, id);
+  }
+});
+
+test('review of #159: Studio keeps the note on keyboard paths; other workspaces have none', () => {
+  assert.match(shortcutHelp('studio').note, /Every drag has a keyboard path: arrows move nodes, /);
+  assert.match(shortcutHelp('studio').note, /focused timeline item/);
+  for (const ws of WORKSPACES) if (ws !== 'studio') assert.equal(shortcutHelp(ws).note, null, ws);
+});
+
+test('review of #159: the stated rule is the one implemented', () => {
+  // "The Play control of the workspace in view" was false where no Play control is shown
+  // (Analyzer, Filter Lab, Compare and Presets at desktop width). No copy may say it.
+  const adr = readdirSync(path.join(ROOT, '.ai/repo/adrs')).find((f) => f.startsWith('0050-'));
+  const texts = { dialog: read('src/index.html'), guide: read('docs/v31/user-guide.md'),
+    adr: read(path.join('.ai/repo/adrs', adr)), ledger: read('docs/v4/completion-ledger.md'),
+    code: read('src/js/ui/shortcuts.js') };
+  for (const [name, text] of Object.entries(texts)) {
+    const flat = text.replace(/\s+/g, ' ');
+    assert.ok(!/keyboard for (the|that workspace's) Play control/.test(flat), name);
+    assert.ok(!/Play control you can see/.test(flat), name);
+    assert.ok(!/Play control of the workspace in view/.test(flat), name);
+  }
+  const flatAdr = texts.adr.replace(/\s+/g, ' ');
+  assert.ok(!/status bar's Play is visible everywhere/.test(flatAdr), 'the status bar claim');
+  assert.match(flatAdr, /narrow layout/);
+  assert.match(texts.dialog.replace(/\s+/g, ' '), /whether or not a Play control is on screen/);
 });
 
 test('index.html: one shortcut dialog, opened by Help, the overflow menu and Studio', () => {
