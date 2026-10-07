@@ -2139,7 +2139,7 @@ function defineChecks(fixtures) {
       const app = window.OSCILLA.app;
       const dup = await app.experimentsDuplicate('fixture-a');
       await app.findingsAskRun('fixture-a');
-      app.fnd.form.statement = 'Connections: A falls above 6 kHz.';
+      app.fnd.form.statement = 'Recorded for the links check: A falls above 6 kHz.';
       const f = await app.findingsSave();
       app.alerts = [];
       return { dup, finding: f ? f.id : null };
@@ -2261,7 +2261,7 @@ function defineChecks(fixtures) {
       'link-opens': res.linked.id === 'fixture-a' && res.linked.focus === 'osc-x-detail-title'
         && res.a.shown && res.a.h4 === 'Connected records',
       downstream: cite.state === 'present' && cite.href === `#m=experiments&finding=${ids.finding}`
-        && /Cited by finding "Connections: A falls above 6 kHz\."/.test(cite.text)
+        && /Cited by finding "Recorded for the links check: A falls above 6 kHz\."/.test(cite.text)
         && /Field: evidence\[0\] \(identity: experiments\[0\]\.resultHash\), on that finding\./
           .test(cite.text)
         && by(a, 'duplicated-as').length === 1 && by(a, 'duplicated-as')[0].state === 'present',
