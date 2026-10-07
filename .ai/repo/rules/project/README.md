@@ -28,3 +28,20 @@ in both directions. A rule without one is normative for whoever reads it and enf
 reviewer; `class` still says what a violation means. Write the second kind when the tool
 cannot decide the question — a validator that always passes is worse than admitting a
 reviewer owns it.
+
+## Index
+
+Every rule in force.
+
+| Rule | Class | What it binds | Mechanism |
+| --- | --- | --- | --- |
+| `project.single-file-deliverable` v2 | blocking | one static `dist/index.html`, no runtime fetch | `npm run verify-dist`, browser gate, `scripts/verify-deploy.mjs` |
+| `project.audio-engine-discipline` v2 | blocking | nodes and timing only inside the engine's accounting | `tests/unit/freeze.test.mjs`, `tests/browser/engine-v1port.cjs` |
+| `project.no-fake-science` v2 | blocking | no unsupported claim; dB SPL only when calibrated | `x-majordomus` tests |
+| `project.about-names-current-release` v1 | blocking | the About timeline names the release line | `tests/unit/about.test.mjs` |
+| `project.studio-model-is-canonical` v1 | blocking | the Studio model is the one source of truth | `tests/unit/v31-studio-model.test.mjs` |
+| `project.typed-ports` v1 | blocking | connections validated before the runtime changes | `tests/unit/v31-studio-model.test.mjs` |
+| `project.no-silent-feedback` v1 | blocking | a feedback loop is refused, never made silently | `tests/unit/v31-studio-model.test.mjs` |
+| `project.visual-identity-lock` v1 | blocking | new surfaces use the existing tokens and primitives | `npm run test:visual`, and review for a new surface |
+| `project.bounded-test-timing` v1 | blocking | a browser check waits for its condition against a named wall-clock deadline; no fixed sleep, frame count or assumed rate | `tests/unit/browser-timing.test.mjs` |
+| `project.suite-harness` v1 | blocking | every browser suite runs through one harness: no unknown or empty selection, no leg without checks, no undeclared skip in CI, no start on a loaded machine | `tests/unit/browser-suite-contract.test.mjs` |

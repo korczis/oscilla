@@ -19,6 +19,11 @@ name): `project.single-file-deliverable`, `project.audio-engine-discipline`,
 `project.studio-model-is-canonical`, `project.typed-ports`, `project.no-silent-feedback`,
 `project.visual-identity-lock`. Read them before changing `src/`.
 
+Two more bind `tests/browser/`: `project.bounded-test-timing` (a wait is a condition poll with
+a named wall-clock deadline through `tests/browser/lib/wait.cjs`; no fixed sleep, frame count or
+assumed sample rate) and `project.suite-harness` (every suite runs through
+`tests/browser/lib/suite.cjs`). Read them before adding or changing a browser check.
+
 ## Commands
 
 ```bash
