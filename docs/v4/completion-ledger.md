@@ -90,7 +90,14 @@ engine/dsp/labs/sequencer CI and the About provenance tests skip in CI's shallow
 **closed** #147: WebKit legs in both jobs, nothing narrowed; the unit job checks out full
 history and tags, and the About checks fail instead of skipping under CI without them);
 no startup budget or large-library fixture (P1); `window.OSCILLA` test seam and `?mock=1` ship
-in production (W7); five dead CSS classes; an import without a hash shows no "unverified"
+in production (W7, **closed** #161, ADR 0052: they stay in the one tested artifact, and a hook
+observes, drives as a user or injects only in TEST CONTEXT; see "W7" below);
+`studioTimeline.createContext` builds a second Studio store and transport on the shared engine
+for one browser suite (W7a, open); TEST CONTEXT cannot be entered or left from the page, only by
+the URL (W7b, open); a manual level calibration made in TEST CONTEXT is not labelled as one (W7c,
+open); the public origin `korczis.github.io` is shared with every other Pages site of the
+account (W7d, open); the live smoke calls seam hooks instead of loading the documented
+`?measure=loopback#mr=` URL (W7e, open); five dead CSS classes; an import without a hash shows no "unverified"
 marker; an unreadable stored record fails silently; ADR status never leaves `proposed`; the plan
 contradicts git (V386 READY, M033 BLOCKED; **closed** #144, see "plan reconciled" below); "run" means both a repeat and a completed
 experiment, and "project" both a Studio file and OSCILLA; no glossary.
@@ -165,3 +172,34 @@ with every check, the five engine microphone checks included (Playwright's WebKi
 granted by permission). Two of the suites could not have run WebKit before: `dsp.cjs` ran 0 checks
 and `labs.cjs` launched Chromium under any other name; every suite now refuses an unknown browser.
 The About timeline checks run in CI against full history and tags (`tests/unit/about.test.mjs`).
+
+## Update 2026-10-07 — W7
+
+W7 is closed by #161 (ADR 0052, proposed; the owner approved the direction on 2026-10-07).
+`window.OSCILLA` and `?mock=1` stay in the one `dist/index.html` that is tested and deployed:
+removing or gating them would protect nothing (`window.Alpine` is global and the origin is
+shared) and the post-deployment smoke would stop testing the served bytes. What was wrong was
+what two hooks could do outside TEST CONTEXT, and one hook that could do what no user can:
+
+- `measure.showResult` titled a result without a `testContext` "Latest measurement" and Save
+  stored it as an ordinary experiment. It now refuses such a result.
+- `measure.setInputNow` named an input nobody checked; a typed level reading then bound to it
+  and the indicator read CALIBRATED. It is now refused outside TEST CONTEXT loopback.
+- `measure.setValues` was a bare `Object.assign`. It is now the validated recipe-link action:
+  unknown keys, out-of-range values and calls while a measurement runs are refused whole, and a
+  READY setup check is reset as by any edit.
+
+Each has a test that failed before the change (`tests/unit/v4-seam-contract.test.mjs`); the
+release gate pins the key lists of `window.OSCILLA` and `OSCILLA.measure` and asserts the
+refusals on the built page (`seam-surface-pinned` in `tests/browser/app.cjs`). The README names
+the stable reads and says the seam is not a security boundary.
+
+Recorded as their own P2 lines, open, and not part of #161:
+
+| Id | Finding | Status |
+|---|---|---|
+| W7a | `studioTimeline.createContext` (`src/js/ui/studio/timeline-test-seam.js`) builds a second StudioStore, runtime and transport on the shared engine, used only by `tests/browser/v31-studio-timeline.cjs` (`project.studio-model-is-canonical`): move the suite onto the canonical store, then delete the module and the `studioTimeline` key | open |
+| W7b | TEST CONTEXT can be entered and left only by the URL: `input-devices.js` disables the Input device select while loopback is on, so a `?measure=loopback` user cannot return to a microphone without editing the address. Add a TEST CONTEXT option to the select | open |
+| W7c | A manual level calibration made in TEST CONTEXT carries no TEST CONTEXT label; only the captured branch of `measureSaveLevelCalibration` adds it | open |
+| W7d | The public origin `korczis.github.io` is shared by every Pages site of the account, so their scripts share OSCILLA's storage, IndexedDB and microphone grant. Independent of the seam; only a custom domain changes it | open |
+| W7e | The live smoke calls `useLoopback` and `setValues` instead of loading `?measure=loopback#mr=<recipe>`, and no test or script loads the documented `?measure=loopback` flag at all | open |
