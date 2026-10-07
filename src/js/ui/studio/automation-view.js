@@ -4,6 +4,7 @@
 // lane's own scale — §101: no shared 0-1 chart), words for screen readers and parsed text
 // entry, and builds the actions the lane editor dispatches.
 
+import { clipTarget } from '../../studio/clip-targets.js';
 import { NODE_REGISTRY } from '../../studio/registry.js';
 import {
   automationScale, curveOptions, editPointAction, laneParamDef, laneValueAt, pointProblem,
@@ -207,12 +208,16 @@ export function fineNudge(model, laneId, pointId, { dValue = 0, dTime = 0, sampl
   return editPointAction(model, laneId, pointId, { time, value }, { sampleRate, registry });
 }
 
-/** Automatable parameters per node, for the "Automate" form: [{ id, name, params: [...] }]. */
+/**
+ * Parameters a lane plays on, per node, for the "Automate" form: [{ id, name, params: [...] }]
+ * (clip-targets.js, R7: a parameter the store would hold but the transport not play is left out).
+ */
 export function automatableTargets(model, registry = NODE_REGISTRY) {
   const out = [];
   for (const n of model.graph.nodes) {
     const def = registry.get(n.type);
-    const params = def ? def.params.filter((p) => p.automatable)
+    const params = def ? def.params
+      .filter((p) => clipTarget(n, { kind: 'automation', param: p.key }, registry).plays)
       .map((p) => ({ key: p.key, label: p.label,
         laned: model.timeline.automation.some((l) => l.target.node === n.id
           && l.target.param === p.key) })) : [];

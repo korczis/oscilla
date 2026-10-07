@@ -66,6 +66,27 @@ Only `stimulus-truncated` is a warning: the store accepts a stimulus clip shorte
 built in code outside the store cannot run out of bounds either: `recipeFromStudio` refuses
 such a timeline instead of substituting defaults (review V431).
 
+### Clip-target policy (R7)
+
+Which node, or node parameter, a clip or an automation lane may target, and how it plays there,
+is one pure function: `src/js/studio/clip-targets.js` `clipTarget(node, use)`, with `use`
+`{ kind, action }` for a clip and `{ kind: 'automation', param }` for a lane. It answers on two
+levels:
+
+| Level | Who reads it | What it is |
+| --- | --- | --- |
+| `holds` | the store (`clipRules`, `canHostClip`, lane validation, `AUTOMATION_POINT_ADD`) | what the registry declares: a node type's `clipKinds`, `MEASUREMENT_TARGETS` per action, a parameter's `automatable`. A model with it validates, so a file saved by an earlier build keeps loading |
+| `plays`, `how` | the transport (`clipPlayReason`, pattern-played oscillators, gated envelopes, lane parameters) and the timeline UI (track and clip target options, "add clip", the Automate form and button) | the subset the transport plays: a pattern clip on a Sequence (`sequence`) or an Oscillator (`pattern-played`), an event clip only as a gate on an Envelope (`gate`), a measurement clip always (`measurement`, as data), a lane unless no single AudioParam carries its parameter (`automation`) |
+
+The UI offers only what plays; what is held and not played (an event clip on an Oscillator,
+Noise or Sweep; a trigger event; a lane on a Stereo Split pan or level; a low-/high-pass Q lane,
+whose AudioParam is in dB) is shown with the policy's reason, the same sentence and code the
+transport lists in `debugInfo().unplayed`. "Add clip" on a track whose target plays neither a
+pattern nor a gate says so instead of adding a clip that never sounds.
+`tests/unit/v4-clip-target-policy.test.mjs` proves that the store, the UI and the transport give
+this verdict for every node type, clip kind, action and parameter in the registry, and that the
+adapters expose an AudioParam exactly for the lanes it says play.
+
 ## Time (§89-§91)
 
 - Model times are absolute seconds; the scale (pixels per second, scroll) is view state.
@@ -313,7 +334,8 @@ fromNormalized, format, ticks }` per parameter — no shared 0-1 chart:
 (drag, curve change; value clamped, illegal exponential refused) and `nudgePointAction`
 (keyboard: 1 % of the scale per step, ×10 with large, 10 ms time steps) produce
 `AUTOMATION_POINT_MOVE`; `automateParameter` (Inspector AUTOMATE) reveals the lane or creates it
-with one point at the parameter's current value; `curveOptions` lists the legal curves.
+with one point at the parameter's current value, only where the lane would play (the clip-target
+policy above); `curveOptions` lists the legal curves.
 
 ### Automation and modulation (§103-§104)
 

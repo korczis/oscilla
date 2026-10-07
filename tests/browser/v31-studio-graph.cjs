@@ -32,7 +32,8 @@
 //                        buttons and F / A frame; view changes are not undoable and not dirty
 //   inspector            typed cutoff "2.4k" → 2400 Hz; invalid text refused with the range;
 //                        a slider drag is one history entry; AUTOMATE creates / reveals a lane;
-//                        rename; clip start/duration
+//                        no AUTOMATE on a low-pass Q, with the reason (R7); rename; clip
+//                        start/duration
 //   keyboard-connect     keyboard only: focus a node, C opens the list of compatible inputs,
 //                        Enter connects; arrows nudge (one entry per key sequence)
 //   focus-never-body     V431 review: Tab after a press that moved no focus selects the
@@ -696,6 +697,17 @@ function defineChecks() {
     await sleep(80);
     const depth1 = await H.undoDepth(page);
     const q = (await H.model(page)).nodes.find((n) => n.id === 'filter-1').params.Q;
+    // R7 (clip-targets.js): a low-pass Q lane would never play (its AudioParam is in dB), so
+    // Filter 1 (low-pass) offers no AUTOMATE on Q and says why; as a band-pass it does.
+    const noQLane = await page.evaluate(() => {
+      const f = document.querySelector('.osc-si-field[data-field="Q"]');
+      const why = f.querySelector('[data-osc="studio.inspector.no-automate"]');
+      return !f.querySelector('[data-osc="studio.inspector.automate"]')
+        && !!why && /dB AudioParam/.test(why.textContent);
+    });
+    await page.evaluate(() => window.OSCILLA.studio.store.dispatch({ type: 'NODE_PARAM_SET',
+      nodeId: 'filter-1', key: 'type', value: 'bandpass' }));
+    await H.frames(page);
     // AUTOMATE (§102): creates the lane at the current value; on an automated parameter it
     // reveals the lane (selects its points).
     await page.click('.osc-si-field[data-field="Q"] [data-osc="studio.inspector.automate"]');
@@ -725,7 +737,7 @@ function defineChecks() {
       renamed: name === 'HF Filter' && cardTitle === 'HF FILTER',
       clipDuration: clip.duration === 1.5,
       announced: live.includes('Changed Filter 1 Cutoff'),
-      automate: lane.join() === 'frequency:2,Q:1', revealed,
+      automate: lane.join() === 'frequency:2,Q:1', revealed, noQLane,
     }), f1, f2, err, depth0, depth1, q, live: live.slice(-4) };
   });
 

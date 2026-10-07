@@ -144,9 +144,18 @@ test('fine nudge: a thousandth of the scale and 1 ms; clamped; neighbour after d
 });
 
 test('automatable targets list each node with its automatable parameters and lanes', () => {
-  const t = automatableTargets(synth());
+  const m = synth();
+  const t = automatableTargets(m);
   const filter = t.find((x) => x.id === 'filter-1');
   assert.ok(filter.params.find((p) => p.key === 'frequency').laned);
-  assert.ok(filter.params.some((p) => p.key === 'Q' && !p.laned));
+  // R7 (clip-targets.js): a low-pass Q lane would never play (its AudioParam is in dB), so the
+  // form does not offer it; a band-pass Q lane plays and is offered.
+  assert.equal(m.graph.nodes.find((n) => n.id === 'filter-1').params.type, 'lowpass');
+  assert.ok(!filter.params.some((p) => p.key === 'Q'));
+  const s = storeOf(m);
+  assert.ok(s.dispatch({ type: 'NODE_PARAM_SET', nodeId: 'filter-1', key: 'type',
+    value: 'bandpass' }).ok);
+  const bp = automatableTargets(s.getModel()).find((x) => x.id === 'filter-1');
+  assert.ok(bp.params.some((p) => p.key === 'Q' && !p.laned));
   assert.ok(!t.some((x) => x.id === 'master-1' && !x.params.length));
 });

@@ -35,6 +35,7 @@
 import { automationValueAt } from '../sequencer/compiler.js';
 import { safeMaximum } from '../sequencer/model.js';
 import { AUTOMATION_CURVES, TIMELINE_MAX_S } from './schema.js';
+import { clipTarget } from './clip-targets.js';
 import { NODE_REGISTRY } from './registry.js';
 
 // ---------------------------------------------------------------- constants
@@ -428,18 +429,17 @@ export function defaultCurve() {
 /**
  * The action that AUTOMATE in the Inspector (§102) triggers: reveal the existing lane, or create
  * it with one point holding the parameter's current value at `time`. Returns { reveal: laneId }
- * or { action } or { reason } when the parameter is not automatable.
+ * or { action } or { reason } when no lane on the parameter would play (clip-targets.js).
  */
 export function automateParameter(model, nodeId, param, time = 0, registry = NODE_REGISTRY) {
   const node = model.graph.nodes.find((n) => n.id === nodeId);
   if (!node) return { reason: `There is no node "${String(nodeId)}".` };
-  const def = registry.param(node.type, param);
-  if (!def || !def.automatable) {
-    return { reason: `${node.metadata.name} ${def ? def.label : param} cannot be automated.` };
-  }
   const lane = model.timeline.automation.find((l) => l.target.node === nodeId
     && l.target.param === param);
   if (lane) return { reveal: lane.id };
+  // A new lane only where the transport plays it (clip-targets.js, R7).
+  const v = clipTarget(node, { kind: 'automation', param }, registry);
+  if (!v.plays) return { reason: v.reason };
   return { action: { type: 'AUTOMATION_POINT_ADD', target: { node: nodeId, param }, time,
     value: node.params[param], curve: 'linear' } };
 }
