@@ -1,16 +1,19 @@
 // FINDINGS inside the Experiments workspace (ADR 0046): the DOM/Alpine adapter over
 // experiments/findings.js. Composed into the ONE OSCILLA component by main.js, next to
 // ui/experiments.js, whose store it uses (experimentsStore) and whose list refresh calls
-// findingsRefresh, so a deleted run reads as missing in every finding that cites it.
+// findingsRefresh, so a deleted experiment reads as missing in every finding that cites it.
 //
-// A finding is user metadata: an interpretation linked to the runs it rests on. Nothing here
-// writes a run. Every text is rendered with x-text (never as markup), and the model refuses
+// A finding is user metadata: an interpretation linked to the experiments it rests on. Nothing here
+// writes an experiment. Every text is rendered with x-text (never as markup), and the model refuses
 // markup in the first place.
 //
-// Integrity (review 3 of #149): ONE verification point, findingsVerifyCitedRun(id, citedHash),
-// reads a run's identity fresh from the store every time (experimentsIdentity -> store.get, which
+// Integrity (review 3 of #149): ONE verification point, findingsVerifyCitedExperiment(id,
+// citedHash),
+// reads an experiment's identity fresh from the store every time (experimentsIdentity ->
+// store.get, which
 // verifies the record; never the decoded cache) and says ok, different, unverifiable, unreadable or
-// missing. Every claim this adapter shows about a cited run is derived from it at the moment of
+// missing. Every claim this adapter shows about a cited experiment is derived from it at the
+// moment of
 // use: a row's reference states and "(a stored grid point)" (verified on every refresh), Open
 // (verified again first; refused, re-checked and said otherwise), linking (verified against the
 // hash of the record on screen, experimentsShownHash), and backlinks (the row's state, and the
@@ -22,8 +25,8 @@
 
 import {
   FINDING_STATUSES, STATUS_TEXT, STATUS_HINT, FINDINGS_FILE_EXTENSION, FINDING_LIMITS,
-  createFinding, updateFinding, findingIssues, findingsCiting, refText, refKey, refRunIds,
-  citedRunIds, exportFindings, findingsToJson, parseFindingsFile, exactHzText,
+  createFinding, updateFinding, findingIssues, findingsCiting, refText, refKey, refExperimentIds,
+  citedExperimentIds, exportFindings, findingsToJson, parseFindingsFile, exactHzText,
 } from '../experiments/findings.js';
 import { newExperimentId } from '../experiments/schema.js';
 import { timestampText } from '../measurement/views/experiment-summary.js';
@@ -37,8 +40,8 @@ const formState = (f) => JSON.stringify([f.statement.trim(), f.status, f.notes.t
   f.evidence.map((e) => e.key)]);
 const blankForm = () => {
   const f = { open: false, mode: 'new', id: null, loadedUpdatedAt: null, statement: '',
-    status: 'observation', notes: '', evidence: [], runs: [], base: '', error: '', addRun: '',
-    cmpA: '', cmpB: '',
+    status: 'observation', notes: '', evidence: [], experiments: [], base: '', error: '',
+    addRun: '', cmpA: '', cmpB: '',
     // A save refused because the finding changed or was deleted elsewhere: `conflict` until the
     // stored version is loaded; `mine*` keep what was typed here (statement, notes, status,
     // references), shown to copy, until a save.
@@ -74,7 +77,7 @@ export function findingRow(f, lookup, nameOf) {
       const got = ref.kind === 'value' && !mine.length ? lookup(ref.experimentId) : null;
       return { key: refKey(ref), ref, text: refText(ref, nameOf, { storedPoint: !!(got
         && Array.isArray(got.frequencies)), frequencies: got && got.frequencies }),
-        state: !mine.length ? 'ok' : mine.some((x) => x.code === 'missing-run') ? 'missing'
+        state: !mine.length ? 'ok' : mine.some((x) => x.code === 'missing-experiment') ? 'missing'
           : 'broken', issue: mine.length ? mine.map((x) => x.text).join('; ') : null };
     }),
     statusIssue: (issues.find((x) => x.code === 'unsupported-status') || {}).text || null,
@@ -83,9 +86,10 @@ export function findingRow(f, lookup, nameOf) {
 
 export function createFindingsUi() {
   const ctx = {
-    names: new Map(),    // experimentId -> name, of the runs listed
+    names: new Map(),    // experimentId -> name, of the experiments listed
     defs: new Map(),     // definition id -> name (a reference to one is the wrong kind)
-    // experimentId -> the verification of the last refresh (findingsVerifyCitedRun), used only
+    // experimentId -> the verification of the last refresh (findingsVerifyCitedExperiment), used
+    // only
     // to draw that refresh's rows; every new claim verifies again
     checked: new Map(),
   };
@@ -97,37 +101,41 @@ export function createFindingsUi() {
       return ctx.defs.has(id) ? { kind: 'definition', name: ctx.defs.get(id) } : null;
     }
     const name = nameOf(id) || v.name || null;
-    if (v.state === 'unreadable') return { kind: 'run', name, readable: false, reason: v.reason };
-    return { kind: 'run', name, readable: true, resultHash: v.resultHash,
+    if (v.state === 'unreadable') {
+      return { kind: 'experiment', name, readable: false, reason: v.reason };
+    }
+    return { kind: 'experiment', name, readable: true, resultHash: v.resultHash,
       hasResponse: v.hasResponse, frequencies: v.frequencies };
   }
   function lookup(id) {
     if (ctx.checked.has(id)) return entryOf(id, ctx.checked.get(id));
-    if (ctx.names.has(id)) return { kind: 'run', name: nameOf(id) }; // listed, not verified
+    if (ctx.names.has(id)) return { kind: 'experiment', name: nameOf(id) }; // listed, not verified
     return entryOf(id, null);
   }
   /** Is a value reference exactly a point of the grid `v` verified? */
   const onGrid = (ref, v) => !!(ref.kind === 'value' && v && v.state === 'ok' && v.frequencies
     && v.frequencies.includes(ref.at.hz));
 
-  /** Why a verification does not let a run be linked (null when it does). */
+  /** Why a verification does not let an experiment be linked (null when it does). */
   function linkRefusal(v, label) {
     if (v.state === 'ok') return null;
     if (v.state === 'different') {
-      return `Run ${label} was replaced in another tab since it was shown here; reopen it.`;
+      return `Experiment ${label} was replaced in another tab since it was shown here; reopen it.`;
     }
     if (v.state === 'missing') {
-      return `Run ${label} is not stored here (deleted, perhaps in another tab); only a stored `
-        + 'run can be linked.';
+      return `Experiment ${label} is not stored here (deleted, perhaps in another tab); only a `
+        + 'stored experiment can be linked.';
     }
-    if (v.state === 'unreadable') return `Run ${label} cannot be read (${v.reason}); it cannot be `
-      + 'linked.';
-    return `Run ${label} has no result hash, so a finding could not tell it from a different `
-      + 'record later; only a completed run can be linked.';
+    if (v.state === 'unreadable') {
+      return `Experiment ${label} cannot be read (${v.reason}); it cannot be linked.`;
+    }
+    return `Experiment ${label} has no result hash, so a finding could not tell it from a `
+      + 'different record later; only a completed experiment can be linked.';
   }
 
   /**
-   * Add `refs` to the open form. Each run is verified against the hash of the record this page
+   * Add `refs` to the open form. Each experiment is verified against the hash of the record this
+   * page
    * shows for it (`shown`, else experimentsShownHash) and cited with that hash.
    */
   async function link(cmp, refs, shown = null) {
@@ -142,8 +150,8 @@ export function createFindingsUi() {
         return false;
       }
       let grid = null;
-      for (const id of refRunIds(ref)) {
-        const v = await cmp.findingsVerifyCitedRun(id, shownOf(id));
+      for (const id of refExperimentIds(ref)) {
+        const v = await cmp.findingsVerifyCitedExperiment(id, shownOf(id));
         const why = linkRefusal(v, nameOf(id) ? `"${nameOf(id)}"` : id);
         if (why) {
           f.error = why;
@@ -151,13 +159,13 @@ export function createFindingsUi() {
         }
         if (ref.kind === 'value') {
           if (!onGrid(ref, v)) {
-            f.error = `${exactHzText(ref.at.hz)} is not a frequency the run stores; reopen `
-              + 'the run.';
+            f.error = `${exactHzText(ref.at.hz)} is not a frequency the experiment stores; reopen `
+              + 'the experiment.';
             return false;
           }
           grid = v;
         }
-        f.runs = [...f.runs.filter((r) => r.experimentId !== id), { experimentId: id,
+        f.experiments = [...f.experiments.filter((r) => r.experimentId !== id), { experimentId: id,
           resultHash: v.resultHash }];
       }
       f.evidence = [...f.evidence, { key, ref, text: refText(ref, nameOf,
@@ -166,9 +174,9 @@ export function createFindingsUi() {
     return true;
   }
 
-  /** The first issue of reference `ref` (citing `runs`) under fresh verifications, or null. */
-  function refIssue(ref, runs, verified) {
-    const probe = { status: 'observation', evidence: [ref], runs };
+  /** The first issue of `ref` (citing `experiments`) under fresh verifications, or null. */
+  function refIssue(ref, experiments, verified) {
+    const probe = { status: 'observation', evidence: [ref], experiments };
     const [x] = findingIssues(probe, (id) => entryOf(id, verified.get(id)));
     return x ? x.text : null;
   }
@@ -197,7 +205,7 @@ export function createFindingsUi() {
       const dlg = typeof document !== 'undefined' ? document.getElementById(DIALOG) : null;
       // Closing without a save (Cancel, Escape, a backdrop click) keeps a changed form as a draft.
       if (dlg) dlg.addEventListener('close', () => this.findingsDialogClosed());
-      // Another tab may have changed the runs or findings: read them again when this tab is
+      // Another tab may have changed the experiments or findings: read them again when this tab is
       // shown, so a reference is checked against what is stored now.
       if (typeof document !== 'undefined') {
         let pending = null;
@@ -211,13 +219,14 @@ export function createFindingsUi() {
     },
 
     /**
-     * THE verification point (review 3 of #149): run `id` as stored now, read fresh (never from a
+     * THE verification point (review 3 of #149): experiment `id` as stored now, read fresh (never
+     * from a
      * cache), against `citedHash`. { id, state: 'ok' | 'different' | 'unverifiable' |
      * 'unreadable' | 'missing', resultHash, hasResponse, frequencies, name, reason }.
      * 'unverifiable': the cited or the stored hash is missing (with no cited hash it reports the
      * stored identity only).
      */
-    async findingsVerifyCitedRun(id, citedHash = null) {
+    async findingsVerifyCitedExperiment(id, citedHash = null) {
       const none = { id, resultHash: null, hasResponse: null, frequencies: null, name: null };
       let x;
       try {
@@ -283,7 +292,7 @@ export function createFindingsUi() {
       if (typed.status !== now.status) f.mineStatus = STATUS_TEXT[typed.status];
       if (typed.keys !== now.evidence.map(refKey).sort().join('|')) f.mineRefs = typed.texts;
       Object.assign(f, { loadedUpdatedAt: now.updatedAt, statement: now.statement,
-        status: now.status, notes: now.notes || '', runs: plain(now.runs),
+        status: now.status, notes: now.notes || '', experiments: plain(now.experiments),
         evidence: await this.findingsFormRefs(now), conflict: false, deleted: false, error: '' });
       f.base = formState(f);
       return true;
@@ -303,9 +312,10 @@ export function createFindingsUi() {
     },
 
     /**
-     * Read the findings again and check their references against `list` (the run rows, as
+     * Read the findings again and check their references against `list` (the experiment rows, as
      * experimentsRefresh read them). Without a list (after a finding is saved, deleted or
-     * imported) the whole Experiments list is read again first, so the runs, the decoded-record
+     * imported) the whole Experiments list is read again first, so the experiments, the
+     * decoded-record
      * cache and the findings are checked against the same, current rows.
      */
     async findingsRefresh(list = null) {
@@ -318,10 +328,10 @@ export function createFindingsUi() {
       ctx.names = new Map(rows.map((r) => [r.experimentId, r.name || '(unnamed)']));
       ctx.defs = new Map((this.exps.defs || []).map((d) => [d.id, d.name]));
       const { findings, unreadable } = await s.listFindings();
-      // Every cited run that is listed is verified now, fresh from the store.
+      // Every cited experiment that is listed is verified now, fresh from the store.
       const checked = new Map();
-      for (const id of new Set(findings.flatMap(citedRunIds))) {
-        if (ctx.names.has(id)) checked.set(id, await this.findingsVerifyCitedRun(id));
+      for (const id of new Set(findings.flatMap(citedExperimentIds))) {
+        if (ctx.names.has(id)) checked.set(id, await this.findingsVerifyCitedExperiment(id));
       }
       ctx.checked = checked;
       const n = unreadable.length;
@@ -334,12 +344,13 @@ export function createFindingsUi() {
       return this.fnd.rows;
     },
 
-    /** How many findings cite run `id` (the delete dialog says so). */
+    /** How many findings cite experiment `id` (the delete dialog says so). */
     findingsCiting(id) {
       return findingsCiting(this.fnd.all, id).length;
     },
     /**
-     * Backlinks of run `id`: the findings citing it, with how, and the state of those references
+     * Backlinks of experiment `id`: the findings citing it, with how, and the state of those
+     * references
      * as the last check found them (findingIssues). A finding whose cited hash is not the hash of
      * the record shown (`shownHash`, else experimentsShownHash) never reads ok for it.
      */
@@ -348,8 +359,9 @@ export function createFindingsUi() {
         : typeof this.experimentsShownHash === 'function' ? this.experimentsShownHash(id) : null;
       return findingsCiting(this.fnd.all, id, nameOf).map(({ finding, how }) => {
         const row = this.fnd.rows.find((r) => r.id === finding.id);
-        const refs = row ? row.evidence.filter((e) => refRunIds(e.ref).includes(id)) : [];
-        const cited = (finding.runs.find((r) => r.experimentId === id) || {}).resultHash || null;
+        const refs = row ? row.evidence.filter((e) => refExperimentIds(e.ref).includes(id)) : [];
+        const cited = (finding.experiments.find((r) => r.experimentId === id) || {}).resultHash
+          || null;
         let issue = refs.map((e) => e.issue).filter(Boolean).join('; ') || null;
         let state = refs.length && refs.every((e) => e.state === 'ok') ? 'ok' : 'broken';
         if (state === 'ok' && cited !== shown) {
@@ -376,7 +388,7 @@ export function createFindingsUi() {
         .catch(() => null) || this.fnd.all.find((x) => x.id === id) || null : null;
       const f = Object.assign(blankForm(), old ? { mode: 'edit', id,
         loadedUpdatedAt: old.updatedAt, statement: old.statement,
-        status: old.status, notes: old.notes || '', runs: plain(old.runs),
+        status: old.status, notes: old.notes || '', experiments: plain(old.experiments),
         evidence: await this.findingsFormRefs(old) } : {});
       this.fnd.form = f;
       if (refs.length && !await link(this, refs, shown)) {
@@ -393,26 +405,26 @@ export function createFindingsUi() {
       return this.findingsAskNew([], id);
     },
     /**
-     * A finding about run `id`, citing the record this page shows for it (`shownHash`, else
+     * A finding about experiment `id`, citing the record this page shows for it (`shownHash`, else
      * experimentsShownHash: the open detail, a compared record or the list row).
      */
     findingsAskRun(id, shownHash) {
-      return this.findingsAskNew([{ kind: 'run', experimentId: id }], null,
+      return this.findingsAskNew([{ kind: 'experiment', experimentId: id }], null,
         shownHash !== undefined ? { [id]: shownHash } : null);
     },
     /** The dialog's entries of a stored finding's references, value points verified now. */
     async findingsFormRefs(finding) {
-      const hashOf = new Map(finding.runs.map((r) => [r.experimentId, r.resultHash]));
+      const hashOf = new Map(finding.experiments.map((r) => [r.experimentId, r.resultHash]));
       const out = [];
       for (const ref of finding.evidence) {
-        const v = ref.kind === 'value' ? await this.findingsVerifyCitedRun(ref.experimentId,
+        const v = ref.kind === 'value' ? await this.findingsVerifyCitedExperiment(ref.experimentId,
           hashOf.get(ref.experimentId) || null) : null;
         out.push({ key: refKey(ref), ref: plain(ref), text: refText(ref, nameOf,
           { storedPoint: onGrid(ref, v) }) });
       }
       return out;
     },
-    /** A finding about the stored point the open run's evidence shows (ADR 0044's lineage). */
+    /** A finding about the stored point the open experiment's evidence shows (ADR 0044). */
     findingsAskValue() {
       const d = this.exps.detail;
       const p = d && d.evidence && d.evidence.point;
@@ -424,7 +436,7 @@ export function createFindingsUi() {
       const p = d && d.evidence && d.evidence.point;
       return p ? `Record a finding about the value at ${exactHzText(p.hz)}` : '';
     },
-    /** A finding about the open comparison: A compared with each other run. */
+    /** A finding about the open comparison: A compared with each other experiment. */
     findingsAskCompare() {
       const e = this.exps.compare ? this.exps.compare.entries : [];
       return e.length >= 2 ? this.findingsAskNew(e.slice(1).map((x) => ({ kind: 'compare',
@@ -432,13 +444,13 @@ export function createFindingsUi() {
     },
     async findingsAddRun(id) {
       if (!id) return false;
-      const ok = await link(this, [{ kind: 'run', experimentId: id }]);
+      const ok = await link(this, [{ kind: 'experiment', experimentId: id }]);
       if (ok) this.fnd.form.addRun = '';
       return ok;
     },
     async findingsAddCompare(a, b) {
       if (!a || !b || a === b) {
-        this.fnd.form.error = 'Choose two different runs to link a comparison.';
+        this.fnd.form.error = 'Choose two different experiments to link a comparison.';
         return false;
       }
       return link(this, [{ kind: 'compare', a, b }]);
@@ -446,9 +458,9 @@ export function createFindingsUi() {
     findingsRemoveRef(i) {
       const f = this.fnd.form;
       f.evidence = f.evidence.filter((x, j) => j !== i);
-      // A run no longer cited loses its recorded identity: linking it again reads it anew.
-      const cited = new Set(f.evidence.flatMap((e) => refRunIds(e.ref)));
-      f.runs = f.runs.filter((r) => cited.has(r.experimentId));
+      // An experiment no longer cited loses its recorded identity: linking it again reads it anew.
+      const cited = new Set(f.evidence.flatMap((e) => refExperimentIds(e.ref)));
+      f.experiments = f.experiments.filter((r) => cited.has(r.experimentId));
       f.error = '';
     },
 
@@ -459,9 +471,9 @@ export function createFindingsUi() {
       try {
         const s = await this.experimentsStore();
         const evidence = f.evidence.map((e) => e.ref);
-        const cited = new Set(evidence.flatMap(refRunIds));
+        const cited = new Set(evidence.flatMap(refExperimentIds));
         const fields = { statement: f.statement, status: f.status, notes: f.notes, evidence,
-          runs: f.runs.filter((r) => cited.has(r.experimentId)) };
+          experiments: f.experiments.filter((r) => cited.has(r.experimentId)) };
         const now = Date.now();
         const old = f.mode === 'edit' ? await s.getFinding(f.id) : null;
         if (f.mode === 'edit' && !old) throw DELETED;
@@ -516,7 +528,7 @@ export function createFindingsUi() {
       }
       return ok;
     },
-    /** Delete finding `id` (the runs it cites are not touched). */
+    /** Delete finding `id` (the experiments it cites are not touched). */
     async findingsDeleteNow(id) {
       try {
         await (await this.experimentsStore()).deleteFinding(id);
@@ -530,20 +542,21 @@ export function createFindingsUi() {
     },
 
     /**
-     * Open what a reference of finding `findingId` names: the run, the comparison, or the run at
-     * the value. Each run is verified first against the hash the finding cites; when that no
+     * Open what a reference of finding `findingId` names: the experiment, the comparison, or the
+     * experiment at
+     * the value. Each experiment is verified first against the hash the finding cites; when that no
      * longer holds, nothing is opened, the findings are checked again and the reason is said.
      */
     async findingsOpenRef(ref, findingId = null) {
       const f = (findingId && this.fnd.all.find((x) => x.id === findingId))
         || this.fnd.all.find((x) => x.evidence.some((r) => refKey(r) === refKey(ref))) || null;
-      const runs = f ? f.runs : [];
-      const cited = new Map(runs.map((r) => [r.experimentId, r.resultHash]));
+      const experiments = f ? f.experiments : [];
+      const cited = new Map(experiments.map((r) => [r.experimentId, r.resultHash]));
       const verified = new Map();
-      for (const id of refRunIds(ref)) {
-        verified.set(id, await this.findingsVerifyCitedRun(id, cited.get(id) || null));
+      for (const id of refExperimentIds(ref)) {
+        verified.set(id, await this.findingsVerifyCitedExperiment(id, cited.get(id) || null));
       }
-      const why = refIssue(ref, runs, verified);
+      const why = refIssue(ref, experiments, verified);
       if (why) {
         await this.findingsRefresh();
         this.notify('warning', 'Not opened', `${why}. The finding's references were checked `
@@ -557,7 +570,8 @@ export function createFindingsUi() {
     },
 
     /**
-     * Export every stored finding, each with the identity of the runs it cites. A stored finding
+     * Export every stored finding, each with the identity of the experiments it cites. A stored
+     * finding
      * that cannot be read is left out, and the notification says so. Returns the file text.
      */
     async findingsExport({ download = downloadBlob } = {}) {
@@ -616,11 +630,11 @@ export function createFindingsUi() {
       }
       this.fnd.importErrors = [];
       await this.findingsRefresh();
-      const absent = [...new Set(p.findings.flatMap(citedRunIds))]
+      const absent = [...new Set(p.findings.flatMap(citedExperimentIds))]
         .filter((id) => !ctx.names.has(id)).length;
       this.notify(absent ? 'warning' : 'success', 'Findings imported', `${r.stored.length} `
         + `stored${r.same.length ? `, ${r.same.length} already here` : ''}.${absent ? ` ${absent} `
-        + `cited run${absent === 1 ? ' is' : 's are'} not stored here; import ${absent === 1
+        + `cited experiment${absent === 1 ? ' is' : 's are'} not stored here; import ${absent === 1
           ? 'it' : 'them'} to check the references.` : ''}`);
       return r.stored.length;
     },

@@ -2,38 +2,41 @@
 // plain data in, plain data out; no DOM, no clock, no randomness (callers pass `now` and `id`).
 //
 // Three things are kept apart:
-//   - a MEASUREMENT is what was observed or computed (a stored run, immutable, ADR 0040);
+//   - a MEASUREMENT is what was observed or computed (a stored experiment, immutable, ADR 0040);
 //   - an OBSERVATION is what the user recorded (status 'observation': not yet interpreted);
 //   - a FINDING is an interpretation linked to evidence (the other statuses).
-// A finding is user metadata. It never changes a run, and a run never changes a finding: a cited
-// run that is deleted leaves the reference in place, reported by findingIssues as missing.
+// A finding is user metadata. It never changes an experiment, and an experiment never changes a
+// finding: a cited
+// experiment that is deleted leaves the reference in place, reported by findingIssues as missing.
 //
 // FINDING (stored, store.js putFinding) =
 //   { kind: 'oscilla-finding', schemaVersion: 1, id, statement, status, evidence: [ref],
-//     runs: [{ experimentId, resultHash }], notes, createdAt, updatedAt }
+//     experiments: [{ experimentId, resultHash }], notes, createdAt, updatedAt }
 //   statement  one line of plain text (markup, control and bidirectional characters refused)
 //   status     FINDING_STATUSES, categorical; there is no confidence number. A finding that
 //              claims 'supported' or 'contradicted' cites at least one reference.
-//   evidence   typed references, each naming runs by experimentId:
-//                { kind: 'run', experimentId }
-//                { kind: 'compare', a, b }                 two different runs, A first
+//   evidence   typed references, each naming experiments by experimentId:
+//                { kind: 'experiment', experimentId }
+//                { kind: 'compare', a, b }                 two different experiments, A first
 //                { kind: 'value', experimentId, at: { hz } }   the stored grid point at hz
 //                                                            (evidence.js resultPoint, ADR 0044)
-//   runs       the identity of every cited run when it was linked: its id and its stored result
+//   experiments       the identity of every cited experiment when it was linked: its id and its
+//   stored result
 //              hash (null for an unstamped record), exactly one entry per cited id. An id alone
 //              is not an identity: a different record can later be stored under it, and an
-//              export must carry what the evidence was (findingIssues 'different-run').
+//              export must carry what the evidence was (findingIssues 'different-experiment').
 //   notes      plain text or null (may wrap)
 //
 //   validateFinding(value) -> { ok, finding, errors }        (never throws; a clean copy)
-//   createFinding({ id, now, statement, status, evidence, runs, notes }) -> Finding  (RangeError)
+//   createFinding({ id, now, statement, status, evidence, experiments, notes }) -> Finding
+//   (RangeError)
 //   updateFinding(finding, patch, { now }) -> Finding   (id and createdAt kept; updatedAt is
 //     max(now, previous + 1 ms), so it always advances)
 //   findingIssues(finding, lookup) -> [{ code, index, experimentId, text }]
-//     lookup(experimentId) -> { kind: 'run', name, resultHash, hasResponse, frequencies,
+//     lookup(experimentId) -> { kind: 'experiment', name, resultHash, hasResponse, frequencies,
 //       readable, reason } | { kind, name } | null   (frequencies: the stored response grid; a
 //       value reference must name one of them exactly, else 'not-a-grid-point')
-//     A cited run is present only when it is readable and its stored result hash equals the
+//     A cited experiment is present only when it is readable and its stored result hash equals the
 //     cited one; a hash missing on either side (or not read) is 'unverifiable-identity', never ok.
 //   findingsCiting(findings, experimentId) -> [{ finding, how: [text] }]   (backlinks)
 //   refText(ref, nameOf) -> text that never claims a cause
@@ -55,10 +58,10 @@ export const FINDINGS_FILE_EXTENSION = '.oscilla-findings.json';
 export const FINDING_STATUSES = Object.freeze(['observation', 'hypothesis', 'supported',
   'contradicted', 'inconclusive']);
 export const EVIDENCE_REQUIRED_STATUSES = Object.freeze(['supported', 'contradicted']);
-export const EVIDENCE_KINDS = Object.freeze(['run', 'compare', 'value']);
-export const ISSUE_CODES = Object.freeze(['missing-run', 'wrong-kind', 'unreadable-run',
-  'different-run', 'unverifiable-identity', 'no-response', 'unsupported-status',
-  'not-a-grid-point']);
+export const EVIDENCE_KINDS = Object.freeze(['experiment', 'compare', 'value']);
+export const ISSUE_CODES = Object.freeze(['missing-experiment', 'wrong-kind',
+  'unreadable-experiment', 'different-experiment', 'unverifiable-identity', 'no-response',
+  'unsupported-status', 'not-a-grid-point']);
 export const FINDING_LIMITS = Object.freeze({
   statementChars: 1000,
   notesChars: LIMITS.notesChars,
@@ -91,8 +94,8 @@ const INVISIBLE = new RegExp('[\\u0080-\\u009F\\u061C\\u200B\\u200E\\u200F\\u202
   + '\\u202A-\\u202E\\u2060-\\u2064\\u2066-\\u2069\\uFEFF]');
 const LONE_SURROGATE = /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?:^|[^\uD800-\uDBFF])[\uDC00-\uDFFF]/;
 const HZ_MAX = LIMITS.frequencyHz[1];
-const FINDING_KEYS = ['kind', 'schemaVersion', 'id', 'statement', 'status', 'evidence', 'runs',
-  'createdAt', 'updatedAt'];
+const FINDING_KEYS = ['kind', 'schemaVersion', 'id', 'statement', 'status', 'evidence',
+  'experiments', 'createdAt', 'updatedAt'];
 const shortId = (id) => (id.length > 14 ? `${id.slice(0, 12)}…` : id);
 /** "1 kHz", "4.974 kHz", "250 Hz": a frequency as the references read it. */
 export const hzText = (f) => (f >= 1000 ? `${+(f / 1000).toPrecision(4)} kHz`
@@ -102,17 +105,17 @@ export const hzText = (f) => (f >= 1000 ? `${+(f / 1000).toPrecision(4)} kHz`
 export function refKey(ref) {
   if (ref.kind === 'compare') return `compare:${ref.a}|${ref.b}`;
   if (ref.kind === 'value') return `value:${ref.experimentId}@${ref.at.hz}`;
-  return `run:${ref.experimentId}`;
+  return `experiment:${ref.experimentId}`;
 }
 
-/** The run ids a reference names, in order. */
-export function refRunIds(ref) {
+/** The experiment ids a reference names, in order. */
+export function refExperimentIds(ref) {
   return ref.kind === 'compare' ? [ref.a, ref.b] : [ref.experimentId];
 }
 
-/** Every run id a finding cites, once each, in order of first citation. */
-export function citedRunIds(finding) {
-  return [...new Set((finding.evidence || []).flatMap(refRunIds))];
+/** Every experiment id a finding cites, once each, in order of first citation. */
+export function citedExperimentIds(finding) {
+  return [...new Set((finding.evidence || []).flatMap(refExperimentIds))];
 }
 
 /** Plain text checks shared by the statement and the notes. */
@@ -139,13 +142,13 @@ function checkRef(c, v, path) {
   }
   const n = c.errors.length;
   const id = (x, p) => c.str(x, p, LIMITS.idChars, { pattern: ID_PATTERN });
-  if (v.kind === 'run') {
+  if (v.kind === 'experiment') {
     if (c.keys(v, path, ['kind', 'experimentId'])) id(v.experimentId, `${path}.experimentId`);
-    return c.errors.length > n ? null : { kind: 'run', experimentId: v.experimentId };
+    return c.errors.length > n ? null : { kind: 'experiment', experimentId: v.experimentId };
   }
   if (v.kind === 'compare') {
     if (c.keys(v, path, ['kind', 'a', 'b']) && id(v.a, `${path}.a`) && id(v.b, `${path}.b`)
-      && v.a === v.b) c.add(path, 'a comparison names two different runs');
+      && v.a === v.b) c.add(path, 'a comparison names two different experiments');
     return c.errors.length > n ? null : { kind: 'compare', a: v.a, b: v.b };
   }
   if (c.keys(v, path, ['kind', 'experimentId', 'at'])) {
@@ -194,18 +197,19 @@ function checkFinding(c, v, path) {
       evidence.push(ref);
     });
     if (EVIDENCE_REQUIRED_STATUSES.includes(v.status) && !v.evidence.length) {
-      c.add(p('evidence'), `a ${v.status} finding must cite at least one reference (a run, a `
-        + 'comparison or a value)');
+      c.add(p('evidence'), `a ${v.status} finding must cite at least one reference (an `
+        + 'experiment, a comparison or a value)');
     }
   }
-  const runs = [];
-  if (!Array.isArray(v.runs)) c.add(p('runs'), 'must be an array');
-  else if (v.runs.length > 2 * FINDING_LIMITS.evidence) c.add(p('runs'), 'too many entries');
-  else {
-    const cited = new Set(evidence.flatMap(refRunIds));
+  const experiments = [];
+  if (!Array.isArray(v.experiments)) c.add(p('experiments'), 'must be an array');
+  else if (v.experiments.length > 2 * FINDING_LIMITS.evidence) {
+    c.add(p('experiments'), 'too many entries');
+  } else {
+    const cited = new Set(evidence.flatMap(refExperimentIds));
     const seen = new Set();
-    v.runs.forEach((r, i) => {
-      const rp = `${p('runs')}[${i}]`;
+    v.experiments.forEach((r, i) => {
+      const rp = `${p('experiments')}[${i}]`;
       if (!c.keys(r, rp, ['experimentId', 'resultHash'])) return;
       const okId = c.str(r.experimentId, `${rp}.experimentId`, LIMITS.idChars,
         { pattern: ID_PATTERN });
@@ -214,17 +218,17 @@ function checkFinding(c, v, path) {
       if (seen.has(r.experimentId)) c.add(rp, `${r.experimentId} is listed more than once`);
       else if (!cited.has(r.experimentId)) c.add(rp, `${r.experimentId} is not cited`);
       seen.add(r.experimentId);
-      runs.push({ experimentId: r.experimentId, resultHash: r.resultHash });
+      experiments.push({ experimentId: r.experimentId, resultHash: r.resultHash });
     });
     const absent = [...cited].filter((id) => !seen.has(id));
     if (absent.length) {
-      c.add(p('runs'), `the identity of each cited run is required (${absent.slice(0, 4)
-        .join(', ')})`);
+      c.add(p('experiments'), `the identity of each cited experiment is required (${absent
+        .slice(0, 4).join(', ')})`);
     }
   }
   if (c.errors.length > n) return null;
   return { kind: FINDING_KIND, schemaVersion: v.schemaVersion, id: v.id, statement: v.statement,
-    status: v.status, evidence, runs, notes: has(v, 'notes') ? v.notes : null,
+    status: v.status, evidence, experiments, notes: has(v, 'notes') ? v.notes : null,
     createdAt: v.createdAt, updatedAt: v.updatedAt };
 }
 
@@ -246,17 +250,17 @@ const noteOf = (s) => (typeof s === 'string' ? s.trim() || null : s ?? null);
 
 /** A new finding; throws RangeError with the reasons. */
 export function createFinding({ id, now, statement, status = 'observation', evidence = [],
-  runs = [], notes = null } = {}) {
+  experiments = [], notes = null } = {}) {
   const at = toIsoTimestamp(now);
   return valid({ kind: FINDING_KIND, schemaVersion: FINDING_SCHEMA_VERSION, id,
-    statement: trimmed(statement), status, evidence, runs, notes: noteOf(notes),
+    statement: trimmed(statement), status, evidence, experiments, notes: noteOf(notes),
     createdAt: at, updatedAt: at });
 }
 
-/** The finding with `patch` applied (statement, status, evidence, runs, notes) at `now`. */
+/** The finding with `patch` applied (statement, status, evidence, experiments, notes) at `now`. */
 export function updateFinding(finding, patch = {}, { now } = {}) {
   for (const k of Object.keys(patch)) {
-    if (!['statement', 'status', 'evidence', 'runs', 'notes'].includes(k)) {
+    if (!['statement', 'status', 'evidence', 'experiments', 'notes'].includes(k)) {
       throw new RangeError(`Invalid finding: ${k} cannot be changed`);
     }
   }
@@ -276,14 +280,14 @@ export function updateFinding(finding, patch = {}, { now } = {}) {
 /**
  * What is wrong with a finding's references in this browser: [{ code, index, experimentId,
  * text }], in reference order, then the status issue. Nothing is repaired or removed: a reference
- * to a deleted run stays and reads missing.
+ * to a deleted experiment stays and reads missing.
  */
 export function findingIssues(finding, lookup) {
   const out = [];
-  const hashOf = new Map((finding.runs || []).map((r) => [r.experimentId, r.resultHash]));
+  const hashOf = new Map((finding.experiments || []).map((r) => [r.experimentId, r.resultHash]));
   const broken = new Set();
   (finding.evidence || []).forEach((ref, index) => {
-    for (const id of refRunIds(ref)) {
+    for (const id of refExperimentIds(ref)) {
       const got = lookup(id);
       const name = got && got.name ? `"${got.name}"` : shortId(id);
       const issue = (code, text) => {
@@ -291,29 +295,30 @@ export function findingIssues(finding, lookup) {
         broken.add(index);
       };
       const cited = hashOf.get(id) || null;
-      if (!got) issue('missing-run', `missing: run ${shortId(id)} is not stored here (deleted, or `
-        + 'never stored in this browser)');
-      else if (got.kind !== 'run') {
-        issue('wrong-kind', `${shortId(id)} names a ${got.kind}, not a run`);
+      if (!got) issue('missing-experiment', `missing: experiment ${shortId(id)} is not stored `
+        + 'here (deleted, or never stored in this browser)');
+      else if (got.kind !== 'experiment') {
+        issue('wrong-kind', `${shortId(id)} names a ${got.kind}, not an experiment`);
       } else if (got.readable === false) {
-        issue('unreadable-run', `run ${name} is stored here but cannot be read${got.reason
-          ? ` (${got.reason})` : ''}; it cannot be checked`);
+        issue('unreadable-experiment', `experiment ${name} is stored here but cannot be read${
+          got.reason ? ` (${got.reason})` : ''}; it cannot be checked`);
       } else if (!cited) {
-        issue('unverifiable-identity', `run ${name}: its identity cannot be verified: it was cited `
-          + 'without a result hash');
+        issue('unverifiable-identity', `experiment ${name}: its identity cannot be verified: it `
+          + 'was cited without a result hash');
       } else if (typeof got.resultHash !== 'string' || !got.resultHash) {
-        issue('unverifiable-identity', `run ${name}: its identity cannot be verified: ${
+        issue('unverifiable-identity', `experiment ${name}: its identity cannot be verified: ${
           got.resultHash === null ? 'the record stored under this id has no result hash'
             : 'its stored result hash has not been read'}`);
       } else if (got.resultHash !== cited) {
-        issue('different-run', `run ${name}: a different record is stored under this id (its `
-          + 'result hash differs from the one cited)');
+        issue('different-experiment', `experiment ${name}: a different record is stored under `
+          + 'this id (its result hash differs from the one cited)');
       } else if (ref.kind === 'value' && got.hasResponse === false) {
-        issue('no-response', `run ${name} stores no frequency response to take a value from`);
+        issue('no-response', `experiment ${name} stores no frequency response to take a value `
+          + 'from');
       } else if (ref.kind === 'value' && Array.isArray(got.frequencies)
         && !got.frequencies.includes(ref.at.hz)) {
-        issue('not-a-grid-point', `${exactHzText(ref.at.hz)} is not a frequency the run stores `
-          + `(run ${name}): the value is not a stored point`);
+        issue('not-a-grid-point', `${exactHzText(ref.at.hz)} is not a frequency the experiment `
+          + `stores (experiment ${name}): the value is not a stored point`);
       }
     }
   });
@@ -352,20 +357,22 @@ export function refText(ref, nameOf = () => null, { storedPoint = false, frequen
     return n ? `"${n}"` : shortId(id);
   };
   if (ref.kind === 'compare') {
-    return `Comparison of ${nm(ref.a)} with ${nm(ref.b)} (what changed between the runs, not why)`;
+    return `Comparison of ${nm(ref.a)} with ${nm(ref.b)} (what changed between the experiments, `
+      + 'not why)';
   }
   if (ref.kind === 'value') {
     return `Value of ${nm(ref.experimentId)} at ${exactHzText(ref.at.hz)}${storedPoint
       ? ' (a stored grid point)' : ''}`;
   }
-  return `Run ${nm(ref.experimentId)}`;
+  return `Experiment ${nm(ref.experimentId)}`;
 }
 
-/** Does `finding` cite run `id`? */
-export const findingCites = (finding, id) => citedRunIds(finding).includes(id);
+/** Does `finding` cite experiment `id`? */
+export const findingCites = (finding, id) => citedExperimentIds(finding).includes(id);
 
 /**
- * Backlinks: each finding citing run `id`, with how it cites it (other runs by `nameOf`, a
+ * Backlinks: each finding citing experiment `id`, with how it cites it (other experiments by
+ * `nameOf`, a
  * value's frequency by `hzTextOf`, every digit by default).
  */
 export function findingsCiting(findings, id, nameOf = () => null, hzTextOf = exactHzText) {
@@ -374,7 +381,7 @@ export function findingsCiting(findings, id, nameOf = () => null, hzTextOf = exa
   for (const finding of findings) {
     const how = [];
     for (const ref of finding.evidence) {
-      if (ref.kind === 'run' && ref.experimentId === id) how.push('this run');
+      if (ref.kind === 'experiment' && ref.experimentId === id) how.push('this experiment');
       else if (ref.kind === 'value' && ref.experimentId === id) {
         how.push(`its value at ${hzTextOf(ref.at.hz)}`);
       } else if (ref.kind === 'compare' && (ref.a === id || ref.b === id)) {
@@ -388,7 +395,7 @@ export function findingsCiting(findings, id, nameOf = () => null, hzTextOf = exa
 
 // ---------------------------------------------------------------- export / import
 
-/** The export document of `findings` (each with the identity of the runs it cites). */
+/** The export document of `findings` (each with the identity of the experiments it cites). */
 export function exportFindings(findings, { now, oscillaVersion = null } = {}) {
   return { kind: FINDINGS_FILE_KIND, schemaVersion: FINDINGS_FILE_SCHEMA_VERSION,
     exportedAt: toIsoTimestamp(now), oscillaVersion,

@@ -339,10 +339,10 @@ export function createExperimentsUi() {
       if (st) {
         const e = st === 'changed' ? await fresh(ctx.detail.experimentId) : null;
         setDetail(cmp, e);
-        cmp.notify('info', e ? 'Run changed elsewhere' : 'Run no longer shown', e
-          ? 'The run shown was replaced (here or in another tab); its detail now shows the stored '
-            + 'record.' : 'The run shown is no longer stored or cannot be read; its detail was '
-            + 'closed.');
+        cmp.notify('info', e ? 'Experiment changed elsewhere' : 'Experiment no longer shown', e
+          ? 'The experiment shown was replaced (here or in another tab); its detail now shows the '
+            + 'stored record.' : 'The experiment shown is no longer stored or cannot be read; its '
+            + 'detail was closed.');
       }
     }
     if (ctx.compare.length && ctx.compare.some((e) => stale(e))) {
@@ -356,9 +356,10 @@ export function createExperimentsUi() {
         }
       }
       setCompare(cmp, next);
-      cmp.notify('info', 'Comparison changed elsewhere', next.length >= 2 ? 'A compared run was '
-        + 'replaced or deleted (here or in another tab); the comparison now shows the stored '
-        + 'records.' : 'A compared run is no longer stored; the comparison was closed.');
+      cmp.notify('info', 'Comparison changed elsewhere', next.length >= 2 ? 'A compared '
+        + 'experiment was replaced or deleted (here or in another tab); the comparison now shows '
+        + 'the stored records.' : 'A compared experiment is no longer stored; the comparison '
+        + 'was closed.');
     }
   }
 
@@ -745,8 +746,8 @@ export function createExperimentsUi() {
       this.exps.deleteId = row.id;
       this.exps.deleteName = row.name;
       const n = typeof this.findingsCiting === 'function' ? this.findingsCiting(row.id) : 0;
-      this.exps.deleteCiting = n ? `${n} finding${n === 1 ? ' cites' : 's cite'} this run. ${n === 1
-        ? 'It keeps' : 'They keep'} the reference, which will then read "missing".` : '';
+      this.exps.deleteCiting = n ? `${n} finding${n === 1 ? ' cites' : 's cite'} this experiment. ${
+        n === 1 ? 'It keeps' : 'They keep'} the reference, which will then read "missing".` : '';
       this.openModal('osc-dlg-exp-delete');
     },
     /** Explicit, confirmed delete (§225). */
