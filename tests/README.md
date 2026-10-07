@@ -125,8 +125,8 @@ for people, never gating · **DELETED** removed, with its replacement.
 | `browser/v31-studio-links.cjs` | GATE | dist in chromium, firefox, webkit, file:// and /oscilla/ (every check): a deep link `#m=studio&st=…&sv=…` opened on a fresh page lands in STUDIO with the template and subview (one panel at 390 px) and starts nothing; an invalid link (unknown template or view, repeated key, `st` without `m=studio`) is refused with the reason at load and on hashchange, nothing changed; a link never replaces unsaved changes (the Templates dialog opens with the note and the linked template, Open is explicit); Copy link writes a link that round-trips, and only the workspace and view after an edit; the Fullscreen button enters, exits, keeps focus, fills the screen and exits when leaving the workspace, and with the API removed stays aria-disabled with the reason; what Escape does while fullscreen is printed |
 | `unit/v31-studio-links.test.mjs` | GATE | the Studio deep-link hash codec (`core/url-state-studio.js`): round trip of every shipped template and subview, whole-link refusal with a sentence, coexistence with the instrument hash and the `mr` recipe; Copy link's view (template only while unmodified); fullscreen feature detection and its reasons |
 | `../scripts/visual-studio.mjs` + `visual/studio/*` | GATE | STUDIO at 1536x1024 (toolbar to graph row; and the whole workspace down to the timeline row with its clips and the automation lane), the compact widget, and at 390x844 the GRAPH and TIMELINE subviews, against the accepted reference per environment (≤ 0.5 % differing pixels) |
-| `unit/browser-suite-contract.test.mjs` | GATE | rule `project.suite-harness`: every entry suite under `browser/` opens its run through `browser/lib/suite.cjs`, takes playwright from it, tallies or reports its legs and parses no selection of its own (one suite is listed as pending, with the reason); the harness exits 2 on an empty or unknown browser or origin list (every migrated suite is spawned with `OSC_BROWSERS=bogus` and with it empty), fails a leg or a selected browser that ran 0 checks, fails a skip under CI that the Declared skips table below does not list, holds a start outside CI until the 1-minute load is below `OSC_LOAD_MAX` (bounded, a no-op under CI), reaches an engine by a known name only and bounds `page.evaluate` |
-| `unit/browser-timing.test.mjs` | GATE | rule `project.bounded-test-timing`: the static scan of `browser/` (fixed sleeps, setTimeout sleeps, counted polls, waiting loops without a wall-clock deadline, Playwright waits without a timeout, playwright outside the harness, frame windows from integer literals, 44100/48000 outside a render rate) finds nothing beyond the debt recorded in `browser/timing-baseline.json`, and only a reasoned `timing-allow` marker silences a finding; `browser/lib/wait.cjs` ends every wait on a named wall-clock deadline |
+| `unit/browser-suite-contract.test.mjs` | GATE | rule `project.suite-harness`: every entry suite under `browser/` opens its run through `browser/lib/suite.cjs`, takes playwright from it, tallies or reports its legs and parses no selection of its own (one suite is listed as pending, with the reason); the harness exits 2 on an empty or unknown browser or origin list (every migrated suite is spawned with `OSC_BROWSERS=bogus` and with it empty), fails a leg or a selected browser that ran 0 checks, refuses an engine outside the selection or before the load gate and fails a selected browser whose own engine never started, fails a skip under CI that the Declared skips table below does not list, holds a start outside CI until the 1-minute load is below `OSC_LOAD_MAX` (bounded, a no-op under CI), reaches an engine by a known name only and bounds the page's `evaluate`, `evaluateHandle`, `$eval` and `$$eval` |
+| `unit/browser-timing.test.mjs` | GATE | rule `project.bounded-test-timing`: the static scan of `browser/` (fixed sleeps, setTimeout sleeps in the suite or the page and the helpers that wrap them, counted polls, waiting loops without a wall-clock deadline of their own, Playwright waits without a non-zero timeout, playwright outside the harness, frame windows from integer literals, 44100/48000 outside a render rate) finds nothing beyond the debt recorded in `browser/timing-baseline.json`, and only a `timing-allow` marker with a reason of three words silences a finding (every marker is printed); `browser/lib/wait.cjs` ends every wait on a named wall-clock deadline |
 | `browser/lib/suite.cjs`, `browser/lib/wait.cjs`, `browser/lib/timing-scan.cjs` | SUPPORTING | the browser suites' one harness (selection, engines, bounded `page.evaluate`, legs, declared skips, load gate), the shared waits (`until`, `bounded`, `anchor`, `frames`) and the static scan of the timing rule |
 | `browser/timing-baseline.json` | SUPPORTING | the timing findings that predate the rule, as a count per file and kind; it only goes down (`node tests/browser/lib/timing-scan.cjs --write-baseline`) |
 | `browser/dist-gate.cjs` | DELETED | targeted skeleton ids and crashed; superseded by `app.cjs` and `verify-dist` |
@@ -148,17 +148,24 @@ Every suite under `browser/` runs through `browser/lib/suite.cjs` (rule `project
 - `OSC_BROWSERS` (or the suite's `--browsers` / `--browser` flag) and `--origins` / `OSC_ORIGINS`
   select what runs. An empty list, an unknown name or a repeated one exits 2; a variable that is
   set and empty is an empty list, not "everything".
-- A selected browser that ran 0 checks fails the suite, whatever it printed.
+- A selected browser that ran 0 checks fails the suite, whatever it printed. So does a leg
+  run on another engine: launching an engine outside the selection is refused, and a selected
+  browser whose own engine never started fails at exit.
 - Outside CI a suite waits for the 1-minute load average to fall below `OSC_LOAD_MAX` (default
   2 x cores) for at most `OSC_LOAD_WAIT_MS` (default 600000) and then fails without running; it
   prints the load at start and at end. Under CI (`CI` or `GITHUB_ACTIONS`) there is no gate.
-- `page.evaluate` answers within `OSC_EVALUATE_MS` (default 300000) of wall time or rejects with
-  the function it was running.
+  `npm run release-gate` and `npm run release:prepare` run the suites locally, each behind its
+  own gate: on a machine that stays busy they wait and then fail, by design. Run them when it
+  is quiet, or state the limit you accept (`OSC_LOAD_MAX=64 npm run release:prepare`).
+- `page.evaluate` (and the page's `evaluateHandle`, `$eval`, `$$eval`) answers within
+  `OSC_EVALUATE_MS` (default 300000) of wall time or rejects with the function it was running.
 
 Waits follow rule `project.bounded-test-timing`: a condition poll through `browser/lib/wait.cjs`
-with a wall-clock deadline that names the check, never a fixed sleep. A deliberate exception
-carries `// timing-allow: <reason>` on its line or the line above.
-`node tests/browser/lib/timing-scan.cjs` prints what the scan finds beyond the recorded debt.
+with a wall-clock deadline that names the check, never a fixed sleep, in the suite or in the
+page. A deliberate exception carries `// timing-allow: <reason>` (three words or more) on its
+line or the line above. `node tests/browser/lib/timing-scan.cjs` prints what the scan finds
+beyond the recorded debt; after removing a sleep, `--write-baseline` lowers the record, which
+otherwise leaves room for a new one.
 
 ## Declared skips
 
