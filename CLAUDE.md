@@ -17,7 +17,9 @@ The binding constraints are the project rules in `.ai/repo/rules/project/` (vers
 name): `project.single-file-deliverable`, `project.audio-engine-discipline`,
 `project.no-fake-science`, `project.about-names-current-release`,
 `project.studio-model-is-canonical`, `project.typed-ports`, `project.no-silent-feedback`,
-`project.visual-identity-lock`. Read them before changing `src/`.
+`project.visual-identity-lock`. Read them before changing `src/`. Releases are bound by
+`project.release-receipt-binds-gate`, `project.release-flow-complete` (the flow, in order) and
+`project.deploy-often`.
 
 Two more bind `tests/browser/`: `project.bounded-test-timing` (a wait is a condition poll with
 a named wall-clock deadline through `tests/browser/lib/wait.cjs`; no fixed sleep, frame count or
@@ -50,9 +52,11 @@ aggregates the CI jobs, whose `npm test` includes `tests/unit/knowledge-integrit
 
 Releases: the version lives only in `package.json` (`version:check` rejects a hard-coded copy
 of the current version elsewhere, this file included). On a clean tree `release:prepare`
-bumps it and runs the gate; land `chore(release): vX.Y.Z` by PR; on main `release:publish`,
-then `-- --yes`; `verify-deploy` fails Pages on a mismatch; land the release record by a small
-PR (`release/record-vX.Y.Z`).
+bumps it and runs the gate; land `chore(release): vX.Y.Z` by PR (nothing else merges until
+the publish: the receipt binds the whole tree); on main `release:publish`, then `-- --yes`;
+`verify-deploy` fails Pages on a mismatch; land the release record by a small PR
+(`chore/release-record-vX.Y.Z`) before the next `release:prepare`, which refuses without it.
+`node scripts/release-cadence.mjs` says whether a release is overdue (24 h).
 
 ## Plan
 

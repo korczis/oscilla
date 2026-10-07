@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 import {
-  findVersionLiterals, repositoryFiles, versionLiteralPattern,
+  findVersionLiterals, findVersionsAhead, repositoryFiles, versionLiteralPattern,
 } from '../../scripts/release-version-check.mjs';
 import {
   bumpVersion, computeSourceDigest, findRegion, readBanner,
@@ -104,6 +104,43 @@ test('no hard-coded current product version outside package.json, the lock and d
   const hits = findVersionLiterals(repositoryFiles(), PKG.version);
   assert.deepEqual(hits, [], `hard-coded ${PKG.version}:\n${hits.map((h) => `${h.path}:${h.line}`
     + ` ${h.text}`).join('\n')}`);
+});
+
+// release:prepare bumps package.json and then runs version:check, so a literal of a version
+// the product has not reached yet is a release that fails in its gate on the day it is cut
+// (round 2 of #163: a code comment named the next major's first three versions; round 3: a
+// third-party version in docs/ sat two patches ahead). The horizon is the rest of the current
+// major and the whole of the next one (rule project.release-flow-complete), so the finding
+// lands on the pull request that writes the literal, not inside the release before it.
+test('no version-shaped literal ahead of the product, up to the end of the next major', () => {
+  const hits = findVersionsAhead(repositoryFiles(ROOT.pathname), PKG.version)
+    .map((h) => `${h.version} in ${h.path}:${h.line}: ${h.text}`);
+  assert.deepEqual(hits, [], 'version:check will refuse these once the product gets there. '
+    + 'Write X.Y.Z; a third-party version as package@1.2.3 (or @1.2.3); a fixture version on '
+    + 'major 40');
+});
+
+test('the ahead scan: above the current version, within one major, same shape rules', () => {
+  const at = (version, text, o) => findVersionsAhead([{ path: 'docs/x.md', content: text }],
+    version, o).map((h) => h.version);
+  const text = ['40.2.3 v40.2.4 40.2.5-rc.1 40.3.0 41.0.0 41.9.9 42.0.0 40.2.2 40.1.9 39.9.9',
+    'lib@40.9.9 @40.9.8 140.9.7 40.9.6.1 /40.9.5 a40.9.4 40.9'].join('\n');
+  assert.deepEqual(at('40.2.3', text), ['40.2.4', '40.2.5', '40.3.0', '41.0.0', '41.9.9']);
+  // a candidate: the release it becomes is ahead of it
+  assert.deepEqual(at('40.2.3-rc.1', '40.2.3 40.2.3-rc.2 40.2.2'), ['40.2.3', '40.2.3']);
+  // a bump inside a major only narrows the range; entering a major adds the one after it
+  assert.deepEqual(at('40.3.0', text), ['41.0.0', '41.9.9']);
+  assert.deepEqual(at('41.0.0-rc.1', text), ['41.0.0', '41.9.9', '42.0.0']);
+  assert.deepEqual(at('40.2.3', text, { majorsAhead: 0 }), ['40.2.4', '40.2.5', '40.3.0']);
+  // the allowlist of the current-version scan applies
+  for (const path of ['package.json', 'dist/index.html', '.ai/repo/x.md', 'CHANGELOG.md',
+    'docs/specs/v4.md']) {
+    assert.deepEqual(findVersionsAhead([{ path, content: '40.2.4' }], '40.2.3'), []);
+  }
+  assert.deepEqual(findVersionsAhead([{ path: 'a.png', content: Buffer.from('\u000040.2.4') }],
+    '40.2.3'), []);
+  const [hit] = findVersionsAhead([{ path: 'src/a.js', content: 'a\n  x 40.2.4 y\n' }], '40.2.3');
+  assert.deepEqual(hit, { version: '40.2.4', path: 'src/a.js', line: 2, text: 'x 40.2.4 y' });
 });
 
 test('the literal scan catches plain and v-prefixed copies and ignores look-alikes', () => {

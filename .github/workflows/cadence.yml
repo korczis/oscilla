@@ -1,0 +1,75 @@
+# Release cadence (rule project.deploy-often): releasable commits on main do not sit unreleased.
+# scripts/release-cadence.mjs fails this workflow while the oldest unreleased release-relevant
+# commit on main is more than 24 hours old, and keeps exactly one open issue titled
+# "release overdue" in step with the verdict (opened or updated while overdue, closed once a
+# release ships). It runs every hour, on every push to main (a merge can only add to the lag,
+# and the run shows it) and on every v* tag (the release that clears it).
+#
+# The second job runs the record-completeness check of rule project.release-flow-complete on
+# main itself (node scripts/release-record.mjs --complete): the unit job of ci.yml runs it only
+# for pull requests, so a tag that nobody recorded would otherwise first show as a red check on
+# someone else's pull request. It is red here, where the missing record is; it opens no issue.
+#
+# This check is not part of the required `gate`: the pull request that clears it is the release
+# itself, and a required red check would block that pull request.
+#
+# Token: the repository contents are only read. `issues: write` is the one write permission,
+# and only for the "release overdue" issue. Nothing is installed: the script uses Node built-ins
+# and git, so there is no `npm ci` and no cache to restore.
+name: Release cadence
+
+on:
+  schedule:
+    - cron: '17 * * * *'
+  push:
+    branches: [main]
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+# One verdict at a time, so two runs cannot both open the issue.
+concurrency:
+  group: cadence
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  cadence:
+    name: releasable commits are not older than 24 h
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      # Full history and tags: the unreleased range is "last v* tag reachable from HEAD..HEAD".
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+      - name: Oldest unreleased releasable commit is at most 24 h old (fatal)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node scripts/release-cadence.mjs --issue
+
+  records:
+    name: every published release in this history has its record
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    timeout-minutes: 5
+    steps:
+      # Full history and tags: the tags reachable from HEAD are the list of what is recorded.
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+      - name: Every v* tag past its publish window has a record in this checkout (fatal)
+        run: node scripts/release-record.mjs --complete
