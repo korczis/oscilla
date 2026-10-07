@@ -7,7 +7,8 @@
 // contributor has Majordomus installed:
 //
 //   - every claim in docs/CLAIMS.yaml: a known status; for a guaranteed claim, its source,
-//     implementation and test exist, and its test is run by a script CI runs;
+//     implementation and test exist, and its test is run by a script CI runs; an algorithm
+//     id in its prose is a current default, or a retained one on a line that says so;
 //   - every project rule's `x-majordomus` block names tests that exist and that CI runs, and
 //     claims that exist;
 //   - rule project.rules-name-their-enforcement: every active project rule without such a
@@ -35,17 +36,13 @@ import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { ALGORITHMS, isKnownAlgorithm } from '../../src/js/measurement/algorithms.js';
+import { parseClaims, staleAlgorithmIds, unquote } from './claims-parse.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const read = (rel) => readFileSync(path.join(ROOT, rel), 'utf8');
 const exists = (rel) => existsSync(path.join(ROOT, rel));
 const list = (rel) => readdirSync(path.join(ROOT, rel)).sort();
-const unquote = (v) => {
-  const t = v.trim();
-  if (t.startsWith("'") && t.endsWith("'")) return t.slice(1, -1).replace(/''/g, "'");
-  if (t.startsWith('"') && t.endsWith('"')) return t.slice(1, -1);
-  return t;
-};
 const flowList = (raw) => raw.trim().replace(/^\[|\]$/g, '').split(',').map(unquote)
   .filter(Boolean);
 
@@ -103,18 +100,7 @@ export function runByCi(rel) {
 // ---------------------------------------------------------------- records
 
 /** docs/CLAIMS.yaml as [{ id, claim, source, implementation, test, status, note }]. */
-function claims() {
-  const out = [];
-  let cur = null;
-  const text = read('docs/CLAIMS.yaml');
-  for (const line of text.slice(text.indexOf('\nclaims:\n')).split('\n')) {
-    const start = line.match(/^ {2}- id:\s*(\S+)/);
-    if (start) { cur = { id: start[1] }; out.push(cur); continue; }
-    const kv = cur && line.match(/^ {4}([a-z_]+):\s*(.*)$/);
-    if (kv) cur[kv[1]] = unquote(kv[2]);
-  }
-  return out;
-}
+const claims = () => parseClaims(read('docs/CLAIMS.yaml'));
 
 /** Front matter of a Markdown record: top-level scalars and flow lists, plus x-majordomus. */
 function frontMatter(rel, text = read(rel)) {
@@ -164,6 +150,45 @@ test('the test of every guaranteed claim is run by a script the CI workflow runs
   for (const c of CLAIMS.filter((x) => x.status === 'guaranteed')) {
     assert.ok(runByCi(c.test), `${c.id}: ${c.test} is run by CI (.github/workflows/ci.yml)`);
   }
+});
+
+test('the shared reader gives every claim record of the ledger, with its fields', () => {
+  const text = read('docs/CLAIMS.yaml');
+  const body = text.slice(text.indexOf('\nclaims:\n'));
+  const ids = [...body.matchAll(/^ {2}- id:\s*(\S+)/gm)].map(([, id]) => id);
+  assert.deepEqual(CLAIMS.map((c) => c.id), ids);
+  assert.equal(new Set(ids).size, ids.length, 'claim ids are unique');
+  assert.equal(CLAIMS.filter((c) => c.status === 'guaranteed').length,
+    [...body.matchAll(/^ {4}status: guaranteed$/gm)].length);
+  for (const c of CLAIMS) {
+    for (const key of ['claim', 'source', 'implementation', 'test', 'status']) {
+      assert.equal(typeof c[key], 'string', `${c.id}: ${key}`);
+    }
+  }
+  const one = parseClaims(
+    "x: 1\nclaims:\n  - id: a-b\n    claim: 'it''s so'\n    status: planned\n");
+  assert.deepEqual(one, [{ id: 'a-b', claim: "it's so", status: 'planned' }]);
+});
+
+// An algorithm id in claim prose is a statement about the code: a change that can alter a stored
+// number gets a new version (ADR 0024), so a claim that names a superseded version without
+// saying so describes a method the default no longer runs.
+const CURRENT_IDS = new Set(Object.values(ALGORITHMS));
+const ID_CHECK = { isCurrent: (id) => CURRENT_IDS.has(id), isKnown: isKnownAlgorithm };
+
+test('the algorithm-id check refuses an unknown id and an unmarked superseded one', () => {
+  const stale = (fields) => staleAlgorithmIds([{ id: 'x', ...fields }], ID_CHECK);
+  assert.deepEqual(stale({ note: 'The Farina inverse filter (oscilla.ir.farina-inverse.v1) is '
+    + 'the test oracle.' }),
+  ['x.note: oscilla.ir.farina-inverse.v1 is superseded and the line does not say it is retained']);
+  assert.deepEqual(stale({ claim: 'Rated by oscilla.confidence.v9.' }),
+    ['x.claim: oscilla.confidence.v9 is not an id this build knows']);
+  assert.deepEqual(stale({ note: 'oscilla.confidence.v1 to v3 are retained.' }), []);
+  assert.deepEqual(stale({ claim: `Rated by ${ALGORITHMS.quality}.`, test: 'tests/x.mjs' }), []);
+});
+
+test('every algorithm id in claim prose is a current default, or retained and said to be', () => {
+  assert.deepEqual(staleAlgorithmIds(CLAIMS, ID_CHECK), []);
 });
 
 // ---------------------------------------------------------------- rules
