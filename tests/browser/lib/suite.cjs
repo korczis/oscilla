@@ -13,6 +13,8 @@
 //     suite that launches nothing printed ALL PASS, and one mapped every unknown name to
 //     Chromium (#147);
 //   - a selected browser that ran 0 checks (exit 1);
+//   - an engine launched outside the selection, an engine launched before ready() resolved,
+//     and a selected browser whose own engine was never launched (its checks ran on another);
 //   - under CI, a skip that tests/README.md does not list with a reason;
 //   - outside CI, a start while the machine is too loaded to measure the product: it waits,
 //     bounded, for the 1-minute load average to fall below OSC_LOAD_MAX (default 2 x cores).
@@ -25,6 +27,7 @@ const os = require('os');
 const path = require('path');
 const { bounded } = require('./wait.cjs');
 
+const RULE = 'project.suite-harness';
 const KNOWN_BROWSERS = Object.freeze(['chromium', 'firefox', 'webkit']);
 const KNOWN_ORIGINS = Object.freeze(['file', 'http']);
 const README = path.resolve(__dirname, '..', '..', 'README.md');
@@ -35,9 +38,10 @@ const LOAD_POLL_MS = 5000;
 // Properties a runtime probes on any object (await, JSON, util.inspect, ESM interop).
 const BENIGN_PROPS = new Set(['then', 'toJSON', 'inspect', 'default', '__esModule', 'constructor']);
 
+// Both name the rule, so a failure in a CI log says where the contract is written.
 class UsageError extends Error {
   constructor(message) {
-    super(message);
+    super(`${RULE}: ${message}`);
     this.name = 'UsageError';
     this.exitCode = EXIT_USAGE;
   }
@@ -45,7 +49,7 @@ class UsageError extends Error {
 
 class SuiteError extends Error {
   constructor(message) {
-    super(message);
+    super(`${RULE}: ${message}`);
     this.name = 'SuiteError';
   }
 }
@@ -152,6 +156,10 @@ async function loadGate({
 // page.evaluate has no timeout of its own: a page function that never returns holds the suite
 // until the CI job is killed (#153). Every page of a browser launched through the harness
 // answers within OSC_EVALUATE_MS of wall time or rejects with the function it was running.
+// The same holds for the page's evaluateHandle, $eval and $$eval. A frame, a worker, a
+// locator and an element handle keep Playwright's own unbounded evaluate.
+const PAGE_EVALUATES = Object.freeze({ evaluate: 0, evaluateHandle: 0, $eval: 1, $$eval: 1 });
+
 function describeFn(fn) {
   const text = String(fn).replace(/\s+/g, ' ').trim();
   return text.length > 120 ? `${text.slice(0, 117)}...` : text;
@@ -159,9 +167,12 @@ function describeFn(fn) {
 
 function boundPage(page, ms) {
   if (!page || page.oscillaBounded) return page;
-  const evaluate = page.evaluate.bind(page);
-  page.evaluate = (fn, ...rest) => bounded(evaluate(fn, ...rest),
-    { ms, what: `page.evaluate(${describeFn(fn)})` });
+  for (const [method, fnAt] of Object.entries(PAGE_EVALUATES)) {
+    if (typeof page[method] !== 'function') continue;
+    const original = page[method].bind(page);
+    page[method] = (...a) => bounded(original(...a),
+      { ms, what: `page.${method}(${describeFn(a[fnAt])})` });
+  }
   page.oscillaBounded = true;
   return page;
 }
@@ -196,10 +207,11 @@ function evaluateMs(env = process.env) {
   return Number.isFinite(given) && given > 0 ? given : DEFAULT_EVALUATE_MS;
 }
 
-// The playwright module with two changes: an engine is reachable by a known name only (an
-// unknown one throws instead of being undefined or a default), and every browser it launches
-// or connects to hands out pages whose evaluate is bounded.
-function boundPlaywright(playwright, { ms = evaluateMs() } = {}) {
+// The playwright module with three changes: an engine is reachable by a known name only (an
+// unknown one throws instead of being undefined or a default), every browser it launches or
+// connects to hands out pages whose evaluate is bounded, and `onLaunch(name, how)` is told of
+// every start before it happens, so the run knows which engines its checks ran on.
+function boundPlaywright(playwright, { ms = evaluateMs(), onLaunch = () => {} } = {}) {
   const engines = new Map();
   const engine = (name) => {
     if (!engines.has(name)) {
@@ -208,10 +220,22 @@ function boundPlaywright(playwright, { ms = evaluateMs() } = {}) {
         get(target, prop) {
           const value = target[prop];
           if (prop === 'launch' || prop === 'connect' || prop === 'connectOverCDP') {
-            return async (...a) => boundBrowser(await value.apply(target, a), ms);
+            return async (...a) => {
+              onLaunch(name, prop);
+              return boundBrowser(await value.apply(target, a), ms);
+            };
           }
           if (prop === 'launchPersistentContext') {
-            return async (...a) => boundContext(await value.apply(target, a), ms);
+            return async (...a) => {
+              onLaunch(name, prop);
+              return boundContext(await value.apply(target, a), ms);
+            };
+          }
+          if (prop === 'launchServer') {
+            return async (...a) => {
+              onLaunch(name, prop);
+              return value.apply(target, a);
+            };
           }
           return typeof value === 'function' ? value.bind(target) : value;
         },
@@ -245,11 +269,33 @@ function createRun({
   env = process.env,
   readme = README,
   log = console.log,
+  // eslint-disable-next-line global-require
+  playwright = () => require('playwright'),
 } = {}) {
   if (typeof name !== 'string' || !name) throw new TypeError('suite: name is required');
   const counts = new Map(browsers.map((b) => [b, 0]));
+  const launched = new Set();
   const skips = [];
-  const state = { failed: [] };
+  const state = { failed: [], ready: false };
+  const fail = (message) => {
+    const error = new SuiteError(message);
+    state.failed.push(error.message);
+    return error;
+  };
+
+  // Told of every engine start before it happens. A check is only as good as the engine it
+  // ran on: #147 ran every leg but Firefox's on Chromium, under the selected browser's label.
+  const onLaunch = (engine, how) => {
+    if (!browsers.includes(engine)) {
+      throw fail(`[${name}] ${how} of the ${engine} engine, which is not in the selection `
+        + `(${browsers.join(', ')}); a leg runs on the engine it is named after`);
+    }
+    if (!state.ready) {
+      throw fail(`[${name}] ${how} of the ${engine} engine before RUN.ready() resolved; the `
+        + 'load gate comes before any browser');
+    }
+    launched.add(engine);
+  };
 
   const count = (leg, n) => {
     const browser = legBrowser(leg, browsers);
@@ -266,8 +312,7 @@ function createRun({
     origins,
     get playwright() {
       // Loaded on first use: parsing a selection (and refusing a bad one) needs no browser.
-      // eslint-disable-next-line global-require
-      if (!run.boundPlaywright) run.boundPlaywright = boundPlaywright(require('playwright'));
+      if (!run.boundPlaywright) run.boundPlaywright = boundPlaywright(playwright(), { onLaunch });
       return run.boundPlaywright;
     },
     // One executed check of `leg`; the leg starts with its browser ("chromium", "webkit/http",
@@ -279,10 +324,8 @@ function createRun({
     // nothing or filtered everything away, and "0 failures" would read as a pass.
     reportLeg({ leg, checks } = {}) {
       if (!(Number.isInteger(checks) && checks > 0)) {
-        const message = `[${name}] leg ${leg} ran ${checks === undefined ? 'no' : checks} `
-          + 'checks; a leg that checks nothing cannot pass';
-        state.failed.push(message);
-        throw new SuiteError(message);
+        throw fail(`[${name}] leg ${leg} ran ${checks === undefined ? 'no' : checks} `
+          + 'checks; a leg that checks nothing cannot pass');
       }
       count(leg, checks);
     },
@@ -296,26 +339,31 @@ function createRun({
       if (isCi(env)) {
         const listed = declaredSkips(fs.readFileSync(readme, 'utf8'));
         if (!listed.has(key)) {
-          const message = `[${name}] skip \`${key}\` on ${leg} (${reason}) is not listed with a `
-            + 'reason under "Declared skips" in tests/README.md; CI does not skip silently';
-          state.failed.push(message);
-          throw new SuiteError(message);
+          throw fail(`[${name}] skip \`${key}\` on ${leg} (${reason}) is not listed with a `
+            + 'reason under "Declared skips" in tests/README.md; CI does not skip silently');
         }
       }
       skips.push({ leg: String(leg), id, reason });
       log(`SKIP [${leg}] ${key}: ${reason}`);
     },
-    ready(overrides = {}) {
-      return loadGate({ env, label: name, log, ...overrides });
+    async ready(overrides = {}) {
+      const gate = await loadGate({ env, label: name, log, ...overrides });
+      state.ready = true;
+      return gate;
     },
     counts: () => Object.fromEntries(counts),
+    launched: () => [...launched],
     skips: () => skips.slice(),
     // What the process may exit with: `code` unless it would pass a run that proved nothing.
     verdict(code) {
       const problems = state.failed.slice();
       for (const [browser, n] of counts) {
         if (n === 0) {
-          problems.push(`[${name}] ${browser} ran 0 checks; a leg that checks nothing cannot pass`);
+          problems.push(`${RULE}: [${name}] ${browser} ran 0 checks; a leg that checks nothing `
+            + 'cannot pass');
+        } else if (!launched.has(browser)) {
+          problems.push(`${RULE}: [${name}] ${browser} counted ${n} check(s) but its engine was `
+            + 'never launched through RUN.playwright; they ran on another engine or on none');
         }
       }
       return { code: code === 0 && problems.length ? 1 : code, problems };
@@ -327,7 +375,7 @@ function createRun({
 // Open the suite's run for this process: parse the selection (exit 2 on a refusal) and hold
 // the exit code to the verdict.
 function open({ name, browsers, origins, defaultBrowsers, knownOrigins, defaultOrigins,
-  env = process.env } = {}) {
+  env = process.env, playwright } = {}) {
   let run;
   try {
     const selected = select({ flag: browsers, env, envName: 'OSC_BROWSERS',
@@ -336,7 +384,8 @@ function open({ name, browsers, origins, defaultBrowsers, knownOrigins, defaultO
       ? select({ flag: origins, env, envName: 'OSC_ORIGINS',
         known: knownOrigins || KNOWN_ORIGINS, what: 'origin', fallback: defaultOrigins })
       : null;
-    run = createRun({ name, browsers: selected, origins: selectedOrigins, env });
+    run = createRun({ name, browsers: selected, origins: selectedOrigins, env,
+      ...(playwright ? { playwright: () => playwright } : {}) });
   } catch (error) {
     if (!(error instanceof UsageError)) throw error;
     console.error(`[${name}] ${error.message}`);
@@ -354,6 +403,7 @@ function open({ name, browsers, origins, defaultBrowsers, knownOrigins, defaultO
 }
 
 module.exports = {
+  RULE,
   KNOWN_BROWSERS,
   KNOWN_ORIGINS,
   DEFAULT_EVALUATE_MS,

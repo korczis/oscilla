@@ -651,7 +651,7 @@ async function main() {
   const base = `http://127.0.0.1:${server.address().port}`;
   const shot = opt('--screenshot');
   if (shot) {
-    const browser = await launch('chromium');
+    const browser = await launch(ENGINES[0]);
     const page = await browser.newPage({ viewport: { width: 1536, height: 1024 } });
     await page.goto(`${base}/labs-visual.html`);
     // timing-allow: --screenshot is a manual diagnostic, never a check; 11 s of the visual fixture

@@ -398,6 +398,7 @@ async function benchOne(name, url, cfg) {
     }
     // Retained 1.5 s later: an inline analysis leaves its garbage in the page heap until the
     // page's next GC; a terminated Worker returns its heap at once.
+    // timing-allow: the retained reading is defined 1.5 s after the analysis ends
     await page.evaluate(() => new Promise((r) => setTimeout(r, 1500)));
     if (!rss) return { ...out, baseMiB: null, peakDeltaMiB: null, afterDeltaMiB: null };
     const after = rss(pid);

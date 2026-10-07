@@ -4,8 +4,9 @@
 // Static half: each entry suite under tests/browser opens its run through the harness, takes
 // playwright from it, tallies or reports its legs, and parses no selection of its own.
 // Behavioural half: the harness refuses an empty or unknown selection with exit 2, fails a leg
-// or a browser that ran 0 checks, fails an undeclared skip under CI, and holds a start on a
-// loaded machine (bounded, and never under CI).
+// or a browser that ran 0 checks, refuses an engine outside the selection or before the load
+// gate, fails a selected browser whose own engine never started, fails an undeclared skip
+// under CI, and holds a start on a loaded machine (bounded, and never under CI).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
@@ -47,20 +48,35 @@ function contractProblems(file, source) {
   if (!opened.some((o) => new RegExp(`['"]${name}['"]$`).test(o))) {
     problems.push(`does not open its run with suite.open({ name: '${name}', ... })`);
   }
-  if (!/\.\s*ready\s*\(/.test(code)) problems.push('never awaits the load gate (RUN.ready())');
+  if (!/\bawait\s+[\w$.]+\s*\.\s*ready\s*\(/.test(code)) {
+    problems.push('never awaits the load gate (await RUN.ready())');
+  }
   if (!/\.\s*(?:tally|reportLeg)\s*\(/.test(code)) {
     problems.push('never tallies a check or reports a leg (RUN.tally / RUN.reportLeg)');
   }
-  if (/process\s*\.\s*env\s*\.\s*OSC_(?:BROWSERS|ORIGINS)\b/.test(code)) {
+  // The variable by any spelling: process.env.X, process.env['X'], a destructured X.
+  if (/\bOSC_(?:BROWSERS|ORIGINS)\b/.test(code)
+    || literal(/(['"`])\s*\1/g).some((t) => /^.OSC_(?:BROWSERS|ORIGINS).$/.test(t))) {
     problems.push('reads OSC_BROWSERS / OSC_ORIGINS itself instead of through the harness');
   }
   if (literal(/\brequire\s*\(\s*(['"])\s*\1\s*\)/g).some((r) => /['"]playwright/.test(r))) {
     problems.push("requires 'playwright' directly instead of RUN.playwright");
   }
-  // An engine picked by a comparison with a default branch, or named outright, runs under
-  // another browser's label when the selection is something else.
-  if (/===\s*(['"])\s*\1\s*\?[^;:]*:\s*[\w.]*\b(?:chromium|firefox|webkit)\b/.test(code)
-    || /\b(?:playwright|pw)\s*\.\s*(?:chromium|firefox|webkit)\b/.test(code)) {
+  // An engine picked by a comparison with a default branch, named outright, destructured, or
+  // indexed by anything but a name, runs under another browser's label when the selection is
+  // something else. The harness refuses such a launch at run time whatever its spelling; this
+  // is the same refusal before a browser job has to find it.
+  const modules = ['playwright', 'pw'];
+  for (const m of code.matchAll(/\b(?:const|let|var)\s+([\w$]+)\s*=\s*[\w$.]*\.\s*playwright\b/g)) {
+    modules.push(m[1]);
+  }
+  const mod = `(?:${[...new Set(modules)].join('|')})`;
+  const ENGINE = String.raw`(?:chromium|firefox|webkit)`;
+  const indexes = [...code.matchAll(new RegExp(String.raw`\b${mod}\s*\[([^\]]*)\]`, 'g'))];
+  if (new RegExp(String.raw`===\s*(['"])\s*\1\s*\?[^;:]*:\s*[\w.]*\b${ENGINE}\b`).test(code)
+    || new RegExp(String.raw`\b${mod}\s*\.\s*${ENGINE}\b`).test(code)
+    || new RegExp(String.raw`\{[^{}]*\b${ENGINE}\b[^{}]*\}\s*=\s*[\w$.]*\b${mod}\b`).test(code)
+    || indexes.some((m) => !/^\s*[\w$.]+\s*$/.test(m[1]))) {
     problems.push('names a browser engine outright (a default engine); index RUN.playwright '
       + 'by the selected name');
   }
@@ -77,7 +93,8 @@ test('every entry suite under tests/browser runs through the harness', () => {
       assert.notDeepEqual(problems, [],
         `${file} conforms now; remove it from PENDING in this test`);
     } else {
-      assert.deepEqual(problems, [], `tests/browser/${file}:\n  ${problems.join('\n  ')}`);
+      assert.deepEqual(problems, [],
+        `${suite.RULE}: tests/browser/${file}:\n  ${problems.join('\n  ')}`);
     }
   }
   for (const file of Object.keys(PENDING)) {
@@ -94,44 +111,78 @@ test('every entry suite is run by a package script', () => {
   }
 });
 
+// A conforming suite, as text: the mutations below are made on it, not on a line of a real
+// suite that a legitimate edit could reword.
+const CONFORMING = [
+  "const suite = require('./lib/suite.cjs');",
+  "const RUN = suite.open({ name: 'x' });",
+  'const playwright = RUN.playwright;',
+  'function check(leg, ok) {',
+  '  RUN.tally(leg);',
+  '  return ok;',
+  '}',
+  '(async () => {',
+  '  await RUN.ready();',
+  '  for (const b of RUN.browsers) {',
+  '    const browser = await playwright[b].launch();',
+  "    check(b, Boolean(browser));",
+  '  }',
+  '})();',
+].join('\n');
+const mutated = (from, to) => {
+  const out = CONFORMING.replace(from, to);
+  assert.notEqual(out, CONFORMING, `the text to mutate exists: ${from}`);
+  return contractProblems('x.cjs', out);
+};
+
 test('mutation: a suite that parses OSC_BROWSERS itself is out of the contract', () => {
-  const dsp = read('dsp.cjs');
-  assert.deepEqual(contractProblems('dsp.cjs', dsp), []);
-  const reverted = dsp.replace('const targets = RUN.browsers.map(',
-    "const names = (process.env.OSC_BROWSERS || '').split(',');\n  const targets = names.map(");
-  assert.notEqual(reverted, dsp, 'the line to revert exists');
-  assert.deepEqual(contractProblems('dsp.cjs', reverted),
-    ['reads OSC_BROWSERS / OSC_ORIGINS itself instead of through the harness']);
+  assert.deepEqual(contractProblems('x.cjs', CONFORMING), []);
+  const reads = ['reads OSC_BROWSERS / OSC_ORIGINS itself instead of through the harness'];
+  for (const names of [
+    "(process.env.OSC_BROWSERS || '').split(',')",
+    "(process.env['OSC_BROWSERS'] || '').split(',')",
+    '(process.env["OSC_ORIGINS"] || "").split(",")',
+    "(({ OSC_BROWSERS = '' }) => OSC_BROWSERS.split(','))(process.env)",
+    "(process.env[`OSC_BROWSERS`] || '').split(',')",
+  ]) {
+    assert.deepEqual(mutated('of RUN.browsers', `of ${names}`), reads, names);
+  }
 });
 
 test('mutation: a default engine, raw playwright or a missing tally is out of the contract', () => {
-  const base = [
-    "const suite = require('./lib/suite.cjs');",
-    "const RUN = suite.open({ name: 'x' });",
-    'const playwright = RUN.playwright;',
-    '(async () => {',
-    '  await RUN.ready();',
-    '  for (const b of RUN.browsers) {',
-    '    const browser = await playwright[b].launch(); RUN.tally(b);',
-    '  }',
-    '})();',
-  ].join('\n');
-  assert.deepEqual(contractProblems('x.cjs', base), []);
-  const fallback = base.replace('playwright[b].launch()',
-    "(b === 'firefox' ? playwright.firefox : playwright.chromium).launch()");
-  assert.equal(contractProblems('x.cjs', fallback).length, 1);
-  assert.match(contractProblems('x.cjs', fallback)[0], /names a browser engine outright/);
-  assert.match(contractProblems('x.cjs', base.replace('RUN.playwright',
-    "require('playwright')"))[0], /requires 'playwright' directly/);
-  assert.match(contractProblems('x.cjs', base.replace(' RUN.tally(b);', ''))[0],
-    /never tallies a check/);
-  assert.match(contractProblems('x.cjs', base.replace('  await RUN.ready();\n', ''))[0],
+  const outright = /names a browser engine outright/;
+  for (const engine of [
+    // the #147 defect in each spelling: any name but firefox runs Chromium under its label
+    "(b === 'firefox' ? playwright.firefox : playwright.chromium)",
+    "(b === 'firefox' ? firefox : chromium)",
+    'playwright[b === "firefox" ? "firefox" : "chromium"]',
+    "(b === 'firefox' ? playwright[b] : playwright['chromium'])",
+    'playwright.chromium',
+    "playwright['webkit']",
+    'RUN.playwright.chromium',
+  ]) {
+    const problems = mutated('playwright[b]', engine);
+    assert.equal(problems.length, 1, engine);
+    assert.match(problems[0], outright, engine);
+  }
+  assert.match(mutated('const playwright = RUN.playwright;',
+    'const { chromium } = RUN.playwright; const playwright = { webkit: chromium };')[0], outright);
+  assert.match(mutated('const playwright = RUN.playwright;',
+    'const types = RUN.playwright; const playwright = { webkit: types.chromium };')[0], outright);
+  assert.match(mutated('RUN.playwright', "require('playwright')")[0],
+    /requires 'playwright' directly/);
+  assert.match(mutated('  RUN.tally(leg);\n', '')[0], /never tallies a check/);
+  assert.match(mutated('  await RUN.ready();\n', '')[0], /never awaits the load gate/);
+  // Called and not awaited: the suite would launch while the gate is still waiting.
+  assert.match(mutated('  await RUN.ready();\n', '  RUN.ready();\n')[0],
     /never awaits the load gate/);
-  assert.match(contractProblems('y.cjs', base)[0], /does not open its run with suite\.open/);
-  // Words in comments and strings are not code.
+  assert.match(contractProblems('y.cjs', CONFORMING)[0], /does not open its run with suite\.open/);
+  // Words in comments and strings are not code, and a browser name in a condition is not an
+  // engine: a check may differ per browser.
   assert.deepEqual(contractProblems('x.cjs',
-    `${base}\n// process.env.OSC_BROWSERS, require('playwright')\n`
-    + "const s = 'playwright.chromium';"),
+    `${CONFORMING}\n// process.env.OSC_BROWSERS, require('playwright')\n`
+    + "const s = 'playwright.chromium'; const usage = 'set OSC_BROWSERS=webkit to run one';\n"
+    + "const key = (b) => (b === 'webkit' ? 'Alt+Tab' : 'Tab');"),
   []);
 });
 
@@ -177,7 +228,8 @@ test('open exits 2 on a refused selection and names it', () => {
   for (const value of ['bogus', '', 'chromium,nope']) {
     const r = child(`${OPEN} console.log('ran');`, { OSC_BROWSERS: value });
     assert.equal(r.status, 2, `OSC_BROWSERS=${JSON.stringify(value)}: ${r.stderr}`);
-    assert.match(r.stderr, /^\[probe\] (unknown browser\(s\)|empty browser list)/);
+    assert.match(r.stderr,
+      /^\[probe\] project\.suite-harness: (unknown browser\(s\)|empty browser list)/);
     assert.doesNotMatch(r.stdout, /ran/);
   }
   const origin = child(`require(${JSON.stringify(SUITE_LIB)}).open({ name: 'probe', `
@@ -206,6 +258,45 @@ test('every migrated suite exits 2 on an unknown and on an empty OSC_BROWSERS', 
 // ------------------------------------------------------------------------- 0 checks
 const quiet = { log: () => {} };
 
+// Stands in for the playwright module: engines that start browsers whose pages answer, or
+// never do. Self-contained, so a child process can run its source.
+function fakePlaywright() {
+  const answer = (fn) => (fn === 'hang' ? new Promise(() => {}) : Promise.resolve(`ran ${fn}`));
+  const page = () => ({
+    evaluate: answer,
+    evaluateHandle: answer,
+    $eval: (selector, fn) => answer(fn),
+    $$eval: (selector, fn) => answer(fn),
+    context() { return this.ctx; },
+  });
+  const context = () => {
+    const ctx = { listeners: [], pages: () => [], on(ev, fn) { ctx.listeners.push([ev, fn]); } };
+    ctx.newPage = async () => Object.assign(page(), { ctx });
+    return ctx;
+  };
+  const browser = () => {
+    const b = { contexts: () => [], newContext: async () => context() };
+    b.newPage = async () => (await context().newPage());
+    return b;
+  };
+  const type = (name) => ({ name: () => name, launch: async () => browser(),
+    connect: async () => browser(), launchServer: async () => ({ wsEndpoint: () => 'ws://x' }) });
+  return { chromium: type('chromium'), firefox: type('firefox'), webkit: type('webkit'),
+    devices: {} };
+}
+
+const FAKE_PLAYWRIGHT = `(${fakePlaywright})()`;
+const IDLE = { loadavg: () => [0, 0, 0] };
+
+// A run past its load gate whose selected engines have all started, as a suite's is by the
+// time it counts a check.
+async function started(options) {
+  const run = suite.createRun({ name: 's', playwright: fakePlaywright, ...quiet, ...options });
+  await run.ready(IDLE);
+  for (const browser of run.browsers) await run.playwright[browser].launch();
+  return run;
+}
+
 test('reportLeg throws on a leg that ran 0 checks, and the run cannot pass afterwards', () => {
   const run = suite.createRun({ name: 's', browsers: ['chromium'], ...quiet });
   assert.throws(() => run.reportLeg({ leg: 'chromium/file', checks: 0 }),
@@ -216,14 +307,14 @@ test('reportLeg throws on a leg that ran 0 checks, and the run cannot pass after
   assert.equal(run.verdict(0).code, 1, 'a later leg does not redeem the empty one');
 });
 
-test('the verdict fails a selected browser that ran 0 checks', () => {
-  const run = suite.createRun({ name: 's', browsers: ['chromium', 'webkit'], ...quiet });
+test('the verdict fails a selected browser that ran 0 checks', async () => {
+  const run = await started({ browsers: ['chromium', 'webkit'] });
   run.tally('chromium 141.0');
   run.tally('chromium/file', 2);
   assert.deepEqual(run.counts(), { chromium: 3, webkit: 0 });
   const verdict = run.verdict(0);
   assert.equal(verdict.code, 1);
-  assert.match(verdict.problems[0], /\[s\] webkit ran 0 checks/);
+  assert.match(verdict.problems[0], /^project\.suite-harness: \[s\] webkit ran 0 checks/);
   run.reportLeg({ leg: 'webkit/http', checks: 1 });
   assert.deepEqual(run.verdict(0), { code: 0, problems: [] });
   assert.equal(run.verdict(1).code, 1, 'a failing exit code is kept');
@@ -231,22 +322,95 @@ test('the verdict fails a selected browser that ran 0 checks', () => {
 
 test('a check that belongs to no selected browser is refused', () => {
   const run = suite.createRun({ name: 's', browsers: ['chromium'], ...quiet });
-  assert.throws(() => run.tally('firefox'), /names none of the selected browsers/);
+  assert.throws(() => run.tally('firefox'),
+    /^SuiteError: project\.suite-harness: \[s\] leg "firefox" names none of the selected browsers/);
   assert.throws(() => run.tally('chromiumx'), /names none of the selected browsers/);
   assert.throws(() => run.tally(''), /names none of the selected browsers/);
 });
 
+// A suite process on the fake engines: `body` runs past the load gate with `run` in scope.
+const PROBE = (body) => `const run = require(${JSON.stringify(SUITE_LIB)}).open({ name: 'probe', `
+  + `playwright: ${FAKE_PLAYWRIGHT} });`
+  + `run.ready({ loadavg: () => [0, 0, 0] }).then(async () => { ${body} })`
+  + '.catch((e) => { console.error(String(e)); process.exit(3); });';
+
 test('a suite process that ran 0 checks exits 1 whatever it asked to exit with', () => {
   const none = child(`${OPEN} process.exit(0);`, { OSC_BROWSERS: 'webkit' });
   assert.equal(none.status, 1, none.stderr);
-  assert.match(none.stderr, /FAIL \[probe\] webkit ran 0 checks/);
-  const one = child(`${OPEN} run.tally('webkit'); console.log('ALL PASS'); process.exit(0);`,
-    { OSC_BROWSERS: 'webkit' });
+  assert.match(none.stderr, /FAIL project\.suite-harness: \[probe\] webkit ran 0 checks/);
+  const one = child(PROBE("await run.playwright.webkit.launch(); run.tally('webkit'); "
+    + "console.log('ALL PASS'); process.exit(0);"), { OSC_BROWSERS: 'webkit' });
   assert.equal(one.status, 0, one.stderr);
-  const half = child(`${OPEN} run.tally('chromium');`, { OSC_BROWSERS: 'chromium,firefox' });
+  const half = child(PROBE("await run.playwright.chromium.launch(); run.tally('chromium');"),
+    { OSC_BROWSERS: 'chromium,firefox' });
   assert.equal(half.status, 1);
-  assert.match(half.stderr, /FAIL \[probe\] firefox ran 0 checks/);
+  assert.match(half.stderr, /FAIL project\.suite-harness: \[probe\] firefox ran 0 checks/);
   for (const r of [none, one, half]) assert.match(r.stdout, /\[probe\] load [\d.]+ at end/);
+});
+
+// ------------------------------------------------------- the engine a leg really ran on
+test('an engine outside the selection cannot be launched, and the run cannot pass', async () => {
+  const run = suite.createRun({ name: 's', browsers: ['webkit'], playwright: fakePlaywright,
+    ...quiet });
+  await run.ready(IDLE);
+  const { chromium } = run.playwright;
+  for (const how of ['launch', 'connect', 'launchServer']) {
+    await assert.rejects(chromium[how](), (e) => e instanceof suite.SuiteError
+      && e.message === `project.suite-harness: [s] ${how} of the chromium engine, which is not `
+        + 'in the selection (webkit); a leg runs on the engine it is named after');
+  }
+  assert.deepEqual(run.launched(), []);
+  // Caught by the suite and tallied under the selected label all the same: still a failure.
+  run.tally('webkit');
+  assert.equal(run.verdict(0).code, 1);
+});
+
+test('a selected browser whose own engine never started fails, whatever it tallied', async () => {
+  const run = suite.createRun({ name: 's', browsers: ['chromium', 'webkit'],
+    playwright: fakePlaywright, ...quiet });
+  await run.ready(IDLE);
+  // Both legs on Chromium: the #147 defect, with every check counted.
+  await run.playwright.chromium.launch();
+  run.tally('chromium');
+  await run.playwright.chromium.launch();
+  run.tally('webkit', 12);
+  const verdict = run.verdict(0);
+  assert.equal(verdict.code, 1);
+  assert.deepEqual(verdict.problems, ['project.suite-harness: [s] webkit counted 12 check(s) but '
+    + 'its engine was never launched through RUN.playwright; they ran on another engine or on '
+    + 'none']);
+  await run.playwright.webkit.launch();
+  assert.deepEqual(run.verdict(0), { code: 0, problems: [] });
+  assert.deepEqual(run.launched(), ['chromium', 'webkit']);
+});
+
+test('an engine cannot be launched before the load gate has let the suite start', async () => {
+  const run = suite.createRun({ name: 's', browsers: ['webkit'], playwright: fakePlaywright,
+    ...quiet });
+  await assert.rejects(run.playwright.webkit.launch(),
+    /^SuiteError: project\.suite-harness: \[s\] launch of the webkit engine before RUN\.ready\(\)/);
+  await run.ready(IDLE);
+  await run.playwright.webkit.launch();
+  run.tally('webkit');
+  assert.equal(run.verdict(0).code, 1, 'the early launch stays a failure of the run');
+});
+
+test('a suite process that runs a selected leg on another engine exits 1', () => {
+  // Selected webkit, launched chromium, tallied as webkit: what `const { chromium } =
+  // playwright` did under every label, in any spelling the static test does not read.
+  const swapped = child(PROBE('const { chromium } = run.playwright; '
+    + "try { await chromium.launch(); } catch (e) { console.log('refused'); } "
+    + "run.tally('webkit'); console.log('ALL PASS'); process.exit(0);"),
+  { OSC_BROWSERS: 'webkit' });
+  assert.equal(swapped.status, 1, swapped.stderr);
+  assert.match(swapped.stdout, /refused/);
+  assert.match(swapped.stderr, new RegExp('FAIL project\\.suite-harness: \\[probe\\] launch of '
+    + 'the chromium engine, which is not in the selection \\(webkit\\)'));
+  // Selected webkit and no engine at all, with a tally.
+  const none = child(PROBE("run.tally('webkit'); process.exit(0);"), { OSC_BROWSERS: 'webkit' });
+  assert.equal(none.status, 1, none.stderr);
+  assert.match(none.stderr, new RegExp('FAIL project\\.suite-harness: \\[probe\\] webkit counted '
+    + '1 check\\(s\\) but its engine was never launched'));
 });
 
 // ------------------------------------------------------------------------------- skips
@@ -395,14 +559,19 @@ test('the gate is bounded: a load that stays high ends in a named failure', asyn
 });
 
 test('the gate of a real process: bounded on a loaded machine, immediate under CI', () => {
-  const script = `const run = require(${JSON.stringify(SUITE_LIB)}).open({ name: 'probe' });`
-    + "run.ready().then(() => { run.tally('chromium'); console.log('started'); },"
+  // The clock, the timer and the exit are real; only the load is given, so the test does not
+  // depend on what the host reports (0 on a platform without a load average).
+  const script = `const run = require(${JSON.stringify(SUITE_LIB)}).open({ name: 'probe', `
+    + `playwright: ${FAKE_PLAYWRIGHT} });`
+    + 'run.ready({ loadavg: () => [100, 0, 0] }).then(async () => { '
+    + "await run.playwright.chromium.launch(); run.tally('chromium'); console.log('started'); },"
     + '(e) => { console.error(e.message); process.exit(3); });';
-  const env = { OSC_BROWSERS: 'chromium', OSC_LOAD_MAX: '0.000001', OSC_LOAD_WAIT_MS: '1000' };
+  const env = { OSC_BROWSERS: 'chromium', OSC_LOAD_MAX: '36', OSC_LOAD_WAIT_MS: '1000' };
   const t0 = Date.now();
   const held = child(script, env);
   assert.equal(held.status, 3, held.stderr);
-  assert.match(held.stderr, /load gate: the 1-minute load average [\d.]+ stayed at or above/);
+  assert.match(held.stderr, new RegExp('^project\\.suite-harness: \\[probe\\] load gate: the '
+    + '1-minute load average 100\\.00 stayed at or above'));
   assert.doesNotMatch(held.stdout, /started/);
   assert.ok(Date.now() - t0 < 30000, 'the bound is honoured');
   const ci = child(script, { ...env, CI: '1' });
@@ -411,27 +580,6 @@ test('the gate of a real process: bounded on a loaded machine, immediate under C
 });
 
 // ------------------------------------------------------------------- engines and evaluate
-function fakePlaywright() {
-  const page = () => ({
-    evaluate: (fn) => (fn === 'hang' ? new Promise(() => {}) : Promise.resolve(`ran ${fn}`)),
-    context() { return this.ctx; },
-  });
-  const context = () => {
-    const ctx = { listeners: [], pages: () => [], on(ev, fn) { ctx.listeners.push([ev, fn]); } };
-    ctx.newPage = async () => Object.assign(page(), { ctx });
-    return ctx;
-  };
-  const browser = () => {
-    const b = { contexts: () => [], newContext: async () => context() };
-    b.newPage = async () => (await context().newPage());
-    return b;
-  };
-  const type = (name) => ({ name: () => name, launch: async () => browser(),
-    connect: async () => browser(), launchServer: async () => ({ wsEndpoint: () => 'ws://x' }) });
-  return { chromium: type('chromium'), firefox: type('firefox'), webkit: type('webkit'),
-    devices: {} };
-}
-
 test('an engine is reachable by a known name only; nothing maps to a default', () => {
   const pw = suite.boundPlaywright(fakePlaywright(), { ms: 50 });
   assert.equal(pw.webkit.name(), 'webkit');
@@ -457,6 +605,14 @@ test('page.evaluate of every harness page is bounded and names its function', as
       assert.ok(Date.now() - t0 < 2000);
     }
   }
+  // The page's other evaluating calls carry the same bound; the function is the 2nd argument
+  // of $eval and $$eval.
+  const page = await (await pw.webkit.launch()).newPage();
+  assert.equal(await page.evaluateHandle('quick'), 'ran quick');
+  await assert.rejects(page.evaluateHandle('hang'), /^WaitTimeout: page\.evaluateHandle\(hang\): /);
+  assert.equal(await page.$eval('#a', 'quick'), 'ran quick');
+  await assert.rejects(page.$eval('#a', 'hang'), /^WaitTimeout: page\.\$eval\(hang\): /);
+  await assert.rejects(page.$$eval('.b', 'hang'), /^WaitTimeout: page\.\$\$eval\(hang\): /);
   // A popup the page opens arrives through the context's page event.
   const ctx = await (await pw.firefox.launch()).newContext();
   const popup = { evaluate: () => new Promise(() => {}) };

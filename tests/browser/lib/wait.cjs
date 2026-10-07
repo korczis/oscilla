@@ -32,10 +32,12 @@ function describe(value) {
 
 function requireBound(fn, ms, what) {
   if (!(Number.isFinite(ms) && ms > 0)) {
-    throw new TypeError(`${fn}: ms must be a positive wall-clock deadline in milliseconds`);
+    throw new TypeError(`${fn}: ms must be a positive wall-clock deadline in milliseconds `
+      + '(project.bounded-test-timing)');
   }
   if (typeof what !== 'string' || !what.trim()) {
-    throw new TypeError(`${fn}: what must name the check this wait serves`);
+    throw new TypeError(`${fn}: what must name the check this wait serves `
+      + '(project.bounded-test-timing)');
   }
 }
 

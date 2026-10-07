@@ -214,10 +214,11 @@ async function periodicWaveSquare() {
     { duration: 0.5, sampleRate: SR, channels: 1 },
   );
   const d = buffer.getChannelData(0);
-  const band = (f) => spectrumPeak(d, 4800, { minHz: f - 40, maxHz: f + 40, minSnrDb: -200 });
+  const skip = Math.round(0.1 * SR); // past the start of the render, at its own rate
+  const band = (f) => spectrumPeak(d, skip, { minHz: f - 40, maxHz: f + 40, minSnrDb: -200 });
   const h = [1, 2, 3, 4, 5].map((n) => band(n * f0));
   let peak = 0;
-  for (let i = 4800; i < d.length; i++) peak = Math.max(peak, Math.abs(d[i]));
+  for (let i = skip; i < d.length; i++) peak = Math.max(peak, Math.abs(d[i]));
   return {
     f0,
     freqs: h.map((p) => p && p.frequencyHz),
