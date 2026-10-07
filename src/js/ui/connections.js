@@ -40,7 +40,7 @@ const plain = (v) => JSON.parse(JSON.stringify(v));
 // time): discovery only, never an identity.
 const rowKey = (r) => `${r.experimentId}|${r.sizeBytes}|${r.createdAt}`;
 const CHECKING = 'Checking the records stored in this browser…';
-const NOUN = { run: 'Run', definition: 'Definition', finding: 'Finding' };
+const NOUN = { experiment: 'Experiment', definition: 'Definition', finding: 'Finding' };
 
 export function createConnectionsUi() {
   const ctx = {
@@ -214,9 +214,11 @@ export function createConnectionsUi() {
         try {
           e = await store.get(id);
         } catch (err) {
-          return `Run ${id} is stored here but cannot be read (${err.message || String(err)}).`;
+          return `Experiment ${id} is stored here but cannot be read (${err.message
+            || String(err)}).`;
         }
-        return e ? { kind: 'run', record: e } : `Run ${id} is not stored in this browser.`;
+        return e ? { kind: 'experiment', record: e }
+          : `Experiment ${id} is not stored in this browser.`;
       }));
       if (t === ctx.token.run) this.cnx.run = view(id, r);
       return r;
@@ -302,7 +304,7 @@ export function createConnectionsUi() {
         }
         return true;
       }
-      if (c.to && c.to.kind === 'run' && c.to.hash && c.href) {
+      if (c.to && c.to.kind === 'experiment' && c.to.hash && c.href) {
         // A run shown as "stored here" is opened only while the same record is stored: it is
         // read again first, and a record that changed since the list was read is refused.
         if (ev) ev.preventDefault();
@@ -327,8 +329,8 @@ export function createConnectionsUi() {
           + `cannot be read now${v.reason ? ` (${v.reason})` : ''}`, different: 'a different '
           + 'record is stored under its id now', unverifiable: 'the record stored under its id '
           + 'has no result hash now' }[v.state] || 'it cannot be verified now';
-        this.notify('warning', 'Run not opened', `${c.target} changed since this list was read: ${
-          why}. Nothing was opened; the connections are read again.`);
+        this.notify('warning', 'Experiment not opened', `${c.target} changed since this list `
+          + `was read: ${why}. Nothing was opened; the list is read again.`);
         this.connectionsRefreshOpen();
         return false;
       }
@@ -361,7 +363,7 @@ export function createConnectionsUi() {
         return false;
       };
       try {
-        if (kind === 'run') {
+        if (kind === 'experiment') {
           if (!(this.exps.detail && this.exps.detail.id === id)) {
             if (!await (await this.experimentsStore()).get(id)) return missing();
             await this.experimentsOpen(id);

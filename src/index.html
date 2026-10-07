@@ -1869,7 +1869,7 @@
                   <template x-for="(c, i) in (cnx.defs[d.id] ? cnx.defs[d.id].downstream : [])" :key="c.relation + '|' + (c.to.id || '') + '|' + i">
                     <li class="osc-x-cn-item" :data-state="c.state" :data-relation="c.relation"><strong x-text="c.label"></strong> <template x-if="c.href"><a class="osc-x-cn-link" data-osc="cnx.link" :href="c.href" @click="connectionsFollow(c, $event)" x-text="c.target"></a></template><template x-if="!c.href"><span x-text="c.target"></span></template><span class="osc-x-cn-state" x-text="' — ' + c.text + '.'"></span> <span class="osc-x-cn-field" x-text="'Field: ' + c.field + ', on ' + c.fieldOf + '.'"></span></li>
                   </template>
-                  <li class="osc-x-empty" x-show="cnx.defs[d.id] && !cnx.defs[d.id].status && !cnx.defs[d.id].downstream.length" x-text="'No stored run names a version of this definition.'"></li>
+                  <li class="osc-x-empty" x-show="cnx.defs[d.id] && !cnx.defs[d.id].status && !cnx.defs[d.id].downstream.length" x-text="'No stored experiment names a version of this definition.'"></li>
                   <li class="osc-x-cn-more" x-show="cnx.defs[d.id] && cnx.defs[d.id].more.downstream" x-text="cnx.defs[d.id] ? 'And ' + cnx.defs[d.id].more.downstream + ' more, not listed.' : ''"></li>
                 </ul>
                 <ul class="osc-x-ev-list osc-x-cn-notes" role="list" x-show="cnx.defs[d.id] && cnx.defs[d.id].notes.some((n) => n.field)" aria-label="Notes on fields">
@@ -1970,7 +1970,7 @@
                   <template x-for="(c, i) in (cnx.findings[r.id] ? cnx.findings[r.id].upstream : [])" :key="c.relation + '|' + (c.to.id || '') + '|' + i">
                     <li class="osc-x-cn-item" :data-state="c.state" :data-relation="c.relation"><strong x-text="c.label"></strong> <template x-if="c.href"><a class="osc-x-cn-link" data-osc="cnx.link" :href="c.href" @click="connectionsFollow(c, $event)" x-text="c.target"></a></template><template x-if="!c.href"><span x-text="c.target"></span></template><span class="osc-x-cn-state" x-text="' — ' + c.text + '.'"></span> <span class="osc-x-cn-field" x-text="'Field: ' + c.field + ', on ' + c.fieldOf + '.'"></span></li>
                   </template>
-                  <li class="osc-x-empty" x-show="cnx.findings[r.id] && !cnx.findings[r.id].status && !cnx.findings[r.id].upstream.length" x-text="'This finding cites no run.'"></li>
+                  <li class="osc-x-empty" x-show="cnx.findings[r.id] && !cnx.findings[r.id].status && !cnx.findings[r.id].upstream.length" x-text="'This finding cites no experiment.'"></li>
                   <li class="osc-x-cn-more" x-show="cnx.findings[r.id] && cnx.findings[r.id].more.upstream" x-text="cnx.findings[r.id] ? 'And ' + cnx.findings[r.id].more.upstream + ' more, not listed.' : ''"></li>
                 </ul>
                 <p class="osc-x-cn-dir">What depends on it?</p>
@@ -2089,26 +2089,26 @@
               </ul>
               <p class="osc-m-hint">A checklist of what is recorded, not a score.</p>
             </section>
-            <!-- CONNECTED RECORDS (ADR 0048): each connection from one stored field, its state in words. -->
+            <!-- CONNECTED RECORDS (ADR 0048): each entry from one stored field, its state in words. -->
             <section class="osc-x-evidence osc-x-cn" data-osc="exp.connections" aria-labelledby="osc-x-cn-title"
               x-show="exps.detail" style="display: none">
               <h4 id="osc-x-cn-title">Connected records</h4>
-              <p class="osc-m-hint">Each connection comes from one field a record stores, and names it. Nothing is inferred from names, recipes or times; a record that is not stored here reads "missing".</p>
+              <p class="osc-m-hint">Each entry comes from one field a record stores, and names it. Nothing is inferred from names, recipes or times; a record that is not stored here reads "missing".</p>
               <p class="osc-m-hint" role="status" x-text="cnx.run && cnx.run.status ? cnx.run.status : ''"></p>
                 <p class="osc-x-cn-dir">What is this connected to?</p>
-                <ul class="osc-x-ev-list osc-x-cn-list" role="list" :aria-label="'What this run is connected to'">
+                <ul class="osc-x-ev-list osc-x-cn-list" role="list" :aria-label="'What this experiment is connected to'">
                   <template x-for="(c, i) in (cnx.run ? cnx.run.upstream : [])" :key="c.relation + '|' + (c.to.id || '') + '|' + i">
                     <li class="osc-x-cn-item" :data-state="c.state" :data-relation="c.relation"><strong x-text="c.label"></strong> <template x-if="c.href"><a class="osc-x-cn-link" data-osc="cnx.link" :href="c.href" @click="connectionsFollow(c, $event)" x-text="c.target"></a></template><template x-if="!c.href"><span x-text="c.target"></span></template><span class="osc-x-cn-state" x-text="' — ' + c.text + '.'"></span> <span class="osc-x-cn-field" x-text="'Field: ' + c.field + ', on ' + c.fieldOf + '.'"></span></li>
                   </template>
-                  <li class="osc-x-empty" x-show="cnx.run && !cnx.run.status && !cnx.run.upstream.length" x-text="'No stored field of this run names another record.'"></li>
+                  <li class="osc-x-empty" x-show="cnx.run && !cnx.run.status && !cnx.run.upstream.length" x-text="'No stored field of this experiment names another record.'"></li>
                   <li class="osc-x-cn-more" x-show="cnx.run && cnx.run.more.upstream" x-text="cnx.run ? 'And ' + cnx.run.more.upstream + ' more, not listed.' : ''"></li>
                 </ul>
                 <p class="osc-x-cn-dir">What depends on it?</p>
-                <ul class="osc-x-ev-list osc-x-cn-list" role="list" :aria-label="'What depends on this run'">
+                <ul class="osc-x-ev-list osc-x-cn-list" role="list" :aria-label="'What depends on this experiment'">
                   <template x-for="(c, i) in (cnx.run ? cnx.run.downstream : [])" :key="c.relation + '|' + (c.to.id || '') + '|' + i">
                     <li class="osc-x-cn-item" :data-state="c.state" :data-relation="c.relation"><strong x-text="c.label"></strong> <template x-if="c.href"><a class="osc-x-cn-link" data-osc="cnx.link" :href="c.href" @click="connectionsFollow(c, $event)" x-text="c.target"></a></template><template x-if="!c.href"><span x-text="c.target"></span></template><span class="osc-x-cn-state" x-text="' — ' + c.text + '.'"></span> <span class="osc-x-cn-field" x-text="'Field: ' + c.field + ', on ' + c.fieldOf + '.'"></span></li>
                   </template>
-                  <li class="osc-x-empty" x-show="cnx.run && !cnx.run.status && !cnx.run.downstream.length" x-text="'No stored record names this run.'"></li>
+                  <li class="osc-x-empty" x-show="cnx.run && !cnx.run.status && !cnx.run.downstream.length" x-text="'No stored record names this experiment.'"></li>
                   <li class="osc-x-cn-more" x-show="cnx.run && cnx.run.more.downstream" x-text="cnx.run ? 'And ' + cnx.run.more.downstream + ' more, not listed.' : ''"></li>
                 </ul>
                 <ul class="osc-x-ev-list osc-x-cn-notes" role="list" x-show="cnx.run && cnx.run.notes.some((n) => n.field)" aria-label="Notes on fields">

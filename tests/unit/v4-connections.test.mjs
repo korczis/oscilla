@@ -78,18 +78,18 @@ const one = (list, relation) => {
 // ---------------------------------------------------------------- the record link
 
 test('a record link names one stored record, and is refused whole when malformed', () => {
-  assert.deepEqual(RECORD_LINK_KEYS, { run: 'run', definition: 'def', finding: 'finding' });
-  for (const kind of ['run', 'definition', 'finding']) {
+  assert.deepEqual(RECORD_LINK_KEYS, { experiment: 'exp', definition: 'def', finding: 'finding' });
+  for (const kind of ['experiment', 'definition', 'finding']) {
     const h = encodeRecordLink({ kind, id: 'abc-1.x_2' });
     assert.deepEqual(decodeRecordLink(`#${h}`), { ok: true, kind, id: 'abc-1.x_2' });
     assert.equal(new URLSearchParams(h).get('m'), 'experiments');
   }
   assert.equal(decodeRecordLink('#m=measure&mr=x'), null, 'no record key: not a record link');
   for (const [hash, re] of [
-    ['run=a&run=b', /"run" appears more than once/],
-    ['run=a&def=b', /names one record/],
-    ['m=measure&run=a', /opens the Experiments workspace/],
-    ['run=', /empty/],
+    ['exp=a&exp=b', /"exp" appears more than once/],
+    ['exp=a&def=b', /names one record/],
+    ['m=measure&exp=a', /opens the Experiments workspace/],
+    ['exp=', /empty/],
     ['finding=..%2Fx', /is not a record id/],
     ['def=%3Cscript%3E', /is not a record id/],
   ]) {
@@ -97,25 +97,25 @@ test('a record link names one stored record, and is refused whole when malformed
     assert.equal(r.ok, false, hash);
     assert.ok(r.errors.some((e) => re.test(e)), `${hash}: ${r.errors}`);
   }
-  assert.throws(() => encodeRecordLink({ kind: 'run', id: '<x>' }), RangeError);
+  assert.throws(() => encodeRecordLink({ kind: 'experiment', id: '<x>' }), RangeError);
   assert.throws(() => encodeRecordLink({ kind: 'studio', id: 'p-1' }), RangeError);
-  assert.equal(withoutRecordParams('m=experiments&run=a&v=1&f=440'), 'm=experiments&v=1&f=440');
+  assert.equal(withoutRecordParams('m=experiments&exp=a&v=1&f=440'), 'm=experiments&v=1&f=440');
 });
 
 test('navigation: the records domain is dispatched last; its keys leave with Experiments', () => {
   assert.deepEqual([...HASH_DOMAINS], ['instrument', 'measure', 'studio', 'records']);
-  assert.deepEqual(routeOfHash('#run=abc'), { workspace: 'experiments', owner: 'records' });
+  assert.deepEqual(routeOfHash('#exp=abc'), { workspace: 'experiments', owner: 'records' });
   assert.deepEqual(routeOfHash('#m=experiments&def=abc'), { workspace: 'experiments',
     owner: 'workspace' });
-  assert.equal(routeOfHash('#m=studio&run=abc').workspace, 'studio', 'm decides');
-  const off = new URLSearchParams(hashForWorkspace('m=experiments&run=a&v=1', 'measure'));
-  assert.equal(off.get('run'), null, 'off Experiments the record key would be refused');
+  assert.equal(routeOfHash('#m=studio&exp=abc').workspace, 'studio', 'm decides');
+  const off = new URLSearchParams(hashForWorkspace('m=experiments&exp=a&v=1', 'measure'));
+  assert.equal(off.get('exp'), null, 'off Experiments the record key would be refused');
   assert.equal(off.get('v'), '1');
-  assert.equal(new URLSearchParams(hashForWorkspace('m=experiments&run=a', 'experiments'))
-    .get('run'), 'a');
-  const refused = new URLSearchParams(hashAfterRefusal('#m=experiments&run=a&run=b',
+  assert.equal(new URLSearchParams(hashForWorkspace('m=experiments&exp=a', 'experiments'))
+    .get('exp'), 'a');
+  const refused = new URLSearchParams(hashAfterRefusal('#m=experiments&exp=a&exp=b',
     { records: false }, 'experiments'));
-  assert.equal(refused.get('run'), null, 'a refused record link is not kept');
+  assert.equal(refused.get('exp'), null, 'a refused record link is not kept');
 });
 
 // ---------------------------------------------------------------- runLinks and the store rows
@@ -157,18 +157,18 @@ test('run: the definition it was executed from, present, mismatched, missing or 
     [{ unreadableDefinitions: ['def-1'] }, 'unreadable', /cannot be read/],
   ];
   for (const [over, state, re] of cases) {
-    const c = one(C.connectionsOf({ kind: 'run', record: r }, index([r], over)).upstream,
+    const c = one(C.connectionsOf({ kind: 'experiment', record: r }, index([r], over)).upstream,
       'definition');
     assert.equal(c.state, state);
     assert.match(c.text, re);
     assert.equal(c.text.startsWith(C.STATE_WORDS[state]), true, 'the state comes first, in words');
     assert.equal(c.field, 'definition (id, version and hash)');
-    assert.equal(c.fieldOf, 'this run');
+    assert.equal(c.fieldOf, 'this experiment');
     assert.deepEqual(c.to, { kind: 'definition', id: 'def-1', version: 2 });
     assert.equal(c.href, ['missing', 'unreadable'].includes(state) ? null
       : '#m=experiments&def=def-1');
   }
-  const derived = C.connectionsOf({ kind: 'run', record: run('r2') }, index([run('r2')]));
+  const derived = C.connectionsOf({ kind: 'experiment', record: run('r2') }, index([run('r2')]));
   assert.equal(of(derived.upstream, 'definition').length, 0, 'a derived definition is no record');
   assert.ok(derived.notes.some((n) => n.field === 'definition.derived'
     && /derived from its own recipe/.test(n.text)));
@@ -179,20 +179,20 @@ test('run: repeat and duplicate links by the stored id; a missing original stays
   const rep = run('rep', { provenance: { repeatOf: 'orig', resultHash: H('2') } });
   const dup = run('dup', { provenance: { duplicateOf: 'orig' } });
   const ix = index([orig, rep, dup]);
-  const r = one(C.connectionsOf({ kind: 'run', record: rep }, ix).upstream, 'repeat-of');
+  const r = one(C.connectionsOf({ kind: 'experiment', record: rep }, ix).upstream, 'repeat-of');
   assert.equal(r.state, 'unverifiable', 'a repeat records no identity of its original');
   assert.equal(r.field, 'provenance.repeatOf');
   assert.match(r.text, /^not verifiable: .*by id only/);
-  assert.equal(r.href, '#m=experiments&run=orig');
-  const d = one(C.connectionsOf({ kind: 'run', record: dup }, ix).upstream, 'duplicate-of');
+  assert.equal(r.href, '#m=experiments&exp=orig');
+  const d = one(C.connectionsOf({ kind: 'experiment', record: dup }, ix).upstream, 'duplicate-of');
   assert.equal(d.state, 'present');
   assert.match(d.text, /result hash recorded, recomputed when it was read/);
   // A different record stored under the original's id: a duplicate keeps the original's hash.
   const other = index([run('orig', { provenance: { resultHash: H('9') } }), dup]);
-  assert.equal(one(C.connectionsOf({ kind: 'run', record: dup }, other).upstream, 'duplicate-of')
+  assert.equal(one(C.connectionsOf({ kind: 'experiment', record: dup }, other).upstream, 'duplicate-of')
     .state, 'mismatch');
   // The original deleted: the reference is still there, and reads missing.
-  const gone = one(C.connectionsOf({ kind: 'run', record: rep }, index([rep])).upstream,
+  const gone = one(C.connectionsOf({ kind: 'experiment', record: rep }, index([rep])).upstream,
     'repeat-of');
   assert.equal(gone.state, 'missing');
   assert.equal(gone.href, null);
@@ -200,23 +200,23 @@ test('run: repeat and duplicate links by the stored id; a missing original stays
   // Stored but unreadable (fails validation, or its hash does not verify): never fine.
   const bad = index([orig, dup]);
   Object.assign(bad.runs[0], { readable: false, reason: 'stored experiment orig is invalid' });
-  const u = one(C.connectionsOf({ kind: 'run', record: dup }, bad).upstream, 'duplicate-of');
+  const u = one(C.connectionsOf({ kind: 'experiment', record: dup }, bad).upstream, 'duplicate-of');
   assert.equal(u.state, 'unreadable');
   assert.match(u.text, /^unreadable: .*cannot be read \(stored experiment orig is invalid\)/);
   // Stored, but not read: never shown as verified.
   delete bad.runs[0].readable;
-  assert.equal(one(C.connectionsOf({ kind: 'run', record: dup }, bad).upstream, 'duplicate-of')
+  assert.equal(one(C.connectionsOf({ kind: 'experiment', record: dup }, bad).upstream, 'duplicate-of')
     .state, 'unverifiable');
   // A hash missing on either side cannot verify an identity.
   const unst = index([run('orig', { provenance: { resultHash: null } }), dup]);
-  assert.equal(one(C.connectionsOf({ kind: 'run', record: dup }, unst).upstream, 'duplicate-of')
+  assert.equal(one(C.connectionsOf({ kind: 'experiment', record: dup }, unst).upstream, 'duplicate-of')
     .state, 'unverifiable');
 });
 
 test('nothing is inferred: the same name, recipe, definition or time is no connection', () => {
   const a = run('a', { name: 'Same', recipe: { x: 1 } });
   const b = run('b', { name: 'Same', recipe: { x: 1 } });
-  const out = C.connectionsOf({ kind: 'run', record: a }, index([a, b]));
+  const out = C.connectionsOf({ kind: 'experiment', record: a }, index([a, b]));
   assert.deepEqual(out.upstream, []);
   assert.deepEqual(out.downstream, []);
 });
@@ -229,7 +229,7 @@ test('run: Studio projects by the hash recomputed over them, whole graph or meas
   const ix = index([r], { studio: { projects: [proj('whole', p.studioHash, { v: 1,
     hash: p.measured.hash }), proj('path', H('e'), { v: 1, hash: p.measured.hash }),
   proj('other', H('f'), { v: 1, hash: H('0') })], unreadable: [] } });
-  const up = C.connectionsOf({ kind: 'run', record: r }, ix).upstream;
+  const up = C.connectionsOf({ kind: 'experiment', record: r }, ix).upstream;
   const g = one(up, 'studio-graph');
   assert.deepEqual([g.state, g.to, g.field], ['present', { kind: 'studio', id: 'whole' },
     'studio.studioHash']);
@@ -238,17 +238,17 @@ test('run: Studio projects by the hash recomputed over them, whole graph or meas
   assert.deepEqual([m.state, m.to.id, m.field], ['present', 'path', 'studio.measured.hash']);
   assert.match(m.text, /other parts of its graph differ/);
   // No project holds the graph: one missing connection, never nothing.
-  const none = C.connectionsOf({ kind: 'run', record: r }, index([r])).upstream;
+  const none = C.connectionsOf({ kind: 'experiment', record: r }, index([r])).upstream;
   const miss = one(none, 'studio-graph');
   assert.equal(miss.state, 'missing');
   assert.match(miss.text, /no Studio project stored here has this graph or its measured path/);
   // The projects could not be read: said, not guessed.
-  const unread = C.connectionsOf({ kind: 'run', record: r }, index([r], { studio: null }));
+  const unread = C.connectionsOf({ kind: 'experiment', record: r }, index([r], { studio: null }));
   assert.equal(of(unread.upstream, 'studio-graph').length, 0);
   assert.ok(unread.notes.some((n) => /could not be read/.test(n.text)));
   // A measured path of another version is not compared.
   const v9 = run('v9', { studio: { studioHash: H('a'), measured: { v: 9, hash: p.measured.hash } } });
-  const out9 = C.connectionsOf({ kind: 'run', record: v9 }, index([v9], { studio: ix.studio }));
+  const out9 = C.connectionsOf({ kind: 'experiment', record: v9 }, index([v9], { studio: ix.studio }));
   assert.equal(of(out9.upstream, 'studio-path').length, 0);
   assert.ok(out9.notes.some((n) => /version 9/.test(n.text)));
 });
@@ -257,7 +257,7 @@ test('run: the frequency profile by id (loaded or not) and the build (this one o
   const r = run('c', { calibration: { frequency: { id: H('7'), name: 'Mic A' }, level: null },
     provenance: { build: { version: '9.8.7', sourceDigest: H('s'), artifactSha256: null } } });
   const cur = { version: '9.8.7', sourceDigest: H('s'), artifactSha256: H('x') };
-  const up = (over) => C.connectionsOf({ kind: 'run', record: r }, index([r], over)).upstream;
+  const up = (over) => C.connectionsOf({ kind: 'experiment', record: r }, index([r], over)).upstream;
   assert.equal(one(up({ profile: { id: H('7'), name: 'Mic A' } }), 'profile').state, 'present');
   const p = one(up({ profile: { id: H('8'), name: 'Other' } }), 'profile');
   assert.equal(p.state, 'missing');
@@ -270,7 +270,7 @@ test('run: the frequency profile by id (loaded or not) and the build (this one o
   assert.match(older.text, /this page runs OSCILLA 9\.9\.0/);
   assert.equal(one(up({ build: { ...cur, sourceDigest: null } }), 'build').state,
     'unverifiable');
-  const none = C.connectionsOf({ kind: 'run', record: run('n') }, index([run('n')],
+  const none = C.connectionsOf({ kind: 'experiment', record: run('n') }, index([run('n')],
     { build: cur }));
   assert.ok(none.notes.some((n) => n.field === 'provenance.build'));
 });
@@ -288,30 +288,30 @@ test('run: the findings citing it, the runs repeating or duplicating it', () => 
   const f2 = finding('f-2', [{ kind: 'compare', a: 'rep', b: 'a' }],
     [{ experimentId: 'rep', resultHash: H('2') }, { experimentId: 'a', resultHash: H('9') }],
     'Other record');
-  const out = C.connectionsOf({ kind: 'run', record: a }, index([a, rep, dup],
+  const out = C.connectionsOf({ kind: 'experiment', record: a }, index([a, rep, dup],
     { findings: [f1, f2] }));
   const cites = of(out.downstream, 'cited-by');
   assert.deepEqual(cites.map((c) => [c.to.id, c.state]), [['f-1', 'present'],
     ['f-2', 'mismatch']]);
   assert.equal(cites[0].field, 'evidence[0], evidence[1] (identity: runs[0].resultHash)');
   assert.equal(cites[0].fieldOf, 'that finding');
-  assert.match(cites[0].text, /this run; its value at 1000 Hz/);
+  assert.match(cites[0].text, /this experiment; its value at 1000 Hz/);
   assert.match(cites[1].text, /different record/);
   // A value at a frequency the run does not store: findingIssues's not-a-grid-point, mismatch.
   const off = finding('f-3', [{ kind: 'value', experimentId: 'a', at: { hz: 1001 } }],
     [{ experimentId: 'a', resultHash: H('1') }]);
-  const o = one(C.connectionsOf({ kind: 'run', record: a }, index([a], { findings: [off] }))
+  const o = one(C.connectionsOf({ kind: 'experiment', record: a }, index([a], { findings: [off] }))
     .downstream, 'cited-by');
   assert.equal(o.state, 'mismatch');
   assert.match(o.text, /1001 Hz is not a frequency the run stores/);
   // Cited without a result hash: findingIssues's unverifiable-identity.
   const bare = finding('f-4', [{ kind: 'run', experimentId: 'a' }],
     [{ experimentId: 'a', resultHash: null }]);
-  assert.equal(one(C.connectionsOf({ kind: 'run', record: a }, index([a],
+  assert.equal(one(C.connectionsOf({ kind: 'experiment', record: a }, index([a],
     { findings: [bare] })).downstream, 'cited-by').state, 'unverifiable');
   assert.equal(cites[0].href, '#m=experiments&finding=f-1');
   const rb = one(out.downstream, 'repeated-by');
-  assert.deepEqual([rb.to, rb.state], [{ kind: 'run', id: 'rep' }, 'unverifiable']);
+  assert.deepEqual([rb.to, rb.state], [{ kind: 'experiment', id: 'rep' }, 'unverifiable']);
   assert.equal(one(out.downstream, 'duplicated-as').state, 'present');
   for (const c of [...out.upstream, ...out.downstream]) {
     assert.ok(C.CONNECTION_STATES.includes(c.state));
@@ -323,15 +323,15 @@ test('the lists are bounded, and what is left out is counted', () => {
   const a = run('a');
   const reps = Array.from({ length: C.CONNECTION_LIMIT + 7 }, (_, i) => run(`r${i}`,
     { provenance: { repeatOf: 'a' } }));
-  const out = C.connectionsOf({ kind: 'run', record: a }, index([a, ...reps]));
+  const out = C.connectionsOf({ kind: 'experiment', record: a }, index([a, ...reps]));
   assert.equal(out.downstream.length, C.CONNECTION_LIMIT);
   assert.equal(out.more.downstream, 7);
   // A list row whose links could not be read is counted, not silently skipped.
   const ix = index([a, reps[0]]);
   ix.runs[1].links = null;
-  const unread = C.connectionsOf({ kind: 'run', record: a }, ix);
+  const unread = C.connectionsOf({ kind: 'experiment', record: a }, ix);
   assert.equal(unread.downstream.length, 0);
-  assert.ok(unread.notes.some((n) => /1 stored run could not be read/.test(n.text)));
+  assert.ok(unread.notes.some((n) => /1 stored experiment could not be read/.test(n.text)));
 });
 
 // ---------------------------------------------------------------- the other subjects
@@ -348,7 +348,7 @@ test('definition: the runs that executed one of its versions', () => {
   assert.deepEqual(out.downstream.map((c) => [c.to.id, c.state]), [['r1', 'present'],
     ['r2', 'mismatch']]);
   assert.match(out.downstream[0].text, /version 1/);
-  assert.equal(out.downstream[0].fieldOf, 'that run');
+  assert.equal(out.downstream[0].fieldOf, 'that experiment');
 });
 
 test('finding: each run it cites, by the identity it recorded', () => {
@@ -543,12 +543,12 @@ test('the workspace: a record link opens the record; a malformed one is refused'
   const { cmp, notes } = harness();
   await cmp.experimentsImportText(a.json);
   assert.equal(cmp.recordsApplyHash('#m=measure'), null, 'no record key: not this domain');
-  assert.equal(cmp.recordsApplyHash('#m=experiments&run=a&def=b'), false);
+  assert.equal(cmp.recordsApplyHash('#m=experiments&exp=a&def=b'), false);
   assert.match(notes.at(-1).text, /names one record/);
-  assert.equal(cmp.recordsApplyHash('#m=experiments&run=fixture-a', 'link'), true);
+  assert.equal(cmp.recordsApplyHash('#m=experiments&exp=fixture-a', 'link'), true);
   await cmp.cnxSettled();
   assert.equal(cmp.exps.detail.id, 'fixture-a');
-  assert.equal(cmp.recordsApplyHash('#m=experiments&run=nope', 'link'), true);
+  assert.equal(cmp.recordsApplyHash('#m=experiments&exp=nope', 'link'), true);
   await cmp.cnxSettled();
   assert.match(notes.at(-1).text, /not stored in this browser/);
 });

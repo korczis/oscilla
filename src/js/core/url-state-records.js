@@ -1,12 +1,12 @@
-// A stored record in the URL hash (ADR 0048): the address of one run, definition or finding in
-// the Experiments workspace, so that a connected record is a real link (ui/navigation.js, ADR
-// 0045) that Back and Forward walk through. Pure.
+// A stored record in the URL hash (ADR 0048): the address of one experiment, definition or
+// finding in the Experiments workspace, so that a connected record is a real link
+// (ui/navigation.js, ADR 0045) that Back and Forward walk through. Pure.
 //
 // Format: `m=experiments` and exactly one of
-//   run=<experiment id>        a stored run (experiment)
+//   exp=<experiment id>        a stored experiment (the saved record; a run is one capture)
 //   def=<definition id>        a stored definition
 //   finding=<finding id>       a stored finding
-// e.g. `#m=experiments&run=3f2c…`. A link carries an id, never a record: what it opens is what
+// e.g. `#m=experiments&exp=3f2c…`. A link carries an id, never a record: what it opens is what
 // this browser stores under that id, and a record that is not stored here is said to be missing.
 // Each codec reads only its own keys (the instrument, the recipe `mr`, the Studio keys), and
 // withoutRecordParams() lets another workspace's address drop these.
@@ -25,7 +25,8 @@ import { ID_PATTERN } from '../experiments/schema.js';
 
 export const RECORD_LINK_MODE = 'experiments';
 /** Record kind -> its hash key. */
-export const RECORD_LINK_KEYS = Object.freeze({ run: 'run', definition: 'def', finding: 'finding' });
+export const RECORD_LINK_KEYS = Object.freeze({ experiment: 'exp', definition: 'def',
+  finding: 'finding' });
 export const RECORD_KINDS = Object.freeze(Object.keys(RECORD_LINK_KEYS));
 
 const KEYS = Object.values(RECORD_LINK_KEYS);

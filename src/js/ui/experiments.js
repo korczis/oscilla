@@ -640,7 +640,7 @@ export function createExperimentsUi() {
       setDetail(this, e);
       this.exps.panel = 'detail';
       // The address names the open run (no new entry): Back from a connected record returns here.
-      if (typeof this.navNameRecord === 'function') this.navNameRecord({ kind: 'run', id });
+      if (typeof this.navNameRecord === 'function') this.navNameRecord({ kind: 'experiment', id });
       this.$nextTick(() => { if (ctx.charts.detail) ctx.charts.detail.relayout(); });
       return e;
     },

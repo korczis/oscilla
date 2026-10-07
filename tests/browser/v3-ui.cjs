@@ -2156,6 +2156,8 @@ function defineChecks(fixtures) {
       const r = sec.getBoundingClientRect();
       return { shown: sec.getClientRects().length > 0, h4: (sec.querySelector('h4') || {})
         .textContent || null, status: st ? st.textContent.trim() : '', up: li(lists[0]),
+      labels: lists.map((u) => u.getAttribute('aria-label')),
+      all: sec.textContent.replace(/\s+/g, ' '),
       down: li(lists[1]), fits: r.right <= window.innerWidth + 1
           && document.documentElement.scrollWidth <= window.innerWidth + 1 };
     }, sel);
@@ -2164,7 +2166,7 @@ function defineChecks(fixtures) {
       ? window.OSCILLA.app.exps.detail.id : null, hash: location.hash,
     focus: document.activeElement ? document.activeElement.id : null }));
     // 1. A record link (typed into the address): the run opens, focus on its heading.
-    await page.evaluate(() => { location.hash = '#m=experiments&run=fixture-a'; });
+    await page.evaluate(() => { location.hash = '#m=experiments&exp=fixture-a'; });
     res.linked = await H.until(state, (x) => x.id === 'fixture-a'
       && x.focus === 'osc-x-detail-title', 5000);
     res.a = await H.until(() => items(RUN), (x) => x.shown && x.down && x.down.length === 2
@@ -2173,13 +2175,13 @@ function defineChecks(fixtures) {
     await page.focus(`${RUN} li[data-relation="duplicated-as"] a`);
     await page.keyboard.press('Enter');
     res.toDup = await H.until(state, (x) => x.id === ids.dup && x.focus === 'osc-x-detail-title'
-      && x.hash.includes(`run=${ids.dup}`), 5000);
+      && x.hash.includes(`exp=${ids.dup}`), 5000);
     res.dup = await H.until(() => items(RUN), (x) => x.up && x.up.some((c) => c.relation
       === 'duplicate-of') && !x.status, 10000);
     // 3. Back returns to the run the link was followed from; Forward to the duplicate.
     await page.goBack();
     res.back = await H.until(state, (x) => x.id === 'fixture-a'
-      && x.hash.includes('run=fixture-a'), 5000);
+      && x.hash.includes('exp=fixture-a'), 5000);
     await page.goForward();
     res.forward = await H.until(state, (x) => x.id === ids.dup, 5000);
     await page.goBack();
@@ -2207,7 +2209,7 @@ function defineChecks(fixtures) {
     }, fixtures.c.json);
     res.impostorFinding = await H.until(() => items(FND), (x) => x.up && x.up[0]
       && x.up[0].state === 'mismatch', 10000);
-    await page.evaluate((id) => { location.hash = `#m=experiments&run=${id}`; }, ids.dup);
+    await page.evaluate((id) => { location.hash = `#m=experiments&exp=${id}`; }, ids.dup);
     res.impostorDup = await H.until(() => items(RUN), (x) => x.up && x.up.some((c) => c.relation
       === 'duplicate-of' && c.state === 'mismatch'), 10000);
     // 6. The stored record altered under its hash (IndexedDB only): unreadable after a reload.
@@ -2233,7 +2235,7 @@ function defineChecks(fixtures) {
         && x.up[0].state === 'unreadable', 10000);
     }
     // 7. 390 px.
-    await page.evaluate((id) => { location.hash = `#m=experiments&run=${id}`; }, ids.dup);
+    await page.evaluate((id) => { location.hash = `#m=experiments&exp=${id}`; }, ids.dup);
     await page.setViewportSize({ width: 390, height: 844 });
     await page.evaluate(() => document.querySelector('[data-osc="exp.connections"]')
       .scrollIntoView());
@@ -2263,21 +2265,26 @@ function defineChecks(fixtures) {
         && /Field: evidence\[0\] \(identity: runs\[0\]\.resultHash\), on that finding\./
           .test(cite.text)
         && by(a, 'duplicated-as').length === 1 && by(a, 'duplicated-as')[0].state === 'present',
-      upstream: dupOf.state === 'present' && dupOf.href === '#m=experiments&run=fixture-a'
-        && /Field: provenance\.duplicateOf, on this run\./.test(dupOf.text)
+      upstream: dupOf.state === 'present' && dupOf.href === '#m=experiments&exp=fixture-a'
+        && /Field: provenance\.duplicateOf, on this experiment\./.test(dupOf.text)
         && build.state === 'missing' && /this page runs OSCILLA/.test(build.text),
       keyboard: res.toDup.id === ids.dup && res.toDup.focus === 'osc-x-detail-title',
       history: res.back.id === 'fixture-a' && res.forward.id === ids.dup,
       finding: res.finding.up[0] && res.finding.up[0].state === 'present'
-        && /^Cites run "TEST CONTEXT · synthetic A/.test(res.finding.up[0].text)
+        && /^Cites experiment "TEST CONTEXT · synthetic A/.test(res.finding.up[0].text)
         && res.findingFocus === true,
-      impostor: /^Cites run "IMPOSTOR under fixture-a" — does not match: .*a different record/
+      impostor: /^Cites experiment "IMPOSTOR under fixture-a" — does not match: .*a different record/
         .test((res.impostorFinding.up || [{}])[0].text || '')
         && by(res.impostorDup.up, 'duplicate-of')[0].state === 'mismatch',
       corrupt: res.storeKind !== 'indexeddb' || (res.corrupt.up && res.corrupt.up[0].state
         === 'unreadable' && /— unreadable: run .* is stored here but cannot be read/
         .test(res.corrupt.up[0].text)),
       narrow: res.narrow.fits === true,
+      // Vocabulary (owner decision 2026-10-07): the stored record is an experiment, and the bare
+      // word "connection" stays Studio's graph edge.
+      vocabulary: res.a.labels.join('|') === 'What this experiment is connected to|What '
+        + 'depends on this experiment' && !/\bconnections?\b/i.test(res.a.all)
+        && !/\b(this|that|stored) runs?\b/.test(res.a.all + res.dup.all),
     }) };
   });
 
@@ -2459,7 +2466,7 @@ function defineChecks(fixtures) {
     return { ...res, ...H.verdict({
       before: res.before[0] && res.before[0].state === 'present',
       replaced: res.tab2 === 'fixture-b' && res.listed === 'present',
-      'open-refused': res.refused.alerts.some((t) => /Run not opened: .*changed since this list was read: a different record is stored under its id now/.test(t)),
+      'open-refused': res.refused.alerts.some((t) => /Experiment not opened: .*changed since this list was read: a different record is stored under its id now/.test(t)),
       'not-present': res.after[0] && res.after[0].state === 'mismatch'
         && /does not match: .*different record/.test(res.after[0].text),
       finding: res.finding.join() === 'mismatch',

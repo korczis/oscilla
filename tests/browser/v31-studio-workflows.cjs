@@ -537,7 +537,7 @@ function defineChecks(fx) {
     const res = { project, done };
     if (!project || !done.id) return { ok: false, failed: ['measured'], ...res };
     // 1. The run's connected records name the stored project.
-    await page.evaluate((id) => { location.hash = `#m=experiments&run=${id}`; }, done.id);
+    await page.evaluate((id) => { location.hash = `#m=experiments&exp=${id}`; }, done.id);
     res.up = await H.until(() => items(RUN), (l) => l.some((c) => c.relation === 'studio-graph'),
       15000);
     // 2. Following it opens Studio's dialog at that project, its runs listed.
@@ -569,7 +569,7 @@ function defineChecks(fx) {
       if (!r.ok) throw new Error(r.reason);
       await a.studioSave();
     });
-    await page.evaluate((id) => { location.hash = `#m=experiments&run=${id}`; }, done.id);
+    await page.evaluate((id) => { location.hash = `#m=experiments&exp=${id}`; }, done.id);
     res.after = await H.until(() => items(RUN), (l) => l.some((c) => c.relation === 'studio-path'),
       15000);
     // Leave nothing behind: the run and the project.
@@ -588,10 +588,10 @@ function defineChecks(fx) {
     return { ...H.verdict({
       measured: done.run === 'done',
       upstream: g.state === 'present' && g.text.includes(`Studio project "${project.name}"`)
-        && /Field: studio\.studioHash, on this run\./.test(g.text),
+        && /Field: studio\.studioHash, on this experiment\./.test(g.text),
       dialog: res.dialog.ws === 'studio' && res.dialog.open && res.dialog.details
         && res.dialog.focusInRow && d.state === 'present'
-        && /Field: studio\.studioHash, on that run\./.test(d.text),
+        && /Field: studio\.studioHash, on that experiment\./.test(d.text),
       back: res.back.id === done.id,
       measuredPath: p.state === 'present' && /Field: studio\.measured\.hash/.test(p.text)
         && !res.after.some((c) => c.relation === 'studio-graph'),

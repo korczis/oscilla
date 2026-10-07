@@ -42,11 +42,11 @@ changed.
   **Copy config URL** keeps the recipe and Studio keys that are in the address. Each nav item
   links to its workspace's address, so opening it in a new tab opens that workspace. A link
   that is refused does not stay in the address or in history.
-- **The address names a stored record.** In Experiments, the open run is named in the address
-  (`#m=experiments&run=<id>`, no new history entry); a definition is `def=<id>` and a finding
-  `finding=<id>`. Following a connected record is a new entry, so Back returns to the record
-  you came from and moves focus to its heading. Such a link names a record stored in this
-  browser; elsewhere it says the record is not stored here
+- **The address names a stored record.** In Experiments, the open experiment is named in the
+  address (`#m=experiments&exp=<id>`, no new history entry); a definition is `def=<id>` and a
+  finding `finding=<id>`. Following a connected record is a new entry, so Back returns to the
+  record you came from and moves focus to its heading. Such a link names a record stored in
+  this browser; elsewhere it says the record is not stored here
   ([ADR 0048](.ai/repo/adrs/0048-connected-records-over-stored-fields.md)).
 - **Unsaved work.** While something would be lost, a reload, a closed tab or leaving the page
   makes the browser ask first: unsaved Studio changes, a completed measurement that is not
@@ -263,19 +263,22 @@ filter class is claimed. An experiment saved from Measure does not store band le
   that identity; an import is validated whole before anything is stored, a newer schema is
   refused, and a cited run that is not in this browser reads "not stored here"
   ([ADR 0046](.ai/repo/adrs/0046-findings-interpretation-linked-to-evidence.md), proposed).
-- **Connected records.** A run's detail, each definition and each finding (and each saved
-  project in Studio's Projects and patches dialog) answer two questions: what is this connected
-  to, and what depends on it. Every connection comes from one field a record stores, and names
-  that field: a run's definition version, the run it repeats or duplicates, the Studio project
-  whose saved graph has the hash the run stores (or holds its measured path), the frequency
-  profile it names, the build that made it; downstream, the findings citing it and the runs
-  repeating or duplicating it, the runs a definition's versions executed, the runs measured
-  from a project's graph. Nothing is inferred from names, recipes or times. A connection reads
-  "stored here" only when its identity verifies: the record is stored, it was read (its result
-  hash recomputed) and it is the record the field names. Otherwise it says which: "missing"
-  (not stored here, never hidden), "does not match" (another record under that id),
-  "not verifiable" (the field records no identity to check, as a repeat names its original by
-  id only) or "unreadable" (stored, but it fails validation). Each target is a link
+- **Connected records.** An experiment's detail, each definition and each finding (and each
+  saved project in Studio's Projects and patches dialog) answer two questions: what is this
+  connected to, and what depends on it. Every entry comes from one field a record stores, and
+  names that field: an experiment's definition version, the experiment it repeats or
+  duplicates, the Studio project whose saved graph has the hash the experiment stores (or holds
+  its measured path), the frequency profile it names, the build that made it; downstream, the
+  findings citing it and the experiments repeating or duplicating it, the experiments a
+  definition's versions were used by, the experiments measured from a project's graph. Nothing
+  is inferred from names, recipes or times. An entry reads "stored here" only when its identity
+  verifies: the record is stored, it was read just now (its result hash recomputed, at the same
+  verification point the findings use) and it is the record the field names. Otherwise it says
+  which: "missing" (not stored here, never hidden), "does not match" (another record under
+  that id), "not verifiable" (the field records no identity to check, as a repeat names its
+  original by id only) or "unreadable" (stored, but it fails validation). Each target is a
+  link; an experiment shown as stored here is read again before its link is followed, and one
+  that changed since the list was read is not opened
   ([ADR 0048](.ai/repo/adrs/0048-connected-records-over-stored-fields.md), proposed).
 - **A completed run cannot be changed.** Only the name, the annotation notes and the baseline
   mark of a saved

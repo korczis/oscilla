@@ -43,7 +43,7 @@ mobile, significant performance), **P2** (polish, debt).
 | Studio provenance on a measurement | ✓ | ✓ | ✓ | ✓ | evidence, compare | whole graph + measured path (D3, #139) | – | ✓ | EXISTS |
 | Raw data retention | – | – | engine `keepRaw` | none | none | – | – | – | MISSING (no stated policy) |
 | Findings | – | – | – | – | – | – | – | – | MISSING |
-| Cross-domain Trace (result → run → definition → build → Studio) | ✓ (connections.js, ADR 0048) | record links refused whole | – | list-row links, no DB version | run detail, definition and finding rows, Studio dialog | every connection names its stored field; present only when the identity verifies | keyboard, focus, state in words | ✓ | in review (branch `feat/record-relations`, after #149) |
+| Cross-domain Trace (result → run → definition → build → Studio) | ✓ (connections.js, ADR 0048) | record links refused whole | – | list-row links, no DB version | experiment detail, definition and finding rows, Studio dialog | every entry names its stored field; present only when the identity verifies | keyboard, focus, state in words | ✓ | in review (branch `feat/record-relations`, after #149) |
 | Knowledge explorer | – | – | – | – | static About | – | – | – | MISSING |
 | Project model | singletons | – | – | split by domain | – | – | – | – | PARTIAL |
 | Workspace navigation / history / deep links | ✓ | – | – | URL only | ✓ | – | ✓ | ✓ | PARTIAL (W2, W3) |

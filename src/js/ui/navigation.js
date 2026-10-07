@@ -6,14 +6,15 @@
 // The hash is shared by four codecs, each reading only its own keys: the instrument
 // (core/url-state.js: v s p w f g d a r rm x, and V1 mode ids in `m`), the MEASURE recipe
 // (core/url-state-measure.js: mr), the Studio link (core/url-state-studio.js: m=studio, st,
-// sv) and a stored record (core/url-state-records.js: m=experiments with run, def or finding,
-// ADR 0048; the record keys leave the address with Experiments, like the Studio keys). `m` names the workspace: any workspace id (`m=measure`, `m=analyzer`, …) or, as V1 links
-// wrote it, a V1 mode id (`sweep` → Playground, `dual` → Synthesis).
+// sv) and a stored record (core/url-state-records.js: m=experiments with exp, def or finding,
+// ADR 0048; the record keys leave the address with Experiments, like the Studio keys). `m`
+// names the workspace: any workspace id (`m=measure`, `m=analyzer`, …) or, as V1 links wrote
+// it, a V1 mode id (`sweep` → Playground, `dual` → Synthesis).
 //
 // Route precedence (routeOfHash, the one place a hash becomes a workspace and a V1 mode):
 //   1. Studio keys: m=studio, st or sv               → STUDIO (owner: studio)
 //   2. m = a workspace id or a V1 mode id            → that workspace (owner: workspace)
-//   3. run, def or finding (a record link without m) → EXPERIMENTS (owner: records)
+//   3. exp, def or finding (a record link without m) → EXPERIMENTS (owner: records)
 //   4. mr (a recipe link without m)                  → MEASURE (owner: measure)
 //   5. none of these (an empty hash, bare `v=1&f=…`) → PLAYGROUND
 //   An in-page anchor (`#osc-main`, no `=`) is not a route: a click on one (the skip link, the

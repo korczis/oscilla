@@ -53,7 +53,8 @@
 //              names: 'this run', 'that run', 'this finding', 'that finding')
 //     text     the state in words, starting with STATE_WORDS[state]
 //     href     the target's address (core/url-state-records.js, '#m=about', '#m=measure'), or
-//              null when nothing can be opened (missing, unreadable); open: { kind: 'studio', id } for a stored Studio
+//              null when nothing can be opened (missing, unreadable); open: { kind: 'studio',
+//              id } for a stored Studio
 //              project (opened through Studio's own Projects and patches dialog)
 //
 // Studio (ADR 0038): a run stores the Studio graph it was measured from (`studio.execution`)
@@ -73,7 +74,7 @@ export const CONNECTION_STATES = Object.freeze(['present', 'missing', 'mismatch'
   'unverifiable', 'unreadable']);
 export const STATE_WORDS = Object.freeze({ present: 'stored here', missing: 'missing',
   mismatch: 'does not match', unverifiable: 'not verifiable', unreadable: 'unreadable' });
-export const SUBJECT_KINDS = Object.freeze(['run', 'definition', 'finding', 'studio']);
+export const SUBJECT_KINDS = Object.freeze(['experiment', 'definition', 'finding', 'studio']);
 /** Most connections listed per direction; the rest are counted in `more`. */
 export const CONNECTION_LIMIT = 50;
 
@@ -81,6 +82,8 @@ const obj = (v) => !!v && typeof v === 'object';
 const str = (v) => typeof v === 'string' && v !== '';
 const short = (id) => (id.length > 14 ? `${id.slice(0, 12)}…` : id);
 const NOT_HERE = 'not stored in this browser (deleted, or never stored here)';
+const THIS = 'this experiment';
+const THAT = 'that experiment';
 
 /** See the header. */
 export function runLinks(e) {
@@ -97,7 +100,8 @@ export function runLinks(e) {
 }
 
 const link = (kind, id) => `#${encodeRecordLink({ kind, id })}`;
-const runName = (row, id) => (row && str(row.name) ? `run "${row.name}"` : `run ${short(id)}`);
+const runName = (row, id) => (row && str(row.name) ? `experiment "${row.name}"`
+  : `experiment ${short(id)}`);
 const defName = (d, id) => (d && str(d.name) ? `definition "${d.name}"`
   : `definition ${short(id)}`);
 const statementOf = (f) => (f.statement.length > 80 ? `${f.statement.slice(0, 79)}…`
@@ -147,7 +151,7 @@ function runState(row, expect, byId = null) {
   if (expect === undefined) return ['unverifiable', byId];
   const theirs = row.links.resultHash;
   if (!expect || !theirs) {
-    return ['unverifiable', !theirs ? 'the stored run has no result hash (it was not stamped), '
+    return ['unverifiable', !theirs ? 'the stored experiment has no result hash (not stamped), '
       + 'so its identity cannot be checked' : 'no result hash is recorded for it, so its '
       + 'identity cannot be checked'];
   }
@@ -162,7 +166,9 @@ function runState(row, expect, byId = null) {
 
 function definitionUp(e, v, me) {
   const d = e.definition;
-  if (!obj(d)) return { note: { field: 'definition', text: 'This run names no definition.' } };
+  if (!obj(d)) {
+    return { note: { field: 'definition', text: 'This experiment names no definition.' } };
+  }
   if (d.derived) {
     return { note: { field: 'definition.derived', text: 'Its definition is derived from its own '
       + 'recipe, not authored: it references no stored definition.' } };
@@ -172,7 +178,7 @@ function definitionUp(e, v, me) {
   const target = `${defName(match === 'match' ? stored : null, d.id)} version ${d.version}`;
   const args = ['upstream', 'definition', 'Executed from', me,
     { kind: 'definition', id: d.id, version: d.version },
-    'definition (id, version and hash)', 'this run'];
+    'definition (id, version and hash)', 'this experiment'];
   const href = link('definition', d.id);
   if (match === 'match') {
     return { c: connection(...args, ['present', 'that version is stored with the same hash'],
@@ -199,11 +205,11 @@ function runUp(kind, e, v, me) {
   const field = kind === 'repeat-of' ? 'provenance.repeatOf' : 'provenance.duplicateOf';
   // A repeat is a new measurement: it names the run it repeats by id only. A duplicate is the
   // same run copied, so it keeps the original's result hash.
-  const state = kind === 'repeat-of' ? runState(row, undefined, 'a repeat names the run it '
-    + 'repeats by id only; it does not record that run\'s result hash') : runState(row,
+  const state = kind === 'repeat-of' ? runState(row, undefined, 'a repeat names the experiment it '
+    + 'repeats by id only; it does not record that experiment\'s result hash') : runState(row,
     l.resultHash);
-  return connection('upstream', kind, label, me, { kind: 'run', id }, field, 'this run', state,
-    runName(row, id), { href: link('run', id) });
+  return connection('upstream', kind, label, me, { kind: 'experiment', id }, field, THIS, state,
+    runName(row, id), { href: link('experiment', id) });
 }
 
 function studioUp(e, v, me, notes) {
@@ -211,7 +217,7 @@ function studioUp(e, v, me, notes) {
   if (!s) return [];
   if (!v.studio) {
     notes.push({ field: 'studio.studioHash', text: 'The Studio projects stored here could not be '
-      + 'read, so none was compared with the graph this run records.' });
+      + 'read, so none was compared with the graph this experiment records.' });
     return [];
   }
   const projects = Array.isArray(v.studio.projects) ? v.studio.projects.filter(obj) : [];
@@ -227,8 +233,8 @@ function studioUp(e, v, me, notes) {
   const whole = projects.filter((p) => p.studioHash === s.hash);
   for (const p of whole) {
     out.push(connection('upstream', 'studio-graph', 'Measured from the graph of', me,
-      { kind: 'studio', id: p.id }, 'studio.studioHash', 'this run', ['present', 'its saved '
-        + 'graph, recomputed as it loads, has the hash this run stores'], pName(p), at(p)));
+      { kind: 'studio', id: p.id }, 'studio.studioHash', 'this experiment', ['present', 'its saved '
+        + 'graph, recomputed as it loads, has the hash this experiment stores'], pName(p), at(p)));
   }
   const m = s.measured;
   if (m && m.v !== MEASURED_PATH_VERSION) {
@@ -239,16 +245,16 @@ function studioUp(e, v, me, notes) {
     for (const p of projects) {
       if (whole.includes(p) || !obj(p.measured) || p.measured.hash !== m.hash) continue;
       out.push(connection('upstream', 'studio-path', 'Measured path held by', me,
-        { kind: 'studio', id: p.id }, 'studio.measured.hash', 'this run', ['present', 'its saved '
-          + 'graph holds the measured path with the hash this run stores; other parts of its '
+        { kind: 'studio', id: p.id }, 'studio.measured.hash', THIS, ['present', 'its saved '
+          + 'graph holds the measured path with the hash stored here; other parts of its '
           + 'graph differ from the graph recorded'], pName(p), at(p)));
     }
   }
   if (!out.length) {
     out.push(connection('upstream', 'studio-graph', 'Measured from the graph of', me,
       { kind: 'studio', id: null }, m ? 'studio.studioHash and studio.measured.hash'
-        : 'studio.studioHash', 'this run', ['missing', 'no Studio project stored here has this '
-        + `graph${m ? ' or its measured path' : ''} now (the run stores the graph itself, not a `
+        : 'studio.studioHash', THIS, ['missing', 'no Studio project stored here has this '
+        + `graph${m ? ' or its measured path' : ''} now (the experiment stores the graph, not a `
         + 'project)'], 'a Studio project'));
   }
   return out;
@@ -262,7 +268,7 @@ function profileUp(e, v, me) {
   const also = contradicted ? '; the record\'s own results contradict this claim, so it is '
     + 'presented as uncalibrated' : '';
   const args = ['upstream', 'profile', 'Frequency profile named', me,
-    { kind: 'profile', id: f.id }, 'calibration.frequency.id', 'this run'];
+    { kind: 'profile', id: f.id }, 'calibration.frequency.id', 'this experiment'];
   const target = `frequency profile "${f.name || short(f.id)}"`;
   // A profile id is the SHA-256 of its points (calibration/profile.js): equal ids are equal
   // profiles.
@@ -284,7 +290,7 @@ function buildUp(e, v, me, notes) {
   const cur = v.build;
   if (!cur) return null;
   const args = ['upstream', 'build', 'Made by', me, { kind: 'build', id: b.version },
-    'provenance.build', 'this run'];
+    'provenance.build', 'this experiment'];
   const target = `OSCILLA ${b.version}`;
   const about = { href: '#m=about' };
   if (b.version !== cur.version) {
@@ -312,7 +318,7 @@ function buildUp(e, v, me, notes) {
 function citations(f, id) {
   const out = [];
   f.evidence.forEach((ref, index) => {
-    if (ref.kind === 'run' && ref.experimentId === id) out.push({ index, words: 'this run' });
+    if (ref.kind === 'run' && ref.experimentId === id) out.push({ index, words: THIS });
     else if (ref.kind === 'value' && ref.experimentId === id) {
       out.push({ index, words: `its value at ${exactHzText(ref.at.hz)}` });
     } else if (ref.kind === 'compare' && (ref.a === id || ref.b === id)) {
@@ -345,8 +351,8 @@ function runDown(e, v, me) {
     const issues = findingIssues(f, lookup);
     const words = `it cites ${how.map((x) => x.words).join('; ')}`;
     // The worst state among its references to this run (one connection per finding).
-    const states = how.map((x) => citedState(issues, x.index, id, `${words}, with this run's `
-      + 'result hash'));
+    const states = how.map((x) => citedState(issues, x.index, id, `${words}, with this `
+      + 'experiment\'s result hash'));
     const rank = ['unreadable', 'mismatch', 'unverifiable', 'missing', 'present'];
     const [state, why] = states.sort((a, b) => rank.indexOf(a[0]) - rank.indexOf(b[0]))[0];
     out.push(connection('downstream', 'cited-by', 'Cited by', me, { kind: 'finding', id: f.id },
@@ -357,21 +363,21 @@ function runDown(e, v, me) {
   for (const row of v.runs) {
     if (!obj(row.links) || row.experimentId === id) continue;
     const args = (relation, label, field) => ['downstream', relation, label, me,
-      { kind: 'run', id: row.experimentId }, field, 'that run'];
-    const href = link('run', row.experimentId);
+      { kind: 'experiment', id: row.experimentId }, field, THAT];
+    const href = link('experiment', row.experimentId);
     if (row.links.repeatOf === id) {
       out.push(connection(...args('repeated-by', 'Repeated by', 'provenance.repeatOf'),
-        referrerState(row, () => ['unverifiable', 'a new measurement that names this run\'s id '
-          + 'as the one it repeats; a repeat does not record the result hash of that run']),
+        referrerState(row, () => ['unverifiable', 'a new measurement that names this one\'s id '
+          + 'as the one it repeats; a repeat does not record that one\'s result hash']),
         runName(row, row.experimentId), { href }));
     }
     if (row.links.duplicateOf === id) {
       const theirs = row.links.resultHash;
       out.push(connection(...args('duplicated-as', 'Duplicated as', 'provenance.duplicateOf'),
         referrerState(row, () => (!mine || !theirs ? ['unverifiable', 'a copy that names this '
-          + 'run\'s id, but a result hash is missing on one side'] : theirs !== mine
-          ? ['mismatch', 'it names this run\'s id as its original, but its result hash differs']
-          : ['present', 'a copy of this run under a new id, with the same result hash'])),
+          + 'experiment\'s id, but a result hash is missing on one side'] : theirs !== mine
+          ? ['mismatch', 'it names this one\'s id as its original, but its result hash differs']
+          : ['present', 'a copy of this experiment under a new id, with the same result hash'])),
         runName(row, row.experimentId), { href }));
     }
   }
@@ -380,8 +386,8 @@ function runDown(e, v, me) {
 
 function unknownRunsNote(v, notes, what) {
   if (!v.unknown) return;
-  notes.push({ field: what, text: `${v.unknown} stored run${v.unknown === 1 ? '' : 's'} could `
-    + `not be read; ${v.unknown === 1 ? 'it was' : 'they were'} not checked.` });
+  notes.push({ field: what, text: `${v.unknown} stored experiment${v.unknown === 1 ? '' : 's'} `
+    + `could not be read; ${v.unknown === 1 ? 'it was' : 'they were'} not checked.` });
 }
 
 // ---------------------------------------------------------------- the other subjects
@@ -430,12 +436,12 @@ function findingUp(f, v, me) {
       const row = v.run.get(id) || null;
       const isDef = !row && v.defs.has(id);
       const state = citedState(issues, i, id, ref.kind === 'value' ? 'with the cited result hash, '
-        + 'at a frequency the run stores' : 'with the cited result hash, recomputed when it was '
+        + 'at a frequency it stores' : 'with the cited result hash, recomputed when it was '
         + 'read');
-      out.push(connection('upstream', 'cites', label, me, { kind: 'run', id },
+      out.push(connection('upstream', 'cites', label, me, { kind: 'experiment', id },
         `evidence[${i}].${key} (identity: runs[${j(id)}].resultHash)`, 'this finding', state,
         isDef ? defName(v.defs.get(id), id) : runName(row, id),
-        { href: isDef ? link('definition', id) : link('run', id) }));
+        { href: isDef ? link('definition', id) : link('experiment', id) }));
     });
   });
   return out;
@@ -451,8 +457,8 @@ function definitionDown(d, v, me) {
       : ['mismatch', `it names version ${r.version} of this id with a hash this definition does `
         + 'not store']));
     out.push(connection('downstream', 'executed', 'Executed by', me,
-      { kind: 'run', id: row.experimentId }, 'definition (id, version and hash)', 'that run',
-      state, runName(row, row.experimentId), { href: link('run', row.experimentId) }));
+      { kind: 'experiment', id: row.experimentId }, 'definition (id, version and hash)', THAT,
+      state, runName(row, row.experimentId), { href: link('experiment', row.experimentId) }));
   }
   return out;
 }
@@ -463,8 +469,8 @@ function studioDown(p, v, me) {
     const s = obj(row.links) ? row.links.studio : null;
     if (!s) continue;
     const args = (relation, label, field) => ['downstream', relation, label, me,
-      { kind: 'run', id: row.experimentId }, field, 'that run'];
-    const href = link('run', row.experimentId);
+      { kind: 'experiment', id: row.experimentId }, field, THAT];
+    const href = link('experiment', row.experimentId);
     if (s.hash === p.studioHash) {
       out.push(connection(...args('measured-graph', 'Measured from this graph by',
         'studio.studioHash'), referrerState(row, () => ['present', 'it stores the hash of this '
@@ -499,9 +505,9 @@ export function connectionsOf(subject, index = {}) {
   let up = [];
   let down = [];
   let id;
-  if (subject.kind === 'run') {
+  if (subject.kind === 'experiment') {
     id = r.experimentId;
-    const me = { kind: 'run', id };
+    const me = { kind: 'experiment', id };
     const def = definitionUp(r, v, me);
     if (def.note) notes.push(def.note);
     up = [def.c, runUp('repeat-of', r, v, me), runUp('duplicate-of', r, v, me),
@@ -526,9 +532,9 @@ export function connectionsOf(subject, index = {}) {
   // A run target read and verified here carries the result hash it was verified with, so that
   // following the link can check that the same record is still stored (ui/connections.js).
   for (const c of [...up, ...down]) {
-    if (c.to.kind !== 'run' || c.state !== 'present') continue;
+    if (c.to.kind !== 'experiment' || c.state !== 'present') continue;
     const row = v.run.get(c.to.id);
-    const hash = c.to.id === id && subject.kind === 'run' ? runLinks(r).resultHash
+    const hash = c.to.id === id && subject.kind === 'experiment' ? runLinks(r).resultHash
       : row && obj(row.links) ? row.links.resultHash : null;
     if (hash) c.to = { ...c.to, hash };
   }
@@ -541,5 +547,5 @@ export function connectionsOf(subject, index = {}) {
 /** The ids of the stored runs a result names (to read and verify before it is shown). */
 export function runTargets(result) {
   return [...new Set([...result.upstream, ...result.downstream]
-    .filter((c) => c.to.kind === 'run' && c.state !== 'missing').map((c) => c.to.id))];
+    .filter((c) => c.to.kind === 'experiment' && c.state !== 'missing').map((c) => c.to.id))];
 }

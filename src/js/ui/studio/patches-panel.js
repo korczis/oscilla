@@ -116,7 +116,7 @@ export function mountPatches(dialogs, svc) {
       + 'toolbar, or select nodes and choose Save as patch.' }));
   }
 
-  // Connected records of a stored project (ADR 0048): the runs measured from its graph, found
+  // Connected records of a stored project (ADR 0048): the experiments measured from it, found
   // by the hash recomputed over it as it loads; computed when the disclosure is opened.
   function connectionsOf(r) {
     if (typeof svc.connections !== 'function') return null;
@@ -153,7 +153,7 @@ export function mountPatches(dialogs, svc) {
         h('ul', { class: 'osc-x-ev-list osc-x-cn-list', role: 'list',
           'aria-label': `What depends on ${r.name}` }, v.downstream.length
           ? v.downstream.map(item) : [h('li', { class: 'osc-x-empty', text: v.status ? ''
-            : 'No stored run was measured from this graph or its measured path.' })]),
+            : 'No stored experiment was measured from this graph or its measured path.' })]),
         v.more && v.more.downstream ? h('p', { class: 'osc-x-cn-more',
           text: `And ${v.more.downstream} more, not listed.` }) : null,
         notes.length ? h('ul', { class: 'osc-x-ev-list', role: 'list',
