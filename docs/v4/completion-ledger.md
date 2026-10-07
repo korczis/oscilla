@@ -90,7 +90,8 @@ engine/dsp/labs/sequencer CI and the About provenance tests skip in CI's shallow
 **closed** #147: WebKit legs in both jobs, nothing narrowed; the unit job checks out full
 history and tags, and the About checks fail instead of skipping under CI without them);
 no startup budget or large-library fixture (P1); `window.OSCILLA` test seam and `?mock=1` ship
-in production (W7); five dead CSS classes; an import without a hash shows no "unverified"
+in production (W7); five dead CSS classes (**closed** #156: six, removed; a unit test now
+requires a producer in src for every class selector); an import without a hash shows no "unverified"
 marker; an unreadable stored record fails silently; ADR status never leaves `proposed`; the plan
 contradicts git (V386 READY, M033 BLOCKED; **closed** #144, see "plan reconciled" below); "run" means both a repeat and a completed
 experiment, and "project" both a Studio file and OSCILLA; no glossary.
