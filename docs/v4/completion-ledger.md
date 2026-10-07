@@ -41,7 +41,7 @@ mobile, significant performance), **P2** (polish, debt).
 | Import / export / migration | ✓ | ✓ (validate before put) | – | ✓ | ✓ | hash recomputed | – | ✓ | EXISTS |
 | Semantic comparison | ✓ | – | – | – | ✓ | ✓ | ✓ | ✓ | EXISTS |
 | Studio provenance on a measurement | ✓ | ✓ | ✓ | ✓ | evidence, compare | whole graph + measured path (D3, #139) | – | ✓ | EXISTS |
-| Raw data retention | – | – | engine `keepRaw` | none | none | – | – | – | MISSING (no stated policy) |
+| Raw data retention | ADR 0049 | raw fields refused | released when a measurement settles; `keepRaw` tests only | derived only | MEASURE, About, README | IR carries post-roll sound (stated) | – | raw-retention | EXISTS (**closed** #158) |
 | Findings | – | – | – | – | – | – | – | – | MISSING |
 | Cross-domain Trace (result → run → definition → build → Studio) | – | – | – | – | – | – | – | – | MISSING |
 | Knowledge explorer | – | – | – | – | static About | – | – | – | MISSING |
