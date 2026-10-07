@@ -634,11 +634,14 @@ and is never played back, recorded or uploaded. Exports are downloaded to your m
 configuration URL contains only your settings, and it leaves your machine only if you share
 it.
 
-In Measure, the microphone opens only for the setup check, a measurement or the live RTA, and
-every track is stopped when they end or are aborted. The live RTA keeps only its latest
-analysis window, overwritten frame by frame. A measurement's recording (the background-noise
+In Measure, the microphone opens only for the setup check, a measurement, a level-calibration
+reference capture or the live RTA, and every track is stopped when they end or are aborted.
+The live RTA keeps only its latest analysis window, overwritten frame by frame. The setup
+check reads the input level from a 0.3 s window, and the reference capture (3 s) keeps only its
+level reading and the facts of the input; both recordings are dropped as soon as the level is
+read. A measurement's recording (the background-noise
 check and every run) is analysed in the page and lives only as long as that analysis: when the
-measurement completes, is aborted or fails, nothing in the page references it any more. It is
+measurement completes, is found invalid, is aborted or fails, nothing in the page references it any more. It is
 never stored, exported or uploaded, and OSCILLA offers no option to keep it. A saved experiment
 keeps derived results: the frequency response (with the aggregate of repeated runs), the
 impulse response, the quality assessment and the facts of the run. The impulse response is

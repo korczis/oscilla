@@ -73,6 +73,14 @@ Proposed:
   nothing in the engine references a capture any more. Their size is bounded by the contract
   limits (sweep ≤ 30 s, repeats ≤ 10, capture ≤ 40 s per run, all captures together ≤
   `maxRawBytes` = 128 MiB).
+- **In memory, outside the engine.** Two more raw captures go through the same capture io and
+  never reach the engine. The setup check records a 0.3 s level window (`capture.js`
+  `PREFLIGHT_LEVEL_S`) and the level calibration's "Capture reference" records 3 s
+  (`ui/measure.js` `captureReference`, `REFERENCE_CAPTURE_S` through `io.captureNoise`). Each
+  is a local reduced to a level reading (peak and RMS; the reference band level) and dropped
+  when that returns: the reference keeps the reading and the input facts, the setup check its
+  two numbers. Neither is stored or exported. The live RTA keeps only its latest analysis
+  window, overwritten frame by frame.
 - **`keepRaw`.** `measure(recipe, { keepRaw: true })` returns the captures as `runs[i].raw` and
   `noise.raw`, untransferred. No product path calls it: it exists for tests (the browser
   residual check). Even then only the caller's result holds them, and they go when the caller
@@ -96,9 +104,14 @@ Proposed:
 - **Why.** Privacy: microphone audio never leaves the page, and keeping a recording nobody
   asked for, even in memory, is a retention the user did not choose. Size: a 10 s sweep at
   48 kHz with its pre- and post-roll is about 2.3 MB of PCM per run, 10 runs of the longest
-  recipe about 77 MB, against about 20 kB of encoded response and 26 kB of aggregate for a 2 s
-  sweep of three runs (the impulse response is as long as one capture, 131 998 of 132 000
-  samples in the test fixture, but there is one per experiment). Immutability: a completed run is stored once and never changed
+  recipe about 77 MB. The stored side is not small either, and the impulse response is why:
+  measured on a synthetic input, three runs of a 2 s sweep store about 21 kB of encoded
+  response, 26 kB of aggregate and an impulse response of 180 000 samples (0.72 MB of
+  Float32, 0.96 MB encoded, of a 1.0 MB file), and of a 10 s sweep 564 000 samples (2.3 MB,
+  3.0 MB encoded). The impulse response is as long as one capture (131 998 of 132 000 samples
+  in the test fixture). So the saving is one capture-sized array per experiment instead of
+  one per run plus the noise check, not kilobytes instead of megabytes.
+  Immutability: a completed run is stored once and never changed
   (ADR 0040), so a raw field could never be removed from a run later without breaking that
   rule; leaving it out is the decision that keeps the option open without a record that
   contradicts it.
@@ -110,8 +123,13 @@ Proposed:
   the abort promise is gone. Abort and error behaviour is unchanged (`tests/unit/v3-engine`).
 - `tests/unit/raw-retention.test.mjs` pins the policy: WeakRefs to the io's capture buffers and
   a forced collection prove that nothing references a capture after `measure()` resolves,
-  aborts or fails, with or without `keepRaw` (the test failed on the base for both resolved
-  cases); a
+  is INVALID (by a run check and by the quality assessment), aborts or fails, with or without
+  `keepRaw` (the test failed on the base for the resolved cases). "Released" is polled to a
+  deadline: V8's concurrent compile can pin a buffer for a few event-loop turns after the
+  engine let go of it, and a buffer the engine holds never clears. The reference capture and
+  the setup check's level window are outside the engine and are held to this policy by
+  reading `ui/measure.js` and `capture.js`, not by a WeakRef test (their io needs a real
+  audio context). A
   saved experiment and its export carry only derived arrays and no `raw` field; validation
   refuses a record with a raw array; and a voice in the post-roll is rebuilt from the stored IR
   (r > 0.99) while one before the sweep is not (|r| < 0.1).

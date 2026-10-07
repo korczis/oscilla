@@ -2804,6 +2804,9 @@
         position: OSCILLA records the input (as far as the browser reports it) and stops applying
         the calibration when the input changes. It is kept in page memory only: a reload or a closed
         tab discards it, and the browser asks first while one is set.</p>
+      <p class="osc-m-hint" data-osc="levelCal.retention">Capturing opens the microphone for
+        <span x-text="REFERENCE_CAPTURE_S"></span> s. The recording is discarded as soon as its
+        level is read: only the level reading and the facts of the input are kept.</p>
       <p class="osc-m-hint" data-osc="levelCal.scale"><strong>Scale of the reading:</strong>
         <span x-text="LEVEL_SCALE.label"></span>.</p>
       <div class="osc-settings-grid">
