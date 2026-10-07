@@ -349,6 +349,7 @@ function defineChecks() {
           && x.outcome === 'presentation-only')).map((x) => `${x.kind}:${x.outcome}`),
         playing: s.transport.playing };
     }, before.seq);
+    await H.select(page, []); // the drag selected the node; the Runtime section needs none
     const rv = await H.runtime(page);
     const audio = await H.steps(page, before.t, after.t);
     const slope = (2 * Math.PI * 440 * audio.peak) / audio.sr;
