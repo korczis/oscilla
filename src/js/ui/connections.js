@@ -107,7 +107,7 @@ export function createConnectionsUi() {
     const projects = [];
     const unreadable = [];
     for (const r of rows) {
-      const key = `${r.id}|${r.savedAt}`;
+      const key = `${r.id}|${r.savedAt}|${r.studioHash}`;
       keys.add(key);
       if (!ctx.projects.has(key)) {
         let x;
