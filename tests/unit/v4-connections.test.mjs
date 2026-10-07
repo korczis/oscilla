@@ -566,3 +566,224 @@ test('connected records are rendered as text, in every record view', () => {
     assert.match(html, new RegExp(`data-osc="${osc.replace('.', '\\.')}"`), osc);
   }
 });
+
+// ---------------------------------------------------------------- review 1 of #151
+
+/** Another tab on the same database (the harness's IndexedDB): its own component. */
+async function otherTab() {
+  const cmp = {};
+  for (const part of [createExperimentsUi(), createFindingsUi(), createConnectionsUi()]) {
+    Object.defineProperties(cmp, Object.getOwnPropertyDescriptors(part));
+  }
+  Object.assign(cmp, { notify() {}, $nextTick: (fn) => fn && fn(), openModal() {},
+    closeModal() {}, setWorkspace() {}, measureCurrentProfile: () => null });
+  cmp.experimentsInit();
+  cmp.findingsInit();
+  await cmp.experimentsRefresh();
+  return cmp;
+}
+/** In `tab`: delete experiment `id` and store `json` under that id, renamed. */
+async function replaceIn(tab, id, json, name) {
+  tab.exps.deleteId = id;
+  assert.equal(await tab.experimentsDelete(), true);
+  const d = JSON.parse(json);
+  d.experimentId = id;
+  d.name = name;
+  assert.equal(await tab.experimentsImportText(JSON.stringify(d)), id);
+}
+/** The address as ui/navigation.js would hold it: the record it names, or null. */
+function fakeAddress(cmp) {
+  const nav = { named: null, calls: [] };
+  cmp.navNameRecord = (link) => { nav.named = link ? { ...link } : null; nav.calls.push(link); };
+  cmp.navRecordInAddress = () => (nav.named ? { ok: true, ...nav.named } : null);
+  return nav;
+}
+const hashOf = (e) => (e ? e.provenance.resultHash : null);
+const shown = (cmp) => cmp.experimentsTestSeam().detail();
+
+test('review 1.5: a build or a profile is never "stored here"; it has its own words', () => {
+  const r = run('c', { calibration: { frequency: { id: H('7'), name: 'Mic A' }, level: null },
+    provenance: { build: { version: '9.8.7', sourceDigest: H('s'), artifactSha256: null } } });
+  const cur = { version: '9.8.7', sourceDigest: H('s'), artifactSha256: null };
+  const texts = [];
+  for (const over of [{ build: cur, profile: { id: H('7'), name: 'Mic A' } },
+    { build: { ...cur, version: '9.9.0' }, profile: null },
+    { build: { ...cur, sourceDigest: H('t') } }, { build: { ...cur, sourceDigest: null } }]) {
+    const up = C.connectionsOf(exp(r), index([r], over)).upstream;
+    for (const c of up) texts.push([c.relation, c.state, c.text]);
+  }
+  assert.ok(texts.length >= 7);
+  for (const [, , text] of texts) assert.ok(!/stored here/.test(text), text);
+  const of2 = (rel, state) => texts.find((t) => t[0] === rel && t[1] === state)[2];
+  assert.match(of2('build', 'present'), /^running here: /);
+  assert.match(of2('build', 'missing'), /^not running here: /);
+  assert.match(of2('profile', 'present'), /^loaded here: /);
+  assert.match(of2('profile', 'missing'), /^not loaded: /);
+  // The same source with another artifact SHA-256 is another file, never the running build.
+  const stamped = run('s', { provenance: { build: { ...cur, artifactSha256: H('x') } } });
+  assert.equal(one(C.connectionsOf(exp(stamped), index([stamped],
+    { build: { ...cur, artifactSha256: H('y') } })).upstream, 'build').state, 'mismatch');
+});
+
+test('review 1.6: each identity check of each row holds (the mutants die)', () => {
+  const a = run('a', { definition: { id: 'def-1', version: 1, hash: H('a'), derived: false } });
+  const d = def('def-1', [H('a')]);
+  const p = { id: 'p-1', name: 'Sweep', studioHash: H('g'), measured: { v: 1, hash: H('m') } };
+  // A copy that names this id with another result hash, or without one, on either side.
+  const dup = (hash) => run('dup', { provenance: { duplicateOf: 'a', resultHash: hash } });
+  const state = (subject, rows) => one(C.connectionsOf(exp(subject), index(rows)).downstream,
+    'duplicated-as').state;
+  assert.equal(state(a, [a, dup(H('1'))]), 'present');
+  assert.equal(state(a, [a, dup(H('2'))]), 'mismatch');
+  assert.equal(state(a, [a, dup(null)]), 'unverifiable');
+  const bare = run('a', { provenance: { resultHash: null } });
+  assert.equal(state(bare, [bare, dup(H('1'))]), 'unverifiable');
+  // A referrer whose record was not read is never "stored here", in any downstream row.
+  const rep = run('rep', { provenance: { repeatOf: 'a', resultHash: H('2') } });
+  const ran = run('ran', { definition: { id: 'def-1', version: 1, hash: H('a'), derived: false } });
+  const whole = run('w', { studio: { studioHash: H('g'), measured: { v: 1, hash: H('m') } } });
+  const path = run('p', { studio: { studioHash: H('h'), measured: { v: 1, hash: H('m') } } });
+  const unread = (rows) => {
+    const ix = index(rows);
+    for (const r of ix.runs) delete r.readable;
+    return ix;
+  };
+  const states = (out) => out.downstream.map((c) => [c.relation, c.state]);
+  assert.deepEqual(states(C.connectionsOf(exp(a), unread([a, rep, dup(H('1'))]))),
+    [['repeated-by', 'unverifiable'], ['duplicated-as', 'unverifiable']]);
+  assert.deepEqual(states(C.connectionsOf({ kind: 'definition', record: d },
+    { ...unread([a, ran]), definitions: [d] })),
+  [['executed', 'unverifiable'], ['executed', 'unverifiable']]);
+  assert.deepEqual(states(C.connectionsOf({ kind: 'studio', record: p }, unread([whole, path]))),
+    [['measured-graph', 'unverifiable'], ['measured-path', 'unverifiable']]);
+  // A measured path recorded in another version is not compared with the project's.
+  const v2 = run('v2', { studio: { studioHash: H('h'), measured: { v: 2, hash: H('m') } } });
+  assert.deepEqual(C.connectionsOf({ kind: 'studio', record: p }, index([v2])).downstream, []);
+});
+
+test('review 1 (P2): what is not fine is listed first, so the bound never hides it', () => {
+  const d = def('def-1', [H('a')]);
+  const rows = Array.from({ length: C.CONNECTION_LIMIT + 5 }, (_, i) => run(`r${i}`,
+    { definition: { id: 'def-1', version: 1, hash: i >= C.CONNECTION_LIMIT ? H('f') : H('a'),
+      derived: false } }));
+  const out = C.connectionsOf({ kind: 'definition', record: d }, index(rows,
+    { definitions: [d] }));
+  assert.equal(out.downstream.length, C.CONNECTION_LIMIT);
+  assert.deepEqual(out.downstream.slice(0, 5).map((c) => c.state), Array(5).fill('mismatch'));
+  assert.equal(out.more.downstream, 5);
+  assert.equal(out.more.downstreamNotFine, 0, 'every unlisted entry is fine');
+});
+
+test('review 1.4: a record replaced while the list is read is never "stored here"', async () => {
+  const { a, c } = await fx();
+  const { cmp } = harness();
+  const model = templateModel('measurement-sweep');
+  const e = JSON.parse(experimentToJson(withStudioProvenance(a.experiment, model)));
+  e.experimentId = 'from-studio';
+  await cmp.experimentsImportText(JSON.stringify(e));
+  const s = await cmp.experimentsStore();
+  await createStudioLibrary(s).saveProject(model, { id: 'project-sweep', now: NOW });
+  const tab2 = await otherTab();
+  const listFindings = s.listFindings.bind(s);
+  let once = true;
+  s.listFindings = async () => { // "another tab", after this compute read the list rows
+    if (once) {
+      once = false;
+      await replaceIn(tab2, 'from-studio', c.json, 'IMPOSTOR, never measured from Studio');
+    }
+    return listFindings();
+  };
+  const v = await cmp.connectionsOfStudioProject('project-sweep');
+  assert.equal((await s.get('from-studio')).studio, undefined, 'the stored record has no graph');
+  assert.deepEqual(v.downstream.filter((x) => x.state === 'present'), [],
+    'no entry says the impostor stores this graph');
+  for (const x of v.downstream) assert.equal(await cmp.connectionsVerifyAndGo(x), false);
+});
+
+test('review 1.1: the entries under a detail are those of the record the detail shows',
+  async () => {
+    const { a, c } = await fx();
+    const { cmp } = harness();
+    await cmp.experimentsImportText(a.json);
+    await cmp.experimentsOpen('fixture-a');
+    const old = hashOf(shown(cmp));
+    await replaceIn(await otherTab(), 'fixture-a', c.json, 'IMPOSTOR-A');
+    // Asked for the detail's own hash, a different stored record lists nothing under it.
+    const direct = await cmp.connectionsOfRun('fixture-a', old, { resync: false });
+    assert.deepEqual([direct.upstream, direct.downstream], [[], []]);
+    assert.match(direct.status, /no longer the one shown/);
+    // A refresh of what is shown (returning to Experiments) brings the detail to the stored
+    // record first; the entries then belong to it.
+    await cmp.connectionsRefreshOpen();
+    await cmp.cnxSettled();
+    const stored = await (await cmp.experimentsStore()).get('fixture-a');
+    assert.equal(hashOf(shown(cmp)), hashOf(stored));
+    assert.equal(cmp.exps.detail.title, 'IMPOSTOR-A');
+    assert.equal(cmp.cnx.run.status, null);
+    assert.equal(cmp.cnx.run.shownHash, hashOf(stored), 'the view says whose entries they are');
+  });
+
+test('review 1.2: following an entry opens the record that was read, never a decoded copy',
+  async () => {
+    const { a, b, c } = await fx();
+    const { cmp } = harness();
+    await cmp.experimentsImportText(a.json);
+    await cmp.experimentsImportText(b.json);
+    await cmp.experimentsOpen('fixture-b'); // B decoded and shown here
+    await cmp.experimentsOpen('fixture-a'); // B stays in the decoded cache
+    const tab2 = await otherTab();
+    await replaceIn(tab2, 'fixture-b', c.json, 'IMPOSTOR under fixture-b');
+    await tab2.findingsAskRun('fixture-b');
+    tab2.fnd.form.statement = 'cites the impostor';
+    const f = await tab2.findingsSave();
+    assert.ok(f);
+    const entry = (await cmp.connectionsOfFinding(f.id)).upstream[0];
+    assert.equal(entry.state, 'present');
+    assert.equal(await cmp.connectionsVerifyAndGo(entry), true);
+    await cmp.cnxSettled();
+    const stored = await (await cmp.experimentsStore()).get('fixture-b');
+    assert.equal(cmp.exps.detail.title, 'IMPOSTOR under fixture-b');
+    assert.equal(hashOf(shown(cmp)), hashOf(stored));
+    assert.equal(hashOf(shown(cmp)), entry.to.hash, 'the record opened is the one verified');
+    // The same with the stale copy on screen: a record link to the open id reads it again.
+    await replaceIn(tab2, 'fixture-b', b.json, 'B again');
+    assert.equal(await cmp.recordsOpen('experiment', 'fixture-b'), true);
+    assert.equal(cmp.exps.detail.title, 'B again');
+  });
+
+test('review 1.7: the address names the open experiment on every path', async () => {
+  const { a, b } = await fx();
+  const { cmp, notes } = harness();
+  const nav = fakeAddress(cmp);
+  await cmp.experimentsImportText(a.json);
+  await cmp.experimentsImportText(b.json);
+  await cmp.experimentsOpen('fixture-a');
+  assert.deepEqual(nav.named, { kind: 'experiment', id: 'fixture-a' });
+  // A link to a record that is not stored: said, and the address names what is shown again.
+  nav.named = { kind: 'experiment', id: 'not-stored-anywhere' };
+  assert.equal(cmp.recordsApplyHash('#m=experiments&exp=not-stored-anywhere'), true);
+  await cmp.cnxSettled();
+  assert.match(notes.at(-1).text, /not stored in this browser/);
+  assert.deepEqual(nav.named, { kind: 'experiment', id: 'fixture-a' });
+  // The open record deleted in another tab: the detail closes and the address names none.
+  const tab2 = await otherTab();
+  tab2.exps.deleteId = 'fixture-a';
+  await tab2.experimentsDelete();
+  await cmp.experimentsRefresh();
+  await cmp.cnxSettled();
+  assert.equal(cmp.exps.detail, null);
+  assert.equal(nav.named, null);
+  // With nothing open, a missing link leaves no record named.
+  nav.named = { kind: 'experiment', id: 'gone' };
+  cmp.recordsApplyHash('#m=experiments&exp=gone');
+  await cmp.cnxSettled();
+  assert.equal(nav.named, null);
+});
+
+test('review 1.3 and 1.8: Studio\'s dialog follows entries through the verified path', () => {
+  const panel = readFileSync(path.join(ROOT, 'src/js/ui/studio/patches-panel.js'), 'utf8');
+  assert.match(panel, /svc\.follow\(/, 'a dialog link goes through connectionsVerifyAndGo');
+  assert.ok(!/onClick: follow\b/.test(panel), 'no link is left to the browser alone');
+  assert.match(panel, /'aria-label': `Open \$\{r\.name\}`/, 'Open names its project');
+  assert.match(panel, /svc\.dirty\(\)/, 'Open asks before it replaces unsaved changes');
+});
