@@ -3,12 +3,20 @@
 // Fixture versions use majors 39-41 and 400 so they can never be mistaken for the real product
 // version by version:check (the V2 situation, the v1.0.0 tag followed by an untagged V2
 // major, is modelled as v39.0.0 -> 40.0.0).
+//
+// And what release:prepare requires before it starts (rule project.release-flow-complete),
+// driven through main() as a dry run against a fake git runner and a fixture checkout: the
+// newest release is recorded, and a major release follows a published release candidate.
 import assert from 'node:assert/strict';
+import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import { test } from 'node:test';
 import {
   analyzeCommits, parseCommit, proposeVersion, readCommits, lastReleaseTag,
 } from '../../scripts/release-analyze.mjs';
 import { bumpVersion, compareSemver, parseSemver } from '../../scripts/release-metadata.mjs';
+import { adrStatus, flowProblems, main as prepare } from '../../scripts/release-prepare.mjs';
 
 const c = (subject, body = '') => ({ sha: `${subject.length}`.padEnd(40, '0'), subject, body });
 
@@ -128,4 +136,134 @@ test('git readers: last v* tag by SemVer, commits since it', () => {
   assert.deepEqual(commits.map((x) => [x.subject, x.body]),
     [['feat: x', 'body line'], ['fix: y', '']]);
   assert.equal(lastReleaseTag(() => ''), null);
+});
+
+// ---------------------------------------------------------------- release:prepare preconditions
+
+const record = (version, channel) => `schema: release/v1\nversion: "${version}"\n`
+  + `tag: v${version}\nchannel: ${channel}\n`;
+
+/**
+ * A fixture checkout (package.json, release records, ADRs) and a fake git that answers what
+ * release:prepare asks before it would change anything. Returns the dry run's exit code and
+ * everything it printed.
+ */
+function prepareDryRun({ version, tags, records = {}, adrs = {}, subject = 'feat(x): y',
+  argv = [] }) {
+  const root = mkdtempSync(path.join(os.tmpdir(), 'oscilla-prepare-'));
+  const write = (rel, text) => {
+    mkdirSync(path.dirname(path.join(root, rel)), { recursive: true });
+    writeFileSync(path.join(root, rel), text);
+  };
+  write('package.json', JSON.stringify({ version }));
+  for (const [tag, channel] of Object.entries(records)) {
+    write(`.ai/repo/releases/${tag}.yaml`, record(tag.slice(1), channel));
+  }
+  for (const [name, status] of Object.entries(adrs)) {
+    write(`.ai/repo/adrs/${name}.md`, `---\nschema: adr/v1\nstatus: ${status}\n---\n\n# x\n`);
+  }
+  const run = (args) => {
+    if (args[0] === 'status') return '';
+    if (args[0] === 'tag') return tags.join('\n');
+    if (args[0] === 'log') return `${'a'.repeat(40)}\x1f${subject}\x1f\x1e\n`;
+    throw new Error(`release:prepare --dry-run must not run git ${args.join(' ')}`);
+  };
+  const out = [];
+  const real = { log: console.log, error: console.error };
+  console.log = (l) => out.push(String(l));
+  console.error = (l) => out.push(String(l));
+  let code;
+  try {
+    code = prepare(['--dry-run', ...argv], root, run);
+  } finally {
+    Object.assign(console, real);
+  }
+  return { code, text: out.join('\n') };
+}
+
+const RECORDED = { 'v40.10.2': 'stable', 'v40.10.3': 'stable' };
+const TAGS = ['v40.10.2', 'v40.10.3'];
+
+test('prepare starts when the newest release is recorded', () => {
+  const r = prepareDryRun({ version: '40.10.3', tags: TAGS, records: RECORDED });
+  assert.equal(r.code, 0, r.text);
+  assert.match(r.text, /Dry run: would bump v40\.11\.0 and run:/);
+});
+
+test('prepare refuses to start while the newest release has no record', () => {
+  const r = prepareDryRun({ version: '40.10.3', tags: TAGS,
+    records: { 'v40.10.2': 'stable' } });
+  assert.equal(r.code, 1);
+  assert.match(r.text, /refusing to start \(rule project\.release-flow-complete\)/);
+  assert.match(r.text,
+    /the newest release v40\.10\.3 has no \.ai\/repo\/releases\/v40\.10\.3\.yaml/);
+  assert.match(r.text, /npm run release:record -- --version 40\.10\.3/);
+  assert.doesNotMatch(r.text, /Dry run: would/);
+  // an older gap does not stop the next release; the completeness test owns those
+  const older = prepareDryRun({ version: '40.10.3', tags: TAGS,
+    records: { 'v40.10.3': 'stable' } });
+  assert.equal(older.code, 0, older.text);
+  // releases before the first recorded one (v3.4.0) never had a record to miss
+  const early = prepareDryRun({ version: '3.3.3', tags: ['v3.3.2', 'v3.3.3'] });
+  assert.equal(early.code, 0, early.text);
+});
+
+test('prepare refuses a major release that no published release candidate preceded', () => {
+  const major = { version: '41.0.0', tags: TAGS, records: RECORDED };
+  const bare = prepareDryRun(major);
+  assert.equal(bare.code, 1);
+  assert.match(bare.text, /v41\.0\.0 is a major release with no published release candidate/);
+  assert.match(bare.text, /release:prepare -- --prerelease first, or pass --no-rc-because <ADR>/);
+
+  // an rc tag alone is not a published candidate: its record must be on the prerelease channel
+  const rcTags = [...TAGS, 'v41.0.0-rc.1'];
+  const tagOnly = prepareDryRun({ ...major, tags: rcTags });
+  assert.equal(tagOnly.code, 1);
+  assert.match(tagOnly.text, /newest release v41\.0\.0-rc\.1 has no /);
+  assert.match(tagOnly.text, /no published release candidate/);
+  const wrongChannel = prepareDryRun({ ...major, tags: rcTags,
+    records: { ...RECORDED, 'v41.0.0-rc.1': 'stable' } });
+  assert.equal(wrongChannel.code, 1);
+  const published = prepareDryRun({ ...major, tags: rcTags,
+    records: { ...RECORDED, 'v41.0.0-rc.1': 'prerelease' } });
+  assert.equal(published.code, 0, published.text);
+  assert.match(published.text, /Dry run: would confirm v41\.0\.0/);
+  // a candidate of another major does not count
+  const other = prepareDryRun({ ...major, tags: [...TAGS, 'v40.0.0-rc.1'],
+    records: { ...RECORDED, 'v40.0.0-rc.1': 'prerelease' } });
+  assert.equal(other.code, 1);
+
+  // the release candidate itself, and minors and patches, need none
+  const rc = prepareDryRun({ ...major, argv: ['--prerelease'], subject: 'feat!: new contract',
+    version: '40.10.3' });
+  assert.equal(rc.code, 0, rc.text);
+  assert.match(rc.text, /would bump v41\.0\.0-rc\.1/);
+});
+
+test('--no-rc-because overrides only by naming an accepted ADR', () => {
+  const major = { version: '41.0.0', tags: TAGS, records: RECORDED,
+    adrs: { '0098-skip-the-candidate': 'proposed', '0099-skip-the-candidate': 'accepted' } };
+  const proposed = prepareDryRun({ ...major, argv: ['--no-rc-because', '0098'] });
+  assert.equal(proposed.code, 1);
+  assert.match(proposed.text, /--no-rc-because 0098: adr-0098 is proposed, not accepted/);
+  const missing = prepareDryRun({ ...major, argv: ['--no-rc-because', 'ADR-0097'] });
+  assert.equal(missing.code, 1);
+  assert.match(missing.text, /--no-rc-because ADR-0097 names no ADR in \.ai\/repo\/adrs\//);
+  const empty = prepareDryRun({ ...major, argv: ['--no-rc-because'] });
+  assert.equal(empty.code, 1);
+  for (const ref of ['0099', 'adr-0099', 'ADR 0099']) {
+    const ok = prepareDryRun({ ...major, argv: ['--no-rc-because', ref] });
+    assert.equal(ok.code, 0, ok.text);
+  }
+  // the repository's own ADR 0047 is the rule, not an exemption from it
+  assert.equal(adrStatus('0047').id, 'adr-0047');
+  assert.notEqual(adrStatus('0047').status, 'accepted');
+});
+
+test('flowProblems is pure: both refusals from facts alone', () => {
+  const f = { lastTag: 'v40.10.3', proposed: '41.0.0', tags: TAGS, hasRecord: () => false,
+    channelOf: () => null };
+  assert.equal(flowProblems(f).length, 2);
+  assert.deepEqual(flowProblems({ ...f, proposed: '40.11.0', hasRecord: () => true }), []);
+  assert.deepEqual(flowProblems({ ...f, lastTag: null, proposed: null }), []);
 });

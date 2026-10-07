@@ -1,5 +1,7 @@
 // release:record against fake git/gh runners (nothing is read from GitHub here), and every
 // committed .ai/repo/releases/*.yaml against release/v1 and against git where the tag is known.
+// Completeness (rule project.release-flow-complete): every v* tag from v3.4.0 on that is past
+// its publish window has a record; CI's unit job checks out the tags, so it runs there.
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
@@ -9,9 +11,10 @@ import path from 'node:path';
 import { test } from 'node:test';
 import { ROOT, bannerComment } from '../../scripts/release-metadata.mjs';
 import {
-  ARTIFACT_KEYS, RECORD_KEYS, RECORD_REQUIRED, RECORDS_DIR, REQUIRED_TARGETS, WEB_TARGET,
-  artifactEntry, assetUrl, channelFor, gatherRecord, main, parseRecord, recordDifferences,
-  recordFile, recordProblems, releaseAssetName, renderRecord,
+  ARTIFACT_KEYS, RECORD_FLOOR, RECORD_KEYS, RECORD_REQUIRED, RECORD_WINDOW_HOURS, RECORDS_DIR,
+  REQUIRED_TARGETS, WEB_TARGET, artifactEntry, assetUrl, channelFor, gatherRecord, hasRecordFile,
+  main, missingRecords, needsRecord, parseRecord, readTagDates, recordDifferences, recordFile,
+  recordProblems, releaseAssetName, renderRecord,
 } from '../../scripts/release-record.mjs';
 
 const COMMIT = 'f187f664893ce0444c03629b0d8afa66d6d9f715';
@@ -251,4 +254,62 @@ test('every committed release record is valid, canonical and agrees with git', (
     const pkg = JSON.parse(git(['show', `${r.commit}:package.json`]).toString());
     assert.equal(pkg.version, r.version, `${f}: package.json version at the tag`);
   }
+});
+
+// ---------------------------------------------------------------- completeness
+
+test('missingRecords: tags from the floor on, past the publish window, without a record', () => {
+  const now = Date.parse('2026-10-07T00:00:00Z');
+  const hoursAgo = (h) => now - h * 3_600_000;
+  const tags = [
+    { tag: 'v3.3.3', date: hoursAgo(90) }, // before the first recorded release
+    { tag: 'v40.0.0', date: hoursAgo(80) },
+    { tag: 'v40.1.0', date: hoursAgo(50) },
+    { tag: 'v41.0.0-rc.1', date: hoursAgo(30) }, // a candidate is a published release too
+    { tag: 'v41.0.0', date: hoursAgo(RECORD_WINDOW_HOURS - 1) }, // still being published
+    { tag: 'vnext', date: hoursAgo(99) },
+  ];
+  const recorded = new Set(['v40.0.0']);
+  const hasRecord = (t) => recorded.has(t);
+  const missing = (o = {}) => missingRecords({ tags, hasRecord, now, ...o });
+  assert.deepEqual(missing(), ['v40.1.0', 'v41.0.0-rc.1']);
+  assert.deepEqual(missing({ windowHours: 0 }), ['v40.1.0', 'v41.0.0-rc.1', 'v41.0.0']);
+  assert.deepEqual(missing({ now: now + 2 * 3_600_000 }),
+    ['v40.1.0', 'v41.0.0-rc.1', 'v41.0.0'], 'the window closes');
+  recorded.add('v40.1.0').add('v41.0.0-rc.1');
+  assert.deepEqual(missing(), []);
+  assert.equal(RECORD_FLOOR, '3.4.0');
+  assert.deepEqual(['v3.3.3', 'v3.4.0', 'v3.4.0-rc.1', 'v3.10.0', 'vnext', '3.4.0']
+    .map((t) => needsRecord(t)), [false, true, false, true, false, false]);
+});
+
+test('readTagDates: tag and creation time from git for-each-ref', () => {
+  const run = (args) => {
+    assert.deepEqual(args, ['for-each-ref', '--format=%(refname:short)%09%(creatordate:unix)',
+      'refs/tags/v*']);
+    return 'v40.0.0\t1759745400\nv40.1.0\t1759831800';
+  };
+  assert.deepEqual(readTagDates(run), [{ tag: 'v40.0.0', date: 1759745400000 },
+    { tag: 'v40.1.0', date: 1759831800000 }]);
+  assert.deepEqual(readTagDates(() => ''), []);
+});
+
+// CI's unit job checks out full history and tags (fetch-depth: 0), so there a clone without
+// tags fails this test instead of skipping it; elsewhere (a shallow clone) it skips and says so.
+test('every published release from v3.4.0 on, past its publish window, has a record', (t) => {
+  const out = git(['for-each-ref', '--format=%(refname:short)%09%(creatordate:unix)',
+    'refs/tags/v*']);
+  const tags = out ? readTagDates(() => out.toString().trim()) : [];
+  if (!tags.some(({ tag }) => needsRecord(tag))) {
+    const why = 'no v* tag from v3.4.0 on in this clone';
+    if (process.env.GITHUB_ACTIONS === 'true') {
+      assert.fail(`${why}: the CI unit job must check out with fetch-depth: 0`);
+    }
+    t.skip(why);
+    return;
+  }
+  const missing = missingRecords({ tags, hasRecord: (tag) => hasRecordFile(tag, ROOT) });
+  assert.deepEqual(missing, [], `published more than ${RECORD_WINDOW_HOURS} h ago and not `
+    + `recorded: ${missing.join(', ')}. Run npm run release:record -- --version <X.Y.Z> for `
+    + `each and land the records (${RECORDS_DIR}/)`);
 });

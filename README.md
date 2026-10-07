@@ -561,18 +561,34 @@ automated test proves how a physical speaker, room or microphone behaves.
   2. `npm run release:prepare` starts from a clean tree. It bumps `package.json` once (or
      confirms an untagged version), rebuilds, and runs `version:check`, the release gate and
      `majordomus doctor`. If anything fails, it restores the files. It never tags. Land the
-     result on `main` through a pull request.
+     result on `main` through a pull request. It refuses to start while the newest release has
+     no record (step 4), and it refuses a stable `X.0.0` that no published `X.0.0-rc.N`
+     preceded (`npm run release:prepare -- --prerelease` cuts the candidate;
+     [ADR 0047](.ai/repo/adrs/0047-a-major-release-is-preceded-by-a-release-candidate-v3-0-0-wa.md)).
+     The gate receipt it writes binds every tracked file outside the release records, so any
+     other pull request merged before the publish means running it again
+     (rule `project.release-receipt-binds-gate`).
   3. `npm run release:publish` is a dry run by default. With `-- --yes`, on `main`, it creates
      the annotated tag `vX.Y.Z`, pushes it, waits for the Pages deployment, verifies it, and
      creates the GitHub Release with notes generated from the commits since the previous tag,
-     with the committed `dist/index.html` attached as `oscilla-vX.Y.Z.html`.
+     with the committed `dist/index.html` attached as `oscilla-vX.Y.Z.html`. A Pages run that
+     has sat in `waiting` or `queued` for 15 minutes blocks it, reported with its run id, its
+     commit and whether that commit precedes `HEAD`; it never watches a run that has not
+     started. It prints the `majordomus finish` line that verifies the published commit.
   4. `npm run release:record -- --version X.Y.Z` writes the release record
      `.ai/repo/releases/vX.Y.Z.yaml` (Majordomus `release/v1`): the tag and its commit, the
      channel, when the GitHub Release was published, its notes, and the attached file's
      SHA-256 and size read off the downloaded bytes, which must equal the committed
      `dist/index.html` at the tag (the artifact digest `verify-deploy` checks). A record is
      evidence: `-- --check` refuses one that differs from what was published, naming the
-     field. Land it on `main` by a small pull request of its own (`release/record-vX.Y.Z`).
+     field. Land it on `main` by a small pull request of its own
+     (`chore/release-record-vX.Y.Z`). The release is finished when the record is on `main`:
+     `npm test` fails for a tag more than 6 hours old without one
+     (rule `project.release-flow-complete`, which states the whole flow in order).
+- **Cadence.** A commit that needs a release is released within 24 hours of landing on `main`
+  (rule `project.deploy-often`). `node scripts/release-cadence.mjs` prints the lag; the
+  `Release cadence` workflow (`.github/workflows/cadence.yml`) runs it every hour, fails while
+  a release is overdue and keeps one "release overdue" issue open until it ships.
 - **Tags** are `vX.Y.Z`. V1, the original hand-written single file, is `v1.0.0` (deployed) and
   `v1.0.1` (a maintenance tag that was never deployed).
 - **About timeline.** A minor or major release adds its line to the About view's evolution

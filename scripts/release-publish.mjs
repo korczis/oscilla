@@ -6,17 +6,26 @@
 // Preconditions (all checked, all reported, in both modes):
 //   on branch main, clean tree, HEAD == origin/main (Pages deploys main), tag v<version>
 //   absent locally and on origin, a release-gate receipt (release:prepare) matching the
-//   current version, source digest and dist bytes, committed dist up to date
-//   (npm run build:check), gh authenticated.
+//   current version, source digest, dist bytes and gate tree (every tracked file outside
+//   .ai/repo/releases/; rule project.release-receipt-binds-gate), committed dist up to date
+//   (npm run build:check), gh authenticated, and no pages.yml run that has sat in waiting or
+//   queued for STUCK_AFTER_MIN minutes (rule project.release-flow-complete): such a run holds
+//   the `pages` concurrency group, so the deploy this publish waits for would never start.
+//   Each stuck run is reported with its id, its commit and the `git merge-base --is-ancestor`
+//   verdict against HEAD.
 // With --yes:
 //   git tag -a v<version> on HEAD; git push origin v<version>; wait for the Pages run of HEAD
-//   (gh run list/watch); node scripts/verify-deploy.mjs --commit <HEAD>; gh release create
+//   to start (gh run list; a run that is still waiting or queued at --pages-timeout is
+//   diagnosed the same way, never watched forever), then gh run watch;
+//   node scripts/verify-deploy.mjs --commit <HEAD>; gh release create
 //   with notes generated from the commits since the previous tag and the committed
 //   dist/index.html attached as oscilla-v<version>.html (the artifact the release record of
 //   scripts/release-record.mjs names); a SemVer prerelease (X.Y.Z-rc.N) is created with
 //   --prerelease --latest=false, so GitHub never shows it as the latest release and its record
 //   lands on the prerelease channel. A failure after the push stops before the GitHub Release
-//   and says how to undo the tag.
+//   and says how to undo the tag. Both modes print the `majordomus finish` line that closes
+//   the release task against the published commit (verify-deploy defaults to the worktree
+//   HEAD, which is not the published commit once main has moved).
 import { spawnSync } from 'node:child_process';
 import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
@@ -67,6 +76,50 @@ export function releaseNotes({ version, previousTag, commits, commit, sourceDige
   ].join('\n');
 }
 
+// ------------------------------------------------------------------------------- pages runs
+export const PAGES_RUN_FIELDS = 'databaseId,status,conclusion,headSha,createdAt';
+/** Statuses of a workflow run that has not started: awaiting approval, a runner or its turn. */
+export const WAITING_STATUSES = ['waiting', 'queued', 'pending', 'requested'];
+// pages.yml is two jobs of at most 10 minutes each and one run at a time, so a run that has
+// not started after 15 minutes is not waiting for its turn behind a healthy deploy.
+export const STUCK_AFTER_MIN = 15;
+
+/** Pure: the runs that have not started for at least `afterMin` minutes at `now` (ms). */
+export function stuckPagesRuns(runs, now, afterMin = STUCK_AFTER_MIN) {
+  return runs.filter((r) => WAITING_STATUSES.includes(r.status)
+    && now - Date.parse(r.createdAt) >= afterMin * 60_000);
+}
+
+/**
+ * Pure: one line per stuck run, with the run id, its commit and the ancestry verdict.
+ * @param {{ stuck: object[], head: string, now: number,
+ *   ancestry: (sha: string) => boolean|null }} o  ancestry: null when git cannot tell
+ */
+export function diagnoseStuckRuns({ stuck, head, now, ancestry }) {
+  return stuck.map((r) => {
+    const sha = r.headSha || '';
+    const minutes = Math.round((now - Date.parse(r.createdAt)) / 60_000);
+    const is = sha === head ? true : ancestry(sha);
+    const verdict = is === null ? 'unknown (the commit is not in this clone: git fetch)'
+      : is ? 'yes' : 'no';
+    let meaning = 'fetch, then re-run to see whether it precedes HEAD';
+    if (sha === head) meaning = 'this is the deploy of HEAD and it has not started';
+    else if (is) {
+      meaning = 'an older deploy holds the pages concurrency group; the deploy of HEAD waits '
+        + 'behind it';
+    } else if (is === false) meaning = 'the run is for a commit that is not in the history of HEAD';
+    return `Pages run ${r.databaseId} for ${sha} has been '${r.status}' for ${minutes} min; `
+      + `git merge-base --is-ancestor ${sha.slice(0, 7)} ${head.slice(0, 7)}: ${verdict} `
+      + `(${meaning}). Inspect: gh run view ${r.databaseId}`;
+  });
+}
+
+/** The line that closes the release task against the published commit. */
+export function finishLine(tag, commit) {
+  return `majordomus finish --outcome completed --note "published ${tag}" `
+    + `--verify-command "npm run release:verify-deploy -- --commit ${commit}"`;
+}
+
 /** Pure precondition check over gathered facts. */
 export function preconditionProblems(f) {
   const problems = [];
@@ -82,6 +135,7 @@ export function preconditionProblems(f) {
   problems.push(...f.receiptProblems);
   if (!f.buildCheck) problems.push('npm run build:check failed: dist/index.html is stale');
   if (!f.ghAuth) problems.push('gh is not authenticated (gh auth status)');
+  problems.push(...(f.stuckRuns || []));
   return problems;
 }
 
@@ -96,25 +150,40 @@ function defaultSh(root) {
 
 /**
  * @param {{ argv?: string[], root?: string, run?: Function, sh?: Function, log?: Function,
- *   receipt?: object|null, fingerprint?: object, sleep?: Function }} [o]
+ *   receipt?: object|null, fingerprint?: object, sleep?: Function, clock?: () => number }} [o]
  * @returns {Promise<number>} exit code
  */
 export async function publish({
   argv = process.argv.slice(2), root = ROOT, run = gitRunner(root), sh = defaultSh(root),
   log = console.log, receipt, fingerprint, sleep = (s) => new Promise((r) => {
     setTimeout(r, s * 1000);
-  }),
+  }), clock = Date.now,
 } = {}) {
   const yes = argv.includes('--yes');
   const ti = argv.indexOf('--pages-timeout');
   const pagesTimeoutMin = ti >= 0 ? Number(argv[ti + 1]) : 15;
-  const now = fingerprint || currentFingerprint(root);
+  const now = fingerprint || currentFingerprint(root, run);
   const version = now.version;
   const tag = `v${version}`;
   const asset = releaseAssetName(version);
   const head = run(['rev-parse', 'HEAD']);
   const remoteMain = sh('git', ['ls-remote', 'origin', 'refs/heads/main']);
   const remoteTag = sh('git', ['ls-remote', '--tags', 'origin', `refs/tags/${tag}`]);
+  const listRuns = (extra) => {
+    const r = sh('gh', ['run', 'list', '--workflow', 'pages.yml', ...extra, '--json',
+      PAGES_RUN_FIELDS]);
+    try {
+      return r.status === 0 ? JSON.parse(r.stdout || '[]') : [];
+    } catch {
+      return [];
+    }
+  };
+  const ancestry = (sha) => {
+    const { status } = sh('git', ['merge-base', '--is-ancestor', sha, head]);
+    return status === 0 ? true : status === 1 ? false : null;
+  };
+  const diagnose = (afterMin) => diagnoseStuckRuns({ head, now: clock(), ancestry,
+    stuck: stuckPagesRuns(listRuns(['--limit', '20']), clock(), afterMin) });
   const facts = {
     tag, head,
     branch: run(['rev-parse', '--abbrev-ref', 'HEAD']),
@@ -125,6 +194,7 @@ export async function publish({
     receiptProblems: receiptProblems(receipt === undefined ? readReceipt(run, root) : receipt, now),
     buildCheck: sh('npm', ['run', '--silent', 'build:check']).status === 0,
     ghAuth: sh('gh', ['auth', 'status']).status === 0,
+    stuckRuns: diagnose(STUCK_AFTER_MIN),
   };
   const previousTag = lastReleaseTag(run);
   const commits = readCommits(previousTag, run);
@@ -139,8 +209,8 @@ export async function publish({
   const steps = [
     ['git', ['tag', '-a', tag, '-m', `OSCILLA ${tag}`, head]],
     ['git', ['push', 'origin', `refs/tags/${tag}`]],
-    ['gh', ['run', 'list', '--workflow', 'pages.yml', '--commit', head, '--json',
-      'databaseId,status,conclusion', '--limit', '1'], '(poll, then gh run watch --exit-status)'],
+    ['gh', ['run', 'list', '--workflow', 'pages.yml', '--commit', head, '--limit', '1', '--json',
+      PAGES_RUN_FIELDS], '(poll until it starts, then gh run watch --exit-status)'],
     ['node', ['scripts/verify-deploy.mjs', '--commit', head]],
     ['gh', ['release', 'create', tag, asset, ...releaseCreateFlags(version, '<generated notes>')],
       `(${asset} = the committed ${DIST_PATH})`],
@@ -150,6 +220,7 @@ export async function publish({
     for (const [cmd, args, note] of steps) {
       log(`  ${cmd} ${args.join(' ')}${note ? ` ${note}` : ''}`);
     }
+    log(`\nThen close the release task against the published commit:\n  ${finishLine(tag, head)}`);
     log(`\nRelease notes:\n${notes}`);
     return problems.length ? 1 : 0;
   }
@@ -168,16 +239,25 @@ export async function publish({
     must('git', ['tag', '-a', tag, '-m', `OSCILLA ${tag}`, head], 'tagging');
     must('git', ['push', 'origin', `refs/tags/${tag}`], 'pushing the tag');
     pushed = true;
+    // Wait for the Pages run of HEAD to START. A run that exists but is still waiting or
+    // queued is not watched: `gh run watch` has no timeout, and a run awaiting approval or
+    // held behind another run would hold this publish for as long as it sits there.
     let runId = null;
-    const deadline = Date.now() + pagesTimeoutMin * 60_000;
-    while (!runId && Date.now() < deadline) {
-      const r = sh('gh', ['run', 'list', '--workflow', 'pages.yml', '--commit', head, '--json',
-        'databaseId,status,conclusion', '--limit', '1']);
-      const [first] = r.status === 0 ? JSON.parse(r.stdout || '[]') : [];
-      if (first) runId = String(first.databaseId);
+    let seen = null;
+    const deadline = clock() + pagesTimeoutMin * 60_000;
+    while (!runId && clock() < deadline) {
+      const [first] = listRuns(['--commit', head, '--limit', '1']);
+      seen = first || seen;
+      if (first && !WAITING_STATUSES.includes(first.status)) runId = String(first.databaseId);
       else await sleep(15);
     }
-    if (!runId) throw new Error(`no Pages run for ${head} within ${pagesTimeoutMin} min`);
+    if (!runId) {
+      for (const line of diagnose(0)) log(`  STUCK ${line}`);
+      throw new Error(seen
+        ? `Pages run ${seen.databaseId} for ${head} is still '${seen.status}' after `
+          + `${pagesTimeoutMin} min`
+        : `no Pages run for ${head} within ${pagesTimeoutMin} min`);
+    }
     must('gh', ['run', 'watch', runId, '--exit-status'], `Pages run ${runId}`);
     must('node', ['scripts/verify-deploy.mjs', '--commit', head], 'deployment verification');
     const dir = mkdtempSync(path.join(os.tmpdir(), 'oscilla-release-'));
@@ -193,11 +273,15 @@ export async function publish({
     if (pushed) {
       log(`The tag ${tag} is on origin but no GitHub Release was created. Fix and re-run the `
         + `failed step, or undo with: git push origin :refs/tags/${tag} && git tag -d ${tag}`);
+      log(`Once the page is live, prove it with: npm run release:verify-deploy -- --commit ${head}`);
     }
     return 1;
   }
   log(`\nPublished ${tag}: ${REPO_URL}/releases/tag/${tag}`);
-  log(`Record it: npm run release:record -- --version ${version}, then land the record by PR.`);
+  log(`Record it: npm run release:record -- --version ${version}, then land the record by PR `
+    + `(branch chore/release-record-${tag}); release:prepare refuses the next release without it.`);
+  log(`Close the release task against the published commit, not the worktree HEAD:\n  `
+    + `${finishLine(tag, head)}`);
   return 0;
 }
 

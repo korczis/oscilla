@@ -24,7 +24,10 @@ where its notes are, and the artifact with its name, download URL, SHA-256 diges
 
 `npm run release:record -- --version X.Y.Z` (`scripts/release-record.mjs`), after
 `release:publish -- --yes` has tagged, deployed, verified and created the GitHub Release, and
-nobody else. The record lands on `main` by a small pull request of its own. A record is
+nobody else. The record lands on `main` by a small pull request of its own, from the branch
+`chore/release-record-vX.Y.Z`; rule `project.release-flow-complete` makes it part of the
+release (`release:prepare` refuses the next release while the newest tag has no record, and
+`tests/unit/release-record.test.mjs` fails for a tag more than 6 hours old without one). A record is
 evidence, not a plan: every value is read from git and from the GitHub Release, and the digest
 and size are read off the downloaded asset. Editing one by hand makes it describe something
 that was not published; `node scripts/release-record.mjs --version X.Y.Z --check` refuses a

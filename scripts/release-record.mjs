@@ -36,7 +36,9 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { REPO_URL, ROOT, isFullSha, parseSemver, readBanner, sha256 } from './release-metadata.mjs';
+import {
+  REPO_URL, ROOT, compareSemver, isFullSha, parseSemver, readBanner, sha256,
+} from './release-metadata.mjs';
 
 export const RECORD_SCHEMA = 'release/v1';
 export const RECORDS_DIR = '.ai/repo/releases';
@@ -56,6 +58,51 @@ export const assetUrl = (tag, name, repoUrl = REPO_URL) => (
 );
 export const recordFile = (version, root = ROOT) => (
   path.join(root, RECORDS_DIR, `v${version}.yaml`)
+);
+
+// ------------------------------------------------------------------------------- completeness
+// Rule project.release-flow-complete: from v3.4.0 (the first release published with the
+// committed dist attached, so the first one a release/v1 record can name) every published tag
+// has a record. A record is written after the tag (release:record reads the GitHub Release),
+// so a tag younger than RECORD_WINDOW_HOURS is still inside its publish window and is not yet
+// missing. release:prepare applies the same check with no window to the newest tag: the next
+// release does not start until the previous one is recorded.
+export const RECORD_FLOOR = '3.4.0';
+export const RECORD_WINDOW_HOURS = 6;
+
+/** Whether `tag` is a v<SemVer> tag at or after the record floor. */
+export function needsRecord(tag, floor = RECORD_FLOOR) {
+  if (typeof tag !== 'string' || !tag.startsWith('v') || !parseSemver(tag.slice(1))) return false;
+  return compareSemver(tag.slice(1), floor) >= 0;
+}
+
+/**
+ * Tags at or after the floor, older than the publish window, with no record; oldest first.
+ * @param {{ tags: { tag: string, date: number }[], hasRecord: (tag: string) => boolean,
+ *   now?: number, windowHours?: number, floor?: string }} o  date and now in milliseconds
+ * @returns {string[]}
+ */
+export function missingRecords({
+  tags, hasRecord, now = Date.now(), windowHours = RECORD_WINDOW_HOURS, floor = RECORD_FLOOR,
+}) {
+  return tags.filter(({ tag, date }) => needsRecord(tag, floor)
+    && now - date >= windowHours * 3_600_000 && !hasRecord(tag))
+    .map(({ tag }) => tag).sort((a, b) => compareSemver(a.slice(1), b.slice(1)));
+}
+
+/** Every v* tag with its creation time (tagger date, else commit date) in milliseconds. */
+export function readTagDates(run) {
+  const out = run(['for-each-ref', '--format=%(refname:short)%09%(creatordate:unix)',
+    'refs/tags/v*']);
+  return out.split('\n').filter(Boolean).map((line) => {
+    const [tag, seconds] = line.split('\t');
+    return { tag, date: Number(seconds) * 1000 };
+  });
+}
+
+/** Whether the checkout at `root` carries the record of `tag`. */
+export const hasRecordFile = (tag, root = ROOT) => (
+  existsSync(path.join(root, RECORDS_DIR, `${tag}.yaml`))
 );
 
 /** stable, or prerelease for a SemVer prerelease. */
