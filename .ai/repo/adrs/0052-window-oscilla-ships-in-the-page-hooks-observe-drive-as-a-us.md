@@ -15,7 +15,7 @@ provenance:
   derived_from:
     - file:src/js/main.js
     - file:src/js/ui/measure.js
-    - file:src/js/ui/studio/timeline-test-seam.js
+    - file:tests/unit/v4-one-studio-store.test.mjs
     - file:tests/browser/live-smoke.cjs
     - file:docs/v4/completion-ledger.md
     - file:docs/specs/oscilla-v3-measure.md
@@ -70,10 +70,10 @@ only, never data), for the opt-in `scripts/visual-compare.mjs --mock`. It change
 ## Decision
 
 `window.OSCILLA` and `?mock=1` stay in the one shipped artifact. There is no flag, no build mode
-and no test build. Every member of the seam except `studioTimeline` is one of three kinds
-(`studioTimeline.createContext` builds a second StudioStore, runtime and transport on the shared
-engine and calls `engine.stopAll`: it is none of the three, and it leaves the page under ledger
-W7a):
+and no test build. Every member of the seam is one of three kinds. (`studioTimeline`, whose
+`createContext` built a second StudioStore, runtime and transport on the shared engine and
+called `engine.stopAll`, was none of the three. It left the page under ledger W7a, and
+`tests/unit/v4-one-studio-store.test.mjs` keeps a second Studio context out.)
 
 1. **Observe.** Reads, `counts()`, state, model, trace, `version`, `build`. The stable reads are
    `version`, `build`, `measure.state`, `measure.counts()`, `studio.counts()`, `studio.model`
@@ -154,8 +154,9 @@ that the seam is not a security boundary.
 - These follow-ups are recorded in the ledger and are not needed for this decision:
   - `studioTimeline.createContext`, a second StudioStore on the shared engine used only by one
     browser suite, moves to the canonical store and leaves the page
-    (`project.studio-model-is-canonical`).
-  - The live smoke loads `?measure=loopback#mr=...` instead of calling seam hooks.
+    (`project.studio-model-is-canonical`). Done under ledger W7a.
+  - The live smoke loads `?measure=loopback#mr=...` instead of calling seam hooks. Done under
+    ledger W7e.
   - The Input device select gets a TEST CONTEXT option, so a user can leave `?measure=loopback`
     without editing the URL.
   - A manual level calibration made in TEST CONTEXT carries the TEST CONTEXT label.

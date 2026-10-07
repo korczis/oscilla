@@ -113,7 +113,8 @@ for (const [name, allowed] of Object.entries(ALLOWED)) {
         Object.keys(allowed).join(', ')}`);
     // An allowance nobody uses is stale: the list may only describe what exists.
     for (const file of Object.keys(allowed)) {
-      assert.ok(sites.some((s) => s.file === file), `${name}: ${file} is allowed and never calls it`);
+      assert.ok(sites.some((s) => s.file === file),
+        `${name}: ${file} is allowed and never calls it`);
     }
   });
 }
