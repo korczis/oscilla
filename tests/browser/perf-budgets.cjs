@@ -17,8 +17,9 @@
 //   ready-mark          a fresh page records exactly one `oscilla:ready` mark, at the moment
 //                       html[data-ready] turns true (a MutationObserver installed before any
 //                       page script reports the attribute after the mark and within
-//                       READY_GAP_MS of it); at that moment the Playground answers: Hold to
-//                       Play and the frequency slider are enabled and hit-testable, and an
+//                       READY_GAP_MS of it); in that observer callback, the same task as the
+//                       mark, Hold to Play and the frequency slider are enabled and
+//                       hit-testable; once the page has reported ready (a later evaluate) an
 //                       input on the slider updates the readout through Alpine
 //   startup             median of --samples fresh contexts (empty storage; one warm-up context
 //                       first, reported, not counted) of the mark's startTime <= budget
@@ -31,8 +32,9 @@
 //                       startTime <= budget `startupLibrary` (a large library must not slow
 //                       the start)
 //   experiments-list    on --library-samples fresh pages: click Experiments in the navigation →
-//                       the 500 experiment rows and 50 definition rows are in the DOM (first
-//                       animation frame that shows them); median <= budget `experimentsList`
+//                       the 500 experiment rows and 50 definition rows are in the DOM (the
+//                       first animation-frame callback that finds them; see "Where a click's
+//                       time ends"); median <= budget `experimentsList`
 //   experiment-detail   on the same pages, click Open on an experiment not read before (a
 //                       different one per page) → the detail heading names it (the app's store
 //                       reads and re-validates the record, result hash included); median <=
@@ -41,12 +43,21 @@
 //                       third (the difference is validation and the result hash)
 //   compare             select two experiments of one definition (two different engine
 //                       measurements), click Compare selected → the compare panel shows 2
-//                       entries and its summary; median <= budget `compare`. Selecting (each a
-//                       re-render of the 500-row list) is reported, not budgeted
+//                       entries and its summary; median <= budget `compare`. Selecting (each
+//                       click replaces every row object, so the bindings of all 500 rows are
+//                       evaluated again; no row element changes) is reported, not budgeted
 //   no-console-errors
 //
-// --measure-only reports every number and asserts every check except the budgets (to measure
-// new budgets). Not in release-gate: docs/v4/performance.md says why.
+// Where a click's time ends: in the first requestAnimationFrame callback in which the
+// condition holds, which runs before that frame's style, layout and paint. The numbers
+// therefore leave out the layout and paint of the frame that shows the result.
+//
+// --only takes names from the list above; a name that is not a check is refused (exit 2), so
+// a misspelt selection cannot pass. --measure-only reports every number and asserts every
+// check except the budgets (to measure new budgets; fixtures/perf-sessions.mjs records the
+// sessions and derives the budgets). Not in release-gate: docs/v4/performance.md says why.
+// The selectors, ids and app state the suite reads are fixtures/perf-dom.json, which
+// tests/unit/v4-performance-docs.test.mjs holds against src/.
 'use strict';
 const fs = require('node:fs');
 const os = require('node:os');
@@ -66,7 +77,7 @@ const DIST = path.resolve(arg('dist', path.join(ROOT, 'dist', 'index.html')));
 const RUN = suite.open({ name: 'perf-budgets', browsers: arg('browsers') });
 const playwright = RUN.playwright;
 const BROWSERS = RUN.browsers;
-const ONLY = arg('only', '') ? new Set(arg('only', '').split(',')) : null;
+const ONLY = flag('only') ? new Set(arg('only', '').split(',').map((n) => n.trim())) : null;
 const SAMPLES = Number(arg('samples', '7'));
 const LIBRARY_SAMPLES = Number(arg('library-samples', '5'));
 const CACHE = path.resolve(arg('cache', path.join(os.tmpdir(), 'oscilla-perf-cache')));
@@ -84,6 +95,12 @@ const LAUNCH = {
 };
 const VIEWPORT = { width: 1536, height: 1024 };
 const READY_MARK = 'oscilla:ready';
+// Every selector, element id and field of the app's Experiments state the suite reads.
+const DOM = require('./fixtures/perf-dom.json');
+const sel = (name) => {
+  if (!DOM.osc[name]) throw new Error(`perf-dom.json has no selector ${name}`);
+  return `[${DOM.attribute}="${DOM.osc[name]}"]`;
+};
 const DB_NAME = 'oscilla-experiments';
 const SEED_CHUNK = 25; // experiments per page.evaluate (about 1 MB of JSON without the IR text)
 // Wall-clock deadlines (project.bounded-test-timing). They bound a stalled page; none of them
@@ -117,16 +134,33 @@ function budgeted(key, browserName, xs, extra = {}) {
 // ------------------------------------------------------------------------------ page side
 /**
  * Init script: performance.now() at the moment html[data-ready] turns "true" (a
- * MutationObserver on the document, installed before any page script runs).
+ * MutationObserver on the document, installed before any page script runs). With `controls`
+ * ({ hold, slider }: element ids) the same callback, which is a microtask of the task that
+ * set the mark, also records whether those controls are enabled and hit-testable; that reads
+ * layout, so only the ready-mark check asks for it.
  */
-function readyObserver() {
+function readyObserver(controls) {
   window.__oscReadyAt = null;
+  window.__oscReadyControls = null;
   const seen = () => document.documentElement
     && document.documentElement.getAttribute('data-ready') === 'true';
+  const hit = (el) => {
+    if (!el) return false;
+    const r = el.getBoundingClientRect();
+    if (!r.width || !r.height) return false;
+    const at = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+    return !!at && (at === el || el.contains(at));
+  };
   const mo = new MutationObserver(() => {
     if (window.__oscReadyAt === null && seen()) {
       window.__oscReadyAt = performance.now();
       mo.disconnect();
+      if (controls) {
+        const hold = document.getElementById(controls.hold);
+        const slider = document.getElementById(controls.slider);
+        window.__oscReadyControls = { holdEnabled: !!hold && !hold.disabled, holdHit: hit(hold),
+          sliderEnabled: !!slider && !slider.disabled, sliderHit: hit(slider) };
+      }
     }
   });
   mo.observe(document, { subtree: true, attributes: true, attributeFilter: ['data-ready'] });
@@ -140,13 +174,17 @@ function startupFacts(markName) {
     marks: marks.length,
     mark: marks.length ? marks[0].startTime : null,
     observed: window.__oscReadyAt,
+    controlsAtMark: window.__oscReadyControls,
     dcl: nav ? nav.domContentLoadedEventEnd : null,
     load: nav ? nav.loadEventEnd : null,
   };
 }
 
-/** Does the Playground answer right now? Enabled, hit-testable controls; Alpine updates. */
-function playgroundAnswers() {
+/**
+ * Does the Playground answer now that the page has reported ready (a later task than the
+ * mark)? Enabled, hit-testable controls; a slider input reaches the readout through Alpine.
+ */
+function playgroundAnswers(ids) {
   const hit = (el) => {
     if (!el) return false;
     const r = el.getBoundingClientRect();
@@ -154,9 +192,9 @@ function playgroundAnswers() {
     const at = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
     return !!at && (at === el || el.contains(at));
   };
-  const hold = document.getElementById('osc-hold-play');
-  const slider = document.getElementById('osc-freq-slider');
-  const out = document.getElementById('osc-freq-value');
+  const hold = document.getElementById(ids.holdPlay);
+  const slider = document.getElementById(ids.freqSlider);
+  const out = document.getElementById(ids.freqValue);
   const before = out ? out.textContent : null;
   if (slider) {
     slider.value = Number(slider.value) > 500 ? '300' : '700';
@@ -315,13 +353,16 @@ function defineChecks() {
 
   def('ready-mark', async (ctx) => {
     const context = await ctx.browser.newContext({ viewport: VIEWPORT, reducedMotion: 'reduce' });
-    await context.addInitScript(readyObserver);
+    await context.addInitScript(readyObserver,
+      { hold: DOM.ids.holdPlay, slider: DOM.ids.freqSlider });
     try {
       const page = await readyPage(context, ctx.url, ctx.errors, { studio: false });
       const f = await page.evaluate(startupFacts, READY_MARK);
-      const answers = await page.evaluate(playgroundAnswers);
+      const answers = await page.evaluate(playgroundAnswers, DOM.ids);
       const gap = f.mark !== null && f.observed !== null ? f.observed - f.mark : null;
+      const at = f.controlsAtMark;
       return { ok: f.marks === 1 && gap !== null && gap >= 0 && gap <= READY_GAP_MS
+        && !!at && at.holdEnabled && at.holdHit && at.sliderEnabled && at.sliderHit
         && answers.holdEnabled && answers.holdHit && answers.sliderEnabled && answers.sliderHit
         && answers.changed, facts: { ...f, gap }, answers };
     } finally {
@@ -415,34 +456,37 @@ function defineChecks() {
     for (let i = 0; i < LIBRARY_SAMPLES; i++) {
       const page = await readyPage(ctx.libContext, ctx.url, ctx.errors);
       await settle(page);
-      out.list.push(await page.evaluate(clickUntil, { selector: '[data-osc="nav.experiments"]',
-        timeoutMs: ACTION_MS, arg: { n: lib.counts.experiments, defs: lib.counts.definitions },
-        cond: 'return document.querySelectorAll(\'[data-osc="exp.row"]\').length === arg.n'
-          + ' && document.querySelectorAll(\'[data-osc="def.row"]\').length === arg.defs;' }));
+      out.list.push(await page.evaluate(clickUntil, { selector: sel('navExperiments'),
+        timeoutMs: ACTION_MS, arg: { n: lib.counts.experiments, defs: lib.counts.definitions,
+          row: sel('expRow'), defRow: sel('defRow') },
+        cond: 'return document.querySelectorAll(arg.row).length === arg.n'
+          + ' && document.querySelectorAll(arg.defRow).length === arg.defs;' }));
       await settle(page);
       const id = detailIds[i % detailIds.length];
       const { name, sizeBytes } = lib.experiments.find((x) => x.id === id);
       const detail = await page.evaluate(clickUntil, {
-        selector: `[data-osc="exp.row"][data-id="${id}"] [data-osc="exp.open"]`,
-        timeoutMs: ACTION_MS, arg: { id, name },
-        cond: 'const d = window.OSCILLA.app.exps.detail; const h = document.getElementById('
-          + '\'osc-x-detail-title\'); return !!d && d.id === arg.id && !!h'
-          + ' && h.textContent === arg.name;' });
+        selector: `${sel('expRow')}[data-id="${id}"] ${sel('expOpen')}`,
+        timeoutMs: ACTION_MS, arg: { id, name, title: DOM.ids.detailTitle },
+        cond: 'const d = window.OSCILLA.app.exps.detail;'
+          + ' const h = document.getElementById(arg.title);'
+          + ' return !!d && d.id === arg.id && !!h && h.textContent === arg.name;' });
       out.detail.push({ ...detail, sizeBytes });
       await settle(page);
       for (const cid of lib.compare) {
         out.select.push(await page.evaluate(clickUntil, {
-          selector: `[data-osc="exp.row"][data-id="${cid}"] [data-osc="exp.select"]`,
+          selector: `${sel('expRow')}[data-id="${cid}"] ${sel('expSelect')}`,
           timeoutMs: ACTION_MS, arg: cid,
           cond: 'return window.OSCILLA.app.exps.selected.includes(arg);' }));
       }
       await settle(page);
-      out.compare.push(await page.evaluate(clickUntil, { selector: '[data-osc="exp.compare"]',
-        timeoutMs: ACTION_MS, arg: null,
-        cond: 'const c = window.OSCILLA.app.exps.compare; const p = document.getElementById('
-          + '\'osc-exp-compare\'); const s = document.querySelector(\'[data-osc='
-          + '"exp.compareSummary"]\'); return !!c && c.entries.length === 2 && !!p'
-          + ' && p.offsetParent !== null && !!s && s.textContent.trim().length > 0;' }));
+      out.compare.push(await page.evaluate(clickUntil, { selector: sel('expCompare'),
+        timeoutMs: ACTION_MS,
+        arg: { panel: DOM.ids.comparePanel, summary: sel('compareSummary') },
+        cond: 'const c = window.OSCILLA.app.exps.compare;'
+          + ' const p = document.getElementById(arg.panel);'
+          + ' const s = document.querySelector(arg.summary);'
+          + ' return !!c && c.entries.length === 2 && !!p && p.offsetParent !== null'
+          + ' && !!s && s.textContent.trim().length > 0;' }));
       await settle(page);
       const viaStore = storeIds[i % storeIds.length];
       const raw = rawIds[i % rawIds.length];
@@ -518,6 +562,17 @@ async function runOne(browserName, url) {
 }
 
 (async () => {
+  // Before the load gate and any browser: a selection that names no check proves nothing.
+  if (ONLY) {
+    const known = defineChecks().map((c) => c.name);
+    const unknown = [...ONLY].filter((n) => !known.includes(n));
+    if (unknown.length || !ONLY.size) {
+      console.error(`[perf-budgets] --only: ${unknown.length
+        ? `unknown check(s): ${unknown.map((n) => JSON.stringify(n)).join(', ')}`
+        : 'no check named'}; expected ${known.join(', ')}`);
+      process.exit(2);
+    }
+  }
   await RUN.ready();
   if (!fs.existsSync(DIST)) {
     console.error(`missing ${DIST}: run npm run build`);

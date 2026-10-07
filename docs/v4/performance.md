@@ -2,10 +2,13 @@
 
 Ledger P2 item P1, "no startup budget or large-library fixture". This document records what is
 measured, the measurements, the budgets derived from them, and why the suite that asserts them
-is not part of the release gate. The one copy of the numbers is
-`tests/browser/fixtures/perf-budgets.json`; `tests/unit/v4-performance-docs.test.mjs` fails
-when a table below differs from it, or when a budget is not the stated rule applied to its
-measurement.
+is not part of the release gate.
+
+Nothing below is typed in by hand. `tests/browser/fixtures/perf-sessions.json` holds the single
+samples of every recorded session; `tests/browser/fixtures/perf-sessions.mjs` derives
+`perf-budgets.json` (the measurements and the budgets the suite asserts) and every table of
+this document between `begin` and `end` markers from it, and
+`tests/unit/v4-performance-docs.test.mjs` recomputes all of that and fails on any difference.
 
 The Studio-specific numbers (compile, render, large graph) are in
 [`docs/v31/performance.md`](../v31/performance.md) and are not repeated here.
@@ -18,10 +21,14 @@ its first `$nextTick` has mounted the visualizer, the labs and the MEASURE and E
 charts. The mark's `startTime` is milliseconds since navigation start, read inside the page, so
 the startup number contains no polling interval of the test.
 
-The suite's `ready-mark` check holds the definition: exactly one mark, the attribute observed
-by a `MutationObserver` in the same task (0 ms apart in every session below), and at that
-moment Hold to Play and the frequency slider are enabled, hit-testable, and a slider input
-updates the readout.
+The suite's `ready-mark` check holds the definition: exactly one mark, and the attribute
+observed by a `MutationObserver` in the same task. The observer's clock read 0.1 ms or less
+after the mark in Chromium and 0 ms in Firefox and WebKit in the six measuring sessions, and
+1 ms in one later Firefox session (Firefox and WebKit coarsen their timers to whole
+milliseconds). In that observer callback, still the task that set the mark, Hold to Play and
+the frequency slider are enabled and hit-testable. Once the page has reported ready, in a
+later task, a slider input updates the readout through Alpine; that part is "directly after
+the mark", not "at the mark".
 
 ## The large library
 
@@ -45,14 +52,23 @@ All from `file://`, the built `dist/index.html`, viewport 1536x1024, reduced mot
 | --- | --- | --- |
 | `startup` | navigation start, fresh context, empty storage | the `oscilla:ready` mark |
 | `startupLibrary` | navigation start, fresh page over the seeded library | the `oscilla:ready` mark |
-| `experimentsList` | click on Experiments in the navigation | first frame with 500 experiment rows and 50 definition rows in the DOM |
-| `experimentDetail` | click on Open of an experiment not read on that page | first frame in which the detail heading names it |
-| `compare` | click on Compare selected, two experiments of one definition selected | first frame in which the compare panel shows 2 entries and its summary |
+| `experimentsList` | click on Experiments in the navigation | first animation-frame callback with 500 experiment rows and 50 definition rows in the DOM |
+| `experimentDetail` | click on Open of an experiment not read on that page | first animation-frame callback in which the detail heading names it |
+| `compare` | click on Compare selected, two experiments of one definition selected | first animation-frame callback in which the compare panel shows 2 entries and its summary |
 
-A session is one execution of `npm run test:perf`: per browser 7 startup samples (after one
-warm-up context that is not counted), 7 startup samples over the library, and 5 fresh pages
-that each give one sample of the list, the detail and Compare. The session's result for a
-measurement is the median of its samples, and that median is what a budget judges.
+The three click measurements end inside a `requestAnimationFrame` callback, which runs before
+that frame's style, layout and paint. They therefore leave out the layout and paint of the
+frame that shows the result. A reviewer's probe of the list in Chromium put the rows at the
+first callback after 201.3 ms and the following callback at 216.6 ms, so about 15 ms (7 %) of
+the list's cost is outside `experimentsList`. The numbers are lower bounds of what a person
+waits for, by about one frame.
+
+A session is one execution of the suite: per browser 7 startup samples (after one warm-up
+context that is not counted), 7 startup samples over the library, and 5 fresh pages that each
+give one sample of the list, the detail and Compare. The session's result for a measurement
+is the median of its samples, and that median is what a budget judges. A measuring session is
+`node tests/browser/perf-budgets.cjs --measure-only`, which reports without judging; an
+asserting session is `npm run test:perf`.
 
 ## Measurements
 
@@ -61,10 +77,21 @@ Six sessions on 2026-10-07, main at 95561ee plus this change. Machine: Apple M5 
 Firefox and WebKit, headless.
 
 The machine was shared with other work the whole time. The suite's harness holds a start until
-the 1-minute load average is below 36 (2 x cores); the sessions started at 32.7, 31.8, 34.5,
-33.0, 30.2 and 32.2 and ended at 51.0, 47.6, 33.0, 31.4, 32.2 and 43.1. These are therefore
-numbers of a busy machine, not of an idle one, and a quieter machine was not available: a
-session gated at a load of 20 waited its full 560 s and did not start.
+the 1-minute load average is below 36 (2 x cores). These are therefore numbers of a busy
+machine, not of an idle one, and a quieter machine was not available: a session gated at a
+load of 20 waited its full 560 s and did not start. The load each session, and from session 3
+on each browser's leg, started and ended with:
+
+<!-- load:begin -->
+| Session | 1-minute load at start | at end | Chromium leg | Firefox leg | WebKit leg |
+| --- | --- | --- | --- | --- | --- |
+| 1 | 32.7 | 51 | not recorded | not recorded | not recorded |
+| 2 | 31.8 | 47.6 | not recorded | not recorded | not recorded |
+| 3 | 34.5 | 33 | 34.5 -> 35 | 35 -> 37.4 | 37.4 -> 33 |
+| 4 | 33 | 31.4 | 33 -> 31.5 | 31.5 -> 30.5 | 30.5 -> 31.4 |
+| 5 | 30.2 | 32.2 | 30.2 -> 27.5 | 27.5 -> 31.4 | 31.4 -> 32.2 |
+| 6 | 32.2 | 43.1 | 32.2 -> 32.1 | 32.1 -> 35.9 | 35.9 -> 43.1 |
+<!-- load:end -->
 
 The table is over the six session medians: their median, the fastest and the slowest.
 
@@ -90,6 +117,7 @@ The table is over the six session medians: their median, the fastest and the slo
 
 The session medians, in the order the sessions were made (ms):
 
+<!-- sessions:begin -->
 | Measurement | Browser | 1 | 2 | 3 | 4 | 5 | 6 |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | startup | chromium | 297.4 | 312.1 | 287.4 | 287.9 | 281.9 | 278.1 |
@@ -107,9 +135,11 @@ The session medians, in the order the sessions were made (ms):
 | compare | chromium | 149.8 | 162.7 | 164.4 | 151.6 | 147.8 | 150.5 |
 | compare | firefox | 668 | 230 | 180 | 199 | 288 | 182 |
 | compare | webkit | 134 | 150 | 134 | 135 | 151 | 153 |
+<!-- sessions:end -->
 
 The single samples behind them, over all six sessions (ms):
 
+<!-- samples:begin -->
 | Measurement | Browser | Median | Min | Max | Samples |
 | --- | --- | --- | --- | --- | --- |
 | startup | chromium | 287.8 | 250 | 371.9 | 42 |
@@ -127,6 +157,7 @@ The single samples behind them, over all six sessions (ms):
 | compare | chromium | 154.3 | 143.7 | 169.8 | 30 |
 | compare | firefox | 216.5 | 160 | 1519 | 30 |
 | compare | webkit | 140.5 | 126 | 175 | 30 |
+<!-- samples:end -->
 
 Firefox and WebKit report whole milliseconds (their timers are coarsened); Chromium reports
 tenths.
@@ -137,7 +168,7 @@ tenths.
   `startup` in all three browsers (297.6 against 287.7, 705.5 against 735.5, 387 against 390).
   Nothing reads the experiments before the Experiments workspace is opened.
 - **Chromium and WebKit are steady; Firefox is not.** Across the same six sessions the
-  Chromium and WebKit session medians stay within 12 % and 24 % of their fastest for the
+  Chromium and WebKit session medians stay within 13 % and 24 % of their fastest for the
   start; Firefox spans 533 to 1408 ms. In session 1 every Firefox measurement over the library
   was 3 to 9 times its median elsewhere (list 3348 ms, detail 536 ms, Compare 668 ms) while
   the load average rose from 32.7 to 51.0 during the session. The other two browsers did not
@@ -149,11 +180,13 @@ tenths.
   Beside each detail sample the suite times the store's `get()` of another experiment nobody
   has read on that page, and a bare IndexedDB read of a third:
 
-  | Browser | store `get()` median (min-max), ms | bare IndexedDB read median (min-max), ms | Samples |
-  | --- | --- | --- | --- |
-  | chromium | 28.5 (20.7-34.1) | 0.5 (0.3-1.5) | 30 |
-  | firefox | 39.5 (25-150) | 5.5 (2-19) | 30 |
-  | webkit | 23 (17-28) | 1 (0-7) | 30 |
+<!-- reads:begin -->
+| Browser | store `get()` median (min-max), ms | bare IndexedDB read median (min-max), ms | Samples |
+| --- | --- | --- | --- |
+| chromium | 28.5 (20.7-34.1) | 0.5 (0.3-1.5) | 30 |
+| firefox | 39.5 (25-150) | 5.5 (2-19) | 30 |
+| webkit | 23 (17-28) | 1 (0-7) | 30 |
+<!-- reads:end -->
 
   The difference, about 22 to 34 ms for a record of 0.4 to 1.0 MB, is `validateExperiment`
   with the result hash recomputed by the bundled synchronous SHA-256. It is one blocked task
@@ -161,13 +194,28 @@ tenths.
   takes to open, and it is paid once per experiment and page (the decoded experiment is
   cached). It grows with the record and with a slower processor; it is reported here, not
   changed.
-- **Selecting an experiment re-renders the whole list.** Each click on a row's checkbox took
-  64.3 ms (56.2-76.2) in Chromium, 116 ms (104-138) in WebKit and 191 ms (131-1585) in
-  Firefox, 60 samples each, because the 500 rows are replaced. That is above the 100 ms at
-  which a click stops feeling immediate in two of the three browsers. It is recorded as an
-  open line of the completion ledger; the code is `src/js/ui/experiments.js`.
-- **The first frame of the list** with 500 + 50 rows takes 174 ms, 417 ms and 279 ms
-  (Chromium, Firefox, WebKit). The list is not windowed.
+- **Selecting an experiment re-evaluates every row, although no row changes.** Each click on
+  a row's checkbox, to the first animation-frame callback that sees the selection:
+
+<!-- select:begin -->
+| Browser | click on a row's checkbox, median (min-max), ms | Samples |
+| --- | --- | --- |
+| chromium | 64.3 (56.2-76.2) | 60 |
+| firefox | 191 (131-1585) | 60 |
+| webkit | 116 (104-138) | 60 |
+<!-- select:end -->
+
+  That is above the 100 ms at which a click stops feeling immediate in two of the three
+  browsers. No row element is replaced: a probe on the 500-row list in Chromium (every row
+  element tagged, a `MutationObserver` over the list, one checkbox clicked) found all 500
+  elements kept, none added or removed, and no attribute changed; the list is keyed by
+  experiment id. What is replaced is every row object: `experimentsToggleSelect` in
+  `src/js/ui/experiments.js` assigns `exps.rows` a new array of new objects with `selected`
+  recomputed, so Alpine evaluates the bindings of all 500 rows again to arrive at the same
+  DOM. It is recorded as an open line of the completion ledger with these numbers.
+- **The list** with 500 + 50 rows takes 174 ms, 417 ms and 279 ms (Chromium, Firefox, WebKit)
+  to the first animation-frame callback that finds the rows. The list is not windowed, so
+  this grows with the library.
 - Writing the library through IndexedDB took 2.2 to 2.9 s in Chromium, 1.9 to 3.4 s in WebKit
   and 5.3 to 12.9 s in Firefox. The app never writes 352 MB at once; this is the fixture's
   cost, not a product path.
@@ -178,8 +226,8 @@ tenths.
 budget = 2 x the median of the session medians, rounded up to 10 ms
 <!-- rule:end -->
 
-The margin is the factor 2. A session's median is judged against it; a single slow sample
-fails nothing.
+The margin is the factor 2 over the median session. A session's median is judged against it;
+a single slow sample fails nothing. The unit test refuses a factor outside 1.5 to 3.
 
 <!-- budgets:begin -->
 | Measurement (median) | Chromium (ms) | Firefox (ms) | WebKit (ms) |
@@ -201,31 +249,61 @@ What these budgets do and do not hold:
   would catch nothing. On a machine as loaded as this one was, one Firefox session in six can
   therefore fail without any change to the code; the suite prints the 1-minute load each leg
   started and ended with so that such a failure can be read for what it is and repeated.
-- The asserting session made after the budgets were set passed 24 of 24 checks. Its load fell
-  from 35.3 to 28.6, and from 34.8 to 26.7 during the Firefox leg, where Firefox was faster
-  than in any of the six measured sessions (start 467 ms, list 306 ms, detail 88 ms, Compare
-  148 ms). That points at the host rather than the page for Firefox's spread; the budgets
-  were not recomputed from it.
+- For Firefox the factor 2 is not a margin of 2 in practice. The asserting sessions made
+  after the budgets were set, with the commit each ran on, the load of each browser's leg,
+  and each session median as a share of its budget:
+
+<!-- asserting:begin -->
+| Commit | Browser | Leg load | startup (% of budget) | startupLibrary (% of budget) | experimentsList (% of budget) | experimentDetail (% of budget) | compare (% of budget) |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `baf3cd4` | chromium | 35.3 -> 34.8 | 298.9 (52 %) | 275.5 (46 %) | 158.2 (45 %) | 90.3 (43 %) | 138.9 (45 %) |
+| `baf3cd4` | firefox | 34.8 -> 26.7 | 467 (32 %) | 449 (32 %) | 306 (36 %) | 88 (30 %) | 148 (34 %) |
+| `baf3cd4` | webkit | 26.7 -> 28.6 | 389 (50 %) | 338 (43 %) | 290 (52 %) | 93 (52 %) | 141 (49 %) |
+| `e5fb470` | chromium | 35.2 -> 39.5 | 316.6 (55 %) | 276.1 (46 %) | 160.7 (46 %) | 101.8 (48 %) | 143.3 (46 %) |
+| `e5fb470` | firefox | 39.5 -> 39.3 | 478 (32 %) | 605 (43 %) | 535 (64 %) | 168 (58 %) | 188 (44 %) |
+| `e5fb470` | webkit | 39.3 -> 34.7 | 364 (47 %) | 357 (46 %) | 273 (49 %) | 91 (51 %) | 143 (49 %) |
+| `1e1bf20` | chromium | 24.5 -> 25.1 | 333.9 (58 %) | 339.2 (57 %) | 202.1 (58 %) | 102.2 (49 %) | 158.4 (51 %) |
+| `1e1bf20` | firefox | 25.1 -> 31.8 | 598 (40 %) | 922 (65 %) | 814 (97 %) | 239 (82 %) | 316 (73 %) |
+| `1e1bf20` | webkit | 31.8 -> 35.4 | 452 (58 %) | 453 (58 %) | 335 (60 %) | 99 (55 %) | 147 (51 %) |
+<!-- asserting:end -->
+
+  All of them passed every check. In the session on `1e1bf20`, at a lower load than any
+  measuring session, the Firefox list took 814 ms against a budget of 840 ms (samples 687 to
+  1101 ms), about twice its median over the measuring sessions, with the detail, Compare and
+  the start over the library also 1.3 to 1.7 times theirs. In the session on `baf3cd4`
+  Firefox was faster than in any measuring session. Firefox session medians of this page on
+  this machine therefore range over a factor of about 2.7 between sessions that are not
+  outliers (306 to 814 ms for the list), and the recorded 1-minute load does not order them;
+  an earlier version of this document attributed the spread to the host, which the
+  lower-load session contradicts. The Firefox budgets, the list's above all, can fail
+  on ordinary variation between sessions. They were not widened: a rule that admits the
+  slowest session holds nothing, and what would settle it is more sessions on a machine
+  whose load is controlled.
 - They are medians of one machine. They say nothing about a phone or a five-year-old laptop,
   and nothing here claims they do.
 
 ## Why the suite is not in the release gate
 
 `npm run test:perf` is a diagnostic. It asserts its budgets and exits 1 when one is exceeded,
-but `release-gate`, `test:release` and the CI workflow do not run it, and
-`tests/unit/v4-performance-docs.test.mjs` holds that.
+but `release-gate`, `test:release`, `verify`, `test:browser` and the workflows under
+`.github/workflows/` do not run it, and `tests/unit/v4-performance-docs.test.mjs` holds that
+(it reads those scripts and every workflow file).
 
 - The budgets are wall-clock medians of one development machine. The CI runners are
   different hardware with fewer cores; the same budgets there would either fail for no reason
   or, widened until they pass, hold nothing. Budgets for the runners would have to be measured
   on the runners, which this change did not do.
-- Even on the machine they come from, one Firefox session in six exceeded them under load
-  (above). A gate that fails one time in six without a code change teaches people to repeat
-  it until it passes.
+- Even on the machine they come from, one Firefox session in six exceeded them under load,
+  and a later one came within 3 % of the list budget at a lower load (above). A gate that
+  fails one time in six without a code change teaches people to repeat it until it passes.
 - What does not depend on the machine is gated: the unit test fails when `oscilla:ready` is
   not marked exactly once directly before `html[data-ready]`, when the committed dist does
-  not carry the mark, when a budget is not the rule applied to its recorded measurement, or
-  when this document and the budget file disagree.
+  not carry the mark, when a measurement is not what the recorded sessions give, when a
+  budget is not the rule applied to its measurement, when this document and the recorded
+  sessions disagree, or when a selector, element id or field of the Experiments state that
+  the suite reads (`tests/browser/fixtures/perf-dom.json`) is no longer in `src/`. The last
+  one matters because nothing runs the suite automatically: without it a renamed selector
+  would only be noticed by the next person who measures.
 
 What would let it join: budgets measured on the CI runners over enough sessions to know their
 spread, or a measure that does not depend on wall time (for example a count of rows rendered
@@ -236,12 +314,14 @@ per interaction, or of bytes hashed per open).
 ```bash
 npm run build
 node tests/browser/perf-budgets.cjs --measure-only --json session-1.json   # six times
-npm run test:perf                                                         # asserts the budgets
+node tests/browser/fixtures/perf-sessions.mjs --new --measured session-*.json
+npm run test:perf -- --json assert.json                                   # asserts the budgets
+node tests/browser/fixtures/perf-sessions.mjs --asserting <commit> assert.json
 ```
 
-`--measure-only` runs every check and reports every number without judging the budgets. New
-budgets are the rule applied to the new session medians, written to
-`tests/browser/fixtures/perf-budgets.json` together with the measurements, and the tables
-above follow; the unit test refuses any other combination. The library is cached under the
-system temporary directory by a digest of `src/js` and the fixture, and is rebuilt (about a
-minute and a half) when either changes.
+`--measure-only` runs every check and reports every number without judging the budgets.
+`perf-sessions.mjs` records the sessions' samples in `perf-sessions.json` and rewrites
+`perf-budgets.json` and the tables above from them (without arguments: from what is already
+recorded); the unit test refuses any other combination. The rule's factor is the `rule` of
+`perf-budgets.json`. The library is cached under the system temporary directory by a digest
+of `src/js` and the fixture, and is rebuilt (about a minute) when either changes.

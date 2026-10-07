@@ -77,7 +77,8 @@ export function reduceSession(raw, extra = {}) {
 export const machineOf = (raw) => Object.fromEntries(MACHINE_KEYS.map((k) => [k, raw.machine[k]]));
 
 /** A session's result for a measurement: the median of its samples. */
-export const sessionMedian = (session, key, browser) => round(median(session.samples[key][browser]));
+export const sessionMedian = (session, key, browser) => round(
+  median(session.samples[key][browser]));
 
 /** `measured` of perf-budgets.json: over the session medians of the measuring sessions. */
 export function measuredOf(sessions) {
@@ -99,7 +100,8 @@ export function budgetFileOf(sessions, rule) {
   return { statistic: 'median', unit: 'ms', rule, measured, budgets: budgetsOf(rule, measured) };
 }
 
-const table = (head, rows) => [`| ${head.join(' | ')} |`, `| ${head.map(() => '---').join(' | ')} |`,
+const table = (head, rows) => [`| ${head.join(' | ')} |`,
+  `| ${head.map(() => '---').join(' | ')} |`,
   ...rows.map((r) => `| ${r.join(' | ')} |`)];
 const range = (s) => `${s.median} (${s.min}-${s.max})`;
 const legLoad = (l) => (l ? `${l.start} -> ${l.end}` : 'not recorded');
