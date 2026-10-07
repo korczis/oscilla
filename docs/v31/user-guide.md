@@ -230,7 +230,7 @@ the output, Studio PLAY is refused.
 They apply while the Studio has focus and no text field is being edited; Tab is never taken.
 The same table is the Studio part of the one **Keyboard shortcuts** dialog. The keyboard button
 in the toolbar, Help (**?**) and the menu all open that dialog, and it lists the keys of the
-workspace in view and the keys that work everywhere (ADR 0049).
+workspace in view and the keys that work everywhere (ADR 0050).
 
 Space has one meaning in each workspace: it is the keyboard for that workspace's Play control,
 and nothing else. A focused text field, button, link, slider or tab, or an open dialog, keeps

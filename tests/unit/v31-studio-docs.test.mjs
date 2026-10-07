@@ -1,7 +1,7 @@
 // V3.1 Studio documentation stays true to the code (spec §221-§224; plan V432, V431):
 //   - docs/v31/user-guide.md: the workflows of §223, the shortcut table equal to the ONE table in
 //     code (graph-keys.js STUDIO_SHORTCUTS, which the in-app list renders) and the timeline keys
-//     equal to timeline's KEY_HELP, and the Space table equal to shortcuts.js (ADR 0049)
+//     equal to timeline's KEY_HELP, and the Space table equal to shortcuts.js (ADR 0050)
 //   - docs/v31/performance.md: the budget table equal to the budgets the tests enforce
 //   - README.md's Studio section links the user guide and no longer lists search as missing
 //   node --test tests/unit/v31-studio-docs.test.mjs

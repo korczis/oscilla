@@ -1,4 +1,4 @@
-// One meaning for Space and one shortcut list (ledger W5, ADR 0049):
+// One meaning for Space and one shortcut list (ledger W5, ADR 0050):
 //   - src/js/ui/shortcuts.js says, for every workspace, who owns Space (the instrument's Hold to
 //     Play, the Studio transport, or nobody) and what the one Keyboard shortcuts dialog lists
 //   - the Studio part of that list is graph-keys.js STUDIO_SHORTCUTS, in its order

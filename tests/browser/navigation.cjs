@@ -39,7 +39,7 @@
 //                     modified click is left to the browser
 //   anchor            the skip link moves focus to the main region with no history entry and the
 //                     address unchanged
-//   space-one-meaning  (ledger W5, ADR 0049) Space with nothing focused does what the workspace
+//   space-one-meaning  (ledger W5, ADR 0050) Space with nothing focused does what the workspace
 //                     in view owns, and nothing else: the instrument's Hold to Play in the six
 //                     instrument workspaces, the Studio transport in Studio, nothing at all in
 //                     Measure, Experiments, Learn, Presets and About; a focused link in Studio
@@ -703,7 +703,7 @@ function defineChecks() {
     after: { hash: after.hash, length: after.length, focus: after.focus } };
   });
 
-  // W5 / ADR 0049: what Space (nothing focused) starts in each workspace.
+  // W5 / ADR 0050: what Space (nothing focused) starts in each workspace.
   const SPACE_EXPECTED = { playground: 'instrument', measure: 'none', experiments: 'none',
     analyzer: 'instrument', filter: 'instrument', compare: 'instrument', synthesis: 'instrument',
     sequencer: 'instrument', presets: 'none', learn: 'none', studio: 'studio', about: 'none' };

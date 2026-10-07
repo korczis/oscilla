@@ -328,7 +328,7 @@ export function createOscillaUi({ storedAnalysisTab = storageGet(ANALYSIS_TAB_KE
         .sort((a, b) => a.getBoundingClientRect().top - b.getBoundingClientRect().top)[0];
       if (target) target.scrollIntoView({ block: tablet ? 'start' : 'nearest', behavior });
     },
-    /** What the one Keyboard shortcuts dialog lists in the workspace in view (ADR 0049). */
+    /** What the one Keyboard shortcuts dialog lists in the workspace in view (ADR 0050). */
     keyHelp() {
       return shortcutHelp(this.workspace);
     },
