@@ -76,7 +76,7 @@ export function experimentSummary(e, { name = null, match = 'absent' } = {}) {
     { label: 'Repeat of', text: e.provenance && e.provenance.repeatOf ? e.provenance.repeatOf
       : 'none (original)' },
     ...(e.provenance && e.provenance.duplicateOf ? [{ label: 'Duplicate of',
-      text: `${e.provenance.duplicateOf} (the same run, copied)` }] : []),
+      text: `${e.provenance.duplicateOf} (the same experiment, copied)` }] : []),
     { label: 'Build', text: build ? `${build.version || UNAVAILABLE.UNKNOWN} (${build.channel
       || UNAVAILABLE.UNKNOWN}${build.dirty ? ', dirty' : ''}${build.sourceDigest
       ? `, source ${build.sourceDigest.slice(0, 12)}…` : ''})` : UNAVAILABLE.UNKNOWN },

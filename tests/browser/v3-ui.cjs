@@ -1369,7 +1369,7 @@ function defineChecks(fixtures) {
       stated: /^recipe\.stimulus\.kind: this run used a white noise stimulus/.test(res.statement)
         && /Repeat is refused/.test(res.statement),
       repeatRefused: !!res.repeat && res.repeat.title === 'Repeat refused'
-        && /This run used a white noise stimulus/.test(res.repeat.text),
+        && /This experiment used a white noise stimulus/.test(res.repeat.text),
       nothingLoaded: res.workspace === 'experiments' && res.valuesKept,
     }) };
   });
@@ -1631,7 +1631,7 @@ function defineChecks(fixtures) {
     const g = (d, label) => (d.groups || []).find((x) => x.label === label) || { items: [] };
     return { ...res, ...H.verdict({
       section: !res.ac.missing && res.ac.shown,
-      headings: res.ac.h4 === 1 && res.ac.h5[0] === 'Changed between runs A and B'
+      headings: res.ac.h4 === 1 && res.ac.h5[0] === 'Changed between experiments A and B'
         && res.ac.h6 >= 2 && res.ac.lists,
       recipe: g(res.ac, 'Recipe').open && g(res.ac, 'Recipe').items
         .includes('Stimulus f1: 20 Hz → 50 Hz'),
@@ -1645,7 +1645,7 @@ function defineChecks(fixtures) {
       baseline: res.marked.id === 'fixture-c' && res.marked.pressed === 'true'
         && res.marked.chip.join() === 'fixture-c',
       againstBaseline: res.canCompare === true && res.base.first === 'fixture-c'
-        && res.base.h5[0] === 'Changed between runs A (baseline) and B',
+        && res.base.h5[0] === 'Changed between experiments A (baseline) and B',
       narrow: res.narrow.fits,
       cleared: res.cleared === null,
     }) };
@@ -1804,7 +1804,7 @@ function defineChecks(fixtures) {
       compareSaysVersion: g13.open && g13.items.some((t) => t === 'Definition version: version 1 '
         + `(${res.ref1.hash.slice(0, 12)}…) → version 2 (${res.ref3.hash.slice(0, 12)}…) (version `
         + '1 → 2 of the same definition: its execution fields were edited between the runs)')
-        && res.heading === 'Changed between runs A (baseline) and B',
+        && res.heading === 'Changed between experiments A (baseline) and B',
       sameVersionNoChange: !res.cmp12.some((x) => x.label === 'Definition'),
       truth: res.differs === true && !!res.ref4 && res.ref4.derived === true
         && res.ref4.id !== def.id,

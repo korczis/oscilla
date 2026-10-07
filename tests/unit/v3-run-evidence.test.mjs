@@ -233,7 +233,7 @@ test('lineage of a calibrated microphone run: device, flags, profile and bound l
     .slice(0, 12)}…\\)`));
   assert.match(t('calibration'), /oscilla\.calibration\.log-interp\.v1/);
   assert.match(t('calibration'), /level calibration offset \+124\.00 dB/);
-  assert.match(t('calibration'), /bound to the input this run recorded \(device \(hashed\)/);
+  assert.match(t('calibration'), /bound to the input this experiment recorded \(device \(hashed\)/);
   assert.doesNotMatch(t('calibration'), /as far as the browser reports/, 'a device id is known');
   assert.match(t('calibration'), /applies to levels, not to this ratio/);
   assert.match(t('build'), /source digest dddddddddddd…/);
