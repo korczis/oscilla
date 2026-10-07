@@ -15,6 +15,7 @@ const os = require('node:os');
 const path = require('node:path');
 const { pathToFileURL } = require('node:url');
 const suite = require('./lib/suite.cjs');
+const { until } = require('./lib/wait.cjs');
 
 const argv = process.argv.slice(2);
 const arg = (name, fallback) => {
@@ -466,6 +467,156 @@ function defineChecks() {
     return { ok, oscilla: o, measure: m, fixed: got.fixed, testContext: got.testContext,
       setInputNow: got.setInputNow, showResult: got.showResult, titleKept: got.titleKept,
       setValues: got.setValues, setRange: got.setRange, valuesKept: got.valuesKept };
+  });
+
+  // Ledger W7f and W7c (ADR 0052, ADR 0017): the level indicator reads CALIBRATED only for an
+  // input that was checked in the context the page is in. An input named in TEST CONTEXT (by
+  // the loopback, by setInputNow or by a TEST CONTEXT result) is not a checked input once the
+  // page is on the microphone, a level calibration made in one context does not apply in the
+  // other, and one typed by hand in TEST CONTEXT says so. On its own page: it leaves a result
+  // and a calibration behind.
+  def('calibrated-only-for-a-checked-input', async ({ context, baseUrl, browserName, origin }) => {
+    const p = await context.newPage();
+    const errs = [];
+    p.on('pageerror', (e) => errs.push(e.message));
+    const MIC = { device: { label: 'Mic A', id: 'mic-a' },
+      constraints: { requested: null, applied: { echoCancellation: false,
+        noiseSuppression: false, autoGainControl: false, channelCount: 1 } } };
+    /** The level state now: the getters the indicator renders, and what is stored. */
+    const now = () => p.evaluate(() => {
+      const a = window.OSCILLA.app;
+      const m = window.OSCILLA.measure;
+      const c = m.levelCalibration;
+      return { input: m.inputNow ? 'known' : null, indicator: a.measureCalIndicator,
+        levels: a.measureLevelsText, void: a.meas.cal.levelVoid,
+        pending: !!a.meas.cal.levelPending, stored: !!c, conditions: c ? c.conditions : null,
+        state: a.measureLevelStateText, testContext: !!a.meas.loopback };
+    });
+    /** Type a reading by hand and press Store; resolves to the verdict and the state after. */
+    const typeReading = async (conditions = '') => {
+      const tried = await p.evaluate((text) => {
+        const a = window.OSCILLA.app;
+        a.measureSetLevelManual(true);
+        Object.assign(a.meas.levelForm, { referenceHz: '1000', referenceDb: '94',
+          observedDb: '-30', conditions: text });
+        return { note: a.measureLevelManualNote, saved: a.measureSaveLevelCalibration(),
+          error: a.meas.levelForm.error };
+      }, conditions);
+      return { ...tried, ...await now() };
+    };
+    const seam = (fn, arg) => p.evaluate(fn, arg);
+    const NEEDS_INPUT = /^Run the setup check first: a level calibration is valid only for the/;
+    /** Nothing to bind to: no input, the typed reading refused with the reason, no CALIBRATED. */
+    const refused = (r) => r.input === null && r.saved === false && NEEDS_INPUT.test(r.error)
+      && NEEDS_INPUT.test(r.note) && !r.stored && r.indicator === 'UNCALIBRATED'
+      && r.levels === 'relative (dBFS-like)';
+    const indicatorText = () => p.evaluate(() => document
+      .querySelector('[data-osc="measure.levelIndicator"]').textContent.replace(/\s+/g, ' ')
+      .trim());
+    const res = {};
+    try {
+      await p.goto(baseUrl, { waitUntil: 'load' });
+      await H.ready(p);
+      await H.workspace(p, 'measure');
+      // A real TEST CONTEXT measurement: its setup check names the loopback input.
+      res.setup = await seam(() => {
+        const m = window.OSCILLA.measure;
+        return { loopback: m.useLoopback(), values: m.setValues({ duration: 1, repeats: 1,
+          noiseCheckS: 0.5, preRollS: 0.25, postRollS: 0.5, gapS: 0.2 }) };
+      });
+      await seam(() => window.OSCILLA.app.measureStart());
+      res.run = await until(() => seam(() => {
+        const m = window.OSCILLA.measure;
+        return ['COMPLETE', 'INVALID', 'ABORTED', 'ERROR'].includes(m.state)
+          ? { state: m.state, input: m.inputNow ? 'known' : null,
+            testContext: !!(m.result && m.result.testContext) } : null;
+      }), { ms: 45000, what: 'the TEST CONTEXT measurement ends' });
+      // Route A with the input the loopback's own check named ...
+      res.leftLoopback = await seam(() => {
+        window.__oscResult = window.OSCILLA.measure.result;
+        return window.OSCILLA.measure.useMicrophone();
+      });
+      res.afterCheck = await typeReading();
+      // ... and with an input injected in TEST CONTEXT.
+      res.injected = await seam((input) => {
+        const m = window.OSCILLA.measure;
+        return { loopback: m.useLoopback(), set: m.setInputNow({ ...input,
+          sampleRate: window.OSCILLA.engine.ctx.sampleRate }), known: !!m.inputNow,
+        left: m.useMicrophone() };
+      }, MIC);
+      res.afterInject = await typeReading();
+      // Route B: a TEST CONTEXT result shown while the page is on the microphone.
+      res.shown = await seam(() => ({ ok: window.OSCILLA.measure.showResult(window.__oscResult),
+        title: window.OSCILLA.app.meas.shownTitle }));
+      res.afterShow = await typeReading();
+      // In TEST CONTEXT the typed reading is stored, labelled (W7c), and applies there only.
+      res.inContext = await seam((input) => {
+        const m = window.OSCILLA.measure;
+        return { loopback: m.useLoopback(), set: m.setInputNow({ ...input,
+          sampleRate: window.OSCILLA.engine.ctx.sampleRate }) };
+      }, MIC);
+      res.typedInContext = await typeReading('calibrator on the capsule');
+      res.left = await seam(() => window.OSCILLA.measure.useMicrophone());
+      res.outside = await now();
+      res.outsideText = await until(async () => {
+        const t = await indicatorText();
+        return t === 'Level UNCALIBRATED' ? t : null;
+      }, { ms: 5000, what: 'the level indicator reads UNCALIBRATED outside TEST CONTEXT' })
+        .catch(() => indicatorText());
+      const v = {
+        setup: res.setup.loopback === true && res.setup.values === true,
+        ran: res.run.state === 'COMPLETE' && res.run.input === 'known' && res.run.testContext,
+        routeACheck: res.leftLoopback === true && refused(res.afterCheck),
+        routeAInject: res.injected.loopback && res.injected.set === true && res.injected.known
+          && res.injected.left === true && refused(res.afterInject),
+        routeB: res.shown.ok === true && res.shown.title === 'TEST CONTEXT result'
+          && refused(res.afterShow),
+        inContext: res.inContext.set === true && res.typedInContext.saved === true
+          && res.typedInContext.indicator === 'CALIBRATED' && res.typedInContext.testContext,
+        labelled: /^TEST CONTEXT: .* calibrator on the capsule$/
+          .test(res.typedInContext.conditions || '')
+          && /^TEST CONTEXT reference reading stored/.test(res.typedInContext.state),
+        outside: res.left === true && !res.outside.testContext && res.outside.input === null
+          && res.outside.indicator === 'UNCALIBRATED' && !res.outside.pending
+          && /^UNCALIBRATED: the level calibration was made in TEST CONTEXT/
+            .test(res.outside.void || '')
+          && res.outsideText === 'Level UNCALIBRATED',
+      };
+      // With a fake microphone: the checked microphone is the one input a reading binds to,
+      // and that calibration does not apply in TEST CONTEXT.
+      if (FAKE_MIC.has(browserName) && origin === 'http') {
+        await seam(() => window.OSCILLA.app.measureClearLevelCalibration());
+        // Check setup, on the microphone (not awaited: the poll below is the wait).
+        await seam(() => { window.OSCILLA.app.measureCheck(); });
+        res.micCheck = await until(() => seam(() => {
+          const m = window.OSCILLA.measure;
+          return ['READY', 'INVALID', 'ERROR'].includes(m.state)
+            ? { state: m.state, kind: m.ioKind, input: m.inputNow ? 'known' : null } : null;
+        }), { ms: 15000, what: 'the microphone setup check ends' });
+        res.micTyped = await typeReading('on the microphone');
+        res.intoLoopback = await seam(() => window.OSCILLA.measure.useLoopback());
+        res.micCalInLoopback = await now();
+        res.backOnMic = await seam(() => window.OSCILLA.measure.useMicrophone());
+        res.micCalUnchecked = await now();
+        v.micChecked = res.micCheck.state === 'READY' && res.micCheck.kind === 'microphone'
+          && res.micCheck.input === 'known';
+        v.micCalibrated = res.micTyped.saved === true && res.micTyped.indicator === 'CALIBRATED'
+          && res.micTyped.conditions === 'on the microphone'
+          && /^reference reading stored/.test(res.micTyped.state);
+        v.micCalNotInLoopback = res.intoLoopback === true && res.micCalInLoopback.testContext
+          && res.micCalInLoopback.indicator === 'UNCALIBRATED'
+          && /^UNCALIBRATED: the level calibration was taken with a microphone/
+            .test(res.micCalInLoopback.void || '');
+        v.micCalPendingAgain = res.backOnMic === true && res.micCalUnchecked.input === null
+          && res.micCalUnchecked.indicator === 'PENDING INPUT CHECK';
+      } else {
+        res.microphone = 'not run: no fake microphone on this browser and origin';
+      }
+      const failed = Object.keys(v).filter((k) => !v[k]);
+      return { ok: failed.length === 0 && errs.length === 0, failed, errs, ...res };
+    } finally {
+      await p.close({ runBeforeUnload: false }).catch(() => {});
+    }
   });
 
   def('controls-reachable-labelled', async ({ page }) => {
