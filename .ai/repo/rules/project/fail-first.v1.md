@@ -34,7 +34,8 @@ A claim a person types is not evidence; a run against the merge base is.
   on the base's source, and `dist/` there is the base's build.
 - A test file that fails on the head as well is not evidence: something other than the
   change fails it (a test that needs the git history, for one, since both trees are plain
-  `git archive` extracts).
+  `git archive` extracts). The head run is repeated once when it fails, and the job says so,
+  because a test that is sensitive to a loaded machine would otherwise hide real evidence.
 - A change no unit test can demonstrate (documentation under a `fix` title, a behaviour only
   a browser suite can observe) says so in the pull request body, on a line of its own:
   `fail-first: n/a <reason>`. The reason is required. It is printed in the job log, and
@@ -62,7 +63,8 @@ test also passes on the base is refused; one whose test fails on the base passes
 kind printed; the same refused fixture with `fail-first: n/a docs-only` in the body passes
 and prints the reason, and a waiver without a reason does not; other title types pass; a
 `fix` with no unit test is refused; a new module is reported as `module-not-found`; a test
-that fails on the head too is not evidence.
+that fails on the head too is not evidence, and one that fails there once and passes on
+the retry still is.
 
 What it cannot see:
 

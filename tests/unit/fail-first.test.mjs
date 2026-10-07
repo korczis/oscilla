@@ -99,6 +99,31 @@ test('the waiver passes a PR that proves nothing, and its reason is printed', (t
   assert.match(bare.out, /a waiver needs one/);
 });
 
+test('a test that fails once with the change and passes on the retry is still evidence', (t) => {
+  const repo = fixture();
+  t.after(() => repo.dispose());
+  const marker = path.join(repo.dir, '..', `${path.basename(repo.dir)}.flaked`);
+  t.after(() => spawnSync('rm', ['-f', marker]));
+  // fails the first time it runs against the changed source, then passes: a load-sensitive test
+  repo.commit('fix', {
+    'src/value.mjs': 'export const value = () => 2;\n',
+    'tests/unit/value.test.mjs': `import test from 'node:test';
+import assert from 'node:assert/strict';
+import { existsSync, writeFileSync } from 'node:fs';
+import { value } from '../../src/value.mjs';
+test('value is 2', () => {
+  assert.equal(value(), 2);
+  const marker = ${JSON.stringify(marker)};
+  if (!existsSync(marker)) { writeFileSync(marker, ''); assert.fail('flaked'); }
+});
+`,
+  });
+  const r = run(repo, 'fix(x): the value is 2');
+  assert.equal(r.status, 0, r.out);
+  assert.match(r.out, /failed with the change \(assertion\); running it once more/);
+  assert.match(r.out, /value\.test\.mjs: fails without the change \(assertion\), passes with it/);
+});
+
 test('a title that is not feat or fix has nothing to prove', (t) => {
   const repo = fixture();
   t.after(() => repo.dispose());
@@ -147,6 +172,7 @@ test('a test that fails with the change too is not evidence', (t) => {
   const r = run(repo, 'fix(x): the value is 2');
   assert.equal(r.status, 1, r.out);
   assert.match(r.out, /value\.test\.mjs: FAILS WITH THE CHANGE TOO \(assertion\) - not evidence/);
+  assert.match(r.out, /failed with the change \(assertion\); running it once more/);
 });
 
 test('the change is everything outside tests/: a script test fails on the base script', (t) => {

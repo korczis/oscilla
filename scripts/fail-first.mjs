@@ -13,7 +13,9 @@
 //            head's tests/ put in its place.
 // A file is evidence when it passes `with` and fails `without`. At least one file must be, or
 // the PR body carries a line `fail-first: n/a <reason>`, which is printed. A file that fails in
-// both trees proves nothing (the harness, not the change, fails it) and is reported as such.
+// both trees proves nothing (the harness, not the change, fails it) and is reported as such;
+// a failure with the change is retried once and printed, so a load-sensitive test is not
+// mistaken for that.
 // The kind of each failure without the change is printed (assertion, module-not-found,
 // missing-file, error, timeout) with the names of the failing tests, so a test that only fails
 // because a new module does not exist yet is visible as that.
@@ -130,7 +132,14 @@ export function failFirst({ repo, title, body, head = 'HEAD', base, baseBranch =
       }
     }
     for (const file of files) {
-      const withRun = runFile(withTree, file);
+      let withRun = runFile(withTree, file);
+      if (!withRun.ok) {
+        // The head run is the control for the harness. One retry, said out loud: a test that
+        // is sensitive to a loaded machine must not turn real evidence into "not evidence".
+        say(`  ${file}: failed with the change (${failureKind(withRun.output, withRun.timedOut)});`
+          + ' running it once more');
+        withRun = runFile(withTree, file);
+      }
       const withoutRun = runFile(withoutTree, file);
       if (!withRun.ok) {
         const kind = failureKind(withRun.output, withRun.timedOut);
