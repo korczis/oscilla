@@ -8,7 +8,12 @@
 // One call is recorded as pending (PENDING): the live smoke's, which leaves with ledger W7e.
 //
 // What the scan decides: a call written as a statement or as the body of an arrow function is
-// a discarded verdict. It does not trace a value that is assigned and then ignored.
+// a discarded verdict. Its limits: it does not trace a value that is assigned and then ignored
+// (`const r = m.setValues(v);`), passed as an argument to a call that ignores it
+// (`foo(m.setValues(v))`), or returned out of page.evaluate and dropped by the caller
+// (`await page.evaluate(() => { return m.setValues(v); });`), and it does not see a call made
+// through an alias of the method. No such call exists in tests/browser or scripts/ today; a
+// suite states its verdict through the helpers above or asserts it.
 
 import test from 'node:test';
 import assert from 'node:assert/strict';

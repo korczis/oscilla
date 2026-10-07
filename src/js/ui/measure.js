@@ -314,7 +314,9 @@ export function createMeasureUi(svc) {
     lastRecipe: null,
     onStateHook: null,     // test seam only (onceInState)
     // The input named last { device, constraints, sampleRate } and whether TEST CONTEXT named
-    // it. Written by nameInput() and read by inputKnown() only (binding check, W7f).
+    // it. Written by nameInput(); whatever decides a binding, an indicator or a displayed
+    // level reads it through inputKnown() (W7f). The devicechange handler only tests it for
+    // presence before it clears it.
     inputNow: null,
     inputTest: false,
     reference: null,       // { reading, input, referenceHz, testContext } of the last capture
@@ -355,8 +357,9 @@ export function createMeasureUi(svc) {
    * The input checked in the context the page is in, or null (ledger W7f, ADR 0017 C1). An
    * input belongs to the context that named it: one named in TEST CONTEXT is not a checked
    * input on the microphone, and a microphone is not the input of the loopback. Every reader
-   * of the current input goes through here, so no path can bind a level calibration to, or
-   * apply one for, an input the page's own context did not check.
+   * that decides a binding, an indicator or a displayed level goes through here, so no path
+   * can bind a level calibration to, or display one for, an input the page's own context did
+   * not check.
    */
   function inputKnown() {
     return ctx.inputNow && ctx.inputTest === ctx.loopback ? ctx.inputNow : null;
@@ -365,20 +368,35 @@ export function createMeasureUi(svc) {
   /**
    * Enter or leave TEST CONTEXT (the seam's useLoopback / useMicrophone; a user has the URL
    * flag only, which is set before anything is checked). The engine and its input are
-   * released, so nothing checked or captured before the switch is known after it.
+   * released, so nothing checked or captured before the switch is known after it; and the
+   * result and the noise-check snapshot of the context that is left go with it, so nothing
+   * of TEST CONTEXT stays on the microphone page to be read as a measurement, nor the
+   * reverse (review of #169). A saved experiment that is shown stays: it is a stored record
+   * with its own label.
    */
   function setLoopback(on, system = null) {
+    const m = ctx.cmp.meas;
+    const left = ctx.loopback !== !!on;
     stopLive();
     disposeEngine();
     ctx.loopback = !!on;
+    if (left) {
+      ctx.result = null;
+      ctx.evidence = null;
+      ctx.save = null;
+      ctx.rta = null;
+      if (ctx.shown && ctx.shown.kind === 'result') ctx.shown = null;
+      Object.assign(m, { saved: false, savedId: null, savedAnnotation: null, savedName: null });
+    }
     if (on && system) ctx.loopbackSystem = system;
     nameInput(null);
     ctx.reference = null; // a captured reference belongs to the input that is gone
     ctx.preflight = null;
-    ctx.cmp.meas.loopback = ctx.loopback;
-    ctx.cmp.meas.levelForm.reading = null;
+    m.loopback = ctx.loopback;
+    m.levelForm.reading = null;
     renderInputs();
     refresh();
+    if (left) rebuildAll();
   }
 
   /**
@@ -394,10 +412,40 @@ export function createMeasureUi(svc) {
     return a;
   }
 
-  /** The level calibration to display levels with: on, valid and taken with this input (M3). */
+  /**
+   * The level calibration to display levels with: on, valid, and taken with the input that
+   * was checked in the context the page is in (M3). One that waits for its input check is not
+   * in use: the indicator says PENDING INPUT CHECK and "until then levels are relative", and
+   * no view may say otherwise (review of #169). The engine is handed the pending one all the
+   * same (calibrationInput()): it checks the input it measures.
+   */
   function levelInUse(m) {
-    return m.cal.useLevel && isValidLevelCalibration(ctx.levelCal) && levelApplies().applies
-      ? ctx.levelCal : null;
+    if (!(m.cal.useLevel && isValidLevelCalibration(ctx.levelCal))) return null;
+    const a = levelApplies();
+    return a.applies && a.checked ? ctx.levelCal : null;
+  }
+
+  /**
+   * levelInUse() for a result or experiment that is shown without evidence of its own: only
+   * a calibration made in the context the shown data was taken in (`testContext`: its label
+   * or null). A TEST CONTEXT result never reads in dB SPL through a microphone calibration.
+   */
+  function levelForShown(m, testContext) {
+    return !!testContext === ctx.levelCalTest ? levelInUse(m) : null;
+  }
+
+  /** The TEST CONTEXT label a level calibration stored now would carry (W7c), or null. */
+  function levelLabelNow(manual) {
+    // A typed reading binds to inputKnown(), which is an input of the page's own context.
+    if (manual) return ctx.loopback ? MANUAL_TEST_CONTEXT_LABEL : null;
+    const ref = ctx.reference;
+    if (ref) return ref.testContext ? ref.testContext.label || LOOPBACK_LABEL : null;
+    return ctx.loopback ? LOOPBACK_LABEL : null;
+  }
+
+  /** How many characters of conditions fit beside `label` (LEVEL_LIMITS.maxConditionsLength). */
+  function conditionsRoom(label) {
+    return LEVEL_LIMITS.maxConditionsLength - (label ? label.length + 1 : 0);
   }
 
   function announce(message) {
@@ -601,8 +649,10 @@ export function createMeasureUi(svc) {
     m.active = isActiveState(state);
     m.busy = m.active && state !== S.READY;
     const recipe = recipeNow();
+    const lv = ctx.levelCal ? levelApplies() : null;
     m.flow = plain(measureFlow({
       state, preflight: ctx.preflight, recipe, calibration: calibrationInput(),
+      levelChecked: !!lv && lv.applies && lv.checked,
       result: ctx.result && ctx.result.state ? { state: ctx.result.state,
         reasons: ctx.result.reasons, runs: ctx.result.runs, quality: ctx.result.quality,
         preflight: ctx.result.preflight, noise: ctx.result.noise } : null,
@@ -615,7 +665,6 @@ export function createMeasureUi(svc) {
     m.runText = m.flow.runText;
     if (lite) return;
     m.inputRows = inputFacts();
-    const lv = ctx.levelCal ? levelApplies() : null;
     m.cal.levelVoid = lv && !lv.applies && lv.checked ? lv.reason : null;
     m.cal.levelPending = lv && m.cal.useLevel && lv.applies && !lv.checked ? LEVEL_PENDING_TEXT
       : null;
@@ -674,7 +723,7 @@ export function createMeasureUi(svc) {
         useCalibration: true,
         showEnvelope: true,
         profile: ctx.profile,
-        levelCalibration: levelInUse(m),
+        levelCalibration: levelForShown(m, ctx.shown.testContext),
       });
       view = phase ? buildPhaseView(src) : magnitude;
     }
@@ -740,10 +789,9 @@ export function createMeasureUi(svc) {
     // V383: a level calibration applies to the live RTA only once the input has been checked:
     // the live tap reports no device facts, and with no input known levelCalibrationApplies()
     // cannot tell mic B from the mic A it was taken with (nor refuse an unbound one, C1).
-    const level = levelInUse(m);
-    const unchecked = level && !inputKnown();
+    // levelInUse() is null until then, as for every other view.
     return { profile: m.cal.useFrequency && ctx.profile ? ctx.profile : null,
-      levelCalibration: unchecked ? null : level };
+      levelCalibration: levelInUse(m) };
   }
 
   function rebuildLiveRta(m, L) {
@@ -767,11 +815,13 @@ export function createMeasureUi(svc) {
   /**
    * The level calibration of a stored noise-check snapshot: the one its measurement applied
    * (the evidence of that result), never one loaded or created afterwards; the current one only
-   * for a TEST CONTEXT result shown without a run (test seam).
+   * for a TEST CONTEXT result shown without a run (test seam), and then only one that was made
+   * in TEST CONTEXT and whose input is checked (levelForShown).
    */
   function snapshotLevel(st, m) {
     const ev = ctx.evidence;
-    return ev && st.result && ev.result === st.result ? ev.calibration.level : levelInUse(m);
+    if (ev && st.result && ev.result === st.result) return ev.calibration.level;
+    return levelForShown(m, st.result && st.result.testContext);
   }
 
   function rebuildRta() {
@@ -1899,13 +1949,11 @@ export function createMeasureUi(svc) {
         let input;
         let method;
         let conditions = f.conditions;
-        let label = null; // the TEST CONTEXT label of a calibration made there (W7c)
         if (f.manual) {
           if (!inputBinding(inputKnown())) throw new Error(LEVEL_NEEDS_INPUT);
           observed = Number(f.observedDb === '' ? NaN : f.observedDb);
           input = inputKnown();
           method = 'manual';
-          if (ctx.inputTest) label = MANUAL_TEST_CONTEXT_LABEL;
         } else {
           const ref = ctx.reference;
           if (!ref || !ref.reading.ok) {
@@ -1923,10 +1971,18 @@ export function createMeasureUi(svc) {
           observed = ref.reading.observedDbRelative;
           input = ref.input;
           method = 'captured';
-          if (ref.testContext) label = ref.testContext.label || LOOPBACK_LABEL;
         }
+        const label = levelLabelNow(f.manual);
         if (label) {
-          conditions = [label, conditions].filter((t) => t && String(t).trim()).join(' ');
+          // The label is stored in front of the conditions as typed, never in place of a part
+          // of them: text that does not fit beside it is refused with the limit that applies.
+          const typed = typeof conditions === 'string' ? conditions.trim() : '';
+          const room = conditionsRoom(label);
+          if (typed.length > room) {
+            throw new Error(`Conditions can be at most ${room} characters in TEST CONTEXT (the `
+              + `TEST CONTEXT label is stored with them); ${typed.length} were entered.`);
+          }
+          conditions = typed ? `${label} ${typed}` : label;
         }
         const cal = createLevelCalibration({
           referenceHz,
@@ -1965,6 +2021,15 @@ export function createMeasureUi(svc) {
       rebuildAll();
     },
     get measureFreqCalText() { return calText({ profile: this.meas.cal.profile }); },
+    /**
+     * How many characters the conditions field takes: the limit of a level calibration, less
+     * the TEST CONTEXT label that is stored in front of them there (W7c).
+     */
+    get measureLevelConditionsMax() {
+      // Read first, so the binding follows them (ctx is not reactive).
+      const deps = [this.meas.levelForm.manual, this.meas.loopback, this.meas.levelForm.reading];
+      return conditionsRoom(levelLabelNow(deps[0]));
+    },
     /** Why a hand-typed reading cannot be stored now (no input known yet), or ''. */
     get measureLevelManualNote() {
       // meas.inputRows makes this getter follow the setup check (refresh()).

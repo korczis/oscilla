@@ -174,9 +174,9 @@ and not at the two hooks:
 
 - **An input belongs to the context that named it.** MEASURE keeps, next to the current input,
   whether TEST CONTEXT named it: the loopback's own setup check or reference capture, a result
-  that carries a `testContext`, or `setInputNow`. Every reader of the current input (the typed
-  reading's binding, the indicator, the check before a measurement, the live RTA, the dialog's
-  note) goes through one function, `inputKnown()`, which answers "no input" when the input's
+  that carries a `testContext`, or `setInputNow`. Every reader that decides a binding, an
+  indicator or a displayed level (the typed reading's binding, the indicator, the check
+  before a measurement, the views, the dialog's note) goes through one function, `inputKnown()`, which answers "no input" when the input's
   context is not the page's. So `useLoopback()`, `setInputNow(input)`, `useMicrophone()` leaves
   no input known, and `showResult` of a TEST CONTEXT result outside loopback shows the result,
   labelled, without making its input the current one. Entering or leaving TEST CONTEXT also
@@ -206,3 +206,27 @@ one page.
 
 Proven by `tests/unit/v4-seam-contract.test.mjs` (the W7f, W7c and W7h tests, which failed
 before the change) and check `calibrated-only-for-a-checked-input` in `tests/browser/app.cjs`.
+
+### 2026-10-07: a pending calibration is in no display (review of #169)
+
+The note above left one path open, and review found it: with a microphone calibration stored,
+a TEST CONTEXT result shown on the microphone page drew its noise-check RTA as "Level · dB
+SPL" with a CALIBRATED badge while the indicator read PENDING INPUT CHECK. The display asked
+whether a calibration could apply, not whether its input was checked. Closed in #169:
+
+- **A level calibration is displayed only once its input is checked.** One function,
+  `levelInUse()`, answers every view (response, stored noise-check snapshot, live RTA,
+  evidence notes, and the Calibration step of the setup flow through `levelChecked`), and it
+  answers "none" while the calibration waits for its input check. The measurement engine is
+  still handed the pending calibration: it checks the input it measures (ADR 0017 C1,
+  unchanged).
+- **A result shown without evidence of its own takes only a calibration of its own context.**
+  A TEST CONTEXT result never reads in dB SPL through a microphone calibration.
+- **Leaving a context drops the result and the noise-check snapshot shown in it**, with the
+  input, the reference and the setup check's facts. A saved experiment that is shown stays.
+- **The TEST CONTEXT label is stored in front of the conditions as typed**, and the field's
+  limit in TEST CONTEXT is the limit of a level calibration less the label, so nothing the
+  field accepts is refused and nothing typed is cut.
+
+Proven by the four "of #169" tests in `tests/unit/v4-seam-contract.test.mjs`, which failed
+before the change, and by the fake-microphone leg of `calibrated-only-for-a-checked-input`.
