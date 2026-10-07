@@ -44,7 +44,8 @@ mobile, significant performance), **P2** (polish, debt).
 | Raw data retention | – | – | engine `keepRaw` | none | none | – | – | – | MISSING (no stated policy) |
 | Findings | – | – | – | – | – | – | – | – | MISSING |
 | Cross-domain Trace (result → run → definition → build → Studio) | ✓ (connections.js, ADR 0048) | record links refused whole | – | list-row links, no DB version | experiment detail, definition and finding rows, Studio dialog | every entry names its stored field; present only when the identity verifies | keyboard, focus, state in words | ✓ | in review (branch `feat/record-relations`, after #149) |
-| Knowledge explorer | – | – | – | – | static About | – | – | – | MISSING |
+| Knowledge explorer | – | – | – | – | static About | – | – | – | DESCOPED (ADR 0051, proposed) |
+| Method claims on evidence ("Why trust the method?" on a saved experiment) | – | – | – | – | – | – | – | claim-prose id check only | MISSING (ADR 0051; built after #149 and #151) |
 | Project model | singletons | – | – | split by domain | – | – | – | – | PARTIAL |
 | Workspace navigation / history / deep links | ✓ | – | – | URL only | ✓ | – | ✓ | ✓ | PARTIAL (W2, W3) |
 | Unsaved-work protection | – | – | – | – | – | – | – | – | MISSING (W2) |
@@ -93,7 +94,12 @@ no startup budget or large-library fixture (P1); `window.OSCILLA` test seam and 
 in production (W7); five dead CSS classes; an import without a hash shows no "unverified"
 marker; an unreadable stored record fails silently; ADR status never leaves `proposed`; the plan
 contradicts git (V386 READY, M033 BLOCKED; **closed** #144, see "plan reconciled" below); "run" means both a repeat and a completed
-experiment, and "project" both a Studio file and OSCILLA; no glossary.
+experiment, and "project" both a Studio file and OSCILLA (**partly closed** #162, ADR 0053 and
+`docs/GLOSSARY.md` "Run", "Experiment", "Project": a run is one capture, an experiment is the
+stored record, and the page, the UI controllers, the record views and the About view say so,
+held by `tests/unit/vocabulary.test.mjs`; still open: the same renames inside #149 and #151
+before they merge, and the import, validation and store messages and the derived-definition
+wording that the ADR's Consequences lists); the glossary exists since #120.
 
 ## What v4.0 still lacks entirely
 
@@ -106,7 +112,12 @@ as real, tested slices, in dependency order, never as placeholders:
 4. Cross-domain Trace over real stored relations ("Connected records", ADR 0048, branch
    `feat/record-relations`, in review; lands after #149).
 5. Unsaved-work protection and navigation history in the workspace.
-6. A knowledge explorer fed by a build-time index of claims, features, rules, ADRs and releases.
+6. ~~A knowledge explorer fed by a build-time index of claims, features, rules, ADRs and
+   releases.~~ — descoped by ADR 0051 (proposed); replaced by method claims on a saved
+   experiment's Evidence (item 7).
+7. "Why trust the method?" on a saved experiment's Evidence: for each recorded algorithm id,
+   the published claim that covers exactly that version with its test, or a plain statement
+   that none does (ADR 0051). Open; built after #149 and #151 land.
 
 ## Release decision at this baseline
 
@@ -166,3 +177,24 @@ with every check, the five engine microphone checks included (Playwright's WebKi
 granted by permission). Two of the suites could not have run WebKit before: `dsp.cjs` ran 0 checks
 and `labs.cjs` launched Chromium under any other name; every suite now refuses an unknown browser.
 The About timeline checks run in CI against full history and tags (`tests/unit/about.test.mjs`).
+
+## Update 2026-10-07 — knowledge explorer descoped (ADR 0051, proposed)
+
+Item 6 is descoped by decision, not built: v4.0 ships no knowledge explorer and no build-time
+index of claims, features, rules, ADRs or releases. The owner approved the direction on
+2026-10-07, steering by: "depth over breadth; fewer new nouns, more working verbs; acoustic
+measurement is the wedge; the meta-layer must not grow for its own sake; Majordomus must pay
+rent; the single file is not a religion". ADR 0051 holds the reasons and the preconditions for
+reopening it; the descoping counts once the owner marks that ADR accepted.
+
+Its replacement is item 7, one list on a panel that already exists. It is open, and it is built
+in its own pull request after findings (#149) and connected records (#151) land, because all
+three edit the Evidence section.
+
+Shipped with the decision, at 0 bytes in `dist/index.html`: the impulse-response note in
+`docs/CLAIMS.yaml` named `oscilla.ir.farina-inverse.v1` as the test oracle while the default,
+which the test runs, is v3. `tests/unit/knowledge-integrity.test.mjs` now fails on any algorithm
+id in claim prose that is not a current default, unless the line says it is retained; it failed
+on that note before the fix.
+
+The release blockers recorded above are unchanged by this update.

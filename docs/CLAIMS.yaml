@@ -319,7 +319,7 @@ claims:
     test: tests/unit/v3-transfer-ir.test.mjs
     status: guaranteed
     responsibility: product
-    note: The Farina inverse filter (oscilla.ir.farina-inverse.v1) is the test oracle and agrees on peak index and in-band scale.
+    note: The Farina inverse filter (oscilla.ir.farina-inverse.v3, the current method) is the test oracle and agrees on peak index and in-band scale.
 
   - id: rta-bands
     claim: Octave and one-third-octave band levels integrate power between the base-10 band edges below 0.95 of Nyquist, and the band averager in fast and slow mode reaches 63.2 percent of a step after one time constant whatever the frame rate

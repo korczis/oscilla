@@ -13,16 +13,19 @@
 const path = require('path');
 const fs = require('fs');
 const esbuild = require('esbuild');
-const { chromium, firefox, webkit } = require('playwright');
+const suite = require('./lib/suite.cjs');
 
 const FIX = path.join(__dirname, 'fixtures');
 const ORIGIN = 'http://dsp.test';
 const args = process.argv.slice(2);
 const only = args.includes('--browser') ? args[args.indexOf('--browser') + 1] : null;
+const RUN = suite.open({ name: 'dsp', browsers: only === null ? undefined : only });
+const playwright = RUN.playwright;
 
 let failures = 0;
 const lines = [];
 function check(browser, name, ok, detail) {
+  RUN.tally(browser);
   const line = `${ok ? 'PASS' : 'FAIL'} [${browser}] ${name}${detail ? ` — ${detail}` : ''}`;
   lines.push(line);
   console.log(line);
@@ -69,7 +72,8 @@ async function runBrowser(name, type, js) {
     });
   });
   await page.goto(`${ORIGIN}/dsp.html`);
-  await page.waitForFunction(() => window.DSP_READY === true);
+  await page.waitForFunction(() => window.DSP_READY === true, null,
+    { timeout: 30000 });
   const call = (fn) => page.evaluate((n) => window.DSP_TESTS[n](), fn);
   const B = `${name} ${browser.version()}`;
 
@@ -94,8 +98,7 @@ async function runBrowser(name, type, js) {
   }
   const off = await call('offlineTonePeak');
   if (off.skipped) {
-    lines.push(`INFO [${B}] offline analyser variant skipped: ${off.skipped}`);
-    console.log(lines.at(-1));
+    RUN.skip(B, 'offline-analyser-variant', off.skipped);
   } else {
     check(
       B,
@@ -277,17 +280,11 @@ async function runBrowser(name, type, js) {
 }
 
 (async () => {
+  await RUN.ready();
   const js = await bundle();
-  const engines = { chromium, firefox, webkit };
-  const names = only ? [only]
-    : (process.env.OSC_BROWSERS ? process.env.OSC_BROWSERS.split(',') : Object.keys(engines));
-  const unknown = names.filter((n) => !engines[n]);
-  if (unknown.length || names.length === 0) {
-    // A browser this suite cannot launch must not pass as "0 checks, ALL PASS".
-    console.error(`unknown browser(s): ${unknown.join(', ') || '(none given)'}`);
-    process.exit(2);
-  }
-  const targets = names.map((n) => [n, engines[n]]);
+  // The harness has refused an unknown or empty selection (exit 2) and fails a browser that
+  // runs 0 checks: a browser this suite cannot launch must not pass as "0 checks, ALL PASS".
+  const targets = RUN.browsers.map((n) => [n, playwright[n]]);
   for (const [name, type] of targets) {
     try {
       await runBrowser(name, type, js);

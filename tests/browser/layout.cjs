@@ -16,14 +16,16 @@
 
 const path = require('node:path');
 const { pathToFileURL } = require('node:url');
-const playwright = require('playwright');
+const suite = require('./lib/suite.cjs');
 
 const args = process.argv.slice(2);
 const arg = (name, def) => {
   const i = args.indexOf(`--${name}`);
   return i >= 0 ? args[i + 1] : def;
 };
-const BROWSERS = arg('browsers', process.env.OSC_BROWSERS || 'chromium,firefox,webkit').split(',');
+const RUN = suite.open({ name: 'layout', browsers: arg('browsers') });
+const playwright = RUN.playwright;
+const BROWSERS = RUN.browsers;
 // --stress-font <family>: render with a wider font (e.g. Verdana) to reproduce the metrics
 // of Linux and Windows system-ui fonts on a macOS machine.
 const STRESS_FONT = arg('stress-font', null);
@@ -182,6 +184,7 @@ function measureView(ws) {
 
 async function setWorkspace(page, ws) {
   await page.evaluate((w) => window.OSCILLA.app.setWorkspace(w), ws);
+  // timing-allow: app.setWorkspace exposes no layout-settled signal; geometry is read 150 ms on
   await page.waitForTimeout(150);
 }
 
@@ -271,7 +274,8 @@ async function runOne(name) {
         failures.push(`sequence did not start within 2 s before ${how}`);
         continue;
       }
-      await page.waitForTimeout(150); // let it really play for a moment before stopping it
+      // timing-allow: a deliberate 150 ms of playback before the stop under test
+      await page.waitForTimeout(150);
       if (how === 'escape') await page.keyboard.press('Escape');
       else {
         await page.evaluate(() => {
@@ -293,10 +297,12 @@ async function runOne(name) {
 }
 
 (async () => {
+  await RUN.ready();
   let failed = 0;
   for (const b of BROWSERS) {
     const t0 = Date.now();
     const { checks, failures } = await runOne(b);
+    RUN.reportLeg({ leg: b, checks });
     failed += failures.length;
     console.log(`${failures.length ? 'FAIL' : 'PASS'} ${b}/layout: ${checks - failures.length}/${checks} `
       + `checks (${((Date.now() - t0) / 1000).toFixed(1)} s)`);

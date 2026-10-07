@@ -286,7 +286,8 @@ test('F5: the evidence of a run bound without a device id says so', async () => 
       capture: { ...anon, device: { label: null, id: null } } })));
   assert.ok(e.calibration.level, 'applied: the same input as far as the browser reports it');
   const lin = evidenceLineage(e).find((l) => l.id === 'calibration').text;
-  assert.match(lin, /bound to the input this run recorded \(8 kHz\), as far as the browser /);
+  assert.match(lin,
+    /bound to the input this experiment recorded \(8 kHz\), as far as the browser /);
 });
 
 // ================================================================= F4
