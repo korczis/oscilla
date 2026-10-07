@@ -228,7 +228,22 @@ the output, Studio PLAY is refused.
 ## Keyboard shortcuts
 
 They apply while the Studio has focus and no text field is being edited; Tab is never taken.
-The same table is the in-app list (the keyboard button in the toolbar).
+The same table is the Studio part of the one **Keyboard shortcuts** dialog. The keyboard button
+in the toolbar, Help (**?**) and the menu all open that dialog, and it lists the keys of the
+workspace in view and the keys that work everywhere (ADR 0049).
+
+Space has one meaning in each workspace: it is the keyboard for that workspace's Play control,
+and nothing else. A focused text field, button, link, slider or tab, or an open dialog, keeps
+Space instead. In the compact Studio panel of the Playground and the Sequencer, Space is the
+Studio transport's, because that panel is Studio.
+
+<!-- space:begin -->
+| Workspaces | Space |
+| --- | --- |
+| Playground, Analyzer, Filter Lab, Compare, Synthesis, Sequencer | Hold to play: sounds while held, stops on release (a programmed pattern: trigger once) |
+| Measure, Experiments, Presets, Learn, About | Nothing: this workspace has no transport of its own |
+| Studio | Play / stop the Studio transport |
+<!-- space:end -->
 
 <!-- shortcuts:begin -->
 | Keys | Action |
