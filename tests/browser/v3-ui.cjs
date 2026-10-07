@@ -2611,8 +2611,12 @@ function defineChecks(fixtures) {
     const del = async () => {
       await page.focus('[data-osc="fnd.row"] [data-osc="fnd.delete"]');
       await page.keyboard.press('Enter');
-      await H.until(() => page.evaluate(() => document.getElementById('osc-dlg-finding-delete')
-        .open), Boolean, 3000);
+      // The dialog focuses its first button on a timer after it opens: wait until that initial
+      // focus is inside the dialog, or it would land after ours and Enter would press Cancel.
+      await H.until(() => page.evaluate(() => {
+        const d = document.getElementById('osc-dlg-finding-delete');
+        return d.open && d.contains(document.activeElement);
+      }), Boolean, 5000);
       await page.focus('[data-osc="fnd.deleteConfirm"]');
       await page.keyboard.press('Enter');
     };
@@ -2626,9 +2630,9 @@ function defineChecks(fixtures) {
     res.deleted = await page.evaluate(() => document.querySelector('[data-osc="fnd.row"] h4')
       .textContent);
     await del();
-    res.afterFirst = await H.until(focus, (f) => f.rows === 1 && f.osc === 'fnd.edit', 3000);
+    res.afterFirst = await H.until(focus, (f) => f.rows === 1 && f.osc === 'fnd.edit', 8000);
     await del();
-    res.afterLast = await H.until(focus, (f) => f.rows === 0 && f.osc === 'fnd.new', 3000);
+    res.afterLast = await H.until(focus, (f) => f.rows === 0 && f.osc === 'fnd.new', 8000);
     await page.evaluate(() => { window.OSCILLA.app.alerts = []; });
     return { ...res, ...H.verdict({
       setup: res.rows === 2,
