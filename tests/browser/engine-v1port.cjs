@@ -423,6 +423,7 @@ async function clockReport(page) {
     new Promise((resolve) => { setTimeout(() => resolve('no answer within 3 s'), 3000); }),
   ]).catch((e) => `unreadable (${e.message})`);
   const a = await read();
+  // timing-allow: the one-second interval the clock rate is measured over, in a timeout report
   await new Promise((resolve) => { setTimeout(resolve, 1000); });
   const b = await read();
   if (!a || !b || typeof a !== 'object' || typeof b !== 'object') {
