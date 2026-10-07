@@ -575,8 +575,9 @@ function defineChecks() {
       });
       res.releasedAfterMic = zero(await released());
     }
-    const ok = Object.values(res).every(Boolean);
-    return ok ? { ok, ...res } : { ok, ...res, ...detail };
+    await H.workspace(page, 'playground'); // the checks after this one start there
+    const failed = Object.keys(res).filter((k) => !res[k]);
+    return failed.length ? { ok: false, failed, detail } : { ok: true, ...res };
   });
 
   def('controls-reachable-labelled', async ({ page }) => {
