@@ -4,7 +4,7 @@ version: 1
 kind: rule
 title: Every release completes prepare, pull request, publish, live verification and record
 description: A release is finished when its record is on main. release:prepare refuses to start the next one before that, and refuses the first stable release of a new major that no published release candidate preceded; release:publish diagnoses a Pages run of which no job starts instead of waiting on it.
-statement: release:prepare refuses to start when the newest v* tag at or after v3.4.0 has no .ai/repo/releases/<tag>.yaml, or when the proposed version is the first stable release of a new major (its major is above that of every stable v* tag reachable from HEAD, whatever its minor and patch) and no vX.0.0-rc.N tag has a record on the prerelease channel (overridden only by --no-rc-because naming an accepted ADR). Every v* tag at or after v3.4.0 that is reachable from HEAD and more than 6 hours old has its record in the checkout that is judged; the copy on origin/main counts only for a branch whose history never contained that record, so a record deleted or renamed on a branch is missing. release:publish refuses while a pages.yml run has had no job start for 15 minutes or the run list cannot be read, reports the run id, its commit and the git merge-base --is-ancestor verdict against HEAD, never watches a run of which no job has started, and prints the majordomus finish line that verifies the published commit.
+statement: release:prepare refuses to start when the newest v* tag at or after v3.4.0 has no .ai/repo/releases/<tag>.yaml, or when the proposed version is the first stable release of a new major (its major is above that of every stable v* tag reachable from HEAD, whatever its minor and patch) and no vX.0.0-rc.N tag has a record on the prerelease channel (overridden only by --no-rc-because naming an accepted ADR). Every v* tag at or after v3.4.0 that is reachable from HEAD and more than 6 hours old has its record in the checkout that is judged, a file that parses as a record and carries the tag it is named after; the copy on origin/main counts only for a branch whose history never contained that record, so a record deleted, renamed, emptied or overwritten on a branch is missing. No scanned file carries a version-shaped literal above the product version up to the end of the next major. release:publish refuses while a pages.yml run has had no job start for 15 minutes or the run list cannot be read, reports the run id, its commit and the git merge-base --is-ancestor verdict against HEAD, never watches a run of which no job has started, and prints the majordomus finish line that verifies the published commit.
 status: active
 class: blocking
 depends_on: [project.release-receipt-binds-gate@1, project.about-names-current-release@1]
@@ -41,9 +41,16 @@ The flow, in the order it is practised. Each step names what holds it in place.
    major that no published `vX.0.0-rc.N` preceded. "First stable release of a new major" is
    any stable version whose major is above every stable tag in the history: `X.0.0`, and
    equally `X.0.1` or `X.1.0` typed into `package.json`. It bumps once, rebuilds, runs the
-   full gate and writes the receipt. The first candidate of a major is
-   `npm run release:prepare -- --prerelease` (when `package.json` already carries an `X.y.z`
-   version, it is set to `X.0.0-rc.1` for the candidate). Once the candidate is published and
+   full gate and writes the receipt. The first candidate of a major is cut with
+   `npm run release:prepare -- --prerelease`, and who sets its version depends on the
+   commits. With a breaking commit since the last tag the script proposes `X.0.0-rc.1`
+   itself. Without one it proposes a candidate of the next minor or patch, so the operator
+   sets the version: a pull request that runs `npm version X.0.0-rc.1 --no-git-tag-version`
+   and `npm run build` lands on main first (`release:prepare` refuses a dirty tree, so the
+   typed version has to be a commit), and `release:prepare -- --prerelease` then confirms
+   that untagged version and changes no file. The script never turns a stable `X.y.z` typed
+   into `package.json` into a candidate: with `--prerelease` it confirms that stable version,
+   and the candidate refusal above then stops it. Once the candidate is published and
    recorded, a plain `release:prepare` proposes `X.0.0` even when no releasable commit
    followed the candidate.
 3. **The `chore(release): vX.Y.Z` pull request, merged by auto-merge** behind the required
@@ -99,12 +106,27 @@ anything changes, as a dry run too:
 
 `release:prepare` bumps `package.json` and then runs `version:check`, which refuses a copy of
 the product version outside `package.json`, the lock, `dist/`, `.ai/`, `CHANGELOG.md` and
-`docs/specs/`. A literal of a version the product can reach next is therefore a release that
-fails in its own gate. The test "no literal of a version the next release:prepare can
-propose" in `tests/unit/version-authority.test.mjs` derives the next patch, minor and major
-and the two other ways a new major can be typed (`X.0.1`, `X.1.0`) from `package.json` and
-fails on any such literal in a scanned file. Prose and comments write `X.Y.Z`; fixtures use
-major 40.
+`docs/specs/`. A literal of a version the product has not reached yet is therefore a release
+that fails in its own gate on the day it is cut. `findVersionsAhead()` in
+`scripts/release-version-check.mjs` and the test "no version-shaped literal ahead of the
+product, up to the end of the next major" in `tests/unit/version-authority.test.mjs` fail on
+it earlier, in the pull request that writes it. The horizon, exactly: with the product at
+`M.m.p`, every `X.Y.Z` (with or without a leading `v` or a prerelease suffix) in a file
+`version:check` scans that is greater than `M.m.p` and less than `(M+2).0.0`; on a candidate
+`M.m.p-rc.N`, `M.m.p` itself counts as well. What counts as a literal is what `version:check`
+counts: not preceded by a letter, a digit or one of `. @ / _ + -`, and not followed by a
+fourth numeric part. Prose and comments write `X.Y.Z`; a third-party version is written
+`package@1.2.3` or `@1.2.3`; fixtures use major 40.
+
+The check is a unit test and not a step of `version:check`, so it runs in the `gate` of every
+pull request and in the gate of `release:prepare`. A patch, minor or candidate-to-stable bump
+only narrows the horizon, so a tree that passes before such a bump passes after it: the test
+cannot first fail inside one of those releases. It fired inside one in round 3 of #163, when
+it looked one step ahead only: three third-party versions in `docs/v2-baseline-inventory.txt`
+(Tailwind, Flowbite, Alpine) each failed the release before the one `version:check` would
+have refused. They are now written `@x.y.z`; the file stays scanned (it is not in
+`LITERAL_ALLOW`), because an allowlisted file is one where a real copy of the product version
+would never be seen.
 
 `scripts/release-analyze.mjs`, `proposeVersion()`: after a `vX.Y.Z-rc.N` tag with no
 release-relevant commit, the proposal is `X.Y.Z`, so the step this rule makes mandatory can be
@@ -134,7 +156,11 @@ record" in `tests/unit/release-record.test.mjs`. The `v*` tags reachable from HE
 (`git for-each-ref --merged HEAD`) are the list of what must be recorded, because tags are
 shared by every worktree of a clone and a branch does not answer for a release cut after it.
 What is judged is the checkout: a record counts when `.ai/repo/releases/<tag>.yaml` is in the
-working tree. The copy on `origin/main` (`git cat-file -e origin/main:<path>`) excuses one
+working tree, parses (`parseRecord()`) and carries `tag: <tag>` (`recordFileState()`); an
+emptied file, any other content and another tag's record are reported as "is there and is not
+the record of <tag>", whatever the trunk has. `release:prepare` reads the newest tag's record
+through the same function. The copy on `origin/main` (`git show origin/main:<path>`, parsed
+the same way) excuses one
 state only, a branch cut between a tag and its record pull request: `recordInHistory()`
 (`git rev-list -1 --full-history HEAD -- <path>`) finds that HEAD's history never touched the
 record. When the history did contain it and the checkout does not, the record was deleted or
@@ -166,8 +192,11 @@ repositories: a tag recorded in the checkout, one recorded only on `origin/main`
 recorded nowhere and one on a line HEAD does not contain (only the third is reported); a
 record deleted in a commit, every record deleted, a record renamed, a record removed from the
 working tree only, each while `origin/main` still has it (each reported); a merge of the
-trunk that drops the record (reported); and `--complete` with no tag, a recorded tag, a
-deleted record and a tag inside its window.
+trunk that drops the record (reported); a record that is empty, is other YAML, carries
+another tag, carries the tag without its `v`, or holds a conflict marker, each while
+`origin/main` has the valid file (each reported, by `--complete` too), and a file of that name
+on the trunk that is not a record (excuses nothing); and `--complete` with no tag, a recorded
+tag, a deleted record and a tag inside its window.
 
 Not mechanically enforced, and stated as such:
 
@@ -188,6 +217,20 @@ Not mechanically enforced, and stated as such:
 - the `records` job of `cadence.yml` has not run: a scheduled workflow runs from the default
   branch only, so its first run is after this rule lands. Until then the `--complete` path is
   proven by the unit test and by running the command in a checkout;
+- the completeness check asks that a record parses and names its tag, not that every field
+  is valid `release/v1` or still equals what was published. Field validity of every committed
+  record is `recordProblems()` in `tests/unit/release-record.test.mjs` (so in a pull
+  request's unit job, not in the `records` job on main); equality with the published bytes is
+  `release:record -- --check`, which nothing runs on a schedule;
+- `release:prepare` reads the record of the newest tag only. An older record that is missing
+  or invalid stops it later, in its gate (`npm test`), after the bump, which it then restores;
+- the horizon of the literal scan gains a major when the product enters one: a literal of
+  major `M+2` written while the product is on major `M` is first reported when the first
+  version of `M+1` (its candidate) is prepared, in that release's gate. A literal beyond the
+  horizon is not reported at all until then. Known today and outside the horizon: fixture
+  versions on major 9 in the unit tests, a Node and a macOS version in `docs/v3/` and
+  `docs/v31/`, and a GUM section number (`§7.2.6`) in `src/js/measurement/format.js` and
+  `docs/v3/algorithms.md`;
 - `--no-rc-because` checks that the ADR is accepted, not that it is about the release being
   cut: any accepted ADR lifts the refusal. Whether the named ADR waives the candidate for
   this major is the reviewer's;

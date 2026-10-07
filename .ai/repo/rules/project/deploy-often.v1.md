@@ -59,6 +59,13 @@ line and never fails on it, so `npm test`, `npm run verify` and the release gate
 What `class: blocking` means for this rule: a violation must be cleared, by shipping; it is
 never waived or silenced. It does not mean a merge is stopped.
 
+Not machine-checked: the commit type. The clock reads the subject line a commit landed with,
+so the same change titled `chore` instead of `feat` or `fix` never becomes overdue (measured:
+an empty commit 48 hours old is `OVERDUE`, exit 1, as `feat(x): probe` and `release cadence:
+ok`, exit 0, as `chore(x): probe`). "Not by retitling commits" above is therefore a statement
+of intent that no script holds: whether a pull request's title names what it changes is the
+reviewer's, at the squash merge, where the title becomes the subject.
+
 What this is not: a required check. The `gate` check that blocks a merge does not include the
 cadence, because the pull request that clears an overdue release is the release itself and a
 required red check would block it. A violation is a red scheduled workflow on main and an open
