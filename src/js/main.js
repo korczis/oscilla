@@ -535,8 +535,9 @@ function integrationInit() {
       stopSequencer();
       cmp.measureAbort('escape'); // spec §111: Escape aborts a measurement (after the sequencer)
     }
-    // ADR 0050: Space is Hold to Play only where the instrument is the workspace in view; in
-    // Studio it is the transport's (handled above), elsewhere it starts nothing.
+    // ADR 0050: Space is Hold to Play only in the workspaces that play, load or analyse the
+    // instrument's signal; in Studio it is the transport's (handled above), elsewhere it
+    // starts nothing.
     if (isSpace(e) && !instrumentTakesSpace(cmp.workspace)) return;
     cmp.onKeyDown(e);
   });

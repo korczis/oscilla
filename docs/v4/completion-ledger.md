@@ -86,10 +86,11 @@ Diagnostic codes derived from message text (R5, fixing); clip-target policy dupl
 registry, timeline UI and transport (R7); pattern-played Oscillator frequency lanes drive a
 silent carrier (R8); presentation-only edits pay a full compile while playing (R9);
 `mode`/`workspace` split state and three hash routers (W4, fixing with W2: one dispatcher, ADR 0045); Space has two meanings and two
-shortcut dialogs (W5, **closed** #159, ADR 0050: Space is the Play control of the workspace in
-view (Hold to Play in the six instrument workspaces, the Studio transport in Studio, nothing in
-Measure, Experiments, Learn, Presets and About, where it used to start the hidden instrument),
-and one dialog lists the keys of the workspace in view and the global ones); disabled controls without a reason (W6, partly fixing); WebKit absent from
+shortcut dialogs (W5, **closed** #159, ADR 0050: Space has one owner per workspace, the same
+at every width (Hold to Play in the seven workspaces that play, load or analyse the instrument's
+signal, the Studio transport in Studio, nothing in Measure, Experiments, Learn and About, where
+it used to start the instrument), and one dialog lists the keys of the workspace in view and
+the global ones, each key once); disabled controls without a reason (W6, partly fixing); WebKit absent from
 engine/dsp/labs/sequencer CI and the About provenance tests skip in CI's shallow clone (CI1,
 **closed** #147: WebKit legs in both jobs, nothing narrowed; the unit job checks out full
 history and tags, and the About checks fail instead of skipping under CI without them);

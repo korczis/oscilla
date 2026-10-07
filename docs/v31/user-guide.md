@@ -232,16 +232,23 @@ The same table is the Studio part of the one **Keyboard shortcuts** dialog. The 
 in the toolbar, Help (**?**) and the menu all open that dialog, and it lists the keys of the
 workspace in view and the keys that work everywhere (ADR 0050).
 
-Space has one meaning in each workspace: it is the keyboard for that workspace's Play control,
-and nothing else. A focused text field, button, link, slider or tab, or an open dialog, keeps
-Space instead. In the compact Studio panel of the Playground and the Sequencer, Space is the
-Studio transport's, because that panel is Studio.
+Space has one owner in each workspace, the same at every window width. In the workspaces that
+play, load or analyse the instrument's signal it is the instrument's Hold to Play, whether or
+not Hold or Trigger is on screen there. In Studio it is the Studio transport's. Elsewhere it
+starts nothing. A focused text field, native button, link, slider or tab, or an open dialog,
+keeps Space instead. A focused timeline item (clip, marker, point, loop handle) is not such a
+control: Enter activates it, and Space plays or stops Studio there, as the timeline keys below
+say.
+
+The compact Studio panel of the Playground and the Sequencer has no Space of its own. Its Play
+button starts the Studio transport; Space on that focused button presses it, and with focus
+anywhere else in those workspaces Space is the instrument's.
 
 <!-- space:begin -->
 | Workspaces | Space |
 | --- | --- |
-| Playground, Analyzer, Filter Lab, Compare, Synthesis, Sequencer | Hold to play: sounds while held, stops on release (a programmed pattern: trigger once) |
-| Measure, Experiments, Presets, Learn, About | Nothing: this workspace has no transport of its own |
+| Playground, Analyzer, Filter Lab, Compare, Synthesis, Sequencer, Presets | Hold to play: sounds while held, stops on release (a programmed pattern: trigger once) |
+| Measure, Experiments, Learn, About | Nothing: Space starts no sound in this workspace |
 | Studio | Play / stop the Studio transport |
 <!-- space:end -->
 

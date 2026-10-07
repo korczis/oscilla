@@ -154,8 +154,13 @@ test('review of #159: the stated rule is the one implemented', () => {
   // "The Play control of the workspace in view" was false where no Play control is shown
   // (Analyzer, Filter Lab, Compare and Presets at desktop width). No copy may say it.
   const adr = readdirSync(path.join(ROOT, '.ai/repo/adrs')).find((f) => f.startsWith('0050-'));
+  // The ADR quotes the first wording once, as a rejected alternative: that section is not read.
+  const whole = read(path.join('.ai/repo/adrs', adr));
+  const from = whole.indexOf('## Alternatives rejected');
+  const to = whole.indexOf('## Consequences');
+  assert.ok(from > 0 && to > from, 'the ADR has both sections');
   const texts = { dialog: read('src/index.html'), guide: read('docs/v31/user-guide.md'),
-    adr: read(path.join('.ai/repo/adrs', adr)), ledger: read('docs/v4/completion-ledger.md'),
+    adr: whole.slice(0, from) + whole.slice(to), ledger: read('docs/v4/completion-ledger.md'),
     code: read('src/js/ui/shortcuts.js') };
   for (const [name, text] of Object.entries(texts)) {
     const flat = text.replace(/\s+/g, ' ');
@@ -163,7 +168,7 @@ test('review of #159: the stated rule is the one implemented', () => {
     assert.ok(!/Play control you can see/.test(flat), name);
     assert.ok(!/Play control of the workspace in view/.test(flat), name);
   }
-  const flatAdr = texts.adr.replace(/\s+/g, ' ');
+  const flatAdr = whole.replace(/\s+/g, ' ');
   assert.ok(!/status bar's Play is visible everywhere/.test(flatAdr), 'the status bar claim');
   assert.match(flatAdr, /narrow layout/);
   assert.match(texts.dialog.replace(/\s+/g, ' '), /whether or not a Play control is on screen/);

@@ -2697,18 +2697,21 @@
 
   <!-- The ONE shortcut list (ADR 0050): src/js/ui/shortcuts.js says what Space means in the
        workspace in view and which keys that workspace has; Help, the overflow menu and
-       Studio's keyboard button all open it. -->
+       Studio's keyboard button all open it. A kbd holds keys; where they apply follows it. -->
   <dialog class="osc-dialog" id="osc-dlg-help" data-oscilla-modal aria-labelledby="osc-dlg-help-title"
     :class="{ 'osc-dialog--wide': keyHelp().timeline }">
     <div class="osc-dialog-body">
       <h2 class="osc-dialog-title" id="osc-dlg-help-title">Keyboard shortcuts</h2>
       <h3 class="osc-shortcuts-head">In <span data-osc="help.title" x-text="keyHelp().title">Playground</span></h3>
       <dl class="osc-shortcuts" data-osc="help.workspace">
-        <div data-osc="help.space" data-osc-shortcut="space"><dt><kbd x-text="keyHelp().space.keys">Space (hold)</kbd></dt><dd x-text="keyHelp().space.text">Hold to play: sounds while held, stops on release (a programmed pattern: trigger once)</dd></div>
+        <div data-osc="help.space" data-osc-shortcut="space"><dt><kbd x-text="keyHelp().space.keys">Space</kbd><span x-show="keyHelp().space.where" x-text="' ' + (keyHelp().space.where || '')"> (hold)</span></dt><dd x-text="keyHelp().space.text">Hold to play: sounds while held, stops on release (a programmed pattern: trigger once)</dd></div>
         <template x-for="k in keyHelp().rows" :key="k.id">
-          <div :data-osc-shortcut="k.id"><dt><kbd x-text="k.keys"></kbd></dt><dd x-text="k.text"></dd></div>
+          <div :data-osc-shortcut="k.id"><dt><kbd x-text="k.keys"></kbd><span x-show="k.where" x-text="' ' + (k.where || '')"></span></dt><dd x-text="k.text"></dd></div>
         </template>
       </dl>
+      <template x-if="keyHelp().note">
+        <p class="osc-muted osc-dialog-note" data-osc="help.note" x-text="keyHelp().note"></p>
+      </template>
       <template x-if="keyHelp().timeline">
         <div>
           <h3 class="osc-shortcuts-head">Timeline, with a clip, marker or point focused</h3>
@@ -2718,13 +2721,14 @@
       <h3 class="osc-shortcuts-head">Everywhere</h3>
       <dl class="osc-shortcuts" data-osc="help.global">
         <template x-for="k in keyHelp().global" :key="k.id">
-          <div :data-osc-shortcut="k.id"><dt><kbd x-text="k.keys"></kbd></dt><dd x-text="k.text"></dd></div>
+          <div :data-osc-shortcut="k.id"><dt><kbd x-text="k.keys"></kbd><span x-show="k.where" x-text="' ' + (k.where || '')"></span></dt><dd x-text="k.text"></dd></div>
         </template>
       </dl>
-      <p class="osc-muted osc-dialog-note">Space is the keyboard for the Play control of the
-        workspace in view: hold it for the instrument, press it to start or stop Studio; where a
-        workspace has no transport, it starts nothing. It does nothing while a text field, button,
-        slider or dialog has focus. Start at a low level: OSCILLA caps the logical gain at 0.25
+      <p class="osc-muted osc-dialog-note">Space has one owner in each workspace. Where a
+        workspace plays, loads or analyses the instrument's signal, holding Space plays it,
+        whether or not a Play control is on screen. In Studio, Space starts or stops the Studio
+        transport. Elsewhere it starts nothing. A focused text field, button, link, slider or
+        open dialog keeps Space. Start at a low level: OSCILLA caps the logical gain at 0.25
         and, unless continuous playback is allowed in Device &amp; Limits, stops every tone after
         the hard limit.</p>
       <div class="osc-dialog-actions">
