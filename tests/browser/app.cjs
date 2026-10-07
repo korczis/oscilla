@@ -14,7 +14,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { pathToFileURL } = require('node:url');
-const playwright = require('playwright');
+const suite = require('./lib/suite.cjs');
 
 const argv = process.argv.slice(2);
 const arg = (name, fallback) => {
@@ -22,8 +22,11 @@ const arg = (name, fallback) => {
   return i >= 0 && argv[i + 1] ? argv[i + 1] : fallback;
 };
 const DIST = path.resolve(arg('dist', path.join(__dirname, '..', '..', 'dist', 'index.html')));
-const BROWSERS = arg('browsers', process.env.OSC_BROWSERS || 'chromium,firefox,webkit').split(',');
-const ORIGINS = arg('origins', 'file,http').split(',');
+const RUN = suite.open({ name: 'app', browsers: arg('browsers'),
+  origins: arg('origins'), defaultOrigins: ['file', 'http'] });
+const playwright = RUN.playwright;
+const BROWSERS = RUN.browsers;
+const ORIGINS = RUN.origins;
 const ONLY = arg('only', '') ? new Set(arg('only', '').split(',')) : null;
 const JSON_OUT = arg('json', '');
 const WIDTHS = [320, 375, 768, 1024, 1280, 1536];
@@ -164,7 +167,8 @@ const H = {
   },
   workspace: async (page, ws) => {
     await H.navTo(page, ws);
-    await page.waitForFunction((w) => document.querySelector('#osc-app').dataset.mode === w, ws);
+    await page.waitForFunction((w) => document.querySelector('#osc-app').dataset.mode === w, ws,
+      { timeout: 8000 });
     await sleep(150);
   },
   /** Let n animation frames pass (focus scrolling, Alpine's x-show, rAF focus hand-offs). */
@@ -774,7 +778,7 @@ function defineChecks() {
     await page.evaluate(() => window.OSCILLA.app.setFrequency(1234));
     await page.click('#osc-wave-triangle');
     await page.click('#osc-act-save-preset');
-    await page.waitForSelector('#osc-dlg-save[open]');
+    await page.waitForSelector('#osc-dlg-save[open]', { timeout: 8000 });
     await page.fill('#osc-save-name', 'Gate preset');
     await page.click('[data-osc="save.confirm"]');
     await sleep(150);
@@ -1261,7 +1265,7 @@ function defineChecks() {
     await sleep(100);
     await page.focus('[data-osc="header.shortcuts"]');
     await page.keyboard.press('Enter');
-    await page.waitForSelector('#osc-dlg-help[open]');
+    await page.waitForSelector('#osc-dlg-help[open]', { timeout: 8000 });
     await page.keyboard.press('Escape');
     await sleep(200);
     out.menuDialog = await active();
@@ -1297,7 +1301,7 @@ function defineChecks() {
     // save preset dialog submitted by keyboard
     await page.focus('#osc-act-save-preset');
     await page.keyboard.press('Enter');
-    await page.waitForSelector('#osc-dlg-save[open]');
+    await page.waitForSelector('#osc-dlg-save[open]', { timeout: 8000 });
     await page.fill('#osc-save-name', 'Focus gate');
     await page.keyboard.press('Enter');
     await sleep(250);
@@ -1450,7 +1454,8 @@ function defineChecks() {
         } else {
           await H.workspace(page, 'learn');
           await page.locator('[data-osc="learn.demo"]', { hasText: 'Octave steps 125 Hz' }).click();
-          await page.waitForFunction(() => window.OSCILLA.app.workspace === 'playground');
+          await page.waitForFunction(() => window.OSCILLA.app.workspace === 'playground', null,
+            { timeout: 8000 });
         }
         await sleep(100);
         const r = await page.evaluate((sel) => {
@@ -1730,6 +1735,9 @@ function defineChecks() {
       await H.waitNodes0(page);
     };
     const mics = FAKE_MIC.has(browserName) ? [false, true] : [false];
+    if (mics.length === 1) {
+      RUN.skip(browserName, 'phone-bars-with-microphone', 'no fake capture device in this browser');
+    }
     const res = {};
     for (const mic of mics) {
       if (mic) {
@@ -1774,7 +1782,8 @@ function defineChecks() {
     res.tabbedTo = await page.evaluate(() => document.activeElement && document.activeElement.dataset.osc);
     await page.focus('[data-osc="nav.about"]');
     await page.keyboard.press('Enter');
-    await page.waitForFunction(() => document.querySelector('#osc-app').dataset.mode === 'about');
+    await page.waitForFunction(() => document.querySelector('#osc-app').dataset.mode === 'about',
+      null, { timeout: 8000 });
     await sleep(200);
     res.view = await page.evaluate(() => {
       const q = (s) => document.querySelector(s);
@@ -1951,6 +1960,7 @@ async function runOne(browserName, origin, baseUrl) {
 }
 
 (async () => {
+  await RUN.ready();
   if (!fs.existsSync(DIST)) {
     console.error(`missing ${DIST}: run npm run build`);
     process.exit(2);
@@ -1969,6 +1979,7 @@ async function runOne(browserName, origin, baseUrl) {
         const res = await runOne(b, o, base);
         all[key] = res;
         const names = Object.keys(res);
+        RUN.reportLeg({ leg: key, checks: names.length });
         const bad = names.filter((n) => !res[n].ok && !KNOWN_DEFECTS[n]);
         const open = names.filter((n) => !res[n].ok && KNOWN_DEFECTS[n]);
         // A known defect that now passes fails the gate until its entry is removed.

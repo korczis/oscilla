@@ -104,7 +104,12 @@ non-boolean toggle value is coerced instead of refused, and the v3-ui `calibrati
 depends on the check before it (W7g-W7i, open); five dead CSS classes; an import without a hash shows no "unverified"
 marker; an unreadable stored record fails silently; ADR status never leaves `proposed`; the plan
 contradicts git (V386 READY, M033 BLOCKED; **closed** #144, see "plan reconciled" below); "run" means both a repeat and a completed
-experiment, and "project" both a Studio file and OSCILLA; no glossary.
+experiment, and "project" both a Studio file and OSCILLA (**partly closed** #162, ADR 0053 and
+`docs/GLOSSARY.md` "Run", "Experiment", "Project": a run is one capture, an experiment is the
+stored record, and the page, the UI controllers, the record views and the About view say so,
+held by `tests/unit/vocabulary.test.mjs`; still open: the same renames inside #149 and #151
+before they merge, and the import, validation and store messages and the derived-definition
+wording that the ADR's Consequences lists); the glossary exists since #120.
 
 ## What v4.0 still lacks entirely
 

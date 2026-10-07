@@ -426,7 +426,7 @@ test('D4: import keeps the record with a warning; Repeat refuses and changes not
     const refused = notes.pop();
     assert.equal(refused.type, 'error');
     assert.equal(refused.title, 'Repeat refused');
-    assert.match(refused.text, /This run used a white noise stimulus, which this version/);
+    assert.match(refused.text, /This experiment used a white noise stimulus, which this version/);
     assert.match(refused.text, /of OSCILLA cannot measure/);
     assert.deepEqual({ ...cmp.meas.values }, before, 'the setup is unchanged');
     assert.equal(cmp.meas.definition, null);

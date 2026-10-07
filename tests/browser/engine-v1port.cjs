@@ -24,12 +24,13 @@ const fs = require('fs');
 const os = require('os');
 
 const args = process.argv.slice(2);
-const BROWSERS = args.includes('--browser') ? [args[args.indexOf('--browser') + 1]]
-  : (process.env.OSC_BROWSERS || 'chromium,firefox,webkit').split(',');
-if (!BROWSERS.length || BROWSERS.some((b) => !['chromium', 'firefox', 'webkit'].includes(b))) {
-  console.error(`unknown browser(s) in ${JSON.stringify(BROWSERS)}; expected chromium, firefox, webkit`);
-  process.exit(2);
-}
+const suite = require('./lib/suite.cjs');
+// This file is also loaded as a module (instrument, LAUNCH); only the entry script opens a run.
+const RUN = require.main === module
+  ? suite.open({ name: 'engine-v1port',
+    browsers: args.includes('--browser') ? args[args.indexOf('--browser') + 1] : undefined })
+  : null;
+const BROWSERS = RUN ? RUN.browsers : [...suite.KNOWN_BROWSERS];
 const APP_JS = path.resolve(__dirname, '..', '..', 'src', 'js');
 let ENGINE = BROWSERS[0];
 let BASE = null; // file:// URL of the built fixture (buildFixture)
@@ -126,6 +127,7 @@ let passed = 0;
 let failed = 0;
 const failures = [];
 function check(name, ok, detail = '') {
+  if (RUN) RUN.tally(ENGINE);
   if (ok) { passed++; console.log(`  ok   ${name}${process.env.OSC_VERBOSE && detail ? ` ${detail}` : ''}`); }
   else { failed++; failures.push(`${name} ${detail}`); console.log(`  FAIL ${name} ${detail}`); }
 }
@@ -388,6 +390,7 @@ async function openPage(browser, { hash = '', query = '', instrumentOpts = {}, i
   page.on('pageerror', (e) => problems.push(`[pageerror] ${e.message}`));
   await page.goto(`${BASE}${query}${hash}`, { waitUntil: 'load' });
   await page.waitForFunction(() => window.Alpine && window.OSCILLA && window.__OSCILLA_READY, null, { timeout: 20000 });
+  // timing-allow: post-ready settle; each check then starts its own audio and waits on its clock
   await page.waitForTimeout(200);
   return { context, page, problems };
 }
@@ -420,6 +423,7 @@ async function clockReport(page) {
     new Promise((resolve) => { setTimeout(() => resolve('no answer within 3 s'), 3000); }),
   ]).catch((e) => `unreadable (${e.message})`);
   const a = await read();
+  // timing-allow: the one-second interval the clock rate is measured over, in a timeout report
   await new Promise((resolve) => { setTimeout(resolve, 1000); });
   const b = await read();
   if (!a || !b || typeof a !== 'object' || typeof b !== 'object') {
@@ -526,7 +530,7 @@ async function startAudio(page) {
 }
 
 async function runBrowser() {
-  const playwright = require('playwright');
+  const { playwright } = RUN;
   console.log(`OSCILLA engine test (V2 modules) → ${BASE} (${ENGINE})`);
   const start = { passed, failed };
   const browser = await playwright[ENGINE].launch(LAUNCH[ENGINE]);
@@ -809,6 +813,7 @@ async function runBrowser() {
       const box = await page.locator('.hold-btn').boundingBox();
       await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
       await page.mouse.down();
+      // timing-allow: the hold itself; the pointer stays down 200 ms before the event under test
       await page.waitForTimeout(200);
       out[kind] = await app(page, async (a, e, O, T, k) => {
         const playing = !!e.voice;
@@ -825,6 +830,7 @@ async function runBrowser() {
         return { playing, ...g, release: a.release / 1000 };
       }, kind);
       await page.mouse.up();
+      // timing-allow: the gap between two holds; the next iteration presses again
       await page.waitForTimeout(100);
     }
     for (const [k, v] of Object.entries(out)) {
@@ -1339,6 +1345,7 @@ async function runBrowser() {
 }
 
 async function main() {
+  await RUN.ready();
   const fx = await buildFixture();
   BASE = fx.url;
   console.log(`fixture: ${fx.url} (${(fx.bytes / 1024).toFixed(1)} kB bundle)`);

@@ -49,7 +49,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { pathToFileURL } = require('node:url');
-const playwright = require('playwright');
+const suite = require('./lib/suite.cjs');
 
 const argv = process.argv.slice(2);
 const arg = (name, fallback) => {
@@ -57,8 +57,11 @@ const arg = (name, fallback) => {
   return i >= 0 && argv[i + 1] ? argv[i + 1] : fallback;
 };
 const DIST = path.resolve(__dirname, '..', '..', 'dist', 'index.html');
-const BROWSERS = arg('browsers', process.env.OSC_BROWSERS || 'chromium,firefox,webkit').split(',');
-const ORIGINS = arg('origins', 'file,http').split(',');
+const RUN = suite.open({ name: 'v31-studio-timeline', browsers: arg('browsers'),
+  origins: arg('origins'), defaultOrigins: ['file', 'http'] });
+const playwright = RUN.playwright;
+const BROWSERS = RUN.browsers;
+const ORIGINS = RUN.origins;
 const ONLY = arg('only', '') ? new Set(arg('only', '').split(',')) : null;
 const JSON_OUT = arg('json', '');
 const SCREENS = argv.includes('--screens');
@@ -506,7 +509,7 @@ function defineChecks() {
         if (a.workspace !== 'studio') a.setWorkspace('studio');
       });
       await page.waitForFunction(() => document.querySelector('#osc-app').dataset.mode
-        === 'studio');
+        === 'studio', null, { timeout: 10000 });
       await sleep(150);
       const W = '[data-osc="studio.timeline"]';
       const v0 = await page.evaluate((w) => {
@@ -773,6 +776,7 @@ async function runOne(browserName, origin, baseUrl) {
 }
 
 (async () => {
+  await RUN.ready();
   if (!fs.existsSync(DIST)) {
     console.error(`missing ${DIST}: run npm run build`);
     process.exit(2);
@@ -790,6 +794,7 @@ async function runOne(browserName, origin, baseUrl) {
         const res = await runOne(b, o, base);
         all[key] = res;
         const names = Object.keys(res);
+        RUN.reportLeg({ leg: key, checks: names.length });
         const bad = names.filter((n) => !res[n].ok);
         failed += bad.length;
         console.log(`${bad.length ? 'FAIL' : 'PASS'} ${key}/v31-studio-timeline: `

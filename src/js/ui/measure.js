@@ -1022,14 +1022,15 @@ export function createMeasureUi(svc) {
         lostRun = true;
         sv.stored = false;
         cmp.notify('error', 'Experiment not stored', `"${name}" was no longer stored, and storing `
-          + `it again failed: ${err.message || String(err)}. The run is not stored; save again.`);
+          + `it again failed: ${err.message || String(err)}. The experiment is not stored; `
+          + 'save again.');
         return null;
       }
       sv.experiment = again;
       m.savedAnnotation = again.annotations && again.annotations.notes || null;
       m.savedName = again.name;
       cmp.notify('success', 'Experiment saved again', `"${name}" was no longer stored; the `
-        + 'same run is stored again under its id.');
+        + 'same experiment is stored again under its id.');
       return sv.id;
     };
     try {
@@ -1041,7 +1042,7 @@ export function createMeasureUi(svc) {
       if (name !== stored.name) meta.name = name;
       if (notes !== null && notes !== storedNotes) meta.notes = notes;
       // A lost acknowledgement: the write reported an error, yet the run is stored.
-      const lost = confirmed ? ' (the write reported an error, but the run is stored)' : '';
+      const lost = confirmed ? ' (the write reported an error, but the experiment is stored)' : '';
       if (!Object.keys(meta).length) {
         m.savedAnnotation = storedNotes;
         m.savedName = stored.name;
@@ -1063,10 +1064,11 @@ export function createMeasureUi(svc) {
       m.savedName = next.name;
       cmp.notify('success', confirmed ? 'Experiment saved' : 'Experiment updated',
         `"${next.name}"${lost}: ${Object.keys(meta).map((k) => (k === 'name' ? 'name'
-          : 'annotation notes')).join(' and ')} updated; the measured run is stored unchanged.`);
+          : 'annotation notes')).join(' and ')} updated; the measured experiment is stored `
+          + 'unchanged.');
       return sv.id;
     } catch (err) {
-      cmp.notify('error', 'Experiment name and notes not updated', 'The measured run is '
+      cmp.notify('error', 'Experiment name and notes not updated', 'The measured experiment is '
         + `stored (${sv.id}); only the metadata change failed: ${err.message || String(err)}`);
       return sv.id;
     } finally {
@@ -1231,7 +1233,7 @@ export function createMeasureUi(svc) {
     const definitionAtStart = ctx.runDefinition;
     if (!given && ctx.definition && !ctx.runDefinition) {
       cmp.notify('warning', 'Not run from the definition', 'The setup differs from the loaded '
-        + 'definition, so this run records the definition derived from its own recipe.');
+        + 'definition, so this experiment records the definition derived from its own recipe.');
     }
     let result = null;
     try {
@@ -1952,7 +1954,7 @@ export function createMeasureUi(svc) {
       if (this.meas.saving) return 'Saving…';
       if (this.meas.saved) {
         return 'This measurement is saved; Update name and notes stores a new name or notes as '
-          + 'metadata (the run is unchanged).';
+          + 'metadata (the experiment is unchanged).';
       }
       if (this.meas.state !== S.COMPLETE) return 'Available once a measurement is COMPLETE.';
       return '';
@@ -2017,13 +2019,14 @@ export function createMeasureUi(svc) {
           ctx.save = null; // a retry stores this run under a new id, with the same decoration
           saveOf(result).decorate = sv.decorate || null;
           this.notify('error', 'Experiment not saved', `A different record is stored under this `
-            + `id (${sv.id}); this run was not saved. Save again to store it under a new id.`);
+            + `id (${sv.id}); this experiment was not saved. Save again to store it under a `
+            + 'new id.');
           return null;
         }
         if (unread) {
           this.notify('error', 'Experiment not confirmed', `${err.message || String(err)}. The `
-            + 'store could not be read back to see whether the run was stored; save again (a '
-            + 'retry never stores a second copy).');
+            + 'store could not be read back to see whether the experiment was stored; save again '
+            + '(a retry never stores a second copy).');
         } else this.notify('error', 'Experiment not saved', err.message || String(err));
         return null;
       } finally {
