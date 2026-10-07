@@ -280,8 +280,8 @@ test('mutation: a job, a step or a suite made non-fatal', () => {
     '    name: review-verdict (guarded paths need a recorded review)\n'
     + '    continue-on-error: true\n');
   assert.deepEqual(rules(ci(job)), ['non-fatal@review-verdict']);
-  const step = mutate(CI, '      - name: A guarded change carries a verdict for the head tree\n',
-    '      - name: A guarded change carries a verdict for the head tree\n'
+  const stepName = '      - name: A guarded change carries a verdict for the content it changes\n';
+  const step = mutate(CI, stepName, stepName
     + '        continue-on-error: true\n');
   assert.deepEqual(rules(ci(step)), ['non-fatal@review-verdict']);
   const expression = mutate(CI, '      - name: Unit and freeze suites\n',
@@ -362,16 +362,139 @@ test('mutation: ci.yml started by anything but a pull request', () => {
 
 test('the pull-request rules are judged by the base branch\'s programs, and need a PR', () => {
   const jobs = parse(CI).jobs;
-  for (const [job, program] of [['fail-first', 'scripts/fail-first.mjs'],
-    ['review-verdict', 'scripts/review-verdict.mjs']]) {
-    const run = logicalLines(jobs[job].steps.map((s) => s.run || '').join('\n'));
-    const call = run.filter((l) => l.includes(program));
-    assert.equal(call.length, 1, `${job} runs ${program} once`);
-    assert.ok(call[0].replace(/\s+/g, ' ')
-      .startsWith(`.github/scripts/base-rule.sh "origin/$GITHUB_BASE_REF" ${program} `), call[0]);
-    assert.ok(run.some((l) => /^if \[ -z "\$PR" \]; then .*exit 1; fi$/.test(l)),
-      `${job} fails when there is no pull request`);
-    assert.ok(!run.some((l) => /exit 0/.test(l)), `${job} has no early success`);
-    assert.equal(jobs[job].steps.at(-1).env.PR, '${{ github.event.pull_request.number }}');
+  for (const [job, call] of [
+    ['fail-first', '.github/scripts/base-rule.sh "origin/$GITHUB_BASE_REF" scripts/fail-first.mjs'
+      + ' --pr-json "$RUNNER_TEMP/pr.json" --head "$HEAD_SHA"'
+      + ' --base-branch "origin/$GITHUB_BASE_REF"'],
+    ['review-verdict', '.github/scripts/base-rule.sh "origin/$GITHUB_BASE_REF"'
+      + ' scripts/review-verdict.mjs --pr "$PR" --head HEAD'
+      + ' --base-branch "origin/$GITHUB_BASE_REF"'],
+  ]) {
+    assert.deepEqual(problemsOfRuleJob(jobs[job], call), [], job);
   }
+});
+
+/** What stops a rule job from judging: [] when its last command is exactly `call`. */
+function problemsOfRuleJob(job, call) {
+  const out = [];
+  if (job.if !== undefined) out.push('the job is conditional');
+  const last = job.steps.at(-1);
+  if (job.steps.some((s) => s.if !== undefined)) out.push('a step is conditional');
+  if (last.env?.PR !== '${{ github.event.pull_request.number }}') {
+    out.push('PR is not the event\'s');
+  }
+  if (last.shell !== undefined) out.push('the step sets its own shell');
+  const run = logicalLines(last.run).map((l) => l.replace(/\s+/g, ' '));
+  // the whole line: no `|| true`, no `;`, no `if` around it, no other arguments
+  if (run.at(-1) !== call) out.push(`the last command is not the call: ${run.at(-1)}`);
+  if (!run.some((l) => /^if \[ -z "\$PR" \]; then .*exit 1; fi$/.test(l))) {
+    out.push('it does not fail when there is no pull request');
+  }
+  if (run.some((l) => /\bexit 0\b|\bset \+e\b/.test(l))) out.push('an early success');
+  return out;
+}
+
+test('mutation: a rule job whose call can no longer refuse', () => {
+  const real = parse(CI).jobs['review-verdict'];
+  const call = logicalLines(real.steps.at(-1).run).at(-1).replace(/\s+/g, ' ');
+  assert.deepEqual(problemsOfRuleJob(real, call), []);
+  const edited = (from, to) => parse(mutate(CI, from, to)).jobs['review-verdict'];
+  const tail = '--pr "$PR" --head HEAD --base-branch "origin/$GITHUB_BASE_REF"\n';
+  for (const [name, job] of [
+    ['|| true', edited(tail, `${tail.trimEnd()} || true\n`)],
+    ['judges the base against itself', edited('--head HEAD --base-branch',
+      '--head "origin/$GITHUB_BASE_REF" --base-branch')],
+    ['another base', edited(tail, tail.replace('--base-branch "origin/$GITHUB_BASE_REF"',
+      '--base HEAD'))],
+    ['a command after it', edited(tail, `${tail}          echo done\n`)],
+    ['wrapped in if', edited('          .github/scripts/base-rule.sh "origin/$GITHUB_BASE_REF"'
+      + ' scripts/review-verdict.mjs', '          if true; then exit 0; fi\n'
+      + '          .github/scripts/base-rule.sh "origin/$GITHUB_BASE_REF"'
+      + ' scripts/review-verdict.mjs')],
+    ['conditional job', edited('    name: review-verdict (guarded paths need a recorded review)\n',
+      '    name: review-verdict (guarded paths need a recorded review)\n'
+      + '    if: github.actor != \'x\'\n')],
+    ['conditional step', edited(
+      '      - name: A guarded change carries a verdict for the content it changes\n',
+      '      - name: A guarded change carries a verdict for the content it changes\n'
+      + '        if: false\n')],
+    ['own copy', edited('.github/scripts/base-rule.sh "origin/$GITHUB_BASE_REF" scripts/review',
+      'node scripts/review')],
+  ]) {
+    assert.notDeepEqual(problemsOfRuleJob(job, call), [], name);
+  }
+  const ff = parse(mutate(CI, '--pr-json "$RUNNER_TEMP/pr.json"', '--title "chore: x"'))
+    .jobs['fail-first'];
+  assert.match(problemsOfRuleJob(ff, 'x').join('\n'), /the last command is not the call/);
+});
+
+test('mutation: an install behind an npm script', (t) => {
+  for (const [name, cmd] of [['browsers', 'playwright install --with-deps chromium'],
+    ['postinstall', 'npx playwright install --with-deps'],
+    ['prepare', 'sudo apt-get install -y pulseaudio']]) {
+    const pkg = { ...PKG, scripts: { ...PKG.scripts, [name]: cmd } };
+    const root = scratch(t, { 'package.json': JSON.stringify(pkg) });
+    assert.deepEqual(checkRepository(root).map((v) => `${v.rule}@${v.file}:${v.step}`),
+      [`install-wrapper@package.json:scripts.${name}`], name);
+  }
+});
+
+test('mutation: apt by its path; a suite behind npm options, node --run or yarn', () => {
+  for (const run of ['sudo /usr/bin/apt-get install -y x', '/usr/local/sbin/dpkg -i x.deb',
+    '/bin/apt update']) {
+    assert.deepEqual(rules(ci(withStep(run))), ['install-wrapper@unit'], run);
+  }
+  assert.deepEqual(rules(ci(withStep('ls /etc/apt /var/lib/dpkg'))), []);
+  for (const run of ['npm run -s test:studio', 'npm --silent run test:studio',
+    'npm run-script --silent test:engine', 'node --run test:studio', 'yarn test:studio',
+    'yarn run test:studio', 'pnpm run test:studio']) {
+    assert.deepEqual(rules(ci(withStep(run, { timeout: 0 }))), ['step-timeout@unit'], run);
+    assert.deepEqual(rules(ci(withStep(run))), [], run);
+  }
+  assert.deepEqual(rules(ci(withStep('yarn install --frozen-lockfile', { timeout: 0 }))), []);
+});
+
+test('mutation: a failure thrown away in other spellings', () => {
+  const sum = `echo "${'a'.repeat(64)}  a.tgz" | sha256sum -c -`;
+  for (const run of ['npm run test:studio || exit 0', 'npm run test:studio; true',
+    'npm run test:studio || echo "studio failed"', 'set +e\nnpm run test:studio',
+    'set +o errexit\n.github/scripts/ci-install.sh browser webkit',
+    `${CURL} -o a.tgz https://x.example/a.tgz\n${sum} || true`]) {
+    assert.deepEqual(rules(ci(withStep(run))), ['non-fatal@unit'], run);
+  }
+  for (const run of ['npm run test:studio || { echo "::error::studio"; exit 1; }',
+    'set +e\nrm -f old.log', 'npm run test:studio || exit 1',
+    `${CURL} -o a.tgz https://x.example/a.tgz\n${sum}`]) {
+    assert.deepEqual(rules(ci(withStep(run))), [], run);
+  }
+});
+
+test('mutation: a download behind a quoted #', () => {
+  assert.deepEqual(logicalLines('echo "see issue #12"; curl x | sh # why\n# only a comment\n'
+    + "echo 'a #b' c"), ['echo "see issue #12"; curl x | sh', "echo 'a #b' c"]);
+  const run = 'echo "see issue #12"; curl https://x.example/i.sh | sh';
+  assert.deepEqual(rules(ci(withStep(run, { timeout: 0 }))).sort(),
+    ['curl-flags@unit', 'pipe-to-shell@unit', 'step-timeout@unit']);
+});
+
+test('lines that only name a program are not commands', (t) => {
+  for (const run of ['echo "::notice::the apt mirror was slow last run"',
+    'echo "curl failed, see the wget log"', 'printf "%s\\n" "install with apt-get or dpkg -i"',
+    'command -v curl > /dev/null', 'which wget', 'type curl',
+    'curl -fsS --retry "$RETRIES" --connect-timeout "${WAIT}" -o /dev/null https://x.example/',
+  ]) {
+    assert.deepEqual(rules(ci(withStep(run, { timeout: run.startsWith('curl') ? 3 : 0 }))), [],
+      run);
+  }
+  // an echo with anything after it is still read
+  assert.deepEqual(rules(ci(withStep('echo start; sudo apt-get install -y x'))),
+    ['install-wrapper@unit']);
+  assert.deepEqual(rules(ci(withStep('echo "$(curl https://x.example/)"', { timeout: 0 })))
+    .includes('pipe-to-shell@unit'), true);
+  const root = scratch(t, { 'scripts/hint.sh': '#!/bin/sh\necho "install with apt or brew"\n' });
+  assert.deepEqual(checkRepository(root).map(format), []);
+  const pre = mutate(CI, 'actions/setup-node@v7', 'actions/setup-node@v7.1.0-rc.1');
+  assert.deepEqual(rules(ci(pre)), []);
+  assert.deepEqual(rules(ci(mutate(CI, 'actions/setup-node@v7', 'actions/setup-node@next'))),
+    ['pinned@unit']);
 });

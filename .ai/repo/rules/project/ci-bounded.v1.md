@@ -30,21 +30,27 @@ that is repaired where it last hurt regresses in the next job somebody adds.
 
 # Required behaviour
 
-- A job declares a positive `timeout-minutes`. The one exception is a job that calls a
+- A job declares a positive `timeout-minutes`, written as a number (an expression such as
+  `${{ vars.LIMIT }}` cannot be read here and is refused). The one exception is a job that calls a
   reusable workflow (a job-level `uses:`), where GitHub accepts none: the limits are the
   called workflow's jobs', and a local one is checked as a workflow file itself.
 - A step declares its own `timeout-minutes` when its `run` installs through
   `.github/scripts/ci-install.sh`, runs `curl`, `wget`, any `gh` command or `verify-deploy`,
   or runs a browser suite. The browser suites are not listed by hand: they are the npm
   scripts of `package.json` whose command, with `npm run <x>` expanded, starts a file of
-  `tests/browser/` or a `scripts/visual-*` program; a `run` that names `tests/browser`,
+  `tests/browser/` or a `scripts/visual-*` program, however the script is started (`npm run`
+  with options before or after `run`, `node --run`, `yarn`, `pnpm`); a `run` that names `tests/browser`,
   `tests/visual` or `scripts/visual-*` itself (after a `cd`, say) or runs `playwright test`
   counts too. A step that uses a local composite action whose steps do any of this carries
   the limit, since a composite action's steps cannot.
 - `playwright install`, `playwright install-deps`, `apt`, `apt-get`, `aptitude` and `dpkg -i`
-  appear as a command in no workflow, in no composite action (an `action.yml` anywhere under `.github/`) and in
-  no other shell script under `.github/` or `scripts/`, whatever options stand between the
-  program and its verb (`apt-get -o Acquire::Retries=3 install` is the same install): the
+  appear as a command in no workflow, in no composite action (an `action.yml` anywhere under
+  `.github/`), in no other shell script under `.github/` or `scripts/` and in no script of
+  `package.json` (where `npm run <x>` or a `postinstall` under `npm ci` would hide it),
+  whatever options stand between the program and its verb
+  (`apt-get -o Acquire::Retries=3 install` is the same install) and whether or not it is
+  named by its path (`/usr/bin/apt-get`). A plain `echo` or `printf` line and a
+  `command -v <name>` lookup name a program without running it and are not read as one. The
   wrapper bounds each install by wall time and retries it once, against the next mirror for
   apt, and must keep doing so.
 - A download is `curl` with `--retry <n>` and `--connect-timeout <s>` (`wget`: `--tries`
@@ -52,6 +58,9 @@ that is repaired where it last hurt regresses in the next job somebody adds.
   step against a 64-hex digest written in the workflow, however it is kept: `-o`, a `>`
   redirect, a pipe into `tar` or `tee`, or printed. Only a download that says it keeps
   nothing (`-o /dev/null`, `> /dev/null`, `--spider`, and no pipe) needs the flags alone.
+  A check that has to read a response body that changes (a deployed page, an API answer)
+  cannot carry a pinned digest and has no allowed `curl` form: it is written as a Node
+  program, as `scripts/verify-deploy.mjs` and the live smoke are.
 - A download is never executed: not piped into a shell or another interpreter (`sh`, `bash`,
   `python`, `node`, `perl`, `ruby`, ...), not substituted into a command (`$(curl ...)`,
   `<(curl ...)`, backticks), and not fetched in a step that uses `eval`. A digest check
@@ -59,8 +68,11 @@ that is repaired where it last hurt regresses in the next job somebody adds.
 - `uses:` names a version tag (`@v7`) or a full commit; a container image names a tag other
   than `latest`, or a digest.
 - Nothing is made non-fatal: no job and no step sets `continue-on-error` (GitHub reports such
-  a job as succeeded, so `gate` would pass over its failure), and no line that installs,
-  downloads or runs a browser suite ends in `|| true` or `|| :`.
+  a job as succeeded, so `gate` would pass over its failure); no line that installs,
+  downloads, checks a digest or runs a browser suite throws its failure away with
+  `|| true`, `|| :`, `|| exit 0`, a trailing `|| echo ...` or a trailing `; true`; and no
+  step that has such a line turns `set +e` on. Other ways to ignore a failure are listed
+  below as not seen.
 - `gate` runs with `if: always()`, its `needs` list every other job of its workflow, and it
   fails unless every one of them succeeded. A job that `gate` does not need is not required
   by branch protection, whatever it checks.
@@ -100,14 +112,21 @@ it cannot read fails the test instead of passing unread.
   script under `scripts/` and behind a local action used without a limit, each job in turn
   removed from `gate.needs`, a new job nobody added to it, `gate` without `if: always()`,
   `workflow_dispatch` or `push` added to `ci.yml`'s triggers, an action on a branch, an image
-  without a tag, a reusable workflow on a branch) and require the checker to name that rule
+  without a tag, a reusable workflow on a branch, an install in a script of `package.json`
+  including `postinstall`, apt and dpkg by their path, a suite behind `npm run -s`,
+  `npm --silent run`, `node --run`, `yarn` and `pnpm`, a failure thrown away with
+  `|| exit 0`, `|| echo`, `; true` or `set +e`, a digest check followed by `|| true`, a
+  download after a quoted `#`) and require the checker to name that rule
   and that job and nothing else. A checker that stopped looking fails here. The same tests
   hold the forms that must stay allowed: `ci-install.sh apt <package>`, a path containing
   `apt`, `dpkg -l`, a digest-checked download, a discarded probe, `|| true` on a cleanup, a
-  job that calls a reusable workflow.
-- "the pull-request rules are judged by the base branch's programs" fails if the
-  `fail-first` or `review-verdict` job stops running its program through
-  `.github/scripts/base-rule.sh`, or passes when there is no pull request.
+  job that calls a reusable workflow, an `echo` that mentions apt or curl, `command -v curl`,
+  `--retry "$VAR"`, a pre-release version tag, `|| { ...; exit 1; }`.
+- "the pull-request rules are judged by the base branch's programs" fails unless the last
+  command of the `fail-first` and of the `review-verdict` job is exactly its call of
+  `.github/scripts/base-rule.sh` with its exact arguments, unconditional, and the step fails
+  when there is no pull request; "a rule job whose call can no longer refuse" applies eight
+  such edits and requires each to be reported.
 
 `tests/unit/ci-knowledge-job.test.mjs` keeps the `knowledge` job's own assertions (the exact
 retry flags, the verdict program).
@@ -120,6 +139,14 @@ What the test cannot see:
   (`scripts/*.mjs`, an inline `node -e` or `python -c`), and a shell script outside
   `.github/` and `scripts/`. The patterns are matched per logical line, so an install built
   from variables (`$PM install`) is not recognised.
+- Other ways to keep a download or ignore a failure: a failure swallowed by
+  `if ! <suite>; then ...; fi` or by a `|| echo` with a separator inside its quotes; two
+  downloads in one step with a digest check that covers one of them (the clause holds per
+  step, not per file); a sums file that was itself downloaded; `gh release download`,
+  `git clone`, `npx <remote package>`, `aria2c` and `docker run`, which are not read as
+  downloads (a `gh` command still needs its step limit).
+- YAML the strict reader does not implement (anchors, a multi-line flow sequence): the file
+  is refused as unreadable, which is a refusal of a legal workflow, not a pass.
 - A pull request that rewrites the workflow. On a pull request GitHub runs the workflow file
   the pull request carries, so a change to `ci.yml` is judged by this test as that pull
   request leaves it. What holds such a change back is `project.review-verdict`: everything

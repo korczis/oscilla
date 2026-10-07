@@ -7,15 +7,17 @@
 // under .github/ and scripts/, and reports:
 //   job-timeout      a job without a positive timeout-minutes
 //   step-timeout     a step that installs, downloads or runs a browser suite without its own
-//   install-wrapper  a browser or apt install outside .github/scripts/ci-install.sh
+//   install-wrapper  a browser or apt install outside .github/scripts/ci-install.sh, a script
+//                    of package.json included
 //   curl-flags       a curl without --retry and --connect-timeout (wget: --tries)
 //   download-digest  a download not checked with `sha256sum -c` against a pinned digest
 //   pipe-to-shell    a download that is executed: piped into an interpreter, substituted into
 //                    a command ($(curl), <(curl), backticks) or in a step that uses eval
 //   pinned           an action not pinned to a version tag or commit, an image without a tag
 //   gate-needs       a `gate` job whose needs is not every other job of its workflow
-//   non-fatal        continue-on-error on a job or a step, or `|| true` after an install or a
-//                    browser suite: the job would report success whatever happened
+//   non-fatal        continue-on-error on a job or a step; `|| true`, `|| :`, `|| exit 0`,
+//                    a trailing `|| echo` or `; true` on a line that installs, downloads,
+//                    checks a digest or runs a browser suite, or `set +e` in such a step
 //   triggers         ci.yml started by anything but pull_request (a manual run has no pull
 //                    request, so fail-first and review-verdict would have nothing to check)
 //
@@ -33,6 +35,9 @@ const INSTALL_WRAPPER = '.github/scripts/ci-install.sh';
 const WORD = '(?:^|[\\s;&|(){}"\'`])';
 const WORD_END = '(?=$|[\\s;&|(){}"\'`])';
 
+/** A program named by its path in a bin directory (`/usr/bin/apt-get`). */
+const BIN = '(?:/\\S*bin/)?';
+
 /**
  * Installs that only the wrapper may run: it bounds and retries them. apt is matched as a
  * word whatever follows it, because `apt-get -o Acquire::Retries=3 install` and
@@ -40,17 +45,27 @@ const WORD_END = '(?=$|[\\s;&|(){}"\'`])';
  */
 const BARE_INSTALL = [
   [/\bplaywright(@[\w.-]+)?\s+(-\S+\s+)*install(-deps)?\b/, 'playwright install'],
-  [new RegExp(`${WORD}(apt|apt-get|aptitude)${WORD_END}`), 'apt'],
-  [new RegExp(`${WORD}dpkg\\s+(\\S+\\s+)*?(-i|--install)${WORD_END}`), 'dpkg -i'],
+  [new RegExp(`${WORD}${BIN}(apt|apt-get|aptitude)${WORD_END}`), 'apt'],
+  [new RegExp(`${WORD}${BIN}dpkg\\s+(\\S+\\s+)*?(-i|--install)${WORD_END}`), 'dpkg -i'],
 ];
 
 /** `ci-install.sh apt <package>` names the wrapper's mode, not the program. */
 const withoutWrapperCalls = (line) => line.replace(/ci-install\.sh\s+apt\b/g, 'ci-install.sh');
 
+/**
+ * A logical line as the commands it runs: '' for a plain `echo` / `printf` (one with no
+ * separator, pipe or substitution, so nothing else runs on it), and without the `command -v
+ * <name>`, `which <name>` and `type <name>` lookups, which name a program and do not run it.
+ */
+export function commandText(line) {
+  if (/^\s*(echo|printf)\s/.test(line) && !/[;&|`]|\$\(|<\(/.test(line)) return '';
+  return line.replace(/(^|[\s;&|(])(command\s+-v|which|type)\s+[\w./-]+/g, '$1');
+}
+
 /** The bare installs of one shell text, by label. */
 function bareInstalls(text) {
   const found = new Set();
-  for (const line of logicalLines(text).map(withoutWrapperCalls)) {
+  for (const line of logicalLines(text).map(commandText).map(withoutWrapperCalls)) {
     for (const [re, label] of BARE_INSTALL) if (re.test(line)) found.add(label);
   }
   return [...found];
@@ -77,17 +92,38 @@ const SUBSTITUTED = /(\$\(|<\(|`)\s*(sudo\s+)?(curl|wget)\b/;
 const EVAL = new RegExp(`${WORD}eval${WORD_END}`);
 const DISCARDED = new RegExp('(^|\\s)(-[A-Za-z]*[oO]\\s*|--output(-document)?[= ]\\s*|>\\s*)'
   + '/dev/null\\b|\\s--spider\\b');
-const NON_FATAL = /\|\|\s*(true|:)(?=$|[\s;|&)])/;
+/**
+ * A failure thrown away: `|| true`, `|| :`, `|| exit 0`, a trailing `|| echo ...` (echo
+ * succeeds), or `; true` as the line's last command.
+ */
+const NON_FATAL = new RegExp('\\|\\|\\s*(true|:|exit\\s+0)(?=$|[\\s;|&)])'
+  + '|\\|\\|\\s*(echo|printf)\\b[^;&|{}]*$|;\\s*(true|:)\\s*$');
+const ERREXIT_OFF = /(^|[\s;&|])set\s+(\+e\b|\+o\s+errexit\b)/;
 
 const DIGEST_CHECK = /\bsha256sum\s+(-c|--check)\b|\bshasum\s+-a\s*256\s+(-c|--check)\b/;
 const DIGEST = /\b[0-9a-f]{64}\b/;
-const PINNED_ACTION = /@(v\d+(\.\d+){0,2}|[0-9a-f]{40})$/;
+const PINNED_ACTION = /@(v\d+(\.\d+){0,2}(-[0-9A-Za-z.]+)?|[0-9a-f]{40})$/;
 
 /** Shell text as logical lines: continuations joined, comments and blank lines dropped. */
 export function logicalLines(text) {
   return String(text).replace(/\\\r?\n/g, ' ').split(/\r?\n/)
-    .map((l) => l.replace(/(^|\s)#.*$/, '').trim())
+    .map((l) => withoutComment(l).trim())
     .filter(Boolean);
+}
+
+/** A line up to its comment: a `#` at the start or after whitespace, outside quotes. */
+function withoutComment(line) {
+  let quote = null;
+  for (let i = 0; i < line.length; i += 1) {
+    const c = line[i];
+    if (quote) {
+      if (c === '\\' && quote === '"') i += 1;
+      else if (c === quote) quote = null;
+    } else if (c === '\\') i += 1;
+    else if (c === '"' || c === "'") quote = c;
+    else if (c === '#' && (i === 0 || /\s/.test(line[i - 1]))) return line.slice(0, i);
+  }
+  return line;
 }
 
 /**
@@ -111,15 +147,27 @@ export function browserSuites(pkg) {
   return new Set(Object.keys(scripts).filter((n) => runs(n)));
 }
 
+/**
+ * An npm script started: `npm run <x>` and `npm run-script <x>` with any options before or
+ * after `run` (`npm run -s <x>`, `npm --silent run <x>`), `node --run <x>`, `yarn [run] <x>`
+ * and `pnpm [run] <x>`.
+ */
+const SCRIPT_RUN = new RegExp(
+  '\\bnpm\\s+(?:-\\S+\\s+)*(?:run|run-script)\\s+(?:-\\S+\\s+)*([\\w:.-]+)'
+  + '|\\bnode\\s+(?:-\\S+\\s+)*?--run[= ]\\s*([\\w:.-]+)'
+  + '|\\b(?:yarn|pnpm)\\s+(?:-\\S+\\s+)*(?:run\\s+)?(?:-\\S+\\s+)*([\\w:.-]+)', 'g');
+
 /** Why a step must carry its own timeout-minutes, or null. */
-export function stepNeedsTimeout(run, suites) {
+export function stepNeedsTimeout(text, suites) {
+  const run = logicalLines(text).map(commandText).filter(Boolean).join('\n');
   if (run.includes('ci-install.sh')) return 'installs through ci-install.sh';
   for (const label of bareInstalls(run)) return `runs ${label}`;
   for (const [re, label] of NETWORK_COMMAND) {
     if (re.test(run)) return `reaches the network (${label})`;
   }
-  for (const m of run.matchAll(/\bnpm (?:run|run-script) ([\w:.-]+)/g)) {
-    if (suites.has(m[1])) return `runs the browser suite ${m[1]}`;
+  for (const m of run.matchAll(SCRIPT_RUN)) {
+    const name = m[1] || m[2] || m[3];
+    if (suites.has(name)) return `runs the browser suite ${name}`;
   }
   if (BROWSER_PATH.test(run)) return 'runs a browser suite';
   return null;
@@ -127,7 +175,7 @@ export function stepNeedsTimeout(run, suites) {
 
 /** Whether one logical line installs or runs a browser suite (what `|| true` must not follow). */
 function fatalLine(line, suites) {
-  return stepNeedsTimeout(line, suites) !== null && !/^\s*(echo|printf)\b/.test(line);
+  return stepNeedsTimeout(line, suites) !== null || DIGEST_CHECK.test(commandText(line));
 }
 
 /** `continue-on-error` set to anything but false. */
@@ -140,10 +188,13 @@ function positive(n) {
   return typeof n === 'number' && Number.isFinite(n) && n > 0;
 }
 
+/** A number, or a variable that holds one (`--retry "$RETRIES"`). */
+const COUNT = '(?:\\d+|"?\\$\\{?\\w+\\}?"?)';
+
 /** Violations of the curl / wget / digest rules in one shell text. */
 function shellViolations(text, digestScope) {
   const out = [];
-  const lines = logicalLines(text);
+  const lines = logicalLines(text).map(commandText).filter(Boolean);
   const hasEval = lines.some((l) => EVAL.test(l));
   for (const line of lines) {
     const isCurl = /\bcurl\b/.test(line);
@@ -151,8 +202,10 @@ function shellViolations(text, digestScope) {
     if (!isCurl && !isWget) continue;
     if (isCurl) {
       const missing = [];
-      if (!/--retry\s+\d+/.test(line)) missing.push('--retry <n>');
-      if (!/--connect-timeout\s+\d+/.test(line)) missing.push('--connect-timeout <s>');
+      if (!new RegExp(`--retry\\s+${COUNT}`).test(line)) missing.push('--retry <n>');
+      if (!new RegExp(`--connect-timeout\\s+${COUNT}`).test(line)) {
+        missing.push('--connect-timeout <s>');
+      }
       if (missing.length) {
         out.push(['curl-flags', `curl without ${missing.join(' and ')}: ${line}`]);
       }
@@ -207,11 +260,16 @@ function stepViolations(step, suites, envScope) {
     out.push(['install-wrapper',
       `${what} outside ${INSTALL_WRAPPER}, which bounds and retries it`]);
   }
-  for (const line of logicalLines(step.run)) {
+  const runLines = logicalLines(step.run);
+  for (const line of runLines) {
     if (NON_FATAL.test(line) && fatalLine(line, suites)) {
-      out.push(['non-fatal',
-        `\`|| true\` after an install, a download or a browser suite: ${line}`]);
+      out.push(['non-fatal', 'the failure of an install, a download, a digest check or a'
+        + ` browser suite is thrown away: ${line}`]);
     }
+  }
+  if (runLines.some((l) => ERREXIT_OFF.test(l)) && runLines.some((l) => fatalLine(l, suites))) {
+    out.push(['non-fatal', '`set +e` in a step that installs, downloads, checks a digest or'
+      + ' runs a browser suite: its failure would not fail the step']);
   }
   const scope = `${envScope}\n${JSON.stringify(step.env || {})}\n${step.run}`;
   out.push(...shellViolations(step.run, scope));
@@ -403,6 +461,14 @@ export function checkRepository(root) {
   const scripts = [...filesUnder(root, '.github', /\.sh$/),
     ...filesUnder(root, 'scripts', /\.sh$/)];
   for (const rel of scripts) out.push(...checkScript(rel, read(rel)));
+  // An install behind an npm script (`npm run browsers`, or a `postinstall` that `npm ci`
+  // runs) would be out of the workflow's sight, so no script of package.json may hold one.
+  for (const [name, cmd] of Object.entries(pkg.scripts || {})) {
+    for (const what of bareInstalls(String(cmd))) {
+      out.push({ file: 'package.json', job: null, step: `scripts.${name}`,
+        rule: 'install-wrapper', message: `${what} outside ${INSTALL_WRAPPER}` });
+    }
+  }
   const usesWrapper = workflows.some((rel) => read(rel).includes('ci-install.sh'));
   if (usesWrapper && !scripts.includes(INSTALL_WRAPPER)) {
     out.push({ file: INSTALL_WRAPPER, job: null, step: null, rule: 'install-wrapper',
