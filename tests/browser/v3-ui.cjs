@@ -118,16 +118,16 @@
 //                           light theme; the
 //                           contradicted older record reads "uncalibrated (the stored claim is
 //                           contradicted)", no "SPL"; Compare A with it names the differing item
-//   findings                (ADR 0046) "Record a finding about this run" on A's detail (focus +
+//   findings                (ADR 0046) "Record a finding about this experiment" on A's detail (focus +
 //                           Enter) opens the finding dialog with A cited; while a statement is
 //                           typed the unsaved-work guard reports "A finding being written"; a
 //                           comparison of A with B is linked (with its "not why" hint), the
 //                           status (five categorical values) is set to supported and saved: the
 //                           Findings panel (h3) lists it as a real list item (h4 statement,
 //                           status in words, its references in a list), both runs' details list
-//                           it under "Findings that cite this run", the export carries A's
-//                           result hash; deleting B warns "1 finding cites this run", and the
-//                           comparison then reads "missing: run ... is not stored here" while the
+//                           it under "Findings that cite this experiment", the export carries A's
+//                           result hash; deleting B warns "1 finding cites this experiment", and the
+//                           comparison then reads "missing: experiment ... is not stored here" while the
 //                           finding keeps its status; no causal wording; 390 px; light theme
 //   findings-integrity      (review 1 of #149, items 1-2) a cited run deleted and replaced by a
 //                           different record without a result hash reads "cannot be verified"
@@ -2015,7 +2015,7 @@ function defineChecks(fixtures) {
       const d = document.getElementById('osc-dlg-finding');
       return !!d && d.open;
     });
-    // 1. From a run's detail: "Record a finding about this run" (keyboard: focus + Enter).
+    // 1. From an experiment's detail: "Record a finding about this experiment" (keyboard: focus + Enter).
     await page.evaluate(() => window.OSCILLA.app.experimentsOpen('fixture-a'));
     const button = await H.until(() => page.evaluate(() => {
       const b = document.querySelector('[data-osc="exp.findingNew"]');
@@ -2096,9 +2096,9 @@ function defineChecks(fixtures) {
     for (const k of ['saved', 'afterDelete', 'narrow']) if (out[k]) out[k] = { ...out[k], text: '' };
     return { ...out, ...H.verdict({
       'record-from-run': res.opened === true && res.prefilled.length === 1
-        && /^Run "TEST CONTEXT · synthetic A/.test(res.prefilled[0]),
+        && /^Experiment "TEST CONTEXT · synthetic A/.test(res.prefilled[0]),
       guard: res.guard.join() === 'A finding being written' && res.guardAfter === 0,
-      'link-compare': res.linked.refs.length === 2 && /^Comparison of ".*" with ".*" \(what changed between the runs, not why\)/
+      'link-compare': res.linked.refs.length === 2 && /^Comparison of ".*" with ".*" \(what changed between the experiments, not why\)/
         .test(res.linked.refs[1]) && res.linked.hint,
       categorical: res.statuses.join() === 'observation,hypothesis,supported,contradicted,'
         + 'inconclusive',
@@ -2106,15 +2106,15 @@ function defineChecks(fixtures) {
         && row.h4 === 'A falls above 6 kHz; B is 0.9 dB quieter.'
         && row.evidence.every((e) => e.state === 'ok' && e.inList),
       panel: res.saved.shown && res.saved.h3 === 'Findings',
-      backlinks: res.backA.shown && res.backA.h4 === 'Findings that cite this run'
+      backlinks: res.backA.shown && res.backA.h4 === 'Findings that cite this experiment'
         && /A falls above 6 kHz/.test(res.backA.items[0]) && /Supported/.test(res.backA.items[0])
         && /comparison/.test(res.backB.items[0]),
       export: typeof res.exported === 'string' && res.exported.includes(res.hashA)
         && res.exported.includes('"kind": "oscilla-findings"'),
-      'delete-warning': /^1 finding cites this run/.test(res.warning),
+      'delete-warning': /^1 finding cites this experiment/.test(res.warning),
       missing: after.status === 'Supported' && after.evidence.length === 2
         && after.evidence[0].state === 'ok' && after.evidence[1].state === 'missing'
-        && /missing: run .* is not stored here/.test(after.evidence[1].text),
+        && /missing: experiment .* is not stored here/.test(after.evidence[1].text),
       notCausal: !/\bcaused\b|because|due to/i.test(res.saved.text || ''),
       narrow: res.narrow.fits,
       light: res.light.theme === 'light' && hex(res.light.color) === res.light.text.toLowerCase(),
@@ -2262,7 +2262,7 @@ function defineChecks(fixtures) {
         && res.a.shown && res.a.h4 === 'Connected records',
       downstream: cite.state === 'present' && cite.href === `#m=experiments&finding=${ids.finding}`
         && /Cited by finding "Connections: A falls above 6 kHz\."/.test(cite.text)
-        && /Field: evidence\[0\] \(identity: runs\[0\]\.resultHash\), on that finding\./
+        && /Field: evidence\[0\] \(identity: experiments\[0\]\.resultHash\), on that finding\./
           .test(cite.text)
         && by(a, 'duplicated-as').length === 1 && by(a, 'duplicated-as')[0].state === 'present',
       upstream: dupOf.state === 'present' && dupOf.href === '#m=experiments&exp=fixture-a'
@@ -2277,7 +2277,7 @@ function defineChecks(fixtures) {
         .test((res.impostorFinding.up || [{}])[0].text || '')
         && by(res.impostorDup.up, 'duplicate-of')[0].state === 'mismatch',
       corrupt: res.storeKind !== 'indexeddb' || (res.corrupt.up && res.corrupt.up[0].state
-        === 'unreadable' && /— unreadable: run .* is stored here but cannot be read/
+        === 'unreadable' && /— unreadable: experiment .* is stored here but cannot be read/
         .test(res.corrupt.up[0].text)),
       narrow: res.narrow.fits === true,
       // Vocabulary (owner decision 2026-10-07): the stored record is an experiment, and the bare
@@ -2308,8 +2308,8 @@ function defineChecks(fixtures) {
       await a.experimentsImportText(x);
       await a.experimentsImportText(y);
       const out = [];
-      for (const [id, st] of [['fixture-imp', 'cites the replaced run'],
-        ['fixture-bad', 'cites the unreadable run']]) {
+      for (const [id, st] of [['fixture-imp', 'cites the replaced experiment'],
+        ['fixture-bad', 'cites the unreadable experiment']]) {
         await a.findingsAskRun(id);
         a.fnd.form.statement = st;
         a.fnd.form.status = 'supported';
@@ -2326,7 +2326,7 @@ function defineChecks(fixtures) {
         open: !!x.querySelector('[data-osc="fnd.openRef"]') })),
         issue: ((li.querySelector('[data-osc="fnd.statusIssue"]') || {}).textContent || '') };
     }, statement);
-    res.before = await rowIn(page, 'cites the replaced run');
+    res.before = await rowIn(page, 'cites the replaced experiment');
     // 1. Delete the cited run and store a different record without a result hash under its id.
     await page.evaluate(async (t) => {
       const a = window.OSCILLA.app;
@@ -2335,7 +2335,7 @@ function defineChecks(fixtures) {
       await a.experimentsImportText(t);
       a.alerts = [];
     }, as('c', 'fixture-imp', { unstamped: true, name: 'TEST CONTEXT · a different record' }));
-    res.replaced = await H.until(() => rowIn(page, 'cites the replaced run'),
+    res.replaced = await H.until(() => rowIn(page, 'cites the replaced experiment'),
       (r) => r.refs && r.refs[0] && r.refs[0].state !== 'ok', 5000);
     // 2. Corrupt the other cited run in IndexedDB and read it in a fresh page (nothing cached).
     res.kind = await page.evaluate(() => window.OSCILLA.experiments.store().kind);
@@ -2362,7 +2362,7 @@ function defineChecks(fixtures) {
         await page2.goto(page.url(), { waitUntil: 'load' });
         await page2.waitForSelector('html[data-ready="true"]', { timeout: 15000 });
         await page2.evaluate(() => window.OSCILLA.app.setWorkspace('experiments'));
-        res.unreadable = await H.until(() => rowIn(page2, 'cites the unreadable run'),
+        res.unreadable = await H.until(() => rowIn(page2, 'cites the unreadable experiment'),
           (r) => r.refs && r.refs[0] && r.refs[0].state !== 'ok', 8000);
       } finally {
         await page2.close();
@@ -2595,13 +2595,13 @@ function defineChecks(fixtures) {
       await a.experimentsImportText(t);
       await a.experimentsImportText(u);
       await a.findingsAskRun('fixture-tab');
-      a.fnd.form.statement = 'cites the run another tab replaces';
+      a.fnd.form.statement = 'cites the experiment another tab replaces';
       a.fnd.form.status = 'supported';
       return !!(await a.findingsSave());
     }, [as('b', 'fixture-tab'), as('a', 'fixture-tab-u')]);
     const row = (p) => p.evaluate(() => {
       const li = [...document.querySelectorAll('[data-osc="fnd.row"]')]
-        .find((x) => x.querySelector('h4').textContent === 'cites the run another tab replaces');
+        .find((x) => x.querySelector('h4').textContent === 'cites the experiment another tab replaces');
       const r = li && li.querySelector('[data-osc="fnd.ref"]');
       return r ? { state: r.dataset.state, open: !!r.querySelector('[data-osc="fnd.openRef"]'),
         text: r.textContent.replace(/\s+/g, ' ').trim() } : { missing: true };
@@ -2697,7 +2697,7 @@ function defineChecks(fixtures) {
       return !!f;
     }, [as('b', 'fixture-vx'), as('a', 'fixture-vy')]);
     res.replacedX = await replace('fixture-vx', as('c', 'fixture-vx', 'TEST CONTEXT · X replaced'));
-    // 1. The detail tab 1 shows is out of date: "Record a finding about this run" is refused.
+    // 1. The detail tab 1 shows is out of date: "Record a finding about this experiment" is refused.
     const before = await page.evaluate(() => window.OSCILLA.app.fnd.all.length);
     await page.click('[data-osc="exp.findingNew"]');
     await sleep(400);

@@ -234,34 +234,35 @@ filter class is claimed. An experiment saved from Measure does not store band le
   apart from what was measured: a measurement is what was observed or computed, an observation
   is what you recorded, and a finding interprets evidence. Its status is one of observation,
   hypothesis, supported, contradicted or inconclusive (a category, never a confidence number),
-  and a supported or contradicted finding cites at least one piece of evidence: a run, a
-  comparison of two runs, or the stored value of a run at a frequency (the point the evidence
-  lineage traces). Record one from a run's detail ("Record a finding about this run") or from a
-  comparison; a comparison says what changed between the runs, not why. Each run's detail lists
-  the findings that cite it. A finding never changes a run. Deleting a cited run keeps the
-  reference, which then reads "missing", and the delete dialog says how many findings cite the
-  run. A finding records each cited run's id with its result hash. Every claim about a cited run
-  is checked, at the moment it is made, against the record stored now (read fresh and verified):
+  and a supported or contradicted finding cites at least one piece of evidence: an experiment, a
+  comparison of two experiments, or the stored value of an experiment at a frequency (the point the
+  evidence lineage traces). Record one from an experiment's detail ("Record a finding about this
+  experiment") or from a comparison; a comparison says what changed between the experiments, not
+  why. Each experiment's detail lists the findings that cite it. A finding never changes an
+  experiment. Deleting a cited experiment keeps the reference, which then reads "missing", and the
+  delete dialog says how many findings cite the experiment. A finding records each cited
+  experiment's id with its result hash. Every claim about a cited experiment is checked, at the
+  moment it is made, against the record stored now (read fresh and verified):
   - a reference reads present only when that record carries the cited hash (checked on every
     refresh of the list);
   - Open checks again first and opens nothing when that no longer holds;
-  - a finding recorded from a run's detail, a comparison or the list cites the record on screen,
-    and is refused when another tab has replaced it since ("reopen it");
-  - a run's backlinks show the state of each citing reference, and a finding citing an earlier
-    record under the same id never reads as citing the one shown.
+  - a finding recorded from an experiment's detail, a comparison or the list cites the record on
+    screen, and is refused when another tab has replaced it since ("reopen it");
+  - an experiment's backlinks show the state of each citing reference, and a finding citing an
+    earlier record under the same id never reads as citing the one shown.
 
   A different record under the id is named as different, a hash missing on either side as an
   identity that cannot be verified, and a stored record that cannot be read as unreadable. Only a
-  run with a result hash can be linked. A value reference must name exactly a frequency of the
-  run's stored response grid; only then does it read "(a stored grid point)", and every stored
-  point prints as its exact frequency. A status is shown as your judgement. Closing the finding
-  dialog without saving keeps a changed draft (offered again, guarded against a reload) until you
-  save or discard it. An edit is refused when another tab changed or deleted the finding since you
-  opened it; the dialog then offers to load the stored version (or, if it was deleted, to save
-  your text as a new finding) and keeps what you typed beside it to copy (the statement, status,
-  references and notes). Findings export as `.oscilla-findings.json` with
+  experiment with a result hash can be linked. A value reference must name exactly a frequency of
+  the experiment's stored response grid; only then does it read "(a stored grid point)", and every
+  stored point prints as its exact frequency. A status is shown as your judgement. Closing the
+  finding dialog without saving keeps a changed draft (offered again, guarded against a reload)
+  until you save or discard it. An edit is refused when another tab changed or deleted the finding
+  since you opened it; the dialog then offers to load the stored version (or, if it was deleted, to
+  save your text as a new finding) and keeps what you typed beside it to copy (the statement,
+  status, references and notes). Findings export as `.oscilla-findings.json` with
   that identity; an import is validated whole before anything is stored, a newer schema is
-  refused, and a cited run that is not in this browser reads "not stored here"
+  refused, and a cited experiment that is not in this browser reads "not stored here"
   ([ADR 0046](.ai/repo/adrs/0046-findings-interpretation-linked-to-evidence.md), proposed).
 - **Connected records.** An experiment's detail, each definition and each finding (and each
   saved project in Studio's Projects and patches dialog) answer two questions: what is this
@@ -715,7 +716,7 @@ Browser storage holds only these keys and one database, `oscilla-experiments` (v
 | IndexedDB | `oscilla-experiments`, object store `studio` | Your saved Studio projects and patches (name, save time, studioHash and the document) |
 | IndexedDB | `oscilla-experiments`, object store `studioSummaries` | One small row per Studio project or patch for the library list |
 | IndexedDB | `oscilla-experiments`, object store `definitions` | Your experiment definitions, each with its versions (recipe, declared conditions, acceptance criterion, name and notes) |
-| IndexedDB | `oscilla-experiments`, object store `findings` | Your findings (statement, status, notes, the evidence each cites and the id and result hash of each cited run) |
+| IndexedDB | `oscilla-experiments`, object store `findings` | Your findings (statement, status, notes, the evidence each cites and the id and result hash of each cited experiment) |
 
 Experiments and findings are deleted only when you delete them. Permission to play continuously is never
 stored.

@@ -63,11 +63,13 @@ const row = (e) => ({ experimentId: e.experimentId, name: e.name,
 const def = (id, hashes, name = 'Room sweep') => ({ kind: 'oscilla-definition', schemaVersion: 1,
   id, name, notes: null, createdAt: NOW,
   versions: hashes.map((hash, i) => ({ version: i + 1, hash, createdAt: NOW, execution: {} })) });
-const finding = (id, evidence, runs, statement = 'A falls above 6 kHz.') => createFinding({ id,
-  now: NOW, statement, status: 'hypothesis', evidence, runs });
+const finding = (id, evidence, experiments, statement = 'A falls above 6 kHz.') => createFinding(
+  { id, now: NOW, statement, status: 'hypothesis', evidence, experiments });
 const index = (runs, over = {}) => ({ runs: runs.map(row), definitions: [],
   unreadableDefinitions: [], findings: [], studio: { projects: [], unreadable: [] },
   build: null, profile: null, ...over });
+/** A stored experiment as a subject. */
+const exp = (record) => ({ kind: 'experiment', record });
 const of = (list, relation) => list.filter((c) => c.relation === relation);
 const one = (list, relation) => {
   const x = of(list, relation);
@@ -157,7 +159,7 @@ test('run: the definition it was executed from, present, mismatched, missing or 
     [{ unreadableDefinitions: ['def-1'] }, 'unreadable', /cannot be read/],
   ];
   for (const [over, state, re] of cases) {
-    const c = one(C.connectionsOf({ kind: 'experiment', record: r }, index([r], over)).upstream,
+    const c = one(C.connectionsOf(exp(r), index([r], over)).upstream,
       'definition');
     assert.equal(c.state, state);
     assert.match(c.text, re);
@@ -168,7 +170,7 @@ test('run: the definition it was executed from, present, mismatched, missing or 
     assert.equal(c.href, ['missing', 'unreadable'].includes(state) ? null
       : '#m=experiments&def=def-1');
   }
-  const derived = C.connectionsOf({ kind: 'experiment', record: run('r2') }, index([run('r2')]));
+  const derived = C.connectionsOf(exp(run('r2')), index([run('r2')]));
   assert.equal(of(derived.upstream, 'definition').length, 0, 'a derived definition is no record');
   assert.ok(derived.notes.some((n) => n.field === 'definition.derived'
     && /derived from its own recipe/.test(n.text)));
@@ -179,20 +181,20 @@ test('run: repeat and duplicate links by the stored id; a missing original stays
   const rep = run('rep', { provenance: { repeatOf: 'orig', resultHash: H('2') } });
   const dup = run('dup', { provenance: { duplicateOf: 'orig' } });
   const ix = index([orig, rep, dup]);
-  const r = one(C.connectionsOf({ kind: 'experiment', record: rep }, ix).upstream, 'repeat-of');
+  const r = one(C.connectionsOf(exp(rep), ix).upstream, 'repeat-of');
   assert.equal(r.state, 'unverifiable', 'a repeat records no identity of its original');
   assert.equal(r.field, 'provenance.repeatOf');
   assert.match(r.text, /^not verifiable: .*by id only/);
   assert.equal(r.href, '#m=experiments&exp=orig');
-  const d = one(C.connectionsOf({ kind: 'experiment', record: dup }, ix).upstream, 'duplicate-of');
+  const d = one(C.connectionsOf(exp(dup), ix).upstream, 'duplicate-of');
   assert.equal(d.state, 'present');
   assert.match(d.text, /result hash recorded, recomputed when it was read/);
   // A different record stored under the original's id: a duplicate keeps the original's hash.
   const other = index([run('orig', { provenance: { resultHash: H('9') } }), dup]);
-  assert.equal(one(C.connectionsOf({ kind: 'experiment', record: dup }, other).upstream, 'duplicate-of')
+  assert.equal(one(C.connectionsOf(exp(dup), other).upstream, 'duplicate-of')
     .state, 'mismatch');
   // The original deleted: the reference is still there, and reads missing.
-  const gone = one(C.connectionsOf({ kind: 'experiment', record: rep }, index([rep])).upstream,
+  const gone = one(C.connectionsOf(exp(rep), index([rep])).upstream,
     'repeat-of');
   assert.equal(gone.state, 'missing');
   assert.equal(gone.href, null);
@@ -200,23 +202,23 @@ test('run: repeat and duplicate links by the stored id; a missing original stays
   // Stored but unreadable (fails validation, or its hash does not verify): never fine.
   const bad = index([orig, dup]);
   Object.assign(bad.runs[0], { readable: false, reason: 'stored experiment orig is invalid' });
-  const u = one(C.connectionsOf({ kind: 'experiment', record: dup }, bad).upstream, 'duplicate-of');
+  const u = one(C.connectionsOf(exp(dup), bad).upstream, 'duplicate-of');
   assert.equal(u.state, 'unreadable');
   assert.match(u.text, /^unreadable: .*cannot be read \(stored experiment orig is invalid\)/);
   // Stored, but not read: never shown as verified.
   delete bad.runs[0].readable;
-  assert.equal(one(C.connectionsOf({ kind: 'experiment', record: dup }, bad).upstream, 'duplicate-of')
+  assert.equal(one(C.connectionsOf(exp(dup), bad).upstream, 'duplicate-of')
     .state, 'unverifiable');
   // A hash missing on either side cannot verify an identity.
   const unst = index([run('orig', { provenance: { resultHash: null } }), dup]);
-  assert.equal(one(C.connectionsOf({ kind: 'experiment', record: dup }, unst).upstream, 'duplicate-of')
+  assert.equal(one(C.connectionsOf(exp(dup), unst).upstream, 'duplicate-of')
     .state, 'unverifiable');
 });
 
 test('nothing is inferred: the same name, recipe, definition or time is no connection', () => {
   const a = run('a', { name: 'Same', recipe: { x: 1 } });
   const b = run('b', { name: 'Same', recipe: { x: 1 } });
-  const out = C.connectionsOf({ kind: 'experiment', record: a }, index([a, b]));
+  const out = C.connectionsOf(exp(a), index([a, b]));
   assert.deepEqual(out.upstream, []);
   assert.deepEqual(out.downstream, []);
 });
@@ -229,7 +231,7 @@ test('run: Studio projects by the hash recomputed over them, whole graph or meas
   const ix = index([r], { studio: { projects: [proj('whole', p.studioHash, { v: 1,
     hash: p.measured.hash }), proj('path', H('e'), { v: 1, hash: p.measured.hash }),
   proj('other', H('f'), { v: 1, hash: H('0') })], unreadable: [] } });
-  const up = C.connectionsOf({ kind: 'experiment', record: r }, ix).upstream;
+  const up = C.connectionsOf(exp(r), ix).upstream;
   const g = one(up, 'studio-graph');
   assert.deepEqual([g.state, g.to, g.field], ['present', { kind: 'studio', id: 'whole' },
     'studio.studioHash']);
@@ -238,17 +240,18 @@ test('run: Studio projects by the hash recomputed over them, whole graph or meas
   assert.deepEqual([m.state, m.to.id, m.field], ['present', 'path', 'studio.measured.hash']);
   assert.match(m.text, /other parts of its graph differ/);
   // No project holds the graph: one missing connection, never nothing.
-  const none = C.connectionsOf({ kind: 'experiment', record: r }, index([r])).upstream;
+  const none = C.connectionsOf(exp(r), index([r])).upstream;
   const miss = one(none, 'studio-graph');
   assert.equal(miss.state, 'missing');
   assert.match(miss.text, /no Studio project stored here has this graph or its measured path/);
   // The projects could not be read: said, not guessed.
-  const unread = C.connectionsOf({ kind: 'experiment', record: r }, index([r], { studio: null }));
+  const unread = C.connectionsOf(exp(r), index([r], { studio: null }));
   assert.equal(of(unread.upstream, 'studio-graph').length, 0);
   assert.ok(unread.notes.some((n) => /could not be read/.test(n.text)));
   // A measured path of another version is not compared.
-  const v9 = run('v9', { studio: { studioHash: H('a'), measured: { v: 9, hash: p.measured.hash } } });
-  const out9 = C.connectionsOf({ kind: 'experiment', record: v9 }, index([v9], { studio: ix.studio }));
+  const v9 = run('v9', { studio: { studioHash: H('a'),
+    measured: { v: 9, hash: p.measured.hash } } });
+  const out9 = C.connectionsOf(exp(v9), index([v9], { studio: ix.studio }));
   assert.equal(of(out9.upstream, 'studio-path').length, 0);
   assert.ok(out9.notes.some((n) => /version 9/.test(n.text)));
 });
@@ -257,7 +260,7 @@ test('run: the frequency profile by id (loaded or not) and the build (this one o
   const r = run('c', { calibration: { frequency: { id: H('7'), name: 'Mic A' }, level: null },
     provenance: { build: { version: '9.8.7', sourceDigest: H('s'), artifactSha256: null } } });
   const cur = { version: '9.8.7', sourceDigest: H('s'), artifactSha256: H('x') };
-  const up = (over) => C.connectionsOf({ kind: 'experiment', record: r }, index([r], over)).upstream;
+  const up = (over) => C.connectionsOf(exp(r), index([r], over)).upstream;
   assert.equal(one(up({ profile: { id: H('7'), name: 'Mic A' } }), 'profile').state, 'present');
   const p = one(up({ profile: { id: H('8'), name: 'Other' } }), 'profile');
   assert.equal(p.state, 'missing');
@@ -270,7 +273,7 @@ test('run: the frequency profile by id (loaded or not) and the build (this one o
   assert.match(older.text, /this page runs OSCILLA 9\.9\.0/);
   assert.equal(one(up({ build: { ...cur, sourceDigest: null } }), 'build').state,
     'unverifiable');
-  const none = C.connectionsOf({ kind: 'experiment', record: run('n') }, index([run('n')],
+  const none = C.connectionsOf(exp(run('n')), index([run('n')],
     { build: cur }));
   assert.ok(none.notes.some((n) => n.field === 'provenance.build'));
 });
@@ -282,32 +285,32 @@ test('run: the findings citing it, the runs repeating or duplicating it', () => 
     magnitudeDb: [0, -1, -3] } } });
   const rep = run('rep', { provenance: { repeatOf: 'a', resultHash: H('2') } });
   const dup = run('dup', { provenance: { duplicateOf: 'a' } });
-  const f1 = finding('f-1', [{ kind: 'run', experimentId: 'a' },
+  const f1 = finding('f-1', [{ kind: 'experiment', experimentId: 'a' },
     { kind: 'value', experimentId: 'a', at: { hz: 1000 } }],
   [{ experimentId: 'a', resultHash: H('1') }]);
   const f2 = finding('f-2', [{ kind: 'compare', a: 'rep', b: 'a' }],
     [{ experimentId: 'rep', resultHash: H('2') }, { experimentId: 'a', resultHash: H('9') }],
     'Other record');
-  const out = C.connectionsOf({ kind: 'experiment', record: a }, index([a, rep, dup],
+  const out = C.connectionsOf(exp(a), index([a, rep, dup],
     { findings: [f1, f2] }));
   const cites = of(out.downstream, 'cited-by');
   assert.deepEqual(cites.map((c) => [c.to.id, c.state]), [['f-1', 'present'],
     ['f-2', 'mismatch']]);
-  assert.equal(cites[0].field, 'evidence[0], evidence[1] (identity: runs[0].resultHash)');
+  assert.equal(cites[0].field, 'evidence[0], evidence[1] (identity: experiments[0].resultHash)');
   assert.equal(cites[0].fieldOf, 'that finding');
   assert.match(cites[0].text, /this experiment; its value at 1000 Hz/);
   assert.match(cites[1].text, /different record/);
   // A value at a frequency the run does not store: findingIssues's not-a-grid-point, mismatch.
   const off = finding('f-3', [{ kind: 'value', experimentId: 'a', at: { hz: 1001 } }],
     [{ experimentId: 'a', resultHash: H('1') }]);
-  const o = one(C.connectionsOf({ kind: 'experiment', record: a }, index([a], { findings: [off] }))
+  const o = one(C.connectionsOf(exp(a), index([a], { findings: [off] }))
     .downstream, 'cited-by');
   assert.equal(o.state, 'mismatch');
-  assert.match(o.text, /1001 Hz is not a frequency the run stores/);
+  assert.match(o.text, /1001 Hz is not a frequency/);
   // Cited without a result hash: findingIssues's unverifiable-identity.
-  const bare = finding('f-4', [{ kind: 'run', experimentId: 'a' }],
+  const bare = finding('f-4', [{ kind: 'experiment', experimentId: 'a' }],
     [{ experimentId: 'a', resultHash: null }]);
-  assert.equal(one(C.connectionsOf({ kind: 'experiment', record: a }, index([a],
+  assert.equal(one(C.connectionsOf(exp(a), index([a],
     { findings: [bare] })).downstream, 'cited-by').state, 'unverifiable');
   assert.equal(cites[0].href, '#m=experiments&finding=f-1');
   const rb = one(out.downstream, 'repeated-by');
@@ -323,13 +326,13 @@ test('the lists are bounded, and what is left out is counted', () => {
   const a = run('a');
   const reps = Array.from({ length: C.CONNECTION_LIMIT + 7 }, (_, i) => run(`r${i}`,
     { provenance: { repeatOf: 'a' } }));
-  const out = C.connectionsOf({ kind: 'experiment', record: a }, index([a, ...reps]));
+  const out = C.connectionsOf(exp(a), index([a, ...reps]));
   assert.equal(out.downstream.length, C.CONNECTION_LIMIT);
   assert.equal(out.more.downstream, 7);
   // A list row whose links could not be read is counted, not silently skipped.
   const ix = index([a, reps[0]]);
   ix.runs[1].links = null;
-  const unread = C.connectionsOf({ kind: 'experiment', record: a }, ix);
+  const unread = C.connectionsOf(exp(a), ix);
   assert.equal(unread.downstream.length, 0);
   assert.ok(unread.notes.some((n) => /1 stored experiment could not be read/.test(n.text)));
 });
@@ -354,21 +357,22 @@ test('definition: the runs that executed one of its versions', () => {
 test('finding: each run it cites, by the identity it recorded', () => {
   const a = run('a');
   const b = run('b', { provenance: { resultHash: H('5') } });
-  const f = finding('f-1', [{ kind: 'run', experimentId: 'a' },
-    { kind: 'compare', a: 'a', b: 'b' }, { kind: 'run', experimentId: 'gone' },
-    { kind: 'run', experimentId: 'def-x' }],
+  const f = finding('f-1', [{ kind: 'experiment', experimentId: 'a' },
+    { kind: 'compare', a: 'a', b: 'b' }, { kind: 'experiment', experimentId: 'gone' },
+    { kind: 'experiment', experimentId: 'def-x' }],
   [{ experimentId: 'a', resultHash: H('1') }, { experimentId: 'b', resultHash: H('6') },
     { experimentId: 'gone', resultHash: null }, { experimentId: 'def-x', resultHash: null }]);
   const out = C.connectionsOf({ kind: 'finding', record: f }, index([a, b],
     { definitions: [def('def-x', [H('a')])] }));
   assert.deepEqual(out.upstream.map((c) => [c.to.id, c.field, c.state]), [
-    ['a', 'evidence[0].experimentId (identity: runs[0].resultHash)', 'present'],
-    ['a', 'evidence[1].a (identity: runs[0].resultHash)', 'present'],
-    ['b', 'evidence[1].b (identity: runs[1].resultHash)', 'mismatch'],
-    ['gone', 'evidence[2].experimentId (identity: runs[2].resultHash)', 'missing'],
-    ['def-x', 'evidence[3].experimentId (identity: runs[3].resultHash)', 'mismatch'],
+    ['a', 'evidence[0].experimentId (identity: experiments[0].resultHash)', 'present'],
+    ['a', 'evidence[1].a (identity: experiments[0].resultHash)', 'present'],
+    ['b', 'evidence[1].b (identity: experiments[1].resultHash)', 'mismatch'],
+    ['gone', 'evidence[2].experimentId (identity: experiments[2].resultHash)', 'missing'],
+    ['def-x', 'evidence[3].experimentId (identity: experiments[3].resultHash)', 'mismatch'],
   ]);
-  assert.match(out.upstream[4].text, /^does not match: def-x names a definition, not a run/);
+  assert.match(out.upstream[4].text,
+    /^does not match: def-x names a definition, not an experiment/);
   assert.deepEqual(out.downstream, []);
   assert.ok(out.notes.some((n) => /No record stores a reference to a finding/.test(n.text)));
 });
@@ -500,7 +504,7 @@ test('the workspace: a row written before links existed is read for its links on
   assert.equal(reads.get(dupId), 2, 'its links once, its identity once');
   await cmp.connectionsOfRun('fixture-a');
   assert.equal(reads.get(dupId), 3, 'the links are kept; the identity is verified again');
-  await s.putFinding(finding('f-1', [{ kind: 'run', experimentId: 'fixture-a' }],
+  await s.putFinding(finding('f-1', [{ kind: 'experiment', experimentId: 'fixture-a' }],
     [{ experimentId: 'fixture-a', resultHash: H('0') }]));
   assert.equal((await cmp.connectionsOfFinding('f-1')).upstream[0].state, 'mismatch');
 });

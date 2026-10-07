@@ -7,25 +7,25 @@
 //   - the runs' list rows (store.list), each with its `links` (what the run names, to find
 //     dependents); a row written before links existed is read once from its record for its
 //     links only, never for an identity;
-//   - every stored run a connection names, verified at THE verification point of review 3 of
-//     #149, findingsVerifyCitedRun (ui/findings.js: fresh from the store, never a cache), on
+//   - every stored experiment a connection names, verified at THE verification point of review 3 of
+//     #149, findingsVerifyCitedExperiment (ui/findings.js: fresh from the store, never a cache), on
 //     every compute: its answer (ok / different / unverifiable / unreadable / missing, the stored
 //     result hash and grid) is the only identity connections.js sees, so a connection is
 //     'present' only for a record that reads and verifies now. Nothing keeps an identity between
-//     computes; following a present run's link verifies it again (connectionsVerifyAndGo);
+//     computes; following a present experiment's link verifies it again (connectionsVerifyAndGo);
 //   - the definitions and findings (listDefinitions, listFindings: validated on read);
 //   - the stored Studio projects through Studio's own library (studioLibrary, the store Studio
 //     saves to), each loaded through the full import pipeline once per saved version, its
 //     studioHash and measured-path hash recomputed by studio/provenance.js studioProvenance;
 //   - the running build (BUILD) and the frequency profile loaded in Measure.
 //
-// Views (plain data, x-text only): cnx.run (the open run's detail), cnx.defs[id],
+// Views (plain data, x-text only): cnx.run (the open experiment's detail), cnx.defs[id],
 // cnx.findings[id] (a definition or finding row's "Connected records", computed when it is
 // opened), cnx.studio[id] (a Studio project in the Projects and patches dialog). Each is
 // { id, status, upstream, downstream, notes, more } or null.
 //
 // Navigation: recordsApplyHash is the `records` domain of the one hash dispatcher
-// (ui/navigation.js, ADR 0045/0048): a record link opens the run (its detail), or opens the
+// (ui/navigation.js, ADR 0045/0048): a record link opens the experiment (its detail), or opens the
 // definition's or finding's connections, and moves focus to the record's heading unless a
 // dialog is open. A Studio project is shown through Studio's Projects and patches dialog (a
 // link never loads a project over the open graph).
@@ -70,9 +70,9 @@ export function createConnectionsUi() {
     return ctx.links.get(key);
   }
 
-  /** Verify run `row` now (findingsVerifyCitedRun) and write the answer into the row. */
+  /** Verify run `row` now (findingsVerifyCitedExperiment) and write the answer into the row. */
   async function verify(cmp, row) {
-    const v = await cmp.findingsVerifyCitedRun(row.experimentId, null);
+    const v = await cmp.findingsVerifyCitedExperiment(row.experimentId, null);
     if (v.state === 'missing' || v.state === 'unreadable') {
       Object.assign(row, { readable: false, reason: v.state === 'missing'
         ? 'it was not found when read' : v.reason || null });
@@ -154,7 +154,7 @@ export function createConnectionsUi() {
   }
 
   /**
-   * connectionsOf over the stored records, after every run it names was read and verified.
+   * connectionsOf over the stored records, after every experiment it names was read and verified.
    * `subjectOf(index)` -> subject, or a text saying why there is none.
    */
   async function compute(cmp, subjectOf) {
@@ -203,13 +203,13 @@ export function createConnectionsUi() {
       open: { definition: {}, finding: {} },
     },
 
-    /** The connections of the open run (its detail). */
+    /** The connections of the open experiment (its detail). */
     async connectionsOfRun(id) {
       const t = ++ctx.token.run;
       if (!this.cnx.run || this.cnx.run.id !== id) this.cnx.run = checking(id);
       const r = await track(compute(this, async (ix, store) => {
         // Read from the store, never from the workspace's decoded cache: another tab may have
-        // replaced the run under its id since it was cached (review 2 of #149).
+        // replaced the experiment under its id since it was cached (review 2 of #149).
         let e;
         try {
           e = await store.get(id);
@@ -323,7 +323,7 @@ export function createConnectionsUi() {
      * under its id still has the result hash it was verified with. Returns true when followed.
      */
     async connectionsVerifyAndGo(c) {
-      const v = await this.findingsVerifyCitedRun(c.to.id, c.to.hash);
+      const v = await this.findingsVerifyCitedExperiment(c.to.id, c.to.hash);
       if (v.state !== 'ok') {
         const why = { missing: 'it is no longer stored here', unreadable: `it is stored here but `
           + `cannot be read now${v.reason ? ` (${v.reason})` : ''}`, different: 'a different '

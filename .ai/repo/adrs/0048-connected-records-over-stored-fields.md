@@ -92,8 +92,8 @@ Proposed:
 
   Between a finding and the experiments it cites, the states are not derived a second time: they are
   `findings.js` `findingIssues` (ADR 0046, after review 1 of #149) mapped one to one. No issue
-  is *stored here*, `missing-run` is *missing*, `unreadable-run` *unreadable*,
-  `unverifiable-identity` *not verifiable*, and `different-run`, `wrong-kind`, `no-response` and
+  is *stored here*, `missing-experiment` is *missing*, `unreadable-experiment` *unreadable*,
+  `unverifiable-identity` *not verifiable*, and `different-experiment`, `wrong-kind`, `no-response` and
   `not-a-grid-point` *does not match*, each with the issue's own words. The findings panel and
   the connected records therefore never disagree about one reference.
 
@@ -110,11 +110,11 @@ Proposed:
   | experiment | measured path held by a Studio project (up) | `studio.measured.hash` | a stored project's measured path, recomputed by `measuredPath` and `measuredPathHash` in the same version, has that hash (only for projects whose whole graph differs) |
   | experiment | frequency profile named (up) | `calibration.frequency.id` | the profile loaded in Measure has that id (the SHA-256 of its points) |
   | experiment | made by build (up) | `provenance.build` | the running build has that version and source digest (and artifact SHA-256 when both are stamped) |
-  | experiment | cited by finding (down) | the finding's `evidence[i]` with `runs[j].resultHash` | `findingIssues` reports nothing for that reference (the recorded hash equals the experiment's; a value names a stored grid point) |
+  | experiment | cited by finding (down) | the finding's `evidence[i]` with `experiments[j].resultHash` | `findingIssues` reports nothing for that reference (the recorded hash equals the experiment's; a value names a stored grid point) |
   | experiment | repeated by (down) | the repeat's `provenance.repeatOf` | never: *not verifiable*, as above |
   | experiment | duplicated as (down) | the copy's `provenance.duplicateOf` | equal result hashes |
   | definition | executed by experiment (down) | the experiment's `definition` | `storedMatch` is `match` |
-  | finding | cites experiment (up), per experiment id of each reference (a, b of a comparison) | `evidence[i]` with `runs[j].resultHash` | `findingIssues` reports nothing for that reference |
+  | finding | cites experiment (up), per experiment id of each reference (a, b of a comparison) | `evidence[i]` with `experiments[j].resultHash` | `findingIssues` reports nothing for that reference |
   | Studio project | measured from this graph, or its measured path, by experiment (down) | the experiment's `studio.studioHash` / `studio.measured.hash` | equal recomputed hashes |
 
   The Studio connection is a stored relation because an experiment stores the hashes of the graph it
@@ -142,7 +142,7 @@ Proposed:
   reads that record once per page view for its links (discovery only, never an identity) and
   rewrites nothing.
 - **One verification point.** Every experiment a connection names is verified, on every compute,
-  by `findingsVerifyCitedRun` (ui/findings.js, review 3 of #149): fresh from the store, which
+  by `findingsVerifyCitedExperiment` (ui/findings.js, review 3 of #149): fresh from the store, which
   validates the record and recomputes its result hash, never from a cache. Its answer (ok,
   different, unverifiable, unreadable, missing; the stored hash and grid) is the only identity
   `connections.js` sees, so the findings panel and the connected records share one check and no

@@ -58,24 +58,26 @@
 // experiment definitions (definition.js), validated on put and on read. listDefinitions never
 // fails on one bad record: it lists the readable ones and names the others in `unreadable`, so a
 // damaged definition can neither hide the rest nor fail a refresh of the runs. putDefinition
-// creates one or writes its next state: the name and notes may change, versions may only be appended,
+// creates one or writes its next state: the name and notes may change, versions may only be
+// appended,
 // and a stored version that differs is refused with 'immutable' (err.fields names it). list()
 // rows carry the run's `definition` { id, version, hash, derived } (schema 3), so a definition's
 // runs are found without reading the records.
 //
 // Findings (ADR 0046; DB_VERSION 4 adds the FINDINGS store, keyPath 'id'): user metadata, an
-// interpretation linked to the runs it cites (findings.js). Validated on put and on read; a stored
+// interpretation linked to the experiments it cites (findings.js). Validated on put and on read; a
+// stored
 // finding that cannot be read is named in `unreadable` and never hides the others. putFinding
 // creates or edits one (its createdAt never changes: 'immutable'); putFindings is an import, all
 // or nothing in one transaction: a different finding stored under an incoming id refuses the whole
 // batch with 'conflict' (err.fields names the ids), an identical one is skipped. No finding write
-// touches a run, and delete(id) of a run never touches a finding: a reference to a deleted run
-// stays and reads missing (findings.js findingIssues).
+// touches an experiment, and delete(id) of one never touches a finding: a reference to a deleted
+// experiment stays and reads missing (findings.js findingIssues).
 //
 // Connected records (ADR 0048): list() rows carry `links` (connections.js runLinks: the result
-// hash, repeatOf, duplicateOf and the Studio hashes the run stores), so the runs that name a
-// record are found without reading every record. A row written before this version has no
-// `links`; ui/connections.js reads that record once instead. Nothing is rewritten.
+// hash, repeatOf, duplicateOf and the Studio hashes the experiment stores), so the experiments
+// that name a record are found without reading every record. A row written before this version
+// has no `links`; ui/connections.js reads that record once for them. Nothing is rewritten.
 
 import {
   serializeExperiment, formatErrors, annotateExperiment, executionFactChanges, isMetadataPath,
@@ -355,7 +357,7 @@ export function summaryRecord(doc, sizeBytes) {
     schemaVersion: doc.schemaVersion,
     oscillaVersion: doc.oscillaVersion,
     status: doc.quality ? doc.quality.status : null,
-    // The run's identity (ADR 0046): a finding's reference is checked against it on every
+    // The experiment's identity (ADR 0046): a finding's reference is checked against it on every
     // refresh. A row written by an earlier build lacks it and the record is read instead.
     resultHash: doc.provenance && typeof doc.provenance.resultHash === 'string'
       ? doc.provenance.resultHash : null,

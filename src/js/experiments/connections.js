@@ -3,18 +3,18 @@
 // from it). Pure: plain data in, plain data out; no DOM, no storage, no clock.
 //
 // Every connection comes from ONE stored field, and names it. Nothing is inferred from
-// similarity, timing or names: two runs with the same recipe, name or time are not connected
+// similarity, timing or names: two experiments with the same recipe, name or time are not connected
 // unless one stores the other's id or hash. A reference whose target is not stored here is
 // listed as missing, never hidden and never repaired.
 //
 // A connection is 'present' only when the identity it names verifies: the target is stored
-// here, was read (a stored run is validated and its result hash recomputed on every read,
+// here, was read (a stored experiment is validated and its result hash recomputed on every read,
 // store.js), and is the record the field names (the same result hash, definition version hash
 // or Studio hash). Every other case says which it is:
 //   missing       nothing is stored here under the id (deleted, or never stored here)
 //   mismatch      something is stored under the id, but not what the field names (another
-//                 result hash, a definition without that version hash, a definition where a
-//                 run was named)
+//                 result hash, a definition without that version hash, a definition where an
+//                 experiment was named)
 //   unverifiable  the target is stored and readable, but the field records no identity to
 //                 check it against (a repeat names its original by id only; a result hash is
 //                 not stamped on one side; a build without a source digest)
@@ -23,15 +23,15 @@
 //
 //   runLinks(experiment) -> { resultHash, repeatOf, duplicateOf, studio }
 //     the references a run stores (a decoded experiment or its serialized document); store.js
-//     keeps it on each list row (`links`), so a run's dependents are found without reading
+//     keeps it on each list row (`links`), so an experiment's dependents are found without reading
 //     every record. studio = { hash, measured: { v, hash } | null } | null.
 //   connectionsOf(subject, index) -> { kind, id, upstream: [Connection], downstream:
 //     [Connection], notes: [{ field, text }], more: { upstream, downstream } }
-//     subject  { kind: 'run', record: experiment (read and verified) }
+//     subject  { kind: 'experiment', record: experiment (read and verified) }
 //              | { kind: 'definition', record: definition } | { kind: 'finding', record }
 //              | { kind: 'studio', record: { id, name, studioHash, measured } }
 //     index    what this browser stores, as the caller read it:
-//              { runs: [{ experimentId, name, definition, links, readable, reason,
+//              { experiments: [{ experimentId, name, definition, links, readable, reason,
 //                         hasResponse, frequencies }]
 //                  links null: not known; readable true (the record was read and verified),
 //                  false (it could not be read, `reason` says why), absent (not read);
@@ -44,13 +44,13 @@
 //                build: { version, sourceDigest, artifactSha256 } | null (the running build),
 //                profile: { id, name } | null (the frequency profile loaded in Measure) }
 //     Each list is bounded by CONNECTION_LIMIT; `more` counts what was left out.
-//   runTargets(result) -> [experimentId]   the runs a result names, to be read and verified
+//   runTargets(result) -> [experimentId]   the experiments a result names, to be read and verified
 //   Connection = { direction, relation, label, from: { kind, id },
 //     to: { kind, id, version?, hash? }   hash: the result hash a present run target was verified
 //                                         with (following it checks the record is unchanged),
 //     field, fieldOf, state, target, text, href, open }
 //     field    the stored field the connection comes from (a path on the record `fieldOf`
-//              names: 'this run', 'that run', 'this finding', 'that finding')
+//              names: 'this experiment', 'that experiment', 'this finding', 'that finding')
 //     text     the state in words, starting with STATE_WORDS[state]
 //     href     the target's address (core/url-state-records.js, '#m=about', '#m=measure'), or
 //              null when nothing can be opened (missing, unreadable); open: { kind: 'studio',
@@ -64,7 +64,7 @@
 // caller recomputes it over each project as it loads; this module compares hashes only.
 
 import { storedMatch } from './definition.js';
-import { findingIssues, refRunIds, exactHzText } from './findings.js';
+import { findingIssues, refExperimentIds, exactHzText } from './findings.js';
 import { defaultEvidenceHz, storedResponseFrequencies } from './evidence.js';
 import { MEASURED_PATH_VERSION } from './hash.js';
 import { calibrationClaimFindings } from './validate.js';
@@ -136,7 +136,7 @@ function connection(direction, relation, label, from, to, field, fieldOf, [state
 }
 
 /**
- * The state of a stored run named by id. `expect`: the result hash the field records for it
+ * The state of a stored experiment named by id. `expect`: the result hash the field records for it
  * (null: none recorded; undefined: the field records no identity at all, `byId` says why).
  */
 function runState(row, expect, byId = null) {
@@ -162,7 +162,7 @@ function runState(row, expect, byId = null) {
   return ['present', 'with the result hash recorded, recomputed when it was read'];
 }
 
-// ---------------------------------------------------------------- run
+// ---------------------------------------------------------------- experiment
 
 function definitionUp(e, v, me) {
   const d = e.definition;
@@ -204,7 +204,7 @@ function runUp(kind, e, v, me) {
   const label = kind === 'repeat-of' ? 'A repeat of' : 'A duplicate of';
   const field = kind === 'repeat-of' ? 'provenance.repeatOf' : 'provenance.duplicateOf';
   // A repeat is a new measurement: it names the run it repeats by id only. A duplicate is the
-  // same run copied, so it keeps the original's result hash.
+  // same experiment copied, so it keeps the original's result hash.
   const state = kind === 'repeat-of' ? runState(row, undefined, 'a repeat names the experiment it '
     + 'repeats by id only; it does not record that experiment\'s result hash') : runState(row,
     l.resultHash);
@@ -314,11 +314,14 @@ function buildUp(e, v, me, notes) {
     + 'source digest)'], target, about);
 }
 
-/** How finding `f` cites run `id`: [{ index, words }]. */
+/** The field holding the identity a finding recorded for a cited experiment. */
+const identityAt = (j) => `(identity: experiments[${j}].resultHash)`;
+
+/** How finding `f` cites experiment `id`: [{ index, words }]. */
 function citations(f, id) {
   const out = [];
   f.evidence.forEach((ref, index) => {
-    if (ref.kind === 'run' && ref.experimentId === id) out.push({ index, words: THIS });
+    if (ref.kind === 'experiment' && ref.experimentId === id) out.push({ index, words: THIS });
     else if (ref.kind === 'value' && ref.experimentId === id) {
       out.push({ index, words: `its value at ${exactHzText(ref.at.hz)}` });
     } else if (ref.kind === 'compare' && (ref.a === id || ref.b === id)) {
@@ -328,7 +331,7 @@ function citations(f, id) {
   return out;
 }
 
-/** The state of a run whose record names the subject: it must be readable itself. */
+/** The state of an experiment whose record names the subject: it must be readable itself. */
 function referrerState(row, then) {
   if (row.readable === false) {
     return ['unreadable', `it cannot be read${str(row.reason) ? ` (${row.reason})` : ''}`];
@@ -347,16 +350,16 @@ function runDown(e, v, me) {
   for (const f of v.findings) {
     const how = citations(f, id);
     if (!how.length) continue;
-    const j = f.runs.findIndex((r) => r.experimentId === id);
+    const j = f.experiments.findIndex((r) => r.experimentId === id);
     const issues = findingIssues(f, lookup);
     const words = `it cites ${how.map((x) => x.words).join('; ')}`;
-    // The worst state among its references to this run (one connection per finding).
+    // The worst state among its references to this experiment (one connection per finding).
     const states = how.map((x) => citedState(issues, x.index, id, `${words}, with this `
       + 'experiment\'s result hash'));
     const rank = ['unreadable', 'mismatch', 'unverifiable', 'missing', 'present'];
     const [state, why] = states.sort((a, b) => rank.indexOf(a[0]) - rank.indexOf(b[0]))[0];
     out.push(connection('downstream', 'cited-by', 'Cited by', me, { kind: 'finding', id: f.id },
-      `${how.map((x) => `evidence[${x.index}]`).join(', ')} (identity: runs[${j}].resultHash)`,
+      `${how.map((x) => `evidence[${x.index}]`).join(', ')} ${identityAt(j)}`,
       'that finding', [state, state === 'present' ? why : `${words}; ${why}`],
       `finding "${statementOf(f)}"`, { href: link('finding', f.id) }));
   }
@@ -393,22 +396,23 @@ function unknownRunsNote(v, notes, what) {
 // ---------------------------------------------------------------- the other subjects
 
 /** findingIssues code -> connection state (see the header). */
-const ISSUE_STATE = Object.freeze({ 'missing-run': 'missing', 'unreadable-run': 'unreadable',
-  'unverifiable-identity': 'unverifiable', 'different-run': 'mismatch', 'wrong-kind': 'mismatch',
+const ISSUE_STATE = Object.freeze({ 'missing-experiment': 'missing',
+  'unreadable-experiment': 'unreadable', 'unverifiable-identity': 'unverifiable',
+  'different-experiment': 'mismatch', 'wrong-kind': 'mismatch',
   'no-response': 'mismatch', 'not-a-grid-point': 'mismatch' });
 
-/** The findingIssues lookup over the index (and the subject run, read and verified). */
+/** The findingIssues lookup over the index (and the subject experiment, read and verified). */
 function issueLookup(v, self = null) {
   return (id) => {
     if (self && id === self.experimentId) {
-      return { kind: 'run', name: self.name || null, readable: true,
+      return { kind: 'experiment', name: self.name || null, readable: true,
         resultHash: runLinks(self).resultHash, hasResponse: defaultEvidenceHz(self) !== null,
         frequencies: storedResponseFrequencies(self) };
     }
     const row = v.run.get(id);
     if (!row) return v.defs.has(id) ? { kind: 'definition', name: v.defs.get(id).name } : null;
     const read = row.readable === true;
-    return { kind: 'run', name: row.name || null,
+    return { kind: 'experiment', name: row.name || null,
       readable: row.readable === false ? false : read ? true : undefined, reason: row.reason,
       // A row that was not read has no verified hash: "its stored result hash has not been read".
       resultHash: read && obj(row.links) ? row.links.resultHash : undefined,
@@ -417,7 +421,7 @@ function issueLookup(v, self = null) {
   };
 }
 
-/** The state of finding `f`'s reference `index` to run `id`, by findingIssues. */
+/** The state of finding `f`'s reference `index` to experiment `id`, by findingIssues. */
 function citedState(issues, index, id, okWords) {
   const x = issues.find((i) => i.index === index && i.experimentId === id);
   if (!x) return ['present', okWords];
@@ -427,9 +431,9 @@ function citedState(issues, index, id, okWords) {
 function findingUp(f, v, me) {
   const out = [];
   const issues = findingIssues(f, issueLookup(v));
-  const j = (id) => f.runs.findIndex((r) => r.experimentId === id);
+  const j = (id) => f.experiments.findIndex((r) => r.experimentId === id);
   f.evidence.forEach((ref, i) => {
-    refRunIds(ref).forEach((id, k) => {
+    refExperimentIds(ref).forEach((id, k) => {
       const key = ref.kind === 'compare' ? (k === 0 ? 'a' : 'b') : 'experimentId';
       const label = ref.kind === 'value' ? `Cites the value at ${exactHzText(ref.at.hz)} of`
         : ref.kind === 'compare' ? `Cites a comparison (${k === 0 ? 'A' : 'B'}) with` : 'Cites';
@@ -439,7 +443,7 @@ function findingUp(f, v, me) {
         + 'at a frequency it stores' : 'with the cited result hash, recomputed when it was '
         + 'read');
       out.push(connection('upstream', 'cites', label, me, { kind: 'experiment', id },
-        `evidence[${i}].${key} (identity: runs[${j(id)}].resultHash)`, 'this finding', state,
+        `evidence[${i}].${key} ${identityAt(j(id))}`, 'this finding', state,
         isDef ? defName(v.defs.get(id), id) : runName(row, id),
         { href: isDef ? link('definition', id) : link('experiment', id) }));
     });
@@ -544,7 +548,7 @@ export function connectionsOf(subject, index = {}) {
     more: { upstream: u.more, downstream: d.more } };
 }
 
-/** The ids of the stored runs a result names (to read and verify before it is shown). */
+/** The ids of the stored experiments a result names (to read and verify before it is shown). */
 export function runTargets(result) {
   return [...new Set([...result.upstream, ...result.downstream]
     .filter((c) => c.to.kind === 'experiment' && c.state !== 'missing').map((c) => c.to.id))];

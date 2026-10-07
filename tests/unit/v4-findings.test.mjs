@@ -3,14 +3,14 @@
 // what the user recorded; a finding is an interpretation linked to evidence.
 //
 //   - validation: categorical status only, typed evidence references, evidence required for
-//     supported / contradicted, the identity (id + result hash) of each cited run, unsafe input
+//     supported / contradicted, the identity (id + result hash) of each cited experiment, unsafe input
 //     (prototype pollution, HTML markup, control and bidirectional characters, sizes) refused;
-//   - integrity: findingIssues names a missing (deleted, or never stored here) run, a reference
-//     to something that is not a run, a different record under a cited id, a value reference to
-//     a run without a stored response, and a claimed status none of whose evidence is here;
+//   - integrity: findingIssues names a missing (deleted, or never stored here) experiment, a reference
+//     to something that is not an experiment, a different record under a cited id, a value reference to
+//     an experiment without a stored response, and a claimed status none of whose evidence is here;
 //   - the store: the findings object store (DB version 4) in memory and IndexedDB, an atomic
-//     import, deletion of a cited run that never touches a finding, and the memory observer;
-//   - export / import: the file round-trips with each cited run's id and result hash, a newer
+//     import, deletion of a cited experiment that never touches a finding, and the memory observer;
+//   - export / import: the file round-trips with each cited experiment's id and result hash, a newer
 //     schema is refused clearly, and one bad finding refuses the whole file;
 //   - the workspace adapter: backlinks, the delete warning, the unsaved draft and the memory
 //     fallback reported to the unsaved-work guard (ADR 0045).
@@ -49,8 +49,8 @@ function raw(over = {}) {
   return {
     kind: F.FINDING_KIND, schemaVersion: F.FINDING_SCHEMA_VERSION, id: 'f-1',
     statement: 'The response falls above 6 kHz.', status: 'observation',
-    evidence: [{ kind: 'run', experimentId: 'run-a' }],
-    runs: [{ experimentId: 'run-a', resultHash: H1 }],
+    evidence: [{ kind: 'experiment', experimentId: 'run-a' }],
+    experiments: [{ experimentId: 'run-a', resultHash: H1 }],
     notes: null, createdAt: NOW, updatedAt: NOW, ...over,
   };
 }
@@ -80,12 +80,12 @@ test('a finding is categorical: five statuses, no confidence number', () => {
 
 test('supported and contradicted must cite evidence; the others need not', () => {
   for (const status of ['supported', 'contradicted']) {
-    refused(raw({ status, evidence: [], runs: [] }), /evidence: .*at least one/,
+    refused(raw({ status, evidence: [], experiments: [] }), /evidence: .*at least one/,
       `${status} without evidence`);
     assert.equal(ok(raw({ status })).evidence.length, 1, `${status} with evidence`);
   }
   for (const status of ['observation', 'hypothesis', 'inconclusive']) {
-    assert.deepEqual(ok(raw({ status, evidence: [], runs: [] })).evidence, [], status);
+    assert.deepEqual(ok(raw({ status, evidence: [], experiments: [] })).evidence, [], status);
   }
   assert.deepEqual(F.EVIDENCE_REQUIRED_STATUSES, ['supported', 'contradicted']);
 });
@@ -95,50 +95,50 @@ test('evidence references are typed and unambiguous', () => {
   const value = { kind: 'value', experimentId: 'run-a', at: { hz: 1000 } };
   const both = [{ experimentId: 'run-a', resultHash: H1 }, { experimentId: 'run-b',
     resultHash: H2 }];
-  const f = ok(raw({ evidence: [{ kind: 'run', experimentId: 'run-a' }, compare, value],
-    runs: both }));
-  assert.deepEqual(f.evidence.map((r) => r.kind), ['run', 'compare', 'value']);
-  assert.deepEqual(F.citedRunIds(f), ['run-a', 'run-b']);
+  const f = ok(raw({ evidence: [{ kind: 'experiment', experimentId: 'run-a' }, compare, value],
+    experiments: both }));
+  assert.deepEqual(f.evidence.map((r) => r.kind), ['experiment', 'compare', 'value']);
+  assert.deepEqual(F.citedExperimentIds(f), ['run-a', 'run-b']);
   refused(raw({ evidence: [{ kind: 'compare', a: 'run-a', b: 'run-a' }] }),
-    /evidence\[0\].*two different runs/, 'a run compared with itself');
-  refused(raw({ evidence: [{ kind: 'run', experimentId: 'run-a', hz: 3 }] }),
+    /evidence\[0\].*two different experiments/, 'an experiment compared with itself');
+  refused(raw({ evidence: [{ kind: 'experiment', experimentId: 'run-a', hz: 3 }] }),
     /evidence\[0\]\.hz: unknown field/, 'an extra field');
   refused(raw({ evidence: [{ kind: 'definition', id: 'd' }] }), /evidence\[0\]\.kind/,
     'an unknown kind');
-  refused(raw({ evidence: [{ kind: 'run' }] }), /evidence\[0\]\.experimentId: missing/,
-    'a reference without its run');
-  refused(raw({ evidence: [{ kind: 'run', experimentId: '../x' }] }),
+  refused(raw({ evidence: [{ kind: 'experiment' }] }), /evidence\[0\]\.experimentId: missing/,
+    'a reference without its experiment');
+  refused(raw({ evidence: [{ kind: 'experiment', experimentId: '../x' }] }),
     /evidence\[0\]\.experimentId: has an invalid format/, 'an id that is not an id');
   for (const hz of [0, -1, Infinity, 'x', 200000]) {
     refused(raw({ evidence: [{ kind: 'value', experimentId: 'run-a', at: { hz } }] }),
       /evidence\[0\]\.at\.hz/, `value at ${hz}`);
   }
-  refused(raw({ evidence: [{ kind: 'run', experimentId: 'run-a' }, { kind: 'run',
+  refused(raw({ evidence: [{ kind: 'experiment', experimentId: 'run-a' }, { kind: 'experiment',
     experimentId: 'run-a' }] }), /evidence\[1\]: .*already cited/, 'a duplicate reference');
   refused(raw({ evidence: Array.from({ length: F.FINDING_LIMITS.evidence + 1 },
-    (_, i) => ({ kind: 'run', experimentId: `r${i}` })), runs: Array.from({ length:
+    (_, i) => ({ kind: 'experiment', experimentId: `r${i}` })), experiments: Array.from({ length:
     F.FINDING_LIMITS.evidence + 1 }, (_, i) => ({ experimentId: `r${i}`, resultHash: null })) }),
   /evidence: more than/, 'too many references');
 });
 
-test('each cited run carries its identity (id + result hash), exactly once', () => {
-  refused(raw({ runs: [] }), /runs: .*run-a/, 'a cited run without its identity');
-  refused(raw({ runs: [{ experimentId: 'run-a', resultHash: H1 }, { experimentId: 'run-z',
-    resultHash: H1 }] }), /runs\[1\]: .*not cited/, 'an identity of a run that is not cited');
-  refused(raw({ runs: [{ experimentId: 'run-a', resultHash: H1 }, { experimentId: 'run-a',
-    resultHash: H1 }] }), /runs\[1\]/, 'a duplicate identity');
-  refused(raw({ runs: [{ experimentId: 'run-a', resultHash: 'nope' }] }),
-    /runs\[0\]\.resultHash/, 'a hash that is not a SHA-256');
-  assert.equal(ok(raw({ runs: [{ experimentId: 'run-a', resultHash: null }] })).runs[0]
-    .resultHash, null, 'an unstamped run has no hash');
+test('each cited experiment carries its identity (id + result hash), exactly once', () => {
+  refused(raw({ experiments: [] }), /experiments: .*run-a/, 'a cited experiment without its identity');
+  refused(raw({ experiments: [{ experimentId: 'run-a', resultHash: H1 }, { experimentId: 'run-z',
+    resultHash: H1 }] }), /experiments\[1\]: .*not cited/, 'an identity of an experiment that is not cited');
+  refused(raw({ experiments: [{ experimentId: 'run-a', resultHash: H1 }, { experimentId: 'run-a',
+    resultHash: H1 }] }), /experiments\[1\]/, 'a duplicate identity');
+  refused(raw({ experiments: [{ experimentId: 'run-a', resultHash: 'nope' }] }),
+    /experiments\[0\]\.resultHash/, 'a hash that is not a SHA-256');
+  assert.equal(ok(raw({ experiments: [{ experimentId: 'run-a', resultHash: null }] })).experiments[0]
+    .resultHash, null, 'an unstamped experiment has no hash');
 });
 
 test('unsafe input is refused: prototype pollution, markup, control characters, sizes', () => {
   const polluted = JSON.parse(`{"kind":"${F.FINDING_KIND}","schemaVersion":1,"id":"f-1",`
-    + '"statement":"x","status":"observation","evidence":[],"runs":[],"notes":null,'
+    + '"statement":"x","status":"observation","evidence":[],"experiments":[],"notes":null,'
     + `"createdAt":"${NOW}","updatedAt":"${NOW}","__proto__":{"polluted":true}}`);
   refused(polluted, /__proto__: unknown field/, '__proto__ on the finding');
-  const ref = JSON.parse('{"kind":"run","experimentId":"run-a","__proto__":{"polluted":1}}');
+  const ref = JSON.parse('{"kind":"experiment","experimentId":"run-a","__proto__":{"polluted":1}}');
   refused(raw({ evidence: [ref] }), /evidence\[0\]\.__proto__: unknown field/,
     '__proto__ on a reference');
   refused({ ...raw(), constructor: { prototype: { polluted: 1 } } }, /constructor: unknown/,
@@ -180,12 +180,12 @@ test('create and update: the id and creation time stay, updatedAt moves, input i
   const f = F.createFinding({ id: 'f-9', now: NOW, statement: '  Falls above 6 kHz. ',
     status: 'hypothesis' });
   assert.deepEqual({ ...f }, { kind: F.FINDING_KIND, schemaVersion: F.FINDING_SCHEMA_VERSION,
-    id: 'f-9', statement: 'Falls above 6 kHz.', status: 'hypothesis', evidence: [], runs: [],
+    id: 'f-9', statement: 'Falls above 6 kHz.', status: 'hypothesis', evidence: [], experiments: [],
     notes: null, createdAt: NOW, updatedAt: NOW });
   assert.throws(() => F.createFinding({ id: 'f-9', now: NOW, statement: 'x',
     status: 'supported' }), /at least one/);
-  const g = F.updateFinding(f, { status: 'supported', evidence: [{ kind: 'run',
-    experimentId: 'run-a' }], runs: [{ experimentId: 'run-a', resultHash: H1 }] },
+  const g = F.updateFinding(f, { status: 'supported', evidence: [{ kind: 'experiment',
+    experimentId: 'run-a' }], experiments: [{ experimentId: 'run-a', resultHash: H1 }] },
   { now: LATER });
   assert.equal(g.id, 'f-9');
   assert.equal(g.createdAt, NOW);
@@ -201,75 +201,75 @@ test('create and update: the id and creation time stay, updatedAt moves, input i
 const lookupOf = (table) => (id) => (Object.prototype.hasOwnProperty.call(table, id)
   ? table[id] : null);
 const RUNS = {
-  'run-a': { kind: 'run', name: 'A', resultHash: H1, hasResponse: true },
-  'run-b': { kind: 'run', name: 'B', resultHash: H2, hasResponse: true },
+  'run-a': { kind: 'experiment', name: 'A', resultHash: H1, hasResponse: true },
+  'run-b': { kind: 'experiment', name: 'B', resultHash: H2, hasResponse: true },
   'def-1': { kind: 'definition', name: 'Desk speaker' },
 };
 const both = [{ experimentId: 'run-a', resultHash: H1 }, { experimentId: 'run-b',
   resultHash: H2 }];
 
 test('findingIssues: a whole finding has none', () => {
-  const f = ok(raw({ status: 'supported', evidence: [{ kind: 'run', experimentId: 'run-a' },
+  const f = ok(raw({ status: 'supported', evidence: [{ kind: 'experiment', experimentId: 'run-a' },
     { kind: 'compare', a: 'run-a', b: 'run-b' }, { kind: 'value', experimentId: 'run-b',
-      at: { hz: 1000 } }], runs: both }));
+      at: { hz: 1000 } }], experiments: both }));
   assert.deepEqual(F.findingIssues(f, lookupOf(RUNS)), []);
 });
 
-test('findingIssues: a deleted or never-stored run reads as missing, never as nothing', () => {
+test('findingIssues: a deleted or never-stored experiment reads as missing, never as nothing', () => {
   const f = ok(raw({ status: 'supported', evidence: [{ kind: 'compare', a: 'run-a',
-    b: 'run-b' }], runs: both }));
+    b: 'run-b' }], experiments: both }));
   const { 'run-b': gone, ...rest } = RUNS; // eslint-disable-line no-unused-vars
   const issues = F.findingIssues(f, lookupOf(rest));
   assert.deepEqual(issues.map((i) => [i.code, i.index, i.experimentId]),
-    [['missing-run', 0, 'run-b'], ['unsupported-status', null, null]]);
-  assert.match(issues[0].text, /^missing: run "?run-b"? is not stored here/);
+    [['missing-experiment', 0, 'run-b'], ['unsupported-status', null, null]]);
+  assert.match(issues[0].text, /^missing: experiment "?run-b"? is not stored here/);
   assert.match(issues[1].text, /supported.*none of the evidence it cites can be checked here/);
   // A finding whose other evidence is here keeps its status without that issue.
-  const g = ok(raw({ status: 'supported', evidence: [{ kind: 'run', experimentId: 'run-a' },
-    { kind: 'run', experimentId: 'run-b' }], runs: both }));
-  assert.deepEqual(F.findingIssues(g, lookupOf(rest)).map((i) => i.code), ['missing-run']);
+  const g = ok(raw({ status: 'supported', evidence: [{ kind: 'experiment', experimentId: 'run-a' },
+    { kind: 'experiment', experimentId: 'run-b' }], experiments: both }));
+  assert.deepEqual(F.findingIssues(g, lookupOf(rest)).map((i) => i.code), ['missing-experiment']);
 });
 
 test('findingIssues: wrong kind, a different record, a value without a response', () => {
-  const wrong = ok(raw({ evidence: [{ kind: 'run', experimentId: 'def-1' }],
-    runs: [{ experimentId: 'def-1', resultHash: null }] }));
+  const wrong = ok(raw({ evidence: [{ kind: 'experiment', experimentId: 'def-1' }],
+    experiments: [{ experimentId: 'def-1', resultHash: null }] }));
   const [w] = F.findingIssues(wrong, lookupOf(RUNS));
   assert.equal(w.code, 'wrong-kind');
-  assert.match(w.text, /names a definition, not a run/);
-  const other = ok(raw({ runs: [{ experimentId: 'run-a', resultHash: H2 }] }));
+  assert.match(w.text, /names a definition, not an experiment/);
+  const other = ok(raw({ experiments: [{ experimentId: 'run-a', resultHash: H2 }] }));
   const [d] = F.findingIssues(other, lookupOf(RUNS));
-  assert.equal(d.code, 'different-run');
+  assert.equal(d.code, 'different-experiment');
   assert.match(d.text, /different record.*result hash/);
   const value = ok(raw({ evidence: [{ kind: 'value', experimentId: 'run-a', at: { hz: 1000 } }] }));
   const noResponse = { ...RUNS, 'run-a': { ...RUNS['run-a'], hasResponse: false } };
   assert.deepEqual(F.findingIssues(value, lookupOf(noResponse)).map((i) => i.code),
     ['no-response']);
-  assert.deepEqual(F.ISSUE_CODES.slice(0, 7), ['missing-run', 'wrong-kind', 'unreadable-run',
-    'different-run', 'unverifiable-identity', 'no-response', 'unsupported-status']);
+  assert.deepEqual(F.ISSUE_CODES.slice(0, 7), ['missing-experiment', 'wrong-kind', 'unreadable-experiment',
+    'different-experiment', 'unverifiable-identity', 'no-response', 'unsupported-status']);
 });
 
-test('findingsCiting names each finding that cites a run, and how', () => {
+test('findingsCiting names each finding that cites an experiment, and how', () => {
   const a = ok(raw({ id: 'f-a' }));
   const b = ok(raw({ id: 'f-b', evidence: [{ kind: 'compare', a: 'run-b', b: 'run-a' }],
-    runs: both }));
+    experiments: both }));
   const c = ok(raw({ id: 'f-c', evidence: [{ kind: 'value', experimentId: 'run-b',
-    at: { hz: 4974.2 } }], runs: [{ experimentId: 'run-b', resultHash: H2 }] }));
+    at: { hz: 4974.2 } }], experiments: [{ experimentId: 'run-b', resultHash: H2 }] }));
   assert.deepEqual(F.findingsCiting([a, b, c], 'run-a').map((x) => [x.finding.id, x.how]),
-    [['f-a', ['this run']], ['f-b', ['a comparison with run-b']]]);
+    [['f-a', ['this experiment']], ['f-b', ['a comparison with run-b']]]);
   assert.deepEqual(F.findingsCiting([a, b, c], 'run-b').map((x) => [x.finding.id, x.how]),
     [['f-b', ['a comparison with run-a']], ['f-c', ['its value at 4974.2 Hz']]]);
   assert.deepEqual(F.findingsCiting([a, b, c], 'nope'), []);
 });
 
-test('reference text never claims a cause; a comparison says what changed between runs', () => {
+test('reference text never claims a cause; a comparison says what changed between experiments', () => {
   const name = (id) => ({ 'run-a': 'A', 'run-b': 'B' }[id] || null);
-  assert.equal(F.refText({ kind: 'run', experimentId: 'run-a' }, name), 'Run "A"');
+  assert.equal(F.refText({ kind: 'experiment', experimentId: 'run-a' }, name), 'Experiment "A"');
   assert.equal(F.refText({ kind: 'compare', a: 'run-a', b: 'run-b' }, name),
-    'Comparison of "A" with "B" (what changed between the runs, not why)');
+    'Comparison of "A" with "B" (what changed between the experiments, not why)');
   assert.equal(F.refText({ kind: 'value', experimentId: 'run-b', at: { hz: 1000 } }, name,
     { storedPoint: true }), 'Value of "B" at 1000 Hz (a stored grid point)');
-  assert.equal(F.refText({ kind: 'run', experimentId: '0123456789abcdef-x' }, () => null),
-    'Run 0123456789ab…');
+  assert.equal(F.refText({ kind: 'experiment', experimentId: '0123456789abcdef-x' }, () => null),
+    'Experiment 0123456789ab…');
   const texts = F.FINDING_STATUSES.map((s) => `${F.STATUS_TEXT[s]} ${F.STATUS_HINT[s]}`).join(' ');
   assert.ok(!/\b(caus|because|due to|proves?)\b/i.test(texts), texts);
 });
@@ -285,7 +285,7 @@ test('DB version 4 adds the findings store and never deletes anything', async ()
   assert.deepEqual([...fake.dbs.get('fresh').stores.keys()], ['experiments', 'summaries',
     'studio', 'studioSummaries', 'definitions', 'findings']);
   fresh.close();
-  // A version-3 database as v3.10 left it, with a run, a Studio record and a definition.
+  // A version-3 database as v3.10 left it, with an experiment, a Studio record and a definition.
   const stores = new Map();
   const keep = { experiments: 'experimentId', summaries: 'experimentId', studio: 'id',
     studioSummaries: 'id', definitions: 'id' };
@@ -326,7 +326,7 @@ for (const kind of ['memory', 'indexeddb']) {
     assert.equal((await store.putFinding(edited)).status, 'supported');
     await assert.rejects(store.putFinding({ ...edited, createdAt: LATER }),
       (e) => e instanceof ExperimentStoreError && e.code === 'immutable');
-    await assert.rejects(store.putFinding({ ...f, status: 'supported', evidence: [], runs: [] }),
+    await assert.rejects(store.putFinding({ ...f, status: 'supported', evidence: [], experiments: [] }),
       (e) => e instanceof ExperimentStoreError && e.code === 'invalid'
         && /at least one/.test(e.message));
     // Import: all or nothing. A different finding under a stored id refuses the whole batch.
@@ -335,15 +335,15 @@ for (const kind of ['memory', 'indexeddb']) {
       (e) => e.code === 'conflict' && e.fields.join() === 'f-2');
     assert.equal(await store.getFinding('f-3'), null, 'nothing of a refused import is stored');
     await assert.rejects(store.putFindings([h, { ...h, id: 'f-4', status: 'supported',
-      evidence: [], runs: [] }]), (e) => e.code === 'invalid');
+      evidence: [], experiments: [] }]), (e) => e.code === 'invalid');
     assert.equal(await store.getFinding('f-3'), null, 'an invalid finding refuses the batch');
     assert.deepEqual(await store.putFindings([h, g]), { stored: ['f-3'], same: ['f-2'] });
     assert.deepEqual(await store.getFinding('f-3'), h);
-    // Deleting a cited run never touches a finding.
+    // Deleting a cited experiment never touches a finding.
     const { a } = await fx();
     await store.put(a.experiment);
-    const cites = ok(raw({ id: 'f-5', status: 'supported', evidence: [{ kind: 'run',
-      experimentId: 'fixture-a' }], runs: [{ experimentId: 'fixture-a',
+    const cites = ok(raw({ id: 'f-5', status: 'supported', evidence: [{ kind: 'experiment',
+      experimentId: 'fixture-a' }], experiments: [{ experimentId: 'fixture-a',
       resultHash: a.experiment.provenance.resultHash }] }));
     await store.putFinding(cites);
     assert.equal(await store.delete('fixture-a'), true);
@@ -374,15 +374,15 @@ test('the memory store reports the findings it holds (losable work, ADR 0045)', 
 
 // ---------------------------------------------------------------- export / import
 
-test('export and import round-trip, with each cited run\'s id and result hash', () => {
+test('export and import round-trip, with each cited experiment\'s id and result hash', () => {
   const f = ok(raw({ status: 'supported', evidence: [{ kind: 'compare', a: 'run-a',
-    b: 'run-b' }], runs: both, notes: 'Two lines\nof notes' }));
-  const g = ok(raw({ id: 'f-2', status: 'hypothesis', evidence: [], runs: [] }));
+    b: 'run-b' }], experiments: both, notes: 'Two lines\nof notes' }));
+  const g = ok(raw({ id: 'f-2', status: 'hypothesis', evidence: [], experiments: [] }));
   const doc = F.exportFindings([f, g], { now: LATER, oscillaVersion: '9.9.9' });
   assert.deepEqual(Object.keys(doc), ['kind', 'schemaVersion', 'exportedAt', 'oscillaVersion',
     'findings']);
   assert.equal(doc.kind, F.FINDINGS_FILE_KIND);
-  assert.deepEqual(doc.findings[0].runs, both, 'the evidence identity travels with the file');
+  assert.deepEqual(doc.findings[0].experiments, both, 'the evidence identity travels with the file');
   const text = F.findingsToJson(doc);
   const back = F.parseFindingsFile(text);
   assert.ok(back.ok, JSON.stringify(back.errors));
@@ -447,7 +447,7 @@ function harness(fake = fakeIndexedDB()) {
   return { cmp, notes, fake };
 }
 
-test('the workspace: record from a run, link a compare, support it, see backlinks', async () => {
+test('the workspace: record from an experiment, link a compare, support it, see backlinks', async () => {
   const { a, b } = await fx();
   const { cmp } = harness();
   await cmp.experimentsImportText(a.json);
@@ -455,7 +455,7 @@ test('the workspace: record from a run, link a compare, support it, see backlink
   await cmp.experimentsOpen('fixture-a');
   assert.equal(cmp.findingsWhatWouldBeLost().length, 0, 'nothing typed, nothing to lose');
   await cmp.findingsAskRun('fixture-a');
-  assert.deepEqual(cmp.fnd.form.evidence.map((x) => x.ref), [{ kind: 'run',
+  assert.deepEqual(cmp.fnd.form.evidence.map((x) => x.ref), [{ kind: 'experiment',
     experimentId: 'fixture-a' }]);
   cmp.fnd.form.statement = 'A falls above 6 kHz.';
   assert.deepEqual(cmp.findingsWhatWouldBeLost(), [{ domain: 'findings',
@@ -464,8 +464,8 @@ test('the workspace: record from a run, link a compare, support it, see backlink
   cmp.fnd.form.status = 'supported';
   const saved = await cmp.findingsSave();
   assert.ok(saved, cmp.fnd.form.error);
-  assert.deepEqual(saved.runs.map((r) => r.experimentId), ['fixture-a', 'fixture-b']);
-  assert.equal(saved.runs[0].resultHash, a.experiment.provenance.resultHash);
+  assert.deepEqual(saved.experiments.map((r) => r.experimentId), ['fixture-a', 'fixture-b']);
+  assert.equal(saved.experiments[0].resultHash, a.experiment.provenance.resultHash);
   assert.equal(cmp.findingsWhatWouldBeLost().length, 0, 'saved: nothing to lose');
   assert.equal(cmp.fnd.rows.length, 1);
   assert.equal(cmp.fnd.rows[0].statusText, F.STATUS_TEXT.supported);
@@ -473,25 +473,25 @@ test('the workspace: record from a run, link a compare, support it, see backlink
   assert.deepEqual(cmp.findingsBacklinks('fixture-b').map((x) => x.how), [
     `a comparison with "${a.name}"`]);
   assert.equal(cmp.findingsCiting('fixture-a'), 1);
-  // Delete the cited run: the dialog says one finding cites it; the reference reads missing.
+  // Delete the cited experiment: the dialog says one finding cites it; the reference reads missing.
   cmp.experimentsAskDelete({ id: 'fixture-b', name: 'B' });
-  assert.match(cmp.exps.deleteCiting, /^1 finding cites this run/);
+  assert.match(cmp.exps.deleteCiting, /^1 finding cites this experiment/);
   assert.equal(await cmp.experimentsDelete(), true);
   const row = cmp.fnd.rows[0];
   assert.deepEqual(row.evidence.map((e) => e.state), ['ok', 'missing']);
-  assert.match(row.evidence[1].issue, /^missing: run .* is not stored here/);
+  assert.match(row.evidence[1].issue, /^missing: experiment .* is not stored here/);
   assert.equal(row.status, 'supported', 'the finding keeps its status and its reference');
   assert.equal(JSON.stringify(cmp.fnd.rows), JSON.stringify(JSON.parse(JSON.stringify(
     cmp.fnd.rows))), 'plain data for Alpine');
 });
 
-test('the workspace: import refuses a conflict whole and names runs not stored here', async () => {
+test('the workspace: import refuses a conflict whole and names experiments not stored here', async () => {
   const { cmp, notes } = harness();
   await cmp.experimentsRefresh();
   const f = ok(raw({ id: 'f-imp', status: 'supported' }));
   const text = F.findingsToJson(F.exportFindings([f], { now: LATER }));
   assert.equal(await cmp.findingsImportText(text), 1);
-  assert.match(notes.at(-1).text, /1 cited run is not stored here/);
+  assert.match(notes.at(-1).text, /1 cited experiment is not stored here/);
   assert.match(cmp.fnd.rows[0].evidence[0].issue, /not stored here/);
   const changed = F.findingsToJson(F.exportFindings([{ ...f, statement: 'Other' },
     ok(raw({ id: 'f-new' }))], { now: LATER }));
@@ -520,7 +520,7 @@ test('findings are rendered as text: no x-html or innerHTML on the findings path
   assert.ok(!/x-html/.test(html), 'no x-html anywhere in the page');
   assert.ok(!/innerHTML|insertAdjacentHTML|outerHTML/.test(ui));
   assert.match(html, /data-osc="fnd\.panel"/, 'the Findings panel is in the page');
-  assert.match(html, /data-osc="exp\.findings"/, 'the run detail lists the findings citing it');
+  assert.match(html, /data-osc="exp\.findings"/, 'the experiment detail lists the findings citing it');
 });
 
 // ---------------------------------------------------------------- adversarial review 1 of #149
@@ -543,22 +543,22 @@ const rowOf = (cmp, statement) => cmp.fnd.rows.find((r) => r.statement === state
 
 test('review 1.1: an identity that cannot be verified is an issue, never ok', () => {
   const f = ok(raw({ status: 'supported' }));
-  const stored = (o) => lookupOf({ 'run-a': { kind: 'run', name: 'A', resultHash: H1,
+  const stored = (o) => lookupOf({ 'run-a': { kind: 'experiment', name: 'A', resultHash: H1,
     hasResponse: true, ...o } });
   let is = F.findingIssues(f, stored({ resultHash: null }));
   assert.deepEqual(is.map((i) => i.code), ['unverifiable-identity', 'unsupported-status']);
   assert.match(is[0].text, /cannot be verified: the record stored under this id has no result hash/);
-  const g = ok(raw({ status: 'supported', runs: [{ experimentId: 'run-a', resultHash: null }] }));
+  const g = ok(raw({ status: 'supported', experiments: [{ experimentId: 'run-a', resultHash: null }] }));
   is = F.findingIssues(g, stored({}));
   assert.deepEqual(is.map((i) => i.code), ['unverifiable-identity', 'unsupported-status']);
   assert.match(is[0].text, /cannot be verified: it was cited without a result hash/);
-  is = F.findingIssues(f, lookupOf({ 'run-a': { kind: 'run', name: 'A' } }));
+  is = F.findingIssues(f, lookupOf({ 'run-a': { kind: 'experiment', name: 'A' } }));
   assert.deepEqual(is.map((i) => i.code), ['unverifiable-identity', 'unsupported-status'],
     'an identity the lookup does not know is not verified either');
   assert.ok(F.ISSUE_CODES.includes('unverifiable-identity'));
 });
 
-test('review 1.1: a different, hash-less record under a cited id is not shown as the run', async () => {
+test('review 1.1: a different, hash-less record under a cited id is not shown as the experiment', async () => {
   const { cmp, notes } = harness();
   await cmp.experimentsImportText(await recordAs('b', 'run-x'));
   await cmp.findingsAskRun('run-x');
@@ -574,12 +574,12 @@ test('review 1.1: a different, hash-less record under a cited id is not shown as
   assert.equal(row.evidence[0].state, 'broken');
   assert.match(row.evidence[0].issue, /cannot be verified: the record stored under this id has no result hash/);
   assert.match(row.statusIssue, /none of the evidence it cites/);
-  // A run without a result hash cannot be linked in the first place.
+  // An experiment without a result hash cannot be linked in the first place.
   assert.equal(await cmp.findingsAskRun('run-x'), false);
   assert.match(notes.at(-1).text, /has no result hash/);
 });
 
-test('review 1.2: a cited run that is stored but cannot be read is unreadable, not ok', async () => {
+test('review 1.2: a cited experiment that is stored but cannot be read is unreadable, not ok', async () => {
   const fake = fakeIndexedDB();
   const first = harness(fake).cmp;
   await first.experimentsImportText(await recordAs('a', 'run-y'));
@@ -592,12 +592,12 @@ test('review 1.2: a cited run that is stored but cannot be read is unreadable, n
   await cmp.experimentsRefresh();
   const row = rowOf(cmp, 'cites Y');
   assert.equal(row.evidence[0].state, 'broken');
-  assert.match(row.evidence[0].issue, /^run .* is stored here but cannot be read/);
+  assert.match(row.evidence[0].issue, /^experiment .* is stored here but cannot be read/);
   assert.match(row.statusIssue, /none of the evidence it cites/);
-  const is = F.findingIssues(ok(raw()), lookupOf({ 'run-a': { kind: 'run', name: 'A',
+  const is = F.findingIssues(ok(raw()), lookupOf({ 'run-a': { kind: 'experiment', name: 'A',
     readable: false, reason: 'stored experiment run-a is invalid' } }));
-  assert.deepEqual(is.map((i) => i.code), ['unreadable-run']);
-  assert.ok(F.ISSUE_CODES.includes('unreadable-run'));
+  assert.deepEqual(is.map((i) => i.code), ['unreadable-experiment']);
+  assert.ok(F.ISSUE_CODES.includes('unreadable-experiment'));
 });
 
 test('review 1.3: a record replaced under a cited id elsewhere is caught on the next refresh', async () => {
@@ -608,7 +608,7 @@ test('review 1.3: a record replaced under a cited id elsewhere is caught on the 
   cmp.fnd.form.statement = 'cites Z';
   assert.ok(await cmp.findingsSave(), cmp.fnd.form.error);
   assert.equal(rowOf(cmp, 'cites Z').evidence[0].state, 'ok');
-  // Another tab deletes the run and stores a different, stamped record under its id.
+  // Another tab deletes the experiment and stores a different, stamped record under its id.
   const other = await openExperimentStore({ indexedDB: fake.indexedDB, ...OPTS });
   await other.delete('run-z');
   const { validateExperiment } = await import('../../src/js/experiments/validate.js');
@@ -623,14 +623,14 @@ test('review 1.3: a record replaced under a cited id elsewhere is caught on the 
 test('review 1.4: a value reference names a stored grid point exactly, or says it does not', async () => {
   const name = () => 'A';
   const v = (hz) => ({ kind: 'value', experimentId: 'run-a', at: { hz } });
-  const grid = { 'run-a': { kind: 'run', name: 'A', resultHash: H1, hasResponse: true,
+  const grid = { 'run-a': { kind: 'experiment', name: 'A', resultHash: H1, hasResponse: true,
     frequencies: [1000.5, 2000.25] } };
   const on = ok(raw({ evidence: [v(1000.5)] }));
   const off = ok(raw({ evidence: [v(1234.56789)] }));
   assert.deepEqual(F.findingIssues(on, lookupOf(grid)), []);
   const [x] = F.findingIssues(off, lookupOf(grid));
   assert.equal(x.code, 'not-a-grid-point');
-  assert.match(x.text, /1234\.56789 Hz is not a frequency the run stores/);
+  assert.match(x.text, /1234\.56789 Hz is not a frequency the experiment stores/);
   assert.ok(F.ISSUE_CODES.includes('not-a-grid-point'));
   assert.match(F.refText(v(1000.5), name, { storedPoint: true }), /\(a stored grid point\)$/);
   assert.ok(!/stored/.test(F.refText(v(1234.56789), name)), 'no claim without the check');
@@ -647,14 +647,14 @@ test('review 1.4: a value reference names a stored grid point exactly, or says i
   assert.equal(good.state, 'ok');
   assert.match(good.text, /\(a stored grid point\)$/);
   const crafted = ok(raw({ id: 'f-off', statement: 'value off the grid', evidence: [{ kind: 'value',
-    experimentId: 'run-v', at: { hz: 1234.56789 } }], runs: [{ experimentId: 'run-v',
+    experimentId: 'run-v', at: { hz: 1234.56789 } }], experiments: [{ experimentId: 'run-v',
     resultHash: (await fx()).a.experiment.provenance.resultHash }] }));
   assert.equal(await cmp.findingsImportText(F.findingsToJson(F.exportFindings([crafted],
     { now: LATER }))), 1);
   const bad = rowOf(cmp, 'value off the grid').evidence[0];
   assert.equal(bad.state, 'broken');
   assert.ok(!/stored grid point\)/.test(bad.text), bad.text);
-  assert.match(bad.issue, /not a frequency the run stores/);
+  assert.match(bad.issue, /not a frequency the experiment stores/);
 });
 
 test('review 1.5: closing the dialog keeps a typed draft; only Discard drops it', async () => {
@@ -682,7 +682,7 @@ test('review 1.5: closing the dialog keeps a typed draft; only Discard drops it'
   assert.deepEqual(cmp.findingsWhatWouldBeLost(), []);
 });
 
-test('review 1.7: removing the last reference to a run drops its identity; relinking reads it anew', async () => {
+test('review 1.7: removing the last reference to an experiment drops its identity; relinking reads it anew', async () => {
   const { cmp } = harness();
   await cmp.experimentsImportText(await recordAs('b', 'run-r'));
   await cmp.findingsAskRun('run-r');
@@ -694,11 +694,11 @@ test('review 1.7: removing the last reference to a run drops its identity; relin
   await cmp.experimentsImportText(await recordAs('c', 'run-r', { name: 'another record' }));
   await cmp.findingsAskEdit(first.id);
   cmp.findingsRemoveRef(0);
-  assert.deepEqual(cmp.fnd.form.runs, [], 'no identity is kept for a run no longer cited');
+  assert.deepEqual(cmp.fnd.form.experiments, [], 'no identity is kept for an experiment no longer cited');
   assert.ok(await cmp.findingsAddRun('run-r'), cmp.fnd.form.error);
   const saved = await cmp.findingsSave();
   assert.ok(saved, cmp.fnd.form.error);
-  assert.equal(saved.runs[0].resultHash, (await fx()).c.experiment.provenance.resultHash);
+  assert.equal(saved.experiments[0].resultHash, (await fx()).c.experiment.provenance.resultHash);
   assert.equal(rowOf(cmp, 'cites R').evidence[0].state, 'ok');
 });
 
@@ -786,9 +786,9 @@ test('review 1.11: one import rule: importPlan is the store\'s verdict, and the 
   assert.equal(await (await cmp.experimentsStore()).getFinding('f-c2'), null);
 });
 
-test('review 1.12: backlinks name the runs; the status reads as the user\'s judgement', async () => {
+test('review 1.12: backlinks name the experiments; the status reads as the user\'s judgement', async () => {
   const b = ok(raw({ id: 'f-b', evidence: [{ kind: 'compare', a: 'run-b', b: 'run-a' }],
-    runs: both }));
+    experiments: both }));
   assert.deepEqual(F.findingsCiting([b], 'run-a', (id) => ({ 'run-b': 'B' }[id] || null))
     .map((x) => x.how), [['a comparison with "B"']]);
   assert.deepEqual(F.findingsCiting([b], 'run-a').map((x) => x.how),
@@ -801,7 +801,7 @@ test('review 1.12: backlinks name the runs; the status reads as the user\'s judg
 
 // ---------------------------------------------------------------- adversarial review 2 of #149
 
-test('review 2.1: a run replaced from another tab is caught by a refresh from a save, too', async () => {
+test('review 2.1: an experiment replaced from another tab is caught by a refresh from a save, too', async () => {
   const fake = fakeIndexedDB();
   const { cmp } = harness(fake);
   await cmp.experimentsImportText(await recordAs('b', 'run-t'));
@@ -827,7 +827,7 @@ test('review 2.1: a run replaced from another tab is caught by a refresh from a 
   await cmp.experimentsRefresh();
   e = rowOf(cmp, 'cites T').evidence[0];
   assert.equal(e.state, 'broken', 'and after the list refresh');
-  // The run detail never shows the replaced record as the cited one either.
+  // The experiment detail never shows the replaced record as the cited one either.
   const shown = await cmp.experimentsOpen('run-t');
   assert.equal(shown.name, 'impostor');
 });
@@ -898,7 +898,7 @@ test('review 2.6: a list row from an earlier build gets its result hash once', a
   const hash = (await fx()).a.experiment.provenance.resultHash;
   assert.equal(listed.resultHash, hash, 'filled in from the stored record');
   assert.equal(rows.get('run-old').resultHash, hash, 'and written back to the row');
-  // Review 3 (A): a cited run is verified fresh on every refresh, whatever the row says.
+  // Review 3 (A): a cited experiment is verified fresh on every refresh, whatever the row says.
   const second = harness(fake).cmp;
   let reads = 0;
   const real = second.experimentsIdentity;
@@ -924,7 +924,7 @@ test('review 2.7: hints are the user\'s, visible; (review 3: one exact Hz format
 
 // ---------------------------------------------------------------- adversarial review 3 of #149
 
-/** Replace run `id` through a second connection (another tab), with fixture `k` renamed. */
+/** Replace experiment `id` through a second connection (another tab), with fixture `k` renamed. */
 const replaceElsewhere = async (fake, id, k = 'c', name = 'impostor') => {
   const other = await openExperimentStore({ indexedDB: fake.indexedDB, ...OPTS });
   await other.delete(id);
@@ -946,9 +946,9 @@ test('review 3.A: one verification point; identity is read fresh from the store 
   await cmp.experimentsImportText(await recordAs('a', 'run-p'));
   await cmp.experimentsImportText(await recordAs('b', 'run-q'));
   const calls = [];
-  const real = cmp.findingsVerifyCitedRun;
+  const real = cmp.findingsVerifyCitedExperiment;
   assert.equal(typeof real, 'function', 'the verification point exists');
-  cmp.findingsVerifyCitedRun = function (id, hash) {
+  cmp.findingsVerifyCitedExperiment = function (id, hash) {
     calls.push(id);
     return real.call(this, id, hash);
   };
@@ -981,7 +981,7 @@ test('review 3.A: one verification point; identity is read fresh from the store 
   assert.ok(!/ctx\.identity/.test(src), 'no identity cache in the findings adapter');
 });
 
-test('review 3.A: Open re-checks the run first and opens nothing that is no longer the cited one', async () => {
+test('review 3.A: Open re-checks the experiment first and opens nothing that is no longer the cited one', async () => {
   const fake = fakeIndexedDB();
   let { cmp, notes } = harness(fake);
   await cmp.experimentsImportText(await recordAs('b', 'run-o'));
@@ -1024,7 +1024,7 @@ test('review 3.B: a finding recorded from a detail or Compare that is out of dat
   const other = await openExperimentStore({ indexedDB: fake.indexedDB, ...OPTS });
   await other.delete('run-d1');
   await cmp.experimentsRefresh();
-  assert.equal(cmp.exps.detail, null, 'a run gone elsewhere closes its detail');
+  assert.equal(cmp.exps.detail, null, 'an experiment gone elsewhere closes its detail');
 });
 
 test('review 3.C: editing a finding another tab deleted goes through the conflict path', async () => {
@@ -1086,4 +1086,36 @@ test('review 3.D: one exact formatter for every stored point; on-grid and off-gr
   assert.notEqual(F.exactHzText(off), F.exactHzText(grid[2]));
   const html = readFileSync(path.join(ROOT, 'src/js/ui/findings.js'), 'utf8');
   assert.ok(!/\bhzText\(/.test(html), 'the detail button uses the same formatter');
+});
+
+// ---------------------------------------------------------------- vocabulary (owner, 2026-10-07)
+
+test('a stored record is an experiment: kinds, the field and the issue codes say so', () => {
+  assert.deepEqual(F.EVIDENCE_KINDS, ['experiment', 'compare', 'value']);
+  assert.deepEqual(F.ISSUE_CODES, ['missing-experiment', 'wrong-kind', 'unreadable-experiment',
+    'different-experiment', 'unverifiable-identity', 'no-response', 'unsupported-status',
+    'not-a-grid-point']);
+  const f = ok(raw());
+  assert.deepEqual(Object.keys(f), ['kind', 'schemaVersion', 'id', 'statement', 'status',
+    'evidence', 'experiments', 'notes', 'createdAt', 'updatedAt']);
+  assert.equal(f.evidence[0].kind, 'experiment');
+  // The earlier words never shipped: no alias, no migration.
+  refused(raw({ evidence: [{ kind: 'run', experimentId: 'run-a' }] }), /evidence\[0\]\.kind/,
+    'evidence kind run');
+  const { experiments, ...rest } = raw();
+  refused({ ...rest, runs: experiments }, /runs: unknown field/, 'the field runs');
+  // What is persisted elsewhere keeps its name.
+  assert.equal(F.FINDING_KIND, 'oscilla-finding');
+  assert.equal(F.FINDINGS_FILE_KIND, 'oscilla-findings');
+  assert.equal(F.FINDINGS_FILE_EXTENSION, '.oscilla-findings.json');
+  assert.equal(F.FINDING_SCHEMA_VERSION, 1);
+  assert.equal(FINDINGS, 'findings');
+  assert.equal(DB_VERSION, 4);
+  assert.deepEqual(F.FINDING_STATUSES, ['observation', 'hypothesis', 'supported',
+    'contradicted', 'inconclusive']);
+  // No user text of the findings code calls a stored record a run.
+  for (const file of ['src/js/experiments/findings.js', 'src/js/ui/findings.js']) {
+    const src = readFileSync(path.join(ROOT, file), 'utf8');
+    assert.deepEqual(src.match(/\b(?:this|a|the|cited|stored) runs?\b/gi) || [], [], file);
+  }
 });
