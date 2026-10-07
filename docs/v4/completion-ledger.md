@@ -102,7 +102,8 @@ open); the public origin `korczis.github.io` is shared with every other Pages si
 account (W7d, open); the live smoke calls seam hooks instead of loading the documented
 `?measure=loopback#mr=` URL (W7e, open); no caller reads the verdict `setValues` now returns, a
 non-boolean toggle value is coerced instead of refused, and the v3-ui `calibration` check
-depends on the check before it (W7g-W7i, open); five dead CSS classes; an import without a hash shows no "unverified"
+depends on the check before it (W7g-W7i, open); five dead CSS classes (**closed** #156: six, removed; a unit test now
+requires a producer in src for every class selector); an import without a hash shows no "unverified"
 marker; an unreadable stored record fails silently; ADR status never leaves `proposed`; the plan
 contradicts git (V386 READY, M033 BLOCKED; **closed** #144, see "plan reconciled" below); "run" means both a repeat and a completed
 experiment, and "project" both a Studio file and OSCILLA (**partly closed** #162, ADR 0053 and
