@@ -14,11 +14,15 @@
 // The proposal: when package.json already carries an untagged version that satisfies the
 // required level (the initial V2 major after v1.0.0 covers any level), the release confirms
 // it; otherwise the version is bumped once from the last tag (or from package.json when that
-// version is the tagged one). Pure functions are exported for the unit tests.
+// version is the tagged one). A published release candidate is finalised even when nothing
+// release-relevant followed it: after vX.Y.Z-rc.N with no such commit the proposal is X.Y.Z
+// (rule project.release-flow-complete makes the candidate mandatory before a major, so the
+// step from it to the release must not need an invented commit). Pure functions are exported
+// for the unit tests.
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
-  ROOT, bumpVersion, compareSemver, gitRunner, parseSemver, readVersion,
+  ROOT, bumpVersion, compareSemver, formatSemver, gitRunner, parseSemver, readVersion,
 } from './release-metadata.mjs';
 
 export const LEVELS = ['none', 'patch', 'minor', 'major'];
@@ -91,6 +95,12 @@ export function proposeVersion({
     throw new Error(`package.json ${current} is older than the last tag v${lastTagVersion}`);
   }
   if (level === 'none') {
+    const last = parseSemver(lastTagVersion);
+    const final = formatSemver({ ...last, prerelease: [] });
+    if (!prerelease && last.prerelease.length && compareSemver(current, final) <= 0) {
+      return { version: final, action: current === final ? 'confirm' : 'bump',
+        why: `finalises the candidate v${lastTagVersion} (no release-relevant commit since it)` };
+    }
     return { version: null, action: 'none',
       why: `no release-relevant commit since v${lastTagVersion}` };
   }

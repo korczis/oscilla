@@ -39,7 +39,10 @@ The flow, in the order it is practised. Each step names what holds it in place.
 2. **`npm run release:prepare` on a clean tree of main.** It refuses a dirty tree, refuses
    while the newest release has no record, and refuses a stable `X.0.0` that no published
    `vX.0.0-rc.N` preceded. It bumps once, rebuilds, runs the full gate and writes the receipt.
-   The first candidate of a major is `npm run release:prepare -- --prerelease`.
+   The first candidate of a major is `npm run release:prepare -- --prerelease` (when
+   `package.json` already carries `X.0.0`, it is set to `X.0.0-rc.1` for the candidate). Once
+   the candidate is published and recorded, a plain `release:prepare` proposes `X.0.0` even
+   when no releasable commit followed the candidate.
 3. **The `chore(release): vX.Y.Z` pull request, merged by auto-merge** behind the required
    `gate` check. It is the only pull request armed while a release is in flight: any other
    merge to main changes the gate tree and the publish refuses until the gate is re-run
@@ -82,6 +85,10 @@ anything changes, as a dry run too:
   `.ai/repo/adrs/` with `status: accepted`; a proposed ADR, or a number that names none, is
   refused. Every ADR of this repository is `proposed` today, so the override cannot be used
   until the owner accepts one.
+
+`scripts/release-analyze.mjs`, `proposeVersion()`: after a `vX.Y.Z-rc.N` tag with no
+release-relevant commit, the proposal is `X.Y.Z`, so the step this rule makes mandatory can be
+finished without an invented commit.
 
 `scripts/release-publish.mjs`: `stuckPagesRuns()` and `diagnoseStuckRuns()` over
 `gh run list --workflow pages.yml --json databaseId,status,conclusion,headSha,createdAt`. A

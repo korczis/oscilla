@@ -172,8 +172,10 @@ export function flowProblems({
       const why = `v${proposed} is a major release with no published release candidate (no `
         + `v${v.major}.0.0-rc.N tag with a prerelease record in ${RECORDS_DIR}/; ADR 0047)`;
       if (!noRcBecause) {
-        problems.push(`${why}: run npm run release:prepare -- --prerelease first, or pass `
-          + '--no-rc-because <ADR> naming an accepted ADR');
+        problems.push(`${why}: publish a candidate first (npm run release:prepare -- `
+          + `--prerelease; when package.json already says ${proposed}, set it to `
+          + `${proposed}-rc.1 for the candidate), or pass --no-rc-because <ADR> naming an `
+          + 'accepted ADR');
       } else if (!adr) {
         problems.push(`${why}: --no-rc-because ${noRcBecause} names no ADR in .ai/repo/adrs/`);
       } else if (adr.status !== 'accepted') {

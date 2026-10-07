@@ -213,7 +213,8 @@ test('prepare refuses a major release that no published release candidate preced
   const bare = prepareDryRun(major);
   assert.equal(bare.code, 1);
   assert.match(bare.text, /v41\.0\.0 is a major release with no published release candidate/);
-  assert.match(bare.text, /release:prepare -- --prerelease first, or pass --no-rc-because <ADR>/);
+  assert.match(bare.text, /publish a candidate first \(npm run release:prepare -- --prerelease; /);
+  assert.match(bare.text, /set it to 41\.0\.0-rc\.1 for the candidate\), or pass --no-rc-because /);
 
   // an rc tag alone is not a published candidate: its record must be on the prerelease channel
   const rcTags = [...TAGS, 'v41.0.0-rc.1'];
@@ -238,6 +239,28 @@ test('prepare refuses a major release that no published release candidate preced
     version: '40.10.3' });
   assert.equal(rc.code, 0, rc.text);
   assert.match(rc.text, /would bump v41\.0\.0-rc\.1/);
+  // the owner already set the major in package.json: the candidate is that version's rc.1
+  const set = prepareDryRun({ ...major, argv: ['--prerelease'], version: '41.0.0-rc.1' });
+  assert.equal(set.code, 0, set.text);
+  assert.match(set.text, /would confirm v41\.0\.0-rc\.1/);
+  // and the published candidate is finalised without an invented commit after it
+  const final = prepareDryRun({ version: '41.0.0-rc.1', tags: rcTags, subject: 'docs: notes',
+    records: { ...RECORDED, 'v41.0.0-rc.1': 'prerelease' } });
+  assert.equal(final.code, 0, final.text);
+  assert.match(final.text, /would bump v41\.0\.0 and run:/);
+});
+
+test('proposeVersion: a published candidate is finalised even with no releasable commit', () => {
+  const p = (current, last, o = {}) => proposeVersion({ current, lastTagVersion: last,
+    level: 'none', ...o });
+  const va = (r) => [r.version, r.action];
+  assert.deepEqual(va(p('41.0.0-rc.2', '41.0.0-rc.2')), ['41.0.0', 'bump']);
+  assert.deepEqual(va(p('41.0.0', '41.0.0-rc.1')), ['41.0.0', 'confirm']);
+  assert.match(p('41.0.0-rc.2', '41.0.0-rc.2').why, /finalises the candidate v41\.0\.0-rc\.2/);
+  // another candidate is asked for explicitly and still needs something to ship
+  assert.equal(p('41.0.0-rc.2', '41.0.0-rc.2', { prerelease: true }).version, null);
+  // a stable last tag with nothing releasable is still no release
+  assert.equal(p('41.0.0', '41.0.0').version, null);
 });
 
 test('--no-rc-because overrides only by naming an accepted ADR', () => {
