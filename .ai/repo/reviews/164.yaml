@@ -1,0 +1,58 @@
+# Review verdict for pull request #164 (rules project.ci-bounded, project.fail-first,
+# project.review-verdict). Reviewed head 2a5eef99845959d2306ecca7ca149abc477a9906; the digest
+# is the same on a merge of that head with main at 9cc2f37 (13 guarded paths).
+# Ids: R1-* round 1 (25bdabe), R2-* round 2 (83695ca), R3-* round 3 (2a5eef9), V-* this review.
+schema: review-verdict/v1
+pr: 164
+verdict: merge
+reviewer: "independent review subagent (Claude Opus 5.5) with its own context, spawned by orchestrating session 58f2f7ae, whose other subagents built this change; this agent did not build or edit it"
+content: 213d6550d2e71d9a81a2cf69604d6eeb98d6ff14c2ede1ffe44370f46a6cff21
+findings:
+  - { id: R1-P1-1, severity: P1, status: closed, title: "the checker a pull request carries judged it; now the base branch's copy runs through base-rule.sh and the enforcement files are guarded" }
+  - { id: R1-P1-2, severity: P1, status: closed, title: "ci-bounded missed download and install forms (redirect, process substitution, eval, apt behind options); each has a mutation test" }
+  - { id: R1-P1-3, severity: P1, status: closed, title: "a manual workflow_dispatch run of ci.yml put a gate on a head with nothing judged; the trigger is removed and pinned by the triggers clause" }
+  - { id: R1-P1-4, severity: P1, status: closed, title: "ci-bounded text claimed more than the checker caught; same fix as R1-P1-2" }
+  - { id: R1-P2-1, severity: P2, status: closed, title: "continue-on-error and a suite followed by a true fallback were not reported" }
+  - { id: R1-P2-2, severity: P2, status: closed, title: "installs in composite actions and other scripts, and a suite after cd, were unseen" }
+  - { id: R1-P2-3, severity: P2, status: closed, title: "a reusable-workflow job was refused for having no timeout" }
+  - { id: R1-P2-4a, severity: P2, status: closed, title: "fail-first title match was case and spacing sensitive" }
+  - { id: R1-P2-4b, severity: P2, status: open, title: "a retitle to feat or fix after the last run is not re-checked until the job is run again; stated in the rule" }
+  - { id: R1-P2-5, severity: P2, status: closed, title: "the waiver accepted the literal placeholder reason" }
+  - { id: R1-P2-6, severity: P2, status: closed, title: "continue-on-error on a rule job made gate green" }
+  - { id: R1-P2-7, severity: P2, status: closed, title: "the enforcement code was not a guarded path" }
+  - { id: R1-P2-8, severity: P2, status: closed, title: "a test that reads git ls-files could never be fail-first evidence" }
+  - { id: R1-P2-9, severity: P2, status: closed, title: "the waiver matched a quoted line inside a code block" }
+  - { id: R1-P2-10, severity: P2, status: closed, title: "small mismatches between rule text and checker (gh subcommands, playwright test, the job limit sum)" }
+  - { id: R1-P2-11, severity: P2, status: closed, title: "the effect on open pull requests was understated in the pull request body" }
+  - { id: R2-P1-1, severity: P1, status: closed, title: "the branch conflicted with main and the verdict bound a tree that could not land; main is merged and the verdict binds guarded content" }
+  - { id: R2-P1-2, severity: P1, status: closed, title: "the transition was not stated; both rules now say a pull request green before landing merges unjudged unless main is merged into it, as a coordinator step that is not machine-checked" }
+  - { id: R2-P2-1, severity: P2, status: closed, title: "a browser install behind an npm script or postinstall was not seen" }
+  - { id: R2-P2-2, severity: P2, status: closed, title: "non-fatal spellings (exit 0, echo, trailing true, set +e) and suites behind npm options were not seen; the if-not form stays stated as unseen" }
+  - { id: R2-P2-3, severity: P2, status: open, title: "the digest clause holds per step and not per downloaded file; a downloaded sums file passes; gh release download, git clone, npx, aria2c and docker run are not read as downloads; stated in the rule" }
+  - { id: R2-P2-4, severity: P2, status: closed, title: "lines that only name apt or curl, a quoted retry variable and pre-release tags were refused" }
+  - { id: R2-P2-5, severity: P2, status: open, title: "YAML anchors and multi-line flow sequences are refused as unreadable; a refusal of a legal workflow, stated in the rule" }
+  - { id: R2-P2-6, severity: P2, status: closed, title: "the test pinning the two rule jobs checked that base-rule.sh was called, not that the call could refuse; the last command is now pinned exactly (remainder is R3-P2-1)" }
+  - { id: R2-P2-7, severity: P2, status: open, title: "owner follow-up: require the two rule job checks or a pull_request_target workflow, and consider strict up-to-date branches; a stale branch with the old ci.yml can still be dispatched by hand" }
+  - { id: R2-P2-8, severity: P2, status: closed, title: "a guarded file with a non-ASCII name was not seen" }
+  - { id: R2-P2-9, severity: P2, status: open, title: "fail-first gives the generic refusal for a test that needs git history (tests/unit/about.test.mjs) instead of pointing at the waiver" }
+  - { id: R2-P2-10, severity: P2, status: closed, title: "echo, command -v and similar look-alikes were refused; an expression timeout is refused and the rule says so" }
+  - { id: R2-P2-11, severity: P2, status: closed, title: "apt called by its absolute path was not caught" }
+  - { id: R2-P2-12, severity: P2, status: closed, title: "a body-reading probe has no allowed curl form; the rule now names the Node program alternative" }
+  - { id: R2-P2-13, severity: P2, status: closed, title: "the cost of a verdict (a full CI run) and of a browser-only fix (a waiver) is stated in the pull request body" }
+  - { id: R3-P2-1, severity: P2, status: open, title: "the exact-call pin covers only the last command of the last step; ref main on the checkout or a PATH export before the call disarm a rule job and no test fails" }
+  - { id: R3-P2-2, severity: P2, status: open, title: "the triggers clause finds a gate job by job id only; a job in another workflow with the name gate and a push trigger is not reported" }
+  - { id: R3-P2-3, severity: P2, status: open, title: "npm test followed by a true fallback on the unit step is not reported although that step enforces ci-bounded" }
+  - { id: R3-P2-4, severity: P2, status: open, title: "a download saved to a file and then executed passes when the step holds another download's digest check" }
+  - { id: R3-P2-5, severity: P2, status: open, title: "fail-first depends on a self-declared title; chore, hotfix or Feature titles on a source change have nothing to prove and the rule does not say the title is the reviewer's to check" }
+  - { id: R3-P2-6, severity: P2, status: open, title: "src/js/calibration, src/js/measurement and package.json are not guarded although the rationale cites the calibration defect of #139; owner decision" }
+  - { id: R3-P2-7, severity: P2, status: open, title: "landing order: if #171 (ci.yml) lands first this verdict goes stale; after landing, main must be merged into every open pull request before it lands" }
+  - { id: R3-P2-8, severity: P2, status: open, title: "the rules index row and the pull request body say a branch that has not merged main is not judged; any later run of the pull request is judged, reopen included" }
+  - { id: R3-P2-9, severity: P2, status: open, title: "CLAUDE.md says the base branch's copy of each program judges; that holds for fail-first and review-verdict, not for ci-bounded" }
+  - { id: R3-P2-10, severity: P2, status: open, title: "two unlisted false refusals in ci-bounded: grep with a quoted apt-get argument, and a docker:// action with a tag" }
+  - { id: R3-P2-11, severity: P2, status: open, title: "the open pull request table in the body is out of date (#169, #170, #171 missing; #171 changes a guarded file this one also changes)" }
+  - { id: R3-P2-12, severity: P2, status: open, title: "a local --content run uses the checkout's guarded list while CI uses the base's; they differ for a pull request that edits the list, and reviews/README.md does not say so" }
+  - { id: V-1, severity: P2, status: open, title: "the twelve round-3 P2 follow-ups are recorded in pull request comment 6033678114 and not in the pull request body, whose section 6 lists only the earlier follow-ups" }
+  - { id: V-2, severity: P2, status: open, title: "reviewer independence here is at agent level: this reviewer and the builders are separate subagents of one orchestrating session, while the rule says a session other than the builder's; the owner decides whether that satisfies it" }
+  - { id: V-3, severity: P3, status: open, title: "the pages.yml install change runs only on a push to main, so no pull request run exercises it; watch the first Pages run after the merge" }
+  - { id: V-4, severity: P3, status: open, title: "a manual ci.yml run was used on branch evidence/w7f-fail-first on 2026-10-07 (run 37585150710, cancelled); nothing in package.json, scripts or docs depends on one, but that practice needs a pull request once this lands" }
+  - { id: V-5, severity: P3, status: open, title: "under the transition sentence, a re-run of a run from before the rule keeps the old workflow file, so re-running is not a way to bind such a pull request; only a new commit or a reopen is" }
