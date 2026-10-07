@@ -1459,7 +1459,8 @@
               aria-describedby="osc-m-input-status" :disabled="!meas.input.options.length || meas.busy"
               @change="measureSelectInput($event.target.value)">
               <template x-for="o in meas.input.options" :key="o.value">
-                <option :value="o.value" x-text="o.label" :selected="o.value === meas.input.selected"></option>
+                <!-- value="": Alpine leaves an option whose bound value is '' without the attribute, and its value would then be its label -->
+                <option value="" :value="o.value" x-text="o.label" :selected="o.value === meas.input.selected"></option>
               </template>
             </select></div>
             <p class="osc-m-hint" id="osc-m-input-status" data-osc="measure.inputStatus" x-text="meas.input.status"></p>
