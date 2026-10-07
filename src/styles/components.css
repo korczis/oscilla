@@ -415,9 +415,8 @@
   --osc-slider-color: var(--osc-orange);
 }
 
-/* ---------- Number input / field ---------- */
-.osc-number,
-.osc-field {
+/* ---------- Number input ---------- */
+.osc-number {
   display: block;
   width: 100%;
   height: var(--osc-control-h);
@@ -629,12 +628,7 @@
   text-align: right;
 }
 
-/* ---------- Chart panel / renderer hosts ---------- */
-.osc-chart-panel {
-  position: relative;
-  min-width: 0;
-}
-
+/* ---------- Chart renderer hosts ---------- */
 /* Empty host for a renderer (uPlot, p5, Canvas). Explicit size comes from the layout. */
 .osc-chart-host {
   position: relative;
@@ -677,7 +671,6 @@
 
 .osc-legend-dot--purple { background: var(--osc-purple); }
 .osc-legend-dot--blue { background: var(--osc-blue-trace); }
-.osc-legend-dot--green { background: var(--osc-green); }
 
 .osc-colorbar {
   border: 1px solid var(--osc-border-soft);
@@ -846,15 +839,6 @@
 
 .osc-warning--info svg {
   color: var(--osc-info-icon);
-}
-
-/* ---------- Toolbar ---------- */
-.osc-toolbar {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
 }
 
 /* ---------- Menu (overflow, actions) ---------- */

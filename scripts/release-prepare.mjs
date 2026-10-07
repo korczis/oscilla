@@ -84,7 +84,7 @@ export function main(argv = process.argv.slice(2), root = ROOT) {
   const run = gitRunner(root);
   const dirty = run(['status', '--porcelain', '--untracked-files=normal']);
   if (dirty) {
-    loud(['the working tree is not clean; commit or stash first:', ...dirty.split('\n')]);
+    loud(['the working tree is not clean; commit or copy aside first:', ...dirty.split('\n')]);
     return 1;
   }
   const i = argv.indexOf('--preid');
