@@ -91,17 +91,18 @@ engine/dsp/labs/sequencer CI and the About provenance tests skip in CI's shallow
 **closed** #147: WebKit legs in both jobs, nothing narrowed; the unit job checks out full
 history and tags, and the About checks fail instead of skipping under CI without them);
 no startup budget or large-library fixture (P1); `window.OSCILLA` test seam and `?mock=1` ship
-in production (W7, **decided and partly fixed** #161, ADR 0052: they stay in the one tested
-artifact; three hooks now refuse what they must, but an unchecked input can still read
-CALIBRATED outside TEST CONTEXT by two hook sequences, W7f, open; see "W7" below);
+in production (W7, **closed** #161 and #169, ADR 0052: they stay in the one tested
+artifact; three hooks refuse what they must, and an input or a level calibration made in TEST
+CONTEXT is not one outside it, W7f, **closed** #169; see "W7" below);
 `studioTimeline.createContext` builds a second Studio store and transport on the shared engine
 for one browser suite (W7a, open); TEST CONTEXT cannot be entered or left from the page, only by
 the URL (W7b, open); a manual level calibration made in TEST CONTEXT is not labelled as one (W7c,
-open); the public origin `korczis.github.io` is shared with every other Pages site of the
+**closed** #169); the public origin `korczis.github.io` is shared with every other Pages site of the
 account (W7d, open); the live smoke calls seam hooks instead of loading the documented
-`?measure=loopback#mr=` URL (W7e, open); no caller reads the verdict `setValues` now returns, a
-non-boolean toggle value is coerced instead of refused, and the v3-ui `calibration` check
-depends on the check before it (W7g-W7i, open); five dead CSS classes; an import without a hash shows no "unverified"
+`?measure=loopback#mr=` URL (W7e, open); no caller reads the verdict `setValues` now returns (W7g, open for the live smoke's one
+call; the suites read it since #169), a non-boolean toggle value is coerced instead of refused
+(W7h, **closed** #169), and the v3-ui `calibration` check depends on the check before it (W7i,
+**closed** #169); five dead CSS classes; an import without a hash shows no "unverified"
 marker; an unreadable stored record fails silently; ADR status never leaves `proposed`; the plan
 contradicts git (V386 READY, M033 BLOCKED; **closed** #144, see "plan reconciled" below); "run" means both a repeat and a completed
 experiment, and "project" both a Studio file and OSCILLA (**partly closed** #162, ADR 0053 and
@@ -212,7 +213,8 @@ The release blockers recorded above are unchanged by this update.
 ## Update 2026-10-07 — W7
 
 W7 is decided by #161 (ADR 0052, proposed; the owner approved the direction on 2026-10-07) and
-fixed in part: the three guards below hold, and W7f is what they leave open, so W7 is not closed.
+fixed in part: the three guards below hold, and W7f is what they left open. #169 closes W7f
+(see "W7f closed" below), and with it W7.
 `window.OSCILLA` and `?mock=1` stay in the one `dist/index.html` that is tested and deployed:
 removing or gating them would protect nothing (`window.Alpine` is global and the origin is
 shared) and the post-deployment smoke would stop testing the served bytes. What was wrong was
@@ -240,11 +242,41 @@ widening the approved change:
 |---|---|---|
 | W7a | `studioTimeline.createContext` (`src/js/ui/studio/timeline-test-seam.js`) builds a second StudioStore, runtime and transport on the shared engine, used only by `tests/browser/v31-studio-timeline.cjs` (`project.studio-model-is-canonical`): move the suite onto the canonical store, then delete the module and the `studioTimeline` key | open |
 | W7b | TEST CONTEXT can be entered and left only by the URL: `input-devices.js` disables the Input device select while loopback is on, so a `?measure=loopback` user cannot return to a microphone without editing the address. Add a TEST CONTEXT option to the select | open |
-| W7c | A manual level calibration made in TEST CONTEXT carries no TEST CONTEXT label; only the captured branch of `measureSaveLevelCalibration` adds it | open |
+| W7c | A manual level calibration made in TEST CONTEXT carried no TEST CONTEXT label; only the captured branch of `measureSaveLevelCalibration` added it. Its conditions now start with "TEST CONTEXT: reading typed by hand while the page was in TEST CONTEXT (digital loopback, no microphone checked)." and the state line of either kind starts with "TEST CONTEXT" | **closed** #169 |
 | W7d | The public origin `korczis.github.io` is shared by every Pages site of the account, so their scripts share OSCILLA's storage, IndexedDB and microphone grant. Independent of the seam; only a custom domain changes it | open |
 | W7e | The live smoke calls `useLoopback` and `setValues` instead of loading `?measure=loopback#mr=<recipe>`, and no test or script loads the documented `?measure=loopback` flag at all | open |
-| W7f | An unchecked input still reads CALIBRATED outside TEST CONTEXT through seam hooks alone. Route A: `useLoopback()`, `setInputNow(input)`, `useMicrophone()`; leaving TEST CONTEXT does not clear `ctx.inputNow` (the device-change path does), and a typed level reading then binds to it. Route B, never entering loopback: `showResult(result)` with a `testContext` and an `input`; the inner `showResult` adopts `result.input`, and the typed reading binds to it. Fix: clear the input when the seam enters or leaves loopback and do not adopt an injected result's input outside loopback, with both sequences as tests in `tests/unit/v4-seam-contract.test.mjs` and a full v3-ui run. Beyond the three guards approved on 2026-10-07: needs the owner's nod | open |
-| W7g | `setValues` returns `true` or `{ ok: false, errors }` and no caller reads it: `live-smoke.cjs`, `navigation.cjs`, `app.cjs` (setup helper) and every v3-ui call site discard it. It validates the whole setup, so one out-of-range value typed into a field (the page's edit checks only that a number is finite) makes every later call refuse, and v3-ui runs its checks on one page. Make the shared setup helpers throw unless the call returns `true`; in the live smoke this goes with W7e | open |
-| W7h | `setValues` coerces a toggle value to a boolean (`{ phase: 'no' }` sets `true`) instead of refusing it. Reject a non-boolean toggle before the encode step | open |
-| W7i | The v3-ui `calibration` check run alone (`--only calibration`) no longer clears its input: its `setInputNow(null)` relies on TEST CONTEXT left on by the `live-rta` check before it. Call `useLoopback` at the start of the check when `v3-ui.cjs` is next edited | open |
+| W7f | An unchecked input still read CALIBRATED outside TEST CONTEXT through seam hooks alone. Route A: `useLoopback()`, `setInputNow(input)`, `useMicrophone()`. Route B, never entering loopback: `showResult(result)` with a `testContext` and an `input`. A typed level reading then bound to the input. Closed at the binding, not at the two hooks: the current input carries the context that named it and every reader goes through `inputKnown()`, which answers "no input" when that context is not the page's; entering or leaving TEST CONTEXT releases what was checked before; a level calibration made in one context does not apply in the other. `tests/unit/v4-seam-contract.test.mjs` (both routes, and the calibration) and `calibrated-only-for-a-checked-input` in `tests/browser/app.cjs` failed before | **closed** #169 |
+| W7g | `setValues` returns `true` or `{ ok: false, errors }` and no caller read it. Since #169 the suites read it: `tests/browser/lib/measure-seam.cjs` (`loopback`, `applyValues`, `applied`) throws with the reasons unless the hook answered `true`, `v3-ui.cjs` (its setup helper and eight call sites), `navigation.cjs` and `app.cjs` go through it, and `tests/unit/seam-verdict-read.test.mjs` fails on a call in `tests/browser` or `scripts/` whose verdict is discarded. What remains: the one call of `live-smoke.cjs`, recorded as pending in that test; W7e (#168) replaces it with the documented URL, and the pending entry is then removed | open (the live smoke's call, with W7e) |
+| W7h | `setValues` coerced a toggle value to a boolean (`{ phase: 'no' }` set `true`) instead of refusing it. A toggle value that is not `true` or `false` is refused whole, before the encode step, with "must be true or false" | **closed** #169 |
+| W7i | The v3-ui `calibration` check cleared its input with `setInputNow(null)`, which is refused outside TEST CONTEXT, so it relied on TEST CONTEXT left on by the `live-rta` check before it. The check now enters TEST CONTEXT itself at its start (which also releases any input known before). No failing run could be shown: run alone on main (`--only calibration`, chromium, file://) the check passes, because a fresh page knows no input; the dependency was latent. After the change it passes alone in chromium, firefox and webkit over file:// and /oscilla/ | **closed** #169 |
 | W7j | The `seam-surface-pinned` check has not been seen to fail on main's dist (its fail-first is inferred from the unit suite), and `live-smoke.cjs` has not been run locally against `file://dist` with this change; the machine's load stayed above the limit for local browsers. CI ran the check green in three browsers and two origins | open |
+
+### W7f closed (#169)
+
+Both sequences were reproduced first: as unit tests, and as the browser check
+`calibrated-only-for-a-checked-input`, which on main's dist (2961ca7) read "CALIBRATED
+(reference offset applied)" after `useLoopback()`, a real TEST CONTEXT measurement and
+`useMicrophone()`, in chromium over file:// and /oscilla/ (CI run 37585150710 on the test-only
+commit). The fix is at the binding and not at the two hooks, so a third sequence the routes
+implied is closed with them (a reading typed in TEST CONTEXT for an injected input, then a real
+check of a microphone with the same binding):
+
+- The current input carries the context that named it, and `inputKnown()` in
+  `src/js/ui/measure.js` is the only reader: an input named in TEST CONTEXT is no input on the
+  microphone, and the reverse.
+- Entering or leaving TEST CONTEXT releases the input, a captured reference and the setup
+  check's facts.
+- A level calibration made in one context does not apply in the other; it reads UNCALIBRATED
+  with the reason and is not deleted.
+
+ADR 0017's C1 is unchanged: a calibration is stored only with its input and applied only for
+it, by the workspace and again by the engine; this only refuses more. A user reaches TEST
+CONTEXT by the URL flag alone, before anything is checked, so no user path changes with #169.
+The change goes beyond the three guards the owner approved on 2026-10-07; ADR 0052 records it
+as a resolution note and stays `proposed` for the owner. #167 (W7b) makes the same transition
+a user's choice in the page and clears what was made in TEST CONTEXT when it is left: the two
+changes meet in `measure.js`, and the one that lands second keeps one transition function and
+the read-side rule of this one.
+
+What #169 leaves open: W7g for the live smoke's one call (with W7e, #168), and W7a, W7b, W7d,
+W7e and W7j, which it does not touch.
