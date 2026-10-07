@@ -10,8 +10,9 @@ import path from 'node:path';
 import { test } from 'node:test';
 import { gitRunner } from '../../scripts/release-metadata.mjs';
 import {
-  STUCK_AFTER_MIN, WAITING_STATUSES, diagnoseStuckRuns, finishLine, jobStarted,
-  preconditionProblems, publish, releaseCreateFlags, releaseNotes, runStarted, stuckPagesRuns,
+  PAGES_TIMEOUT_MIN, STUCK_AFTER_MIN, WAITING_STATUSES, diagnoseStuckRuns, finishLine,
+  jobStarted, preconditionProblems, publish, releaseCreateFlags, releaseNotes, runStarted,
+  stuckPagesRuns,
 } from '../../scripts/release-publish.mjs';
 import {
   GATE_TREE_EXCLUDE, RECEIPT_KEYS, computeGateTree, currentFingerprint, gateTreePaths,
@@ -477,6 +478,31 @@ test('--yes: a Pages run of HEAD that never starts is diagnosed, not watched', a
   assert.ok(!f.calls.some((c) => c[0] === 'gh' && c[1] === 'run' && c[2] === 'watch'),
     'gh run watch has no timeout: a run of which no job has started is never watched');
   assert.ok(!f.calls.some((c) => c[0] === 'gh' && c[1] === 'release'));
+});
+
+// pages.yml holds its concurrency group for a whole run (deploy, then three smoke legs, each
+// job bounded at 10 minutes), so a healthy run of HEAD can sit behind another for about 20.
+// The default wait outlasts that: a job that starts in minute 24 is watched, not given up on
+// with the tag already on origin.
+test('--yes: the default wait outlasts one whole Pages run ahead in the group', async () => {
+  assert.ok(PAGES_TIMEOUT_MIN > 20 && PAGES_TIMEOUT_MIN > STUCK_AFTER_MIN);
+  const time = fakeTime();
+  const f = fakes({
+    runs: (args) => (args.includes('--commit')
+      ? [{ databaseId: 7004, status: 'queued', headSha: HEAD, createdAt: ago(1) }] : []),
+    jobs: () => (time.clock() - NOW < 24 * 60_000 ? NEVER_STARTED : [job('deploy', 'in_progress')]),
+  });
+  const code = await publish({ argv: ['--yes'], run: f.run, sh: f.sh, log: f.log,
+    receipt: RECEIPT, fingerprint: FP, ...time });
+  assert.equal(code, 0, f.out.join('\n'));
+  assert.ok(f.calls.some((c) => c.join(' ') === 'gh run watch 7004 --exit-status'));
+  // and it is still a bound: a run of which no job ever starts ends the publish at the default
+  const g = fakes({ runs: [{ databaseId: 7005, status: 'queued', headSha: HEAD,
+    createdAt: ago(1) }], jobs: { 7005: NEVER_STARTED } });
+  assert.equal(await publish({ argv: ['--yes'], run: g.run, sh: g.sh, log: g.log,
+    receipt: RECEIPT, fingerprint: FP, ...fakeTime() }), 1);
+  assert.match(g.out.join('\n'),
+    new RegExp(`with no job started after ${PAGES_TIMEOUT_MIN} min`));
 });
 
 test('--yes: tags, waits for a job of the Pages run to start, verifies, releases', async () => {
