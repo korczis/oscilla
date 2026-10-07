@@ -22,9 +22,11 @@
 # its own step, and the engine suite names a stalled check itself well before either.
 name: CI
 
+# pull_request only (project.ci-bounded, `triggers`): the fail-first and review-verdict jobs
+# judge a pull request, and a manual run on a PR's branch would have none to judge while its
+# `gate` landed on the same commit as the required check.
 on:
   pull_request:
-  workflow_dispatch:
 
 permissions:
   contents: read
@@ -294,6 +296,7 @@ jobs:
           test "$want" = "1.63.0" || { echo "lockfile playwright $want, image v1.63.0"; exit 1; }
       - name: 1536x1024 --play scene, the MEASURE and STUDIO references against the accepted baselines
         run: npm run test:visual
+        timeout-minutes: 8
       - name: Upload current, reference, diff and report on failure
         if: failure()
         uses: actions/upload-artifact@v7
@@ -329,6 +332,7 @@ jobs:
         with:
           fetch-depth: 0
       - name: Install Majordomus ${{ env.MJ_VERSION }} (pinned version and digest)
+        timeout-minutes: 5
         run: |
           a="majordomus-v${MJ_VERSION}-${MJ_TARGET}.tar.gz"
           curl -fsSL --proto '=https' --retry 5 --retry-all-errors --retry-delay 5 --connect-timeout 20 \
@@ -348,10 +352,83 @@ jobs:
           jq -e -s -f .github/doctor-verdict.jq doctor.jsonl > /dev/null \
             || { echo "::error::majordomus doctor: a failure (listed above), or no OK layout"; exit 1; }
 
+  fail-first:
+    # project.fail-first: for a PR whose title starts with feat or fix, the unit test files it
+    # adds or changes must fail on the merge base's tree and pass on the head's
+    # (scripts/fail-first.mjs, tested by tests/unit/fail-first.test.mjs), unless the PR body
+    # carries `fail-first: n/a <reason>`, which the step prints. Title and body are read from
+    # the PR as it is now, not from the event, so re-running the job after editing the body is
+    # enough. Any other title passes with nothing to prove. The program that judges is the base
+    # branch's copy (.github/scripts/base-rule.sh), not the one this pull request carries.
+    name: fail-first (feat/fix tests fail without the change)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: The PR's added or changed unit tests fail on the merge base
+        timeout-minutes: 10
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          if [ -z "$PR" ]; then echo "::error::fail-first: no pull request to judge"; exit 1; fi
+          n=0
+          until gh pr view "$PR" --repo "$GITHUB_REPOSITORY" --json title,body > "$RUNNER_TEMP/pr.json"; do
+            n=$((n + 1)); [ "$n" -lt 3 ] || { echo "::error::could not read PR $PR"; exit 1; }
+            sleep 10
+          done
+          .github/scripts/base-rule.sh "origin/$GITHUB_BASE_REF" scripts/fail-first.mjs \
+            --pr-json "$RUNNER_TEMP/pr.json" --head "$HEAD_SHA" \
+            --base-branch "origin/$GITHUB_BASE_REF"
+
+  review-verdict:
+    # project.review-verdict: a PR that changes a guarded path (the audio, analysis, experiments
+    # and studio modules, core/storage*, scripts/release-*, all of .github/, and the programs
+    # and tests of the three process rules: GUARDED in scripts/review-verdict.mjs) needs
+    # .ai/repo/reviews/<pr>.yaml: `verdict: merge`, the reviewer session, the content it
+    # reviewed and no open P0 or P1 finding (scripts/review-verdict.mjs, tested by
+    # tests/unit/review-verdict.test.mjs). `content` is a SHA-256 over the guarded paths the PR
+    # changes against its merge base, so committing the verdict, a commit outside the guarded
+    # paths and a merge of main that leaves those paths alone all keep it, and a change to one
+    # of them does not. What is judged is HEAD of this checkout: the pull request as GitHub
+    # merged it with the base branch for this run, so a base that changed one of the PR's
+    # guarded files since the review is seen here. Any other PR passes without a verdict. The
+    # script needs no dependency, so nothing is installed. The program that judges, and so the
+    # guarded list, is the base branch's copy (.github/scripts/base-rule.sh): a pull request
+    # that edits the list is judged by the list it found.
+    name: review-verdict (guarded paths need a recorded review)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+      - name: A guarded change carries a verdict for the content it changes
+        env:
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          if [ -z "$PR" ]; then echo "::error::review-verdict: no pull request to judge"; exit 1; fi
+          .github/scripts/base-rule.sh "origin/$GITHUB_BASE_REF" scripts/review-verdict.mjs \
+            --pr "$PR" --head HEAD --base-branch "origin/$GITHUB_BASE_REF"
+
   gate:
     name: gate
     if: always()
-    needs: [unit, knowledge, engine, suites, measure, studio, browser, visual]
+    needs: [unit, knowledge, fail-first, review-verdict, engine, suites, measure, studio, browser, visual]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:

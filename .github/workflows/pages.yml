@@ -66,6 +66,7 @@ jobs:
       - id: deployment
         uses: actions/deploy-pages@v5
       - name: Verify the live deployment (fatal)
+        timeout-minutes: 5
         # 10 attempts, 10 s apart: normalised live == committed dist, commit == GITHUB_SHA,
         # version == package.json, digest == recomputed, p5 vendor marker, no module script,
         # og:image meta, og-image.png and apple-touch-icon.png byte-equal to site/.
@@ -83,10 +84,14 @@ jobs:
     # smoke itself 3.1 s chromium, 5.9 s firefox, 10.8 s webkit; whole jobs 33 s, 53 s, 79 s,
     # mostly the browser install (21 s, 30 s + 7 s sink, 57 s). The legs run in parallel, so
     # the smoke adds about 80 s to a deployment.
+    # Installs go through .github/scripts/ci-install.sh like ci.yml's (project.ci-bounded): a
+    # slow apt mirror is cut and retried there instead of running into the job's limit. Budgets
+    # are per step, as in ci.yml (install 15, Firefox's sink 13, the smoke 5); the job's is
+    # their sum, rounded up.
     name: Public smoke (${{ matrix.browser }})
     needs: deploy
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 35
     strategy:
       fail-fast: false
       matrix:
@@ -99,15 +104,18 @@ jobs:
           cache: npm
       - run: npm ci
       - name: Install ${{ matrix.browser }}
-        run: npx playwright install --with-deps ${{ matrix.browser }}
+        run: .github/scripts/ci-install.sh browser ${{ matrix.browser }}
+        timeout-minutes: 15
       - name: Audio sink for headless Firefox (no sound server on the runner)
         if: matrix.browser == 'firefox'
+        timeout-minutes: 13
         run: |
-          sudo apt-get update -q && sudo apt-get install -y --no-install-recommends pulseaudio
+          .github/scripts/ci-install.sh apt pulseaudio
           pulseaudio --start --exit-idle-time=-1
           pactl load-module module-null-sink sink_name=ci_null
           pactl set-default-sink ci_null
       - name: Public smoke of the deployed page (fatal)
+        timeout-minutes: 5
         run: >-
           npm run test:live -- --url "${{ needs.deploy.outputs.page_url }}"
           --expect-version "$(node -p "require('./package.json').version")"
