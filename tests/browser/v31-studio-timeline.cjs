@@ -7,10 +7,13 @@
 //        [--origins file,http] [--only name1,name2] [--json out.json] [--screens]
 //   (or OSC_BROWSERS=...)
 //
-// The editor is mounted through the app's test seam (window.OSCILLA.studioTimeline: the mount
-// functions plus a Studio context — store, runtime, transport — on the app's ONE AudioEngine,
-// wired as the Studio shell wires it). Each check mounts a fresh Subtractive Synth (the §257
-// reference: Source track with Tone 0-1 s and Sweep 1-3 s, filter cutoff lane 500 Hz → 8 kHz).
+// The editor under test is the one the STUDIO workspace mounts ([data-osc="studio.timeline"]) on
+// the page's ONE Studio document: the canonical store, runtime and transport that
+// window.OSCILLA.studio observes (rule project.studio-model-is-canonical; ledger W7a). No second
+// store or transport is built for the suite. Each check opens a fresh Subtractive Synth through
+// the template gallery's own action (the §257 reference: Source track with Tone 0-1 s and Sweep
+// 1-3 s, filter cutoff lane 500 Hz → 8 kHz), which also empties the undo history. What the
+// editor announces is read where a screen reader gets it: the workspace's live regions.
 //
 // Checks per browser and origin (asserted):
 //   mount               tracks, clips, lane, points, ruler ticks, loop handles, accessible labels
@@ -28,16 +31,18 @@
 //                       entry "2 kHz"; curve choice; Delete removes; lane scale is logarithmic
 //   loop-markers        M adds a marker at the playhead, ←/→ move it, L toggles the loop, loop
 //                       handle by keyboard, ruler click locates the transport
-//   playback            Space plays, the playhead element follows transport.playhead(), an edit
-//                       during playback goes through the transport's edit path (decisions
-//                       recorded), Space stops: 0 engine nodes and sources
+//   playback            Space plays, the playhead element follows transport.playhead(), the
+//                       workspace header shows Playing, an edit during playback goes through the
+//                       transport's edit path (decisions recorded), Space stops: 0 engine nodes
+//                       and sources
 //   escape-priority     while playing: Escape first cancels a drag (audio continues), then closes
 //                       the details, then stops audio (0 nodes); the Playground plays afterwards
-//   workspace           the STUDIO workspace's own mount (its store and transport) next to the
-//                       seam instance: one root per host, keys move the focused instance's
-//                       clip only, Space plays its transport only, Escape stops it (0 nodes)
-//   compact             renderCompactTimeline draws the same model (clip count, positions) and
-//                       moves only the playhead on repeated calls; follows a store change
+//   workspace           the page holds ONE timeline editor, on the Studio document: its clips are
+//                       the model's, the header is the one transport on screen, a key moves the
+//                       model's clip, Space plays the Studio transport and not the Playground
+//                       instrument, Escape stops it (0 nodes)
+//   compact             the Playground's compact Studio shows the same document: a clip
+//                       duplicated in the timeline appears as a clip chip, and undo removes it
 //   layout              no horizontal page overflow at 320, 375, 768, 1024, 1280 and 1536 px;
 //                       light theme text contrast >= 4.5:1 on its surfaces
 //   touch-targets       coarse pointer: buttons and handles >= 44 px
@@ -50,6 +55,7 @@ const os = require('node:os');
 const path = require('node:path');
 const { pathToFileURL } = require('node:url');
 const suite = require('./lib/suite.cjs');
+const { until } = require('./lib/wait.cjs');
 
 const argv = process.argv.slice(2);
 const arg = (name, fallback) => {
@@ -96,31 +102,74 @@ async function waitForServer(url) {
 }
 
 // ------------------------------------------------------------------------------ page helpers
-/** Mount a fresh timeline (disposing the previous one) in a fixed overlay host. */
-async function mount(page, { width = null, template = 'subtractive-synth' } = {}) {
-  await page.evaluate(async ({ width, template }) => {
-    const T = window.__tl;
-    if (T) {
-      T.handle.destroy();
-      await T.ctx.dispose();
-      T.host.remove();
+// The workspace's timeline host, and the editor it mounts there (section.osc-stl, the one
+// timeline editor of the page: the `workspace` check asserts there is no other).
+const TL = '[data-osc="studio.timeline"]';
+
+/**
+ * Record what the STUDIO workspace announces: every text its polite and assertive live regions
+ * take (the invisible suffix that makes a repeated sentence announce again is dropped).
+ */
+async function listen(page) {
+  await page.evaluate(() => {
+    if (window.__said) return;
+    window.__said = [];
+    for (const sel of ['[data-osc="studio.live"]', '[data-osc="studio.alert"]']) {
+      const region = document.querySelector(sel);
+      new MutationObserver(() => {
+        const text = region.textContent.replace(/[​-‍⁠﻿]/g, '').trim();
+        if (text) window.__said.push(text);
+      }).observe(region, { childList: true, characterData: true, subtree: true });
     }
-    const seam = window.OSCILLA.studioTimeline;
-    const ctx = seam.createContext({ template });
-    const host = document.createElement('div');
-    host.id = 'tl-host';
-    host.style.cssText = 'position:fixed;left:0;right:0;top:0;z-index:1000;padding:16px;'
-      + `background:var(--osc-bg);box-sizing:border-box;${width ? `width:${width}px;` : ''}`;
-    document.body.append(host);
-    const handle = seam.mountStudioTimeline(host, ctx);
-    window.__tl = { ctx, host, handle, seam };
-  }, { width, template });
-  await sleep(80);
+  });
+}
+
+/**
+ * A fresh Subtractive Synth in the STUDIO workspace: the template gallery's Open action
+ * (app.studioLoadTemplate is the button's own handler) on the canonical store, the playhead
+ * returned to the start, the timeline in view and nothing announced yet.
+ */
+async function fresh(page, { template = 'subtractive-synth' } = {}) {
+  await page.evaluate(() => {
+    const a = window.OSCILLA.app;
+    if (a.workspace !== 'studio') a.setWorkspace('studio');
+  });
+  await page.waitForFunction((tl) => document.querySelector('#osc-app').dataset.mode === 'studio'
+    && !!window.OSCILLA.app.studio.ready
+    && !!document.querySelector(`${tl} [data-osc="studio.tl.root"]`), TL, { timeout: 10000 });
+  await listen(page);
+  // A check that failed with the details panel open must not leave it to the next one.
+  const open = await page.evaluate((tl) => {
+    const d = document.querySelector(`${tl} [data-osc="studio.tl.details"]`);
+    if (!d || d.hidden) return false;
+    const field = d.querySelector('input, select, button');
+    if (field) field.focus();
+    return true;
+  }, TL);
+  if (open) await page.keyboard.press('Escape');
+  await page.evaluate(async (id) => {
+    const O = window.OSCILLA;
+    if (O.studio.transport.playing) await O.studio.transport.stop();
+    if (!O.app.studioLoadTemplate(id)) throw new Error(`template ${id} did not open`);
+    O.studio.transport.returnToStart();
+  }, template);
+  await until(() => page.evaluate((tl) => {
+    const st = window.OSCILLA.studio;
+    const root = document.querySelector(`${tl} [data-osc="studio.tl.root"]`);
+    const details = root.querySelector('[data-osc="studio.tl.details"]');
+    return st.store.debugInfo().undoDepth === 0 && !st.transport.playing
+      && st.transport.playhead().position === 0 && (!details || details.hidden)
+      && root.querySelectorAll('.osc-stl-clip').length === st.model.timeline.clips.length
+      && st.model.timeline.clips.length > 0;
+  }, TL), { ms: 5000, what: 'a fresh template is rendered by the workspace timeline' });
+  await page.evaluate((tl) => {
+    document.querySelector(tl).scrollIntoView({ block: 'center' });
+    window.__said.length = 0;
+  }, TL);
 }
 
 const H = {
-  model: (page) => page.evaluate(() => JSON.parse(JSON.stringify(
-    window.__tl.ctx.store.getModel()))),
+  model: (page) => page.evaluate(() => JSON.parse(JSON.stringify(window.OSCILLA.studio.model))),
   clip: async (page, id) => (await H.model(page)).timeline.clips.find((c) => c.id === id) || null,
   rect: (page, sel) => page.evaluate((s) => {
     const n = document.querySelector(s);
@@ -131,10 +180,19 @@ const H = {
   }, sel),
   focus: (page, sel) => page.evaluate((s) => document.querySelector(s).focus(), sel),
   key: async (page, k) => { await page.keyboard.press(k); await sleep(40); },
-  said: (page) => page.evaluate(() => window.__tl.ctx.announcements.slice()),
+  said: (page) => page.evaluate(() => window.__said.slice()),
+  /** What was announced, once every pattern has been heard (bounded; never throws). */
+  heard: (page, patterns, ms = 2000) => H.until(() => H.said(page),
+    (said) => patterns.every((re) => said.some((t) => re.test(t))), ms),
   counts: (page) => page.evaluate(() => ({ nodes: window.OSCILLA.engine.activeNodeCount,
     sources: window.OSCILLA.engine.activeSourceCount,
-    playing: window.__tl ? window.__tl.ctx.transport.playing : false })),
+    playing: window.OSCILLA.studio.transport.playing })),
+  /** The playhead as the transport reports it and as the editor drew it (px from 0 s). */
+  playhead: (page) => page.evaluate((tl) => {
+    const el = document.querySelector(`${tl} [data-osc="studio.tl.playhead"]`);
+    const m = /translateX\(([-\d.]+)px\)/.exec(el.style.transform || '');
+    return { p: window.OSCILLA.studio.transport.playhead().position, x: m ? Number(m[1]) : null };
+  }, TL),
   until: async (fn, test, ms = 4000, step = 40) => {
     const t0 = Date.now();
     let v = await fn();
@@ -157,8 +215,10 @@ const H = {
     await page.mouse.up();
     await sleep(60);
   },
-  stop: (page) => page.evaluate(() => (window.__tl ? window.__tl.ctx.transport.stop()
-    : Promise.resolve(null))),
+  stop: (page) => page.evaluate(() => {
+    const st = window.OSCILLA && window.OSCILLA.studio;
+    return st && st.transport ? st.transport.stop() : null;
+  }),
 };
 
 function result(failed, extra) {
@@ -170,9 +230,9 @@ function result(failed, extra) {
 function defineChecks() {
   return [
     { name: 'mount', fn: async ({ page }) => {
-      await mount(page);
+      await fresh(page);
       const v = await page.evaluate(() => {
-        const r = document.querySelector('#tl-host [data-osc="studio.tl.root"]');
+        const r = document.querySelector('.osc-stl');
         const clips = [...r.querySelectorAll('.osc-stl-clip')];
         return {
           clips: clips.map((c) => ({ id: c.dataset.clip, label: c.getAttribute('aria-label'),
@@ -186,7 +246,8 @@ function defineChecks() {
           loopHandles: r.querySelectorAll('[role="slider"]').length,
           heads: [...r.querySelectorAll('.osc-stl-hname')].map((n) => n.textContent),
           region: r.getAttribute('role'),
-          time: r.querySelector('[data-osc="studio.tl.time"]').textContent,
+          inHost: !!r.closest('[data-osc="studio.timeline"]'),
+          time: document.querySelector('[data-osc="studio.time"]').textContent,
           laneScale: r.querySelector('.osc-stl-hrow--lane .osc-stl-chip').textContent,
         };
       });
@@ -201,21 +262,22 @@ function defineChecks() {
         ticks: v.ticks >= 4,
         loop: v.loopHandles === 2,
         heads: v.heads.includes('Source') && v.heads.some((h) => /Cutoff|Frequency/.test(h)),
-        region: v.region === 'region',
+        region: v.region === 'region' && v.inHost,
         clock: v.time === '00:00.000',
       }, { v });
     } },
 
     { name: 'clip-drag', fn: async ({ page }) => {
-      await mount(page);
-      const r = await H.rect(page, '#tl-host [data-clip="clip-2"]');
+      await fresh(page);
+      const r = await H.rect(page, '.osc-stl [data-clip="clip-2"]');
       // +0.53 s at 100 px/s with the 0.1 s grid -> 1.5 s.
       await H.drag(page, { x: r.cx, y: r.cy }, { x: r.cx + 53, y: r.cy });
       const moved = await H.clip(page, 'clip-2');
-      const said = await H.said(page);
-      const undoDepth = await page.evaluate(() => window.__tl.ctx.store.debugInfo().undoDepth);
+      const said = await H.heard(page, [/Moved pattern clip to 1\.500 s on Source/]);
+      const undoDepth = await page.evaluate(() => window.OSCILLA.studio.store.debugInfo()
+        .undoDepth);
       // Escape mid-drag cancels.
-      const r2 = await H.rect(page, '#tl-host [data-clip="clip-2"]');
+      const r2 = await H.rect(page, '.osc-stl [data-clip="clip-2"]');
       await page.mouse.move(r2.cx, r2.cy);
       await page.mouse.down();
       await page.mouse.move(r2.cx + 40, r2.cy, { steps: 5 });
@@ -224,10 +286,10 @@ function defineChecks() {
       await sleep(60);
       const afterEsc = await H.clip(page, 'clip-2');
       const transform = await page.evaluate(() => document.querySelector(
-        '#tl-host [data-clip="clip-2"]')
+        '.osc-stl [data-clip="clip-2"]')
         .style.transform);
       // Undo from the keyboard (focus is on the clip).
-      await H.focus(page, '#tl-host [data-clip="clip-2"]');
+      await H.focus(page, '.osc-stl [data-clip="clip-2"]');
       await H.key(page, process.platform === 'darwin' ? 'Meta+z' : 'Control+z');
       const undone = await H.clip(page, 'clip-2');
       return result({
@@ -240,18 +302,18 @@ function defineChecks() {
     } },
 
     { name: 'clip-resize', fn: async ({ page }) => {
-      await mount(page);
-      const r = await H.rect(page, '#tl-host [data-clip="clip-1"]');
+      await fresh(page);
+      const r = await H.rect(page, '.osc-stl [data-clip="clip-1"]');
       // End handle: 1.0 s -> 0.6 s.
       await H.drag(page, { x: r.x + r.w - 3, y: r.cy }, { x: r.x + r.w - 43, y: r.cy });
       const c1 = await H.clip(page, 'clip-1');
       // Below the tone minimum: clamped, start never moves.
-      const r2 = await H.rect(page, '#tl-host [data-clip="clip-1"]');
+      const r2 = await H.rect(page, '.osc-stl [data-clip="clip-1"]');
       await page.mouse.move(r2.x + r2.w - 3, r2.cy);
       await page.mouse.down();
       await page.mouse.move(r2.x - 30, r2.cy, { steps: 6 });
       const chip = await page.evaluate(() => {
-        const n = document.querySelector('#tl-host .osc-stl-dragchip');
+        const n = document.querySelector('.osc-stl .osc-stl-dragchip');
         return { hidden: n.hidden, text: n.textContent, bad: n.dataset.bad };
       });
       await page.mouse.up();
@@ -265,34 +327,35 @@ function defineChecks() {
     } },
 
     { name: 'clip-keyboard', fn: async ({ page }) => {
-      await mount(page);
-      await H.focus(page, '#tl-host [data-clip="clip-2"]');
+      await fresh(page);
+      await H.focus(page, '.osc-stl [data-clip="clip-2"]');
       await H.key(page, 'ArrowRight');
       const a = await H.clip(page, 'clip-2');
       await H.key(page, 'Shift+ArrowRight');
       const b = await H.clip(page, 'clip-2');
       await H.key(page, 'Enter');
       const det = await page.evaluate(() => ({
-        open: !document.querySelector('#tl-host [data-osc="studio.tl.details"]').hidden,
+        open: !document.querySelector('.osc-stl [data-osc="studio.tl.details"]').hidden,
         focus: document.activeElement.dataset.field }));
-      await page.fill('#tl-host [data-osc="studio.tl.details"] [data-field="start"]', '2.5');
-      await page.press('#tl-host [data-osc="studio.tl.details"] [data-field="start"]', 'Enter');
+      await page.fill('.osc-stl [data-osc="studio.tl.details"] [data-field="start"]', '2.5');
+      await page.press('.osc-stl [data-osc="studio.tl.details"] [data-field="start"]', 'Enter');
       await sleep(60);
-      await page.fill('#tl-host [data-osc="studio.tl.details"] [data-field="duration"]', '1.25');
-      await page.press('#tl-host [data-osc="studio.tl.details"] [data-field="duration"]', 'Tab');
+      await page.fill('.osc-stl [data-osc="studio.tl.details"] [data-field="duration"]', '1.25');
+      await page.press('.osc-stl [data-osc="studio.tl.details"] [data-field="duration"]', 'Tab');
       await sleep(60);
       const c = await H.clip(page, 'clip-2');
       await H.key(page, 'Escape');
       const back = await H.active(page);
       const closed = await page.evaluate(() => document.querySelector(
-        '#tl-host [data-osc="studio.tl.details"]').hidden);
+        '.osc-stl [data-osc="studio.tl.details"]').hidden);
       await H.key(page, process.platform === 'darwin' ? 'Meta+d' : 'Control+d');
       const dup = (await H.model(page)).timeline.clips;
       const dupFocus = await H.active(page);
       await H.key(page, 'Delete');
       const afterDel = (await H.model(page)).timeline.clips;
       const delFocus = await H.active(page);
-      const said = await H.said(page);
+      const said = await H.heard(page, [/Moved pattern clip to 1\.100 s/, /Duplicated clip/,
+        /Deleted/]);
       return result({
         arrow: near(a.start, 1.1),
         shift: near(b.start, 1.11),
@@ -309,27 +372,27 @@ function defineChecks() {
     } },
 
     { name: 'create-split', fn: async ({ page }) => {
-      await mount(page);
-      await page.click('#tl-host [data-key="track-add:track-1"]');
+      await fresh(page);
+      await page.click('.osc-stl [data-key="track-add:track-1"]');
       await sleep(60);
       const m1 = await H.model(page);
       const added = m1.timeline.clips.find((c) => !['clip-1', 'clip-2'].includes(c.id));
       // Double-click an empty spot at 6.0 s.
-      const row = await H.rect(page, '#tl-host .osc-stl-row--track');
-      const content = await H.rect(page, '#tl-host .osc-stl-content');
+      const row = await H.rect(page, '.osc-stl .osc-stl-row--track');
+      const content = await H.rect(page, '.osc-stl .osc-stl-content');
       await page.mouse.dblclick(content.x + 600, row.cy);
       await sleep(80);
       const m2 = await H.model(page);
       const at6 = m2.timeline.clips.find((c) => near(c.start, 6));
       // Split the 220 -> 880 log sweep at 2.0 s (the halfway point: 440 Hz).
-      await page.evaluate(() => window.__tl.ctx.transport.locate(2));
-      await H.focus(page, '#tl-host [data-clip="clip-2"]');
+      await page.evaluate(() => window.OSCILLA.studio.transport.locate(2));
+      await H.focus(page, '.osc-stl [data-clip="clip-2"]');
       await H.key(page, 's');
       const m3 = await H.model(page);
       const left = m3.timeline.clips.find((c) => c.id === 'clip-2');
       const right = m3.timeline.clips.find((c) => c.kind === 'pattern' && near(c.start, 2)
         && c.payload.blockType === 'sweep');
-      const undo = await page.evaluate(() => window.__tl.ctx.store.undo());
+      const undo = await page.evaluate(() => window.OSCILLA.studio.store.undo());
       const m4 = await H.model(page);
       return result({
         headerAdd: !!added && near(added.start, 3) && added.payload.blockType === 'tone',
@@ -344,9 +407,9 @@ function defineChecks() {
     } },
 
     { name: 'automation', fn: async ({ page }) => {
-      await mount(page);
-      const lane = await H.rect(page, '#tl-host .osc-stl-row--lane');
-      const content = await H.rect(page, '#tl-host .osc-stl-content');
+      await fresh(page);
+      const lane = await H.rect(page, '.osc-stl .osc-stl-row--lane');
+      const content = await H.rect(page, '.osc-stl .osc-stl-content');
       await page.mouse.dblclick(content.x + 150, lane.y + lane.h / 2);
       await sleep(80);
       const m1 = await H.model(page);
@@ -354,27 +417,27 @@ function defineChecks() {
       const added = pts.find((p) => !['pt-1', 'pt-2'].includes(p.id));
       const focus1 = await H.active(page);
       // Drag it +0.5 s.
-      const pr = await H.rect(page, `#tl-host [data-point="${added.id}"]`);
+      const pr = await H.rect(page, `.osc-stl [data-point="${added.id}"]`);
       await H.drag(page, { x: pr.cx, y: pr.cy }, { x: pr.cx + 50, y: pr.cy });
       const moved = (await H.model(page)).timeline.automation[0].points
         .find((p) => p.id === added.id);
-      await H.focus(page, `#tl-host [data-point="${added.id}"]`);
+      await H.focus(page, `.osc-stl [data-point="${added.id}"]`);
       await H.key(page, 'ArrowUp');
       const up = (await H.model(page)).timeline.automation[0].points.find((p) => p.id === added.id);
       await H.key(page, 'Enter');
-      await page.fill('#tl-host [data-osc="studio.tl.details"] [data-field="value"]', '2 kHz');
-      await page.press('#tl-host [data-osc="studio.tl.details"] [data-field="value"]', 'Enter');
+      await page.fill('.osc-stl [data-osc="studio.tl.details"] [data-field="value"]', '2 kHz');
+      await page.press('.osc-stl [data-osc="studio.tl.details"] [data-field="value"]', 'Enter');
       await sleep(60);
-      await page.selectOption('#tl-host [data-osc="studio.tl.details"] [data-field="curve"]',
+      await page.selectOption('.osc-stl [data-osc="studio.tl.details"] [data-field="curve"]',
         'exponential');
       await sleep(60);
       const typed = (await H.model(page)).timeline.automation[0].points
         .find((p) => p.id === added.id);
       const curveOpts = await page.evaluate(() => [...document.querySelectorAll(
-        '#tl-host [data-osc="studio.tl.details"] [data-field="curve"] option')]
+        '.osc-stl [data-osc="studio.tl.details"] [data-field="curve"] option')]
         .map((o) => o.value));
       await H.key(page, 'Escape');
-      await H.focus(page, `#tl-host [data-point="${added.id}"]`);
+      await H.focus(page, `.osc-stl [data-point="${added.id}"]`);
       await H.key(page, 'Delete');
       const after = (await H.model(page)).timeline.automation[0].points;
       return result({
@@ -389,9 +452,9 @@ function defineChecks() {
     } },
 
     { name: 'loop-markers', fn: async ({ page }) => {
-      await mount(page);
-      await page.evaluate(() => window.__tl.ctx.transport.locate(1.2));
-      await H.focus(page, '#tl-host [data-clip="clip-1"]');
+      await fresh(page);
+      await page.evaluate(() => window.OSCILLA.studio.transport.locate(1.2));
+      await H.focus(page, '.osc-stl [data-clip="clip-1"]');
       await H.key(page, 'm');
       const m1 = await H.model(page);
       const mk = m1.timeline.markers[0];
@@ -400,20 +463,20 @@ function defineChecks() {
       const mk2 = (await H.model(page)).timeline.markers[0];
       await H.key(page, 'l');
       const loopOn = (await H.model(page)).timeline.loop;
-      await H.focus(page, '#tl-host [data-key="loop:end"]');
+      await H.focus(page, '.osc-stl [data-key="loop:end"]');
       await H.key(page, 'ArrowLeft');
       const loop2 = (await H.model(page)).timeline.loop;
       // Ruler click at 2.5 s locates the transport.
-      const ruler = await H.rect(page, '#tl-host .osc-stl-ruler');
-      const content = await H.rect(page, '#tl-host .osc-stl-content');
+      const ruler = await H.rect(page, '.osc-stl .osc-stl-ruler');
+      const content = await H.rect(page, '.osc-stl .osc-stl-content');
       await page.mouse.click(content.x + 250, ruler.y + ruler.h - 4);
       await sleep(60);
-      const ph = await page.evaluate(() => window.__tl.ctx.transport.playhead());
-      const phX = await page.evaluate(() => window.__tl.handle.debug().playheadX);
+      const ph = await page.evaluate(() => window.OSCILLA.studio.transport.playhead());
+      const phX = (await H.until(() => H.playhead(page), (h) => near(h.x, 250, 0.6), 1000)).x;
       // ] jumps to the next marker (none after 2.5 s), [ to the previous one.
-      await H.focus(page, '#tl-host [data-clip="clip-1"]');
+      await H.focus(page, '.osc-stl [data-clip="clip-1"]');
       await H.key(page, '[');
-      const ph2 = await page.evaluate(() => window.__tl.ctx.transport.playhead());
+      const ph2 = await page.evaluate(() => window.OSCILLA.studio.transport.playhead());
       return result({
         marker: !!mk && near(mk.time, 1.2) && focus === `marker:${mk.id}`,
         markerMove: near(mk2.time, 1.3),
@@ -425,22 +488,21 @@ function defineChecks() {
     } },
 
     { name: 'playback', fn: async ({ page }) => {
-      await mount(page);
-      await H.focus(page, '#tl-host [data-clip="clip-1"]');
+      await fresh(page);
+      await H.focus(page, '.osc-stl [data-clip="clip-1"]');
       await H.key(page, ' ');
       const playing = await H.until(() => H.counts(page), (c) => c.playing, 2000);
       await sleep(500);
-      const s1 = await page.evaluate(() => ({ p: window.__tl.ctx.transport.playhead().position,
-        x: window.__tl.handle.debug().playheadX }));
+      const s1 = await H.playhead(page);
       await sleep(300);
-      const s2 = await page.evaluate(() => ({ p: window.__tl.ctx.transport.playhead().position,
-        x: window.__tl.handle.debug().playheadX,
-        state: document.querySelector('#tl-host [data-osc="studio.tl.state"]').textContent }));
+      // The header is the one transport on screen: its PLAY key reads Playing.
+      const s2 = { ...await H.playhead(page), state: await page.evaluate(() => document
+        .querySelector('[data-osc="studio.play"]').getAttribute('aria-pressed')) };
       // Edit during playback: move the sweep one step later.
-      await H.focus(page, '#tl-host [data-clip="clip-2"]');
+      await H.focus(page, '.osc-stl [data-clip="clip-2"]');
       await H.key(page, 'ArrowRight');
       const dbg = await page.evaluate(() => {
-        const d = window.__tl.ctx.transport.debugInfo();
+        const d = window.OSCILLA.studio.transport.debugInfo();
         return { decisions: d.decisions.length, kinds: [...new Set(d.decisions
           .map((x) => x.decision))] };
       });
@@ -448,9 +510,9 @@ function defineChecks() {
       await H.key(page, ' ');
       const after = await H.until(() => H.counts(page),
         (c) => !c.playing && c.nodes === 0 && c.sources === 0, 3000);
-      const said = await H.said(page);
+      const said = await H.heard(page, [/^Playing from/, /^Stopped$/]);
       return result({
-        playing: playing.playing && s2.state === 'PLAYING',
+        playing: playing.playing && s2.state === 'true',
         advances: s2.p > s1.p && s1.p > 0.2,
         follows: near(s2.x / 100, s2.p, 0.12),
         editPath: dbg.decisions > 0,
@@ -461,10 +523,10 @@ function defineChecks() {
     } },
 
     { name: 'escape-priority', fn: async ({ page }) => {
-      await mount(page);
-      await page.evaluate(() => window.__tl.handle.commands.play());
+      await fresh(page);
+      await page.click('[data-osc="studio.play"]');
       await H.until(() => H.counts(page), (c) => c.playing, 2000);
-      const r = await H.rect(page, '#tl-host [data-clip="clip-2"]');
+      const r = await H.rect(page, '.osc-stl [data-clip="clip-2"]');
       await page.mouse.move(r.cx, r.cy);
       await page.mouse.down();
       await page.mouse.move(r.cx + 40, r.cy, { steps: 5 });
@@ -473,24 +535,23 @@ function defineChecks() {
       await sleep(80);
       const afterGesture = await H.counts(page);
       const clip = await H.clip(page, 'clip-2');
-      await H.focus(page, '#tl-host [data-clip="clip-2"]');
+      await H.focus(page, '.osc-stl [data-clip="clip-2"]');
       await H.key(page, 'Enter');
       await H.key(page, 'Escape');
       const afterPopup = await H.counts(page);
       const closed = await page.evaluate(() => document.querySelector(
-        '#tl-host [data-osc="studio.tl.details"]').hidden);
+        '.osc-stl [data-osc="studio.tl.details"]').hidden);
       await H.key(page, 'Escape');
       const stopped = await H.until(() => H.counts(page),
         (c) => !c.playing && c.nodes === 0 && c.sources === 0, 3000);
       // The Playground keeps working: a latched voice plays and stops cleanly.
-      await page.evaluate(() => window.__tl.host.style.setProperty('display', 'none'));
+      await page.evaluate(() => window.OSCILLA.app.setWorkspace('playground'));
       await page.evaluate(() => window.OSCILLA.app.play('hold'));
       const pg = await H.until(() => page.evaluate(() => ({ playing: window.OSCILLA.app.playing,
         nodes: window.OSCILLA.engine.activeNodeCount })), (v) => v.playing && v.nodes > 0, 2000);
       await page.evaluate(() => window.OSCILLA.app.stopNow());
       const pgStop = await H.until(() => H.counts(page), (c) => c.nodes === 0 && c.sources === 0,
         3000);
-      await page.evaluate(() => window.__tl.host.style.removeProperty('display'));
       return result({
         gestureFirst: afterGesture.playing && near(clip.start, 1),
         popupSecond: afterPopup.playing && closed,
@@ -500,92 +561,78 @@ function defineChecks() {
     } },
 
     { name: 'workspace', fn: async ({ page }) => {
-      // The real STUDIO workspace mounts its own instance on its own store and transport; the
-      // seam instance stays mounted meanwhile: keys go to the instance that has focus only.
-      await mount(page);
-      await page.evaluate(() => {
-        const a = window.OSCILLA.app;
-        a.alerts = [];
-        if (a.workspace !== 'studio') a.setWorkspace('studio');
-      });
-      await page.waitForFunction(() => document.querySelector('#osc-app').dataset.mode
-        === 'studio', null, { timeout: 10000 });
-      await sleep(150);
-      const W = '[data-osc="studio.timeline"]';
+      // The page holds ONE timeline editor, the STUDIO workspace's, on the ONE Studio document:
+      // there is no second store or transport for it to disagree with (ledger W7a).
+      await fresh(page);
       const v0 = await page.evaluate((w) => {
         const host = document.querySelector(w);
         const st = window.OSCILLA.studio;
-        return { roots: host.querySelectorAll('[data-osc="studio.tl.root"]').length,
-          clips: host.querySelectorAll('.osc-stl-clip').length,
-          modelClips: st.model.timeline.clips.length,
+        return { roots: document.querySelectorAll('[data-osc="studio.tl.root"]').length,
+          inHost: host.querySelectorAll('[data-osc="studio.tl.root"]').length,
+          clips: [...host.querySelectorAll('.osc-stl-clip')].map((c) => c.dataset.clip),
+          modelClips: st.model.timeline.clips.map((c) => c.id),
           visible: host.getBoundingClientRect().height > 0,
           // one transport on screen: the header's; the embedded strip keeps mode and tempo
           tlKeys: host.querySelectorAll('[data-osc="studio.tl.play"], [data-osc="studio.tl.time"]')
             .length,
           headerPlay: document.querySelectorAll('[data-osc="studio.play"]').length,
           tempo: host.querySelectorAll('[data-osc="studio.tl.tempo"]').length };
-      }, W);
-      const start = await page.evaluate(() => window.OSCILLA.studio.model.timeline.clips
-        .find((c) => c.id === 'clip-2').start);
-      await page.evaluate((w) => document.querySelector(`${w} [data-clip="clip-2"]`).focus(), W);
+      }, TL);
+      const start = (await H.clip(page, 'clip-2')).start;
+      await H.focus(page, '.osc-stl [data-clip="clip-2"]');
       await H.key(page, 'ArrowRight');
       const moved = await page.evaluate(() => ({
-        ws: window.OSCILLA.studio.model.timeline.clips.find((c) => c.id === 'clip-2').start,
-        seam: window.__tl.ctx.store.getModel().timeline.clips.find((c) => c.id === 'clip-2')
-          .start }));
+        model: window.OSCILLA.studio.model.timeline.clips.find((c) => c.id === 'clip-2').start,
+        left: parseFloat(document.querySelector('.osc-stl [data-clip="clip-2"]').style.left) }));
       await H.key(page, ' ');
       const playing = await H.until(() => page.evaluate(() => ({
-        ws: window.OSCILLA.studio.transport.playing, seam: window.__tl.ctx.transport.playing,
-        instrument: window.OSCILLA.app.playing })), (x) => x.ws, 2000);
+        studio: window.OSCILLA.studio.transport.playing,
+        instrument: window.OSCILLA.app.playing })), (x) => x.studio, 2000);
       await sleep(300);
       await H.key(page, 'Escape');
       const stopped = await H.until(() => page.evaluate(() => window.OSCILLA.studio.counts()),
         (c) => !c.playing && c.engineNodes === 0 && c.engineSources === 0, 3000);
-      await page.evaluate(() => {
-        const st = window.OSCILLA.studio;
-        while (st.store.canUndo()) st.store.undo();
-        window.OSCILLA.app.setWorkspace('playground');
-      });
       return result({
-        oneInstance: v0.roots === 1 && v0.visible,
+        oneInstance: v0.roots === 1 && v0.inHost === 1 && v0.visible,
         oneTransport: v0.tlKeys === 0 && v0.headerPlay === 1 && v0.tempo === 1,
-        projection: v0.clips === v0.modelClips && v0.clips > 0,
-        keyOwnStore: near(moved.ws, start + 0.1) && near(moved.seam, 1),
-        spaceOwnTransport: playing.ws && !playing.seam && !playing.instrument,
+        projection: v0.clips.length > 0 && v0.clips.join() === v0.modelClips.join(),
+        keyMovesModel: near(moved.model, start + 0.1) && near(moved.left, (start + 0.1) * 100, 0.5),
+        spacePlaysStudio: playing.studio && !playing.instrument,
         escapeStops: !stopped.playing && stopped.engineNodes === 0 && stopped.engineSources === 0,
       }, { v0, start, moved, playing, stopped });
     } },
 
     { name: 'compact', fn: async ({ page }) => {
-      await mount(page);
-      const v = await page.evaluate(async () => {
-        const { seam, ctx } = window.__tl;
-        const host = document.createElement('div');
-        host.style.cssText = 'position:fixed;left:16px;bottom:16px;width:320px;z-index:1001';
-        document.body.append(host);
-        const h1 = seam.renderCompactTimeline(host, ctx.store.getModel(), 1.5);
-        const el1 = h1.element;
-        const clips = [...el1.querySelectorAll('.osc-stc-clip')].map((c) => c.style.left);
-        const head1 = el1.querySelector('.osc-stc-playhead').style.left;
-        const h2 = seam.renderCompactTimeline(host, ctx.store.getModel(), { position: 2 });
-        const same = h2.element === el1;
-        const head2 = el1.querySelector('.osc-stc-playhead').style.left;
-        ctx.store.dispatch({ type: 'CLIP_MOVE', clipId: 'clip-2', start: 2 });
-        const h3 = seam.renderCompactTimeline(host, ctx.store.getModel(), 2);
-        const moved = [...h3.element.querySelectorAll('.osc-stc-clip')].map((c) => c.style.left);
-        const label = h3.element.getAttribute('aria-label');
-        const lanes = h3.element.querySelectorAll('.osc-stc-lane path').length;
-        host.remove();
-        return { clips, head1, head2, same, rebuilt: h3.element !== el1, moved, label, lanes };
+      // The Playground's compact Studio is a second view of the same document (§127-§129): an
+      // edit made in the timeline is the clip chip it shows, and so is its undo.
+      await fresh(page);
+      await H.focus(page, '.osc-stl [data-clip="clip-2"]');
+      await H.key(page, process.platform === 'darwin' ? 'Meta+d' : 'Control+d');
+      const dup = (await H.model(page)).timeline.clips.map((c) => c.id);
+      await page.evaluate(() => window.OSCILLA.app.setWorkspace('playground'));
+      const view = () => page.evaluate(() => {
+        const host = document.querySelector('[data-osc="studio.compact"]');
+        const shown = (el) => !!el && el.getBoundingClientRect().width > 0
+          && el.getBoundingClientRect().height > 0;
+        const m = window.OSCILLA.studio.model;
+        return { shown: shown(host),
+          title: (host.querySelector('[data-osc="studio.compact.title"]') || {}).textContent,
+          modelTitle: m.metadata.title,
+          chips: [...host.querySelectorAll('[data-osc="studio.compact.clip"]')].filter(shown)
+            .map((c) => c.dataset.clipId),
+          clips: m.timeline.clips.map((c) => c.id) };
       });
+      const same = (v, n) => v.shown && v.chips.length === n
+        && [...v.chips].sort().join() === [...v.clips].sort().join();
+      const after = await H.until(view, (v) => same(v, 3), 3000);
+      const undo = await page.evaluate(() => window.OSCILLA.studio.store.undo());
+      const undone = await H.until(view, (v) => same(v, 2), 3000);
       return result({
-        clips: v.clips.length === 2 && near(parseFloat(v.clips[1]), 33.333, 0.001),
-        playhead: near(parseFloat(v.head1), 50, 0.001) && near(parseFloat(v.head2), 66.667, 0.001),
-        cached: v.same,
-        follows: v.rebuilt && near(parseFloat(v.moved[1]), 50, 0.001),
-        lane: v.lanes === 1,
-        summary: /^Timeline: 2 clips on 1 track, 1 automation lane/.test(v.label),
-      }, { v });
+        duplicated: dup.length === 3,
+        follows: same(after, 3) && after.chips.includes(dup[2]),
+        title: after.title === after.modelTitle && /Subtractive Synth/.test(after.title || ''),
+        undo: undo.ok && same(undone, 2) && !undone.chips.includes(dup[2]),
+      }, { dup, after, undo, undone });
     } },
 
     { name: 'layout', fn: async ({ page }) => {
@@ -593,12 +640,12 @@ function defineChecks() {
       let ok = true;
       for (const w of [320, 375, 768, 1024, 1280, 1536]) {
         await page.setViewportSize({ width: w, height: 900 });
-        await mount(page);
+        await fresh(page);
         await sleep(60);
         const v = await page.evaluate(() => {
-          const r = document.querySelector('#tl-host [data-osc="studio.tl.root"]')
-            .getBoundingClientRect();
-          const host = document.getElementById('tl-host');
+          const r0 = document.querySelector('.osc-stl');
+          const r = r0.getBoundingClientRect();
+          const host = r0.closest('[data-osc="studio.timeline"]');
           return { page: document.documentElement.scrollWidth, inner: window.innerWidth,
             right: Math.round(r.right), host: host.scrollWidth - host.clientWidth };
         });
@@ -612,7 +659,7 @@ function defineChecks() {
       // failed at time 1.1:1, help 3.41:1, although the settled colours pass.
       await page.emulateMedia({ reducedMotion: 'reduce' });
       await page.evaluate(() => document.documentElement.setAttribute('data-theme', 'light'));
-      await mount(page);
+      await fresh(page);
       // Colours are measured once the theme has settled: a style flush and two frames (so the
       // theme change has started its transitions, e.g. .osc-btn's 0.12 s colour transition),
       // then every running animation finished, then two consecutive readings that agree
@@ -647,7 +694,7 @@ function defineChecks() {
           return [255, 255, 255];
         };
         const ratio = (sel) => {
-          const n = document.querySelector(`#tl-host ${sel}`);
+          const n = document.querySelector(`.osc-stl ${sel}`);
           const a = lum(rgb(getComputedStyle(n).color));
           const b = lum(bgOf(n));
           return Math.round(((Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05)) * 100) / 100;
@@ -677,12 +724,12 @@ function defineChecks() {
       const page = await context.newPage();
       await page.goto(currentBase, { waitUntil: 'load' });
       await page.waitForSelector('html[data-ready="true"]', { timeout: 15000 });
-      await mount(page);
+      await fresh(page);
       const v = await page.evaluate(() => {
         const coarse = matchMedia('(pointer: coarse)').matches;
         const small = [];
-        const sel = '#tl-host button, #tl-host select, #tl-host input, #tl-host .osc-stl-pt, '
-          + '#tl-host .osc-stl-loop-h';
+        const sel = '.osc-stl button, .osc-stl select, .osc-stl input, .osc-stl .osc-stl-pt, '
+          + '.osc-stl .osc-stl-loop-h';
         for (const n of document.querySelectorAll(sel)) {
           const r = n.getBoundingClientRect();
           if (!r.width) continue;
@@ -698,10 +745,6 @@ function defineChecks() {
         fs.mkdirSync(SHOTS, { recursive: true });
         await page.screenshot({ path: path.join(SHOTS, `${currentKey}-390-touch.png`) });
       }
-      await page.evaluate(async () => {
-        window.__tl.handle.destroy();
-        await window.__tl.ctx.dispose();
-      });
       await context.close();
       return result({ coarse: v.coarse, targets: v.small.length === 0, noOverflow: !v.overflow },
         { v });
@@ -719,13 +762,13 @@ async function screens(page) {
     if (theme === 'light') {
       await page.evaluate(() => document.documentElement.setAttribute('data-theme', 'light'));
     }
-    await mount(page);
+    await fresh(page);
     await page.evaluate(() => {
-      const { ctx } = window.__tl;
-      ctx.store.dispatch({ type: 'MARKER_ADD', kind: 'sweep', time: 1, label: 'Sweep' });
-      ctx.store.dispatch({ type: 'LOOP_SET', enabled: true, start: 0.5, end: 2.5 });
-      ctx.transport.locate(1.75);
-      ctx.store.dispatch({ type: 'SELECTION_CHANGE', selection: { clips: ['clip-2'] } });
+      const { store, transport } = window.OSCILLA.studio;
+      store.dispatch({ type: 'MARKER_ADD', kind: 'sweep', time: 1, label: 'Sweep' });
+      store.dispatch({ type: 'LOOP_SET', enabled: true, start: 0.5, end: 2.5 });
+      transport.locate(1.75);
+      store.dispatch({ type: 'SELECTION_CHANGE', selection: { clips: ['clip-2'] } });
     });
     await sleep(200);
     await page.screenshot({ path: path.join(SHOTS, `${currentKey}-${w}-${theme}.png`) });
