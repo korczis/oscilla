@@ -173,6 +173,20 @@ wired to.
    disconnected, disposed and removed from the engine accounting. The timer is UI bookkeeping
    (`engine._timers`); on a suspended or closed context cleanup runs at once, as the engine does.
 
+**Presentation-only edits (ledger R9).** While running, a model whose execution state is the
+applied plan's (`schema.js` `sameExecutionState`: only node positions and names, markers, track
+names or the Studio metadata differ, the parts `studioHash` does not cover) compiles to that
+same plan. `apply` then runs no compile, no diff and no transaction: it takes the revision
+(`{ ok: true, applied: false, presentation: true, ops: [] }`), the applied record names it with
+the same plan (`planHash`, `studioHash` and `at` unchanged), and the transport neither brings
+claims and lanes in line nor re-plans the timeline, since the clips, lanes, loop and tempo are
+execution state. The plan keeps the model it was compiled from; node names reach only its display
+reasons, as a node's handle reasons already did. `setOptions`, a changed owned-parameter peak and
+any apply while stopped compile as before. `tests/unit/v4-presentation-edits.test.mjs` asserts
+zero compiles and zero Web Audio writes for each presentation edit while playing and exactly one
+compile for a parameter edit; `presentation-edit` in `tests/browser/v31-studio-runtime.cjs`
+drags a node of the playing Basic Tone: no compile, no glitch on the output.
+
 While stopped, `apply` only stores the plan (`applied: false`). `start()` is the transaction
 from the empty plan; `stop()` fades the Master bus to the floor over `STUDIO_STOP_S` (15 ms,
 the engine's fast release; `{ fast: true }`: 8 ms, Escape), stops every source after it,
@@ -299,7 +313,8 @@ the plan that runs is different. A refused or empty plan has `null`.
 
 `runtime.applied()` → `{ revision, studioHash, planHash, at } | null`, also
 `debugInfo().applied`. It is set only when a transaction commits: `start()`, and `apply` while
-running, including an apply that only changes presentation. A refused apply (validate or prepare)
+running. An apply that only changes presentation runs no transaction and moves the record to its
+revision with the same plan (R9, "Transactions" above). A refused apply (validate or prepare)
 leaves it as it was, and so does an apply while stopped, which only stores the plan.
 `setOptions` (microphone permission) re-applies the same model at the same revision, so the
 record keeps its revision and gets the new `planHash`. It is
@@ -393,15 +408,15 @@ Diagnostic code from the table above whenever a step is a refusal or a failure.
 | store | `replace` | `committed`: the revision and the reason (open, template, import) |
 | store | `commit` | `committed` (with the revision), `unchanged`, `rejected` (validation code), `refused` (the gate's reason) |
 | runtime | `compile` | `compiled`: `planHash` and the number of diff ops; `refused`: validation's code |
-| runtime | `apply` | `applied`: `at` (the crossfade time), ops, nodes, edges; `not-applied`: the runtime `state` (stopped: the plan is kept for PLAY); `refused`: `prepare-failed` or `disposed` with the entity that threw |
+| runtime | `apply` | `applied`: `at` (the crossfade time), ops, nodes, edges; `presentation-only`: no compile and no transaction, the record takes the revision (R9); `not-applied`: the runtime `state` (stopped: the plan is kept for PLAY); `refused`: `prepare-failed` or `disposed` with the entity that threw |
 | runtime | `node` | `built`, `replaced`, `retired` |
 | runtime | `route` | `scheduled`: the edge `gain`, from `at`, reached at `end` (the value `ramp.to` returned) |
 | runtime | `param` | `scheduled`: `param`, `value`, `unit`, `via` and `at` for `set` and `glide` (none for a `crossfade`); `stored`: not written now (`via` `next-gate` for an Envelope, else `null`), no `at`; `owned`: not written, another owner drives it |
 | runtime | `update`, `parameters`, `output`, `stop`, `route` | `failed`, with its `<step>-failed` code |
 | runtime | `start`, `stop` | `start` refused (`start-failed`, `nothing-compiled`); `stop`: `at`, `fade` |
 | transport | `play`, `stop` | `playing`: `position`, `baseTime`; `refused`: the failed `phase` and reason; `stopped`: the reason; `aborted`: the context closed or the runtime stopped elsewhere |
-| transport | `admit` | `admitted`; `refused` (`edit-refused`); `not-applied`: `playing: false`, so the edit commits and PLAY applies it |
-| transport | `sync` | `applied`; `refused` (`sync-refused`) |
+| transport | `admit` | `admitted`; `presentation-only` (R9: nothing re-planned); `refused` (`edit-refused`); `not-applied`: `playing: false`, so the edit commits and PLAY applies it |
+| transport | `sync` | `applied`; `presentation-only`; `refused` (`sync-refused`) |
 
 A `param` step is what the node's adapter reports it did (the optional report argument `w` of
 `applyBase` and `update`, `adapters/nodes.js`):

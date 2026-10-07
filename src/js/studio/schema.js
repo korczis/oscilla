@@ -405,6 +405,33 @@ export function executionState(model) {
   };
 }
 
+/**
+ * True when `b` has the execution state of `a` (what executionState selects and studioHash
+ * covers), so that `b` compiles to the plan `a` compiled to: a presentation-only change (R9).
+ * Cheap on the store's structurally shared models: the parts are compared by reference first and
+ * only a part that is a new object is compared by content. Conservative: list order is compared
+ * as well (the compile order follows it), so a reordered list is not claimed to be the same.
+ */
+export function sameExecutionState(a, b) {
+  if (a === b) return true;
+  if (!a || !b || a.schemaVersion !== b.schemaVersion) return false;
+  const same = (x, y) => x === y || canonicalJson(x) === canonicalJson(y);
+  const each = (xs, ys, eq) => xs === ys || (xs.length === ys.length
+    && xs.every((x, i) => x === ys[i] || eq(x, ys[i])));
+  const ga = a.graph;
+  const gb = b.graph;
+  const ta = a.timeline;
+  const tb = b.timeline;
+  return each(ga.nodes, gb.nodes, (x, y) => x.id === y.id && x.type === y.type
+      && same(x.params, y.params))
+    && each(ga.edges, gb.edges, (x, y) => x.id === y.id && same(x.from, y.from)
+      && same(x.to, y.to) && same(x.props, y.props))
+    && each(ta.tracks, tb.tracks, (x, y) => x.id === y.id && x.kind === y.kind
+      && x.target === y.target)
+    && each(ta.clips, tb.clips, same) && each(ta.automation, tb.automation, same)
+    && same(ta.loop, tb.loop) && same(a.transport, b.transport);
+}
+
 /** The PRESENTATION state: authored, undoable, saved, but not executed. */
 export function presentationState(model) {
   return {

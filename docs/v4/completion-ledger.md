@@ -84,7 +84,11 @@ mobile, significant performance), **P2** (polish, debt).
 
 Diagnostic codes derived from message text (R5, fixing); clip-target policy duplicated between
 registry, timeline UI and transport (R7); pattern-played Oscillator frequency lanes drive a
-silent carrier (R8); presentation-only edits pay a full compile while playing (R9);
+silent carrier (R8); presentation-only edits pay a full compile while playing (R9, **closed**
+#155: while playing, an edit that leaves the execution state as it was takes the revision with
+no compile, no runtime transaction and no timeline re-plan, the plan identity unchanged and the
+verdict in-sync, `tests/unit/v4-presentation-edits.test.mjs` and `presentation-edit` in
+`tests/browser/v31-studio-runtime.cjs`);
 `mode`/`workspace` split state and three hash routers (W4, fixing with W2: one dispatcher, ADR 0045); Space has two meanings and two
 shortcut dialogs (W5); disabled controls without a reason (W6, partly fixing); WebKit absent from
 engine/dsp/labs/sequencer CI and the About provenance tests skip in CI's shallow clone (CI1,
