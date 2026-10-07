@@ -514,6 +514,16 @@ The browser suites need Playwright's browsers (`npx playwright install chromium 
 webkit`). Work lands through small pull requests. CI runs the gate on every pull request,
 branch protection requires the `gate` check, and a merge to `main` redeploys Pages.
 
+Two of the gate's jobs check the pull request rather than the product. `fail-first`: when the
+title starts with `feat` or `fix`, a unit test the pull request adds or changes must fail on
+the merge base and pass on the head, or the body carries `fail-first: n/a <reason>`
+(`node scripts/fail-first.mjs --title "<title>"`). `review-verdict`: a change under `src/js/audio`,
+`src/js/analysis`, `src/js/experiments`, `src/js/studio`, `src/js/core/storage*`,
+`scripts/release-*` or `.github/workflows` needs a reviewer's verdict for the head tree in
+`.ai/repo/reviews/<pr>.yaml` (`node scripts/review-verdict.mjs --pr <number>`). The rules are
+`project.fail-first`, `project.review-verdict` and `project.ci-bounded` under
+[`.ai/repo/rules/project/`](.ai/repo/rules/project/).
+
 ## Browser support
 
 The release gate runs the built `dist/index.html` in Chromium, Firefox and WebKit (the engine

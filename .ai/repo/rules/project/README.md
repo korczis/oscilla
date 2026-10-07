@@ -28,3 +28,14 @@ in both directions. A rule without one is normative for whoever reads it and enf
 reviewer; `class` still says what a violation means. Write the second kind when the tool
 cannot decide the question — a validator that always passes is worse than admitting a
 reviewer owns it.
+
+## Process and CI rules
+
+Rules about how a change reaches `main`. Each names its mechanism in its `# Enforcement`
+section, and the mechanism is in the repository.
+
+| rule | class | enforced by |
+|---|---|---|
+| [`project.ci-bounded@1`](ci-bounded.v1.md) | blocking | `tests/unit/ci-workflows.test.mjs` over `scripts/ci-workflow-rules.mjs`, in `npm test` |
+| [`project.fail-first@1`](fail-first.v1.md) | blocking | the `fail-first` job of `ci.yml` (`scripts/fail-first.mjs`), needed by `gate`; `tests/unit/fail-first.test.mjs` |
+| [`project.review-verdict@1`](review-verdict.v1.md) | blocking | the `review-verdict` job of `ci.yml` (`scripts/review-verdict.mjs`), needed by `gate`; `tests/unit/review-verdict.test.mjs`; reviewer independence is reviewer-owned |

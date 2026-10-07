@@ -294,6 +294,7 @@ jobs:
           test "$want" = "1.63.0" || { echo "lockfile playwright $want, image v1.63.0"; exit 1; }
       - name: 1536x1024 --play scene, the MEASURE and STUDIO references against the accepted baselines
         run: npm run test:visual
+        timeout-minutes: 8
       - name: Upload current, reference, diff and report on failure
         if: failure()
         uses: actions/upload-artifact@v7
@@ -329,6 +330,7 @@ jobs:
         with:
           fetch-depth: 0
       - name: Install Majordomus ${{ env.MJ_VERSION }} (pinned version and digest)
+        timeout-minutes: 5
         run: |
           a="majordomus-v${MJ_VERSION}-${MJ_TARGET}.tar.gz"
           curl -fsSL --proto '=https' --retry 5 --retry-all-errors --retry-delay 5 --connect-timeout 20 \
@@ -348,10 +350,76 @@ jobs:
           jq -e -s -f .github/doctor-verdict.jq doctor.jsonl > /dev/null \
             || { echo "::error::majordomus doctor: a failure (listed above), or no OK layout"; exit 1; }
 
+  fail-first:
+    # project.fail-first: for a PR whose title starts with feat or fix, the unit test files it
+    # adds or changes must fail on the merge base's tree and pass on the head's
+    # (scripts/fail-first.mjs, tested by tests/unit/fail-first.test.mjs), unless the PR body
+    # carries `fail-first: n/a <reason>`, which the step prints. Title and body are read from
+    # the PR as it is now, not from the event, so re-running the job after editing the body is
+    # enough. Any other title, and a run that is not a pull request, passes with nothing to prove.
+    name: fail-first (feat/fix tests fail without the change)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: The PR's added or changed unit tests fail on the merge base
+        timeout-minutes: 10
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          if [ -z "$PR" ]; then echo "fail-first: not a pull request; nothing to prove"; exit 0; fi
+          n=0
+          until gh pr view "$PR" --repo "$GITHUB_REPOSITORY" --json title,body > "$RUNNER_TEMP/pr.json"; do
+            n=$((n + 1)); [ "$n" -lt 3 ] || { echo "::error::could not read PR $PR"; exit 1; }
+            sleep 10
+          done
+          node scripts/fail-first.mjs --pr-json "$RUNNER_TEMP/pr.json" --head "$HEAD_SHA" \
+            --base-branch "origin/$GITHUB_BASE_REF"
+
+  review-verdict:
+    # project.review-verdict: a PR that changes a guarded path (the audio, analysis, experiments
+    # and studio modules, core/storage*, scripts/release-*, .github/workflows) needs
+    # .ai/repo/reviews/<pr>.yaml in its head commit: `verdict: merge`, the reviewer session, the
+    # git tree it reviewed (the head's, with .ai/repo/reviews/ left out, so committing the verdict
+    # does not invalidate it) and no open P0 or P1 finding (scripts/review-verdict.mjs, tested by
+    # tests/unit/review-verdict.test.mjs). The head is the PR's own head commit, not the merge
+    # with main, so a verdict survives main moving. Any other PR passes without one. The script
+    # needs no dependency, so nothing is installed.
+    name: review-verdict (guarded paths need a recorded review)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+      - name: A guarded change carries a verdict for the head tree
+        env:
+          PR: ${{ github.event.pull_request.number }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          if [ -z "$PR" ]; then echo "review-verdict: not a pull request; no verdict needed"; exit 0; fi
+          node scripts/review-verdict.mjs --pr "$PR" --head "$HEAD_SHA" \
+            --base-branch "origin/$GITHUB_BASE_REF"
+
   gate:
     name: gate
     if: always()
-    needs: [unit, knowledge, engine, suites, measure, studio, browser, visual]
+    needs: [unit, knowledge, fail-first, review-verdict, engine, suites, measure, studio, browser, visual]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
