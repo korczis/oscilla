@@ -659,6 +659,9 @@ function integrationInit() {
     setAnalysisTab(cmp.tabs.analysis);
     if (cmp.debug) setInterval(() => cmp.refreshDebug(), 250);
     cmp.initialized = true;
+    // "Interactive": the User Timing mark the startup budget reads (docs/v4/performance.md),
+    // ms since navigation start, set once, together with the attribute the suites wait for.
+    try { performance.mark('oscilla:ready'); } catch (e) { /* no User Timing here */ }
     document.documentElement.dataset.ready = 'true';
   });
 }
