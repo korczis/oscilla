@@ -220,7 +220,7 @@ filter class is claimed. An experiment saved from Measure does not store band le
   with its reason, and there is no score. The result hash is recomputed and its reason says what
   it covers; the algorithm ids, environment notes and lineage are covered by no result hash.
   The raw capture is never retained: OSCILLA stores the
-  derived result. Anything the record does not store reads "not recorded"
+  derived result (see [Privacy](#privacy)). Anything the record does not store reads "not recorded"
   ([ADR 0044](.ai/repo/adrs/0044-evidence-on-a-run-lineage-and-reproducibility-checklist.md),
   proposed).
 - **A completed run cannot be changed.** Only the name, the annotation notes and the baseline
@@ -634,13 +634,25 @@ and is never played back, recorded or uploaded. Exports are downloaded to your m
 configuration URL contains only your settings, and it leaves your machine only if you share
 it.
 
-In Measure, the microphone opens only when you run the setup check or a measurement, and every
-track is stopped when the measurement ends or is aborted. The captured audio is analysed in
-the page. The raw recording is released after analysis and is never stored, exported or
-uploaded. A saved experiment does contain the input device's label and the browser's device ID,
-when the browser reports them, along with your notes and the results. Both go into an exported
-file, so check it before you share it. Calibration profiles and level calibrations are kept in
-page memory only.
+In Measure, the microphone opens only for the setup check, a measurement, a level-calibration
+reference capture or the live RTA, and every track is stopped when they end or are aborted.
+The live RTA keeps only its latest analysis window, overwritten frame by frame. The setup
+check reads the input level from a 0.3 s window, and the reference capture (3 s) keeps only its
+level reading and the facts of the input; both recordings are dropped as soon as the level is
+read. A measurement's recording (the background-noise
+check and every run) is analysed in the page and lives only as long as that analysis: when the
+measurement completes, is found invalid, is aborted or fails, nothing in the page references it any more. It is
+never stored, exported or uploaded, and OSCILLA offers no option to keep it. A saved experiment
+keeps derived results: the frequency response (with the aggregate of repeated runs), the
+impulse response, the quality assessment and the facts of the run. The impulse response is
+computed from the recording of one run and is not anonymised: other sound the microphone
+picked up after the sweep had passed a frequency, in particular in the post-roll after the
+sweep (1.5 s by default), can be recovered from it. A saved experiment also contains the input
+device's label and a one-way hash of the browser's device ID, when the browser reports them,
+along with your notes. All of it goes into an exported file, so check it before you share it.
+Calibration profiles and level calibrations are kept in page memory only. The policy, its
+reasons and the tests that hold the code to it are
+[ADR 0049](.ai/repo/adrs/0049-raw-capture-retention.md) (proposed).
 
 Browser storage holds only these keys and one database, `oscilla-experiments` (version 3):
 

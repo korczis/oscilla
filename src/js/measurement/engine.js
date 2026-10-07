@@ -66,8 +66,10 @@
 // the estimate > limits.maxAnalysisBytes; preflight warns (ANALYSIS_MEMORY) above
 // PREFLIGHT_THRESHOLDS.analysisMemoryWarnBytes. Raw PCM of a run is released as soon as its
 // analysis no longer needs it (with the Worker it is transferred to the Worker and gone from
-// this thread); the result carries raw buffers only with measure(..., { keepRaw: true }) (the
-// explicit SAVE RAW choice).
+// this thread), and nothing of the engine references it once measure() settles, aborts or
+// fails; the result carries raw buffers only with measure(..., { keepRaw: true }), which no
+// product path calls (tests only; the spec's optional SAVE RAW CAPTURE is not offered), and
+// then only the caller's result holds them (ADR 0049, tests/unit/raw-retention.test.mjs).
 //
 // Analysis thread: the injected `analyze`, default defaultAnalyze() of analysis-runner.js (a
 // data: URL Worker of the page's analysis library script in the built page, analyzeInline under
@@ -703,24 +705,39 @@ export function createMeasurementEngine({ io, clock, onEvent, limits, assess, an
   function newSession() {
     const s = { id: (current ? current.id : 0) + 1, dead: false, plan: null, timeline: null,
       currentAudio: null, lastOverall: 0, analysis: null, captures: [], noiseCapture: null };
-    s.abortPromise = new Promise((resolve, reject) => { s.rejectAbort = reject; });
-    s.abortPromise.catch(() => {});
+    // Called with the error when the session is killed, and removed as soon as they no longer
+    // apply: the rejections of pending guard() calls and the abort of a running analysis.
+    s.onKill = new Set();
     s.kill = (err) => {
       s.dead = true;
       s.deadError = err;
-      s.rejectAbort(err);
+      for (const f of s.onKill) f(err);
+      s.onKill.clear();
     };
     current = s;
     muted = false;
     return s;
   }
 
+  // `value` once it settles, or the session's error as soon as the session is killed. It waits
+  // through s.onKill, not by racing a promise that the kill rejects: a completed session never
+  // settles that promise, and each reaction on it (one per guard, and the analysis abort) kept
+  // what it referenced reachable, every raw capture of the run among it, until the next
+  // measurement replaced the session (ADR 0049).
   function guard(s, value) {
     const p = Promise.resolve(value);
     p.catch(() => {}); // a late rejection after abort is expected and handled here
-    return Promise.race([p, s.abortPromise]).then((v) => {
-      if (s.dead) throw s.deadError;
-      return v;
+    return new Promise((resolve, reject) => {
+      if (s.dead) { reject(s.deadError); return; }
+      s.onKill.add(reject);
+      p.then((v) => {
+        s.onKill.delete(reject);
+        if (s.dead) reject(s.deadError);
+        else resolve(v);
+      }, (e) => {
+        s.onKill.delete(reject);
+        reject(s.dead ? s.deadError : e);
+      });
     });
   }
 
@@ -1108,7 +1125,8 @@ export function createMeasurementEngine({ io, clock, onEvent, limits, assess, an
     };
     // Aborted with the session (abort(), fail()): a Worker-backed analyze terminates.
     const ac = typeof AbortController === 'function' ? new AbortController() : null;
-    if (ac) s.abortPromise.catch(() => ac.abort());
+    const abortAnalysis = () => ac.abort();
+    if (ac) s.onKill.add(abortAnalysis);
     let out;
     try {
       out = await guard(s, analyzeFn(message, {
@@ -1121,6 +1139,8 @@ export function createMeasurementEngine({ io, clock, onEvent, limits, assess, an
     } catch (e) {
       if (s.dead) throw s.deadError;
       throw mapError(e, 'ANALYSIS_FAILURE');
+    } finally {
+      s.onKill.delete(abortAnalysis);
     }
     if (s.timeline.analysis.steps.length === 0 && Array.isArray(out.steps)) {
       for (const st of out.steps) onStep(st);
