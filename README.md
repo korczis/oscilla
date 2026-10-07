@@ -523,9 +523,11 @@ the merge base and pass on the head, or the body carries `fail-first: n/a <reaso
 (`node scripts/fail-first.mjs --title "<title>"`). `review-verdict`: a change under `src/js/audio`,
 `src/js/analysis`, `src/js/experiments`, `src/js/studio`, `src/js/core/storage*`,
 `scripts/release-*` or `.github/`, or to the programs and tests of these rules, needs a
-reviewer's verdict for the head tree in `.ai/repo/reviews/<pr>.yaml`
-(`node scripts/review-verdict.mjs --pr <number>`). CI judges a pull request with the base
-branch's copy of both programs, and `ci.yml` runs on pull requests only. The rules are
+reviewer's verdict in `.ai/repo/reviews/<pr>.yaml` for the guarded content the pull request
+changes (`node scripts/review-verdict.mjs --pr <number>`; `--content` prints the digest to
+record, which a merge of `main` that leaves those files alone does not change). CI judges a
+pull request with the base branch's copy of both programs, and `ci.yml` runs on pull requests
+only. A pull request is bound from the first run of a head that contains these jobs. The rules are
 `project.fail-first`, `project.review-verdict` and `project.ci-bounded` under
 [`.ai/repo/rules/project/`](.ai/repo/rules/project/).
 

@@ -65,9 +65,11 @@ title and body read from the pull request at run time, and `gate` needs the job
 (`tests/unit/ci-workflows.test.mjs` fails if `gate` stops needing it). The job runs it
 through `.github/scripts/base-rule.sh`, which extracts `scripts/` of the base branch outside
 the checkout and runs that copy on the pull request, printing the commit it came from; the
-same test fails if the job calls the program any other way, if it passes when there is no
-pull request, or if `ci.yml` can be started by anything but a pull request
-(`project.ci-bounded`, `triggers`). `tests/unit/base-rule.test.mjs` runs the wrapper on a
+same test fails if the last command of the job's last step is anything but that call with
+its exact arguments (`--title` in place of `--pr-json`, `|| true`, an `if:`), if the step
+passes when there is no pull request, or if `ci.yml` can be started by anything but a pull
+request (`project.ci-bounded`, `triggers`). That test binds a pull request only as far as
+the pull request leaves it standing; see below. `tests/unit/base-rule.test.mjs` runs the wrapper on a
 fixture pull request that replaces `scripts/fail-first.mjs` with a program that always
 passes: the base's copy still refuses it.
 
@@ -77,7 +79,7 @@ kind printed; the same refused fixture with `fail-first: n/a docs-only` in the b
 and prints the reason, and a waiver without a reason does not; other title types pass; a
 `fix` with no unit test is refused; a new module is reported as `module-not-found`; a test
 that fails on the head too is not evidence, and one that fails there once and passes on
-the retry still is; `Fix(x):`, `fix (x):`, `[WIP] fix(x):` and `FEAT!:` are checked like
+the retry still is; a test file with a non-ASCII name is seen; `Fix(x):`, `fix (x):`, `[WIP] fix(x):` and `FEAT!:` are checked like
 `fix(x):`; a waiver whose reason is `<reason>` or `...`, or that stands in a code block, an
 HTML comment, a blockquote or mid-sentence, is refused; a test that reads `git ls-files`
 is evidence.
@@ -94,8 +96,17 @@ What it cannot see:
 - A test that needs the git history: it fails in both trees and is never evidence.
 - The pull request that introduces the program (the base has no copy, the wrapper says so
   and runs the pull request's), and a pull request that rewrites the `fail-first` job itself:
-  GitHub runs the workflow file the pull request carries. Both change guarded paths, so
-  `project.review-verdict` asks for a reviewer's verdict on them.
+  GitHub runs the workflow file the pull request carries. The second is not closed; it needs
+  a check GitHub runs from the base branch and branch protection requiring it, which is the
+  owner's setting. Both change guarded paths, so `project.review-verdict` asks for a
+  reviewer's verdict on them, with the same limit on its own job.
+- A branch that does not contain this rule. Branch protection on `main` requires `gate` and
+  not an up-to-date branch (`strict: false`), so a pull request whose last run was green
+  before the rule reached `main` keeps that `gate` and can merge without a fail-first run.
+  It is bound from its next run, which needs a new commit on it, in practice a merge of
+  `main`. Merging `main` into every pull request open when the rule landed is a step of the
+  coordinator's landing procedure and is not machine-checked
+  (`project.review-verdict` says the same of itself).
 
 Locally: `node scripts/fail-first.mjs --title "fix(scope): ..."` checks the committed head against
 `origin/main`.

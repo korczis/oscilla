@@ -271,3 +271,18 @@ test('extra is tracked', () => {
   assert.equal(r.status, 0, r.out);
   assert.match(r.out, /tracked\.test\.mjs: fails without the change \(assertion\), passes with it/);
 });
+
+test('a unit test file with a non-ASCII name is seen', (t) => {
+  const repo = fixture();
+  t.after(() => repo.dispose());
+  repo.commit('fix', {
+    'src/value.mjs': 'export const value = () => 2;\n',
+    'tests/unit/value.test.mjs': VALUE_TEST(1),
+    'tests/unit/výstup.test.mjs': VALUE_TEST(2),
+  });
+  repo.git('rm', '-q', 'tests/unit/value.test.mjs');
+  repo.commit('drop the old test', {});
+  const r = run(repo, 'fix(x): the value is 2');
+  assert.equal(r.status, 0, r.out);
+  assert.match(r.out, /výstup\.test\.mjs: fails without the change \(assertion\)/);
+});

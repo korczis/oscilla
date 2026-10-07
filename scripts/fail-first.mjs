@@ -141,8 +141,9 @@ export function failFirst({ repo, title, body, head = 'HEAD', base, baseBranch =
   const baseSha = base ? git(repo, ['rev-parse', '--verify', `${base}^{commit}`])
     : git(repo, ['merge-base', baseBranch, headSha]);
   say(`fail-first: head ${headSha.slice(0, 12)}, merge base ${baseSha.slice(0, 12)}`);
-  const files = git(repo, ['diff', '--name-only', '--no-renames', '--diff-filter=AM',
-    baseSha, headSha, '--', 'tests/unit']).split('\n').filter((f) => TEST_FILE.test(f));
+  // -z: a name with non-ASCII characters is itself, not a quoted, escaped form
+  const files = git(repo, ['diff', '--name-only', '-z', '--no-renames', '--diff-filter=AM',
+    baseSha, headSha, '--', 'tests/unit']).split('\0').filter((f) => TEST_FILE.test(f));
   if (!files.length) {
     say('fail-first: the PR adds or changes no tests/unit/**/*.test.mjs file, so nothing fails'
       + ' without the change');
