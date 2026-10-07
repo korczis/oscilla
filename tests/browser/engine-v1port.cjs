@@ -24,12 +24,13 @@ const fs = require('fs');
 const os = require('os');
 
 const args = process.argv.slice(2);
-const BROWSERS = args.includes('--browser') ? [args[args.indexOf('--browser') + 1]]
-  : (process.env.OSC_BROWSERS || 'chromium,firefox,webkit').split(',');
-if (!BROWSERS.length || BROWSERS.some((b) => !['chromium', 'firefox', 'webkit'].includes(b))) {
-  console.error(`unknown browser(s) in ${JSON.stringify(BROWSERS)}; expected chromium, firefox, webkit`);
-  process.exit(2);
-}
+const suite = require('./lib/suite.cjs');
+// This file is also loaded as a module (instrument, LAUNCH); only the entry script opens a run.
+const RUN = require.main === module
+  ? suite.open({ name: 'engine-v1port',
+    browsers: args.includes('--browser') ? args[args.indexOf('--browser') + 1] : undefined })
+  : null;
+const BROWSERS = RUN ? RUN.browsers : [...suite.KNOWN_BROWSERS];
 const APP_JS = path.resolve(__dirname, '..', '..', 'src', 'js');
 let ENGINE = BROWSERS[0];
 let BASE = null; // file:// URL of the built fixture (buildFixture)
@@ -126,6 +127,7 @@ let passed = 0;
 let failed = 0;
 const failures = [];
 function check(name, ok, detail = '') {
+  if (RUN) RUN.tally(ENGINE);
   if (ok) { passed++; console.log(`  ok   ${name}${process.env.OSC_VERBOSE && detail ? ` ${detail}` : ''}`); }
   else { failed++; failures.push(`${name} ${detail}`); console.log(`  FAIL ${name} ${detail}`); }
 }
@@ -388,16 +390,78 @@ async function openPage(browser, { hash = '', query = '', instrumentOpts = {}, i
   page.on('pageerror', (e) => problems.push(`[pageerror] ${e.message}`));
   await page.goto(`${BASE}${query}${hash}`, { waitUntil: 'load' });
   await page.waitForFunction(() => window.Alpine && window.OSCILLA && window.__OSCILLA_READY, null, { timeout: 20000 });
+  // timing-allow: post-ready settle; each check then starts its own audio and waits on its clock
   await page.waitForTimeout(200);
   return { context, page, problems };
 }
 
+// Every wait in this suite is bounded in wall time, so a stalled audio clock or page fails the
+// check it stalls in, by name, instead of running into the CI job's timeout. The in-page waits
+// below follow the audio clock (a starved runner renders slower than real time) and also stop at
+// a wall deadline; app() gives up on a page that does not answer within APP_TIMEOUT_MS. The
+// longest single app() call measured 16.9 s ('limit scope and continuous scheduling', Chromium
+// and WebKit in the Linux Playwright container); the deadline is generous on purpose: it only
+// has to end a stall, never to judge timing. A clock that crawls (each wait under its own 15 s
+// bound, their sum over 60 s) ends there too; the report then says how fast the clock runs.
+const APP_TIMEOUT_MS = 60000;
+const UNTIL_AUDIO_MAX_MS = 15000; // the longest audio-clock wait is 2.6 s of audio
+let SECTION = '(setup)';
+function section(name) {
+  SECTION = name;
+  console.log(name);
+}
+
 // Run fn(app, engine, O, T, arg) in the page; helpers sleep / untilAudio are in scope.
-const app = (page, fn, arg) => page.evaluate(([src, a]) => {
+// After a timeout: is the page answering, and how fast does its audio clock run? Two readings
+// one second apart (each bounded), so the report tells a frozen page from a starved clock.
+async function clockReport(page) {
+  const read = () => Promise.race([
+    page.evaluate(() => {
+      const c = window.OSCILLA.engine.ctx;
+      return c ? { t: c.currentTime, state: c.state, wall: Date.now() } : null;
+    }),
+    new Promise((resolve) => { setTimeout(() => resolve('no answer within 3 s'), 3000); }),
+  ]).catch((e) => `unreadable (${e.message})`);
+  const a = await read();
+  // timing-allow: the one-second interval the clock rate is measured over, in a timeout report
+  await new Promise((resolve) => { setTimeout(resolve, 1000); });
+  const b = await read();
+  if (!a || !b || typeof a !== 'object' || typeof b !== 'object') {
+    return `page: ${JSON.stringify(a)} / ${JSON.stringify(b)}`;
+  }
+  const rate = (b.t - a.t) / ((b.wall - a.wall) / 1000);
+  return `page answers; audio clock ${b.state} at ${b.t.toFixed(3)} s, advancing at `
+    + `${(rate * 100).toFixed(0)} % of real time`;
+}
+
+const app = (page, fn, arg) => {
+  let timer;
+  const stalled = new Promise((_, reject) => {
+    timer = setTimeout(() => {
+      clockReport(page).then((report) => reject(new Error(`${SECTION}: the page did not `
+        + `answer within ${APP_TIMEOUT_MS / 1000} s; ${report}`)));
+    }, APP_TIMEOUT_MS);
+  });
+  const run = evaluateApp(page, fn, arg).catch((e) => {
+    throw new Error(`${SECTION}: ${e.message}`);
+  });
+  return Promise.race([run, stalled]).finally(() => clearTimeout(timer));
+};
+const evaluateApp = (page, fn, arg) => page.evaluate(([src, a, untilMax]) => {
   const data = window.Alpine.$data(document.body);
   const prelude = `
     const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-    const untilAudio = async (t) => { const c = window.OSCILLA.engine.ctx; while (c.currentTime < t) await sleep(3); };
+    const untilAudio = async (t) => {
+      const c = window.OSCILLA.engine.ctx;
+      const wall = Date.now();
+      while (c.currentTime < t) {
+        if (Date.now() - wall > ${untilMax}) {
+          throw new Error('audio clock stalled: currentTime ' + c.currentTime.toFixed(3) + ' s, state '
+            + c.state + ', still short of ' + t.toFixed(3) + ' s after ${untilMax} ms');
+        }
+        await sleep(3);
+      }
+    };
     // Deadline-based teardown probe. Polls until the audio graph is empty or maxS of audio time
     // passed, and reports: after (audio time when the poll SAW it empty), stopAt (the latest
     // time a stop() takes effect on the audio clock for the oscillators live at t0 or started
@@ -409,7 +473,12 @@ const app = (page, fn, arg) => page.evaluate(([src, a]) => {
       const liveAtT0 = window.__T.oscs.filter((r) => r.started && !r.ended);
       let tick = 0;
       let last = c.currentTime;
+      // maxS of audio time, or that plus 10 s of wall time if the clock stalls (stalled: true;
+      // the graph is then still live and the teardown checks fail on it)
+      const wall = Date.now();
+      let stalled = false;
       while (c.currentTime - t0 < maxS && (window.__T.liveOscs() || window.OSCILLA.engine.voices.size)) {
+        if (Date.now() - wall > maxS * 1000 + 10000) { stalled = true; break; }
         await sleep(2);
         tick = Math.max(tick, c.currentTime - last);
         last = c.currentTime;
@@ -418,10 +487,11 @@ const app = (page, fn, arg) => page.evaluate(([src, a]) => {
       const live = [...liveAtT0, ...window.__T.oscs.slice(first).filter((r) => r.started)];
       const stops = live.map((r) => (r.stopEff == null ? Infinity : Math.max(r.stopEff, t0) - t0));
       return { after: c.currentTime - t0, stopAt: stops.length ? Math.max(...stops) : 0, tick,
-        oscs: window.__T.liveOscs(), voices: window.OSCILLA.engine.voices.size, nodes: window.OSCILLA.engine.activeNodeCount };
+        oscs: window.__T.liveOscs(), voices: window.OSCILLA.engine.voices.size, nodes: window.OSCILLA.engine.activeNodeCount,
+        ...(stalled ? { stalled, state: c.state } : {}) };
     };`;
   return new Function('app', 'engine', 'O', 'T', 'arg', `${prelude} return (${src})(app, engine, O, T, arg);`)(data, window.OSCILLA.engine, window.OSCILLA, window.__T, a);
-}, [fn.toString(), arg]);
+}, [fn.toString(), arg, UNTIL_AUDIO_MAX_MS]);
 
 // Observation margin for teardown checks: the poll in gone() can only see the empty graph at
 // the first poll after the audio thread has rendered past the stop, so the observed time lags
@@ -460,14 +530,14 @@ async function startAudio(page) {
 }
 
 async function runBrowser() {
-  const playwright = require('playwright');
+  const { playwright } = RUN;
   console.log(`OSCILLA engine test (V2 modules) → ${BASE} (${ENGINE})`);
   const start = { passed, failed };
   const browser = await playwright[ENGINE].launch(LAUNCH[ENGINE]);
   const t0 = Date.now();
 
   // ------------------------------------------------------------------ accounting, silence, gain cap
-  console.log('oscillator accounting and silence');
+  section('oscillator accounting and silence');
   {
     const { page, problems, context } = await openPage(browser);
     const tap = await startAudio(page);
@@ -534,7 +604,7 @@ async function runBrowser() {
     await context.close();
   }
 
-  console.log('gain cap');
+  section('gain cap');
   {
     const { page, problems, context } = await openPage(browser);
     await startAudio(page);
@@ -603,7 +673,7 @@ async function runBrowser() {
   }
 
   // ------------------------------------------------------------------ clicks
-  console.log('click-free transitions');
+  section('click-free transitions');
   {
     const { page, problems, context } = await openPage(browser);
     await startAudio(page);
@@ -734,7 +804,7 @@ async function runBrowser() {
   }
 
   // ------------------------------------------------------------------ hold edge cases, Escape, revoke
-  console.log('hold edge cases, Escape, continuous revoke');
+  section('hold edge cases, Escape, continuous revoke');
   {
     const { page, problems, context } = await openPage(browser);
     await startAudio(page);
@@ -743,6 +813,7 @@ async function runBrowser() {
       const box = await page.locator('.hold-btn').boundingBox();
       await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
       await page.mouse.down();
+      // timing-allow: the hold itself; the pointer stays down 200 ms before the event under test
       await page.waitForTimeout(200);
       out[kind] = await app(page, async (a, e, O, T, k) => {
         const playing = !!e.voice;
@@ -759,6 +830,7 @@ async function runBrowser() {
         return { playing, ...g, release: a.release / 1000 };
       }, kind);
       await page.mouse.up();
+      // timing-allow: the gap between two holds; the next iteration presses again
       await page.waitForTimeout(100);
     }
     for (const [k, v] of Object.entries(out)) {
@@ -808,7 +880,7 @@ async function runBrowser() {
   }
 
   // ------------------------------------------------------------------ measured signal content
-  console.log('stereo split, beating, pulse timing');
+  section('stereo split, beating, pulse timing');
   {
     const { page, problems, context } = await openPage(browser);
     await startAudio(page);
@@ -888,7 +960,7 @@ async function runBrowser() {
   }
 
   // ------------------------------------------------------------------ limits and long patterns
-  console.log('limit scope and continuous scheduling');
+  section('limit scope and continuous scheduling');
   {
     const { page, problems, context } = await openPage(browser);
     await startAudio(page);
@@ -954,7 +1026,7 @@ async function runBrowser() {
   }
 
   // ------------------------------------------------------------------ live changes and plans
-  console.log('live changes and plans');
+  section('live changes and plans');
   {
     const { page, problems, context } = await openPage(browser);
     await startAudio(page);
@@ -1021,7 +1093,7 @@ async function runBrowser() {
   }
 
   // ------------------------------------------------------------------ context lifecycle
-  console.log('context lifecycle');
+  section('context lifecycle');
   {
     const { page, problems, context } = await openPage(browser);
     const r = await app(page, async (a, e, O, T) => {
@@ -1077,7 +1149,7 @@ async function runBrowser() {
 
   // ------------------------------------------------------------------ microphone
   {
-    console.log('microphone');
+    section('microphone');
     const { page, problems, context } = await openPage(browser);
     const r = await app(page, async (a, e, O, T) => {
       const out = {};
@@ -1123,7 +1195,7 @@ async function runBrowser() {
   // (-80 dB) of the sound, held through the 10 ms stop margin, so what the frozen line replays
   // is that floor: gain 0.25 (UI 100 %) x 1e-4 = 2.5e-5. Threshold 1e-6 (-120 dBFS): 28 dB
   // under the smallest replay and above the exact 0 of a correct chain.
-  console.log('limiter look-ahead: no replay of the previous sound at the next onset');
+  section('limiter look-ahead: no replay of the previous sound at the next onset');
   {
     const { page, problems, context } = await openPage(browser);
     await startAudio(page);
@@ -1192,7 +1264,7 @@ async function runBrowser() {
   // ------------------------------------------------------------------ V2 extension points
   // Not part of V1's suite: the V2 hooks on the ported engine, measured the same way (click
   // ratio from the output tap, oscillator accounting).
-  console.log('V2 extension points on the ported engine');
+  section('V2 extension points on the ported engine');
   {
     const { page, problems, context } = await openPage(browser);
     await startAudio(page);
@@ -1238,11 +1310,22 @@ async function runBrowser() {
         const wave = V2.buildPeriodicWave(e.ctx, [{ n: 1, gain: 1, phase: 0 }, { n: 2, gain: 0.3, phase: 0 }]).wave;
         e.play(plan, { ...base, periodicWave: wave });
         await sleep(200);
+        const v = e.voice;
+        const tClear = e.ctx.currentTime;
         const cleared = e.clearPeriodicWave();
-        await sleep(100);
-        const type = e.voice && e.voice.carrier.type;
+        // The engine swaps the waveform when the dip it scheduled has rendered (_switchWaves),
+        // and it schedules from its estimate of the rendered time (_soon, clock.js
+        // renderedTimeAtLeast), not from this request. So no fixed delay after the request is
+        // safe: on a starved host (clock ticks up to 45 ms) both 100 ms of wall time and then
+        // 100 ms of audio time read the carrier before the swap; normally the swap is seen 29-37
+        // ms after the request. Wait for the engine's own dip to end (bounded), then judge.
+        const wall = Date.now();
+        while (v.dipping && Date.now() - wall < 15000) await sleep(2);
+        const type = v.carrier.type;
+        const dipEnded = !v.dipping;
+        const swapAfterS = +(e.ctx.currentTime - tClear).toFixed(3);
         e.stopAll();
-        return { cleared, type };
+        return { cleared, type, dipEnded, swapAfterS };
       });
       await sleep(200);
       out.final = { oscs: T.liveOscs(), nodes: e.activeNodeCount, voices: e.voices.size };
@@ -1251,7 +1334,7 @@ async function runBrowser() {
     for (const k of ['adsrMidAttackRelease', 'filterInsertStop', 'periodicWaveClear']) {
       check(`V2 hook click ratio ≈ 1 (median of 3 < 3): ${k}`, r[k].n > 1000 && r[k].ratio < 3, JSON.stringify(r[k]));
     }
-    check('V2 periodicWave cleared back to the plan waveform', r.periodicWaveClear.takes.every((x) => x.cleared && x.type === 'sine'), JSON.stringify(r.periodicWaveClear.takes));
+    check('V2 periodicWave cleared back to the plan waveform', r.periodicWaveClear.takes.every((x) => x.cleared && x.dipEnded && x.type === 'sine'), JSON.stringify(r.periodicWaveClear.takes));
     check('V2 hooks: 0 oscillators, nodes and voices afterwards', r.final.oscs === 0 && r.final.nodes === 0 && r.final.voices === 0, JSON.stringify(r.final));
     check('no console problems (V2 hooks)', problems.length === 0, problems.join(' | '));
     await context.close();
@@ -1262,6 +1345,7 @@ async function runBrowser() {
 }
 
 async function main() {
+  await RUN.ready();
   const fx = await buildFixture();
   BASE = fx.url;
   console.log(`fixture: ${fx.url} (${(fx.bytes / 1024).toFixed(1)} kB bundle)`);
@@ -1273,7 +1357,7 @@ async function main() {
       await runBrowser();
     } catch (e) {
       failed++;
-      failures.push(`[${b}] crashed: ${e && e.stack}`);
+      failures.push(`crashed: ${e && e.stack}`); // prefixed with [browser] below
       console.error(e);
     }
     summary.push(`${b}: ${passed - before.passed} passed, ${failed - before.failed} failed`);

@@ -141,9 +141,9 @@ function semanticView(experiments, labels, semantic) {
     };
     const exe = listed.filter((c) => c.class === 'execution');
     const n = listed.length - exe.length;
-    return { label, heading: `Changed between runs ${ref}${base ? ' (baseline)' : ''} and ${
+    return { label, heading: `Changed between experiments ${ref}${base ? ' (baseline)' : ''} and ${
       label}`, executionCount: exe.length, otherCount: n,
-    none: `No execution change between runs ${ref} and ${label}.`,
+    none: `No execution change between experiments ${ref} and ${label}.`,
     groups: [...groups(exe), ...groups(listed.filter((c) => c.class !== 'execution'))] };
   });
 }

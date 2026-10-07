@@ -82,7 +82,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { pathToFileURL } = require('node:url');
-const playwright = require('playwright');
+const suite = require('./lib/suite.cjs');
 
 const argv = process.argv.slice(2);
 const arg = (name, fallback) => {
@@ -91,8 +91,11 @@ const arg = (name, fallback) => {
 };
 const DIST = path.resolve(__dirname, '..', '..', 'dist', 'index.html');
 const OUT = path.resolve(__dirname, '..', 'visual', 'out-studio');
-const BROWSERS = arg('browsers', process.env.OSC_BROWSERS || 'chromium,firefox,webkit').split(',');
-const ORIGINS = arg('origins', 'file,http').split(',');
+const RUN = suite.open({ name: 'v31-studio-graph', browsers: arg('browsers'),
+  origins: arg('origins'), defaultOrigins: ['file', 'http'] });
+const playwright = RUN.playwright;
+const BROWSERS = RUN.browsers;
+const ORIGINS = RUN.origins;
 const ONLY = arg('only', '') ? new Set(arg('only', '').split(',')) : null;
 const JSON_OUT = arg('json', '');
 const HTTP_CHECKS = new Set(['nav-and-render', 'node-drag', 'cable-connect', 'play-stop',
@@ -152,7 +155,8 @@ const H = {
       if (a.workspace !== 'studio') a.setWorkspace('studio');
       a.studioLoadTemplate(tid);
     }, id);
-    await page.waitForFunction(() => document.querySelector('#osc-app').dataset.mode === 'studio');
+    await page.waitForFunction(() => document.querySelector('#osc-app').dataset.mode === 'studio',
+      null, { timeout: 10000 });
     await page.evaluate(() => new Promise((r) => requestAnimationFrame(() =>
       requestAnimationFrame(r))));
     await page.evaluate(() => window.OSCILLA.studio.editor.frameAll());
@@ -533,7 +537,7 @@ function defineChecks() {
     const a = await H.center(page, H.port('lfo-1', 'out', 'control'));
     const vp = await H.center(page, '.osc-sg-viewport');
     await H.drag(page, a, { x: vp.x - vp.w / 2 + 40, y: vp.y + vp.h / 2 - 40 });
-    await page.waitForSelector('#osc-dlg-studio-add[open]');
+    await page.waitForSelector('#osc-dlg-studio-add[open]', { timeout: 10000 });
     const types = await page.evaluate(() => [...document.querySelectorAll(
       '[data-osc="studio.add.item"]')].map((b) => b.dataset.type));
     await page.fill('[data-osc="studio.add.search"]', 'gain');
@@ -754,7 +758,7 @@ function defineChecks() {
     }
     const sel = await H.sel(page);
     await page.keyboard.press('c');
-    await page.waitForSelector('#osc-dlg-studio-connect[open]');
+    await page.waitForSelector('#osc-dlg-studio-connect[open]', { timeout: 10000 });
     const list = await page.evaluate(() => [...document.querySelectorAll(
       '[data-osc="studio.connect.target"]')].map((b) => b.textContent));
     const firstFocused = await page.evaluate(() => document.activeElement.dataset.osc);
@@ -816,7 +820,7 @@ function defineChecks() {
     await H.fresh(page);
     await page.focus('.osc-sg-viewport');
     await page.keyboard.press('n');
-    await page.waitForSelector('#osc-dlg-studio-add[open] input');
+    await page.waitForSelector('#osc-dlg-studio-add[open] input', { timeout: 10000 });
     await page.keyboard.type('gain');
     await page.keyboard.press('Enter');
     await H.frames(page, 4);
@@ -849,7 +853,8 @@ function defineChecks() {
     await page.keyboard.press('Enter');
     await H.frames(page, 4);
     const afterBack = await where();
-    await page.waitForSelector('[data-osc="studio.compact.node"]', { state: 'visible' });
+    await page.waitForSelector('[data-osc="studio.compact.node"]',
+      { timeout: 10000, state: 'visible' });
     await page.focus('[data-osc="studio.compact.node"][data-node-id="filter-1"]');
     await page.keyboard.press('Enter');
     await H.frames(page, 3);
@@ -945,10 +950,12 @@ function defineChecks() {
       await inspectorOf('lfo-1');
       await page.focus('[data-osc="studio.inspector.connect"]');
       await page.keyboard.press('Enter');
-      await page.waitForSelector('#osc-dlg-studio-connect[open] [data-osc="studio.connect.target"]');
+      await page.waitForSelector('#osc-dlg-studio-connect[open] [data-osc="studio.connect.target"]',
+        { timeout: 30000 });
       const e0 = (await H.model(page)).edges.length;
       await page.keyboard.press('Enter');
-      await page.waitForSelector('#osc-dlg-studio-connect:not([open])', { state: 'attached' });
+      await page.waitForSelector('#osc-dlg-studio-connect:not([open])',
+        { timeout: 30000, state: 'attached' });
       await sleep(80);
       await H.frames(page, 3);
       const afterConnect = await focusAt(page);
@@ -956,7 +963,7 @@ function defineChecks() {
       // Connect… then Escape.
       await page.focus('[data-osc="studio.inspector.connect"]');
       await page.keyboard.press('Enter');
-      await page.waitForSelector('#osc-dlg-studio-connect[open]');
+      await page.waitForSelector('#osc-dlg-studio-connect[open]', { timeout: 30000 });
       await page.keyboard.press('Escape');
       await sleep(80);
       await H.frames(page, 3);
@@ -1165,7 +1172,8 @@ function defineChecks() {
     const clip = (await H.model(page)).clips.find((c) => c.id === 'clip-2');
     // Add a Filter in Full, see it in the compact signal path.
     await page.click('[data-osc="studio.compact.expand"]');
-    await page.waitForFunction(() => document.querySelector('#osc-app').dataset.mode === 'studio');
+    await page.waitForFunction(() => document.querySelector('#osc-app').dataset.mode === 'studio',
+      null, { timeout: 10000 });
     await page.evaluate(() => window.OSCILLA.studio.store.dispatch({ type: 'SELECTION_CHANGE',
       selection: { clips: ['clip-2'] } }));
     await H.frames(page);
@@ -1197,7 +1205,7 @@ function defineChecks() {
   def('templates', async ({ page }) => {
     await H.fresh(page);
     await page.click('[data-osc="studio.templates"]');
-    await page.waitForSelector('#osc-dlg-studio-templates[open]');
+    await page.waitForSelector('#osc-dlg-studio-templates[open]', { timeout: 10000 });
     const ids = await page.evaluate(() => [...document.querySelectorAll(
       '[data-osc="studio.template.open"]')].map((b) => b.dataset.template));
     const opened = {};
@@ -1237,12 +1245,14 @@ function defineChecks() {
     await page.click('[data-osc="studio.save"]');
     await H.until(() => page.evaluate(() => window.OSCILLA.studio.dirty), (d) => d === false, 3000);
     await page.click('[data-osc="studio.open"]');
-    await page.waitForSelector('#osc-dlg-studio-library[open] [data-osc="studio.saved.open"]');
+    await page.waitForSelector('#osc-dlg-studio-library[open] [data-osc="studio.saved.open"]',
+      { timeout: 10000 });
     const saved = await page.evaluate(() => [...document.querySelectorAll('.osc-sp-row')]
       .map((r) => `${r.dataset.kind}:${r.dataset.id}`));
     await page.click('[data-osc="studio.saved.close"]');
     // Export then import the file: same semantics.
-    const [download] = await Promise.all([page.waitForEvent('download'),
+    const [download] = await Promise.all([
+      page.waitForEvent('download', { timeout: 10000 }),
       page.click('[data-osc="studio.export"]')]);
     const fileName = download.suggestedFilename();
     const file = await download.path();
@@ -1256,14 +1266,15 @@ function defineChecks() {
     await page.click(H.nodeTitle('osc-1'));
     await page.click(H.nodeTitle('env-1'), { modifiers: ['Shift'] });
     await page.click('[data-osc="studio.inspector.savePatch"]');
-    await page.waitForSelector('#osc-dlg-studio-patch[open]');
+    await page.waitForSelector('#osc-dlg-studio-patch[open]', { timeout: 10000 });
     await page.fill('[data-osc="studio.patch.name"]', 'Voice');
     await page.click('[data-osc="studio.patch.save"]');
     await H.until(() => page.evaluate(() => !document.querySelector('#osc-dlg-studio-patch[open]')),
       (x) => x, 3000);
     const n0 = (await H.model(page)).nodes.length;
     await page.click('[data-osc="studio.open"]');
-    await page.waitForSelector('#osc-dlg-studio-library[open] [data-osc="studio.saved.insert"]');
+    await page.waitForSelector('#osc-dlg-studio-library[open] [data-osc="studio.saved.insert"]',
+      { timeout: 10000 });
     await page.click('[data-osc="studio.saved.insert"]');
     await sleep(150);
     const n1 = (await H.model(page)).nodes.length;
@@ -1543,6 +1554,7 @@ async function runOne(browserName, origin, baseUrl) {
 }
 
 (async () => {
+  await RUN.ready();
   if (!fs.existsSync(DIST)) {
     console.error(`missing ${DIST}: run npm run build`);
     process.exit(2);
@@ -1561,6 +1573,7 @@ async function runOne(browserName, origin, baseUrl) {
         const res = await runOne(b, o, base);
         all[key] = res;
         const names = Object.keys(res);
+        RUN.reportLeg({ leg: key, checks: names.length });
         const bad = names.filter((n) => !res[n].ok);
         failed += bad.length;
         console.log(`${bad.length ? 'FAIL' : 'PASS'} ${key}/v31-studio-graph: ${names.length
