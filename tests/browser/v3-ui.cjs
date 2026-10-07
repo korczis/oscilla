@@ -2234,6 +2234,16 @@ function defineChecks(fixtures) {
       res.corrupt = await H.until(() => items(FND), (x) => x.up && x.up[0]
         && x.up[0].state === 'unreadable', 10000);
     }
+    // Review 1 of #151, item 7: a link to a record that is not stored says so, and the address
+    // names the experiment the detail shows again (a reload opens it, not the dead link).
+    await page.evaluate((id) => { location.hash = `#m=experiments&exp=${id}`; }, ids.dup);
+    await H.until(state, (x) => x.id === ids.dup, 5000);
+    await page.evaluate(() => { window.OSCILLA.app.alerts = [];
+      location.hash = '#m=experiments&exp=not-stored-anywhere'; });
+    res.dead = await H.until(() => page.evaluate(() => ({ hash: location.hash,
+      id: window.OSCILLA.app.exps.detail ? window.OSCILLA.app.exps.detail.id : null,
+      alerts: window.OSCILLA.app.alerts.map((a) => a.title) })),
+    (x) => x.alerts.includes('Experiment not found') && !/not-stored-anywhere/.test(x.hash), 8000);
     // 7. 390 px.
     await page.evaluate((id) => { location.hash = `#m=experiments&exp=${id}`; }, ids.dup);
     await page.setViewportSize({ width: 390, height: 844 });
@@ -2280,6 +2290,8 @@ function defineChecks(fixtures) {
         === 'unreadable' && /— unreadable: experiment .* is stored here but cannot be read/
         .test(res.corrupt.up[0].text)),
       narrow: res.narrow.fits === true,
+      'address-names-detail': res.dead.id === ids.dup && res.dead.hash.includes(`exp=${ids.dup}`)
+        && res.dead.alerts.includes('Experiment not found'),
       // Vocabulary (owner decision 2026-10-07): the stored record is an experiment, and the bare
       // word "connection" stays Studio's graph edge.
       vocabulary: res.a.labels.join('|') === 'What this experiment is connected to|What '
@@ -2423,24 +2435,49 @@ function defineChecks(fixtures) {
       const li = document.querySelector(q);
       return li ? li.dataset.state : null;
     }, CITES), (x) => x === 'present', 10000);
-    const page2 = await context.newPage();
-    try {
-      await page2.goto(page.url(), { waitUntil: 'load' });
-      await page2.waitForSelector('html[data-ready="true"]', { timeout: 15000 });
-      res.tab2 = await page2.evaluate(async (t) => {
-        const app = window.OSCILLA.app;
-        app.setWorkspace('experiments');
-        await app.experimentsRefresh();
-        app.exps.deleteId = 'fixture-b';
-        await app.experimentsDelete();
-        const d = JSON.parse(t);
-        d.experimentId = 'fixture-b';
-        d.name = 'IMPOSTOR under fixture-b';
-        return app.experimentsImportText(JSON.stringify(d));
-      }, fixtures.c.json);
-    } finally {
-      await page2.close();
-    }
+    // Another tab: fixture-b deleted and `json` stored under its id as `name`; with `cite`, a
+    // finding recorded there that cites the new record. Returns the finding's id, or the id.
+    const tab2 = async (json, name, cite = false) => {
+      const page2 = await context.newPage();
+      try {
+        await page2.goto(page.url().split('#')[0], { waitUntil: 'load' });
+        await page2.waitForSelector('html[data-ready="true"]', { timeout: 15000 });
+        return await page2.evaluate(async ({ t, n, c }) => {
+          const app = window.OSCILLA.app;
+          app.setWorkspace('experiments');
+          await app.experimentsRefresh();
+          app.exps.deleteId = 'fixture-b';
+          await app.experimentsDelete();
+          const d = JSON.parse(t);
+          d.experimentId = 'fixture-b';
+          d.name = n;
+          const id = await app.experimentsImportText(JSON.stringify(d));
+          if (!c) return id;
+          await app.findingsAskRun('fixture-b');
+          app.fnd.form.statement = `cites ${n}`;
+          const f = await app.findingsSave();
+          return f ? f.id : null;
+        }, { t: json, n: name, c: cite });
+      } finally {
+        await page2.close();
+      }
+    };
+    // What the detail shows (its heading and the hash of its record) against what is stored.
+    const shownVsStored = () => page.evaluate(async () => {
+      const app = window.OSCILLA.app;
+      const e = await window.OSCILLA.experiments.store().get('fixture-b').catch(() => null);
+      const sec = document.querySelector('[data-osc="exp.connections"]');
+      return { title: document.getElementById('osc-x-detail-title').textContent.trim(),
+        shown: app.experimentsShownHash('fixture-b'), open: app.exps.detail
+          ? app.exps.detail.id : null,
+        stored: e ? { name: e.name, hash: e.provenance.resultHash } : null,
+        entries: sec ? sec.querySelectorAll('li.osc-x-cn-item').length : 0,
+        entriesOf: app.cnx.run ? app.cnx.run.shownHash : null,
+        status: app.cnx.run ? app.cnx.run.status : null, hash: location.hash };
+    });
+    const sameRecord = (x) => !!x.stored && x.title === x.stored.name
+      && x.shown === x.stored.hash && x.entriesOf === x.stored.hash && !x.status;
+    res.tab2 = await tab2(fixtures.c.json, 'IMPOSTOR under fixture-b');
     // This tab, no reload, the list not read again: following the link reads B first and
     // refuses, since a different record is stored under its id now.
     await page.evaluate(() => { window.OSCILLA.app.alerts = []; });
@@ -2453,6 +2490,19 @@ function defineChecks(fixtures) {
     await page.evaluate(() => window.OSCILLA.app.setWorkspace('measure'));
     await page.evaluate(() => window.OSCILLA.app.setWorkspace('experiments'));
     res.after = await H.until(cited, (l) => l.length === 1 && l[0].state !== 'present', 10000);
+    // Review 1 of #151, item 1: the heading, the detail's record and the entries are one record.
+    res.returned = await H.until(shownVsStored, sameRecord, 10000);
+    // Item 2: the record replaced once more, and a finding there cites the new record. Its entry
+    // is verified here; following it opens the record that was read, not the copy on screen.
+    res.second = await tab2(fixtures.a.json, 'SECOND under fixture-b', true);
+    res.followed = await page.evaluate(async (fid) => {
+      const app = window.OSCILLA.app;
+      const v = await app.connectionsOfFinding(fid);
+      const c = v.upstream[0];
+      return { state: c ? c.state : null, went: c ? await app.connectionsVerifyAndGo(c) : null };
+    }, res.second);
+    res.opened = await H.until(shownVsStored, (x) => sameRecord(x)
+      && x.title === 'SECOND under fixture-b', 10000);
     res.finding = await page.evaluate((id) => window.OSCILLA.app.connectionsOfFinding(id)
       .then((v) => v.upstream.map((c) => c.state)), res.setup);
     await page.evaluate(async (t) => {
@@ -2470,6 +2520,11 @@ function defineChecks(fixtures) {
       'not-present': res.after[0] && res.after[0].state === 'mismatch'
         && /does not match: .*different record/.test(res.after[0].text),
       finding: res.finding.join() === 'mismatch',
+      'detail-is-stored-record': sameRecord(res.returned)
+        && res.returned.title === 'IMPOSTOR under fixture-b'
+        && /exp=fixture-b/.test(res.returned.hash),
+      'followed-is-stored-record': res.followed.state === 'present' && res.followed.went === true
+        && sameRecord(res.opened) && res.opened.title === 'SECOND under fixture-b',
     }) };
   });
 

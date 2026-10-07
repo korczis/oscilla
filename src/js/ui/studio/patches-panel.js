@@ -15,8 +15,10 @@
 //            openProject({ model, summary }), downloadFile({ name, type, text }),
 //            recordDeleted(id) -> announcement | null (the workspace detaches the open document
 //            when its project record was deleted), connections(id) -> Promise<view | null>
-//            (ui/connections.js connectionsOfStudioProject, ADR 0048), openModal(id),
-//            closeModal(id) }
+//            (ui/connections.js connectionsOfStudioProject, ADR 0048), follow(entry, before)
+//            -> Promise<boolean> (connectionsGo: an experiment is verified before it opens;
+//            `before` runs once it is), dirty() -> bool (Studio has unsaved changes),
+//            openModal(id), closeModal(id) }
 
 import { ID_PATTERN } from '../../experiments/schema.js';
 import { createPatch } from '../../studio/patches.js';
@@ -73,6 +75,8 @@ export function mountPatches(dialogs, svc) {
   ]));
   libDlg.setAttribute('aria-labelledby', 'osc-dlg-studio-lib-title');
   let confirmDelete = null;
+  let confirmOpen = null; // the project whose Open was pressed over unsaved changes
+  const opened = new Set(); // project ids whose connected records are open (kept on refresh)
 
   const fail = (err) => {
     const text = (err && err.message) || String(err);
@@ -92,8 +96,10 @@ export function mountPatches(dialogs, svc) {
     } catch (e) {
       fail(e);
     }
-    const btn = (text, osc, fn) => h('button', { type: 'button', class: 'osc-btn osc-btn-secondary',
-      'data-osc': osc, text, onClick: fn });
+    // Each row button names its record: focus can land on one from another workspace.
+    const btn = (text, osc, fn, name) => h('button', { type: 'button',
+      class: 'osc-btn osc-btn-secondary', 'data-osc': osc, text, onClick: fn,
+      'aria-label': name ? `${text} ${name}` : null });
     replaceChildren(list, rows.length ? h('ul', { class: 'osc-sp-items' }, rows.map((r) =>
       h('li', { class: 'osc-sp-row', 'data-id': r.id, 'data-kind': r.kind }, [
         h('div', { class: 'osc-sp-meta' }, [
@@ -102,42 +108,65 @@ export function mountPatches(dialogs, svc) {
         ]),
         r.kind === 'project' ? connectionsOf(r) : null,
         h('div', { class: 'osc-sp-acts' }, r.kind === 'project' ? [
-          btn('Open', 'studio.saved.open', () => openProject(r.id)),
+          h('button', { type: 'button', class: 'osc-btn osc-btn-secondary',
+            'data-osc': 'studio.saved.open', onClick: () => openProject(r.id),
+            text: confirmOpen === r.id ? 'Replace unsaved changes' : 'Open',
+            'aria-label': confirmOpen === r.id
+              ? `Replace the unsaved changes in Studio with ${r.name}` : `Open ${r.name}` }),
           btn(confirmDelete === r.id ? 'Confirm delete' : 'Delete', 'studio.saved.delete',
-            () => remove(r.id)),
+            () => remove(r.id), r.name),
         ] : [
-          btn('Insert', 'studio.saved.insert', () => applyPatch(r.id, 'insert')),
-          btn('Replace graph', 'studio.saved.replace', () => applyPatch(r.id, 'replace')),
-          btn('Export', 'studio.saved.export', () => exportPatch(r.id)),
+          btn('Insert', 'studio.saved.insert', () => applyPatch(r.id, 'insert'), r.name),
+          btn('Replace graph', 'studio.saved.replace', () => applyPatch(r.id, 'replace'),
+            r.name),
+          btn('Export', 'studio.saved.export', () => exportPatch(r.id), r.name),
           btn(confirmDelete === r.id ? 'Confirm delete' : 'Delete', 'studio.saved.delete',
-            () => remove(r.id)),
+            () => remove(r.id), r.name),
         ]),
       ]))) : h('p', { class: 'osc-sl-empty', text: 'Nothing saved yet. Save the project from the '
       + 'toolbar, or select nodes and choose Save as patch.' }));
   }
 
   // Connected records of a stored project (ADR 0048): the experiments measured from it, found
-  // by the hash recomputed over it as it loads; computed when the disclosure is opened.
+  // by the hash recomputed over it as it loads; read when the disclosure is opened and again
+  // after a refused link. A link is followed through svc.follow (the verified path of
+  // ui/connections.js): the dialog closes only once the record is verified, and a record that
+  // changed since the list was read is not opened (review 1 of #151).
   function connectionsOf(r) {
     if (typeof svc.connections !== 'function') return null;
     const cstatus = h('p', { class: 'osc-muted osc-dialog-note', role: 'status' });
     const body = h('div', { class: 'osc-sp-cnx-body' });
     const det = h('details', { class: 'osc-sp-cnx', 'data-osc': 'studio.saved.connections' }, [
-      h('summary', { class: 'osc-sp-cnx-summary', text: 'Connected records' }), cstatus, body]);
-    const follow = (e) => {
+      h('summary', { class: 'osc-sp-cnx-summary', text: 'Connected records',
+        'data-osc': 'studio.saved.connectionsToggle',
+        'aria-label': `Connected records of ${r.name}` }), cstatus, body]);
+    let load = async () => {};
+    const follow = async (c, e) => {
       if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button > 0) return;
-      svc.closeModal(libDlg.id);
+      e.preventDefault();
+      let ok = false;
+      try {
+        ok = await svc.follow(c, () => svc.closeModal(libDlg.id));
+      } catch (err) {
+        ok = false;
+      }
+      if (ok) return;
+      // Refused: the dialog stays, the list is read again and says what is stored now.
+      await load('The experiment changed since this list was read, so it was not opened. The '
+        + 'list was read again.');
+      const first = body.querySelector('a') || det.querySelector('summary');
+      if (first) first.focus();
     };
     const item = (c) => h('li', { class: 'osc-x-cn-item', 'data-state': c.state,
       'data-relation': c.relation }, [
       h('strong', { text: c.label }), ' ',
       c.href ? h('a', { class: 'osc-x-cn-link', href: c.href, text: c.target,
-        'data-osc': 'studio.saved.cnxLink', onClick: follow }) : h('span', { text: c.target }),
+        'data-osc': 'studio.saved.cnxLink', onClick: (e) => follow(c, e) })
+        : h('span', { text: c.target }),
       h('span', { class: 'osc-x-cn-state', text: ` — ${c.text}.` }), ' ',
       h('span', { class: 'osc-x-cn-field', text: `Field: ${c.field}, on ${c.fieldOf}.` }),
     ]);
-    det.addEventListener('toggle', async () => {
-      if (!det.open) return;
+    load = async (said = '') => {
       cstatus.textContent = 'Checking the records stored in this browser…';
       let v;
       try {
@@ -146,25 +175,47 @@ export function mountPatches(dialogs, svc) {
         v = { status: (e && e.message) || String(e), downstream: [], notes: [], more: {} };
       }
       if (!v) return;
-      cstatus.textContent = v.status || '';
+      cstatus.textContent = [said, v.status].filter(Boolean).join(' ');
       const notes = (v.notes || []).filter((n) => n.field);
+      const more = v.more || {};
       replaceChildren(body, [
         h('p', { class: 'osc-x-cn-dir', text: 'What depends on it?' }),
         h('ul', { class: 'osc-x-ev-list osc-x-cn-list', role: 'list',
           'aria-label': `What depends on ${r.name}` }, v.downstream.length
           ? v.downstream.map(item) : [h('li', { class: 'osc-x-empty', text: v.status ? ''
-            : 'No stored experiment was measured from this graph or its measured path.' })]),
-        v.more && v.more.downstream ? h('p', { class: 'osc-x-cn-more',
-          text: `And ${v.more.downstream} more, not listed.` }) : null,
+            : 'No stored experiment has this graph hash or its measured-path hash.' })]),
+        more.downstream ? h('p', { class: 'osc-x-cn-more', text: `And ${more.downstream} more, `
+          + `not listed${more.downstreamNotFine ? ` (${more.downstreamNotFine} of them not `
+            + 'stored here as listed)' : ''}.` }) : null,
         notes.length ? h('ul', { class: 'osc-x-ev-list', role: 'list',
           'aria-label': 'Notes on fields' }, notes.map((n) => h('li',
           { text: `${n.field}: ${n.text}` }))) : null,
       ]);
+    };
+    det.addEventListener('toggle', () => {
+      if (det.open) opened.add(r.id); else opened.delete(r.id);
+      if (det.open) load();
     });
+    if (opened.has(r.id)) det.open = true;
     return det;
   }
 
   async function openProject(id) {
+    // Open replaces the open graph: over unsaved changes it asks first, like Delete does
+    // (review 1 of #151: focus can land here from a connected record in Experiments).
+    if (typeof svc.dirty === 'function' && svc.dirty() && confirmOpen !== id) {
+      confirmOpen = id;
+      await refresh();
+      status.textContent = 'Studio has unsaved changes. Opening this project replaces them: '
+        + 'press "Replace unsaved changes" to open it, or close this dialog and save or export '
+        + 'first.';
+      status.hidden = false;
+      svc.announce(status.textContent, { assertive: true });
+      const b = list.querySelector(`[data-id="${CSS.escape(id)}"] [data-osc="studio.saved.open"]`);
+      if (b) b.focus();
+      return;
+    }
+    confirmOpen = null;
     try {
       const lib = await svc.library();
       const r = await lib.loadProject(id);
@@ -310,15 +361,21 @@ export function mountPatches(dialogs, svc) {
     /** Open the dialog; `focusId`: a stored project to show, focused, with its connections. */
     async openLibrary({ focusId = null } = {}) {
       confirmDelete = null;
+      confirmOpen = null;
+      opened.clear();
       svc.openModal(libDlg.id);
       await refresh();
       const row = focusId ? list.querySelector(`[data-id="${CSS.escape(focusId)}"]`) : null;
       if (focusId && !row) svc.announce('That project is no longer saved.', { assertive: true });
-      if (row) {
-        const det = row.querySelector('details');
-        if (det) det.open = true;
+      // A project shown from a connected record: focus goes to its "Connected records"
+      // disclosure, which names the project, never to a button that would replace the graph.
+      const det = row ? row.querySelector('details') : null;
+      if (det) {
+        det.open = true;
+        const name = row.querySelector('.osc-sl-name');
+        svc.announce(`${name ? name.textContent : 'Project'}: connected records`);
       }
-      const first = (row && row.querySelector('button')) || list.querySelector('button') || close;
+      const first = (det && det.querySelector('summary')) || list.querySelector('button') || close;
       first.focus();
       return !!row || !focusId;
     },

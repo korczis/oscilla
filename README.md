@@ -42,11 +42,13 @@ changed.
   **Copy config URL** keeps the recipe and Studio keys that are in the address. Each nav item
   links to its workspace's address, so opening it in a new tab opens that workspace. A link
   that is refused does not stay in the address or in history.
-- **The address names a stored record.** In Experiments, the open experiment is named in the
-  address (`#m=experiments&exp=<id>`, no new history entry); a definition is `def=<id>` and a
-  finding `finding=<id>`. Following a connected record is a new entry, so Back returns to the
-  record you came from and moves focus to its heading. Such a link names a record stored in
-  this browser; elsewhere it says the record is not stored here
+- **The address names a stored record.** In Experiments, the experiment the detail shows is
+  named in the address (`#m=experiments&exp=<id>`, no new history entry) on every path: when it
+  opens, when the detail closes, and on return to Experiments. A definition is `def=<id>` and a
+  finding `finding=<id>`; such an address stays until an experiment is opened. Following a
+  connected record is a new entry, so Back returns to the record you came from and moves focus
+  to its heading. A link names a record stored in this browser; for one that is not stored the
+  page says so and the address names what is shown again
   ([ADR 0048](.ai/repo/adrs/0048-connected-records-over-stored-fields.md)).
 - **Unsaved work.** While something would be lost, a reload, a closed tab or leaving the page
   makes the browser ask first: unsaved Studio changes, a completed measurement that is not
@@ -272,15 +274,20 @@ filter class is claimed. An experiment saved from Measure does not store band le
   duplicates, the Studio project whose saved graph has the hash the experiment stores (or holds
   its measured path), the frequency profile it names, the build that made it; downstream, the
   findings citing it and the experiments repeating or duplicating it, the experiments a
-  definition's versions were used by, the experiments measured from a project's graph. Nothing
-  is inferred from names, recipes or times. An entry reads "stored here" only when its identity
-  verifies: the record is stored, it was read just now (its result hash recomputed, at the same
-  verification point the findings use) and it is the record the field names. Otherwise it says
-  which: "missing" (not stored here, never hidden), "does not match" (another record under
-  that id), "not verifiable" (the field records no identity to check, as a repeat names its
-  original by id only) or "unreadable" (stored, but it fails validation). Each target is a
-  link; an experiment shown as stored here is read again before its link is followed, and one
-  that changed since the list was read is not opened
+  definition's versions were used by, the experiments that store a project's graph hash.
+  Nothing is inferred from names, recipes or times. An entry reads "stored here" only for a
+  record in the store whose identity verifies: it is stored, it was read just now (its result
+  hash recomputed, at the same verification point the findings use) and it is the record the
+  field names. Otherwise it says which: "missing" (not stored here, never hidden), "does not
+  match" (another record under that id), "not verifiable" (the field records no identity to
+  check, as a repeat names its original by id only) or "unreadable" (stored, but it fails
+  validation). A build and a frequency profile are never stored, so they have their own words:
+  "running here" or "not running here" for the build, "loaded here" or "not loaded" for the
+  profile. The entries under a detail are those of the record the detail shows: when another
+  record is stored under its id, the detail is brought to the stored record first. Each target
+  is a link; an experiment shown as stored here is read again before its link is followed,
+  also from Studio's dialog, the record opened is the one that was read, and one that changed
+  since the list was read is not opened
   ([ADR 0048](.ai/repo/adrs/0048-connected-records-over-stored-fields.md), proposed).
 - **A completed experiment cannot be changed.** Only the name, the annotation notes and the baseline
   mark of a saved

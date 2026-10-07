@@ -656,6 +656,19 @@ test('review 1.6: each identity check of each row holds (the mutants die)', () =
   [['executed', 'unverifiable'], ['executed', 'unverifiable']]);
   assert.deepEqual(states(C.connectionsOf({ kind: 'studio', record: p }, unread([whole, path]))),
     [['measured-graph', 'unverifiable'], ['measured-path', 'unverifiable']]);
+  // A row that is not what is stored now (replaced while the list was read) states nothing.
+  const staleIx = index([a, dup(H('1')), whole]);
+  for (const r of staleIx.runs) if (r.experimentId !== 'a') r.stale = true;
+  assert.equal(one(C.connectionsOf(exp(a), staleIx).downstream, 'duplicated-as').state,
+    'unverifiable');
+  const st = one(C.connectionsOf({ kind: 'studio', record: p }, staleIx).downstream,
+    'measured-graph');
+  assert.equal(st.state, 'unverifiable');
+  assert.match(st.text, /changed while this list was read/);
+  const orig = index([run('a'), dup(H('1'))]);
+  orig.runs[0].stale = true;
+  assert.equal(one(C.connectionsOf(exp(dup(H('1'))), orig).upstream, 'duplicate-of').state,
+    'unverifiable');
   // A measured path recorded in another version is not compared with the project's.
   const v2 = run('v2', { studio: { studioHash: H('h'), measured: { v: 2, hash: H('m') } } });
   assert.deepEqual(C.connectionsOf({ kind: 'studio', record: p }, index([v2])).downstream, []);
@@ -706,6 +719,7 @@ test('review 1.1: the entries under a detail are those of the record the detail 
     const { cmp } = harness();
     await cmp.experimentsImportText(a.json);
     await cmp.experimentsOpen('fixture-a');
+    await cmp.cnxSettled();
     const old = hashOf(shown(cmp));
     await replaceIn(await otherTab(), 'fixture-a', c.json, 'IMPOSTOR-A');
     // Asked for the detail's own hash, a different stored record lists nothing under it.
@@ -784,6 +798,6 @@ test('review 1.3 and 1.8: Studio\'s dialog follows entries through the verified 
   const panel = readFileSync(path.join(ROOT, 'src/js/ui/studio/patches-panel.js'), 'utf8');
   assert.match(panel, /svc\.follow\(/, 'a dialog link goes through connectionsVerifyAndGo');
   assert.ok(!/onClick: follow\b/.test(panel), 'no link is left to the browser alone');
-  assert.match(panel, /'aria-label': `Open \$\{r\.name\}`/, 'Open names its project');
+  assert.match(panel, /`Open \$\{r\.name\}`/, 'Open names its project');
   assert.match(panel, /svc\.dirty\(\)/, 'Open asks before it replaces unsaved changes');
 });

@@ -1854,7 +1854,7 @@
                   :aria-label="'Edit ' + d.name" @click="experimentsDefAsk(d.id)">Edit…</button>
                 <details class="osc-x-cn osc-x-cn--row" data-osc="def.connections" :open="!!cnx.open.definition[d.id]"
                   @toggle="connectionsToggle('definition', d.id, $event.target.open)">
-                  <summary class="osc-x-cn-summary">Connected records</summary>
+                  <summary class="osc-x-cn-summary" data-osc="cnx.toggle" :aria-label="'Connected records of ' + d.name">Connected records</summary>
                 <p class="osc-m-hint" role="status" x-text="cnx.defs[d.id] && cnx.defs[d.id].status ? cnx.defs[d.id].status : ''"></p>
                 <p class="osc-x-cn-dir">What is this connected to?</p>
                 <ul class="osc-x-ev-list osc-x-cn-list" role="list" :aria-label="'What ' + d.name + ' is connected to'">
@@ -1862,7 +1862,7 @@
                     <li class="osc-x-cn-item" :data-state="c.state" :data-relation="c.relation"><strong x-text="c.label"></strong> <template x-if="c.href"><a class="osc-x-cn-link" data-osc="cnx.link" :href="c.href" @click="connectionsFollow(c, $event)" x-text="c.target"></a></template><template x-if="!c.href"><span x-text="c.target"></span></template><span class="osc-x-cn-state" x-text="' — ' + c.text + '.'"></span> <span class="osc-x-cn-field" x-text="'Field: ' + c.field + ', on ' + c.fieldOf + '.'"></span></li>
                   </template>
                   <li class="osc-x-empty" x-show="cnx.defs[d.id] && !cnx.defs[d.id].status && !cnx.defs[d.id].upstream.length" x-text="'A definition stores no reference to another record.'"></li>
-                  <li class="osc-x-cn-more" x-show="cnx.defs[d.id] && cnx.defs[d.id].more.upstream" x-text="cnx.defs[d.id] ? 'And ' + cnx.defs[d.id].more.upstream + ' more, not listed.' : ''"></li>
+                  <li class="osc-x-cn-more" x-show="cnx.defs[d.id] && cnx.defs[d.id].more.upstream" x-text="cnx.defs[d.id] ? 'And ' + cnx.defs[d.id].more.upstream + ' more, not listed' + (cnx.defs[d.id].more.upstreamNotFine ? ' (' + cnx.defs[d.id].more.upstreamNotFine + ' of them not stored here as listed)' : '') + '.' : ''"></li>
                 </ul>
                 <p class="osc-x-cn-dir">What depends on it?</p>
                 <ul class="osc-x-ev-list osc-x-cn-list" role="list" :aria-label="'What depends on ' + d.name">
@@ -1870,7 +1870,7 @@
                     <li class="osc-x-cn-item" :data-state="c.state" :data-relation="c.relation"><strong x-text="c.label"></strong> <template x-if="c.href"><a class="osc-x-cn-link" data-osc="cnx.link" :href="c.href" @click="connectionsFollow(c, $event)" x-text="c.target"></a></template><template x-if="!c.href"><span x-text="c.target"></span></template><span class="osc-x-cn-state" x-text="' — ' + c.text + '.'"></span> <span class="osc-x-cn-field" x-text="'Field: ' + c.field + ', on ' + c.fieldOf + '.'"></span></li>
                   </template>
                   <li class="osc-x-empty" x-show="cnx.defs[d.id] && !cnx.defs[d.id].status && !cnx.defs[d.id].downstream.length" x-text="'No stored experiment names a version of this definition.'"></li>
-                  <li class="osc-x-cn-more" x-show="cnx.defs[d.id] && cnx.defs[d.id].more.downstream" x-text="cnx.defs[d.id] ? 'And ' + cnx.defs[d.id].more.downstream + ' more, not listed.' : ''"></li>
+                  <li class="osc-x-cn-more" x-show="cnx.defs[d.id] && cnx.defs[d.id].more.downstream" x-text="cnx.defs[d.id] ? 'And ' + cnx.defs[d.id].more.downstream + ' more, not listed' + (cnx.defs[d.id].more.downstreamNotFine ? ' (' + cnx.defs[d.id].more.downstreamNotFine + ' of them not stored here as listed)' : '') + '.' : ''"></li>
                 </ul>
                 <ul class="osc-x-ev-list osc-x-cn-notes" role="list" x-show="cnx.defs[d.id] && cnx.defs[d.id].notes.some((n) => n.field)" aria-label="Notes on fields">
                   <template x-for="(n, i) in (cnx.defs[d.id] ? cnx.defs[d.id].notes.filter((n) => n.field) : [])" :key="i"><li x-text="n.field + ': ' + n.text"></li></template>
@@ -1963,7 +1963,7 @@
                 <p class="osc-x-meta osc-f-meta" x-text="r.meta"></p>
                 <details class="osc-x-cn osc-x-cn--row" data-osc="fnd.connections" :open="!!cnx.open.finding[r.id]"
                   @toggle="connectionsToggle('finding', r.id, $event.target.open)">
-                  <summary class="osc-x-cn-summary">Connected records</summary>
+                  <summary class="osc-x-cn-summary" data-osc="cnx.toggle" :aria-label="'Connected records of: ' + r.statement">Connected records</summary>
                 <p class="osc-m-hint" role="status" x-text="cnx.findings[r.id] && cnx.findings[r.id].status ? cnx.findings[r.id].status : ''"></p>
                 <p class="osc-x-cn-dir">What is this connected to?</p>
                 <ul class="osc-x-ev-list osc-x-cn-list" role="list" :aria-label="'What this finding is connected to: ' + r.statement">
@@ -1971,7 +1971,7 @@
                     <li class="osc-x-cn-item" :data-state="c.state" :data-relation="c.relation"><strong x-text="c.label"></strong> <template x-if="c.href"><a class="osc-x-cn-link" data-osc="cnx.link" :href="c.href" @click="connectionsFollow(c, $event)" x-text="c.target"></a></template><template x-if="!c.href"><span x-text="c.target"></span></template><span class="osc-x-cn-state" x-text="' — ' + c.text + '.'"></span> <span class="osc-x-cn-field" x-text="'Field: ' + c.field + ', on ' + c.fieldOf + '.'"></span></li>
                   </template>
                   <li class="osc-x-empty" x-show="cnx.findings[r.id] && !cnx.findings[r.id].status && !cnx.findings[r.id].upstream.length" x-text="'This finding cites no experiment.'"></li>
-                  <li class="osc-x-cn-more" x-show="cnx.findings[r.id] && cnx.findings[r.id].more.upstream" x-text="cnx.findings[r.id] ? 'And ' + cnx.findings[r.id].more.upstream + ' more, not listed.' : ''"></li>
+                  <li class="osc-x-cn-more" x-show="cnx.findings[r.id] && cnx.findings[r.id].more.upstream" x-text="cnx.findings[r.id] ? 'And ' + cnx.findings[r.id].more.upstream + ' more, not listed' + (cnx.findings[r.id].more.upstreamNotFine ? ' (' + cnx.findings[r.id].more.upstreamNotFine + ' of them not stored here as listed)' : '') + '.' : ''"></li>
                 </ul>
                 <p class="osc-x-cn-dir">What depends on it?</p>
                 <ul class="osc-x-ev-list osc-x-cn-list" role="list" :aria-label="'What depends on this finding: ' + r.statement">
@@ -1979,7 +1979,7 @@
                     <li class="osc-x-cn-item" :data-state="c.state" :data-relation="c.relation"><strong x-text="c.label"></strong> <template x-if="c.href"><a class="osc-x-cn-link" data-osc="cnx.link" :href="c.href" @click="connectionsFollow(c, $event)" x-text="c.target"></a></template><template x-if="!c.href"><span x-text="c.target"></span></template><span class="osc-x-cn-state" x-text="' — ' + c.text + '.'"></span> <span class="osc-x-cn-field" x-text="'Field: ' + c.field + ', on ' + c.fieldOf + '.'"></span></li>
                   </template>
                   <li class="osc-x-empty" x-show="cnx.findings[r.id] && !cnx.findings[r.id].status && !cnx.findings[r.id].downstream.length" x-text="'No record stores a reference to a finding.'"></li>
-                  <li class="osc-x-cn-more" x-show="cnx.findings[r.id] && cnx.findings[r.id].more.downstream" x-text="cnx.findings[r.id] ? 'And ' + cnx.findings[r.id].more.downstream + ' more, not listed.' : ''"></li>
+                  <li class="osc-x-cn-more" x-show="cnx.findings[r.id] && cnx.findings[r.id].more.downstream" x-text="cnx.findings[r.id] ? 'And ' + cnx.findings[r.id].more.downstream + ' more, not listed' + (cnx.findings[r.id].more.downstreamNotFine ? ' (' + cnx.findings[r.id].more.downstreamNotFine + ' of them not stored here as listed)' : '') + '.' : ''"></li>
                 </ul>
                 <ul class="osc-x-ev-list osc-x-cn-notes" role="list" x-show="cnx.findings[r.id] && cnx.findings[r.id].notes.some((n) => n.field)" aria-label="Notes on fields">
                   <template x-for="(n, i) in (cnx.findings[r.id] ? cnx.findings[r.id].notes.filter((n) => n.field) : [])" :key="i"><li x-text="n.field + ': ' + n.text"></li></template>
@@ -2101,7 +2101,7 @@
                     <li class="osc-x-cn-item" :data-state="c.state" :data-relation="c.relation"><strong x-text="c.label"></strong> <template x-if="c.href"><a class="osc-x-cn-link" data-osc="cnx.link" :href="c.href" @click="connectionsFollow(c, $event)" x-text="c.target"></a></template><template x-if="!c.href"><span x-text="c.target"></span></template><span class="osc-x-cn-state" x-text="' — ' + c.text + '.'"></span> <span class="osc-x-cn-field" x-text="'Field: ' + c.field + ', on ' + c.fieldOf + '.'"></span></li>
                   </template>
                   <li class="osc-x-empty" x-show="cnx.run && !cnx.run.status && !cnx.run.upstream.length" x-text="'No stored field of this experiment names another record.'"></li>
-                  <li class="osc-x-cn-more" x-show="cnx.run && cnx.run.more.upstream" x-text="cnx.run ? 'And ' + cnx.run.more.upstream + ' more, not listed.' : ''"></li>
+                  <li class="osc-x-cn-more" x-show="cnx.run && cnx.run.more.upstream" x-text="cnx.run ? 'And ' + cnx.run.more.upstream + ' more, not listed' + (cnx.run.more.upstreamNotFine ? ' (' + cnx.run.more.upstreamNotFine + ' of them not stored here as listed)' : '') + '.' : ''"></li>
                 </ul>
                 <p class="osc-x-cn-dir">What depends on it?</p>
                 <ul class="osc-x-ev-list osc-x-cn-list" role="list" :aria-label="'What depends on this experiment'">
@@ -2109,7 +2109,7 @@
                     <li class="osc-x-cn-item" :data-state="c.state" :data-relation="c.relation"><strong x-text="c.label"></strong> <template x-if="c.href"><a class="osc-x-cn-link" data-osc="cnx.link" :href="c.href" @click="connectionsFollow(c, $event)" x-text="c.target"></a></template><template x-if="!c.href"><span x-text="c.target"></span></template><span class="osc-x-cn-state" x-text="' — ' + c.text + '.'"></span> <span class="osc-x-cn-field" x-text="'Field: ' + c.field + ', on ' + c.fieldOf + '.'"></span></li>
                   </template>
                   <li class="osc-x-empty" x-show="cnx.run && !cnx.run.status && !cnx.run.downstream.length" x-text="'No stored record names this experiment.'"></li>
-                  <li class="osc-x-cn-more" x-show="cnx.run && cnx.run.more.downstream" x-text="cnx.run ? 'And ' + cnx.run.more.downstream + ' more, not listed.' : ''"></li>
+                  <li class="osc-x-cn-more" x-show="cnx.run && cnx.run.more.downstream" x-text="cnx.run ? 'And ' + cnx.run.more.downstream + ' more, not listed' + (cnx.run.more.downstreamNotFine ? ' (' + cnx.run.more.downstreamNotFine + ' of them not stored here as listed)' : '') + '.' : ''"></li>
                 </ul>
                 <ul class="osc-x-ev-list osc-x-cn-notes" role="list" x-show="cnx.run && cnx.run.notes.some((n) => n.field)" aria-label="Notes on fields">
                   <template x-for="(n, i) in (cnx.run ? cnx.run.notes.filter((n) => n.field) : [])" :key="i"><li x-text="n.field + ': ' + n.text"></li></template>

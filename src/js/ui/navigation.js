@@ -53,7 +53,7 @@ import {
 } from '../core/url-state-studio.js';
 import { RECIPE_HASH_KEY, withRecipeParam } from '../core/url-state-measure.js';
 import {
-  RECORD_LINK_KEYS, RECORD_LINK_MODE, encodeRecordLink, withoutRecordParams,
+  RECORD_LINK_KEYS, RECORD_LINK_MODE, decodeRecordLink, encodeRecordLink, withoutRecordParams,
 } from '../core/url-state-records.js';
 import { WORKSPACES } from './app.js';
 
@@ -348,6 +348,24 @@ export function createNavigation(svc = {}) {
       const hash = hashForRecord(loc().hash, link);
       if (hash === strip(loc().hash)) return false;
       write(hash, 'replace');
+      return true;
+    },
+
+    /** The record the address names (core/url-state-records.js decodeRecordLink), or null. */
+    navRecordInAddress() {
+      return nav.started ? decodeRecordLink(loc().hash) : null;
+    },
+    /**
+     * A new history entry naming stored record `link` in Experiments (an entry of a connected
+     * record followed after it was verified, ADR 0048), from any workspace: the workspace
+     * becomes Experiments with that one entry, not two.
+     */
+    navPushRecord(link) {
+      if (!nav.started) return false;
+      const hash = hashForRecord(loc().hash, link);
+      if (hash !== strip(loc().hash)) write(hash, 'push');
+      nav.routed = { href: loc().href, workspace: RECORD_LINK_MODE };
+      if (this.workspace !== RECORD_LINK_MODE) this.setWorkspace(RECORD_LINK_MODE);
       return true;
     },
 

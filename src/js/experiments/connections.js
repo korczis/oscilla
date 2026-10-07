@@ -26,17 +26,20 @@
 //     keeps it on each list row (`links`), so an experiment's dependents are found without reading
 //     every record. studio = { hash, measured: { v, hash } | null } | null.
 //   connectionsOf(subject, index) -> { kind, id, upstream: [Connection], downstream:
-//     [Connection], notes: [{ field, text }], more: { upstream, downstream } }
+//     [Connection], notes: [{ field, text }], more: { upstream, downstream, upstreamNotFine,
+//     downstreamNotFine } }
 //     subject  { kind: 'experiment', record: experiment (read and verified) }
 //              | { kind: 'definition', record: definition } | { kind: 'finding', record }
 //              | { kind: 'studio', record: { id, name, studioHash, measured } }
 //     index    what this browser stores, as the caller read it:
-//              { experiments: [{ experimentId, name, definition, links, readable, reason,
+//              { runs: [{ experimentId, name, definition, links, readable, reason, stale,
 //                         hasResponse, frequencies }]
 //                  links null: not known; readable true (the record was read and verified),
 //                  false (it could not be read, `reason` says why), absent (not read);
-//                  hasResponse and frequencies (evidence.js storedResponseFrequencies) of a
-//                  record that was read,
+//                  stale true: the record verified under the id is not the one its list row
+//                  described (replaced while the list was read), so nothing the row says is
+//                  stated; hasResponse and frequencies (evidence.js
+//                  storedResponseFrequencies) of a record that was read,
 //                definitions: [definition], unreadableDefinitions: [id],
 //                findings: [finding],
 //                studio: { projects: [{ id, name, studioHash, measured }], unreadable: [id] }
@@ -51,7 +54,8 @@
 //     field, fieldOf, state, target, text, href, open }
 //     field    the stored field the connection comes from (a path on the record `fieldOf`
 //              names: 'this experiment', 'that experiment', 'this finding', 'that finding')
-//     text     the state in words, starting with STATE_WORDS[state]
+//     text     the state in words, starting with STATE_WORDS[state] (a build or a profile,
+//              which are never stored: RELATION_STATE_WORDS)
 //     href     the target's address (core/url-state-records.js, '#m=about', '#m=measure'), or
 //              null when nothing can be opened (missing, unreadable); open: { kind: 'studio',
 //              id } for a stored Studio
@@ -74,6 +78,14 @@ export const CONNECTION_STATES = Object.freeze(['present', 'missing', 'mismatch'
   'unverifiable', 'unreadable']);
 export const STATE_WORDS = Object.freeze({ present: 'stored here', missing: 'missing',
   mismatch: 'does not match', unverifiable: 'not verifiable', unreadable: 'unreadable' });
+/**
+ * A build and a frequency profile are never stored (review 1 of #151): their entries have their
+ * own words for the two states "stored here" and "missing" would misname.
+ */
+export const RELATION_STATE_WORDS = Object.freeze({
+  build: Object.freeze({ present: 'running here', missing: 'not running here' }),
+  profile: Object.freeze({ present: 'loaded here', missing: 'not loaded' }),
+});
 export const SUBJECT_KINDS = Object.freeze(['experiment', 'definition', 'finding', 'studio']);
 /** Most connections listed per direction; the rest are counted in `more`. */
 export const CONNECTION_LIMIT = 50;
@@ -82,6 +94,8 @@ const obj = (v) => !!v && typeof v === 'object';
 const str = (v) => typeof v === 'string' && v !== '';
 const short = (id) => (id.length > 14 ? `${id.slice(0, 12)}…` : id);
 const NOT_HERE = 'not stored in this browser (deleted, or never stored here)';
+const STALE = 'the record stored under this id changed while this list was read; what its list '
+  + 'row says is not what is stored now';
 const THIS = 'this experiment';
 const THAT = 'that experiment';
 
@@ -106,7 +120,10 @@ const defName = (d, id) => (d && str(d.name) ? `definition "${d.name}"`
   : `definition ${short(id)}`);
 const statementOf = (f) => (f.statement.length > 80 ? `${f.statement.slice(0, 79)}…`
   : f.statement);
-const said = (state, why) => (why ? `${STATE_WORDS[state]}: ${why}` : STATE_WORDS[state]);
+const wordOf = (relation, state) => (RELATION_STATE_WORDS[relation] || {})[state]
+  || STATE_WORDS[state];
+const said = (relation, state, why) => (why ? `${wordOf(relation, state)}: ${why}`
+  : wordOf(relation, state));
 
 /** The lookups of an index, built once per index object. */
 const views = new WeakMap();
@@ -131,7 +148,7 @@ function viewOf(index) {
 function connection(direction, relation, label, from, to, field, fieldOf, [state, why], target,
   { href = null, open = null } = {}) {
   return { direction, relation, label, from, to, field, fieldOf, state, target,
-    text: said(state, why), href: state === 'missing' || state === 'unreadable' ? null : href,
+    text: said(relation, state, why), href: state === 'missing' || state === 'unreadable' ? null : href,
     open };
 }
 
@@ -145,6 +162,7 @@ function runState(row, expect, byId = null) {
     return ['unreadable', `a record is stored under this id, but it cannot be read${
       str(row.reason) ? ` (${row.reason})` : ''}`];
   }
+  if (row.stale) return ['unverifiable', STALE];
   if (row.readable !== true || !obj(row.links)) {
     return ['unverifiable', 'its stored record was not read, so its identity is not checked'];
   }
@@ -232,7 +250,7 @@ function studioUp(e, v, me, notes) {
   const at = (p) => ({ href: '#m=studio', open: { kind: 'studio', id: p.id } });
   const whole = projects.filter((p) => p.studioHash === s.hash);
   for (const p of whole) {
-    out.push(connection('upstream', 'studio-graph', 'Measured from the graph of', me,
+    out.push(connection('upstream', 'studio-graph', 'Its graph hash is that of', me,
       { kind: 'studio', id: p.id }, 'studio.studioHash', 'this experiment', ['present', 'its saved '
         + 'graph, recomputed as it loads, has the hash this experiment stores'], pName(p), at(p)));
   }
@@ -244,14 +262,14 @@ function studioUp(e, v, me, notes) {
   } else if (m) {
     for (const p of projects) {
       if (whole.includes(p) || !obj(p.measured) || p.measured.hash !== m.hash) continue;
-      out.push(connection('upstream', 'studio-path', 'Measured path held by', me,
+      out.push(connection('upstream', 'studio-path', 'Its measured-path hash is held by', me,
         { kind: 'studio', id: p.id }, 'studio.measured.hash', THIS, ['present', 'its saved '
           + 'graph holds the measured path with the hash stored here; other parts of its '
           + 'graph differ from the graph recorded'], pName(p), at(p)));
     }
   }
   if (!out.length) {
-    out.push(connection('upstream', 'studio-graph', 'Measured from the graph of', me,
+    out.push(connection('upstream', 'studio-graph', 'Its graph hash is that of', me,
       { kind: 'studio', id: null }, m ? 'studio.studioHash and studio.measured.hash'
         : 'studio.studioHash', THIS, ['missing', 'no Studio project stored here has this '
         + `graph${m ? ' or its measured path' : ''} now (the experiment stores the graph, not a `
@@ -273,12 +291,14 @@ function profileUp(e, v, me) {
   // A profile id is the SHA-256 of its points (calibration/profile.js): equal ids are equal
   // profiles.
   if (v.profile && v.profile.id === f.id) {
-    return connection(...args, ['present', `loaded in Measure with this id (the hash of its `
-      + `points) for this page view; a profile is kept only while it is loaded${also}`], target,
+    return connection(...args, ['present', `the profile loaded in Measure now has this id (the `
+      + `hash of its points); a profile is kept only while it is loaded, never stored${also}`],
+    target,
     { href: '#m=measure' });
   }
-  return connection(...args, ['missing', `not loaded here: OSCILLA keeps a frequency profile `
-    + `only while it is loaded in Measure; load its file to check it${also}`], target);
+  return connection(...args, ['missing', `OSCILLA keeps a frequency profile only while it is `
+    + `loaded in Measure, and the one loaded now (if any) has another id; load its file to check `
+    + `it${also}`], target);
 }
 
 function buildUp(e, v, me, notes) {
@@ -310,8 +330,8 @@ function buildUp(e, v, me, notes) {
     return connection(...args, ['mismatch', 'the same source with another artifact SHA-256: a '
       + 'different file'], target, about);
   }
-  return connection(...args, ['present', 'the build running this page (the same version and '
-    + 'source digest)'], target, about);
+  return connection(...args, ['present', 'this page\'s build has the same version and source '
+    + 'digest; a build is not a stored record'], target, about);
 }
 
 /** The field holding the identity a finding recorded for a cited experiment. */
@@ -336,6 +356,7 @@ function referrerState(row, then) {
   if (row.readable === false) {
     return ['unreadable', `it cannot be read${str(row.reason) ? ` (${row.reason})` : ''}`];
   }
+  if (row.stale) return ['unverifiable', STALE];
   if (row.readable !== true) {
     return ['unverifiable', 'its stored record was not read, so it is not checked'];
   }
@@ -370,8 +391,8 @@ function runDown(e, v, me) {
     const href = link('experiment', row.experimentId);
     if (row.links.repeatOf === id) {
       out.push(connection(...args('repeated-by', 'Repeated by', 'provenance.repeatOf'),
-        referrerState(row, () => ['unverifiable', 'a new measurement that names this one\'s id '
-          + 'as the one it repeats; a repeat does not record that one\'s result hash']),
+        referrerState(row, () => ['unverifiable', 'it names this one\'s id as the one it '
+          + 'repeats; a repeat does not record that one\'s result hash']),
         runName(row, row.experimentId), { href }));
     }
     if (row.links.duplicateOf === id) {
@@ -411,7 +432,7 @@ function issueLookup(v, self = null) {
     }
     const row = v.run.get(id);
     if (!row) return v.defs.has(id) ? { kind: 'definition', name: v.defs.get(id).name } : null;
-    const read = row.readable === true;
+    const read = row.readable === true && !row.stale;
     return { kind: 'experiment', name: row.name || null,
       readable: row.readable === false ? false : read ? true : undefined, reason: row.reason,
       // A row that was not read has no verified hash: "its stored result hash has not been read".
@@ -476,13 +497,13 @@ function studioDown(p, v, me) {
       { kind: 'experiment', id: row.experimentId }, field, THAT];
     const href = link('experiment', row.experimentId);
     if (s.hash === p.studioHash) {
-      out.push(connection(...args('measured-graph', 'Measured from this graph by',
+      out.push(connection(...args('measured-graph', 'Its saved graph has the hash stored by',
         'studio.studioHash'), referrerState(row, () => ['present', 'it stores the hash of this '
         + 'project\'s saved graph, recomputed as it loads']), runName(row, row.experimentId),
       { href }));
     } else if (obj(s.measured) && obj(p.measured) && s.measured.v === p.measured.v
       && s.measured.hash === p.measured.hash) {
-      out.push(connection(...args('measured-path', 'Measured path held here, by',
+      out.push(connection(...args('measured-path', 'It holds the measured path stored by',
         'studio.measured.hash'), referrerState(row, () => ['present', 'it stores the hash of a '
         + 'measured path this project holds; other parts of the graph it recorded differ']),
       runName(row, row.experimentId), { href }));
@@ -493,9 +514,19 @@ function studioDown(p, v, me) {
 
 // ---------------------------------------------------------------- entry
 
+/**
+ * The first CONNECTION_LIMIT entries. A list over the bound puts those that are not present
+ * first (in their order), so the bound never hides one that is not fine while a fine one is
+ * listed; `notFine` counts the
+ * unlisted ones that are not present.
+ */
 function bounded(list) {
-  return { list: list.slice(0, CONNECTION_LIMIT), more: Math.max(0, list.length
-    - CONNECTION_LIMIT) };
+  if (list.length <= CONNECTION_LIMIT) return { list, more: 0, notFine: 0 };
+  const sorted = [...list.filter((c) => c.state !== 'present'),
+    ...list.filter((c) => c.state === 'present')];
+  const rest = sorted.slice(CONNECTION_LIMIT);
+  return { list: sorted.slice(0, CONNECTION_LIMIT), more: rest.length,
+    notFine: rest.filter((c) => c.state !== 'present').length };
 }
 
 /** See the header. */
@@ -545,7 +576,8 @@ export function connectionsOf(subject, index = {}) {
   const u = bounded(up);
   const d = bounded(down);
   return { kind: subject.kind, id, upstream: u.list, downstream: d.list, notes,
-    more: { upstream: u.more, downstream: d.more } };
+    more: { upstream: u.more, downstream: d.more, upstreamNotFine: u.notFine,
+      downstreamNotFine: d.notFine } };
 }
 
 /** The ids of the stored experiments a result names (to read and verify before it is shown). */

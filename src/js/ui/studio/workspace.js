@@ -993,6 +993,9 @@ export function createStudioUi(svc = {}) {
       recordDeleted: (id) => detachDeleted(id),
       connections: (id) => (ctx.cmp && typeof ctx.cmp.connectionsOfStudioProject === 'function'
         ? ctx.cmp.connectionsOfStudioProject(id) : Promise.resolve(null)),
+      follow: (c, before) => (ctx.cmp && typeof ctx.cmp.connectionsGo === 'function'
+        ? ctx.cmp.connectionsGo(c, before) : Promise.resolve(false)),
+      dirty: () => !!(ctx.cmp && ctx.cmp.studio && ctx.cmp.studio.dirty),
       downloadFile,
       ...dialogSvc,
     });

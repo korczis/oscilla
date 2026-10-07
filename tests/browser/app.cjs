@@ -185,7 +185,8 @@ const H = {
 
 /** Accessible-name + reachability audit of every interactive [data-osc] element, in-page. */
 function auditControls() {
-  const INTERACTIVE = 'button, input, select, textarea, a[href], [role="switch"], [role="tab"],'
+  const INTERACTIVE = 'button, input, select, textarea, summary, a[href], [role="switch"],'
+    + ' [role="tab"],'
     + ' [role="radio"], [role="menuitem"], [role="listbox"], [tabindex]:not([tabindex="-1"])';
   const text = (el) => (el ? el.textContent.replace(/\s+/g, ' ').trim() : '');
   const name = (el) => {
@@ -624,6 +625,10 @@ function defineChecks() {
     });
     await page.waitForSelector('[data-osc="exp.findingNew"]', { state: 'visible', timeout: 5000 })
       .catch(() => {});
+    // Connected records (ADR 0048): the open experiment is a duplicate, so its section holds a
+    // link; the definition and finding rows carry their disclosure.
+    await page.waitForSelector('[data-osc="cnx.link"]', { state: 'visible', timeout: 10000 })
+      .catch(() => {});
     await collect();
     await page.click('[data-osc="exp.findingNew"]');
     await page.waitForSelector('#osc-fnd-statement', { state: 'visible', timeout: 5000 })
@@ -730,7 +735,10 @@ function defineChecks() {
     const unlabelled = list.filter((c) => !c.name).map((c) => c.osc + (c.id ? `#${c.id}` : ''));
     const unreachable = list.filter((c) => !c.reachable).map((c) => c.osc);
     const neverVisible = list.filter((c) => !c.visible).map((c) => c.osc);
-    return { ok: !unlabelled.length && !unreachable.length && !neverVisible.length,
+    // Controls the audit must have met (they exist only in a state the audit sets up).
+    const unseen = ['cnx.link', 'cnx.toggle'].filter((k) => !seen.has(k));
+    return { ok: !unlabelled.length && !unreachable.length && !neverVisible.length
+      && !unseen.length, unseen,
       controls: list.length, unlabelled, unreachable, neverVisible, measureState };
   });
 

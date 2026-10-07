@@ -36,6 +36,10 @@ import { createStudioLibrary } from '../studio/library.js';
 import { studioProvenance } from '../studio/provenance.js';
 
 const plain = (v) => JSON.parse(JSON.stringify(v));
+const obj = (v) => !!v && typeof v === 'object';
+const hashOf = (e) => runLinks(e).resultHash;
+const NOT_SHOWN = 'The experiment stored under this id is no longer the one shown, so nothing is '
+  + 'listed under it.';
 // The links of a row written before links existed, read once per list row (id, size, creation
 // time): discovery only, never an identity.
 const rowKey = (r) => `${r.experimentId}|${r.sizeBytes}|${r.createdAt}`;
@@ -47,6 +51,7 @@ export function createConnectionsUi() {
     links: new Map(),     // rowKey -> links of a row written before links existed
     projects: new Map(),  // `${id}|${savedAt}` -> a Studio project's recomputed identity
     token: { run: 0, definition: {}, finding: {}, studio: {} },
+    resyncing: false,     // the detail is being brought to the stored record (no nested resync)
     pending: new Set(),
   };
 
@@ -78,10 +83,14 @@ export function createConnectionsUi() {
         ? 'it was not found when read' : v.reason || null });
       return;
     }
-    // The verified hash replaces the one the list row records.
+    // What the entry states (links, definition, name) comes from the list row; the identity
+    // comes from this read. When the two name different records (the row's result hash is not
+    // the verified one: replaced while the list was read), the row is stale and nothing it says
+    // is stated (review 1 of #151).
+    const listed = obj(row.links) ? row.links.resultHash || null : null;
     Object.assign(row, { readable: true, reason: null, hasResponse: v.hasResponse,
-      frequencies: v.frequencies, links: { ...(row.links || runLinks(null)),
-        resultHash: v.resultHash || null } });
+      frequencies: v.frequencies, stale: !obj(row.links) || listed !== (v.resultHash || null),
+      links: { ...(row.links || runLinks(null)), resultHash: v.resultHash || null } });
   }
 
   async function studioIndex(cmp, store) {
@@ -157,7 +166,7 @@ export function createConnectionsUi() {
    * connectionsOf over the stored records, after every experiment it names was read and verified.
    * `subjectOf(index)` -> subject, or a text saying why there is none.
    */
-  async function compute(cmp, subjectOf) {
+  async function compute(cmp, subjectOf, attempt = 0) {
     const { store, index } = await readIndex(cmp);
     const subject = await subjectOf(index, store);
     if (typeof subject === 'string') return { status: subject, upstream: [], downstream: [],
@@ -171,11 +180,14 @@ export function createConnectionsUi() {
       await verify(cmp, r);
       read = true;
     }
+    // A row that changed while the list was read: read the list again (twice at most); after
+    // that its entries say that the row is not what is stored.
+    if (index.runs.some((r) => r.stale) && attempt < 2) return compute(cmp, subjectOf, attempt + 1);
     if (read) out = connectionsOf(subject, { ...index, runs: index.runs.slice() });
     return { status: null, ...out };
   }
 
-  const view = (id, r) => plain({ id, ...r });
+  const view = (id, r, extra = {}) => plain({ id, ...extra, ...r });
   const checking = (id) => ({ id, status: CHECKING, upstream: [], downstream: [], notes: [],
     more: { upstream: 0, downstream: 0 } });
 
@@ -203,10 +215,21 @@ export function createConnectionsUi() {
       open: { definition: {}, finding: {} },
     },
 
-    /** The connections of the open experiment (its detail). */
-    async connectionsOfRun(id) {
+    /**
+     * The entries of the open experiment (its detail). `shownHash`: the result hash of the record
+     * the detail shows (default: experimentsShownHash when the detail is this id). When the
+     * record stored under the id is another one, or none, nothing is listed under the detail:
+     * the detail is brought to what is stored first (experimentsRefresh re-reads or closes it and
+     * says so), and the entries are then those of the record shown (review 1 of #151).
+     */
+    async connectionsOfRun(id, shownHash, { resync = true } = {}) {
       const t = ++ctx.token.run;
+      const shown = shownHash !== undefined ? shownHash
+        : this.exps.detail && this.exps.detail.id === id
+          && typeof this.experimentsShownHash === 'function' ? this.experimentsShownHash(id)
+          : undefined;
       if (!this.cnx.run || this.cnx.run.id !== id) this.cnx.run = checking(id);
+      let other = false;
       const r = await track(compute(this, async (ix, store) => {
         // Read from the store, never from the workspace's decoded cache: another tab may have
         // replaced the experiment under its id since it was cached (review 2 of #149).
@@ -214,13 +237,31 @@ export function createConnectionsUi() {
         try {
           e = await store.get(id);
         } catch (err) {
+          other = shown !== undefined;
           return `Experiment ${id} is stored here but cannot be read (${err.message
             || String(err)}).`;
         }
-        return e ? { kind: 'experiment', record: e }
-          : `Experiment ${id} is not stored in this browser.`;
+        if (!e) {
+          other = shown !== undefined;
+          return `Experiment ${id} is not stored in this browser.`;
+        }
+        if (shown !== undefined && hashOf(e) !== shown) {
+          other = true;
+          return NOT_SHOWN;
+        }
+        return { kind: 'experiment', record: e };
       }));
-      if (t === ctx.token.run) this.cnx.run = view(id, r);
+      if (t === ctx.token.run) this.cnx.run = view(id, r, { shownHash: shown ?? null });
+      if (other && resync && !ctx.resyncing && typeof this.experimentsRefresh === 'function') {
+        ctx.resyncing = true;
+        try {
+          await this.experimentsRefresh();
+        } catch (err) { /* the list could not be read: the status above stays */ } finally {
+          ctx.resyncing = false;
+        }
+        const d = this.exps.detail;
+        if (d && d.id === id) return this.connectionsOfRun(id, undefined, { resync: false });
+      }
       return r;
     },
     async connectionsOfDefinition(id) {
@@ -251,6 +292,8 @@ export function createConnectionsUi() {
     },
     /** The runs measured from stored Studio project `id` (the Projects and patches dialog). */
     async connectionsOfStudioProject(id) {
+      const t = (ctx.token.studio[id] || 0) + 1;
+      ctx.token.studio[id] = t;
       const r = await track(compute(this, (ix) => {
         if (!ix.studio) return 'The Studio projects stored here could not be read.';
         const p = ix.studio.projects.find((x) => x.id === id);
@@ -258,7 +301,7 @@ export function createConnectionsUi() {
         return ix.studio.unreadable.includes(id) ? 'This project cannot be read, so its graph '
           + 'was not compared.' : 'This project is no longer saved.';
       }));
-      this.cnx.studio = { ...this.cnx.studio, [id]: view(id, r) };
+      if (t === ctx.token.studio[id]) this.cnx.studio = { ...this.cnx.studio, [id]: view(id, r) };
       return r;
     },
     /** A definition's or finding's "Connected records" opened or closed. */
@@ -272,6 +315,7 @@ export function createConnectionsUi() {
     connectionsRefreshOpen() {
       const jobs = [];
       if (this.cnx.run) jobs.push(this.connectionsOfRun(this.cnx.run.id));
+      else if (this.exps.detail) jobs.push(this.connectionsOfRun(this.exps.detail.id));
       for (const [id, on] of Object.entries(this.cnx.open.definition)) {
         if (on) jobs.push(this.connectionsOfDefinition(id));
       }
@@ -319,10 +363,14 @@ export function createConnectionsUi() {
       return false;
     },
     /**
-     * Read run target `c.to` from the store again; follow `c.href` only when the record stored
-     * under its id still has the result hash it was verified with. Returns true when followed.
+     * Follow an entry to an experiment shown as "stored here": verify it now, at the findings
+     * verification point, against the result hash it was listed with; then open the record read
+     * from the store, and only when it has that hash (recordsOpen `expect`). A record that
+     * changed since the list was read is not opened: a notice says why and the lists are read
+     * again. `before()` runs after the verification passed and before anything opens (Studio's
+     * dialog closes there). Returns true when the record was opened.
      */
-    async connectionsVerifyAndGo(c) {
+    async connectionsVerifyAndGo(c, { before = null } = {}) {
       const v = await this.findingsVerifyCitedExperiment(c.to.id, c.to.hash);
       if (v.state !== 'ok') {
         const why = { missing: 'it is no longer stored here', unreadable: `it is stored here but `
@@ -334,11 +382,23 @@ export function createConnectionsUi() {
         this.connectionsRefreshOpen();
         return false;
       }
-      if (typeof location !== 'undefined') {
-        if (location.hash === c.href) this.recordsApplyHash(c.href, 'link');
-        else location.hash = c.href;
-      } else this.recordsApplyHash(c.href, 'link');
-      return true;
+      if (typeof before === 'function') before();
+      return this.recordsOpen('experiment', c.to.id, { expect: c.to.hash, push: true,
+        what: c.target });
+    },
+    /**
+     * An entry followed from outside the Experiments templates (Studio's Projects and patches
+     * dialog): the same verified path for an experiment listed with its hash; any other target
+     * is opened through its address. Resolves true when something was opened.
+     */
+    async connectionsGo(c, before = null) {
+      if (c && c.to && c.to.kind === 'experiment' && c.to.hash) {
+        return this.connectionsVerifyAndGo(c, { before });
+      }
+      const link = c && c.href ? decodeRecordLink(c.href) : null;
+      if (!link || !link.ok) return false;
+      if (typeof before === 'function') before();
+      return this.recordsOpen(link.kind, link.id, { push: true });
     },
     /**
      * The `records` domain of the hash dispatcher: true (applied; the record opens when it is
@@ -355,33 +415,66 @@ export function createConnectionsUi() {
       track(this.recordsOpen(r.kind, r.id));
       return true;
     },
-    /** Open stored record `kind` `id` where it is shown, and move focus to it. */
-    async recordsOpen(kind, id) {
-      const missing = () => {
-        this.notify('warning', `${NOUN[kind]} not found`, `${NOUN[kind]} ${id} is not stored in `
-          + 'this browser (deleted, or never stored here).');
+    /**
+     * The address names the experiment the detail shows, or none (review 1 of #151). An address
+     * that names a definition or a finding a link opened is kept unless `force`.
+     */
+    recordsNameDetail(force = false) {
+      if (typeof this.navNameRecord !== 'function') return;
+      const cur = typeof this.navRecordInAddress === 'function' ? this.navRecordInAddress() : null;
+      if (!force && cur && cur.ok && cur.kind !== 'experiment') return;
+      const d = this.exps.detail;
+      this.navNameRecord(d ? { kind: 'experiment', id: d.id } : null);
+    },
+    /**
+     * Open stored record `kind` `id` where it is shown, and move focus to it. An experiment is
+     * read from the store here, once, and the detail is set from that record: never from a
+     * decoded copy kept under its id. `expect`: the result hash the record must have (the hash an
+     * entry was verified with), else nothing opens. `push`: the address gets a new history entry
+     * naming the record. A record that is not opened leaves the address naming what is shown.
+     */
+    async recordsOpen(kind, id, { expect, push = false, what = null } = {}) {
+      const refuse = (level, title, text) => {
+        this.notify(level, title, text);
+        this.recordsNameDetail(true);
         return false;
+      };
+      const missing = () => refuse('warning', `${NOUN[kind]} not found`, `${NOUN[kind]} ${id} is `
+        + 'not stored in this browser (deleted, or never stored here).');
+      const name = (link) => {
+        if (push && typeof this.navPushRecord === 'function') this.navPushRecord(link);
       };
       try {
         if (kind === 'experiment') {
-          if (!(this.exps.detail && this.exps.detail.id === id)) {
-            if (!await (await this.experimentsStore()).get(id)) return missing();
-            await this.experimentsOpen(id);
-          } else await this.connectionsOfRun(id);
-          this.exps.panel = 'detail';
+          let e;
+          try {
+            e = await (await this.experimentsStore()).get(id);
+          } catch (err) {
+            return refuse('warning', 'Experiment not opened', `Experiment ${id} is stored here `
+              + `but cannot be read (${err.message || String(err)}). Nothing was opened.`);
+          }
+          if (!e) return missing();
+          if (expect !== undefined && hashOf(e) !== expect) {
+            this.connectionsRefreshOpen();
+            return refuse('warning', 'Experiment not opened', `${what || `Experiment ${id}`} `
+              + 'changed since this list was read: a different record is stored under its id '
+              + 'now. Nothing was opened; the list is read again.');
+          }
+          name({ kind, id });
+          await this.experimentsShowRecord(e);
           focusLater(this, '#osc-x-detail-title');
           return true;
         }
         if (!this.exps.loaded) await this.experimentsRefresh();
         const rowsOf = kind === 'definition' ? this.exps.defs : this.fnd.rows;
         if (!rowsOf.some((x) => x.id === id)) return missing();
+        name({ kind, id });
         await this.connectionsToggle(kind, id, true);
         focusLater(this, `[data-osc="${kind === 'definition' ? 'def' : 'fnd'}.row"][data-id="${
           css(id)}"] h4`);
         return true;
       } catch (err) {
-        this.notify('error', `${NOUN[kind]} not opened`, err.message || String(err));
-        return false;
+        return refuse('error', `${NOUN[kind]} not opened`, err.message || String(err));
       }
     },
 

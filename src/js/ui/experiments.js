@@ -373,6 +373,8 @@ export function createExperimentsUi() {
       cmp.exps.detail = null;
       if (ctx.charts.detail) ctx.charts.detail.setView(null);
       if (typeof cmp.connectionsClearRun === 'function') cmp.connectionsClearRun();
+      // The address names what the detail shows: nothing now (ADR 0048).
+      if (typeof cmp.recordsNameDetail === 'function') cmp.recordsNameDetail();
       return;
     }
     const findings = calibrationClaimFindings(e);
@@ -642,6 +644,21 @@ export function createExperimentsUi() {
       this.exps.panel = 'detail';
       // The address names the open run (no new entry): Back from a connected record returns here.
       if (typeof this.navNameRecord === 'function') this.navNameRecord({ kind: 'experiment', id });
+      this.$nextTick(() => { if (ctx.charts.detail) ctx.charts.detail.relayout(); });
+      return e;
+    },
+    /**
+     * Show `e`, an experiment the caller has just read from the store, in the detail: the record
+     * read is the record shown, whatever decoded copy was kept under its id (ADR 0048, review 1
+     * of #151). The address names it.
+     */
+    async experimentsShowRecord(e) {
+      remember(e.experimentId, e);
+      setDetail(this, e);
+      this.exps.panel = 'detail';
+      if (typeof this.navNameRecord === 'function') {
+        this.navNameRecord({ kind: 'experiment', id: e.experimentId });
+      }
       this.$nextTick(() => { if (ctx.charts.detail) ctx.charts.detail.relayout(); });
       return e;
     },

@@ -126,7 +126,9 @@ records: experiments, definitions, findings and Studio projects (ADR 0048,
 names it; nothing is inferred from names, recipes or times. Its state is a word: *stored here*
 only when the identity verifies (the target is stored, it was read and its result hash
 recomputed, and it is the record the field names), else *missing*, *does not match*,
-*not verifiable* or *unreadable*. It is computed when shown and never stored. An entry has no
+*not verifiable* or *unreadable*. A build and a frequency profile are never stored, so their
+entries read *running here* / *not running here* and *loaded here* / *not loaded* instead. It
+is computed when shown and never stored. An entry has no
 noun of its own in the interface: each row is named by its relation ("A repeat of", "Cited
 by"). In Studio, "connection" means a graph edge between two ports, so record text never uses
 the bare word. Not to be confused with the two words beside it: the *lineage* of evidence (ADR

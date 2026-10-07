@@ -554,6 +554,10 @@ function defineChecks(fx) {
       const det = r && r.querySelector('details');
       return { ws: window.OSCILLA.app.workspace, open: !!d && d.open, details: !!det && det.open,
         focusInRow: !!r && r.contains(document.activeElement),
+        focus: { tag: document.activeElement.tagName,
+          label: document.activeElement.getAttribute('aria-label') },
+        openLabel: r ? r.querySelector('[data-osc="studio.saved.open"]')
+          .getAttribute('aria-label') : null,
         items: det ? [...det.querySelectorAll('li.osc-x-cn-item')].map((x) => ({
           state: x.dataset.state, relation: x.dataset.relation,
           text: x.textContent.replace(/\s+/g, ' ').trim() })) : [] };
@@ -577,6 +581,46 @@ function defineChecks(fx) {
     await page.evaluate((id) => { location.hash = `#m=experiments&exp=${id}`; }, done.id);
     res.after = await H.until(() => items(RUN), (l) => l.some((c) => c.relation === 'studio-path'),
       15000);
+    // Review 1 of #151, items 3 and 8. The dialog lists the experiment; it is then deleted behind
+    // this view (as another tab would); the dialog's link is not followed: the dialog stays, says
+    // why, and its list is read again.
+    await page.evaluate(async (pid) => {
+      window.OSCILLA.app.setWorkspace('studio');
+      await window.OSCILLA.app.studioShowProject(pid);
+    }, project.id);
+    res.listed = await H.until(() => items(`${ROW} li.osc-x-cn-item`),
+      (l) => l.length === 1 && l[0].state === 'present', 15000);
+    await page.evaluate(async (id) => {
+      await window.OSCILLA.experiments.store().delete(id);
+      window.OSCILLA.app.alerts = [];
+    }, done.id);
+    await page.click(`${ROW} [data-osc="studio.saved.cnxLink"]`);
+    res.refused = await H.until(() => page.evaluate((row) => {
+      const r = document.querySelector(row);
+      return { ws: window.OSCILLA.app.workspace,
+        dialog: document.getElementById('osc-dlg-studio-library').open,
+        status: r ? r.querySelector('details [role="status"]').textContent : '',
+        links: r ? r.querySelectorAll('[data-osc="studio.saved.cnxLink"]').length : -1,
+        alerts: window.OSCILLA.app.alerts.map((a) => `${a.title}: ${a.message || ''}`) };
+    }, ROW), (x) => /was not opened/.test(x.status) && x.links === 0, 15000);
+    // Open over unsaved changes asks first: the first press changes nothing.
+    res.unsaved = await page.evaluate(async (row) => {
+      const s = window.OSCILLA.studio.store;
+      const r0 = s.dispatch({ type: 'NODE_PARAM_SET', nodeId: 'sweep-1', key: 'duration',
+        value: 2 });
+      const before = JSON.stringify(window.OSCILLA.studio.model);
+      document.querySelector(`${row} [data-osc="studio.saved.open"]`).click();
+      return { dispatched: r0.ok, dirty: window.OSCILLA.app.studio.dirty, before };
+    }, ROW);
+    res.asked = await H.until(() => page.evaluate((row) => {
+      const b = document.querySelector(`${row} [data-osc="studio.saved.open"]`);
+      const st = document.querySelector('[data-osc="studio.saved.error"]');
+      return { text: b ? b.textContent : '', label: b ? b.getAttribute('aria-label') : '',
+        status: st && !st.hidden ? st.textContent : '',
+        dialog: document.getElementById('osc-dlg-studio-library').open,
+        model: JSON.stringify(window.OSCILLA.studio.model) };
+    }, ROW), (x) => x.text === 'Replace unsaved changes', 8000);
+    await page.evaluate(() => window.OSCILLA.app.closeModal('osc-dlg-studio-library'));
     // Leave nothing behind: the run and the project.
     await page.evaluate(async ({ run, pid }) => {
       const st = await window.OSCILLA.experiments.store();
@@ -600,7 +644,19 @@ function defineChecks(fx) {
       back: res.back.id === done.id,
       measuredPath: p.state === 'present' && /Field: studio\.measured\.hash/.test(p.text)
         && !res.after.some((c) => c.relation === 'studio-graph'),
-    }), ...res };
+      // The focus target names the project and is not a button that replaces the graph.
+      focusNamed: res.dialog.focus.tag === 'SUMMARY'
+        && res.dialog.focus.label === `Connected records of ${project.name}`
+        && res.dialog.openLabel === `Open ${project.name}`,
+      linkRefused: res.refused.ws === 'studio' && res.refused.dialog === true
+        && res.refused.links === 0 && /was not opened/.test(res.refused.status)
+        && res.refused.alerts.some((t) => /Experiment not opened: .*no longer stored here/.test(t)),
+      openAsks: res.unsaved.dispatched && res.unsaved.dirty === true && res.asked.dialog === true
+        && res.asked.model === res.unsaved.before
+        && /^Replace the unsaved changes in Studio with /.test(res.asked.label)
+        && /Studio has unsaved changes/.test(res.asked.status),
+    }), ...res, unsaved: { ...res.unsaved, before: undefined },
+    asked: { ...res.asked, model: undefined } };
   });
 
   def('large-graph-render', async ({ page, browserName }) => {

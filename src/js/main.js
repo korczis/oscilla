@@ -596,8 +596,11 @@ function integrationInit() {
       cmp.experimentsRefresh().catch((err) => cmp.notify('error', 'Experiments unavailable',
         err.message || String(err)));
     } else if (ws === 'experiments') {
-      // Connected records shown here are read again: Studio or Measure may have saved since.
-      cmp.connectionsRefreshOpen();
+      // Back in Experiments: the list is read again, so a detail whose record was replaced or
+      // deleted since (here or in another tab) is brought to what is stored before its
+      // connected records are read, and the address names the detail again (ADR 0048).
+      cmp.experimentsRefresh().then(() => cmp.recordsNameDetail(), (err) => cmp.notify('error',
+        'Experiments unavailable', err.message || String(err)));
     }
   };
   cmp.$watch('workspace', (ws) => {
