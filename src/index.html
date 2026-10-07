@@ -1820,6 +1820,7 @@
             x-text="measureEvidenceNotes.join(' ')" style="display: none"></p>
           <p class="osc-m-hint" data-osc="measure.savedText"
             x-text="meas.saved ? 'Saved as an experiment' + (exps.persistent ? ' in this browser.' : ' in memory for this page view.') : (measureUnsaved ? 'Not saved yet: reloading or closing the page loses this result. ' : '') + 'Saved experiments stay in this browser only (no cloud).'"></p>
+          <p class="osc-m-hint" data-osc="measure.retention">The recording is analysed in this page and discarded when the analysis ends: it is never stored or exported. A saved experiment keeps derived results. One of them, the impulse response, is computed from the recording, so other sound the microphone picked up during the sweep, and above all just after it, can be recovered from it, also from an exported file.</p>
           <p class="osc-m-hint" x-show="exps.storeNote" x-text="exps.storeNote"></p>
         </section>
       </div>
@@ -2487,6 +2488,9 @@
             <li><b>Recorded</b> Architecture decisions are written down with their reasons.</li>
             <li><b>Honest</b> Approximation is never presented as measurement; relative is not
               calibrated.</li>
+            <li data-osc="about.privacy"><b>Private</b> No server, no account, no analytics. A
+              measurement's recording is discarded after its analysis; a saved run keeps derived
+              results, whose impulse response can still carry room sound.</li>
           </ul>
         </section>
 

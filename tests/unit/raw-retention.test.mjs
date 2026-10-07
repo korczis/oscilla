@@ -57,8 +57,9 @@ function voiceAt(i) {
  * when `voice` = { from, frames } (capture frames), a voice in that span. It keeps no strong
  * reference to anything it returns: `refs` holds a WeakRef to every capture buffer.
  */
-function syntheticIo({ gain = 0.3, voice = null, onYield = null } = {}) {
+function syntheticIo({ gain = 0.3, voice = null, onYield = null, failRun = -1 } = {}) {
   let t = 1;
+  let run = 0;
   const rnd = seeded(11);
   const refs = [];
   const device = { label: null, id: null };
@@ -83,6 +84,7 @@ function syntheticIo({ gain = 0.3, voice = null, onYield = null } = {}) {
         device };
     },
     async runStimulus(stimulus, { preRollS, postRollS, notBefore, onScheduled }) {
+      if (run++ === failRun) throw Object.assign(new Error('device lost'), { code: 'NO_INPUT' });
       const pre = Math.round(preRollS * SR);
       const x = stimulus.samples;
       const frames = pre + x.length + Math.round(postRollS * SR);
@@ -166,6 +168,18 @@ test('an aborted measurement leaves no capture behind, with or without keepRaw',
     engine = createMeasurementEngine({ io });
     await assert.rejects(engine.measure(recipe(), { keepRaw }), (e) => e.code === 'ABORTED');
     assert.ok(io.refs.length >= 1, 'the abort landed after a capture');
+    await collect();
+    assert.equal(alive(io.refs), 0, `keepRaw ${keepRaw}: nothing kept a capture`);
+  }
+});
+
+test('a failed measurement leaves no capture behind, with or without keepRaw', async () => {
+  for (const keepRaw of [false, true]) {
+    const io = syntheticIo({ failRun: 1 });
+    const engine = createMeasurementEngine({ io });
+    await assert.rejects(engine.measure(recipe(), { keepRaw }), (e) => e.code === 'NO_INPUT');
+    assert.equal(engine.state, 'ERROR');
+    assert.equal(io.refs.length, 2, 'the noise check and the first run were captured');
     await collect();
     assert.equal(alive(io.refs), 0, `keepRaw ${keepRaw}: nothing kept a capture`);
   }
