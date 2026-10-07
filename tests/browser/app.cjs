@@ -412,6 +412,62 @@ function defineChecks() {
     return { ok, errors: errors.slice(0, 5), ...info };
   });
 
+  // Ledger W7 (ADR 0052): the seam ships in the page, so its surface is pinned here. A key is
+  // added or removed only by editing these lists; every hook observes, drives an action a user
+  // already has, or injects only inside TEST CONTEXT (tests/unit/v4-seam-contract.test.mjs).
+  def('seam-surface-pinned', async ({ page }) => {
+    const OSCILLA_KEYS = ['engine', 'viz', 'adapter', 'labs', 'labErrors', 'app', 'host',
+      'measure', 'experiments', 'studio', 'navigation', 'unsaved', 'studioTimeline', 'buildPlan',
+      'planFreqAt', 'parseFrequency', 'parseFrequencyList', 'formatFrequency', 'formatPeriod',
+      'formatWavelength', 'frequencyToNormalized', 'normalizedToFrequency', 'nearestNote',
+      'noteToFrequency', 'regionFor', 'harmonicTable', 'BUILTIN_PRESETS', 'LEARN_TOPICS',
+      'PATTERNS', 'parseWav', 'encodeWav', 'buildConfigExport', 'parseConfigImport', 'version',
+      'build', 'legacyV1Stamp'];
+    const MEASURE_KEYS = ['state', 'engine', 'io', 'ioKind', 'result', 'history', 'useLoopback',
+      'useMicrophone', 'onceInState', 'clearStateHook', 'live', 'setValues', 'counts', 'liveRta',
+      'liveRtaSnapshot', 'experimentFromResult', 'levelCalibration', 'inputNow', 'reference',
+      'referenceCapturing', 'setInputNow', 'showResult', 'responseView', 'deviceId',
+      'ioDeviceId', 'refreshInputs', 'irView'];
+    const got = await page.evaluate(() => {
+      const O = window.OSCILLA;
+      const m = O.measure;
+      const fixed = {};
+      for (const k of ['version', 'build', 'legacyV1Stamp']) {
+        const d = Object.getOwnPropertyDescriptor(O, k);
+        const was = O[k];
+        try { O[k] = 'overwritten'; } catch (e) { /* strict mode */ }
+        fixed[k] = !!d && d.writable === false && d.configurable === false && O[k] === was;
+      }
+      const values = JSON.stringify(O.app.meas.values);
+      const title = O.app.meas.shownTitle;
+      return {
+        oscilla: Object.keys(O), measure: Object.keys(m), fixed,
+        testContext: !!O.app.meas.loopback,
+        // Inject hooks refuse outside TEST CONTEXT; the drive hook validates like a recipe link.
+        setInputNow: m.setInputNow({ device: { label: 'Unchecked', id: 'x' }, constraints: null,
+          sampleRate: 48000 }),
+        inputNow: m.inputNow,
+        showResult: m.showResult({ state: 'COMPLETE', transfer: {}, ir: {} }),
+        result: m.result, titleKept: O.app.meas.shownTitle === title,
+        setValues: m.setValues({ bogus: 1 }), setRange: m.setValues({ duration: 0.5 }),
+        valuesKept: JSON.stringify(O.app.meas.values) === values,
+      };
+    });
+    const diff = (have, want) => ({ added: have.filter((k) => !want.includes(k)),
+      removed: want.filter((k) => !have.includes(k)) });
+    const o = diff(got.oscilla, OSCILLA_KEYS);
+    const m = diff(got.measure, MEASURE_KEYS);
+    const refusedValues = (r) => !!r && r.ok === false && Array.isArray(r.errors);
+    const ok = o.added.length + o.removed.length + m.added.length + m.removed.length === 0
+      && Object.values(got.fixed).every(Boolean)
+      && !got.testContext && got.setInputNow === false && got.inputNow === null
+      && got.showResult === false && got.result === null && got.titleKept
+      && refusedValues(got.setValues) && refusedValues(got.setRange) && got.valuesKept;
+    return { ok, oscilla: o, measure: m, fixed: got.fixed, testContext: got.testContext,
+      setInputNow: got.setInputNow, showResult: got.showResult, titleKept: got.titleKept,
+      setValues: got.setValues, setRange: got.setRange, valuesKept: got.valuesKept };
+  });
+
   def('controls-reachable-labelled', async ({ page }) => {
     const seen = new Map();
     const collect = async () => {
@@ -578,7 +634,7 @@ function defineChecks() {
       const [x, y] = a.exps.rows;
       if (x && y) await a.findingsAddCompare(x.id, y.id);
     });
-    await page.waitForSelector('[data-osc="fnd.compareHint"]', { state: 'visible', timeout: 5000 })
+    await page.waitForSelector('[data-osc="fnd.removeRef"]', { state: 'visible', timeout: 5000 })
       .catch(() => {});
     await collect();
     await page.click('[data-osc="fnd.save"]');
@@ -622,8 +678,8 @@ function defineChecks() {
     await page.waitForSelector('#osc-fnd-statement', { state: 'visible', timeout: 5000 })
       .catch(() => {});
     await page.fill('#osc-fnd-statement', 'audit draft');
-    await page.waitForFunction(() => window.OSCILLA.app.fnd.form.statement === 'audit draft',
-      null, { timeout: 5000 }).catch(() => {});
+    await page.waitForSelector('[data-osc="fnd.discard"]', { state: 'visible', timeout: 5000 })
+      .catch(() => {});
     await collect();
     await page.keyboard.press('Escape');
     await page.waitForSelector('[data-osc="fnd.draftNote"]', { state: 'visible', timeout: 5000 })

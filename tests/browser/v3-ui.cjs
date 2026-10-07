@@ -2681,6 +2681,7 @@ function defineChecks(fixtures) {
       await a.experimentsDelete();
       return a.experimentsImportText(t);
     }, [id, json]);
+    const refused = /replaced in another tab since it was shown here; reopen it/;
     const alertsText = () => page.evaluate(() => (window.OSCILLA.app.alerts || [])
       .map((x) => `${x.title}: ${x.text || x.message || ''}`).join(' | '));
     const res = {};
@@ -2700,7 +2701,7 @@ function defineChecks(fixtures) {
     // 1. The detail tab 1 shows is out of date: "Record a finding about this experiment" is refused.
     const before = await page.evaluate(() => window.OSCILLA.app.fnd.all.length);
     await page.click('[data-osc="exp.findingNew"]');
-    await H.until(alertsText, (t) => /replaced in another tab/.test(t), 5000);
+    await H.until(alertsText, (t) => refused.test(t), 4000); // the refusal the verdict judges
     res.detail = { dialog: await page.evaluate(() => document.getElementById('osc-dlg-finding')
       .open), alerts: await alertsText(), count: await page.evaluate(() => window.OSCILLA.app
       .fnd.all.length) - before };
@@ -2722,7 +2723,7 @@ function defineChecks(fixtures) {
     await H.until(() => page.evaluate(() => !!window.OSCILLA.app.exps.compare), Boolean, 5000);
     res.replacedY = await replace('fixture-vy', as('b', 'fixture-vy', 'TEST CONTEXT · Y replaced'));
     await page.click('[data-osc="exp.findingCompare"]');
-    await H.until(alertsText, (t) => /replaced in another tab/.test(t), 5000);
+    await H.until(alertsText, (t) => refused.test(t), 4000);
     res.compare = { dialog: await page.evaluate(() => document.getElementById('osc-dlg-finding')
       .open), alerts: await alertsText() };
     await page.evaluate(async () => {
@@ -2737,7 +2738,6 @@ function defineChecks(fixtures) {
       a.exps.panel = 'detail';
       a.alerts = [];
     });
-    const refused = /replaced in another tab since it was shown here; reopen it/;
     return { ...res, ...H.verdict({
       setup: res.setup === true && !!res.replacedX && !!res.replacedY,
       'detail-refused': !res.detail.dialog && res.detail.count === 0

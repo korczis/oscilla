@@ -816,6 +816,13 @@ window.addEventListener('unhandledrejection', (e) => {
 });
 
 // ------------------------------------------------------------------------------ test seam
+// window.OSCILLA ships in the one page that is tested and deployed (ADR 0052). It is not a
+// security boundary. Each member OBSERVES, DRIVES an action a user already has (through the
+// user's validation), or INJECTS only as TEST CONTEXT; studioTimeline is none of the three and is
+// due to leave the page (ledger W7a). The stable reads are version, build,
+// measure.state, measure.counts(), studio.counts(), studio.model and studio.trace.steps(); every
+// other member may change without notice, and app, engine and host are live internals, not a
+// contract. The key list is pinned by tests/browser/app.cjs `seam-surface-pinned`.
 window.OSCILLA = {
   engine,
   viz: bridge,
