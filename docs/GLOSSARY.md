@@ -100,10 +100,24 @@ operation, from the intent through the compiled plan to each value the node adap
 they wrote, under one correlation id. It is bounded (a ring of 256 steps), in memory only,
 covered by no hash, and is not evidence of what sounded.
 
-**Finding.** Not a product entity. OSCILLA has no finding object: a measurement has quality
-*reasons* (`src/js/measurement/quality.js`) and the Studio has *diagnostics* (ADR 0039).
-"Finding" appears only in the repository's audits and reviews (for example
-`docs/v3/audits-v383.md`), for a defect a reviewer reported.
+**Finding.** A user's interpretation, linked to the evidence it rests on (ADR 0046,
+`src/js/experiments/findings.js`, kind `oscilla-finding`, the `findings` object store of the
+experiments database). It is kept apart from measurement truth:
+
+- a *measurement* is what was observed or computed: a stored experiment, immutable (ADR 0040);
+- an *observation* is what the user recorded: a finding with status `observation`, not yet
+  interpreted;
+- a *finding* is an interpretation linked to evidence: status `hypothesis`, `supported`,
+  `contradicted` or `inconclusive`, categorical and never a confidence number.
+
+Its evidence is typed references to experiments (an experiment, a comparison of two experiments, or
+the stored value of an experiment at a frequency, ADR 0044's lineage point), and it records each
+cited experiment's id with its result hash. A finding never changes an experiment; a reference to a
+deleted experiment stays and reads "missing". Two other words are not findings: a measurement's
+quality *reasons* (`src/js/measurement/quality.js`) and the Studio's *diagnostics* (ADR 0039). Two
+older uses remain with their own meaning: the repository's audits and reviews (for example
+`docs/v3/audits-v383.md`) call a defect a reviewer reported a finding, and `validate.js` names a
+non-fatal check of a record a finding (`calibrationClaimFindings`, `stimulusFindings`).
 
 ## Repository
 

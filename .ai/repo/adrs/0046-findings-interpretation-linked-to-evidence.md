@@ -1,0 +1,218 @@
+---
+schema: adr/v1
+id: adr-0046
+kind: adr
+title: A finding is an interpretation linked to the evidence it rests on, never measurement truth
+status: proposed
+date: 2026-10-06
+tags:
+  - experiments
+  - findings
+  - evidence
+  - storage
+  - v4
+related:
+  - file:.ai/repo/adrs/0040-completed-experiment-run-immutable-metadata-separate.md
+  - file:.ai/repo/adrs/0041-run-comparison-semantic-execution-vs-presentation.md
+  - file:.ai/repo/adrs/0043-runs-executed-from-versioned-experiment-definitions.md
+  - file:.ai/repo/adrs/0044-evidence-on-a-run-lineage-and-reproducibility-checklist.md
+  - file:.ai/repo/adrs/0045-workspace-in-history-one-hash-dispatcher-unsaved-guard.md
+  - rule:project.no-fake-science
+  - file:src/js/experiments/findings.js
+  - file:src/js/experiments/store.js
+  - file:src/js/ui/findings.js
+  - file:src/js/ui/experiments.js
+  - file:docs/v4/completion-ledger.md
+  - test:tests/unit/v4-findings.test.mjs
+provenance:
+  origin: authored
+  derived_from:
+    - file:docs/v4/completion-ledger.md
+---
+
+# 46. A finding is an interpretation linked to the evidence it rests on
+
+## Context
+
+The v4 completion ledger lists "Findings linked to evidence" as missing capability 3. The
+owner's scope decision of 2026-10-05 put it after the definition/experiment split (ADR 0043) and the
+evidence on an experiment (ADR 0044), deepening the measurement wedge without a new workspace or a
+meta layer. Until now the glossary said that OSCILLA had no finding object: a user who concluded
+something from two experiments could only type it into an experiment's annotation notes, where it
+was tied to one experiment, carried no status and pointed at nothing.
+
+Three things must not be confused:
+
+- a **measurement** is what was observed or computed: a stored experiment, immutable (ADR 0040);
+- an **observation** is what the user recorded about it;
+- a **finding** is the user's interpretation, linked to the evidence it rests on.
+
+A finding that blurs into the first would present an opinion as a result, which the
+no-fake-science rule forbids in spirit; a finding that floats free of evidence is a note.
+
+## Decision
+
+Proposed:
+
+- **The model.** `src/js/experiments/findings.js`, pure. A finding is
+  `{ kind: 'oscilla-finding', schemaVersion: 1, id, statement, status, evidence, experiments, notes,
+  createdAt, updatedAt }`. The statement is one line of plain text; notes may wrap.
+- **Status is categorical.** `observation` (recorded, not interpreted), `hypothesis`,
+  `supported`, `contradicted`, `inconclusive`. There is no confidence number or score. A
+  `supported` or `contradicted` finding must cite at least one reference; the validator refuses
+  it otherwise. The interface says that a status is the user's judgement, not a measurement.
+- **Typed, unambiguous references.** `{ kind: 'experiment', experimentId }`, `{ kind: 'compare', a,
+  b }` (two different experiments, A first, as the compare view orders them) and
+  `{ kind: 'value', experimentId, at: { hz } }`, the stored grid point ADR 0044's lineage traces
+  (the experiment detail records it at the point the Evidence section shows). Duplicates and unknown
+  fields are refused.
+- **A cited experiment's identity is its id and its result hash.** An id alone is not an identity: a
+  experiment can be deleted and a different record stored under the same id. Each finding therefore
+  carries `experiments: [{ experimentId, resultHash }]`, exactly one entry per cited id, taken from
+  the stored experiment when the reference is linked. An export carries it, so the evidence identity
+  travels with the file.
+- **Untrusted input.** Validation builds a clean copy from known fields only. It refuses a
+  non-plain object, any unknown key (so `__proto__` and `constructor` never pass), HTML-like
+  markup (`<` followed by a letter, `/`, `!` or `?`; a comparison written "A < B" passes),
+  control characters, bidirectional overrides, ids outside the id pattern, a frequency that is
+  not above 0 Hz or beyond 192 kHz, and sizes over the limits (statement 1000 characters, notes
+  10000, 32 references, 2000 findings and 8 MiB per file). The page renders every text with
+  `x-text`, never as markup.
+- **Storage.** The `findings` object store (keyPath `id`) in the existing experiments database,
+  added by DB version 4; the upgrade creates it and deletes nothing. The memory fallback holds
+  findings with the same API, and `held().findings` reaches the unsaved-work guard (ADR 0045),
+  so findings kept in page memory are reported as losable. Findings are user metadata: no
+  finding write touches an experiment, and deleting an experiment never touches a finding. A stored
+  finding that fails validation is listed as unreadable and never hides the others; its `createdAt`
+  never changes.
+- **Integrity is reported, never repaired.** A reference counts as present only when its experiment
+  is stored here, its record can be read, and its stored result hash equals the cited one.
+  `findingIssues(finding, lookup)` returns, in reference order:
+  - `missing-experiment`: the experiment is not stored here (deleted, or never imported). The
+    reference reads "missing: … is not stored here".
+  - `wrong-kind`: the id names a stored definition, not an experiment.
+  - `unreadable-experiment`: the experiment is listed but its record cannot be read (a corrupt
+    record).
+  - `different-experiment`: an experiment is stored under the id, but its result hash differs from
+    the cited one.
+  - `unverifiable-identity`: the hash is missing on either side (the citation, or the record
+    stored under the id), or the stored identity was not read. Each case is worded as such.
+  - `no-response`: a value reference to an experiment that stores no frequency response.
+  - `not-a-grid-point`: a value reference whose frequency is not exactly a point of the experiment's
+    stored response grid. "(a stored grid point)" is said only when that check holds, and
+    frequencies print with enough digits that distinct grid points never read the same.
+  - `unsupported-status`: the finding claims supported or contradicted, but none of its
+    references can be checked here.
+
+  The finding keeps its status and its references; the user decides. Only a readable experiment
+  with a result hash can be linked. The delete dialog of an experiment says how many findings cite
+  it.
+- **Export and import.** `.oscilla-findings.json`:
+  `{ kind: 'oscilla-findings', schemaVersion: 1, exportedAt, oscillaVersion, findings }`.
+  The whole file is validated before anything is stored; a newer file or finding schema is
+  refused with that reason. A finding stored here under the same id with different content
+  refuses the whole import (never overwritten silently); an identical one is skipped. The
+  store's `putFindings` checks and writes in one transaction, so a refused import writes
+  nothing. Cited experiments that are not in this browser read "not stored here", and the import
+  notification says how many.
+- **UI inside the Experiments workspace.** No new workspace: a Findings panel under the saved
+  experiments (a real list; each finding an item with its statement as a heading, its status in
+  words and its references as a list, with Open, Edit and Delete), a "Findings that cite this
+  experiment" section in the experiment detail with "Record a finding about this experiment" and,
+  when the experiment has a response, "Record a finding about the value at …", and "Record a
+  finding about this comparison" in Compare (A compared with each other experiment). A comparison
+  reference reads "what changed between the experiments, not why", and the dialog says the same;
+  nothing in this interface attributes a cause. The dialog is a native modal (keyboard reachable,
+  Escape closes it); a finding being written counts as losable work for the unsaved-work guard.
+
+## Alternatives rejected
+
+- **A confidence number or score.** It would invite a number to stand for a judgement, as ADR
+  0044 rejected for reproducibility.
+- **Findings inside the experiment record (annotations).** A finding can cite several experiments,
+  and an experiment is immutable apart from its name and notes (ADR 0040); a finding spanning
+  experiments cannot belong to one of them.
+- **Nulling or removing a reference when its experiment is deleted.** That would silently change
+  what the finding says it rests on.
+- **Cascading the deletion of an experiment to its findings.** A finding is the user's work; losing
+  it because evidence was removed is data loss.
+- **Refusing to delete a cited experiment.** The user owns the experiments; the dialog states the
+  consequence instead.
+- **An id-only reference.** It cannot tell a re-imported identical experiment from a different
+  record stored under the same id.
+- **A new Findings workspace.** The owner's steer: no new workspace; findings belong next to
+  the experiments they cite.
+- **Allowing markup and escaping it at render time only.** Rendering as text is kept as the
+  second defence; refusing markup at the boundary keeps an exported file safe for any other
+  reader.
+
+## Consequences
+
+- **DB version 4, with a version-3 tab open.** An open tab of an earlier build holding the
+  version-3 database does not block the upgrade: it receives `versionchange` and closes its
+  connection (`db.onversionchange = () => db.close()`, already in earlier builds). The upgrade
+  then proceeds, and every record in every store is kept. The old tab's later store calls fail
+  with their error until it is reloaded. Review 1 of #149 verified this in Chromium, Firefox and
+  WebKit, over `file://` and http.
+- **DB version 4 is one-way.** A build with `DB_VERSION` 3 cannot open a version-4 database
+  (IndexedDB refuses a lower version). It falls back to page memory and shows nothing stored. A
+  revert of this decision must therefore keep `DB_VERSION` 4 and its upgrade step, even if it
+  removes the findings interface.
+- **Identity is verified at one point, at the moment of use** (review 3 of #149).
+  `findingsVerifyCitedExperiment(id, citedHash)` (`ui/findings.js`) reads the experiment fresh from
+  the store, through `experimentsIdentity`, which calls `store.get` (it verifies the record's
+  result hash on read) and never the decoded-record cache. It answers ok, different, unverifiable,
+  unreadable or missing, with the stored grid. Nothing keeps an identity between uses. Every claim
+  about a cited experiment comes from it:
+  - **Reference states and "(a stored grid point)".** Every refresh verifies each listed cited
+    experiment (findingIssues over those verifications). Every findings refresh reads the
+    experiment list first, including the one after a finding is saved, deleted or imported.
+  - **Open.** It verifies against the cited hash first. When that no longer holds, nothing is
+    opened, the findings are checked again and the reason is notified.
+  - **Linking.** The experiment is verified against the hash of the record the page shows for it
+    (`experimentsShownHash`: the open detail, a compared record, else the list row as last read),
+    and that hash is cited. A record replaced in another tab since it was shown is refused:
+    "replaced in another tab since it was shown here; reopen it".
+  - **Backlinks.** They carry the state of the citing references, and a finding whose cited hash
+    is not the hash of the record shown never reads as citing it.
+
+  List rows carry the result hash; rows written by earlier builds get it on their first read
+  (from the stored record, which stays unchanged).
+- **A view shows the stored record** (`ui/experiments.js`, one rule). A decoded copy of an
+  experiment is used only while the stored row, read at that moment (`store.summary`), still
+  names its result hash; otherwise the copy is dropped and the record is read from the store.
+  Opening, comparing, exporting and repeating all go through it, so opening an id never shows a
+  record that another tab replaced or deleted. The list is read again on every entry to the
+  Experiments workspace and when the tab becomes visible; that refresh re-reads a detail or
+  comparison whose row names another hash and closes one whose experiment is gone, each with a
+  notice. The detail exposes the result hash of the record it shows (`exps.detail.resultHash`,
+  `experimentsShownHash`) for whatever depends on it.
+- **Tested structurally.** A unit test asserts that the identity is read in exactly
+  one place, with no identity cache in the findings adapter, and that refresh, Open and linking each
+  call the verification point.
+- **Known limit.** A record corrupted in place while its list row stays the same (possible only
+  with developer tools) is caught when the experiment is next verified: at the next refresh, Open or
+  link. A view opened before the corruption keeps showing its decoded copy until it is reopened
+  or the page is reloaded.
+- **Edits from two tabs.** `updatedAt` is an edit's version and always advances (at least 1 ms
+  past the previous one). The dialog records the version it loaded. A save whose stored version
+  differs (or that was deleted elsewhere) is refused;
+  `store.putFinding(finding, { expectedUpdatedAt })` checks the same inside its write
+  transaction. The refused form offers "Load the stored version", which loads the
+  stored fields and version (or, for a deleted finding, turns the form into a new finding) and
+  keeps the latest typed statement, status, references and notes beside them to copy, counted as
+  unsaved work. A refused draft
+  reopened later loads the stored version first, so it never reopens stale.
+- **Drafts.** Closing the finding dialog without a save (Cancel, Escape or a backdrop click)
+  keeps a changed form as a draft. The guard keeps reporting it, the panel offers to continue or
+  discard it, and only Discard drops it. A reload still loses it, and the guard says so before
+  one.
+- Confirmation criteria: `tests/unit/v4-findings.test.mjs` (statuses, evidence required for
+  supported and contradicted, typed references, the identity list, prototype pollution, markup,
+  control and bidirectional characters, sizes, a newer schema; every integrity issue; the memory
+  and IndexedDB stores, the atomic import, the DB 3 to 4 migration, deletion of a cited experiment;
+  export and import round-trips; the workspace adapter and the guard) and check `findings` in
+  `tests/browser/v3-ui.cjs` (record from an experiment with the keyboard, link a comparison, set
+  supported, the backlinks, the export carrying the result hash, deleting the cited experiment with
+  the dialog's warning and the missing reference, 390 px, light theme; chromium, firefox and
+  webkit over file:// and /oscilla/).

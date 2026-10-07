@@ -118,6 +118,40 @@
 //                           light theme; the
 //                           contradicted older record reads "uncalibrated (the stored claim is
 //                           contradicted)", no "SPL"; Compare A with it names the differing item
+//   findings                (ADR 0046) "Record a finding about this experiment" on A's detail (focus +
+//                           Enter) opens the finding dialog with A cited; while a statement is
+//                           typed the unsaved-work guard reports "A finding being written"; a
+//                           comparison of A with B is linked (with its "not why" hint), the
+//                           status (five categorical values) is set to supported and saved: the
+//                           Findings panel (h3) lists it as a real list item (h4 statement,
+//                           status in words, its references in a list), both runs' details list
+//                           it under "Findings that cite this experiment", the export carries A's
+//                           result hash; deleting B warns "1 finding cites this experiment", and the
+//                           comparison then reads "missing: experiment ... is not stored here" while the
+//                           finding keeps its status; no causal wording; 390 px; light theme
+//   findings-integrity      (review 1 of #149, items 1-2) a cited run deleted and replaced by a
+//                           different record without a result hash reads "cannot be verified"
+//                           (state broken, no Open, the supported status flagged); a cited run
+//                           corrupted in IndexedDB reads "stored here but cannot be read" in a
+//                           fresh page (state broken, no Open)
+//   findings-draft          (review 1 of #149, item 5) a typed draft survives Escape and a
+//                           backdrop click: the guard still reports it, the panel offers to
+//                           continue it, and only Discard drops it
+//   findings-delete-focus   (review 1 of #149, item 12) a finding deleted with the keyboard moves
+//                           focus to the next finding's Edit, or to "New finding" when none is
+//                           left; the status reads "Your judgement: …"
+//   findings-two-tabs       (review 2 of #149, item 1) a second tab replaces a cited run with a
+//                           different stamped record; after an unrelated save here, and after a
+//                           list refresh, the citing reference reads broken ("different record"),
+//                           with no Open
+//   findings-views-two-tabs (review 3 of #149) with no event in tab 1, tab 2 replaces runs:
+//                           recording a finding from tab 1's out-of-date detail or comparison is
+//                           refused ("replaced in another tab … reopen it"), and Open of a
+//                           reference to the replaced run opens nothing and re-checks the row
+//   views-two-tabs          (#151 review) tab 2 replaces the experiment tab 1 has open: after
+//                           tab 1 returns from another workspace, and after the id is opened
+//                           again with no event, the detail's title and result hash are the
+//                           stored record's
 //   calibration-export      (V315) Export CSV and Export JSON of the loaded profile download
 //                           deterministic files named after the profile and its id, and both
 //                           re-import (same id, name, convention); a correction profile (chosen
@@ -1946,6 +1980,598 @@ function defineChecks(fixtures) {
       compare: res.diff === 'Checklist differences (states only): Calibration identity recorded '
         + '(A recorded, B partial). No difference in the recorded build, definition, calibration '
         + 'or input device.',
+    }) };
+  });
+
+  def('findings', async ({ page }) => {
+    await H.workspace(page, 'experiments');
+    for (const k of ['a', 'b']) {
+      const stored = await page.evaluate(async (x) => !!(await window.OSCILLA.experiments.store()
+        .get(x)), `fixture-${k}`);
+      if (!stored) {
+        await page.evaluate((t) => window.OSCILLA.app.experimentsImportText(t), fixtures[k].json);
+      }
+    }
+    const res = {};
+    const panel = () => page.evaluate(() => {
+      const sec = document.querySelector('[data-osc="fnd.panel"]');
+      if (!sec) return { missing: true };
+      const r = sec.getBoundingClientRect();
+      const rows = [...sec.querySelectorAll('[data-osc="fnd.row"]')].map((li) => ({
+        tag: li.tagName, h4: (li.querySelector('h4') || {}).textContent || null,
+        status: (li.querySelector('[data-osc="fnd.status"]') || {}).textContent || null,
+        evidence: [...li.querySelectorAll('[data-osc="fnd.ref"]')].map((x) => ({
+          state: x.dataset.state, text: x.textContent.replace(/\s+/g, ' ').trim(),
+          inList: x.parentElement.tagName === 'UL' })) }));
+      return { shown: sec.offsetParent !== null, h3: (sec.querySelector('h3') || {}).textContent,
+        rows, text: sec.textContent.replace(/\s+/g, ' '),
+        fits: sec.scrollWidth <= sec.clientWidth + 1 && r.right <= window.innerWidth + 1
+          && document.documentElement.scrollWidth <= window.innerWidth + 1 };
+    });
+    const backlinks = () => page.evaluate(() => {
+      const sec = document.querySelector('[data-osc="exp.findings"]');
+      if (!sec) return { missing: true };
+      return { shown: sec.offsetParent !== null, h4: (sec.querySelector('h4') || {}).textContent,
+        items: [...sec.querySelectorAll('li')].map((li) => li.textContent.replace(/\s+/g, ' ')
+          .trim()) };
+    });
+    const dialogOpen = () => page.evaluate(() => {
+      const d = document.getElementById('osc-dlg-finding');
+      return !!d && d.open;
+    });
+    // 1. From an experiment's detail: "Record a finding about this experiment" (keyboard: focus + Enter).
+    await page.evaluate(() => window.OSCILLA.app.experimentsOpen('fixture-a'));
+    const button = await H.until(() => page.evaluate(() => {
+      const b = document.querySelector('[data-osc="exp.findingNew"]');
+      return !!b && b.offsetParent !== null;
+    }), Boolean, 5000);
+    if (!button) {
+      return { ok: false, failed: ['record-from-run'], detail: 'no "Record a finding" button' };
+    }
+    await page.focus('[data-osc="exp.findingNew"]');
+    await page.keyboard.press('Enter');
+    res.opened = await H.until(dialogOpen, Boolean, 3000);
+    res.prefilled = await page.evaluate(() => [...document.querySelectorAll(
+      '#osc-dlg-finding [data-osc="fnd.formRef"]')].map((li) => li.textContent
+      .replace(/\s+/g, ' ').trim()));
+    await page.fill('#osc-fnd-statement', 'A falls above 6 kHz; B is 0.9 dB quieter.');
+    res.guard = await page.evaluate(() => window.OSCILLA.unsaved.whatWouldBeLost()
+      .filter((x) => x.domain === 'findings').map((x) => x.label));
+    // 2. Link a comparison.
+    await page.selectOption('#osc-fnd-cmp-a', 'fixture-a');
+    await page.selectOption('#osc-fnd-cmp-b', 'fixture-b');
+    await page.click('[data-osc="fnd.addCompare"]');
+    res.linked = await H.until(() => page.evaluate(() => ({
+      refs: [...document.querySelectorAll('#osc-dlg-finding [data-osc="fnd.formRef"]')]
+        .map((li) => li.textContent.replace(/\s+/g, ' ').trim()),
+      // offsetParent is null inside a top-layer dialog: visibility is a rendered box.
+      hint: ((el) => !!el && el.getClientRects().length > 0)(document.querySelector(
+        '[data-osc="fnd.compareHint"]')) })), (x) => x.refs.length === 2 && x.hint, 3000);
+    // 3. A categorical status; supported needs evidence (it has two references now).
+    res.statuses = await page.evaluate(() => [...document.querySelectorAll(
+      '#osc-fnd-status option')].map((o) => o.value));
+    await page.selectOption('#osc-fnd-status', 'supported');
+    await page.click('[data-osc="fnd.save"]');
+    res.closed = await H.until(dialogOpen, (o) => o === false, 5000);
+    res.guardAfter = await page.evaluate(() => window.OSCILLA.unsaved.whatWouldBeLost()
+      .filter((x) => x.domain === 'findings').length);
+    res.saved = await H.until(panel, (p) => p.rows && p.rows.length === 1
+      && p.rows[0].evidence.length === 2, 5000);
+    // 4. Backlinks on both runs' details.
+    res.backA = await H.until(backlinks, (b) => b.items && b.items.length === 1, 5000);
+    await page.evaluate(() => window.OSCILLA.app.experimentsOpen('fixture-b'));
+    res.backB = await H.until(backlinks, (b) => b.items && b.items.length === 1
+      && /comparison/.test(b.items[0]), 5000);
+    res.exported = await page.evaluate(() => window.OSCILLA.app.findingsExport());
+    res.hashA = fixtures.a.experiment.provenance.resultHash;
+    // 5. Delete the cited run B: the dialog says that a finding cites it; the reference then
+    // reads missing, and the finding keeps its status.
+    await page.click('[data-osc="exp.delete"]');
+    res.warning = await H.until(() => page.evaluate(() => {
+      const el = document.querySelector('[data-osc="exp.deleteCiting"]');
+      return el && el.offsetParent !== null ? el.textContent.replace(/\s+/g, ' ').trim() : '';
+    }), (t) => t.length > 0, 3000);
+    await page.click('[data-osc="exp.deleteConfirm"]');
+    res.afterDelete = await H.until(panel, (p) => p.rows && p.rows[0]
+      && p.rows[0].evidence.some((e) => e.state === 'missing'), 5000);
+    // 6. 390 px and the light theme.
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.evaluate(() => document.querySelector('[data-osc="fnd.panel"]').scrollIntoView());
+    res.narrow = await H.until(panel, (p) => p.fits, 2000);
+    await page.evaluate(() => window.OSCILLA.app.toggleTheme());
+    res.light = await page.evaluate(() => ({
+      theme: document.documentElement.dataset.theme,
+      color: getComputedStyle(document.querySelector('[data-osc="fnd.row"] h4')).color,
+      text: getComputedStyle(document.documentElement).getPropertyValue('--osc-text').trim() }));
+    await page.evaluate(() => window.OSCILLA.app.toggleTheme());
+    await page.setViewportSize({ width: 1536, height: 1024 });
+    // Leave the store as later checks expect it: no finding, B stored again.
+    await page.evaluate(async (t) => {
+      const app = window.OSCILLA.app;
+      for (const r of app.fnd.rows.slice()) await app.findingsDeleteNow(r.id);
+      await app.experimentsImportText(t);
+      app.alerts = [];
+    }, fixtures.b.json);
+    const hex = (c) => { const m = String(c).match(/\d+/g) || []; return `#${m.slice(0, 3)
+      .map((v) => Number(v).toString(16).padStart(2, '0')).join('')}`; };
+    const row = (res.saved.rows || [])[0] || { evidence: [] };
+    const after = (res.afterDelete.rows || [])[0] || { evidence: [] };
+    const out = { ...res, exported: res.exported ? res.exported.length : null };
+    for (const k of ['saved', 'afterDelete', 'narrow']) if (out[k]) out[k] = { ...out[k], text: '' };
+    return { ...out, ...H.verdict({
+      'record-from-run': res.opened === true && res.prefilled.length === 1
+        && /^Experiment "TEST CONTEXT · synthetic A/.test(res.prefilled[0]),
+      guard: res.guard.join() === 'A finding being written' && res.guardAfter === 0,
+      'link-compare': res.linked.refs.length === 2 && /^Comparison of ".*" with ".*" \(what changed between the experiments, not why\)/
+        .test(res.linked.refs[1]) && res.linked.hint,
+      categorical: res.statuses.join() === 'observation,hypothesis,supported,contradicted,'
+        + 'inconclusive',
+      supported: res.closed === false && row.status === 'Supported' && row.tag === 'LI'
+        && row.h4 === 'A falls above 6 kHz; B is 0.9 dB quieter.'
+        && row.evidence.every((e) => e.state === 'ok' && e.inList),
+      panel: res.saved.shown && res.saved.h3 === 'Findings',
+      backlinks: res.backA.shown && res.backA.h4 === 'Findings that cite this experiment'
+        && /A falls above 6 kHz/.test(res.backA.items[0]) && /Supported/.test(res.backA.items[0])
+        && /comparison/.test(res.backB.items[0]),
+      export: typeof res.exported === 'string' && res.exported.includes(res.hashA)
+        && res.exported.includes('"kind": "oscilla-findings"'),
+      'delete-warning': /^1 finding cites this experiment/.test(res.warning),
+      missing: after.status === 'Supported' && after.evidence.length === 2
+        && after.evidence[0].state === 'ok' && after.evidence[1].state === 'missing'
+        && /missing: experiment .* is not stored here/.test(after.evidence[1].text),
+      notCausal: !/\bcaused\b|because|due to/i.test(res.saved.text || ''),
+      narrow: res.narrow.fits,
+      light: res.light.theme === 'light' && hex(res.light.color) === res.light.text.toLowerCase(),
+    }) };
+  });
+
+  // Review 1 of #149, items 1 and 2: a cited run replaced by a record without a result hash, or
+  // stored but unreadable, is never shown as present (no "ok", no Open).
+  def('findings-integrity', async ({ page, context }) => {
+    await H.workspace(page, 'experiments');
+    const as = (k, id, { unstamped = false, name = null } = {}) => {
+      const j = JSON.parse(fixtures[k].json);
+      j.experimentId = id;
+      if (name) j.name = name;
+      if (unstamped) {
+        delete j.provenance.resultHash;
+        delete j.provenance.resultHashVersion;
+      }
+      return JSON.stringify(j);
+    };
+    const res = {};
+    res.setup = await page.evaluate(async ([x, y]) => {
+      const a = window.OSCILLA.app;
+      await a.experimentsImportText(x);
+      await a.experimentsImportText(y);
+      const out = [];
+      for (const [id, st] of [['fixture-imp', 'cites the replaced experiment'],
+        ['fixture-bad', 'cites the unreadable experiment']]) {
+        await a.findingsAskRun(id);
+        a.fnd.form.statement = st;
+        a.fnd.form.status = 'supported';
+        out.push(!!(await a.findingsSave()));
+      }
+      return out;
+    }, [as('b', 'fixture-imp'), as('a', 'fixture-bad')]);
+    const rowIn = (p, statement) => p.evaluate((st) => {
+      const li = [...document.querySelectorAll('[data-osc="fnd.row"]')]
+        .find((x) => x.querySelector('h4').textContent === st);
+      if (!li) return { missing: true };
+      return { refs: [...li.querySelectorAll('[data-osc="fnd.ref"]')].map((x) => ({
+        state: x.dataset.state, text: x.textContent.replace(/\s+/g, ' ').trim(),
+        open: !!x.querySelector('[data-osc="fnd.openRef"]') })),
+        issue: ((li.querySelector('[data-osc="fnd.statusIssue"]') || {}).textContent || '') };
+    }, statement);
+    res.before = await rowIn(page, 'cites the replaced experiment');
+    // 1. Delete the cited run and store a different record without a result hash under its id.
+    await page.evaluate(async (t) => {
+      const a = window.OSCILLA.app;
+      a.experimentsAskDelete({ id: 'fixture-imp', name: 'imp' });
+      await a.experimentsDelete();
+      await a.experimentsImportText(t);
+      a.alerts = [];
+    }, as('c', 'fixture-imp', { unstamped: true, name: 'TEST CONTEXT · a different record' }));
+    res.replaced = await H.until(() => rowIn(page, 'cites the replaced experiment'),
+      (r) => r.refs && r.refs[0] && r.refs[0].state !== 'ok', 5000);
+    // 2. Corrupt the other cited run in IndexedDB and read it in a fresh page (nothing cached).
+    res.kind = await page.evaluate(() => window.OSCILLA.experiments.store().kind);
+    if (res.kind === 'indexeddb') {
+      res.corrupted = await page.evaluate(() => new Promise((resolve) => {
+        const r = indexedDB.open('oscilla-experiments');
+        r.onsuccess = () => {
+          const db = r.result;
+          const tx = db.transaction('experiments', 'readwrite');
+          const os = tx.objectStore('experiments');
+          const q = os.get('fixture-bad');
+          q.onsuccess = () => {
+            const doc = q.result;
+            doc.provenance.resultHash = 'e'.repeat(64);
+            os.put(doc);
+          };
+          tx.oncomplete = () => { db.close(); resolve(true); };
+          tx.onerror = () => resolve(false);
+        };
+        r.onerror = () => resolve(false);
+      }));
+      const page2 = await context.newPage();
+      try {
+        await page2.goto(page.url(), { waitUntil: 'load' });
+        await page2.waitForSelector('html[data-ready="true"]', { timeout: 15000 });
+        await page2.evaluate(() => window.OSCILLA.app.setWorkspace('experiments'));
+        res.unreadable = await H.until(() => rowIn(page2, 'cites the unreadable experiment'),
+          (r) => r.refs && r.refs[0] && r.refs[0].state !== 'ok', 8000);
+      } finally {
+        await page2.close();
+      }
+    } else res.unreadable = { skipped: `store ${res.kind}` };
+    await page.evaluate(async () => {
+      const a = window.OSCILLA.app;
+      for (const r of a.fnd.rows.slice()) await a.findingsDeleteNow(r.id);
+      for (const id of ['fixture-imp', 'fixture-bad']) {
+        a.exps.deleteId = id;
+        await a.experimentsDelete();
+      }
+      a.alerts = [];
+    });
+    const r0 = (x) => (x && x.refs && x.refs[0]) || {};
+    return { ...res, ...H.verdict({
+      setup: res.setup.join() === 'true,true' && r0(res.before).state === 'ok',
+      'unverifiable-not-ok': r0(res.replaced).state === 'broken' && !r0(res.replaced).open
+        && /cannot be verified: the record stored under this id has no result hash/
+          .test(r0(res.replaced).text) && /none of the evidence it cites/.test(res.replaced.issue),
+      'unreadable-not-ok': res.kind !== 'indexeddb' || (r0(res.unreadable).state === 'broken'
+        && !r0(res.unreadable).open && /is stored here but cannot be read/
+          .test(r0(res.unreadable).text)),
+    }) };
+  });
+
+  // Review 1 of #149, item 5: Escape and a backdrop click keep a typed draft; the guard keeps
+  // reporting it; only Discard drops it.
+  def('findings-draft', async ({ page }) => {
+    await H.workspace(page, 'experiments');
+    const stored = await page.evaluate(async () => !!(await window.OSCILLA.experiments.store()
+      .get('fixture-a')));
+    if (!stored) {
+      await page.evaluate((t) => window.OSCILLA.app.experimentsImportText(t), fixtures.a.json);
+    }
+    await page.evaluate(() => window.OSCILLA.app.experimentsOpen('fixture-a'));
+    await H.until(() => page.evaluate(() => {
+      const b = document.querySelector('[data-osc="exp.findingNew"]');
+      return !!b && b.offsetParent !== null;
+    }), Boolean, 5000);
+    const open = () => page.evaluate(() => document.getElementById('osc-dlg-finding').open);
+    const state = () => page.evaluate(() => {
+      const note = document.querySelector('[data-osc="fnd.draftNote"]');
+      return { open: document.getElementById('osc-dlg-finding').open,
+        lost: window.OSCILLA.unsaved.whatWouldBeLost().filter((x) => x.domain === 'findings')
+          .map((x) => x.label),
+        note: !!note && note.getClientRects().length > 0,
+        value: document.getElementById('osc-fnd-statement').value };
+    });
+    const res = {};
+    await page.click('[data-osc="exp.findingNew"]');
+    await H.until(open, Boolean, 3000);
+    await page.fill('#osc-fnd-statement', 'a long careful draft');
+    await page.keyboard.press('Escape');
+    res.escape = await H.until(state, (x) => !x.open && x.note, 3000);
+    const cont = await page.$('[data-osc="fnd.draftContinue"]');
+    if (cont) await cont.click();
+    res.continued = await H.until(state, (x) => x.open && !x.note, 3000);
+    await page.mouse.click(3, 3); // the backdrop
+    res.backdrop = await H.until(state, (x) => !x.open && x.note, 3000);
+    if (cont) await page.click('[data-osc="fnd.draftContinue"]');
+    await H.until(open, Boolean, 3000);
+    const discard = await page.$('[data-osc="fnd.discard"]');
+    if (discard) await discard.click();
+    res.discarded = await H.until(state, (x) => !x.open && !x.lost.length, 3000);
+    await page.evaluate(() => {
+      window.OSCILLA.app.closeModal('osc-dlg-finding');
+      window.OSCILLA.app.alerts = [];
+    });
+    const kept = (x) => !x.open && x.lost.join() === 'A finding being written' && x.note;
+    return { ...res, ...H.verdict({
+      escape: kept(res.escape),
+      continue: res.continued.open && res.continued.value === 'a long careful draft',
+      backdrop: kept(res.backdrop),
+      discard: !res.discarded.open && !res.discarded.lost.length && !res.discarded.note,
+    }) };
+  });
+
+  // Review 1 of #149, item 12: after a finding is deleted with the keyboard, focus moves to the
+  // next finding (its Edit) or, with none left, to "New finding"; never to the page start.
+  def('findings-delete-focus', async ({ page }) => {
+    await H.workspace(page, 'experiments');
+    const stored = await page.evaluate(async () => !!(await window.OSCILLA.experiments.store()
+      .get('fixture-a')));
+    if (!stored) {
+      await page.evaluate((t) => window.OSCILLA.app.experimentsImportText(t), fixtures.a.json);
+    }
+    await page.evaluate(async () => {
+      const a = window.OSCILLA.app;
+      for (const st of ['first finding', 'second finding']) {
+        await a.findingsAskRun('fixture-a');
+        a.fnd.form.statement = st;
+        await a.findingsSave();
+      }
+    });
+    const res = {};
+    res.rows = await H.until(() => page.evaluate(() => document.querySelectorAll(
+      '[data-osc="fnd.row"]').length), (n) => n === 2, 5000);
+    res.judgement = await page.evaluate(() => document.querySelector('[data-osc="fnd.row"]')
+      .textContent.replace(/\s+/g, ' ').includes('Your judgement: Observation'));
+    const del = async () => {
+      await page.focus('[data-osc="fnd.row"] [data-osc="fnd.delete"]');
+      await page.keyboard.press('Enter');
+      // The dialog focuses its first button on a timer after it opens: wait until that initial
+      // focus is inside the dialog, or it would land after ours and Enter would press Cancel.
+      await H.until(() => page.evaluate(() => {
+        const d = document.getElementById('osc-dlg-finding-delete');
+        return d.open && d.contains(document.activeElement);
+      }), Boolean, 5000);
+      await page.focus('[data-osc="fnd.deleteConfirm"]');
+      await page.keyboard.press('Enter');
+    };
+    const focus = () => page.evaluate(() => {
+      const e = document.activeElement;
+      const row = e && e.closest('[data-osc="fnd.row"]');
+      return { osc: e && e.dataset ? e.dataset.osc || e.id || e.tagName : null,
+        row: row ? row.querySelector('h4').textContent : null,
+        rows: document.querySelectorAll('[data-osc="fnd.row"]').length };
+    });
+    res.deleted = await page.evaluate(() => document.querySelector('[data-osc="fnd.row"] h4')
+      .textContent);
+    await del();
+    res.afterFirst = await H.until(focus, (f) => f.rows === 1 && f.osc === 'fnd.edit', 8000);
+    await del();
+    res.afterLast = await H.until(focus, (f) => f.rows === 0 && f.osc === 'fnd.new', 8000);
+    await page.evaluate(() => { window.OSCILLA.app.alerts = []; });
+    return { ...res, ...H.verdict({
+      setup: res.rows === 2,
+      judgement: res.judgement === true,
+      next: res.afterFirst.osc === 'fnd.edit' && !!res.afterFirst.row
+        && res.afterFirst.row !== res.deleted,
+      none: res.afterLast.osc === 'fnd.new',
+    }) };
+  });
+
+  // Review 2 of #149, item 1: a second tab replaces a cited run with a different stamped
+  // record; in this tab an unrelated finding is saved (a findings refresh without a list
+  // refresh). The citing finding must read broken, with no Open, then and after a list refresh.
+  def('findings-two-tabs', async ({ page, context }) => {
+    await H.workspace(page, 'experiments');
+    const as = (k, id, name = null) => {
+      const j = JSON.parse(fixtures[k].json);
+      j.experimentId = id;
+      if (name) j.name = name;
+      return JSON.stringify(j);
+    };
+    const res = {};
+    res.setup = await page.evaluate(async ([t, u]) => {
+      const a = window.OSCILLA.app;
+      await a.experimentsImportText(t);
+      await a.experimentsImportText(u);
+      await a.findingsAskRun('fixture-tab');
+      a.fnd.form.statement = 'cites the experiment another tab replaces';
+      a.fnd.form.status = 'supported';
+      return !!(await a.findingsSave());
+    }, [as('b', 'fixture-tab'), as('a', 'fixture-tab-u')]);
+    const row = (p) => p.evaluate(() => {
+      const li = [...document.querySelectorAll('[data-osc="fnd.row"]')]
+        .find((x) => x.querySelector('h4').textContent === 'cites the experiment another tab replaces');
+      const r = li && li.querySelector('[data-osc="fnd.ref"]');
+      return r ? { state: r.dataset.state, open: !!r.querySelector('[data-osc="fnd.openRef"]'),
+        text: r.textContent.replace(/\s+/g, ' ').trim() } : { missing: true };
+    });
+    res.before = await row(page);
+    const page2 = await context.newPage();
+    try {
+      await page2.goto(page.url(), { waitUntil: 'load' });
+      await page2.waitForSelector('html[data-ready="true"]', { timeout: 15000 });
+      await page2.evaluate(() => window.OSCILLA.app.setWorkspace('experiments'));
+      await page2.waitForFunction(() => window.OSCILLA.app.exps.loaded, null, { timeout: 15000 });
+      res.tab2 = await page2.evaluate(async (t) => {
+        const a = window.OSCILLA.app;
+        a.exps.deleteId = 'fixture-tab';
+        const deleted = await a.experimentsDelete();
+        const imported = await a.experimentsImportText(t);
+        return { deleted, imported };
+      }, as('c', 'fixture-tab', 'TEST CONTEXT · the record another tab stored'));
+    } finally {
+      await page2.close();
+    }
+    // This tab: an unrelated finding is saved, then the list is refreshed.
+    await page.evaluate(async () => {
+      const a = window.OSCILLA.app;
+      await a.findingsAskRun('fixture-tab-u');
+      a.fnd.form.statement = 'an unrelated finding';
+      await a.findingsSave();
+    });
+    res.afterSave = await H.until(() => row(page), (r) => r.state !== 'ok', 4000);
+    await page.evaluate(() => window.OSCILLA.app.experimentsRefresh());
+    res.afterRefresh = await H.until(() => row(page), (r) => r.state !== 'ok', 4000);
+    await page.evaluate(async () => {
+      const a = window.OSCILLA.app;
+      for (const r of a.fnd.rows.slice()) await a.findingsDeleteNow(r.id);
+      for (const id of ['fixture-tab', 'fixture-tab-u']) {
+        a.exps.deleteId = id;
+        await a.experimentsDelete();
+      }
+      a.alerts = [];
+    });
+    const broken = (r) => r.state === 'broken' && !r.open
+      && /different record is stored under this id/.test(r.text);
+    return { ...res, ...H.verdict({
+      setup: res.setup === true && res.before.state === 'ok',
+      'tab2-replaced': !!res.tab2 && res.tab2.deleted === true && !!res.tab2.imported,
+      'broken-after-save': broken(res.afterSave),
+      'broken-after-refresh': broken(res.afterRefresh),
+    }) };
+  });
+
+  // Review 3 of #149: views carry the hash of the record on screen, and Open re-checks. Tab 2
+  // replaces runs while tab 1 receives no event: recording a finding from tab 1's out-of-date
+  // detail or comparison is refused, and Open of a reference to the replaced run opens nothing.
+  def('findings-views-two-tabs', async ({ page, context }) => {
+    await H.workspace(page, 'experiments');
+    const as = (k, id, name = null) => {
+      const j = JSON.parse(fixtures[k].json);
+      j.experimentId = id;
+      if (name) j.name = name;
+      return JSON.stringify(j);
+    };
+    const tab2 = async (fn, arg) => {
+      const p2 = await context.newPage();
+      try {
+        await p2.goto(page.url(), { waitUntil: 'load' });
+        await p2.waitForSelector('html[data-ready="true"]', { timeout: 15000 });
+        await p2.evaluate(() => window.OSCILLA.app.setWorkspace('experiments'));
+        await p2.waitForFunction(() => window.OSCILLA.app.exps.loaded, null, { timeout: 15000 });
+        return await p2.evaluate(fn, arg);
+      } finally {
+        await p2.close();
+      }
+    };
+    const replace = (id, json) => tab2(async ([i, t]) => {
+      const a = window.OSCILLA.app;
+      a.exps.deleteId = i;
+      await a.experimentsDelete();
+      return a.experimentsImportText(t);
+    }, [id, json]);
+    const refused = /replaced in another tab since it was shown here; reopen it/;
+    const alertsText = () => page.evaluate(() => (window.OSCILLA.app.alerts || [])
+      .map((x) => `${x.title}: ${x.text || x.message || ''}`).join(' | '));
+    const res = {};
+    res.setup = await page.evaluate(async ([x, y]) => {
+      const a = window.OSCILLA.app;
+      await a.experimentsImportText(x);
+      await a.experimentsImportText(y);
+      await a.findingsAskRun('fixture-vx');
+      a.fnd.form.statement = 'cites X';
+      a.fnd.form.status = 'supported';
+      const f = await a.findingsSave();
+      await a.experimentsOpen('fixture-vx');
+      a.alerts = [];
+      return !!f;
+    }, [as('b', 'fixture-vx'), as('a', 'fixture-vy')]);
+    res.replacedX = await replace('fixture-vx', as('c', 'fixture-vx', 'TEST CONTEXT · X replaced'));
+    // 1. The detail tab 1 shows is out of date: "Record a finding about this experiment" is refused.
+    const before = await page.evaluate(() => window.OSCILLA.app.fnd.all.length);
+    await page.click('[data-osc="exp.findingNew"]');
+    await H.until(alertsText, (t) => refused.test(t), 4000); // the refusal the verdict judges
+    res.detail = { dialog: await page.evaluate(() => document.getElementById('osc-dlg-finding')
+      .open), alerts: await alertsText(), count: await page.evaluate(() => window.OSCILLA.app
+      .fnd.all.length) - before };
+    await page.evaluate(() => { window.OSCILLA.app.alerts = []; });
+    // 2. Open of the reference to X (its row still reads ok here: no event) opens nothing.
+    res.open = await page.evaluate(async () => {
+      const a = window.OSCILLA.app;
+      const r = a.fnd.rows.find((x) => x.statement === 'cites X');
+      const stateBefore = r.evidence[0].state;
+      const opened = await a.findingsOpenRef(r.evidence[0].ref, r.id);
+      const after = a.fnd.rows.find((x) => x.statement === 'cites X').evidence[0];
+      return { stateBefore, opened: !!opened, stateAfter: after.state };
+    });
+    res.openAlerts = await alertsText();
+    await page.evaluate(() => { window.OSCILLA.app.alerts = []; });
+    // 3. The comparison tab 1 shows is out of date: recording a finding about it is refused.
+    await page.evaluate(() => window.OSCILLA.app.experimentsCompare(['fixture-vy',
+      'fixture-vx']));
+    await H.until(() => page.evaluate(() => !!window.OSCILLA.app.exps.compare), Boolean, 5000);
+    res.replacedY = await replace('fixture-vy', as('b', 'fixture-vy', 'TEST CONTEXT · Y replaced'));
+    await page.click('[data-osc="exp.findingCompare"]');
+    await H.until(alertsText, (t) => refused.test(t), 4000);
+    res.compare = { dialog: await page.evaluate(() => document.getElementById('osc-dlg-finding')
+      .open), alerts: await alertsText() };
+    await page.evaluate(async () => {
+      const a = window.OSCILLA.app;
+      a.closeModal('osc-dlg-finding');
+      a.findingsDiscardDraft();
+      for (const r of a.fnd.rows.slice()) await a.findingsDeleteNow(r.id);
+      for (const id of ['fixture-vx', 'fixture-vy']) {
+        a.exps.deleteId = id;
+        await a.experimentsDelete();
+      }
+      a.exps.panel = 'detail';
+      a.alerts = [];
+    });
+    return { ...res, ...H.verdict({
+      setup: res.setup === true && !!res.replacedX && !!res.replacedY,
+      'detail-refused': !res.detail.dialog && res.detail.count === 0
+        && refused.test(res.detail.alerts),
+      'open-refused': res.open.stateBefore === 'ok' && !res.open.opened
+        && res.open.stateAfter === 'broken' && /different record/.test(res.openAlerts),
+      'compare-refused': !res.compare.dialog && refused.test(res.compare.alerts),
+    }) };
+  });
+
+  // #151 review (root in ui/experiments.js): the detail always shows the stored record. Tab 2
+  // replaces the experiment tab 1 has open; (a) tab 1 leaves the workspace and returns, (b) the
+  // id is opened again with no event at all: each time the detail's title and result hash are
+  // the stored record's, never the decoded copy of the record that is gone.
+  def('views-two-tabs', async ({ page, context }) => {
+    await H.workspace(page, 'experiments');
+    const as = (k, id, name) => {
+      const j = JSON.parse(fixtures[k].json);
+      j.experimentId = id;
+      j.name = name;
+      return JSON.stringify(j);
+    };
+    const replace = async (json) => {
+      const p2 = await context.newPage();
+      try {
+        await p2.goto(page.url(), { waitUntil: 'load' });
+        await p2.waitForSelector('html[data-ready="true"]', { timeout: 15000 });
+        await p2.evaluate(() => window.OSCILLA.app.setWorkspace('experiments'));
+        await p2.waitForFunction(() => window.OSCILLA.app.exps.loaded, null, { timeout: 15000 });
+        return await p2.evaluate(async (t) => {
+          const a = window.OSCILLA.app;
+          a.exps.deleteId = 'fixture-view';
+          await a.experimentsDelete();
+          return a.experimentsImportText(t);
+        }, json);
+      } finally {
+        await p2.close();
+      }
+    };
+    const shown = () => page.evaluate(async () => {
+      const a = window.OSCILLA.app;
+      const row = (await window.OSCILLA.experiments.store().list())
+        .find((x) => x.experimentId === 'fixture-view');
+      const d = a.exps.detail;
+      return { title: d ? d.title : null, hash: d ? d.resultHash : null,
+        dom: (document.getElementById('osc-x-detail-title') || {}).textContent || null,
+        storedName: row ? row.name : null, storedHash: row ? row.resultHash : null };
+    });
+    const same = (x) => !!x.storedHash && x.hash === x.storedHash && x.title === x.storedName
+      && x.dom === x.storedName;
+    const res = {};
+    await page.evaluate((t) => window.OSCILLA.app.experimentsImportText(t),
+      as('b', 'fixture-view', 'TEST CONTEXT · view original'));
+    await page.evaluate(() => window.OSCILLA.app.experimentsOpen('fixture-view'));
+    res.before = await H.until(shown, same, 5000);
+    // (a) Replaced in tab 2; tab 1 goes to another workspace and comes back.
+    res.replaced1 = await replace(as('c', 'fixture-view', 'TEST CONTEXT · view replaced once'));
+    await H.workspace(page, 'measure');
+    await H.workspace(page, 'experiments');
+    res.afterReturn = await H.until(shown, same, 5000);
+    // (b) Replaced again; the id is opened again here with no event in between.
+    res.replaced2 = await replace(as('a', 'fixture-view', 'TEST CONTEXT · view replaced twice'));
+    await page.evaluate(() => window.OSCILLA.app.experimentsOpen('fixture-view'));
+    res.afterOpen = await H.until(shown, same, 5000);
+    await page.evaluate(async () => {
+      const a = window.OSCILLA.app;
+      a.exps.deleteId = 'fixture-view';
+      await a.experimentsDelete();
+      a.alerts = [];
+    });
+    return { ...res, ...H.verdict({
+      setup: same(res.before) && res.before.title === 'TEST CONTEXT · view original'
+        && !!res.replaced1 && !!res.replaced2,
+      'after-return': same(res.afterReturn)
+        && res.afterReturn.title === 'TEST CONTEXT · view replaced once',
+      'after-open': same(res.afterOpen)
+        && res.afterOpen.title === 'TEST CONTEXT · view replaced twice',
     }) };
   });
 

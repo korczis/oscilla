@@ -374,20 +374,20 @@ test('§114 store PATCH_INSERT / PATCH_REPLACE are single undoable entries', () 
 // ---------------------------------------------------------------- store partition (§154, §225)
 
 test('§225 DB version 2 adds the Studio stores and never deletes anything', async () => {
-  // Version 3 (ADR 0043) adds the definitions after them.
-  assert.strictEqual(DB_VERSION, 3);
+  // Version 3 (ADR 0043) adds the definitions after them, version 4 (ADR 0046) the findings.
+  assert.strictEqual(DB_VERSION, 4);
   const fake = fakeIndexedDB();
   const fresh = await openExperimentStore({ indexedDB: fake.indexedDB, name: 'fresh' });
-  assert.deepStrictEqual(fake.state.upgrades, [[0, 3]]);
+  assert.deepStrictEqual(fake.state.upgrades, [[0, 4]]);
   assert.deepStrictEqual([...fake.dbs.get('fresh').stores.keys()], ['experiments', 'summaries',
-    STUDIO_RECORDS, STUDIO_SUMMARIES, 'definitions']);
+    STUDIO_RECORDS, STUDIO_SUMMARIES, 'definitions', 'findings']);
   fresh.close();
   v1Database(fake, 'old');
   const upgraded = await openExperimentStore({ indexedDB: fake.indexedDB, name: 'old' });
-  assert.deepStrictEqual(fake.state.upgrades, [[0, 3], [1, 3]]);
+  assert.deepStrictEqual(fake.state.upgrades, [[0, 4], [1, 4]]);
   const rec = fake.dbs.get('old');
   assert.deepStrictEqual([...rec.stores.keys()], ['experiments', 'summaries', 'studio',
-    'studioSummaries', 'definitions']);
+    'studioSummaries', 'definitions', 'findings']);
   assert.deepStrictEqual(rec.stores.get('experiments').data.get('old-1'), { experimentId: 'old-1',
     name: 'kept', note: 'a V3.0 record' }, 'the V3.0 experiment is untouched');
   assert.deepStrictEqual(await upgraded.listStudio(), []);
@@ -397,7 +397,7 @@ test('§225 DB version 2 adds the Studio stores and never deletes anything', asy
   const db = { objectStoreNames: { contains: (k) => ['experiments', 'summaries', 'studio']
     .includes(k) }, createObjectStore: (k) => created.push(k) };
   upgradeExperimentDb(db, 1);
-  assert.deepStrictEqual(created, ['studioSummaries', 'definitions']);
+  assert.deepStrictEqual(created, ['studioSummaries', 'definitions', 'findings']);
 });
 
 for (const kind of ['memory', 'indexeddb']) {

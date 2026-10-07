@@ -119,7 +119,7 @@ as real, tested slices, in dependency order, never as placeholders:
 
 1. Experiment definition separate from run (#116, in review).
 2. Evidence on a run: a value traced through stored provenance, and a reproducibility checklist.
-3. Findings linked to evidence.
+3. Findings linked to evidence (ADR 0046, branch `feat/findings`, in review).
 4. Cross-domain Trace over real stored relations.
 5. Unsaved-work protection and navigation history in the workspace.
 6. ~~A knowledge explorer fed by a build-time index of claims, features, rules, ADRs and
