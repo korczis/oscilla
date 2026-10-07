@@ -370,30 +370,7 @@
   font-size: var(--osc-fs-xs);
 }
 
-/* About: build provenance (version, commit, channel, source digest). */
-.osc-about-build {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  margin: 0;
-  font-size: var(--osc-fs-sm);
-}
-
-.osc-about-build > div {
-  display: grid;
-  grid-template-columns: 110px minmax(0, 1fr);
-  gap: 10px;
-}
-
-.osc-about-build dt {
-  color: var(--osc-text-2);
-}
-
-.osc-about-build dd {
-  margin: 0;
-  overflow-wrap: anywhere;
-}
-
+/* About: the source digest of the build provenance readout. */
 .osc-about-digest {
   font-family: var(--osc-font-mono);
   font-size: var(--osc-fs-xs);
@@ -770,25 +747,6 @@
 
   .osc-safety-toggle {
     display: inline;
-  }
-}
-
-/* Text-style button. */
-.osc-link-btn {
-  padding: 2px 0;
-  border: 0;
-  background: none;
-  color: var(--osc-text-2);
-  font: inherit;
-  font-size: var(--osc-fs-xs);
-  text-align: left;
-  text-decoration: underline dotted;
-  cursor: pointer;
-}
-
-@media (pointer: coarse) {
-  .osc-link-btn {
-    min-height: 44px;
   }
 }
 
