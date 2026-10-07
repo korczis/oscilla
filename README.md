@@ -123,8 +123,9 @@ is in the [algorithm notes](docs/v3/algorithms.md).
   `?measure=loopback` opens the page with it chosen, and the address follows the choice. The
   page then says TEST CONTEXT on the result and in every saved experiment. The automated tests
   use this mode, and it is never presented as a measurement of a physical system. Choosing an
-  input leaves it and clears what was produced in it: its result (a saved experiment of it
-  stays, labelled), the input check and a level calibration stored in it.
+  input leaves it and clears what was produced in it: its result, valid or invalid (a saved
+  experiment of it stays, labelled), the input check and a level calibration stored in it. A
+  level calibration stored with a real input is kept and does not apply inside TEST CONTEXT.
 
 ### Calibration
 

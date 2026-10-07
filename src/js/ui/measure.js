@@ -213,6 +213,13 @@ const LIVE_FIELD_HELP = 'Live RTA (RTA tab); not part of the measurement recipe.
 export const LEVEL_PENDING_TEXT = 'Pending input check: the level calibration is applied only '
   + 'once the setup check or a measurement confirms the input it was taken with; until then '
   + 'levels are relative (dBFS-like).';
+// A level calibration does not cross the TEST CONTEXT boundary (levelApplies).
+export const LEVEL_OUTSIDE_TEST_CONTEXT_TEXT = 'UNCALIBRATED: the level calibration was stored '
+  + 'outside TEST CONTEXT, with a real input. The digital loopback has no microphone, so it does '
+  + 'not apply here; it applies again once that input is checked after leaving TEST CONTEXT.';
+export const LEVEL_FROM_TEST_CONTEXT_TEXT = 'UNCALIBRATED: the level calibration was stored in '
+  + 'TEST CONTEXT, the digital loopback, and says nothing about a real input. Calibrate again '
+  + 'for this input.';
 /** Why a level calibration cannot be stored before an input is known (ledger C1). */
 export const LEVEL_NEEDS_INPUT = 'Run the setup check first: a level calibration is valid only '
   + 'for the input it was taken with, and no input has been checked yet, so a reading typed now '
@@ -278,6 +285,7 @@ export function createMeasureUi(svc) {
     loopback: !!svc.loopback,
     loopbackSystem: { type: 'biquad', filter: 'lowpass', frequency: 1000, Q: Math.SQRT1_2 },
     result: null,          // last engine result (COMPLETE or INVALID)
+    resultTest: false,     // it was produced in TEST CONTEXT (showResult; not read off a label)
     evidence: null,        // frozen { result, calibration, notes } of it, as measured
     shown: null,           // what the result panel shows: { kind: 'result'|'experiment', src }
     preflight: null,
@@ -334,8 +342,18 @@ export function createMeasureUi(svc) {
     m.cal.levelVoid = null;
   }
 
-  /** The level calibration's applicability to the current input (level.js). */
+  /**
+   * The level calibration's applicability to the current input (level.js). The context it was
+   * stored in is part of that: the binding's facts alone do not tell a real input that reports
+   * none of them from the loopback (review of #167). A calibration stored in TEST CONTEXT is
+   * cleared when TEST CONTEXT is left, so the case that remains is a real input's calibration
+   * while the page is in TEST CONTEXT.
+   */
   function levelApplies() {
+    if (isValidLevelCalibration(ctx.levelCal) && ctx.levelCalTest !== ctx.loopback) {
+      return { applies: false, checked: true, differences: [], reason: ctx.levelCalTest
+        ? LEVEL_FROM_TEST_CONTEXT_TEXT : LEVEL_OUTSIDE_TEST_CONTEXT_TEXT };
+    }
     return levelCalibrationApplies(ctx.levelCal, ctx.inputNow);
   }
 
@@ -502,45 +520,76 @@ export function createMeasureUi(svc) {
   }
 
   /**
+   * Something uses the input: a measurement, a setup check that is running, or a reference
+   * capture. The one refusal of the Input device choice and of the seam's useLoopback /
+   * useMicrophone, so that the seam drives no transition the page refuses.
+   */
+  function inputInUse(cmp) {
+    return !!(cmp.meas.busy || ctx.refCapture || ctx.pending);
+  }
+
+  /**
    * Enter or leave TEST CONTEXT, the digital loopback (ledger W7b, ADR 0052): the one
    * transition behind the Input device choice and the seam's useLoopback / useMicrophone. The
-   * caller has checked that nothing runs.
+   * caller has checked that nothing runs (inputInUse).
    *
    * Nothing made on one side is read as the other side's. In both directions the input check
-   * (the input facts a level calibration binds to), a captured reference reading and the live
-   * RTA end. Leaving also clears what was produced in TEST CONTEXT: its result (a saved
-   * experiment of it stays in Experiments, labelled) and a level calibration stored in it. A
-   * result measured with a real input stays, on either side, as what it is; when it is
-   * COMPLETE its engine stays too, so that it can still be saved (ensureEngine replaces the
-   * engine at the next check or measurement).
+   * (the input facts a level calibration binds to), a captured reference reading, the live
+   * RTA, a pending repeat link and the outcome in the assertive live region end. Leaving also
+   * clears what was produced in TEST CONTEXT: its result, COMPLETE or INVALID (a saved
+   * experiment of it stays in Experiments, labelled), with its noise-check snapshot, and a
+   * level calibration stored in it. Where a result was produced is recorded when it is shown
+   * (ctx.resultTest), not read off its label: an INVALID result has no view that would carry
+   * one. A COMPLETE result measured with a real input stays, on either side, under its own
+   * title; its engine stays too, so that it can still be saved (ensureEngine replaces the
+   * engine at the next check or measurement). An INVALID result of a real input has no title
+   * to say whose it is, so entering clears it.
    *
-   * Returns what leaving cleared, in words ([] when entering, or when there was nothing).
+   * Returns what was cleared, in words ([] when there was nothing).
    */
   function setTestContext(cmp, on) {
     const m = cmp.meas;
     const cleared = [];
+    const dropResult = () => {
+      ctx.result = null;
+      ctx.resultTest = false;
+      ctx.evidence = null;
+      ctx.save = null;
+      if (ctx.shown && ctx.shown.kind === 'result') ctx.shown = null;
+      m.saved = false;
+      m.savedId = null;
+      m.savedAnnotation = null;
+      m.savedName = null;
+    };
     stopLive();
+    const invalid = !!ctx.result && ctx.result.state === S.INVALID;
     if (!on) {
-      if (ctx.result && ctx.result.testContext) {
-        cleared.push(m.saved ? 'the TEST CONTEXT result shown (its saved experiment is kept)'
-          : 'the unsaved TEST CONTEXT result');
-        ctx.result = null;
-        ctx.evidence = null;
-        ctx.save = null;
-        if (ctx.shown && ctx.shown.kind === 'result') ctx.shown = null;
-        m.saved = false;
-        m.savedId = null;
-        m.savedAnnotation = null;
-        m.savedName = null;
+      if (ctx.result && (ctx.resultTest || ctx.result.testContext)) {
+        if (invalid) {
+          cleared.push(`the invalid TEST CONTEXT result${ctx.result.noise ? ' and its noise '
+            + 'check' : ''}`);
+        }
+        else {
+          cleared.push(m.saved ? 'the TEST CONTEXT result shown (its saved experiment is kept)'
+            : 'the unsaved TEST CONTEXT result');
+        }
+        dropResult();
       }
       if (ctx.levelCal && ctx.levelCalTest) {
         cleared.push('the level calibration stored in TEST CONTEXT');
         clearLevelCalibration(m);
       }
       if (ctx.inputNow || ctx.preflight) cleared.push('the input check');
+    } else if (invalid && !ctx.resultTest && !ctx.result.testContext) {
+      cleared.push(`the invalid result of the previous input${ctx.result.noise ? ' and its '
+        + 'noise check' : ''}`);
+      dropResult();
     }
     // A stored noise-check snapshot (its peak hold spans checks) goes with its result.
-    if (ctx.rta && ctx.rta.result !== ctx.result) ctx.rta = null;
+    if (ctx.rta && !(ctx.result && ctx.rta.result === ctx.result)) ctx.rta = null;
+    // The next Start on this side repeats nothing made on the other (provenance.repeatOf).
+    ctx.repeatOf = null;
+    m.live.assertive = ''; // the outcome said for the other side's check or measurement
     ctx.inputNow = null;
     ctx.preflight = null;
     ctx.noise = null;
@@ -567,17 +616,18 @@ export function createMeasureUi(svc) {
     const value = typeof raw === 'string' ? raw : '';
     const toTest = value === TEST_CONTEXT_INPUT_VALUE;
     if (toTest ? ctx.loopback : !ctx.loopback && value === (ctx.deviceId || '')) return true;
-    if (cmp.meas.busy || ctx.refCapture || ctx.pending) {
+    if (inputInUse(cmp)) {
       cmp.notify('warning', 'Input not changed', 'A measurement or a reference capture is using '
         + 'the input; stop it before choosing another input.');
       renderInputs(); // the select shows the input still in use
       return false;
     }
     if (toTest) {
-      setTestContext(cmp, true);
+      const cleared = setTestContext(cmp, true);
       syncContextUrl(true);
       announce({ politeness: 'polite', text: 'TEST CONTEXT: digital loopback, no microphone and '
-        + 'no acoustic path. Results test the software, not a physical setup.' });
+        + 'no acoustic path. Results test the software, not a physical setup.'
+        + (cleared.length ? ` Cleared: ${cleared.join('; ')}.` : '') });
       return true;
     }
     const opt = cmp.meas.input.options.find((o) => o.value === value);
@@ -1023,6 +1073,8 @@ export function createMeasureUi(svc) {
 
   function showResult(result) {
     ctx.result = result;
+    // Where it was produced: read when TEST CONTEXT is left (setTestContext).
+    ctx.resultTest = !!result && (ctx.loopback || !!result.testContext);
     if (result && result.input && (result.input.device || result.input.constraints)) {
       ctx.inputNow = { device: result.input.device, constraints: result.input.constraints,
         sampleRate: result.sampleRate };
@@ -2237,7 +2289,7 @@ export function createMeasureUi(svc) {
          * replaces the synthetic system. Already in it: a new engine, nothing else changes.
          */
         useLoopback(system = null) {
-          if (ctx.me && isActiveState(ctx.me.state)) return false;
+          if (inputInUse(self) || (ctx.me && isActiveState(ctx.me.state))) return false;
           if (system) ctx.loopbackSystem = system;
           if (!ctx.loopback) setTestContext(self, true);
           else newEngine();
@@ -2245,7 +2297,7 @@ export function createMeasureUi(svc) {
         },
         /** Drive: leave TEST CONTEXT, as choosing an input does: what was made in it is cleared. */
         useMicrophone() {
-          if (ctx.me && isActiveState(ctx.me.state)) return false;
+          if (inputInUse(self) || (ctx.me && isActiveState(ctx.me.state))) return false;
           if (ctx.loopback) setTestContext(self, false);
           else newEngine();
           return true;

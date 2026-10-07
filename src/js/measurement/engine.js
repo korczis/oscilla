@@ -1056,10 +1056,18 @@ export function createMeasurementEngine({ io, clock, onEvent, limits, assess, an
     return to > from ? [from, to] : null;
   }
 
+  // An INVALID result says where it was made, like a COMPLETE one. Its captures are released
+  // before it is built, so the TEST CONTEXT label is the one in the setup check's facts, which
+  // the io states for every capture it makes. null for a real input.
+  function resultTestContext(preflight) {
+    return (preflight && preflight.facts && preflight.facts.testContext) || null;
+  }
+
   function invalidResult(s, extra) {
     return {
       state: S.INVALID,
       reasons: extra.reasons,
+      testContext: resultTestContext(extra.preflight),
       preflight: extra.preflight || null,
       runs: extra.runs || [],
       transfer: null,

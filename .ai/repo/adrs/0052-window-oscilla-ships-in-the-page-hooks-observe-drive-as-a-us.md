@@ -178,3 +178,15 @@ that the seam is not a security boundary.
   that W7f waits for; the second route (`showResult` adopting `result.input` outside loopback)
   is open, and W7f stays open for it. `useLoopback()` while already in TEST CONTEXT keeps what
   was made in it and only replaces the engine, as before.
+- **Note of 2026-10-07 (review of #167), no decision above changes.** "Produced in TEST
+  CONTEXT" is recorded where a result is shown, not read off the result's label: the engine's
+  INVALID result carried no `testContext`, so one made in the loopback survived leaving, with
+  its noise-check snapshot, under the real input. It is now cleared and named, and the engine's
+  INVALID result carries the label of the setup check's facts. A pending repeat link and the
+  outcome in the assertive live region end with the transition, in both directions. Entering
+  clears an INVALID result of the real input: with no transfer it has no title that would say
+  whose it is. A level calibration applies only on the side it was stored on, whatever the
+  input reports about itself; one stored with a real input reads UNCALIBRATED, with the reason,
+  while the page is in TEST CONTEXT and is kept for that input. `useLoopback()` and
+  `useMicrophone()` are refused wherever the choice is refused (a measurement, a running setup
+  check, a reference capture), so "the same transition" holds for the refusal as well.
