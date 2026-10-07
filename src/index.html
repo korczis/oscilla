@@ -1456,7 +1456,7 @@
           <div class="osc-m-field osc-m-inputsel">
             <label class="osc-label" for="osc-m-input-device">Input device</label>
             <div class="osc-select"><select id="osc-m-input-device" data-osc="measure.inputDevice"
-              aria-describedby="osc-m-input-status" :disabled="meas.input.disabled || meas.busy"
+              aria-describedby="osc-m-input-status" :disabled="!meas.input.options.length || meas.busy"
               @change="measureSelectInput($event.target.value)">
               <template x-for="o in meas.input.options" :key="o.value">
                 <option :value="o.value" x-text="o.label" :selected="o.value === meas.input.selected"></option>

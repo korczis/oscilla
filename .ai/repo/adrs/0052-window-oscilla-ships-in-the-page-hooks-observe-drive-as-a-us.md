@@ -162,3 +162,19 @@ that the seam is not a security boundary.
   - The shared-origin exposure is tracked as its own item.
 - If OSCILLA moves to its own origin, revisit `window.Alpine` and `OSCILLA.app` first, not the
   measure hooks.
+- **Note of 2026-10-07 (ledger W7b), no decision above changes.** The follow-up "the Input
+  device select gets a TEST CONTEXT option" is done. The list ends with "TEST CONTEXT · digital
+  loopback (no microphone)"; choosing it is `?measure=loopback` (the address follows the
+  choice), and choosing an input leaves it. The banner, the labels on results and the refusal
+  to present a loopback result as a measurement are as before. Leaving clears what was produced
+  in TEST CONTEXT: its result (a saved experiment of it stays, labelled), the input check, a
+  captured reference reading and a level calibration stored in it; entering ends the input
+  check of the real input. A result measured with a real input, and a level calibration stored
+  with one, stay on either side as what they are.
+  `useLoopback()` and `useMicrophone()` are now that same transition, which is what "drive"
+  means here. That closes the first of the two routes above (`useLoopback()`,
+  `setInputNow(input)`, `useMicrophone()`): the injected input and a calibration stored on it
+  do not survive leaving. It follows from the page's own reset, not from the owner's answer
+  that W7f waits for; the second route (`showResult` adopting `result.input` outside loopback)
+  is open, and W7f stays open for it. `useLoopback()` while already in TEST CONTEXT keeps what
+  was made in it and only replaces the engine, as before.

@@ -28,10 +28,11 @@
 // cannot start while a measurement is in progress (exclusive input). Live RTA is feedback:
 // nothing of it is stored.
 //
-// TEST CONTEXT (§146, §249): `?measure=loopback` (or OSCILLA.measure.useLoopback()) replaces
-// the microphone with capture.js createLoopbackIo, a known synthetic digital system. The
-// workspace then says so in a banner and in every saved experiment; it is never presented as a
-// measurement of a physical system.
+// TEST CONTEXT (§146, §249): `?measure=loopback`, the last choice of the Input device list
+// (ledger W7b) or OSCILLA.measure.useLoopback() replaces the microphone with capture.js
+// createLoopbackIo, a known synthetic digital system. The workspace then says so in a banner
+// and in every saved experiment; it is never presented as a measurement of a physical system.
+// Choosing an input leaves it and clears what was produced in it (setTestContext).
 //
 // Level calibration (M3 of the V3 review): the dialog measures the reference itself — "Capture
 // reference" records REFERENCE_CAPTURE_S seconds through the SAME capture io as a measurement
@@ -149,7 +150,7 @@ import { formatHz } from '../charts/axes.js';
 import { createResponseChart, createIrChart, createRtaChart } from '../charts/measure-charts.js';
 import { readFileText, downloadBlob } from './exporters.js';
 import { exportProfileFile } from '../calibration/export.js';
-import { inputDeviceView } from '../measurement/views/input-devices.js';
+import { inputDeviceView, TEST_CONTEXT_INPUT_VALUE } from '../measurement/views/input-devices.js';
 import {
   encodeRecipeLink, decodeRecipeLink, recipeParamOf, withRecipeParam, RECIPE_WIRE_KEYS,
 } from '../core/url-state-measure.js';
@@ -266,7 +267,7 @@ function calText(cal) {
 /**
  * createMeasureUi(svc) → the MEASURE part of the component.
  * svc: { engine (AudioEngine), stopPlayback(cmp) (instrument, sequencer, voices),
- *        loopback: boolean (TEST CONTEXT from the URL) }
+ *        loopback: boolean (TEST CONTEXT at load, from the URL) }
  */
 export function createMeasureUi(svc) {
   const ctx = {
@@ -287,6 +288,7 @@ export function createMeasureUi(svc) {
     said: initialAnnouncements(),
     profile: null,         // FrequencyProfile
     levelCal: null,        // LevelCalibration
+    levelCalTest: false,   // it was stored in TEST CONTEXT (cleared when TEST CONTEXT is left)
     calibrationObj: null,  // the object identity the engine compares between preflight/measure
     repeatOf: null,
     charts: { response: null, ir: null, rta: null },
@@ -322,6 +324,14 @@ export function createMeasureUi(svc) {
     } catch (e) {
       return false;
     }
+  }
+
+  function clearLevelCalibration(m) {
+    ctx.levelCal = null;
+    ctx.levelCalTest = false;
+    m.cal.level = null;
+    m.cal.useLevel = false;
+    m.cal.levelVoid = null;
   }
 
   /** The level calibration's applicability to the current input (level.js). */
@@ -402,11 +412,12 @@ export function createMeasureUi(svc) {
   }
 
   function ensureEngine() {
-    // A newly chosen input takes effect here: the io is re-created for it when nothing runs.
-    if (ctx.me && ctx.ioKind === 'microphone' && ctx.ioDeviceId !== ctx.deviceId
-      && !isActiveState(ctx.me.state)) disposeEngine();
-    if (ctx.me) return ctx.me;
+    // A newly chosen input (or TEST CONTEXT entered or left with a completed result kept)
+    // takes effect here: the io is re-created for it when nothing runs.
     const kind = ctx.loopback ? 'loopback' : 'microphone';
+    if (ctx.me && !isActiveState(ctx.me.state) && (ctx.ioKind !== kind
+      || (kind === 'microphone' && ctx.ioDeviceId !== ctx.deviceId))) disposeEngine();
+    if (ctx.me) return ctx.me;
     ctx.io = kind === 'loopback'
       ? createLoopbackIo({ engine: svc.engine, system: ctx.loopbackSystem })
       : createCaptureIo({ engine: svc.engine, deviceId: ctx.deviceId });
@@ -440,7 +451,7 @@ export function createMeasureUi(svc) {
       selectedLabel: ctx.deviceLabel, enumerated: ctx.devicesEnumerated, loopback: ctx.loopback,
       available: !!mediaDevices() });
     cmp.meas.input = { options: v.options, selected: v.selected, missing: v.missing,
-      message: v.message, status: v.status, disabled: v.disabled };
+      message: v.message, status: v.status };
   }
 
   /** List the inputs (after the permission); announce a chosen input that disappeared. */
@@ -474,25 +485,125 @@ export function createMeasureUi(svc) {
     refreshInputs();
   }
 
+  // ---------------------------------------------------------------- TEST CONTEXT (W7b)
+  function microphoneAvailable() {
+    return hasMicrophoneApi(typeof navigator !== 'undefined' ? navigator : null);
+  }
+
+  /** Keep `?measure=loopback` in the address in step with the choice made in the page. */
+  function syncContextUrl(on) {
+    try {
+      const url = new URL(window.location.href);
+      if ((url.searchParams.get('measure') === 'loopback') === on) return;
+      if (on) url.searchParams.set('measure', 'loopback');
+      else url.searchParams.delete('measure');
+      window.history.replaceState(window.history.state, '', url.href);
+    } catch (e) { /* no window (unit tests), or an address the browser does not rewrite */ }
+  }
+
+  /**
+   * Enter or leave TEST CONTEXT, the digital loopback (ledger W7b, ADR 0052): the one
+   * transition behind the Input device choice and the seam's useLoopback / useMicrophone. The
+   * caller has checked that nothing runs.
+   *
+   * Nothing made on one side is read as the other side's. In both directions the input check
+   * (the input facts a level calibration binds to), a captured reference reading and the live
+   * RTA end. Leaving also clears what was produced in TEST CONTEXT: its result (a saved
+   * experiment of it stays in Experiments, labelled) and a level calibration stored in it. A
+   * result measured with a real input stays, on either side, as what it is; when it is
+   * COMPLETE its engine stays too, so that it can still be saved (ensureEngine replaces the
+   * engine at the next check or measurement).
+   *
+   * Returns what leaving cleared, in words ([] when entering, or when there was nothing).
+   */
+  function setTestContext(cmp, on) {
+    const m = cmp.meas;
+    const cleared = [];
+    stopLive();
+    if (!on) {
+      if (ctx.result && ctx.result.testContext) {
+        cleared.push(m.saved ? 'the TEST CONTEXT result shown (its saved experiment is kept)'
+          : 'the unsaved TEST CONTEXT result');
+        ctx.result = null;
+        ctx.evidence = null;
+        ctx.save = null;
+        if (ctx.shown && ctx.shown.kind === 'result') ctx.shown = null;
+        m.saved = false;
+        m.savedId = null;
+        m.savedAnnotation = null;
+        m.savedName = null;
+      }
+      if (ctx.levelCal && ctx.levelCalTest) {
+        cleared.push('the level calibration stored in TEST CONTEXT');
+        clearLevelCalibration(m);
+      }
+      if (ctx.inputNow || ctx.preflight) cleared.push('the input check');
+    }
+    // A stored noise-check snapshot (its peak hold spans checks) goes with its result.
+    if (ctx.rta && ctx.rta.result !== ctx.result) ctx.rta = null;
+    ctx.inputNow = null;
+    ctx.preflight = null;
+    ctx.noise = null;
+    ctx.progress = null;
+    ctx.error = null;
+    ctx.reference = null;
+    m.levelForm.reading = null;
+    ctx.loopback = !!on;
+    m.loopback = !!on;
+    m.rtaLive.available = !!on || microphoneAvailable();
+    if (ctx.me && ctx.me.state === S.READY) ctx.me.reset(); // releases the checked input
+    if (!(ctx.me && ctx.me.state === S.COMPLETE && ctx.result)) {
+      disposeEngine();
+      ctx.bar = initialQualityBar();
+      ctx.said = initialAnnouncements();
+    }
+    renderInputs();
+    refresh();
+    rebuildAll();
+    return cleared;
+  }
+
   function selectInput(cmp, raw) {
     const value = typeof raw === 'string' ? raw : '';
-    if (ctx.loopback) return false;
-    if (value === (ctx.deviceId || '')) return true;
+    const toTest = value === TEST_CONTEXT_INPUT_VALUE;
+    if (toTest ? ctx.loopback : !ctx.loopback && value === (ctx.deviceId || '')) return true;
     if (cmp.meas.busy || ctx.refCapture || ctx.pending) {
       cmp.notify('warning', 'Input not changed', 'A measurement or a reference capture is using '
         + 'the input; stop it before choosing another input.');
       renderInputs(); // the select shows the input still in use
       return false;
     }
+    if (toTest) {
+      setTestContext(cmp, true);
+      syncContextUrl(true);
+      announce({ politeness: 'polite', text: 'TEST CONTEXT: digital loopback, no microphone and '
+        + 'no acoustic path. Results test the software, not a physical setup.' });
+      return true;
+    }
     const opt = cmp.meas.input.options.find((o) => o.value === value);
-    if (!opt) {
+    if (!opt || opt.testContext) {
       renderInputs();
       return false;
+    }
+    const label = value ? opt.label.replace(/ — not available$/, '') : null;
+    if (ctx.loopback) {
+      ctx.deviceId = value || null;
+      ctx.deviceLabel = label;
+      const cleared = setTestContext(cmp, false);
+      syncContextUrl(false);
+      const what = cleared.length ? ` Cleared: ${cleared.join('; ')}.` : '';
+      announce({ politeness: 'polite', text: `Left TEST CONTEXT. Input: ${label
+        || 'default input'}.${what} Run the setup check for this input.` });
+      if (cleared.length) {
+        cmp.notify('info', 'Left TEST CONTEXT', 'Cleared, so that nothing from the digital '
+          + `loopback is read as this input's: ${cleared.join('; ')}.`);
+      }
+      return true;
     }
     stopLive(); // the live RTA listens to the previous input
     if (ctx.me && ctx.me.state === S.READY) ctx.me.reset(); // releases the checked input
     ctx.deviceId = value || null;
-    ctx.deviceLabel = value ? opt.label.replace(/ — not available$/, '') : null;
+    ctx.deviceLabel = label;
     ctx.inputNow = null; // a level calibration is checked against the new input first (M3)
     ctx.preflight = null;
     renderInputs();
@@ -1303,8 +1414,8 @@ export function createMeasureUi(svc) {
       normAvail: { none: { ok: true, reason: null }, '1k': { ok: true, reason: null },
         band: { ok: true, reason: null } },
       rtaLive: { running: false, starting: false, error: null, kind: null,
-        available: !!svc.loopback || hasMicrophoneApi(typeof navigator !== 'undefined'
-          ? navigator : null), unavailableText: MIC_UNAVAILABLE_TEXT },
+        available: !!svc.loopback || microphoneAvailable(),
+        unavailableText: MIC_UNAVAILABLE_TEXT },
       response: null,
       ir: null,
       rta: null,
@@ -1317,8 +1428,7 @@ export function createMeasureUi(svc) {
       levelForm: { referenceHz: '1000', referenceDb: '94', observedDb: '', conditions: '',
         error: '', manual: false, capturing: false, reading: null },
       calImport: null,
-      input: { options: [], selected: '', missing: false, message: null, status: '',
-        disabled: true },
+      input: { options: [], selected: '', missing: false, message: null, status: '' },
       recipeLink: '',
       recipeLinkErrors: [],
       definition: null,      // { text, conditions, differs } of the loaded definition
@@ -1867,6 +1977,7 @@ export function createMeasureUi(svc) {
           input,
         });
         ctx.levelCal = cal;
+        ctx.levelCalTest = ctx.loopback;
         this.meas.cal.level = { referenceHz: cal.referenceHz, referenceDb: cal.referenceDbSpl,
           observedDb: cal.observedDbRelative, offsetDb: cal.offsetDb, conditions: cal.conditions,
           method: cal.method, bound: isBoundLevelCalibration(cal),
@@ -1884,10 +1995,7 @@ export function createMeasureUi(svc) {
       }
     },
     measureClearLevelCalibration() {
-      ctx.levelCal = null;
-      this.meas.cal.level = null;
-      this.meas.cal.useLevel = false;
-      this.meas.cal.levelVoid = null;
+      clearLevelCalibration(this.meas);
       refresh();
       rebuildAll();
     },
@@ -2103,13 +2211,20 @@ export function createMeasureUi(svc) {
     // ------------------------------------------------------------------ test seam
     // window.OSCILLA.measure (ADR 0052). Every member is one of three kinds: it OBSERVES (the
     // getters, counts(), liveRta()); it DRIVES an action a user already has, through the user's
-    // validation (useLoopback = ?measure=loopback, useMicrophone, setValues = a recipe link); or
-    // it INJECTS, and then only as TEST CONTEXT: setInputNow only while the page is in loopback,
-    // showResult only a result that carries a testContext. Open (ledger W7f): an injected input
-    // survives useMicrophone(), and showResult adopts result.input outside loopback. The key
-    // list is pinned by tests/browser/app.cjs `seam-surface-pinned`.
+    // validation (useLoopback and useMicrophone = the TEST CONTEXT choice of the Input device
+    // list, setValues = a recipe link); or it INJECTS, and then only as TEST CONTEXT:
+    // setInputNow only while the page is in loopback, showResult only a result that carries a
+    // testContext. Leaving TEST CONTEXT clears an injected input (W7b). Open (ledger W7f):
+    // showResult adopts result.input outside loopback. The key list is pinned by
+    // tests/browser/app.cjs `seam-surface-pinned`.
     measureTestSeam() {
       const self = this;
+      const newEngine = () => {
+        stopLive();
+        disposeEngine();
+        renderInputs();
+        refresh();
+      };
       return {
         get state() { return ctx.me ? ctx.me.state : S.IDLE; },
         get engine() { return ctx.me; },
@@ -2117,26 +2232,22 @@ export function createMeasureUi(svc) {
         get ioKind() { return ctx.ioKind; },
         get result() { return ctx.result; },
         get history() { return ctx.me ? ctx.me.history.map((h) => h.to) : []; },
-        /** TEST CONTEXT: replace the microphone with a known synthetic system. */
+        /**
+         * Drive: enter TEST CONTEXT, as the Input device choice does (setTestContext); `system`
+         * replaces the synthetic system. Already in it: a new engine, nothing else changes.
+         */
         useLoopback(system = null) {
           if (ctx.me && isActiveState(ctx.me.state)) return false;
-          stopLive();
-          disposeEngine();
-          ctx.loopback = true;
           if (system) ctx.loopbackSystem = system;
-          self.meas.loopback = true;
-          renderInputs();
-          refresh();
+          if (!ctx.loopback) setTestContext(self, true);
+          else newEngine();
           return true;
         },
+        /** Drive: leave TEST CONTEXT, as choosing an input does: what was made in it is cleared. */
         useMicrophone() {
           if (ctx.me && isActiveState(ctx.me.state)) return false;
-          stopLive();
-          disposeEngine();
-          ctx.loopback = false;
-          self.meas.loopback = false;
-          renderInputs();
-          refresh();
+          if (ctx.loopback) setTestContext(self, false);
+          else newEngine();
           return true;
         },
         /**

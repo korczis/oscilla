@@ -18,16 +18,24 @@
 //     INPUT_DEVICE_UNAVAILABLE_TEXT) until the user chooses another input or the default.
 //   - The raw deviceId lives only in the page (the option values); experiments store it hashed
 //     (experiments/schema.js normalizeInput, calibration/device-id.js).
+//   - TEST CONTEXT is a choice of this list (ledger W7b, ADR 0052): the last option, "TEST
+//     CONTEXT · digital loopback (no microphone)", is the same as `?measure=loopback`. It is
+//     not a device: it is selected while the loopback is on, choosing any input leaves it, and
+//     it needs no microphone, so the choice stays enabled where the browser offers none.
 //
 //   inputDeviceList(devices) -> [{ id, label, labelExposed }]
 //   inputDeviceView({ devices, selectedId, selectedLabel, enumerated, loopback, available })
-//     -> { options: [{ value, label, missing }], selected, missing, message, status, disabled }
+//     -> { options: [{ value, label, missing, testContext? }], selected, missing, message,
+//          status }
 
 export const DEFAULT_INPUT_VALUE = '';
 export const DEFAULT_INPUT_LABEL = 'Default input (chosen by the browser and system)';
 /** Chromium's aliases of real inputs; not separate devices. */
 export const PSEUDO_INPUT_IDS = Object.freeze(['default', 'communications']);
 export const INPUT_LIST_LIMIT = 32;
+/** The option value of TEST CONTEXT; never a deviceId (a device with this id is not listed). */
+export const TEST_CONTEXT_INPUT_VALUE = 'oscilla:test-context';
+export const TEST_CONTEXT_INPUT_LABEL = 'TEST CONTEXT · digital loopback (no microphone)';
 
 const clean = (s) => String(s || '').replace(/[\s\x00-\x1f\x7f]+/g, ' ').trim().slice(0, 120);
 
@@ -38,7 +46,8 @@ export function inputDeviceList(devices) {
   for (const d of Array.isArray(devices) ? devices : []) {
     if (!d || d.kind !== 'audioinput') continue;
     const id = typeof d.deviceId === 'string' ? d.deviceId : '';
-    if (!id || PSEUDO_INPUT_IDS.includes(id) || seen.has(id)) continue;
+    if (!id || PSEUDO_INPUT_IDS.includes(id) || id === TEST_CONTEXT_INPUT_VALUE
+      || seen.has(id)) continue;
     seen.add(id);
     const label = clean(d.label);
     out.push({ id, label: label || `Input ${out.length + 1} (label not exposed by the browser)`,
@@ -52,20 +61,27 @@ export function inputDeviceList(devices) {
 export function inputDeviceView({ devices = [], selectedId = null, selectedLabel = null,
   enumerated = false, loopback = false, available = true } = {}) {
   const list = inputDeviceList(devices);
-  const selected = selectedId || DEFAULT_INPUT_VALUE;
+  // While TEST CONTEXT is on, the input chosen before it is remembered, not in use.
+  const selected = loopback ? TEST_CONTEXT_INPUT_VALUE : selectedId || DEFAULT_INPUT_VALUE;
   const options = [{ value: DEFAULT_INPUT_VALUE, label: DEFAULT_INPUT_LABEL, missing: false },
     ...list.map((d) => ({ value: d.id, label: d.label, missing: false }))];
-  const missing = !!selectedId && enumerated && !list.some((d) => d.id === selectedId);
+  const gone = !!selectedId && enumerated && !list.some((d) => d.id === selectedId);
+  const missing = gone && !loopback;
   const name = clean(selectedLabel) || 'The selected input';
   const who = clean(selectedLabel) ? `"${clean(selectedLabel)}"` : 'The selected input';
   if (selectedId && !list.some((d) => d.id === selectedId)) {
-    options.push({ value: selectedId, label: missing ? `${name} — not available` : name,
-      missing });
+    options.push({ value: selectedId, label: gone ? `${name} — not available` : name,
+      missing: gone });
   }
+  options.push({ value: TEST_CONTEXT_INPUT_VALUE, label: TEST_CONTEXT_INPUT_LABEL,
+    missing: false, testContext: true });
   let status;
-  if (loopback) status = 'TEST CONTEXT loopback: no input device is used.';
-  else if (!available) status = 'This browser offers no microphone input here.';
-  else if (!enumerated) {
+  if (loopback) {
+    status = 'TEST CONTEXT loopback: no input device is used. Choose an input to leave TEST '
+      + 'CONTEXT; what was measured in it is cleared.';
+  } else if (!available) {
+    status = 'This browser offers no microphone input here; TEST CONTEXT needs none.';
+  } else if (!enumerated) {
     status = 'Run the setup check to list the inputs (the browser shows them only after the '
       + 'microphone permission); until then the default input is used.';
   } else if (!list.length) status = 'The browser lists no input besides the default.';
@@ -77,6 +93,5 @@ export function inputDeviceView({ devices = [], selectedId = null, selectedLabel
     message: missing ? `${who} is no longer available (unplugged or disabled). Choose another `
       + 'input or the default input; nothing is switched for you.' : null,
     status,
-    disabled: !!loopback || !available,
   };
 }
