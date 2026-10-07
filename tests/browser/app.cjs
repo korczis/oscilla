@@ -491,8 +491,26 @@ function defineChecks() {
       return { input: m.inputNow ? 'known' : null, indicator: a.measureCalIndicator,
         levels: a.measureLevelsText, void: a.meas.cal.levelVoid,
         pending: !!a.meas.cal.levelPending, stored: !!c, conditions: c ? c.conditions : null,
-        state: a.measureLevelStateText, testContext: !!a.meas.loopback };
+        state: a.measureLevelStateText, testContext: !!a.meas.loopback,
+        // Every other place the page states a level: the Calibration step and the views.
+        step: a.meas.flow.steps.find((s) => s.id === 'calibration').detail,
+        title: a.meas.shownTitle,
+        rta: a.meas.rta ? { badges: a.meas.rta.badges.slice(), yLabel: a.meas.rta.yLabel } : null,
+        response: a.meas.response ? { badges: a.meas.response.badges.slice(),
+          yLabel: a.meas.response.yLabel } : null };
     });
+    /** A view that exists and claims no absolute level. */
+    const relative = (view) => !!view && !view.badges.includes('CALIBRATED')
+      && !/dB SPL/.test(view.yLabel);
+    /** Check setup on the microphone; resolves when the check has ended. */
+    const checkMicrophone = async (what) => {
+      await inPage(() => { window.OSCILLA.app.measureCheck(); }); // the poll below is the wait
+      return until(() => inPage(() => {
+        const m = window.OSCILLA.measure;
+        return ['READY', 'INVALID', 'ERROR'].includes(m.state)
+          ? { state: m.state, kind: m.ioKind, input: m.inputNow ? 'known' : null } : null;
+      }), { ms: 15000, what });
+    };
     /** Type a reading by hand and press Store; resolves to the verdict and the state after. */
     const typeReading = async (conditions = '') => {
       const tried = await p.evaluate((text) => {
@@ -537,6 +555,8 @@ function defineChecks() {
         window.__oscResult = window.OSCILLA.measure.result;
         return window.OSCILLA.measure.useMicrophone();
       });
+      // Nothing shown in TEST CONTEXT stays on the microphone page (review of #169).
+      res.afterLeaving = await now();
       res.afterCheck = await typeReading();
       // ... and with an input injected in TEST CONTEXT.
       res.injected = await inPage((input) => {
@@ -568,12 +588,15 @@ function defineChecks() {
         setup: res.setup.loopback === true && res.setup.values === true,
         ran: res.run.state === 'COMPLETE' && res.run.input === 'known' && res.run.testContext,
         routeACheck: res.leftLoopback === true && refused(res.afterCheck),
+        nothingLeftBehind: res.afterLeaving.title === null && res.afterLeaving.rta === null
+          && res.afterLeaving.response === null,
         routeAInject: res.injected.loopback && res.injected.set === true && res.injected.known
           && res.injected.left === true && refused(res.afterInject),
         routeB: res.shown.ok === true && res.shown.title === 'TEST CONTEXT result'
           && refused(res.afterShow),
         inContext: res.inContext.set === true && res.typedInContext.saved === true
-          && res.typedInContext.indicator === 'CALIBRATED' && res.typedInContext.testContext,
+          && res.typedInContext.indicator === 'CALIBRATED' && res.typedInContext.testContext
+          && /level CALIBRATED$/.test(res.typedInContext.step),
         labelled: /^TEST CONTEXT: .* calibrator on the capsule$/
           .test(res.typedInContext.conditions || '')
           && /^TEST CONTEXT reference reading stored/.test(res.typedInContext.state),
@@ -581,20 +604,38 @@ function defineChecks() {
           && res.outside.indicator === 'UNCALIBRATED' && !res.outside.pending
           && /^UNCALIBRATED: the level calibration was made in TEST CONTEXT/
             .test(res.outside.void || '')
-          && res.outsideText === 'Level UNCALIBRATED',
+          && res.outsideText === 'Level UNCALIBRATED'
+          && /level relative \(dBFS-like\)$/.test(res.outside.step),
       };
       // With a fake microphone: the checked microphone is the one input a reading binds to,
       // and that calibration does not apply in TEST CONTEXT.
       if (FAKE_MIC.has(browserName) && origin === 'http') {
         await inPage(() => window.OSCILLA.app.measureClearLevelCalibration());
-        // Check setup, on the microphone (not awaited: the poll below is the wait).
-        await inPage(() => { window.OSCILLA.app.measureCheck(); });
-        res.micCheck = await until(() => inPage(() => {
+        res.micCheck = await checkMicrophone('the microphone setup check ends');
+        // The third sequence: a reading typed in TEST CONTEXT for an injected input with the
+        // checked microphone's own binding, then a real check of that microphone. The binding
+        // matches field for field; the calibration still does not apply.
+        res.sameBinding = await inPage(() => {
           const m = window.OSCILLA.measure;
-          return ['READY', 'INVALID', 'ERROR'].includes(m.state)
-            ? { state: m.state, kind: m.ioKind, input: m.inputNow ? 'known' : null } : null;
-        }), { ms: 15000, what: 'the microphone setup check ends' });
+          const input = JSON.parse(JSON.stringify(m.inputNow));
+          const left = m.setValues({ repeats: 1 }); // an edit: the READY check is reset
+          return { left, loopback: m.useLoopback(), set: m.setInputNow(input) };
+        });
+        res.typedSameBinding = await typeReading('same binding, typed in TEST CONTEXT');
+        res.backForCheck = await inPage(() => window.OSCILLA.measure.useMicrophone());
+        res.micCheckAgain = await checkMicrophone('the second microphone setup check ends');
+        res.afterRealCheck = await now();
+        await inPage(() => window.OSCILLA.app.measureClearLevelCalibration());
         res.micTyped = await typeReading('on the microphone');
+        // A TEST CONTEXT result shown on the microphone page, with a microphone calibration
+        // stored and its input checked: the result's views never take that calibration ...
+        res.shownChecked = await inPage(() => window.OSCILLA.measure
+          .showResult({ ...window.__oscResult, input: null }));
+        res.afterShownChecked = await now();
+        // ... nor, once the result has named its own (TEST CONTEXT) input, a pending one (P1).
+        res.shownPending = await inPage(() => window.OSCILLA.measure
+          .showResult({ ...window.__oscResult }));
+        res.afterShownPending = await now();
         res.intoLoopback = await inPage(() => window.OSCILLA.measure.useLoopback());
         res.micCalInLoopback = await now();
         res.backOnMic = await inPage(() => window.OSCILLA.measure.useMicrophone());
@@ -609,7 +650,28 @@ function defineChecks() {
           && /^UNCALIBRATED: the level calibration was taken with a microphone/
             .test(res.micCalInLoopback.void || '');
         v.micCalPendingAgain = res.backOnMic === true && res.micCalUnchecked.input === null
-          && res.micCalUnchecked.indicator === 'PENDING INPUT CHECK';
+          && res.micCalUnchecked.indicator === 'PENDING INPUT CHECK'
+          && /level pending input check$/.test(res.micCalUnchecked.step);
+        v.thirdSequence = res.sameBinding.left === true && res.sameBinding.loopback === true
+          && res.sameBinding.set === true && res.typedSameBinding.saved === true
+          && res.typedSameBinding.indicator === 'CALIBRATED' && res.backForCheck === true
+          && res.micCheckAgain.state === 'READY' && res.micCheckAgain.kind === 'microphone'
+          && res.afterRealCheck.input === 'known' && res.afterRealCheck.stored
+          && res.afterRealCheck.indicator === 'UNCALIBRATED'
+          && /^UNCALIBRATED: the level calibration was made in TEST CONTEXT/
+            .test(res.afterRealCheck.void || '')
+          && /level relative \(dBFS-like\)$/.test(res.afterRealCheck.step);
+        v.testResultNeverTakesMicCal = res.shownChecked === true
+          && res.afterShownChecked.title === 'TEST CONTEXT result'
+          && res.afterShownChecked.input === 'known'
+          && res.afterShownChecked.indicator === 'CALIBRATED'
+          && relative(res.afterShownChecked.rta) && relative(res.afterShownChecked.response);
+        v.pendingIsRelative = res.shownPending === true
+          && res.afterShownPending.title === 'TEST CONTEXT result'
+          && res.afterShownPending.input === null
+          && res.afterShownPending.indicator === 'PENDING INPUT CHECK'
+          && /level pending input check$/.test(res.afterShownPending.step)
+          && relative(res.afterShownPending.rta) && relative(res.afterShownPending.response);
       } else {
         res.microphone = 'not run: no fake microphone on this browser and origin';
       }

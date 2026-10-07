@@ -185,6 +185,103 @@ test('W7c: a level calibration typed by hand in TEST CONTEXT is labelled as one'
   assert.match(seam.levelCalibration.conditions, /^TEST CONTEXT: [^ ].*[^ ]$/);
 });
 
+// ================================================================= review of #169, round 1
+
+const calStep = (cmp) => cmp.meas.flow.steps.find((s) => s.id === 'calibration').detail;
+/** No display of `view` (meas.rta, meas.response) claims an absolute level. */
+function assertRelative(view, where) {
+  assert.ok(view, `${where}: the view exists`);
+  assert.ok(!view.badges.includes('CALIBRATED'), `${where}: no CALIBRATED badge`);
+  assert.doesNotMatch(view.yLabel, /dB SPL/, `${where}: the axis is not dB SPL`);
+}
+
+test('P1 of #169: a level calibration whose input is not checked is in no display', async () => {
+  // The reviewer's sequence: a calibration stored for a checked input, the input no longer
+  // known, then a result shown. The indicator says PENDING INPUT CHECK and "until then levels
+  // are relative"; the RTA of the result's noise check said CALIBRATED / dB SPL.
+  const { a } = await fx();
+  const { cmp, seam } = makeUi({ loopback: true });
+  seam.setInputNow(MIC_A);
+  typeReading(cmp);
+  assert.equal(cmp.measureSaveLevelCalibration(), true);
+  seam.setInputNow(null);
+  assert.equal(seam.showResult({ ...a.result, input: null }), true);
+  assert.equal(seam.inputNow, null);
+  assert.equal(cmp.measureCalIndicator, 'PENDING INPUT CHECK');
+  assert.equal(cmp.measureLevelsText, 'relative until the input is checked');
+  assertRelative(cmp.meas.rta, 'noise-check RTA, input not checked');
+  assertRelative(cmp.meas.response, 'response, input not checked');
+  // Checked again, the same calibration is displayed.
+  seam.setInputNow(MIC_A);
+  seam.showResult({ ...a.result, input: null });
+  assert.equal(cmp.measureCalIndicator, 'CALIBRATED');
+  assert.ok(cmp.meas.rta.badges.includes('CALIBRATED'));
+  assert.match(cmp.meas.rta.yLabel, /dB SPL/);
+});
+
+test('P2 of #169: the Calibration step says CALIBRATED only for a checked input', () => {
+  const { cmp, seam } = makeUi({ loopback: true });
+  assert.match(calStep(cmp), /level relative \(dBFS-like\)$/);
+  seam.setInputNow(MIC_A);
+  typeReading(cmp);
+  assert.equal(cmp.measureSaveLevelCalibration(), true);
+  assert.equal(cmp.measureCalIndicator, 'CALIBRATED');
+  assert.match(calStep(cmp), /level CALIBRATED$/);
+  seam.setInputNow(null);
+  assert.equal(cmp.measureCalIndicator, 'PENDING INPUT CHECK');
+  assert.match(calStep(cmp), /level pending input check$/);
+  assert.doesNotMatch(calStep(cmp), /CALIBRATED$/);
+  // Made in the other context: never "level CALIBRATED" either.
+  seam.useMicrophone();
+  assert.equal(cmp.measureCalIndicator, 'UNCALIBRATED');
+  assert.match(calStep(cmp), /level relative \(dBFS-like\)$/);
+});
+
+test('P2 of #169: leaving a context drops the result and the noise-check snapshot shown in it',
+  async () => {
+    const { a } = await fx();
+    const { cmp, seam } = makeUi({ loopback: true });
+    assert.equal(seam.showResult({ ...a.result }), true);
+    assert.equal(cmp.meas.shownTitle, 'TEST CONTEXT result');
+    assert.ok(cmp.meas.rta, 'the noise-check snapshot is in the RTA panel');
+    // The same context again keeps it.
+    assert.equal(seam.useLoopback(), true);
+    assert.equal(cmp.meas.shownTitle, 'TEST CONTEXT result');
+    assert.ok(cmp.meas.rta);
+    // On the microphone nothing of TEST CONTEXT is left to read as a measurement.
+    assert.equal(seam.useMicrophone(), true);
+    assert.equal(seam.result, null);
+    assert.equal(cmp.meas.shownTitle, null);
+    assert.equal(cmp.meas.testContext, null);
+    assert.equal(cmp.meas.rta, null, 'no TEST CONTEXT snapshot without its label');
+    assert.equal(cmp.meas.response, null);
+    assert.equal(await cmp.measureSave(), null);
+  });
+
+test('P2 of #169: the conditions field takes what Store accepts, with the TEST CONTEXT label',
+  () => {
+    const outside = makeUi({ loopback: false });
+    assert.equal(outside.cmp.measureLevelConditionsMax, 2000, 'no label on the microphone');
+    const { cmp, seam } = makeUi({ loopback: true });
+    seam.setInputNow(MIC_A);
+    typeReading(cmp);
+    const max = cmp.measureLevelConditionsMax;
+    assert.ok(Number.isInteger(max) && max > 1500 && max < 2000, `max ${max}`);
+    // The longest text the field takes is stored whole, behind the label.
+    cmp.meas.levelForm.conditions = 'x'.repeat(max);
+    assert.equal(cmp.measureSaveLevelCalibration(), true, cmp.meas.levelForm.error);
+    const stored = seam.levelCalibration.conditions;
+    assert.equal(stored.length, 2000);
+    assert.match(stored, /^TEST CONTEXT: /);
+    assert.ok(stored.endsWith(` ${'x'.repeat(max)}`), 'the conditions as typed');
+    // One more is refused with the limit that applies, never cut short silently.
+    cmp.measureClearLevelCalibration();
+    cmp.meas.levelForm.conditions = 'x'.repeat(max + 1);
+    assert.equal(cmp.measureSaveLevelCalibration(), false);
+    assert.match(cmp.meas.levelForm.error, new RegExp(`at most ${max} characters in TEST CONTEXT`));
+    assert.equal(seam.levelCalibration, null);
+  });
+
 // ================================================================= inject: showResult
 
 test('inject: a result without a testContext is refused, never shown or saved as a measurement',
