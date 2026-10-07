@@ -39,6 +39,15 @@
 //                     modified click is left to the browser
 //   anchor            the skip link moves focus to the main region with no history entry and the
 //                     address unchanged
+//   space-one-meaning  (ledger W5, ADR 0049) Space with nothing focused does what the workspace
+//                     in view owns, and nothing else: the instrument's Hold to Play in the six
+//                     instrument workspaces, the Studio transport in Studio, nothing at all in
+//                     Measure, Experiments, Learn, Presets and About; a focused link in Studio
+//                     keeps Space (nothing starts)
+//   one-shortcut-dialog  (W5) one dialog lists shortcuts: Help, the overflow menu and Studio's
+//                     keyboard button open the same dialog, which names the Space meaning of the
+//                     workspace in view and lists that workspace's keys (Studio: its table and
+//                     the timeline keys) and the global ones
 //   no-console-errors
 'use strict';
 const { spawn } = require('node:child_process');
@@ -692,6 +701,113 @@ function defineChecks() {
       focused: after.focus === 'osc-main',
     }), before: { hash: before.hash, length: before.length },
     after: { hash: after.hash, length: after.length, focus: after.focus } };
+  });
+
+  // W5 / ADR 0049: what Space (nothing focused) starts in each workspace.
+  const SPACE_EXPECTED = { playground: 'instrument', measure: 'none', experiments: 'none',
+    analyzer: 'instrument', filter: 'instrument', compare: 'instrument', synthesis: 'instrument',
+    sequencer: 'instrument', presets: 'none', learn: 'none', studio: 'studio', about: 'none' };
+  const sounding = (page) => page.evaluate(() => ({ instrument: !!window.OSCILLA.app.playing,
+    studio: !!window.OSCILLA.app.studio.playing }));
+  const heardOf = (v) => (v.instrument && v.studio ? 'both'
+    : v.instrument ? 'instrument' : v.studio ? 'studio' : 'none');
+  /** Press Space at `focus` ('body' or a selector) and report what started, then stop it. */
+  const pressSpace = async (page, focus) => {
+    if (focus === 'body') {
+      await page.evaluate(() => {
+        const a = document.activeElement;
+        if (a && a !== document.body && a.blur) a.blur();
+      });
+    } else {
+      await page.focus(focus);
+    }
+    await page.keyboard.down(' ');
+    const v = await H.until(() => sounding(page), (x) => x.instrument || x.studio, 1200);
+    await page.keyboard.up(' ');
+    await page.evaluate(() => {
+      const a = window.OSCILLA.app;
+      a.stopNow();
+      if (a.studio.playing) a.studioStop();
+    });
+    await H.until(() => sounding(page), (x) => !x.instrument && !x.studio, 3000);
+    return { heard: heardOf(v), focus: await page.evaluate(() => {
+      const a = document.activeElement;
+      return a ? (a.dataset.osc || a.id || a.tagName) : null;
+    }) };
+  };
+
+  def('space-one-meaning', async (ctx) => {
+    const page = await H.open(ctx, ctx.baseUrl);
+    // Releases are immediate; continuous playback only keeps a slow engine from hitting the
+    // hard limit inside the wait.
+    await page.evaluate(() => window.OSCILLA.app.setContinuous(true));
+    const got = {};
+    for (const ws of Object.keys(SPACE_EXPECTED)) {
+      await H.navTo(page, ws);
+      await sleep(100);
+      got[ws] = (await pressSpace(page, 'body')).heard;
+    }
+    await H.navTo(page, 'studio');
+    const onLink = await pressSpace(page, '[data-osc="nav.studio"]');
+    await page.evaluate(() => window.OSCILLA.app.setContinuous(false));
+    await page.close();
+    const wrong = Object.keys(SPACE_EXPECTED).filter((ws) => got[ws] !== SPACE_EXPECTED[ws]);
+    return { ...H.verdict({ everyWorkspace: wrong.length === 0,
+      focusedLinkKeepsSpace: onLink.heard === 'none' }), wrong, got, onLink };
+  });
+
+  def('one-shortcut-dialog', async (ctx) => {
+    const page = await H.open(ctx, ctx.baseUrl);
+    const lists = await page.evaluate(() => [...document.querySelectorAll('dialog')]
+      .filter((d) => d.querySelector('.osc-shortcuts')).map((d) => d.id));
+    const read = () => page.evaluate(() => {
+      const open = [...document.querySelectorAll('dialog[open]')];
+      const d = open[0];
+      const text = (sel) => {
+        const el = d && d.querySelector(sel);
+        return el ? el.textContent.replace(/\s+/g, ' ').trim() : null;
+      };
+      return { open: open.map((x) => x.id), title: text('[data-osc="help.title"]'),
+        space: text('[data-osc="help.space"] dd'),
+        rows: d ? [...d.querySelectorAll('[data-osc="help.workspace"] [data-osc-shortcut]')]
+          .map((x) => x.dataset.oscShortcut) : [],
+        global: d ? d.querySelectorAll('[data-osc="help.global"] [data-osc-shortcut]').length
+          : 0,
+        timeline: text('[data-osc="help.timeline"]') };
+    });
+    const openWith = async (sel, menu) => {
+      if (menu) await page.click(menu);
+      await page.click(sel);
+      await H.until(() => page.evaluate(() => !!document.querySelector('dialog[open]')), (v) => v);
+      await H.frames(page);
+      const r = await read();
+      await page.keyboard.press('Escape');
+      await H.until(() => page.evaluate(() => !document.querySelector('dialog[open]')), (v) => v);
+      return r;
+    };
+    const play = await openWith('[data-osc="header.help"]');
+    await H.navTo(page, 'studio');
+    const studio = await openWith('[data-osc="studio.keys"]');
+    const studioHelp = await openWith('[data-osc="header.help"]');
+    await H.navTo(page, 'measure');
+    const measure = await openWith('[data-osc="header.shortcuts"]', '[data-osc="header.overflow"]');
+    await page.close();
+    const same = [play, studio, studioHelp, measure].every((r) => r.open.length === 1
+      && r.open[0] === 'osc-dlg-help' && r.global > 0);
+    return { ...H.verdict({
+      oneDialog: lists.length === 1 && lists[0] === 'osc-dlg-help',
+      sameDialog: same,
+      playground: play.title === 'Playground' && /^Hold to play/.test(play.space || '')
+        && play.rows.includes('trigger') && !play.rows.includes('quick-add')
+        && play.timeline === null,
+      studio: studio.title === 'Studio' && studio.space === 'Play / stop the Studio transport'
+        && ['quick-add', 'connect', 'find', 'undo'].every((k) => studio.rows.includes(k))
+        && !studio.rows.includes('trigger') && /^Space play or stop/.test(studio.timeline || ''),
+      studioViaHelp: JSON.stringify(studioHelp) === JSON.stringify(studio),
+      measure: measure.title === 'Measure' && /^Nothing/.test(measure.space || '')
+        && measure.rows.includes('measure-abort') && !measure.rows.includes('trigger')
+        && !measure.rows.includes('quick-add'),
+    }), lists, play, studio, measure };
   });
 
   def('no-console-errors', async (ctx) => ({ ok: ctx.errors.length === 0,
