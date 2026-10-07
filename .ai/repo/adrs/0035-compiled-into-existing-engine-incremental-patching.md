@@ -167,3 +167,21 @@ An adversarial review of that change (PR #119) sharpened both:
   transaction retries it) or is removed, `commit-failed` until STOP, and the divergence verdict
   of the applied revision is `degraded` meanwhile. The commit's own bookkeeping (trace steps,
   the cleanup timer) moved inside the guarded region.
+
+### 2026-10-07: an edit that changes no execution state is no transaction (ledger R9)
+
+"Edits are applied as a diff between the previous and the new model" was implemented as: every
+committed edit compiles the new model, diffs the plans and runs the transaction, even when the
+diff is empty. While playing, a node moved or renamed, a marker or the Studio title so paid a
+whole compile, an empty transaction and a timeline re-plan through the commit gate. The decision
+stands; the empty case is now recognised before the compile. `schema.js` `sameExecutionState`
+says that the new model has the execution state of the applied plan's model (what `studioHash`
+covers), and `runtime.apply`, while running, then takes the revision without compiling or
+transacting; the transport adopts the model and re-plans nothing. A change of capabilities
+(`setOptions`), a changed owned-parameter peak and every apply while stopped still compile. The
+plan keeps the model it was compiled from: node names reach only its display reasons.
+
+Proven by `tests/unit/v4-presentation-edits.test.mjs` (zero compiles and zero Web Audio writes
+for each presentation edit while playing, exactly one compile for a parameter edit; it fails on
+the code before the change) and `presentation-edit` in `tests/browser/v31-studio-runtime.cjs`
+(a node dragged while the Basic Tone plays: no compile, no glitch on the output).
