@@ -7,7 +7,8 @@
 //             calibration: { frequency, level } | null, result (engine result | null),
 //             progress (engine.progress() | last progress event | null), saved = false,
 //             expert = false, noise (engine 'noise' event | result.noise | null),
-//             error ({ code, message } | null) }
+//             error ({ code, message } | null), levelChecked = true (false: calibration.level
+//             waits for its input check, and the Calibration step says so) }
 //     Step = { id, n, label, status: 'todo'|'current'|'done'|'blocked'|'warn', detail,
 //              reasons: [{ code, text }] }
 //   The seven steps of §77: input, calibration, noise check, stimulus, measure, review, save.
@@ -181,7 +182,7 @@ function levelName(level) {
 export function measureFlow(ctx = {}) {
   const {
     state = S.IDLE, preflight = null, recipe = null, calibration = null, result = null,
-    progress = null, saved = false, expert = false, error = null,
+    progress = null, saved = false, expert = false, error = null, levelChecked = true,
   } = ctx;
   const noise = ctx.noise || (result && result.noise) || null;
   const blockers = preflight && Array.isArray(preflight.blockers) ? preflight.blockers : [];
@@ -229,7 +230,9 @@ export function measureFlow(ctx = {}) {
     const detail = b.length ? b[0].text : [
       freq ? `frequency profile "${freq.name || UNAVAILABLE.UNKNOWN}"`
         : `frequency ${UNAVAILABLE.UNCALIBRATED}`,
-      lvl ? 'level CALIBRATED' : 'level relative (dBFS-like)',
+      // A level calibration that waits for its input check is not CALIBRATED yet.
+      lvl ? (levelChecked ? 'level CALIBRATED' : 'level pending input check')
+        : 'level relative (dBFS-like)',
     ].join(', ');
     set('calibration', { complete: (!!preflight && !b.length) || measured,
       blocked: b.length > 0, warn: false,

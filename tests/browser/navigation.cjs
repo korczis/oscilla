@@ -47,6 +47,7 @@ const os = require('node:os');
 const path = require('node:path');
 const { pathToFileURL } = require('node:url');
 const suite = require('./lib/suite.cjs');
+const seam = require('./lib/measure-seam.cjs');
 
 const argv = process.argv.slice(2);
 const arg = (name, fallback) => {
@@ -232,11 +233,8 @@ const H = {
   /** A short TEST CONTEXT measurement in MEASURE, run to its end; resolves to its state. */
   complete: async (page) => {
     await H.navTo(page, 'measure');
-    await page.evaluate((values) => {
-      const m = window.OSCILLA.measure;
-      m.useLoopback({ type: 'biquad', filter: 'lowpass', frequency: 2000, Q: Math.SQRT1_2 });
-      m.setValues(values);
-    }, SHORT);
+    await seam.loopback(page, { values: SHORT,
+      system: { type: 'biquad', filter: 'lowpass', frequency: 2000, Q: Math.SQRT1_2 } });
     await page.click('#osc-measure-primary'); // Check setup
     await page.waitForFunction(() => ['READY', 'INVALID', 'ERROR']
       .includes(window.OSCILLA.measure.state), null, { timeout: RUN_MS, polling: 50 });
@@ -298,11 +296,8 @@ function defineChecks() {
   def('guard-measure', async (ctx) => {
     const page = await H.open(ctx, ctx.baseUrl);
     await H.navTo(page, 'measure');
-    await page.evaluate((values) => {
-      const m = window.OSCILLA.measure;
-      m.useLoopback({ type: 'biquad', filter: 'lowpass', frequency: 2000, Q: Math.SQRT1_2 });
-      m.setValues(values);
-    }, SHORT);
+    await seam.loopback(page, { values: SHORT,
+      system: { type: 'biquad', filter: 'lowpass', frequency: 2000, Q: Math.SQRT1_2 } });
     const idle = await H.state(page);
     const idleIndicator = await H.shown(page, '[data-osc="measure.unsaved"]');
     await page.click('#osc-measure-primary'); // Check setup
