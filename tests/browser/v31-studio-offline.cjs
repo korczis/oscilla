@@ -23,12 +23,14 @@ const os = require('node:os');
 const path = require('node:path');
 const { pathToFileURL } = require('node:url');
 const esbuild = require('esbuild');
-const playwright = require('playwright');
+const suite = require('./lib/suite.cjs');
 
 const argv = process.argv.slice(2);
 const i = argv.indexOf('--browsers');
-const BROWSERS = (i >= 0 && argv[i + 1] ? argv[i + 1]
-  : process.env.OSC_BROWSERS || 'chromium,firefox,webkit').split(',');
+const RUN = suite.open({ name: 'v31-studio-offline',
+  browsers: i >= 0 && argv[i + 1] ? argv[i + 1] : undefined });
+const playwright = RUN.playwright;
+const BROWSERS = RUN.browsers;
 const ENTRY = path.join(__dirname, 'fixtures', 'v31-studio-offline-entry.js');
 // Goertzel with a Hann window over 0.6 s (264 periods of 440 Hz) reads a steady sine's amplitude
 // to < 0.01 %; 1 % covers the engines' oscillator wavetables.
@@ -42,6 +44,7 @@ const HTML = (js) => `<!doctype html><html lang="en"><head><meta charset="utf-8"
 let failures = 0;
 let passes = 0;
 function check(key, name, ok, detail = '') {
+  RUN.tally(key);
   if (ok) passes += 1; else failures += 1;
   console.log(`  ${ok ? 'PASS' : 'FAIL'} [${key}] ${name}${detail ? ` — ${detail}` : ''}`);
 }
@@ -66,6 +69,7 @@ async function runOne(name, url) {
     check(name, 'no clipping', t.stats.clippedSamples === 0 && t.stats.peak <= MASTER * 1.01,
       JSON.stringify(t.stats));
     check(name, 'silent until the click-free start time',
+      // timing-allow: the offline render rate requested above (sampleRate: 48000)
       t.firstSample >= Math.floor(t.startTime * 48000), `${t.firstSample} / ${t.startTime}`);
     check(name, 'the end is faded out', t.tailMax < 1e-3, String(t.tailMax));
 
@@ -102,6 +106,7 @@ async function runOne(name, url) {
 }
 
 (async () => {
+  await RUN.ready();
   const r = await esbuild.build({ entryPoints: [ENTRY], bundle: true, format: 'iife',
     write: false, target: 'es2020', logLevel: 'silent' });
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'oscilla-v31-offline-'));
