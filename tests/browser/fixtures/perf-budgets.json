@@ -1,0 +1,137 @@
+{
+  "statistic": "median",
+  "unit": "ms",
+  "rule": {
+    "factor": 2,
+    "roundUpTo": 10
+  },
+  "measured": {
+    "startup": {
+      "chromium": {
+        "median": 287.7,
+        "min": 278.1,
+        "max": 312.1,
+        "n": 6
+      },
+      "firefox": {
+        "median": 735.5,
+        "min": 533,
+        "max": 1408,
+        "n": 6
+      },
+      "webkit": {
+        "median": 390,
+        "min": 352,
+        "max": 435,
+        "n": 6
+      }
+    },
+    "startupLibrary": {
+      "chromium": {
+        "median": 297.6,
+        "min": 274.7,
+        "max": 310.9,
+        "n": 6
+      },
+      "firefox": {
+        "median": 705.5,
+        "min": 509,
+        "max": 1222,
+        "n": 6
+      },
+      "webkit": {
+        "median": 387,
+        "min": 343,
+        "max": 415,
+        "n": 6
+      }
+    },
+    "experimentsList": {
+      "chromium": {
+        "median": 174.3,
+        "min": 163.3,
+        "max": 195.3,
+        "n": 6
+      },
+      "firefox": {
+        "median": 416.5,
+        "min": 370,
+        "max": 3348,
+        "n": 6
+      },
+      "webkit": {
+        "median": 278.5,
+        "min": 262,
+        "max": 326,
+        "n": 6
+      }
+    },
+    "experimentDetail": {
+      "chromium": {
+        "median": 101.5,
+        "min": 97,
+        "max": 109.6,
+        "n": 6
+      },
+      "firefox": {
+        "median": 143.5,
+        "min": 105,
+        "max": 536,
+        "n": 6
+      },
+      "webkit": {
+        "median": 90,
+        "min": 83,
+        "max": 96,
+        "n": 6
+      }
+    },
+    "compare": {
+      "chromium": {
+        "median": 151.1,
+        "min": 147.8,
+        "max": 164.4,
+        "n": 6
+      },
+      "firefox": {
+        "median": 214.5,
+        "min": 180,
+        "max": 668,
+        "n": 6
+      },
+      "webkit": {
+        "median": 142.5,
+        "min": 134,
+        "max": 153,
+        "n": 6
+      }
+    }
+  },
+  "budgets": {
+    "startup": {
+      "chromium": 580,
+      "firefox": 1480,
+      "webkit": 780
+    },
+    "startupLibrary": {
+      "chromium": 600,
+      "firefox": 1420,
+      "webkit": 780
+    },
+    "experimentsList": {
+      "chromium": 350,
+      "firefox": 840,
+      "webkit": 560
+    },
+    "experimentDetail": {
+      "chromium": 210,
+      "firefox": 290,
+      "webkit": 180
+    },
+    "compare": {
+      "chromium": 310,
+      "firefox": 430,
+      "webkit": 290
+    }
+  }
+}

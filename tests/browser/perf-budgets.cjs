@@ -529,17 +529,23 @@ async function runOne(browserName, url) {
   const all = { machine: { platform: process.platform, arch: process.arch, cpus: os.cpus().length,
     cpu: os.cpus()[0] && os.cpus()[0].model, loadavgStart: os.loadavg().map(round),
     node: process.version, playwright: pw.version },
-  samples: SAMPLES, librarySamples: LIBRARY_SAMPLES, measureOnly: MEASURE_ONLY, results: {} };
+  samples: SAMPLES, librarySamples: LIBRARY_SAMPLES, measureOnly: MEASURE_ONLY, legs: {},
+  results: {} };
   let failed = 0;
   for (const b of BROWSERS) {
     const t0 = Date.now();
+    // The harness gates the start only; the load each leg ran under is part of what it measured.
+    const loadStart = round(os.loadavg()[0]);
     const res = await runOne(b, url);
     all.results[b] = res;
+    all.legs[b] = { loadStart, loadEnd: round(os.loadavg()[0]), seconds: round((Date.now() - t0)
+      / 1000) };
     const names = Object.keys(res);
     const bad = names.filter((n) => !res[n].ok);
     failed += bad.length;
     console.log(`${bad.length ? 'FAIL' : 'PASS'} ${b}/file/perf-budgets: ${names.length
-      - bad.length}/${names.length} checks (${((Date.now() - t0) / 1000).toFixed(1)} s)`);
+      - bad.length}/${names.length} checks (${all.legs[b].seconds} s, 1-minute load ${
+      all.legs[b].loadStart} -> ${all.legs[b].loadEnd})`);
     for (const n of bad) console.log(`   x ${n}: ${JSON.stringify(res[n]).slice(0, 900)}`);
   }
   all.machine.loadavgEnd = os.loadavg().map(round);

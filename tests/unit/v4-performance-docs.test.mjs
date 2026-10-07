@@ -1,8 +1,9 @@
 // The startup and large-library budgets stay true to the code and to their measurements
 // (ledger P2 "no startup budget or large-library fixture"; docs/v4/performance.md):
 //   - tests/browser/fixtures/perf-budgets.json is the one copy: per measurement and browser the
-//     pooled measurement (median, min, max, n >= 5) and the budget, and every budget is what the
-//     file's own rule gives for its measurement (no budget is a number somebody liked)
+//     measurement (median, fastest and slowest of the medians of n >= 5 sessions of the suite)
+//     and the budget, and every budget is what the file's own rule gives for its measurement
+//     (no budget is a number somebody liked)
 //   - the doc's measurement and budget tables equal that file, and its fixture counts equal
 //     fixtures/large-library.mjs LIBRARY
 //   - "interactive" is one User Timing mark: main.js sets `oscilla:ready` once, directly before
@@ -28,7 +29,7 @@ const PKG = JSON.parse(read('package.json'));
 const BROWSERS = ['chromium', 'firefox', 'webkit'];
 const KEYS = ['startup', 'startupLibrary', 'experimentsList', 'experimentDetail', 'compare'];
 const MARK = 'oscilla:ready';
-const MIN_SAMPLES = 5;
+const MIN_SESSIONS = 5;
 
 /** The lines between <!-- name:begin --> and <!-- name:end --> (trimmed, non-empty). */
 function region(text, name) {
@@ -37,10 +38,9 @@ function region(text, name) {
   return m[1].split('\n').map((l) => l.trim()).filter(Boolean);
 }
 
-/** The file's rule: the larger of factor x median and the slowest sample, rounded up. */
+/** The file's rule: factor x the median of the session medians, rounded up. */
 function ruled(rule, measured) {
-  return Math.ceil(Math.max(rule.factor * measured.median, measured.max) / rule.roundUpTo)
-    * rule.roundUpTo;
+  return Math.ceil((rule.factor * measured.median) / rule.roundUpTo) * rule.roundUpTo;
 }
 
 test('the budget file holds a measurement and a budget per measurement and browser', () => {
@@ -58,7 +58,7 @@ test('the budget file holds a measurement and a budget per measurement and brows
     for (const b of BROWSERS) {
       const m = file.measured[k][b];
       assert.deepEqual(Object.keys(m), ['median', 'min', 'max', 'n'], `${k}.${b}`);
-      assert.ok(m.n >= MIN_SAMPLES, `${k}.${b}: ${m.n} samples`);
+      assert.ok(m.n >= MIN_SESSIONS, `${k}.${b}: ${m.n} sessions`);
       assert.ok(m.min > 0 && m.min <= m.median && m.median <= m.max, `${k}.${b} is ordered`);
     }
   }
@@ -77,8 +77,8 @@ test('the performance doc states the measurements and the budgets of the budget 
   const file = budgetFile();
   const doc = read('docs/v4/performance.md');
   const measured = region(doc, 'measured');
-  assert.deepEqual(measured.slice(0, 2), ['| Measurement | Browser | Median (ms) | Min (ms) '
-    + '| Max (ms) | Samples |', '| --- | --- | --- | --- | --- | --- |']);
+  assert.deepEqual(measured.slice(0, 2), ['| Measurement | Browser | Median (ms) | Fastest (ms) '
+    + '| Slowest (ms) | Sessions |', '| --- | --- | --- | --- | --- | --- |']);
   assert.deepEqual(measured.slice(2), KEYS.flatMap((k) => BROWSERS.map((b) => {
     const m = file.measured[k][b];
     return `| ${k} | ${b} | ${m.median} | ${m.min} | ${m.max} | ${m.n} |`;
@@ -88,8 +88,8 @@ test('the performance doc states the measurements and the budgets of the budget 
     + '| WebKit (ms) |', '| --- | --- | --- | --- |']);
   assert.deepEqual(budgets.slice(2), KEYS.map((k) => `| ${k} | ${BROWSERS.map((b) => file
     .budgets[k][b]).join(' | ')} |`));
-  assert.deepEqual(region(doc, 'rule'), [`budget = the larger of ${file.rule.factor} x the `
-    + `measured median and the slowest sample, rounded up to ${file.rule.roundUpTo} ms`]);
+  assert.deepEqual(region(doc, 'rule'), [`budget = ${file.rule.factor} x the median of the `
+    + `session medians, rounded up to ${file.rule.roundUpTo} ms`]);
 });
 
 test('the performance doc states the fixture the suite builds', () => {
