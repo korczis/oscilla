@@ -90,10 +90,14 @@ export function missingRecords({
     .map(({ tag }) => tag).sort((a, b) => compareSemver(a.slice(1), b.slice(1)));
 }
 
-/** Every v* tag with its creation time (tagger date, else commit date) in milliseconds. */
-export function readTagDates(run) {
-  const out = run(['for-each-ref', '--format=%(refname:short)%09%(creatordate:unix)',
-    'refs/tags/v*']);
+/**
+ * v* tags with their creation time (tagger date, else commit date) in milliseconds: every tag
+ * of the clone, or with `merged` only those reachable from that revision. Tags are shared by
+ * every worktree of a clone, so a checkout can only answer for the ones in its own history.
+ */
+export function readTagDates(run, { merged = null } = {}) {
+  const out = run(['for-each-ref', ...(merged ? ['--merged', merged] : []),
+    '--format=%(refname:short)%09%(creatordate:unix)', 'refs/tags/v*']);
   return out.split('\n').filter(Boolean).map((line) => {
     const [tag, seconds] = line.split('\t');
     return { tag, date: Number(seconds) * 1000 };
@@ -104,6 +108,31 @@ export function readTagDates(run) {
 export const hasRecordFile = (tag, root = ROOT) => (
   existsSync(path.join(root, RECORDS_DIR, `${tag}.yaml`))
 );
+
+export const RECORD_TRUNK = 'origin/main';
+
+/** Whether `ref` (the trunk as this clone last fetched it) carries the record of `tag`. */
+export function recordOnRef(tag, run, ref = RECORD_TRUNK) {
+  try {
+    run(['cat-file', '-e', `${ref}:${RECORDS_DIR}/${tag}.yaml`]);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * The tags this checkout answers for that have no record: those reachable from HEAD, past
+ * their publish window, recorded neither in the checkout nor on the trunk. A branch cut after
+ * a tag and before its record landed is not at fault for a record that is on main.
+ * @param {{ root?: string, run: (args: string[]) => string, now?: number }} o
+ * @returns {{ tags: { tag: string, date: number }[], missing: string[] }}
+ */
+export function checkoutMissingRecords({ root = ROOT, run, now = Date.now() }) {
+  const tags = readTagDates(run, { merged: 'HEAD' });
+  return { tags, missing: missingRecords({ tags, now,
+    hasRecord: (tag) => hasRecordFile(tag, root) || recordOnRef(tag, run) }) };
+}
 
 /** stable, or prerelease for a SemVer prerelease. */
 export function channelFor(version) {

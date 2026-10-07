@@ -8,9 +8,11 @@
 //   2a. refuse to start (rule project.release-flow-complete), also as a dry run, when
 //      - the newest v* tag at or after v3.4.0 has no .ai/repo/releases/<tag>.yaml: the
 //        previous release is not finished until its record has landed on main;
-//      - the proposed version is a stable X.0.0 and no vX.0.0-rc.N tag has a record on the
-//        prerelease channel (ADR 0047). `--no-rc-because <ADR>` overrides it only when it names
-//        an ADR in .ai/repo/adrs/ whose status is accepted.
+//      - the proposed version is the first stable release of a new major (its major is above
+//        that of every stable v* tag reachable from HEAD, whatever its minor and patch) and no
+//        vX.0.0-rc.N tag has a record on the prerelease channel (ADR 0047).
+//        `--no-rc-because <ADR>` overrides it only when it names an ADR in .ai/repo/adrs/
+//        whose status is accepted.
 //   3. bump package.json + package-lock.json ONCE (npm version --no-git-tag-version), or
 //      confirm the untagged version package.json already carries
 //   4. rebuild dist/index.html, then npm run version:check, npm run release-gate and
@@ -20,7 +22,8 @@
 //   6. on success write the gate receipt into the git directory (never a tracked file, so the
 //      tree stays clean) for release:publish: version, source digest, dist sha256 and the gate
 //      tree (rule project.release-receipt-binds-gate) at the time the gate passed. Any later
-//      change to a tracked file outside .ai/repo/releases/ invalidates it.
+//      change to a tracked file other than a release record (.ai/repo/releases/v*.yaml)
+//      invalidates it.
 import { spawnSync } from 'node:child_process';
 import {
   existsSync, lstatSync, readFileSync, readdirSync, readlinkSync, writeFileSync,
@@ -57,11 +60,12 @@ export function receiptPath(run = gitRunner(), root = ROOT) {
 // build inputs the source digest covers: on the tests, the scripts, the workflows, package.json
 // and the .ai layer doctor reads. The gate tree is a digest of every tracked file (`git
 // ls-files`, read from the working tree, so the uncommitted bump release:prepare gates is
-// included) except the two directories that legitimately change between prepare and publish
-// without changing the verdict: the release records (.ai/repo/releases/, written after a
-// publish) and checkout-local state (.ai/local/, never tracked). A squash-merged release PR
+// included) except what legitimately changes between prepare and publish without changing
+// the verdict: the release record files (.ai/repo/releases/v<version>.yaml, written after a
+// publish; nothing else in that directory, so its README and any other file added there are
+// bound) and checkout-local state (.ai/local/, never tracked). A squash-merged release PR
 // whose tree equals the prepared tree still verifies; any other change on main does not.
-export const GATE_TREE_EXCLUDE = [/^\.ai\/repo\/releases\//, /^\.ai\/local\//];
+export const GATE_TREE_EXCLUDE = [/^\.ai\/repo\/releases\/v[^/]+\.yaml$/, /^\.ai\/local\//];
 
 /** Tracked paths the gate tree covers, sorted by git. */
 export function gateTreePaths(run = gitRunner(), exclude = GATE_TREE_EXCLUDE) {
@@ -100,16 +104,24 @@ export function currentFingerprint(root = ROOT, run = gitRunner(root)) {
 
 export const RECEIPT_KEYS = ['version', 'sourceDigest', 'distSha256', 'gateTree'];
 
-/** Problems comparing a receipt with the current fingerprint (empty = verified). */
+const present = (v) => typeof v === 'string' && v !== '';
+
+/**
+ * Problems comparing a receipt with the current fingerprint (empty = verified). A key that is
+ * absent is a problem on either side: two fingerprints that both lack gateTree are not equal,
+ * they are both unbound, and `undefined === undefined` must never verify a receipt.
+ */
 export function receiptProblems(receipt, now) {
   if (!receipt) return ['no release-gate receipt: run npm run release:prepare first'];
   const problems = [];
   for (const k of RECEIPT_KEYS) {
-    if (receipt[k] !== now[k]) {
+    if (!present(receipt[k])) problems.push(`gate receipt has no ${k}`);
+    if (!present(now?.[k])) problems.push(`gate receipt ${k}: the current fingerprint has no ${k}`);
+    if (present(receipt[k]) && present(now?.[k]) && receipt[k] !== now[k]) {
       problems.push(`gate receipt ${k} ${receipt[k]} != current ${now[k]}`);
     }
   }
-  if (problems.some((p) => p.startsWith('gate receipt gateTree'))) {
+  if (problems.some((p) => /^gate receipt (has no )?gateTree/.test(p))) {
     problems.push('a tracked file changed since the gate passed (rule '
       + 'project.release-receipt-binds-gate): re-run npm run release:prepare on this tree');
   }
@@ -146,6 +158,8 @@ export function recordChannel(tag, root = ROOT) {
 
 /**
  * Pure: the reasons release:prepare refuses to start (empty = it may start).
+ * `tags` are the v* tags reachable from HEAD: a candidate or a release on another line does
+ * not count.
  * @param {{ lastTag: string|null, proposed: string|null, tags: string[],
  *   hasRecord: (tag: string) => boolean, channelOf: (tag: string) => string|null,
  *   noRcBecause?: string|null, adr?: { id: string, status: string|null }|null }} f
@@ -161,20 +175,27 @@ export function flowProblems({
       + `it first (npm run release:record -- --version ${lastTag.slice(1)}, land the record PR)`);
   }
   const v = proposed ? parseSemver(proposed) : null;
-  if (v && !v.prerelease.length && v.minor === 0 && v.patch === 0) {
-    const rcs = tags.filter((t) => {
-      const p = t.startsWith('v') && parseSemver(t.slice(1));
-      return p && p.major === v.major && p.minor === 0 && p.patch === 0
-        && p.prerelease[0] === 'rc';
-    });
-    const published = rcs.filter((t) => channelOf(t) === 'prerelease');
+  const parsed = tags.map((t) => ({ t, p: t.startsWith('v') ? parseSemver(t.slice(1)) : null }))
+    .filter(({ p }) => p);
+  // The first stable release of a new major, whatever its minor and patch: 4.0.1 or 4.1.0
+  // typed into package.json after v3.x opens major 4 exactly as 4.0.0 does. With no stable tag
+  // at all there is no line to compare with, and the X.0.0 shape decides.
+  const stableMajors = parsed.filter(({ p }) => !p.prerelease.length).map(({ p }) => p.major);
+  const opensMajor = v && !v.prerelease.length && (stableMajors.length
+    ? v.major > Math.max(...stableMajors) : v.minor === 0 && v.patch === 0);
+  if (opensMajor) {
+    const published = parsed.filter(({ p }) => p.major === v.major && p.minor === 0
+      && p.patch === 0 && p.prerelease[0] === 'rc')
+      .filter(({ t }) => channelOf(t) === 'prerelease');
     if (!published.length) {
-      const why = `v${proposed} is a major release with no published release candidate (no `
-        + `v${v.major}.0.0-rc.N tag with a prerelease record in ${RECORDS_DIR}/; ADR 0047)`;
+      const rc = `${v.major}.0.0-rc.1`;
+      const why = `v${proposed} is the first stable release of major ${v.major} and has no `
+        + `published release candidate (no v${v.major}.0.0-rc.N tag with a prerelease record `
+        + `in ${RECORDS_DIR}/; ADR 0047)`;
       if (!noRcBecause) {
         problems.push(`${why}: publish a candidate first (npm run release:prepare -- `
-          + `--prerelease; when package.json already says ${proposed}, set it to `
-          + `${proposed}-rc.1 for the candidate), or pass --no-rc-because <ADR> naming an `
+          + `--prerelease; when package.json already carries a ${v.major}.x version, set it to `
+          + `${rc} for the candidate), or pass --no-rc-because <ADR> naming an `
           + 'accepted ADR');
       } else if (!adr) {
         problems.push(`${why}: --no-rc-because ${noRcBecause} names no ADR in .ai/repo/adrs/`);
@@ -222,7 +243,7 @@ export function main(argv = process.argv.slice(2), root = ROOT, run = gitRunner(
   const noRcBecause = ni >= 0 ? (argv[ni + 1] || '') : null;
   const refused = flowProblems({
     lastTag: analysis.lastTag, proposed: proposal.version,
-    tags: run(['tag', '--list', 'v*']).split('\n').filter(Boolean),
+    tags: run(['tag', '--merged', 'HEAD', '--list', 'v*']).split('\n').filter(Boolean),
     hasRecord: (tag) => hasRecordFile(tag, root), channelOf: (tag) => recordChannel(tag, root),
     noRcBecause, adr: noRcBecause === null ? null : adrStatus(noRcBecause, root),
   });

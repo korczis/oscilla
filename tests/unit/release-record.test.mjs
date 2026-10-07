@@ -1,20 +1,23 @@
 // release:record against fake git/gh runners (nothing is read from GitHub here), and every
 // committed .ai/repo/releases/*.yaml against release/v1 and against git where the tag is known.
-// Completeness (rule project.release-flow-complete): every v* tag from v3.4.0 on that is past
-// its publish window has a record; CI's unit job checks out the tags, so it runs there.
+// Completeness (rule project.release-flow-complete): every v* tag from v3.4.0 on that HEAD can
+// reach and that is past its publish window has a record, in the checkout or on origin/main;
+// CI's unit job checks out the tags, so it runs there.
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { existsSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import {
+  existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFileSync,
+} from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
-import { ROOT, bannerComment } from '../../scripts/release-metadata.mjs';
+import { ROOT, bannerComment, gitRunner } from '../../scripts/release-metadata.mjs';
 import {
   ARTIFACT_KEYS, RECORD_FLOOR, RECORD_KEYS, RECORD_REQUIRED, RECORD_WINDOW_HOURS, RECORDS_DIR,
-  REQUIRED_TARGETS, WEB_TARGET, artifactEntry, assetUrl, channelFor, gatherRecord, hasRecordFile,
-  main, missingRecords, needsRecord, parseRecord, readTagDates, recordDifferences, recordFile,
-  recordProblems, releaseAssetName, renderRecord,
+  REQUIRED_TARGETS, WEB_TARGET, artifactEntry, assetUrl, channelFor, checkoutMissingRecords,
+  gatherRecord, hasRecordFile, main, missingRecords, needsRecord, parseRecord, readTagDates,
+  recordDifferences, recordFile, recordOnRef, recordProblems, releaseAssetName, renderRecord,
 } from '../../scripts/release-record.mjs';
 
 const COMMIT = 'f187f664893ce0444c03629b0d8afa66d6d9f715';
@@ -292,24 +295,82 @@ test('readTagDates: tag and creation time from git for-each-ref', () => {
   assert.deepEqual(readTagDates(run), [{ tag: 'v40.0.0', date: 1759745400000 },
     { tag: 'v40.1.0', date: 1759831800000 }]);
   assert.deepEqual(readTagDates(() => ''), []);
+  // only the tags a revision can reach
+  readTagDates((args) => {
+    assert.deepEqual(args.slice(0, 3), ['for-each-ref', '--merged', 'HEAD']);
+    return '';
+  }, { merged: 'HEAD' });
 });
 
-// CI's unit job checks out full history and tags (fetch-depth: 0), so there a clone without
-// tags fails this test instead of skipping it; elsewhere (a shallow clone) it skips and says so.
-test('every published release from v3.4.0 on, past its publish window, has a record', (t) => {
-  const out = git(['for-each-ref', '--format=%(refname:short)%09%(creatordate:unix)',
-    'refs/tags/v*']);
-  const tags = out ? readTagDates(() => out.toString().trim()) : [];
-  if (!tags.some(({ tag }) => needsRecord(tag))) {
-    const why = 'no v* tag from v3.4.0 on in this clone';
+// A real repository: main carries v40.0.0 (recorded in the checkout), v40.1.0 (recorded only
+// on origin/main, the state of a branch cut between a tag and its record PR) and v40.2.0
+// (recorded nowhere); v40.3.0 is tagged on another line that HEAD does not contain.
+test('a checkout answers for the tags in its history, with records here or on the trunk', () => {
+  const root = mkdtempSync(path.join(os.tmpdir(), 'oscilla-records-'));
+  const g = (...args) => execFileSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@t',
+    '-c', 'commit.gpgsign=false', '-c', 'tag.gpgsign=false', ...args],
+  { cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'],
+    env: { ...process.env, GIT_COMMITTER_DATE: '2026-10-01T00:00:00Z',
+      GIT_AUTHOR_DATE: '2026-10-01T00:00:00Z' } }).trim();
+  const write = (rel, text) => {
+    mkdirSync(path.dirname(path.join(root, rel)), { recursive: true });
+    writeFileSync(path.join(root, rel), text);
+  };
+  const commit = (msg) => { g('add', '-A'); g('commit', '-q', '--no-verify', '-m', msg); };
+  g('init', '-q', '-b', 'work');
+  write(`${RECORDS_DIR}/v40.0.0.yaml`, 'schema: release/v1\n');
+  commit('one');
+  for (const t of ['v40.0.0', 'v40.1.0', 'v40.2.0']) g('tag', '-a', t, '-m', t);
+  // the trunk moved on: it has the record of v40.1.0, this checkout does not
+  g('checkout', '-q', '-b', 'trunk');
+  write(`${RECORDS_DIR}/v40.1.0.yaml`, 'schema: release/v1\n');
+  commit('record v40.1.0');
+  g('update-ref', 'refs/remotes/origin/main', 'HEAD');
+  // a release on a line this checkout does not contain
+  write('x', 'x\n');
+  commit('elsewhere');
+  g('tag', '-a', 'v40.3.0', '-m', 'v40.3.0');
+  g('checkout', '-q', 'work');
+  const run = gitRunner(root);
+  const now = Date.parse('2026-10-02T00:00:00Z'); // every tag is past its 6 h window
+
+  assert.equal(recordOnRef('v40.1.0', run), true);
+  assert.equal(recordOnRef('v40.0.0', run), true, 'the trunk has it too');
+  assert.equal(recordOnRef('v40.2.0', run), false);
+  assert.equal(recordOnRef('v40.2.0', run, 'no/such-ref'), false, 'no trunk ref: not recorded');
+  const r = checkoutMissingRecords({ root, run, now });
+  assert.deepEqual(r.tags.map((t) => t.tag), ['v40.0.0', 'v40.1.0', 'v40.2.0'],
+    'v40.3.0 is not reachable from HEAD');
+  assert.deepEqual(r.missing, ['v40.2.0'], 'recorded here, recorded on the trunk, not recorded');
+  // every tag of the clone, judged against this checkout alone, blames it for two more
+  assert.deepEqual(missingRecords({ tags: readTagDates(run), now,
+    hasRecord: (t) => hasRecordFile(t, root) }), ['v40.1.0', 'v40.2.0', 'v40.3.0']);
+  // without a trunk ref the checkout's own records are all there is
+  g('update-ref', '-d', 'refs/remotes/origin/main');
+  assert.deepEqual(checkoutMissingRecords({ root, run, now }).missing, ['v40.1.0', 'v40.2.0']);
+});
+
+// Scope: the tags reachable from HEAD (tags are shared by every worktree of a clone, and a
+// branch does not answer for a release cut after it), with a record in this checkout or on
+// origin/main. CI's unit job checks out full history and tags (fetch-depth: 0), so there a
+// clone without tags fails this test instead of skipping it; elsewhere (a shallow clone) it
+// skips and says so.
+test('every published release from v3.4.0 on in this history, past its publish window, has a '
+  + 'record (rule project.release-flow-complete)', (t) => {
+  let found = { tags: [], missing: [] };
+  try {
+    found = checkoutMissingRecords({ root: ROOT, run: gitRunner(ROOT) });
+  } catch { /* not a git checkout: no tags */ }
+  if (!found.tags.some(({ tag }) => needsRecord(tag))) {
+    const why = 'no v* tag from v3.4.0 on reachable from HEAD in this clone';
     if (process.env.GITHUB_ACTIONS === 'true') {
       assert.fail(`${why}: the CI unit job must check out with fetch-depth: 0`);
     }
     t.skip(why);
     return;
   }
-  const missing = missingRecords({ tags, hasRecord: (tag) => hasRecordFile(tag, ROOT) });
-  assert.deepEqual(missing, [], `published more than ${RECORD_WINDOW_HOURS} h ago and not `
-    + `recorded: ${missing.join(', ')}. Run npm run release:record -- --version <X.Y.Z> for `
-    + `each and land the records (${RECORDS_DIR}/)`);
+  assert.deepEqual(found.missing, [], `rule project.release-flow-complete: published more than `
+    + `${RECORD_WINDOW_HOURS} h ago and recorded neither in this checkout nor on origin/main: `
+    + `${found.missing.join(', ')}. Run npm run release:record -- --version <X.Y.Z> for each `
+    + `and land the records (${RECORDS_DIR}/)`);
 });

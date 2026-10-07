@@ -3,8 +3,8 @@ id: project.release-flow-complete
 version: 1
 kind: rule
 title: Every release completes prepare, pull request, publish, live verification and record
-description: A release is finished when its record is on main. release:prepare refuses to start the next one before that, and refuses a major release no published release candidate preceded; release:publish diagnoses a Pages run that never starts instead of waiting on it.
-statement: release:prepare refuses to start when the newest v* tag at or after v3.4.0 has no .ai/repo/releases/<tag>.yaml, or when the proposed version is a stable X.0.0 and no vX.0.0-rc.N tag has a record on the prerelease channel (overridden only by --no-rc-because naming an accepted ADR). Every v* tag at or after v3.4.0 that is more than 6 hours old has a record. release:publish refuses while a pages.yml run has sat in waiting or queued for 15 minutes, reports its run id, its commit and the git merge-base --is-ancestor verdict against HEAD, never watches a run that has not started, and prints the majordomus finish line that verifies the published commit.
+description: A release is finished when its record is on main. release:prepare refuses to start the next one before that, and refuses the first stable release of a new major that no published release candidate preceded; release:publish diagnoses a Pages run of which no job starts instead of waiting on it.
+statement: release:prepare refuses to start when the newest v* tag at or after v3.4.0 has no .ai/repo/releases/<tag>.yaml, or when the proposed version is the first stable release of a new major (its major is above that of every stable v* tag reachable from HEAD, whatever its minor and patch) and no vX.0.0-rc.N tag has a record on the prerelease channel (overridden only by --no-rc-because naming an accepted ADR). Every v* tag at or after v3.4.0 that is reachable from HEAD and more than 6 hours old has a record, in the checkout or on origin/main. release:publish refuses while a pages.yml run has had no job start for 15 minutes or the run list cannot be read, reports the run id, its commit and the git merge-base --is-ancestor verdict against HEAD, never watches a run of which no job has started, and prints the majordomus finish line that verifies the published commit.
 status: active
 class: blocking
 depends_on: [project.release-receipt-binds-gate@1, project.about-names-current-release@1]
@@ -37,12 +37,15 @@ The flow, in the order it is practised. Each step names what holds it in place.
    a change that lands before the release starts. Enforced by
    `project.about-names-current-release` (`tests/unit/about.test.mjs`, in the gate).
 2. **`npm run release:prepare` on a clean tree of main.** It refuses a dirty tree, refuses
-   while the newest release has no record, and refuses a stable `X.0.0` that no published
-   `vX.0.0-rc.N` preceded. It bumps once, rebuilds, runs the full gate and writes the receipt.
-   The first candidate of a major is `npm run release:prepare -- --prerelease` (when
-   `package.json` already carries `X.0.0`, it is set to `X.0.0-rc.1` for the candidate). Once
-   the candidate is published and recorded, a plain `release:prepare` proposes `X.0.0` even
-   when no releasable commit followed the candidate.
+   while the newest release has no record, and refuses the first stable release of a new
+   major that no published `vX.0.0-rc.N` preceded. "First stable release of a new major" is
+   any stable version whose major is above every stable tag in the history: `X.0.0`, and
+   equally `X.0.1` or `X.1.0` typed into `package.json`. It bumps once, rebuilds, runs the
+   full gate and writes the receipt. The first candidate of a major is
+   `npm run release:prepare -- --prerelease` (when `package.json` already carries an `X.y.z`
+   version, it is set to `X.0.0-rc.1` for the candidate). Once the candidate is published and
+   recorded, a plain `release:prepare` proposes `X.0.0` even when no releasable commit
+   followed the candidate.
 3. **The `chore(release): vX.Y.Z` pull request, merged by auto-merge** behind the required
    `gate` check. It is the only pull request armed while a release is in flight: any other
    merge to main changes the gate tree and the publish refuses until the gate is re-run
@@ -51,9 +54,12 @@ The flow, in the order it is practised. Each step names what holds it in place.
    that has the receipt (the receipt lives in the common git directory, so a linked worktree
    of the clone that prepared it sees it; a separate fresh clone needs the receipt file copied
    into its `.git/`). It refuses without a matching receipt, on a dirty tree, off main, when
-   HEAD is not `origin/main`, when the tag exists, when `build:check` fails, and while a Pages
-   run is stuck. It tags, pushes the tag, waits for the Pages run of HEAD to start, watches
-   it, runs `verify-deploy` against that commit and creates the GitHub Release.
+   HEAD is not `origin/main`, when the tag exists, when `build:check` fails, while a Pages
+   run is stuck and when the Pages runs cannot be listed. It tags, pushes the tag, waits for
+   a job of the Pages run of HEAD to start, watches the run, runs `verify-deploy` against
+   that commit and creates the GitHub Release. A run is stuck when none of its jobs has
+   started; a run that GitHub still reports as `queued` while its deploy job has run and its
+   smoke legs wait for a runner is slow, and is waited for.
 5. **Live verification.** `.github/workflows/pages.yml` runs `verify-deploy` and `test:live`
    in Chromium, Firefox and WebKit on every deployment and fails on a mismatch;
    `release:publish` runs `verify-deploy` itself before it creates the GitHub Release.
@@ -80,8 +86,12 @@ anything changes, as a dry run too:
 - the newest `v*` tag reachable from HEAD, when at or after `RECORD_FLOOR` (v3.4.0, the first
   release published with its artifact attached), must have its `.ai/repo/releases/` record in
   the checkout;
-- a proposed stable `X.0.0` needs a `vX.0.0-rc.N` tag whose record's `channel` is
-  `prerelease`. `--no-rc-because <ADR>` lifts this only when `adrStatus()` finds that ADR in
+- a proposed stable version whose major is above the major of every stable `v*` tag
+  reachable from HEAD (`git tag --merged HEAD`), whatever its minor and patch, needs a
+  `vX.0.0-rc.N` tag, also reachable from HEAD, whose record's `channel` is `prerelease`. A
+  version typed into `package.json` (`4.0.1`, `4.1.0` after `v3.x`) is judged the same way
+  as a computed `4.0.0`; with no stable tag at all, the `X.0.0` shape decides.
+  `--no-rc-because <ADR>` lifts this only when `adrStatus()` finds that ADR in
   `.ai/repo/adrs/` with `status: accepted`; a proposed ADR, or a number that names none, is
   refused. Every ADR of this repository is `proposed` today, so the override cannot be used
   until the owner accepts one.
@@ -90,26 +100,44 @@ anything changes, as a dry run too:
 release-relevant commit, the proposal is `X.Y.Z`, so the step this rule makes mandatory can be
 finished without an invented commit.
 
-`scripts/release-publish.mjs`: `stuckPagesRuns()` and `diagnoseStuckRuns()` over
-`gh run list --workflow pages.yml --json databaseId,status,conclusion,headSha,createdAt`. A
-run in `waiting`, `queued`, `pending` or `requested` for `STUCK_AFTER_MIN` (15) minutes is a
-blocked precondition, reported with its id, its commit and the verdict of
-`git merge-base --is-ancestor <run commit> <HEAD>`. With `--yes`, the wait for the Pages run
-of HEAD ends at `--pages-timeout` with the same diagnosis when the run exists and has not
-started; `gh run watch`, which has no timeout, is only ever given a run that has started.
-`finishLine()` is printed by the dry run and after a publish.
+`scripts/release-publish.mjs`: `runStarted()`, `stuckPagesRuns()` and `diagnoseStuckRuns()`
+over `gh run list --workflow pages.yml --json databaseId,status,conclusion,headSha,createdAt`
+and, for each run whose status is `waiting`, `queued`, `pending`, `requested` or
+`action_required`, `gh run view <id> --json jobs`. The run status alone does not say whether a
+run started: GitHub reports `queued` for a run whose deploy job has succeeded while a smoke
+leg waits for a runner (Pages run 37558326962, 2026-10-07). A run has started when one of its
+jobs is `in_progress`, or `completed` and not skipped; a job's `startedAt` is not used, because
+it carries the run's creation time while the job is queued. A run of which no job has started
+for `STUCK_AFTER_MIN` (15) minutes is a blocked precondition, reported with its id, its commit
+and the verdict of `git merge-base --is-ancestor <run commit> <HEAD>`; so is a run whose jobs
+cannot be read, and so is a run list that cannot be read (`could not list the pages.yml
+runs`): neither is taken for "no stuck run". With `--yes`, the wait for the Pages run of HEAD
+ends at `--pages-timeout` with the same diagnosis when no job of it has started;
+`gh run watch`, which has no timeout, is given the run as soon as one job has started and
+never before. `finishLine()` is printed by the dry run and after a publish.
 
-`scripts/release-record.mjs`, `missingRecords()`, and the test "every published release from
-v3.4.0 on, past its publish window, has a record" in `tests/unit/release-record.test.mjs`: it
-reads the tags of the clone and fails for any tag older than `RECORD_WINDOW_HOURS` (6) without
-a record. The CI unit job checks out with `fetch-depth: 0`, so the tags are there; under
-GitHub Actions a clone without them fails the test instead of skipping it.
+`scripts/release-record.mjs`, `checkoutMissingRecords()` over `missingRecords()`, and the test
+"every published release from v3.4.0 on in this history, past its publish window, has a
+record" in `tests/unit/release-record.test.mjs`. Scope: the `v*` tags reachable from HEAD
+(`git for-each-ref --merged HEAD`), because tags are shared by every worktree of a clone and
+a branch does not answer for a release cut after it; a record counts when it is in the
+checkout or on `origin/main` (`git cat-file -e origin/main:.ai/repo/releases/<tag>.yaml`),
+because a branch cut between a tag and its record pull request is not at fault for a record
+that is on main. It fails for any such tag older than `RECORD_WINDOW_HOURS` (6) with a record
+in neither place. The CI unit job checks out with `fetch-depth: 0`, so the tags are there;
+under GitHub Actions a clone without them fails the test instead of skipping it.
 
 `tests/unit/release-analyze.test.mjs` drives `release:prepare` as a dry run against a fake
-git and a fixture checkout (both refusals, the override with a proposed, a missing and an
-accepted ADR). `tests/unit/release-publish.test.mjs` drives `release:publish` against fake
-git and gh (a run `waiting` for 30 minutes blocks the dry run and `--yes`; a run of HEAD that
-stays `queued` is diagnosed and never watched; the full `--yes` sequence; the finish line).
+git and a fixture checkout (both refusals; a new major typed as `X.0.1`, `X.1.0` and
+`X.2.3`, and the same versions once the major has a stable tag; the override with a proposed,
+a missing and an accepted ADR). `tests/unit/release-publish.test.mjs` drives
+`release:publish` against fake git and gh (a run `waiting` for 30 minutes with no job started
+blocks the dry run and `--yes`; a run `queued` for 20 minutes whose deploy job has run does
+not; an unreadable run list blocks; a run of HEAD of which no job starts is diagnosed and
+never watched; a run that stays `queued` is watched once its deploy job starts; the full
+`--yes` sequence; the finish line). `tests/unit/release-record.test.mjs` builds a real
+repository with a tag recorded in the checkout, one recorded only on `origin/main`, one
+recorded nowhere and one on a line HEAD does not contain: only the third is reported.
 
 Not mechanically enforced, and stated as such:
 
@@ -121,13 +149,22 @@ Not mechanically enforced, and stated as such:
 - that the record pull request uses the branch name above, and that the task is closed with
   the printed line. The script prints both; a reviewer owns the rest;
 - the 6-hour window is a test of the clock: a tag that nobody records turns the unit job red
-  for every pull request once the window closes. That is the intent.
+  for every pull request once the window closes, and `npm test` red in every checkout whose
+  history contains the tag. That is the intent. A checkout whose `origin/main` is stale (not
+  fetched since the record landed) and which contains the tag fails until it fetches;
+- a `v*` tag pushed by hand is trusted as a release by this rule and by
+  `project.deploy-often`: nothing checks that a tag has a GitHub Release behind it;
+- a stuck precondition also reports plain runner congestion: a Pages run of which no job has
+  been given a runner for 15 minutes blocks the dry run until the queue clears. That is a
+  transient refusal, and it is correct, because the deploy this publish waits for would not
+  start either.
 
 # Failure behaviour
 
 `release:prepare` prints `refusing to start (rule project.release-flow-complete)` with each
-reason and changes nothing. `release:publish` prints one `BLOCKED Pages run <id> …` line per
-stuck run and tags nothing; after the tag is pushed, a run that never starts ends the publish
+reason and changes nothing. `release:publish` prints one `BLOCKED Pages run <id> … (rule
+project.release-flow-complete)` line per stuck run, or `BLOCKED could not list the pages.yml
+runs …`, and tags nothing; after the tag is pushed, a run that never starts ends the publish
 with `STUCK` lines, the undo command for the tag and the `verify-deploy` command for later.
 A missing record fails `npm test`; the fix is `release:record` and its pull request, never a
 hand-written record.

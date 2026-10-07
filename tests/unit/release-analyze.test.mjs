@@ -212,7 +212,8 @@ test('prepare refuses a major release that no published release candidate preced
   const major = { version: '41.0.0', tags: TAGS, records: RECORDED };
   const bare = prepareDryRun(major);
   assert.equal(bare.code, 1);
-  assert.match(bare.text, /v41\.0\.0 is a major release with no published release candidate/);
+  assert.match(bare.text,
+    /v41\.0\.0 is the first stable release of major 41 and has no published release candidate/);
   assert.match(bare.text, /publish a candidate first \(npm run release:prepare -- --prerelease; /);
   assert.match(bare.text, /set it to 41\.0\.0-rc\.1 for the candidate\), or pass --no-rc-because /);
 
@@ -248,6 +249,76 @@ test('prepare refuses a major release that no published release candidate preced
     records: { ...RECORDED, 'v41.0.0-rc.1': 'prerelease' } });
   assert.equal(final.code, 0, final.text);
   assert.match(final.text, /would bump v41\.0\.0 and run:/);
+});
+
+// The hole of verification round 1: a new major typed into package.json as X.0.1 or X.1.0 took
+// the "confirm an untagged version" path, and the X.0.0 shape was the only trigger.
+test('a new major line needs its candidate whatever minor and patch it starts at', () => {
+  for (const version of ['41.0.1', '41.1.0', '41.2.3', '42.0.0']) {
+    const typed = prepareDryRun({ version, tags: TAGS, records: RECORDED,
+      subject: 'feat!: break it' });
+    assert.equal(typed.code, 1, `${version}: ${typed.text}`);
+    const major = version.split('.')[0];
+    assert.match(typed.text, /refusing to start \(rule project\.release-flow-complete\)/);
+    assert.match(typed.text, new RegExp(`v${version.replaceAll('.', '\\.')} is the first `
+      + `stable release of major ${major} and has no published release candidate \\(no `
+      + `v${major}\\.0\\.0-rc\\.N tag`));
+    assert.match(typed.text, new RegExp(`set it to ${major}\\.0\\.0-rc\\.1 for the candidate`));
+    assert.doesNotMatch(typed.text, /Dry run: would/);
+  }
+  // the candidate of that major, published, opens the line for any first stable version
+  const rcTags = [...TAGS, 'v41.0.0-rc.1'];
+  const rcRecords = { ...RECORDED, 'v41.0.0-rc.1': 'prerelease' };
+  const after = prepareDryRun({ version: '41.0.1', tags: rcTags, records: rcRecords });
+  assert.equal(after.code, 0, after.text);
+  assert.match(after.text, /Dry run: would confirm v41\.0\.1/);
+  // a candidate numbered after the typed version is not the candidate of the major
+  const odd = prepareDryRun({ version: '41.1.0', tags: [...TAGS, 'v41.1.0-rc.1'],
+    records: { ...RECORDED, 'v41.1.0-rc.1': 'prerelease' } });
+  assert.equal(odd.code, 1);
+  // once the major has a stable release, its patches and minors need none
+  const line = { tags: [...TAGS, 'v41.0.0'], records: { ...RECORDED, 'v41.0.0': 'stable' } };
+  for (const [version, subject, want] of [['41.0.0', 'fix: a', /would bump v41\.0\.1/],
+    ['41.0.1', 'fix: a', /would confirm v41\.0\.1/], ['41.0.0', 'feat: a', /would bump v41\.1\.0/],
+    ['41.1.0', 'feat: a', /would confirm v41\.1\.0/]]) {
+    const ok = prepareDryRun({ ...line, version, subject });
+    assert.equal(ok.code, 0, ok.text);
+    assert.match(ok.text, want);
+  }
+  // pure: the trigger is the major of the stable tags, not the shape of the proposal
+  const f = { lastTag: 'v40.10.3', tags: TAGS, hasRecord: () => true, channelOf: () => null };
+  assert.equal(flowProblems({ ...f, proposed: '41.0.1' }).length, 1);
+  assert.equal(flowProblems({ ...f, proposed: '41.1.0' }).length, 1);
+  assert.deepEqual(flowProblems({ ...f, proposed: '40.11.0' }), []);
+  assert.deepEqual(flowProblems({ ...f, proposed: '41.0.1', tags: [...TAGS, 'v41.0.0'] }), []);
+  // a prerelease tag of the new major is not a stable release of it
+  assert.equal(flowProblems({ ...f, proposed: '41.0.1', tags: [...TAGS, 'v41.0.0-rc.1'] }).length,
+    1);
+  assert.deepEqual(flowProblems({ ...f, proposed: '41.0.1', tags: [...TAGS, 'v41.0.0-rc.1'],
+    channelOf: (t) => (t === 'v41.0.0-rc.1' ? 'prerelease' : null) }), []);
+  // no stable tag at all: the X.0.0 shape decides (a first 0.1.0 needs no candidate)
+  assert.deepEqual(flowProblems({ ...f, lastTag: null, tags: [], proposed: '0.1.0' }), []);
+  assert.equal(flowProblems({ ...f, lastTag: null, tags: [], proposed: '1.0.0' }).length, 1);
+});
+
+test('prepare reads the tags reachable from HEAD, not every tag of the clone', () => {
+  const root = mkdtempSync(path.join(os.tmpdir(), 'oscilla-prepare-tags-'));
+  writeFileSync(path.join(root, 'package.json'), JSON.stringify({ version: '3.3.3' }));
+  const asked = [];
+  const run = (args) => {
+    if (args[0] === 'status') return '';
+    if (args[0] === 'tag') { asked.push(args.join(' ')); return 'v3.3.2\nv3.3.3'; }
+    if (args[0] === 'log') return '';
+    throw new Error(`unexpected git ${args.join(' ')}`);
+  };
+  const real = console.log;
+  console.log = () => {};
+  try {
+    prepare(['--dry-run'], root, run);
+  } finally {
+    console.log = real;
+  }
+  assert.deepEqual([...new Set(asked)], ['tag --merged HEAD --list v*']);
 });
 
 test('proposeVersion: a published candidate is finalised even with no releasable commit', () => {

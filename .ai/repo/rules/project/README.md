@@ -35,11 +35,11 @@ How a release is cut, in the order the steps happen. Each rule's `# Enforcement`
 script and the test that hold it, and says what no check holds.
 
 - `project.release-receipt-binds-gate` (`release-receipt-binds-gate.v1.md`): the gate receipt
-  binds every tracked file outside the release records, so a merge to main between
+  binds every tracked file except the release records, so a merge to main between
   `release:prepare` and `release:publish` needs the gate again.
 - `project.release-flow-complete` (`release-flow-complete.v1.md`): the flow from prepare to
   the record, in order; the next release does not start before the previous one is recorded,
-  a major follows a published release candidate, and a Pages run that never starts is
-  diagnosed.
+  the first stable release of a new major follows a published release candidate, and a Pages
+  run of which no job starts is diagnosed.
 - `project.deploy-often` (`deploy-often.v1.md`): a releasable commit is released within 24
   hours; an hourly workflow is red and keeps one issue open until it is.
