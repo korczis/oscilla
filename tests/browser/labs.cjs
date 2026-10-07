@@ -18,19 +18,18 @@ const fs = require('fs');
 const http = require('http');
 const path = require('path');
 const esbuild = require('esbuild');
-const playwright = require('playwright');
+const suite = require('./lib/suite.cjs');
+const { until, WaitTimeout } = require('./lib/wait.cjs');
 
 const ROOT = path.resolve(__dirname, '..', '..');
 const args = process.argv.slice(2);
 const opt = (name) => (args.includes(name) ? args[args.indexOf(name) + 1] : null);
-const KNOWN = ['chromium', 'firefox', 'webkit'];
-const ENGINES = opt('--browser') ? [opt('--browser')]
-  : (process.env.OSC_BROWSERS ? process.env.OSC_BROWSERS.split(',') : KNOWN);
-if (!ENGINES.length || ENGINES.some((e) => !KNOWN.includes(e))) {
-  // An unknown name must not fall through to another browser and pass under its label.
-  console.error(`unknown browser(s) in ${JSON.stringify(ENGINES)}; expected ${KNOWN.join(', ')}`);
-  process.exit(2);
-}
+// The harness refuses an unknown or empty selection (exit 2): an unknown name must not fall
+// through to another browser and pass under its label.
+const RUN = suite.open({ name: 'labs', browsers: opt('--browser') === null ? undefined
+  : opt('--browser') });
+const playwright = RUN.playwright;
+const ENGINES = RUN.browsers;
 
 // ---------------------------------------------------------------- fixture build
 
@@ -117,26 +116,44 @@ function writeToneWav(file, hz, seconds = 4, sr = 48000) {
 
 let fakeWav = null;
 
+// One entry per engine and no default: a name without an entry throws instead of launching
+// another browser under its label.
 function launch(engine) {
-  if (engine === 'firefox') {
-    return playwright.firefox.launch({
+  const options = {
+    firefox: () => ({
       firefoxUserPrefs: {
         'media.navigator.streams.fake': true,
         'media.navigator.permission.disabled': true,
         'media.autoplay.default': 0,
         'media.autoplay.block-webaudio': false,
       },
-    });
+    }),
+    webkit: () => ({}),
+    chromium: () => ({
+      args: [
+        '--use-fake-device-for-media-stream',
+        '--use-fake-ui-for-media-stream',
+        '--autoplay-policy=no-user-gesture-required',
+        ...(fakeWav ? [`--use-file-for-fake-audio-capture=${fakeWav}`] : []),
+      ],
+    }),
+  };
+  if (!Object.hasOwn(options, engine)) throw new Error(`labs: no launch options for ${engine}`);
+  return playwright[engine].launch(options[engine]());
+}
+
+// Poll `read` until `judge` accepts what it returned, and hand back the last reading either
+// way: the check that follows judges the same predicate and reports the value, so a deadline
+// that runs out is a failed check with its reading, not a thrown wait.
+async function settled(read, judge, { ms, what }) {
+  let last;
+  try {
+    await until(async () => { last = await read(); return judge(last); }, { ms, what });
+  } catch (e) {
+    if (!(e instanceof WaitTimeout)) throw e;
+    console.log(`  WAIT  ${e.message}`);
   }
-  if (engine === 'webkit') return playwright.webkit.launch();
-  return playwright.chromium.launch({
-    args: [
-      '--use-fake-device-for-media-stream',
-      '--use-fake-ui-for-media-stream',
-      '--autoplay-policy=no-user-gesture-required',
-      ...(fakeWav ? [`--use-file-for-fake-audio-capture=${fakeWav}`] : []),
-    ],
-  });
+  return last;
 }
 
 // ---------------------------------------------------------------- checks
@@ -156,6 +173,7 @@ async function startContext(page) {
 async function runEngine(engine, base) {
   const results = [];
   const check = (name, ok, detail = '') => {
+    RUN.tally(engine);
     results.push({ name, ok: !!ok, detail });
     console.log(`  ${ok ? 'PASS' : 'FAIL'}  ${name}${detail ? `  (${detail})` : ''}`);
   };
@@ -211,10 +229,10 @@ async function runEngine(engine, base) {
   // audio in 1.5 s, and the charts would read a nearly silent analyser (deadline 10 s).
   await page.waitForFunction(() => window.__labs.ctx.currentTime >= 1.2, null, { timeout: 10000 })
     .catch(() => {});
-  await page.waitForTimeout(400);
 
-  // (1) Spectrum: peak at the oscillator frequency, read from uPlot's own data.
-  const spec = await page.evaluate(() => {
+  // (1) Spectrum: peak at the oscillator frequency, read from uPlot's own data. The chart
+  // draws on its own frame loop, so the reading is polled until the peak the check asserts.
+  const readSpec = () => page.evaluate(() => {
     const { labs, ctx } = window.__labs;
     const u = labs.analysis.chart.uplot;
     const x = u.data[0];
@@ -228,9 +246,12 @@ async function runEngine(engine, base) {
       binHz: ctx.sampleRate / r.fftSize, chip: document.querySelector('#osc-chart-spectrum'
         + ' .osc-chip-readout:not([hidden])')?.textContent || '' };
   });
-  const tol = Math.max(spec.binHz, 1000 * (spec.colRatio - 1)) * 1.5;
-  check('spectrum peak at the oscillator frequency (uPlot data)',
-    Math.abs(spec.peakHz - 1000) <= tol && spec.peakDb > -40,
+  const specTol = (sp) => Math.max(sp.binHz, 1000 * (sp.colRatio - 1)) * 1.5;
+  const specOk = (sp) => Math.abs(sp.peakHz - 1000) <= specTol(sp) && sp.peakDb > -40;
+  const spec = await settled(readSpec, (sp) => specOk(sp) && /1 kHz/.test(sp.chip)
+    && /dB/.test(sp.chip), { ms: 10000, what: 'spectrum chart shows the 1 kHz peak and chip' });
+  const tol = specTol(spec);
+  check('spectrum peak at the oscillator frequency (uPlot data)', specOk(spec),
     `${spec.peakHz.toFixed(1)} Hz at ${spec.peakDb.toFixed(1)} dB, ${spec.points} points, `
       + `±${tol.toFixed(1)}`);
   check('requested-frequency chip shows frequency and level', /1 kHz/.test(spec.chip)
@@ -239,8 +260,7 @@ async function runEngine(engine, base) {
   // Log/Linear and Max through the shell controls.
   await page.click('#osc-spec-linear');
   await page.selectOption('#osc-spec-max', '5000');
-  await page.waitForTimeout(200);
-  const lin = await page.evaluate(() => {
+  const readLin = () => page.evaluate(() => {
     const u = window.__labs.labs.analysis.chart.uplot;
     const x = u.data[0];
     const y = u.data[1];
@@ -248,9 +268,11 @@ async function runEngine(engine, base) {
     for (let i = 1; i < y.length; i++) if (y[i] > y[best]) best = i;
     return { distr: u.scales.x.distr, max: u.scales.x.max, peakHz: x[best] };
   });
-  check('Linear + Max 5 kHz applied; peak still at 1 kHz',
-    lin.distr === 1 && Math.abs(lin.max - 5000) < 1 && Math.abs(lin.peakHz - 1000) < 15,
-    JSON.stringify(lin));
+  const linOk = (l) => l.distr === 1 && Math.abs(l.max - 5000) < 1
+    && Math.abs(l.peakHz - 1000) < 15;
+  const lin = await settled(readLin, linOk,
+    { ms: 5000, what: 'spectrum chart on the linear axis with Max 5 kHz' });
+  check('Linear + Max 5 kHz applied; peak still at 1 kHz', linOk(lin), JSON.stringify(lin));
   await page.click('#osc-spec-log');
   await page.selectOption('#osc-spec-max', '20000');
 
@@ -280,10 +302,11 @@ async function runEngine(engine, base) {
     fc.maxErr < 1e-3 && fc.config.type === 'lowpass' && Math.abs(fc.config.frequency - 2500) < 1,
     `max |Δ| ${fc.maxErr.toExponential(2)} dB over ${fc.points} points`);
   await page.click('#osc-ftype-highpass');
-  await page.waitForTimeout(50);
-  fc = await filterCompare();
+  const highpassOk = (c) => c.config.type === 'highpass' && c.maxErr < 1e-3;
+  fc = await settled(filterCompare, highpassOk,
+    { ms: 5000, what: 'filter chart redrawn as the high-pass the radio selected' });
   check('filter type via shell radio (high-pass) and curve still exact',
-    fc.config.type === 'highpass' && fc.maxErr < 1e-3, `max |Δ| ${fc.maxErr.toExponential(2)}`);
+    highpassOk(fc), `max |Δ| ${fc.maxErr.toExponential(2)}`);
   // Drag on the graph: right and up → higher cutoff and higher Q.
   const over = await page.evaluate(() => {
     const r = window.__labs.labs.filter.chart.uplot.over.getBoundingClientRect();
@@ -439,22 +462,27 @@ async function runEngine(engine, base) {
   s1 = await seqState();
   check('delete button removes the selected block', s1.blocks.length === 5, s1.blocks.join(','));
   await page.click('#osc-seq-play');
-  await page.waitForTimeout(400);
-  const playing = await seqState();
-  const playhead = await page.evaluate(() => {
-    const ph = [...document.querySelectorAll('#osc-seq-timeline > div')].find((d) =>
-      d.style.zIndex === '2');
-    return ph ? { hidden: ph.hidden, t: ph.style.transform } : null;
-  });
+  // Each wait ends on the state its check asserts: sources live with the playhead shown, then
+  // nothing live after STOP.
+  const readPlaying = async () => ({ state: await seqState(),
+    playhead: await page.evaluate(() => {
+      const ph = [...document.querySelectorAll('#osc-seq-timeline > div')].find((d) =>
+        d.style.zIndex === '2');
+      return ph ? { hidden: ph.hidden, t: ph.style.transform } : null;
+    }) });
+  const playingOk = (p) => !!(p.state.playing && p.state.live > 0 && p.playhead
+    && !p.playhead.hidden);
+  const { state: playing, playhead } = await settled(readPlaying, playingOk,
+    { ms: 5000, what: 'sequencer playing with live sources and a visible playhead' });
   await page.click('#osc-seq-stop');
-  await page.waitForTimeout(500);
-  const stopped = await seqState();
+  const stoppedOk = (st) => st.live === 0 && st.stats.activeSourceCount === 0
+    && st.stats.voices === 0 && !st.playing;
+  const stopped = await settled(seqState, stoppedOk,
+    { ms: 5000, what: 'sequencer stopped with 0 live sources and 0 voices' });
   check('play schedules sources; playhead follows the audio clock',
-    playing.playing && playing.live > 0 && playhead && !playhead.hidden,
+    playingOk({ state: playing, playhead }),
     `live ${playing.live}, playhead ${JSON.stringify(playhead)}`);
-  check('stop leaves 0 live sources (and 0 editor voices)',
-    stopped.live === 0 && stopped.stats.activeSourceCount === 0 && stopped.stats.voices === 0
-      && !stopped.playing,
+  check('stop leaves 0 live sources (and 0 editor voices)', stoppedOk(stopped),
     `started ${stopped.started}, live ${stopped.live}, ${JSON.stringify(stopped.stats)}`);
 
   // (6) Device panel: real sample rate.
@@ -520,12 +548,10 @@ async function runEngine(engine, base) {
     && m.est.levelDb >= FAKE_MIC_MIN_LEVEL_DB
     && Math.abs(m.est.frequencyHz - m.ref.hz) <= 2 * m.ref.binHz
     && Math.abs(m.est.frequencyHz - want) <= Math.max(m.est.uncertaintyHz, 1));
-  let mic = null;
   let polls = 0;
-  for (let i = 0; i < 40; i++) {
-    polls = i + 1;
-    await page.waitForTimeout(150);
-    mic = await page.evaluate(() => {
+  const readMic = () => {
+    polls += 1;
+    return page.evaluate(() => {
       const m = window.__labs.labs.mic;
       const an = m.analyser;
       let ref = null;
@@ -541,8 +567,9 @@ async function runEngine(engine, base) {
         text: document.querySelector('#osc-mic-detected').textContent,
         label: m.stream ? m.stream.getAudioTracks()[0].label : null };
     });
-    if (micDetects(mic)) break;
-  }
+  };
+  const mic = await settled(readMic, micDetects,
+    { ms: 20000, what: `microphone estimate at the fake ${want} Hz tone` });
   check(`mic (fake device) detects the fake ${want} Hz tone within ± its uncertainty`,
     micDetects(mic),
     mic.est ? `${mic.est.frequencyHz.toFixed(2)} ± ${mic.est.uncertaintyHz.toFixed(2)} Hz `
@@ -552,12 +579,13 @@ async function runEngine(engine, base) {
       : `active ${mic.active} error "${mic.error}" text "${mic.text}"; after ${polls} polls`);
   check('mic readout before enabling says it is off', /microphone off/i.test(micBefore), micBefore);
   await page.click('#osc-mtab-compare');
-  await page.waitForTimeout(250);
-  const cmp = await page.evaluate(() => ({ text: document.querySelector('#osc-mic-detected')
+  const readCmp = () => page.evaluate(() => ({ text: document.querySelector('#osc-mic-detected')
     .textContent, cmp: window.__labs.labs.mic.comparison,
     toolbar: !document.querySelector('[data-osc="mic.freeze"]').closest('[role=group]').hidden }));
-  check('mic Compare tab shows difference against the requested frequency',
-    cmp.toolbar && cmp.cmp && cmp.cmp.calibrated === false && /Δ/.test(cmp.text), cmp.text);
+  const cmpOk = (c) => !!(c.toolbar && c.cmp && c.cmp.calibrated === false && /Δ/.test(c.text));
+  const cmp = await settled(readCmp, cmpOk,
+    { ms: 5000, what: 'mic Compare tab showing the difference to the requested frequency' });
+  check('mic Compare tab shows difference against the requested frequency', cmpOk(cmp), cmp.text);
   await page.click('#osc-mtab-live');
   const stopState = await page.evaluate(() => {
     const s = window.__labs.labs.mic.stream;
@@ -576,14 +604,15 @@ async function runEngine(engine, base) {
   await page2.goto(`${base}/labs-stereo.html`);
   await page2.waitForFunction(() => window.__oscReady && window.__labs, null, { timeout: 10000 });
   await startContext(page2);
-  await page2.waitForTimeout(1200);
-  const st = await page2.evaluate(() => ({ source: window.__labs.labs.phase.source,
+  const readStereo = () => page2.evaluate(() => ({ source: window.__labs.labs.phase.source,
     corr: document.querySelector('#osc-corr-value').textContent,
     meter: document.querySelector('#osc-corr-meter').getAttribute('aria-valuetext') }));
-  const corrV = Number(st.corr);
+  const stereoOk = (x) => x.source === 'live' && Number.isFinite(Number(x.corr))
+    && Math.abs(Number(x.corr)) < 0.15 && /estimated/.test(x.meter);
+  const st = await settled(readStereo, stereoOk,
+    { ms: 10000, what: 'stereo phase view on live L/R data with an estimated correlation' });
   check('stereo playing: live L/R data, correlation estimated (quarter-period lag ≈ 0)',
-    st.source === 'live' && Number.isFinite(corrV) && Math.abs(corrV) < 0.15
-      && /estimated/.test(st.meter), JSON.stringify(st));
+    stereoOk(st), JSON.stringify(st));
   await page2.close();
 
   classifyPageErrors();
@@ -600,6 +629,7 @@ async function runEngine(engine, base) {
 }
 
 async function main() {
+  await RUN.ready();
   const pages = {
     '/labs.html': await buildFixture({ frequency: 1000, gain: 0.5 }),
     '/labs-stereo.html': await buildFixture({ frequency: 1000, gain: 0.5, stereo: true }),
@@ -621,9 +651,10 @@ async function main() {
   const base = `http://127.0.0.1:${server.address().port}`;
   const shot = opt('--screenshot');
   if (shot) {
-    const browser = await launch('chromium');
+    const browser = await launch(ENGINES[0]);
     const page = await browser.newPage({ viewport: { width: 1536, height: 1024 } });
     await page.goto(`${base}/labs-visual.html`);
+    // timing-allow: --screenshot is a manual diagnostic, never a check; 11 s of the visual fixture
     await page.waitForTimeout(11000);
     await page.screenshot({ path: shot });
     await browser.close();

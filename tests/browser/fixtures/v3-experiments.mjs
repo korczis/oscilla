@@ -27,6 +27,7 @@ import { normalizeStimulus } from '../../../src/js/measurement/stimulus.js';
 import { derivedRef } from '../../../src/js/experiments/definition.js';
 import { experimentFromResult } from '../../../src/js/ui/measure-experiment.js';
 
+// timing-allow: the synthetic io's own sample rate; these fixtures never open an AudioContext
 export const SR = 48000;
 export const NOW = '2026-10-02T10:00:00.000Z';
 const NOW_MS = Date.parse(NOW);
