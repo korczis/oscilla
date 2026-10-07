@@ -2511,7 +2511,9 @@ function defineChecks(fixtures) {
       .then((v) => v.upstream.map((c) => c.state)), res.setup);
     await page.evaluate(async (t) => {
       const app = window.OSCILLA.app;
-      for (const r of app.fnd.rows.slice()) await app.findingsDeleteNow(r.id);
+      // Every stored finding, the one the other tab recorded included.
+      const all = (await window.OSCILLA.experiments.store().listFindings()).findings;
+      for (const f of all) await app.findingsDeleteNow(f.id);
       app.exps.deleteId = 'fixture-b';
       await app.experimentsDelete();
       await app.experimentsImportText(t);
