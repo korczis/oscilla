@@ -162,3 +162,47 @@ that the seam is not a security boundary.
   - The shared-origin exposure is tracked as its own item.
 - If OSCILLA moves to its own origin, revisit `window.Alpine` and `OSCILLA.app` first, not the
   measure hooks.
+
+## Resolution notes
+
+Appended; the sections above are left as written, and the status stays `proposed`.
+
+### 2026-10-07: what is injected stays in TEST CONTEXT (ledger W7f, W7c, W7h)
+
+The two routes recorded above as not closed are closed, at the place the binding is decided
+and not at the two hooks:
+
+- **An input belongs to the context that named it.** MEASURE keeps, next to the current input,
+  whether TEST CONTEXT named it: the loopback's own setup check or reference capture, a result
+  that carries a `testContext`, or `setInputNow`. Every reader of the current input (the typed
+  reading's binding, the indicator, the check before a measurement, the live RTA, the dialog's
+  note) goes through one function, `inputKnown()`, which answers "no input" when the input's
+  context is not the page's. So `useLoopback()`, `setInputNow(input)`, `useMicrophone()` leaves
+  no input known, and `showResult` of a TEST CONTEXT result outside loopback shows the result,
+  labelled, without making its input the current one. Entering or leaving TEST CONTEXT also
+  releases what was checked or captured before (the input, a captured reference, the setup
+  check's facts), as choosing another input device does.
+- **A level calibration belongs to the context it was made in.** One made in TEST CONTEXT does
+  not apply on the microphone ("UNCALIBRATED: the level calibration was made in TEST CONTEXT
+  ..."), and one taken with a microphone does not apply in TEST CONTEXT. It is not deleted:
+  back in its own context it is checked against the input as before. This closes the third
+  sequence the two routes implied: a reading typed in TEST CONTEXT for an injected "Mic A",
+  then a real check of a microphone with the same binding.
+- **A reading typed by hand in TEST CONTEXT says so** (W7c): its conditions start with
+  "TEST CONTEXT: reading typed by hand while the page was in TEST CONTEXT (digital loopback, no
+  microphone checked)." and MEASURE's state line starts with "TEST CONTEXT", for the captured
+  kind too.
+- **`setValues` refuses a toggle value that is not `true` or `false`** (W7h), replacing the
+  consequence "A toggle value is coerced to a boolean" above. The page's own switch still
+  coerces: it can only send one of the two.
+- The browser suites read the verdict of `setValues` through `tests/browser/lib/measure-seam.cjs`
+  (W7g); the live smoke's one call leaves with W7e.
+
+ADR 0017's rule is unchanged and not weakened: a calibration is still stored only with its
+input and applied only for that input, by the workspace and again by the measurement engine.
+What is added only refuses more. A user reaches TEST CONTEXT by the URL flag alone, before
+anything is checked, so no user path changes; the hooks are the only way to cross contexts in
+one page.
+
+Proven by `tests/unit/v4-seam-contract.test.mjs` (the W7f, W7c and W7h tests, which failed
+before the change) and check `calibrated-only-for-a-checked-input` in `tests/browser/app.cjs`.

@@ -16,6 +16,7 @@ const path = require('node:path');
 const { pathToFileURL } = require('node:url');
 const suite = require('./lib/suite.cjs');
 const { until } = require('./lib/wait.cjs');
+const seam = require('./lib/measure-seam.cjs');
 
 const argv = process.argv.slice(2);
 const arg = (name, fallback) => {
@@ -504,7 +505,7 @@ function defineChecks() {
       }, conditions);
       return { ...tried, ...await now() };
     };
-    const seam = (fn, arg) => p.evaluate(fn, arg);
+    const inPage = (fn, arg) => p.evaluate(fn, arg);
     const NEEDS_INPUT = /^Run the setup check first: a level calibration is valid only for the/;
     /** Nothing to bind to: no input, the typed reading refused with the reason, no CALIBRATED. */
     const refused = (r) => r.input === null && r.saved === false && NEEDS_INPUT.test(r.error)
@@ -519,26 +520,26 @@ function defineChecks() {
       await H.ready(p);
       await H.workspace(p, 'measure');
       // A real TEST CONTEXT measurement: its setup check names the loopback input.
-      res.setup = await seam(() => {
+      res.setup = await inPage(() => {
         const m = window.OSCILLA.measure;
         return { loopback: m.useLoopback(), values: m.setValues({ duration: 1, repeats: 1,
           noiseCheckS: 0.5, preRollS: 0.25, postRollS: 0.5, gapS: 0.2 }) };
       });
-      await seam(() => window.OSCILLA.app.measureStart());
-      res.run = await until(() => seam(() => {
+      await inPage(() => window.OSCILLA.app.measureStart());
+      res.run = await until(() => inPage(() => {
         const m = window.OSCILLA.measure;
         return ['COMPLETE', 'INVALID', 'ABORTED', 'ERROR'].includes(m.state)
           ? { state: m.state, input: m.inputNow ? 'known' : null,
             testContext: !!(m.result && m.result.testContext) } : null;
       }), { ms: 45000, what: 'the TEST CONTEXT measurement ends' });
       // Route A with the input the loopback's own check named ...
-      res.leftLoopback = await seam(() => {
+      res.leftLoopback = await inPage(() => {
         window.__oscResult = window.OSCILLA.measure.result;
         return window.OSCILLA.measure.useMicrophone();
       });
       res.afterCheck = await typeReading();
       // ... and with an input injected in TEST CONTEXT.
-      res.injected = await seam((input) => {
+      res.injected = await inPage((input) => {
         const m = window.OSCILLA.measure;
         return { loopback: m.useLoopback(), set: m.setInputNow({ ...input,
           sampleRate: window.OSCILLA.engine.ctx.sampleRate }), known: !!m.inputNow,
@@ -546,17 +547,17 @@ function defineChecks() {
       }, MIC);
       res.afterInject = await typeReading();
       // Route B: a TEST CONTEXT result shown while the page is on the microphone.
-      res.shown = await seam(() => ({ ok: window.OSCILLA.measure.showResult(window.__oscResult),
+      res.shown = await inPage(() => ({ ok: window.OSCILLA.measure.showResult(window.__oscResult),
         title: window.OSCILLA.app.meas.shownTitle }));
       res.afterShow = await typeReading();
       // In TEST CONTEXT the typed reading is stored, labelled (W7c), and applies there only.
-      res.inContext = await seam((input) => {
+      res.inContext = await inPage((input) => {
         const m = window.OSCILLA.measure;
         return { loopback: m.useLoopback(), set: m.setInputNow({ ...input,
           sampleRate: window.OSCILLA.engine.ctx.sampleRate }) };
       }, MIC);
       res.typedInContext = await typeReading('calibrator on the capsule');
-      res.left = await seam(() => window.OSCILLA.measure.useMicrophone());
+      res.left = await inPage(() => window.OSCILLA.measure.useMicrophone());
       res.outside = await now();
       res.outsideText = await until(async () => {
         const t = await indicatorText();
@@ -585,18 +586,18 @@ function defineChecks() {
       // With a fake microphone: the checked microphone is the one input a reading binds to,
       // and that calibration does not apply in TEST CONTEXT.
       if (FAKE_MIC.has(browserName) && origin === 'http') {
-        await seam(() => window.OSCILLA.app.measureClearLevelCalibration());
+        await inPage(() => window.OSCILLA.app.measureClearLevelCalibration());
         // Check setup, on the microphone (not awaited: the poll below is the wait).
-        await seam(() => { window.OSCILLA.app.measureCheck(); });
-        res.micCheck = await until(() => seam(() => {
+        await inPage(() => { window.OSCILLA.app.measureCheck(); });
+        res.micCheck = await until(() => inPage(() => {
           const m = window.OSCILLA.measure;
           return ['READY', 'INVALID', 'ERROR'].includes(m.state)
             ? { state: m.state, kind: m.ioKind, input: m.inputNow ? 'known' : null } : null;
         }), { ms: 15000, what: 'the microphone setup check ends' });
         res.micTyped = await typeReading('on the microphone');
-        res.intoLoopback = await seam(() => window.OSCILLA.measure.useLoopback());
+        res.intoLoopback = await inPage(() => window.OSCILLA.measure.useLoopback());
         res.micCalInLoopback = await now();
-        res.backOnMic = await seam(() => window.OSCILLA.measure.useMicrophone());
+        res.backOnMic = await inPage(() => window.OSCILLA.measure.useMicrophone());
         res.micCalUnchecked = await now();
         v.micChecked = res.micCheck.state === 'READY' && res.micCheck.kind === 'microphone'
           && res.micCheck.input === 'known';
@@ -680,13 +681,9 @@ function defineChecks() {
     // measurement (2 runs) gives the result tabs, Save/Repeat and, saved twice, two experiments
     // for the detail, compare and dialog controls.
     await H.workspace(page, 'measure');
-    await page.evaluate(() => {
-      const m = window.OSCILLA.measure;
-      m.useLoopback();
-      m.setValues({ duration: 1, repeats: 2, noiseCheckS: 0.5, preRollS: 0.25, postRollS: 0.5,
-        gapS: 0.2 });
-      window.OSCILLA.app.measureSetExpert(true);
-    });
+    await seam.loopback(page, { values: { duration: 1, repeats: 2, noiseCheckS: 0.5,
+      preRollS: 0.25, postRollS: 0.5, gapS: 0.2 } });
+    await page.evaluate(() => window.OSCILLA.app.measureSetExpert(true));
     await collect();
     await page.evaluate(() => window.OSCILLA.app.measureStart());
     await page.waitForFunction(() => ['COMPLETE', 'INVALID', 'ABORTED', 'ERROR']
