@@ -10,6 +10,8 @@
 // mode ids (playground/sweep/dual/presets/learn) that the URL `m` key and presets still use.
 // The 'mode' event kind keeps its name (detail.value is the workspace id).
 
+import { shortcutHelp } from './shortcuts.js';
+
 const THEME_KEY = 'oscilla.v2.theme';
 const ANALYSIS_TAB_KEY = 'oscilla.v2.analysisTab';
 const ANALYSIS_TABS = ['waveform', 'spectrum', 'spectrogram', 'harmonics', 'signalPath'];
@@ -325,6 +327,10 @@ export function createOscillaUi({ storedAnalysisTab = storageGet(ANALYSIS_TAB_KE
         && p.offsetParent !== null && !p.matches('.osc-p-source, .osc-p-analysis'))
         .sort((a, b) => a.getBoundingClientRect().top - b.getBoundingClientRect().top)[0];
       if (target) target.scrollIntoView({ block: tablet ? 'start' : 'nearest', behavior });
+    },
+    /** What the one Keyboard shortcuts dialog lists in the workspace in view (ADR 0050). */
+    keyHelp() {
+      return shortcutHelp(this.workspace);
     },
     navItem(mode) {
       return {

@@ -2245,7 +2245,7 @@
                 @click="studioImportClick()"><svg aria-hidden="true"><use href="#s-import"/></svg></button>
               <button type="button" class="osc-icon-btn osc-st-ico" data-osc="studio.keys"
                 aria-label="Studio keyboard shortcuts" title="Keyboard shortcuts"
-                @click="openDialog('osc-dlg-studio-keys')"><svg aria-hidden="true"><use href="#s-keys"/></svg></button>
+                @click="openDialog('help')"><svg aria-hidden="true"><use href="#s-keys"/></svg></button>
             </div>
           </div>
           <p class="osc-st-note" data-osc="studio.storeNote" x-show="studio.storeNote" style="display: none"
@@ -2695,20 +2695,42 @@
     </div>
   </dialog>
 
-  <dialog class="osc-dialog" id="osc-dlg-help" data-oscilla-modal aria-labelledby="osc-dlg-help-title">
+  <!-- The ONE shortcut list (ADR 0050): src/js/ui/shortcuts.js says what Space means in the
+       workspace in view and which keys that workspace has; Help, the overflow menu and
+       Studio's keyboard button all open it. A kbd holds keys; where they apply follows it. -->
+  <dialog class="osc-dialog" id="osc-dlg-help" data-oscilla-modal aria-labelledby="osc-dlg-help-title"
+    :class="{ 'osc-dialog--wide': keyHelp().timeline }">
     <div class="osc-dialog-body">
       <h2 class="osc-dialog-title" id="osc-dlg-help-title">Keyboard shortcuts</h2>
-      <dl class="osc-shortcuts">
-        <div><dt><kbd>Space</kbd> (hold)</dt><dd>Hold to play (programmed patterns: trigger)</dd></div>
-        <div><dt><kbd>Enter</kbd> on Hold / Trigger</dt><dd>Trigger once</dd></div>
-        <div><dt><kbd>Esc</kbd></dt><dd>Stop immediately; close menus and dialogs</dd></div>
-        <div><dt><kbd>←</kbd> <kbd>→</kbd> on tabs and segments</dt><dd>Move and select</dd></div>
-        <div><dt><kbd>PgUp</kbd> / <kbd>PgDn</kbd> on the frequency slider</dt><dd>One octave up / down</dd></div>
-        <div><dt>Sequencer timeline: arrows, <kbd>Alt</kbd>+arrows, <kbd>Del</kbd>, <kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>D</kbd></dt><dd>Select, move, delete, duplicate blocks</dd></div>
+      <h3 class="osc-shortcuts-head">In <span data-osc="help.title" x-text="keyHelp().title">Playground</span></h3>
+      <dl class="osc-shortcuts" data-osc="help.workspace">
+        <div data-osc="help.space" data-osc-shortcut="space"><dt><kbd x-text="keyHelp().space.keys">Space</kbd><span x-show="keyHelp().space.where" x-text="' ' + (keyHelp().space.where || '')"> (hold)</span></dt><dd x-text="keyHelp().space.text">Hold to play: sounds while held, stops on release (a programmed pattern: trigger once)</dd></div>
+        <template x-for="k in keyHelp().rows" :key="k.id">
+          <div :data-osc-shortcut="k.id"><dt><kbd x-text="k.keys"></kbd><span x-show="k.where" x-text="' ' + (k.where || '')"></span></dt><dd x-text="k.text"></dd></div>
+        </template>
       </dl>
-      <p class="osc-muted osc-dialog-note">Space does nothing while a text field, button or
-        dialog has focus. Start at a low level: OSCILLA caps the logical gain at 0.25 and, unless
-        continuous playback is allowed in Device &amp; Limits, stops every tone after the hard limit.</p>
+      <template x-if="keyHelp().note">
+        <p class="osc-muted osc-dialog-note" data-osc="help.note" x-text="keyHelp().note"></p>
+      </template>
+      <template x-if="keyHelp().timeline">
+        <div>
+          <h3 class="osc-shortcuts-head">Timeline, with a clip, marker or point focused</h3>
+          <p class="osc-muted osc-dialog-note" data-osc="help.timeline" x-text="keyHelp().timeline"></p>
+        </div>
+      </template>
+      <h3 class="osc-shortcuts-head">Everywhere</h3>
+      <dl class="osc-shortcuts" data-osc="help.global">
+        <template x-for="k in keyHelp().global" :key="k.id">
+          <div :data-osc-shortcut="k.id"><dt><kbd x-text="k.keys"></kbd><span x-show="k.where" x-text="' ' + (k.where || '')"></span></dt><dd x-text="k.text"></dd></div>
+        </template>
+      </dl>
+      <p class="osc-muted osc-dialog-note">Space has one owner in each workspace. Where a
+        workspace plays, loads or analyses the instrument's signal, holding Space plays it,
+        whether or not a Play control is on screen. In Studio, Space starts or stops the Studio
+        transport. Elsewhere it starts nothing. A focused text field, button, link, slider or
+        open dialog keeps Space. Start at a low level: OSCILLA caps the logical gain at 0.25
+        and, unless continuous playback is allowed in Device &amp; Limits, stops every tone after
+        the hard limit.</p>
       <div class="osc-dialog-actions">
         <button type="button" class="osc-btn osc-btn-primary" @click="closeDialog('help')">Close</button>
       </div>
@@ -2995,24 +3017,6 @@
       <div class="osc-dialog-actions">
         <button type="button" class="osc-btn osc-btn-primary" data-osc="studio.linkDone"
           @click="closeDialog('osc-dlg-studio-link')">Done</button>
-      </div>
-    </div>
-  </dialog>
-  <dialog class="osc-dialog osc-dialog--wide" id="osc-dlg-studio-keys" data-oscilla-modal
-    data-osc-studio-dialog aria-labelledby="osc-dlg-st-keys-title">
-    <div class="osc-dialog-body">
-      <h2 class="osc-dialog-title" id="osc-dlg-st-keys-title">Studio keyboard shortcuts</h2>
-      <dl class="osc-shortcuts" data-osc="studio.shortcuts">
-        <template x-for="k in studio.shortcuts" :key="k.id">
-          <div><dt><kbd x-text="k.keys"></kbd></dt><dd x-text="k.text"></dd></div>
-        </template>
-      </dl>
-      <p class="osc-muted osc-dialog-note">They apply while Studio has focus and no text field is
-        being edited. Every drag has a keyboard path: arrows move nodes, C lists the inputs a node
-        can connect to, and the Inspector edits positions and clip times.</p>
-      <div class="osc-dialog-actions">
-        <button type="button" class="osc-btn osc-btn-primary"
-          @click="closeDialog('osc-dlg-studio-keys')">Done</button>
       </div>
     </div>
   </dialog>

@@ -343,6 +343,13 @@
   padding: 0 14px;
 }
 
+.osc-shortcuts-head {
+  margin: 4px 0 0;
+  color: var(--osc-text-2);
+  font-size: var(--osc-fs-sm);
+  font-weight: var(--osc-fw-semibold);
+}
+
 .osc-shortcuts {
   display: flex;
   flex-direction: column;

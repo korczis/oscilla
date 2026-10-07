@@ -53,6 +53,7 @@ import { serializeSequence } from './sequencer/model.js';
 
 import { registerOscillaUi, workspaceTitle } from './ui/app.js';
 import { keyGuard, openModal, closeModal, watchDialogs, focusSafely } from './ui/dialogs.js';
+import { instrumentTakesSpace, isSpace } from './ui/shortcuts.js';
 import { createWorkbench } from './ui/workbench.js';
 import { createNavigation, v1ModeFor } from './ui/navigation.js';
 import { createUnsavedGuard } from './ui/unsaved.js';
@@ -534,6 +535,10 @@ function integrationInit() {
       stopSequencer();
       cmp.measureAbort('escape'); // spec §111: Escape aborts a measurement (after the sequencer)
     }
+    // ADR 0050: Space is Hold to Play only in the workspaces that play, load or analyse the
+    // instrument's signal; in Studio it is the transport's (handled above), elsewhere it
+    // starts nothing.
+    if (isSpace(e) && !instrumentTakesSpace(cmp.workspace)) return;
     cmp.onKeyDown(e);
   });
   window.addEventListener('keyup', (e) => cmp.onKeyUp(e));
