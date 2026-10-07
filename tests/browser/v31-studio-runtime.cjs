@@ -296,7 +296,12 @@ function defineChecks() {
 
   def('presentation-edit', async ({ page }) => {
     await H.fresh(page);
-    await page.evaluate(() => window.OSCILLA.app.studioLoadTemplate('basic-tone'));
+    // The Basic Tone has no clips: with the loop on it keeps playing (else PLAY ends at once).
+    await page.evaluate(() => {
+      window.OSCILLA.app.studioLoadTemplate('basic-tone');
+      window.OSCILLA.studio.store.dispatch({ type: 'LOOP_SET', enabled: true, start: 0,
+        end: 4 });
+    });
     await H.frames(page);
     await H.tap(page);
     await page.click('[data-osc="studio.play"]');
