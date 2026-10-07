@@ -6,7 +6,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { writeFileSync } from 'node:fs';
+import { mkdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { gitRepo } from './fixtures/git-repo.mjs';
@@ -259,10 +259,14 @@ test('extra is tracked', () => {
   const files = execFileSync('git', ['ls-files'], { encoding: 'utf8' }).split('\\n');
   assert.ok(files.includes('README.md'));
   assert.ok(files.includes('src/extra.mjs'), 'src/extra.mjs is tracked');
-  assert.ok(!files.includes('node_modules'));
+  const others = execFileSync('git', ['ls-files', '--others', '--exclude-standard'],
+    { encoding: 'utf8' });
+  assert.equal(others, '', 'nothing untracked, the linked node_modules included');
 });
 `,
   });
+  // the fixture has dependencies, as the repository does: both trees get them linked in
+  mkdirSync(path.join(repo.dir, 'node_modules'));
   const r = run(repo, 'feat(x): extra');
   assert.equal(r.status, 0, r.out);
   assert.match(r.out, /tracked\.test\.mjs: fails without the change \(assertion\), passes with it/);

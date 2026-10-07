@@ -26,7 +26,7 @@
 // Exit 0: nothing to prove, waived, or proven. Exit 1: not proven. Exit 2: usage.
 
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync }
+import { appendFileSync, existsSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync }
   from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -94,6 +94,9 @@ function stage(tree) {
     const r = spawnSync('git', ['-C', tree, ...args], { encoding: 'utf8', env });
     if (r.status !== 0) throw new Error(`git ${args.join(' ')} in ${tree}: ${r.stderr.trim()}`);
   }
+  // node_modules is linked in afterwards; a `node_modules/` ignore pattern does not match a
+  // symlink, and it must stay as invisible to `git ls-files --others` as the real directory.
+  appendFileSync(path.join(tree, '.git', 'info', 'exclude'), '\n/node_modules\n');
 }
 
 function runFile(tree, file) {
