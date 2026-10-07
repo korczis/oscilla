@@ -588,21 +588,25 @@ function defineChecks(fx) {
       window.OSCILLA.app.setWorkspace('studio');
       await window.OSCILLA.app.studioShowProject(pid);
     }, project.id);
+    // (An experiment an earlier check measured from the same path may be listed too.)
+    const mine = (c) => !!c.href && c.href.endsWith(`exp=${done.id}`);
     res.listed = await H.until(() => items(`${ROW} li.osc-x-cn-item`),
-      (l) => l.length === 1 && l[0].state === 'present', 15000);
+      (l) => l.some((c) => mine(c) && c.state === 'present'), 15000);
     await page.evaluate(async (id) => {
       await window.OSCILLA.experiments.store().delete(id);
       window.OSCILLA.app.alerts = [];
     }, done.id);
-    await page.click(`${ROW} [data-osc="studio.saved.cnxLink"]`);
-    res.refused = await H.until(() => page.evaluate((row) => {
+    await page.click(`${ROW} a[data-osc="studio.saved.cnxLink"][href$="exp=${done.id}"]`);
+    res.refused = await H.until(() => page.evaluate(({ row, id }) => {
       const r = document.querySelector(row);
       return { ws: window.OSCILLA.app.workspace,
         dialog: document.getElementById('osc-dlg-studio-library').open,
         status: r ? r.querySelector('details [role="status"]').textContent : '',
-        links: r ? r.querySelectorAll('[data-osc="studio.saved.cnxLink"]').length : -1,
+        links: r ? [...r.querySelectorAll('[data-osc="studio.saved.cnxLink"]')]
+          .filter((a) => a.getAttribute('href').endsWith(`exp=${id}`)).length : -1,
         alerts: window.OSCILLA.app.alerts.map((a) => `${a.title}: ${a.message || ''}`) };
-    }, ROW), (x) => /was not opened/.test(x.status) && x.links === 0, 15000);
+    }, { row: ROW, id: done.id }), (x) => /was not opened/.test(x.status) && x.links === 0,
+    15000);
     // Open over unsaved changes asks first: the first press changes nothing.
     res.unsaved = await page.evaluate(async (row) => {
       const s = window.OSCILLA.studio.store;
