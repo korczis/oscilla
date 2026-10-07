@@ -700,7 +700,7 @@ export function createMeasureUi(svc) {
   /**
    * The level calibration of a stored noise-check snapshot: the one its measurement applied
    * (the evidence of that result), never one loaded or created afterwards; the current one only
-   * for a result shown without a run (test seam).
+   * for a TEST CONTEXT result shown without a run (test seam).
    */
   function snapshotLevel(st, m) {
     const ev = ctx.evidence;
@@ -932,6 +932,21 @@ export function createMeasureUi(svc) {
     rebuildAll();
   }
 
+  /**
+   * Put validated recipe values (decodeRecipeLink) into the setup, as an edit does: refused
+   * while a measurement or a reference capture runs, and a READY setup check is reset because
+   * the recipe changed. Returns { ok: true } or { ok: false, errors }. Says nothing itself.
+   */
+  function applyRecipeValues(cmp, values) {
+    if (cmp.meas.busy || ctx.refCapture) return { ok: false, errors: ['a measurement is running'] };
+    Object.assign(cmp.meas.values, values);
+    // meas.saved belongs to the result shown, not to the setup: a stored run stays saved (a
+    // second save of it would be refused as immutable and read as "not saved").
+    if (ctx.me && ctx.me.state === S.READY) ctx.me.reset(); // the recipe changed
+    refresh();
+    return { ok: true };
+  }
+
   // ---------------------------------------------------------------- experiment building
   /** The { f1, f2 } a recipe asked for (before the Nyquist clamp), or null. */
   function requestedOf(recipe) {
@@ -940,8 +955,9 @@ export function createMeasureUi(svc) {
   }
 
   /**
-   * The evidence of `result` as measured (taken at its start, measuredEvidence); a result shown
-   * without a run (test seam) has no start notes and takes the rest from the workspace now.
+   * The evidence of `result` as measured (taken at its start, measuredEvidence); a TEST CONTEXT
+   * result shown without a run (test seam) has no start notes and takes the rest from the
+   * workspace now.
    */
   function evidenceOf(result) {
     return ctx.evidence && ctx.evidence.result === result ? ctx.evidence
@@ -1006,14 +1022,15 @@ export function createMeasureUi(svc) {
         lostRun = true;
         sv.stored = false;
         cmp.notify('error', 'Experiment not stored', `"${name}" was no longer stored, and storing `
-          + `it again failed: ${err.message || String(err)}. The run is not stored; save again.`);
+          + `it again failed: ${err.message || String(err)}. The experiment is not stored; `
+          + 'save again.');
         return null;
       }
       sv.experiment = again;
       m.savedAnnotation = again.annotations && again.annotations.notes || null;
       m.savedName = again.name;
       cmp.notify('success', 'Experiment saved again', `"${name}" was no longer stored; the `
-        + 'same run is stored again under its id.');
+        + 'same experiment is stored again under its id.');
       return sv.id;
     };
     try {
@@ -1025,7 +1042,7 @@ export function createMeasureUi(svc) {
       if (name !== stored.name) meta.name = name;
       if (notes !== null && notes !== storedNotes) meta.notes = notes;
       // A lost acknowledgement: the write reported an error, yet the run is stored.
-      const lost = confirmed ? ' (the write reported an error, but the run is stored)' : '';
+      const lost = confirmed ? ' (the write reported an error, but the experiment is stored)' : '';
       if (!Object.keys(meta).length) {
         m.savedAnnotation = storedNotes;
         m.savedName = stored.name;
@@ -1047,10 +1064,11 @@ export function createMeasureUi(svc) {
       m.savedName = next.name;
       cmp.notify('success', confirmed ? 'Experiment saved' : 'Experiment updated',
         `"${next.name}"${lost}: ${Object.keys(meta).map((k) => (k === 'name' ? 'name'
-          : 'annotation notes')).join(' and ')} updated; the measured run is stored unchanged.`);
+          : 'annotation notes')).join(' and ')} updated; the measured experiment is stored `
+          + 'unchanged.');
       return sv.id;
     } catch (err) {
-      cmp.notify('error', 'Experiment name and notes not updated', 'The measured run is '
+      cmp.notify('error', 'Experiment name and notes not updated', 'The measured experiment is '
         + `stored (${sv.id}); only the metadata change failed: ${err.message || String(err)}`);
       return sv.id;
     } finally {
@@ -1215,7 +1233,7 @@ export function createMeasureUi(svc) {
     const definitionAtStart = ctx.runDefinition;
     if (!given && ctx.definition && !ctx.runDefinition) {
       cmp.notify('warning', 'Not run from the definition', 'The setup differs from the loaded '
-        + 'definition, so this run records the definition derived from its own recipe.');
+        + 'definition, so this experiment records the definition derived from its own recipe.');
     }
     let result = null;
     try {
@@ -1599,20 +1617,17 @@ export function createMeasureUi(svc) {
           + 'The measurement setup is unchanged.');
         return false;
       }
-      if (this.meas.busy || ctx.refCapture) {
-        this.meas.recipeLinkErrors = ['a measurement is running'];
+      // Refused while a measurement runs; otherwise applied as an edit (a READY check resets).
+      const applied = applyRecipeValues(this, r.values);
+      if (!applied.ok) {
+        this.meas.recipeLinkErrors = applied.errors;
         this.notify('warning', 'Recipe link not applied', 'A measurement is running; stop it and '
           + 'open the link again.');
         ctx.lastRecipeParam = null;
         return false;
       }
-      Object.assign(this.meas.values, r.values);
       this.meas.recipeLinkErrors = [];
       ctx.repeatOf = null;
-      // meas.saved belongs to the result shown, not to the setup: a stored run stays saved (a
-      // second save of it would be refused as immutable and read as "not saved").
-      if (ctx.me && ctx.me.state === S.READY) ctx.me.reset(); // the recipe changed
-      refresh();
       this.notify('info', 'Measurement recipe loaded from the link', `${this.meas.stimulusText}, `
         + `${this.meas.values.repeats} run(s). Nothing runs until you press Check setup or Start `
         + 'measurement.');
@@ -1939,7 +1954,7 @@ export function createMeasureUi(svc) {
       if (this.meas.saving) return 'Saving…';
       if (this.meas.saved) {
         return 'This measurement is saved; Update name and notes stores a new name or notes as '
-          + 'metadata (the run is unchanged).';
+          + 'metadata (the experiment is unchanged).';
       }
       if (this.meas.state !== S.COMPLETE) return 'Available once a measurement is COMPLETE.';
       return '';
@@ -2004,13 +2019,14 @@ export function createMeasureUi(svc) {
           ctx.save = null; // a retry stores this run under a new id, with the same decoration
           saveOf(result).decorate = sv.decorate || null;
           this.notify('error', 'Experiment not saved', `A different record is stored under this `
-            + `id (${sv.id}); this run was not saved. Save again to store it under a new id.`);
+            + `id (${sv.id}); this experiment was not saved. Save again to store it under a `
+            + 'new id.');
           return null;
         }
         if (unread) {
           this.notify('error', 'Experiment not confirmed', `${err.message || String(err)}. The `
-            + 'store could not be read back to see whether the run was stored; save again (a '
-            + 'retry never stores a second copy).');
+            + 'store could not be read back to see whether the experiment was stored; save again '
+            + '(a retry never stores a second copy).');
         } else this.notify('error', 'Experiment not saved', err.message || String(err));
         return null;
       } finally {
@@ -2085,6 +2101,13 @@ export function createMeasureUi(svc) {
     },
 
     // ------------------------------------------------------------------ test seam
+    // window.OSCILLA.measure (ADR 0052). Every member is one of three kinds: it OBSERVES (the
+    // getters, counts(), liveRta()); it DRIVES an action a user already has, through the user's
+    // validation (useLoopback = ?measure=loopback, useMicrophone, setValues = a recipe link); or
+    // it INJECTS, and then only as TEST CONTEXT: setInputNow only while the page is in loopback,
+    // showResult only a result that carries a testContext. Open (ledger W7f): an injected input
+    // survives useMicrophone(), and showResult adopts result.input outside loopback. The key
+    // list is pinned by tests/browser/app.cjs `seam-surface-pinned`.
     measureTestSeam() {
       const self = this;
       return {
@@ -2136,9 +2159,24 @@ export function createMeasureUi(svc) {
         },
         clearStateHook() { ctx.onStateHook = null; },
         get live() { return { ...self.meas.live }; },
+        /**
+         * Drive: set recipe values (field id → value) as a recipe link does. The whole call is
+         * refused with { ok: false, errors } for a key that is not a recipe field, a value
+         * outside its field's range, or while a measurement runs; otherwise it returns true, and
+         * a READY setup check is reset as by any edit. No toast, and no link state changes.
+         */
         setValues(values) {
-          Object.assign(self.meas.values, values);
-          refresh();
+          const given = values && typeof values === 'object' ? Object.keys(values) : null;
+          const unknown = given ? given.filter((k) => !RECIPE_FIELD_IDS.includes(k)) : [];
+          if (!given || unknown.length) {
+            return { ok: false, errors: given ? unknown.map((k) => `unknown recipe field `
+              + `"${String(k).slice(0, 20)}"`) : ['the values must be an object'] };
+          }
+          const r = decodeRecipeLink(encodeRecipeLink(recipeValues({ ...self.meas.values,
+            ...values })), { defaults: recipeValues(FIELD_DEFAULTS) });
+          if (!r.ok) return { ok: false, errors: r.errors };
+          const applied = applyRecipeValues(self, r.values);
+          return applied.ok ? true : applied;
         },
         counts() {
           const io = ctx.io;
@@ -2178,15 +2216,26 @@ export function createMeasureUi(svc) {
         get inputNow() { return ctx.inputNow; },
         get reference() { return ctx.reference; },
         get referenceCapturing() { return !!ctx.refCapture; },
-        /** Test hook: the current input (as a preflight would report it). */
+        /**
+         * Test hook (TEST CONTEXT only): the current input, as a preflight would report it.
+         * Refused (false) unless the page is in TEST CONTEXT loopback: a level calibration binds
+         * to this input, and outside TEST CONTEXT only a real setup check may name one.
+         */
         setInputNow(input) {
+          if (!ctx.loopback) return false;
           ctx.inputNow = input;
           refresh();
+          return true;
         },
-        /** Test hook: show any engine-like result (view-option robustness, M6). */
+        /**
+         * Test hook: show a TEST CONTEXT engine-like result; a result without testContext is
+         * refused (false), never shown as a measurement.
+         */
         showResult(result) {
+          if (!result || !result.testContext) return false;
           showResult(result);
           refresh();
+          return true;
         },
         get responseView() { return ctx.charts.response ? ctx.charts.response.view : null; },
         /** The chosen input (raw id, page only) and the one the current io was opened with. */

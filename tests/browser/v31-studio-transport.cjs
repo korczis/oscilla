@@ -43,14 +43,16 @@ const os = require('node:os');
 const path = require('node:path');
 const { pathToFileURL } = require('node:url');
 const esbuild = require('esbuild');
-const playwright = require('playwright');
+const suite = require('./lib/suite.cjs');
 
 const argv = process.argv.slice(2);
 const arg = (name, fallback) => {
   const i = argv.indexOf(`--${name}`);
   return i >= 0 && argv[i + 1] ? argv[i + 1] : fallback;
 };
-const BROWSERS = arg('browsers', process.env.OSC_BROWSERS || 'chromium,firefox,webkit').split(',');
+const RUN = suite.open({ name: 'v31-studio-transport', browsers: arg('browsers') });
+const playwright = RUN.playwright;
+const BROWSERS = RUN.browsers;
 const JSON_OUT = arg('json', '');
 const STALL_MS = Number(arg('stall-ms', '0'));
 const ENTRY = path.join(__dirname, 'fixtures', 'v31-studio-transport-entry.js');
@@ -112,6 +114,7 @@ let failures = 0;
 let passes = 0;
 const report = { meta: { date: new Date().toISOString(), node: process.version }, runs: {} };
 function check(key, name, ok, detail = '') {
+  RUN.tally(key);
   if (ok) passes += 1; else failures += 1;
   console.log(`  ${ok ? 'PASS' : 'FAIL'} [${key}] ${name}${detail ? ` — ${detail}` : ''}`);
   return ok;
@@ -236,6 +239,7 @@ async function runOne(browserName, url) {
 }
 
 (async () => {
+  await RUN.ready();
   const r = await esbuild.build({ entryPoints: [ENTRY], bundle: true, format: 'iife',
     write: false, target: 'es2020', logLevel: 'silent' });
   const html = HTML(r.outputFiles[0].text);

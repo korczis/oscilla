@@ -34,7 +34,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const { pathToFileURL } = require('node:url');
-const playwright = require('playwright');
+const suite = require('./lib/suite.cjs');
 
 const argv = process.argv.slice(2);
 const arg = (name, fallback) => {
@@ -43,7 +43,9 @@ const arg = (name, fallback) => {
 };
 const ROOT = path.resolve(__dirname, '..', '..');
 const DIST = path.resolve(arg('dist', path.join(ROOT, 'dist', 'index.html')));
-const BROWSERS = arg('browsers', process.env.OSC_BROWSERS || 'chromium,firefox,webkit').split(',');
+const RUN = suite.open({ name: 'qa-regressions', browsers: arg('browsers') });
+const playwright = RUN.playwright;
+const BROWSERS = RUN.browsers;
 const ONLY = arg('only', '') ? new Set(arg('only', '').split(',')) : null;
 
 const LAUNCH = {
@@ -732,7 +734,7 @@ function defineChecks() {
     await page.keyboard.press('Enter'); // focus is on dismiss again
     await settle((v) => !v.shown);
     await page.reload({ waitUntil: 'load' });
-    await page.waitForSelector('html[data-ready="true"]');
+    await page.waitForSelector('html[data-ready="true"]', { timeout: 10000 });
     await sleep(150);
     const reloaded = await state();
     await context.close();
@@ -761,7 +763,7 @@ function defineChecks() {
       reloaded: { shown: reloaded.shown, stored: reloaded.stored }, phone };
   });
 
-  def('contrast', async ({ browser }) => {
+  def('contrast', async ({ browser, browserName }) => {
     const res = {};
     const add = (k, v) => { res[k] = v; };
     for (const theme of ['dark', 'light']) {
@@ -788,6 +790,7 @@ function defineChecks() {
     // axe-core, when installed (npm i --no-save axe-core): color-contrast across workspaces.
     let axe = 'skipped (axe-core not installed)';
     const axeBad = [];
+    if (!axeSource) RUN.skip(browserName, 'contrast-axe', 'axe-core is not installed');
     if (axeSource) {
       let runs = 0;
       for (const theme of ['dark', 'light']) {
@@ -820,6 +823,7 @@ function defineChecks() {
 
 // ------------------------------------------------------------------------------ runner
 (async () => {
+  await RUN.ready();
   if (!fs.existsSync(DIST)) {
     console.error(`missing ${DIST}: run npm run build`);
     process.exit(2);
@@ -832,7 +836,10 @@ function defineChecks() {
     const bad = [];
     for (const c of defineChecks()) {
       if (ONLY && !ONLY.has(c.name)) continue;
-      if (c.browsers && !c.browsers.includes(name)) continue;
+      if (c.browsers && !c.browsers.includes(name)) {
+        RUN.skip(name, c.name, `defined for ${c.browsers.join(', ')} only`);
+        continue;
+      }
       n++;
       let r;
       try {
@@ -846,6 +853,7 @@ function defineChecks() {
       if (!r.ok) bad.push(c.name);
     }
     await browser.close();
+    RUN.reportLeg({ leg: name, checks: n });
     failed += bad.length;
     console.log(`${bad.length ? 'FAIL' : 'PASS'} ${name}: ${n - bad.length}/${n} checks `
       + `(${((Date.now() - t0) / 1000).toFixed(1)} s)`);

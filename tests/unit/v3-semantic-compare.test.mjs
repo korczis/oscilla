@@ -274,7 +274,7 @@ test('ADR 0041: the compare view groups changes, execution first, wording "chang
     assert.equal(v.entries[0].baseline, true);
     assert.equal(v.semantic.length, 1);
     const p = v.semantic[0];
-    assert.equal(p.heading, 'Changed between runs A (baseline) and B');
+    assert.equal(p.heading, 'Changed between experiments A (baseline) and B');
     assert.ok(p.executionCount >= 1);
     const firstOther = p.groups.findIndex((g) => g.other);
     assert.ok(firstOther > 0 && p.groups.slice(firstOther).every((g) => g.other),
@@ -288,7 +288,7 @@ test('ADR 0041: the compare view groups changes, execution first, wording "chang
     assert.doesNotMatch(text, /SPL/);
     const same = buildCompareView([a.experiment, a.experiment]).semantic[0];
     assert.equal(same.executionCount, 0);
-    assert.equal(same.none, 'No execution change between runs A and B.');
+    assert.equal(same.none, 'No execution change between experiments A and B.');
   });
 
 // ---------------------------------------------------------------- baseline

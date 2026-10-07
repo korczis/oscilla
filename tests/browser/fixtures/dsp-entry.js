@@ -24,6 +24,7 @@ import { createNoiseSource } from '../../../src/js/audio/noise.js';
 import { encodeWav } from '../../../src/js/audio/wav.js';
 import { render, renderTone, bufferStats } from '../../../src/js/audio/offline-renderer.js';
 
+// timing-allow: the rate this fixture requests for every context it creates, live and offline
 const SR = 48000;
 const FFT = 8192;
 
@@ -213,10 +214,11 @@ async function periodicWaveSquare() {
     { duration: 0.5, sampleRate: SR, channels: 1 },
   );
   const d = buffer.getChannelData(0);
-  const band = (f) => spectrumPeak(d, 4800, { minHz: f - 40, maxHz: f + 40, minSnrDb: -200 });
+  const skip = Math.round(0.1 * SR); // past the start of the render, at its own rate
+  const band = (f) => spectrumPeak(d, skip, { minHz: f - 40, maxHz: f + 40, minSnrDb: -200 });
   const h = [1, 2, 3, 4, 5].map((n) => band(n * f0));
   let peak = 0;
-  for (let i = 4800; i < d.length; i++) peak = Math.max(peak, Math.abs(d[i]));
+  for (let i = skip; i < d.length; i++) peak = Math.max(peak, Math.abs(d[i]));
   return {
     f0,
     freqs: h.map((p) => p && p.frequencyHz),
@@ -336,7 +338,7 @@ async function stereoRouting() {
       { duration: 0.3, sampleRate: SR, channels: 2 },
     );
   const corr = (buf) =>
-    pearson(buf.getChannelData(0).subarray(4800), buf.getChannelData(1).subarray(4800));
+    pearson(buf.getChannelData(0).subarray(SR / 10), buf.getChannelData(1).subarray(SR / 10));
   const split = await run({ mode: 'split' }, false);
   const inverted = await run({ mode: 'split' }, true);
   const unrelated = await run({ mode: 'split', freqB: 733 }, false);
