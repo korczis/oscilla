@@ -592,13 +592,10 @@ function integrationInit() {
   });
   cmp.$watch('tabs.analysis', (tab) => setAnalysisTab(tab));
   const loadExperiments = (ws) => {
-    if (ws === 'experiments' && !cmp.exps.loaded) {
-      cmp.experimentsRefresh().catch((err) => cmp.notify('error', 'Experiments unavailable',
-        err.message || String(err)));
-    } else if (ws === 'experiments') {
-      // Back in Experiments: the list is read again, so a detail whose record was replaced or
-      // deleted since (here or in another tab) is brought to what is stored before its
-      // connected records are read, and the address names the detail again (ADR 0048).
+    // Every entry reads the list again: another tab may have changed what is stored, and a
+    // detail or comparison left open must show the stored record (ui/experiments.js syncViews).
+    // The address then names the detail again (ADR 0048).
+    if (ws === 'experiments') {
       cmp.experimentsRefresh().then(() => cmp.recordsNameDetail(), (err) => cmp.notify('error',
         'Experiments unavailable', err.message || String(err)));
     }

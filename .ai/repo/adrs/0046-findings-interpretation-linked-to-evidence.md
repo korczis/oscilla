@@ -177,9 +177,17 @@ Proposed:
     is not the hash of the record shown never reads as citing it.
 
   List rows carry the result hash; rows written by earlier builds get it on their first read
-  (from the stored record, which stays unchanged). A list refresh re-reads a detail or comparison
-  whose experiment's row names another hash, and closes one whose experiment is gone. A tab that
-  becomes visible again re-reads the list. A unit test asserts that the identity is read in exactly
+  (from the stored record, which stays unchanged).
+- **A view shows the stored record** (`ui/experiments.js`, one rule). A decoded copy of an
+  experiment is used only while the stored row, read at that moment (`store.summary`), still
+  names its result hash; otherwise the copy is dropped and the record is read from the store.
+  Opening, comparing, exporting and repeating all go through it, so opening an id never shows a
+  record that another tab replaced or deleted. The list is read again on every entry to the
+  Experiments workspace and when the tab becomes visible; that refresh re-reads a detail or
+  comparison whose row names another hash and closes one whose experiment is gone, each with a
+  notice. The detail exposes the result hash of the record it shows (`exps.detail.resultHash`,
+  `experimentsShownHash`) for whatever depends on it.
+- **Tested structurally.** A unit test asserts that the identity is read in exactly
   one place, with no identity cache in the findings adapter, and that refresh, Open and linking each
   call the verification point.
 - **Known limit.** A record corrupted in place while its list row stays the same (possible only

@@ -461,7 +461,7 @@ export function createConnectionsUi() {
               + 'now. Nothing was opened; the list is read again.');
           }
           name({ kind, id });
-          await this.experimentsShowRecord(e);
+          await this.experimentsOpen(id, { record: e });
           focusLater(this, '#osc-x-detail-title');
           return true;
         }

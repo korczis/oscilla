@@ -148,6 +148,10 @@
 //                           recording a finding from tab 1's out-of-date detail or comparison is
 //                           refused ("replaced in another tab … reopen it"), and Open of a
 //                           reference to the replaced run opens nothing and re-checks the row
+//   views-two-tabs          (#151 review) tab 2 replaces the experiment tab 1 has open: after
+//                           tab 1 returns from another workspace, and after the id is opened
+//                           again with no event, the detail's title and result hash are the
+//                           stored record's
 //   calibration-export      (V315) Export CSV and Export JSON of the loaded profile download
 //                           deterministic files named after the profile and its id, and both
 //                           re-import (same id, name, convention); a correction profile (chosen
@@ -2800,6 +2804,76 @@ function defineChecks(fixtures) {
       'open-refused': res.open.stateBefore === 'ok' && !res.open.opened
         && res.open.stateAfter === 'broken' && /different record/.test(res.openAlerts),
       'compare-refused': !res.compare.dialog && refused.test(res.compare.alerts),
+    }) };
+  });
+
+  // #151 review (root in ui/experiments.js): the detail always shows the stored record. Tab 2
+  // replaces the experiment tab 1 has open; (a) tab 1 leaves the workspace and returns, (b) the
+  // id is opened again with no event at all: each time the detail's title and result hash are
+  // the stored record's, never the decoded copy of the record that is gone.
+  def('views-two-tabs', async ({ page, context }) => {
+    await H.workspace(page, 'experiments');
+    const as = (k, id, name) => {
+      const j = JSON.parse(fixtures[k].json);
+      j.experimentId = id;
+      j.name = name;
+      return JSON.stringify(j);
+    };
+    const replace = async (json) => {
+      const p2 = await context.newPage();
+      try {
+        await p2.goto(page.url(), { waitUntil: 'load' });
+        await p2.waitForSelector('html[data-ready="true"]', { timeout: 15000 });
+        await p2.evaluate(() => window.OSCILLA.app.setWorkspace('experiments'));
+        await p2.waitForFunction(() => window.OSCILLA.app.exps.loaded, null, { timeout: 15000 });
+        return await p2.evaluate(async (t) => {
+          const a = window.OSCILLA.app;
+          a.exps.deleteId = 'fixture-view';
+          await a.experimentsDelete();
+          return a.experimentsImportText(t);
+        }, json);
+      } finally {
+        await p2.close();
+      }
+    };
+    const shown = () => page.evaluate(async () => {
+      const a = window.OSCILLA.app;
+      const row = (await window.OSCILLA.experiments.store().list())
+        .find((x) => x.experimentId === 'fixture-view');
+      const d = a.exps.detail;
+      return { title: d ? d.title : null, hash: d ? d.resultHash : null,
+        dom: (document.getElementById('osc-x-detail-title') || {}).textContent || null,
+        storedName: row ? row.name : null, storedHash: row ? row.resultHash : null };
+    });
+    const same = (x) => !!x.storedHash && x.hash === x.storedHash && x.title === x.storedName
+      && x.dom === x.storedName;
+    const res = {};
+    await page.evaluate((t) => window.OSCILLA.app.experimentsImportText(t),
+      as('b', 'fixture-view', 'TEST CONTEXT · view original'));
+    await page.evaluate(() => window.OSCILLA.app.experimentsOpen('fixture-view'));
+    res.before = await H.until(shown, same, 5000);
+    // (a) Replaced in tab 2; tab 1 goes to another workspace and comes back.
+    res.replaced1 = await replace(as('c', 'fixture-view', 'TEST CONTEXT · view replaced once'));
+    await H.workspace(page, 'measure');
+    await H.workspace(page, 'experiments');
+    res.afterReturn = await H.until(shown, same, 5000);
+    // (b) Replaced again; the id is opened again here with no event in between.
+    res.replaced2 = await replace(as('a', 'fixture-view', 'TEST CONTEXT · view replaced twice'));
+    await page.evaluate(() => window.OSCILLA.app.experimentsOpen('fixture-view'));
+    res.afterOpen = await H.until(shown, same, 5000);
+    await page.evaluate(async () => {
+      const a = window.OSCILLA.app;
+      a.exps.deleteId = 'fixture-view';
+      await a.experimentsDelete();
+      a.alerts = [];
+    });
+    return { ...res, ...H.verdict({
+      setup: same(res.before) && res.before.title === 'TEST CONTEXT · view original'
+        && !!res.replaced1 && !!res.replaced2,
+      'after-return': same(res.afterReturn)
+        && res.afterReturn.title === 'TEST CONTEXT · view replaced once',
+      'after-open': same(res.afterOpen)
+        && res.afterOpen.title === 'TEST CONTEXT · view replaced twice',
     }) };
   });
 

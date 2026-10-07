@@ -1119,3 +1119,45 @@ test('a stored record is an experiment: kinds, the field and the issue codes say
     assert.deepEqual(src.match(/\b(?:this|a|the|cited|stored) runs?\b/gi) || [], [], file);
   }
 });
+
+// ---------------------------------------------------------------- #151 review: the root in views
+
+test('views: a decoded record is never served once another record is stored under its id', async () => {
+  const fake = fakeIndexedDB();
+  const { cmp } = harness(fake);
+  await cmp.experimentsImportText(await recordAs('b', 'run-k', { name: 'original' }));
+  const first = await cmp.experimentsOpen('run-k'); // decoded and cached
+  assert.equal(cmp.exps.detail.title, 'original');
+  assert.equal(cmp.exps.detail.resultHash, first.provenance.resultHash,
+    'the detail exposes the hash of the record it shows');
+  await replaceElsewhere(fake, 'run-k'); // no refresh, no event in this tab
+  const again = await cmp.experimentsOpen('run-k');
+  const stored = (await fx()).c.experiment.provenance.resultHash;
+  assert.equal(again.provenance.resultHash, stored, 'opened from the store, not the cache');
+  assert.equal(cmp.exps.detail.title, 'impostor');
+  assert.equal(cmp.exps.detail.resultHash, stored);
+  assert.equal(cmp.experimentsShownHash('run-k'), stored);
+  // Compare, export and the stored-record lookup take the same path.
+  await cmp.experimentsImportText(await recordAs('a', 'run-l'));
+  await cmp.experimentsOpen('run-l');
+  await replaceElsewhere(fake, 'run-l', 'b', 'impostor L');
+  assert.equal((await cmp.experimentsGet('run-l')).name, 'impostor L');
+  // A record already read from the store can be opened as it is.
+  const s = await cmp.experimentsStore();
+  const record = await s.get('run-k');
+  let reads = 0;
+  const get = s.get;
+  s.get = (id) => { reads += 1; return get(id); };
+  await cmp.experimentsOpen('run-k', { record });
+  s.get = get;
+  assert.equal(reads, 0);
+  assert.equal(cmp.exps.detail.resultHash, stored);
+  // A deleted id opens nothing, even while its decoded copy is still in memory.
+  const other = await openExperimentStore({ indexedDB: fake.indexedDB, ...OPTS });
+  await other.delete('run-k');
+  assert.equal(await cmp.experimentsOpen('run-k'), null);
+  // Every entry to the workspace reads the list again (main.js), not only the first.
+  const main = readFileSync(path.join(ROOT, 'src/js/main.js'), 'utf8');
+  assert.ok(!/ws === 'experiments' && !cmp\.exps\.loaded/.test(main),
+    'the Experiments list is refreshed on every entry');
+});
