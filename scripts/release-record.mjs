@@ -110,18 +110,55 @@ export function readTagDates(run, { merged = null } = {}) {
   });
 }
 
-/** Whether the checkout at `root` carries the record of `tag`. */
-export const hasRecordFile = (tag, root = ROOT) => (
-  existsSync(path.join(root, RECORDS_DIR, `${tag}.yaml`))
-);
+/**
+ * Why `text` is not the record of `tag`, or null when it is: it parses as a record file and
+ * its `tag` is the tag the file is named after. An emptied or overwritten file is not a
+ * record. Whether every field is valid release/v1 is recordProblems(), checked for every
+ * committed record by tests/unit/release-record.test.mjs.
+ */
+export function recordTextProblem(tag, text) {
+  let r;
+  try {
+    r = parseRecord(text);
+  } catch (e) {
+    return `does not parse as a record (${e.message})`;
+  }
+  if (r.tag === undefined) return 'carries no tag';
+  return r.tag === tag ? null : `carries tag ${JSON.stringify(r.tag)}, not ${tag}`;
+}
+
+/**
+ * The record file of `tag` in the checkout at `root`: whether it is there and, when it is,
+ * why it is not that tag's record (null = it is).
+ * @returns {{ present: boolean, problem: string|null }}
+ */
+export function recordFileState(tag, root = ROOT) {
+  const file = path.join(root, RECORDS_DIR, `${tag}.yaml`);
+  if (!existsSync(file)) return { present: false, problem: null };
+  let text;
+  try {
+    text = readFileSync(file, 'utf8');
+  } catch (e) {
+    return { present: true, problem: `cannot be read (${e.code || e.message})` };
+  }
+  return { present: true, problem: recordTextProblem(tag, text) };
+}
+
+/** Whether the checkout at `root` carries the record of `tag`: a file that parses and names it. */
+export const hasRecordFile = (tag, root = ROOT) => {
+  const { present, problem } = recordFileState(tag, root);
+  return present && problem === null;
+};
 
 export const RECORD_TRUNK = 'origin/main';
 
-/** Whether `ref` (the trunk as this clone last fetched it) carries the record of `tag`. */
+/**
+ * Whether `ref` (the trunk as this clone last fetched it) carries the record of `tag`: the
+ * file there parses and names the tag, as in the checkout.
+ */
 export function recordOnRef(tag, run, ref = RECORD_TRUNK) {
   try {
-    run(['cat-file', '-e', `${ref}:${RECORDS_DIR}/${tag}.yaml`]);
-    return true;
+    return recordTextProblem(tag, run(['show', `${ref}:${RECORDS_DIR}/${tag}.yaml`])) === null;
   } catch {
     return false;
   }
@@ -150,29 +187,50 @@ export function recordInHistory(tag, run, rev = 'HEAD') {
  * branch cut after a tag and before its record landed: HEAD's history never contained the
  * record and origin/main has it. A record that HEAD's history contains and the checkout lacks
  * was deleted or renamed here, and the copy on origin/main (the base of the pull request that
- * deletes it) does not excuse that; such tags are also listed in `deleted`.
+ * deletes it) does not excuse that; such tags are also listed in `deleted`. A file that is
+ * there and is not the tag's record (emptied, overwritten, another tag's content) is missing
+ * too, whatever the trunk has, and is listed in `invalid` with the reason.
  * @param {{ root?: string, run: (args: string[]) => string, now?: number }} o
- * @returns {{ tags: { tag: string, date: number }[], missing: string[], deleted: string[] }}
+ * @returns {{ tags: { tag: string, date: number }[], missing: string[], deleted: string[],
+ *   invalid: { tag: string, problem: string }[] }}
  */
 export function checkoutMissingRecords({ root = ROOT, run, now = Date.now() }) {
   const tags = readTagDates(run, { merged: 'HEAD' });
   const deleted = [];
+  const invalid = [];
   const missing = missingRecords({ tags, now, hasRecord: (tag) => {
-    if (hasRecordFile(tag, root)) return true;
+    const { present, problem } = recordFileState(tag, root);
+    if (present && problem === null) return true;
+    if (present) {
+      invalid.push({ tag, problem });
+      return false;
+    }
     if (!recordInHistory(tag, run)) return recordOnRef(tag, run);
     deleted.push(tag);
     return false;
   } });
-  return { tags, missing, deleted };
+  return { tags, missing, deleted, invalid };
 }
 
 /** One line per tag of checkoutMissingRecords().missing, saying what to do (empty = none). */
-export function describeMissingRecords({ missing, deleted }) {
-  return missing.map((tag) => (deleted.includes(tag)
+export function describeMissingRecords({ missing, deleted, invalid = [] }) {
+  return missing.map((tag) => {
+    const bad = invalid.find((x) => x.tag === tag);
+    if (bad) {
+      return `${tag}: ${RECORDS_DIR}/${tag}.yaml is there and is not the record of ${tag} (it `
+        + `${bad.problem}): restore it from history, or npm run release:record -- --version `
+        + `${tag.slice(1)}`;
+    }
+    return describeAbsent(tag, deleted);
+  });
+}
+
+function describeAbsent(tag, deleted) {
+  return (deleted.includes(tag)
     ? `${tag}: ${RECORDS_DIR}/${tag}.yaml is in this branch's history and not in the checkout `
       + '(deleted or renamed here; the copy on origin/main does not count): restore it'
     : `${tag}: recorded neither in this checkout nor on origin/main: npm run release:record `
-      + `-- --version ${tag.slice(1)}, then land the record`));
+      + `-- --version ${tag.slice(1)}, then land the record`);
 }
 
 /** stable, or prerelease for a SemVer prerelease. */

@@ -19,8 +19,8 @@ import {
   ARTIFACT_KEYS, RECORD_FLOOR, RECORD_KEYS, RECORD_REQUIRED, RECORD_WINDOW_HOURS, RECORDS_DIR,
   REQUIRED_TARGETS, WEB_TARGET, artifactEntry, assetUrl, channelFor, checkoutMissingRecords,
   describeMissingRecords, gatherRecord, hasRecordFile, main, missingRecords, needsRecord,
-  parseRecord, readTagDates, recordDifferences, recordFile, recordInHistory, recordOnRef,
-  recordProblems, releaseAssetName, renderRecord,
+  parseRecord, readTagDates, recordDifferences, recordFile, recordFileState, recordInHistory,
+  recordOnRef, recordProblems, releaseAssetName, renderRecord,
 } from '../../scripts/release-record.mjs';
 
 const COMMIT = 'f187f664893ce0444c03629b0d8afa66d6d9f715';
@@ -305,6 +305,9 @@ test('readTagDates: tag and creation time from git for-each-ref', () => {
   }, { merged: 'HEAD' });
 });
 
+/** The least a file must say to be the record of `tag`: it parses and carries that tag. */
+const stub = (tag) => `schema: release/v1\nversion: "${tag.slice(1)}"\ntag: ${tag}\n`;
+
 /** A scratch git repository on branch `work`, with committer dates a week before `now`. */
 function fixtureRepo() {
   const root = mkdtempSync(path.join(os.tmpdir(), 'oscilla-records-'));
@@ -329,12 +332,12 @@ function fixtureRepo() {
 // (recorded nowhere); v40.3.0 is tagged on another line that HEAD does not contain.
 test('a checkout answers for the tags in its history, with records here or on the trunk', () => {
   const { root, g, write, commit, run, now } = fixtureRepo();
-  write(`${RECORDS_DIR}/v40.0.0.yaml`, 'schema: release/v1\n');
+  write(`${RECORDS_DIR}/v40.0.0.yaml`, stub('v40.0.0'));
   commit('one');
   for (const t of ['v40.0.0', 'v40.1.0', 'v40.2.0']) g('tag', '-a', t, '-m', t);
   // the trunk moved on: it has the record of v40.1.0, this checkout does not
   g('checkout', '-q', '-b', 'trunk');
-  write(`${RECORDS_DIR}/v40.1.0.yaml`, 'schema: release/v1\n');
+  write(`${RECORDS_DIR}/v40.1.0.yaml`, stub('v40.1.0'));
   commit('record v40.1.0');
   g('update-ref', 'refs/remotes/origin/main', 'HEAD');
   // a release on a line this checkout does not contain
@@ -370,8 +373,8 @@ test('a checkout answers for the tags in its history, with records here or on th
 // stand in for a record this branch's history contains.
 test('a record deleted or renamed on the branch is missing although origin/main has it', () => {
   const { root, g, write, commit, run, record, now } = fixtureRepo();
-  write(record('v40.0.0'), 'schema: release/v1\n');
-  write(record('v40.1.0'), 'schema: release/v1\n');
+  write(record('v40.0.0'), stub('v40.0.0'));
+  write(record('v40.1.0'), stub('v40.1.0'));
   commit('one');
   for (const t of ['v40.0.0', 'v40.1.0', 'v40.2.0']) g('tag', '-a', t, '-m', t);
   g('update-ref', 'refs/remotes/origin/main', 'HEAD'); // the base of the pull request
@@ -420,7 +423,7 @@ test('a merge of the trunk that drops a record does not hide the deletion', () =
   commit('one');
   g('tag', '-a', 'v40.0.0', '-m', 'v40.0.0');
   g('checkout', '-q', '-b', 'trunk');
-  write(record('v40.0.0'), 'schema: release/v1\n');
+  write(record('v40.0.0'), stub('v40.0.0'));
   commit('record v40.0.0');
   g('update-ref', 'refs/remotes/origin/main', 'HEAD');
   g('checkout', '-q', 'work');
@@ -439,6 +442,54 @@ test('a merge of the trunk that drops a record does not hide the deletion', () =
   assert.equal(recordInHistory('v40.0.0', () => { throw new Error('no git'); }), true);
 });
 
+// Round 3 of #163: the check asked only whether the file exists, so an emptied record, or one
+// overwritten with anything, passed --complete and the record check of release:prepare.
+test('a record file that is empty, garbage or another tag\'s is not that tag\'s record', () => {
+  const { root, g, write, commit, run, record, now } = fixtureRepo();
+  write(record('v40.0.0'), stub('v40.0.0'));
+  write(record('v40.1.0'), stub('v40.1.0'));
+  commit('one');
+  for (const t of ['v40.0.0', 'v40.1.0']) g('tag', '-a', t, '-m', t);
+  g('update-ref', 'refs/remotes/origin/main', 'HEAD'); // the trunk has both, valid
+  const check = () => checkoutMissingRecords({ root, run, now });
+  assert.deepEqual(check().missing, []);
+  assert.deepEqual(recordFileState('v40.0.0', root), { present: true, problem: null });
+  assert.deepEqual(recordFileState('v40.9.0', root), { present: false, problem: null });
+
+  const cases = [
+    ['', new RegExp('^v40\\.1\\.0: \\S+v40\\.1\\.0\\.yaml is there and is not the record of '
+      + 'v40\\.1\\.0 \\(it carries no tag\\): restore it from history, or npm run '
+      + 'release:record ')],
+    ['nonsense: true\n', /\(it carries no tag\)/],
+    [stub('v40.0.0'), /\(it carries tag "v40\.0\.0", not v40\.1\.0\)/],
+    ['schema: release/v1\ntag: 40.1.0\n', /\(it carries tag "40\.1\.0", not v40\.1\.0\)/],
+    ['<<<<<<< HEAD\n', /\(it does not parse as a record \(line 1: unexpected /],
+  ];
+  for (const [text, message] of cases) {
+    write(record('v40.1.0'), text);
+    assert.equal(hasRecordFile('v40.1.0', root), false, JSON.stringify(text));
+    const r = check();
+    assert.deepEqual(r.missing, ['v40.1.0'], 'the valid copy on origin/main does not count');
+    assert.deepEqual(r.deleted, []);
+    assert.deepEqual(r.invalid.map((x) => x.tag), ['v40.1.0']);
+    assert.match(describeMissingRecords(r)[0], message);
+  }
+  // --complete (the records job on main) says so and exits 1
+  const out = [];
+  assert.equal(main({ argv: ['--complete'], root, run, now, log: (l) => out.push(l),
+    err: (l) => out.push(l) }), 1);
+  assert.match(out.join('\n'),
+    /1 published release\(s\) without a record [^\n]*\n {2}v40\.1\.0: /);
+  // the trunk copy is parsed too: a branch cut before the record landed is excused only by a
+  // record, not by a file of that name
+  commit('garbage on the trunk');
+  g('update-ref', 'refs/remotes/origin/main', 'HEAD');
+  assert.equal(recordOnRef('v40.1.0', run), false);
+  assert.equal(recordOnRef('v40.0.0', run), true);
+  write(record('v40.1.0'), stub('v40.1.0'));
+  assert.deepEqual(check().missing, []);
+});
+
 test('--complete: exit 0 when every reachable tag is recorded, 1 naming the others', () => {
   const { root, g, write, commit, run, record, now } = fixtureRepo();
   const complete = () => {
@@ -452,7 +503,7 @@ test('--complete: exit 0 when every reachable tag is recorded, 1 naming the othe
   let r = complete();
   assert.equal(r.code, 1, 'no tag to judge is not a pass');
   assert.match(r.text, /no v\* tag from v3\.4\.0 on is reachable from HEAD/);
-  write(record('v40.0.0'), 'schema: release/v1\n');
+  write(record('v40.0.0'), stub('v40.0.0'));
   commit('record');
   g('tag', '-a', 'v40.0.0', '-m', 'v40.0.0');
   r = complete();

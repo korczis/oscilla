@@ -171,8 +171,9 @@ export function flowProblems({
   if (lastTag && needsRecord(lastTag)
     && missingRecords({ tags: [{ tag: lastTag, date: 0 }], hasRecord, now: 0, windowHours: 0 })
       .length) {
-    problems.push(`the newest release ${lastTag} has no ${RECORDS_DIR}/${lastTag}.yaml: finish `
-      + `it first (npm run release:record -- --version ${lastTag.slice(1)}, land the record PR)`);
+    problems.push(`the newest release ${lastTag} has no ${RECORDS_DIR}/${lastTag}.yaml that `
+      + 'parses and carries its tag: finish it first (npm run release:record -- --version '
+      + `${lastTag.slice(1)}, land the record PR)`);
   }
   const v = proposed ? parseSemver(proposed) : null;
   const parsed = tags.map((t) => ({ t, p: t.startsWith('v') ? parseSemver(t.slice(1)) : null }))
