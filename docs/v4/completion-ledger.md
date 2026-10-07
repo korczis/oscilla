@@ -91,14 +91,17 @@ engine/dsp/labs/sequencer CI and the About provenance tests skip in CI's shallow
 **closed** #147: WebKit legs in both jobs, nothing narrowed; the unit job checks out full
 history and tags, and the About checks fail instead of skipping under CI without them);
 no startup budget or large-library fixture (P1); `window.OSCILLA` test seam and `?mock=1` ship
-in production (W7, **closed** #161, ADR 0052: they stay in the one tested artifact, and a hook
-observes, drives as a user or injects only in TEST CONTEXT; see "W7" below);
+in production (W7, **decided and partly fixed** #161, ADR 0052: they stay in the one tested
+artifact; three hooks now refuse what they must, but an unchecked input can still read
+CALIBRATED outside TEST CONTEXT by two hook sequences, W7f, open; see "W7" below);
 `studioTimeline.createContext` builds a second Studio store and transport on the shared engine
 for one browser suite (W7a, open); TEST CONTEXT cannot be entered or left from the page, only by
 the URL (W7b, open); a manual level calibration made in TEST CONTEXT is not labelled as one (W7c,
 open); the public origin `korczis.github.io` is shared with every other Pages site of the
 account (W7d, open); the live smoke calls seam hooks instead of loading the documented
-`?measure=loopback#mr=` URL (W7e, open); five dead CSS classes; an import without a hash shows no "unverified"
+`?measure=loopback#mr=` URL (W7e, open); no caller reads the verdict `setValues` now returns, a
+non-boolean toggle value is coerced instead of refused, and the v3-ui `calibration` check
+depends on the check before it (W7g-W7i, open); five dead CSS classes; an import without a hash shows no "unverified"
 marker; an unreadable stored record fails silently; ADR status never leaves `proposed`; the plan
 contradicts git (V386 READY, M033 BLOCKED; **closed** #144, see "plan reconciled" below); "run" means both a repeat and a completed
 experiment, and "project" both a Studio file and OSCILLA; no glossary.
@@ -203,7 +206,8 @@ The release blockers recorded above are unchanged by this update.
 
 ## Update 2026-10-07 — W7
 
-W7 is closed by #161 (ADR 0052, proposed; the owner approved the direction on 2026-10-07).
+W7 is decided by #161 (ADR 0052, proposed; the owner approved the direction on 2026-10-07) and
+fixed in part: the three guards below hold, and W7f is what they leave open, so W7 is not closed.
 `window.OSCILLA` and `?mock=1` stay in the one `dist/index.html` that is tested and deployed:
 removing or gating them would protect nothing (`window.Alpine` is global and the origin is
 shared) and the post-deployment smoke would stop testing the served bytes. What was wrong was
@@ -212,7 +216,8 @@ what two hooks could do outside TEST CONTEXT, and one hook that could do what no
 - `measure.showResult` titled a result without a `testContext` "Latest measurement" and Save
   stored it as an ordinary experiment. It now refuses such a result.
 - `measure.setInputNow` named an input nobody checked; a typed level reading then bound to it
-  and the indicator read CALIBRATED. It is now refused outside TEST CONTEXT loopback.
+  and the indicator read CALIBRATED. A direct call is now refused outside TEST CONTEXT loopback.
+  The indicator can still be reached by two other sequences (W7f).
 - `measure.setValues` was a bare `Object.assign`. It is now the validated recipe-link action:
   unknown keys, out-of-range values and calls while a measurement runs are refused whole, and a
   READY setup check is reset as by any edit.
@@ -222,7 +227,9 @@ release gate pins the key lists of `window.OSCILLA` and `OSCILLA.measure` and as
 refusals on the built page (`seam-surface-pinned` in `tests/browser/app.cjs`). The README names
 the stable reads and says the seam is not a security boundary.
 
-Recorded as their own P2 lines, open, and not part of #161:
+Recorded as their own P2 lines, open, and not part of #161. W7f is the remainder of W7 itself;
+the review of #161 rated the claim that it was closed P1, and #161 withdrew the claim instead of
+widening the approved change:
 
 | Id | Finding | Status |
 |---|---|---|
@@ -231,3 +238,8 @@ Recorded as their own P2 lines, open, and not part of #161:
 | W7c | A manual level calibration made in TEST CONTEXT carries no TEST CONTEXT label; only the captured branch of `measureSaveLevelCalibration` adds it | open |
 | W7d | The public origin `korczis.github.io` is shared by every Pages site of the account, so their scripts share OSCILLA's storage, IndexedDB and microphone grant. Independent of the seam; only a custom domain changes it | open |
 | W7e | The live smoke calls `useLoopback` and `setValues` instead of loading `?measure=loopback#mr=<recipe>`, and no test or script loads the documented `?measure=loopback` flag at all | open |
+| W7f | An unchecked input still reads CALIBRATED outside TEST CONTEXT through seam hooks alone. Route A: `useLoopback()`, `setInputNow(input)`, `useMicrophone()`; leaving TEST CONTEXT does not clear `ctx.inputNow` (the device-change path does), and a typed level reading then binds to it. Route B, never entering loopback: `showResult(result)` with a `testContext` and an `input`; the inner `showResult` adopts `result.input`, and the typed reading binds to it. Fix: clear the input when the seam enters or leaves loopback and do not adopt an injected result's input outside loopback, with both sequences as tests in `tests/unit/v4-seam-contract.test.mjs` and a full v3-ui run. Beyond the three guards approved on 2026-10-07: needs the owner's nod | open |
+| W7g | `setValues` returns `true` or `{ ok: false, errors }` and no caller reads it: `live-smoke.cjs`, `navigation.cjs`, `app.cjs` (setup helper) and every v3-ui call site discard it. It validates the whole setup, so one out-of-range value typed into a field (the page's edit checks only that a number is finite) makes every later call refuse, and v3-ui runs its checks on one page. Make the shared setup helpers throw unless the call returns `true`; in the live smoke this goes with W7e | open |
+| W7h | `setValues` coerces a toggle value to a boolean (`{ phase: 'no' }` sets `true`) instead of refusing it. Reject a non-boolean toggle before the encode step | open |
+| W7i | The v3-ui `calibration` check run alone (`--only calibration`) no longer clears its input: its `setInputNow(null)` relies on TEST CONTEXT left on by the `live-rta` check before it. Call `useLoopback` at the start of the check when `v3-ui.cjs` is next edited | open |
+| W7j | The `seam-surface-pinned` check has not been seen to fail on main's dist (its fail-first is inferred from the unit suite), and `live-smoke.cjs` has not been run locally against `file://dist` with this change; the machine's load stayed above the limit for local browsers. CI ran the check green in three browsers and two origins | open |

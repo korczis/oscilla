@@ -589,10 +589,14 @@ automated test proves how a physical speaker, room or microphone behaves.
   browser tests and the post-deployment smoke use, so the bytes that are tested are the bytes
   that are served. The stable reads are `version`, `build`, `measure.state`, `measure.counts()`,
   `studio.counts()`, `studio.model` and `studio.trace.steps()`; everything else may change
-  without notice. Every member is one of three kinds: it observes; it drives an action you
-  already have in the page, through the same validation (`measure.useLoopback()` is
-  `?measure=loopback`, `measure.setValues()` is a recipe link); or it injects test data, and
-  then only inside TEST CONTEXT, so nothing injected is shown or saved as a measurement. It is
+  without notice. Every member except `studioTimeline` (a second Studio context that one test
+  suite builds; it is due to leave the page) is one of three kinds: it observes; it drives an
+  action you already have in the page, through the same validation (`measure.useLoopback()` is
+  `?measure=loopback`, `measure.setValues()` is a recipe link); or it injects test data.
+  `measure.showResult()` refuses a result that is not marked TEST CONTEXT, so no injected result
+  is shown or saved as a measurement, and a direct `measure.setInputNow()` is refused outside
+  TEST CONTEXT. One gap is open: an input named while in TEST CONTEXT, or carried by an injected
+  result, stays known afterwards, and a typed level reading can then bind to it. It is
   not a security boundary: any script running in the page can reach the same code without it.
   `?mock=1` only outlines the chart and view areas for layout comparison and never draws data.
 - **Proof of deployment.** After every Pages deployment, `scripts/verify-deploy.mjs` fetches the

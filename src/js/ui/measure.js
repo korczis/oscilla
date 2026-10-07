@@ -2101,8 +2101,10 @@ export function createMeasureUi(svc) {
     // window.OSCILLA.measure (ADR 0052). Every member is one of three kinds: it OBSERVES (the
     // getters, counts(), liveRta()); it DRIVES an action a user already has, through the user's
     // validation (useLoopback = ?measure=loopback, useMicrophone, setValues = a recipe link); or
-    // it INJECTS, and then only inside TEST CONTEXT (setInputNow, showResult). The key list is
-    // pinned by tests/browser/app.cjs `seam-surface-pinned`.
+    // it INJECTS, and then only as TEST CONTEXT: setInputNow only while the page is in loopback,
+    // showResult only a result that carries a testContext. Open (ledger W7f): an injected input
+    // survives useMicrophone(), and showResult adopts result.input outside loopback. The key
+    // list is pinned by tests/browser/app.cjs `seam-surface-pinned`.
     measureTestSeam() {
       const self = this;
       return {

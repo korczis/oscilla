@@ -70,14 +70,19 @@ only, never data), for the opt-in `scripts/visual-compare.mjs --mock`. It change
 ## Decision
 
 `window.OSCILLA` and `?mock=1` stay in the one shipped artifact. There is no flag, no build mode
-and no test build. Every member of the seam is one of three kinds:
+and no test build. Every member of the seam except `studioTimeline` is one of three kinds
+(`studioTimeline.createContext` builds a second StudioStore, runtime and transport on the shared
+engine and calls `engine.stopAll`: it is none of the three, and it leaves the page under ledger
+W7a):
 
 1. **Observe.** Reads, `counts()`, state, model, trace, `version`, `build`. The stable reads are
    `version`, `build`, `measure.state`, `measure.counts()`, `studio.counts()`, `studio.model`
    and `studio.trace.steps()`. Every other member, including the live internals `app`, `engine`
    and `host`, may change without notice.
 2. **Drive.** Only actions a user already has, through the user's code path and validation:
-   - `measure.useLoopback()` is the same as `?measure=loopback`.
+   - `measure.useLoopback()` is the same as `?measure=loopback`. `useLoopback(system)` also
+     takes a synthetic system, which the URL flag cannot set; what it measures stays labelled
+     TEST CONTEXT.
    - `measure.useMicrophone()` leaves TEST CONTEXT.
    - `studio.store` dispatches through the canonical store and its undo history.
    - `measure.setValues(values)` is the validated recipe-link action
@@ -86,9 +91,9 @@ and no test build. Every member of the seam is one of three kinds:
      measurement is running are refused whole with `{ ok: false, errors }`; otherwise it
      returns `true`. A change resets a READY setup check. It shows no toast and leaves the
      link state and `repeatOf` alone.
-3. **Inject.** Only inside TEST CONTEXT:
+3. **Inject.** Only as TEST CONTEXT:
    - `measure.showResult(result)` refuses (returns `false` for) a result without
-     `testContext`.
+     `testContext`. It checks the result's mark, not whether the page is in TEST CONTEXT.
    - `measure.setInputNow(input)` refuses (returns `false`) unless the page is in TEST CONTEXT
      loopback.
    - `onceInState` only observes timing and stays as it is.
@@ -120,16 +125,29 @@ that the seam is not a security boundary.
 
 ## Consequences
 
-- Through the seam, a page script can no longer show or save a result as a measurement, or make
-  an unchecked input read as calibrated, outside TEST CONTEXT. Deliberate forgery through
-  `window.Alpine` and component internals is still possible and is not claimed to be prevented.
-  Imported records stay the job of the open "unverified import" marker.
+- Through the seam, a page script can no longer show or save an injected result as a
+  measurement, and a direct `setInputNow` call outside TEST CONTEXT is refused. Deliberate
+  forgery through `window.Alpine` and component internals is still possible and is not claimed
+  to be prevented. Imported records stay the job of the open "unverified import" marker.
+- **Not closed by this decision as implemented: an unchecked input can still read CALIBRATED
+  outside TEST CONTEXT through seam hooks alone, by two routes** (found by review of #161,
+  reproduced on the merged branch; ledger W7f, open):
+  - `useLoopback()`, `setInputNow(input)`, `useMicrophone()`: leaving TEST CONTEXT does not
+    clear the injected input, so a typed level reading then binds to it.
+  - `showResult(result)` with a `testContext` and an `input`, never entering loopback: the
+    result is rightly titled TEST CONTEXT, but showing it adopts `result.input` as the current
+    input, and a typed level reading then binds to it.
+  Closing them (clear the input when the seam enters or leaves loopback; do not adopt an
+  injected result's input outside loopback) changes behaviour beyond the three guards approved
+  on 2026-10-07 and waits for the owner.
 - `setValues` now resets a READY check and refuses invalid input. A test that relied on the old
   behaviour was relying on something no user can do. It validates the whole setup recipe, not
   only the keys given: when the setup already holds a value outside a recipe link's range
   (typed into a field, which checks only that a number is finite), every call is refused until
   that value is corrected.
 - A toggle value is coerced to a boolean, as the page's own toggle does; it is not refused.
+- `setValues` now returns a verdict that no existing caller reads (the browser suites and the
+  live smoke discard it), so a refusal would surface as an unrelated later failure (ledger W7g).
 - The browser gate, the visual tooling and the live smoke keep testing the deployed bytes. The
   byte cost is measured by verify-dist and recorded in the pull request.
 - ADR 0027 and ADR 0042 hold unchanged. Spec §165 is met by the declared surface.

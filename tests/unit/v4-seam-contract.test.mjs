@@ -1,8 +1,11 @@
 // Ledger W7: what a window.OSCILLA.measure hook may do. Every hook observes, drives an action a
 // user already has (through the user's validation), or injects only inside TEST CONTEXT.
-//   inject  setInputNow is refused outside TEST CONTEXT loopback, so a typed level reading cannot
-//           be bound to an input nobody checked; showResult refuses a result without a
-//           testContext, so nothing unmeasured is titled or saved as a measurement.
+//   inject  a direct setInputNow call is refused outside TEST CONTEXT loopback; showResult
+//           refuses a result without a testContext, so no injected result is titled or saved as
+//           a measurement.
+//           NOT covered, and open as ledger W7f: an input named in TEST CONTEXT stays known after
+//           useMicrophone(), and showResult adopts the input of a TEST CONTEXT result outside
+//           loopback; a typed level reading can bind to either.
 //   drive   setValues is the validated recipe-link action: unknown keys, out-of-range values and
 //           calls while a measurement runs are refused whole; a change resets a READY check.
 // In Node (no DOM: the adapters' Alpine state is a plain object, IndexedDB the in-process fake).
@@ -70,21 +73,23 @@ test('inject: setInputNow is refused outside TEST CONTEXT, so nothing binds to a
     assert.notEqual(cmp.measureCalIndicator, 'CALIBRATED');
   });
 
-test('inject: setInputNow works in TEST CONTEXT loopback and stops when it is left', () => {
-  const { cmp, seam } = makeUi({ loopback: true });
-  assert.equal(seam.setInputNow(MIC_A), true);
-  assert.deepEqual(seam.inputNow, MIC_A);
-  typeReading(cmp);
-  assert.equal(cmp.measureSaveLevelCalibration(), true);
-  assert.equal(cmp.measureCalIndicator, 'CALIBRATED');
-  // Leaving TEST CONTEXT (a drive action) ends the injection.
-  assert.equal(seam.useMicrophone(), true);
-  assert.equal(seam.setInputNow(null), false);
-  assert.deepEqual(seam.inputNow, MIC_A, 'a refused call changes nothing');
-  assert.equal(seam.useLoopback(), true);
-  assert.equal(seam.setInputNow(null), true);
-  assert.equal(seam.inputNow, null);
-});
+test('inject: setInputNow works in TEST CONTEXT loopback; a direct call is refused outside it',
+  () => {
+    const { cmp, seam } = makeUi({ loopback: true });
+    assert.equal(seam.setInputNow(MIC_A), true);
+    assert.deepEqual(seam.inputNow, MIC_A);
+    typeReading(cmp);
+    assert.equal(cmp.measureSaveLevelCalibration(), true);
+    assert.equal(cmp.measureCalIndicator, 'CALIBRATED');
+    // After TEST CONTEXT is left (a drive action) a direct call is refused. What the input is
+    // at this point is deliberately not asserted: it is still the injected one, which is the
+    // open ledger line W7f, not a contract.
+    assert.equal(seam.useMicrophone(), true);
+    assert.equal(seam.setInputNow(null), false);
+    assert.equal(seam.useLoopback(), true);
+    assert.equal(seam.setInputNow(null), true);
+    assert.equal(seam.inputNow, null);
+  });
 
 // ================================================================= inject: showResult
 
