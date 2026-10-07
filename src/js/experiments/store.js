@@ -7,7 +7,8 @@
 //   openExperimentStoreOrMemory(opts) -> Promise<{ store, persistent, error }>
 //   observeMemoryStore(store, onChange) -> Store   (onChange(store.held()) after every write;
 //                                                   the memory store only, ADR 0045)
-//   Store = { kind: 'indexeddb'|'memory', list(), get(id), put(experiment),
+//   Store = { kind: 'indexeddb'|'memory', list(), summary(id) -> the list row of one id | null,
+//             get(id), put(experiment),
 //             annotate(id, { name, notes, baseline }), delete(id), estimate(), close(),
 //             listStudio({ kind }), getStudio(id), putStudio(record), deleteStudio(id),
 //             listDefinitions() -> { definitions, unreadable: [{ id, reason }] },
@@ -443,6 +444,7 @@ export function createMemoryStore({ knownAlgorithms } = {}) {
   return {
     kind: 'memory',
     list: () => wrap('list', () => [...summaries.values()].map((s) => ({ ...s })).sort(byNewest)),
+    summary: (id) => wrap('summary', () => (summaries.has(id) ? { ...summaries.get(id) } : null)),
     get: (id) => wrap('get', () => read(id)),
     put: (experiment) => wrap('put', () => {
       const prepared = prepare(experiment, knownAlgorithms);
@@ -651,6 +653,16 @@ function idbStore(db, storage, knownAlgorithms) {
       (tx) => request(tx.objectStore(SUMMARIES).getAll()))
       .then((rows) => (rows.some(lacksHash) ? backfillHashes() : rows))
       .then((rows) => rows.map((s) => ({ ...s })).sort(byNewest)),
+    // The row of one id as stored now (a view checks its record against it, ADR 0046). A row
+    // from an earlier build gets its result hash from the stored record, without a write.
+    summary: (id) => run('summary', [RECORDS, SUMMARIES], 'readonly',
+      (tx) => request(tx.objectStore(SUMMARIES).get(id)).then((row) => {
+        if (row == null) return null;
+        if (!lacksHash(row)) return { ...row };
+        return request(tx.objectStore(RECORDS).get(id)).then((doc) => ({ ...row,
+          resultHash: doc && doc.provenance && typeof doc.provenance.resultHash === 'string'
+            ? doc.provenance.resultHash : null }));
+      })),
     get: (id) => run('get', [RECORDS], 'readonly',
       (tx) => request(tx.objectStore(RECORDS).get(id)))
       .then((doc) => (doc == null ? null : decodeStored(doc, knownAlgorithms, id))),

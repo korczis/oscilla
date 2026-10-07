@@ -589,7 +589,9 @@ function integrationInit() {
   });
   cmp.$watch('tabs.analysis', (tab) => setAnalysisTab(tab));
   const loadExperiments = (ws) => {
-    if (ws === 'experiments' && !cmp.exps.loaded) {
+    // Every entry reads the list again: another tab may have changed what is stored, and a
+    // detail or comparison left open must show the stored record (ui/experiments.js syncViews).
+    if (ws === 'experiments') {
       cmp.experimentsRefresh().catch((err) => cmp.notify('error', 'Experiments unavailable',
         err.message || String(err)));
     }

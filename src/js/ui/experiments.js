@@ -297,13 +297,23 @@ export function createExperimentsUi() {
       .map((x) => x.experimentId));
   }
 
+  /**
+   * The stored experiment `id`. THE one rule for the decoded copies (ADR 0046, #151 review): a
+   * cached record is used only while the stored row still names its result hash, read now; a
+   * row that is gone, names another hash or names none means the cached copy is dropped and the
+   * record is read from the store. So no view shows a record that is no longer the stored one.
+   */
   async function get(cmp, id) {
-    if (ctx.cache.has(id)) {
-      const hit = ctx.cache.get(id);
-      remember(id, hit);
-      return hit;
-    }
     const s = await store(cmp);
+    const hit = ctx.cache.get(id);
+    if (hit) {
+      const row = await s.summary(id);
+      if (row && typeof row.resultHash === 'string' && row.resultHash === hashOf(hit)) {
+        remember(id, hit);
+        return hit;
+      }
+      ctx.cache.delete(id);
+    }
     const e = await s.get(id);
     if (e) remember(id, e);
     return e;
@@ -387,6 +397,8 @@ export function createExperimentsUi() {
       // Ledger D4: a stimulus this build cannot measure; the record is shown, never repeated.
       stimulusFinding: stimulus.length ? `${stimulus[0].path}: ${stimulus[0].text}.` : null,
       testContext: isTestContext(e),
+      // The identity of the record shown, for whatever depends on this view (ADR 0046).
+      resultHash: hashOf(e),
       baseline: isBaseline(e),
       notes: e.environment && e.environment.notes ? e.environment.notes : null,
       response: view ? { summary: view.summary, badges: view.badges.slice(),
@@ -480,6 +492,19 @@ export function createExperimentsUi() {
       const dlg = typeof document !== 'undefined'
         ? document.getElementById('osc-dlg-exp-rename') : null;
       if (dlg) dlg.addEventListener('close', () => { this.exps.renameOpen = false; });
+      // Another tab may have changed what is stored: when this tab is shown again in
+      // Experiments, the list is read again, which re-reads or closes a changed detail or
+      // comparison (syncViews) and checks every finding. main.js does the same on every entry
+      // to the workspace.
+      if (typeof document !== 'undefined') {
+        let pending = null;
+        document.addEventListener('visibilitychange', () => {
+          if (document.hidden || pending || this.workspace !== 'experiments'
+            || !this.exps.loaded) return;
+          pending = this.experimentsRefresh().catch(() => null)
+            .finally(() => { pending = null; });
+        });
+      }
     },
     /**
      * What a reload or a closed tab would lose here (ui/unsaved.js, ADR 0045): the experiments
@@ -619,8 +644,13 @@ export function createExperimentsUi() {
       }
       return list;
     },
-    async experimentsOpen(id) {
-      const e = await get(this, id);
+    /**
+     * Show experiment `id` in the detail: the stored record (get), or `record` when the caller
+     * has just read it from the store.
+     */
+    async experimentsOpen(id, { record = null } = {}) {
+      const e = record && record.experimentId === id ? record : await get(this, id);
+      if (e && e === record) remember(id, e);
       if (!e) {
         this.notify('error', 'Experiment not found', id);
         return null;

@@ -205,17 +205,6 @@ export function createFindingsUi() {
       const dlg = typeof document !== 'undefined' ? document.getElementById(DIALOG) : null;
       // Closing without a save (Cancel, Escape, a backdrop click) keeps a changed form as a draft.
       if (dlg) dlg.addEventListener('close', () => this.findingsDialogClosed());
-      // Another tab may have changed the experiments or findings: read them again when this tab is
-      // shown, so a reference is checked against what is stored now.
-      if (typeof document !== 'undefined') {
-        let pending = null;
-        document.addEventListener('visibilitychange', () => {
-          if (document.hidden || pending || this.workspace !== 'experiments'
-            || !this.exps.loaded) return;
-          pending = this.experimentsRefresh().catch(() => null)
-            .finally(() => { pending = null; });
-        });
-      }
     },
 
     /**
