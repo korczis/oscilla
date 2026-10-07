@@ -118,7 +118,7 @@ test('Copy config URL keeps mr and the Studio keys and names the workspace', () 
 });
 
 test('the dispatcher applies the domains in one declared order', () => {
-  assert.deepEqual([...HASH_DOMAINS], ['instrument', 'measure', 'studio']);
+  assert.deepEqual([...HASH_DOMAINS], ['instrument', 'measure', 'studio', 'records']);
 });
 
 function fakeWindow() {
@@ -207,7 +207,7 @@ test('the memory store says what it holds, and an observer hears every write', a
   const seen = [];
   const raw = createMemoryStore();
   const store = observeMemoryStore(raw, (h) => seen.push(h));
-  assert.deepEqual(raw.held(), { experiments: 0, definitions: 0, studio: 0 });
+  assert.deepEqual(raw.held(), { experiments: 0, definitions: 0, studio: 0, findings: 0 });
   await store.putStudio({ id: 'p1', kind: 'oscilla-studio-patch', name: 'x',
     savedAt: '2026-10-06T00:00:00.000Z', studioHash: 'h', doc: {} }).catch(() => {});
   await store.put({}).catch(() => {}); // refused: the observer still hears it

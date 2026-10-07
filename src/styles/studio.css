@@ -1087,6 +1087,24 @@
   font-size: var(--osc-fs-xs);
 }
 
+/* Connected records of a stored project (ADR 0048): a full-width disclosure under the row. */
+.osc-sp-cnx {
+  order: 3;
+  flex: 1 1 100%;
+  min-width: 0;
+  color: var(--osc-text-2);
+  font-size: var(--osc-fs-xs);
+}
+
+.osc-sp-cnx-summary {
+  width: fit-content;
+  cursor: pointer;
+}
+
+.osc-sp-cnx .osc-dialog-note:empty {
+  display: none;
+}
+
 .osc-sp-check {
   display: flex;
   align-items: center;

@@ -1852,6 +1852,30 @@
                   :aria-label="'Run this definition: ' + d.name" @click="experimentsDefRun(d.id)">Run this definition</button>
                 <button type="button" class="osc-btn osc-btn-secondary osc-m-small" data-osc="def.edit"
                   :aria-label="'Edit ' + d.name" @click="experimentsDefAsk(d.id)">Edit…</button>
+                <details class="osc-x-cn osc-x-cn--row" data-osc="def.connections" :open="!!cnx.open.definition[d.id]"
+                  @toggle="connectionsToggle('definition', d.id, $event.target.open)">
+                  <summary class="osc-x-cn-summary" data-osc="cnx.toggle" :aria-label="'Connected records of ' + d.name">Connected records</summary>
+                <p class="osc-m-hint" role="status" x-text="cnx.defs[d.id] && cnx.defs[d.id].status ? cnx.defs[d.id].status : ''"></p>
+                <p class="osc-x-cn-dir">What is this connected to?</p>
+                <ul class="osc-x-ev-list osc-x-cn-list" role="list" :aria-label="'What ' + d.name + ' is connected to'">
+                  <template x-for="(c, i) in (cnx.defs[d.id] ? cnx.defs[d.id].upstream : [])" :key="c.relation + '|' + (c.to.id || '') + '|' + i">
+                    <li class="osc-x-cn-item" :data-state="c.state" :data-relation="c.relation"><strong x-text="c.label"></strong> <template x-if="c.href"><a class="osc-x-cn-link" data-osc="cnx.link" :href="c.href" @click="connectionsFollow(c, $event)" x-text="c.target"></a></template><template x-if="!c.href"><span x-text="c.target"></span></template><span class="osc-x-cn-state" x-text="' — ' + c.text + '.'"></span> <span class="osc-x-cn-field" x-text="'Field: ' + c.field + ', on ' + c.fieldOf + '.'"></span></li>
+                  </template>
+                  <li class="osc-x-empty" x-show="cnx.defs[d.id] && !cnx.defs[d.id].status && !cnx.defs[d.id].upstream.length" x-text="'A definition stores no reference to another record.'"></li>
+                  <li class="osc-x-cn-more" x-show="cnx.defs[d.id] && cnx.defs[d.id].more.upstream" x-text="cnx.defs[d.id] ? 'And ' + cnx.defs[d.id].more.upstream + ' more, not listed' + (cnx.defs[d.id].more.upstreamNotFine ? ' (' + cnx.defs[d.id].more.upstreamNotFine + ' of them not stored here as listed)' : '') + '.' : ''"></li>
+                </ul>
+                <p class="osc-x-cn-dir">What depends on it?</p>
+                <ul class="osc-x-ev-list osc-x-cn-list" role="list" :aria-label="'What depends on ' + d.name">
+                  <template x-for="(c, i) in (cnx.defs[d.id] ? cnx.defs[d.id].downstream : [])" :key="c.relation + '|' + (c.to.id || '') + '|' + i">
+                    <li class="osc-x-cn-item" :data-state="c.state" :data-relation="c.relation"><strong x-text="c.label"></strong> <template x-if="c.href"><a class="osc-x-cn-link" data-osc="cnx.link" :href="c.href" @click="connectionsFollow(c, $event)" x-text="c.target"></a></template><template x-if="!c.href"><span x-text="c.target"></span></template><span class="osc-x-cn-state" x-text="' — ' + c.text + '.'"></span> <span class="osc-x-cn-field" x-text="'Field: ' + c.field + ', on ' + c.fieldOf + '.'"></span></li>
+                  </template>
+                  <li class="osc-x-empty" x-show="cnx.defs[d.id] && !cnx.defs[d.id].status && !cnx.defs[d.id].downstream.length" x-text="'No stored experiment names a version of this definition.'"></li>
+                  <li class="osc-x-cn-more" x-show="cnx.defs[d.id] && cnx.defs[d.id].more.downstream" x-text="cnx.defs[d.id] ? 'And ' + cnx.defs[d.id].more.downstream + ' more, not listed' + (cnx.defs[d.id].more.downstreamNotFine ? ' (' + cnx.defs[d.id].more.downstreamNotFine + ' of them not stored here as listed)' : '') + '.' : ''"></li>
+                </ul>
+                <ul class="osc-x-ev-list osc-x-cn-notes" role="list" x-show="cnx.defs[d.id] && cnx.defs[d.id].notes.some((n) => n.field)" aria-label="Notes on fields">
+                  <template x-for="(n, i) in (cnx.defs[d.id] ? cnx.defs[d.id].notes.filter((n) => n.field) : [])" :key="i"><li x-text="n.field + ': ' + n.text"></li></template>
+                </ul>
+                </details>
               </li>
             </template>
             <li class="osc-x-empty" x-show="exps.loaded && !exps.defs.length">No definitions yet. A definition fixes what to measure and how; every experiment started from it records its version.</li>
@@ -1892,6 +1916,84 @@
               </li>
             </template>
             <li class="osc-x-empty" x-show="exps.loaded && !exps.rows.length" x-text="exps.empty"></li>
+          </ul>
+        </section>
+        <!-- FINDINGS (ADR 0046): interpretations linked to the experiments they rest on; never an experiment. -->
+        <section class="osc-panel osc-x-findings" id="osc-exp-findings" data-osc="fnd.panel" aria-labelledby="osc-x-fnd-title">
+          <div class="osc-panel-header osc-x-head">
+            <h3 class="osc-panel-title" id="osc-x-fnd-title">Findings</h3>
+            <span class="osc-m-chip osc-num" x-text="fnd.rows.length"></span>
+            <span class="osc-spacer"></span>
+            <button type="button" class="osc-btn osc-btn-secondary osc-m-small" data-osc="fnd.import"
+              @click="findingsImportClick()">Import…</button>
+            <button type="button" class="osc-btn osc-btn-secondary osc-m-small" data-osc="fnd.export"
+              :disabled="!fnd.rows.length" @click="findingsExport()">Export</button>
+            <button type="button" class="osc-btn osc-btn-primary osc-m-small" data-osc="fnd.new"
+              @click="findingsAskNew()">New finding…</button>
+          </div>
+          <p class="osc-m-hint">A finding is your interpretation, linked to the evidence it rests on. A measurement is what was observed or computed; recording a finding never changes it.</p>
+          <p class="osc-m-hint" role="note" data-osc="fnd.note" x-show="fnd.note" style="display: none" x-text="fnd.note"></p>
+          <div class="osc-warning osc-f-draft" role="status" data-osc="fnd.draftNote" x-show="fnd.draftKept && !fnd.form.open" style="display: none">
+            <svg aria-hidden="true"><use href="#q-warn"/></svg>
+            <p>A finding draft is kept in this page only (a reload loses it).</p>
+            <button type="button" class="osc-btn osc-btn-secondary osc-m-small" data-osc="fnd.draftContinue"
+              @click="findingsContinueDraft()">Continue writing</button>
+            <button type="button" class="osc-btn osc-btn-secondary osc-m-small osc-x-delete" data-osc="fnd.draftDiscard"
+              @click="findingsDiscardDraft()">Discard draft</button>
+          </div>
+          <ul class="osc-m-notes osc-m-notes--plain" role="alert" data-osc="fnd.importErrors" x-show="fnd.importErrors.length" style="display: none">
+            <template x-for="(t, i) in fnd.importErrors" :key="i"><li x-text="t"></li></template>
+          </ul>
+          <ul class="osc-x-rows" role="list">
+            <template x-for="r in fnd.rows" :key="r.id">
+              <li class="osc-x-row osc-f-row" data-osc="fnd.row" :data-id="r.id">
+                <div class="osc-f-head">
+                  <h4 class="osc-f-statement" x-text="r.statement"></h4>
+                  <span class="osc-m-chip osc-f-status">Your judgement: <span data-osc="fnd.status" :data-status="r.status" x-text="r.statusText"></span></span>
+                </div>
+                <p class="osc-x-meta osc-f-meta" data-osc="fnd.statusHint" x-text="r.statusHint"></p>
+                <p class="osc-f-issue" data-osc="fnd.statusIssue" x-show="r.statusIssue" style="display: none" x-text="r.statusIssue"></p>
+                <ul class="osc-f-refs" role="list" :aria-label="'Evidence: ' + r.statement">
+                  <template x-for="e in r.evidence" :key="e.key">
+                    <li class="osc-f-ref" data-osc="fnd.ref" :data-state="e.state"><span x-text="e.text"></span><template x-if="e.issue"><span class="osc-f-issue" x-text="' ' + e.issue"></span></template><template x-if="e.state === 'ok'"><button type="button" class="osc-btn osc-btn-secondary osc-m-small" data-osc="fnd.openRef"
+                        :aria-label="'Open: ' + e.text" @click="findingsOpenRef(e.ref, r.id)">Open</button></template></li>
+                  </template>
+                  <li class="osc-x-empty" x-show="!r.evidence.length">No evidence linked.</li>
+                </ul>
+                <p class="osc-x-meta osc-f-meta" x-text="r.meta"></p>
+                <details class="osc-x-cn osc-x-cn--row" data-osc="fnd.connections" :open="!!cnx.open.finding[r.id]"
+                  @toggle="connectionsToggle('finding', r.id, $event.target.open)">
+                  <summary class="osc-x-cn-summary" data-osc="cnx.toggle" :aria-label="'Connected records of: ' + r.statement">Connected records</summary>
+                <p class="osc-m-hint" role="status" x-text="cnx.findings[r.id] && cnx.findings[r.id].status ? cnx.findings[r.id].status : ''"></p>
+                <p class="osc-x-cn-dir">What is this connected to?</p>
+                <ul class="osc-x-ev-list osc-x-cn-list" role="list" :aria-label="'What this finding is connected to: ' + r.statement">
+                  <template x-for="(c, i) in (cnx.findings[r.id] ? cnx.findings[r.id].upstream : [])" :key="c.relation + '|' + (c.to.id || '') + '|' + i">
+                    <li class="osc-x-cn-item" :data-state="c.state" :data-relation="c.relation"><strong x-text="c.label"></strong> <template x-if="c.href"><a class="osc-x-cn-link" data-osc="cnx.link" :href="c.href" @click="connectionsFollow(c, $event)" x-text="c.target"></a></template><template x-if="!c.href"><span x-text="c.target"></span></template><span class="osc-x-cn-state" x-text="' — ' + c.text + '.'"></span> <span class="osc-x-cn-field" x-text="'Field: ' + c.field + ', on ' + c.fieldOf + '.'"></span></li>
+                  </template>
+                  <li class="osc-x-empty" x-show="cnx.findings[r.id] && !cnx.findings[r.id].status && !cnx.findings[r.id].upstream.length" x-text="'This finding cites no experiment.'"></li>
+                  <li class="osc-x-cn-more" x-show="cnx.findings[r.id] && cnx.findings[r.id].more.upstream" x-text="cnx.findings[r.id] ? 'And ' + cnx.findings[r.id].more.upstream + ' more, not listed' + (cnx.findings[r.id].more.upstreamNotFine ? ' (' + cnx.findings[r.id].more.upstreamNotFine + ' of them not stored here as listed)' : '') + '.' : ''"></li>
+                </ul>
+                <p class="osc-x-cn-dir">What depends on it?</p>
+                <ul class="osc-x-ev-list osc-x-cn-list" role="list" :aria-label="'What depends on this finding: ' + r.statement">
+                  <template x-for="(c, i) in (cnx.findings[r.id] ? cnx.findings[r.id].downstream : [])" :key="c.relation + '|' + (c.to.id || '') + '|' + i">
+                    <li class="osc-x-cn-item" :data-state="c.state" :data-relation="c.relation"><strong x-text="c.label"></strong> <template x-if="c.href"><a class="osc-x-cn-link" data-osc="cnx.link" :href="c.href" @click="connectionsFollow(c, $event)" x-text="c.target"></a></template><template x-if="!c.href"><span x-text="c.target"></span></template><span class="osc-x-cn-state" x-text="' — ' + c.text + '.'"></span> <span class="osc-x-cn-field" x-text="'Field: ' + c.field + ', on ' + c.fieldOf + '.'"></span></li>
+                  </template>
+                  <li class="osc-x-empty" x-show="cnx.findings[r.id] && !cnx.findings[r.id].status && !cnx.findings[r.id].downstream.length" x-text="'No record stores a reference to a finding.'"></li>
+                  <li class="osc-x-cn-more" x-show="cnx.findings[r.id] && cnx.findings[r.id].more.downstream" x-text="cnx.findings[r.id] ? 'And ' + cnx.findings[r.id].more.downstream + ' more, not listed' + (cnx.findings[r.id].more.downstreamNotFine ? ' (' + cnx.findings[r.id].more.downstreamNotFine + ' of them not stored here as listed)' : '') + '.' : ''"></li>
+                </ul>
+                <ul class="osc-x-ev-list osc-x-cn-notes" role="list" x-show="cnx.findings[r.id] && cnx.findings[r.id].notes.some((n) => n.field)" aria-label="Notes on fields">
+                  <template x-for="(n, i) in (cnx.findings[r.id] ? cnx.findings[r.id].notes.filter((n) => n.field) : [])" :key="i"><li x-text="n.field + ': ' + n.text"></li></template>
+                </ul>
+                </details>
+                <div class="osc-m-btnrow">
+                  <button type="button" class="osc-btn osc-btn-secondary osc-m-small" data-osc="fnd.edit"
+                    :aria-label="'Edit finding: ' + r.statement" @click="findingsAskEdit(r.id)">Edit…</button>
+                  <button type="button" class="osc-btn osc-btn-secondary osc-m-small osc-x-delete" data-osc="fnd.delete"
+                    :aria-label="'Delete finding: ' + r.statement" @click="findingsAskDelete(r.id)">Delete…</button>
+                </div>
+              </li>
+            </template>
+            <li class="osc-x-empty" x-show="fnd.loaded && !fnd.rows.length">No findings yet. Record one from an experiment's detail or from a comparison.</li>
           </ul>
         </section>
         </div>
@@ -1987,6 +2089,50 @@
               </ul>
               <p class="osc-m-hint">A checklist of what is recorded, not a score.</p>
             </section>
+            <!-- CONNECTED RECORDS (ADR 0048): each entry from one stored field, its state in words. -->
+            <section class="osc-x-evidence osc-x-cn" data-osc="exp.connections" aria-labelledby="osc-x-cn-title"
+              x-show="exps.detail" style="display: none">
+              <h4 id="osc-x-cn-title">Connected records</h4>
+              <p class="osc-m-hint">Each entry comes from one field a record stores, and names it. Nothing is inferred from names, recipes or times; a record that is not stored here reads "missing".</p>
+              <p class="osc-m-hint" role="status" x-text="cnx.run && cnx.run.status ? cnx.run.status : ''"></p>
+                <p class="osc-x-cn-dir">What is this connected to?</p>
+                <ul class="osc-x-ev-list osc-x-cn-list" role="list" :aria-label="'What this experiment is connected to'">
+                  <template x-for="(c, i) in (cnx.run ? cnx.run.upstream : [])" :key="c.relation + '|' + (c.to.id || '') + '|' + i">
+                    <li class="osc-x-cn-item" :data-state="c.state" :data-relation="c.relation"><strong x-text="c.label"></strong> <template x-if="c.href"><a class="osc-x-cn-link" data-osc="cnx.link" :href="c.href" @click="connectionsFollow(c, $event)" x-text="c.target"></a></template><template x-if="!c.href"><span x-text="c.target"></span></template><span class="osc-x-cn-state" x-text="' — ' + c.text + '.'"></span> <span class="osc-x-cn-field" x-text="'Field: ' + c.field + ', on ' + c.fieldOf + '.'"></span></li>
+                  </template>
+                  <li class="osc-x-empty" x-show="cnx.run && !cnx.run.status && !cnx.run.upstream.length" x-text="'No stored field of this experiment names another record.'"></li>
+                  <li class="osc-x-cn-more" x-show="cnx.run && cnx.run.more.upstream" x-text="cnx.run ? 'And ' + cnx.run.more.upstream + ' more, not listed' + (cnx.run.more.upstreamNotFine ? ' (' + cnx.run.more.upstreamNotFine + ' of them not stored here as listed)' : '') + '.' : ''"></li>
+                </ul>
+                <p class="osc-x-cn-dir">What depends on it?</p>
+                <ul class="osc-x-ev-list osc-x-cn-list" role="list" :aria-label="'What depends on this experiment'">
+                  <template x-for="(c, i) in (cnx.run ? cnx.run.downstream : [])" :key="c.relation + '|' + (c.to.id || '') + '|' + i">
+                    <li class="osc-x-cn-item" :data-state="c.state" :data-relation="c.relation"><strong x-text="c.label"></strong> <template x-if="c.href"><a class="osc-x-cn-link" data-osc="cnx.link" :href="c.href" @click="connectionsFollow(c, $event)" x-text="c.target"></a></template><template x-if="!c.href"><span x-text="c.target"></span></template><span class="osc-x-cn-state" x-text="' — ' + c.text + '.'"></span> <span class="osc-x-cn-field" x-text="'Field: ' + c.field + ', on ' + c.fieldOf + '.'"></span></li>
+                  </template>
+                  <li class="osc-x-empty" x-show="cnx.run && !cnx.run.status && !cnx.run.downstream.length" x-text="'No stored record names this experiment.'"></li>
+                  <li class="osc-x-cn-more" x-show="cnx.run && cnx.run.more.downstream" x-text="cnx.run ? 'And ' + cnx.run.more.downstream + ' more, not listed' + (cnx.run.more.downstreamNotFine ? ' (' + cnx.run.more.downstreamNotFine + ' of them not stored here as listed)' : '') + '.' : ''"></li>
+                </ul>
+                <ul class="osc-x-ev-list osc-x-cn-notes" role="list" x-show="cnx.run && cnx.run.notes.some((n) => n.field)" aria-label="Notes on fields">
+                  <template x-for="(n, i) in (cnx.run ? cnx.run.notes.filter((n) => n.field) : [])" :key="i"><li x-text="n.field + ': ' + n.text"></li></template>
+                </ul>
+            </section>
+            <section class="osc-x-evidence osc-x-fnd-of" data-osc="exp.findings" aria-labelledby="osc-x-fnd-of-title"
+              x-show="exps.detail" style="display: none">
+              <h4 id="osc-x-fnd-of-title">Findings that cite this experiment</h4>
+              <div class="osc-m-btnrow">
+                <button type="button" class="osc-btn osc-btn-secondary osc-m-small" data-osc="exp.findingNew"
+                  @click="findingsAskRun(exps.detail.id)">Record a finding about this experiment</button>
+                <template x-if="findingsValueLabel()">
+                  <button type="button" class="osc-btn osc-btn-secondary osc-m-small" data-osc="exp.findingValue"
+                    @click="findingsAskValue()" x-text="findingsValueLabel()"></button>
+                </template>
+              </div>
+              <ul class="osc-x-ev-list" role="list" data-osc="exp.findingsList" aria-labelledby="osc-x-fnd-of-title">
+                <template x-for="b in (exps.detail ? findingsBacklinks(exps.detail.id) : [])" :key="b.id">
+                  <li><strong x-text="b.statusText + ' (your judgement)'"></strong>: <span x-text="b.statement"></span> <span class="osc-f-how" x-text="'(cites ' + b.how + ')'"></span><template x-if="b.issue"><span class="osc-f-issue" data-osc="exp.findingIssue" x-text="' Not this experiment: ' + b.issue"></span></template></li>
+                </template>
+              </ul>
+              <p class="osc-m-hint" x-show="exps.detail && !findingsBacklinks(exps.detail.id).length">No finding cites this experiment.</p>
+            </section>
           </div>
         </section>
 
@@ -1996,6 +2142,8 @@
             <h3 class="osc-panel-title" id="osc-x-compare-title">Compare</h3>
             <span class="osc-m-chip" x-show="exps.compare" x-text="exps.compare && exps.compare.compatible ? 'EQUIVALENT' : 'NOT EQUIVALENT'"></span>
             <span class="osc-spacer"></span>
+            <button type="button" class="osc-btn osc-btn-secondary osc-m-small" data-osc="exp.findingCompare"
+              :disabled="!exps.compare" @click="findingsAskCompare()">Record a finding about this comparison</button>
             <button type="button" class="osc-btn osc-btn-secondary osc-m-small" data-osc="exp.backToDetail"
               @click="exps.panel = 'detail'">Back to detail</button>
           </div>
@@ -2651,6 +2799,8 @@
     @change="measureImportCalibrationFile($event)">
   <input type="file" id="osc-exp-import-file" class="osc-sr-only" accept=".json,application/json"
     tabindex="-1" aria-hidden="true" @change="experimentsImportFile($event)">
+  <input type="file" id="osc-fnd-import-file" class="osc-sr-only" accept=".json,application/json"
+    tabindex="-1" aria-hidden="true" @change="findingsImportFile($event)">
 
   <!-- ================= Dialogs (native <dialog>) ================= -->
   <dialog class="osc-dialog" id="osc-dlg-save" data-oscilla-modal aria-labelledby="osc-dlg-save-title">
@@ -2939,11 +3089,104 @@
       <h2 class="osc-dialog-title" id="osc-dlg-delete-title">Delete experiment?</h2>
       <p>“<span x-text="exps.deleteName"></span>” is removed from this browser. This cannot be
         undone; export it as .oscilla.json first to keep a copy.</p>
+      <p class="osc-dialog-note osc-f-cite-warn" role="note" data-osc="exp.deleteCiting" x-show="exps.deleteCiting"
+        style="display: none" x-text="exps.deleteCiting"></p>
       <div class="osc-dialog-actions">
         <button type="button" class="osc-btn osc-btn-secondary" data-osc="exp.deleteCancel"
           @click="closeDialog('osc-dlg-exp-delete')">Cancel</button>
         <button type="button" class="osc-btn osc-btn-primary osc-x-delete" data-osc="exp.deleteConfirm"
           @click="experimentsDelete()">Delete</button>
+      </div>
+    </div>
+  </dialog>
+  <!-- FINDINGS (ADR 0046): write a finding and link its evidence; delete with confirmation. -->
+  <dialog class="osc-dialog osc-dialog--wide" id="osc-dlg-finding" data-oscilla-modal aria-labelledby="osc-dlg-fnd-title">
+    <form method="dialog" class="osc-dialog-body" @submit.prevent="findingsSave()">
+      <h2 class="osc-dialog-title" id="osc-dlg-fnd-title" x-text="fnd.form.mode === 'edit' ? 'Edit finding' : 'New finding'">New finding</h2>
+      <p class="osc-dialog-note">Your interpretation of the evidence it cites. The experiments it cites are not changed.</p>
+      <label class="osc-label" for="osc-fnd-statement">Statement</label>
+      <input class="osc-number osc-dialog-input" id="osc-fnd-statement" type="text" maxlength="1000"
+        autocomplete="off" data-osc="fnd.statement" x-model="fnd.form.statement">
+      <label class="osc-label" for="osc-fnd-status">Status (your judgement)</label>
+      <div class="osc-select">
+        <select id="osc-fnd-status" data-osc="fnd.statusSelect" x-model="fnd.form.status" aria-describedby="osc-fnd-status-hint">
+          <template x-for="s in FINDING_STATUSES" :key="s"><option :value="s" x-text="FINDING_STATUS_TEXT[s]"></option></template>
+        </select>
+      </div>
+      <p class="osc-dialog-note" id="osc-fnd-status-hint" x-text="FINDING_STATUS_TEXT[fnd.form.status] + ': ' + FINDING_STATUS_HINT[fnd.form.status] + '. A status is your judgement, not a measurement.'"></p>
+      <h3 class="osc-f-dlg-h" id="osc-fnd-ev-title">Evidence</h3>
+      <ul class="osc-f-refs" role="list" aria-labelledby="osc-fnd-ev-title" data-osc="fnd.formRefs">
+        <template x-for="(e, i) in fnd.form.evidence" :key="e.key">
+          <li class="osc-f-ref" data-osc="fnd.formRef"><span x-text="e.text"></span>
+            <button type="button" class="osc-btn osc-btn-secondary osc-m-small" data-osc="fnd.removeRef"
+              :aria-label="'Remove: ' + e.text" @click="findingsRemoveRef(i)">Remove</button></li>
+        </template>
+      </ul>
+      <p class="osc-dialog-note" x-show="!fnd.form.evidence.length">No evidence linked yet. A supported or contradicted finding cites at least one experiment, comparison or value.</p>
+      <p class="osc-dialog-note" data-osc="fnd.compareHint" x-show="fnd.form.evidence.some((e) => e.ref.kind === 'compare')"
+        style="display: none">A comparison shows what changed between the experiments, not why.</p>
+      <div class="osc-f-add">
+        <label class="osc-label" for="osc-fnd-run">Link an experiment</label>
+        <div class="osc-select">
+          <select id="osc-fnd-run" data-osc="fnd.runSelect" x-model="fnd.form.addRun">
+            <option value="">Choose an experiment</option>
+            <template x-for="r in exps.rows" :key="r.id"><option :value="r.id" x-text="r.name"></option></template>
+          </select>
+        </div>
+        <button type="button" class="osc-btn osc-btn-secondary osc-m-small" data-osc="fnd.addRun"
+          :disabled="!fnd.form.addRun" @click="findingsAddRun(fnd.form.addRun)">Link experiment</button>
+      </div>
+      <div class="osc-f-add">
+        <label class="osc-label" for="osc-fnd-cmp-a">Link a comparison of</label>
+        <div class="osc-select">
+          <select id="osc-fnd-cmp-a" data-osc="fnd.cmpA" x-model="fnd.form.cmpA">
+            <option value="">Experiment A</option>
+            <template x-for="r in exps.rows" :key="r.id"><option :value="r.id" x-text="r.name"></option></template>
+          </select>
+        </div>
+        <label class="osc-label" for="osc-fnd-cmp-b">with</label>
+        <div class="osc-select">
+          <select id="osc-fnd-cmp-b" data-osc="fnd.cmpB" x-model="fnd.form.cmpB">
+            <option value="">Experiment B</option>
+            <template x-for="r in exps.rows" :key="r.id"><option :value="r.id" x-text="r.name"></option></template>
+          </select>
+        </div>
+        <button type="button" class="osc-btn osc-btn-secondary osc-m-small" data-osc="fnd.addCompare"
+          @click="findingsAddCompare(fnd.form.cmpA, fnd.form.cmpB)">Link comparison</button>
+      </div>
+      <label class="osc-label" for="osc-fnd-notes">Notes</label>
+      <textarea class="osc-number osc-m-text osc-m-textarea" id="osc-fnd-notes" rows="2" maxlength="10000"
+        data-osc="fnd.notes" x-model="fnd.form.notes"></textarea>
+      <p class="osc-dialog-note" role="alert" data-osc="fnd.error" x-show="fnd.form.error" x-text="fnd.form.error"></p>
+      <div class="osc-m-btnrow" x-show="fnd.form.conflict" style="display: none">
+        <button type="button" class="osc-btn osc-btn-primary osc-m-small" data-osc="fnd.loadStored"
+          @click="findingsLoadStored()">Load the stored version</button>
+      </div>
+      <div class="osc-f-mine" x-show="findingsMineText()" style="display: none">
+        <label class="osc-label" for="osc-fnd-mine">Your text from before (not saved; copy what you need)</label>
+        <textarea class="osc-number osc-m-text osc-m-textarea" id="osc-fnd-mine" data-osc="fnd.mine" rows="2" readonly
+          :value="findingsMineText()"></textarea>
+      </div>
+      <p class="osc-dialog-note" x-show="findingsDraftDirty()" style="display: none">Closing keeps this draft in this page until you save or discard it; a reload loses it.</p>
+      <div class="osc-dialog-actions">
+        <button type="button" class="osc-btn osc-btn-secondary osc-x-delete" data-osc="fnd.discard"
+          x-show="findingsDraftDirty()" style="display: none" @click="findingsDiscardDraft()">Discard draft</button>
+        <button type="button" class="osc-btn osc-btn-secondary" data-osc="fnd.close" @click="closeDialog('osc-dlg-finding')"
+          x-text="findingsDraftDirty() ? 'Close (keep draft)' : 'Cancel'">Cancel</button>
+        <button type="submit" class="osc-btn osc-btn-primary" data-osc="fnd.save"
+          :disabled="fnd.form.conflict">Save</button>
+      </div>
+    </form>
+  </dialog>
+  <dialog class="osc-dialog" id="osc-dlg-finding-delete" data-oscilla-modal aria-labelledby="osc-dlg-fnd-delete-title">
+    <div class="osc-dialog-body">
+      <h2 class="osc-dialog-title" id="osc-dlg-fnd-delete-title">Delete finding?</h2>
+      <p>“<span x-text="fnd.deleteText"></span>” is removed from this browser. The experiments it cites are kept.</p>
+      <div class="osc-dialog-actions">
+        <button type="button" class="osc-btn osc-btn-secondary" data-osc="fnd.deleteCancel"
+          @click="closeDialog('osc-dlg-finding-delete')">Cancel</button>
+        <button type="button" class="osc-btn osc-btn-primary osc-x-delete" data-osc="fnd.deleteConfirm"
+          @click="findingsDelete()">Delete</button>
       </div>
     </div>
   </dialog>

@@ -7,13 +7,17 @@
 //   openExperimentStoreOrMemory(opts) -> Promise<{ store, persistent, error }>
 //   observeMemoryStore(store, onChange) -> Store   (onChange(store.held()) after every write;
 //                                                   the memory store only, ADR 0045)
-//   Store = { kind: 'indexeddb'|'memory', list(), get(id), put(experiment),
+//   Store = { kind: 'indexeddb'|'memory', list(), summary(id) -> the list row of one id | null,
+//             get(id), put(experiment),
 //             annotate(id, { name, notes, baseline }), delete(id), estimate(), close(),
 //             listStudio({ kind }), getStudio(id), putStudio(record), deleteStudio(id),
 //             listDefinitions() -> { definitions, unreadable: [{ id, reason }] },
-//             getDefinition(id), putDefinition(definition) }
-//   memory Store only: held() -> { experiments, definitions, studio } (records it holds, which a
-//   reload discards: the unsaved-work guard reports them)
+//             getDefinition(id), putDefinition(definition),
+//             listFindings() -> { findings, unreadable: [{ id, reason }] }, getFinding(id),
+//             putFinding(finding, { expectedUpdatedAt }),
+//             putFindings([finding]) -> { stored, same }, deleteFinding(id) }
+//   memory Store only: held() -> { experiments, definitions, studio, findings } (records it
+//   holds, which a reload discards: the unsaved-work guard reports them)
 //
 // Records are stored in the portable file form (schema.serializeExperiment: EncodedArray
 // result arrays) of the validated, migrated experiment (validate.js on put, and again on get),
@@ -55,10 +59,26 @@
 // experiment definitions (definition.js), validated on put and on read. listDefinitions never
 // fails on one bad record: it lists the readable ones and names the others in `unreadable`, so a
 // damaged definition can neither hide the rest nor fail a refresh of the runs. putDefinition
-// creates one or writes its next state: the name and notes may change, versions may only be appended,
+// creates one or writes its next state: the name and notes may change, versions may only be
+// appended,
 // and a stored version that differs is refused with 'immutable' (err.fields names it). list()
 // rows carry the run's `definition` { id, version, hash, derived } (schema 3), so a definition's
 // runs are found without reading the records.
+//
+// Findings (ADR 0046; DB_VERSION 4 adds the FINDINGS store, keyPath 'id'): user metadata, an
+// interpretation linked to the experiments it cites (findings.js). Validated on put and on read; a
+// stored
+// finding that cannot be read is named in `unreadable` and never hides the others. putFinding
+// creates or edits one (its createdAt never changes: 'immutable'); putFindings is an import, all
+// or nothing in one transaction: a different finding stored under an incoming id refuses the whole
+// batch with 'conflict' (err.fields names the ids), an identical one is skipped. No finding write
+// touches an experiment, and delete(id) of one never touches a finding: a reference to a deleted
+// experiment stays and reads missing (findings.js findingIssues).
+//
+// Connected records (ADR 0048): list() rows carry `links` (connections.js runLinks: the result
+// hash, repeatOf, duplicateOf and the Studio hashes the experiment stores), so the experiments
+// that name a record are found without reading every record. A row written before this version
+// has no `links`; ui/connections.js reads that record once for them. Nothing is rewritten.
 
 import {
   serializeExperiment, formatErrors, annotateExperiment, executionFactChanges, isMetadataPath,
@@ -66,19 +86,23 @@ import {
 } from './schema.js';
 import { validateExperiment } from './validate.js';
 import { validateDefinition } from './definition.js';
+import { validateFinding, importPlan } from './findings.js';
+import { runLinks } from './connections.js';
 import { canonicalJson } from './canonical-json.js';
 
 export const DB_NAME = 'oscilla-experiments';
 /**
- * Version 1: experiments; version 2 adds the Studio partition; version 3 the definitions
- * (never deletes anything).
+ * Version 1: experiments; version 2 adds the Studio partition; version 3 the definitions;
+ * version 4 the findings (never deletes anything). One-way: a build with a lower version cannot
+ * open the database, so a revert keeps this version and its upgrade step (ADR 0046).
  */
-export const DB_VERSION = 3;
+export const DB_VERSION = 4;
 export const RECORDS = 'experiments';
 export const SUMMARIES = 'summaries';
 export const STUDIO_RECORDS = 'studio';
 export const STUDIO_SUMMARIES = 'studioSummaries';
 export const DEFINITIONS = 'definitions';
+export const FINDINGS = 'findings';
 /** Kinds of Studio records (studio/schema.js STUDIO_KIND, studio/patches.js PATCH_KIND). */
 export const STUDIO_RECORD_KINDS = Object.freeze(['oscilla-studio', 'oscilla-patch']);
 /** Largest stored Studio document (JSON characters): twice the 4 MiB Studio import limit. */
@@ -148,6 +172,74 @@ export function upgradeExperimentDb(db, oldVersion) {
     ensure(STUDIO_SUMMARIES, 'id');
   }
   if (oldVersion < 3) ensure(DEFINITIONS, 'id');
+  if (oldVersion < 4) ensure(FINDINGS, 'id');
+}
+
+// ---------------------------------------------------------------- findings
+
+/** A validated finding copy, or throws 'invalid' / 'corrupt' (`code`). */
+function checkedFinding(f, code, id) {
+  const v = validateFinding(f);
+  if (!v.ok) {
+    throw new ExperimentStoreError(code, `${code === 'corrupt' ? `stored finding ${id} is`
+      : 'finding not stored:'} invalid: ${formatErrors(v.errors.slice(0, 5))}`);
+  }
+  return v.finding;
+}
+
+/**
+ * May `next` replace the stored `old`? Its creation time never changes; with `expectedUpdatedAt`
+ * (the version an edit was made from) a finding changed since then is refused with 'conflict'.
+ */
+function findingVerdict(old, next, expectedUpdatedAt) {
+  if (old && old.createdAt !== next.createdAt) {
+    throw new ExperimentStoreError('immutable', `finding ${next.id}: its creation time never `
+      + 'changes', undefined, ['createdAt']);
+  }
+  if (expectedUpdatedAt !== undefined && (old ? old.updatedAt : null) !== expectedUpdatedAt) {
+    throw new ExperimentStoreError('conflict', `finding ${next.id} was changed elsewhere since it `
+      + 'was opened here (another tab or window); nothing was overwritten', undefined, [next.id]);
+  }
+}
+
+const findingNewest = (a, b) => String(b.updatedAt).localeCompare(String(a.updatedAt))
+  || String(a.id).localeCompare(String(b.id));
+
+/** { findings (valid, newest change first), unreadable: [{ id, reason }] } of stored rows. */
+function findingList(rows) {
+  const findings = [];
+  const unreadable = [];
+  for (const row of rows) {
+    const id = row && typeof row.id === 'string' ? row.id : null;
+    try {
+      findings.push(checkedFinding(row, 'corrupt', id));
+    } catch (err) {
+      unreadable.push({ id, reason: err.message });
+    }
+  }
+  return { findings: findings.sort(findingNewest), unreadable };
+}
+
+/** Validate an import batch: [finding] (copies), or throws 'invalid'. */
+function checkedBatch(list) {
+  if (!Array.isArray(list)) throw new ExperimentStoreError('invalid', 'findings must be a list');
+  const out = list.map((f) => checkedFinding(f, 'invalid'));
+  const ids = out.map((f) => f.id);
+  const dup = ids.find((id, i) => ids.indexOf(id) !== i);
+  if (dup) throw new ExperimentStoreError('invalid', `finding ${dup} appears more than once`);
+  return out;
+}
+
+/** The import verdict over the stored copies (null when absent): { write, same } or throws. */
+function batchVerdict(batch, olds) {
+  const plan = importPlan(batch, olds.filter(Boolean));
+  if (plan.conflicts.length) {
+    const n = plan.conflicts.length;
+    throw new ExperimentStoreError('conflict', `${n === 1 ? 'a finding' : 'findings'} with the `
+      + `same id ${n === 1 ? 'is' : 'are'} already stored with different content (${plan.conflicts
+        .slice(0, 4).join(', ')}); nothing was imported`, undefined, plan.conflicts);
+  }
+  return { write: plan.add, same: plan.same };
 }
 
 // ---------------------------------------------------------------- definitions
@@ -266,10 +358,15 @@ export function summaryRecord(doc, sizeBytes) {
     schemaVersion: doc.schemaVersion,
     oscillaVersion: doc.oscillaVersion,
     status: doc.quality ? doc.quality.status : null,
+    // The experiment's identity (ADR 0046): a finding's reference is checked against it on every
+    // refresh. A row written by an earlier build lacks it and the record is read instead.
+    resultHash: doc.provenance && typeof doc.provenance.resultHash === 'string'
+      ? doc.provenance.resultHash : null,
     sizeBytes,
     ...(isBaseline(doc) ? { baseline: true } : {}),
     ...(doc.definition ? { definition: { id: doc.definition.id, version: doc.definition.version,
       hash: doc.definition.hash, derived: doc.definition.derived } } : {}),
+    links: runLinks(doc),
   };
 }
 
@@ -322,6 +419,7 @@ function decodeStored(doc, knownAlgorithms, id) {
   return v.experiment;
 }
 
+const lacksHash = (row) => !!row && !Object.prototype.hasOwnProperty.call(row, 'resultHash');
 const byNewest = (a, b) => String(b.createdAt).localeCompare(String(a.createdAt))
   || String(a.experimentId).localeCompare(String(b.experimentId));
 
@@ -332,6 +430,9 @@ export function createMemoryStore({ knownAlgorithms } = {}) {
   const studio = new Map();
   const studioSummaries = new Map();
   const defs = new Map();
+  const finds = new Map();
+  const readFinding = (id) => (finds.has(id) ? checkedFinding(JSON.parse(finds.get(id)),
+    'corrupt', id) : null);
   const readDef = (id) => (defs.has(id) ? checkedDefinition(JSON.parse(defs.get(id)), 'corrupt',
     id) : null);
   const wrap = (what, fn) => {
@@ -350,6 +451,7 @@ export function createMemoryStore({ knownAlgorithms } = {}) {
   return {
     kind: 'memory',
     list: () => wrap('list', () => [...summaries.values()].map((s) => ({ ...s })).sort(byNewest)),
+    summary: (id) => wrap('summary', () => (summaries.has(id) ? { ...summaries.get(id) } : null)),
     get: (id) => wrap('get', () => read(id)),
     put: (experiment) => wrap('put', () => {
       const prepared = prepare(experiment, knownAlgorithms);
@@ -377,6 +479,7 @@ export function createMemoryStore({ knownAlgorithms } = {}) {
       let usage = 0;
       for (const v of records.values()) usage += v.length;
       for (const v of studio.values()) usage += v.length;
+      for (const v of finds.values()) usage += v.length;
       return { usage, quota: null, persistent: false };
     }),
     listStudio: ({ kind } = {}) => wrap('listStudio', () => [...studioSummaries.values()]
@@ -402,13 +505,30 @@ export function createMemoryStore({ knownAlgorithms } = {}) {
       defs.set(next.id, JSON.stringify(next));
       return next;
     }),
+    listFindings: () => wrap('listFindings', () => findingList([...finds.values()]
+      .map((t) => JSON.parse(t)))),
+    getFinding: (id) => wrap('getFinding', () => readFinding(id)),
+    putFinding: (f, { expectedUpdatedAt } = {}) => wrap('putFinding', () => {
+      const next = checkedFinding(f, 'invalid');
+      findingVerdict(readFinding(next.id), next, expectedUpdatedAt);
+      finds.set(next.id, JSON.stringify(next));
+      return next;
+    }),
+    putFindings: (list) => wrap('putFindings', () => {
+      const batch = checkedBatch(list);
+      const { write, same } = batchVerdict(batch, batch.map((f) => readFinding(f.id)));
+      for (const f of write) finds.set(f.id, JSON.stringify(f));
+      return { stored: write.map((f) => f.id), same };
+    }),
+    deleteFinding: (id) => wrap('deleteFinding', () => finds.delete(id)),
     held: () => ({ experiments: summaries.size, definitions: defs.size,
-      studio: studioSummaries.size }),
+      studio: studioSummaries.size, findings: finds.size }),
     close() {},
   };
 }
 
-const MEMORY_WRITES = ['put', 'annotate', 'delete', 'putStudio', 'deleteStudio', 'putDefinition'];
+const MEMORY_WRITES = ['put', 'annotate', 'delete', 'putStudio', 'deleteStudio', 'putDefinition',
+  'putFinding', 'putFindings', 'deleteFinding'];
 
 /**
  * The memory store with `onChange(store.held())` called after each write settles (a refused
@@ -518,11 +638,38 @@ function idbStore(db, storage, knownAlgorithms) {
     }
     Promise.resolve(pending).then((v) => { value = v; }, abort);
   });
+  // A row written by an earlier build has no resultHash (ADR 0046). On its first read it is
+  // filled in from the stored record's provenance (the record itself is not changed), so later
+  // refreshes need not read the record to know the run's identity. One transaction; a row whose
+  // record is gone or carries no hash gets null.
+  const backfillHashes = () => run('list', [RECORDS, SUMMARIES], 'readwrite', (tx) => {
+    const sums = tx.objectStore(SUMMARIES);
+    return request(sums.getAll()).then((rows) => Promise.all(rows.map((row) => {
+      if (!lacksHash(row)) return row;
+      return request(tx.objectStore(RECORDS).get(row.experimentId)).then((doc) => {
+        const p = doc && doc.provenance;
+        const next = { ...row, resultHash: p && typeof p.resultHash === 'string'
+          ? p.resultHash : null };
+        return request(sums.put(next)).then(() => next);
+      });
+    })));
+  });
   return {
     kind: 'indexeddb',
     list: () => run('list', [SUMMARIES], 'readonly',
       (tx) => request(tx.objectStore(SUMMARIES).getAll()))
+      .then((rows) => (rows.some(lacksHash) ? backfillHashes() : rows))
       .then((rows) => rows.map((s) => ({ ...s })).sort(byNewest)),
+    // The row of one id as stored now (a view checks its record against it, ADR 0046). A row
+    // from an earlier build gets its result hash from the stored record, without a write.
+    summary: (id) => run('summary', [RECORDS, SUMMARIES], 'readonly',
+      (tx) => request(tx.objectStore(SUMMARIES).get(id)).then((row) => {
+        if (row == null) return null;
+        if (!lacksHash(row)) return { ...row };
+        return request(tx.objectStore(RECORDS).get(id)).then((doc) => ({ ...row,
+          resultHash: doc && doc.provenance && typeof doc.provenance.resultHash === 'string'
+            ? doc.provenance.resultHash : null }));
+      })),
     get: (id) => run('get', [RECORDS], 'readonly',
       (tx) => request(tx.objectStore(RECORDS).get(id)))
       .then((doc) => (doc == null ? null : decodeStored(doc, knownAlgorithms, id))),
@@ -621,6 +768,50 @@ function idbStore(db, storage, knownAlgorithms) {
         });
       }).then(() => next);
     },
+    listFindings: () => run('listFindings', [FINDINGS], 'readonly',
+      (tx) => request(tx.objectStore(FINDINGS).getAll())).then(findingList),
+    getFinding: (id) => run('getFinding', [FINDINGS], 'readonly',
+      (tx) => request(tx.objectStore(FINDINGS).get(id)))
+      .then((f) => (f == null ? null : checkedFinding(f, 'corrupt', id))),
+    putFinding(f, { expectedUpdatedAt } = {}) {
+      let next;
+      try {
+        next = checkedFinding(f, 'invalid');
+      } catch (err) {
+        return Promise.reject(err);
+      }
+      return run('putFinding', [FINDINGS], 'readwrite', (tx) => {
+        const os = tx.objectStore(FINDINGS);
+        return request(os.get(next.id)).then((old) => {
+          findingVerdict(old == null ? null : checkedFinding(old, 'corrupt', next.id), next,
+            expectedUpdatedAt);
+          return request(os.put(next));
+        });
+      }).then(() => next);
+    },
+    putFindings(list) {
+      let batch;
+      try {
+        batch = checkedBatch(list);
+      } catch (err) {
+        return Promise.reject(err);
+      }
+      // Read, check and write in ONE transaction: a refused batch writes nothing.
+      return run('putFindings', [FINDINGS], 'readwrite', (tx) => {
+        const os = tx.objectStore(FINDINGS);
+        return Promise.all(batch.map((f) => request(os.get(f.id)))).then((olds) => {
+          const { write, same } = batchVerdict(batch, olds.map((o, i) => (o == null ? null
+            : checkedFinding(o, 'corrupt', batch[i].id))));
+          return Promise.all(write.map((f) => request(os.put(f))))
+            .then(() => ({ stored: write.map((f) => f.id), same }));
+        });
+      });
+    },
+    deleteFinding: (id) => run('deleteFinding', [FINDINGS], 'readwrite', (tx) => {
+      const os = tx.objectStore(FINDINGS);
+      return Promise.all([request(os.get(id)).then((v) => v != null), request(os.delete(id))])
+        .then(([existed]) => existed);
+    }),
     close: () => db.close(),
   };
 }

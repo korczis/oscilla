@@ -994,7 +994,8 @@ test('memory store: CRUD with validation and explicit delete', async () => {
   const list = await store.list();
   assert.strictEqual(list.length, 1);
   assert.deepStrictEqual(Object.keys(list[0]), ['experimentId', 'name', 'createdAt',
-    'schemaVersion', 'oscillaVersion', 'status', 'sizeBytes', 'definition']);
+    'schemaVersion', 'oscillaVersion', 'status', 'resultHash', 'sizeBytes', 'definition',
+    'links']);
   assert.strictEqual(list[0].status, 'USABLE');
   const later = fullExperiment({ id: 'later', now: '2026-10-05T00:00:00.000Z' });
   await store.put(later);
@@ -1016,9 +1017,9 @@ test('IndexedDB store: open, upgrade from empty, CRUD, reopen keeps data', async
   assert.strictEqual(store.kind, 'indexeddb');
   assert.deepStrictEqual(fake.state.upgrades, [[0, DB_VERSION]]);
   // DB version 2 (V3.1, V426) adds the Studio partition next to the experiment stores, version
-  // 3 the definitions (ADR 0043).
+  // 3 the definitions (ADR 0043), version 4 the findings (ADR 0046).
   assert.deepStrictEqual([...fake.dbs.get('t1').stores.keys()], ['experiments', 'summaries',
-    'studio', 'studioSummaries', 'definitions']);
+    'studio', 'studioSummaries', 'definitions', 'findings']);
   const e = fullExperiment();
   assert.strictEqual(await store.put(e), e.experimentId);
   assert.deepStrictEqual(await store.get(e.experimentId), e);

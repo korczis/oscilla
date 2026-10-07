@@ -58,6 +58,8 @@ import { createNavigation, v1ModeFor } from './ui/navigation.js';
 import { createUnsavedGuard } from './ui/unsaved.js';
 import { createMeasureUi } from './ui/measure.js';
 import { createExperimentsUi } from './ui/experiments.js';
+import { createFindingsUi } from './ui/findings.js';
+import { createConnectionsUi } from './ui/connections.js';
 import { createStudioUi } from './ui/studio/workspace.js';
 import { createScopeView, createHarmonicBarsView } from './ui/p5-views.js';
 import { buildConfigExport, parseConfigImport, CONFIG_FILE_VERSION } from './ui/config-file.js';
@@ -475,6 +477,7 @@ const unsavedGuard = createUnsavedGuard({ sources: [
   () => (app ? app.studioWhatWouldBeLost() : []),
   () => (app ? app.measureWhatWouldBeLost() : []),
   () => (app ? app.experimentsWhatWouldBeLost() : []),
+  () => (app ? app.findingsWhatWouldBeLost() : []),
 ] });
 
 function compose(...parts) {
@@ -505,11 +508,13 @@ function integrationInit() {
   cmp.history = cmp.loadHistory();
   cmp.safetyCollapsed = sessionStore.get(STORAGE_KEYS.safetySeen) === '1';
   // ONE hash dispatcher (ui/navigation.js, ADR 0045): each domain applies its own keys, in this
-  // order, and the dispatcher alone chooses the workspace (Studio keys > m > mr > Playground).
-  // It applies the hash the page opened at, new links, and Back / Forward between workspaces.
+  // order, and the dispatcher alone chooses the workspace (Studio keys > m > a stored record >
+  // mr > Playground). It applies the hash the page opened at, new links, and Back / Forward
+  // between workspaces; on Back / Forward only the stored record is opened again (ADR 0048).
   cmp.navRegister('instrument', () => cmp.restoreFromHash());
   cmp.navRegister('measure', (hash) => cmp.measureApplyRecipeHash(hash));
   cmp.navRegister('studio', (hash) => cmp.studioApplyLinkHash(hash));
+  cmp.navRegister('records', (hash) => cmp.recordsApplyHash(hash));
   cmp.navStart();
   if (cmp.source !== 'single' || cmp.pattern !== 'tone') cmp.sourceKind = 'pattern';
   engine.on((type, d) => {
@@ -587,9 +592,12 @@ function integrationInit() {
   });
   cmp.$watch('tabs.analysis', (tab) => setAnalysisTab(tab));
   const loadExperiments = (ws) => {
-    if (ws === 'experiments' && !cmp.exps.loaded) {
-      cmp.experimentsRefresh().catch((err) => cmp.notify('error', 'Experiments unavailable',
-        err.message || String(err)));
+    // Every entry reads the list again: another tab may have changed what is stored, and a
+    // detail or comparison left open must show the stored record (ui/experiments.js syncViews).
+    // The address then names the detail again (ADR 0048).
+    if (ws === 'experiments') {
+      cmp.experimentsRefresh().then(() => cmp.recordsNameDetail(), (err) => cmp.notify('error',
+        'Experiments unavailable', err.message || String(err)));
     }
   };
   cmp.$watch('workspace', (ws) => {
@@ -721,10 +729,12 @@ function createOscillaComponent(ui) {
     loopback: new URLSearchParams(window.location.search).get('measure') === 'loopback',
   });
   const experiments = createExperimentsUi();
+  const findings = createFindingsUi();
+  const connections = createConnectionsUi();
   const studio = createStudioUi({ engine, stopPlayback });
   const navigation = createNavigation();
-  const cmp = compose(instrument, ui, workbench, measure, experiments, studio, navigation,
-    provenancePart(), TEMPLATE_HELPERS);
+  const cmp = compose(instrument, ui, workbench, measure, experiments, findings, connections,
+    studio, navigation, provenancePart(), TEMPLATE_HELPERS);
   cmp.dismissAlert = focusSafeDismiss(cmp.dismissAlert);
   const baseRefreshDebug = cmp.refreshDebug;
   Object.defineProperty(cmp, 'refreshDebug', {
@@ -742,6 +752,7 @@ function createOscillaComponent(ui) {
       shellInit.call(this);
       this.measureInit();
       this.experimentsInit();
+      this.findingsInit();
       this.studioInit(); // before integrationInit: Studio's key listener runs first (§125)
       integrationInit.call(this);
     },

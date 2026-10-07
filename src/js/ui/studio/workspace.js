@@ -991,6 +991,11 @@ export function createStudioUi(svc = {}) {
         announce(`Opened ${r.summary.name}`);
       },
       recordDeleted: (id) => detachDeleted(id),
+      connections: (id) => (ctx.cmp && typeof ctx.cmp.connectionsOfStudioProject === 'function'
+        ? ctx.cmp.connectionsOfStudioProject(id) : Promise.resolve(null)),
+      follow: (c, before) => (ctx.cmp && typeof ctx.cmp.connectionsGo === 'function'
+        ? ctx.cmp.connectionsGo(c, before) : Promise.resolve(false)),
+      dirty: () => !!(ctx.cmp && ctx.cmp.studio && ctx.cmp.studio.dirty),
       downloadFile,
       ...dialogSvc,
     });
@@ -1463,6 +1468,18 @@ export function createStudioUi(svc = {}) {
 
     studioOpenLibrary() {
       if (ctx.patches) ctx.patches.openLibrary();
+    },
+    /** The library Studio saves to (ui/connections.js reads the stored projects through it). */
+    studioLibrary() {
+      return library();
+    },
+    /**
+     * Show stored project `id` in the Projects and patches dialog, focused, with its connected
+     * records open (ADR 0048). Nothing is loaded: Open there stays explicit.
+     */
+    async studioShowProject(id) {
+      if (!ctx.patches) return false;
+      return ctx.patches.openLibrary({ focusId: id });
     },
 
     async studioSave() {

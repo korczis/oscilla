@@ -185,7 +185,8 @@ const H = {
 
 /** Accessible-name + reachability audit of every interactive [data-osc] element, in-page. */
 function auditControls() {
-  const INTERACTIVE = 'button, input, select, textarea, a[href], [role="switch"], [role="tab"],'
+  const INTERACTIVE = 'button, input, select, textarea, summary, a[href], [role="switch"],'
+    + ' [role="tab"],'
     + ' [role="radio"], [role="menuitem"], [role="listbox"], [tabindex]:not([tabindex="-1"])';
   const text = (el) => (el ? el.textContent.replace(/\s+/g, ' ').trim() : '');
   const name = (el) => {
@@ -616,6 +617,80 @@ function defineChecks() {
     await sleep(120);
     await collect();
     await page.evaluate(() => window.OSCILLA.app.closeModal('osc-dlg-def'));
+    // Findings (ADR 0046): the run detail's buttons, the dialog with a comparison linked, a
+    // listed finding's buttons and its delete dialog.
+    await page.evaluate(async () => {
+      const a = window.OSCILLA.app;
+      if (a.exps.rows[0]) await a.experimentsOpen(a.exps.rows[0].id);
+    });
+    await page.waitForSelector('[data-osc="exp.findingNew"]', { state: 'visible', timeout: 5000 })
+      .catch(() => {});
+    // Connected records (ADR 0048): the open experiment is a duplicate, so its section holds a
+    // link; the definition and finding rows carry their disclosure.
+    await page.waitForSelector('[data-osc="cnx.link"]', { state: 'visible', timeout: 10000 })
+      .catch(() => {});
+    await collect();
+    await page.click('[data-osc="exp.findingNew"]');
+    await page.waitForSelector('#osc-fnd-statement', { state: 'visible', timeout: 5000 })
+      .catch(() => {});
+    await page.fill('#osc-fnd-statement', 'audit finding');
+    await page.evaluate(async () => {
+      const a = window.OSCILLA.app;
+      const [x, y] = a.exps.rows;
+      if (x && y) await a.findingsAddCompare(x.id, y.id);
+    });
+    await page.waitForSelector('[data-osc="fnd.removeRef"]', { state: 'visible', timeout: 5000 })
+      .catch(() => {});
+    await collect();
+    await page.click('[data-osc="fnd.save"]');
+    await page.waitForSelector('[data-osc="fnd.edit"]', { state: 'visible', timeout: 5000 })
+      .catch(() => {});
+    await collect();
+    await page.click('[data-osc="fnd.delete"]');
+    await page.waitForSelector('[data-osc="fnd.deleteConfirm"]', { state: 'visible',
+      timeout: 5000 }).catch(() => {});
+    await collect();
+    await page.click('[data-osc="fnd.deleteConfirm"]');
+    // A refused stale edit: "Load the stored version", then the typed text kept to copy.
+    await page.evaluate(async () => {
+      const a = window.OSCILLA.app;
+      await a.findingsAskRun(a.exps.rows[0].id);
+      a.fnd.form.statement = 'audit conflict';
+      const f = await a.findingsSave();
+      if (!f) return;
+      await a.findingsAskEdit(f.id);
+      a.fnd.form.statement = 'audit edit';
+      const s = await a.experimentsStore();
+      const now = await s.getFinding(f.id);
+      await s.putFinding({ ...now, statement: 'audit other tab',
+        updatedAt: new Date(Date.parse(now.updatedAt) + 1000).toISOString() });
+      await a.findingsSave();
+    });
+    await page.waitForSelector('[data-osc="fnd.loadStored"]', { state: 'visible', timeout: 5000 })
+      .catch(() => {});
+    await collect();
+    await page.click('[data-osc="fnd.loadStored"]');
+    await page.waitForSelector('[data-osc="fnd.mine"]', { state: 'visible', timeout: 5000 })
+      .catch(() => {});
+    await collect();
+    await page.evaluate(async () => {
+      const a = window.OSCILLA.app;
+      a.findingsDiscardDraft();
+      for (const r of a.fnd.rows.slice()) await a.findingsDeleteNow(r.id);
+    });
+    // A draft kept after Escape: the panel's note offers to continue or discard it.
+    await page.click('[data-osc="exp.findingNew"]');
+    await page.waitForSelector('#osc-fnd-statement', { state: 'visible', timeout: 5000 })
+      .catch(() => {});
+    await page.fill('#osc-fnd-statement', 'audit draft');
+    await page.waitForSelector('[data-osc="fnd.discard"]', { state: 'visible', timeout: 5000 })
+      .catch(() => {});
+    await collect();
+    await page.keyboard.press('Escape');
+    await page.waitForSelector('[data-osc="fnd.draftNote"]', { state: 'visible', timeout: 5000 })
+      .catch(() => {});
+    await collect();
+    await page.click('[data-osc="fnd.draftDiscard"]');
     await page.evaluate(async () => {
       // An authored definition stays loaded in MEASURE (a derived one only fills the setup).
       const a = window.OSCILLA.app;
@@ -660,7 +735,10 @@ function defineChecks() {
     const unlabelled = list.filter((c) => !c.name).map((c) => c.osc + (c.id ? `#${c.id}` : ''));
     const unreachable = list.filter((c) => !c.reachable).map((c) => c.osc);
     const neverVisible = list.filter((c) => !c.visible).map((c) => c.osc);
-    return { ok: !unlabelled.length && !unreachable.length && !neverVisible.length,
+    // Controls the audit must have met (they exist only in a state the audit sets up).
+    const unseen = ['cnx.link', 'cnx.toggle'].filter((k) => !seen.has(k));
+    return { ok: !unlabelled.length && !unreachable.length && !neverVisible.length
+      && !unseen.length, unseen,
       controls: list.length, unlabelled, unreachable, neverVisible, measureState };
   });
 

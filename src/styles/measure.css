@@ -915,6 +915,117 @@ ul.osc-x-ev-list {
   clip-path: inset(50%);
 }
 
+/* Findings (ADR 0046): a statement, its status in words and its references as a real list; a
+   broken reference says why in words (colour is never the only signal). */
+.osc-x-row.osc-f-row {
+  grid-template-columns: minmax(0, 1fr);
+  align-items: stretch;
+  gap: 5px;
+}
+
+.osc-f-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 8px;
+  min-width: 0;
+}
+
+.osc-f-statement {
+  flex: 1 1 12em;
+  min-width: 0;
+  margin: 0;
+  color: var(--osc-text);
+  font-size: var(--osc-fs-md);
+  font-weight: var(--osc-fw-medium);
+  overflow-wrap: anywhere;
+}
+
+.osc-f-refs {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  color: var(--osc-text-2);
+  font-size: var(--osc-fs-xs);
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.osc-f-ref {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  min-width: 0;
+}
+
+.osc-f-ref > span {
+  min-width: 0;
+}
+
+.osc-f-ref:is([data-state="missing"], [data-state="broken"]) {
+  padding-left: 6px;
+  border-left: 2px solid var(--osc-orange);
+}
+
+.osc-f-issue {
+  margin: 0;
+  color: var(--osc-text);
+  font-size: var(--osc-fs-xs);
+}
+
+.osc-x-meta.osc-f-meta {
+  margin: 0;
+  white-space: normal;
+}
+
+.osc-f-how {
+  color: var(--osc-text-muted);
+}
+
+.osc-f-add {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 8px;
+}
+
+.osc-f-add .osc-select {
+  flex: 1 1 10em;
+  min-width: 0;
+}
+
+.osc-f-dlg-h {
+  margin: 6px 0 0;
+  color: var(--osc-text-2);
+  font-size: var(--osc-fs-sm);
+}
+
+.osc-f-draft {
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 8px;
+}
+
+.osc-f-draft p {
+  flex: 1 1 14em;
+  margin: 0;
+  font-size: var(--osc-fs-sm);
+}
+
+.osc-f-draft svg {
+  color: var(--osc-orange);
+}
+
+.osc-f-cite-warn {
+  padding: 6px 8px;
+  border-left: 2px solid var(--osc-orange);
+  color: var(--osc-text);
+}
+
 .osc-x-delete {
   border-color: var(--osc-red);
 }
@@ -1070,4 +1181,59 @@ ul.osc-x-ev-list {
   .osc-m-tabs .osc-tab {
     min-width: 44px;
   }
+}
+
+/* Connected records (ADR 0048): each connection in words, its state first, its stored field
+   named; a state other than "stored here" is marked by a border as well as by its words. */
+.osc-x-cn-dir {
+  margin: 0;
+  color: var(--osc-text-2);
+  font-size: var(--osc-fs-xs);
+  font-weight: var(--osc-fw-medium);
+}
+
+.osc-x-cn-item {
+  min-width: 0;
+}
+
+.osc-x-cn-item:not([data-state="present"]) {
+  padding-left: 6px;
+  border-left: 2px solid var(--osc-orange);
+}
+
+.osc-x-cn-link {
+  color: var(--osc-link);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.osc-x-cn-field,
+.osc-x-cn-more {
+  color: var(--osc-text-muted);
+}
+
+.osc-x-row > .osc-x-cn--row {
+  grid-column: 1 / -1;
+  min-width: 0;
+}
+
+.osc-x-cn--row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: var(--osc-fs-xs);
+}
+
+.osc-x-cn--row:not([open]) {
+  gap: 0;
+}
+
+.osc-x-cn-summary {
+  width: fit-content;
+  color: var(--osc-text-2);
+  cursor: pointer;
+}
+
+.osc-x-cn--row > .osc-m-hint {
+  margin: 0;
 }
