@@ -90,7 +90,13 @@ shortcut dialogs (W5); disabled controls without a reason (W6, partly fixing); W
 engine/dsp/labs/sequencer CI and the About provenance tests skip in CI's shallow clone (CI1,
 **closed** #147: WebKit legs in both jobs, nothing narrowed; the unit job checks out full
 history and tags, and the About checks fail instead of skipping under CI without them);
-no startup budget or large-library fixture (P1); `window.OSCILLA` test seam and `?mock=1` ship
+no startup budget or large-library fixture (P1, **closed** #170: `npm run test:perf` over a
+500-experiment, 50-definition, 20-project library in three browsers, budgets derived by rule
+from six measured sessions, `docs/v4/performance.md`; a diagnostic, not in the release gate,
+for the reasons recorded there; found by it and **open**, P1b: selecting an experiment in a
+500-row list replaces every row, 64 / 191 / 116 ms per checkbox click in Chromium / Firefox /
+WebKit (medians of 60 clicks each), and the list is not windowed, its first frame taking
+174 / 417 / 279 ms; `src/js/ui/experiments.js`); `window.OSCILLA` test seam and `?mock=1` ship
 in production (W7, **decided and partly fixed** #161, ADR 0052: they stay in the one tested
 artifact; three hooks now refuse what they must, but an unchecked input can still read
 CALIBRATED outside TEST CONTEXT by two hook sequences, W7f, open; see "W7" below);
