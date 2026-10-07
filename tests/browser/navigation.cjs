@@ -55,7 +55,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { pathToFileURL } = require('node:url');
-const playwright = require('playwright');
+const suite = require('./lib/suite.cjs');
 
 const argv = process.argv.slice(2);
 const arg = (name, fallback) => {
@@ -64,8 +64,11 @@ const arg = (name, fallback) => {
 };
 const ROOT = path.resolve(__dirname, '..', '..');
 const DIST = path.resolve(arg('dist', path.join(ROOT, 'dist', 'index.html')));
-const BROWSERS = arg('browsers', process.env.OSC_BROWSERS || 'chromium,firefox,webkit').split(',');
-const ORIGINS = arg('origins', 'file,http').split(',');
+const RUN = suite.open({ name: 'navigation', browsers: arg('browsers'),
+  origins: arg('origins'), defaultOrigins: ['file', 'http'] });
+const playwright = RUN.playwright;
+const BROWSERS = RUN.browsers;
+const ORIGINS = RUN.origins;
 const ONLY = arg('only', '') ? new Set(arg('only', '').split(',')) : null;
 const JSON_OUT = arg('json', '');
 const LAUNCH = {
@@ -205,7 +208,8 @@ const H = {
     }, item);
     if (group) await page.click(`[data-osc="nav-group.${group}"]`);
     await page.click(item);
-    await page.waitForFunction((w) => window.OSCILLA.app.workspace === w, ws);
+    await page.waitForFunction((w) => window.OSCILLA.app.workspace === w, ws,
+      { timeout: 15000 });
     await H.frames(page);
   },
   /** Back / Forward (same document), the dialogs met on the way, then the state. */
@@ -537,7 +541,8 @@ function defineChecks() {
     });
     await page.fill('#osc-m-notes', 'notes typed after the save');
     await page.click('#osc-measure-save');
-    await page.waitForFunction(() => !window.OSCILLA.app.meas.saving);
+    await page.waitForFunction(() => !window.OSCILLA.app.meas.saving, null,
+      { timeout: 15000 });
     await H.frames(page);
     const failedUpdate = await H.state(page);
     await page.evaluate(() => {
@@ -845,6 +850,7 @@ async function runOne(browserName, origin, baseUrl) {
 }
 
 (async () => {
+  await RUN.ready();
   if (!fs.existsSync(DIST)) {
     console.error(`missing ${DIST}: run npm run build`);
     process.exit(2);
@@ -862,6 +868,7 @@ async function runOne(browserName, origin, baseUrl) {
         const res = await runOne(b, o, base);
         all[key] = res;
         const names = Object.keys(res);
+        RUN.reportLeg({ leg: key, checks: names.length });
         const bad = names.filter((n) => !res[n].ok);
         failed += bad.length;
         console.log(`${bad.length ? 'FAIL' : 'PASS'} ${key}/navigation: ${names.length - bad.length}/`

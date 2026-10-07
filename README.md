@@ -19,8 +19,8 @@ it computes the response of the whole playback and capture chain, rates the qual
 measurement and keeps it as a reproducible experiment. The app is a single HTML file. It needs no server, no account and no network once loaded, and it works
 when opened straight from disk.
 
-The words OSCILLA uses for its objects (project, Studio, runtime, measurement, experiment,
-run and repeat, calibration, trace) are defined in the [glossary](docs/GLOSSARY.md).
+The words OSCILLA uses for its objects (project, Studio, runtime, measurement, run, experiment,
+definition, calibration, trace) are defined in the [glossary](docs/GLOSSARY.md).
 
 ## Navigation
 
@@ -44,8 +44,8 @@ changed.
   that is refused does not stay in the address or in history.
 - **Unsaved work.** While something would be lost, a reload, a closed tab or leaving the page
   makes the browser ask first: unsaved Studio changes, a completed measurement that is not
-  saved, a saved run's name or notes not yet stored with "Update name and notes", a rename being
-  typed, or a level calibration (it is kept in page memory only). Where the browser allows no
+  saved, a saved experiment's name or notes not yet stored with "Update name and notes", a
+  rename being typed, or a level calibration (it is kept in page memory only). Where the browser allows no
   IndexedDB, saved experiments and Studio projects live in page memory too and count as well.
   Studio shows "unsaved changes" and Measure "unsaved result" or "unsaved name or notes". With
   nothing to lose the page asks nothing. Sequencer patterns are not guarded yet.
@@ -188,22 +188,23 @@ filter class is claimed. An experiment saved from Measure does not store band le
   deployed page, the artifact SHA-256), with a configuration hash and a result hash. The
   result hash (version 4) covers the results, the verdict, the calibration, the input, the
   output, the runs (each with a stable id, `run-1`, `run-2`, ...), the build, the recipe and
-  the definition the run was executed from. Files with a version 1, 2 or 3 hash still verify
+  the definition the experiment was executed from. Files with a version 1, 2 or 3 hash still verify
   in their own version.
 - **Definitions.** A definition says what to measure and how: the recipe as asked for, the
-  conditions declared for every run and, optionally, the lowest quality verdict that meets it.
+  conditions declared for every experiment and, optionally, the lowest quality verdict that
+  meets it.
   Its hash covers only those fields, so a rename never changes it. Editing them creates a new
-  version; earlier runs keep the version they ran. "Run this definition" runs its latest
-  version, and Repeat loads a saved run's version again. A run records the version only when
-  it ran exactly that recipe. A run without one, or whose setup was changed, records a
-  definition derived from the recipe it played and marked as derived, never as authored. A
-  run is shown under a stored definition's name only when that definition has its version
-  with its hash
+  version; earlier experiments keep the version they used. "Run this definition" runs its
+  latest version, and Repeat loads a saved experiment's version again. An experiment records
+  the version only when its measurement ran exactly that recipe. One without a definition, or
+  whose setup was changed, records a definition derived from the recipe it played and marked
+  as derived, never as authored. An experiment is shown under a stored definition's name only
+  when that definition has its version with its hash
   ([ADR 0043](.ai/repo/adrs/0043-runs-executed-from-versioned-experiment-definitions.md),
   proposed).
 - **Recorded as measured.** The calibration saved is the one the measurement applied, and the
   notes are those at its start. A profile loaded, a correction switched or a level calibration
-  made after the run never becomes part of its record, and the Experiment panel says so; notes
+  made after the measurement never becomes part of its record, and the Experiment panel says so; notes
   edited later are saved as an annotation. An experiment from an earlier version whose named
   calibration its own results contradict still opens and imports, and is marked as such: it is
   shown and compared as uncalibrated, never in dB SPL.
@@ -211,11 +212,11 @@ filter class is claimed. An experiment saved from Measure does not store band le
   whose stimulus is anything else (white or pink noise, a sine, a chirp) still imports and is
   kept as it is, with a warning that this version cannot measure it; Repeat and "Run this
   definition" refuse it rather than run a log sweep in its place.
-- **Evidence.** A saved run's detail answers two questions from what its record stores. "What
+- **Evidence.** A saved experiment's detail answers two questions from what its record stores. "What
   produced this value?" traces the stored response value at a frequency you enter (1 kHz by
   default) through the analysis algorithms, the capture (input, sample rate, processing flags),
-  the calibration as applied, the run, the definition version, the build and, for a Studio run,
-  the Studio graph the recipe was derived from with the measured path it names (the nodes,
+  the calibration as applied, the runs, the definition version, the build and, for an
+  experiment run from Studio, the Studio graph the recipe was derived from with the measured path it names (the nodes,
   connections and measurement clips the measurement used). "Can I repeat this?" is a checklist: each item is recorded, partial or not recorded,
   with its reason, and there is no score. The result hash is recomputed and its reason says what
   it covers; the algorithm ids, environment notes and lineage are covered by no result hash.
@@ -223,10 +224,11 @@ filter class is claimed. An experiment saved from Measure does not store band le
   derived result. Anything the record does not store reads "not recorded"
   ([ADR 0044](.ai/repo/adrs/0044-evidence-on-a-run-lineage-and-reproducibility-checklist.md),
   proposed).
-- **A completed run cannot be changed.** Only the name, the annotation notes and the baseline
+- **A completed experiment cannot be changed.** Only the name, the annotation notes and the baseline
   mark of a saved
   experiment can be edited, and no hash covers them. The store refuses any other change to a
-  completed run, and rename edits only the name. A duplicate is the same run under a new ID,
+  completed experiment, and rename edits only the name. A duplicate is the same experiment
+  under a new ID,
   with the same hashes and creation time, and it records which experiment it was copied from
   ([ADR 0040](.ai/repo/adrs/0040-completed-experiment-run-immutable-metadata-separate.md),
   proposed).
@@ -246,21 +248,22 @@ filter class is claimed. An experiment saved from Measure does not store band le
   product version
   ([ADR 0023](.ai/repo/adrs/0023-schema-versions-independent-of-product-version.md), proposed).
   Schema 1 files import through a migration that adds the run ids and keeps their hash.
-  Schema 2 files import through a migration that gives each run the definition derived from
+  Schema 2 files import through a migration that gives the experiment the definition derived from
   its own recipe (marked as derived) and keeps their hash.
 - **Compare.** Comparing two or more experiments names every difference in calibration, sample
-  rate, stimulus and algorithm. It also lists what changed between the runs, grouped by
-  domain: the definition version (an edit of the same definition between two runs is said
-  plainly), recipe (stimulus and analysis field by field, with units), algorithms (with the
-  version step), calibration, input and output conditions, the Studio graph a run recorded
+  rate, stimulus and algorithm. It also lists what changed between the experiments, grouped
+  by domain: the definition version (an edit of the same definition between two experiments
+  is said plainly), recipe (stimulus and analysis field by field, with units), algorithms (with the
+  version step), calibration, input and output conditions, the Studio graph an experiment recorded
   (nodes and connections added or removed, parameters with their units, automation lanes),
   build provenance and the quality verdict and reasons. Execution changes come first. Layout,
   view and metadata changes are collapsed and never counted as execution changes. The list
   says what differs between the two records, not what caused a difference in the responses.
-  A line names the evidence checklist items whose state differs between the runs and the
+  A line names the evidence checklist items whose state differs between the experiments and the
   recorded identities (build, definition, calibration, input device) that differ.
-  One run can be marked as the baseline: Compare then shows it first and compares a single
-  selected run with it. The mark is metadata, kept in the file, and at most one run carries it
+  One experiment can be marked as the baseline: Compare then shows it first and compares a
+  single selected experiment with it. The mark is metadata, kept in the file, and at most one
+  experiment carries it
   ([ADR 0041](.ai/repo/adrs/0041-run-comparison-semantic-execution-vs-presentation.md),
   proposed). A minus B is shown only for equivalent experiments, and only
   over their overlapping valid range. Equivalent experiments also get an impulse-response
@@ -372,7 +375,7 @@ How to use it, with the keyboard shortcuts, is the [Studio user guide](docs/v31/
   the clips, and the saved experiment records the Studio graph it was run from (schema version,
   hash, execution state) beside its recipe, and the measured path the recipe was derived from
   with its own hash. A node the measurement never reads, such as an unconnected Oscillator, is
-  recorded but is not an execution change when two runs are compared. Such a record needs
+  recorded but is not an execution change when two experiments are compared. Such a record needs
   experiment schema 4, which earlier versions of OSCILLA refuse as newer than they support;
   every other record is still written as schema 3 and opens in them.
 - **Performance.** Responsive at about 100 nodes and 200 connections; the numbers and budgets
@@ -585,6 +588,20 @@ automated test proves how a physical speaker, room or microphone behaves.
   `?debug=1` adds the full commit SHA, the source date, the artifact hash, the config schema
   version and live engine state: sample rate, Nyquist, AudioContext state, voices, nodes,
   microphone state and the last error.
+- **Inspection and test surface.** The page carries `window.OSCILLA`, the surface its own
+  browser tests and the post-deployment smoke use, so the bytes that are tested are the bytes
+  that are served. The stable reads are `version`, `build`, `measure.state`, `measure.counts()`,
+  `studio.counts()`, `studio.model` and `studio.trace.steps()`; everything else may change
+  without notice. Every member except `studioTimeline` (a second Studio context that one test
+  suite builds; it is due to leave the page) is one of three kinds: it observes; it drives an
+  action you already have in the page, through the same validation (`measure.useLoopback()` is
+  `?measure=loopback`, `measure.setValues()` is a recipe link); or it injects test data.
+  `measure.showResult()` refuses a result that is not marked TEST CONTEXT, so no injected result
+  is shown or saved as a measurement, and a direct `measure.setInputNow()` is refused outside
+  TEST CONTEXT. One gap is open: an input named while in TEST CONTEXT, or carried by an injected
+  result, stays known afterwards, and a typed level reading can then bind to it. It is
+  not a security boundary: any script running in the page can reach the same code without it.
+  `?mock=1` only outlines the chart and view areas for layout comparison and never draws data.
 - **Proof of deployment.** After every Pages deployment, `scripts/verify-deploy.mjs` fetches the
   public page, retrying a bounded number of times. It reverses the stamp and requires the
   result to be byte-identical to the committed `dist/index.html`. It also requires the stamped

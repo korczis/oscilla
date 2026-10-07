@@ -47,15 +47,18 @@ const path = require('node:path');
 const { pathToFileURL } = require('node:url');
 const zlib = require('node:zlib');
 const esbuild = require('esbuild');
-const playwright = require('playwright');
+const suite = require('./lib/suite.cjs');
 
 const argv = process.argv.slice(2);
 const arg = (name, fallback) => {
   const i = argv.indexOf(`--${name}`);
   return i >= 0 && argv[i + 1] ? argv[i + 1] : fallback;
 };
-const BROWSERS = arg('browsers', process.env.OSC_BROWSERS || 'chromium,firefox,webkit').split(',');
-const ORIGINS = arg('origins', 'file,http').split(',');
+const RUN = suite.open({ name: 'v3-measure', browsers: arg('browsers'),
+  origins: arg('origins'), defaultOrigins: ['file', 'http'] });
+const playwright = RUN.playwright;
+const BROWSERS = RUN.browsers;
+const ORIGINS = RUN.origins;
 const SPIKE = argv.includes('--spike');
 const LONG_S = Number(arg('long-s', '40'));
 const JSON_OUT = arg('json', '');
@@ -566,6 +569,7 @@ let failures = 0;
 let passes = 0;
 const report = { meta: { date: new Date().toISOString(), node: process.version }, runs: {} };
 function check(key, name, ok, detail = '') {
+  RUN.tally(key);
   if (ok) passes += 1; else failures += 1;
   console.log(`  ${ok ? 'PASS' : 'FAIL'} [${key}] ${name}${detail ? ` — ${detail}` : ''}`);
   return ok;
@@ -806,6 +810,7 @@ async function nodeSpike() {
   const ir = await import(pathToFileURL(path.join(SRC, 'measurement',
     'impulse-response.js')).href);
   const out = {};
+  // timing-allow: rates of synthetic captures analysed in Node; no AudioContext is involved
   for (const [seconds, sr] of [[10, 48000], [20, 48000], [10, 96000], [20, 96000]]) {
     const st = stim.renderStimulus({ kind: 'log-sweep', sampleRate: sr, duration: seconds,
       level: 0.25, f1: 20, f2: 20000, fade: 0.01 });
@@ -850,6 +855,7 @@ window.__v3 = { engine, capture };`;
 }
 
 (async () => {
+  await RUN.ready();
   const js = await bundle(ENTRY, 'v3-measure-entry.js');
   const workerSource = await bundle(WORKER_ENTRY, 'v3-worker-entry.js', true);
   const html = HTML(js);
