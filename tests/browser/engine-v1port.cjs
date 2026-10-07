@@ -401,7 +401,8 @@ async function openPage(browser, { hash = '', query = '', instrumentOpts = {}, i
 // a wall deadline; app() gives up on a page that does not answer within APP_TIMEOUT_MS. The
 // longest single app() call measured 16.9 s ('limit scope and continuous scheduling', Chromium
 // and WebKit in the Linux Playwright container); the deadline is generous on purpose: it only
-// has to end a stall, never to judge timing.
+// has to end a stall, never to judge timing. A clock that crawls (each wait under its own 15 s
+// bound, their sum over 60 s) ends there too; the report then says how fast the clock runs.
 const APP_TIMEOUT_MS = 60000;
 const UNTIL_AUDIO_MAX_MS = 15000; // the longest audio-clock wait is 2.6 s of audio
 let SECTION = '(setup)';
@@ -411,11 +412,34 @@ function section(name) {
 }
 
 // Run fn(app, engine, O, T, arg) in the page; helpers sleep / untilAudio are in scope.
+// After a timeout: is the page answering, and how fast does its audio clock run? Two readings
+// one second apart (each bounded), so the report tells a frozen page from a starved clock.
+async function clockReport(page) {
+  const read = () => Promise.race([
+    page.evaluate(() => {
+      const c = window.OSCILLA.engine.ctx;
+      return c ? { t: c.currentTime, state: c.state, wall: Date.now() } : null;
+    }),
+    new Promise((resolve) => { setTimeout(() => resolve('no answer within 3 s'), 3000); }),
+  ]).catch((e) => `unreadable (${e.message})`);
+  const a = await read();
+  await new Promise((resolve) => { setTimeout(resolve, 1000); });
+  const b = await read();
+  if (!a || !b || typeof a !== 'object' || typeof b !== 'object') {
+    return `page: ${JSON.stringify(a)} / ${JSON.stringify(b)}`;
+  }
+  const rate = (b.t - a.t) / ((b.wall - a.wall) / 1000);
+  return `page answers; audio clock ${b.state} at ${b.t.toFixed(3)} s, advancing at `
+    + `${(rate * 100).toFixed(0)} % of real time`;
+}
+
 const app = (page, fn, arg) => {
   let timer;
   const stalled = new Promise((_, reject) => {
-    timer = setTimeout(() => reject(new Error(`${SECTION}: the page did not answer within `
-      + `${APP_TIMEOUT_MS / 1000} s (a stalled page or audio clock)`)), APP_TIMEOUT_MS);
+    timer = setTimeout(() => {
+      clockReport(page).then((report) => reject(new Error(`${SECTION}: the page did not `
+        + `answer within ${APP_TIMEOUT_MS / 1000} s; ${report}`)));
+    }, APP_TIMEOUT_MS);
   });
   const run = evaluateApp(page, fn, arg).catch((e) => {
     throw new Error(`${SECTION}: ${e.message}`);
@@ -1285,15 +1309,22 @@ async function runBrowser() {
         const wave = V2.buildPeriodicWave(e.ctx, [{ n: 1, gain: 1, phase: 0 }, { n: 2, gain: 0.3, phase: 0 }]).wave;
         e.play(plan, { ...base, periodicWave: wave });
         await sleep(200);
+        const v = e.voice;
         const tClear = e.ctx.currentTime;
         const cleared = e.clearPeriodicWave();
-        // The engine swaps the waveform once its 5 ms dip has rendered on the audio clock
-        // (_switchWaves); 100 ms of wall time is less than that on a starved runner (seen: the
-        // carrier still 'custom' with 45 ms clock ticks), so wait 100 ms of audio time.
-        await untilAudio(tClear + 0.1);
-        const type = e.voice && e.voice.carrier.type;
+        // The engine swaps the waveform when the dip it scheduled has rendered (_switchWaves),
+        // and it schedules from its estimate of the rendered time (_soon, clock.js
+        // renderedTimeAtLeast), not from this request. So no fixed delay after the request is
+        // safe: on a starved host (clock ticks up to 45 ms) both 100 ms of wall time and then
+        // 100 ms of audio time read the carrier before the swap; normally the swap is seen 29-37
+        // ms after the request. Wait for the engine's own dip to end (bounded), then judge.
+        const wall = Date.now();
+        while (v.dipping && Date.now() - wall < 15000) await sleep(2);
+        const type = v.carrier.type;
+        const dipEnded = !v.dipping;
+        const swapAfterS = +(e.ctx.currentTime - tClear).toFixed(3);
         e.stopAll();
-        return { cleared, type };
+        return { cleared, type, dipEnded, swapAfterS };
       });
       await sleep(200);
       out.final = { oscs: T.liveOscs(), nodes: e.activeNodeCount, voices: e.voices.size };
@@ -1302,7 +1333,7 @@ async function runBrowser() {
     for (const k of ['adsrMidAttackRelease', 'filterInsertStop', 'periodicWaveClear']) {
       check(`V2 hook click ratio ≈ 1 (median of 3 < 3): ${k}`, r[k].n > 1000 && r[k].ratio < 3, JSON.stringify(r[k]));
     }
-    check('V2 periodicWave cleared back to the plan waveform', r.periodicWaveClear.takes.every((x) => x.cleared && x.type === 'sine'), JSON.stringify(r.periodicWaveClear.takes));
+    check('V2 periodicWave cleared back to the plan waveform', r.periodicWaveClear.takes.every((x) => x.cleared && x.dipEnded && x.type === 'sine'), JSON.stringify(r.periodicWaveClear.takes));
     check('V2 hooks: 0 oscillators, nodes and voices afterwards', r.final.oscs === 0 && r.final.nodes === 0 && r.final.voices === 0, JSON.stringify(r.final));
     check('no console problems (V2 hooks)', problems.length === 0, problems.join(' | '));
     await context.close();
