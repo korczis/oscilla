@@ -125,6 +125,10 @@ for people, never gating · **DELETED** removed, with its replacement.
 | `browser/v31-studio-links.cjs` | GATE | dist in chromium, firefox, webkit, file:// and /oscilla/ (every check): a deep link `#m=studio&st=…&sv=…` opened on a fresh page lands in STUDIO with the template and subview (one panel at 390 px) and starts nothing; an invalid link (unknown template or view, repeated key, `st` without `m=studio`) is refused with the reason at load and on hashchange, nothing changed; a link never replaces unsaved changes (the Templates dialog opens with the note and the linked template, Open is explicit); Copy link writes a link that round-trips, and only the workspace and view after an edit; the Fullscreen button enters, exits, keeps focus, fills the screen and exits when leaving the workspace, and with the API removed stays aria-disabled with the reason; what Escape does while fullscreen is printed |
 | `unit/v31-studio-links.test.mjs` | GATE | the Studio deep-link hash codec (`core/url-state-studio.js`): round trip of every shipped template and subview, whole-link refusal with a sentence, coexistence with the instrument hash and the `mr` recipe; Copy link's view (template only while unmodified); fullscreen feature detection and its reasons |
 | `../scripts/visual-studio.mjs` + `visual/studio/*` | GATE | STUDIO at 1536x1024 (toolbar to graph row; and the whole workspace down to the timeline row with its clips and the automation lane), the compact widget, and at 390x844 the GRAPH and TIMELINE subviews, against the accepted reference per environment (≤ 0.5 % differing pixels) |
+| `unit/browser-suite-contract.test.mjs` | GATE | rule `project.suite-harness`: every entry suite under `browser/` opens its run through `browser/lib/suite.cjs`, takes playwright from it, tallies or reports its legs and parses no selection of its own (one suite is listed as pending, with the reason); the harness exits 2 on an empty or unknown browser or origin list (every migrated suite is spawned with `OSC_BROWSERS=bogus` and with it empty), fails a leg or a selected browser that ran 0 checks, fails a skip under CI that the Declared skips table below does not list, holds a start outside CI until the 1-minute load is below `OSC_LOAD_MAX` (bounded, a no-op under CI), reaches an engine by a known name only and bounds `page.evaluate` |
+| `unit/browser-timing.test.mjs` | GATE | rule `project.bounded-test-timing`: the static scan of `browser/` (fixed sleeps, setTimeout sleeps, counted polls, waiting loops without a wall-clock deadline, Playwright waits without a timeout, playwright outside the harness, frame windows from integer literals, 44100/48000 outside a render rate) finds nothing beyond the debt recorded in `browser/timing-baseline.json`, and only a reasoned `timing-allow` marker silences a finding; `browser/lib/wait.cjs` ends every wait on a named wall-clock deadline |
+| `browser/lib/suite.cjs`, `browser/lib/wait.cjs`, `browser/lib/timing-scan.cjs` | SUPPORTING | the browser suites' one harness (selection, engines, bounded `page.evaluate`, legs, declared skips, load gate), the shared waits (`until`, `bounded`, `anchor`, `frames`) and the static scan of the timing rule |
+| `browser/timing-baseline.json` | SUPPORTING | the timing findings that predate the rule, as a count per file and kind; it only goes down (`node tests/browser/lib/timing-scan.cjs --write-baseline`) |
 | `browser/dist-gate.cjs` | DELETED | targeted skeleton ids and crashed; superseded by `app.cjs` and `verify-dist` |
 
 Visual baseline: `node scripts/visual-gate.mjs --update-baseline` re-accepts the current
@@ -136,3 +140,34 @@ environment deliberately (3 runs; it refuses an unstable chrome). The CI environ
 The STUDIO references take the same `--update-reference`; `--view <id>[,<id>]` accepts only the
 named views (a new view) and leaves the other reference files as they are, and is refused when
 the environment's references were accepted with a different Chromium build.
+
+## The browser harness
+
+Every suite under `browser/` runs through `browser/lib/suite.cjs` (rule `project.suite-harness`):
+
+- `OSC_BROWSERS` (or the suite's `--browsers` / `--browser` flag) and `--origins` / `OSC_ORIGINS`
+  select what runs. An empty list, an unknown name or a repeated one exits 2; a variable that is
+  set and empty is an empty list, not "everything".
+- A selected browser that ran 0 checks fails the suite, whatever it printed.
+- Outside CI a suite waits for the 1-minute load average to fall below `OSC_LOAD_MAX` (default
+  2 x cores) for at most `OSC_LOAD_WAIT_MS` (default 600000) and then fails without running; it
+  prints the load at start and at end. Under CI (`CI` or `GITHUB_ACTIONS`) there is no gate.
+- `page.evaluate` answers within `OSC_EVALUATE_MS` (default 300000) of wall time or rejects with
+  the function it was running.
+
+Waits follow rule `project.bounded-test-timing`: a condition poll through `browser/lib/wait.cjs`
+with a wall-clock deadline that names the check, never a fixed sleep. A deliberate exception
+carries `// timing-allow: <reason>` on its line or the line above.
+`node tests/browser/lib/timing-scan.cjs` prints what the scan finds beyond the recorded debt.
+
+## Declared skips
+
+A check a suite does not run is taken through `RUN.skip(leg, id, reason)`. Under CI a skip that
+is not listed here with its reason fails the suite, so no check stops running there unnoticed.
+
+| Skip | Reason |
+| --- | --- |
+| `dsp:offline-analyser-variant` | the offline variant of the analyser peak check needs `OfflineAudioContext.suspend(t)`, which a browser may lack or refuse; the live analyser checks of the same suite cover the peak in every browser |
+| `qa-regressions:contrast` | the contrast check is defined for Chromium only (`browsers: ['chromium']`); the reason was not recorded when it was written, and Firefox and WebKit do not run it |
+| `qa-regressions:contrast-axe` | the axe-core colour-contrast pass runs only when axe-core is installed (`npm i --no-save axe-core`); it is not a dependency, so CI computes the contrast ratios without it |
+| `app:phone-bars-with-microphone` | WebKit has no fake capture device, so the phone-bar states are checked there without an open microphone stream; Chromium and Firefox check both |

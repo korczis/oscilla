@@ -24,6 +24,7 @@ import { createNoiseSource } from '../../../src/js/audio/noise.js';
 import { encodeWav } from '../../../src/js/audio/wav.js';
 import { render, renderTone, bufferStats } from '../../../src/js/audio/offline-renderer.js';
 
+// timing-allow: the rate this fixture requests for every context it creates, live and offline
 const SR = 48000;
 const FFT = 8192;
 
@@ -336,7 +337,7 @@ async function stereoRouting() {
       { duration: 0.3, sampleRate: SR, channels: 2 },
     );
   const corr = (buf) =>
-    pearson(buf.getChannelData(0).subarray(4800), buf.getChannelData(1).subarray(4800));
+    pearson(buf.getChannelData(0).subarray(SR / 10), buf.getChannelData(1).subarray(SR / 10));
   const split = await run({ mode: 'split' }, false);
   const inverted = await run({ mode: 'split' }, true);
   const unrelated = await run({ mode: 'split', freqB: 733 }, false);

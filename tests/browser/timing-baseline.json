@@ -1,0 +1,57 @@
+{
+  "note": "Findings of tests/browser/lib/timing-scan.cjs that predate rule project.bounded-test-timing, as a count per file and kind. tests/unit/browser-timing.test.mjs fails when a count rises above its record. The record only goes down: node tests/browser/lib/timing-scan.cjs --write-baseline.",
+  "debt": {
+    "tests/browser/app.cjs": {
+      "counted-poll": 19,
+      "timer-sleep": 57
+    },
+    "tests/browser/engine-v1port.cjs": {
+      "counted-poll": 6,
+      "timer-sleep": 49
+    },
+    "tests/browser/fixtures/dsp-entry.js": {
+      "timer-sleep": 1
+    },
+    "tests/browser/fixtures/sequencer-fixture.js": {
+      "counted-poll": 2,
+      "timer-sleep": 3
+    },
+    "tests/browser/live-smoke.cjs": {
+      "timer-sleep": 1
+    },
+    "tests/browser/navigation.cjs": {
+      "counted-poll": 1,
+      "timer-sleep": 3
+    },
+    "tests/browser/qa-regressions.cjs": {
+      "counted-poll": 7,
+      "fixed-rate": 1,
+      "timer-sleep": 24
+    },
+    "tests/browser/v3-ui.cjs": {
+      "counted-poll": 1,
+      "fixed-frame-window": 1,
+      "raw-playwright": 1,
+      "timer-sleep": 17,
+      "unbounded-wait": 4
+    },
+    "tests/browser/v31-studio-graph.cjs": {
+      "counted-poll": 1,
+      "timer-sleep": 24
+    },
+    "tests/browser/v31-studio-links.cjs": {
+      "counted-poll": 1,
+      "timer-sleep": 1
+    },
+    "tests/browser/v31-studio-runtime.cjs": {
+      "timer-sleep": 1
+    },
+    "tests/browser/v31-studio-timeline.cjs": {
+      "counted-poll": 4,
+      "timer-sleep": 18
+    },
+    "tests/browser/v31-studio-workflows.cjs": {
+      "counted-poll": 1
+    }
+  }
+}

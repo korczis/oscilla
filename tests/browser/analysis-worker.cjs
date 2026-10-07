@@ -41,15 +41,18 @@ const os = require('node:os');
 const path = require('node:path');
 const { pathToFileURL } = require('node:url');
 const esbuild = require('esbuild');
-const playwright = require('playwright');
+const suite = require('./lib/suite.cjs');
 
 const argv = process.argv.slice(2);
 const arg = (name, fallback) => {
   const i = argv.indexOf(`--${name}`);
   return i >= 0 && argv[i + 1] ? argv[i + 1] : fallback;
 };
-const BROWSERS = arg('browsers', process.env.OSC_BROWSERS || 'chromium,firefox,webkit').split(',');
-const ORIGINS = arg('origins', 'file,http').split(',');
+const RUN = suite.open({ name: 'analysis-worker', browsers: arg('browsers'),
+  origins: arg('origins'), defaultOrigins: ['file', 'http'] });
+const playwright = RUN.playwright;
+const BROWSERS = RUN.browsers;
+const ORIGINS = RUN.origins;
 const BENCH = argv.includes('--bench');
 const JSON_OUT = arg('json', '');
 const RATES = arg('rates', '48000,96000').split(',').map(Number);
@@ -298,6 +301,7 @@ let passes = 0;
 const report = { meta: { date: new Date().toISOString(), node: process.version,
   platform: `${os.platform()} ${os.release()}`, cpu: os.cpus()[0].model }, runs: {}, bench: [] };
 function check(key, name, ok, detail = '') {
+  RUN.tally(key);
   if (ok) passes += 1; else failures += 1;
   console.log(`  ${ok ? 'PASS' : 'FAIL'} [${key}] ${name}${detail ? ` — ${detail}` : ''}`);
 }
@@ -378,8 +382,10 @@ async function benchOne(name, url, cfg) {
     let peak = base;
     let sampling = true;
     const sampler = (async () => {
+      // timing-allow: a memory sampler; it ends when the bounded page.evaluate below settles
       while (sampling) {
         if (rss) peak = Math.max(peak, rss(pid));
+        // timing-allow: the sampler's 20 ms period, inside the loop explained above
         await new Promise((r) => setTimeout(r, 20));
       }
     })();
@@ -404,6 +410,7 @@ async function benchOne(name, url, cfg) {
 }
 
 (async () => {
+  await RUN.ready();
   const scripts = await bundle();
   const html = HTML(scripts);
   const once = scripts.library.includes(ANALYSIS_MARKER) && !scripts.app.includes(ANALYSIS_MARKER);
