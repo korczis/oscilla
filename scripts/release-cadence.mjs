@@ -1,6 +1,7 @@
 #!/usr/bin/env node
-// npm run release:cadence — rule project.deploy-often: releasable commits on main do not sit
-// unreleased. When release:analyze reports a level other than none, the oldest unreleased
+// node scripts/release-cadence.mjs (there is no npm script: package.json is a build input) —
+// rule project.deploy-often: releasable commits on main do not sit unreleased. When
+// release:analyze reports a level other than none, the oldest unreleased
 // release-relevant commit (any commit release-analyze.mjs gives a level other than none: feat,
 // fix, perf, revert, a breaking change, and a commit that is not a conventional commit) may be
 // at most MAX_AGE_HOURS old, counted from its committer date, which for a squash merge is the
@@ -146,7 +147,7 @@ export function main({
   const hi = argv.indexOf('--max-age-hours');
   const maxAgeHours = hi >= 0 ? Number(argv[hi + 1]) : MAX_AGE_HOURS;
   if (!Number.isFinite(maxAgeHours) || maxAgeHours <= 0) {
-    err('release:cadence: --max-age-hours needs a positive number');
+    err('release-cadence: --max-age-hours needs a positive number');
     return 2;
   }
   const lastTag = lastReleaseTag(run);
@@ -167,7 +168,7 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   try {
     process.exit(main());
   } catch (e) {
-    console.error(`release:cadence: ${e.message}`);
+    console.error(`release-cadence: ${e.message}`);
     process.exit(2);
   }
 }

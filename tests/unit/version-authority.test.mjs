@@ -106,6 +106,32 @@ test('no hard-coded current product version outside package.json, the lock and d
     + ` ${h.text}`).join('\n')}`);
 });
 
+// release:prepare bumps package.json and then runs version:check, so a literal of a version
+// the product can reach next is a release that fails in its gate on the day it is cut (round 2
+// of #163: a code comment named the next major's first three versions). The versions are
+// derived from package.json: the next patch, minor and major, and the two other ways a new
+// major can be typed (rule project.release-flow-complete), each also as its first candidate.
+test('no literal of a version the next release:prepare can propose', () => {
+  const [base, pre] = PKG.version.split('-');
+  const [major, minor, patch] = base.split('.').map(Number);
+  const next = [`${major}.${minor}.${patch + 1}`, `${major}.${minor + 1}.0`,
+    `${major + 1}.0.0`, `${major + 1}.0.1`, `${major + 1}.1.0`];
+  assert.equal(next[2], bumpVersion(base, 'major'));
+  // on a candidate, the release it becomes is next too (the current-version scan above looks
+  // for the candidate's own literal only)
+  if (pre) next.push(base);
+  const files = repositoryFiles(ROOT.pathname);
+  const hits = next.flatMap((v) => findVersionLiterals(files, v)
+    .map((h) => `${v} in ${h.path}:${h.line}: ${h.text}`));
+  assert.deepEqual(hits, [], 'write X.Y.Z, or a fixture version on a major the product is far '
+    + 'from (the tests use 40.x); version:check will refuse these once the product gets there');
+  // the scan sees what it is asked for (a candidate is caught by its base version)
+  const planted = [{ path: 'scripts/x.mjs', content: `// ${next[2]}-rc.1 and v${next[4]}\n` }];
+  assert.equal(findVersionLiterals(planted, next[2]).length, 1);
+  assert.equal(findVersionLiterals(planted, next[4]).length, 1);
+  assert.equal(findVersionLiterals(planted, next[3]).length, 0);
+});
+
 test('the literal scan catches plain and v-prefixed copies and ignores look-alikes', () => {
   const v = '40.8.7';
   const files = [

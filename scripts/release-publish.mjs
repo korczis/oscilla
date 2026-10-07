@@ -18,8 +18,9 @@
 //   blocked precondition of its own.
 // With --yes:
 //   git tag -a v<version> on HEAD; git push origin v<version>; wait for the Pages run of HEAD
-//   to start (gh run list + gh run view; a run of which no job has started at --pages-timeout
-//   is diagnosed the same way, never watched forever), then gh run watch;
+//   to start (gh run list + gh run view; a run of which no job has started at --pages-timeout,
+//   default PAGES_TIMEOUT_MIN, is diagnosed the same way, never watched forever), then gh run
+//   watch;
 //   node scripts/verify-deploy.mjs --commit <HEAD>; gh release create
 //   with notes generated from the commits since the previous tag and the committed
 //   dist/index.html attached as oscilla-v<version>.html (the artifact the release record of
@@ -90,9 +91,18 @@ export const RULE_FLOW = 'project.release-flow-complete';
  * For these the jobs decide.
  */
 export const WAITING_STATUSES = ['waiting', 'queued', 'pending', 'requested', 'action_required'];
-// pages.yml is one run at a time and its deploy job takes minutes, so a run of which no job
-// has started after 15 minutes is not waiting for its turn behind a healthy deploy.
+// pages.yml is one run at a time, and the `pages` concurrency group is held for the whole run:
+// the deploy job and then the three public smoke legs (each job timeout-minutes: 10, so a run
+// is bounded at about 20 minutes; 27 of 30 runs took under 2, and runs 37558326962 and
+// 37554348522 took 14.5 under runner congestion on 2026-10-07). A run of which no job has
+// started after STUCK_AFTER_MIN minutes is therefore almost always held, not waiting for its
+// turn; the exception, a run queued behind one slow healthy run, is a transient refusal of the
+// dry run that clears when the run ahead finishes.
 export const STUCK_AFTER_MIN = 15;
+// After the tag is pushed the wait must outlast one whole run ahead in the group (about 20
+// minutes by the job timeouts), or a healthy deploy behind a slow one would be given up on
+// with the tag already on origin.
+export const PAGES_TIMEOUT_MIN = 30;
 
 /**
  * Pure: whether a job has run. Its status decides; `startedAt` does not, because gh reports
@@ -190,7 +200,7 @@ export async function publish({
 } = {}) {
   const yes = argv.includes('--yes');
   const ti = argv.indexOf('--pages-timeout');
-  const pagesTimeoutMin = ti >= 0 ? Number(argv[ti + 1]) : 15;
+  const pagesTimeoutMin = ti >= 0 ? Number(argv[ti + 1]) : PAGES_TIMEOUT_MIN;
   const now = fingerprint || currentFingerprint(root, run);
   const version = now.version;
   const tag = `v${version}`;

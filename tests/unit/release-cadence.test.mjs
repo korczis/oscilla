@@ -171,6 +171,21 @@ test('cadence.yml runs the check hourly and on main, bounded, with a minimal tok
   assert.match(yml, /fetch-depth: 0\n/, 'tags and history: the unreleased range needs both');
   assert.match(yml, /\n {8}run: node scripts\/release-cadence\.mjs --issue\n/);
   assert.doesNotMatch(yml, /continue-on-error|\|\| true/, 'an overdue release fails the run');
+  assert.doesNotMatch(yml, /^\s*(- )?if:/m, 'no job or step is conditional: `if: false` on the '
+    + 'job would leave a green workflow that checks nothing');
+});
+
+// Rule project.release-flow-complete: ci.yml runs the record-completeness test for pull
+// requests only, so main itself is judged here, hourly and on every push and tag.
+test('cadence.yml also judges the release records of main, with a read-only token', () => {
+  const yml = readFileSync(new URL('../../.github/workflows/cadence.yml', import.meta.url),
+    'utf8');
+  const job = /\n {2}records:\n([\s\S]*?)(?=\n {2}\S|$)/.exec(yml);
+  assert.ok(job, 'a records job');
+  assert.match(job[1], /\n {4}permissions:\n {6}contents: read\n(?! {6})/, 'contents: read only');
+  assert.match(job[1], /\n {4}timeout-minutes: \d+\n/);
+  assert.match(job[1], /fetch-depth: 0\n/, 'the tags reachable from HEAD are the list');
+  assert.match(job[1], /\n {8}run: node scripts\/release-record\.mjs --complete\n/);
 });
 
 // package.json is a build input (its digest is stamped into dist/index.html), so the lag is

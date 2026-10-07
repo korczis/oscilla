@@ -50,7 +50,8 @@ that reads contents and writes issues only. The run fails while the release is o
 `tests/unit/release-cadence.test.mjs`: a `feat` 48 hours old fails and is named; the same
 commit at 2 hours passes; `chore` and `docs` commits at 72 hours pass; the issue is created
 once, edited while overdue and closed when it clears; the workflow file keeps its schedule,
-its timeout, its permissions and the failing step. The issue path is exercised there against
+its timeout, its permissions and the failing step, and no job or step carries an `if:` (a
+disabled job would be a green workflow that checks nothing). The issue path is exercised there against
 a fake `gh`; the workflow itself runs only on main (schedule, push, tag,
 `workflow_dispatch`). The same file prints the lag of the current checkout as a diagnostic
 line and never fails on it, so `npm test`, `npm run verify` and the release gate show it.

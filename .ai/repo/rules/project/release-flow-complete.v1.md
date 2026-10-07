@@ -4,13 +4,13 @@ version: 1
 kind: rule
 title: Every release completes prepare, pull request, publish, live verification and record
 description: A release is finished when its record is on main. release:prepare refuses to start the next one before that, and refuses the first stable release of a new major that no published release candidate preceded; release:publish diagnoses a Pages run of which no job starts instead of waiting on it.
-statement: release:prepare refuses to start when the newest v* tag at or after v3.4.0 has no .ai/repo/releases/<tag>.yaml, or when the proposed version is the first stable release of a new major (its major is above that of every stable v* tag reachable from HEAD, whatever its minor and patch) and no vX.0.0-rc.N tag has a record on the prerelease channel (overridden only by --no-rc-because naming an accepted ADR). Every v* tag at or after v3.4.0 that is reachable from HEAD and more than 6 hours old has a record, in the checkout or on origin/main. release:publish refuses while a pages.yml run has had no job start for 15 minutes or the run list cannot be read, reports the run id, its commit and the git merge-base --is-ancestor verdict against HEAD, never watches a run of which no job has started, and prints the majordomus finish line that verifies the published commit.
+statement: release:prepare refuses to start when the newest v* tag at or after v3.4.0 has no .ai/repo/releases/<tag>.yaml, or when the proposed version is the first stable release of a new major (its major is above that of every stable v* tag reachable from HEAD, whatever its minor and patch) and no vX.0.0-rc.N tag has a record on the prerelease channel (overridden only by --no-rc-because naming an accepted ADR). Every v* tag at or after v3.4.0 that is reachable from HEAD and more than 6 hours old has its record in the checkout that is judged; the copy on origin/main counts only for a branch whose history never contained that record, so a record deleted or renamed on a branch is missing. release:publish refuses while a pages.yml run has had no job start for 15 minutes or the run list cannot be read, reports the run id, its commit and the git merge-base --is-ancestor verdict against HEAD, never watches a run of which no job has started, and prints the majordomus finish line that verifies the published commit.
 status: active
 class: blocking
 depends_on: [project.release-receipt-binds-gate@1, project.about-names-current-release@1]
 tags: [release, flow, provenance, deployment]
 x-majordomus:
-  tests: [tests/unit/release-analyze.test.mjs, tests/unit/release-publish.test.mjs, tests/unit/release-record.test.mjs]
+  tests: [tests/unit/release-analyze.test.mjs, tests/unit/release-publish.test.mjs, tests/unit/release-record.test.mjs, tests/unit/release-cadence.test.mjs, tests/unit/version-authority.test.mjs]
 ---
 
 # Rationale
@@ -89,12 +89,22 @@ anything changes, as a dry run too:
 - a proposed stable version whose major is above the major of every stable `v*` tag
   reachable from HEAD (`git tag --merged HEAD`), whatever its minor and patch, needs a
   `vX.0.0-rc.N` tag, also reachable from HEAD, whose record's `channel` is `prerelease`. A
-  version typed into `package.json` (`4.0.1`, `4.1.0` after `v3.x`) is judged the same way
-  as a computed `4.0.0`; with no stable tag at all, the `X.0.0` shape decides.
+  version typed into `package.json` (`X.0.1`, `X.1.0` while every stable tag is below major
+  `X`) is judged the same way as a computed `X.0.0`; with no stable tag at all, the `X.0.0`
+  shape decides.
   `--no-rc-because <ADR>` lifts this only when `adrStatus()` finds that ADR in
   `.ai/repo/adrs/` with `status: accepted`; a proposed ADR, or a number that names none, is
   refused. Every ADR of this repository is `proposed` today, so the override cannot be used
   until the owner accepts one.
+
+`release:prepare` bumps `package.json` and then runs `version:check`, which refuses a copy of
+the product version outside `package.json`, the lock, `dist/`, `.ai/`, `CHANGELOG.md` and
+`docs/specs/`. A literal of a version the product can reach next is therefore a release that
+fails in its own gate. The test "no literal of a version the next release:prepare can
+propose" in `tests/unit/version-authority.test.mjs` derives the next patch, minor and major
+and the two other ways a new major can be typed (`X.0.1`, `X.1.0`) from `package.json` and
+fails on any such literal in a scanned file. Prose and comments write `X.Y.Z`; fixtures use
+major 40.
 
 `scripts/release-analyze.mjs`, `proposeVersion()`: after a `vX.Y.Z-rc.N` tag with no
 release-relevant commit, the proposal is `X.Y.Z`, so the step this rule makes mandatory can be
@@ -112,20 +122,36 @@ for `STUCK_AFTER_MIN` (15) minutes is a blocked precondition, reported with its 
 and the verdict of `git merge-base --is-ancestor <run commit> <HEAD>`; so is a run whose jobs
 cannot be read, and so is a run list that cannot be read (`could not list the pages.yml
 runs`): neither is taken for "no stuck run". With `--yes`, the wait for the Pages run of HEAD
-ends at `--pages-timeout` with the same diagnosis when no job of it has started;
+ends at `--pages-timeout` (default `PAGES_TIMEOUT_MIN`, 30 minutes: longer than one whole
+run ahead of it in the `pages` concurrency group, which the job timeouts bound at about 20)
+with the same diagnosis when no job of it has started;
 `gh run watch`, which has no timeout, is given the run as soon as one job has started and
 never before. `finishLine()` is printed by the dry run and after a publish.
 
 `scripts/release-record.mjs`, `checkoutMissingRecords()` over `missingRecords()`, and the test
 "every published release from v3.4.0 on in this history, past its publish window, has a
-record" in `tests/unit/release-record.test.mjs`. Scope: the `v*` tags reachable from HEAD
-(`git for-each-ref --merged HEAD`), because tags are shared by every worktree of a clone and
-a branch does not answer for a release cut after it; a record counts when it is in the
-checkout or on `origin/main` (`git cat-file -e origin/main:.ai/repo/releases/<tag>.yaml`),
-because a branch cut between a tag and its record pull request is not at fault for a record
-that is on main. It fails for any such tag older than `RECORD_WINDOW_HOURS` (6) with a record
-in neither place. The CI unit job checks out with `fetch-depth: 0`, so the tags are there;
-under GitHub Actions a clone without them fails the test instead of skipping it.
+record" in `tests/unit/release-record.test.mjs`. The `v*` tags reachable from HEAD
+(`git for-each-ref --merged HEAD`) are the list of what must be recorded, because tags are
+shared by every worktree of a clone and a branch does not answer for a release cut after it.
+What is judged is the checkout: a record counts when `.ai/repo/releases/<tag>.yaml` is in the
+working tree. The copy on `origin/main` (`git cat-file -e origin/main:<path>`) excuses one
+state only, a branch cut between a tag and its record pull request: `recordInHistory()`
+(`git rev-list -1 --full-history HEAD -- <path>`) finds that HEAD's history never touched the
+record. When the history did contain it and the checkout does not, the record was deleted or
+renamed there, and the trunk copy does not count: a pull request that deletes a record fails
+its own unit job, where its base still has the file. `--full-history` matters: a merge that
+drops the record agrees with the parent that never had it, and the simplified history would
+not show the commit that added it. The test fails for any such tag older than
+`RECORD_WINDOW_HOURS` (6). The CI unit job checks out with `fetch-depth: 0`, so the tags are
+there; under GitHub Actions a clone without them fails the test instead of skipping it.
+
+`.github/workflows/cadence.yml`, job `records`: `node scripts/release-record.mjs --complete`
+runs the same check on main hourly, on every push to main and on every `v*` tag, with a
+`contents: read` token. `ci.yml` runs only for pull requests, so without this job a tag that
+nobody recorded would first be red on someone else's pull request. It exits 1 when no tag
+from the floor on is reachable (a clone without tags is not a pass).
+`tests/unit/release-cadence.test.mjs` pins the job, its token, its full-history checkout and
+that no job or step of the workflow carries an `if:`.
 
 `tests/unit/release-analyze.test.mjs` drives `release:prepare` as a dry run against a fake
 git and a fixture checkout (both refusals; a new major typed as `X.0.1`, `X.1.0` and
@@ -135,9 +161,13 @@ a missing and an accepted ADR). `tests/unit/release-publish.test.mjs` drives
 blocks the dry run and `--yes`; a run `queued` for 20 minutes whose deploy job has run does
 not; an unreadable run list blocks; a run of HEAD of which no job starts is diagnosed and
 never watched; a run that stays `queued` is watched once its deploy job starts; the full
-`--yes` sequence; the finish line). `tests/unit/release-record.test.mjs` builds a real
-repository with a tag recorded in the checkout, one recorded only on `origin/main`, one
-recorded nowhere and one on a line HEAD does not contain: only the third is reported.
+`--yes` sequence; the finish line). `tests/unit/release-record.test.mjs` builds real
+repositories: a tag recorded in the checkout, one recorded only on `origin/main`, one
+recorded nowhere and one on a line HEAD does not contain (only the third is reported); a
+record deleted in a commit, every record deleted, a record renamed, a record removed from the
+working tree only, each while `origin/main` still has it (each reported); a merge of the
+trunk that drops the record (reported); and `--complete` with no tag, a recorded tag, a
+deleted record and a tag inside its window.
 
 Not mechanically enforced, and stated as such:
 
@@ -152,6 +182,15 @@ Not mechanically enforced, and stated as such:
   for every pull request once the window closes, and `npm test` red in every checkout whose
   history contains the tag. That is the intent. A checkout whose `origin/main` is stale (not
   fetched since the record landed) and which contains the tag fails until it fetches;
+- a shallow clone has no history to consult: a record absent from its checkout is judged by
+  `origin/main` alone there. The CI unit job and `cadence.yml` check out full history, and a
+  test pins `fetch-depth: 0` for the latter;
+- the `records` job of `cadence.yml` has not run: a scheduled workflow runs from the default
+  branch only, so its first run is after this rule lands. Until then the `--complete` path is
+  proven by the unit test and by running the command in a checkout;
+- `--no-rc-because` checks that the ADR is accepted, not that it is about the release being
+  cut: any accepted ADR lifts the refusal. Whether the named ADR waives the candidate for
+  this major is the reviewer's;
 - a `v*` tag pushed by hand is trusted as a release by this rule and by
   `project.deploy-often`: nothing checks that a tag has a GitHub Release behind it;
 - a stuck precondition also reports plain runner congestion: a Pages run of which no job has
@@ -164,7 +203,13 @@ Not mechanically enforced, and stated as such:
 `release:prepare` prints `refusing to start (rule project.release-flow-complete)` with each
 reason and changes nothing. `release:publish` prints one `BLOCKED Pages run <id> … (rule
 project.release-flow-complete)` line per stuck run, or `BLOCKED could not list the pages.yml
-runs …`, and tags nothing; after the tag is pushed, a run that never starts ends the publish
-with `STUCK` lines, the undo command for the tag and the `verify-deploy` command for later.
-A missing record fails `npm test`; the fix is `release:record` and its pull request, never a
-hand-written record.
+runs …`, and tags nothing; after the tag is pushed, a run of which no job starts within
+`--pages-timeout` ends the publish with `STUCK` lines, the undo command for the tag and the
+`verify-deploy` command for later. The tag is then on origin with no GitHub Release. To
+resume without undoing it: once the Pages run of that commit has succeeded, run
+`npm run release:verify-deploy -- --commit <sha>` and create the GitHub Release by hand with
+the flags the dry run printed (`release:publish` itself refuses an existing tag). A missing
+record fails `npm test` with one line per tag, saying whether the record is recorded nowhere
+(the fix is `release:record` and its pull request, never a hand-written record) or was
+deleted or renamed on this branch (the fix is to restore it); on main the `records` job of
+`cadence.yml` is red with the same lines.

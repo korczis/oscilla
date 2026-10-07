@@ -589,8 +589,11 @@ automated test proves how a physical speaker, room or microphone behaves.
      field. Land it on `main` by a small pull request of its own
      (`chore/release-record-vX.Y.Z`). The release is finished when the record is on `main`:
      `npm test` fails for a tag in the checkout's history that is more than 6 hours old and
-     has a record neither in the checkout nor on `origin/main`
-     (rule `project.release-flow-complete`, which states the whole flow in order).
+     has no record in the checkout (the copy on `origin/main` counts only for a branch whose
+     history never contained the record, so a pull request that deletes one fails), and the
+     `records` job of `.github/workflows/cadence.yml` runs the same check on `main`
+     (`node scripts/release-record.mjs --complete`; rule `project.release-flow-complete`,
+     which states the whole flow in order).
 - **Cadence.** A commit that needs a release is released within 24 hours of landing on `main`
   (rule `project.deploy-often`). `node scripts/release-cadence.mjs` prints the lag; the
   `Release cadence` workflow (`.github/workflows/cadence.yml`) runs it every hour, fails while

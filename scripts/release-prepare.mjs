@@ -177,9 +177,11 @@ export function flowProblems({
   const v = proposed ? parseSemver(proposed) : null;
   const parsed = tags.map((t) => ({ t, p: t.startsWith('v') ? parseSemver(t.slice(1)) : null }))
     .filter(({ p }) => p);
-  // The first stable release of a new major, whatever its minor and patch: 4.0.1 or 4.1.0
-  // typed into package.json after v3.x opens major 4 exactly as 4.0.0 does. With no stable tag
-  // at all there is no line to compare with, and the X.0.0 shape decides.
+  // The first stable release of a new major, whatever its minor and patch: X.0.1 or X.1.0
+  // typed into package.json while every stable tag is below major X opens that major exactly
+  // as X.0.0 does. With no stable tag at all there is no line to compare with, and the X.0.0
+  // shape decides. (No concrete version here: version:check would refuse this file on the day
+  // the product reaches it.)
   const stableMajors = parsed.filter(({ p }) => !p.prerelease.length).map(({ p }) => p.major);
   const opensMajor = v && !v.prerelease.length && (stableMajors.length
     ? v.major > Math.max(...stableMajors) : v.minor === 0 && v.patch === 0);

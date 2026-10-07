@@ -1,13 +1,15 @@
 // release:record against fake git/gh runners (nothing is read from GitHub here), and every
 // committed .ai/repo/releases/*.yaml against release/v1 and against git where the tag is known.
 // Completeness (rule project.release-flow-complete): every v* tag from v3.4.0 on that HEAD can
-// reach and that is past its publish window has a record, in the checkout or on origin/main;
-// CI's unit job checks out the tags, so it runs there.
+// reach and that is past its publish window has a record in the checkout that is judged. The
+// copy on origin/main excuses only a branch whose history never contained the record; a record
+// deleted or renamed on the branch is missing although the trunk still has it. CI's unit job
+// checks out the tags, so it runs there.
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import {
-  existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFileSync,
+  existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync,
 } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -16,8 +18,9 @@ import { ROOT, bannerComment, gitRunner } from '../../scripts/release-metadata.m
 import {
   ARTIFACT_KEYS, RECORD_FLOOR, RECORD_KEYS, RECORD_REQUIRED, RECORD_WINDOW_HOURS, RECORDS_DIR,
   REQUIRED_TARGETS, WEB_TARGET, artifactEntry, assetUrl, channelFor, checkoutMissingRecords,
-  gatherRecord, hasRecordFile, main, missingRecords, needsRecord, parseRecord, readTagDates,
-  recordDifferences, recordFile, recordOnRef, recordProblems, releaseAssetName, renderRecord,
+  describeMissingRecords, gatherRecord, hasRecordFile, main, missingRecords, needsRecord,
+  parseRecord, readTagDates, recordDifferences, recordFile, recordInHistory, recordOnRef,
+  recordProblems, releaseAssetName, renderRecord,
 } from '../../scripts/release-record.mjs';
 
 const COMMIT = 'f187f664893ce0444c03629b0d8afa66d6d9f715';
@@ -302,10 +305,8 @@ test('readTagDates: tag and creation time from git for-each-ref', () => {
   }, { merged: 'HEAD' });
 });
 
-// A real repository: main carries v40.0.0 (recorded in the checkout), v40.1.0 (recorded only
-// on origin/main, the state of a branch cut between a tag and its record PR) and v40.2.0
-// (recorded nowhere); v40.3.0 is tagged on another line that HEAD does not contain.
-test('a checkout answers for the tags in its history, with records here or on the trunk', () => {
+/** A scratch git repository on branch `work`, with committer dates a week before `now`. */
+function fixtureRepo() {
   const root = mkdtempSync(path.join(os.tmpdir(), 'oscilla-records-'));
   const g = (...args) => execFileSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@t',
     '-c', 'commit.gpgsign=false', '-c', 'tag.gpgsign=false', ...args],
@@ -318,6 +319,16 @@ test('a checkout answers for the tags in its history, with records here or on th
   };
   const commit = (msg) => { g('add', '-A'); g('commit', '-q', '--no-verify', '-m', msg); };
   g('init', '-q', '-b', 'work');
+  return { root, g, write, commit, run: gitRunner(root),
+    record: (tag) => `${RECORDS_DIR}/${tag}.yaml`,
+    now: Date.parse('2026-10-02T00:00:00Z') }; // every tag is past its 6 h window
+}
+
+// A real repository: main carries v40.0.0 (recorded in the checkout), v40.1.0 (recorded only
+// on origin/main, the state of a branch cut between a tag and its record PR) and v40.2.0
+// (recorded nowhere); v40.3.0 is tagged on another line that HEAD does not contain.
+test('a checkout answers for the tags in its history, with records here or on the trunk', () => {
+  const { root, g, write, commit, run, now } = fixtureRepo();
   write(`${RECORDS_DIR}/v40.0.0.yaml`, 'schema: release/v1\n');
   commit('one');
   for (const t of ['v40.0.0', 'v40.1.0', 'v40.2.0']) g('tag', '-a', t, '-m', t);
@@ -331,8 +342,6 @@ test('a checkout answers for the tags in its history, with records here or on th
   commit('elsewhere');
   g('tag', '-a', 'v40.3.0', '-m', 'v40.3.0');
   g('checkout', '-q', 'work');
-  const run = gitRunner(root);
-  const now = Date.parse('2026-10-02T00:00:00Z'); // every tag is past its 6 h window
 
   assert.equal(recordOnRef('v40.1.0', run), true);
   assert.equal(recordOnRef('v40.0.0', run), true, 'the trunk has it too');
@@ -342,6 +351,11 @@ test('a checkout answers for the tags in its history, with records here or on th
   assert.deepEqual(r.tags.map((t) => t.tag), ['v40.0.0', 'v40.1.0', 'v40.2.0'],
     'v40.3.0 is not reachable from HEAD');
   assert.deepEqual(r.missing, ['v40.2.0'], 'recorded here, recorded on the trunk, not recorded');
+  assert.deepEqual(r.deleted, [], 'this branch removed nothing');
+  assert.equal(recordInHistory('v40.0.0', run), true);
+  assert.equal(recordInHistory('v40.1.0', run), false, 'the trunk has it, this history never did');
+  assert.match(describeMissingRecords(r)[0],
+    /^v40\.2\.0: recorded neither in this checkout nor on origin\/main: npm run release:record /);
   // every tag of the clone, judged against this checkout alone, blames it for two more
   assert.deepEqual(missingRecords({ tags: readTagDates(run), now,
     hasRecord: (t) => hasRecordFile(t, root) }), ['v40.1.0', 'v40.2.0', 'v40.3.0']);
@@ -350,11 +364,116 @@ test('a checkout answers for the tags in its history, with records here or on th
   assert.deepEqual(checkoutMissingRecords({ root, run, now }).missing, ['v40.1.0', 'v40.2.0']);
 });
 
+// The hole of verification round 2: a pull request that deletes release records passed its
+// own CI, because origin/main (its base) still carried them, and the failure appeared on every
+// other pull request after the merge. The checkout is what is judged: the trunk copy does not
+// stand in for a record this branch's history contains.
+test('a record deleted or renamed on the branch is missing although origin/main has it', () => {
+  const { root, g, write, commit, run, record, now } = fixtureRepo();
+  write(record('v40.0.0'), 'schema: release/v1\n');
+  write(record('v40.1.0'), 'schema: release/v1\n');
+  commit('one');
+  for (const t of ['v40.0.0', 'v40.1.0', 'v40.2.0']) g('tag', '-a', t, '-m', t);
+  g('update-ref', 'refs/remotes/origin/main', 'HEAD'); // the base of the pull request
+  const check = () => checkoutMissingRecords({ root, run, now });
+  assert.deepEqual(check().missing, ['v40.2.0']);
+
+  // deleted in a commit: the trunk still has it, and that excuses nothing
+  g('rm', '-q', record('v40.1.0'));
+  commit('chore: drop a record');
+  assert.equal(recordOnRef('v40.1.0', run), true);
+  assert.equal(recordInHistory('v40.1.0', run), true);
+  let r = check();
+  assert.deepEqual(r.missing, ['v40.1.0', 'v40.2.0']);
+  assert.deepEqual(r.deleted, ['v40.1.0']);
+  assert.equal(describeMissingRecords(r)[0], `v40.1.0: ${record('v40.1.0')} is in this branch's `
+    + 'history and not in the checkout (deleted or renamed here; the copy on origin/main does '
+    + 'not count): restore it');
+
+  // every record deleted (the verifier's second probe)
+  g('rm', '-q', record('v40.0.0'));
+  commit('chore: drop them all');
+  r = check();
+  assert.deepEqual(r.missing, ['v40.0.0', 'v40.1.0', 'v40.2.0']);
+  assert.deepEqual(r.deleted, ['v40.0.0', 'v40.1.0']);
+
+  // restored, then renamed: the name is the identity
+  g('revert', '--no-edit', 'HEAD', 'HEAD~1');
+  assert.deepEqual(check().missing, ['v40.2.0']);
+  g('mv', record('v40.0.0'), `${RECORDS_DIR}/v40.0.0.yml`);
+  commit('chore: rename a record');
+  assert.deepEqual(check().deleted, ['v40.0.0']);
+  g('revert', '--no-edit', 'HEAD');
+
+  // not committed yet: the working tree is what is judged
+  rmSync(path.join(root, record('v40.1.0')));
+  assert.deepEqual(check().deleted, ['v40.1.0']);
+  g('checkout', '-q', '--', record('v40.1.0'));
+  assert.deepEqual(check().missing, ['v40.2.0']);
+});
+
+// A merge that drops the record agrees, for that path, with the parent that never had it, so
+// git's default history simplification never visits the commit that added it.
+test('a merge of the trunk that drops a record does not hide the deletion', () => {
+  const { root, g, write, commit, run, record, now } = fixtureRepo();
+  write('a', 'a\n');
+  commit('one');
+  g('tag', '-a', 'v40.0.0', '-m', 'v40.0.0');
+  g('checkout', '-q', '-b', 'trunk');
+  write(record('v40.0.0'), 'schema: release/v1\n');
+  commit('record v40.0.0');
+  g('update-ref', 'refs/remotes/origin/main', 'HEAD');
+  g('checkout', '-q', 'work');
+  write('b', 'b\n');
+  commit('work');
+  const check = () => checkoutMissingRecords({ root, run, now });
+  assert.deepEqual(check().missing, [], 'cut before the record landed: the trunk has it');
+  g('merge', '-q', '--no-ff', '--no-commit', 'trunk');
+  g('rm', '-q', '-f', record('v40.0.0'));
+  g('commit', '-q', '--no-verify', '-m', 'merge trunk, without the record');
+  assert.equal(run(['rev-list', '-1', 'HEAD', '--', record('v40.0.0')]), '',
+    'the simplified history does not show it');
+  assert.equal(recordInHistory('v40.0.0', run), true);
+  assert.deepEqual(check().deleted, ['v40.0.0']);
+  // git cannot answer: the trunk copy excuses nothing
+  assert.equal(recordInHistory('v40.0.0', () => { throw new Error('no git'); }), true);
+});
+
+test('--complete: exit 0 when every reachable tag is recorded, 1 naming the others', () => {
+  const { root, g, write, commit, run, record, now } = fixtureRepo();
+  const complete = () => {
+    const out = [];
+    const code = main({ argv: ['--complete'], root, run, now, log: (l) => out.push(l),
+      err: (l) => out.push(l) });
+    return { code, text: out.join('\n') };
+  };
+  write('a', 'a\n');
+  commit('one');
+  let r = complete();
+  assert.equal(r.code, 1, 'no tag to judge is not a pass');
+  assert.match(r.text, /no v\* tag from v3\.4\.0 on is reachable from HEAD/);
+  write(record('v40.0.0'), 'schema: release/v1\n');
+  commit('record');
+  g('tag', '-a', 'v40.0.0', '-m', 'v40.0.0');
+  r = complete();
+  assert.equal(r.code, 0);
+  assert.match(r.text, /^release:record: 1 release\(s\) from v3\.4\.0 on reachable from HEAD; /);
+  g('rm', '-q', record('v40.0.0'));
+  commit('chore: drop the record');
+  r = complete();
+  assert.equal(r.code, 1);
+  assert.match(r.text, /1 published release\(s\) without a record /);
+  assert.match(r.text, /\(rule project\.release-flow-complete\):\n {2}v40\.0\.0: /);
+  // inside the publish window nothing is missing yet
+  assert.equal(main({ argv: ['--complete'], root, run, now: Date.parse('2026-10-01T01:00:00Z'),
+    log: () => {}, err: () => {} }), 0);
+});
+
 // Scope: the tags reachable from HEAD (tags are shared by every worktree of a clone, and a
-// branch does not answer for a release cut after it), with a record in this checkout or on
-// origin/main. CI's unit job checks out full history and tags (fetch-depth: 0), so there a
-// clone without tags fails this test instead of skipping it; elsewhere (a shallow clone) it
-// skips and says so.
+// branch does not answer for a release cut after it), with a record in this checkout; the
+// copy on origin/main counts only for a record this history never contained. CI's unit job
+// checks out full history and tags (fetch-depth: 0), so there a clone without tags fails this
+// test instead of skipping it; elsewhere (a shallow clone) it skips and says so.
 test('every published release from v3.4.0 on in this history, past its publish window, has a '
   + 'record (rule project.release-flow-complete)', (t) => {
   let found = { tags: [], missing: [] };
@@ -370,7 +489,6 @@ test('every published release from v3.4.0 on in this history, past its publish w
     return;
   }
   assert.deepEqual(found.missing, [], `rule project.release-flow-complete: published more than `
-    + `${RECORD_WINDOW_HOURS} h ago and recorded neither in this checkout nor on origin/main: `
-    + `${found.missing.join(', ')}. Run npm run release:record -- --version <X.Y.Z> for each `
-    + `and land the records (${RECORDS_DIR}/)`);
+    + `${RECORD_WINDOW_HOURS} h ago and without a record in this checkout (${RECORDS_DIR}/):\n`
+    + `${describeMissingRecords(found).join('\n')}`);
 });

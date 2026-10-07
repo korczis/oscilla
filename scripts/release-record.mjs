@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 // npm run release:record -- --version X.Y.Z [--check]
+// node scripts/release-record.mjs --complete
 //
 // Writes .ai/repo/releases/vX.Y.Z.yaml, the Majordomus release record (kind release-record,
 // contract release/v1) of one PUBLISHED release, from what was actually published:
@@ -30,6 +31,10 @@
 // missing or unauthenticated, the tag or the GitHub Release does not exist, or the asset is
 // missing or is not the committed dist. Exit codes: 0 ok, 1 refused, 2 usage.
 //
+// --complete reads nothing from GitHub: it lists the v* tags reachable from HEAD and exits 1
+// naming each one that is past its publish window and has no record in this checkout (rule
+// project.release-flow-complete; the same check the unit test runs, for a workflow on main).
+//
 // Version and provenance logic comes from release-metadata.mjs; nothing is recomputed here.
 import { spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
@@ -37,7 +42,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
-  REPO_URL, ROOT, compareSemver, isFullSha, parseSemver, readBanner, sha256,
+  REPO_URL, ROOT, compareSemver, gitRunner, isFullSha, parseSemver, readBanner, sha256,
 } from './release-metadata.mjs';
 
 export const RECORD_SCHEMA = 'release/v1';
@@ -66,7 +71,8 @@ export const recordFile = (version, root = ROOT) => (
 // has a record. A record is written after the tag (release:record reads the GitHub Release),
 // so a tag younger than RECORD_WINDOW_HOURS is still inside its publish window and is not yet
 // missing. release:prepare applies the same check with no window to the newest tag: the next
-// release does not start until the previous one is recorded.
+// release does not start until the previous one is recorded. The record must be in the
+// checkout that is judged; see checkoutMissingRecords() for the one state the trunk excuses.
 export const RECORD_FLOOR = '3.4.0';
 export const RECORD_WINDOW_HOURS = 6;
 
@@ -122,16 +128,51 @@ export function recordOnRef(tag, run, ref = RECORD_TRUNK) {
 }
 
 /**
- * The tags this checkout answers for that have no record: those reachable from HEAD, past
- * their publish window, recorded neither in the checkout nor on the trunk. A branch cut after
- * a tag and before its record landed is not at fault for a record that is on main.
+ * Whether the history of `rev` ever touched the record of `tag`: it was added there, so a
+ * checkout of `rev` without the file has deleted or renamed it. --full-history, because the
+ * default simplification follows only the parent a merge agrees with, and a merge that drops
+ * the record agrees with the side that never had it. When git cannot answer, the answer is
+ * yes: the trunk copy then excuses nothing.
+ */
+export function recordInHistory(tag, run, rev = 'HEAD') {
+  try {
+    return run(['rev-list', '-1', '--full-history', rev, '--',
+      `${RECORDS_DIR}/${tag}.yaml`]) !== '';
+  } catch {
+    return true;
+  }
+}
+
+/**
+ * The tags this checkout answers for that have no record. The tags reachable from HEAD are
+ * the list of what must be recorded, and the checkout itself is what is judged: a record
+ * counts when the file is in the working tree. The trunk copy excuses exactly one state, a
+ * branch cut after a tag and before its record landed: HEAD's history never contained the
+ * record and origin/main has it. A record that HEAD's history contains and the checkout lacks
+ * was deleted or renamed here, and the copy on origin/main (the base of the pull request that
+ * deletes it) does not excuse that; such tags are also listed in `deleted`.
  * @param {{ root?: string, run: (args: string[]) => string, now?: number }} o
- * @returns {{ tags: { tag: string, date: number }[], missing: string[] }}
+ * @returns {{ tags: { tag: string, date: number }[], missing: string[], deleted: string[] }}
  */
 export function checkoutMissingRecords({ root = ROOT, run, now = Date.now() }) {
   const tags = readTagDates(run, { merged: 'HEAD' });
-  return { tags, missing: missingRecords({ tags, now,
-    hasRecord: (tag) => hasRecordFile(tag, root) || recordOnRef(tag, run) }) };
+  const deleted = [];
+  const missing = missingRecords({ tags, now, hasRecord: (tag) => {
+    if (hasRecordFile(tag, root)) return true;
+    if (!recordInHistory(tag, run)) return recordOnRef(tag, run);
+    deleted.push(tag);
+    return false;
+  } });
+  return { tags, missing, deleted };
+}
+
+/** One line per tag of checkoutMissingRecords().missing, saying what to do (empty = none). */
+export function describeMissingRecords({ missing, deleted }) {
+  return missing.map((tag) => (deleted.includes(tag)
+    ? `${tag}: ${RECORDS_DIR}/${tag}.yaml is in this branch's history and not in the checkout `
+      + '(deleted or renamed here; the copy on origin/main does not count): restore it'
+    : `${tag}: recorded neither in this checkout nor on origin/main: npm run release:record `
+      + `-- --version ${tag.slice(1)}, then land the record`));
 }
 
 /** stable, or prerelease for a SemVer prerelease. */
@@ -490,17 +531,19 @@ function parseArgs(argv) {
       if (o.version === undefined) throw usage('--version needs a value');
     } else if (a === '--check') {
       o.check = true;
+    } else if (a === '--complete') {
+      o.complete = true;
     } else if (a === '--help' || a === '-h') {
       o.help = true;
     } else {
       throw usage(`unknown argument ${a}`);
     }
   }
-  if (!o.help && !o.version) throw usage('--version X.Y.Z is required');
+  if (!o.help && !o.complete && !o.version) throw usage('--version X.Y.Z is required');
   return o;
 }
 
-const USAGE = 'usage: node scripts/release-record.mjs --version X.Y.Z [--check]';
+const USAGE = 'usage: node scripts/release-record.mjs --version X.Y.Z [--check] | --complete';
 
 function usage(message) {
   const e = new Error(`${message}\n${USAGE}`);
@@ -508,12 +551,40 @@ function usage(message) {
   return e;
 }
 
+/** --complete: 0 when every tag this checkout answers for is recorded, 1 naming the others. */
+export function completeness({ root = ROOT, run = gitRunner(root), now = Date.now(), log, err }) {
+  let found;
+  try {
+    found = checkoutMissingRecords({ root, run, now });
+  } catch (e) {
+    err(`release:record: cannot read the tags of this checkout: ${e.message}`);
+    return 1;
+  }
+  const due = found.tags.filter(({ tag }) => needsRecord(tag));
+  if (!due.length) {
+    err(`release:record: no v* tag from v${RECORD_FLOOR} on is reachable from HEAD: a clone `
+      + 'without tags or history cannot be judged (git fetch --tags, fetch-depth: 0)');
+    return 1;
+  }
+  if (found.missing.length) {
+    err(`release:record: ${found.missing.length} published release(s) without a record (rule `
+      + `project.release-flow-complete):\n${describeMissingRecords(found)
+        .map((l) => `  ${l}`).join('\n')}`);
+    return 1;
+  }
+  log(`release:record: ${due.length} release(s) from v${RECORD_FLOOR} on reachable from HEAD; `
+    + `every one past its ${RECORD_WINDOW_HOURS} h publish window has its record`);
+  return 0;
+}
+
 /**
  * Write (or with --check, verify) the record. Returns the exit code.
- * @param {{ argv?: string[], root?: string, io?: object, log?: Function, err?: Function }} [o]
+ * @param {{ argv?: string[], root?: string, io?: object, log?: Function, err?: Function,
+ *   run?: Function, now?: number }} [o]
  */
 export function main({
   argv = process.argv.slice(2), root = ROOT, io, log = console.log, err = console.error,
+  run, now,
 } = {}) {
   let o;
   try {
@@ -526,6 +597,7 @@ export function main({
     log(USAGE);
     return 0;
   }
+  if (o.complete) return completeness({ root, run: run || gitRunner(root), now, log, err });
   const file = recordFile(o.version, root);
   const rel = path.relative(root, file);
   let record;
