@@ -62,7 +62,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { pathToFileURL } = require('node:url');
-const playwright = require('playwright');
+const suite = require('./lib/suite.cjs');
 
 const argv = process.argv.slice(2);
 const arg = (name, fallback) => {
@@ -71,8 +71,11 @@ const arg = (name, fallback) => {
 };
 const ROOT = path.resolve(__dirname, '..', '..');
 const DIST = path.join(ROOT, 'dist', 'index.html');
-const BROWSERS = arg('browsers', process.env.OSC_BROWSERS || 'chromium,firefox,webkit').split(',');
-const ORIGINS = arg('origins', 'file,http').split(',');
+const RUN = suite.open({ name: 'v31-studio-workflows', browsers: arg('browsers'),
+  origins: arg('origins'), defaultOrigins: ['file', 'http'] });
+const playwright = RUN.playwright;
+const BROWSERS = RUN.browsers;
+const ORIGINS = RUN.origins;
 const ONLY = arg('only', '') ? new Set(arg('only', '').split(',')) : null;
 const JSON_OUT = arg('json', '');
 const HTTP_CHECKS = new Set(['graph-search', 'render-wav', 'no-console-errors']);
@@ -135,7 +138,8 @@ const H = {
       a.studioLoadTemplate(tid);
       a.studio.warning = '';
     }, id);
-    await page.waitForFunction(() => document.querySelector('#osc-app').dataset.mode === 'studio');
+    await page.waitForFunction(() => document.querySelector('#osc-app').dataset.mode === 'studio',
+      null, { timeout: 15000 });
     await H.frames(page);
     await page.evaluate(() => window.OSCILLA.studio.editor.frameAll());
     await H.frames(page);
@@ -253,7 +257,7 @@ function defineChecks(fx) {
     await H.recordLive(page);
     await page.focus('[data-osc="studio.graph.viewport"]');
     await page.keyboard.press('/');
-    await page.waitForSelector('#osc-dlg-studio-find[open]');
+    await page.waitForSelector('#osc-dlg-studio-find[open]', { timeout: 15000 });
     await H.frames(page);
     const opened = await page.evaluate(() => ({
       focused: document.activeElement && document.activeElement.dataset.osc,
@@ -279,7 +283,7 @@ function defineChecks(fx) {
     // returns focus to it; nothing matched is said in words.
     await page.focus('[data-osc="studio.find"]');
     await page.keyboard.press('Enter');
-    await page.waitForSelector('#osc-dlg-studio-find[open]');
+    await page.waitForSelector('#osc-dlg-studio-find[open]', { timeout: 15000 });
     await H.frames(page);
     await page.keyboard.type('zzz');
     const none = await page.evaluate(() => document.querySelector('[data-osc="studio.find.status"]')
@@ -317,7 +321,7 @@ function defineChecks(fx) {
     // The dialog: a graph without a timeline is offered RENDER_DEFAULT_S; a bad duration is
     // refused in words and the dialog stays.
     await page.click('[data-osc="studio.renderWav"]');
-    await page.waitForSelector('#osc-dlg-studio-render[open]');
+    await page.waitForSelector('#osc-dlg-studio-render[open]', { timeout: 15000 });
     await H.frames(page);
     const form = await page.evaluate(() => ({
       duration: document.querySelector('[data-osc="studio.render.duration"]').value,
@@ -335,7 +339,7 @@ function defineChecks(fx) {
     for (let i = 0; i < 2; i++) {
       if (i > 0) {
         await page.click('[data-osc="studio.renderWav"]');
-        await page.waitForSelector('#osc-dlg-studio-render[open]');
+        await page.waitForSelector('#osc-dlg-studio-render[open]', { timeout: 15000 });
         await page.fill('[data-osc="studio.render.duration"]', '1.5');
       }
       const [dl] = await Promise.all([page.waitForEvent('download', { timeout: 20000 }),
@@ -372,7 +376,7 @@ function defineChecks(fx) {
     // A Studio with a live input: the dialog states the limitation and cannot render.
     await H.fresh(page, 'measurement-sweep');
     await page.click('[data-osc="studio.renderWav"]');
-    await page.waitForSelector('#osc-dlg-studio-render[open]');
+    await page.waitForSelector('#osc-dlg-studio-render[open]', { timeout: 15000 });
     await H.frames(page);
     const refused = await page.evaluate(async () => {
       const limits = [...document.querySelectorAll('[data-osc="studio.render.limits"] li')]
@@ -390,6 +394,7 @@ function defineChecks(fx) {
         && /no timeline/.test(form.note) && form.focused === 'studio.render.duration',
       badRefused: bad.open && bad.error === 'Give a duration in seconds.',
       downloaded: a.name === 'basic-tone.wav' && a.info.riff === 'RIFF' && a.info.wave === 'WAVE',
+      // timing-allow: the WAV header of the offline render, whose rate the dialog states
       format: a.info.sampleRate === 48000 && a.info.channels === 2 && a.info.bits === 16,
       length: frames === 72000,
       deterministic: a.info.sha256 === b.info.sha256,
@@ -567,7 +572,7 @@ function defineChecks(fx) {
     await page.waitForFunction((sel) => {
       const b = document.querySelector(sel);
       return b && b.textContent === 'Confirm delete';
-    }, row('studio.saved.delete'));
+    }, row('studio.saved.delete'), { timeout: 15000 });
     await page.click(row('studio.saved.delete'));
     await H.until(() => page.evaluate(() => window.OSCILLA.studio.projectId), (v) => v === null);
     await H.frames(page);
@@ -877,6 +882,7 @@ async function runOne(browserName, origin, baseUrl, fx) {
 }
 
 (async () => {
+  await RUN.ready();
   if (!fs.existsSync(DIST)) {
     console.error(`missing ${DIST}: run npm run build`);
     process.exit(2);
@@ -905,6 +911,7 @@ async function runOne(browserName, origin, baseUrl, fx) {
         const res = await runOne(b, o, base, fx);
         all[key] = res;
         const names = Object.keys(res);
+        RUN.reportLeg({ leg: key, checks: names.length });
         const bad = names.filter((n) => !res[n].ok);
         failed += bad.length;
         console.log(`${bad.length ? 'FAIL' : 'PASS'} ${key}/v31-studio-workflows: ${names.length

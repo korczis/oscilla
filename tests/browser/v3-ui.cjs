@@ -1399,7 +1399,7 @@ function defineChecks(fixtures) {
       stated: /^recipe\.stimulus\.kind: this run used a white noise stimulus/.test(res.statement)
         && /Repeat is refused/.test(res.statement),
       repeatRefused: !!res.repeat && res.repeat.title === 'Repeat refused'
-        && /This run used a white noise stimulus/.test(res.repeat.text),
+        && /This experiment used a white noise stimulus/.test(res.repeat.text),
       nothingLoaded: res.workspace === 'experiments' && res.valuesKept,
     }) };
   });
@@ -1661,7 +1661,7 @@ function defineChecks(fixtures) {
     const g = (d, label) => (d.groups || []).find((x) => x.label === label) || { items: [] };
     return { ...res, ...H.verdict({
       section: !res.ac.missing && res.ac.shown,
-      headings: res.ac.h4 === 1 && res.ac.h5[0] === 'Changed between runs A and B'
+      headings: res.ac.h4 === 1 && res.ac.h5[0] === 'Changed between experiments A and B'
         && res.ac.h6 >= 2 && res.ac.lists,
       recipe: g(res.ac, 'Recipe').open && g(res.ac, 'Recipe').items
         .includes('Stimulus f1: 20 Hz → 50 Hz'),
@@ -1675,7 +1675,7 @@ function defineChecks(fixtures) {
       baseline: res.marked.id === 'fixture-c' && res.marked.pressed === 'true'
         && res.marked.chip.join() === 'fixture-c',
       againstBaseline: res.canCompare === true && res.base.first === 'fixture-c'
-        && res.base.h5[0] === 'Changed between runs A (baseline) and B',
+        && res.base.h5[0] === 'Changed between experiments A (baseline) and B',
       narrow: res.narrow.fits,
       cleared: res.cleared === null,
     }) };
@@ -1834,7 +1834,7 @@ function defineChecks(fixtures) {
       compareSaysVersion: g13.open && g13.items.some((t) => t === 'Definition version: version 1 '
         + `(${res.ref1.hash.slice(0, 12)}…) → version 2 (${res.ref3.hash.slice(0, 12)}…) (version `
         + '1 → 2 of the same definition: its execution fields were edited between the runs)')
-        && res.heading === 'Changed between runs A (baseline) and B',
+        && res.heading === 'Changed between experiments A (baseline) and B',
       sameVersionNoChange: !res.cmp12.some((x) => x.label === 'Definition'),
       truth: res.differs === true && !!res.ref4 && res.ref4.derived === true
         && res.ref4.id !== def.id,
@@ -2430,6 +2430,7 @@ function defineChecks(fixtures) {
       await a.experimentsDelete();
       return a.experimentsImportText(t);
     }, [id, json]);
+    const refused = /replaced in another tab since it was shown here; reopen it/;
     const alertsText = () => page.evaluate(() => (window.OSCILLA.app.alerts || [])
       .map((x) => `${x.title}: ${x.text || x.message || ''}`).join(' | '));
     const res = {};
@@ -2449,7 +2450,7 @@ function defineChecks(fixtures) {
     // 1. The detail tab 1 shows is out of date: "Record a finding about this experiment" is refused.
     const before = await page.evaluate(() => window.OSCILLA.app.fnd.all.length);
     await page.click('[data-osc="exp.findingNew"]');
-    await sleep(400);
+    await H.until(alertsText, (t) => refused.test(t), 4000); // the refusal the verdict judges
     res.detail = { dialog: await page.evaluate(() => document.getElementById('osc-dlg-finding')
       .open), alerts: await alertsText(), count: await page.evaluate(() => window.OSCILLA.app
       .fnd.all.length) - before };
@@ -2471,7 +2472,7 @@ function defineChecks(fixtures) {
     await H.until(() => page.evaluate(() => !!window.OSCILLA.app.exps.compare), Boolean, 5000);
     res.replacedY = await replace('fixture-vy', as('b', 'fixture-vy', 'TEST CONTEXT · Y replaced'));
     await page.click('[data-osc="exp.findingCompare"]');
-    await sleep(400);
+    await H.until(alertsText, (t) => refused.test(t), 4000);
     res.compare = { dialog: await page.evaluate(() => document.getElementById('osc-dlg-finding')
       .open), alerts: await alertsText() };
     await page.evaluate(async () => {
@@ -2486,7 +2487,6 @@ function defineChecks(fixtures) {
       a.exps.panel = 'detail';
       a.alerts = [];
     });
-    const refused = /replaced in another tab since it was shown here; reopen it/;
     return { ...res, ...H.verdict({
       setup: res.setup === true && !!res.replacedX && !!res.replacedY,
       'detail-refused': !res.detail.dialog && res.detail.count === 0

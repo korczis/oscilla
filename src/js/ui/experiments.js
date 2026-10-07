@@ -862,7 +862,7 @@ export function createExperimentsUi() {
       const why = measurableStimulusRefusal(e.recipe && e.recipe.stimulus
         ? e.recipe.stimulus.kind : undefined);
       if (why) {
-        this.notify('error', 'Repeat refused', `This run used ${why}. Nothing was loaded.`);
+        this.notify('error', 'Repeat refused', `This experiment used ${why}. Nothing was loaded.`);
         return false;
       }
       const m = matchOf(e.definition);
