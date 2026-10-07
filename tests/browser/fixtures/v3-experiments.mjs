@@ -5,6 +5,8 @@
 // uses (src/js/ui/measure-experiment.js). Every run is marked testContext 'synthetic', and the
 // names say TEST CONTEXT: nothing here is presented as a measurement of a physical system.
 //
+//   measure(ioOpts, recipe) -> Promise<result>   one COMPLETE engine.measure() on the synthetic
+//                                                io (also used by fixtures/large-library.mjs)
 //   buildFixtures() -> Promise<{ a, b, c }>   each { experiment, json, name }
 //     a  low-pass 6 kHz, 3 runs                       (reference)
 //     b  the same system 0.9 dB quieter, same recipe   (equivalent to a: A − B is shown)
@@ -117,7 +119,7 @@ export const FIXTURE_RECIPE = Object.freeze({
     phase: false, aggregation: 'mean' }),
 });
 
-async function measure(ioOpts, recipe) {
+export async function measure(ioOpts, recipe) {
   const engine = createMeasurementEngine({ io: syntheticIo(ioOpts), assess: assessMeasurement,
     clock: { wall: () => NOW_MS, mono: () => 0 } });
   const result = await engine.measure(JSON.parse(JSON.stringify(recipe)));
