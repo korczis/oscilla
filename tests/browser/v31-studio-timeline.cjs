@@ -130,9 +130,12 @@ async function listen(page) {
  * returned to the start, the timeline in view and nothing announced yet.
  */
 async function fresh(page, { template = 'subtractive-synth' } = {}) {
+  // Below 768 px the workspace shows one of Graph, Timeline and Inspector: the Timeline tab's
+  // action is taken at every width, so the editor is on screen wherever it is judged.
   await page.evaluate(() => {
     const a = window.OSCILLA.app;
     if (a.workspace !== 'studio') a.setWorkspace('studio');
+    a.studioSetSubview('timeline');
   });
   await page.waitForFunction((tl) => document.querySelector('#osc-app').dataset.mode === 'studio'
     && !!window.OSCILLA.app.studio.ready
@@ -157,7 +160,8 @@ async function fresh(page, { template = 'subtractive-synth' } = {}) {
     const st = window.OSCILLA.studio;
     const root = document.querySelector(`${tl} [data-osc="studio.tl.root"]`);
     const details = root.querySelector('[data-osc="studio.tl.details"]');
-    return st.store.debugInfo().undoDepth === 0 && !st.transport.playing
+    return root.getBoundingClientRect().width > 0
+      && st.store.debugInfo().undoDepth === 0 && !st.transport.playing
       && st.transport.playhead().position === 0 && (!details || details.hidden)
       && root.querySelectorAll('.osc-stl-clip').length === st.model.timeline.clips.length
       && st.model.timeline.clips.length > 0;
@@ -650,7 +654,8 @@ function defineChecks() {
             right: Math.round(r.right), host: host.scrollWidth - host.clientWidth };
         });
         out[w] = v;
-        if (v.page > v.inner || v.right > v.inner || v.host > 0) ok = false;
+        // right > 0: the editor is laid out at this width (a hidden one cannot overflow).
+        if (v.page > v.inner || v.right > v.inner || v.right <= 0 || v.host > 0) ok = false;
       }
       await page.setViewportSize({ width: 1536, height: 1024 });
       // Light theme: text on its own surface >= 4.5:1. Measured with reduced motion, the app's
@@ -693,13 +698,14 @@ function defineChecks() {
           }
           return [255, 255, 255];
         };
-        const ratio = (sel) => {
-          const n = document.querySelector(`.osc-stl ${sel}`);
+        const ratio = (sel, within = '.osc-stl ') => {
+          const n = document.querySelector(`${within}${sel}`);
           const a = lum(rgb(getComputedStyle(n).color));
           const b = lum(bgOf(n));
           return Math.round(((Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05)) * 100) / 100;
         };
-        return { time: ratio('[data-osc="studio.tl.time"]'),
+        // The clock is the workspace header's: the one transport on screen.
+        return { time: ratio('[data-osc="studio.time"]', ''),
           head: ratio('.osc-stl-hname'), tick: ratio('.osc-stl-ticklabel'),
           clip: ratio('[data-clip="clip-1"] .osc-block-name'),
           sweep: ratio('[data-clip="clip-2"] .osc-block-name'),
@@ -728,26 +734,29 @@ function defineChecks() {
       const v = await page.evaluate(() => {
         const coarse = matchMedia('(pointer: coarse)').matches;
         const small = [];
+        let measured = 0;
         const sel = '.osc-stl button, .osc-stl select, .osc-stl input, .osc-stl .osc-stl-pt, '
           + '.osc-stl .osc-stl-loop-h';
         for (const n of document.querySelectorAll(sel)) {
           const r = n.getBoundingClientRect();
           if (!r.width) continue;
+          measured += 1;
           if (r.height < 43.5 || (n.matches('.osc-icon-btn, .osc-stl-pt') && r.width < 43.5)) {
             small.push(`${n.dataset.osc || n.dataset.key || n.className}: ${Math.round(r.width)}x`
               + `${Math.round(r.height)}`);
           }
         }
         const overflow = document.documentElement.scrollWidth > innerWidth;
-        return { coarse, small: small.slice(0, 12), overflow };
+        return { coarse, measured, small: small.slice(0, 12), overflow };
       });
       if (SCREENS) {
         fs.mkdirSync(SHOTS, { recursive: true });
         await page.screenshot({ path: path.join(SHOTS, `${currentKey}-390-touch.png`) });
       }
       await context.close();
-      return result({ coarse: v.coarse, targets: v.small.length === 0, noOverflow: !v.overflow },
-        { v });
+      // measured > 0: a target that is not laid out has no size to judge.
+      return result({ coarse: v.coarse, targets: v.measured > 0 && v.small.length === 0,
+        noOverflow: !v.overflow }, { v });
     } },
   ];
 }
