@@ -468,6 +468,118 @@ function defineChecks() {
       setValues: got.setValues, setRange: got.setRange, valuesKept: got.valuesKept };
   });
 
+  // Ledger W7b (ADR 0052): TEST CONTEXT is a choice of the MEASURE Input device list. It is
+  // entered and left from the page; leaving clears what was produced in it (here a setup
+  // check and a level calibration typed on it; the result is in the unit suite,
+  // tests/unit/v4-test-context-choice.test.mjs). With the fake microphone (chromium, firefox on
+  // http) a level calibration stored on a real input survives entering and leaving.
+  def('test-context-from-the-page', async ({ page, browserName, origin }) => {
+    const TC_LABEL = 'TEST CONTEXT · digital loopback (no microphone)';
+    const SELECT = '#osc-m-input-device';
+    await H.workspace(page, 'measure');
+    const view = () => page.evaluate(() => {
+      const a = window.OSCILLA.app;
+      const m = window.OSCILLA.measure;
+      const text = (el) => (el ? el.textContent.replace(/\s+/g, ' ').trim() : null);
+      const sel = document.getElementById('osc-m-input-device');
+      const banner = document.querySelector('[data-osc="measure.testContext"]');
+      return { loopback: a.meas.loopback, value: sel.value, disabled: sel.disabled,
+        selected: text(sel.selectedOptions[0]), options: [...sel.options].map(text),
+        status: text(document.getElementById(sel.getAttribute('aria-describedby'))),
+        banner: banner.offsetParent !== null ? text(banner) : null,
+        chip: text(document.querySelector('#osc-measure-input .osc-m-chip')),
+        flag: new URLSearchParams(window.location.search).get('measure'),
+        state: m.state, ioKind: m.ioKind, inputNow: !!m.inputNow, level: !!m.levelCalibration,
+        indicator: a.measureCalIndicator, polite: a.meas.live.polite,
+        toasts: a.alerts.map((t) => `${t.title}: ${t.message}`) };
+    });
+    const typeLevel = () => page.evaluate(() => {
+      const a = window.OSCILLA.app;
+      a.measureOpenLevelCalibration();
+      a.measureSetLevelManual(true);
+      Object.assign(a.meas.levelForm, { referenceHz: '1000', referenceDb: '94',
+        observedDb: '-30' });
+      const stored = a.measureSaveLevelCalibration();
+      a.measureSetLevelManual(false);
+      return stored;
+    });
+    const check = async () => {
+      await page.click('#osc-measure-primary');
+      return H.until(view, (v) => v.state === 'READY' && v.inputNow, 15000);
+    };
+    const enter = async () => {
+      await page.selectOption(SELECT, { label: TC_LABEL }, { timeout: 5000 });
+      return H.until(view, (v) => v.loopback && !!v.banner && /^TEST CONTEXT/.test(v.polite),
+        3000);
+    };
+    const leave = async () => {
+      await page.selectOption(SELECT, '', { timeout: 5000 });
+      return H.until(view, (v) => !v.loopback && !v.banner && /^Left TEST CONTEXT/
+        .test(v.polite), 3000);
+    };
+    const zero = (c) => c.ioNodes === 0 && c.ioSources === 0 && c.captures === 0
+      && c.ports === 0 && c.tracks === 0;
+    const released = () => H.until(() => page.evaluate(() => window.OSCILLA.measure.counts()),
+      zero, 3000);
+
+    const before = await view();
+    const entered = await enter();
+    const checked = await check();
+    const stored = await typeLevel();
+    const calibrated = await view();
+    const left = await leave();
+    const counts = await released();
+    const res = {
+      offered: !before.loopback && !before.disabled && before.value === ''
+        && before.options.at(-1) === TC_LABEL && before.banner === null
+        && before.chip === 'Microphone',
+      entered: entered.loopback && entered.selected === TC_LABEL && !entered.disabled
+        && /^TEST CONTEXT\./.test(entered.banner || '')
+        && entered.chip === 'TEST CONTEXT loopback'
+        && /no input device is used\. Choose an input to leave TEST CONTEXT/
+          .test(entered.status)
+        && /^TEST CONTEXT: digital loopback, no microphone/.test(entered.polite),
+      checkedInIt: checked.state === 'READY' && checked.ioKind === 'loopback'
+        && checked.inputNow && stored === true && calibrated.level
+        && calibrated.indicator === 'CALIBRATED',
+      left: !left.loopback && left.value === '' && left.banner === null
+        && left.chip === 'Microphone' && !left.disabled,
+      cleared: left.state === 'IDLE' && !left.inputNow && !left.level
+        && left.indicator === 'UNCALIBRATED'
+        && /Cleared: the level calibration stored in TEST CONTEXT; the input check\. Run the /
+          .test(left.polite)
+        && left.toasts.some((t) => /^Left TEST CONTEXT: Cleared/.test(t)),
+      released: zero(counts),
+      // The address follows the choice where the browser rewrites it (not judged on file://).
+      address: origin !== 'http' || (before.flag === null && entered.flag === 'loopback'
+        && left.flag === null),
+    };
+    const detail = { before, entered, checked, calibrated, left, counts };
+    await page.evaluate(() => { window.OSCILLA.app.alerts = []; });
+    if (FAKE_MIC.has(browserName) && origin === 'http') {
+      // A real input: its check ends when TEST CONTEXT is entered, its calibration stays.
+      const mic = await check();
+      const micStored = await typeLevel();
+      const micCal = await view();
+      const inIt = await enter();
+      const back = await leave();
+      res.realInputKept = mic.ioKind === 'microphone' && micStored === true
+        && micCal.indicator === 'CALIBRATED' && inIt.level && !inIt.inputNow
+        && inIt.indicator !== 'CALIBRATED' && back.level && !back.inputNow
+        && back.indicator === 'PENDING INPUT CHECK'
+        && !back.toasts.some((t) => /level calibration/.test(t));
+      Object.assign(detail, { mic, micCal, inIt, back });
+      await page.evaluate(() => {
+        window.OSCILLA.app.measureClearLevelCalibration();
+        window.OSCILLA.app.alerts = [];
+      });
+      res.releasedAfterMic = zero(await released());
+    }
+    await H.workspace(page, 'playground'); // the checks after this one start there
+    const failed = Object.keys(res).filter((k) => !res[k]);
+    return failed.length ? { ok: false, failed, detail } : { ok: true, ...res };
+  });
+
   def('controls-reachable-labelled', async ({ page }) => {
     const seen = new Map();
     const collect = async () => {

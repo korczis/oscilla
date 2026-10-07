@@ -152,12 +152,13 @@ test('V322: the input list holds real inputs with the browser labels, nothing in
 test('V322: the default stays the default; a vanished choice stays selected and says so', () => {
   const devices = [{ kind: 'audioinput', deviceId: 'a1', label: 'USB mic' }];
   const before = inputDeviceView({ devices: [], enumerated: false });
-  assert.deepEqual(before.options, [{ value: '', label: DEFAULT_INPUT_LABEL, missing: false }]);
+  // The list ends with the TEST CONTEXT choice (ledger W7b, v4-test-context-choice.test.mjs).
+  assert.deepEqual(before.options.filter((o) => !o.testContext),
+    [{ value: '', label: DEFAULT_INPUT_LABEL, missing: false }]);
   assert.equal(before.selected, '');
   assert.match(before.status, /Run the setup check to list the inputs/);
-  assert.equal(before.disabled, false);
   const listed = inputDeviceView({ devices, enumerated: true });
-  assert.deepEqual(listed.options.map((o) => o.value), ['', 'a1']);
+  assert.deepEqual(listed.options.filter((o) => !o.testContext).map((o) => o.value), ['', 'a1']);
   assert.equal(listed.missing, false);
   assert.equal(listed.message, null);
   const chosen = inputDeviceView({ devices, selectedId: 'a1', selectedLabel: 'USB mic',
@@ -167,13 +168,11 @@ test('V322: the default stays the default; a vanished choice stays selected and 
     enumerated: true });
   assert.equal(gone.missing, true);
   assert.equal(gone.selected, 'a1', 'nothing switches to another input silently');
-  assert.deepEqual(gone.options.at(-1), { value: 'a1', label: 'USB mic — not available',
+  assert.deepEqual(gone.options.at(-2), { value: 'a1', label: 'USB mic — not available',
     missing: true });
   assert.match(gone.message, /^"USB mic" is no longer available .*nothing is switched for you/);
   const unnamed = inputDeviceView({ devices: [], selectedId: 'zz', enumerated: true });
   assert.match(unnamed.message, /^The selected input is no longer available/);
-  assert.equal(inputDeviceView({ loopback: true }).disabled, true);
-  assert.equal(inputDeviceView({ available: false }).disabled, true);
 });
 
 test('V322: a chosen input that cannot be opened is a readable NO_INPUT', () => {
