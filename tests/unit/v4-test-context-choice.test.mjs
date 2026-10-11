@@ -5,8 +5,9 @@
 //           leaves), and the choice is offered where the browser has no microphone.
 //   enter   choosing it turns the loopback on: banner state, announcement, address.
 //   leave   choosing an input turns it off and clears what was produced in TEST CONTEXT (its
-//           result, the input check, a level calibration stored in it), says what was cleared,
-//           and a typed level reading then has no input to bind to.
+//           result and the input check), says what was cleared, and a typed level reading then
+//           has no input to bind to. A level calibration stored in it is kept and reads
+//           UNCALIBRATED, with the reason, outside it (owner decision of 2026-10-11).
 //   seam    useLoopback / useMicrophone are that same transition (ADR 0052 "drive"), behind the
 //           same "the input is in use" refusal as the choice.
 //   origin  (review of #167) what was produced in TEST CONTEXT is known from where it was
@@ -14,11 +15,14 @@
 //           COMPLETE one and carries the engine's testContext; a pending repeat link does not
 //           cross the transition; the outcome in the assertive live region goes with it; an
 //           INVALID result of a real input is not kept inside TEST CONTEXT, where nothing would
-//           say whose it is; a level calibration stored on one side does not apply on the other.
-// NOT covered here: that a result measured with a real input, and a level calibration stored
-// with one, survive entering and leaving. Node has no input to check; the browser check
-// `test-context-from-the-page` (tests/browser/app.cjs) covers the calibration on the fake
-// microphone of chromium and firefox.
+//           say whose it is; a level calibration stored on one side does not apply on the other,
+//           is kept there, and applies again on its own side once its input is checked.
+// NOT covered here: that a COMPLETE result measured with a real input is dropped on entering,
+// and that a level calibration stored with one is kept and void inside TEST CONTEXT. Node has
+// no input to check (and, since #169, the seam's showResult names no input outside TEST
+// CONTEXT); the browser checks `test-context-from-the-page` and
+// `calibrated-only-for-a-checked-input` (tests/browser/app.cjs) cover the calibration on the
+// fake microphone of chromium and firefox.
 // In Node (no DOM: the adapters' Alpine state is a plain object, IndexedDB the in-process fake).
 //   node --test tests/unit/v4-test-context-choice.test.mjs
 
@@ -158,8 +162,8 @@ test('enter and leave are refused while a measurement uses the input', () => {
 
 // ================================================================= leave
 
-test('leave: choosing an input clears the result, input check and level calibration of TEST '
-  + 'CONTEXT', async () => {
+test('leave: choosing an input clears the result and input check of TEST CONTEXT and keeps its '
+  + 'level calibration, void outside it', async () => {
   const { a } = await fx();
   const { cmp, seam, notes } = makeUi({ loopback: true }); // as ?measure=loopback loads
   assert.equal(cmp.meas.input.selected, TC, 'the URL flag shows as the selected choice');
@@ -189,25 +193,30 @@ test('leave: choosing an input clears the result, input check and level calibrat
   // The input check.
   assert.equal(seam.inputNow, null);
   assert.equal(seam.reference, null);
-  // The level calibration.
-  assert.equal(seam.levelCalibration, null);
-  assert.equal(cmp.meas.cal.level, null);
-  assert.equal(cmp.meas.cal.useLevel, false);
+  // The level calibration: kept, and void outside TEST CONTEXT (owner decision of 2026-10-11).
+  const cal = seam.levelCalibration;
+  assert.ok(cal);
+  assert.ok(cmp.meas.cal.level);
+  assert.equal(cmp.meas.cal.useLevel, true);
   assert.equal(cmp.measureCalIndicator, 'UNCALIBRATED');
-  assert.equal(cmp.measureLevelsText, 'relative (dBFS-like)');
-  assert.deepEqual(cmp.measureWhatWouldBeLost(), []);
+  assert.match(cmp.meas.cal.levelVoid, /^UNCALIBRATED: the level calibration was made in TEST /);
+  assert.equal(cmp.measureLevelsText,
+    'UNCALIBRATED (the calibration is not valid for this input)');
+  assert.deepEqual(cmp.measureWhatWouldBeLost().map((l) => l.label),
+    ['The level calibration (kept in page memory only)'], 'the result is gone, not unsaved');
   // A reading typed now has no input to bind to (ledger W7f route A, through the page).
   typeReading(cmp);
   assert.equal(cmp.measureSaveLevelCalibration(), false);
   assert.equal(cmp.meas.levelForm.error, LEVEL_NEEDS_INPUT);
+  assert.equal(seam.levelCalibration, cal, 'the refused reading replaced nothing');
   // It is said, in the live region and in a notification.
   const text = await said(cmp, /^Left TEST CONTEXT/);
   assert.match(text, /^Left TEST CONTEXT\. Input: default input\. Cleared: /);
-  for (const what of [/the unsaved TEST CONTEXT result/, /the level calibration stored in TEST /,
-    /the input check/]) {
+  for (const what of [/the unsaved TEST CONTEXT result/, /the input check/]) {
     assert.match(text, what);
     assert.match(notes.at(-1).text, what);
   }
+  assert.doesNotMatch(text, /level calibration/, 'the calibration is kept, not cleared');
   assert.equal(notes.at(-1).title, 'Left TEST CONTEXT');
   assert.match(text, /Run the setup check for this input\.$/);
 });
@@ -280,13 +289,16 @@ test('seam: useLoopback and useMicrophone are the same transition as the choice'
   assert.deepEqual(seam.inputNow, MIC_A);
   assert.ok(seam.result);
   assert.ok(seam.levelCalibration);
-  // Leaving clears it, as the choice does.
+  // Leaving clears the input and the result, as the choice does; the level calibration is
+  // kept and void outside TEST CONTEXT (owner decision of 2026-10-11).
+  const cal = seam.levelCalibration;
   assert.equal(seam.useMicrophone(), true);
   assert.equal(cmp.meas.input.selected, '');
   assert.equal(seam.inputNow, null);
   assert.equal(seam.result, null);
-  assert.equal(seam.levelCalibration, null);
+  assert.equal(seam.levelCalibration, cal);
   assert.equal(cmp.measureCalIndicator, 'UNCALIBRATED');
+  assert.match(cmp.meas.cal.levelVoid, /^UNCALIBRATED: the level calibration was made in TEST /);
 });
 
 test('seam: useLoopback and useMicrophone are refused where the choice is refused', () => {
@@ -400,34 +412,33 @@ test('origin: an INVALID result of a real input is not kept inside TEST CONTEXT'
     /Cleared: the invalid result of the previous input\.$/);
 });
 
-test('origin: a level calibration stored outside TEST CONTEXT never applies inside it',
-  async () => {
-    const { a } = await fx();
-    // An input that reports no facts at all: its binding equals the loopback's but for nothing.
-    const bare = { device: { label: null, id: null },
-      constraints: { requested: null, applied: null } };
-    const { cmp, seam } = makeUi();
-    // Outside TEST CONTEXT the seam's showResult adopts result.input (ledger W7f route B, still
-    // open): the only way Node has to a known input on this side. When route B closes, this
-    // case needs another way in.
-    assert.equal(seam.showResult({ ...a.result, input: bare }), true);
-    typeReading(cmp);
-    assert.equal(cmp.measureSaveLevelCalibration(), true);
-    assert.equal(cmp.measureCalIndicator, 'CALIBRATED');
+test('origin: a level calibration applies only on the side it was stored on, and is kept on '
+  + 'the other', () => {
+  // An input that reports no facts at all: its binding is the same on either side but for the
+  // context. (The mirror case, a calibration stored with a real input and the page then in TEST
+  // CONTEXT, needs a checked microphone: since #169 closed route B of W7f, Node has no way to
+  // one, and the fake-microphone legs of the browser checks cover it.)
+  const bare = { device: { label: null, id: null },
+    constraints: { requested: null, applied: null }, sampleRate: SR };
+  const { cmp, seam } = makeUi({ loopback: true });
+  assert.equal(seam.setInputNow(bare), true);
+  typeReading(cmp);
+  assert.equal(cmp.measureSaveLevelCalibration(), true);
+  assert.equal(cmp.measureCalIndicator, 'CALIBRATED');
+  const cal = seam.levelCalibration;
 
-    assert.equal(cmp.measureSelectInput(TC), true);
-    assert.ok(seam.levelCalibration, 'it is kept for the input it was taken with');
-    assert.equal(cmp.measureCalIndicator, 'UNCALIBRATED');
-    assert.match(cmp.meas.cal.levelVoid, /stored outside TEST CONTEXT/);
-    // The loopback's input facts equal the binding; the context still decides.
-    assert.equal(seam.setInputNow({ ...bare, sampleRate: a.result.sampleRate }), true);
-    assert.equal(cmp.measureCalIndicator, 'UNCALIBRATED');
-    assert.match(cmp.meas.cal.levelVoid, /stored outside TEST CONTEXT/);
-    assert.equal(cmp.measureLevelsText,
-      'UNCALIBRATED (the calibration is not valid for this input)');
+  assert.equal(cmp.measureSelectInput(''), true);
+  assert.equal(seam.levelCalibration, cal, 'it is kept for the input it was taken with');
+  assert.equal(cmp.measureCalIndicator, 'UNCALIBRATED');
+  assert.match(cmp.meas.cal.levelVoid, /^UNCALIBRATED: the level calibration was made in TEST /);
+  assert.equal(cmp.meas.cal.levelPending, null, 'not "pending": no check here can make it apply');
+  assert.equal(cmp.measureLevelsText,
+    'UNCALIBRATED (the calibration is not valid for this input)');
 
-    assert.equal(cmp.measureSelectInput(''), true);
-    assert.ok(seam.levelCalibration);
-    assert.equal(cmp.measureCalIndicator, 'PENDING INPUT CHECK');
-    assert.equal(cmp.meas.cal.levelVoid, null);
-  });
+  assert.equal(cmp.measureSelectInput(TC), true);
+  assert.equal(seam.levelCalibration, cal);
+  assert.equal(cmp.meas.cal.levelVoid, null);
+  assert.equal(cmp.measureCalIndicator, 'PENDING INPUT CHECK');
+  assert.equal(seam.setInputNow(bare), true);
+  assert.equal(cmp.measureCalIndicator, 'CALIBRATED');
+});

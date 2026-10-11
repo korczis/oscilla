@@ -48,7 +48,7 @@
     },
     "tests/browser/v31-studio-timeline.cjs": {
       "counted-poll": 2,
-      "timer-sleep": 20
+      "timer-sleep": 18
     },
     "tests/browser/v31-studio-workflows.cjs": {
       "counted-poll": 1

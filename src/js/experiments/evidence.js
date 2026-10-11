@@ -99,6 +99,15 @@ function span(f) {
   return i < 0 ? null : [f[i], f[f.length - 1]];
 }
 
+/**
+ * The frequencies of the run's stored main result (the grid resultPoint picks from), as plain
+ * numbers, or null without a stored response. A finding's value reference must name one exactly.
+ */
+export function storedResponseFrequencies(e) {
+  const r = responseOf(e);
+  return r ? Array.from(r.frequencies, Number) : null;
+}
+
 /** See the header. */
 export function defaultEvidenceHz(e) {
   const r = responseOf(e);

@@ -100,10 +100,40 @@ operation, from the intent through the compiled plan to each value the node adap
 they wrote, under one correlation id. It is bounded (a ring of 256 steps), in memory only,
 covered by no hash, and is not evidence of what sounded.
 
-**Finding.** Not a product entity. OSCILLA has no finding object: a measurement has quality
-*reasons* (`src/js/measurement/quality.js`) and the Studio has *diagnostics* (ADR 0039).
-"Finding" appears only in the repository's audits and reviews (for example
-`docs/v3/audits-v383.md`), for a defect a reviewer reported.
+**Finding.** A user's interpretation, linked to the evidence it rests on (ADR 0046,
+`src/js/experiments/findings.js`, kind `oscilla-finding`, the `findings` object store of the
+experiments database). It is kept apart from measurement truth:
+
+- a *measurement* is what was observed or computed: a stored experiment, immutable (ADR 0040);
+- an *observation* is what the user recorded: a finding with status `observation`, not yet
+  interpreted;
+- a *finding* is an interpretation linked to evidence: status `hypothesis`, `supported`,
+  `contradicted` or `inconclusive`, categorical and never a confidence number.
+
+Its evidence is typed references to experiments (an experiment, a comparison of two experiments, or
+the stored value of an experiment at a frequency, ADR 0044's lineage point), and it records each
+cited experiment's id with its result hash. A finding never changes an experiment; a reference to a
+deleted experiment stays and reads "missing". Two other words are not findings: a measurement's
+quality *reasons* (`src/js/measurement/quality.js`) and the Studio's *diagnostics* (ADR 0039). Two
+older uses remain with their own meaning: the repository's audits and reviews (for example
+`docs/v3/audits-v383.md`) call a defect a reviewer reported a finding, and `validate.js` names a
+non-fatal check of a record a finding (`calibrationClaimFindings`, `stimulusFindings`).
+
+**Connected records.** What a stored record is connected to (upstream: what it was made from
+or rests on) and what depends on it (downstream: what cites it or was made from it), between
+records: experiments, definitions, findings and Studio projects (ADR 0048,
+`src/js/experiments/connections.js`). Each entry comes from one field a record stores, and
+names it; nothing is inferred from names, recipes or times. Its state is a word: *stored here*
+only when the identity verifies (the target is stored, it was read and its result hash
+recomputed, and it is the record the field names), else *missing*, *does not match*,
+*not verifiable* or *unreadable*. A build and a frequency profile are never stored, so their
+entries read *running here* / *not running here* and *loaded here* / *not loaded* instead. It
+is computed when shown and never stored. An entry has no
+noun of its own in the interface: each row is named by its relation ("A repeat of", "Cited
+by"). In Studio, "connection" means a graph edge between two ports, so record text never uses
+the bare word. Not to be confused with the two words beside it: the *lineage* of evidence (ADR
+0044) traces one value within one experiment, and the Studio operation *trace* (ADR 0042)
+follows one Studio operation in memory.
 
 ## Repository
 

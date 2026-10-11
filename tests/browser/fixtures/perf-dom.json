@@ -1,0 +1,20 @@
+{
+  "attribute": "data-osc",
+  "osc": {
+    "navExperiments": "nav.experiments",
+    "expRow": "exp.row",
+    "expOpen": "exp.open",
+    "expSelect": "exp.select",
+    "expCompare": "exp.compare",
+    "compareSummary": "exp.compareSummary",
+    "defRow": "def.row"
+  },
+  "ids": {
+    "holdPlay": "osc-hold-play",
+    "freqSlider": "osc-freq-slider",
+    "freqValue": "osc-freq-value",
+    "detailTitle": "osc-x-detail-title",
+    "comparePanel": "osc-exp-compare"
+  },
+  "state": ["loaded", "rows", "defs", "detail", "selected", "compare"]
+}

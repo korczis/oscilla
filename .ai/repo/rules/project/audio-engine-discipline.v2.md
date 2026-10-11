@@ -45,6 +45,7 @@ nonzero after stop fails.
 
 # Verification
 
-The freeze suite replays the V1 engine schedules on a recording mock context; the browser gate
+The freeze suite (`tests/unit/freeze.test.mjs`) replays the V1 engine schedules on a recording
+mock context; the browser gate (`tests/browser/engine-v1port.cjs`, `npm run test:engine`)
 counts live oscillators independently after stop, Escape, safety limit, natural end and mode
-switch; click checks measure the largest one-sample step at release.
+switch; its click checks measure the largest one-sample step at release.

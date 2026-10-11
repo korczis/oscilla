@@ -1,0 +1,4 @@
+{
+  "about": "Tracked lines that look like a git conflict marker and are not one. Read by tests/unit/repo-hygiene.test.mjs (rule project.no-conflict-markers). An entry names the file, the exact line and why the line is legitimate there; an entry whose line is gone fails the test, so the list cannot outlive its reasons. dist/index.html is not scanned: it is rebuilt from src/ and compared byte for byte by build:check.",
+  "entries": []
+}

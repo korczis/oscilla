@@ -26,15 +26,20 @@
 //                  nodes (V3.1 public Studio smoke, plan V433)
 //   measure        MEASURE from the navigation (V3 §230, plan V386): the guided flow renders
 //                  (seven steps, "Check setup" enabled, Stop disabled, Frequency and Level
-//                  indicators, result tabs, input panel); switched to TEST CONTEXT (the digital
-//                  loopback of OSCILLA.measure.useLoopback, as the browser suites do) the setup
-//                  check reaches READY with the TEST CONTEXT banner, and a reset leaves 0 engine,
-//                  io nodes, sources, captures, ports and tracks
+//                  indicators, result tabs, input panel)
+//   documented URL the page is then loaded as the README documents TEST CONTEXT and the recipe
+//                  link, <url>?measure=loopback#mr=<recipe> (ledger W7e): no seam hook switches
+//                  the input or sets a value. The link alone opens MEASURE, the TEST CONTEXT
+//                  banner is shown and the setup holds the link's recipe; the setup check then
+//                  reaches READY on the loopback input with the banner still shown, and a reset
+//                  leaves 0 engine, io nodes, sources, captures, ports and tracks. The page is
+//                  loaded from the plain URL again before the Studio checks
 //   measurement sweep  the Measurement Sweep opened from the template gallery (V3.1 §270)
 //                  renders its six nodes by kind (Sweep, Master, Microphone and the Measurement
 //                  nodes Calibration, Transfer Analyzer, Measurement Result) and five connections
-//   no microphone  navigator.mediaDevices.getUserMedia is never called during the whole smoke
-//                  (no permission prompt can block it; no physical microphone is needed)
+//   no microphone  navigator.mediaDevices.getUserMedia is never called during the whole smoke,
+//                  counted over its three page loads (no permission prompt can block it; no
+//                  physical microphone is needed)
 // A node's kind is the type of the canonical model node its rendered card stands for
 // (window.OSCILLA.studio.model, matched by data-node-id); its category is the label on the card.
 // Every check waits on its condition (bounded), never on a fixed delay: the public site's timing
@@ -88,9 +93,23 @@ const SWEEP = {
   edges: { 'edge-1': 'sweep-1>master-1', 'edge-2': 'sweep-1>transfer-1', 'edge-3': 'mic-1>cal-1',
     'edge-4': 'cal-1>transfer-1', 'edge-5': 'transfer-1>result-1' },
 };
-// Short TEST CONTEXT recipe of the browser suites (tests/browser/v3-ui.cjs SHORT).
+// Short TEST CONTEXT recipe of the browser suites (tests/browser/v3-ui.cjs SHORT), and the same
+// recipe as a link writes it: the `mr` hash value is base64url(JSON) with the wire keys of
+// src/js/core/url-state-measure.js (d duration, n runs, nc noise check, pr pre-roll, po
+// post-roll, g gap). The value is built here, not by the page, so the documented format is
+// what is under test.
 const SHORT = { duration: 1, repeats: 2, noiseCheckS: 0.5, preRollS: 0.25, postRollS: 0.5,
   gapS: 0.2 };
+const SHORT_LINK = Buffer.from(JSON.stringify({ v: 1, d: SHORT.duration, n: SHORT.repeats,
+  nc: SHORT.noiseCheckS, pr: SHORT.preRollS, po: SHORT.postRollS, g: SHORT.gapS }))
+  .toString('base64url');
+/** `base` as the README documents TEST CONTEXT with a recipe link: ?measure=loopback#mr=… */
+function documentedUrl(base) {
+  const u = new URL(base);
+  u.search = '?measure=loopback';
+  u.hash = `#mr=${SHORT_LINK}`;
+  return u.href;
+}
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 async function until(fn, test, ms) {
@@ -181,10 +200,17 @@ async function runOne(name) {
         };
       }
     });
-    const res = await page.goto(URL_, { waitUntil: 'load', timeout: 30000 });
-    let ready = true;
-    await page.waitForSelector('html[data-ready="true"]', { timeout: 20000 })
-      .catch(() => { ready = false; });
+    // Each navigation starts the page's own counter at 0: the calls of a page are added to
+    // `gum` before the page is left.
+    let gum = 0;
+    const load = async (url) => {
+      const response = await page.goto(url, { waitUntil: 'load', timeout: 30000 });
+      const booted = await page.waitForSelector('html[data-ready="true"]', { timeout: 20000 })
+        .then(() => true, () => false);
+      return { response, booted };
+    };
+    const leave = async () => { gum += await page.evaluate(() => window.__oscGum); };
+    const { response: res, booted: ready } = await load(URL_);
     await sleep(500);
     const boot = await page.evaluate(() => ({
       osc: !!window.OSCILLA,
@@ -321,12 +347,28 @@ async function runOne(name) {
       + `${mui.primaryEnabled ? 'enabled' : 'disabled'}, stop disabled ${mui.stopDisabled}, `
       + `indicators ${mui.indicators}, tabs ${mui.tabs.join('/')}, input ${mui.input}, `
       + `state ${mui.state}`);
-    const loop = await page.evaluate((values) => {
-      const m = window.OSCILLA.measure;
-      const ok = m.useLoopback();
-      m.setValues(values);
-      return ok;
-    }, SHORT);
+    // TEST CONTEXT by the documented URL (README "TEST CONTEXT" and "Recipe link"; ledger
+    // W7e): the page is loaded with ?measure=loopback and a recipe link. No hook switches the
+    // input or sets a value, so the flag and the link are what production is tested through.
+    const DOC_URL = documentedUrl(URL_);
+    await leave();
+    const doc = await load(DOC_URL);
+    const linkOk = (v) => v.mode === 'measure' && v.banner && v.search === '?measure=loopback'
+      && v.state === 'IDLE' && Object.keys(SHORT).every((k) => v.values[k] === SHORT[k]);
+    const link = await until(() => page.evaluate((keys) => {
+      const el = document.querySelector('[data-osc="measure.testContext"]');
+      const shown = !!el && el.getBoundingClientRect().width > 0
+        && el.getBoundingClientRect().height > 0 && getComputedStyle(el).visibility !== 'hidden';
+      const values = {};
+      for (const k of keys) values[k] = window.OSCILLA.app.meas.values[k];
+      return { mode: document.querySelector('#osc-app').dataset.mode, banner: shown,
+        text: shown ? el.textContent.trim().replace(/\s+/g, ' ').slice(0, 60) : '',
+        search: window.location.search, state: window.OSCILLA.measure.state, values };
+    }, Object.keys(SHORT)), linkOk, 5000);
+    check('the documented URL ?measure=loopback#mr=<recipe> opens MEASURE, shows the TEST CONTEXT '
+      + 'banner and loads the recipe', doc.booted && linkOk(link),
+    `ready ${doc.booted}, workspace ${link.mode}, banner ${link.banner} "${link.text}", query `
+      + `"${link.search}", state ${link.state}, recipe ${JSON.stringify(link.values)}`);
     const banner = await page.waitForSelector('[data-osc="measure.testContext"]',
       { state: 'visible', timeout: 3000 }).then(() => true, () => false);
     await page.click('#osc-measure-primary');
@@ -343,7 +385,7 @@ async function runOne(name) {
     const zero = (c) => c.engineNodes === 0 && c.ioNodes === 0 && c.ioSources === 0
       && c.captures === 0 && c.ports === 0 && c.tracks === 0;
     const mc = await until(() => page.evaluate(() => window.OSCILLA.measure.counts()), zero, 3000);
-    await page.evaluate(() => window.OSCILLA.measure.useMicrophone());
+    const loop = setup.kind === 'loopback';
     check('MEASURE setup check in TEST CONTEXT reaches READY, reset leaves 0 nodes',
       loop && banner && setup.state === 'READY' && zero(mc),
     `loopback ${loop}, banner ${banner}, state ${setup.state} (io ${setup.kind}), primary `
@@ -353,7 +395,11 @@ async function runOne(name) {
     // STUDIO (V3.1, plan V433 §269-§270): the Full Studio opens from the navigation; the
     // Subtractive Synth (the §270 Basic Synth) opened from the gallery renders its graph by
     // node kind and connection, and its timeline; PLAY sounds through the Studio runtime, STOP
-    // leaves 0 nodes.
+    // leaves 0 nodes. They run on the page as a visitor loads it: the plain URL, out of TEST
+    // CONTEXT (which only the address enters and leaves, ledger W7b).
+    await leave();
+    const plain = await load(URL_);
+    if (!plain.booted) throw new Error('the page did not boot from the plain URL again');
     await page.click('[data-osc="nav.studio"]');
     await page.waitForFunction(() => document.querySelector('#osc-app').dataset.mode === 'studio',
       null, { timeout: 5000 });
@@ -397,7 +443,7 @@ async function runOne(name) {
       + 'Analyzer, Measurement Result and its 5 connections', graphMatches(sweep, SWEEP),
     graphText(sweep));
 
-    const gum = await page.evaluate(() => window.__oscGum);
+    await leave();
     check('no microphone request (getUserMedia never called)', gum === 0, `${gum} call(s)`);
 
     check('no console errors', errors.length === 0, errors.slice(0, 5).join(' | ') || 'none');

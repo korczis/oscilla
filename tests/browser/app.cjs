@@ -15,6 +15,8 @@ const os = require('node:os');
 const path = require('node:path');
 const { pathToFileURL } = require('node:url');
 const suite = require('./lib/suite.cjs');
+const { until } = require('./lib/wait.cjs');
+const seam = require('./lib/measure-seam.cjs');
 
 const argv = process.argv.slice(2);
 const arg = (name, fallback) => {
@@ -185,7 +187,8 @@ const H = {
 
 /** Accessible-name + reachability audit of every interactive [data-osc] element, in-page. */
 function auditControls() {
-  const INTERACTIVE = 'button, input, select, textarea, a[href], [role="switch"], [role="tab"],'
+  const INTERACTIVE = 'button, input, select, textarea, summary, a[href], [role="switch"],'
+    + ' [role="tab"],'
     + ' [role="radio"], [role="menuitem"], [role="listbox"], [tabindex]:not([tabindex="-1"])';
   const text = (el) => (el ? el.textContent.replace(/\s+/g, ' ').trim() : '');
   const name = (el) => {
@@ -415,10 +418,12 @@ function defineChecks() {
   // Ledger W7 (ADR 0052): the seam ships in the page, so its surface is pinned here. A key is
   // added or removed only by editing these lists; every hook observes, drives an action a user
   // already has, or injects only inside TEST CONTEXT (tests/unit/v4-seam-contract.test.mjs).
+  // `studioTimeline` left the list with ledger W7a: it built a second Studio store and
+  // transport, and the timeline suite now drives the canonical ones.
   def('seam-surface-pinned', async ({ page }) => {
     const OSCILLA_KEYS = ['engine', 'viz', 'adapter', 'labs', 'labErrors', 'app', 'host',
-      'measure', 'experiments', 'studio', 'navigation', 'unsaved', 'studioTimeline', 'buildPlan',
-      'planFreqAt', 'parseFrequency', 'parseFrequencyList', 'formatFrequency', 'formatPeriod',
+      'measure', 'experiments', 'studio', 'navigation', 'unsaved', 'buildPlan', 'planFreqAt',
+      'parseFrequency', 'parseFrequencyList', 'formatFrequency', 'formatPeriod',
       'formatWavelength', 'frequencyToNormalized', 'normalizedToFrequency', 'nearestNote',
       'noteToFrequency', 'regionFor', 'harmonicTable', 'BUILTIN_PRESETS', 'LEARN_TOPICS',
       'PATTERNS', 'parseWav', 'encodeWav', 'buildConfigExport', 'parseConfigImport', 'version',
@@ -470,11 +475,12 @@ function defineChecks() {
 
   // Ledger W7b (ADR 0052): TEST CONTEXT is a choice of the MEASURE Input device list. It is
   // entered and left from the page; leaving clears what was produced in it (here a setup
-  // check, a level calibration typed on it and an INVALID result with its noise-check
-  // snapshot; a COMPLETE result is in the unit suite,
-  // tests/unit/v4-test-context-choice.test.mjs). With the fake microphone (chromium, firefox on
-  // http) a level calibration stored on a real input survives entering and leaving and reads
-  // UNCALIBRATED, with the reason, while the page is in TEST CONTEXT.
+  // check and an INVALID result with its noise-check snapshot; a COMPLETE result is in the unit
+  // suite, tests/unit/v4-test-context-choice.test.mjs). A level calibration typed on it is
+  // kept and reads UNCALIBRATED, with the reason, outside it (owner decision of 2026-10-11).
+  // With the fake microphone (chromium, firefox on http) a level calibration stored on a real
+  // input survives entering and leaving and reads UNCALIBRATED, with the reason, while the page
+  // is in TEST CONTEXT.
   def('test-context-from-the-page', async ({ page, browserName, origin }) => {
     const TC_LABEL = 'TEST CONTEXT · digital loopback (no microphone)';
     const SELECT = '#osc-m-input-device';
@@ -553,11 +559,12 @@ function defineChecks() {
         && calibrated.indicator === 'CALIBRATED',
       left: !left.loopback && left.value === '' && left.banner === null
         && left.chip === 'Microphone' && !left.disabled,
-      cleared: left.state === 'IDLE' && !left.inputNow && !left.level
-        && left.indicator === 'UNCALIBRATED'
-        && /Cleared: the level calibration stored in TEST CONTEXT; the input check\. Run the /
-          .test(left.polite)
+      cleared: left.state === 'IDLE' && !left.inputNow && left.indicator === 'UNCALIBRATED'
+        && /Cleared: the input check\. Run the /.test(left.polite)
         && left.toasts.some((t) => /^Left TEST CONTEXT: Cleared/.test(t)),
+      // The calibration typed in TEST CONTEXT is kept, void outside it (decision 2026-10-11).
+      calibrationKept: left.level && !/level calibration/.test(left.polite)
+        && /^UNCALIBRATED: the level calibration was made in TEST /.test(left.levelVoid || ''),
       released: zero(counts),
       // The address follows the choice where the browser rewrites it (not judged on file://).
       address: origin !== 'http' || (before.flag === null && entered.flag === 'loopback'
@@ -580,8 +587,8 @@ function defineChecks() {
     const gainWas = await gain();
     await enter();
     // A short recipe, as a recipe link would set it (the seam's setValues is that validation).
-    const shortened = await page.evaluate(() => window.OSCILLA.measure.setValues({ duration: 1,
-      repeats: 1, noiseCheckS: 0.5, preRollS: 0.25, postRollS: 0.5 }));
+    const shortened = await seam.applyValues(page, { duration: 1, repeats: 1, noiseCheckS: 0.5,
+      preRollS: 0.25, postRollS: 0.5 });
     // The setup check refuses a zero output level, so the volume goes down after it is READY.
     await check();
     await setGain(0);
@@ -613,7 +620,8 @@ function defineChecks() {
       res.realInputKept = mic.ioKind === 'microphone' && micStored === true
         && micCal.indicator === 'CALIBRATED' && inIt.level && !inIt.inputNow
         && inIt.indicator === 'UNCALIBRATED'
-        && /stored outside TEST CONTEXT/.test(inIt.levelVoid || '') && back.level
+        && /^UNCALIBRATED: the level calibration was taken with a microphone/
+          .test(inIt.levelVoid || '') && back.level
         && !back.inputNow && back.levelVoid === null
         && back.indicator === 'PENDING INPUT CHECK'
         && !back.toasts.some((t) => /level calibration/.test(t));
@@ -624,9 +632,223 @@ function defineChecks() {
       });
       res.releasedAfterMic = zero(await released());
     }
+    // The calibration typed in TEST CONTEXT is kept: the checks after this one start without it.
+    await page.evaluate(() => window.OSCILLA.app.measureClearLevelCalibration());
     await H.workspace(page, 'playground'); // the checks after this one start there
     const failed = Object.keys(res).filter((k) => !res[k]);
     return failed.length ? { ok: false, failed, detail } : { ok: true, ...res };
+  });
+
+  // Ledger W7f and W7c (ADR 0052, ADR 0017): the level indicator reads CALIBRATED only for an
+  // input that was checked in the context the page is in. An input named in TEST CONTEXT (by
+  // the loopback, by setInputNow or by a TEST CONTEXT result) is not a checked input once the
+  // page is on the microphone, a level calibration made in one context does not apply in the
+  // other, and one typed by hand in TEST CONTEXT says so. On its own page: it leaves a result
+  // and a calibration behind.
+  def('calibrated-only-for-a-checked-input', async ({ context, baseUrl, browserName, origin }) => {
+    const p = await context.newPage();
+    const errs = [];
+    p.on('pageerror', (e) => errs.push(e.message));
+    const MIC = { device: { label: 'Mic A', id: 'mic-a' },
+      constraints: { requested: null, applied: { echoCancellation: false,
+        noiseSuppression: false, autoGainControl: false, channelCount: 1 } } };
+    /** The level state now: the getters the indicator renders, and what is stored. */
+    const now = () => p.evaluate(() => {
+      const a = window.OSCILLA.app;
+      const m = window.OSCILLA.measure;
+      const c = m.levelCalibration;
+      return { input: m.inputNow ? 'known' : null, indicator: a.measureCalIndicator,
+        levels: a.measureLevelsText, void: a.meas.cal.levelVoid,
+        pending: !!a.meas.cal.levelPending, stored: !!c, conditions: c ? c.conditions : null,
+        state: a.measureLevelStateText, testContext: !!a.meas.loopback,
+        // Every other place the page states a level: the Calibration step and the views.
+        step: a.meas.flow.steps.find((s) => s.id === 'calibration').detail,
+        title: a.meas.shownTitle,
+        rta: a.meas.rta ? { badges: a.meas.rta.badges.slice(), yLabel: a.meas.rta.yLabel } : null,
+        response: a.meas.response ? { badges: a.meas.response.badges.slice(),
+          yLabel: a.meas.response.yLabel } : null };
+    });
+    /** A view that exists and claims no absolute level. */
+    const relative = (view) => !!view && !view.badges.includes('CALIBRATED')
+      && !/dB SPL/.test(view.yLabel);
+    /** Check setup on the microphone; resolves when the check has ended. */
+    const checkMicrophone = async (what) => {
+      await inPage(() => { window.OSCILLA.app.measureCheck(); }); // the poll below is the wait
+      return until(() => inPage(() => {
+        const m = window.OSCILLA.measure;
+        return ['READY', 'INVALID', 'ERROR'].includes(m.state)
+          ? { state: m.state, kind: m.ioKind, input: m.inputNow ? 'known' : null } : null;
+      }), { ms: 15000, what });
+    };
+    /** Type a reading by hand and press Store; resolves to the verdict and the state after. */
+    const typeReading = async (conditions = '') => {
+      const tried = await p.evaluate((text) => {
+        const a = window.OSCILLA.app;
+        a.measureSetLevelManual(true);
+        Object.assign(a.meas.levelForm, { referenceHz: '1000', referenceDb: '94',
+          observedDb: '-30', conditions: text });
+        return { note: a.measureLevelManualNote, saved: a.measureSaveLevelCalibration(),
+          error: a.meas.levelForm.error };
+      }, conditions);
+      return { ...tried, ...await now() };
+    };
+    const inPage = (fn, arg) => p.evaluate(fn, arg);
+    const NEEDS_INPUT = /^Run the setup check first: a level calibration is valid only for the/;
+    /** Nothing to bind to: no input, the typed reading refused with the reason, no CALIBRATED. */
+    const refused = (r) => r.input === null && r.saved === false && NEEDS_INPUT.test(r.error)
+      && NEEDS_INPUT.test(r.note) && !r.stored && r.indicator === 'UNCALIBRATED'
+      && r.levels === 'relative (dBFS-like)';
+    const indicatorText = () => p.evaluate(() => document
+      .querySelector('[data-osc="measure.levelIndicator"]').textContent.replace(/\s+/g, ' ')
+      .trim());
+    const res = {};
+    try {
+      await p.goto(baseUrl, { waitUntil: 'load' });
+      await H.ready(p);
+      await H.workspace(p, 'measure');
+      // A real TEST CONTEXT measurement: its setup check names the loopback input.
+      res.setup = await inPage(() => {
+        const m = window.OSCILLA.measure;
+        return { loopback: m.useLoopback(), values: m.setValues({ duration: 1, repeats: 1,
+          noiseCheckS: 0.5, preRollS: 0.25, postRollS: 0.5, gapS: 0.2 }) };
+      });
+      await inPage(() => window.OSCILLA.app.measureStart());
+      res.run = await until(() => inPage(() => {
+        const m = window.OSCILLA.measure;
+        return ['COMPLETE', 'INVALID', 'ABORTED', 'ERROR'].includes(m.state)
+          ? { state: m.state, input: m.inputNow ? 'known' : null,
+            testContext: !!(m.result && m.result.testContext) } : null;
+      }), { ms: 45000, what: 'the TEST CONTEXT measurement ends' });
+      // Route A with the input the loopback's own check named ...
+      res.leftLoopback = await inPage(() => {
+        window.__oscResult = window.OSCILLA.measure.result;
+        return window.OSCILLA.measure.useMicrophone();
+      });
+      // Nothing shown in TEST CONTEXT stays on the microphone page (review of #169).
+      res.afterLeaving = await now();
+      res.afterCheck = await typeReading();
+      // ... and with an input injected in TEST CONTEXT.
+      res.injected = await inPage((input) => {
+        const m = window.OSCILLA.measure;
+        return { loopback: m.useLoopback(), set: m.setInputNow({ ...input,
+          sampleRate: window.OSCILLA.engine.ctx.sampleRate }), known: !!m.inputNow,
+        left: m.useMicrophone() };
+      }, MIC);
+      res.afterInject = await typeReading();
+      // Route B: a TEST CONTEXT result shown while the page is on the microphone.
+      res.shown = await inPage(() => ({ ok: window.OSCILLA.measure.showResult(window.__oscResult),
+        title: window.OSCILLA.app.meas.shownTitle }));
+      res.afterShow = await typeReading();
+      // In TEST CONTEXT the typed reading is stored, labelled (W7c), and applies there only.
+      res.inContext = await inPage((input) => {
+        const m = window.OSCILLA.measure;
+        return { loopback: m.useLoopback(), set: m.setInputNow({ ...input,
+          sampleRate: window.OSCILLA.engine.ctx.sampleRate }) };
+      }, MIC);
+      res.typedInContext = await typeReading('calibrator on the capsule');
+      res.left = await inPage(() => window.OSCILLA.measure.useMicrophone());
+      res.outside = await now();
+      res.outsideText = await until(async () => {
+        const t = await indicatorText();
+        return t === 'Level UNCALIBRATED' ? t : null;
+      }, { ms: 5000, what: 'the level indicator reads UNCALIBRATED outside TEST CONTEXT' })
+        .catch(() => indicatorText());
+      const v = {
+        setup: res.setup.loopback === true && res.setup.values === true,
+        ran: res.run.state === 'COMPLETE' && res.run.input === 'known' && res.run.testContext,
+        routeACheck: res.leftLoopback === true && refused(res.afterCheck),
+        nothingLeftBehind: res.afterLeaving.title === null && res.afterLeaving.rta === null
+          && res.afterLeaving.response === null,
+        routeAInject: res.injected.loopback && res.injected.set === true && res.injected.known
+          && res.injected.left === true && refused(res.afterInject),
+        routeB: res.shown.ok === true && res.shown.title === 'TEST CONTEXT result'
+          && refused(res.afterShow),
+        inContext: res.inContext.set === true && res.typedInContext.saved === true
+          && res.typedInContext.indicator === 'CALIBRATED' && res.typedInContext.testContext
+          && /level CALIBRATED$/.test(res.typedInContext.step),
+        labelled: /^TEST CONTEXT: .* calibrator on the capsule$/
+          .test(res.typedInContext.conditions || '')
+          && /^TEST CONTEXT reference reading stored/.test(res.typedInContext.state),
+        outside: res.left === true && !res.outside.testContext && res.outside.input === null
+          && res.outside.indicator === 'UNCALIBRATED' && !res.outside.pending
+          && /^UNCALIBRATED: the level calibration was made in TEST CONTEXT/
+            .test(res.outside.void || '')
+          && res.outsideText === 'Level UNCALIBRATED'
+          && /level relative \(dBFS-like\)$/.test(res.outside.step),
+      };
+      // With a fake microphone: the checked microphone is the one input a reading binds to,
+      // and that calibration does not apply in TEST CONTEXT.
+      if (FAKE_MIC.has(browserName) && origin === 'http') {
+        await inPage(() => window.OSCILLA.app.measureClearLevelCalibration());
+        res.micCheck = await checkMicrophone('the microphone setup check ends');
+        // The third sequence: a reading typed in TEST CONTEXT for an injected input with the
+        // checked microphone's own binding, then a real check of that microphone. The binding
+        // matches field for field; the calibration still does not apply.
+        res.sameBinding = await inPage(() => {
+          const m = window.OSCILLA.measure;
+          const input = JSON.parse(JSON.stringify(m.inputNow));
+          const left = m.setValues({ repeats: 1 }); // an edit: the READY check is reset
+          return { left, loopback: m.useLoopback(), set: m.setInputNow(input) };
+        });
+        res.typedSameBinding = await typeReading('same binding, typed in TEST CONTEXT');
+        res.backForCheck = await inPage(() => window.OSCILLA.measure.useMicrophone());
+        res.micCheckAgain = await checkMicrophone('the second microphone setup check ends');
+        res.afterRealCheck = await now();
+        await inPage(() => window.OSCILLA.app.measureClearLevelCalibration());
+        res.micTyped = await typeReading('on the microphone');
+        // A TEST CONTEXT result shown on the microphone page, with a microphone calibration
+        // stored and its input checked: the result's views never take that calibration ...
+        res.shownChecked = await inPage(() => window.OSCILLA.measure
+          .showResult({ ...window.__oscResult, input: null }));
+        res.afterShownChecked = await now();
+        // ... nor, once the result has named its own (TEST CONTEXT) input, a pending one (P1).
+        res.shownPending = await inPage(() => window.OSCILLA.measure
+          .showResult({ ...window.__oscResult }));
+        res.afterShownPending = await now();
+        res.intoLoopback = await inPage(() => window.OSCILLA.measure.useLoopback());
+        res.micCalInLoopback = await now();
+        res.backOnMic = await inPage(() => window.OSCILLA.measure.useMicrophone());
+        res.micCalUnchecked = await now();
+        v.micChecked = res.micCheck.state === 'READY' && res.micCheck.kind === 'microphone'
+          && res.micCheck.input === 'known';
+        v.micCalibrated = res.micTyped.saved === true && res.micTyped.indicator === 'CALIBRATED'
+          && res.micTyped.conditions === 'on the microphone'
+          && /^reference reading stored/.test(res.micTyped.state);
+        v.micCalNotInLoopback = res.intoLoopback === true && res.micCalInLoopback.testContext
+          && res.micCalInLoopback.indicator === 'UNCALIBRATED'
+          && /^UNCALIBRATED: the level calibration was taken with a microphone/
+            .test(res.micCalInLoopback.void || '');
+        v.micCalPendingAgain = res.backOnMic === true && res.micCalUnchecked.input === null
+          && res.micCalUnchecked.indicator === 'PENDING INPUT CHECK'
+          && /level pending input check$/.test(res.micCalUnchecked.step);
+        v.thirdSequence = res.sameBinding.left === true && res.sameBinding.loopback === true
+          && res.sameBinding.set === true && res.typedSameBinding.saved === true
+          && res.typedSameBinding.indicator === 'CALIBRATED' && res.backForCheck === true
+          && res.micCheckAgain.state === 'READY' && res.micCheckAgain.kind === 'microphone'
+          && res.afterRealCheck.input === 'known' && res.afterRealCheck.stored
+          && res.afterRealCheck.indicator === 'UNCALIBRATED'
+          && /^UNCALIBRATED: the level calibration was made in TEST CONTEXT/
+            .test(res.afterRealCheck.void || '')
+          && /level relative \(dBFS-like\)$/.test(res.afterRealCheck.step);
+        v.testResultNeverTakesMicCal = res.shownChecked === true
+          && res.afterShownChecked.title === 'TEST CONTEXT result'
+          && res.afterShownChecked.input === 'known'
+          && res.afterShownChecked.indicator === 'CALIBRATED'
+          && relative(res.afterShownChecked.rta) && relative(res.afterShownChecked.response);
+        v.pendingIsRelative = res.shownPending === true
+          && res.afterShownPending.title === 'TEST CONTEXT result'
+          && res.afterShownPending.input === null
+          && res.afterShownPending.indicator === 'PENDING INPUT CHECK'
+          && /level pending input check$/.test(res.afterShownPending.step)
+          && relative(res.afterShownPending.rta) && relative(res.afterShownPending.response);
+      } else {
+        res.microphone = 'not run: no fake microphone on this browser and origin';
+      }
+      const failed = Object.keys(v).filter((k) => !v[k]);
+      return { ok: failed.length === 0 && errs.length === 0, failed, errs, ...res };
+    } finally {
+      await p.close({ runBeforeUnload: false }).catch(() => {});
+    }
   });
 
   def('controls-reachable-labelled', async ({ page }) => {
@@ -690,13 +912,9 @@ function defineChecks() {
     // measurement (2 runs) gives the result tabs, Save/Repeat and, saved twice, two experiments
     // for the detail, compare and dialog controls.
     await H.workspace(page, 'measure');
-    await page.evaluate(() => {
-      const m = window.OSCILLA.measure;
-      m.useLoopback();
-      m.setValues({ duration: 1, repeats: 2, noiseCheckS: 0.5, preRollS: 0.25, postRollS: 0.5,
-        gapS: 0.2 });
-      window.OSCILLA.app.measureSetExpert(true);
-    });
+    await seam.loopback(page, { values: { duration: 1, repeats: 2, noiseCheckS: 0.5,
+      preRollS: 0.25, postRollS: 0.5, gapS: 0.2 } });
+    await page.evaluate(() => window.OSCILLA.app.measureSetExpert(true));
     await collect();
     await page.evaluate(() => window.OSCILLA.app.measureStart());
     await page.waitForFunction(() => ['COMPLETE', 'INVALID', 'ABORTED', 'ERROR']
@@ -777,6 +995,80 @@ function defineChecks() {
     await sleep(120);
     await collect();
     await page.evaluate(() => window.OSCILLA.app.closeModal('osc-dlg-def'));
+    // Findings (ADR 0046): the run detail's buttons, the dialog with a comparison linked, a
+    // listed finding's buttons and its delete dialog.
+    await page.evaluate(async () => {
+      const a = window.OSCILLA.app;
+      if (a.exps.rows[0]) await a.experimentsOpen(a.exps.rows[0].id);
+    });
+    await page.waitForSelector('[data-osc="exp.findingNew"]', { state: 'visible', timeout: 5000 })
+      .catch(() => {});
+    // Connected records (ADR 0048): the open experiment is a duplicate, so its section holds a
+    // link; the definition and finding rows carry their disclosure.
+    await page.waitForSelector('[data-osc="cnx.link"]', { state: 'visible', timeout: 10000 })
+      .catch(() => {});
+    await collect();
+    await page.click('[data-osc="exp.findingNew"]');
+    await page.waitForSelector('#osc-fnd-statement', { state: 'visible', timeout: 5000 })
+      .catch(() => {});
+    await page.fill('#osc-fnd-statement', 'audit finding');
+    await page.evaluate(async () => {
+      const a = window.OSCILLA.app;
+      const [x, y] = a.exps.rows;
+      if (x && y) await a.findingsAddCompare(x.id, y.id);
+    });
+    await page.waitForSelector('[data-osc="fnd.removeRef"]', { state: 'visible', timeout: 5000 })
+      .catch(() => {});
+    await collect();
+    await page.click('[data-osc="fnd.save"]');
+    await page.waitForSelector('[data-osc="fnd.edit"]', { state: 'visible', timeout: 5000 })
+      .catch(() => {});
+    await collect();
+    await page.click('[data-osc="fnd.delete"]');
+    await page.waitForSelector('[data-osc="fnd.deleteConfirm"]', { state: 'visible',
+      timeout: 5000 }).catch(() => {});
+    await collect();
+    await page.click('[data-osc="fnd.deleteConfirm"]');
+    // A refused stale edit: "Load the stored version", then the typed text kept to copy.
+    await page.evaluate(async () => {
+      const a = window.OSCILLA.app;
+      await a.findingsAskRun(a.exps.rows[0].id);
+      a.fnd.form.statement = 'audit conflict';
+      const f = await a.findingsSave();
+      if (!f) return;
+      await a.findingsAskEdit(f.id);
+      a.fnd.form.statement = 'audit edit';
+      const s = await a.experimentsStore();
+      const now = await s.getFinding(f.id);
+      await s.putFinding({ ...now, statement: 'audit other tab',
+        updatedAt: new Date(Date.parse(now.updatedAt) + 1000).toISOString() });
+      await a.findingsSave();
+    });
+    await page.waitForSelector('[data-osc="fnd.loadStored"]', { state: 'visible', timeout: 5000 })
+      .catch(() => {});
+    await collect();
+    await page.click('[data-osc="fnd.loadStored"]');
+    await page.waitForSelector('[data-osc="fnd.mine"]', { state: 'visible', timeout: 5000 })
+      .catch(() => {});
+    await collect();
+    await page.evaluate(async () => {
+      const a = window.OSCILLA.app;
+      a.findingsDiscardDraft();
+      for (const r of a.fnd.rows.slice()) await a.findingsDeleteNow(r.id);
+    });
+    // A draft kept after Escape: the panel's note offers to continue or discard it.
+    await page.click('[data-osc="exp.findingNew"]');
+    await page.waitForSelector('#osc-fnd-statement', { state: 'visible', timeout: 5000 })
+      .catch(() => {});
+    await page.fill('#osc-fnd-statement', 'audit draft');
+    await page.waitForSelector('[data-osc="fnd.discard"]', { state: 'visible', timeout: 5000 })
+      .catch(() => {});
+    await collect();
+    await page.keyboard.press('Escape');
+    await page.waitForSelector('[data-osc="fnd.draftNote"]', { state: 'visible', timeout: 5000 })
+      .catch(() => {});
+    await collect();
+    await page.click('[data-osc="fnd.draftDiscard"]');
     await page.evaluate(async () => {
       // An authored definition stays loaded in MEASURE (a derived one only fills the setup).
       const a = window.OSCILLA.app;
@@ -821,7 +1113,10 @@ function defineChecks() {
     const unlabelled = list.filter((c) => !c.name).map((c) => c.osc + (c.id ? `#${c.id}` : ''));
     const unreachable = list.filter((c) => !c.reachable).map((c) => c.osc);
     const neverVisible = list.filter((c) => !c.visible).map((c) => c.osc);
-    return { ok: !unlabelled.length && !unreachable.length && !neverVisible.length,
+    // Controls the audit must have met (they exist only in a state the audit sets up).
+    const unseen = ['cnx.link', 'cnx.toggle'].filter((k) => !seen.has(k));
+    return { ok: !unlabelled.length && !unreachable.length && !neverVisible.length
+      && !unseen.length, unseen,
       controls: list.length, unlabelled, unreachable, neverVisible, measureState };
   });
 

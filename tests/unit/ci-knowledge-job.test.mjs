@@ -1,7 +1,9 @@
 // The `knowledge` job of .github/workflows/ci.yml: a pinned `majordomus doctor` that the
 // required `gate` job needs. Its verdict is .github/doctor-verdict.jq, run here on doctor
 // outputs so that what passes the gate is decided by a tested program, not by eye:
-//   - any FAIL fails, except the two git-hook wiring entries a CI runner cannot have;
+//   - any FAIL fails, except the git-hook wiring entries a CI runner cannot have;
+//   - a line at any level saying the policy lacks a key the pinned Majordomus requires fails
+//     (doctor reports it as a WARN; rule project.majordomus-layer-current);
 //   - an output with no OK layout line fails (doctor printed nothing usable).
 // The download retries, so one transient asset error does not stall every merge.
 //   node --test tests/unit/ci-knowledge-job.test.mjs
@@ -37,7 +39,8 @@ function verdict(lines) {
 
 const ok = (category, subject) => ({ level: 'OK', category, subject, message: '' });
 const fail = (category, subject) => ({ level: 'FAIL', category, subject, message: '' });
-const HOOKS = [fail('wiring', 'doctor-on-commit'), fail('wiring', 'finish-on-push')];
+const HOOKS = ['doctor-on-commit', 'finish-on-push', 'worktree-guard', 'diff-check-on-commit']
+  .map((name) => fail('wiring', name));
 const LAYOUT = ok('layout', '.ai/manifest.yaml');
 
 test('the gate needs the knowledge job, and the job runs the verdict program', () => {
@@ -76,3 +79,37 @@ test('the verdict: hook wiring is excused, any other FAIL and an empty output ar
   assert.equal(verdict([fail('layout', '.ai/manifest.yaml'), ...HOOKS]), false, 'layout FAIL');
 });
 
+
+// What `majordomus doctor --json` 0.13.2 printed for this repository on 2026-10-07, while
+// .ai/repo/policy.yaml had no `knowledge:` block: no FAIL, exit 0, and this WARN. The same
+// run wrote "majordomus: policy is missing required key knowledge.candidates_max_files" to
+// stderr. CI passed it for as long as the verdict looked only at FAIL.
+const MISSING_KEY = {
+  level: 'WARN', category: 'knowledge', subject: 'candidates',
+  message: 'policy declares no knowledge.candidates_max_files',
+  reproduce: 'add a knowledge: block to .ai/repo/policy.yaml; see share/skeleton/policy.yaml',
+};
+
+test('the verdict: a policy missing a required key fails without any FAIL line', {
+  skip: HAVE_JQ ? false : 'jq is not installed here (CI runners have it)',
+}, () => {
+  assert.equal(verdict([LAYOUT, MISSING_KEY]), false, 'the WARN doctor 0.13.2 prints');
+  assert.equal(verdict([LAYOUT, ...HOOKS, MISSING_KEY]), false, 'with the hooks excused');
+  assert.equal(verdict([LAYOUT, { level: 'INFO', category: 'policy', subject: 'policy.yaml',
+    message: 'policy is missing required key knowledge.candidates_max_files' }]), false,
+  'the stderr wording, at any level');
+  assert.equal(verdict([LAYOUT, { level: 'WARN', category: 'knowledge', subject: 'candidates',
+    message: '41 candidates await review, over knowledge.candidates_max_files 40' }]), true,
+  'a full review queue is a WARN, not a missing key');
+});
+
+test('the policy declares every hook the verdict excuses, and the knowledge block', () => {
+  const policy = readFileSync(path.join(ROOT, '.ai/repo/policy.yaml'), 'utf8');
+  const hooks = [...policy.matchAll(
+    /^ {2}- name: ([\w-]+)\n(?: {4}.*\n)*? {4}wired_by: git-hook:/gm)].map(([, n]) => n).sort();
+  const excused = [...readFileSync(VERDICT, 'utf8').matchAll(/\.subject == "([\w-]+)"/g)]
+    .map(([, n]) => n).sort();
+  assert.deepEqual(excused, hooks, 'the verdict excuses exactly the git-hook entries of policy');
+  assert.match(policy, /^knowledge:\n {2}candidates_max_files: \d+/m);
+  assert.match(policy, /^ {2}candidate_max_age_minutes: \d+/m);
+});

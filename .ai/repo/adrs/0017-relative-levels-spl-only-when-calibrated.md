@@ -143,3 +143,15 @@ applied, and summarized as "SPL CALIBRATED" with no finding. Added:
 Proven by `tests/unit/v4-review-139.test.mjs` (each test failed before) and checks
 `level-wrong-input` (a calibration bound to "Mic A" while the run captures from the loopback:
 not applied, no "SPL") and `calibration` (the pending state) in `tests/browser/v3-ui.cjs`.
+
+### 2026-10-07: an input, and a calibration, belong to the context that named them (ledger W7f)
+
+Two sequences of `window.OSCILLA.measure` hooks still made the indicator read CALIBRATED for an
+input nobody checked: an input named in TEST CONTEXT stayed the current input after the page
+left it, and the input of a TEST CONTEXT result shown on the microphone was adopted; a typed
+reading then bound to either. MEASURE now keeps which context named the current input and
+answers "no input known" when it is not the page's own (`inputKnown()` in `src/js/ui/measure.js`),
+and a level calibration made in TEST CONTEXT does not apply on the microphone, nor the reverse.
+The rules above are unchanged; this only refuses more. Details: ADR 0052, resolution note of
+the same day. Proven by `tests/unit/v4-seam-contract.test.mjs` and check
+`calibrated-only-for-a-checked-input` in `tests/browser/app.cjs`.
