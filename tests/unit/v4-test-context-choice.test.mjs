@@ -17,12 +17,17 @@
 //           INVALID result of a real input is not kept inside TEST CONTEXT, where nothing would
 //           say whose it is; a level calibration stored on one side does not apply on the other,
 //           is kept there, and applies again on its own side once its input is checked.
-// NOT covered here: that a COMPLETE result measured with a real input is dropped on entering,
-// and that a level calibration stored with one is kept and void inside TEST CONTEXT. Node has
-// no input to check (and, since #169, the seam's showResult names no input outside TEST
-// CONTEXT); the browser checks `test-context-from-the-page` and
-// `calibrated-only-for-a-checked-input` (tests/browser/app.cjs) cover the calibration on the
-// fake microphone of chromium and firefox.
+//   review  (review of the merge with #169) entering drops a COMPLETE result shown before it,
+//           with its snapshot, and says so in a notification as leaving does; a captured
+//           reference reading and its summary end with the transition; a running reference
+//           capture or a pending setup check refuses it.
+// Entering drops whatever result is shown, wherever it was made (the rule does not read its
+// origin; only the words naming it do), so the COMPLETE fixture shown on the microphone page
+// covers a result measured with a real input. NOT covered here: that a level calibration stored
+// with a real input is kept and void inside TEST CONTEXT. Node has no input to check (and,
+// since #169, the seam's showResult names no input outside TEST CONTEXT); the browser checks
+// `test-context-from-the-page` and `calibrated-only-for-a-checked-input` (tests/browser/app.cjs)
+// cover it on the fake microphone of chromium and firefox.
 // In Node (no DOM: the adapters' Alpine state is a plain object, IndexedDB the in-process fake).
 //   node --test tests/unit/v4-test-context-choice.test.mjs
 
@@ -396,7 +401,7 @@ test('origin: a repeat link pending in TEST CONTEXT does not cross the transitio
 });
 
 test('origin: an INVALID result of a real input is not kept inside TEST CONTEXT', async () => {
-  const { cmp, seam } = makeUi();
+  const { cmp, seam, notes } = makeUi();
   await cmp.measureStart(); // no Web Audio in Node: INVALID, with the microphone engine
   assert.equal(seam.result.state, 'INVALID');
   assert.equal(seam.result.testContext ?? null, null, 'a real input result has no such label');
@@ -410,6 +415,9 @@ test('origin: an INVALID result of a real input is not kept inside TEST CONTEXT'
   assert.equal(cmp.meas.live.assertive, '');
   assert.match(await said(cmp, /^TEST CONTEXT/),
     /Cleared: the invalid result of the previous input\.$/);
+  // Said in a notification too, as leaving does (review of the merge, B2).
+  assert.equal(notes.at(-1).title, 'Entered TEST CONTEXT');
+  assert.match(notes.at(-1).text, /the invalid result of the previous input/);
 });
 
 test('origin: a level calibration applies only on the side it was stored on, and is kept on '
@@ -442,3 +450,95 @@ test('origin: a level calibration applies only on the side it was stored on, and
   assert.equal(seam.setInputNow(bare), true);
   assert.equal(cmp.measureCalIndicator, 'CALIBRATED');
 });
+
+// ================================================================= review of the merge (#174)
+
+/** Two seconds of a 1 kHz tone as the loopback would capture it (reference.js reads it). */
+function loopbackCapture() {
+  const x = new Float32Array(SR * 2);
+  for (let i = 0; i < x.length; i++) x[i] = 0.1 * Math.sin(2 * Math.PI * 1000 * i / SR);
+  return { samples: x, sampleRate: SR, device: { label: 'digital loopback', id: null },
+    constraints: null, testContext: { kind: 'digital-loopback', label: 'TEST CONTEXT · test' } };
+}
+/**
+ * In TEST CONTEXT, with the engine made by a setup check (INVALID in Node), the loopback io's
+ * captureNoise answers when `release` is called: a reference capture that is running, then done.
+ */
+async function capturingUi() {
+  const ui = makeUi({ loopback: true });
+  await ui.cmp.measureCheck(); // makes the engine and its io; Node has no Web Audio
+  let release;
+  ui.seam.io.captureNoise = () => new Promise((r) => { release = r; });
+  const done = ui.cmp.measureCaptureLevelReference();
+  return { ...ui, done, release: (cap) => release(cap) };
+}
+
+test('enter: a COMPLETE result shown before TEST CONTEXT is dropped, and a notification says so',
+  async () => {
+    const { a } = await fx();
+    const { cmp, seam, notes } = makeUi();
+    assert.equal(seam.showResult({ ...a.result }), true);
+    assert.equal(seam.result.state, 'COMPLETE');
+    assert.ok(cmp.meas.shownTitle);
+    assert.ok(cmp.meas.rta, 'its noise-check snapshot is shown');
+    assert.deepEqual(notes, []);
+
+    assert.equal(cmp.measureSelectInput(TC), true);
+    assert.equal(cmp.meas.loopback, true);
+    assert.equal(seam.result, null, 'no result crosses into TEST CONTEXT (owner, 2026-10-11)');
+    assert.equal(cmp.meas.shownTitle, null);
+    assert.equal(cmp.meas.rta, null);
+    assert.equal(cmp.meas.response, null);
+    assert.equal(await cmp.measureSave(), null);
+    assert.match(await said(cmp, /^TEST CONTEXT/), /Cleared: the unsaved TEST CONTEXT result\.$/);
+    // Not only for a screen reader: an unsaved measurement went (review of the merge, B2).
+    assert.equal(notes.length, 1);
+    assert.equal(notes[0].title, 'Entered TEST CONTEXT');
+    assert.match(notes[0].text, /^Cleared, so that nothing from before is read as the digital /);
+    assert.match(notes[0].text, /the unsaved TEST CONTEXT result\.$/);
+  });
+
+test('enter and leave end a captured reference reading and its summary', async () => {
+  const { cmp, seam, done, release } = await capturingUi();
+  release(loopbackCapture());
+  assert.equal(await done, true);
+  assert.ok(seam.reference, 'a reference reading was captured');
+  assert.ok(cmp.meas.levelForm.reading);
+  assert.equal(cmp.measureSelectInput(''), true);
+  assert.equal(seam.reference, null, 'the reading belongs to the input that is gone');
+  assert.equal(cmp.meas.levelForm.reading, null, 'and so does its summary in the dialog');
+  // Nothing of it can be stored on the other side.
+  cmp.measureSetLevelManual(false);
+  assert.equal(cmp.measureSaveLevelCalibration(), false);
+  assert.equal(seam.levelCalibration, null);
+});
+
+test('enter and leave are refused while a reference capture is running', async () => {
+  const { cmp, seam, done, release, notes } = await capturingUi();
+  assert.equal(seam.referenceCapturing, true);
+  assert.equal(cmp.meas.busy, false, 'a reference capture is not a measurement');
+  assert.equal(cmp.measureSelectInput(''), false);
+  assert.equal(notes.at(-1).title, 'Input not changed');
+  assert.equal(seam.useMicrophone(), false);
+  assert.equal(cmp.meas.loopback, true);
+  release(loopbackCapture());
+  await done;
+  assert.equal(cmp.measureSelectInput(''), true);
+});
+
+test('enter and leave are refused while a setup check is pending', async () => {
+  const { cmp, seam, notes } = makeUi({ loopback: true });
+  await cmp.measureCheck(); // makes the engine
+  let release;
+  seam.engine.preflight = () => new Promise((r) => { release = r; });
+  const pending = cmp.measureCheck();
+  assert.equal(cmp.meas.busy, false, 'the engine has not reported a state yet');
+  assert.equal(cmp.measureSelectInput(''), false);
+  assert.equal(notes.at(-1).title, 'Input not changed');
+  assert.equal(seam.useMicrophone(), false);
+  assert.equal(cmp.meas.loopback, true);
+  release();
+  await pending;
+  assert.equal(cmp.measureSelectInput(''), true);
+});
+
