@@ -153,6 +153,7 @@ const os = require('node:os');
 const path = require('node:path');
 const { pathToFileURL } = require('node:url');
 const playwright = require('playwright');
+const seam = require('./lib/measure-seam.cjs');
 
 const argv = process.argv.slice(2);
 const arg = (name, fallback) => {
@@ -318,11 +319,8 @@ const H = {
     const failed = Object.keys(conds).filter((k) => !conds[k]);
     return { ok: failed.length === 0, failed };
   },
-  loopback: (page) => page.evaluate((values) => {
-    const m = window.OSCILLA.measure;
-    m.useLoopback({ type: 'biquad', filter: 'lowpass', frequency: 2000, Q: Math.SQRT1_2 });
-    m.setValues(values);
-  }, SHORT),
+  loopback: (page) => seam.loopback(page, { values: SHORT,
+    system: { type: 'biquad', filter: 'lowpass', frequency: 2000, Q: Math.SQRT1_2 } }),
 };
 
 /** In-page: every rendered text node and label of the two workspaces that mentions SPL. */
@@ -530,7 +528,7 @@ function defineChecks(fixtures) {
   def('output-exclusive', async ({ page }) => {
     await H.workspace(page, 'measure');
     await H.loopback(page);
-    await page.evaluate(() => window.OSCILLA.measure.setValues({ repeats: 1, duration: 2 }));
+    await seam.applyValues(page, { repeats: 1, duration: 2 });
     await page.click('#osc-measure-primary');
     await H.waitState(page, ['READY', 'INVALID'], 15000);
     const hook = page.evaluate(() => window.OSCILLA.measure.onceInState('MEASURING', () => {
@@ -778,6 +776,8 @@ function defineChecks(fixtures) {
 
   def('calibration', async ({ page }) => {
     await H.workspace(page, 'measure');
+    // TEST CONTEXT, with no input known yet: the check does not rely on the one before it.
+    await seam.loopback(page);
     const res = {};
     res.bad = await page.evaluate(() => window.OSCILLA.app.measureImportCalibrationText('a,b\n',
       'broken.csv'));
@@ -1040,10 +1040,8 @@ function defineChecks(fixtures) {
   def('view-options', async ({ page }) => {
     await H.workspace(page, 'measure');
     await H.loopback(page);
-    await page.evaluate(() => {
-      window.OSCILLA.measure.setValues({ repeats: 1, f1: 2000 });
-      window.OSCILLA.app.measureSetView('normalization', '1k');
-    });
+    await seam.applyValues(page, { repeats: 1, f1: 2000 });
+    await page.evaluate(() => window.OSCILLA.app.measureSetView('normalization', '1k'));
     const run = await H.run(page, () => page.evaluate(() => {
       window.OSCILLA.app.measureStart();
     }));
@@ -1065,12 +1063,13 @@ function defineChecks(fixtures) {
         inSpan: Array.from(v.x).filter((t) => t >= -2 && t <= 20).length,
         sampleRate: window.OSCILLA.engine.ctx.sampleRate } : null;
     });
-    await page.evaluate(() => {
+    seam.applied(await page.evaluate(() => {
       const a = window.OSCILLA.app;
       a.measureSetView('irSpan', 'early');
-      window.OSCILLA.measure.setValues({ f1: 20 });
+      const set = window.OSCILLA.measure.setValues({ f1: 20 });
       a.alerts = [];
-    });
+      return set;
+    }));
     return { run, ...res, ...H.verdict({
       complete: run.state === 'COMPLETE',
       noFailure: !res.alerts.includes('Measurement failed'),
@@ -1754,11 +1753,8 @@ function defineChecks(fixtures) {
       res.save4 = await H.saved(page);
       res.ref4 = await ref(await app(() => window.OSCILLA.app.meas.savedId));
     }
-    await app(() => {
-      const a = window.OSCILLA.app;
-      a.measureClearDefinition();
-      window.OSCILLA.measure.setValues({ duration: 1 });
-    });
+    await app(() => window.OSCILLA.app.measureClearDefinition());
+    await seam.applyValues(page, { duration: 1 });
     // 390 px: the panel and the dialog fit.
     await page.setViewportSize({ width: 390, height: 844 });
     await H.workspace(page, 'experiments');
@@ -2141,11 +2137,8 @@ function defineChecks(fixtures) {
     const res = {};
     const RECIPE = { f1: 50, f2: 12000, duration: 3, level: 'medium', repeats: 2,
       aggregation: 'median', noiseCheckS: 1, phase: true };
-    res.param = await page.evaluate((v) => {
-      const a = window.OSCILLA.app;
-      window.OSCILLA.measure.setValues(v);
-      return a.measureRecipeParam();
-    }, RECIPE);
+    await seam.applyValues(page, RECIPE);
+    res.param = await page.evaluate(() => window.OSCILLA.app.measureRecipeParam());
     const values = () => page.evaluate(() => {
       const v = window.OSCILLA.app.meas.values;
       return { f1: v.f1, f2: v.f2, duration: v.duration, level: v.level, repeats: v.repeats,
@@ -2153,8 +2146,8 @@ function defineChecks(fixtures) {
     });
     const same = (v) => Object.keys(RECIPE).every((k) => v[k] === RECIPE[k]);
     // A link opened in this page (hashchange): from Playground, with an instrument state too.
-    await page.evaluate(() => window.OSCILLA.measure.setValues({ f1: 20, f2: 20000, duration: 10,
-      level: 'low', repeats: 3, aggregation: 'mean', noiseCheckS: 5, phase: false }));
+    await seam.applyValues(page, { f1: 20, f2: 20000, duration: 10, level: 'low', repeats: 3,
+      aggregation: 'mean', noiseCheckS: 5, phase: false });
     await H.workspace(page, 'playground');
     await page.evaluate((p) => { window.location.hash = `v=1&f=440&mr=${p}`; }, res.param);
     res.applied = await H.until(async () => ({ v: await values(), ws: await page.evaluate(() =>
@@ -2202,14 +2195,15 @@ function defineChecks(fixtures) {
     res.loadErrors = errors2;
     await p2.close();
     // Leave the page as the other checks expect it.
-    await page.evaluate(() => {
+    seam.applied(await page.evaluate(() => {
       window.history.replaceState(null, '', window.location.href.split('#')[0]);
       window.OSCILLA.app.measureApplyRecipeHash('');
-      window.OSCILLA.measure.setValues({ f1: 20, f2: 20000, duration: 10, level: 'low',
-        repeats: 3, aggregation: 'mean', noiseCheckS: 5, phase: false });
+      const set = window.OSCILLA.measure.setValues({ f1: 20, f2: 20000, duration: 10,
+        level: 'low', repeats: 3, aggregation: 'mean', noiseCheckS: 5, phase: false });
       window.OSCILLA.app.meas.recipeLinkErrors = [];
       window.OSCILLA.app.alerts = [];
-    });
+      return set;
+    }));
     return { ...res, ...H.verdict({
       param: /^[A-Za-z0-9_-]+$/.test(res.param) && res.param.length < 300,
       applied: same(res.applied.v) && res.applied.ws === 'measure',
@@ -2326,8 +2320,8 @@ function defineChecks(fixtures) {
       .activeNodeCount), (n) => n === 0, 3000);
     await H.workspace(q, 'measure');
     await H.loopback(q);
+    await seam.applyValues(q, { repeats: 1 });
     res.noStoreRun = await H.run(q, () => q.evaluate(() => {
-      window.OSCILLA.measure.setValues({ repeats: 1 });
       window.OSCILLA.app.measureStart();
     }));
     await q.click('[data-osc="measure.save"]');

@@ -2837,7 +2837,7 @@
         x-text="measureLevelManualNote || 'The reading is bound to the input checked last; OSCILLA stops applying it when the input changes.'"></p>
       <div class="osc-settings-grid">
         <label class="osc-label" for="osc-lc-cond">Conditions (device, gain, position)</label>
-        <input class="osc-number" id="osc-lc-cond" type="text" maxlength="2000" autocomplete="off"
+        <input class="osc-number" id="osc-lc-cond" type="text" :maxlength="measureLevelConditionsMax" autocomplete="off"
           data-osc="levelCal.conditions" x-model="meas.levelForm.conditions">
       </div>
       <p class="osc-pp-error" role="alert" x-show="meas.levelForm.error" x-text="meas.levelForm.error"></p>

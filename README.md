@@ -598,8 +598,9 @@ automated test proves how a physical speaker, room or microphone behaves.
   `?measure=loopback`, `measure.setValues()` is a recipe link); or it injects test data.
   `measure.showResult()` refuses a result that is not marked TEST CONTEXT, so no injected result
   is shown or saved as a measurement, and a direct `measure.setInputNow()` is refused outside
-  TEST CONTEXT. One gap is open: an input named while in TEST CONTEXT, or carried by an injected
-  result, stays known afterwards, and a typed level reading can then bind to it. It is
+  TEST CONTEXT. What is injected stays in TEST CONTEXT: an input named there, or carried by a
+  TEST CONTEXT result, is not a checked input once the page is on the microphone, and a level
+  calibration made there is labelled TEST CONTEXT and does not apply outside it. It is
   not a security boundary: any script running in the page can reach the same code without it.
   `?mock=1` only outlines the chart and view areas for layout comparison and never draws data.
 - **Proof of deployment.** After every Pages deployment, `scripts/verify-deploy.mjs` fetches the
