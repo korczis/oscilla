@@ -234,27 +234,41 @@ before the change, and by the fake-microphone leg of `calibrated-only-for-a-chec
 
 ### 2026-10-07: TEST CONTEXT is a choice of the Input device list (ledger W7b, #167)
 
-The follow-up "the Input device select gets a TEST CONTEXT option" is done. The list ends with
-"TEST CONTEXT · digital loopback (no microphone)"; choosing it is `?measure=loopback` (the
-address follows the choice), and choosing an input leaves it. The banner, the labels on
-results and the refusal to present a loopback result as a measurement are as before. The
-transition clears, in both directions, the result shown (a saved experiment of it stays,
-labelled), the input check and a captured reference reading; a level calibration is kept on
-either side (note of 2026-10-11). `useLoopback()` and `useMicrophone()` are now that same
-transition, which is what "drive" means here. `useLoopback()` while already in TEST CONTEXT
-keeps what was made in it and only replaces the engine, as before.
+_As written then; superseded in part by the note of 2026-10-11._
+
+**Note of 2026-10-07 (ledger W7b), no decision above changes.** The follow-up "the Input
+device select gets a TEST CONTEXT option" is done. The list ends with "TEST CONTEXT · digital
+loopback (no microphone)"; choosing it is `?measure=loopback` (the address follows the
+choice), and choosing an input leaves it. The banner, the labels on results and the refusal
+to present a loopback result as a measurement are as before. Leaving clears what was produced
+in TEST CONTEXT: its result (a saved experiment of it stays, labelled), the input check, a
+captured reference reading and a level calibration stored in it; entering ends the input
+check of the real input. A result measured with a real input, and a level calibration stored
+with one, stay on either side as what they are.
+`useLoopback()` and `useMicrophone()` are now that same transition, which is what "drive"
+means here. That closes the first of the two routes above (`useLoopback()`,
+`setInputNow(input)`, `useMicrophone()`): the injected input and a calibration stored on it
+do not survive leaving. It follows from the page's own reset, not from the owner's answer
+that W7f waits for; the second route (`showResult` adopting `result.input` outside loopback)
+is open, and W7f stays open for it. `useLoopback()` while already in TEST CONTEXT keeps what
+was made in it and only replaces the engine, as before.
 
 ### 2026-10-07: what was made in TEST CONTEXT is known from where it was made (review of #167)
 
-"Produced in TEST CONTEXT" is recorded where a result is shown, not read off the result's
-label: the engine's INVALID result carried no `testContext`, so one made in the loopback
-survived leaving, with its noise-check snapshot, under the real input. It is now cleared and
-named, and the engine's INVALID result carries the label of the setup check's facts. A pending
-repeat link and the outcome in the assertive live region end with the transition, in both
-directions. A level calibration applies only on the side it was stored on, whatever the input
-reports about itself. `useLoopback()` and `useMicrophone()` are refused wherever the choice is
-refused (a measurement, a running setup check, a reference capture), so "the same transition"
-holds for the refusal as well.
+_As written then; superseded in part by the note of 2026-10-11._
+
+**Note of 2026-10-07 (review of #167), no decision above changes.** "Produced in TEST
+CONTEXT" is recorded where a result is shown, not read off the result's label: the engine's
+INVALID result carried no `testContext`, so one made in the loopback survived leaving, with
+its noise-check snapshot, under the real input. It is now cleared and named, and the engine's
+INVALID result carries the label of the setup check's facts. A pending repeat link and the
+outcome in the assertive live region end with the transition, in both directions. Entering
+clears an INVALID result of the real input: with no transfer it has no title that would say
+whose it is. A level calibration applies only on the side it was stored on, whatever the
+input reports about itself; one stored with a real input reads UNCALIBRATED, with the reason,
+while the page is in TEST CONTEXT and is kept for that input. `useLoopback()` and
+`useMicrophone()` are refused wherever the choice is refused (a measurement, a running setup
+check, a reference capture), so "the same transition" holds for the refusal as well.
 
 ### 2026-10-11: #167 and #169 together (owner decision)
 
@@ -278,3 +292,12 @@ decides holds for the page's choice as for the hooks, because they are the same 
 Proven by `tests/unit/v4-test-context-choice.test.mjs`, `tests/unit/v4-seam-contract.test.mjs`
 and checks `test-context-from-the-page` and `calibrated-only-for-a-checked-input` in
 `tests/browser/app.cjs`.
+
+This supersedes, in the two #167 notes of 2026-10-07 above, "a level calibration stored in
+it" among what leaving clears, "A result measured with a real input ... stay[s] on either
+side", "a calibration stored on it do[es] not survive leaving" and "Entering clears an INVALID
+result of the real input" (entering now clears any result). Since W7f is closed by #169, its
+"W7f stays open" is history too. Entering says what it cleared in a notification, as leaving
+does, so that an unsaved measurement dropped on entering is not said to a screen reader only
+(review of the merge). Whether the page should ask before it drops an unsaved measurement is
+the owner's to decide; it does not ask.

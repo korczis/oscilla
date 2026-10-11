@@ -681,6 +681,11 @@ export function createMeasureUi(svc) {
       announce({ politeness: 'polite', text: 'TEST CONTEXT: digital loopback, no microphone and '
         + 'no acoustic path. Results test the software, not a physical setup.'
         + (cleared.length ? ` Cleared: ${cleared.join('; ')}.` : '') });
+      // Not only for a screen reader: an unsaved measurement may be what went (as leaving).
+      if (cleared.length) {
+        cmp.notify('info', 'Entered TEST CONTEXT', 'Cleared, so that nothing from before is '
+          + `read as the digital loopback's: ${cleared.join('; ')}.`);
+      }
       return true;
     }
     const opt = cmp.meas.input.options.find((o) => o.value === value);
