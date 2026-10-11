@@ -412,6 +412,7 @@ test('V353: only the experiment and Studio adapters import the experiment store'
     'src/js/ui/studio/workspace.js']);
   const main = readFileSync(join(ROOT, 'src/js/main.js'), 'utf8');
   assert.doesNotMatch(main, /indexedDB/);
-  // The Experiments store opens lazily: only on its workspace or a save, never at start-up.
-  assert.match(main, /ws === 'experiments' && !cmp\.exps\.loaded/);
+  // The Experiments store opens lazily: only on its workspace or a save, never at start-up. Every
+  // entry to the workspace reads the list again (ADR 0046: a view shows the stored record).
+  assert.match(main, /if \(ws === 'experiments'\) \{\s+cmp\.experimentsRefresh\(\)/);
 });

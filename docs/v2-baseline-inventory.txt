@@ -37,21 +37,23 @@ Proposed deviations from spec §9 (cohesion; no tiny modules):
 ------------------------------------------------------------------------------------------------
 A. RUNTIME DEPENDENCIES (CDN in V1 -> npm in V2, bundled into dist/index.html)
 ------------------------------------------------------------------------------------------------
+In "latest seen", pinned (line) / @latest: both are versions of the package named first. The
+bare @ keeps a third-party version from reading as an OSCILLA version to `npm run version:check`.
 dep            V1 load (index.html)                                   npm package (latest seen)          licence   V2 decision
-Tailwind CSS   L35 <script src=cdn.tailwindcss.com/3.4.17> (Play CDN,  tailwindcss@3.4.19 (3.x) / 4.3.3      MIT       REMOVE as runtime. Spec part 2 replaces Tailwind
+Tailwind CSS   L35 <script src=cdn.tailwindcss.com/3.4.17> (Play CDN,  tailwindcss@3.4.19 (3.x) / @4.3.3     MIT       REMOVE as runtime. Spec part 2 replaces Tailwind
                runtime JIT, no SRI) + L36-61 tailwind.config                                                         markup with --osc-* token CSS [S]. If [S] keeps
                                                                                                                      Tailwind, it must be a build-time compile.
-Flowbite CSS   L62 jsdelivr flowbite@2.5.2/dist/flowbite.min.css (SRI) flowbite@2.5.2 (2.x) / 4.0.2           MIT       REMOVE unless [S] keeps Flowbite components.
+Flowbite CSS   L62 jsdelivr flowbite@2.5.2/dist/flowbite.min.css (SRI) flowbite@2.5.2 (2.x) / @4.0.2          MIT       REMOVE unless [S] keeps Flowbite components.
 Flowbite JS    L111 jsdelivr flowbite@2.5.2/dist/flowbite.min.js       flowbite@2.5.2 (bundles               MIT       OPTIONAL (spec §14: a11y infra only). Used in V1:
                (defer, SRI)                                            @popperjs/core 2.11.8, MIT)                     Modal x4, Dropdown (theme + overlays), Accordion
                                                                                                                      (advanced), Tabs (presets), Tooltip (explore).
-p5.js          L109 cdnjs p5.js/1.11.3/p5.min.js (defer, SRI)          p5@1.11.13 (1.x) / 2.3.4               LGPL-2.1  KEEP 1.11.x. 2.x is a breaking API. Inlining LGPL into
+p5.js          L109 cdnjs p5.js/1.11.3/p5.min.js (defer, SRI)          p5@1.11.13 (1.x) / @2.3.4              LGPL-2.1  KEEP 1.11.x. 2.x is a breaking API. Inlining LGPL into
                                                                                                                      a single file is allowed, but the dist must carry
                                                                                                                      the LGPL-2.1 text + p5 version + source URL, and
                                                                                                                      users must be able to replace it. Needs a licence
                                                                                                                      review. p5 1.x registers device-sensor listeners,
                                                                                                                      which Firefox reports as deprecated.
-Alpine.js      L113 jsdelivr alpinejs@3.14.9/dist/cdn.min.js (defer,   alpinejs@3.14.9 (pin) / 3.17.4         MIT       KEEP. The npm ESM build does NOT auto-start and does
+Alpine.js      L113 jsdelivr alpinejs@3.14.9/dist/cdn.min.js (defer,   alpinejs@3.14.9 (pin) / @3.17.4        MIT       KEEP. The npm ESM build does NOT auto-start and does
                SRI)                                                                                                  NOT fire 'alpine:init' by itself: main.js must set
                                                                                                                      window.Alpine, call Alpine.data/directive, then
                                                                                                                      Alpine.start().

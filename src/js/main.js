@@ -53,17 +53,19 @@ import { serializeSequence } from './sequencer/model.js';
 
 import { registerOscillaUi, workspaceTitle } from './ui/app.js';
 import { keyGuard, openModal, closeModal, watchDialogs, focusSafely } from './ui/dialogs.js';
+import { instrumentTakesSpace, isSpace } from './ui/shortcuts.js';
 import { createWorkbench } from './ui/workbench.js';
 import { createNavigation, v1ModeFor } from './ui/navigation.js';
 import { createUnsavedGuard } from './ui/unsaved.js';
 import { createMeasureUi } from './ui/measure.js';
 import { createExperimentsUi } from './ui/experiments.js';
+import { createFindingsUi } from './ui/findings.js';
+import { createConnectionsUi } from './ui/connections.js';
 import { createStudioUi } from './ui/studio/workspace.js';
 import { createScopeView, createHarmonicBarsView } from './ui/p5-views.js';
 import { buildConfigExport, parseConfigImport, CONFIG_FILE_VERSION } from './ui/config-file.js';
 import { renderPlanToWav, renderSequenceToWav, screenshotCanvases } from './ui/exporters.js';
 import { BUILD } from './core/build-info.js';
-import { studioTimelineSeam } from './ui/studio/timeline-test-seam.js';
 
 import { mount as mountAnalysis } from './labs/analysis.js';
 import { mount as mountFilter } from './labs/filter-lab.js';
@@ -475,6 +477,7 @@ const unsavedGuard = createUnsavedGuard({ sources: [
   () => (app ? app.studioWhatWouldBeLost() : []),
   () => (app ? app.measureWhatWouldBeLost() : []),
   () => (app ? app.experimentsWhatWouldBeLost() : []),
+  () => (app ? app.findingsWhatWouldBeLost() : []),
 ] });
 
 function compose(...parts) {
@@ -505,11 +508,13 @@ function integrationInit() {
   cmp.history = cmp.loadHistory();
   cmp.safetyCollapsed = sessionStore.get(STORAGE_KEYS.safetySeen) === '1';
   // ONE hash dispatcher (ui/navigation.js, ADR 0045): each domain applies its own keys, in this
-  // order, and the dispatcher alone chooses the workspace (Studio keys > m > mr > Playground).
-  // It applies the hash the page opened at, new links, and Back / Forward between workspaces.
+  // order, and the dispatcher alone chooses the workspace (Studio keys > m > a stored record >
+  // mr > Playground). It applies the hash the page opened at, new links, and Back / Forward
+  // between workspaces; on Back / Forward only the stored record is opened again (ADR 0048).
   cmp.navRegister('instrument', () => cmp.restoreFromHash());
   cmp.navRegister('measure', (hash) => cmp.measureApplyRecipeHash(hash));
   cmp.navRegister('studio', (hash) => cmp.studioApplyLinkHash(hash));
+  cmp.navRegister('records', (hash) => cmp.recordsApplyHash(hash));
   cmp.navStart();
   if (cmp.source !== 'single' || cmp.pattern !== 'tone') cmp.sourceKind = 'pattern';
   engine.on((type, d) => {
@@ -534,6 +539,10 @@ function integrationInit() {
       stopSequencer();
       cmp.measureAbort('escape'); // spec §111: Escape aborts a measurement (after the sequencer)
     }
+    // ADR 0050: Space is Hold to Play only in the workspaces that play, load or analyse the
+    // instrument's signal; in Studio it is the transport's (handled above), elsewhere it
+    // starts nothing.
+    if (isSpace(e) && !instrumentTakesSpace(cmp.workspace)) return;
     cmp.onKeyDown(e);
   });
   window.addEventListener('keyup', (e) => cmp.onKeyUp(e));
@@ -587,9 +596,12 @@ function integrationInit() {
   });
   cmp.$watch('tabs.analysis', (tab) => setAnalysisTab(tab));
   const loadExperiments = (ws) => {
-    if (ws === 'experiments' && !cmp.exps.loaded) {
-      cmp.experimentsRefresh().catch((err) => cmp.notify('error', 'Experiments unavailable',
-        err.message || String(err)));
+    // Every entry reads the list again: another tab may have changed what is stored, and a
+    // detail or comparison left open must show the stored record (ui/experiments.js syncViews).
+    // The address then names the detail again (ADR 0048).
+    if (ws === 'experiments') {
+      cmp.experimentsRefresh().then(() => cmp.recordsNameDetail(), (err) => cmp.notify('error',
+        'Experiments unavailable', err.message || String(err)));
     }
   };
   cmp.$watch('workspace', (ws) => {
@@ -659,6 +671,9 @@ function integrationInit() {
     setAnalysisTab(cmp.tabs.analysis);
     if (cmp.debug) setInterval(() => cmp.refreshDebug(), 250);
     cmp.initialized = true;
+    // "Interactive": the User Timing mark the startup budget reads (docs/v4/performance.md),
+    // ms since navigation start, set once, together with the attribute the suites wait for.
+    try { performance.mark('oscilla:ready'); } catch (e) { /* no User Timing here */ }
     document.documentElement.dataset.ready = 'true';
   });
 }
@@ -721,10 +736,12 @@ function createOscillaComponent(ui) {
     loopback: new URLSearchParams(window.location.search).get('measure') === 'loopback',
   });
   const experiments = createExperimentsUi();
+  const findings = createFindingsUi();
+  const connections = createConnectionsUi();
   const studio = createStudioUi({ engine, stopPlayback });
   const navigation = createNavigation();
-  const cmp = compose(instrument, ui, workbench, measure, experiments, studio, navigation,
-    provenancePart(), TEMPLATE_HELPERS);
+  const cmp = compose(instrument, ui, workbench, measure, experiments, findings, connections,
+    studio, navigation, provenancePart(), TEMPLATE_HELPERS);
   cmp.dismissAlert = focusSafeDismiss(cmp.dismissAlert);
   const baseRefreshDebug = cmp.refreshDebug;
   Object.defineProperty(cmp, 'refreshDebug', {
@@ -742,6 +759,7 @@ function createOscillaComponent(ui) {
       shellInit.call(this);
       this.measureInit();
       this.experimentsInit();
+      this.findingsInit();
       this.studioInit(); // before integrationInit: Studio's key listener runs first (§125)
       integrationInit.call(this);
     },
@@ -807,11 +825,12 @@ window.addEventListener('unhandledrejection', (e) => {
 // ------------------------------------------------------------------------------ test seam
 // window.OSCILLA ships in the one page that is tested and deployed (ADR 0052). It is not a
 // security boundary. Each member OBSERVES, DRIVES an action a user already has (through the
-// user's validation), or INJECTS only as TEST CONTEXT; studioTimeline is none of the three and is
-// due to leave the page (ledger W7a). The stable reads are version, build,
-// measure.state, measure.counts(), studio.counts(), studio.model and studio.trace.steps(); every
-// other member may change without notice, and app, engine and host are live internals, not a
-// contract. The key list is pinned by tests/browser/app.cjs `seam-surface-pinned`.
+// user's validation), or INJECTS only as TEST CONTEXT. No member builds Studio state of its own:
+// studio is the workspace's one store, runtime and transport (tests/unit/v4-one-studio-store).
+// The stable reads are version, build, measure.state, measure.counts(), studio.counts(),
+// studio.model and studio.trace.steps(); every other member may change without notice, and app,
+// engine and host are live internals, not a contract. The key list is pinned by
+// tests/browser/app.cjs `seam-surface-pinned`.
 window.OSCILLA = {
   engine,
   viz: bridge,
@@ -828,7 +847,6 @@ window.OSCILLA = {
     get armed() { return unsavedGuard.armed; },
     whatWouldBeLost: () => unsavedGuard.update(),
   },
-  studioTimeline: studioTimelineSeam(engine),
   buildPlan,
   planFreqAt,
   parseFrequency,

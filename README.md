@@ -42,11 +42,20 @@ changed.
   **Copy config URL** keeps the recipe and Studio keys that are in the address. Each nav item
   links to its workspace's address, so opening it in a new tab opens that workspace. A link
   that is refused does not stay in the address or in history.
+- **The address names a stored record.** In Experiments, the experiment the detail shows is
+  named in the address (`#m=experiments&exp=<id>`, no new history entry) on every path: when it
+  opens, when the detail closes, and on return to Experiments. A definition is `def=<id>` and a
+  finding `finding=<id>`; such an address stays until an experiment is opened. Following a
+  connected record is a new entry, so Back returns to the record you came from and moves focus
+  to its heading. A link names a record stored in this browser; for one that is not stored the
+  page says so and the address names what is shown again
+  ([ADR 0048](.ai/repo/adrs/0048-connected-records-over-stored-fields.md)).
 - **Unsaved work.** While something would be lost, a reload, a closed tab or leaving the page
   makes the browser ask first: unsaved Studio changes, a completed measurement that is not
   saved, a saved experiment's name or notes not yet stored with "Update name and notes", a
-  rename being typed, or a level calibration (it is kept in page memory only). Where the browser allows no
-  IndexedDB, saved experiments and Studio projects live in page memory too and count as well.
+  rename being typed, a finding being written, or a level calibration (it is kept in page memory
+  only). Where the browser allows no IndexedDB, saved experiments, findings and Studio projects
+  live in page memory too and count as well.
   Studio shows "unsaved changes" and Measure "unsaved result" or "unsaved name or notes". With
   nothing to lose the page asks nothing. Sequencer patterns are not guarded yet.
 
@@ -221,9 +230,65 @@ filter class is claimed. An experiment saved from Measure does not store band le
   with its reason, and there is no score. The result hash is recomputed and its reason says what
   it covers; the algorithm ids, environment notes and lineage are covered by no result hash.
   The raw capture is never retained: OSCILLA stores the
-  derived result. Anything the record does not store reads "not recorded"
+  derived result (see [Privacy](#privacy)). Anything the record does not store reads "not recorded"
   ([ADR 0044](.ai/repo/adrs/0044-evidence-on-a-run-lineage-and-reproducibility-checklist.md),
   proposed).
+- **Findings.** A finding is your interpretation, linked to the evidence it rests on, and kept
+  apart from what was measured: a measurement is what was observed or computed, an observation
+  is what you recorded, and a finding interprets evidence. Its status is one of observation,
+  hypothesis, supported, contradicted or inconclusive (a category, never a confidence number),
+  and a supported or contradicted finding cites at least one piece of evidence: an experiment, a
+  comparison of two experiments, or the stored value of an experiment at a frequency (the point the
+  evidence lineage traces). Record one from an experiment's detail ("Record a finding about this
+  experiment") or from a comparison; a comparison says what changed between the experiments, not
+  why. Each experiment's detail lists the findings that cite it. A finding never changes an
+  experiment. Deleting a cited experiment keeps the reference, which then reads "missing", and the
+  delete dialog says how many findings cite the experiment. A finding records each cited
+  experiment's id with its result hash. Every claim about a cited experiment is checked, at the
+  moment it is made, against the record stored now (read fresh and verified):
+  - a reference reads present only when that record carries the cited hash (checked on every
+    refresh of the list);
+  - Open checks again first and opens nothing when that no longer holds;
+  - a finding recorded from an experiment's detail, a comparison or the list cites the record on
+    screen, and is refused when another tab has replaced it since ("reopen it");
+  - an experiment's backlinks show the state of each citing reference, and a finding citing an
+    earlier record under the same id never reads as citing the one shown.
+
+  A different record under the id is named as different, a hash missing on either side as an
+  identity that cannot be verified, and a stored record that cannot be read as unreadable. Only an
+  experiment with a result hash can be linked. A value reference must name exactly a frequency of
+  the experiment's stored response grid; only then does it read "(a stored grid point)", and every
+  stored point prints as its exact frequency. A status is shown as your judgement. Closing the
+  finding dialog without saving keeps a changed draft (offered again, guarded against a reload)
+  until you save or discard it. An edit is refused when another tab changed or deleted the finding
+  since you opened it; the dialog then offers to load the stored version (or, if it was deleted, to
+  save your text as a new finding) and keeps what you typed beside it to copy (the statement,
+  status, references and notes). Findings export as `.oscilla-findings.json` with
+  that identity; an import is validated whole before anything is stored, a newer schema is
+  refused, and a cited experiment that is not in this browser reads "not stored here"
+  ([ADR 0046](.ai/repo/adrs/0046-findings-interpretation-linked-to-evidence.md), proposed).
+- **Connected records.** An experiment's detail, each definition and each finding (and each
+  saved project in Studio's Projects and patches dialog) answer two questions: what is this
+  connected to, and what depends on it. Every entry comes from one field a record stores, and
+  names that field: an experiment's definition version, the experiment it repeats or
+  duplicates, the Studio project whose saved graph has the hash the experiment stores (or holds
+  its measured path), the frequency profile it names, the build that made it; downstream, the
+  findings citing it and the experiments repeating or duplicating it, the experiments a
+  definition's versions were used by, the experiments that store a project's graph hash.
+  Nothing is inferred from names, recipes or times. An entry reads "stored here" only for a
+  record in the store whose identity verifies: it is stored, it was read just now (its result
+  hash recomputed, at the same verification point the findings use) and it is the record the
+  field names. Otherwise it says which: "missing" (not stored here, never hidden), "does not
+  match" (another record under that id), "not verifiable" (the field records no identity to
+  check, as a repeat names its original by id only) or "unreadable" (stored, but it fails
+  validation). A build and a frequency profile are never stored, so they have their own words:
+  "running here" or "not running here" for the build, "loaded here" or "not loaded" for the
+  profile. The entries under a detail are those of the record the detail shows: when another
+  record is stored under its id, the detail is brought to the stored record first. Each target
+  is a link; an experiment shown as stored here is read again before its link is followed,
+  also from Studio's dialog, the record opened is the one that was read, and one that changed
+  since the list was read is not opened
+  ([ADR 0048](.ai/repo/adrs/0048-connected-records-over-stored-fields.md), proposed).
 - **A completed experiment cannot be changed.** Only the name, the annotation notes and the baseline
   mark of a saved
   experiment can be edited, and no hash covers them. The store refuses any other change to a
@@ -240,6 +305,8 @@ filter class is claimed. An experiment saved from Measure does not store band le
   experiment from the same definition version), exports and deletes experiments. It also
   shows an experiment in Measure. Its Definitions panel lists each definition with its version
   count and last run, creates one from the Measure setup, renames and edits it, and runs it.
+  Its Findings panel lists each finding with its status and its references, and creates,
+  edits, deletes, exports and imports them.
   Export gives an `.oscilla.json` file or CSV (transfer, impulse response, aggregate) with a
   metadata header and explicit unit columns.
 - **Import.** An imported file is untrusted. Oversized files, wrong types, non-finite numbers,
@@ -517,6 +584,20 @@ The browser suites need Playwright's browsers (`npx playwright install chromium 
 webkit`). Work lands through small pull requests. CI runs the gate on every pull request,
 branch protection requires the `gate` check, and a merge to `main` redeploys Pages.
 
+Two of the gate's jobs check the pull request rather than the product. `fail-first`: when the
+title starts with `feat` or `fix`, a unit test the pull request adds or changes must fail on
+the merge base and pass on the head, or the body carries `fail-first: n/a <reason>`
+(`node scripts/fail-first.mjs --title "<title>"`). `review-verdict`: a change under `src/js/audio`,
+`src/js/analysis`, `src/js/experiments`, `src/js/studio`, `src/js/core/storage*`,
+`scripts/release-*` or `.github/`, or to the programs and tests of these rules, needs a
+reviewer's verdict in `.ai/repo/reviews/<pr>.yaml` for the guarded content the pull request
+changes (`node scripts/review-verdict.mjs --pr <number>`; `--content` prints the digest to
+record, which a merge of `main` that leaves those files alone does not change). CI judges a
+pull request with the base branch's copy of both programs, and `ci.yml` runs on pull requests
+only. A pull request is bound from the first run of a head that contains these jobs. The rules are
+`project.fail-first`, `project.review-verdict` and `project.ci-bounded` under
+[`.ai/repo/rules/project/`](.ai/repo/rules/project/).
+
 ## Browser support
 
 The release gate runs the built `dist/index.html` in Chromium, Firefox and WebKit (the engine
@@ -564,18 +645,40 @@ automated test proves how a physical speaker, room or microphone behaves.
   2. `npm run release:prepare` starts from a clean tree. It bumps `package.json` once (or
      confirms an untagged version), rebuilds, and runs `version:check`, the release gate and
      `majordomus doctor`. If anything fails, it restores the files. It never tags. Land the
-     result on `main` through a pull request.
+     result on `main` through a pull request. It refuses to start while the newest release has
+     no record (step 4), and it refuses the first stable release of a new major (`X.0.0`, and
+     equally `X.0.1` or `X.1.0` typed into `package.json`) that no published `X.0.0-rc.N`
+     preceded (`npm run release:prepare -- --prerelease` cuts the candidate;
+     [ADR 0047](.ai/repo/adrs/0047-a-major-release-is-preceded-by-a-release-candidate-v3-0-0-wa.md)).
+     The gate receipt it writes binds every tracked file except the release records, so any
+     other pull request merged before the publish means running it again
+     (rule `project.release-receipt-binds-gate`).
   3. `npm run release:publish` is a dry run by default. With `-- --yes`, on `main`, it creates
      the annotated tag `vX.Y.Z`, pushes it, waits for the Pages deployment, verifies it, and
      creates the GitHub Release with notes generated from the commits since the previous tag,
-     with the committed `dist/index.html` attached as `oscilla-vX.Y.Z.html`.
+     with the committed `dist/index.html` attached as `oscilla-vX.Y.Z.html`. A Pages run of
+     which no job has started for 15 minutes blocks it, reported with its run id, its commit
+     and whether that commit precedes `HEAD`, and so does a run list it cannot read; a run
+     GitHub still calls `queued` while its deploy job has run is slow, not stuck, and is
+     waited for. It never watches a run of which no job has started. It prints the `majordomus finish` line that verifies the published commit.
   4. `npm run release:record -- --version X.Y.Z` writes the release record
      `.ai/repo/releases/vX.Y.Z.yaml` (Majordomus `release/v1`): the tag and its commit, the
      channel, when the GitHub Release was published, its notes, and the attached file's
      SHA-256 and size read off the downloaded bytes, which must equal the committed
      `dist/index.html` at the tag (the artifact digest `verify-deploy` checks). A record is
      evidence: `-- --check` refuses one that differs from what was published, naming the
-     field. Land it on `main` by a small pull request of its own (`release/record-vX.Y.Z`).
+     field. Land it on `main` by a small pull request of its own
+     (`chore/release-record-vX.Y.Z`). The release is finished when the record is on `main`:
+     `npm test` fails for a tag in the checkout's history that is more than 6 hours old and
+     has no record in the checkout (the copy on `origin/main` counts only for a branch whose
+     history never contained the record, so a pull request that deletes one fails), and the
+     `records` job of `.github/workflows/cadence.yml` runs the same check on `main`
+     (`node scripts/release-record.mjs --complete`; rule `project.release-flow-complete`,
+     which states the whole flow in order).
+- **Cadence.** A commit that needs a release is released within 24 hours of landing on `main`
+  (rule `project.deploy-often`). `node scripts/release-cadence.mjs` prints the lag; the
+  `Release cadence` workflow (`.github/workflows/cadence.yml`) runs it every hour, fails while
+  a release is overdue and keeps one "release overdue" issue open until it ships.
 - **Tags** are `vX.Y.Z`. V1, the original hand-written single file, is `v1.0.0` (deployed) and
   `v1.0.1` (a maintenance tag that was never deployed).
 - **About timeline.** A minor or major release adds its line to the About view's evolution
@@ -592,14 +695,14 @@ automated test proves how a physical speaker, room or microphone behaves.
   browser tests and the post-deployment smoke use, so the bytes that are tested are the bytes
   that are served. The stable reads are `version`, `build`, `measure.state`, `measure.counts()`,
   `studio.counts()`, `studio.model` and `studio.trace.steps()`; everything else may change
-  without notice. Every member except `studioTimeline` (a second Studio context that one test
-  suite builds; it is due to leave the page) is one of three kinds: it observes; it drives an
+  without notice. Every member is one of three kinds: it observes; it drives an
   action you already have in the page, through the same validation (`measure.useLoopback()` is
   `?measure=loopback`, `measure.setValues()` is a recipe link); or it injects test data.
   `measure.showResult()` refuses a result that is not marked TEST CONTEXT, so no injected result
   is shown or saved as a measurement, and a direct `measure.setInputNow()` is refused outside
-  TEST CONTEXT. One gap is open: an input named while in TEST CONTEXT, or carried by an injected
-  result, stays known afterwards, and a typed level reading can then bind to it. It is
+  TEST CONTEXT. What is injected stays in TEST CONTEXT: an input named there, or carried by a
+  TEST CONTEXT result, is not a checked input once the page is on the microphone, and a level
+  calibration made there is labelled TEST CONTEXT and does not apply outside it. It is
   not a security boundary: any script running in the page can reach the same code without it.
   `?mock=1` only outlines the chart and view areas for layout comparison and never draws data.
 - **Proof of deployment.** After every Pages deployment, `scripts/verify-deploy.mjs` fetches the
@@ -660,15 +763,27 @@ and is never played back, recorded or uploaded. Exports are downloaded to your m
 configuration URL contains only your settings, and it leaves your machine only if you share
 it.
 
-In Measure, the microphone opens only when you run the setup check or a measurement, and every
-track is stopped when the measurement ends or is aborted. The captured audio is analysed in
-the page. The raw recording is released after analysis and is never stored, exported or
-uploaded. A saved experiment does contain the input device's label and the browser's device ID,
-when the browser reports them, along with your notes and the results. Both go into an exported
-file, so check it before you share it. Calibration profiles and level calibrations are kept in
-page memory only.
+In Measure, the microphone opens only for the setup check, a measurement, a level-calibration
+reference capture or the live RTA, and every track is stopped when they end or are aborted.
+The live RTA keeps only its latest analysis window, overwritten frame by frame. The setup
+check reads the input level from a 0.3 s window, and the reference capture (3 s) keeps only its
+level reading and the facts of the input; both recordings are dropped as soon as the level is
+read. A measurement's recording (the background-noise
+check and every run) is analysed in the page and lives only as long as that analysis: when the
+measurement completes, is found invalid, is aborted or fails, nothing in the page references it any more. It is
+never stored, exported or uploaded, and OSCILLA offers no option to keep it. A saved experiment
+keeps derived results: the frequency response (with the aggregate of repeated runs), the
+impulse response, the quality assessment and the facts of the run. The impulse response is
+computed from the recording of one run and is not anonymised: other sound the microphone
+picked up after the sweep had passed a frequency, in particular in the post-roll after the
+sweep (1.5 s by default), can be recovered from it. A saved experiment also contains the input
+device's label and a one-way hash of the browser's device ID, when the browser reports them,
+along with your notes. All of it goes into an exported file, so check it before you share it.
+Calibration profiles and level calibrations are kept in page memory only. The policy, its
+reasons and the tests that hold the code to it are
+[ADR 0049](.ai/repo/adrs/0049-raw-capture-retention.md) (proposed).
 
-Browser storage holds only these keys and one database, `oscilla-experiments` (version 3):
+Browser storage holds only these keys and one database, `oscilla-experiments` (version 4):
 
 | Storage | Key | Contents |
 | --- | --- | --- |
@@ -678,12 +793,13 @@ Browser storage holds only these keys and one database, `oscilla-experiments` (v
 | sessionStorage | `oscilla.history` | Recently played configurations (this tab only) |
 | sessionStorage | `oscilla.safetyNoticeCollapsed` | Whether the safety notice was collapsed |
 | IndexedDB | `oscilla-experiments`, object store `experiments` | Your saved experiments, in the exported file form |
-| IndexedDB | `oscilla-experiments`, object store `summaries` | One small row per experiment for the list (name, date, schema and product version, quality status, size) |
+| IndexedDB | `oscilla-experiments`, object store `summaries` | One small row per experiment for the list (name, date, schema and product version, quality status, result hash, size, its definition version, and the repeat, duplicate and Studio hashes it stores) |
 | IndexedDB | `oscilla-experiments`, object store `studio` | Your saved Studio projects and patches (name, save time, studioHash and the document) |
 | IndexedDB | `oscilla-experiments`, object store `studioSummaries` | One small row per Studio project or patch for the library list |
 | IndexedDB | `oscilla-experiments`, object store `definitions` | Your experiment definitions, each with its versions (recipe, declared conditions, acceptance criterion, name and notes) |
+| IndexedDB | `oscilla-experiments`, object store `findings` | Your findings (statement, status, notes, the evidence each cites and the id and result hash of each cited experiment) |
 
-Experiments are deleted only when you delete them. Permission to play continuously is never
+Experiments and findings are deleted only when you delete them. Permission to play continuously is never
 stored.
 
 ## Licences

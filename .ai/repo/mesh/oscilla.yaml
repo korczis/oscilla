@@ -1,0 +1,31 @@
+# The mesh declaration of this repository (majordomus mesh-declaration/v1). Enabled so the
+# runtimes OSCILLA is worked on with — every worktree's shared server on the owner's
+# machines — find each other, link, and share one journal of sessions, claims, handovers
+# and reviews, instead of each session seeing only its own checkout's board.
+#
+# Least privilege, the same posture as the majordomus repository's own declaration:
+# multicast on the local segment only (TTL 1), no broadcast, no rendezvous hub, cooperation
+# at its defaults, and `deny_unknown` — a key not listed below is observed and trusted for
+# nothing. The worktrees of one machine share that machine's key. `trust.allow` holds
+# Ed25519 public keys, never a secret: `majordomus mesh identity` prints a machine's.
+schema: mesh/v1
+kind: mesh-declaration
+id: oscilla
+enabled: true
+multicast:
+  enabled: true
+  group: 239.255.77.77
+  port: 7741
+  ttl: 1
+  interval_seconds: 15
+broadcast:
+  mode: disabled
+trust:
+  policy: deny_unknown
+  allow:
+    # 641bdb94 — the owner's MacBook Pro (Darwin arm64)
+    - 946e8aa593fe16c58d5eb43493338810896cd10bc6bdd44ffa8e9bfebd37ca1f
+    # 5d81b5c9 — the owner's second MacBook Pro (Darwin arm64)
+    - 3f7b357805aa15ecdb3c1ace7e7ac02de263e3d0def8aafda9ad280d3af7c813
+    # aaba18ea — the owner's iMac (Darwin x86_64)
+    - aaadec268d02d8d43bfa3c3a7a5aacf8f3d80308fcbc513913f5d74d079621f7

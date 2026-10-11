@@ -55,6 +55,15 @@
 // user enters; 1 kHz or the grid centre by default) and the reproducibility checklist. Compare
 // adds one line naming the checklist items whose state differs between the compared runs.
 //
+// Findings (ADR 0046, ui/findings.js): the store is shared (experimentsStore); every refresh of
+// the runs' list refreshes the findings, so a deleted run reads as missing where it is cited; the
+// delete dialog says how many findings cite the run (exps.deleteCiting). A finding never changes
+// a run, and deleting a run never changes a finding.
+//
+// Connected records (ADR 0048, ui/connections.js): the detail shows what the run is connected to
+// and what depends on it, read after the detail is shown; opening a run names it in the address
+// (ui/navigation.js navNameRecord, no new history entry), and deleting the open run names none.
+//
 // Independence (§227, V353): the store opens lazily, on the first Experiments view or save, and
 // reading the IndexedDB factory never throws into the app (pageIndexedDb): a store that cannot
 // open falls back to memory and says so, and the Playground, the instrument and Studio never
@@ -92,7 +101,7 @@ import {
 import { timestampText, definitionText } from '../measurement/views/experiment-summary.js';
 import {
   runEvidence, evidenceLineage, resultPoint, reproducibilityChecklist, evidenceDifferences,
-  evidenceDifferencesText, identityDifferences,
+  evidenceDifferencesText, identityDifferences, defaultEvidenceHz, storedResponseFrequencies,
 } from '../experiments/evidence.js';
 
 export const STORE_FALLBACK_TEXT = 'Experiments are kept in memory for this page view only: this '
@@ -134,7 +143,7 @@ function describeRecipe(r) {
   }
 }
 
-function randomBytes16() {
+export function randomBytes16() {
   const b = new Uint8Array(16);
   if (typeof crypto !== 'undefined' && typeof crypto.getRandomValues === 'function') {
     crypto.getRandomValues(b);
@@ -236,6 +245,7 @@ export function createExperimentsUi() {
     store: null,
     opening: null,
     cache: new Map(),   // id → decoded experiment: detail, compare and the last few opened
+    rows: new Map(),    // id → its list row when last read: a changed row evicts the cache
     detail: null,       // the experiment shown in the detail panel
     defs: new Map(),    // stored definition id → definition (names are metadata; runs lack them)
     unreadable: new Set(), // ids of stored definitions that could not be read
@@ -291,16 +301,80 @@ export function createExperimentsUi() {
       .map((x) => x.experimentId));
   }
 
+  /**
+   * The stored experiment `id`. THE one rule for the decoded copies (ADR 0046, #151 review): a
+   * cached record is used only while the stored row still names its result hash, read now; a
+   * row that is gone, names another hash or names none means the cached copy is dropped and the
+   * record is read from the store. So no view shows a record that is no longer the stored one.
+   */
   async function get(cmp, id) {
-    if (ctx.cache.has(id)) {
-      const hit = ctx.cache.get(id);
-      remember(id, hit);
-      return hit;
-    }
     const s = await store(cmp);
+    const hit = ctx.cache.get(id);
+    if (hit) {
+      const row = await s.summary(id);
+      if (row && typeof row.resultHash === 'string' && row.resultHash === hashOf(hit)) {
+        remember(id, hit);
+        return hit;
+      }
+      ctx.cache.delete(id);
+    }
     const e = await s.get(id);
     if (e) remember(id, e);
     return e;
+  }
+
+  const hashOf = (e) => (e && e.provenance && typeof e.provenance.resultHash === 'string'
+    ? e.provenance.resultHash : null);
+
+  /**
+   * Views carry the record they render (review 3 of #149): after the list is read, a detail or
+   * comparison whose run is gone is closed, and one whose run's row names another result hash
+   * (replaced here or in another tab) is read again from the store. `list` rows carry resultHash.
+   */
+  async function syncViews(cmp, s, list) {
+    const rows = new Map(list.map((x) => [x.experimentId, x]));
+    const stale = (e) => {
+      const r = rows.get(e.experimentId);
+      if (!r) return 'gone';
+      return Object.prototype.hasOwnProperty.call(r, 'resultHash') && r.resultHash !== hashOf(e)
+        ? 'changed' : null;
+    };
+    const fresh = async (id) => {
+      try {
+        const e = await s.get(id);
+        if (e) remember(id, e);
+        return e || null;
+      } catch (err) {
+        return null; // unreadable: the view closes rather than show what is not stored
+      }
+    };
+    if (ctx.detail) {
+      const st = stale(ctx.detail);
+      if (st) {
+        const e = st === 'changed' ? await fresh(ctx.detail.experimentId) : null;
+        setDetail(cmp, e);
+        cmp.notify('info', e ? 'Experiment changed elsewhere' : 'Experiment no longer shown', e
+          ? 'The experiment shown was replaced (here or in another tab); its detail now shows the '
+            + 'stored record.' : 'The experiment shown is no longer stored or cannot be read; its '
+            + 'detail was closed.');
+      }
+    }
+    if (ctx.compare.length && ctx.compare.some((e) => stale(e))) {
+      const next = [];
+      for (const e of ctx.compare) {
+        const st = stale(e);
+        if (!st) next.push(e);
+        else if (st === 'changed') {
+          const f = await fresh(e.experimentId);
+          if (f) next.push(f);
+        }
+      }
+      setCompare(cmp, next);
+      cmp.notify('info', 'Comparison changed elsewhere', next.length >= 2 ? 'A compared '
+        + 'experiment was replaced or deleted (here or in another tab); the comparison now shows '
+        + 'the stored records.' : 'A compared experiment is no longer stored; the comparison '
+        + 'was closed.');
+    }
   }
 
   function setDetail(cmp, e) {
@@ -308,6 +382,9 @@ export function createExperimentsUi() {
     if (!e) {
       cmp.exps.detail = null;
       if (ctx.charts.detail) ctx.charts.detail.setView(null);
+      if (typeof cmp.connectionsClearRun === 'function') cmp.connectionsClearRun();
+      // The address names what the detail shows: nothing now (ADR 0048).
+      if (typeof cmp.recordsNameDetail === 'function') cmp.recordsNameDetail();
       return;
     }
     const findings = calibrationClaimFindings(e);
@@ -327,6 +404,8 @@ export function createExperimentsUi() {
       // Ledger D4: a stimulus this build cannot measure; the record is shown, never repeated.
       stimulusFinding: stimulus.length ? `${stimulus[0].path}: ${stimulus[0].text}.` : null,
       testContext: isTestContext(e),
+      // The identity of the record shown, for whatever depends on this view (ADR 0046).
+      resultHash: hashOf(e),
       baseline: isBaseline(e),
       notes: e.environment && e.environment.notes ? e.environment.notes : null,
       response: view ? { summary: view.summary, badges: view.badges.slice(),
@@ -338,6 +417,12 @@ export function createExperimentsUi() {
       evidence: { ...plain(runEvidence(e, { ...m, hz: was })), hzError: null },
     };
     if (ctx.charts.detail) ctx.charts.detail.setView(view);
+    // Connected records (ADR 0048): read after the detail shows; never blocks it.
+    if (typeof cmp.connectionsOfRun === 'function') {
+      cmp.connectionsOfRun(e.experimentId).catch((err) => {
+        console.error('OSCILLA: connected records could not be read:', err);
+      });
+    }
   }
 
   function setCompare(cmp, list) {
@@ -405,6 +490,7 @@ export function createExperimentsUi() {
       memoryHeld: null,     // { experiments, definitions } held by the memory fallback store
       deleteId: null,
       deleteName: '',
+      deleteCiting: '',     // "N findings cite this run…" (ADR 0046), or ''
       importErrors: [],
       readout: null,
       defs: [],
@@ -419,6 +505,19 @@ export function createExperimentsUi() {
       const dlg = typeof document !== 'undefined'
         ? document.getElementById('osc-dlg-exp-rename') : null;
       if (dlg) dlg.addEventListener('close', () => { this.exps.renameOpen = false; });
+      // Another tab may have changed what is stored: when this tab is shown again in
+      // Experiments, the list is read again, which re-reads or closes a changed detail or
+      // comparison (syncViews) and checks every finding. main.js does the same on every entry
+      // to the workspace.
+      if (typeof document !== 'undefined') {
+        let pending = null;
+        document.addEventListener('visibilitychange', () => {
+          if (document.hidden || pending || this.workspace !== 'experiments'
+            || !this.exps.loaded) return;
+          pending = this.experimentsRefresh().catch(() => null)
+            .finally(() => { pending = null; });
+        });
+      }
     },
     /**
      * What a reload or a closed tab would lose here (ui/unsaved.js, ADR 0045): the experiments
@@ -430,8 +529,8 @@ export function createExperimentsUi() {
       const h = this.exps.memoryHeld;
       if (!this.exps.persistent && h) {
         const n = (k, one) => (h[k] ? `${h[k]} ${one}${h[k] === 1 ? '' : 's'}` : '');
-        const what = [n('experiments', 'experiment'), n('definitions', 'definition')]
-          .filter(Boolean).join(' and ');
+        const what = [n('experiments', 'experiment'), n('definitions', 'definition'),
+          n('findings', 'finding')].filter(Boolean).join(', ').replace(/, ([^,]*)$/, ' and $1');
         if (what) {
           lost.push({ domain: 'experiments', label: `${what} kept in page memory only` });
         }
@@ -462,6 +561,50 @@ export function createExperimentsUi() {
       for (const c of Object.values(ctx.charts)) if (c) c.relayout();
     },
 
+    /**
+     * The result hash of run `id` as this page shows it (review 3 of #149): the open detail's
+     * record, else a compared record, else the list row as last read; null when none shows it.
+     * A finding recorded from a view cites this hash, and linking is refused when the store
+     * now holds another record under the id.
+     */
+    experimentsShownHash(id) {
+      if (ctx.detail && ctx.detail.experimentId === id) return hashOf(ctx.detail);
+      const c = ctx.compare.find((e) => e.experimentId === id);
+      if (c) return hashOf(c);
+      const row = ctx.rows.get(id);
+      if (!row) return null;
+      try {
+        const r = JSON.parse(row);
+        return typeof r.resultHash === 'string' ? r.resultHash : null;
+      } catch (e) {
+        return null;
+      }
+    },
+    /** The store (opened on first use; the memory fallback where IndexedDB is unavailable). */
+    experimentsStore() {
+      return store(this);
+    },
+    /**
+     * The identity of stored run `id` as a finding cites it (ADR 0046): { experimentId, name,
+     * resultHash, hasResponse, frequencies (the stored response grid, or null) }, or null when it
+     * is not stored; rejects when its record cannot be read. It is read from the STORE, never
+     * from the decoded cache: another tab may have replaced the record under this id since it
+     * was cached (review 2 of #149). A cached copy that differs is replaced by what is stored.
+     */
+    async experimentsIdentity(id) {
+      const e = await (await store(this)).get(id);
+      if (!e) {
+        ctx.cache.delete(id);
+        return null;
+      }
+      const cached = ctx.cache.get(id);
+      if (cached && hashOf(cached) !== hashOf(e)) remember(id, e);
+      return { experimentId: e.experimentId, name: e.name || null,
+        resultHash: e.provenance && typeof e.provenance.resultHash === 'string'
+          ? e.provenance.resultHash : null,
+        hasResponse: defaultEvidenceHz(e) !== null, // the lineage point exists (ADR 0044)
+        frequencies: storedResponseFrequencies(e) };
+    },
     /** Store a validated experiment (store.put validates again); returns its id. */
     async experimentsPut(e) {
       const s = await store(this);
@@ -474,6 +617,14 @@ export function createExperimentsUi() {
       const s = await store(this);
       const list = await s.list();
       const ids = new Set(list.map((x) => x.experimentId));
+      // A record replaced under its id (here or in another tab) changes its row: its decoded copy
+      // is dropped, so nothing (detail, compare, a finding's check) reads the old record again.
+      const rows = new Map(list.map((x) => [x.experimentId, JSON.stringify(x)]));
+      for (const id of [...ctx.cache.keys()]) {
+        if (ctx.rows.has(id) && rows.get(id) !== ctx.rows.get(id)) ctx.cache.delete(id);
+      }
+      ctx.rows = rows;
+      await syncViews(this, s, list);
       this.exps.selected = this.exps.selected.filter((id) => ids.has(id));
       const v = experimentListRows(list, { selected: this.exps.selected });
       // The definitions are read apart: one that cannot be read never fails the runs' list.
@@ -496,16 +647,33 @@ export function createExperimentsUi() {
       this.exps.baselineId = v.baselineId;
       this.exps.canCompare = v.canCompare;
       this.exps.loaded = true;
+      // The findings are read apart too: one that cannot be read never fails the runs' list.
+      if (typeof this.findingsRefresh === 'function') {
+        try {
+          await this.findingsRefresh(list);
+        } catch (err) {
+          this.fnd.note = `The findings could not be read: ${err.message || String(err)}`;
+        }
+      }
+      // Connected records shown elsewhere are read again (a stored change may move a state).
+      if (typeof this.connectionsRefreshOpen === 'function') this.connectionsRefreshOpen();
       return list;
     },
-    async experimentsOpen(id) {
-      const e = await get(this, id);
+    /**
+     * Show experiment `id` in the detail: the stored record (get), or `record` when the caller
+     * has just read it from the store.
+     */
+    async experimentsOpen(id, { record = null } = {}) {
+      const e = record && record.experimentId === id ? record : await get(this, id);
+      if (e && e === record) remember(id, e);
       if (!e) {
         this.notify('error', 'Experiment not found', id);
         return null;
       }
       setDetail(this, e);
       this.exps.panel = 'detail';
+      // The address names the open run (no new entry): Back from a connected record returns here.
+      if (typeof this.navNameRecord === 'function') this.navNameRecord({ kind: 'experiment', id });
       this.$nextTick(() => { if (ctx.charts.detail) ctx.charts.detail.relayout(); });
       return e;
     },
@@ -624,6 +792,9 @@ export function createExperimentsUi() {
     experimentsAskDelete(row) {
       this.exps.deleteId = row.id;
       this.exps.deleteName = row.name;
+      const n = typeof this.findingsCiting === 'function' ? this.findingsCiting(row.id) : 0;
+      this.exps.deleteCiting = n ? `${n} finding${n === 1 ? ' cites' : 's cite'} this experiment. ${
+        n === 1 ? 'It keeps' : 'They keep'} the reference, which will then read "missing".` : '';
       this.openModal('osc-dlg-exp-delete');
     },
     /** Explicit, confirmed delete (§225). */
@@ -633,7 +804,10 @@ export function createExperimentsUi() {
       try {
         await (await store(this)).delete(id);
         ctx.cache.delete(id);
-        if (ctx.detail && ctx.detail.experimentId === id) setDetail(this, null);
+        if (ctx.detail && ctx.detail.experimentId === id) {
+          setDetail(this, null);
+          if (typeof this.navNameRecord === 'function') this.navNameRecord(null);
+        }
         if (ctx.compare.some((e) => e.experimentId === id)) setCompare(this, []);
         this.exps.deleteId = null;
         this.closeModal('osc-dlg-exp-delete');

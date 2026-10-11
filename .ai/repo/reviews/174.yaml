@@ -1,0 +1,36 @@
+# Review verdict for pull request #174, the merge train train/2026-10-11 (#149 #151 #158 #159
+# #163 #164 #168 #169 #170, the Majordomus 0.20.0 pin 9bf826e, the mesh declaration e4cb88c).
+# Reviewed head 9bf826e63ff1c01d474dc85fbfb787527462f371, merge base origin/main 9e009a2
+# (#172); 24 guarded paths. This review is of the integration; each included PR had its own.
+#
+# What was checked:
+# - Every guarded path against the head of the PR that introduced it. 22 are byte-identical
+#   to that head: 13 to #164 (b6c9b57), 6 to #163 (082e2e7), 4 to #151 (e6abc7e; findings.js
+#   and evidence.js equal #149 40491e0 too). No two included PRs change the same guarded path;
+#   #158, #159, #168, #169 and #170 change none.
+# - The two guarded paths main also changed since the PR's merge base are the clean three-way
+#   merge (git merge-file, no conflict) of the PR head and main, nothing else:
+#   scripts/release-prepare.mjs = #163 + #165's one-line "commit or copy aside" wording;
+#   .github/workflows/ci.yml at 9bf826e^ = #164 + #171's 0.14.0 pin, then 9bf826e moves only
+#   MJ_VERSION, MJ_SHA256, the job name and the comment to 0.20.0.
+# - MJ_SHA256 beb2cd4b...4d06f equals the x86_64-unknown-linux-gnu sha256 in
+#   https://majordomus.dev/releases/v0.20.0.json (read 2026-10-11).
+# - Hand-resolved conflicts (remerge-diff of every train merge): completion-ledger (W7a/W7e by
+#   #168, W7c/W7f/W7h/W7i by #169, W7g by both, W7k from #168, P1 by #170), tests/README.md
+#   (rows of every side, app row from #169, navigation row from #159), navigation.cjs (both
+#   requires; seam.loopback at both #169 call sites, until() at #159's), the rules index and
+#   CLAUDE.md hand-written part (rows and prose of #163, #164 and main), 09cc0f6 (PENDING empty,
+#   live-smoke.cjs calls neither hook). No conflict marker in the tree; the main merge d3ff77e
+#   and the dist rebuild 8c1d879 carry nothing of their own outside dist.
+# - npm run verify on the head: 2763/2763 unit tests, doctor 0.20.0 with 0 failures.
+schema: review-verdict/v1
+pr: 174
+verdict: merge
+reviewer: "independent review subagent (Claude Opus 5.5) with its own context, spawned by orchestrating session d563bebc, whose other agent assembled this train; this agent did not build, merge or edit any of it and wrote only this file"
+content: cc5edc697169b2e1401c3c0a95609ba71a5673cf8d7b080f9a3cb6c1898467dc
+findings:
+  - { id: V-1, severity: P2, status: open, title: "reviewer independence is at agent level: this reviewer and the train's builder are agents of one orchestrating session (d563bebc), while the rule says a session other than the builder's; the owner decides whether that satisfies it (as V-2 of #164)" }
+  - { id: V-2, severity: P3, status: open, title: "the mesh declaration (e4cb88c, .ai/repo/mesh/) is unguarded and no reviewed pull request head carries it (#173 closed); its posture matches its text (TTL 1, broadcast disabled, deny_unknown) and the first key equals this machine's mesh identity 641bdb94, but the two other machine keys cannot be verified from here: the owner confirms them" }
+  - { id: V-3, severity: P3, status: open, title: "main has no scripts/review-verdict.mjs or .github/scripts/base-rule.sh yet, so CI judges this pull request with its own copy (the rule's stated introduction case); that copy is byte-identical to #164's reviewed head" }
+  - { id: V-4, severity: P3, status: open, title: "browser suites were not run by this reviewer (shared machine); that #149/#151, #158, #159 and #169 work together in the page rests on the train head's CI run" }
+  - { id: V-5, severity: P3, status: open, title: "09cc0f6 and the hand-resolved conflicts are content no included pull request's reviewer saw; checked here and found correct, none on a guarded path" }

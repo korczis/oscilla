@@ -507,6 +507,162 @@ function defineChecks(fx) {
     live: live.slice(-8) };
   });
 
+  // Connected records (ADR 0048): a run measured from a saved project names it (the hash
+  // recomputed over the project as it loads), Studio's Projects and patches dialog names the run
+  // back, the links go both ways, and a change outside the measured path keeps only the
+  // measured-path connection.
+  def('connections-from-studio', async ({ page }) => {
+    await page.evaluate(() => window.OSCILLA.measure.useLoopback({ type: 'biquad',
+      filter: 'lowpass', frequency: 2000, Q: Math.SQRT1_2 }));
+    await H.fresh(page, 'measurement-sweep');
+    const project = await page.evaluate(async () => {
+      const s = window.OSCILLA.studio.store;
+      for (const a of [
+        { type: 'NODE_PARAM_SET', nodeId: 'sweep-1', key: 'duration', value: 1 },
+        { type: 'NODE_PARAM_SET', nodeId: 'sweep-1', key: 'level', value: 0.25 },
+        { type: 'CLIP_RESIZE', clipId: 'clip-1', duration: 0.25 },
+        { type: 'CLIP_RESIZE', clipId: 'clip-3', duration: 1 },
+      ]) {
+        const r = s.dispatch(a);
+        if (!r.ok) throw new Error(r.reason);
+      }
+      const saved = await window.OSCILLA.app.studioSave();
+      return saved ? { id: saved.id, name: saved.name } : null;
+    });
+    await page.evaluate(() => window.OSCILLA.app.studioPlay());
+    const done = await H.until(() => page.evaluate(() => {
+      const r = window.OSCILLA.studio.measurementRun;
+      return { run: r.state, id: r.experimentId };
+    }), (v) => v.run === 'done' || v.run === 'failed', 30000, 50);
+    const items = (sel) => page.evaluate((q) => [...document.querySelectorAll(q)].map((x) => ({
+      state: x.dataset.state, relation: x.dataset.relation,
+      href: (x.querySelector('a') || { getAttribute: () => null }).getAttribute('href'),
+      text: x.textContent.replace(/\s+/g, ' ').trim() })), sel);
+    const RUN = '[data-osc="exp.connections"] li.osc-x-cn-item';
+    const res = { project, done };
+    if (!project || !done.id) return { ok: false, failed: ['measured'], ...res };
+    // 1. The run's connected records name the stored project.
+    await page.evaluate((id) => { location.hash = `#m=experiments&exp=${id}`; }, done.id);
+    res.up = await H.until(() => items(RUN), (l) => l.some((c) => c.relation === 'studio-graph'),
+      15000);
+    // 2. Following it opens Studio's dialog at that project, its runs listed.
+    await page.click(`${RUN}[data-relation="studio-graph"] a`);
+    const ROW = `[data-osc="studio.saved.list"] [data-id="${project.id}"]`;
+    res.dialog = await H.until(() => page.evaluate((row) => {
+      const d = document.getElementById('osc-dlg-studio-library');
+      const r = document.querySelector(row);
+      const det = r && r.querySelector('details');
+      return { ws: window.OSCILLA.app.workspace, open: !!d && d.open, details: !!det && det.open,
+        focusInRow: !!r && r.contains(document.activeElement),
+        focus: { tag: document.activeElement.tagName,
+          label: document.activeElement.getAttribute('aria-label') },
+        openLabel: r ? r.querySelector('[data-osc="studio.saved.open"]')
+          .getAttribute('aria-label') : null,
+        items: det ? [...det.querySelectorAll('li.osc-x-cn-item')].map((x) => ({
+          state: x.dataset.state, relation: x.dataset.relation,
+          text: x.textContent.replace(/\s+/g, ' ').trim() })) : [] };
+    }, ROW), (x) => x.open && x.items.length > 0, 15000);
+    // 3. The run link in the dialog goes back to the run.
+    await page.click(`${ROW} [data-osc="studio.saved.cnxLink"]`);
+    res.back = await H.until(() => page.evaluate(() => ({
+      ws: window.OSCILLA.app.workspace,
+      id: window.OSCILLA.app.exps.detail ? window.OSCILLA.app.exps.detail.id : null,
+      dialog: document.getElementById('osc-dlg-studio-library').open })),
+    (x) => x.ws === 'experiments' && x.id && !x.dialog, 8000);
+    // 4. A node the measurement does not read, added and saved: only the measured path matches.
+    await page.evaluate(async () => {
+      const a = window.OSCILLA.app;
+      a.setWorkspace('studio');
+      const r = window.OSCILLA.studio.store.dispatch({ type: 'NODE_ADD', nodeType: 'oscillator',
+        position: { x: 600, y: 420 }, params: { frequency: 440 } });
+      if (!r.ok) throw new Error(r.reason);
+      await a.studioSave();
+    });
+    await page.evaluate((id) => { location.hash = `#m=experiments&exp=${id}`; }, done.id);
+    res.after = await H.until(() => items(RUN), (l) => l.some((c) => c.relation === 'studio-path'),
+      15000);
+    // Review 1 of #151, items 3 and 8. The dialog lists the experiment; it is then deleted behind
+    // this view (as another tab would); the dialog's link is not followed: the dialog stays, says
+    // why, and its list is read again.
+    await page.evaluate(async (pid) => {
+      window.OSCILLA.app.setWorkspace('studio');
+      await window.OSCILLA.app.studioShowProject(pid);
+    }, project.id);
+    // (An experiment an earlier check measured from the same path may be listed too.)
+    const mine = (c) => !!c.href && c.href.endsWith(`exp=${done.id}`);
+    res.listed = await H.until(() => items(`${ROW} li.osc-x-cn-item`),
+      (l) => l.some((c) => mine(c) && c.state === 'present'), 15000);
+    await page.evaluate(async (id) => {
+      await window.OSCILLA.experiments.store().delete(id);
+      window.OSCILLA.app.alerts = [];
+    }, done.id);
+    await page.click(`${ROW} a[data-osc="studio.saved.cnxLink"][href$="exp=${done.id}"]`);
+    res.refused = await H.until(() => page.evaluate(({ row, id }) => {
+      const r = document.querySelector(row);
+      return { ws: window.OSCILLA.app.workspace,
+        dialog: document.getElementById('osc-dlg-studio-library').open,
+        status: r ? r.querySelector('details [role="status"]').textContent : '',
+        links: r ? [...r.querySelectorAll('[data-osc="studio.saved.cnxLink"]')]
+          .filter((a) => a.getAttribute('href').endsWith(`exp=${id}`)).length : -1,
+        alerts: window.OSCILLA.app.alerts.map((a) => `${a.title}: ${a.message || ''}`) };
+    }, { row: ROW, id: done.id }), (x) => /was not opened/.test(x.status) && x.links === 0,
+    15000);
+    // Open over unsaved changes asks first: the first press changes nothing.
+    res.unsaved = await page.evaluate(async (row) => {
+      const s = window.OSCILLA.studio.store;
+      const r0 = s.dispatch({ type: 'NODE_PARAM_SET', nodeId: 'sweep-1', key: 'duration',
+        value: 2 });
+      const before = JSON.stringify(window.OSCILLA.studio.model);
+      document.querySelector(`${row} [data-osc="studio.saved.open"]`).click();
+      return { dispatched: r0.ok, dirty: window.OSCILLA.app.studio.dirty, before };
+    }, ROW);
+    res.asked = await H.until(() => page.evaluate((row) => {
+      const b = document.querySelector(`${row} [data-osc="studio.saved.open"]`);
+      const st = document.querySelector('[data-osc="studio.saved.error"]');
+      return { text: b ? b.textContent : '', label: b ? b.getAttribute('aria-label') : '',
+        status: st && !st.hidden ? st.textContent : '',
+        dialog: document.getElementById('osc-dlg-studio-library').open,
+        model: JSON.stringify(window.OSCILLA.studio.model) };
+    }, ROW), (x) => x.text === 'Replace unsaved changes', 8000);
+    await page.evaluate(() => window.OSCILLA.app.closeModal('osc-dlg-studio-library'));
+    // Leave nothing behind: the run and the project.
+    await page.evaluate(async ({ run, pid }) => {
+      const st = await window.OSCILLA.experiments.store();
+      await st.delete(run);
+      const lib = await window.OSCILLA.app.studioLibrary();
+      await lib.remove(pid);
+      await window.OSCILLA.app.experimentsRefresh();
+      location.hash = '#m=studio';
+      window.OSCILLA.app.alerts = [];
+    }, { run: done.id, pid: project.id });
+    const g = res.up.find((c) => c.relation === 'studio-graph') || {};
+    const d = res.dialog.items.find((c) => c.relation === 'measured-graph') || {};
+    const p = res.after.find((c) => c.relation === 'studio-path') || {};
+    return { ...H.verdict({
+      measured: done.run === 'done',
+      upstream: g.state === 'present' && g.text.includes(`Studio project "${project.name}"`)
+        && /Field: studio\.studioHash, on this experiment\./.test(g.text),
+      dialog: res.dialog.ws === 'studio' && res.dialog.open && res.dialog.details
+        && res.dialog.focusInRow && d.state === 'present'
+        && /Field: studio\.studioHash, on that experiment\./.test(d.text),
+      back: res.back.id === done.id,
+      measuredPath: p.state === 'present' && /Field: studio\.measured\.hash/.test(p.text)
+        && !res.after.some((c) => c.relation === 'studio-graph'),
+      // The focus target names the project and is not a button that replaces the graph.
+      focusNamed: res.dialog.focus.tag === 'SUMMARY'
+        && res.dialog.focus.label === `Connected records of ${project.name}`
+        && res.dialog.openLabel === `Open ${project.name}`,
+      linkRefused: res.refused.ws === 'studio' && res.refused.dialog === true
+        && res.refused.links === 0 && /was not opened/.test(res.refused.status)
+        && res.refused.alerts.some((t) => /Experiment not opened: .*no longer stored here/.test(t)),
+      openAsks: res.unsaved.dispatched && res.unsaved.dirty === true && res.asked.dialog === true
+        && res.asked.model === res.unsaved.before
+        && /^Replace the unsaved changes in Studio with /.test(res.asked.label)
+        && /Studio has unsaved changes/.test(res.asked.status),
+    }), ...res, unsaved: { ...res.unsaved, before: undefined },
+    asked: { ...res.asked, model: undefined } };
+  });
+
   def('large-graph-render', async ({ page, browserName }) => {
     await H.fresh(page);
     const t = await page.evaluate(async (text) => {

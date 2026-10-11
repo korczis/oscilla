@@ -54,4 +54,25 @@ rule files in this directory, and fails when a row is missing, extra or stale.
 | `project.majordomus-layer-current` v1 | blocking | the local Majordomus is the pinned one; no missing policy key | `scripts/majordomus-pin-check.mjs` in `npm run verify`, `.github/doctor-verdict.jq` |
 | `project.bounded-test-timing` v1 | blocking | a browser check waits for its condition against a named wall-clock deadline; no fixed sleep in the suite or the page, frame count or assumed rate | `tests/unit/browser-timing.test.mjs` |
 | `project.suite-harness` v1 | blocking | every browser suite runs through one harness: no unknown or empty selection, no leg without checks or on another engine, no undeclared skip in CI, no start on a loaded machine | `tests/unit/browser-suite-contract.test.mjs` |
+| `project.release-receipt-binds-gate` v1 | blocking | the gate receipt binds every tracked file except the release records | `tests/unit/release-publish.test.mjs` |
+| `project.release-flow-complete` v1 | blocking | prepare, pull request, publish, live verification and record, in order; every published tag in a checkout's history has its record in that checkout | `tests/unit/release-analyze.test.mjs`, `release-publish.test.mjs`, `release-record.test.mjs` |
+| `project.deploy-often` v1 | blocking | a releasable commit on main is released within 24 hours | `tests/unit/release-cadence.test.mjs`, `.github/workflows/cadence.yml` (not part of the required `gate`) |
+| `project.ci-bounded` v1 | blocking | every workflow job and network step bounded, pinned, retried; nothing fatal made non-fatal | `tests/unit/ci-workflows.test.mjs` over `scripts/ci-workflow-rules.mjs`, in `npm test`; a pull request that rewrites the workflow is held only by `project.review-verdict` |
+| `project.fail-first` v1 | blocking | a `feat`/`fix` pull request's unit tests fail on the merge base, or its body carries a reasoned waiver | the `fail-first` job of `ci.yml` (the base branch's `scripts/fail-first.mjs` through `.github/scripts/base-rule.sh`), needed by `gate`; `tests/unit/fail-first.test.mjs`, `tests/unit/base-rule.test.mjs`; a retitle nobody re-runs is not caught |
+| `project.review-verdict` v1 | blocking | a pull request changing a guarded path carries a reviewer's verdict for the content it changes | the `review-verdict` job of `ci.yml` (the base branch's `scripts/review-verdict.mjs` through `.github/scripts/base-rule.sh`), needed by `gate`; `tests/unit/review-verdict.test.mjs`, `tests/unit/base-rule.test.mjs`; reviewer independence is reviewer-owned, a pull request that rewrites the job itself is not stopped, and a branch that has not merged the `main` carrying the job is not judged |
 | `project.shared-machine-discipline` v1 | advisory | how a session behaves on the shared machine and clone | none: see its `# Why advisory` |
+
+## Release rules
+
+How a release is cut, in the order the steps happen. Each rule's `# Enforcement` names the
+script and the test that hold it, and says what no check holds.
+
+- `project.release-receipt-binds-gate` (`release-receipt-binds-gate.v1.md`): the gate receipt
+  binds every tracked file except the release records, so a merge to main between
+  `release:prepare` and `release:publish` needs the gate again.
+- `project.release-flow-complete` (`release-flow-complete.v1.md`): the flow from prepare to
+  the record, in order; the next release does not start before the previous one is recorded,
+  the first stable release of a new major follows a published release candidate, and a Pages
+  run of which no job starts is diagnosed.
+- `project.deploy-often` (`deploy-often.v1.md`): a releasable commit is released within 24
+  hours; an hourly workflow is red and keeps one issue open until it is.

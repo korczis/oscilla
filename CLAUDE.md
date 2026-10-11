@@ -17,9 +17,11 @@ The binding constraints are the project rules in `.ai/repo/rules/project/` (vers
 name): `project.single-file-deliverable`, `project.audio-engine-discipline`,
 `project.no-fake-science`, `project.about-names-current-release`,
 `project.studio-model-is-canonical`, `project.typed-ports`, `project.no-silent-feedback`,
-`project.visual-identity-lock`. Read them before changing `src/`. Four more bind how the
-repository is worked on: `project.rules-name-their-enforcement`,
-`project.no-conflict-markers`, `project.worktree-topology` (mechanism: `docs/WORKTREES.md`),
+`project.visual-identity-lock`. Read them before changing `src/`. Releases are bound by
+`project.release-receipt-binds-gate`, `project.release-flow-complete` (the flow, in order) and
+`project.deploy-often`. Four more bind how the repository is worked on:
+`project.rules-name-their-enforcement`, `project.no-conflict-markers`,
+`project.worktree-topology` (mechanism: `docs/WORKTREES.md`),
 `project.majordomus-layer-current`; `project.shared-machine-discipline` is the advisory
 session guidance (no pattern kills, no stash, no chained merge-and-commit, owner-only
 actions). Read those before the first command.
@@ -31,6 +33,14 @@ assumed sample rate) and `project.suite-harness` (every suite runs through
 each suite waits for the 1-minute load to fall below `OSC_LOAD_MAX` (default 2 x cores) and then
 fails without running, so `release-gate` and `release:prepare` need a quiet machine or a stated
 limit (`OSC_LOAD_MAX`, `OSC_LOAD_WAIT_MS`; see `tests/README.md`).
+
+How a change reaches `main` is ruled too: `project.ci-bounded` (every workflow job and
+network step bounded, pinned, retried), `project.fail-first` (a `feat`/`fix` PR's unit tests
+fail on the merge base, or the body says `fail-first: n/a <reason>`) and
+`project.review-verdict` (a PR touching the audio, analysis, experiments, studio, storage or
+release-script paths, anything under `.github/`, or the programs and tests of these three
+rules needs a reviewer's `.ai/repo/reviews/<pr>.yaml` for the content it changes). The builder of a
+change never writes its own verdict, and the base branch's copy of each program judges.
 
 ## Commands
 
@@ -55,9 +65,11 @@ aggregates the CI jobs, whose `npm test` includes `tests/unit/knowledge-integrit
 
 Releases: the version lives only in `package.json` (`version:check` rejects a hard-coded copy
 of the current version elsewhere, this file included). On a clean tree `release:prepare`
-bumps it and runs the gate; land `chore(release): vX.Y.Z` by PR; on main `release:publish`,
-then `-- --yes`; `verify-deploy` fails Pages on a mismatch; land the release record by a small
-PR (`release/record-vX.Y.Z`).
+bumps it and runs the gate; land `chore(release): vX.Y.Z` by PR (nothing else merges until
+the publish: the receipt binds the whole tree); on main `release:publish`, then `-- --yes`;
+`verify-deploy` fails Pages on a mismatch; land the release record by a small PR
+(`chore/release-record-vX.Y.Z`) before the next `release:prepare`, which refuses without it.
+`node scripts/release-cadence.mjs` says whether a release is overdue (24 h).
 
 ## Plan
 
