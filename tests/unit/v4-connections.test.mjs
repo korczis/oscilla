@@ -1,0 +1,803 @@
+// Connected records (ADR 0048, ledger item 4 "cross-domain Trace over real stored relations"):
+// from any stored record, what it is connected to (upstream) and what depends on it
+// (downstream), each connection from one stored field that it names, with a state in words.
+//
+//   - the record link: one stored record in the URL hash, refused whole when malformed;
+//   - runLinks: the references a run stores, kept on each list row of the store;
+//   - connectionsOf: run (definition, repeat, duplicate, Studio by recomputed hash, frequency
+//     profile, build; findings, repeats and duplicates downstream), definition (the runs that
+//     executed it), finding (the runs it cites), Studio project (the runs measured from it);
+//     present / missing / mismatch; nothing inferred from names, recipes or times; bounded;
+//   - navigation: the records domain of the one hash dispatcher (ADR 0045);
+//   - the workspace adapter over the stores, legacy list rows, Studio projects and the page.
+//   node --test tests/unit/v4-connections.test.mjs
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+import * as C from '../../src/js/experiments/connections.js';
+import {
+  RECORD_LINK_KEYS, decodeRecordLink, encodeRecordLink, withoutRecordParams,
+} from '../../src/js/core/url-state-records.js';
+import {
+  HASH_DOMAINS, hashAfterRefusal, hashForWorkspace, routeOfHash,
+} from '../../src/js/ui/navigation.js';
+import { createMemoryStore, summaryRecord } from '../../src/js/experiments/store.js';
+import { serializeExperiment, experimentToJson } from '../../src/js/experiments/schema.js';
+import { createFinding } from '../../src/js/experiments/findings.js';
+import { KNOWN_ALGORITHM_IDS } from '../../src/js/measurement/algorithms.js';
+import { createExperimentsUi } from '../../src/js/ui/experiments.js';
+import { createFindingsUi } from '../../src/js/ui/findings.js';
+import { createConnectionsUi } from '../../src/js/ui/connections.js';
+import { createStudioLibrary } from '../../src/js/studio/library.js';
+import { studioProvenance, withStudioProvenance } from '../../src/js/studio/provenance.js';
+import { templateModel } from '../../src/js/studio/templates/index.js';
+import { buildFixtures, NOW } from '../browser/fixtures/v3-experiments.mjs';
+import { fakeIndexedDB } from './fixtures/fake-indexeddb.mjs';
+
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
+const OPTS = { knownAlgorithms: KNOWN_ALGORITHM_IDS };
+const H = (c) => c.repeat(64);
+
+let fixtures;
+const fx = async () => {
+  fixtures = fixtures || await buildFixtures();
+  return fixtures;
+};
+
+// ---------------------------------------------------------------- plain records for the pure part
+
+/** A run as connections.js reads it (the fields it reads, nothing else). */
+function run(id, over = {}) {
+  const { provenance = {}, ...rest } = over;
+  return { experimentId: id, name: `Run ${id}`,
+    definition: { id: `derived-${id}`, version: 1, hash: H('d'), derived: true },
+    provenance: { resultHash: H('1'), repeatOf: null, ...provenance }, ...rest };
+}
+const row = (e) => ({ experimentId: e.experimentId, name: e.name,
+  definition: e.definition ? { id: e.definition.id, version: e.definition.version,
+    hash: e.definition.hash, derived: e.definition.derived } : undefined,
+  links: C.runLinks(e), readable: true });
+const def = (id, hashes, name = 'Room sweep') => ({ kind: 'oscilla-definition', schemaVersion: 1,
+  id, name, notes: null, createdAt: NOW,
+  versions: hashes.map((hash, i) => ({ version: i + 1, hash, createdAt: NOW, execution: {} })) });
+const finding = (id, evidence, experiments, statement = 'A falls above 6 kHz.') => createFinding(
+  { id, now: NOW, statement, status: 'hypothesis', evidence, experiments });
+const index = (runs, over = {}) => ({ runs: runs.map(row), definitions: [],
+  unreadableDefinitions: [], findings: [], studio: { projects: [], unreadable: [] },
+  build: null, profile: null, ...over });
+/** A stored experiment as a subject. */
+const exp = (record) => ({ kind: 'experiment', record });
+const of = (list, relation) => list.filter((c) => c.relation === relation);
+const one = (list, relation) => {
+  const x = of(list, relation);
+  assert.equal(x.length, 1, `exactly one ${relation}: ${JSON.stringify(list)}`);
+  return x[0];
+};
+
+// ---------------------------------------------------------------- the record link
+
+test('a record link names one stored record, and is refused whole when malformed', () => {
+  assert.deepEqual(RECORD_LINK_KEYS, { experiment: 'exp', definition: 'def', finding: 'finding' });
+  for (const kind of ['experiment', 'definition', 'finding']) {
+    const h = encodeRecordLink({ kind, id: 'abc-1.x_2' });
+    assert.deepEqual(decodeRecordLink(`#${h}`), { ok: true, kind, id: 'abc-1.x_2' });
+    assert.equal(new URLSearchParams(h).get('m'), 'experiments');
+  }
+  assert.equal(decodeRecordLink('#m=measure&mr=x'), null, 'no record key: not a record link');
+  for (const [hash, re] of [
+    ['exp=a&exp=b', /"exp" appears more than once/],
+    ['exp=a&def=b', /names one record/],
+    ['m=measure&exp=a', /opens the Experiments workspace/],
+    ['exp=', /empty/],
+    ['finding=..%2Fx', /is not a record id/],
+    ['def=%3Cscript%3E', /is not a record id/],
+  ]) {
+    const r = decodeRecordLink(hash);
+    assert.equal(r.ok, false, hash);
+    assert.ok(r.errors.some((e) => re.test(e)), `${hash}: ${r.errors}`);
+  }
+  assert.throws(() => encodeRecordLink({ kind: 'experiment', id: '<x>' }), RangeError);
+  assert.throws(() => encodeRecordLink({ kind: 'studio', id: 'p-1' }), RangeError);
+  assert.equal(withoutRecordParams('m=experiments&exp=a&v=1&f=440'), 'm=experiments&v=1&f=440');
+});
+
+test('navigation: the records domain is dispatched last; its keys leave with Experiments', () => {
+  assert.deepEqual([...HASH_DOMAINS], ['instrument', 'measure', 'studio', 'records']);
+  assert.deepEqual(routeOfHash('#exp=abc'), { workspace: 'experiments', owner: 'records' });
+  assert.deepEqual(routeOfHash('#m=experiments&def=abc'), { workspace: 'experiments',
+    owner: 'workspace' });
+  assert.equal(routeOfHash('#m=studio&exp=abc').workspace, 'studio', 'm decides');
+  const off = new URLSearchParams(hashForWorkspace('m=experiments&exp=a&v=1', 'measure'));
+  assert.equal(off.get('exp'), null, 'off Experiments the record key would be refused');
+  assert.equal(off.get('v'), '1');
+  assert.equal(new URLSearchParams(hashForWorkspace('m=experiments&exp=a', 'experiments'))
+    .get('exp'), 'a');
+  const refused = new URLSearchParams(hashAfterRefusal('#m=experiments&exp=a&exp=b',
+    { records: false }, 'experiments'));
+  assert.equal(refused.get('exp'), null, 'a refused record link is not kept');
+});
+
+// ---------------------------------------------------------------- runLinks and the store rows
+
+test('runLinks: what a run stores about other records, nothing more', async () => {
+  const { a } = await fx();
+  assert.deepEqual(C.runLinks(a.experiment), { resultHash: a.experiment.provenance.resultHash,
+    repeatOf: null, duplicateOf: null, studio: null });
+  const s = withStudioProvenance(a.experiment, templateModel('measurement-sweep'));
+  const l = C.runLinks(s);
+  assert.equal(l.studio.hash, s.studio.studioHash);
+  assert.deepEqual(l.studio.measured, { v: s.studio.measured.v, hash: s.studio.measured.hash });
+  assert.deepEqual(C.runLinks(serializeExperiment(s)), l, 'the same from a stored document');
+  assert.deepEqual(C.runLinks(run('x', { provenance: { repeatOf: 'o', duplicateOf: 'd' } })),
+    { resultHash: H('1'), repeatOf: 'o', duplicateOf: 'd', studio: null });
+  assert.deepEqual(C.runLinks(null), { resultHash: null, repeatOf: null, duplicateOf: null,
+    studio: null });
+});
+
+test('the store keeps each run\'s links on its list row (no record read to find dependents)',
+  async () => {
+    const { a } = await fx();
+    const doc = serializeExperiment(a.experiment);
+    assert.deepEqual(summaryRecord(doc, 10).links, C.runLinks(doc));
+    const store = createMemoryStore(OPTS);
+    await store.put(a.experiment);
+    const [r] = await store.list();
+    assert.deepEqual(r.links, C.runLinks(a.experiment));
+  });
+
+// ---------------------------------------------------------------- run: upstream
+
+test('run: the definition it was executed from, present, mismatched, missing or unreadable', () => {
+  const r = run('r1', { definition: { id: 'def-1', version: 2, hash: H('b'), derived: false } });
+  const cases = [
+    [{ definitions: [def('def-1', [H('a'), H('b')])] }, 'present', /stored with the same hash/],
+    [{ definitions: [def('def-1', [H('a'), H('c')])] }, 'mismatch', /has no version 2 with/],
+    [{}, 'missing', /not stored in this browser/],
+    [{ unreadableDefinitions: ['def-1'] }, 'unreadable', /cannot be read/],
+  ];
+  for (const [over, state, re] of cases) {
+    const c = one(C.connectionsOf(exp(r), index([r], over)).upstream,
+      'definition');
+    assert.equal(c.state, state);
+    assert.match(c.text, re);
+    assert.equal(c.text.startsWith(C.STATE_WORDS[state]), true, 'the state comes first, in words');
+    assert.equal(c.field, 'definition (id, version and hash)');
+    assert.equal(c.fieldOf, 'this experiment');
+    assert.deepEqual(c.to, { kind: 'definition', id: 'def-1', version: 2 });
+    assert.equal(c.href, ['missing', 'unreadable'].includes(state) ? null
+      : '#m=experiments&def=def-1');
+  }
+  const derived = C.connectionsOf(exp(run('r2')), index([run('r2')]));
+  assert.equal(of(derived.upstream, 'definition').length, 0, 'a derived definition is no record');
+  assert.ok(derived.notes.some((n) => n.field === 'definition.derived'
+    && /derived from its own recipe/.test(n.text)));
+});
+
+test('run: repeat and duplicate links by the stored id; a missing original stays listed', () => {
+  const orig = run('orig');
+  const rep = run('rep', { provenance: { repeatOf: 'orig', resultHash: H('2') } });
+  const dup = run('dup', { provenance: { duplicateOf: 'orig' } });
+  const ix = index([orig, rep, dup]);
+  const r = one(C.connectionsOf(exp(rep), ix).upstream, 'repeat-of');
+  assert.equal(r.state, 'unverifiable', 'a repeat records no identity of its original');
+  assert.equal(r.field, 'provenance.repeatOf');
+  assert.match(r.text, /^not verifiable: .*by id only/);
+  assert.equal(r.href, '#m=experiments&exp=orig');
+  const d = one(C.connectionsOf(exp(dup), ix).upstream, 'duplicate-of');
+  assert.equal(d.state, 'present');
+  assert.match(d.text, /result hash recorded, recomputed when it was read/);
+  // A different record stored under the original's id: a duplicate keeps the original's hash.
+  const other = index([run('orig', { provenance: { resultHash: H('9') } }), dup]);
+  assert.equal(one(C.connectionsOf(exp(dup), other).upstream, 'duplicate-of')
+    .state, 'mismatch');
+  // The original deleted: the reference is still there, and reads missing.
+  const gone = one(C.connectionsOf(exp(rep), index([rep])).upstream,
+    'repeat-of');
+  assert.equal(gone.state, 'missing');
+  assert.equal(gone.href, null);
+  assert.match(gone.text, /^missing: not stored in this browser/);
+  // Stored but unreadable (fails validation, or its hash does not verify): never fine.
+  const bad = index([orig, dup]);
+  Object.assign(bad.runs[0], { readable: false, reason: 'stored experiment orig is invalid' });
+  const u = one(C.connectionsOf(exp(dup), bad).upstream, 'duplicate-of');
+  assert.equal(u.state, 'unreadable');
+  assert.match(u.text, /^unreadable: .*cannot be read \(stored experiment orig is invalid\)/);
+  // Stored, but not read: never shown as verified.
+  delete bad.runs[0].readable;
+  assert.equal(one(C.connectionsOf(exp(dup), bad).upstream, 'duplicate-of')
+    .state, 'unverifiable');
+  // A hash missing on either side cannot verify an identity.
+  const unst = index([run('orig', { provenance: { resultHash: null } }), dup]);
+  assert.equal(one(C.connectionsOf(exp(dup), unst).upstream, 'duplicate-of')
+    .state, 'unverifiable');
+});
+
+test('nothing is inferred: the same name, recipe, definition or time is no connection', () => {
+  const a = run('a', { name: 'Same', recipe: { x: 1 } });
+  const b = run('b', { name: 'Same', recipe: { x: 1 } });
+  const out = C.connectionsOf(exp(a), index([a, b]));
+  assert.deepEqual(out.upstream, []);
+  assert.deepEqual(out.downstream, []);
+});
+
+test('run: Studio projects by the hash recomputed over them, whole graph or measured path', () => {
+  const model = templateModel('measurement-sweep');
+  const p = studioProvenance(model);
+  const r = run('s', { studio: { studioHash: p.studioHash, measured: p.measured } });
+  const proj = (id, studioHash, measured) => ({ id, name: `P ${id}`, studioHash, measured });
+  const ix = index([r], { studio: { projects: [proj('whole', p.studioHash, { v: 1,
+    hash: p.measured.hash }), proj('path', H('e'), { v: 1, hash: p.measured.hash }),
+  proj('other', H('f'), { v: 1, hash: H('0') })], unreadable: [] } });
+  const up = C.connectionsOf(exp(r), ix).upstream;
+  const g = one(up, 'studio-graph');
+  assert.deepEqual([g.state, g.to, g.field], ['present', { kind: 'studio', id: 'whole' },
+    'studio.studioHash']);
+  assert.deepEqual(g.open, { kind: 'studio', id: 'whole' });
+  const m = one(up, 'studio-path');
+  assert.deepEqual([m.state, m.to.id, m.field], ['present', 'path', 'studio.measured.hash']);
+  assert.match(m.text, /other parts of its graph differ/);
+  // No project holds the graph: one missing connection, never nothing.
+  const none = C.connectionsOf(exp(r), index([r])).upstream;
+  const miss = one(none, 'studio-graph');
+  assert.equal(miss.state, 'missing');
+  assert.match(miss.text, /no Studio project stored here has this graph or its measured path/);
+  // The projects could not be read: said, not guessed.
+  const unread = C.connectionsOf(exp(r), index([r], { studio: null }));
+  assert.equal(of(unread.upstream, 'studio-graph').length, 0);
+  assert.ok(unread.notes.some((n) => /could not be read/.test(n.text)));
+  // A measured path of another version is not compared.
+  const v9 = run('v9', { studio: { studioHash: H('a'),
+    measured: { v: 9, hash: p.measured.hash } } });
+  const out9 = C.connectionsOf(exp(v9), index([v9], { studio: ix.studio }));
+  assert.equal(of(out9.upstream, 'studio-path').length, 0);
+  assert.ok(out9.notes.some((n) => /version 9/.test(n.text)));
+});
+
+test('run: the frequency profile by id (loaded or not) and the build (this one or another)', () => {
+  const r = run('c', { calibration: { frequency: { id: H('7'), name: 'Mic A' }, level: null },
+    provenance: { build: { version: '9.8.7', sourceDigest: H('s'), artifactSha256: null } } });
+  const cur = { version: '9.8.7', sourceDigest: H('s'), artifactSha256: H('x') };
+  const up = (over) => C.connectionsOf(exp(r), index([r], over)).upstream;
+  assert.equal(one(up({ profile: { id: H('7'), name: 'Mic A' } }), 'profile').state, 'present');
+  const p = one(up({ profile: { id: H('8'), name: 'Other' } }), 'profile');
+  assert.equal(p.state, 'missing');
+  assert.match(p.text, /keeps a frequency profile only while it is loaded/);
+  assert.equal(p.field, 'calibration.frequency.id');
+  assert.equal(one(up({ build: cur }), 'build').state, 'present');
+  assert.equal(one(up({ build: { ...cur, sourceDigest: H('t') } }), 'build').state, 'mismatch');
+  const older = one(up({ build: { ...cur, version: '9.9.0' } }), 'build');
+  assert.equal(older.state, 'missing');
+  assert.match(older.text, /this page runs OSCILLA 9\.9\.0/);
+  assert.equal(one(up({ build: { ...cur, sourceDigest: null } }), 'build').state,
+    'unverifiable');
+  const none = C.connectionsOf(exp(run('n')), index([run('n')],
+    { build: cur }));
+  assert.ok(none.notes.some((n) => n.field === 'provenance.build'));
+});
+
+// ---------------------------------------------------------------- run: downstream
+
+test('run: the findings citing it, the runs repeating or duplicating it', () => {
+  const a = run('a', { results: { transfer: { frequencies: [500, 1000, 2000],
+    magnitudeDb: [0, -1, -3] } } });
+  const rep = run('rep', { provenance: { repeatOf: 'a', resultHash: H('2') } });
+  const dup = run('dup', { provenance: { duplicateOf: 'a' } });
+  const f1 = finding('f-1', [{ kind: 'experiment', experimentId: 'a' },
+    { kind: 'value', experimentId: 'a', at: { hz: 1000 } }],
+  [{ experimentId: 'a', resultHash: H('1') }]);
+  const f2 = finding('f-2', [{ kind: 'compare', a: 'rep', b: 'a' }],
+    [{ experimentId: 'rep', resultHash: H('2') }, { experimentId: 'a', resultHash: H('9') }],
+    'Other record');
+  const out = C.connectionsOf(exp(a), index([a, rep, dup],
+    { findings: [f1, f2] }));
+  const cites = of(out.downstream, 'cited-by');
+  assert.deepEqual(cites.map((c) => [c.to.id, c.state]), [['f-1', 'present'],
+    ['f-2', 'mismatch']]);
+  assert.equal(cites[0].field, 'evidence[0], evidence[1] (identity: experiments[0].resultHash)');
+  assert.equal(cites[0].fieldOf, 'that finding');
+  assert.match(cites[0].text, /this experiment; its value at 1000 Hz/);
+  assert.match(cites[1].text, /different record/);
+  // A value at a frequency the run does not store: findingIssues's not-a-grid-point, mismatch.
+  const off = finding('f-3', [{ kind: 'value', experimentId: 'a', at: { hz: 1001 } }],
+    [{ experimentId: 'a', resultHash: H('1') }]);
+  const o = one(C.connectionsOf(exp(a), index([a], { findings: [off] }))
+    .downstream, 'cited-by');
+  assert.equal(o.state, 'mismatch');
+  assert.match(o.text, /1001 Hz is not a frequency/);
+  // Cited without a result hash: findingIssues's unverifiable-identity.
+  const bare = finding('f-4', [{ kind: 'experiment', experimentId: 'a' }],
+    [{ experimentId: 'a', resultHash: null }]);
+  assert.equal(one(C.connectionsOf(exp(a), index([a],
+    { findings: [bare] })).downstream, 'cited-by').state, 'unverifiable');
+  assert.equal(cites[0].href, '#m=experiments&finding=f-1');
+  const rb = one(out.downstream, 'repeated-by');
+  assert.deepEqual([rb.to, rb.state], [{ kind: 'experiment', id: 'rep' }, 'unverifiable']);
+  assert.equal(one(out.downstream, 'duplicated-as').state, 'present');
+  for (const c of [...out.upstream, ...out.downstream]) {
+    assert.ok(C.CONNECTION_STATES.includes(c.state));
+    assert.ok(c.field && c.fieldOf && c.label && c.target && c.text, JSON.stringify(c));
+  }
+});
+
+test('the lists are bounded, and what is left out is counted', () => {
+  const a = run('a');
+  const reps = Array.from({ length: C.CONNECTION_LIMIT + 7 }, (_, i) => run(`r${i}`,
+    { provenance: { repeatOf: 'a' } }));
+  const out = C.connectionsOf(exp(a), index([a, ...reps]));
+  assert.equal(out.downstream.length, C.CONNECTION_LIMIT);
+  assert.equal(out.more.downstream, 7);
+  // A list row whose links could not be read is counted, not silently skipped.
+  const ix = index([a, reps[0]]);
+  ix.runs[1].links = null;
+  const unread = C.connectionsOf(exp(a), ix);
+  assert.equal(unread.downstream.length, 0);
+  assert.ok(unread.notes.some((n) => /1 stored experiment could not be read/.test(n.text)));
+});
+
+// ---------------------------------------------------------------- the other subjects
+
+test('definition: the runs that executed one of its versions', () => {
+  const d = def('def-1', [H('a'), H('b')]);
+  const r1 = run('r1', { definition: { id: 'def-1', version: 1, hash: H('a'), derived: false } });
+  const r2 = run('r2', { definition: { id: 'def-1', version: 2, hash: H('c'), derived: false } });
+  const r3 = run('r3');
+  const out = C.connectionsOf({ kind: 'definition', record: d }, index([r1, r2, r3],
+    { definitions: [d] }));
+  assert.deepEqual(out.upstream, []);
+  assert.ok(out.notes.some((n) => /stores no reference/.test(n.text)));
+  assert.deepEqual(out.downstream.map((c) => [c.to.id, c.state]), [['r1', 'present'],
+    ['r2', 'mismatch']]);
+  assert.match(out.downstream[0].text, /version 1/);
+  assert.equal(out.downstream[0].fieldOf, 'that experiment');
+});
+
+test('finding: each run it cites, by the identity it recorded', () => {
+  const a = run('a');
+  const b = run('b', { provenance: { resultHash: H('5') } });
+  const f = finding('f-1', [{ kind: 'experiment', experimentId: 'a' },
+    { kind: 'compare', a: 'a', b: 'b' }, { kind: 'experiment', experimentId: 'gone' },
+    { kind: 'experiment', experimentId: 'def-x' }],
+  [{ experimentId: 'a', resultHash: H('1') }, { experimentId: 'b', resultHash: H('6') },
+    { experimentId: 'gone', resultHash: null }, { experimentId: 'def-x', resultHash: null }]);
+  const out = C.connectionsOf({ kind: 'finding', record: f }, index([a, b],
+    { definitions: [def('def-x', [H('a')])] }));
+  assert.deepEqual(out.upstream.map((c) => [c.to.id, c.field, c.state]), [
+    ['a', 'evidence[0].experimentId (identity: experiments[0].resultHash)', 'present'],
+    ['a', 'evidence[1].a (identity: experiments[0].resultHash)', 'present'],
+    ['b', 'evidence[1].b (identity: experiments[1].resultHash)', 'mismatch'],
+    ['gone', 'evidence[2].experimentId (identity: experiments[2].resultHash)', 'missing'],
+    ['def-x', 'evidence[3].experimentId (identity: experiments[3].resultHash)', 'mismatch'],
+  ]);
+  assert.match(out.upstream[4].text,
+    /^does not match: def-x names a definition, not an experiment/);
+  assert.deepEqual(out.downstream, []);
+  assert.ok(out.notes.some((n) => /No record stores a reference to a finding/.test(n.text)));
+});
+
+test('Studio project: the runs measured from its graph or holding its measured path', () => {
+  const p = { id: 'p-1', name: 'Sweep', studioHash: H('a'), measured: { v: 1, hash: H('m') } };
+  const whole = run('w', { studio: { studioHash: H('a'), measured: { v: 1, hash: H('m') } } });
+  const path = run('p', { studio: { studioHash: H('b'), measured: { v: 1, hash: H('m') } } });
+  const neither = run('n', { studio: { studioHash: H('c'), measured: { v: 1, hash: H('o') } } });
+  const out = C.connectionsOf({ kind: 'studio', record: p }, index([whole, path, neither]));
+  assert.deepEqual(out.downstream.map((c) => [c.relation, c.to.id, c.field]), [
+    ['measured-graph', 'w', 'studio.studioHash'], ['measured-path', 'p', 'studio.measured.hash']]);
+  assert.throws(() => C.connectionsOf({ kind: 'nope', record: {} }, {}), TypeError);
+});
+
+// ---------------------------------------------------------------- the workspace adapter
+
+function harness() {
+  const fake = fakeIndexedDB();
+  globalThis.indexedDB = fake.indexedDB;
+  const cmp = {};
+  for (const part of [createExperimentsUi(), createFindingsUi(), createConnectionsUi()]) {
+    Object.defineProperties(cmp, Object.getOwnPropertyDescriptors(part));
+  }
+  const notes = [];
+  Object.assign(cmp, { notify: (kind, title, text) => notes.push({ kind, title, text }),
+    $nextTick: (f) => f && f(), openModal() {}, closeModal() {}, setWorkspace() {},
+    measureCurrentProfile: () => null, workspace: 'experiments' });
+  cmp.experimentsInit();
+  cmp.findingsInit();
+  return { cmp, notes, fake };
+}
+
+test('the workspace: a duplicate, a finding and a deleted original, in both directions',
+  async () => {
+    const { a, b } = await fx();
+    const { cmp, notes } = harness();
+    await cmp.experimentsImportText(a.json);
+    await cmp.experimentsImportText(b.json);
+    const dupId = await cmp.experimentsDuplicate('fixture-a');
+    await cmp.findingsAskRun('fixture-a');
+    cmp.fnd.form.statement = 'A falls above 6 kHz.';
+    const saved = await cmp.findingsSave();
+    assert.ok(saved, cmp.fnd.form.error);
+    const fromA = await cmp.connectionsOfRun('fixture-a');
+    assert.deepEqual(fromA.downstream.map((c) => [c.relation, c.to.id, c.state]), [
+      ['cited-by', saved.id, 'present'], ['duplicated-as', dupId, 'present']]);
+    const fromDup = await cmp.connectionsOfRun(dupId);
+    const dupOf = one(fromDup.upstream, 'duplicate-of');
+    assert.equal(dupOf.state, 'present');
+    assert.equal(dupOf.to.hash, a.experiment.provenance.resultHash, 'verified with this hash');
+    // Following it reads the record again first: unchanged, the original opens.
+    assert.equal(await cmp.connectionsVerifyAndGo(dupOf), true);
+    await cmp.cnxSettled();
+    assert.equal(cmp.exps.detail.id, 'fixture-a');
+    const fromF = await cmp.connectionsOfFinding(saved.id);
+    assert.equal(fromF.upstream[0].state, 'present');
+    assert.equal(cmp.cnx.findings[saved.id].upstream.length, 1, 'kept for the finding row');
+    // The original deleted: both references stay, and read missing.
+    cmp.experimentsAskDelete({ id: 'fixture-a', name: 'A' });
+    assert.equal(await cmp.experimentsDelete(), true);
+    assert.equal(one((await cmp.connectionsOfRun(dupId)).upstream, 'duplicate-of').state,
+      'missing');
+    assert.equal((await cmp.connectionsOfFinding(saved.id)).upstream[0].state, 'missing');
+    // A different record stored under the id: read again (not the earlier cached read).
+    const { c } = await fx();
+    const impostor = JSON.parse(c.json);
+    impostor.experimentId = 'fixture-a';
+    await cmp.experimentsImportText(JSON.stringify(impostor));
+    // The listed connection was verified against the earlier record: following it now refuses.
+    assert.equal(await cmp.connectionsVerifyAndGo(dupOf), false);
+    assert.match(notes.at(-1).text, /changed since this list was read: a different record is /);
+    const re = (await cmp.connectionsOfFinding(saved.id)).upstream[0];
+    assert.equal(re.state, 'mismatch');
+    assert.match(re.text, /^does not match: .*a different record is stored under this id/);
+    assert.equal(one((await cmp.connectionsOfRun(dupId)).upstream, 'duplicate-of').state,
+      'mismatch');
+    assert.equal(JSON.stringify(cmp.cnx), JSON.stringify(JSON.parse(JSON.stringify(cmp.cnx))),
+      'plain data for Alpine');
+  });
+
+test('two tabs: a run replaced in another tab is never present from this tab\'s decoded copy',
+  async () => {
+    const { b, c } = await fx();
+    const one2 = harness();
+    await one2.cmp.experimentsImportText(b.json);
+    await one2.cmp.findingsAskRun('fixture-b');
+    one2.cmp.fnd.form.statement = 'B is quieter.';
+    const f = await one2.cmp.findingsSave();
+    await one2.cmp.experimentsOpen('fixture-b'); // this tab now holds B decoded
+    assert.equal(one((await one2.cmp.connectionsOfRun('fixture-b')).downstream, 'cited-by').state,
+      'present');
+    // Another tab on the same database: B deleted, a different record stored under its id.
+    const cmp2 = {};
+    for (const part of [createExperimentsUi(), createFindingsUi(), createConnectionsUi()]) {
+      Object.defineProperties(cmp2, Object.getOwnPropertyDescriptors(part));
+    }
+    Object.assign(cmp2, { notify() {}, $nextTick: (fn) => fn && fn(), openModal() {},
+      closeModal() {}, setWorkspace() {}, measureCurrentProfile: () => null });
+    cmp2.experimentsInit();
+    cmp2.findingsInit();
+    await cmp2.experimentsRefresh();
+    cmp2.exps.deleteId = 'fixture-b';
+    assert.equal(await cmp2.experimentsDelete(), true);
+    const imp = JSON.parse(c.json);
+    imp.experimentId = 'fixture-b';
+    assert.equal(await cmp2.experimentsImportText(JSON.stringify(imp)), 'fixture-b');
+    // This tab, without a reload.
+    const down = (await one2.cmp.connectionsOfRun('fixture-b')).downstream;
+    assert.equal(one(down, 'cited-by').state, 'mismatch');
+    assert.equal((await one2.cmp.connectionsOfFinding(f.id)).upstream[0].state, 'mismatch');
+  });
+
+test('the workspace: a row written before links existed is read for its links once; identity is '
+  + 'verified on every compute', async () => {
+  const { a } = await fx();
+  const { cmp } = harness();
+  await cmp.experimentsImportText(a.json);
+  const dupId = await cmp.experimentsDuplicate('fixture-a');
+  const s = await cmp.experimentsStore();
+  const list = s.list.bind(s);
+  const get = s.get.bind(s);
+  const reads = new Map();
+  s.list = async () => (await list()).map(({ links, ...r }) => r); // rows of an earlier build
+  s.get = async (id) => { reads.set(id, (reads.get(id) || 0) + 1); return get(id); };
+  const first = await cmp.connectionsOfRun('fixture-a');
+  const d = one(first.downstream, 'duplicated-as');
+  assert.equal(d.state, 'present', 'found from the record of a row without links, then verified');
+  assert.equal(reads.get(dupId), 2, 'its links once, its identity once');
+  await cmp.connectionsOfRun('fixture-a');
+  assert.equal(reads.get(dupId), 3, 'the links are kept; the identity is verified again');
+  await s.putFinding(finding('f-1', [{ kind: 'experiment', experimentId: 'fixture-a' }],
+    [{ experimentId: 'fixture-a', resultHash: H('0') }]));
+  assert.equal((await cmp.connectionsOfFinding('f-1')).upstream[0].state, 'mismatch');
+});
+
+test('the workspace: a run measured from Studio connects to the stored project', async () => {
+  const { a } = await fx();
+  const { cmp } = harness();
+  const model = templateModel('measurement-sweep');
+  const e = JSON.parse(experimentToJson(withStudioProvenance(a.experiment, model)));
+  e.experimentId = 'from-studio';
+  await cmp.experimentsImportText(JSON.stringify(e));
+  const lib = createStudioLibrary(await cmp.experimentsStore());
+  await lib.saveProject(model, { id: 'project-sweep', now: NOW });
+  const up = (await cmp.connectionsOfRun('from-studio')).upstream;
+  const g = one(up, 'studio-graph');
+  assert.deepEqual([g.state, g.to.id], ['present', 'project-sweep']);
+  const down = (await cmp.connectionsOfStudioProject('project-sweep')).downstream;
+  assert.deepEqual(down.map((c) => [c.relation, c.to.id]), [['measured-graph', 'from-studio']]);
+  // The project edited outside the measured path and saved again: the whole graph no longer
+  // matches, the measured path still does (recomputed as the project loads).
+  const edited = { ...model, graph: { ...model.graph, nodes: model.graph.nodes.map((n) => (
+    n.id === 'result-1' ? { ...n, params: { ...n.params, smoothing: 3 } } : n)) } };
+  await lib.saveProject(edited, { id: 'project-sweep', now: '2026-10-02T11:00:00.000Z' });
+  const after = (await cmp.connectionsOfRun('from-studio')).upstream;
+  assert.equal(of(after, 'studio-graph').length, 0);
+  assert.deepEqual([one(after, 'studio-path').state, one(after, 'studio-path').to.id],
+    ['present', 'project-sweep']);
+  assert.deepEqual((await cmp.connectionsOfStudioProject('project-sweep')).downstream
+    .map((c) => c.relation), ['measured-path']);
+  // Saved again with the measured Sweep changed: no project holds it; that reads missing.
+  const swept = { ...model, graph: { ...model.graph, nodes: model.graph.nodes.map((n) => (
+    n.id === 'sweep-1' ? { ...n, params: { ...n.params, duration: 4 } } : n)) } };
+  await lib.saveProject(swept, { id: 'project-sweep', now: '2026-10-02T12:00:00.000Z' });
+  assert.equal(one((await cmp.connectionsOfRun('from-studio')).upstream, 'studio-graph').state,
+    'missing');
+});
+
+test('the workspace: a record link opens the record; a malformed one is refused', async () => {
+  const { a } = await fx();
+  const { cmp, notes } = harness();
+  await cmp.experimentsImportText(a.json);
+  assert.equal(cmp.recordsApplyHash('#m=measure'), null, 'no record key: not this domain');
+  assert.equal(cmp.recordsApplyHash('#m=experiments&exp=a&def=b'), false);
+  assert.match(notes.at(-1).text, /names one record/);
+  assert.equal(cmp.recordsApplyHash('#m=experiments&exp=fixture-a', 'link'), true);
+  await cmp.cnxSettled();
+  assert.equal(cmp.exps.detail.id, 'fixture-a');
+  assert.equal(cmp.recordsApplyHash('#m=experiments&exp=nope', 'link'), true);
+  await cmp.cnxSettled();
+  assert.match(notes.at(-1).text, /not stored in this browser/);
+});
+
+test('connected records are rendered as text, in every record view', () => {
+  const html = readFileSync(path.join(ROOT, 'src/index.html'), 'utf8');
+  const ui = readFileSync(path.join(ROOT, 'src/js/ui/connections.js'), 'utf8');
+  assert.ok(!/x-html/.test(html));
+  assert.ok(!/innerHTML|insertAdjacentHTML|outerHTML/.test(ui));
+  for (const osc of ['exp.connections', 'def.connections', 'fnd.connections']) {
+    assert.match(html, new RegExp(`data-osc="${osc.replace('.', '\\.')}"`), osc);
+  }
+});
+
+// ---------------------------------------------------------------- review 1 of #151
+
+/** Another tab on the same database (the harness's IndexedDB): its own component. */
+async function otherTab() {
+  const cmp = {};
+  for (const part of [createExperimentsUi(), createFindingsUi(), createConnectionsUi()]) {
+    Object.defineProperties(cmp, Object.getOwnPropertyDescriptors(part));
+  }
+  Object.assign(cmp, { notify() {}, $nextTick: (fn) => fn && fn(), openModal() {},
+    closeModal() {}, setWorkspace() {}, measureCurrentProfile: () => null });
+  cmp.experimentsInit();
+  cmp.findingsInit();
+  await cmp.experimentsRefresh();
+  return cmp;
+}
+/** In `tab`: delete experiment `id` and store `json` under that id, renamed. */
+async function replaceIn(tab, id, json, name) {
+  tab.exps.deleteId = id;
+  assert.equal(await tab.experimentsDelete(), true);
+  const d = JSON.parse(json);
+  d.experimentId = id;
+  d.name = name;
+  assert.equal(await tab.experimentsImportText(JSON.stringify(d)), id);
+}
+/** The address as ui/navigation.js would hold it: the record it names, or null. */
+function fakeAddress(cmp) {
+  const nav = { named: null, calls: [] };
+  cmp.navNameRecord = (link) => { nav.named = link ? { ...link } : null; nav.calls.push(link); };
+  cmp.navRecordInAddress = () => (nav.named ? { ok: true, ...nav.named } : null);
+  return nav;
+}
+const hashOf = (e) => (e ? e.provenance.resultHash : null);
+const shown = (cmp) => cmp.experimentsTestSeam().detail();
+
+test('review 1.5: a build or a profile is never "stored here"; it has its own words', () => {
+  const r = run('c', { calibration: { frequency: { id: H('7'), name: 'Mic A' }, level: null },
+    provenance: { build: { version: '9.8.7', sourceDigest: H('s'), artifactSha256: null } } });
+  const cur = { version: '9.8.7', sourceDigest: H('s'), artifactSha256: null };
+  const texts = [];
+  for (const over of [{ build: cur, profile: { id: H('7'), name: 'Mic A' } },
+    { build: { ...cur, version: '9.9.0' }, profile: null },
+    { build: { ...cur, sourceDigest: H('t') } }, { build: { ...cur, sourceDigest: null } }]) {
+    const up = C.connectionsOf(exp(r), index([r], over)).upstream;
+    for (const c of up) texts.push([c.relation, c.state, c.text]);
+  }
+  assert.ok(texts.length >= 7);
+  for (const [, , text] of texts) assert.ok(!/stored here/.test(text), text);
+  const of2 = (rel, state) => texts.find((t) => t[0] === rel && t[1] === state)[2];
+  assert.match(of2('build', 'present'), /^running here: /);
+  assert.match(of2('build', 'missing'), /^not running here: /);
+  assert.match(of2('profile', 'present'), /^loaded here: /);
+  assert.match(of2('profile', 'missing'), /^not loaded: /);
+  // The same source with another artifact SHA-256 is another file, never the running build.
+  const stamped = run('s', { provenance: { build: { ...cur, artifactSha256: H('x') } } });
+  assert.equal(one(C.connectionsOf(exp(stamped), index([stamped],
+    { build: { ...cur, artifactSha256: H('y') } })).upstream, 'build').state, 'mismatch');
+});
+
+test('review 1.6: each identity check of each row holds (the mutants die)', () => {
+  const a = run('a', { definition: { id: 'def-1', version: 1, hash: H('a'), derived: false } });
+  const d = def('def-1', [H('a')]);
+  const p = { id: 'p-1', name: 'Sweep', studioHash: H('g'), measured: { v: 1, hash: H('m') } };
+  // A copy that names this id with another result hash, or without one, on either side.
+  const dup = (hash) => run('dup', { provenance: { duplicateOf: 'a', resultHash: hash } });
+  const state = (subject, rows) => one(C.connectionsOf(exp(subject), index(rows)).downstream,
+    'duplicated-as').state;
+  assert.equal(state(a, [a, dup(H('1'))]), 'present');
+  assert.equal(state(a, [a, dup(H('2'))]), 'mismatch');
+  assert.equal(state(a, [a, dup(null)]), 'unverifiable');
+  const bare = run('a', { provenance: { resultHash: null } });
+  assert.equal(state(bare, [bare, dup(H('1'))]), 'unverifiable');
+  // A referrer whose record was not read is never "stored here", in any downstream row.
+  const rep = run('rep', { provenance: { repeatOf: 'a', resultHash: H('2') } });
+  const ran = run('ran', { definition: { id: 'def-1', version: 1, hash: H('a'), derived: false } });
+  const whole = run('w', { studio: { studioHash: H('g'), measured: { v: 1, hash: H('m') } } });
+  const path = run('p', { studio: { studioHash: H('h'), measured: { v: 1, hash: H('m') } } });
+  const unread = (rows) => {
+    const ix = index(rows);
+    for (const r of ix.runs) delete r.readable;
+    return ix;
+  };
+  const states = (out) => out.downstream.map((c) => [c.relation, c.state]);
+  assert.deepEqual(states(C.connectionsOf(exp(a), unread([a, rep, dup(H('1'))]))),
+    [['repeated-by', 'unverifiable'], ['duplicated-as', 'unverifiable']]);
+  assert.deepEqual(states(C.connectionsOf({ kind: 'definition', record: d },
+    { ...unread([a, ran]), definitions: [d] })),
+  [['executed', 'unverifiable'], ['executed', 'unverifiable']]);
+  assert.deepEqual(states(C.connectionsOf({ kind: 'studio', record: p }, unread([whole, path]))),
+    [['measured-graph', 'unverifiable'], ['measured-path', 'unverifiable']]);
+  // A row that is not what is stored now (replaced while the list was read) states nothing.
+  const staleIx = index([a, dup(H('1')), whole]);
+  for (const r of staleIx.runs) if (r.experimentId !== 'a') r.stale = true;
+  assert.equal(one(C.connectionsOf(exp(a), staleIx).downstream, 'duplicated-as').state,
+    'unverifiable');
+  const st = one(C.connectionsOf({ kind: 'studio', record: p }, staleIx).downstream,
+    'measured-graph');
+  assert.equal(st.state, 'unverifiable');
+  assert.match(st.text, /changed while this list was read/);
+  const orig = index([run('a'), dup(H('1'))]);
+  orig.runs[0].stale = true;
+  assert.equal(one(C.connectionsOf(exp(dup(H('1'))), orig).upstream, 'duplicate-of').state,
+    'unverifiable');
+  // A measured path recorded in another version is not compared with the project's.
+  const v2 = run('v2', { studio: { studioHash: H('h'), measured: { v: 2, hash: H('m') } } });
+  assert.deepEqual(C.connectionsOf({ kind: 'studio', record: p }, index([v2])).downstream, []);
+});
+
+test('review 1 (P2): what is not fine is listed first, so the bound never hides it', () => {
+  const d = def('def-1', [H('a')]);
+  const rows = Array.from({ length: C.CONNECTION_LIMIT + 5 }, (_, i) => run(`r${i}`,
+    { definition: { id: 'def-1', version: 1, hash: i >= C.CONNECTION_LIMIT ? H('f') : H('a'),
+      derived: false } }));
+  const out = C.connectionsOf({ kind: 'definition', record: d }, index(rows,
+    { definitions: [d] }));
+  assert.equal(out.downstream.length, C.CONNECTION_LIMIT);
+  assert.deepEqual(out.downstream.slice(0, 5).map((c) => c.state), Array(5).fill('mismatch'));
+  assert.equal(out.more.downstream, 5);
+  assert.equal(out.more.downstreamNotFine, 0, 'every unlisted entry is fine');
+});
+
+test('review 1.4: a record replaced while the list is read is never "stored here"', async () => {
+  const { a, c } = await fx();
+  const { cmp } = harness();
+  const model = templateModel('measurement-sweep');
+  const e = JSON.parse(experimentToJson(withStudioProvenance(a.experiment, model)));
+  e.experimentId = 'from-studio';
+  await cmp.experimentsImportText(JSON.stringify(e));
+  const s = await cmp.experimentsStore();
+  await createStudioLibrary(s).saveProject(model, { id: 'project-sweep', now: NOW });
+  const tab2 = await otherTab();
+  const listFindings = s.listFindings.bind(s);
+  let once = true;
+  s.listFindings = async () => { // "another tab", after this compute read the list rows
+    if (once) {
+      once = false;
+      await replaceIn(tab2, 'from-studio', c.json, 'IMPOSTOR, never measured from Studio');
+    }
+    return listFindings();
+  };
+  const v = await cmp.connectionsOfStudioProject('project-sweep');
+  assert.equal((await s.get('from-studio')).studio, undefined, 'the stored record has no graph');
+  assert.deepEqual(v.downstream.filter((x) => x.state === 'present'), [],
+    'no entry says the impostor stores this graph');
+  for (const x of v.downstream) assert.equal(await cmp.connectionsVerifyAndGo(x), false);
+});
+
+test('review 1.1: the entries under a detail are those of the record the detail shows',
+  async () => {
+    const { a, c } = await fx();
+    const { cmp } = harness();
+    await cmp.experimentsImportText(a.json);
+    await cmp.experimentsOpen('fixture-a');
+    await cmp.cnxSettled();
+    const old = hashOf(shown(cmp));
+    await replaceIn(await otherTab(), 'fixture-a', c.json, 'IMPOSTOR-A');
+    // Asked for the detail's own hash, a different stored record lists nothing under it.
+    const direct = await cmp.connectionsOfRun('fixture-a', old, { resync: false });
+    assert.deepEqual([direct.upstream, direct.downstream], [[], []]);
+    assert.match(direct.status, /no longer the one shown/);
+    // A refresh of what is shown (returning to Experiments) brings the detail to the stored
+    // record first; the entries then belong to it.
+    await cmp.connectionsRefreshOpen();
+    await cmp.cnxSettled();
+    const stored = await (await cmp.experimentsStore()).get('fixture-a');
+    assert.equal(hashOf(shown(cmp)), hashOf(stored));
+    assert.equal(cmp.exps.detail.title, 'IMPOSTOR-A');
+    assert.equal(cmp.cnx.run.status, null);
+    assert.equal(cmp.cnx.run.shownHash, hashOf(stored), 'the view says whose entries they are');
+  });
+
+test('review 1.2: following an entry opens the record that was read, never a decoded copy',
+  async () => {
+    const { a, b, c } = await fx();
+    const { cmp } = harness();
+    await cmp.experimentsImportText(a.json);
+    await cmp.experimentsImportText(b.json);
+    await cmp.experimentsOpen('fixture-b'); // B decoded and shown here
+    await cmp.experimentsOpen('fixture-a'); // B stays in the decoded cache
+    const tab2 = await otherTab();
+    await replaceIn(tab2, 'fixture-b', c.json, 'IMPOSTOR under fixture-b');
+    await tab2.findingsAskRun('fixture-b');
+    tab2.fnd.form.statement = 'cites the impostor';
+    const f = await tab2.findingsSave();
+    assert.ok(f);
+    const entry = (await cmp.connectionsOfFinding(f.id)).upstream[0];
+    assert.equal(entry.state, 'present');
+    assert.equal(await cmp.connectionsVerifyAndGo(entry), true);
+    await cmp.cnxSettled();
+    const stored = await (await cmp.experimentsStore()).get('fixture-b');
+    assert.equal(cmp.exps.detail.title, 'IMPOSTOR under fixture-b');
+    assert.equal(hashOf(shown(cmp)), hashOf(stored));
+    assert.equal(hashOf(shown(cmp)), entry.to.hash, 'the record opened is the one verified');
+    // The same with the stale copy on screen: a record link to the open id reads it again.
+    await replaceIn(tab2, 'fixture-b', b.json, 'B again');
+    assert.equal(await cmp.recordsOpen('experiment', 'fixture-b'), true);
+    assert.equal(cmp.exps.detail.title, 'B again');
+  });
+
+test('review 1.7: the address names the open experiment on every path', async () => {
+  const { a, b } = await fx();
+  const { cmp, notes } = harness();
+  const nav = fakeAddress(cmp);
+  await cmp.experimentsImportText(a.json);
+  await cmp.experimentsImportText(b.json);
+  await cmp.experimentsOpen('fixture-a');
+  assert.deepEqual(nav.named, { kind: 'experiment', id: 'fixture-a' });
+  // A link to a record that is not stored: said, and the address names what is shown again.
+  nav.named = { kind: 'experiment', id: 'not-stored-anywhere' };
+  assert.equal(cmp.recordsApplyHash('#m=experiments&exp=not-stored-anywhere'), true);
+  await cmp.cnxSettled();
+  assert.match(notes.at(-1).text, /not stored in this browser/);
+  assert.deepEqual(nav.named, { kind: 'experiment', id: 'fixture-a' });
+  // The open record deleted in another tab: the detail closes and the address names none.
+  const tab2 = await otherTab();
+  tab2.exps.deleteId = 'fixture-a';
+  await tab2.experimentsDelete();
+  await cmp.experimentsRefresh();
+  await cmp.cnxSettled();
+  assert.equal(cmp.exps.detail, null);
+  assert.equal(nav.named, null);
+  // With nothing open, a missing link leaves no record named.
+  nav.named = { kind: 'experiment', id: 'gone' };
+  cmp.recordsApplyHash('#m=experiments&exp=gone');
+  await cmp.cnxSettled();
+  assert.equal(nav.named, null);
+});
+
+test('review 1.3 and 1.8: Studio\'s dialog follows entries through the verified path', () => {
+  const panel = readFileSync(path.join(ROOT, 'src/js/ui/studio/patches-panel.js'), 'utf8');
+  assert.match(panel, /svc\.follow\(/, 'a dialog link goes through connectionsVerifyAndGo');
+  assert.ok(!/onClick: follow\b/.test(panel), 'no link is left to the browser alone');
+  assert.match(panel, /`Open \$\{r\.name\}`/, 'Open names its project');
+  assert.match(panel, /svc\.dirty\(\)/, 'Open asks before it replaces unsaved changes');
+});
