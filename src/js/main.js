@@ -63,7 +63,6 @@ import { createScopeView, createHarmonicBarsView } from './ui/p5-views.js';
 import { buildConfigExport, parseConfigImport, CONFIG_FILE_VERSION } from './ui/config-file.js';
 import { renderPlanToWav, renderSequenceToWav, screenshotCanvases } from './ui/exporters.js';
 import { BUILD } from './core/build-info.js';
-import { studioTimelineSeam } from './ui/studio/timeline-test-seam.js';
 
 import { mount as mountAnalysis } from './labs/analysis.js';
 import { mount as mountFilter } from './labs/filter-lab.js';
@@ -807,11 +806,12 @@ window.addEventListener('unhandledrejection', (e) => {
 // ------------------------------------------------------------------------------ test seam
 // window.OSCILLA ships in the one page that is tested and deployed (ADR 0052). It is not a
 // security boundary. Each member OBSERVES, DRIVES an action a user already has (through the
-// user's validation), or INJECTS only as TEST CONTEXT; studioTimeline is none of the three and is
-// due to leave the page (ledger W7a). The stable reads are version, build,
-// measure.state, measure.counts(), studio.counts(), studio.model and studio.trace.steps(); every
-// other member may change without notice, and app, engine and host are live internals, not a
-// contract. The key list is pinned by tests/browser/app.cjs `seam-surface-pinned`.
+// user's validation), or INJECTS only as TEST CONTEXT. No member builds Studio state of its own:
+// studio is the workspace's one store, runtime and transport (tests/unit/v4-one-studio-store).
+// The stable reads are version, build, measure.state, measure.counts(), studio.counts(),
+// studio.model and studio.trace.steps(); every other member may change without notice, and app,
+// engine and host are live internals, not a contract. The key list is pinned by
+// tests/browser/app.cjs `seam-surface-pinned`.
 window.OSCILLA = {
   engine,
   viz: bridge,
@@ -828,7 +828,6 @@ window.OSCILLA = {
     get armed() { return unsavedGuard.armed; },
     whatWouldBeLost: () => unsavedGuard.update(),
   },
-  studioTimeline: studioTimelineSeam(engine),
   buildPlan,
   planFreqAt,
   parseFrequency,

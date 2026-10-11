@@ -592,8 +592,7 @@ automated test proves how a physical speaker, room or microphone behaves.
   browser tests and the post-deployment smoke use, so the bytes that are tested are the bytes
   that are served. The stable reads are `version`, `build`, `measure.state`, `measure.counts()`,
   `studio.counts()`, `studio.model` and `studio.trace.steps()`; everything else may change
-  without notice. Every member except `studioTimeline` (a second Studio context that one test
-  suite builds; it is due to leave the page) is one of three kinds: it observes; it drives an
+  without notice. Every member is one of three kinds: it observes; it drives an
   action you already have in the page, through the same validation (`measure.useLoopback()` is
   `?measure=loopback`, `measure.setValues()` is a recipe link); or it injects test data.
   `measure.showResult()` refuses a result that is not marked TEST CONTEXT, so no injected result
