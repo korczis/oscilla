@@ -5,7 +5,7 @@
 // `true`, or by using the value itself (the checks that assert a refusal).
 //   node --test tests/unit/seam-verdict-read.test.mjs
 //
-// One call is recorded as pending (PENDING): the live smoke's, which leaves with ledger W7e.
+// No call is pending (PENDING is empty): the live smoke's one call left with ledger W7e (#168).
 //
 // What the scan decides: a call written as a statement or as the body of an arrow function is
 // a discarded verdict. Its limits: it does not trace a value that is assigned and then ignored
@@ -29,10 +29,7 @@ const requireCjs = createRequire(import.meta.url);
  * Calls that leave with another open ledger line: file → why. An entry allows exactly the
  * calls of that file to stay, never more, and may be removed once they are gone.
  */
-const PENDING = Object.freeze({
-  'tests/browser/live-smoke.cjs': 'ledger W7e: the smoke loads ?measure=loopback#mr=<recipe> '
-    + 'and its one setValues call goes with that change',
-});
+const PENDING = Object.freeze({});
 
 /** `file:line` of every setValues call in `text` whose verdict is not read. */
 function discarded(text, file) {
