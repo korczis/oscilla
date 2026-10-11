@@ -22,7 +22,7 @@ rules:
   - id: majordomus.bootstrap-integrity
     version: 1
     file: rules/bootstrap-integrity.v1.md
-    sha256: 6cba4af621124f19136f2a12ce2f5f00f413f327da9497900397ce8616d6410c
+    sha256: d6a33fc1b28cb2b23e2da57f7fb6aad0a573253b511b01a5bdf3fdbc5e2812d6
   - id: majordomus.candidates-reviewed
     version: 1
     file: rules/candidates-reviewed.v1.md
