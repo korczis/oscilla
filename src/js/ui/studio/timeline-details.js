@@ -20,7 +20,7 @@ import {
 } from './automation-view.js';
 import {
   blockTypeOptions, clipText, clipTargetOptions, clipView, compatibleTracks, eventActionOptions,
-  measurementActionOptions, parseSecondsText, trackTargetOptions,
+  measurementActionOptions, nodeName, parseSecondsText, trackTargetOptions,
 } from './timeline-view.js';
 import { el, selectBox, spriteIcon } from './timeline-dom.js';
 
@@ -110,8 +110,15 @@ export function createDetails(api, container) {
     const duration = numberInput();
     const track = selectBox(compatibleTracks(model, clip).map((t) => ({ id: t.id,
       label: t.name })), clip.trackId);
+    // Targets the clip plays on (clip-targets.js, R7), and the one it has even when it does not
+    // play there (a file from an earlier build): the select never shows a target it lacks.
+    const offered = clipTargetOptions(model, clip.kind, NODE_REGISTRY,
+      clip.kind === 'pattern' ? undefined : (clip.payload.action || 'gate'));
+    if (clip.target && !offered.some((n) => n.id === clip.target)) {
+      offered.push({ id: clip.target, name: nodeName(model, clip.target) });
+    }
     const targets = [{ id: '', label: 'Track target' },
-      ...clipTargetOptions(model, clip.kind).map((n) => ({ id: n.id, label: n.name }))];
+      ...offered.map((n) => ({ id: n.id, label: n.name }))];
     const target = selectBox(targets, clip.target || '');
     const timeBase = selectBox([{ id: 'absolute', label: 'Seconds (absolute)' },
       { id: 'tempo', label: 'Tempo-linked' }], clip.musical ? 'tempo' : 'absolute');

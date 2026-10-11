@@ -59,6 +59,7 @@
 //     between reports under the same op. Selection and view changes are not traced.
 
 import { ID_PATTERN } from '../experiments/schema.js';
+import { clipTarget } from './clip-targets.js';
 import { canConnect, validateEdgeProps } from './ports.js';
 import { NODE_REGISTRY, projectParams, validateParamValue } from './registry.js';
 import {
@@ -579,9 +580,9 @@ const REDUCERS = {
   AUTOMATION_POINT_ADD(model, a, ctx) {
     const target = a.target || {};
     const node = requireNode(model, target.node);
+    const held = clipTarget(node, { kind: 'automation', param: target.param }, ctx.registry);
+    if (!held.holds) reject(held.reason);
     const p = ctx.registry.param(node.type, target.param);
-    if (!p || !p.automatable) reject(`${node.metadata.name} ${p ? p.label : target.param} cannot `
-      + 'be automated.');
     const point = { id: ctx.newId('pt'), time: a.time, value: a.value, curve: a.curve || 'linear' };
     const lanes = model.timeline.automation;
     const lane = lanes.find((l) => l.target.node === node.id && l.target.param === p.key);
