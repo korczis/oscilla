@@ -178,10 +178,31 @@ stands; the empty case is now recognised before the compile. `schema.js` `sameEx
 says that the new model has the execution state of the applied plan's model (what `studioHash`
 covers), and `runtime.apply`, while running, then takes the revision without compiling or
 transacting; the transport adopts the model and re-plans nothing. A change of capabilities
-(`setOptions`), a changed owned-parameter peak and every apply while stopped still compile. The
-plan keeps the model it was compiled from: node names reach only its display reasons.
+(`setOptions`), a changed owned-parameter peak and every apply while stopped still compile.
 
-Proven by `tests/unit/v4-presentation-edits.test.mjs` (zero compiles and zero Web Audio writes
-for each presentation edit while playing, exactly one compile for a parameter edit; it fails on
-the code before the change) and `presentation-edit` in `tests/browser/v31-studio-runtime.cjs`
+A node rename is not on that path, although `studioHash` does not cover names: a node's name
+reaches the compiled plan (validation's warnings, which `debugInfo().warnings` and the
+Inspector's runtime diagnostics show, and the nodes' display reasons), so a rename compiles and
+runs its transaction like any edit (the adversarial review of #155 found a stale name in the
+diagnostics, kept for good by a later `setOptions`). What stays on the skip path changes only
+what the plan does not read: node positions, markers, track names and the Studio metadata. The
+plan keeps the model it was compiled from, and the runtime keeps the adopted model beside it, so
+that `setOptions` recompiles the current document, not the plan's older one.
+
+Two consequences of "no transaction" are deliberate:
+
+- A failed engage (`engage-failed`, `runtime.unresolved()`) is retried by every later
+  transaction, and a presentation-only edit runs none: it is retried only by an edit that
+  compiles (a real edit, or `setOptions` with changed capabilities) or by STOP and PLAY. Before,
+  any edit ran an (empty) transaction and so retried it. The verdict stays `degraded` meanwhile.
+- `debugInfo().lastOps` and `lastWarnings` keep the last real transaction's values across
+  presentation-only edits: they describe the last transaction, and none ran.
+
+Proven by `tests/unit/v4-presentation-edits.test.mjs` (zero compiles, zero Web Audio writes and
+no timeline re-plan by `admit` or `sync` for each presentation edit while playing, exactly one
+compile for a parameter, automation or rename edit, the renamed node in the runtime diagnostics
+before and after `setOptions`, `setOptions` compiling the store's current model, a refusal
+cleared when a move takes its revision number, and `sameExecutionState` agreeing with
+`studioHash` on node, edge, track, clip, automation, loop and transport edits; it fails on the
+code before the change) and `presentation-edit` in `tests/browser/v31-studio-runtime.cjs`
 (a node dragged while the Basic Tone plays: no compile, no glitch on the output).

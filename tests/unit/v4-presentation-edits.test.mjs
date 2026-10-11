@@ -1,10 +1,11 @@
 // R9 (docs/v4/completion-ledger.md, P2): a presentation-only Studio edit while playing (a node
-// moved or renamed, a marker, the Studio title: anything the execution state, and so the audio
-// graph, does not depend on; schema.js executionState) skips the compile and the runtime
-// transaction. Before this change every such edit, through the store's commit gate
-// (transport.admit), compiled the whole model, diffed it, ran an empty transaction and re-planned
-// the timeline. ADR 0039 stays true: the applied record moves to the new revision with the same
-// plan (its planHash unchanged), and the divergence verdict stays in-sync.
+// moved, a marker, the Studio title: anything the execution state, and so the audio graph, does
+// not depend on, schema.js executionState, and that the compiled plan does not read, unlike a node
+// name) skips the compile and the runtime transaction. Before this change every such edit,
+// through the store's commit gate (transport.admit), compiled the whole model, diffed it, ran an
+// empty transaction and re-planned the timeline. ADR 0039 stays true: the applied record moves
+// to the new revision with the same plan (its planHash unchanged), and the divergence verdict
+// stays in-sync.
 //   node --test tests/unit/v4-presentation-edits.test.mjs
 // Wiring is the workspace's (as tests/unit/v31-studio-trace.test.mjs): createStoreHandle with the
 // commit gate transport.admit, the transport and runtime on the real AudioEngine over the fake

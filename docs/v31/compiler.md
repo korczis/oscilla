@@ -174,18 +174,25 @@ wired to.
    (`engine._timers`); on a suspended or closed context cleanup runs at once, as the engine does.
 
 **Presentation-only edits (ledger R9).** While running, a model whose execution state is the
-applied plan's (`schema.js` `sameExecutionState`: only node positions and names, markers, track
-names or the Studio metadata differ, the parts `studioHash` does not cover) compiles to that
-same plan. `apply` then runs no compile, no diff and no transaction: it takes the revision
-(`{ ok: true, applied: false, presentation: true, ops: [] }`), the applied record names it with
-the same plan (`planHash`, `studioHash` and `at` unchanged), and the transport neither brings
-claims and lanes in line nor re-plans the timeline, since the clips, lanes, loop and tempo are
-execution state. The plan keeps the model it was compiled from; node names reach only its display
-reasons, as a node's handle reasons already did. `setOptions`, a changed owned-parameter peak and
-any apply while stopped compile as before. `tests/unit/v4-presentation-edits.test.mjs` asserts
-zero compiles and zero Web Audio writes for each presentation edit while playing and exactly one
-compile for a parameter edit; `presentation-edit` in `tests/browser/v31-studio-runtime.cjs`
-drags a node of the playing Basic Tone: no compile, no glitch on the output.
+applied plan's (`schema.js` `sameExecutionState`: what `studioHash` covers is equal) and whose
+node names are the plan's (so only node positions, markers, track names or the Studio metadata
+differ) compiles to that same plan. `apply` then runs no compile, no diff and no transaction:
+it takes the revision (`{ ok: true, applied: false, presentation: true, ops: [] }`), the applied
+record names it with the same plan (`planHash`, `studioHash` and `at` unchanged), and the
+transport neither brings claims and lanes in line nor re-plans the timeline, since the clips,
+lanes, loop and tempo are execution state. A node rename is compiled although `studioHash` does
+not cover names: a name reaches the plan (validation's warnings, so `debugInfo().warnings` and
+the Inspector, and the nodes' display reasons). The plan keeps the model it was compiled from,
+and the runtime keeps the adopted model, which `setOptions` recompiles. `setOptions`, a changed
+owned-parameter peak and any apply while stopped compile as before. With no transaction, a
+failed engage (`engage-failed`) is retried only by an edit that compiles (a real edit, or
+`setOptions` with changed capabilities) or by STOP and PLAY, and `debugInfo().lastOps` and
+`lastWarnings` keep the last real transaction's values.
+`tests/unit/v4-presentation-edits.test.mjs` asserts zero compiles, zero Web Audio writes and no
+timeline re-plan for each presentation edit while playing, exactly one compile for a parameter,
+automation or rename edit, and the new name in the runtime diagnostics after a rename;
+`presentation-edit` in `tests/browser/v31-studio-runtime.cjs` drags a node of the playing Basic
+Tone: no compile, no glitch on the output.
 
 While stopped, `apply` only stores the plan (`applied: false`). `start()` is the transaction
 from the empty plan; `stop()` fades the Master bus to the floor over `STUDIO_STOP_S` (15 ms,
