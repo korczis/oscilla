@@ -56,6 +56,51 @@ export function findVersionLiterals(files, version, allow = LITERAL_ALLOW) {
   return hits;
 }
 
+// How far ahead of the product findVersionsAhead() looks: the rest of the current major and
+// the whole of the next one.
+export const AHEAD_MAJORS = 1;
+
+const AHEAD_RE = /(?<![0-9A-Za-z.@/_+-])v?([0-9]+)\.([0-9]+)\.([0-9]+)(?![0-9A-Za-z_]|\.[0-9])/g;
+
+/**
+ * Version-shaped literals the product has not reached yet: every X.Y.Z in the scanned files
+ * (the shape and the allowlist of findVersionLiterals) that is above `version` and whose major
+ * is at most `majorsAhead` above its major. On a candidate, its own X.Y.Z counts as ahead (the
+ * release it becomes). Each one is a release that fails version:check on the day the product
+ * gets there. A patch, minor or candidate-to-stable bump only narrows the range, so a tree
+ * with no hit before such a bump has none after it; the range gains one major only when the
+ * product enters a new major.
+ * @param {{ path: string, content: Buffer|string }[]} files
+ * @param {string} version
+ * @param {{ allow?: RegExp[], majorsAhead?: number }} [o]
+ * @returns {{ version: string, path: string, line: number, text: string }[]}
+ */
+export function findVersionsAhead(files, version, {
+  allow = LITERAL_ALLOW, majorsAhead = AHEAD_MAJORS,
+} = {}) {
+  const [base, pre] = version.split('-');
+  const cur = base.split('.').map(Number);
+  const ahead = (v) => {
+    if (v[0] > cur[0] + majorsAhead) return false;
+    const i = v.findIndex((n, k) => n !== cur[k]);
+    return i === -1 ? Boolean(pre) : v[i] > cur[i];
+  };
+  const hits = [];
+  for (const f of files) {
+    if (allow.some((a) => a.test(f.path))) continue;
+    const buf = Buffer.isBuffer(f.content) ? f.content : Buffer.from(f.content);
+    if (buf.includes(0)) continue; // binary
+    buf.toString('utf8').split('\n').forEach((text, i) => {
+      for (const m of text.matchAll(AHEAD_RE)) {
+        if (!ahead([Number(m[1]), Number(m[2]), Number(m[3])])) continue;
+        hits.push({ version: `${m[1]}.${m[2]}.${m[3]}`, path: f.path, line: i + 1,
+          text: text.trim().slice(0, 120) });
+      }
+    });
+  }
+  return hits;
+}
+
 /** Tracked plus untracked-but-not-ignored files (a new file is caught before its commit). */
 export function repositoryFiles(root = ROOT) {
   const out = execFileSync('git', ['ls-files', '-z', '--cached', '--others', '--exclude-standard'],
