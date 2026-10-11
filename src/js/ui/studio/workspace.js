@@ -89,7 +89,7 @@ import { openModal, closeModal } from '../dialogs.js';
 import { downloadBlob, readFileText } from '../exporters.js';
 import { createGraphEditor } from './graph-editor.js';
 import { compiledEdgeStatus, compiledStatus, nodeWarnings, runtimeStatus } from './graph-view.js';
-import { STUDIO_SHORTCUTS, isEditingTarget, resolveStudioKey } from './graph-keys.js';
+import { isEditingTarget, resolveStudioKey } from './graph-keys.js';
 import { createConnectDialog, createFindNode, createQuickAdd } from './graph-picker.js';
 import { mountInspector } from './inspector.js';
 import { mountLibrary } from './library-panel.js';
@@ -1038,7 +1038,6 @@ export function createStudioUi(svc = {}) {
       warning: '',
       counts: '',
       templates: listTemplates(),
-      shortcuts: STUDIO_SHORTCUTS,
       task: { ...IDLE_TASK },
       measureNote: '',
       renderForm: { duration: '', note: '', format: '', limitations: [], refused: false,
