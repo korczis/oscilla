@@ -62,7 +62,7 @@ import { renderStimulus } from '../../measurement/stimulus.js';
 import { createAnalyserReader } from '../../analysis/analyser.js';
 import { createRamp } from './ramp.js';
 import { createRtaAverager } from '../../measurement/rta.js';
-import { CLIP_TARGET_TEXT, qIsDecibels } from '../clip-targets.js';
+import { CLIP_TARGET_TEXT, gainIsUsed, qIsDecibels } from '../clip-targets.js';
 
 /** Glide of a parameter change: the engine's live-update time constant (updateLive, τ 15 ms). */
 export const PARAM_TAU_S = 0.015;
@@ -591,7 +591,10 @@ const filter = {
           if (qIsDecibels(params.type)) return { reason: CLIP_TARGET_TEXT.filterQ };
           return linearOnly(biquad.Q)(key, mapping);
         }
-        if (key === 'gain') return linearOnly(biquad.gain)(key, mapping);
+        if (key === 'gain') {
+          if (!gainIsUsed(params.type)) return { reason: CLIP_TARGET_TEXT.filterGain };
+          return linearOnly(biquad.gain)(key, mapping);
+        }
         return { reason: `unknown parameter ${key}` };
       },
       applyBase(b, immediate, owned, w) {

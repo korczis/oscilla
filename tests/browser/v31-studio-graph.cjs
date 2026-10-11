@@ -83,6 +83,7 @@ const os = require('node:os');
 const path = require('node:path');
 const { pathToFileURL } = require('node:url');
 const suite = require('./lib/suite.cjs');
+const { until } = require('./lib/wait.cjs');
 
 const argv = process.argv.slice(2);
 const arg = (name, fallback) => {
@@ -707,7 +708,13 @@ function defineChecks() {
     });
     await page.evaluate(() => window.OSCILLA.studio.store.dispatch({ type: 'NODE_PARAM_SET',
       nodeId: 'filter-1', key: 'type', value: 'bandpass' }));
-    await H.frames(page);
+    // The Inspector rebuilds on the type change (inspectorRebuildKey): the Q note goes and its
+    // AUTOMATE appears, which the click below needs.
+    await until(() => page.evaluate(() => {
+      const f = document.querySelector('.osc-si-field[data-field="Q"]');
+      return !!f && !!f.querySelector('[data-osc="studio.inspector.automate"]')
+        && !f.querySelector('[data-osc="studio.inspector.no-automate"]');
+    }), { ms: 5000, what: 'inspector: Q offers AUTOMATE once Filter 1 is band-pass' });
     // AUTOMATE (§102): creates the lane at the current value; on an automated parameter it
     // reveals the lane (selects its points).
     await page.click('.osc-si-field[data-field="Q"] [data-osc="studio.inspector.automate"]');

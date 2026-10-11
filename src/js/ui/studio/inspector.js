@@ -631,10 +631,23 @@ export function inspectorView(model, selection, opts = {}) {
 // ---------------------------------------------------------------- DOM
 
 /** Mount the Inspector into `host`. */
+/**
+ * The texts of a node view that the mounted Inspector's update() does not refresh in place: when
+ * this key changes for the same selection, the panel is rebuilt (focus kept by data-key). Pure.
+ */
+export function inspectorRebuildKey(view) {
+  if (view.kind !== 'node') return '';
+  return [!!view.statusText, view.mic ? `${view.mic.action}|${view.mic.error}|${view.mic.busy}`
+    : '',
+    ...view.connections.map((c) => c.text), ...view.fields.map((f) =>
+      // Whether Automate is offered can change with another parameter (a filter type, R7).
+      `${f.modulatedBy.join('|')}|${f.automatable}|${f.automateReason || ''}`)].join('\n');
+}
+
 export function mountInspector(host, svc) {
   const registry = svc.registry || NODE_REGISTRY;
   let current = null; // the rendered view key
-  let builtSig = ''; // textSig of the rendered node view
+  let builtSig = ''; // inspectorRebuildKey of the rendered node view
   let refs = new Map(); // field key -> { input, slider, readout, error, field }
   let gestureOpen = false;
 
@@ -1286,16 +1299,6 @@ export function mountInspector(host, svc) {
   }
 
   // ---------------------------------------------------------------- render
-  /** The texts of a node view that update() does not refresh in place. */
-  function textSig(view) {
-    if (view.kind !== 'node') return '';
-    return [!!view.statusText, view.mic ? `${view.mic.action}|${view.mic.error}|${view.mic.busy}`
-      : '',
-      ...view.connections.map((c) => c.text), ...view.fields.map((f) =>
-        // Whether Automate is offered can change with another parameter (a filter type, R7).
-        `${f.modulatedBy.join('|')}|${f.automatable}|${f.automateReason || ''}`)].join('\n');
-  }
-
   function update(view) {
     const active = document.activeElement;
     if (view.kind === 'node') {
@@ -1384,7 +1387,7 @@ export function mountInspector(host, svc) {
       // The connection list and the "Modulated" notes are text built with the view: rebuild
       // when they change (a connection added or removed, or one that stopped carrying anything
       // after a filter type change, §237). Focus is kept by data-key.
-      if (view.kind === 'node' && textSig(view) !== builtSig) {
+      if (view.kind === 'node' && inspectorRebuildKey(view) !== builtSig) {
         current = null;
         return render();
       }
@@ -1408,7 +1411,7 @@ export function mountInspector(host, svc) {
     rt = null;
     tr = null;
     current = view.key;
-    builtSig = textSig(view);
+    builtSig = inspectorRebuildKey(view);
     const builders = { node: buildNode, edge: buildEdge, clip: buildClip, point: buildPoint,
       multi: buildMulti, studio: buildStudio };
     replaceChildren(host, h('div', { class: `osc-si osc-si--${view.kind}`,

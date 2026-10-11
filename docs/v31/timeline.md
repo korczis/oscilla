@@ -75,17 +75,32 @@ levels:
 
 | Level | Who reads it | What it is |
 | --- | --- | --- |
-| `holds` | the store (`clipRules`, `canHostClip`, lane validation, `AUTOMATION_POINT_ADD`) | what the registry declares: a node type's `clipKinds`, `MEASUREMENT_TARGETS` per action, a parameter's `automatable`. A model with it validates, so a file saved by an earlier build keeps loading |
-| `plays`, `how` | the transport (`clipPlayReason`, pattern-played oscillators, gated envelopes, lane parameters) and the timeline UI (track and clip target options, "add clip", the Automate form and button) | the subset the transport plays: a pattern clip on a Sequence (`sequence`) or an Oscillator (`pattern-played`), an event clip only as a gate on an Envelope (`gate`), a measurement clip always (`measurement`, as data), a lane unless no single AudioParam carries its parameter (`automation`) |
+| `holds` | the store (`clipRules`, the current track in `clipTrackReason`, lane validation, `AUTOMATION_POINT_ADD`) | what the registry declares: a node type's `clipKinds`, `MEASUREMENT_TARGETS` per action, a parameter's `automatable`. A model with it validates, so a file saved by an earlier build keeps loading |
+| `plays`, `how` | the transport (`clipPlayReason`, pattern-played oscillators, gated envelopes, lane parameters), the offline render plan (`planOfflineRender`, clips and lanes) and the timeline UI (track and clip target options, "add clip", the tracks a clip may move or be nudged to, the clip form's Action options, the Automate form and button) | the subset the transport plays: a pattern clip on a Sequence (`sequence`) or an Oscillator (`pattern-played`), an event clip only as a gate on an Envelope (`gate`), a measurement clip always (`measurement`, as data), a lane on a parameter with a linear AudioParam that Web Audio uses (`automation`) |
 
-The UI offers only what plays; what is held and not played (an event clip on an Oscillator,
-Noise or Sweep; a trigger event; a lane on a Stereo Split pan or level; a low-/high-pass Q lane,
-whose AudioParam is in dB) is shown with the policy's reason, the same sentence and code the
-transport lists in `debugInfo().unplayed`. "Add clip" on a track whose target plays neither a
-pattern nor a gate says so instead of adding a clip that never sounds.
-`tests/unit/v4-clip-target-policy.test.mjs` proves that the store, the UI and the transport give
-this verdict for every node type, clip kind, action and parameter in the registry, and that the
-adapters expose an AudioParam exactly for the lanes it says play.
+A lane does not play on a Stereo Split pan or level (a pan law over several gains: no single
+AudioParam carries it), on a low-/high-pass Q (its AudioParam is in dB, so a linear lane would be
+mis-scaled) or on a filter gain for any type but peaking (Web Audio ignores the gain there). The
+adapters refuse modulation of the same parameters with the same sentence.
+
+The UI offers only what plays. A clip moves (pointer or keyboard) only onto a track where it
+plays; its own track stays in the list even where it does not. The Action select offers Trigger
+only to a clip that already has it, and the clip form recomputes its track, target and action
+choices after every change. What is held and not played is reported with the policy's reason
+in these places, and only there:
+
+- a clip: the clip's problems in the timeline and the clip form, `debugInfo().unplayed` (same
+  code and sentence), and the Render WAV plan's limitations;
+- a lane: the Inspector's "No automation:" note on the parameter, `debugInfo().unplayed`, and
+  the Render WAV plan's limitations. The lane editor and the import report do not show it yet
+  (a held lane from an earlier file is drawn like any other).
+
+"Add clip" on a track whose target plays neither a pattern nor a gate says so instead of adding
+a clip that never sounds. `tests/unit/v4-clip-target-policy.test.mjs` proves that the store,
+the UI, the offline plan and the transport (its unplayed list, owned parameters, pattern claims
+and gated envelopes after PLAY) give this verdict for every node type, clip kind, action and
+parameter in the registry, and that the adapters expose an AudioParam exactly for the lanes it
+says play.
 
 ## Time (§89-§91)
 

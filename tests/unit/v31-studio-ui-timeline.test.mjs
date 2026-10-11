@@ -185,8 +185,10 @@ test('add clip: pattern on an oscillator track, gate on an envelope track, pre-r
     assert.equal(freeStartOnTrack(s.getModel(), 'track-1', 10), 10);
     assert.ok(trackTargetOptions(m, 'event').some((n) => n.id === 'osc-1'));
     assert.ok(clipTargetOptions(m, 'pattern').every((n) => n.id !== 'filter-1'));
-    assert.deepEqual(compatibleTracks(s.getModel(), { kind: 'pattern' }).map((t) => t.id),
-      ['track-1', 'track-2']);
+    // A pattern clip may move only onto tracks where it plays (R7): not onto the Envelope track.
+    const pattern = s.getModel().timeline.clips.find((c) => c.kind === 'pattern'
+      && c.trackId === 'track-1');
+    assert.deepEqual(compatibleTracks(s.getModel(), pattern).map((t) => t.id), ['track-1']);
   });
 
 test('split: a log sweep is cut where its curve is; one undo entry restores it exactly', () => {

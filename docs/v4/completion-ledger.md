@@ -86,7 +86,9 @@ Diagnostic codes derived from message text (R5, fixing); clip-target policy dupl
 registry, timeline UI and transport (R7, **closed** #154: one pure function,
 `studio/clip-targets.js` `clipTarget`, read by the store, the timeline UI and the transport; the
 UI had offered event-clip targets, measurement targets and Automate on parameters the transport
-never plays, `tests/unit/v4-clip-target-policy.test.mjs`); pattern-played Oscillator frequency lanes drive a
+never plays; review round 1 added the offline render plan's lanes, the move/nudge tracks, the
+Action options, filter gain off peaking and the transport's own clip ownership,
+`tests/unit/v4-clip-target-policy.test.mjs`); pattern-played Oscillator frequency lanes drive a
 silent carrier (R8); presentation-only edits pay a full compile while playing (R9);
 `mode`/`workspace` split state and three hash routers (W4, fixing with W2: one dispatcher, ADR 0045); Space has two meanings and two
 shortcut dialogs (W5); disabled controls without a reason (W6, partly fixing); WebKit absent from

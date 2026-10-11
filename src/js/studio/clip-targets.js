@@ -1,13 +1,16 @@
 // The clip-target policy (R7, docs/v4/completion-ledger.md): which node, or node parameter, a
 // timeline clip or automation lane may target, and how the transport plays it there. Pure: plain
 // data in, plain data out. It is the ONE answer read by
-//   the store         timeline.js clipRules (every action and every import) and canHostClip;
+//   the store         timeline.js clipRules (every action and every import);
 //                     validate.js and actions.js for automation lanes
-//   the timeline UI   timeline-view.js trackTargetOptions / clipTargetOptions / addClipAction,
-//                     automation-view.js automatableTargets, automation.js automateParameter and
-//                     the Inspector's Automate button
+//   the timeline UI   timeline-view.js trackTargetOptions / clipTargetOptions / addClipAction /
+//                     compatibleTracks / clipFormOptions, timeline.js clipTrackReason (the
+//                     tracks a clip may move or be nudged to), automation-view.js
+//                     automatableTargets, automation.js automateParameter and the Inspector's
+//                     Automate button
 //   the transport     transport.js clipPlayReason, the oscillators it pattern-plays, the
 //                     envelopes it gates, and the parameters its lanes own and drive
+//   offline render    offline.js planOfflineRender (clips through clipPlayReason, lanes here)
 //
 //   clipTarget(node, use, registry = NODE_REGISTRY) -> { holds, plays, how, code, reason,
 //                                                        errors }
@@ -26,10 +29,14 @@
 //
 // Holding and playing differ on purpose. The store holds what the registry declares (a node
 // type's clipKinds, a parameter's `automatable`) so that a file saved by an earlier build keeps
-// loading; the transport plays a subset of it; the UI offers only what plays, and shows what is
-// held but not played with this reason. The subset is the table below: pattern clips play on a
+// loading; the transport plays a subset of it; the UI offers only what plays, and reports what is
+// held but not played with this reason where docs/v31/timeline.md "Clip-target policy" lists. The
+// subset is the table below: pattern clips play on a
 // Sequence or an Oscillator, event clips only as gates on an Envelope, measurement clips always
-// (as data), and a lane plays unless no single AudioParam carries its parameter.
+// (as data), and a lane plays unless its parameter has no linear AudioParam that Web Audio uses:
+// a Stereo Split pan or level is a pan law over several gains (no single AudioParam), a low-/
+// high-pass Q AudioParam is in dB (a linear lane would be mis-scaled), and a filter's gain is
+// ignored by Web Audio for every type but peaking.
 // tests/unit/v4-clip-target-policy.test.mjs proves the store, the UI and the transport give this
 // verdict for every node type, clip kind, action and parameter in the registry.
 
@@ -54,6 +61,14 @@ export function qIsDecibels(type) {
   return type === 'lowpass' || type === 'highpass';
 }
 
+/**
+ * Whether Web Audio uses a biquad's gain AudioParam for a filter type (only the shelving and
+ * peaking types do; of FILTER_TYPES, peaking), so that driving it changes the sound.
+ */
+export function gainIsUsed(type) {
+  return type === 'peaking';
+}
+
 /** How a pattern clip plays, by target node type (absent: it does not play). */
 const PATTERN_PLAY = Object.freeze({ sequence: 'sequence', oscillator: 'pattern-played' });
 
@@ -66,6 +81,8 @@ export const CLIP_TARGET_TEXT = Object.freeze({
     + 'not.',
   filterQ: 'Low-/high-pass Q is a dB AudioParam in Web Audio; a linear Q modulation would be '
     + 'mis-scaled, so it is not applied.',
+  filterGain: 'Web Audio uses the gain of a filter only for the peaking type; a gain lane or '
+    + 'modulation on this type would change nothing, so it is not applied.',
   stereoSplit: (name, label) => `${name} ${label} sets a pan law over several gains; no single `
     + 'AudioParam carries it, so a lane cannot drive it.',
 });
@@ -75,8 +92,11 @@ export const CLIP_TARGET_TEXT = Object.freeze({
  * (adapters/nodes.js modTarget) refuse the same parameters; the R7 test proves they agree.
  */
 const LANE_LIMITS = Object.freeze({
-  filter: (node, p) => (p.key === 'Q' && qIsDecibels(node.params.type)
-    ? CLIP_TARGET_TEXT.filterQ : null),
+  filter: (node, p) => {
+    if (p.key === 'Q' && qIsDecibels(node.params.type)) return CLIP_TARGET_TEXT.filterQ;
+    if (p.key === 'gain' && !gainIsUsed(node.params.type)) return CLIP_TARGET_TEXT.filterGain;
+    return null;
+  },
   'stereo-split': (node, p) => CLIP_TARGET_TEXT.stereoSplit(node.metadata.name, p.label),
 });
 

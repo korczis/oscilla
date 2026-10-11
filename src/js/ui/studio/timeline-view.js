@@ -14,9 +14,9 @@ import {
   MEASUREMENT_ACTIONS, TIMELINE_MAX_S, TRACK_CLIP_KINDS,
 } from '../../studio/schema.js';
 import {
-  EVENT_ACTIONS, MARKER_LABELS, beatsToSeconds, clipDurationBounds, clipEnd, cleanTime,
-  effectiveTarget, findClip, formatMusicalPosition, resolveSnap, secondsPerBar, secondsPerBeat,
-  timelineEnd, validateClip,
+  EVENT_ACTIONS, MARKER_LABELS, beatsToSeconds, clipDurationBounds, clipEnd, clipTrackReason,
+  cleanTime, effectiveTarget, findClip, formatMusicalPosition, resolveSnap, secondsPerBar,
+  secondsPerBeat, timelineEnd, validateClip,
 } from '../../studio/timeline.js';
 import { truncatePatternPayload } from '../../studio/timeline-compiler.js';
 import { clipPlayReason } from '../../studio/transport.js';
@@ -397,10 +397,36 @@ export function clipTargetOptions(model, kind, registry = NODE_REGISTRY, action 
     .map((n) => ({ id: n.id, name: n.metadata.name }));
 }
 
-/** Tracks a clip may move to (§86 vertical: a compatible track). */
-export function compatibleTracks(model, clip) {
-  return model.timeline.tracks.filter((t) => (TRACK_CLIP_KINDS[t.kind] || []).includes(clip.kind))
-    .map((t) => ({ id: t.id, name: t.name }));
+/**
+ * Tracks a clip may move to (§86 vertical: a compatible track): its own, and every other track
+ * on which it plays (timeline.js clipTrackReason, the clip-target policy, R7).
+ */
+export function compatibleTracks(model, clip, registry = NODE_REGISTRY) {
+  return model.timeline.tracks.filter((t) => t.id === clip.trackId
+    || !clipTrackReason(model, t, clip, registry)).map((t) => ({ id: t.id, name: t.name }));
+}
+
+/**
+ * The choices of the clip form (timeline-details.js) for the clip as it is now, recomputed after
+ * every change (an action change changes where the clip plays): { tracks, targets, actions },
+ * each [{ id, label }]. Targets: "Track target", the nodes on which the clip plays for its
+ * action, and its own target even where it does not play (a file from an earlier build), so the
+ * select never shows a target the clip lacks. Actions: the block types of a pattern clip, the
+ * event actions offered for its action, or the measurement actions.
+ */
+export function clipFormOptions(model, clip, registry = NODE_REGISTRY) {
+  const action = clip.kind === 'pattern' ? undefined : (clip.payload.action || 'gate');
+  const offered = clipTargetOptions(model, clip.kind, registry, action);
+  if (clip.target && !offered.some((n) => n.id === clip.target)) {
+    offered.push({ id: clip.target, name: nodeName(model, clip.target) });
+  }
+  return {
+    tracks: compatibleTracks(model, clip, registry).map((t) => ({ id: t.id, label: t.name })),
+    targets: [{ id: '', label: 'Track target' },
+      ...offered.map((n) => ({ id: n.id, label: n.name }))],
+    actions: clip.kind === 'pattern' ? blockTypeOptions()
+      : clip.kind === 'event' ? eventActionOptions(action) : measurementActionOptions(),
+  };
 }
 
 /**
@@ -528,9 +554,14 @@ export function blockTypeOptions() {
   return BLOCK_TYPES.map((t) => ({ id: t, label: BLOCK_SCHEMA[t].label }));
 }
 
-/** Event clip actions: [{ id, label }]. */
-export function eventActionOptions() {
-  return EVENT_ACTIONS.map((a) => ({ id: a, label: a === 'trigger' ? 'Trigger' : 'Gate' }));
+/**
+ * Event clip actions offered for a clip whose action is `current`: [{ id, label }]. Only gate
+ * plays (clip-targets.js, R7); trigger is held by the store and listed only for a clip that
+ * already has it, so that the select shows it and the clip can be switched to gate.
+ */
+export function eventActionOptions(current = undefined) {
+  return EVENT_ACTIONS.filter((a) => a !== 'trigger' || current === 'trigger')
+    .map((a) => ({ id: a, label: a === 'trigger' ? 'Trigger' : 'Gate' }));
 }
 
 /** Measurement clip actions: [{ id, label }]. */
