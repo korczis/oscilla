@@ -70,7 +70,7 @@ rules:
   - id: majordomus.deployment-contract
     version: 1
     file: rules/deployment-contract.v1.md
-    sha256: ec534509fdd124cbc979b673061a180cbf5370927ea2c88aba69516fb6fd2593
+    sha256: 5180a026347d696531604b717226250afaf3980e8e49086bb91d0d47eedd9dae
   - id: majordomus.doctrine-wiring-integrity
     version: 1
     file: rules/doctrine-wiring-integrity.v1.md

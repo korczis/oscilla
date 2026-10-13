@@ -3,7 +3,7 @@ schema: context/v1
 id: ai.repo.deployments
 kind: context
 title: Deployments
-description: One canonical object per deployment of this repository's service; every container and provider artifact is generated from it and none of them is authoritative.
+description: One canonical object per deployment of this repository's service; every artifact built from it — the container image definition and its ignore file — is generated from it and none of them is authoritative.
 status: active
 scope: subtree
 providers: ["*"]
@@ -18,17 +18,17 @@ A deployment object states, once, everything a deployment needs: which applicati
 which package and binary are shipped, the port the process listens on and the interface it
 listens on, the routes a platform polls for liveness and readiness, the resources and the
 machine count it is granted, the region it runs in, the paths its image is built from, and
-the budgets it is held to. Facts that mean nothing outside one hosting provider live in the
-`provider` block and nowhere else.
+the budgets it is held to. It names no hosting provider: the contract has no `provider`
+block, and one is refused like any other key it does not have.
 
 ## What is authoritative and what is generated
 
 **Authoritative:** the `*.yaml` files in this directory. Nothing else.
 
-**Generated from them:** the container image definition, its ignore file and the provider
-configuration. A hand-written `Dockerfile` and a hand-written provider file would restate
-the port, the routes, the resources and the build inputs the repository already knows, and
-every pair would drift the first time one half changed.
+**Generated from them:** the container image definition and its ignore file. No provider
+configuration is generated. A hand-written `Dockerfile` would restate the port and the
+build inputs the repository already knows, and the pair would drift the first time one
+half changed.
 
 Regenerate with `majordomus generate`; `majordomus generate --check` is what refuses a
 generated artifact that was edited by hand.

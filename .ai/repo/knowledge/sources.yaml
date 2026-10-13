@@ -169,6 +169,14 @@ sources:
     pathspec: ':(glob).ai/repo/mesh/*.yaml'
     required: false
 
+  # The derive offload (I2398, docs/OFFLOAD.md): the hosts `majordomus offload` may send a
+  # derive to and the limits each must meet. Without this class the declaration is never read.
+  - id: derive-offload
+    kind: derive-offload
+    discovery: vcs
+    pathspec: ':(glob).ai/repo/offload/*.yaml'
+    required: false
+
   - id: document
     kind: document
     discovery: vcs
