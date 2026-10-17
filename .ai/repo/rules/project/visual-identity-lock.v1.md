@@ -52,7 +52,23 @@ built app against accepted references in Playwright's Chromium and fails closed:
 regions in `tests/visual/regions.json`, accepted values in `tests/visual/baseline.json`),
 `scripts/visual-measure.mjs` (Measure, `tests/visual/measure/`) and
 `scripts/visual-studio.mjs` (issue V430, done: the compact Studio, the full Studio with and
-without the timeline, and the phone graph and timeline views, `tests/visual/studio/`). That
-catches regressions of surfaces that have a reference; it cannot answer the hidden-logo
-question for a new surface. Reviewers apply that question to every new surface; the
-cross-model UX review (§236) records the answer.
+without the timeline, and the phone graph and timeline views, `tests/visual/studio/`).
+
+What that decides: a pixel regression, beyond the accepted tolerance, of a view that has an
+accepted reference, in Chromium at the reference sizes. Nothing else in this rule is
+machine-checked, and these parts are review-only (advisory; a reviewer owns them):
+
+- The hidden-logo question, for a new surface or a surface without a reference. A new
+  surface has no reference until one is accepted, and accepting it is the review.
+- The design language of the first bullet (cockpit, navy surfaces, compact radii, no
+  glassmorphism, gradients, pills or skeuomorphism) on anything the references do not show.
+- "Colours come only from `src/styles/tokens.css`": no test scans the stylesheets or the
+  scripts for a hard-coded colour; a hard-coded colour on a referenced view is caught only
+  if it changes pixels.
+- That a new token, shape or colour family was added only after no primitive could be
+  extended, that no other product's or flow-editor library's visual identity is imported,
+  and that the identity holds in the light theme, in Firefox and WebKit, and at sizes
+  without a reference.
+
+Reviewers apply the hidden-logo question to every new surface; the cross-model UX review
+(§236) records the answer.

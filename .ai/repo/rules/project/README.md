@@ -47,7 +47,7 @@ rule files in this directory, and fails when a row is missing, extra or stale.
 | `project.studio-model-is-canonical` v1 | blocking | the Studio model is the one source of truth | `tests/unit/v31-studio-model.test.mjs` |
 | `project.typed-ports` v1 | blocking | connections validated before the runtime changes | `tests/unit/v31-studio-model.test.mjs`, `tests/unit/v31-studio-compiler.test.mjs`, `tests/browser/v31-studio-graph.cjs` |
 | `project.no-silent-feedback` v1 | blocking | a feedback loop is refused, never made silently | `tests/unit/v31-studio-model.test.mjs`, `tests/unit/v31-studio-compiler.test.mjs`, `tests/browser/v31-studio-graph.cjs`; a new graph-changing path is held by review until a test names it |
-| `project.visual-identity-lock` v1 | blocking | new surfaces use the existing tokens and primitives | `npm run test:visual`, and review for a new surface |
+| `project.visual-identity-lock` v1 | blocking | new surfaces use the existing tokens and primitives | `npm run test:visual` (pixel regressions of referenced views); review-only: the hidden-logo question, the design language, tokens-only colour |
 | `project.rules-name-their-enforcement` v1 | blocking | a rule, bootstrap or script header names only enforcement that exists | `tests/unit/knowledge-integrity.test.mjs` |
 | `project.no-conflict-markers` v1 | blocking | no conflict marker in a tracked file or a staged change | `tests/unit/repo-hygiene.test.mjs`, pre-commit `git diff --cached --check` |
 | `project.worktree-topology` v1 | blocking | a branch is committed from its canonical worktree; no stash advice | pre-commit `majordomus worktree guard`, `tests/unit/repo-hygiene.test.mjs` |
