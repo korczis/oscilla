@@ -132,6 +132,68 @@ test('the About timeline marks the release line of package.json as current', () 
   }
 });
 
+/**
+ * What each station's visible text says against its attributes (rule
+ * project.about-names-current-release): its step number "NN ·" is its 1-based position; the
+ * HH:MM it shows is the wall-clock time of its `datetime` in the offset the datetime carries
+ * (the page prints that text as it is, nothing converts it); the release it names, "(V3.x)",
+ * "(V3)", a title "V2" or "tagged v1.0.0", is its data-osc-release, and a station with a
+ * release names it. Returns the problems, one string each.
+ */
+export function stationProblems(view) {
+  const list = view.slice(view.indexOf('osc-about-timeline'), view.indexOf('</ol>'));
+  const items = [...list.matchAll(
+    /<li data-state="[a-z]+"(?: data-osc-release="([0-9.]+)")?>([\s\S]*?)<\/li>/g)];
+  const problems = [];
+  const line = ([, a, b]) => `${a}.${b || 0}`;
+  items.forEach(([, release, body], i) => {
+    const at = `station ${i + 1}`;
+    const step = body.match(
+      /<span class="osc-about-step[^"]*">\s*(\d+) · <time [^>]*datetime="([^"]+)"[^>]*>([^<]*)<\/time>/);
+    if (!step) {
+      problems.push(`${at}: no step number and time`);
+      return;
+    }
+    const [, num, datetime, shown] = step;
+    if (num !== String(i + 1).padStart(2, '0')) problems.push(`${at}: shows step ${num}`);
+    const wall = datetime.match(/T(\d{2}:\d{2})/);
+    if (!wall || shown.trim() !== wall[1]) {
+      problems.push(`${at}: shows ${shown.trim()}, its datetime ${datetime} says ${wall && wall[1]}`);
+    }
+    const text = body.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
+    const named = [
+      ...[...text.matchAll(/\(V(\d+)(?:\.(\d+))?\)/g)].map(line),
+      ...[...body.matchAll(/<strong>V(\d+)(?:\.(\d+))?<\/strong>/g)].map(line),
+      ...[...text.matchAll(/\bv(\d+)\.(\d+)\.\d+\b/g)].map(line),
+    ];
+    for (const v of named) {
+      if (v !== release) problems.push(`${at}: names ${v}, data-osc-release is ${release || 'absent'}`);
+    }
+    if (release && !named.length) problems.push(`${at}: release ${release} is not named in its text`);
+  });
+  return problems;
+}
+
+test('each timeline station shows the step, time and release its attributes hold', () => {
+  assert.deepEqual(stationProblems(aboutView), []);
+  const list = aboutView.slice(aboutView.indexOf('osc-about-timeline'), aboutView.indexOf('</ol>'));
+  assert.equal(list.split('<li ').length - 1, timeline().length, 'every station is read');
+});
+
+test('mutation: a station whose text disagrees with its attributes is named', () => {
+  const swap = (from, to) => {
+    const v = aboutView.replace(from, to);
+    assert.notEqual(v, aboutView, `${from} is in the view`);
+    return stationProblems(v);
+  };
+  assert.deepEqual(swap('(V3.10)', '(V3.9)'), ['station 14: names 3.9, data-osc-release is 3.10']);
+  assert.deepEqual(swap('>06:11</time>', '>04:11</time>'),
+    ['station 14: shows 04:11, its datetime 2026-10-06T06:11:53+02:00 says 06:11']);
+  assert.deepEqual(swap('14 · <time', '15 · <time'), ['station 14: shows step 15']);
+  assert.deepEqual(swap('<strong>V2</strong>', '<strong>Lab</strong>'),
+    ['station 3: release 2.0 is not named in its text']);
+});
+
 test('every published release line is on the About timeline, at or before its release', (t) => {
   const tags = git('tag', '--list', 'v*.*.0');
   if (!tags) {
