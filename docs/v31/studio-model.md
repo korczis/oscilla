@@ -132,7 +132,8 @@ parameters; depth and offset are octaves, |value| ≤ 10. New edges take the par
 
 ## Node registry
 
-`NODE_REGISTRY` holds 25 frozen definitions: Sources (Oscillator, Noise, Sweep, Sequence,
+`NODE_REGISTRY` holds frozen definitions, by category (held to `NODE_REGISTRY.list()` by
+`tests/unit/docs-derived.test.mjs`): Sources (Oscillator, Noise, Sweep, Sequence,
 Microphone), Modulation (LFO, Envelope, Random, Step Modulator), Processing (Gain, Filter, Pan,
 Stereo Split, Mixer), Analysis (Scope, Spectrum, Spectrogram, Meter, RTA), Output (Master Output,
 Recorder/Export), Measurement (Capture, Calibration, Transfer Analyzer, Measurement Result).
