@@ -38,6 +38,7 @@ import { resultHash, resultHashVersionOf, RESULT_HASH_VERSION } from './hash.js'
 import { calibrationClaimFindings, withoutContradictedCalibration } from './validate.js';
 import { RELATIVE_UNIT } from '../calibration/level.js';
 import { safeMaxFrequency } from '../measurement/stimulus.js';
+import { SAFE_NYQUIST_FACTOR_TEXT } from '../core/constants.js';
 import { measurableStimulusRefusal } from '../measurement/engine.js';
 import { TRANSFER_RATIO_UNIT } from './csv.js';
 import { describeAlgorithm, isKnownAlgorithm } from '../measurement/algorithms.js';
@@ -208,7 +209,8 @@ function stimulusText(e) {
   const limit = num(st.sampleRate) ? safeMaxFrequency(st.sampleRate) : null;
   const clamp = obj(req) ? [['f1', 'from'], ['f2', 'up to']].filter(([k]) => num(req[k])
     && num(st[k]) && req[k] !== st[k]).map(([k, w]) => `; requested ${w} ${formatHz(req[k])}, `
-    + `played ${w} ${formatHz(st[k])}${req[k] > st[k] && st[k] === limit ? ` (lowered to 0.95 × `
+    + `played ${w} ${formatHz(st[k])}${req[k] > st[k] && st[k] === limit
+      ? ` (lowered to ${SAFE_NYQUIST_FACTOR_TEXT} × `
       + `the Nyquist frequency of ${formatHz(st.sampleRate)})` : '; the record does not say why'}`)
     .join('') : '';
   const lv = obj(e.output) && num(e.output.level) ? e.output.level : null;

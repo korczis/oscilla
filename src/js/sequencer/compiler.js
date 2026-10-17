@@ -35,6 +35,7 @@
 // computed hold, even a no-op event far in the future) can so freeze one quantum of a ramp: a
 // one-sample step of up to a whole edge. The out gain sits at a constant 1, so it is immune.
 
+import { GAIN_FLOOR, RENDER_QUANTUM, START_OFFSET_S } from '../core/constants.js';
 import {
   clamp,
   isNum,
@@ -55,12 +56,12 @@ export { observeClock };
 
 // ============================================================ constants
 
-export const GAIN_FLOOR = 0.0001; // from V1 GAIN_FLOOR (index.html@95dfa81:989), -80 dB
+// V1 GAIN_FLOOR (-80 dB) and START_OFFSET_S (index.html@95dfa81:989, :991): one owner,
+// core/constants.js; re-exported for the sequencer's importers.
+export { GAIN_FLOOR, START_OFFSET_S };
 export const EDGE_S = 0.003; // block/step edge ramp (2-5 ms band)
-export const START_OFFSET_S = 0.02; // from V1 START_OFFSET_S (index.html@95dfa81:991)
 export const STOP_RAMP_S = 0.012; // V1 fast release before a new voice (index.html@95dfa81:2190)
 export const STOP_PAD_S = 0.01; // V1: sources stop 10 ms after the programmed end (:2321)
-const RENDER_QUANTUM = 128; // frames per Web Audio render quantum
 // A realtime stop is scheduled this far ahead of the rendered audio, on a render-quantum boundary:
 // the engine's SCHEDULE_LEAD_S (src/js/audio/scheduler.js), which its releases use.
 export const STOP_LEAD_S = 0.02;

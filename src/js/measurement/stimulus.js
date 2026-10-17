@@ -39,6 +39,7 @@
 import { mulberry32, fillWhite, fillPink } from '../audio/noise.js';
 import { createFft } from '../analysis/fft.js';
 import { nextPow2 } from './spectrum.js';
+import { SAFE_NYQUIST_FACTOR } from '../core/constants.js';
 
 export const STIMULUS_KINDS = Object.freeze([
   'sine',
@@ -49,8 +50,11 @@ export const STIMULUS_KINDS = Object.freeze([
   'chirp',
 ]);
 
-/** Highest frequency generated, as a fraction of Nyquist (project audio-engine-discipline). */
-export const SAFE_NYQUIST_FRACTION = 0.95;
+/**
+ * Highest frequency generated, as a fraction of Nyquist (project audio-engine-discipline): the
+ * measurement name of core/constants.js SAFE_NYQUIST_FACTOR, the one limit every engine keeps.
+ */
+export { SAFE_NYQUIST_FACTOR as SAFE_NYQUIST_FRACTION };
 /** Lowest requested frequency; below it a log sweep's L and phase grow without bound. */
 export const MIN_FREQUENCY_HZ = 1;
 /** Sample rates accepted: the range common audio interfaces and browsers run at. */
@@ -74,7 +78,7 @@ export const DURATION_LIMITS = Object.freeze({
  * there bit for bit.
  */
 export function safeMaxFrequency(sampleRate) {
-  return (sampleRate / 2) * SAFE_NYQUIST_FRACTION;
+  return (sampleRate / 2) * SAFE_NYQUIST_FACTOR;
 }
 
 /** Raised-cosine edge width of band-noise, octaves (capped at a quarter of the band). */

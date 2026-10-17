@@ -33,7 +33,8 @@
 //
 // INVARIANT: no function here connects anything to ctx.destination.
 
-const QUANTUM = 128;
+import { RENDER_QUANTUM, SAFE_NYQUIST_FACTOR } from '../../core/constants.js';
+
 const LEAD_S = 0.02; // scheduler.js SCHEDULE_LEAD_S, used only when the engine lacks _soon
 const MASTER_TAU_S = 0.02; // engine.setMasterGain's own time constant
 
@@ -51,17 +52,17 @@ export function createEngineHooks(engine) {
     soon() {
       const ctx = engine.ctx;
       if (typeof engine._soon === 'function') return engine._soon(ctx);
-      const q = QUANTUM / ctx.sampleRate;
+      const q = RENDER_QUANTUM / ctx.sampleRate;
       return Math.ceil((ctx.currentTime + Math.max(LEAD_S, 2 * q)) / q) * q;
     },
     clampFrequency(f) {
       if (typeof engine._f === 'function') return engine._f(f);
-      const max = (engine.ctx.sampleRate / 2) * 0.95;
+      const max = (engine.ctx.sampleRate / 2) * SAFE_NYQUIST_FACTOR;
       return Math.min(max, Math.max(0.01, f));
     },
     get safeMaximum() {
       return engine.safeMaximum != null ? engine.safeMaximum
-        : (engine.ctx.sampleRate / 2) * 0.95;
+        : (engine.ctx.sampleRate / 2) * SAFE_NYQUIST_FACTOR;
     },
     oscillator(type, freq, at) {
       if (typeof engine._osc === 'function') return engine._osc(type, freq, at);

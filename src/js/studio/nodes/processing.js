@@ -8,6 +8,7 @@
 // other audio input accepts one connection, so accidental summing cannot happen.
 
 import { DEFAULT_FILTER, FILTER_TYPES } from '../../audio/filters.js';
+import { SAFE_NYQUIST_FACTOR_TEXT } from '../../core/constants.js';
 import { definePort } from '../ports.js';
 import {
   CATEGORIES, FREQUENCY_MAX_HZ, boolParam, defineNode, enumParam, frequencyParam, hz,
@@ -92,7 +93,7 @@ export const filter = defineNode({
     inputs: 'Audio; cutoff, Q and gain accept modulation.',
     outputs: 'Audio.',
     constraints: 'Q is linear for every type; gain applies to peaking only. Cutoff is limited '
-      + 'to 0.95 × the digital Nyquist limit.',
+      + `to ${SAFE_NYQUIST_FACTOR_TEXT} × the digital Nyquist limit.`,
   },
 });
 

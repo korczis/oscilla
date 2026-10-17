@@ -111,6 +111,7 @@ import { assessQuality, normalizeChainNotes } from './quality.js';
 import { ALGORITHMS } from './algorithms.js';
 import { toneToMeanSquare, welch } from './spectrum.js';
 import { bandCenters, integrateBands } from './rta.js';
+import { SAFE_NYQUIST_FACTOR_TEXT } from '../core/constants.js';
 import { normalizePoints } from '../calibration/profile.js';
 import { applyFrequencyCorrection } from '../calibration/interpolate.js';
 import {
@@ -896,7 +897,8 @@ export function createMeasurementEngine({ io, clock, onEvent, limits, assess, an
       { value: plan.analysis.bytes, unit: 'bytes', detail: { fftSize: plan.analysis.fftSize } }));
     if (plan && plan.clampedTo)
       warnings.push(reason('RANGE_CLAMPED', `The sweep is limited to ${plan.clampedTo.toFixed(0)} `
-        + 'Hz (0.95 × Nyquist of the device rate).', { value: plan.clampedTo, unit: 'Hz' }));
+        + `Hz (${SAFE_NYQUIST_FACTOR_TEXT} × Nyquist of the device rate).`,
+      { value: plan.clampedTo, unit: 'Hz' }));
 
     if (facts.permission === 'denied' && !blockers.some((b) => b.code === 'MIC_DENIED'))
       blockers.push(reason('MIC_DENIED', MEASUREMENT_ERRORS.MIC_DENIED));

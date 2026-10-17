@@ -87,7 +87,7 @@
 // testContext = { kind: 'digital-loopback', ... } and must never be presented as a measurement
 // of a physical system.
 
-import { MAX_OUTPUT_GAIN } from '../core/constants.js';
+import { MAX_OUTPUT_GAIN, RENDER_QUANTUM } from '../core/constants.js';
 import {
   MIC_ANALYSER_FFT_SIZE, MIC_UNAVAILABLE_TEXT, configureAnalyser, hasMicrophoneApi,
   stopStreamTracks,
@@ -644,8 +644,8 @@ function createIoCore({ engine, env = defaultEnv(), mode = 'auto', openInput, ki
     if (abortedSince(since)) throw new MeasurementError('ABORTED');
   }
 
-  const quantum = (sr) => 128 / sr;
-  const ceilFrame = (t, sr) => Math.ceil((t * sr) / 128 - 1e-9) * 128;
+  const quantum = (sr) => RENDER_QUANTUM / sr;
+  const ceilFrame = (t, sr) => Math.ceil((t * sr) / RENDER_QUANTUM - 1e-9) * RENDER_QUANTUM;
 
   function captureObject(ctx, w, extra) {
     return {
@@ -675,8 +675,8 @@ function createIoCore({ engine, env = defaultEnv(), mode = 'auto', openInput, ki
       cleanupStim(st);
       return;
     }
-    const t = Math.ceil((now + 2 * quantum(ctx.sampleRate)) * ctx.sampleRate / 128) * 128
-      / ctx.sampleRate;
+    const t = Math.ceil((now + 2 * quantum(ctx.sampleRate)) * ctx.sampleRate / RENDER_QUANTUM)
+      * RENDER_QUANTUM / ctx.sampleRate;
     try {
       st.fade.gain.setValueAtTime(1, t); // constant 1 until now: holding it is exact
       st.fade.gain.linearRampToValueAtTime(0, t + ABORT_FADE_S);

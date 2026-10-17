@@ -59,7 +59,7 @@
 
 import {
   DEFAULT_GAIN, GAIN_FLOOR, LIMITER_RATIO, LIMITER_THRESHOLD_DB, MAX_OUTPUT_GAIN,
-  SAFE_NYQUIST_FACTOR, START_OFFSET_S,
+  RENDER_QUANTUM, SAFE_NYQUIST_FACTOR, START_OFFSET_S,
 } from '../core/constants.js';
 import { clamp, toNumber } from '../core/math.js';
 import { planFreqAt } from './patterns.js';
@@ -369,7 +369,7 @@ export class AudioEngine {
     // and the per-frame snapshot()): Firefox's currentTime stands still within a task, so a main
     // thread late inside one would anchor a fade in the past. Without a performance clock in the
     // environment, or without readings, this is currentTime + SCHEDULE_LEAD_S (V1).
-    const q = 128 / ctx.sampleRate;
+    const q = RENDER_QUANTUM / ctx.sampleRate;
     const rendered = renderedTimeAtLeast(ctx, this._perfNow(), { outputTimestamp: false });
     return Math.ceil((rendered + Math.max(SCHEDULE_LEAD_S, 2 * q)) / q) * q;
   }

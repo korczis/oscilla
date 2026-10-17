@@ -63,7 +63,13 @@ export const OCTAVE_RATIO_G = 10 ** (3 / 10);
 export const REFERENCE_FREQUENCY_HZ = 1000;
 /** Bands per octave by kind. */
 export const BANDS_PER_OCTAVE = Object.freeze({ octave: 1, third: 3 });
-/** Bands whose upper edge exceeds this fraction of Nyquist are excluded (engine discipline). */
+/**
+ * Bands whose upper edge exceeds this fraction of Nyquist are excluded. Equal in value to the
+ * generation limit (core/constants.js SAFE_NYQUIST_FACTOR) but deliberately not bound to it: it
+ * is a parameter of the versioned RTA method (oscilla.rta.v1/v2, docs/v3/algorithms.md) that
+ * stored results were computed with, so a change of the generation limit must never alter band
+ * selection without a new algorithm id.
+ */
 export const NYQUIST_FRACTION = 0.95;
 /**
  * A band covering fewer FFT bins than this, for the window the spectrum was analysed with, is
