@@ -127,10 +127,16 @@ is in the [algorithm notes](docs/v3/algorithms.md).
   works from `file://`. When AudioWorklet is unavailable, a ScriptProcessor fallback records
   instead. The stimulus passes through the same master safety chain as every other sound, and
   that chain is part of what is measured.
-- **TEST CONTEXT.** `?measure=loopback` replaces the microphone with a known synthetic digital
-  system. The page then says TEST CONTEXT on the result and in every saved experiment. The
-  automated tests use this mode, and it is never presented as a measurement of a physical
-  system.
+- **TEST CONTEXT.** The last choice of the Input device list, "TEST CONTEXT · digital loopback
+  (no microphone)", replaces the microphone with a known synthetic digital system;
+  `?measure=loopback` opens the page with it chosen, and the address follows the choice. The
+  page then says TEST CONTEXT on the result and in every saved experiment. The automated tests
+  use this mode, and it is never presented as a measurement of a physical system. Choosing an
+  input leaves it. Entering or leaving clears the result shown, valid or invalid (a saved
+  experiment of it stays, labelled), and the input check. A level calibration is kept on
+  either side: one stored in TEST CONTEXT does not apply to a real input, one stored with a
+  real input does not apply inside TEST CONTEXT, and each applies again on its own side once
+  its input is checked.
 
 ### Calibration
 
@@ -695,9 +701,10 @@ automated test proves how a physical speaker, room or microphone behaves.
   browser tests and the post-deployment smoke use, so the bytes that are tested are the bytes
   that are served. The stable reads are `version`, `build`, `measure.state`, `measure.counts()`,
   `studio.counts()`, `studio.model` and `studio.trace.steps()`; everything else may change
-  without notice. Every member is one of three kinds: it observes; it drives an
-  action you already have in the page, through the same validation (`measure.useLoopback()` is
-  `?measure=loopback`, `measure.setValues()` is a recipe link); or it injects test data.
+  without notice. Every member is one of three kinds: it observes; it drives an action you
+  already have in the page, through the same validation (`measure.useLoopback()` and
+  `measure.useMicrophone()` are the TEST CONTEXT choice of the Input device list,
+  `measure.setValues()` is a recipe link); or it injects test data.
   `measure.showResult()` refuses a result that is not marked TEST CONTEXT, so no injected result
   is shown or saved as a measurement, and a direct `measure.setInputNow()` is refused outside
   TEST CONTEXT. What is injected stays in TEST CONTEXT: an input named there, or carried by a
