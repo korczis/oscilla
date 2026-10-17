@@ -28,6 +28,19 @@ export const PRESET_SCHEMA_VERSION = 1;
 export const LIMITER_THRESHOLD_DB = -3;
 export const LIMITER_RATIO = 20;
 
+// V2+: one home for constants that several layers restated (each was a separate literal).
+/** SAFE_NYQUIST_FACTOR as copy: '95 %' (a share of Nyquist) and '0.95' (a factor). */
+export const SAFE_NYQUIST_PERCENT_TEXT = `${Math.round(SAFE_NYQUIST_FACTOR * 100)} %`;
+export const SAFE_NYQUIST_FACTOR_TEXT = String(SAFE_NYQUIST_FACTOR);
+/** Frames per Web Audio render quantum (stops, ramps and _soon land on its boundaries). */
+export const RENDER_QUANTUM = 128;
+/**
+ * Rate of the Filter Lab's response model before an AudioContext exists: a 1-frame
+ * OfflineAudioContext at this rate, labelled on the chart ('model @ 48 kHz'). It is a model
+ * rate, not the provisional rate of the readouts (PROVISIONAL_SAMPLE_RATE).
+ */
+export const FILTER_PREVIEW_SAMPLE_RATE = 48000;
+
 // V1: STORAGE_KEYS (index.html@a7b7a23)
 export const STORAGE_KEYS = {
   theme: 'oscilla.theme',

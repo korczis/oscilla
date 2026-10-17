@@ -157,8 +157,9 @@ import { ALGORITHMS } from './algorithms.js';
 import { CLIP_MIN_RUN, CLIP_THRESHOLD, EMPTY_RMS_DBFS } from './capture-checks.js';
 import { formatDb, formatFrequencyWithResolution } from './format.js';
 import { smoothFractionalOctave } from './smoothing.js';
-import { SAFE_NYQUIST_FRACTION, instantaneousFrequency } from './stimulus.js';
-import { SNR_CEIL_DB } from './transfer.js';
+import { SAFE_NYQUIST_FACTOR } from '../core/constants.js';
+import { instantaneousFrequency } from './stimulus.js';
+import { SNR_CEIL_DB, VALID_MIN_SNR_DB, VALIDITY_SMOOTHING_FRACTION } from './transfer.js';
 import { RELATIVE_UNIT, isValidLevelCalibration } from '../calibration/level.js';
 
 /** The default rule set for new assessments: 'oscilla.confidence.v4'. */
@@ -190,12 +191,12 @@ export const QUALITY_THRESHOLDS = Object.freeze({
   /** Median SNR below which the SNR reason fails (POOR): 10 dB bounds the error to
    *  +2.4 / −3.3 dB; equals transfer.js VALID_MIN_SNR_DB. */
   snrUsableDb: 10,
-  /** Pooled SNR for a grid point to be "reliable" (noise-floor margin per band): equals
-   *  transfer.js VALID_MIN_SNR_DB so the reliable mask and validRange use one criterion. */
-  reliableMinSnrDb: 10,
+  /** Pooled SNR for a grid point to be "reliable" (noise-floor margin per band): transfer.js
+   *  VALID_MIN_SNR_DB, so the reliable mask and validRange use one criterion. */
+  reliableMinSnrDb: VALID_MIN_SNR_DB,
   /** Pooling bandwidth 1/N octave for the reliable mask: transfer.js
    *  VALIDITY_SMOOTHING_FRACTION, so a single-point dip does not fragment the mask. */
-  reliablePoolingFraction: 6,
+  reliablePoolingFraction: VALIDITY_SMOOTHING_FRACTION,
   /** Repeatability (median per-point spread across runs) for an 'ok' reason: the same ~1 dB
    *  bound that snrGoodDb gives, so SNR and run-to-run scatter limit the error alike. */
   repeatabilityGoodDb: 1,
@@ -1225,7 +1226,7 @@ export function assessQuality({
     if (requested) cov = assessCoverage(transfer, requested, fmt, add);
     const vr = transfer.validRange;
     const fMax = Number.isFinite(transfer.sampleRate)
-      ? (transfer.sampleRate / 2) * SAFE_NYQUIST_FRACTION
+      ? (transfer.sampleRate / 2) * SAFE_NYQUIST_FACTOR
       : Infinity;
     for (let i = 0; i < n; i++) {
       const f = frequencies[i];

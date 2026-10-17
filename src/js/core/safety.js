@@ -13,6 +13,7 @@
 
 import { formatFrequency, formatMs } from './frequency.js';
 import { presetMaxFrequency } from '../data/presets.js';
+import { SAFE_NYQUIST_PERCENT_TEXT } from './constants.js';
 
 export const BINAURAL_MIN_DELTA_HZ = 0.5;
 export const BINAURAL_MAX_DELTA_HZ = 30;
@@ -27,14 +28,14 @@ export function presetDisabled(p, safeMax) {
 
 /** Why a preset is disabled. V1: oscillaApp.presetDisabledReason (index.html@a7b7a23) */
 export function presetDisabledReason(p, safeMax, provisional) {
-  return `Needs ${formatFrequency(presetMaxFrequency(p.cfg))}; this device's digital limit (95 % of Nyquist) is ${formatFrequency(safeMax)}${provisional ? ' (provisional until audio starts)' : ''}.`;
+  return `Needs ${formatFrequency(presetMaxFrequency(p.cfg))}; this device's digital limit (${SAFE_NYQUIST_PERCENT_TEXT} of Nyquist) is ${formatFrequency(safeMax)}${provisional ? ' (provisional until audio starts)' : ''}.`;
 }
 
 /** Whether a requested frequency is digitally representable. V1: getter representability. */
 export function representability(f, nyquist, safeMax) {
   // V1: oscillaApp getter representability (index.html@a7b7a23), f computed by the caller
   if (f < safeMax) return `Requested ${formatFrequency(f)} is below the digital Nyquist limit (${formatFrequency(nyquist)}): digitally representable.`;
-  if (f < nyquist) return `Requested ${formatFrequency(f)} is above the digital limit (95 % of Nyquist); it is clamped to ${formatFrequency(safeMax)}.`;
+  if (f < nyquist) return `Requested ${formatFrequency(f)} is above the digital limit (${SAFE_NYQUIST_PERCENT_TEXT} of Nyquist); it is clamped to ${formatFrequency(safeMax)}.`;
   return `Requested ${formatFrequency(f)} is at or above Nyquist (${formatFrequency(nyquist)}): not representable; clamped.`;
 }
 

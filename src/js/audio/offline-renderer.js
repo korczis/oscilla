@@ -17,8 +17,8 @@ import { applyAdsr, releaseAt, normalizeAdsr } from './envelope.js';
 import { buildPeriodicWave } from './additive.js';
 import { createFilterStage } from './filters.js';
 import { encodeWav } from './wav.js';
+import { SAFE_NYQUIST_FACTOR } from '../core/constants.js';
 
-export const SAFE_NYQUIST_FACTOR = 0.95;
 export const DEFAULT_RENDER = Object.freeze({ sampleRate: 48000, channels: 2, maxDuration: 120 });
 const MIN_RATE = 8000;
 const MAX_RATE = 192000;

@@ -20,6 +20,8 @@
 // configured values directly (no glide), so the chart shows the browser's own response for the
 // current settings immediately; the audible node reaches the same values within ~50 ms.
 
+import { SAFE_NYQUIST_FACTOR } from '../core/constants.js';
+
 export const FILTER_TYPES = Object.freeze(['lowpass', 'highpass', 'bandpass', 'notch', 'peaking']);
 export const DEFAULT_FILTER = Object.freeze({
   type: 'lowpass',
@@ -29,7 +31,6 @@ export const DEFAULT_FILTER = Object.freeze({
   enabled: true,
 });
 
-const SAFE_NYQUIST_FACTOR = 0.95;
 const MIN_FREQUENCY = 10;
 const GLIDE_TAU_S = 0.01;
 const CROSSFADE_S = 0.02;

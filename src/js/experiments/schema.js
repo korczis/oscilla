@@ -99,6 +99,7 @@
 
 import { CONFIG_FILE_VERSION } from '../ui/config-file.js';
 import { canonicalJson } from './canonical-json.js';
+import { SAFE_NYQUIST_FACTOR_TEXT } from '../core/constants.js';
 import { PRESET_SCHEMA_VERSION } from '../core/constants.js';
 import { sig } from '../core/math.js';
 import { encodeArray } from './encode.js';
@@ -945,7 +946,8 @@ export function summarizeExperiment(e) {
     `Stimulus: ${describeStimulus(s)}`,
   ];
   if (req && s && typeof req.f2 === 'number' && req.f2 !== s.f2) {
-    lines.push(`Requested: up to ${formatHz(req.f2)} (limited to ${formatHz(s.f2)}, 0.95 × the `
+    lines.push(`Requested: up to ${formatHz(req.f2)} (limited to ${formatHz(s.f2)}, `
+      + `${SAFE_NYQUIST_FACTOR_TEXT} × the `
       + 'Nyquist frequency)');
   }
   lines.push(

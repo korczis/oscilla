@@ -5,8 +5,8 @@
 
 import { formatHzGrouped } from './axes.js';
 import { setText, onAdapterChange, on } from '../labs/dom.js';
+import { SAFE_NYQUIST_FACTOR } from '../core/constants.js';
 
-export const SAFE_NYQUIST_FACTOR = 0.95;
 export const DEFAULT_OUTPUT_LABEL = 'Default audio output';
 
 /** { sampleRate, nyquist, safeMax } from a sample rate, or nulls. */
