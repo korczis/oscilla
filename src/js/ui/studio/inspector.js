@@ -48,6 +48,7 @@
 //   data-key; when the action replaced the view (a connection link, Select source, Delete)
 //   and that control is gone, focus goes to the new view's heading, never to <body>.
 
+import { clipTarget } from '../../studio/clip-targets.js';
 import { NODE_REGISTRY, validateParamValue } from '../../studio/registry.js';
 import {
   MIN_CLIP_S, NOTES_MAX_CHARS, TEMPO_RANGE, TIME_SIGNATURE_DENOMINATORS,
@@ -160,6 +161,7 @@ function fieldOf(model, node, p, registry, edgeStatus) {
       const text = describeEdge(model, e.id, { registry });
       return r.short ? `${text} (${r.short})` : text;
     });
+  const lanePlays = clipTarget(node, { kind: 'automation', param: p.key }, registry);
   const control = p.type === 'enum' ? 'select' : p.type === 'boolean' ? 'toggle'
     : p.type === 'id' ? 'readonly' : p.type === 'list' ? 'list' : 'number';
   return {
@@ -176,7 +178,10 @@ function fieldOf(model, node, p, registry, edgeStatus) {
     max: p.max,
     slider: control === 'number' ? valueToSlider(p, value) : null,
     options: (p.options || []).map(([v, l]) => ({ value: v, label: l })),
-    automatable: !!p.automatable,
+    // Automate is offered where a lane plays (clip-targets.js, R7), not merely where one is
+    // held; a parameter the registry calls automatable says why no lane would play here.
+    automatable: lanePlays.plays,
+    automateReason: p.automatable && !lanePlays.plays ? lanePlays.reason : null,
     modulatable: !!p.modulatable,
     automated: !!lane,
     laneId: lane ? lane.id : null,
@@ -626,10 +631,23 @@ export function inspectorView(model, selection, opts = {}) {
 // ---------------------------------------------------------------- DOM
 
 /** Mount the Inspector into `host`. */
+/**
+ * The texts of a node view that the mounted Inspector's update() does not refresh in place: when
+ * this key changes for the same selection, the panel is rebuilt (focus kept by data-key). Pure.
+ */
+export function inspectorRebuildKey(view) {
+  if (view.kind !== 'node') return '';
+  return [!!view.statusText, view.mic ? `${view.mic.action}|${view.mic.error}|${view.mic.busy}`
+    : '',
+    ...view.connections.map((c) => c.text), ...view.fields.map((f) =>
+      // Whether Automate is offered can change with another parameter (a filter type, R7).
+      `${f.modulatedBy.join('|')}|${f.automatable}|${f.automateReason || ''}`)].join('\n');
+}
+
 export function mountInspector(host, svc) {
   const registry = svc.registry || NODE_REGISTRY;
   let current = null; // the rendered view key
-  let builtSig = ''; // textSig of the rendered node view
+  let builtSig = ''; // inspectorRebuildKey of the rendered node view
   let refs = new Map(); // field key -> { input, slider, readout, error, field }
   let gestureOpen = false;
 
@@ -716,6 +734,10 @@ export function mountInspector(host, svc) {
     const notes = [];
     if (f.modulatedBy.length) {
       notes.push(h('p', { class: 'osc-si-note', text: `Modulated: ${f.modulatedBy.join('; ')}` }));
+    }
+    if (f.automateReason) {
+      notes.push(h('p', { class: 'osc-si-note', 'data-osc': 'studio.inspector.no-automate',
+        text: `No automation: ${f.automateReason}` }));
     }
     if (f.automatable) {
       notes.push(h('button', { type: 'button', class: 'osc-btn osc-btn-secondary osc-si-auto',
@@ -1277,15 +1299,6 @@ export function mountInspector(host, svc) {
   }
 
   // ---------------------------------------------------------------- render
-  /** The texts of a node view that update() does not refresh in place. */
-  function textSig(view) {
-    if (view.kind !== 'node') return '';
-    return [!!view.statusText, view.mic ? `${view.mic.action}|${view.mic.error}|${view.mic.busy}`
-      : '',
-      ...view.connections.map((c) => c.text), ...view.fields.map((f) =>
-        f.modulatedBy.join('|'))].join('\n');
-  }
-
   function update(view) {
     const active = document.activeElement;
     if (view.kind === 'node') {
@@ -1374,7 +1387,7 @@ export function mountInspector(host, svc) {
       // The connection list and the "Modulated" notes are text built with the view: rebuild
       // when they change (a connection added or removed, or one that stopped carrying anything
       // after a filter type change, §237). Focus is kept by data-key.
-      if (view.kind === 'node' && textSig(view) !== builtSig) {
+      if (view.kind === 'node' && inspectorRebuildKey(view) !== builtSig) {
         current = null;
         return render();
       }
@@ -1398,7 +1411,7 @@ export function mountInspector(host, svc) {
     rt = null;
     tr = null;
     current = view.key;
-    builtSig = textSig(view);
+    builtSig = inspectorRebuildKey(view);
     const builders = { node: buildNode, edge: buildEdge, clip: buildClip, point: buildPoint,
       multi: buildMulti, studio: buildStudio };
     replaceChildren(host, h('div', { class: `osc-si osc-si--${view.kind}`,

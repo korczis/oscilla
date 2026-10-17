@@ -31,7 +31,7 @@ mobile, significant performance), **P2** (polish, debt).
 | Studio model, desired/plan/applied, divergence | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | EXISTS — but see R1, R2 |
 | Runtime transaction (prepare/commit) | ✓ | ✓ | ✓ (#119) | – | ✓ | – | ✓ | prepare + commit injection | EXISTS |
 | Operation trace (Studio) | ✓ | – | ✓ | ephemeral by design | ✓ | – | ✓ | ✓ | EXISTS (gaps: locate, edges) |
-| Sequencer / timeline / automation | ✓ | ✓ | ✓ | ✓ | ✓ | – | ✓ | ✓ | PARTIAL (clip-target policy duplicated, R7) |
+| Sequencer / timeline / automation | ✓ | ✓ | ✓ | ✓ | ✓ | – | ✓ | ✓ | EXISTS (one clip-target policy, R7 **closed** #154) |
 | Studio Microphone node | ✓ | ✓ | ✓ (#119) | – | Allow microphone | – | ✓ | ✓ | EXISTS |
 | Experiment definition | ✓ (#116) | ✓ | engine runs the bound recipe | ✓ (append-only versions) | ✓ | definition ref in result hash v4 | ✓ | ✓ | EXISTS (no separate plan compiler) |
 | Measurement run (state machine, cancel, repeats) | ✓ | ✓ | ✓ | aggregate only | ✓ | ✓ | ✓ | ✓ | EXISTS (no retry/attempt record) |
@@ -83,8 +83,17 @@ mobile, significant performance), **P2** (polish, debt).
 ### P2 (tracked)
 
 Diagnostic codes derived from message text (R5, fixing); clip-target policy duplicated between
-registry, timeline UI and transport (R7); pattern-played Oscillator frequency lanes drive a
-silent carrier (R8); presentation-only edits pay a full compile while playing (R9);
+registry, timeline UI and transport (R7, **closed** #154: one pure function,
+`studio/clip-targets.js` `clipTarget`, read by the store, the timeline UI and the transport; the
+UI had offered event-clip targets, measurement targets and Automate on parameters the transport
+never plays; review round 1 added the offline render plan's lanes, the move/nudge tracks, the
+Action options, filter gain off peaking and the transport's own clip ownership,
+`tests/unit/v4-clip-target-policy.test.mjs`); pattern-played Oscillator frequency lanes drive a
+silent carrier (R8); presentation-only edits pay a full compile while playing (R9, **closed**
+#155: while playing, an edit that leaves the execution state and the node names as they were
+takes the revision with no compile, no runtime transaction and no timeline re-plan, the plan
+identity unchanged and the verdict in-sync, `tests/unit/v4-presentation-edits.test.mjs` and
+`presentation-edit` in `tests/browser/v31-studio-runtime.cjs`);
 `mode`/`workspace` split state and three hash routers (W4, fixing with W2: one dispatcher, ADR 0045); Space has two meanings and two
 shortcut dialogs (W5, **closed** #159, ADR 0050: Space has one owner per workspace, the same
 at every width (Hold to Play in the seven workspaces that play, load or analyse the instrument's
@@ -111,7 +120,8 @@ CONTEXT is not one outside it, W7f, **closed** #169; see "W7" below);
 `studioTimeline.createContext` builds a second Studio store and transport on the shared engine
 for one browser suite (W7a, **closed** #168: the suite runs on the canonical store and the module
 and the key are deleted; what the seam alone kept reachable is W7k, open); TEST CONTEXT cannot be entered or left from the page, only by
-the URL (W7b, open); a manual level calibration made in TEST CONTEXT is not labelled as one (W7c,
+the URL (W7b, **closed** #167: it is a choice of the Input device list, and the transition
+clears the result and the input check of the side that is left; see "W7" below); a manual level calibration made in TEST CONTEXT is not labelled as one (W7c,
 **closed** #169); the public origin `korczis.github.io` is shared with every other Pages site of the
 account (W7d, open); the live smoke calls seam hooks instead of loading the documented
 `?measure=loopback#mr=` URL (W7e, **closed** #168: it loads that URL); no caller reads the verdict `setValues` now returns (W7g, **closed** #169 and #168: the suites read it since #169
@@ -259,7 +269,7 @@ widening the approved change:
 | Id | Finding | Status |
 |---|---|---|
 | W7a | `studioTimeline.createContext` (`src/js/ui/studio/timeline-test-seam.js`) builds a second StudioStore, runtime and transport on the shared engine, used only by `tests/browser/v31-studio-timeline.cjs` (`project.studio-model-is-canonical`): move the suite onto the canonical store, then delete the module and the `studioTimeline` key | **closed** #168: the suite drives the editor the STUDIO workspace mounts, on `OSCILLA.studio` (one store, runtime and transport), 14 checks in chromium, firefox and webkit from file:// and /oscilla/; the module and the key are deleted and `seam-surface-pinned` pins the list without it (seen failing on the previous dist: `added: studioTimeline`). `tests/unit/v4-one-studio-store.test.mjs` failed before the deletion and now keeps a second `createStudioStore`, `createStudioRuntime` or `createStudioTransport` call site out of `src/js`. dist −3,374 B raw, −1,245 B gzip. What only the seam kept reachable is W7k |
-| W7b | TEST CONTEXT can be entered and left only by the URL: `input-devices.js` disables the Input device select while loopback is on, so a `?measure=loopback` user cannot return to a microphone without editing the address. Add a TEST CONTEXT option to the select | open |
+| W7b | TEST CONTEXT can be entered and left only by the URL: `input-devices.js` disables the Input device select while loopback is on, so a `?measure=loopback` user cannot return to a microphone without editing the address. Add a TEST CONTEXT option to the select | **closed** #167: the Input device list ends with "TEST CONTEXT · digital loopback (no microphone)", never disabled by the loopback or by a missing microphone; choosing it is `?measure=loopback` (the address follows), choosing an input leaves it. `useLoopback` / `useMicrophone` are the same transition, refused wherever the choice is (a measurement, a pending setup check, a running reference capture). The transition releases, in both directions, the input check, a captured reference reading and its summary, the live RTA, a pending repeat link and the outcome in the assertive live region, and drops the result shown, COMPLETE or INVALID, with its noise-check snapshot (a saved experiment of it stays, labelled); what it cleared is announced and, when anything was, shown in a notification, on entering as on leaving. Where a result was produced is recorded when it is shown, not read off a label, and the engine's INVALID result carries `testContext` like a COMPLETE one. A level calibration is kept on either side: one made in the other context reads UNCALIBRATED with the reason and applies again on its own side once its input is checked (owner decision of 2026-10-11; #167 as first written cleared one stored in TEST CONTEXT and kept a COMPLETE result of the real input on entering). Tests: `tests/unit/v4-test-context-choice.test.mjs` (8 of 9 failed before #167, 7 more before its review fix, 2 more before the notification on entering; the cases for the reference reading, the two refusals and the COMPLETE result dropped on entering were seen failing on mutants), `tests/unit/v4-seam-contract.test.mjs`, `test-context-from-the-page` and, for a calibration of the fake microphone inside TEST CONTEXT, `calibrated-only-for-a-checked-input` in `tests/browser/app.cjs`; ADR 0052 notes of 2026-10-07 and 2026-10-11. Not covered by a test: a level calibration of a real input inside TEST CONTEXT without the fake microphone (Node has no input), the repeat link across a real-input leg. Left as it is: an unsaved result is discarded on entering or leaving without a question (whether to ask is the owner's to decide), also when a closed select is stepped through by arrow keys |
 | W7c | A manual level calibration made in TEST CONTEXT carried no TEST CONTEXT label; only the captured branch of `measureSaveLevelCalibration` added it. Its conditions now start with "TEST CONTEXT: reading typed by hand while the page was in TEST CONTEXT (digital loopback, no microphone checked)." and the state line of either kind starts with "TEST CONTEXT" | **closed** #169 |
 | W7d | The public origin `korczis.github.io` is shared by every Pages site of the account, so their scripts share OSCILLA's storage, IndexedDB and microphone grant. Independent of the seam; only a custom domain changes it | open |
 | W7e | The live smoke calls `useLoopback` and `setValues` instead of loading `?measure=loopback#mr=<recipe>`, and no test or script loads the documented `?measure=loopback` flag at all | **closed** #168: `tests/browser/live-smoke.cjs` loads `<url>?measure=loopback#mr=<recipe>` (the recipe written as base64url JSON by the suite) and calls neither hook; a 17th check asserts that the link alone opens MEASURE, shows the TEST CONTEXT banner and holds the link's recipe, and the setup check judges the io kind the engine used. 17/17 in chromium, firefox and webkit against the public page (the release current on 2026-10-07, commit `9cc2f37`, both taken from the page's provenance) and against file://dist; with the flag taken out of the URL the same script fails three checks (no banner, setup INVALID on the microphone, one getUserMedia call) |
@@ -269,6 +279,10 @@ widening the approved change:
 | W7i | The v3-ui `calibration` check cleared its input with `setInputNow(null)`, which is refused outside TEST CONTEXT, so it relied on TEST CONTEXT left on by the `live-rta` check before it. The check now enters TEST CONTEXT itself at its start (which also releases any input known before). No failing run could be shown: run alone on main (`--only calibration`, chromium, file://) the check passes, because a fresh page knows no input; the dependency was latent. After the change it passes alone in chromium, firefox and webkit over file:// and /oscilla/ | **closed** #169 |
 | W7j | The `seam-surface-pinned` check has not been seen to fail on main's dist (its fail-first is inferred from the unit suite), and `live-smoke.cjs` has not been run locally against `file://dist` with this change; the machine's load stayed above the limit for local browsers. CI ran the check green in three browsers and two origins. Since #168: the key-list half of the check was seen failing on a dist that still carried `studioTimeline`, and `live-smoke.cjs` ran 17/17 against file://dist in three browsers; the refusal assertions of the check have still not been seen failing on a dist from before #161 | open |
 | W7k | With the seam gone, three things it alone kept reachable are left. `src/js/ui/studio/compact-timeline.js` (`renderCompactTimeline`, spec §129) is mounted by no product surface: it is no longer bundled, only its pure helpers have a unit test, and its browser check was replaced by one on the Playground's compact Studio. Its nine `.osc-stc*` rules in `src/styles/studio-timeline.css` (1,289 B of source) still ship, and `tests/unit/css-producers.test.mjs` passes because the unbundled module still names them. The timeline's own transport keys and clock (`mountTransportBar` with `keys: true`, taken when `transportKeys` is not `false`) are in dist, but the workspace passes `false` and no browser check runs them any more. Decide for each: mount it in the product, or delete it with its styles and tests | open |
+
+W7b is closed by #167, which makes TEST CONTEXT a choice of the Input device list (ADR 0052,
+notes of 2026-10-07 and 2026-10-11). `tests/browser/v3-ui.cjs` changed in its `input-device`
+check only (the select is no longer disabled in TEST CONTEXT, and the list has one option more).
 
 ### W7f closed (#169)
 
@@ -341,3 +355,19 @@ returned out of `page.evaluate` and then ignored, nor a call through an alias.
 
 What #169 leaves open: W7g for the live smoke's one call (with W7e, #168), and W7a, W7b, W7d,
 W7e and W7j, which it does not touch.
+
+### #167 with #169 (owner decision of 2026-10-11)
+
+#167 (W7b) and #169 (W7f) met in `src/js/ui/measure.js` and disagreed on two points. The owner
+decided both for #169's behaviour: a level calibration stored in TEST CONTEXT is kept when
+TEST CONTEXT is left (outside it reads UNCALIBRATED with the reason; it applies again once TEST
+CONTEXT is entered and its input named there), and a result is dropped on any change of
+context, in both directions, with its evidence, save state and noise-check snapshot. One
+transition, `setTestContext()`, now serves the Input device choice and the seam's
+`useLoopback()` / `useMicrophone()`; #169's `setLoopback()` is folded into it, and
+`inputKnown()` is the one read-side rule. #167's tests that encoded the other behaviour
+(`v4-test-context-choice.test.mjs`, the seam-contract inject case, `test-context-from-the-page`)
+assert the decided one; the review of the merge added the notification on entering and the
+tests the merge had left without one. A user now crosses contexts from the page, so "a user reaches TEST
+CONTEXT by the URL flag alone" above no longer holds; the rules hold for the page's choice as
+for the hooks, because they are the same transition.

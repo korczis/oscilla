@@ -102,7 +102,8 @@
 // names the revision whose plan the maps hold, and the store's commit gate never refuses an edit
 // the runtime already holds. A failure that leaves the running graph short of its plan stays
 // visible until it is resolved (runtime.unresolved(), PR #119 D3): `engage-failed` until that
-// node engages (every later transaction retries it) or is removed, `commit-failed` until STOP.
+// node engages (every later transaction retries it; a presentation-only edit, R9, runs none) or
+// is removed, `commit-failed` until STOP.
 // While any is unresolved the divergence verdict of the applied revision is 'degraded'.
 //
 // Microphone input (F2). `setOptions({ inputPermission: true })` also rebuilds every running
@@ -150,6 +151,7 @@ import {
   computeBases, createEdgeHandle, diffPlans, disposeHandle, instantiateNode, planHash,
   studioHashOf,
 } from './compiler.js';
+import { sameExecutionState } from './schema.js';
 import { studioDiagnostic } from './validate.js';
 import { NO_TRACE } from '../core/trace.js';
 
@@ -218,6 +220,18 @@ export function studioDivergence({ model, revision = null }, runtime) {
     reason: state === 'in-sync' ? null : state === 'degraded' ? open[0] : reason };
 }
 
+/**
+ * True when the nodes of `a` and `b` (the same ids in the same order: sameExecutionState holds)
+ * carry the same names. A name reaches the compiled plan (validation's warnings and the nodes'
+ * display reasons), so a rename is compiled, not adopted (R9, review round 1 of #155).
+ */
+function sameNodeNames(a, b) {
+  const xs = a.graph.nodes;
+  const ys = b.graph.nodes;
+  return xs === ys || xs.every((x, i) => x === ys[i]
+    || (x.metadata && x.metadata.name) === (ys[i].metadata && ys[i].metadata.name));
+}
+
 export function createStudioRuntime({
   engine, registry = NODE_REGISTRY, adapters = NODE_ADAPTERS, options = {}, trace = NO_TRACE,
 } = {}) {
@@ -249,6 +263,12 @@ export function createStudioRuntime({
   let lastError = null;
   let lastOps = [];
   let lastWarnings = [];
+  // The capabilities `plan` was compiled under (setOptions changes them: a recompile).
+  const optsKey = () => `${opts.inputPermission}|${opts.masterLevel}`;
+  let planOpts = null;
+  // The newer model a presentation-only edit took the revision with (adopt), null when `plan`
+  // was compiled from the model of compiledRevision: what setOptions recompiles.
+  let adopted = null;
   let disposed = false;
   // The applied record (runtime.applied): set when a transaction commits, null while stopped.
   let record = null;
@@ -610,6 +630,7 @@ export function createStudioRuntime({
     for (const [id, h] of created.handles) handles.set(id, h);
     for (const [id, eh] of created.edges) edges.set(id, eh);
     plan = next;
+    adopted = null;
     // 4. crossfade. Committed: from here nothing may throw out of apply (F4), or the store would
     // refuse a revision whose plan the maps already hold. Every step below is guarded or inside
     // the try; a throw outside a guarded step is commit-failed, and the cleanup still runs.
@@ -786,6 +807,8 @@ export function createStudioRuntime({
     attempt = rev;
     attemptModel = model;
     if (disposed) return fail('validate', 'The Studio runtime is disposed.', {}, 'disposed');
+    if (replace == null && presentationOnly(model)) return adopt(rev, model);
+    const key = optsKey();
     const next = compileStudio(model, { engine, registry, adapters, options: opts });
     if (!next.ok) return fail('validate', next.errors, { kept: true });
     const ops = diffPlans(plan, next, { owned: ownedMap(), replace });
@@ -795,6 +818,8 @@ export function createStudioRuntime({
       trace.record('runtime', 'apply', { revision: rev, outcome: 'not-applied',
         detail: { state } });
       plan = next;
+      adopted = null;
+      planOpts = key;
       compiledRevision = rev;
       lastOps = ops;
       const result = { ok: true, applied: false, ops, revision: rev, warnings: next.warnings };
@@ -803,9 +828,45 @@ export function createStudioRuntime({
     }
     const r = transact(next, ops, rev);
     if (!r.ok) return r;
+    planOpts = key;
     compiledRevision = rev;
     commit();
     const result = { ...r, revision: rev, warnings: [...next.warnings, ...r.warnings] };
+    emit('applied', result);
+    return result;
+  }
+
+  /**
+   * Presentation-only (R9): while the graph runs, a model with the execution state of the
+   * applied plan's model (schema.js sameExecutionState: positions, markers, track names and
+   * metadata differ at most) and the same node names compiles to that same plan, so nothing the
+   * audio graph or the plan's diagnostics depend on changed. A node rename is not presentation-
+   * only here, although studioHash does not cover it: node names reach the plan (validation's
+   * warnings, which debugInfo and the Inspector show, and the nodes' display reasons).
+   */
+  function presentationOnly(model) {
+    return state === 'running' && !!hooks.ctx && !!record && record.plan === plan
+      && !!plan.model && planOpts === optsKey() && peaksDirty.size === 0
+      && sameExecutionState(plan.model, model) && sameNodeNames(plan.model, model);
+  }
+
+  /**
+   * Take revision `rev` without a compile or a transaction: the running graph already is what it
+   * compiles to. The applied record names `rev` with the same plan (planHash, studioHash and `at`
+   * unchanged: nothing was applied), so the divergence verdict stays in-sync; a refusal of that
+   * revision number is cleared as by a commit. The plan keeps the model it was compiled from,
+   * which differs from `model` only where the plan does not read it (positions, markers, track
+   * names, metadata); `model` is kept as `adopted`, so that setOptions recompiles the current
+   * document. lastOps and lastWarnings stay the last transaction's.
+   */
+  function adopt(rev, model) {
+    adopted = model;
+    compiledRevision = rev;
+    record = { ...record, revision: rev };
+    if (lastError && lastError.revision === rev) lastError = null;
+    trace.record('runtime', 'apply', { revision: rev, outcome: 'presentation-only' });
+    const result = { ok: true, applied: false, presentation: true, ops: [], revision: rev,
+      warnings: [] };
     emit('applied', result);
     return result;
   }
@@ -886,6 +947,7 @@ export function createStudioRuntime({
       offEngine();
       listeners.clear();
       plan = EMPTY_PLAN;
+      adopted = null;
       return c;
     });
   }
@@ -906,9 +968,10 @@ export function createStudioRuntime({
       }
     }
     // The same model and revision under new capabilities: the record keeps its revision and
-    // gets the new planHash, so the store revision stays in sync.
+    // gets the new planHash, so the store revision stays in sync. The model is the one the
+    // revision names: a presentation-only edit's (adopted), else the plan's.
     if (!plan.model) return { ok: true, applied: false, ops: [], reopened };
-    const r = apply(plan.model, { revision: compiledRevision,
+    const r = apply(adopted || plan.model, { revision: compiledRevision,
       replace: reopened.length ? new Set(reopened) : null });
     return { ...r, reopened: r.ok ? reopened : [] };
   }
