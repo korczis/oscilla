@@ -19,10 +19,9 @@ import {
   automatableTargets, curveChoices, laneInfo, parseValueText,
 } from './automation-view.js';
 import {
-  blockTypeOptions, clipText, clipTargetOptions, clipView, compatibleTracks, eventActionOptions,
-  measurementActionOptions, parseSecondsText, trackTargetOptions,
+  clipFormOptions, clipText, clipView, parseSecondsText, trackTargetOptions,
 } from './timeline-view.js';
-import { el, selectBox, spriteIcon } from './timeline-dom.js';
+import { el, selectBox, setOptions, spriteIcon } from './timeline-dom.js';
 
 let seq = 0;
 
@@ -108,17 +107,16 @@ export function createDetails(api, container) {
     if (!clip) return false;
     const start = numberInput({ 'aria-describedby': `${uid}-unit-s` });
     const duration = numberInput();
-    const track = selectBox(compatibleTracks(model, clip).map((t) => ({ id: t.id,
-      label: t.name })), clip.trackId);
-    const targets = [{ id: '', label: 'Track target' },
-      ...clipTargetOptions(model, clip.kind).map((n) => ({ id: n.id, label: n.name }))];
-    const target = selectBox(targets, clip.target || '');
+    // Tracks and targets on which the clip plays, and the actions offered for it
+    // (clipFormOptions, the clip-target policy, R7); recomputed by sync() after every change,
+    // since an action change changes where the clip plays.
+    const opts = clipFormOptions(model, clip, NODE_REGISTRY);
+    const track = selectBox(opts.tracks, clip.trackId);
+    const target = selectBox(opts.targets, clip.target || '');
     const timeBase = selectBox([{ id: 'absolute', label: 'Seconds (absolute)' },
       { id: 'tempo', label: 'Tempo-linked' }], clip.musical ? 'tempo' : 'absolute');
     if (clip.kind === 'measurement') timeBase.querySelector('select').disabled = true;
-    const typeOpts = clip.kind === 'pattern' ? blockTypeOptions()
-      : clip.kind === 'event' ? eventActionOptions() : measurementActionOptions();
-    const type = selectBox(typeOpts, clip.kind === 'pattern' ? clip.payload.blockType
+    const type = selectBox(opts.actions, clip.kind === 'pattern' ? clip.payload.blockType
       : (clip.payload.action || 'gate'));
 
     start.addEventListener('change', () => {
@@ -176,11 +174,12 @@ export function createDetails(api, container) {
         if (!c) return false;
         setIfIdle(start, c.start.toFixed(3));
         setIfIdle(duration, c.duration.toFixed(3));
-        track.querySelector('select').value = c.trackId;
-        target.querySelector('select').value = c.target || '';
+        const o = clipFormOptions(m, c, NODE_REGISTRY);
+        setOptions(track.querySelector('select'), o.tracks, c.trackId);
+        setOptions(target.querySelector('select'), o.targets, c.target || '');
         timeBase.querySelector('select').value = c.musical ? 'tempo' : 'absolute';
-        type.querySelector('select').value = c.kind === 'pattern' ? c.payload.blockType
-          : (c.payload.action || 'gate');
+        setOptions(type.querySelector('select'), o.actions, c.kind === 'pattern'
+          ? c.payload.blockType : (c.payload.action || 'gate'));
         container.querySelector(`#${uid}-title`).textContent = title();
         if (!keepStatus) {
           const v = clipView(m, c);

@@ -100,16 +100,16 @@ import {
   anchorEndTime, createTimelineScheduler, resolveEscape, safeHorizon,
 } from './timeline-compiler.js';
 import { effectiveTarget } from './timeline.js';
+import { CLIP_TARGET_TEXT, clipTarget, clipUse } from './clip-targets.js';
 import { studioDiagnostic } from './validate.js';
 import { NO_TRACE } from '../core/trace.js';
 
 /** Reasons shown for what the transport does not play. */
 export const TRANSPORT_TEXT = Object.freeze({
-  noTarget: 'The clip has no target node.',
-  patternTarget: (name) => `Pattern clips play on a Sequence or an Oscillator; this clip on `
-    + `${name} is not played.`,
-  eventTarget: (name) => `Only gate events on an Envelope are played; this clip on ${name} is `
-    + 'not.',
+  // What plays where is the clip-target policy's (clip-targets.js, R7), and so are its reasons.
+  noTarget: CLIP_TARGET_TEXT.noTarget,
+  patternTarget: CLIP_TARGET_TEXT.patternTarget,
+  eventTarget: CLIP_TARGET_TEXT.eventTarget,
   unavailable: (name, reason) => `${name} is not available${reason ? `: ${reason}` : '.'}`,
   noParameter: (name, param) => `${name} has no ${param} parameter to automate.`,
   claimRefused: 'The audio output is in use by another program.',
@@ -141,28 +141,25 @@ const messageOf = (e) => (e && e.message) || String(e);
 /** The message of a failed runtime result's first diagnostic, or `fallback`. */
 const errorOf = (r, fallback) => (r.errors && r.errors[0] && r.errors[0].message) || fallback;
 
-const PATTERN_TARGETS = Object.freeze(['sequence', 'oscillator']);
 const REFUSALS = Object.freeze(['edit-refused', 'sync-refused']);
+
+/** The clip-target verdict (clip-targets.js) of a model clip on its effective target. */
+export function clipVerdict(model, clip, registry = NODE_REGISTRY) {
+  const id = effectiveTarget(model, clip);
+  const n = id ? model.graph.nodes.find((x) => x.id === id) || null : null;
+  return clipTarget(n, clipUse(clip), registry);
+}
 
 /**
  * Why the transport does not play a timeline clip, from the model alone (pure): null when it
  * plays it (a pattern clip on a Sequence or an Oscillator, a gate event on an Envelope, a
- * measurement clip as data), else the TRANSPORT_TEXT reason. At play time a target that is not
- * ready is reported too (debugInfo().unplayed). Offline rendering (offline.js) plans with it.
+ * measurement clip as data), else the clip-target policy's reason (clip-targets.js, R7). At play
+ * time a target that is not ready is reported too (debugInfo().unplayed). Offline rendering
+ * (offline.js) plans with it.
  */
-export function clipPlayReason(model, clip) {
-  if (clip.kind === 'measurement') return null;
-  const id = effectiveTarget(model, clip);
-  const n = id ? model.graph.nodes.find((x) => x.id === id) || null : null;
-  if (!n) return TRANSPORT_TEXT.noTarget;
-  if (clip.kind === 'pattern') {
-    return PATTERN_TARGETS.includes(n.type) ? null : TRANSPORT_TEXT.patternTarget(n.metadata.name);
-  }
-  if (clip.kind === 'event') {
-    return n.type === 'envelope' && (clip.payload.action || 'gate') === 'gate' ? null
-      : TRANSPORT_TEXT.eventTarget(n.metadata.name);
-  }
-  return null;
+export function clipPlayReason(model, clip, registry = NODE_REGISTRY) {
+  const v = clipVerdict(model, clip, registry);
+  return v.plays ? null : v.reason;
 }
 
 export function createStudioTransport({
@@ -283,9 +280,7 @@ export function createStudioTransport({
   function patternOscillators(m) {
     const out = new Set();
     for (const c of m.timeline.clips) {
-      if (c.kind !== 'pattern') continue;
-      const n = nodeOf(m, effectiveTarget(m, c));
-      if (n && n.type === 'oscillator') out.add(n.id);
+      if (clipVerdict(m, c, registry).how === 'pattern-played') out.add(effectiveTarget(m, c));
     }
     return out;
   }
@@ -305,9 +300,8 @@ export function createStudioTransport({
     const out = new Set();
     for (const c of m.timeline.clips) {
       const id = effectiveTarget(m, c);
-      if (c.kind === 'event' && (c.payload.action || 'gate') === 'gate') {
-        const n = nodeOf(m, id);
-        if (n && n.type === 'envelope') out.add(id);
+      if (c.kind === 'event') {
+        if (clipVerdict(m, c, registry).how === 'gate') out.add(id);
       } else if (c.kind === 'pattern') {
         for (const env of triggerEnvelopes(m, id)) out.add(env);
       }
@@ -580,9 +574,10 @@ export function createStudioTransport({
       return skip(it, 'target-unavailable', TRANSPORT_TEXT.unavailable(n.metadata.name,
         raw && raw.reason));
     }
+    const v = clipTarget(n, { kind: 'pattern' }, registry);
     let dest = null;
-    if (n.type === 'sequence') dest = h.info && h.info.destination;
-    else if (n.type === 'oscillator') {
+    if (v.how === 'sequence') dest = h.info && h.info.destination;
+    else if (v.how === 'pattern-played') {
       const c = claims.get(it.target);
       dest = c && c.handle === h ? c.bus : null;
     }
@@ -627,9 +622,8 @@ export function createStudioTransport({
   function playEvent(it, deferred) {
     const n = nodeOf(model, it.target);
     if (!n) return skip(it, 'no-target', TRANSPORT_TEXT.noTarget);
-    if (n.type !== 'envelope' || it.action !== 'gate') {
-      return skip(it, 'event-target', TRANSPORT_TEXT.eventTarget(n.metadata.name));
-    }
+    const v = clipTarget(n, { kind: 'event', action: it.action }, registry);
+    if (v.how !== 'gate') return skip(it, 'event-target', v.reason);
     unplayed.delete(it.clipId);
     return addGate(it.key, it, it.target, it.startTime, it.endTime, deferred);
   }
@@ -685,6 +679,11 @@ export function createStudioTransport({
     if (!n || !h) {
       unplayed.set(reasonKey, { code: 'target-unavailable',
         reason: TRANSPORT_TEXT.unavailable(n ? n.metadata.name : target.node) });
+      return null;
+    }
+    const v = clipTarget(n, { kind: 'automation', param: target.param }, registry);
+    if (!v.plays) {
+      unplayed.set(reasonKey, { code: 'no-parameter', reason: v.reason });
       return null;
     }
     const def = registry.param(n.type, target.param);
@@ -1004,9 +1003,10 @@ export function createStudioTransport({
       refusedBy(r, 'sync-refused', rev);
       return { ok: false, synced: false, revision: rev, applied: r };
     }
-    note('sync', rev, 'applied');
+    note('sync', rev, r.presentation ? 'presentation-only' : 'applied');
     settled();
     model = next;
+    if (r.presentation) return { ok: true, synced: true, revision: rev, applied: r, plan: null };
     afterApply(freshOf(r));
     const plan = scheduler.edit(next, ctxNow());
     applyEdit(plan);
@@ -1036,10 +1036,14 @@ export function createStudioTransport({
     if (!r.ok) {
       return { ok: false, phase: r.phase, reason: refusedBy(r, 'edit-refused', revision) };
     }
-    note('admit', revision, 'admitted');
+    note('admit', revision, r.presentation ? 'presentation-only' : 'admitted');
     lastRevision = revision;
     settled();
     model = next;
+    // A presentation-only edit (R9, runtime.js adopt): the runtime took the revision without a
+    // transaction, and nothing the transport plays changed (the execution state holds the clips,
+    // lanes, loop and tempo): no claims, lanes or timeline re-plan to bring in line.
+    if (r.presentation) return null;
     afterApply(freshOf(r));
     applyEdit(scheduler.edit(next, ctxNow()));
     if (playing && timer == null) arm(1);

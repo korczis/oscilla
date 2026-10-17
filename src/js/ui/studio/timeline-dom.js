@@ -86,6 +86,19 @@ export function selectBox(options, value, attrs = {}, wrapClass = '') {
   return el('div', { class: `osc-select${wrapClass ? ` ${wrapClass}` : ''}` }, [sel]);
 }
 
+/**
+ * Replace a select's options when they changed (same [{ id, label }] shape as selectBox), then
+ * set its value. Unchanged options are left alone, so an open or focused select keeps its state.
+ */
+export function setOptions(sel, options, value) {
+  const now = [...sel.options].map((o) => `${o.value}\u0000${o.textContent}`).join('\n');
+  const next = options.map((o) => `${o.id}\u0000${o.label}`).join('\n');
+  if (now !== next) {
+    sel.replaceChildren(...options.map((o) => el('option', { value: o.id, text: o.label })));
+  }
+  sel.value = value;
+}
+
 /** Set an attribute only when it changed (avoids needless DOM writes). */
 export function setAttr(node, name, value) {
   const v = String(value);

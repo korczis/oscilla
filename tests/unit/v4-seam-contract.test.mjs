@@ -6,8 +6,10 @@
 //           An input belongs to the context it was named in (ledger W7f): one named in TEST
 //           CONTEXT (by the loopback, by setInputNow, or by a TEST CONTEXT result) is not a
 //           checked input outside it, so a typed level reading cannot bind to it; and a level
-//           calibration made in one context does not apply in the other. A level calibration
-//           typed by hand in TEST CONTEXT says so (W7c).
+//           calibration made in one context does not apply in the other (it is kept, owner
+//           decision of 2026-10-11). Leaving TEST CONTEXT is the page's own "choose an input"
+//           (ledger W7b, v4-test-context-choice.test.mjs). A level calibration typed by hand in
+//           TEST CONTEXT says so (W7c).
 //   drive   setValues is the validated recipe-link action: unknown keys, out-of-range values and
 //           calls while a measurement runs are refused whole; a change resets a READY check.
 //           A toggle takes true or false only (W7h).
@@ -84,8 +86,13 @@ test('inject: setInputNow works in TEST CONTEXT loopback; a direct call is refus
     typeReading(cmp);
     assert.equal(cmp.measureSaveLevelCalibration(), true);
     assert.equal(cmp.measureCalIndicator, 'CALIBRATED');
-    // After TEST CONTEXT is left (a drive action) a direct call is refused.
+    // Leaving TEST CONTEXT (a drive action: the page's "choose an input") ends the injected
+    // input; the calibration stored on it is kept and does not apply outside TEST CONTEXT; a
+    // direct call is refused from then on.
     assert.equal(seam.useMicrophone(), true);
+    assert.equal(seam.inputNow, null);
+    assert.ok(seam.levelCalibration, 'kept (owner decision of 2026-10-11)');
+    assert.notEqual(cmp.measureCalIndicator, 'CALIBRATED');
     assert.equal(seam.setInputNow(null), false);
     assert.equal(seam.useLoopback(), true);
     assert.equal(seam.setInputNow(null), true);

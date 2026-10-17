@@ -29,6 +29,7 @@ clock, no randomness. IDs come from an injected generator; inputs are never muta
 | `ports.js` | Port types, roles, visual shapes, accessible labels, `canConnect`, modulation edge properties |
 | `registry.js`, `nodes/*.js` | Canonical node-type registry and the §29 library (25 types) |
 | `validate.js` | Structured graph and timeline diagnostics, cycle analysis, untrusted import |
+| `clip-targets.js` | The one clip-target policy: which node or parameter a clip or lane may target (held by the store) and how the transport plays it (R7, `docs/v31/timeline.md`) |
 | `actions.js` | The store: `dispatch`, reducers, copy/paste, duplicate, id generator |
 | `history.js` | Undo/redo over immutable snapshots, gesture coalescing |
 | `migrate.js` | Migration registry and the import pipeline |
@@ -310,11 +311,11 @@ fails when a value or a cited line stops matching the code.
 | Studio project file extension | .oscilla-studio.json | `STUDIO_FILE_EXTENSION` | `src/js/studio/schema.js:56` |
 | Patch file extension | .oscilla-patch.json | `PATCH_FILE_EXTENSION` | `src/js/studio/patches.js:50` |
 | Default timeline scale | 100 px/s | `pxPerSecond` | `src/js/studio/schema.js:100` |
-| Timeline zoom bounds | 4-4000 px/s | `TIMELINE_ZOOM` | `src/js/ui/studio/timeline-view.js:26` |
-| Timeline snap default | 0.1 s time grid | `EDITOR_DEFAULT_SNAP` | `src/js/ui/studio/timeline-view.js:37` |
-| Maximum node import count | 512 nodes | `STUDIO_IMPORT_LIMITS` | `src/js/studio/validate.js:73` |
+| Timeline zoom bounds | 4-4000 px/s | `TIMELINE_ZOOM` | `src/js/ui/studio/timeline-view.js:27` |
+| Timeline snap default | 0.1 s time grid | `EDITOR_DEFAULT_SNAP` | `src/js/ui/studio/timeline-view.js:38` |
+| Maximum node import count | 512 nodes | `STUDIO_IMPORT_LIMITS` | `src/js/studio/validate.js:74` |
 | Undo history limit | 200 entries | `STUDIO_HISTORY_LIMIT` | `src/js/studio/history.js:34` |
-| Paste and duplicate offset | (24, 24) units | `PASTE_OFFSET` | `src/js/studio/actions.js:78` |
+| Paste and duplicate offset | (24, 24) units | `PASTE_OFFSET` | `src/js/studio/actions.js:79` |
 <!-- studio-decisions:end -->
 
 The model stores the graph view's zoom as any finite number (`src/js/studio/schema.js:356`,
