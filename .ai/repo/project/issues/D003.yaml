@@ -1,5 +1,7 @@
 id: D003
 milestone: M006
+serves:
+  - "v1-instrument#public-from-file-and-pages"
 title: "GitHub Pages deployment"
 slug: github-pages-deployment
 priority: p0

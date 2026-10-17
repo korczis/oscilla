@@ -1,5 +1,7 @@
 id: S035
 milestone: M003
+serves:
+  - "v1-instrument#dual-oscillator"
 title: "§35 Dual osc mode"
 slug: dual-osc-mode
 priority: p1

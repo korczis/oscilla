@@ -1,5 +1,7 @@
 id: S048
 milestone: M004
+serves:
+  - "v1-instrument#visuals-and-interface"
 title: "§48 Responsive design"
 slug: responsive-design
 priority: p1

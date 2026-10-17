@@ -1,5 +1,7 @@
 id: R012
 milestone: M011
+serves:
+  - "release-provenance#majordomus-knows-the-product"
 title: "Knowledge graph validation"
 slug: knowledge-graph-validation
 priority: p0

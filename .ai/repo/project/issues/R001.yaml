@@ -1,5 +1,7 @@
 id: R001
 milestone: M011
+serves:
+  - "release-provenance#majordomus-knows-the-product"
 title: "Baseline audit"
 slug: baseline-audit
 priority: p0

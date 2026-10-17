@@ -1,5 +1,7 @@
 id: S031
 milestone: M002
+serves:
+  - "v1-instrument#visuals-and-interface"
 title: "§31 Wavelength and period"
 slug: wavelength-and-period
 priority: p1

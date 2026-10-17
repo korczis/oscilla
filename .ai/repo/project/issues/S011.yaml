@@ -1,5 +1,7 @@
 id: S011
 milestone: M001
+serves:
+  - "v1-instrument#engine-plays-and-releases"
 title: "§11 Musical note mode"
 slug: musical-note-mode
 priority: p1

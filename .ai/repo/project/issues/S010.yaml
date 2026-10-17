@@ -1,5 +1,7 @@
 id: S010
 milestone: M001
+serves:
+  - "v1-instrument#engine-plays-and-releases"
 title: "§10 Fine frequency controls"
 slug: fine-frequency-controls
 priority: p1

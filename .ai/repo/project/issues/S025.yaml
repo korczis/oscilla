@@ -1,5 +1,7 @@
 id: S025
 milestone: M002
+serves:
+  - "v1-instrument#visuals-and-interface"
 title: "§25 p5.js visualization"
 slug: p5-js-visualization
 priority: p1

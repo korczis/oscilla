@@ -1,5 +1,7 @@
 id: V313
 milestone: M013
+serves:
+  - "v3-measure#calibration-profiles"
 title: "Log-frequency interpolation and coverage"
 slug: log-frequency-interpolation-and-coverage
 priority: p1

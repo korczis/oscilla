@@ -1,5 +1,7 @@
 id: V432
 milestone: M032
+serves:
+  - "v31-studio#self-knowledge"
 title: "Studio documentation and self-knowledge"
 slug: studio-documentation-and-self-knowledge
 priority: p1

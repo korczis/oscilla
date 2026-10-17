@@ -1,5 +1,7 @@
 id: V244
 milestone: M010
+serves:
+  - "v2-laboratory#public-and-identified"
 title: "Open Graph tags"
 slug: open-graph-tags
 priority: p1

@@ -1,5 +1,7 @@
 id: R003
 milestone: M011
+serves:
+  - "release-provenance#deterministic-build"
 title: "Deterministic build provenance"
 slug: deterministic-build-provenance
 priority: p0

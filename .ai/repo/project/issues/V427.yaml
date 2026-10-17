@@ -1,5 +1,7 @@
 id: V427
 milestone: M030
+serves:
+  - "v31-studio#offline-render"
 title: "Offline rendering of Studio sequences"
 slug: offline-rendering-of-studio-sequences
 priority: p1

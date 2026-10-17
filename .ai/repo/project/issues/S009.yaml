@@ -1,5 +1,7 @@
 id: S009
 milestone: M001
+serves:
+  - "v1-instrument#engine-plays-and-releases"
 title: "§9 Flexible frequency entry"
 slug: flexible-frequency-entry
 priority: p1

@@ -1,5 +1,7 @@
 id: V355
 milestone: M017
+serves:
+  - "v3-measure#reproducible-experiments"
 title: "Recipe, repeat and URL recipe"
 slug: recipe-repeat-and-url-recipe
 priority: p1

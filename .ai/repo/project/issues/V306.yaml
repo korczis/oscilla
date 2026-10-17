@@ -1,5 +1,7 @@
 id: V306
 milestone: M012
+serves:
+  - "v3-measure#transfer-function"
 title: "Offline FFT and windowing"
 slug: offline-fft-and-windowing
 priority: p1

@@ -1,5 +1,7 @@
 id: V343
 milestone: M016
+serves:
+  - "v3-measure#rta-bands"
 title: "RTA averaging"
 slug: rta-averaging
 priority: p1

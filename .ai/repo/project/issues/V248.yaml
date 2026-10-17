@@ -1,5 +1,8 @@
 id: V248
 milestone: M010
+serves:
+  - "v2-laboratory#about-workspace"
+  - "v2-laboratory#about-provenance"
 title: "About workspace"
 slug: about-workspace
 priority: p1

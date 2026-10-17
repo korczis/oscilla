@@ -1,5 +1,7 @@
 id: R009
 milestone: M011
+serves:
+  - "release-provenance#majordomus-knows-the-product"
 title: "Product features in Majordomus"
 slug: product-features-in-majordomus
 priority: p0

@@ -1,5 +1,7 @@
 id: R008
 milestone: M011
+serves:
+  - "release-provenance#majordomus-knows-the-product"
 title: "V2 architecture decisions"
 slug: v2-architecture-decisions
 priority: p0

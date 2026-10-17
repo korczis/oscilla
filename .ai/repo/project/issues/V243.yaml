@@ -1,5 +1,7 @@
 id: V243
 milestone: M010
+serves:
+  - "v2-laboratory#public-and-identified"
 title: "Favicon and app icons"
 slug: favicon-and-app-icons
 priority: p1

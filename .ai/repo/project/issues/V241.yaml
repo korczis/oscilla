@@ -1,5 +1,7 @@
 id: V241
 milestone: M010
+serves:
+  - "v2-laboratory#public-and-identified"
 title: "Final functional QA and review"
 slug: final-functional-qa-and-review
 priority: p0

@@ -1,5 +1,7 @@
 id: V363
 milestone: M018
+serves:
+  - "v3-measure#aggregate-primary-response"
 title: "Repeats and aggregation"
 slug: repeats-and-aggregation
 priority: p1

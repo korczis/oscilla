@@ -1,5 +1,7 @@
 id: V403
 milestone: M021
+serves:
+  - "v31-studio#self-knowledge"
 title: "Studio in the Majordomus product graph"
 slug: studio-in-the-majordomus-product-graph
 priority: p1

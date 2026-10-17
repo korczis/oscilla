@@ -1,5 +1,7 @@
 id: V376
 milestone: M019
+serves:
+  - "v3-measure#measurement-workbench"
 title: "Visual acceptance"
 slug: visual-acceptance
 priority: p1

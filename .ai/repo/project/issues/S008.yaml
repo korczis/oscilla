@@ -1,5 +1,7 @@
 id: S008
 milestone: M001
+serves:
+  - "v1-instrument#engine-plays-and-releases"
 title: "§8 Frequency regions"
 slug: frequency-regions
 priority: p1

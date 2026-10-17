@@ -1,5 +1,7 @@
 id: V246
 milestone: M010
+serves:
+  - "v2-laboratory#public-and-identified"
 title: "Link preview image"
 slug: link-preview-image
 priority: p1

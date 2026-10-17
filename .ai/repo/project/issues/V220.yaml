@@ -1,5 +1,8 @@
 id: V220
 milestone: M008
+serves:
+  - "v2-laboratory#phase-and-lissajous"
+  - "v2-laboratory#stereo-correlation"
 title: "Phase, Lissajous, stereo"
 slug: phase-lissajous-stereo
 priority: p0

@@ -1,5 +1,7 @@
 id: V218
 milestone: M008
+serves:
+  - "v2-laboratory#adsr"
 title: "ADSR envelope"
 slug: adsr-envelope
 priority: p0

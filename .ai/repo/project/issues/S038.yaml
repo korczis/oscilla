@@ -1,5 +1,7 @@
 id: S038
 milestone: M003
+serves:
+  - "v1-instrument#presets"
 title: "§38 Presets mode"
 slug: presets-mode
 priority: p1

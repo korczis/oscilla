@@ -1,5 +1,7 @@
 id: V301
 milestone: M012
+serves:
+  - "v3-measure#product-graph"
 title: "V3 baseline audit"
 slug: v3-baseline-audit
 priority: p1

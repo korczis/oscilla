@@ -1,5 +1,7 @@
 id: S062
 milestone: M004
+serves:
+  - "v1-instrument#no-fake-science"
 title: "§62 Preset description quality"
 slug: preset-description-quality
 priority: p1

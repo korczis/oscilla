@@ -1,5 +1,7 @@
 id: S044
 milestone: M003
+serves:
+  - "v1-instrument#no-fake-science"
 title: "§44 Learn mode"
 slug: learn-mode
 priority: p1

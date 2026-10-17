@@ -1,5 +1,7 @@
 id: R002
 milestone: M011
+serves:
+  - "release-provenance#one-version-authority"
 title: "Single product-version authority"
 slug: single-product-version-authority
 priority: p0

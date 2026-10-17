@@ -1,5 +1,7 @@
 id: V429
 milestone: M031
+serves:
+  - "v31-studio#non-drag-operation"
 title: "Mobile Studio and responsive layout"
 slug: mobile-studio-and-responsive-layout
 priority: p1

@@ -1,5 +1,7 @@
 id: S001
 milestone: M001
+serves:
+  - "v1-instrument#public-from-file-and-pages"
 title: "§1 Primary deliverable"
 slug: primary-deliverable
 priority: p1
