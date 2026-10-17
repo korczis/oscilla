@@ -5,7 +5,7 @@
 // relative digital levels into the graph; the Master Output's logical gain (DEFAULT_GAIN) and the
 // engine's safe output chain sit after them (§186).
 
-import { WAVEFORMS, WAVEFORM_LABELS } from '../../core/constants.js';
+import { SAFE_NYQUIST_FACTOR_TEXT, WAVEFORMS, WAVEFORM_LABELS } from '../../core/constants.js';
 import { DEFAULT_SWEEP } from '../../audio/patterns.js';
 import { definePort } from '../ports.js';
 import {
@@ -47,8 +47,8 @@ export const oscillator = defineNode({
     what: 'A periodic tone at a requested digital frequency.',
     inputs: 'Frequency, detune and level accept modulation.',
     outputs: 'Audio.',
-    constraints: 'Frequencies are limited to 0.95 × the digital Nyquist limit of the running '
-      + 'audio context.',
+    constraints: `Frequencies are limited to ${SAFE_NYQUIST_FACTOR_TEXT} × the digital Nyquist `
+      + 'limit of the running audio context.',
   },
 });
 

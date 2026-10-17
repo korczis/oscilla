@@ -51,6 +51,7 @@ import {
   BLOCK_SCHEMA, DEFAULT_SEED, PROVISIONAL_SAMPLE_RATE, WAVEFORMS, normalizeModel,
 } from '../sequencer/model.js';
 import { LOOKAHEAD_S } from '../sequencer/editor.js';
+import { RENDER_QUANTUM } from '../core/constants.js';
 import { SCHEDULE_LEAD_S, TOP_UP_EVERY_MS } from '../audio/scheduler.js';
 import { NODE_REGISTRY } from './registry.js';
 import {
@@ -66,8 +67,8 @@ import {
 export const TIMELINE_LOOKAHEAD_S = LOOKAHEAD_S;
 /** Safe horizon: nothing is changed closer to now than the engine's SCHEDULE_LEAD_S. */
 export const SAFE_HORIZON_S = SCHEDULE_LEAD_S;
-/** Frames per Web Audio render quantum; STOP lands on a quantum boundary (stopTime). */
-export const RENDER_QUANTUM = 128;
+/** Frames per Web Audio render quantum (core/constants.js); STOP lands on its boundary. */
+export { RENDER_QUANTUM };
 /** Guard against pathological loops: passes compiled per window at most. */
 export const MAX_PASSES_PER_WINDOW = 4096;
 const MIN_WAKE_MS = 50;

@@ -1,10 +1,17 @@
 // Learn topics: explanatory text and a demo configuration per topic. Extracted from V1
-// (index.html@a7b7a23, section 5). Text and demo configurations are unchanged, with one V2 fix
+// (index.html@a7b7a23, section 5). Text and demo configurations are unchanged, with two V2 fixes
 // over index.html@a7b7a23: the 'hearing' demo sets the octave steps explicitly (V1's cfg has no
-// pp, so a user-edited Steps field changed what "Octave steps 125 Hz – 16 kHz" played). demo.viz
-// keeps the V1 visualization ids (wave, spectrum, motion, harmonics, interference).
+// pp, so a user-edited Steps field changed what "Octave steps 125 Hz – 16 kHz" played), and the
+// 'samplerate' body names the Filter Lab's own model rate (V2 added that lab: its chart models
+// FILTER_PREVIEW_SAMPLE_RATE before audio starts, not the provisional rate of the readouts), its
+// rates built from the constants. demo.viz keeps the V1 visualization ids (wave, spectrum,
+// motion, harmonics, interference).
 
-import { OCTAVE_STEP_FREQUENCIES } from '../core/constants.js';
+import {
+  FILTER_PREVIEW_SAMPLE_RATE, OCTAVE_STEP_FREQUENCIES, PROVISIONAL_SAMPLE_RATE,
+} from '../core/constants.js';
+
+const kHz = (hz) => `${hz / 1000} kHz`;
 
 // V1: LEARN_TOPICS (index.html@a7b7a23)
 export const LEARN_TOPICS = [
@@ -22,7 +29,7 @@ export const LEARN_TOPICS = [
     demo: { label: 'Square at 220 Hz', viz: 'harmonics', cfg: { source: 'single', pattern: 'tone', waveform: 'square', frequency: 220 } } },
   { id: 'nyquist', title: 'Nyquist limit', body: 'A digital system can represent frequencies only below half its sample rate. Nyquist is a digital limit, not a guarantee of speaker performance.',
     demo: { label: 'Square at 5 kHz', viz: 'harmonics', cfg: { source: 'single', pattern: 'tone', waveform: 'square', frequency: 5000 } } },
-  { id: 'samplerate', title: 'Sample rate', body: 'The sample rate is how many values per second the audio system produces. Once audio starts, OSCILLA uses the rate this device reports; until then the display assumes 44.1 kHz provisionally and marks it as such.',
+  { id: 'samplerate', title: 'Sample rate', body: `The sample rate is how many values per second the audio system produces. Once audio starts, OSCILLA uses the rate this device reports; until then the display assumes ${kHz(PROVISIONAL_SAMPLE_RATE)} provisionally and marks it as such; the Filter Lab models its response at ${kHz(FILTER_PREVIEW_SAMPLE_RATE)} and labels it.`,
     demo: { label: 'Open the spectrum', viz: 'spectrum', cfg: { source: 'single', pattern: 'tone', waveform: 'sine', frequency: 1000 } } },
   { id: 'aliasing', title: 'Aliasing', body: 'Content above Nyquist folds back to wrong, lower frequencies. Web Audio oscillators are band-limited, so they omit harmonics above Nyquist instead.',
     demo: { label: 'Saw at 8 kHz: few harmonics fit', viz: 'harmonics', cfg: { source: 'single', pattern: 'tone', waveform: 'sawtooth', frequency: 8000 } } },

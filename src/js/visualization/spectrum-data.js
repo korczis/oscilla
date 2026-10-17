@@ -9,7 +9,7 @@ import {
 } from '../core/frequency.js';
 import { clamp, isNum } from '../core/math.js';
 import {
-  SAFE_NYQUIST_FACTOR, SPECTRUM_MARKERS, THIRD_OCTAVE_FREQUENCIES,
+  SAFE_NYQUIST_FACTOR, SAFE_NYQUIST_PERCENT_TEXT, SPECTRUM_MARKERS, THIRD_OCTAVE_FREQUENCIES,
 } from '../core/constants.js';
 import { midiToFrequency } from '../core/music.js';
 
@@ -22,7 +22,7 @@ export const LINEAR_TICK_LABELS = LINEAR_TICKS.map(formatFrequencyShort);
 export const OCTAVE_C_LABELS = ['C0', 'C1', 'C2', 'C3', 'C4', 'C5', 'C6', 'C7', 'C8', 'C9', 'C10'];
 export const THIRD_OCTAVE_HALF_BAND = 2 ** (1 / 6);
 export const MIC_LEGENDS = ['● microphone (relative)', '● mic'];
-export const DIGITAL_LIMIT_LABEL = 'digital limit 95 %';
+export const DIGITAL_LIMIT_LABEL = `digital limit ${SAFE_NYQUIST_PERCENT_TEXT}`;
 export const SPECTRUM_IDLE_NOTES = ['The measured spectrum appears once audio starts — press HOLD TO PLAY.', 'Spectrum appears once audio starts.', 'press HOLD TO PLAY'];
 
 export const SPECTRUM_TITLE = 'RELATIVE LEVEL (dB, uncalibrated)';

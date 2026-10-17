@@ -3,6 +3,9 @@
 
 import { isNum } from './math.js';
 
+/** Cents in one octave: f · 2^(cents / CENTS_PER_OCTAVE) (V2+, the Studio's detune maths). */
+export const CENTS_PER_OCTAVE = 1200;
+
 // V1: NOTE_NAMES, NOTE_BUTTONS (index.html@a7b7a23)
 export const NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
 export const NOTE_BUTTONS = ['C2', 'A2', 'C3', 'A3', 'C4', 'A4', 'C5', 'A5', 'C6', 'A6', 'C7'];

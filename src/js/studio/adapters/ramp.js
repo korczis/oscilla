@@ -15,8 +15,10 @@
 // before the start of the previous one is moved one render quantum after it, so an event is
 // never replaced at the same time.
 
+import { RENDER_QUANTUM } from '../../core/constants.js';
+
 export function createRamp(param, initial, now, sampleRate = 48000) {
-  const quantum = 128 / sampleRate;
+  const quantum = RENDER_QUANTUM / sampleRate;
   let seg = { t0: now, v0: initial, t1: now, v1: initial };
   // The intrinsic value as well: a node connected while the graph renders must not pass even
   // one sample at the GainNode default 1 before the event at `now` applies (measured in

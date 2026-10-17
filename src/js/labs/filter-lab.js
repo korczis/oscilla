@@ -8,7 +8,8 @@
 // stage's getResponse() (the browser's own getFrequencyResponse). Before the engine has
 // inserted a stage, the chart reads an unconnected probe stage on the engine's context, or —
 // when no context exists yet — on a 1-frame OfflineAudioContext at the engine's sample rate
-// (48 kHz assumed and labelled until the real rate is known). It never plays audio.
+// (core/constants.js FILTER_PREVIEW_SAMPLE_RATE, 48 kHz, assumed and labelled until the real
+// rate is known). It never plays audio.
 
 import { createFilterStage, normalizeFilter, FILTER_TYPES, usesGain } from '../audio/filters.js';
 import { createFilterChart } from '../charts/filter-chart.js';
@@ -22,6 +23,7 @@ import {
 } from '../charts/axes.js';
 import { FILTER_DRAG } from '../charts/drag-math.js';
 import { on, onUi, bindSwitch, setSlider, setField, activeValue, onAdapterChange } from './dom.js';
+import { FILTER_PREVIEW_SAMPLE_RATE } from '../core/constants.js';
 
 export const FILTER_DEFAULTS = Object.freeze({
   type: 'lowpass',
@@ -30,7 +32,8 @@ export const FILTER_DEFAULTS = Object.freeze({
   gain: 0,
   enabled: true,
 });
-const PREVIEW_RATE = 48000;
+/** The chart's note while it reads the offline model: 'model @ 48 kHz'. */
+const PREVIEW_NOTE = `model @ ${FILTER_PREVIEW_SAMPLE_RATE / 1000} kHz`;
 
 /** Q display: 0.707, 1.5, 12. */
 export function formatQ(q) {
@@ -64,7 +67,7 @@ export function mount(rootEl, adapter) {
   function sampleRate() {
     const ctx = adapter.getContext && adapter.getContext();
     return (ctx && ctx.sampleRate) || (adapter.getSampleRate && adapter.getSampleRate())
-      || PREVIEW_RATE;
+      || FILTER_PREVIEW_SAMPLE_RATE;
   }
 
   function ensurePreview() {
@@ -78,7 +81,7 @@ export function mount(rootEl, adapter) {
     }
     if (!preview && typeof OfflineAudioContext === 'function') {
       const known = adapter.getSampleRate && adapter.getSampleRate();
-      const off = new OfflineAudioContext(1, 1, known || PREVIEW_RATE);
+      const off = new OfflineAudioContext(1, 1, known || FILTER_PREVIEW_SAMPLE_RATE);
       preview = { ctx: off, stage: createFilterStage(off, config), offline: true, assumed: !known };
     }
     return preview ? preview.stage : null;
@@ -100,7 +103,7 @@ export function mount(rootEl, adapter) {
         return s.getResponse(freqs, out);
       },
       onChange: (patch) => set(patch),
-      getNote: () => (preview && preview.assumed && !stages.size ? 'model @ 48 kHz' : null),
+      getNote: () => (preview && preview.assumed && !stages.size ? PREVIEW_NOTE : null),
     })
     : null;
 
@@ -173,7 +176,7 @@ export function mount(rootEl, adapter) {
     get config() {
       return { ...config };
     },
-    /** True while the chart reads the 48 kHz offline probe (no engine context yet). */
+    /** True while the chart reads the offline probe (no engine context yet). */
     get previewOnly() {
       return !!(preview && preview.offline && !stages.size);
     },

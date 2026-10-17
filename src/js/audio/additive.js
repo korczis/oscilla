@@ -23,6 +23,8 @@
 // Above the oscillator's Nyquist frequency the browser drops partials (band-limited tables);
 // visualCoefficients() flags those as not audible instead of hiding them.
 
+import { SAFE_NYQUIST_FACTOR } from '../core/constants.js';
+
 export const MAX_PARTIALS = 256;
 export const OFF_DB = -96; // gains at or below this are treated as off
 export const ADDITIVE_PRESETS = Object.freeze(['sine', 'square', 'sawtooth', 'triangle', 'custom']);
@@ -247,7 +249,7 @@ export function createAdditiveOscillator(ctx, partials, options = {}) {
     refreshCoefficients();
   }
 
-  const nyqSafe = (ctx.sampleRate / 2) * 0.95;
+  const nyqSafe = (ctx.sampleRate / 2) * SAFE_NYQUIST_FACTOR;
   osc.frequency.setValueAtTime(Math.min(nyqSafe, current.frequency), ctx.currentTime);
   rebuild();
   let started = false;

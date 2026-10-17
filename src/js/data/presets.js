@@ -6,7 +6,9 @@
 // presets use cfg.source 'sweep'; `end: 'max'` resolves to the running safe maximum at apply
 // time (core/config.js).
 
-import { OCTAVE_STEP_FREQUENCIES, THIRD_OCTAVE_FREQUENCIES } from '../core/constants.js';
+import {
+  OCTAVE_STEP_FREQUENCIES, SAFE_NYQUIST_FACTOR, SAFE_NYQUIST_PERCENT_TEXT, THIRD_OCTAVE_FREQUENCIES,
+} from '../core/constants.js';
 import { isNum } from '../core/math.js';
 import { formatFrequency } from '../core/frequency.js';
 import { PATTERN_BY_ID } from '../audio/patterns.js';
@@ -14,6 +16,10 @@ import { PATTERN_BY_ID } from '../audio/patterns.js';
 // A preset is { id, cat, name, desc, params, cfg }. `cfg` is a partial configuration in the
 // same shape the URL hash and custom presets use, applied through one validated code path
 // (oscillaApp.applyConfig). `end: 'max'` resolves to the running safe maximum.
+
+// Copy derived from the constants it states (the text is V1's, byte for byte): the lowest sample
+// rate whose safe maximum is above 20 kHz, in kHz with one decimal ('42.1').
+const RATE_FOR_20K_KHZ = ((2 * 20000) / SAFE_NYQUIST_FACTOR / 1000).toFixed(1);
 
 // V1: PRESET_CATEGORIES, REFERENCE_NOTES, refPreset (index.html@a7b7a23)
 export const PRESET_CATEGORIES = [
@@ -43,7 +49,7 @@ export const REFERENCE_NOTES = {
   15500: 'High-frequency signal — not ultrasound. Speakers may attenuate it strongly.',
   17000: 'Upper hearing range. Many adults perceive it weakly or not at all; the digital signal is generated regardless, and speaker output is unknown.',
   18000: 'Upper hearing range. Phone speakers and some codecs may attenuate it.',
-  20000: 'Nominal upper edge of human hearing. Needs a sample rate of about 42.1 kHz or more, so that 20 kHz stays below the digital limit (95 % of Nyquist).',
+  20000: `Nominal upper edge of human hearing. Needs a sample rate of about ${RATE_FOR_20K_KHZ} kHz or more, so that 20 kHz stays below the digital limit (${SAFE_NYQUIST_PERCENT_TEXT} of Nyquist).`,
 };
 
 export function refPreset(f) {
@@ -87,7 +93,7 @@ export const BUILTIN_PRESETS = [
     params: '2 kHz → 6 kHz · 3 s · log', cfg: { source: 'sweep', sweep: { start: 2000, end: 6000, durationMs: 3000, curve: 'log', direction: 'up', repeat: 'once' } } },
   { id: 'sw-high', cat: 'sweeps', name: 'High range', desc: 'Brilliance into the upper hearing range.',
     params: '8 kHz → 18 kHz · 4 s · log', cfg: { source: 'sweep', sweep: { start: 8000, end: 18000, durationMs: 4000, curve: 'log', direction: 'up', repeat: 'once' } } },
-  { id: 'sw-upper', cat: 'sweeps', name: 'Upper range', desc: 'From 12 kHz to the digital limit of this device (95 % of Nyquist).',
+  { id: 'sw-upper', cat: 'sweeps', name: 'Upper range', desc: `From 12 kHz to the digital limit of this device (${SAFE_NYQUIST_PERCENT_TEXT} of Nyquist).`,
     params: '12 kHz → digital limit · 4 s · log', cfg: { source: 'sweep', sweep: { start: 12000, end: 'max', durationMs: 4000, curve: 'log', direction: 'up', repeat: 'once' } } },
   { id: 'sw-sub', cat: 'sweeps', name: 'Sub-bass', desc: 'Low end; watch speaker excursion and start at low gain.',
     params: '20 Hz → 100 Hz · 4 s · log', cfg: { source: 'sweep', sweep: { start: 20, end: 100, durationMs: 4000, curve: 'log', direction: 'up', repeat: 'once' } } },
@@ -122,11 +128,11 @@ export const BUILTIN_PRESETS = [
   { id: 'pt-40-sub', cat: 'patterns', name: '40 Hz sub-bass', desc: 'Sustained sub-bass tone. Small speakers may reproduce it poorly.',
     params: '40 Hz · sine · 2 s', cfg: { source: 'single', pattern: 'finite', waveform: 'sine', frequency: 40, duration: 2000 } },
   { id: 'pt-octaves', cat: 'patterns', name: 'Octave stepping', desc: '125 Hz to 16 kHz in octave steps.',
-    params: '8 steps × 400 ms', cfg: { source: 'single', pattern: 'octave', waveform: 'sine',
+    params: `${OCTAVE_STEP_FREQUENCIES.length} steps × 400 ms`, cfg: { source: 'single', pattern: 'octave', waveform: 'sine',
       // V2 fix: the steps are part of what the label promises (125 Hz … 16 kHz)
       pp: { octave: { text: OCTAVE_STEP_FREQUENCIES.join(', '), toneMs: 400, gapMs: 100 } } } },
   { id: 'pt-third', cat: 'patterns', name: 'Third-octave demonstration', desc: 'Nominal third-octave center frequencies, 20 Hz to 20 kHz; values above the digital limit are skipped.',
-    params: 'up to 31 steps × 250 ms', cfg: { source: 'single', pattern: 'sequence', waveform: 'sine',
+    params: `up to ${THIRD_OCTAVE_FREQUENCIES.length} steps × 250 ms`, cfg: { source: 'single', pattern: 'sequence', waveform: 'sine',
       pp: { sequence: { text: THIRD_OCTAVE_FREQUENCIES.join(', '), toneMs: 250, gapMs: 50, repeats: 1 } } } },
 
   // HIGH FREQUENCY

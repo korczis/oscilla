@@ -47,7 +47,7 @@
 import { DEFAULT_RENDER, bufferStats, normalizeRenderOptions, render } from
   '../audio/offline-renderer.js';
 import { encodeWav } from '../audio/wav.js';
-import { MAX_OUTPUT_GAIN } from '../core/constants.js';
+import { MAX_OUTPUT_GAIN, RENDER_QUANTUM, SAFE_NYQUIST_FACTOR } from '../core/constants.js';
 import { clipTarget } from './clip-targets.js';
 import { NODE_REGISTRY } from './registry.js';
 import { validateStudioModel } from './validate.js';
@@ -189,7 +189,7 @@ export function offlineEngine(ctx, master) {
     init: () => true,
     on: () => () => {},
     lastError: null,
-    get safeMaximum() { return (ctx.sampleRate / 2) * 0.95; },
+    get safeMaximum() { return (ctx.sampleRate / 2) * SAFE_NYQUIST_FACTOR; },
     setMasterGain(g) {
       master.gain.value = Math.min(MAX_OUTPUT_GAIN, Math.max(0, g));
     },
@@ -219,7 +219,7 @@ function trackProgress(ctx, duration, onProgress, aborted) {
   };
   report(0);
   if (typeof ctx.suspend !== 'function') return;
-  const quantum = 128 / ctx.sampleRate;
+  const quantum = RENDER_QUANTUM / ctx.sampleRate;
   const seen = new Set();
   for (let k = 1; k < PROGRESS_STEPS; k += 1) {
     const t = Math.round((k * duration) / PROGRESS_STEPS / quantum) * quantum;

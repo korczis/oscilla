@@ -74,6 +74,7 @@ import { createAccounting } from './adapters/engine-hooks.js';
 import { createRamp } from './adapters/ramp.js';
 import { hasMicrophoneApi } from '../audio/microphone.js';
 import { GAIN_FLOOR } from '../core/constants.js';
+import { CENTS_PER_OCTAVE } from '../core/music.js';
 
 /** Route crossfade (connect, disconnect, reconnect, replace): filters.js CROSSFADE_S. */
 export const STUDIO_XFADE_S = 0.02;
@@ -93,7 +94,6 @@ export const CLEANUP_MARGIN_S = 0.05;
  */
 export const ROUTE_FLOOR = GAIN_FLOOR;
 
-const CENTS_PER_OCTAVE = 1200;
 const DEFAULT_RANGE = Object.freeze([-1, 1]);
 const KIND_BY_TYPE = Object.freeze({ AUDIO: 'audio', CONTROL: 'control', TRIGGER: 'trigger',
   ANALYSIS: 'analysis' });

@@ -28,6 +28,7 @@ import { RTA_MODES } from '../rta.js';
 import { safeMaxFrequency } from '../stimulus.js';
 import { describeStimulus } from '../../experiments/schema.js';
 import { fixedText, UNAVAILABLE } from './common.js';
+import { SAFE_NYQUIST_FACTOR_TEXT } from '../../core/constants.js';
 
 // ----------------------------------------------------------------------------- output level
 
@@ -66,22 +67,30 @@ const NOISE_CHECK_HELP = `${DEFAULT_NOISE_CHECK_S} s by default: the SNR is asse
   + 'about 10 / (0.1156 × length) Hz (17 Hz for 5 s, 87 Hz for 1 s), so a shorter check leaves '
   + 'the low end NOT ASSESSED. 0 skips it (SNR NOT MEASURED).';
 
+const CHARACTERIZE_RECIPE = Object.freeze({
+  stimulus: Object.freeze({ kind: 'log-sweep', f1: 20, f2: 20000, duration: 10, level: 'low' }),
+  repeats: 3,
+  analysis: Object.freeze({ noiseCheckS: DEFAULT_NOISE_CHECK_S, preRollS: DEFAULT_TIMING.preRollS,
+    postRollS: DEFAULT_TIMING.postRollS, gapS: DEFAULT_TIMING.gapS, phase: false,
+    aggregation: 'mean' }),
+});
+
+/** How many times, in words: 'once', 'twice', 'three times', else '<n> times'. */
+export function timesText(n) {
+  return ['', 'once', 'twice', 'three times'][n] || `${n} times`;
+}
+
 export const CHARACTERIZE_PLAYBACK_CHAIN = Object.freeze({
   id: 'characterize-playback-chain',
   label: 'CHARACTERIZE PLAYBACK CHAIN',
   resultLabel: 'OBSERVED PLAYBACK / CAPTURE CHAIN RESPONSE',
   description: 'Measures the observed playback/capture chain response: a noise-floor check, '
-    + 'then a logarithmic sweep played and captured three times and averaged. The result '
-    + 'includes the output processing, speaker, room, microphone position, microphone, ADC and '
-    + 'browser input processing; it is not the response of the speaker alone.',
+    + `then a logarithmic sweep played and captured ${timesText(CHARACTERIZE_RECIPE.repeats)} `
+    + 'and averaged. The result includes the output processing, speaker, room, microphone '
+    + 'position, microphone, ADC and browser input processing; it is not the response of the '
+    + 'speaker alone.',
   steps: Object.freeze(['noise', 'sweep', 'response', 'quality', 'save']),
-  recipe: Object.freeze({
-    stimulus: Object.freeze({ kind: 'log-sweep', f1: 20, f2: 20000, duration: 10, level: 'low' }),
-    repeats: 3,
-    analysis: Object.freeze({ noiseCheckS: DEFAULT_NOISE_CHECK_S, preRollS: DEFAULT_TIMING.preRollS,
-      postRollS: DEFAULT_TIMING.postRollS, gapS: DEFAULT_TIMING.gapS, phase: false,
-      aggregation: 'mean' }),
-  }),
+  recipe: CHARACTERIZE_RECIPE,
 });
 
 // ----------------------------------------------------------------------------- safety, room
@@ -389,7 +398,7 @@ export function expertFields({ disclosure = 'basic', sampleRate = null } = {}) {
         min: 1, max: fTop, step: 1, default: 20 }),
       field({ id: 'f2', path: 'stimulus.f2', label: 'End frequency', kind: 'number', unit: 'Hz',
         min: 1, max: fTop, step: 1, default: Math.min(20000, fTop),
-        help: 'Limited to 0.95 × Nyquist of the device rate.' }),
+        help: `Limited to ${SAFE_NYQUIST_FACTOR_TEXT} × Nyquist of the device rate.` }),
       field({ id: 'duration', path: 'stimulus.duration', label: 'Sweep duration', kind: 'number',
         unit: 's', min: 1, max: CONTRACT_LIMITS.maxSweepS, step: 0.5, default: 10 }),
       field({ id: 'level', path: 'stimulus.level', label: 'Output level', kind: 'choice',
