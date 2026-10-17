@@ -8,7 +8,7 @@ why; this document says **how**.
 
 | Module | Role |
 | --- | --- |
-| `src/js/studio/templates/*.js` | the six templates as canonical, versioned data; `index.js` lists, validates and instantiates them |
+| `src/js/studio/templates/*.js` | the templates (the table below) as canonical, versioned data; `index.js` lists, validates and instantiates them |
 | `src/js/studio/patches.js` | patch schema, `createPatch`, `importPatch`, `insertPatch`, `replaceWithPatch`, `applyPatch` |
 | `src/js/studio/library.js` | save/load of projects and patches through the experiment store, file export/import, dirty tracker |
 | `src/js/studio/provenance.js` | the experiment `studio` block, its semantic verification, the recipe derived from a topology |

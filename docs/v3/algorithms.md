@@ -1626,9 +1626,9 @@ instead of drawing one.
 <a id="golden"></a>
 ### Golden outputs per algorithm ID — **New (gaps)** (was G18)
 
-`tests/unit/v3-golden.test.mjs` has one case per ID in `KNOWN_ALGORITHM_IDS` (15: every current
-default and the retained `oscilla.confidence.v1`) and one fixture per ID,
-`tests/unit/fixtures/v3/<id>.json` (24.5 KB in all): a small deterministic input (8 kHz, 1 s
+`tests/unit/v3-golden.test.mjs` has one case per ID in `KNOWN_ALGORITHM_IDS` (every current
+default and every retained ID; the list is `src/js/measurement/algorithms.js`) and one fixture
+per ID, `tests/unit/fixtures/v3/<id>.json`: a small deterministic input (8 kHz, 1 s
 50 Hz-3 kHz sweep through a one-pole low-pass with mulberry32 noise; a clipped/dropped/stepped
 capture; closed-form curves; a fixed profile and level calibration) run through the module, its
 output reduced to plain numbers (long arrays to a 12-32-value window plus order-sensitive sums)
