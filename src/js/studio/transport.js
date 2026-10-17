@@ -1004,9 +1004,10 @@ export function createStudioTransport({
       refusedBy(r, 'sync-refused', rev);
       return { ok: false, synced: false, revision: rev, applied: r };
     }
-    note('sync', rev, 'applied');
+    note('sync', rev, r.presentation ? 'presentation-only' : 'applied');
     settled();
     model = next;
+    if (r.presentation) return { ok: true, synced: true, revision: rev, applied: r, plan: null };
     afterApply(freshOf(r));
     const plan = scheduler.edit(next, ctxNow());
     applyEdit(plan);
@@ -1036,10 +1037,14 @@ export function createStudioTransport({
     if (!r.ok) {
       return { ok: false, phase: r.phase, reason: refusedBy(r, 'edit-refused', revision) };
     }
-    note('admit', revision, 'admitted');
+    note('admit', revision, r.presentation ? 'presentation-only' : 'admitted');
     lastRevision = revision;
     settled();
     model = next;
+    // A presentation-only edit (R9, runtime.js adopt): the runtime took the revision without a
+    // transaction, and nothing the transport plays changed (the execution state holds the clips,
+    // lanes, loop and tempo): no claims, lanes or timeline re-plan to bring in line.
+    if (r.presentation) return null;
     afterApply(freshOf(r));
     applyEdit(scheduler.edit(next, ctxNow()));
     if (playing && timer == null) arm(1);

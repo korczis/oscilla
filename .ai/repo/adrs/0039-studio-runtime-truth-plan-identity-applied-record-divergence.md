@@ -177,3 +177,18 @@ when this was written. On 2026-10-05 the budget became 1 000 000 B gzip / 3 500 
 (#114, owner decision, a stopgap; ADR 0012 note), and v3.8.0 uses about 755 KB of it. The
 gzip budget is still the constraint a further runtime surface is weighed against; it is no
 longer within 1 KB.
+
+### 2026-10-07: the record follows a presentation-only edit without a transaction (ledger R9)
+
+"Set only when a transaction commits" had one more case to state. A presentation-only edit while
+playing no longer runs a transaction (ADR 0035 resolution note of the same date), and the store
+revision still moves. The applied record therefore takes that revision with the plan it already
+names: `planHash` and `studioHash` are unchanged, because the plan is the same object, and `at`
+stays the time that graph was applied, because nothing was applied. The verdict is `in-sync` by
+revision, which is the truth: the running graph is exactly what the new revision compiles to.
+Without this the record would lag one revision per moved node and every such edit would read
+`behind`. A refusal recorded for that revision number is cleared as a commit clears it. The trace
+states what happened: runtime `apply` and transport `admit` with outcome `presentation-only`,
+and no `compile` step.
+
+Tests: `tests/unit/v4-presentation-edits.test.mjs`.
