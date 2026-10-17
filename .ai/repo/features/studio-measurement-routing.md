@@ -9,6 +9,7 @@ summary: 'ANALYSIS ports with reference, observed and result roles; measurement 
 status: stable
 weight: 450
 featured: false
+domain: studio
 rules: [project.typed-ports, project.no-fake-science]
 docs: [docs/v31/patches-and-provenance.md, docs/v31/timeline.md, docs/v31/user-guide.md, docs/specs/oscilla-v3.1-studio.md]
 adrs: [adr-0038, adr-0032]

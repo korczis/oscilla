@@ -9,6 +9,7 @@ summary: 'The modular source builds deterministically into one committed dist/in
 status: stable
 weight: 140
 featured: true
+domain: delivery
 rules: [project.single-file-deliverable]
 docs: [README.md]
 adrs: [adr-0011, adr-0012, adr-0013]

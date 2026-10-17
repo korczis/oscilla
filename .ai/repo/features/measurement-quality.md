@@ -9,6 +9,7 @@ summary: 'A rule-based GOOD, USABLE, POOR or INVALID status from named metrics (
 status: stable
 weight: 370
 featured: false
+domain: measurement
 rules: [project.no-fake-science]
 docs: [docs/v3/algorithms.md, docs/v3/measurement-guide.md]
 adrs: [adr-0025]

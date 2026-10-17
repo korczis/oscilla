@@ -9,6 +9,7 @@ summary: 'A phase view and a Lissajous figure of oscillators A and B, stereo pan
 status: stable
 weight: 100
 featured: false
+domain: laboratory
 rules: [project.audio-engine-discipline]
 docs: [README.md]
 adrs: [adr-0015, adr-0016]

@@ -9,6 +9,7 @@ summary: 'Repeated runs aggregated with their dispersion and a repeatability fig
 status: stable
 weight: 360
 featured: false
+domain: experiments
 rules: [project.no-fake-science]
 docs: [docs/v3/algorithms.md, docs/v3/measurement-guide.md]
 adrs: [adr-0019, adr-0022]

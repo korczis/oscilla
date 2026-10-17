@@ -9,6 +9,7 @@ summary: 'Typed ports with roles, pure compatibility and cycle checks before any
 status: stable
 weight: 410
 featured: false
+domain: studio
 rules: [project.typed-ports, project.no-silent-feedback, project.audio-engine-discipline, project.visual-identity-lock]
 docs: [docs/v31/compiler.md, docs/v31/studio-model.md, docs/v31/user-guide.md, docs/specs/oscilla-v3.1-studio.md]
 adrs: [adr-0032, adr-0033, adr-0034, adr-0035]

@@ -9,6 +9,7 @@ summary: 'The last navigation item opens a full-width view: origin, a commit-tim
 status: stable
 weight: 150
 featured: false
+domain: delivery
 rules: [project.no-fake-science, project.single-file-deliverable]
 docs: [README.md]
 claims: [about-is-last-workspace, about-provenance-matches-git]

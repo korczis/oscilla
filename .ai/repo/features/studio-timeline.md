@@ -9,6 +9,7 @@ summary: 'Tracks and clips in absolute seconds reusing the sequencer block seman
 status: stable
 weight: 420
 featured: false
+domain: studio
 rules: [project.audio-engine-discipline, project.studio-model-is-canonical]
 docs: [docs/v31/timeline.md, docs/v31/sequencer-migration.md, docs/v31/user-guide.md, docs/specs/oscilla-v3.1-studio.md]
 adrs: [adr-0036]

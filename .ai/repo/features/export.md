@@ -9,6 +9,7 @@ summary: 'WAV export rendered offline through the same engine as live playback, 
 status: stable
 weight: 130
 featured: false
+domain: instrument
 rules: [project.single-file-deliverable]
 docs: [README.md]
 adrs: [adr-0015, adr-0023]

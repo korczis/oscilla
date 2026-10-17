@@ -9,6 +9,7 @@ summary: 'Built-in presets with technical descriptions, saved presets in local s
 status: stable
 weight: 120
 featured: false
+domain: instrument
 rules: [project.no-fake-science]
 docs: [README.md]
 adrs: [adr-0023]

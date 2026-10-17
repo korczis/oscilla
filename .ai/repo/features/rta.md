@@ -9,6 +9,7 @@ summary: 'Power-integrated octave and one-third-octave bands on the base-10 edge
 status: stable
 weight: 340
 featured: false
+domain: measurement
 rules: [project.no-fake-science]
 docs: [docs/v3/algorithms.md]
 adrs: [adr-0017, adr-0018]

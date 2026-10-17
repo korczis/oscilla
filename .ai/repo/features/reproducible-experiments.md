@@ -9,6 +9,7 @@ summary: 'Versioned experiments with recipe, output level, device and constraint
 status: stable
 weight: 350
 featured: false
+domain: experiments
 rules: [project.no-fake-science]
 docs: [README.md, docs/v3/algorithms.md, docs/v3/architecture.md]
 adrs: [adr-0019, adr-0022, adr-0023, adr-0024, adr-0027]

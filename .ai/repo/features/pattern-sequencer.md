@@ -9,6 +9,7 @@ summary: 'A block timeline with a ruler, playhead and per-block editors, compile
 status: stable
 weight: 60
 featured: false
+domain: instrument
 rules: [project.audio-engine-discipline]
 docs: [README.md]
 adrs: [adr-0001, adr-0015]

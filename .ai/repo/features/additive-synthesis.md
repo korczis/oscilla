@@ -9,6 +9,7 @@ summary: 'Harmonic tables (square, saw, triangle approximations and custom) with
 status: stable
 weight: 90
 featured: false
+domain: instrument
 rules: [project.audio-engine-discipline]
 docs: [README.md]
 adrs: [adr-0015]

@@ -9,6 +9,7 @@ summary: 'Sweep up, sweep down and ping-pong patterns over a chosen range, durat
 status: stable
 weight: 20
 featured: false
+domain: instrument
 rules: [project.audio-engine-discipline]
 docs: [README.md]
 adrs: [adr-0001, adr-0004, adr-0005]

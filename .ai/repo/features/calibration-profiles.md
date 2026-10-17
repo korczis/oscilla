@@ -9,6 +9,7 @@ summary: 'Frequency-response profiles imported from CSV, TXT or JSON, identified
 status: stable
 weight: 310
 featured: false
+domain: measurement
 rules: [project.no-fake-science]
 docs: [docs/v3/algorithms.md, docs/v3/measurement-guide.md]
 adrs: [adr-0017, adr-0020]

@@ -9,6 +9,7 @@ summary: 'A Filter Lab stage of BiquadFilterNodes (low-pass, high-pass, band-pas
 status: stable
 weight: 70
 featured: false
+domain: instrument
 rules: [project.audio-engine-discipline]
 docs: [README.md]
 adrs: [adr-0015]
