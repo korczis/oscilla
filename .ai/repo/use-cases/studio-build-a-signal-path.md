@@ -10,6 +10,7 @@ weight: 300
 difficulty: basic
 commands: [knowledge]
 claims: [studio-typed-connections, studio-registry-reuses-engine, studio-compiled-topology]
+applications: [sound-design-in-the-studio]
 tags: [oscilla, studio, v31, product-acceptance]
 ---
 

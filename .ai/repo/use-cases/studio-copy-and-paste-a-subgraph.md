@@ -10,6 +10,7 @@ weight: 370
 difficulty: intermediate
 commands: [knowledge]
 claims: [studio-subgraph-paste]
+applications: [sound-design-in-the-studio]
 tags: [oscilla, studio, v31, product-acceptance]
 ---
 

@@ -10,6 +10,7 @@ weight: 430
 difficulty: basic
 commands: [knowledge]
 claims: [studio-file-protocol]
+applications: [running-without-install-or-network, sound-design-in-the-studio]
 tags: [oscilla, studio, v31, product-acceptance]
 ---
 

@@ -10,6 +10,7 @@ weight: 40
 difficulty: basic
 commands: [knowledge]
 claims: [microphone-analysis-only, generator-mic-compare, spectrum-peak-accuracy, spectrogram-mapping]
+applications: [teaching-sound-and-hearing]
 tags: [oscilla, product-acceptance]
 ---
 

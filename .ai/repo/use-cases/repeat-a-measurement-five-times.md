@@ -10,6 +10,7 @@ weight: 170
 difficulty: intermediate
 commands: [knowledge]
 claims: [aggregate-primary-response, measurement-quality, measurable-stimulus-only]
+applications: [measuring-a-playback-chain-at-home, reproducible-experiment-record]
 tags: [oscilla, product-acceptance, v3]
 ---
 

@@ -10,6 +10,7 @@ weight: 190
 difficulty: basic
 commands: [knowledge]
 claims: [experiment-persistence, reproducible-experiments, experiment-round-trip, experiment-run-immutable]
+applications: [reproducible-experiment-record]
 tags: [oscilla, product-acceptance, v3]
 ---
 

@@ -10,6 +10,7 @@ weight: 185
 difficulty: basic
 commands: [knowledge]
 claims: [findings-linked-to-evidence, run-evidence, semantic-run-comparison]
+applications: [reproducible-experiment-record]
 tags: [oscilla, product-acceptance, v4]
 ---
 

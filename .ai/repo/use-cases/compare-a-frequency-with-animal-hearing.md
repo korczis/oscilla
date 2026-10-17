@@ -10,6 +10,7 @@ weight: 45
 difficulty: basic
 commands: [knowledge]
 claims: [bioacoustics-cited, no-fake-science-in-shipped-copy]
+applications: [hearing-ranges-and-bioacoustics]
 tags: [oscilla, product-acceptance]
 ---
 

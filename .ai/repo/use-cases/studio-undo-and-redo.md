@@ -10,6 +10,7 @@ weight: 360
 difficulty: basic
 commands: [knowledge]
 claims: [studio-exact-undo-redo]
+applications: [sound-design-in-the-studio]
 tags: [oscilla, studio, v31, product-acceptance]
 ---
 

@@ -10,6 +10,7 @@ weight: 390
 difficulty: intermediate
 commands: [knowledge]
 claims: [studio-patch-round-trip, studio-untrusted-import, studio-deterministic-hash, studio-schema-version]
+applications: [sound-design-in-the-studio]
 tags: [oscilla, studio, v31, product-acceptance]
 ---
 
