@@ -4,7 +4,8 @@ Studio is the patching and composition workspace of OSCILLA: a graph of nodes jo
 cables, a timeline of clips and automation lanes, and a transport, all playing on the one audio
 engine of the Playground. This guide is the short "how do I"; how it works is in
 [the model](studio-model.md), [the compiler](compiler.md), [the timeline](timeline.md),
-[patches and provenance](patches-and-provenance.md) and [performance](performance.md).
+[patches and provenance](patches-and-provenance.md) and [performance](performance.md); what was
+built, with its evidence, is [the final report](studio-report.md).
 
 Start quietly, especially on headphones: Studio plays through the same master chain, limiter
 and ceiling as the Playground, and every level is relative to digital full scale, not a sound

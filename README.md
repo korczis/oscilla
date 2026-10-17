@@ -390,6 +390,8 @@ is in the proposed [ADR 0025](.ai/repo/adrs/0025-data-driven-quality-with-reason
 **Studio** is the last workspace before About. It is a patching and composition workspace
 over the same audio engine: no second engine, and the engine's master chain and limits apply.
 How to use it, with the keyboard shortcuts, is the [Studio user guide](docs/v31/user-guide.md).
+What it consists of (schemas, node and port types, tests, size, ADRs, records) and how its
+release and deployment are evidenced is the [final report](docs/v31/studio-report.md).
 
 - **The model is the source of truth.** A Studio document is a plain, versioned `StudioModel`:
   a graph of typed nodes and ports, a timeline of tracks and clips, automation lanes, and
