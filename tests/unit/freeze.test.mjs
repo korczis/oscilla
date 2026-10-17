@@ -74,8 +74,16 @@ const DEVIATIONS = {
     delete q.cfg.pp.octave.text;
     return q;
   }),
-  // the 'hearing' demo sets pp.octave (V1's cfg has no pp)
+  // the 'hearing' demo sets pp.octave (V1's cfg has no pp); the 'samplerate' body names the
+  // Filter Lab's model rate (V1 had no Filter Lab), appended after V1's sentence
   'presets.data/LEARN_TOPICS': (out) => out.map((t) => {
+    if (t.id === 'samplerate') {
+      const q = structuredClone(t);
+      const added = '; the Filter Lab models its response at 48 kHz and labels it.';
+      assert.ok(q.body.endsWith(added), 'V2 fix: samplerate names the Filter Lab model rate');
+      q.body = `${q.body.slice(0, -added.length)}.`;
+      return q;
+    }
     if (t.id !== 'hearing') return t;
     const q = structuredClone(t);
     assert.deepStrictEqual(q.demo.cfg.pp,
