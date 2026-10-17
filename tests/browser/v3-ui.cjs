@@ -182,7 +182,7 @@
 //   light-theme             warning chips use --osc-text on --osc-warn-bg (orange is icon only)
 //   no-console-errors
 'use strict';
-const { spawn } = require('node:child_process');
+const { serveDist } = require('./lib/serve.cjs');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
@@ -248,24 +248,6 @@ const SHORT = { duration: 1, repeats: 2, noiseCheckS: 0.5, preRollS: 0.25, postR
 const RUN_MS = 45000;
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-
-function startServer() {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'oscilla-v3ui-'));
-  fs.mkdirSync(path.join(root, 'oscilla'));
-  fs.copyFileSync(DIST, path.join(root, 'oscilla', 'index.html'));
-  const port = 9300 + Math.floor(Math.random() * 300);
-  const proc = spawn('python3', ['-m', 'http.server', String(port), '--bind', '127.0.0.1',
-    '--directory', root], { stdio: 'ignore' });
-  return { proc, root, url: `http://127.0.0.1:${port}/oscilla/` };
-}
-
-async function waitForServer(url) {
-  for (let i = 0; i < 80; i += 1) {
-    try { const r = await fetch(url); if (r.ok) return; } catch { /* not yet */ }
-    await sleep(100);
-  }
-  throw new Error(`server did not start: ${url}`);
-}
 
 // ------------------------------------------------------------------------------ page helpers
 const H = {
@@ -3411,8 +3393,7 @@ async function runOne(browserName, origin, baseUrl, fixtures) {
   const { buildFixtures } = await import(pathToFileURL(path.join(__dirname, 'fixtures',
     'v3-experiments.mjs')).href);
   const fixtures = await buildFixtures();
-  const server = ORIGINS.includes('http') ? startServer() : null;
-  if (server) await waitForServer(server.url);
+  const server = ORIGINS.includes('http') ? await serveDist(DIST, { prefix: 'oscilla-v3ui-' }) : null;
   const all = {};
   let failed = 0;
   try {
@@ -3436,8 +3417,7 @@ async function runOne(browserName, origin, baseUrl, fixtures) {
     }
   } finally {
     if (server) {
-      server.proc.kill();
-      fs.rmSync(server.root, { recursive: true, force: true });
+      server.close();
     }
   }
   if (JSON_OUT) fs.writeFileSync(JSON_OUT, `${JSON.stringify(all, null, 2)}\n`);

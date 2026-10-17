@@ -9,7 +9,7 @@
 // Playwright resolves from app/node_modules or NODE_PATH (e.g. /Users/korczis/dev/oscilla/tests/
 // node_modules). Exit code 1 when any check fails.
 'use strict';
-const { spawn } = require('node:child_process');
+const { serveDist } = require('./lib/serve.cjs');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
@@ -48,24 +48,6 @@ const FAKE_MIC = new Set(['chromium', 'firefox']);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 // ------------------------------------------------------------------------------ server
-function startServer() {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'oscilla-gate-'));
-  fs.mkdirSync(path.join(root, 'oscilla'));
-  fs.copyFileSync(DIST, path.join(root, 'oscilla', 'index.html'));
-  const port = 8900 + Math.floor(Math.random() * 300);
-  const proc = spawn('python3', ['-m', 'http.server', String(port), '--bind', '127.0.0.1',
-    '--directory', root], { stdio: 'ignore' });
-  return { proc, root, url: `http://127.0.0.1:${port}/oscilla/` };
-}
-
-async function waitForServer(url) {
-  for (let i = 0; i < 80; i += 1) {
-    try { const r = await fetch(url); if (r.ok) return; } catch { /* not yet */ }
-    await sleep(100);
-  }
-  throw new Error(`server did not start: ${url}`);
-}
-
 // ------------------------------------------------------------------------------ WAV parsing
 function parseWavHeader(buf) {
   const s = (o, n) => buf.toString('ascii', o, o + n);
@@ -2421,8 +2403,7 @@ async function runOne(browserName, origin, baseUrl) {
     console.error(`missing ${DIST}: run npm run build`);
     process.exit(2);
   }
-  const server = ORIGINS.includes('http') ? startServer() : null;
-  if (server) await waitForServer(server.url);
+  const server = ORIGINS.includes('http') ? await serveDist(DIST, { prefix: 'oscilla-gate-' }) : null;
   const all = {};
   let failed = 0;
   let known = 0;
@@ -2455,8 +2436,7 @@ async function runOne(browserName, origin, baseUrl) {
     }
   } finally {
     if (server) {
-      server.proc.kill();
-      fs.rmSync(server.root, { recursive: true, force: true });
+      server.close();
     }
   }
   if (JSON_OUT) fs.writeFileSync(JSON_OUT, `${JSON.stringify(all, null, 2)}\n`);
