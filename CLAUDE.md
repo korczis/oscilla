@@ -92,7 +92,7 @@ status` is the truth, not this paragraph.
 - Build and release: `scripts/`. Tests: `tests/unit/`, `tests/browser/`, `tests/visual/`;
   `tests/README.md` says what each proves and which gate runs it.
 
-<!-- majordomus:begin b0db5c6111e4 f2d9a1017395dba3 -->
+<!-- majordomus:begin 446ca2e497aa f2d9a1017395dba3 -->
 # CLAUDE.md
 
 Claude Code bootstrap. The repository's provider-neutral AI context lives under

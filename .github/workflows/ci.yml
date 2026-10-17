@@ -311,8 +311,8 @@ jobs:
   knowledge:
     # The .ai/ layer, checked by the same `majordomus doctor` the pre-commit hook and
     # `npm run verify` run locally, at a pinned release: the archive is downloaded from the
-    # release and checked against its SHA-256 here (the digest of v0.20.0's x86_64 Linux glibc
-    # archive in https://majordomus.dev/releases/v0.20.0.json), so neither the installer script
+    # release and checked against its SHA-256 here (the digest of v0.29.0's x86_64 Linux glibc
+    # archive in https://majordomus.dev/releases/v0.29.0.json), so neither the installer script
     # nor the latest release can change what CI runs. Bump the version and the digest together.
     # The verdict is .github/doctor-verdict.jq (tested by tests/unit/ci-knowledge-job.test.mjs):
     # every doctor FAIL fails the job except the git-hook wiring entries of policy
@@ -321,13 +321,13 @@ jobs:
     # output without an OK layout line.
     # The download retries, so one transient asset error does not stall every merge. Full
     # history, because curated knowledge cites V1 commits and the ADR check reads every ref.
-    name: .ai layer (majordomus doctor 0.20.0)
+    name: .ai layer (majordomus doctor 0.29.0)
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
-      MJ_VERSION: 0.20.0
+      MJ_VERSION: 0.29.0
       MJ_TARGET: x86_64-unknown-linux-gnu
-      MJ_SHA256: beb2cd4bcf6d994a53dbfe2a0c526d01e9dcbc22ffd2e4338be1097a82a4d06f
+      MJ_SHA256: 6bf87c46d4f79a6eb5e9cfacfd95cdee8bb74e915d6590db90de2b3da97166f8
     steps:
       - uses: actions/checkout@v7
         with:
