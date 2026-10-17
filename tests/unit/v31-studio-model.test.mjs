@@ -11,6 +11,7 @@
 import test from 'node:test';
 import assert from 'node:assert';
 import { createHash } from 'node:crypto';
+import { readFileSync } from 'node:fs';
 
 import {
   DEFAULT_TITLE, STUDIO_KIND, STUDIO_SCHEMA_VERSION, StudioSchemaError, assertPlainData,
@@ -149,10 +150,64 @@ test('createStudioModel returns the normalized schema-1 shape', () => {
 });
 
 test('Studio schema version is its own constant, independent of the experiment schema', () => {
-  // Both start at 1 (ADR 0023) but are separate exports; neither is a product version string.
-  assert.strictEqual(typeof STUDIO_SCHEMA_VERSION, 'number');
+  // Claim studio-schema-version. Its own positive integer, separate from the experiment
+  // schema; neither is the product version string.
   assert.strictEqual(typeof EXPERIMENT_SCHEMA_VERSION, 'number');
-  assert.ok(Number.isInteger(STUDIO_SCHEMA_VERSION));
+  assert.ok(Number.isInteger(STUDIO_SCHEMA_VERSION) && STUDIO_SCHEMA_VERSION >= 1);
+  const product = JSON.parse(readFileSync(new URL('../../package.json', import.meta.url),
+    'utf8')).version;
+  assert.match(product, /^\d+\.\d+\.\d+/, 'the product version is a SemVer string');
+  assert.notStrictEqual(String(STUDIO_SCHEMA_VERSION), product);
+  // Independent by construction: schema.js writes it as an integer literal and derives it
+  // from nothing (no product version, build info or experiment schema is read for it).
+  const source = readFileSync(new URL('../../src/js/studio/schema.js', import.meta.url), 'utf8');
+  assert.match(source, /^export const STUDIO_SCHEMA_VERSION = \d+;$/m,
+    'STUDIO_SCHEMA_VERSION is an integer literal');
+  assert.doesNotMatch(source,
+    /EXPERIMENT_SCHEMA_VERSION|build-info|package\.json|\bAPP_VERSION\b/,
+    'schema.js reads no other version');
+  // A saved Studio carries this version and no product version.
+  const saved = JSON.parse(serializeStudio(createStudioModel()));
+  assert.strictEqual(saved.schemaVersion, STUDIO_SCHEMA_VERSION);
+  assert.ok(!('version' in saved) && !('productVersion' in saved), 'no product version field');
+});
+
+test('the Studio schema version changes only through registered stepwise migrations', () => {
+  // Claim studio-schema-version. One registry step per version from 1 to the current one,
+  // nothing beyond it: a schema bump without its migration step fails here.
+  const steps = Object.keys(studioMigrations).map(Number).sort((a, b) => a - b);
+  assert.deepStrictEqual(steps, Array.from({ length: STUDIO_SCHEMA_VERSION }, (_, i) => i + 1),
+    'studioMigrations has steps 1..STUDIO_SCHEMA_VERSION, contiguous');
+  for (const n of steps) assert.strictEqual(typeof studioMigrations[n], 'function', `step ${n}`);
+  assert.ok(Object.isFrozen(studioMigrations), 'the registry cannot be extended at run time');
+  // No path but migration changes the version: normalize refuses any other one, the
+  // pipeline refuses a newer one, and a registry with a missing step is refused.
+  assert.throws(() => normalizeStudio({ schemaVersion: STUDIO_SCHEMA_VERSION + 1 }), /migrate/);
+  assert.throws(() => normalizeStudio({ schemaVersion: STUDIO_SCHEMA_VERSION - 1 }), /migrate/);
+  const newer = importStudio({ kind: STUDIO_KIND, schemaVersion: STUDIO_SCHEMA_VERSION + 1 });
+  assert.strictEqual(newer.ok, false);
+  assert.strictEqual(newer.errors[0].code, 'unsupported-version');
+  // Stepwise: a two-step registry applies 1 then 2, in order, each on the previous output.
+  const seen = [];
+  const migrations = {
+    1: (doc) => {
+      seen.push(doc.schemaVersion);
+      return { ...doc, schemaVersion: 1 };
+    },
+    2: (doc) => {
+      seen.push(doc.schemaVersion);
+      return { ...doc, schemaVersion: 2 };
+    },
+  };
+  const two = migrateStudio({ kind: STUDIO_KIND, schemaVersion: 0 }, { migrations,
+    targetVersion: 2 });
+  assert.ok(two.ok, JSON.stringify(two.errors));
+  assert.deepStrictEqual(two.applied, [1, 2]);
+  assert.deepStrictEqual(seen, [0, 1]);
+  assert.strictEqual(two.doc.schemaVersion, 2);
+  const gap = migrateStudio({ kind: STUDIO_KIND, schemaVersion: 0 },
+    { migrations: { 2: migrations[2] }, targetVersion: 2 });
+  assert.strictEqual(gap.ok, false, 'a missing step is refused, not jumped over');
 });
 
 test('assertPlainData rejects runtime objects, typed arrays and unsafe values (§10)', () => {
@@ -887,6 +942,55 @@ test('rejected EDGE_ADD leaves model, history and revision unchanged', () => {
   assert.strictEqual(store.debugInfo().undoDepth, depth);
   assert.strictEqual(store.canRedo(), false);
 });
+
+test('a cycle is refused at every model entry point, never repaired (project.no-silent-feedback)',
+  () => {
+    // Mixer → Filter → Gain, then Gain → Mixer closes an all-AUDIO loop.
+    const store = newStore();
+    const b = builder(store);
+    const mix = b.add('mixer', 0, 0);
+    const f = b.add('filter', 200, 0);
+    const g = b.add('gain', 400, 0);
+    b.connect(mix, 'audio', f, 'audio');
+    b.connect(f, 'audio', g, 'audio');
+    const model = store.getModel();
+    const text = serializeStudio(model);
+    const rev = store.getRevision();
+    // The editor's action: refused with the sentence, nothing dropped or rerouted.
+    const closing = store.dispatch({ type: 'EDGE_ADD', from: { node: g, port: 'audio' },
+      to: { node: mix, port: 'in2' } });
+    assert.strictEqual(closing.ok, false);
+    assert.strictEqual(closing.reason, `${AUDIO_FEEDBACK_MESSAGE} (Mixer 1 → Filter 1 → Gain 1 → `
+      + 'Mixer 1)', 'the sentence and the cycle it names');
+    assert.strictEqual(store.getModel(), model);
+    assert.strictEqual(serializeStudio(store.getModel()), text);
+    assert.strictEqual(store.getRevision(), rev);
+    // A pasted subgraph that carries its own loop: refused whole, not pasted without the edge.
+    const clip = copySubgraph(model, [mix, f, g]);
+    const looped = { ...clip, edges: [...clip.edges, { id: 'edge-loop',
+      from: { node: g, port: 'audio' }, to: { node: mix, port: 'in2' } }] };
+    const pasted = store.dispatch({ type: 'PASTE', clipboard: looped });
+    assert.strictEqual(pasted.ok, false, 'a looped clipboard is refused');
+    assert.strictEqual(store.getModel(), model);
+    // The cyclic document itself: kept as written by normalize and validate, refused by the
+    // import pipeline and the store, and no entry point returns it with the loop removed.
+    const cyclic = JSON.parse(text);
+    cyclic.graph.edges.push({ id: 'edge-loop', from: { node: g, port: 'audio' },
+      to: { node: mix, port: 'in2' } });
+    const edgeCount = cyclic.graph.edges.length;
+    const normalized = normalizeStudio(cyclic);
+    assert.strictEqual(normalized.graph.edges.length, edgeCount, 'normalize keeps every edge');
+    const report = validateStudioModel(normalized);
+    assert.deepStrictEqual(codes(report), ['audio-feedback']);
+    assert.strictEqual(report.errors[0].message, AUDIO_FEEDBACK_MESSAGE);
+    assert.strictEqual(normalized.graph.edges.length, edgeCount, 'validate removes nothing');
+    const imported = importStudio(JSON.stringify(cyclic));
+    assert.strictEqual(imported.ok, false);
+    assert.strictEqual(imported.model, undefined, 'no repaired model is handed back');
+    assert.ok(imported.errors.some((d) => d.code === 'audio-feedback'));
+    assert.strictEqual(validateStudioImport(cyclic).ok, false);
+    assert.throws(() => newStore(cyclic), /initial model is invalid/);
+  });
 
 test('§208 history: undo all → exact initial state; redo all → exact final state', () => {
   const store = newStore();

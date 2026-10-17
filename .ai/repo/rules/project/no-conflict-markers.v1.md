@@ -45,8 +45,9 @@ unrelated unit tests failed on files that no longer parsed.
   marker.
 - `.ai/repo/policy.yaml` declares the `enforcement` entry `diff-check-on-commit`
   (`git diff --cached --check`, `wired_by: git-hook:pre-commit`), and the same test asserts
-  the policy entry exists. `majordomus doctor` 0.13.2 fails a developer checkout with no hook
-  file, a hook that does not name the entry, and an entry followed by `|| true`.
+  the policy entry exists. `majordomus doctor`, at the version CI pins, fails a developer
+  checkout with no hook file, a hook that does not name the entry, and an entry followed by
+  `|| true`.
 - `.gitattributes` sets `-whitespace` on every path, so that check reports leftover conflict
   markers and nothing else. Without it the hook refused a correctly resolved merge: the
   staged diff of a merge commit holds every line the other side added, a trailing space or a

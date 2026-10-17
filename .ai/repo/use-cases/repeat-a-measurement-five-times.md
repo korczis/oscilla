@@ -9,7 +9,7 @@ target: advisory
 weight: 170
 difficulty: intermediate
 commands: [knowledge]
-claims: [aggregate-primary-response, measurement-quality]
+claims: [aggregate-primary-response, measurement-quality, measurable-stimulus-only]
 tags: [oscilla, product-acceptance, v3]
 ---
 
@@ -24,6 +24,7 @@ The behaviour is proven by the OSCILLA test named in each claim of `docs/CLAIMS.
 by:
 
 - `npm test` (tests/unit/v3-storage.test.mjs: the aggregate is the primary stored response; tests/unit/v3-rta-aggregate.test.mjs mean and median aggregation; tests/unit/v3-engine.test.mjs runs never overlap; tests/unit/v3-quality.test.mjs repeatability warn and fail)
+- `npm test` (tests/unit/v4-measurement-truth.test.mjs: Repeat and "Run this definition" refuse a record whose stimulus this engine cannot measure)
 
 A use-case/v1 scenario can only invoke `bin/majordomus`, so the scenario below does not
 play or capture audio. It proves the traceability instead: each claim's implementation and
@@ -70,6 +71,18 @@ steps:
     expect:
       exit: 0
       stdout_contains: ['claim:measurement-quality +test:tests/unit/v3-quality\.test\.mjs']
+  - id: measurable-stimulus-only-implemented
+    run: ['knowledge', 'edges', '--type', 'implemented_by']
+    note: 'claim measurable-stimulus-only is implemented by src/js/experiments/validate.js, a tracked file'
+    expect:
+      exit: 0
+      stdout_contains: ['claim:measurable-stimulus-only +implementation:src/js/experiments/validate\.js']
+  - id: measurable-stimulus-only-tested
+    run: ['knowledge', 'edges', '--type', 'tested_by']
+    note: 'claim measurable-stimulus-only is proven by tests/unit/v4-measurement-truth.test.mjs'
+    expect:
+      exit: 0
+      stdout_contains: ['claim:measurable-stimulus-only +test:tests/unit/v4-measurement-truth\.test\.mjs']
 then:
   - 'every claim this use case names resolves to a tracked implementation and a tracked test'
 ```

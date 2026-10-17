@@ -7,7 +7,7 @@ description: A browser suite opens its run through tests/browser/lib/suite.cjs, 
 statement: Every tests/browser entry suite goes through tests/browser/lib/suite.cjs (v3-ui.cjs is pending, by name, in the contract test). It refuses an empty or unknown browser or origin list with exit 2, never maps an unknown name to a default engine, refuses to launch an engine outside the selection and fails a selected browser whose own engine never started. It fails a leg that ran 0 checks, and under CI it fails any skip not listed with a reason in tests/README.md. Outside CI (a no-op when CI is set) it waits, bounded, for the 1-minute loadavg to fall below OSC_LOAD_MAX (default 2 × cores) and prints the load at start and end.
 status: active
 class: blocking
-depends_on: [project.bounded-test-timing@1]
+depends_on: [project.bounded-test-timing@2]
 tags: [tests, browser, harness, ci]
 ---
 

@@ -9,7 +9,7 @@ target: advisory
 weight: 30
 difficulty: basic
 commands: [knowledge]
-claims: [dual-oscillator-beats]
+claims: [dual-oscillator-beats, phase-and-lissajous-model, stereo-correlation-meter]
 tags: [oscilla, product-acceptance]
 ---
 
@@ -25,6 +25,7 @@ The behaviour is proven by the OSCILLA test named in each claim of `docs/CLAIMS.
 by:
 
 - `npm run test:engine` (tests/browser/engine-v1port.cjs: beating 440 + 442 Hz, level envelope at 2 +/- 0.2 Hz)
+- `npm test` (tests/unit/charts.test.mjs: the phase view and the Lissajous figure computed from the two frequencies and phases; tests/unit/analysis-misc.test.mjs: the correlation meter reads +1 in phase, -1 inverted, about 0 in quadrature and resets on silence)
 
 A use-case/v1 scenario can only invoke `bin/majordomus`, so the scenario below does not
 play audio. It proves the traceability instead: each claim's implementation and test are
@@ -54,6 +55,30 @@ steps:
     expect:
       exit: 0
       stdout_contains: ['claim:dual-oscillator-beats +test:tests/browser/engine-v1port\.cjs']
+  - id: phase-and-lissajous-model-implemented
+    run: ['knowledge', 'edges', '--type', 'implemented_by']
+    note: 'claim phase-and-lissajous-model is implemented by src/js/charts/phase-model.js, a tracked file'
+    expect:
+      exit: 0
+      stdout_contains: ['claim:phase-and-lissajous-model +implementation:src/js/charts/phase-model\.js']
+  - id: phase-and-lissajous-model-tested
+    run: ['knowledge', 'edges', '--type', 'tested_by']
+    note: 'claim phase-and-lissajous-model is proven by tests/unit/charts.test.mjs'
+    expect:
+      exit: 0
+      stdout_contains: ['claim:phase-and-lissajous-model +test:tests/unit/charts\.test\.mjs']
+  - id: stereo-correlation-meter-implemented
+    run: ['knowledge', 'edges', '--type', 'implemented_by']
+    note: 'claim stereo-correlation-meter is implemented by src/js/analysis/correlation.js, a tracked file'
+    expect:
+      exit: 0
+      stdout_contains: ['claim:stereo-correlation-meter +implementation:src/js/analysis/correlation\.js']
+  - id: stereo-correlation-meter-tested
+    run: ['knowledge', 'edges', '--type', 'tested_by']
+    note: 'claim stereo-correlation-meter is proven by tests/unit/analysis-misc.test.mjs'
+    expect:
+      exit: 0
+      stdout_contains: ['claim:stereo-correlation-meter +test:tests/unit/analysis-misc\.test\.mjs']
 then:
   - 'every claim this use case names resolves to a tracked implementation and a tracked test'
 ```

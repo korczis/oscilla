@@ -1,10 +1,10 @@
 ---
 id: project.bounded-test-timing
-version: 1
+version: 2
 kind: rule
 title: Browser timing checks measure OSCILLA, not the host
-description: A browser check waits for the condition it judges against a wall-clock deadline that names it, takes every frame window from the context's sample rate, and never sleeps for a fixed time in place of a product condition.
-statement: Every wait in tests/browser is a condition poll through tests/browser/lib/wait.cjs, with a wall-clock deadline that names the stalled check on expiry, and its ending predicate is the predicate the assertion judges. No fixed sleep stands in for a product condition, in the suite or in the page, and every page.evaluate is bounded. No frame window or tolerance is a fixed count or a 44100/48000 literal outside an OfflineAudioContext or WAV render rate. Each exception carries `// timing-allow: <reason>`.
+description: A browser check waits for the condition it judges against a wall-clock deadline that names it and takes every frame window from the context's sample rate; no new fixed sleep is added, and the sleeps that predate the rule are recorded debt that only shrinks.
+statement: A wait added to tests/browser is a condition poll through tests/browser/lib/wait.cjs, with a wall-clock deadline that names the stalled check on expiry. No change adds a fixed sleep (in the suite or in the page), a count-bounded poll, an unbounded wait or page.evaluate, or a frame window or tolerance that is a fixed count or a 44100/48000 literal outside an OfflineAudioContext or WAV render rate, unless it carries `// timing-allow: <reason>`. The findings that predate the rule are debt, recorded per file and kind in tests/browser/timing-baseline.json; a file may hold no more findings of a kind than its record, and no count of the record may rise above its value in an earlier commit, so the debt only shrinks. That a poll's ending predicate is the predicate its assertion judges is a reviewer's call.
 status: active
 class: blocking
 depends_on: []
@@ -31,6 +31,11 @@ with the machine it runs on. Each of these was observed:
 `project.audio-engine-discipline` forbids assuming 48 kHz in `src/`; nothing held the tests to
 the same.
 
+Version 1 stated "no fixed sleep" as if it held, while its own enforcement recorded 250
+findings in 13 files as debt (223 of them `timer-sleep`, the suites' own `sleep()` helpers)
+and let a hand edit raise the record. Version 2 states the ratchet the test performs: nothing
+new beyond the record, and a record that only falls, now checked against the git history.
+
 # Required behaviour
 
 - A wait is `until(pred, { ms, what })` from `tests/browser/lib/wait.cjs`: `pred` is the
@@ -38,7 +43,8 @@ the same.
   the check, which the timeout carries together with the last value read. `bounded(promise,
   { ms, what })` puts the same deadline on any promise. Neither accepts a wait without a
   deadline or a name.
-- No fixed sleep stands in for a product condition. A fixed sleep is `page.waitForTimeout`,
+- No new fixed sleep stands in for a product condition; the ones that predate the rule are
+  the recorded debt below, paid down and never added to. A fixed sleep is `page.waitForTimeout`,
   a promise whose executor only arms `setTimeout` with its own resolve (run by the suite or
   by the page through `page.evaluate`, awaited where it is made or later), `setTimeout` of
   `timers/promises`, and a call of any helper that wraps one of these.
@@ -53,7 +59,9 @@ the same.
   `waitForURL`, `waitForResponse`, `waitForRequest` and a locator's `waitFor` state their
   `timeout` as a key of the options argument written at the call, and not as the literal
   `0`, which in Playwright disables the timeout.
-- Every `page.evaluate`, `page.evaluateHandle`, `page.$eval` and `page.$$eval` is bounded. A
+- Every `page.evaluate`, `page.evaluateHandle`, `page.$eval` and `page.$$eval` is bounded,
+  except in `v3-ui.cjs`, whose `raw-playwright` and `unbounded-wait` findings are recorded
+  debt. A
   suite gets that by taking playwright from the harness (`project.suite-harness`), whose
   pages reject such a call that has not answered within `OSC_EVALUATE_MS` and name the page
   function.
@@ -100,15 +108,19 @@ What the mechanism does not decide, stated so nothing above is read as more than
   when a count rises; it prints, and does not fail, when a count falls, so that a change
   which removes a sleep needs no second file. The scan's command line (in
   `tests/README.md`) prints what it finds beyond the record, and with `--write-baseline`
-  lowers the record and never raises it. `fixed-sleep`, `unbounded-loop` and `empty-allow`
+  lowers the record and never raises it. "the recorded debt only shrinks: no count is above
+  its value in an earlier commit" reads every commit that changed the record (`git log`,
+  `git show`) and fails when a file and kind holds a count above its value in any of them; a
+  file or kind absent there counts 0. It has a mutation test of its own. `fixed-sleep`, `unbounded-loop` and `empty-allow`
   can never be recorded as debt;
   `raw-playwright`, `unbounded-wait` and `fixed-frame-window` only for `v3-ui.cjs`.
 - Paid debt is headroom until the record follows it down. In a file whose count fell below
   its record, that many new findings of the same kind pass. Nothing lowers the record but
   `--write-baseline`, run by whoever removes the sleep or by a later change.
-- The record is a file, and a hand edit can raise a count of `timer-sleep`, `counted-poll`
-  or `fixed-rate`. No test compares it with an earlier commit; a raised count is a line of
-  the diff that a reviewer reads.
+- The history check needs the history. The CI `unit` job checks out with `fetch-depth: 0`,
+  and there a missing history fails; a local shallow clone skips it, and so does a tree with
+  no commit at all (the extracts the `fail-first` job runs). It compares with the commits
+  that changed the record, so a history rewritten by a force-push is not seen.
 - Within a file that carries debt of a kind, the scan cannot tell which finding is new: it
   lists them all with the two counts. Two findings of one kind on one line count once.
 - A function that sleeps and also does something else is one finding, at its sleep, however

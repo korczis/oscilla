@@ -90,6 +90,28 @@ const MISSING_KEY = {
   reproduce: 'add a knowledge: block to .ai/repo/policy.yaml; see share/skeleton/policy.yaml',
 };
 
+// The same situation under the pinned Majordomus: the lines the verdict reads, as
+// `majordomus doctor --json` CAPTURED_WITH printed them on 2026-10-18 for a clone of this
+// repository with the `knowledge:` block removed and no git hooks, as on a CI runner. The
+// missing-key WARN is word for word the 0.13.2 line; the stderr line gained the policy path.
+// Capture again when a pin change alters doctor's output.
+const CAPTURED_WITH = '0.29.0';
+const PINNED = {
+  layout: { level: 'OK', category: 'layout', subject: '.ai/manifest.yaml',
+    message: 'schema ai-repository/v1', reproduce: '' },
+  hooks: [['doctor-on-commit', 'pre-commit'], ['finish-on-push', 'pre-push'],
+    ['worktree-guard', 'pre-commit'], ['diff-check-on-commit', 'pre-commit']]
+    .map(([subject, hook]) => ({ level: 'FAIL', category: 'wiring', subject,
+      message: `hook .git/hooks/${hook} does not exist`, reproduce: `ls -l .git/hooks/${hook}` })),
+  deriver: { level: 'OK', category: 'knowledge', subject: 'wiring',
+    message: 'the close path and the compaction adapter call the deriver', reproduce: '' },
+  missingKey: { level: 'WARN', category: 'knowledge', subject: 'candidates',
+    message: 'policy declares no knowledge.candidates_max_files',
+    reproduce: 'add a knowledge: block to .ai/repo/policy.yaml; see share/skeleton/policy.yaml' },
+  stderr: 'majordomus: policy is missing required key knowledge.candidates_max_files '
+    + '(.ai/repo/policy.yaml)',
+};
+
 test('the verdict: a policy missing a required key fails without any FAIL line', {
   skip: HAVE_JQ ? false : 'jq is not installed here (CI runners have it)',
 }, () => {
@@ -101,6 +123,18 @@ test('the verdict: a policy missing a required key fails without any FAIL line',
   assert.equal(verdict([LAYOUT, { level: 'WARN', category: 'knowledge', subject: 'candidates',
     message: '41 candidates await review, over knowledge.candidates_max_files 40' }]), true,
   'a full review queue is a WARN, not a missing key');
+});
+
+test(`the verdict on the lines the pinned doctor (${CAPTURED_WITH}) prints`, {
+  skip: HAVE_JQ ? false : 'jq is not installed here (CI runners have it)',
+}, () => {
+  const runner = [PINNED.layout, ...PINNED.hooks, PINNED.deriver];
+  assert.equal(verdict(runner), true, 'a runner without hooks and with the block passes');
+  assert.equal(verdict([...runner, PINNED.missingKey]), false, 'the missing-key WARN fails');
+  assert.equal(verdict([...runner, { level: 'INFO', category: 'policy', subject: 'stderr',
+    message: PINNED.stderr }]), false, 'the stderr wording, with the policy path, fails');
+  assert.equal(verdict([PINNED.layout, PINNED.hooks[0], { ...PINNED.hooks[1],
+    subject: 'something-else' }]), false, 'a wiring FAIL the policy does not declare fails');
 });
 
 test('the policy declares every hook the verdict excuses, and the knowledge block', () => {

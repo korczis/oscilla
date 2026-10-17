@@ -44,5 +44,16 @@ validate fails the rule regardless of whether the result sounds right.
 
 `tests/unit/v31-studio-model.test.mjs`: the compatibility matrix, role checks, wrong
 direction, self connection, single-input ports, the rejected EDGE_ADD that leaves the store
-unchanged, and malicious or oversized import rejected. Planned (V414, V415, V430): the
-compiler and patcher refuse an invalid transaction and keep the last valid runtime graph.
+unchanged, and malicious or oversized import rejected.
+
+`tests/unit/v31-studio-compiler.test.mjs`: "invalid models are refused before Web Audio; the
+runtime keeps its last graph" (the compiler of issue V414 refuses each invalid model before a
+node exists, and the runtime keeps its revision and nodes) and "a failed transaction leaves
+the previous runtime intact and leaks nothing" (the incremental patcher of V415 refuses a
+transaction that fails while it is prepared and keeps the last valid graph).
+`tests/browser/v31-studio-graph.cjs` check cable-reject (V430, `npm run test:studio` in CI):
+an audio output dropped on a control input adds no edge and announces the type reason.
+
+Not machine-checked: that the editor, the connection dialog, paste, patch load and import
+carry no compatibility table of their own is read by review; the tests prove the shared
+`canConnect` and the validated store, not the absence of a second table.

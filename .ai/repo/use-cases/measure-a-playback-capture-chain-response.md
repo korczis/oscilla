@@ -9,7 +9,7 @@ target: advisory
 weight: 140
 difficulty: intermediate
 commands: [knowledge]
-claims: [measurement-workbench, transfer-function, measurement-quality, measurement-abort-releases-everything]
+claims: [measurement-workbench, transfer-function, measurement-quality, measurement-abort-releases-everything, analysis-off-main-thread]
 tags: [oscilla, product-acceptance, v3]
 ---
 
@@ -26,6 +26,7 @@ by:
 
 - `npm test` (tests/unit/v3-transfer-ir.test.mjs synthetic known systems; tests/unit/v3-quality.test.mjs; tests/unit/v3-engine.test.mjs state flow and abort)
 - `npm run test:measure` (tests/browser/v3-measure.cjs loopback recovery of a known BiquadFilterNode and 0 nodes after finish and abort; tests/browser/v3-ui.cjs checks loopback-workflow, abort-stages and output-exclusive)
+- `npm run test:measure` (tests/browser/analysis-worker.cjs: the offline analysis runs in a Worker loaded from a data URL, bit-identical to the inline fallback)
 
 A use-case/v1 scenario can only invoke `bin/majordomus`, so the scenario below does not
 play or capture audio. It proves the traceability instead: each claim's implementation and
@@ -97,6 +98,18 @@ steps:
     expect:
       exit: 0
       stdout_contains: ['claim:measurement-abort-releases-everything +test:tests/browser/v3-ui\.cjs']
+  - id: analysis-off-main-thread-implemented
+    run: ['knowledge', 'edges', '--type', 'implemented_by']
+    note: 'claim analysis-off-main-thread is implemented by src/js/measurement/analysis-runner.js, a tracked file'
+    expect:
+      exit: 0
+      stdout_contains: ['claim:analysis-off-main-thread +implementation:src/js/measurement/analysis-runner\.js']
+  - id: analysis-off-main-thread-tested
+    run: ['knowledge', 'edges', '--type', 'tested_by']
+    note: 'claim analysis-off-main-thread is proven by tests/browser/analysis-worker.cjs'
+    expect:
+      exit: 0
+      stdout_contains: ['claim:analysis-off-main-thread +test:tests/browser/analysis-worker\.cjs']
 then:
   - 'every claim this use case names resolves to a tracked implementation and a tracked test'
 ```
