@@ -562,7 +562,7 @@ claims:
     test: tests/unit/v31-studio-model.test.mjs
     status: guaranteed
     responsibility: product
-    note: 'STUDIO_SCHEMA_VERSION = 1 (ADR 0023); test "Studio schema version is its own constant, independent of the experiment schema".'
+    note: 'STUDIO_SCHEMA_VERSION = 1 (ADR 0023). Proven by three tests of tests/unit/v31-studio-model.test.mjs: "Studio schema version is its own constant, independent of the experiment schema" (a positive integer literal in schema.js, which reads no product, build or experiment version; a saved Studio carries it and no product version), "the Studio schema version changes only through registered stepwise migrations" (studioMigrations holds steps 1 to the current version, contiguous and frozen; normalize refuses any other version; import refuses a newer one; steps apply in order and a missing step is refused) and "migration: synthetic schema 0 → 1 through the registry (§160)" (a real upgrade through importStudio). That no code writes schemaVersion outside the pipeline is read by review.'
 
   - id: studio-timeline-model
     claim: 'Timeline clips are placed in absolute seconds and carry sequencer block payloads checked by the sequencer block rules; timeline edits validate their track and target references and undo exactly.'
