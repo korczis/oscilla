@@ -1,5 +1,7 @@
 id: V356
 milestone: M017
+serves:
+  - "v3-measure#measurement-comparison"
 title: "Experiment comparison"
 slug: experiment-comparison
 priority: p1

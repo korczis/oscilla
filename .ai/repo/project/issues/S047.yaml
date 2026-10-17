@@ -1,5 +1,7 @@
 id: S047
 milestone: M004
+serves:
+  - "v1-instrument#visuals-and-interface"
 title: "§47 Theme"
 slug: theme
 priority: p1

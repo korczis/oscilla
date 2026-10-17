@@ -1,5 +1,8 @@
 id: V224
 milestone: M008
+serves:
+  - "v2-laboratory#opens-from-file-and-pages"
+  - "v2-laboratory#layout-and-accessibility"
 title: "Pages and navigation"
 slug: pages-and-navigation
 priority: p0

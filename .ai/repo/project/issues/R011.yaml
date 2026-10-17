@@ -1,5 +1,7 @@
 id: R011
 milestone: M011
+serves:
+  - "release-provenance#majordomus-knows-the-product"
 title: "Release and deployment records"
 slug: release-and-deployment-records
 priority: p0

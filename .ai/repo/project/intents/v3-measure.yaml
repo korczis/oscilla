@@ -1,0 +1,126 @@
+id: v3-measure
+title: "OSCILLA V3 MEASURE is a browser acoustic measurement workbench whose results say how far they can be trusted"
+statement: "OSCILLA V3 is primarily a browser acoustic measurement workbench, not a larger synthesizer: stimulus, capture, offline analysis and result layers are pure tested modules behind an explicit measurement state machine with versioned algorithm IDs; frequency-response and absolute-level calibration are separate, validated, interpolated in log frequency and hashed, and SPL appears only with valid absolute calibration; a guided log-sweep measurement yields a magnitude response with raw, calibrated, normalized and smoothed views and reliability masks, and its deconvolution recovers the impulse response with metadata and non-destructive windowing; an FFT, octave and third-octave RTA integrates band power with documented averaging, peak hold and freeze; versioned experiments carry provenance, persist locally with graceful degradation under file://, import strictly, export CSV, repeat and compare; a data-driven GOOD/USABLE/POOR/INVALID assessment states its reasons; a MEASURE workspace in the OSCILLA design language offers guided and expert modes, a live quality bar, safe abort and accessible summaries; and OSCILLA 3.0.0 is deployed to Pages from the gated release workflow with V1/V2 regressions and V3 suites green and its public version and commit verified."
+invariants:
+  - "Measurement results come from captured PCM through deterministic offline DSP; the live analyser is feedback only (ADR 0018)"
+  - "Levels are relative (dBFS-like) and labelled dB SPL only under a valid absolute-level calibration (ADR 0017, project.no-fake-science)"
+  - "Every stored result names the algorithm that produced it by a stable versioned ID; a material change mints a new ID (ADR 0024)"
+  - "A recipe says what to do and an experiment records what was done; repeating a recipe creates a new experiment (ADR 0019)"
+  - "V1 and V2 behaviour is not weakened (specification section 183)"
+  - "No medical, hearing-diagnosis or certification claim (specification sections 188-189)"
+milestones:
+  - M012
+  - M013
+  - M014
+  - M015
+  - M016
+  - M017
+  - M018
+  - M019
+  - M020
+satisfaction:
+  - id: algorithm-ids
+    criterion: "Every stored result names its algorithm by a versioned ID, an unknown ID is refused on import, and every known ID reproduces its golden output"
+    evidence: claim
+    ref: "algorithm-ids-on-results"
+  - id: analysis-off-main-thread
+    criterion: "The offline analysis runs in a Worker when the platform has one, bit-identical to the inline fallback"
+    evidence: claim
+    ref: "analysis-off-main-thread"
+  - id: calibration-profiles
+    criterion: "A frequency-response profile imports with line-numbered errors, is identified by a SHA-256 and is interpolated in log frequency without extrapolation"
+    evidence: claim
+    ref: "calibration-profiles"
+  - id: spl-only-with-calibration
+    criterion: "No level is labelled dB SPL unless a valid absolute level calibration with an explicit reference applies"
+    evidence: claim
+    ref: "spl-only-with-level-calibration"
+  - id: transfer-function
+    criterion: "The transfer function is recovered from a captured log sweep within the stated tolerances of known systems"
+    evidence: claim
+    ref: "transfer-function"
+  - id: impulse-response
+    criterion: "The impulse response is derived by regularised deconvolution of the captured sweep within the stated tolerances"
+    evidence: claim
+    ref: "impulse-response"
+  - id: rta-bands
+    criterion: "Octave and third-octave bands integrate power between base-10 edges, and the fast and slow averager meets its time constant"
+    evidence: claim
+    ref: "rta-bands"
+  - id: experiment-round-trip
+    criterion: "An experiment survives create, encode, JSON and validate identically"
+    evidence: claim
+    ref: "experiment-round-trip"
+  - id: reproducible-experiments
+    criterion: "Every saved measurement records its recipe, devices, calibration, sample rate, runs, quality, algorithm IDs, version and build with hashes"
+    evidence: claim
+    ref: "reproducible-experiments"
+  - id: experiment-persistence
+    criterion: "Experiments persist in IndexedDB and fall back to an in-memory store that says so"
+    evidence: claim
+    ref: "experiment-persistence"
+  - id: experiment-import-validated
+    criterion: "An imported experiment is untrusted input and every malformed shape is refused with a reason"
+    evidence: claim
+    ref: "experiment-import-validated"
+  - id: measurement-comparison
+    criterion: "Comparing experiments flags differing conditions and shows A minus B only over the overlapping valid range"
+    evidence: claim
+    ref: "measurement-comparison"
+  - id: measurement-quality
+    criterion: "Every measurement is rated GOOD, USABLE, POOR or INVALID from named metrics, always with its reasons"
+    evidence: claim
+    ref: "measurement-quality"
+  - id: aggregate-primary-response
+    criterion: "A measurement of two or more runs stores the aggregate with dispersion and repeatability as its primary response"
+    evidence: claim
+    ref: "aggregate-primary-response"
+  - id: measurement-workbench
+    criterion: "The Measure workspace takes a measurement through setup, noise check, sweep, analysis and review to a saved experiment"
+    evidence: claim
+    ref: "measurement-workbench"
+  - id: abort-releases-everything
+    criterion: "Aborting a measurement in any active state leaves no audio node, source, capture, worklet port or input track"
+    evidence: claim
+    ref: "measurement-abort-releases-everything"
+  - id: measure-from-file-and-subpath
+    criterion: "The Measure and Experiments workspaces run in Chromium, Firefox and WebKit from file:// and from the /oscilla/ sub-path"
+    evidence: claim
+    ref: "measure-from-file-and-subpath"
+  - id: no-fake-science
+    criterion: "No shipped text makes a medical, pseudoscientific or certification claim"
+    evidence: claim
+    ref: "no-fake-science-in-shipped-copy"
+  - id: product-graph
+    criterion: "The V3 features, use cases, ADRs and knowledge validate in the .ai layer"
+    evidence: command
+    ref: "majordomus doctor"
+  - id: public-release-verified
+    criterion: "The public page serves the 3.x release with its version and commit, and the MEASURE and Playground smoke passes"
+    evidence: command
+    ref: "npm run test:live"
+governance:
+  - "rule:project.no-fake-science"
+  - "rule:project.audio-engine-discipline"
+  - "rule:project.single-file-deliverable"
+  - "rule:project.visual-identity-lock"
+  - "adr:adr-0017"
+  - "adr:adr-0018"
+  - "adr:adr-0019"
+  - "adr:adr-0020"
+  - "adr:adr-0021"
+  - "adr:adr-0022"
+  - "adr:adr-0023"
+  - "adr:adr-0024"
+  - "adr:adr-0025"
+  - "adr:adr-0026"
+  - "adr:adr-0047"
+  - "file:docs/specs/oscilla-v3-measure.md"
+non_goals:
+  - "The future V3.x measurement capabilities of specification section 4 (RT60, EDT, T20/T30, ETC, THD, THD+N, latency, phase transfer, group delay, device characterization, batch measurement, WASM DSP): interfaces only where they improve V3.0"
+  - "The excluded scope of specification section 10: MIDI, accounts, a backend, collaboration, AI classification, generative music, DAW multitrack, room simulation, VST-style effects, healing or focus frequencies, medical interpretation"
+  - "IEC, ANSI or class certification: results are measurement estimates (section 189)"
+  - "The v4.0 experiment-record work (definitions, run evidence, findings, connected records; ADRs 0040-0053): it has no milestone in the plan, so no intent names it"
+  - "A knowledge explorer: v4.0 ships method claims on experiment evidence instead (ADR 0051)"
+created_at: 2026-10-18
+updated_at: 2026-10-18

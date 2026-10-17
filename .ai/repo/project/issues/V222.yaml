@@ -1,5 +1,9 @@
 id: V222
 milestone: M008
+serves:
+  - "v2-laboratory#link-state"
+  - "v2-laboratory#presets"
+  - "v2-laboratory#config-file"
 title: "Status bar, URL, presets, config import/export"
 slug: status-bar-url-presets-config-import-export
 priority: p0

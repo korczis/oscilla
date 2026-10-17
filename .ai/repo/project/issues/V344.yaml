@@ -1,5 +1,7 @@
 id: V344
 milestone: M016
+serves:
+  - "v3-measure#rta-bands"
 title: "RTA chart"
 slug: rta-chart
 priority: p1

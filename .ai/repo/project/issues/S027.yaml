@@ -1,5 +1,7 @@
 id: S027
 milestone: M002
+serves:
+  - "v1-instrument#visuals-and-interface"
 title: "§27 Spectrum mode"
 slug: spectrum-mode
 priority: p1

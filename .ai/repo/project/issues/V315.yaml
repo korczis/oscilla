@@ -1,5 +1,7 @@
 id: V315
 milestone: M013
+serves:
+  - "v3-measure#calibration-profiles"
 title: "Calibration UI"
 slug: calibration-ui
 priority: p1

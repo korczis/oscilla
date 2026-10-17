@@ -1,5 +1,7 @@
 id: V381
 milestone: M020
+serves:
+  - "v3-measure#measure-from-file-and-subpath"
 title: "V3 test suites in the release gate"
 slug: v3-test-suites-in-the-release-gate
 priority: p1

@@ -1,5 +1,7 @@
 id: V324
 milestone: M014
+serves:
+  - "v3-measure#transfer-function"
 title: "Response chart"
 slug: response-chart
 priority: p1

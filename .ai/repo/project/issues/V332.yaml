@@ -1,5 +1,7 @@
 id: V332
 milestone: M015
+serves:
+  - "v3-measure#impulse-response"
 title: "IR result, windowing and metadata"
 slug: ir-result-windowing-and-metadata
 priority: p1

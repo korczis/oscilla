@@ -1,5 +1,7 @@
 id: V202
 milestone: M007
+serves:
+  - "v2-laboratory#v1-frozen"
 title: "Baseline inventory"
 slug: baseline-inventory
 priority: p0

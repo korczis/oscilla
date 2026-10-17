@@ -1,5 +1,7 @@
 id: V431
 milestone: M032
+serves:
+  - "v31-studio#file-protocol"
 title: "Reviews, performance and bundle audit"
 slug: reviews-performance-and-bundle-audit
 priority: p1

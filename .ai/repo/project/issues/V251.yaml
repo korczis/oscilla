@@ -1,5 +1,7 @@
 id: V251
 milestone: M034
+serves:
+  - "v2-laboratory#engine-plays-and-releases"
 title: "Explain the deterministic Chromium release step of 0.0523"
 slug: explain-the-deterministic-chromium-release-step
 priority: p3

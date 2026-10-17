@@ -1,5 +1,7 @@
 id: S034
 milestone: M003
+serves:
+  - "v1-instrument#sweep-mode"
 title: "§34 Sweep presets"
 slug: sweep-presets
 priority: p1

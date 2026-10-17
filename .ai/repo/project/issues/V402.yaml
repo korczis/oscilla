@@ -1,5 +1,7 @@
 id: V402
 milestone: M021
+serves:
+  - "v31-studio#self-knowledge"
 title: "Studio ADRs"
 slug: studio-adrs
 priority: p1

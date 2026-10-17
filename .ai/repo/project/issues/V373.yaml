@@ -1,5 +1,7 @@
 id: V373
 milestone: M019
+serves:
+  - "v3-measure#abort-releases-everything"
 title: "Live quality bar, progress, abort, errors"
 slug: live-quality-bar-progress-abort-errors
 priority: p1

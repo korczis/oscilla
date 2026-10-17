@@ -1,5 +1,7 @@
 id: S013
 milestone: M001
+serves:
+  - "v1-instrument#patterns-preserved"
 title: "§13 Pattern engine"
 slug: pattern-engine
 priority: p1

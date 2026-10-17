@@ -1,5 +1,7 @@
 id: S012
 milestone: M001
+serves:
+  - "v1-instrument#engine-plays-and-releases"
 title: "§12 Waveforms"
 slug: waveforms
 priority: p1

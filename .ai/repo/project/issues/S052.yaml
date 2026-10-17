@@ -1,5 +1,7 @@
 id: S052
 milestone: M004
+serves:
+  - "v1-instrument#microphone-analysis"
 title: "§52 Optional microphone analysis"
 slug: optional-microphone-analysis
 priority: p1

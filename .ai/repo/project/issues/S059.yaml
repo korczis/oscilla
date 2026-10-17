@@ -1,5 +1,7 @@
 id: S059
 milestone: M004
+serves:
+  - "v1-instrument#visuals-and-interface"
 title: "§59 Flowbite LLM best practices"
 slug: flowbite-llm-best-practices
 priority: p1

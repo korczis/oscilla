@@ -1,5 +1,7 @@
 id: S053
 milestone: M004
+serves:
+  - "v1-instrument#visuals-and-interface"
 title: "§53 Debug mode"
 slug: debug-mode
 priority: p1

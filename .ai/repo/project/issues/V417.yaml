@@ -1,5 +1,7 @@
 id: V417
 milestone: M025
+serves:
+  - "v31-studio#timeline-model"
 title: "Timeline editor"
 slug: timeline-editor
 priority: p1

@@ -1,5 +1,7 @@
 id: V342
 milestone: M016
+serves:
+  - "v3-measure#rta-bands"
 title: "Octave and third-octave band power"
 slug: octave-and-third-octave-band-power
 priority: p1

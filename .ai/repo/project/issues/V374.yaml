@@ -1,5 +1,7 @@
 id: V374
 milestone: M019
+serves:
+  - "v3-measure#measurement-workbench"
 title: "Responsive layout"
 slug: responsive-layout
 priority: p1

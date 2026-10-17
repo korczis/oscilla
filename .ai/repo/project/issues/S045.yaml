@@ -1,5 +1,7 @@
 id: S045
 milestone: M003
+serves:
+  - "v1-instrument#no-fake-science"
 title: "§45 Contextual education"
 slug: contextual-education
 priority: p1

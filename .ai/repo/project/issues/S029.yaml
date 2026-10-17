@@ -1,5 +1,7 @@
 id: S029
 milestone: M002
+serves:
+  - "v1-instrument#visuals-and-interface"
 title: "§29 Signal path mode"
 slug: signal-path-mode
 priority: p1

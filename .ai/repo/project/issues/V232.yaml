@@ -1,5 +1,7 @@
 id: V232
 milestone: M009
+serves:
+  - "v2-laboratory#visual-reference"
 title: "Visual refinement passes"
 slug: visual-refinement-passes
 priority: p0

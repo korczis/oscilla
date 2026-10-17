@@ -1,5 +1,7 @@
 id: V252
 milestone: M034
+serves:
+  - "v2-laboratory#layout-and-accessibility"
 title: "Stepper keys are hidden on coarse pointers (accepted)"
 slug: stepper-keys-are-hidden-on-coarse-pointers
 priority: p3

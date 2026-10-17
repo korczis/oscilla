@@ -1,5 +1,7 @@
 id: V386
 milestone: M020
+serves:
+  - "v3-measure#public-release-verified"
 title: "Release 3.0.0 and public verification"
 slug: release-3.0.0-and-public-verification
 priority: p1

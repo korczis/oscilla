@@ -1,5 +1,7 @@
 id: V323
 milestone: M014
+serves:
+  - "v3-measure#transfer-function"
 title: "Normalization and smoothing"
 slug: normalization-and-smoothing
 priority: p1

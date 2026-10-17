@@ -1,5 +1,7 @@
 id: V377
 milestone: M019
+serves:
+  - "v3-measure#abort-releases-everything"
 title: "Measurement safety"
 slug: measurement-safety
 priority: p1

@@ -1,5 +1,7 @@
 id: V420
 milestone: M026
+serves:
+  - "v31-studio#automation-model"
 title: "Automation editor"
 slug: automation-editor
 priority: p1

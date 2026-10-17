@@ -1,5 +1,7 @@
 id: S003
 milestone: M001
+serves:
+  - "v1-instrument#visuals-and-interface"
 title: "§3 Product identity"
 slug: product-identity
 priority: p1

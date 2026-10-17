@@ -1,5 +1,7 @@
 id: S058
 milestone: M004
+serves:
+  - "v1-instrument#visuals-and-interface"
 title: "§58 Retina / canvas"
 slug: retina-canvas
 priority: p1

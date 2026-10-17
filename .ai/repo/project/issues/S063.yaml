@@ -1,5 +1,7 @@
 id: S063
 milestone: M004
+serves:
+  - "v1-instrument#visuals-and-interface"
 title: "§63 Progressive disclosure"
 slug: progressive-disclosure
 priority: p1

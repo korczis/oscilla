@@ -1,5 +1,7 @@
 id: D001
 milestone: M006
+serves:
+  - "v1-instrument#public-from-file-and-pages"
 title: "Cross-model review"
 slug: cross-model-review
 priority: p0

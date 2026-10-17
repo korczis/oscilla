@@ -1,5 +1,7 @@
 id: R007
 milestone: M011
+serves:
+  - "release-provenance#gate-runs-every-suite"
 title: "Browser test consolidation"
 slug: browser-test-consolidation
 priority: p0

@@ -1,5 +1,7 @@
 id: R015
 milestone: M011
+serves:
+  - "release-provenance#gate-runs-every-suite"
 title: "Release candidate verification"
 slug: release-candidate-verification
 priority: p0

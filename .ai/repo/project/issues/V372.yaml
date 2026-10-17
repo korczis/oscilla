@@ -1,5 +1,7 @@
 id: V372
 milestone: M019
+serves:
+  - "v3-measure#measurement-workbench"
 title: "Guided and expert modes"
 slug: guided-and-expert-modes
 priority: p1

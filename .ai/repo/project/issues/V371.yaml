@@ -1,5 +1,7 @@
 id: V371
 milestone: M019
+serves:
+  - "v3-measure#measurement-workbench"
 title: "MEASURE and EXPERIMENTS workspaces"
 slug: measure-and-experiments-workspaces
 priority: p1
