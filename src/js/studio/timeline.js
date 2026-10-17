@@ -33,9 +33,10 @@
 import { BLOCK_SCHEMA } from '../sequencer/model.js';
 import { CONTRACT_LIMITS, TIMING_LIMITS } from '../measurement/engine.js';
 import { DURATION_LIMITS } from '../measurement/stimulus.js';
+import { MEASUREMENT_TARGETS, clipTarget, clipUse } from './clip-targets.js';
 import { NODE_REGISTRY } from './registry.js';
 import {
-  CLIP_KINDS, EVENT_ACTIONS, MARKER_KINDS, MEASUREMENT_ACTIONS, MIN_CLIP_S, TIMELINE_MAX_S,
+  CLIP_KINDS, EVENT_ACTIONS, MARKER_KINDS, MIN_CLIP_S, TIMELINE_MAX_S,
   TRACK_CLIP_KINDS, TRACK_KINDS,
 } from './schema.js';
 
@@ -75,15 +76,8 @@ export const MEASUREMENT_CLIP_LIMITS = Object.freeze({
   analysis: Object.freeze([MIN_CLIP_S, TIMELINE_MAX_S]),
 });
 
-/** Node types a measurement clip action requires as its target (null: any or none). */
-export const MEASUREMENT_TARGETS = Object.freeze({
-  'noise-check': Object.freeze(['microphone', 'capture']),
-  'pre-roll': null,
-  stimulus: Object.freeze(['sweep']),
-  capture: Object.freeze(['microphone', 'capture']),
-  tail: null,
-  analysis: Object.freeze(['transfer-analyzer']),
-});
+/** Node types a measurement clip action requires as its target (clip-targets.js). */
+export { MEASUREMENT_TARGETS };
 
 export const SNAP_MODES = Object.freeze(['off', 'time', 'musical', 'markers']);
 /**
@@ -331,28 +325,12 @@ export function clipRules(model, clip, { registry = NODE_REGISTRY, trackById = n
   const targetId = clip.target ?? (track ? track.target : null);
   const node = targetId == null ? null
     : (nodeById ? nodeById.get(targetId) : model.graph.nodes.find((n) => n.id === targetId));
-  const def = node ? registry.get(node.type) : null;
   if (targetId != null && !node) {
     err('missing-node', 'The clip targets a node that does not exist.', 'target');
-  } else if (def && !def.clipKinds.includes(clip.kind)) {
-    err('invalid-clip-target', `${node.metadata.name} cannot play ${clip.kind} clips.`, 'target',
-      { nodeId: node.id });
   }
-  const action = clip.payload && clip.payload.action;
-  if (clip.kind === 'event' && action !== undefined && !EVENT_ACTIONS.includes(action)) {
-    err('invalid-clip', `An event clip action must be one of ${EVENT_ACTIONS.join(', ')}.`,
-      'payload.action');
-  }
-  if (clip.kind === 'measurement') {
-    const need = MEASUREMENT_TARGETS[action];
-    if (!MEASUREMENT_ACTIONS.includes(action)) {
-      err('invalid-clip', `A measurement clip action must be one of `
-        + `${MEASUREMENT_ACTIONS.join(', ')}.`, 'payload.action');
-    } else if (need && (!node || !need.includes(node.type))) {
-      err('measurement-target', `A ${action} clip needs a ${need.join(' or ')} target.`, 'target');
-    } else if (action === 'stimulus' && node.params.curve !== 'log') {
-      err('measurement-target', 'A measurement stimulus sweep must be logarithmic.', 'target');
-    }
+  // Target and action: the one clip-target policy (clip-targets.js, R7).
+  for (const e of clipTarget(node || null, clipUse(clip), registry).errors) {
+    err(e.code, e.message, e.path, e.nodeId ? { nodeId: e.nodeId } : undefined);
   }
   return errors;
 }
@@ -474,19 +452,23 @@ function snapContext(model, clip) {
     clipKind: clip.kind };
 }
 
-function canHostClip(model, track, clip, registry) {
+/**
+ * Why `clip` cannot go on `track`, or null (§86 vertical: a compatible track). Its own track
+ * always hosts it unless the store would refuse it there. Another track hosts it only where the
+ * transport plays it, on its effective target there (clip-targets.js, R7): a move never turns a
+ * clip that plays into one that does not, and never offers a track on which it stays silent.
+ */
+export function clipTrackReason(model, track, clip, registry = NODE_REGISTRY) {
   if (!track) return 'There is no such track.';
   if (!TRACK_CLIP_KINDS[track.kind].includes(clip.kind)) {
     return `A ${clip.kind} clip cannot go on a ${track.kind} track.`;
   }
-  if (clip.target === null && track.target) {
-    const node = model.graph.nodes.find((n) => n.id === track.target);
-    const def = node ? registry.get(node.type) : null;
-    if (def && !def.clipKinds.includes(clip.kind)) {
-      return `${node.metadata.name} cannot play ${clip.kind} clips.`;
-    }
-  }
-  return null;
+  const id = clip.target ?? track.target;
+  const node = id == null ? null : model.graph.nodes.find((n) => n.id === id) || null;
+  const v = clipTarget(node, clipUse(clip), registry);
+  if (track.id !== clip.trackId) return v.plays ? null : v.reason;
+  const no = v.errors.find((e) => e.code === 'invalid-clip-target');
+  return no ? no.message : null;
 }
 
 /**
@@ -499,7 +481,7 @@ export function moveClipResult(model, clipId, opts = {}, registry = NODE_REGISTR
   if (!clip) return { ok: false, reason: `There is no clip "${String(clipId)}".`, action: null };
   const trackId = opts.trackId ?? clip.trackId;
   const track = findTrack(model, trackId);
-  const why = canHostClip(model, track, clip, registry);
+  const why = clipTrackReason(model, track, clip, registry);
   if (why) return { ok: false, reason: why, action: null, start: clip.start, trackId };
   let start = finite(opts.start) ? opts.start
     : clip.start + (finite(opts.deltaS) ? opts.deltaS : 0);
@@ -600,7 +582,7 @@ export function nudgeClipResult(model, clipId, { direction = 1, trackDelta = 0, 
     const tracks = model.timeline.tracks;
     let i = tracks.findIndex((t) => t.id === clip.trackId);
     for (i += Math.sign(trackDelta); i >= 0 && i < tracks.length; i += Math.sign(trackDelta)) {
-      if (!canHostClip(model, tracks[i], clip, registry)) {
+      if (!clipTrackReason(model, tracks[i], clip, registry)) {
         trackId = tracks[i].id;
         break;
       }
