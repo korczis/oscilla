@@ -15,7 +15,8 @@
 // Like the V1 vm context, each load has its own seeded Math.random and Date.now is fixed while a
 // case runs.
 //
-// Freeze files: OSCILLA_FREEZE_DIR, default ../freeze (tests/freeze). Regenerate a golden from
+// Freeze files: OSCILLA_FREEZE_DIR, default ../freeze (tests/freeze); missing, they skip the test
+// locally and fail it under GITHUB_ACTIONS or CI. Regenerate a golden from
 // V1 with: git show v1.0.0:index.html > /tmp/v1.html; OSCILLA_HTML=/tmp/v1.html node extract.cjs --golden
 //   node --test 'tests/unit/*.test.mjs'
 
@@ -536,7 +537,16 @@ function diff(a, b, at = '$') {
 
 // ---------------------------------------------------------------- run
 
-if (!available) {
+// A skip passes the gate, so in CI missing freeze files are a failure: claim patterns-match-v1
+// must not pass without one vector replayed (tests/unit/freeze-guard.test.mjs proves both).
+const IN_CI = process.env.GITHUB_ACTIONS === 'true' || process.env.CI === 'true';
+
+if (!available && IN_CI) {
+  test('V1 freeze vectors', () => {
+    assert.fail(`freeze files not found in ${FREEZE_DIR}: CI replays the V1 golden vectors `
+      + '(tests/freeze/, or OSCILLA_FREEZE_DIR) and does not skip them');
+  });
+} else if (!available) {
   test('V1 freeze vectors', { skip: `freeze files not found in ${FREEZE_DIR}` }, () => {});
 } else {
   const require = createRequire(import.meta.url);

@@ -49,7 +49,7 @@ claims:
     test: tests/unit/freeze.test.mjs
     status: guaranteed
     responsibility: product
-    note: Golden vectors from index.html@a7b7a23 (tests/freeze/golden-a7b7a23.json) replayed against the V2 modules.
+    note: Golden vectors from index.html@a7b7a23 (tests/freeze/golden-a7b7a23.json) replayed against the V2 modules. Without the freeze files the test skips locally and fails under GITHUB_ACTIONS or CI, so the claim cannot pass in CI by skipping (tests/unit/freeze-guard.test.mjs).
 
   - id: sweep-rises-through-range
     claim: A sweep pattern plays a frequency that rises through the requested range, and stopping it leaves no audio node running
