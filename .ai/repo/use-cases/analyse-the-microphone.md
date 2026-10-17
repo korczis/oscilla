@@ -9,7 +9,7 @@ target: advisory
 weight: 40
 difficulty: basic
 commands: [knowledge]
-claims: [microphone-analysis-only, generator-mic-compare]
+claims: [microphone-analysis-only, generator-mic-compare, spectrum-peak-accuracy, spectrogram-mapping]
 tags: [oscilla, product-acceptance]
 ---
 
@@ -26,6 +26,7 @@ by:
 
 - `npm test` (tests/unit/engine.test.mjs microphone cases; tests/unit/analysis-misc.test.mjs compareFrequencies)
 - tests/browser/labs.cjs runs the panel against a fake capture device; it is not yet in the release gate (peer issue R007 adds test:labs)
+- `npm test` (tests/unit/analysis-peak.test.mjs: a bin-centred full-scale sine reads 0 dB relative to full scale and the peak frequency is interpolated between bins; tests/unit/analysis-spectrogram.test.mjs: relative level to colour through a monotone lookup table on a log or linear axis)
 
 A use-case/v1 scenario can only invoke `bin/majordomus`, so the scenario below does not
 play audio. It proves the traceability instead: each claim's implementation and test are
@@ -67,6 +68,30 @@ steps:
     expect:
       exit: 0
       stdout_contains: ['claim:generator-mic-compare +test:tests/unit/analysis-misc\.test\.mjs']
+  - id: spectrum-peak-accuracy-implemented
+    run: ['knowledge', 'edges', '--type', 'implemented_by']
+    note: 'claim spectrum-peak-accuracy is implemented by src/js/analysis/peak-detector.js, a tracked file'
+    expect:
+      exit: 0
+      stdout_contains: ['claim:spectrum-peak-accuracy +implementation:src/js/analysis/peak-detector\.js']
+  - id: spectrum-peak-accuracy-tested
+    run: ['knowledge', 'edges', '--type', 'tested_by']
+    note: 'claim spectrum-peak-accuracy is proven by tests/unit/analysis-peak.test.mjs'
+    expect:
+      exit: 0
+      stdout_contains: ['claim:spectrum-peak-accuracy +test:tests/unit/analysis-peak\.test\.mjs']
+  - id: spectrogram-mapping-implemented
+    run: ['knowledge', 'edges', '--type', 'implemented_by']
+    note: 'claim spectrogram-mapping is implemented by src/js/analysis/spectrogram.js, a tracked file'
+    expect:
+      exit: 0
+      stdout_contains: ['claim:spectrogram-mapping +implementation:src/js/analysis/spectrogram\.js']
+  - id: spectrogram-mapping-tested
+    run: ['knowledge', 'edges', '--type', 'tested_by']
+    note: 'claim spectrogram-mapping is proven by tests/unit/analysis-spectrogram.test.mjs'
+    expect:
+      exit: 0
+      stdout_contains: ['claim:spectrogram-mapping +test:tests/unit/analysis-spectrogram\.test\.mjs']
 then:
   - 'every claim this use case names resolves to a tracked implementation and a tracked test'
 ```

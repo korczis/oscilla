@@ -9,7 +9,7 @@ target: advisory
 weight: 10
 difficulty: basic
 commands: [knowledge]
-claims: [tone-plays-and-releases]
+claims: [tone-plays-and-releases, patterns-match-v1, adsr-envelope-semantics]
 tags: [oscilla, product-acceptance]
 ---
 
@@ -26,6 +26,7 @@ The behaviour is proven by the OSCILLA test named in each claim of `docs/CLAIMS.
 by:
 
 - `npm run test:browser` (tests/browser/app.cjs, check hold-plays-release-zero-nodes)
+- `npm test` (tests/unit/freeze.test.mjs: every V1 pattern plans the automation the frozen V1 file planned, replayed from the golden vectors; tests/unit/audio-envelope.test.mjs: attack, decay, sustain and release with set, linear and exponential semantics, and a release from mid-segment)
 
 A use-case/v1 scenario can only invoke `bin/majordomus`, so the scenario below does not
 play audio. It proves the traceability instead: each claim's implementation and test are
@@ -55,6 +56,30 @@ steps:
     expect:
       exit: 0
       stdout_contains: ['claim:tone-plays-and-releases +test:tests/browser/app\.cjs']
+  - id: patterns-match-v1-implemented
+    run: ['knowledge', 'edges', '--type', 'implemented_by']
+    note: 'claim patterns-match-v1 is implemented by src/js/audio/patterns.js, a tracked file'
+    expect:
+      exit: 0
+      stdout_contains: ['claim:patterns-match-v1 +implementation:src/js/audio/patterns\.js']
+  - id: patterns-match-v1-tested
+    run: ['knowledge', 'edges', '--type', 'tested_by']
+    note: 'claim patterns-match-v1 is proven by tests/unit/freeze.test.mjs'
+    expect:
+      exit: 0
+      stdout_contains: ['claim:patterns-match-v1 +test:tests/unit/freeze\.test\.mjs']
+  - id: adsr-envelope-semantics-implemented
+    run: ['knowledge', 'edges', '--type', 'implemented_by']
+    note: 'claim adsr-envelope-semantics is implemented by src/js/audio/envelope.js, a tracked file'
+    expect:
+      exit: 0
+      stdout_contains: ['claim:adsr-envelope-semantics +implementation:src/js/audio/envelope\.js']
+  - id: adsr-envelope-semantics-tested
+    run: ['knowledge', 'edges', '--type', 'tested_by']
+    note: 'claim adsr-envelope-semantics is proven by tests/unit/audio-envelope.test.mjs'
+    expect:
+      exit: 0
+      stdout_contains: ['claim:adsr-envelope-semantics +test:tests/unit/audio-envelope\.test\.mjs']
 then:
   - 'every claim this use case names resolves to a tracked implementation and a tracked test'
 ```

@@ -9,7 +9,7 @@ target: advisory
 weight: 190
 difficulty: basic
 commands: [knowledge]
-claims: [experiment-persistence, reproducible-experiments, experiment-round-trip]
+claims: [experiment-persistence, reproducible-experiments, experiment-round-trip, experiment-run-immutable]
 tags: [oscilla, product-acceptance, v3]
 ---
 
@@ -25,6 +25,7 @@ by:
 
 - `npm test` (tests/unit/v3-experiments.test.mjs: IndexedDB open, upgrade, CRUD and reopen on an in-process fake, quota and open failures, memory fallback; round trip)
 - `npm run test:measure` (tests/browser/v3-ui.cjs, checks loopback-workflow (save, repeat as a new experiment) and experiments (list, open, rename, duplicate, delete with confirmation))
+- `npm test` (tests/unit/v3-experiment-immutable.test.mjs: a stored completed run refuses every execution-fact change; only its name and notes change, and a duplicate records its source)
 
 A use-case/v1 scenario can only invoke `bin/majordomus`, so the scenario below does not
 play or capture audio. It proves the traceability instead: each claim's implementation and
@@ -84,6 +85,18 @@ steps:
     expect:
       exit: 0
       stdout_contains: ['claim:experiment-round-trip +test:tests/unit/v3-experiments\.test\.mjs']
+  - id: experiment-run-immutable-implemented
+    run: ['knowledge', 'edges', '--type', 'implemented_by']
+    note: 'claim experiment-run-immutable is implemented by src/js/experiments/store.js, a tracked file'
+    expect:
+      exit: 0
+      stdout_contains: ['claim:experiment-run-immutable +implementation:src/js/experiments/store\.js']
+  - id: experiment-run-immutable-tested
+    run: ['knowledge', 'edges', '--type', 'tested_by']
+    note: 'claim experiment-run-immutable is proven by tests/unit/v3-experiment-immutable.test.mjs'
+    expect:
+      exit: 0
+      stdout_contains: ['claim:experiment-run-immutable +test:tests/unit/v3-experiment-immutable\.test\.mjs']
 then:
   - 'every claim this use case names resolves to a tracked implementation and a tracked test'
 ```
