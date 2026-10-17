@@ -26,17 +26,17 @@ rather than of a pull request. It derives which gates apply from the change set'
 which is the right derivation for every gate that measures a tree — and it is structurally
 incapable of reaching the ones that do not.
 
-A repository that publishes has two trees. There is the one in the checkout, which every
-gate in the model examines, and there is the one the public is actually being served, which
-none of them can see. The second is not a function of the first: it is a function of whether
-a deployment ran, whether it ran to completion, whether the hosting provider's own build of
-what was pushed succeeded, and whether anything has landed since. **No edit to any file can
-make that question come out differently**, so a path class can never select the gate that
-asks it, and a gate in no class is asked only by a full plan — which, on this repository,
-runs on a push to master, *before* the publication it would judge.
+A repository that publishes has two trees. There is the one in the checkout, which every gate
+in the model examines, and there is the one the public is actually being served, which none of
+them can see. The second is not a function of the first: it is a function of whether a
+deployment ran, whether it ran to completion, whether the hosting provider's own build of what
+was pushed succeeded, and whether anything has landed since. **No edit to any file can make
+that question come out differently**, so a path class can never select the gate that asks it,
+and a gate in no class is asked only by a full plan — which, in a repository that plans its
+full run on a push to its trunk, runs *before* the publication it would judge.
 
-The result is a question nobody owns. Three measured instances, each of which left every
-commit-level check green:
+The result is a question nobody owns. Three instances measured in the Majordomus repository,
+where this rule was written, each of which left every commit-level check green:
 
 - an unmerged ref served as the public site for about half an hour, noticed by a person's eye;
 - twenty pull requests landed in one afternoon and the site sat hours behind the trunk;
@@ -77,13 +77,13 @@ worker to claim `completed` instead — the argument `majordomus.completion-gate
 makes, applied here unchanged.
 
 **A verdict that could not be reached is reported, never inferred.** The gate distinguishes
-"the publication is not current" from "I could not find out" — no network, no published
-branch, no hosting API. The first refuses. The second is reported by name, with its exit and
-reason, and refuses `completed` too: a session on a train is not evidence that the site is
-stale, but `completed` claims it is current, and a requirement that passes whenever it cannot
-measure is decoration. It is never reported as the first, and an honest `partial` or
-`blocked` is never refused over it. Silence is not green; it is named — the argument this repository states as
-`project.never-reported-is-not-green`, which the package cannot depend on because a
+"the publication is not current" from "I could not find out" — no network, no published branch,
+no hosting API. The first refuses. The second is reported by name, with its exit and reason,
+and refuses `completed` too: a session on a train is not evidence that the site is stale, but
+`completed` claims it is current, and a requirement that passes whenever it cannot measure is
+decoration. It is never reported as the first, and an honest `partial` or `blocked` is never
+refused over it. Silence is not green; it is named — the argument the Majordomus repository
+states as `project.never-reported-is-not-green`, which the package cannot depend on because a
 vendored rule must resolve inside the package it ships in.
 
 # Failure behaviour

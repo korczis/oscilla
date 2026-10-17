@@ -21,7 +21,7 @@ x-majordomus:
 
 # Rationale
 
-A decision record is read months after it was written, by someone deciding whether a constraint still holds. Two records claiming one identity make every reference to that identity ambiguous, and nothing notices until a reader follows one. This is not hypothetical for this repository: two worktrees allocated `0005` within three hours of each other and two allocated `0007` within one, and the collision survived a merge because no command had an opinion about the section. Validating the set on every `doctor` run puts the failure in the tree, with the files named, instead of in the head of whoever reads the second record.
+A decision record is read months after it was written, by someone deciding whether a constraint still holds. Two records claiming one identity make every reference to that identity ambiguous, and nothing notices until a reader follows one. This is not hypothetical: in the Majordomus repository, where this rule was written, two worktrees allocated `0005` within three hours of each other and two allocated `0007` within one, and the collision survived a merge because no command had an opinion about the section. Validating the set on every `doctor` run puts the failure in the tree, with the files named, instead of in the head of whoever reads the second record.
 
 The second half of the rule is about what a machine may assert. `majordomus adr propose` writes a record from a local decision, and a record it wrote may be `proposed` or `rejected` and nothing else. A tool that can write `accepted` can turn its own inference into repository truth by the act of writing it down, and the reader who later finds that record has no way to tell which happened.
 
