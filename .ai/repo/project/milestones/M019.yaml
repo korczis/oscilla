@@ -13,3 +13,12 @@ validation:
 evidence_required:
   - "milestone_verified"
 created_at: 2026-10-02
+updated_at: 2026-10-17T22:19:54Z
+evidence:
+  - covers: milestone_verified
+    type: ci
+    command: "npm run release-gate (its suites as the jobs of CI run 38441577562, PR #176 head d84ffeb, tree f7459bb = main 964e25d)"
+    result: "Verified retrospectively on 2026-10-18 at 964e25d: V371-V377 done; the gate's jobs passed on the tree of 964e25d in CI run 38441577562 (unit, build and artifact rules; V1 engine; DSP, labs and sequencer; V3 measurement and UI; V3.1 Studio UI; browser gate in chromium, firefox and webkit; visual regression including the MEASURE desktop and phone references; .ai layer doctor), gate SUCCESS; the public page at 964e25d passes verify-deploy and test:live 17/17 in three browsers, including the MEASURE guided flow (Pages run 38453063858)"
+    artifact: "https://github.com/korczis/oscilla/actions/runs/38441577562"
+    commit: 4f241e57d84fdf172430c897412a45ab82a953ca
+    recorded_at: 2026-10-17T22:19:53Z
