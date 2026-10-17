@@ -157,6 +157,7 @@ claims:
     test: tests/unit/bioacoustics.test.mjs
     status: guaranteed
     responsibility: product
+    note: 'Machine-checked by tests/unit/bioacoustics.test.mjs: every object of HEARING_RANGES and CALL_EXAMPLES that holds a number (each entry and each alternative) carries a full source (authors, title, venue, year or null, URL or DOI); a hearing range with a dB SPL criterion names it at the start of its basis, and one whose source gives none states the levels or that none is stated; a call band has a kind and says which quantity it is, and no hearing criterion; src/index.html shows the disclaimer and mount() renders it into the note; the sources list renders each bar with its label, basis and citation. Not machine-checked: that each value is the one the cited source gives and nothing is estimated, which is a reviewer''s reading of the sources, and the bars the canvas chart draws (src/js/charts/bio-chart.js).'
 
   - id: link-restores-configuration
     claim: A copied link restores the instrument configuration through the validated path, with the gain capped
