@@ -1,5 +1,7 @@
 id: S043
 milestone: M003
+serves:
+  - "v1-instrument#shareable-state"
 title: "§43 Shareable URL state"
 slug: shareable-url-state
 priority: p1

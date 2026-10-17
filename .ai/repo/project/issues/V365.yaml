@@ -1,5 +1,7 @@
 id: V365
 milestone: M018
+serves:
+  - "v3-measure#measurement-quality"
 title: "Resolution-aware precision"
 slug: resolution-aware-precision
 priority: p1

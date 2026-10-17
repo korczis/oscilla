@@ -1,5 +1,7 @@
 id: S049
 milestone: M004
+serves:
+  - "v1-instrument#visuals-and-interface"
 title: "§49 Accessibility"
 slug: accessibility
 priority: p1

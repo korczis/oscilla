@@ -1,5 +1,7 @@
 id: V430
 milestone: M032
+serves:
+  - "v31-studio#file-protocol"
 title: "Studio test suites and visual gate"
 slug: studio-test-suites-and-visual-gate
 priority: p1

@@ -1,5 +1,7 @@
 id: V362
 milestone: M018
+serves:
+  - "v3-measure#measurement-quality"
 title: "SNR and reliability masks"
 slug: snr-and-reliability-masks
 priority: p1

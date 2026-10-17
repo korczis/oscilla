@@ -1,5 +1,7 @@
 id: S023
 milestone: M001
+serves:
+  - "v1-instrument#engine-plays-and-releases"
 title: "§23 High-frequency safety"
 slug: high-frequency-safety
 priority: p1

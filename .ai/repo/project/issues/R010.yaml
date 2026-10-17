@@ -1,5 +1,7 @@
 id: R010
 milestone: M011
+serves:
+  - "release-provenance#majordomus-knows-the-product"
 title: "Product use cases"
 slug: product-use-cases
 priority: p0

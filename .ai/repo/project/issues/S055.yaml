@@ -1,5 +1,7 @@
 id: S055
 milestone: M001
+serves:
+  - "v1-instrument#shareable-state"
 title: "§55 State architecture"
 slug: state-architecture
 priority: p1

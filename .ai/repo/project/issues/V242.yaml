@@ -1,5 +1,8 @@
 id: V242
 milestone: M010
+serves:
+  - "v2-laboratory#opens-from-file-and-pages"
+  - "v2-laboratory#public-and-identified"
 title: "Deploy V2 to GitHub Pages"
 slug: deploy-v2-to-github-pages
 priority: p0

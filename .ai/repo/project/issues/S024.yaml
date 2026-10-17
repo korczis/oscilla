@@ -1,5 +1,7 @@
 id: S024
 milestone: M001
+serves:
+  - "v1-instrument#no-fake-science"
 title: "§24 No fake science"
 slug: no-fake-science
 priority: p1

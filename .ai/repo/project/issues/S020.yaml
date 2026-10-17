@@ -1,5 +1,7 @@
 id: S020
 milestone: M001
+serves:
+  - "v1-instrument#engine-plays-and-releases"
 title: "§20 Continuous playback"
 slug: continuous-playback
 priority: p1

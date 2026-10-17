@@ -1,5 +1,7 @@
 id: V219
 milestone: M008
+serves:
+  - "v2-laboratory#additive"
 title: "Additive synthesis"
 slug: additive-synthesis
 priority: p0

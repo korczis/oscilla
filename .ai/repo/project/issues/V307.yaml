@@ -1,5 +1,7 @@
 id: V307
 milestone: M012
+serves:
+  - "v3-measure#analysis-off-main-thread"
 title: "AudioWorklet and Worker spike"
 slug: audioworklet-and-worker-spike
 priority: p1

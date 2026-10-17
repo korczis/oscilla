@@ -1,5 +1,7 @@
 id: V211
 milestone: M008
+serves:
+  - "v2-laboratory#engine-plays-and-releases"
 title: "Generator panel"
 slug: generator-panel
 priority: p0

@@ -1,5 +1,7 @@
 id: V217
 milestone: M008
+serves:
+  - "v2-laboratory#filter"
 title: "Filter lab"
 slug: filter-lab
 priority: p0

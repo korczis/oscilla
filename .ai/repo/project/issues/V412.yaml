@@ -1,5 +1,8 @@
 id: V412
 milestone: M023
+serves:
+  - "v31-studio#exact-undo-redo"
+  - "v31-studio#subgraph-paste"
 title: "Selection, clipboard and shortcuts"
 slug: selection-clipboard-and-shortcuts
 priority: p1

@@ -1,5 +1,7 @@
 id: S050
 milestone: M004
+serves:
+  - "v1-instrument#visuals-and-interface"
 title: "§50 Live technical metrics"
 slug: live-technical-metrics
 priority: p1

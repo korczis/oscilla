@@ -1,5 +1,7 @@
 id: V421
 milestone: M027
+serves:
+  - "v31-studio#one-store-projections"
 title: "Compact Studio widget"
 slug: compact-studio-widget
 priority: p1

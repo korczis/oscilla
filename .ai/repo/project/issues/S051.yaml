@@ -1,5 +1,7 @@
 id: S051
 milestone: M004
+serves:
+  - "v1-instrument#visuals-and-interface"
 title: "§51 Device limits panel"
 slug: device-limits-panel
 priority: p1

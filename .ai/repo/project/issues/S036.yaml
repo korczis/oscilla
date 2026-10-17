@@ -1,5 +1,7 @@
 id: S036
 milestone: M003
+serves:
+  - "v1-instrument#dual-oscillator"
 title: "§36 Beating / interference"
 slug: beating-interference
 priority: p1

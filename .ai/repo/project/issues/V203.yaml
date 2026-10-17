@@ -1,5 +1,7 @@
 id: V203
 milestone: M007
+serves:
+  - "v2-laboratory#v1-frozen"
 title: "Freeze V1 behaviour"
 slug: freeze-v1-behaviour
 priority: p0

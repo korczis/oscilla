@@ -1,5 +1,7 @@
 id: V375
 milestone: M019
+serves:
+  - "v3-measure#measurement-workbench"
 title: "Accessibility"
 slug: accessibility
 priority: p1

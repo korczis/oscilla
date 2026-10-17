@@ -1,5 +1,7 @@
 id: V413
 milestone: M023
+serves:
+  - "v31-studio#one-store-projections"
 title: "Inspector"
 slug: inspector
 priority: p1

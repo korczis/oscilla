@@ -1,5 +1,7 @@
 id: R017
 milestone: M011
+serves:
+  - "release-provenance#public-release-verified"
 title: "Post-deploy audit"
 slug: post-deploy-audit
 priority: p0

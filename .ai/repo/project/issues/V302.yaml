@@ -1,5 +1,7 @@
 id: V302
 milestone: M012
+serves:
+  - "v3-measure#algorithm-ids"
 title: "Measurement architecture and ADRs"
 slug: measurement-architecture-and-adrs
 priority: p1

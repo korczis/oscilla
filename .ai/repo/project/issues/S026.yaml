@@ -1,5 +1,7 @@
 id: S026
 milestone: M002
+serves:
+  - "v1-instrument#visuals-and-interface"
 title: "§26 Wave mode"
 slug: wave-mode
 priority: p1

@@ -1,5 +1,7 @@
 id: V401
 milestone: M021
+serves:
+  - "v31-studio#self-knowledge"
 title: "Studio current-state audit"
 slug: studio-current-state-audit
 priority: p1

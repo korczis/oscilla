@@ -1,5 +1,7 @@
 id: S002
 milestone: M001
+serves:
+  - "v1-instrument#public-from-file-and-pages"
 title: "§2 Tech stack"
 slug: tech-stack
 priority: p1

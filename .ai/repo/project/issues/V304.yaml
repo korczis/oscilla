@@ -1,5 +1,7 @@
 id: V304
 milestone: M012
+serves:
+  - "v3-measure#transfer-function"
 title: "Stimulus abstraction and noise"
 slug: stimulus-abstraction-and-noise
 priority: p1

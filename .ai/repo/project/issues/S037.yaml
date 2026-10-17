@@ -1,5 +1,7 @@
 id: S037
 milestone: M003
+serves:
+  - "v1-instrument#dual-oscillator"
 title: "§37 Binaural demo"
 slug: binaural-demo
 priority: p1

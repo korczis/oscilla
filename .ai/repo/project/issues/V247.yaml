@@ -1,5 +1,7 @@
 id: V247
 milestone: M010
+serves:
+  - "v2-laboratory#layout-and-accessibility"
 title: "Restore the safety notice"
 slug: restore-the-safety-notice
 priority: p0

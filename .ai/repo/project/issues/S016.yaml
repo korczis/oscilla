@@ -1,5 +1,8 @@
 id: S016
 milestone: M001
+serves:
+  - "v1-instrument#engine-plays-and-releases"
+  - "v1-instrument#patterns-preserved"
 title: "§16 Audio scheduling"
 slug: audio-scheduling
 priority: p1

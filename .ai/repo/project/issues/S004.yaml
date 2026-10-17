@@ -1,5 +1,7 @@
 id: S004
 milestone: M001
+serves:
+  - "v1-instrument#engine-plays-and-releases"
 title: "§4 Core product modes"
 slug: core-product-modes
 priority: p1

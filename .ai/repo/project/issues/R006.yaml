@@ -1,5 +1,7 @@
 id: R006
 milestone: M011
+serves:
+  - "release-provenance#gate-runs-every-suite"
 title: "Visual regression gate"
 slug: visual-regression-gate
 priority: p0

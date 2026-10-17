@@ -1,5 +1,7 @@
 id: V221
 milestone: M008
+serves:
+  - "v2-laboratory#bioacoustics"
 title: "Bioacoustics"
 slug: bioacoustics
 priority: p0

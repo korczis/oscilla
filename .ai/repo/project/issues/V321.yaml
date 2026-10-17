@@ -1,5 +1,7 @@
 id: V321
 milestone: M014
+serves:
+  - "v3-measure#transfer-function"
 title: "Transfer-function DSP"
 slug: transfer-function-dsp
 priority: p1

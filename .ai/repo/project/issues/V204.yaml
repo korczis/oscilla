@@ -1,5 +1,7 @@
 id: V204
 milestone: M007
+serves:
+  - "v2-laboratory#single-file-build"
 title: "Build system"
 slug: build-system
 priority: p0
