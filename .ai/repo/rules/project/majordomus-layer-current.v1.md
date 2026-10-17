@@ -49,14 +49,16 @@ layer is judged by two tools.
   `knowledge` job installs the pinned archive by digest and tests that the installed version
   is the pinned one.
 - `tests/unit/majordomus-pin.test.mjs`, run by `npm test` in the CI `unit` job, runs that
-  script on fixture versions (a match passes; `MJ_VERSION` 0.12.0 against `majordomus
-  0.13.2` exits 1 and prints the procedure) and asserts `npm run verify` chains it before
-  doctor.
+  script on fixture versions (a match passes; a pin and a local version that differ exit 1
+  and print the procedure) and asserts `npm run verify` chains it before doctor.
 - `.github/doctor-verdict.jq`, the verdict of the CI `knowledge` job, fails on any doctor
   line whose message says the policy "declares no" or "is missing required key".
-  `tests/unit/ci-knowledge-job.test.mjs` runs the verdict on the line doctor 0.13.2 printed
-  for this repository, with no FAIL beside it, and asserts the policy declares the
-  `knowledge:` block.
+  `tests/unit/ci-knowledge-job.test.mjs` runs the verdict on doctor output captured from
+  the pinned Majordomus for this repository with the `knowledge:` block removed (the WARN
+  line and the stderr wording, with no FAIL beside them, and the hook-wiring FAIL lines a
+  runner prints), and asserts the policy declares the `knowledge:` block. The captured lines
+  carry the version they came from; a pin change that alters the line format is caught when
+  the fixture is captured again, not by the pin change itself.
 
 # Failure behaviour
 

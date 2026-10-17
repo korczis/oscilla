@@ -88,7 +88,7 @@ session:
 # without it doctor printed "policy is missing required key knowledge.candidates_max_files"
 # as a WARN that CI ignored while candidates piled up untracked. The CI verdict
 # (.github/doctor-verdict.jq) now fails on a missing required key
-# (project.majordomus-layer-current). The values are the ones the 0.13.2 skeleton ships.
+# (project.majordomus-layer-current). The values are the ones the Majordomus skeleton ships.
 knowledge:
   candidates_max_files: 40               # more candidates than this awaiting review is a WARN
   candidate_max_age_minutes: 20160       # 14d: a candidate this old was ignored, not reviewed

@@ -71,6 +71,11 @@ has to resolve to something that runs.
   comment line before a file's first line of code ("runs it", "executes it", "run by",
   "executed by", "runs in") and checks each claim against the workflow, read the same way,
   and against `package.json`.
+- "rules name no planned proof and no Majordomus version but the pinned one" reads each
+  active rule's `# Enforcement` (or `# Verification`) section and `docs/WORKTREES.md`: a
+  proof the section calls planned is not enforcement, and a `majordomus` or `doctor` version other than
+  `MJ_VERSION` of `.github/workflows/ci.yml` describes a tool CI does not run. History
+  outside those sections (a rationale's "under 0.13.2 doctor printed ...") is not judged.
 - Each has a mutation test beside it: a rule naming a test file that does not exist, an npm
   script alone, a script only a comment or an upload path names, a helper with no test, and
   a blocking rule resting on `reviewed_because`; an index with a row removed, a stale class
