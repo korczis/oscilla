@@ -1,0 +1,82 @@
+intent: release-provenance
+reviewed_at: "62cccb363c9b71e22c2df311a6222012761df04c"
+reviewed_by: "claude-opus-5.5 (critic, oscilla-35 session)"
+findings:
+  - id: evidence-never-recorded
+    class: delivery_verification
+    subject: "M011"
+    finding: "No criterion of this intent can ever read met under Majordomus 0.29. Five of six are command criteria, which the ledger never derives (majordomus intent explain: evidence of a kind the ledger cannot derive), and the sixth is claim single-file-build, whose node --test run Majordomus cannot record (majordomus evidence claim: unrunnable, no runner in this repository drives it). M011 is DONE and the intent reads verifying 0/6 permanently: closing the work cannot move it, and nothing in the plan says so. The remedy is the post-alpha Majordomus request for recording node --test and Playwright runs; until it lands, the proof of every criterion is the CI run, which no criterion names."
+    blocking: false
+    resolution:
+      state: open
+  - id: one-version-two-artifacts
+    class: missed_requirement
+    subject: "release-provenance#public-release-verified"
+    finding: "The statement can be false while every criterion reads met. The public page reads version 3.10.3 but is commit 964e25d (verify-deploy at 62cccb3: region.commit 964e25d, digest cc7af440), 155 commits and +3864/-314 lines of src/ and dist/ after the v3.10.3 tag (e4772ee, 2026-10-06). Every main merge is deployed and stamped channel production with the unchanged package.json version, and node scripts/release-cadence.mjs reports OVERDUE: 120 releasable commits since v3.10.3, the oldest 269.4 h old, against the 24 h of project.deploy-often. So one version string names at least two different public artifacts, and the v3.10.3 GitHub Release asset is not what Pages serves. test:live checks that the status bar, window.OSCILLA.version and the region agree with each other, never that the page served under a release version is that release's artifact. No criterion compares the served bytes with the release/v1 record's sha256 of the version the page names."
+    blocking: false
+    resolution:
+      state: open
+  - id: v2-release-undecidable
+    class: delivery_verification
+    subject: "R016"
+    finding: "The statement ends with: v2.0.0 is tagged, released and verified at the public URL. The only criterion that could decide it, public-release-verified, runs npm run test:live, which tests whatever Pages serves today (the 3.10 line). v2.0.0 has no release/v1 record (records start at v3.4.0, a non-goal of this intent), so the v2.0.0 clause is decided only by the evidence recorded on R016, which no criterion references. The clause is historical, and no current evidence can make it true or false."
+    blocking: false
+    resolution:
+      state: open
+  - id: verify-deploy-is-commit-bound
+    class: unproven_assumption
+    subject: "release-provenance#fatal-deploy-verification"
+    finding: "npm run release:verify-deploy compares the public page with the checkout it runs in. At 62cccb3 it fails all 10 attempts (5 problems: bytes, artifact, commit, date, digest) because Pages serves 964e25d; it can pass only at the one commit Pages serves. And a pass shows that the current deployment matches, not that a mismatch is fatal. Fatality is a property of .github/workflows/pages.yml (the verify-deploy step fails the workflow before the live smoke) and of tests/unit/release-provenance.test.mjs (verify-deploy: every mismatch is a problem); the criterion names neither."
+    blocking: false
+    resolution:
+      state: open
+  - id: determinism-claim-is-a-toy
+    class: unproven_assumption
+    subject: "release-provenance#deterministic-build"
+    finding: "Claim single-file-build is proven by tests/unit/pack-single-file.test.mjs, whose determinism case asserts pack(o) === pack(o) on a five-field toy input inside one process. It never runs esbuild, never builds the real source twice and never compares across machines. The real proof is npm run build:check (in npm run verify and in pages.yml), which rebuilds and compares with the committed dist. The criterion should name that command or a claim whose test runs it."
+    blocking: false
+    resolution:
+      state: open
+  - id: gate-omits-live-smoke
+    class: insufficient_work
+    subject: "release-provenance#gate-runs-every-suite"
+    finding: "npm run release-gate (verify, then test:release) does not run test:live (tests/browser/live-smoke.cjs), the only suite that exercises the public page."
+    blocking: false
+    resolution:
+      state: rejected
+      because: "project.release-flow-complete puts live verification after publish: a pre-publish gate cannot test a page that does not exist yet. Since #146, .github/workflows/pages.yml runs test:live in three browsers after verify-deploy on every deployment, and a failure fails the workflow."
+  - id: gate-omits-performance
+    class: insufficient_work
+    subject: "release-provenance#gate-runs-every-suite"
+    finding: "test:perf (tests/browser/perf-budgets.cjs) is outside the release gate, classed a diagnostic by docs/v4/performance.md, which is neither an ADR nor a rule. The suite has already found an open P1 regression no gate catches (docs/v4/completion-ledger.md P1b: selecting one of 500 experiments re-evaluates every row, 64/191/116 ms per click in Chromium/Firefox/WebKit; the list is not windowed). Every authoritative suite therefore means every suite somebody chose to call authoritative, and the criterion cannot tell."
+    blocking: false
+    resolution:
+      state: open
+  - id: doctor-is-not-knowledge
+    class: unproven_assumption
+    subject: "release-provenance#majordomus-knows-the-product"
+    finding: "majordomus doctor checks that the layer is well formed (0 failures at 62cccb3, with a WARN that it took 48 s against a 20 s budget); it does not answer what OSCILLA is and why. It passes while seven plan records (issues V314, V371, V382, V384, V385, V386, V433) and docs/CLAIMS.yaml (line 466, a colon followed by a space inside the plain scalar of the connected-records note) are not valid YAML to a conforming parser (PyYAML rejects all eight; Majordomus reads them leniently), and while all 57 ADRs are still proposed, so the why it serves has never been accepted. A product could lose every feature record and doctor would still pass."
+    blocking: false
+    resolution:
+      state: open
+  - id: receipt-binding-has-no-criterion
+    class: missed_requirement
+    subject: "release-provenance#gate-runs-every-suite"
+    finding: "The invariant that the gate receipt binds version, source digest, dist sha256 and gate tree (project.release-receipt-binds-gate) has no criterion and no claim. It is enforced by tests/unit/release-publish.test.mjs inside npm test, so the intent never reads it. The rule's own rationale records that a release (v3.10.3) was published on a tree the gate never ran before gateTree existed: exactly the failure the title (no release reaches Pages ungated) is about."
+    blocking: false
+    resolution:
+      state: open
+  - id: version-check-excludes-ai
+    class: unproven_assumption
+    subject: "release-provenance#one-version-authority"
+    finding: "The criterion says no copy of the current version exists outside package.json; npm run version:check excludes the lock root, dist/, CHANGELOG.md and the whole of .ai/. A hard-coded current version in an intent, an issue's evidence or a release record is invisible to it, and .ai/ is the layer this intent says answers what OSCILLA is."
+    blocking: false
+    resolution:
+      state: open
+  - id: deployment-record-decided-elsewhere
+    class: surface_missing
+    subject: "release-provenance#public-release-verified"
+    finding: "The non-goal says deployment/v1 has no shape for a static Pages site. ADR 0057 (proposed 2026-10-17) decides where that evidence lives instead: the release/v1 record plus the Pages run. The intent's governance omits ADR 0057, so public-release-verified still relies on a by-hand smoke rather than on the record that release:record --check compares with what GitHub serves."
+    blocking: false
+    resolution:
+      state: open

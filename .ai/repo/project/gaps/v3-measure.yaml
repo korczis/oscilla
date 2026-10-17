@@ -1,0 +1,155 @@
+intent: v3-measure
+observed_at: "62cccb363c9b71e22c2df311a6222012761df04c"
+recorded_by: "claude-opus-5.5 (critic, oscilla-35 session)"
+recorded_at: "2026-10-18"
+observations:
+  - id: verify-at-head
+    statement: "npm run verify passes at 62cccb3: 2869 unit tests, 0 failed, 0 skipped (the v3-* and v4-* measurement, calibration, experiment and quality suites among them); doctor 0 failures."
+    source: "command:npm run verify"
+  - id: ci-at-head
+    statement: "CI run 39078375041 (PR #179, head 62cccb3): V3 measurement and UI (npm run test:measure: v3-measure.cjs, analysis-worker.cjs, v3-ui.cjs, file:// and /oscilla/) succeeded in chromium, firefox and webkit, as did the unit job and the Visual regression gate (MEASURE references included); the gate failed only on review-verdict."
+    source: "command:gh run view 39078375041 --json jobs"
+  - id: ledger-cannot-derive
+    statement: "majordomus intent explain v3-measure: executing, 0 of 20 criteria met; every claim has no recorded run and both commands are not derivable."
+    source: "command:majordomus intent explain v3-measure"
+  - id: claim-unrunnable
+    statement: "majordomus evidence claim transfer-function reports state unrunnable."
+    source: "command:majordomus evidence claim transfer-function"
+  - id: v386-open
+    statement: "V386 (Release 3.0.0 and public verification) is READY, not DONE; its last evidence (3a9f762) leaves unmet the release/v1 record of v3.0.0, whose GitHub Release has no asset, and records that rc-first (spec 233) can no longer become true (ADR 0047, proposed)."
+    source: "file:.ai/repo/project/issues/V386.yaml"
+  - id: v4-claims
+    statement: "docs/CLAIMS.yaml holds guaranteed measurement claims that no criterion of any intent names: level-calibration-bound-to-input, measurable-stimulus-only, experiment-calibration-as-measured, experiment-run-immutable, semantic-run-comparison, experiment-definitions, run-evidence, findings-linked-to-evidence and connected-records."
+    source: "file:docs/CLAIMS.yaml"
+  - id: v4-ledger-defects
+    statement: "The v4 ledger records V3 results that were false before 3.9.2 and the measurement-truth change: D1/D2 (calibration recorded at Save, closed #121), C1 (an unbound level calibration applied to every input, closed #139), D4 (five unrunnable stimulus kinds accepted, Repeat ran a log sweep, closed #139) and W7f (CALIBRATED for an unchecked input, closed #169)."
+    source: "file:docs/v4/completion-ledger.md"
+  - id: explorer-missing
+    statement: "Ledger item 7 (Why trust the method? on a saved experiment, ADR 0051) is MISSING: no file under src/ contains the phrase; ADR 0051 is proposed."
+    source: "command:grep -rln 'Why trust' src"
+  - id: synthetic-only
+    statement: "The notes of transfer-function and studio-experiment-provenance say the proofs use synthetic systems with known answers, a BiquadFilterNode loopback and the TEST CONTEXT loopback, and that no automated test proves how a physical speaker, room or microphone behaves."
+    source: "file:docs/CLAIMS.yaml"
+  - id: persistence-fake
+    statement: "experiment-persistence is proven on an in-process IndexedDB fake; the browser check persistence reads the record back or reports the memory fallback."
+    source: "file:docs/CLAIMS.yaml"
+  - id: public-is-main
+    statement: "Pages serves commit 964e25d labelled 3.10.3, 155 commits after the v3.10.3 tag, with the v4.0 work; no -rc tag exists."
+    source: "command:npm run release:verify-deploy && git tag --list '*rc*'"
+conditions:
+  - criterion: algorithm-ids
+    state: satisfied
+    observations:
+      - verify-at-head
+  - criterion: analysis-off-main-thread
+    state: satisfied
+    observations:
+      - ci-at-head
+  - criterion: calibration-profiles
+    state: satisfied
+    observations:
+      - verify-at-head
+      - ci-at-head
+  - criterion: spl-only-with-calibration
+    state: satisfied
+    because: "Holds at 62cccb3 with the C1 binding (level-calibration-bound-to-input); before #139 the same criterion read met while a calibration applied to the wrong input."
+    observations:
+      - verify-at-head
+      - ci-at-head
+      - v4-ledger-defects
+  - criterion: transfer-function
+    state: satisfied
+    because: "Within tolerance on synthetic systems and a browser loopback; never on an acoustic path."
+    observations:
+      - verify-at-head
+      - ci-at-head
+      - synthetic-only
+  - criterion: impulse-response
+    state: satisfied
+    observations:
+      - verify-at-head
+  - criterion: rta-bands
+    state: satisfied
+    observations:
+      - verify-at-head
+  - criterion: experiment-round-trip
+    state: satisfied
+    observations:
+      - verify-at-head
+  - criterion: reproducible-experiments
+    state: satisfied
+    because: "Records carry recipe, devices, calibration, sample rate, runs, quality, algorithm ids, version and build with result hashes; a calibration is recorded by id and name, not by its points."
+    observations:
+      - verify-at-head
+      - ci-at-head
+  - criterion: experiment-persistence
+    state: unknown
+    because: "The IndexedDB path is shown on a fake, and the browser check also passes on the memory fallback; whether a real browser persisted to IndexedDB is not observed."
+  - criterion: experiment-import-validated
+    state: satisfied
+    observations:
+      - verify-at-head
+      - ci-at-head
+  - criterion: measurement-comparison
+    state: satisfied
+    observations:
+      - verify-at-head
+      - ci-at-head
+  - criterion: measurement-quality
+    state: satisfied
+    observations:
+      - verify-at-head
+  - criterion: aggregate-primary-response
+    state: satisfied
+    observations:
+      - verify-at-head
+  - criterion: measurement-workbench
+    state: satisfied
+    because: "loopback-workflow and output-exclusive passed in three browsers on both origins; guided and expert modes, accessibility and visual acceptance are not what they check."
+    observations:
+      - ci-at-head
+  - criterion: abort-releases-everything
+    state: satisfied
+    observations:
+      - ci-at-head
+      - verify-at-head
+  - criterion: measure-from-file-and-subpath
+    state: satisfied
+    observations:
+      - ci-at-head
+  - criterion: no-fake-science
+    state: satisfied
+    observations:
+      - verify-at-head
+  - criterion: product-graph
+    state: satisfied
+    observations:
+      - verify-at-head
+  - criterion: public-release-verified
+    state: conflicting
+    because: "The page names 3.10.3 and its commit, but serves an unreleased main commit, not a 3.x release artifact; V386 is still open; test:live was not run in this review."
+    observations:
+      - public-is-main
+      - v386-open
+risks:
+  - "The v4.0 fixes to V3 truth (C1, D1/D2, D4, W7f) are held by claims no intent reads; a regression of them would leave every criterion of this intent met, as the original defects did."
+  - "No acoustic measurement is ever automated, so latency, drift and room noise are untested inputs to a quality model that claims to say how far results can be trusted."
+  - "V386 cannot become DONE as written (rc-first is impossible) and its remaining part needs the owner's approval to modify a published release."
+work:
+  - id: adopt-v4-truth-claims
+    title: "Make the guaranteed v4 measurement claims (level-calibration-bound-to-input, measurable-stimulus-only, experiment-calibration-as-measured, experiment-run-immutable) criteria of an intent, with a milestone for the v4.0 work"
+    serves:
+      - spl-only-with-calibration
+      - reproducible-experiments
+      - experiment-import-validated
+  - id: result-layer-claims
+    title: "State the raw, calibrated, normalized and smoothed views, the reliability masks, non-destructive windowing and CSV export as claims"
+    serves:
+      - transfer-function
+      - impulse-response
+      - measurement-quality
+  - id: v300-record
+    title: "Attach the v3.0.0 dist to its GitHub Release and write its release/v1 record, with the owner's approval"
+    serves:
+      - public-release-verified
+    issue: "V386"

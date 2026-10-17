@@ -1,0 +1,111 @@
+intent: v1-instrument
+observed_at: "62cccb363c9b71e22c2df311a6222012761df04c"
+recorded_by: "claude-opus-5.5 (critic, oscilla-35 session)"
+recorded_at: "2026-10-18"
+observations:
+  - id: verify-at-head
+    statement: "npm run verify passes at 62cccb3: 2869 unit tests, 0 failed, 0 skipped (tests/unit/freeze.test.mjs, engine.test.mjs, core.test.mjs and no-fake-science.test.mjs among them), version, build and dist checks, majordomus doctor 0 failures."
+    source: "command:npm run verify"
+  - id: ci-at-head
+    statement: "CI run 39078375041 (PR #179, head 62cccb3): V1 engine checks (tests/browser/engine-v1port.cjs) and the Browser gate (npm run test:browser: app, layout, qa-regressions, navigation, from file:// and a local /oscilla/ sub-path) succeeded in chromium, firefox and webkit; the gate failed only on review-verdict."
+    source: "command:gh run view 39078375041 --json jobs"
+  - id: ledger-cannot-derive
+    statement: "majordomus intent explain v1-instrument: verifying, 0 of 10 criteria met; every claim has no recorded run and the command criterion is not derivable."
+    source: "command:majordomus intent explain v1-instrument"
+  - id: claim-unrunnable
+    statement: "majordomus evidence claim tone-plays-and-releases reports state unrunnable: no runner in this repository drives its test."
+    source: "command:majordomus evidence claim tone-plays-and-releases"
+  - id: hold-check
+    statement: "Check hold-plays-release-zero-nodes waits until the analyser peak is within 0.01 of window.OSCILLA.app.gainLevel, requires nodes while playing, then waits for window.OSCILLA.engine.activeNodeCount to reach 0, which is the size of the engine's own node Set."
+    source: "test:tests/browser/app.cjs"
+  - id: independent-census
+    statement: "tests/browser/engine-v1port.cjs instruments AudioContext before the application loads (addInitScript) and counts what the application creates independently of the engine."
+    source: "test:tests/browser/engine-v1port.cjs"
+  - id: coverage-overloaded
+    statement: "majordomus intent coverage: engine-plays-and-releases is served by 19 issues (S004-S012, S015-S023, S056) and visuals-and-interface by 21 (S003, S025-S032, S046-S051, S053, S054, S057-S059, S063); Learn (S044, S045) serves no-fake-science and session history (S042) serves shareable-state."
+    source: "command:majordomus intent coverage"
+  - id: no-safety-claim
+    statement: "docs/CLAIMS.yaml has no claim for the hard safety limit (ADR 0005) or the voice replacement and output ceiling (ADR 0002); tests of them exist in tests/unit/engine.test.mjs, tests/unit/qa-regressions.test.mjs and tests/browser/engine-v1port.cjs."
+    source: "file:docs/CLAIMS.yaml"
+  - id: mic-fake
+    statement: "Claim microphone-analysis-only is proven by tests/unit/engine.test.mjs, which runs on a fake context and getUserMedia."
+    source: "file:docs/CLAIMS.yaml"
+  - id: spec-tail
+    statement: "Milestone M005 (sections 64-95) is PLANNED 0/33; S000 (receive the text) is not done and no intent names M005."
+    source: "command:majordomus plan status"
+  - id: public-is-v3
+    statement: "Pages serves commit 964e25d, version 3.10.3; the V1 file is frozen at a7b7a23 and tagged v1.0.0 and v1.0.1."
+    source: "command:npm run release:verify-deploy"
+conditions:
+  - criterion: engine-plays-and-releases
+    state: satisfied
+    because: "The check ran green in three browsers at 62cccb3; no audio node is read from the engine's own count, not an independent census."
+    observations:
+      - ci-at-head
+      - hold-check
+      - independent-census
+  - criterion: patterns-preserved
+    state: satisfied
+    because: "The freeze replay of the golden vectors ran in npm test with 0 skipped; it fails rather than skips in CI without the freeze files."
+    observations:
+      - verify-at-head
+      - ci-at-head
+  - criterion: sweep-mode
+    state: satisfied
+    because: "Check pattern-select-plays-sweep passed in three browsers (200 Hz to 4 kHz in 2 s, not the 20 Hz to 20 kHz default)."
+    observations:
+      - ci-at-head
+  - criterion: dual-oscillator
+    state: satisfied
+    observations:
+      - ci-at-head
+  - criterion: presets
+    state: satisfied
+    observations:
+      - ci-at-head
+      - verify-at-head
+  - criterion: shareable-state
+    state: satisfied
+    observations:
+      - ci-at-head
+      - verify-at-head
+  - criterion: microphone-analysis
+    state: satisfied
+    because: "Shown on a fake context and on Playwright's fake device: the constraints are requested and the graph is wired; that a browser honours them is not observed."
+    observations:
+      - verify-at-head
+      - ci-at-head
+      - mic-fake
+  - criterion: no-fake-science
+    state: satisfied
+    observations:
+      - verify-at-head
+  - criterion: visuals-and-interface
+    state: satisfied
+    because: "The four suites of test:browser passed in three browsers; none of them states the six visualization modes or the frequency map as a claim."
+    observations:
+      - ci-at-head
+      - coverage-overloaded
+  - criterion: public-from-file-and-pages
+    state: satisfied
+    because: "Observed from file:// and from a local server at /oscilla/, which emulates the Pages sub-path; the public URL serves the 3.10 line, not V1."
+    observations:
+      - ci-at-head
+      - public-is-v3
+risks:
+  - "The safety limit and the output ceiling, the guarantees that keep a playground instrument safe, could regress while all ten criteria read met: no criterion names them."
+  - "Specification sections 64-95 are unknown; the intent's completeness is asserted without them."
+  - "A node leak outside the engine's accounting would pass hold-plays-release-zero-nodes."
+work:
+  - id: safety-claim
+    title: "Add a claim, and a criterion, for the hard safety limit and the output ceiling (ADR 0005, ADR 0002), naming the existing engine tests"
+    serves:
+      - engine-plays-and-releases
+  - id: split-engine-criterion
+    title: "Give note mode, waveforms, frequency entry and the low- and high-frequency safety sections their own claims instead of tone-plays-and-releases"
+    serves:
+      - engine-plays-and-releases
+  - id: visual-mode-claims
+    title: "State the six visualization modes and the interactive frequency map as claims whose checks run in test:browser"
+    serves:
+      - visuals-and-interface
