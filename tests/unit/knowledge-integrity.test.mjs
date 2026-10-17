@@ -21,7 +21,9 @@
 //     `project.<id>` the bootstraps, README, docs/, workflows, rules and provider templates
 //     name is a rule in force; every "CI runs it" / "run by CI" / "pages.yml executes it" /
 //     "Runs in `npm run x`" claim in the leading comments of a JavaScript file directly
-//     under tests/browser/ or scripts/ is true of the workflow or npm script it names;
+//     under tests/browser/ or scripts/ is true of the workflow or npm script it names; an
+//     active rule's enforcement section (and docs/WORKTREES.md) names no "Planned" proof and
+//     no Majordomus version other than the one CI pins;
 //   - every repository path named in the bootstraps, the .ai/ layer's protocol, rules,
 //     workflows and skills, the glossary, the README, tests/README.md (whose paths are
 //     relative to tests/), the feature front matter and the claims exists, apart from a small
@@ -41,6 +43,7 @@ import { fileURLToPath } from 'node:url';
 
 import { ALGORITHMS, isKnownAlgorithm } from '../../src/js/measurement/algorithms.js';
 import { parseClaims, staleAlgorithmIds, unquote } from './claims-parse.mjs';
+import { pinnedVersion } from '../../scripts/majordomus-pin-check.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const read = (rel) => readFileSync(path.join(ROOT, rel), 'utf8');
@@ -545,6 +548,75 @@ test('mutation: a rule naming a missing test, an unrun file or no mechanism is r
   assert.deepEqual(problems({ status: 'deprecated', body: '' }), [],
     'a deprecated rule is history');
 });
+
+// ---------------------------------------------------------------- enforcement text current
+// A proof that is "Planned" is not enforcement, and a mechanism described by the behaviour of
+// a Majordomus version CI no longer pins describes a tool nobody runs. Both were found in
+// rules whose planned proofs had landed and whose doctor was sixteen minor releases old.
+
+const PINNED_MAJORDOMUS = pinnedVersion(read('.github/workflows/ci.yml'));
+// "majordomus 0.13.2", "doctor 0.13.2", "Majordomus version 0.13.2", and a bare "Version 0.13.2",
+// which in an enforcement text is the tool's: product versions there are written v3.2.0.
+const TOOL_VERSION = new RegExp(String.raw`(?:\b(?:[Mm]ajordomus|doctor)\`?\s+(?:[Vv]ersion\s+)?v?`
+  + String.raw`|\b[Vv]ersion\s+)(\d+\.\d+\.\d+(?:-[\w.]+)?)\b`, 'g');
+const PLANNED = /\bPlanned\b|\bplanned \(/;
+// Documents outside the rules that describe how a rule is enforced, read whole.
+const ENFORCEMENT_DOCUMENTS = ['docs/WORKTREES.md'];
+
+/** Majordomus versions a text names that are not the pinned one: ['0.13.2', ...]. */
+export function staleToolVersions(text, pinned = PINNED_MAJORDOMUS) {
+  const prose = text.replace(/\s+/g, ' ');
+  return [...new Set([...prose.matchAll(TOOL_VERSION)].map(([, v]) => v))]
+    .filter((v) => v !== pinned);
+}
+
+/** What is out of date in how one rule describes its enforcement; [] when current. */
+export function enforcementTextProblems(rel, text, pinned = PINNED_MAJORDOMUS) {
+  const fm = frontMatter(rel, text);
+  if (fm.status !== 'active') return [];
+  const body = section(text, ['Enforcement', 'Verification']);
+  if (body === null) return [];
+  const problems = staleToolVersions(body, pinned).map((v) => `${rel}: its enforcement `
+    + `describes Majordomus ${v}, and CI pins ${pinned}; describe what the pinned tool does `
+    + 'without naming a version, or name the pinned one');
+  if (PLANNED.test(body.replace(/\s+/g, ' '))) {
+    problems.push(`${rel}: its enforcement names a planned proof; a proof that does not exist `
+      + 'is not enforcement. Name the test that exists, or say what no check holds');
+  }
+  return problems;
+}
+
+test('rules name no planned proof and no Majordomus version but the pinned one', () => {
+  assert.ok(PINNED_MAJORDOMUS, 'MJ_VERSION is read from .github/workflows/ci.yml');
+  const bad = [
+    ...RULE_FILES.flatMap((rel) => enforcementTextProblems(rel, read(rel))),
+    ...ENFORCEMENT_DOCUMENTS.flatMap((rel) => staleToolVersions(read(rel))
+      .map((v) => `${rel}: describes Majordomus ${v}, and CI pins ${PINNED_MAJORDOMUS}`)),
+  ];
+  assert.deepEqual(bad, [], `enforcement described out of date:\n  ${bad.join('\n  ')}`);
+});
+
+test('mutation: a planned proof or a stale doctor version in an enforcement section is refused',
+  () => {
+    const rel = '.ai/repo/rules/project/fixture-rule.v1.md';
+    const problems = (body) => enforcementTextProblems(rel, FIXTURE_RULE({ body }), '9.9.9');
+    assert.deepEqual(problems('\n# Enforcement\n\n`majordomus doctor` 9.9.9 fails it.\n'), []);
+    assert.match(problems('\n# Enforcement\n\n`majordomus doctor` 0.13.2 fails it.\n')
+      .join('\n'), /describes Majordomus 0\.13\.2, and CI pins 9\.9\.9/);
+    assert.match(problems('\n# Verification\n\nUnder Majordomus\n0.13.2 it fails.\n').join('\n'),
+      /describes Majordomus 0\.13\.2/, 'across a line break');
+    assert.match(problems('\n# Enforcement\n\n`majordomus doctor` reads the hook. Version 1.0.0 '
+      + 'fails a checkout.\n').join('\n'), /describes Majordomus 1\.0\.0/, 'a bare "Version"');
+    assert.match(problems('\n# Verification\n\nPlanned (V430): a browser test.\n').join('\n'),
+      /names a planned proof/);
+    assert.deepEqual(problems('\n# Rationale\n\nUnder 0.13.2 doctor printed a WARN.\n'
+      + '\n# Enforcement\n\n`tests/unit/knowledge-integrity.test.mjs`.\n'), [],
+    'history outside the enforcement section is not judged');
+    assert.deepEqual(staleToolVersions('majordomus 0.29.0 and doctor 0.13.2', '0.29.0'),
+      ['0.13.2']);
+    assert.deepEqual(staleToolVersions('the v3.2.0 release, 1.2.3 of anything', '0.29.0'), [],
+      'a product version or a number with no tool beside it is not read');
+  });
 
 // A rule id in prose: `project.` and hyphenated words. Every id carries a hyphen (checked
 // with the front matter above), which keeps `project.yaml` and `project.name` out.
