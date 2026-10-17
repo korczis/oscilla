@@ -8,6 +8,7 @@ invariants:
   - "The release gate includes a visual regression check with per-region thresholds measured from run-to-run variance (ADR 0029)"
 milestones:
   - M011
+  - M035
 satisfaction:
   - id: one-version-authority
     criterion: "No hard-coded copy of the current product version exists outside package.json"
