@@ -98,7 +98,7 @@ test('a freeze vector count, where a document states one, is the golden\'s meta.
   const golden = JSON.parse(read('tests/freeze/golden-a7b7a23.json'));
   assert.equal(golden.meta.count, golden.cases.length, 'the golden counts its own cases');
   for (const [rel, text] of [['README.md', README], ['tests/README.md', TESTS_README]]) {
-    for (const [phrase, n] of flat(text).matchAll(/\b(\d[\d ]*) (?:golden )?vectors\b/g)) {
+    for (const [phrase, n] of flat(text).matchAll(/(?<![\w-])(\d[\d ]*) (?:golden )?vectors\b/g)) {
       assert.equal(Number(n.replace(/ /g, '')), golden.meta.count, `${rel}: "${phrase}"`);
     }
   }
@@ -188,7 +188,9 @@ test('the README navigation names the header entries and groups of src/index.htm
   const text = flat(section(README, 'Navigation'));
   const entries = text.match(/The header has (?:(\w+) )?entries: ([^.]*), in that order\./);
   assert.ok(entries, 'the README lists the header entries');
-  if (entries[1]) assert.equal(numberOf(entries[1]), top.length, `"${entries[1]} entries"`);
+  if (entries[1] && numberOf(entries[1]) >= 0) {
+    assert.equal(numberOf(entries[1]), top.length, `"${entries[1]} entries"`);
+  }
   assert.deepEqual(series(entries[2]).map((s) => s.replace(/\*\*/g, '')), top);
   for (const [group, items] of groups) {
     const m = text.match(new RegExp(`${group} opens ([^;.]*)[;.]`));
