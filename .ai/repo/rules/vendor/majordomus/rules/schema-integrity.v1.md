@@ -20,8 +20,8 @@ x-majordomus:
 
 # Rationale
 
-Two things this repository relies on were true only because the code happened to do them,
-and neither was written anywhere a person could read.
+Two things the Majordomus repository, where this rule was written, relied on were true only
+because the code happened to do them, and neither was written anywhere a person could read.
 
 The first is the order the rules apply in. A rule set where the order is an accident of
 loading is a rule set nobody can reason about: which of two rules wins is answerable only by
@@ -29,11 +29,12 @@ running it, and a change to the loader silently changes what the repository mean
 is a contract, so it belongs in a rule and not only in `lib/rules.sh`.
 
 The second is that a schema is optional. A kind may be declared with no `schema:`, and its
-metadata is then carried through unvalidated — quietly, with no finding, looking exactly like
-a kind that validates. Every unschema'd kind is a place where a typo in front matter becomes
+metadata is then carried through unvalidated — quietly, with no finding, looking exactly like a
+kind that validates. Every unschema'd kind is a place where a typo in front matter becomes
 data. The same hole exists in the other direction: a schema file that no kind names describes
 nothing, is never applied, and drifts away from the shape it was written for without anything
-noticing. This repository has four such files today, which is how the hole was found.
+noticing. The Majordomus repository had four such files when this rule was written, which is
+how the hole was found.
 
 And a path under the AI layer that no source claims is read by nothing and validated by
 nothing, while looking from the outside like part of the layer.

@@ -38,6 +38,13 @@ graph does not see it, no surface serves it, and a second checkout will never re
 is named so the person adds it beside the session record, which is what the deriver's own
 output already asks for.
 
+That remedy is a commit, and a trunk that changes only through pull requests cannot make
+one. So on the trunk the deriver does not write into `candidates/` at all: it stages the
+candidate, with the episode's session record, in the checkout-local outbox
+`.ai/local/state/outbox/`, and the next episode boundary on another branch of the clone moves
+it into `candidates/`, where that branch's pull request carries it to the trunk (ADR 0091 and
+its amendment). This rule never asks the trunk for a commit it cannot make.
+
 # Required behaviour
 
 Candidates are reviewed, not accumulated. More records with `status: candidate` than
@@ -46,6 +53,13 @@ Candidates are reviewed, not accumulated. More records with `status: candidate` 
 does not track, is a finding that names them. Both numbers are declared once in the policy
 and read by every surface; a superseded record stays under `candidates/` and counts toward
 neither.
+
+A candidate staged in the outbox is not under `candidates/`, so it is neither counted nor
+reported as untracked here. It is not hidden: until a branch carries it, `context` prints a
+line and `doctor` an `INFO` finding `outbox` under the category `clone`, each naming how many
+session records and candidates wait in `.ai/local/state/outbox/`. A file there that is not a
+record is left in place and named on standard error by the episode that would have carried
+it, and is counted until a person moves or removes it.
 
 Review age is the age of the queue entry, not of the evidence. It is measured from the
 oldest `knowledge.derived` line whose paths name the file, falling back to the commit that

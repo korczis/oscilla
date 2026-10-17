@@ -28,12 +28,12 @@ from the trunk, unpublished and unverified, and the record will say completed. T
 implemented, committed, pushed, integrated and deployed name different facts, and a report
 that treats them as one is not a report.
 
-The second half is staleness. Evidence that cannot expire is a claim about the past
-presented as a claim about the present: a test result recorded before a change says nothing
-about the tree that exists after it. This repository already solved that for its website,
-by hashing the inputs a derived artifact was built from and recomputing the hash to decide
-whether the artifact is current. An obligation's evidence is the same shape of fact and is
-judged the same way.
+The second half is staleness. Evidence that cannot expire is a claim about the past presented
+as a claim about the present: a test result recorded before a change says nothing about the
+tree that exists after it. The Majordomus repository, where this rule was written, had already
+solved that for its website, by hashing the inputs a derived artifact was built from and
+recomputing the hash to decide whether the artifact is current. An obligation's evidence is the
+same shape of fact and is judged the same way.
 
 The third part follows from the second. Where the fact is one the tool can hold — the tree
 is clean, the remote has the commit, the trunk reaches it, the published site serves it — a

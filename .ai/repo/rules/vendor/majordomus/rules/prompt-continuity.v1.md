@@ -29,11 +29,11 @@ episode id needed `state/sessions-open/<provider session>.yaml`, and closing the
 deletes that file. So from the moment an episode ended, nothing in the repository could say
 which episode its prompts belonged to.
 
-This is not a gap that widens slowly. It is total and it is immediate: the mapping exists
-while the episode is open and is gone the instant it closes, and every prompt of that episode
-becomes unattributable at once. Measured in this repository on 2026-09-11: 974 records, 80
-distinct provider sessions, 20 session contexts, and 713 prompts with no surviving path to an
-episode. The archive was a heap of text with timestamps.
+This is not a gap that widens slowly. It is total and it is immediate: the mapping exists while
+the episode is open and is gone the instant it closes, and every prompt of that episode becomes
+unattributable at once. Measured in the Majordomus repository, where this rule was written, on
+2026-09-11: 974 records, 80 distinct provider sessions, 20 session contexts, and 713 prompts
+with no surviving path to an episode. The archive was a heap of text with timestamps.
 
 An identity that lives in a file somebody else will delete is not an identity. So the record
 carries it: the episode, the provider session it came from, and the repository and worktree
