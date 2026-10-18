@@ -33,7 +33,7 @@ evidence:
     recorded_at: 2026-10-03T06:50:34Z
   - covers: verified
     type: ci
-    command: "git tag -l 'v3*' && grep -n 'MEASURE\|measure' tests/browser/live-smoke.cjs && ls .ai/repo/deployments"
+    command: 'git tag -l ''v3*'' && grep -n ''MEASURE\|measure'' tests/browser/live-smoke.cjs && ls .ai/repo/deployments'
     result: "PARTIAL (do not mark done): re-checked at 6f47ab7; v3.0.0 tagged and released, Pages verify-deploy passes. Unmet, unchanged: no rc first; no public MEASURE smoke (live-smoke.cjs now covers Playground and Studio, not MEASURE); no Majordomus release/deployment record (.ai/repo/deployments holds only its README)"
     commit: 6f47ab76768738e5b4fcd1754da68e72243e0930
     recorded_at: 2026-10-03T13:14:39Z
