@@ -247,3 +247,42 @@ test('V272 A3: muting the gate edge during playback stops the gating from the ho
   assert.ok(Math.abs(at(1.1) - at(1.4)) < 1e-9, `no gate after the clip at 1 s: ${at(1.1)} `
     + `vs ${at(1.4)}`);
 });
+
+// ---------------------------------------------------------------- B9
+
+/** The reference Envelope's VCA gain at positions `ps` with gate clips `clips` ([start, dur]). */
+function gatesAt(clips, ps) {
+  const s = setup();
+  dispatch(s, { type: 'TRACK_ADD', kind: 'event', target: 'env-1', name: 'Gate' });
+  const trackId = s.store.getModel().timeline.tracks.at(-1).id;
+  // A last gate at 20 s keeps the playback (and the envelope's schedule) alive meanwhile.
+  for (const [start, duration] of [...clips, [20, 0.5]]) {
+    dispatch(s, { type: 'CLIP_ADD', trackId, kind: 'event', start, duration,
+      payload: { action: 'gate' } });
+  }
+  const { baseTime: b } = ok(s.transport.start());
+  s.fx.advance(Math.max(...ps) + 0.1);
+  const vca = s.runtime.nodes.get('env-1').inputs.audio.gain;
+  return ps.map((p) => valueAtTime(getSchedule(vca), b + p));
+}
+
+const SUSTAIN = 0.7; // the reference Envelope's sustain (DEFAULT_ADSR)
+const near = (a, b, tol = 1e-6) => Math.abs(a - b) <= tol;
+
+test('V272 B9: a gate nested in another on one Envelope keeps it open to the outer end', () => {
+  const [p15, p21, p35] = gatesAt([[0, 4], [1, 1]], [1.5, 2.1, 3.5]);
+  assert.ok(near(p15, SUSTAIN), `inside both gates: ${p15}`);
+  assert.ok(near(p21, SUSTAIN), `after the nested gate's end: ${p21}`);
+  assert.ok(near(p35, SUSTAIN), `still inside the outer gate: ${p35}`);
+});
+
+test('V272 B9: overlapping gates on one Envelope release at the later end', () => {
+  const [p1, p15, p25, p35] = gatesAt([[0, 2], [1, 2]], [1.005, 1.5, 2.5, 3.5]);
+  assert.ok(near(p1, SUSTAIN), `one gate (their union): no retrigger at 1 s: ${p1}`);
+  assert.ok(near(p15, SUSTAIN) && near(p25, SUSTAIN), `open from 0 to 3 s: ${p15}, ${p25}`);
+  assert.ok(p35 < 0.05, `released after 3 s: ${p35}`);
+  // Touching gates stay two gates: the second retriggers at the first's end.
+  const [t05, t09] = gatesAt([[0, 0.5], [0.5, 0.5]], [0.505, 0.9]);
+  assert.ok(t05 > SUSTAIN, `the second gate's attack at 0.5 s: ${t05}`);
+  assert.ok(near(t09, SUSTAIN), `then its sustain: ${t09}`);
+});
