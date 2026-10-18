@@ -40,6 +40,9 @@
 //                        focused node (Delete removes it, not the old selection); undo /
 //                        redo, a disabled Undo button, the timeline, the compact chips and
 //                        Back never leave focus on <body>
+//   v272-c1-timeline-focus  V272 C1: Delete on a lane's only point, Remove lane, undo on the
+//                        details panel's Close and details Delete point move focus to the next
+//                        lane's add button, Automate, or the track's add button; never <body>
 //   inspector-focus      V431 U2: keyboard Enter on an Inspector connection link, "Select
 //                        source" and "Duplicate" lands on the resulting view's heading or the
 //                        same action of the copy, never <body>
@@ -197,6 +200,26 @@ const H = {
     const f = () => (++i >= k ? r() : requestAnimationFrame(f));
     requestAnimationFrame(f);
   }), n),
+  /** Where keyboard focus is: 'BODY', `node:<id>`, `key:<data-key>`, a data-osc or a tag. */
+  where: (page) => page.evaluate(() => {
+    const a = document.activeElement;
+    if (!a || a === document.body) return 'BODY';
+    return a.dataset.nodeId ? `node:${a.dataset.nodeId}` : a.dataset.key ? `key:${a.dataset.key}`
+      : a.dataset.osc || a.tagName.toLowerCase();
+  }),
+  /** Poll read() until test(value) holds, under a named deadline; the last value either way. */
+  settle: async (read, test, what, ms = 5000) => {
+    let last;
+    try {
+      return await until(async () => {
+        last = await read();
+        return test(last) ? last : null;
+      }, { ms, what });
+    } catch (e) {
+      if (e.name !== 'WaitTimeout') throw e;
+      return last;
+    }
+  },
 };
 
 /**
@@ -863,6 +886,73 @@ function defineChecks() {
         && afterClipChip === 'studio.compact.clip',
     }), tabbed, ids, afterUndo, afterUndoButton, afterClipUndo, afterBack, afterChip,
     afterClipChip };
+  });
+
+  def('v272-c1-timeline-focus', async ({ page }) => {
+    // V272 C1 (spec §142, WCAG 2.4.3): a timeline action that removes the focused object with
+    // its lane, or closes the details panel that held focus, moves focus to a neighbour, never
+    // <body>. T1 Delete on a lane's only point; T2 Enter on "Remove … automation lane"; T3 undo
+    // on the details panel's Close, undoing the clip it shows; T4 details "Delete point".
+    const lanes = () => page.evaluate(() => window.OSCILLA.studio.model.timeline.automation
+      .map((l) => l.id));
+    const newLane = () => page.evaluate(() => {
+      const s = window.OSCILLA.studio.store;
+      s.dispatch({ type: 'AUTOMATION_POINT_ADD', target: { node: 'osc-1', param: 'frequency' },
+        time: 0.5, value: 440, curve: 'linear' });
+      const lane = s.getModel().timeline.automation.find((l) => l.target.node === 'osc-1');
+      return { laneId: lane.id, key: `pt:${lane.id}:${lane.points[0].id}` };
+    });
+    const focusOn = async (sel, what) => {
+      await until(() => page.$(sel), { ms: 5000, what });
+      await page.focus(sel);
+    };
+    const state = async () => ({ lanes: await lanes(), at: await H.where(page) });
+    // T1: the template's Filter 1 Cutoff lane stays; the new lane goes with its only point.
+    await H.fresh(page);
+    const [kept] = await lanes();
+    let ln = await newLane();
+    await focusOn(`.osc-stl [data-key="${ln.key}"]`, 'C1 T1: the new point is drawn');
+    await page.keyboard.press('Delete');
+    const t1 = await H.settle(state, (v) => v.lanes.length === 1 && v.at !== 'BODY',
+      'C1 T1: Delete removes the lane and focus stays in the timeline');
+    // T2: the only lane removed from its head.
+    await H.fresh(page);
+    await focusOn('.osc-stl button[aria-label="Remove the Filter 1 Cutoff automation lane"]',
+      'C1 T2: the lane head is drawn');
+    await page.keyboard.press('Enter');
+    const t2 = await H.settle(state, (v) => v.lanes.length === 0 && v.at !== 'BODY',
+      'C1 T2: the lane is removed and focus stays in the timeline');
+    // T3: add a clip by keyboard, open its details, focus Close, undo the clip.
+    await H.fresh(page);
+    const add = await page.$eval('.osc-stl [data-key^="track-add:"]', (b) => b.dataset.key);
+    const clips0 = (await H.model(page)).clips.length;
+    await page.focus(`.osc-stl [data-key="${add}"]`);
+    await page.keyboard.press('Enter');
+    const clipAt = await H.settle(() => H.where(page), (a) => a.startsWith('key:clip:'),
+      'C1 T3: focus is on the added clip');
+    await page.keyboard.press('Enter');
+    await focusOn('.osc-stl [data-osc="studio.tl.d-close"]', 'C1 T3: the clip details open');
+    await page.keyboard.press(`${MOD}+z`);
+    const t3 = await H.settle(async () => ({ clips: (await H.model(page)).clips.length,
+      details: !!(await page.$('.osc-stl [data-osc="studio.tl.d-close"]')),
+      at: await H.where(page) }), (v) => v.clips === clips0 && !v.details && v.at !== 'BODY',
+    'C1 T3: undo removes the clip, closes its details and focus stays in the timeline');
+    // T4: the details panel's Delete point on a lane's only point.
+    await H.fresh(page);
+    ln = await newLane();
+    await focusOn(`.osc-stl [data-key="${ln.key}"]`, 'C1 T4: the new point is drawn');
+    await page.keyboard.press('Enter');
+    await focusOn('.osc-stl [data-osc="studio.tl.d-delete"]', 'C1 T4: the point details open');
+    await page.keyboard.press('Enter');
+    const t4 = await H.settle(state, (v) => v.lanes.length === 1 && v.at !== 'BODY',
+      'C1 T4: Delete point removes the lane and focus stays in the timeline');
+    return { ...H.verdict({
+      t1NextLane: t1.lanes.join() === kept && t1.at === `key:lane-add:${kept}`,
+      t2Automate: t2.lanes.length === 0 && t2.at === 'key:tool:automate',
+      t3TrackAdd: clipAt.startsWith('key:clip:') && t3.clips === clips0 && !t3.details
+        && t3.at === `key:${add}`,
+      t4NextLane: t4.lanes.join() === kept && t4.at === `key:lane-add:${kept}`,
+    }), kept, t1, t2, clipAt, t3, t4 };
   });
 
   /** In-page: where focus is (for the Inspector checks); `shown` when it can be seen. */
