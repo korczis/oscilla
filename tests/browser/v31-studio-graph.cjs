@@ -43,6 +43,9 @@
 //   v272-c1-timeline-focus  V272 C1: Delete on a lane's only point, Remove lane, undo on the
 //                        details panel's Close and details Delete point move focus to the next
 //                        lane's add button, Automate, or the track's add button; never <body>
+//   v272-c4-dialog-live  V272 C4: what is said while a Studio dialog stays open (patch Export,
+//                        Library Delete) is said in a live region inside it, exposed (chromium
+//                        reads the accessibility tree)
 //   inspector-focus      V431 U2: keyboard Enter on an Inspector connection link, "Select
 //                        source" and "Duplicate" lands on the resulting view's heading or the
 //                        same action of the copy, never <body>
@@ -953,6 +956,74 @@ function defineChecks() {
         && t3.at === `key:${add}`,
       t4NextLane: t4.lanes.join() === kept && t4.at === `key:lane-add:${kept}`,
     }), kept, t1, t2, clipAt, t3, t4 };
+  });
+
+  def('v272-c4-dialog-live', async ({ page, browserName }) => {
+    // V272 C4 (WCAG status messages): an open modal dialog makes the rest of the page inert,
+    // the Studio live regions included, so what is said while one stays open is said inside
+    // it: Export in Save as patch, Delete in the Library. Chromium also reads the region's
+    // node in the accessibility tree (CDP): it must not be ignored.
+    const said = (id, src) => page.evaluate(([dlgId, re]) => {
+      const d = document.getElementById(dlgId);
+      const rx = new RegExp(re, 'i');
+      const r = [...d.querySelectorAll('[aria-live], [role="status"], [role="alert"]')]
+        .find((x) => rx.test(x.textContent));
+      return { open: d.open, region: r ? r.dataset.osc || '(unnamed)' : null };
+    }, [id, src]);
+    const axIgnored = async (sel) => {
+      if (browserName !== 'chromium') return null; // the AX tree is read through CDP
+      const cdp = await page.context().newCDPSession(page);
+      try {
+        await cdp.send('DOM.enable');
+        await cdp.send('Accessibility.enable');
+        const { root } = await cdp.send('DOM.getDocument', { depth: -1, pierce: true });
+        const { nodeId } = await cdp.send('DOM.querySelector', { nodeId: root.nodeId,
+          selector: sel });
+        if (!nodeId) return 'missing';
+        const { nodes } = await cdp.send('Accessibility.getPartialAXTree', { nodeId,
+          fetchRelatives: false });
+        return nodes[0].ignored ? (nodes[0].ignoredReasons || []).map((r) => r.name).join()
+          || 'ignored' : false;
+      } finally {
+        await cdp.detach();
+      }
+    };
+    await H.fresh(page);
+    await H.recordLive(page);
+    await page.click('[data-osc="studio.save"]');
+    await H.settle(() => H.live(page), (l) => l.some((t) => /^Saved /.test(t)),
+      'C4: the project is saved');
+    // Save as patch, then Export file: the dialog stays open.
+    await page.click(H.nodeTitle('osc-1'));
+    await page.click('[data-osc="studio.inspector.savePatch"]');
+    await page.waitForSelector('#osc-dlg-studio-patch[open]', { timeout: 10000 });
+    await page.fill('[data-osc="studio.patch.name"]', 'Probe');
+    await Promise.all([page.waitForEvent('download', { timeout: 10000 }),
+      page.click('[data-osc="studio.patch.export"]')]);
+    const exp = await H.settle(() => said('osc-dlg-studio-patch', '^Exported patch Probe'),
+      (v) => !!v.region, 'C4: Export is said inside Save as patch');
+    const expAx = exp.region ? await axIgnored(`#osc-dlg-studio-patch [data-osc="${exp.region}"]`)
+      : 'missing';
+    await page.evaluate(() => document.getElementById('osc-dlg-studio-patch').close());
+    // Library, Delete, Confirm delete: the dialog stays open.
+    await page.click('[data-osc="studio.open"]');
+    await page.waitForSelector('#osc-dlg-studio-library[open] [data-osc="studio.saved.delete"]',
+      { timeout: 10000 });
+    await page.click('#osc-dlg-studio-library [data-osc="studio.saved.delete"]');
+    await page.waitForSelector('#osc-dlg-studio-library button[aria-label^="Confirm delete"]',
+      { timeout: 10000 });
+    await page.click('#osc-dlg-studio-library button[aria-label^="Confirm delete"]');
+    const del = await H.settle(() => said('osc-dlg-studio-library', 'deleted|no longer|detached'),
+      (v) => !!v.region, 'C4: Delete is said inside the Library');
+    const delAx = del.region ? await axIgnored(`#osc-dlg-studio-library [data-osc="${del.region}"]`)
+      : 'missing';
+    const live = await H.live(page);
+    return { ...H.verdict({
+      exportInDialog: exp.open && !!exp.region && !expAx,
+      deleteInDialog: del.open && !!del.region && !delAx,
+      pageRegionsToo: live.includes('Exported patch Probe')
+        && live.some((t) => /deleted|no longer|detached/i.test(t)),
+    }), exp, expAx, del, delAx, live: live.slice(-4) };
   });
 
   /** In-page: where focus is (for the Inspector checks); `shown` when it can be seen. */
