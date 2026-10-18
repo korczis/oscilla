@@ -1,7 +1,6 @@
 id: M039
 title: "V3.5 Studio runtime truth"
 slug: v35-studio-runtime-truth
-version: "3.5.0"
 order: 38
 priority: p1
 problem: "The Studio could show a graph the running engine had not applied, with no record of which plan was running, what had not been applied, or why."

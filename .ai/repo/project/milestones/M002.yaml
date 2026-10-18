@@ -1,7 +1,6 @@
 id: M002
 title: "Visualization"
 slug: visualization
-version: "1.0.0"
 order: 2
 priority: p1
 problem: "Sound without coupled visuals teaches little."

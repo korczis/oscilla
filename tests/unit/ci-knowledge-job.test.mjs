@@ -95,7 +95,7 @@ const MISSING_KEY = {
 // repository with the `knowledge:` block removed and no git hooks, as on a CI runner. The
 // missing-key WARN is word for word the 0.13.2 line; the stderr line gained the policy path.
 // Capture again when a pin change alters doctor's output.
-const CAPTURED_WITH = '0.29.0';
+const CAPTURED_WITH = '0.30.0';
 const PINNED = {
   layout: { level: 'OK', category: 'layout', subject: '.ai/manifest.yaml',
     message: 'schema ai-repository/v1', reproduce: '' },

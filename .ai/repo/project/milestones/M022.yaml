@@ -1,7 +1,6 @@
 id: M022
 title: "V3.1 Studio graph model"
 slug: v31-studio-graph-model
-version: "3.1.0"
 order: 22
 priority: p0
 problem: "There is no canonical, serializable representation of a signal graph and timeline."

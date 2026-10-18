@@ -1,7 +1,6 @@
 id: M037
 title: "V3.3 navigation groups and the V431 Studio review findings"
 slug: v33-navigation-and-studio-review
-version: "3.3.0"
 order: 36
 priority: p1
 problem: "The V431 independent architecture, UX and adversarial reviews of the Studio (docs/v31/review-v431.md) found 30 findings (19 defects, 2 risks, 9 nits); MEASURE labels claimed more than the response, CSV and Expert table showed; and the eight-entry navigation (V371) was unreleased. No milestone recorded the release line that shipped the fixes."
