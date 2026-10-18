@@ -1,0 +1,28 @@
+id: E017
+milestone: M046
+title: "An issue is recorded done only after the review verdict and validation its criteria name"
+slug: an-issue-is-recorded-done-only-after-its-review-verdict-and-validation
+priority: p2
+profile: implementation
+objective: "#210 R-1 (P2): E006 was recorded DONE (verified_at and completed_at 2026-10-18T13:59Z) before two of its own terms were met: the criterion 'the pull request carries a review verdict', met only by .ai/repo/reviews/210.yaml, and the validation command npm run release-gate, which never ran locally. #208 R-4: E009 was recorded DONE (verified 13:57Z) while its review verdict was pending and before any CI run showed the step summary its criterion names. #208 R-3: E009's change edits .ai/repo/ci/gates.yaml, which E009's scope does not name. Add tests/unit/plan-done-evidence.test.mjs: every issue with completed_at whose acceptance criteria require a review verdict has a verified evidence entry whose artifact is an existing .ai/repo/reviews/<pr>.yaml, and its verified_at is not earlier than that file's first commit. Correct the two records with majordomus plan evidence: E006 names .ai/repo/reviews/210.yaml and the CI run of #210 that ran the gate; E009 names .ai/repo/reviews/208.yaml and a CI run whose step summary shows the four size numbers, and E009's scope names .ai/repo/ci/gates.yaml."
+why: "Review verdicts .ai/repo/reviews/208.yaml (R-3, R-4) and .ai/repo/reviews/210.yaml (branch fix/e006-imports-acyclic, R-1): the plan recorded completion ahead of its evidence twice in one day, and nothing refuses it. A refusal inside majordomus plan done is upstream work; this issue adds the repository-side check."
+scope:
+  - "tests/unit/plan-done-evidence.test.mjs"
+  - ".ai/repo/project/issues/E006.yaml"
+  - ".ai/repo/project/issues/E009.yaml"
+  - "tests/README.md"
+depends_on:
+  - "E006"
+acceptance_criteria:
+  - "Given a fixture issue with completed_at, a criterion requiring a review verdict and no evidence naming .ai/repo/reviews/<pr>.yaml, the test fails; given the same issue with that evidence and an existing verdict file, it passes; both are unit cases of tests/unit/plan-done-evidence.test.mjs."
+  - "The test passes over the real .ai/repo/project/issues; an issue completed before 2026-10-19 that it would flag is either corrected with majordomus plan evidence or listed in an allowance inside the test with its reason, and the allowance only shrinks."
+  - "E006 and E009 carry the evidence the objective names, recorded with majordomus plan evidence; E009's scope names .ai/repo/ci/gates.yaml; majordomus plan validate reports 0 failures."
+  - "tests/README.md has a row for the test (one appended row)."
+validation:
+  - "node --test tests/unit/plan-done-evidence.test.mjs"
+  - "majordomus plan validate"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-10-19
+updated_at: 2026-10-19

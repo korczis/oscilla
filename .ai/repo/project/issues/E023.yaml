@@ -1,0 +1,23 @@
+id: E023
+milestone: M046
+title: "The V3 architecture and algorithms docs place the recipe code in experiments/recipe.js"
+slug: the-v3-docs-place-the-recipe-code-in-experiments-recipe-js
+priority: p3
+profile: implementation
+objective: "#210 R-3: E006 (#210) moves the recipe code out of src/js/experiments/schema.js into a third module, src/js/experiments/recipe.js, rather than making createExperiment take the derived reference. That design decision is recorded only in the recipe.js and schema.js headers, not as a majordomus decision or an ADR, and docs/v3/architecture.md's module tree and docs/v3/algorithms.md's section 'Recipe stimulus (schema.js)' still place the recipe code in schema.js (true of the export, not of the code). Record the decision with majordomus decision, and update both documents to name recipe.js as the home of the code and schema.js as its re-export."
+why: "Review verdict .ai/repo/reviews/210.yaml (branch fix/e006-imports-acyclic), finding R-3: out of E006's scope, and named by its builder."
+scope:
+  - "docs/v3/architecture.md"
+  - "docs/v3/algorithms.md"
+depends_on:
+  - "E006"
+acceptance_criteria:
+  - "docs/v3/architecture.md's module tree lists recipe.js under src/js/experiments/, and docs/v3/algorithms.md's recipe stimulus section names src/js/experiments/recipe.js as the home of the code (grep shows both)."
+  - "majordomus decision records the choice of a third module over createExperiment taking the derived reference, with its reason."
+  - "node --test tests/unit/knowledge-integrity.test.mjs passes (the paths the documents name exist)."
+validation:
+  - "node --test tests/unit/knowledge-integrity.test.mjs"
+evidence_required:
+  - "verified"
+created_at: 2026-10-19
+updated_at: 2026-10-19

@@ -1,0 +1,31 @@
+id: E024
+milestone: M046
+title: "The Studio import limit is one number measured one way, and a refused Studio setting says why beside its field"
+slug: the-studio-import-limit-is-measured-one-way-and-refused-settings-say-why
+priority: p3
+profile: implementation
+objective: "docs/v31/review-v272.md, Open, builders' follow-ups. (1) The 4 MB Studio import limit is measured two ways and defined twice: src/js/ui/studio/workspace.js reads a file against its own STUDIO_FILE_MAX_BYTES, and src/js/studio/validate.js readStudioInput checks STUDIO_IMPORT_LIMITS.maxBytes as the UTF-8 length of a string input (the text as written, pretty-printed or not) but, for an object input, as scanUntrusted's size estimate, so one document can pass on one path and fail on the other. Define the limit once in validate.js, import it in the workspace, and state and apply one measure on both paths. (2) The Studio settings fields built by settingInput in src/js/ui/studio/inspector.js (Tempo, Beats per bar, Loop start, Loop end) refuse a value with only an assertive announcement and then revert, so a sighted user sees the value snap back with no reason. Show the reason beside the field (aria-invalid and aria-describedby on the input), cleared on the next accepted value."
+why: "docs/v31/review-v272.md, the follow-ups named by the V272 builders: an untrusted-import limit that depends on how the document arrives, and a refusal only a screen-reader user hears."
+scope:
+  - "src/js/studio/validate.js"
+  - "src/js/ui/studio/workspace.js"
+  - "src/js/ui/studio/inspector.js"
+  - "tests/unit/studio-import-limit.test.mjs"
+  - "tests/browser/v31-studio-workflows.cjs"
+  - "tests/README.md"
+  - "dist/index.html"
+depends_on:
+  - "E003"
+  - "E004"
+acceptance_criteria:
+  - "tests/unit/studio-import-limit.test.mjs: a document at the limit, given as text and as the parsed object, is accepted or refused the same way by readStudioInput, and the workspace's limit is the same constant as validate.js's (no second 4 * 1024 * 1024 in src/js); the cases fail on the merge base."
+  - "A browser check in tests/browser/v31-studio-workflows.cjs enters a refused Tempo and a refused Loop end: each field shows the reason in visible text referenced by aria-describedby with aria-invalid=true, and an accepted value clears both; the check fails on the merge base and keeps project.bounded-test-timing and project.suite-harness."
+  - "It follows E003 and E004, which own workspace.js and inspector.js; the change is made in whichever module those splits leave the code in."
+  - "npm run release-gate passes; the pull request carries a review verdict (src/js/studio is guarded); tests/README.md has a row for the unit test (one appended row)."
+validation:
+  - "node --test tests/unit/studio-import-limit.test.mjs"
+  - "npm run release-gate"
+evidence_required:
+  - "verified"
+created_at: 2026-10-19
+updated_at: 2026-10-19
