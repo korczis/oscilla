@@ -104,9 +104,19 @@ plausible failure with concrete evidence; **nit** is a small correctness or clar
 | I1 | B2 and A8 together: a re-armed measurement derived its recipe from `getModel()` inside the store's commit gate, which still returned the model being replaced. With A8, the old model was refused and the moved pass failed. | defect | The transport's `schedule` event carries the model it plays. | The B2 re-arm test fails on the merged tree without the change and passes with it. |
 | I2 | A5's level refusal was never wired into the app, because the workspace did not pass the level. | defect | `outputLevel: cmp.gainLevel` in the workspace. | The unit tests hold the recipe side; no browser check yet (follow-up). |
 
+### Found by the review of the pull request (R)
+
+The independent reviewer of the pull request requested changes (`.ai/repo/reviews/`); these were fixed before it landed.
+
+| # | Finding | Class | Fix | Test (fails before the fix) |
+| --- | --- | --- | --- | --- |
+| R-1 | A regression from A7: a static detune lowered into the Nyquist headroom was counted by `runtime.baseOffset` as an edge offset and shifted a detune lane (-89 to -236 cents at 48 / 44.1 kHz). | defect | `computeBases` reports how far it lowered each base, and `baseOffset` is only the edges' constant part. | `v272-studio-automation.test.mjs` "V272 R-1" (44.1 and 48 kHz) |
+| R-2 | An edit made while a Studio measurement was armed was left out of it: the run measured the old model, bypassing A5. | defect | The transport sends the edited model while a measurement clip is scheduled. The run derives the recipe again at the hand-off: a changed recipe runs, and a refused one fails with its reason. | `v272-transport-lifecycle.test.mjs` "V272 R-2" (three tests) |
+| R-5 | The first clock trigger of a clocked modulator plays the value it already holds. | nit | Kept: a Sequence clip at 0 s is the common case, and skipping step 0 there would surprise more. The node help, the user guide and `timeline.md` now state it. | "V272 R-5" pins the semantics |
+
 ## Open
 
-- **D2 (risk, owner).** Branch protection on main has `strict: false` and no merge queue. In 16 of the last 60 first-parent merges, the last CI run started before the merge parent landed, so the combined tree was never run. The dist bytes stay serialized, because every dist-changing PR rewrites the metadata region and therefore conflicts. The suites are what never ran on the combined tree. The fix is the owner's: either `strict: true`, or a merge queue, which needs `project.ci-bounded` to allow `merge_group`.
+- **D2: resolved on 2026-10-18.** The owner approved, and main's branch protection now requires the `gate` check with `strict: true`, so a pull request merges only when its branch is current with main and CI ran on the combined tree. A merge queue was not chosen (`project.ci-bounded` would have to allow `merge_group`).
 - **D3 (defect, Majordomus).** 0 of the 85 intent criteria read met while their milestones are DONE: Majordomus 0.29 cannot record `node --test` or Playwright runs. This is queued post-alpha in Majordomus (foreign runners as evidence).
 - **Follow-ups named by the builders:**
   - a browser check of the A5 level wiring;
