@@ -189,6 +189,7 @@ const path = require('node:path');
 const { pathToFileURL } = require('node:url');
 const playwright = require('playwright');
 const seam = require('./lib/measure-seam.cjs');
+const { until } = require('./lib/wait.cjs');
 
 const argv = process.argv.slice(2);
 const arg = (name, fallback) => {
@@ -1250,8 +1251,15 @@ function defineChecks(fixtures) {
       const e = await window.OSCILLA.experiments.store().get(id);
       return { env: e.environment.notes, ann: e.annotations ? e.annotations.notes : null };
     }, res.id);
+    // Each step waits for the state its assertion judges, on a named wall-clock deadline
+    // (rule project.bounded-test-timing): a fixed sleep here failed under load, when the
+    // IndexedDB update had not landed 300 ms after the click (release:prepare, 2026-10-18).
+    // On a timeout the current value is kept, so the verdict reports what was there.
+    const settle = (pred, what) => until(pred, { ms: 10000, what: `notes-after-save: ${what}` })
+      .catch(() => null);
     await page.fill('#osc-m-notes', 'typed after the save');
-    await sleep(150);
+    await settle(async () => /not stored yet/.test(await status()),
+      'the page states the typed notes are not stored yet');
     res.pending = await status();
     res.button = await page.evaluate(() => {
       const b = document.querySelector('#osc-measure-save');
@@ -1264,7 +1272,9 @@ function defineChecks(fixtures) {
     }
     await page.evaluate(() => { window.OSCILLA.app.alerts = []; });
     await page.click('#osc-measure-save');
-    await sleep(300);
+    await settle(async () => (await stored()).ann === 'typed after the save'
+      && /are stored as its annotation/.test(await status()),
+    'the update stores the notes as the annotation and the page says so');
     res.after = await stored();
     res.stated = await status();
     res.alerts1 = await page.evaluate(() => window.OSCILLA.app.alerts.map((a) => a.title));
@@ -1274,7 +1284,8 @@ function defineChecks(fixtures) {
     await page.fill('#osc-m-notes', '');
     await page.evaluate(() => { window.OSCILLA.app.alerts = []; });
     await page.click('#osc-measure-save');
-    await sleep(300);
+    await settle(() => page.evaluate(() => window.OSCILLA.app.alerts.length > 0),
+      'the update without notes answers with an alert');
     res.kept = await stored();
     res.alerts2 = await page.evaluate(() => window.OSCILLA.app.alerts.map((a) => a.title));
     await page.evaluate(() => {
