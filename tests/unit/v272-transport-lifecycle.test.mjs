@@ -12,6 +12,7 @@ import { getSchedule, valueAtTime } from '../../src/js/audio/envelope.js';
 import { createIdGenerator, createStudioStore } from '../../src/js/studio/actions.js';
 import { createStudioMeasurementRun } from '../../src/js/studio/measurement-run.js';
 import { createStudioRuntime } from '../../src/js/studio/runtime.js';
+import { createStudioModel } from '../../src/js/studio/schema.js';
 import {
   MEASUREMENT_TEMPLATE_ID, REFERENCE_TEMPLATE_ID, templateModel,
 } from '../../src/js/studio/templates/index.js';
@@ -159,4 +160,71 @@ test('V272 B5: an edit that does not touch the timeline leaves the envelope cont
   assert.ok(Math.abs(edited.v - 0.7) < 1e-6, `the gate reaches its sustain: ${edited.v}`);
   const decided = edited.s.transport.debugInfo().decisions.map((d) => d.decision);
   assert.ok(!decided.includes('cancel'), `no item is cancelled: ${decided.join(',')}`);
+});
+
+// ---------------------------------------------------------------- A3 (and A2 below)
+
+/**
+ * A Sequence with four pattern clips (0, 0.5, 1, 1.5 s, 0.25 s each) into `mod`: an Envelope
+ * on its audio, or a Random / Step Modulator on a Filter's cutoff; `trigger` adds the
+ * Sequence trigger -> gate / clock edge (`muted` as its prop).
+ */
+function triggerStudio(mod, { trigger = false, muted = false } = {}) {
+  const store = createStudioStore(createStudioModel(), { idGenerator: createIdGenerator() });
+  const d = (a) => ok(store.dispatch(a));
+  const add = (nodeType) => d({ type: 'NODE_ADD', nodeType }).created.nodes[0];
+  const edge = (from, fp, to, tp, props) => d({ type: 'EDGE_ADD', from: { node: from, port: fp },
+    to: { node: to, port: tp }, ...(props ? { props } : {}) }).created.edges[0];
+  const seq = add('sequence');
+  const master = add('master');
+  let target = null;
+  let port = 'gate';
+  if (mod === 'envelope') {
+    target = add('envelope');
+    edge(seq, 'audio', target, 'audio');
+    edge(target, 'audio', master, 'audio');
+  } else {
+    const flt = add('filter');
+    target = add(mod);
+    port = mod === 'random' ? 'trigger' : 'clock';
+    edge(seq, 'audio', flt, 'audio');
+    edge(flt, 'audio', master, 'audio');
+    edge(target, 'control', flt, 'frequency');
+  }
+  const triggerEdge = trigger ? edge(seq, 'trigger', target, port, { muted }) : null;
+  const tr = d({ type: 'TRACK_ADD', kind: 'event', target: seq }).created.tracks[0];
+  for (let i = 0; i < 4; i++) {
+    d({ type: 'CLIP_ADD', trackId: tr, kind: 'pattern', start: i * 0.5, duration: 0.25 });
+  }
+  return { store, target, triggerEdge };
+}
+
+/** Every AudioParam call and source start / stop a 2.5 s playback of `store` made, in order. */
+function scheduleOf(store) {
+  const fx = createFakeAudioEnv({ sampleRate: SR });
+  const engine = new AudioEngine({ env: fx.env });
+  assert.ok(engine.init());
+  const runtime = createStudioRuntime({ engine });
+  const transport = createStudioTransport({ runtime, engine, store });
+  ok(transport.start());
+  const debug = transport.debugInfo(); // while playing (the timeline ends at 1.75 s)
+  fx.advance(2.5);
+  const log = [];
+  for (const n of fx.ctx.created) {
+    for (const [k, v] of Object.entries(n)) {
+      if (v && Array.isArray(v.calls)) log.push(`${n.kind}.${k}:${JSON.stringify(v.calls)}`);
+    }
+    if ('startAt' in n) log.push(`${n.kind} start ${n.startAt} stop ${n.stopAt}`);
+  }
+  return { log: log.join('\n'), debug };
+}
+
+test('V272 A3: a muted TRIGGER edge does not gate its Envelope', () => {
+  const none = scheduleOf(triggerStudio('envelope').store);
+  const live = scheduleOf(triggerStudio('envelope', { trigger: true }).store);
+  const muted = scheduleOf(triggerStudio('envelope', { trigger: true, muted: true }).store);
+  assert.notEqual(live.log, none.log, 'an unmuted gate edge gates the envelope');
+  assert.equal(live.debug.gatedEnvelopes.length, 1);
+  assert.deepEqual(muted.debug.gatedEnvelopes, [], 'the timeline does not own the envelope');
+  assert.equal(muted.log, none.log, 'a muted gate edge schedules what no edge schedules');
 });
