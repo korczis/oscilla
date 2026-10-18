@@ -121,3 +121,10 @@ findings:
     blocking: false
     resolution:
       state: open
+  - id: breadth-against-the-measurement-wedge
+    class: unproven_assumption
+    subject: "M045"
+    finding: "Added on 2026-10-18 by the synthesis of the owner's ChatGPT project conversations (knowledge record chatgpt-oscilla-project), not by the critic named above. The owner's standing steering for v4 is 'depth over breadth; fewer new nouns, more working verbs; acoustic measurement is the wedge; the meta-layer must not grow for its own sake' (ADR 0051:34-36, ADR 0046). A MIDI jam companion is a creative and performance branch beside that wedge, and no record weighs the two: neither ADR 0058 nor the intent says why the jam direction comes now, what it takes from the measurement work, or whether it waits for it. The same tension was raised twice in the conversations: 'measurement plus creative instrument plus universal Studio plus general platform at once' was judged too wide (conversation 6ac3efc5, 2026-10-05T18:47:59Z), and the main threat was named as attaching good things before their boundaries firm up (conversation 6ac3ead5, 2026-10-05, verdict). The plan should state the owner's ordering: MIDI before, beside or after the measurement extensions (M047) and the engineering-integrity work (M046), and what the direction must not take from them. Not blocking: the direction is the owner's to set, and ADR 0058 stays proposed until the owner accepts it."
+    blocking: false
+    resolution:
+      state: open
