@@ -1,0 +1,27 @@
+id: M039
+title: "V3.5 Studio runtime truth"
+slug: v35-studio-runtime-truth
+version: "3.5.0"
+order: 38
+priority: p1
+problem: "The Studio could show a graph the running engine had not applied, with no record of which plan was running, what had not been applied, or why."
+outcome: "OSCILLA 3.5.0 shipped runtime truth as data: one diagnostic shape, plan identity, an applied record and divergence (ADR 0039, #98); the Inspector says what is running, what is not applied and why (#99); and the build recovered 8.9 KB of gzip headroom without changing what renders (#97)."
+acceptance_criteria:
+  - "v3.5.0 is tagged at 614d15c with its GitHub Release (published 2026-10-04T15:19:03Z) listing #98, #99 and #97."
+  - "ADR 0039 (Studio runtime truth: plan identity, applied record and divergence) landed in the release (98aabab)."
+  - ".ai/repo/releases/v3.5.0.yaml matches what was published."
+validation:
+  - "gh release view v3.5.0"
+  - "node scripts/release-record.mjs --version 3.5.0 --check"
+evidence_required:
+  - "milestone_verified"
+created_at: 2026-10-18
+updated_at: 2026-10-18T00:49:09Z
+evidence:
+  - covers: milestone_verified
+    type: artifact
+    command: "git rev-parse v3.5.0^{commit} && gh release view v3.5.0 --json tagName,publishedAt,isDraft,isPrerelease && node scripts/release-record.mjs --version 3.5.0 --check"
+    result: "The 3.5 line shipped: v3.5.0 tag at 614d15c, GitHub Release published 2026-10-04T15:19:03Z; release records .ai/repo/releases/v3.5.0.yaml match what was published (release-record --check)"
+    artifact: "https://github.com/korczis/oscilla/releases/tag/v3.5.0"
+    commit: 1a165b109f24d30219410513adfe7e17be0c861e
+    recorded_at: 2026-10-18T00:49:09Z

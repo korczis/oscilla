@@ -1,0 +1,27 @@
+id: M042
+title: "V3.8 Studio operation trace"
+slug: v38-operation-trace
+version: "3.8.0"
+order: 41
+priority: p1
+problem: "The path of one edit from the Studio to the running graph could not be followed."
+outcome: "OSCILLA 3.8.0 shipped one operation traced from the edit to the running graph under one correlation id, bounded and not evidence (ADR 0042, #112), and set the dist size budget to 1 MB gzip (owner stopgap, #114)."
+acceptance_criteria:
+  - "v3.8.0 is tagged at ba2b2e3 with its GitHub Release (published 2026-10-05T17:14:57Z) listing #112 and #114."
+  - "ADR 0042 (Studio operation trace: one correlation id, bounded, not evidence) landed in the release (ffb9765)."
+  - ".ai/repo/releases/v3.8.0.yaml matches what was published."
+validation:
+  - "gh release view v3.8.0"
+  - "node scripts/release-record.mjs --version 3.8.0 --check"
+evidence_required:
+  - "milestone_verified"
+created_at: 2026-10-18
+updated_at: 2026-10-18T00:49:31Z
+evidence:
+  - covers: milestone_verified
+    type: artifact
+    command: "git rev-parse v3.8.0^{commit} && gh release view v3.8.0 --json tagName,publishedAt,isDraft,isPrerelease && node scripts/release-record.mjs --version 3.8.0 --check"
+    result: "The 3.8 line shipped: v3.8.0 tag at ba2b2e3, GitHub Release published 2026-10-05T17:14:57Z; release records .ai/repo/releases/v3.8.0.yaml match what was published (release-record --check)"
+    artifact: "https://github.com/korczis/oscilla/releases/tag/v3.8.0"
+    commit: 1a165b109f24d30219410513adfe7e17be0c861e
+    recorded_at: 2026-10-18T00:49:31Z

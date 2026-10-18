@@ -21,6 +21,9 @@ milestones:
   - M031
   - M032
   - M033
+  - M037
+  - M039
+  - M042
 satisfaction:
   - id: model-plain-data
     criterion: "A StudioModel is plain serializable data; runtime values are rejected before it is stored or serialized"

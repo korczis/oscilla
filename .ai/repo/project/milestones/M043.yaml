@@ -1,0 +1,29 @@
+id: M043
+title: "V3.9 versioned experiment definitions and the closure audit"
+slug: v39-experiment-definitions
+version: "3.9.0"
+order: 42
+priority: p1
+problem: "Runs were not executed from a stored, versioned definition, and the four closure audits of main at 27f7c62 (docs/v4/completion-ledger.md) found P0 defects: a refused PLAY left Studio state on the shared engine (R1), a throw after the plan swap left the applied record stale (R2), and a frequency-profile calibration was recorded as it was at Save, not as measured (D1)."
+outcome: "OSCILLA 3.9.0 shipped runs executed from a versioned experiment definition (ADR 0043, #116) and the completion ledger from four independent closure audits (#118); 3.9.1 rolled global side effects back, made the runtime commit atomic and made the Studio Microphone node work (#119, closing R1 and R2); 3.9.2 recorded calibration and notes as measured (#121, closing D1)."
+acceptance_criteria:
+  - "v3.9.0 (291bcde), v3.9.1 (acb2c88) and v3.9.2 (39a766b) are tagged with GitHub Releases listing #116, #118, #119 and #121."
+  - "ADR 0043 (runs are executed from a versioned experiment definition) landed in 3.9.0 (8c22376); docs/v4/completion-ledger.md names #119 and #121 as closing R1, R2 and D1."
+  - ".ai/repo/releases/v3.9.0.yaml, v3.9.1.yaml and v3.9.2.yaml match what was published."
+validation:
+  - "gh release view v3.9.0"
+  - "node scripts/release-record.mjs --version 3.9.0 --check"
+  - "node scripts/release-record.mjs --version 3.9.1 --check"
+  - "node scripts/release-record.mjs --version 3.9.2 --check"
+evidence_required:
+  - "milestone_verified"
+created_at: 2026-10-18
+updated_at: 2026-10-18T00:49:45Z
+evidence:
+  - covers: milestone_verified
+    type: artifact
+    command: "git rev-parse v3.9.0^{commit} && gh release view v3.9.0 --json tagName,publishedAt,isDraft,isPrerelease && git rev-parse v3.9.1^{commit} && gh release view v3.9.1 --json tagName,publishedAt,isDraft,isPrerelease && git rev-parse v3.9.2^{commit} && gh release view v3.9.2 --json tagName,publishedAt,isDraft,isPrerelease && node scripts/release-record.mjs --version 3.9.0 --check && node scripts/release-record.mjs --version 3.9.1 --check && node scripts/release-record.mjs --version 3.9.2 --check"
+    result: "The 3.9 line shipped: v3.9.0 tag at 291bcde, GitHub Release published 2026-10-05T22:50:58Z; v3.9.1 tag at acb2c88, GitHub Release published 2026-10-06T00:16:02Z; v3.9.2 tag at 39a766b, GitHub Release published 2026-10-06T01:19:57Z; release records .ai/repo/releases/v3.9.0.yaml, .ai/repo/releases/v3.9.1.yaml, .ai/repo/releases/v3.9.2.yaml match what was published (release-record --check)"
+    artifact: "https://github.com/korczis/oscilla/releases/tag/v3.9.0"
+    commit: 1a165b109f24d30219410513adfe7e17be0c861e
+    recorded_at: 2026-10-18T00:49:45Z

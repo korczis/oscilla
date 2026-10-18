@@ -1,0 +1,26 @@
+id: M038
+title: "V3.4 release lines and Majordomus release records"
+slug: v34-release-records
+version: "3.4.0"
+order: 37
+priority: p1
+problem: "A release had a tag and a GitHub Release but no tracked record of the bytes it published, and the About timeline did not name every release line."
+outcome: "OSCILLA 3.4.0 shipped an About timeline that names every release line and release/v1 records written by scripts/release-record.mjs from what was published (#93); v3.4.0 is the first recorded release (#96), and every release since has one under .ai/repo/releases."
+acceptance_criteria:
+  - "v3.4.0 is tagged at ec703c3 with its GitHub Release (published 2026-10-04T13:02:26Z) carrying the artifact oscilla-v3.4.0.html."
+  - ".ai/repo/releases/v3.4.0.yaml matches what was published (node scripts/release-record.mjs --version 3.4.0 --check)."
+validation:
+  - "gh release view v3.4.0"
+  - "node scripts/release-record.mjs --version 3.4.0 --check"
+evidence_required:
+  - "milestone_verified"
+created_at: 2026-10-18
+updated_at: 2026-10-18T00:49:04Z
+evidence:
+  - covers: milestone_verified
+    type: artifact
+    command: "git rev-parse v3.4.0^{commit} && gh release view v3.4.0 --json tagName,publishedAt,isDraft,isPrerelease && node scripts/release-record.mjs --version 3.4.0 --check"
+    result: "The 3.4 line shipped: v3.4.0 tag at ec703c3, GitHub Release published 2026-10-04T13:02:26Z; release records .ai/repo/releases/v3.4.0.yaml match what was published (release-record --check)"
+    artifact: "https://github.com/korczis/oscilla/releases/tag/v3.4.0"
+    commit: 1a165b109f24d30219410513adfe7e17be0c861e
+    recorded_at: 2026-10-18T00:49:04Z

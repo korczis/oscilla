@@ -18,6 +18,11 @@ milestones:
   - M018
   - M019
   - M020
+  - M036
+  - M040
+  - M041
+  - M043
+  - M044
 satisfaction:
   - id: algorithm-ids
     criterion: "Every stored result names its algorithm by a versioned ID, an unknown ID is refused on import, and every known ID reproduces its golden output"
@@ -120,7 +125,7 @@ non_goals:
   - "The future V3.x measurement capabilities of specification section 4 (RT60, EDT, T20/T30, ETC, THD, THD+N, latency, phase transfer, group delay, device characterization, batch measurement, WASM DSP): interfaces only where they improve V3.0"
   - "The excluded scope of specification section 10: MIDI, accounts, a backend, collaboration, AI classification, generative music, DAW multitrack, room simulation, VST-style effects, healing or focus frequencies, medical interpretation"
   - "IEC, ANSI or class certification: results are measurement estimates (section 189)"
-  - "The v4.0 experiment-record work (definitions, run evidence, findings, connected records; ADRs 0040-0053): it has no milestone in the plan, so no intent names it"
+  - "The v4.0 experiment-record work not yet released (findings, connected records, raw capture retention and the work of ADRs 0046-0053, on main after v3.10.3): it has no milestone in the plan, so no intent names it. The released part (immutable runs, semantic comparison, versioned definitions, evidence on a run; ADRs 0040, 0041, 0043 and 0044, releases 3.6 to 3.10) is recorded retrospectively by M040, M041, M043 and M044"
   - "A knowledge explorer: v4.0 ships method claims on experiment evidence instead (ADR 0051)"
 created_at: 2026-10-18
 updated_at: 2026-10-18
