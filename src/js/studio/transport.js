@@ -75,8 +75,9 @@
 //                                gates is closed at PLAY (the timeline owns its gate)
 //   automation lane              applyAutomation on handle.modTarget(key, 'linear').param, the
 //                                lane's parameter owned by the transport (runtime.setOwnedParams:
-//                                the runtime does not glide it); linear modulation offsets are
-//                                added (runtime.baseOffset)
+//                                the runtime does not glide it); the modulation edges' constant
+//                                offset (runtime.baseOffset) is added to the values, or on a
+//                                strictly positive parameter summed in by an offset source (fit)
 //   measurement clip             data: onMeasurement({ type: 'schedule', model, ... }); the Studio
 //                                workspace's hook (measurement-run.js) runs the pass through
 //                                the MEASURE MeasurementEngine (docs/v31/timeline.md). `model` is
@@ -99,9 +100,12 @@ import { createEngineHooks } from './adapters/engine-hooks.js';
 import { PARAM_TAU_S } from './adapters/nodes.js';
 import { createRamp } from './adapters/ramp.js';
 import { CLEANUP_MARGIN_S, ROUTE_FLOOR, STUDIO_XFADE_S } from './compiler.js';
-import { applyAutomation, paramBounds, scheduledValueAt } from './automation.js';
 import {
-  anchorEndTime, createTimelineScheduler, resolveEscape, safeHorizon,
+  applyAutomation, detuneCeiling, isExponentialLegal, paramBounds, scheduledValueAt,
+} from './automation.js';
+import {
+  LANE_GLIDE_S, anchorEndTime, createTimelineScheduler, frameCeil, holdEvents, resolveEscape,
+  safeHorizon,
 } from './timeline-compiler.js';
 import { effectiveTarget } from './timeline.js';
 import { CLIP_TARGET_TEXT, clipTarget, clipUse } from './clip-targets.js';
@@ -183,7 +187,14 @@ export function createStudioTransport({
   const ticks = new Map(); // tick key → { key, itemKey, nodeId, handle, time }: clock triggers
   const ticksPassed = new Map(); // clocked node id → triggers pruned from `ticks` (still counted)
   const measures = new Map(); // item key → measurement data
-  const lanes = new Map(); // lane id → { laneId, target, param, handle, events (as applied) }
+  // lane id → { laneId, target, param, handle, events (as applied), raw (the scheduler's events
+  // they were fitted from), offset (the baseOffset they were fitted with), mode (see fit) }
+  const lanes = new Map();
+  // Lane AudioParam → its offset source { node, events: [{ kind, t, v, tau }] }: the
+  // ConstantSourceNode that sums the modulation edges' constant offset into it (mode 'source').
+  const offsetSources = new WeakMap();
+  // Lane AudioParam → { at, v, to }: a removed lane's glide from v back to the base `to`.
+  const released = new WeakMap();
   // oscillator id → { id, handle, bus, param, level, fadeAt (null: fresh), routes }
   const claims = new Map();
   // Carrier level AudioParam → the transport's last segment on it { t0, v0, t1, v1, reEnd }
@@ -769,13 +780,27 @@ export function createStudioTransport({
       return null;
     }
     const def = registry.param(n.type, target.param);
-    const offset = typeof runtime.baseOffset === 'function'
-      ? runtime.baseOffset(target.node, target.param) : 0;
-    const bounds = def ? paramBounds(def, hooks.ctx.sampleRate) : null;
+    const offsetOf = (key) => (typeof runtime.baseOffset === 'function'
+      ? runtime.baseOffset(target.node, key) : 0);
+    const offset = offsetOf(target.param);
+    const sr = hooks.ctx.sampleRate;
+    let bounds = def ? paramBounds(def, sr) : null;
+    const fDef = registry.param(n.type, 'frequency');
+    if (bounds && def.unit === 'cents' && fDef && fDef.unit === 'Hz') {
+      // A detune shifts the node's frequency: lane + offset stays below the cents that keep the
+      // frequency's base (or its lane's peak, offsets included) at 0.95 × Nyquist (V272 A7).
+      const fLane = model.timeline.automation.find((l) => l.target.node === target.node
+        && l.target.param === 'frequency');
+      const peak = fLane ? Math.max(...fLane.points.map((p) => p.value)) : -Infinity;
+      const ref = Math.min(paramBounds(fDef, sr).max, Math.max(n.params.frequency, peak)
+        + offsetOf('frequency'));
+      const max = Math.min(bounds.max, detuneCeiling(ref, sr));
+      bounds = { min: Math.min(bounds.min, max), max };
+    }
     const c = claims.get(target.node);
     if (c && c.handle === h && target.param === 'level') {
       // A pattern-played oscillator: its level is the pattern bus (the voices).
-      return { param: c.bus.gain, handle: h, offset, bounds };
+      return { param: c.bus.gain, handle: h, offset, bounds, mode: 'shift' };
     }
     let t = null;
     try { t = h.modTarget(target.param, 'linear'); } catch (e) { t = null; }
@@ -784,26 +809,99 @@ export function createStudioTransport({
         || TRANSPORT_TEXT.noParameter(n.metadata.name, target.param) });
       return null;
     }
-    return { param: t.param, handle: h, offset, bounds };
+    const mode = isExponentialLegal(def) && h.acct
+      && typeof hooks.ctx.createConstantSource === 'function' ? 'source' : 'shift';
+    return { param: t.param, handle: h, offset, bounds, mode };
   }
 
-  /** Lane values + the modulation edges' constant offset (exact when there is none). */
-  function shift(events, dest) {
-    if (!dest.offset) return events;
+  /**
+   * Lane events as the param gets them. The modulation edges' constant offset (runtime.baseOffset)
+   * is part of the base (§103, automation.js combination rule). Mode 'shift' adds it to every
+   * value: exact on a parameter whose lanes are step and linear only (an affine map keeps those
+   * segments). Mode 'source', a strictly positive domain where exponential ramps are legal,
+   * keeps the authored values and sums the offset in through the param's offset source
+   * (moveOffset), because a geometric ramp between shifted ends is not the shifted ramp. Either
+   * way lane + offset stays inside the parameter's bounds (a detune's: below the cents that
+   * keep its frequency at 0.95 × Nyquist). `offset`: the one to fit with.
+   */
+  function fit(events, dest, offset = dest.offset) {
+    if (!offset && !dest.bounds) return events;
     return events.map((e) => {
-      let v = e.value + dest.offset;
-      if (dest.bounds) v = clamp(v, dest.bounds.min, dest.bounds.max);
+      const total = e.value + offset;
+      const c = dest.bounds ? clamp(total, dest.bounds.min, dest.bounds.max) : total;
+      let v = c;
+      if (dest.mode === 'source') v = c === total ? e.value : c - offset;
       if (e.method === 'exponentialRampToValueAtTime' && !(v > 0)) {
-        return { ...e, method: 'linearRampToValueAtTime', value: v };
+        return { ...e, method: LINEAR, value: v };
       }
-      return { ...e, value: v };
+      return v === e.value ? e : { ...e, value: v };
     });
+  }
+
+  /** True when `dest`'s bounds clamp any of the lane's events (debugInfo limitedLanes). */
+  const clampsAny = (events, dest) => !!dest.bounds && events.some((e) => {
+    const total = e.value + dest.offset;
+    return total > dest.bounds.max || total < dest.bounds.min;
+  });
+  /** What a lane's events were fitted with: its offset, mode and bounds (reoffsetLanes). */
+  const fitted = (rec, dest) => {
+    rec.offset = dest.offset;
+    rec.mode = dest.mode;
+    rec.max = dest.bounds ? dest.bounds.max : null;
+    rec.limited = clampsAny(rec.raw, dest);
+  };
+
+  /** An offset source's value at t from its events (set, setTargetAtTime). */
+  function sourceValueAt(events, t) {
+    let v = 0;
+    let target = null;
+    for (const e of events) {
+      if (e.t > t) break;
+      const now = target ? target.v + (v - target.v) * Math.exp(-(e.t - target.t) / target.tau)
+        : v;
+      v = e.kind === 'target' ? now : e.v;
+      target = e.kind === 'target' ? e : null;
+    }
+    return target ? target.v + (v - target.v) * Math.exp(-(t - target.t) / target.tau) : v;
+  }
+
+  /**
+   * Bring `dest.param`'s offset source to `to` from `at` (mode 'source'): a ConstantSourceNode on
+   * the node's accounting, connected to the param and started at `at` when it is first needed
+   * (never while the offset is 0, so a lane without one schedules exactly as before); `glide`
+   * false sets it at `at` (it starts with the lane's own anchor there), true glides it from its
+   * value with setTargetAtTime τ PARAM_TAU_S, as the runtime glides a base. It is stopped and
+   * disconnected with its node (compiler.js disposeHandle).
+   */
+  function moveOffset(dest, at, to, glide) {
+    if (dest.mode !== 'source') return;
+    let src = offsetSources.get(dest.param);
+    if (!src) {
+      if (!to) return;
+      const node = dest.handle.acct.source(dest.handle.acct.track(
+        hooks.ctx.createConstantSource()));
+      node.offset.value = 0;
+      node.connect(dest.param);
+      node.start(at);
+      src = { node, events: [] };
+      offsetSources.set(dest.param, src);
+    }
+    const from = sourceValueAt(src.events, at);
+    if (from === to && !src.events.some((e) => e.t >= at)) return;
+    const p = src.node.offset;
+    p.cancelScheduledValues(at);
+    p.setValueAtTime(glide ? from : to, at);
+    src.events = [{ kind: 'set', t: at, v: glide ? from : to }];
+    if (glide && from !== to) {
+      p.setTargetAtTime(to, at, PARAM_TAU_S);
+      src.events.push({ kind: 'target', t: at, v: to, tau: PARAM_TAU_S });
+    }
   }
 
   function applyLane(laneId, target, events, cancelFrom = null) {
     const dest = paramFor(target, laneId);
     if (!dest) return;
-    const evs = shift(events, dest);
+    const evs = fit(events, dest);
     try {
       applyAutomation(dest.param, evs, { cancelFrom });
     } catch (e) {
@@ -812,11 +910,21 @@ export function createStudioTransport({
     }
     let rec = lanes.get(laneId);
     if (!rec || rec.param !== dest.param) {
-      rec = { laneId, target: { ...target }, param: dest.param, handle: dest.handle, events: [] };
+      rec = { laneId, target: { ...target }, param: dest.param, handle: dest.handle, events: [],
+        raw: [] };
     }
-    if (finite(cancelFrom)) rec.events = rec.events.filter((e) => e.time < cancelFrom);
+    if (finite(cancelFrom)) {
+      rec.events = rec.events.filter((e) => e.time < cancelFrom);
+      rec.raw = rec.raw.filter((e) => e.time < cancelFrom);
+    }
     rec.events.push(...evs);
+    rec.raw.push(...events);
+    fitted(rec, dest);
     lanes.set(laneId, rec);
+    released.delete(dest.param);
+    if (evs.length && !offsetSources.has(dest.param)) {
+      moveOffset(dest, evs[0].time, dest.offset, false);
+    }
     unplayed.delete(laneId);
   }
 
@@ -825,9 +933,10 @@ export function createStudioTransport({
     for (const rec of [...lanes.values()]) {
       const dest = paramFor(rec.target, rec.laneId);
       if (!dest || dest.param === rec.param) continue;
-      const v = scheduledValueAt(rec.events, horizon, null);
-      const evs = [...(v === null ? [] : [{ method: 'setValueAtTime', value: v, time: horizon }]),
-        ...rec.events.filter((e) => e.time > horizon)];
+      const v = scheduledValueAt(rec.raw, horizon, null);
+      const raw = [...(v === null ? [] : [{ method: 'setValueAtTime', value: v, time: horizon }]),
+        ...rec.raw.filter((e) => e.time > horizon)];
+      const evs = fit(raw, dest);
       try {
         applyAutomation(dest.param, evs, { cancelFrom: horizon });
       } catch (e) {
@@ -835,32 +944,122 @@ export function createStudioTransport({
         continue;
       }
       rec.events = rec.events.filter((e) => e.time < horizon).concat(evs);
+      rec.raw = rec.raw.filter((e) => e.time < horizon).concat(raw);
       rec.param = dest.param;
       rec.handle = dest.handle;
+      fitted(rec, dest);
+      moveOffset(dest, horizon, dest.offset, false);
       record({ key: rec.laneId, decision: 'rebind', at: horizon, reason: 'node-replaced' });
     }
   }
 
+  /**
+   * A changed constant offset (an edge's offset, depth or polarity; an edge added or removed)
+   * reaches every lane on that parameter from the horizon, not only the events scheduled after
+   * it (§103): mode 'source' glides the offset source, as the runtime glides a base; mode
+   * 'shift' holds the lane's value at the horizon and glides (LANE_GLIDE_S) onto its events with
+   * the new offset. A lane whose bounds changed (a detune's, with its frequency) or that the
+   * bounds now clamp differently is re-applied that way too.
+   */
+  function reoffsetLanes(horizon) {
+    for (const rec of lanes.values()) {
+      const dest = paramFor(rec.target, rec.laneId);
+      if (!dest || dest.param !== rec.param) continue;
+      const max = dest.bounds ? dest.bounds.max : null;
+      if (dest.offset === rec.offset && max === rec.max) continue;
+      const before = { ...dest, offset: rec.offset,
+        bounds: rec.max === null ? null : { ...dest.bounds, max: rec.max } };
+      fitted(rec, dest);
+      moveOffset(dest, horizon, dest.offset, true);
+      // Values the param already has need nothing: the offset source carries the offset, and
+      // new bounds that clamp nothing new change nothing.
+      const v0 = scheduledValueAt(rec.raw, horizon, null);
+      const later = [...(v0 === null ? [] : [{ method: 'setValueAtTime', value: v0,
+        time: horizon }]), ...rec.raw.filter((e) => e.time > horizon)];
+      const was = fit(later, before);
+      const same = fit(later, dest).every((e, i) => e.value === was[i].value);
+      if (same && (dest.mode === 'source' || dest.offset === before.offset)) continue;
+      const held = holdEvents(rec.events, horizon);
+      if (held.value === null) continue;
+      const end = frameCeil(horizon + LANE_GLIDE_S, hooks.ctx.sampleRate);
+      const to = scheduledValueAt(rec.raw, end, null);
+      const evs = held.events.concat(to === null ? []
+        : fit([{ method: LINEAR, value: to, time: end }], dest),
+      fit(rec.raw.filter((e) => e.time > end), dest));
+      try {
+        applyAutomation(dest.param, evs, { cancelFrom: horizon });
+      } catch (e) {
+        laneWarn(rec.laneId, e);
+        continue;
+      }
+      rec.events = rec.events.filter((e) => e.time < horizon).concat(evs);
+    }
+  }
+
+  /**
+   * The value `dest.param` has at t without a lane on it (its offset source aside): a removed
+   * lane's glide back to the base, else the runtime's base (the node's value plus the edges'
+   * constant offset, within the bounds); null when the node has no such value.
+   */
+  function unownedValueAt(dest, target, t) {
+    const r = released.get(dest.param);
+    if (r) return r.to + (r.v - r.to) * Math.exp(-Math.max(0, t - r.at) / PARAM_TAU_S);
+    const n = nodeOf(model, target.node);
+    const base = n && n.params[target.param];
+    if (!finite(base)) return null;
+    return dest.bounds ? clamp(base + dest.offset, dest.bounds.min, dest.bounds.max)
+      : base + dest.offset;
+  }
+
   function applyLaneEdit(a) {
-    if (!a.removed) {
+    const rec = lanes.get(a.laneId);
+    if (!a.removed && rec && !a.fresh) {
       applyLane(a.laneId, a.target, a.events, a.cancelFrom);
       return;
     }
+    if (!a.removed) {
+      // A lane the scheduler has nothing of (added, or restored by undo, while playing; plan
+      // entry `fresh`) or the transport does not play yet: the scheduler anchors it at the
+      // node's value; it starts from the value the param has at the horizon instead, then the
+      // plan's glide takes it to the lane (and the offset source glides in), so it never steps
+      // (V272 B4).
+      const dest = paramFor(a.target, a.laneId);
+      if (!dest) return;
+      const h = a.cancelFrom;
+      // The param's own value at h (an offset source, if any, glides on from where it is).
+      const own = rec && rec.param === dest.param ? scheduledValueAt(rec.events, h, null)
+        : unownedValueAt(dest, a.target, h);
+      let events = a.events;
+      if (own !== null) {
+        const anchor = dest.mode === 'source' ? own : own - dest.offset;
+        events = [{ method: 'setValueAtTime', value: anchor, time: h, hold: true },
+          ...a.events.filter((e) => !(e.hold && e.time === h))];
+      }
+      moveOffset(dest, h, dest.offset, true);
+      applyLane(a.laneId, a.target, events, h);
+      return;
+    }
     // The lane is gone: hold its exact value at the horizon, then glide back to the base value
-    // the runtime owns again (setTargetAtTime τ PARAM_TAU_S, as the runtime's own glides).
+    // the runtime owns again (setTargetAtTime τ PARAM_TAU_S, as the runtime's own glides); an
+    // offset source glides to 0 with it, so the sum glides to the base as one curve.
     lanes.delete(a.laneId);
     const dest = paramFor(a.target, a.laneId);
     unplayed.delete(a.laneId); // the lane no longer exists, whether or not its node does
     if (!dest) return;
     try {
-      applyAutomation(dest.param, shift(a.events, dest), { cancelFrom: a.cancelFrom });
+      const evs = fit(a.events, dest);
+      applyAutomation(dest.param, evs, { cancelFrom: a.cancelFrom });
       const n = nodeOf(model, a.target.node);
       const base = n && n.params[a.target.param];
+      const held = evs.length ? evs[evs.length - 1].value : null;
+      let to = held;
       if (finite(base)) {
-        let v = base + dest.offset;
-        if (dest.bounds) v = clamp(v, dest.bounds.min, dest.bounds.max);
-        dest.param.setTargetAtTime(v, a.cancelFrom, PARAM_TAU_S);
+        to = base + dest.offset;
+        if (dest.bounds) to = clamp(to, dest.bounds.min, dest.bounds.max);
+        dest.param.setTargetAtTime(to, a.cancelFrom, PARAM_TAU_S);
       }
+      if (held !== null) released.set(dest.param, { at: a.cancelFrom, v: held, to });
+      moveOffset(dest, a.cancelFrom, 0, true);
     } catch (e) {
       laneWarn(a.laneId, e);
     }
@@ -966,10 +1165,19 @@ export function createStudioTransport({
       if (!a.target) continue;
       const dest = paramFor(a.target, a.laneId);
       if (!dest) continue;
+      const evs = fit(a.events, dest);
       try {
-        applyAutomation(dest.param, shift(a.events, dest), { cancelFrom: a.cancelFrom });
+        applyAutomation(dest.param, evs, { cancelFrom: a.cancelFrom });
       } catch (e) {
         laneWarn(a.laneId, e);
+        continue;
+      }
+      // The record ends with the hold, as the param does: a locate plays on from it, and a
+      // rebind must not read the events cancelled here (V272 B8).
+      const rec = lanes.get(a.laneId);
+      if (rec && rec.param === dest.param) {
+        rec.events = rec.events.filter((e) => e.time < a.cancelFrom).concat(evs);
+        rec.raw = rec.raw.filter((e) => e.time < a.cancelFrom).concat(a.events);
       }
     }
     if (measures.size) measure({ type: 'stop', at: plan.at });
@@ -1030,6 +1238,7 @@ export function createStudioTransport({
       }
     }
     rebindLanes(horizon);
+    reoffsetLanes(horizon);
   }
 
   // ------------------------------------------------------------ the wake-up
@@ -1043,10 +1252,14 @@ export function createStudioTransport({
       ticksPassed.set(k.nodeId, (ticksPassed.get(k.nodeId) || 0) + 1);
     }
     for (const [key, m] of measures) if (m.endTime + STOP_PAD_S < now) measures.delete(key);
-    for (const rec of lanes.values()) {
+    const keep = (evs) => {
       let i = 0;
-      while (i + 1 < rec.events.length && rec.events[i + 1].time <= now) i++;
-      if (i > 0) rec.events = rec.events.slice(i);
+      while (i + 1 < evs.length && evs[i + 1].time <= now) i++;
+      return i > 0 ? evs.slice(i) : evs;
+    };
+    for (const rec of lanes.values()) {
+      rec.events = keep(rec.events);
+      rec.raw = keep(rec.raw);
     }
   }
 
@@ -1368,7 +1581,11 @@ export function createStudioTransport({
       clockCount: ticks.size,
       measurementCount: measures.size,
       lanes: [...lanes.values()].map((l) => ({ laneId: l.laneId, target: { ...l.target },
-        scheduled: l.events.length })),
+        scheduled: l.events.length, limited: !!l.limited })),
+      // Lanes whose values the bounds clamp beyond what they author (with the edges' offset,
+      // a detune below 0.95 × Nyquist of its frequency, V272 A7), like runtime limitedParams.
+      limitedLanes: [...lanes.values()].filter((l) => l.limited).map((l) => ({
+        laneId: l.laneId, node: l.target.node, param: l.target.param })),
       claims: [...claims.keys()],
       gatedEnvelopes: [...gateOwned.keys()],
       ownedParams: typeof runtime.ownedParams === 'function' ? runtime.ownedParams() : [],
