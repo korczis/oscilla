@@ -30,12 +30,15 @@ function run(repo, ...args) {
   return { status: r.status, out: r.stdout, err: r.stderr };
 }
 
-/** Deterministic text that gzip cannot shrink much: a linear congruential generator's bytes. */
+/** Deterministic text gzip cannot shrink much: printable bytes from a xorshift32 generator. */
 function noise(n, seed = 1) {
   let x = seed;
   let s = '';
   for (let i = 0; i < n; i += 1) {
-    x = (x * 1103515245 + 12345) % 2147483648;
+    x ^= x << 13;
+    x ^= x >>> 17;
+    x ^= x << 5;
+    x >>>= 0;
     s += String.fromCharCode(33 + (x % 94));
   }
   return s;
