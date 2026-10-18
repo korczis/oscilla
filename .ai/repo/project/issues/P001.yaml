@@ -19,4 +19,25 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-18
-updated_at: 2026-10-18
+updated_at: 2026-10-18T13:36:23Z
+started_at: 2026-10-18T13:20:36Z
+started_event: sha256:a768cb2d1ebddb70aa5aa54b6dc808c903b1d019084e934a4d37d0c9f1483ee9
+verified_at: 2026-10-18T13:36:14Z
+verified_event: sha256:82ef5066dec4acb369f8d6a37fe9590956fa6aa17da8a715db50385764b9e879
+completed_at: 2026-10-18T13:36:23Z
+completed_event: sha256:d368b3336af0f21d00475a77fc6948e25f66725923c8be1dd846025c51dc9503
+evidence:
+  - covers: verified
+    type: artifact
+    command: "test -s docs/first-screen-options.md && git diff --quiet 50f6d6c HEAD -- src"
+    result: "exit 0: docs/first-screen-options.md is non-empty (analysis at 1536x1024 and 390x844, changes since v3.0.0, options A-C each stating how it serves ADR 0051's wedge, in Q002's sentence); no file under src/ differs from main 50f6d6c"
+    artifact: "docs/first-screen-options.md"
+    commit: a38bcec8f251c94ab3fbdc9971126fb47ac5a63a
+    recorded_at: 2026-10-18T13:35:55Z
+  - covers: verified
+    type: test
+    command: "awk '/^```js first-screen-measure$/{f=1;next} f&&/^```$/{exit} f' docs/first-screen-options.md | node -"
+    result: "exit 0, run twice on dist/index.html at 50f6d6c (Chromium 153.0.8010.12, file://): identical tables; every per-part row of sections 2.1 and 2.2 appears verbatim in the output (Playground 1536x1024: 101 usable controls, one-signal parts 63.4 %, Measure 0 %; 390x844: Source & Pattern 67.3 %)"
+    artifact: "docs/first-screen-options.md"
+    commit: a38bcec8f251c94ab3fbdc9971126fb47ac5a63a
+    recorded_at: 2026-10-18T13:36:04Z
