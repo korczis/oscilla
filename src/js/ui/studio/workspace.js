@@ -107,6 +107,59 @@ function focusedPane() {
   return a && a.closest ? a.closest('.osc-st-timeline, .osc-st-inspector') : null;
 }
 
+/** True when `d` is an open modal <dialog> (showModal; the page outside it is inert). */
+function isModal(d) {
+  try {
+    return d.matches(':modal');
+  } catch (e) {
+    return d.getAttribute('aria-modal') === 'true'; // a browser without :modal
+  }
+}
+
+/** The modal dialog announcements must be said in: the one holding focus, else the last. */
+function topModalDialog() {
+  const open = [...document.querySelectorAll('dialog[open]')].filter(isModal);
+  if (!open.length) return null;
+  const a = document.activeElement;
+  return open.find((d) => d.contains(a)) || open[open.length - 1];
+}
+
+/**
+ * The polite and assertive live regions inside `dlg` (V272 C4): made once per dialog, kept
+ * while its content is rebuilt elsewhere. -> { live, alert, made }
+ */
+function dialogRegions(dlg) {
+  let live = dlg.querySelector(':scope > [data-osc="studio.dlg.live"]');
+  let alert = dlg.querySelector(':scope > [data-osc="studio.dlg.alert"]');
+  const made = !live || !alert;
+  if (!live) {
+    live = document.createElement('p');
+    live.className = 'osc-sr-only';
+    live.setAttribute('role', 'status');
+    live.setAttribute('aria-live', 'polite');
+    live.setAttribute('aria-atomic', 'true');
+    live.dataset.osc = 'studio.dlg.live';
+    dlg.append(live);
+  }
+  if (!alert) {
+    alert = document.createElement('p');
+    alert.className = 'osc-sr-only';
+    alert.setAttribute('role', 'alert');
+    alert.setAttribute('aria-atomic', 'true');
+    alert.dataset.osc = 'studio.dlg.alert';
+    dlg.append(alert);
+  }
+  return { live, alert, made };
+}
+
+/** Say `text` in `dlg`; a region made just now is filled a moment later, so it is heard. */
+function sayInDialog(dlg, text, assertive) {
+  const r = dialogRegions(dlg);
+  const el = assertive ? r.alert : r.live;
+  if (r.made) setTimeout(() => { el.textContent = text; }, 30);
+  else el.textContent = text;
+}
+
 export const STUDIO_SUBVIEWS = Object.freeze(['graph', 'timeline', 'inspector']);
 /** Largest Studio file read from disk (the import pipeline re-checks every limit). */
 export const STUDIO_FILE_MAX_BYTES = 4 * 1024 * 1024;
@@ -448,13 +501,20 @@ export function createStudioUi(svc = {}) {
     if (!text || !ctx.cmp) return;
     const s = ctx.cmp.studio;
     // Repeating the same sentence must be announced again: alternate an invisible suffix.
+    let said;
     if (assertive) {
       ctx.alertToggle = !ctx.alertToggle;
-      s.alert = `${text}${ctx.alertToggle ? '​' : ''}`;
+      said = `${text}${ctx.alertToggle ? '​' : ''}`;
+      s.alert = said;
     } else {
       ctx.liveToggle = !ctx.liveToggle;
-      s.live = `${text}${ctx.liveToggle ? '​' : ''}`;
+      said = `${text}${ctx.liveToggle ? '​' : ''}`;
+      s.live = said;
     }
+    // An open modal dialog makes the rest of the page inert, the regions above included: the
+    // sentence is said inside the top-most one too (V272 C4, WCAG status messages).
+    const dlg = topModalDialog();
+    if (dlg) sayInDialog(dlg, said, assertive);
   }
 
   function recompile(model) {
@@ -999,6 +1059,8 @@ export function createStudioUi(svc = {}) {
       downloadFile,
       ...dialogSvc,
     });
+    // Each Studio dialog holds its live regions before anything is said in it (V272 C4).
+    for (const d of document.querySelectorAll('dialog[data-osc-studio-dialog]')) dialogRegions(d);
     const tlHost = document.querySelector('[data-osc="studio.timeline"]');
     if (tlHost && typeof mountStudioTimeline === 'function') {
       try {
