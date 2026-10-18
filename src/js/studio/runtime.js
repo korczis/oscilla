@@ -62,6 +62,7 @@
 //   runtime.ownedParams()          the current claims, [{ node, param }]
 //   runtime.baseOffset(id, key)    the constant part the modulation edges add to a parameter's
 //                                  base (linear edges: unipolar polarity, offset), in its unit,
+//                                  never the amount a base was lowered to fit (V272 R-1),
 //                                  plus the constant cents of log edges that land on the same
 //                                  AudioParam (an Oscillator's detune, V431 X2);
 //                                  an owner adds it to the values it schedules (automation.js
@@ -526,7 +527,9 @@ export function createStudioRuntime({
     const cb = bases.get(id);
     const pn = plan.nodes.get(id);
     if (!cb || !pn || !cb.base[key] || typeof pn.params[key] !== 'number') return 0;
-    let d = cb.base[key].value - pn.params[key];
+    // The edges' constant part only: a base computeBases moved to fit its range (a static detune
+    // lowered into the Nyquist headroom) is not an offset a lane owner adds (V272 review R-1).
+    let d = cb.base[key].value + ((cb.lowered && cb.lowered[key]) || 0) - pn.params[key];
     // An AudioParam that also carries log-mapped modulation (an Oscillator's detune holds the
     // frequency edges' constant cents): the owner of that param must schedule those cents too,
     // or a lane on it drops them (V431 review X2/X8).

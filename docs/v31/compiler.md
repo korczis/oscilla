@@ -104,7 +104,9 @@ The runtime then instantiates the plan in order and routes it:
   to fit above the frequency (a lane's peak counts as its reference), a positive one lowers the
   cap of the frequency's own edges, and the upward excursion of the detune's edges is scaled to
   what is left; a static base lowered this way is listed in `debugInfo().limitedParams`
-  (`{ node, param }`), a scaled edge in `limitedEdges`. Other parameters are not clamped at
+  (`{ node, param }`), a scaled edge in `limitedEdges`. That lowering is not an edge offset:
+  `runtime.baseOffset` leaves it out, so a detune lane, which overrides the static value, plays
+  its own values within its own bound (review V272 R-1). Other parameters are not clamped at
   audio rate (an AudioParam sum cannot be); when base ± modulation can leave the range it is
   listed in `debugInfo().exceeds` (§242: excessive gain made visible, the limiter is a last
   resort).
