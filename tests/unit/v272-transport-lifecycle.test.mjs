@@ -93,8 +93,9 @@ const settle = async () => {
   for (let i = 0; i < 20; i++) await Promise.resolve();
 };
 
-async function measureWith(edit) {
+async function measureWith(edit, { outputLevel = () => null } = {}) {
   const runs = [];
+  const got = [];
   const states = [];
   let mr = null;
   const s = setup(templateModel(MEASUREMENT_TEMPLATE_ID), { onMeasurement: (ev) => mr.hook(ev) });
@@ -102,10 +103,11 @@ async function measureWith(edit) {
     getModel: () => s.store.getModel(), sampleRate: () => SR, now: () => s.ctx.currentTime,
     run: async (recipe, m, o) => {
       runs.push(o);
+      got.push({ recipe, model: m });
       return { ok: true, experimentId: 'x' };
     },
     stopStudio: () => s.transport.stop({ fast: true }), timers: s.fx.env,
-    onChange: (v) => states.push(v.state),
+    onChange: (v) => states.push(v.state), outputLevel,
   });
   // A 2 s lead-in before the measurement clips (moved last first, so none overlaps).
   for (const c of [...s.store.getModel().timeline.clips].sort((a, b) => b.start - a.start)) {
@@ -117,7 +119,7 @@ async function measureWith(edit) {
   if (edit) edit(s);
   s.fx.advanceTo(r.baseTime + 2.5);
   await settle();
-  return { runs: runs.length, states: states.join('>'), view: mr.view };
+  return { runs: runs.length, got, states: states.join('>'), view: mr.view, s };
 }
 
 test('V272 B2: an edit while a Studio measurement hand-off is pending keeps the measurement',
@@ -141,6 +143,44 @@ test('V272 B2: a measurement clip moved while its hand-off is pending re-arms it
     }
   });
   assert.equal(moved.runs, 1, `the rescheduled measurement runs (states ${moved.states})`);
+});
+
+// R-2 (review of #197): B2 keeps a pending measurement, so an admitted edit in the armed window
+// re-derives its recipe from the model being played; MEASURE plays at level 0.08 here.
+const paramOf = (m, id, key) => m.graph.nodes.find((n) => n.id === id).params[key];
+const atMeasureLevel = { outputLevel: () => 0.08 };
+
+test('V272 R-2: an edit while a measurement is pending re-derives its recipe', async () => {
+  const edited = await measureWith((s) => {
+    dispatch(s, { type: 'NODE_PARAM_SET', nodeId: 'sweep-1', key: 'end', value: 10000 });
+  }, atMeasureLevel);
+  assert.equal(edited.runs, 1, `the measurement runs (states ${edited.states})`);
+  assert.equal(edited.got[0].recipe.stimulus.f2, 10000, 'the recipe has the edited Sweep end');
+  assert.equal(paramOf(edited.got[0].model, 'sweep-1', 'end'), 10000,
+    'the provenance model is the edited one');
+  assert.equal(edited.view.state, 'done');
+});
+
+test('V272 R-2: an edit that the recipe now refuses fails the pending measurement', async () => {
+  const edited = await measureWith((s) => {
+    dispatch(s, { type: 'NODE_PARAM_SET', nodeId: 'sweep-1', key: 'end', value: 10000 });
+    dispatch(s, { type: 'NODE_PARAM_SET', nodeId: 'master-1', key: 'level', value: 0.04 });
+  }, atMeasureLevel);
+  assert.equal(edited.runs, 0, `nothing is measured (states ${edited.states})`);
+  assert.equal(edited.view.state, 'failed');
+  assert.match(edited.view.text, /^Measurement not run: Master shows level 0\.04/);
+  assert.equal(edited.s.transport.playing, true, 'the pass plays on');
+});
+
+test('V272 R-2: an edit the recipe does not depend on keeps the armed measurement', async () => {
+  const edited = await measureWith((s) => {
+    dispatch(s, { type: 'NODE_RENAME', nodeId: 'mic-1', name: 'Room mic' });
+    dispatch(s, { type: 'NODE_PARAM_SET', nodeId: 'result-1', key: 'smoothing', value: 3 });
+  }, atMeasureLevel);
+  assert.equal(edited.runs, 1, `the measurement runs (states ${edited.states})`);
+  assert.equal(edited.states.split('>').filter((x) => x === 'pending').length, 1,
+    `armed once (states ${edited.states})`);
+  assert.equal(edited.view.state, 'done');
 });
 
 /** VCA gain of the reference Envelope at position 0.85 s, gates every 0.5 s, `edit` at 0.52 s. */
