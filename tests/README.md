@@ -25,6 +25,7 @@ for people, never gating · **DELETED** removed, with its replacement.
 | `unit/one-source-constants.test.mjs` | GATE | one source for the safety and rate constants (rule `project.audio-engine-discipline`): no second 0.95 Nyquist literal, render quantum, gain floor, start offset, cents per octave or transfer validity criterion outside its home module, and the user copy built from them ("95 %", step counts, repeats, the Filter Lab's 48 kHz label) is byte for byte the text it replaced |
 | `unit/engine.test.mjs` | GATE | AudioEngine snapshot and extension points on a recording mock context |
 | `unit/core.test.mjs` | GATE | applyConfig / URL restore, storage migration, safety rules |
+| `unit/audio-test-matrix.test.mjs` | GATE | the section 79 audio test matrix (S079): 20 Hz to 20 kHz and 1 Hz below Nyquist at 44.1 and 48 kHz, each validated, read out and mapped to period, wavelength, nearest note and region by the core helpers and the instrument component, against values written out by hand |
 | `unit/core-visualization.test.mjs` | GATE | the bridge reads snapshots only; p5 views render on a stub p5 |
 | `unit/charts.test.mjs` | GATE | chart axis, log mapping, FFT-to-pixel and drag maths |
 | `unit/analysis-peak.test.mjs` | GATE | FFT, Blackman window, dBFS calibration, peak interpolation |
