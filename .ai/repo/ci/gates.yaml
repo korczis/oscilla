@@ -33,8 +33,8 @@ gates:
   - id: unit
     job: unit
     always: true
-    runs: npm test && npm run version:check && npm run build:check && npm run verify-dist
-    summary: the unit and freeze suites, one product version everywhere, the committed dist equal to a clean rebuild, and the artifact rules (single file, no runtime fetch, licence notices, budget)
+    runs: npm test && npm run version:check && npm run build:check && npm run verify-dist && node scripts/size-report.mjs --base-branch origin/main
+    summary: the unit and freeze suites, one product version everywhere, the committed dist equal to a clean rebuild, the artifact rules (single file, no runtime fetch, licence notices, budget), and the size report of dist against the budget and the merge base (a report, never a failure on a size)
 
   - id: engine-chromium
     job: engine
