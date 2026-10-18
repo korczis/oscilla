@@ -24,4 +24,18 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-18
-updated_at: 2026-10-18
+updated_at: 2026-10-18T13:35:25Z
+started_at: 2026-10-18T13:20:57Z
+started_event: sha256:68900869d949cadea67a41f6ac042ca9e7d6c730ffe20089894e05005f0ff75e
+verified_at: 2026-10-18T13:35:15Z
+verified_event: sha256:fdaa775afc9a469042b1f07cf7926ece650aa77cb1d7c442afc6b24216ce8090
+completed_at: 2026-10-18T13:35:25Z
+completed_event: sha256:310d6517c1e241141cfab5287880b52471cf69e25963cd1b0dc057451e42162f
+evidence:
+  - covers: verified
+    type: test
+    command: "majordomus adr check && node --test tests/unit/knowledge-integrity.test.mjs"
+    result: "adr check: 60 decisions examined, every identity unique, every reference resolves, adr-0060 added here (proposed, cites Q003); knowledge-integrity 34/34 pass, V272 D8 included, with 0060 in ADR_NOT_A_CAPABILITY (reason > 30 chars); without that entry D8 failed naming 0060"
+    artifact: ".ai/repo/adrs/0060-no-commercial-path-before-v4-oscilla-stays-a-free-mit-laboratory.md"
+    commit: aba4b03616985ac5700a3dc785e6486689551103
+    recorded_at: 2026-10-18T13:35:10Z
