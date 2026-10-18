@@ -167,6 +167,13 @@ function baselineHistory() {
   });
 }
 
+/** What `current` raises over the baseline's git history (`history`, newest first): `current`
+ *  against the newest version that differs from it. */
+export function capHistoryProblems(current, history) {
+  const earlier = history.find((v) => canonical(v.baseline) !== canonical(current));
+  return earlier ? raiseProblems(current, earlier.baseline, earlier.sha) : [];
+}
+
 const clone = (value) => JSON.parse(JSON.stringify(value));
 
 // ------------------------------------------------------------------------------ the tree
@@ -210,7 +217,7 @@ test('a cap only falls: none is above its value in the most recent earlier commi
     t.diagnostic(`the baseline is the record ${history.at(-1).sha} made: its own earlier value`);
     return;
   }
-  const problems = raiseProblems(current, earlier.baseline, earlier.sha);
+  const problems = capHistoryProblems(current, history);
   assert.deepEqual(problems, [], `a cap rose; it may only fall:\n  ${problems.join('\n  ')}`);
 });
 
@@ -376,6 +383,49 @@ test('mutation: a raises entry edited or removed after it was recorded fails', (
   const appended = clone(earlier);
   appended.raises.unshift({ file, cap: earlier.caps[file], pr: 4343, reason: RAISE_REASON });
   assert.deepEqual(raiseProblems(appended, earlier, 'abc123'), [], 'an entry is only added');
+});
+
+test('E001 F1 mutation: a raise without an entry, then an unrelated lowering, still fails', () => {
+  const { baseline: original } = tree();
+  const [file, other] = Object.keys(original.caps).sort();
+  const raised = clone(original);
+  raised.caps[file] = original.caps[file] + 1_000;
+  const lowered = clone(raised);
+  lowered.caps[other] = original.caps[other] - 1_000;
+  const history = [
+    { sha: 'lowered', baseline: lowered },
+    { sha: 'raised', baseline: raised },
+    { sha: 'original', baseline: original },
+  ];
+  const problems = capHistoryProblems(lowered, history);
+  assert.equal(problems.length, 1, problems.join('\n'));
+  assert.match(problems[0], new RegExp(`^${file}: the cap ${raised.caps[file]} is above its value `
+    + `${original.caps[file]} at original with no raises entry`));
+  // An entry edited in one commit and covered by an unrelated change in the next.
+  const declared = clone(original);
+  declared.raises.push({ file, cap: original.caps[file], pr: 4242, reason: RAISE_REASON });
+  const edited = clone(declared);
+  edited.raises.at(-1).pr = 4343;
+  const covered = clone(edited);
+  covered.caps[other] = original.caps[other] - 1_000;
+  const laundered = capHistoryProblems(covered, [
+    { sha: 'covered', baseline: covered },
+    { sha: 'edited', baseline: edited },
+    { sha: 'declared', baseline: declared },
+  ]);
+  assert.equal(laundered.length, 1, laundered.join('\n'));
+  assert.match(laundered[0], /^raises: the entry .* of declared was edited or removed/);
+  // The working tree equal to the newest commit, and a declared raise, pass.
+  const honest = clone(original);
+  honest.caps[file] = raised.caps[file];
+  honest.raises.push({ file, cap: honest.caps[file], pr: 4242, reason: RAISE_REASON });
+  const later = clone(honest);
+  later.caps[other] = original.caps[other] - 1_000;
+  assert.deepEqual(capHistoryProblems(later, [
+    { sha: 'later', baseline: later },
+    { sha: 'honest', baseline: honest },
+    { sha: 'original', baseline: original },
+  ]), [], 'every step declared');
 });
 
 test('mutation: a malformed raises entry in the ledger fails the tree', () => {
