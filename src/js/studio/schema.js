@@ -101,6 +101,11 @@ export const NOTES_MAX_CHARS = 10000;
 export const DEFAULT_TITLE = 'Untitled Studio';
 const MAX_PLAIN_DEPTH = 32;
 
+/**
+ * Ranges of the persisted view values (the import's, V272 A1): |panX|, |panY|, |scrollX| at most
+ * `pan`; graph zoom and timeline pxPerSecond within `scale`. VIEW_SET is held to them as well.
+ */
+export const VIEW_LIMITS = Object.freeze({ pan: 1e9, scale: Object.freeze([1e-6, 1e6]) });
 export const DEFAULT_VIEW = Object.freeze({
   graph: Object.freeze({ panX: 0, panY: 0, zoom: 1 }),
   timeline: Object.freeze({ pxPerSecond: 100, scrollX: 0 }),

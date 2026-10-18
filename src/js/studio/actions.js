@@ -31,9 +31,12 @@
 // appear to do nothing; editors restore focus themselves (§142).
 //
 // INVARIANTS:
-//   - The store's model is always valid: a semantic action whose result fails
-//     validateStudioModel is rejected with the first error's message and leaves model, history,
-//     selection and revision unchanged (§46, §179). The initial model must be valid.
+//   - The store's model is always valid and reopenable: a semantic action whose result fails
+//     validateStudioCommit (validateStudioModel, the import's limits and string rules, and
+//     normalized form: what is saved loads again and matches its studioHash, V272 A1, A6) is
+//     rejected with the first error's message and leaves model, history, selection and revision
+//     unchanged (§46, §179). The initial model must pass it too. NODE_MOVE, the drag gesture's
+//     action, changes positions only and is held to isPosition instead.
 //   - Models are deep-frozen and never mutated; actions return new models sharing unchanged
 //     sub-objects (history.js explains the memory reasoning).
 //   - `revision` is monotonic and in memory only (§178): it increases on every semantic change,
@@ -64,11 +67,11 @@ import { canConnect, validateEdgeProps } from './ports.js';
 import { NODE_REGISTRY, projectParams, validateParamValue } from './registry.js';
 import {
   CLIP_KINDS, CLIP_TIME_BASES, MARKER_KINDS, NAME_MAX_CHARS, POSITION_MESSAGE, StudioSchemaError,
-  TRACK_CLIP_KINDS,
+  TRACK_CLIP_KINDS, VIEW_LIMITS,
   assertPlainData, isPosition, collectIds, copyPlain, createStudioModel, normalizeClipPayload,
   normalizeStudio, sortPoints, withoutNodes,
 } from './schema.js';
-import { validateStudioModel } from './validate.js';
+import { validateStudioCommit } from './validate.js';
 import { createHistory, STUDIO_HISTORY_LIMIT } from './history.js';
 import { PatchError, insertPatch, replaceWithPatch } from './patches.js';
 import { NO_TRACE } from '../core/trace.js';
@@ -264,14 +267,18 @@ function pasteInto(model, clipboard, offset, ctx) {
     created.nodes.push(node.id);
   }
   const edges = [...model.graph.edges];
+  const withNodes = withGraph(model, { nodes });
   for (const e of clipboard.edges) {
     if (!e || !e.from || !e.to || !idMap.has(e.from.node) || !idMap.has(e.to.node)) continue;
-    const edge = {
-      id: ctx.newId('edge'),
-      from: { node: idMap.get(e.from.node), port: e.from.port },
-      to: { node: idMap.get(e.to.node), port: e.to.port },
-      props: copyPlain(e.props || {}),
-    };
+    const from = { node: idMap.get(e.from.node), port: e.from.port };
+    const to = { node: idMap.get(e.to.node), port: e.to.port };
+    // Props completed for the signal type as EDGE_ADD completes them (V272 A6).
+    const r = resolvePorts(withNodes, from, to, ctx.registry);
+    const props = validateEdgeProps(e.props || {}, r.type, r.tgt, r.paramDef);
+    if (!props.ok) {
+      reject(`Connection rejected: ${props.errors.map((x) => `${x.field} ${x.text}`).join('; ')}.`);
+    }
+    const edge = { id: ctx.newId('edge'), from, to, props: copyPlain(props.props) };
     edges.push(edge);
     created.edges.push(edge.id);
   }
@@ -669,6 +676,8 @@ const REDUCERS = {
 
   TRANSPORT_SET(model, a) {
     const cur = model.transport;
+    if (a.timeSignature != null && (!Array.isArray(a.timeSignature)
+      || a.timeSignature.length !== 2)) reject('A time signature is [beats, unit].');
     const transport = { timeMode: a.timeMode ?? cur.timeMode, tempo: a.tempo ?? cur.tempo,
       timeSignature: a.timeSignature ? [...a.timeSignature] : cur.timeSignature };
     if (transport.timeMode === cur.timeMode && transport.tempo === cur.tempo
@@ -783,13 +792,16 @@ function pruneSelection(sel, model) {
   return Object.freeze(out);
 }
 
+/** A view within the import's ranges (schema.js VIEW_LIMITS, V272 A1), or a rejection. */
 function checkView(view, cur) {
   const v = view || {};
   const g = { ...cur.graph, ...(v.graph || {}) };
   const t = { ...cur.timeline, ...(v.timeline || {}) };
-  if (![g.panX, g.panY, t.scrollX].every(finite) || !(finite(g.zoom) && g.zoom > 0)
-    || !(finite(t.pxPerSecond) && t.pxPerSecond > 0)) {
-    reject('View values must be finite; zoom and timeline scale must be positive.');
+  const { pan, scale: [lo, hi] } = VIEW_LIMITS;
+  if (![g.panX, g.panY, t.scrollX].every((x) => finite(x) && Math.abs(x) <= pan)
+    || ![g.zoom, t.pxPerSecond].every((x) => finite(x) && x >= lo && x <= hi)) {
+    reject(`View values must be finite: pan and scroll within ±${pan}, zoom and timeline scale `
+      + `between ${lo} and ${hi}.`);
   }
   return { graph: { panX: g.panX, panY: g.panY, zoom: g.zoom },
     timeline: { pxPerSecond: t.pxPerSecond, scrollX: t.scrollX } };
@@ -810,7 +822,7 @@ export function createStudioStore(initialModel, {
   }
   let model = deepFreeze(initialModel == null ? createStudioModel({}, { registry })
     : normalizeStudio(initialModel, { registry }));
-  const initial = validateStudioModel(model, { registry });
+  const initial = validateStudioCommit(model, { registry });
   if (!initial.ok) {
     throw new StudioSchemaError(`createStudioStore: the initial model is invalid: `
       + `${initial.errors[0].message}`);
@@ -907,7 +919,7 @@ export function createStudioStore(initialModel, {
       // (a function or a prototype-setting key in a payload or pasted props: V431 A4, X9).
       if (action.type !== 'NODE_MOVE') assertPlainData(result.model);
       if (action.type !== 'NODE_MOVE') {
-        const report = validateStudioModel(result.model, { registry });
+        const report = validateStudioCommit(result.model, { registry });
         if (!report.ok) {
           const e = report.errors[0];
           return fail(e.detail ? `${e.message} (${e.detail})` : e.message, report.errors);
