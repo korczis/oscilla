@@ -210,7 +210,8 @@ export function importPatch(input, opts = {}) {
   const text = (v, path, max, o) => (typeof v === 'string' && v.length > max
     ? c.add(path, `longer than ${max} characters`, 'limit-exceeded') : c.str(v, path, max, o));
   if (c.keys(p, '', ENVELOPE.req, ENVELOPE.opt)) {
-    text(p.name, 'name', NAME_MAX_CHARS, { min: 1 });
+    // The name is judged as it is kept, trimmed: a name of spaces is empty (V272 A9).
+    text(typeof p.name === 'string' ? p.name.trim() : p.name, 'name', NAME_MAX_CHARS, { min: 1 });
     if (p.description !== undefined) {
       text(p.description, 'description', PATCH_DESCRIPTION_MAX_CHARS, { multiline: true });
     }
