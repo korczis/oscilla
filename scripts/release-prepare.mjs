@@ -11,8 +11,10 @@
 //      - the proposed version is the first stable release of a new major (its major is above
 //        that of every stable v* tag reachable from HEAD, whatever its minor and patch) and no
 //        vX.0.0-rc.N tag has a record on the prerelease channel (ADR 0047).
-//        `--no-rc-because <ADR>` overrides it only when it names an ADR in .ai/repo/adrs/
-//        whose status is accepted.
+//        `--no-rc-because <ADR>` overrides it only when it names an RC exemption in
+//        .ai/repo/adrs/: status accepted, tagged `rc-exemption` and `major-<N>` for the major
+//        being opened, with `adr:adr-0047` (the decision it exempts) under `related`. Any other
+//        ADR, accepted or not, is refused (convention: .ai/repo/adrs/README.md).
 //   3. bump package.json + package-lock.json ONCE (npm version --no-git-tag-version), or
 //      confirm the untagged version package.json already carries
 //   4. rebuild dist/index.html, then npm run version:check, npm run release-gate and
@@ -132,7 +134,23 @@ export function receiptProblems(receipt, now) {
 // ------------------------------------------------------------------------------- flow
 // Rule project.release-flow-complete: what must be true before a release starts.
 
-/** Status of ADR `ref` ("0047", "adr-0047", "ADR 0047"), or null when there is none. */
+/** The items of the YAML list `key` in front matter `fm`, block (`  - a`) or flow (`[a, b]`). */
+function frontMatterList(fm, key) {
+  const lines = fm.split('\n');
+  const at = lines.findIndex((l) => l.startsWith(`${key}:`));
+  if (at < 0) return [];
+  const inline = lines[at].slice(key.length + 1).trim();
+  const rest = lines.slice(at + 1);
+  const end = rest.findIndex((l) => !/^\s*-/.test(l));
+  const items = inline.startsWith('[') ? inline.replace(/^\[|\]$/g, '').split(',')
+    : rest.slice(0, end < 0 ? rest.length : end).map((l) => l.replace(/^\s*-/, ''));
+  return items.map((i) => i.trim().replace(/^(['"])(.*)\1$/, '$2')).filter(Boolean);
+}
+
+/**
+ * Status, tags and related references of ADR `ref` ("0047", "adr-0047", "ADR 0047"), or null
+ * when there is none.
+ */
 export function adrStatus(ref, root = ROOT) {
   const m = /(\d{1,4})\s*$/.exec(String(ref ?? '').trim());
   if (!m) return null;
@@ -143,7 +161,25 @@ export function adrStatus(ref, root = ROOT) {
   if (!file) return null;
   const fm = /^---\n([\s\S]*?)\n---\n/.exec(readFileSync(path.join(dir, file), 'utf8'));
   const status = fm && /^status:\s*(\S+)\s*$/m.exec(fm[1]);
-  return { id: `adr-${m[1].padStart(4, '0')}`, file, status: status ? status[1] : null };
+  return { id: `adr-${m[1].padStart(4, '0')}`, file, status: status ? status[1] : null,
+    tags: fm ? frontMatterList(fm[1], 'tags') : [],
+    related: fm ? frontMatterList(fm[1], 'related') : [] };
+}
+
+/**
+ * Why `adr` is not an RC exemption for `major` (empty = it is): the convention of
+ * .ai/repo/adrs/README.md, within what `majordomus adr check` accepts. An exemption carries the
+ * tags `rc-exemption` and `major-<N>` and names the decision it exempts, ADR 0047, as
+ * `adr:adr-0047` under `related`. Its status is judged by the caller.
+ */
+export function rcExemptionProblems(adr, major) {
+  const tags = adr.tags || [];
+  const related = adr.related || [];
+  return [
+    !tags.includes('rc-exemption') && 'no tag rc-exemption',
+    !related.includes('adr:adr-0047') && 'related does not name adr:adr-0047',
+    !tags.includes(`major-${major}`) && `no tag major-${major}`,
+  ].filter(Boolean);
 }
 
 /** The channel of the committed record of `tag`, or null when there is none. */
@@ -199,12 +235,19 @@ export function flowProblems({
         problems.push(`${why}: publish a candidate first (npm run release:prepare -- `
           + `--prerelease; when package.json already carries a ${v.major}.x version, set it to `
           + `${rc} for the candidate), or pass --no-rc-because <ADR> naming an `
-          + 'accepted ADR');
+          + `accepted RC exemption for major ${v.major}`);
       } else if (!adr) {
         problems.push(`${why}: --no-rc-because ${noRcBecause} names no ADR in .ai/repo/adrs/`);
-      } else if (adr.status !== 'accepted') {
-        problems.push(`${why}: --no-rc-because ${noRcBecause}: ${adr.id} is ${adr.status}, `
-          + 'not accepted');
+      } else {
+        const not = rcExemptionProblems(adr, v.major);
+        const reasons = [
+          adr.status !== 'accepted' && `${adr.id} is ${adr.status}, not accepted`,
+          not.length && `${adr.id} is not an RC exemption for major ${v.major} (${not.join('; ')}`
+            + '; see .ai/repo/adrs/README.md)',
+        ].filter(Boolean);
+        if (reasons.length) {
+          problems.push(`${why}: --no-rc-because ${noRcBecause}: ${reasons.join('; ')}`);
+        }
       }
     }
   }

@@ -4,7 +4,7 @@ version: 1
 kind: rule
 title: Every release completes prepare, pull request, publish, live verification and record
 description: A release is finished when its record is on main. release:prepare refuses to start the next one before that, and refuses the first stable release of a new major that no published release candidate preceded; release:publish diagnoses a Pages run of which no job starts instead of waiting on it.
-statement: release:prepare refuses to start when the newest v* tag at or after v3.4.0 has no .ai/repo/releases/<tag>.yaml, or when the proposed version is the first stable release of a new major (its major is above that of every stable v* tag reachable from HEAD, whatever its minor and patch) and no vX.0.0-rc.N tag has a record on the prerelease channel (overridden only by --no-rc-because naming an accepted ADR). Every v* tag at or after v3.4.0 that is reachable from HEAD and more than 6 hours old has its record in the checkout that is judged, a file that parses as a record and carries the tag it is named after; the copy on origin/main counts only for a branch whose history never contained that record, so a record deleted, renamed, emptied or overwritten on a branch is missing. No scanned file carries a version-shaped literal above the product version up to the end of the next major. release:publish refuses while a pages.yml run has had no job start for 15 minutes or the run list cannot be read, reports the run id, its commit and the git merge-base --is-ancestor verdict against HEAD, never watches a run of which no job has started, and prints the majordomus finish line that verifies the published commit.
+statement: release:prepare refuses to start when the newest v* tag at or after v3.4.0 has no .ai/repo/releases/<tag>.yaml, or when the proposed version is the first stable release of a new major (its major is above that of every stable v* tag reachable from HEAD, whatever its minor and patch) and no vX.0.0-rc.N tag has a record on the prerelease channel (overridden only by --no-rc-because naming an accepted ADR that is an RC exemption for that major: tagged rc-exemption and major-<N>, related to adr:adr-0047). Every v* tag at or after v3.4.0 that is reachable from HEAD and more than 6 hours old has its record in the checkout that is judged, a file that parses as a record and carries the tag it is named after; the copy on origin/main counts only for a branch whose history never contained that record, so a record deleted, renamed, emptied or overwritten on a branch is missing. No scanned file carries a version-shaped literal above the product version up to the end of the next major. release:publish refuses while a pages.yml run has had no job start for 15 minutes or the run list cannot be read, reports the run id, its commit and the git merge-base --is-ancestor verdict against HEAD, never watches a run of which no job has started, and prints the majordomus finish line that verifies the published commit.
 status: active
 class: blocking
 depends_on: [project.release-receipt-binds-gate@1, project.about-names-current-release@1]
@@ -100,9 +100,12 @@ anything changes, as a dry run too:
   `X`) is judged the same way as a computed `X.0.0`; with no stable tag at all, the `X.0.0`
   shape decides.
   `--no-rc-because <ADR>` lifts this only when `adrStatus()` finds that ADR in
-  `.ai/repo/adrs/` with `status: accepted`; a proposed ADR, or a number that names none, is
-  refused. Accepting an ADR is the owner's act, so the override is used only with an ADR the
-  owner has accepted.
+  `.ai/repo/adrs/` with `status: accepted` and `rcExemptionProblems()` finds it an RC
+  exemption for the major being opened: tagged `rc-exemption` and `major-<N>`, with
+  `adr:adr-0047` under `related` (the convention in `.ai/repo/adrs/README.md`). A proposed
+  ADR, an accepted ADR that is not such an exemption, ADR 0047 itself, or a number that names
+  none, is refused with the reason. Accepting an ADR is the owner's act, so the override is
+  used only with an exemption the owner has accepted.
 
 `release:prepare` bumps `package.json` and then runs `version:check`, which refuses a copy of
 the product version outside `package.json`, the lock, `dist/`, `.ai/`, `CHANGELOG.md` and
@@ -231,9 +234,9 @@ Not mechanically enforced, and stated as such:
   versions on major 9 in the unit tests, a Node and a macOS version in `docs/v3/` and
   `docs/v31/`, and a GUM section number (`§7.2.6`) in `src/js/measurement/format.js` and
   `docs/v3/algorithms.md`;
-- `--no-rc-because` checks that the ADR is accepted, not that it is about the release being
-  cut: any accepted ADR lifts the refusal. Whether the named ADR waives the candidate for
-  this major is the reviewer's;
+- `--no-rc-because` checks the ADR's status and front matter (the `rc-exemption` and
+  `major-<N>` tags and the `adr:adr-0047` reference), not its text: whether its `# Decision`
+  really argues for shipping that major without a candidate is the reviewer's;
 - a `v*` tag pushed by hand is trusted as a release by this rule and by
   `project.deploy-often`: nothing checks that a tag has a GitHub Release behind it;
 - a stuck precondition also reports plain runner congestion: a Pages run of which no job has

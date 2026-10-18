@@ -49,8 +49,10 @@ accepted` lists them. The rest stay `proposed`, each for a stated reason:
   the Studio ADRs with open questions to keep `proposed`; 0038 also keeps one question open
   (Apple Safari with a real input device).
 - 0045: amended by ADR 0048, which re-applies the `records` domain on Back and Forward.
-- 0047: `tests/unit/release-analyze.test.mjs` requires it to stay unaccepted, because
-  `release:prepare --no-rc-because` accepts any accepted ADR and would then accept this one.
+- 0047: implemented, but its `provenance.origin` is `extracted`, and `majordomus adr check`
+  refuses `accepted` on an extracted record. (Until 2026-10-18 it was also held back because
+  `release:prepare --no-rc-because` took any accepted ADR; it now takes only an RC exemption,
+  below.)
 - 0050, 0052, 0054, 0055, 0056, 0057: implemented, but their `provenance.origin` is
   `extracted`, and `majordomus adr check` refuses `accepted` on an extracted record.
 - 0051: the "Why trust the method?" list and its hand-written claims mirror under
@@ -60,6 +62,22 @@ accepted` lists them. The rest stay `proposed`, each for a stated reason:
 
 A worker still never promotes a status without the owner: this was the owner's act, and a
 later acceptance, supersession or rejection is too.
+
+## An exemption from the release candidate
+
+ADR 0047 requires a release candidate before the first stable release of a new major, and
+`release:prepare` refuses that release without one (rule `project.release-flow-complete`).
+`npm run release:prepare -- --no-rc-because <ADR>` lifts the refusal only for an ADR that is
+an RC exemption for the major being opened. The ADR schema has no field for this, so the
+convention uses what `majordomus adr check` accepts:
+
+- `status: accepted` (the owner's act, as for every decision);
+- `tags` include `rc-exemption` and `major-<N>`, the one major it exempts (`major-4`);
+- `related` includes `adr:adr-0047`, the decision it exempts;
+- its `# Decision` says why that major ships without a candidate.
+
+Any other ADR, accepted or not, is refused with the missing parts named
+(`rcExemptionProblems()` in `scripts/release-prepare.mjs`). No exemption exists today.
 
 ## How one is added
 
