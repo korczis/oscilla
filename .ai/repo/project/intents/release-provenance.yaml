@@ -1,6 +1,6 @@
 id: release-provenance
 title: "Every public OSCILLA page proves its version, source digest and commit, and no release reaches Pages ungated"
-statement: "OSCILLA has one canonical product version; every public page proves its version, source digest and commit; a deployment mismatch is fatal; the release gate runs every authoritative suite including visual; Majordomus answers what OSCILLA is and why; and v2.0.0 is tagged, released and verified at the public URL."
+statement: "OSCILLA has one canonical product version; every public page proves its version, source digest and commit; a deployment mismatch is fatal; the release gate runs every authoritative suite including visual; Majordomus answers what OSCILLA is and why; and a release is tagged, published from its gate receipt and verified at the public URL."
 invariants:
   - "package.json \"version\" is the only source of the product version; schema versions and the frozen V1 stamp are separate (ADR 0027)"
   - "The committed dist embeds a source digest, and the Pages workflow stamps one metadata region with the deployed commit (ADR 0028)"

@@ -8,7 +8,14 @@
 //
 //   - every claim in docs/CLAIMS.yaml: a known status; for a guaranteed claim, its source,
 //     implementation and test exist, and its test is run by a script CI runs; an algorithm
-//     id in its prose is a current default, or a retained one on a line that says so;
+//     id in its prose is a current default, or a retained one on a line that says so; every
+//     browser check its note cites is defined in the suite it names (V272 D8);
+//   - every ADR from 0011 on is cited by a claim, a feature or a use case, or is listed with
+//     the reason it adds no capability of the page (V272 D8);
+//   - docs/v4/completion-ledger.md: every completion-matrix row names its claims (or "–"),
+//     and no row or open item that names a guaranteed claim reads MISSING, "in review" or
+//     "fixing" (V272 D7);
+//   - a guaranteed claim whose note admits a skip says that CI fails instead (V272 D9);
 //   - every project rule's `x-majordomus` block names tests that exist and that CI runs, and
 //     claims that exist;
 //   - rule project.rules-name-their-enforcement: every active project rule without such a
@@ -989,4 +996,256 @@ test('every path in feature front matter and in a use case resolves', () => {
   }
   for (const f of useCaseFiles()) bad.push(...unresolved(f, read(f)));
   assert.deepEqual(bad, [], `unresolved references:\n  ${bad.join('\n  ')}`);
+});
+
+// ---------------------------------------------------------------- checks a claim cites (V272 D8)
+
+// A guaranteed claim's note names browser checks as "Check a", "checks a, b and c" or
+// "check a in tests/browser/x" ("of" for "in" too). A name with a hyphen is a check id; a
+// one-word name counts only when the suite follows it ("check findings in tests/browser/v3-ui"),
+// because "check from both origins" is prose. Without a named suite the check must be defined
+// in a browser suite the note names or in the claim's own test. A suite defines a check with
+// `def('id', ...)`, `check('id', ...)` or `{ name: 'id', fn: ... }`. Renaming a check then
+// fails here, not only in the suite's own run.
+const CHECK_NAME = String.raw`[a-z][a-z0-9]*(?:-[a-z0-9]+)*`;
+const CHECK_CITE = new RegExp(String.raw`\b[Cc]hecks? (${CHECK_NAME}`
+  + String.raw`(?:(?:, and |, | and )(?!(?:in|of) tests\/)${CHECK_NAME})*)`
+  + String.raw`(?:,? (?:in|of) (tests\/browser\/[\w-]+)(?:\.cjs)?)?`, 'g');
+const BROWSER_SUITE = /tests\/browser\/[\w-]+\.cjs/g;
+const CHECK_DEF = /(?:\b(?:def|check)\(\s*'([a-z0-9-]+)'|\{\s*name:\s*'([a-z0-9-]+)',\s*fn:)/g;
+
+/** The checks a claim's note cites: [{ name, suites }], suites the files that may define it. */
+export function citedChecks(claim) {
+  const note = claim.note || '';
+  const named = new Set([...note.matchAll(BROWSER_SUITE)].map(([p]) => p));
+  if (/^tests\/browser\/[\w-]+\.cjs$/.test(claim.test || '')) named.add(claim.test);
+  const out = [];
+  for (const m of note.matchAll(CHECK_CITE)) {
+    let names = m[1].split(/, and |, | and /);
+    if (!m[2]) {
+      const prose = names.findIndex((n) => !n.includes('-'));
+      if (prose >= 0) names = names.slice(0, prose);
+    }
+    for (const name of names) out.push({ name, suites: m[2] ? [`${m[2]}.cjs`] : [...named] });
+  }
+  return out;
+}
+
+/** The check ids a browser suite's source defines. */
+export const definedChecks = (text) => new Set([...text.matchAll(CHECK_DEF)]
+  .map(([, a, b]) => a || b));
+
+/** One problem per check a guaranteed claim cites that no suite it may live in defines. */
+export function missingCitedChecks(claims, readSuite) {
+  const problems = [];
+  for (const c of claims.filter((x) => x.status === 'guaranteed')) {
+    for (const { name, suites } of citedChecks(c)) {
+      if (suites.length === 0) {
+        problems.push(`${c.id}: check ${name} names no browser suite`);
+        continue;
+      }
+      const found = suites.some((s) => {
+        const text = readSuite(s);
+        return text !== null && definedChecks(text).has(name);
+      });
+      if (!found) problems.push(`${c.id}: check ${name} is not defined in ${suites.join(' or ')}`);
+    }
+  }
+  return problems;
+}
+
+const readSuite = (rel) => (exists(rel) ? read(rel) : null);
+
+test('V272 D8: every check a guaranteed claim cites is defined in the suite it names', () => {
+  const cited = CLAIMS.filter((c) => c.status === 'guaranteed').flatMap(citedChecks);
+  assert.ok(cited.length >= 40, `cited checks parsed (${cited.length})`);
+  assert.deepEqual(missingCitedChecks(CLAIMS, readSuite), []);
+});
+
+test('V272 D8 mutation: a renamed check, a wrong suite and prose are told apart', () => {
+  const suite = 'tests/browser/v3-ui.cjs';
+  const renamed = read(suite).replace("def('loopback-workflow',", "def('loopback-flow',");
+  assert.notEqual(renamed, read(suite), 'the check to rename exists');
+  const problems = missingCitedChecks(CLAIMS, (rel) => (rel === suite ? renamed : readSuite(rel)));
+  const ids = problems.filter((p) => p.includes('loopback-workflow')).map((p) => p.split(':')[0]);
+  assert.deepEqual(ids.sort(), ['measurement-workbench', 'reproducible-experiments']);
+  const one = (note, test = 'tests/unit/x.test.mjs') => citedChecks({ note, test });
+  assert.deepEqual(one('Check about-page, in Chromium', 'tests/browser/app.cjs'),
+    [{ name: 'about-page', suites: ['tests/browser/app.cjs'] }]);
+  assert.deepEqual(one('checks experiments and persistence in tests/browser/v3-ui.cjs')
+    .map((x) => [x.name, x.suites[0]]),
+  [['experiments', 'tests/browser/v3-ui.cjs'], ['persistence', 'tests/browser/v3-ui.cjs']]);
+  assert.deepEqual(one('the check from both origins; check is in tests/unit/v3-x'), []);
+  assert.deepEqual(missingCitedChecks([{ id: 'x', status: 'guaranteed', test: 'tests/unit/a.mjs',
+    note: 'Check hold-plays-release-zero-nodes in tests/browser/v3-ui.cjs' }], readSuite),
+  ['x: check hold-plays-release-zero-nodes is not defined in tests/browser/v3-ui.cjs']);
+  assert.deepEqual(missingCitedChecks([{ id: 'y', status: 'guaranteed', test: 'tests/unit/a.mjs',
+    note: 'Check no-such-suite' }], readSuite), ['y: check no-such-suite names no browser suite']);
+});
+
+// ------------------------------------------------------------ decisions with no claim (V272 D8)
+
+// Every ADR from 0011 on (the V2 line and later) is cited by a claim (its source or its note),
+// by a feature's front matter or by a use case, so a shipped capability a decision describes is
+// claimed with the test that proves it. A decision that adds no capability of the page is listed
+// here with its reason; an entry that becomes cited is refused as stale.
+const ADR_NOT_A_CAPABILITY = new Map([
+  ['0028', 'release provenance (the source digest and the Pages stamp): intent release-provenance'
+    + ' and tests/unit/release-provenance.test.mjs hold it'],
+  ['0029', 'the release gate\'s visual regression check: a gate, not a capability of the page'],
+  ['0047', 'release process: a major release is preceded by a release candidate'],
+  ['0051', 'a descoping decision: no knowledge explorer is built, and the method claims it names'
+    + ' are not built yet (docs/v4/completion-ledger.md)'],
+  ['0053', 'vocabulary: the names the stored records and the page use, held by'
+    + ' tests/unit/vocabulary.test.mjs; it adds no capability'],
+  ['0054', 'repository operation: the Majordomus mesh of OSCILLA\'s runtimes'],
+  ['0055', 'repository operation: how a merge train lands'],
+  ['0056', 'repository operation: when the Majordomus CI pin moves'],
+  ['0057', 'release evidence: what proves a static Pages deployment'],
+]);
+
+/** ADR numbers (from 0011 on) that `corpus` never cites, and exemptions it does cite. */
+export function uncitedAdrs(numbers, corpus, exempt) {
+  const cites = (n) => new RegExp(String.raw`adrs\/${n}-|\badr-${n}\b|\bADRs? ${n}\b`).test(corpus);
+  return {
+    uncited: numbers.filter((n) => Number(n) >= 11 && !exempt.has(n) && !cites(n)),
+    stale: [...exempt.keys()].filter(cites),
+  };
+}
+
+const ADR_NUMBERS = () => list('.ai/repo/adrs').map((f) => f.match(/^(\d{4})-.+\.md$/))
+  .filter(Boolean).map(([, n]) => n);
+const featureFiles = () => list('.ai/repo/features')
+  .filter((x) => x.endsWith('.md') && x !== 'README.md').map((f) => `.ai/repo/features/${f}`);
+const ADR_CORPUS = () => [
+  ...CLAIMS.map((c) => Object.values(c).join(' ')),
+  ...featureFiles().map((f) => (read(f).match(/^---\n([\s\S]*?)\n---\n/) || ['', ''])[1]),
+  ...useCaseFiles().map(read),
+].join('\n');
+
+test('V272 D8: every ADR from 0011 on is claimed, or says why it adds no capability', () => {
+  const numbers = ADR_NUMBERS();
+  assert.ok(numbers.length > 50, `ADRs listed (${numbers.length})`);
+  for (const [n, why] of ADR_NOT_A_CAPABILITY) {
+    assert.ok(numbers.includes(n), `ADR ${n} exists`);
+    assert.ok(why.length > 30, `ADR ${n} says why it adds no capability`);
+  }
+  const { uncited, stale } = uncitedAdrs(numbers, ADR_CORPUS(), ADR_NOT_A_CAPABILITY);
+  assert.deepEqual(uncited, [], `ADRs no claim, feature or use case cites: ${uncited.join(', ')}`);
+  assert.deepEqual(stale, [], `exempt ADRs that are cited now: ${stale.join(', ')}`);
+});
+
+test('V272 D8 mutation: an ADR cited nowhere is named, a cited exemption is stale', () => {
+  const corpus = 'source: .ai/repo/adrs/0012-x.md adrs: [adr-0013] ADR 0014. ADRs 0015';
+  assert.deepEqual(uncitedAdrs(['0010', '0012', '0013', '0014', '0015', '0016'], corpus,
+    new Map([['0015', 'why']])), { uncited: ['0016'], stale: ['0015'] });
+  assert.deepEqual(uncitedAdrs(['0120'], 'ADR 01201', new Map()).uncited, ['0120']);
+});
+
+// ------------------------------------------------------- the v4.0 completion ledger (V272 D7)
+
+// docs/v4/completion-ledger.md says it is updated as items close. Its completion matrix has a
+// Claims column naming the docs/CLAIMS.yaml claims of each capability (or "–"), and a
+// numbered item of its current part ("What v4.0 still lacks entirely") names its claims in
+// backticks. A row or an item that names a guaranteed claim cannot read MISSING, "in review"
+// or "fixing": the claim says it is shipped and tested. The dated "## Update" sections after
+// the current part are history and are not read.
+const LEDGER = 'docs/v4/completion-ledger.md';
+// MISSING is the status word; a lower-case "missing" names a gap of an existing capability.
+const NOT_SHIPPED = /\bMISSING\b|\b[Ii]n review\b|\b[Ff]ixing\b/;
+
+const cellsOf = (row) => row.split('|').slice(1, -1).map((c) => c.trim());
+const claimIdsIn = (text) => [...text.matchAll(/`([a-z][a-z0-9-]+)`/g)].map(([, id]) => id);
+
+/** One problem per ledger row or item that contradicts a claim, or names one that is not. */
+export function ledgerProblems(text, claims) {
+  const byId = new Map(claims.map((c) => [c.id, c]));
+  const current = text.split(/\n## Update /)[0];
+  const problems = [];
+  const matrix = current.match(/\n## Completion matrix\n\n((?:\|.*\n)+)/);
+  if (!matrix) return ['no "## Completion matrix" table'];
+  const [header, , ...rows] = matrix[1].trim().split('\n');
+  const head = cellsOf(header);
+  const at = { claims: head.indexOf('Claims'), status: head.indexOf('Status') };
+  if (at.claims < 0 || at.status < 0) {
+    return ['the completion matrix has no Claims or Status column'];
+  }
+  const judge = (where, ids, status) => {
+    for (const id of ids) {
+      const c = byId.get(id);
+      if (!c) problems.push(`${where}: claim ${id} is not in docs/CLAIMS.yaml`);
+      else if (c.status === 'guaranteed' && NOT_SHIPPED.test(status)) {
+        problems.push(`${where}: reads "${status.match(NOT_SHIPPED)[0]}" but claim ${id} is `
+          + 'guaranteed');
+      }
+    }
+  };
+  for (const row of rows) {
+    const cells = cellsOf(row);
+    const named = cells[at.claims] || '';
+    if (named !== '–' && claimIdsIn(named).length === 0) {
+      problems.push(`${cells[0]}: the Claims cell names no claim and is not "–"`);
+    }
+    judge(cells[0], claimIdsIn(named), cells[at.status] || '');
+  }
+  // A numbered item with its indented continuation lines.
+  for (const [item] of current.matchAll(/^\d+\. .*(?:\n {3}\S.*)*/gm)) {
+    judge(item.slice(0, 60), claimIdsIn(item).filter((id) => byId.has(id)), item);
+  }
+  return problems;
+}
+
+test('V272 D7: the completion ledger agrees with the claims ledger', () => {
+  const text = read(LEDGER);
+  assert.ok(/updated as items close/.test(text), 'the ledger still says it is kept current');
+  assert.deepEqual(ledgerProblems(text, CLAIMS), []);
+});
+
+test('V272 D7 mutation: a shipped capability read MISSING or in review is refused', () => {
+  const text = read(LEDGER);
+  const row = text.split('\n').find((l) => l.startsWith('| Findings |'));
+  assert.ok(row, 'the Findings row exists');
+  const cells = row.split('|');
+  cells[cells.length - 3] = ' MISSING ';
+  const missing = text.replace(row, cells.join('|'));
+  assert.deepEqual(ledgerProblems(missing, CLAIMS),
+    ['Findings: reads "MISSING" but claim findings-linked-to-evidence is guaranteed']);
+  const item = text.split('\n').find((l) => /^ {3}.*`connected-records`/.test(l));
+  assert.ok(item, 'the Trace item names its claim');
+  assert.match(ledgerProblems(text.replace(item, `${item} In review.`), CLAIMS)[0],
+    /reads "In review" but claim connected-records is guaranteed/);
+  assert.deepEqual(ledgerProblems(text.replace('| Claims |', '| Claim ids |'), CLAIMS),
+    ['the completion matrix has no Claims or Status column']);
+  const unknown = text.replace('`findings-linked-to-evidence`', '`findings-linked`');
+  assert.match(ledgerProblems(unknown, CLAIMS).join('\n'),
+    /claim findings-linked is not in docs\/CLAIMS\.yaml/);
+});
+
+// ------------------------------------------------------------- skips a claim admits (V272 D9)
+
+// A guaranteed claim's test is run by CI, so a claim whose note says the test skips somewhere
+// (a shallow clone, missing tags or freeze files) must also say that it fails instead under
+// GitHub Actions or CI, as tests/unit/about.test.mjs and freeze-guard do. A note that says the
+// check is skipped in CI states the opposite of what the gate does.
+const SKIPS = /\bskip(?:s|ped|ping)?\b/i;
+const FAILS_IN_CI = /\bfails?\b[^.;]*\b(?:under|in) (?:GitHub Actions|GITHUB_ACTIONS|CI)\b/;
+
+/** One problem per guaranteed claim that admits a skip without saying CI fails instead. */
+export function skipProblems(claims) {
+  return claims.filter((c) => c.status === 'guaranteed' && SKIPS.test(c.note || '')
+    && !FAILS_IN_CI.test(c.note)).map((c) => `${c.id}: says its test skips, not that CI fails`);
+}
+
+test('V272 D9: a claim that admits a skip says CI fails instead', () => {
+  assert.deepEqual(skipProblems(CLAIMS), []);
+});
+
+test('V272 D9 mutation: "skipped where tags are not fetched (CI)" is refused', () => {
+  const claim = (note) => ({ id: 'a', status: 'guaranteed', note });
+  const ci = claim('the tag check is skipped where tags are not fetched (CI)');
+  assert.deepEqual(skipProblems([ci]), ['a: says its test skips, not that CI fails']);
+  assert.deepEqual(skipProblems([claim('it skips locally and fails under GITHUB_ACTIONS')]), []);
+  assert.deepEqual(skipProblems([claim('a shallow clone skips it; it fails under GitHub Actions')]),
+    []);
+  assert.deepEqual(skipProblems([{ ...claim('skipped in CI'), status: 'planned' }]), []);
 });
