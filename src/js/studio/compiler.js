@@ -13,7 +13,9 @@
 //     Audio never discovers a topology (§38). Unsupported or unavailable nodes compile to an
 //     explicit status with a reason instead of throwing (§170-§171).
 //     PlanNode = { id, type, name, def, adapter, params, status: 'ready' | 'degraded' |
-//                  'offline-only' | 'data', code, reason }
+//                  'offline-only' | 'data', code, reason, clocked }
+//                clocked: an unmuted TRIGGER edge reaches the adapter's `clock` input (Random,
+//                Step Modulator): the node steps on the transport's triggers (adapters/nodes.js)
 //     PlanEdge = { id, kind: 'audio' | 'control' | 'trigger' | 'analysis', from, to, fromPort,
 //                  toPort, paramDef, props (complete), status: 'active' | 'inactive' |
 //                  'logical' | 'data', code, reason }
@@ -163,8 +165,10 @@ export function compileStudio(model, {
       reason = why.reason || why;
     } else status = 'ready';
     if (node.type === 'master') masterId = id;
+    const clocked = !!(adapter && adapter.clock) && model.graph.edges.some((e) => e.to.node === id
+      && e.to.port === adapter.clock && !(e.props && e.props.muted));
     nodes.set(id, Object.freeze({ id, type: node.type, name: nameOf(node, def), def, adapter,
-      params: node.params, status, code, reason }));
+      params: node.params, status, code, reason, clocked }));
   }
   const rank = new Map(report.order.map((id, i) => [id, i]));
   const edges = new Map();
@@ -257,7 +261,8 @@ const changedKeys = (a, b) => [...new Set([...Object.keys(a), ...Object.keys(b)]
 
 /**
  * The minimal patch from `prev` to `next` (both plans). A parameter change on a running node
- * is `node-params` unless it touches a structural key of its adapter (`node-replace`); edges of
+ * is `node-params` unless it touches a structural key of its adapter (`node-replace`), as a
+ * node that becomes clocked or free-running is (`clocked`, another builder); edges of
  * a replaced node are `edge-rewire` (rebuilt and crossfaded); a modulation edge whose mapping
  * changes is rewired (it targets another AudioParam); other edge property changes are
  * `edge-props`. `owned` (Map node id → Set of owned parameter keys): on a node with an owned
@@ -274,7 +279,7 @@ export function diffPlans(prev, next, { owned = null, replace = null } = {}) {
     const p = prev.nodes.get(id);
     if (!p) { ops.push({ op: 'node-add', id }); continue; }
     if (p.type !== n.type || p.status !== n.status || p.reason !== n.reason
-      || (replace && replace.has(id))) {
+      || p.clocked !== n.clocked || (replace && replace.has(id))) {
       replaced.add(id);
       ops.push({ op: 'node-replace', id, keys: [] });
       continue;

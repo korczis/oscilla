@@ -59,7 +59,9 @@
 // What plays where (docs/v31/timeline.md "Transport integration"):
 //   pattern clip on a Sequence   compileSequence(item.sequence, ctx, handle.info.destination,
 //                                item.startTime) with the node's accounting; the Sequence's
-//                                TRIGGER edges gate their Envelopes at the clip start
+//                                unmuted TRIGGER edges gate their Envelopes for the clip and
+//                                clock their Random / Step Modulator at the clip start
+//                                (handle.clock(t, k): the k-th trigger since PLAY steps it)
 //   pattern clip on an Oscillator  the oscillator is pattern-played: its free-running carrier
 //                                is held at ROUTE_FLOOR (its `level` AudioParam is owned by the
 //                                transport) and the voices play into a pattern bus (gain = the
@@ -176,6 +178,8 @@ export function createStudioTransport({
   const listeners = new Set();
   const voices = new Map(); // item key → { key, item, voice, nodeId, handle }
   const gates = new Map(); // gate key → { key, itemKey, clipId, nodeId, handle, start, end }
+  const ticks = new Map(); // tick key → { key, itemKey, nodeId, handle, time }: clock triggers
+  const ticksPassed = new Map(); // clocked node id → triggers pruned from `ticks` (still counted)
   const measures = new Map(); // item key → measurement data
   const lanes = new Map(); // lane id → { laneId, target, param, handle, events (as applied) }
   // oscillator id → { id, handle, bus, param, level, fadeAt (null: fresh), routes }
@@ -296,6 +300,19 @@ export function createStudioTransport({
       if (e.props && e.props.muted) continue;
       const n = nodeOf(m, e.to.node);
       if (n && n.type === 'envelope') out.push(n.id);
+    }
+    return out;
+  }
+
+  /** Clocked nodes (plan `clocked`: Random, Step Modulator) a pattern clip on `sourceId` clocks. */
+  function triggerClocks(m, sourceId) {
+    const out = [];
+    for (const e of m.graph.edges) {
+      if (e.from.node !== sourceId || e.from.port !== 'trigger') continue;
+      if (e.props && e.props.muted) continue;
+      const n = nodeOf(m, e.to.node);
+      const a = n ? runtime.nodes.get(n.id) : null;
+      if (a && typeof a.clock === 'function') out.push(n.id);
     }
     return out;
   }
@@ -608,7 +625,40 @@ export function createStudioTransport({
     for (const env of triggerEnvelopes(model, it.target)) {
       addGate(`${it.key}>${env}`, it, env, it.startTime, it.endTime);
     }
+    for (const id of triggerClocks(model, it.target)) addTick(`${it.key}>${id}`, it, id);
     return null;
+  }
+
+  /** Index of a trigger at `time` on clocked node `id`: the triggers before it since PLAY. */
+  const tickIndex = (id, time) => (ticksPassed.get(id) || 0)
+    + [...ticks.values()].filter((k) => k.nodeId === id && k.time < time).length;
+
+  /** A clock trigger at the item's start on clocked node `id` (V272 A2). */
+  function addTick(key, it, id) {
+    const h = ready(id);
+    if (!h || typeof h.clock !== 'function') return;
+    const later = [...ticks.values()].some((k) => k.nodeId === id && k.time > it.startTime);
+    ticks.set(key, { key, itemKey: it.key, nodeId: id, handle: h, time: it.startTime });
+    if (later) rebuildClock(id, it.startTime); // out of order: the later steps move up one
+    else h.clock(it.startTime, tickIndex(id, it.startTime));
+  }
+
+  /**
+   * Re-render a clocked node's steps from `horizon` from the trigger records (after an edit or
+   * a STOP removed one, or its node was replaced): hold the step it has there, then every
+   * later trigger again with its index.
+   */
+  function rebuildClock(id, horizon) {
+    const h = ready(id);
+    if (!h || typeof h.clockFrom !== 'function') return;
+    const list = [...ticks.values()].filter((k) => k.nodeId === id && k.time >= horizon)
+      .sort((a, b) => a.time - b.time);
+    const before = tickIndex(id, horizon);
+    h.clockFrom(horizon, Math.max(0, before - 1));
+    list.forEach((k, i) => {
+      k.handle = h;
+      h.clock(k.time, before + i);
+    });
   }
 
   function addGate(key, it, envId, start, end, deferred = null) {
@@ -835,6 +885,11 @@ export function createStudioTransport({
       gates.delete(g.key);
       touched.add(g.nodeId);
     }
+    for (const k of [...ticks.values()]) {
+      if (k.itemKey !== key) continue;
+      ticks.delete(k.key);
+      touched.add(k.nodeId);
+    }
     const m = measures.get(key);
     if (m) {
       measures.delete(key);
@@ -888,7 +943,10 @@ export function createStudioTransport({
       if (it.type === 'event' && touched.has(it.target)) deferred.add(it.target);
     }
     for (const it of [...replay, ...plan.schedule]) playItem(it, deferred);
-    for (const env of touched) rebuildEnvelope(env, plan.horizon);
+    for (const id of touched) {
+      rebuildEnvelope(id, plan.horizon);
+      rebuildClock(id, plan.horizon);
+    }
     for (const a of plan.automation) applyLaneEdit(a);
     for (const d of plan.decisions) record(d);
   }
@@ -898,7 +956,10 @@ export function createStudioTransport({
     const touched = new Set();
     for (const key of plan.cancel) cancelItem(key, touched);
     for (const { key, at } of plan.release) releaseItem(key, at, touched);
-    for (const env of touched) rebuildEnvelope(env, plan.at);
+    for (const id of touched) {
+      rebuildEnvelope(id, plan.at);
+      rebuildClock(id, plan.at);
+    }
     for (const a of plan.automation) {
       if (!a.target) continue;
       const dest = paramFor(a.target, a.laneId);
@@ -953,6 +1014,10 @@ export function createStudioTransport({
       }
     }
     for (const id of wantEnv) if (!gateOwned.has(id)) ownEnvelope(id, fresh.has(id));
+    // A clocked node rebuilt by the runtime continues its steps on the new node.
+    const stale = new Set([...ticks.values()].filter((k) => k.handle !== ready(k.nodeId))
+      .map((k) => k.nodeId));
+    for (const id of stale) rebuildClock(id, horizon);
     for (const v of voices.values()) {
       if (v.handle !== ready(v.nodeId) && !v.replacedNoted) {
         // A sounding voice fades out with the node it plays into (the runtime's crossfade);
@@ -970,6 +1035,11 @@ export function createStudioTransport({
   function prune(now) {
     for (const [key, v] of voices) if (v.voice.ended) voices.delete(key);
     for (const [key, g] of gates) if (g.end + GATE_KEEP_S < now) gates.delete(key);
+    for (const [key, k] of ticks) {
+      if (k.time + GATE_KEEP_S >= now) continue;
+      ticks.delete(key);
+      ticksPassed.set(k.nodeId, (ticksPassed.get(k.nodeId) || 0) + 1);
+    }
     for (const [key, m] of measures) if (m.endTime + STOP_PAD_S < now) measures.delete(key);
     for (const rec of lanes.values()) {
       let i = 0;
@@ -1179,6 +1249,8 @@ export function createStudioTransport({
     }
     voices.clear();
     gates.clear();
+    ticks.clear();
+    ticksPassed.clear();
     measures.clear();
     lanes.clear();
     claims.clear();
@@ -1213,6 +1285,8 @@ export function createStudioTransport({
     // starts a new playback whose own records the cleanup below must not touch (V272 B1).
     const ownVoices = [...voices.values()];
     const ownGates = [...gates.values()];
+    const ownTicks = [...ticks.values()];
+    ticksPassed.clear(); // the next PLAY counts its triggers from 0
     return runtime.stop({ fast }).then((c) => {
       // Everything of this playback is silent and released by now; end the voices' own
       // bookkeeping too.
@@ -1221,6 +1295,7 @@ export function createStudioTransport({
         if (voices.get(v.key) === v) voices.delete(v.key);
       }
       for (const g of ownGates) if (gates.get(g.key) === g) gates.delete(g.key);
+      for (const k of ownTicks) if (ticks.get(k.key) === k) ticks.delete(k.key);
       return counts(c);
     });
   }
@@ -1288,6 +1363,7 @@ export function createStudioTransport({
       voiceCount: voices.size,
       liveVoices: [...voices.values()].filter((v) => !v.voice.ended).length,
       gateCount: gates.size,
+      clockCount: ticks.size,
       measurementCount: measures.size,
       lanes: [...lanes.values()].map((l) => ({ laneId: l.laneId, target: { ...l.target },
         scheduled: l.events.length })),

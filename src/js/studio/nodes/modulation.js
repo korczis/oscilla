@@ -105,9 +105,11 @@ export const random = defineNode({
   compiler: 'audio/noise.js#mulberry32',
   help: {
     what: 'Seeded random values, a new one per period or per clock trigger.',
-    inputs: 'An optional clock trigger; rate accepts modulation.',
+    inputs: 'An optional clock trigger: each trigger takes the next value and rate has no '
+      + 'effect; without it, rate accepts modulation.',
     outputs: 'Control, −1 to 1.',
-    constraints: 'The same seed gives the same sequence (deterministic).',
+    constraints: 'The same seed gives the same sequence (deterministic); Smooth applies '
+      + 'without a clock.',
   },
 });
 
@@ -134,7 +136,8 @@ export const stepModulator = defineNode({
   compiler: 'audio/scheduler.js#scheduleSteps',
   help: {
     what: 'Steps through a list of values, one per period or per clock trigger.',
-    inputs: 'An optional clock trigger; rate accepts modulation.',
+    inputs: 'An optional clock trigger: each trigger takes the next step and rate has no '
+      + 'effect; without it, rate accepts modulation.',
     outputs: 'Control, −1 to 1.',
     constraints: '1-32 steps.',
   },

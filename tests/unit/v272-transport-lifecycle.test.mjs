@@ -362,3 +362,41 @@ test('V272 A2: a clocked Step Modulator outputs step k at the k-th trigger', () 
   const bF = Math.round(b * SR);
   assert.deepEqual(sets, [0, 1, 2, 3].map((k) => [steps[k], (bF + k * 0.5 * SR) / SR]));
 });
+
+test('V272 A2: removing a clocking clip during playback moves the later steps up', () => {
+  const { store, target } = triggerStudio('step-modulator', { trigger: true });
+  const steps = store.getModel().graph.nodes.find((n) => n.id === target).params.steps;
+  const fx = createFakeAudioEnv({ sampleRate: SR });
+  const engine = new AudioEngine({ env: fx.env });
+  assert.ok(engine.init());
+  const runtime = createStudioRuntime({ engine });
+  const transport = createStudioTransport({ runtime, engine, store });
+  const { baseTime: b } = ok(transport.start());
+  fx.advance(0.6); // the triggers at 1 s and 1.5 s are scheduled
+  const clip = store.getModel().timeline.clips.find((c) => c.start === 1);
+  ok(store.dispatch({ type: 'CLIP_REMOVE', clipId: clip.id }));
+  ok(transport.sync());
+  fx.advance(0.6);
+  const offset = runtime.nodes.get(target).outputs.control.offset;
+  const bF = Math.round(b * SR);
+  // The offset's events as scheduled (FakeParam: cancelScheduledValues drops the later ones).
+  const value = (p) => offset.events.filter((e) => e.t <= (bF + p * SR) / SR).at(-1).value;
+  assert.deepEqual([value(0.25), value(0.75), value(1.25), value(1.6)],
+    [steps[0], steps[1], steps[1], steps[2]], 'the clip at 1.5 s is the third trigger now');
+});
+
+test('V272 A2: a rate edge into a clocked Step Modulator is inactive with its reason', () => {
+  const { store, target } = triggerStudio('step-modulator', { trigger: true });
+  const lfo = ok(store.dispatch({ type: 'NODE_ADD', nodeType: 'lfo' })).created.nodes[0];
+  const edge = ok(store.dispatch({ type: 'EDGE_ADD', from: { node: lfo, port: 'control' },
+    to: { node: target, port: 'rate' } })).created.edges[0];
+  const fx = createFakeAudioEnv({ sampleRate: SR });
+  const engine = new AudioEngine({ env: fx.env });
+  assert.ok(engine.init());
+  const runtime = createStudioRuntime({ engine });
+  const transport = createStudioTransport({ runtime, engine, store });
+  ok(transport.start());
+  const eh = runtime.edges.get(edge);
+  assert.equal(eh.status, 'inactive');
+  assert.match(eh.reason, /clocked Step Modulator steps on its clock trigger; rate has no effect/);
+});
