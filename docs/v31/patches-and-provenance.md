@@ -250,8 +250,10 @@ The reasons are the transport's (`OFFLINE_TEXT.patternTarget` / `eventTarget` ar
 `TRANSPORT_TEXT`'s): a render plays what live playback plays. The Subtractive Synth lists no
 limitation.
 
-Everything not rendered is listed in `limitations`. The duration is explicit or the timeline end
-(`timelineEnd`), at most `DEFAULT_RENDER.maxDuration` (120 s).
+Everything not rendered is listed in `limitations`. The duration is explicit (the buffer length)
+or `defaultRenderDuration`: the graph's start time (below), the timeline end (`timelineEnd`) and
+the output fade `STUDIO_STOP_S`, rounded up to a millisecond, so the last clip ends before the
+fade starts (3.037 s for a 3 s timeline at 48 kHz); at most `DEFAULT_RENDER.maxDuration` (120 s).
 
 `renderStudioOffline(model, opts)` runs the plan's model through the SAME compiler, runtime,
 adapters and transport (`createStudioRuntime`, `createStudioTransport` with a fixed store and
@@ -274,7 +276,7 @@ resolves the call at once with `{ ok: false, aborted: true }`; the context finis
 background and its buffer is dropped. Neither changes a sample.
 
 The UI is the Studio toolbar's **Render WAV** (`src/js/ui/studio/workspace.js`
-`studioOpenRender` / `studioRenderWav`): a dialog with the duration (the timeline's end, or
+`studioOpenRender` / `studioRenderWav`): a dialog with the duration (`defaultRenderDuration`, or
 `RENDER_DEFAULT_S` = 2 s for a graph without a timeline), the plan's format (48 kHz stereo or a
 Recorder's) and limitations; Render is disabled when the plan refuses. The render runs at the
 plan's rate, never the device's, so the same Studio gives the same bytes on every machine; the
