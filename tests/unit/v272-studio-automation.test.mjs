@@ -24,8 +24,8 @@ function ok(r) {
   return r;
 }
 
-function setup(model = templateModel(REFERENCE_TEMPLATE_ID)) {
-  const fx = createFakeAudioEnv({ sampleRate: SR });
+function setup(model = templateModel(REFERENCE_TEMPLATE_ID), sampleRate = SR) {
+  const fx = createFakeAudioEnv({ sampleRate });
   const engine = new AudioEngine({ env: fx.env });
   assert.ok(engine.init(), 'engine.init');
   if (engine.limiterFeed) engine.limiterFeed.infrastructure = true;
@@ -277,4 +277,63 @@ test('V272 B8: locate while playing leaves no stale lane events for a rebuilt no
   s.fx.advance(0.5);
   near(actualAt(s, p, s.ctx.currentTime), laneValueAt(lane1(s).points,
     s.transport.playhead().position), 1e-3, 'the lane after the locate');
+});
+
+// ---------------------------------------------------------------- A7 (detune lane)
+
+for (const rate of [44100, 48000]) {
+  test(`V272 A7: a +1200 ct detune lane on a 12 kHz oscillator stays below 0.95 x Nyquist (${
+    rate} Hz)`, () => {
+    const m = templateModel(REFERENCE_TEMPLATE_ID);
+    const s = setup({ ...m, graph: { ...m.graph, nodes: m.graph.nodes.map((n) => (n.id === 'osc-1'
+      ? { ...n, params: { ...n.params, frequency: 12000 } } : n)) } }, rate);
+    dispatch(s, { type: 'AUTOMATION_POINT_ADD', target: { node: 'osc-1', param: 'detune' },
+      time: 0, value: 1200, curve: 'step' });
+    ok(s.transport.start());
+    s.fx.advance(0.5);
+    const osc = s.runtime.nodes.get('osc-1').info.oscillator;
+    const cap = (s.ctx.sampleRate / 2) * 0.95;
+    const t = s.ctx.currentTime;
+    const f = ownValueAt(osc.frequency, t) * 2 ** (actualAt(s, osc.detune, t) / 1200);
+    assert.ok(f <= cap * (1 + 1e-9), `${f.toFixed(1)} Hz requested, safe maximum ${cap} Hz`);
+    near(f, cap, 1e-6 * cap, 'the lane is bounded at the safe maximum, not below it');
+    const lane = s.transport.debugInfo().lanes.find((l) => l.target.param === 'detune');
+    assert.equal(lane.limited, true, 'the bounded lane is reported');
+    assert.deepEqual(s.transport.debugInfo().limitedLanes.map((l) => [l.node, l.param]),
+      [['osc-1', 'detune']]);
+  });
+}
+
+test('V272 A7: a detune lane follows its bound when the frequency is raised while playing',
+  () => {
+  const s = setup();
+  dispatch(s, { type: 'AUTOMATION_POINT_ADD', target: { node: 'osc-1', param: 'detune' },
+    time: 0, value: 1200, curve: 'step' });
+  ok(s.transport.start());
+  s.fx.advance(0.5);
+  dispatch(s, { type: 'NODE_PARAM_SET', nodeId: 'osc-1', key: 'frequency', value: 12000 });
+  s.fx.advance(0.5);
+  const osc = s.runtime.nodes.get('osc-1').info.oscillator;
+  const cap = (s.ctx.sampleRate / 2) * 0.95;
+  const t = s.ctx.currentTime;
+  const f = ownValueAt(osc.frequency, t) * 2 ** (actualAt(s, osc.detune, t) / 1200);
+  assert.ok(f <= cap * (1 + 1e-6), `${f.toFixed(1)} Hz requested, safe maximum ${cap} Hz`);
+});
+
+test('V272 A7: a changed log-edge offset reaches a detune lane while it plays', () => {
+  const s = setup();
+  dispatch(s, { type: 'EDGE_ADD', from: { node: 'lfo-1', port: 'control' },
+    to: { node: 'osc-1', port: 'frequency' },
+    props: { mapping: 'log', polarity: 'bipolar', depth: 0.1, offset: 0 } });
+  dispatch(s, { type: 'AUTOMATION_POINT_ADD', target: { node: 'osc-1', param: 'detune' },
+    time: 0, value: 0, curve: 'step' });
+  ok(s.transport.start());
+  s.fx.advance(0.5);
+  const edge = s.store.getModel().graph.edges.find((e) => e.to.node === 'osc-1'
+    && e.to.port === 'frequency');
+  dispatch(s, { type: 'EDGE_UPDATE', edgeId: edge.id, props: { offset: 0.5 } });
+  assert.equal(s.runtime.baseOffset('osc-1', 'detune'), 600);
+  s.fx.advance(0.5);
+  const osc = s.runtime.nodes.get('osc-1').info.oscillator;
+  near(actualAt(s, osc.detune, s.ctx.currentTime), 600, 1e-6, 'lane 0 ct + the edge\'s 600 ct');
 });
