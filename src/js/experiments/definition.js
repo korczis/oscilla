@@ -48,7 +48,7 @@ import { sha256Hex as defaultSha256Hex } from '../calibration/sha256.js';
 import {
   HEX64_PATTERN, ID_PATTERN, LIMITS, checkRecipe, createChecker, createRecipe, formatErrors,
   toIsoTimestamp,
-} from './schema.js';
+} from './recipe.js';
 import {
   normalizeStimulus, safeMaxFrequency, SAMPLE_RATE_LIMITS,
 } from '../measurement/stimulus.js';
