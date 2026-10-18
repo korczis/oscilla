@@ -12,6 +12,9 @@
 //     browser check its note cites is defined in the suite it names (V272 D8);
 //   - every ADR from 0011 on is cited by a claim, a feature or a use case, or is listed with
 //     the reason it adds no capability of the page (V272 D8);
+//   - docs/v4/completion-ledger.md: every completion-matrix row names its claims (or "–"),
+//     and no row or open item that names a guaranteed claim reads MISSING, "in review" or
+//     "fixing" (V272 D7);
 //   - every project rule's `x-majordomus` block names tests that exist and that CI runs, and
 //     claims that exist;
 //   - rule project.rules-name-their-enforcement: every active project rule without such a
@@ -1147,7 +1150,8 @@ test('V272 D8 mutation: an ADR cited nowhere is named, a cited exemption is stal
 // or "fixing": the claim says it is shipped and tested. The dated "## Update" sections after
 // the current part are history and are not read.
 const LEDGER = 'docs/v4/completion-ledger.md';
-const NOT_SHIPPED = /\bMISSING\b|\bin review\b|\bfixing\b/i;
+// MISSING is the status word; a lower-case "missing" names a gap of an existing capability.
+const NOT_SHIPPED = /\bMISSING\b|\b[Ii]n review\b|\b[Ff]ixing\b/;
 
 const cellsOf = (row) => row.split('|').slice(1, -1).map((c) => c.trim());
 const claimIdsIn = (text) => [...text.matchAll(/`([a-z][a-z0-9-]+)`/g)].map(([, id]) => id);
@@ -1183,7 +1187,8 @@ export function ledgerProblems(text, claims) {
     }
     judge(cells[0], claimIdsIn(named), cells[at.status] || '');
   }
-  for (const item of current.split('\n').filter((l) => /^\d+\. /.test(l))) {
+  // A numbered item with its indented continuation lines.
+  for (const [item] of current.matchAll(/^\d+\. .*(?:\n {3}\S.*)*/gm)) {
     judge(item.slice(0, 60), claimIdsIn(item).filter((id) => byId.has(id)), item);
   }
   return problems;
@@ -1204,7 +1209,7 @@ test('V272 D7 mutation: a shipped capability read MISSING or in review is refuse
   const missing = text.replace(row, cells.join('|'));
   assert.deepEqual(ledgerProblems(missing, CLAIMS),
     ['Findings: reads "MISSING" but claim findings-linked-to-evidence is guaranteed']);
-  const item = text.split('\n').find((l) => /^\d+\. .*`connected-records`/.test(l));
+  const item = text.split('\n').find((l) => /^ {3}.*`connected-records`/.test(l));
   assert.ok(item, 'the Trace item names its claim');
   assert.match(ledgerProblems(text.replace(item, `${item} In review.`), CLAIMS)[0],
     /reads "In review" but claim connected-records is guaranteed/);
