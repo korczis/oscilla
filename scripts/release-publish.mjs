@@ -1,8 +1,11 @@
 #!/usr/bin/env node
 // npm run release:publish — tag and publish a verified release candidate. DRY RUN unless --yes.
 //
-//   node scripts/release-publish.mjs [--yes] [--pages-timeout <minutes>]
+//   node scripts/release-publish.mjs [--yes] [--pages-timeout <minutes>] [--help]
 //
+// The arguments are parsed against that list first (parseFlags of release-analyze.mjs):
+// --help / -h prints the usage and exits 0; an unknown flag, a flag missing its value or a
+// --pages-timeout that is not a positive number exits 2, before any git, gh or npm call.
 // Preconditions (all checked, all reported, in both modes):
 //   on branch main, clean tree, HEAD == origin/main (Pages deploys main), tag v<version>
 //   absent locally and on origin, a release-gate receipt (release:prepare) matching the
@@ -35,7 +38,9 @@ import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { analyzeCommits, lastReleaseTag, parseCommit, readCommits } from './release-analyze.mjs';
+import {
+  analyzeCommits, lastReleaseTag, parseCommit, parseFlags, readCommits,
+} from './release-analyze.mjs';
 import { PUBLIC_URL, REPO_URL, ROOT, gitRunner } from './release-metadata.mjs';
 import { currentFingerprint, readReceipt, receiptProblems } from './release-prepare.mjs';
 import { DIST_PATH, channelFor, releaseAssetName } from './release-record.mjs';
@@ -187,6 +192,10 @@ function defaultSh(root) {
   };
 }
 
+export const USAGE = 'usage: node scripts/release-publish.mjs [--yes] '
+  + '[--pages-timeout <minutes>] [--help]';
+const FLAGS = { '--yes': 'boolean', '--pages-timeout': 'value' };
+
 /**
  * @param {{ argv?: string[], root?: string, run?: Function, sh?: Function, log?: Function,
  *   receipt?: object|null, fingerprint?: object, sleep?: Function, clock?: () => number }} [o]
@@ -198,9 +207,24 @@ export async function publish({
     setTimeout(r, s * 1000);
   }), clock = Date.now,
 } = {}) {
-  const yes = argv.includes('--yes');
-  const ti = argv.indexOf('--pages-timeout');
-  const pagesTimeoutMin = ti >= 0 ? Number(argv[ti + 1]) : PAGES_TIMEOUT_MIN;
+  let o;
+  try {
+    o = parseFlags(argv, FLAGS, USAGE);
+  } catch (e) {
+    log(`release:publish: ${e.message}`);
+    return e.exitCode;
+  }
+  if (o.help) {
+    log(USAGE);
+    return 0;
+  }
+  const yes = !!o['--yes'];
+  const pagesTimeoutMin = '--pages-timeout' in o ? Number(o['--pages-timeout'])
+    : PAGES_TIMEOUT_MIN;
+  if (!Number.isFinite(pagesTimeoutMin) || pagesTimeoutMin <= 0) {
+    log(`release:publish: --pages-timeout needs a positive number of minutes\n${USAGE}`);
+    return 2;
+  }
   const now = fingerprint || currentFingerprint(root, run);
   const version = now.version;
   const tag = `v${version}`;

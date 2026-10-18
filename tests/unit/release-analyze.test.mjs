@@ -352,8 +352,10 @@ test('--no-rc-because overrides only by naming an accepted ADR', () => {
   const missing = prepareDryRun({ ...major, argv: ['--no-rc-because', 'ADR-0097'] });
   assert.equal(missing.code, 1);
   assert.match(missing.text, /--no-rc-because ADR-0097 names no ADR in \.ai\/repo\/adrs\//);
+  // a flag missing its value is a usage error, refused before anything runs (R-4 of #198)
   const empty = prepareDryRun({ ...major, argv: ['--no-rc-because'] });
-  assert.equal(empty.code, 1);
+  assert.equal(empty.code, 2);
+  assert.match(empty.text, /--no-rc-because needs a value/);
   for (const ref of ['0099', 'adr-0099', 'ADR 0099']) {
     const ok = prepareDryRun({ ...major, argv: ['--no-rc-because', ref] });
     assert.equal(ok.code, 0, ok.text);

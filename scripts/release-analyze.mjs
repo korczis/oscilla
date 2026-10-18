@@ -2,7 +2,7 @@
 // Release analysis: conventional commits since the last reachable v* tag (else since the root
 // commit) -> the SemVer level the next release needs, with one reason per commit.
 //
-//   node scripts/release-analyze.mjs [--json] [--prerelease [--preid rc]]
+//   node scripts/release-analyze.mjs [--json] [--prerelease [--preid rc]] [--help]
 //
 // Levels (SemVer policy of this project):
 //   major  "type!:" or a "BREAKING CHANGE:" / "BREAKING-CHANGE:" footer: incompatible config,
@@ -18,7 +18,7 @@
 // release-relevant followed it: after vX.Y.Z-rc.N with no such commit the proposal is X.Y.Z
 // (rule project.release-flow-complete makes the candidate mandatory before a major, so the
 // step from it to the release must not need an invented commit). Pure functions are exported
-// for the unit tests.
+// for the unit tests. parseFlags() is the argument parser of every release script.
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
@@ -118,6 +118,37 @@ export function proposeVersion({
   return { version: bump(current), action: 'bump', why: `${level} step from v${current}` };
 }
 
+// ------------------------------------------------------------------------------- cli
+/**
+ * Parse a release script's argv against its declared flags (`spec`: flag -> 'boolean' or
+ * 'value'). Returns { help: true } when --help or -h is given, else an object keyed by flag (a
+ * boolean flag true, a value flag its string). An argument the spec does not declare, or a
+ * value flag followed by nothing or by another flag, throws an Error with exitCode 2 that ends
+ * in `usage`, so a typo is refused before the script touches git, a file or the network
+ * (R-4 of the #198 review).
+ */
+export function parseFlags(argv, spec, usage) {
+  const refuse = (m) => Object.assign(new Error(`${m}\n${usage}`), { exitCode: 2 });
+  const o = {};
+  let help = false;
+  for (let i = 0; i < argv.length; i++) {
+    const a = argv[i];
+    if (a === '--help' || a === '-h') {
+      help = true;
+    } else if (!Object.hasOwn(spec, a)) {
+      throw refuse(`unknown argument ${a}`);
+    } else if (spec[a] === 'boolean') {
+      o[a] = true;
+    } else {
+      const v = argv[i + 1];
+      if (v === undefined || v.startsWith('-')) throw refuse(`${a} needs a value`);
+      o[a] = v;
+      i++;
+    }
+  }
+  return help ? { help: true } : o;
+}
+
 // ------------------------------------------------------------------------------- git
 /** Highest SemVer v* tag reachable from HEAD, or null. */
 export function lastReleaseTag(run = gitRunner()) {
@@ -172,15 +203,37 @@ export function formatAnalysis(a) {
   return lines.join('\n');
 }
 
-if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  const argv = process.argv.slice(2);
-  const i = argv.indexOf('--preid');
+export const USAGE = 'usage: node scripts/release-analyze.mjs [--json] '
+  + '[--prerelease [--preid <id>]] [--help]';
+const FLAGS = { '--json': 'boolean', '--prerelease': 'boolean', '--preid': 'value' };
+
+/** The command line; returns the exit code (0 ok, 1 cannot analyse, 2 usage). */
+export function main({
+  argv = process.argv.slice(2), root = ROOT, run = gitRunner(root), log = console.log,
+  err = console.error,
+} = {}) {
+  let o;
   try {
-    const a = analyzeRepository({ prerelease: argv.includes('--prerelease'),
-      preid: i >= 0 ? argv[i + 1] : 'rc' });
-    console.log(argv.includes('--json') ? JSON.stringify(a, null, 2) : formatAnalysis(a));
+    o = parseFlags(argv, FLAGS, USAGE);
   } catch (e) {
-    console.error(`release:analyze: ${e.message}`);
-    process.exit(1);
+    err(`release:analyze: ${e.message}`);
+    return e.exitCode;
   }
+  if (o.help) {
+    log(USAGE);
+    return 0;
+  }
+  try {
+    const a = analyzeRepository({ root, run, prerelease: !!o['--prerelease'],
+      preid: o['--preid'] || 'rc' });
+    log(o['--json'] ? JSON.stringify(a, null, 2) : formatAnalysis(a));
+    return 0;
+  } catch (e) {
+    err(`release:analyze: ${e.message}`);
+    return 1;
+  }
+}
+
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  process.exitCode = main(); // not process.exit(): a long --json must reach a pipe whole
 }

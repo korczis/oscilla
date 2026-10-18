@@ -2,7 +2,11 @@
 // npm run release:prepare — turn the current clean tree into a release candidate. Never tags.
 //
 //   node scripts/release-prepare.mjs [--dry-run] [--prerelease [--preid rc]]
+//     [--no-rc-because <ADR>] [--help]
 //
+//   0. parse the arguments against that list (parseFlags of release-analyze.mjs): --help / -h
+//      prints the usage and exits 0; an unknown flag (a typo such as --dryrun) or a flag
+//      missing its value exits 2; both before any git, file or npm action (R-4 of #198)
 //   1. refuse a dirty tree (a release candidate is exactly a commit)
 //   2. analyse conventional commits since the last v* tag (release-analyze.mjs)
 //   2a. refuse to start (rule project.release-flow-complete), also as a dry run, when
@@ -37,7 +41,7 @@ import {
 } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { analyzeRepository, formatAnalysis } from './release-analyze.mjs';
+import { analyzeRepository, formatAnalysis, parseFlags } from './release-analyze.mjs';
 import {
   ROOT, computeSourceDigest, digestEntries, gitRunner, parseSemver, readVersion, sha256,
 } from './release-metadata.mjs';
@@ -316,8 +320,26 @@ function loud(lines) {
   console.error(`\n${bar}\n${lines.map((l) => `RELEASE:PREPARE FAILED  ${l}`).join('\n')}\n${bar}`);
 }
 
+export const USAGE = 'usage: node scripts/release-prepare.mjs [--dry-run] '
+  + '[--prerelease [--preid <id>]] [--no-rc-because <ADR>] [--help]';
+const FLAGS = {
+  '--dry-run': 'boolean', '--prerelease': 'boolean', '--preid': 'value',
+  '--no-rc-because': 'value',
+};
+
 export function main(argv = process.argv.slice(2), root = ROOT, run = gitRunner(root),
   env = process.env) {
+  let o;
+  try {
+    o = parseFlags(argv, FLAGS, USAGE);
+  } catch (e) {
+    console.error(`release:prepare: ${e.message}\nnothing was changed`);
+    return e.exitCode;
+  }
+  if (o.help) {
+    console.log(USAGE);
+    return 0;
+  }
   const narrowed = gateEnvProblems(env);
   if (narrowed.length) {
     loud(['refusing to start (rule project.release-receipt-binds-gate):', ...narrowed,
@@ -329,13 +351,11 @@ export function main(argv = process.argv.slice(2), root = ROOT, run = gitRunner(
     loud(['the working tree is not clean; commit or copy aside first:', ...dirty.split('\n')]);
     return 1;
   }
-  const i = argv.indexOf('--preid');
-  const analysis = analyzeRepository({ root, run, prerelease: argv.includes('--prerelease'),
-    preid: i >= 0 ? argv[i + 1] : 'rc' });
+  const analysis = analyzeRepository({ root, run, prerelease: !!o['--prerelease'],
+    preid: o['--preid'] || 'rc' });
   console.log(formatAnalysis(analysis));
   const { proposal, current } = analysis;
-  const ni = argv.indexOf('--no-rc-because');
-  const noRcBecause = ni >= 0 ? (argv[ni + 1] || '') : null;
+  const noRcBecause = o['--no-rc-because'] ?? null;
   const refused = flowProblems({
     lastTag: analysis.lastTag, proposed: proposal.version,
     tags: run(['tag', '--merged', 'HEAD', '--list', 'v*']).split('\n').filter(Boolean),
@@ -354,7 +374,7 @@ export function main(argv = process.argv.slice(2), root = ROOT, run = gitRunner(
   const plan = proposal.action === 'bump'
     ? [['npm', ['version', proposal.version, '--no-git-tag-version']], ...GATE_COMMANDS]
     : GATE_COMMANDS;
-  if (argv.includes('--dry-run')) {
+  if (o['--dry-run']) {
     console.log(`\nDry run: would ${proposal.action} v${proposal.version} and run:`);
     for (const [cmd, args] of plan) console.log(`  ${cmd} ${args.join(' ')}`);
     return 0;
