@@ -990,3 +990,147 @@ test('every path in feature front matter and in a use case resolves', () => {
   for (const f of useCaseFiles()) bad.push(...unresolved(f, read(f)));
   assert.deepEqual(bad, [], `unresolved references:\n  ${bad.join('\n  ')}`);
 });
+
+// ---------------------------------------------------------------- checks a claim cites (V272 D8)
+
+// A guaranteed claim's note names browser checks as "Check a", "checks a, b and c" or
+// "check a in tests/browser/x" ("of" for "in" too). A name with a hyphen is a check id; a
+// one-word name counts only when the suite follows it ("check findings in tests/browser/v3-ui"),
+// because "check from both origins" is prose. Without a named suite the check must be defined
+// in a browser suite the note names or in the claim's own test. A suite defines a check with
+// `def('id', ...)`, `check('id', ...)` or `{ name: 'id', fn: ... }`. Renaming a check then
+// fails here, not only in the suite's own run.
+const CHECK_NAME = String.raw`[a-z][a-z0-9]*(?:-[a-z0-9]+)*`;
+const CHECK_CITE = new RegExp(String.raw`\b[Cc]hecks? (${CHECK_NAME}`
+  + String.raw`(?:(?:, and |, | and )(?!(?:in|of) tests\/)${CHECK_NAME})*)`
+  + String.raw`(?:,? (?:in|of) (tests\/browser\/[\w-]+)(?:\.cjs)?)?`, 'g');
+const BROWSER_SUITE = /tests\/browser\/[\w-]+\.cjs/g;
+const CHECK_DEF = /(?:\b(?:def|check)\(\s*'([a-z0-9-]+)'|\{\s*name:\s*'([a-z0-9-]+)',\s*fn:)/g;
+
+/** The checks a claim's note cites: [{ name, suites }], suites the files that may define it. */
+export function citedChecks(claim) {
+  const note = claim.note || '';
+  const named = new Set([...note.matchAll(BROWSER_SUITE)].map(([p]) => p));
+  if (/^tests\/browser\/[\w-]+\.cjs$/.test(claim.test || '')) named.add(claim.test);
+  const out = [];
+  for (const m of note.matchAll(CHECK_CITE)) {
+    let names = m[1].split(/, and |, | and /);
+    if (!m[2]) {
+      const prose = names.findIndex((n) => !n.includes('-'));
+      if (prose >= 0) names = names.slice(0, prose);
+    }
+    for (const name of names) out.push({ name, suites: m[2] ? [`${m[2]}.cjs`] : [...named] });
+  }
+  return out;
+}
+
+/** The check ids a browser suite's source defines. */
+export const definedChecks = (text) => new Set([...text.matchAll(CHECK_DEF)]
+  .map(([, a, b]) => a || b));
+
+/** One problem per check a guaranteed claim cites that no suite it may live in defines. */
+export function missingCitedChecks(claims, readSuite) {
+  const problems = [];
+  for (const c of claims.filter((x) => x.status === 'guaranteed')) {
+    for (const { name, suites } of citedChecks(c)) {
+      if (suites.length === 0) {
+        problems.push(`${c.id}: check ${name} names no browser suite`);
+        continue;
+      }
+      const found = suites.some((s) => {
+        const text = readSuite(s);
+        return text !== null && definedChecks(text).has(name);
+      });
+      if (!found) problems.push(`${c.id}: check ${name} is not defined in ${suites.join(' or ')}`);
+    }
+  }
+  return problems;
+}
+
+const readSuite = (rel) => (exists(rel) ? read(rel) : null);
+
+test('V272 D8: every check a guaranteed claim cites is defined in the suite it names', () => {
+  const cited = CLAIMS.filter((c) => c.status === 'guaranteed').flatMap(citedChecks);
+  assert.ok(cited.length >= 40, `cited checks parsed (${cited.length})`);
+  assert.deepEqual(missingCitedChecks(CLAIMS, readSuite), []);
+});
+
+test('V272 D8 mutation: a renamed check, a wrong suite and prose are told apart', () => {
+  const suite = 'tests/browser/v3-ui.cjs';
+  const renamed = read(suite).replace("def('loopback-workflow',", "def('loopback-flow',");
+  assert.notEqual(renamed, read(suite), 'the check to rename exists');
+  const problems = missingCitedChecks(CLAIMS, (rel) => (rel === suite ? renamed : readSuite(rel)));
+  const ids = problems.filter((p) => p.includes('loopback-workflow')).map((p) => p.split(':')[0]);
+  assert.deepEqual(ids.sort(), ['measurement-workbench', 'reproducible-experiments']);
+  const one = (note, test = 'tests/unit/x.test.mjs') => citedChecks({ note, test });
+  assert.deepEqual(one('Check about-page, in Chromium', 'tests/browser/app.cjs'),
+    [{ name: 'about-page', suites: ['tests/browser/app.cjs'] }]);
+  assert.deepEqual(one('checks experiments and persistence in tests/browser/v3-ui.cjs')
+    .map((x) => [x.name, x.suites[0]]),
+  [['experiments', 'tests/browser/v3-ui.cjs'], ['persistence', 'tests/browser/v3-ui.cjs']]);
+  assert.deepEqual(one('the check from both origins; check is in tests/unit/v3-x'), []);
+  assert.deepEqual(missingCitedChecks([{ id: 'x', status: 'guaranteed', test: 'tests/unit/a.mjs',
+    note: 'Check hold-plays-release-zero-nodes in tests/browser/v3-ui.cjs' }], readSuite),
+  ['x: check hold-plays-release-zero-nodes is not defined in tests/browser/v3-ui.cjs']);
+  assert.deepEqual(missingCitedChecks([{ id: 'y', status: 'guaranteed', test: 'tests/unit/a.mjs',
+    note: 'Check no-such-suite' }], readSuite), ['y: check no-such-suite names no browser suite']);
+});
+
+// ------------------------------------------------------------ decisions with no claim (V272 D8)
+
+// Every ADR from 0011 on (the V2 line and later) is cited by a claim (its source or its note),
+// by a feature's front matter or by a use case, so a shipped capability a decision describes is
+// claimed with the test that proves it. A decision that adds no capability of the page is listed
+// here with its reason; an entry that becomes cited is refused as stale.
+const ADR_NOT_A_CAPABILITY = new Map([
+  ['0028', 'release provenance (the source digest and the Pages stamp): intent release-provenance'
+    + ' and tests/unit/release-provenance.test.mjs hold it'],
+  ['0029', 'the release gate\'s visual regression check: a gate, not a capability of the page'],
+  ['0047', 'release process: a major release is preceded by a release candidate'],
+  ['0051', 'a descoping decision: no knowledge explorer is built, and the method claims it names'
+    + ' are not built yet (docs/v4/completion-ledger.md)'],
+  ['0053', 'vocabulary: the names the stored records and the page use, held by'
+    + ' tests/unit/vocabulary.test.mjs; it adds no capability'],
+  ['0054', 'repository operation: the Majordomus mesh of OSCILLA\'s runtimes'],
+  ['0055', 'repository operation: how a merge train lands'],
+  ['0056', 'repository operation: when the Majordomus CI pin moves'],
+  ['0057', 'release evidence: what proves a static Pages deployment'],
+]);
+
+/** ADR numbers (from 0011 on) that `corpus` never cites, and exemptions it does cite. */
+export function uncitedAdrs(numbers, corpus, exempt) {
+  const cites = (n) => new RegExp(String.raw`adrs\/${n}-|\badr-${n}\b|\bADRs? ${n}\b`).test(corpus);
+  return {
+    uncited: numbers.filter((n) => Number(n) >= 11 && !exempt.has(n) && !cites(n)),
+    stale: [...exempt.keys()].filter(cites),
+  };
+}
+
+const ADR_NUMBERS = () => list('.ai/repo/adrs').map((f) => f.match(/^(\d{4})-.+\.md$/))
+  .filter(Boolean).map(([, n]) => n);
+const featureFiles = () => list('.ai/repo/features')
+  .filter((x) => x.endsWith('.md') && x !== 'README.md').map((f) => `.ai/repo/features/${f}`);
+const ADR_CORPUS = () => [
+  ...CLAIMS.map((c) => Object.values(c).join(' ')),
+  ...featureFiles().map((f) => (read(f).match(/^---\n([\s\S]*?)\n---\n/) || ['', ''])[1]),
+  ...useCaseFiles().map(read),
+].join('\n');
+
+test('V272 D8: every ADR from 0011 on is claimed, or says why it adds no capability', () => {
+  const numbers = ADR_NUMBERS();
+  assert.ok(numbers.length > 50, `ADRs listed (${numbers.length})`);
+  for (const [n, why] of ADR_NOT_A_CAPABILITY) {
+    assert.ok(numbers.includes(n), `ADR ${n} exists`);
+    assert.ok(why.length > 30, `ADR ${n} says why it adds no capability`);
+  }
+  const { uncited, stale } = uncitedAdrs(numbers, ADR_CORPUS(), ADR_NOT_A_CAPABILITY);
+  assert.deepEqual(uncited, [], `ADRs no claim, feature or use case cites: ${uncited.join(', ')}`);
+  assert.deepEqual(stale, [], `exempt ADRs that are cited now: ${stale.join(', ')}`);
+});
+
+test('V272 D8 mutation: an ADR cited nowhere is named, a cited exemption is stale', () => {
+  const corpus = 'source: .ai/repo/adrs/0012-x.md adrs: [adr-0013] ADR 0014. ADRs 0015';
+  assert.deepEqual(uncitedAdrs(['0010', '0012', '0013', '0014', '0015', '0016'], corpus,
+    new Map([['0015', 'why']])), { uncited: ['0016'], stale: ['0015'] });
+  assert.deepEqual(uncitedAdrs(['0120'], 'ADR 01201', new Map()).uncited, ['0120']);
+});
