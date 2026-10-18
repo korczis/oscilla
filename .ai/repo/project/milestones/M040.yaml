@@ -1,0 +1,28 @@
+id: M040
+title: "V3.6 immutable runs with identity"
+slug: v36-immutable-runs
+version: "3.6.0"
+order: 39
+priority: p1
+problem: "A completed measurement run could be changed after the fact, runs had no identity, provenance did not name the exact build, and the analysis code was in the artifact twice."
+outcome: "OSCILLA 3.6.0 shipped immutable completed runs with identity, their metadata kept separate, and provenance naming the exact build (ADR 0040, #102); 3.6.1 put the analysis code in the artifact once, with the Worker running the page's own library (#103)."
+acceptance_criteria:
+  - "v3.6.0 (87ea991) and v3.6.1 (8f2374b) are tagged with GitHub Releases listing #102 and #103."
+  - "ADR 0040 (a completed experiment run is immutable; metadata is separate) landed in 3.6.0 (3801b05)."
+  - ".ai/repo/releases/v3.6.0.yaml and v3.6.1.yaml match what was published."
+validation:
+  - "gh release view v3.6.0"
+  - "node scripts/release-record.mjs --version 3.6.0 --check"
+  - "node scripts/release-record.mjs --version 3.6.1 --check"
+evidence_required:
+  - "milestone_verified"
+created_at: 2026-10-18
+updated_at: 2026-10-18T00:49:19Z
+evidence:
+  - covers: milestone_verified
+    type: artifact
+    command: "git rev-parse v3.6.0^{commit} && gh release view v3.6.0 --json tagName,publishedAt,isDraft,isPrerelease && git rev-parse v3.6.1^{commit} && gh release view v3.6.1 --json tagName,publishedAt,isDraft,isPrerelease && node scripts/release-record.mjs --version 3.6.0 --check && node scripts/release-record.mjs --version 3.6.1 --check"
+    result: "The 3.6 line shipped: v3.6.0 tag at 87ea991, GitHub Release published 2026-10-04T18:11:32Z; v3.6.1 tag at 8f2374b, GitHub Release published 2026-10-04T20:47:05Z; release records .ai/repo/releases/v3.6.0.yaml, .ai/repo/releases/v3.6.1.yaml match what was published (release-record --check)"
+    artifact: "https://github.com/korczis/oscilla/releases/tag/v3.6.0"
+    commit: 1a165b109f24d30219410513adfe7e17be0c861e
+    recorded_at: 2026-10-18T00:49:19Z

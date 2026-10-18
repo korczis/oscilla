@@ -1,6 +1,7 @@
 id: M006
 title: "Verified public deployment"
 slug: deployment
+version: "1.0.0"
 order: 6
 priority: p1
 problem: "Nothing is published."

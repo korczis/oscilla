@@ -1,0 +1,27 @@
+id: M036
+title: "V3.2 evidence audit and DSP review closed"
+slug: v32-audit-and-dsp-review
+version: "3.2.0"
+order: 35
+priority: p1
+problem: "V3.0 MEASURE and V3.1 Studio shipped with the gaps the evidence audit at 320130f and the independent DSP review (V382, docs/v3/dsp-review-v382.md) found: correlation alignment, confidence, RTA resolution, clipping, transfer function, impulse response and calibration defects, the analysis on the main thread, and no Studio deep links. No milestone recorded the release that closed them."
+outcome: "OSCILLA 3.2.0 shipped the corrected V3 algorithms under new IDs (align.v2, confidence.v4, rta.v2, smoothing.v2, clip.v2, transfer.v3, ir.v3), the analysis in a Worker (V384), the Playground Signal Path projected from a derived Studio model (V421), Studio deep links and fullscreen (V422), and the V250, V251 and V253 audio fixes."
+current_state: "Shipped and retrospectively recorded: the work was executed under M019, M020, M027, M028 and M034, and this milestone records the release line that carried it."
+acceptance_criteria:
+  - "v3.2.0 is tagged at e494605 and its GitHub Release (published 2026-10-03T21:40:16Z) lists the V382 fixes (#51, #52, #55, #57, #58, #59, #60), the Worker (#48), V421 (#56), V422 (#54) and the V250, V251 and V253 fixes (#42, #46, #39)."
+  - "No release/v1 record exists for 3.2.0, because records start at v3.4.0; the tag and the GitHub Release are the evidence."
+validation:
+  - "git rev-parse v3.2.0^{commit}"
+  - "gh release view v3.2.0"
+evidence_required:
+  - "milestone_verified"
+created_at: 2026-10-18
+updated_at: 2026-10-18T00:48:25Z
+evidence:
+  - covers: milestone_verified
+    type: artifact
+    command: "git rev-parse v3.2.0^{commit} && gh release view v3.2.0 --json tagName,publishedAt,isDraft,isPrerelease"
+    result: "The 3.2 line shipped: v3.2.0 tag at e494605, GitHub Release published 2026-10-03T21:40:16Z; no release/v1 record: records start at v3.4.0"
+    artifact: "https://github.com/korczis/oscilla/releases/tag/v3.2.0"
+    commit: 1a165b109f24d30219410513adfe7e17be0c861e
+    recorded_at: 2026-10-18T00:48:25Z

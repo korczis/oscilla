@@ -1,0 +1,28 @@
+id: M037
+title: "V3.3 navigation groups and the V431 Studio review findings"
+slug: v33-navigation-and-studio-review
+version: "3.3.0"
+order: 36
+priority: p1
+problem: "The V431 independent architecture, UX and adversarial reviews of the Studio (docs/v31/review-v431.md) found 30 findings (19 defects, 2 risks, 9 nits); MEASURE labels claimed more than the response, CSV and Expert table showed; and the eight-entry navigation (V371) was unreleased. No milestone recorded the release line that shipped the fixes."
+outcome: "Releases 3.3.0 to 3.3.3 shipped eight top-level navigation entries with Analyze and Synthesis groups (V371, #71); every V431 finding fixed with a test that fails before the fix (#75, #76, #77, #78, #80, #86, #89); MEASURE labels that state the basis of clipping, aggregation and levels, with SPL labels agreeing with the levels behind them (#66, #68; V383, #65); saved experiments no longer pinned in memory (#67); a public smoke that opens MEASURE (#72); and the Studio self-knowledge test (#73)."
+current_state: "Shipped and retrospectively recorded: the work was executed under M019, M020 and M032, and this milestone records the release line that carried it."
+acceptance_criteria:
+  - "v3.3.0 (1c129bd), v3.3.1 (150c51d), v3.3.2 (a285b0b) and v3.3.3 (87b3ef1) are tagged, each with a GitHub Release whose notes list the changes above."
+  - "No release/v1 record exists for the 3.3 line, because records start at v3.4.0; the tags and the GitHub Releases are the evidence."
+validation:
+  - "git rev-parse v3.3.0^{commit} v3.3.1^{commit} v3.3.2^{commit} v3.3.3^{commit}"
+  - "gh release view v3.3.0"
+  - "gh release view v3.3.3"
+evidence_required:
+  - "milestone_verified"
+created_at: 2026-10-18
+updated_at: 2026-10-18T00:48:59Z
+evidence:
+  - covers: milestone_verified
+    type: artifact
+    command: "git rev-parse v3.3.0^{commit} && gh release view v3.3.0 --json tagName,publishedAt,isDraft,isPrerelease && git rev-parse v3.3.1^{commit} && gh release view v3.3.1 --json tagName,publishedAt,isDraft,isPrerelease && git rev-parse v3.3.2^{commit} && gh release view v3.3.2 --json tagName,publishedAt,isDraft,isPrerelease && git rev-parse v3.3.3^{commit} && gh release view v3.3.3 --json tagName,publishedAt,isDraft,isPrerelease"
+    result: "The 3.3 line shipped: v3.3.0 tag at 1c129bd, GitHub Release published 2026-10-04T02:31:34Z; v3.3.1 tag at 150c51d, GitHub Release published 2026-10-04T05:11:42Z; v3.3.2 tag at a285b0b, GitHub Release published 2026-10-04T10:03:45Z; v3.3.3 tag at 87b3ef1, GitHub Release published 2026-10-04T12:08:44Z; no release/v1 record, because records start at v3.4.0"
+    artifact: "https://github.com/korczis/oscilla/releases/tag/v3.3.0"
+    commit: 1a165b109f24d30219410513adfe7e17be0c861e
+    recorded_at: 2026-10-18T00:48:59Z

@@ -1,9 +1,10 @@
 id: M005
 title: "Specification tail"
 slug: spec-tail
-order: 5
+order: 999
 priority: p1
 problem: "Sections 64-95 of the specification were never received."
+current_state: "Unscheduled, waiting on external input: S000 asks the requester for the text of specification sections 64-95 (the 2026-10-01 paste ended mid-sentence in section 63), and that text has never arrived. No worker can act on S064-S095 until it does. The milestone carries no version and sorts after every other milestone (order 999) because no milestone dependency can express a wait on a person; it is neither cancelled nor done."
 outcome: "Sections 64-95 implemented once their text is supplied."
 acceptance_criteria:
   - "Sections 64-95 implemented once their text is supplied."
@@ -11,4 +12,8 @@ validation:
   - "node tests/smoke.cjs"
 evidence_required:
   - "milestone_verified"
+risks:
+  - "S000 depends on the requester, not on any worker or milestone; while the text is missing the roadmap must not nominate M005 as current work, which is why its order is 999."
+  - "When S000 is evidenced (spec_received), M005 is rescheduled: give it an order among the live milestones and the version of the release that will carry it."
 created_at: 2026-10-01
+updated_at: 2026-10-18

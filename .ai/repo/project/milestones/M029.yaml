@@ -1,6 +1,7 @@
 id: M029
 title: "V3.1 Studio measurement integration"
 slug: v31-studio-measurement
+version: "3.1.0"
 order: 29
 priority: p0
 problem: "Studio and the V3 measurement engine would otherwise be two orchestration systems."

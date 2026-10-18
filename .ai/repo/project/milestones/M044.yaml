@@ -1,0 +1,28 @@
+id: M044
+title: "V3.10 evidence on a run and a protected workspace"
+slug: v310-run-evidence-and-workspace
+version: "3.10.0"
+order: 43
+priority: p1
+problem: "A run could not say what produced a value or whether it can be repeated; unsaved work could be lost and the workspace was not in navigation history; level calibrations were not bound to their input and the measured Studio path was not recorded (ledger C1, D3); and the Pages deployment did not run the public smoke."
+outcome: "OSCILLA 3.10.0 shipped evidence on a run, read from stored fields as a lineage and a reproducibility checklist, never a score (ADR 0044, #129); 3.10.1 put the workspace in navigation history with one hash dispatcher and an unsaved-work guard (ADR 0045, #130); 3.10.2 bound level calibrations to their input, recorded the measured Studio path and refused stimuli the engine cannot run (#139); 3.10.3 built a pattern-played carrier at the floor (#140), made every Pages deployment run the public smoke (#146) and added WebKit to the engine, DSP, labs and sequencer CI (CI1, #147)."
+acceptance_criteria:
+  - "v3.10.0 (36dcb48), v3.10.1 (1f76654), v3.10.2 (531544b) and v3.10.3 (e4772ee) are tagged with GitHub Releases listing #129, #130, #139, #140, #146 and #147."
+  - "ADR 0044 (evidence on a run is read from stored fields, as a lineage and a checklist, never a score) landed in 3.10.0 (7fc5001) and ADR 0045 (the workspace is in navigation history; one hash dispatcher; an unsaved-work guard) in 3.10.1 (6c6e25f)."
+  - ".ai/repo/releases/v3.10.0.yaml to v3.10.3.yaml match what was published."
+validation:
+  - "gh release view v3.10.0"
+  - "node scripts/release-record.mjs --version 3.10.0 --check"
+  - "node scripts/release-record.mjs --version 3.10.3 --check"
+evidence_required:
+  - "milestone_verified"
+created_at: 2026-10-18
+updated_at: 2026-10-18T00:50:02Z
+evidence:
+  - covers: milestone_verified
+    type: artifact
+    command: "git rev-parse v3.10.0^{commit} && gh release view v3.10.0 --json tagName,publishedAt,isDraft,isPrerelease && git rev-parse v3.10.1^{commit} && gh release view v3.10.1 --json tagName,publishedAt,isDraft,isPrerelease && git rev-parse v3.10.2^{commit} && gh release view v3.10.2 --json tagName,publishedAt,isDraft,isPrerelease && git rev-parse v3.10.3^{commit} && gh release view v3.10.3 --json tagName,publishedAt,isDraft,isPrerelease && node scripts/release-record.mjs --version 3.10.0 --check && node scripts/release-record.mjs --version 3.10.1 --check && node scripts/release-record.mjs --version 3.10.2 --check && node scripts/release-record.mjs --version 3.10.3 --check"
+    result: "The 3.10 line shipped: v3.10.0 tag at 36dcb48, GitHub Release published 2026-10-06T12:15:46Z; v3.10.1 tag at 1f76654, GitHub Release published 2026-10-06T14:06:39Z; v3.10.2 tag at 531544b, GitHub Release published 2026-10-06T17:53:58Z; v3.10.3 tag at e4772ee, GitHub Release published 2026-10-06T19:10:15Z; release records .ai/repo/releases/v3.10.0.yaml, .ai/repo/releases/v3.10.1.yaml, .ai/repo/releases/v3.10.2.yaml, .ai/repo/releases/v3.10.3.yaml match what was published (release-record --check)"
+    artifact: "https://github.com/korczis/oscilla/releases/tag/v3.10.0"
+    commit: 1a165b109f24d30219410513adfe7e17be0c861e
+    recorded_at: 2026-10-18T00:50:02Z

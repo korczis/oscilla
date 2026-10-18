@@ -1,6 +1,7 @@
 id: M024
 title: "V3.1 Studio audio graph compiler"
 slug: v31-studio-compiler
+version: "3.1.0"
 order: 24
 priority: p0
 problem: "A model that does not drive the sound would be decoration."

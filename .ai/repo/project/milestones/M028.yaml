@@ -1,6 +1,7 @@
 id: M028
 title: "V3.1 full Studio workspace"
 slug: v31-full-studio
+version: "3.1.0"
 order: 28
 priority: p0
 problem: "There is no place to author graphs and timelines together."

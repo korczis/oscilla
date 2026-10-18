@@ -1,6 +1,7 @@
 id: M031
 title: "V3.1 Studio accessibility and mobile"
 slug: v31-studio-a11y-mobile
+version: "3.1.0"
 order: 31
 priority: p0
 problem: "Graph editors usually exclude keyboard, screen-reader and phone users."

@@ -9,6 +9,7 @@ invariants:
 milestones:
   - M011
   - M035
+  - M038
 satisfaction:
   - id: one-version-authority
     criterion: "No hard-coded copy of the current product version exists outside package.json"
