@@ -267,7 +267,7 @@ The project rules the Studio features name:
 The claims of `docs/CLAIMS.yaml` for the Studio:
 
 <!-- claims:begin -->
-`studio-model-plain-data`, `studio-deterministic-hash`, `studio-typed-connections`, `studio-feedback-rejected`, `studio-exact-undo-redo`, `studio-subgraph-paste`, `studio-untrusted-import`, `studio-schema-version`, `studio-timeline-model`, `studio-automation-model`, `studio-measurement-topology`, `studio-registry-reuses-engine`, `studio-one-store-projections`, `studio-compiled-topology`, `studio-click-free-live-edit`, `studio-operation-trace`, `studio-transport-audio-clock`, `studio-patch-round-trip`, `studio-experiment-provenance`, `studio-non-drag-operation`, `studio-file-protocol`
+`studio-model-plain-data`, `studio-deterministic-hash`, `studio-typed-connections`, `studio-feedback-rejected`, `studio-exact-undo-redo`, `studio-subgraph-paste`, `studio-untrusted-import`, `studio-schema-version`, `studio-timeline-model`, `studio-automation-model`, `studio-measurement-topology`, `studio-registry-reuses-engine`, `studio-one-store-projections`, `studio-compiled-topology`, `studio-click-free-live-edit`, `studio-runtime-divergence`, `studio-operation-trace`, `studio-transport-audio-clock`, `studio-patch-round-trip`, `studio-experiment-provenance`, `studio-non-drag-operation`, `studio-file-protocol`
 <!-- claims:end -->
 
 ### Features

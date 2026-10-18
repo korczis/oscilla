@@ -8,7 +8,10 @@
 //
 //   - every claim in docs/CLAIMS.yaml: a known status; for a guaranteed claim, its source,
 //     implementation and test exist, and its test is run by a script CI runs; an algorithm
-//     id in its prose is a current default, or a retained one on a line that says so;
+//     id in its prose is a current default, or a retained one on a line that says so; every
+//     browser check its note cites is defined in the suite it names (V272 D8);
+//   - every ADR from 0011 on is cited by a claim, a feature or a use case, or is listed with
+//     the reason it adds no capability of the page (V272 D8);
 //   - every project rule's `x-majordomus` block names tests that exist and that CI runs, and
 //     claims that exist;
 //   - rule project.rules-name-their-enforcement: every active project rule without such a
