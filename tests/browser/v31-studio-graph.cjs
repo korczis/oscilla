@@ -46,6 +46,9 @@
 //   v272-c4-dialog-live  V272 C4: what is said while a Studio dialog stays open (patch Export,
 //                        Library Delete) is said in a live region inside it, exposed (chromium
 //                        reads the accessibility tree)
+//   v272-c5-keyboard-multiselect  V272 C5: Tab, T, Shift+Tab select Oscillator 1 and Envelope 1
+//                        by keyboard alone; Save as patch covers both; T removes; Ctrl/Cmd A
+//                        then Tab keeps the selection
 //   inspector-focus      V431 U2: keyboard Enter on an Inspector connection link, "Select
 //                        source" and "Duplicate" lands on the resulting view's heading or the
 //                        same action of the copy, never <body>
@@ -1024,6 +1027,54 @@ function defineChecks() {
       pageRegionsToo: live.includes('Exported patch Probe')
         && live.some((t) => /deleted|no longer|detached/i.test(t)),
     }), exp, expAx, del, delAx, live: live.slice(-4) };
+  });
+
+  def('v272-c5-keyboard-multiselect', async ({ page }) => {
+    // V272 C5 (WCAG 2.1.1): a subset of nodes is selected by keyboard alone. T adds the focused
+    // node to the selection that moving focus replaced (or removes a selected one), and focus
+    // landing on a member of a multi-selection keeps it; Save as patch then covers both.
+    const playing = () => page.evaluate(() => !!(window.OSCILLA.studio.transport
+      && window.OSCILLA.studio.transport.playing));
+    const nodes = async () => (await H.sel(page)).nodes.slice().sort().join();
+    await H.fresh(page);
+    await page.focus('.osc-sg-node[data-node-id="osc-1"]');
+    const first = await H.settle(nodes, (s) => s === 'osc-1', 'C5: focus selects Oscillator 1');
+    await page.keyboard.press('Tab');
+    const second = await H.settle(() => H.where(page), (a) => a === 'node:env-1',
+      'C5: Tab reaches Envelope 1');
+    await page.keyboard.press('t');
+    const both = await H.settle(nodes, (s) => s === 'env-1,osc-1', 'C5: T adds Envelope 1');
+    const playedOnT = await playing();
+    await page.keyboard.press('Shift+Tab');
+    const back = await H.settle(() => H.where(page), (a) => a === 'node:osc-1',
+      'C5: Shift+Tab returns to Oscillator 1');
+    const kept = await H.settle(nodes, (s) => s === 'env-1,osc-1',
+      'C5: focus on a member keeps the selection');
+    await page.focus('[data-osc="studio.inspector.savePatch"]');
+    await page.keyboard.press('Enter');
+    await until(() => page.$('#osc-dlg-studio-patch[open]'), { ms: 5000,
+      what: 'C5: Save as patch opens' });
+    const info = await page.$eval('[data-osc="studio.patch.info"]', (p) => p.textContent);
+    await page.keyboard.press('Escape');
+    // T on a member removes it from the selection.
+    await page.focus('.osc-sg-node[data-node-id="osc-1"]');
+    await page.keyboard.press('t');
+    const removed = await H.settle(nodes, (s) => s === 'env-1', 'C5: T removes Oscillator 1');
+    // Ctrl/Cmd A, then Tab onto a member: every node stays selected.
+    await H.fresh(page);
+    await page.focus('.osc-sg-node[data-node-id="osc-1"]');
+    await page.keyboard.press(`${MOD}+a`);
+    const all = await H.settle(nodes, (s) => s.split(',').length > 2, 'C5: Ctrl/Cmd A');
+    await page.keyboard.press('Tab');
+    const allKept = await H.settle(nodes, (s) => s === all, 'C5: Tab keeps the whole selection');
+    return { ...H.verdict({
+      tAdds: first === 'osc-1' && second === 'node:env-1' && both === 'env-1,osc-1',
+      tPlaysNothing: !playedOnT,
+      memberFocusKeeps: back === 'node:osc-1' && kept === 'env-1,osc-1',
+      patchCoversBoth: /^2 nodes \(Oscillator 1, Envelope 1\)/.test(info),
+      tRemoves: removed === 'env-1',
+      selectAllThenTab: all.split(',').length > 2 && allKept === all,
+    }), first, second, both, back, kept, info, removed, all, allKept };
   });
 
   /** In-page: where focus is (for the Inspector checks); `shown` when it can be seen. */
