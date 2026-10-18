@@ -1,5 +1,5 @@
 // Pure numeric and encoding helpers, extracted from V1 (index.html@a7b7a23, section 2 HELPERS).
-// Bodies are unchanged.
+// Bodies are unchanged except round (S079, below).
 
 // V1: clamp, isNum, deepCopy, toNumber, toInt, pick, round, sig (index.html@a7b7a23)
 export const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
@@ -17,9 +17,15 @@ export function toInt(v, fallback, lo, hi) {
 export function pick(v, allowed, fallback) {
   return allowed.includes(v) ? v : fallback;
 }
+/**
+ * Round to `digits` decimals, a decimal tie upwards (8.575 -> 8.58). V1 added only an absolute
+ * Number.EPSILON, which is below one unit in the last place above 1, so a tie stored just under
+ * its decimal value (343 / 40 = 8.575 m) rounded down. The scaled term below lifts such a tie at
+ * any magnitude; every V1 golden case is unchanged (S079, tests/unit/audio-test-matrix.test.mjs).
+ */
 export function round(v, digits) {
   const m = 10 ** digits;
-  return Math.round((v + Number.EPSILON) * m) / m;
+  return Math.round((v + Number.EPSILON) * m + Math.abs(v) * m * Number.EPSILON) / m;
 }
 /** Significant-digit formatting without trailing zeros: 2.2727 -> "2.27", 50.0 -> "50". */
 export function sig(v, digits = 3) {
