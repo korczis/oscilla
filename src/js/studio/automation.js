@@ -36,6 +36,7 @@
 
 import { automationValueAt } from '../sequencer/compiler.js';
 import { safeMaximum } from '../sequencer/model.js';
+import { CENTS_PER_OCTAVE } from '../core/music.js';
 import { AUTOMATION_CURVES, TIMELINE_MAX_S } from './schema.js';
 import { clipTarget } from './clip-targets.js';
 import { NODE_REGISTRY } from './registry.js';
@@ -89,6 +90,16 @@ export function paramBounds(paramDef, sampleRate) {
   if (paramDef.unit === 'Hz') max = Math.min(max, safeMaximum(sampleRate));
   if (max < min) max = min;
   return { min, max };
+}
+
+/**
+ * The highest detune (cents) that keeps a frequency of `frequencyRef` Hz at or below 0.95 ×
+ * Nyquist of `sampleRate`: f × 2^(cents / 1200) <= safeMaximum (V272 A7). A detune lane is
+ * bounded by it, not only by its ±1200 ct range. Infinity without a positive reference.
+ */
+export function detuneCeiling(frequencyRef, sampleRate) {
+  if (!(finite(frequencyRef) && frequencyRef > 0)) return Infinity;
+  return CENTS_PER_OCTAVE * Math.log2(safeMaximum(sampleRate) / frequencyRef);
 }
 
 /**

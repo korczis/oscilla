@@ -97,7 +97,7 @@ import { PARAM_TAU_S } from './adapters/nodes.js';
 import { createRamp } from './adapters/ramp.js';
 import { CLEANUP_MARGIN_S, ROUTE_FLOOR, STUDIO_XFADE_S } from './compiler.js';
 import {
-  applyAutomation, isExponentialLegal, paramBounds, scheduledValueAt,
+  applyAutomation, detuneCeiling, isExponentialLegal, paramBounds, scheduledValueAt,
 } from './automation.js';
 import {
   LANE_GLIDE_S, anchorEndTime, createTimelineScheduler, frameCeil, holdEvents, resolveEscape,
@@ -698,9 +698,23 @@ export function createStudioTransport({
       return null;
     }
     const def = registry.param(n.type, target.param);
-    const offset = typeof runtime.baseOffset === 'function'
-      ? runtime.baseOffset(target.node, target.param) : 0;
-    const bounds = def ? paramBounds(def, hooks.ctx.sampleRate) : null;
+    const offsetOf = (key) => (typeof runtime.baseOffset === 'function'
+      ? runtime.baseOffset(target.node, key) : 0);
+    const offset = offsetOf(target.param);
+    const sr = hooks.ctx.sampleRate;
+    let bounds = def ? paramBounds(def, sr) : null;
+    const fDef = registry.param(n.type, 'frequency');
+    if (bounds && def.unit === 'cents' && fDef && fDef.unit === 'Hz') {
+      // A detune shifts the node's frequency: lane + offset stays below the cents that keep the
+      // frequency's base (or its lane's peak, offsets included) at 0.95 × Nyquist (V272 A7).
+      const fLane = model.timeline.automation.find((l) => l.target.node === target.node
+        && l.target.param === 'frequency');
+      const peak = fLane ? Math.max(...fLane.points.map((p) => p.value)) : -Infinity;
+      const ref = Math.min(paramBounds(fDef, sr).max, Math.max(n.params.frequency, peak)
+        + offsetOf('frequency'));
+      const max = Math.min(bounds.max, detuneCeiling(ref, sr));
+      bounds = { min: Math.min(bounds.min, max), max };
+    }
     const c = claims.get(target.node);
     if (c && c.handle === h && target.param === 'level') {
       // A pattern-played oscillator: its level is the pattern bus (the voices).
@@ -725,10 +739,11 @@ export function createStudioTransport({
    * segments). Mode 'source', a strictly positive domain where exponential ramps are legal,
    * keeps the authored values and sums the offset in through the param's offset source
    * (moveOffset), because a geometric ramp between shifted ends is not the shifted ramp. Either
-   * way lane + offset stays inside the parameter's bounds. `offset`: the one to fit with.
+   * way lane + offset stays inside the parameter's bounds (a detune's: below the cents that
+   * keep its frequency at 0.95 × Nyquist). `offset`: the one to fit with.
    */
   function fit(events, dest, offset = dest.offset) {
-    if (!offset) return events;
+    if (!offset && !dest.bounds) return events;
     return events.map((e) => {
       const total = e.value + offset;
       const c = dest.bounds ? clamp(total, dest.bounds.min, dest.bounds.max) : total;
@@ -740,6 +755,19 @@ export function createStudioTransport({
       return v === e.value ? e : { ...e, value: v };
     });
   }
+
+  /** True when `dest`'s bounds clamp any of the lane's events (debugInfo limitedLanes). */
+  const clampsAny = (events, dest) => !!dest.bounds && events.some((e) => {
+    const total = e.value + dest.offset;
+    return total > dest.bounds.max || total < dest.bounds.min;
+  });
+  /** What a lane's events were fitted with: its offset, mode and bounds (reoffsetLanes). */
+  const fitted = (rec, dest) => {
+    rec.offset = dest.offset;
+    rec.mode = dest.mode;
+    rec.max = dest.bounds ? dest.bounds.max : null;
+    rec.limited = clampsAny(rec.raw, dest);
+  };
 
   /** An offset source's value at t from its events (set, setTargetAtTime). */
   function sourceValueAt(events, t) {
@@ -809,8 +837,7 @@ export function createStudioTransport({
     }
     rec.events.push(...evs);
     rec.raw.push(...events);
-    rec.offset = dest.offset;
-    rec.mode = dest.mode;
+    fitted(rec, dest);
     lanes.set(laneId, rec);
     released.delete(dest.param);
     if (evs.length && !offsetSources.has(dest.param)) {
@@ -838,8 +865,7 @@ export function createStudioTransport({
       rec.raw = rec.raw.filter((e) => e.time < horizon).concat(raw);
       rec.param = dest.param;
       rec.handle = dest.handle;
-      rec.offset = dest.offset;
-      rec.mode = dest.mode;
+      fitted(rec, dest);
       moveOffset(dest, horizon, dest.offset, false);
       record({ key: rec.laneId, decision: 'rebind', at: horizon, reason: 'node-replaced' });
     }
@@ -850,20 +876,27 @@ export function createStudioTransport({
    * reaches every lane on that parameter from the horizon, not only the events scheduled after
    * it (§103): mode 'source' glides the offset source, as the runtime glides a base; mode
    * 'shift' holds the lane's value at the horizon and glides (LANE_GLIDE_S) onto its events with
-   * the new offset. A source lane the bounds now clamp differently is re-applied that way too.
+   * the new offset. A lane whose bounds changed (a detune's, with its frequency) or that the
+   * bounds now clamp differently is re-applied that way too.
    */
   function reoffsetLanes(horizon) {
     for (const rec of lanes.values()) {
       const dest = paramFor(rec.target, rec.laneId);
-      if (!dest || dest.param !== rec.param || dest.offset === rec.offset) continue;
-      const before = rec.offset;
-      rec.offset = dest.offset;
-      if (dest.mode === 'source') {
-        moveOffset(dest, horizon, dest.offset, true);
-        const later = rec.raw.filter((e) => e.time > horizon);
-        const was = fit(later, dest, before);
-        if (fit(later, dest).every((e, i) => e.value === was[i].value)) continue;
-      }
+      if (!dest || dest.param !== rec.param) continue;
+      const max = dest.bounds ? dest.bounds.max : null;
+      if (dest.offset === rec.offset && max === rec.max) continue;
+      const before = { ...dest, offset: rec.offset,
+        bounds: rec.max === null ? null : { ...dest.bounds, max: rec.max } };
+      fitted(rec, dest);
+      moveOffset(dest, horizon, dest.offset, true);
+      // Values the param already has need nothing: the offset source carries the offset, and
+      // new bounds that clamp nothing new change nothing.
+      const v0 = scheduledValueAt(rec.raw, horizon, null);
+      const later = [...(v0 === null ? [] : [{ method: 'setValueAtTime', value: v0,
+        time: horizon }]), ...rec.raw.filter((e) => e.time > horizon)];
+      const was = fit(later, before);
+      const same = fit(later, dest).every((e, i) => e.value === was[i].value);
+      if (same && (dest.mode === 'source' || dest.offset === before.offset)) continue;
       const held = holdEvents(rec.events, horizon);
       if (held.value === null) continue;
       const end = frameCeil(horizon + LANE_GLIDE_S, hooks.ctx.sampleRate);
@@ -1416,7 +1449,11 @@ export function createStudioTransport({
       gateCount: gates.size,
       measurementCount: measures.size,
       lanes: [...lanes.values()].map((l) => ({ laneId: l.laneId, target: { ...l.target },
-        scheduled: l.events.length })),
+        scheduled: l.events.length, limited: !!l.limited })),
+      // Lanes whose values the bounds clamp beyond what they author (with the edges' offset,
+      // a detune below 0.95 × Nyquist of its frequency, V272 A7), like runtime limitedParams.
+      limitedLanes: [...lanes.values()].filter((l) => l.limited).map((l) => ({
+        laneId: l.laneId, node: l.target.node, param: l.target.param })),
       claims: [...claims.keys()],
       gatedEnvelopes: [...gateOwned.keys()],
       ownedParams: typeof runtime.ownedParams === 'function' ? runtime.ownedParams() : [],

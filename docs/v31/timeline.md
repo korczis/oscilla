@@ -484,7 +484,11 @@ browsers).
 A lane on an Oscillator's `detune` owns the oscillator's `detune` AudioParam, which also carries
 the log-mapped frequency modulation's constant cents: `baseOffset(id, 'detune')` includes those
 cents, so the lane schedules them with its values and a removed lane glides back to base plus
-them (review V431 X2/X8).
+them (review V431 X2/X8); a changed edge reaches the playing lane from the edit's horizon. The
+lane plus those cents is bounded by `detuneCeiling` (automation.js): the cents that keep the
+frequency's base, or its lane's peak, at 0.95 × Nyquist of the running context, and re-bounded
+when the frequency changes; a lane the bound clamps is listed in `debugInfo().limitedLanes`
+(V272 review A7).
 
 Known limitations: an offline render of a
 looping timeline compiles at most `MAX_PASSES_PER_WINDOW` (4096) loop passes.
