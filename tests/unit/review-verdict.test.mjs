@@ -148,7 +148,13 @@ test('a deleted guarded file needs a verdict too', (t) => {
 
 test('the guarded paths are the rule\'s list', () => {
   assert.deepEqual(GUARDED, ['src/js/audio/*', 'src/js/analysis/*', 'src/js/experiments/*',
-    'src/js/studio/*', 'src/js/core/storage*', 'scripts/release-*',
+    'src/js/studio/*', 'src/js/measurement/*', 'src/js/calibration/*', 'src/js/core/storage*',
+    'src/js/core/safety*', 'src/js/ui/measure.js', 'src/js/ui/experiments.js',
+    'src/js/ui/findings.js',
+    'scripts/release-*', 'scripts/build*', 'scripts/pack-single-file.mjs',
+    'scripts/stamp-build.mjs', 'scripts/verify-deploy.mjs', 'scripts/verify-dist.mjs',
+    'tests/unit/release-*', 'tests/unit/version-authority.test.mjs',
+    'tests/browser/live-smoke.cjs',
     '.github/*', 'scripts/review-verdict.mjs', 'scripts/fail-first.mjs',
     'scripts/ci-workflow-rules.mjs', 'scripts/yaml-subset.mjs',
     'tests/unit/review-verdict.test.mjs', 'tests/unit/fail-first.test.mjs',
@@ -163,7 +169,7 @@ test('the guarded paths are the rule\'s list', () => {
     ...GUARDED.filter((g) => !g.endsWith('*'))]) {
     assert.equal(isGuarded(f), true, f);
   }
-  for (const f of ['src/js/core/safety.js', 'src/js/ui/findings.js', 'scripts/build.mjs',
+  for (const f of ['src/js/main.js', 'src/index.html', 'src/js/ui/shell.js',
     'scripts/review-verdict.mjs.bak', 'tests/unit/v3-engine.test.mjs', 'docs/src/js/audio/x.md',
     'docs/.github/workflows/ci.yml', '.ai/repo/reviews/1.yaml']) {
     assert.equal(isGuarded(f), false, f);

@@ -596,8 +596,10 @@ Two of the gate's jobs check the pull request rather than the product. `fail-fir
 title starts with `feat` or `fix`, a unit test the pull request adds or changes must fail on
 the merge base and pass on the head, or the body carries `fail-first: n/a <reason>`
 (`node scripts/fail-first.mjs --title "<title>"`). `review-verdict`: a change under `src/js/audio`,
-`src/js/analysis`, `src/js/experiments`, `src/js/studio`, `src/js/core/storage*`,
-`scripts/release-*` or `.github/`, or to the programs and tests of these rules, needs a
+`src/js/analysis`, `src/js/experiments`, `src/js/studio`, `src/js/measurement`,
+`src/js/calibration`, `src/js/core/storage*`, `src/js/core/safety*`, the MEASURE, Experiments
+and Findings adapters, `scripts/release-*`, the build, stamp and deploy-verification scripts,
+the release rules' tests or `.github/`, or to the programs and tests of these rules, needs a
 reviewer's verdict in `.ai/repo/reviews/<pr>.yaml` for the guarded content the pull request
 changes (`node scripts/review-verdict.mjs --pr <number>`; `--content` prints the digest to
 record, which a merge of `main` that leaves those files alone does not change). CI judges a
