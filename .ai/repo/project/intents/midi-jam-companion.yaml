@@ -1,0 +1,32 @@
+id: midi-jam-companion
+title: "OSCILLA plays with a MIDI player, shows what they play, and lets them explore what that sound does"
+statement: "A player connects a MIDI keyboard or controller and OSCILLA answers: incoming notes and velocities are shown, sound through the existing AudioEngine within its safety limits, and one bounded, deterministic response mode (drone plus answer, or call and response) plays back on the audio clock; incoming and generated notes are shown next to the spectrum and waveform; and the jam is recorded into an editable event track. MIDI is an optional capability with a stated support state: where Web MIDI is absent or denied, OSCILLA works exactly as before, from file:// and the Pages sub-path. OSCILLA does not become a DAW: no MIDI clock, MIDI output, multi-track or AI improvisation in the first version (ADR 0058)."
+invariants:
+  - "The AudioEngine stays the only audio lifecycle owner; MIDI is a control layer and adds no second audio graph (project.audio-engine-discipline, ADR 0058)"
+  - "MIDI is optional: its absence or a denied permission changes nothing else, and the single-file build still runs from file:// and the Pages sub-path (project.single-file-deliverable)"
+  - "No network call and no model inference sit in the MIDI event or audio path; response modes are deterministic and scheduled on the AudioContext clock"
+  - "Support is stated as measured: no browser or origin is claimed to support MIDI before a check proves it (project.no-fake-science)"
+  - "New surfaces extend the existing OSCILLA tokens and visual language and have a non-pointer path (project.visual-identity-lock)"
+milestones:
+  - M045
+satisfaction:
+  - id: midi-support-state
+    criterion: "OSCILLA states one of unsupported, permission needed, denied, no devices or connected (with device names), and nothing else changes when MIDI is absent"
+    evidence: claim
+    ref: "midi-support-state"
+  - id: midi-notes-sound
+    criterion: "Note On and Note Off from a MIDI input sound through the AudioEngine with velocity mapped under the safety level cap, bounded polyphony and click-free starts and stops"
+    evidence: claim
+    ref: "midi-notes-sound"
+  - id: midi-response-deterministic
+    criterion: "A response mode produces the same output events for the same input events, scheduled on the audio clock"
+    evidence: claim
+    ref: "midi-response-deterministic"
+  - id: midi-notes-visible
+    criterion: "Incoming and generated notes are shown beside the spectrum and waveform, with their names and velocities"
+    evidence: claim
+    ref: "midi-notes-visible"
+  - id: midi-jam-recorded
+    criterion: "A jam is recorded as an editable event track that saves, reloads and replays identically"
+    evidence: claim
+    ref: "midi-jam-recorded"

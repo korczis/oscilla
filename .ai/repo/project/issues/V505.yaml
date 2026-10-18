@@ -1,0 +1,24 @@
+id: V505
+milestone: M045
+serves:
+  - "midi-jam-companion#midi-jam-recorded"
+title: "Record a jam into an editable event track"
+slug: midi-jam-record
+priority: p2
+profile: implementation
+objective: "Decide where a recorded jam lives (Studio timeline clips or a separate record) against project.studio-model-is-canonical, then record incoming and generated events into it so that it saves, reloads and replays identically."
+scope:
+  - "src/js"
+  - "tests"
+  - "docs"
+depends_on:
+  - "V503"
+  - "V504"
+acceptance_criteria:
+  - "Decide where a recorded jam lives (Studio timeline clips or a separate record) against project.studio-model-is-canonical, then record incoming and generated events into it so that it saves, reloads and replays identically."
+  - "Decision: .ai/repo/adrs/0058-midi-is-an-optional-local-input-layer-over-the-audio-engine.md; the visual identity lock applies."
+validation:
+  - "npm run release-gate"
+evidence_required:
+  - "verified"
+created_at: 2026-10-18

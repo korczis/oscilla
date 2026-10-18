@@ -1,0 +1,123 @@
+intent: midi-jam-companion
+reviewed_at: "2d56148f11318f1b05f530ff45af719c513add0a"
+reviewed_by: "claude-opus-5.5 (critic, oscilla-35 session)"
+findings:
+  - id: no-hardware-test-seam-undecided
+    class: unproven_assumption
+    subject: "V501"
+    finding: "Most serious, and blocking. The CI gate has no MIDI hardware, and the gate's WebKit has no Web MIDI at all. In headless Chromium on a Linux runner, requestMIDIAccess can at best reach the no-devices state, and Playwright's Firefox build is not the shipped Firefox permission flow. So the states connected (with device names), denied and permission needed, and every Note On that V502 to V505 test, can be produced in CI only by a substitute. The plan never says which substitute. V502 says 'in the browser gate with synthetic MIDI events' and stops there. Two options exist, and they prove different things. (a) An addInitScript stub of navigator.requestMIDIAccess, a fake MIDIAccess or MIDIInput that dispatches MIDIMessageEvent-shaped objects: this needs no page change, but it then proves only the stub in WebKit and Firefox. (b) A window.OSCILLA hook that injects notes: under ADR 0052 that is an inject-kind member, allowed only as TEST CONTEXT, and the release-gate check seam-surface-pinned (tests/browser/app.cjs:405) pins the key list, so the surface grows only by a deliberate edit. No project rule is about test seams; ADR 0052 (proposed) is the only decision. Before V501 starts, the plan must name the substitute, which ADR-0052 kind it is, and how a check tells measured real-API behaviour apart from stubbed behaviour. Otherwise the support-state claim will rest on a stub while its wording says it was measured."
+    blocking: true
+    resolution:
+      state: open
+  - id: permission-prompt-and-state-taxonomy
+    class: missed_requirement
+    subject: "midi-jam-companion#midi-support-state"
+    finding: "Blocking. Two things are unstated. (1) When access is requested. Calling navigator.requestMIDIAccess at load makes current Chromium show a permission prompt on every first visit. That changes OSCILLA for every user, including users with no MIDI device, and breaks the invariant that MIDI's absence changes nothing. The criterion has to say that access is requested only by an explicit user action, and that loading the page triggers no prompt and no permission query that has a side effect. (2) The five states are not exhaustive, and some cannot be told apart. 'Permission needed' has to come from navigator.permissions.query({name: 'midi'}), which may throw or be missing where the API exists. requestMIDIAccess can reject for reasons other than denial: a policy-blocked origin, NotSupportedError, or no platform MIDI backend on a Linux runner. Other states have no name at all: a pending request, an insecure context, a permission revoked mid-session, and the last device disconnecting (MIDIPort statechange). V501 needs the full state table, with the cause behind each state and the exact copy for each, before it is built. Otherwise 'unsupported' becomes the catch-all for everything that went wrong, which project.no-fake-science forbids for a stated support level."
+    blocking: true
+    resolution:
+      state: open
+  - id: measured-support-is-playwright-not-users
+    class: unproven_assumption
+    subject: "V501"
+    finding: "V501 measures 'which gate browsers and origins (file://, Pages) expose it'. The gate browsers are Playwright's Chromium, Firefox (Juggler) and WebKit builds, not the Chrome, Firefox and Safari people use. Shipped Firefox gates Web MIDI behind a site-permission add-on, and whether that flow exists for file:// is not something Playwright can reproduce. Safari and every iOS browser have no Web MIDI. A test that records what the gate builds expose is honest only if its claim says gate build, not browser. Otherwise the support text over-claims Firefox or under-claims Chrome. Release verification (test:live) cannot close the gap either: it runs the same Playwright builds against Pages."
+    blocking: false
+    resolution:
+      state: open
+  - id: shared-origin-permission-and-device-names
+    class: regression_risk
+    subject: "midi-jam-companion#midi-support-state"
+    finding: "On Pages, the MIDI permission belongs to the origin korczis.github.io. ADR 0052 records that 22 Pages sites of the account share that origin. A grant made for OSCILLA is a grant to all of them, and a denial made on another site reads as 'denied' here. The device names the criterion shows are hardware identifiers. Nothing says whether they enter a saved record: the recorded jam (V505), experiment provenance, the operation trace or URL state. The support-state copy should say the permission is per origin. The plan should say device names are shown and never persisted, or say where they are persisted and why."
+    blocking: false
+    resolution:
+      state: open
+  - id: polyphony-contradicts-voice-replacement
+    class: unproven_assumption
+    subject: "midi-jam-companion#midi-notes-sound"
+    finding: "The criterion asks for bounded polyphony 'through the AudioEngine' and ADR 0058 forbids a MIDI-specific synth, but the AudioEngine is monophonic by decision. play() releases every earlier voice within FAST_RELEASE_S and starts the new one after that fade, so 'at most one is heard' (src/js/audio/audio-engine.js:417-439; ADR 0002: voices never overlap, so the sum never exceeds one voice's level). A chord played through engine.play() therefore sounds only its last note, and every new note is delayed by the 15 ms fade. Polyphony needs a new engine API and a new decision that supersedes or amends ADR 0002. That decision also has to cover summing. The output ceiling is a waveshaper flat beyond plus or minus MAX_OUTPUT_GAIN (0.25, src/js/core/constants.js:20; audio-engine.js:259-262), so N voices summing above it hard-clip, which is audible distortion. Per-voice gain has to scale with the polyphony bound, or rely on the limiter by stated design. The criterion fixes no bound and no gain law, so it cannot be decided. Not blocking for V501, but it must be resolved, in an ADR and the criterion, before V502 starts."
+    blocking: false
+    resolution:
+      state: open
+  - id: held-notes-and-drone-vs-safety-limit
+    class: unproven_assumption
+    subject: "midi-jam-companion#midi-notes-sound"
+    finding: "An open HOLD voice is capped at the session safety limit unless continuous playback is allowed (ADR 0005; audio-engine.js:510-517). The default limit is 2 s (src/js/core/instrument.js:131). Continuous playback is opt-in per session and never persisted (project.no-fake-science, instrument.js:130). So a key held for 3 s, or a sustain pedal, is cut at 2 s with default settings. The drone of the 'drone plus answer' mode is, by definition, continuous sound under the same cap. The intent does not say whether MIDI notes and the drone obey the safety limit, need the continuous permission, or are exempt like programmed patterns (MAX_PROGRAMMED_S). Each choice touches a safety ADR."
+    blocking: false
+    resolution:
+      state: open
+  - id: velocity-curve-and-message-semantics
+    class: missed_requirement
+    subject: "V502"
+    finding: "'Velocity mapped under the safety level cap' decides only an upper bound, not the mapping, which can be linear amplitude, a dB curve or a fixed table. Several MIDI semantics a real keyboard sends are unstated: a Note On with velocity 0 is a Note Off; a repeated Note On for a sounding pitch; a Note Off for a note that never started; channel filtering (omni or one channel); sustain (CC64); and the device's own All Sound Off and All Notes Off (CC120, CC123). ADR 0058 Decision 1 says input becomes 'note and controller events', and the intent says 'keyboard or controller', yet no criterion, issue or claim says what any controller message does. Either controllers are out of scope for the first version, which the non-goals should then say, or a criterion owns them."
+    blocking: false
+    resolution:
+      state: open
+  - id: stuck-notes-have-no-criterion
+    class: missed_requirement
+    subject: "midi-jam-companion#midi-notes-sound"
+    finding: "Nothing requires that sound stops when its input goes away. Cases: the device is unplugged (MIDIPort statechange disconnected) while a key is down; the permission is revoked; the tab is hidden or the window blurs; Escape is pressed; Measure or Studio PLAY takes the output. The response mode makes this worse, because its notes are scheduled ahead on the audio clock and keep playing after the page hides unless they are cancelled. The page's existing hide path (src/js/main.js:549-558) releases the hold, stops the sequencer and aborts a measurement, and it would know nothing of MIDI voices or scheduled responses. Missing criterion: after disconnect, revoke, hide, blur or Escape, no MIDI or response voice is audible within a stated time, and activeNodeCount returns to 0, checked as in tests/browser/engine-v1port.cjs."
+    blocking: false
+    resolution:
+      state: open
+  - id: output-ownership-with-measure-and-studio
+    class: regression_risk
+    subject: "V502"
+    finding: "Measure and Studio PLAY take the shared output through stopPlayback (src/js/main.js:213-221; workspace.js:1117 studioOwnsOutput). A MIDI note that arrives during a Measure capture would sound into the measured signal and corrupt it, with no user action in OSCILLA to show for it. A note during Studio transport would mix into the Studio's master level. The intent says MIDI 'adds no second audio graph', but it does not say who wins the output: whether MIDI is muted or refused during a measurement and during Studio PLAY, and whether that is announced. A regression here would contaminate measurement results, which ADR 0044 and no-fake-science protect."
+    blocking: false
+    resolution:
+      state: open
+  - id: latency-and-clock-mapping-unstated
+    class: missed_requirement
+    subject: "midi-jam-companion#midi-response-deterministic"
+    finding: "The statement says OSCILLA plays with a musician, yet no criterion bounds latency or jitter. MIDIMessageEvent.timeStamp is on the performance.now() timeline; the AudioContext clock is another clock. The mapping (getOutputTimestamp, or currentTime plus the performance.now() offset, plus baseLatency and outputLatency) is not chosen, and neither is what happens to an event whose mapped time is already past. The engine's existing lead adds START_OFFSET_S (20 ms, constants.js:23) and, on a replacement, a further FAST_RELEASE_S fade (audio-engine.js:439), on top of main-thread delivery and output latency. A latency budget needs both a number and a method that works under project.bounded-test-timing, for instance an offline or fake-clock unit test of the mapping and the lead, rather than a wall-clock browser measurement on a loaded CI host."
+    blocking: false
+    resolution:
+      state: open
+  - id: response-mode-unbounded-and-undetermined
+    class: insufficient_work
+    subject: "V503"
+    finding: "'One bounded response mode (drone plus answer, or call and response)' chooses neither mode and states no bound: the most generated notes per input phrase, the longest response, the densest output. 'Bounded' is in the title and in no criterion. Call and response needs phrase-end detection. With MIDI clock out of scope, that means a silence timeout, and an obvious implementation is a setTimeout in the event path, which project.audio-engine-discipline allows only for UI bookkeeping. The determinism criterion is decidable by a unit test only once its input is defined as events with timestamps. With that, 'same output for the same input' is testable on a pure function, but the 'no model inference' part of the claim has no machine check."
+    blocking: false
+    resolution:
+      state: open
+  - id: absence-changes-nothing-is-contradictory
+    class: unproven_assumption
+    subject: "midi-jam-companion#midi-support-state"
+    finding: "'Nothing else changes when MIDI is absent' contradicts the same criterion's 'OSCILLA states ... unsupported'. Stating the state is itself a change. Placed on the Playground, it changes the pixels of the accepted visual reference (scripts/visual-gate.mjs), and a window.OSCILLA.midi member changes the pinned key list (seam-surface-pinned). Restate it as: no existing behaviour, suite or recorded output changes. The only addition is the MIDI surface, and accepting its visual references is a reviewed change. Proof: the full release gate passes in WebKit, which has no Web MIDI, with the MIDI code bundled."
+    blocking: false
+    resolution:
+      state: open
+  - id: visible-notes-lacks-a11y-and-perf-bounds
+    class: insufficient_work
+    subject: "midi-jam-companion#midi-notes-visible"
+    finding: "The criterion asks only for names and velocities beside the spectrum and waveform. The invariant's non-pointer path, and V504's 'announcements', have no criterion. An aria-live region announcing every note floods a screen reader at playing speed, so announcements need a rate limit or a summary. The views redraw per frame, and project.audio-engine-discipline forbids touching the DOM per frame. A fast player can send dozens of notes a second, so the note view needs a bounded history and a draw budget (test:perf is outside the gate). The new surface has no visual reference until one is accepted (project.visual-identity-lock), so the criterion should name the visual gate scene that will hold it."
+    blocking: false
+    resolution:
+      state: open
+  - id: event-track-needs-new-clip-kind
+    class: unproven_assumption
+    subject: "V505"
+    finding: "The StudioModel cannot hold a note today. Event tracks hold pattern clips and event clips, and an event clip only gates or triggers a target node, with no pitch or velocity (src/js/studio/schema.js:61-68). Recording a jam into the timeline therefore means a new clip kind or payload. That is a schema change, possibly a STUDIO_HASH_VERSION bump (schema.js:58), a migration (src/js/studio/migrate.js) and import validation, all under the src/js/studio paths that project.review-verdict guards. A chord recorded as overlapping clips on one track also raises the clip-overlap warning on every chord (src/js/studio/timeline.js:357-362). The alternative, 'a separate record', is a second musical timeline beside the StudioModel. project.studio-model-is-canonical allows that only if it is not Studio state. The decision belongs in an ADR before V505, not inside it."
+    blocking: false
+    resolution:
+      state: open
+  - id: replays-identically-undefined
+    class: unproven_assumption
+    subject: "midi-jam-companion#midi-jam-recorded"
+    finding: "'Replays identically' has no defined measure. It could mean the same event list (pitch, velocity, start, duration within a tolerance), the same scheduled audio-clock times, or the same audio. The live jam sounds through the Playground's engine.play() voice. A replay from the Studio timeline sounds through the Studio runtime's compiled graph (studio/runtime.js, timeline-compiler.js), which is a different voice, envelope and level path, so audio identity is false by construction unless one path plays both. Recording is not one user gesture. Unless one recording session is one history entry, as spec §50 requires for a continuous gesture, every note would be an undoable dispatch and would flood the undo history. The STUDIO workspace owns the only store (tests/unit/v4-one-studio-store.test.mjs), so recording while the player is in the Playground also needs the store reachable from there."
+    blocking: false
+    resolution:
+      state: open
+  - id: evidence-never-recorded
+    class: delivery_verification
+    subject: "M045"
+    finding: "All five criteria are claims whose tests will be node --test or Playwright suites. Majordomus 0.29 cannot record these runs (as in the v1-instrument, v31-studio and release-provenance critiques), and M045 asks only for npm run release-gate, a command the ledger never derives. When V501 to V505 close, the intent will still read unmet 0/5. The plan should say so. The remedy is the post-alpha Majordomus request for recording node --test and Playwright runs."
+    blocking: false
+    resolution:
+      state: open
+  - id: no-real-device-check
+    class: delivery_verification
+    subject: "M045"
+    finding: "Every proof the plan names is synthetic: the fake audio context, synthetic MIDI events, a release gate with no device. No step plays a real keyboard into the shipped page, so real-world behaviour is never observed by any planned check. That includes running status merged by drivers, device-specific velocity ranges, hot-plug, and the real latency. M045 should name a recorded manual check on real hardware, with browser, origin, device and observed latency, or say why none is required."
+    blocking: false
+    resolution:
+      state: open

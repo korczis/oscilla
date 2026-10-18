@@ -1,0 +1,22 @@
+id: V503
+milestone: M045
+serves:
+  - "midi-jam-companion#midi-response-deterministic"
+title: "One deterministic response mode on the audio clock"
+slug: midi-response-mode
+priority: p2
+profile: implementation
+objective: "Implement one bounded response mode (drone plus answer, or call and response) as a pure rule from input events to output events, scheduled on the AudioContext clock; the same input gives the same output."
+scope:
+  - "src/js"
+  - "tests"
+depends_on:
+  - "V502"
+acceptance_criteria:
+  - "Implement one bounded response mode (drone plus answer, or call and response) as a pure rule from input events to output events, scheduled on the AudioContext clock; the same input gives the same output."
+  - "Decision: .ai/repo/adrs/0058-midi-is-an-optional-local-input-layer-over-the-audio-engine.md; the visual identity lock applies."
+validation:
+  - "npm run release-gate"
+evidence_required:
+  - "verified"
+created_at: 2026-10-18
