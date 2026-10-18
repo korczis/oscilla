@@ -2,18 +2,25 @@ id: M005
 title: "Specification tail"
 slug: spec-tail
 order: 999
-priority: p1
-problem: "Sections 64-95 of the specification were never received."
-current_state: "Unscheduled, waiting on external input: S000 asks the requester for the text of specification sections 64-95 (the 2026-10-01 paste ended mid-sentence in section 63), and that text has never arrived. No worker can act on S064-S095 until it does. The milestone carries no version and sorts after every other milestone (order 999) because no milestone dependency can express a wait on a person; it is neither cancelled nor done."
-outcome: "Sections 64-95 implemented once their text is supplied."
+priority: p2
+problem: "Sections 64-95 of the V1 plan had no adopted text. They were planned on 2026-10-01 as the tail of a truncated paste. The owner's ChatGPT export of 2026-10-18 shows that the single-file prompt S001-S063 implement stops mid-sentence in section 63 in the export itself, and that the 95 sections belong to a separate, numbered multi-page specification whose sections 64-95 now stand verbatim in docs/specs/oscilla-v1-sections-64-95.md."
+current_state: "Adopted and triaged under Q001 on 2026-10-18, decided by the coordinating Claude session under the owner's delegation of 2026-10-18 ('tak to vse pores'); the owner may override (Q001's current_state). S000 (receive the text) is satisfied by docs/specs/oscilla-v1-sections-64-95.md; Q001, an issue of this milestone, records the decision, and its owner_decision evidence is recorded on main after this branch lands. Of S064-S095, seven are cancelled as superseded (S069, S070, S072, S075, S077, S091, S094), fourteen are cancelled as already delivered with a pointer (S064, S065, S066, S067, S068, S073, S076, S078, S086, S087, S088, S090, S092, S093), and eleven are kept as work (S071, S074, S079, S080, S081, S082, S083, S084, S085, S089, S095), all BLOCKED on Q001 until its evidence is recorded. The work is checks of the current build that the specification's verification sections name (79-85, 95), a real-device browser record (71), a reviewer's quality audit (74) and three optional extensions (89). No intent names the milestone yet (see risks). The milestone keeps order 999, after every live milestone, and carries no version: the release that carries its work is named when that work lands (npm run release:analyze), not here."
+outcome: "Q001 is answered; each of S064-S095 is cancelled with its triage and pointer, or done with its own evidence."
 acceptance_criteria:
-  - "Sections 64-95 implemented once their text is supplied."
+  - "Q001 carries owner_decision evidence."
+  - "Each of S064-S095 is CANCELLED with its triage stated in current_state, or DONE with the evidence its acceptance criteria name."
 validation:
-  - "node tests/smoke.cjs"
+  - "majordomus plan validate"
+  - "majordomus intent validate"
+  - "npm run verify"
+  - "npm run test:browser"
 evidence_required:
   - "milestone_verified"
 risks:
-  - "S000 depends on the requester, not on any worker or milestone; while the text is missing the roadmap must not nominate M005 as current work, which is why its order is 999."
-  - "When S000 is evidenced (spec_received), M005 is rescheduled: give it an order among the live milestones and the version of the release that will carry it."
+  - "The work issues verify a build whose V1 behaviour is frozen by golden vectors (ADR 0014): a defect they find is fixed in the V2 modules that carry V1, never by changing the frozen vectors."
+  - "S089's three extensions are optional in the specification itself; implementing them before the verification issues is breadth the specification warns against (section 89: \"Do not sacrifice core correctness or usability for feature count\")."
+  - "No intent names M005 (majordomus intent validate: WARN milestone_serves_no_intent), so its work issues preflight as maintenance. Intent v1-instrument cannot simply name it: majordomus intent validate then fails issue_without_purpose for all thirteen live issues (S000, Q001, S071, S074, S079-S085, S089, S095), checked 2026-10-18 in a scratch copy with M005 added to its milestones: none of them carries a serves entry. Binding it needs serves entries on S071, S079-S085 and S095 against criteria the intent states (with matching gap conditions), plus moving S000 and Q001 to M052 and either a criterion for S074 and S089 or their move to another milestone; that is a plan change outside this triage."
+  - "Once Q001 is done the eleven work issues would all be READY at once over shared tests/unit, tests/browser files, src/index.html and src/js (plan validate reported 21 scope conflicts among them in a scratch copy with Q001 simulated DONE, 2026-10-18), so they are chained by scope: S079, S080, S081, S085, S082, S083, S084, S095, S089 in that order, and S074 after S071; L001 of M049 follows S089, whose src/js/labs it shares."
+  - "The triage was decided under the owner's delegation, not by the owner; if the owner overrides Q001, the cancelled and the work issues are re-triaged from the override."
 created_at: 2026-10-01
 updated_at: 2026-10-18

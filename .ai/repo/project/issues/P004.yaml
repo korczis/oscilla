@@ -1,0 +1,27 @@
+id: P004
+milestone: M051
+serves:
+  - "product-direction#product-path-decided"
+title: "Record the product-path decision as an ADR"
+slug: record-the-owner-s-product-path-decision-as-an-adr
+priority: p2
+profile: routine
+objective: "Write the ADR, status proposed, that states Q003's decision as Q003 records it (no commercial path now; OSCILLA stays free under the MIT licence, which is not reopened; no buyer, offer or pilot before a v4.0.0 release exists; the question returns as a new intent after v4.0), who decided it (the coordinating Claude session under the owner's delegation of 2026-10-18, which the owner may override), the reasoning Q003 records, the alternatives the conversations raised (a paid teaching pack, measurement services, support) and what they would cost, and the MIT consequence that anyone may resell the core. Number it with the next free number in .ai/repo/adrs when it is written (0059 is taken on #197 by the release-state stamp ADR, so 0060 if #197 has landed). Plan follow-up work only from it."
+why: "The intent's product-path criterion is an ADR (critique product-direction, licence-non-goal-contradicts-q003, resolved by Q003's decision)."
+scope:
+  - ".ai/repo/adrs"
+  - ".ai/repo/project/issues/P004.yaml"
+  - "tests/unit/knowledge-integrity.test.mjs"
+depends_on:
+  - "Q003"
+acceptance_criteria:
+  - "The ADR cites Q003, has status proposed, and passes majordomus adr check."
+  - "Where tests/unit/knowledge-integrity.test.mjs has the V272 D8 check (ADR_NOT_A_CAPABILITY, from #197), the new ADR, by its own number, is listed in ADR_NOT_A_CAPABILITY with a reason longer than 30 characters (a product-path decision adds no capability of the page), and the check passes."
+  - "Its consequences name the work it implies, to be planned in a separate change: today none, and after v4.0 a new intent for the product question."
+validation:
+  - "majordomus adr check"
+  - "node --test tests/unit/knowledge-integrity.test.mjs"
+evidence_required:
+  - "verified"
+created_at: 2026-10-18
+updated_at: 2026-10-18

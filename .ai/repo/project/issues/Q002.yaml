@@ -1,0 +1,23 @@
+id: Q002
+milestone: M052
+serves:
+  - "product-direction#positioning-chosen"
+title: "Owner decision: the one positioning sentence OSCILLA uses"
+slug: owner-decision-the-one-positioning-sentence-oscilla-uses
+priority: p2
+profile: routine
+owner: "repository owner"
+objective: "Choose the sentence README, About and the page metadata will say alike, or write a new one. The candidates, with their sources, are in .ai/repo/knowledge/curated/positioning-candidates.md: C1 \"a zero-install, scientifically honest, reproducible acoustic laboratory that runs in the browser\"; C2 \"Arturia: make sound. Oscilla: understand sound, program signal flow, measure reality, reproduce experiment\"; C3 an \"audio systems laboratory\"; C4 \"local-first acoustic experimentation instrument with composable signal topology, reproducible measurements and inspectable execution\"; C5 \"a local-first environment for composing, executing, measuring and explaining reproducible experiments\"; C6 \"a local sound lab for learning and experimenting\"; C7 \"an interactive scientific instrument you can play\"; or keep \"an interactive sound and frequency laboratory\". The record also lists the framings (three pillars, two axes, harder to fool) and ChatGPT's own advice to lead with concrete jobs such as measuring a speaker or comparing two rooms. Each candidate's claims must be ones the product can back (project.no-fake-science): 'reproducible' in C1, C4 and C5 is backed for recipes and evidence (ADR 0044), not for the user's acoustics, and most candidates lead with breadth where the owner's steering makes measurement the wedge (ADR 0051)."
+why: "README.md, the About lede and the Open Graph description say different things, the conversations proposed a dozen sentences, and choosing one is the owner's act (conversation 6ac1beb8, 2026-10-04T03:30:06Z: \"business clarity 5/10, too many possible identities\")."
+current_state: "Decided on 2026-10-18 by the coordinating Claude session under the owner's delegation of 2026-10-18 ('tak to vse pores', resolve all of it, given to that session together with the approval to accept implemented ADRs, enable strict branch protection and upload new ChatGPT project instructions); the owner may override it. These are not the owner's own words. Decision: adopt C1, adapted, as the one positioning sentence: \"A zero-install, scientifically honest acoustic laboratory in your browser: generate, measure and reproduce sound experiments, and know how far each result can be trusted.\" (170 characters). The tagline \"See sound. Shape frequency.\" stays. The copy that follows the sentence leads with concrete jobs the product supports today. The product name 'OSCILLA · Interactive Sound & Frequency Lab' stays in the title surfaces. Reasoning: C1 is the candidate that leads with the trust of a measurement rather than with breadth, which is the owner's steering (ADR 0051: acoustic measurement is the wedge; depth over breadth); every claim of the adapted sentence is backed: zero-install (one static file that runs from file://, project.single-file-deliverable), scientifically honest (project.no-fake-science, figures refused with their reason, ADR 0025), generate and measure (the Playground and MEASURE), reproduce sound experiments (a saved experiment's recipe runs again, ADR 0044; the adjective 'reproducible' of C1 is dropped because ADR 0044 covers the recipe and the evidence, not the user's acoustics), and know how far each result can be trusted (the validity and quality reasons each result carries, ADR 0025). It fits the 200 characters platforms show of a description. P003 implements it. The committer records this as owner_decision evidence after the branch lands on main."
+scope:
+  - ".ai/repo/project/issues/Q002.yaml"
+acceptance_criteria:
+  - "The decision is recorded as evidence on this issue (covers owner_decision), either in the owner's words with date and source, or as a decision of a coordinating session under an owner delegation it quotes with its date, stating its reasoning and that the owner may override it; a worker without such a delegation never answers it."
+  - "The answer names the sentence verbatim, whether the tagline \"See sound. Shape frequency.\" stays, and what backs each claim of the sentence."
+validation:
+  - "manual"
+evidence_required:
+  - "owner_decision"
+created_at: 2026-10-18
+updated_at: 2026-10-18

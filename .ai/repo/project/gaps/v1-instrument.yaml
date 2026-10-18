@@ -36,6 +36,12 @@ observations:
   - id: public-is-v3
     statement: "Pages serves commit 964e25d, version 3.10.3; the V1 file is frozen at a7b7a23 and tagged v1.0.0 and v1.0.1."
     source: "command:npm run release:verify-deploy"
+  - id: update-2026-10-18-public-page
+    statement: "Update 2026-10-18, appended by the coordinating Claude session (not the critic), observed at main 044f98a after observed_at 62cccb3; the observations above are kept as they were made. Pages serves region.commit 044f98a, version 3.11.0, sourceDigest fa7cf5c0, sourceDate 2026-10-18T08:54:25Z; node scripts/verify-deploy.mjs --commit 044f98a passes attempt 1/2 (live page is the committed dist stamped with that commit), and its artifact sha256 898270c4 equals the artifact sha256 of .ai/repo/releases/v3.11.0.yaml. Tag v3.11.0 is 2b63ec3 (2026-10-18T04:36:10Z); 21 commits separate it from 044f98a and they change nothing under src/ or dist/index.html (git diff --stat is empty)."
+    source: "command:node scripts/verify-deploy.mjs --commit 044f98a6a3f74ebe4471404eedaea5ec91ce97ae --attempts 2 --delay 5"
+  - id: update-2026-10-18-spec-tail
+    statement: "Update 2026-10-18, appended by the coordinating Claude session (not the critic); the spec-tail observation above is kept as it was made. S000 is DONE (docs/specs/oscilla-v1-sections-64-95.md), and Q001 triaged M005 under the owner's delegation of 2026-10-18: twenty-one of S064-S095 are cancelled and eleven kept as work, BLOCKED on Q001; no intent names M005."
+    source: "command:majordomus plan list --milestone M005"
 conditions:
   - criterion: engine-plays-and-releases
     state: satisfied

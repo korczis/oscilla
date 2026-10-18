@@ -1,0 +1,35 @@
+id: E005
+milestone: M046
+serves:
+  - "engineering-integrity#shell-partials"
+title: "Assemble src/index.html from partials at build time"
+slug: assemble-src-index-html-from-partials-at-build-time
+priority: p2
+profile: implementation
+objective: "Split src/index.html (255 020 bytes on main at 044f98a, 255 382 at d4bd97f, where #197 merged; measure again at the start commit) into build-time partials under src/partials/ (one file per workspace and per dialog) that scripts/build.mjs concatenates in a fixed order; the output stays one file and is byte-identical to the build before the split. Every test and script that reads the shell (tests/unit/no-fake-science, about, css-producers, navigation, vocabulary, v3-ui, v4-shortcuts, v31-studio-self-knowledge, raw-retention, release-provenance and others; scripts/build-config.mjs, visual-compare.mjs, social-assets.mjs, pack-single-file.mjs) reads it through one shared reader of the assembled shell, never a single partial. Once this lands, issues that change shell markup name src/partials in place of src/index.html. If the owner has by then made src/index.html a guarded path (a follow-up question of #197), the guard moves to src/partials in the same change. It follows E002 and E004 because it rewrites every reader of the shell, including tests those splits change, and rebuilds dist; its source scope is the shell (src/index.html, src/partials) and the scripts, not the rest of src."
+why: "Conversation 6ac1beb8, 2026-10-04T02:55:11Z and prompt 1 section 19 (218 kB then, 255 kB now)."
+scope:
+  - "src/index.html"
+  - "src/partials"
+  - "scripts"
+  - "tests/unit"
+  - "tests/README.md"
+  - "dist"
+depends_on:
+  - "E001"
+  - "E002"
+  - "E004"
+acceptance_criteria:
+  - "npm run build produces a dist/index.html byte-identical to the one built from the unsplit source at the same commit, and npm run build:check passes."
+  - "tests/unit/shell-partials.test.mjs fails when a partial is missing or included twice, and fails when a test or script under tests/unit or scripts reads src/index.html directly instead of the shared reader; it fails on the merge base (no src/partials) and passes on the head."
+  - "tests/unit/no-fake-science.test.mjs and every other reader of the shell still pass through the shared reader."
+  - "Each partial is under 40 000 bytes, and src/index.html's cap in tests/unit/source-size-baseline.json is lowered or removed."
+  - "The pull request carries a reviewer's verdict: scripts/build.mjs matches the guarded scripts/build* (project.review-verdict)."
+  - "tests/README.md has a row for the new test (one appended row)."
+  - "E015 registers the claim; this issue does not edit docs/CLAIMS.yaml or the intent."
+validation:
+  - "npm run release-gate"
+evidence_required:
+  - "verified"
+created_at: 2026-10-18
+updated_at: 2026-10-18

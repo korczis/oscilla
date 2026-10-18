@@ -1,19 +1,23 @@
 id: S067
 milestone: M005
-title: "§67 Specification section 67 (not received)"
-slug: specification-section-67-not-received
-priority: p1
-profile: implementation
-objective: "The pasted specification was truncated inside section 63; this section's text was never delivered. Blocked until the text is supplied."
+title: "§67 SEO / Metadata (Q001 triage: already delivered)"
+slug: "v1-spec-67-seo-metadata"
+priority: p3
+profile: routine
+objective: "Section 67, \"SEO / Metadata\", of the numbered multi-page V1 specification (docs/specs/oscilla-v1-sections-64-95.md, line 137; ChatGPT project conversation 6abec18d, 2026-10-01T20:46:12Z), triaged under Q001 against project.single-file-deliverable, S001-S063 and the ADRs from 0011 on, and closed as already delivered."
 scope:
-  - "index.html"
-  - "tests"
+  - "docs/specs/oscilla-v1-sections-64-95.md"
+  - ".ai/repo/project/issues/S067.yaml"
 depends_on:
   - "S000"
+  - "Q001"
+cancelled: true
+current_state: "Already delivered, with one premise superseded. src/index.html carries the title \"OSCILLA · Interactive Sound & Frequency Lab\", the meta description, viewport, theme-color for light and dark (V243), Open Graph tags (V244) and social card tags (V245), checked by tests/unit/social-meta.test.mjs; nothing is injected at runtime. The per-page titles (Playground, Sweep, Dual Oscillator, Presets, Learn) are superseded: OSCILLA is one page with workspaces (project.single-file-deliverable, ADR 0011). Triage of 2026-10-18 under Q001, decided by the coordinating Claude session under the owner's delegation of 2026-10-18 ('tak to vse pores'); the owner may override."
 acceptance_criteria:
-  - "The pasted specification was truncated inside section 63; this section's text was never delivered. Blocked until the text is supplied."
+  - "Cancelled by the Q001 triage of 2026-10-18 as already delivered, for the reason and with the pointer in current_state; reopening it needs a new decision recorded here that names what the pointer does not cover."
 validation:
-  - "node tests/smoke.cjs"
+  - "majordomus plan validate"
 evidence_required:
   - "verified"
 created_at: 2026-10-01
+updated_at: 2026-10-18

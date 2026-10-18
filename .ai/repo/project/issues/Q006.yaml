@@ -1,0 +1,21 @@
+id: Q006
+milestone: M052
+serves:
+  - "product-direction#collaborator-brief-current"
+title: "Owner act: rewrite the ChatGPT project instructions to match the repository"
+slug: owner-act-rewrite-the-chatgpt-project-instructions-to-match
+priority: p2
+profile: routine
+owner: "repository owner"
+objective: "Until 2026-10-18 the ChatGPT project \"Oscilla\" ran under instructions written for an Elixir/Phoenix agent platform (knowledge record chatgpt-project-instructions-drift): they prescribed Phoenix, LiveView and OTP, put ADRs, a knowledge base, agents and pipelines into the product, and ranked a user instruction below the ADRs. Every new ChatGPT answer in that project inherited them. Decide whether to rewrite them (drop the stack and the platform scope, point to .ai/repo/rules/project/ and README.md) or to leave them; either is an act in the owner's ChatGPT account, outside this repository."
+why: "A drifting copy of the project contract keeps misleading every new ChatGPT session (conversation 6abf2a8d, 2026-10-02T04:06:25Z, section 14; conversation 6abf3077, 04:21:01Z, section 3)."
+current_state: "Done on 2026-10-18; evidence not yet recorded. Under the owner's delegation of 2026-10-18 ('tak to vse pores'), the coordinating Claude session replaced the Instructions of the ChatGPT project \"Oscilla\" on 2026-10-18 with a text of 3,697 characters derived from .ai/. The text says it supersedes PROJECT_INSTRUCTIONS.md and every 2026-10-02 snapshot in Sources; it states the single-file browser stack, rules out Phoenix, LiveView, OTP and a server, names main as the only source of truth, and lists 17 of the 21 project rules (not the repository-working rules majordomus-layer-current, no-conflict-markers, worktree-topology and the advisory shared-machine-discipline). The owner may override it. Not done: the 2026-10-02 files in the project's Sources, PROJECT_INSTRUCTIONS.md among them, are still there; replacing or removing them is a follow-up act in the owner's ChatGPT account. No repository command can see the ChatGPT account, so this is recorded as reported by the session that made the change."
+scope:
+  - ".ai/repo/project/issues/Q006.yaml"
+acceptance_criteria:
+  - "The answer is recorded as evidence on this issue (covers owner_decision) with its date and source: either the owner's own words, or an act or decision made under a delegation or approval the owner gave, stated as such together with its date and words, never presented as the owner's own words."
+validation:
+  - "manual"
+evidence_required:
+  - "owner_decision"
+created_at: 2026-10-18

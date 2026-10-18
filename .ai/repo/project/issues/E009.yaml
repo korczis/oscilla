@@ -1,0 +1,26 @@
+id: E009
+milestone: M046
+serves:
+  - "engineering-integrity#size-delta-reported"
+title: "CI reports the size change of every pull request"
+slug: ci-reports-the-size-change-of-every-pull-request
+priority: p2
+profile: implementation
+objective: "Make the CI build job print, for dist/index.html, the raw and gzip size, the headroom to the budget of scripts/build-config.mjs and the change from the merge base's build, as a step summary; a pull request that adds more than a stated threshold names where the bytes come from in its body (a review convention, not a gate). The number feeds two decisions: the reviewer's acceptance of a size change, and the owner's deferred decisions on the 1 MB budget stopgap (#114) and on p5 (ADR 0013, E012)."
+why: "Conversation 6ac1beb8, 2026-10-04T02:55:11Z and prompt 1 section 22; scripts/verify-dist.mjs prints the size against the budget but no delta. ADR 0051 asks the meta-layer to pay rent, so the report names the decision it feeds."
+scope:
+  - "scripts/size-report.mjs"
+  - ".github/workflows/ci.yml"
+  - "tests/unit/size-report.test.mjs"
+  - "tests/README.md"
+acceptance_criteria:
+  - "The CI step summary of a pull request shows the four numbers; tests/unit/size-report.test.mjs checks the arithmetic and the output on fixtures, and fails on the merge base (the script is absent)."
+  - "The workflow change keeps project.ci-bounded (bounded, pinned, retried) and carries a review verdict (.github is guarded)."
+  - "tests/README.md has a row for the test (one appended row)."
+  - "E015 registers the claim; this issue does not edit docs/CLAIMS.yaml or the intent."
+validation:
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-10-18
+updated_at: 2026-10-18

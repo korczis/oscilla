@@ -19,7 +19,7 @@ findings:
   - id: release-criterion-accepts-any-3x
     class: delivery_verification
     subject: "v3-measure#public-release-verified"
-    finding: "The statement says OSCILLA 3.0.0 is deployed to Pages from the gated release workflow; the criterion accepts any 3.x, and the page Pages serves today (964e25d, labelled 3.10.3) carries v4.0 work. The criterion can read met without saying anything about 3.0.0. V386 records what is still unmet about 3.0.0: no release candidate preceded it (ADR 0047, proposed; spec 233 can no longer become true) and it has no release/v1 record, because its GitHub Release has no asset, which awaits the owner's approval."
+    finding: "The statement says OSCILLA 3.0.0 is deployed to Pages from the gated release workflow; the criterion accepts any 3.x, and the page Pages serves today (964e25d, labelled 3.10.3) carries v4.0 work. The criterion can read met without saying anything about 3.0.0. V386 records what is still unmet about 3.0.0: no release candidate preceded it (ADR 0047, proposed; spec 233 can no longer become true) and it has no release/v1 record, because its GitHub Release has no asset, which awaits the owner's approval. Update 2026-10-18, appended by the coordinating Claude session, not by the critic; the text above is the critic's at 62cccb3: at 044f98a Pages serves 3.11.0, the v3.11.0 artifact. V386 now depends on Q007, the owner act that attaches the v3.0.0 asset so its release/v1 record can be written, and names ADR 0047 as the recorded rc deviation."
     blocking: false
     resolution:
       state: planned

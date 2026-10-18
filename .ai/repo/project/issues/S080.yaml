@@ -1,19 +1,25 @@
 id: S080
 milestone: M005
-title: "§80 Specification section 80 (not received)"
-slug: specification-section-80-not-received
+title: "§80 Pattern Test Matrix (Q001 triage: work)"
+slug: "v1-spec-80-pattern-test-matrix"
 priority: p1
 profile: implementation
-objective: "The pasted specification was truncated inside section 63; this section's text was never delivered. Blocked until the text is supplied."
+objective: "Section 80, \"Pattern Test Matrix\", of the numbered multi-page V1 specification (docs/specs/oscilla-v1-sections-64-95.md, line 478; ChatGPT project conversation 6abec18d, 2026-10-01T20:46:12Z), adopted under Q001 and triaged against project.single-file-deliverable, S001-S063 and the ADRs from 0011 on. This issue is the part of it that no record or check shows delivered; the rest is named in current_state."
 scope:
-  - "index.html"
-  - "tests"
+  - "tests/browser/engine-v1port.cjs"
+  - "tests/unit"
 depends_on:
   - "S000"
+  - "Q001"
+  - "S079"
+current_state: "Kept as work, triaged. tests/unit/freeze.test.mjs replays the V1 stop and topology vectors of am, fm, siren, wobble, chirp, ping-pong and pulse (ADR 0014), but no record shows every pattern the section lists put through trigger, stop, retrigger, rapid interruption and a workspace change with zero nodes left. Triage of 2026-10-18 under Q001, decided by the coordinating Claude session under the owner's delegation of 2026-10-18 ('tak to vse pores'); the owner may override."
 acceptance_criteria:
-  - "The pasted specification was truncated inside section 63; this section's text was never delivered. Blocked until the text is supplied."
+  - "Every pattern of the section's list that src/js/audio/patterns.js defines is triggered, stopped, retriggered and interrupted rapidly, and switched away from by a workspace change; after each, the engine's activeNodeCount and the independent node census of tests/browser/engine-v1port.cjs are 0. A listed pattern with no counterpart is named in the test with the reason."
+  - "npm run test:engine and npm test pass in Chromium, Firefox and WebKit, under project.bounded-test-timing and project.suite-harness."
 validation:
-  - "node tests/smoke.cjs"
+  - "npm run test:engine"
+  - "npm test"
 evidence_required:
   - "verified"
 created_at: 2026-10-01
+updated_at: 2026-10-18

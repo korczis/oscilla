@@ -1,0 +1,43 @@
+id: V604
+milestone: M048
+serves:
+  - "studio-completion#draft-recovery"
+title: "Autosave of the working draft and crash recovery"
+slug: autosave-of-the-working-draft-and-crash-recovery
+priority: p2
+profile: implementation
+objective: "Save the working Studio draft as it changes (debounced, local, versioned; specification sections 155 and 157) as a record kind of the existing 'studio' store, or a new store, of the oscilla-experiments database, never a second database (section 154), with a DB_VERSION bump if a store is added (src/js/experiments/store.js) and a row in README's storage table and in tests/unit/storage-inventory.test.mjs; after a reload or a closed page, offer it back with its time; accepting restores it as an unsaved draft, declining discards it; a saved project is never overwritten by a draft; without IndexedDB the Studio says no draft is kept. Decide and test two tabs editing at once: each tab keeps its own draft keyed by a tab id, and the offer lists the newest per project. The suite waits for a debounced save through an observable seam that reports the draft's save time (project.bounded-test-timing), and produces a 'crash' by closing the page with runBeforeUnload false. The draft lives in the document and session module E003 splits out of workspace.js, which is why it waits on E003."
+why: "V3.1 Studio specification (docs/specs/oscilla-v3.1-studio.md); .ai/repo/features/studio.md, \"What it does not do\". A draft store touches the storage contract (critique studio-completion, draft-store-touches-storage-contract)."
+scope:
+  - "src/js/studio"
+  - "src/js/ui/studio"
+  - "src/js/ui/unsaved.js"
+  - "src/js/experiments/store.js"
+  - "src/js/core"
+  - "src/index.html"
+  - "src/partials"
+  - "src/styles"
+  - "tests/unit"
+  - "tests/browser"
+  - "tests/README.md"
+  - "README.md"
+  - ".ai/repo/features"
+  - "dist"
+depends_on:
+  - "E003"
+  - "V601"
+acceptance_criteria:
+  - "tests/unit/studio-draft-recovery.test.mjs: a draft round-trips and restores the exact model, two tabs keep separate drafts, and a saved project is unchanged by any draft operation; it fails on the merge base."
+  - "A browser check: a draft edited, followed by a reload or a page closed with runBeforeUnload false, is offered back and restores the exact model, waiting on the save-time seam, never on a fixed sleep."
+  - "With IndexedDB unavailable the Studio states that no draft is kept, and nothing claims recovery."
+  - "The unsaved-work guard (ADR 0045, src/js/ui/unsaved.js) is unchanged by the draft: an autosave is recovery, not a save, so it never clears the Studio's dirty state and unsaved Studio changes still arm the one beforeunload listener; a restored draft sets the dirty state and arms it; a declined or discarded draft leaves a clean page with no listener; tests/browser/navigation.cjs guard-studio and tests/unit/navigation.test.mjs pass unchanged, and the browser check gains a restored-draft-arms case. Once #197 is on main its claim unsaved-work-guard binds this criterion and stays true unchanged."
+  - "README's storage table and tests/unit/storage-inventory.test.mjs name the draft record and the DB_VERSION."
+  - "The pull request carries a reviewer's verdict and, as a feat change, fail-first (project.review-verdict, project.fail-first; src/js/studio and src/js/experiments are guarded); a capped file it grows past its cap is split first or its raise is declared in tests/unit/source-size-baseline.json's raises ledger."
+  - "tests/README.md has a row for each new test; V606 registers the claim; this issue does not edit docs/CLAIMS.yaml or the intent."
+validation:
+  - "node --test tests/unit/studio-draft-recovery.test.mjs tests/unit/storage-inventory.test.mjs"
+  - "npm run release-gate"
+evidence_required:
+  - "verified"
+created_at: 2026-10-18
+updated_at: 2026-10-18

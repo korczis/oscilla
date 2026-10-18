@@ -1,0 +1,38 @@
+id: V605
+milestone: M048
+serves:
+  - "studio-completion#voice-opens-in-studio"
+title: "Open the Playground voice in the Studio"
+slug: open-the-playground-voice-in-the-studio
+priority: p2
+profile: implementation
+objective: "From the Signal Path view, open the Playground voice as an editable Studio project built from the derived graph that view draws (docs/v31/signal-path.md; src/js/studio/playground-voice.js, signal-path-projection.js). Schema 1 has no field for an additive oscillator's partial count or the dual B side's start phase, which travel as annotations the compiler does not read, so the Additive lab and a dual voice with a non-zero B phase cannot sound the same: refuse them with that reason unless this issue adds the fields with a schema bump and a migration. The covered configurations are listed in the test: the single and dual sources (B phase 0) and the sweep, each V1 pattern of src/js/data/presets.js (siren, wobble, AM, FM, sequence, pulse, octave, chirp) mapped onto Studio nodes and the timeline, or refused with the reason where it does not map. The open action lives in the file I/O and navigation module E003 splits out of workspace.js, which is why it waits on E003."
+why: "Conversation 6abec18d, 2026-10-02T03:22:47Z: Signal Path becomes a main interaction, not only a visualization. The derived model was built for drawing (critique studio-completion, voice-model-cannot-sound-the-same)."
+scope:
+  - "src/js/studio"
+  - "src/js/ui/studio"
+  - "src/js/visualization"
+  - "src/index.html"
+  - "src/partials"
+  - "src/styles"
+  - "tests/unit"
+  - "tests/browser"
+  - "tests/README.md"
+  - ".ai/repo/features"
+  - "dist"
+depends_on:
+  - "E003"
+  - "V604"
+acceptance_criteria:
+  - "tests/unit/playground-voice-in-studio.test.mjs lists the covered configurations and, for each, the opened project's offline render matches the Playground voice's with a residual RMS at least 60 dB below the Playground render's RMS; each unsupported configuration is refused with its reason; it fails on the merge base."
+  - "A browser check renders the listed configurations through OfflineAudioContext in Chromium, Firefox and WebKit, as tests/browser/v31-studio-offline.cjs does."
+  - "Opening is one action that leaves the Playground unchanged and the Studio with one new unsaved project."
+  - "The pull request carries a reviewer's verdict and, as a feat change, fail-first (project.review-verdict, project.fail-first; src/js/studio is guarded); a capped file it grows past its cap is split first or its raise is declared in tests/unit/source-size-baseline.json's raises ledger."
+  - "tests/README.md has a row for each new test; V606 registers the claim; this issue does not edit docs/CLAIMS.yaml or the intent."
+validation:
+  - "node --test tests/unit/playground-voice-in-studio.test.mjs"
+  - "npm run release-gate"
+evidence_required:
+  - "verified"
+created_at: 2026-10-18
+updated_at: 2026-10-18

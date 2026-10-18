@@ -1,0 +1,22 @@
+id: Q005
+milestone: M052
+serves:
+  - "product-direction#public-story-sourced"
+title: "Owner decision: the origin and the pace the public copy tells"
+slug: owner-decision-the-origin-and-the-pace-the-public-copy-tells
+priority: p2
+profile: routine
+owner: "repository owner"
+objective: "Two statements of the public copy differ from the recorded history. (1) Origin: About says OSCILLA \"began with a simple question: how much of an acoustic laboratory could live entirely inside a web browser?\". That sentence is ChatGPT's About draft, written at the owner's request (conversation 6abf2a8d, 2026-10-02T04:11:27Z and 04:13:38Z), which the owner published; it is not a question the owner posed. The transcripts show the start as an anti-bark (\"Bark Button\") ad promising 'ultrasound through any phone's speaker', which ChatGPT judged not credible, and the owner's reply \"Tak tohle se da spichnout v jednom html5\" (6abec18d, 2026-10-01T20:25:58Z; knowledge record oscilla-origin-in-the-transcripts). Keep About as it is, tell the ad story, or tell another one; if the ad is told, is the company named; and is there a personal motive the copy should name? (2) Pace: About says \"Built in one night\" with 5 h 51 min from the first tracked commit to V2; the record says that was wall-clock time with several AI workers in parallel (knowledge record built-in-one-night-is-wall-clock). Add that qualifier, or keep the copy as it is?"
+why: "The public story must not be invented. About is published copy the owner kept (drafted by ChatGPT, 6abf2a8d 2026-10-02T04:13:38Z); the synthesis of 2026-10-18 did not change it and left the choice to this question."
+current_state: "Decided on 2026-10-18 (evidence not yet recorded) by the coordinating Claude session under the owner's delegation of 2026-10-18 ('tak to vse pores'); the owner may override. (1) Origin: About's Origin will tell the documented start: the owner's reaction to an anti-bark ad promising 'ultrasound through any phone's speaker' that only dogs hear (a phone tone around 15-16 kHz, the kind ChatGPT's 30-line answer generated, is audible to many people and is not ultrasound) with 'this can be knocked together in one HTML5', growing that night into a lab. The 'how much of an acoustic laboratory could live in a browser' question stays only as the framing the project grew into, not as its starting point. The company behind the ad is not named or characterised beyond 'an anti-bark ad', because what is known about it is ChatGPT's unverifiable web summary. No personal motive is told: it is unrecorded. (2) Pace: 'Built in one night' and the 5 h 51 min derived from git stay, qualified as wall-clock time with several AI workers in parallel; the copy cites no figure the knowledge records do not measure (not the 75 captured prompts, not the 1 358/2 test run, not a line count). Reasoning: the transcripts record this start in the owner's own words while the 'simple question' is ChatGPT's draft, and the qualifier rests on what the record measures: the two commits, the interval and the overlap of PRs #3, #4 and #5 (knowledge record built-in-one-night-is-wall-clock). This issue changes no copy; the copy change is a follow-up issue under M051."
+scope:
+  - ".ai/repo/project/issues/Q005.yaml"
+acceptance_criteria:
+  - "The decision is recorded as evidence on this issue (covers owner_decision) with its date and source: either the owner's own words, or a decision made under a delegation the owner gave, stated as such together with the delegation's date and words and the reasoning, never presented as the owner's own words."
+  - "If the decision changes copy, a follow-up issue under M051 is planned from it; this issue changes no copy."
+validation:
+  - "manual"
+evidence_required:
+  - "owner_decision"
+created_at: 2026-10-18

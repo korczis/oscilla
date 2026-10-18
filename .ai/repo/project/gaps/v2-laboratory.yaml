@@ -33,6 +33,9 @@ observations:
   - id: about-notes
     statement: "The notes of about-provenance-matches-git and about-names-current-release say a shallow clone and CI skip their git checks; the v4 ledger (CI1, #147) records that CI now fetches full history and tags and fails instead of skipping."
     source: "file:docs/v4/completion-ledger.md"
+  - id: update-2026-10-18-public-page
+    statement: "Update 2026-10-18, appended by the coordinating Claude session (not the critic), observed at main 044f98a after observed_at 62cccb3; the observations above are kept as they were made. Pages serves region.commit 044f98a, version 3.11.0, sourceDigest fa7cf5c0, sourceDate 2026-10-18T08:54:25Z; node scripts/verify-deploy.mjs --commit 044f98a passes attempt 1/2 (live page is the committed dist stamped with that commit), and its artifact sha256 898270c4 equals the artifact sha256 of .ai/repo/releases/v3.11.0.yaml. Tag v3.11.0 is 2b63ec3 (2026-10-18T04:36:10Z); 21 commits separate it from 044f98a and they change nothing under src/ or dist/index.html (git diff --stat is empty)."
+    source: "command:node scripts/verify-deploy.mjs --commit 044f98a6a3f74ebe4471404eedaea5ec91ce97ae --attempts 2 --delay 5"
 conditions:
   - criterion: single-file-build
     state: satisfied

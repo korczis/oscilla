@@ -7,9 +7,12 @@ slug: midi-response-mode
 priority: p2
 profile: implementation
 objective: "Implement one bounded response mode (drone plus answer, or call and response) as a pure rule from input events to output events, scheduled on the AudioContext clock; the same input gives the same output."
+current_state: "Updated 2026-10-18. The scope names only MIDI paths plus the one integration file the criteria need, so that majordomus intent realization does not infer unrelated earlier work as realising this intent (audit finding main-plan F9, 2026-10-18)."
 scope:
-  - "src/js"
-  - "tests"
+  - "src/js/midi"
+  - "tests/unit/midi"
+  - "tests/README.md"
+  - "dist"
 depends_on:
   - "V502"
 acceptance_criteria:
@@ -20,3 +23,4 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-18
+updated_at: 2026-10-18

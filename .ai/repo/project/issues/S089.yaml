@@ -1,19 +1,29 @@
 id: S089
 milestone: M005
-title: "§89 Specification section 89 (not received)"
-slug: specification-section-89-not-received
+title: "§89 Optional High-Value Extensions (Q001 triage: work)"
+slug: "v1-spec-89-optional-high-value-extensions"
 priority: p1
 profile: implementation
-objective: "The pasted specification was truncated inside section 63; this section's text was never delivered. Blocked until the text is supplied."
+objective: "Section 89, \"Optional High-Value Extensions\", of the numbered multi-page V1 specification (docs/specs/oscilla-v1-sections-64-95.md, line 676; ChatGPT project conversation 6abec18d, 2026-10-01T20:46:12Z), adopted under Q001 and triaged against project.single-file-deliverable, S001-S063 and the ADRs from 0011 on. This issue is the part of it that no record or check shows delivered; the rest is named in current_state."
 scope:
-  - "index.html"
-  - "tests"
+  - "src/js/labs"
+  - "src/js/charts"
+  - "src/js/visualization"
+  - "src/index.html"
+  - "tests/unit"
+  - "tests/browser/labs.cjs"
 depends_on:
   - "S000"
+  - "Q001"
+  - "S095"
+current_state: "Kept as work for three items only, triaged. Delivered: keyboard frequency stepping (S011; src/js/ui/app.js), WAV download (src/js/audio/wav.js, tests/unit/audio-wav.test.mjs), offline vendored dependencies (Alpine.js, p5.js and uPlot are inlined, project.single-file-deliverable), the microphone analyser (S052; src/js/labs/mic-analyzer.js), phase control between two oscillators (src/js/labs/phase-stereo.js), the spectrogram (src/js/analysis/spectrogram.js), the Lissajous figure (src/js/charts/lissajous.js), user-defined envelopes (src/js/labs/envelope.js), the harmonic-series generator and additive synthesis (src/js/labs/additive.js). Carried by other issues, not duplicated here: MIDI input (V501-V505, M045), the missing-fundamental demo (L001), the Shepard tone (L002) and the equal-loudness explanation (L005), all M049. Left: oscilloscope trigger settings (the scope triggers on a rising zero crossing with no user setting, src/js/visualization/waveform.js), a stereo vectorscope as a view of its own, and a phase-cancellation demonstration at 0, 90 and 180 degrees (also listed in section 90). Triage of 2026-10-18 under Q001, decided by the coordinating Claude session under the owner's delegation of 2026-10-18 ('tak to vse pores'); the owner may override."
 acceptance_criteria:
-  - "The pasted specification was truncated inside section 63; this section's text was never delivered. Blocked until the text is supplied."
+  - "Each of the three items left (oscilloscope trigger settings, a stereo vectorscope view, a phase-cancellation demonstration at 0, 90 and 180 degrees) is implemented with a unit or browser test named on this issue, or declined in this issue by an owner decision with date and source."
+  - "No item delivered or carried by another issue (V501-V505, L001, L002, L005) is implemented here."
 validation:
-  - "node tests/smoke.cjs"
+  - "npm test"
+  - "npm run test:labs"
 evidence_required:
   - "verified"
 created_at: 2026-10-01
+updated_at: 2026-10-18

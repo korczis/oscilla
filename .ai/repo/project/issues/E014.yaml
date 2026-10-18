@@ -1,0 +1,23 @@
+id: E014
+milestone: M046
+serves:
+  - "engineering-integrity#screen-reader-pass"
+title: "File an issue for each failure the screen-reader pass recorded"
+slug: file-an-issue-for-each-screen-reader-failure
+priority: p2
+profile: routine
+objective: "For each failure E013's evidence records, add an issue under the milestone whose surface it concerns (for example M032 beside V428 and V429 for the Studio), with the flow, what VoiceOver announced, what was expected and a check that fails before its fix where a browser suite can express one; a failure that repeats a V272 item of docs/v31/review-v272.md is reported against that item instead."
+why: "E013's own scope is its record; planning the fixes is separate work a worker can do from the record (audit idd-dispatch F6)."
+scope:
+  - ".ai/repo/project/issues"
+non_scope:
+  - ".ai/repo/project/issues/E013.yaml: E013's record is its own; E014 only reads it and adds new issue files"
+depends_on:
+  - "E013"
+acceptance_criteria:
+  - "Every failure in E013's evidence is named by exactly one issue, or by a V272 item it repeats, and majordomus plan validate reports no failure."
+validation:
+  - "majordomus plan validate"
+evidence_required:
+  - "verified"
+created_at: 2026-10-18

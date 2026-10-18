@@ -1,19 +1,25 @@
 id: S082
 milestone: M005
-title: "§82 Specification section 82 (not received)"
-slug: specification-section-82-not-received
+title: "§82 Visualization Tests (Q001 triage: work)"
+slug: "v1-spec-82-visualization-tests"
 priority: p1
 profile: implementation
-objective: "The pasted specification was truncated inside section 63; this section's text was never delivered. Blocked until the text is supplied."
+objective: "Section 82, \"Visualization Tests\", of the numbered multi-page V1 specification (docs/specs/oscilla-v1-sections-64-95.md, line 531; ChatGPT project conversation 6abec18d, 2026-10-01T20:46:12Z), adopted under Q001 and triaged against project.single-file-deliverable, S001-S063 and the ADRs from 0011 on. This issue is the part of it that no record or check shows delivered; the rest is named in current_state."
 scope:
-  - "index.html"
-  - "tests"
+  - "tests/browser/app.cjs"
+  - "tests/browser/layout.cjs"
+  - "src/js/visualization"
 depends_on:
   - "S000"
+  - "Q001"
+  - "S085"
+current_state: "Kept as work, triaged. S025-S032 and S058 (high-DPI canvas, resize) are done for V1, but no record shows the six views checked under resize, a phone width, a device pixel ratio above 1, both themes and a hidden tab. Triage of 2026-10-18 under Q001, decided by the coordinating Claude session under the owner's delegation of 2026-10-18 ('tak to vse pores'); the owner may override."
 acceptance_criteria:
-  - "The pasted specification was truncated inside section 63; this section's text was never delivered. Blocked until the text is supplied."
+  - "A browser check shows each of the Wave, Spectrum, Frequency Motion, Signal Path, Harmonics and Interference views after a resize, at 320 px, at a device scale factor of 2, in the dark and the light theme, and after the tab is hidden and shown again, asserting that the canvas backing size equals its CSS size times devicePixelRatio and that it redraws."
+  - "npm run test:browser passes in Chromium, Firefox and WebKit; a defect it finds is fixed under src/js/visualization in the same pull request or opened as its own issue."
 validation:
-  - "node tests/smoke.cjs"
+  - "npm run test:browser"
 evidence_required:
   - "verified"
 created_at: 2026-10-01
+updated_at: 2026-10-18

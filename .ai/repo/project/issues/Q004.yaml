@@ -1,0 +1,26 @@
+id: Q004
+milestone: M050
+serves:
+  - "first-run-experience#first-screen-chosen"
+title: "Owner decision: what the first screen shows"
+slug: owner-decision-what-the-first-screen-shows
+priority: p2
+profile: routine
+owner: "repository owner"
+objective: "From P001's analysis and options, decide what a visitor sees first: which workspace or view opens, what the first screen must show of the instrument, Studio, Measure and Experiments, how much space one signal generator keeps, how it says what Q002 chose about OSCILLA, and whether one guided path (for example: change the waveform, see the spectrum, filter, compare, export, which conversation 6abf3077 suggested at 2026-10-02T04:21:01Z) belongs on it."
+why: "The owner asked for an analysis and a proposal first (conversation 6ac1beb8, 2026-10-05T19:17:26Z); the conversation ended before any proposal, and a layout nobody chose is not to be built. Q004 sits under M050 with the work it gates, so the first-run intent does not depend on the product questions of M052 (critique first-run-experience, m052-couples-unrelated-questions)."
+current_state: "Decided on 2026-10-18 by the coordinating Claude session under the owner's delegation of 2026-10-18 ('tak to vse pores', resolve all of it, given to that session together with the approval to accept implemented ADRs, enable strict branch protection and upload new ChatGPT project instructions); the owner may override it. These are not the owner's own words. Decision: Q004 stays open until P001's analysis and options exist (docs/first-screen-options.md); choosing a layout nobody has analysed is what the owner asked not to do. It is answered from P001's options, by the owner or under a recorded delegation, and the answer uses the positioning sentence Q002 recorded."
+scope:
+  - ".ai/repo/project/issues/Q004.yaml"
+depends_on:
+  - "P001"
+acceptance_criteria:
+  - "The decision is recorded as evidence on this issue (covers owner_decision), either in the owner's words with date and source, or as a decision of a coordinating session under an owner delegation it quotes with its date, stating its reasoning and that the owner may override it; a worker without such a delegation never answers it."
+  - "The answer is specific enough for P002 to state testable acceptance criteria: the view that opens, the parts it shows and their order at desktop and phone width."
+  - "It is not answered before docs/first-screen-options.md exists."
+validation:
+  - "manual"
+evidence_required:
+  - "owner_decision"
+created_at: 2026-10-18
+updated_at: 2026-10-18

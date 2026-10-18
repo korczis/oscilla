@@ -7,9 +7,14 @@ slug: midi-notes-sound
 priority: p2
 profile: implementation
 objective: "Map Note On/Off and velocity to voices of the existing AudioEngine under its level cap, with bounded polyphony, click-free envelopes and the 0.95 x Nyquist bound; tested on the fake audio context and in the browser gate with synthetic MIDI events."
+current_state: "Updated 2026-10-18. The scope names only MIDI paths plus the one integration file the criteria need, so that majordomus intent realization does not infer unrelated earlier work as realising this intent (audit finding main-plan F9, 2026-10-18). src/js/audio/audio-engine.js is in scope because the engine is monophonic by ADR 0002 and bounded polyphony needs an engine API (critique finding polyphony-contradicts-voice-replacement, open)."
 scope:
-  - "src/js"
-  - "tests"
+  - "src/js/midi"
+  - "src/js/audio/audio-engine.js"
+  - "tests/unit/midi"
+  - "tests/browser/midi.cjs"
+  - "tests/README.md"
+  - "dist"
 depends_on:
   - "V501"
 acceptance_criteria:
@@ -20,3 +25,4 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-18
+updated_at: 2026-10-18

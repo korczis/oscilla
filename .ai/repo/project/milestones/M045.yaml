@@ -4,6 +4,7 @@ slug: midi-jam-companion
 order: 45
 priority: p2
 problem: "OSCILLA can sound, analyse and measure, but it cannot play with a musician: there is no MIDI input, so a player cannot jam with it and see what their playing does to the sound."
+current_state: "Updated 2026-10-18: no MIDI work has started. V500 decides the test seam that stands in for MIDI hardware and the support-state and permission model in a resolution note of ADR 0058 (the two blocking findings of the critique of midi-jam-companion, no-hardware-test-seam-undecided and permission-prompt-and-state-taxonomy, are planned against it), and V501, the first build issue, depends on V500. ADR 0058 is proposed. The issue scopes name only MIDI paths and the integration files their criteria need."
 outcome: "A player connects a MIDI keyboard; OSCILLA shows incoming notes, sounds them through its engine, answers in one bounded deterministic response mode, shows incoming and generated notes beside the spectrum and waveform, and records the jam into an editable event track; without Web MIDI, OSCILLA is unchanged (ADR 0058)."
 acceptance_criteria:
   - "The MIDI support state is detected and stated, and its absence changes nothing else (V501)."

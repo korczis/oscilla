@@ -1,0 +1,20 @@
+id: Q007
+milestone: M053
+title: "Owner act: attach the committed dist to the v3.0.0 and v3.1.0 GitHub Releases"
+slug: owner-act-attach-v3-0-0-and-v3-1-0-assets
+priority: p2
+profile: routine
+owner: "repository owner"
+objective: "Attach the committed artifact of each release to its GitHub Release, by the route in .ai/repo/releases/README.md ('A release that predates the attached asset has no record until the asset is attached'): git show v3.0.0:dist/index.html as oscilla-v3.0.0.html to the v3.0.0 Release, and git show v3.1.0:dist/index.html as oscilla-v3.1.0.html to the v3.1.0 Release. This changes published releases, so it is the owner's act, or an act taken under a delegation the owner gave and stated as such. It does not write the release records: V386 and V433 do that once the assets exist."
+why: "V386 (spec 181) and V433 each need a release/v1 record for their release, and scripts/release-record.mjs refuses a record whose artifact is not a GitHub Release download byte-identical to dist/index.html at the tag; gh release view v3.0.0 --json assets and gh release view v3.1.0 --json assets return no asset (V386 evidence, 2026-10-06T18:12:16Z, 'assets: []')."
+current_state: "Open on 2026-10-18. Neither Release has an asset. ADR 0047 (status proposed, which reads as recorded under .ai/repo/adrs/README.md) closes V386's rc-first clause; this act does not depend on its acceptance. V386 and V433 name Q007 in depends_on so that majordomus plan next does not nominate them before the assets exist. It sits under M053 (order 997, named by no intent), not under M052, which realises product-direction, where an issue that serves none of its criteria fails majordomus intent validate (issue_without_purpose, checked 2026-10-18), and not under M020 (order 20), where majordomus plan next nominated it to a worker first (checked 2026-10-18)."
+scope:
+  - ".ai/repo/project/issues/Q007.yaml"
+acceptance_criteria:
+  - "gh release view v3.0.0 --json assets lists oscilla-v3.0.0.html and gh release view v3.1.0 --json assets lists oscilla-v3.1.0.html, each byte-identical to dist/index.html at its tag (git show vX.Y.Z:dist/index.html | shasum -a 256 equals the downloaded asset's SHA-256)."
+  - "The act is recorded as evidence on this issue (covers owner_decision) with its date and source: either the owner's own words, or an act taken under a delegation the owner gave, stated as such together with the delegation's date and words, never presented as the owner's own words."
+validation:
+  - "manual"
+evidence_required:
+  - "owner_decision"
+created_at: 2026-10-18

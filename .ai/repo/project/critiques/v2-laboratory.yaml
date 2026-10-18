@@ -40,7 +40,7 @@ findings:
   - id: public-check-is-not-v2
     class: delivery_verification
     subject: "v2-laboratory#public-and-identified"
-    finding: "npm run test:live tests the page Pages serves now (964e25d, labelled 3.10.3). The criterion names no version, so any release satisfies it, and it cannot decide that V2 itself was deployed, opened and smoke-tested at the public URL: that is history held only by V241-V246's evidence. Favicon, Open Graph and social-card tags (V243-V245) and the link preview image (V246) are mapped to it although live-smoke.cjs checks none of them; verify-deploy checks only that the share images are byte-equal PNGs."
+    finding: "npm run test:live tests the page Pages serves now (964e25d, labelled 3.10.3). The criterion names no version, so any release satisfies it, and it cannot decide that V2 itself was deployed, opened and smoke-tested at the public URL: that is history held only by V241-V246's evidence. Favicon, Open Graph and social-card tags (V243-V245) and the link preview image (V246) are mapped to it although live-smoke.cjs checks none of them; verify-deploy checks only that the share images are byte-equal PNGs. Update 2026-10-18, appended by the coordinating Claude session, not by the critic; the text above is the critic's at 62cccb3: at 044f98a Pages serves 3.11.0 (the v3.11.0 artifact, verify-deploy --commit 044f98a passes); the finding stands for any served version."
     blocking: false
     resolution:
       state: open

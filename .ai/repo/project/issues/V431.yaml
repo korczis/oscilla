@@ -7,6 +7,7 @@ slug: reviews-performance-and-bundle-audit
 priority: p1
 profile: implementation
 objective: "Cross-model architecture, UX and adversarial reviews with fixes; 100-node/200-edge performance target; bundle and dependency audit; licence notices; no runtime network (§145, §216-§220, §235-§237, §272)."
+current_state: "Updated 2026-10-18. Evidence under verified records each verification round, met or not, and every round so far is PARTIAL; all_criteria_met is recorded only when every acceptance criterion is met, so majordomus plan done refuses until then. What remains: the spec 272 final review (Majordomus-completeness and release-integrity lenses, docs/v31/review-v272.md) landed with #197 at d4bd97f (merged 2026-10-18T10:56:53Z), and a new evidence round on main decides whether it is met; and the v4 audit finding that ADR status never leaves proposed (the round of 2026-10-18 counted 58 of 58 proposed)."
 scope:
   - "src"
   - "tests"
@@ -20,8 +21,9 @@ validation:
   - "npm run release-gate"
 evidence_required:
   - "verified"
+  - "all_criteria_met"
 created_at: 2026-10-02
-updated_at: 2026-10-06T18:12:38Z
+updated_at: 2026-10-18T10:43:12Z
 evidence:
   - covers: verified
     type: manual
@@ -47,3 +49,9 @@ evidence:
     result: "PARTIAL (do not mark done): at caf7764 spec 235-237 are MET: docs/v31/review-v431.md (#75, landed after the 34f967a round) records three independent architecture (A), UX/accessibility (U) and adversarial (X) reviews of the Studio at 10fafa1, each finding backed by a failing check; 30 findings (19 defects, 2 risks, 9 nits), all fixed with tests that fail before the fix (#75-#89); the 237 questions are answered there (topology divergence #14/#15, leaks, undo/runtime drift, hostile import, JS time #22, compact/full one store, modulation vs automation #16/#17, measurement graph lying #13, inactive cable #14, feedback, master safety, runtime objects #2, migration); 'cross-model' became independent contexts of one model by the owner's ruling, stated in the doc (spec: 'where available'). Review tests 34/34 pass; 145 performance target and 216-220 bundle, licence, no runtime network pass (verify-dist: gzip 762.9/976.6 KiB). Unmet: spec 272 final review: the V431 review's lenses exclude 'Majordomus completeness' and 'release integrity'; the later reviews are change-scoped (two adversarial reviews per PR on #116-#140 review a diff, not the architecture), and the v4 audit at 27f7c62 that covered the .ai layer, artifact and CI is kept only as the docs/v4/completion-ledger.md summary with valid findings in those areas still open (ADR status never leaves proposed; CI1 WebKit absent from engine/dsp/labs/sequencer CI; and tests/browser/live-smoke.cjs says the Pages workflow runs it, but no workflow or release script does)"
     commit: caf7764ce6fec9329de43254328170255faa6dad
     recorded_at: 2026-10-06T18:12:38Z
+  - covers: verified
+    type: manual
+    command: "node --test tests/unit/v31-studio-review-v431*.test.mjs tests/unit/v431-*.test.mjs tests/unit/v31-studio-performance.test.mjs && node scripts/verify-dist.mjs && grep -n test:live .github/workflows/pages.yml && grep -n webkit .github/workflows/ci.yml && gh run view 39113258872 --json jobs && gh pr view 197 --json state && majordomus adr list"
+    result: "PARTIAL (do not mark done): at 2e80461, which is main 044f98a plus nine plan, knowledge, ADR, specification-text and plan-test commits, none under src, scripts, .github or dist (count corrected by hand on 2026-10-18 after the tool recorded this round, which said three): review and performance tests 34/34 pass; verify-dist PASS (gzip 789.8/976.6 KiB; provenance names v3.11.0). Closed since the caf7764 round: (a) the live smoke is wired: .github/workflows/pages.yml:120 runs npm run test:live against the deployed URL, one job per browser (#146), and Pages run 39113258872 at 044f98a passed deploy and Public smoke in chromium, firefox and webkit; (b) CI1 WebKit: the engine and DSP/labs/sequencer jobs run chromium, firefox and webkit (.github/workflows/ci.yml:77, :118). Unmet: (1) spec 272 final review: PR #197 (branch docs/v272-final-review, docs/v31/review-v272.md) carries it and is open, not merged to main; (2) majordomus adr list at this round shows 58 of 58 ADRs proposed, so the v4 audit finding that ADR status never leaves proposed still holds"
+    commit: 2e80461b7a2d20022bb282d5ef3a16c15d461da5
+    recorded_at: 2026-10-18T10:43:12Z

@@ -34,19 +34,19 @@ evidence:
     recorded_at: 2026-10-03T06:50:32Z
   - covers: verified
     type: manual
-    command: "grep -n 'main thread\|no Worker yet\|confidence.v2. (default)' docs/v3/architecture.md docs/v3/algorithms.md .ai/repo/features/measurement-workbench.md .ai/repo/features/measurement-quality.md"
+    command: 'grep -n ''main thread\|no Worker yet\|confidence.v2. (default)'' docs/v3/architecture.md docs/v3/algorithms.md .ai/repo/features/measurement-workbench.md .ai/repo/features/measurement-quality.md'
     result: "PARTIAL (do not mark done): at 6f47ab7 README is fixed (#37: Worker analysis, oscilla.confidence.v3 default). Docs still contradict shipped code: docs/v3/architecture.md section 3 says the default analyze is analyzeInline on the main thread and a Worker is planned (claim analysis-off-main-thread is guaranteed in docs/CLAIMS.yaml) and line 83 'no Worker yet'; docs/v3/algorithms.md index table says 'oscilla.confidence.v2 (default)' (default is v3, quality.js) and line 643 'until the analysis moves to a Worker'; .ai/repo/features/measurement-workbench.md:39 calls the Worker 'planned', measurement-quality.md:24 names confidence v2"
     commit: 6f47ab76768738e5b4fcd1754da68e72243e0930
     recorded_at: 2026-10-03T13:14:37Z
   - covers: verified
     type: manual
-    command: "grep -n 'oscilla\.confidence\.v3. for new' README.md && sed -n 217,227p docs/v3/architecture.md && sed -n 45,52p src/js/measurement/algorithms.js && grep -n \"oscilla.transfer.v2' /\|log-sweep.v2',\" docs/v3/architecture.md"
+    command: 'grep -n ''oscilla\.confidence\.v3. for new'' README.md && sed -n 217,227p docs/v3/architecture.md && sed -n 45,52p src/js/measurement/algorithms.js && grep -n "oscilla.transfer.v2'' /\|log-sweep.v2''," docs/v3/architecture.md'
     result: "PARTIAL (do not mark done): at 34f967a PR #48 closed the round-2 gaps (Worker analysis, no 'no Worker yet', index table default) and PR #57 corrected the DSP docs; README V3 section, measurement-guide.md, architecture.md with diagram and algorithms.md with references exist (v31-studio-docs and unit suite pass). Unmet: the V382 fixes (#51-#60) left docs contradicting algorithms.js: README.md:177 says oscilla.confidence.v3 for new measurements (default is confidence.v4); docs/v3/architecture.md:225-227 lists RETAINED_ALGORITHMS without transfer.v2, ir v2, clip.v1, confidence.v3; architecture.md:277 gives computeTransfer default 'oscilla.transfer.v2' (now transfer.v3) and :296-297 IrResult defaults ir v2 (now v3)"
     commit: 34f967a063ead9085b89faf32f748e4cf9aff301
     recorded_at: 2026-10-03T23:36:06Z
   - covers: verified
     type: manual
-    command: "git grep -n -E \"main thread|no Worker|confidence\.v[0-9]. \(default\)\" -- README.md docs/v3 .ai/repo/features src/js/measurement/quality.js && npm test"
+    command: 'git grep -n -E "main thread|no Worker|confidence\.v[0-9]. \(default\)" -- README.md docs/v3 .ai/repo/features src/js/measurement/quality.js && npm test'
     result: "PASS on docs/v384-v385 (from main a285b0b): README 'The V3 measurement workbench' section, docs/v3/measurement-guide.md, docs/v3/architecture.md with the layer diagram, docs/v3/algorithms.md with a References section exist and now match the code. The earlier contradictions are gone: architecture.md and features/measurement-workbench.md state Worker analysis by default (claim analysis-off-main-thread) with the inline main-thread path only as the no-Worker fallback; the default quality rule set is oscilla.confidence.v4 (algorithms.js ALGORITHMS.quality) in algorithms.md's index, architecture.md and features/measurement-quality.md; this change corrects the last two stale statements (quality.js header said v3 default; algorithms.md 'now v3'). Unit 2186/2186"
     commit: a285b0b0dc54641dc2f0b32707ec52ed1fd62d24
     recorded_at: 2026-10-04T10:18:51Z

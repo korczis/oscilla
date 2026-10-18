@@ -1,0 +1,35 @@
+id: first-run-experience
+title: "The first screen a visitor sees reflects what OSCILLA is now, in the form the owner chooses from an analysis of the current layout"
+statement: "The owner felt the whole first screen should be redone to reflect the latest direction and features, since generating one signal need not take so much space, and asked first for an analysis of the layout and of the recent changes, ADRs and commits, then for a proposal (ChatGPT project conversation 6ac1beb8, 2026-10-05T19:17:26Z); the conversation ends before any proposal. OSCILLA opens today on the Playground generator. A worker analyses the current first screen and proposes layouts traced to the features and decisions they serve, each saying how it serves the owner's steering that acoustic measurement is the wedge (ADR 0051); the owner chooses what the first screen must show (Q004, which stays open until that analysis exists); the chosen layout is built in the words of the chosen positioning sentence (Q002) without breaking an inventoried deep link, file://, the sub-path, the instrument's direct path, the live smoke or the visual gate."
+invariants:
+  - "No layout is built before the owner chooses it (Q004), and Q004 is not answered before P001's analysis exists"
+  - "Every existing deep link, the file:// and /oscilla/ sub-path paths and the direct path to the instrument keep working (project.single-file-deliverable), as an inventory committed before the change proves"
+  - "The first screen uses the existing tokens and visual language (project.visual-identity-lock) and makes no claim the product cannot support (project.no-fake-science)"
+  - "The first screen describes OSCILLA in the positioning sentence Q002 records, never in words of its own"
+milestones:
+  - "M050"
+satisfaction:
+  - id: "layout-analysed"
+    criterion: "The analysis of the current first screen and the layout options are recorded with the share of the viewport each part takes at 1536x1024 and 390x844, each option traced to ADR 0051's steering"
+    evidence: "command"
+    ref: "test -s docs/first-screen-options.md"
+  - id: "first-screen-chosen"
+    criterion: "The owner's choice of what the first screen shows is recorded on Q004"
+    evidence: "command"
+    ref: "majordomus plan list | grep -Eq '^Q004 +DONE '"
+  - id: "first-screen-built"
+    criterion: "The first screen shows what the owner chose, in Chromium, Firefox and WebKit, from file:// and from the sub-path, with every entry of the committed deep-link inventory resolving as before"
+    evidence: "command"
+    ref: "node tests/browser/first-screen.cjs"
+governance:
+  - "rule:project.visual-identity-lock"
+  - "rule:project.single-file-deliverable"
+  - "rule:project.no-fake-science"
+  - "adr:adr-0045"
+  - "adr:adr-0051"
+  - "file:.ai/repo/knowledge/curated/product-landscape-and-the-pigments-path.md"
+non_goals:
+  - "A marketing landing page outside the application, analytics, sign-up or a newsletter"
+  - "Making About the default view (rejected in the About brief, conversation 6abf2a8d, 2026-10-02T04:13:38Z)"
+created_at: 2026-10-18
+updated_at: 2026-10-18

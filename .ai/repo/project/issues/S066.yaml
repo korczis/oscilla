@@ -1,19 +1,23 @@
 id: S066
 milestone: M005
-title: "§66 Specification section 66 (not received)"
-slug: specification-section-66-not-received
-priority: p1
-profile: implementation
-objective: "The pasted specification was truncated inside section 63; this section's text was never delivered. Blocked until the text is supplied."
+title: "§66 Privacy (Q001 triage: already delivered)"
+slug: "v1-spec-66-privacy"
+priority: p3
+profile: routine
+objective: "Section 66, \"Privacy\", of the numbered multi-page V1 specification (docs/specs/oscilla-v1-sections-64-95.md, line 117; ChatGPT project conversation 6abec18d, 2026-10-01T20:46:12Z), triaged under Q001 against project.single-file-deliverable, S001-S063 and the ADRs from 0011 on, and closed as already delivered."
 scope:
-  - "index.html"
-  - "tests"
+  - "docs/specs/oscilla-v1-sections-64-95.md"
+  - ".ai/repo/project/issues/S066.yaml"
 depends_on:
   - "S000"
+  - "Q001"
+cancelled: true
+current_state: "Already delivered. README.md \"Privacy\" states no analytics, no server, no account and no runtime fetch; the About workspace says it (data-osc=\"about.privacy\" in src/index.html: \"No server, no account, no analytics\"); tests/unit/storage-inventory.test.mjs requires the README's storage table to equal the browser-storage keys src/js uses. (b), and so S001-S063, already carried \"Do not add tracking. Do not send data anywhere.\" The \"About page\" is the About workspace of the one page (project.single-file-deliverable). Triage of 2026-10-18 under Q001, decided by the coordinating Claude session under the owner's delegation of 2026-10-18 ('tak to vse pores'); the owner may override."
 acceptance_criteria:
-  - "The pasted specification was truncated inside section 63; this section's text was never delivered. Blocked until the text is supplied."
+  - "Cancelled by the Q001 triage of 2026-10-18 as already delivered, for the reason and with the pointer in current_state; reopening it needs a new decision recorded here that names what the pointer does not cover."
 validation:
-  - "node tests/smoke.cjs"
+  - "majordomus plan validate"
 evidence_required:
   - "verified"
 created_at: 2026-10-01
+updated_at: 2026-10-18

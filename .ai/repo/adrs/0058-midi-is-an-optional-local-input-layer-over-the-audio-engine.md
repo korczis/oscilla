@@ -29,12 +29,25 @@ provenance:
 
 ## Context
 
-On 2026-10-18 the owner proposed a new direction: OSCILLA as a MIDI jam companion. A player
-connects a MIDI keyboard or controller. OSCILLA listens to what they play, answers with a
-bounded response, and shows what the sound does. The proposal draws a firm boundary: OSCILLA
-is not to become another DAW or a copy of a commercial synthesizer. The product sentence was:
-OSCILLA plays with you, sees what you play, and lets you explore what that sound does. It
-extends "See sound. Shape frequency." rather than replacing it.
+On 2026-10-11, in the owner's ChatGPT project "Oscilla" (conversation `6acbd3dc`, knowledge
+record `chatgpt-oscilla-project`), the owner wrote one line: "prismatic/oscilla jako midi jam
+companion" (Prismatic and OSCILLA as a MIDI jam companion). ChatGPT's answer (18:23:45Z) gave
+the idea its shape. A player connects a MIDI keyboard or controller. OSCILLA listens to what
+they play, answers with a bounded response, and shows what the sound does. The answer drew a
+firm boundary: OSCILLA is not to become another DAW or a copy of a commercial synthesizer. Its
+product sentence was: OSCILLA plays with you, sees what you play, and lets you explore what that
+sound does. It extends "See sound. Shape frequency." rather than replacing it.
+
+The same answer split the roles. OSCILLA owns the sound, the MIDI input, the jam rules, the
+rhythmic and harmonic response, the visualisation and the recording. Prismatic, the owner's
+other project, would be the higher layer that designs and explains jam modes and holds presets,
+experiments and structured session notes. Nothing in this repository builds or names that
+layer.
+
+On 2026-10-18 the owner adopted the direction by asking for it to be recorded; this decision,
+the intent `midi-jam-companion` and M045 are that record. The boundary, the product sentence and
+the role split are therefore ChatGPT's proposal as the owner adopted it, not the owner's own
+words.
 
 What exists today:
 
@@ -92,3 +105,15 @@ What constrains a MIDI feature:
 - The intent `midi-jam-companion` holds the criteria that make the direction true. Until claims
   and tests exist, its criteria are unmet, and the plan says so.
 - The status stays `proposed` until the owner accepts the direction.
+
+## Resolution notes
+
+Appended; the status stays `proposed`.
+
+### 2026-10-18: the Context's provenance corrected
+
+The first version of the Context said the owner proposed the direction on 2026-10-18 and quoted
+the boundary and the product sentence as the proposal. The conversation is dated 2026-10-11, the
+owner's part of it is one line, and the shape, the boundary, the product sentence and the role of
+Prismatic are ChatGPT's answer, which the owner adopted on 2026-10-18. The Context now says so.
+The Decision is unchanged.

@@ -1,0 +1,33 @@
+id: V606
+milestone: M048
+serves:
+  - "studio-completion#node-groups"
+  - "studio-completion#minimap"
+  - "studio-completion#timeline-pinch-zoom"
+  - "studio-completion#draft-recovery"
+  - "studio-completion#voice-opens-in-studio"
+title: "Register the M048 claims and point the studio-completion criteria at them"
+slug: register-the-m048-claims
+priority: p2
+profile: routine
+objective: "Once V601-V605 have landed, add to docs/CLAIMS.yaml one guaranteed claim per criterion, naming the source and the test that prove it: studio-node-groups, studio-minimap, studio-timeline-pinch-zoom, studio-draft-recovery and playground-voice-in-studio; then change each criterion of .ai/repo/project/intents/studio-completion.yaml from its command to evidence claim with that id."
+why: "Audit idd-dispatch F1 and F5: one closing issue keeps docs/CLAIMS.yaml and the intent out of the other M048 scopes."
+scope:
+  - "docs/CLAIMS.yaml"
+  - ".ai/repo/project/intents/studio-completion.yaml"
+depends_on:
+  - "V601"
+  - "V602"
+  - "V603"
+  - "V604"
+  - "V605"
+acceptance_criteria:
+  - "docs/CLAIMS.yaml holds the five claims as guaranteed, each naming an implementation and a test that exist, and tests/unit/knowledge-integrity.test.mjs passes."
+  - "The five criteria name their claims as evidence and majordomus intent validate reports no failure; because this issue changes the intent it serves, the plan and evidence pins of majordomus intent binding --issue V606 change during the task and the worker re-reads them before finish."
+validation:
+  - "majordomus intent validate"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-10-18
+updated_at: 2026-10-18

@@ -42,6 +42,9 @@ observations:
   - id: runtime-truth-tests
     statement: "Runtime truth and divergence (ADR 0039) are tested by tests/unit/v31-studio-runtime-truth.test.mjs, tests/unit/v40-studio-runtime-closure.test.mjs and tests/browser/v31-studio-runtime.cjs; no claim in docs/CLAIMS.yaml states them."
     source: "test:tests/unit/v31-studio-runtime-truth.test.mjs"
+  - id: update-2026-10-18-public-page
+    statement: "Update 2026-10-18, appended by the coordinating Claude session (not the critic), observed at main 044f98a after observed_at 62cccb3; the observations above are kept as they were made. Pages serves region.commit 044f98a, version 3.11.0, sourceDigest fa7cf5c0, sourceDate 2026-10-18T08:54:25Z; node scripts/verify-deploy.mjs --commit 044f98a passes attempt 1/2 (live page is the committed dist stamped with that commit), and its artifact sha256 898270c4 equals the artifact sha256 of .ai/repo/releases/v3.11.0.yaml. No 3.1.x page is served; the v3.1.0 GitHub Release still carries no asset, so v3.1.0 has no release/v1 record (V433, owner act Q007)."
+    source: "command:node scripts/verify-deploy.mjs --commit 044f98a6a3f74ebe4471404eedaea5ec91ce97ae --attempts 2 --delay 5"
 conditions:
   - criterion: model-plain-data
     state: satisfied

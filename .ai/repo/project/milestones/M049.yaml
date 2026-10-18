@@ -1,0 +1,20 @@
+id: M049
+title: "Learn: three perception lessons of the adopted V1 specification"
+slug: learn-five-perception-lessons
+order: 49
+priority: p3
+problem: "Learn has 18 topics about signals, sampling and hearing range and none about perception phenomena; sections 89-90 of the V1 specification, which Q001 adopted on 2026-10-18 under the owner's delegation, name a missing-fundamental demo, a Shepard tone demo and an equal-loudness explanation."
+outcome: "Learn teaches the missing fundamental, the Shepard tone and equal loudness, each with a playable demonstration, as teaching and never as a test, and L006 points the intent's criteria at registered claims."
+acceptance_criteria:
+  - "L001, L002, L005 and L006 are done with their evidence; L003 and L004 are cancelled with their reason; npm run release-gate passes at the last one."
+validation:
+  - "npm run release-gate"
+evidence_required:
+  - "milestone_verified"
+risks:
+  - "A perception lesson drifts into telling listeners about their hearing: the copy reports what listeners commonly report, cited, the no-fake-science scan catches what it can, and the reviewer judges perceptual claims, which the scan cannot."
+  - "Breadth against the measurement wedge (ADR 0051): the lessons are priority p3 and wait on Q001; L001 also follows S089 of M005, the last of M005's scope chain, because both change src/js/labs, src/js/ui, src/index.html and tests/browser (scope conflicts reported with Q001 simulated DONE, 2026-10-18)."
+  - "The Learn surfaces have no visual reference (tests/visual covers the Playground, Measure and Studio only), so project.visual-identity-lock is held by review for them (critique perception-lessons, learn-has-no-visual-reference, open)."
+  - "If the owner overrides Q001, L001, L002, L005 and L006 are cancelled with that reason; if the owner asks for masking or critical bands, L003 and L004 return with new criteria."
+created_at: 2026-10-18
+updated_at: 2026-10-18

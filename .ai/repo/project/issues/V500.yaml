@@ -1,0 +1,21 @@
+id: V500
+milestone: M045
+serves:
+  - "midi-jam-companion#midi-support-state"
+title: "Decide the MIDI test seam and the support-state table"
+slug: decide-the-midi-test-seam-and-the-support-state-table
+priority: p2
+profile: deep-work
+objective: "Write the decision V501 needs before it is built, as a dated resolution note of ADR 0058 (.ai/repo/adrs/0058-midi-is-an-optional-local-input-layer-over-the-audio-engine.md, status proposed, which already plans V501-V505; its sections above the notes stay as written), referring to ADR 0052. A note, not a new ADR, so the scope is one known file and does not collide with other issues that write ADRs (E012, P004). (1) The test seam that stands in for MIDI hardware in the gate (critique midi-jam-companion, no-hardware-test-seam-undecided): either an addInitScript stub of navigator.requestMIDIAccess with a fake MIDIAccess and MIDIInput, or a window.OSCILLA inject-kind member allowed only as TEST CONTEXT under ADR 0052 (which then grows the key list pinned by seam-surface-pinned in tests/browser/app.cjs); name which, which ADR 0052 kind it is, and how a check tells measured real-API behaviour from stubbed behaviour, so that no support claim rests on a stub while its wording says measured. (2) The full support-state table (finding permission-prompt-and-state-taxonomy): every state with its cause (the API missing, an insecure context, navigator.permissions.query({name: 'midi'}) missing or throwing, permission needed, a pending request, denied, a policy-blocked origin, NotSupportedError or no platform backend, no devices, connected, a permission revoked mid-session, the last device disconnecting) and the exact copy of each; that access is requested only by an explicit user action and loading the page makes no prompt and no permission query with a side effect; and that the permission is per origin (on Pages, korczis.github.io, shared with the account's other sites, ADR 0052). This issue changes no code and no intent: if the table has states beyond the five the criterion midi-support-state names, the criterion is restated by a plan change after this issue, before V501 starts."
+why: "Two blocking findings of the critique of midi-jam-companion hold V501 until the seam and the state table are decided; without a plan issue that decides them, majordomus plan ready lists V501 as READY and only intent preflight refuses it (audit 2026-10-18)."
+current_state: "Planned on 2026-10-18. The two blocking findings are planned against this issue; a critic re-reviews them once the note exists."
+scope:
+  - ".ai/repo/adrs/0058-midi-is-an-optional-local-input-layer-over-the-audio-engine.md"
+acceptance_criteria:
+  - "ADR 0058 gains a dated resolution note, its status still proposed and its sections above unchanged, that names the test seam, its ADR 0052 kind and how a check distinguishes measured from stubbed behaviour, and holds the support-state table with each state's cause and exact copy, the explicit-user-action rule for requesting access and the per-origin permission note; majordomus adr check passes."
+  - "The note states for each state of the table whether the gate browsers (Playwright's Chromium, Firefox and WebKit builds) can produce it without the seam, so V501's test records gate-build support, not browser support (finding measured-support-is-playwright-not-users)."
+validation:
+  - "majordomus adr check"
+evidence_required:
+  - "verified"
+created_at: 2026-10-18

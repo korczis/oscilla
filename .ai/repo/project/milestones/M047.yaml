@@ -1,0 +1,22 @@
+id: M047
+title: "Measurement extensions: room decay, clarity, distortion, chain delay, phase, run consistency"
+slug: measurement-extensions-room-decay-clarity-distortion-latency
+order: 47
+priority: p2
+problem: "The measurement roadmap after V3.0 has no milestone: the V3 specification deferred room acoustics, THD, latency and phase to \"V3.1\", which became the Studio, and .ai/repo/features/impulse-response.md still says those figures \"belong to V3.1 and are not computed\"."
+outcome: "OSCILLA computes and stores each figure of the measurement-extensions intent from its captured measurements under one figure contract (estimate, setup and position, validity, method reference, spread), proven on known systems, refuses what its data cannot support, shows every figure in every gate browser and origin, and V399 points the intent's criteria at registered claims."
+acceptance_criteria:
+  - "Every issue of M047 is done with its evidence; npm run release-gate passes at the last one."
+validation:
+  - "npm run release-gate"
+evidence_required:
+  - "milestone_verified"
+risks:
+  - "A figure that looks plausible on real rooms but was never proven on a known system: every figure lands with its synthetic proof first, through the product's own filter bank where it uses one."
+  - "A bare number with a versioned ID: V391 lands the figure contract and its test first, and every later figure is registered against it."
+  - "A new stimulus (a stepped sine for THD) must join the measurable stimulus kinds only when the engine measures it (claim measurable-stimulus-only); V393 weighs the existing sweep's harmonic impulse responses first."
+  - "The issues are chained V391 to V398 because they all extend the stored result schema, the CSV export and the Measure result views; the chain is the order of a shared file set, not of their science."
+  - "The DSP waits on E002 (the MEASURE adapter split) and E002 on E001 and V431 (#197): measurement value arrives after M046's first split (critique measurement-extensions, dsp-waits-on-the-adapter-split, open). src/js/measurement/engine.js and quality.js are capped with headroom, not split: a figure that needs more splits the file first or declares the raise."
+  - "V391-V398 name the MEASURE and experiment UI files (src/js/ui/measure.js and the src/js/ui/measure directory E002 creates, measure-experiment.js, experiments.js, exporters.js), not all of src/js/ui, so they do not collide with E003's Studio split (plan validate reported E003 and V391 on src/js/ui/studio/workspace.js with E002 simulated DONE, 2026-10-18); a figure that needs another UI file widens its scope by a plan change."
+created_at: 2026-10-18
+updated_at: 2026-10-18

@@ -1,0 +1,43 @@
+id: V393
+milestone: M047
+serves:
+  - "measurement-extensions#distortion"
+title: "THD and THD+N at a stated fundamental, bandwidth and notch"
+slug: thd-and-thd-n-at-a-stated-fundamental
+priority: p2
+profile: implementation
+objective: "First weigh, in docs/v3/algorithms.md, the two ways to get harmonic distortion: a new stepped-sine stimulus (a new stimulus kind, capture and result type in src/js/measurement/engine.js) or the harmonic impulse responses the existing log sweep already separates in time (Farina; the inverse-filter oracle of ADR 0021), and build the one the record chooses. Compute THD from harmonics 2 to N below 0.95 x Nyquist and THD+N with the fundamental removed by a stated notch (its width in bins or Hz), both in a stated measurement bandwidth (20 Hz to the lower of 20 kHz and 0.95 x Nyquist unless the record states another), reported beside the floor of the same chain measured with the stimulus silent (the noise capture transfer.js already uses for SNR); a harmonic above the safe maximum is left out and the result says so; the figure is the chain's distortion at that level and setup, never the speaker's; the spread is the run-to-run spread where runs repeat. A new stimulus joins the measurable kinds only with this measurement. It follows V392 because both extend the stored result schema and the result views."
+why: "V3 MEASURE specification sections 4 and 90-92 (docs/specs/oscilla-v3-measure.md); conversation 6abec18d, 2026-10-02T03:15:06Z."
+scope:
+  - "src/js/measurement"
+  - "src/js/experiments"
+  - "src/js/ui/measure.js"
+  - "src/js/ui/measure"
+  - "src/js/ui/measure-experiment.js"
+  - "src/js/ui/experiments.js"
+  - "src/js/ui/exporters.js"
+  - "src/index.html"
+  - "src/partials"
+  - "src/styles"
+  - "tests/unit"
+  - "tests/browser"
+  - "tests/README.md"
+  - "docs/v3"
+  - ".ai/repo/features"
+  - "dist"
+depends_on:
+  - "V392"
+acceptance_criteria:
+  - "tests/unit/distortion-thd.test.mjs: on synthetic signals with 1 % second and 0.5 % third harmonic, THD is within 0.02 percentage points of 1.118 %; with added white noise of known level THD+N in the stated bandwidth and notch matches its analytic value within 0.02 percentage points; it fails on the merge base."
+  - "The result names the harmonics included, the bandwidth, the notch and the chain floor, and is never labelled the speaker's distortion."
+  - "tests/unit/v4-measurement-truth.test.mjs still refuses a stimulus the engine cannot measure."
+  - "The figure follows the V391 contract (tests/unit/measurement-figure-contract.test.mjs passes with this figure kind registered)."
+  - "The pull request carries a reviewer's verdict and, as a feat change, fail-first (project.review-verdict, project.fail-first); a capped file it grows past its cap is split first or its raise is declared in tests/unit/source-size-baseline.json's raises ledger."
+  - "tests/README.md has a row for each new test; V399 registers the claim; this issue does not edit docs/CLAIMS.yaml or the intent."
+validation:
+  - "node --test tests/unit/distortion-thd.test.mjs"
+  - "npm run release-gate"
+evidence_required:
+  - "verified"
+created_at: 2026-10-18
+updated_at: 2026-10-18

@@ -1,0 +1,40 @@
+id: V601
+milestone: M048
+serves:
+  - "studio-completion#node-groups"
+title: "Node groups with exposed ports"
+slug: node-groups-with-exposed-ports
+priority: p2
+profile: implementation
+objective: "ADR 0030 records 'Groups and subgraphs: in neither 3.1.0 nor 3.2.0' and that adding them later needs a schema version bump and a migration (ADR 0023), with the release not decided. Before code, append a resolution note to ADR 0030 that says which release takes groups and how studioHash (src/js/studio/schema.js) treats them: a group is a model record that changes the hash, or view state that does not; the note records the choice and its consequence for an experiment that stored a Studio hash. Then group selected nodes into a collapsed node whose exposed ports are the connections that cross the group; enter it by double-click or keyboard, leave it, ungroup it; each is one undoable action of the StudioModel; the group record raises STUDIO_SCHEMA_VERSION with a migration (src/js/studio/migrate.js), import validation and limits (src/js/studio/validate.js), and round-trips through save, load and patch paste (specification sections 116-117). The group commands go through the graph module E003 splits out of workspace.js and the node panel E004 splits out of inspector.js, which is why it waits on both."
+why: "V3.1 Studio specification (docs/specs/oscilla-v3.1-studio.md); .ai/repo/features/studio.md, \"What it does not do\". ADR 0030 decided against groups for 3.1 and 3.2 (critique studio-completion, groups-contradict-adr-0030)."
+scope:
+  - "src/js/studio"
+  - "src/js/ui/studio"
+  - "src/index.html"
+  - "src/partials"
+  - "src/styles"
+  - "tests/unit"
+  - "tests/browser"
+  - "tests/README.md"
+  - ".ai/repo/features"
+  - ".ai/repo/adrs/0030-studio-model-canonical-separate-from-runtime.md"
+  - "dist"
+depends_on:
+  - "E003"
+  - "E004"
+  - "V603"
+acceptance_criteria:
+  - "ADR 0030 carries the dated resolution note on the release and the hash before any group code lands; its sections above and its status stay as written."
+  - "tests/unit/studio-node-groups.test.mjs: grouping, entering, leaving and ungrouping are each one undo step and undo restores the exact previous model; a schema-1 project migrates and loads; the compiled topology and the offline render of a graph are identical before and after grouping; it fails on the merge base."
+  - "A connection that would cross a group boundary with mismatched types or form a feedback cycle is refused with the reason, as outside a group."
+  - "studioHash follows the decision of the ADR 0030 note, and a test pins it."
+  - "The pull request carries a reviewer's verdict and, as a feat change, fail-first (project.review-verdict, project.fail-first; src/js/studio is guarded); a capped file it grows past its cap is split first or its raise is declared in tests/unit/source-size-baseline.json's raises ledger."
+  - "tests/README.md has a row for each new test; V606 registers the claim; this issue does not edit docs/CLAIMS.yaml or the intent."
+validation:
+  - "node --test tests/unit/studio-node-groups.test.mjs"
+  - "npm run release-gate"
+evidence_required:
+  - "verified"
+created_at: 2026-10-18
+updated_at: 2026-10-18

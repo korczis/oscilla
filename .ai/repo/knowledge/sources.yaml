@@ -1,5 +1,11 @@
 # The repository's knowledge sources: which tracked files are knowledge, in which class.
 #
+# Material outside the repository is not a class: a pathspec discovers tracked files only. The
+# owner's ChatGPT project "Oscilla" (12 private conversations, 2026-10-01 to 2026-10-11) is
+# described by the curated record chatgpt-oscilla-project, which every statement citing a
+# conversation id and message time resolves to; its one verbatim excerpt in the repository,
+# docs/specs/oscilla-v1-sections-64-95.md, is discovered by the `spec` class.
+#
 # Discovery goes through the version-control index with the pathspec given here, under the
 # `:(glob)` prefix so that `*` never crosses a directory separator and no two classes claim
 # one file. Operational records (the active task, checkpoints, handovers, sessions,

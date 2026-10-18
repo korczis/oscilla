@@ -1,0 +1,46 @@
+id: V398
+milestone: M047
+serves:
+  - "measurement-extensions#chain-profile"
+title: "Keep a characterized chain as a named chain profile"
+slug: keep-a-characterized-chain-as-a-named-chain-profile
+priority: p2
+profile: implementation
+objective: "Let \"Characterize playback chain\" save its observed response as a named chain profile with its setup (the hashed device id of src/js/calibration/device-id.js, never the device labels, which an exported record would share; sample rate, level, notes), labelled \"observed chain response under this setup\", separate from the digital capability of Device & Limits; a later measurement can be compared against a stored profile; a profile is never applied as a calibration. A saved profile is a new persisted record: add it as a store of oscilla-experiments with a DB_VERSION bump (src/js/experiments/store.js) rather than a second database, and update the README storage table, tests/unit/storage-inventory.test.mjs and, where it says what is kept, ADR 0049's record by a resolution note. It follows V397 because both change the Measure views."
+why: "Conversation 6abec18d, 2026-10-02T03:15:06Z, item 6; today the workflow saves an experiment, not a reusable profile. README says calibration profiles are kept in page memory only and lists the one database it holds (critique measurement-extensions, chain-profile-storage-and-privacy)."
+scope:
+  - "src/js/measurement"
+  - "src/js/experiments"
+  - "src/js/ui/measure.js"
+  - "src/js/ui/measure"
+  - "src/js/ui/measure-experiment.js"
+  - "src/js/ui/experiments.js"
+  - "src/js/ui/exporters.js"
+  - "src/index.html"
+  - "src/partials"
+  - "src/styles"
+  - "tests/unit"
+  - "tests/browser"
+  - "tests/README.md"
+  - "docs/v3"
+  - ".ai/repo/features"
+  - "dist"
+  - "README.md"
+  - ".ai/repo/adrs/0049-raw-capture-retention.md"
+depends_on:
+  - "V397"
+acceptance_criteria:
+  - "tests/unit/chain-profile.test.mjs: a saved profile round-trips through export and import with its setup and hash and holds no device label; it fails on the merge base."
+  - "No path applies a chain profile as a frequency-response or level calibration, and no copy calls it the speaker's response."
+  - "Comparing a measurement with a profile flags differing conditions like experiment comparison does."
+  - "README's storage table and tests/unit/storage-inventory.test.mjs name the new store and the DB_VERSION, and the inventory test passes."
+  - "The figure follows the V391 contract (tests/unit/measurement-figure-contract.test.mjs passes with this figure kind registered)."
+  - "The pull request carries a reviewer's verdict and, as a feat change, fail-first (project.review-verdict, project.fail-first); a capped file it grows past its cap is split first or its raise is declared in tests/unit/source-size-baseline.json's raises ledger."
+  - "tests/README.md has a row for each new test; V399 registers the claim; this issue does not edit docs/CLAIMS.yaml or the intent."
+validation:
+  - "node --test tests/unit/chain-profile.test.mjs tests/unit/storage-inventory.test.mjs"
+  - "npm run release-gate"
+evidence_required:
+  - "verified"
+created_at: 2026-10-18
+updated_at: 2026-10-18

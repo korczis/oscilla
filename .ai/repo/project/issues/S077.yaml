@@ -1,19 +1,23 @@
 id: S077
 milestone: M005
-title: "§77 Specification section 77 (not received)"
-slug: specification-section-77-not-received
-priority: p1
-profile: implementation
-objective: "The pasted specification was truncated inside section 63; this section's text was never delivered. Blocked until the text is supplied."
+title: "§77 Link Audit (Q001 triage: superseded)"
+slug: "v1-spec-77-link-audit"
+priority: p3
+profile: routine
+objective: "Section 77, \"Link Audit\", of the numbered multi-page V1 specification (docs/specs/oscilla-v1-sections-64-95.md, line 396; ChatGPT project conversation 6abec18d, 2026-10-01T20:46:12Z), triaged under Q001 against project.single-file-deliverable, S001-S063 and the ADRs from 0011 on, and closed as superseded."
 scope:
-  - "index.html"
-  - "tests"
+  - "docs/specs/oscilla-v1-sections-64-95.md"
+  - ".ai/repo/project/issues/S077.yaml"
 depends_on:
   - "S000"
+  - "Q001"
+cancelled: true
+current_state: "Superseded, with its intent delivered. The eight pages it lists (playground.html ... 404.html) do not exist: OSCILLA is one page with workspaces (project.single-file-deliverable). Navigation between workspaces is checked by tests/browser/navigation.cjs and tests/unit/navigation.test.mjs, from file:// and from the /oscilla/ sub-path. Triage of 2026-10-18 under Q001, decided by the coordinating Claude session under the owner's delegation of 2026-10-18 ('tak to vse pores'); the owner may override."
 acceptance_criteria:
-  - "The pasted specification was truncated inside section 63; this section's text was never delivered. Blocked until the text is supplied."
+  - "Cancelled by the Q001 triage of 2026-10-18 as superseded, for the reason and with the pointer in current_state; reopening it needs a new decision recorded here that names what the pointer does not cover."
 validation:
-  - "node tests/smoke.cjs"
+  - "majordomus plan validate"
 evidence_required:
   - "verified"
 created_at: 2026-10-01
+updated_at: 2026-10-18

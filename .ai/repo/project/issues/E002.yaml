@@ -1,0 +1,31 @@
+id: E002
+milestone: M046
+serves:
+  - "engineering-integrity#measure-adapter-split"
+title: "Split the MEASURE workspace adapter by responsibility"
+slug: split-the-measure-workspace-adapter-by-responsibility
+priority: p1
+profile: implementation
+objective: "Split src/js/ui/measure.js (115 572 bytes and 2 503 lines on main at 044f98a and at d4bd97f, where #197 merged; measure again with wc -c at the start commit) along its responsibilities (for example: setup and input selection, the run flow, result views, calibration panel, experiment saving, the test seam) into modules under src/js/ui/measure/, each under 40 000 bytes, with no behaviour change and no framework; src/js/ui/measure.js stays the module its importers import, so no other file under src/js/ui changes; lower or remove its cap in tests/unit/source-size-baseline.json in the same change. Since #197 (d4bd97f), scripts/review-verdict.mjs guards src/js/ui/measure.js as a single file (V272 D5); extend that guard to the new modules in the same change, so the code that decides what MEASURE runs and saves stays a guarded path."
+why: "The hotspot named first in every audit (conversation 6ac1beb8, 2026-10-04T02:55:11Z; conversation 6ac3ead5, 2026-10-05T18:32:06Z); M047 adds result views to the same file."
+scope:
+  - "src/js/ui/measure.js"
+  - "src/js/ui/measure"
+  - "scripts/review-verdict.mjs"
+  - "tests/unit"
+  - "tests/browser"
+  - "dist"
+depends_on:
+  - "E001"
+acceptance_criteria:
+  - "src/js/ui/measure.js and each module split from it are under 40 000 bytes, and tests/unit/source-size-budget.test.mjs passes with the cap lowered or removed."
+  - "npm run test:measure, npm run test:visual and npm test pass. What may change: the paths in tests that read the moved code and source-scanning fixtures. What may not: any expected value, snapshot, visual reference or browser-suite assertion."
+  - "npm run build:check passes on the committed build; the dist may differ by module order and identifier names (esbuild scope hoisting), which is not a behaviour change."
+  - "scripts/review-verdict.mjs guards every module split from src/js/ui/measure.js, and the pull request carries a reviewer's verdict (project.review-verdict; the base branch's list judges it)."
+  - "E015 registers the claim; this issue does not edit docs/CLAIMS.yaml or the intent."
+validation:
+  - "npm run release-gate"
+evidence_required:
+  - "verified"
+created_at: 2026-10-18
+updated_at: 2026-10-18

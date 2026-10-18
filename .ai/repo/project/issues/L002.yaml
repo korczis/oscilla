@@ -1,0 +1,42 @@
+id: L002
+milestone: M049
+serves:
+  - "perception-lessons#shepard-tone"
+title: "Learn: the Shepard tone"
+slug: learn-the-shepard-tone
+priority: p3
+profile: implementation
+objective: "It starts only after Q001 is answered. If Q001 adopts sections 89-90, this lesson is the implementation of their 'Shepard tone educational demo'; if not, it is cancelled with Q001 as the reason. A lesson whose demonstration plays octave-spaced partials (8 to 10) under a fixed spectral envelope as a Shepard scale of twelve semitone steps whose partial set after one octave equals the initial one, short enough to play within the default session safety limit (src/js/core/instrument.js; ADR 0005); a continuous glide over several cycles plays only under the session's continuous permission, and the copy names the limit. The additive oscillator is one PeriodicWave with static partials (src/js/audio/additive.js), so the demonstration needs a graph builder inside the engine's track and source accounting (project.audio-engine-discipline) under the guarded src/js/audio. It follows L001 because both add a topic to src/js/data/learn.js and its demonstration path."
+why: "Multi-page V1 specification sections 89-90 (docs/specs/oscilla-v1-sections-64-95.md), adopted or not by Q001; conversation 6abec18d, 2026-10-01T21:08:07Z (V2 roadmap item 9, a ChatGPT proposal). Default safety limit and Learn form (critique perception-lessons, shepard-vs-safety-limit, demonstrations-exceed-the-learn-form)."
+scope:
+  - "src/js/data"
+  - "src/js/labs"
+  - "src/js/ui"
+  - "src/index.html"
+  - "src/partials"
+  - "src/styles"
+  - "src/js/audio"
+  - "src/js/core"
+  - "tests/unit/learn-shepard-tone.test.mjs"
+  - "tests/browser"
+  - "tests/README.md"
+  - "tests/unit/source-size-baseline.json"
+  - "dist"
+depends_on:
+  - "Q001"
+  - "L001"
+acceptance_criteria:
+  - "tests/unit/learn-shepard-tone.test.mjs: the schedule's partial set after one octave of steps equals the initial one within a stated tolerance, and the stepped scale ends within the default session limit; it fails on the merge base."
+  - "Without the continuous permission no glide outlasts the session limit; the copy names the limit."
+  - "tests/unit/freeze.test.mjs (the V1 golden vectors, ADR 0014) passes unchanged; the pull request carries a reviewer's verdict (src/js/audio is guarded)."
+  - "The copy says what listeners commonly report under controlled listening, with a citation, never what this listener hears; it passes tests/unit/no-fake-science.test.mjs, and the pull request states that whether a sentence still implies a perceptual effect was judged by the reviewer, since the scan has no perceptual-claim phrases."
+  - "A browser check plays the demonstration through the AudioEngine with no console error, within the session safety limit, from file:// and the sub-path."
+  - "A capped file it grows past its cap is split first or its raise is declared in tests/unit/source-size-baseline.json's raises ledger."
+  - "tests/README.md has a row for the new test; L006 registers the claim; this issue does not edit docs/CLAIMS.yaml or the intent."
+validation:
+  - "node --test tests/unit/learn-shepard-tone.test.mjs tests/unit/freeze.test.mjs"
+  - "npm run release-gate"
+evidence_required:
+  - "verified"
+created_at: 2026-10-18
+updated_at: 2026-10-18

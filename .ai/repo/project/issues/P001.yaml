@@ -1,0 +1,22 @@
+id: P001
+milestone: M050
+serves:
+  - "first-run-experience#layout-analysed"
+title: "Analyse the first screen and propose layouts for the owner"
+slug: analyse-the-first-screen-and-propose-layouts-for-the-owner
+priority: p1
+profile: deep-work
+objective: "Do what the owner asked first (conversation 6ac1beb8, 2026-10-05T19:17:26Z): measure the current first screen at 1536x1024 and 390x844 (the share of the viewport each part takes, what a visitor can do without scrolling), read the changes, ADRs and commits since V3, and write two or three layout options for the owner, each traced to the features and decisions it serves, to what it costs, and to how it serves the owner's steering that acoustic measurement is the wedge (ADR 0051; knowledge record product-landscape-and-the-pigments-path); each option shows the first screen in the words of the positioning sentence Q002 recorded. Build nothing."
+why: "Q004 waits on this analysis; the owner asked for it before any proposal."
+scope:
+  - "docs/first-screen-options.md"
+  - ".ai/repo/project/issues/P001.yaml"
+acceptance_criteria:
+  - "The analysis and options are docs/first-screen-options.md, whose measurements name the command or screenshot that produced them, and each option states how it serves ADR 0051's wedge."
+  - "No file under src/ changes."
+validation:
+  - "test -s docs/first-screen-options.md"
+evidence_required:
+  - "verified"
+created_at: 2026-10-18
+updated_at: 2026-10-18

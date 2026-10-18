@@ -1,0 +1,26 @@
+id: E012
+milestone: M046
+serves:
+  - "engineering-integrity#p5-cost-measured"
+title: "Spike: what replacing p5 with a Canvas2D adapter would cost and save"
+slug: spike-what-replacing-p5-with-a-canvas2d-adapter-would-cost-a
+priority: p2
+profile: implementation
+objective: "Inventory the p5 calls the conceptual views use, and measure what a Canvas2D adapter for them would save and cost; record the numbers as a resolution note on ADR 0013 for the owner, under the heading '### <date>: what replacing p5 would cost'. Nothing is adopted. The adapter and its measuring harness live only on the branch spike/p5-canvas2d, in its worktree (majordomus worktree create spike/p5-canvas2d), run as a task of its own started there with --scope src/js/visualization scripts tests/visual tests/browser dist; that branch is never opened for merge and is deleted after the note lands. This issue's own task, on a branch from main, changes only the ADR."
+why: "p5 is about a third of the gzip size and the 1 MB budget was a stopgap (scripts/build-config.mjs); conversation 6ac3ead5, section 7, put the threshold for adoption at about 180-230 KB gzip saved."
+scope:
+  - ".ai/repo/adrs/0013-p5-unmodified-separable-block.md"
+non_scope:
+  - "Any adapter, harness or measurement script on main: they stay on spike/p5-canvas2d"
+acceptance_criteria:
+  - "ADR 0013 carries a dated resolution note with the inventory, the gzip bytes saved (npm run build on spike/p5-canvas2d, the gzip size scripts/build-config.mjs reports), the per-view visual difference (npm run test:visual on that branch) and the frame-time change (npm run test:perf on that branch), each with its command and the spike commit it ran at."
+  - "The note is appended under the ADR's resolution notes and leaves the sections above it and the status as written (.ai/repo/adrs/README.md)."
+  - "main carries no adapter code from the spike: git grep -n -i canvas2d -- src on main finds nothing the spike added."
+validation:
+  - "grep -q 'what replacing p5 would cost' .ai/repo/adrs/0013-p5-unmodified-separable-block.md"
+  - "majordomus adr check"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-10-18
+updated_at: 2026-10-18

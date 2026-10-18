@@ -1,0 +1,43 @@
+id: P003
+milestone: M051
+serves:
+  - "product-direction#positioning-consistent"
+title: "Say the chosen positioning sentence wherever OSCILLA describes itself"
+slug: say-the-chosen-positioning-sentence-in-readme-about-and-the
+priority: p2
+profile: implementation
+objective: "Put the sentence Q002 records verbatim into every long self-description: README.md's opening line, the About lede in src/index.html, the hand-written meta description in src/index.html, the DESCRIPTION constant of scripts/social-assets.mjs (from which the og:description and twitter:description of the generated social block come; edit the block until npm run social -- --check passes, so site/ is untouched) and package.json's description. Keep the name 'OSCILLA · Interactive Sound & Frequency Lab' in the title, og:title, twitter:title and the brand link's aria-label, and the About tagline 'See sound. Shape frequency.'. After the sentence, README and About lead with concrete jobs the product supports today (for example: measure the response of a speaker and room chain, compare two setups, save an experiment and run it again, patch a signal graph in the Studio), never 'measure a speaker' as such (an observed response is the chain's). Export DESCRIPTION, or a getter for it, and add tests/unit/positioning-consistency.test.mjs, which reads the shell markup through E005's shared reader of the assembled shell once that exists (src/index.html until then, wherever the About lede and the meta description live, in src/index.html or src/partials), and reads README, the About lede, the meta description, DESCRIPTION, the og:description and twitter:description of the dist head and package.json and checks that each contains the sentence and stays within 200 characters, that each title surface carries the name within 70 characters, and that every surface it neither checks nor exempts fails it. Exempt with the reason in the test: site/og-image.png (a screenshot that carries no copy), CLAUDE.md and AGENTS.md (operating contracts for workers, not self-descriptions to users), and the GitHub repository description, which lies outside the tree: the committer sets it with gh repo edit korczis/oscilla --description followed by the sentence, and the evidence records that."
+why: "The critique counted at least nine self-descriptions where the plan named four, and an exact-equality test breaks across surfaces of different length (critique product-direction, four-places-are-not-everywhere); the OG text is generated (audit idd-dispatch F4)."
+scope:
+  - "README.md"
+  - "src/index.html"
+  - "src/partials"
+  - "scripts/social-assets.mjs"
+  - "package.json"
+  - "tests/unit/positioning-consistency.test.mjs"
+  - "tests/unit/about.test.mjs"
+  - "tests/unit/social-meta.test.mjs"
+  - "tests/unit/source-size-baseline.json"
+  - "tests/README.md"
+  - "dist"
+  - "docs/CLAIMS.yaml"
+  - ".ai/repo/project/intents/product-direction.yaml"
+non_scope:
+  - "site/: the block is edited to match socialBlock(), so the icon and the preview image stay as they are"
+depends_on:
+  - "Q002"
+acceptance_criteria:
+  - "tests/unit/positioning-consistency.test.mjs passes, fails on the merge base, and fails when any one checked surface changes, when the sentence exceeds 200 characters, and when a title surface exceeds 70 characters."
+  - "npm run social -- --check passes; tests/unit/about.test.mjs, tests/unit/social-meta.test.mjs and tests/unit/no-fake-science.test.mjs pass."
+  - "The evidence records the gh repo edit of the repository description, or that the owner declined it."
+  - "docs/CLAIMS.yaml gains the guaranteed claim positioning-sentence-consistent naming the source and the test that prove it, and product-direction#positioning-consistent names that claim as its evidence; because this changes the intent this issue serves, the plan and evidence pins of majordomus intent binding --issue P003 change during the task and the worker re-reads them before finish."
+  - "tests/README.md has a row for the new test."
+  - "A capped file it grows past its cap is split first or its raise is declared in tests/unit/source-size-baseline.json's raises ledger."
+validation:
+  - "npm run social -- --check"
+  - "npm run build"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-10-18
+updated_at: 2026-10-18

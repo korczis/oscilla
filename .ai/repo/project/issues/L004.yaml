@@ -1,0 +1,39 @@
+id: L004
+milestone: M049
+title: "Learn: critical bands"
+slug: learn-critical-bands
+priority: p3
+profile: implementation
+cancelled: true
+current_state: "Cancelled on 2026-10-18 under this intent's rule that masking and critical bands are built only if the answer to Q001 names them: Q001's decision of 2026-10-18 (option (a), adopt and triage; recorded in Q001's current_state, evidence pending on main) names L001, L002 and L005 as the implementation of sections 89-90 and does not name critical bands, which rests only on a ChatGPT proposal (V2 roadmap item 9) that no owner adopted; ADR 0051's steering (fewer new nouns, measurement is the wedge) argues against adding it unasked. Applied by the planning session working under the coordinating session's delegation of 2026-10-18 ('tak to vse pores'); the owner may override by removing cancelled and asking for it."
+objective: "It starts only after Q001 is answered. Critical bands are not in sections 89-90: this issue is built only if the answer to Q001 names them, and is otherwise cancelled with Q001 as the reason. A lesson whose demonstration plays two tones whose separation steps across the equivalent rectangular bandwidth of the centre frequency, by Glasberg and Moore (1990): ERB = 24.7 (4.37 f / 1000 + 1) Hz (about 133 Hz at 1 kHz; Zwicker's critical bandwidth, about 160 Hz there, is named as the other model). The copy follows the literature rather than a single boundary: beats are commonly reported below about 15 Hz of separation, roughness peaks near a quarter of the critical bandwidth (Plomp and Levelt 1965), and two tones are commonly reported as separate somewhat below a full bandwidth. It follows L003 because both add a topic to src/js/data/learn.js and use its two-source demonstration path."
+why: "Conversation 6abec18d, 2026-10-01T21:08:07Z (V2 roadmap item 9, a ChatGPT proposal); sections 89-90 do not name it, so only the answer to Q001 can adopt it. The model must be named and the copy kept to what the source supports (critique perception-lessons, critical-band-formula-and-claim)."
+scope:
+  - "src/js/data"
+  - "src/js/labs"
+  - "src/js/ui"
+  - "src/index.html"
+  - "src/partials"
+  - "src/styles"
+  - "tests/unit/learn-critical-bands.test.mjs"
+  - "tests/browser"
+  - "tests/README.md"
+  - "tests/unit/source-size-baseline.json"
+  - "dist"
+depends_on:
+  - "Q001"
+  - "L003"
+acceptance_criteria:
+  - "tests/unit/learn-critical-bands.test.mjs: the bandwidth shown equals the ERB formula at three centre frequencies and the schedule's separations step across it; it fails on the merge base."
+  - "The copy cites Glasberg and Moore (1990) and Plomp and Levelt (1965) and draws no single boundary the sources do not draw."
+  - "The copy says what listeners commonly report under controlled listening, with a citation, never what this listener hears; it passes tests/unit/no-fake-science.test.mjs, and the pull request states that whether a sentence still implies a perceptual effect was judged by the reviewer, since the scan has no perceptual-claim phrases."
+  - "A browser check plays the demonstration through the AudioEngine with no console error, within the session safety limit, from file:// and the sub-path."
+  - "A capped file it grows past its cap is split first or its raise is declared in tests/unit/source-size-baseline.json's raises ledger."
+  - "tests/README.md has a row for the new test; L006 registers the claim; this issue does not edit docs/CLAIMS.yaml or the intent."
+validation:
+  - "node --test tests/unit/learn-critical-bands.test.mjs"
+  - "npm run release-gate"
+evidence_required:
+  - "verified"
+created_at: 2026-10-18
+updated_at: 2026-10-18

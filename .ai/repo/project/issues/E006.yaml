@@ -1,0 +1,27 @@
+id: E006
+milestone: M046
+serves:
+  - "engineering-integrity#acyclic-imports"
+title: "Break the experiments schema/definition import cycle and keep the graph acyclic"
+slug: break-the-experiments-schema-definition-import-cycle-and-kee
+priority: p2
+profile: implementation
+objective: "src/js/experiments/schema.js imports derivedRef and recipeMismatches from definition.js (schema.js line 116), and definition.js imports its checkers from schema.js (definition.js lines 48-51). recipeMismatches could move to a leaf module, but derivedRef builds an execution with definition.js's checkExecution, which uses schema.js's checkers, so breaking the cycle needs a decision on where the execution and recipe core lives (a third module both import, or createExperiment taking the derived reference from its caller). Decide it, break the cycle with no behaviour change, and add tests/unit/src-imports-acyclic.test.mjs, which parses the static imports of src/js and fails on any cycle."
+why: "The V2 import graph had no cycle (conversation 6abf2a8d, 2026-10-02T04:06:25Z, sections 2 and 17); \"no circular dependencies\" is in the project instructions (section 19) and in no rule. The synthesis of 2026-10-18 left the test out because the fix needs this design decision."
+scope:
+  - "src/js/experiments"
+  - "tests/unit/src-imports-acyclic.test.mjs"
+  - "tests/README.md"
+  - "dist"
+acceptance_criteria:
+  - "tests/unit/src-imports-acyclic.test.mjs fails on the merge base (the schema/definition cycle) and on a fixture with a two-module and a three-module cycle, and passes on the head."
+  - "npm test, npm run test:measure and the experiment round-trip and hash tests pass with no change to any expected hash or value."
+  - "The pull request carries a review verdict (project.review-verdict: src/js/experiments is guarded)."
+  - "tests/README.md has a row for the new test (one appended row)."
+  - "E015 registers the claim; this issue does not edit docs/CLAIMS.yaml or the intent."
+validation:
+  - "npm run release-gate"
+evidence_required:
+  - "verified"
+created_at: 2026-10-18
+updated_at: 2026-10-18

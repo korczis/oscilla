@@ -1,0 +1,30 @@
+id: E003
+milestone: M046
+serves:
+  - "engineering-integrity#studio-workspace-split"
+title: "Split the Studio workspace orchestrator by responsibility"
+slug: split-the-studio-workspace-orchestrator-by-responsibility
+priority: p1
+profile: implementation
+objective: "Split src/js/ui/studio/workspace.js (75 076 bytes and 1 730 lines on main at 044f98a; 78 124 bytes and 1 801 lines at d4bd97f, where #197 merged, identical to its head 55ae40d; measure again with wc -c at the start commit, which E001's dependency on V431 places after #197) by lifecycle and capability into modules under src/js/ui/studio/workspace/, each under 40 000 bytes, with workspace.js staying the module its importers import so that no other file under src/js/ui/studio changes: document and session (which V604's draft recovery extends), runtime and transport, graph (which V601's group commands extend), timeline, measurement bridge, file I/O and navigation (which V605's open-from-Signal-Path extends); with no behaviour change, and the STUDIO workspace stays the only caller of createStudioStore (tests/unit/v4-one-studio-store.test.mjs). It follows E002 because both change tests under tests/unit and tests/browser and rebuild dist."
+why: "Conversation 6ac3ead5, 2026-10-05T18:32:06Z, section 6: every new Studio capability lands in the same coordinator. A split before #197 landed (d4bd97f) would have turned every V272 fix into a cross-file conflict and invalidate its review verdict (critique engineering-integrity, studio-splits-collide-with-v272)."
+scope:
+  - "src/js/ui/studio/workspace.js"
+  - "src/js/ui/studio/workspace"
+  - "tests/unit"
+  - "tests/browser"
+  - "dist"
+depends_on:
+  - "E001"
+  - "E002"
+acceptance_criteria:
+  - "workspace.js and each module split from it are under 40 000 bytes, and tests/unit/source-size-budget.test.mjs passes with the cap lowered or removed."
+  - "npm run test:studio, npm run test:visual and npm test pass, including tests/unit/v4-one-studio-store.test.mjs. What may change: the paths in tests that read the moved code and source-scanning fixtures. What may not: any expected value, snapshot, visual reference or browser-suite assertion."
+  - "The pull request carries a reviewer's verdict where it touches a guarded path (project.review-verdict)."
+  - "E015 registers the claim; this issue does not edit docs/CLAIMS.yaml or the intent."
+validation:
+  - "npm run release-gate"
+evidence_required:
+  - "verified"
+created_at: 2026-10-18
+updated_at: 2026-10-18

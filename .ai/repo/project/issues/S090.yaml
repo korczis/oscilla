@@ -1,19 +1,23 @@
 id: S090
 milestone: M005
-title: "§90 Specification section 90 (not received)"
-slug: specification-section-90-not-received
-priority: p1
-profile: implementation
-objective: "The pasted specification was truncated inside section 63; this section's text was never delivered. Blocked until the text is supplied."
+title: "§90 Especially Valuable Future Experiments (Q001 triage: already delivered)"
+slug: "v1-spec-90-especially-valuable-future-experiments"
+priority: p3
+profile: routine
+objective: "Section 90, \"Especially Valuable Future Experiments\", of the numbered multi-page V1 specification (docs/specs/oscilla-v1-sections-64-95.md, line 705; ChatGPT project conversation 6abec18d, 2026-10-01T20:46:12Z), triaged under Q001 against project.single-file-deliverable, S001-S063 and the ADRs from 0011 on, and closed as already delivered."
 scope:
-  - "index.html"
-  - "tests"
+  - "docs/specs/oscilla-v1-sections-64-95.md"
+  - ".ai/repo/project/issues/S090.yaml"
 depends_on:
   - "S000"
+  - "Q001"
+cancelled: true
+current_state: "Already delivered or carried elsewhere. The section asks for an architecture that admits these later, and they were added: the spectrogram (src/js/analysis/spectrogram.js), Lissajous and phase (src/js/labs/phase-stereo.js), additive synthesis (src/js/labs/additive.js), the filter lab (src/js/labs/filter-lab.js) and the ADSR envelope lab (src/js/labs/envelope.js). The missing fundamental and the Shepard tone are L001 and L002 (M049); the phase-cancellation demonstration is part of S089. Triage of 2026-10-18 under Q001, decided by the coordinating Claude session under the owner's delegation of 2026-10-18 ('tak to vse pores'); the owner may override."
 acceptance_criteria:
-  - "The pasted specification was truncated inside section 63; this section's text was never delivered. Blocked until the text is supplied."
+  - "Cancelled by the Q001 triage of 2026-10-18 as already delivered, for the reason and with the pointer in current_state; reopening it needs a new decision recorded here that names what the pointer does not cover."
 validation:
-  - "node tests/smoke.cjs"
+  - "majordomus plan validate"
 evidence_required:
   - "verified"
 created_at: 2026-10-01
+updated_at: 2026-10-18

@@ -1,19 +1,24 @@
 id: S074
 milestone: M005
-title: "§74 Specification section 74 (not received)"
-slug: specification-section-74-not-received
+title: "§74 Quality Bar (Q001 triage: work)"
+slug: "v1-spec-74-quality-bar"
 priority: p1
-profile: implementation
-objective: "The pasted specification was truncated inside section 63; this section's text was never delivered. Blocked until the text is supplied."
+profile: routine
+objective: "Section 74, \"Quality Bar\", of the numbered multi-page V1 specification (docs/specs/oscilla-v1-sections-64-95.md, line 308; ChatGPT project conversation 6abec18d, 2026-10-01T20:46:12Z), adopted under Q001 and triaged against project.single-file-deliverable, S001-S063 and the ADRs from 0011 on. This issue is the part of it that no record or check shows delivered; the rest is named in current_state."
 scope:
-  - "index.html"
-  - "tests"
+  - ".ai/repo/project/issues/S074.yaml"
+  - ".ai/repo/project/issues"
 depends_on:
   - "S000"
+  - "Q001"
+  - "S071"
+current_state: "Kept as work, triaged. Parts are delivered as standing rules: project.no-fake-science (no fake metrics, every claim derived), project.visual-identity-lock (no generic visual identity), S046-S050 and S063 for V1. Whether every visible control has an effect and every graph shows real state is not decided by any check or record, so a review of the current build against the section's list is this issue. Triage of 2026-10-18 under Q001, decided by the coordinating Claude session under the owner's delegation of 2026-10-18 ('tak to vse pores'); the owner may override."
 acceptance_criteria:
-  - "The pasted specification was truncated inside section 63; this section's text was never delivered. Blocked until the text is supplied."
+  - "A reviewer who is not the builder reads the current build against the section's eleven symptoms and its three rules (every control does something, every graph shows real state, every metric has a derivation) and records the result on this issue as evidence."
+  - "Each finding is fixed in a named pull request or opened as its own issue named in that evidence; none is left in prose only."
 validation:
-  - "node tests/smoke.cjs"
+  - "manual"
 evidence_required:
   - "verified"
 created_at: 2026-10-01
+updated_at: 2026-10-18

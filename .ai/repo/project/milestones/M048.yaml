@@ -1,0 +1,20 @@
+id: M048
+title: "Studio completion: groups, minimap, pinch zoom, draft recovery, voice in Studio"
+slug: studio-completion-groups-minimap-pinch-zoom-draft-recovery-v
+order: 48
+priority: p2
+problem: "The Studio feature record lists as not built a minimap, node groups, pinch zoom on the timeline, autosave and crash recovery, and opening the Playground voice in the Studio (.ai/repo/features/studio.md, \"What it does not do\"); the V3.1 specification marks each of them optional."
+outcome: "Each of the five is built as a projection of the StudioModel and proven, and V606 points the intent's criteria at registered claims."
+acceptance_criteria:
+  - "Every issue of M048 is done with its evidence; npm run release-gate passes at the last one."
+validation:
+  - "npm run release-gate"
+evidence_required:
+  - "milestone_verified"
+risks:
+  - "Every M048 issue edits Studio files the V272 final review #197 (plan issue V431) changes: none starts before V431, directly (V602, V603) or through E003 and E004 (V601, V604, V605)."
+  - "Editing ui/studio/workspace.js and inspector.js before they are split makes both the split and the feature harder to review: the issues that need a workspace or inspector responsibility wait on E003 or E004 and name the responsibility; V602 and V603 live in the graph and timeline editors and do not wait on them."
+  - "The five share Studio source paths, so they are chained by scope, not by design: V603 follows V602 (both change src/js/ui/studio/graph-geometry.js), V601 follows V603 (its src/js/ui/studio contains the graph and timeline editors), V604 follows V601 and V605 follows V604 (all three declare src/js/studio, src/js/ui/studio, src/index.html and tests/unit). Narrowing V601, V604 and V605 to the responsibility modules E003 creates would let them run in parallel; that is a plan change once E003 has named those modules."
+  - "Groups reopen ADR 0030's decision that neither 3.1.0 nor 3.2.0 takes them: V601 records the release and the hash decision on ADR 0030 before code."
+created_at: 2026-10-18
+updated_at: 2026-10-18

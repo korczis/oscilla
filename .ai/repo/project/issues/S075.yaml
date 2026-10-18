@@ -1,19 +1,23 @@
 id: S075
 milestone: M005
-title: "§75 Specification section 75 (not received)"
-slug: specification-section-75-not-received
-priority: p1
-profile: implementation
-objective: "The pasted specification was truncated inside section 63; this section's text was never delivered. Blocked until the text is supplied."
+title: "§75 Implementation Strategy (Q001 triage: superseded)"
+slug: "v1-spec-75-implementation-strategy"
+priority: p3
+profile: routine
+objective: "Section 75, \"Implementation Strategy\", of the numbered multi-page V1 specification (docs/specs/oscilla-v1-sections-64-95.md, line 334; ChatGPT project conversation 6abec18d, 2026-10-01T20:46:12Z), triaged under Q001 against project.single-file-deliverable, S001-S063 and the ADRs from 0011 on, and closed as superseded."
 scope:
-  - "index.html"
-  - "tests"
+  - "docs/specs/oscilla-v1-sections-64-95.md"
+  - ".ai/repo/project/issues/S075.yaml"
 depends_on:
   - "S000"
+  - "Q001"
+cancelled: true
+current_state: "Superseded. It instructs one agent how to build the multi-page site in one pass (inspect, plan the pages in order, then implement). The repository exists, and work on it follows .ai/repo/workflows/task-lifecycle.md and the plan; the page order is superseded by one page with workspaces (project.single-file-deliverable). Triage of 2026-10-18 under Q001, decided by the coordinating Claude session under the owner's delegation of 2026-10-18 ('tak to vse pores'); the owner may override."
 acceptance_criteria:
-  - "The pasted specification was truncated inside section 63; this section's text was never delivered. Blocked until the text is supplied."
+  - "Cancelled by the Q001 triage of 2026-10-18 as superseded, for the reason and with the pointer in current_state; reopening it needs a new decision recorded here that names what the pointer does not cover."
 validation:
-  - "node tests/smoke.cjs"
+  - "majordomus plan validate"
 evidence_required:
   - "verified"
 created_at: 2026-10-01
+updated_at: 2026-10-18

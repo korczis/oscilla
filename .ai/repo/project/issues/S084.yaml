@@ -1,19 +1,25 @@
 id: S084
 milestone: M005
-title: "§84 Specification section 84 (not received)"
-slug: specification-section-84-not-received
+title: "§84 Responsive Audit (Q001 triage: work)"
+slug: "v1-spec-84-responsive-audit"
 priority: p1
 profile: implementation
-objective: "The pasted specification was truncated inside section 63; this section's text was never delivered. Blocked until the text is supplied."
+objective: "Section 84, \"Responsive Audit\", of the numbered multi-page V1 specification (docs/specs/oscilla-v1-sections-64-95.md, line 571; ChatGPT project conversation 6abec18d, 2026-10-01T20:46:12Z), adopted under Q001 and triaged against project.single-file-deliverable, S001-S063 and the ADRs from 0011 on. This issue is the part of it that no record or check shows delivered; the rest is named in current_state."
 scope:
-  - "index.html"
-  - "tests"
+  - "tests/browser/layout.cjs"
+  - "src/styles"
 depends_on:
   - "S000"
+  - "Q001"
+  - "S083"
+current_state: "Kept as work, triaged. S048 (320-1440 px without horizontal scroll) is done for V1. tests/browser/layout.cjs checks widths 320, 375, 768, 1024, 1280 and 1536 px (WIDTHS) and touch at 320, 375 and 768 px; the section's 390, 430 and 1440 px are not checked. Triage of 2026-10-18 under Q001, decided by the coordinating Claude session under the owner's delegation of 2026-10-18 ('tak to vse pores'); the owner may override."
 acceptance_criteria:
-  - "The pasted specification was truncated inside section 63; this section's text was never delivered. Blocked until the text is supplied."
+  - "WIDTHS in tests/browser/layout.cjs include 390, 430 and 1440 px besides 320, 375, 768, 1024 and 1280 px, with the same overflow, label, reachability, canvas and slider checks as the existing widths."
+  - "node tests/browser/layout.cjs passes in Chromium, Firefox and WebKit; any new entry in its known-defects list names the issue that fixes it."
 validation:
-  - "node tests/smoke.cjs"
+  - "node tests/browser/layout.cjs"
+  - "npm run test:browser"
 evidence_required:
   - "verified"
 created_at: 2026-10-01
+updated_at: 2026-10-18

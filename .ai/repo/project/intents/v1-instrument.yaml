@@ -68,7 +68,7 @@ governance:
   - "adr:adr-0010"
   - "adr:adr-0014"
 non_goals:
-  - "Specification sections 64-95 (milestone M005): their text was never received (S000), so no intent states a requirement for them; M005 stays unnamed until the text exists"
+  - "Specification sections 64-95 (milestone M005): the single-file prompt this intent implements stops mid-sentence inside section 63 in the export, and the text of sections 64-95 that exists is the numbered multi-page variant (docs/specs/oscilla-v1-sections-64-95.md). Q001 adopted it on 2026-10-18 as M005's source and triaged it section by section; this intent states no requirement for it, and M005 stays unnamed here because no issue of it carries a serves entry for these criteria; naming it fails issue_without_purpose for all of its live issues (see M005's risks)"
   - "The V2 laboratory, the V3 measurement workbench and Studio: each is its own intent"
   - "Changing V1 behaviour: it is frozen by golden vectors (ADR 0014), and a change to it is a V2 or later decision"
 created_at: 2026-10-18
