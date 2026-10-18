@@ -19,3 +19,24 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-18
+started_at: 2026-10-18T13:20:32Z
+started_event: sha256:fe616700769e4830972c50f96bbb62e91a8bdb3668290ac5cdf097df35fc2732
+updated_at: 2026-10-18T13:35:38Z
+verified_at: 2026-10-18T13:35:28Z
+verified_event: sha256:a440b782a697111923d8d1d47fdc0547be84ed729ce03deaadb1d4b6ba6ad3df
+completed_at: 2026-10-18T13:35:38Z
+completed_event: sha256:a5caa8593e278c86af0b30eeab5304670d1f059b1ac9bbd1afee1acda24d1144
+evidence:
+  - covers: verified
+    type: test
+    command: "majordomus adr check"
+    result: "examined 59 decision(s); every identity unique, every status known, every reference resolves; ADR 0058 status still proposed"
+    commit: 9ef15857861a6c1bb864f496de950b0d2af641ef
+    recorded_at: 2026-10-18T13:35:17Z
+  - covers: verified
+    type: artifact
+    command: "git diff 50f6d6c 9ef1585 -- .ai/repo/adrs/0058-midi-is-an-optional-local-input-layer-over-the-audio-engine.md"
+    result: "126 lines added, 0 removed: one dated resolution note (seam, ADR 0052 kind, measured-vs-stubbed rule, request rule, per-origin note, 13-state table with cause, exact copy and gate-build column)"
+    artifact: "9ef1585"
+    commit: 9ef15857861a6c1bb864f496de950b0d2af641ef
+    recorded_at: 2026-10-18T13:35:23Z
