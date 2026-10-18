@@ -19,3 +19,44 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-18
+started_at: 2026-10-18T13:20:32Z
+started_event: sha256:fe616700769e4830972c50f96bbb62e91a8bdb3668290ac5cdf097df35fc2732
+updated_at: 2026-10-18T15:16:09Z
+verified_at: 2026-10-18T13:35:28Z
+verified_event: sha256:a440b782a697111923d8d1d47fdc0547be84ed729ce03deaadb1d4b6ba6ad3df
+completed_at: 2026-10-18T13:35:38Z
+completed_event: sha256:a5caa8593e278c86af0b30eeab5304670d1f059b1ac9bbd1afee1acda24d1144
+evidence:
+  - covers: verified
+    type: test
+    command: "majordomus adr check"
+    result: "examined 59 decision(s); every identity unique, every status known, every reference resolves; ADR 0058 status still proposed"
+    commit: 9ef15857861a6c1bb864f496de950b0d2af641ef
+    recorded_at: 2026-10-18T13:35:17Z
+  - covers: verified
+    type: artifact
+    command: "git diff 50f6d6c 9ef1585 -- .ai/repo/adrs/0058-midi-is-an-optional-local-input-layer-over-the-audio-engine.md"
+    result: "126 lines added, 0 removed: one dated resolution note (seam, ADR 0052 kind, measured-vs-stubbed rule, request rule, per-origin note, 13-state table with cause, exact copy and gate-build column)"
+    artifact: "9ef1585"
+    commit: 9ef15857861a6c1bb864f496de950b0d2af641ef
+    recorded_at: 2026-10-18T13:35:23Z
+  - covers: verified
+    type: artifact
+    command: "git diff --numstat 9ef1585 9541cc8 -- .ai/repo/adrs/0058-midi-is-an-optional-local-input-layer-over-the-audio-engine.md"
+    result: "104 lines added, 49 removed, all inside the V500 note: the review of #211 (F1-F6) corrected in place before merge; every cause names its phase (context, after Connect MIDI, before Connect MIDI) so all 13 states are reachable; Firefox 155.0 re-measured to settlement (SecurityError after 3.0-12.9 s on 127.0.0.1 with or without Permissions-Policy midi=(), 32 runs); WebKit accepts a midi grant"
+    artifact: "9541cc8"
+    commit: 9541cc86b09cb549285cb2dc86f667c286751bd1
+    recorded_at: 2026-10-18T15:16:05Z
+  - covers: verified
+    type: artifact
+    command: "git diff --numstat 50f6d6c 9541cc8 -- .ai/repo/adrs/0058-midi-is-an-optional-local-input-layer-over-the-audio-engine.md"
+    result: "181 lines added, 0 removed: the sections above the resolution notes are unchanged; status still proposed"
+    artifact: "9541cc8"
+    commit: 9541cc86b09cb549285cb2dc86f667c286751bd1
+    recorded_at: 2026-10-18T15:16:07Z
+  - covers: verified
+    type: test
+    command: "majordomus adr check"
+    result: "examined 59 decision(s); every identity unique, every status known, every reference resolves; ADR 0058 status still proposed (at 9541cc8)"
+    commit: 9541cc86b09cb549285cb2dc86f667c286751bd1
+    recorded_at: 2026-10-18T15:16:09Z
