@@ -32,7 +32,7 @@ import {
   bannerComment, computeSourceDigest, readPackage, readVersion, renderRegion, sourceRecord,
 } from './release-metadata.mjs';
 import {
-  BUILD_TIME_ASSETS, CSS_ENTRY, DIST_HTML, JS_ENTRY, SRC_HTML, TARGETS, VENDOR_SCRIPTS,
+  BUILD_TIME_ASSETS, CSS_ENTRY, DIST_HTML, JS_ENTRY, P5_ADAPTER, SRC_HTML, TARGETS, VENDOR_SCRIPTS,
 } from './build-config.mjs';
 
 const require = createRequire(import.meta.url);
@@ -171,6 +171,8 @@ async function buildJs() {
         __OSCILLA_VERSION__: JSON.stringify(VERSION),
         __OSCILLA_SOURCE_DIGEST__: JSON.stringify(SOURCE_DIGEST),
       },
+      // SPIKE (E012): the p5 import is the Canvas2D adapter.
+      alias: { p5: `./${P5_ADAPTER}` },
       plugins: [rawPlugin, vendorGlobalsPlugin, analysisPlugin],
     }) });
   const warnings = result.warnings.filter((w) => /import\.meta/.test(w.text));
