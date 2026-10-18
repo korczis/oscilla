@@ -935,6 +935,7 @@ export function createStudioUi(svc = {}) {
       case 'paste': consume(); ed.paste(); break;
       case 'duplicate': consume(); ed.duplicateSelection(); break;
       case 'select-all': consume(); ed.selectAll(); break;
+      case 'select-toggle': consume(); ed.toggleFocusedNode(); break;
       case 'quick-add': consume(); cmp.studioAddNode(); break;
       case 'connect': {
         consume();

@@ -18,6 +18,8 @@ export const STUDIO_SHORTCUTS = Object.freeze([
   { id: 'undo', keys: 'Ctrl/⌘ Z', text: 'Undo' },
   { id: 'redo', keys: 'Ctrl/⌘ Shift Z, Ctrl Y', text: 'Redo' },
   { id: 'select-all', keys: 'Ctrl/⌘ A', text: 'Select every node' },
+  { id: 'select-toggle', keys: 'T',
+    text: 'Add the focused node to the selection, or take it out' },
   { id: 'quick-add', keys: 'N', text: 'Add a node (searchable picker)' },
   { id: 'find', keys: '/', text: 'Find a node by name or type and frame it' },
   { id: 'connect', keys: 'C', text: 'Connect the selected node (list of compatible inputs)' },
@@ -71,6 +73,7 @@ export function resolveStudioKey(e) {
   if (e.shiftKey && lower !== '+') return null;
   switch (lower) {
     case 'n': return { id: 'quick-add' };
+    case 't': return { id: 'select-toggle' };
     case 'c': return { id: 'connect' };
     case 'f': return { id: 'frame-selection' };
     case 'a': return { id: 'frame-all' };
@@ -80,4 +83,29 @@ export function resolveStudioKey(e) {
     case '_': return { id: 'zoom-out' };
     default: return null;
   }
+}
+
+// Keyboard selection of a subset of nodes (V272 C5, WCAG 2.1.1): Tab moves focus and focus
+// selects the node, T adds the focused node to the selection the move replaced (or takes a
+// selected one out), and focus landing on a member of a multi-selection keeps it.
+
+/**
+ * The selection after keyboard focus lands on node `id`, given the selected node ids: [id],
+ * or null when it stays (`id` alone already, or a member of a multi-selection).
+ */
+export function focusSelection(current, id) {
+  return (current || []).includes(id) ? null : [id];
+}
+
+/**
+ * T on the focused node `id`: the node ids to select. `replaced` is the selection that focus
+ * landing on `id` replaced, while `id` is still selected alone: T adds `id` to it. Otherwise
+ * `id` is taken out of the selection when selected and added when not.
+ */
+export function toggleFocusedSelection(current, id, replaced = null) {
+  const cur = current || [];
+  if (replaced && cur.length === 1 && cur[0] === id) {
+    return replaced.includes(id) ? [...replaced] : [...replaced, id];
+  }
+  return cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id];
 }
