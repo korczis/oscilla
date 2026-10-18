@@ -237,25 +237,56 @@ export function mountStudioTimeline(host, ctx) {
     if (r.ok && transport.playing) transport.sync();
     say(redo ? announceRedo(r) : announceUndo(r));
     render(true);
-    // Undo / redo may remove the focused clip, point or marker: never leave focus on <body>
-    // (§142; V431 U3). Its track's or lane's add button, else the matching tool.
+    // Undo / redo may remove the focused clip, point, lane or marker, or the object the details
+    // panel shows: never leave focus on <body> (§142; V431 U3, V272 C1). Its track's or lane's
+    // add button, else the matching tool.
     const a = document.activeElement;
-    if (back.length && (!a || a === document.body || !a.isConnected)) {
-      const key = back.find((k) => root.querySelector(`[data-key="${CSS.escape(k)}"]`));
-      if (key) focusKey(key);
-    }
+    if (back.length && (!a || a === document.body || !a.isConnected)) focusFirst(back);
   }
 
-  /** Where focus goes when the element `node` held disappears (data-key candidates). */
-  function focusFallbacks(node) {
-    const key = node && root.contains(node) && node.dataset ? node.dataset.key || '' : '';
+  /** Focus the first of `keys` that is drawn; false when none is. */
+  function focusFirst(keys) {
+    const key = keys.find((k) => root.querySelector(`[data-key="${CSS.escape(k)}"]`));
+    if (key) focusKey(key);
+    return !!key;
+  }
+
+  /**
+   * The focus target once lane `laneId` is gone: the next lane's (else the previous lane's)
+   * add-point button, else Automate (V272 C1). Read before the lane is removed.
+   */
+  function laneGoneKey(laneId) {
+    const all = model().timeline.automation;
+    const i = all.findIndex((l) => l.id === laneId);
+    const other = i < 0 ? null : all[i + 1] || all[i - 1] || null;
+    return other ? `lane-add:${other.id}` : 'tool:automate';
+  }
+
+  /** Where focus goes when the element keyed `key` disappears (read while it still exists). */
+  function fallbackKeys(key) {
     if (key.startsWith('clip:')) {
       const c = findClip(model(), key.slice(5));
       return [...(c ? [`track-add:${c.trackId}`] : []), 'tool:track'];
     }
-    if (key.startsWith('pt:')) return [`lane-add:${key.split(':')[1]}`, 'tool:track'];
+    const lane = /^(?:pt|lane-add|lane-del):([^:]+)/.exec(key);
+    if (lane) return [`lane-add:${lane[1]}`, laneGoneKey(lane[1]), 'tool:automate'];
     if (key.startsWith('marker:')) return ['tool:marker'];
+    if (key.startsWith('track-')) return ['tool:track'];
     return [];
+  }
+
+  /**
+   * The fallbacks of the element `node` holding focus; in the details panel, the object the
+   * panel shows and then its own fallbacks (V272 C1).
+   */
+  function focusFallbacks(node) {
+    if (!node || !root.contains(node)) return [];
+    if (detailsEl.contains(node)) {
+      const cur = details.current();
+      return cur && cur.returnKey ? [cur.returnKey, ...fallbackKeys(cur.returnKey)] : [];
+    }
+    const key = node.dataset ? node.dataset.key || '' : '';
+    return key ? fallbackKeys(key) : [];
   }
 
   // ------------------------------------------------------------ gestures (§86, §246-§247)
@@ -300,7 +331,8 @@ export function mountStudioTimeline(host, ctx) {
   // ------------------------------------------------------------ lanes and details
   const api = {
     model, sampleRate, pps, contentWidth, contentLeft, selection, select, say, commit,
-    commitMany, focusKey, formatTime, snap, chip, playheadPosition,
+    commitMany, focusKey, focusFirst, fallbackKeys, laneGoneKey, formatTime, snap, chip,
+    playheadPosition,
     render: (force) => render(force),
     beginGesture: (e, node, h) => {
       const g = beginGesture(e, node, { ...h, move: (ev) => { g.moved = true; h.move(ev); } });
