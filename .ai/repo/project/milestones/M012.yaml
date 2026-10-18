@@ -1,7 +1,6 @@
 id: M012
 title: "V3 measurement architecture"
 slug: v3-measurement-architecture
-version: "3.0.0"
 order: 12
 priority: p0
 problem: "V2 can generate and visualize but has no measurement layer: no PCM capture session, no offline DSP, no structured result."

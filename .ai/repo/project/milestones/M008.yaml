@@ -1,7 +1,6 @@
 id: M008
 title: "V2 laboratory features"
 slug: v2-lab
-version: "2.0.0"
 order: 8
 priority: p0
 problem: "V1 generates and visualizes; it cannot measure, compose, filter, synthesize, compare or export."

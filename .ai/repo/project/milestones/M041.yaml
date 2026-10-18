@@ -1,7 +1,6 @@
 id: M041
 title: "V3.7 semantic run comparison"
 slug: v37-semantic-comparison
-version: "3.7.0"
 order: 40
 priority: p1
 problem: "Runs were compared without telling a change in what was executed from a change in how it is presented, and no reference run was chosen by default."

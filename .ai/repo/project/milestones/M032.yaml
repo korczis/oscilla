@@ -1,7 +1,6 @@
 id: M032
 title: "V3.1 Studio verification"
 slug: v31-studio-verification
-version: "3.1.0"
 order: 32
 priority: p0
 problem: "Nothing ships on screenshots alone."
