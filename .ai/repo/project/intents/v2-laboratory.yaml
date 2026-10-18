@@ -117,7 +117,7 @@ satisfaction:
   - id: public-and-identified
     criterion: "The public Pages URL serves the release, boots and plays, and identifies its version and commit"
     evidence: command
-    ref: "npm run test:live"
+    ref: "npm run test:live -- --expect-commit origin/main"
 governance:
   - "rule:project.single-file-deliverable"
   - "rule:project.audio-engine-discipline"

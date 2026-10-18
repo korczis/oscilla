@@ -4,7 +4,7 @@ version: 1
 kind: rule
 title: Risky changes merge only with a recorded review verdict for the reviewed content
 description: A pull request that changes a guarded path merges only with a committed verdict file that says merge, names the reviewer, records the digest of the guarded content the pull request changes and lists no open P0 or P1 finding.
-statement: A pull request touching src/js/audio, src/js/analysis, src/js/experiments, src/js/studio, src/js/core/storage*, scripts/release-*, anything under .github/, or the programs and tests that enforce the process rules (scripts/review-verdict.mjs, scripts/fail-first.mjs, scripts/ci-workflow-rules.mjs, scripts/yaml-subset.mjs, their tests under tests/unit/ and tests/unit/fixtures/git-repo.mjs) merges only with .ai/repo/reviews/<pr>.yaml carrying `verdict: merge`, the reviewer session, a `content` equal to the SHA-256 of the guarded paths the pull request changes against its merge base (mode, blob and name of each, as merged with the base branch for the run), and no finding of severity P0 or P1 with status open; the guarded list that applies is the base branch's, the verdict is written by a reviewer who did not build the change, and a pull request is bound from the first CI run of a head that contains this rule's job.
+statement: A pull request touching src/js/audio, src/js/analysis, src/js/experiments, src/js/studio, src/js/measurement, src/js/calibration, src/js/core/storage*, src/js/core/safety*, src/js/ui/measure.js, src/js/ui/experiments.js, src/js/ui/findings.js, scripts/release-*, the build, pack, stamp and deploy-verification scripts (scripts/build*, scripts/pack-single-file.mjs, scripts/stamp-build.mjs, scripts/verify-deploy.mjs, scripts/verify-dist.mjs), the release rules' tests (tests/unit/release-*, tests/unit/version-authority.test.mjs, tests/browser/live-smoke.cjs), anything under .github/, or the programs and tests that enforce the process rules (scripts/review-verdict.mjs, scripts/fail-first.mjs, scripts/ci-workflow-rules.mjs, scripts/yaml-subset.mjs, their tests under tests/unit/ and tests/unit/fixtures/git-repo.mjs) merges only with .ai/repo/reviews/<pr>.yaml carrying `verdict: merge`, the reviewer session, a `content` equal to the SHA-256 of the guarded paths the pull request changes against its merge base (mode, blob and name of each, as merged with the base branch for the run), and no finding of severity P0 or P1 with status open; the guarded list that applies is the base branch's, the verdict is written by a reviewer who did not build the change, and a pull request is bound from the first CI run of a head that contains this rule's job.
 status: active
 class: blocking
 depends_on: []
@@ -30,7 +30,15 @@ never reviewed.
 
 - The guarded paths are the audio engine and graph builders (`src/js/audio/`), the analysis
   code (`src/js/analysis/`), experiments (`src/js/experiments/`), Studio (`src/js/studio/`),
-  storage (`src/js/core/storage*`), the release scripts (`scripts/release-*`), and what
+  the MEASURE engine (`src/js/measurement/`), calibration (`src/js/calibration/`), storage
+  (`src/js/core/storage*`), the output safety stage (`src/js/core/safety*`), the MEASURE,
+  Experiments and Findings adapters (`src/js/ui/measure.js`, `src/js/ui/experiments.js`,
+  `src/js/ui/findings.js`: where #139 and #149 put their defects); what proves a build, a
+  deployment and a release: the release scripts (`scripts/release-*`), the build and pack
+  scripts (`scripts/build*`, `scripts/pack-single-file.mjs`), the deploy stamp and its
+  verifiers (`scripts/stamp-build.mjs`, `scripts/verify-deploy.mjs`,
+  `scripts/verify-dist.mjs`) and the release rules' tests (`tests/unit/release-*`,
+  `tests/unit/version-authority.test.mjs`, `tests/browser/live-smoke.cjs`); and what
   enforces the process rules: everything under `.github/` (the workflows, `ci-install.sh`,
   `base-rule.sh`, composite actions, `doctor-verdict.jq`), the programs
   `scripts/review-verdict.mjs`, `scripts/fail-first.mjs`, `scripts/ci-workflow-rules.mjs` and
@@ -38,7 +46,10 @@ never reviewed.
   `fail-first.test.mjs`, `ci-workflows.test.mjs`, `ci-knowledge-job.test.mjs`,
   `yaml-subset.test.mjs` and `base-rule.test.mjs`, and `tests/unit/fixtures/git-repo.mjs`.
   An added, changed, renamed or deleted file there counts. The list is `GUARDED` in
-  `scripts/review-verdict.mjs`.
+  `scripts/review-verdict.mjs`. Left out on purpose: `src/index.html`, `src/js/main.js` (the
+  composition root) and `src/styles/`, which nearly every user-facing change touches and
+  which #139 and #149 changed only for markup and wiring; a defect there is the suites' and
+  the reviewer's of the guarded files it wires.
 - The list that judges a pull request is the base branch's, not the one the pull request
   carries: a pull request that shortens the list is judged by the list it found, and needs
   a verdict for touching it.
@@ -111,7 +122,9 @@ merge of `main` that changed another guarded file, an unguarded file and `dist/i
 so is a merge commit that carries a guarded change of its own; a later commit to unguarded
 paths keeps it and a new guarded path does not; a guarded change reverted to the base needs
 none; a mode change and a deletion change the digest; a guarded file with a non-ASCII or
-quoted name is seen; a docs-only pull request passes without one; `changes-requested`,
+quoted name is seen; a docs-only pull request passes without one; every `src/js/` file #139, #140 and #149
+changed, and the deploy and release proof (`verify-deploy.mjs`, `stamp-build.mjs`, the build
+and pack scripts, `safety.js`, `capture.js`, the release rules' tests) is guarded ("V272 D5"); `changes-requested`,
 another pull request's number, a missing reviewer, a missing findings list, an unknown
 severity or status and invalid YAML are refused; a deleted guarded file needs a verdict; a
 change to each kind of enforcement file (the programs, `ci-install.sh`, a composite action,

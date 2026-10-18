@@ -10,14 +10,23 @@
 //   commit    region.commit == expected commit ($GITHUB_SHA / --commit / git HEAD)
 //   date      region.sourceDate == that commit's timestamp (when git knows the commit)
 //   version   region.version == package.json version
+//   release   region.release/distance == the release state git reports now for that commit
+//             (ADR 0059), or "untagged" when the commit is now the tag's: the release commit
+//             is deployed when it merges, before release:publish tags it. So the page of a
+//             later commit cannot present itself as v<version>, and at release:publish (tag
+//             just created on the verified commit) the page must be the release
 //   digest    region.sourceDigest == recomputed digest of the build inputs
 //   shape     vendor marker (data-vendor="p5@") present, no module script
 //   og        og:image meta == <url>og-image.png; og-image.png and apple-touch-icon.png are
 //             image/png and byte-equal to site/ (the crawler-only share assets)
 //
-//   node scripts/verify-deploy.mjs [--url <url>] [--commit <sha>] [--attempts 10] [--delay 10]
+//   node scripts/verify-deploy.mjs [--url <url>] [--commit <rev>] [--attempts 10] [--delay 10]
 //        [--dist dist/index.html] [--site site] [--no-assets] [--no-cache-bust]
 //
+// --commit takes a full SHA or any revision git resolves (origin/main, a v* tag); without it
+// the expected commit is $GITHUB_SHA, then the checkout's HEAD. The bytes, version and digest
+// checks compare with this checkout, so run it in a checkout of the expected commit. The
+// release check reads the history and the tags (it fails on a shallow clone).
 // Each request carries a unique query string (?oscilla-verify=<commit>.<attempt>) so a stale
 // CDN edge cannot satisfy or fail the check; --no-cache-bust fetches the exact URL instead.
 import { existsSync, readFileSync } from 'node:fs';
@@ -25,7 +34,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   PUBLIC_URL, ROOT, commitDate, computeSourceDigest, findRegion, gitRunner, isFullSha,
-  normalizeStamped, readVersion, sha256, validateRecord,
+  normalizeStamped, readVersion, releaseLabel, releaseState, sha256, validateRecord,
 } from './release-metadata.mjs';
 
 export const SHARE_ASSETS = ['og-image.png', 'apple-touch-icon.png'];
@@ -36,8 +45,10 @@ export const SHARE_ASSETS = ['og-image.png', 'apple-touch-icon.png'];
  * @param {string} o.html      live page text
  * @param {string} o.dist      committed (unstamped) dist/index.html text
  * @param {string} o.url       public base URL (with trailing slash)
- * @param {{ commit: string, version: string, sourceDigest: string, sourceDate?: string|null }}
- *   o.expected
+ * @param {{ commit: string, version: string, sourceDigest: string, sourceDate?: string|null,
+ *   release?: { release: string, distance: number|null }|null, releaseError?: string|null }}
+ *   o.expected  release: the state git reports now (releaseState()); releaseError: why it
+ *   could not be read
  * @returns {string[]} problems (empty = pass)
  */
 export function checkLive({ html, dist, url, expected }) {
@@ -86,11 +97,28 @@ export function checkLive({ html, dist, url, expected }) {
   if (record.version !== expected.version) {
     problems.push(`version: region.version ${record.version} != package.json ${expected.version}`);
   }
+  problems.push(...releaseProblems(record, expected));
   if (record.sourceDigest !== expected.sourceDigest) {
     problems.push(`digest: region.sourceDigest ${record.sourceDigest} != recomputed `
       + `${expected.sourceDigest}`);
   }
   return problems;
+}
+
+const describe = ({ release, distance }) => (release === 'after-tag'
+  ? `${distance} commit(s) after its tag` : release);
+
+/** The stamped release state against the one git reports now (empty = they agree). */
+export function releaseProblems(record, expected) {
+  if (expected.releaseError) return [`release: cannot read the release state from git: `
+    + `${expected.releaseError}`];
+  const now = expected.release;
+  if (!now) return ['release: no expected release state (verify-deploy reads it from git)'];
+  const same = record.release === now.release && record.distance === now.distance;
+  const taggedSince = record.release === 'untagged' && now.release === 'tagged';
+  if (same || taggedSince) return [];
+  return [`release: the page says ${describe(record)} (shown as v${releaseLabel(record)}), git `
+    + `says ${describe(now)} for ${record.commit}`];
 }
 
 function firstDifference(a, b) {
@@ -187,16 +215,32 @@ async function main() {
   const run = gitRunner(ROOT);
   let commit = o.commit || process.env.GITHUB_SHA;
   if (!commit) commit = run(['rev-parse', 'HEAD']);
-  if (!isFullSha(commit)) throw new Error(`expected commit must be a full SHA, got "${commit}"`);
+  if (!isFullSha(commit)) {
+    try {
+      commit = run(['rev-parse', '--verify', `${commit}^{commit}`]);
+    } catch {
+      throw new Error(`expected commit "${commit}" is neither a full SHA nor a revision git `
+        + 'resolves here');
+    }
+  }
   let sourceDate = null;
   try {
     sourceDate = commitDate(commit, run);
   } catch { /* commit unknown to this clone: the date check is skipped */ }
+  const version = readVersion(ROOT);
+  let release = null;
+  let releaseError = null;
+  try {
+    release = releaseState({ version, commit, run });
+  } catch (e) {
+    releaseError = e.message;
+  }
   const expected = {
-    commit, sourceDate, version: readVersion(ROOT), sourceDigest: computeSourceDigest(ROOT),
+    commit, sourceDate, version, sourceDigest: computeSourceDigest(ROOT), release, releaseError,
   };
   const dist = readFileSync(path.resolve(ROOT, o.dist), 'utf8');
   console.log(`verify-deploy ${o.url}: expecting v${expected.version}, commit ${commit}, `
+    + `release ${release ? describe(release) : `unknown (${releaseError})`}, `
     + `source ${expected.sourceDigest}, artifact ${sha256(dist)}`);
 
   let problems = [];
@@ -204,7 +248,8 @@ async function main() {
     problems = await attempt(o, expected, dist, n);
     if (!problems.length) {
       console.log(`  PASS attempt ${n}/${o.attempts}: live page is the committed dist stamped `
-        + `with commit ${commit}; version, digest, shape and share assets verified`);
+        + `with commit ${commit}; version, release state, digest, shape and share assets `
+        + 'verified');
       return;
     }
     console.log(`  attempt ${n}/${o.attempts}: ${problems.length} problem(s); `

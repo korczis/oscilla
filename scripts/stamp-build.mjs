@@ -1,16 +1,23 @@
 #!/usr/bin/env node
 // Deploy-time provenance stamp (GitHub Pages workflow). Rewrites ONLY the inline metadata
 // region of a built dist/index.html with
-//   { commit, shortCommit, channel: "production", sourceDate (the commit timestamp),
-//     artifactSha256 (sha256 of the UNSTAMPED committed dist) }
-// keeping version and sourceDigest from the build. Every other byte is untouched, so
-// normalizeStamped() (release-metadata.mjs, used by verify-deploy.mjs) reverses the stamp and
-// the result is byte-equal to the committed dist. Idempotent: re-running with the same inputs
-// produces the same bytes, also on an already stamped file.
+//   { schema: 2, commit, shortCommit, channel: "production", sourceDate (the commit
+//     timestamp), artifactSha256 (sha256 of the UNSTAMPED committed dist),
+//     release, distance (where the commit stands relative to the tag v<version>, ADR 0059) }
+// keeping version and sourceDigest from the build. The release state is read from git
+// (releaseState() in release-metadata.mjs), so the clone needs its history and tags: Pages
+// checks out with fetch-depth: 0. A commit after its version's tag is stamped "after-tag"
+// and shows <version>+<distance>.g<short>, never the bare release version. Every other byte
+// is untouched, so normalizeStamped() (release-metadata.mjs, used by verify-deploy.mjs)
+// reverses the stamp and the result is byte-equal to the committed dist. Idempotent:
+// re-running with the same inputs produces the same bytes, also on an already stamped file.
 //
 //   node scripts/stamp-build.mjs [in] [out] [--commit <sha>] [--source-date <iso>]
 //                                [--channel production] [--no-source-check]
+//                                [--release tagged|after-tag|untagged --distance <n>|null]
 //
+// --release/--distance replace the state read from git (a local dry run of a later build's
+// page); verify-deploy compares a deployed stamp with git and refuses one that disagrees.
 // in defaults to dist/index.html, out to in (in place). --commit defaults to $GITHUB_SHA, then
 // to `git rev-parse HEAD`; --source-date to that commit's timestamp from git. Before stamping
 // it refuses a dist whose region names another version than package.json or another source
@@ -20,7 +27,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   ROOT, commitDate, computeSourceDigest, findRegion, gitRunner, isFullSha, normalizeStamped,
-  readVersion, stampHtml,
+  readVersion, releaseLabel, releaseState, stampHtml,
 } from './release-metadata.mjs';
 
 export { normalizeStamped, stampHtml };
@@ -33,6 +40,11 @@ function parseArgs(argv) {
     else if (a === '--source-date') opts.sourceDate = argv[++i];
     else if (a === '--channel') opts.channel = argv[++i];
     else if (a === '--no-source-check') opts.sourceCheck = false;
+    else if (a === '--release') opts.release = argv[++i];
+    else if (a === '--distance') {
+      const d = argv[++i];
+      opts.distance = d === 'null' ? null : Number(d);
+    }
     else if (a.startsWith('--')) throw new Error(`unknown option ${a}`);
     else opts.positional.push(a);
   }
@@ -62,14 +74,19 @@ function main() {
       throw new Error(`refusing to stamp a stale dist (${problems.join('; ')}); run npm run build`);
     }
   }
-  const stamped = stampHtml(html, { commit, sourceDate, channel: opts.channel });
+  const state = opts.release !== undefined
+    ? { release: opts.release, distance: opts.distance ?? null }
+    : releaseState({ version: findRegion(html).record.version, commit, run });
+  const stamped = stampHtml(html, { commit, sourceDate, channel: opts.channel,
+    release: state.release, distance: state.distance });
   mkdirSync(path.dirname(output), { recursive: true });
   writeFileSync(output, stamped);
   const { record } = findRegion(stamped);
   const reversible = normalizeStamped(stamped) === normalizeStamped(html);
   console.log(`stamped ${path.relative(ROOT, output)}: v${record.version} ${record.channel} `
-    + `commit ${record.commit} (${record.sourceDate}); artifact ${record.artifactSha256}; `
-    + `reversible ${reversible}`);
+    + `commit ${record.commit} (${record.sourceDate}); release ${record.release}`
+    + `${record.distance ? ` +${record.distance}` : ''}, shown as v${releaseLabel(record)}; `
+    + `artifact ${record.artifactSha256}; reversible ${reversible}`);
   if (!reversible) throw new Error('stamp is not reversible: normalised bytes differ');
 }
 

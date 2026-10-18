@@ -84,9 +84,17 @@ function select({ flag, env = process.env, envName, known, what, fallback }) {
   return parse((fallback || known).join(','), { known, what });
 }
 
+const on = (v) => v !== undefined && v !== '' && v !== '0' && v !== 'false';
+
 function isCi(env = process.env) {
-  const on = (v) => v !== undefined && v !== '' && v !== '0' && v !== 'false';
   return on(env.CI) || on(env.GITHUB_ACTIONS);
+}
+
+// CI's skip semantics without CI's other effects: release:prepare runs the gate with
+// OSC_STRICT_SKIPS=1, so an undeclared skip fails the release gate as it fails CI, while the
+// load gate still holds the start on a busy machine (rule project.release-receipt-binds-gate).
+function strictSkips(env = process.env) {
+  return isCi(env) || on(env.OSC_STRICT_SKIPS);
 }
 
 // ---------------------------------------------------------------------------- declared skips
@@ -329,14 +337,15 @@ function createRun({
       }
       count(leg, checks);
     },
-    // A check this leg did not run, with the reason. Under CI the skip must be listed in the
-    // "Declared skips" table of tests/README.md, so no check stops running there unnoticed.
+    // A check this leg did not run, with the reason. Under CI, and in the release gate
+    // (OSC_STRICT_SKIPS), the skip must be listed in the "Declared skips" table of
+    // tests/README.md, so no check stops running there unnoticed.
     skip(leg, id, reason) {
       if (typeof id !== 'string' || !id || typeof reason !== 'string' || !reason.trim()) {
         throw new TypeError('suite.skip: an id and a reason are required');
       }
       const key = `${name}:${id}`;
-      if (isCi(env)) {
+      if (strictSkips(env)) {
         const listed = declaredSkips(fs.readFileSync(readme, 'utf8'));
         if (!listed.has(key)) {
           throw fail(`[${name}] skip \`${key}\` on ${leg} (${reason}) is not listed with a `
@@ -412,6 +421,7 @@ module.exports = {
   parse,
   select,
   isCi,
+  strictSkips,
   declaredSkips,
   loadGate,
   boundPlaywright,
