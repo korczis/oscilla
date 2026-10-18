@@ -774,6 +774,9 @@ export function createStudioUi(svc = {}) {
       onChange: onMeasureRun,
       profileId: () => (ctx.cmp && typeof ctx.cmp.measureAppliedProfileId === 'function'
         ? ctx.cmp.measureAppliedProfileId() : null),
+      // The level MEASURE plays at once the Studio gives the output back (main.js sets the engine
+      // from cmp.gainLevel); a Master Output showing another level is refused (V272 A5).
+      outputLevel: () => (ctx.cmp && Number.isFinite(ctx.cmp.gainLevel) ? ctx.cmp.gainLevel : null),
     });
     ctx.transport = createStudioTransport({ runtime: ctx.runtime, engine: svc.engine,
       store: ctx.handle, registry, trace: ctx.trace,
