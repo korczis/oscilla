@@ -7,6 +7,7 @@ slug: studio-documentation-and-self-knowledge
 priority: p1
 profile: implementation
 objective: "README Studio section, architecture doc, user guide, canonical shortcut table, Majordomus knowledge/evidence audit, repository self-knowledge test (§221-§226, §266)."
+current_state: "Updated 2026-10-18. Evidence under verified records each verification round, met or not, and every round so far is PARTIAL; all_criteria_met is recorded only when every acceptance criterion is met, so majordomus plan done refuses until then. What remains is the dependency V431; the spec 225 feature indexing gap closed under majordomus 0.29.0 (round of 2026-10-18)."
 scope:
   - "docs"
   - "README.md"
@@ -20,8 +21,9 @@ validation:
   - "npm run release-gate"
 evidence_required:
   - "verified"
+  - "all_criteria_met"
 created_at: 2026-10-02
-updated_at: 2026-10-06T18:13:19Z
+updated_at: 2026-10-18T10:43:15Z
 evidence:
   - covers: verified
     type: manual
@@ -47,3 +49,9 @@ evidence:
     result: "PARTIAL (do not mark done; blocked behind V431): at caf7764 the spec 266 repository self-knowledge test EXISTS and passes: tests/unit/v31-studio-self-knowledge.test.mjs (#73, landed after the 34f967a round; extended by #120) asks every 266 question (Studio exists, StudioModel canonical, compact/full share it, typed ports, compiled into AudioEngine, audio-clock timeline, automation, measurement integration, topology in experiments, feedback restrictions, schema version, which tests prove each capability, which public release contains it) of the tracked records and checks each answer against the shipped code, plus 225 no-orphan checks over Studio features, use cases and claims; with v31-studio-docs and knowledge-integrity 36/36 pass. README Studio section, docs/v31 architecture docs, user guide and canonical shortcut table met in earlier rounds. majordomus 0.13.2 knowledge check: 4 records, 0 failing; 14 Studio use cases indexed as use-case nodes. Unmet: (1) dependency V431 not done; (2) spec 225 'Studio feature appears' only partly: the 6 Studio feature records are indexed as kind 'unknown' because majordomus 0.13.2 has no extractor rule for kind 'feature' (WARN), so their stated relations are not knowledge edges; this is upstream, and in the repository the self-knowledge test enforces those relations instead"
     commit: caf7764ce6fec9329de43254328170255faa6dad
     recorded_at: 2026-10-06T18:13:19Z
+  - covers: verified
+    type: test
+    command: "node --test tests/unit/v31-studio-self-knowledge.test.mjs tests/unit/v31-studio-docs.test.mjs && majordomus knowledge check && majordomus knowledge nodes --kind feature && majordomus knowledge edges"
+    result: "PARTIAL (do not mark done; blocked behind V431): at 2e80461 (code as main 044f98a): self-knowledge and docs tests 26/26 pass; majordomus 0.29.0 knowledge check: 20 records, 0 failing; knowledge nodes --kind feature indexes 29 feature nodes, among them the 6 Studio feature records (feature:studio, studio-automation, studio-measurement-routing, studio-patches, studio-signal-graph, studio-timeline), and knowledge edges lists 100 edge lines with a Studio feature at one end, so the spec 225 gap of the caf7764 round (kind unknown under 0.13.2, relations not edges) is closed. Unmet: (1) dependency V431 not done"
+    commit: 2e80461b7a2d20022bb282d5ef3a16c15d461da5
+    recorded_at: 2026-10-18T10:43:15Z

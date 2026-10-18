@@ -1,0 +1,37 @@
+id: V399
+milestone: M047
+serves:
+  - "measurement-extensions#extensions-from-file-and-subpath"
+title: "Every M047 figure in every browser and origin; register the M047 claims"
+slug: m047-figures-in-every-browser-and-origin-and-claims
+priority: p2
+profile: implementation
+objective: "Once V391-V398 have landed, add tests/browser/v3-measure-extensions.cjs, run through tests/browser/lib/suite.cjs (project.suite-harness, project.bounded-test-timing), which asserts that each new figure (EDT, T20 and T30; C50, C80 and D50; THD and THD+N; the chain delay; phase and group delay; run-to-run consistency), each context overlay and the chain profile view is visible, or refused with its reason, on every leg: Chromium, Firefox and WebKit, each from file:// and from http /oscilla/. Add it to npm run test:measure. Then register one guaranteed claim per criterion in docs/CLAIMS.yaml (measurement-figure-contract, room-decay-metrics, clarity-definition-metrics, distortion-thd, chain-delay, phase-group-delay, run-consistency, response-context-overlays, chain-profile, measure-extensions-render), naming the source and the test that prove each, and change each criterion of .ai/repo/project/intents/measurement-extensions.yaml whose figure V391-V398 built from its command to evidence claim with that id. This issue changes no product code: a figure that fails a leg, or cannot be observed without a test seam, is fixed or given the seam in a pull request of its own V39x issue."
+why: "Audit idd-dispatch F8: the cross-browser criterion covers every new figure, while only V391 served it; audit F1 and F5: one closing issue keeps docs/CLAIMS.yaml and the intent out of the other M047 scopes."
+scope:
+  - "tests/browser/v3-measure-extensions.cjs"
+  - "tests/README.md"
+  - "package.json"
+  - "docs/CLAIMS.yaml"
+  - ".ai/repo/project/intents/measurement-extensions.yaml"
+depends_on:
+  - "V391"
+  - "V392"
+  - "V393"
+  - "V394"
+  - "V395"
+  - "V396"
+  - "V397"
+  - "V398"
+acceptance_criteria:
+  - "node tests/browser/v3-measure-extensions.cjs passes on all six legs and fails on the merge base of V391 (no figure exists there); npm run test:measure runs it."
+  - "docs/CLAIMS.yaml holds the ten claims as guaranteed, each naming an implementation and a test that exist, and tests/unit/knowledge-integrity.test.mjs passes."
+  - "The criteria name their claims as evidence and majordomus intent validate reports no failure; because this issue changes the intent it serves (and the criteria V391-V398 serve), the plan and evidence pins of majordomus intent binding --issue V399 change during the task and the worker re-reads them before finish."
+  - "tests/README.md has a row for the new suite."
+validation:
+  - "node tests/browser/v3-measure-extensions.cjs"
+  - "majordomus intent validate"
+  - "npm run release-gate"
+evidence_required:
+  - "verified"
+created_at: 2026-10-18

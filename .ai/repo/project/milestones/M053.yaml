@@ -1,0 +1,18 @@
+id: M053
+title: "Owner acts on published releases"
+slug: owner-acts-on-published-releases
+order: 997
+priority: p2
+problem: "Some planned work waits on a change to an already published GitHub Release, which is the owner's act: V386 and V433 need a release/v1 record for v3.0.0 and v3.1.0, and neither Release has the asset a record names (Q007)."
+current_state: "Opened on 2026-10-18 with Q007. The milestone sorts after every live milestone except M052 and M005 (order 997), so majordomus plan next does not nominate an owner act before the work; that ordering and the owner field are conventions, and nothing stops a worker from running majordomus plan start on one. No intent names it: an owner act serves no criterion of its own, and Q007's effect is checked by the criteria of V386 (v3-measure#public-release-verified) and V433, which depend on it."
+outcome: "Every owner act on a published release that planned work waits on is done or cancelled with the owner's reason, and recorded."
+acceptance_criteria:
+  - "Every issue of this milestone carries owner_decision evidence with its date and source, either quoting the owner or attributed to the session that acted under a quoted owner delegation, or is cancelled with the reason."
+validation:
+  - "manual"
+evidence_required:
+  - "milestone_verified"
+risks:
+  - "An act on a published release cannot be undone silently: an attached asset changes what the Release serves, so each act names the exact bytes (git show <tag>:dist/index.html) and the route (.ai/repo/releases/README.md)."
+created_at: 2026-10-18
+updated_at: 2026-10-18

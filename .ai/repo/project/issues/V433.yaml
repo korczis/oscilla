@@ -7,6 +7,7 @@ slug: release-3-1-and-public-verification
 priority: p1
 profile: implementation
 objective: "SemVer from actual history (likely 3.1.0 after 3.0.0), full release gate, Pages deploy of the verified artifact, post-deploy verification with bounded retry, public Studio smoke, release notes from landed work, deployment evidence (§227-§231, §259, §261, §267-§271)."
+current_state: "Updated 2026-10-18. Evidence under verified records each verification round, met or not, and every round so far is PARTIAL; all_criteria_met is recorded only when every acceptance criterion is met, so majordomus plan done refuses until then. Besides V432 and V386, this issue waits on the owner act of Q007: gh release view v3.1.0 --json assets returns no asset, so no release/v1 record for v3.1.0 can be written; Q007 is named in depends_on directly, not only through V386."
 scope:
   - ".github"
   - "dist"
@@ -15,15 +16,18 @@ scope:
 depends_on:
   - "V432"
   - "V386"
+  - "Q007"
 acceptance_criteria:
   - "SemVer from actual history (likely 3.1.0 after 3.0.0), full release gate, Pages deploy of the verified artifact, post-deploy verification with bounded retry, public Studio smoke, release notes from landed work, deployment evidence (§227-§231, §259, §261, §267-§271)."
+  - "A release/v1 record for v3.1.0 exists and node scripts/release-record.mjs --version 3.1.0 --check passes: after Q007 attaches git show v3.1.0:dist/index.html to the v3.1.0 GitHub Release as oscilla-v3.1.0.html, run npm run release:record -- --version 3.1.0."
   - "Specification: docs/specs/oscilla-v3.1-studio.md. Visual identity lock in the same file applies."
 validation:
   - "npm run release-gate"
 evidence_required:
   - "verified"
+  - "all_criteria_met"
 created_at: 2026-10-02
-updated_at: 2026-10-06T18:30:56Z
+updated_at: 2026-10-18T10:43:19Z
 evidence:
   - covers: verified
     type: ci
@@ -61,3 +65,9 @@ evidence:
     result: "PARTIAL (do not mark done; blocked behind V432 and V386): with live-smoke.cjs of branch ci/pages-runs-live-smoke (PR #146) against the public page serving caf7764 (v3.10.2): 16/16 checks PASS in chromium, firefox and webkit, incl. spec 269 compact Studio loads in the Playground with the Studio document (node and clip chips = model), STUDIO from navigation, Subtractive Synth renders by node kind oscillator/envelope/filter/master/lfo/spectrum with its 5 connections by ends, its timeline renders track-1 with the Tone and Sweep clips, PLAY sounds and STOP leaves 0 nodes; spec 270 Measurement Sweep renders sweep/master/microphone/calibration/transfer-analyzer/measurement-result with its 5 connections; no getUserMedia call; no console error. PR #146 makes pages.yml run this smoke (one job per browser) after verify-deploy on every deployment, a failure failing the workflow. Unmet: spec 227/271 deployment record"
     commit: b8c59532fa90bf6ff6719c856bfeb7228f84ce95
     recorded_at: 2026-10-06T18:30:56Z
+  - covers: verified
+    type: ci
+    command: "node --test tests/unit/v31-studio-report.test.mjs && node scripts/release-record.mjs --version 3.11.0 --check && gh run view 39097666998 --json conclusion,headSha,jobs && gh release view v3.1.0 --json assets && ls .ai/repo/releases"
+    result: "PARTIAL (do not mark done; blocked behind V432, V386 and Q007): at 2e80461 (code as main 044f98a): spec 259 is met by docs/v31/studio-report.md (d3bdcb1), checked against the code by tests/unit/v31-studio-report.test.mjs (17/17 pass); spec 269/270 stay met (#146, round of 2026-10-06T18:30Z); spec 227/271 under ADR 0057 (proposed): the release v3.11.0, which carries the Studio, has the pair: .ai/repo/releases/v3.11.0.yaml (commit 2b63ec3; release-record --check: matches what was published) and Pages run 39097666998 at 2b63ec3 (deploy and Public smoke chromium, firefox, webkit: success). Unmet: (1) dependencies V432 and V386 not done; (2) v3.1.0, the release this issue names, has no release/v1 record: gh release view v3.1.0 --json assets returns no asset, and .ai/repo/releases holds 14 records, v3.4.0 to v3.11.0; attaching the asset is the owner act Q007"
+    commit: 2e80461b7a2d20022bb282d5ef3a16c15d461da5
+    recorded_at: 2026-10-18T10:43:19Z

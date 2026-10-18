@@ -3,8 +3,8 @@ title: "Engineering integrity: orchestration split, structural checks, measured 
 slug: engineering-integrity-orchestration-split-structural-checks
 order: 46
 priority: p2
-problem: "The owner asked for less orchestration entropy and for no hard-coding, mockups or placeholders (conversation 6ac1beb8, 2026-10-04T03:01:41Z). Since then the hotspots grew: src/js/ui/measure.js from about 77 kB to 115 572 B, ui/studio/workspace.js to 75 076 B, ui/studio/inspector.js to 69 711 B, src/index.html to 255 020 B; the experiments schema and definition modules import each other; no rule bans placeholders or inert controls; and nothing reports a pull request's size change or a check that passed only on retry."
-outcome: "Every source file stays under a cap that only falls, the three orchestration hotspots and the shell are split with no behaviour change, the import graph is acyclic, the no-placeholder rule is in force with mutation-proven checks, and the remaining costs are measured for the owner."
+problem: "The owner asked for less orchestration entropy and for no hard-coding, mockups or placeholders (conversation 6ac1beb8, 2026-10-04T03:01:41Z). Since then the hotspots grew: on main at 044f98a (before #197) src/js/ui/measure.js is 115 572 B (about 77 kB then), ui/studio/workspace.js 75 076 B, ui/studio/inspector.js 69 711 B and src/index.html 255 020 B, and the V272 final review #197, merged into main as d4bd97f on 2026-10-18, grew the Studio ones further (78 124, 73 184 and 255 382 B on main at d4bd97f, identical to its head 55ae40d); the experiments schema and definition modules import each other; no rule bans placeholders or inert controls; and nothing reports a pull request's size change or a check that passed only on a re-run."
+outcome: "Every source file stays under a cap with stated headroom that only falls, the three orchestration hotspots and the shell are split with no behaviour change, the import graph is acyclic, the no-placeholder rule is in force with mutation-proven checks, the remaining costs are measured for the owner, and E015 points the intent's criteria at registered claims."
 acceptance_criteria:
   - "Every issue of M046 is done with its evidence; npm run release-gate passes at the last one."
 validation:
@@ -12,6 +12,11 @@ validation:
 evidence_required:
   - "milestone_verified"
 risks:
-  - "A split that changes behaviour hides inside a refactor: each split keeps the suites and the visual references unchanged, and anything else is a separate issue."
-  - "The splits touch the files other work also edits (Measure, Studio): land them first and small, which is why M047 and M048 depend on them."
+  - "A split that changes behaviour hides inside a refactor: each split keeps expected values, snapshots, visual references and browser assertions unchanged, and anything else is a separate issue."
+  - "The splits touch the files #197 (V272, plan issue V431) changes most: E001, and with it every split, E008 and E013 wait for V431, so no cap or split is taken against a tree #197 still rewrites. #197 merged as d4bd97f, but V431 also closes on ADR acceptance (its unmet items include 'ADR status never leaves proposed'), so these issues start only when V431 is DONE, not when #197 merged."
+  - "Scope chains within the milestone: E002 owns src/js/ui/measure.js and src/js/ui/measure, E003 src/js/ui/studio/workspace.js and its directory, E004 src/js/ui/studio/inspector.js and its directory, so the three splits share no source path; they still share tests/unit, tests/browser and dist, so E003 follows E002 and E004 follows E003, and E005, which rewrites every shell reader and rebuilds dist, follows E002 and E004 (checked 2026-10-18 by simulating V431, Q001-Q003, Q005, Q006, E001, E006, E009 and P001 as DONE in a scratch copy: plan validate then reported E002 and E003 on tests/unit)."
+  - "E005 moves the whole shell into partials, so in its wave it collides with any open issue of another milestone that edits src/index.html (simulated 2026-10-18: V393 and V601); plan validate reports it, and the E005 worker starts only when none is ACTIVE, and every later shell edit names src/partials."
+  - "M047 and M048 grow files this milestone caps but does not split (src/js/measurement/engine.js, quality.js, src/js/studio/actions.js, validate.js, transport.js): the 10 % headroom of E001 absorbs ordinary growth, and beyond it the feature splits the file first or declares the raise in the baseline's raises ledger."
+  - "tests/README.md is a shared index every test-adding issue appends one row to; parallel issues that both append rebase on it, which is a merge, not a design conflict."
 created_at: 2026-10-18
+updated_at: 2026-10-18

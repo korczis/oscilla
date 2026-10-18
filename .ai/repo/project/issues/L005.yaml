@@ -4,24 +4,38 @@ serves:
   - "perception-lessons#equal-loudness"
 title: "Learn: equal-loudness contours as published data"
 slug: learn-equal-loudness-contours-as-published-data
-priority: p2
+priority: p3
 profile: implementation
-objective: "A lesson that draws published equal-loudness contours with their citation and lets the user play tones across frequency at one relative level, explaining why they do not sound equally loud, without computing or reporting anything about the listener."
-why: "Conversation 6abec18d, 2026-10-01T21:08:07Z (V2 roadmap item 9) and the multi-page specification sections 89-90."
+objective: "It starts only after Q001 is answered. If Q001 adopts sections 89-90, this lesson is the implementation of their 'equal-loudness educational explanation'; if not, it is cancelled with Q001 as the reason. A lesson that draws published equal-loudness contours with their citation and lets the user play tones across frequency at one relative level, without computing or reporting anything about the listener. ISO 226 tables are copyrighted, and specification section 93 (docs/specs/oscilla-v3-measure.md) refuses embedded third-party data without licence and provenance: the data comes from a source whose redistribution in an MIT build is checked and recorded in the issue's evidence (for example the underlying published studies, or the ISO 226 formula with its cited parameters if their licence permits), and is not embedded otherwise. The copy says the difference a user hears through an unknown playback chain comes from the speaker as much as from the ear. It follows L002 because both add a topic to src/js/data/learn.js."
+why: "Multi-page V1 specification sections 89-90 (docs/specs/oscilla-v1-sections-64-95.md), adopted or not by Q001; conversation 6abec18d, 2026-10-01T21:08:07Z (V2 roadmap item 9, a ChatGPT proposal). Data licence and speaker caveat (critique perception-lessons, equal-loudness-data-licence)."
 scope:
   - "src/js/data"
   - "src/js/labs"
   - "src/js/ui"
+  - "src/index.html"
+  - "src/partials"
+  - "src/styles"
+  - "src/js/charts"
   - "tests/unit/learn-equal-loudness.test.mjs"
   - "tests/browser"
+  - "tests/README.md"
+  - "tests/unit/source-size-baseline.json"
   - "dist"
-  - "docs/CLAIMS.yaml"
+depends_on:
+  - "Q001"
+  - "L002"
 acceptance_criteria:
-  - "The contours are drawn from a cited table embedded in the build, and a unit test checks three points against it."
-  - "No control, text or stored value describes the listener's hearing; tests/unit/no-fake-science.test.mjs passes."
-  - "docs/CLAIMS.yaml gains the guaranteed claim `lesson-equal-loudness` naming the source and the test that prove it, and the intent criterion this issue serves names that claim as its evidence in place of the command."
+  - "tests/unit/learn-equal-loudness.test.mjs: the contours are drawn from the embedded cited table, checked at three points against it; it fails on the merge base."
+  - "The evidence records the data source, its licence and why it may be embedded under MIT."
+  - "No control, text or stored value describes the listener's hearing, and the copy names the playback-chain caveat."
+  - "The copy says what listeners commonly report under controlled listening, with a citation, never what this listener hears; it passes tests/unit/no-fake-science.test.mjs, and the pull request states that whether a sentence still implies a perceptual effect was judged by the reviewer, since the scan has no perceptual-claim phrases."
+  - "A browser check plays the demonstration through the AudioEngine with no console error, within the session safety limit, from file:// and the sub-path."
+  - "A capped file it grows past its cap is split first or its raise is declared in tests/unit/source-size-baseline.json's raises ledger."
+  - "tests/README.md has a row for the new test; L006 registers the claim; this issue does not edit docs/CLAIMS.yaml or the intent."
 validation:
+  - "node --test tests/unit/learn-equal-loudness.test.mjs"
   - "npm run release-gate"
 evidence_required:
   - "verified"
 created_at: 2026-10-18
+updated_at: 2026-10-18

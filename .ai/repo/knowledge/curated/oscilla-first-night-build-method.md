@@ -62,8 +62,11 @@ ChatGPT's analysis of the snapshot (`6ac027b2`, 21:55:24Z) names four reasons:
    click-free audio, accessibility twice, visualisation readouts, a second audit, engine
    correctness, then V2. "Defects appeared, but had a short half-life."
 
-"Few defects" was not zero: that snapshot ran 1 358 unit tests passing and 2 failing
-(`6ac027b2`, 21:54:43Z).
+"Few defects" was not zero, but the one figure is not a first-night measure: a later
+repository snapshot, read on 2026-10-02 at about 21:54Z (its commit is not recorded; it may
+include post-V2 commits such as c367cdb..c43cd38), ran 1 358 unit tests passing and 2 failing
+(`6ac027b2`, 21:54:43Z). It is not a measured first-night defect rate, and public copy must not
+present it as one.
 
 ## The risk the same method carries
 
@@ -71,8 +74,10 @@ ChatGPT's warning at V3 (`6abec18d`, 2026-10-02T03:18:10Z, closing note): the ri
 the agent cannot build it but that it is "too willing to implement everything". The later
 critiques say the same of scope (`6ac1beb8`, 2026-10-04T03:30:06Z: "scope gravity", each layer
 leading logically to the next; `6ac3ead5`, 2026-10-05: attaching good things before their
-boundaries firm up). The owner's steering answers it: "depth over breadth; fewer new nouns,
-more working verbs" (ADR 0051).
+boundaries firm up). The remedy came from the same critique (`6ac1beb8`, 03:30:06Z: "méně
+nových nounů, více fungujících sloves", measurement as "tvoje wedge"; restated as point 252
+"PREFER DEPTH OVER BREADTH" in `6ac1beb8`, 2026-10-05T18:20:52Z). The owner adopted it as v4
+steering on 2026-10-07: "depth over breadth; fewer new nouns, more working verbs" (ADR 0051).
 
 ## Automation the owner asked for that the method does not have
 

@@ -1,21 +1,24 @@
 id: S083
 milestone: M005
-title: "§83 Specification section 83 (not received)"
-slug: specification-section-83-not-received
+title: "§83 Accessibility Audit (Q001 triage: work)"
+slug: "v1-spec-83-accessibility-audit"
 priority: p1
 profile: implementation
-objective: "The pasted specification was truncated inside section 63; this section's text was never delivered. Blocked until the text is supplied."
+objective: "Section 83, \"Accessibility Audit\", of the numbered multi-page V1 specification (docs/specs/oscilla-v1-sections-64-95.md, line 553; ChatGPT project conversation 6abec18d, 2026-10-01T20:46:12Z), adopted under Q001 and triaged against project.single-file-deliverable, S001-S063 and the ADRs from 0011 on. This issue is the part of it that no record or check shows delivered; the rest is named in current_state."
 scope:
-  - "index.html"
-  - "tests"
+  - "tests/browser/app.cjs"
+  - "src/index.html"
+  - "src/js/ui"
 depends_on:
   - "S000"
   - "Q001"
-current_state: "Text exists, not adopted: section 83, \"Accessibility Audit\", of the numbered multi-page V1 specification, recorded verbatim in docs/specs/oscilla-v1-sections-64-95.md (ChatGPT project conversation 6abec18d, 2026-10-01T20:46:12Z). Its numbering and premises differ from the single-file prompt of S001-S063, and parts of it conflict with the single-file deliverable rule and with later ADRs, so before any work this section is triaged against them. Whether M005 adopts the text at all is the owner's decision Q001, and this issue waits on it."
+  - "S082"
+current_state: "Kept as work, triaged. S049 (semantic HTML, labels, aria-live, keyboard, focus, accessible dialogs) is done for V1, and src/js/ui/dialogs.js uses showModal() for the focus trap. No record shows the section's audit of the current build, in particular an equivalent accessible input for every graphical control. Triage of 2026-10-18 under Q001, decided by the coordinating Claude session under the owner's delegation of 2026-10-18 ('tak to vse pores'); the owner may override."
 acceptance_criteria:
-  - "The pasted specification was truncated inside section 63; this section's text was never delivered. Blocked until the text is supplied."
+  - "A browser check asserts, for the Playground, Sweep, Dual, Presets and Learn workspaces: every control reachable by keyboard with a visible focus indicator, a label on every input, an aria-live readout of frequency and play state, focus held and restored by every modal dialog, and an equivalent input control for the interactive frequency map."
+  - "npm run test:browser passes in Chromium, Firefox and WebKit; a defect it finds is fixed in src/index.html or src/js/ui in the same pull request or opened as its own issue."
 validation:
-  - "node tests/smoke.cjs"
+  - "npm run test:browser"
 evidence_required:
   - "verified"
 created_at: 2026-10-01

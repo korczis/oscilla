@@ -1,21 +1,22 @@
 id: S092
 milestone: M005
-title: "§92 Specification section 92 (not received)"
-slug: specification-section-92-not-received
-priority: p1
-profile: implementation
-objective: "The pasted specification was truncated inside section 63; this section's text was never delivered. Blocked until the text is supplied."
+title: "§92 Final Implementation Checklist (Q001 triage: already delivered)"
+slug: "v1-spec-92-final-implementation-checklist"
+priority: p3
+profile: routine
+objective: "Section 92, \"Final Implementation Checklist\", of the numbered multi-page V1 specification (docs/specs/oscilla-v1-sections-64-95.md, line 779; ChatGPT project conversation 6abec18d, 2026-10-01T20:46:12Z), triaged under Q001 against project.single-file-deliverable, S001-S063 and the ADRs from 0011 on, and closed as already delivered."
 scope:
-  - "index.html"
-  - "tests"
+  - "docs/specs/oscilla-v1-sections-64-95.md"
+  - ".ai/repo/project/issues/S092.yaml"
 depends_on:
   - "S000"
   - "Q001"
-current_state: "Text exists, not adopted: section 92, \"Final Implementation Checklist\", of the numbered multi-page V1 specification, recorded verbatim in docs/specs/oscilla-v1-sections-64-95.md (ChatGPT project conversation 6abec18d, 2026-10-01T20:46:12Z). Its numbering and premises differ from the single-file prompt of S001-S063, and parts of it conflict with the single-file deliverable rule and with later ADRs, so before any work this section is triaged against them. Whether M005 adopts the text at all is the owner's decision Q001, and this issue waits on it."
+cancelled: true
+current_state: "Already delivered or superseded, item by item. The audio, pattern, preset, history, URL, visualisation, theme, keyboard, accessibility, high-DPI and safety items are S001-S063 (done for V1) and the checks named by intent v1-instrument; \"no medical claims\", \"no fake ultrasonic claims\" and \"no fake SPL measurements\" are S024, S060 and project.no-fake-science; .nojekyll is S069 and the README S068. \"All pages navigate\", \"404.html exists\" and \"no build required\" are superseded (S077, S070, S068). What is still open in it is S071, S074 and S079-S085. Triage of 2026-10-18 under Q001, decided by the coordinating Claude session under the owner's delegation of 2026-10-18 ('tak to vse pores'); the owner may override."
 acceptance_criteria:
-  - "The pasted specification was truncated inside section 63; this section's text was never delivered. Blocked until the text is supplied."
+  - "Cancelled by the Q001 triage of 2026-10-18 as already delivered, for the reason and with the pointer in current_state; reopening it needs a new decision recorded here that names what the pointer does not cover."
 validation:
-  - "node tests/smoke.cjs"
+  - "majordomus plan validate"
 evidence_required:
   - "verified"
 created_at: 2026-10-01

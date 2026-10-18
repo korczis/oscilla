@@ -1,0 +1,45 @@
+id: E015
+milestone: M046
+serves:
+  - "engineering-integrity#source-size-budget"
+  - "engineering-integrity#measure-adapter-split"
+  - "engineering-integrity#studio-workspace-split"
+  - "engineering-integrity#studio-inspector-split"
+  - "engineering-integrity#shell-partials"
+  - "engineering-integrity#acyclic-imports"
+  - "engineering-integrity#no-inert-surfaces"
+  - "engineering-integrity#automation-transforms"
+  - "engineering-integrity#size-delta-reported"
+  - "engineering-integrity#flake-ledger"
+  - "engineering-integrity#layer-cost-measured"
+title: "Register the M046 claims and point the engineering-integrity criteria at them"
+slug: register-the-m046-claims
+priority: p2
+profile: routine
+objective: "Once E001-E011 have landed, add to docs/CLAIMS.yaml one guaranteed claim per criterion, naming the source and the test that prove it: source-size-budget, measure-adapter-split, studio-workspace-split, studio-inspector-split, shell-partials, src-imports-acyclic, no-inert-surfaces, automation-transforms-table, dist-size-delta-reported, ci-flake-ledger and ai-layer-cost-measured; then change each criterion of .ai/repo/project/intents/engineering-integrity.yaml that this issue serves from its command to evidence claim with that claim id. Doing this once, here, keeps docs/CLAIMS.yaml and the intent out of every other M046 issue's scope, so they can run in parallel and none fails finish on scope."
+why: "Audit idd-dispatch F1 and F5: a claim swap inside each issue edits an intent outside its scope and moves the binding's plan pin mid-task, and docs/CLAIMS.yaml in eleven scopes serialises them all."
+scope:
+  - "docs/CLAIMS.yaml"
+  - ".ai/repo/project/intents/engineering-integrity.yaml"
+depends_on:
+  - "E001"
+  - "E002"
+  - "E003"
+  - "E004"
+  - "E005"
+  - "E006"
+  - "E007"
+  - "E008"
+  - "E009"
+  - "E010"
+  - "E011"
+acceptance_criteria:
+  - "docs/CLAIMS.yaml holds the eleven claims as guaranteed, each naming an implementation and a test that exist, and tests/unit/knowledge-integrity.test.mjs passes."
+  - "The eleven criteria name their claims as evidence, and majordomus intent validate reports no failure."
+  - "This issue changes the intent it serves, so the plan and evidence pins of majordomus intent binding --issue E015 change during the task: the worker re-reads them before finish."
+validation:
+  - "majordomus intent validate"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-10-18

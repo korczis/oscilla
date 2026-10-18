@@ -6,22 +6,25 @@ title: "Split the Studio inspector by responsibility"
 slug: split-the-studio-inspector-by-responsibility
 priority: p2
 profile: implementation
-objective: "Split src/js/ui/studio/inspector.js (69 711 bytes, 1 457 lines) into modules per subject (node, connection, clip, automation, measurement) each under 40 000 bytes, with no behaviour change and the inspector's focus behaviour unchanged."
-why: "Conversation 6ac1beb8, 2026-10-04T02:55:11Z (inspector about 47 kB then, 69.7 kB now)."
+objective: "Split src/js/ui/studio/inspector.js (69 711 bytes and 1 457 lines on main at 044f98a; 73 184 bytes and 1 523 lines at d4bd97f, where #197 merged after changing it for B10, C2, C3 and C8, identical to its head 55ae40d; measure again with wc -c at the start commit) into modules per subject (node, connection, clip, automation, measurement) under src/js/ui/studio/inspector/, each under 40 000 bytes, with inspector.js staying the module its importers import, with no behaviour change and the inspector's focus behaviour unchanged. It follows E003 because both rebuild dist and both are Studio splits a reviewer reads in order."
+why: "Conversation 6ac1beb8, 2026-10-04T02:55:11Z (inspector about 47 kB then; 73.2 kB on main at d4bd97f)."
 scope:
-  - "src/js/ui/studio"
+  - "src/js/ui/studio/inspector.js"
+  - "src/js/ui/studio/inspector"
   - "tests/unit"
   - "tests/browser"
   - "dist"
-  - "docs/CLAIMS.yaml"
 depends_on:
   - "E001"
+  - "E003"
 acceptance_criteria:
-  - "inspector.js and each module split from it are under 40 000 bytes and the baseline records the lower caps."
-  - "npm run test:studio, npm run test:visual and npm test pass with no change to any expected value or reference."
-  - "docs/CLAIMS.yaml gains the guaranteed claim `studio-inspector-split` naming the source and the test that prove it, and the intent criterion this issue serves names that claim as its evidence in place of the command."
+  - "inspector.js and each module split from it are under 40 000 bytes, and tests/unit/source-size-budget.test.mjs passes with the cap lowered or removed."
+  - "npm run test:studio, npm run test:visual and npm test pass. What may change: the paths in tests that read the moved code and source-scanning fixtures. What may not: any expected value, snapshot, visual reference or browser-suite assertion."
+  - "The pull request carries a reviewer's verdict where it touches a guarded path (project.review-verdict)."
+  - "E015 registers the claim; this issue does not edit docs/CLAIMS.yaml or the intent."
 validation:
   - "npm run release-gate"
 evidence_required:
   - "verified"
 created_at: 2026-10-18
+updated_at: 2026-10-18

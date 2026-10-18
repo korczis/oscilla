@@ -7,12 +7,19 @@ slug: midi-notes-visible
 priority: p2
 profile: implementation
 objective: "Show incoming and generated notes (name, velocity) next to the existing spectrum and waveform views, in the OSCILLA visual language, with a non-pointer path and announcements."
+current_state: "Updated 2026-10-18. The scope names only MIDI paths plus the one integration file the criteria need, so that majordomus intent realization does not infer unrelated earlier work as realising this intent (audit finding main-plan F9, 2026-10-18). src/index.html is the integration file for the note view. It follows V503 as well as V502 because both change src/js/midi (scope conflict in the same wave, simulated 2026-10-18)."
 scope:
-  - "src/js"
-  - "src/css"
-  - "tests"
+  - "src/js/midi"
+  - "src/js/ui/midi"
+  - "src/styles/midi.css"
+  - "src/index.html"
+  - "tests/browser/midi.cjs"
+  - "src/styles/main.css"
+  - "tests/README.md"
+  - "dist"
 depends_on:
   - "V502"
+  - "V503"
 acceptance_criteria:
   - "Show incoming and generated notes (name, velocity) next to the existing spectrum and waveform views, in the OSCILLA visual language, with a non-pointer path and announcements."
   - "Decision: .ai/repo/adrs/0058-midi-is-an-optional-local-input-layer-over-the-audio-engine.md; the visual identity lock applies."
@@ -21,3 +28,4 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-18
+updated_at: 2026-10-18

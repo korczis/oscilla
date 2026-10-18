@@ -1,21 +1,22 @@
 id: S086
 milestone: M005
-title: "§86 Specification section 86 (not received)"
-slug: specification-section-86-not-received
-priority: p1
-profile: implementation
-objective: "The pasted specification was truncated inside section 63; this section's text was never delivered. Blocked until the text is supplied."
+title: "§86 Code Quality (Q001 triage: already delivered)"
+slug: "v1-spec-86-code-quality"
+priority: p3
+profile: routine
+objective: "Section 86, \"Code Quality\", of the numbered multi-page V1 specification (docs/specs/oscilla-v1-sections-64-95.md, line 611; ChatGPT project conversation 6abec18d, 2026-10-01T20:46:12Z), triaged under Q001 against project.single-file-deliverable, S001-S063 and the ADRs from 0011 on, and closed as already delivered."
 scope:
-  - "index.html"
-  - "tests"
+  - "docs/specs/oscilla-v1-sections-64-95.md"
+  - ".ai/repo/project/issues/S086.yaml"
 depends_on:
   - "S000"
   - "Q001"
-current_state: "Text exists, not adopted: section 86, \"Code Quality\", of the numbered multi-page V1 specification, recorded verbatim in docs/specs/oscilla-v1-sections-64-95.md (ChatGPT project conversation 6abec18d, 2026-10-01T20:46:12Z). Its numbering and premises differ from the single-file prompt of S001-S063, and parts of it conflict with the single-file deliverable rule and with later ADRs, so before any work this section is triaged against them. Whether M005 adopts the text at all is the owner's decision Q001, and this issue waits on it."
+cancelled: true
+current_state: "Already delivered as a duplicate: S056 \"Code organization\" (done) for V1. The current module structure is the one CLAUDE.md \"Architecture of src/js/\" describes, tests/unit/one-source-constants.test.mjs keeps shared constants in one source, and structure and duplication of the code base are the engineering-integrity intent (M046). Triage of 2026-10-18 under Q001, decided by the coordinating Claude session under the owner's delegation of 2026-10-18 ('tak to vse pores'); the owner may override."
 acceptance_criteria:
-  - "The pasted specification was truncated inside section 63; this section's text was never delivered. Blocked until the text is supplied."
+  - "Cancelled by the Q001 triage of 2026-10-18 as already delivered, for the reason and with the pointer in current_state; reopening it needs a new decision recorded here that names what the pointer does not cover."
 validation:
-  - "node tests/smoke.cjs"
+  - "majordomus plan validate"
 evidence_required:
   - "verified"
 created_at: 2026-10-01

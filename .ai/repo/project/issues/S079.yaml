@@ -1,21 +1,21 @@
 id: S079
 milestone: M005
-title: "§79 Specification section 79 (not received)"
-slug: specification-section-79-not-received
+title: "§79 Audio Test Matrix (Q001 triage: work)"
+slug: "v1-spec-79-audio-test-matrix"
 priority: p1
 profile: implementation
-objective: "The pasted specification was truncated inside section 63; this section's text was never delivered. Blocked until the text is supplied."
+objective: "Section 79, \"Audio Test Matrix\", of the numbered multi-page V1 specification (docs/specs/oscilla-v1-sections-64-95.md, line 447; ChatGPT project conversation 6abec18d, 2026-10-01T20:46:12Z), adopted under Q001 and triaged against project.single-file-deliverable, S001-S063 and the ADRs from 0011 on. This issue is the part of it that no record or check shows delivered; the rest is named in current_state."
 scope:
-  - "index.html"
-  - "tests"
+  - "tests/unit"
 depends_on:
   - "S000"
   - "Q001"
-current_state: "Text exists, not adopted: section 79, \"Audio Test Matrix\", of the numbered multi-page V1 specification, recorded verbatim in docs/specs/oscilla-v1-sections-64-95.md (ChatGPT project conversation 6abec18d, 2026-10-01T20:46:12Z). Its numbering and premises differ from the single-file prompt of S001-S063, and parts of it conflict with the single-file deliverable rule and with later ADRs, so before any work this section is triaged against them. Whether M005 adopts the text at all is the owner's decision Q001, and this issue waits on it."
+current_state: "Kept as work, triaged. Unit tests cover frequency helpers (tests/unit/core.test.mjs, engine.test.mjs, audio-synthesis.test.mjs), but no record shows the section's matrix: every listed frequency and a value near Nyquist, each checked for validation, formatting, wavelength, period, note and region. Triage of 2026-10-18 under Q001, decided by the coordinating Claude session under the owner's delegation of 2026-10-18 ('tak to vse pores'); the owner may override."
 acceptance_criteria:
-  - "The pasted specification was truncated inside section 63; this section's text was never delivered. Blocked until the text is supplied."
+  - "A unit test under tests/unit checks 20 Hz, 40 Hz, 100 Hz, 440 Hz, 1 kHz, 4 kHz, 8 kHz, 15.5 kHz, 18 kHz, 20 kHz and a frequency just below Nyquist at 44.1 kHz and at 48 kHz, each for validation, formatted readout, period, wavelength, nearest note and frequency region, through the helpers the page uses (src/js/core)."
+  - "npm test passes; a helper fixed because of it is changed in src/js/core and named in the pull request."
 validation:
-  - "node tests/smoke.cjs"
+  - "npm test"
 evidence_required:
   - "verified"
 created_at: 2026-10-01

@@ -63,7 +63,14 @@ has chosen none (issue Q002). Times are UTC.
 - "The system cannot quietly lie" about its version, commit, deployment, measurement, visual
   state or a test that never ran (`6abec18d`, 2026-10-02T03:06:41Z, §149).
 - Method: "AI accelerated implementation. Majordomus constrained and organized it. Human
-  judgment defined the product." (`6abf2a8d` 04:11:27Z; About carries it.) Prismatic as the
+  judgment defined the product." (ChatGPT's wording, `6abf2a8d` 2026-10-02T04:11:27Z, which
+  ChatGPT itself recommended keeping. About does not carry it verbatim: its C Method list says
+  "Human judgment defined the product and the architecture. AI accelerated implementation.
+  Majordomus kept the rules, plan and decisions in the repository and checked them. The
+  repository remained the source of truth."; its Majordomus coda says "AI accelerated
+  implementation. Majordomus supplied structure, memory and constraints. The repository
+  remained the source of truth." (`src/index.html`, section `osc-about-method` and
+  `p.osc-about-coda`).) Prismatic as the
   technology, Majordomus as the production process, OSCILLA as the proof the process works
   (`6ac027b2`, 22:03:18Z) is ChatGPT's framing; Prismatic is absent from the public copy.
 
@@ -78,5 +85,8 @@ has chosen none (issue Q002). Times are UTC.
   "miracle ultrasonic gadget", not a medical or hearing-diagnostic tool, not a DAW, not a
   generic SaaS dashboard, not "Pigments, free in the browser"; bioacoustics is one comparison
   domain, not the identity (`6abec18d` 2026-10-01T23:25:49Z; 2026-10-02T03:35:53Z).
-- ChatGPT rated technical quality 9/10 and business clarity 5/10: too many possible identities
-  (`6ac1beb8`, 03:30:06Z).
+- ChatGPT's overall verdict: technically "very above average", product-wise "a strong emerging
+  identity, but still too many possible identities". It added, as a general aside rather than a
+  score, that technical quality "can be 9/10 and business clarity 5/10" because the two do not
+  correlate (`6ac1beb8`, 2026-10-04T03:30:06Z). Nothing derived from this record presents 9/10
+  and 5/10 as ratings.

@@ -6,26 +6,28 @@ title: "Formalize the owner's ban on placeholders, mockup data and inert control
 slug: formalize-the-owner-s-ban-on-placeholders-mockup-data-and-in
 priority: p1
 profile: implementation
-objective: "The owner's standing instruction: no hard-coding, mockups or placeholders, old or new; everything connected, interactive, integrated and covered by tests (conversation 6ac1beb8, 2026-10-04T03:01:41Z), with the earlier \"NO FAKE DATA: the mockup fixes UI geometry, never values\" and \"every control does something real\" (conversation 6abec18d, 2026-10-01T21:52:21Z; specification section 74). Write the rule under .ai/repo/rules/project/ in the same change as its enforcement: a unit test that refuses (a) placeholder copy in what a user can be shown (\"TODO\", \"lorem\", \"coming soon\", \"not implemented\", \"mock\" and the like; the HTML placeholder attribute of an input is not placeholder copy), (b) a disabled control with no stated reason (the completion ledger's W6), (c) a control in src/index.html with no binding to an effect and no mark that it is static, and (d) a value shown as data that comes from a literal rather than from state; each with a mutation test. What no mechanism can decide stays with the reviewer and the rule says so."
+objective: "The owner's standing instruction: no hard-coding, mockups or placeholders, old or new; everything connected, interactive, integrated and covered by tests (conversation 6ac1beb8, 2026-10-04T03:01:41Z), with the earlier \"NO FAKE DATA: the mockup fixes UI geometry, never values\" and \"every control does something real\" (conversation 6abec18d, 2026-10-01T21:52:21Z; specification section 74). Write the rule under .ai/repo/rules/project/ in the same change as its enforcement, limited to what a mechanism can decide: (a) placeholder copy in what a user can be shown ('TODO', 'lorem', 'coming soon', 'not implemented', 'mock' and the like), with named allowances for the legitimate matches on today's tree: the flow-step status value 'todo' (src/index.html and src/js/measurement/views/measure-flow.js), the ?mock=1 layout-comparison mode (src/js/ui/app.js, src/styles/base.css), which is the geometry-only mockup the owner allowed, the honest status text 'not implemented by this build' (src/js/experiments/evidence.js), and the HTML placeholder attribute of an input; (b) a disabled control with no stated reason (the completion ledger's W6); (c) a data-osc control in the running page with no handler registered for it, checked in a browser suite at runtime rather than by parsing src/index.html, because 111 of its 341 form controls are bound imperatively from src/js and the Studio inspector's controls exist only in JS. A value shown as data that comes from a literal rather than from state cannot be decided statically (cited constants such as the nominal 20 Hz-20 kHz convention are literals on purpose): the rule says it stays with the reviewer. Existing violations are listed in an allowance file with a reason each, and the allowance only shrinks, checked against its git history as tests/unit/browser-timing.test.mjs checks its debt. Fixing a listed violation changes behaviour, so each fix is its own pull request with its own visual-reference acceptance, outside this issue and outside the intent's no-behaviour-change invariant."
 why: "The owner formalizes lessons as rules with mutation-proven enforcement; no project rule bans placeholders or inert controls today (no-fake-science covers invented science only)."
 scope:
   - ".ai/repo/rules/project"
   - "tests/unit/no-inert-surfaces.test.mjs"
+  - "tests/unit/no-inert-surfaces-allowance.json"
+  - "tests/browser/qa-regressions.cjs"
   - "tests/README.md"
   - "CLAUDE.md"
   - "AGENTS.md"
-  - "src"
-  - "docs/CLAIMS.yaml"
-depends_on:
-  - "E001"
 acceptance_criteria:
-  - "The rule file and its test land in one commit; the test fails on a mutation for each of (a) to (d) and passes on the tree, after the existing violations it finds are fixed or listed with a reason in an allowance that only shrinks."
-  - "tests/unit/knowledge-integrity.test.mjs passes: the rule names its enforcement, the rules index lists it with version and class, and every bootstrap that names it names a rule in force (project.rules-name-their-enforcement)."
-  - "Until the rule document lands, no file names it by an id."
-  - "docs/CLAIMS.yaml gains the guaranteed claim `no-inert-surfaces` naming the source and the test that prove it, and the intent criterion this issue serves names that claim as its evidence in place of the command."
+  - "The rule file and its tests land in one commit; the unit test fails on a mutation for each of (a) and (b), the browser check fails on a fixture control with no handler for (c), and both pass on the tree with every existing violation in the allowance."
+  - "The allowance check fails on a mutation that adds an entry or widens one relative to its value in an earlier commit."
+  - "The rule names what stays with the reviewer (a literal shown as data; whether a sentence is placeholder copy in substance)."
+  - "tests/unit/knowledge-integrity.test.mjs passes: the rule names its enforcement, the rules index lists it with version and class, and every bootstrap that names it names a rule in force (project.rules-name-their-enforcement). Where CLAUDE.md or AGENTS.md text is generated by Majordomus, the change goes through .ai/repo/policy.yaml and majordomus update, never between the generated markers."
+  - "Until the rule document lands, no file names it by an id; no file under src changes in this issue."
+  - "tests/README.md has a row for the new test (one appended row)."
+  - "E015 registers the claim; this issue does not edit docs/CLAIMS.yaml or the intent."
 validation:
-  - "node --test tests/unit/knowledge-integrity.test.mjs"
+  - "node --test tests/unit/knowledge-integrity.test.mjs tests/unit/no-inert-surfaces.test.mjs"
   - "npm test"
 evidence_required:
   - "verified"
 created_at: 2026-10-18
+updated_at: 2026-10-18

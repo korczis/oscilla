@@ -2,24 +2,28 @@ id: E001
 milestone: M046
 serves:
   - "engineering-integrity#source-size-budget"
-title: "A source-size budget that only falls"
+title: "A source-size budget with headroom whose caps only fall"
 slug: a-source-size-budget-that-only-falls
 priority: p1
 profile: implementation
-objective: "Add tests/unit/source-size-budget.test.mjs and a baseline file beside it, on the model of tests/browser/timing-baseline.json: every tracked file under src/js and src/index.html above 40 000 bytes has a recorded cap; the test fails when a file exceeds its cap, when a file above 40 000 bytes has no cap, when a cap names a file that no longer exists, and when a cap is more than 5 % above its file's size (so a shrink must lower the cap in the same change). The first baseline is the current size of each file."
-why: "Conversation 6ac1beb8, 2026-10-04T02:55:11Z and prompt 1 sections 17-22; conversation 6ac3ead5, 2026-10-05T18:32:06Z, section 6: the hotspots grew 15-50 % in two weeks with nothing measuring them."
+objective: "Add tests/unit/source-size-budget.test.mjs and tests/unit/source-size-baseline.json beside it, on the model of tests/browser/timing-baseline.json and its history check in tests/unit/browser-timing.test.mjs ('the recorded debt only shrinks'). Every tracked file under src/js, and src/index.html, above 40 000 bytes has a recorded cap; a file at or below 40 000 bytes has no entry and its effective cap is 40 000 bytes. The first cap of a file is its headroom ceiling: its size at the start commit plus 10 %, rounded up to the next 1 000 bytes, so a feature can grow a capped file by about a tenth before it must split it or declare a raise. The test fails when a file exceeds its cap; when a file above 40 000 bytes has no cap; when an entry names a missing file or a file of 40 000 bytes or less; when a cap is above its file's headroom ceiling (so a shrink lowers the cap in the same change); and when a cap is above its effective value in the most recent earlier commit that changed the baseline (read with git log and git show, skipped only where no history exists, failing in CI as browser-timing does), unless the baseline's raises ledger has an entry naming the file, the new cap, the pull request and a reason of more than 30 characters; raises entries are added, never edited. A file that passes 40 000 bytes for the first time therefore needs a raises entry too. Take the baseline on a main that contains the V272 final review (#197, merged into main as d4bd97f on 2026-10-18T10:56:53Z), which V431 tracks; V431 also waits on ADR acceptance, so this issue starts only when V431 is DONE. On main at d4bd97f (sizes identical to #197's head 55ae40d), 18 files under src/js are above 40 000 bytes, the largest src/js/ui/measure.js at 115 572 bytes, and src/index.html is 255 382 bytes (git ls-tree -r -l origin/main -- src/js src/index.html); measure again with wc -c at the start commit and record those sizes, not these."
+why: "Conversation 6ac1beb8, 2026-10-04T02:55:11Z and prompt 1 sections 17-22; conversation 6ac3ead5, 2026-10-05T18:32:06Z, section 6: the hotspots grew 6-49 % in two weeks with nothing measuring them (inspector.js +6 %, workspace.js +17 %, src/index.html +18 %, measure.js +49 %; git ls-tree -r -l from 27f7c62, main on 2026-10-05, to 044f98a). A cap equal to the current size would leave no headroom and block #197, M047 and M048 on the first byte (critique engineering-integrity, baseline-at-current-size-freezes-seventeen-files); a cap without a history check would not only fall (critique only-falls-is-unenforced)."
 scope:
   - "tests/unit/source-size-budget.test.mjs"
   - "tests/unit/source-size-baseline.json"
   - "tests/README.md"
-  - "docs/CLAIMS.yaml"
+depends_on:
+  - "V431"
 acceptance_criteria:
-  - "The test fails on each of the four mutations (a file grown past its cap, a new large file, a stale cap, a cap left high after a shrink) and passes on the tree."
-  - "tests/README.md names the test, and the baseline's header says that a cap only falls and that raising one is stated in the pull request."
-  - "docs/CLAIMS.yaml gains the guaranteed claim `source-size-budget` naming the source and the test that prove it, and the intent criterion this issue serves names that claim as its evidence in place of the command."
+  - "The test fails on each of these mutations, each a case in the test, and passes on the tree: a file grown past its cap; a new file above 40 000 bytes without a cap; an entry for a missing file; an entry for a file of 40 000 bytes or less; a cap above the headroom ceiling after a shrink; a cap raised above its value in an earlier commit without a raises entry; and a file passing 40 000 bytes for the first time without a raises entry."
+  - "A cap raised with a raises entry naming the file, the cap, the pull request and a reason of more than 30 characters passes."
+  - "The baseline's header says that a cap only falls, how the headroom ceiling is computed, and that a raise is declared in the raises ledger of the pull request that needs it."
+  - "tests/README.md has a row for the test (one appended row; tests/README.md is a shared index every test-adding issue appends to)."
+  - "E015 registers the claim; this issue does not edit docs/CLAIMS.yaml or the intent."
 validation:
   - "node --test tests/unit/source-size-budget.test.mjs"
   - "npm test"
 evidence_required:
   - "verified"
 created_at: 2026-10-18
+updated_at: 2026-10-18

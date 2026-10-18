@@ -39,25 +39,51 @@ majordomus plan validate      # the graph: acyclic, every edge resolves
 ## Issue identifiers
 
 An issue's id is a letter and three digits; the letter says which line of work it belongs to,
-and nothing derives a status from it.
+and nothing derives a status from it. This list names every prefix under `issues/`; a new
+prefix is added here in the same change that adds its first issue.
 
 ```text
-S001-S095   V1 specification sections (M001-M005); S000 received the text of 64-95
+S000-S095   V1 specification sections (M001-M005); S000 received the text of 64-95
 D001-D003   V1 delivery (M006)
-V2xx        V2 laboratory (M007-M010, M034)          R0xx  release engineering (M011, M035)
+V2xx        V2 laboratory (M007-M010, M034)
+R0xx        release engineering (M011, M035)
 V3xx        V3 MEASURE (M012-M020); V39x its measurement extensions after 3.11 (M047)
 V4xx        V3.1 Studio (M021-M033)
 V5xx        MIDI jam companion (M045)
 V6xx        Studio completion after 3.11 (M048)
 E0xx        engineering integrity: structure, size and checks of the code base (M046)
 L0xx        Learn lessons (M049)
-P0xx        product: first run, positioning, productization (M050, M051)
-Q0xx        questions only the owner can answer (M052; Q001 under M005)
+P0xx        product: first run (M050), positioning, product path, public story (M051)
+Q0xx        questions and acts only the owner can answer or take (M052; Q001 under M005, Q004 under
+            M050, Q007 under M053)
 ```
 
-A Q issue is answered by the owner. A worker records the answer as evidence (covers
-`owner_decision`) only by quoting the owner's words with their date and source, and never answers
-one itself. Work that waits on an answer names the Q issue in `depends_on`, and M052 sorts after
-every live milestone, so `majordomus plan next` never nominates a question to a worker. A question
-recorded with `majordomus question add` lives in one checkout's `.ai/local/` and is read by nobody
-else; a question the next worker must see is a Q issue.
+A Q issue is answered by the owner, or by a session the owner delegated the decision to. The
+answer is recorded as evidence (covers `owner_decision`) with its date and source: in the owner's
+words, or attributed to the deciding session together with the delegation's date and words, its
+reasoning and the note that the owner may override it, never presented as the owner's own words.
+A worker without such a delegation never answers one. Work that waits on an answer names the Q
+issue in `depends_on`, and M052 (questions) and M053 (owner acts on published releases, Q007)
+sort after every live milestone, so `majordomus plan next` does not nominate them first. That is a convention, not a guarantee: a Q issue is READY to
+`majordomus plan start` like any other, and its `owner` field only informs. A question recorded
+with `majordomus question add` lives in one checkout's `.ai/local/` and is read by nobody else;
+a question the next worker must see is a Q issue.
+
+## Shared files and closing issues
+
+`docs/CLAIMS.yaml` and an intent file are changed by one closing issue per milestone (E015 for
+M046, V399 for M047, V606 for M048, L006 for M049), which registers the milestone's claims and
+points the intent's criteria at them once the work has landed; the other issues of the milestone
+leave both files alone, so they can run in parallel and none fails `finish` on scope or moves
+its binding's pins mid-task. P002, P003 and P005 do the swap themselves and have the intent file
+in their scope: P003 then P005 are chained, P002 follows Q004 after P001, and P004 does not edit
+the intent; a P004 worker re-reads its binding pins after rebasing over P003 or P005. `tests/README.md` must have a row for every
+test (`tests/unit/knowledge-integrity.test.mjs`), so every test-adding issue appends one row to
+it; two such issues running at once rebase on that index, which `majordomus plan validate`
+reports as a scope conflict and which is a merge, not a design conflict. `dist` is a rebuild
+artifact in the same way: whichever change lands second rebuilds it.
+
+An issue whose verification rounds may be partial (V386, V431, V432, V433) declares a closing
+token, `all_criteria_met`, besides `verified` in `evidence_required`; each round is recorded
+under `verified`, met or not, and `all_criteria_met` only when every acceptance criterion is
+met, so `majordomus plan done` refuses until then.

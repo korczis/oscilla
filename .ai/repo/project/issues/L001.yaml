@@ -4,24 +4,36 @@ serves:
   - "perception-lessons#missing-fundamental"
 title: "Learn: the missing fundamental"
 slug: learn-the-missing-fundamental
-priority: p2
+priority: p3
 profile: implementation
-objective: "A lesson whose demonstration plays harmonics 2 to N of a chosen fundamental with no energy at the fundamental, with an explanation, a control (fundamental, N) and a takeaway, in the form of the existing Learn topics."
-why: "Conversation 6abec18d, 2026-10-01T21:08:07Z (V2 roadmap item 9) and the multi-page specification sections 89-90."
+objective: "It starts only after Q001 is answered. If Q001 adopts sections 89-90, this lesson is the implementation of their 'missing fundamental demo' and S089/S090 do not repeat it; if Q001 closes them, this issue is cancelled with Q001 as the reason. A lesson whose demonstration plays harmonics 2 to N of a chosen fundamental with no component at the fundamental, with an explanation, a control (fundamental, N) and a takeaway, in the form of the existing Learn topics. The copy names what an unknown playback chain changes: a small speaker cannot reproduce a low fundamental, and distortion in the chain can put energy at the fundamental, so the signal is free of it only digitally."
+why: "Multi-page V1 specification sections 89-90 (docs/specs/oscilla-v1-sections-64-95.md), adopted or not by Q001; conversation 6abec18d, 2026-10-01T21:08:07Z (V2 roadmap item 9, a ChatGPT proposal)."
 scope:
   - "src/js/data"
   - "src/js/labs"
   - "src/js/ui"
+  - "src/index.html"
+  - "src/partials"
+  - "src/styles"
   - "tests/unit/learn-missing-fundamental.test.mjs"
   - "tests/browser"
+  - "tests/README.md"
+  - "tests/unit/source-size-baseline.json"
   - "dist"
-  - "docs/CLAIMS.yaml"
+depends_on:
+  - "Q001"
+  - "S089"
 acceptance_criteria:
-  - "A spectrum test on the rendered demonstration finds the harmonics and no energy at the fundamental above a stated floor."
-  - "The copy describes the phenomenon only and passes tests/unit/no-fake-science.test.mjs."
-  - "docs/CLAIMS.yaml gains the guaranteed claim `lesson-missing-fundamental` naming the source and the test that prove it, and the intent criterion this issue serves names that claim as its evidence in place of the command."
+  - "tests/unit/learn-missing-fundamental.test.mjs: the demonstration's partial set and schedule hold harmonics 2 to N of the stated fundamental and no component at the fundamental; it fails on the merge base."
+  - "The copy says what listeners commonly report under controlled listening, with a citation, never what this listener hears; it passes tests/unit/no-fake-science.test.mjs, and the pull request states that whether a sentence still implies a perceptual effect was judged by the reviewer, since the scan has no perceptual-claim phrases."
+  - "The copy names the two playback-chain caveats."
+  - "A browser check plays the demonstration through the AudioEngine with no console error, within the session safety limit, from file:// and the sub-path."
+  - "A capped file it grows past its cap is split first or its raise is declared in tests/unit/source-size-baseline.json's raises ledger."
+  - "tests/README.md has a row for the new test; L006 registers the claim; this issue does not edit docs/CLAIMS.yaml or the intent."
 validation:
+  - "node --test tests/unit/learn-missing-fundamental.test.mjs"
   - "npm run release-gate"
 evidence_required:
   - "verified"
 created_at: 2026-10-18
+updated_at: 2026-10-18

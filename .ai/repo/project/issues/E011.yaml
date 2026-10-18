@@ -6,20 +6,24 @@ title: "Measure what the .ai layer costs"
 slug: measure-what-the-ai-layer-costs
 priority: p2
 profile: implementation
-objective: "A script, run by CI, that prints the .ai layer's share of tracked files and lines, the share of commits since the last release that touch only .ai/, and the records no other record or file references; the numbers go in the step summary, never into a committed file by hand."
-why: "\"Majordomus must pay rent\" (ADR 0051); the .ai share was 53 % of tracked files at v3.3.0 and 55 % at v3.11.0 (conversation 6ac1beb8, 2026-10-04T02:55:11Z; conversation 6ac3ead5, section 12)."
+objective: "A script, run by CI, that prints the .ai layer's share of tracked files and lines and the share of commits since the last v* tag that touch only .ai/; the numbers go in the step summary, never into a committed file by hand. The number feeds the owner's decision under ADR 0051 ('the meta-layer must not grow for its own sake; Majordomus must pay rent') on whether to prune or slow the layer; it decides nothing itself."
+why: "\"Majordomus must pay rent\" (ADR 0051); the .ai share was 53 % of tracked files at v3.3.0 and 55 % at v3.11.0 (conversation 6ac1beb8, 2026-10-04T02:55:11Z; conversation 6ac3ead5, section 12). A count of records that nothing references is left out: Majordomus relations, file mentions in prose and claim citations are three different graphs, and the number would mean nothing until one is chosen."
 scope:
   - "scripts/ai-layer-cost.mjs"
   - "tests/unit/ai-layer-cost.test.mjs"
   - ".github/workflows/ci.yml"
   - "tests/README.md"
-  - "docs/CLAIMS.yaml"
+depends_on:
+  - "E010"
 acceptance_criteria:
-  - "The script's output on a fixture repository is checked by a unit test."
-  - "CI prints the numbers on every pull request."
-  - "docs/CLAIMS.yaml gains the guaranteed claim `ai-layer-cost-measured` naming the source and the test that prove it, and the intent criterion this issue serves names that claim as its evidence in place of the command."
+  - "The script's output on a fixture repository is checked by tests/unit/ai-layer-cost.test.mjs, which fails on the merge base."
+  - "CI prints the numbers on every pull request; the workflow change keeps project.ci-bounded (bounded, pinned, retried) and carries a review verdict (.github is guarded)."
+  - "It follows E010 because both change .github/workflows/ci.yml."
+  - "tests/README.md has a row for the test (one appended row)."
+  - "E015 registers the claim; this issue does not edit docs/CLAIMS.yaml or the intent."
 validation:
   - "npm test"
 evidence_required:
   - "verified"
 created_at: 2026-10-18
+updated_at: 2026-10-18

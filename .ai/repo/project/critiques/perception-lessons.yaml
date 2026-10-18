@@ -8,49 +8,62 @@ findings:
     finding: "Most serious, and blocking. The intent's two sources are not owner decisions. (1) 'ChatGPT's V2 roadmap ... item 9' is a ChatGPT proposal. The knowledge record chatgpt-oscilla-project ('How to read them') says an answer is a decision only where the owner adopted it, and no adopted spec mentions psychoacoustics (grep over docs/specs finds nothing). (2) 'The multi-page specification, sections 89-90' is docs/specs/oscilla-v1-sections-64-95.md. The same record lists it as 'recorded on 2026-10-18 and not adopted (issue Q001)'. Its section 89 lists the 'Shepard tone educational demo', the 'missing fundamental demo' and the 'equal-loudness educational explanation', and section 90 'MISSING FUNDAMENTAL' and 'SHEPARD TONE'. Those are the S089 and S090 issues of M005, whose fate Q001 asks the owner to decide. If the owner answers (a), adopting the sections, L001, L002 and L005 duplicate S089 and S090. If the answer is (b), closing them, this intent revives what the owner just closed. Before L001 starts, L001-L005 must depend on Q001, or on a Q issue of their own, and Q001's option (a) must say that these issues are its implementation of 89-90. The steering of ADR 0051 (measurement is the wedge; fewer new nouns) also applies here: five new Learn topics are breadth, and the intent does not say why they come now."
     blocking: true
     resolution:
-      state: open
+      state: planned
+      issue: "L001"
+      because: "Every L issue depends on Q001; Q001's decision of 2026-10-18 (option (a), by the coordinating session under the owner's delegation) names L001, L002 and L005 as the implementation of sections 89-90, which S089 and S090 do not repeat; L003 and L004, not named there, are cancelled; the lessons are priority p3 under ADR 0051."
   - id: statement-claims-what-the-listener-hears
     class: unproven_assumption
     subject: "perception-lessons#missing-fundamental"
     finding: "Blocking for L001. The invariant says no lesson 'claims an effect', but the statement makes several perceptual claims: the harmonic series is 'still heard at the fundamental's pitch'; the Shepard tone 'seems to rise without end'; the masked tone is 'audible again'; the two tones 'separate'. These describe what is typically reported under controlled listening, not what this user will hear through unknown speakers at an unknown level. That is exactly the 'speaker output unknown' case of project.no-fake-science. Two physical confounds belong in the missing-fundamental lesson in particular. Small speakers cannot reproduce a low fundamental anyway, so the demo is weak there. And intermodulation in the playback chain can create energy at the difference frequency, which is the fundamental, so 'no energy at the fundamental' holds only for the digital signal. The node --test criterion checks that digital signal and cannot see either confound. The copy contract should be 'listeners commonly report ..., cited', the rule's phrasing for binaural content ('describes the perceptual phenomenon only'). The no-fake-science scan cannot decide this: its matcher has no perceptual-claim phrases, so it stays with the reviewer, and the issues should say so."
     blocking: true
     resolution:
-      state: open
+      state: planned
+      issue: "L001"
+      because: "The statement and criteria now state what each demonstration plays, the copy contract is 'listeners commonly report ..., cited', L001 names the small-speaker and chain-distortion confounds, and every L issue says the reviewer decides perceptual claims the scan cannot (2026-10-18)."
   - id: demonstrations-exceed-the-learn-form
     class: unproven_assumption
     subject: "L002"
     finding: "'In the form of the existing Learn topics' means a demo cfg that drives the Playground voice (src/js/data/learn.js:1-7; sources single, dual and sweep; patterns tone, sequence, am, fm, siren, octave and the like). Two of the five demonstrations do not fit that form. A Shepard tone needs 8-10 octave-spaced partials, each gliding while its gain follows a fixed spectral envelope. The additive oscillator is one PeriodicWave with static partials (src/js/audio/additive.js), so this needs a new graph builder inside the engine's track()/source() accounting (project.audio-engine-discipline) under the guarded src/js/audio. Masking needs a tone and band-limited noise sounding at once. The noise source (src/js/audio/noise.js) is not a Learn or Playground source that can mix with a tone, and the AudioEngine replaces voices rather than layering them (ADR 0002). The scopes (src/js/data, src/js/labs, src/js/ui) omit src/js/audio. Engine changes also have to keep the V1 golden vectors green (ADR 0014, tests/unit/freeze.test.mjs)."
     blocking: false
     resolution:
-      state: open
+      state: planned
+      issue: "L002"
+      because: "L002 adds src/js/audio for a Shepard graph builder inside the engine's accounting, keeps tests/unit/freeze.test.mjs green and needs a verdict; L003, which needed a tone-plus-noise builder, is cancelled (2026-10-18)."
   - id: shepard-vs-safety-limit
     class: missed_requirement
     subject: "perception-lessons#shepard-tone"
     finding: "The illusion of endless rise needs a glide over several octave cycles, typically 10 s or more. The session safety limit cuts sound at 2 s by default (core/instrument.js:131). Continuous playback is opt-in per session and never persisted (project.no-fake-science; ADR 0005). L002's 'bounded by the session safety limit like every other sound' therefore means that, with default settings, the demonstration stops before the effect appears. The lesson must say whether it needs the continuous permission, plays a bounded number of cycles within the limit, or names the limit in its copy."
     blocking: false
     resolution:
-      state: open
+      state: planned
+      issue: "L002"
+      because: "The criterion and L002 play a twelve-step Shepard scale within the default session limit and allow a continuous glide only under the continuous permission, naming the limit in the copy (2026-10-18)."
   - id: critical-band-formula-and-claim
     class: unproven_assumption
     subject: "L004"
     finding: "'A cited formula' leaves the choice open, and the choices disagree. Zwicker's critical bandwidth is about 160 Hz at 1 kHz, while Glasberg and Moore's ERB is about 133 Hz at 1 kHz. The demonstration's own description ('from beating roughness to two separate tones', separating 'outside it') simplifies the literature. Beats are heard below roughly 15 Hz separation. Roughness peaks near a quarter of the critical band (Plomp and Levelt 1965). Two tones are resolved somewhat below a full critical bandwidth. A lesson built on 'crossing the bandwidth' would teach a boundary the cited source does not draw. The issue should name the model and state the copy the source supports. Its dependency on L003 (masking) has no stated reason. If the two share a module, say which. Otherwise drop the edge."
     blocking: false
     resolution:
-      state: open
+      state: rejected
+      because: "No longer applies: L004 was cancelled on 2026-10-18 because Q001 does not adopt critical bands; before cancelling, its objective was corrected to name Glasberg and Moore's ERB and the copy the literature supports, and its edge to L003 was given its reason, in case the owner revives it."
   - id: equal-loudness-data-licence
     class: missed_requirement
     subject: "L005"
     finding: "'Published equal-loudness contours ... from a cited table embedded in the build' most likely means ISO 226 (2003 or 2023). ISO's tables are copyrighted, and the specification's own section 93 (docs/specs/oscilla-v3-measure.md: 'no manufacturer files without licence/provenance') sets the bar for embedded third-party data. The issue must name a source whose data may be redistributed under MIT (for example the underlying published studies, or the ISO formula with its parameters cited and the licence checked) and record that check. 'Play tones across frequency at one relative level, explaining why they do not sound equally loud' also needs the speaker caveat. With an unknown playback chain the difference the user hears comes from the speaker as much as from the ear, and copy that attributes it to hearing alone over-claims."
     blocking: false
     resolution:
-      state: open
+      state: planned
+      issue: "L005"
+      because: "L005 requires a source whose redistribution under MIT is checked and recorded, embeds ISO 226 data only if that check passes, and names the speaker caveat (2026-10-18)."
   - id: node-tests-cannot-hear-the-engine
     class: delivery_verification
     subject: "L001"
     finding: "The five criteria run under node --test, which has no Web Audio. The repository's node tests replay schedules on a recording mock context (freeze.test.mjs; tests/unit/sequencer-fake-audio.mjs). A 'spectrum test on the rendered demonstration' in node can only analyse a JS synthesis of the partial table, not what the engine plays. That proves the table, while the criterion says 'plays'. Either the criteria say they check the demonstration's schedule or partial set, or a browser check renders the demo through the engine (OfflineAudioContext, as v31-studio-offline.cjs does) and analyses that. Majordomus 0.29 also cannot record any of these runs (V272 D3)."
     blocking: false
     resolution:
-      state: open
+      state: planned
+      issue: "L001"
+      because: "The criteria now say the unit tests check the demonstration's schedule and partial set (the digital signal), and every L issue adds a browser check that plays the demonstration through the AudioEngine (2026-10-18)."
   - id: learn-has-no-visual-reference
     class: surface_missing
     subject: "M049"
@@ -58,3 +71,4 @@ findings:
     blocking: false
     resolution:
       state: open
+      because: "Recorded as a risk of M049 on 2026-10-18: the lock is held by review for Learn surfaces."

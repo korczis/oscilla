@@ -8,14 +8,18 @@ findings:
     finding: "Blocking. All five issues wait on E003 (V601 also on E004), and E003 and E004 split ui/studio/workspace.js and inspector.js. Those files are exactly what the open V272 pull request #197 changes (workspace.js +3 048 bytes, inspector.js +3 473; 15 src/js/studio files with 933 insertions; findings A1-A9, B1-B11 and C1-C9). The plan's order (E001, then E003 and E004, then M048) therefore meets an unmerged 71-commit branch. Before any M048 issue starts, the plan must put #197 first (E003 and E004 after it), or say how the splits rebase onto it. Two dependencies also lack a reason. V603 (timeline pinch) lives in ui/studio/timeline-editor.js and V602 (minimap) in ui/studio/graph-editor.js, not in the workspace, so their wait on E003 delays them for nothing. Cut those edges, or name the workspace responsibility each needs."
     blocking: true
     resolution:
-      state: open
+      state: planned
+      issue: "V602"
+      because: "Every M048 issue now comes after #197: V602 and V603 depend on V431 directly and no longer on E003, since they live in the graph and timeline editors; V601, V604 and V605 keep E003 (V601 also E004), which come after V431 through E001, and each names the workspace or inspector responsibility it needs (2026-10-18)."
   - id: groups-contradict-adr-0030
     class: unproven_assumption
     subject: "V601"
     finding: "ADR 0030 records a decision: 'Groups and subgraphs: in neither 3.1.0 nor 3.2.0'. Schema 1 has no group record (studio/schema.js:54 STUDIO_SCHEMA_VERSION = 1), and 'adding them later needs a schema version bump and a migration (ADR 0023); which release takes them is not decided' (ADR 0030:120-125). V601 does not cite that decision. It also plans no STUDIO_SCHEMA_VERSION bump, no migration (studio/migrate.js), no import validation and no limits for the new record. And it does not say what grouping does to studioHash (schema.js:58). If a group changes the hash while 'the compiled topology and the offline render are identical', then an experiment that stored the Studio hash flags differing conditions for the same sound. If the hash ignores groups, a group becomes view state that the model has to carry. The issue must pick one, and an owner decision should reopen ADR 0030's 'not decided' first."
     blocking: false
     resolution:
-      state: open
+      state: planned
+      issue: "V601"
+      because: "V601 first appends a resolution note to ADR 0030 deciding the release and how studioHash treats groups, then raises STUDIO_SCHEMA_VERSION with a migration, validation and limits (2026-10-18)."
   - id: spec-says-optional-not-asked
     class: unproven_assumption
     subject: "M048"
@@ -23,38 +27,49 @@ findings:
     blocking: false
     resolution:
       state: open
+      because: "Partly addressed 2026-10-18: the intent statement and M048 now quote the specification's 'optional'; why these come now and what they displace under ADR 0051 is not answered."
   - id: voice-model-cannot-sound-the-same
     class: unproven_assumption
     subject: "V605"
     finding: "The derived model V605 opens was built for drawing. docs/v31/signal-path.md records that schema 1 'has no field for two facts: an additive oscillator's partial count and the dual B side's start phase', so these travel as annotations beside the model, keyed by node id. The Studio compiler does not read annotations. A voice opened from that model therefore loses the additive partials and the dual phase, and 'sounds the same as the Playground' is false for the Additive and Phase labs by construction. The V1 patterns (siren, wobble, AM, FM, sequence, pulse, octave, chirp; src/js/data/presets.js) must also each map onto Studio nodes and the timeline. And the tolerance is left to the test ('a tolerance the test states'), which lets the builder pick a number that passes. The criterion should list the Playground configurations covered, state the tolerance, and say how an unsupported one is refused."
     blocking: false
     resolution:
-      state: open
+      state: planned
+      issue: "V605"
+      because: "V605 lists the covered Playground configurations, states the tolerance (residual RMS 60 dB below the Playground render), and refuses the Additive lab and a non-zero dual B phase with the reason unless it adds schema fields (2026-10-18)."
   - id: draft-store-touches-storage-contract
     class: missed_requirement
     subject: "V604"
     finding: "A draft store is a new IndexedDB store, or a record kind inside the 'studio' store, of oscilla-experiments. That means a DB_VERSION bump (src/js/experiments/store.js:99, now 4), a guarded change under src/js/experiments, a README storage-table row (README.md:799-810: 'Browser storage holds only these keys and one database') and an update to tests/unit/storage-inventory.test.mjs. The issue names none of these. Specification section 154 says 'no second DB layer' and section 155 says 'versioned', and neither is in the criteria. Also unstated: two tabs editing at once (whose draft wins, and does one tab's draft overwrite the other's); how a 'crash' is produced in the browser suite (page.close with runBeforeUnload false, or a killed context); and how the suite waits for a debounced save without a fixed sleep (project.bounded-test-timing needs an observable condition, for example a seam that reports the draft's save time)."
     blocking: false
     resolution:
-      state: open
+      state: planned
+      issue: "V604"
+      because: "V604 now names the record in oscilla-experiments (no second database), the DB_VERSION bump, the README storage table, the storage-inventory test, two tabs, a crash by page.close with runBeforeUnload false, and a save-time seam instead of a sleep (2026-10-18)."
   - id: pinch-cannot-be-driven-in-the-gate
     class: delivery_verification
     subject: "V603"
     finding: "Playwright has no multi-touch API. In Firefox and WebKit a two-pointer pinch can only be synthesized by dispatching PointerEvent objects, which proves the handler, not a real gesture. The criterion 'a synthetic two-pointer pinch and the keyboard zoom reach the same zoom level and anchor' should say that, as the MIDI critique asked of its stubs. The graph already has a pinch about the midpoint (V429: 'touch pan and two-finger pinch on the graph (unit pinch about the midpoint)'). V603 should reuse that geometry and its unit test rather than write a second pinch."
     blocking: false
     resolution:
-      state: open
+      state: planned
+      issue: "V603"
+      because: "V603 says the browser check synthesizes PointerEvents and proves the handler, and reuses the graph's midpoint pinch geometry and its unit test (2026-10-18)."
   - id: guarded-paths-not-named
     class: delivery_verification
     subject: "M048"
     finding: "All five issues have src/js/studio in scope, and V604 also touches src/js/experiments/store.js. Both are guarded (project.review-verdict), so every M048 pull request needs a reviewer's verdict file and, as a feat change, fail-first. No acceptance criterion says so."
     blocking: false
     resolution:
-      state: open
+      state: planned
+      issue: "V601"
+      because: "An invariant of the intent and an acceptance criterion of every M048 issue require a reviewer's verdict and fail-first (2026-10-18)."
   - id: evidence-never-recorded
     class: delivery_verification
     subject: "M048"
     finding: "All five criteria name npm run test:studio, which passes today, before any of the five exists, and which Majordomus 0.29 cannot record (V272 D3). The claims each issue promises fix the first problem only if each names a check that fails before the issue lands. The intent will read 0/5 when M048 is done until foreign-runner evidence lands post-alpha."
     blocking: false
     resolution:
-      state: open
+      state: planned
+      issue: "V606"
+      because: "Every criterion now names a new test file that fails before its work, and V606 swaps them to registered claims once V601-V605 have landed (2026-10-18)."

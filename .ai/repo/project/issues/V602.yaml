@@ -6,25 +6,33 @@ title: "A minimap of the graph"
 slug: a-minimap-of-the-graph
 priority: p2
 profile: implementation
-objective: "Show a minimap of the whole graph with the viewport rectangle; dragging or clicking it moves the viewport, and a keyboard path does the same (specification section 153)."
+objective: "Show a minimap of the whole graph with the viewport rectangle; dragging or clicking it moves the viewport, and a keyboard path does the same (specification section 153). The minimap is view state of the graph editor (src/js/ui/studio/graph-editor.js, graph-view.js, graph-geometry.js) and needs nothing from the workspace orchestrator, so it does not wait on E003; it waits on V431 because #197 changes graph-editor.js."
 why: "V3.1 Studio specification (docs/specs/oscilla-v3.1-studio.md); .ai/repo/features/studio.md, \"What it does not do\"."
 scope:
-  - "src/js/studio"
-  - "src/js/ui/studio"
+  - "src/js/ui/studio/graph-editor.js"
+  - "src/js/ui/studio/graph-view.js"
+  - "src/js/ui/studio/graph-geometry.js"
+  - "src/js/ui/studio/graph-minimap.js"
+  - "src/index.html"
+  - "src/partials"
   - "src/styles"
-  - "tests/unit"
-  - "tests/browser"
-  - ".ai/repo/features"
+  - "tests/unit/studio-minimap.test.mjs"
+  - "tests/unit/source-size-baseline.json"
+  - "tests/browser/v31-studio-graph.cjs"
+  - "tests/README.md"
   - "dist"
-  - "docs/CLAIMS.yaml"
 depends_on:
-  - "E003"
+  - "V431"
 acceptance_criteria:
-  - "The minimap reflects node positions and the viewport after every pan and zoom."
-  - "The viewport moves by pointer and by keyboard to the same positions."
-  - "docs/CLAIMS.yaml gains the guaranteed claim `studio-minimap` naming the source and the test that prove it, and the intent criterion this issue serves names that claim as its evidence in place of the command."
+  - "tests/unit/studio-minimap.test.mjs: the minimap's geometry reflects node positions and the viewport after every pan and zoom, and a minimap pointer or key event maps to the same viewport position; it fails on the merge base."
+  - "tests/browser/v31-studio-graph.cjs moves the viewport by pointer and by keyboard to the same positions."
+  - "The minimap never changes the model: it is view state only."
+  - "The pull request carries a reviewer's verdict where it touches a guarded path and, as a feat change, fail-first (project.review-verdict, project.fail-first); a capped file it grows past its cap is split first or its raise is declared in tests/unit/source-size-baseline.json's raises ledger."
+  - "tests/README.md has a row for each new test; V606 registers the claim; this issue does not edit docs/CLAIMS.yaml or the intent."
 validation:
+  - "node --test tests/unit/studio-minimap.test.mjs"
   - "npm run release-gate"
 evidence_required:
   - "verified"
 created_at: 2026-10-18
+updated_at: 2026-10-18

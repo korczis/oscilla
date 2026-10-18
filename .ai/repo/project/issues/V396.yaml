@@ -2,30 +2,41 @@ id: V396
 milestone: M047
 serves:
   - "measurement-extensions#run-coherence"
-title: "Coherence of repeated runs"
+title: "Run-to-run consistency of repeated runs"
 slug: coherence-of-repeated-runs
 priority: p2
 profile: implementation
-objective: "For a measurement of three or more runs compute the coherence of the transfer estimates across runs per frequency, show it as a reliability view, and add it to the quality reasons where it is low."
-why: "Conversation 6abec18d, 2026-10-02T03:15:06Z, item 16; \"coherence\" appears nowhere in the repository."
+objective: "For a measurement of three or more runs compute, per frequency, the run-to-run consistency gamma^2 = |sum H_i|^2 / (N sum |H_i|^2) of the N transfer estimates, whose expected value under independent noise is (SNR + 1/N) / (SNR + 1), not SNR / (1 + SNR); name it run-to-run consistency, never coherence in the input-output sense; show it as a reliability view with N stated, and add it to the quality reasons where it is low. It follows V395 because both extend the stored result schema and the result views."
+why: "Conversation 6abec18d, 2026-10-02T03:15:06Z, item 16; the natural estimator is biased at small N (critique measurement-extensions, coherence-target-is-biased)."
 scope:
   - "src/js/measurement"
   - "src/js/experiments"
-  - "src/js/ui"
+  - "src/js/ui/measure.js"
+  - "src/js/ui/measure"
+  - "src/js/ui/measure-experiment.js"
+  - "src/js/ui/experiments.js"
+  - "src/js/ui/exporters.js"
+  - "src/index.html"
+  - "src/partials"
+  - "src/styles"
   - "tests/unit"
   - "tests/browser"
+  - "tests/README.md"
   - "docs/v3"
   - ".ai/repo/features"
   - "dist"
-  - "docs/CLAIMS.yaml"
 depends_on:
-  - "E002"
+  - "V395"
 acceptance_criteria:
-  - "Identical runs give a coherence of 1; runs with independent noise at a known SNR follow SNR/(1+SNR) within 0.05."
-  - "A measurement of fewer than three runs shows no coherence and says why."
-  - "docs/CLAIMS.yaml gains the guaranteed claim `run-coherence` naming the source and the test that prove it, and the intent criterion this issue serves names that claim as its evidence in place of the command."
+  - "tests/unit/run-consistency.test.mjs: identical runs give 1; runs with independent noise at SNR 0.5, 1 and 10 give values within 0.05 of (SNR + 1/N) / (SNR + 1) at N = 3, 5 and 10, averaged over the bins of the test band; it fails on the merge base."
+  - "A measurement of fewer than three runs shows no consistency and says why; no copy calls it coherence."
+  - "The figure follows the V391 contract (tests/unit/measurement-figure-contract.test.mjs passes with this figure kind registered)."
+  - "The pull request carries a reviewer's verdict and, as a feat change, fail-first (project.review-verdict, project.fail-first); a capped file it grows past its cap is split first or its raise is declared in tests/unit/source-size-baseline.json's raises ledger."
+  - "tests/README.md has a row for each new test; V399 registers the claim; this issue does not edit docs/CLAIMS.yaml or the intent."
 validation:
+  - "node --test tests/unit/run-consistency.test.mjs"
   - "npm run release-gate"
 evidence_required:
   - "verified"
 created_at: 2026-10-18
+updated_at: 2026-10-18

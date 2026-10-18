@@ -1,21 +1,23 @@
 id: S081
 milestone: M005
-title: "§81 Specification section 81 (not received)"
-slug: specification-section-81-not-received
+title: "§81 Dual Osc Tests (Q001 triage: work)"
+slug: "v1-spec-81-dual-osc-tests"
 priority: p1
 profile: implementation
-objective: "The pasted specification was truncated inside section 63; this section's text was never delivered. Blocked until the text is supplied."
+objective: "Section 81, \"Dual Osc Tests\", of the numbered multi-page V1 specification (docs/specs/oscilla-v1-sections-64-95.md, line 509; ChatGPT project conversation 6abec18d, 2026-10-01T20:46:12Z), adopted under Q001 and triaged against project.single-file-deliverable, S001-S063 and the ADRs from 0011 on. This issue is the part of it that no record or check shows delivered; the rest is named in current_state."
 scope:
-  - "index.html"
-  - "tests"
+  - "tests/browser/engine-v1port.cjs"
+  - "tests/unit"
 depends_on:
   - "S000"
   - "Q001"
-current_state: "Text exists, not adopted: section 81, \"Dual Osc Tests\", of the numbered multi-page V1 specification, recorded verbatim in docs/specs/oscilla-v1-sections-64-95.md (ChatGPT project conversation 6abec18d, 2026-10-01T20:46:12Z). Its numbering and premises differ from the single-file prompt of S001-S063, and parts of it conflict with the single-file deliverable rule and with later ADRs, so before any work this section is triaged against them. Whether M005 adopts the text at all is the owner's decision Q001, and this issue waits on it."
+  - "S080"
+current_state: "Kept as work, triaged. The beat at 440 + 442 Hz and the stereo split are a claim of intent v1-instrument (dual-oscillator-beats); freeze.test.mjs replays dual-mono and dual-stereo topologies. The section's other cases (440 + 440, 441, 450; changing one oscillator while playing; stopping one or both; rapid restart; node cleanup after each) are not shown by any record. Triage of 2026-10-18 under Q001, decided by the coordinating Claude session under the owner's delegation of 2026-10-18 ('tak to vse pores'); the owner may override."
 acceptance_criteria:
-  - "The pasted specification was truncated inside section 63; this section's text was never delivered. Blocked until the text is supplied."
+  - "A check plays 440 + 440, 440 + 441, 440 + 442 and 440 + 450 Hz in mono and in the stereo split, changes one oscillator while playing, stops one and then both, and restarts rapidly; after each stop the independent node census of tests/browser/engine-v1port.cjs and the engine's activeNodeCount are 0."
+  - "npm run test:engine passes in Chromium, Firefox and WebKit, under project.bounded-test-timing and project.suite-harness."
 validation:
-  - "node tests/smoke.cjs"
+  - "npm run test:engine"
 evidence_required:
   - "verified"
 created_at: 2026-10-01

@@ -4,13 +4,17 @@ slug: first-run-experience-chosen-by-the-owner-and-built
 order: 50
 priority: p2
 problem: "OSCILLA opens on the Playground generator (src/js/ui/app.js), and the owner felt the first screen no longer reflects the product (conversation 6ac1beb8, 2026-10-05T19:17:26Z)."
-outcome: "The current first screen is analysed, the owner chooses what it shows, and that layout is built without breaking any entry path."
+outcome: "The current first screen is analysed, the owner chooses what it shows (Q004, here with the work it gates), and that layout is built in the words of the chosen positioning sentence without breaking any inventoried entry path."
 acceptance_criteria:
-  - "P001 and P002 are done with their evidence and Q004 is answered."
+  - "P001, Q004 and P002 are done with their evidence."
 validation:
   - "npm run release-gate"
 evidence_required:
   - "milestone_verified"
 risks:
-  - "Designing the screen before the owner answers: P002 depends on Q004."
+  - "Designing the screen before the owner answers: P002 depends on Q004, and Q004 on P001."
+  - "Copy on the first screen that the positioning work then rewrites: P002 depends on Q002 and P003."
+  - "Q004 is an owner question in a live milestone, so majordomus plan next can nominate it once P001 is done; its owner field and acceptance say a worker never answers it, which is a convention, not a mechanism."
+  - "P002's scope is all of src until Q004's answer names the layout's files, so in the wave where it becomes READY it collides with any open src issue (simulated 2026-10-18: P005 and V501 on src and src/index.html); when Q004 is answered, the plan narrows P002 to the files the layout names or chains it after the src issues still open."
 created_at: 2026-10-18
+updated_at: 2026-10-18

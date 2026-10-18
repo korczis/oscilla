@@ -48,7 +48,7 @@ governance:
   - "adr:adr-0029"
   - "adr:adr-0047"
 non_goals:
-  - "Release records for releases before v3.4.0: the release/v1 records under .ai/repo/releases start at v3.4.0"
+  - "Requiring release records for releases before v3.4.0: this intent and the completeness check (RECORD_FLOOR = '3.4.0' in scripts/release-record.mjs) start at v3.4.0. V386 and V433 add records for v3.0.0 and v3.1.0 for their own intents once Q007 attaches the assets, which .ai/repo/releases/README.md allows ('A release that predates the attached asset has no record until the asset is attached')"
   - "A deployment record: .ai/repo/deployments holds only its README, and deployment/v1 has no shape for a static Pages site"
   - "Telling a release's changes from inside the released page: release notes are written after publish (ADR 0051)"
 created_at: 2026-10-18

@@ -1,8 +1,13 @@
 # OSCILLA V1, specification sections 64-95 (the numbered multi-page variant, 2026-10-01)
 
-Recorded verbatim; nothing condensed. This text is a record of what was written, not a
-requirement the repository has adopted: whether milestone M005 takes it is an owner decision
-(issue `S000` records the evidence, issue `Q001` asks the question).
+Recorded verbatim; nothing condensed. This text is a record of what was written. Issue `S000`
+records the evidence that it exists, and issue `Q001` records the decision about it: on
+2026-10-18 it was adopted as the source of milestone M005, section by section, triaged against
+`project.single-file-deliverable`, S001-S063 and the ADRs from 0011 on. That decision was taken
+by the coordinating Claude session under the owner's delegation of 2026-10-18 ("tak to vse
+pores"), and the owner may override it. Each of `S064`-`S095` states its section's triage:
+superseded, already delivered (with a pointer to what delivered it), or kept as work. Adopting
+the text does not adopt the premises listed under "What conflicts with later decisions".
 
 ## Provenance
 
@@ -15,35 +20,46 @@ requirement the repository has adopted: whether milestone M005 takes it is an ow
   knowledge record `chatgpt-oscilla-project` describes them.
 - **Which specification this is.** The conversation holds two V1 prompts.
   - (b) The unnumbered single-file prompt of 20:42:59Z. Its 63 section headings are the
-    repository's S001-S063, in the same order. Its 63rd heading is "PROGRESSIVE DISCLOSURE",
-    and ChatGPT's own message ends there, after the words "The initial UI": the point that
-    `S063` records as the truncation. Prompt (b) never had a section 64.
+    repository's S001-S063, in the same order. As exported, it stops mid-sentence inside its
+    63rd section, "PROGRESSIVE DISCLOSURE", after the words "The initial UI", with its text
+    block unclosed: the truncation that `S063` records. Nothing of (b) after that point exists;
+    whether it would have continued past section 63 is unknown.
   - (c) This numbered multi-page specification of 20:46:12Z, sections 0 to 95. The Execution
     Protocol of 20:52:28Z ("The specification that follows contains 95 numbered sections") and
     the Majordomus Step 0 of 20:54:21Z refer to it. The plan's 95 TODO items were therefore
-    planned against (c) while sections 1-63 were taken from (b).
-  - So the tail was not lost in a paste. Sections 64-95 of (c) are the counterparts of the
-    missing items, with (c)'s numbering, which differs from (b)'s (for example, (b)'s §2 is
-    "Tech stack", (c)'s §2 is "Deployment model"). Sections 0-63 of (c) cover the ground of (b)
-    in another order and are not reproduced here.
+    planned against (c) while sections 1-63 were taken from (b). The only text of any section
+    64-95 that exists is (c)'s.
+  - So the tail was not lost in a paste. Sections 64-95 of (c) fill the plan's slots S064-S095
+    by number only, with (c)'s numbering, which differs from (b)'s (for example, (b)'s §2 is
+    "Tech stack", (c)'s §2 is "Deployment model"). Some of them repeat ground that (b), and so
+    S001-S063, already covers: §72 restates S059 (Flowbite best practices), §73 restates S060
+    (terminology), and §66 partly restates (b)'s "Do not add tracking. Do not send data
+    anywhere." Sections 0-63 of (c) cover the rest of (b) in another order and are not
+    reproduced here.
 - **What conflicts with later decisions.** The premises of (c) are partly superseded:
-  - a multi-page site (pages in §67, §68, §70, §75, §78, §84 and the checklist), where OSCILLA
-    is one page with workspaces (`project.single-file-deliverable`, ADR 0011);
+  - a multi-page site (pages in §66, §67, §68, §70, §75, §77, §78, §95 and the checklist §92),
+    where OSCILLA is one page with workspaces (`project.single-file-deliverable`, ADR 0011);
   - "no build required" (§68, §92), where OSCILLA builds `dist/index.html` from `src/` with
-    esbuild and a packer (ADR 0011, ADR 0012);
-  - classic scripts in a `window.Oscilla` namespace (the end of §63, §64), where the source is
+    esbuild and a packer (ADR 0011, ADR 0012); a user still needs no build, because
+    `dist/index.html` is committed;
+  - classic scripts in a `window.Oscilla` namespace (the end of §63, §65), where the source is
     ES modules bundled into the one file (ADR 0011);
   - Flowbite (§72), which the repository removed together with Tailwind
     (`docs/v2-baseline-inventory.txt`, ADR 0012);
   - "do not overengineer" (§91), which later decisions (an IndexedDB store, ADR 0022; the
     Studio model, compiler and runtime, ADRs 0030 and 0035) went past deliberately.
   Much of the rest has shipped under other ids: privacy (README "Privacy"), metadata and Open
-  Graph tags (V243, V244), `.nojekyll` (`.github/workflows/pages.yml`), the three-engine browser
-  suites. There is no 404 page (§70).
+  Graph tags (theme-color and icons V243, Open Graph V244, social cards V245; the meta
+  description in `src/index.html`), `.nojekyll` (`.github/workflows/pages.yml`), the
+  three-engine browser suites. There is no 404 page (§70): a second file in `dist/` is what
+  `project.single-file-deliverable` forbids.
 - **Transcription.** Lines 6735-7655 of the exported conversation: from the rule above "64.
   ALPINE ARCHITECTURE" to the last line of the prompt, "Implement OSCILLA to that standard."
   The message's closing code fence and ChatGPT's commentary after it are omitted. Typography
-  (box-drawing rules, curly quotes, arrows) is as written.
+  (box-drawing rules, curly quotes, arrows) is as written. The text block below has sha256
+  `5ab3a93367ee8cd9595cab70df7a3a21f6df6cae1e38132653e1a20d0b51ac9b`, the same as those lines
+  of the export:
+  `` awk '/^```text$/{f=1;next} /^```$/{f=0} f' <this file> | shasum -a 256 ``.
 
 ## Sections 64-95
 

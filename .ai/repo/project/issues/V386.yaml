@@ -6,22 +6,27 @@ title: "Release 3.0.0 and public verification"
 slug: release-3.0.0-and-public-verification
 priority: p1
 profile: implementation
-objective: "Single-source version 3.0.0 (rc first if supported), gated release, Pages deploy of the same artifact, public version/commit/MEASURE/Playground smoke, Majordomus release records (§130, §179-§181, §229-§233, §243-§244)."
+objective: "Single-source version 3.0.0 (no release candidate preceded 3.0.0; the deviation is recorded by ADR 0047, spec 233), gated release, Pages deploy of the same artifact, public version/commit/MEASURE/Playground smoke, Majordomus release records (§130, §179-§181, §229-§233, §243-§244)."
+current_state: "Updated 2026-10-18. Evidence under verified records each verification round, met or not, and every round so far is PARTIAL; all_criteria_met is recorded only when every acceptance criterion is met, so majordomus plan done refuses until then. What remains is the owner act of Q007: gh release view v3.0.0 --json assets returns no asset, so no release/v1 record for v3.0.0 can be written. The rc-first clause cannot become true and is closed by the recorded deviation, ADR 0047 (status proposed reads as recorded, .ai/repo/adrs/README.md). Q007 is named in depends_on so that majordomus plan next does not nominate this issue to a worker before the owner acts."
 scope:
   - ".github"
   - "dist"
   - "package.json"
+  - ".ai/repo/releases"
 depends_on:
   - "V383"
   - "V384"
   - "V385"
+  - "Q007"
 acceptance_criteria:
-  - "Single-source version 3.0.0 (rc first if supported), gated release, Pages deploy of the same artifact, public version/commit/MEASURE/Playground smoke, Majordomus release records (§130, §179-§181, §229-§233, §243-§244)."
+  - "Single-source version 3.0.0 (no release candidate preceded 3.0.0; the deviation is recorded by ADR 0047, spec 233), gated release, Pages deploy of the same artifact, public version/commit/MEASURE/Playground smoke, Majordomus release records (§130, §179-§181, §229-§233, §243-§244)."
+  - "A release/v1 record for v3.0.0 exists and node scripts/release-record.mjs --version 3.0.0 --check passes: after Q007 attaches git show v3.0.0:dist/index.html to the v3.0.0 GitHub Release as oscilla-v3.0.0.html, run npm run release:record -- --version 3.0.0."
   - "Specification: docs/specs/oscilla-v3-measure.md"
 validation:
   - "npm run release-gate"
 evidence_required:
   - "verified"
+  - "all_criteria_met"
 created_at: 2026-10-02
 updated_at: 2026-10-06T21:11:25Z
 evidence:

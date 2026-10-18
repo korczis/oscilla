@@ -36,6 +36,9 @@ observations:
   - id: public-is-main
     statement: "Pages serves commit 964e25d labelled 3.10.3, 155 commits after the v3.10.3 tag, with the v4.0 work; no -rc tag exists."
     source: "command:npm run release:verify-deploy && git tag --list '*rc*'"
+  - id: update-2026-10-18-public-page
+    statement: "Update 2026-10-18, appended by the coordinating Claude session (not the critic), observed at main 044f98a after observed_at 62cccb3; the observations above are kept as they were made. Pages serves region.commit 044f98a, version 3.11.0, sourceDigest fa7cf5c0, sourceDate 2026-10-18T08:54:25Z; node scripts/verify-deploy.mjs --commit 044f98a passes attempt 1/2 (live page is the committed dist stamped with that commit), and its artifact sha256 898270c4 equals the artifact sha256 of .ai/repo/releases/v3.11.0.yaml. Tag v3.11.0 is 2b63ec3 (2026-10-18T04:36:10Z); 21 commits separate it from 044f98a and they change nothing under src/ or dist/index.html (git diff --stat is empty). No tag matching *rc* exists, and V386 is still open."
+    source: "command:node scripts/verify-deploy.mjs --commit 044f98a6a3f74ebe4471404eedaea5ec91ce97ae --attempts 2 --delay 5"
 conditions:
   - criterion: algorithm-ids
     state: satisfied

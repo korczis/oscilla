@@ -2,29 +2,39 @@ id: V397
 milestone: M047
 serves:
   - "measurement-extensions#context-overlays"
-title: "Optional context overlays on the response chart"
+title: "Optional context overlays on the response chart's frequency axis"
 slug: optional-context-overlays-on-the-response-chart
 priority: p2
 profile: implementation
-objective: "Offer overlays on the measured response chart, off by default: the nominal human hearing range, a speech band, musical note frequencies and the bioacoustics species ranges with their citations (src/js/data/bioacoustics.js); each names its source and none changes data."
+objective: "Offer overlays on the measured response chart, off by default: the nominal human hearing range (with the record's caveat that 20 Hz-20 kHz is a convention, src/js/data/bioacoustics.js), a speech band, musical note frequencies and the bioacoustics species ranges with their citations; each names its source, none changes data, and every overlay draws on the frequency axis only: a species threshold or any level criterion is drawn in the level dimension only when a valid level calibration applies (ADR 0017), since the chart's level axis is otherwise relative. It follows V396 because both change the response chart and its views."
 why: "V3 MEASURE specification section 95; conversation 6abec18d, 2026-10-02T03:18:10Z."
 scope:
-  - "src/js/ui"
+  - "src/js/ui/measure.js"
+  - "src/js/ui/measure"
+  - "src/js/ui/measure-experiment.js"
+  - "src/js/ui/experiments.js"
+  - "src/js/ui/exporters.js"
   - "src/js/charts"
   - "src/js/data"
+  - "src/index.html"
+  - "src/partials"
+  - "src/styles"
   - "tests/unit"
   - "tests/browser"
+  - "tests/README.md"
   - "dist"
-  - "docs/CLAIMS.yaml"
 depends_on:
-  - "E002"
+  - "V396"
 acceptance_criteria:
-  - "Turning each overlay on and off leaves the result hash, the CSV export and the stored record byte-identical."
-  - "Each overlay shows its source; tests/unit/no-fake-science.test.mjs passes on the new copy."
+  - "tests/unit/response-context-overlays.test.mjs: turning each overlay on and off leaves the result hash, the CSV export and the stored record byte-identical, and no overlay draws in the level dimension of an uncalibrated chart; it fails on the merge base."
+  - "Each overlay shows its source, the hearing-range overlay shows its convention caveat, and tests/unit/no-fake-science.test.mjs passes on the new copy."
   - "The overlays have a keyboard path and use the existing tokens."
-  - "docs/CLAIMS.yaml gains the guaranteed claim `response-context-overlays` naming the source and the test that prove it, and the intent criterion this issue serves names that claim as its evidence in place of the command."
+  - "The pull request carries a reviewer's verdict where it touches a guarded path and, as a feat change, fail-first (project.review-verdict, project.fail-first); a capped file it grows past its cap is split first or its raise is declared in tests/unit/source-size-baseline.json's raises ledger."
+  - "tests/README.md has a row for each new test; V399 registers the claim; this issue does not edit docs/CLAIMS.yaml or the intent."
 validation:
+  - "node --test tests/unit/response-context-overlays.test.mjs"
   - "npm run release-gate"
 evidence_required:
   - "verified"
 created_at: 2026-10-18
+updated_at: 2026-10-18

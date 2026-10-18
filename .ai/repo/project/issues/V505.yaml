@@ -7,10 +7,15 @@ slug: midi-jam-record
 priority: p2
 profile: implementation
 objective: "Decide where a recorded jam lives (Studio timeline clips or a separate record) against project.studio-model-is-canonical, then record incoming and generated events into it so that it saves, reloads and replays identically."
+current_state: "Updated 2026-10-18. The scope names only MIDI paths plus the one integration file the criteria need, so that majordomus intent realization does not infer unrelated earlier work as realising this intent (audit finding main-plan F9, 2026-10-18). .ai/repo/adrs holds the decision on where a recorded jam lives (critique finding event-track-needs-new-clip-kind); if that decision puts the jam into Studio timeline clips, this scope is widened to the src/js/studio paths it names by a plan change at that point. The same plan change adds the storage and UI path a saved jam needs (its store module, the save and reload controls) and the browser check that saves, reloads and replays identically; tests/browser/midi.cjs is in scope already for that check."
 scope:
-  - "src/js"
-  - "tests"
-  - "docs"
+  - "src/js/midi"
+  - "tests/unit/midi"
+  - "docs/midi.md"
+  - ".ai/repo/adrs"
+  - "tests/browser/midi.cjs"
+  - "tests/README.md"
+  - "dist"
 depends_on:
   - "V503"
   - "V504"
@@ -22,3 +27,4 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-18
+updated_at: 2026-10-18

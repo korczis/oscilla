@@ -57,7 +57,8 @@ findings:
     finding: "The statement says V1 is complete while sections 64-95 of its specification were never received (S000). The intent could be false by a requirement nobody has read. The non-goal records the gap honestly, but no work in this repository can close it: only the owner can supply the text or retire it."
     blocking: false
     resolution:
-      state: open
+      state: rejected
+      because: "Resolved on 2026-10-18 by the coordinating Claude session, not by the critic, under the owner's delegation of 2026-10-18 ('tak to vse pores'); the owner may override. The premise no longer holds: the text of sections 64-95 that exists, the numbered multi-page variant, is recorded verbatim in docs/specs/oscilla-v1-sections-64-95.md (S000; text block sha256 5ab3a93367ee8cd9595cab70df7a3a21f6df6cae1e38132653e1a20d0b51ac9b), and the single-file prompt S001-S063 implement stops inside section 63 in the export, so no unread section of it exists. Q001 adopted the multi-page text as M005's source and triaged every section: seven superseded and fourteen already delivered are cancelled with their pointers, and the eleven kept as work (S071, S074, S079-S085, S089, S095) are planned in M005. The intent's non-goal keeps M005 outside its statement, so V1's completeness rests on no unread requirement."
   - id: microphone-proven-on-a-fake
     class: unproven_assumption
     subject: "v1-instrument#microphone-analysis"

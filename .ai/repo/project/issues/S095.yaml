@@ -1,21 +1,22 @@
 id: S095
 milestone: M005
-title: "§95 Specification section 95 (not received)"
-slug: specification-section-95-not-received
+title: "§95 Final Product Test (Q001 triage: work)"
+slug: "v1-spec-95-final-product-test"
 priority: p1
 profile: implementation
-objective: "The pasted specification was truncated inside section 63; this section's text was never delivered. Blocked until the text is supplied."
+objective: "Section 95, \"Final Product Test\", of the numbered multi-page V1 specification (docs/specs/oscilla-v1-sections-64-95.md, line 922; ChatGPT project conversation 6abec18d, 2026-10-01T20:46:12Z), adopted under Q001 and triaged against project.single-file-deliverable, S001-S063 and the ADRs from 0011 on. This issue is the part of it that no record or check shows delivered; the rest is named in current_state."
 scope:
-  - "index.html"
-  - "tests"
+  - "tests/browser/app.cjs"
 depends_on:
   - "S000"
   - "Q001"
-current_state: "Text exists, not adopted: section 95, \"Final Product Test\", of the numbered multi-page V1 specification, recorded verbatim in docs/specs/oscilla-v1-sections-64-95.md (ChatGPT project conversation 6abec18d, 2026-10-01T20:46:12Z). Its numbering and premises differ from the single-file prompt of S001-S063, and parts of it conflict with the single-file deliverable rule and with later ADRs, so before any work this section is triaged against them. Whether M005 adopts the text at all is the owner's decision Q001, and this issue waits on it."
+  - "S084"
+current_state: "Kept as work, triaged. The parts are checked one by one (file:// boot, tone, sweep, dual beat, Learn), but no record shows one check that walks the section's journey end to end. If an existing check already walks it, this issue is cancelled with that check's name instead. Triage of 2026-10-18 under Q001, decided by the coordinating Claude session under the owner's delegation of 2026-10-18 ('tak to vse pores'); the owner may override."
 acceptance_criteria:
-  - "The pasted specification was truncated inside section 63; this section's text was never delivered. Blocked until the text is supplied."
+  - "One browser check opens dist/index.html from file:// and walks the section's journey: 440 Hz sounds after a click; raising the frequency changes the frequency, note, period and wavelength readouts; Sawtooth shows its harmonics; Sweep runs from 20 Hz to 20 kHz; Dual at 440 + 442 Hz shows a 2 Hz beat; Learn opens the topic that explains it. The same check passes from the /oscilla/ sub-path."
+  - "npm run test:browser passes in Chromium, Firefox and WebKit."
 validation:
-  - "node tests/smoke.cjs"
+  - "npm run test:browser"
 evidence_required:
   - "verified"
 created_at: 2026-10-01

@@ -48,6 +48,24 @@ observations:
   - id: adrs-proposed
     statement: "All 57 ADRs under .ai/repo/adrs carry status proposed; none is accepted."
     source: "command:grep -L 'status: proposed' .ai/repo/adrs/0*.md"
+  - id: update-2026-10-18-deploy
+    statement: "Update 2026-10-18, appended by the coordinating Claude session (not the critic), observed at main 044f98a after observed_at 62cccb3; the observations above are kept as they were made. Pages serves region.commit 044f98a, version 3.11.0, sourceDigest fa7cf5c0, sourceDate 2026-10-18T08:54:25Z; node scripts/verify-deploy.mjs --commit 044f98a passes attempt 1/2 (live page is the committed dist stamped with that commit), and its artifact sha256 898270c4 equals the artifact sha256 of .ai/repo/releases/v3.11.0.yaml."
+    source: "command:node scripts/verify-deploy.mjs --commit 044f98a6a3f74ebe4471404eedaea5ec91ce97ae --attempts 2 --delay 5"
+  - id: update-2026-10-18-tag-vs-page
+    statement: "Update 2026-10-18, appended by the coordinating Claude session (not the critic), observed at main 044f98a after observed_at 62cccb3; the observations above are kept as they were made. Tag v3.11.0 is 2b63ec3 (2026-10-18T04:36:10Z); 21 commits separate it from 044f98a and they change nothing under src/ or dist/index.html (git diff --stat is empty)."
+    source: "command:git rev-list --count v3.11.0..044f98a && git diff --stat v3.11.0 044f98a -- src dist/index.html"
+  - id: update-2026-10-18-cadence
+    statement: "Update 2026-10-18, appended by the coordinating Claude session (not the critic), observed at main 044f98a after observed_at 62cccb3; the observations above are kept as they were made. node scripts/release-cadence.mjs, run on 2e80461 (044f98a plus nine plan, knowledge, ADR, specification-text and plan-test commits, none under src, scripts, .github or dist): ok; 8 releasable commits since v3.11.0, the oldest (1486edf) landed 10.9 h ago against the 24 h limit of project.deploy-often. M035 released v3.11.0."
+    source: "command:node scripts/release-cadence.mjs"
+  - id: update-2026-10-18-tags
+    statement: "Update 2026-10-18, appended by the coordinating Claude session (not the critic), observed at main 044f98a after observed_at 62cccb3; the observations above are kept as they were made. Tag v3.11.0 exists besides the tags listed above, and no tag matching *rc* exists. .ai/repo/releases holds 14 release records, v3.4.0 to v3.11.0 (v3.11.0.yaml landed by #193, 19ef719), and node scripts/release-record.mjs --version 3.11.0 --check reports that the record matches what was published. The v3.0.0 and v3.1.0 GitHub Releases still carry no asset."
+    source: "command:git tag --list 'v*' && ls .ai/repo/releases && node scripts/release-record.mjs --version 3.11.0 --check && gh release view v3.1.0 --json assets"
+  - id: update-2026-10-18-pages-runs
+    statement: "Update 2026-10-18, appended by the coordinating Claude session (not the critic), observed at main 044f98a after observed_at 62cccb3; the observations above are kept as they were made. Pages run 39097666998 at 2b63ec3 (the v3.11.0 tag commit) and run 39113258872 at 044f98a succeeded: deploy and Public smoke in chromium, firefox and webkit."
+    source: "command:gh run view 39097666998 --json conclusion,headSha,jobs && gh run view 39113258872 --json jobs"
+  - id: update-2026-10-18-adrs
+    statement: "Update 2026-10-18, appended by the coordinating Claude session (not the critic), observed at main 044f98a after observed_at 62cccb3; the observations above are kept as they were made. majordomus adr list lists 58 ADRs, all proposed."
+    source: "command:majordomus adr list"
 conditions:
   - criterion: one-version-authority
     state: conflicting
@@ -97,6 +115,7 @@ risks:
   - "No criterion of this intent can ever be met under Majordomus 0.29: its satisfaction is decided by CI runs nobody records, until the post-alpha request for node --test and Playwright evidence lands."
   - "A stricter YAML reader in a future Majordomus, or in any other tool, would refuse seven plan records and the claims matrix."
   - "The release cadence rule (blocking) has been red for days; a red check that nobody clears teaches that red checks are ignorable."
+  - "Update 2026-10-18 (coordinating Claude session, not the critic): at 044f98a the cadence risk above no longer holds (release-cadence ok; v3.11.0 released by M035), and the page served under 3.11.0 is the v3.11.0 artifact (update-2026-10-18-deploy). The version-identity risk is answered on main by ADR 0059, landed by #197 (d4bd97f): a build after its version's tag is served as v<version>+<distance>.g<short> and verify-deploy checks that release state; whether the risk is closed is the critic's re-derivation."
 work:
   - id: release-the-backlog
     title: "Ship the overdue minor release through release:prepare, publish and record, so the public version names the served artifact again"
@@ -105,6 +124,7 @@ work:
       - one-version-authority
     why: "120 releasable commits are public under 3.10.3; project.deploy-often is red."
     evidence: "node scripts/release-cadence.mjs reports on time; npm run release:verify-deploy passes at the release tag; release:record --check passes"
+    issue: "R020"
   - id: criterion-on-release-record
     title: "Decide public-release-verified by comparing the served page with the release/v1 record of the version it names (ADR 0057)"
     serves:

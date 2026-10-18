@@ -6,15 +6,20 @@ title: "Record a screen-reader pass over the main flows"
 slug: record-a-screen-reader-pass-over-the-main-flows
 priority: p2
 profile: routine
-objective: "With VoiceOver and Safari on macOS, walk the main flows (play a tone in the Playground, run a measurement in TEST CONTEXT, save and open an experiment, build and play a Studio graph without a pointer) and record what was announced, what was missing and what failed, as evidence on this issue; each failure becomes its own issue."
-why: "Automated semantic checks are not assistive-technology use; the audit of conversation 6ac3ead5 (section 11) marked it UNKNOWN."
+owner: "repository owner"
+objective: "A person using VoiceOver with Safari on macOS (the repository owner, or a human tester the owner names) walks the main flows (play a tone in the Playground, run a measurement in TEST CONTEXT, save and open an experiment, build and play a Studio graph without a pointer) and records what was announced, what was missing and what failed, as evidence on this issue. An AI worker without assistive technology never performs or records the pass; VoiceOver cannot run in CI or under Playwright. Run it on a main that contains the V272 accessibility fixes C1-C9 of #197 (plan issue V431); a defect already listed in docs/v31/review-v272.md is a regression to report there, not a new finding. E014 turns each recorded failure into its own issue."
+why: "Automated semantic checks are not assistive-technology use; the audit of conversation 6ac3ead5 (section 11) marked it UNKNOWN. Run before #197, the pass would re-find the defects #197 fixes (critique engineering-integrity, screen-reader-pass-sequencing). It also follows V432, whose scope .ai/repo contains this issue's record file (scope conflict in the same wave, 2026-10-18)."
 scope:
   - ".ai/repo/project/issues/E013.yaml"
+depends_on:
+  - "V431"
+  - "V432"
 acceptance_criteria:
-  - "The evidence names the browser, VoiceOver and OS versions, each flow and its result."
-  - "Every failure found has an issue that names it."
+  - "The evidence names the person who performed the pass, the browser, VoiceOver and OS versions, each flow and its result, and the main commit it ran at."
+  - "The evidence is recorded by or for the person named in owner, quoting their findings; a worker never records a pass it did not watch."
 validation:
   - "manual"
 evidence_required:
   - "verified"
 created_at: 2026-10-18
+updated_at: 2026-10-18

@@ -8,14 +8,18 @@ findings:
     finding: "Most serious, and blocking. The CI gate has no MIDI hardware, and the gate's WebKit has no Web MIDI at all. In headless Chromium on a Linux runner, requestMIDIAccess can at best reach the no-devices state, and Playwright's Firefox build is not the shipped Firefox permission flow. So the states connected (with device names), denied and permission needed, and every Note On that V502 to V505 test, can be produced in CI only by a substitute. The plan never says which substitute. V502 says 'in the browser gate with synthetic MIDI events' and stops there. Two options exist, and they prove different things. (a) An addInitScript stub of navigator.requestMIDIAccess, a fake MIDIAccess or MIDIInput that dispatches MIDIMessageEvent-shaped objects: this needs no page change, but it then proves only the stub in WebKit and Firefox. (b) A window.OSCILLA hook that injects notes: under ADR 0052 that is an inject-kind member, allowed only as TEST CONTEXT, and the release-gate check seam-surface-pinned (tests/browser/app.cjs:405) pins the key list, so the surface grows only by a deliberate edit. No project rule is about test seams; ADR 0052 (proposed) is the only decision. Before V501 starts, the plan must name the substitute, which ADR-0052 kind it is, and how a check tells measured real-API behaviour apart from stubbed behaviour. Otherwise the support-state claim will rest on a stub while its wording says it was measured."
     blocking: true
     resolution:
-      state: open
+      state: planned
+      issue: "V500"
+      because: "V500 (new, 2026-10-18) writes the ADR 0058 resolution note that names the substitute, its ADR 0052 kind and how a check tells measured from stubbed behaviour, before V501, which now depends on it."
   - id: permission-prompt-and-state-taxonomy
     class: missed_requirement
     subject: "midi-jam-companion#midi-support-state"
     finding: "Blocking. Two things are unstated. (1) When access is requested. Calling navigator.requestMIDIAccess at load makes current Chromium show a permission prompt on every first visit. That changes OSCILLA for every user, including users with no MIDI device, and breaks the invariant that MIDI's absence changes nothing. The criterion has to say that access is requested only by an explicit user action, and that loading the page triggers no prompt and no permission query that has a side effect. (2) The five states are not exhaustive, and some cannot be told apart. 'Permission needed' has to come from navigator.permissions.query({name: 'midi'}), which may throw or be missing where the API exists. requestMIDIAccess can reject for reasons other than denial: a policy-blocked origin, NotSupportedError, or no platform MIDI backend on a Linux runner. Other states have no name at all: a pending request, an insecure context, a permission revoked mid-session, and the last device disconnecting (MIDIPort statechange). V501 needs the full state table, with the cause behind each state and the exact copy for each, before it is built. Otherwise 'unsupported' becomes the catch-all for everything that went wrong, which project.no-fake-science forbids for a stated support level."
     blocking: true
     resolution:
-      state: open
+      state: planned
+      issue: "V500"
+      because: "V500 (new, 2026-10-18) writes the full state table with each cause and exact copy and the explicit-user-action rule into an ADR 0058 resolution note before V501 starts; V501 already requires that loading the page requests no MIDI access."
   - id: measured-support-is-playwright-not-users
     class: unproven_assumption
     subject: "V501"

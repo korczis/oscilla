@@ -1,16 +1,18 @@
 id: M051
-title: "Product direction: one positioning sentence and a decided product path"
+title: "Product direction: one positioning sentence, a decided product path, a sourced public story"
 slug: product-direction-one-positioning-sentence-and-a-decided-pro
 order: 51
 priority: p2
-problem: "No record answers the owner's question whether OSCILLA can be a product, and the positioning candidates of the ChatGPT project are unchosen."
-outcome: "The chosen sentence stands in README, About and the metadata alike, and the product path the owner decides is recorded as an ADR."
+problem: "No record answers the owner's question whether OSCILLA can be a product, the positioning candidates of the ChatGPT project are unchosen, and About tells an origin and a pace the record does not support as written."
+outcome: "The chosen sentence stands in every long self-description, the product-path decision (no commercial path before v4.0, MIT not reopened) is an ADR, and About tells the origin and the pace Q005 decided."
 acceptance_criteria:
-  - "P003 and P004 are done with their evidence; Q002, Q003 and Q005 are answered."
+  - "P003, P004 and P005 are done with their evidence (each depends on the Q issue it implements: Q002, Q003, Q005)."
 validation:
   - "npm test"
 evidence_required:
   - "milestone_verified"
 risks:
-  - "A worker picking a sentence or a buyer because the plan seems to need one: both wait on the owner (Q002, Q003)."
+  - "A worker picking a sentence or a buyer because the plan seems to need one: both were decided under a recorded delegation (Q002, Q003), and the owner may override them."
+  - "Commercial work starting before v4.0: the product-direction invariant and P004's ADR forbid it; the question returns as a new intent after v4.0."
 created_at: 2026-10-18
+updated_at: 2026-10-18

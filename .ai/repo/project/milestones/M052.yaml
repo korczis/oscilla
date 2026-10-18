@@ -4,14 +4,16 @@ slug: owner-decisions-chatgpt-project
 order: 998
 priority: p2
 problem: "The owner's ChatGPT project \"Oscilla\" (knowledge record chatgpt-oscilla-project) raised questions that only the owner can answer, and planned work waits on them; a question kept in one checkout's .ai/local/ state is read by nobody else."
-current_state: "Each question is a Q issue here, answered by the owner, except Q001, which belongs to M005 (the V1 specification tail) because no intent names M005. A worker records the answer as evidence (covers owner_decision) only when it quotes the owner's own words with their date and source; a worker never answers one. The issues that wait on an answer name the Q issue in depends_on, so majordomus plan next cannot nominate them first. The milestone sorts after every live milestone (order 998, before M005) so that the roadmap never nominates a question to a worker."
-outcome: "Every question raised by the ChatGPT project is answered by the owner and recorded, and the work that waited on it is planned from the answer or cancelled."
+current_state: "The product-direction questions are Q issues here (Q002, Q003, Q005, Q006). Q001 belongs to M005 (the V1 specification tail) and Q004 to M050 (the first screen), so this milestone's state couples no other intent to them. On 2026-10-18 the owner delegated the open questions to the coordinating Claude session ('tak to vse pores'); Q002, Q003 and Q005 carry that session's decision, and Q006 its act, in their current_state, attributed to it and not to the owner, and the owner may override each. The owner act on published releases that V386 and V433 wait on is Q007, under M053. The owner_decision evidence is recorded on main after the branch that wrote the decisions lands, because majordomus plan evidence pins the commit it runs at and a squash merge would leave a branch commit outside main's history. The milestone sorts after every live milestone (order 998, before M005), so the roadmap does not nominate these questions first; that ordering and the owner field are conventions, and nothing stops a worker from running majordomus plan start on one."
+outcome: "Every question raised by the ChatGPT project is answered, by the owner or under a delegation the owner gave, and recorded, and the work that waited on it is planned from the answer or cancelled."
 acceptance_criteria:
-  - "Every Q issue of this milestone carries owner_decision evidence that quotes the owner, with date and source, or is cancelled with the owner's reason."
+  - "Every Q issue of this milestone carries owner_decision evidence with its date and source, either quoting the owner or attributed to the session that decided under a quoted owner delegation, or is cancelled with the reason."
 validation:
   - "manual"
 evidence_required:
   - "milestone_verified"
 risks:
   - "Nobody asks the owner: the questions are listed by majordomus plan list --milestone M052, and a coordinator raises them; the plan cannot."
+  - "A delegated decision read as the owner's own: each records who decided and under which delegation, and the owner may override it."
 created_at: 2026-10-18
+updated_at: 2026-10-18

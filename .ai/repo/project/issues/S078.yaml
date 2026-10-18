@@ -1,21 +1,22 @@
 id: S078
 milestone: M005
-title: "§78 Specification section 78 (not received)"
-slug: specification-section-78-not-received
-priority: p1
-profile: implementation
-objective: "The pasted specification was truncated inside section 63; this section's text was never delivered. Blocked until the text is supplied."
+title: "§78 Manual file:// Test (Q001 triage: already delivered)"
+slug: "v1-spec-78-manual-file-test"
+priority: p3
+profile: routine
+objective: "Section 78, \"Manual file:// Test\", of the numbered multi-page V1 specification (docs/specs/oscilla-v1-sections-64-95.md, line 418; ChatGPT project conversation 6abec18d, 2026-10-01T20:46:12Z), triaged under Q001 against project.single-file-deliverable, S001-S063 and the ADRs from 0011 on, and closed as already delivered."
 scope:
-  - "index.html"
-  - "tests"
+  - "docs/specs/oscilla-v1-sections-64-95.md"
+  - ".ai/repo/project/issues/S078.yaml"
 depends_on:
   - "S000"
   - "Q001"
-current_state: "Text exists, not adopted: section 78, \"Manual FILE:// Test\", of the numbered multi-page V1 specification, recorded verbatim in docs/specs/oscilla-v1-sections-64-95.md (ChatGPT project conversation 6abec18d, 2026-10-01T20:46:12Z). Its numbering and premises differ from the single-file prompt of S001-S063, and parts of it conflict with the single-file deliverable rule and with later ADRs, so before any work this section is triaged against them. Whether M005 adopts the text at all is the owner's decision Q001, and this issue waits on it."
+cancelled: true
+current_state: "Already delivered, automated. The browser gate loads dist/index.html from file:// (and from the /oscilla/ sub-path) in Chromium, Firefox and WebKit with zero console errors (README \"Browser support\"; the Verification section of project.single-file-deliverable), which replaces the manual run as the definitive file:// test. The features it lists are S033-S045 and S052 (done for V1) and are exercised by the browser suites of the gate (tests/browser/app.cjs, navigation.cjs). The per-page items are superseded by one page. Triage of 2026-10-18 under Q001, decided by the coordinating Claude session under the owner's delegation of 2026-10-18 ('tak to vse pores'); the owner may override."
 acceptance_criteria:
-  - "The pasted specification was truncated inside section 63; this section's text was never delivered. Blocked until the text is supplied."
+  - "Cancelled by the Q001 triage of 2026-10-18 as already delivered, for the reason and with the pointer in current_state; reopening it needs a new decision recorded here that names what the pointer does not cover."
 validation:
-  - "node tests/smoke.cjs"
+  - "majordomus plan validate"
 evidence_required:
   - "verified"
 created_at: 2026-10-01

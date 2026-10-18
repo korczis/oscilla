@@ -1,27 +1,41 @@
 id: L003
 milestone: M049
-serves:
-  - "perception-lessons#masking"
 title: "Learn: masking"
 slug: learn-masking
-priority: p2
+priority: p3
 profile: implementation
-objective: "A lesson whose demonstration plays a tone with a band of noise at stated relative levels and separations, near and far in frequency, with controls for level and separation."
-why: "Conversation 6abec18d, 2026-10-01T21:08:07Z (V2 roadmap item 9) and the multi-page specification sections 89-90."
+cancelled: true
+current_state: "Cancelled on 2026-10-18 under this intent's rule that masking and critical bands are built only if the answer to Q001 names them: Q001's decision of 2026-10-18 (option (a), adopt and triage; recorded in Q001's current_state, evidence pending on main) names L001, L002 and L005 as the implementation of sections 89-90 and does not name masking, which rests only on a ChatGPT proposal (V2 roadmap item 9) that no owner adopted; ADR 0051's steering (fewer new nouns, measurement is the wedge) argues against adding it unasked. Applied by the planning session working under the coordinating session's delegation of 2026-10-18 ('tak to vse pores'); the owner may override by removing cancelled and asking for it."
+objective: "It starts only after Q001 is answered. Masking is not in sections 89-90: this issue is built only if the answer to Q001 names it, and is otherwise cancelled with Q001 as the reason. A lesson whose demonstration plays a tone and a band of noise at the same time, at stated relative levels and separations, near and far in frequency, with controls for level and separation. The noise source (src/js/audio/noise.js) is not a Learn or Playground source that mixes with a tone, and the AudioEngine replaces voices rather than layering them (ADR 0002), so the demonstration needs a two-source graph builder inside the engine's accounting (project.audio-engine-discipline) under the guarded src/js/audio. It follows L002 because both add a topic to src/js/data/learn.js and an engine graph builder."
+why: "Conversation 6abec18d, 2026-10-01T21:08:07Z (V2 roadmap item 9, a ChatGPT proposal); sections 89-90 do not name it, so only the answer to Q001 can adopt it."
 scope:
   - "src/js/data"
   - "src/js/labs"
   - "src/js/ui"
+  - "src/index.html"
+  - "src/partials"
+  - "src/styles"
+  - "src/js/audio"
   - "tests/unit/learn-masking.test.mjs"
   - "tests/browser"
+  - "tests/README.md"
+  - "tests/unit/source-size-baseline.json"
   - "dist"
-  - "docs/CLAIMS.yaml"
+depends_on:
+  - "Q001"
+  - "L002"
 acceptance_criteria:
-  - "The demonstration's relative levels and separations are the stated ones in a unit test of its schedule."
+  - "tests/unit/learn-masking.test.mjs: the schedule plays the tone and the noise band at once, at the stated relative levels and separations; it fails on the merge base."
   - "Levels are labelled relative; nothing states an SPL or a threshold of the listener."
-  - "docs/CLAIMS.yaml gains the guaranteed claim `lesson-masking` naming the source and the test that prove it, and the intent criterion this issue serves names that claim as its evidence in place of the command."
+  - "tests/unit/freeze.test.mjs passes unchanged; the pull request carries a reviewer's verdict (src/js/audio is guarded)."
+  - "The copy says what listeners commonly report under controlled listening, with a citation, never what this listener hears; it passes tests/unit/no-fake-science.test.mjs, and the pull request states that whether a sentence still implies a perceptual effect was judged by the reviewer, since the scan has no perceptual-claim phrases."
+  - "A browser check plays the demonstration through the AudioEngine with no console error, within the session safety limit, from file:// and the sub-path."
+  - "A capped file it grows past its cap is split first or its raise is declared in tests/unit/source-size-baseline.json's raises ledger."
+  - "tests/README.md has a row for the new test; L006 registers the claim; this issue does not edit docs/CLAIMS.yaml or the intent."
 validation:
+  - "node --test tests/unit/learn-masking.test.mjs tests/unit/freeze.test.mjs"
   - "npm run release-gate"
 evidence_required:
   - "verified"
 created_at: 2026-10-18
+updated_at: 2026-10-18

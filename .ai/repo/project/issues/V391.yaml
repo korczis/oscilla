@@ -1,34 +1,45 @@
 id: V391
 milestone: M047
 serves:
+  - "measurement-extensions#figure-contract"
   - "measurement-extensions#room-decay"
-  - "measurement-extensions#extensions-from-file-and-subpath"
-title: "Room decay from the impulse response: Schroeder integral, EDT, T20 and T30"
+title: "The figure contract, and room decay from the impulse response: Schroeder integral, EDT, T20 and T30"
 slug: room-decay-from-the-impulse-response-schroeder-integral-edt
 priority: p1
 profile: implementation
-objective: "From a measured impulse response compute the energy-time curve and the backward (Schroeder) integral with a stated noise-floor truncation, and per octave band EDT (0 to -10 dB), T20 (-5 to -25 dB) and T30 (-5 to -35 dB) as reverberation-time estimates, each only when the band's decay range above the noise floor covers its evaluation range plus a stated margin; mint a versioned algorithm ID; store, export (CSV) and compare (B minus A per band) the figures like the existing results."
-why: "V3 MEASURE specification sections 4 and 90-92 (docs/specs/oscilla-v3-measure.md); conversation 6abec18d, 2026-10-02T03:15:06Z."
+objective: "First, the contract every M047 figure inherits: a figure kind registered with the measurement engine stores its estimate; the setup and position it estimates (for room decay: 'single-position decay estimate of this playback and capture chain at this source and receiver position', never 'the room's reverberation time'); its validity condition; its method reference without a conformance claim; and its spread or uncertainty, or the statement that none can be given. Decide and record in docs/v3/algorithms.md whether derived figures enter the result hash (they are re-derivable from the stored PCM by a versioned algorithm) and bump the experiment schema with a migration for the stored figures (ADR 0023), so an experiment saved before a figure existed loads and compares with that figure absent and said so. Then room decay: from a measured impulse response compute the energy-time curve and the backward (Schroeder) integral, limited to the full-overlap span of the deconvolution (the post-roll minus the latency, src/js/measurement/impulse-response.js) and truncated at the stated noise floor, and per octave band of the product's own filter bank (named bands and filter, IEC 61260-like without claiming its class) EDT (0 to -10 dB), T20 (-5 to -25 dB) and T30 (-5 to -35 dB) by linear regression, with the regression's correlation coefficient as the per-band spread and the run-to-run spread where the measurement has repeated runs. A band yields a figure only when its decay range above the noise floor covers its evaluation range plus a stated margin, its bandwidth-time product B x T (with T the band's own estimate) is at least 16, and its evaluation range fits in the full-overlap span; otherwise it yields no figure and the reason. Mint a versioned algorithm ID; store, export (CSV) and compare (B minus A per band) the figures like the existing results."
+why: "V3 MEASURE specification sections 4 and 90-92 (docs/specs/oscilla-v3-measure.md); conversation 6abec18d, 2026-10-02T03:15:06Z. A per-band synthetic decay would prove only the fit, not the filter bank, and beyond the full-overlap span the deconvolved noise falls away artificially and would give a falsely clean decay (critique measurement-extensions, room-decay-proof-is-circular and no-uncertainty-or-reference-stated)."
 scope:
   - "src/js/measurement"
   - "src/js/experiments"
-  - "src/js/ui"
+  - "src/js/ui/measure.js"
+  - "src/js/ui/measure"
+  - "src/js/ui/measure-experiment.js"
+  - "src/js/ui/experiments.js"
+  - "src/js/ui/exporters.js"
+  - "src/index.html"
+  - "src/partials"
+  - "src/styles"
   - "tests/unit"
   - "tests/browser"
+  - "tests/README.md"
   - "docs/v3"
   - ".ai/repo/features"
   - "dist"
-  - "docs/CLAIMS.yaml"
 depends_on:
   - "E002"
 acceptance_criteria:
-  - "On synthetic exponential decays with known reverberation times (0.3, 0.8 and 2.0 s) at 44.1 and 48 kHz, EDT, T20 and T30 are within 5 % in every band."
-  - "A band whose decay range is too short yields no figure and the reason, never a number."
-  - "The figures carry the new algorithm ID, survive the experiment round trip and CSV export, and the comparison shows B minus A per band."
-  - "docs/v3/algorithms.md documents the method, and .ai/repo/features/impulse-response.md no longer says these figures are not computed."
-  - "docs/CLAIMS.yaml gains the guaranteed claim `room-decay-metrics` naming the source and the test that prove it, and the intent criterion this issue serves names that claim as its evidence in place of the command."
+  - "tests/unit/measurement-figure-contract.test.mjs fails for a registered figure kind without an estimate, setup and position label, validity condition, method reference or spread (or its stated absence), fails if a method reference claims conformance, and passes for room decay."
+  - "tests/unit/room-decay.test.mjs: a broadband synthetic impulse response built from per-band exponential decays of known T (0.8 and 2.0 s, generated with FFT-domain band masks independent of the product's filter bank) plus noise at a known floor, at 44.1 and 48 kHz, passed through the product's own filter bank, gives EDT, T20 and T30 within 5 % in every band the result names as evaluated, and the evaluated bands are listed in the test."
+  - "At T = 0.3 s a band with B x T below 16 (the 63 Hz octave) is refused with that reason; a decay whose evaluation range does not fit in the full-overlap span (T = 3.0 s with the default 1.5 s post-roll) is refused with that reason; a decay range too short above the floor is refused with that reason; never a number."
+  - "An experiment saved before this change loads, migrates and compares with the figure absent and said so; the figures carry the new algorithm ID, survive the experiment round trip and CSV export, and the comparison shows B minus A per band."
+  - "docs/v3/algorithms.md documents the contract, the hash decision and the method; .ai/repo/features/impulse-response.md no longer says these figures are not computed."
+  - "The pull request carries a reviewer's verdict and, as a feat change, fail-first (project.review-verdict, project.fail-first); a capped file it grows past its cap is split first or its raise is declared in tests/unit/source-size-baseline.json's raises ledger."
+  - "tests/README.md has a row for each new test; V399 registers the claims; this issue does not edit docs/CLAIMS.yaml or the intent."
 validation:
+  - "node --test tests/unit/measurement-figure-contract.test.mjs tests/unit/room-decay.test.mjs"
   - "npm run release-gate"
 evidence_required:
   - "verified"
 created_at: 2026-10-18
+updated_at: 2026-10-18

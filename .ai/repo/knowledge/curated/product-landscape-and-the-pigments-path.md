@@ -63,5 +63,6 @@ OSCILLA identity", a "precision technical cockpit", not a "warm analog instrumen
   competitor of Ableton, Spotify or synth demos.
 
 None of this is a decision. The owner's adopted steering is that acoustic measurement is the
-wedge (ADR 0051); the positioning sentence is still to be chosen (`positioning-candidates`,
+wedge, ChatGPT's framing in `6ac1beb8` (2026-10-04T03:30:06Z, "To je tvoje wedge"), adopted on
+2026-10-07 (ADR 0051); the positioning sentence is still to be chosen (`positioning-candidates`,
 issue Q002).

@@ -6,25 +6,32 @@ title: "Pinch zoom on the timeline"
 slug: pinch-zoom-on-the-timeline
 priority: p2
 profile: implementation
-objective: "Zoom the timeline with a two-pointer pinch anchored between the pointers, matching the keyboard zoom's levels and limits."
-why: "V3.1 Studio specification (docs/specs/oscilla-v3.1-studio.md); .ai/repo/features/studio.md, \"What it does not do\"."
+objective: "Zoom the timeline with a two-pointer pinch anchored between the pointers, matching the keyboard zoom's levels and limits, by reusing the graph's pinch about the midpoint (V429; src/js/ui/studio/graph-geometry.js) and its unit test rather than writing a second pinch. Playwright has no multi-touch API, so the browser check dispatches synthetic PointerEvent pairs: it proves the handler, not a real gesture, and the issue says so. The timeline's pinch lives in src/js/ui/studio/timeline-editor.js and needs nothing from the workspace orchestrator, so it does not wait on E003; it waits on V431 because #197 changes timeline-editor.js."
+why: "V3.1 Studio specification (docs/specs/oscilla-v3.1-studio.md); .ai/repo/features/studio.md, \"What it does not do\". Pinch cannot be driven as a real gesture in the gate (critique studio-completion, pinch-cannot-be-driven-in-the-gate)."
 scope:
-  - "src/js/studio"
-  - "src/js/ui/studio"
-  - "src/styles"
-  - "tests/unit"
-  - "tests/browser"
-  - ".ai/repo/features"
+  - "src/js/ui/studio/timeline-editor.js"
+  - "src/js/ui/studio/timeline-view.js"
+  - "src/js/ui/studio/graph-geometry.js"
+  - "tests/unit/studio-timeline-pinch.test.mjs"
+  - "tests/unit/source-size-baseline.json"
+  - "tests/browser/v31-studio-timeline.cjs"
+  - "tests/README.md"
   - "dist"
-  - "docs/CLAIMS.yaml"
+non_scope:
+  - "Shell markup: the pinch is a handler of the timeline editor, so src/index.html and src/partials do not change"
 depends_on:
-  - "E003"
+  - "V431"
+  - "V602"
 acceptance_criteria:
-  - "A synthetic two-pointer pinch and the keyboard zoom reach the same zoom level and anchor in the browser suite."
+  - "tests/unit/studio-timeline-pinch.test.mjs: the shared midpoint pinch geometry gives the same zoom level and anchor as the keyboard zoom for the same factor; it fails on the merge base."
+  - "tests/browser/v31-studio-timeline.cjs: a synthetic two-pointer pinch and the keyboard zoom reach the same zoom level and anchor; the check states that it synthesizes PointerEvents."
   - "Pinch never changes the model; it is view state only."
-  - "docs/CLAIMS.yaml gains the guaranteed claim `studio-timeline-pinch-zoom` naming the source and the test that prove it, and the intent criterion this issue serves names that claim as its evidence in place of the command."
+  - "The pull request carries a reviewer's verdict where it touches a guarded path and, as a feat change, fail-first (project.review-verdict, project.fail-first); a capped file it grows past its cap is split first or its raise is declared in tests/unit/source-size-baseline.json's raises ledger."
+  - "tests/README.md has a row for each new test; V606 registers the claim; this issue does not edit docs/CLAIMS.yaml or the intent."
 validation:
+  - "node --test tests/unit/studio-timeline-pinch.test.mjs"
   - "npm run release-gate"
 evidence_required:
   - "verified"
 created_at: 2026-10-18
+updated_at: 2026-10-18

@@ -31,7 +31,7 @@ by the first eight hex digits of the conversation id and the message timestamp (
 
 ## The conversations
 
-| id | title (as exported) | created (UTC) | last message (UTC) | messages (owner) |
+| id | title (as exported) | created (UTC) | updated (UTC, export header) | messages (owner) |
 | --- | --- | --- | --- | --- |
 | `6abec18d-3e14-83eb-826c-cec2de466d22` | Development of Oscilla | 2026-10-01 20:24 | 2026-10-02 03:56 | 170 (23) |
 | `6abf2906-4c00-83eb-b8ee-d32e10447655` | Napiš instrukce projektu | 2026-10-02 03:46 | 2026-10-02 03:49 | 2 (1) |
@@ -68,16 +68,23 @@ contain.
   MEASURE and V3.1 STUDIO master prompts (`6abec18d`, 2026-10-02T03:18:10Z and 03:27:31Z),
   which the owner asked for and adopted.
 - `docs/specs/oscilla-v1-sections-64-95.md`: sections 64-95 of the numbered multi-page V1
-  specification (`6abec18d`, 2026-10-01T20:46:12Z), recorded on 2026-10-18 and not adopted
-  (issue Q001).
+  specification (`6abec18d`, 2026-10-01T20:46:12Z), recorded on 2026-10-18 and adopted as M005's source, triaged section by section (issue Q001,
+  decided under the owner's delegation of 2026-10-18; the owner may override).
 - The V1 plan S001-S063 (the single-file prompt of 20:42:59Z), the V2 mission, the release
   engineering mission (R001-R017) and the "v4.0 brief" that `docs/v4/completion-ledger.md`
-  follows. That brief is ChatGPT's 266-point closure prompt (`6ac1beb8`,
-  2026-10-05T18:20:52Z); ADR 0051 correctly says it is not in the repository. The owner split
-  points 071-266 into per-point prompt files, and points 001-070 were written again later
-  (`6ac1beb8`, 18:27:39Z, 18:41:49Z).
-- The About page (`6abf2a8d`, 2026-10-02T04:13:38Z) and the ChatGPT project instructions,
-  which drifted from the repository (`chatgpt-project-instructions-drift`).
+  follows. That brief is ChatGPT's closure prompt numbered 0-266 (`6ac1beb8`,
+  2026-10-05T18:20:52Z); ADR 0051 correctly says it is not in the repository. At the owner's
+  request (18:27:39Z) ChatGPT turned the brief into a ZIP of per-point prompts. Its handoff held
+  only points 071-266, so it delivered 196 prompts and 70 blocked placeholders for 001-070
+  (18:29:32Z, 18:35:51Z). Asked for a prequel (18:41:49Z), it announced newly written prompts for
+  001-070, marked as not the original text (18:42:10Z); no prequel archive appears in the
+  export. The original points survive in full in the 18:20:52Z message (`# 0.` through
+  `# 266.`, 267 points with no gaps), so the original is the source to use, not any rewritten
+  per-point prompt.
+- The About page (`6abf2a8d`, 2026-10-02T04:13:38Z), including its "simple question" Origin
+  sentence (`oscilla-origin-in-the-transcripts`), and the ChatGPT project instructions, which
+  drifted from the repository until they were replaced on 2026-10-18
+  (`chatgpt-project-instructions-drift`).
 - ADR 0058 and the intent `midi-jam-companion` (`6acbd3dc`, 2026-10-11T18:23:45Z).
 - The curated records `oscilla-origin-in-the-transcripts`, `oscilla-first-night-build-method`,
   `built-in-one-night-is-wall-clock`, `product-landscape-and-the-pigments-path`,

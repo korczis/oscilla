@@ -8,39 +8,51 @@ findings:
     finding: "Q004 asks the owner what the first screen 'says about OSCILLA (Q002)', but neither Q004 nor P002 depends on Q002. Once P001 is done and Q004 is answered, P002 is ready and can ship first-screen copy while the positioning sentence is still unchosen. Either P002 depends on Q002 too, or Q004's answer must state the words itself. The same edge orders P002 against P003, which changes the About lede and the metadata. Without it, two issues write the product's self-description in either order."
     blocking: false
     resolution:
-      state: open
+      state: planned
+      issue: "P002"
+      because: "P002 depends on Q002 and P003, and the intent says the first screen describes OSCILLA in the sentence Q002 records (2026-10-18)."
   - id: deep-links-have-no-inventory
     class: missed_requirement
     subject: "first-run-experience#first-screen-built"
     finding: "'Every earlier deep link resolving as before' cannot be checked without a list of them, and none exists. Known entry paths include: the hash dispatcher of ADR 0045; the URL state keys, among them 'm' for the V1 mode ids playground, sweep, dual, presets and learn (src/js/ui/app.js:10, ui/navigation.js:96); ?mock=1 (app.js:62-65); the Studio links that tests/browser/v31-studio-links.cjs covers; and the instrument's direct path. P002 should first commit that inventory as a table-driven browser check that passes on the current first screen. Only then is 'as before' decidable."
     blocking: false
     resolution:
-      state: open
+      state: planned
+      issue: "P002"
+      because: "P002 first commits tests/browser/first-screen.cjs with a table-driven inventory of the entry paths, passing on the current screen, and the criterion cites that suite (2026-10-18)."
   - id: live-smoke-and-visual-gate-assume-the-playground
     class: regression_risk
     subject: "P002"
     finding: "Two gates assume today's first screen. The live smoke on every Pages deployment checks that 'the Playground's Studio widget loads' and that the compact Studio is visible (tests/browser/live-smoke.cjs:17, 268-291; specification section 269). The visual gate's main reference is the Playground --play scene (scripts/visual-gate.mjs, tests/visual/regions.json, project.visual-identity-lock). P002 says only that 'the visual references are updated only for the first screen'. It does not mention live-smoke, which runs after publish and would fail a deployed page rather than a pull request. And if the layout moves the compact Studio widget, the claim compact-sync and V31 section 269 are affected. The acceptance should name both suites."
     blocking: false
     resolution:
-      state: open
+      state: planned
+      issue: "P002"
+      because: "P002's acceptance names tests/browser/live-smoke.cjs, the visual gate and the compact Studio claim (2026-10-18)."
   - id: wedge-not-in-governance
     class: surface_missing
     subject: "P001"
     finding: "P001 must read 'the changes, ADRs and commits since V3', but the intent's governance names only ADR 0045. The decision that most constrains a first screen is ADR 0051, the owner's steering 'acoustic measurement is the wedge; depth over breadth; fewer new nouns', and the knowledge record product-landscape-and-the-pigments-path:65 repeats it. Options that P001 does not trace to that steering leave the owner choosing without it. Add ADR 0051 to the governance and require each option to state how it serves the wedge."
     blocking: false
     resolution:
-      state: open
+      state: planned
+      issue: "P001"
+      because: "ADR 0051 and the product-landscape record join the governance, and P001 requires each option to state how it serves the wedge (2026-10-18)."
   - id: m052-couples-unrelated-questions
     class: delivery_verification
     subject: "M052"
     finding: "The intent names M052 because Q004 lives there. M052 also holds Q002, Q003, Q005 and Q006, which belong to product-direction, and its acceptance is that every Q issue is answered or cancelled. An intent's milestone-level state can therefore never read done for first-run-experience while the product questions are open, even when P001, Q004 and P002 are complete. Either Q004 moves under M050, which already lists it in its acceptance, or the intent stops naming M052."
     blocking: false
     resolution:
-      state: open
+      state: planned
+      issue: "Q004"
+      because: "Q004 moved to M050 and the intent names only M050 (2026-10-18)."
   - id: evidence-never-recorded
     class: delivery_verification
     subject: "M050"
     finding: "Two of three criteria cite 'majordomus plan show P001/Q004', which exits 0 whatever the issue says. The third cites npm run test:browser (app, layout, qa-regressions, navigation), which passes on today's screen and does not include the visual gate. None of them can turn false before the work or true after it, and Majordomus 0.29 cannot record them anyway (V272 D3). For the owner's choice the honest evidence is owner_decision on Q004. That is a kind the criterion could name directly."
     blocking: false
     resolution:
-      state: open
+      state: planned
+      issue: "P002"
+      because: "The criteria now cite checks that fail before the work (test -s of the analysis, plan list showing Q004 DONE, tests/browser/first-screen.cjs), and P002 swaps the last to a claim (2026-10-18)."
