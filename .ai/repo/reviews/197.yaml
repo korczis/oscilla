@@ -1,56 +1,71 @@
 # Review verdict for pull request #197, the V272 final adversarial review (spec §272) and its 35
-# fixes plus I1 and I2, branch docs/v272-final-review.
-# Reviewed head 9b9723278c425ce43bf03b217f2f5ea62b93641b, merge base origin/main 044f98a (#196,
-# main's tip: main has not moved). This review is of the whole diff, by area: src/js/studio,
-# src/js/ui/studio, src/styles, the release and deploy scripts, .github, tests, .ai/repo and docs.
+# fixes plus I1 and I2, branch docs/v272-final-review. Second round (re-review).
+# Reviewed head 55ae40d71ba40ea43ef62f71c3bd3af3512a2e05, merge base origin/main 044f98a (#196,
+# main's tip: main has not moved). Round 1 reviewed 9b97232 and requested changes (cc5ab9b).
+# This round reviews what changed since: fedf67c and 727cf57 (R-1), 8d23a4a and d938013
+# (R-2), 4369fd6 (R-5), 130abce (dist) and 55ae40d (docs). Another builder wrote them, not me.
 #
 # The digest: the base branch's scripts/review-verdict.mjs judges this pull request
-# (.github/scripts/base-rule.sh). Its GUARDED list gives 21 changed guarded paths and the content
-# below (run from `git archive origin/main scripts`). The pull request's own copy, with D5's longer
-# list, gives 28 paths and 4f15da941f163e14450249e65d35d7d1fb0ca076273b06e4301a98dc8820a44e; that
-# one applies only to pull requests based on main after this merges.
+# (.github/scripts/base-rule.sh). I ran it from `git archive origin/main scripts` at 55ae40d:
+# a64856d4...5c97f, the same as the builder's figure for 130abce, because 55ae40d changes
+# only docs/v31/review-v272.md. The pull request's own copy, with D5's longer list, gives
+# b68593e93da117662390afd19d1d8ab50c41441e1dea38b50847f8c0a9d59ae4. That copy applies only to
+# pull requests based on main after this merges.
 #
 # What was checked:
-# - The questions I was asked to check. I1: the transport sets `model = next` before
-#   applyEdit in admitNow and syncNow, so the 'schedule' event carries the model being played;
-#   measurement-run derives its recipe from it. I2: cmp.gainLevel is the engine's linear
-#   logical gain, which is also the Master Output `level` unit; runtime.restoreMaster gives the
-#   saved level back before the run. The automation builder's detune-clamp case was tested and
-#   is a defect (R-1).
-# - Release integrity. pages.yml stamps (schema 2) and runs verify-deploy in the same deploy job,
-#   after checkout with fetch-depth 0. So the first deploy after the merge stamps and verifies
-#   with this commit's scripts: the live schema-1 page is replaced before it is judged. The
-#   smoke job passes a full $GITHUB_SHA and needs no git history. The release commit is stamped
-#   'untagged', and verify-deploy accepts untagged->tagged at release:publish. The stamp, the
-#   verifiers and the labels agree (build-info, releaseLabel, live-smoke labelOf).
-#   release:prepare refuses OSC_BROWSERS/OSC_ORIGINS and runs with OSC_STRICT_SKIPS=1. The four
-#   declared skips are not platform-specific. An old receipt is refused, which is intended.
-# - Audio discipline. B1 holds: re-running reviewer B's b1 script shows one hard-stopped
-#   oscillator, but it is the OLD playback's future voice (created 0.5, startAt 1.0213, stopAt
-#   0, never started). The new playback's sources keep running. The offset ConstantSource is
-#   tracked on the node's accounting and starts with the lane's anchor. Kept future voices on a
-#   replaced node are replayed; kept gates and clocks on one are rebuilt by afterApply.
-# - Visual identity: the C6 changes swap --osc-text-dim for the existing --osc-text-muted token;
-#   aria-pressed becomes aria-current on the compact chips. scripts/visual-studio.mjs dist:
-#   5 views, 0 % differ from the re-accepted darwin-arm64 references.
-# - Timing: no new fixed sleep, waitForTimeout or timing-allow in tests/browser (diff scan);
-#   browser-timing.test.mjs passes.
-# - Ran on the head: npm test 2951/2951; build:check, verify-dist, version:check, pin check
-#   0.29.0, majordomus doctor 0 failures; v31-studio-transport chromium 27/27; v31-studio-graph
-#   chromium file 33/33, http 6/6; reviewers A and B's evidence scripts (each one prints the
-#   fixed behaviour, apart from the B1 false positive above and b2-offset-drift: that script
-#   reads only the param's own schedule, and the offset now lives in the ConstantSource).
-#   Reviewer tests: scratchpad rv197/detune-clamp.test.mjs (fails on the head, passes on
-#   origin/main's src) and rv197/pending-edit.test.mjs.
+# - R-1 (727cf57). computeBases now records `lowered` for every base it moves (a frequency to
+#   its cap or minimum, a static detune into the headroom). offsetOf and runtime.baseOffset
+#   add it back, so baseOffset is the edges' constant part only. Checks, each passing:
+#   - My round-1 test, rv197/detune-clamp.test.mjs: 6/6 (it failed 6/6 at 9b97232).
+#   - "V272 R-1" fails on the src of fedf67c and passes at 727cf57 (fail-first holds).
+#   - Adversarial cases, rv197/r1-adversarial.test.mjs:
+#     - a linear LFO->detune edge with an offset gives the same baseOffset and the same
+#       scheduled detune with static detune +1200 (clamped) as with 0;
+#     - removing the detune lane while playing glides to the runtime's lowered base
+#       (1111.2 / 964.5 ct at 48 / 44.1 kHz), so the transport and the runtime agree;
+#     - a static frequency above the cap (15 kHz at 22.05 kHz) under a frequency lane at
+#       1000 Hz plays 1000 Hz with baseOffset 0, which closes the same latent case on the
+#       frequency.
+#   One case is conservative and reported, not silent: R-7.
+# - R-2 (d938013). After an applied edit, admitNow and syncNow send { type: 'edit', model }
+#   while a measurement is scheduled. measurement-run keeps the model it armed with, and
+#   handOff derives the recipe again from that model: a refusal fails the run with its
+#   reason, and the Studio plays on. Checks, each passing:
+#   - My round-1 test, rv197/pending-edit.test.mjs, now gives runs 0, failed.
+#   - The "V272 R-2" tests fail 2 of 3 on the src of 8d23a4a; the third ("keeps the armed
+#     measurement") passes both before and after, as intended.
+#   - Adversarial cases, rv197/r2-adversarial.test.mjs:
+#     - an edit and its revert, and an edit and its undo, run with the original recipe and
+#       model;
+#     - a Sweep duration edit that keeps the clips (so the item is kept) is refused at the
+#       hand-off with A8's reason;
+#     - MEASURE's output level changing between arm and hand-off is refused with A5's reason.
+#   The design choice (a refusal is reported at the hand-off, not at the edit) is accepted.
+#   An edit only marks the run as changed; the recipe is decided once, at the hand-off, so a
+#   multi-clip move cannot fail on a passing layout. The cost: for up to the armed window
+#   (lookahead 1 s minus 0.25 s), the view still says pending with the last valid recipe.
+#   Presentation-only edits send no 'edit'. They cannot change studioHash, which covers only
+#   the execution state.
+# - R-5 (4369fd6). The semantics are kept, decided and documented in the node help, the user
+#   guide and timeline.md, and pinned by "V272 R-5".
+# - D2: `gh api .../branches/main/protection` reads required check `gate` with strict: true.
+# - Ran on 55ae40d:
+#   - npm test 2957/2957; build:check (dist up to date, source a5dd00183bd1);
+#   - v31-studio-transport chromium 27/27; v31-studio-workflows chromium file 11/11 and
+#     http 3/3;
+#   - the fail-first checks above.
+#   Round 1's checks (release integrity, the first deploy after the merge, visual identity,
+#   timing, I1 and I2) are of files this round does not touch; they stand as recorded in cc5ab9b.
 schema: review-verdict/v1
 pr: 197
-verdict: changes-requested
-reviewer: "independent review subagent (Claude Opus 5.5) with its own context, spawned by orchestrating session e4a1ac78, whose other agents reviewed (A-D), built and integrated this change; this agent is none of them, did not build, merge or edit any of it and wrote only this file"
-content: 4d145b3c07b7ee45ce84c1eac45b903a40c8e284c2abd243903a2329455cde73
+verdict: merge
+reviewer: "independent review subagent (Claude Opus 5.5) with its own context, spawned by orchestrating session e4a1ac78, whose other agents reviewed (A-D), built and integrated this change and fixed this review's findings; this agent is none of them, did not build, merge or edit any of it and wrote only this file"
+content: a64856d4b576008d65ec2ea7340e0892ea9cae9b24fce36c14ac48f1ebf5c97f
 findings:
-  - { id: R-1, severity: P1, status: open, title: "regression from A7. compiler.js computeBases lowers a static detune that exceeds the frequency's headroom (`clamped`), and runtime.baseOffset counts the lowered amount as an edge offset. So a detune LANE, which overrides the static value, is shifted down by the clamp. Oscillator 12 kHz, static detune +1200 ct, detune lane: at 48 kHz, lane values 0/500/-600 ct play -88.8/411.2/-688.8 ct; at 44.1 kHz, -235.5/264.5/-835.5 ct. Each is within its own ceiling (1111.2 / 964.5 ct). limitedLanes is empty, so nothing reports it. On origin/main the same lanes play exactly 0/500/-600. Fix: the static clamp must not reach baseOffset (offset = the edges' constant part only; the lane is bounded by detuneCeiling in paramFor). Add this case as a test" }
-  - { id: R-2, severity: P2, status: open, title: "B2's keep policy keeps a pending measurement item without re-deriving its recipe. An edit in the armed window (lookahead 1 s minus HANDOFF_LEAD_S 0.25 s) is silently left out of the measurement, and A5's level refusal is bypassed. Example: with the hand-off pending, Sweep end goes 20000 to 10000 and Master Output 0.08 to 0.04 (outputLevel 0.08). The run still gets the old model (end 20000, level 0.08) and saves 'done'. The record matches what ran, so the provenance is not false, but the Studio shows another graph and says nothing. Fix: re-derive on an admitted edit while pending, and abort or re-arm when the recipe changes" }
-  - { id: R-3, severity: P2, status: open, title: "reviewer independence is at agent level: this reviewer, reviewers A-D, the nine builders and the integrator are agents of one orchestrating session (e4a1ac78). The rule says a reviewer who did not build the change, and the README says a session other than the builder's; the owner decides whether that satisfies it (as V-1 of #174 and #179)" }
-  - { id: R-4, severity: P3, status: open, title: "I2's wiring (workspace outputLevel: cmp.gainLevel) has no browser check (the builders' named follow-up). The units and the restore were read here; that the refusal reaches the user in the page rests on that follow-up" }
-  - { id: R-5, severity: P3, status: open, title: "a clocked Random or Step Modulator holds step 0 from PLAY, and its first trigger (k = 0) sets step 0 again, so the first trigger changes nothing audible and step 1 arrives with the second. This is consistent with the header ('the k-th trigger sets step k'), but the user guide should say it, or step 0 should wait for the first trigger" }
-  - { id: R-6, severity: P3, status: open, title: "this reviewer ran browser suites only in chromium (v31-studio-transport, v31-studio-graph) on a shared, loaded machine (load about 55). The firefox and webkit legs, the other Studio suites and the linux-x64 visual references rest on CI run 39116161418, which was still pending when this was written" }
+  - { id: R-1, severity: P1, status: closed, title: "a static detune lowered into the Nyquist headroom was counted by runtime.baseOffset as an edge offset and shifted a detune lane (lane 0/500/-600 ct played -88.8/411.2/-688.8 at 48 kHz). Fixed by 727cf57 (computeBases `lowered`, added back in offsetOf and baseOffset). Confirmed on 55ae40d: the reviewer's test passes 6/6, 'V272 R-1' fails before the fix, and the adversarial cases above pass" }
+  - { id: R-2, severity: P2, status: closed, title: "an edit made while a measurement hand-off was armed was left out of the run, bypassing A5. Fixed by d938013 (the transport's 'edit' event; the recipe is derived again at the hand-off). Confirmed: a Sweep end edit runs with the edited model; a Master level, Sweep duration or MEASURE output level that the recipe now refuses fails the run with its reason; revert and undo run the original" }
+  - { id: R-3, severity: P2, status: open, title: "reviewer independence is at agent level: this reviewer, reviewers A-D, the builders, the integrator and the builder of the R fixes are agents of one orchestrating session (e4a1ac78). The rule says a reviewer who did not build the change, and the README says a session other than the builder's; the owner decides whether that satisfies it (as V-1 of #174 and #179)" }
+  - { id: R-4, severity: P3, status: open, title: "I2's wiring (workspace outputLevel: cmp.gainLevel) still has no browser check (the builders' named follow-up). The R-2 unit tests now exercise outputLevel against the hand-off; that the refusal reaches the user in the page rests on that follow-up" }
+  - { id: R-5, severity: P3, status: closed, title: "the first clock trigger of a clocked Random or Step Modulator plays the value it already holds since PLAY. Decided and kept (a Sequence clip at 0 s starts on step 0), stated in the node help, the user guide and timeline.md, and pinned by 'V272 R-5' (4369fd6)" }
+  - { id: R-6, severity: P3, status: open, title: "this reviewer ran browser suites only in chromium (round 1: v31-studio-transport, v31-studio-graph; round 2: v31-studio-transport, v31-studio-workflows) on a loaded shared machine (load 75-95). The firefox and webkit legs, the other suites and the linux-x64 visuals rest on CI run 39119966278 for this head, pending when this was written; run 39116161418 for 9b97232 was cancelled when it was superseded" }
+  - { id: R-7, severity: P3, status: open, title: "a static detune that a detune lane overrides still spends the frequency's log-edge headroom, because computeBases sizes it from max(static, lane peak), the same sizing as X1. Example: Oscillator 12 kHz, static +1200 ct, detune lane 0, and a log LFO->frequency edge with offset 0.1 (120 ct constant). The edge's cents drop to 0 (the detune plays 0, not 120, although the ceiling is 1111 ct). It is reported in limitedEdges (edge-6), so it is conservative and visible, not silent; sizing an owned detune from its lane peak alone would lift it" }
