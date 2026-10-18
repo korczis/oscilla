@@ -30,7 +30,9 @@
 // (m ∈ [-1, 1] the modulator signal), muted edges contributing nothing, and the clamp being the
 // parameter range (frequencies: also 0.95 × Nyquist). combineAutomationAndModulation() is that
 // rule as a pure function; the graph runtime realises it with AudioParam summing (base value
-// automated on the param, modulator → depth gain → the same param).
+// automated on the param, modulator → depth gain → the same param). An automated parameter's
+// constant offset is summed in too where the base has exponential segments (the transport's
+// offset source): a geometric ramp between offset end values is not base + offset.
 
 import { automationValueAt } from '../sequencer/compiler.js';
 import { safeMaximum } from '../sequencer/model.js';

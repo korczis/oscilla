@@ -526,9 +526,10 @@ method (an engine change, out of this issue's scope):
   during playback with edits on owned nodes.
 - `runtime.baseOffset(id, key)` is the constant part the modulation edges add to a parameter's
   base (linear edges: unipolar polarity, `offset`), in the parameter's unit. The lane owns the
-  intrinsic value, so the transport adds it to the values it schedules (actual = base +
-  Σ edges, `combineAutomationAndModulation`); log-mapped edges stay on `detune`, which the
-  runtime keeps writing.
+  intrinsic value, so the transport adds it (actual = base + Σ edges,
+  `combineAutomationAndModulation`): to the values it schedules, or, on a strictly positive
+  parameter, through an offset source summed into the same AudioParam (`docs/v31/timeline.md`
+  "Transport integration"); log-mapped edges stay on `detune`, which the runtime keeps writing.
 - Pattern clips play into `nodes.get(sequenceId).info.destination` with the handle's accounting
   (`handle.acct`, whose `track` / `source` are `info.accounting`), or, on an Oscillator, into a
   pattern bus routed into the oscillator's AUDIO routes (`runtime.edges`, `fromNode`, `gain`).
