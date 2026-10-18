@@ -22,6 +22,7 @@ const DIGEST = computeSourceDigest();
 const COMMIT = 'f187f664893ce0444c03629b0d8afa66d6d9f715';
 const DATE = '2026-10-02T03:32:49Z';
 const URL_ = 'https://korczis.github.io/oscilla/';
+const TAGGED = { release: 'tagged', distance: 0 }; // the release state of a release commit
 
 test('source digest: order-independent, sensitive to content and to paths', () => {
   const a = [{ path: 'src/a.js', content: 'x' }, { path: 'package.json', content: '{}' }];
@@ -95,34 +96,38 @@ test('verify-dist provenance: missing banner/region, wrong version, stale digest
   has(DIST, /region version .* != package\.json 40\.0\.0/, { ...ok, version: '40.0.0' });
   has(DIST, /sourceDigest .* != recomputed/, { ...ok, sourceDigest: 'b'.repeat(64) });
   has(DIST.replace(REGION_OPEN, '<script type="application/json" id="other">'), /found 0 times/);
-  has(stampHtml(DIST, { commit: COMMIT, sourceDate: DATE }), /must be unstamped/);
+  has(stampHtml(DIST, { commit: COMMIT, sourceDate: DATE, ...TAGGED }), /must be unstamped/);
 });
 
 test('stamp: rewrites only the region, is idempotent, and normalise reverses it', () => {
-  const stamped = stampHtml(DIST, { commit: COMMIT, sourceDate: DATE });
+  const stamped = stampHtml(DIST, { commit: COMMIT, sourceDate: DATE, ...TAGGED });
   const { record, start } = findRegion(stamped);
   assert.deepEqual(record, { ...sourceRecord({ version: PKG.version, sourceDigest: DIGEST }),
-    channel: 'production', commit: COMMIT, shortCommit: 'f187f66', sourceDate: DATE,
-    artifactSha256: sha256(DIST) });
-  assert.equal(stampHtml(stamped, { commit: COMMIT, sourceDate: DATE }), stamped);
+    schema: 2, channel: 'production', commit: COMMIT, shortCommit: 'f187f66', sourceDate: DATE,
+    artifactSha256: sha256(DIST), ...TAGGED });
+  assert.equal(stampHtml(stamped, { commit: COMMIT, sourceDate: DATE, ...TAGGED }), stamped);
   assert.equal(normalizeStamped(stamped), DIST);
   assert.equal(normalizeStamped(DIST), DIST);
   assert.equal(stamped.slice(0, start), DIST.slice(0, start)); // bytes before the region
   const tail = stamped.length - stamped.indexOf('</script>', start);
   assert.equal(stamped.slice(-tail), DIST.slice(-tail)); // bytes after the region
-  assert.throws(() => stampHtml(DIST, { commit: 'abc', sourceDate: DATE }), /refusing to stamp/);
-  assert.throws(() => stampHtml(DIST, { commit: COMMIT, sourceDate: 'yesterday' }), /sourceDate/);
+  assert.throws(() => stampHtml(DIST, { commit: 'abc', sourceDate: DATE, ...TAGGED }),
+    /refusing to stamp/);
+  assert.throws(() => stampHtml(DIST, { commit: COMMIT, sourceDate: 'yesterday', ...TAGGED }),
+    /sourceDate/);
 });
 
 test('verify-deploy: a correctly stamped deployment passes', () => {
-  const html = stampHtml(DIST, { commit: COMMIT, sourceDate: DATE });
-  const expected = { commit: COMMIT, version: PKG.version, sourceDigest: DIGEST, sourceDate: DATE };
+  const html = stampHtml(DIST, { commit: COMMIT, sourceDate: DATE, ...TAGGED });
+  const expected = { commit: COMMIT, version: PKG.version, sourceDigest: DIGEST, sourceDate: DATE,
+    release: TAGGED };
   assert.deepEqual(checkLive({ html, dist: DIST, url: URL_, expected }), []);
 });
 
 test('verify-deploy: every mismatch is a problem', () => {
-  const html = stampHtml(DIST, { commit: COMMIT, sourceDate: DATE });
-  const expected = { commit: COMMIT, version: PKG.version, sourceDigest: DIGEST, sourceDate: DATE };
+  const html = stampHtml(DIST, { commit: COMMIT, sourceDate: DATE, ...TAGGED });
+  const expected = { commit: COMMIT, version: PKG.version, sourceDigest: DIGEST, sourceDate: DATE,
+    release: TAGGED };
   const has = (o, re) => {
     const p = checkLive({ html, dist: DIST, url: URL_, expected, ...o });
     assert.ok(p.some((x) => re.test(x)), `${re} in ${JSON.stringify(p)}`);
@@ -168,10 +173,11 @@ test('pack: banner first, then the notice; the build-info marker is required whe
 
 // ---------------------------------------------------------------- V272 D1: release state
 // Pages deploys every push to main and stamps the version of package.json, so after a release
-// every later commit carried the release's bare version (2d56148 labelled 3.11.0, 20 commits
-// after the tag). The stamp now records where the commit stands relative to v<version>, and
-// only the tag's own commit (or the release commit deployed before its tag existed) shows the
-// bare version; any later commit is <version>+<distance>.g<short> (git-describe style).
+// every later commit carried the release's bare version (review V272: 2d56148, 20 commits after
+// the tag, labelled with the release's version). The stamp now records where the commit
+// stands relative to v<version>, and only the tag's own commit (or the release commit
+// deployed before its tag existed) shows the bare version; any later commit is
+// <version>+<distance>.g<short> (git-describe style).
 const OLDER = '0a1b2c3d4e5f60718293a4b5c6d7e8f901234567';
 
 /** A git runner for releaseState(): v40.1.0 at `tagAt`, `count` commits from it to COMMIT. */

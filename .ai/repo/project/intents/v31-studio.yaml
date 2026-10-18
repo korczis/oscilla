@@ -116,7 +116,7 @@ satisfaction:
   - id: public-release-verified
     criterion: "The public page serves the 3.1.x release with its version and commit, and the public Studio smoke passes"
     evidence: command
-    ref: "npm run test:live"
+    ref: "npm run test:live -- --expect-commit origin/main"
 governance:
   - "rule:project.studio-model-is-canonical"
   - "rule:project.typed-ports"

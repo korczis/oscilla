@@ -69,7 +69,14 @@ The flow, in the order it is practised. Each step names what holds it in place.
    smoke legs wait for a runner is slow, and is waited for.
 5. **Live verification.** `.github/workflows/pages.yml` runs `verify-deploy` and `test:live`
    in Chromium, Firefox and WebKit on every deployment and fails on a mismatch;
-   `release:publish` runs `verify-deploy` itself before it creates the GitHub Release.
+   `release:publish` runs `verify-deploy` itself before it creates the GitHub Release. The
+   stamp carries the release state (ADR 0059): the page of the release commit, deployed
+   before its tag, is stamped `untagged`, and `verify-deploy` after the tag accepts it as the
+   release; every later push is stamped `after-tag` and shows `vX.Y.Z+N.g<short>`. This step
+   is proved at release time by the release's own Pages run; the live page proves only the
+   commit it serves, so a plan item proves a release by that run and the record, and a
+   validation that runs `verify-deploy` or `test:live` names its commit
+   (`tests/unit/release-validation-pins.test.mjs`).
 6. **`npm run release:record -- --version X.Y.Z`**, landed by its own small pull request from
    the branch `chore/release-record-vX.Y.Z`. The release is finished when that record is on
    main, and the next `release:prepare` does not start before.

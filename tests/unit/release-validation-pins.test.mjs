@@ -1,11 +1,12 @@
 // V272 D1: a plan or intent validation that proves the public page names the commit it proves.
 // `npm run release:verify-deploy` without --commit compares the page with the checkout it runs
 // in, and `npm run test:live` without --expect-commit accepts whatever Pages serves, so both
-// pass on any later main HEAD: M035 ("the public page carries 3.11.0 and the release commit")
-// read as met while Pages served 2d56148 labelled 3.11.0. Every `validation:` entry of a
-// milestone or issue and every `ref:` of an intent criterion with `evidence: command` that
-// runs verify-deploy carries `--commit <rev>`, and one that runs the live smoke carries
-// `--expect-commit <rev>` (a full SHA, a tag or origin/main; never a <placeholder>).
+// pass on any later main HEAD: M035 ("the public page carries <the release> and the release
+// commit") read as met while Pages served 2d56148 under the release's version. Every
+// `validation:` entry of a milestone or issue and every `ref:` of an intent criterion with
+// `evidence: command` that runs verify-deploy carries `--commit <rev>`, and one that runs the
+// live smoke carries `--expect-commit <rev>` (a full SHA, a tag or origin/main; never a
+// <placeholder>).
 //   node --test tests/unit/release-validation-pins.test.mjs
 import assert from 'node:assert/strict';
 import { readdirSync, readFileSync } from 'node:fs';

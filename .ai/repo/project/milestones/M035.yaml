@@ -5,15 +5,17 @@ version: "3.11.0"
 order: 44
 priority: p0
 problem: "Pages has served main 964e25d since 2026-10-13 under the v3.10.3 label while 100+ releasable commits waited unreleased (node scripts/release-cadence.mjs: OVERDUE), and train 2 (#179) is not on main."
-outcome: "Train 2 is on main and deployed; OSCILLA 3.11.0 is released through the gated flow, its public page is proven to carry the release version, commit and artifact in three browsers, and its release record has landed."
+outcome: "Train 2 is on main and deployed; OSCILLA 3.11.0 is released through the gated flow, its own Pages run proved at release time that the public page carried the release version, commit and artifact in three browsers, and its release record has landed."
 acceptance_criteria:
   - "Train 2 (#179) is merged to main by merge commit and the Pages deployment of that commit passes verify-deploy and test:live in chromium, firefox and webkit."
   - "v3.11.0 is tagged, released and deployed from a gate receipt that binds the released tree (project.release-receipt-binds-gate)."
-  - "The public page carries 3.11.0 and the release commit, matches the released artifact, and the live smoke passes in three browsers."
+  - "At release time the Pages run of the release commit (39097666998, 2b63ec3) proved the public page carried 3.11.0 and that commit and matched the released artifact, and the live smoke passed in three browsers. That is a point-in-time proof: Pages deploys every push to main, so a later commit replaces the page; since ADR 0059 such a page names itself 3.11.0+<distance>.g<short>, not 3.11.0."
   - "The v3.11.0 release record has landed on main."
 validation:
-  - "npm run release:verify-deploy"
-  - "npm run test:live"
+  - "gh run view 39084400974 --json conclusion,headSha --jq '.conclusion + \" \" + .headSha' | grep -qx 'success ee70a21f6a4e52bac066828a2224007cc12b17d2'"
+  - "gh run view 39097666998 --json conclusion,headSha --jq '.conclusion + \" \" + .headSha' | grep -qx 'success 2b63ec382d4d4c49efa2553a2a6368cb41068fe2'"
+  - "npm run release:record -- --version 3.11.0 --check"
+  - "npm run release:verify-deploy -- --commit 2b63ec382d4d4c49efa2553a2a6368cb41068fe2 (in a checkout of 2b63ec3; fails once Pages serves a later commit, which is the truth of a point-in-time claim)"
 evidence_required:
   - "milestone_verified"
 created_at: 2026-10-18

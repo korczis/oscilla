@@ -13,8 +13,9 @@ acceptance_criteria:
   - "#179 is merged by merge commit; its review verdict .ai/repo/reviews/179.yaml was written by a reviewer other than the builder."
   - "The Pages run of the merge commit passes verify-deploy and test:live in chromium, firefox and webkit."
 validation:
-  - "npm run release:verify-deploy"
-  - "npm run test:live"
+  - "gh run view 39084400974 --json conclusion,headSha --jq '.conclusion + \" \" + .headSha' | grep -qx 'success ee70a21f6a4e52bac066828a2224007cc12b17d2'"
+  - "npm run release:verify-deploy -- --commit ee70a21f6a4e52bac066828a2224007cc12b17d2 (in a checkout of ee70a21, while Pages serves it)"
+  - "npm run test:live -- --expect-commit ee70a21f6a4e52bac066828a2224007cc12b17d2 (while Pages serves it)"
 evidence_required:
   - "verified"
 created_at: 2026-10-18
