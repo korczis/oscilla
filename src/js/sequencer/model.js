@@ -20,14 +20,14 @@
 // against the real context rate, so a model edited on a 96 kHz device still plays safely on a
 // 44.1 kHz one.
 
-import { WAVEFORMS } from '../core/constants.js';
+import { PROVISIONAL_SAMPLE_RATE, SAFE_NYQUIST_FACTOR, WAVEFORMS } from '../core/constants.js';
 
 // ============================================================ constants
 
 export const SEQUENCE_VERSION = 1;
-export const SAFE_NYQUIST_FACTOR = 0.95; // from V1 SAFE_NYQUIST_FACTOR (index.html@95dfa81:984)
-// from V1 PROVISIONAL_SAMPLE_RATE (index.html@95dfa81:985)
-export const PROVISIONAL_SAMPLE_RATE = 44100;
+// V1 SAFE_NYQUIST_FACTOR and PROVISIONAL_SAMPLE_RATE (index.html@95dfa81:984-985): one owner,
+// core/constants.js; re-exported for the sequencer's importers.
+export { PROVISIONAL_SAMPLE_RATE, SAFE_NYQUIST_FACTOR };
 export const SEQ_MIN_FREQUENCY = 20; // Hz; V1's absolute floor is 1 Hz, the sequencer uses 20
 export const MAX_BLOCKS = 64;
 export const MIN_BLOCK_MS = 10;

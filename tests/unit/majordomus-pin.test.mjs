@@ -53,7 +53,7 @@ test('equal versions pass; a difference names both versions and the procedure', 
   for (const step of PROCEDURE) assert.ok(lines.includes(step), step);
   const text = PROCEDURE.join('\n');
   for (const part of ['on a branch', 'BOTH', 'pull request', 'MJ_VERSION and MJ_SHA256',
-    'owner flip']) {
+    'owner flip', 'cannot read', 'ONE pull request', 'ADR 0056']) {
     assert.ok(text.includes(part), `the procedure says "${part}"`);
   }
   assert.ok(pinProblems({ pinned: null, local: '0.13.2' }).length > 0, 'no pin is a problem');

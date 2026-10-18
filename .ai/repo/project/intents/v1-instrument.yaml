@@ -1,0 +1,75 @@
+id: v1-instrument
+title: "OSCILLA V1 is a safe, click-free browser instrument with coupled visuals, published and verified"
+statement: "OSCILLA V1 is a playground instrument with a correct, click-free, safe audio engine and pattern engine; six p5 visualization modes and an interactive log frequency map tied to the engine; Sweep, Dual Osc, Presets, Learn, history and shareable state; a responsive, accessible, themed, robust, debuggable and performant application; and a cross-model reviewed build deployed to GitHub Pages and smoke-tested at its public URL. Since V2 the V1 file is frozen at a7b7a23 and its behaviour is carried by the V2 modules, so the criteria read the guarantees the current build keeps of it."
+invariants:
+  - "V1 behaviour is frozen as golden vectors from index.html@a7b7a23 and replayed against the V2 modules (ADR 0014)"
+  - "Web Audio nodes are created only by the AudioEngine or the graph builders it accounts for, all timing uses audioContext.currentTime, envelopes are click-free and stop() leaves zero active nodes (project.audio-engine-discipline)"
+  - "The hard safety limit caps open signals and the finite tone, patterns exempt up to 30 s (ADR 0005); a new voice fades every earlier one out and a waveshaper ceiling backs up the output cap (ADR 0002)"
+  - "No text OSCILLA can show claims a therapeutic, medical, cognitive or animal-specific effect, inaudibility or the safety of a frequency (project.no-fake-science)"
+milestones:
+  - M001
+  - M002
+  - M003
+  - M004
+  - M006
+satisfaction:
+  - id: engine-plays-and-releases
+    criterion: "Holding play sounds the tone at the set relative gain, and releasing it leaves no audio node running"
+    evidence: claim
+    ref: "tone-plays-and-releases"
+  - id: patterns-preserved
+    criterion: "Every V1 signal pattern plans exactly the automation the frozen V1 file planned"
+    evidence: claim
+    ref: "patterns-match-v1"
+  - id: sweep-mode
+    criterion: "A sweep plays a frequency that rises through the requested range, and stopping it leaves no audio node running"
+    evidence: claim
+    ref: "sweep-rises-through-range"
+  - id: dual-oscillator
+    criterion: "Two oscillators at 440 Hz and 442 Hz mixed to mono beat at 2 Hz, and the stereo split puts one on each channel"
+    evidence: claim
+    ref: "dual-oscillator-beats"
+  - id: presets
+    criterion: "A saved preset is stored locally and loading it restores the same configuration; blocked storage never throws"
+    evidence: claim
+    ref: "presets-save-and-load"
+  - id: shareable-state
+    criterion: "A copied link restores the instrument configuration through the validated path, with the gain capped"
+    evidence: claim
+    ref: "link-restores-configuration"
+  - id: microphone-analysis
+    criterion: "The optional microphone feeds an analyser and never the output, with echo cancellation, noise suppression and automatic gain control off, and stopping it ends every track"
+    evidence: claim
+    ref: "microphone-analysis-only"
+  - id: no-fake-science
+    criterion: "No text the page or its modules can show makes a medical, therapeutic, pseudoscientific, inaudibility, frequency-safety or certification claim"
+    evidence: claim
+    ref: "no-fake-science-in-shipped-copy"
+  - id: visuals-and-interface
+    criterion: "The visualization views, layout, navigation and QA regression browser suites pass"
+    evidence: command
+    ref: "npm run test:browser"
+  - id: public-from-file-and-pages
+    criterion: "The built page boots without console errors and plays in Chromium, Firefox and WebKit, from file:// and from the /oscilla/ sub-path GitHub Pages serves"
+    evidence: claim
+    ref: "opens-from-file-and-subpath"
+governance:
+  - "rule:project.audio-engine-discipline"
+  - "rule:project.no-fake-science"
+  - "rule:project.single-file-deliverable"
+  - "adr:adr-0001"
+  - "adr:adr-0002"
+  - "adr:adr-0003"
+  - "adr:adr-0004"
+  - "adr:adr-0005"
+  - "adr:adr-0006"
+  - "adr:adr-0007"
+  - "adr:adr-0009"
+  - "adr:adr-0010"
+  - "adr:adr-0014"
+non_goals:
+  - "Specification sections 64-95 (milestone M005): their text was never received (S000), so no intent states a requirement for them; M005 stays unnamed until the text exists"
+  - "The V2 laboratory, the V3 measurement workbench and Studio: each is its own intent"
+  - "Changing V1 behaviour: it is frozen by golden vectors (ADR 0014), and a change to it is a V2 or later decision"
+created_at: 2026-10-18
+updated_at: 2026-10-18

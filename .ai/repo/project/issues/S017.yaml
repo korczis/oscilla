@@ -1,5 +1,7 @@
 id: S017
 milestone: M001
+serves:
+  - "v1-instrument#engine-plays-and-releases"
 title: "§17 Click-free playback"
 slug: click-free-playback
 priority: p1

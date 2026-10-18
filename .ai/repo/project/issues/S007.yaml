@@ -1,5 +1,7 @@
 id: S007
 milestone: M001
+serves:
+  - "v1-instrument#engine-plays-and-releases"
 title: "§7 Logarithmic frequency control"
 slug: logarithmic-frequency-control
 priority: p1

@@ -1,5 +1,7 @@
 id: V250
 milestone: M034
+serves:
+  - "v2-laboratory#continuous-sweep"
 title: "Continuous-sweep top-ups must not write into a ramping gain"
 slug: continuous-sweep-top-ups-must-not-write-into-a-ramping-gain
 priority: p2

@@ -1,5 +1,7 @@
 id: V384
 milestone: M020
+serves:
+  - "v3-measure#no-fake-science"
 title: "V3 documentation"
 slug: v3-documentation
 priority: p1

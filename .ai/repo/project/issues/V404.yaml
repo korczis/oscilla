@@ -1,5 +1,9 @@
 id: V404
 milestone: M022
+serves:
+  - "v31-studio#model-plain-data"
+  - "v31-studio#deterministic-hash"
+  - "v31-studio#schema-version"
 title: "StudioModel schema"
 slug: studiomodel-schema
 priority: p1

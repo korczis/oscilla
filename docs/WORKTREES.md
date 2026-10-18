@@ -63,14 +63,14 @@ majordomus doctor || exit $?
 
 Git hooks are not tracked, so each clone writes these lines once into the hook file that
 `git rev-parse --git-path hooks/pre-commit` names (every worktree of the clone then has
-them). `majordomus doctor` reads the policy and the hook's text. Version 0.13.2 fails a
-checkout with no hook file, a hook that does not name a declared entry, and an entry followed
-by `|| true`. It does not execute the hook: a line that is commented out, sits in a branch
-never taken or below an early `exit 0`, or is not followed by `|| exit $?`, counts as wired.
-`npm run verify` and the hook itself run doctor; a clone that never wrote the hook file runs
-nothing at commit, and is caught by `npm run verify`, not at the commit. The CI runner has no
-hooks: the
-verdict in `.github/doctor-verdict.jq` excuses exactly the git-hook entries of the policy, and
+them). `majordomus doctor` reads the policy and the hook's text. At the version CI pins
+(`MJ_VERSION` in `.github/workflows/ci.yml`) it fails a checkout with no hook file, a hook
+that does not name a declared entry, and an entry followed by `|| true`.
+It does not execute the hook: a line that is commented out, sits in a branch never taken or
+below an early `exit 0`, or is not followed by `|| exit $?`, counts as wired. `npm run verify` and the hook
+itself run doctor; a clone that never wrote the hook file runs nothing at commit, and is
+caught by `npm run verify`, not at the commit. The CI runner has no hooks: the verdict in
+`.github/doctor-verdict.jq` excuses exactly the git-hook entries of the policy, and
 `tests/unit/repo-hygiene.test.mjs` proves in CI that the policy still declares the guard.
 
 ## What the guard cannot see

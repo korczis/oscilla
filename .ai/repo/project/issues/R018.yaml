@@ -1,0 +1,20 @@
+id: R018
+milestone: M035
+serves:
+  - "release-provenance#fatal-deploy-verification"
+title: "Land train 2 and verify its deployment"
+slug: land-train-2
+priority: p0
+profile: implementation
+objective: "Train 2 (#179) lands on main by merge commit behind the required gate, with a reviewer's verdict, and the Pages run of that commit passes verify-deploy and test:live in three browsers."
+scope:
+  - ".ai/repo"
+acceptance_criteria:
+  - "#179 is merged by merge commit; its review verdict .ai/repo/reviews/179.yaml was written by a reviewer other than the builder."
+  - "The Pages run of the merge commit passes verify-deploy and test:live in chromium, firefox and webkit."
+validation:
+  - "npm run release:verify-deploy"
+  - "npm run test:live"
+evidence_required:
+  - "verified"
+created_at: 2026-10-18

@@ -1,5 +1,7 @@
 id: S060
 milestone: M004
+serves:
+  - "v1-instrument#no-fake-science"
 title: "§60 Content / terminology quality"
 slug: content-terminology-quality
 priority: p1

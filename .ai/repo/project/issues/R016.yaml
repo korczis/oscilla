@@ -1,5 +1,7 @@
 id: R016
 milestone: M011
+serves:
+  - "release-provenance#public-release-verified"
 title: "Public release v2.0.0"
 slug: public-release-v2-0-0
 priority: p0

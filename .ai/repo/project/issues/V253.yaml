@@ -1,5 +1,7 @@
 id: V253
 milestone: M034
+serves:
+  - "v2-laboratory#continuous-sweep"
 title: "A continuous repeat must play its first cycle"
 slug: a-continuous-repeat-must-play-its-first-cycle
 priority: p1

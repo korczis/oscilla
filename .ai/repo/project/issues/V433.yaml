@@ -1,5 +1,7 @@
 id: V433
 milestone: M033
+serves:
+  - "v31-studio#public-release-verified"
 title: "Release 3.1 and public verification"
 slug: release-3-1-and-public-verification
 priority: p1

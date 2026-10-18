@@ -1,5 +1,7 @@
 id: S005
 milestone: M001
+serves:
+  - "v1-instrument#engine-plays-and-releases"
 title: "§5 Playground mode"
 slug: playground-mode
 priority: p1

@@ -62,6 +62,8 @@ import { renderStimulus } from '../../measurement/stimulus.js';
 import { createAnalyserReader } from '../../analysis/analyser.js';
 import { createRamp } from './ramp.js';
 import { createRtaAverager } from '../../measurement/rta.js';
+import { CLIP_TARGET_TEXT, gainIsUsed, qIsDecibels } from '../clip-targets.js';
+import { CENTS_PER_OCTAVE } from '../../core/music.js';
 
 /** Glide of a parameter change: the engine's live-update time constant (updateLive, τ 15 ms). */
 export const PARAM_TAU_S = 0.015;
@@ -71,7 +73,6 @@ export const CONTROL_STEP_SAMPLES = 480;
 export const RANDOM_LOOP_VALUES = 64;
 /** Fade of a rendered Studio sweep: min(SWEEP_FADE_S, duration / 4) (recipeFromStudio too). */
 export const SWEEP_FADE_S = 0.01;
-const CENTS_PER_OCTAVE = 1200;
 /** filters.js GLIDE_TAU_S: the stage's own parameter glide (not exported there). */
 const FILTER_GLIDE_TAU_S = 0.01;
 /** The filter parameters createFilterStage.update writes together. */
@@ -587,13 +588,13 @@ const filter = {
             : { param: biquad.frequency, scale: 1 };
         }
         if (key === 'Q') {
-          if (params.type === 'lowpass' || params.type === 'highpass') {
-            return { reason: 'Low-/high-pass Q is a dB AudioParam in Web Audio; a linear Q '
-              + 'modulation would be mis-scaled, so it is not applied.' };
-          }
+          if (qIsDecibels(params.type)) return { reason: CLIP_TARGET_TEXT.filterQ };
           return linearOnly(biquad.Q)(key, mapping);
         }
-        if (key === 'gain') return linearOnly(biquad.gain)(key, mapping);
+        if (key === 'gain') {
+          if (!gainIsUsed(params.type)) return { reason: CLIP_TARGET_TEXT.filterGain };
+          return linearOnly(biquad.gain)(key, mapping);
+        }
         return { reason: `unknown parameter ${key}` };
       },
       applyBase(b, immediate, owned, w) {

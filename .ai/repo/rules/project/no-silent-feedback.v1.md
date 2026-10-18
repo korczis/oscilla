@@ -41,8 +41,22 @@ without a visible message, fails the rule.
 
 # Verification
 
-`tests/unit/v31-studio-model.test.mjs`: audio feedback rejected with the specification's
-message, the control-cycle policy table, analysis cycles and live input to output rejected,
-deterministic topological order. Planned (V430, specification §209): the browser audio-graph
-test attempts a feedback connection in the editor and observes the message and an unchanged
-runtime.
+- `tests/unit/v31-studio-model.test.mjs`, in `npm test`: audio feedback rejected with the
+  specification's message and the cycle path, the control-cycle policy table, analysis cycles
+  and live input to output rejected, deterministic topological order; and "a cycle is refused
+  at every model entry point, never repaired": EDGE_ADD, a looped PASTE clipboard,
+  `normalizeStudio`, `validateStudioModel`, `importStudio`, `validateStudioImport` and the
+  store's initial model each refuse the loop with its sentence or keep every edge, and none
+  hands back a model with the loop removed.
+- `tests/unit/v31-studio-compiler.test.mjs`, in `npm test`: "invalid models are refused
+  before Web Audio; the runtime keeps its last graph" compiles and applies an audio-feedback,
+  a control-cycle and a live-input-to-output model; each is refused in the validate phase, no
+  audio node is created and the runtime's revision and nodes stay as they were.
+- `tests/browser/v31-studio-graph.cjs` check cable-reject, in `npm run test:studio` (CI's
+  `studio` job, three browsers): dragging a cable that closes an instantaneous feedback loop
+  in the editor adds no edge and announces the specification's sentence.
+
+Not machine-checked: the tests cover the entry points above. Code added later that changes
+the graph another way (a new action, adapter or import path) is held to "nothing silently
+fixes a cycle" by review until a test names it; the browser check observes the model and the
+announcement, and the unchanged runtime is the compiler test's.

@@ -1,5 +1,7 @@
 id: R014
 milestone: M011
+serves:
+  - "release-provenance#majordomus-knows-the-product"
 title: "Repository metadata"
 slug: repository-metadata
 priority: p0

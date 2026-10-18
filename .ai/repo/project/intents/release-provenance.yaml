@@ -1,0 +1,54 @@
+id: release-provenance
+title: "Every public OSCILLA page proves its version, source digest and commit, and no release reaches Pages ungated"
+statement: "OSCILLA has one canonical product version; every public page proves its version, source digest and commit; a deployment mismatch is fatal; the release gate runs every authoritative suite including visual; Majordomus answers what OSCILLA is and why; and v2.0.0 is tagged, released and verified at the public URL."
+invariants:
+  - "package.json \"version\" is the only source of the product version; schema versions and the frozen V1 stamp are separate (ADR 0027)"
+  - "The committed dist embeds a source digest, and the Pages workflow stamps one metadata region with the deployed commit (ADR 0028)"
+  - "The release-gate receipt binds the version, the source digest, the sha256 of dist/index.html and the tree, and release:publish refuses while any differs (project.release-receipt-binds-gate)"
+  - "The release gate includes a visual regression check with per-region thresholds measured from run-to-run variance (ADR 0029)"
+milestones:
+  - M011
+  - M035
+satisfaction:
+  - id: one-version-authority
+    criterion: "No hard-coded copy of the current product version exists outside package.json"
+    evidence: command
+    ref: "npm run version:check"
+  - id: deterministic-build
+    criterion: "The build packs the modular source into one dist/index.html deterministically"
+    evidence: claim
+    ref: "single-file-build"
+  - id: fatal-deploy-verification
+    criterion: "Pages serving anything but the released artifact, version and commit fails the deployment"
+    evidence: command
+    ref: "npm run release:verify-deploy"
+  - id: gate-runs-every-suite
+    criterion: "The release gate runs fast verify and every authoritative browser suite, visual included"
+    evidence: command
+    ref: "npm run release-gate"
+  - id: majordomus-knows-the-product
+    criterion: "The .ai layer that holds the features, use cases, ADRs, release records and knowledge reports no failure"
+    evidence: command
+    ref: "majordomus doctor"
+  - id: public-release-verified
+    criterion: "The public page carries the release version and commit, matches the artifact, boots and plays"
+    evidence: command
+    ref: "npm run test:live"
+governance:
+  - "rule:project.release-receipt-binds-gate"
+  - "rule:project.release-flow-complete"
+  - "rule:project.deploy-often"
+  - "rule:project.single-file-deliverable"
+  - "rule:project.majordomus-layer-current"
+  - "adr:adr-0009"
+  - "adr:adr-0011"
+  - "adr:adr-0027"
+  - "adr:adr-0028"
+  - "adr:adr-0029"
+  - "adr:adr-0047"
+non_goals:
+  - "Release records for releases before v3.4.0: the release/v1 records under .ai/repo/releases start at v3.4.0"
+  - "A deployment record: .ai/repo/deployments holds only its README, and deployment/v1 has no shape for a static Pages site"
+  - "Telling a release's changes from inside the released page: release notes are written after publish (ADR 0051)"
+created_at: 2026-10-18
+updated_at: 2026-10-18

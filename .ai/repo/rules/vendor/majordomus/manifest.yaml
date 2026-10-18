@@ -5,12 +5,12 @@ vendor: majordomus
 package: majordomus-standard-rules
 version: 1
 format: ai-rules/v1
-source_revision: 0.6.0
+source_revision: 0.29.0
 rules:
   - id: majordomus.adr-integrity
     version: 1
     file: rules/adr-integrity.v1.md
-    sha256: b1caa35a339315932fb410b1ebafef50e2912a81744982940bf8fb1bd82eb244
+    sha256: 8513b44dfe1538b26fa3d3249fbbf43bf273a14a7ea81fc2d8dba4d3d33c6389
   - id: majordomus.ai-layout-integrity
     version: 1
     file: rules/ai-layout-integrity.v1.md
@@ -26,7 +26,7 @@ rules:
   - id: majordomus.candidates-reviewed
     version: 1
     file: rules/candidates-reviewed.v1.md
-    sha256: a8a1d647854c1cfda82d7461c41673883df509ed1049dd7e328c009fd321a980
+    sha256: f8137aa6fcd42c3183b23765b97f5b5c21cc7697d1aacf77b055bd0b9290d069
   - id: majordomus.catalogue-integrity
     version: 1
     file: rules/catalogue-integrity.v1.md
@@ -46,7 +46,7 @@ rules:
   - id: majordomus.completion-gates
     version: 1
     file: rules/completion-gates.v1.md
-    sha256: d93b58dd9754eba9936426262a6bbb1db800871613d80f740b01aa95eaffad6e
+    sha256: adf88f6520924ef26cb8dce381724a93ba154c265718e681529ad2589034538e
   - id: majordomus.context-budget
     version: 1
     file: rules/context-budget.v1.md
@@ -83,6 +83,10 @@ rules:
     version: 1
     file: rules/handover-integrity.v1.md
     sha256: db680840291e1d1217e5cc399d3154a4cb1086890327658e3679c3ba8117579e
+  - id: majordomus.knowledge-graph
+    version: 1
+    file: rules/knowledge-graph.v1.md
+    sha256: 3427bfc92e290838350371bace6dbea42f25c32bf92f09646e41c0e99f6d9152
   - id: majordomus.knowledge-integrity
     version: 1
     file: rules/knowledge-integrity.v1.md
@@ -102,7 +106,7 @@ rules:
   - id: majordomus.lifecycle-observed
     version: 1
     file: rules/lifecycle-observed.v1.md
-    sha256: d0f241a94fe254a4028c57a91e5402e78010e36bf15199d98ae3a6ca6c297120
+    sha256: 628f11b967032156a7ebd5cbcf18fc3ce98cd5527be0885d45d8bc25e07af0e5
   - id: majordomus.note-integrity
     version: 1
     file: rules/note-integrity.v1.md
@@ -110,7 +114,7 @@ rules:
   - id: majordomus.obligation-closure
     version: 1
     file: rules/obligation-closure.v1.md
-    sha256: 6e8809365070404e25850136f44509555d1747545ac3474907679080352e9ad2
+    sha256: 88f7f9322b0054b975fcd3da0ea9e63694024227e749f73e86801af65f7ce36f
   - id: majordomus.policy-completeness
     version: 1
     file: rules/policy-completeness.v1.md
@@ -178,7 +182,7 @@ rules:
   - id: majordomus.prompt-continuity
     version: 1
     file: rules/prompt-continuity.v1.md
-    sha256: 1cee5882731b77de16dc58f062d132396b7eb653732b4f6b34f6ad41d050a6bb
+    sha256: 5d4230b7c6182792c9280d2871088897519988e123fecc5e8138569aac40104d
   - id: majordomus.prompt-integrity
     version: 1
     file: rules/prompt-integrity.v1.md
@@ -186,7 +190,7 @@ rules:
   - id: majordomus.publication-currency
     version: 1
     file: rules/publication-currency.v1.md
-    sha256: fedcd1e8b4aecd3b69a77bd0c216fb146c34910f329b2f5d249606fca3f2b01b
+    sha256: 9b68dbd49ac6b25d12481ad9cd3390e7151adb0da6c25c5c187665498ed2332c
   - id: majordomus.questions-store-integrity
     version: 1
     file: rules/questions-store-integrity.v1.md
@@ -194,11 +198,11 @@ rules:
   - id: majordomus.record-changed-files
     version: 1
     file: rules/record-changed-files.v1.md
-    sha256: 25fb5c27ec0b6750c2b9ace123648264c51a1f10db32bdd525545290a636c530
+    sha256: 4043b457e4380e5c7f97d6f67763f9c0c26cdf91bc1e918bd40cfba695ffeb12
   - id: majordomus.retention-caps
     version: 1
     file: rules/retention-caps.v1.md
-    sha256: cc00432f6e4e419edc25d1db98f55d862568f2a5943282da35c3733b2f43b29d
+    sha256: 6ac34a128a32b93f0ec07eba2d6c68f98e8abcd42b4cdcd6642dff7309d3c3f1
   - id: majordomus.roadmap-integrity
     version: 1
     file: rules/roadmap-integrity.v1.md
@@ -210,7 +214,7 @@ rules:
   - id: majordomus.schema-integrity
     version: 1
     file: rules/schema-integrity.v1.md
-    sha256: 380e34cd67fc3f72538abfd5ca39c44fca95b99bad0bfdb28428c407b1215dcc
+    sha256: d73fb1b2f7020fc6a3ac7572aafe427eb00bc4ef85a0de8e2f4225cde40ffcde
   - id: majordomus.scope-integrity
     version: 1
     file: rules/scope-integrity.v1.md
@@ -235,6 +239,10 @@ rules:
     version: 1
     file: rules/task-continuity.v1.md
     sha256: 7e381d15f9f3e414eb8dbfacb3d9c3fd202f0de43066c74418d9e6d5afbdc911
+  - id: majordomus.task-on-the-mesh
+    version: 1
+    file: rules/task-on-the-mesh.v1.md
+    sha256: 2a25cd588cea98cab36e4c7065bc4152db9803930c78b1c590c0a20aaefbf9bc
   - id: majordomus.use-case-coverage
     version: 1
     file: rules/use-case-coverage.v1.md

@@ -1,5 +1,7 @@
 id: V352
 milestone: M017
+serves:
+  - "v3-measure#reproducible-experiments"
 title: "Provenance, hashes and metadata"
 slug: provenance-hashes-and-metadata
 priority: p1

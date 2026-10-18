@@ -29,6 +29,7 @@ import {
 import { compareFrequencies } from '../analysis/compare.js';
 import { formatHz, formatHzStep, formatUncertainty } from '../charts/axes.js';
 import { onFrame } from '../charts/frame-loop.js';
+import { SAFE_NYQUIST_FACTOR } from '../core/constants.js';
 import { on, onUi, setText, setAttr, activeValue } from './dom.js';
 
 export const MIC_UNAVAILABLE = 'Microphone unavailable here';
@@ -290,7 +291,7 @@ export function mount(rootEl, adapter) {
       pitch = { sampleRate: sr, detector: createPitchDetector({ sampleRate: sr }) };
     }
     const time = reader.readTime(now);
-    const maxHz = Math.min(20000, (sr / 2) * 0.95);
+    const maxHz = Math.min(20000, (sr / 2) * SAFE_NYQUIST_FACTOR);
     estimate = estimateFrequency({
       spectrumDb: reader.frequency,
       timeData: time,

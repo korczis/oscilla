@@ -1,5 +1,7 @@
 id: D002
 milestone: M006
+serves:
+  - "v1-instrument#public-from-file-and-pages"
 title: "file:// and responsive verification"
 slug: file-and-responsive-verification
 priority: p0

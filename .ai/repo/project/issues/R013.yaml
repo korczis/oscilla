@@ -1,5 +1,7 @@
 id: R013
 milestone: M011
+serves:
+  - "release-provenance#majordomus-knows-the-product"
 title: "Documentation"
 slug: documentation
 priority: p0

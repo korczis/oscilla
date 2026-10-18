@@ -1,0 +1,142 @@
+id: v31-studio
+title: "OSCILLA Studio makes the signal path an editable, executable model that drives the real audio and measurement engines"
+statement: "OSCILLA Studio turns the Signal Path from passive visualization into an editable executable model: one versioned StudioModel with a node-type registry, typed ports, pure validation and an undoable action layer, holding no runtime object, is the only Studio state; the editable HTML/SVG graph, the multi-track timeline migrated from the sequencer, the automation lanes, the Inspector, the compact Studio widget and the maximizable Studio workspace are projections of it; it compiles into the existing AudioEngine with incremental, transactional, click-free patching, so the screen never shows a topology the runtime does not have; measurement nodes and clips drive the canonical V3 measurement workflow and the Studio definition enters experiment provenance; patches and projects save, export and import with strict validation and migrations; every operation has a non-drag path and phones get a GRAPH, TIMELINE and INSPECTOR flow; the Studio suites run in the release gate; and OSCILLA 3.1.x is released through the single-source version and Pages workflow and publicly smoke-tested."
+invariants:
+  - "Studio has exactly one canonical state, the StudioModel; every view only reads it and it holds no AudioContext, AudioNode, MediaStream, DOM or worker reference (project.studio-model-is-canonical, ADR 0030)"
+  - "The AudioEngine stays the authoritative audio lifecycle owner and the V3 measurement architecture stays authoritative for measurement; Studio orchestrates them and duplicates neither (specification section 2, ADR 0035, ADR 0038)"
+  - "An edge reaches the runtime only after the model accepts it; ports are typed with roles and compatibility is model logic (project.typed-ports, ADR 0032)"
+  - "Instantaneous audio feedback and control or analysis cycles are rejected with the cycle and a reason (project.no-silent-feedback, ADR 0033)"
+  - "New surfaces extend the existing OSCILLA tokens and visual language (project.visual-identity-lock); the graph editor is custom HTML nodes over SVG cables, without React or a flow-editor framework (ADR 0034)"
+milestones:
+  - M021
+  - M022
+  - M023
+  - M024
+  - M025
+  - M026
+  - M027
+  - M028
+  - M029
+  - M030
+  - M031
+  - M032
+  - M033
+satisfaction:
+  - id: model-plain-data
+    criterion: "A StudioModel is plain serializable data; runtime values are rejected before it is stored or serialized"
+    evidence: claim
+    ref: "studio-model-plain-data"
+  - id: deterministic-hash
+    criterion: "A normalized StudioModel serializes deterministically and its hash covers execution state only"
+    evidence: claim
+    ref: "studio-deterministic-hash"
+  - id: schema-version
+    criterion: "The Studio schema version is its own integer, changed only through registered stepwise migrations"
+    evidence: claim
+    ref: "studio-schema-version"
+  - id: registry-reuses-engine
+    criterion: "Every node type names the existing engine export it compiles to and holds no audio object"
+    evidence: claim
+    ref: "studio-registry-reuses-engine"
+  - id: typed-connections
+    criterion: "Only compatible typed ports connect, and a rejection carries a readable reason and changes nothing"
+    evidence: claim
+    ref: "studio-typed-connections"
+  - id: feedback-rejected
+    criterion: "Audio feedback, control cycles and analysis cycles are rejected before anything reaches Web Audio"
+    evidence: claim
+    ref: "studio-feedback-rejected"
+  - id: exact-undo-redo
+    criterion: "Undo and redo restore exact semantic state, and a continuous drag is one history entry"
+    evidence: claim
+    ref: "studio-exact-undo-redo"
+  - id: subgraph-paste
+    criterion: "Pasting a subgraph creates fresh ids, keeps only internal edges and is one undoable step"
+    evidence: claim
+    ref: "studio-subgraph-paste"
+  - id: one-store-projections
+    criterion: "The graph editor, Inspector, timeline and compact widget render one StudioModel through one store"
+    evidence: claim
+    ref: "studio-one-store-projections"
+  - id: compiled-topology
+    criterion: "The running Web Audio topology is compiled from the StudioModel through the existing AudioEngine"
+    evidence: claim
+    ref: "studio-compiled-topology"
+  - id: click-free-live-edit
+    criterion: "Editing while playing patches the running graph in crossfaded transactions and leaves nothing behind after stop"
+    evidence: claim
+    ref: "studio-click-free-live-edit"
+  - id: timeline-model
+    criterion: "Timeline clips sit in absolute seconds with sequencer block payloads, and timeline edits validate and undo exactly"
+    evidence: claim
+    ref: "studio-timeline-model"
+  - id: transport-audio-clock
+    criterion: "Transport, clips, loop and automation are scheduled on AudioContext time"
+    evidence: claim
+    ref: "studio-transport-audio-clock"
+  - id: automation-model
+    criterion: "Automation lanes accept only automatable parameters, one lane each, with sorted points"
+    evidence: claim
+    ref: "studio-automation-model"
+  - id: measurement-topology
+    criterion: "A Studio measurement topology is typed analysis routing whose reference and capture ports cannot be swapped"
+    evidence: claim
+    ref: "studio-measurement-topology"
+  - id: experiment-provenance
+    criterion: "A measurement run from Studio goes through the V3 engine and the saved experiment records the Studio schema version and hash"
+    evidence: claim
+    ref: "studio-experiment-provenance"
+  - id: patch-round-trip
+    criterion: "A saved project loads back to the exact model, and a patch inserts only on explicit user intent"
+    evidence: claim
+    ref: "studio-patch-round-trip"
+  - id: untrusted-import
+    criterion: "Studio files are imported as untrusted data, checked before use, and a newer schema is refused"
+    evidence: claim
+    ref: "studio-untrusted-import"
+  - id: non-drag-operation
+    criterion: "Every pointer-drag operation has a keyboard path dispatching the same store actions"
+    evidence: claim
+    ref: "studio-non-drag-operation"
+  - id: file-protocol
+    criterion: "The Studio workspace runs in Chromium, Firefox and WebKit from file:// and the /oscilla/ sub-path inside the single file"
+    evidence: claim
+    ref: "studio-file-protocol"
+  - id: offline-render
+    criterion: "The Studio suites, offline rendering of Studio sequences included, pass"
+    evidence: command
+    ref: "npm run test:studio"
+  - id: self-knowledge
+    criterion: "The Studio ADRs, features, use cases, rules and knowledge validate in the .ai layer"
+    evidence: command
+    ref: "majordomus doctor"
+  - id: public-release-verified
+    criterion: "The public page serves the 3.1.x release with its version and commit, and the public Studio smoke passes"
+    evidence: command
+    ref: "npm run test:live"
+governance:
+  - "rule:project.studio-model-is-canonical"
+  - "rule:project.typed-ports"
+  - "rule:project.no-silent-feedback"
+  - "rule:project.visual-identity-lock"
+  - "rule:project.audio-engine-discipline"
+  - "rule:project.single-file-deliverable"
+  - "adr:adr-0030"
+  - "adr:adr-0031"
+  - "adr:adr-0032"
+  - "adr:adr-0033"
+  - "adr:adr-0034"
+  - "adr:adr-0035"
+  - "adr:adr-0036"
+  - "adr:adr-0037"
+  - "adr:adr-0038"
+  - "adr:adr-0039"
+  - "file:docs/specs/oscilla-v3.1-studio.md"
+non_goals:
+  - "Graph grouping and subgraphs with exposed ports: architected for, optional for 3.1 (specification section 116)"
+  - "A command palette and crash recovery of the last working draft: optional, and must not delay 3.1 (sections 126 and 157)"
+  - "React or a flow-editor framework (section 54, ADR 0034)"
+  - "An audio-file editor: the timeline is an event and control timeline (section 81)"
+  - "A second audio engine or a second measurement orchestration (sections 2 and 42)"
+created_at: 2026-10-18
+updated_at: 2026-10-18

@@ -1,5 +1,7 @@
 id: V341
 milestone: M016
+serves:
+  - "v3-measure#rta-bands"
 title: "FFT RTA"
 slug: fft-rta
 priority: p1

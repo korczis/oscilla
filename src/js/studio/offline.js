@@ -19,8 +19,9 @@
 //     clips on a Sequence (into its bus) or on an Oscillator (pattern-played: carrier held at
 //     ROUTE_FLOOR, voices into a pattern bus feeding the oscillator's AUDIO routes), gate events
 //     on Envelopes, automation lanes on their AudioParam with the parameter owned by the lane and
-//     the modulation edges' constant offsets added. Everything else is listed as a limitation
-//     with the transport's reason; measurement clips run live through the measurement engine.
+//     the modulation edges' constant offsets added, where the clip-target policy plays them
+//     (clip-targets.js). Everything else is listed as a limitation with the transport's reason;
+//     measurement clips run live through the measurement engine.
 //   renderStudioOffline(model, { duration, sampleRate, channels, OfflineAudioContext, wav,
 //                                signal, onProgress })
 //     -> Promise<{ ok: true, plan, buffer, stats, wav, warnings, startTime,
@@ -46,7 +47,8 @@
 import { DEFAULT_RENDER, bufferStats, normalizeRenderOptions, render } from
   '../audio/offline-renderer.js';
 import { encodeWav } from '../audio/wav.js';
-import { MAX_OUTPUT_GAIN } from '../core/constants.js';
+import { MAX_OUTPUT_GAIN, RENDER_QUANTUM, SAFE_NYQUIST_FACTOR } from '../core/constants.js';
+import { clipTarget } from './clip-targets.js';
 import { NODE_REGISTRY } from './registry.js';
 import { validateStudioModel } from './validate.js';
 import { createStudioRuntime } from './runtime.js';
@@ -152,11 +154,14 @@ export function planOfflineRender(model, { duration = null, registry = NODE_REGI
     }
   }
   for (const lane of model.timeline.automation) {
-    const ok = rendered.has(lane.target.node);
-    const reason = ok ? null : OFFLINE_TEXT.nodeNotRendered(byId.get(lane.target.node)
-      .metadata.name);
-    plan.automation.push({ id: lane.id, target: { ...lane.target }, rendered: ok, reason });
-    if (!ok) plan.limitations.push(`Automation ${lane.id}: ${reason}`);
+    const node = byId.get(lane.target.node);
+    // What the live transport does not play is not rendered either, with the same reason: the
+    // clip-target policy (clip-targets.js, R7), which the transport's lane binding reads.
+    const v = clipTarget(node, { kind: 'automation', param: lane.target.param }, registry);
+    const reason = !v.plays ? v.reason
+      : rendered.has(lane.target.node) ? null : OFFLINE_TEXT.nodeNotRendered(node.metadata.name);
+    plan.automation.push({ id: lane.id, target: { ...lane.target }, rendered: !reason, reason });
+    if (reason) plan.limitations.push(`Automation ${lane.id}: ${reason}`);
   }
   plan.ok = !plan.refused && plan.errors.length === 0;
   return plan;
@@ -184,7 +189,7 @@ export function offlineEngine(ctx, master) {
     init: () => true,
     on: () => () => {},
     lastError: null,
-    get safeMaximum() { return (ctx.sampleRate / 2) * 0.95; },
+    get safeMaximum() { return (ctx.sampleRate / 2) * SAFE_NYQUIST_FACTOR; },
     setMasterGain(g) {
       master.gain.value = Math.min(MAX_OUTPUT_GAIN, Math.max(0, g));
     },
@@ -214,7 +219,7 @@ function trackProgress(ctx, duration, onProgress, aborted) {
   };
   report(0);
   if (typeof ctx.suspend !== 'function') return;
-  const quantum = 128 / ctx.sampleRate;
+  const quantum = RENDER_QUANTUM / ctx.sampleRate;
   const seen = new Set();
   for (let k = 1; k < PROGRESS_STEPS; k += 1) {
     const t = Math.round((k * duration) / PROGRESS_STEPS / quantum) * quantum;

@@ -1,5 +1,7 @@
 id: S033
 milestone: M003
+serves:
+  - "v1-instrument#sweep-mode"
 title: "§33 Sweep mode"
 slug: sweep-mode
 priority: p1

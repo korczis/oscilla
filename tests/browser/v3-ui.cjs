@@ -156,8 +156,9 @@
 //                           deterministic files named after the profile and its id, and both
 //                           re-import (same id, name, convention); a correction profile (chosen
 //                           in the dialog) re-imports from its CSV without the question
-//   input-device            (V322) the input choice is disabled in TEST CONTEXT and starts at the
-//                           default; (chromium, firefox on http, fake microphone) the setup check
+//   input-device            (V322) the input choice shows TEST CONTEXT as its selected option
+//                           while the loopback is on (ledger W7b) and starts at the default;
+//                           (chromium, firefox on http, fake microphone) the setup check
 //                           opens the default (no deviceId), the inputs are listed, a chosen
 //                           input reaches getUserMedia as deviceId { exact } and the input
 //                           record, a chosen input that disappears stays selected, is marked
@@ -181,7 +182,7 @@
 //   light-theme             warning chips use --osc-text on --osc-warn-bg (orange is icon only)
 //   no-console-errors
 'use strict';
-const { spawn } = require('node:child_process');
+const { serveDist } = require('./lib/serve.cjs');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
@@ -247,24 +248,6 @@ const SHORT = { duration: 1, repeats: 2, noiseCheckS: 0.5, preRollS: 0.25, postR
 const RUN_MS = 45000;
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-
-function startServer() {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'oscilla-v3ui-'));
-  fs.mkdirSync(path.join(root, 'oscilla'));
-  fs.copyFileSync(DIST, path.join(root, 'oscilla', 'index.html'));
-  const port = 9300 + Math.floor(Math.random() * 300);
-  const proc = spawn('python3', ['-m', 'http.server', String(port), '--bind', '127.0.0.1',
-    '--directory', root], { stdio: 'ignore' });
-  return { proc, root, url: `http://127.0.0.1:${port}/oscilla/` };
-}
-
-async function waitForServer(url) {
-  for (let i = 0; i < 80; i += 1) {
-    try { const r = await fetch(url); if (r.ok) return; } catch { /* not yet */ }
-    await sleep(100);
-  }
-  throw new Error(`server did not start: ${url}`);
-}
 
 // ------------------------------------------------------------------------------ page helpers
 const H = {
@@ -2958,12 +2941,13 @@ function defineChecks(fixtures) {
         disabled: el.disabled, deviceId: window.OSCILLA.measure.deviceId,
         msg: document.querySelector('[data-osc="measure.inputMissing"]').offsetParent !== null };
     });
-    // TEST CONTEXT: no input device; the choice is disabled.
+    // TEST CONTEXT: no input device; it is the selected choice, and the list can leave it.
     await page.evaluate(() => window.OSCILLA.measure.useLoopback());
     const loop = await view();
     await page.evaluate(() => window.OSCILLA.measure.useMicrophone());
     const before = await view();
-    const base = { loopDisabled: loop.disabled && /TEST CONTEXT/.test(loop.status),
+    const base = { loopChoice: !loop.disabled && /TEST CONTEXT/.test(loop.status)
+        && loop.options.some((o) => o.testContext && o.value === loop.value),
       defaultFirst: before.options[0].value === '' && before.value === '' && !before.disabled
         // Listed only after a check opened the microphone (earlier checks may have done so).
         && /Run the setup check to list the inputs|listed by the browser|lists no input/
@@ -3001,8 +2985,9 @@ function defineChecks(fixtures) {
     };
     const res = { loop, before };
     res.firstState = await check();
-    res.listed = await H.until(view, (v) => v.options.length >= 2, 3000);
-    const chosen = res.listed.options.find((o) => o.value !== '');
+    res.listed = await H.until(view, (v) => v.options.filter((o) => !o.testContext).length >= 2,
+      3000);
+    const chosen = res.listed.options.find((o) => o.value !== '' && !o.testContext);
     if (chosen) {
       await page.selectOption('#osc-m-input-device', chosen.value);
       res.afterSelect = await view();
@@ -3057,7 +3042,7 @@ function defineChecks(fixtures) {
         && res.ioDeviceId === chosen.value,
       goneShown: !!res.gone && res.gone.missing && res.gone.msg && res.gone.value === chosen.value
         && /no longer available/.test(res.gone.message)
-        && /not available$/.test(res.gone.options.at(-1).label),
+        && /not available$/.test(res.gone.options.findLast((o) => !o.testContext).label),
       goneAnnounced: (res.liveLog || []).some((t) => /no longer available/.test(t)),
       goneRefused: res.goneState !== 'READY'
         && /selected input device is not available/.test(res.blockers || ''),
@@ -3408,8 +3393,7 @@ async function runOne(browserName, origin, baseUrl, fixtures) {
   const { buildFixtures } = await import(pathToFileURL(path.join(__dirname, 'fixtures',
     'v3-experiments.mjs')).href);
   const fixtures = await buildFixtures();
-  const server = ORIGINS.includes('http') ? startServer() : null;
-  if (server) await waitForServer(server.url);
+  const server = ORIGINS.includes('http') ? await serveDist(DIST, { prefix: 'oscilla-v3ui-' }) : null;
   const all = {};
   let failed = 0;
   try {
@@ -3433,8 +3417,7 @@ async function runOne(browserName, origin, baseUrl, fixtures) {
     }
   } finally {
     if (server) {
-      server.proc.kill();
-      fs.rmSync(server.root, { recursive: true, force: true });
+      server.close();
     }
   }
   if (JSON_OUT) fs.writeFileSync(JSON_OUT, `${JSON.stringify(all, null, 2)}\n`);

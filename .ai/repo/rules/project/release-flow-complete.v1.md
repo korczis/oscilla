@@ -101,8 +101,8 @@ anything changes, as a dry run too:
   shape decides.
   `--no-rc-because <ADR>` lifts this only when `adrStatus()` finds that ADR in
   `.ai/repo/adrs/` with `status: accepted`; a proposed ADR, or a number that names none, is
-  refused. Every ADR of this repository is `proposed` today, so the override cannot be used
-  until the owner accepts one.
+  refused. Accepting an ADR is the owner's act, so the override is used only with an ADR the
+  owner has accepted.
 
 `release:prepare` bumps `package.json` and then runs `version:check`, which refuses a copy of
 the product version outside `package.json`, the lock, `dist/`, `.ai/`, `CHANGELOG.md` and

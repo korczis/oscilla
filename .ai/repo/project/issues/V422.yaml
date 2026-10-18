@@ -1,5 +1,7 @@
 id: V422
 milestone: M028
+serves:
+  - "v31-studio#one-store-projections"
 title: "Full Studio workspace and navigation"
 slug: full-studio-workspace-and-navigation
 priority: p1

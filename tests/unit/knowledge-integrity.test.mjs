@@ -20,8 +20,14 @@
 //     index in .ai/repo/rules/project/README.md lists exactly the rules in force; every
 //     `project.<id>` the bootstraps, README, docs/, workflows, rules and provider templates
 //     name is a rule in force; every "CI runs it" / "run by CI" / "pages.yml executes it" /
-//     "Runs in `npm run x`" claim in the leading comments of a JavaScript file directly
-//     under tests/browser/ or scripts/ is true of the workflow or npm script it names;
+//     "Runs in `npm run x`" / "`npm run x` runs it" / "(npm run x: ...)" claim in the leading
+//     comments of a JavaScript file directly under tests/browser/ or scripts/ is true of the
+//     workflow or npm script it names; an active rule's enforcement section (and
+//     docs/WORKTREES.md) names no "Planned" proof and no Majordomus version other than the one
+//     CI pins;
+//   - tests/README.md has a row for every unit test (tests/unit/*.test.mjs) and every browser
+//     suite (tests/browser/*.cjs; lib/ and fixtures/ are helpers), and every file a row lists
+//     exists unless the row is DELETED;
 //   - every repository path named in the bootstraps, the .ai/ layer's protocol, rules,
 //     workflows and skills, the glossary, the README, tests/README.md (whose paths are
 //     relative to tests/), the feature front matter and the claims exists, apart from a small
@@ -41,6 +47,7 @@ import { fileURLToPath } from 'node:url';
 
 import { ALGORITHMS, isKnownAlgorithm } from '../../src/js/measurement/algorithms.js';
 import { parseClaims, staleAlgorithmIds, unquote } from './claims-parse.mjs';
+import { pinnedVersion } from '../../scripts/majordomus-pin-check.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const read = (rel) => readFileSync(path.join(ROOT, rel), 'utf8');
@@ -546,6 +553,75 @@ test('mutation: a rule naming a missing test, an unrun file or no mechanism is r
     'a deprecated rule is history');
 });
 
+// ---------------------------------------------------------------- enforcement text current
+// A proof that is "Planned" is not enforcement, and a mechanism described by the behaviour of
+// a Majordomus version CI no longer pins describes a tool nobody runs. Both were found in
+// rules whose planned proofs had landed and whose doctor was sixteen minor releases old.
+
+const PINNED_MAJORDOMUS = pinnedVersion(read('.github/workflows/ci.yml'));
+// "majordomus 0.13.2", "doctor 0.13.2", "Majordomus version 0.13.2", and a bare "Version 0.13.2",
+// which in an enforcement text is the tool's: product versions there are written v3.2.0.
+const TOOL_VERSION = new RegExp(String.raw`(?:\b(?:[Mm]ajordomus|doctor)\`?\s+(?:[Vv]ersion\s+)?v?`
+  + String.raw`|\b[Vv]ersion\s+)(\d+\.\d+\.\d+(?:-[\w.]+)?)\b`, 'g');
+const PLANNED = /\bPlanned\b|\bplanned \(/;
+// Documents outside the rules that describe how a rule is enforced, read whole.
+const ENFORCEMENT_DOCUMENTS = ['docs/WORKTREES.md'];
+
+/** Majordomus versions a text names that are not the pinned one: ['0.13.2', ...]. */
+export function staleToolVersions(text, pinned = PINNED_MAJORDOMUS) {
+  const prose = text.replace(/\s+/g, ' ');
+  return [...new Set([...prose.matchAll(TOOL_VERSION)].map(([, v]) => v))]
+    .filter((v) => v !== pinned);
+}
+
+/** What is out of date in how one rule describes its enforcement; [] when current. */
+export function enforcementTextProblems(rel, text, pinned = PINNED_MAJORDOMUS) {
+  const fm = frontMatter(rel, text);
+  if (fm.status !== 'active') return [];
+  const body = section(text, ['Enforcement', 'Verification']);
+  if (body === null) return [];
+  const problems = staleToolVersions(body, pinned).map((v) => `${rel}: its enforcement `
+    + `describes Majordomus ${v}, and CI pins ${pinned}; describe what the pinned tool does `
+    + 'without naming a version, or name the pinned one');
+  if (PLANNED.test(body.replace(/\s+/g, ' '))) {
+    problems.push(`${rel}: its enforcement names a planned proof; a proof that does not exist `
+      + 'is not enforcement. Name the test that exists, or say what no check holds');
+  }
+  return problems;
+}
+
+test('rules name no planned proof and no Majordomus version but the pinned one', () => {
+  assert.ok(PINNED_MAJORDOMUS, 'MJ_VERSION is read from .github/workflows/ci.yml');
+  const bad = [
+    ...RULE_FILES.flatMap((rel) => enforcementTextProblems(rel, read(rel))),
+    ...ENFORCEMENT_DOCUMENTS.flatMap((rel) => staleToolVersions(read(rel))
+      .map((v) => `${rel}: describes Majordomus ${v}, and CI pins ${PINNED_MAJORDOMUS}`)),
+  ];
+  assert.deepEqual(bad, [], `enforcement described out of date:\n  ${bad.join('\n  ')}`);
+});
+
+test('mutation: a planned proof or a stale doctor version in an enforcement section is refused',
+  () => {
+    const rel = '.ai/repo/rules/project/fixture-rule.v1.md';
+    const problems = (body) => enforcementTextProblems(rel, FIXTURE_RULE({ body }), '9.9.9');
+    assert.deepEqual(problems('\n# Enforcement\n\n`majordomus doctor` 9.9.9 fails it.\n'), []);
+    assert.match(problems('\n# Enforcement\n\n`majordomus doctor` 0.13.2 fails it.\n')
+      .join('\n'), /describes Majordomus 0\.13\.2, and CI pins 9\.9\.9/);
+    assert.match(problems('\n# Verification\n\nUnder Majordomus\n0.13.2 it fails.\n').join('\n'),
+      /describes Majordomus 0\.13\.2/, 'across a line break');
+    assert.match(problems('\n# Enforcement\n\n`majordomus doctor` reads the hook. Version 1.0.0 '
+      + 'fails a checkout.\n').join('\n'), /describes Majordomus 1\.0\.0/, 'a bare "Version"');
+    assert.match(problems('\n# Verification\n\nPlanned (V430): a browser test.\n').join('\n'),
+      /names a planned proof/);
+    assert.deepEqual(problems('\n# Rationale\n\nUnder 0.13.2 doctor printed a WARN.\n'
+      + '\n# Enforcement\n\n`tests/unit/knowledge-integrity.test.mjs`.\n'), [],
+    'history outside the enforcement section is not judged');
+    assert.deepEqual(staleToolVersions('majordomus 0.29.0 and doctor 0.13.2', '0.29.0'),
+      ['0.13.2']);
+    assert.deepEqual(staleToolVersions('the v3.2.0 release, 1.2.3 of anything', '0.29.0'), [],
+      'a product version or a number with no tool beside it is not read');
+  });
+
 // A rule id in prose: `project.` and hyphenated words. Every id carries a hyphen (checked
 // with the front matter above), which keeps `project.yaml` and `project.name` out.
 const RULE_ID = /^project\.[a-z][a-z0-9]*(?:-[a-z0-9]+)+$/;
@@ -643,6 +719,11 @@ const CLAIMS_OF_BEING_RUN = [
   { by: 'npm', script: 'release-gate',
     re: new RegExp(String.raw`\b[Tt]he (?:release[- ])?gate ${DOES} ${SELF}`, 'g') },
   { by: 'npm', re: /\bRuns in `npm run ([\w:-]+)`/g },
+  { by: 'npm', re: new RegExp(String.raw`\`?npm run ([\w:-]+)\`? ${DOES} ${SELF}`, 'g') },
+  // A parenthesis that names the npm script a flag or mode is for: "--report ... (npm run
+  // verify: ...)". A colon that ends the script name and is followed by a space, so
+  // "(npm run build:check)" names a script and claims nothing.
+  { by: 'npm', re: /\(`?npm run ([\w:-]+?)`?:\s/g },
 ];
 
 /** The claims a header makes about what runs its file: [{ by, script, phrase }]. */
@@ -728,6 +809,15 @@ test('mutation: a header claim outlives the workflow step or npm script it names
   assert.deepEqual(by('Run by CI on every pull request.'), ['ci:']);
   assert.deepEqual(by('The Pages workflow executes it after the deploy.'), ['pages:']);
   assert.deepEqual(by('Executed by .github/workflows/ci.yml.'), ['ci:']);
+  assert.deepEqual(by('`npm run verify` runs it; a test pins that.'), ['npm:verify']);
+  assert.deepEqual(by('--report  always exit 0 (npm run verify: shown there)'), ['npm:verify']);
+  assert.deepEqual(by('committed dist up to date (npm run build:check), gh authenticated'), []);
+  assert.deepEqual(by('The git hooks and `npm run verify` run whatever is on PATH.'), []);
+  // The --report flag of release-cadence.mjs once said `npm run verify` used it; verify does not.
+  const cadence = { 'scripts/cadence-probe.mjs':
+    '//   --report   print the lag (npm run verify: shown, never judged)\nexport const x = 1;\n' };
+  assert.deepEqual(headerClaimProblems({ files: cadence, ci, pages, scripts: PKG.scripts }),
+    ['scripts/cadence-probe.mjs: "(npm run verify: ", and npm run verify does not run it']);
   // The header is every comment line before the first line of code, not the first block.
   assert.equal(headerProse('#!/usr/bin/env node\n// a\n// b\n\n// later\nconst x = 1;\n// no\n'),
     'a b later');
@@ -841,6 +931,44 @@ test('mutation: a tests/README.md row renamed to a missing file is caught', () =
     ['tests/unit/abuot.test.mjs is listed but does not exist']);
   // The general path scan alone does not see a relative path: that is why this check exists.
   assert.ok(!namedPaths(renamed).has('tests/unit/abuot.test.mjs'));
+});
+
+/**
+ * The unit tests and browser suites (`files`, repository paths) that no row of tests/README.md
+ * lists in its first cell. Each one needs a row that says what it proves.
+ */
+export function unlistedTestFiles(text, files) {
+  const listed = new Set();
+  for (const row of text.split('\n').filter((l) => l.startsWith('| `'))) {
+    const first = row.split('|')[1] || '';
+    for (const [, rel] of first.matchAll(/`((?:unit|browser)\/[^`*{}<>\s]+)`/g)) {
+      listed.add(`tests/${rel}`);
+    }
+  }
+  return files.filter((f) => !listed.has(f));
+}
+
+const TEST_FILES = () => [
+  ...list('tests/unit').filter((f) => f.endsWith('.test.mjs')).map((f) => `tests/unit/${f}`),
+  ...list('tests/browser').filter((f) => f.endsWith('.cjs')).map((f) => `tests/browser/${f}`),
+];
+
+test('tests/README.md lists every unit test and every browser suite', () => {
+  const files = TEST_FILES();
+  assert.ok(files.length > 100, `the test files are read (${files.length})`);
+  const missing = unlistedTestFiles(read('tests/README.md'), files);
+  assert.deepEqual(missing, [], `tests/README.md has no row for:\n  ${missing.join('\n  ')}`);
+});
+
+test('mutation: a test file with no tests/README.md row is named', () => {
+  const text = read('tests/README.md');
+  const files = [...TEST_FILES(), 'tests/unit/brand-new.test.mjs'];
+  const before = new Set(unlistedTestFiles(text, TEST_FILES()));
+  assert.deepEqual(unlistedTestFiles(text, files).filter((f) => !before.has(f)),
+    ['tests/unit/brand-new.test.mjs']);
+  // A file named only in a later cell (as a helper of another row) is not listed.
+  const helperOnly = text.replace(/^\| `unit\/about\.test\.mjs` \|/m, '| `unit/abuot.test.mjs` |');
+  assert.ok(unlistedTestFiles(helperOnly, files).includes('tests/unit/about.test.mjs'));
 });
 
 test('every path a claim names, in its fields or its note, resolves', () => {

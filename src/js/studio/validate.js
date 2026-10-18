@@ -47,6 +47,7 @@ import { utf8Length, scanUntrusted } from '../experiments/validate.js';
 import { ID_PATTERN, createChecker } from '../experiments/schema.js';
 import { BLOCK_SCHEMA, normalizeBlock } from '../sequencer/model.js';
 import { SAMPLE_RATE_LIMITS } from '../measurement/stimulus.js';
+import { clipTarget } from './clip-targets.js';
 import { canConnect, describePort, validateEdgeProps } from './ports.js';
 import { NODE_REGISTRY, validateParamValue } from './registry.js';
 import { clipRules } from './timeline.js';
@@ -524,12 +525,11 @@ function validateTimeline(model, registry, sink, ids, nodeById) {
     const node = nodeById.get(lane.target && lane.target.node);
     const def = node && registry.get(node.type);
     const p = def ? def.params.find((x) => x.key === lane.target.param) : null;
-    if (!node) {
-      sink.error('missing-node', 'An automation lane targets a node that does not exist.',
-        { path: `${path}.target.node` });
-    } else if (def && (!p || !p.automatable)) {
-      sink.error('not-automatable', `${nameOf(node)} ${p ? p.label : lane.target.param} cannot be `
-        + 'automated.', { path: `${path}.target.param`, nodeId: node.id });
+    // The lane's target: the one clip-target policy (clip-targets.js, R7).
+    for (const e of clipTarget(node || null, { kind: 'automation',
+      param: lane.target && lane.target.param }, registry).errors) {
+      sink.error(e.code, e.message, { path: `${path}.${e.path}`,
+        ...(e.nodeId ? { nodeId: e.nodeId } : {}) });
     }
     const key = `${lane.target && lane.target.node}\u0000${lane.target && lane.target.param}`;
     if (laneTargets.has(key)) {

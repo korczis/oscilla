@@ -1,5 +1,7 @@
 id: S014
 milestone: M001
+serves:
+  - "v1-instrument#patterns-preserved"
 title: "§14 Pattern details"
 slug: pattern-details
 priority: p1

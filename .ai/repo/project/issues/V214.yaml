@@ -1,5 +1,8 @@
 id: V214
 milestone: M008
+serves:
+  - "v2-laboratory#microphone-analysis"
+  - "v2-laboratory#generator-mic-compare"
 title: "Microphone analyzer and compare"
 slug: microphone-analyzer-and-compare
 priority: p0

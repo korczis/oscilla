@@ -12,13 +12,14 @@
 // stored up to FREQUENCY_MAX_HZ and the compiler clamps them to 0.95 × Nyquist of the context it
 // runs on (project rule audio-engine-discipline), as the sequencer compiler already does.
 
-import { SAFE_NYQUIST_FRACTION, SAMPLE_RATE_LIMITS } from '../../measurement/stimulus.js';
+import { SAMPLE_RATE_LIMITS } from '../../measurement/stimulus.js';
+import { SAFE_NYQUIST_FACTOR } from '../../core/constants.js';
 import { formatFrequency } from '../../core/frequency.js';
 import { sig } from '../../core/math.js';
 import { HEX64_PATTERN } from '../../experiments/schema.js';
 
 /** Highest storable frequency: 0.95 × Nyquist of the highest accepted sample rate (384 kHz). */
-export const FREQUENCY_MAX_HZ = (SAMPLE_RATE_LIMITS[1] / 2) * SAFE_NYQUIST_FRACTION;
+export const FREQUENCY_MAX_HZ = (SAMPLE_RATE_LIMITS[1] / 2) * SAFE_NYQUIST_FACTOR;
 /** Inspector display range for audio frequencies (the model accepts the full range). */
 export const AUDIBLE_SOFT_RANGE = Object.freeze([20, 20000]);
 

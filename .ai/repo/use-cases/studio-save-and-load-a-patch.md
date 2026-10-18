@@ -9,7 +9,7 @@ target: advisory
 weight: 390
 difficulty: intermediate
 commands: [knowledge]
-claims: [studio-patch-round-trip, studio-untrusted-import, studio-deterministic-hash]
+claims: [studio-patch-round-trip, studio-untrusted-import, studio-deterministic-hash, studio-schema-version]
 tags: [oscilla, studio, v31, product-acceptance]
 ---
 
@@ -34,6 +34,7 @@ by these, run by:
   the Open dialog lists it; export and re-import with identical semantics; save a selection as
   a patch and insert it, undoable; malformed and hostile files refused), in Chromium, Firefox and
   WebKit.
+- `npm test`: tests/unit/v31-studio-model.test.mjs ("Studio schema version is its own constant", "the Studio schema version changes only through registered stepwise migrations", "migration: synthetic schema 0 → 1 through the registry"): a saved file carries its own schema version, which moves only by a registered step.
 
 A use-case/v1 scenario can only invoke `bin/majordomus`, so the scenario below does not
 open a browser or play audio. It proves the traceability instead: each claim's
@@ -95,6 +96,18 @@ steps:
     expect:
       exit: 0
       stdout_contains: ['claim:studio-deterministic-hash +test:tests/unit/v31-studio-model\.test\.mjs']
+  - id: studio-schema-version-implemented
+    run: ['knowledge', 'edges', '--type', 'implemented_by']
+    note: 'claim studio-schema-version is implemented by src/js/studio/schema.js, a tracked file'
+    expect:
+      exit: 0
+      stdout_contains: ['claim:studio-schema-version +implementation:src/js/studio/schema\.js']
+  - id: studio-schema-version-tested
+    run: ['knowledge', 'edges', '--type', 'tested_by']
+    note: 'claim studio-schema-version is proven by tests/unit/v31-studio-model.test.mjs'
+    expect:
+      exit: 0
+      stdout_contains: ['claim:studio-schema-version +test:tests/unit/v31-studio-model\.test\.mjs']
 then:
   - 'every claim this use case names resolves to a tracked implementation and a tracked test'
 ```

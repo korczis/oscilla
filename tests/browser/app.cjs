@@ -9,7 +9,7 @@
 // Playwright resolves from app/node_modules or NODE_PATH (e.g. /Users/korczis/dev/oscilla/tests/
 // node_modules). Exit code 1 when any check fails.
 'use strict';
-const { spawn } = require('node:child_process');
+const { serveDist } = require('./lib/serve.cjs');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
@@ -48,24 +48,6 @@ const FAKE_MIC = new Set(['chromium', 'firefox']);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 // ------------------------------------------------------------------------------ server
-function startServer() {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'oscilla-gate-'));
-  fs.mkdirSync(path.join(root, 'oscilla'));
-  fs.copyFileSync(DIST, path.join(root, 'oscilla', 'index.html'));
-  const port = 8900 + Math.floor(Math.random() * 300);
-  const proc = spawn('python3', ['-m', 'http.server', String(port), '--bind', '127.0.0.1',
-    '--directory', root], { stdio: 'ignore' });
-  return { proc, root, url: `http://127.0.0.1:${port}/oscilla/` };
-}
-
-async function waitForServer(url) {
-  for (let i = 0; i < 80; i += 1) {
-    try { const r = await fetch(url); if (r.ok) return; } catch { /* not yet */ }
-    await sleep(100);
-  }
-  throw new Error(`server did not start: ${url}`);
-}
-
 // ------------------------------------------------------------------------------ WAV parsing
 function parseWavHeader(buf) {
   const s = (o, n) => buf.toString('ascii', o, o + n);
@@ -471,6 +453,172 @@ function defineChecks() {
     return { ok, oscilla: o, measure: m, fixed: got.fixed, testContext: got.testContext,
       setInputNow: got.setInputNow, showResult: got.showResult, titleKept: got.titleKept,
       setValues: got.setValues, setRange: got.setRange, valuesKept: got.valuesKept };
+  });
+
+  // Ledger W7b (ADR 0052): TEST CONTEXT is a choice of the MEASURE Input device list. It is
+  // entered and left from the page; leaving clears what was produced in it (here a setup
+  // check and an INVALID result with its noise-check snapshot; a COMPLETE result is in the unit
+  // suite, tests/unit/v4-test-context-choice.test.mjs). A level calibration typed on it is
+  // kept and reads UNCALIBRATED, with the reason, outside it (owner decision of 2026-10-11).
+  // With the fake microphone (chromium, firefox on http) a level calibration stored on a real
+  // input survives entering and leaving and reads UNCALIBRATED, with the reason, while the page
+  // is in TEST CONTEXT.
+  def('test-context-from-the-page', async ({ page, browserName, origin }) => {
+    const TC_LABEL = 'TEST CONTEXT · digital loopback (no microphone)';
+    const SELECT = '#osc-m-input-device';
+    await H.workspace(page, 'measure');
+    const view = () => page.evaluate(() => {
+      const a = window.OSCILLA.app;
+      const m = window.OSCILLA.measure;
+      const text = (el) => (el ? el.textContent.replace(/\s+/g, ' ').trim() : null);
+      const sel = document.getElementById('osc-m-input-device');
+      const banner = document.querySelector('[data-osc="measure.testContext"]');
+      return { loopback: a.meas.loopback, value: sel.value, disabled: sel.disabled,
+        selected: text(sel.selectedOptions[0]), options: [...sel.options].map(text),
+        status: text(document.getElementById(sel.getAttribute('aria-describedby'))),
+        banner: banner.offsetParent !== null ? text(banner) : null,
+        chip: text(document.querySelector('#osc-measure-input .osc-m-chip')),
+        flag: new URLSearchParams(window.location.search).get('measure'),
+        state: m.state, ioKind: m.ioKind, inputNow: !!m.inputNow, level: !!m.levelCalibration,
+        indicator: a.measureCalIndicator, polite: a.meas.live.polite,
+        assertive: a.meas.live.assertive, levelVoid: a.meas.cal.levelVoid,
+        result: m.result ? m.result.state : null,
+        resultLabel: m.result && m.result.testContext ? m.result.testContext.kind : null,
+        reasons: m.result ? m.result.reasons.map((r) => r.code) : null,
+        rta: a.meas.rta ? a.meas.rta.badges.slice() : null,
+        noiseStep: a.meas.flow.steps.find((s) => s.id === 'noise').status,
+        primary: text(document.getElementById('osc-measure-primary')),
+        toasts: a.alerts.map((t) => `${t.title}: ${t.message}`) };
+    });
+    const typeLevel = () => page.evaluate(() => {
+      const a = window.OSCILLA.app;
+      a.measureOpenLevelCalibration();
+      a.measureSetLevelManual(true);
+      Object.assign(a.meas.levelForm, { referenceHz: '1000', referenceDb: '94',
+        observedDb: '-30' });
+      const stored = a.measureSaveLevelCalibration();
+      a.measureSetLevelManual(false);
+      return stored;
+    });
+    const check = async () => {
+      await page.click('#osc-measure-primary');
+      return H.until(view, (v) => v.state === 'READY' && v.inputNow, 15000);
+    };
+    const enter = async () => {
+      await page.selectOption(SELECT, { label: TC_LABEL }, { timeout: 5000 });
+      return H.until(view, (v) => v.loopback && !!v.banner && /^TEST CONTEXT/.test(v.polite),
+        3000);
+    };
+    const leave = async () => {
+      await page.selectOption(SELECT, '', { timeout: 5000 });
+      return H.until(view, (v) => !v.loopback && !v.banner && /^Left TEST CONTEXT/
+        .test(v.polite), 3000);
+    };
+    const zero = (c) => c.ioNodes === 0 && c.ioSources === 0 && c.captures === 0
+      && c.ports === 0 && c.tracks === 0;
+    const released = () => H.until(() => page.evaluate(() => window.OSCILLA.measure.counts()),
+      zero, 3000);
+
+    const before = await view();
+    const entered = await enter();
+    const checked = await check();
+    const stored = await typeLevel();
+    const calibrated = await view();
+    const left = await leave();
+    const counts = await released();
+    const res = {
+      offered: !before.loopback && !before.disabled && before.value === ''
+        && before.options.at(-1) === TC_LABEL && before.banner === null
+        && before.chip === 'Microphone',
+      entered: entered.loopback && entered.selected === TC_LABEL && !entered.disabled
+        && /^TEST CONTEXT\./.test(entered.banner || '')
+        && entered.chip === 'TEST CONTEXT loopback'
+        && /no input device is used\. Choose an input to leave TEST CONTEXT/
+          .test(entered.status)
+        && /^TEST CONTEXT: digital loopback, no microphone/.test(entered.polite),
+      checkedInIt: checked.state === 'READY' && checked.ioKind === 'loopback'
+        && checked.inputNow && stored === true && calibrated.level
+        && calibrated.indicator === 'CALIBRATED',
+      left: !left.loopback && left.value === '' && left.banner === null
+        && left.chip === 'Microphone' && !left.disabled,
+      cleared: left.state === 'IDLE' && !left.inputNow && left.indicator === 'UNCALIBRATED'
+        && /Cleared: the input check\. Run the /.test(left.polite)
+        && left.toasts.some((t) => /^Left TEST CONTEXT: Cleared/.test(t)),
+      // The calibration typed in TEST CONTEXT is kept, void outside it (decision 2026-10-11).
+      calibrationKept: left.level && !/level calibration/.test(left.polite)
+        && /^UNCALIBRATED: the level calibration was made in TEST /.test(left.levelVoid || ''),
+      released: zero(counts),
+      // The address follows the choice where the browser rewrites it (not judged on file://).
+      address: origin !== 'http' || (before.flag === null && entered.flag === 'loopback'
+        && left.flag === null),
+    };
+    const detail = { before, entered, checked, calibrated, left, counts };
+    await page.evaluate(() => { window.OSCILLA.app.alerts = []; });
+    // Review of #167: an INVALID result made in TEST CONTEXT, by page actions only (the volume
+    // at 0: the loopback hears digital silence). It has no transfer and nothing titled
+    // "TEST CONTEXT result"; it, its noise-check snapshot and the outcome said for it must not
+    // stay under the input chosen next.
+    const gain = () => page.$eval('#osc-gain', (el) => Number(el.value));
+    const setGain = async (pct) => {
+      await page.$eval('#osc-gain', (el, v) => {
+        el.value = String(v);
+        el.dispatchEvent(new Event('input', { bubbles: true }));
+      }, pct);
+      return H.until(gain, (v) => v === pct, 3000);
+    };
+    const gainWas = await gain();
+    await enter();
+    // A short recipe, as a recipe link would set it (the seam's setValues is that validation).
+    const shortened = await seam.applyValues(page, { duration: 1, repeats: 1, noiseCheckS: 0.5,
+      preRollS: 0.25, postRollS: 0.5 });
+    // The setup check refuses a zero output level, so the volume goes down after it is READY.
+    await check();
+    await setGain(0);
+    await page.click('#osc-measure-primary');
+    const invalid = await H.until(view, (v) => ['INVALID', 'COMPLETE', 'ABORTED', 'ERROR']
+      .includes(v.state) && v.result !== null && v.assertive !== '', 45000);
+    const leftInvalid = await leave();
+    res.invalidInIt = shortened === true && invalid.state === 'INVALID'
+      && invalid.result === 'INVALID' && invalid.reasons.includes('NO_INPUT')
+      && invalid.resultLabel === 'digital-loopback' && invalid.noiseStep === 'done'
+      && Array.isArray(invalid.rta) && invalid.rta.includes('NOISE CHECK SNAPSHOT')
+      && /^Measurement invalid/.test(invalid.assertive);
+    res.invalidCleared = leftInvalid.result === null && leftInvalid.rta === null
+      && leftInvalid.noiseStep !== 'done' && leftInvalid.state === 'IDLE'
+      && leftInvalid.assertive === '' && leftInvalid.chip === 'Microphone'
+      && /Cleared: the invalid TEST CONTEXT result/.test(leftInvalid.polite)
+      && leftInvalid.toasts.some((t) => /the invalid TEST CONTEXT result/.test(t));
+    await setGain(gainWas);
+    res.releasedAfterInvalid = zero(await released());
+    Object.assign(detail, { gainWas, shortened, invalid, leftInvalid });
+    await page.evaluate(() => { window.OSCILLA.app.alerts = []; });
+    if (FAKE_MIC.has(browserName) && origin === 'http') {
+      // A real input: its check ends when TEST CONTEXT is entered, its calibration stays.
+      const mic = await check();
+      const micStored = await typeLevel();
+      const micCal = await view();
+      const inIt = await enter();
+      const back = await leave();
+      res.realInputKept = mic.ioKind === 'microphone' && micStored === true
+        && micCal.indicator === 'CALIBRATED' && inIt.level && !inIt.inputNow
+        && inIt.indicator === 'UNCALIBRATED'
+        && /^UNCALIBRATED: the level calibration was taken with a microphone/
+          .test(inIt.levelVoid || '') && back.level
+        && !back.inputNow && back.levelVoid === null
+        && back.indicator === 'PENDING INPUT CHECK'
+        && !back.toasts.some((t) => /level calibration/.test(t));
+      Object.assign(detail, { mic, micCal, inIt, back });
+      await page.evaluate(() => {
+        window.OSCILLA.app.measureClearLevelCalibration();
+        window.OSCILLA.app.alerts = [];
+      });
+      res.releasedAfterMic = zero(await released());
+    }
+    // The calibration typed in TEST CONTEXT is kept: the checks after this one start without it.
+    await page.evaluate(() => window.OSCILLA.app.measureClearLevelCalibration());
+    await H.workspace(page, 'playground'); // the checks after this one start there
+    const failed = Object.keys(res).filter((k) => !res[k]);
+    return failed.length ? { ok: false, failed, detail } : { ok: true, ...res };
   });
 
   // Ledger W7f and W7c (ADR 0052, ADR 0017): the level indicator reads CALIBRATED only for an
@@ -2255,8 +2403,7 @@ async function runOne(browserName, origin, baseUrl) {
     console.error(`missing ${DIST}: run npm run build`);
     process.exit(2);
   }
-  const server = ORIGINS.includes('http') ? startServer() : null;
-  if (server) await waitForServer(server.url);
+  const server = ORIGINS.includes('http') ? await serveDist(DIST, { prefix: 'oscilla-gate-' }) : null;
   const all = {};
   let failed = 0;
   let known = 0;
@@ -2289,8 +2436,7 @@ async function runOne(browserName, origin, baseUrl) {
     }
   } finally {
     if (server) {
-      server.proc.kill();
-      fs.rmSync(server.root, { recursive: true, force: true });
+      server.close();
     }
   }
   if (JSON_OUT) fs.writeFileSync(JSON_OUT, `${JSON.stringify(all, null, 2)}\n`);

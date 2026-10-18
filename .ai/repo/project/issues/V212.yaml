@@ -1,5 +1,7 @@
 id: V212
 milestone: M008
+serves:
+  - "v2-laboratory#spectrum"
 title: "Live waveform and FFT"
 slug: live-waveform-and-fft
 priority: p0

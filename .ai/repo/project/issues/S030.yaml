@@ -1,5 +1,7 @@
 id: S030
 milestone: M002
+serves:
+  - "v1-instrument#visuals-and-interface"
 title: "§30 Harmonics mode"
 slug: harmonics-mode
 priority: p1

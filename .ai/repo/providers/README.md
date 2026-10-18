@@ -22,8 +22,8 @@ the same either way.
 This repository currently overrides no template: every bootstrap is rendered from the
 templates the installed Majordomus ships. Until 2026-10-06 it overrode `agents`,
 `claude-code` and `gemini` to correct a worktree paragraph that promised a pre-commit guard
-and a rule this repository did not have; Majordomus 0.13.2 ships templates that promise only
-what an adopter has (majordomus #783), so the overrides were deleted.
+and a rule this repository did not have; since majordomus #783 the shipped templates promise
+only what an adopter has, so the overrides were deleted.
 
 An override is a copy of a shipped template with a deliberate change. When one is added,
 record here which template it overrides, why, and the condition under which it can go, and

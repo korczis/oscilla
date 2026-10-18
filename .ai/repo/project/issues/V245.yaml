@@ -1,5 +1,7 @@
 id: V245
 milestone: M010
+serves:
+  - "v2-laboratory#public-and-identified"
 title: "Social card tags"
 slug: social-card-tags
 priority: p1

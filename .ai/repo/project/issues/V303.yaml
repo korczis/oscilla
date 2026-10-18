@@ -1,5 +1,7 @@
 id: V303
 milestone: M012
+serves:
+  - "v3-measure#abort-releases-everything"
 title: "Measurement state machine"
 slug: measurement-state-machine
 priority: p1

@@ -1,5 +1,7 @@
 id: V406
 milestone: M022
+serves:
+  - "v31-studio#typed-connections"
 title: "Typed ports and compatibility"
 slug: typed-ports-and-compatibility
 priority: p1

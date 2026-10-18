@@ -1,5 +1,7 @@
 id: V364
 milestone: M018
+serves:
+  - "v3-measure#measurement-quality"
 title: "Quality assessment and reasons"
 slug: quality-assessment-and-reasons
 priority: p1

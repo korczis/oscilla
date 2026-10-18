@@ -1,5 +1,7 @@
 id: V308
 milestone: M012
+serves:
+  - "v3-measure#algorithm-ids"
 title: "Algorithm registry"
 slug: algorithm-registry
 priority: p1

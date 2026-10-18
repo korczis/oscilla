@@ -45,9 +45,9 @@ share one git directory.
 - `.ai/repo/policy.yaml` declares the `enforcement` entry `worktree-guard`
   (`majordomus worktree guard`, `wired_by: git-hook:pre-commit`). The guard exits 10 with
   the reason for a branch committed anywhere but its canonical worktree.
-  `majordomus doctor` 0.13.2 proves the wiring by reading the hook's text: it fails a
-  checkout with no hook file, a hook that does not name a declared entry, and an entry
-  followed by `|| true`. `npm run verify` and the hook itself run doctor.
+  `majordomus doctor`, at the version CI pins, proves the wiring by reading the hook's
+  text: it fails a checkout with no hook file, a hook that does not name a declared entry,
+  and an entry followed by `|| true`. `npm run verify` and the hook itself run doctor.
 - `tests/unit/repo-hygiene.test.mjs`, run by `npm test` in the CI `unit` job, asserts that
   the policy declares that entry exactly (a removed entry, or `wired_by: manual`, fails),
   that `docs/WORKTREES.md` exists and documents the layout, the guard and its limits, and

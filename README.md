@@ -24,7 +24,7 @@ definition, calibration, trace) are defined in the [glossary](docs/GLOSSARY.md).
 
 ## Navigation
 
-The header has eight entries: **Playground**, **Measure**, **Experiments**, **Analyze**,
+The header has these entries: **Playground**, **Measure**, **Experiments**, **Analyze**,
 **Synthesis**, **Learn**, **Studio** and **About**, in that order. Analyze and Synthesis are
 groups. Analyze opens Analyzer, Filter Lab and Compare; Synthesis opens Synthesis, Sequencer and
 Presets. A group is a button that shows its list of workspaces: Enter or Space opens it and Tab
@@ -127,10 +127,16 @@ is in the [algorithm notes](docs/v3/algorithms.md).
   works from `file://`. When AudioWorklet is unavailable, a ScriptProcessor fallback records
   instead. The stimulus passes through the same master safety chain as every other sound, and
   that chain is part of what is measured.
-- **TEST CONTEXT.** `?measure=loopback` replaces the microphone with a known synthetic digital
-  system. The page then says TEST CONTEXT on the result and in every saved experiment. The
-  automated tests use this mode, and it is never presented as a measurement of a physical
-  system.
+- **TEST CONTEXT.** The last choice of the Input device list, "TEST CONTEXT · digital loopback
+  (no microphone)", replaces the microphone with a known synthetic digital system;
+  `?measure=loopback` opens the page with it chosen, and the address follows the choice. The
+  page then says TEST CONTEXT on the result and in every saved experiment. The automated tests
+  use this mode, and it is never presented as a measurement of a physical system. Choosing an
+  input leaves it. Entering or leaving clears the result shown, valid or invalid (a saved
+  experiment of it stays, labelled), and the input check. A level calibration is kept on
+  either side: one stored in TEST CONTEXT does not apply to a real input, one stored with a
+  real input does not apply inside TEST CONTEXT, and each applies again on its own side once
+  its input is checked.
 
 ### Calibration
 
@@ -384,6 +390,8 @@ is in the proposed [ADR 0025](.ai/repo/adrs/0025-data-driven-quality-with-reason
 **Studio** is the last workspace before About. It is a patching and composition workspace
 over the same audio engine: no second engine, and the engine's master chain and limits apply.
 How to use it, with the keyboard shortcuts, is the [Studio user guide](docs/v31/user-guide.md).
+What it consists of (schemas, node and port types, tests, size, ADRs, records) and how its
+release and deployment are evidenced is the [final report](docs/v31/studio-report.md).
 
 - **The model is the source of truth.** A Studio document is a plain, versioned `StudioModel`:
   a graph of typed nodes and ports, a timeline of tracks and clips, automation lanes, and
@@ -610,23 +618,27 @@ GitHub-Pages-like `/oscilla/` sub-path, and the run must produce zero console er
 | --- | --- | --- |
 | Unit | `tests/unit/` | Pure modules (DSP, analysis, sequencer, charts), the packer, the artifact rules and the release tooling, all under `node --test` |
 | V1 freeze | `tests/freeze/` | Golden vectors that pin V1 behaviour ([ADR 0014](.ai/repo/adrs/0014-v1-behaviour-frozen-by-golden-vectors.md)) |
-| Browser | `tests/browser/` | Playwright suites for the app gate, layout, navigation history and unsaved work, V1 engine port, DSP, labs and sequencer |
-| Visual | `tests/visual/` | The 1536x1024 reference and named regions, compared region by region with thresholds measured from run-to-run variance ([ADR 0029](.ai/repo/adrs/0029-visual-regression-in-the-release-gate.md)) |
+| Browser | `npm run test:browser`, `test:engine`, `test:dsp`, `test:labs`, `test:sequencer` | Playwright suites on the built page: the app gate (`tests/browser/app.cjs`), layout (`tests/browser/layout.cjs`), the V2 final-QA regressions (`tests/browser/qa-regressions.cjs`), navigation history and unsaved work (`tests/browser/navigation.cjs`), the V1 engine port (`tests/browser/engine-v1port.cjs`), DSP (`tests/browser/dsp.cjs`), labs (`tests/browser/labs.cjs`) and the sequencer (`tests/browser/sequencer.cjs`) |
+| Visual | `scripts/visual-gate.mjs`, `tests/visual/` | The 1536x1024 reference and named regions, compared region by region with thresholds measured from run-to-run variance ([ADR 0029](.ai/repo/adrs/0029-visual-regression-in-the-release-gate.md)) |
 | V3 unit | `tests/unit/v3-*.test.mjs` | Measurement core, transfer and impulse response on synthetic systems with known answers, RTA and aggregation, calibration, quality, experiments (schema, round trip, corrupt imports, store), goldens per algorithm ID, the engine on a fake io and the view models, all in `npm test` |
-| V3 browser | `npm run test:measure` | `tests/browser/v3-measure.cjs`: the measurement engine on real Web Audio, a recovered digital loopback response, limiter transparency, 0 nodes after finish and abort. `tests/browser/v3-ui.cjs`: Measure and Experiments of the built page, guided flow, abort at every stage, calibration, experiment import, compare and export, and no "SPL" without a level calibration. Both run in Chromium, Firefox and WebKit, from `file://` and `/oscilla/` |
+| V3 browser | `npm run test:measure` | `tests/browser/v3-measure.cjs`: the measurement engine on real Web Audio, a recovered digital loopback response, limiter transparency, 0 nodes after finish and abort. `tests/browser/analysis-worker.cjs`: the offline analysis in its Worker against the inline run, identical results, no inline fallback, abort. `tests/browser/v3-ui.cjs`: Measure and Experiments of the built page, guided flow, abort at every stage, calibration, experiment import, compare and export, and no "SPL" without a level calibration. All run in Chromium, Firefox and WebKit, from `file://` and `/oscilla/` |
 | V3 visual | `scripts/visual-measure.mjs`, `tests/visual/measure/` | Measure at 1536x1024 and 390x844 showing a deterministic TEST CONTEXT experiment, against the accepted reference for each environment (part of `npm run test:visual`) |
+| Studio browser | `npm run test:studio` | The Studio of the built page: the graph editor (`tests/browser/v31-studio-graph.cjs`), the timeline editor (`tests/browser/v31-studio-timeline.cjs`), the compiler and runtime on the real engine (`tests/browser/v31-studio-audio.cjs`), the transport on the audio clock (`tests/browser/v31-studio-transport.cjs`), offline rendering of the templates (`tests/browser/v31-studio-offline.cjs`), the transport Inspector, Find node, Render WAV and a measurement from Studio (`tests/browser/v31-studio-workflows.cjs`), deep links and fullscreen (`tests/browser/v31-studio-links.cjs`), and the Inspector's Runtime and Trace sections (`tests/browser/v31-studio-runtime.cjs`) |
+| Studio visual | `scripts/visual-studio.mjs`, `tests/visual/studio/` | Studio at 1536x1024 and its GRAPH and TIMELINE subviews at 390x844, against the accepted reference for each environment (part of `npm run test:visual`) |
 
 Every V3 browser check runs on a TEST CONTEXT digital loopback or a fake microphone. No
 automated test proves how a physical speaker, room or microphone behaves.
 
-`npm run release-gate` is the authority on what the gate runs and in what order.
-[`tests/README.md`](tests/README.md) describes each layer and how to run it alone.
+`npm run release-gate` is the authority on what the gate runs and in what order; the table
+names every suite and visual script its `test:release` runs (`tests/unit/docs-derived.test.mjs`
+holds it to `package.json`). [`tests/README.md`](tests/README.md) describes each file and how to
+run it alone.
 
 ## Versioning and releases
 
 - **One source.** The `version` field in `package.json` is the only product version
   ([ADR 0027](.ai/repo/adrs/0027-package-json-is-the-product-version-authority.md)). The
-  status bar, the About dialog, the exported configuration's `oscillaVersion` and
+  status bar, the About workspace, the exported configuration's `oscillaVersion` and
   `window.OSCILLA.version` all derive from it at build time. `npm run version:check` fails
   when any of these disagree, or when the current version is hard-coded anywhere else. That is
   why this README never names it. File-format schema versions are separate integers
@@ -686,7 +698,7 @@ automated test proves how a physical speaker, room or microphone behaves.
   `release:prepare`. Rule `project.about-names-current-release` requires it, and
   `tests/unit/about.test.mjs` refuses a bump to a line the page does not name, so `verify` and
   the release gate fail until the station exists.
-- **In the app.** The About dialog shows the version, the commit (linked to GitHub, or
+- **In the app.** The About workspace shows the version, the commit (linked to GitHub, or
   "source build" for a local build), the channel and the source digest. Opening the page with
   `?debug=1` adds the full commit SHA, the source date, the artifact hash, the config schema
   version and live engine state: sample rate, Nyquist, AudioContext state, voices, nodes,
@@ -695,9 +707,10 @@ automated test proves how a physical speaker, room or microphone behaves.
   browser tests and the post-deployment smoke use, so the bytes that are tested are the bytes
   that are served. The stable reads are `version`, `build`, `measure.state`, `measure.counts()`,
   `studio.counts()`, `studio.model` and `studio.trace.steps()`; everything else may change
-  without notice. Every member is one of three kinds: it observes; it drives an
-  action you already have in the page, through the same validation (`measure.useLoopback()` is
-  `?measure=loopback`, `measure.setValues()` is a recipe link); or it injects test data.
+  without notice. Every member is one of three kinds: it observes; it drives an action you
+  already have in the page, through the same validation (`measure.useLoopback()` and
+  `measure.useMicrophone()` are the TEST CONTEXT choice of the Input device list,
+  `measure.setValues()` is a recipe link); or it injects test data.
   `measure.showResult()` refuses a result that is not marked TEST CONTEXT, so no injected result
   is shown or saved as a measurement, and a direct `measure.setInputNow()` is refused outside
   TEST CONTEXT. What is injected stays in TEST CONTEXT: an input named there, or carried by a

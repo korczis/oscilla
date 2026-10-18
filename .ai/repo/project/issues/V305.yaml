@@ -1,5 +1,7 @@
 id: V305
 milestone: M012
+serves:
+  - "v3-measure#abort-releases-everything"
 title: "Capture session"
 slug: capture-session
 priority: p1

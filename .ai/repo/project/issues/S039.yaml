@@ -1,5 +1,7 @@
 id: S039
 milestone: M003
+serves:
+  - "v1-instrument#presets"
 title: "§39 Pattern presets"
 slug: pattern-presets
 priority: p1

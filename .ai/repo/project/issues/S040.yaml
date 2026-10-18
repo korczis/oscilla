@@ -1,5 +1,7 @@
 id: S040
 milestone: M003
+serves:
+  - "v1-instrument#presets"
 title: "§40 Third-octave preset"
 slug: third-octave-preset
 priority: p1

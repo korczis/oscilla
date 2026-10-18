@@ -49,7 +49,7 @@ claims:
     test: tests/unit/freeze.test.mjs
     status: guaranteed
     responsibility: product
-    note: Golden vectors from index.html@a7b7a23 (tests/freeze/golden-a7b7a23.json) replayed against the V2 modules.
+    note: Golden vectors from index.html@a7b7a23 (tests/freeze/golden-a7b7a23.json) replayed against the V2 modules. Without the freeze files the test skips locally and fails under GITHUB_ACTIONS or CI, so the claim cannot pass in CI by skipping (tests/unit/freeze-guard.test.mjs).
 
   - id: sweep-rises-through-range
     claim: A sweep pattern plays a frequency that rises through the requested range, and stopping it leaves no audio node running
@@ -157,6 +157,7 @@ claims:
     test: tests/unit/bioacoustics.test.mjs
     status: guaranteed
     responsibility: product
+    note: 'Machine-checked by tests/unit/bioacoustics.test.mjs: every object of HEARING_RANGES and CALL_EXAMPLES that holds a number (each entry and each alternative) carries a full source (authors, title, venue, year or null, URL or DOI); a hearing range with a dB SPL criterion names it at the start of its basis, and one whose source gives none states the levels or that none is stated; a call band has a kind and says which quantity it is, and no hearing criterion; src/index.html shows the disclaimer and mount() renders it into the note; the sources list renders each bar with its label, basis and citation. Not machine-checked: that each value is the one the cited source gives and nothing is estimated, which is a reviewer''s reading of the sources, and the bars the canvas chart draws (src/js/charts/bio-chart.js).'
 
   - id: link-restores-configuration
     claim: A copied link restores the instrument configuration through the validated path, with the gain capped
@@ -562,7 +563,7 @@ claims:
     test: tests/unit/v31-studio-model.test.mjs
     status: guaranteed
     responsibility: product
-    note: 'STUDIO_SCHEMA_VERSION = 1 (ADR 0023); test "Studio schema version is its own constant, independent of the experiment schema".'
+    note: 'STUDIO_SCHEMA_VERSION = 1 (ADR 0023). Proven by three tests of tests/unit/v31-studio-model.test.mjs: "Studio schema version is its own constant, independent of the experiment schema" (a positive integer literal in schema.js, which reads no product, build or experiment version; a saved Studio carries it and no product version), "the Studio schema version changes only through registered stepwise migrations" (studioMigrations holds steps 1 to the current version, contiguous and frozen; normalize refuses any other version; import refuses a newer one; steps apply in order and a missing step is refused) and "migration: synthetic schema 0 → 1 through the registry (§160)" (a real upgrade through importStudio). That no code writes schemaVersion outside the pipeline is read by review.'
 
   - id: studio-timeline-model
     claim: 'Timeline clips are placed in absolute seconds and carry sequencer block payloads checked by the sequencer block rules; timeline edits validate their track and target references and undo exactly.'

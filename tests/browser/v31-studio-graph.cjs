@@ -32,7 +32,8 @@
 //                        buttons and F / A frame; view changes are not undoable and not dirty
 //   inspector            typed cutoff "2.4k" → 2400 Hz; invalid text refused with the range;
 //                        a slider drag is one history entry; AUTOMATE creates / reveals a lane;
-//                        rename; clip start/duration
+//                        no AUTOMATE on a low-pass Q, with the reason (R7); rename; clip
+//                        start/duration
 //   keyboard-connect     keyboard only: focus a node, C opens the list of compatible inputs,
 //                        Enter connects; arrows nudge (one entry per key sequence)
 //   focus-never-body     V431 review: Tab after a press that moved no focus selects the
@@ -76,12 +77,13 @@
 //   screenshots          tests/visual/out-studio/ (not committed): desktop, phone, light
 //   no-console-errors
 'use strict';
-const { spawn } = require('node:child_process');
+const { serveDist } = require('./lib/serve.cjs');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { pathToFileURL } = require('node:url');
 const suite = require('./lib/suite.cjs');
+const { until } = require('./lib/wait.cjs');
 
 const argv = process.argv.slice(2);
 const arg = (name, fallback) => {
@@ -109,24 +111,6 @@ const FEEDBACK = 'Connection rejected: This would create an unsupported instanta
   + 'feedback loop.';
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const MOD = process.platform === 'darwin' ? 'Meta' : 'Control';
-
-function startServer() {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'oscilla-studio-'));
-  fs.mkdirSync(path.join(root, 'oscilla'));
-  fs.copyFileSync(DIST, path.join(root, 'oscilla', 'index.html'));
-  const port = 9600 + Math.floor(Math.random() * 300);
-  const proc = spawn('python3', ['-m', 'http.server', String(port), '--bind', '127.0.0.1',
-    '--directory', root], { stdio: 'ignore' });
-  return { proc, root, url: `http://127.0.0.1:${port}/oscilla/` };
-}
-
-async function waitForServer(url) {
-  for (let i = 0; i < 80; i += 1) {
-    try { const r = await fetch(url); if (r.ok) return; } catch { /* not yet */ }
-    await sleep(100);
-  }
-  throw new Error(`server did not start: ${url}`);
-}
 
 // ------------------------------------------------------------------------------ page helpers
 const H = {
@@ -696,6 +680,23 @@ function defineChecks() {
     await sleep(80);
     const depth1 = await H.undoDepth(page);
     const q = (await H.model(page)).nodes.find((n) => n.id === 'filter-1').params.Q;
+    // R7 (clip-targets.js): a low-pass Q lane would never play (its AudioParam is in dB), so
+    // Filter 1 (low-pass) offers no AUTOMATE on Q and says why; as a band-pass it does.
+    const noQLane = await page.evaluate(() => {
+      const f = document.querySelector('.osc-si-field[data-field="Q"]');
+      const why = f.querySelector('[data-osc="studio.inspector.no-automate"]');
+      return !f.querySelector('[data-osc="studio.inspector.automate"]')
+        && !!why && /dB AudioParam/.test(why.textContent);
+    });
+    await page.evaluate(() => window.OSCILLA.studio.store.dispatch({ type: 'NODE_PARAM_SET',
+      nodeId: 'filter-1', key: 'type', value: 'bandpass' }));
+    // The Inspector rebuilds on the type change (inspectorRebuildKey): the Q note goes and its
+    // AUTOMATE appears, which the click below needs.
+    await until(() => page.evaluate(() => {
+      const f = document.querySelector('.osc-si-field[data-field="Q"]');
+      return !!f && !!f.querySelector('[data-osc="studio.inspector.automate"]')
+        && !f.querySelector('[data-osc="studio.inspector.no-automate"]');
+    }), { ms: 5000, what: 'inspector: Q offers AUTOMATE once Filter 1 is band-pass' });
     // AUTOMATE (§102): creates the lane at the current value; on an automated parameter it
     // reveals the lane (selects its points).
     await page.click('.osc-si-field[data-field="Q"] [data-osc="studio.inspector.automate"]');
@@ -725,7 +726,7 @@ function defineChecks() {
       renamed: name === 'HF Filter' && cardTitle === 'HF FILTER',
       clipDuration: clip.duration === 1.5,
       announced: live.includes('Changed Filter 1 Cutoff'),
-      automate: lane.join() === 'frequency:2,Q:1', revealed,
+      automate: lane.join() === 'frequency:2,Q:1', revealed, noQLane,
     }), f1, f2, err, depth0, depth1, q, live: live.slice(-4) };
   });
 
@@ -1548,8 +1549,7 @@ async function runOne(browserName, origin, baseUrl) {
     process.exit(2);
   }
   fs.mkdirSync(OUT, { recursive: true });
-  const server = ORIGINS.includes('http') ? startServer() : null;
-  if (server) await waitForServer(server.url);
+  const server = ORIGINS.includes('http') ? await serveDist(DIST, { prefix: 'oscilla-studio-' }) : null;
   const all = {};
   let failed = 0;
   try {
@@ -1574,8 +1574,7 @@ async function runOne(browserName, origin, baseUrl) {
     }
   } finally {
     if (server) {
-      server.proc.kill();
-      fs.rmSync(server.root, { recursive: true, force: true });
+      server.close();
     }
   }
   if (JSON_OUT) fs.writeFileSync(JSON_OUT, `${JSON.stringify(all, null, 2)}\n`);

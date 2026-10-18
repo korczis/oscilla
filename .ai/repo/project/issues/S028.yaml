@@ -1,5 +1,7 @@
 id: S028
 milestone: M002
+serves:
+  - "v1-instrument#visuals-and-interface"
 title: "§28 Frequency motion mode"
 slug: frequency-motion-mode
 priority: p1

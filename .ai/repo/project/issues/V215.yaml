@@ -1,5 +1,7 @@
 id: V215
 milestone: M008
+serves:
+  - "v2-laboratory#engine-plays-and-releases"
 title: "Device and limits"
 slug: device-and-limits
 priority: p0

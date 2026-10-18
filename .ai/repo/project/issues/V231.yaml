@@ -1,5 +1,7 @@
 id: V231
 milestone: M009
+serves:
+  - "v2-laboratory#visual-reference"
 title: "Visual tokens and components"
 slug: visual-tokens-and-components
 priority: p0

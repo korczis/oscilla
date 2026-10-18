@@ -27,7 +27,7 @@ Running Majordomus dirties the tree. `majordomus update` rewrites CLAUDE.md and 
 Every record this tool writes took its `changed_files` straight from `git status
 --porcelain`, so each one claimed all of that as the episode's work.
 
-Measured, on this repository. The record at
+Measured in the Majordomus repository, where this rule was written. The record at
 `.ai/repo/sessions/20260910T103933Z--s-20260909152316-024f--master--38f056b--…` carries 122
 changed files. Among them are the whole of `site/data/generated/`, eleven pages under
 `site/content/sessions/`, twelve files under `docs/generated/` — and the three sibling
@@ -52,8 +52,8 @@ because something else needs it, and the classifier reads all five:
   declared. A work product nobody may read is not a work product;
 - `.ai/repo/policy.yaml`, `projections[].target` — CLAUDE.md, AGENTS.md, `.bb/AGENTS.md`;
 - `.gitattributes`, every path marked `merge=derived` — the repository's own list of what
-  its generator writes, maintained because the merge driver needs it (in this repository,
-  covered by `test/cases/57_derived_merge_driver.sh`);
+  its generator writes, maintained because the merge driver needs it (in the Majordomus
+  repository, covered by its `test/cases/57_derived_merge_driver.sh`);
 - the record stores themselves, by the resolvers that name them. These are not derived — a
   closed session record is a tracked object the executable indexes — but the tool writes
   them and the worker does not.

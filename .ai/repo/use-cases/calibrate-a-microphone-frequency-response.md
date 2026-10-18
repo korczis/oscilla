@@ -9,7 +9,7 @@ target: advisory
 weight: 130
 difficulty: intermediate
 commands: [knowledge]
-claims: [calibration-profiles, spl-only-with-level-calibration]
+claims: [calibration-profiles, spl-only-with-level-calibration, level-calibration-bound-to-input]
 tags: [oscilla, product-acceptance, v3]
 ---
 
@@ -27,6 +27,7 @@ by:
 
 - `npm test` (tests/unit/v3-calibration.test.mjs: parsing, profile identity, interpolation, coverage, level offset, SPL label only with a valid calibration)
 - `npm run test:measure` (tests/browser/v3-ui.cjs, checks calibration and no-spl, in Chromium, Firefox and WebKit from file:// and /oscilla/)
+- `npm test` (tests/unit/v4-measurement-truth.test.mjs: a level calibration is stored with the input it was taken with and applies only to a measurement from that input)
 
 A use-case/v1 scenario can only invoke `bin/majordomus`, so the scenario below does not
 play or capture audio. It proves the traceability instead: each claim's implementation and
@@ -74,6 +75,18 @@ steps:
     expect:
       exit: 0
       stdout_contains: ['claim:spl-only-with-level-calibration +test:tests/unit/v3-calibration\.test\.mjs']
+  - id: level-calibration-bound-to-input-implemented
+    run: ['knowledge', 'edges', '--type', 'implemented_by']
+    note: 'claim level-calibration-bound-to-input is implemented by src/js/calibration/level.js, a tracked file'
+    expect:
+      exit: 0
+      stdout_contains: ['claim:level-calibration-bound-to-input +implementation:src/js/calibration/level\.js']
+  - id: level-calibration-bound-to-input-tested
+    run: ['knowledge', 'edges', '--type', 'tested_by']
+    note: 'claim level-calibration-bound-to-input is proven by tests/unit/v4-measurement-truth.test.mjs'
+    expect:
+      exit: 0
+      stdout_contains: ['claim:level-calibration-bound-to-input +test:tests/unit/v4-measurement-truth\.test\.mjs']
 then:
   - 'every claim this use case names resolves to a tracked implementation and a tracked test'
 ```

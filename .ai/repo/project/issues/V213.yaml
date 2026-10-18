@@ -1,5 +1,7 @@
 id: V213
 milestone: M008
+serves:
+  - "v2-laboratory#spectrogram"
 title: "Spectrogram"
 slug: spectrogram
 priority: p0

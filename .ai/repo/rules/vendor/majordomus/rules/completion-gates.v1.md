@@ -31,12 +31,13 @@ would say completed.
 Two measurements decide the shape of this rule rather than the shape a first draft would
 take.
 
-**A verdict that never arrived reads exactly like one that passed.** On 2026-09-10 four runs
-on this repository's trunk had every Linux job finished — five of them red — while three
-macOS jobs had been queued for between three and seven hours, so the verdict those failures
-were supposed to reach had not run. The trunk carried the defects overnight with nothing
-showing red anywhere. `majordomus.never-reported-is-not-green` states the principle; this
-rule is where it becomes a status a machine holds, distinct from both `pass` and `unknown`.
+**A verdict that never arrived reads exactly like one that passed.** On 2026-09-10, in the
+Majordomus repository, where this rule was written, four runs on its trunk had every Linux job
+finished — five of them red — while three macOS jobs had been queued for between three and
+seven hours, so the verdict those failures were supposed to reach had not run. The trunk
+carried the defects overnight with nothing showing red anywhere.
+`majordomus.never-reported-is-not-green` states the principle; this rule is where it becomes a
+status a machine holds, distinct from both `pass` and `unknown`.
 
 **A gate's own output can be flattered.** A coverage gate that counts its test code in its
 own denominator reports a higher percentage every time tests are added, whether or not

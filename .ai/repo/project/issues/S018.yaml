@@ -1,5 +1,7 @@
 id: S018
 milestone: M001
+serves:
+  - "v1-instrument#engine-plays-and-releases"
 title: "§18 Stop semantics"
 slug: stop-semantics
 priority: p1

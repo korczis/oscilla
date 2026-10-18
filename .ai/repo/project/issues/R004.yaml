@@ -1,5 +1,7 @@
 id: R004
 milestone: M011
+serves:
+  - "release-provenance#one-version-authority"
 title: "Release analysis and bump tooling"
 slug: release-analysis-and-bump-tooling
 priority: p0

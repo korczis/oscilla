@@ -1,5 +1,7 @@
 id: V216
 milestone: M008
+serves:
+  - "v2-laboratory#sequencer"
 title: "Pattern sequencer"
 slug: pattern-sequencer
 priority: p0

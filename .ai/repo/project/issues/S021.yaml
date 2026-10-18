@@ -1,5 +1,7 @@
 id: S021
 milestone: M001
+serves:
+  - "v1-instrument#engine-plays-and-releases"
 title: "§21 Gain / output"
 slug: gain-output
 priority: p1

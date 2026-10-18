@@ -1,5 +1,7 @@
 id: V385
 milestone: M020
+serves:
+  - "v3-measure#product-graph"
 title: "Majordomus V3 product graph"
 slug: majordomus-v3-product-graph
 priority: p1

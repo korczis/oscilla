@@ -1,5 +1,8 @@
 id: V205
 milestone: M007
+serves:
+  - "v2-laboratory#v1-frozen"
+  - "v2-laboratory#engine-plays-and-releases"
 title: "Extract V1 core and engine into modules"
 slug: extract-v1-core-and-engine-into-modules
 priority: p0

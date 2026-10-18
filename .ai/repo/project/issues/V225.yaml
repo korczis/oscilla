@@ -1,5 +1,7 @@
 id: V225
 milestone: M008
+serves:
+  - "v2-laboratory#layout-and-accessibility"
 title: "Accessibility and responsive"
 slug: accessibility-and-responsive
 priority: p0

@@ -1,5 +1,7 @@
 id: R005
 milestone: M011
+serves:
+  - "release-provenance#fatal-deploy-verification"
 title: "Fatal deployment verification"
 slug: fatal-deployment-verification
 priority: p0

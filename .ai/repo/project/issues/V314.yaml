@@ -1,5 +1,7 @@
 id: V314
 milestone: M013
+serves:
+  - "v3-measure#spl-only-with-calibration"
 title: "Absolute level calibration and SPL labels"
 slug: absolute-level-calibration-and-spl-labels
 priority: p1

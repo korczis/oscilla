@@ -1,0 +1,139 @@
+id: v2-laboratory
+title: "OSCILLA V2 is a modular, single-file laboratory that measures, composes, filters, synthesizes, compares and exports"
+statement: "Modular src/ builds deterministically into one static dist/index.html with V1 behaviour frozen and preserved; where V1 generated and visualized, every V2 definition-of-done feature (measure, compose, filter, synthesize, compare, export) works with real data and no stuck nodes; the desktop at 1536x1024 matches the supplied visual reference after at least three refinement passes while tablet and mobile adapt; dist/index.html is deployed to GitHub Pages, opened and smoke-tested at the public URL with its revision identified; and each known v2.0.0 limitation is fixed and proven, or documented as accepted with evidence."
+invariants:
+  - "The runtime is exactly one self-contained dist/index.html built deterministically from src/; it loads no local file, needs no server, and the committed artifact is the deployed one apart from its stamped build-metadata region (project.single-file-deliverable)"
+  - "The V2 engine is the V1 engine on the native Web Audio API, extended through option hooks and engine-accounted graph builders (ADR 0015)"
+  - "p5.js ships unmodified as a separately identifiable script block with its licence notice (ADR 0013)"
+  - "Levels are relative to digital full scale; dB SPL appears only under a valid absolute-level calibration (ADR 0017)"
+  - "Each persisted format has its own integer schema version, independent of the product version, upgraded by explicit stepwise migrations (ADR 0023)"
+milestones:
+  - M007
+  - M008
+  - M009
+  - M010
+  - M034
+satisfaction:
+  - id: single-file-build
+    criterion: "The build packs the modular source into one dist/index.html deterministically"
+    evidence: claim
+    ref: "single-file-build"
+  - id: dist-self-contained
+    criterion: "The committed dist/index.html loads nothing at runtime"
+    evidence: claim
+    ref: "dist-self-contained"
+  - id: v1-frozen
+    criterion: "Every V1 signal pattern plans exactly the automation the frozen V1 file planned"
+    evidence: claim
+    ref: "patterns-match-v1"
+  - id: engine-plays-and-releases
+    criterion: "Holding play sounds the tone at the set relative gain, and releasing it leaves no audio node running"
+    evidence: claim
+    ref: "tone-plays-and-releases"
+  - id: continuous-sweep
+    criterion: "A sweep rises through the requested range, and stopping it leaves no audio node running"
+    evidence: claim
+    ref: "sweep-rises-through-range"
+  - id: spectrum
+    criterion: "The spectrum reads a bin-centred full-scale sine at 0 dB relative to full scale and interpolates the peak between bins"
+    evidence: claim
+    ref: "spectrum-peak-accuracy"
+  - id: spectrogram
+    criterion: "The spectrogram maps relative level to colour through a monotone lookup table"
+    evidence: claim
+    ref: "spectrogram-mapping"
+  - id: microphone-analysis
+    criterion: "The microphone feeds an analyser and never the output, and stopping it ends every track"
+    evidence: claim
+    ref: "microphone-analysis-only"
+  - id: generator-mic-compare
+    criterion: "The generator-versus-microphone comparison reports the difference in hertz and cents and classifies it"
+    evidence: claim
+    ref: "generator-mic-compare"
+  - id: sequencer
+    criterion: "The sequencer compiles a block timeline into sorted automation whose gain never reaches zero and whose frequencies stay in the safe range"
+    evidence: claim
+    ref: "sequencer-safe-automation"
+  - id: filter
+    criterion: "An enabled 500 Hz low-pass attenuates a 5 kHz tone below a fifth of its level, and bypassing it restores the level"
+    evidence: claim
+    ref: "lowpass-attenuates"
+  - id: adsr
+    criterion: "The ADSR envelope schedules attack, decay, sustain and release with Web Audio semantics"
+    evidence: claim
+    ref: "adsr-envelope-semantics"
+  - id: additive
+    criterion: "Additive synthesis plays exactly the harmonic coefficients the bars draw"
+    evidence: claim
+    ref: "additive-coefficients-play"
+  - id: phase-and-lissajous
+    criterion: "The phase view and the Lissajous figure are computed from the two frequencies and phases"
+    evidence: claim
+    ref: "phase-and-lissajous-model"
+  - id: stereo-correlation
+    criterion: "The stereo correlation meter reads +1 in phase, -1 inverted and about 0 in quadrature"
+    evidence: claim
+    ref: "stereo-correlation-meter"
+  - id: bioacoustics
+    criterion: "Every hearing range and call band shown comes from a cited publication with its criterion and a disclaimer"
+    evidence: claim
+    ref: "bioacoustics-cited"
+  - id: link-state
+    criterion: "A copied link restores the configuration through the validated path"
+    evidence: claim
+    ref: "link-restores-configuration"
+  - id: presets
+    criterion: "A saved preset loads back to the same configuration"
+    evidence: claim
+    ref: "presets-save-and-load"
+  - id: config-file
+    criterion: "An exported configuration file round-trips through the validated path"
+    evidence: claim
+    ref: "config-file-round-trip"
+  - id: wav-export
+    criterion: "WAV export writes a valid RIFF/WAVE file that parses back to the same samples"
+    evidence: claim
+    ref: "wav-export-valid"
+  - id: opens-from-file-and-pages
+    criterion: "The built page boots and plays in Chromium, Firefox and WebKit from file:// and from the /oscilla/ sub-path"
+    evidence: claim
+    ref: "opens-from-file-and-subpath"
+  - id: about-workspace
+    criterion: "About is the last primary navigation item and opens a full-width view without overflow from 320 to 1536 px"
+    evidence: claim
+    ref: "about-is-last-workspace"
+  - id: about-provenance
+    criterion: "The development times the About view states are the commit times of the commits it names"
+    evidence: claim
+    ref: "about-provenance-matches-git"
+  - id: visual-reference
+    criterion: "The desktop at 1536x1024 compares to the visual reference within its thresholds"
+    evidence: command
+    ref: "npm run visual"
+  - id: layout-and-accessibility
+    criterion: "The layout, navigation, accessibility and QA regression browser suites pass from 320 px to desktop"
+    evidence: command
+    ref: "npm run test:browser"
+  - id: public-and-identified
+    criterion: "The public Pages URL serves the release, boots and plays, and identifies its version and commit"
+    evidence: command
+    ref: "npm run test:live"
+governance:
+  - "rule:project.single-file-deliverable"
+  - "rule:project.audio-engine-discipline"
+  - "rule:project.no-fake-science"
+  - "adr:adr-0010"
+  - "adr:adr-0011"
+  - "adr:adr-0012"
+  - "adr:adr-0013"
+  - "adr:adr-0014"
+  - "adr:adr-0015"
+  - "adr:adr-0016"
+  - "adr:adr-0017"
+  - "adr:adr-0023"
+non_goals:
+  - "The measurement workbench (calibration, transfer function, impulse response, RTA, experiments): V3 MEASURE, its own intent"
+  - "Absolute sound pressure levels: V2 levels are relative to digital full scale (ADR 0017)"
+  - "Release engineering and provenance (one version authority, fatal deployment verification): its own intent over M011"
+created_at: 2026-10-18
+updated_at: 2026-10-18

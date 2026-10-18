@@ -63,5 +63,11 @@ It does not see a factory reached through an alias or a re-export.
 `tests/browser/v31-studio-timeline.cjs` runs on that one store (`window.OSCILLA.studio`): its
 `workspace` check requires one timeline editor in the page, and its `compact` check that a
 clip duplicated in the timeline, and then its undo, are the clip chips of the Playground's
-compact Studio. Planned (issue V430, specification §214): both show the same topology after
-every action.
+compact Studio. `tests/browser/v31-studio-graph.cjs` check compact-sync, in
+`npm run test:studio` (CI's `studio` job, three browsers): a clip moved in the compact widget
+by keyboard is the clip the full Studio and the Inspector show, a Filter added in the full
+Studio appears in the compact signal path, and both read the same store object.
+
+Not machine-checked: "the same topology after every action" (specification §214). The browser
+checks sample the actions above; the rest rests on the single store, which
+`tests/unit/v4-one-studio-store.test.mjs` holds.

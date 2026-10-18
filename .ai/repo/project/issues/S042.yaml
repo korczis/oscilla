@@ -1,5 +1,7 @@
 id: S042
 milestone: M003
+serves:
+  - "v1-instrument#shareable-state"
 title: "§42 Session history"
 slug: session-history
 priority: p1

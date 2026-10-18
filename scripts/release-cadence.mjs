@@ -10,8 +10,10 @@
 //   node scripts/release-cadence.mjs [--json] [--report] [--issue] [--max-age-hours 24]
 //
 //   (default)  print the lag; exit 1 when the release is overdue, 2 when it cannot be measured
-//   --report   print the lag and always exit 0 (npm run verify: a feature branch is not where
-//              a release is cut, so the lag is shown there and judged on main)
+//   --report   print the lag and always exit 0: a feature branch is not where a release is
+//              cut, so the lag is shown there and judged on main. No npm script runs it, and
+//              the lag is not a step of verify (rule project.deploy-often);
+//              tests/unit/release-cadence.test.mjs prints it as a diagnostic through main()
 //   --issue    also keep exactly one open GitHub issue titled ISSUE_TITLE in step with the
 //              verdict through gh: opened or updated while overdue, closed once it is not
 //              (.github/workflows/cadence.yml, hourly and on every push to main)

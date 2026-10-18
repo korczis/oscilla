@@ -1,0 +1,56 @@
+# Review verdict for pull request #179, the merge train train/2026-10-17 (#178 #167 #155 #154
+# #180 #181 #182 #183 #184 #185 #186, ADRs 0054-0056 4f241e5, the pin-procedure step 1039f36 +
+# 0dc8374, dist 0e09556, tests/README.md rows 62cccb3, the plan M035 1a165b1).
+# Reviewed head 1a165b109f24d30219410513adfe7e17be0c861e, merge base origin/main 964e25d (#176,
+# main's tip: main has not moved); 26 guarded paths. This review is of the integration and of
+# every guarded change no earlier review covered; #154, #155 and #167 had their own rounds.
+#
+# What was checked:
+# - Every guarded path against the head of the PR that introduced it. All 26 are byte-identical
+#   to a reviewed or here-reviewed head: .github/workflows/ci.yml to #178 (2399544);
+#   scripts/release-cadence.mjs to #183 (15a377f); tests/unit/ci-knowledge-job.test.mjs to #185
+#   (0600182); the 15 audio/experiments/studio files #182 changes to #182 (69740cc, based on
+#   train 4f241e5, which already held #154 and #155: offline.js and adapters/nodes.js are #154's
+#   plus #182's on top); actions, automation, clip-targets, timeline, validate to #154
+#   (516922e); runtime and schema to #155 (8191740). transport.js, the one guarded file #154
+#   and #155 both change, is the clean three-way merge (git merge-file, base 89f67d2, exit 0) of
+#   the two heads, nothing else. #167, #180, #181, #184 and #186 change no guarded path.
+#   scripts/review-verdict.mjs is identical on main and the head.
+# - MJ_SHA256 6bf87c46...97166f8 equals the x86_64-unknown-linux-gnu sha256 in
+#   https://majordomus.dev/releases/v0.29.0.json and the GitHub release asset digest of
+#   majordomus-v0.29.0-x86_64-unknown-linux-gnu.tar.gz (both read 2026-10-18); ci.yml differs
+#   from main only in MJ_VERSION, MJ_SHA256, the job name and the comment.
+# - Hand-resolved conflicts (remerge-diff of all eleven train merges): only 0a6319f and 66a0614
+#   (dist, taken and rebuilt; completion-ledger keeps #154's R7 and #155's R9 closures, both
+#   texts word for word) and 57bf0f5 (knowledge-integrity header: both sides' clauses kept).
+#   No conflict marker in the tree or in dist. Direct commits carry nothing of a guarded path.
+# - #182 (one source for constants): SAFE_NYQUIST_FACTOR is 0.95 in core/constants.js and every
+#   replaced use is still (sampleRate / 2) * factor; SAFE_NYQUIST_FRACTION is a re-export;
+#   rta.js NYQUIST_FRACTION stays a separate, documented method parameter. Every export of 19
+#   touched modules was evaluated at 4f241e5 and at 69740cc and compared: identical (copy
+#   '95 %', '0.95', 'about 42.1 kHz', 8 and 31 steps, GAIN_FLOOR, START_OFFSET_S, 44100, quality
+#   thresholds 10 and 6), except LEARN_TOPICS (V-5) and the two dropped redundant exports,
+#   which nothing imports.
+# - #183's release-cadence header (comment only, claims true: no npm script runs it, the test
+#   prints it through main()); #185's pinned-doctor lines in ci-knowledge-job.test.mjs agree with
+#   .github/doctor-verdict.jq, and bounded-test-timing v2's history ratchet has its mutation test
+#   and the unit job's fetch-depth 0; #186's serveDist (OS port, retry on early exit, bounded
+#   readiness, length check); #154/#155 together: a presentation-only edit skips the transport
+#   re-plan, and the clip-target reasons read only node names, which sameNodeNames excludes.
+# - CI run 39078375041 at 62cccb3 and 39079244584 at 1a165b1: every job green except
+#   review-verdict and gate (this file). npm ci && npm run verify on the head: 2869/2869 unit
+#   tests, version:check, build:check (dist up to date), verify-dist, pin check 0.29.0,
+#   majordomus doctor 0 failures.
+schema: review-verdict/v1
+pr: 179
+verdict: merge
+reviewer: "independent review subagent (Claude Opus 5.5) with its own context, spawned by orchestrating session e4a1ac78, whose other agent (oscilla-35) assembled this train; this agent did not build, merge or edit any of it and wrote only this file"
+content: 67368bcfba187464c79b7f5ab3ad380d5092937be9c645d45b20891b1c4f9221
+findings:
+  - { id: V-1, severity: P2, status: open, title: "reviewer independence is at agent level: this reviewer and the train's builder are agents of one orchestrating session (e4a1ac78), while the rule says a reviewer who did not build the change and the README a session other than the builder's; the owner decides whether that satisfies it (as V-1 of #174)" }
+  - { id: V-2, severity: P2, status: open, title: "#180-#186 were opened against the train and merged into it with no review recorded on any of them, and #178 has none either; ADR 0055 describes a train of ready PRs. Their guarded content (#178 ci.yml, #182, #183, #185) had its first independent review here and was found correct; the owner decides whether unreviewed PRs may ride a train" }
+  - { id: V-3, severity: P3, status: open, title: "#167's last round (the fixes at aeb3d39 for the review of the merge) has no recorded independent verification on the PR; it changes no guarded path. setTestContext was read here (both directions drop the result, evidence, reference reading and RTA snapshot, and notify), its unit tests pass; its browser legs rest on CI" }
+  - { id: V-4, severity: P3, status: open, title: "browser suites were not run by this reviewer (shared, loaded machine); that #154, #155, #167, #182 and #186 work together in the page rests on the CI runs 39078375041 and 39079244584" }
+  - { id: V-5, severity: P3, status: open, title: "#182 is not copy-identical in one place, deliberately: the Learn 'samplerate' body gains '; the Filter Lab models its response at 48 kHz and labels it.', a V2 deviation from the V1 freeze held by an exact DEVIATIONS entry in freeze.test.mjs (69740cc); every other exported value is unchanged" }
+  - { id: V-6, severity: P3, status: open, title: "records that say more than holds: the PR body names src/js/measurement as guarded (it is not in GUARDED); ADR 0055 lists train 2 as #178 #167 #155 #154 only; 62cccb3's subject says build(dist): rebuild but it changes only tests/README.md (dist was already current); #178's body gives the doctor failure counts, not both versions' output that ADR 0056 asks for" }
+  - { id: V-7, severity: P3, status: open, title: "the machine-wide launcher already ran 0.29.0 before the 0.29.0 pin landed (#178 body), the reverse of the pin procedure's step 4 'only then'; an owner action, recorded here for the owner, with no effect on the content reviewed" }

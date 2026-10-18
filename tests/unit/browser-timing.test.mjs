@@ -3,10 +3,12 @@
 //
 // Three halves: the static scan (tests/browser/lib/timing-scan.cjs) finds each kind of wait or
 // window the rule forbids and honours only a reasoned `timing-allow` marker; tests/browser as
-// it stands holds no finding beyond the debt recorded in tests/browser/timing-baseline.json;
+// it stands holds no finding beyond the debt recorded in tests/browser/timing-baseline.json,
+// and that record holds no count above its value in an earlier commit (it only shrinks);
 // and the shared waits (tests/browser/lib/wait.cjs) end on a named wall-clock deadline.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
 import { createRequire } from 'node:module';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -406,6 +408,73 @@ test('every timing-allow marker of tests/browser gives its reason, printed for r
     t.diagnostic(`timing-allow ${m.file}:${m.line}: ${m.reason}`);
   }
   assert.equal(scanner.RULE, 'project.bounded-test-timing');
+});
+
+// The record only shrinks: no count of tests/browser/timing-baseline.json is above its value in
+// any commit that changed the file (a file and kind absent there counts 0, so nothing is added
+// after the record was made). The scan's --write-baseline never raises a count; this holds a
+// hand edit to the same.
+const BASELINE_REL = 'tests/browser/timing-baseline.json';
+
+/** Each [file, kind, now, earlier, sha] whose count `debt` raises over a version in `history`. */
+export function raisedDebt(debt, history) {
+  const raised = [];
+  for (const { sha, debt: then } of history) {
+    for (const [file, byKind] of Object.entries(debt)) {
+      for (const [kind, n] of Object.entries(byKind)) {
+        const was = (then[file] && then[file][kind]) || 0;
+        if (n > was) raised.push([file, kind, n, was, sha]);
+      }
+    }
+  }
+  return raised;
+}
+
+/** The recorded debt of every commit that changed the baseline, newest first; null without
+ *  history (a tree with no commit, as the fail-first job's extracts are). */
+function baselineHistory() {
+  const git = (...args) => spawnSync('git', args, { cwd: ROOT, encoding: 'utf8' });
+  if (git('rev-parse', '--verify', '-q', 'HEAD').status !== 0) return null;
+  const log = git('log', '--format=%H', '--', BASELINE_REL);
+  if (log.status !== 0) return null;
+  return log.stdout.split('\n').filter(Boolean).map((sha) => ({ sha: sha.slice(0, 12),
+    debt: JSON.parse(git('show', `${sha}:${BASELINE_REL}`).stdout).debt }));
+}
+
+test('the recorded debt only shrinks: no count is above its value in an earlier commit', (t) => {
+  const history = baselineHistory();
+  if (!history || !history.length) {
+    if (history && process.env.GITHUB_ACTIONS === 'true') {
+      assert.fail(`no commit holds ${BASELINE_REL}: the CI unit job checks out with `
+        + 'fetch-depth: 0');
+    }
+    t.skip('no git history of the baseline here');
+    return;
+  }
+  const raised = raisedDebt(scanner.readBaseline().debt, history);
+  assert.deepEqual(raised, [], `${scanner.RULE}: the recorded debt rose; it may only fall:\n  `
+    + raised.map(([f, k, n, was, sha]) => `${f} [${k}] ${n}, was ${was} at ${sha}`)
+      .join('\n  '));
+});
+
+test('mutation: a raised count, a new kind or a new file in the debt record is refused', () => {
+  const history = [
+    { sha: 'lowered', debt: { 'a.cjs': { 'timer-sleep': 3 } } },
+    { sha: 'original', debt: { 'a.cjs': { 'timer-sleep': 5 }, 'b.cjs': { 'counted-poll': 1 } } },
+  ];
+  assert.deepEqual(raisedDebt({ 'a.cjs': { 'timer-sleep': 3 } }, history), []);
+  assert.deepEqual(raisedDebt({ 'a.cjs': { 'timer-sleep': 2 } }, history), [], 'paid down');
+  assert.deepEqual(raisedDebt({ 'a.cjs': { 'timer-sleep': 4 } }, history),
+    [['a.cjs', 'timer-sleep', 4, 3, 'lowered']], 'back above a later, lower record');
+  assert.deepEqual(raisedDebt({ 'b.cjs': { 'counted-poll': 1 } }, history),
+    [['b.cjs', 'counted-poll', 1, 0, 'lowered']], 'paid off, then recorded again');
+  assert.deepEqual(raisedDebt({ 'a.cjs': { 'fixed-rate': 1 } }, history),
+    [['a.cjs', 'fixed-rate', 1, 0, 'lowered'], ['a.cjs', 'fixed-rate', 1, 0, 'original']],
+    'a new kind');
+  assert.deepEqual(raisedDebt({ 'c.cjs': { 'timer-sleep': 1 } }, history.slice(1)),
+    [['c.cjs', 'timer-sleep', 1, 0, 'original']], 'a new file');
+  assert.deepEqual(raisedDebt(history[1].debt, history.slice(1)), [],
+    'the commit that made the record is its own baseline');
 });
 
 test('the recorded debt names real files and kinds, and never a fixed waitForTimeout', (t) => {

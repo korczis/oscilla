@@ -1,5 +1,7 @@
 id: V322
 milestone: M014
+serves:
+  - "v3-measure#transfer-function"
 title: "Log-sweep workflow, preflight and noise floor"
 slug: log-sweep-workflow-preflight-and-noise-floor
 priority: p1

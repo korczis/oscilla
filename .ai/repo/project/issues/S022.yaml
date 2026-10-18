@@ -1,5 +1,7 @@
 id: S022
 milestone: M001
+serves:
+  - "v1-instrument#engine-plays-and-releases"
 title: "§22 Low-frequency safety"
 slug: low-frequency-safety
 priority: p1

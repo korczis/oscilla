@@ -1,5 +1,7 @@
 id: V223
 milestone: M008
+serves:
+  - "v2-laboratory#wav-export"
 title: "Audio and graph export"
 slug: audio-and-graph-export
 priority: p0
