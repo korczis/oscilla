@@ -15,6 +15,7 @@
 //   - docs/v4/completion-ledger.md: every completion-matrix row names its claims (or "–"),
 //     and no row or open item that names a guaranteed claim reads MISSING, "in review" or
 //     "fixing" (V272 D7);
+//   - a guaranteed claim whose note admits a skip says that CI fails instead (V272 D9);
 //   - every project rule's `x-majordomus` block names tests that exist and that CI runs, and
 //     claims that exist;
 //   - rule project.rules-name-their-enforcement: every active project rule without such a
@@ -1218,4 +1219,33 @@ test('V272 D7 mutation: a shipped capability read MISSING or in review is refuse
   const unknown = text.replace('`findings-linked-to-evidence`', '`findings-linked`');
   assert.match(ledgerProblems(unknown, CLAIMS).join('\n'),
     /claim findings-linked is not in docs\/CLAIMS\.yaml/);
+});
+
+// ------------------------------------------------------------- skips a claim admits (V272 D9)
+
+// A guaranteed claim's test is run by CI, so a claim whose note says the test skips somewhere
+// (a shallow clone, missing tags or freeze files) must also say that it fails instead under
+// GitHub Actions or CI, as tests/unit/about.test.mjs and freeze-guard do. A note that says the
+// check is skipped in CI states the opposite of what the gate does.
+const SKIPS = /\bskip(?:s|ped|ping)?\b/i;
+const FAILS_IN_CI = /\bfails?\b[^.;]*\b(?:under|in) (?:GitHub Actions|GITHUB_ACTIONS|CI)\b/;
+
+/** One problem per guaranteed claim that admits a skip without saying CI fails instead. */
+export function skipProblems(claims) {
+  return claims.filter((c) => c.status === 'guaranteed' && SKIPS.test(c.note || '')
+    && !FAILS_IN_CI.test(c.note)).map((c) => `${c.id}: says its test skips, not that CI fails`);
+}
+
+test('V272 D9: a claim that admits a skip says CI fails instead', () => {
+  assert.deepEqual(skipProblems(CLAIMS), []);
+});
+
+test('V272 D9 mutation: "skipped where tags are not fetched (CI)" is refused', () => {
+  const claim = (note) => ({ id: 'a', status: 'guaranteed', note });
+  const ci = claim('the tag check is skipped where tags are not fetched (CI)');
+  assert.deepEqual(skipProblems([ci]), ['a: says its test skips, not that CI fails']);
+  assert.deepEqual(skipProblems([claim('it skips locally and fails under GITHUB_ACTIONS')]), []);
+  assert.deepEqual(skipProblems([claim('a shallow clone skips it; it fails under GitHub Actions')]),
+    []);
+  assert.deepEqual(skipProblems([{ ...claim('skipped in CI'), status: 'planned' }]), []);
 });
