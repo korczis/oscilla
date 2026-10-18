@@ -12,7 +12,8 @@
 //       an existing patch is never silently overwritten (§155): ExperimentStoreError 'exists'
 //     loadPatch(id) -> Promise<{ patch, warnings, migratedFrom, summary } | null>
 //     list({ kind }) -> Promise<[summary]>  newest first;   remove(id) -> Promise<boolean>
-//     Saving validates first ('invalid'); loading runs the full untrusted pipeline (migrate.js
+//     Saving validates first ('invalid', validate.js validateStudioCommit: what would not load
+//     again is not saved, V272 A1); loading runs the full untrusted pipeline (migrate.js
 //     importStudio, patches.js importPatch), so a corrupt or tampered record is 'corrupt',
 //     never loaded. Records of the other kind are refused ('invalid' on save, 'corrupt' on load).
 //   Files (§158): exportProjectFile(model) / exportPatchFile(patch) -> { name, type, text }
@@ -34,7 +35,7 @@ import { toIsoTimestamp } from '../experiments/schema.js';
 import {
   STUDIO_FILE_EXTENSION, STUDIO_KIND, semanticState, serializeStudio, studioHash,
 } from './schema.js';
-import { STUDIO_IMPORT_LIMITS, validateStudioModel } from './validate.js';
+import { STUDIO_IMPORT_LIMITS, validateStudioCommit } from './validate.js';
 import { importStudio } from './migrate.js';
 import {
   PATCH_FILE_EXTENSION, PATCH_KIND, importPatch, patchHash, serializePatch,
@@ -67,7 +68,7 @@ export function createStudioLibrary(store) {
     persistent: store.kind === 'indexeddb',
 
     async saveProject(model, { id, now } = {}) {
-      const report = validateStudioModel(model);
+      const report = validateStudioCommit(model);
       if (!report.ok) throw invalid('Studio project', firstMessage(report.errors));
       const existing = await store.getStudio(id).catch(() => null);
       if (existing && existing.kind !== STUDIO_KIND) {
@@ -140,7 +141,7 @@ export function fileSlug(title, fallback = 'studio') {
 
 /** The `.oscilla-studio.json` download of a project: { name, type, text }. */
 export function exportProjectFile(model) {
-  const report = validateStudioModel(model);
+  const report = validateStudioCommit(model);
   if (!report.ok) throw new TypeError(`The project is invalid: ${firstMessage(report.errors)}`);
   return { name: `${fileSlug(model.metadata.title)}${STUDIO_FILE_EXTENSION}`,
     type: STUDIO_FILE_TYPE, text: `${serializeStudio(model, 2)}\n` };

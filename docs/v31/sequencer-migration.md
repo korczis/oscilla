@@ -71,7 +71,7 @@ panel), **MIGRATE** (data converted by `importSequence` / `exportSequence`).
 | `LOOKAHEAD_S` (1 s), `_pump`, `MAX_QUEUED_PASSES` | REFACTOR | `createTimelineScheduler().advance(now)` schedules the window `[scheduledUntil, now + LOOKAHEAD_S)`; `MAX_PASSES_PER_WINDOW` guards short loops |
 | `play`, `stop`, `restart`, `togglePlay` | REFACTOR | Scheduler `advance` / `stop` (STOP plan, `STOP_POLICY`) |
 | Loop: next pass at the previous end | REFACTOR | Loop region passes on whole frames (`passInfo`); boundary truncation keeps a sweep on its curve |
-| "Edits during playback apply from the next pass" | SUPERSEDE | `EDIT_POLICY`: future items rebuilt from the safe horizon, the current item kept until a compatible live edit |
+| "Edits during playback apply from the next pass" | SUPERSEDE | `EDIT_POLICY`: future items an edit changes rebuilt from the safe horizon (the others kept), the current item kept until a compatible live edit |
 | `onKeydown` (arrows, Alt+Arrow, Delete, Ctrl+D) | REFACTOR | `nudgeClipResult`, `duplicateClipPlacement`, store actions |
 | `dragStart` / `dragOver` / `drop` | SUPERSEDE | `moveClipResult` inside a store gesture (one undo entry) |
 | `playheadTime`, `currentPassTiming`, `activeBlockIndex`, `currentFrequency` | REFACTOR | `positionAt`, the active item, `voice.freqAt` |

@@ -532,8 +532,12 @@ src/  (ES modules, plain CSS, the src/index.html shell)
   contains it. So the build writes one inline JSON region that records the version and a
   digest of the build inputs, with `commit: null`. The Pages workflow
   (`.github/workflows/pages.yml`) rewrites only that region with the deployed commit, the
-  `production` channel, the commit date and the SHA-256 of the committed file
-  ([ADR 0028](.ai/repo/adrs/0028-provenance-without-a-fixed-point.md)).
+  `production` channel, the commit date, the SHA-256 of the committed file
+  ([ADR 0028](.ai/repo/adrs/0028-provenance-without-a-fixed-point.md)) and the release state:
+  whether the commit is its version's tag, and if it comes after the tag, how many commits
+  after. Pages deploys every push to `main`, so between releases the page names itself
+  `vX.Y.Z+N.g<commit>` (N commits after `vX.Y.Z`); only a release page reads `vX.Y.Z`
+  ([ADR 0059](.ai/repo/adrs/0059-a-deployed-page-names-its-release-state-a-later-build-is-version-plus-distance.md)).
 - **Engine and renderers.** The audio engine is the V1 engine on the native Web Audio API,
   extended through option hooks. All timing follows the audio clock
   ([ADR 0015](.ai/repo/adrs/0015-native-web-audio-engine-extended-in-place.md)). p5 draws the
@@ -596,8 +600,10 @@ Two of the gate's jobs check the pull request rather than the product. `fail-fir
 title starts with `feat` or `fix`, a unit test the pull request adds or changes must fail on
 the merge base and pass on the head, or the body carries `fail-first: n/a <reason>`
 (`node scripts/fail-first.mjs --title "<title>"`). `review-verdict`: a change under `src/js/audio`,
-`src/js/analysis`, `src/js/experiments`, `src/js/studio`, `src/js/core/storage*`,
-`scripts/release-*` or `.github/`, or to the programs and tests of these rules, needs a
+`src/js/analysis`, `src/js/experiments`, `src/js/studio`, `src/js/measurement`,
+`src/js/calibration`, `src/js/core/storage*`, `src/js/core/safety*`, the MEASURE, Experiments
+and Findings adapters, `scripts/release-*`, the build, stamp and deploy-verification scripts,
+the release rules' tests or `.github/`, or to the programs and tests of these rules, needs a
 reviewer's verdict in `.ai/repo/reviews/<pr>.yaml` for the guarded content the pull request
 changes (`node scripts/review-verdict.mjs --pr <number>`; `--content` prints the digest to
 record, which a merge of `main` that leaves those files alone does not change). CI judges a
@@ -689,8 +695,9 @@ run it alone.
      which states the whole flow in order).
 - **Cadence.** A commit that needs a release is released within 24 hours of landing on `main`
   (rule `project.deploy-often`). `node scripts/release-cadence.mjs` prints the lag; the
-  `Release cadence` workflow (`.github/workflows/cadence.yml`) runs it every hour, fails while
-  a release is overdue and keeps one "release overdue" issue open until it ships.
+  `Release cadence` workflow (`.github/workflows/cadence.yml`) runs it on every push to `main`
+  and on an hourly schedule that GitHub runs best effort (3 to 6 runs a day were measured), fails
+  while a release is overdue and keeps one "release overdue" issue open until it ships.
 - **Tags** are `vX.Y.Z`. V1, the original hand-written single file, is `v1.0.0` (deployed) and
   `v1.0.1` (a maintenance tag that was never deployed).
 - **About timeline.** A minor or major release adds its line to the About view's evolution
@@ -698,7 +705,8 @@ run it alone.
   `release:prepare`. Rule `project.about-names-current-release` requires it, and
   `tests/unit/about.test.mjs` refuses a bump to a line the page does not name, so `verify` and
   the release gate fail until the station exists.
-- **In the app.** The About workspace shows the version, the commit (linked to GitHub, or
+- **In the app.** The About workspace shows the version (with `+N.g<commit>` for a build after
+  the release), whether the build is that release, the commit (linked to GitHub, or
   "source build" for a local build), the channel and the source digest. Opening the page with
   `?debug=1` adds the full commit SHA, the source date, the artifact hash, the config schema
   version and live engine state: sample rate, Nyquist, AudioContext state, voices, nodes,
@@ -721,9 +729,12 @@ run it alone.
 - **Proof of deployment.** After every Pages deployment, `scripts/verify-deploy.mjs` fetches the
   public page, retrying a bounded number of times. It reverses the stamp and requires the
   result to be byte-identical to the committed `dist/index.html`. It also requires the stamped
-  commit to be the deployed one, the version to match `package.json`, and the digest to match a
-  fresh recomputation. Any mismatch fails the workflow. Run the same check yourself with
-  `npm run release:verify-deploy`.
+  commit to be the deployed one, the version to match `package.json`, the release state to be
+  what git says for that commit, and the digest to match a fresh recomputation. Any mismatch
+  fails the workflow. Run the same check yourself, in a checkout of the commit Pages serves,
+  with `npm run release:verify-deploy -- --commit origin/main`. That proves the page served
+  now; a release is proved by its own Pages run and its release record, since a later push
+  replaces the page.
 
 ## Majordomus
 

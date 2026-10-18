@@ -39,7 +39,11 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
+      # Full history and tags: the stamp and verify-deploy read where this commit stands
+      # relative to the tag of its version (ADR 0059), and a shallow clone cannot tell.
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
       - uses: actions/setup-node@v7
         with:
           node-version: 22
@@ -54,7 +58,9 @@ jobs:
         run: |
           mkdir -p _site
           # Rewrites ONLY the metadata region (commit, channel production, sourceDate,
-          # artifactSha256 of the committed dist); verify-deploy reverses it byte for byte.
+          # artifactSha256 of the committed dist, and the release state: tagged, after-tag
+          # with its distance, or untagged); verify-deploy reverses it byte for byte. A commit
+          # after its version's tag shows <version>+<distance>.g<short>, not the bare version.
           node scripts/stamp-build.mjs dist/index.html _site/index.html --commit "$GITHUB_SHA"
           # Crawler-only share assets: the page never loads them (project.single-file-deliverable).
           cp site/og-image.png site/apple-touch-icon.png _site/
@@ -68,7 +74,8 @@ jobs:
       - name: Verify the live deployment (fatal)
         timeout-minutes: 5
         # 10 attempts, 10 s apart: normalised live == committed dist, commit == GITHUB_SHA,
-        # version == package.json, digest == recomputed, p5 vendor marker, no module script,
+        # version == package.json, release state == git's, digest == recomputed, p5 vendor
+        # marker, no module script,
         # og:image meta, og-image.png and apple-touch-icon.png byte-equal to site/.
         run: >-
           node scripts/verify-deploy.mjs --url "${{ steps.deployment.outputs.page_url }}"
@@ -79,7 +86,9 @@ jobs:
     # needs a PulseAudio null sink to run an AudioContext on the runner, and Chromium's realtime
     # clock stalls behind that sink (ci.yml `suites`), so the sink exists only in the Firefox
     # job. Only that job's browser is installed. The expected version and commit are the ones
-    # release:publish verifies (package.json, the deployed commit).
+    # release:publish verifies (package.json, the deployed commit); the smoke also checks that
+    # the page shows the label its stamp's release state gives (verify-deploy checked that
+    # state against git above).
     # Measured on ubuntu-latest (run 37511872556, the same steps against the public page): the
     # smoke itself 3.1 s chromium, 5.9 s firefox, 10.8 s webkit; whole jobs 33 s, 53 s, 79 s,
     # mostly the browser install (21 s, 30 s + 7 s sink, 57 s). The legs run in parallel, so

@@ -402,8 +402,14 @@ function defineChecks(fx) {
       for (const a of [
         { type: 'NODE_PARAM_SET', nodeId: 'sweep-1', key: 'duration', value: 1 },
         { type: 'NODE_PARAM_SET', nodeId: 'sweep-1', key: 'level', value: 0.25 },
+        // The shortened pass stays the one the engine runs: back to back, the capture from
+        // pre-roll to tail (V272 review A8).
         { type: 'CLIP_RESIZE', clipId: 'clip-1', duration: 0.25 },
-        { type: 'CLIP_RESIZE', clipId: 'clip-3', duration: 1 },
+        { type: 'CLIP_MOVE', clipId: 'clip-2', start: 0.25 },
+        { type: 'CLIP_RESIZE', clipId: 'clip-3', start: 0.75, duration: 1 },
+        { type: 'CLIP_MOVE', clipId: 'clip-4', start: 1.75 },
+        { type: 'CLIP_MOVE', clipId: 'clip-5', start: 2.75 },
+        { type: 'CLIP_RESIZE', clipId: 'clip-6', start: 0.25, duration: 2.5 },
         // Ledger D3: a node the measurement never reads; recorded, outside the measured path.
         { type: 'NODE_ADD', nodeType: 'oscillator', position: { x: 600, y: 420 },
           params: { frequency: 440 } },
@@ -503,7 +509,11 @@ function defineChecks(fx) {
         { type: 'NODE_PARAM_SET', nodeId: 'sweep-1', key: 'duration', value: 1 },
         { type: 'NODE_PARAM_SET', nodeId: 'sweep-1', key: 'level', value: 0.25 },
         { type: 'CLIP_RESIZE', clipId: 'clip-1', duration: 0.25 },
-        { type: 'CLIP_RESIZE', clipId: 'clip-3', duration: 1 },
+        { type: 'CLIP_MOVE', clipId: 'clip-2', start: 0.25 },
+        { type: 'CLIP_RESIZE', clipId: 'clip-3', start: 0.75, duration: 1 },
+        { type: 'CLIP_MOVE', clipId: 'clip-4', start: 1.75 },
+        { type: 'CLIP_MOVE', clipId: 'clip-5', start: 2.75 },
+        { type: 'CLIP_RESIZE', clipId: 'clip-6', start: 0.25, duration: 2.5 },
       ]) {
         const r = s.dispatch(a);
         if (!r.ok) throw new Error(r.reason);

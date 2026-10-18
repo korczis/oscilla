@@ -235,7 +235,16 @@ claims:
     test: tests/unit/about.test.mjs
     status: guaranteed
     responsibility: product
-    note: Checked against git history where it is complete; a shallow clone skips the comparison and still checks the stated duration against the stated times.
+    note: Checked against git history where it is complete; a shallow clone or an export without .git skips the comparison and still checks the stated duration against the stated times, and missing history fails the check under GitHub Actions instead of skipping it, since the CI unit job checks out full history and tags.
+
+  - id: release-state-stamp
+    claim: Every deployed page names its release state: only the release commit shows the bare version, and any later commit shows <version>+<distance>.g<short>, so a page never presents itself as a release it is not
+    source: .ai/repo/adrs/0059-a-deployed-page-names-its-release-state-a-later-build-is-version-plus-distance.md
+    implementation: scripts/release-metadata.mjs
+    test: tests/unit/release-provenance.test.mjs
+    status: guaranteed
+    responsibility: product
+    note: 'Test "V272 D1: the stamp records the release state and a later build does not show the bare version"; scripts/verify-deploy.mjs refuses a stamped state that disagrees with git, and tests/browser/live-smoke.cjs checks the label on every Pages deployment. A release commit deployed before its tag shows the bare version until the tag exists (ADR 0059 states this gap).'
 
   - id: about-names-current-release
     claim: The About view's evolution timeline names every published release line and marks the release line of the running build (package.json MAJOR.MINOR) as current, so a minor or major release cannot ship with a stale About page
@@ -244,7 +253,7 @@ claims:
     test: tests/unit/about.test.mjs
     status: guaranteed
     responsibility: product
-    note: The current-line check reads package.json and runs everywhere, so npm test, npm run verify and npm run release-gate refuse a bump to a line the page does not name; the published-lines check reads the vX.Y.0 tags and is skipped where tags are not fetched (CI).
+    note: The current-line check reads package.json and runs everywhere, so npm test, npm run verify and npm run release-gate refuse a bump to a line the page does not name; the published-lines check reads the vX.Y.0 tags: it is skipped where tags are not fetched outside CI, and fails under GitHub Actions instead, whose unit job checks out full history and tags (tests/README.md).
 
   - id: no-fake-science-in-shipped-copy
     claim: No text the page or its modules can show claims a medical, therapeutic, wellness, cognitive, pseudoscientific or animal-specific effect, inaudibility, the safety of a frequency, ultrasound below 20 kHz or certification, except in a sentence that negates it
@@ -492,6 +501,52 @@ claims:
     responsibility: product
     note: Gap G21 of docs/v3/algorithms.md, resolved in M10. Without Worker the engine falls back to analyzeInline, which yields between steps; tests/unit/v3-analysis-task.test.mjs runs the real bundle in a worker thread.
 
+  - id: raw-capture-retention
+    claim: 'A raw capture lives only for its analysis: once a measurement completes, is INVALID, fails or is aborted the engine references no capture; a saved experiment and its export carry derived results only, and the store and an import refuse a record that carries raw samples; the page says where a run is saved, in About and in the README that the stored impulse response can carry sound the microphone picked up after the sweep'
+    source: .ai/repo/adrs/0049-raw-capture-retention.md
+    implementation: src/js/measurement/engine.js
+    test: tests/unit/raw-retention.test.mjs
+    status: guaranteed
+    responsibility: product
+    note: 'Release is proven with WeakRefs to the capture buffers the io handed out and a forced garbage collection, for the default and for keepRaw, which no product path calls (the captures then live exactly as long as the caller keeps the result). The setup check''s level window and the calibration''s reference capture are reduced to a reading and dropped; the test checks the policy names them. Ledger item "Raw data retention", closed by #158. ADR 0049.'
+
+  # ---- The workspace and the test seam (v4.0 closure: ledger W2, W4, W5, W7) ----
+  - id: workspace-navigation-history
+    claim: 'The address names the workspace: one dispatcher turns a hash into a workspace (the Studio keys, then m, then a recipe link, then the Playground), every workspace switch is one history entry, Back and Forward move between workspaces without applying a link''s keys again, a refused link is replaced in the address so that Back never reopens it, and a reload reopens the workspace the address names'
+    source: .ai/repo/adrs/0045-workspace-in-history-one-hash-dispatcher-unsaved-guard.md
+    implementation: src/js/ui/navigation.js
+    test: tests/unit/navigation.test.mjs
+    status: guaranteed
+    responsibility: product
+    note: 'tests/browser/navigation.cjs checks history, open-every-workspace, hashchange-mode, precedence, copy-link, refused-link-not-in-history, nav-links and anchor in Chromium, Firefox and WebKit, from file:// and from a /oscilla/ sub-path; a changed instrument setting and unsaved Studio changes survive Back and Forward. Ledger W2 and W4, closed by #130. ADR 0045.'
+
+  - id: unsaved-work-guard
+    claim: 'While anything would be lost on leaving the page (unsaved Studio changes, a completed measurement that is not saved, a level calibration held in page memory, a typed name or rename that is not stored, records held only in the memory store), the page holds exactly one beforeunload listener and the browser asks before a reload; with nothing to lose it holds none and asks nothing'
+    source: .ai/repo/adrs/0045-workspace-in-history-one-hash-dispatcher-unsaved-guard.md
+    implementation: src/js/ui/unsaved.js
+    test: tests/unit/navigation.test.mjs
+    status: guaranteed
+    responsibility: product
+    note: 'tests/browser/navigation.cjs checks guard-studio, guard-measure, guard-saved-metadata and guard-memory-store in Chromium, Firefox and WebKit, from file:// and from a /oscilla/ sub-path: the browser''s own beforeunload dialog, dismissed, keeps the page and its work; Save disarms the guard. The dialog''s words are the browser''s. Ledger W2, closed by #130. ADR 0045.'
+
+  - id: space-one-owner
+    claim: 'Space has one owner in each workspace, the same at every width: Hold to Play in the seven workspaces that play, load or analyse the instrument''s signal (Playground, Analyzer, Filter Lab, Compare, Synthesis, Sequencer, Presets), the Studio transport in Studio, and nothing in Measure, Experiments, Learn and About; one shortcut dialog, opened by Help, the overflow menu and Studio''s keyboard button, lists the Space meaning and the keys of the workspace in view and the global keys, each key once'
+    source: .ai/repo/adrs/0050-space-is-the-play-key-of-the-workspace-in-view-one-shortcut-.md
+    implementation: src/js/ui/shortcuts.js
+    test: tests/unit/v4-shortcuts.test.mjs
+    status: guaranteed
+    responsibility: product
+    note: 'tests/browser/navigation.cjs checks space-one-meaning, space-after-preset-load, space-compact-studio-panel and one-shortcut-dialog in Chromium, Firefox and WebKit, from file:// and from a /oscilla/ sub-path; a focused control keeps Space. The V1 key handlers are unchanged (golden vectors, ADR 0014). Ledger W5, closed by #159. ADR 0050.'
+
+  - id: test-seam-contract
+    claim: 'window.OSCILLA ships in the one tested page with a pinned key list, and each member observes, drives only an action a user has through the user''s validation (setValues refuses unknown keys, out-of-range values, a toggle value that is not true or false and a call while a measurement runs, whole), or injects only as TEST CONTEXT (showResult refuses a result without testContext, setInputNow refuses outside TEST CONTEXT loopback); an input or a level calibration named in TEST CONTEXT is not one outside it'
+    source: .ai/repo/adrs/0052-window-oscilla-ships-in-the-page-hooks-observe-drive-as-a-us.md
+    implementation: src/js/main.js
+    test: tests/unit/v4-seam-contract.test.mjs
+    status: guaranteed
+    responsibility: product
+    note: 'Check seam-surface-pinned in tests/browser/app.cjs pins the key lists of window.OSCILLA and OSCILLA.measure on the built page and asserts the refusals, in Chromium, Firefox and WebKit, from file:// and from a /oscilla/ sub-path; check calibrated-only-for-a-checked-input in the same suite finds no CALIBRATED indicator or view for an input named in the other context, and no level calibration applied across contexts. The seam is not a security boundary: the public origin is shared with every Pages site of the account (ledger W7d, open). Ledger W7, closed in code by #161 and #169. ADR 0052.'
+
   # ---- OSCILLA Studio (V3.1) ----
   - id: studio-model-plain-data
     claim: 'A StudioModel is plain serializable data: AudioNode, MediaStream, DOM, canvas, typed array, function and class-instance values are rejected before it is stored or serialized.'
@@ -627,6 +682,15 @@ claims:
     status: guaranteed
     responsibility: product
     note: 'Specification §45 (click ratio for reconnect, filter insertion, waveform replacement, mute and stop) and §213 (20 edits during playback, then stop: 0 engine, runtime and live nodes, no growth over 3 cycles), in Chromium, Firefox and WebKit; tests/unit/v31-studio-compiler.test.mjs covers the diff, a failed transaction leaving the previous runtime intact, and the leak count. ADR 0035.'
+
+  - id: studio-runtime-divergence
+    claim: 'The Studio runtime states what runs as data: every validation, compiler, runtime and transport diagnostic carries a machine code; a compiled plan has a deterministic planHash; the applied record (revision, studioHash, planHash) is set only when a runtime transaction commits, and a refused edit leaves it as it was; one pure verdict says whether the runtime is not applied, in sync, refused or behind the desired model; and the transport does not adopt a model the runtime refused'
+    source: .ai/repo/adrs/0039-studio-runtime-truth-plan-identity-applied-record-divergence.md
+    implementation: src/js/studio/runtime.js
+    test: tests/unit/v31-studio-runtime-truth.test.mjs
+    status: guaranteed
+    responsibility: product
+    note: 'The Inspector''s Runtime section shows that verdict: tests/browser/v31-studio-runtime.cjs checks stopped-not-applied, play-running, edit-in-sync, refused-edit and failed-play in Chromium, Firefox and WebKit from file://, and tests/unit/v31-studio-runtime-view.test.mjs covers its view model. ADR 0039.'
 
   - id: studio-operation-trace
     claim: 'Each Studio dispatch, undo, redo, cancelled gesture, document replace, Play, Stop and sync is traced under one correlation id from the intent through the compiled plan (with its planHash) and the runtime apply to each AudioParam value and route gain the node adapters report they wrote, a key no adapter wrote is traced as stored or owned with no audio time, and a refused or unapplied edit is traced as refused with its diagnostic code or as not applied; the trace is bounded, in memory only and covered by no hash.'

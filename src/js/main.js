@@ -307,7 +307,7 @@ function screenshot(cmp) {
   const bg = getComputedStyle(document.documentElement).getPropertyValue('--osc-surface-1').trim();
   return screenshotCanvases(root, {
     background: bg || '#06111d',
-    title: `OSCILLA v${BUILD.version} · ${cmp.statusFreqText} · ${cmp.statusWaveText}`,
+    title: `OSCILLA v${BUILD.label} · ${cmp.statusFreqText} · ${cmp.statusWaveText}`,
   });
 }
 
@@ -784,6 +784,9 @@ function provenancePart() {
 function provenanceDebug() {
   return {
     version: BUILD.version,
+    label: BUILD.label,
+    release: BUILD.release ? `${BUILD.release}${BUILD.distance ? ` +${BUILD.distance}` : ''}`
+      : '— (source build)',
     channel: BUILD.channel,
     commit: BUILD.commit || 'none (source build)',
     'source date': BUILD.sourceDate || '— (source build)',

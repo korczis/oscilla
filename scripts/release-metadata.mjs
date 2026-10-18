@@ -22,8 +22,13 @@
 // Provenance (the committed dist cannot contain the SHA of the commit that contains it):
 //   build time   deterministic record: version, sourceDigest, channel "source", commit null.
 //   deploy time  stamp-build.mjs rewrites ONLY the metadata region: commit, shortCommit,
-//                channel "production", sourceDate (commit timestamp) and artifactSha256 (sha256
-//                of the unstamped committed dist). normalizeStamped() reverses it byte for byte.
+//                channel "production", sourceDate (commit timestamp), artifactSha256 (sha256
+//                of the unstamped committed dist) and the release state (ADR 0059): release
+//                "tagged" | "after-tag" | "untagged" and distance, the commits from the tag
+//                v<version> to the deployed commit. normalizeStamped() reverses it byte for
+//                byte. releaseLabel() is what the page shows: the bare version for the tag's
+//                commit (or the release commit deployed before its tag), <version>+<distance>
+//                .g<shortCommit> for any later commit.
 //
 // Pure functions take their inputs as arguments (file entries, a git runner, env), so the unit
 // tests drive them with fixtures; the defaults read the repository this file lives in.
@@ -240,19 +245,89 @@ export function releaseMetadata({
   return { version, sourceDigest, ...git, channel };
 }
 
+// ------------------------------------------------------------------------------- release
+// Where a deployed commit stands relative to the tag of its version (ADR 0059). Pages deploys
+// every push to main and the version is package.json's, so without this every commit after a
+// release carried that release's bare version.
+//   tagged     v<version> points at the commit: the release itself (distance 0)
+//   after-tag  v<version> is an ancestor, <distance> commits back: a post-release build
+//   untagged   no v<version> yet: the version is unpublished (the chore(release) commit is
+//              deployed when it merges, before release:publish tags it)
+export const RELEASE_STATES = ['tagged', 'after-tag', 'untagged'];
+
+/**
+ * The release state of `commit` read from git. Throws when git cannot tell: a shallow clone
+ * or one without v* tags would call every build "untagged".
+ * @param {{ version: string, commit: string, run?: (args: string[]) => string }} o
+ * @returns {{ release: string, distance: number|null, tag: string }}
+ */
+export function releaseState({ version, commit, run = gitRunner() }) {
+  if (run(['rev-parse', '--is-shallow-repository']) === 'true') {
+    throw new Error('shallow clone: the release state needs the full history and the tags '
+      + '(actions/checkout fetch-depth: 0, or git fetch --unshallow --tags)');
+  }
+  if (!run(['tag', '--list', 'v*'])) {
+    throw new Error('no v* tag in this clone: cannot tell a release build from a later one '
+      + '(git fetch --tags)');
+  }
+  const tag = `v${version}`;
+  let tagCommit = null;
+  try {
+    tagCommit = run(['rev-parse', '-q', '--verify', `refs/tags/${tag}^{commit}`]) || null;
+  } catch {
+    tagCommit = null;
+  }
+  if (!tagCommit) return { release: 'untagged', distance: null, tag };
+  if (tagCommit === commit) return { release: 'tagged', distance: 0, tag };
+  try {
+    run(['merge-base', '--is-ancestor', tagCommit, commit]);
+  } catch {
+    throw new Error(`${tag} (${tagCommit.slice(0, 7)}) is not an ancestor of `
+      + `${commit.slice(0, 7)}: this commit cannot name its release truthfully`);
+  }
+  const distance = Number(run(['rev-list', '--count', `${tagCommit}..${commit}`]));
+  if (!(Number.isInteger(distance) && distance > 0)) {
+    throw new Error(`git rev-list --count ${tag}..${commit.slice(0, 7)} gave ${distance}`);
+  }
+  return { release: 'after-tag', distance, tag };
+}
+
+/** What the page shows as its version: bare unless the build is after its version's tag. */
+export function releaseLabel(record) {
+  return record && record.release === 'after-tag'
+    ? `${record.version}+${record.distance}.g${record.shortCommit}`
+    : record.version;
+}
+
+/** Problems with a release state (empty = consistent). */
+export function releaseStateProblems({ release, distance }) {
+  if (!RELEASE_STATES.includes(release)) {
+    return [`region release ${JSON.stringify(release)} is not one of ${RELEASE_STATES.join(', ')}`];
+  }
+  const ok = release === 'tagged' ? distance === 0
+    : release === 'after-tag' ? Number.isInteger(distance) && distance > 0 : distance === null;
+  return ok ? [] : [`region distance ${JSON.stringify(distance)} does not fit release ${release}`];
+}
+
 // ------------------------------------------------------------------------------- region
 // dist/index.html carries exactly one metadata region, in <head>:
 //   <script type="application/json" id="oscilla-build">{…}</script>
-// with these keys, in this order. src/js/core/build-info.js parses it at runtime.
+// with these keys, in this order. src/js/core/build-info.js parses it at runtime. The
+// committed (source) record is schema 1; a deploy stamp is schema 2, which adds the release
+// state (PRODUCTION_KEYS), so the committed dist is unchanged by it.
 export const REGION_ID = 'oscilla-build';
 export const REGION_OPEN = `<script type="application/json" id="${REGION_ID}">`;
 export const REGION_CLOSE = '</script>';
 export const REGION_SCHEMA = 1;
+export const PRODUCTION_SCHEMA = 2;
 export const REGION_KEYS = [
   'schema', 'product', 'version', 'channel', 'sourceDigest', 'commit', 'shortCommit',
   'sourceDate', 'artifactSha256',
 ];
+export const PRODUCTION_KEYS = [...REGION_KEYS, 'release', 'distance'];
 export const CHANNELS = ['source', 'production'];
+const keysOf = (record) => (record && record.channel === 'production'
+  ? PRODUCTION_KEYS : REGION_KEYS);
 
 /** The deterministic build-time record: no commit, no date, channel "source". */
 export function sourceRecord({ version, sourceDigest }) {
@@ -267,10 +342,12 @@ export function validateRecord(r) {
   const problems = [];
   if (!r || typeof r !== 'object' || Array.isArray(r)) return ['region is not a JSON object'];
   const keys = Object.keys(r);
-  if (keys.join() !== REGION_KEYS.join()) {
-    problems.push(`region keys ${JSON.stringify(keys)} != ${JSON.stringify(REGION_KEYS)}`);
+  const want = keysOf(r);
+  if (keys.join() !== want.join()) {
+    problems.push(`region keys ${JSON.stringify(keys)} != ${JSON.stringify(want)}`);
   }
-  if (r.schema !== REGION_SCHEMA) problems.push(`region schema ${r.schema} != ${REGION_SCHEMA}`);
+  const schema = r.channel === 'production' ? PRODUCTION_SCHEMA : REGION_SCHEMA;
+  if (r.schema !== schema) problems.push(`region schema ${r.schema} != ${schema}`);
   if (r.product !== PRODUCT) problems.push(`region product ${JSON.stringify(r.product)}`);
   const hex64 = (v) => /^[0-9a-f]{64}$/.test(v || '');
   if (!parseSemver(r.version)) problems.push(`region version ${JSON.stringify(r.version)} invalid`);
@@ -289,13 +366,14 @@ export function validateRecord(r) {
       problems.push('region sourceDate is not ISO-8601 UTC');
     }
     if (!hex64(r.artifactSha256)) problems.push('region artifactSha256 is not sha256 hex');
+    problems.push(...releaseStateProblems(r));
   }
   return problems;
 }
 
 /** Canonical bytes of a region. "<" is escaped so the JSON can never end the element. */
 export function renderRegion(record) {
-  const ordered = Object.fromEntries(REGION_KEYS.map((k) => [k, record[k] ?? null]));
+  const ordered = Object.fromEntries(keysOf(record).map((k) => [k, record[k] ?? null]));
   return `${REGION_OPEN}${JSON.stringify(ordered).replace(/</g, '\\u003c')}${REGION_CLOSE}`;
 }
 
@@ -345,14 +423,18 @@ export function normalizeStamped(html) {
  * Deploy-time stamp. Rewrites ONLY the region. Idempotent: stamping a stamped file with the
  * same inputs returns the same bytes, because the stamp is computed from the normalised file.
  * @param {string} html  unstamped (or already stamped) dist/index.html
- * @param {{ commit: string, sourceDate: string, channel?: string }} o
+ * @param {{ commit: string, sourceDate: string, channel?: string, release: string,
+ *   distance: number|null }} o  release and distance from releaseState()
  */
-export function stampHtml(html, { commit, sourceDate, channel = 'production' }) {
+export function stampHtml(html, {
+  commit, sourceDate, channel = 'production', release, distance,
+}) {
   const unstamped = normalizeStamped(html);
   const base = findRegion(unstamped).record;
   const record = {
-    ...base, channel, commit, shortCommit: isFullSha(commit) ? commit.slice(0, 7) : null,
-    sourceDate, artifactSha256: sha256(unstamped),
+    ...base, schema: PRODUCTION_SCHEMA, channel, commit,
+    shortCommit: isFullSha(commit) ? commit.slice(0, 7) : null,
+    sourceDate, artifactSha256: sha256(unstamped), release, distance,
   };
   const problems = validateRecord(record);
   if (problems.length) throw new Error(`refusing to stamp: ${problems.join('; ')}`);

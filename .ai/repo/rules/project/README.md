@@ -54,7 +54,7 @@ rule files in this directory, and fails when a row is missing, extra or stale.
 | `project.majordomus-layer-current` v1 | blocking | the local Majordomus is the pinned one; no missing policy key | `scripts/majordomus-pin-check.mjs` in `npm run verify`, `.github/doctor-verdict.jq` |
 | `project.bounded-test-timing` v2 | blocking | a browser check waits for its condition against a named wall-clock deadline; no new fixed sleep in the suite or the page, frame count or assumed rate; the recorded debt only shrinks | `tests/unit/browser-timing.test.mjs` |
 | `project.suite-harness` v1 | blocking | every browser suite runs through one harness: no unknown or empty selection, no leg without checks or on another engine, no undeclared skip in CI, no start on a loaded machine | `tests/unit/browser-suite-contract.test.mjs` |
-| `project.release-receipt-binds-gate` v1 | blocking | the gate receipt binds every tracked file except the release records | `tests/unit/release-publish.test.mjs` |
+| `project.release-receipt-binds-gate` v1 | blocking | the gate receipt binds every tracked file except the release records, and how the gate ran (every browser and origin, declared skips only) | `tests/unit/release-publish.test.mjs`, `tests/unit/release-gate-env.test.mjs` |
 | `project.release-flow-complete` v1 | blocking | prepare, pull request, publish, live verification and record, in order; every published tag in a checkout's history has its record in that checkout | `tests/unit/release-analyze.test.mjs`, `release-publish.test.mjs`, `release-record.test.mjs` |
 | `project.deploy-often` v1 | blocking | a releasable commit on main is released within 24 hours | `tests/unit/release-cadence.test.mjs`, `.github/workflows/cadence.yml` (not part of the required `gate`) |
 | `project.ci-bounded` v1 | blocking | every workflow job and network step bounded, pinned, retried; nothing fatal made non-fatal | `tests/unit/ci-workflows.test.mjs` over `scripts/ci-workflow-rules.mjs`, in `npm test`; a pull request that rewrites the workflow is held only by `project.review-verdict` |
@@ -75,4 +75,5 @@ script and the test that hold it, and says what no check holds.
   the first stable release of a new major follows a published release candidate, and a Pages
   run of which no job starts is diagnosed.
 - `project.deploy-often` (`deploy-often.v1.md`): a releasable commit is released within 24
-  hours; an hourly workflow is red and keeps one issue open until it is.
+  hours; a workflow run on every push to main and on a best-effort hourly schedule is red and
+  keeps one issue open until it is.

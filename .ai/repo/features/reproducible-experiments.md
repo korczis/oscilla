@@ -13,7 +13,7 @@ domain: experiments
 rules: [project.no-fake-science]
 docs: [README.md, docs/v3/algorithms.md, docs/v3/architecture.md]
 adrs: [adr-0019, adr-0022, adr-0023, adr-0024, adr-0027]
-claims: [reproducible-experiments, experiment-round-trip, experiment-import-validated, experiment-persistence, algorithm-ids-on-results]
+claims: [reproducible-experiments, experiment-round-trip, experiment-import-validated, experiment-persistence, algorithm-ids-on-results, raw-capture-retention]
 use_cases: [save-and-reload-an-experiment, export-an-experiment]
 related: [measurement-comparison, calibration-profiles]
 tags: [v3, measurement]

@@ -15,7 +15,7 @@ import {
   stuckPagesRuns,
 } from '../../scripts/release-publish.mjs';
 import {
-  GATE_TREE_EXCLUDE, RECEIPT_KEYS, computeGateTree, currentFingerprint, gateTreePaths,
+  GATE_RUN, GATE_TREE_EXCLUDE, RECEIPT_KEYS, computeGateTree, currentFingerprint, gateTreePaths,
   receiptProblems,
 } from '../../scripts/release-prepare.mjs';
 
@@ -25,7 +25,7 @@ const FP = { version: '40.0.0', sourceDigest: 'd'.repeat(64), distSha256: 'e'.re
   gateTree: 'a'.repeat(64) };
 const NOW = Date.parse('2026-10-06T12:00:00Z');
 const ago = (minutes) => new Date(NOW - minutes * 60_000).toISOString();
-const RECEIPT = { ...FP, result: 'passed' };
+const RECEIPT = { ...FP, ...GATE_RUN, result: 'passed' };
 const COMMITS = `${'a'.repeat(40)}\x1ffeat(labs): new lab\x1f\x1e\n`
   + `${'b'.repeat(40)}\x1ffix!: drop v=0 links\x1fBREAKING CHANGE: old links fail\x1e\n`
   + `${'c'.repeat(40)}\x1fchore: tidy\x1f\x1e\n`;
@@ -105,7 +105,7 @@ test('the GitHub Release attaches the committed dist; only a prerelease is marke
   const createLine = async (fp) => {
     const f = fakes();
     const code = await publish({ argv: [], run: f.run, sh: f.sh, log: f.log,
-      receipt: { ...fp, result: 'passed' }, fingerprint: fp });
+      receipt: { ...fp, ...GATE_RUN, result: 'passed' }, fingerprint: fp });
     assert.equal(code, 0);
     assert.deepEqual(f.calls.filter(MUTATING), []);
     return f.out.find((l) => /gh release create/.test(l));
@@ -274,7 +274,7 @@ test('currentFingerprint binds every receipt key, and a test changed after the g
       assert.match(prepared[k], /^[0-9a-f]{64}$/, k);
     }
     assert.equal(prepared.gateTree, computeGateTree(g.root, g.run));
-    const receipt = { ...prepared, result: 'passed' };
+    const receipt = { ...prepared, ...GATE_RUN, result: 'passed' };
     assert.deepEqual(receiptProblems(receipt, currentFingerprint(g.root, g.run)), []);
 
     // #144/#147: a test changes after the gate passed; no build input does
@@ -291,7 +291,7 @@ test('currentFingerprint binds every receipt key, and a test changed after the g
 test('publish computes the fingerprint itself and refuses a tree changed after the gate',
   async () => {
     const g = fingerprintRepo();
-    const receipt = { ...currentFingerprint(g.root, g.run), result: 'passed' };
+    const receipt = { ...currentFingerprint(g.root, g.run), ...GATE_RUN, result: 'passed' };
     // git answers from the fixture checkout; gh, npm and the remote are fakes
     const drive = async (argv) => {
       const f = fakes({ originMain: g.head });

@@ -15,7 +15,7 @@
 //   editor.addNodeAtClient(type, clientX, clientY) -> bool      library drop (§63)
 //   editor.isOverViewport(clientX, clientY), clientToGraph(x, y), centerPoint()
 //   editor.deleteSelection(), copySelection(), cutSelection(), paste(), duplicateSelection(),
-//   editor.selectAll(), nudge(key, large), endNudge()
+//   editor.selectAll(), toggleFocusedNode(), nudge(key, large), endNudge()
 //   editor.startTapConnect(from), cancelTransient() -> bool, hasGesture(), inSelectionMode()
 //   editor.setRunning(bool), focusNode(id) -> bool, focusViewport() -> bool, isShown(),
 //   destroy()        focusNode / focusViewport refuse (false) while the graph subview is hidden
@@ -46,6 +46,7 @@ import {
   connectingText, connectionTargets, edgeView, nodeCard, probeConnection,
 } from './graph-view.js';
 import { coarsePointer, h, s, setAttr, setText, replaceChildren } from './graph-dom.js';
+import { focusSelection, toggleFocusedSelection } from './graph-keys.js';
 
 const VIEW_COMMIT_MS = 250;
 const NODE_HEAD_OFFSET = 18; // logical units above the pointer where an inserted node's top sits
@@ -111,6 +112,8 @@ export function createGraphEditor(host, svc) {
   // next KEYBOARD focus would skip selection and Delete / C act on another node (V431 U1).
   let pointerFocus = false;
   let pointerFocusTimer = null;
+  // The selection that keyboard focus landing on a node replaced, for T (V272 C5).
+  let focusReplaced = null; // { node, before: node ids }
   let running = false;
   let rafId = 0;
   let pendingDrag = null;
@@ -543,6 +546,7 @@ export function createGraphEditor(host, svc) {
   function onPointerDown(e) {
     if (e.target.closest('.osc-sg-controls, .osc-sg-banner')) return;
     pointerFocus = true;
+    focusReplaced = null;
     clearTimeout(pointerFocusTimer);
     pointerFocusTimer = setTimeout(() => { pointerFocus = false; }, 0);
     if (e.pointerType === 'touch') {
@@ -909,10 +913,33 @@ export function createGraphEditor(host, svc) {
       pointerFocus = false;
       return;
     }
-    // Keyboard focus selects the node (actions apply to the selection, §142).
+    // Keyboard focus selects the node (actions apply to the selection, §142); on a member of
+    // a multi-selection it keeps the selection (V272 C5).
     const id = ne.dataset.nodeId;
-    const cur = selection();
-    if (!(cur.nodes.length === 1 && cur.nodes[0] === id)) select({ nodes: [id] });
+    const cur = selection().nodes;
+    const next = focusSelection(cur, id);
+    if (next) {
+      focusReplaced = { node: id, before: [...cur] };
+      select({ nodes: next });
+    }
+  }
+
+  /** T (V272 C5): add the focused node to the selection, or take it out. */
+  function toggleFocusedNode() {
+    const a = document.activeElement;
+    const ne = a && viewport.contains(a) && a.closest ? a.closest('.osc-sg-node') : null;
+    const n = ne ? model().graph.nodes.find((x) => x.id === ne.dataset.nodeId) : null;
+    if (!n) {
+      announce('Focus a node to add it to the selection.');
+      return false;
+    }
+    const replaced = focusReplaced && focusReplaced.node === n.id ? focusReplaced.before : null;
+    const next = toggleFocusedSelection(selection().nodes, n.id, replaced);
+    focusReplaced = null;
+    select({ nodes: next });
+    announce(`${n.metadata.name} ${next.includes(n.id) ? 'added to' : 'taken out of'} the `
+      + `selection: ${next.length} node${next.length === 1 ? '' : 's'} selected`);
+    return true;
   }
 
   function onNodeKey(e) {
@@ -1189,6 +1216,7 @@ export function createGraphEditor(host, svc) {
     paste,
     duplicateSelection,
     selectAll,
+    toggleFocusedNode,
     nudge,
     endNudge,
     startTapConnect,

@@ -4,12 +4,18 @@
 // Sources, in order:
 //   1. the inline metadata region <script type="application/json" id="oscilla-build"> that the
 //      build writes into dist/index.html (channel "source", commit null) and the Pages
-//      deployment stamps (channel "production", commit, sourceDate, artifactSha256);
+//      deployment stamps (channel "production", commit, sourceDate, artifactSha256, and the
+//      release state: release "tagged" | "after-tag" | "untagged" with distance, ADR 0059);
 //   2. the esbuild defines __OSCILLA_VERSION__ / __OSCILLA_SOURCE_DIGEST__ (bundle without a
 //      region, e.g. a test harness page);
 //   3. a dev fallback (node unit tests, unbundled dev previews): version DEV_VERSION, channel
 //      "dev". It never claims a real product version.
-// BUILD is frozen; window.OSCILLA.build exposes it read-only.
+// BUILD is frozen; window.OSCILLA.build exposes it read-only. BUILD.version is package.json's;
+// BUILD.label is what the page shows as its version: the bare version, except for a deployed
+// commit after its version's tag, which is <version>+<distance>.g<shortCommit> (git-describe
+// style), so a later build never presents itself as the release (releaseLabel() in
+// scripts/release-metadata.mjs is the build-side twin; tests/unit/release-provenance.test.mjs
+// holds them equal).
 
 /* global __OSCILLA_VERSION__, __OSCILLA_SOURCE_DIGEST__ */
 
@@ -20,6 +26,17 @@ export const COMMIT_URL_BASE = 'https://github.com/korczis/oscilla/commit/';
 const isObj = (v) => !!v && typeof v === 'object' && !Array.isArray(v);
 const str = (v) => (typeof v === 'string' && v !== '' ? v : null);
 const FULL_SHA = /^[0-9a-f]{40}$/;
+const RELEASE_STATES = ['tagged', 'after-tag', 'untagged'];
+
+/** One line for the About page: whether this build is the release its version names. */
+function releaseText(version, release, distance) {
+  if (release === 'tagged') return `the v${version} release`;
+  if (release === 'after-tag' && distance > 0) {
+    return `${distance} commit${distance === 1 ? '' : 's'} after the v${version} release`;
+  }
+  if (release === 'untagged') return `v${version}, not yet tagged when deployed`;
+  return 'not a deployed release (source build)';
+}
 
 /**
  * Resolve the build record. Pure: the region text and the defines are arguments.
@@ -46,6 +63,9 @@ export function resolveBuild({ regionText = null, defined = {} } = {}) {
     sourceDigest: defDigest,
   };
   const commit = FULL_SHA.test(src.commit || '') ? src.commit : null;
+  const release = RELEASE_STATES.includes(src.release) ? src.release : null;
+  const distance = Number.isInteger(src.distance) ? src.distance : null;
+  const after = release === 'after-tag' && distance > 0 && commit;
   return Object.freeze({
     version: src.version,
     channel: str(src.channel) || 'source',
@@ -55,6 +75,10 @@ export function resolveBuild({ regionText = null, defined = {} } = {}) {
     sourceDate: str(src.sourceDate),
     artifactSha256: str(src.artifactSha256),
     commitUrl: commit ? `${COMMIT_URL_BASE}${commit}` : null,
+    release,
+    distance,
+    label: after ? `${src.version}+${distance}.g${commit.slice(0, 7)}` : src.version,
+    releaseText: releaseText(src.version, release, distance),
     origin: region ? 'region' : (defVersion ? 'define' : 'fallback'),
     // false when the region and the compiled-in defines disagree (a hand-edited region).
     consistent: !region || !defVersion

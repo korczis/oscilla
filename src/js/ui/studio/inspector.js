@@ -164,13 +164,21 @@ function fieldOf(model, node, p, registry, edgeStatus) {
   const lanePlays = clipTarget(node, { kind: 'automation', param: p.key }, registry);
   const control = p.type === 'enum' ? 'select' : p.type === 'boolean' ? 'toggle'
     : p.type === 'id' ? 'readonly' : p.type === 'list' ? 'list' : 'number';
+  const text = formatParamValue(p, value);
   return {
     key: p.key,
     label: p.label,
     type: p.type,
     control,
     value,
-    text: formatParamValue(p, value),
+    text,
+    // A lane owns an automated parameter (the runtime does not write its AudioParam, compiler.md
+    // "Automated parameters belong to their lane"): the node's value is the base used only
+    // without the lane, and the readout, the slider and a note say so (§272 B10).
+    readout: lane ? `Base ${text}` : text,
+    valueText: lane ? `${text}, base, overridden by the lane` : text,
+    laneNote: lane ? `Automated: the lane sets ${p.label}. ${text} is the base value, used only `
+      + 'without the lane; a change here is not heard while the lane exists.' : null,
     input: p.type === 'list' ? (value || []).join(', ')
       : finite(value) ? String(Number(value.toPrecision(6))) : '',
     unit: p.unit || '',
@@ -185,6 +193,9 @@ function fieldOf(model, node, p, registry, edgeStatus) {
     modulatable: !!p.modulatable,
     automated: !!lane,
     laneId: lane ? lane.id : null,
+    // A plain action named for what it does (§272 C3), not a toggle: pressing it never removes
+    // the lane.
+    automateText: lane ? `Show ${p.label} lane` : `Automate ${p.label}`,
     modulatedBy: mods,
     param: p,
   };
@@ -632,16 +643,21 @@ export function inspectorView(model, selection, opts = {}) {
 
 /** Mount the Inspector into `host`. */
 /**
- * The texts of a node view that the mounted Inspector's update() does not refresh in place: when
- * this key changes for the same selection, the panel is rebuilt (focus kept by data-key). Pure.
+ * The parts of a node or edge view that the mounted Inspector's update() does not refresh in
+ * place: when this key changes for the same selection, the panel is rebuilt (focus kept by
+ * data-key). Pure.
  */
 export function inspectorRebuildKey(view) {
+  // An edge's units and Mapping labels follow its mapping (octaves or the parameter's unit).
+  if (view.kind === 'edge') return view.control ? `${view.props.mapping}|${view.unit}` : '';
   if (view.kind !== 'node') return '';
   return [!!view.statusText, view.mic ? `${view.mic.action}|${view.mic.error}|${view.mic.busy}`
     : '',
     ...view.connections.map((c) => c.text), ...view.fields.map((f) =>
-      // Whether Automate is offered can change with another parameter (a filter type, R7).
-      `${f.modulatedBy.join('|')}|${f.automatable}|${f.automateReason || ''}`)].join('\n');
+      // Whether Automate is offered can change with another parameter (a filter type, R7);
+      // whether a lane exists changes the Automate action and the lane note (§272 C3, B10).
+      `${f.modulatedBy.join('|')}|${f.automatable}|${f.automateReason || ''}|${f.automated}`)]
+    .join('\n');
 }
 
 export function mountInspector(host, svc) {
@@ -672,18 +688,43 @@ export function mountInspector(host, svc) {
     if (ref.input) setAttr(ref.input, 'aria-invalid', text ? 'true' : null);
   }
 
+  // A refused entry stays on its field while it has focus (aria-invalid, the message the field
+  // is described by), so it can be corrected; Escape, or leaving the field, shows the model's
+  // value again (§272 C2), and the message stays beside it until the next accepted edit.
+  function keepModelValue(ref) {
+    const restore = () => {
+      ref.input.value = String(ref.field.input);
+      setAttr(ref.input, 'aria-invalid', null);
+    };
+    ref.input.addEventListener('blur', () => {
+      if (ref.input.getAttribute('aria-invalid') === 'true') restore();
+    });
+    ref.input.addEventListener('keydown', (e) => {
+      if (e.key !== 'Escape') return;
+      restore();
+      showError(ref, '');
+    });
+  }
+
+  /** The aria-describedby of a field: its unit, its lane note and its error, those it has. */
+  const describedBy = (...ids) => ids.filter(Boolean).join(' ');
+
   // ---------------------------------------------------------------- field builders
   function numberField(view, f) {
     const id = `osc-si-${view.id}-${f.key}`;
+    // The unit beside the field and the lane note are part of its description (§272 C8, B10).
+    const unitId = f.unit ? `${id}-unit` : null;
+    const laneId = f.laneNote ? `${id}-lane` : null;
     const input = h('input', { class: 'osc-number osc-si-input osc-num', id, type: 'text',
       inputmode: 'decimal', autocomplete: 'off', spellcheck: 'false', 'data-key': f.key,
       'data-osc': 'studio.inspector.param', value: f.input,
-      'aria-describedby': `${id}-err` });
+      'aria-describedby': describedBy(unitId, laneId, `${id}-err`) });
     const slider = h('input', { class: 'osc-slider osc-si-slider', type: 'range',
       min: 0, max: SLIDER_STEPS, step: 1, value: f.slider, 'data-key': f.key,
-      'aria-label': `${f.label} slider`, 'aria-valuetext': f.text });
+      'aria-label': `${f.label} slider`, 'aria-valuetext': f.valueText,
+      'aria-describedby': laneId });
     slider.style.setProperty('--osc-fill', sliderFill(slider));
-    const readout = h('span', { class: 'osc-si-readout osc-num', text: f.text });
+    const readout = h('span', { class: 'osc-si-readout osc-num', text: f.readout });
     const error = h('p', { class: 'osc-si-error', id: `${id}-err`, hidden: true });
     const ref = { input, slider, readout, error, field: f };
     input.addEventListener('change', () => {
@@ -697,12 +738,7 @@ export function mountInspector(host, svc) {
         value: r.value });
       showError(ref, res.ok ? '' : res.reason);
     });
-    input.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape') {
-        input.value = ref.field.input;
-        showError(ref, '');
-      }
-    });
+    keepModelValue(ref);
     slider.addEventListener('input', () => {
       if (!gestureOpen) {
         svc.store.beginGesture();
@@ -723,15 +759,20 @@ export function mountInspector(host, svc) {
         readout,
       ]),
       h('div', { class: 'osc-si-row osc-si-row--edit' }, [input,
-        f.unit ? h('span', { class: 'osc-si-unit', text: f.unit }) : null]),
+        f.unit ? h('span', { class: 'osc-si-unit', id: unitId, text: f.unit }) : null]),
       slider,
       error,
-      fieldNotes(view, f),
+      fieldNotes(view, f, ref, laneId),
     ]);
   }
 
-  function fieldNotes(view, f) {
+  function fieldNotes(view, f, fieldRef, laneId) {
     const notes = [];
+    if (f.laneNote) {
+      fieldRef.laneNote = h('p', { class: 'osc-si-note', id: laneId,
+        'data-osc': 'studio.inspector.laneNote', text: f.laneNote });
+      notes.push(fieldRef.laneNote);
+    }
     if (f.modulatedBy.length) {
       notes.push(h('p', { class: 'osc-si-note', text: `Modulated: ${f.modulatedBy.join('; ')}` }));
     }
@@ -741,9 +782,7 @@ export function mountInspector(host, svc) {
     }
     if (f.automatable) {
       notes.push(h('button', { type: 'button', class: 'osc-btn osc-btn-secondary osc-si-auto',
-        'data-osc': 'studio.inspector.automate', 'data-key': f.key,
-        'aria-pressed': f.automated ? 'true' : 'false',
-        text: f.automated ? 'Automated · show lane' : 'Automate',
+        'data-osc': 'studio.inspector.automate', 'data-key': f.key, text: f.automateText,
         onClick: () => automate(view, ref(f.key)) }));
     }
     return notes.length ? h('div', { class: 'osc-si-notes' }, notes) : null;
@@ -829,34 +868,49 @@ export function mountInspector(host, svc) {
       h('span', { class: 'osc-label osc-si-label', text: f.label }), refs.get(f.key).readout]);
   }
 
-  function textInput(id, label, value, onChange, dataOsc) {
+  // `apply(value)` dispatches the edit and returns the store's result; a refusal is shown on
+  // the field (keepModelValue), as numberField does.
+  function textInput(id, label, value, apply, dataOsc) {
     const input = h('input', { class: 'osc-number osc-si-input', id, type: 'text',
       autocomplete: 'off', spellcheck: 'false', value, 'data-osc': dataOsc,
-      'data-key': dataOsc });
-    input.addEventListener('change', () => onChange(input.value, input));
-    refs.set(dataOsc, { input, field: { input: value } });
+      'data-key': dataOsc, 'aria-describedby': `${id}-err` });
+    const error = h('p', { class: 'osc-si-error', id: `${id}-err`, hidden: true });
+    const ref = { input, error, field: { input: value } };
+    input.addEventListener('change', () => {
+      const r = apply(input.value);
+      showError(ref, r && !r.ok ? r.reason : '');
+    });
+    keepModelValue(ref);
+    refs.set(dataOsc, ref);
     return h('div', { class: 'osc-si-field' }, [
-      h('label', { class: 'osc-label osc-si-label', for: id, text: label }), input]);
+      h('label', { class: 'osc-label osc-si-label', for: id, text: label }), input, error]);
   }
 
-  function numberInput(id, label, value, unit, onChange, dataOsc) {
+  function numberInput(id, label, value, unit, apply, dataOsc) {
+    const unitId = unit ? `${id}-unit` : null;
     const input = h('input', { class: 'osc-number osc-si-input osc-num', id, type: 'text',
       inputmode: 'decimal', autocomplete: 'off', value: String(value), 'data-osc': dataOsc,
-      'data-key': dataOsc });
+      'data-key': dataOsc, 'aria-describedby': describedBy(unitId, `${id}-err`) });
+    const error = h('p', { class: 'osc-si-error', id: `${id}-err`, hidden: true });
+    const unitEl = unit ? h('span', { class: 'osc-si-unit', id: unitId, text: unit }) : null;
+    const ref = { input, error, unit: unitEl, field: { input: String(value) } };
     input.addEventListener('change', () => {
       const v = Number(String(input.value).trim().replace(',', '.'));
       if (!finite(v)) {
-        svc.announce(`${label} must be a number.`, { assertive: true });
-        input.value = String(refs.get(dataOsc).field.input);
+        const why = `${label} must be a number.`;
+        showError(ref, why);
+        svc.announce(why, { assertive: true });
         return;
       }
-      onChange(v, input);
+      const r = apply(v);
+      showError(ref, r && !r.ok ? r.reason : '');
     });
-    refs.set(dataOsc, { input, field: { input: String(value) } });
+    keepModelValue(ref);
+    refs.set(dataOsc, ref);
     return h('div', { class: 'osc-si-field osc-si-field--half' }, [
       h('label', { class: 'osc-label osc-si-label', for: id, text: label }),
-      h('div', { class: 'osc-si-row osc-si-row--edit' }, [input,
-        unit ? h('span', { class: 'osc-si-unit', text: unit }) : null]),
+      h('div', { class: 'osc-si-row osc-si-row--edit' }, [input, unitEl]),
+      error,
     ]);
   }
 
@@ -900,10 +954,9 @@ export function mountInspector(host, svc) {
           'data-osc': 'studio.inspector.micError', text: view.mic.error }) : null,
       ]));
     }
-    parts.push(textInput(`osc-si-${view.id}-name`, 'Name', view.name, (v, input) => {
-      const r = dispatch({ type: 'NODE_RENAME', nodeId: view.id, name: v });
-      if (!r.ok) input.value = view.name;
-    }, 'studio.inspector.name'));
+    parts.push(textInput(`osc-si-${view.id}-name`, 'Name', view.name,
+      (v) => dispatch({ type: 'NODE_RENAME', nodeId: view.id, name: v }),
+      'studio.inspector.name'));
     for (const f of view.fields) {
       if (f.control === 'number') parts.push(numberField(view, f));
       else if (f.control === 'select') parts.push(selectField(view, f));
@@ -914,11 +967,13 @@ export function mountInspector(host, svc) {
     parts.push(h('div', { class: 'osc-si-pos' }, [
       numberInput(`osc-si-${view.id}-x`, 'Position X', view.position.x, '', (v) => {
         const m = svc.store.getModel().graph.nodes.find((n) => n.id === view.id);
-        if (m) dispatch({ type: 'NODE_MOVE', nodeId: view.id, position: { x: v, y: m.position.y } });
+        return m ? dispatch({ type: 'NODE_MOVE', nodeId: view.id,
+          position: { x: v, y: m.position.y } }) : null;
       }, 'studio.inspector.x'),
       numberInput(`osc-si-${view.id}-y`, 'Position Y', view.position.y, '', (v) => {
         const m = svc.store.getModel().graph.nodes.find((n) => n.id === view.id);
-        if (m) dispatch({ type: 'NODE_MOVE', nodeId: view.id, position: { x: m.position.x, y: v } });
+        return m ? dispatch({ type: 'NODE_MOVE', nodeId: view.id,
+          position: { x: m.position.x, y: v } }) : null;
       }, 'studio.inspector.y'),
     ]));
     const conns = h('ul', { class: 'osc-si-conns', 'aria-label': 'Connections',
@@ -1147,10 +1202,9 @@ export function mountInspector(host, svc) {
       + `${view.counts.clips} clips · ${view.counts.lanes} automation lanes`),
     buildRuntime(view.runtime),
     buildTrace(view.trace, 'What each recent operation did, newest first.'),
-    textInput('osc-si-studio-title', 'Title', view.title, (v, input) => {
-      const r = dispatch({ type: 'METADATA_SET', title: v.trim() || view.title });
-      if (!r.ok) input.value = view.title;
-    }, 'studio.inspector.studioTitle'),
+    textInput('osc-si-studio-title', 'Title', view.title,
+      (v) => dispatch({ type: 'METADATA_SET', title: v.trim() || view.title }),
+      'studio.inspector.studioTitle'),
     h('section', { class: 'osc-si-section', 'aria-label': 'Transport',
       'data-osc': 'studio.inspector.transport' }, [
       h('h5', { class: 'osc-si-h5', text: 'Transport' }),
@@ -1306,7 +1360,8 @@ export function mountInspector(host, svc) {
         const r = refs.get(f.key);
         if (!r) continue;
         r.field = f;
-        if (r.readout) setText(r.readout, f.text);
+        if (r.readout) setText(r.readout, f.readout || f.text);
+        if (r.laneNote) setText(r.laneNote, f.laneNote || '');
         if (r.toggle) setAttr(r.input, 'aria-checked', f.value ? 'true' : 'false');
         else if (r.input && r.input !== active) {
           if (r.input.tagName === 'SELECT') r.input.value = f.value;
@@ -1316,9 +1371,10 @@ export function mountInspector(host, svc) {
           r.slider.value = String(f.slider);
           r.slider.style.setProperty('--osc-fill', sliderFill(r.slider));
         }
-        if (r.slider) setAttr(r.slider, 'aria-valuetext', f.text);
+        if (r.slider) setAttr(r.slider, 'aria-valuetext', f.valueText);
       }
       const name = refs.get('studio.inspector.name');
+      if (name) name.field.input = view.name;
       if (name && name.input !== active) name.input.value = view.name;
       const head = host.querySelector('[data-osc="studio.inspector.title"]');
       if (head) setText(head, view.name);
@@ -1387,7 +1443,7 @@ export function mountInspector(host, svc) {
       // The connection list and the "Modulated" notes are text built with the view: rebuild
       // when they change (a connection added or removed, or one that stopped carrying anything
       // after a filter type change, §237). Focus is kept by data-key.
-      if (view.kind === 'node' && inspectorRebuildKey(view) !== builtSig) {
+      if (inspectorRebuildKey(view) !== builtSig) {
         current = null;
         return render();
       }
@@ -1398,6 +1454,7 @@ export function mountInspector(host, svc) {
       const sum = host.querySelector('[data-osc="studio.inspector.summary"]');
       if (sum) setText(sum, view.summary);
       const t = refs.get('studio.inspector.studioTitle');
+      if (t) t.field.input = view.title;
       if (t && t.input !== document.activeElement) t.input.value = view.title;
       const sub = host.querySelector('.osc-si-sub');
       if (sub) setText(sub, `${view.counts.nodes} nodes · ${view.counts.edges} connections · `
@@ -1407,6 +1464,7 @@ export function mountInspector(host, svc) {
     endSliderGesture();
     const hadFocus = host.contains(document.activeElement);
     const focusedKey = hadFocus ? document.activeElement.getAttribute('data-key') : null;
+    const focusedOsc = hadFocus ? document.activeElement.getAttribute('data-osc') : null;
     refs = new Map();
     rt = null;
     tr = null;
@@ -1416,9 +1474,17 @@ export function mountInspector(host, svc) {
       multi: buildMulti, studio: buildStudio };
     replaceChildren(host, h('div', { class: `osc-si osc-si--${view.kind}`,
       'data-kind': view.kind }, builders[view.kind](view)));
-    const el = focusedKey ? host.querySelector(`[data-key="${CSS.escape(focusedKey)}"]`) : null;
+    const el = focusedKey ? keyed(focusedKey, focusedOsc) : null;
     if (el) el.focus();
     else if (hadFocus) focusHeading();
+  }
+
+  // A parameter's field, slider and Automate button share its data-key: the control of the
+  // same kind (data-osc; the slider has none) is the one that gets focus back.
+  function keyed(key, osc) {
+    const k = `[data-key="${CSS.escape(key)}"]`;
+    return host.querySelector(osc ? `${k}[data-osc="${CSS.escape(osc)}"]` : `${k}:not([data-osc])`)
+      || host.querySelector(k);
   }
 
   function focusHeading() {

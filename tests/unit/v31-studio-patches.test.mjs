@@ -18,11 +18,15 @@ import {
   createDirtyTracker, createStudioLibrary, exportPatchFile, exportProjectFile, fileSlug,
   importStudioFile,
 } from '../../src/js/studio/library.js';
-import { createIdGenerator, createStudioStore } from '../../src/js/studio/actions.js';
+import {
+  CLIPBOARD_KIND, copySubgraph, createIdGenerator, createStudioStore,
+} from '../../src/js/studio/actions.js';
 import { templateModel } from '../../src/js/studio/templates/index.js';
 import {
-  STUDIO_FILE_EXTENSION, STUDIO_KIND, collectIds, normalizeStudio, serializeStudio, studioHash,
+  POSITION_LIMIT, STUDIO_FILE_EXTENSION, STUDIO_KIND, collectIds, createStudioModel,
+  normalizeStudio, serializeStudio, studioHash,
 } from '../../src/js/studio/schema.js';
+import { canonicalJson } from '../../src/js/experiments/canonical-json.js';
 import { validateStudioModel } from '../../src/js/studio/validate.js';
 import {
   DB_VERSION, ExperimentStoreError, STUDIO_RECORDS, STUDIO_SUMMARIES, createMemoryStore,
@@ -575,4 +579,166 @@ test('§254 dirty state follows semantic content, never view state or selection'
     lastSave: { id: 'p-1', savedAt: NOW, target: 'local' } });
   store.dispatch({ type: 'METADATA_SET', notes: 'changed' });
   assert.strictEqual(dirty.isDirty(store.getModel()), true, 'notes are saved content');
+});
+
+// ---------------------------------------------------------------- V272: what the store commits
+
+/** Saved and loaded through the library, exported and re-imported as a file: null or why not. */
+async function reopenProblem(model) {
+  const lib = createStudioLibrary(createMemoryStore());
+  try {
+    await lib.saveProject(model, { id: 'p-1', now: NOW });
+    const back = await lib.loadProject('p-1');
+    if (!back) return 'loadProject returned null';
+    const file = importStudioFile(exportProjectFile(model).text);
+    if (!file.ok) return `file: ${file.errors[0].path} ${file.errors[0].message}`;
+  } catch (err) {
+    return err.message;
+  }
+  return null;
+}
+
+const emptyStore = () => createStudioStore(createStudioModel(), {
+  idGenerator: createIdGenerator() });
+const isNormalized = (m) => canonicalJson(normalizeStudio(m)) === canonicalJson(m);
+
+test('V272 A1: the store refuses, with the import\'s reason, a model a save would not reopen',
+  async () => {
+    const cases = [
+      ['65 tracks', /64 tracks/, (s) => {
+        for (let i = 0; i < 64; i++) assert.ok(s.dispatch({ type: 'TRACK_ADD' }).ok, `track ${i}`);
+        return s.dispatch({ type: 'TRACK_ADD' });
+      }],
+      ['notes with a form feed', /control characters/, (s) => s.dispatch({ type: 'METADATA_SET',
+        notes: 'page 1\fpage 2' })],
+      ['513 markers', /512 markers/, (s) => {
+        for (let i = 0; i < 512; i++) {
+          assert.ok(s.dispatch({ type: 'MARKER_ADD', time: i * 0.01 }).ok, `marker ${i}`);
+        }
+        return s.dispatch({ type: 'MARKER_ADD', time: 6 });
+      }],
+      ['513 nodes', /512 nodes/, (s) => {
+        for (let i = 0; i < 512; i++) {
+          assert.ok(s.dispatch({ type: 'NODE_ADD', nodeType: 'gain' }).ok, `node ${i}`);
+        }
+        return s.dispatch({ type: 'NODE_ADD', nodeType: 'gain' });
+      }],
+      ['graph zoom 1e7', /zoom/, (s) => s.dispatch({ type: 'VIEW_SET',
+        view: { graph: { zoom: 1e7 } } })],
+      ['a 300-character event payload field', /256 characters/, (s) => {
+        const env = s.dispatch({ type: 'NODE_ADD', nodeType: 'envelope' }).created.nodes[0];
+        const tr = s.dispatch({ type: 'TRACK_ADD', kind: 'event', target: env }).created.tracks[0];
+        return s.dispatch({ type: 'CLIP_ADD', trackId: tr, kind: 'event', start: 0, duration: 1,
+          payload: { action: 'gate', note: 'x'.repeat(300) } });
+      }],
+    ];
+    for (const [label, reason, build] of cases) {
+      const s = emptyStore();
+      const r = build(s);
+      const before = s.getModel();
+      assert.strictEqual(await reopenProblem(before), null, `${label}: the accepted steps reopen`);
+      assert.strictEqual(r.ok, false, `${label}: refused by dispatch`);
+      assert.match(r.reason, reason, `${label}: the import's reason`);
+      assert.strictEqual(s.getModel(), before, `${label}: the model is unchanged`);
+    }
+  });
+
+test('V272 A1: every action the store accepts keeps loadProject(saveProject(m)) ok', async () => {
+  // A deterministic walk over the action layer, valid and hostile arguments mixed (LCG seed 7).
+  let seed = 7;
+  const rand = (n) => {
+    seed = (seed * 1103515245 + 12345) % 2147483648;
+    return seed % n;
+  };
+  const pick = (xs) => xs[rand(xs.length)];
+  const s = emptyStore();
+  const ids = (k) => {
+    const m = s.getModel();
+    return { nodes: m.graph.nodes, edges: m.graph.edges, tracks: m.timeline.tracks,
+      clips: m.timeline.clips, markers: m.timeline.markers }[k].map((x) => x.id);
+  };
+  const strings = ['ok', ' padded ', 'x'.repeat(300), 'tab\there', 'line\nbreak', 'f\ff', ''];
+  const numbers = [0, 1, 0.5, 120, 1e7, -1, 1e-9, 3601, 2e6];
+  const actions = [
+    () => ({ type: 'NODE_ADD', nodeType: pick(['gain', 'oscillator', 'lfo', 'envelope',
+      'filter', 'master']), position: { x: pick(numbers), y: pick(numbers) } }),
+    () => ({ type: 'NODE_RENAME', nodeId: pick(ids('nodes')), name: pick(strings) }),
+    () => ({ type: 'NODE_MOVE', nodeId: pick(ids('nodes')),
+      position: { x: pick(numbers), y: pick(numbers) } }),
+    () => ({ type: 'EDGE_ADD', from: { node: pick(ids('nodes')), port: pick(['audio', 'control']) },
+      to: { node: pick(ids('nodes')), port: pick(['audio', 'frequency', 'gain', 'gate']) } }),
+    () => ({ type: 'PASTE', clipboard: copySubgraph(s.getModel(), ids('nodes').slice(0, 3)) }),
+    () => ({ type: 'TRACK_ADD', kind: pick(['event', 'measurement']), name: pick(strings) }),
+    () => ({ type: 'CLIP_ADD', trackId: pick(ids('tracks')), start: pick(numbers),
+      duration: pick(numbers), payload: { action: 'gate', note: pick(strings) } }),
+    () => ({ type: 'MARKER_ADD', time: pick(numbers), label: pick(strings) }),
+    () => ({ type: 'MARKER_MOVE', markerId: pick(ids('markers')), label: pick(strings) }),
+    () => ({ type: 'TRANSPORT_SET', tempo: pick(numbers),
+      timeSignature: pick([[3, 4], [4, 4, 1], [7, 8], [3]]) }),
+    () => ({ type: 'METADATA_SET', title: pick(strings), notes: pick(strings) }),
+    () => ({ type: 'LOOP_SET', enabled: true, start: pick(numbers), end: pick(numbers) }),
+    () => ({ type: 'VIEW_SET', view: { graph: { zoom: pick(numbers), panX: pick(numbers) },
+      timeline: { pxPerSecond: pick(numbers) } } }),
+  ];
+  let accepted = 0;
+  for (let i = 0; i < 400; i++) {
+    const action = pick(actions)();
+    const r = s.dispatch(action);
+    if (!r.ok) {
+      assert.ok(typeof r.reason === 'string' && r.reason.length, `${action.type}: a reason`);
+      continue;
+    }
+    accepted++;
+    const m = s.getModel();
+    assert.ok(isNormalized(m), `step ${i} ${action.type}: the committed model is normalized`);
+    assert.strictEqual(await reopenProblem(m), null, `step ${i} ${action.type}: it reopens`);
+  }
+  assert.ok(accepted > 50, `the walk commits enough (${accepted})`);
+});
+
+test('V272 A6: the store commits only normalized models, so a save matches its studioHash',
+  async () => {
+    const s = emptyStore();
+    const r = s.dispatch({ type: 'PASTE', clipboard: { kind: CLIPBOARD_KIND, v: 1,
+      nodes: [{ id: 'a', type: 'lfo', position: { x: 0, y: 0 }, params: {},
+        metadata: { name: 'L' } },
+      { id: 'b', type: 'oscillator', position: { x: 200, y: 0 }, params: {},
+        metadata: { name: 'O' } }],
+      edges: [{ id: 'e', from: { node: 'a', port: 'control' },
+        to: { node: 'b', port: 'frequency' }, props: {} }] } });
+    assert.strictEqual(r.ok, true);
+    const m = s.getModel();
+    assert.ok(isNormalized(m), 'pasted edge props are completed as EDGE_ADD completes them');
+    assert.strictEqual(studioHash(m), studioHash(normalizeStudio(m)));
+    assert.strictEqual(await reopenProblem(m), null);
+    const t = emptyStore();
+    const sig = t.dispatch({ type: 'TRANSPORT_SET', timeSignature: [3, 4, 9] });
+    assert.strictEqual(sig.ok, false, 'a time signature is [beats, unit]');
+    assert.match(sig.reason, /time signature/i);
+    assert.deepStrictEqual(t.getModel().transport.timeSignature, [4, 4]);
+    assert.strictEqual(t.dispatch({ type: 'TRANSPORT_SET', timeSignature: 5 }).ok, false,
+      'a non-list time signature is refused, never thrown');
+    assert.strictEqual(t.dispatch({ type: 'TRANSPORT_SET', timeSignature: [3, 4] }).ok, true);
+    assert.ok(isNormalized(t.getModel()));
+  });
+
+test('V272 A9: a patch name of only spaces is refused on import', () => {
+  const doc = { kind: PATCH_KIND, schemaVersion: 1, studioSchemaVersion: 1, name: '   ',
+    graph: { nodes: [{ id: 'g', type: 'gain', position: { x: 0, y: 0 }, params: {} }],
+      edges: [] } };
+  const r = importPatch(JSON.stringify(doc));
+  assert.strictEqual(r.ok, false);
+  assert.strictEqual(r.errors[0].path, 'name');
+  assert.strictEqual(importPatch({ ...doc, name: '  Voice  ' }).patch.name, 'Voice');
+});
+
+test('V272 C9: an out-of-range position is refused with the position limit in the reason', () => {
+  const s = emptyStore();
+  const id = s.dispatch({ type: 'NODE_ADD', nodeType: 'gain' }).created.nodes[0];
+  const r = s.dispatch({ type: 'NODE_MOVE', nodeId: id, position: { x: 1e9, y: 0 } });
+  assert.strictEqual(r.ok, false);
+  assert.ok(r.reason.includes(String(POSITION_LIMIT)), r.reason);
+  const p = s.dispatch({ type: 'PATCH_INSERT', patch: voice(), at: { x: 1e9, y: 0 } });
+  assert.strictEqual(p.ok, false);
+  assert.ok(p.reason.includes(String(POSITION_LIMIT)), p.reason);
 });

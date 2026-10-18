@@ -9,8 +9,8 @@ import test from 'node:test';
 import assert from 'node:assert';
 
 import {
-  SLIDER_STEPS, formatParamValue, inspectorView, parseParamInput, sliderRange, sliderToValue,
-  valueToSlider,
+  SLIDER_STEPS, formatParamValue, inspectorRebuildKey, inspectorView, parseParamInput,
+  sliderRange, sliderToValue, valueToSlider,
 } from '../../src/js/ui/studio/inspector.js';
 import { libraryView } from '../../src/js/ui/studio/library-panel.js';
 import { chipLabel, clipLabel, compactTime, compactView } from '../../src/js/ui/studio/compact.js';
@@ -162,4 +162,38 @@ test('one store behind a stable handle; opening a document keeps revisions monot
   assert.ok(events.every((e, i) => i === 0 || e[1] > events[i - 1][1]));
   h.undo();
   assert.equal(h.getModel().graph.nodes[0].position.x, 40);
+});
+
+// §272 review B10: the cutoff of the Subtractive Synth is automated. The engine plays the lane
+// (the runtime does not write a lane-owned AudioParam), so the node's own value is a base used
+// only without the lane, and the field must say so instead of reading as what is heard.
+test('V272 B10: an automated parameter is shown as the base value its lane overrides', () => {
+  const view = inspectorView(synth(), { nodes: ['filter-1'] });
+  const cutoff = view.fields.find((f) => f.key === 'frequency');
+  assert.equal(cutoff.automated, true);
+  assert.equal(cutoff.readout, 'Base 500 Hz');
+  assert.equal(cutoff.valueText, '500 Hz, base, overridden by the lane');
+  assert.equal(cutoff.laneNote, 'Automated: the lane sets Cutoff. 500 Hz is the base value, '
+    + 'used only without the lane; a change here is not heard while the lane exists.');
+  const q = view.fields.find((f) => f.key === 'Q');
+  assert.equal(q.automated, false);
+  assert.equal(q.readout, q.text);
+  assert.equal(q.valueText, q.text);
+  assert.equal(q.laneNote, null);
+});
+
+// §272 review C3: the Automate button is a plain action named for what it does, and the
+// Inspector's rebuild key follows whether a parameter has a lane, so the mounted button is
+// rebuilt when a lane is added (Automate) or removed (in the timeline).
+test('V272 C3: Automate is named for its action and the rebuild key follows the lane', () => {
+  const m = synth();
+  const withLane = inspectorView(m, { nodes: ['filter-1'] });
+  const noLanes = { ...m, timeline: { ...m.timeline, automation: [] } };
+  const without = inspectorView(noLanes, { nodes: ['filter-1'] });
+  const cut = (v) => v.fields.find((f) => f.key === 'frequency');
+  assert.equal(cut(withLane).automateText, 'Show Cutoff lane');
+  assert.equal(cut(without).automateText, 'Automate Cutoff');
+  assert.equal(without.key, withLane.key, 'the same node keeps its view key');
+  assert.notEqual(inspectorRebuildKey(without), inspectorRebuildKey(withLane),
+    'a lane added or removed rebuilds the Inspector');
 });
