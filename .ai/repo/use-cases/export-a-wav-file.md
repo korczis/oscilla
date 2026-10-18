@@ -10,6 +10,7 @@ weight: 80
 difficulty: basic
 commands: [knowledge]
 claims: [wav-export-valid]
+applications: [teaching-sound-and-hearing]
 tags: [oscilla, product-acceptance]
 ---
 

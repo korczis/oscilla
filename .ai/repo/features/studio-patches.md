@@ -9,6 +9,7 @@ summary: 'Deterministic, versioned Studio and patch serialization with an untrus
 status: stable
 weight: 440
 featured: false
+domain: studio
 rules: [project.studio-model-is-canonical, project.typed-ports]
 docs: [docs/v31/patches-and-provenance.md, docs/v31/studio-model.md, docs/v31/user-guide.md, docs/specs/oscilla-v3.1-studio.md]
 adrs: [adr-0030, adr-0032]

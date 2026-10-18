@@ -10,6 +10,7 @@ weight: 340
 difficulty: intermediate
 commands: [knowledge]
 claims: [studio-automation-model, studio-transport-audio-clock]
+applications: [sound-design-in-the-studio]
 tags: [oscilla, studio, v31, product-acceptance]
 ---
 

@@ -10,6 +10,7 @@ weight: 350
 difficulty: advanced
 commands: [knowledge]
 claims: [studio-click-free-live-edit, studio-compiled-topology, studio-operation-trace]
+applications: [sound-design-in-the-studio]
 tags: [oscilla, studio, v31, product-acceptance]
 ---
 

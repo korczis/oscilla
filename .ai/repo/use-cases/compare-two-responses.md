@@ -10,6 +10,7 @@ weight: 180
 difficulty: basic
 commands: [knowledge]
 claims: [measurement-comparison, aggregate-primary-response, semantic-run-comparison, experiment-definitions, run-evidence]
+applications: [measuring-a-playback-chain-at-home, reproducible-experiment-record]
 tags: [oscilla, product-acceptance, v3]
 ---
 

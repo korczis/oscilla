@@ -10,6 +10,7 @@ weight: 70
 difficulty: basic
 commands: [knowledge]
 claims: [additive-coefficients-play]
+applications: [teaching-sound-and-hearing]
 tags: [oscilla, product-acceptance]
 ---
 

@@ -10,6 +10,7 @@ weight: 20
 difficulty: basic
 commands: [knowledge]
 claims: [sweep-rises-through-range]
+applications: [hearing-ranges-and-bioacoustics, teaching-sound-and-hearing]
 tags: [oscilla, product-acceptance]
 ---
 

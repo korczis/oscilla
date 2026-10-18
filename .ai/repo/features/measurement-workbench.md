@@ -9,6 +9,7 @@ summary: 'The Measure workspace beside the Playground: a seven-step guided flow 
 status: stable
 weight: 300
 featured: false
+domain: measurement
 rules: [project.no-fake-science, project.audio-engine-discipline, project.single-file-deliverable]
 docs: [README.md, docs/v3/architecture.md, docs/v3/measurement-guide.md]
 adrs: [adr-0018, adr-0026]

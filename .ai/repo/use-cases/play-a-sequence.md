@@ -10,6 +10,7 @@ weight: 50
 difficulty: basic
 commands: [knowledge]
 claims: [sequencer-safe-automation]
+applications: [teaching-sound-and-hearing]
 tags: [oscilla, product-acceptance]
 ---
 

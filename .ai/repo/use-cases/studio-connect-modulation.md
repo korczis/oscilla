@@ -10,6 +10,7 @@ weight: 310
 difficulty: intermediate
 commands: [knowledge]
 claims: [studio-typed-connections, studio-feedback-rejected, studio-compiled-topology]
+applications: [sound-design-in-the-studio]
 tags: [oscilla, studio, v31, product-acceptance]
 ---
 

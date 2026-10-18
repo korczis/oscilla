@@ -10,6 +10,7 @@ weight: 150
 difficulty: intermediate
 commands: [knowledge]
 claims: [impulse-response]
+applications: [measuring-a-playback-chain-at-home]
 tags: [oscilla, product-acceptance, v3]
 ---
 

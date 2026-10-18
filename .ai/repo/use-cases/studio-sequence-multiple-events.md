@@ -10,6 +10,7 @@ weight: 330
 difficulty: basic
 commands: [knowledge]
 claims: [studio-timeline-model, studio-transport-audio-clock]
+applications: [sound-design-in-the-studio]
 tags: [oscilla, studio, v31, product-acceptance]
 ---
 

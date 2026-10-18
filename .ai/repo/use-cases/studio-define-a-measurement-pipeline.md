@@ -10,6 +10,7 @@ weight: 400
 difficulty: advanced
 commands: [knowledge]
 claims: [studio-measurement-topology, studio-experiment-provenance]
+applications: [measuring-a-playback-chain-at-home]
 tags: [oscilla, studio, v31, product-acceptance]
 ---
 

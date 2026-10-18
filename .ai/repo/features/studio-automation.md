@@ -9,6 +9,7 @@ summary: 'Automation lanes of step, linear and exponential points on automatable
 status: stable
 weight: 430
 featured: false
+domain: studio
 rules: [project.audio-engine-discipline, project.studio-model-is-canonical]
 docs: [docs/v31/timeline.md, docs/v31/user-guide.md, docs/specs/oscilla-v3.1-studio.md]
 adrs: [adr-0037, adr-0036]

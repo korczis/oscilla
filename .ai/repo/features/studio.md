@@ -9,6 +9,7 @@ summary: 'The Studio workspace (V3.1): one canonical StudioModel edited through 
 status: stable
 weight: 400
 featured: false
+domain: studio
 rules: [project.studio-model-is-canonical, project.visual-identity-lock, project.single-file-deliverable]
 docs: [docs/v31/user-guide.md, docs/v31/studio-model.md, docs/v31/compiler.md, docs/v31/timeline.md, docs/v31/patches-and-provenance.md, docs/v31/performance.md, docs/specs/oscilla-v3.1-studio.md]
 adrs: [adr-0030, adr-0031, adr-0034]

@@ -9,6 +9,7 @@ summary: 'An oscilloscope-style waveform, an FFT spectrum with peak detection an
 status: stable
 weight: 40
 featured: true
+domain: laboratory
 rules: [project.no-fake-science]
 docs: [README.md]
 adrs: [adr-0016, adr-0017, adr-0018]

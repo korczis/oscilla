@@ -10,6 +10,7 @@ weight: 110
 difficulty: basic
 commands: [knowledge]
 claims: [opens-from-file-and-subpath]
+applications: [running-without-install-or-network]
 tags: [oscilla, product-acceptance]
 ---
 

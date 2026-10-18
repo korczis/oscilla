@@ -9,6 +9,7 @@ summary: 'Hearing-range and call-example bars for humans and other species, each
 status: stable
 weight: 110
 featured: false
+domain: laboratory
 rules: [project.no-fake-science]
 docs: [README.md]
 claims: [bioacoustics-cited]

@@ -9,6 +9,7 @@ summary: 'An opt-in microphone input with its own spectrum and peak, and a gener
 status: stable
 weight: 50
 featured: true
+domain: laboratory
 rules: [project.no-fake-science]
 docs: [README.md]
 adrs: [adr-0017]
