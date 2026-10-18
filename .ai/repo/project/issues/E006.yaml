@@ -24,4 +24,35 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-18
-updated_at: 2026-10-18
+updated_at: 2026-10-18T13:59:26Z
+started_at: 2026-10-18T13:20:38Z
+started_event: sha256:087f77ae00166f7313e5ebd184ca52724c22d3b816d8dc5468845d57c42bde69
+verified_at: 2026-10-18T13:59:17Z
+verified_event: sha256:e4c7818103b1e2a3eacc1a9f4ec3d0a6aca50e3843218136f6be0907e9e97673
+completed_at: 2026-10-18T13:59:26Z
+completed_event: sha256:72e73015cce777102874e2c97622bd1df8487dc8422a336d0c4a72161ac2b07c
+evidence:
+  - covers: verified
+    type: test
+    command: "node --test tests/unit/src-imports-acyclic.test.mjs"
+    result: "4/4 pass at ad87967 (src/js acyclic; two- and three-module fixture cycles found; acyclic and import()-only fixtures clean); on 50f6d6c the src/js test fails: definition.js -> schema.js -> definition.js"
+    commit: ad87967e4de95fc4752523c530b2b48e250b6c65
+    recorded_at: 2026-10-18T13:58:48Z
+  - covers: verified
+    type: test
+    command: "node scripts/fail-first.mjs --title 'fix(experiments): break the schema/definition import cycle (E006)'"
+    result: "proven by 1 of 1 file: tests/unit/src-imports-acyclic.test.mjs fails on merge base 50f6d6c (assertion), passes on head ad87967"
+    commit: ad87967e4de95fc4752523c530b2b48e250b6c65
+    recorded_at: 2026-10-18T13:58:56Z
+  - covers: verified
+    type: test
+    command: "npm test"
+    result: "2969 tests, 2969 pass, 0 fail at ad87967; no expected hash or value changed (tests/ diff vs 50f6d6c: the new test and one tests/README.md row)"
+    commit: ad87967e4de95fc4752523c530b2b48e250b6c65
+    recorded_at: 2026-10-18T13:59:04Z
+  - covers: verified
+    type: test
+    command: "OSC_LOAD_MAX=200 npm run test:measure"
+    result: "v3-measure 116/116, analysis-worker 49/49, v3-ui 37/37 in chromium, firefox, webkit over file and http at ad87967"
+    commit: ad87967e4de95fc4752523c530b2b48e250b6c65
+    recorded_at: 2026-10-18T13:59:10Z
