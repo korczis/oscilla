@@ -1,7 +1,7 @@
 // Studio measurement clips → the MeasurementEngine (spec §106-§110, §180; ADR 0019, ADR 0038;
 // plan V424, V425). The transport (transport.js) plays measurement clips as data: it calls
-// onMeasurement({ type: 'schedule' | 'cancel' | 'release' | 'retime' | 'stop', ... }). This
-// module is that hook. It orchestrates and never duplicates the V3 measurement layer:
+// onMeasurement({ type: 'schedule' | 'cancel' | 'release' | 'retime' | 'edit' | 'stop', ... }).
+// This module is that hook. It orchestrates and never duplicates the V3 measurement layer:
 //
 //   createStudioMeasurementRun({ getModel, sampleRate, now, run, stopStudio, onChange, timers,
 //     profileId, outputLevel })
@@ -40,9 +40,14 @@
 // output and start preflight), never audio timing: a late timer (background throttling) delays
 // only a start already past its anchor. A transport 'stop' or 'cancel' before
 // the hand-off disarms it; after a 'cancel' (an edit moved the clips) the 'schedule' that follows
-// arms it again. Nothing is measured twice in one pass; a refused derivation (no
-// Transfer Analyzer, no logarithmic Sweep reference, ...) is reported with its reason and the
-// pass plays on.
+// arms it again. Any other admitted edit while armed ('edit', with the model the transport now
+// plays) becomes the model the hand-off measures: at the hand-off the recipe is derived again
+// from the last such model, so a changed recipe is the one that runs, a refused one (a Master
+// Output level MEASURE does not play at, ...) fails the run with its reason and leaves the
+// output to the Studio, and an unchanged one runs as armed (V272 review R-2). The hand-off
+// decides, not each edit: a move of several clips passes through layouts the recipe refuses.
+// Nothing is measured twice in one pass; a refused derivation (no Transfer Analyzer, no
+// logarithmic Sweep reference, ...) is reported with its reason and the pass plays on.
 
 import { recipeFromStudio } from './provenance.js';
 
@@ -77,6 +82,7 @@ export function createStudioMeasurementRun({
   let view = { state: 'idle', pass: null, text: '', experimentId: null, recipe: null };
   let timer = null;
   let pendingKeys = new Set();
+  let armed = null; // { recipe, model, startAt } the pending hand-off runs
   let token = 0;
   const handledPasses = new Set();
 
@@ -90,12 +96,26 @@ export function createStudioMeasurementRun({
     if (timer != null) timers.clearTimeout(timer);
     timer = null;
     pendingKeys = new Set();
+    armed = null;
   };
+  const derive = (model) => recipeFromStudio(model, { sampleRate: sampleRate(),
+    profileId: typeof profileId === 'function' ? profileId() : null,
+    outputLevel: typeof outputLevel === 'function' ? outputLevel() : null });
 
-  async function handOff(my, recipe, model, startAt) {
-    if (my !== token || view.state !== 'pending') return;
+  async function handOff(my) {
+    if (my !== token || view.state !== 'pending' || !armed) return;
+    const { model, startAt } = armed;
     timer = null;
-    set({ state: 'running', text: MEASUREMENT_RUN_TEXT.running });
+    // The model the transport plays now (R-2): an edit since the arm may change or refuse it.
+    const d = derive(model);
+    if (!d.ok) {
+      token += 1;
+      disarm();
+      set({ state: 'failed', recipe: null, text: MEASUREMENT_RUN_TEXT.refused(d.reason) });
+      return;
+    }
+    const recipe = d.recipe;
+    set({ state: 'running', recipe, text: MEASUREMENT_RUN_TEXT.running });
     try {
       if (typeof stopStudio === 'function') await stopStudio();
       const r = await run(recipe, model, { startAt });
@@ -124,9 +144,7 @@ export function createStudioMeasurementRun({
     // The model the transport schedules from: an edit re-schedules inside the store's commit
     // gate, before getModel() returns the new model (V272 B2 with A8).
     const model = ev.model || getModel();
-    const r = recipeFromStudio(model, { sampleRate: sampleRate(),
-      profileId: typeof profileId === 'function' ? profileId() : null,
-      outputLevel: typeof outputLevel === 'function' ? outputLevel() : null });
+    const r = derive(model);
     if (!r.ok) {
       set({ state: 'failed', pass: ev.pass, recipe: null,
         text: MEASUREMENT_RUN_TEXT.refused(r.reason) });
@@ -135,13 +153,28 @@ export function createStudioMeasurementRun({
     token += 1;
     const my = token;
     pendingKeys = new Set([ev.key]);
+    const startAt = Number.isFinite(ev.startTime) ? ev.startTime : null;
+    armed = { recipe: r.recipe, model, startAt };
     set({ state: 'pending', pass: ev.pass, recipe: r.recipe, experimentId: null, result: null,
       text: MEASUREMENT_RUN_TEXT.pending });
-    const startAt = Number.isFinite(ev.startTime) ? ev.startTime : null;
     const lead = startAt === null ? 0 : startAt - HANDOFF_LEAD_S - now();
-    const go = () => handOff(my, r.recipe, model, startAt);
+    const go = () => handOff(my);
     if (!(lead > HANDOFF_NOW_S)) queueMicrotask(go);
     else timer = timers.setTimeout(go, Math.round(lead * 1000));
+  }
+
+  /**
+   * An admitted edit while armed: its model is the one the hand-off derives from (R-2). A valid
+   * changed recipe shows at once; a refusal is the hand-off's to report.
+   */
+  function edited(ev) {
+    if (view.state !== 'pending' || !armed || !ev.model) return;
+    armed = { ...armed, model: ev.model };
+    const r = derive(ev.model);
+    if (r.ok && JSON.stringify(r.recipe) !== JSON.stringify(armed.recipe)) {
+      armed.recipe = r.recipe;
+      set({ recipe: r.recipe });
+    }
   }
 
   function hook(ev) {
@@ -161,6 +194,9 @@ export function createStudioMeasurementRun({
             handledPasses.delete(pass);
           }
         }
+        break;
+      case 'edit':
+        edited(ev);
         break;
       case 'stop':
         // The hand-off's own STOP arrives while running and is ignored.

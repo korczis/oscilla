@@ -82,7 +82,9 @@
 //                                workspace's hook (measurement-run.js) runs the pass through
 //                                the MEASURE MeasurementEngine (docs/v31/timeline.md). `model` is
 //                                the model the transport plays: during admit the store has not
-//                                committed it yet, so getModel() would still be the old one
+//                                committed it yet, so getModel() would still be the old one;
+//                                every applied edit while one is scheduled sends
+//                                { type: 'edit', model } after re-planning (V272 R-2)
 // Anything else (an event clip on a source, a trigger event, a node that is not ready) is not
 // played and listed with its reason in debugInfo().unplayed.
 //
@@ -736,6 +738,15 @@ export function createStudioTransport({
     }
   }
 
+  /**
+   * An applied edit while a measurement clip is scheduled: onMeasurement({ type: 'edit', model })
+   * with the model now played, after its clips were re-planned, so a pending hand-off can
+   * re-derive its recipe from it (V272 review R-2).
+   */
+  function edited(next) {
+    if (measures.size) measure({ type: 'edit', model: next });
+  }
+
   const gatesOf = (itemKey) => [...gates.values()].filter((g) => g.itemKey === itemKey);
 
   /**
@@ -1344,6 +1355,7 @@ export function createStudioTransport({
     afterApply(freshOf(r));
     const plan = scheduler.edit(next, ctxNow());
     applyEdit(plan);
+    edited(next);
     return { ok: true, synced: true, revision: rev, applied: r, plan };
   }
 
@@ -1380,6 +1392,7 @@ export function createStudioTransport({
     if (r.presentation) return null;
     afterApply(freshOf(r));
     applyEdit(scheduler.edit(next, ctxNow()));
+    edited(next);
     if (playing && timer == null) arm(1);
     return null;
   }
