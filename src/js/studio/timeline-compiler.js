@@ -60,6 +60,7 @@ import {
 import {
   CONTIGUITY_TOLERANCE_S, MIN_LOOP_S, clipEnd, effectiveTarget, timelineEnd,
 } from './timeline.js';
+import { STUDIO_XFADE_S } from './compiler.js';
 
 // ---------------------------------------------------------------- constants
 
@@ -69,6 +70,11 @@ export const TIMELINE_LOOKAHEAD_S = LOOKAHEAD_S;
 export const SAFE_HORIZON_S = SCHEDULE_LEAD_S;
 /** Frames per Web Audio render quantum (core/constants.js); STOP lands on its boundary. */
 export { RENDER_QUANTUM };
+/**
+ * An edited lane whose value at the horizon is not the held one glides there over the runtime's
+ * crossfade time (a linear ramp from the held value), then plays the new lane's events.
+ */
+export const LANE_GLIDE_S = STUDIO_XFADE_S;
 /** Guard against pathological loops: passes compiled per window at most. */
 export const MAX_PASSES_PER_WINDOW = 4096;
 const MIN_WAKE_MS = 50;
@@ -88,7 +94,8 @@ export const EDIT_POLICY = Object.freeze({
     //                          the edited clip plays from its next trigger (loop pass / play)
   }),
   newUnderPlayhead: 'next-trigger', // a clip now covering the horizon that never started
-  automation: 'hold-and-continue', // exact value held at the horizon, new events after it
+  automation: 'hold-and-continue', // exact value held at the horizon, new events after it;
+  //                                   where the new lane is elsewhere there, a LANE_GLIDE_S glide
   loopChange: 're-anchor', // a new pass grid from the horizon; the position stays continuous
 });
 
@@ -112,6 +119,8 @@ export const ESCAPE_PRIORITY = Object.freeze(['cancel-gesture', 'close-popup',
 // ---------------------------------------------------------------- helpers
 
 const finite = (v) => typeof v === 'number' && Number.isFinite(v);
+/** Two lane values equal up to float rounding (relative 1e-9). */
+const sameValue = (a, b) => Math.abs(a - b) <= 1e-9 * Math.max(1, Math.abs(a), Math.abs(b));
 const rateOf = (sr) => (finite(sr) && sr > 0 ? sr : PROVISIONAL_SAMPLE_RATE);
 
 /** Smallest whole-frame time >= t. */
@@ -656,8 +665,11 @@ export function createTimelineScheduler(initialModel, opts = {}) {
       if (prevLane && lane && sameJson(prevLane, lane) && !plan.reanchored) continue;
       const scheduled = laneEvents.get(laneId) || [];
       const target = (lane || prevLane).target;
+      // A lane with nothing scheduled (new, or back after an undo) starts from the node's value;
+      // the transport replaces that anchor with the value the param has (plan entry `fresh`).
+      const fresh = !scheduled.length;
       let fallback = null;
-      if (!scheduled.length) {
+      if (fresh) {
         const node = nodeOf(model, target.node);
         fallback = node && finite(node.params[target.param]) ? node.params[target.param]
           : lane && pos ? laneValueAt(lane.points, pos.position) : null;
@@ -665,17 +677,34 @@ export function createTimelineScheduler(initialModel, opts = {}) {
       const held = holdEvents(scheduled, horizon, fallback);
       let events = [...held.events];
       if (lane && scheduledUntil > horizon) {
-        // Every new event after the horizon whose segment is due before scheduledUntil — a ramp
-        // that began before the horizon now starts from the held value.
+        // The new lane over the scheduled window: every event due before scheduledUntil, from
+        // the anchor of the pass that holds the horizon, so its value is known from there on.
         const w = compileWindow({ ...model, timeline: { ...model.timeline, clips: [],
           automation: [lane] } }, anchor, horizon, scheduledUntil, { registry,
-          laneFilter: (e) => e.scheduleAt < scheduledUntil && (e.time > horizon
-            || (e.time === horizon && e.method !== 'setValueAtTime')) });
-        events = events.concat(w.automation.length ? w.automation[0].events : []);
+          laneFilter: (e) => e.scheduleAt < scheduledUntil });
+        const evs = w.automation.length ? w.automation[0].events : [];
+        const want = scheduledValueAt(evs, horizon, null);
+        if (want !== null && held.value !== null && (fresh || !sameValue(want, held.value))) {
+          // The new lane is elsewhere at the horizon (a point removed, moved or re-valued, the
+          // lane's last event already behind it): glide to it, then its events after the glide;
+          // a ramp across the glide end continues from the lane's exact value there.
+          const end = frameCeil(horizon + LANE_GLIDE_S, sr);
+          events.push({ method: 'linearRampToValueAtTime', value: scheduledValueAt(evs, end,
+            want), time: end, position: null, pointId: null, glide: true });
+          events = events.concat(evs.filter((e) => e.time > end));
+        } else {
+          // Every new event after the horizon — a ramp that began before the horizon now starts
+          // from the held value, which is the new lane's value there.
+          events = events.concat(evs.filter((e) => e.time > horizon
+            || (e.time === horizon && e.method !== 'setValueAtTime')));
+        }
       }
-      laneEvents.set(laneId, scheduled.filter((e) => e.time < horizon).concat(events));
+      // A removed lane leaves no record: if it comes back (undo) the param has glided to its
+      // base meanwhile, and the old record would pin the value it had at the removal.
+      if (lane) laneEvents.set(laneId, scheduled.filter((e) => e.time < horizon).concat(events));
+      else laneEvents.delete(laneId);
       plan.automation.push({ laneId, target: { ...target }, cancelFrom: horizon,
-        holdValue: held.value, events, removed: !lane });
+        holdValue: held.value, events, removed: !lane, fresh });
     }
     decisions.push(...plan.decisions);
     return plan;
