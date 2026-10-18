@@ -8,9 +8,13 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { AudioEngine } from '../../src/js/audio/audio-engine.js';
+import { getSchedule, valueAtTime } from '../../src/js/audio/envelope.js';
 import { createIdGenerator, createStudioStore } from '../../src/js/studio/actions.js';
+import { createStudioMeasurementRun } from '../../src/js/studio/measurement-run.js';
 import { createStudioRuntime } from '../../src/js/studio/runtime.js';
-import { REFERENCE_TEMPLATE_ID, templateModel } from '../../src/js/studio/templates/index.js';
+import {
+  MEASUREMENT_TEMPLATE_ID, REFERENCE_TEMPLATE_ID, templateModel,
+} from '../../src/js/studio/templates/index.js';
 import { createStudioTransport } from '../../src/js/studio/transport.js';
 import { createFakeAudioEnv } from './sequencer-fake-audio.mjs';
 
@@ -76,4 +80,83 @@ test('V272 B1: PLAY before the previous STOP resolved keeps the new playback ali
   assert.deepEqual(cut.map((o) => [o.startAt, o.stopAt]), [],
     'no source of the new playback is stopped before its clip ends');
   assert.ok(r2.baseTime > 0);
+});
+
+// ---------------------------------------------------------------- B2, B5
+
+/** Let the measurement run's promises settle (its run() is synchronous here). */
+const settle = async () => {
+  for (let i = 0; i < 20; i++) await Promise.resolve();
+};
+
+async function measureWith(edit) {
+  const runs = [];
+  const states = [];
+  let mr = null;
+  const s = setup(templateModel(MEASUREMENT_TEMPLATE_ID), { onMeasurement: (ev) => mr.hook(ev) });
+  mr = createStudioMeasurementRun({
+    getModel: () => s.store.getModel(), sampleRate: () => SR, now: () => s.ctx.currentTime,
+    run: async (recipe, m, o) => {
+      runs.push(o);
+      return { ok: true, experimentId: 'x' };
+    },
+    stopStudio: () => s.transport.stop({ fast: true }), timers: s.fx.env,
+    onChange: (v) => states.push(v.state),
+  });
+  // A 2 s lead-in before the measurement clips (moved last first, so none overlaps).
+  for (const c of [...s.store.getModel().timeline.clips].sort((a, b) => b.start - a.start)) {
+    dispatch(s, { type: 'CLIP_MOVE', clipId: c.id, start: c.start + 2 });
+  }
+  const r = ok(s.transport.start());
+  while (mr.view.state !== 'pending' && s.ctx.currentTime < r.baseTime + 1.9) s.fx.advance(0.005);
+  assert.equal(mr.view.state, 'pending', 'the hand-off is armed before the first clip');
+  if (edit) edit(s);
+  s.fx.advanceTo(r.baseTime + 2.5);
+  await settle();
+  return { runs: runs.length, states: states.join('>'), view: mr.view };
+}
+
+test('V272 B2: an edit while a Studio measurement hand-off is pending keeps the measurement',
+  async () => {
+    const plain = await measureWith(null);
+    assert.equal(plain.runs, 1);
+    const edited = await measureWith((s) => {
+      const master = s.store.getModel().graph.nodes.find((n) => n.type === 'master');
+      dispatch(s, { type: 'NODE_PARAM_SET', nodeId: master.id, key: 'level',
+        value: master.params.level / 2 });
+    });
+    assert.equal(edited.runs, 1, `the measurement runs (states ${edited.states})`);
+    assert.equal(edited.view.state, 'done');
+  });
+
+test('V272 B2: a measurement clip moved while its hand-off is pending re-arms it', async () => {
+  const moved = await measureWith((s) => {
+    const m = s.store.getModel();
+    for (const c of [...m.timeline.clips].sort((a, b) => b.start - a.start)) {
+      dispatch(s, { type: 'CLIP_MOVE', clipId: c.id, start: c.start + 0.1 });
+    }
+  });
+  assert.equal(moved.runs, 1, `the rescheduled measurement runs (states ${moved.states})`);
+});
+
+/** VCA gain of the reference Envelope at position 0.85 s, gates every 0.5 s, `edit` at 0.52 s. */
+function envelopeAfter(edit) {
+  const s = setup();
+  gateClips(s, [0, 0.5, 1.0, 1.5], 0.45);
+  const { baseTime: b } = ok(s.transport.start());
+  s.fx.advanceTo(b + 0.52); // the second gate is in its attack / decay
+  if (edit) edit(s);
+  s.fx.advance(0.5);
+  const vca = s.runtime.nodes.get('env-1').inputs.audio.gain;
+  return { v: valueAtTime(getSchedule(vca), b + 0.85), s };
+}
+
+test('V272 B5: an edit that does not touch the timeline leaves the envelope contour alone', () => {
+  const plain = envelopeAfter(null);
+  assert.ok(Math.abs(plain.v - 0.7) < 1e-6, `sustain without an edit: ${plain.v}`);
+  const edited = envelopeAfter((s) => dispatch(s, { type: 'NODE_PARAM_SET', nodeId: 'filter-1',
+    key: 'Q', value: 1.2 }));
+  assert.ok(Math.abs(edited.v - 0.7) < 1e-6, `the gate reaches its sustain: ${edited.v}`);
+  const decided = edited.s.transport.debugInfo().decisions.map((d) => d.decision);
+  assert.ok(!decided.includes('cancel'), `no item is cancelled: ${decided.join(',')}`);
 });
