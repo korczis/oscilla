@@ -7,8 +7,10 @@
 // at most MAX_AGE_HOURS old, counted from its committer date, which for a squash merge is the
 // time it landed on main.
 //
-//   node scripts/release-cadence.mjs [--json] [--report] [--issue] [--max-age-hours 24]
+//   node scripts/release-cadence.mjs [--json] [--report] [--issue] [--max-age-hours 24] [--help]
 //
+//   --help / -h prints the usage and exits 0; an unknown flag or a flag missing its value
+//   exits 2 (parseFlags of release-analyze.mjs), before git or gh is asked anything
 //   (default)  print the lag; exit 1 when the release is overdue, 2 when it cannot be measured
 //   --report   print the lag and always exit 0: a feature branch is not where a release is
 //              cut, so the lag is shown there and judged on main. No npm script runs it, and
@@ -24,7 +26,7 @@
 import { spawnSync } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { analyzeCommits, lastReleaseTag } from './release-analyze.mjs';
+import { analyzeCommits, lastReleaseTag, parseFlags } from './release-analyze.mjs';
 import { ROOT, gitRunner } from './release-metadata.mjs';
 
 export const MAX_AGE_HOURS = 24;
@@ -140,14 +142,30 @@ function defaultSh(root) {
   };
 }
 
-/** @returns {number} exit code: 0 ok, 1 overdue, 2 cannot measure */
+export const USAGE = 'usage: node scripts/release-cadence.mjs [--json] [--report] [--issue] '
+  + '[--max-age-hours <h>] [--help]';
+const FLAGS = {
+  '--json': 'boolean', '--report': 'boolean', '--issue': 'boolean', '--max-age-hours': 'value',
+};
+
+/** @returns {number} exit code: 0 ok, 1 overdue, 2 cannot measure or usage */
 export function main({
   argv = process.argv.slice(2), root = ROOT, run = gitRunner(root), sh = defaultSh(root),
   now = Date.now(), log = console.log, err = console.error,
 } = {}) {
-  const report = argv.includes('--report');
-  const hi = argv.indexOf('--max-age-hours');
-  const maxAgeHours = hi >= 0 ? Number(argv[hi + 1]) : MAX_AGE_HOURS;
+  let o;
+  try {
+    o = parseFlags(argv, FLAGS, USAGE);
+  } catch (e) {
+    err(`release-cadence: ${e.message}`);
+    return e.exitCode;
+  }
+  if (o.help) {
+    log(USAGE);
+    return 0;
+  }
+  const report = !!o['--report'];
+  const maxAgeHours = '--max-age-hours' in o ? Number(o['--max-age-hours']) : MAX_AGE_HOURS;
   if (!Number.isFinite(maxAgeHours) || maxAgeHours <= 0) {
     err('release-cadence: --max-age-hours needs a positive number');
     return 2;
@@ -161,8 +179,8 @@ export function main({
     return report ? 0 : 2;
   }
   const result = cadence({ lastTag, commits: readDatedCommits(lastTag, run), now, maxAgeHours });
-  log(argv.includes('--json') ? JSON.stringify(result, null, 2) : formatCadence(result));
-  if (argv.includes('--issue')) log(`release overdue issue: ${syncIssue({ result, sh })}`);
+  log(o['--json'] ? JSON.stringify(result, null, 2) : formatCadence(result));
+  if (o['--issue']) log(`release overdue issue: ${syncIssue({ result, sh })}`);
   return result.overdue && !report ? 1 : 0;
 }
 

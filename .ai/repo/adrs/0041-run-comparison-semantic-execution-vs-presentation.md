@@ -3,7 +3,7 @@ schema: adr/v1
 id: adr-0041
 kind: adr
 title: Run comparison is semantic and classifies execution vs presentation changes
-status: proposed
+status: accepted
 date: 2026-10-04
 tags:
   - measurement
@@ -102,3 +102,12 @@ Proposed:
   topology added and removed, an algorithm version change, a calibration change, determinism
   under key order, baseline annotate, persist and export round trip with hashes unchanged, at
   most one baseline, and the compare UI in three browsers.
+
+## Resolution notes
+
+### 2026-10-18: accepted by the owner
+
+Accepted by the owner (explicit instruction in the session of 2026-10-18, applied by the
+coordinating Claude session) — implemented as described; evidence: claim
+`semantic-run-comparison`; `runChanges` in `src/js/experiments/semantic-diff.js` and
+`studioChanges` in `src/js/studio/diff.js`; `tests/unit/v3-semantic-compare.test.mjs`.

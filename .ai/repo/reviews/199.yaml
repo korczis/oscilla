@@ -1,0 +1,79 @@
+# Review verdict for pull request #199, R-4 of the #198 review: the release scripts parse
+# their arguments against an explicit list, answer --help / -h without acting and refuse an
+# unknown flag with exit 2. Branch fix/release-scripts-refuse-unknown-flags.
+# Reviewed head 9bc262a6e0bb86e9188a7d9606bc92b281be0cbf (9d85d96 test, 9bc262a fix). Merge
+# base origin/main 05e81f6: main has not moved. Another builder wrote all of it, not me.
+#
+# The digest: the base branch's scripts/review-verdict.mjs judges this pull request. I ran it
+# from `git archive origin/main scripts` with --repo on this worktree, `--content --list
+# --base-branch origin/main`: c2bfd79c...17d2 over scripts/release-analyze.mjs,
+# release-cadence.mjs, release-prepare.mjs, release-publish.mjs and
+# tests/unit/release-analyze.test.mjs, release-cli-args.test.mjs.
+#
+# No release script was run for real. Every CLI probe ran in a scratch clone at 9bc262a with
+# `env -i PATH=<dir>`, where git, npm, npx and gh were stubs that log the call and exit 99.
+# The clone stayed clean.
+#
+# What was checked:
+# - Every documented invocation is still accepted.
+#   - package.json runs release:analyze, release:prepare and release:publish with no flags.
+#   - .github/workflows: cadence.yml runs `node scripts/release-cadence.mjs --issue`. No
+#     workflow calls prepare, publish or analyze; pages.yml only mentions release:publish in
+#     a comment.
+#   - .ai/repo plan records name `release:publish -- --yes` and release:prepare with no
+#     flags or with --prerelease (README).
+#   - Through the real CLI, each of these got past parsing and reached the git stub first,
+#     with no exit 2: prepare --dry-run, --prerelease --preid beta and
+#     --no-rc-because ADR-0099; publish with no flags, --pages-timeout 5 and 1e3; analyze with
+#     no flags and --json --prerelease --preid rc; cadence --issue, --report and
+#     --json --report --max-age-hours 24.
+# - Argument forms. Through the real CLI of all five scripts (record for comparison):
+#   - refused with exit 2, naming the argument, with no stub call: --preid=rc, a lone `-`, a
+#     lone `--` (also after --dry-run), a positional before or after a flag, --help --bogus
+#     and --bogus --help;
+#   - refused with exit 2 as `needs a value`: --preid -x, a value flag at the end,
+#     --no-rc-because with no value;
+#   - publish refuses --pages-timeout 0 and a repeated --pages-timeout 5 --pages-timeout x,
+#     both exit 2;
+#   - a repeated boolean flag is accepted; a repeated value flag silently takes the last
+#     value (accepted, not a finding).
+#   - Two edges are imprecise but safe (R-1, R-2).
+# - --help and -h. All five scripts printed the usage and exited 0. Neither alone nor after
+#   documented flags (--dry-run --help, --yes --help) made a stub call, and nothing in the
+#   clone changed. In prepare the parse runs before gateEnvProblems and the dirty-tree check;
+#   in publish it runs before currentFingerprint.
+# - process.exit() -> process.exitCode in release-analyze. main() is synchronous and returns
+#   0 on success and 1 on an analysis error, as before; the only new code is 2 for usage. No
+#   workflow or npm script chains release:analyze, so no CI exit status changes. Cadence,
+#   prepare and publish keep process.exit(main()).
+# - Fail-first.
+#   - origin/main's four scripts with the head's tests: release-cli-args.test.mjs fails 3 of
+#     3. release-analyze.test.mjs fails its --no-rc-because test, because the exit code moves
+#     from 1 to 2.
+#   - Reverting one script at a time to base: cadence alone, publish alone and prepare alone
+#     each fail the new test.
+#   - Mutating parseFlags so it ignores unknown flags, accepts a value starting with `-` or
+#     drops -h: each is caught. Keeping the other flags beside help is an equivalent mutant.
+# - Docs.
+#   - The usage lines in the headers of prepare, publish, analyze and cadence match each
+#     USAGE constant and FLAGS map.
+#   - The tests/README.md row matches the test.
+#   - The new CLAUDE.md line overclaims (R-3).
+# - The test drives only exported entry points against a git and a shell that throw. Every
+#   harness leaves its temporary directory behind (R-4).
+# - Ran:
+#   - npm test at 9bc262a: 2961/2961 pass.
+#   - majordomus doctor: 0 failures. The warnings are the doctor budget and stale agent
+#     clones, none in this worktree.
+#   - majordomus worktree: canonical, clean.
+schema: review-verdict/v1
+pr: 199
+verdict: merge
+reviewer: "independent review subagent (Claude Opus 5.5) with its own context, spawned by orchestrating session e4a1ac78, whose other agents may have built this change; this agent did not build, merge or edit any of it and wrote only this file"
+content: c2bfd79ce5f4197c9a4bece1513764c78a38dc51775165ae2e6a16ff8e2917d2
+findings:
+  - { id: R-1, severity: P3, status: open, title: "a value flag given a negative number is refused as needing a value, not as invalid: release:publish --pages-timeout -5 says '--pages-timeout needs a value' (exit 2) where 0 gets 'needs a positive number of minutes'. Safe, since it is refused, but the message misleads" }
+  - { id: R-2, severity: P3, status: open, title: "an empty value is accepted and then dropped: --preid '' parses as '' and `o['--preid'] || 'rc'` silently uses rc. --no-rc-because '' still reaches flowProblems as '', as before. Not reachable by a plausible typo" }
+  - { id: R-3, severity: P3, status: open, title: "the new CLAUDE.md line says 'any release:* script: usage, acts on nothing; unknown flag: 2', but release:stamp (stamp-build.mjs) and release:verify-deploy answer --help with 'unknown option/argument --help' and exit 1, and refuse an unknown flag with 1, not 2 (probed in the scratch clone). Name the five scripts, or extend parseFlags to those two" }
+  - { id: R-4, severity: P3, status: open, title: "tests/unit/release-cli-args.test.mjs creates one mkdtemp fixture per harness() call and never removes it: 618 oscilla-cli-args-* directories in $TMPDIR after a few runs. release-analyze and release-gate-env tests already do the same; an rmSync in a finally would end it" }
+  - { id: R-5, severity: P3, status: open, title: "reviewer independence is at agent level: this reviewer is an agent of orchestrating session e4a1ac78, which likely built the change through other agents, as in #197 and #198. The owner decides whether that satisfies the rule" }

@@ -30,10 +30,13 @@
 // (m ∈ [-1, 1] the modulator signal), muted edges contributing nothing, and the clamp being the
 // parameter range (frequencies: also 0.95 × Nyquist). combineAutomationAndModulation() is that
 // rule as a pure function; the graph runtime realises it with AudioParam summing (base value
-// automated on the param, modulator → depth gain → the same param).
+// automated on the param, modulator → depth gain → the same param). An automated parameter's
+// constant offset is summed in too where the base has exponential segments (the transport's
+// offset source): a geometric ramp between offset end values is not base + offset.
 
 import { automationValueAt } from '../sequencer/compiler.js';
 import { safeMaximum } from '../sequencer/model.js';
+import { CENTS_PER_OCTAVE } from '../core/music.js';
 import { AUTOMATION_CURVES, TIMELINE_MAX_S } from './schema.js';
 import { clipTarget } from './clip-targets.js';
 import { NODE_REGISTRY } from './registry.js';
@@ -87,6 +90,16 @@ export function paramBounds(paramDef, sampleRate) {
   if (paramDef.unit === 'Hz') max = Math.min(max, safeMaximum(sampleRate));
   if (max < min) max = min;
   return { min, max };
+}
+
+/**
+ * The highest detune (cents) that keeps a frequency of `frequencyRef` Hz at or below 0.95 ×
+ * Nyquist of `sampleRate`: f × 2^(cents / 1200) <= safeMaximum (V272 A7). A detune lane is
+ * bounded by it, not only by its ±1200 ct range. Infinity without a positive reference.
+ */
+export function detuneCeiling(frequencyRef, sampleRate) {
+  if (!(finite(frequencyRef) && frequencyRef > 0)) return Infinity;
+  return CENTS_PER_OCTAVE * Math.log2(safeMaximum(sampleRate) / frequencyRef);
 }
 
 /**

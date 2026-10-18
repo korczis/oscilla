@@ -3,7 +3,7 @@ schema: adr/v1
 id: adr-0049
 kind: adr
 title: The raw capture lives only for its analysis; a run stores derived results
-status: proposed
+status: accepted
 date: 2026-10-07
 tags:
   - measurement
@@ -136,3 +136,12 @@ Proposed:
 - Whether to store a shorter impulse response, which would carry less room sound but give up
   the long tail kept "for later ETC / Schroeder / RT60 work" (impulse-response.js), is not
   decided here: it changes a scientific result and its hash, and is the owner's call.
+
+## Resolution notes
+
+### 2026-10-18: accepted by the owner
+
+Accepted by the owner (explicit instruction in the session of 2026-10-18, applied by the
+coordinating Claude session) — implemented as described; evidence:
+`tests/unit/raw-retention.test.mjs` (no capture referenced after `measure()` settles; no raw
+field stored, exported or imported) and `tests/unit/v3-engine.test.mjs`.

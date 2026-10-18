@@ -356,12 +356,14 @@ test('§105 offline plan: a tone graph renders; duration is explicit or the time
     .errors[0].code, 'too-long');
   const seq = planOfflineRender(templateModel('sweep-sequence'));
   assert.strictEqual(seq.ok, true);
-  assert.strictEqual(seq.duration, 4.5, 'the end of the last clip');
+  // The end of the last clip + the graph's start time (21.3 ms at 48 kHz) + the 15 ms fade,
+  // rounded up to a millisecond (V272 B11).
+  assert.strictEqual(seq.duration, 4.537, 'the end of the last clip, its start and the fade');
   assert.ok(seq.clips.every((c) => c.rendered));
   assert.deepStrictEqual(seq.nodes.find((x) => x.id === 'sgram-1'), { id: 'sgram-1',
     name: 'Spectrogram 1', type: 'spectrogram', role: 'skipped', reason: OFFLINE_TEXT.analysis });
   const filt = planOfflineRender(templateModel('filter-automation'));
-  assert.strictEqual(filt.duration, 8, 'the last automation point');
+  assert.strictEqual(filt.duration, 8.037, 'the last automation point, the start and the fade');
   assert.deepStrictEqual(filt.automation, [{ id: 'lane-1',
     target: { node: 'filter-1', param: 'frequency' }, rendered: true, reason: null }]);
 });
@@ -381,7 +383,7 @@ test('§105 offline plan: what the transport plays renders, the rest is listed',
   // cutoff lane render as the live transport plays them; nothing is listed.
   const p = planOfflineRender(templateModel('subtractive-synth'));
   assert.strictEqual(p.ok, true);
-  assert.strictEqual(p.duration, 3);
+  assert.strictEqual(p.duration, 3.037);
   assert.deepStrictEqual(p.limitations, []);
   assert.deepStrictEqual(p.clips.map((c) => [c.id, c.target, c.rendered, c.reason]), [
     ['clip-1', 'osc-1', true, null], ['clip-2', 'osc-1', true, null]]);

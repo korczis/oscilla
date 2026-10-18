@@ -2,7 +2,11 @@
 // npm run release:prepare — turn the current clean tree into a release candidate. Never tags.
 //
 //   node scripts/release-prepare.mjs [--dry-run] [--prerelease [--preid rc]]
+//     [--no-rc-because <ADR>] [--help]
 //
+//   0. parse the arguments against that list (parseFlags of release-analyze.mjs): --help / -h
+//      prints the usage and exits 0; an unknown flag (a typo such as --dryrun) or a flag
+//      missing its value exits 2; both before any git, file or npm action (R-4 of #198)
 //   1. refuse a dirty tree (a release candidate is exactly a commit)
 //   2. analyse conventional commits since the last v* tag (release-analyze.mjs)
 //   2a. refuse to start (rule project.release-flow-complete), also as a dry run, when
@@ -11,8 +15,10 @@
 //      - the proposed version is the first stable release of a new major (its major is above
 //        that of every stable v* tag reachable from HEAD, whatever its minor and patch) and no
 //        vX.0.0-rc.N tag has a record on the prerelease channel (ADR 0047).
-//        `--no-rc-because <ADR>` overrides it only when it names an ADR in .ai/repo/adrs/
-//        whose status is accepted.
+//        `--no-rc-because <ADR>` overrides it only when it names an RC exemption in
+//        .ai/repo/adrs/: status accepted, tagged `rc-exemption` and `major-<N>` for the major
+//        being opened, with `adr:adr-0047` (the decision it exempts) under `related`. Any other
+//        ADR, accepted or not, is refused (convention: .ai/repo/adrs/README.md).
 //   3. bump package.json + package-lock.json ONCE (npm version --no-git-tag-version), or
 //      confirm the untagged version package.json already carries
 //   4. rebuild dist/index.html, then npm run version:check, npm run release-gate and
@@ -24,13 +30,18 @@
 //      tree (rule project.release-receipt-binds-gate) at the time the gate passed. Any later
 //      change to a tracked file other than a release record (.ai/repo/releases/v*.yaml)
 //      invalidates it.
+// The receipt also binds how the gate ran (GATE_RUN): every browser and origin, because
+// release:prepare refuses to start while OSC_BROWSERS or OSC_ORIGINS narrows the selection,
+// and declared skips only, because the gate runs with OSC_STRICT_SKIPS=1 (an undeclared skip
+// fails it, as under CI). OSC_LOAD_MAX and OSC_LOAD_WAIT_MS say when a suite may start, not
+// what it runs, and stay allowed.
 import { spawnSync } from 'node:child_process';
 import {
   existsSync, lstatSync, readFileSync, readdirSync, readlinkSync, writeFileSync,
 } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { analyzeRepository, formatAnalysis } from './release-analyze.mjs';
+import { analyzeRepository, formatAnalysis, parseFlags } from './release-analyze.mjs';
 import {
   ROOT, computeSourceDigest, digestEntries, gitRunner, parseSemver, readVersion, sha256,
 } from './release-metadata.mjs';
@@ -104,6 +115,32 @@ export function currentFingerprint(root = ROOT, run = gitRunner(root)) {
 
 export const RECEIPT_KEYS = ['version', 'sourceDigest', 'distSha256', 'gateTree'];
 
+// ------------------------------------------------------------------------------- gate run
+// How the gate ran, recorded in the receipt and required by receiptProblems(): the full
+// browser and origin sets of tests/browser/lib/suite.cjs and CI's skip semantics.
+export const GATE_RUN = Object.freeze({
+  browsers: Object.freeze(['chromium', 'firefox', 'webkit']),
+  origins: Object.freeze(['file', 'http']),
+  skips: 'declared-only',
+});
+export const NARROWING_ENV = ['OSC_BROWSERS', 'OSC_ORIGINS'];
+
+/** Why the gate cannot run in `env` (empty = it can): a variable that narrows a suite. */
+export function gateEnvProblems(env = process.env) {
+  return NARROWING_ENV.filter((k) => env[k] !== undefined).map((k) => `${k} is set `
+    + `(${JSON.stringify(env[k])}): the release gate runs every browser and origin; unset it `
+    + '(OSC_LOAD_MAX and OSC_LOAD_WAIT_MS stay allowed)');
+}
+
+/** The environment the gate commands run in: `env` with CI's skip semantics. */
+export function gateEnv(env = process.env) {
+  const out = { ...env, OSC_STRICT_SKIPS: '1' };
+  for (const k of NARROWING_ENV) delete out[k];
+  return out;
+}
+
+const sameList = (a, b) => Array.isArray(a) && a.join(',') === b.join(',');
+
 const present = (v) => typeof v === 'string' && v !== '';
 
 /**
@@ -126,13 +163,40 @@ export function receiptProblems(receipt, now) {
       + 'project.release-receipt-binds-gate): re-run npm run release:prepare on this tree');
   }
   if (receipt.result !== 'passed') problems.push(`gate receipt result is ${receipt.result}`);
+  for (const k of ['browsers', 'origins']) {
+    if (receipt[k] === undefined) problems.push(`gate receipt has no ${k}`);
+    else if (!sameList(receipt[k], GATE_RUN[k])) {
+      problems.push(`gate receipt ${k} ${[].concat(receipt[k]).join(',')} != `
+        + `${GATE_RUN[k].join(',')}: the gate did not run every ${k.slice(0, -1)}`);
+    }
+  }
+  if (receipt.skips === undefined) problems.push('gate receipt has no skips');
+  else if (receipt.skips !== GATE_RUN.skips) {
+    problems.push(`gate receipt skips ${receipt.skips} != ${GATE_RUN.skips}`);
+  }
   return problems;
 }
 
 // ------------------------------------------------------------------------------- flow
 // Rule project.release-flow-complete: what must be true before a release starts.
 
-/** Status of ADR `ref` ("0047", "adr-0047", "ADR 0047"), or null when there is none. */
+/** The items of the YAML list `key` in front matter `fm`, block (`  - a`) or flow (`[a, b]`). */
+function frontMatterList(fm, key) {
+  const lines = fm.split('\n');
+  const at = lines.findIndex((l) => l.startsWith(`${key}:`));
+  if (at < 0) return [];
+  const inline = lines[at].slice(key.length + 1).trim();
+  const rest = lines.slice(at + 1);
+  const end = rest.findIndex((l) => !/^\s*-/.test(l));
+  const items = inline.startsWith('[') ? inline.replace(/^\[|\]$/g, '').split(',')
+    : rest.slice(0, end < 0 ? rest.length : end).map((l) => l.replace(/^\s*-/, ''));
+  return items.map((i) => i.trim().replace(/^(['"])(.*)\1$/, '$2')).filter(Boolean);
+}
+
+/**
+ * Status, tags and related references of ADR `ref` ("0047", "adr-0047", "ADR 0047"), or null
+ * when there is none.
+ */
 export function adrStatus(ref, root = ROOT) {
   const m = /(\d{1,4})\s*$/.exec(String(ref ?? '').trim());
   if (!m) return null;
@@ -143,7 +207,25 @@ export function adrStatus(ref, root = ROOT) {
   if (!file) return null;
   const fm = /^---\n([\s\S]*?)\n---\n/.exec(readFileSync(path.join(dir, file), 'utf8'));
   const status = fm && /^status:\s*(\S+)\s*$/m.exec(fm[1]);
-  return { id: `adr-${m[1].padStart(4, '0')}`, file, status: status ? status[1] : null };
+  return { id: `adr-${m[1].padStart(4, '0')}`, file, status: status ? status[1] : null,
+    tags: fm ? frontMatterList(fm[1], 'tags') : [],
+    related: fm ? frontMatterList(fm[1], 'related') : [] };
+}
+
+/**
+ * Why `adr` is not an RC exemption for `major` (empty = it is): the convention of
+ * .ai/repo/adrs/README.md, within what `majordomus adr check` accepts. An exemption carries the
+ * tags `rc-exemption` and `major-<N>` and names the decision it exempts, ADR 0047, as
+ * `adr:adr-0047` under `related`. Its status is judged by the caller.
+ */
+export function rcExemptionProblems(adr, major) {
+  const tags = adr.tags || [];
+  const related = adr.related || [];
+  return [
+    !tags.includes('rc-exemption') && 'no tag rc-exemption',
+    !related.includes('adr:adr-0047') && 'related does not name adr:adr-0047',
+    !tags.includes(`major-${major}`) && `no tag major-${major}`,
+  ].filter(Boolean);
 }
 
 /** The channel of the committed record of `tag`, or null when there is none. */
@@ -199,12 +281,19 @@ export function flowProblems({
         problems.push(`${why}: publish a candidate first (npm run release:prepare -- `
           + `--prerelease; when package.json already carries a ${v.major}.x version, set it to `
           + `${rc} for the candidate), or pass --no-rc-because <ADR> naming an `
-          + 'accepted ADR');
+          + `accepted RC exemption for major ${v.major}`);
       } else if (!adr) {
         problems.push(`${why}: --no-rc-because ${noRcBecause} names no ADR in .ai/repo/adrs/`);
-      } else if (adr.status !== 'accepted') {
-        problems.push(`${why}: --no-rc-because ${noRcBecause}: ${adr.id} is ${adr.status}, `
-          + 'not accepted');
+      } else {
+        const not = rcExemptionProblems(adr, v.major);
+        const reasons = [
+          adr.status !== 'accepted' && `${adr.id} is ${adr.status}, not accepted`,
+          not.length && `${adr.id} is not an RC exemption for major ${v.major} (${not.join('; ')}`
+            + '; see .ai/repo/adrs/README.md)',
+        ].filter(Boolean);
+        if (reasons.length) {
+          problems.push(`${why}: --no-rc-because ${noRcBecause}: ${reasons.join('; ')}`);
+        }
       }
     }
   }
@@ -219,9 +308,9 @@ export function readReceipt(run = gitRunner(), root = ROOT) {
   }
 }
 
-function sh(cmd, args, root) {
+function sh(cmd, args, root, env = process.env) {
   console.log(`\n$ ${cmd} ${args.join(' ')}`);
-  const r = spawnSync(cmd, args, { cwd: root, stdio: 'inherit' });
+  const r = spawnSync(cmd, args, { cwd: root, stdio: 'inherit', env });
   if (r.error) return { ok: false, why: `${cmd}: ${r.error.message}` };
   return { ok: r.status === 0, why: `${cmd} ${args.join(' ')} exited ${r.status}` };
 }
@@ -231,19 +320,42 @@ function loud(lines) {
   console.error(`\n${bar}\n${lines.map((l) => `RELEASE:PREPARE FAILED  ${l}`).join('\n')}\n${bar}`);
 }
 
-export function main(argv = process.argv.slice(2), root = ROOT, run = gitRunner(root)) {
+export const USAGE = 'usage: node scripts/release-prepare.mjs [--dry-run] '
+  + '[--prerelease [--preid <id>]] [--no-rc-because <ADR>] [--help]';
+const FLAGS = {
+  '--dry-run': 'boolean', '--prerelease': 'boolean', '--preid': 'value',
+  '--no-rc-because': 'value',
+};
+
+export function main(argv = process.argv.slice(2), root = ROOT, run = gitRunner(root),
+  env = process.env) {
+  let o;
+  try {
+    o = parseFlags(argv, FLAGS, USAGE);
+  } catch (e) {
+    console.error(`release:prepare: ${e.message}\nnothing was changed`);
+    return e.exitCode;
+  }
+  if (o.help) {
+    console.log(USAGE);
+    return 0;
+  }
+  const narrowed = gateEnvProblems(env);
+  if (narrowed.length) {
+    loud(['refusing to start (rule project.release-receipt-binds-gate):', ...narrowed,
+      'nothing was changed']);
+    return 1;
+  }
   const dirty = run(['status', '--porcelain', '--untracked-files=normal']);
   if (dirty) {
     loud(['the working tree is not clean; commit or copy aside first:', ...dirty.split('\n')]);
     return 1;
   }
-  const i = argv.indexOf('--preid');
-  const analysis = analyzeRepository({ root, run, prerelease: argv.includes('--prerelease'),
-    preid: i >= 0 ? argv[i + 1] : 'rc' });
+  const analysis = analyzeRepository({ root, run, prerelease: !!o['--prerelease'],
+    preid: o['--preid'] || 'rc' });
   console.log(formatAnalysis(analysis));
   const { proposal, current } = analysis;
-  const ni = argv.indexOf('--no-rc-because');
-  const noRcBecause = ni >= 0 ? (argv[ni + 1] || '') : null;
+  const noRcBecause = o['--no-rc-because'] ?? null;
   const refused = flowProblems({
     lastTag: analysis.lastTag, proposed: proposal.version,
     tags: run(['tag', '--merged', 'HEAD', '--list', 'v*']).split('\n').filter(Boolean),
@@ -262,7 +374,7 @@ export function main(argv = process.argv.slice(2), root = ROOT, run = gitRunner(
   const plan = proposal.action === 'bump'
     ? [['npm', ['version', proposal.version, '--no-git-tag-version']], ...GATE_COMMANDS]
     : GATE_COMMANDS;
-  if (argv.includes('--dry-run')) {
+  if (o['--dry-run']) {
     console.log(`\nDry run: would ${proposal.action} v${proposal.version} and run:`);
     for (const [cmd, args] of plan) console.log(`  ${cmd} ${args.join(' ')}`);
     return 0;
@@ -270,7 +382,7 @@ export function main(argv = process.argv.slice(2), root = ROOT, run = gitRunner(
   console.log(`\n${proposal.action === 'bump' ? `Bumping ${current} -> ${proposal.version}`
     : `Confirming the untagged v${current}`}; then the full gate.`);
   for (const [cmd, args] of plan) {
-    const r = sh(cmd, args, root);
+    const r = sh(cmd, args, root, gateEnv(env));
     if (!r.ok) {
       const restore = spawnSync('git', ['checkout', 'HEAD', '--', ...RESTORE_PATHS],
         { cwd: root, stdio: 'inherit' });
@@ -285,7 +397,8 @@ export function main(argv = process.argv.slice(2), root = ROOT, run = gitRunner(
     }
   }
   const receipt = {
-    ...currentFingerprint(root, run), result: 'passed', base: run(['rev-parse', 'HEAD']),
+    ...currentFingerprint(root, run), ...GATE_RUN, result: 'passed',
+    base: run(['rev-parse', 'HEAD']),
     gate: GATE_COMMANDS.map(([c, a]) => `${c} ${a.join(' ')}`), at: new Date().toISOString(),
   };
   if (receipt.version !== proposal.version) {

@@ -37,9 +37,11 @@ limit (`OSC_LOAD_MAX`, `OSC_LOAD_WAIT_MS`; see `tests/README.md`).
 How a change reaches `main` is ruled too: `project.ci-bounded` (every workflow job and
 network step bounded, pinned, retried), `project.fail-first` (a `feat`/`fix` PR's unit tests
 fail on the merge base, or the body says `fail-first: n/a <reason>`) and
-`project.review-verdict` (a PR touching the audio, analysis, experiments, studio, storage or
-release-script paths, anything under `.github/`, or the programs and tests of these three
-rules needs a reviewer's `.ai/repo/reviews/<pr>.yaml` for the content it changes). The builder of a
+`project.review-verdict` (a PR touching the audio, analysis, experiments, studio,
+measurement, calibration, storage or safety paths, the MEASURE, Experiments and Findings
+adapters, the build, stamp, deploy-verification and release scripts and the release rules'
+tests, anything under `.github/`, or the programs and tests of these three rules needs a
+reviewer's `.ai/repo/reviews/<pr>.yaml` for the content it changes). The builder of a
 change never writes its own verdict, and the base branch's copy of each program judges.
 
 ## Commands
@@ -54,6 +56,7 @@ npm run release:analyze            # SemVer level needed by the commits since th
 npm run release:prepare            # clean tree -> bump once, rebuild, gate; restores on failure
 npm run release:publish            # dry run; `-- --yes` tags, waits for Pages, verifies, releases
 npm run release:record -- --version X.Y.Z   # .ai/repo/releases/vX.Y.Z.yaml from the Release
+npm run release:prepare -- --help  # also publish/analyze/cadence/record; bad flag: exit 2
 majordomus plan status             # milestone progress
 ```
 
@@ -73,11 +76,12 @@ the publish: the receipt binds the whole tree); on main `release:publish`, then 
 
 ## Plan
 
-`.ai/repo/project/`: V1 `S001`–`S063` and `D001`–`D003` (M001–M004; `S064`–`S095` blocked on
-`S000`); V2 `V2xx` (M007–M010, maintenance M034); release engineering `R001`–`R017` (M011);
-V3 MEASURE `V3xx` (M012–M020); the V3.1 Studio `V4xx` (M021–M033). Status is derived from
-evidence (`majordomus plan evidence <id> ...`, `majordomus plan done <id>`); `majordomus plan
-status` is the truth, not this paragraph.
+`.ai/repo/project/` holds the milestones, the issues (the prefix names the line: `S` and `D`
+V1, `V2xx` V2, `R` release engineering, `V3xx` V3 MEASURE, `V4xx` the V3.1 Studio), the
+intents above them and their critiques and gaps. Status is derived from evidence (`majordomus
+plan evidence <id> ...`, `majordomus plan done <id>`). `majordomus plan status` lists every
+milestone with its progress and `majordomus plan roadmap` their order; this paragraph
+enumerates neither, because ranges written here go stale.
 
 ## Architecture of `src/js/`
 

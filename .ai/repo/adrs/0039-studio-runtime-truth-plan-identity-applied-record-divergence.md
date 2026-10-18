@@ -3,7 +3,7 @@ schema: adr/v1
 id: adr-0039
 kind: adr
 title: "Studio runtime truth: plan identity, applied record and divergence"
-status: proposed
+status: accepted
 date: 2026-10-04
 tags:
   - studio
@@ -192,3 +192,12 @@ states what happened: runtime `apply` and transport `admit` with outcome `presen
 and no `compile` step.
 
 Tests: `tests/unit/v4-presentation-edits.test.mjs`.
+
+### 2026-10-18: accepted by the owner
+
+Accepted by the owner (explicit instruction in the session of 2026-10-18, applied by the
+coordinating Claude session) — implemented as described; evidence: `studioDivergence`,
+`planHash` and `runtime.applied()` in `src/js/studio/runtime.js` and
+`src/js/studio/compiler.js`; `tests/unit/v31-studio-runtime-truth.test.mjs`,
+`tests/unit/v31-studio-runtime-view.test.mjs` and `tests/browser/v31-studio-runtime.cjs`, with
+the refinements its notes record.

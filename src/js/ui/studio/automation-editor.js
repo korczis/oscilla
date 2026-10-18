@@ -100,19 +100,27 @@ export function createLaneEditor(api) {
     const lane = api.model().timeline.automation.find((l) => l.id === laneId);
     if (!lane) return;
     const info = infoOf(api.model(), lane);
+    const after = api.laneGoneKey(laneId);
     const r = api.commitMany(`Remove ${info ? info.name : 'automation'} lane`,
       lane.points.map((p) => ({ type: 'AUTOMATION_POINT_REMOVE', laneId, pointId: p.id })));
-    if (r.ok) api.say(`Removed the ${info ? info.name : 'automation'} lane`);
+    if (r.ok) {
+      api.say(`Removed the ${info ? info.name : 'automation'} lane`);
+      api.focusKey(after);
+    }
   }
 
   function removePoint(laneId, pointId) {
     const lane = api.model().timeline.automation.find((l) => l.id === laneId);
     if (!lane) return;
     const next = pointNeighbour(lane, pointId);
+    // The last point takes its lane with it (V272 C1): focus goes to the next lane, else
+    // Automate, never to <body>.
+    const after = api.laneGoneKey(laneId);
     const r = api.commit({ type: 'AUTOMATION_POINT_REMOVE', laneId, pointId });
     if (r.ok) {
       const still = api.model().timeline.automation.find((l) => l.id === laneId);
-      api.focusKey(still && next ? `pt:${laneId}:${next}` : `lane-add:${laneId}`);
+      if (!still) api.focusKey(after);
+      else api.focusKey(next ? `pt:${laneId}:${next}` : `lane-add:${laneId}`);
     }
   }
 

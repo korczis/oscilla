@@ -3,7 +3,7 @@ schema: adr/v1
 id: adr-0027
 kind: adr
 title: package.json "version" is the only source of the product version; schema versions and the frozen V1 stamp are separate
-status: proposed
+status: accepted
 date: 2026-10-02
 tags:
   - release
@@ -48,3 +48,12 @@ Proposed (designed and being implemented on `release/provenance`, plan M011 R002
   §179).
 - Confirmation criteria: the duplicate-literal test fails on a second product-version string; the
   public page's version matches the release tag.
+
+## Resolution notes
+
+### 2026-10-18: accepted by the owner
+
+Accepted by the owner (explicit instruction in the session of 2026-10-18, applied by the
+coordinating Claude session) — implemented as described; evidence: `BUILD.version` from
+`package.json` through `src/js/core/build-info.js` and `src/js/ui/version.js`;
+`scripts/release-version-check.mjs` (`npm run version:check`, CI); tag `v2.0.0`.

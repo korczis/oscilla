@@ -3,7 +3,7 @@ schema: adr/v1
 id: adr-0028
 kind: adr
 title: The committed dist embeds a source digest, and the Pages workflow stamps one metadata region with the deployed commit
-status: proposed
+status: accepted
 date: 2026-10-02
 tags:
   - release
@@ -48,3 +48,12 @@ Proposed (designed and being implemented on `release/provenance`, plan M011 R003
   difference between the committed dist and the served page fails the deploy.
 - Experiments record `BUILD.version` and `BUILD.commit`; a source build reports commit `null`
   honestly instead of inventing one (V3 specification §51, §99).
+
+## Resolution notes
+
+### 2026-10-18: accepted by the owner
+
+Accepted by the owner (explicit instruction in the session of 2026-10-18, applied by the
+coordinating Claude session) — implemented as described; evidence: `scripts/stamp-build.mjs` and
+`scripts/verify-deploy.mjs` run by `.github/workflows/pages.yml` with `GITHUB_SHA`; a source
+build reports channel "source" and commit null (`src/js/core/build-info.js`).

@@ -3,7 +3,7 @@ schema: adr/v1
 id: adr-0005
 kind: adr
 title: The hard safety limit caps open signals and the finite tone; patterns are exempt up to 30 s
-status: proposed
+status: accepted
 date: 2026-10-02
 tags:
   - safety
@@ -52,3 +52,11 @@ Appended; the sections above are left as written, and the status stays `proposed
 V1's single file in the V2 change (9fe0a15, #3) and stay readable at tag `v1.0.0`. The
 revocation checks run on the current engine as `tests/browser/engine-v1port.cjs` (`npm run
 test:engine`, in CI).
+
+### 2026-10-18: accepted by the owner
+
+Accepted by the owner (explicit instruction in the session of 2026-10-18, applied by the
+coordinating Claude session) — implemented as described; evidence: `plan.limitable`,
+`MAX_PROGRAMMED_S` and `engine.revokeContinuous()` (`src/js/audio/patterns.js`,
+`src/js/core/constants.js`, `src/js/audio/audio-engine.js`); sections "limit scope and
+continuous scheduling" and "continuous revoked" of `tests/browser/engine-v1port.cjs` (CI).

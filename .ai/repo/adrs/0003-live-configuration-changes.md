@@ -3,7 +3,7 @@ schema: adr/v1
 id: adr-0003
 kind: adr
 title: A configuration change while playing glides, dips or restarts, and never extends playback
-status: proposed
+status: accepted
 date: 2026-10-02
 tags:
   - audio
@@ -44,3 +44,13 @@ towards 1.06× the clamp for ~15 ms with ±1200 cents.
 - A waveform change produces a silent gap of roughly 20–30 ms.
 - Measured (`p9`, chromium): DUAL after a latched tone → dual plan, 328 Hz measured
   (A 220 / B 330); Siren → lfo plan; waveform switch step ratio 12.5 → 1.0.
+
+## Resolution notes
+
+### 2026-10-18: accepted by the owner
+
+Accepted by the owner (explicit instruction in the session of 2026-10-18, applied by the
+coordinating Claude session) — implemented as described; evidence: `updateLive` compares by
+`planKey` and returns 'same', 'live', 'restarted' or false, with `_switchWaves` (`WAVE_DIP_S`)
+and `_restart` (`src/js/audio/audio-engine.js`); sections "live changes and plans" and
+"click-free transitions" of `tests/browser/engine-v1port.cjs` (CI).

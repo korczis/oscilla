@@ -6,6 +6,7 @@
 // here. Every node is created through `acct.track` / `acct.source` (engine accounting).
 //
 // adapter = { compiler, structural: [paramKey], rebuildWhenOwned?: [paramKey],
+//             clock?: portId,   a TRIGGER input that clocks the node (plan node `clocked`)
 //             check?(params, caps) -> reason | { code, reason } | null, create(env) -> handle }
 // env     = { ctx, hooks, acct: { track, source }, now, at, params, node, def, options,
 //             global: { setMasterLevel(g) -> wrote },  the runtime's gate to global engine state
@@ -498,6 +499,42 @@ function steppedControl({ ctx, acct, at, values, smooth, holdLast, rate }) {
   };
 }
 
+/**
+ * A clocked control signal (Random, Step Modulator with a clock edge: plan node `clocked`): a
+ * ConstantSourceNode whose offset holds step 0 from the start and steps on the transport's
+ * triggers, on the audio clock (V272 A2). clock(t, k): the k-th trigger of the playback (k from
+ * 0) sets step `stepAt(k)` at t; clockFrom(t, k) drops the steps scheduled from t on and holds
+ * step `stepAt(k)` there (an edit re-renders the triggers after it). Rate has no effect.
+ */
+function clockedControl({ ctx, acct, at, stepAt, name }) {
+  if (typeof ctx.createConstantSource !== 'function') {
+    return inertHandle('degraded', `A clocked ${name} needs ConstantSourceNode.`);
+  }
+  const src = acct.source(acct.track(ctx.createConstantSource()));
+  src.offset.setValueAtTime(stepAt(0), ctx.currentTime);
+  src.start(at);
+  return {
+    inputs: {},
+    outputs: { control: src },
+    outputRange: { control: BIPOLAR },
+    modTarget: (key) => ({ reason: key === 'rate'
+      ? `A clocked ${name} steps on its clock trigger; rate has no effect.`
+      : `unknown parameter ${key}` }),
+    applyBase() {},
+    update() {},
+    clock(t, k) { src.offset.setValueAtTime(stepAt(k), t); },
+    clockFrom(t, k) {
+      src.offset.cancelScheduledValues(t);
+      src.offset.setValueAtTime(stepAt(k), t);
+    },
+    stop(t) { try { src.stop(t); } catch (e) { /* already stopped */ } },
+    dispose() {},
+    info: { clocked: true },
+    status: 'ready',
+    reason: null,
+  };
+}
+
 function controlHandle(sc, info) {
   return {
     inputs: {},
@@ -517,9 +554,15 @@ function controlHandle(sc, info) {
 const random = {
   compiler: 'audio/noise.js#mulberry32',
   structural: ['seed', 'smooth'],
+  clock: 'trigger',
   create(env) {
     const rng = mulberry32(env.params.seed);
     const values = Array.from({ length: RANDOM_LOOP_VALUES }, () => rng() * 2 - 1);
+    if (env.node && env.node.clocked) {
+      // Sample and hold: the seeded loop, one value per trigger (smooth: free-running only).
+      return clockedControl({ ...env, name: 'Random',
+        stepAt: (k) => values[k % RANDOM_LOOP_VALUES] });
+    }
     const sc = steppedControl({ ...env, values, smooth: env.params.smooth, holdLast: false,
       rate: env.params.rate });
     return controlHandle(sc, { values, loopValues: RANDOM_LOOP_VALUES });
@@ -529,8 +572,14 @@ const random = {
 const stepModulator = {
   compiler: 'audio/scheduler.js#scheduleSteps',
   structural: ['steps', 'playback'],
+  clock: 'clock',
   create(env) {
     const values = [...env.params.steps];
+    if (env.node && env.node.clocked) {
+      const once = env.params.playback === 'once';
+      return clockedControl({ ...env, name: 'Step Modulator',
+        stepAt: (k) => values[once ? Math.min(k, values.length - 1) : k % values.length] });
+    }
     const sc = steppedControl({ ...env, values, smooth: false,
       holdLast: env.params.playback === 'once', rate: env.params.rate });
     return controlHandle(sc, { values });

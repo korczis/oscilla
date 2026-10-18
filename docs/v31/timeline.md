@@ -263,14 +263,15 @@ SCHEDULE_LEAD_S)`: nothing closer to now than the engine's scheduling lead is ch
 | Situation | Decision | Runtime action |
 | --- | --- | --- |
 | Parameter change (`NODE_PARAM_SET`) | live | applied now through the click-free parameter path (§80) |
-| Item starting at or after `h` | `cancel` + `schedule` | dispose the old voice, play the rebuilt item |
+| Item starting at or after `h`, compiled identically by the new model | `keep` | nothing: an edit elsewhere (a parameter, another clip) leaves it scheduled, so a pending measurement hand-off and the envelope contour stay as they are |
+| Item starting at or after `h`, anything else | `cancel` + `schedule` | dispose the old voice, play the rebuilt item |
 | Item sounding across `h`, unchanged | `keep` | nothing |
 | …clip removed or retargeted | `release` at `h` | `voice.stop(h)` / gate off (faded, `STOP_RAMP_S`) |
 | …only shortened, new end after `h` | `retime-end` | `voice.stop(newEnd)` / gate off moved (compatible live edit) |
 | …event / measurement clip lengthened | `retime-end` | gate off moved later |
 | …anything else (payload, start, a longer pattern clip) | `keep-until-end` | the current event stays; the edited clip plays from its next trigger (next loop pass or next play) |
 | Clip now covering `h` that never started | `next-trigger` | waits for its next trigger |
-| Automation lane changed | hold and continue | `cancelFrom: h`, a ramp in progress re-ended at `h` with its exact value, value pinned, then the new lane's events after `h` (a ramp that began before `h` now starts from the held value) |
+| Automation lane changed | hold and continue | `cancelFrom: h`, a ramp in progress re-ended at `h` with its exact value, value pinned, then the new lane's events after `h` (a ramp that began before `h` now starts from the held value); where the new lane is elsewhere at `h` (a point removed, moved or re-valued, the lane's last event already behind `h`) a linear glide over `LANE_GLIDE_S` (the runtime crossfade, 20 ms) to the new lane's value, then its events after the glide. A removed lane leaves no scheduler record, and a lane added or restored (undo) while playing starts from the value its parameter has at `h` |
 | Loop region changed | re-anchor | a new pass grid from `h`; the position at `h` is continuous |
 
 Every decision is recorded (`plan.decisions`, `getState().decisions`) so the behaviour is
@@ -398,24 +399,27 @@ What plays where:
 
 | Timeline content | Played as |
 | --- | --- |
-| pattern clip on a Sequence | `compileSequence(item.sequence, ctx, handle.info.destination, item.startTime, { track, source, timers })` with the node's accounting; a finished voice untracks its nodes at once (`onEnded`), so a long loop never accumulates. The Sequence's TRIGGER edges into an Envelope `gate` gate that envelope for the clip |
+| pattern clip on a Sequence | `compileSequence(item.sequence, ctx, handle.info.destination, item.startTime, { track, source, timers })` with the node's accounting; a finished voice untracks its nodes at once (`onEnded`), so a long loop never accumulates. The Sequence's TRIGGER edges into an Envelope `gate` gate that envelope for the clip; those into a Random `trigger` or Step Modulator `clock` clock it at the clip start (`handle.clock(t, k)`: the k-th trigger since PLAY, k from 0, sets value / step k, and value / step 0 holds from PLAY, so a first trigger after PLAY changes nothing audible (review V272 R-5, decided); an edit that removes a trigger re-renders the later steps from the horizon). A muted TRIGGER edge gates and clocks nothing, and muting or unmuting one during playback reschedules the future clips |
 | pattern clip on an Oscillator | the oscillator is **pattern-played**: its free-running carrier is held at `ROUTE_FLOOR` (its `level` AudioParam is owned by the transport; built in this transaction → set at once, already sounding → 20 ms ramp) and the voices (the oscillator's waveform, `clipSequence`) play into a pattern bus (gain = the oscillator's level + `runtime.baseOffset(id, 'level')`, the base the runtime would give the carrier) connected to every AUDIO route leaving the oscillator. They pass its routes, crossfades included, and everything downstream (OSC → ADSR → FILTER → MASTER in the Basic Synth). A level change glides the bus; a lane on the oscillator's level drives the bus (offsets added). **Modulation into its `level`** reaches the voices: every active CONTROL edge into `level` is re-routed from the carrier's level AudioParam onto the pattern bus gain — the edge's depth gain feeds a path gain into the bus (1) and one into the carrier's level (0). Claiming an oscillator that already sounds ramps the carrier path 1 → 0 together with the carrier's own 20 ms fade, releasing it ramps it 0 → 1 with the carrier's fade-in (click-free both ways); edges built during playback are silent when they are re-routed. Depth, polarity and offset edits keep acting on the edge (its gain, the bus base) |
-| gate event clip on an Envelope | `handle.gate(startTime, duration)`; an envelope the timeline gates is closed at PLAY (`release`) and opened again when no gate clip targets it any more |
-| automation lane | `applyAutomation(handle.modTarget(param, 'linear').param, events)`; the parameter is owned (`runtime.setOwnedParams`), so the runtime's base glide and live updates skip it (the adapters' explicit `owned` argument, `docs/v31/compiler.md` "Owned parameters"); `runtime.baseOffset` (linear modulation offsets) is added to the scheduled values (none in the templates: exact events) |
-| measurement clip | data: `onMeasurement({ type: 'schedule', key, clipId, action, target, trackId, pass, position, startTime, endTime, duration, truncated })`, then `cancel` / `release` / `retime` / `stop` events. The Studio workspace supplies the hook (`studio/measurement-run.js`, see "Measurement clips" below) |
+| gate event clip on an Envelope | `handle.gate(startTime, duration)`; an envelope the timeline gates is closed at PLAY (`release`) and opened again when no gate clip targets it any more. Gates that overlap on one envelope (gate clips, or the clips of a Sequence whose TRIGGER edge gates it) are one gate, their union: opened by the earliest, released at the latest end; a gate starting inside another neither retriggers nor closes it (one that only touches the previous gate's end retriggers) |
+| automation lane | `applyAutomation(handle.modTarget(param, 'linear').param, events)`; the parameter is owned (`runtime.setOwnedParams`), so the runtime's base glide and live updates skip it (the adapters' explicit `owned` argument, `docs/v31/compiler.md` "Owned parameters"). The modulation edges' constant offset (`runtime.baseOffset`, none in the templates) is part of the base (§103): on a strictly positive parameter, where exponential ramps are legal (frequency, Q, LFO rate), the lane schedules its authored values and an offset source (a `ConstantSourceNode` on the node's accounting, summed into the same AudioParam, disposed with the node) carries the offset, because a geometric ramp between shifted ends is not the shifted ramp; on any other parameter (step and linear segments only, which an added constant keeps exact) the offset is added to the scheduled values. Lane plus offset stays inside the parameter's bounds. A changed offset reaches the lane from the edit's horizon: the offset source glides (τ `PARAM_TAU_S`), an added offset glides onto the lane over `LANE_GLIDE_S` |
+| measurement clip | data: `onMeasurement({ type: 'schedule', model, key, clipId, action, target, trackId, pass, position, startTime, endTime, duration, truncated })`, then `cancel` / `release` / `retime` / `edit` (`{ type: 'edit', model }` after every applied edit while one is scheduled) / `stop` events. The Studio workspace supplies the hook (`studio/measurement-run.js`, see "Measurement clips" below) |
 | anything else | not played; listed in `debugInfo().unplayed` with its code and reason (`TRANSPORT_TEXT`): an event clip on a source (`event-target`), a `trigger` event clip (`event-target`), a target that is not ready (`target-unavailable`) |
 
 Edits during playback apply `scheduler.edit`'s plan as `EDIT_POLICY` says: `cancel` disposes the
 not-yet-started voice, `schedule` plays the rebuilt item, `release` / `retime-end` call
 `voice.stop(at)`, lanes are held at the horizon and continue (`applyAutomation` with
-`cancelFrom`); a removed lane is held, then glides back to the parameter's base. Graph edits go
+`cancelFrom`); a removed lane is held, then glides back to the parameter's base (its offset
+source glides to 0 with it). Graph edits go
 through `runtime.apply` first; then:
 
 - a node rebuilt by the runtime (`node-replace`): its lane continues on the new AudioParam from
   the horizon with the exact value there (`rebind`); a pattern-played oscillator is claimed
   again (built silent, so at once); voices sounding into the old node fade with the runtime's
   crossfade (recorded as `release`, reason `node-replaced`) and the future ones are rebuilt on
-  the new node by the edit (future items are always rescheduled), with its new waveform;
+  the new node: a waveform change compiles a new sequence (`cancel` + `schedule`), and a kept
+  future voice whose node or pattern bus was replaced is discarded unheard and played again
+  (`cancel`, reason `node-replaced`);
 - an envelope whose gates changed is re-rendered from the horizon: held (or released when no
   gate is sounding), the sounding gate's release, every later gate again. A gate interrupted in
   its attack by such an edit is held at its value at the horizon (a flattened attack, no step);
@@ -469,6 +473,16 @@ duplicates it:
   model)`: the block records the model that ran (schema version, `studioHash`, execution
   state), beside the recipe, which stays authoritative (ADR 0019, `configHash` unchanged). The
   result is shown in MEASURE as well.
+- **Edits while armed.** An edit that moves the pass's clips cancels them and the `schedule`
+  that follows arms the hand-off again (review V272 B2). Any other edit admitted while armed
+  (`edit`, with the model the transport now plays) is not left out (review V272 R-2): it
+  becomes the model the hand-off measures, and at the hand-off the recipe is derived again
+  from it. A changed recipe (a Sweep end set to 10 kHz) is the one that runs and the
+  provenance block records the edited model; a recipe now refused (a Master Output level that
+  is not the one MEASURE plays at, review V272 A5) fails the run with that reason, the Studio
+  keeps the output and the pass plays on; an edit the recipe does not read runs as armed. The
+  hand-off decides rather than each edit, because a move of several clips one by one passes
+  through layouts the recipe refuses.
 - **Stop and abort.** A `stop` or the `cancel` of the pass's clips before the hand-off disarms
   it; the hand-off's own STOP is ignored. During the measurement, STOP, Escape, page hide and
   leaving the workspace abort it like any measurement; Studio PLAY is refused while it owns the
@@ -483,10 +497,13 @@ browsers).
 A lane on an Oscillator's `detune` owns the oscillator's `detune` AudioParam, which also carries
 the log-mapped frequency modulation's constant cents: `baseOffset(id, 'detune')` includes those
 cents, so the lane schedules them with its values and a removed lane glides back to base plus
-them (review V431 X2/X8).
+them (review V431 X2/X8); a changed edge reaches the playing lane from the edit's horizon. The
+lane plus those cents is bounded by `detuneCeiling` (automation.js): the cents that keep the
+frequency's base, or its lane's peak, at 0.95 × Nyquist of the running context, and re-bounded
+when the frequency changes; a lane the bound clamps is listed in `debugInfo().limitedLanes`
+(V272 review A7).
 
-Known limitations: `baseOffset` is read when events are scheduled, so a changed edge offset
-reaches the lane within one look-ahead (1 s); an offline render of a
+Known limitations: an offline render of a
 looping timeline compiles at most `MAX_PASSES_PER_WINDOW` (4096) loop passes.
 
 ## Model and action additions

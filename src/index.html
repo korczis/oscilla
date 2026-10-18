@@ -1325,7 +1325,9 @@
     <section class="osc-panel osc-p-studio" id="osc-panel-studio" data-osc="studio.compact"
       data-osc-panel="studio" data-osc-modes="playground sequencer"></section>
 
-    <!-- Studio announcements (outside the views: the compact widget announces too). -->
+    <!-- Studio announcements (outside the views: the compact widget announces too). A modal
+         dialog makes them inert, so while one is open workspace.js also says the sentence in
+         that dialog's own regions (data-osc studio.dlg.live / studio.dlg.alert, V272 C4). -->
     <p class="osc-sr-only" aria-live="polite" aria-atomic="true" data-osc="studio.live"
       x-text="studio.live"></p>
     <p class="osc-sr-only" aria-live="assertive" aria-atomic="true" data-osc="studio.alert"
@@ -2479,7 +2481,9 @@
             laboratory. Built as an instrument, not a dashboard.</p>
         </div>
         <dl class="osc-about-spec" aria-label="OSCILLA facts">
-          <div><dt>Version</dt><dd class="osc-num" data-osc="about.version" x-text="BUILD.version"></dd></div>
+          <div><dt>Version</dt><dd class="osc-num" data-osc="about.version" x-text="BUILD.label"
+            :title="BUILD.releaseText"></dd></div>
+          <div><dt>Release</dt><dd data-osc="about.release" x-text="BUILD.releaseText"></dd></div>
           <div data-osc="about.build"><dt>Commit</dt><dd class="osc-num" data-osc="about.commit">
             <template x-if="BUILD.commitUrl">
               <a :href="BUILD.commitUrl" target="_blank" rel="noopener noreferrer"
@@ -2732,8 +2736,9 @@
   <footer class="osc-statusbar" aria-label="Status and actions">
     <div class="osc-sb-brand">
       <span class="osc-sb-name">OSCILLA</span>
-      <span class="osc-sb-version" data-osc="status.version" x-text="'v' + BUILD.version"
-        :title="'OSCILLA ' + BUILD.version + (BUILD.shortCommit ? ' (' + BUILD.shortCommit + ')' : '')"></span>
+      <span class="osc-sb-version" data-osc="status.version" x-text="'v' + BUILD.label"
+        :title="'OSCILLA ' + BUILD.label + (BUILD.shortCommit ? ' (' + BUILD.shortCommit + ')' : '')
+          + ': ' + BUILD.releaseText"></span>
       <span class="osc-sb-div" aria-hidden="true"></span>
       <span class="osc-sb-sub">Interactive Sound &amp; Frequency Lab</span>
     </div>

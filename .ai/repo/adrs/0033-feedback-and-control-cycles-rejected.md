@@ -3,7 +3,7 @@ schema: adr/v1
 id: adr-0033
 kind: adr
 title: Instantaneous audio feedback and control or analysis cycles are rejected by the model until a delay node has its own decision
-status: proposed
+status: accepted
 date: 2026-10-02
 tags:
   - studio
@@ -72,3 +72,12 @@ Proposed:
   feedback, the control-cycle table, analysis cycles, live input to output, deterministic
   topological order. Not yet built: the editor showing the rejected cable and the cycle path
   (issue V411) and the browser audio-graph test (specification §209, issue V430).
+
+## Resolution notes
+
+### 2026-10-18: accepted by the owner
+
+Accepted by the owner (explicit instruction in the session of 2026-10-18, applied by the
+coordinating Claude session) — implemented as described; evidence: claim
+`studio-feedback-rejected`; `audio-feedback`, `control-cycle`, `analysis-cycle` and
+`live-input-to-output` in `src/js/studio/validate.js`; `tests/unit/v31-studio-model.test.mjs`.

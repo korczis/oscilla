@@ -8,7 +8,7 @@
 // driven through main() as a dry run against a fake git runner and a fixture checkout: the
 // newest release is recorded, and a major release follows a published release candidate.
 import assert from 'node:assert/strict';
-import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readdirSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
@@ -159,8 +159,12 @@ function prepareDryRun({ version, tags, records = {}, adrs = {}, subject = 'feat
   for (const [tag, channel] of Object.entries(records)) {
     write(`.ai/repo/releases/${tag}.yaml`, record(tag.slice(1), channel));
   }
-  for (const [name, status] of Object.entries(adrs)) {
-    write(`.ai/repo/adrs/${name}.md`, `---\nschema: adr/v1\nstatus: ${status}\n---\n\n# x\n`);
+  for (const [name, adr] of Object.entries(adrs)) {
+    const { status, tags = [], related = [] } = typeof adr === 'string' ? { status: adr } : adr;
+    const list = (key, items) => (items.length
+      ? `${key}:\n${items.map((i) => `  - ${i}\n`).join('')}` : '');
+    write(`.ai/repo/adrs/${name}.md`, `---\nschema: adr/v1\nstatus: ${status}\n`
+      + `${list('tags', tags)}${list('related', related)}---\n\n# x\n`);
   }
   const run = (args) => {
     if (args[0] === 'status') return '';
@@ -334,25 +338,76 @@ test('proposeVersion: a published candidate is finalised even with no releasable
   assert.equal(p('41.0.0', '41.0.0').version, null);
 });
 
+// An RC exemption (rule project.release-flow-complete, .ai/repo/adrs/README.md): tagged
+// rc-exemption and major-<N>, related to the decision it exempts, adr:adr-0047.
+const EXEMPTION = { tags: ['release', 'rc-exemption', 'major-41'], related: ['adr:adr-0047'] };
+
 test('--no-rc-because overrides only by naming an accepted ADR', () => {
   const major = { version: '41.0.0', tags: TAGS, records: RECORDED,
-    adrs: { '0098-skip-the-candidate': 'proposed', '0099-skip-the-candidate': 'accepted' } };
+    adrs: { '0098-skip-the-candidate': { ...EXEMPTION, status: 'proposed' },
+      '0099-skip-the-candidate': { ...EXEMPTION, status: 'accepted' } } };
   const proposed = prepareDryRun({ ...major, argv: ['--no-rc-because', '0098'] });
   assert.equal(proposed.code, 1);
   assert.match(proposed.text, /--no-rc-because 0098: adr-0098 is proposed, not accepted/);
   const missing = prepareDryRun({ ...major, argv: ['--no-rc-because', 'ADR-0097'] });
   assert.equal(missing.code, 1);
   assert.match(missing.text, /--no-rc-because ADR-0097 names no ADR in \.ai\/repo\/adrs\//);
+  // a flag missing its value is a usage error, refused before anything runs (R-4 of #198)
   const empty = prepareDryRun({ ...major, argv: ['--no-rc-because'] });
-  assert.equal(empty.code, 1);
+  assert.equal(empty.code, 2);
+  assert.match(empty.text, /--no-rc-because needs a value/);
   for (const ref of ['0099', 'adr-0099', 'ADR 0099']) {
     const ok = prepareDryRun({ ...major, argv: ['--no-rc-because', ref] });
     assert.equal(ok.code, 0, ok.text);
   }
-  // the repository's own ADR 0047 is the rule, not an exemption from it
-  assert.equal(adrStatus('0047').id, 'adr-0047');
-  assert.notEqual(adrStatus('0047').status, 'accepted');
 });
+
+test('V272 ADR acceptance: --no-rc-because refuses an accepted ADR that is not an RC exemption',
+  () => {
+    const major = { version: '41.0.0', tags: TAGS, records: RECORDED, adrs: {
+      '0090-unrelated': 'accepted',
+      '0091-no-related': { status: 'accepted', tags: ['rc-exemption', 'major-41'] },
+      '0092-no-tag': { status: 'accepted', tags: ['major-41'], related: ['adr:adr-0047'] },
+      '0093-other-major': { ...EXEMPTION, status: 'accepted',
+        tags: ['rc-exemption', 'major-42'] },
+      '0094-no-major': { status: 'accepted', tags: ['rc-exemption'],
+        related: ['adr:adr-0047'] },
+    } };
+    const refused = (ref, why) => {
+      const r = prepareDryRun({ ...major, argv: ['--no-rc-because', ref] });
+      assert.equal(r.code, 1, r.text);
+      assert.match(r.text, /no published release candidate/);
+      assert.match(r.text, new RegExp(`--no-rc-because ${ref}: adr-${ref} is not an RC `
+        + 'exemption for major 41'));
+      assert.match(r.text, why);
+      assert.doesNotMatch(r.text, /Dry run: would/);
+    };
+    refused('0090', /no tag rc-exemption; related does not name adr:adr-0047; no tag major-41/);
+    refused('0091', /related does not name adr:adr-0047/);
+    refused('0092', /no tag rc-exemption/);
+    refused('0093', /no tag major-41/);
+    refused('0094', /no tag major-41/);
+
+    // the repository's own decisions: ADR 0047 is the rule, not an exemption from it, accepted
+    // or not, and no ADR the owner accepted on 2026-10-18 lifts the refusal
+    const f = { lastTag: 'v40.10.3', proposed: '41.0.0', tags: TAGS, hasRecord: () => true,
+      channelOf: () => null };
+    const rule = adrStatus('0047');
+    assert.equal(rule.id, 'adr-0047');
+    const asAccepted = flowProblems({ ...f, noRcBecause: '0047',
+      adr: { ...rule, status: 'accepted' } });
+    assert.equal(asAccepted.length, 1);
+    assert.match(asAccepted[0], /adr-0047 is not an RC exemption for major 41/);
+    const accepted = readdirSync(new URL('../../.ai/repo/adrs/', import.meta.url))
+      .filter((n) => /^\d{4}-.*\.md$/.test(n)).map((n) => adrStatus(n.slice(0, 4)))
+      .filter((a) => a.status === 'accepted');
+    assert.ok(accepted.length > 0, 'the repository has accepted ADRs to try');
+    for (const a of accepted) {
+      const p = flowProblems({ ...f, noRcBecause: a.id, adr: a });
+      assert.equal(p.length, 1, `${a.id} lifts the refusal`);
+      assert.match(p[0], new RegExp(`${a.id} is not an RC exemption for major 41`));
+    }
+  });
 
 test('flowProblems is pure: both refusals from facts alone', () => {
   const f = { lastTag: 'v40.10.3', proposed: '41.0.0', tags: TAGS, hasRecord: () => false,

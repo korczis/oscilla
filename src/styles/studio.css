@@ -421,8 +421,10 @@
   min-height: 12px;
 }
 
+/* The small node labels take the secondary-readout token: --osc-text-dim (axis ticks,
+   disabled) reads 4.24:1 on the node surface, below 4.5:1 at 9 px (§272 C6). */
 .osc-sg-cat {
-  color: var(--osc-text-dim);
+  color: var(--osc-text-muted);
   font-size: 9px;
   font-weight: var(--osc-fw-semibold);
   letter-spacing: 0.08em;
@@ -513,7 +515,7 @@
 }
 
 .osc-sg-port.is-param .osc-sg-plabel {
-  color: var(--osc-text-dim);
+  color: var(--osc-text-muted);
 }
 
 .osc-sg-glyph {
@@ -1276,7 +1278,7 @@
   white-space: nowrap;
 }
 
-.osc-sc-node[aria-pressed="true"] {
+.osc-sc-node[aria-current="true"] {
   border-color: var(--osc-blue-trace);
   box-shadow: 0 0 0 1px var(--osc-blue-trace);
   color: var(--osc-text);
@@ -1314,7 +1316,7 @@
   color: var(--osc-text-2);
 }
 
-.osc-sc-clip[aria-pressed="true"] {
+.osc-sc-clip[aria-current="true"] {
   border-color: var(--osc-text);
   box-shadow: 0 0 0 1px var(--osc-blue-trace);
 }

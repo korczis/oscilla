@@ -1,9 +1,9 @@
 id: release-provenance
 title: "Every public OSCILLA page proves its version, source digest and commit, and no release reaches Pages ungated"
-statement: "OSCILLA has one canonical product version; every public page proves its version, source digest and commit; a deployment mismatch is fatal; the release gate runs every authoritative suite including visual; Majordomus answers what OSCILLA is and why; and v2.0.0 is tagged, released and verified at the public URL."
+statement: "OSCILLA has one canonical product version; every public page proves its version, source digest and commit and says whether it is the release its version names; a deployment mismatch is fatal; the release gate runs every authoritative suite including visual; Majordomus answers what OSCILLA is and why; and a release is tagged, published from its gate receipt and verified at the public URL."
 invariants:
   - "package.json \"version\" is the only source of the product version; schema versions and the frozen V1 stamp are separate (ADR 0027)"
-  - "The committed dist embeds a source digest, and the Pages workflow stamps one metadata region with the deployed commit (ADR 0028)"
+  - "The committed dist embeds a source digest, and the Pages workflow stamps one metadata region with the deployed commit (ADR 0028) and its release state: only the commit of the tag v<version> (or the release commit deployed before its tag) shows the bare version; a later commit shows <version>+<distance>.g<short> (ADR 0059)"
   - "The release-gate receipt binds the version, the source digest, the sha256 of dist/index.html and the tree, and release:publish refuses while any differs (project.release-receipt-binds-gate)"
   - "The release gate includes a visual regression check with per-region thresholds measured from run-to-run variance (ADR 0029)"
 milestones:
@@ -20,9 +20,9 @@ satisfaction:
     evidence: claim
     ref: "single-file-build"
   - id: fatal-deploy-verification
-    criterion: "Pages serving anything but the released artifact, version and commit fails the deployment"
+    criterion: "Every Pages deployment proves the page it deployed: the committed artifact stamped with its own commit, version, source digest and a release state git confirms; any mismatch fails the deployment. The live page always proves its own commit (main's head), not a release's"
     evidence: command
-    ref: "npm run release:verify-deploy"
+    ref: "npm run release:verify-deploy -- --commit origin/main"
   - id: gate-runs-every-suite
     criterion: "The release gate runs fast verify and every authoritative browser suite, visual included"
     evidence: command
@@ -32,9 +32,9 @@ satisfaction:
     evidence: command
     ref: "majordomus doctor"
   - id: public-release-verified
-    criterion: "The public page carries the release version and commit, matches the artifact, boots and plays"
+    criterion: "A release's own Pages run proved its public page carried the release version and commit, matched the artifact, booted and played in three browsers (release:publish verifies it before the GitHub Release); the live page boots, plays and shows the label its release state gives, so a post-release build never presents itself as the release"
     evidence: command
-    ref: "npm run test:live"
+    ref: "npm run test:live -- --expect-commit origin/main"
 governance:
   - "rule:project.release-receipt-binds-gate"
   - "rule:project.release-flow-complete"
@@ -47,6 +47,8 @@ governance:
   - "adr:adr-0028"
   - "adr:adr-0029"
   - "adr:adr-0047"
+  - "adr:adr-0057"
+  - "adr:adr-0059"
 non_goals:
   - "Requiring release records for releases before v3.4.0: this intent and the completeness check (RECORD_FLOOR = '3.4.0' in scripts/release-record.mjs) start at v3.4.0. V386 and V433 add records for v3.0.0 and v3.1.0 for their own intents once Q007 attaches the assets, which .ai/repo/releases/README.md allows ('A release that predates the attached asset has no record until the asset is attached')"
   - "A deployment record: .ai/repo/deployments holds only its README, and deployment/v1 has no shape for a static Pages site"

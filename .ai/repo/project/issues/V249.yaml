@@ -26,7 +26,7 @@ evidence:
   - covers: verified
     type: test
     command: "npm test && npm run test:engine && npm run release-gate"
-    result: "Reproduced on the old engine (Chromium V249 mechanism 12 events; Firefox 669/1000 stops over the bound under lag); fixed engine 0 mechanism events in 3500 Chromium stops and 0/1000 Firefox with the app draw loop; zero leaks; release gate green"
+    result: "Reproduced on the old engine (Chromium V249 mechanism 12 events; Firefox 669/1000 stops over the bound under lag); fixed engine 0 mechanism events in 3500 Chromium stops and 0/1000 Firefox with the app draw loop; zero leaks; release gate green. Commit ff3c806 is the first commit of #26 before its squash merge to main as e3cb46d; GitHub keeps it under refs/pull/26/head"
     artifact: "fix/v249-engine-release"
     commit: ff3c806f3707d3bf8a0a75833006f5f1f8cf71de
     recorded_at: 2026-10-02T22:32:11Z

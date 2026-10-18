@@ -27,7 +27,7 @@ let seq = 0;
 
 export function createDetails(api, container) {
   const uid = `osc-stl-d${++seq}`;
-  let current = null; // { kind, id, returnKey, sync(model) }
+  let current = null; // { kind, id, returnKey, sync(model), back: fallback data-keys }
 
   const say = (t) => api.say(t);
   const status = el('p', { class: 'osc-stl-dstatus', role: 'status', 'data-osc':
@@ -439,6 +439,7 @@ export function createDetails(api, container) {
   function open(kind, id) {
     const make = FORMS[kind];
     if (!make || !make(id)) return false;
+    current.back = api.fallbackKeys(current.returnKey);
     container.dataset.kind = kind;
     const first = container.querySelector('input, select');
     if (first) first.focus();
@@ -456,10 +457,21 @@ export function createDetails(api, container) {
     return true;
   }
 
-  /** After a model change: refresh the fields, or close when the object is gone. */
+  /**
+   * After a model change: refresh the fields, or close when the object is gone. Focus held in
+   * the panel then goes to the object's fallbacks, read while it still existed (V272 C1: an
+   * undo pressed on Close), never to <body>.
+   */
   function refresh() {
     if (!current) return;
-    if (!current.sync(api.model(), true)) close({ restore: false });
+    if (current.sync(api.model(), true)) {
+      current.back = api.fallbackKeys(current.returnKey);
+      return;
+    }
+    const had = container.contains(document.activeElement);
+    const back = current.back || [];
+    close({ restore: false });
+    if (had) api.focusFirst(back);
   }
 
   return { open, close, refresh, isOpen: () => !!current, current: () => current };

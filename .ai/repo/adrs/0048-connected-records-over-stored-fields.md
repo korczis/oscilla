@@ -3,7 +3,7 @@ schema: adr/v1
 id: adr-0048
 kind: adr
 title: Connected records come from stored fields only, and read present only when the identity verifies
-status: proposed
+status: accepted
 date: 2026-10-06
 tags:
   - experiments
@@ -257,3 +257,11 @@ Proposed:
   experiment measured from a saved project names it, the dialog names the experiment back, both
   links work, and a node added outside the measured path leaves only the measured-path
   connection).
+
+## Resolution notes
+
+### 2026-10-18: accepted by the owner
+
+Accepted by the owner (explicit instruction in the session of 2026-10-18, applied by the
+coordinating Claude session) — implemented as described; evidence: claim `connected-records`;
+`src/js/experiments/connections.js`; `tests/unit/v4-connections.test.mjs`.

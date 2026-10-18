@@ -44,7 +44,8 @@
 //   compact             the Playground's compact Studio shows the same document: a clip
 //                       duplicated in the timeline appears as a clip chip, and undo removes it
 //   layout              no horizontal page overflow at 320, 375, 768, 1024, 1280 and 1536 px;
-//                       light theme text contrast >= 4.5:1 on its surfaces
+//                       light and dark theme text contrast >= 4.5:1 on its surfaces (§272 C6:
+//                       the corner "Tracks" label included)
 //   touch-targets       coarse pointer: buttons and handles >= 44 px
 //   no-console-errors
 // --screens writes PNGs to tests/visual/out-studio/ (not committed).
@@ -691,19 +692,27 @@ function defineChecks() {
           head: ratio('.osc-stl-hname'), tick: ratio('.osc-stl-ticklabel'),
           clip: ratio('[data-clip="clip-1"] .osc-block-name'),
           sweep: ratio('[data-clip="clip-2"] .osc-block-name'),
-          help: ratio('.osc-stl-help') };
+          help: ratio('.osc-stl-help'), corner: ratio('.osc-stl-corner .osc-label') };
       });
-      let contrast = null;
-      for (let i = 0; i < 20; i++) {
-        await settle();
-        const next = await measure();
-        if (contrast && JSON.stringify(next) === JSON.stringify(contrast)) break;
-        contrast = next;
-      }
+      const settled = async () => {
+        let contrast = null;
+        for (let i = 0; i < 20; i++) {
+          await settle();
+          const next = await measure();
+          if (contrast && JSON.stringify(next) === JSON.stringify(contrast)) break;
+          contrast = next;
+        }
+        return contrast;
+      };
+      const contrast = await settled();
+      // V272 C6 (§272 review): the same texts in the dark theme, the corner "Tracks" label
+      // (10 px) included, which read 4.24:1 dark and 4.40:1 light.
       await page.evaluate(() => document.documentElement.removeAttribute('data-theme'));
+      const dark = await settled();
       await page.emulateMedia({ reducedMotion: null });
       const light = Object.values(contrast).every((r) => r >= 4.5);
-      return result({ noOverflow: ok, light }, { out, contrast });
+      return result({ noOverflow: ok, light, dark: Object.values(dark).every((r) => r >= 4.5) },
+        { out, contrast, dark });
     } },
 
     { name: 'touch-targets', fn: async ({ browser }) => {

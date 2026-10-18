@@ -3,7 +3,7 @@ schema: adr/v1
 id: adr-0009
 kind: adr
 title: V1 ships through auto-merge pull requests behind a required CI gate
-status: proposed
+status: accepted
 date: 2026-10-02
 tags:
   - delivery
@@ -51,3 +51,12 @@ WebKit, the visual gate, and a pinned `majordomus doctor` of the `.ai/` layer);
 `tests/README.md` lists what each runs. Pages deploys `dist/` (ADR 0011), not `index.html`.
 Work ships from its own worktree and branch, not from the trunk checkout (see the note on ADR
 0008).
+
+### 2026-10-18: accepted by the owner
+
+Accepted by the owner (explicit instruction in the session of 2026-10-18, applied by the
+coordinating Claude session) — implemented as described; evidence: `main` is protected with the
+required, strict `gate` status check (`gh api repos/korczis/oscilla/branches/main/protection`,
+read 2026-10-18); single changes land by `gh pr merge --auto`; what the gate runs, the `dist/`
+deploy and per-worktree branches as its 2026-10-05 note states; batches by ADR 0055, which keeps
+this decision for a single change.

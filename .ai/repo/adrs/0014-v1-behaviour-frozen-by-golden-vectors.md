@@ -3,7 +3,7 @@ schema: adr/v1
 id: adr-0014
 kind: adr
 title: V1 behaviour is frozen as golden vectors from the V1 file and replayed against the V2 modules
-status: proposed
+status: accepted
 date: 2026-10-02
 tags:
   - testing
@@ -51,3 +51,12 @@ automation schedule an engine call produces.
   in the commit.
 - The golden file is large (about 1.25 MB) and changes only with V1.
 - `npm test` runs the freeze in well under a second; it is part of the CI `gate` job.
+
+## Resolution notes
+
+### 2026-10-18: accepted by the owner
+
+Accepted by the owner (explicit instruction in the session of 2026-10-18, applied by the
+coordinating Claude session) — implemented as described; evidence: claim `patterns-match-v1`
+(`tests/unit/freeze.test.mjs`, `npm test`); `tests/freeze/golden-a7b7a23.json` with
+`extract.cjs` and `vectors.cjs`; `APP_VERSION` '1.0.0' frozen in `src/js/core/constants.js`.

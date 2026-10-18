@@ -191,24 +191,40 @@ every import (`studioExecutionHash` = SHA-256 of the canonical JSON, which equal
 
 Relationship to the recipe (ADR 0019): the recipe stays the one authoritative description of
 what the measurement does, and `configHash` does not include Studio state. A Studio run derives
-its recipe from the topology with `recipeFromStudio(model, { sampleRate, profileId })`:
+its recipe from the topology with
+`recipeFromStudio(model, { sampleRate, profileId, outputLevel })`:
 
 | Recipe field | From |
 | --- | --- |
 | `stimulus` | the logarithmic Sweep wired to a Transfer Analyzer REFERENCE, normalized by `measurement/stimulus.js` exactly as the Sweep adapter renders it (fade = min(`SWEEP_FADE_S`, duration / 4)) |
-| `analysis.preRollS`, `postRollS`, `noiseCheckS` | the pre-roll, tail and noise-check clips (engine `DEFAULT_TIMING` only when absent) |
+| `analysis.preRollS`, `postRollS`, `noiseCheckS` | the pre-roll, tail and noise-check clips (each must be there; no engine default stands in) |
 | `analysis.gapS`, `aggregation` | engine defaults (0.5 s, mean) |
 | `analysis.phase` | the Transfer Analyzer's `phase` |
 
 The recipe is what the timeline shows, or nothing: `recipeFromStudio` refuses, with a reason,
-a timing clip outside the engine's `TIMING_LIMITS`, more than one noise-check, pre-roll,
-stimulus or tail clip, and a stimulus clip shorter than its Sweep (the engine always plays the
-whole sweep); it never substitutes a default for a clip that is there (review V431).
+a timing clip outside the engine's `TIMING_LIMITS`, a noise-check, pre-roll, stimulus, tail,
+analysis or capture clip that is missing or there more than once, and a stimulus clip shorter
+or longer than its Sweep (the engine always plays the whole sweep, and the tail follows it); it
+never substitutes a default for a clip (review V431). The clips must also be the pass the
+engine runs (review V272 A8): the phases in engine order (noise check, pre-roll, stimulus, tail,
+analysis) and back to back, since the engine runs the one capture of pre-roll, sweep and tail
+straight after the noise check and analyses after it, and the capture clip from the pre-roll's
+start to the tail's end, the window the engine records. A clip out of that order, a gap
+between two phases, or a capture clip that is shorter, longer or elsewhere is refused. The
+Measurement Sweep template is such a pass.
 
 The graph also shows only what the run does, because the experiment records the whole graph
-beside the recipe (review V431 A1). `recipeFromStudio` refuses a Sweep whose audio output
+beside the recipe (review V431 A1). `recipeFromStudio` refuses more than one Sweep reference
+into Transfer Analyzers (which one is measured would be a choice the graph does not show; the
+measured path then names the reference into the lowest analyzer id, so it never depends on
+array order, review V272 A4), and a Sweep whose audio output
 reaches anything but the Master Output directly, or nothing (the engine plays its own sweep
-straight to the output, so a filter in between would be listed and never measured). It also
+straight to the output, so a filter in between would be listed and never measured). It refuses
+a muted connection on the measured path (the Sweep reference, its route to the Master Output,
+the observed chain), since the run plays and records through it regardless, and a Master Output
+level other than `outputLevel`, the output level the run plays at (MEASURE's: the Studio gives
+the output back before the run, so the engine's level is the one it held before; review V272
+A5; not checked when `outputLevel` is not a number). It also
 refuses a Calibration node on the observed path that names a profile other than `profileId`,
 the one MEASURE applies (`measureAppliedProfileId`; null for none), a profile MEASURE applies
 that no Calibration node shows, a Calibration that holds the profile's edges (MEASURE never
@@ -250,8 +266,10 @@ The reasons are the transport's (`OFFLINE_TEXT.patternTarget` / `eventTarget` ar
 `TRANSPORT_TEXT`'s): a render plays what live playback plays. The Subtractive Synth lists no
 limitation.
 
-Everything not rendered is listed in `limitations`. The duration is explicit or the timeline end
-(`timelineEnd`), at most `DEFAULT_RENDER.maxDuration` (120 s).
+Everything not rendered is listed in `limitations`. The duration is explicit (the buffer length)
+or `defaultRenderDuration`: the graph's start time (below), the timeline end (`timelineEnd`) and
+the output fade `STUDIO_STOP_S`, rounded up to a millisecond, so the last clip ends before the
+fade starts (3.037 s for a 3 s timeline at 48 kHz); at most `DEFAULT_RENDER.maxDuration` (120 s).
 
 `renderStudioOffline(model, opts)` runs the plan's model through the SAME compiler, runtime,
 adapters and transport (`createStudioRuntime`, `createStudioTransport` with a fixed store and
@@ -274,7 +292,7 @@ resolves the call at once with `{ ok: false, aborted: true }`; the context finis
 background and its buffer is dropped. Neither changes a sample.
 
 The UI is the Studio toolbar's **Render WAV** (`src/js/ui/studio/workspace.js`
-`studioOpenRender` / `studioRenderWav`): a dialog with the duration (the timeline's end, or
+`studioOpenRender` / `studioRenderWav`): a dialog with the duration (`defaultRenderDuration`, or
 `RENDER_DEFAULT_S` = 2 s for a graph without a timeline), the plan's format (48 kHz stereo or a
 Recorder's) and limitations; Render is disabled when the plan refuses. The render runs at the
 plan's rate, never the device's, so the same Studio gives the same bytes on every machine; the

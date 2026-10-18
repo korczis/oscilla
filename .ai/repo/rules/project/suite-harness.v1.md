@@ -4,7 +4,7 @@ version: 1
 kind: rule
 title: Every browser suite runs through one harness that never passes vacuously
 description: A browser suite opens its run through tests/browser/lib/suite.cjs, which refuses a selection it cannot run, fails a leg that checked nothing, fails an undeclared skip under CI and holds a start on a loaded machine.
-statement: Every tests/browser entry suite goes through tests/browser/lib/suite.cjs (v3-ui.cjs is pending, by name, in the contract test). It refuses an empty or unknown browser or origin list with exit 2, never maps an unknown name to a default engine, refuses to launch an engine outside the selection and fails a selected browser whose own engine never started. It fails a leg that ran 0 checks, and under CI it fails any skip not listed with a reason in tests/README.md. Outside CI (a no-op when CI is set) it waits, bounded, for the 1-minute loadavg to fall below OSC_LOAD_MAX (default 2 × cores) and prints the load at start and end.
+statement: Every tests/browser entry suite goes through tests/browser/lib/suite.cjs (v3-ui.cjs is pending, by name, in the contract test). It refuses an empty or unknown browser or origin list with exit 2, never maps an unknown name to a default engine, refuses to launch an engine outside the selection and fails a selected browser whose own engine never started. It fails a leg that ran 0 checks, and under CI, or with OSC_STRICT_SKIPS set (release:prepare sets it for the release gate), it fails any skip not listed with a reason in tests/README.md. Outside CI (a no-op when CI is set) it waits, bounded, for the 1-minute loadavg to fall below OSC_LOAD_MAX (default 2 × cores) and prints the load at start and end.
 status: active
 class: blocking
 depends_on: [project.bounded-test-timing@2]
@@ -86,7 +86,9 @@ with `project.suite-harness:`.
   for exit code 0.
 - "every skip a suite can take is declared in tests/README.md, and nothing else is" reads the
   `skip(` calls of the suites against the table, in both directions, so an undeclared skip
-  fails `npm test` before it fails a CI browser job.
+  fails `npm test` before it fails a CI browser job. `OSC_STRICT_SKIPS=1` gives a local run
+  CI's skip semantics without CI's no-op load gate; `release:prepare` runs the gate with it
+  (`tests/unit/release-gate-env.test.mjs`, "V272 D6").
 - The mutation cases are tests of the same file, made on the text of a conforming suite
   held in the test: five spellings of reading `OSC_BROWSERS` / `OSC_ORIGINS`, nine of a
   default or outright engine, a raw `require('playwright')`, a missing tally, a missing
@@ -126,7 +128,7 @@ What the mechanism does not decide:
 
 A refused selection exits 2 before any browser starts and names the list it expected. A leg
 or browser without checks, an engine outside the selection, a selected browser whose engine
-never started and an undeclared skip under CI exit 1 with a `FAIL project.suite-harness:
+never started and an undeclared skip under CI or `OSC_STRICT_SKIPS` exit 1 with a `FAIL project.suite-harness:
 [suite]` line.
 A machine that stays loaded ends the suite with the load, the limit and the time waited;
 nothing ran, so nothing is reported as passed or failed. The fix is never the default: a new

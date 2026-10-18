@@ -3,7 +3,7 @@ schema: adr/v1
 id: adr-0042
 kind: adr
 title: "Studio operation trace: one correlation id, bounded, not evidence"
-status: proposed
+status: accepted
 date: 2026-10-05
 tags:
   - studio
@@ -174,3 +174,12 @@ Proposed:
   `trace-refused`, `trace-phone`, `trace-themes`, `trace-one-fill` and `trace-focus` in
   `tests/browser/v31-studio-runtime.cjs` run in Chromium, Firefox and WebKit. Revised if a step needs a cause the producer cannot observe; that cause
   then gets recorded where it is observed, never inferred in the view.
+
+## Resolution notes
+
+### 2026-10-18: accepted by the owner
+
+Accepted by the owner (explicit instruction in the session of 2026-10-18, applied by the
+coordinating Claude session) — implemented as described; evidence: claim
+`studio-operation-trace`; `src/js/core/trace.js` (`TRACE_CAP` 256);
+`tests/unit/v31-studio-trace.test.mjs`.

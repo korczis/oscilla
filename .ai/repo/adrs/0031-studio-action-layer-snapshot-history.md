@@ -3,7 +3,7 @@ schema: adr/v1
 id: adr-0031
 kind: adr
 title: Every Studio mutation is a dispatched action reduced into a new immutable model; undo and redo restore earlier snapshots
-status: proposed
+status: accepted
 date: 2026-10-02
 tags:
   - studio
@@ -79,3 +79,13 @@ Proposed:
 
 Recorded as Majordomus decisions and repeated here: `STUDIO_HISTORY_LIMIT` is 200 entries;
 `PASTE_OFFSET` is (24, 24) logical units for paste and duplicate.
+
+## Resolution notes
+
+### 2026-10-18: accepted by the owner
+
+Accepted by the owner (explicit instruction in the session of 2026-10-18, applied by the
+coordinating Claude session) — implemented as described; evidence: claims
+`studio-exact-undo-redo` and `studio-subgraph-paste`; the store and snapshot history in
+`src/js/studio/actions.js` and `src/js/studio/history.js` (`STUDIO_HISTORY_LIMIT`,
+`PASTE_OFFSET`); `tests/unit/v31-studio-model.test.mjs`.

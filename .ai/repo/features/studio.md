@@ -13,7 +13,7 @@ domain: studio
 rules: [project.studio-model-is-canonical, project.visual-identity-lock, project.single-file-deliverable]
 docs: [docs/v31/user-guide.md, docs/v31/studio-model.md, docs/v31/compiler.md, docs/v31/timeline.md, docs/v31/patches-and-provenance.md, docs/v31/performance.md, docs/specs/oscilla-v3.1-studio.md]
 adrs: [adr-0030, adr-0031, adr-0034]
-claims: [studio-model-plain-data, studio-exact-undo-redo, studio-one-store-projections, studio-non-drag-operation, studio-file-protocol]
+claims: [studio-model-plain-data, studio-exact-undo-redo, studio-one-store-projections, studio-runtime-divergence, studio-non-drag-operation, studio-file-protocol]
 use_cases: [studio-compact-full-sync, studio-undo-and-redo, studio-copy-and-paste-a-subgraph, studio-operate-without-dragging, studio-open-from-file]
 related: [studio-signal-graph, studio-timeline, studio-automation, studio-patches, studio-measurement-routing]
 tags: [v31, studio]

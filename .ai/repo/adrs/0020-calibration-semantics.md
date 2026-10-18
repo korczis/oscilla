@@ -3,7 +3,7 @@ schema: adr/v1
 id: adr-0020
 kind: adr
 title: Frequency-response and absolute-level calibration are separate kinds, interpolated in log frequency and never extrapolated
-status: proposed
+status: accepted
 date: 2026-10-02
 tags:
   - calibration
@@ -79,3 +79,10 @@ default extrapolation policy is `none` (uncovered, marked), and holding the edge
 only as the explicit policy `hold`, still flagged uncovered. Profiles and level calibrations
 are kept in page memory only. Proven by claims `calibration-profiles` and
 `spl-only-with-level-calibration`.
+
+### 2026-10-18: accepted by the owner
+
+Accepted by the owner (explicit instruction in the session of 2026-10-18, applied by the
+coordinating Claude session) — implemented as described; evidence: claims `calibration-profiles`
+and `spl-only-with-level-calibration`; `src/js/calibration/` as its 2026-10-05 note lists
+(`tests/unit/v3-calibration.test.mjs`).

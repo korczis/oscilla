@@ -3,7 +3,7 @@ schema: adr/v1
 id: adr-0010
 kind: adr
 title: V1 is finished, verified and deployed before V2 starts on its own branch
-status: proposed
+status: accepted
 date: 2026-10-02
 tags:
   - planning
@@ -47,6 +47,12 @@ Done as decided. V1 (sections 1-63) was finished, verified and deployed from `ma
 `v1.0.0`; V2 was built on its own branch and shipped as its own pull request (9fe0a15, #3);
 S064-S095 remain blocked on S000. V3 and the V3.1 Studio followed the same pattern. The
 `oscilla-wt/feature/v2` worktree and the V1-only file layout it names no longer exist.
+
+### 2026-10-18: accepted by the owner
+
+Accepted by the owner (explicit instruction in the session of 2026-10-18, applied by the
+coordinating Claude session) — implemented as described; evidence: tag `v1.0.0`; V2 shipped as
+its own pull request (9fe0a15, #3); S064-S095 still blocked on S000 (its 2026-10-05 note).
 
 ### 2026-10-18: the tail was not lost; V1 stays sections 1-63
 

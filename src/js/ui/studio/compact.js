@@ -227,13 +227,15 @@ export function mountCompact(host, svc) {
     setText(counts, view.counts);
     setText(summary, view.summary);
     pathGrid.style.gridTemplateColumns = `repeat(${Math.max(1, view.path.columns)}, max-content)`;
-    // The chips are rebuilt: a focused chip keeps focus on its rebuilt twin (V431 U5).
+    // The chips are rebuilt: a focused chip keeps focus on its rebuilt twin (V431 U5). A chip
+    // selects and pressing it again does not deselect, so the selection is aria-current, not
+    // a toggle state (§272 C3).
     const had = document.activeElement;
     const keepNode = had && pathGrid.contains(had) ? had.dataset.nodeId : null;
     const keepClip = had && strip.contains(had) ? had.dataset.clipId : null;
     replaceChildren(pathGrid, view.path.nodes.map((n) => h('button', { type: 'button',
       class: `osc-sc-node osc-sc-node--${n.category}`, 'data-node-id': n.id,
-      'data-osc': 'studio.compact.node', 'aria-pressed': n.selected ? 'true' : 'false',
+      'data-osc': 'studio.compact.node', 'aria-current': n.selected ? 'true' : null,
       'aria-label': `${n.name}, ${n.summary}`, title: `${n.name} · ${n.summary}`,
       style: `grid-column: ${n.col + 1}; grid-row: ${n.row + 1}`, text: n.label,
       onClick: () => selectNode(n.id),
@@ -246,7 +248,7 @@ export function mountCompact(host, svc) {
     replaceChildren(strip, view.clips.items.map((c) => {
       const el = h('button', { type: 'button', class: `osc-sc-clip osc-sc-clip--${c.kind}${
         c.block ? ` osc-block--${c.block}` : ''}`, 'data-clip-id': c.id,
-      'data-osc': 'studio.compact.clip', 'aria-pressed': c.selected ? 'true' : 'false',
+      'data-osc': 'studio.compact.clip', 'aria-current': c.selected ? 'true' : null,
       'aria-label': c.aria, title: c.aria,
       style: `left: ${c.left}px; width: ${c.width}px; --osc-sc-row: ${c.row}`, text: c.label });
       el.addEventListener('pointerdown', (e) => clipDown(e, c.id, el));
