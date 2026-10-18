@@ -142,9 +142,15 @@ test('A3/X5 a timing clip outside the engine limits refuses the recipe; no silen
   assert.match(r.reason, /pre-roll clip lasts 8 s; the measurement engine accepts 0\.05-5 s/);
   assert.match(recipeFromStudio(unvalidated('clip-4', 0.05), { sampleRate: SR }).reason,
     /tail clip/);
-  // In range: the clip's own duration, as before.
+  // In range: the clip's own duration, as before (the later phases follow it, V272 A8).
   const fine = measurement();
-  fine.dispatch({ type: 'CLIP_RESIZE', clipId: 'clip-2', duration: 2 });
+  for (const a of [{ type: 'CLIP_RESIZE', clipId: 'clip-2', duration: 2 },
+    { type: 'CLIP_MOVE', clipId: 'clip-5', start: 9 },
+    { type: 'CLIP_MOVE', clipId: 'clip-4', start: 8 },
+    { type: 'CLIP_MOVE', clipId: 'clip-3', start: 3 },
+    { type: 'CLIP_RESIZE', clipId: 'clip-6', duration: 8 }]) {
+    assert.ok(fine.dispatch(a).ok, JSON.stringify(a));
+  }
   assert.equal(recipeFromStudio(fine.getModel(), { sampleRate: SR }).recipe.analysis.preRollS, 2);
 });
 

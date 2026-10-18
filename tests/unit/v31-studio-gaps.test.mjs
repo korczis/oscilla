@@ -237,13 +237,20 @@ function syntheticIo({ gain = 0.5, delay = 48 } = {}) {
   };
 }
 
-/** A short Measurement Sweep (1 s sweep, short phases) through the store. */
+/**
+ * A short Measurement Sweep (1 s sweep, short phases) through the store, its clips still the
+ * pass the engine runs: back to back, the capture from pre-roll to tail (V272 review A8).
+ */
 function shortMeasurementModel() {
   const store = storeOf(templateModel(MEASUREMENT_TEMPLATE_ID));
   const ok = (a) => assert.ok(store.dispatch(a).ok, JSON.stringify(a));
   ok({ type: 'NODE_PARAM_SET', nodeId: 'sweep-1', key: 'duration', value: 1 });
   ok({ type: 'CLIP_RESIZE', clipId: 'clip-1', duration: 0.25 });
-  ok({ type: 'CLIP_RESIZE', clipId: 'clip-3', duration: 1 });
+  ok({ type: 'CLIP_MOVE', clipId: 'clip-2', start: 0.25 });
+  ok({ type: 'CLIP_RESIZE', clipId: 'clip-3', start: 0.75, duration: 1 });
+  ok({ type: 'CLIP_MOVE', clipId: 'clip-4', start: 1.75 });
+  ok({ type: 'CLIP_MOVE', clipId: 'clip-5', start: 2.75 });
+  ok({ type: 'CLIP_RESIZE', clipId: 'clip-6', start: 0.25, duration: 2.5 });
   return store.getModel();
 }
 
