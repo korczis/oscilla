@@ -400,3 +400,24 @@ test('V272 A2: a rate edge into a clocked Step Modulator is inactive with its re
   assert.equal(eh.status, 'inactive');
   assert.match(eh.reason, /clocked Step Modulator steps on its clock trigger; rate has no effect/);
 });
+
+test('V272 A2: every PLAY counts its clock triggers from 0 (also right after a STOP)', async () => {
+  const { store, target } = triggerStudio('step-modulator', { trigger: true });
+  const steps = store.getModel().graph.nodes.find((n) => n.id === target).params.steps;
+  const fx = createFakeAudioEnv({ sampleRate: SR });
+  const engine = new AudioEngine({ env: fx.env });
+  assert.ok(engine.init());
+  const runtime = createStudioRuntime({ engine });
+  const transport = createStudioTransport({ runtime, engine, store });
+  ok(transport.start());
+  fx.advance(0.6);
+  const stopping = transport.stop(); // not awaited
+  const { baseTime: b } = ok(transport.start());
+  fx.advance(0.3);
+  await stopping;
+  const offset = runtime.nodes.get(target).outputs.control.offset;
+  const bF = Math.round(b * SR);
+  const sets = offset.calls.filter((c) => c[0] === 'setValueAtTime' && c[2] >= b - 1e-9)
+    .map((c) => [c[1], c[2]]);
+  assert.deepEqual(sets.slice(0, 2), [[steps[0], b], [steps[1], (bF + 0.5 * SR) / SR]]);
+});

@@ -1285,8 +1285,9 @@ export function createStudioTransport({
     // starts a new playback whose own records the cleanup below must not touch (V272 B1).
     const ownVoices = [...voices.values()];
     const ownGates = [...gates.values()];
-    const ownTicks = [...ticks.values()];
-    ticksPassed.clear(); // the next PLAY counts its triggers from 0
+    // Clock triggers are instants with nothing to release: the next PLAY counts from 0.
+    ticks.clear();
+    ticksPassed.clear();
     return runtime.stop({ fast }).then((c) => {
       // Everything of this playback is silent and released by now; end the voices' own
       // bookkeeping too.
@@ -1295,7 +1296,6 @@ export function createStudioTransport({
         if (voices.get(v.key) === v) voices.delete(v.key);
       }
       for (const g of ownGates) if (gates.get(g.key) === g) gates.delete(g.key);
-      for (const k of ownTicks) if (ticks.get(k.key) === k) ticks.delete(k.key);
       return counts(c);
     });
   }
