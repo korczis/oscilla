@@ -1,0 +1,49 @@
+{
+  "note": "The source-size budget of tests/unit/source-size-budget.test.mjs: a byte cap for every tracked file under src/js, and src/index.html, above 40 000 bytes. A file at or below 40 000 bytes has no entry, and its effective cap is 40 000 bytes; an entry for a missing file or a file of 40 000 bytes or less fails, so a split file loses its cap. A cap is at most its file's headroom ceiling: the size plus 10 %, rounded up to the next 1 000 bytes, so a shrink lowers the cap in the same change; a file's first cap is that ceiling. A cap only falls: the test judges every version of this file in its first-parent git history, the working tree's included, against the version before it, each on its own raises entries, and a cap above its effective value there, a file passing 40 000 bytes for the first time included, passes only when it is declared in the raises ledger of the pull request that needs it: an entry { file, cap, pr, reason } naming the file, the new cap, the pull request number and a reason of more than 30 characters. Raises entries are added, never edited. measured records the sizes (wc -c) at the commit the first caps were taken on; it is history and is not updated. The budget bounds how code is distributed between files, not its total, which the dist budget of scripts/build-config.mjs bounds.",
+  "measured": {
+    "commit": "50f6d6c9a5608d0494cb61802d06b848c712d610",
+    "sizes": {
+      "src/index.html": 255382,
+      "src/js/audio/audio-engine.js": 45543,
+      "src/js/core/instrument.js": 55166,
+      "src/js/experiments/schema.js": 47908,
+      "src/js/experiments/validate.js": 57642,
+      "src/js/measurement/capture.js": 49858,
+      "src/js/measurement/engine.js": 70955,
+      "src/js/measurement/quality.js": 66213,
+      "src/js/studio/actions.js": 45265,
+      "src/js/studio/adapters/nodes.js": 40583,
+      "src/js/studio/runtime.js": 52096,
+      "src/js/studio/transport.js": 72327,
+      "src/js/studio/validate.js": 43833,
+      "src/js/ui/experiments.js": 47732,
+      "src/js/ui/measure.js": 115572,
+      "src/js/ui/studio/graph-editor.js": 48427,
+      "src/js/ui/studio/inspector.js": 73184,
+      "src/js/ui/studio/timeline-editor.js": 47538,
+      "src/js/ui/studio/workspace.js": 78124
+    }
+  },
+  "caps": {
+    "src/index.html": 281000,
+    "src/js/audio/audio-engine.js": 51000,
+    "src/js/core/instrument.js": 61000,
+    "src/js/experiments/schema.js": 53000,
+    "src/js/experiments/validate.js": 64000,
+    "src/js/measurement/capture.js": 55000,
+    "src/js/measurement/engine.js": 79000,
+    "src/js/measurement/quality.js": 73000,
+    "src/js/studio/actions.js": 50000,
+    "src/js/studio/adapters/nodes.js": 45000,
+    "src/js/studio/runtime.js": 58000,
+    "src/js/studio/transport.js": 80000,
+    "src/js/studio/validate.js": 49000,
+    "src/js/ui/experiments.js": 53000,
+    "src/js/ui/measure.js": 128000,
+    "src/js/ui/studio/graph-editor.js": 54000,
+    "src/js/ui/studio/inspector.js": 81000,
+    "src/js/ui/studio/timeline-editor.js": 53000,
+    "src/js/ui/studio/workspace.js": 86000
+  },
+  "raises": []
+}
