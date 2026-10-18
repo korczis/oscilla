@@ -1,0 +1,68 @@
+intent: v2-laboratory
+reviewed_at: "62cccb363c9b71e22c2df311a6222012761df04c"
+reviewed_by: "claude-opus-5.5 (critic, oscilla-35 session)"
+findings:
+  - id: evidence-never-recorded
+    class: delivery_verification
+    subject: "M010"
+    finding: "Twenty-three of twenty-six criteria are claims proven by node --test or Playwright suites that Majordomus 0.29 cannot record, and three are commands the ledger never derives. Every milestone is DONE and the intent reads verifying 0/26 permanently. The remedy is the post-alpha Majordomus request for recording node --test and Playwright runs."
+    blocking: false
+    resolution:
+      state: open
+  - id: visual-command-cannot-fail
+    class: unproven_assumption
+    subject: "v2-laboratory#visual-reference"
+    finding: "The criterion reads within its thresholds, and its evidence is npm run visual, which is scripts/visual-compare.mjs: its header says the gate is npm run test:visual and this script only reports, and it exits non-zero only on an exception. The command can never decide the criterion. The threshold gate is scripts/visual-gate.mjs (npm run test:visual, in test:release and CI's Visual regression gate job)."
+    blocking: false
+    resolution:
+      state: open
+  - id: visual-gate-locks-a-deviation
+    class: unproven_assumption
+    subject: "v2-laboratory#visual-reference"
+    finding: "Even the real gate does not show that the desktop matches the supplied reference. It judges against accepted values in tests/visual/baseline.json: on linux-x64, 15.91 % of the frame's pixels differ from tests/visual/reference.png (7.03 % without the data hosts). It proves no regression from an accepted deviation. ADR 0029 decided variance-based thresholds for the regression check; nothing decided that a 16 % difference is a match. The at-least-three-refinement-passes clause has no criterion at all (V232's evidence only)."
+    blocking: false
+    resolution:
+      state: open
+  - id: limitations-clause-has-no-criterion
+    class: missed_requirement
+    subject: "M034"
+    finding: "The statement's last clause (each known v2.0.0 limitation is fixed and proven, or documented as accepted with evidence) has no criterion. M034's issues are mapped onto engine-plays-and-releases, continuous-sweep and layout-and-accessibility, and the repository holds no closed list of the v2.0.0 limitations to check completeness against: M034's evidence asserts that V249-V253 are all of them."
+    blocking: false
+    resolution:
+      state: open
+  - id: graph-export-unproven
+    class: missed_requirement
+    subject: "V223"
+    finding: "V223 (Audio and graph export) serves only wav-export. No claim covers graph or chart export, so export in the definition of done is half decided."
+    blocking: false
+    resolution:
+      state: open
+  - id: public-check-is-not-v2
+    class: delivery_verification
+    subject: "v2-laboratory#public-and-identified"
+    finding: "npm run test:live tests the page Pages serves now (964e25d, labelled 3.10.3). The criterion names no version, so any release satisfies it, and it cannot decide that V2 itself was deployed, opened and smoke-tested at the public URL: that is history held only by V241-V246's evidence. Favicon, Open Graph and social-card tags (V243-V245) and the link preview image (V246) are mapped to it although live-smoke.cjs checks none of them; verify-deploy checks only that the share images are byte-equal PNGs."
+    blocking: false
+    resolution:
+      state: open
+  - id: bioacoustics-values-unchecked
+    class: unproven_assumption
+    subject: "v2-laboratory#bioacoustics"
+    finding: "The claim note of bioacoustics-cited says it is not machine-checked that each value is the one the cited source gives, nor what the canvas chart (src/js/charts/bio-chart.js) draws. The criterion (every range shown comes from a cited publication) can read met while a number is mistranscribed or a bar is drawn from another value."
+    blocking: false
+    resolution:
+      state: open
+  - id: claim-notes-stale-on-ci
+    class: regression_risk
+    subject: "v2-laboratory#about-provenance"
+    finding: "The notes of about-provenance-matches-git and about-names-current-release in docs/CLAIMS.yaml still say the git comparison and the published-lines check are skipped in a shallow clone and in CI. CI1 (#147) made CI fetch full history and tags and fail rather than skip. The notes now understate what CI proves and overstate what a local shallow run proves, and tests/unit/knowledge-integrity.test.mjs checks note paths and algorithm ids, not this kind of drift."
+    blocking: false
+    resolution:
+      state: open
+  - id: about-workspace-is-v3-surface
+    class: unnecessary_work
+    subject: "v2-laboratory#about-workspace"
+    finding: "about-workspace and about-provenance (V248) describe the About view as it is today, which names the 3.x lines and the v4 timeline (rule project.about-names-current-release). They are product-wide guarantees, not V2 ones, and keeping them under the V2 intent means a later About change is judged against a laboratory that no longer exists."
+    blocking: false
+    resolution:
+      state: rejected
+      because: "project.about-names-current-release binds the About view to every release line, V2 included; the criterion reads the guarantee the current build keeps, which is how this intent's invariants are written (project.single-file-deliverable applies the same way). Moving it would leave the V2 About requirement without a reader."

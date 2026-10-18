@@ -10,6 +10,7 @@ weight: 90
 difficulty: basic
 commands: [knowledge]
 claims: [config-file-round-trip, link-restores-configuration, presets-save-and-load]
+applications: [teaching-sound-and-hearing]
 tags: [oscilla, product-acceptance]
 ---
 

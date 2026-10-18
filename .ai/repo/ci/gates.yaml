@@ -1,0 +1,190 @@
+# The CI model of OSCILLA: which validation gates exist, which job of
+# .github/workflows/ci.yml runs each, and which changed paths select them. Majordomus reads it
+# (Majordomus 0.29: `check` and `finish` plan and judge a task's gates from it,
+# `evidence --gate <id> --exit <status>` records a run, `gates.completion` is the judgement
+# every surface reads). ci.yml stays the workflow; this file describes it and
+# tests/unit/ci-gates-model.test.mjs fails when the two disagree on the job set, the commands,
+# the path selection or the aggregate's needs.
+#
+# What ci.yml does, and therefore what this model says:
+#   - one gate per CI job, and one per browser leg of a job with a browser matrix, named
+#     `<job>-<browser>`: a leg is its own runner, its own verdict and its own log;
+#   - `runs` is the command a worker runs locally to reproduce the job: the same npm scripts
+#     and repository programs as the job's steps, a leg narrowed with OSC_BROWSERS as the
+#     job's env narrows it. Setup (npm ci, browser and PulseAudio installs, artifact upload)
+#     is not part of a gate;
+#   - ci.yml starts on every pull request and filters no path, and no job is conditional
+#     except the aggregate's `if: always()`, so every gate is `always: true`: every plan
+#     selects it, and any changed file can make a recorded run of it stale. The one path class
+#     covers the whole tree and names no gate, so a plan reads "affected" with every gate
+#     selected as always, never "a changed path is in no class";
+#   - `gate` is the aggregate that branch protection requires; it `requires` every gate of
+#     the jobs it `needs`, so a failing one leaves it blocked rather than queued.
+#
+# Not modelled: .github/workflows/pages.yml (a push to main deploys and verifies Pages, after
+# the change has landed; no gate of a task measures it) and cadence.yml (the release lag of
+# main, rule project.deploy-often). No gate is `at-finish` or `on-demand`.
+#
+# Patterns: `**` crosses directories, `*` does not, a pattern without a wildcard names one
+# path. Paths are repository-relative, as `git diff --name-only` prints them.
+version: 1
+
+gates:
+  - id: unit
+    job: unit
+    always: true
+    runs: npm test && npm run version:check && npm run build:check && npm run verify-dist
+    summary: the unit and freeze suites, one product version everywhere, the committed dist equal to a clean rebuild, and the artifact rules (single file, no runtime fetch, licence notices, budget)
+
+  - id: engine-chromium
+    job: engine
+    always: true
+    runs: OSC_BROWSERS=chromium npm run test:engine
+    summary: the V1 engine checks against the V2 engine in Chromium
+
+  - id: engine-firefox
+    job: engine
+    always: true
+    runs: OSC_BROWSERS=firefox npm run test:engine
+    summary: the V1 engine checks against the V2 engine in Firefox (a PulseAudio null sink on the runner)
+
+  - id: engine-webkit
+    job: engine
+    always: true
+    runs: OSC_BROWSERS=webkit npm run test:engine
+    summary: the V1 engine checks against the V2 engine in WebKit
+
+  - id: suites-chromium
+    job: suites
+    always: true
+    runs: OSC_BROWSERS=chromium npm run test:dsp && OSC_BROWSERS=chromium npm run test:labs && OSC_BROWSERS=chromium npm run test:sequencer
+    summary: the DSP modules, the chart renderers and lab controllers, and the pattern sequencer on real Web Audio in Chromium
+
+  - id: suites-firefox
+    job: suites
+    always: true
+    runs: OSC_BROWSERS=firefox npm run test:dsp && OSC_BROWSERS=firefox npm run test:labs && OSC_BROWSERS=firefox npm run test:sequencer
+    summary: the DSP modules, the chart renderers and lab controllers, and the pattern sequencer on real Web Audio in Firefox
+
+  - id: suites-webkit
+    job: suites
+    always: true
+    runs: OSC_BROWSERS=webkit npm run test:dsp && OSC_BROWSERS=webkit npm run test:labs && OSC_BROWSERS=webkit npm run test:sequencer
+    summary: the DSP modules, the chart renderers and lab controllers, and the pattern sequencer on real Web Audio in WebKit
+
+  - id: measure-chromium
+    job: measure
+    always: true
+    runs: OSC_BROWSERS=chromium npm run test:measure
+    summary: the V3 measurement engine on real Web Audio and the MEASURE and EXPERIMENTS workspaces of dist, file:// and /oscilla/, in Chromium
+
+  - id: measure-firefox
+    job: measure
+    always: true
+    runs: OSC_BROWSERS=firefox npm run test:measure
+    summary: the V3 measurement engine on real Web Audio and the MEASURE and EXPERIMENTS workspaces of dist, file:// and /oscilla/, in Firefox
+
+  - id: measure-webkit
+    job: measure
+    always: true
+    runs: OSC_BROWSERS=webkit npm run test:measure
+    summary: the V3 measurement engine on real Web Audio and the MEASURE and EXPERIMENTS workspaces of dist, file:// and /oscilla/, in WebKit
+
+  - id: studio-chromium
+    job: studio
+    always: true
+    runs: OSC_BROWSERS=chromium npm run test:studio
+    summary: the V3.1 STUDIO workspace, graph and timeline editors, transport and automation of dist, file:// and /oscilla/, in Chromium
+
+  - id: studio-firefox
+    job: studio
+    always: true
+    runs: OSC_BROWSERS=firefox npm run test:studio
+    summary: the V3.1 STUDIO workspace, graph and timeline editors, transport and automation of dist, file:// and /oscilla/, in Firefox
+
+  - id: studio-webkit
+    job: studio
+    always: true
+    runs: OSC_BROWSERS=webkit npm run test:studio
+    summary: the V3.1 STUDIO workspace, graph and timeline editors, transport and automation of dist, file:// and /oscilla/, in WebKit
+
+  - id: browser-chromium
+    job: browser
+    always: true
+    runs: OSC_BROWSERS=chromium npm run test:browser
+    summary: dist from file:// and the /oscilla/ sub-path; layout, touch targets and stop, in Chromium
+
+  - id: browser-firefox
+    job: browser
+    always: true
+    runs: OSC_BROWSERS=firefox npm run test:browser
+    summary: dist from file:// and the /oscilla/ sub-path; layout, touch targets and stop, in Firefox
+
+  - id: browser-webkit
+    job: browser
+    always: true
+    runs: OSC_BROWSERS=webkit npm run test:browser
+    summary: dist from file:// and the /oscilla/ sub-path; layout, touch targets and stop, in WebKit
+
+  # The accepted linux-x64 values in tests/visual/baseline.json were measured in the job's
+  # container image (mcr.microsoft.com/playwright, the lockfile's Playwright version); a run
+  # outside that image is not comparable.
+  - id: visual
+    job: visual
+    always: true
+    runs: npm run test:visual
+    summary: the 1536x1024 --play scene and the MEASURE and STUDIO references against the accepted baselines
+
+  - id: knowledge
+    job: knowledge
+    always: true
+    runs: majordomus doctor --json > doctor.jsonl; jq -e -s -f .github/doctor-verdict.jq doctor.jsonl
+    summary: the .ai layer by majordomus doctor at the pinned release; every FAIL fails but the git-hook wiring of policy enforcement, and an output without an OK layout line fails
+
+  # The two process rules judge a pull request, and the program that judges is the base
+  # branch's copy (.github/scripts/base-rule.sh); <base>, <pr.json>, <head> and <pr> are the
+  # pull request's.
+  - id: fail-first
+    job: fail-first
+    always: true
+    runs: .github/scripts/base-rule.sh origin/<base> scripts/fail-first.mjs --pr-json <pr.json> --head <head> --base-branch origin/<base>
+    summary: a feat or fix pull request's added or changed unit tests fail on the merge base and pass on the head, or its body says fail-first n/a with a reason (project.fail-first)
+
+  - id: review-verdict
+    job: review-verdict
+    always: true
+    runs: .github/scripts/base-rule.sh origin/<base> scripts/review-verdict.mjs --pr <pr> --head HEAD --base-branch origin/<base>
+    summary: a pull request that changes a guarded path carries a reviewer's verdict for the content it changes (project.review-verdict)
+
+  - id: gate
+    job: gate
+    always: true
+    requires:
+      - unit
+      - knowledge
+      - fail-first
+      - review-verdict
+      - engine-chromium
+      - engine-firefox
+      - engine-webkit
+      - suites-chromium
+      - suites-firefox
+      - suites-webkit
+      - measure-chromium
+      - measure-firefox
+      - measure-webkit
+      - studio-chromium
+      - studio-firefox
+      - studio-webkit
+      - browser-chromium
+      - browser-firefox
+      - browser-webkit
+      - visual
+    runs: echo "$RESULTS" | jq -e 'to_entries | all(.value.result == "success")'
+    summary: the required check of branch protection; every job it needs succeeded
+
+classes:
+  # ci.yml filters no path: a change anywhere runs every job, which `always` already says.
+  - id: repository
+    paths: ["**"]
+    gates: []

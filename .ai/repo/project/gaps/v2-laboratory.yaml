@@ -1,0 +1,172 @@
+intent: v2-laboratory
+observed_at: "62cccb363c9b71e22c2df311a6222012761df04c"
+recorded_by: "claude-opus-5.5 (critic, oscilla-35 session)"
+recorded_at: "2026-10-18"
+observations:
+  - id: verify-at-head
+    statement: "npm run verify passes at 62cccb3: 2869 unit tests, 0 failed, 0 skipped; build:check matches the committed dist; verify-dist PASS (no file or remote reference, no fetch, import() or service worker, budget ok); doctor 0 failures."
+    source: "command:npm run verify"
+  - id: ci-at-head
+    statement: "CI run 39078375041 (PR #179, head 62cccb3): unit/build/artifact rules, V1 engine checks, DSP/labs/sequencer and the Browser gate succeeded in chromium, firefox and webkit, and the Visual regression gate (npm run test:visual) succeeded; the gate failed only on review-verdict."
+    source: "command:gh run view 39078375041 --json jobs"
+  - id: ledger-cannot-derive
+    statement: "majordomus intent explain v2-laboratory: verifying, 0 of 26 criteria met; every claim has no recorded run and the three commands are not derivable."
+    source: "command:majordomus intent explain v2-laboratory"
+  - id: claim-unrunnable
+    statement: "majordomus evidence claim single-file-build reports state unrunnable, as every node --test or Playwright claim does under Majordomus 0.29."
+    source: "command:majordomus evidence claim single-file-build"
+  - id: visual-compare-reports
+    statement: "scripts/visual-compare.mjs (npm run visual) says in its header that the gate is npm run test:visual and that it only reports; it exits 1 only when compare() throws."
+    source: "file:scripts/visual-compare.mjs"
+  - id: visual-baseline
+    statement: "tests/visual/baseline.json holds accepted values per environment, written only by visual-gate --update-baseline; on linux-x64 15.91 % of the frame's pixels differ from tests/visual/reference.png (7.03 % without the data hosts), over 3 runs."
+    source: "file:tests/visual/baseline.json"
+  - id: bio-note
+    statement: "The note of claim bioacoustics-cited says that each value being the one the cited source gives, and the bars the canvas chart draws, are not machine-checked."
+    source: "file:docs/CLAIMS.yaml"
+  - id: m034-evidence
+    statement: "M034 (V2 maintenance) is DONE on one release-gate run at 6512083 whose result asserts that every known V2 limitation is V249-V253; no tracked list of the v2.0.0 limitations exists to compare against."
+    source: "file:.ai/repo/project/milestones/M034.yaml"
+  - id: public-is-main
+    statement: "Pages serves commit 964e25d labelled 3.10.3, 155 commits after the v3.10.3 tag (e4772ee); verify-deploy at 62cccb3 fails because the checkout is not the deployed commit."
+    source: "command:npm run release:verify-deploy"
+  - id: about-notes
+    statement: "The notes of about-provenance-matches-git and about-names-current-release say a shallow clone and CI skip their git checks; the v4 ledger (CI1, #147) records that CI now fetches full history and tags and fails instead of skipping."
+    source: "file:docs/v4/completion-ledger.md"
+conditions:
+  - criterion: single-file-build
+    state: satisfied
+    observations:
+      - verify-at-head
+      - ci-at-head
+  - criterion: dist-self-contained
+    state: satisfied
+    observations:
+      - verify-at-head
+  - criterion: v1-frozen
+    state: satisfied
+    observations:
+      - verify-at-head
+  - criterion: engine-plays-and-releases
+    state: satisfied
+    observations:
+      - ci-at-head
+  - criterion: continuous-sweep
+    state: satisfied
+    observations:
+      - ci-at-head
+  - criterion: spectrum
+    state: satisfied
+    observations:
+      - verify-at-head
+  - criterion: spectrogram
+    state: satisfied
+    observations:
+      - verify-at-head
+  - criterion: microphone-analysis
+    state: satisfied
+    because: "On a fake context and on Playwright's fake device."
+    observations:
+      - verify-at-head
+      - ci-at-head
+  - criterion: generator-mic-compare
+    state: satisfied
+    observations:
+      - verify-at-head
+  - criterion: sequencer
+    state: satisfied
+    observations:
+      - verify-at-head
+      - ci-at-head
+  - criterion: filter
+    state: satisfied
+    observations:
+      - ci-at-head
+  - criterion: adsr
+    state: satisfied
+    observations:
+      - verify-at-head
+  - criterion: additive
+    state: satisfied
+    observations:
+      - verify-at-head
+  - criterion: phase-and-lissajous
+    state: satisfied
+    observations:
+      - verify-at-head
+  - criterion: stereo-correlation
+    state: satisfied
+    observations:
+      - verify-at-head
+  - criterion: bioacoustics
+    state: unknown
+    because: "Every entry carries a full source, criterion and disclaimer, but whether each value comes from its source, and what the chart draws, is not checked by anything."
+  - criterion: link-state
+    state: satisfied
+    observations:
+      - verify-at-head
+      - ci-at-head
+  - criterion: presets
+    state: satisfied
+    observations:
+      - ci-at-head
+  - criterion: config-file
+    state: satisfied
+    observations:
+      - verify-at-head
+      - ci-at-head
+  - criterion: wav-export
+    state: satisfied
+    observations:
+      - verify-at-head
+      - ci-at-head
+  - criterion: opens-from-file-and-pages
+    state: satisfied
+    because: "From file:// and from a local /oscilla/ server, in three browsers."
+    observations:
+      - ci-at-head
+  - criterion: about-workspace
+    state: satisfied
+    observations:
+      - ci-at-head
+  - criterion: about-provenance
+    state: satisfied
+    because: "CI checks against full history; the claim's notes still describe the old skip."
+    observations:
+      - ci-at-head
+      - about-notes
+  - criterion: visual-reference
+    state: satisfied
+    because: "Observed through npm run test:visual in CI, not through npm run visual, which the criterion names and which cannot fail; within thresholds means within the accepted deviation of 15.91 % from the reference."
+    observations:
+      - ci-at-head
+      - visual-compare-reports
+      - visual-baseline
+  - criterion: layout-and-accessibility
+    state: satisfied
+    observations:
+      - ci-at-head
+  - criterion: public-and-identified
+    state: conflicting
+    because: "The page identifies its version and commit, but serves an unreleased main commit under the 3.10.3 label, so it does not serve the release; test:live was not run in this review."
+    observations:
+      - public-is-main
+risks:
+  - "The visual criterion's command is a report: a refactor that breaks the layout would leave npm run visual green."
+  - "The completeness of M034 is an assertion: an unlisted v2.0.0 limitation has no reader."
+  - "Bioacoustic figures are shown with citations whose numbers nobody re-reads."
+work:
+  - id: visual-evidence-command
+    title: "Name npm run test:visual as the evidence of visual-reference, and state what accepted deviation from the reference counts as a match"
+    serves:
+      - visual-reference
+  - id: limitations-list
+    title: "Record the known v2.0.0 limitations as a tracked list and give the clause a criterion"
+    serves:
+      - layout-and-accessibility
+      - continuous-sweep
+      - engine-plays-and-releases
+  - id: refresh-about-notes
+    title: "Update the about-provenance and about-names-current-release claim notes to what CI proves since #147"
+    serves:
+      - about-provenance

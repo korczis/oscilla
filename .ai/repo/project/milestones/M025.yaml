@@ -1,6 +1,7 @@
 id: M025
 title: "V3.1 Studio timeline"
 slug: v31-studio-timeline
+version: "3.1.0"
 order: 25
 priority: p0
 problem: "The sequencer is a single lane of blocks."

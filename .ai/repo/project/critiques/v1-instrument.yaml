@@ -1,0 +1,67 @@
+intent: v1-instrument
+reviewed_at: "62cccb363c9b71e22c2df311a6222012761df04c"
+reviewed_by: "claude-opus-5.5 (critic, oscilla-35 session)"
+findings:
+  - id: evidence-never-recorded
+    class: delivery_verification
+    subject: "M006"
+    finding: "Nine of ten criteria are claims proven by node --test or Playwright suites that Majordomus 0.29 cannot record (majordomus evidence claim: unrunnable), and the tenth is a command the ledger never derives. Every milestone is DONE and the intent reads verifying 0/10 permanently. The remedy is the post-alpha Majordomus request for recording node --test and Playwright runs; until then the proof is the CI run, which no criterion names."
+    blocking: false
+    resolution:
+      state: open
+  - id: engine-criterion-overloaded
+    class: insufficient_work
+    subject: "v1-instrument#engine-plays-and-releases"
+    finding: "Nineteen issues (S004-S012, S015-S023, S056: modes, frequency range, log control, regions, flexible entry, fine controls, musical note mode, waveforms, Web Audio architecture, scheduling, click-free playback, stop semantics, playback UX, continuous playback, gain, low- and high-frequency safety, code organisation) serve one claim, tone-plays-and-releases. Its test (check hold-plays-release-zero-nodes in tests/browser/app.cjs) holds one tone, compares the analyser peak with gainLevel and waits for activeNodeCount 0. It cannot decide note mode, waveforms, frequency entry, regions or either safety section; intent validate reports this coverage as hundreds of duplicate_work warnings. Most of the V1 statement reads met on the strength of one check."
+    blocking: false
+    resolution:
+      state: open
+  - id: safety-has-no-criterion
+    class: missed_requirement
+    subject: "v1-instrument#engine-plays-and-releases"
+    finding: "The statement says safe and the invariants cite ADR 0005 (hard safety limit, patterns exempt up to 30 s) and ADR 0002 (a new voice fades the earlier ones; a waveshaper ceiling backs the output cap). No criterion and no claim in docs/CLAIMS.yaml states either. Tests exist (tests/unit/engine.test.mjs, tests/unit/qa-regressions.test.mjs, tests/browser/engine-v1port.cjs), but no claim names them, so the most safety-relevant V1 guarantee is outside the intent's satisfaction and could regress while all ten criteria read met."
+    blocking: false
+    resolution:
+      state: open
+  - id: node-count-is-self-reported
+    class: unproven_assumption
+    subject: "v1-instrument#engine-plays-and-releases"
+    finding: "No audio node running is read from window.OSCILLA.engine.activeNodeCount (H.nodes in tests/browser/app.cjs), the size of the engine's own Set. A node created outside the engine's accounting, which is the violation project.audio-engine-discipline exists to prevent, is invisible to it. tests/browser/engine-v1port.cjs instruments the context independently (addInitScript), but the claim names app.cjs."
+    blocking: false
+    resolution:
+      state: open
+  - id: visuals-one-command
+    class: insufficient_work
+    subject: "v1-instrument#visuals-and-interface"
+    finding: "Twenty-one issues serve one command criterion, npm run test:browser (app, layout, qa-regressions, navigation): S003, the six p5 modes and the interactive log frequency map (S025-S032), design, theme, responsive, accessibility, metrics, device limits, debug, errors, performance, retina canvas and progressive disclosure. No claim states the six modes, the frequency map, debug mode or the retina canvas, and the command is never derivable. Performance (S057) is gated by nothing: test:perf is outside the release gate."
+    blocking: false
+    resolution:
+      state: open
+  - id: learn-and-history-misread
+    class: insufficient_work
+    subject: "v1-instrument#no-fake-science"
+    finding: "S044 Learn mode and S045 contextual education serve no-fake-science, a scanner (tests/unit/no-fake-science.test.mjs) that proves forbidden phrases are absent, not that Learn content exists or is correct. S042 session history serves shareable-state, whose claim link-restores-configuration tests URL state, not history. Learn and history are in the statement, and no criterion decides them."
+    blocking: false
+    resolution:
+      state: open
+  - id: review-and-public-deploy-historical
+    class: delivery_verification
+    subject: "v1-instrument#public-from-file-and-pages"
+    finding: "The statement claims a cross-model reviewed build deployed to GitHub Pages and smoke-tested at its public URL. D001 (cross-model review) and D003 (Pages deployment) serve opens-from-file-and-subpath, a local check of today's build from file:// and a local /oscilla/ server. No criterion decides the review, and the public URL has served the 3.x line for weeks, so V1's public verification is decided only by D001-D003's recorded evidence. The statement's last sentence (criteria read the guarantees the current build keeps) concedes this, but its first sentence still asserts the historical facts."
+    blocking: false
+    resolution:
+      state: open
+  - id: unread-specification-tail
+    class: unproven_assumption
+    subject: "M005"
+    finding: "The statement says V1 is complete while sections 64-95 of its specification were never received (S000). The intent could be false by a requirement nobody has read. The non-goal records the gap honestly, but no work in this repository can close it: only the owner can supply the text or retire it."
+    blocking: false
+    resolution:
+      state: open
+  - id: microphone-proven-on-a-fake
+    class: unproven_assumption
+    subject: "v1-instrument#microphone-analysis"
+    finding: "Claim microphone-analysis-only is proven by tests/unit/engine.test.mjs on a fake context and getUserMedia: it shows the constraints requested and the graph wired, not that a browser honours echoCancellation, noiseSuppression and autoGainControl off. The browser checks in engine-v1port.cjs use Playwright's fake device, which applies no processing either way."
+    blocking: false
+    resolution:
+      state: open

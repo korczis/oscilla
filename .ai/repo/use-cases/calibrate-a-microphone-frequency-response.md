@@ -10,6 +10,7 @@ weight: 130
 difficulty: intermediate
 commands: [knowledge]
 claims: [calibration-profiles, spl-only-with-level-calibration, level-calibration-bound-to-input]
+applications: [measuring-a-playback-chain-at-home]
 tags: [oscilla, product-acceptance, v3]
 ---
 

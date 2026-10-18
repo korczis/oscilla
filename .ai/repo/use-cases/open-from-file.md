@@ -10,6 +10,7 @@ weight: 100
 difficulty: basic
 commands: [knowledge]
 claims: [opens-from-file-and-subpath, dist-self-contained, single-file-build]
+applications: [running-without-install-or-network]
 tags: [oscilla, product-acceptance]
 ---
 

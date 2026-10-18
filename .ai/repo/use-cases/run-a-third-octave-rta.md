@@ -10,6 +10,7 @@ weight: 160
 difficulty: basic
 commands: [knowledge]
 claims: [rta-bands, spl-only-with-level-calibration]
+applications: [measuring-a-playback-chain-at-home]
 tags: [oscilla, product-acceptance, v3]
 ---
 

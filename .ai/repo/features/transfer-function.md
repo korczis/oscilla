@@ -9,6 +9,7 @@ summary: 'A log-sweep transfer function from captured PCM: noise check and per-f
 status: stable
 weight: 320
 featured: false
+domain: measurement
 rules: [project.no-fake-science]
 docs: [docs/v3/algorithms.md, docs/v3/measurement-guide.md]
 adrs: [adr-0018, adr-0021, adr-0024]

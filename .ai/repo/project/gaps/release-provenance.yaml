@@ -1,0 +1,121 @@
+intent: release-provenance
+observed_at: "62cccb363c9b71e22c2df311a6222012761df04c"
+recorded_by: "claude-opus-5.5 (critic, oscilla-35 session)"
+recorded_at: "2026-10-18"
+observations:
+  - id: verify-at-head
+    statement: "npm run verify passes at 62cccb3: 2869 unit tests, 0 failed, 0 skipped; version:check PASS (dist banner, region, define and runtime say 3.10.3; no literal copy outside package.json, the lock root, dist/, .ai/ and CHANGELOG.md); build:check (rebuild equals the committed dist); verify-dist PASS (no file or remote reference, no fetch, import() or service worker, budget ok; provenance region names v3.10.3 and source digest 377cbf4f, recomputed); majordomus doctor 0 failures, with a WARN that doctor took 48 s against its 20 s budget."
+    source: "command:npm run verify"
+  - id: ci-at-head
+    statement: "CI run 39078375041 (pull_request, PR #179, head 62cccb3): every test job succeeded, namely unit/build/artifact rules, V1 engine checks, DSP/labs/sequencer, Browser gate, V3 measurement and UI and V3.1 Studio UI, each in chromium, firefox and webkit, plus the Visual regression gate, the .ai layer (majordomus doctor 0.29.0) and fail-first. The gate job failed only because review-verdict found no recorded review for guarded paths."
+    source: "command:gh run view 39078375041 --json jobs"
+  - id: ledger-cannot-derive
+    statement: "majordomus intent explain release-provenance: verifying, 0 of 6 criteria have current evidence; five command criteria have evidence of a kind the ledger cannot derive, and claim single-file-build has no recorded run."
+    source: "command:majordomus intent explain release-provenance"
+  - id: claim-unrunnable
+    statement: "majordomus evidence claim single-file-build reports state unrunnable: the claim names a path that no runner in this repository drives, so no execution of it can ever be recorded."
+    source: "command:majordomus evidence claim single-file-build"
+  - id: deploy-at-head
+    statement: "npm run release:verify-deploy at 62cccb3 fails all 10 attempts with 5 problems (bytes, artifact, commit, date, digest): Pages serves region.commit 964e25d (main), sourceDigest cc7af440 and sourceDate 2026-10-13T19:12:53Z, while the checkout's dist has digest 377cbf4f. The command judges the checkout it runs in, and here that is not the deployed commit."
+    source: "command:npm run release:verify-deploy"
+  - id: release-tag-vs-page
+    statement: "Tag v3.10.3 is e4772ee (2026-10-06). 155 commits separate it from 964e25d, the commit Pages serves, and they change 26 files under src/ and dist/ (+3864/-314), yet the page reads version 3.10.3."
+    source: "command:git rev-list -n1 v3.10.3 && git diff --stat v3.10.3 964e25d -- dist/index.html src"
+  - id: cadence-overdue
+    statement: "node scripts/release-cadence.mjs: OVERDUE; 120 releasable commits since v3.10.3 need a minor release; the oldest, b032ddb feat(findings), landed 269.4 h ago against the 24 h limit of project.deploy-often. The Release cadence workflow has failed on every scheduled run of main seen (gh run list)."
+    source: "command:node scripts/release-cadence.mjs"
+  - id: tags
+    statement: "Tags v1.0.0, v1.0.1, v2.0.0, v2.0.1, v3.0.0, v3.1.0, v3.2.0, v3.3.0-v3.3.3, v3.4.0, v3.5.0, v3.6.0, v3.6.1, v3.7.0, v3.8.0, v3.9.0-v3.9.2 and v3.10.0-v3.10.3 exist; no -rc tag exists. Release records exist for v3.4.0 to v3.10.3 only (13 files under .ai/repo/releases)."
+    source: "command:git tag --list 'v*' && ls .ai/repo/releases"
+  - id: gate-composition
+    statement: "release-gate is npm run verify && npm run test:release, and test:release runs test:engine, test:dsp, test:labs, test:sequencer, test:measure, test:studio, test:browser and test:visual. Every file under tests/browser is wired into some script; only live-smoke.cjs (test:live) and perf-budgets.cjs (test:perf) are outside test:release."
+    source: "file:package.json"
+  - id: perf-is-diagnostic
+    statement: "docs/v4/performance.md and the v4 ledger classify test:perf as a diagnostic outside the release gate, and record an open P1b: selecting one of 500 experiments re-evaluates every row, 64/191/116 ms per click in Chromium/Firefox/WebKit."
+    source: "file:docs/v4/completion-ledger.md"
+  - id: pages-workflow
+    statement: ".github/workflows/pages.yml runs build:check, verify-dist and version:check, stamps the metadata region, deploys, runs scripts/verify-deploy.mjs against the deployed URL (a mismatch fails the workflow) and then test:live per browser against the page."
+    source: "file:.github/workflows/pages.yml"
+  - id: determinism-test
+    statement: "The determinism case in tests/unit/pack-single-file.test.mjs is assert.equal(pack(o), pack(o)) on a toy input of five fields; it runs no esbuild and no real source."
+    source: "test:tests/unit/pack-single-file.test.mjs"
+  - id: version-in-ai
+    statement: "The literal 3.10.3 appears outside package.json in tracked .ai files the version check excludes: ADR 0051, ADR 0057, rule project.release-flow-complete and rule project.release-receipt-binds-gate (besides the release records)."
+    source: "command:git grep -l 3.10.3 -- .ai"
+  - id: strict-yaml
+    statement: "A conforming YAML parser (PyYAML safe_load) rejects issues V314, V371, V382, V384, V385, V386 and V433 (unescaped double quotes inside double-quoted scalars) and docs/CLAIMS.yaml at line 466 (a colon followed by a space inside a plain scalar). majordomus plan validate reports 0 failures and reads them leniently."
+    source: "command:majordomus plan validate"
+  - id: adrs-proposed
+    statement: "All 57 ADRs under .ai/repo/adrs carry status proposed; none is accepted."
+    source: "command:grep -L 'status: proposed' .ai/repo/adrs/0*.md"
+conditions:
+  - criterion: one-version-authority
+    state: conflicting
+    because: "version:check passes, but it excludes the whole of .ai/, where the literal current version appears in two ADRs and two rules; and the one version string 3.10.3 names both the v3.10.3 release and the different artifact Pages serves."
+    observations:
+      - verify-at-head
+      - version-in-ai
+      - release-tag-vs-page
+  - criterion: deterministic-build
+    state: satisfied
+    because: "build:check rebuilt the source and matched the committed dist at 62cccb3, locally and in CI; the claim's own test is a toy and is not what shows it."
+    observations:
+      - verify-at-head
+      - ci-at-head
+      - determinism-test
+  - criterion: fatal-deploy-verification
+    state: conflicting
+    because: "A mismatch against the deployed commit is fatal (pages.yml; verify-deploy fails, as it did at 62cccb3). But Pages serves 964e25d, which is not the released v3.10.3 artifact, and no deployment failed: the check compares the page with the commit deployed, never with the release whose version the page carries."
+    observations:
+      - pages-workflow
+      - deploy-at-head
+      - release-tag-vs-page
+  - criterion: gate-runs-every-suite
+    state: satisfied
+    because: "test:release runs every browser suite except test:live (post-deploy by project.release-flow-complete) and test:perf (a diagnostic by a classification in docs, contested by the critique)."
+    observations:
+      - gate-composition
+      - perf-is-diagnostic
+      - ci-at-head
+  - criterion: majordomus-knows-the-product
+    state: satisfied
+    because: "Read literally (the layer reports no failure): doctor reports 0 failures at 62cccb3. It does not show the layer answers what OSCILLA is: eight records are invalid strict YAML and no ADR is accepted."
+    observations:
+      - verify-at-head
+      - strict-yaml
+      - adrs-proposed
+  - criterion: public-release-verified
+    state: conflicting
+    because: "The page carries version 3.10.3 and commit 964e25d, but that commit is 155 commits after the v3.10.3 tag, so the page does not match the release artifact its version names; test:live was not run here (no browser suites in this review)."
+    observations:
+      - deploy-at-head
+      - release-tag-vs-page
+      - cadence-overdue
+      - tags
+risks:
+  - "The version on the public page stops identifying an artifact: while releases are overdue, every main merge is public under the last release's version, and a user reporting version 3.10.3 can be on any of more than 155 commits."
+  - "No criterion of this intent can ever be met under Majordomus 0.29: its satisfaction is decided by CI runs nobody records, until the post-alpha request for node --test and Playwright evidence lands."
+  - "A stricter YAML reader in a future Majordomus, or in any other tool, would refuse seven plan records and the claims matrix."
+  - "The release cadence rule (blocking) has been red for days; a red check that nobody clears teaches that red checks are ignorable."
+work:
+  - id: release-the-backlog
+    title: "Ship the overdue minor release through release:prepare, publish and record, so the public version names the served artifact again"
+    serves:
+      - public-release-verified
+      - one-version-authority
+    why: "120 releasable commits are public under 3.10.3; project.deploy-often is red."
+    evidence: "node scripts/release-cadence.mjs reports on time; npm run release:verify-deploy passes at the release tag; release:record --check passes"
+  - id: criterion-on-release-record
+    title: "Decide public-release-verified by comparing the served page with the release/v1 record of the version it names (ADR 0057)"
+    serves:
+      - public-release-verified
+      - fatal-deploy-verification
+    why: "test:live and verify-deploy both accept an unreleased main commit under a release version."
+  - id: build-check-as-evidence
+    title: "Name npm run build:check (or a claim whose test runs a real rebuild) as the evidence of deterministic-build"
+    serves:
+      - deterministic-build
+  - id: strict-yaml-records
+    title: "Quote the seven plan records and the CLAIMS.yaml note so that a conforming YAML parser reads them"
+    serves:
+      - majordomus-knows-the-product

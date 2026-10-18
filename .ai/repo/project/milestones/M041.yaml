@@ -1,0 +1,27 @@
+id: M041
+title: "V3.7 semantic run comparison"
+slug: v37-semantic-comparison
+version: "3.7.0"
+order: 40
+priority: p1
+problem: "Runs were compared without telling a change in what was executed from a change in how it is presented, and no reference run was chosen by default."
+outcome: "OSCILLA 3.7.0 shipped semantic comparison of runs that classifies execution against presentation changes, with a baseline run as the default reference (ADR 0041, #106)."
+acceptance_criteria:
+  - "v3.7.0 is tagged at ff8e470 with its GitHub Release (published 2026-10-05T15:06:14Z) listing #106."
+  - "ADR 0041 (run comparison is semantic and classifies execution vs presentation changes) landed in the release (ac5fdf9)."
+  - ".ai/repo/releases/v3.7.0.yaml matches what was published."
+validation:
+  - "gh release view v3.7.0"
+  - "node scripts/release-record.mjs --version 3.7.0 --check"
+evidence_required:
+  - "milestone_verified"
+created_at: 2026-10-18
+updated_at: 2026-10-18T00:49:25Z
+evidence:
+  - covers: milestone_verified
+    type: artifact
+    command: "git rev-parse v3.7.0^{commit} && gh release view v3.7.0 --json tagName,publishedAt,isDraft,isPrerelease && node scripts/release-record.mjs --version 3.7.0 --check"
+    result: "The 3.7 line shipped: v3.7.0 tag at ff8e470, GitHub Release published 2026-10-05T15:06:14Z; release records .ai/repo/releases/v3.7.0.yaml match what was published (release-record --check)"
+    artifact: "https://github.com/korczis/oscilla/releases/tag/v3.7.0"
+    commit: 1a165b109f24d30219410513adfe7e17be0c861e
+    recorded_at: 2026-10-18T00:49:25Z

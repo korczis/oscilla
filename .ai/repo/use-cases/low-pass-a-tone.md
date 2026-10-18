@@ -10,6 +10,7 @@ weight: 60
 difficulty: basic
 commands: [knowledge]
 claims: [lowpass-attenuates]
+applications: [teaching-sound-and-hearing]
 tags: [oscilla, product-acceptance]
 ---
 

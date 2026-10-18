@@ -10,6 +10,7 @@ weight: 420
 difficulty: intermediate
 commands: [knowledge]
 claims: [studio-non-drag-operation, studio-typed-connections]
+applications: [sound-design-in-the-studio]
 tags: [oscilla, studio, v31, product-acceptance]
 ---
 

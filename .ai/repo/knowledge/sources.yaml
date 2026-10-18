@@ -170,6 +170,14 @@ sources:
     pathspec: ':(glob).ai/repo/features/*.md'
     required: false
 
+  # The product domains (schema domain/v1): every stable feature names one by its `domain`.
+  # The class `feature` does not reach this directory, since `*` stays inside one segment.
+  - id: domain
+    kind: domain
+    discovery: vcs
+    pathspec: ':(glob).ai/repo/features/domains/*.md'
+    required: false
+
   - id: application
     kind: application
     discovery: vcs

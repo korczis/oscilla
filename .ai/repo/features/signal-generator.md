@@ -9,6 +9,7 @@ summary: 'Sine, square, triangle and sawtooth tones at a chosen frequency and re
 status: stable
 weight: 10
 featured: true
+domain: instrument
 rules: [project.audio-engine-discipline, project.no-fake-science]
 docs: [README.md]
 adrs: [adr-0002, adr-0003, adr-0005, adr-0006, adr-0014, adr-0015]

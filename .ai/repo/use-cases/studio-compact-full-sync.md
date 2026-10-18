@@ -10,6 +10,7 @@ weight: 380
 difficulty: basic
 commands: [knowledge]
 claims: [studio-one-store-projections, studio-model-plain-data]
+applications: [sound-design-in-the-studio]
 tags: [oscilla, studio, v31, product-acceptance]
 ---
 

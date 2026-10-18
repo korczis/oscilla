@@ -1,6 +1,7 @@
 id: M020
 title: "V3 verification and release"
 slug: v3-release
+version: "3.0.0"
 order: 20
 priority: p0
 problem: "V3 is not done until it is verified, reviewed, documented, released and publicly checked."

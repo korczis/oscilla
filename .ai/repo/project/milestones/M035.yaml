@@ -1,7 +1,8 @@
 id: M035
 title: "Train 2 deployed and 3.11 verified live"
 slug: train-2-live
-order: 35
+version: "3.11.0"
+order: 44
 priority: p0
 problem: "Pages has served main 964e25d since 2026-10-13 under the v3.10.3 label while 100+ releasable commits waited unreleased (node scripts/release-cadence.mjs: OVERDUE), and train 2 (#179) is not on main."
 outcome: "Train 2 is on main and deployed; OSCILLA 3.11.0 is released through the gated flow, its public page is proven to carry the release version, commit and artifact in three browsers, and its release record has landed."
@@ -16,3 +17,4 @@ validation:
 evidence_required:
   - "milestone_verified"
 created_at: 2026-10-18
+updated_at: 2026-10-18

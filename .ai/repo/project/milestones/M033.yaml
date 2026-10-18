@@ -1,6 +1,7 @@
 id: M033
 title: "V3.1 release and deployment"
 slug: v31-release
+version: "3.1.0"
 order: 33
 priority: p0
 problem: "V3.1 is not done until it is public and verified."

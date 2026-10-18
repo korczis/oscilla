@@ -10,6 +10,7 @@ weight: 210
 difficulty: basic
 commands: [knowledge]
 claims: [measure-from-file-and-subpath, opens-from-file-and-subpath, dist-self-contained]
+applications: [measuring-a-playback-chain-at-home, running-without-install-or-network]
 tags: [oscilla, product-acceptance, v3]
 ---
 

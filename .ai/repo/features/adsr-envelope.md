@@ -9,6 +9,7 @@ summary: 'An attack-decay-sustain-release envelope applied to the gain of the vo
 status: stable
 weight: 80
 featured: false
+domain: instrument
 rules: [project.audio-engine-discipline]
 docs: [README.md]
 adrs: [adr-0001, adr-0015]

@@ -1,0 +1,75 @@
+intent: v3-measure
+reviewed_at: "62cccb363c9b71e22c2df311a6222012761df04c"
+reviewed_by: "claude-opus-5.5 (critic, oscilla-35 session)"
+findings:
+  - id: evidence-never-recorded
+    class: delivery_verification
+    subject: "M020"
+    finding: "Eighteen of twenty criteria are claims proven by node --test or Playwright suites that Majordomus 0.29 cannot record, and two are commands the ledger never derives. Even after V386 closes, the intent reads unsatisfied 0/20. The remedy is the post-alpha Majordomus request for recording node --test and Playwright runs."
+    blocking: false
+    resolution:
+      state: open
+  - id: v4-truth-fixes-outside-every-intent
+    class: missed_requirement
+    subject: "v3-measure#spl-only-with-calibration"
+    finding: "The most serious gap. Releases 3.2-3.10 (and 120 unreleased commits) fixed V3 results that were false while this intent's criteria read met: C1, an unbound manual level calibration applied to every input, so a run on another input read dB SPL (#139, ADR 0017 resolution); D1/D2, the calibration recorded at Save rather than at completion, so a record named a profile the measurement never used, or dB SPL for an uncalibrated run (#121); D4, five stimulus kinds the schema accepted and the engine cannot run, so Repeat silently ran a log sweep (#139); W7f, CALIBRATED for an unchecked input (#169). The claims that now hold them (level-calibration-bound-to-input, measurable-stimulus-only, experiment-calibration-as-measured, experiment-run-immutable, experiment-definitions, run-evidence, semantic-run-comparison, findings-linked-to-evidence, connected-records) are guaranteed in docs/CLAIMS.yaml, but no criterion names them and no milestone holds them (the non-goal says the v4.0 work has no milestone). spl-only-with-calibration, reproducible-experiments and experiment-import-validated were too weak to catch those defects, and nothing stops the next regression of the fixes."
+    blocking: false
+    resolution:
+      state: open
+  - id: release-criterion-accepts-any-3x
+    class: delivery_verification
+    subject: "v3-measure#public-release-verified"
+    finding: "The statement says OSCILLA 3.0.0 is deployed to Pages from the gated release workflow; the criterion accepts any 3.x, and the page Pages serves today (964e25d, labelled 3.10.3) carries v4.0 work. The criterion can read met without saying anything about 3.0.0. V386 records what is still unmet about 3.0.0: no release candidate preceded it (ADR 0047, proposed; spec 233 can no longer become true) and it has no release/v1 record, because its GitHub Release has no asset, which awaits the owner's approval."
+    blocking: false
+    resolution:
+      state: planned
+      issue: "V386"
+  - id: result-layers-have-no-criterion
+    class: missed_requirement
+    subject: "v3-measure#transfer-function"
+    finding: "The statement requires raw, calibrated, normalized and smoothed views with reliability masks, non-destructive IR windowing, CSV export, peak hold and freeze. No criterion names any of them. V323 (normalization and smoothing) and V324 (response chart) serve transfer-function, whose test recovers synthetic systems; V332 (windowing) serves impulse-response; V354 (CSV) serves experiment-import-validated; V362 (reliability masks) serves measurement-quality. tests/unit/v3-views.test.mjs covers views, but no claim states them."
+    blocking: false
+    resolution:
+      state: open
+  - id: workspace-qualities-unstated
+    class: missed_requirement
+    subject: "v3-measure#measurement-workbench"
+    finding: "Guided and expert modes, the live quality bar, accessible summaries, the responsive layout and visual acceptance (V372-V376) all serve measurement-workbench, whose claim is proven by checks loopback-workflow and output-exclusive in tests/browser/v3-ui.cjs. Those checks take a measurement through the flow; they do not decide accessibility, expert mode or visual identity. MEASURE's visual baselines under tests/visual/measure are captures of the page itself, not a supplied reference."
+    blocking: false
+    resolution:
+      state: open
+  - id: never-measured-acoustically
+    class: unproven_assumption
+    subject: "v3-measure#transfer-function"
+    finding: "Every automated proof of measurement runs on synthetic systems (tests/unit/v3-transfer-ir.test.mjs), a BiquadFilterNode loopback (tests/browser/v3-measure.cjs) or the TEST CONTEXT digital loopback; the claim notes say so, and no automated test shows how a physical speaker, room or microphone behaves. A workbench whose results say how far they can be trusted can read met while output-input latency, device clock drift and acoustic noise have never reached the quality model. ADR 0018 fixes the method (captured PCM, offline DSP), not the absence of acoustic validation."
+    blocking: false
+    resolution:
+      state: open
+  - id: persistence-check-accepts-fallback
+    class: unproven_assumption
+    subject: "v3-measure#experiment-persistence"
+    finding: "experiment-persistence is proven on an in-process IndexedDB fake, and the browser check persistence reads the record back or reports the memory fallback, per browser and origin. A browser where IndexedDB never works passes the check, so persist in IndexedDB is not decided by a real browser anywhere."
+    blocking: false
+    resolution:
+      state: open
+  - id: calibration-presence-not-identity
+    class: unproven_assumption
+    subject: "v3-measure#reproducible-experiments"
+    finding: "The criterion says every saved measurement records its calibration with hashes. The note of experiment-calibration-as-measured says the cross-check verifies presence, not identity, because a record keeps a profile's id and name but not its points. A recorded calibration cannot be re-verified from the record, so a different profile under the same name reads the same."
+    blocking: false
+    resolution:
+      state: open
+  - id: v1-v2-regressions-unread
+    class: regression_risk
+    subject: "M020"
+    finding: "The statement requires V1/V2 regressions green and the invariants say V1 and V2 behaviour is not weakened (specification section 183), but no criterion of this intent reads it. It is left to the v1-instrument and v2-laboratory intents, whose criteria are themselves never recorded, so V3 could weaken V1 and still read every one of its own criteria met."
+    blocking: false
+    resolution:
+      state: open
+  - id: explorer-non-goal-rests-on-proposal
+    class: unproven_assumption
+    subject: "v3-measure#product-graph"
+    finding: "The knowledge-explorer non-goal rests on ADR 0051, which is proposed (the ledger: the descoping counts once the owner marks it accepted), and its replacement, Why trust the method? on a saved experiment (docs/v4/completion-ledger.md item 7), does not exist: no source under src/ contains it. The non-goal is justified by an unaccepted decision whose replacement is unbuilt."
+    blocking: false
+    resolution:
+      state: open

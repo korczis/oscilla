@@ -10,6 +10,7 @@ weight: 410
 difficulty: advanced
 commands: [knowledge]
 claims: [studio-experiment-provenance, studio-deterministic-hash]
+applications: [reproducible-experiment-record]
 tags: [oscilla, studio, v31, product-acceptance]
 ---
 

@@ -10,6 +10,7 @@ weight: 10
 difficulty: basic
 commands: [knowledge]
 claims: [tone-plays-and-releases, patterns-match-v1, adsr-envelope-semantics]
+applications: [teaching-sound-and-hearing]
 tags: [oscilla, product-acceptance]
 ---
 

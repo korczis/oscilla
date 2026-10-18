@@ -1,6 +1,7 @@
 id: M015
 title: "V3 impulse response"
 slug: v3-impulse-response
+version: "3.0.0"
 order: 15
 priority: p0
 problem: "No impulse-response measurement exists."

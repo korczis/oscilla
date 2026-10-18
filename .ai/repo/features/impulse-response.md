@@ -9,6 +9,7 @@ summary: 'Log-sweep deconvolution with band-limited regularisation from the same
 status: stable
 weight: 330
 featured: false
+domain: measurement
 rules: [project.no-fake-science]
 docs: [docs/v3/algorithms.md]
 adrs: [adr-0021, adr-0024]

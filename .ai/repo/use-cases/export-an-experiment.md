@@ -10,6 +10,7 @@ weight: 200
 difficulty: basic
 commands: [knowledge]
 claims: [experiment-round-trip, experiment-import-validated, algorithm-ids-on-results]
+applications: [reproducible-experiment-record]
 tags: [oscilla, product-acceptance, v3]
 ---
 

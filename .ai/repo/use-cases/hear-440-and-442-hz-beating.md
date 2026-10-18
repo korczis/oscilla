@@ -10,6 +10,7 @@ weight: 30
 difficulty: basic
 commands: [knowledge]
 claims: [dual-oscillator-beats, phase-and-lissajous-model, stereo-correlation-meter]
+applications: [teaching-sound-and-hearing]
 tags: [oscilla, product-acceptance]
 ---
 

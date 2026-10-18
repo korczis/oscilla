@@ -1,6 +1,7 @@
 id: M003
 title: "Modes and content"
 slug: modes-content
+version: "1.0.0"
 order: 3
 priority: p1
 problem: "Single-mode instrument only."

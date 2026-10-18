@@ -10,6 +10,7 @@ weight: 140
 difficulty: intermediate
 commands: [knowledge]
 claims: [measurement-workbench, transfer-function, measurement-quality, measurement-abort-releases-everything, analysis-off-main-thread]
+applications: [measuring-a-playback-chain-at-home]
 tags: [oscilla, product-acceptance, v3]
 ---
 

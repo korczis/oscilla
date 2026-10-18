@@ -1,6 +1,7 @@
 id: M014
 title: "V3 transfer function"
 slug: v3-transfer-function
+version: "3.0.0"
 order: 14
 priority: p0
 problem: "OSCILLA cannot report the observed frequency response of a playback/capture chain."

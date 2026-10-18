@@ -9,6 +9,7 @@ summary: 'Two oscillators A and B with their own frequency, waveform, gain and d
 status: stable
 weight: 30
 featured: false
+domain: instrument
 rules: [project.audio-engine-discipline]
 docs: [README.md]
 adrs: [adr-0015]
