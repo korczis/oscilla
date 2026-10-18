@@ -179,7 +179,8 @@ not show the commit that added it. The test fails for any such tag older than
 there; under GitHub Actions a clone without them fails the test instead of skipping it.
 
 `.github/workflows/cadence.yml`, job `records`: `node scripts/release-record.mjs --complete`
-runs the same check on main hourly, on every push to main and on every `v*` tag, with a
+runs the same check on main on its schedule (requested hourly, run by GitHub best effort),
+on every push to main and on every `v*` tag, with a
 `contents: read` token. `ci.yml` runs only for pull requests, so without this job a tag that
 nobody recorded would first be red on someone else's pull request. It exits 1 when no tag
 from the floor on is reachable (a clone without tags is not a pass).

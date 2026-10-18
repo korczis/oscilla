@@ -2,8 +2,11 @@
 # scripts/release-cadence.mjs fails this workflow while the oldest unreleased release-relevant
 # commit on main is more than 24 hours old, and keeps exactly one open issue titled
 # "release overdue" in step with the verdict (opened or updated while overdue, closed once a
-# release ships). It runs every hour, on every push to main (a merge can only add to the lag,
-# and the run shows it) and on every v* tag (the release that clears it).
+# release ships). It runs on every push to main (a merge can only add to the lag, and the run
+# shows it), on every v* tag (the release that clears it) and on an hourly schedule. The
+# schedule is best effort: GitHub delays or drops scheduled runs under load, and the hourly
+# cron ran 3 to 6 times a day on 2026-10-12..17 (V272 D9b), so a verdict on main can be hours
+# old between pushes; workflow_dispatch re-runs it on demand.
 #
 # The second job runs the record-completeness check of rule project.release-flow-complete on
 # main itself (node scripts/release-record.mjs --complete): the unit job of ci.yml runs it only

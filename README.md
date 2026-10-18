@@ -695,8 +695,9 @@ run it alone.
      which states the whole flow in order).
 - **Cadence.** A commit that needs a release is released within 24 hours of landing on `main`
   (rule `project.deploy-often`). `node scripts/release-cadence.mjs` prints the lag; the
-  `Release cadence` workflow (`.github/workflows/cadence.yml`) runs it every hour, fails while
-  a release is overdue and keeps one "release overdue" issue open until it ships.
+  `Release cadence` workflow (`.github/workflows/cadence.yml`) runs it on every push to `main`
+  and on an hourly schedule that GitHub runs best effort (3 to 6 runs a day were measured), fails
+  while a release is overdue and keeps one "release overdue" issue open until it ships.
 - **Tags** are `vX.Y.Z`. V1, the original hand-written single file, is `v1.0.0` (deployed) and
   `v1.0.1` (a maintenance tag that was never deployed).
 - **About timeline.** A minor or major release adds its line to the About view's evolution

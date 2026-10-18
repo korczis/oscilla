@@ -3,7 +3,7 @@ id: project.deploy-often
 version: 1
 kind: rule
 title: Releasable commits on main do not sit unreleased
-description: When main carries commits that need a release, the oldest of them is at most 24 hours old; an hourly workflow is red and keeps one "release overdue" issue open until a release ships.
+description: When main carries commits that need a release, the oldest of them is at most 24 hours old; a scheduled workflow (requested hourly, run by GitHub best effort) and every push to main turn it red and keep one "release overdue" issue open until a release ships.
 statement: When release:analyze reports a level other than none for main, the oldest unreleased release-relevant commit (one release-analyze gives a level other than none - feat, fix, perf, revert, a breaking change, or a commit that is not a conventional commit) landed at most 24 hours ago. Otherwise the Release cadence workflow fails and one open issue titled "release overdue" names the commit, until a release ships.
 status: active
 class: blocking
@@ -31,7 +31,7 @@ them". Until this rule the expectation lived in one worker's memory and nothing 
   `docs`, `refactor`, `style` or `test` never make a release overdue, however old.
 - An overdue release is cleared by shipping it through the flow of
   `project.release-flow-complete`, not by retitling commits and not by closing the issue: the
-  workflow reopens the verdict every hour.
+  workflow reopens the verdict on every push to main and on its schedule.
 - A release that must wait (an owner decision) is recorded as a decision; the check stays red
   for as long as that lasts. There is no silence switch.
 
@@ -43,9 +43,13 @@ commits since it and the current time, using `analyzeCommits()` of
 reachable (the lag cannot be measured). With `--issue`, `syncIssue()` opens, updates or closes
 the one issue through `gh`.
 
-`.github/workflows/cadence.yml` runs `node scripts/release-cadence.mjs --issue` every hour, on
-every push to main and on every `v*` tag, with full history, a 5-minute timeout and a token
-that reads contents and writes issues only. The run fails while the release is overdue.
+`.github/workflows/cadence.yml` runs `node scripts/release-cadence.mjs --issue` on every push
+to main, on every `v*` tag and on a schedule of `cron: '17 * * * *'`, with full history, a
+5-minute timeout and a token that reads contents and writes issues only. The run fails while
+the release is overdue. The schedule asks for hourly runs and GitHub runs them best effort:
+it delays or drops scheduled runs under load, and the cron ran 3 to 6 times a day on
+2026-10-12..17 (`gh run list --workflow cadence.yml --event schedule`). Between pushes the
+verdict on main can therefore be hours old; nothing here makes it hourly.
 
 `tests/unit/release-cadence.test.mjs`: a `feat` 48 hours old fails and is named; the same
 commit at 2 hours passes; `chore` and `docs` commits at 72 hours pass; the issue is created

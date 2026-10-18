@@ -75,4 +75,5 @@ script and the test that hold it, and says what no check holds.
   the first stable release of a new major follows a published release candidate, and a Pages
   run of which no job starts is diagnosed.
 - `project.deploy-often` (`deploy-often.v1.md`): a releasable commit is released within 24
-  hours; an hourly workflow is red and keeps one issue open until it is.
+  hours; a workflow run on every push to main and on a best-effort hourly schedule is red and
+  keeps one issue open until it is.
