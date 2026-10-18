@@ -3,7 +3,7 @@ schema: adr/v1
 id: adr-0029
 kind: adr
 title: The release gate includes a visual regression check with per-region thresholds measured from run-to-run variance
-status: proposed
+status: accepted
 date: 2026-10-02
 tags:
   - release
@@ -43,3 +43,12 @@ Proposed (being implemented, plan M011 R006):
   social preview image when the desktop look changes (ADR 0011's share-asset exception).
 - V3 adds a deterministic MEASURE reference rendered from synthetic data, never from a real
   microphone (V3 specification §148).
+
+## Resolution notes
+
+### 2026-10-18: accepted by the owner
+
+Accepted by the owner (explicit instruction in the session of 2026-10-18, applied by the
+coordinating Claude session) — implemented as described; evidence: `scripts/visual-gate.mjs`,
+`scripts/visual-measure.mjs` and `scripts/visual-studio.mjs` (`npm run test:visual`, the CI
+`visual` job) over `tests/visual/regions.json` and `tests/visual/baseline.json`.

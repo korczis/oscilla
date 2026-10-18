@@ -314,18 +314,18 @@ evidence) are what the Studio's measurement records rely on.
 | ADR | Decision | Status |
 | --- | --- | --- |
 | [0030](../../.ai/repo/adrs/0030-studio-model-canonical-separate-from-runtime.md) | One canonical StudioModel of plain serializable data, separate from the runtime graph; every Studio view is a projection of it | proposed |
-| [0031](../../.ai/repo/adrs/0031-studio-action-layer-snapshot-history.md) | Every Studio mutation is a dispatched action reduced into a new immutable model; undo and redo restore earlier snapshots | proposed |
-| [0032](../../.ai/repo/adrs/0032-typed-ports-validated-before-runtime.md) | Studio ports are typed with roles, and connection validity is pure model logic checked before any runtime mutation | proposed |
-| [0033](../../.ai/repo/adrs/0033-feedback-and-control-cycles-rejected.md) | Instantaneous audio feedback and control or analysis cycles are rejected by the model until a delay node has its own decision | proposed |
+| [0031](../../.ai/repo/adrs/0031-studio-action-layer-snapshot-history.md) | Every Studio mutation is a dispatched action reduced into a new immutable model; undo and redo restore earlier snapshots | accepted |
+| [0032](../../.ai/repo/adrs/0032-typed-ports-validated-before-runtime.md) | Studio ports are typed with roles, and connection validity is pure model logic checked before any runtime mutation | accepted |
+| [0033](../../.ai/repo/adrs/0033-feedback-and-control-cycles-rejected.md) | Instantaneous audio feedback and control or analysis cycles are rejected by the model until a delay node has its own decision | accepted |
 | [0034](../../.ai/repo/adrs/0034-custom-html-nodes-svg-cables.md) | The Studio graph editor is custom HTML nodes over an SVG cable layer in the OSCILLA visual language, without a flow-editor framework or React, inside the single file | proposed |
-| [0035](../../.ai/repo/adrs/0035-compiled-into-existing-engine-incremental-patching.md) | The StudioModel compiles into the existing AudioEngine and measurement engine, and edits patch the running graph incrementally in transactions | proposed |
-| [0036](../../.ai/repo/adrs/0036-timeline-on-audio-clock-via-sequencer-compiler.md) | The Studio timeline runs on the audio clock through the existing sequencer compiler, in absolute seconds | proposed |
-| [0037](../../.ai/repo/adrs/0037-automation-versus-modulation.md) | Automation is a timed base value on a timeline lane; modulation is a control edge with its own depth; the two never stand in for each other | proposed |
+| [0035](../../.ai/repo/adrs/0035-compiled-into-existing-engine-incremental-patching.md) | The StudioModel compiles into the existing AudioEngine and measurement engine, and edits patch the running graph incrementally in transactions | accepted |
+| [0036](../../.ai/repo/adrs/0036-timeline-on-audio-clock-via-sequencer-compiler.md) | The Studio timeline runs on the audio clock through the existing sequencer compiler, in absolute seconds | accepted |
+| [0037](../../.ai/repo/adrs/0037-automation-versus-modulation.md) | Automation is a timed base value on a timeline lane; modulation is a control edge with its own depth; the two never stand in for each other | accepted |
 | [0038](../../.ai/repo/adrs/0038-measurement-topology-inside-studio.md) | Measurement topology lives inside Studio as orchestration of the V3 measurement engine, and the StudioModel enters experiment provenance | proposed |
-| [0039](../../.ai/repo/adrs/0039-studio-runtime-truth-plan-identity-applied-record-divergence.md) | Studio runtime truth: plan identity, applied record and divergence | proposed |
-| [0041](../../.ai/repo/adrs/0041-run-comparison-semantic-execution-vs-presentation.md) | Run comparison is semantic and classifies execution vs presentation changes | proposed |
-| [0042](../../.ai/repo/adrs/0042-studio-operation-trace-one-correlation-id-bounded-not-evidence.md) | Studio operation trace: one correlation id, bounded, not evidence | proposed |
-| [0048](../../.ai/repo/adrs/0048-connected-records-over-stored-fields.md) | Connected records come from stored fields only, and read present only when the identity verifies | proposed |
+| [0039](../../.ai/repo/adrs/0039-studio-runtime-truth-plan-identity-applied-record-divergence.md) | Studio runtime truth: plan identity, applied record and divergence | accepted |
+| [0041](../../.ai/repo/adrs/0041-run-comparison-semantic-execution-vs-presentation.md) | Run comparison is semantic and classifies execution vs presentation changes | accepted |
+| [0042](../../.ai/repo/adrs/0042-studio-operation-trace-one-correlation-id-bounded-not-evidence.md) | Studio operation trace: one correlation id, bounded, not evidence | accepted |
+| [0048](../../.ai/repo/adrs/0048-connected-records-over-stored-fields.md) | Connected records come from stored fields only, and read present only when the identity verifies | accepted |
 <!-- adrs:end -->
 
 ## Not built

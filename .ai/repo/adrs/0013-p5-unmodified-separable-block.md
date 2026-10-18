@@ -3,7 +3,7 @@ schema: adr/v1
 id: adr-0013
 kind: adr
 title: p5.js (LGPL-2.1) ships as an unmodified, separately identifiable script block with its licence notice
-status: proposed
+status: accepted
 date: 2026-10-02
 tags:
   - dependencies
@@ -63,3 +63,12 @@ When the dist budget was raised to 1 000 000 B gzip / 3 500 000 B raw (#114, own
 and deferred: p5 is about 245 KB of the gzip while the views call about 28 of its 2D drawing
 functions. This decision stands until that replacement is decided; it would supersede the
 first rejected alternative above.
+
+### 2026-10-18: accepted by the owner
+
+Accepted by the owner (explicit instruction in the session of 2026-10-18, applied by the
+coordinating Claude session) — implemented as described; evidence: the verbatim `<script
+data-vendor="p5@1.11.3" data-sha256=…>` block in `dist/index.html` from `VENDOR_SCRIPTS` in
+`scripts/build-config.mjs`, its byte identity and the notices checked by
+`scripts/verify-dist.mjs` (`tests/unit/verify-dist.test.mjs`); replacing p5 stays deferred (its
+2026-10-05 note).

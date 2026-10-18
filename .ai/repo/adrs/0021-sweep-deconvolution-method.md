@@ -3,7 +3,7 @@ schema: adr/v1
 id: adr-0021
 kind: adr
 title: Sweep deconvolution divides by the spectrum of the rendered canonical sweep with band-limited regularization; Farina's inverse filter is the test oracle
-status: proposed
+status: accepted
 date: 2026-10-02
 tags:
   - dsp
@@ -77,3 +77,14 @@ Proposed:
   review (§186) finds no scaling error. Revise toward the Farina inverse filter if those tests or
   the review show spectral division is worse at band edges or under noise, or if the benchmark
   (§171) shows it does not fit the time budget.
+
+## Resolution notes
+
+### 2026-10-18: accepted by the owner
+
+Accepted by the owner (explicit instruction in the session of 2026-10-18, applied by the
+coordinating Claude session) — implemented as described; evidence: claims `transfer-function`
+and `impulse-response` (`tests/unit/v3-transfer-ir.test.mjs`); regularized spectral division in
+`src/js/measurement/impulse-response.js` and `transfer.js` (current ids minted under ADR 0024 in
+`src/js/measurement/algorithms.js`); the Farina inverse as the oracle in
+`tests/unit/v3-integration.test.mjs`.

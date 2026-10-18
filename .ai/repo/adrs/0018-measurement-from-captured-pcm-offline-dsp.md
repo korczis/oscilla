@@ -3,7 +3,7 @@ schema: adr/v1
 id: adr-0018
 kind: adr
 title: Measurement results come from captured PCM through deterministic offline DSP; the live analyser is feedback only
-status: proposed
+status: accepted
 date: 2026-10-02
 tags:
   - measurement
@@ -83,3 +83,10 @@ AnalyserNode is used only for live feedback (the input tap of `capture.js`, `liv
 The offline analysis runs in a Worker when the platform has one (ADR 0026, claim
 `analysis-off-main-thread`). Proven by claims `transfer-function`, `impulse-response` and
 `measurement-abort-releases-everything` in `docs/CLAIMS.yaml`.
+
+### 2026-10-18: accepted by the owner
+
+Accepted by the owner (explicit instruction in the session of 2026-10-18, applied by the
+coordinating Claude session) — implemented as described; evidence: claims `transfer-function`,
+`impulse-response`, `measurement-abort-releases-everything` and `analysis-off-main-thread`; the
+layers under `src/js/measurement/` its 2026-10-05 note lists.

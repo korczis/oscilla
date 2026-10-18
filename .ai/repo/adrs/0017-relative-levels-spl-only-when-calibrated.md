@@ -3,7 +3,7 @@ schema: adr/v1
 id: adr-0017
 kind: adr
 title: Levels are relative to digital full scale (dBFS-like); dB SPL appears only under a valid absolute-level calibration
-status: proposed
+status: accepted
 date: 2026-10-02
 tags:
   - measurement
@@ -155,3 +155,12 @@ and a level calibration made in TEST CONTEXT does not apply on the microphone, n
 The rules above are unchanged; this only refuses more. Details: ADR 0052, resolution note of
 the same day. Proven by `tests/unit/v4-seam-contract.test.mjs` and check
 `calibrated-only-for-a-checked-input` in `tests/browser/app.cjs`.
+
+### 2026-10-18: accepted by the owner
+
+Accepted by the owner (explicit instruction in the session of 2026-10-18, applied by the
+coordinating Claude session) — implemented as described; evidence: claims
+`spl-only-with-level-calibration`, `level-calibration-bound-to-input` and
+`spectrum-peak-accuracy`; rule `project.no-fake-science` v2; the refinements its resolution
+notes record (`tests/unit/v4-measurement-truth.test.mjs`, `tests/unit/v4-review-139.test.mjs`,
+`tests/unit/v4-seam-contract.test.mjs`).

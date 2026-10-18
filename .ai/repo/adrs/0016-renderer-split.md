@@ -52,3 +52,23 @@ frame is too slow at desktop sizes.
 - V3 result charts (frequency response, impulse response, RTA) extend this split: uPlot for
   response and IR curves, custom bars or uPlot for bands; charts render result objects and never
   own measurement data (ADR 0018).
+
+## Resolution notes
+
+### 2026-10-18: accepted by the owner
+
+Accepted by the owner (explicit instruction in the session of 2026-10-18, applied by the
+coordinating Claude session) — implemented as described; evidence: claims `spectrogram-mapping`
+and `phase-and-lissajous-model`; `src/js/visualization/p5-host.js`, the uPlot charts under
+`src/js/charts/`, the OffscreenCanvas ring of `src/js/analysis/spectrogram.js` and the one loop
+of `src/js/charts/frame-loop.js`.
+
+### 2026-10-18: acceptance withdrawn
+
+The independent review of the acceptance (pull request #198, finding R-1) showed the decision
+is not implemented as written: not every live renderer subscribes to the one loop of
+`src/js/charts/frame-loop.js` — p5 runs its own draw loop (`src/js/visualization/visualization-bridge.js`)
+and the Studio playhead and graph editor run their own requestAnimationFrame chains
+(`src/js/ui/studio/workspace.js`, `src/js/ui/studio/graph-editor.js`). The status returns to
+`proposed` until the decision is scoped to what it covers or the renderers follow it; the note
+above is kept as history.

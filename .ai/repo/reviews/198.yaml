@@ -1,0 +1,88 @@
+# Review verdict for pull request #198, the owner's acceptance of the implemented ADRs
+# (2026-10-18) and the release-candidate exemption it needs, branch docs/adr-acceptance.
+# Reviewed head c21a88924ba5d2884a95e72176a1f36853bdb19d (5db0046, 113469c, 039d5fd, c466eb4
+# and the merge of main d4bd97f, #197). Merge base origin/main d4bd97f: main has not moved.
+# Another builder wrote all of it, not me.
+#
+# The digest: the base branch's scripts/review-verdict.mjs judges this pull request
+# (.github/scripts/base-rule.sh). I ran it from `git archive origin/main scripts` with --repo
+# on this worktree, `--content --list --base-branch origin/main`: fff5ac1b...a5b1 over
+# scripts/release-prepare.mjs and tests/unit/release-analyze.test.mjs, the only guarded paths.
+#
+# What was checked:
+# - The RC exemption (c466eb4). `--no-rc-because` now needs status accepted, the tags
+#   rc-exemption and major-<N> for the major being opened, and adr:adr-0047 under related.
+#   - No accepted ADR opens it: the new test runs flowProblems over every accepted ADR of the
+#     repository (40) and over ADR 0047 forced to accepted, and each is refused.
+#   - Fail-first holds: the new test fails 1 of 20 with origin/main's release-prepare.mjs and
+#     passes 20/20 with the head's.
+#   - Parser probe, 17 front-matter shapes, rv198/probe.mjs. Block lists (indented or at
+#     column 0), flow lists and quoted items read correctly. Every shape it cannot read fails
+#     closed: a comment or blank line inside a block list, a trailing comment, a multi-line
+#     flow list, CRLF, `status: accepted # x`, a duplicate status (first wins), or a nested
+#     related or tags key. None lifted the refusal wrongly (R-3).
+#   - In a scratch clone, an exemption written to the README convention (status accepted,
+#     tags rc-exemption and major-4, related adr:adr-0047, origin authored) passes
+#     `majordomus adr check` and reads as an exemption. Forcing 0047 to accepted is refused by
+#     adr check as an extracted record, as the README says.
+#   - The normal path: `release:prepare --dry-run` on this worktree proposes the minor bump to
+#     3.12.0 with the gate list and exits 0. `--no-rc-because 0031` on that minor changes
+#     nothing. The tree stayed clean. `--help` was not run: see R-4.
+#   - GATE_RUN (#197): the merge base is main's tip, so the 3-dot and 2-dot diffs are the
+#     same and the exemption hunks touch only the flow section. release-gate-env.test.mjs
+#     passes.
+# - The 40 accepted ADRs.
+#   - Every diff changes only the status line and appends a dated note; nothing above the
+#     notes changed.
+#   - Every path and claim the 40 notes cite exists (rv198/notes.mjs, against
+#     docs/CLAIMS.yaml).
+#   - I checked the decision against the code for 0002, 0003, 0004, 0005, 0010, 0012, 0013,
+#     0016, 0022, 0026, 0027, 0028, 0029, 0031, 0032, 0033, 0036, 0039, 0041, 0042 and 0049:
+#     FAST_RELEASE_S, ceilingCurve and its 4097 points, updateLive, _switchWaves, WAVE_DIP_S,
+#     SCHEDULE_AHEAD_S 10, MAX_PROGRAMMED_S, revokeContinuous, tag v1.0.0 and 9fe0a15 (#3),
+#     BUDGET 1 000 000 gzip as 0012's note says, the p5 vendor block with data-sha256,
+#     DEFAULT_MAX_BYTES 32 MiB, maxRawBytes 128 MiB, keepRaw in no product path, the spike doc,
+#     tag v2.0.0, the GITHUB_SHA stamp in pages.yml, test:visual in test:release,
+#     STUDIO_HISTORY_LIMIT and PASTE_OFFSET (24, 24), canConnect in graph-view, the four
+#     validate.js cycle codes, buildTimeline and planFromTimeline, studioDivergence, planHash,
+#     applied(), runChanges, studioChanges and TRACE_CAP 256.
+#   - Branch protection reads gate with strict: true, as 0009's note says.
+#   - One accepted ADR states more than holds (R-1).
+# - The 18 left proposed.
+#   - 0001's reason holds: cancelAndHoldAtTime is used in studio/automation.js,
+#     studio/transport.js and audio/envelope.js.
+#   - 0030, 0034 and 0038 are held by v31-studio-self-knowledge.test.mjs ("keeps its status").
+#   - The extracted ones are refused by adr check when accepted (shown on 0047).
+#   - 0011, 0019 and 0045 are kept back conservatively, with a stated reason; none is
+#     mis-classified as unimplemented.
+#   - 0059 (from #197) has no line in the README (R-2).
+# - Owner authority.
+#   - Each of the 40 notes reads "Accepted by the owner (explicit instruction in the session
+#     of 2026-10-18, applied by the coordinating Claude session)". The README records the
+#     same, and adds that a worker still never promotes a status without the owner. That is
+#     coherent with the policy paragraph above it.
+#   - The PR body quotes "Ano, přijmi implementované". Which ADRs count as implemented was the
+#     session's selection (R-5).
+# - Ran on c21a889:
+#   - npm test, whole suite, twice. First run 2957/2958: v31-studio-performance's build took
+#     1076.64 ms against a budget of 1000 ms at load average 55. The whole-suite rerun passed
+#     2958/2958.
+#   - release-analyze, release-gate-env, v31-studio-self-knowledge and v31-studio-report:
+#     59/59.
+#   - majordomus adr check: clean, 59 decisions.
+#   - majordomus doctor: 0 failures. The warnings are the doctor budget and four stale agent
+#     clones, none in this worktree.
+#   - majordomus adr list --status accepted: 40.
+schema: review-verdict/v1
+pr: 198
+verdict: merge
+reviewer: "independent review subagent (Claude Opus 5.5) with its own context, spawned by orchestrating session e4a1ac78, whose other agents built this change; this agent did not build, merge or edit any of it and wrote only this file"
+content: fff5ac1b3b0a6e8a5c432f61d32da618c1aa91e398954bfa409b5abfbe3ea5b1
+findings:
+  - { id: R-1, severity: P3, status: open, title: "ADR 0016 is accepted as implemented as described, but its decision that every live renderer subscribes to the one requestAnimationFrame loop of charts/frame-loop.js does not hold. The p5 sketches run p5's own loop (visualization-bridge.js:262 toggles p.loop() and p.noLoop()). The Studio playhead tick is its own rAF chain (src/js/ui/studio/workspace.js:661-670), and graph-editor.js coalesces in its own rAF. The behaviour is not at fault; the accepted record needs a scoping note, or the owner keeps it proposed" }
+  - { id: R-2, severity: P3, status: open, title: "the README says the rest stay proposed, each for a stated reason, and lists 18, but ADR 0059 (extracted, brought in from #197 by merge c21a889) has no line there. Only the PR body mentions it" }
+  - { id: R-3, severity: P3, status: open, title: "frontMatterList is a line-based subset parser. A comment or blank line inside a block list, a trailing comment, a multi-line flow list or CRLF makes a valid exemption read as no exemption. Every such case fails closed and names what is missing; scripts/yaml-subset.mjs could read the front matter instead" }
+  - { id: R-4, severity: P3, status: open, title: "pre-existing, not introduced here: release-prepare.mjs has no --help and ignores unknown flags. On a clean tree, node scripts/release-prepare.mjs --help therefore runs a real prepare: this head would bump to 3.12.0 and run the gate. Not run by this reviewer; a --help, or refusing unknown flags, would close it" }
+  - { id: R-5, severity: P3, status: open, title: "the owner gave one blanket instruction, and which ADRs are implemented as described was the session's selection, not a per-ADR review by the owner. The notes and the README record the instruction honestly, but R-1 shows the selection can be wrong; the owner may want the 40 named back to them" }
+  - { id: R-6, severity: P3, status: open, title: "many accepted ADRs still open their decision with 'Proposed:' or 'Proposed (being implemented...)', e.g. 0022, 0027, 0028 and 0029. The policy forbids rewriting above the notes, so only the note says otherwise, and a reader sees both" }
+  - { id: R-7, severity: P3, status: open, title: "reviewer independence is at agent level: this reviewer and the builders are agents of one orchestrating session (e4a1ac78), as R-3 of #197. The owner decides whether that satisfies the rule" }

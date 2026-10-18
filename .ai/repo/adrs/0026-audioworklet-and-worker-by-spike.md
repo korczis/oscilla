@@ -3,7 +3,7 @@ schema: adr/v1
 id: adr-0026
 kind: adr
 title: AudioWorklet capture and Worker DSP are adopted only on the evidence of a recorded spike; the native graph and main thread stay the default
-status: proposed
+status: accepted
 date: 2026-10-02
 tags:
   - audio
@@ -124,3 +124,11 @@ packaging changes.
   and each analysis Worker (one per analysis) would parse about 1.2 MB instead of the
   library's 37.7 KiB. **Rejected: evaluating one string twice** (`new Function`/`eval` on the
   page): it needs `'unsafe-eval'` under a CSP; a real `<script>` element needs neither.
+
+### 2026-10-18: accepted by the owner
+
+Accepted by the owner (explicit instruction in the session of 2026-10-18, applied by the
+coordinating Claude session) — implemented as described; evidence: claim
+`analysis-off-main-thread` (`tests/browser/analysis-worker.cjs`); the `data:` AudioWorklet
+capture of `src/js/measurement/capture.js`; one analysis copy per its 2026-10-04 note
+(`tests/unit/v3-analysis-worker-single-copy.test.mjs`).

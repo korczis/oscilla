@@ -3,7 +3,7 @@ schema: adr/v1
 id: adr-0037
 kind: adr
 title: Automation is a timed base value on a timeline lane; modulation is a control edge with its own depth; the two never stand in for each other
-status: proposed
+status: accepted
 date: 2026-10-02
 tags:
   - studio
@@ -77,3 +77,13 @@ Proposed:
   when the automation test (specification §211) renders cutoff 500 Hz → 8 kHz offline and
   matches the scheduled curve, and the modulation test (§210) shows LFO depth on the edge
   adding to that automated base value.
+
+## Resolution notes
+
+### 2026-10-18: accepted by the owner
+
+Accepted by the owner (explicit instruction in the session of 2026-10-18, applied by the
+coordinating Claude session) — implemented as described; evidence: claims
+`studio-timeline-model` and `studio-automation-model`; `src/js/studio/automation.js`; the §211
+automation test in `tests/unit/v31-studio-timeline.test.mjs` and the §210 edge-depth test in
+`tests/unit/v31-studio-compiler.test.mjs`.

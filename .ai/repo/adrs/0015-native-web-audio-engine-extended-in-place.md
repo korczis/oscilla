@@ -3,7 +3,7 @@ schema: adr/v1
 id: adr-0015
 kind: adr
 title: The V2 engine is the V1 engine on the native Web Audio API, extended through option hooks and engine-accounted graph builders
-status: proposed
+status: accepted
 date: 2026-10-02
 tags:
   - audio
@@ -59,3 +59,15 @@ ownership and release semantics.
 - The V1 engine checks run against the V2 modules in CI (`npm run test:engine`).
 - The V3 measurement stimulus reuses this engine and the pattern definitions rather than a second
   generator (V3 specification §14; ADR 0018).
+
+## Resolution notes
+
+### 2026-10-18: accepted by the owner
+
+Accepted by the owner (explicit instruction in the session of 2026-10-18, applied by the
+coordinating Claude session) — implemented as described; evidence: claims
+`tone-plays-and-releases`, `dual-oscillator-beats`, `lowpass-attenuates`,
+`adsr-envelope-semantics`, `additive-coefficients-play`, `stereo-correlation-meter` and
+`wav-export-valid`; the `play(plan, o)` hooks in `src/js/audio/audio-engine.js`; the 0.95 ×
+Nyquist refusal in `src/js/audio/offline-renderer.js`; the V1 engine checks in CI (`npm run
+test:engine`).

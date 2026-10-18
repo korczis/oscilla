@@ -3,7 +3,7 @@ schema: adr/v1
 id: adr-0012
 kind: adr
 title: The runtime is self-contained: pinned dependencies are inlined and nothing is fetched, imported or loaded from a path
-status: proposed
+status: accepted
 date: 2026-10-02
 tags:
   - deliverable
@@ -72,3 +72,13 @@ each recorded in `scripts/build-config.mjs` (`BUDGET`): V3 to 2 250 000 / 630 00
 760 000 B gzip budget. Raw follows gzip at the measured ratio (3.47), so gzip stays the binding
 limit. Replacing p5 (about 245 KB of the gzip, about 28 of its drawing functions in use) is
 the deferred alternative; see the note on ADR 0013. The rest of this decision stands.
+
+### 2026-10-18: accepted by the owner
+
+Accepted by the owner (explicit instruction in the session of 2026-10-18, applied by the
+coordinating Claude session) — implemented as described; evidence: claims `dist-self-contained`
+(`scripts/verify-dist.mjs`, `tests/unit/verify-dist.test.mjs`), `opens-from-file-and-subpath`
+and `measure-from-file-and-subpath`; the capture worklet and the analysis Worker load from
+`data:` URLs (`src/js/measurement/capture.js`, `src/js/measurement/analysis-runner.js`,
+packaging per ADR 0026's 2026-10-04 note); the budget as its 2026-10-05 note records
+(`scripts/build-config.mjs` `BUDGET`).

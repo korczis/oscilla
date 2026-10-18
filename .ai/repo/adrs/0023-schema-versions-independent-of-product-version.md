@@ -3,7 +3,7 @@ schema: adr/v1
 id: adr-0023
 kind: adr
 title: Each persisted format has its own integer schema version, independent of the product version, upgraded by explicit stepwise migrations
-status: proposed
+status: accepted
 date: 2026-10-02
 tags:
   - data-model
@@ -55,3 +55,14 @@ Proposed:
   loudly.
 - Confirmation criteria: tests migrate a stored version-1 experiment through each later version
   without loss, and reject a version-from-the-future file.
+
+## Resolution notes
+
+### 2026-10-18: accepted by the owner
+
+Accepted by the owner (explicit instruction in the session of 2026-10-18, applied by the
+coordinating Claude session) — implemented as described; evidence: claims
+`link-restores-configuration`, `presets-save-and-load`, `config-file-round-trip` and
+`experiment-round-trip`; `SCHEMA_VERSIONS` in `src/js/experiments/schema.js`, stepwise
+migrations in `src/js/experiments/migrate.js`; "future schema version is rejected clearly" in
+`tests/unit/v3-experiments.test.mjs`.
