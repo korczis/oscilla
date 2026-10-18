@@ -77,7 +77,10 @@
 //                                lane's parameter owned by the transport (runtime.setOwnedParams:
 //                                the runtime does not glide it); the modulation edges' constant
 //                                offset (runtime.baseOffset) is added to the values, or on a
-//                                strictly positive parameter summed in by an offset source (fit)
+//                                strictly positive parameter summed in by an offset source (fit);
+//                                values, bounds and offsets in the parameter's unit, written in
+//                                the AudioParam's at the modTarget scale (schedule: a Random /
+//                                Step Modulator's rate in Hz is playbackRate x sampleRate / 480)
 //   measurement clip             data: onMeasurement({ type: 'schedule', model, ... }); the Studio
 //                                workspace's hook (measurement-run.js) runs the pass through
 //                                the MEASURE MeasurementEngine (docs/v31/timeline.md). `model` is
@@ -811,7 +814,7 @@ export function createStudioTransport({
     const c = claims.get(target.node);
     if (c && c.handle === h && target.param === 'level') {
       // A pattern-played oscillator: its level is the pattern bus (the voices).
-      return { param: c.bus.gain, handle: h, offset, bounds, mode: 'shift' };
+      return { param: c.bus.gain, handle: h, offset, bounds, mode: 'shift', scale: 1 };
     }
     let t = null;
     try { t = h.modTarget(target.param, 'linear'); } catch (e) { t = null; }
@@ -822,7 +825,21 @@ export function createStudioTransport({
     }
     const mode = isExponentialLegal(def) && h.acct
       && typeof hooks.ctx.createConstantSource === 'function' ? 'source' : 'shift';
-    return { param: t.param, handle: h, offset, bounds, mode };
+    // The AudioParam's unit per the parameter's (modTarget scale: a Random / Step Modulator's
+    // rate in Hz drives playbackRate at 480 / sampleRate), as the static value and edges use it.
+    const scale = finite(t.scale) ? t.scale : 1;
+    return { param: t.param, handle: h, offset, bounds, mode, scale };
+  }
+
+  /**
+   * Schedule lane events (in the parameter's unit, fitted) on `dest.param` in its own unit: each
+   * value times dest.scale. Bounds, offsets and every lane record stay in the parameter's unit;
+   * the scale is positive, so step, linear and exponential segments keep their shape.
+   */
+  function schedule(dest, events, opts) {
+    const evs = dest.scale === 1 ? events
+      : events.map((e) => ({ ...e, value: e.value * dest.scale }));
+    return applyAutomation(dest.param, evs, opts);
   }
 
   /**
@@ -901,10 +918,10 @@ export function createStudioTransport({
     if (from === to && !src.events.some((e) => e.t >= at)) return;
     const p = src.node.offset;
     p.cancelScheduledValues(at);
-    p.setValueAtTime(glide ? from : to, at);
+    p.setValueAtTime((glide ? from : to) * dest.scale, at);
     src.events = [{ kind: 'set', t: at, v: glide ? from : to }];
     if (glide && from !== to) {
-      p.setTargetAtTime(to, at, PARAM_TAU_S);
+      p.setTargetAtTime(to * dest.scale, at, PARAM_TAU_S);
       src.events.push({ kind: 'target', t: at, v: to, tau: PARAM_TAU_S });
     }
   }
@@ -914,7 +931,7 @@ export function createStudioTransport({
     if (!dest) return;
     const evs = fit(events, dest);
     try {
-      applyAutomation(dest.param, evs, { cancelFrom });
+      schedule(dest, evs, { cancelFrom });
     } catch (e) {
       laneWarn(laneId, e);
       return;
@@ -949,7 +966,7 @@ export function createStudioTransport({
         ...rec.raw.filter((e) => e.time > horizon)];
       const evs = fit(raw, dest);
       try {
-        applyAutomation(dest.param, evs, { cancelFrom: horizon });
+        schedule(dest, evs, { cancelFrom: horizon });
       } catch (e) {
         laneWarn(rec.laneId, e);
         continue;
@@ -998,7 +1015,7 @@ export function createStudioTransport({
         : fit([{ method: LINEAR, value: to, time: end }], dest),
       fit(rec.raw.filter((e) => e.time > end), dest));
       try {
-        applyAutomation(dest.param, evs, { cancelFrom: horizon });
+        schedule(dest, evs, { cancelFrom: horizon });
       } catch (e) {
         laneWarn(rec.laneId, e);
         continue;
@@ -1059,7 +1076,7 @@ export function createStudioTransport({
     if (!dest) return;
     try {
       const evs = fit(a.events, dest);
-      applyAutomation(dest.param, evs, { cancelFrom: a.cancelFrom });
+      schedule(dest, evs, { cancelFrom: a.cancelFrom });
       const n = nodeOf(model, a.target.node);
       const base = n && n.params[a.target.param];
       const held = evs.length ? evs[evs.length - 1].value : null;
@@ -1067,7 +1084,7 @@ export function createStudioTransport({
       if (finite(base)) {
         to = base + dest.offset;
         if (dest.bounds) to = clamp(to, dest.bounds.min, dest.bounds.max);
-        dest.param.setTargetAtTime(to, a.cancelFrom, PARAM_TAU_S);
+        dest.param.setTargetAtTime(to * dest.scale, a.cancelFrom, PARAM_TAU_S);
       }
       if (held !== null) released.set(dest.param, { at: a.cancelFrom, v: held, to });
       moveOffset(dest, a.cancelFrom, 0, true);
@@ -1178,7 +1195,7 @@ export function createStudioTransport({
       if (!dest) continue;
       const evs = fit(a.events, dest);
       try {
-        applyAutomation(dest.param, evs, { cancelFrom: a.cancelFrom });
+        schedule(dest, evs, { cancelFrom: a.cancelFrom });
       } catch (e) {
         laneWarn(a.laneId, e);
         continue;
