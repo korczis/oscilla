@@ -1,0 +1,179 @@
+{
+  "rule": "project.no-inert-surfaces",
+  "about": "What the rule's checks find on the tree and accept, each with its reason. placeholder-copy and disabled-without-reason are counted per file and key by tests/unit/no-inert-surfaces.test.mjs, which requires the tree to hold exactly these counts; inert-control lists data-osc values the browser check no-inert-controls of tests/browser/qa-regressions.cjs accepts without a handler of their own. Entries only shrink: no count may rise above, and no entry return after, its value in an earlier commit. Fixing a W6 or inert entry changes behaviour and is its own pull request, which lowers or removes the entry.",
+  "placeholder-copy": {
+    "src/index.html": {
+      "todo": {
+        "count": 3,
+        "reason": "legitimate: 'todo' is the MEASURE flow-step status value (a step not started); the shell compares it to pick the step icon and announces it as 'not started', never as the word"
+      }
+    },
+    "src/js/measurement/views/measure-flow.js": {
+      "todo": {
+        "count": 2,
+        "reason": "legitimate: the flow-step status value 'todo' (a step not started) that the view sets and the shell maps to 'not started'"
+      }
+    },
+    "src/styles/measure.css": {
+      "todo": {
+        "count": 1,
+        "reason": "legitimate: the class .is-todo styles a flow step whose status value is 'todo' (not started)"
+      }
+    },
+    "src/js/ui/app.js": {
+      "mock": {
+        "count": 2,
+        "reason": "legitimate: the ?mock=1 layout-comparison mode (the query key and the class osc-mock), the geometry-only mockup the owner allowed: it outlines renderer hosts and shows no value"
+      }
+    },
+    "src/styles/base.css": {
+      "mock": {
+        "count": 2,
+        "reason": "legitimate: the .osc-mock outlines of the ?mock=1 layout-comparison mode, geometry only: an outline and the host's name, never data or a trace"
+      }
+    },
+    "src/js/experiments/evidence.js": {
+      "not implemented": {
+        "count": 1,
+        "reason": "legitimate: the honest status text 'not implemented by this build', which says that an experiment names an analysis algorithm this build does not know"
+      }
+    }
+  },
+  "disabled-without-reason": {
+    "src/index.html": {
+      "export.wav": {
+        "count": 1,
+        "reason": "W6: aria-disabled while an export runs (exportBusy); the menu item states no reason"
+      },
+      "export.seqWav": {
+        "count": 1,
+        "reason": "W6: aria-disabled while an export runs (exportBusy); the menu item states no reason"
+      },
+      "action.exportAudio": {
+        "count": 1,
+        "reason": "W6: aria-disabled while an export runs (exportBusy); aria-busy is set, but no title or description says why"
+      },
+      "measure.expert": {
+        "count": 1,
+        "reason": "W6: disabled while a measurement runs (meas.busy); the switch states no reason"
+      },
+      "measure.stop": {
+        "count": 1,
+        "reason": "W6: disabled while no measurement is active (!meas.active); the button states no reason"
+      },
+      "measure.level": {
+        "count": 1,
+        "reason": "W6: the level choices are disabled while a measurement runs (meas.busy); no reason is stated on them"
+      },
+      "measure.rtaMode": {
+        "count": 1,
+        "reason": "W6: the live RTA mode choices are disabled while the live RTA is stopped; no reason is stated on them"
+      },
+      "measure.field": {
+        "count": 1,
+        "reason": "W6: the recipe number fields are disabled while a measurement runs (meas.busy); no reason is stated on them"
+      },
+      "measure.choice": {
+        "count": 1,
+        "reason": "W6: the recipe choice fields are disabled while a measurement runs (meas.busy); no reason is stated on them"
+      },
+      "measure.switch": {
+        "count": 1,
+        "reason": "W6: the recipe switches are disabled while a measurement runs (meas.busy); no reason is stated on them"
+      },
+      "measure.calImport": {
+        "count": 1,
+        "reason": "W6: disabled while a measurement runs (meas.busy); the button states no reason"
+      },
+      "measure.calRemove": {
+        "count": 1,
+        "reason": "W6: disabled while a measurement runs (meas.busy); the button states no reason"
+      },
+      "measure.calUse": {
+        "count": 1,
+        "reason": "W6: disabled while a measurement runs or no frequency profile is loaded; the switch states no reason"
+      },
+      "measure.levelCal": {
+        "count": 1,
+        "reason": "W6: disabled while a measurement runs (meas.busy); the button states no reason"
+      },
+      "measure.levelRemove": {
+        "count": 1,
+        "reason": "W6: disabled while a measurement runs (meas.busy); the button states no reason"
+      },
+      "measure.levelUse": {
+        "count": 1,
+        "reason": "W6: disabled while a measurement runs or no level calibration is stored; the switch states no reason"
+      },
+      "measure.repeat": {
+        "count": 1,
+        "reason": "W6: disabled until a measurement is COMPLETE; the button states no reason"
+      },
+      "exp.compare": {
+        "count": 1,
+        "reason": "W6: disabled until the selection can be compared (!exps.canCompare); the button states no reason"
+      },
+      "fnd.export": {
+        "count": 1,
+        "reason": "W6: disabled while there is no finding to export; the button states no reason"
+      },
+      "exp.findingCompare": {
+        "count": 1,
+        "reason": "W6: disabled while no comparison is open; the button states no reason"
+      },
+      "presets.load": {
+        "count": 1,
+        "reason": "W6: disabled by presetDisabled(p); the card shows presetDisabledReason(p) beside it, but the button does not point at that text (no aria-describedby)"
+      },
+      "levelCal.hz": {
+        "count": 1,
+        "reason": "W6: disabled while the level reference is captured; the field states no reason"
+      },
+      "levelCal.capture": {
+        "count": 1,
+        "reason": "W6: disabled while the level reference is captured; the button states no reason"
+      },
+      "levelCal.manual": {
+        "count": 1,
+        "reason": "W6: disabled while the level reference is captured; the button states no reason"
+      },
+      "levelCal.save": {
+        "count": 1,
+        "reason": "W6: disabled while the level reference is captured; the button states no reason"
+      },
+      "calConv.load": {
+        "count": 1,
+        "reason": "W6: disabled until a profile file is read and a choice made; the button states no reason"
+      },
+      "fnd.addRun": {
+        "count": 1,
+        "reason": "W6: disabled until an experiment is chosen to link; the button states no reason"
+      },
+      "fnd.save": {
+        "count": 1,
+        "reason": "W6: disabled while the finding conflicts with its stored version; the button states no reason"
+      },
+      "studio.render.start": {
+        "count": 1,
+        "reason": "W6: disabled while the render form refuses its settings (studio.renderForm.refused); the button states no reason"
+      }
+    }
+  },
+  "inert-control": {
+    "seq.field": {
+      "reason": "delegated: the sequencer block fields are handled by one change listener on their container (src/js/labs/sequencer-panel.js), not by listeners of their own"
+    },
+    "studio.tl.loop-start": {
+      "reason": "delegated: the loop handle is dragged and keyed through the pointerdown and keydown listeners of the timeline root (src/js/ui/studio/timeline-editor.js)"
+    },
+    "studio.tl.loop-end": {
+      "reason": "delegated: the loop handle is dragged and keyed through the pointerdown and keydown listeners of the timeline root (src/js/ui/studio/timeline-editor.js)"
+    },
+    "studio.patch.description": {
+      "reason": "read on submit: the Save as patch dialog reads the description when Save patch is pressed (src/js/ui/studio/patches-panel.js); typing in it has no effect of its own"
+    },
+    "studio.patch.replace": {
+      "reason": "read on submit: the Save as patch dialog reads this checkbox when Save patch is pressed (src/js/ui/studio/patches-panel.js)"
+    }
+  }
+}
