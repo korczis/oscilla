@@ -30,4 +30,29 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-18
-updated_at: 2026-10-18
+updated_at: 2026-10-18T13:48:04Z
+started_at: 2026-10-18T13:20:43Z
+started_event: sha256:55d6e2f7b563718ed0acdd001792c900c3e51fd2e59ab566391bd911adeaea33
+verified_at: 2026-10-18T13:47:56Z
+verified_event: sha256:f8460a88b83f89d9a036bf407a56d6c9f51309ae09a89d56012401c3f22143fa
+completed_at: 2026-10-18T13:48:04Z
+completed_event: sha256:87070d5a8f71fc23febcfa0f2905f69dfebb8721a2dbfc54bf570f96473e1725
+evidence:
+  - covers: verified
+    type: test
+    command: "node --test tests/unit/knowledge-integrity.test.mjs tests/unit/no-inert-surfaces.test.mjs"
+    result: "pass at 4a4af52: the rule is indexed, named in CLAUDE.md and names its enforcement; the tree equals the allowance (6 legitimate placeholder entries, 29 W6 disabled controls, 5 inert controls); mutations of (a), (b) and the allowance history refused; fail-first: scripts/fail-first.mjs against origin/main 50f6d6c reports the test failing without the change (assertion) and passing with it"
+    commit: 4a4af52763ab8bf8d1d16f7dfc409afcdbfc7feb
+    recorded_at: 2026-10-18T13:47:42Z
+  - covers: verified
+    type: test
+    command: "OSC_LOAD_MAX=200 node tests/browser/qa-regressions.cjs"
+    result: "PASS chromium 16/16, firefox 15/15, webkit 15/15; no-inert-controls visits 12 workspaces, 6 Studio templates (57 selections) and 25 node types, finds only the 5 allowed controls, and flags the fixture button without a handler; with seq.field removed from the allowance it FAILs (unexpected seq.field)"
+    commit: 4a4af52763ab8bf8d1d16f7dfc409afcdbfc7feb
+    recorded_at: 2026-10-18T13:47:45Z
+  - covers: verified
+    type: test
+    command: "npm test"
+    result: "2975 tests, 2975 pass, 0 fail at 4a4af52 (a first run under load 110 failed only the §145-§147 build budget, 1432 ms > 1000 ms; the whole suite rerun passed)"
+    commit: 4a4af52763ab8bf8d1d16f7dfc409afcdbfc7feb
+    recorded_at: 2026-10-18T13:47:49Z

@@ -23,4 +23,59 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-18
-updated_at: 2026-10-18
+updated_at: 2026-10-18T13:50:45Z
+started_at: 2026-10-18T13:20:45Z
+started_event: sha256:37522e3b0441dccf4c47145292998e971f40a3216d6e6a074f9c652430a82e4b
+verified_at: 2026-10-18T13:50:31Z
+verified_event: sha256:8b498461b087e9e17222ea0f6ed4465afe906acf714f7e5fec624d3e3d09be97
+completed_at: 2026-10-18T13:50:45Z
+completed_event: sha256:c6c7a8b8fc8eb97dbb424d79ca0544afed68aeab082ee714f949cb341e732a83
+evidence:
+  - covers: verified
+    type: test
+    command: "grep -q 'what replacing p5 would cost' .ai/repo/adrs/0013-p5-unmodified-separable-block.md"
+    result: "exit 0 at 1e13c7c; the same grep finds 0 matches in the file at main 50f6d6c (it failed before the note)"
+    commit: 1e13c7c52f659e37cb08b7f05dad186412b45a62
+    recorded_at: 2026-10-18T13:49:18Z
+  - covers: verified
+    type: test
+    command: "majordomus adr check"
+    result: "59 decisions; every identity unique, every status known, every reference resolves; 0 identities added"
+    commit: 1e13c7c52f659e37cb08b7f05dad186412b45a62
+    recorded_at: 2026-10-18T13:49:28Z
+  - covers: verified
+    type: test
+    command: "npm test"
+    result: "2965 tests, 2965 pass, 0 fail at 1e13c7c"
+    commit: 1e13c7c52f659e37cb08b7f05dad186412b45a62
+    recorded_at: 2026-10-18T13:49:41Z
+  - covers: verified
+    type: artifact
+    command: "git diff --numstat 50f6d6c 1e13c7c -- .ai/repo/adrs/0013-p5-unmodified-separable-block.md"
+    result: "59 added, 0 removed: the note is appended under Resolution notes; the sections above and status: accepted are unchanged"
+    commit: 1e13c7c52f659e37cb08b7f05dad186412b45a62
+    recorded_at: 2026-10-18T13:49:48Z
+  - covers: verified
+    type: test
+    command: "git grep -n -i canvas2d -- src"
+    result: "no match (exit 1) at 1e13c7c: main carries no adapter code from the spike"
+    commit: 1e13c7c52f659e37cb08b7f05dad186412b45a62
+    recorded_at: 2026-10-18T13:49:53Z
+  - covers: verified
+    type: manual
+    command: "npm run build && node scripts/verify-dist.mjs"
+    result: "in the spike/p5-canvas2d worktree: gzip 796.2 KiB (815357 B) at e710fe1c1f55 (p5) and 546.0 KiB (559124 B) at 3ab180ba5424 (adapter): 256233 B gzip saved"
+    commit: 1e13c7c52f659e37cb08b7f05dad186412b45a62
+    recorded_at: 2026-10-18T13:50:02Z
+  - covers: verified
+    type: manual
+    command: "npm run test:visual"
+    result: "in the spike/p5-canvas2d worktree at 3ab180ba5424: PASS gate 13 regions, MEASURE 2 views, Studio 5 views; per view (scripts/p5-view-shots.mjs) 5 views pixel-identical, Phase & Stereo 2.24 % within its 2.29 % run-to-run"
+    commit: 1e13c7c52f659e37cb08b7f05dad186412b45a62
+    recorded_at: 2026-10-18T13:50:11Z
+  - covers: verified
+    type: manual
+    command: "OSC_LOAD_MAX=200 npm run test:perf -- --frame-time --frame-batch 50 --only frame-time"
+    result: "in the spike/p5-canvas2d worktree at 3ab180ba5424 vs --dist of e710fe1c1f55, 3 interleaved runs: every view under 1 ms/frame in Chromium and WebKit, adapter equal or faster; Firefox too noisy under load"
+    commit: 1e13c7c52f659e37cb08b7f05dad186412b45a62
+    recorded_at: 2026-10-18T13:50:17Z

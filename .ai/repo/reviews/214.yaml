@@ -1,0 +1,59 @@
+# Review verdict for pull request #214: migrate the .ai layer to Majordomus 0.30.0 (drop the
+# typed milestone `version:` keys, move the CI doctor pin and its digest, re-take the
+# ci-knowledge-job capture, vendor the 0.30.0 standard rules). Branch chore/majordomus-0.30.0.
+# Reviewed head 1a86d6de6e0ba07972e03479f7ce775c96ea25df (c60da47 migrate, 1a86d6d vendor).
+# Merge base origin/main 26584ea: main has not moved. Another builder wrote all of it, not me.
+#
+# The digest: the base branch's scripts/review-verdict.mjs judges this pull request. I ran it
+# from `git archive origin/main scripts` with --repo on this worktree, `--content --list
+# --base-branch origin/main`: 2039f6ab...15fa8 over .github/workflows/ci.yml and
+# tests/unit/ci-knowledge-job.test.mjs, the two guarded paths.
+#
+# What was checked:
+# - The milestones. 43 files, 43 deletions, 0 additions, and every deleted line is
+#   `version: "x.y.z"`; no milestone keeps a `version:`. Nothing reads it: scripts/ and src/
+#   never open the milestones, and the tests that do (v31-studio-report, plan-evidence-commits,
+#   release-validation-pins) read title, validation and evidence, not version.
+#   - Why: in a hookless clone at main 26584ea, 0.30.0 doctor prints 47 FAILs, the 4 hook-wiring
+#     ones and 43 "unknown keys: version" (ADR 0166 upstream), one per removed key.
+#   - At the head, `majordomus plan validate` (0.30.0) in this worktree and 0.29.0's from its
+#     versioned path in a clone both report 0 failures (2 WARNs: M052 evidence, E010 scope).
+# - The digest of the pin. https://majordomus.dev/releases/v0.30.0.json gives
+#   x86_64-unknown-linux-gnu sha256 7fcc015c...fe562, size 18 067 134. I downloaded the asset
+#   from the GitHub release URL the job builds and hashed it: 7fcc015c...fe562, 18 067 134 B,
+#   equal to MJ_SHA256. The archive's top directory is majordomus-v0.30.0-x86_64-unknown-linux-gnu/
+#   with bin/majordomus, which is the path the job adds to GITHUB_PATH. On CI run 39168935913 the
+#   knowledge job ".ai layer (majordomus doctor 0.30.0)" passed, so the runner agreed.
+# - The capture. Two hookless clones of the head under /private/tmp/claude-501/ (.git/hooks
+#   pre-commit and pre-push removed):
+#   - With the `knowledge:` block of policy.yaml stripped, `majordomus doctor --json` 0.30.0
+#     (exit 10) printed the layout OK line, the four wiring FAILs, the deriver OK line, the
+#     missing-key WARN and the stderr line exactly as PINNED holds them, field for field. So only
+#     CAPTURED_WITH needed to change. The verdict on that output is false, as it should be.
+#   - On the unmodified clone, `jq -e -s -f .github/doctor-verdict.jq doctor.jsonl` prints
+#     true (exit 0). The only FAILs are the four excused wiring ones.
+#   - Under 0.29.0 the same unmodified clone also gives verdict true, with 0 non-wiring FAILs.
+# - The vendored rules. `.ai/repo/rules/vendor/majordomus/` is byte-identical (diff -r) to
+#   ~/.local/share/majordomus/versions/0.30.0/share/standard/majordomus/. main's manifest equals
+#   0.29.0's. The only content change is roadmap-integrity: it now states the inferred
+#   released_in rule, and the manifest sha changes with it.
+# - The other 0.29 mentions. The policy.yaml comment ("required since Majordomus 0.29", "the
+#   0.29.0 skeleton's"), gates.yaml's "Majordomus 0.29:" and the critiques and gaps are history
+#   or dated observations, not descriptions of the pin, so they rightly stay. The
+#   knowledge-integrity check that no enforcement section names a non-pinned version passes.
+#   The job name changed, but the required check is `gate`.
+# - Ran: node --test on ci-knowledge-job, knowledge-integrity, ci-workflows, ci-gates-model and
+#   majordomus-pin: 81/81 pass.
+#   CI run 39168935913 at review time: unit, fail-first, visual and the knowledge job passed.
+#   Browser jobs were still pending, and review-verdict failed only because this file was absent.
+# - The procedure (project.majordomus-layer-current, ADR 0056) is recorded as R-1 and R-2.
+schema: review-verdict/v1
+pr: 214
+verdict: merge
+reviewer: "independent review subagent (Claude Opus 5.5) with its own context, spawned by orchestrating session e4a1ac78, which built this change; this agent did not build, merge or edit any of it and wrote only this file"
+content: 2039f6ab343f527c64cf943980a84d215b09611057649c238af3283902815fa8
+findings:
+  - { id: R-1, severity: P3, status: open, title: "the PR cites ADR 0056 for landing layer and pin together, but that exception applies only when no layer passes both versions. This head does pass both: 0.29.0 doctor shows only the four wiring FAILs and the verdict reads true (verified). The rule's default procedure would land the layer first and move the pin in its own PR. Combining them loses no checking here, because CI judges with 0.30.0 and 0.29.0 was checked by hand. Still, the body should give the real reason (the launcher already runs 0.30.0 and every commit is blocked) and show both versions' doctor output, as ADR 0056 asks of a combined PR" }
+  - { id: R-2, severity: P3, status: open, title: "step 4 (the owner's machine-wide launcher flip to 0.30.0) happened before steps 2-3. This PR is catching up with it, not leading it, and that is why every pre-commit doctor on main failed. This is owner-side ordering, outside the change itself" }
+  - { id: R-3, severity: P3, status: open, title: "upstream Majordomus 0.30.0: at main 26584ea, `plan validate` lists 43 FAIL schema lines and exits 10, yet its summary line says '0 failure(s)'. The summary under-reports, so anyone reading only the last line is misled. This should be reported to Majordomus; OSCILLA has nothing to fix" }
+  - { id: R-4, severity: P3, status: open, title: "reviewer independence is at agent level: this reviewer is an agent of orchestrating session e4a1ac78, which built this change. The owner's open question R-3 decides whether that satisfies the rule" }

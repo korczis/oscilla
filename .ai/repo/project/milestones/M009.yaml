@@ -1,7 +1,6 @@
 id: M009
 title: "V2 visual acceptance"
 slug: v2-visual
-version: "2.0.0"
 order: 9
 priority: p0
 problem: "V2 must look like the supplied reference, not an interpretation of it."

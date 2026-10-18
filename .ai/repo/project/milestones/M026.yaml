@@ -1,7 +1,6 @@
 id: M026
 title: "V3.1 Studio automation"
 slug: v31-studio-automation
-version: "3.1.0"
 order: 26
 priority: p0
 problem: "Parameters cannot change over time except by hand."

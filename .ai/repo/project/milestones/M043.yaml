@@ -1,7 +1,6 @@
 id: M043
 title: "V3.9 versioned experiment definitions and the closure audit"
 slug: v39-experiment-definitions
-version: "3.9.0"
 order: 42
 priority: p1
 problem: "Runs were not executed from a stored, versioned definition, and the four closure audits of main at 27f7c62 (docs/v4/completion-ledger.md) found P0 defects: a refused PLAY left Studio state on the shared engine (R1), a throw after the plan swap left the applied record stale (R2), and a frequency-profile calibration was recorded as it was at Save, not as measured (D1)."

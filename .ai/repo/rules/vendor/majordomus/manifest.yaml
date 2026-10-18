@@ -5,7 +5,7 @@ vendor: majordomus
 package: majordomus-standard-rules
 version: 1
 format: ai-rules/v1
-source_revision: 0.29.0
+source_revision: 0.30.0
 rules:
   - id: majordomus.adr-integrity
     version: 1
@@ -206,7 +206,7 @@ rules:
   - id: majordomus.roadmap-integrity
     version: 1
     file: rules/roadmap-integrity.v1.md
-    sha256: 848a019157cffc3fe9480412319ecc7e1c963acfc6ce1ee8d7fd95ace6e0700c
+    sha256: 959aad5152d01f417cb812e943968d7fd6a54e8dc54c4d5d3e42084f322d2ee8
   - id: majordomus.rule-package-integrity
     version: 1
     file: rules/rule-package-integrity.v1.md

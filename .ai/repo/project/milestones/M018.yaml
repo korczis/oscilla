@@ -1,7 +1,6 @@
 id: M018
 title: "V3 measurement quality"
 slug: v3-quality
-version: "3.0.0"
 order: 18
 priority: p0
 problem: "Nothing tells the user how much to trust a reading."
