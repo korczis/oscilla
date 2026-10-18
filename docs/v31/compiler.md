@@ -99,9 +99,15 @@ The runtime then instantiates the plan in order and routes it:
   are listed in `debugInfo().limitedEdges`. A frequency an automation lane owns is sized from
   the lane's peak (the transport claims it with `setOwnedParams([{ node, param, peak }])`),
   not from the static value the lane overrides, and a changed peak re-sizes the node on the
-  next apply (review V431 X1). Other parameters are not clamped at audio rate
-  (an AudioParam sum cannot be); when base ± modulation can leave the range it is listed in
-  `debugInfo().exceeds` (§242: excessive gain made visible, the limiter is a last resort).
+  next apply (review V431 X1). An Oscillator's `detune` shifts its frequency by
+  `2^(cents/1200)` and spends the same headroom (review V272 A7): the static detune is lowered
+  to fit above the frequency (a lane's peak counts as its reference), a positive one lowers the
+  cap of the frequency's own edges, and the upward excursion of the detune's edges is scaled to
+  what is left; a static base lowered this way is listed in `debugInfo().limitedParams`
+  (`{ node, param }`), a scaled edge in `limitedEdges`. Other parameters are not clamped at
+  audio rate (an AudioParam sum cannot be); when base ± modulation can leave the range it is
+  listed in `debugInfo().exceeds` (§242: excessive gain made visible, the limiter is a last
+  resort).
 - Unsupported modulation targets become **inactive routes with a reason**: Q of a low- or
   high-pass filter (a dB AudioParam in Web Audio, a linear depth would be mis-scaled), log
   mapping without a detune AudioParam, pan without StereoPannerNode.
@@ -246,8 +252,8 @@ shaped it (`tests/browser/v31-studio-audio.cjs`):
 
 `debugInfo()` → `{ state, compiledRevision, modelNodeCount, modelEdgeCount, runtimeNodeCount,
 runtimeSourceCount, handleCount, routedEdgeCount, pendingCleanups, engineNodeCount,
-engineSourceCount, degraded, inactiveEdges, limitedEdges, exceeds, warnings, diagnostics,
-lastOps, lastError, applied, ownedParams }`. `degraded` and `inactiveEdges` are
+engineSourceCount, degraded, inactiveEdges, limitedEdges, limitedParams, exceeds, warnings,
+diagnostics, lastOps, lastError, applied, ownedParams }`. `degraded` and `inactiveEdges` are
 `{ id, status, code, reason }` (the live handle's or route's, else the plan's); `diagnostics`
 holds validation's warnings and the runtime's own, structured; `warnings` is their message text.
 

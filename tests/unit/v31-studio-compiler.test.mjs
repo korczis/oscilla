@@ -660,6 +660,98 @@ test('runtime: a changed lane peak re-sizes the modulation edge without a graph 
   assert.ok(Math.abs(edge.ramp.target - 2400) < EPS, 'releasing the lane restores the room');
 });
 
+/** Highest frequency an Oscillator base reaches: frequency · 2^(detune written + Σ up / 1200). */
+const oscPeak = (r, upCents = 0) => r.base.frequency.value
+  * 2 ** ((r.base.detune.value + r.base.detune.cents + r.base.frequency.cents + upCents) / 1200);
+
+test('V272 A7: computeBases counts an Oscillator\'s detune in the Nyquist headroom', () => {
+  const oscDef = NODE_REGISTRY.get('oscillator');
+  const plan = (params) => ({ def: oscDef, params: { waveform: 'sine', frequency: 12000,
+    detune: 0, level: 1, ...params } });
+  const ctl = (id, port, props) => ({ edge: { id, kind: 'control', to: { node: 'o', port },
+    props: { muted: false, polarity: 'bipolar', mapping: 'linear', offset: 0, ...props } },
+  handle: { status: 'active', range: [-1, 1], scale: props.mapping === 'log' ? 1200 : 1 } });
+  for (const sampleRate of [44100, 48000]) {
+    const hooks = { safeMaximum: sampleRate / 2 * 0.95 };
+    const cap = Math.min(oscDef.params.find((p) => p.key === 'frequency').max,
+      hooks.safeMaximum);
+    const tol = cap * 1e-9;
+    // static +1200 ct on 12 kHz: the detune is lowered to fit and reported
+    const st = computeBases(plan({ detune: 1200 }), [], hooks);
+    assert.ok(oscPeak(st) <= cap + tol, `${sampleRate}: static peak ${oscPeak(st)} > ${cap}`);
+    assert.ok(Math.abs(oscPeak(st) - cap) < tol, 'the detune keeps all the room there is');
+    assert.ok(st.clamped && st.clamped.has('detune'), `${sampleRate}: static detune reported`);
+    // LFO → detune, depth 1200 ct: the edge's excursion is scaled to the room and reported
+    const lfo = computeBases(plan({}), [ctl('d', 'detune', { depth: 1200 })], hooks);
+    assert.ok(oscPeak(lfo, lfo.gains.get('d')) <= cap + tol, `${sampleRate}: LFO peak`);
+    assert.ok(lfo.limited.has('d'), `${sampleRate}: detune edge reported`);
+    // a static detune shrinks the room left for a log frequency edge and a linear Hz edge
+    const lg = computeBases(plan({ frequency: 6000, detune: 600 }),
+      [ctl('l', 'frequency', { depth: 2, mapping: 'log' })], hooks);
+    assert.ok(oscPeak(lg, lg.gains.get('l')) <= cap + tol, `${sampleRate}: log edge peak`);
+    assert.ok(lg.limited.has('l'));
+    const lin = computeBases(plan({ frequency: 6000, detune: 600 }),
+      [ctl('m', 'frequency', { depth: 20000 })], hooks);
+    const linTop = (6000 + lin.gains.get('m')) * 2 ** (lin.base.detune.value / 1200);
+    assert.ok(linTop <= cap + tol, `${sampleRate}: linear edge peak ${linTop}`);
+    assert.ok(lin.limited.has('m'));
+    // everything together stays below the cap
+    const all = computeBases(plan({ frequency: 3000, detune: 300 }), [
+      ctl('l', 'frequency', { depth: 1, mapping: 'log' }), ctl('m', 'frequency', { depth: 3000 }),
+      ctl('d', 'detune', { depth: 900 })], hooks);
+    const allTop = (all.base.frequency.value + all.gains.get('m'))
+      * 2 ** ((all.base.detune.value + all.base.frequency.cents + all.gains.get('l')
+        + all.gains.get('d')) / 1200);
+    assert.ok(allTop <= cap + tol, `${sampleRate}: combined peak ${allTop}`);
+  }
+  // within the room nothing changes: 440 Hz + 1200 ct, LFO 1200 ct on detune
+  const hooks = { safeMaximum: 22800 };
+  const free = computeBases(plan({ frequency: 440, detune: 1200 }),
+    [ctl('d', 'detune', { depth: 1200 })], hooks);
+  assert.strictEqual(free.base.detune.value, 1200);
+  assert.strictEqual(free.gains.get('d'), 1200);
+  assert.strictEqual(free.limited.size, 0);
+  assert.strictEqual(free.clamped.size, 0);
+  // a negative detune grants no extra room to the frequency parameter itself
+  const neg = computeBases(plan({ frequency: 20000, detune: -1200 }),
+    [ctl('m', 'frequency', { depth: 10000 })], hooks);
+  assert.ok(Math.abs(neg.gains.get('m') - 2800) < 1e-6);
+  // a detune lane's peak sizes the room like a frequency lane's (V431 X1)
+  const laned = computeBases(plan({}), [ctl('d', 'detune', { depth: 100 })], hooks,
+    { detune: 1100 });
+  assert.ok(laned.limited.has('d'));
+  assert.ok(12000 * 2 ** ((1100 + laned.gains.get('d')) / 1200) <= 22800 + 1e-6);
+});
+
+test('V272 A7: the runtime keeps detune + its modulation below 0.95 × Nyquist', () => {
+  for (const sampleRate of [44100, 48000]) {
+    for (const lfo of [false, true]) {
+      const store = newStore();
+      const b = builder(store);
+      const osc = b.add('oscillator', { params: { frequency: 12000, detune: lfo ? 0 : 1200 } });
+      const master = b.add('master');
+      b.connect(osc, 'audio', master, 'audio');
+      const mod = lfo ? b.add('lfo') : null;
+      const eid = lfo ? b.connect(mod, 'control', osc, 'detune', { depth: 1200 }) : null;
+      const s = setup({ sampleRate });
+      assert.ok(s.runtime.apply(store.getModel()).ok);
+      assert.ok(s.runtime.start().ok);
+      const o = s.runtime.nodes.get(osc).info.oscillator;
+      const up = lfo ? Math.abs(s.runtime.edges.get(eid).ramp.target) : 0;
+      const safe = s.ctx.sampleRate / 2 * 0.95;
+      const peak = o.frequency.value * 2 ** ((o.detune.value + up) / 1200);
+      const label = `${sampleRate} Hz, ${lfo ? 'LFO → detune' : 'static detune'}`;
+      assert.ok(peak <= safe * (1 + 1e-9), `${label}: peak ${peak} > safe maximum ${safe}`);
+      const dbg = s.runtime.debugInfo();
+      if (lfo) assert.ok(dbg.limitedEdges.includes(eid), `${label}: ${dbg.limitedEdges}`);
+      else {
+        assert.ok((dbg.limitedParams || []).some((x) => x.node === osc && x.param === 'detune'),
+          `${label}: ${JSON.stringify(dbg.limitedParams)}`);
+      }
+    }
+  }
+});
+
 // ---------------------------------------------------------------- diff and patch (§44-§45)
 
 test('diff: a parameter change updates the existing node, nothing is rebuilt', () => {

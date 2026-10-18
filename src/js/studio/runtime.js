@@ -1007,9 +1007,11 @@ export function createStudioRuntime({
     // Validation's warnings, the last transaction's, and failures still in effect (once each).
     const warned = [...new Set([...plan.warnings, ...lastWarnings, ...unresolved()])];
     const limitedEdges = [];
+    const limitedParams = []; // static bases lowered below 0.95 × Nyquist (V272 A7)
     const exceeds = [];
     for (const [id, cb] of bases) {
       limitedEdges.push(...cb.limited);
+      for (const k of cb.clamped) limitedParams.push({ node: id, param: k });
       for (const k of cb.exceeds) exceeds.push({ node: id, param: k });
     }
     return {
@@ -1027,6 +1029,7 @@ export function createStudioRuntime({
       degraded,
       inactiveEdges,
       limitedEdges,
+      limitedParams,
       exceeds,
       warnings: warned.map((w) => w.message),
       diagnostics: warned,
