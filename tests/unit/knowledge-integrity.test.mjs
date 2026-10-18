@@ -1102,6 +1102,8 @@ const ADR_NOT_A_CAPABILITY = new Map([
   ['0055', 'repository operation: how a merge train lands'],
   ['0056', 'repository operation: when the Majordomus CI pin moves'],
   ['0057', 'release evidence: what proves a static Pages deployment'],
+  ['0060', 'a product-path decision (Q003): no commercial path before v4.0; it adds no'
+    + ' capability of the page'],
 ]);
 
 /** ADR numbers (from 0011 on) that `corpus` never cites, and exemptions it does cite. */
