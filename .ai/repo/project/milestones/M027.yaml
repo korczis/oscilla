@@ -1,7 +1,6 @@
 id: M027
 title: "V3.1 compact Studio"
 slug: v31-compact-studio
-version: "3.1.0"
 order: 27
 priority: p0
 problem: "The cockpit has no summary of the Studio state."

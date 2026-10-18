@@ -1,7 +1,6 @@
 id: M023
 title: "V3.1 Studio graph editor"
 slug: v31-studio-graph-editor
-version: "3.1.0"
 order: 23
 priority: p0
 problem: "Signal Path is a passive picture."

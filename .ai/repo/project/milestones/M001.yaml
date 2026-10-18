@@ -1,7 +1,6 @@
 id: M001
 title: "Instrument core"
 slug: instrument-core
-version: "1.0.0"
 order: 1
 priority: p1
 problem: "No application exists."

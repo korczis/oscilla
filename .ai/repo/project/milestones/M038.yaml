@@ -1,7 +1,6 @@
 id: M038
 title: "V3.4 release lines and Majordomus release records"
 slug: v34-release-records
-version: "3.4.0"
 order: 37
 priority: p1
 problem: "A release had a tag and a GitHub Release but no tracked record of the bytes it published, and the About timeline did not name every release line."

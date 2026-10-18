@@ -23,4 +23,17 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-18
-updated_at: 2026-10-18
+updated_at: 2026-10-18T13:58:13Z
+started_at: 2026-10-18T13:20:42Z
+started_event: sha256:84006e793edacd69081644c8100285373fe792b82022ef9d79b10506837bb05a
+verified_at: 2026-10-18T13:57:51Z
+verified_event: sha256:5d8d60014e85e5065488ed7b12f3541b027dbf261d8832f8b67e0b6c04b670e1
+completed_at: 2026-10-18T13:58:13Z
+completed_event: sha256:80edc3a82067af0ac56a3248f26ed95d38c094243118b43af65aaecfea8e8f99
+evidence:
+  - covers: verified
+    type: test
+    command: "node --test tests/unit/size-report.test.mjs tests/unit/ci-workflows.test.mjs tests/unit/ci-gates-model.test.mjs && node scripts/fail-first.mjs --title 'feat(ci): E009 CI reports the size change of every pull request' --base-branch origin/main && npm test"
+    result: "MET at 5c07435: scripts/size-report.mjs prints raw and gzip size of dist/index.html, headroom to the scripts/build-config.mjs budget and the change from the merge base; the unit job of ci.yml appends it to the step summary (2-minute step limit; ci-workflows and ci-gates-model pass, .ai/repo/ci/gates.yaml unit gate names the program). size-report.test.mjs 8/8 pass; fail-first: fails without the change (module-not-found), passes with it; tests/README.md one appended row; docs/CLAIMS.yaml and the intent untouched (E015). npm test 2973/2973 pass (after two whole-suite runs failed only v31-studio-performance build 1024 ms > 1000 ms at load 77-165, cleared by a whole re-run at load 97). Locally on this branch: 2 817 241 B raw / 815 357 B gzip, headroom 682 759 / 184 643 B, change 0 / 0 B. Review verdict for the .github change is the reviewer's, pending"
+    commit: 5c07435d08728ca2c1da8644d63902a68957c1e6
+    recorded_at: 2026-10-18T13:57:40Z

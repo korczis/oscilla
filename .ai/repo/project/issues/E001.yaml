@@ -26,4 +26,23 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-18
-updated_at: 2026-10-18
+updated_at: 2026-10-18T13:31:18Z
+started_at: 2026-10-18T13:20:50Z
+started_event: sha256:1ab2f6e18e3614b386ae25bca8a10477564765017880e52e24375802affe03aa
+verified_at: 2026-10-18T13:30:56Z
+verified_event: sha256:308fb782c9c6fef83cab89854b5ec73bcfdb7e47e0ef0c93f96e36ed289f39d8
+completed_at: 2026-10-18T13:31:18Z
+completed_event: sha256:64be84f30a6f1114f74015f417dfbc24b0330225d5ba0d310edea3b087fe0408
+evidence:
+  - covers: verified
+    type: test
+    command: "node --test tests/unit/source-size-budget.test.mjs"
+    result: "15 of 15 pass at 0a17c42: the tree is within budget (18 files under src/js and src/index.html capped at wc -c size at 50f6d6c plus 10 %, rounded up to 1 000); the history check runs (baseline is its own first record); every mutation case of the acceptance criteria (past cap, new >40 000 without cap, missing file, small file, cap above ceiling after shrink, undeclared raise, first pass of 40 000 without entry, edited entry) fails and a declared raise passes. At 37ce101 (test without baseline) 13 of 15 failed."
+    commit: 0a17c42281cfe2fb6bae3c9f0e523f26f16843fd
+    recorded_at: 2026-10-18T13:30:35Z
+  - covers: verified
+    type: test
+    command: "npm test"
+    result: "2980 tests, 2980 pass, 0 fail at 0a17c42, including knowledge-integrity (tests/README.md row) and the new budget test"
+    commit: 0a17c42281cfe2fb6bae3c9f0e523f26f16843fd
+    recorded_at: 2026-10-18T13:30:46Z

@@ -1,7 +1,6 @@
 id: M019
 title: "V3 workbench UX"
 slug: v3-workbench-ux
-version: "3.0.0"
 order: 19
 priority: p0
 problem: "The measurement capabilities have no coherent place in the V2 cockpit."

@@ -1,0 +1,63 @@
+# Review verdict for pull request #208, plan issue E009: CI reports the size change of every
+# pull request (scripts/size-report.mjs, a step of the unit job of ci.yml). Branch
+# ci/e009-size-report.
+# Reviewed head 48f794e37a7125d6ed2c29fbd08764f8578499a9 (34a30ce test, a717ac3 feat, 5c07435
+# ci, 48f794e plan evidence). Merge base origin/main 50f6d6c: main has not moved. Another
+# builder wrote all of it, not me.
+#
+# The digest: the base branch's scripts/review-verdict.mjs judges this pull request. I ran it
+# from `git archive origin/main scripts` with --repo on this worktree, `--content --list
+# --base-branch origin/main`: 642d1c8b...dceba over .github/workflows/ci.yml, the one guarded
+# path. It matches the builder's claim.
+#
+# What was checked:
+# - Acceptance criteria (majordomus plan show E009).
+#   - The four numbers. At the head the program prints raw 2 817 241 B and gzip 815 357 B,
+#     headroom 682 759 / 184 643 B against the 3 500 000 / 1 000 000 B budget, merge base
+#     50f6d6c and a change of 0 / 0 B. That is the evidence record's numbers, and the arithmetic
+#     holds by hand.
+#   - The CI model. In a scratch repository I made a GitHub-style refs/pull/1/merge, where main
+#     moved on with no dist change and the pull request grew dist. I checked it out detached and
+#     ran the program with --base-branch origin/main. It named main's tip as the merge base and
+#     reported exactly the pull request's growth (+40 001 / +30 150 B).
+#   - The step summary on GitHub is not yet observed: CI run 39134118899 was queued when I
+#     reviewed (R-4).
+#   - project.ci-bounded. ci.yml runs on pull_request only, so GITHUB_BASE_REF is always set.
+#     `defaults.run.shell: bash` gives -eo pipefail, so a refusal (exit 1) is not hidden by tee.
+#     The step has its own 2-minute limit. It has no network, no install, no continue-on-error
+#     and no `|| true`, and the action pins are unchanged.
+#   - fetch-depth 0 holds origin/<base>. ci-workflows, ci-gates-model and yaml-subset pass.
+#   - tests/README.md: one appended row, and it matches what the test holds.
+#   - docs/CLAIMS.yaml and the intent are untouched (E015 owns the claim).
+# - Fail-first. In a scratch clone at 48f794e with scripts/size-report.mjs removed, the test
+#   fails with ERR_MODULE_NOT_FOUND. At the head it passes 8/8. The evidence command
+#   `node scripts/fail-first.mjs --title 'feat(ci): E009 ...' --base-branch origin/main` runs
+#   as written. It printed "fails without the change (module-not-found), passes with it; proven
+#   by 1 of 1 file(s)".
+# - Mutations of scripts/size-report.mjs against the test. These were caught:
+#   - comparing with the base branch's tip instead of the merge base;
+#   - >= instead of > at the threshold;
+#   - inverting the headroom sign;
+#   - a threshold of 2 % of the budget;
+#   - a '+' on a zero change;
+#   - dropping the missing-build refusal;
+#   - labelling the merge base with the head's sha.
+#   One survives: gzip at the default level instead of level 9 (R-1).
+# - The out-of-scope edit to .ai/repo/ci/gates.yaml is needed. With main's gates.yaml,
+#   ci-gates-model fails "gates.yaml and ci.yml agree on ... the commands" (R-3).
+# - Ran:
+#   - npm test in this worktree at 48f794e, load 75 on 18 cores: 2973/2973 pass.
+#   - npm test in a scratch clone failed two version-authority tests with EISDIR. That was my
+#     symlinked node_modules in the clone, not the change: the same tests pass in the worktree.
+#   - No browser suite is touched, so none was run.
+schema: review-verdict/v1
+pr: 208
+verdict: merge
+reviewer: "independent review subagent (Claude Opus 5.5) with its own context, spawned by orchestrating session e4a1ac78, whose other agents may have built this change; this agent did not build, merge or edit any of it and wrote only this file"
+content: 642d1c8b1b9fd05b004336e20054936909d11c531f42c0ace6532000404dceba
+findings:
+  - { id: R-1, severity: P3, status: open, title: "the test does not hold the gzip level: measure() with gzipSync(buf) (default level 6) instead of level 9 passes all 8 tests, because the noise fixture compresses the same at both levels. On the real dist the two differ by 2 863 B (818 220 vs 815 357), so a drift from verify-dist's measurement would go unseen. A fixture of repetitive markup would tell the levels apart" }
+  - { id: R-2, severity: P3, status: open, title: "the size step runs only when npm test, build:check and verify-dist all passed. A pull request over the budget, the case where the number matters most, gets no size summary. `if: ${{ !cancelled() }}` on the step would keep the report while the job still fails on verify-dist" }
+  - { id: R-3, severity: P3, status: open, title: ".ai/repo/ci/gates.yaml is outside E009's declared scope. The edit is needed, because ci-gates-model fails without it (verified), and the builder declared it. The issue's scope should name it" }
+  - { id: R-4, severity: P3, status: open, title: "E009 is recorded DONE (verified 13:57Z) while the review verdict was pending and before any CI run showed the step summary (run 39134118899 queued at review). The 'step summary shows the four numbers' criterion rests on the wiring and the local run, not on an observed summary" }
+  - { id: R-5, severity: P3, status: open, title: "reviewer independence is at agent level: this reviewer is an agent of orchestrating session e4a1ac78, which likely built the change through other agents, as in #197-#199. The owner's open question R-3 decides whether that satisfies the rule" }

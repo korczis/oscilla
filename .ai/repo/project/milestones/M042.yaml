@@ -1,7 +1,6 @@
 id: M042
 title: "V3.8 Studio operation trace"
 slug: v38-operation-trace
-version: "3.8.0"
 order: 41
 priority: p1
 problem: "The path of one edit from the Studio to the running graph could not be followed."
