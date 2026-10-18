@@ -235,7 +235,7 @@ claims:
     test: tests/unit/about.test.mjs
     status: guaranteed
     responsibility: product
-    note: Checked against git history where it is complete; a shallow clone skips the comparison and still checks the stated duration against the stated times.
+    note: Checked against git history where it is complete; a shallow clone or an export without .git skips the comparison and still checks the stated duration against the stated times, and missing history fails the check under GitHub Actions instead of skipping it, since the CI unit job checks out full history and tags.
 
   - id: about-names-current-release
     claim: The About view's evolution timeline names every published release line and marks the release line of the running build (package.json MAJOR.MINOR) as current, so a minor or major release cannot ship with a stale About page
@@ -244,7 +244,7 @@ claims:
     test: tests/unit/about.test.mjs
     status: guaranteed
     responsibility: product
-    note: The current-line check reads package.json and runs everywhere, so npm test, npm run verify and npm run release-gate refuse a bump to a line the page does not name; the published-lines check reads the vX.Y.0 tags and is skipped where tags are not fetched (CI).
+    note: The current-line check reads package.json and runs everywhere, so npm test, npm run verify and npm run release-gate refuse a bump to a line the page does not name; the published-lines check reads the vX.Y.0 tags: it is skipped where tags are not fetched outside CI, and fails under GitHub Actions instead, whose unit job checks out full history and tags (tests/README.md).
 
   - id: no-fake-science-in-shipped-copy
     claim: No text the page or its modules can show claims a medical, therapeutic, wellness, cognitive, pseudoscientific or animal-specific effect, inaudibility, the safety of a frequency, ultrasound below 20 kHz or certification, except in a sentence that negates it
