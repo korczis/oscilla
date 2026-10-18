@@ -10,8 +10,6 @@ tags:
   - deployment
   - provenance
 related:
-  - adr:adr-0028
-  - adr:adr-0057
   - rule:project.release-flow-complete
   - rule:project.deploy-often
   - rule:project.about-names-current-release
