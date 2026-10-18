@@ -53,9 +53,9 @@ import { NODE_REGISTRY, validateParamValue } from './registry.js';
 import { clipRules } from './timeline.js';
 import {
   AUTOMATION_CURVES, MARKER_KINDS, MIN_CLIP_S, MUSICAL_TOLERANCE_S, NAME_MAX_CHARS,
-  NOTES_MAX_CHARS, POSITION_LIMIT, STUDIO_KIND, STUDIO_SCHEMA_VERSION, TEMPO_RANGE,
-  TIMELINE_MAX_S, TIME_MODES, TIME_SIGNATURE_DENOMINATORS, TITLE_MAX_CHARS,
-  TRACK_KINDS, CLIP_KINDS, normalizeStudio,
+  NOTES_MAX_CHARS, POSITION_LIMIT, POSITION_MESSAGE, STUDIO_KIND, STUDIO_SCHEMA_VERSION,
+  TEMPO_RANGE, TIMELINE_MAX_S, TIME_MODES, TIME_SIGNATURE_DENOMINATORS, TITLE_MAX_CHARS,
+  TRACK_KINDS, CLIP_KINDS, isPosition, normalizeStudio,
 } from './schema.js';
 
 export const AUDIO_FEEDBACK_MESSAGE = 'Connection rejected: This would create an unsupported '
@@ -320,9 +320,8 @@ function validateGraph(model, registry, sink, ids) {
       return;
     }
     counts.set(n.type, (counts.get(n.type) || 0) + 1);
-    if (!n.position || !finite(n.position.x) || !finite(n.position.y)
-      || Math.abs(n.position.x) > POSITION_LIMIT || Math.abs(n.position.y) > POSITION_LIMIT) {
-      sink.error('invalid-position', `${nameOf(n)} has an invalid position.`,
+    if (!isPosition(n.position)) {
+      sink.error('invalid-position', `${nameOf(n)}: ${POSITION_MESSAGE}`,
         { path: `${path}.position`, nodeId: n.id });
     }
     checkName(n.metadata && n.metadata.name, `${path}.metadata.name`, sink);

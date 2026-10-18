@@ -89,6 +89,12 @@ export const MUSICAL_TOLERANCE_S = 1e-6;
 export const MIN_CLIP_S = 0.01;
 /** Largest |coordinate| of a node position, logical units. */
 export const POSITION_LIMIT = 1e6;
+/** Why a node position is refused: the one sentence, naming the range (V272 C9). */
+export const POSITION_MESSAGE = 'A position needs finite x and y between '
+  + `-${POSITION_LIMIT} and ${POSITION_LIMIT}.`;
+/** True when `p` is { x, y } with finite coordinates within POSITION_LIMIT. */
+export const isPosition = (p) => !!p && [p.x, p.y].every((v) => typeof v === 'number'
+  && Number.isFinite(v) && Math.abs(v) <= POSITION_LIMIT);
 export const NAME_MAX_CHARS = 64;
 export const TITLE_MAX_CHARS = 200;
 export const NOTES_MAX_CHARS = 10000;

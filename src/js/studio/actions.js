@@ -63,9 +63,9 @@ import { clipTarget } from './clip-targets.js';
 import { canConnect, validateEdgeProps } from './ports.js';
 import { NODE_REGISTRY, projectParams, validateParamValue } from './registry.js';
 import {
-  CLIP_KINDS, CLIP_TIME_BASES, MARKER_KINDS, NAME_MAX_CHARS, POSITION_LIMIT, StudioSchemaError,
+  CLIP_KINDS, CLIP_TIME_BASES, MARKER_KINDS, NAME_MAX_CHARS, POSITION_MESSAGE, StudioSchemaError,
   TRACK_CLIP_KINDS,
-  assertPlainData, collectIds, copyPlain, createStudioModel, normalizeClipPayload,
+  assertPlainData, isPosition, collectIds, copyPlain, createStudioModel, normalizeClipPayload,
   normalizeStudio, sortPoints, withoutNodes,
 } from './schema.js';
 import { validateStudioModel } from './validate.js';
@@ -150,8 +150,7 @@ function requireIn(list, id, what) {
 }
 
 function checkPosition(p) {
-  if (!p || !finite(p.x) || !finite(p.y) || Math.abs(p.x) > POSITION_LIMIT
-    || Math.abs(p.y) > POSITION_LIMIT) reject('A position needs finite x and y.');
+  if (!isPosition(p)) reject(POSITION_MESSAGE);
   return { x: p.x, y: p.y };
 }
 

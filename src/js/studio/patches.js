@@ -39,8 +39,8 @@ import { migrateExperiment } from '../experiments/migrate.js';
 import { scanUntrusted, utf8Length } from '../experiments/validate.js';
 import { NODE_REGISTRY } from './registry.js';
 import {
-  DEFAULT_TRANSPORT, NAME_MAX_CHARS, STUDIO_KIND, STUDIO_SCHEMA_VERSION, collectIds, copyPlain,
-  normalizeStudio, studioHash, withoutNodes,
+  DEFAULT_TRANSPORT, NAME_MAX_CHARS, POSITION_MESSAGE, STUDIO_KIND, STUDIO_SCHEMA_VERSION,
+  collectIds, copyPlain, isPosition, normalizeStudio, studioHash, withoutNodes,
 } from './schema.js';
 import { validateStudioModel, STUDIO_IMPORT_LIMITS } from './validate.js';
 import { importStudio } from './migrate.js';
@@ -337,9 +337,7 @@ export function insertPatch(model, patch, at = null, { newId = null,
   const p = validPatch(patch, registry);
   const alloc = typeof newId === 'function' ? newId : allocator(model);
   const pos = at || defaultInsertPosition(model);
-  if (!Number.isFinite(pos.x) || !Number.isFinite(pos.y)) {
-    throw new PatchError('A position needs finite x and y.');
-  }
+  if (!isPosition(pos)) throw new PatchError(POSITION_MESSAGE);
   const nodes = [...model.graph.nodes];
   const counts = new Map();
   for (const n of nodes) counts.set(n.type, (counts.get(n.type) || 0) + 1);
