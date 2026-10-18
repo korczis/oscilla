@@ -214,6 +214,7 @@ function withoutSelection(merged, given) {
   const out = { ...merged };
   if (!('OSC_BROWSERS' in given)) delete out.OSC_BROWSERS;
   delete out.OSC_ORIGINS;
+  if (!('OSC_STRICT_SKIPS' in given)) delete out.OSC_STRICT_SKIPS; // set by release:prepare
   return out;
 }
 const child = (script, env = {}) => spawnSync(process.execPath, ['-e', script], {
