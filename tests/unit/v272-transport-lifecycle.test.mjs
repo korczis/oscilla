@@ -332,3 +332,33 @@ test('V272 B11: the default offline render keeps the end of the last clip', asyn
     OfflineAudioContext: fakeOfflineCtor(two) }));
   assert.equal(two[0].length, 2 * SR);
 });
+
+// ---------------------------------------------------------------- A2
+
+test('V272 A2: a clock edge into Random / Step Modulator changes what plays', () => {
+  for (const mod of ['random', 'step-modulator']) {
+    const free = scheduleOf(triggerStudio(mod).store).log;
+    const clocked = scheduleOf(triggerStudio(mod, { trigger: true }).store).log;
+    const muted = scheduleOf(triggerStudio(mod, { trigger: true, muted: true }).store).log;
+    assert.notEqual(clocked, free, `${mod}: the clock edge is read`);
+    assert.equal(muted, free, `${mod}: a muted clock edge is no clock (A3)`);
+  }
+});
+
+test('V272 A2: a clocked Step Modulator outputs step k at the k-th trigger', () => {
+  const { store, target } = triggerStudio('step-modulator', { trigger: true });
+  const steps = store.getModel().graph.nodes.find((n) => n.id === target).params.steps;
+  const fx = createFakeAudioEnv({ sampleRate: SR });
+  const engine = new AudioEngine({ env: fx.env });
+  assert.ok(engine.init());
+  const runtime = createStudioRuntime({ engine });
+  const transport = createStudioTransport({ runtime, engine, store });
+  const { baseTime: b } = ok(transport.start());
+  fx.advance(1.2);
+  const out = runtime.nodes.get(target).outputs.control;
+  const sets = out.offset.calls.filter((c) => c[0] === 'setValueAtTime' && c[2] >= b - 1e-9)
+    .map((c) => [c[1], c[2]]);
+  // The Sequence's clips start at 0, 0.5, 1 and 1.5 s: one trigger each.
+  const bF = Math.round(b * SR);
+  assert.deepEqual(sets, [0, 1, 2, 3].map((k) => [steps[k], (bF + k * 0.5 * SR) / SR]));
+});
