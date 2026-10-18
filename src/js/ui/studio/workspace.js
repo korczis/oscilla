@@ -200,12 +200,17 @@ export const RENDER_DEFAULT_S = 2;
  */
 export function renderForm(model, { registry, duration = null } = {}) {
   const end = timelineEnd(model);
-  const d = duration != null ? duration : (end > 0 ? Number(end.toFixed(3)) : RENDER_DEFAULT_S);
+  // The default render covers the timeline, the graph's start time and the fade-out (offline.js
+  // defaultRenderDuration), so the last clip is rendered whole.
+  const auto = end > 0 ? planOfflineRender(model, { registry }).duration : null;
+  const d = duration != null ? duration
+    : end > 0 ? (auto ?? Number(end.toFixed(3))) : RENDER_DEFAULT_S;
   const plan = planOfflineRender(model, { duration: d, registry });
   const r = plan.render;
   return {
     duration: String(d),
-    note: end > 0 ? `The timeline ends at ${Number(end.toFixed(3))} s.`
+    note: end > 0 ? `The timeline ends at ${Number(end.toFixed(3))} s; the render adds the `
+      + 'graph\'s start time and its fade-out.'
       : `The Studio has no timeline: the graph is rendered for the duration given.`,
     format: `${r.sampleRate / 1000} kHz · ${r.channels === 1 ? 'mono' : 'stereo'} · 16-bit WAV`
       + ' · rendered offline, not from the device output',

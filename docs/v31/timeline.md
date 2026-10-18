@@ -263,7 +263,8 @@ SCHEDULE_LEAD_S)`: nothing closer to now than the engine's scheduling lead is ch
 | Situation | Decision | Runtime action |
 | --- | --- | --- |
 | Parameter change (`NODE_PARAM_SET`) | live | applied now through the click-free parameter path (§80) |
-| Item starting at or after `h` | `cancel` + `schedule` | dispose the old voice, play the rebuilt item |
+| Item starting at or after `h`, compiled identically by the new model | `keep` | nothing: an edit elsewhere (a parameter, another clip) leaves it scheduled, so a pending measurement hand-off and the envelope contour stay as they are |
+| Item starting at or after `h`, anything else | `cancel` + `schedule` | dispose the old voice, play the rebuilt item |
 | Item sounding across `h`, unchanged | `keep` | nothing |
 | …clip removed or retargeted | `release` at `h` | `voice.stop(h)` / gate off (faded, `STOP_RAMP_S`) |
 | …only shortened, new end after `h` | `retime-end` | `voice.stop(newEnd)` / gate off moved (compatible live edit) |
@@ -398,9 +399,9 @@ What plays where:
 
 | Timeline content | Played as |
 | --- | --- |
-| pattern clip on a Sequence | `compileSequence(item.sequence, ctx, handle.info.destination, item.startTime, { track, source, timers })` with the node's accounting; a finished voice untracks its nodes at once (`onEnded`), so a long loop never accumulates. The Sequence's TRIGGER edges into an Envelope `gate` gate that envelope for the clip |
+| pattern clip on a Sequence | `compileSequence(item.sequence, ctx, handle.info.destination, item.startTime, { track, source, timers })` with the node's accounting; a finished voice untracks its nodes at once (`onEnded`), so a long loop never accumulates. The Sequence's TRIGGER edges into an Envelope `gate` gate that envelope for the clip; those into a Random `trigger` or Step Modulator `clock` clock it at the clip start (`handle.clock(t, k)`: the k-th trigger since PLAY sets value / step k; an edit that removes a trigger re-renders the later steps from the horizon). A muted TRIGGER edge gates and clocks nothing, and muting or unmuting one during playback reschedules the future clips |
 | pattern clip on an Oscillator | the oscillator is **pattern-played**: its free-running carrier is held at `ROUTE_FLOOR` (its `level` AudioParam is owned by the transport; built in this transaction → set at once, already sounding → 20 ms ramp) and the voices (the oscillator's waveform, `clipSequence`) play into a pattern bus (gain = the oscillator's level + `runtime.baseOffset(id, 'level')`, the base the runtime would give the carrier) connected to every AUDIO route leaving the oscillator. They pass its routes, crossfades included, and everything downstream (OSC → ADSR → FILTER → MASTER in the Basic Synth). A level change glides the bus; a lane on the oscillator's level drives the bus (offsets added). **Modulation into its `level`** reaches the voices: every active CONTROL edge into `level` is re-routed from the carrier's level AudioParam onto the pattern bus gain — the edge's depth gain feeds a path gain into the bus (1) and one into the carrier's level (0). Claiming an oscillator that already sounds ramps the carrier path 1 → 0 together with the carrier's own 20 ms fade, releasing it ramps it 0 → 1 with the carrier's fade-in (click-free both ways); edges built during playback are silent when they are re-routed. Depth, polarity and offset edits keep acting on the edge (its gain, the bus base) |
-| gate event clip on an Envelope | `handle.gate(startTime, duration)`; an envelope the timeline gates is closed at PLAY (`release`) and opened again when no gate clip targets it any more |
+| gate event clip on an Envelope | `handle.gate(startTime, duration)`; an envelope the timeline gates is closed at PLAY (`release`) and opened again when no gate clip targets it any more. Gates that overlap on one envelope (gate clips, or the clips of a Sequence whose TRIGGER edge gates it) are one gate, their union: opened by the earliest, released at the latest end; a gate starting inside another neither retriggers nor closes it (one that only touches the previous gate's end retriggers) |
 | automation lane | `applyAutomation(handle.modTarget(param, 'linear').param, events)`; the parameter is owned (`runtime.setOwnedParams`), so the runtime's base glide and live updates skip it (the adapters' explicit `owned` argument, `docs/v31/compiler.md` "Owned parameters"); `runtime.baseOffset` (linear modulation offsets) is added to the scheduled values (none in the templates: exact events) |
 | measurement clip | data: `onMeasurement({ type: 'schedule', key, clipId, action, target, trackId, pass, position, startTime, endTime, duration, truncated })`, then `cancel` / `release` / `retime` / `stop` events. The Studio workspace supplies the hook (`studio/measurement-run.js`, see "Measurement clips" below) |
 | anything else | not played; listed in `debugInfo().unplayed` with its code and reason (`TRANSPORT_TEXT`): an event clip on a source (`event-target`), a `trigger` event clip (`event-target`), a target that is not ready (`target-unavailable`) |
@@ -415,7 +416,9 @@ through `runtime.apply` first; then:
   the horizon with the exact value there (`rebind`); a pattern-played oscillator is claimed
   again (built silent, so at once); voices sounding into the old node fade with the runtime's
   crossfade (recorded as `release`, reason `node-replaced`) and the future ones are rebuilt on
-  the new node by the edit (future items are always rescheduled), with its new waveform;
+  the new node: a waveform change compiles a new sequence (`cancel` + `schedule`), and a kept
+  future voice whose node or pattern bus was replaced is discarded unheard and played again
+  (`cancel`, reason `node-replaced`);
 - an envelope whose gates changed is re-rendered from the horizon: held (or released when no
   gate is sounding), the sounding gate's release, every later gate again. A gate interrupted in
   its attack by such an edit is held at its value at the horizon (a flattened attack, no step);
