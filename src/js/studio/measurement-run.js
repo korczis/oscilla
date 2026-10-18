@@ -4,7 +4,7 @@
 // module is that hook. It orchestrates and never duplicates the V3 measurement layer:
 //
 //   createStudioMeasurementRun({ getModel, sampleRate, now, run, stopStudio, onChange, timers,
-//     profileId })
+//     profileId, outputLevel })
 //     getModel()      the store's current model (frozen plain data)
 //     sampleRate()    the running AudioContext's rate (recipeFromStudio renders the stimulus at it)
 //     now()           AudioContext.currentTime (the clips' startTime is on the audio clock)
@@ -19,6 +19,9 @@
 //     onChange(view)  the run's plain view after every change
 //     profileId()     the frequency profile id MEASURE will apply, or null: a graph that shows
 //                     another calibration is refused (recipeFromStudio, V431 review A1)
+//     outputLevel()   the output level the measurement plays at (MEASURE's, engine.gainLevel once
+//                     the Studio gave the output back), or null: a graph whose Master Output shows
+//                     another level is refused (recipeFromStudio, V272 review A5)
 //   run.hook(event)   the transport's onMeasurement
 //   run.abort(reason) cancel a pending hand-off; a running measurement is aborted by the caller
 //                     through the MEASURE engine (Escape, STOP, page hide, leaving the workspace)
@@ -64,6 +67,7 @@ const messageOf = (e) => (e && e.message) || String(e);
 
 export function createStudioMeasurementRun({
   getModel, sampleRate, now, run, stopStudio, onChange = null, profileId = () => null,
+  outputLevel = () => null,
   timers = { setTimeout: (fn, ms) => setTimeout(fn, ms), clearTimeout: (id) => clearTimeout(id) },
 } = {}) {
   if (typeof getModel !== 'function' || typeof run !== 'function') {
@@ -118,7 +122,8 @@ export function createStudioMeasurementRun({
     handledPasses.add(ev.pass);
     const model = getModel();
     const r = recipeFromStudio(model, { sampleRate: sampleRate(),
-      profileId: typeof profileId === 'function' ? profileId() : null });
+      profileId: typeof profileId === 'function' ? profileId() : null,
+      outputLevel: typeof outputLevel === 'function' ? outputLevel() : null });
     if (!r.ok) {
       set({ state: 'failed', pass: ev.pass, recipe: null,
         text: MEASUREMENT_RUN_TEXT.refused(r.reason) });
