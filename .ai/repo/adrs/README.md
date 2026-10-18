@@ -62,6 +62,8 @@ accepted` lists them. The rest stay `proposed`, each for a stated reason:
 - 0053: the user-visible "run" strings its consequences list are not changed yet.
 - 0058: a proposed direction; nothing implements it.
 - 0059: new on 2026-10-18 (pull request #197) and `extracted`; it amends 0028.
+- 0060: new on 2026-10-18 (issue P004); a decision taken under the owner's delegation
+  (Q003), which the owner may override, so its acceptance is the owner's.
 
 A worker still never promotes a status without the owner: this was the owner's act, and a
 later acceptance, supersession or rejection is too.
