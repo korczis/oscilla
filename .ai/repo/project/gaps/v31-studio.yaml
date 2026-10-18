@@ -1,0 +1,174 @@
+intent: v31-studio
+observed_at: "62cccb363c9b71e22c2df311a6222012761df04c"
+recorded_by: "claude-opus-5.5 (critic, oscilla-35 session)"
+recorded_at: "2026-10-18"
+observations:
+  - id: verify-at-head
+    statement: "npm run verify passes at 62cccb3: 2869 unit tests, 0 failed, 0 skipped (tests/unit/v31-studio-* and v4-* Studio suites among them, including v31-studio-self-knowledge and v4-one-studio-store); doctor 0 failures."
+    source: "command:npm run verify"
+  - id: ci-at-head
+    statement: "CI run 39078375041 (PR #179, head 62cccb3): V3.1 Studio UI (npm run test:studio: graph, timeline, audio, transport, offline, workflows, links, runtime) succeeded in chromium, firefox and webkit, as did the unit job and the Visual regression gate (Studio references included); the gate failed only on review-verdict."
+    source: "command:gh run view 39078375041 --json jobs"
+  - id: ledger-cannot-derive
+    statement: "majordomus intent explain v31-studio: executing, 0 of 23 criteria met; every claim has no recorded run and the three commands are not derivable."
+    source: "command:majordomus intent explain v31-studio"
+  - id: claim-unrunnable
+    statement: "majordomus evidence claim studio-model-plain-data reports state unrunnable."
+    source: "command:majordomus evidence claim studio-model-plain-data"
+  - id: plan-open
+    statement: "M032 is ACTIVE 1/3 (V431 and V432 not done) and M033 is BLOCKED 0/1 (V433 waits on V432 and V386)."
+    source: "command:majordomus plan status"
+  - id: v431-evidence
+    statement: "V431's last evidence (caf7764): spec 235-237 met by docs/v31/review-v431.md; spec 272 unmet, its Majordomus-completeness and release-integrity lenses uncovered by a recorded review."
+    source: "file:.ai/repo/project/issues/V431.yaml"
+  - id: features-indexed
+    statement: "Under Majordomus 0.29.0, knowledge nodes lists the Studio feature records as kind feature (feature:studio, studio-automation, studio-measurement-routing, studio-patches, studio-signal-graph); V432's evidence blamed spec 225 on 0.13.2 indexing them as unknown."
+    source: "command:majordomus knowledge nodes"
+  - id: v31-tag
+    statement: "Tag v3.1.0 is a810b94 (2026-10-03); live-smoke.cjs at that tag has no Studio check, and V433's evidence says test:live covered the Playground only at v3.1.0. No release/v1 record exists for v3.1.0."
+    source: "command:git show v3.1.0:tests/browser/live-smoke.cjs"
+  - id: public-is-main
+    statement: "Pages serves commit 964e25d labelled 3.10.3; no 3.1.x page is served."
+    source: "command:npm run release:verify-deploy"
+  - id: pages-runs-smoke
+    statement: ".github/workflows/pages.yml runs test:live per browser after verify-deploy on every deployment; live-smoke.cjs checks the compact Studio, the Subtractive Synth by node kind and its timeline, Studio PLAY and STOP, and the Measurement Sweep template."
+    source: "file:.github/workflows/pages.yml"
+  - id: compact-timeline
+    statement: "No module under src/js imports src/js/ui/studio/compact-timeline.js; the v4 ledger records W7k open: the compact timeline (spec 129) is mounted by no product surface while its styles ship."
+    source: "file:docs/v4/completion-ledger.md"
+  - id: subpath-coverage
+    statement: "The note of studio-file-protocol: every v31-studio-graph.cjs check runs from file:// and only the smoke checks from the sub-path; v31-studio-timeline.cjs runs every check from both origins. compact-sync of studio-one-store-projections runs from file://."
+    source: "file:docs/CLAIMS.yaml"
+  - id: runtime-truth-tests
+    statement: "Runtime truth and divergence (ADR 0039) are tested by tests/unit/v31-studio-runtime-truth.test.mjs, tests/unit/v40-studio-runtime-closure.test.mjs and tests/browser/v31-studio-runtime.cjs; no claim in docs/CLAIMS.yaml states them."
+    source: "test:tests/unit/v31-studio-runtime-truth.test.mjs"
+conditions:
+  - criterion: model-plain-data
+    state: satisfied
+    observations:
+      - verify-at-head
+  - criterion: deterministic-hash
+    state: satisfied
+    observations:
+      - verify-at-head
+  - criterion: schema-version
+    state: satisfied
+    observations:
+      - verify-at-head
+  - criterion: registry-reuses-engine
+    state: satisfied
+    observations:
+      - verify-at-head
+  - criterion: typed-connections
+    state: satisfied
+    observations:
+      - verify-at-head
+  - criterion: feedback-rejected
+    state: satisfied
+    observations:
+      - verify-at-head
+  - criterion: exact-undo-redo
+    state: satisfied
+    observations:
+      - verify-at-head
+  - criterion: subgraph-paste
+    state: satisfied
+    observations:
+      - verify-at-head
+  - criterion: one-store-projections
+    state: satisfied
+    because: "compact-sync passed in three browsers for the Playground's compact Studio; the compact timeline is not mounted at all (W7k)."
+    observations:
+      - ci-at-head
+      - compact-timeline
+  - criterion: compiled-topology
+    state: satisfied
+    observations:
+      - ci-at-head
+      - verify-at-head
+  - criterion: click-free-live-edit
+    state: satisfied
+    observations:
+      - ci-at-head
+      - verify-at-head
+  - criterion: timeline-model
+    state: satisfied
+    observations:
+      - verify-at-head
+  - criterion: transport-audio-clock
+    state: satisfied
+    observations:
+      - ci-at-head
+      - verify-at-head
+  - criterion: automation-model
+    state: satisfied
+    observations:
+      - verify-at-head
+  - criterion: measurement-topology
+    state: satisfied
+    observations:
+      - verify-at-head
+  - criterion: experiment-provenance
+    state: satisfied
+    because: "measure-from-studio passed on the TEST CONTEXT loopback in three browsers; no physical path."
+    observations:
+      - ci-at-head
+      - verify-at-head
+  - criterion: patch-round-trip
+    state: satisfied
+    observations:
+      - verify-at-head
+      - ci-at-head
+  - criterion: untrusted-import
+    state: satisfied
+    observations:
+      - verify-at-head
+  - criterion: non-drag-operation
+    state: satisfied
+    because: "keyboard-connect, mobile-tap-connect, clip-keyboard and automation passed; the N add-node picker has no browser check."
+    observations:
+      - ci-at-head
+  - criterion: file-protocol
+    state: unknown
+    because: "From file:// every graph check ran; from the /oscilla/ sub-path only the graph smoke checks and the timeline suite did, so most of the graph editor is unobserved on the origin Pages serves."
+  - criterion: offline-render
+    state: satisfied
+    observations:
+      - ci-at-head
+  - criterion: self-knowledge
+    state: satisfied
+    observations:
+      - verify-at-head
+      - features-indexed
+  - criterion: public-release-verified
+    state: missing
+    because: "The public page serves the 3.10.3 label at 964e25d, not a 3.1.x release, and no planned work serves one; v3.1.0 has no release record and was never publicly smoke-tested for Studio."
+    observations:
+      - public-is-main
+      - v31-tag
+      - pages-runs-smoke
+      - plan-open
+risks:
+  - "public-release-verified cannot become true as written, so the intent can never be satisfied even with recordable evidence; V433 is planned against it."
+  - "Runtime truth, the property whose failure made the screen lie about the sound (R1, R2), has no criterion and could regress unread."
+  - "Studio runtime behaviour changed in 3.2-3.10 and on the train (presentation edits without a compile, one clip-target policy, one store) under no milestone."
+work:
+  - id: restate-release-criterion
+    title: "Restate public-release-verified as the 3.1 line or later on the public page plus the v3.1.0 release record, and re-plan V433 against it"
+    serves:
+      - public-release-verified
+    issue: "V433"
+  - id: runtime-truth-claim
+    title: "Add a claim for runtime truth (ADR 0039: plan identity, applied record, divergence) naming the existing runtime-truth tests, and a criterion that reads it"
+    serves:
+      - compiled-topology
+      - click-free-live-edit
+  - id: subpath-graph-checks
+    title: "Run the v31-studio-graph.cjs checks from the /oscilla/ sub-path as well as file://"
+    serves:
+      - file-protocol
+  - id: final-review
+    title: "Record the spec 272 final review with the Majordomus-completeness and release-integrity lenses"
+    serves:
+      - file-protocol
+    issue: "V431"

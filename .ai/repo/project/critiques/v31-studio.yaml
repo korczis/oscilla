@@ -1,0 +1,92 @@
+intent: v31-studio
+reviewed_at: "62cccb363c9b71e22c2df311a6222012761df04c"
+reviewed_by: "claude-opus-5.5 (critic, oscilla-35 session)"
+findings:
+  - id: evidence-never-recorded
+    class: delivery_verification
+    subject: "M032"
+    finding: "Twenty of twenty-three criteria are claims proven by node --test or Playwright suites that Majordomus 0.29 cannot record, and three are commands the ledger never derives. When V431-V433 close, the intent will still read unsatisfied 0/23. The remedy is the post-alpha Majordomus request for recording node --test and Playwright runs."
+    blocking: false
+    resolution:
+      state: open
+  - id: release-criterion-cannot-become-true
+    class: delivery_verification
+    subject: "v31-studio#public-release-verified"
+    finding: "The most serious finding. The criterion reads: the public page serves the 3.1.x release. Pages serves 964e25d, labelled 3.10.3, and no planned work brings back a 3.1.x page, so the text can never become true. Its evidence, npm run test:live, passes against whatever is served, so the command can pass while the criterion is false. V433 (Release 3.1 and public verification) is planned to verify a release that shipped as v3.1.0 long ago, has no release/v1 record (its GitHub Release has no asset) and was never publicly smoke-tested for Studio while it was the public release (V433's evidence: at v3.1.0 test:live covered the Playground only; live-smoke.cjs at the tag a810b94 has no Studio check). The intent needs restating, for instance the 3.1 line or later on the public page plus the v3.1.0 record. Not blocking, because V431's and V432's remaining work is valid whatever this wording says."
+    blocking: false
+    resolution:
+      state: open
+  - id: final-review-lenses-uncovered
+    class: insufficient_work
+    subject: "V431"
+    finding: "Spec 272's final review is unmet: the recorded V431 reviews (docs/v31/review-v431.md) exclude the Majordomus-completeness and release-integrity lenses, and later reviews are change-scoped. V431 serves v31-studio#file-protocol, a claim about file:// that cannot decide whether a review happened, so the review's status is invisible to the intent."
+    blocking: false
+    resolution:
+      state: planned
+      issue: "V431"
+  - id: v432-upstream-gap-closed
+    class: unnecessary_work
+    subject: "V432"
+    finding: "V432's latest evidence (caf7764) blames its spec 225 gap on Majordomus 0.13.2 indexing Studio feature records as kind unknown. Under 0.29.0, majordomus knowledge nodes lists them as kind feature (feature:studio, studio-automation, studio-measurement-routing, studio-patches, studio-signal-graph, studio-timeline). V432 now waits only on V431, and its recorded gap is stale; it needs a new evidence round rather than more work."
+    blocking: false
+    resolution:
+      state: planned
+      issue: "V432"
+  - id: v31-release-record-and-report
+    class: delivery_verification
+    subject: "V433"
+    finding: "Still missing for the 3.1 release: no release/v1 record for v3.1.0, and no final Studio report (spec 259: schema, node and port types, test counts, artifact size delta, Majordomus artifacts, public version, commit and deployment run). V433's evidence about spec 269 and 270 is stale: since #146 pages.yml runs test:live on every deployment, and live-smoke.cjs checks node kinds, the compact Studio and the timeline."
+    blocking: false
+    resolution:
+      state: planned
+      issue: "V433"
+  - id: runtime-truth-has-no-criterion
+    class: missed_requirement
+    subject: "v31-studio#compiled-topology"
+    finding: "The statement says the screen never shows a topology the runtime does not have (ADR 0039: plan identity, applied record, divergence). No criterion and no claim states it. The v4 audit (docs/v4/completion-ledger.md) found it false while compiled-topology and click-free-live-edit read met: R1, a refused PLAY left the Studio Master level on the shared engine that MEASURE's stimulus plays through (P0); R2, a throw after the plan swap left the applied record stale, a hidden divergence. Both are closed by #119 and tested (tests/unit/v31-studio-runtime-truth.test.mjs, tests/unit/v40-studio-runtime-closure.test.mjs, tests/browser/v31-studio-runtime.cjs), but nothing in the intent would notice them coming back."
+    blocking: false
+    resolution:
+      state: open
+  - id: compact-timeline-unmounted
+    class: missed_requirement
+    subject: "v31-studio#one-store-projections"
+    finding: "The statement lists the compact Studio widget among the model's projections. W7k (docs/v4/completion-ledger.md, open) found src/js/ui/studio/compact-timeline.js (spec 129) mounted by no product surface and no longer bundled, while its nine .osc-stc rules still ship, and the timeline's own transport keys are in dist but exercised by no browser check. The claim's check compact-sync proves the Playground's compact Studio chips, not a compact timeline, so the criterion reads met for a projection that is not on the page."
+    blocking: false
+    resolution:
+      state: open
+  - id: phone-flow-unstated
+    class: missed_requirement
+    subject: "v31-studio#non-drag-operation"
+    finding: "Phones get a GRAPH, TIMELINE and INSPECTOR flow is in the statement and in no criterion: V429 (Mobile Studio) serves non-drag-operation, whose claim is about keyboard paths. The checks mobile-tap-connect, inspector-phone-focus and phone-port-targets exist in tests/browser/v31-studio-graph.cjs, but no claim names them. The claim's own note says the N add-node picker has no browser check and dragging several clips is not built."
+    blocking: false
+    resolution:
+      state: open
+  - id: file-protocol-half-checked
+    class: unproven_assumption
+    subject: "v31-studio#file-protocol"
+    finding: "The criterion says Chromium, Firefox and WebKit from file:// and from the /oscilla/ sub-path. The claim note says every check in v31-studio-graph.cjs runs from file://, but only its smoke checks run from the sub-path (the timeline suite runs both), and check compact-sync of studio-one-store-projections runs from file:// only. Most of the graph editor is never exercised from the origin Pages serves."
+    blocking: false
+    resolution:
+      state: open
+  - id: signal-path-still-passive
+    class: unproven_assumption
+    subject: "v31-studio#one-store-projections"
+    finding: "The statement opens with: Studio turns the Signal Path from passive visualization into an editable executable model. The Playground Signal Path (src/js/visualization/signal-path.js) draws a StudioModel derived from the Playground voice (src/js/studio/playground-voice.js), never stored and not editable (docs/v31/signal-path.md). The editable model is the Studio graph, and the Signal Path view itself is still passive. project.studio-model-is-canonical admits a derived read-only projection; no criterion reads the statement's first clause."
+    blocking: false
+    resolution:
+      state: open
+  - id: v4-studio-changes-unplanned
+    class: regression_risk
+    subject: "v31-studio#click-free-live-edit"
+    finding: "Releases 3.2-3.10 and the current train changed the Studio runtime under no milestone: presentation-only edits now take a revision with no compile and no transaction (R9, #155), one clip-target policy (R7, #154), one Studio store with the second timeline context deleted (W7a, #168), and the operation trace (ADR 0042, claim studio-operation-trace, guaranteed). These change what compiled-topology and click-free-live-edit mean in practice (an edit can now be in-sync without a compile), and none of them is a criterion of any intent. The non-goal of v3-measure says the v4.0 work has no milestone, and this intent does not even say that."
+    blocking: false
+    resolution:
+      state: open
+  - id: crash-recovery-not-built
+    class: missed_requirement
+    subject: "v31-studio#patch-round-trip"
+    finding: "The note of studio-patch-round-trip says autosave and crash recovery are not built, so a crash loses an unsaved Studio project."
+    blocking: false
+    resolution:
+      state: rejected
+      because: "The intent's non-goals make crash recovery of the last working draft optional for 3.1 (specification sections 126 and 157), and ADR 0045 decides the protection v4 gives unsaved work instead (a beforeunload guard and history entries in the workspace, one hash dispatcher)."
