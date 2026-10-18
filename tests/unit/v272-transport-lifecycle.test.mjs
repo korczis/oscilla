@@ -228,3 +228,22 @@ test('V272 A3: a muted TRIGGER edge does not gate its Envelope', () => {
   assert.deepEqual(muted.debug.gatedEnvelopes, [], 'the timeline does not own the envelope');
   assert.equal(muted.log, none.log, 'a muted gate edge schedules what no edge schedules');
 });
+
+test('V272 A3: muting the gate edge during playback stops the gating from the horizon', () => {
+  const { store, target, triggerEdge } = triggerStudio('envelope', { trigger: true });
+  const fx = createFakeAudioEnv({ sampleRate: SR });
+  const engine = new AudioEngine({ env: fx.env });
+  assert.ok(engine.init());
+  const runtime = createStudioRuntime({ engine });
+  const transport = createStudioTransport({ runtime, engine, store });
+  const { baseTime: b } = ok(transport.start());
+  fx.advance(0.6); // the clips at 1 s and 1.5 s are scheduled, with their gates
+  ok(store.dispatch({ type: 'EDGE_UPDATE', edgeId: triggerEdge, props: { muted: true } }));
+  ok(transport.sync());
+  assert.deepEqual(transport.debugInfo().gatedEnvelopes, [], 'the envelope is open again');
+  fx.advance(1);
+  const vca = runtime.nodes.get(target).inputs.audio.gain;
+  const at = (p) => valueAtTime(getSchedule(vca), b + p);
+  assert.ok(Math.abs(at(1.1) - at(1.4)) < 1e-9, `no gate after the clip at 1 s: ${at(1.1)} `
+    + `vs ${at(1.4)}`);
+});

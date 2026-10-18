@@ -285,11 +285,15 @@ export function createStudioTransport({
     return out;
   }
 
-  /** Envelope ids whose envelope node is gated from the timeline / a pattern TRIGGER edge. */
+  /**
+   * Envelope ids a pattern clip on `sourceId` gates through its TRIGGER edges. A muted edge
+   * carries nothing (ports.js: every edge can be muted), so it gates nothing (V272 A3).
+   */
   function triggerEnvelopes(m, sourceId) {
     const out = [];
     for (const e of m.graph.edges) {
       if (e.from.node !== sourceId || e.from.port !== 'trigger' || e.to.port !== 'gate') continue;
+      if (e.props && e.props.muted) continue;
       const n = nodeOf(m, e.to.node);
       if (n && n.type === 'envelope') out.push(n.id);
     }
