@@ -1,0 +1,53 @@
+intent: product-direction
+reviewed_at: "07613351025815f2a09c0582a1a3744c03b5056c"
+reviewed_by: "claude-opus-5.5 (critic, oscilla-35 session)"
+findings:
+  - id: licence-non-goal-contradicts-q003
+    class: unproven_assumption
+    subject: "Q003"
+    finding: "Blocking, because it must be fixed before the question goes to the owner. The intent's non-goal reads 'Changing the licence: MIT is the owner's decision of record (LICENSE)'. Q003 question (5) asks the owner whether the MIT consequence is acceptable 'or does the licence question reopen?'. The plan both excludes the answer and asks for it. If the licence may reopen, the non-goal must become 'the licence stays MIT unless Q003 reopens it'. If it may not, question (5) must be reduced to recording the consequence. Asking the owner a question the intent has already answered wastes the one scarce resource this milestone depends on."
+    blocking: true
+    resolution:
+      state: open
+  - id: four-places-are-not-everywhere
+    class: missed_requirement
+    subject: "product-direction#positioning-consistent"
+    finding: "The title promises the sentence 'everywhere it describes itself'. P003 and the criterion cover four places: README, the About lede, the description and Open Graph metadata. The product describes itself in at least these other places too: the title element and og:title ('OSCILLA · Interactive Sound & Frequency Lab', src/index.html:9 and 18); twitter:title and twitter:description (lines 28-29); the brand link's aria-label (line 114); the About tagline 'See sound. Shape frequency.' (line 2477, which Q002 does raise); package.json's description; the opening line of CLAUDE.md; site/og-image.png; and the GitHub repository description, which lies outside the tree. An exact-equality test across surfaces of different length also breaks down: a 50-word C4 does not fit an OG description that platforms cut at about 200 characters. The test should check that the chosen sentence is contained in each surface, and list the surfaces that are exempt and why."
+    blocking: false
+    resolution:
+      state: open
+  - id: statement-misreads-the-current-copy
+    class: unproven_assumption
+    subject: "M051"
+    finding: "The statement says README and About 'still say interactive sound and frequency laboratory'. Only README does (README.md:5). The About lede says 'A browser-based interactive sound, frequency and measurement laboratory. Built as an instrument, not a dashboard.' (src/index.html:2478-2479), and og:description says 'A browser acoustic laboratory ...' (line 19). Q002's own 'why' says README and About 'say different things', which is accurate, so the intent and its question disagree about the baseline the owner is choosing from."
+    blocking: false
+    resolution:
+      state: open
+  - id: candidates-carry-unsupported-claims
+    class: unproven_assumption
+    subject: "Q002"
+    finding: "Several candidates make claims that project.no-fake-science says must be supportable, and that its scan cannot judge. C1 says 'scientifically honest'. C4 says 'reproducible measurements' and 'inspectable execution'. C5 says 'reproducible experiments': ADR 0044's reproducibility checklist covers recipes and evidence, not the user's acoustics. C7 says 'scientific instrument'. The rule's verification states that whether a passing sentence 'still implies an unsupported effect' stays with the reviewer. Q002 should present each candidate with what the product can back for it, or the owner may choose a sentence that P003's own invariant ('makes no claim the product cannot support') then refuses. Most candidates also lead with breadth (composing, executing, measuring, explaining). The owner's adopted steering is that measurement is the wedge (ADR 0051; product-landscape-and-the-pigments-path:65), and Q002 does not show that tension."
+    blocking: false
+    resolution:
+      state: open
+  - id: milestone-and-intent-disagree
+    class: delivery_verification
+    subject: "M051"
+    finding: "M051's acceptance requires Q002, Q003 and Q005 to be answered. The intent's criteria also require Q006 (collaborator-brief-current), and M051 does not. So M051 can be done while the intent is not. Q005 (the origin and the pace told in About) is about the public story, not about positioning or a product path. Bundling it into M051 holds the positioning work hostage to an unrelated copy decision. Q006 is an act in the owner's ChatGPT account. No repository command can see its result, so its criterion is satisfiable only by the owner's quoted words, which the criterion should say. M052 also carries Q004 of first-run-experience, so this intent's milestone state is coupled to the first-screen decision as well."
+    blocking: false
+    resolution:
+      state: open
+  - id: questions-are-ready-to-any-worker
+    class: unproven_assumption
+    subject: "M052"
+    finding: "The plan relies on order 998 so that 'majordomus plan next never nominates a question to a worker'. majordomus plan show Q002 reports status READY, wave 0, parallel safe true and profile routine, and the same holds for Q003, Q005 and Q006, which have no dependencies. Only the ordering of plan next, and the convention that a worker never answers, separate them from 'majordomus plan start Q002'. A recorded owner_decision is just evidence text, and no check verifies that it quotes the owner. That is acceptable as a convention, but the README should not call it a guarantee. A Majordomus issue kind or profile 'owner' that plan start refuses would be the mechanism."
+    blocking: false
+    resolution:
+      state: open
+  - id: evidence-never-recorded
+    class: delivery_verification
+    subject: "M051"
+    finding: "Four of five criteria cite 'majordomus plan show Qxxx/P004', which exits 0 whatever is recorded, and the fifth cites npm test, which passes today before any sentence is chosen. None can be false before the work and true after it, and Majordomus 0.29 records neither (V272 D3). For the owner questions the honest evidence kind is owner_decision. For positioning-consistent it is the new unit test named by file, which fails until P003 lands."
+    blocking: false
+    resolution:
+      state: open

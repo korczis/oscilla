@@ -1,0 +1,95 @@
+intent: engineering-integrity
+reviewed_at: "07613351025815f2a09c0582a1a3744c03b5056c"
+reviewed_by: "claude-opus-5.5 (critic, oscilla-35 session)"
+findings:
+  - id: baseline-at-current-size-freezes-seventeen-files
+    class: regression_risk
+    subject: "E001"
+    finding: "Most serious, and blocking. E001 sets every first cap to the file's current size, and 17 files under src/js are above 40 000 bytes today (measured at 0761335: ui/measure.js 115 572, measurement/engine.js 70 955, ui/studio/workspace.js 75 076, ui/studio/inspector.js 69 711, measurement/quality.js 66 213, experiments/validate.js 57 642, core/instrument.js 55 166, studio/transport.js 54 555, studio/runtime.js 51 585, measurement/capture.js 49 858, experiments/schema.js 47 908, ui/experiments.js 47 732, ui/studio/graph-editor.js 47 145, ui/studio/timeline-editor.js 46 304, audio/audio-engine.js 45 543, studio/actions.js 44 295, studio/validate.js 41 076), plus src/index.html at 255 020. A cap equal to the size leaves zero headroom: one added byte in any of them fails npm test. The open V272 pull request #197 (origin/docs/v272-final-review, 71 commits ahead of main) grows eight of them: studio/transport.js by 17 217 bytes (to 71 772), inspector.js by 3 473, workspace.js by 3 048, studio/validate.js by 2 757, graph-editor.js by 1 282, timeline-editor.js by 1 234, actions.js by 970 and studio/runtime.js by 185, and it grows src/index.html by 362. If E001 lands first, #197 cannot merge without raising nine caps, which the invariant forbids except as a stated, reviewed exception. If #197 lands first, the baseline is simply taken later. M047 and M048 then hit the same wall: V393 adds a measurement kind to measurement/engine.js, V396 adds reasons to measurement/quality.js, and V601 changes studio/actions.js and studio/validate.js. None of those files has a split planned. Before E001 starts, the plan must say (a) that E001 waits for #197, and (b) what a feature does when it must touch a capped file that is not being split: a headroom margin on first capture, a planned split, or an accepted raise. Otherwise the budget either blocks the measurement wedge or teaches every pull request to raise caps."
+    blocking: true
+    resolution:
+      state: open
+  - id: only-falls-is-unenforced
+    class: insufficient_work
+    subject: "engineering-integrity#source-size-budget"
+    finding: "Blocking. The invariant says a cap only falls, yet none of E001's four mutations (file past its cap, new large file without a cap, stale cap, cap more than 5 % above size) catches a raised cap. A pull request that edits the baseline upward and grows the file passes the test. The model the issue names already solves this: tests/unit/browser-timing.test.mjs:444 ('the recorded debt only shrinks: no count is above its value in an earlier commit') reads git history. E001 needs the same history check, or the criterion must say that 'only falls' is review-only. Two edge cases are also undecided. (1) A file that grows past 40 000 bytes for the first time needs a new cap, which is in effect a raise from 'uncapped'. (2) After E002-E004 a split file drops below 40 000 bytes. Does it keep a cap at its new size, which holds it tighter than an uncapped sibling at 39 999 bytes, or does its cap go away? The 5 % rule decides neither. A per-file cap also bounds no total: moving code into new files under 40 000 bytes always passes, so the budget measures how code is distributed, not how much there is. The statement should say that."
+    blocking: true
+    resolution:
+      state: open
+  - id: studio-splits-collide-with-v272
+    class: regression_risk
+    subject: "E003"
+    finding: "E003 and E004 split ui/studio/workspace.js and ui/studio/inspector.js. Those are two of the files #197 (the V272 final review, open since 2026-10-18) changes most in the UI: B10, C2, C3 and C8 in the inspector, I2 in the workspace, and 26 src/js files changed in total (git diff --stat main...origin/docs/v272-final-review). A mechanical split of either file while #197 is open turns every V272 fix into a cross-file conflict. A rebase of the split, or of #197, then re-touches guarded src/js/studio content and invalidates the recorded review verdict. Neither issue depends on anything but E001. Both should wait for #197 to merge, and the objective sizes (75 076 and 69 711) should be re-measured then (78 124 and 73 184 on the review branch)."
+    blocking: false
+    resolution:
+      state: open
+  - id: measure-split-escapes-the-guard
+    class: regression_risk
+    subject: "E002"
+    finding: "After #197, scripts/review-verdict.mjs guards 'src/js/ui/measure.js' as a single file (line 67 on origin/docs/v272-final-review, finding D5). E002 moves most of that file into new modules. If they go under src/js/ui/ or src/js/ui/measure/, the code that decides what MEASURE runs and saves stops being a guarded path, and later changes to it merge without a verdict. E002 must extend GUARDED to the new modules in the same change. Because the base branch's list judges a pull request, this split needs a verdict anyway. Likewise E005 changes scripts/build.mjs, which matches 'scripts/build*' (line 72 there), so it needs a verdict as well. Neither issue says so, while E006, E009 and E010 do."
+    blocking: false
+    resolution:
+      state: open
+  - id: placeholder-scan-false-positives
+    class: unproven_assumption
+    subject: "E007"
+    finding: "E007's checks (a) to (d) cannot be enforced on today's tree without false positives, and (c) and (d) also produce false negatives. (a) Several legitimate strings match. 'todo' is a flow-step status in src/index.html:1382-1387 and src/js/measurement/views/measure-flow.js:12. ?mock=1 is a deliberate layout-comparison mode (src/js/ui/app.js:62-65, src/styles/base.css:140-145): the very 'mockup' the owner wanted kept to geometry, so the rule must allow it explicitly. The copy 'not implemented by this build' (src/js/experiments/evidence.js:435) is honest status text that the rule should keep, not ban. (c) 111 of the 341 button, input, select and textarea elements in src/index.html have no Alpine binding (@, x-on, x-model). They are bound imperatively by id or data-osc from src/js, so a static check of index.html flags all of them unless it resolves those JS bindings, which is a parser project of its own. The Studio inspector's controls are built in JS and are not in index.html at all, so (c) never sees them. (d) 'A value shown as data that comes from a literal' cannot be decided statically: cited constants such as the nominal 20 Hz-20 kHz convention (src/js/data/bioacoustics.js:44) are literals on purpose. The issue should narrow each check to one that can be decided (for example: data-osc controls with no handler registered at runtime, checked in the browser suite), name what stays with the reviewer, and enforce 'the allowance only shrinks' by history, as in only-falls-is-unenforced. Fixing the violations found in 'src' is a behaviour change. It needs its own visual-reference acceptance and does not fall under the intent's no-behaviour-change invariant."
+    blocking: false
+    resolution:
+      state: open
+  - id: automation-table-oracle-and-v272
+    class: unproven_assumption
+    subject: "E008"
+    finding: "'A row's transform differs from the compiler's' can be tested only with an oracle that does not come from the compiler. A table generated from the compiler, or written by running it, is a tautology. Each row must carry an expected value computed independently, for example an analytic cents-to-Hz or dB-to-gain value at two or three points. The transforms are also moving on #197. A7 adds detuneCeiling and limitedLanes, which bound detune lanes by frequency headroom. B7 makes exponential lanes plus linear offsets schedule through a ConstantSource on strictly positive parameters. B3, B4 and B6 change lane gliding and re-offsetting. A table written against main encodes the pre-fix behaviour of #78 (eeed4b6), so E008 must wait for #197 and cite A7 and B7."
+    blocking: false
+    resolution:
+      state: open
+  - id: flake-ledger-has-no-retry-to-record
+    class: unproven_assumption
+    subject: "E010"
+    finding: "No browser suite or check is retried today. .github/workflows/ci.yml retries only apt and the browser download (lines 20 and 322-339), and tests/browser/lib/suite.cjs has no retry. The only way a check can 'fail and then pass on a retry' is a person re-running the job, which GitHub records as github.run_attempt > 1. A ledger written by attempt 2 would need the GitHub API (actions: read) to learn what attempt 1 failed, and the scope (tests/browser/lib, ci.yml) does not say that. The alternative, adding a retry to the harness, is the very mechanism that hides failures. It would change project.suite-harness behaviour and needs its own decision. The issue should choose: record re-run attempts from the API, or introduce a bounded in-harness retry that always fails the job and only labels the flake."
+    blocking: false
+    resolution:
+      state: open
+  - id: layer-cost-misses-ci-rules
+    class: missed_requirement
+    subject: "E011"
+    finding: "E011's scope includes .github/workflows/ci.yml, a guarded path that also falls under project.ci-bounded (bounded, pinned, retried). Unlike E009 and E010, its criteria name neither the review verdict nor project.ci-bounded. 'The records no other record or file references' is also undefined: majordomus relations, file mentions in prose and claim citations are three different graphs. The criterion should say which one, or drop that number."
+    blocking: false
+    resolution:
+      state: open
+  - id: meta-layer-grows-to-measure-itself
+    class: unproven_assumption
+    subject: "M046"
+    finding: "ADR 0051 records the owner's steering: 'the meta-layer must not grow for its own sake; Majordomus must pay rent'. M046 adds 13 claims to docs/CLAIMS.yaml, about a dozen unit tests, three new CI step summaries (size delta, flake ledger, layer cost) and a project rule, and none of them changes what a user can do. E011 measures the .ai layer's share while the milestone adds to it. Each item may be worth it, but the intent never weighs the cost against ADR 0051. E001, E002 and E006 pay rent directly. E009-E011 should say what decision their number feeds, or be cut."
+    blocking: false
+    resolution:
+      state: open
+  - id: split-criteria-undecidable
+    class: delivery_verification
+    subject: "E002"
+    finding: "'The built dist/index.html changes only by the module boundaries' cannot be decided. esbuild's scope hoisting renames and reorders identifiers when modules move, and npm run build:check only proves that the committed dist matches a rebuild, not what kind of difference it has. 'No change to any expected value' also clashes with the 23 unit tests that read ui/measure.js, ui/studio/workspace.js or ui/studio/inspector.js by path (grep -l over tests/unit): they must change to follow the code. The criterion should say what may change (test paths, source-scanning fixtures) and what may not (expected values, snapshots, visual references, the browser suites' assertions)."
+    blocking: false
+    resolution:
+      state: open
+  - id: shell-partials-readers
+    class: regression_risk
+    subject: "E005"
+    finding: "About 20 tests and scripts read src/index.html directly: no-fake-science, about, css-producers, navigation, vocabulary, v3-ui, v4-shortcuts, v31-studio-self-knowledge, raw-retention, release-provenance and others under tests/unit, plus scripts/build-config.mjs, visual-compare.mjs, social-assets.mjs and pack-single-file.mjs. E005 asks that they 'read the assembled shell (or every partial)'. A scan that reads one partial silently misses the rest: no-fake-science would then pass on copy it never saw. The criterion should require one shared reader that every scanner uses, plus a test that fails when a scanner reads src/index.html directly. #197's follow-ups ask the owner whether src/index.html should become a guarded path. Splitting it first changes which file that question is about."
+    blocking: false
+    resolution:
+      state: open
+  - id: screen-reader-pass-sequencing
+    class: insufficient_work
+    subject: "E013"
+    finding: "Run on main today, E013 would re-find V272's accessibility defects C1-C7 (focus lost to body, aria-invalid, aria-pressed, live regions inside dialogs, keyboard multi-select, contrast, the Add node status). They are fixed only on #197, so E013 must wait for it. VoiceOver with Safari also cannot run in CI or under Playwright. An agent session can drive it only through computer use on the owner's Mac, and profile routine plus 'manual' do not say who performs it. Accessibility already has a home in M032 (V428, V429). The issue fits there better than in a code-structure milestone."
+    blocking: false
+    resolution:
+      state: open
+  - id: evidence-never-recorded
+    class: delivery_verification
+    subject: "M046"
+    finding: "None of the 13 criteria can read as met. Eleven are node --test or npm commands that Majordomus 0.29 cannot record (intent explain: 'evidence of a kind the ledger cannot derive'; V272 D3). The other two, p5-cost-measured and screen-reader-pass, use 'majordomus plan show E012/E013', which exits 0 whatever the issue says. Several commands also pass on the unchanged tree today: npm run test:measure, npm run test:studio and npm run build:check pass before any split, so as evidence they decide nothing about the split. The remedy for the first is the post-alpha Majordomus request for recording foreign runners. For the second, each criterion should name a check that fails before the issue lands, as E006 does."
+    blocking: false
+    resolution:
+      state: open

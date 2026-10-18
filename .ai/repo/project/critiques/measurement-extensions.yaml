@@ -1,0 +1,88 @@
+intent: measurement-extensions
+reviewed_at: "07613351025815f2a09c0582a1a3744c03b5056c"
+reviewed_by: "claude-opus-5.5 (critic, oscilla-35 session)"
+findings:
+  - id: no-uncertainty-or-reference-stated
+    class: missed_requirement
+    subject: "measurement-extensions#room-decay"
+    finding: "Most serious, and blocking. project.no-fake-science and ADR 0025 need more than a refusal when the data are too short. A shown figure must also say what it is an estimate of, under which reference method, and how uncertain it is. No criterion of the eight figures asks for any of that. For room decay: one source and one receiver position give a decay of that chain at that point, not 'the room's reverberation time'. ISO 3382 averages over positions, and the intent rightly claims no conformance, so the label must say single-position estimate. The octave filter bank also needs a named reference: which bands, which filter, and whether it is IEC 61260-like without claiming the class. Each figure also needs a stated spread: the run-to-run spread from repeated runs, or the residual of the decay fit (the T20/T30 linear-regression correlation that the ISO method reports). For THD+N the reference is the measurement bandwidth and the notch. For latency it is the clock relationship (see latency-contradicts-the-record). Before V391 starts, the intent needs a common contract that each V39x criterion inherits. A stored figure carries its estimate, its validity condition, its method reference without a conformance claim, and its uncertainty or spread, or says that none can be given. Otherwise the first figure sets the precedent of a bare number with a versioned ID."
+    blocking: true
+    resolution:
+      state: open
+  - id: room-decay-proof-is-circular
+    class: unproven_assumption
+    subject: "V391"
+    finding: "Blocking. 'Synthetic exponential decays with known reverberation times (0.3, 0.8, 2.0 s) within 5 % in every band' proves only the Schroeder fit if the decays are generated per band. The hard part is the band filtering. An octave filter's own ringing biases short decays when the bandwidth-time product B x T is small (Kuerer and Kurze, Jacobsen: B x T above about 16). For 0.3 s at the 63 Hz octave (B about 44 Hz) that product is about 13, so an honest filter bank misses 5 % there, and 'every band' then has to be read as 'the bands we kept'. The criterion must say: a broadband synthetic IR goes through the product's own filter bank; the bands evaluated are named; and where B x T is too small the band is refused with that reason. There is a second gap. The IR's valid span after the peak is about the post-roll minus the latency (src/js/measurement/impulse-response.js:48-57), and the default post-roll is 1.5 s (measurement/engine.js:167). For a 2.0 s decay, the noise-floor estimate that the dynamic-range check relies on is then 'an upper bound (decay, not noise)'. Beyond the full-overlap span the deconvolved noise falls away artificially (-159 dB against a true -100 dB floor, review probe p4). A Schroeder integral over that tail would see a falsely clean decay and report a valid T30. V391 must restrict the integral to the full-overlap span and make 'post-roll long enough for the evaluation range' part of the validity condition."
+    blocking: true
+    resolution:
+      state: open
+  - id: latency-contradicts-the-record
+    class: unproven_assumption
+    subject: "V394"
+    finding: "The repository says the opposite of what V394 plans. .ai/repo/features/impulse-response.md:34-35: 'The time of the peak is where the sweep starts in the recording, including unknown device and browser delays: it is not a time of flight and not a latency'. Specification section 91 says: 'no latency claim without a sufficient clock relationship'. V394 cross-correlates with align.js, which already returns lagSamples to sub-sample accuracy (oscilla.align.xcorr.v2, align.js:80-87), and is proven on synthetic delays. So the planned test proves code that exists. It cannot show that the lag is a round-trip latency, because the lag also contains the offset between when the capture starts and when playback is scheduled, which is a property of OSCILLA's own capture path. The issue must first establish the clock relationship (both ends on the AudioContext clock; what outputLatency, baseLatency and the MediaStream input path add; repeatability across runs and reloads), record it as the validity condition, and then supersede the feature record's sentence. Otherwise a 'latency' figure is exactly the claim the record forbids."
+    blocking: false
+    resolution:
+      state: open
+  - id: coherence-target-is-biased
+    class: unproven_assumption
+    subject: "measurement-extensions#run-coherence"
+    finding: "The criterion is false for the natural estimator at the run counts V396 allows. Across N transfer estimates H_i = H + n_i, with independent noise of power sigma^2 and SNR = |H|^2 / sigma^2, the run coherence |sum H_i|^2 / (N sum |H_i|^2) has expected value (SNR + 1/N) / (SNR + 1), not SNR / (1 + SNR). At N = 3 and SNR = 1 that is 0.667 against 0.5, a miss of 0.17 where the tolerance is 0.05. The formula holds only as N grows large. The criterion must state the estimator and its expected value for finite N (or a bias-corrected estimator), and the minimum N at which the 0.05 tolerance holds. 'Coherence' also usually means input-output magnitude-squared coherence. A run-to-run consistency measure should be named so that no reader takes it for that."
+    blocking: false
+    resolution:
+      state: open
+  - id: phase-exists-and-aggregate-has-none
+    class: insufficient_work
+    subject: "V395"
+    finding: "Wrapped phase already exists with its masking reasons (transfer.js:145-152: NOT_REQUESTED, NO_ALIGNMENT, ALIGNMENT_NOT_ROBUST, AGGREGATED). By design (section 27; aggregate.js:45-46, 281-287) a measurement of repeated runs has no phase at its aggregate centre. V395 says 'show ... where its reliability mask is valid and the alignment is robust; mask them elsewhere with the reason' as if new. It never says that group delay is undefined for the aggregate, which is the default result of a multi-run measurement. It must decide whether group delay is per run only, a statistic over runs, or refused for aggregates. It must also say what the reference of the phase is: relative to the alignment lag that was removed, so a pure delay shows 0 ms after alignment. The 2.083 ms criterion holds only if the alignment is not removed."
+    blocking: false
+    resolution:
+      state: open
+  - id: thd-plus-n-bandwidth-undefined
+    class: missed_requirement
+    subject: "V393"
+    finding: "THD+N depends on the measurement bandwidth and on how the fundamental is removed (notch width or bins). Neither is stated, so 'matches the expected value within 0.02 percentage points' cannot be decided: the expected value changes with both. 'The chain floor' is also undefined. It could be the separate noise capture (stimulus silent) that transfer.js already uses for SNR, or the residual at the harmonic bins with the stimulus off. A stepped sine is also a new stimulus kind, a new capture and a new result type in measurement/engine.js. The issue never weighs the alternative that the existing log sweep already offers: Farina's harmonic impulse responses, which the inverse-filter oracle of ADR 0021 separates in time."
+    blocking: false
+    resolution:
+      state: open
+  - id: stored-figures-change-the-schema
+    class: missed_requirement
+    subject: "V391"
+    finding: "'Survive the experiment round trip and CSV export' adds fields to a stored experiment, under src/js/experiments, which is a guarded path. The issues do not say whether that is an experiment schema bump with a migration (ADR 0023; schema.js:118-124 lists the versions so far), whether the new figures enter the result hash (which would change the hash of a re-analysed old run) or sit outside it, or how comparison treats an experiment saved before the figure existed. The same holds for V392-V396 and V398."
+    blocking: false
+    resolution:
+      state: open
+  - id: chain-profile-storage-and-privacy
+    class: regression_risk
+    subject: "V398"
+    finding: "README.md:795 says 'Calibration profiles and level calibrations are kept in page memory only', and the README storage table says 'Browser storage holds only these keys and one database, oscilla-experiments (version 4)', which tests/unit/storage-inventory.test.mjs holds. A saved chain profile is a new persisted record and needs a new store or a DB_VERSION 5 (src/js/experiments/store.js:99). The README table, the inventory test and ADR 0049 then change too, and V398 names none of them. 'Devices as far as the browser reports them' puts hardware labels into a record that is exported and shared. The README already warns about this for experiments, and V398 must say whether a profile stores the label, the hashed id (calibration/device-id.js) or neither."
+    blocking: false
+    resolution:
+      state: open
+  - id: dsp-waits-on-the-adapter-split
+    class: unproven_assumption
+    subject: "M047"
+    finding: "Every V39x issue waits on E002 (V392 through V391), and E002 waits on E001. The figures themselves are pure offline DSP in src/js/measurement. That code does not live in ui/measure.js, which E002 splits. Only the result views and the export wiring touch that file. Gating the DSP, its versioned IDs and its synthetic proofs on a 115 kB refactor delays all measurement value, the work ADR 0051 calls the wedge, behind M046. Split each issue into a DSP part with no dependency and a view part that waits on E002. Separately, E001's caps freeze measurement/engine.js (70 955) and quality.js (66 213) at their size, and V393 and V396 must grow them (see the engineering-integrity critique, baseline-at-current-size-freezes-seventeen-files)."
+    blocking: false
+    resolution:
+      state: open
+  - id: overlays-on-a-relative-axis
+    class: regression_risk
+    subject: "V397"
+    finding: "The bioacoustics ranges carry their published SPL criteria (src/js/data/bioacoustics.js; no-fake-science allows this with the citation). The response chart's level axis is relative dB unless a level calibration applies. If an overlay draws a species threshold, or a 'hearing range' band, in the level dimension of an uncalibrated chart, it implies an absolute level the chart does not have. The criterion should restrict overlays to the frequency axis unless a valid level calibration applies. It should also carry the record's own caveat that the nominal 20 Hz-20 kHz range is a convention (bioacoustics.js:44). The byte-identical result-hash test is good but does not cover this."
+    blocking: false
+    resolution:
+      state: open
+  - id: guarded-paths-not-named
+    class: delivery_verification
+    subject: "M047"
+    finding: "All eight issues have src/js/experiments in scope, which is guarded today. After #197 (finding D5), src/js/measurement/* and src/js/ui/measure.js are guarded too. Every V39x pull request therefore needs a reviewer's .ai/repo/reviews/<pr>.yaml, and as feat changes they need fail-first. No acceptance criterion says so, unlike E006 or E009 in M046, so a builder could take the issue as complete without either."
+    blocking: false
+    resolution:
+      state: open
+  - id: evidence-never-recorded
+    class: delivery_verification
+    subject: "M047"
+    finding: "Six criteria name npm test and three npm run test:measure, and all of them pass today, before any figure exists. As evidence they decide nothing. Majordomus 0.29 also cannot record them (V272 D3), so the intent reads 0/9 when M047 is done. Each issue does replace its command with a claim, which is the right move. Until then the criteria should name the new test file, as perception-lessons does, so that the command fails before the work."
+    blocking: false
+    resolution:
+      state: open
