@@ -1276,7 +1276,7 @@
   white-space: nowrap;
 }
 
-.osc-sc-node[aria-pressed="true"] {
+.osc-sc-node[aria-current="true"] {
   border-color: var(--osc-blue-trace);
   box-shadow: 0 0 0 1px var(--osc-blue-trace);
   color: var(--osc-text);
@@ -1314,7 +1314,7 @@
   color: var(--osc-text-2);
 }
 
-.osc-sc-clip[aria-pressed="true"] {
+.osc-sc-clip[aria-current="true"] {
   border-color: var(--osc-text);
   box-shadow: 0 0 0 1px var(--osc-blue-trace);
 }
