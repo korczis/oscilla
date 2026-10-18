@@ -1160,13 +1160,18 @@ export function createStudioTransport({
     gateOwned.clear();
     runtime.setOwnedParams([]);
     emit('state', { playing: false, reason });
+    // This playback's voices and gates: a PLAY before the stop resolves (Space pressed again)
+    // starts a new playback whose own records the cleanup below must not touch (V272 B1).
+    const ownVoices = [...voices.values()];
+    const ownGates = [...gates.values()];
     return runtime.stop({ fast }).then((c) => {
-      // Everything is silent and released by now; end the voices' own bookkeeping too.
-      for (const v of voices.values()) {
+      // Everything of this playback is silent and released by now; end the voices' own
+      // bookkeeping too.
+      for (const v of ownVoices) {
         try { v.voice.dispose(); } catch (e) { /* already ended */ }
+        if (voices.get(v.key) === v) voices.delete(v.key);
       }
-      voices.clear();
-      gates.clear();
+      for (const g of ownGates) if (gates.get(g.key) === g) gates.delete(g.key);
       return counts(c);
     });
   }

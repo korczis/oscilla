@@ -57,13 +57,13 @@ test('V272 B1: PLAY before the previous STOP resolved keeps the new playback ali
   ok(s.transport.start());
   s.fx.advance(0.5);
   const stopping = s.transport.stop(); // not awaited: Space pressed again at once
+  const mark = s.ctx.oscillators.length; // the old playback's voices are before it
   const r2 = ok(s.transport.start());
-  const t2 = s.ctx.currentTime;
   s.fx.advance(0.02);
   const before = s.transport.debugInfo();
   assert.equal(before.voiceCount, 1, 'the new playback plays its first clip');
   assert.ok(before.gateCount >= 1, 'and gates its envelope');
-  const fresh = s.ctx.oscillators.filter((o) => o.createdAt >= t2 && o.startAt !== null);
+  const fresh = s.ctx.oscillators.slice(mark).filter((o) => o.startAt !== null);
   assert.ok(fresh.length >= 1);
   s.fx.advance(0.3); // the old stop's fade and cleanup run
   await stopping;
