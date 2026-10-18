@@ -175,6 +175,41 @@ test('the guarded paths are the rule\'s list', () => {
   }
 });
 
+// The incidents the rule's rationale cites, by the src/js files their pull requests changed
+// (gh pr view <n> --json files), and the programs and tests that prove a deployment and a
+// release. src/js/main.js (#149, the composition root), src/index.html and src/styles/ are
+// markup, wiring and style, and stay unguarded on purpose: see the rule's Required behaviour.
+const INCIDENT_FILES = {
+  139: ['src/js/calibration/level.js', 'src/js/experiments/evidence.js',
+    'src/js/experiments/hash.js', 'src/js/experiments/migrate.js',
+    'src/js/experiments/schema.js', 'src/js/experiments/semantic-diff.js',
+    'src/js/experiments/validate.js', 'src/js/measurement/engine.js',
+    'src/js/measurement/quality.js', 'src/js/measurement/views/compare-view.js',
+    'src/js/studio/provenance.js', 'src/js/ui/experiments.js', 'src/js/ui/measure.js'],
+  140: ['src/js/studio/compiler.js', 'src/js/studio/runtime.js', 'src/js/studio/transport.js'],
+  149: ['src/js/experiments/evidence.js', 'src/js/experiments/findings.js',
+    'src/js/experiments/store.js', 'src/js/ui/experiments.js', 'src/js/ui/findings.js'],
+};
+const PROOF_FILES = ['scripts/verify-deploy.mjs', 'scripts/stamp-build.mjs',
+  'scripts/verify-dist.mjs', 'scripts/build.mjs', 'scripts/build-config.mjs',
+  'scripts/build-analysis-worker.mjs', 'scripts/pack-single-file.mjs',
+  'src/js/core/safety.js', 'src/js/measurement/capture.js',
+  'tests/unit/release-publish.test.mjs', 'tests/unit/release-analyze.test.mjs',
+  'tests/unit/release-record.test.mjs', 'tests/unit/release-cadence.test.mjs',
+  'tests/unit/release-provenance.test.mjs', 'tests/unit/version-authority.test.mjs',
+  'tests/browser/live-smoke.cjs'];
+
+test('V272 D5: the files of the cited incidents and the deploy and release proof are guarded',
+  () => {
+    for (const [pr, files] of Object.entries(INCIDENT_FILES)) {
+      for (const f of files) assert.equal(isGuarded(f), true, `#${pr}: ${f}`);
+    }
+    for (const f of PROOF_FILES) {
+      assert.equal(isGuarded(f), true, f);
+      assert.ok(existsSync(path.join(ROOT, f)), `${f} exists`);
+    }
+  });
+
 test('a PR changing what enforces the process rules needs a verdict', (t) => {
   for (const file of ['scripts/review-verdict.mjs', 'scripts/fail-first.mjs',
     'scripts/ci-workflow-rules.mjs', 'scripts/yaml-subset.mjs', '.github/scripts/ci-install.sh',
