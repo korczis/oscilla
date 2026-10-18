@@ -1,7 +1,6 @@
 id: M044
 title: "V3.10 evidence on a run and a protected workspace"
 slug: v310-run-evidence-and-workspace
-version: "3.10.0"
 order: 43
 priority: p1
 problem: "A run could not say what produced a value or whether it can be repeated; unsaved work could be lost and the workspace was not in navigation history; level calibrations were not bound to their input and the measured Studio path was not recorded (ledger C1, D3); and the Pages deployment did not run the public smoke."

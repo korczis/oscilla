@@ -1,7 +1,6 @@
 id: M016
 title: "V3 RTA"
 slug: v3-rta
-version: "3.0.0"
 order: 16
 priority: p0
 problem: "The V2 analyzer shows an FFT but no band analysis with correct power aggregation."

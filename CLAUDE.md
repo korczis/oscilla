@@ -17,9 +17,9 @@ The binding constraints are the project rules in `.ai/repo/rules/project/` (vers
 name): `project.single-file-deliverable`, `project.audio-engine-discipline`,
 `project.no-fake-science`, `project.about-names-current-release`,
 `project.studio-model-is-canonical`, `project.typed-ports`, `project.no-silent-feedback`,
-`project.visual-identity-lock`. Read them before changing `src/`. Releases are bound by
-`project.release-receipt-binds-gate`, `project.release-flow-complete` (the flow, in order) and
-`project.deploy-often`. Four more bind how the repository is worked on:
+`project.visual-identity-lock`, `project.no-inert-surfaces`. Read them before changing `src/`.
+Releases are bound by `project.release-receipt-binds-gate`, `project.release-flow-complete`
+(the flow, in order) and `project.deploy-often`. Four more bind how the repository is worked on:
 `project.rules-name-their-enforcement`, `project.no-conflict-markers`,
 `project.worktree-topology` (mechanism: `docs/WORKTREES.md`),
 `project.majordomus-layer-current`; `project.shared-machine-discipline` is the advisory

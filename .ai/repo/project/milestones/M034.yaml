@@ -1,7 +1,6 @@
 id: M034
 title: "V2 maintenance"
 slug: v2-maintenance
-version: "2.0.1"
 order: 34
 priority: p2
 problem: "Known limitations recorded at the v2.0.0 release need tracked follow-up."

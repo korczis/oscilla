@@ -1,7 +1,6 @@
 id: M036
 title: "V3.2 evidence audit and DSP review closed"
 slug: v32-audit-and-dsp-review
-version: "3.2.0"
 order: 35
 priority: p1
 problem: "V3.0 MEASURE and V3.1 Studio shipped with the gaps the evidence audit at 320130f and the independent DSP review (V382, docs/v3/dsp-review-v382.md) found: correlation alignment, confidence, RTA resolution, clipping, transfer function, impulse response and calibration defects, the analysis on the main thread, and no Studio deep links. No milestone recorded the release that closed them."

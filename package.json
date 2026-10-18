@@ -1,6 +1,6 @@
 {
   "name": "oscilla",
-  "version": "3.11.0",
+  "version": "3.12.0",
   "private": true,
   "description": "A zero-install, scientifically honest acoustic laboratory in your browser: generate, measure and reproduce sound experiments, and know how far each result can be trusted.",
   "license": "MIT",

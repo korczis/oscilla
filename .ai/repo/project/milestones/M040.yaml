@@ -1,7 +1,6 @@
 id: M040
 title: "V3.6 immutable runs with identity"
 slug: v36-immutable-runs
-version: "3.6.0"
 order: 39
 priority: p1
 problem: "A completed measurement run could be changed after the fact, runs had no identity, provenance did not name the exact build, and the analysis code was in the artifact twice."

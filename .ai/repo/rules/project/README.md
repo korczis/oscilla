@@ -43,6 +43,7 @@ rule files in this directory, and fails when a row is missing, extra or stale.
 | `project.single-file-deliverable` v2 | blocking | one static `dist/index.html`, no runtime fetch | `scripts/verify-dist.mjs`, browser gate, `scripts/verify-deploy.mjs` |
 | `project.audio-engine-discipline` v2 | blocking | nodes and timing only inside the engine's accounting | `tests/unit/freeze.test.mjs`, `tests/browser/engine-v1port.cjs` |
 | `project.no-fake-science` v2 | blocking | no unsupported claim; dB SPL only when calibrated | `x-majordomus` tests |
+| `project.no-inert-surfaces` v1 | blocking | no placeholder copy, no control disabled without a stated reason, no `data-osc` control without a handler; the allowance only shrinks | `tests/unit/no-inert-surfaces.test.mjs`, `no-inert-controls` in `tests/browser/qa-regressions.cjs`; review-only: a literal shown as data, placeholder copy in substance |
 | `project.about-names-current-release` v1 | blocking | the About timeline names the release line | `tests/unit/about.test.mjs` |
 | `project.studio-model-is-canonical` v1 | blocking | the Studio model is the one source of truth | `tests/unit/v31-studio-model.test.mjs` |
 | `project.typed-ports` v1 | blocking | connections validated before the runtime changes | `tests/unit/v31-studio-model.test.mjs`, `tests/unit/v31-studio-compiler.test.mjs`, `tests/browser/v31-studio-graph.cjs` |

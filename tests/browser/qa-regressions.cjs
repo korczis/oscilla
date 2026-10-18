@@ -28,6 +28,11 @@
 //   stereo-max-from-rate [17]     #osc-stereo-fa/fb max = floor(safe maximum of the context)
 //   bio-sources-keyboard [17]     a keyboard-reachable sources list with the citations
 //   safety-notice [V247]          first-run notice; focus dismiss → reopen → dismiss; stored
+//   no-inert-controls [E007]      rule project.no-inert-surfaces (c): every data-osc control
+//                                 of every workspace, Studio template selection and library
+//                                 node type has a handler registered for it, or is listed in
+//                                 tests/unit/no-inert-surfaces-allowance.json; a fixture
+//                                 control without one is found
 // Exit code 1 when any check fails.
 'use strict';
 
@@ -35,6 +40,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { pathToFileURL } = require('node:url');
 const suite = require('./lib/suite.cjs');
+const { until } = require('./lib/wait.cjs');
 
 const argv = process.argv.slice(2);
 const arg = (name, fallback) => {
@@ -57,6 +63,8 @@ const LAUNCH = {
 };
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const INERT_ALLOWANCE = JSON.parse(fs.readFileSync(path.join(ROOT, 'tests', 'unit',
+  'no-inert-surfaces-allowance.json'), 'utf8'));
 const WORKSPACES = ['playground', 'analyzer', 'sequencer', 'filter', 'synthesis', 'compare',
   'presets', 'learn'];
 
@@ -247,6 +255,145 @@ function contrastOf(page, selector, pseudoBg) {
     const b = lum(bg || [0, 0, 0]);
     return Math.round(((Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05)) * 100) / 100;
   }, { selector, pseudoBg });
+}
+
+// ------------------------------------------------------------------------------ inert controls
+// Rule project.no-inert-surfaces, check (c): a data-osc control in the running page has a
+// handler registered for it. Installed before any script of the page runs, the registry
+// records every addEventListener and removeEventListener per target, so Alpine's bindings and
+// the imperative ones of src/js are seen alike.
+function listenerRegistry() {
+  const reg = new WeakMap();
+  const add = EventTarget.prototype.addEventListener;
+  const remove = EventTarget.prototype.removeEventListener;
+  const capture = (opts) => (typeof opts === 'boolean' ? opts : !!(opts && opts.capture));
+  const key = (type, opts) => `${type}|${capture(opts)}`;
+  EventTarget.prototype.addEventListener = function addEventListener(type, fn, opts) {
+    if (fn) {
+      let byKey = reg.get(this);
+      if (!byKey) { byKey = new Map(); reg.set(this, byKey); }
+      if (!byKey.has(key(type, opts))) byKey.set(key(type, opts), new Set());
+      byKey.get(key(type, opts)).add(fn);
+    }
+    return add.call(this, type, fn, opts);
+  };
+  EventTarget.prototype.removeEventListener = function removeEventListener(type, fn, opts) {
+    const byKey = reg.get(this);
+    if (byKey && byKey.has(key(type, opts))) byKey.get(key(type, opts)).delete(fn);
+    return remove.call(this, type, fn, opts);
+  };
+  window.__oscListened = (target) => {
+    const byKey = reg.get(target);
+    return !!byKey && [...byKey.values()].some((fns) => fns.size > 0);
+  };
+}
+
+/**
+ * In the page: every data-osc control with no handler registered for it, as
+ * [{ osc, tag }]. A control is a button, a non-hidden input, a select, a textarea, a summary,
+ * a link or an element with an interactive role; a read-only field is an output, not a
+ * control. It has a handler when a listener of any type is registered on it, an on* handler
+ * property is set, or the browser gives it an effect of its own: a link's navigation, a
+ * summary's toggle, a submit button of a dialog form or of a form with a submit listener.
+ */
+function unhandledControls() {
+  const ROLES = new RegExp(`^(?:${['button', 'switch', 'checkbox', 'radio', 'tab', 'menuitem',
+    'menuitemcheckbox', 'menuitemradio', 'option', 'slider', 'spinbutton', 'combobox', 'link',
+    'treeitem'].join('|')})$`);
+  const ON = ['onclick', 'oninput', 'onchange', 'onkeydown', 'onkeyup', 'onpointerdown',
+    'onmousedown', 'onsubmit', 'onfocus', 'ontoggle'];
+  const control = (el) => {
+    if (el.tagName === 'INPUT' && el.type === 'hidden') return false;
+    if ((el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') && el.readOnly) return false;
+    return /^(?:BUTTON|INPUT|SELECT|TEXTAREA|SUMMARY)$/.test(el.tagName)
+      || (el.tagName === 'A' && el.hasAttribute('href'))
+      || ROLES.test(el.getAttribute('role') || '');
+  };
+  const native = (el) => (el.tagName === 'A' && !!el.getAttribute('href'))
+    || (el.tagName === 'SUMMARY' && !!el.closest('details'))
+    || (!!el.form && el.type === 'submit'
+      && (el.form.method === 'dialog' || window.__oscListened(el.form)));
+  const out = [];
+  for (const el of document.querySelectorAll('[data-osc]')) {
+    if (!control(el)) continue;
+    const property = ON.some((p) => typeof el[p] === 'function');
+    if (window.__oscListened(el) || property || native(el)) continue;
+    out.push({ osc: el.dataset.osc, tag: el.tagName.toLowerCase() });
+  }
+  return out;
+}
+
+const INERT_INIT = `(${listenerRegistry})();\nwindow.__oscUnhandled = ${unhandledControls};\n`;
+
+/**
+ * The page in the states that build its controls: every workspace of the navigation, every
+ * Studio template with each of its nodes, edges and clips selected (the Inspector is built in
+ * src/js for the selection), and one node of each type the Studio library offers. Returns
+ * the unhandled controls of all of them (data-osc → the first state that showed it) and how
+ * much was visited.
+ */
+async function walkControls(page) {
+  const found = new Map();
+  const take = (list, where) => {
+    for (const { osc, tag } of list) if (!found.has(osc)) found.set(osc, `${where} <${tag}>`);
+  };
+  take(await page.evaluate(() => window.__oscUnhandled()), 'load');
+  const workspaces = await page.evaluate(() => [...new Set([...document.querySelectorAll(
+    '[data-osc^="nav."]')].map((el) => el.dataset.osc.slice(4)))]);
+  for (const ws of workspaces) {
+    await page.evaluate((w) => window.OSCILLA.app.setWorkspace(w), ws);
+    await until(() => page.evaluate((w) => document.querySelector('#osc-app').dataset.mode === w,
+      ws), { ms: 10000, what: `no-inert-controls: workspace ${ws} is shown` });
+    take(await page.evaluate(() => window.__oscUnhandled()), ws);
+  }
+  const templates = await page.evaluate(() => window.OSCILLA.app.studio.templates.map((t) => t.id));
+  const selections = [];
+  for (const id of templates) {
+    await page.evaluate((t) => {
+      for (const d of document.querySelectorAll('dialog[open]')) d.close();
+      window.OSCILLA.app.studioLoadTemplate(t);
+    }, id);
+    await until(() => page.evaluate((t) => window.OSCILLA.studio.templateId === t
+      && window.OSCILLA.studio.model.graph.nodes.length > 0, id),
+    { ms: 10000, what: `no-inert-controls: Studio template ${id} is open` });
+    // The Inspector renders on the dispatch, so each selection is scanned where it is made.
+    const r = await page.evaluate(() => {
+      const s = window.OSCILLA.studio;
+      const m = s.model;
+      const sels = [...m.graph.nodes.map((n) => ({ nodes: [n.id] })),
+        ...m.graph.edges.map((e) => ({ edges: [e.id] })),
+        ...m.timeline.clips.map((c) => ({ clips: [c.id] }))];
+      const out = [];
+      for (const sel of sels) {
+        s.store.dispatch({ type: 'SELECTION_CHANGE', selection: sel });
+        out.push({ where: JSON.stringify(sel), list: window.__oscUnhandled() });
+      }
+      return { n: sels.length, out };
+    });
+    selections.push(`${id}:${r.n}`);
+    for (const { where, list } of r.out) take(list, `${id} ${where}`);
+  }
+  const added = await page.evaluate(() => {
+    const s = window.OSCILLA.studio;
+    const types = [...new Set([...document.querySelectorAll('[data-osc="studio.library.item"]')]
+      .map((b) => b.dataset.type))];
+    const out = [];
+    for (const nodeType of types) {
+      s.store.dispatch({ type: 'NODE_ADD', nodeType, position: { x: 80, y: 80 } });
+      const node = s.model.graph.nodes.at(-1);
+      s.store.dispatch({ type: 'SELECTION_CHANGE', selection: { nodes: [node.id] } });
+      out.push({ where: `added ${nodeType}`, list: window.__oscUnhandled() });
+    }
+    return { types, out };
+  });
+  for (const { where, list } of added.out) take(list, where);
+  return { found, workspaces, templates: selections, types: added.types };
+}
+
+/** The found controls against the allowance: unexpected ones, and allowed ones not found. */
+function judgeInert(found, allowed) {
+  return { unexpected: [...found.keys()].filter((osc) => !(osc in allowed)).sort(),
+    stale: Object.keys(allowed).filter((osc) => !found.has(osc)).sort() };
 }
 
 // ------------------------------------------------------------------------------ checks
@@ -761,6 +908,43 @@ function defineChecks() {
       && phone.h <= 44 && phone.holdBottom <= phone.mainBottom && phone.active !== 'BODY';
     return { ok, first: { ...first, text: first.text.slice(0, 60) }, dismissed, reopened,
       reloaded: { shown: reloaded.shown, stored: reloaded.stored }, phone };
+  });
+
+  def('no-inert-controls', async ({ browser }) => {
+    // project.no-inert-surfaces (c): every data-osc control the page builds has a handler, or
+    // is listed with its reason in the allowance; a fixture control without one is found.
+    const context = await browser.newContext({ viewport: { width: 1536, height: 1024 } });
+    const page = await context.newPage();
+    page.setDefaultTimeout(10000);
+    await page.addInitScript(INERT_INIT);
+    await page.goto(pathToFileURL(DIST).href, { waitUntil: 'load' });
+    await page.waitForSelector('html[data-ready="true"]', { timeout: 15000 });
+    const walk = await walkControls(page);
+    const allowed = INERT_ALLOWANCE['inert-control'] || {};
+    const { unexpected, stale } = judgeInert(walk.found, allowed);
+    // The mutation: a control with no handler is found and judged; one with a handler is not.
+    const fixture = await page.evaluate(() => {
+      const inert = document.createElement('button');
+      inert.dataset.osc = 'fixture.inert';
+      const handled = document.createElement('button');
+      handled.dataset.osc = 'fixture.handled';
+      handled.addEventListener('click', () => {});
+      document.body.append(inert, handled);
+      const list = window.__oscUnhandled().map((c) => c.osc);
+      inert.remove();
+      handled.remove();
+      return list.filter((osc) => osc.startsWith('fixture.'));
+    });
+    const withFixture = new Map([...walk.found, ...fixture.map((osc) => [osc, 'fixture'])]);
+    const judged = judgeInert(withFixture, allowed).unexpected;
+    await context.close();
+    const ok = unexpected.length === 0 && stale.length === 0
+      && JSON.stringify(fixture) === '["fixture.inert"]'
+      && JSON.stringify(judged) === '["fixture.inert"]'
+      && walk.workspaces.includes('studio') && walk.templates.length > 0 && walk.types.length > 0;
+    return { ok, unexpected: unexpected.map((osc) => `${osc} @${walk.found.get(osc)}`), stale,
+      allowed: Object.keys(allowed).length, fixture, judged, workspaces: walk.workspaces.length,
+      templates: walk.templates, types: walk.types.length };
   });
 
   def('contrast', async ({ browser, browserName }) => {
