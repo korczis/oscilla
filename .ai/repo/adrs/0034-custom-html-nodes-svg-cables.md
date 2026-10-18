@@ -107,8 +107,9 @@ on 2026-10-02, and the status stays `proposed`.
   `clampZoom`/`normalizeView` (`src/js/ui/studio/graph-geometry.js:33-43`), with the reason at
   lines 9-10 (below 0.25 the node titles are illegible, above 2.5 one node fills a phone
   screen). Proven by `tests/unit/v31-studio-ui-graph-geometry.test.mjs` ("zoom is clamped to
-  the decided bounds; invalid zoom becomes 1"). The model still stores any finite zoom
-  (`src/js/studio/schema.js:354`): the bound is view behaviour, not a schema rule, and view
+  the decided bounds; invalid zoom becomes 1"). The model stores any zoom within the import's
+  range (`VIEW_LIMITS`, 1e-6 to 1e6, `src/js/studio/schema.js:108`, since review V272 A1;
+  before it, any finite zoom): the bound is view behaviour, not a schema rule, and view
   state is outside the studioHash. Shipped with the graph editor in commit 320130f (#33),
   first released in v3.1.0. `docs/v31/studio-model.md` ("Decisions recorded in code") now
   says so; until 2026-10-04 it said the bounds were not decided.

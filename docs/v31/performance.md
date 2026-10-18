@@ -63,6 +63,12 @@ Model, compiler and views (`node --test tests/unit/v31-studio-performance.test.m
 | inspector | the Inspector view of a node | 0.20 |
 | compact | the Playground compact view | 0.95 |
 
+Since review V272 A1 (2026-10-18) every validated dispatch is judged by `validateStudioCommit`,
+which adds the untrusted import's stages and a normalized-form check to `validateStudioModel`.
+Measured against the commit before it on the same fixture and machine (fastest of 15, under
+load): build 113 → 326 ms, dispatchParam and dispatchEdge 0.7 → 1.5 ms; NODE_MOVE is unchanged.
+Both stay well inside their budgets.
+
 Graph editor in real browsers (`tests/browser/v31-studio-workflows.cjs`, check
 `large-graph-render`, file://, 1536x1024): opening the fixture as a project file through the
 import path and its first render (two animation frames), then one edit with every projection
