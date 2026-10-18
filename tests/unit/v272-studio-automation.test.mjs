@@ -337,3 +337,32 @@ test('V272 A7: a changed log-edge offset reaches a detune lane while it plays', 
   const osc = s.runtime.nodes.get('osc-1').info.oscillator;
   near(actualAt(s, osc.detune, s.ctx.currentTime), 600, 1e-6, 'lane 0 ct + the edge\'s 600 ct');
 });
+
+// ---------------------------------------------------------------- R-1 (review of #197)
+
+// The static detune the compiler lowers to fit the headroom (computeBases `clamped`) is not an
+// edge offset: a detune lane overrides that static value, so it plays its own values, each
+// inside its own ceiling.
+for (const rate of [44100, 48000]) {
+  test(`V272 R-1: a clamped static detune does not shift a detune lane (${rate} Hz)`, () => {
+    const m = templateModel(REFERENCE_TEMPLATE_ID);
+    const s = setup({ ...m, graph: { ...m.graph, nodes: m.graph.nodes.map((n) => (n.id === 'osc-1'
+      ? { ...n, params: { ...n.params, frequency: 12000, detune: 1200 } } : n)) } }, rate);
+    dispatch(s, { type: 'AUTOMATION_POINT_ADD', target: { node: 'osc-1', param: 'detune' },
+      time: 0, value: 0, curve: 'step' });
+    dispatch(s, { type: 'AUTOMATION_POINT_ADD', target: { node: 'osc-1', param: 'detune' },
+      time: 1, value: 500, curve: 'step' });
+    dispatch(s, { type: 'AUTOMATION_POINT_ADD', target: { node: 'osc-1', param: 'detune' },
+      time: 2, value: -600, curve: 'step' });
+    const r = ok(s.transport.start());
+    const osc = s.runtime.nodes.get('osc-1').info.oscillator;
+    const ceiling = 1200 * Math.log2((rate / 2) * 0.95 / 12000);
+    for (const [at, want] of [[0.5, 0], [1.5, 500], [2.5, -600]]) {
+      s.fx.advanceTo(r.baseTime + at);
+      assert.ok(want <= ceiling, `${want} ct is within its ceiling ${ceiling.toFixed(1)} ct`);
+      near(actualAt(s, osc.detune, s.ctx.currentTime), want, 1e-6, `detune at ${at} s`);
+    }
+    assert.equal(s.runtime.baseOffset('osc-1', 'detune'), 0, 'no edge, no offset');
+    assert.deepEqual(s.transport.debugInfo().limitedLanes, [], 'no lane value is bounded');
+  });
+}
