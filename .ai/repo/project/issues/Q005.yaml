@@ -20,3 +20,18 @@ validation:
 evidence_required:
   - "owner_decision"
 created_at: 2026-10-18
+started_at: 2026-10-18T12:59:06Z
+started_event: sha256:0963f7b2d75e3ca9dda420c504072c3a9255b995c8ddbc34ef5a0cb452d68f18
+updated_at: 2026-10-18T12:59:21Z
+verified_at: 2026-10-18T12:59:14Z
+verified_event: sha256:e6b6dd46ab0cd13f183f22f919d316088c90a23895a52fde39bb5782f48f97e5
+completed_at: 2026-10-18T12:59:21Z
+completed_event: sha256:4eebe7cc132013836cac577718ace52501d8efb4f7d803d598d9b6d27f5c1069
+evidence:
+  - covers: owner_decision
+    type: manual
+    command: "majordomus plan show Q005"
+    result: "2026-10-18, decided by the coordinating Claude session under the owner's delegation of 2026-10-18 ('tak to vse pores'); not the owner's own words; the owner may override. About's Origin tells the documented start (an anti-bark 'ultrasound' ad and the owner's 'this can be knocked together in one HTML5'), keeps the browser-lab question only as framing, names no company and no personal motive; 'Built in one night' (5 h 51 min from git) is qualified as wall-clock time with several AI workers in parallel. P005 implements the copy."
+    artifact: ".ai/repo/project/issues/Q005.yaml"
+    commit: c6747951b123a0befaa956a158d27f8a5410ad9f
+    recorded_at: 2026-10-18T12:59:12Z

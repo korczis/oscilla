@@ -20,4 +20,18 @@ validation:
 evidence_required:
   - "owner_decision"
 created_at: 2026-10-18
-updated_at: 2026-10-18
+updated_at: 2026-10-18T12:58:59Z
+started_at: 2026-10-18T12:58:43Z
+started_event: sha256:753f4ff5e2a1059370c3d48dc5397e26f2e1794de83208283c66599f3379a29b
+verified_at: 2026-10-18T12:58:53Z
+verified_event: sha256:951eb5958a887404182e0b5a7a7259f18a04240eac02f4940cef20d7cff9cdee
+completed_at: 2026-10-18T12:58:59Z
+completed_event: sha256:6edc0591713c7a27f23365c76d6233218129cf8a447a357520a500335e8706cc
+evidence:
+  - covers: owner_decision
+    type: manual
+    command: "majordomus plan show Q003"
+    result: "2026-10-18, decided by the coordinating Claude session under the owner's delegation of 2026-10-18 ('tak to vse pores'); not the owner's own words; the owner may override. No commercial path now: free MIT instrument; no buyer, offer, pilot or sale preparation; MIT consequence accepted, licence not reopened; revisit only as a new intent after v4.0. Reasoning in Q003.current_state; P004 records it as an ADR (proposed)."
+    artifact: ".ai/repo/project/issues/Q003.yaml"
+    commit: c6747951b123a0befaa956a158d27f8a5410ad9f
+    recorded_at: 2026-10-18T12:58:49Z

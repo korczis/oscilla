@@ -23,7 +23,13 @@ evidence_required:
   - "verified"
   - "all_criteria_met"
 created_at: 2026-10-02
-updated_at: 2026-10-18T10:43:12Z
+updated_at: 2026-10-18T13:00:47Z
+started_at: 2026-10-18T12:59:46Z
+started_event: sha256:24bab9dc220a5f56a7de7ae190d76460f0b73d0ee0f6b3a066f4e18f501fab29
+verified_at: 2026-10-18T13:00:30Z
+verified_event: sha256:3cadb88c5644f38a887b744173622f81f6770e347c9c3d834a20dfd29b19c08c
+completed_at: 2026-10-18T13:00:47Z
+completed_event: sha256:606a73803b3606d1c06eb3210e0586d22eb1324a7ef84a0a6460c8f915563971
 evidence:
   - covers: verified
     type: manual
@@ -55,3 +61,17 @@ evidence:
     result: "PARTIAL (do not mark done): at 2e80461, which is main 044f98a plus nine plan, knowledge, ADR, specification-text and plan-test commits, none under src, scripts, .github or dist (count corrected by hand on 2026-10-18 after the tool recorded this round, which said three): review and performance tests 34/34 pass; verify-dist PASS (gzip 789.8/976.6 KiB; provenance names v3.11.0). Closed since the caf7764 round: (a) the live smoke is wired: .github/workflows/pages.yml:120 runs npm run test:live against the deployed URL, one job per browser (#146), and Pages run 39113258872 at 044f98a passed deploy and Public smoke in chromium, firefox and webkit; (b) CI1 WebKit: the engine and DSP/labs/sequencer jobs run chromium, firefox and webkit (.github/workflows/ci.yml:77, :118). Unmet: (1) spec 272 final review: PR #197 (branch docs/v272-final-review, docs/v31/review-v272.md) carries it and is open, not merged to main; (2) majordomus adr list at this round shows 58 of 58 ADRs proposed, so the v4 audit finding that ADR status never leaves proposed still holds"
     commit: 2e80461b7a2d20022bb282d5ef3a16c15d461da5
     recorded_at: 2026-10-18T10:43:12Z
+  - covers: verified
+    type: ci
+    command: "npm test; npm run release-gate (CI run of PR #197); node --test tests/unit/v272-*.test.mjs"
+    result: "MET at main d4bd97f: spec 272 final adversarial review done (docs/v31/review-v272.md): 4 independent reviewers over 8 lenses (architecture, compiler, runtime lifecycle, timeline, automation, accessibility, Majordomus completeness, release integrity), 37 findings, 35 fixed fail-first plus I1, I2, R-1, R-2; D2 resolved (strict branch protection); D3 is a Majordomus limit queued post-alpha. With review-v431.md (spec 235-237) and the 145/216-220 checks this completes V431. PR #197 merged with an independent verdict (.ai/repo/reviews/197.yaml, decision merge), CI gate 21/21, Pages run 39121255800 live smoke 18/18 x3."
+    artifact: "docs/v31/review-v272.md"
+    commit: c6747951b123a0befaa956a158d27f8a5410ad9f
+    recorded_at: 2026-10-18T12:59:54Z
+  - covers: all_criteria_met
+    type: manual
+    command: "majordomus plan show V431; ls docs/v31/review-v431.md docs/v31/review-v272.md docs/v31/performance.md"
+    result: "Every acceptance criterion of V431 is met at main d4bd97f: cross-model (independent-context) architecture, UX and adversarial reviews with fixes (review-v431.md, 30/30 fixed; review-v272.md, spec 272, 35 + 4 fixed); 100-node/200-edge performance target tested (v31-studio-performance, docs/v31/performance.md); bundle and dependency audit, licence notices and no runtime network checked by verify-dist on every build; the spec and the visual identity lock applied (Studio visual references re-accepted only for the C6/B10/C3 fixes)."
+    artifact: "docs/v31/review-v272.md"
+    commit: c6747951b123a0befaa956a158d27f8a5410ad9f
+    recorded_at: 2026-10-18T13:00:26Z

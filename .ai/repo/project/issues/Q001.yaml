@@ -27,4 +27,18 @@ validation:
 evidence_required:
   - "owner_decision"
 created_at: 2026-10-18
-updated_at: 2026-10-18
+updated_at: 2026-10-18T12:58:15Z
+started_at: 2026-10-18T12:58:00Z
+started_event: sha256:b9e6fc6b29095f6f1128121f008f6e8a2d961dc9c51f1a7633e1ebb970013525
+verified_at: 2026-10-18T12:58:09Z
+verified_event: sha256:f7253f3fd363c6b50ec93911ea66b8b28c0c0906fa02175e287328e3c11c7f79
+completed_at: 2026-10-18T12:58:15Z
+completed_event: sha256:b3a2175941078dd96b579b8a7d444d366194be4bcdf0caa814e77d89c9762159
+evidence:
+  - covers: owner_decision
+    type: manual
+    command: "majordomus plan show Q001"
+    result: "2026-10-18, decided by the coordinating Claude session under the owner's delegation of 2026-10-18 ('tak to vse pores'); not the owner's own words; the owner may override. Option (a): adopt sections 64-95 (docs/specs/oscilla-v1-sections-64-95.md) as M005's source, triaged: superseded S069 S070 S072 S075 S077 S091 S094; already delivered S064-S068 S073 S076 S078 S086-S088 S090 S092 S093; kept as work S071 S074 S079-S085 S089 S095. Reasoning in Q001.current_state."
+    artifact: ".ai/repo/project/issues/Q001.yaml"
+    commit: c6747951b123a0befaa956a158d27f8a5410ad9f
+    recorded_at: 2026-10-18T12:58:06Z
