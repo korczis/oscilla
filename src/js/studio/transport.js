@@ -619,8 +619,32 @@ export function createStudioTransport({
     gates.set(key, { key, itemKey: it.key, clipId: it.clipId, nodeId: envId, handle: h, start,
       end });
     if (deferred && deferred.has(envId)) return null; // rebuilt below
-    h.gate(start, end - start);
+    // Gates that overlap on one envelope are one gate, their union (V272 B9): a gate starting
+    // inside another neither retriggers nor closes it early. Inside a sounding union it changes
+    // nothing, or moves the union's release from its end to this gate's; otherwise the
+    // envelope is re-rendered from this gate's start. Both lie ahead of the clock (this gate is
+    // scheduled ahead), so on frames not rendered yet.
+    const others = unionsOf([...gates.values()].filter((g) => g.key !== key
+      && g.nodeId === envId));
+    if (!others.some((u) => u.start < end && start < u.end)) {
+      h.gate(start, end - start);
+      return null;
+    }
+    const inside = others.find((u) => u.start < start && start < u.end);
+    if (inside && end <= inside.end) return null;
+    rebuildEnvelope(envId, inside ? inside.end : start);
     return null;
+  }
+
+  /** Overlapping gate records merged: [{ start, end }] by start (touching ones stay two). */
+  function unionsOf(list) {
+    const out = [];
+    for (const g of [...list].sort((a, b) => a.start - b.start)) {
+      const u = out.at(-1);
+      if (u && g.start < u.end) u.end = Math.max(u.end, g.end);
+      else out.push({ start: g.start, end: g.end });
+    }
+    return out;
   }
 
   function playEvent(it, deferred) {
@@ -653,25 +677,27 @@ export function createStudioTransport({
 
   /**
    * Re-render an Envelope's contour from `horizon` from the gate records (after an edit or a
-   * STOP touched one of them): hold (or close) at the horizon, then the sounding gate's release
-   * and every later gate again. A gate whose envelope node was replaced re-attacks at the
+   * STOP touched one of them, or a gate overlapping another arrived): hold (or close) at the
+   * horizon, then the sounding gate's release and every later gate again. Overlapping gate
+   * records are one gate, their union: opened by the earliest, released at the latest end
+   * (touching ones stay two). A gate whose envelope node was replaced re-attacks at the
    * horizon on the new node.
    */
   function rebuildEnvelope(envId, horizon) {
     const h = ready(envId);
     if (!h || typeof h.hold !== 'function') return;
-    const list = [...gates.values()].filter((g) => g.nodeId === envId && g.end > horizon)
-      .sort((a, b) => a.start - b.start);
-    const sounding = list.filter((g) => g.start < horizon && g.handle === h);
-    if (sounding.length) h.hold(horizon);
-    else h.release(horizon);
+    const list = [...gates.values()].filter((g) => g.nodeId === envId && g.end > horizon);
     for (const g of list) {
-      if (g.start < horizon && g.handle === h) h.release(g.end);
-      else {
-        if (g.start < horizon) g.start = horizon; // re-attack on a replaced node
-        g.handle = h;
-        h.gate(g.start, g.end - g.start);
-      }
+      if (g.handle === h) continue;
+      if (g.start < horizon) g.start = horizon; // re-attack on a replaced node
+      g.handle = h;
+    }
+    const unions = unionsOf(list);
+    if (unions.length && unions[0].start < horizon) h.hold(horizon);
+    else h.release(horizon);
+    for (const u of unions) {
+      if (u.start < horizon) h.release(u.end);
+      else h.gate(u.start, u.end - u.start);
     }
   }
 
