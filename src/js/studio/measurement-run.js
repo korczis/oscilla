@@ -36,7 +36,8 @@
 // due within HANDOFF_NOW_S runs in a microtask. The timer is bookkeeping (when to release the
 // output and start preflight), never audio timing: a late timer (background throttling) delays
 // only a start already past its anchor. A transport 'stop' or 'cancel' before
-// the hand-off disarms it. Nothing is measured twice in one pass; a refused derivation (no
+// the hand-off disarms it; after a 'cancel' (an edit moved the clips) the 'schedule' that follows
+// arms it again. Nothing is measured twice in one pass; a refused derivation (no
 // Transfer Analyzer, no logarithmic Sweep reference, ...) is reported with its reason and the
 // pass plays on.
 
@@ -145,7 +146,13 @@ export function createStudioMeasurementRun({
       case 'cancel':
         if (view.state === 'pending' && pendingKeys.has(ev.key)) {
           pendingKeys.delete(ev.key);
-          if (!pendingKeys.size) abort('cancel');
+          if (!pendingKeys.size) {
+            // An edit cancels to reschedule (a moved clip): the pass may be armed again by the
+            // 'schedule' that follows (V272 B2).
+            const pass = view.pass;
+            abort('cancel');
+            handledPasses.delete(pass);
+          }
         }
         break;
       case 'stop':

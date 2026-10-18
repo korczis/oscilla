@@ -77,7 +77,9 @@ const MIN_WAKE_MS = 50;
 export const EDIT_POLICY = Object.freeze({
   horizon: 'now + SAFE_HORIZON_S, rounded up to a whole frame',
   parameter: 'live', // NODE_PARAM_SET: the runtime applies it now, click-free (§80)
-  futureItem: 'reschedule', // starts at or after the horizon: cancelled, rebuilt from the model
+  // starts at or after the horizon: kept when the edited model compiles it identically (same
+  // times, clip, sequence and trigger edges), else cancelled and rebuilt from the model
+  futureItem: 'keep-or-reschedule',
   playingItem: Object.freeze({
     unchanged: 'keep',
     removed: 'release', // faded at the horizon (voice.stop / gate off)
@@ -281,6 +283,26 @@ export function clipSequence(model, clip, { durationS = clip.duration, sampleRat
 function clipSnapshot(model, clip) {
   return { start: clip.start, duration: clip.duration, trackId: clip.trackId, kind: clip.kind,
     target: effectiveTarget(model, clip), payload: clip.payload };
+}
+
+/** The TRIGGER edges leaving `id` (a pattern clip's target drives them at its start). */
+function triggerEdges(model, id) {
+  return model.graph.edges.filter((e) => e.from.node === id && e.from.port === 'trigger')
+    .map((e) => [e.id, e.to.node, e.to.port, !!(e.props && e.props.muted)]);
+}
+
+/**
+ * Whether a scheduled item `a` (compiled from `prev`) plays exactly as `b` (compiled from
+ * `next`, the same key): same times, target, clip, compiled sequence (waveform and tempo
+ * included) and, for a pattern, the same TRIGGER edges from its target. An edit leaves such a
+ * future item scheduled (EDIT_POLICY futureItem).
+ */
+function sameItem(a, prev, b, next) {
+  return a.type === b.type && a.startTime === b.startTime && a.endTime === b.endTime
+    && a.target === b.target && a.action === b.action && a.truncated === b.truncated
+    && sameJson(a.clip, b.clip) && sameJson(a.sequence, b.sequence)
+    && (a.type !== 'pattern' || sameJson(triggerEdges(prev, a.target),
+      triggerEdges(next, b.target)));
 }
 
 /**
@@ -601,13 +623,14 @@ export function createTimelineScheduler(initialModel, opts = {}) {
       baseFrame: anchor.baseFrame, baseTime: anchor.baseTime };
     }
     cache = new Map();
-    // Scheduled items.
+    // Scheduled items. Those starting at or after the horizon wait for the rebuild below: one
+    // the new model compiles identically stays scheduled (`keep`), the others are cancelled.
     const kept = new Set();
+    const future = new Map();
     for (const [key, it] of [...active]) {
       if (it.startTime >= horizon) {
-        plan.cancel.push(key);
+        future.set(key, it);
         active.delete(key);
-        plan.decisions.push({ key, clipId: it.clipId, decision: 'cancel' });
         continue;
       }
       if (it.endTime <= horizon) {
@@ -633,7 +656,14 @@ export function createTimelineScheduler(initialModel, opts = {}) {
       const w = compileWindow(model, anchor, Math.min(horizon, scheduledUntil), scheduledUntil,
         { passCache });
       for (const it of w.items) {
-        if (it.startTime >= horizon) {
+        if (it.startTime < horizon) continue;
+        const old = future.get(it.key);
+        if (old && sameItem(old, prevModel, it, model)) {
+          future.delete(it.key);
+          plan.keep.push(it.key);
+          plan.decisions.push({ key: it.key, clipId: it.clipId, decision: 'keep' });
+          active.set(it.key, old);
+        } else {
           plan.schedule.push(it);
           active.set(it.key, it);
         }
@@ -646,6 +676,10 @@ export function createTimelineScheduler(initialModel, opts = {}) {
           }
         }
       }
+    }
+    for (const [key, it] of future) {
+      plan.cancel.push(key);
+      plan.decisions.push({ key, clipId: it.clipId, decision: 'cancel' });
     }
     // Automation: hold the exact value at the horizon, continue with the new lane's events.
     const laneIds = new Set([...prevModel.timeline.automation.map((l) => l.id),

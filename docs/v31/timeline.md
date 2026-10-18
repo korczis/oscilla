@@ -263,7 +263,8 @@ SCHEDULE_LEAD_S)`: nothing closer to now than the engine's scheduling lead is ch
 | Situation | Decision | Runtime action |
 | --- | --- | --- |
 | Parameter change (`NODE_PARAM_SET`) | live | applied now through the click-free parameter path (§80) |
-| Item starting at or after `h` | `cancel` + `schedule` | dispose the old voice, play the rebuilt item |
+| Item starting at or after `h`, compiled identically by the new model | `keep` | nothing: an edit elsewhere (a parameter, another clip) leaves it scheduled, so a pending measurement hand-off and the envelope contour stay as they are |
+| Item starting at or after `h`, anything else | `cancel` + `schedule` | dispose the old voice, play the rebuilt item |
 | Item sounding across `h`, unchanged | `keep` | nothing |
 | …clip removed or retargeted | `release` at `h` | `voice.stop(h)` / gate off (faded, `STOP_RAMP_S`) |
 | …only shortened, new end after `h` | `retime-end` | `voice.stop(newEnd)` / gate off moved (compatible live edit) |
@@ -415,7 +416,9 @@ through `runtime.apply` first; then:
   the horizon with the exact value there (`rebind`); a pattern-played oscillator is claimed
   again (built silent, so at once); voices sounding into the old node fade with the runtime's
   crossfade (recorded as `release`, reason `node-replaced`) and the future ones are rebuilt on
-  the new node by the edit (future items are always rescheduled), with its new waveform;
+  the new node: a waveform change compiles a new sequence (`cancel` + `schedule`), and a kept
+  future voice whose node or pattern bus was replaced is discarded unheard and played again
+  (`cancel`, reason `node-replaced`);
 - an envelope whose gates changed is re-rendered from the horizon: held (or released when no
   gate is sounding), the sounding gate's release, every later gate again. A gate interrupted in
   its attack by such an edit is held at its value at the horizon (a flattened attack, no step);

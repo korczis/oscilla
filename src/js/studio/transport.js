@@ -599,7 +599,7 @@ export function createStudioTransport({
         own.length = 0;
       },
     });
-    voices.set(it.key, { key: it.key, item: it, voice, nodeId: it.target, handle: h });
+    voices.set(it.key, { key: it.key, item: it, voice, nodeId: it.target, handle: h, dest });
     unplayed.delete(it.clipId);
     for (const env of triggerEnvelopes(model, it.target)) {
       addGate(`${it.key}>${env}`, it, env, it.startTime, it.endTime);
@@ -812,10 +812,29 @@ export function createStudioTransport({
     }
   }
 
+  /** Where a pattern voice of `it` plays now: the Sequence's bus or the claim's pattern bus. */
+  function destOf(it) {
+    const h = ready(it.target);
+    if (!h) return null;
+    const c = claims.get(it.target);
+    return c && c.handle === h ? c.bus : (h.info && h.info.destination) || null;
+  }
+
   /** Apply a scheduler.edit() plan (EDIT_POLICY, docs/v31/timeline.md). */
   function applyEdit(plan) {
     const touched = new Set();
     for (const key of plan.cancel) cancelItem(key, touched);
+    // A future voice the scheduler kept is rebuilt when the node it plays into was replaced
+    // (or its pattern bus changed): it never started, so it is discarded unheard.
+    const replay = [];
+    for (const key of plan.keep) {
+      const v = voices.get(key);
+      if (!v || v.item.startTime < plan.horizon) continue;
+      if (v.handle === ready(v.nodeId) && v.dest === destOf(v.item)) continue;
+      cancelItem(key, touched);
+      replay.push(v.item);
+      record({ key, clipId: v.item.clipId, decision: 'cancel', reason: 'node-replaced' });
+    }
     for (const { key, at } of plan.release) {
       releaseItem(key, at, touched);
       if (measures.has(key)) measure({ type: 'release', key, at });
@@ -838,7 +857,7 @@ export function createStudioTransport({
     for (const it of plan.schedule) {
       if (it.type === 'event' && touched.has(it.target)) deferred.add(it.target);
     }
-    for (const it of plan.schedule) playItem(it, deferred);
+    for (const it of [...replay, ...plan.schedule]) playItem(it, deferred);
     for (const env of touched) rebuildEnvelope(env, plan.horizon);
     for (const a of plan.automation) applyLaneEdit(a);
     for (const d of plan.decisions) record(d);
@@ -907,7 +926,7 @@ export function createStudioTransport({
     for (const v of voices.values()) {
       if (v.handle !== ready(v.nodeId) && !v.replacedNoted) {
         // A sounding voice fades out with the node it plays into (the runtime's crossfade);
-        // future voices are rebuilt by scheduler.edit (they are always rescheduled).
+        // future voices are rebuilt by applyEdit (a new sequence, or a kept voice replayed).
         v.replacedNoted = true;
         record({ key: v.key, clipId: v.item.clipId, decision: 'release', at: horizon,
           reason: 'node-replaced' });
