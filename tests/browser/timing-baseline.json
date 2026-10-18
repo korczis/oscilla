@@ -30,7 +30,7 @@
     "tests/browser/v3-ui.cjs": {
       "raw-playwright": 1,
       "unbounded-wait": 4,
-      "timer-sleep": 17,
+      "timer-sleep": 14,
       "fixed-frame-window": 1
     },
     "tests/browser/v31-studio-graph.cjs": {
