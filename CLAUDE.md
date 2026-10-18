@@ -56,7 +56,7 @@ npm run release:analyze            # SemVer level needed by the commits since th
 npm run release:prepare            # clean tree -> bump once, rebuild, gate; restores on failure
 npm run release:publish            # dry run; `-- --yes` tags, waits for Pages, verifies, releases
 npm run release:record -- --version X.Y.Z   # .ai/repo/releases/vX.Y.Z.yaml from the Release
-npm run release:prepare -- --help  # any release:* script: usage, acts on nothing; unknown flag: 2
+npm run release:prepare -- --help  # prepare, publish, analyze, cadence, record: usage, no action; unknown flag exits 2
 majordomus plan status             # milestone progress
 ```
 
