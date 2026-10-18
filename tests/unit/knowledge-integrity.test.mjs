@@ -1137,3 +1137,80 @@ test('V272 D8 mutation: an ADR cited nowhere is named, a cited exemption is stal
     new Map([['0015', 'why']])), { uncited: ['0016'], stale: ['0015'] });
   assert.deepEqual(uncitedAdrs(['0120'], 'ADR 01201', new Map()).uncited, ['0120']);
 });
+
+// ------------------------------------------------------- the v4.0 completion ledger (V272 D7)
+
+// docs/v4/completion-ledger.md says it is updated as items close. Its completion matrix has a
+// Claims column naming the docs/CLAIMS.yaml claims of each capability (or "–"), and a
+// numbered item of its current part ("What v4.0 still lacks entirely") names its claims in
+// backticks. A row or an item that names a guaranteed claim cannot read MISSING, "in review"
+// or "fixing": the claim says it is shipped and tested. The dated "## Update" sections after
+// the current part are history and are not read.
+const LEDGER = 'docs/v4/completion-ledger.md';
+const NOT_SHIPPED = /\bMISSING\b|\bin review\b|\bfixing\b/i;
+
+const cellsOf = (row) => row.split('|').slice(1, -1).map((c) => c.trim());
+const claimIdsIn = (text) => [...text.matchAll(/`([a-z][a-z0-9-]+)`/g)].map(([, id]) => id);
+
+/** One problem per ledger row or item that contradicts a claim, or names one that is not. */
+export function ledgerProblems(text, claims) {
+  const byId = new Map(claims.map((c) => [c.id, c]));
+  const current = text.split(/\n## Update /)[0];
+  const problems = [];
+  const matrix = current.match(/\n## Completion matrix\n\n((?:\|.*\n)+)/);
+  if (!matrix) return ['no "## Completion matrix" table'];
+  const [header, , ...rows] = matrix[1].trim().split('\n');
+  const head = cellsOf(header);
+  const at = { claims: head.indexOf('Claims'), status: head.indexOf('Status') };
+  if (at.claims < 0 || at.status < 0) {
+    return ['the completion matrix has no Claims or Status column'];
+  }
+  const judge = (where, ids, status) => {
+    for (const id of ids) {
+      const c = byId.get(id);
+      if (!c) problems.push(`${where}: claim ${id} is not in docs/CLAIMS.yaml`);
+      else if (c.status === 'guaranteed' && NOT_SHIPPED.test(status)) {
+        problems.push(`${where}: reads "${status.match(NOT_SHIPPED)[0]}" but claim ${id} is `
+          + 'guaranteed');
+      }
+    }
+  };
+  for (const row of rows) {
+    const cells = cellsOf(row);
+    const named = cells[at.claims] || '';
+    if (named !== '–' && claimIdsIn(named).length === 0) {
+      problems.push(`${cells[0]}: the Claims cell names no claim and is not "–"`);
+    }
+    judge(cells[0], claimIdsIn(named), cells[at.status] || '');
+  }
+  for (const item of current.split('\n').filter((l) => /^\d+\. /.test(l))) {
+    judge(item.slice(0, 60), claimIdsIn(item).filter((id) => byId.has(id)), item);
+  }
+  return problems;
+}
+
+test('V272 D7: the completion ledger agrees with the claims ledger', () => {
+  const text = read(LEDGER);
+  assert.ok(/updated as items close/.test(text), 'the ledger still says it is kept current');
+  assert.deepEqual(ledgerProblems(text, CLAIMS), []);
+});
+
+test('V272 D7 mutation: a shipped capability read MISSING or in review is refused', () => {
+  const text = read(LEDGER);
+  const row = text.split('\n').find((l) => l.startsWith('| Findings |'));
+  assert.ok(row, 'the Findings row exists');
+  const cells = row.split('|');
+  cells[cells.length - 3] = ' MISSING ';
+  const missing = text.replace(row, cells.join('|'));
+  assert.deepEqual(ledgerProblems(missing, CLAIMS),
+    ['Findings: reads "MISSING" but claim findings-linked-to-evidence is guaranteed']);
+  const item = text.split('\n').find((l) => /^\d+\. .*`connected-records`/.test(l));
+  assert.ok(item, 'the Trace item names its claim');
+  assert.match(ledgerProblems(text.replace(item, `${item} In review.`), CLAIMS)[0],
+    /reads "In review" but claim connected-records is guaranteed/);
+  assert.deepEqual(ledgerProblems(text.replace('| Claims |', '| Claim ids |'), CLAIMS),
+    ['the completion matrix has no Claims or Status column']);
+  const unknown = text.replace('`findings-linked-to-evidence`', '`findings-linked`');
+  assert.match(ledgerProblems(unknown, CLAIMS).join('\n'),
+    /claim findings-linked is not in docs\/CLAIMS\.yaml/);
+});
