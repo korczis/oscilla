@@ -130,21 +130,34 @@ before V501 starts. Whether device names are persisted (finding
 `shared-origin-permission-and-device-names`) is not decided here. A critic re-reviews the two
 blocking findings against this note; the note does not resolve them itself.
 
-**What the gate builds expose, measured.** On 2026-10-18 a probe script (outside the
-repository) ran each gate build headless through Playwright 1.63.0, the version
-`package.json` pins, on darwin arm64. It loaded a blank page from `file://`, from
-`http://127.0.0.1` (the gate's own origins; `tests/browser/lib/serve.cjs` listens on
-127.0.0.1), from plain http on the machine's LAN address, and from 127.0.0.1 with
-`Permissions-Policy: midi=()`. "Pending" means unsettled after 5 s.
+**What the gate builds expose, measured.** On 2026-10-18 each gate build was probed headless
+through Playwright 1.63.0, the version `package.json` pins, on darwin arm64 (Darwin 25.5.0),
+at a 1-minute load average of about 23 to 46. The probe ran twice, with three and then five runs per
+cell, each run in a fresh browser context. It loaded a blank page holding one button from
+`file://`, from `http://127.0.0.1` served by `tests/browser/lib/serve.cjs` (the gate's own
+origins), from 127.0.0.1 served with `Permissions-Policy: midi=()`, and from plain http on the
+machine's LAN address. At load it read `window.isSecureContext`, `typeof
+navigator.requestMIDIAccess`, `typeof MIDIAccess` and `navigator.permissions.query({ name:
+'midi' })`. Then a click on the button called `requestMIDIAccess({ sysex: false })`. The probe
+polled until the request settled, against a 60 s wall-clock deadline that no run reached. It
+recorded how long the request took and read the query again. The probe script is in no
+repository. These steps are what V501's measured checks repeat.
 
-| Gate build | `file://` | `http://127.0.0.1` | plain http, LAN address | `Permissions-Policy: midi=()` |
+| Gate build | `file://` | `http://127.0.0.1` | plain http, LAN address | 127.0.0.1 with `Permissions-Policy: midi=()` |
 |---|---|---|---|---|
-| Chromium 153.0.8010.12 | API present; query `prompt`; request rejects `NotAllowedError` | as `file://` | not a secure context; API absent | query `denied`; request rejects `SecurityError` |
-| Firefox 155.0 | `requestMIDIAccess` absent (the `MIDIAccess` interface exists); query `prompt` | API present; query `prompt`; request pending | not a secure context; API absent | query `prompt`; request rejects `SecurityError` ("WebMIDI requires a site permission add-on to activate") |
-| WebKit 26.6 | API absent; query rejects `NotSupportedError` | as `file://` | as `file://`, not a secure context | as `file://` |
+| Chromium 153.0.8010.12 | API present; query `prompt`; request rejects `NotAllowedError` within 15 ms; query still `prompt` after | as `file://` | not a secure context; API absent | query `denied`; request rejects `SecurityError` ("Midi has been disabled in this document by permissions policy") within 5 ms |
+| Firefox 155.0 | `requestMIDIAccess` absent (the `MIDIAccess` interface exists); query `prompt` | API present; query `prompt`; request rejects `SecurityError` ("WebMIDI requires a site permission add-on to activate") after 3.0 to 12.9 s (32 runs, with and without the policy); query still `prompt` after | not a secure context; API absent | as `http://127.0.0.1`: the policy makes no observable difference |
+| WebKit 26.6 | API absent (`MIDIAccess` too); query rejects `NotSupportedError` | as `file://` | as `file://`, not a secure context | as `file://` |
 
-Granting permissions through Playwright works only in Chromium. Firefox and WebKit refuse the
-permission name `midi`. In Chromium a grant of `midi` alone sets the query to `granted`, but
+The time Firefox takes to reject varies from run to run, and in 29 of the 32 runs it was longer
+than 5 s; the review of pull request #211 measured 4.3 to 8.8 s in four. A check that reads the
+request's state at a fixed time therefore records `pending` or `SecurityError` by chance.
+Calling the request from `page.evaluate` instead of a click changed nothing in any build,
+because Playwright evaluates with user activation.
+
+Granting permissions through Playwright changes the outcome only in Chromium. Firefox refuses
+the names `midi` and `midi-sysex` ("Unknown permission"). WebKit accepts both, and that changes
+nothing without the API. In Chromium a grant of `midi` alone sets the query to `granted`, but
 the request still rejects with `NotAllowedError`. A grant of `midi` and `midi-sysex` makes the
 request resolve with no inputs and no outputs, on `file://` and on 127.0.0.1. When the grant is
 cleared mid-session, the kept `PermissionStatus` fires `change` (`granted` to `prompt`). The
@@ -155,22 +168,28 @@ Where CI differs from this table, the gate column below is restated from V501's 
 
 **The seam: an `addInitScript` stub of `navigator.requestMIDIAccess` (option (a)).** No
 `window.OSCILLA` member injects MIDI. The stub is one test helper that V501 adds under
-`tests/browser/lib/` (`midi-stub.cjs`). A suite installs it with `context.addInitScript`
-before any page script runs. It defines `Navigator.prototype.requestMIDIAccess` and returns a
-fake `MIDIAccess` whose fake `MIDIInput`s dispatch `midimessage` events with a `Uint8Array`
-`data` and a `timeStamp`, and `statechange` events with a `port`. The test drives the stub, not
-the page. The probe installed such a stub, and a dispatched Note On reached a listener, in all
-three gate builds from both origins. This option was chosen over a `window.OSCILLA` inject
-member for three reasons. The page's own code path runs, from the request through the
-listeners, exactly as it would for a device. The shipped surface does not grow. And a
-`window.OSCILLA` hook that feeds notes would be a shipped way to play into the engine that no
-user has.
+`tests/browser/lib/` (`midi-stub.cjs`). A suite installs it with `context.addInitScript` before
+any page script runs. It defines `Navigator.prototype.requestMIDIAccess` and returns a fake
+`MIDIAccess` whose fake `MIDIInput`s dispatch `midimessage` events with a `Uint8Array` `data`
+and a `timeStamp`, and `statechange` events with a `port`. The test drives the stub, not the
+page. The probe installed such a stub, and a dispatched Note On reached a listener, in all three
+gate builds from both origins; under it, `requestMIDIAccess` is not `[native code]`. This option
+was chosen over a `window.OSCILLA` inject member for three reasons. The page's own code path
+runs, from the request through the listeners, exactly as it would for a device. The shipped
+surface does not grow. And a `window.OSCILLA` hook that feeds notes would be a shipped way to
+play into the engine that no user has.
 
-- **Its ADR 0052 kind is Inject, TEST CONTEXT only.** It is not a member of `window.OSCILLA`
-  and does not ship in `dist/index.html`. So the key lists pinned by `seam-surface-pinned` in
-  `tests/browser/app.cjs` do not change for it. If V501 adds a read of the support state to
-  the seam, that read is an Observe member, and the pinned list grows by that deliberate edit.
-  No MIDI member of any kind is decided here.
+- **It is outside ADR 0052's member kinds.** ADR 0052's kinds (Observe, Drive, Inject)
+  classify members of `window.OSCILLA`, and Inject's TEST CONTEXT is a mode that the page knows
+  it is in and labels. The stub is neither a member nor such a mode. It is a test-harness
+  substitute for the platform API, installed from outside the page, and it does not ship in
+  `dist/index.html`. Of the three kinds it is nearest to Inject, because it feeds input that
+  no user made. It cannot carry TEST CONTEXT labelling, because the page cannot know that it
+  runs under the stub (next point), so the stub's self-naming device stands in for that
+  labelling. The key lists pinned by `seam-surface-pinned` in `tests/browser/app.cjs` do not
+  change for it. If V501 adds a read of the support state to the seam, that read is an
+  Observe member, and the pinned list grows by that deliberate edit. No MIDI member of any kind
+  is decided here.
 - **The page cannot tell a stub from the platform, so the stub names itself.** Its inputs are
   named "TEST STUB · MIDI input" and its manufacturer is "OSCILLA test". Anything the page
   shows or records under the stub, with the device names, says so.
@@ -216,30 +235,66 @@ another of them reads as `denied` here. The copy below names the origin's host a
 (`location.host`). On `file://` the copy says "this page", because which origin a browser keys
 a file's permission to was not measured, so the copy claims no reach.
 
-**The support-state table.** The page evaluates the causes top to bottom and states the first
-that holds. `{site}` is `location.host` on http(s) and "this page" on `file://`.
-`{names}` is the connected inputs' `name` values, with "unnamed input" for an empty name,
-joined by ", ". `{error}` is the rejection's `name`. "Gate builds without the seam" is the
-measured darwin arm64 record above; "seam only" means V501 can produce the state only through
-the stub.
+**The support-state table.** The page holds one state at a time. What happened most recently
+wins over what was read at load:
+
+1. The context comes first (rows 1 and 2). In those states Connect MIDI is not offered.
+2. Once Connect MIDI has been chosen in this page, the state comes from the latest request and,
+   once that request resolved, from the access it gave (rows 3 to 10). The permission query no
+   longer chooses the state. Its one effect is the `change` event of the kept
+   `PermissionStatus`, which is row 7.
+3. Only before the first Connect MIDI does the query choose the state (rows 11 to 13). These
+   rows read the kept `PermissionStatus`'s current `state`, which its `change` event updates.
+
+Each cause names its phase (row 5 has one cause in each), so no two causes hold at once, and
+every row is reached by its own cause. The order sets only the order of the checks. Choosing
+Connect MIDI again starts a new request, and the state follows that request. Without a kept
+`PermissionStatus` (row 11), a revocation is not detected, and the state stays what the access
+reports.
+
+`{site}` is `location.host` on http(s) and "this page" on `file://`. `{names}` is the `name`
+values of the connected inputs, joined by ", ". `{name}` is the `name` of the port in the
+`statechange` that left no input connected. An empty name reads "unnamed input" in both.
+`{error}` is the rejection's `name`. "Gate builds without the seam" is the measured darwin arm64
+record above. "Seam only" means V501 can produce the state only through the stub.
 
 | # | State | Cause (how the page detects it) | Exact copy | Gate builds without the seam |
 |---|---|---|---|---|
-| 1 | `insecure` | `window.isSecureContext` is false (checked first, so a missing API in an insecure page is not called unsupported) | "MIDI is unavailable: this page is not in a secure context. Open it over https or from a file." | Not from the gate's origins: `file://` and 127.0.0.1 are secure in all three. Chromium, Firefox and WebKit when served over plain http on a LAN address (a server condition, not the seam) |
-| 2 | `unsupported` | Secure context, and `typeof navigator.requestMIDIAccess` is not `"function"` (detected on the method, not on `MIDIAccess`, which Firefox exposes on `file://` without the method) | "MIDI is unavailable: this browser offers no Web MIDI here." | WebKit, both origins; Firefox on `file://` |
-| 3 | `unknown` | The API is present, and `navigator.permissions.query` is missing, or `query({ name: 'midi' })` throws or rejects | "MIDI is off. The browser does not say whether MIDI is allowed for {site}; Connect MIDI asks it." | Seam only (WebKit's query rejects, but WebKit has no API) |
-| 4 | `needs-permission` | The query reads `prompt` | "MIDI is off. Connect MIDI asks the browser for access to MIDI devices for {site}." | Chromium, both origins; Firefox on 127.0.0.1 |
-| 5 | `allowed` | The query reads `granted` and Connect MIDI has not been chosen in this page | "MIDI is allowed for {site}. Choose Connect MIDI to start listening." | Chromium, both origins, with the grant `midi` and `midi-sysex` |
-| 6 | `pending` | Connect MIDI was chosen and `requestMIDIAccess` has not settled | "Waiting for the browser's answer about MIDI access. The rest of OSCILLA keeps working." | Firefox on 127.0.0.1 (pending after 5 s); not Chromium, which rejects at once |
-| 7 | `denied` | The query reads `denied`, or the request rejected with `NotAllowedError` | "MIDI access is not allowed for {site}. Allow MIDI in the browser's site settings, then choose Connect MIDI again." | Chromium, both origins (the request rejects; the query stays `prompt`). A `denied` query appears in the gate only with the policy of row 8 |
-| 8 | `blocked` | The request rejected with `SecurityError` | "MIDI is blocked for this page by the browser or the site's settings." | Chromium and Firefox on 127.0.0.1 served with `Permissions-Policy: midi=()` (a server condition, not the seam). Before a request, Chromium reads `denied` there and shows row 7 |
-| 9 | `failed` | The request rejected with `NotSupportedError` or any other name (no platform MIDI backend, for one) | "MIDI could not start on this computer (the browser reported {error})." | Not on darwin arm64, where Chromium resolves. `ubuntu-latest` not measured (V501); otherwise seam only |
-| 10 | `no-devices` | The request resolved, and no input has `state` `connected` | "MIDI is on. No MIDI input is connected; plug one in and it appears here." | Chromium, both origins, with the grant `midi` and `midi-sysex` (`midi` alone still rejects) |
-| 11 | `connected` | At least one input has `state` `connected` | "MIDI is on: {names}." | Seam only |
-| 12 | `revoked` | After access, the kept `PermissionStatus` changes to anything but `granted`. The page stops listening and drops the access | "MIDI access was withdrawn for {site}. Choose Connect MIDI to ask again." | Chromium, by clearing the grant mid-session (`change` fires; the access fires nothing) |
-| 13 | `disconnected` | A `statechange` leaves no connected input where there was one | "MIDI input disconnected: {name}. No MIDI input is connected." | Seam only |
+| 1 | `insecure` | `window.isSecureContext` is false. This is checked first, so a missing API in an insecure page is not called unsupported | "MIDI is unavailable: this page is not in a secure context. Open it over https." | Not from the gate's origins: `file://` and 127.0.0.1 are secure in all three. Chromium, Firefox and WebKit when served over plain http on a LAN address (a server condition, not the seam) |
+| 2 | `unsupported` | Secure context, and `typeof navigator.requestMIDIAccess` is not `"function"`. The test is on the method, not on `MIDIAccess`, which Firefox exposes on `file://` without the method | "MIDI is unavailable: this browser offers no Web MIDI here." | WebKit, every origin; Firefox on `file://` |
+| 3 | `pending` | Connect MIDI was chosen, and the latest request has not settled | "Waiting for the browser's answer about MIDI access. The rest of OSCILLA keeps working." | Firefox on 127.0.0.1, with or without the policy, for the 3.0 to 12.9 s before the request rejects (row 4). A check asserts it by a condition poll against a named deadline, never by a fixed wait (`project.bounded-test-timing`). In Chromium the request settles within 15 ms without a grant (up to 711 ms with one), too short to assert |
+| 4 | `blocked` | The latest request rejected with `SecurityError`. This covers a permissions-policy block and a browser that allows MIDI only through a site permission add-on; the page does not tell them apart | "MIDI is blocked for {site}: the browser or the site's settings do not let this page use MIDI. Some browsers allow it only after a site permission add-on is installed." | Firefox on 127.0.0.1, with or without the policy ("WebMIDI requires a site permission add-on to activate"). Chromium only on 127.0.0.1 served with the policy (a server condition, not the seam), which before Connect MIDI is row 5 |
+| 5 | `denied` | The latest request rejected with `NotAllowedError`. Or, before any Connect MIDI, the query reads `denied` | "MIDI access is not allowed for {site}. Allow MIDI in the browser's site settings, then choose Connect MIDI again." | After Connect MIDI: Chromium, `file://` and 127.0.0.1 (the request rejects; the query still reads `prompt` and no longer chooses the state). Before Connect MIDI: Chromium on 127.0.0.1 served with the policy only |
+| 6 | `failed` | The latest request rejected with `NotSupportedError` or any other name (for one, no platform MIDI backend) | "MIDI could not start on this computer (the browser reported {error})." | Not on darwin arm64, where Chromium resolves. `ubuntu-latest` not measured (V501); otherwise seam only |
+| 7 | `revoked` | The latest request resolved, and since then the kept `PermissionStatus` changed to anything but `granted`. The page stops listening and drops the access | "MIDI access was withdrawn for {site}. Choose Connect MIDI to ask again." | Chromium, `file://` and 127.0.0.1: grant `midi` and `midi-sysex`, choose Connect MIDI, then clear the grant (`change` fires, `granted` to `prompt`; the access fires nothing) |
+| 8 | `connected` | The latest request resolved, not revoked, and at least one input has `state` `connected` | "MIDI is on: {names}." | Seam only |
+| 9 | `disconnected` | The latest request resolved, not revoked, no input is connected, and an input was connected earlier under this access (a `statechange` took the last one away) | "MIDI input disconnected: {name}. No MIDI input is connected." | Seam only |
+| 10 | `no-devices` | The latest request resolved, not revoked, no input is connected, and none was connected under this access | "MIDI is on. No MIDI input is connected; plug one in and it appears here." | Chromium, `file://` and 127.0.0.1, with the grant `midi` and `midi-sysex` (`midi` alone still rejects, row 5) |
+| 11 | `unknown` | Before any Connect MIDI: `navigator.permissions.query` is missing, or `query({ name: 'midi' })` throws or rejects | "MIDI is off. The browser does not say whether MIDI is allowed for {site}; Connect MIDI asks it." | Seam only (WebKit's query rejects, but WebKit has no API and stops at row 2) |
+| 12 | `needs-permission` | Before any Connect MIDI: the query reads `prompt` | "MIDI is off. Connect MIDI asks the browser for access to MIDI devices for {site}." | Chromium, `file://` and 127.0.0.1; Firefox on 127.0.0.1, with or without the policy |
+| 13 | `allowed` | Before any Connect MIDI: the query reads `granted` | "MIDI is allowed for {site}. Choose Connect MIDI to start listening." | Chromium, `file://` and 127.0.0.1, with the grant `midi` (alone, or with `midi-sysex`) |
 
 When one of several inputs disconnects and others stay connected, the state stays `connected`
 with the remaining names. When a device is plugged in after `no-devices` or `disconnected`, the
 state becomes `connected`. In no row does the copy name a browser. In every row, everything
 outside the MIDI surface stays as it is.
+
+**Corrected before landing (review of pull request #211, 2026-10-18).** The first version of
+this note (commit 9ef1585) was corrected in place before it merged:
+
+- It stated the first cause that holds, with the load-time query ranked above the request's
+  outcomes. So `pending`, `denied` after a request, `blocked`, `failed` and `revoked` could not
+  be stated while the query read `prompt`, and `no-devices` hid `disconnected`. The table now
+  ranks what happened after Connect MIDI above the load-time query, and every cause names its
+  phase. The states are the same thirteen.
+- It recorded Firefox on 127.0.0.1 as leaving the request pending, and as rejecting with
+  `SecurityError` only under `Permissions-Policy: midi=()`. That was an artefact of a fixed 5 s
+  cut-off. Measured to settlement, Firefox rejects with `SecurityError` with or without the
+  policy, after 3.0 to 12.9 s in 32 runs. So `blocked` is reached from the gate's own origin,
+  and `pending` only for that time.
+- It said WebKit refuses a `midi` grant. WebKit accepts the grant, which changes nothing
+  without the API.
+- It named the stub's ADR 0052 kind as Inject, TEST CONTEXT only. The stub is outside those
+  member kinds (see the seam above).
+- Row 1's copy advised opening the page from a file, which in Firefox's gate build leads to
+  `unsupported`. Row 13 (now 9) used `{name}`, which the note did not define.
