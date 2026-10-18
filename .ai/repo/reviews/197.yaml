@@ -1,0 +1,56 @@
+# Review verdict for pull request #197, the V272 final adversarial review (spec §272) and its 35
+# fixes plus I1 and I2, branch docs/v272-final-review.
+# Reviewed head 9b9723278c425ce43bf03b217f2f5ea62b93641b, merge base origin/main 044f98a (#196,
+# main's tip: main has not moved). This review is of the whole diff, by area: src/js/studio,
+# src/js/ui/studio, src/styles, the release and deploy scripts, .github, tests, .ai/repo and docs.
+#
+# The digest: the base branch's scripts/review-verdict.mjs judges this pull request
+# (.github/scripts/base-rule.sh). Its GUARDED list gives 21 changed guarded paths and the content
+# below (run from `git archive origin/main scripts`). The pull request's own copy, with D5's longer
+# list, gives 28 paths and 4f15da941f163e14450249e65d35d7d1fb0ca076273b06e4301a98dc8820a44e; that
+# one applies only to pull requests based on main after this merges.
+#
+# What was checked:
+# - The questions I was asked to check. I1: the transport sets `model = next` before
+#   applyEdit in admitNow and syncNow, so the 'schedule' event carries the model being played;
+#   measurement-run derives its recipe from it. I2: cmp.gainLevel is the engine's linear
+#   logical gain, which is also the Master Output `level` unit; runtime.restoreMaster gives the
+#   saved level back before the run. The automation builder's detune-clamp case was tested and
+#   is a defect (R-1).
+# - Release integrity. pages.yml stamps (schema 2) and runs verify-deploy in the same deploy job,
+#   after checkout with fetch-depth 0. So the first deploy after the merge stamps and verifies
+#   with this commit's scripts: the live schema-1 page is replaced before it is judged. The
+#   smoke job passes a full $GITHUB_SHA and needs no git history. The release commit is stamped
+#   'untagged', and verify-deploy accepts untagged->tagged at release:publish. The stamp, the
+#   verifiers and the labels agree (build-info, releaseLabel, live-smoke labelOf).
+#   release:prepare refuses OSC_BROWSERS/OSC_ORIGINS and runs with OSC_STRICT_SKIPS=1. The four
+#   declared skips are not platform-specific. An old receipt is refused, which is intended.
+# - Audio discipline. B1 holds: re-running reviewer B's b1 script shows one hard-stopped
+#   oscillator, but it is the OLD playback's future voice (created 0.5, startAt 1.0213, stopAt
+#   0, never started). The new playback's sources keep running. The offset ConstantSource is
+#   tracked on the node's accounting and starts with the lane's anchor. Kept future voices on a
+#   replaced node are replayed; kept gates and clocks on one are rebuilt by afterApply.
+# - Visual identity: the C6 changes swap --osc-text-dim for the existing --osc-text-muted token;
+#   aria-pressed becomes aria-current on the compact chips. scripts/visual-studio.mjs dist:
+#   5 views, 0 % differ from the re-accepted darwin-arm64 references.
+# - Timing: no new fixed sleep, waitForTimeout or timing-allow in tests/browser (diff scan);
+#   browser-timing.test.mjs passes.
+# - Ran on the head: npm test 2951/2951; build:check, verify-dist, version:check, pin check
+#   0.29.0, majordomus doctor 0 failures; v31-studio-transport chromium 27/27; v31-studio-graph
+#   chromium file 33/33, http 6/6; reviewers A and B's evidence scripts (each one prints the
+#   fixed behaviour, apart from the B1 false positive above and b2-offset-drift: that script
+#   reads only the param's own schedule, and the offset now lives in the ConstantSource).
+#   Reviewer tests: scratchpad rv197/detune-clamp.test.mjs (fails on the head, passes on
+#   origin/main's src) and rv197/pending-edit.test.mjs.
+schema: review-verdict/v1
+pr: 197
+verdict: changes-requested
+reviewer: "independent review subagent (Claude Opus 5.5) with its own context, spawned by orchestrating session e4a1ac78, whose other agents reviewed (A-D), built and integrated this change; this agent is none of them, did not build, merge or edit any of it and wrote only this file"
+content: 4d145b3c07b7ee45ce84c1eac45b903a40c8e284c2abd243903a2329455cde73
+findings:
+  - { id: R-1, severity: P1, status: open, title: "regression from A7. compiler.js computeBases lowers a static detune that exceeds the frequency's headroom (`clamped`), and runtime.baseOffset counts the lowered amount as an edge offset. So a detune LANE, which overrides the static value, is shifted down by the clamp. Oscillator 12 kHz, static detune +1200 ct, detune lane: at 48 kHz, lane values 0/500/-600 ct play -88.8/411.2/-688.8 ct; at 44.1 kHz, -235.5/264.5/-835.5 ct. Each is within its own ceiling (1111.2 / 964.5 ct). limitedLanes is empty, so nothing reports it. On origin/main the same lanes play exactly 0/500/-600. Fix: the static clamp must not reach baseOffset (offset = the edges' constant part only; the lane is bounded by detuneCeiling in paramFor). Add this case as a test" }
+  - { id: R-2, severity: P2, status: open, title: "B2's keep policy keeps a pending measurement item without re-deriving its recipe. An edit in the armed window (lookahead 1 s minus HANDOFF_LEAD_S 0.25 s) is silently left out of the measurement, and A5's level refusal is bypassed. Example: with the hand-off pending, Sweep end goes 20000 to 10000 and Master Output 0.08 to 0.04 (outputLevel 0.08). The run still gets the old model (end 20000, level 0.08) and saves 'done'. The record matches what ran, so the provenance is not false, but the Studio shows another graph and says nothing. Fix: re-derive on an admitted edit while pending, and abort or re-arm when the recipe changes" }
+  - { id: R-3, severity: P2, status: open, title: "reviewer independence is at agent level: this reviewer, reviewers A-D, the nine builders and the integrator are agents of one orchestrating session (e4a1ac78). The rule says a reviewer who did not build the change, and the README says a session other than the builder's; the owner decides whether that satisfies it (as V-1 of #174 and #179)" }
+  - { id: R-4, severity: P3, status: open, title: "I2's wiring (workspace outputLevel: cmp.gainLevel) has no browser check (the builders' named follow-up). The units and the restore were read here; that the refusal reaches the user in the page rests on that follow-up" }
+  - { id: R-5, severity: P3, status: open, title: "a clocked Random or Step Modulator holds step 0 from PLAY, and its first trigger (k = 0) sets step 0 again, so the first trigger changes nothing audible and step 1 arrives with the second. This is consistent with the header ('the k-th trigger sets step k'), but the user guide should say it, or step 0 should wait for the first trigger" }
+  - { id: R-6, severity: P3, status: open, title: "this reviewer ran browser suites only in chromium (v31-studio-transport, v31-studio-graph) on a shared, loaded machine (load about 55). The firefox and webkit legs, the other Studio suites and the linux-x64 visual references rest on CI run 39116161418, which was still pending when this was written" }
