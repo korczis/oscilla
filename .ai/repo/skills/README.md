@@ -92,4 +92,24 @@ is typed.
 The MCP resources `majordomus://skill/<id>` and the entries `majordomus_list` returns for the
 kind are derived from the files here. This repository publishes no skills page and has no
 site generator, so nothing else is derived. No list of skills exists anywhere by hand; the
-inventory is this directory, which today holds no skill.
+inventory is this directory (`majordomus skills list`).
+
+## What holds them to the repository
+
+`tests/unit/skills.test.mjs`, in `npm test`, reads every `SKILL.md` here: each `npm run`
+script it names is in `package.json`, each repository path and relative link exists, each
+`project.<id>` is a rule in force and each ADR number a file, and each `majordomus` command,
+its second word and its flags are in the installed tool's help. A step that names something
+the repository no longer has fails the test, not the next worker.
+
+## Why every skill here is a draft
+
+Majordomus derives whether a skill is tested, used, documented and enforced, and its doctor
+fails an `active` skill that no test names or nothing invokes. It counts as a test only a
+case of its own runner or a crate test, named by a `majordomus-skill: <id>` comment and
+backed by a recorded run. This repository's tests are `node --test` files, which it does not
+count, so an active skill fails doctor however well it is held. The skills are therefore
+`status: draft`: valid, listed and checked by `majordomus skills check` and by the unit test
+above, and not claimed as proven capabilities. `tests/unit/skills.test.mjs` carries the
+`majordomus-skill:` markers, so a skill can become `active` once the tool counts that test
+and a workflow, prompt or profile references `majordomus://skill/<id>`.
