@@ -237,6 +237,15 @@ claims:
     responsibility: product
     note: Checked against git history where it is complete; a shallow clone or an export without .git skips the comparison and still checks the stated duration against the stated times, and missing history fails the check under GitHub Actions instead of skipping it, since the CI unit job checks out full history and tags.
 
+  - id: release-state-stamp
+    claim: Every deployed page names its release state: only the release commit shows the bare version, and any later commit shows <version>+<distance>.g<short>, so a page never presents itself as a release it is not
+    source: .ai/repo/adrs/0059-a-deployed-page-names-its-release-state-a-later-build-is-version-plus-distance.md
+    implementation: scripts/release-metadata.mjs
+    test: tests/unit/release-provenance.test.mjs
+    status: guaranteed
+    responsibility: product
+    note: 'Test "V272 D1: the stamp records the release state and a later build does not show the bare version"; scripts/verify-deploy.mjs refuses a stamped state that disagrees with git, and tests/browser/live-smoke.cjs checks the label on every Pages deployment. A release commit deployed before its tag shows the bare version until the tag exists (ADR 0059 states this gap).'
+
   - id: about-names-current-release
     claim: The About view's evolution timeline names every published release line and marks the release line of the running build (package.json MAJOR.MINOR) as current, so a minor or major release cannot ship with a stale About page
     source: .ai/repo/rules/project/about-names-current-release.v1.md
