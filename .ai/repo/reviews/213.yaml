@@ -1,0 +1,80 @@
+# Review verdict for pull request #213, the E008 defect: a Random / Step Modulator rate lane now
+# plays in Hz. Branch fix/modulator-rate-lane-scale.
+# Reviewed head 873ef454735f84e7020fb8b7b1b61e01c9cd8423 (e9f59a4 test, 652ee8a fix, 873ef45
+# dist). Merge base origin/main 6136456: main has not moved. Another builder wrote all of it,
+# not me.
+#
+# The digest: the base branch's scripts/review-verdict.mjs judges this pull request. I ran it
+# from `git archive origin/main scripts` with --repo on this worktree, `--content --list
+# --base-branch origin/main`: 42a12415...1e79 over src/js/studio/transport.js, the one guarded
+# path.
+#
+# What was checked:
+# - Scale. Static rate: steppedControl writes playbackRate = rate / refRate, with refRate =
+#   sampleRate / 480. A linear rate edge: the compiler takes modTarget's scale, 1 / refRate =
+#   480 / sampleRate. A lane: paramFor now carries the same modTarget(key, 'linear') scale,
+#   and schedule() multiplies each value after fit. All three agree at 44.1 and 48 kHz, for
+#   Random and for Step Modulator. Every other lane gets scale 1: every other linear modTarget
+#   returns scale 1 or no scale, and the pattern bus is set to 1 explicitly. The scale is
+#   positive, so step, linear and exponential segments keep their shape.
+# - Every write path. I wrote a scratch probe on the unit harness: the real transport and
+#   runtime on the fake context, with the store's commit gate. It compares the AudioParam (its
+#   schedule plus the constant sources) with the lane in Hz x 480 / sampleRate. It ran 60
+#   checks over Random and Step Modulator at 44.1 and 48 kHz. 56 pass at the head; the other
+#   4 are the oracle limit explained below. The checks:
+#   - a plain lane;
+#   - B3: a point moved while playing;
+#   - B8: a rebind on a structural edit (seed / playback), with the rebind decision recorded;
+#   - the stop hold, held in Hz x scale;
+#   - removal: the hold makes no step, then the glide reaches base x scale;
+#   - B4: undo restores the lane;
+#   - B7: the lane plus an edge offset (offset source);
+#   - B6: an edge offset changed while playing;
+#   - B7: removal with an offset, ending at (base + offset) x scale;
+#   - B4/B7: a fresh lane added on a parameter with an offset;
+#   - the reoffset clamp path: a lane near 100 Hz whose clamp changes with the offset.
+#   On origin/main's transport the same probe fails 48 of 60. On an LFO rate lane (scale 1)
+#   it gives the same results on main and on the head. The 4 reoffset-clamp values differ
+#   from my pointwise-clamp oracle, because the transport clamps the ramp ends, not each
+#   point. They are the LFO's value exactly (52.749 Hz against an oracle of 54.007 Hz at
+#   44.1 kHz) times 480 / sampleRate, so the scale is right and they are not a defect of this
+#   PR. A fresh lane that is still gliding (2.7e-6 relative) passes within the probe's
+#   tolerance.
+# - Clocked mode (A2): with a clock edge, the clocked adapter's modTarget('rate') refuses.
+#   paramFor reports the lane unplayed as no-parameter, with "A clocked Random / Step
+#   Modulator steps on its clock trigger; rate has no effect.", for both types and both rates.
+# - Lane records. events, raw, released, the offset-source events, bounds, offsets and
+#   limitedLanes all stay in Hz. Every read of them (scheduledValueAt, holdEvents,
+#   sourceValueAt, unownedValueAt, clampsAny, the reoffset `same` test) compares Hz with Hz.
+#   Values are scaled only where they are written to an AudioParam (schedule, the moveOffset
+#   set and glide, the removal glide). Nothing reads an AudioParam's value back.
+# - Offline: offline.js runs this same transport on the OfflineAudioContext, and the adapter
+#   takes refRate from that context, so renders get the fix too.
+# - Other lanes: the E008 table has no defect markers left. All 79 tests of
+#   studio-automation-transforms pass, scale-1 rows and the B7, #78, A7 and R-1 cases
+#   included.
+# - Fail-first, in a scratch copy of the head with origin/main's transport.js: the new strict
+#   test fails, along with the four random / step-modulator rows at both rates and the new
+#   offset case at both rates (7 of 79). Mutants on the head:
+#   - caught: dropping the scale in paramFor, schedule() in applyLane, or the moveOffset
+#     setValueAtTime;
+#   - not caught by the unit suite, though my probe catches each one (R-1): the moveOffset
+#     glide, the removal glide, the removal hold, rebindLanes, the reoffset clamp path and the
+#     stop hold.
+# - Docs: the docs/v31/timeline.md automation row, the transport.js header and the tests/README
+#   row match the code. The dist rebuild is current (build:check, verify-dist pass).
+# - Ran:
+#   - npm test at 873ef45: 3044/3044 pass.
+#   - OSC_LOAD_MAX=200 OSC_BROWSERS=chromium: v31-studio-transport ALL PASS (27) and
+#     v31-studio-offline ALL PASS (11).
+#   - npm run build:check and verify-dist: pass.
+#   - majordomus doctor: 0 failures. The warnings are the doctor budget and stale agent clones,
+#     none in this worktree.
+schema: review-verdict/v1
+pr: 213
+verdict: merge
+reviewer: "independent review subagent (Claude Opus 5.5) with its own context, spawned by orchestrating session e4a1ac78, whose other agents may have built this change; this agent did not build, merge or edit any of it and wrote only this file"
+content: 42a12415e92bca85561e123a510d43a6c44dbab85a17b696fd9e506557541e79
+findings:
+  - { id: R-1, severity: P2, status: open, title: "six of the nine scaled write paths are unproven by the unit suite. Dropping the scale from the moveOffset glide (setTargetAtTime), the removal glide, the removal hold, rebindLanes, the reoffsetLanes clamp path or the stop hold leaves all 179 tests of the eight transport unit files passing. The head is correct on each path (the reviewer's probe catches every one of these mutants), but a regression there would ship silently. The PR body's 'reverting the moveOffset scale makes that row fail' holds only for its setValueAtTime line. Add E008 case rows for edit, removal, offset change, rebind and stop on a rate lane" }
+  - { id: R-2, severity: P3, status: open, title: "reviewer independence is at agent level: this reviewer is an agent of orchestrating session e4a1ac78, which likely built the change through other agents, as in #197, #198 and #199. The owner decides whether that satisfies the rule" }
