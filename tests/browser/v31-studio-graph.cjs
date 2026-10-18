@@ -34,6 +34,12 @@
 //                        a slider drag is one history entry; AUTOMATE creates / reveals a lane;
 //                        no AUTOMATE on a low-pass Q, with the reason (R7); rename; clip
 //                        start/duration
+//   v272-inspector       §272 C2, C3, C8: a refused clip Start, Position X or Name is marked
+//                        on its field (aria-invalid, a visible message it describes) and shows
+//                        the model's value after blur; units are in each field's description
+//                        (Depth across Mapping); Automate reads "Automate <param>" / "Show
+//                        <param> lane" with no aria-pressed and follows a lane added or
+//                        removed; compact chips mark the selection with aria-current
 //   keyboard-connect     keyboard only: focus a node, C opens the list of compatible inputs,
 //                        Enter connects; arrows nudge (one entry per key sequence)
 //   focus-never-body     V431 review: Tab after a press that moved no focus selects the
@@ -45,7 +51,7 @@
 //                        same action of the copy, never <body>
 //   inspector-phone-focus  V431 U7, U8 at 390 x 844 touch: Inspector Connect… and Delete keep
 //                        focus in the visible Inspector (never the hidden graph, <body> or
-//                        main); "Automated · show lane" opens the Timeline subview, shows the
+//                        main); "Show Cutoff lane" opens the Timeline subview, shows the
 //                        lane, focuses its add-point button and says so
 //   inactive-cables      V431 A5/X3: Osc → Recorder (no Web Audio route) and LFO → Q on a
 //                        low-pass filter (no audible effect) are drawn is-inactive with a
@@ -74,6 +80,8 @@
 //   phone-port-targets   V431 U9, U10 at 390 x 844 touch: after Frame all every port target is
 //                        at least 24 px tall; the empty-graph hint shows on the phone
 //   light-theme          node titles, port labels and cables keep contrast on the light theme
+//   dark-theme           §272 C6: node category and control-input labels keep 4.5:1 on the
+//                        node surface in the dark theme
 //   screenshots          tests/visual/out-studio/ (not committed): desktop, phone, light
 //   no-console-errors
 'use strict';
@@ -730,6 +738,141 @@ function defineChecks() {
     }), f1, f2, err, depth0, depth1, q, live: live.slice(-4) };
   });
 
+  // V272 C2, C3, C8 (§272 review). C2: a refused or non-numeric entry in an Inspector field
+  // (clip Start, Position X, Name) is marked on that field (aria-invalid, a visible message it
+  // is described by) and the field shows the model's value again once it loses focus. C8: the
+  // unit beside a field is part of its accessible description, also after Mapping changes it.
+  // C3: Automate is a plain action that follows the model ("Automate <param>" / "Show <param>
+  // lane", no aria-pressed): pressing it relabels the button and keeps focus on it, and a lane
+  // removed in the timeline turns it back; the compact chips mark the selection with
+  // aria-current, not with a toggle state that pressing never clears.
+  def('v272-inspector', async ({ page }) => {
+    await H.fresh(page);
+    const select = (s) => page.evaluate((x) => window.OSCILLA.studio.store.dispatch({
+      type: 'SELECTION_CHANGE', selection: x }), s);
+    const probe = (sel) => page.$eval(sel, (i) => {
+      const ids = (i.getAttribute('aria-describedby') || '').split(/\s+/).filter(Boolean);
+      const desc = ids.map((id) => document.getElementById(id)).filter(Boolean);
+      const err = desc.find((e) => e.classList.contains('osc-si-error') && !e.hidden);
+      const unit = i.closest('.osc-si-field').querySelector('.osc-si-unit');
+      return { shown: i.value, invalid: i.getAttribute('aria-invalid'),
+        error: err && err.getClientRects().length ? err.textContent : '',
+        description: desc.map((e) => e.textContent.trim()).filter(Boolean).join(' '),
+        unit: unit ? unit.textContent.trim() : '' };
+    });
+    // A reading that meets `test`, or the last one read when the deadline passes (the verdict
+    // then names the condition).
+    const read = (fn, test, what) => until(async () => {
+      const v = await fn();
+      return test(v) ? v : null;
+    }, { ms: 5000, what: `v272-inspector: ${what}` }).catch(() => fn());
+    const start = '[data-osc="studio.inspector.start"]';
+    const px = '[data-osc="studio.inspector.x"]';
+    const nm = '[data-osc="studio.inspector.name"]';
+    // C2: clip Start, non-numeric, then refused by the store (a negative start).
+    await select({ clips: ['clip-1'] });
+    await page.waitForSelector(start, { timeout: 5000 });
+    await page.fill(start, 'abc');
+    await page.press(start, 'Enter');
+    const nonNumeric = await read(() => probe(start), (v) => !!v.error, 'Start "abc" refused');
+    await page.fill(start, '-5');
+    await page.press(start, 'Enter');
+    const startRefused = await read(() => probe(start), (v) => /Clip start/.test(v.error),
+      'Start "-5" refused on the field');
+    await page.keyboard.press('Tab');
+    const startModel = (await H.model(page)).clips.find((c) => c.id === 'clip-1').start;
+    const startBlurred = await read(() => probe(start), (v) => v.shown === String(startModel),
+      'Start shows the model value after blur');
+    // C2: Position X out of range.
+    await select({ nodes: ['osc-1'] });
+    await page.waitForSelector(px, { timeout: 5000 });
+    await page.fill(px, '1e9');
+    await page.press(px, 'Enter');
+    const xRefused = await read(() => probe(px), (v) => !!v.error, 'Position X "1e9" refused');
+    await page.keyboard.press('Tab');
+    const oscX = (await H.model(page)).nodes.find((n) => n.id === 'osc-1').x;
+    const xBlurred = await read(() => probe(px), (v) => v.shown === String(oscX),
+      'Position X shows the model value after blur');
+    // C2: an empty name is refused on the Name field.
+    await page.fill(nm, '');
+    await page.press(nm, 'Enter');
+    const nameRefused = await read(() => probe(nm), (v) => !!v.error, 'empty name refused');
+    await page.keyboard.press('Tab');
+    const nameBlurred = await read(() => probe(nm), (v) => v.shown === 'Oscillator 1',
+      'Name shows the model value after blur');
+    // C8: units in the description (a parameter, a clip time, an edge depth across Mapping).
+    await select({ nodes: ['filter-1'] });
+    const cutoffSel = '[data-osc="studio.inspector.param"][data-key="frequency"]';
+    await page.waitForSelector(cutoffSel, { timeout: 5000 });
+    const cutoff = await probe(cutoffSel);
+    await select({ clips: ['clip-1'] });
+    await page.waitForSelector(start, { timeout: 5000 });
+    const clipStart = await probe(start);
+    const lfoEdge = await page.evaluate(() => window.OSCILLA.studio.model.graph.edges
+      .find((e) => e.from.node === 'lfo-1').id);
+    await select({ edges: [lfoEdge] });
+    const depth = '[data-osc="studio.inspector.depth"]';
+    await page.waitForSelector(depth, { timeout: 5000 });
+    const depth0 = await probe(depth);
+    const mapping = await page.$eval('[data-osc="studio.inspector.mapping"]', (s) => s.value);
+    await page.selectOption('[data-osc="studio.inspector.mapping"]',
+      mapping === 'log' ? 'linear' : 'log');
+    const depth1 = await read(() => probe(depth), (v) => v.unit && v.unit !== depth0.unit,
+      'the Depth unit follows Mapping');
+    const described = (v) => !!v.unit && v.description.split(' ').includes(v.unit);
+    // C3: Automate on Oscillator 1 Frequency, then a lane removed in the timeline.
+    const auto = (key) => `.osc-si-field[data-field="${key}"] `
+      + '[data-osc="studio.inspector.automate"]';
+    const btn = (key) => page.$eval(auto(key), (b) => ({ text: b.textContent.trim(),
+      pressed: b.getAttribute('aria-pressed'), focused: document.activeElement === b }));
+    const lanes = () => page.evaluate(() => window.OSCILLA.studio.model.timeline.automation
+      .map((l) => `${l.target.node}.${l.target.param}`).sort());
+    await select({ nodes: ['osc-1'] });
+    await page.waitForSelector(auto('frequency'), { timeout: 5000 });
+    const oscBefore = await btn('frequency');
+    await page.focus(auto('frequency'));
+    await page.keyboard.press('Enter');
+    const oscAfter = await read(() => btn('frequency'), (v) => /^Show /.test(v.text),
+      'Automate relabels to Show … lane');
+    const lanesA = await lanes();
+    await H.fresh(page);
+    await select({ nodes: ['filter-1'] });
+    await page.waitForSelector(auto('frequency'), { timeout: 5000 });
+    const filterBefore = await btn('frequency');
+    await page.click('button[aria-label="Remove the Filter 1 Cutoff automation lane"]');
+    const filterAfter = await read(() => btn('frequency'), (v) => /^Automate /.test(v.text),
+      'a removed lane turns the button back to Automate');
+    // Compact chips: the selected one is aria-current, none carries aria-pressed.
+    await page.evaluate(() => window.OSCILLA.app.setWorkspace('playground'));
+    await page.waitForSelector('[data-osc="studio.compact.node"]', { timeout: 5000 });
+    const chips = await read(() => page.evaluate(() => [...document.querySelectorAll(
+      '[data-osc="studio.compact.node"], [data-osc="studio.compact.clip"]')].map((b) => ({
+      id: b.dataset.nodeId || b.dataset.clipId, pressed: b.getAttribute('aria-pressed'),
+      current: b.getAttribute('aria-current') }))), (v) => v.some((c) => c.current === 'true'),
+    'the selected compact chip is aria-current');
+    await page.evaluate(() => window.OSCILLA.app.setWorkspace('studio'));
+    return { ...H.verdict({
+      c2NonNumeric: nonNumeric.invalid === 'true' && /must be a number/.test(nonNumeric.error),
+      c2Refused: startRefused.invalid === 'true' && /Clip start/.test(startRefused.error),
+      c2RefusedBlur: startBlurred.shown === String(startModel) && startBlurred.invalid === null
+        && startModel === 0,
+      c2PositionX: xRefused.invalid === 'true' && !!xRefused.error,
+      c2PositionXBlur: xBlurred.shown === String(oscX) && xBlurred.invalid === null,
+      c2Name: nameRefused.invalid === 'true' && /name must be/.test(nameRefused.error),
+      c2NameBlur: nameBlurred.shown === 'Oscillator 1' && nameBlurred.invalid === null,
+      c8Cutoff: described(cutoff), c8ClipStart: described(clipStart),
+      c8Depth: described(depth0) && described(depth1) && depth1.unit !== depth0.unit,
+      c3Before: oscBefore.text === 'Automate Frequency' && oscBefore.pressed === null,
+      c3After: oscAfter.text === 'Show Frequency lane' && oscAfter.pressed === null
+        && oscAfter.focused && lanesA.includes('osc-1.frequency'),
+      c3Removed: filterBefore.text === 'Show Cutoff lane' && filterAfter.text === 'Automate Cutoff'
+        && filterAfter.pressed === null,
+      c3Chips: chips.every((c) => c.pressed === null)
+        && chips.filter((c) => c.current === 'true').map((c) => c.id).join() === 'filter-1',
+    }), nonNumeric, startRefused, startBlurred, xRefused, xBlurred, nameRefused, nameBlurred,
+    cutoff, clipStart, depth0, depth1, oscBefore, oscAfter, filterBefore, filterAfter, chips };
+  });
+
   def('keyboard-connect', async ({ page }) => {
     await H.fresh(page);
     const id = await page.evaluate(() => window.OSCILLA.studio.store.dispatch({ type: 'NODE_ADD',
@@ -965,7 +1108,7 @@ function defineChecks() {
       const afterDelete = await focusAt(page);
       const deleted = !(await H.model(page)).nodes.some((n) => n.id === 'filter-1');
       const subviewAfterDelete = await page.evaluate(() => window.OSCILLA.app.studio.subview);
-      // U8: "Automated · show lane" on Filter 1 cutoff (the template automates it).
+      // U8: "Show Cutoff lane" on Filter 1 cutoff (the template automates it).
       await inspectorOf('filter-1');
       await H.recordLive(page);
       const laneId = await page.evaluate(() => window.OSCILLA.studio.model.timeline.automation
@@ -1387,6 +1530,43 @@ function defineChecks() {
       + '-desktop-light.png') });
     await page.evaluate(() => { if (window.OSCILLA.app.theme !== 'dark') window.OSCILLA.app.toggleTheme(); });
     return { ...H.verdict({ title: c.title >= 7, port: c.port >= 4.5, cable: c.cable >= 3 }), c };
+  });
+
+  // V272 C6 (§272 review, WCAG 1.4.3): the node's small labels (the category, 9 px, and the
+  // label of a control input, 9.5 px) keep 4.5:1 on the node surface in the dark theme too, as
+  // light-theme already holds for the light one. Read once two readings agree (the controls'
+  // colour transitions have ended).
+  def('dark-theme', async ({ page }) => {
+    await H.fresh(page);
+    await page.evaluate(() => {
+      if (window.OSCILLA.app.theme !== 'dark') window.OSCILLA.app.toggleTheme();
+    });
+    const measure = () => page.evaluate(() => {
+      const parse = (s) => (s.match(/[\d.]+/g) || []).slice(0, 3).map(Number);
+      const lum = ([r, g, b]) => {
+        const f = (v) => { const x = v / 255; return x <= 0.03928 ? x / 12.92
+          : ((x + 0.055) / 1.055) ** 2.4; };
+        return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b);
+      };
+      const ratio = (el) => {
+        const node = el.closest('.osc-sg-node');
+        const [x, y] = [lum(parse(getComputedStyle(el).color)),
+          lum(parse(getComputedStyle(node).backgroundColor))].sort((p, q) => q - p);
+        return Math.round(((x + 0.05) / (y + 0.05)) * 100) / 100;
+      };
+      const min = (sel) => Math.min(...[...document.querySelectorAll(sel)].map(ratio));
+      return { theme: window.OSCILLA.app.theme, cat: min('.osc-sg-cat'),
+        param: min('.osc-sg-port.is-param .osc-sg-plabel'), port: min('.osc-sg-plabel') };
+    });
+    let last = null;
+    const c = await until(async () => {
+      const next = await measure();
+      const same = last && JSON.stringify(next) === JSON.stringify(last);
+      last = next;
+      return same ? next : null;
+    }, { ms: 5000, what: 'dark-theme: two equal contrast readings' }).catch(() => last);
+    return { ...H.verdict({ dark: c.theme === 'dark', cat: c.cat >= 4.5, param: c.param >= 4.5,
+      port: c.port >= 4.5 }), c };
   });
 
   def('screenshots', async ({ page, browserName }) => {
