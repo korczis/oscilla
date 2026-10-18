@@ -8,11 +8,13 @@
 // fails when a file is above its cap, when a file above 40 000 bytes has no cap, when an entry
 // names a missing file or a file of 40 000 bytes or less, or when a cap is above its file's
 // headroom ceiling (so a shrink lowers the cap in the same change). The history check, on the
-// model of tests/unit/browser-timing.test.mjs ('the recorded debt only shrinks'), compares each
-// cap with its effective value in the most recent earlier commit that changed the baseline: a
-// higher cap passes only with a raises entry, new in this change, that names the file, the new
-// cap, the pull request and a reason of more than 30 characters; raises entries are added,
-// never edited. The budget bounds how code is distributed between files, not its total, which
+// model of tests/unit/browser-timing.test.mjs ('the recorded debt only shrinks'), judges every
+// step of the baseline's first-parent git history, the working tree's change included, against
+// the version before it: a cap above its effective value there passes only with a raises entry,
+// new in that step, that names the file, the new cap, the pull request and a reason of more
+// than 30 characters; raises entries are added, never edited. Judging each step on its own
+// keeps an undeclared raise, or an edited entry, from being forgotten once a later change
+// makes another. The budget bounds how code is distributed between files, not its total, which
 // the dist budget of scripts/build-config.mjs bounds.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -152,12 +154,13 @@ export function readBaseline() {
 
 const canonical = (baseline) => JSON.stringify(baseline);
 
-/** The baseline of every commit that changed it, newest first; null without history (a tree
- *  with no commit, as the fail-first job's extracts are). */
+/** The baseline of every commit that changed it, newest first, along the first parents (so
+ *  consecutive versions are parent and descendant, not two sides of a merge); null without
+ *  history (a tree with no commit, as the fail-first job's extracts are). */
 function baselineHistory() {
   const git = (...args) => spawnSync('git', args, { cwd: ROOT, encoding: 'utf8' });
   if (git('rev-parse', '--verify', '-q', 'HEAD').status !== 0) return null;
-  const log = git('log', '--format=%H', '--', BASELINE_REL);
+  const log = git('log', '--first-parent', '--format=%H', '--', BASELINE_REL);
   if (log.status !== 0) return null;
   return log.stdout.split('\n').filter(Boolean).flatMap((sha) => {
     const shown = git('show', `${sha}:${BASELINE_REL}`);
@@ -167,11 +170,23 @@ function baselineHistory() {
   });
 }
 
-/** What `current` raises over the baseline's git history (`history`, newest first): `current`
- *  against the newest version that differs from it. */
+/**
+ * What the baseline's history raises without declaring it. `history` is the version of every
+ * commit that changed the baseline, newest first; `current`, the working tree's, comes before
+ * it when it differs from the newest. Each version is judged against the one before it, on its
+ * own raises entries, so an undeclared raise or an edited entry in one commit is not forgotten
+ * once the next commit makes another change. The oldest version is the record the first caps
+ * were taken in, and its own earlier value.
+ */
 export function capHistoryProblems(current, history) {
-  const earlier = history.find((v) => canonical(v.baseline) !== canonical(current));
-  return earlier ? raiseProblems(current, earlier.baseline, earlier.sha) : [];
+  const committed = history.length && canonical(history[0].baseline) === canonical(current);
+  const chain = (committed ? history : [{ sha: 'the working tree', baseline: current }, ...history])
+    .filter((v, i, all) => i === 0 || canonical(v.baseline) !== canonical(all[i - 1].baseline));
+  return chain.slice(0, -1).flatMap((newer, i) => {
+    const older = chain[i + 1];
+    return raiseProblems(newer.baseline, older.baseline, older.sha)
+      .map((problem) => `${problem} (in ${newer.sha})`);
+  });
 }
 
 const clone = (value) => JSON.parse(JSON.stringify(value));
@@ -201,7 +216,7 @@ test('the baseline has its fields, and its header states the budget', () => {
   }
 });
 
-test('a cap only falls: none is above its value in the most recent earlier commit', (t) => {
+test('a cap only falls: no step in the history of the baseline raises one undeclared', (t) => {
   const history = baselineHistory();
   if (!history || !history.length) {
     if (history && process.env.GITHUB_ACTIONS === 'true') {
@@ -211,13 +226,9 @@ test('a cap only falls: none is above its value in the most recent earlier commi
     t.skip('no git history of the baseline here');
     return;
   }
-  const current = readBaseline();
-  const earlier = history.find((v) => canonical(v.baseline) !== canonical(current));
-  if (!earlier) {
-    t.diagnostic(`the baseline is the record ${history.at(-1).sha} made: its own earlier value`);
-    return;
-  }
-  const problems = capHistoryProblems(current, history);
+  const problems = capHistoryProblems(readBaseline(), history);
+  t.diagnostic(`${history.length} recorded version(s) of the baseline judged, the oldest `
+    + `${history.at(-1).sha} its own earlier value`);
   assert.deepEqual(problems, [], `a cap rose; it may only fall:\n  ${problems.join('\n  ')}`);
 });
 
@@ -415,6 +426,8 @@ test('E001 F1 mutation: a raise without an entry, then an unrelated lowering, st
   ]);
   assert.equal(laundered.length, 1, laundered.join('\n'));
   assert.match(laundered[0], /^raises: the entry .* of declared was edited or removed/);
+  // The same launder with the last step still uncommitted, in the working tree.
+  assert.equal(capHistoryProblems(lowered, history.slice(1)).length, 1, 'uncommitted');
   // The working tree equal to the newest commit, and a declared raise, pass.
   const honest = clone(original);
   honest.caps[file] = raised.caps[file];
