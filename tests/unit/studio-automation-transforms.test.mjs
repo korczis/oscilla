@@ -397,6 +397,20 @@ test('E008: every defect marker still describes a mismatch (remove it with the f
   }
 });
 
+test('rate lane on a Random / Step Modulator plays its value in Hz (E008 defect)', () => {
+  // Strict whatever the rows' markers say: the playbackRate a rate lane schedules is the lane's
+  // value in Hz x 480 / sampleRate, as the static rate and a linear rate edge are.
+  for (const type of ['random', 'step-modulator']) {
+    const row = { ...ROWS.find((r) => !r.case && r.type === type && r.key === 'rate'),
+      defect: undefined };
+    assert.equal(row.toAudio, controlPlaybackRate);
+    for (const sr of RATES) {
+      assert.equal(controlPlaybackRate(8, sr), (8 * 480) / sr);
+      assert.deepEqual(transformMismatches(row, sr), [], `${type}.rate at ${sr} Hz`);
+    }
+  }
+});
+
 test('E008: the table covers a detune lane over a clamped static detune at 44.1 and 48 kHz',
   () => {
     const row = ROWS.find((r) => r.type === 'oscillator' && r.key === 'detune' && r.node
