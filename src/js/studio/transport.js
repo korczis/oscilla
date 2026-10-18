@@ -77,9 +77,11 @@
 //                                lane's parameter owned by the transport (runtime.setOwnedParams:
 //                                the runtime does not glide it); linear modulation offsets are
 //                                added (runtime.baseOffset)
-//   measurement clip             data: onMeasurement({ type: 'schedule', ... }); the Studio
+//   measurement clip             data: onMeasurement({ type: 'schedule', model, ... }); the Studio
 //                                workspace's hook (measurement-run.js) runs the pass through
-//                                the MEASURE MeasurementEngine (docs/v31/timeline.md)
+//                                the MEASURE MeasurementEngine (docs/v31/timeline.md). `model` is
+//                                the model the transport plays: during admit the store has not
+//                                committed it yet, so getModel() would still be the old one
 // Anything else (an event clip on a source, a trigger event, a node that is not ready) is not
 // played and listed with its reason in debugInfo().unplayed.
 //
@@ -719,7 +721,7 @@ export function createStudioTransport({
       const data = measurementData(it);
       measures.set(it.key, data);
       unplayed.delete(it.clipId);
-      measure({ type: 'schedule', ...data });
+      measure({ type: 'schedule', ...data, model });
     }
   }
 

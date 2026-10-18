@@ -121,7 +121,9 @@ export function createStudioMeasurementRun({
     }
     if (view.state === 'running' || handledPasses.has(ev.pass)) return;
     handledPasses.add(ev.pass);
-    const model = getModel();
+    // The model the transport schedules from: an edit re-schedules inside the store's commit
+    // gate, before getModel() returns the new model (V272 B2 with A8).
+    const model = ev.model || getModel();
     const r = recipeFromStudio(model, { sampleRate: sampleRate(),
       profileId: typeof profileId === 'function' ? profileId() : null,
       outputLevel: typeof outputLevel === 'function' ? outputLevel() : null });
