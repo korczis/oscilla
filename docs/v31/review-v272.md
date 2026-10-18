@@ -10,7 +10,7 @@ scoped to single changes.
 
 ## Method
 
-Four independent Claude reviewers each reviewed main at 2d56148 (v3.11.0) through two of the
+Four independent Claude reviewers each reviewed main at 2d56148 (the V3.11 release line) through two of the
 eight lenses. None of them wrote the code and none saw another's work. As in V431, independence
 comes from separate contexts and the evidence rule below, not from different models; the owner
 ruled out other providers.
@@ -89,7 +89,7 @@ plausible failure with concrete evidence; **nit** is a small correctness or clar
 
 | # | Finding | Class | Fix | Test (fails before the fix) |
 | --- | --- | --- | --- | --- |
-| D1 | The release-provenance intent and M035 said the public page proves the release commit. Pages deploys every push with the release version, so the page later showed 3.11.0 over other code, and M035's validation passed on any HEAD. | defect | The stamp records the release state: only the release commit shows the bare version, and a later build shows `<version>+<distance>.g<short>` (ADR 0059). verify-deploy and live-smoke check it. The intent and M035 are restated, and every live validation pins its commit. | `release-provenance.test.mjs` "V272 D1"; `release-validation-pins.test.mjs` |
+| D1 | The release-provenance intent and M035 said the public page proves the release commit. Pages deploys every push with the release version, so the page later showed the V3.11 release version over other code, and M035's validation passed on any HEAD. | defect | The stamp records the release state: only the release commit shows the bare version, and a later build shows `<version>+<distance>.g<short>` (ADR 0059). verify-deploy and live-smoke check it. The intent and M035 are restated, and every live validation pins its commit. | `release-provenance.test.mjs` "V272 D1"; `release-validation-pins.test.mjs` |
 | D4 | Evidence `commit:` was never validated; M034 and V251 cited a commit that exists nowhere. | defect | Every evidence commit must be in the history, apart from an explained list of squash-merged PR heads. The two records now say the commit was not preserved and name the rebased fix. | `plan-evidence-commits.test.mjs` |
 | D5 | The review-verdict guard missed the files of the incident it cites (#139) and the deploy-proof scripts. | defect | Guarded paths now cover measurement, calibration, safety, the build, stamp and verify scripts, and the release rules' tests. | `review-verdict.test.mjs` "V272 D5" |
 | D6 | The receipt bound the tree, not how the gate ran: `OSC_BROWSERS=chromium npm run release:prepare` passed. | risk | release:prepare refuses a narrowed gate, runs with strict skips and records the browsers, origins and skips; publish refuses a receipt that lacks them. | `release-gate-env.test.mjs` |
