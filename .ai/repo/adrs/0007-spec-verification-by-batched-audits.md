@@ -3,7 +3,7 @@ schema: adr/v1
 id: adr-0007
 kind: adr
 title: Spec sections are verified by batched audits against the original text plus section-labelled browser tests
-status: proposed
+status: accepted
 date: 2026-10-02
 tags:
   - verification
@@ -52,3 +52,11 @@ checks run as `tests/browser/engine-v1port.cjs`; the V1 regressions of `tests/sp
 restated in V2 terms in `tests/browser/app.cjs` (the browser gate); V1 behaviour is frozen by
 `tests/unit/freeze.test.mjs`. V2 and later sections are evidenced by the suites listed in
 `tests/README.md` and by `docs/CLAIMS.yaml`.
+
+### 2026-10-18: accepted by the owner
+
+Accepted by the owner (explicit instruction in the session of 2026-10-18, applied by the
+coordinating Claude session) — implemented as described; evidence: V1 sections 1-63 verified and
+tagged `v1.0.0` (ADR 0010); the section-labelled V1 checks carried into `tests/browser/app.cjs`
+and `tests/browser/engine-v1port.cjs`, V1 frozen by `tests/unit/freeze.test.mjs`, later sections
+evidenced by `docs/CLAIMS.yaml` and `majordomus plan evidence` (its 2026-10-05 note).

@@ -3,7 +3,7 @@ schema: adr/v1
 id: adr-0004
 kind: adr
 title: Continuous repeat is a plan kind scheduled ten seconds ahead and topped up
-status: proposed
+status: accepted
 date: 2026-10-02
 tags:
   - audio
@@ -36,3 +36,14 @@ thread), and playback stopped silently at 600 s.
 - If the page's timers stall for more than ten seconds the sweep holds its last frequency
   (whole envelope) or goes silent (segment envelope) until the next top-up.
 - Consumers that test `kind === 'finite'` treat a continuous plan as open-ended.
+
+## Resolution notes
+
+### 2026-10-18: accepted by the owner
+
+Accepted by the owner (explicit instruction in the session of 2026-10-18, applied by the
+coordinating Claude session) — implemented as described; evidence: claim
+`sweep-rises-through-range`; the continuous plan kind in `src/js/audio/patterns.js` and the
+`SCHEDULE_AHEAD_S` top-up in `src/js/audio/scheduler.js`; the "continuous sweep" checks (about
+10 s ahead, topped up, "repeats until stopped", 0 oscillators after stop) in
+`tests/browser/engine-v1port.cjs` (CI).

@@ -3,7 +3,7 @@ schema: adr/v1
 id: adr-0043
 kind: adr
 title: Runs are executed from a versioned experiment definition
-status: proposed
+status: accepted
 date: 2026-10-05
 tags:
   - measurement
@@ -207,3 +207,10 @@ Decided:
 Proven by `tests/unit/v4-measurement-truth.test.mjs` (the D4 tests, which failed before the
 change) and check `unmeasurable-stimulus` in `tests/browser/v3-ui.cjs` (chromium, firefox and
 webkit over file:// and /oscilla/).
+
+### 2026-10-18: accepted by the owner
+
+Accepted by the owner (explicit instruction in the session of 2026-10-18, applied by the
+coordinating Claude session) — implemented as described; evidence: claims
+`experiment-definitions` and `measurable-stimulus-only`; `src/js/experiments/definition.js`;
+`tests/unit/v3-experiment-definitions.test.mjs` and `tests/unit/v4-measurement-truth.test.mjs`.

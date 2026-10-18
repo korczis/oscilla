@@ -3,7 +3,7 @@ schema: adr/v1
 id: adr-0016
 kind: adr
 title: p5 draws conceptual views, uPlot draws quantitative charts, custom canvas draws the spectrogram and editors, on one frame loop
-status: proposed
+status: accepted
 date: 2026-10-02
 tags:
   - visualization
@@ -52,3 +52,13 @@ frame is too slow at desktop sizes.
 - V3 result charts (frequency response, impulse response, RTA) extend this split: uPlot for
   response and IR curves, custom bars or uPlot for bands; charts render result objects and never
   own measurement data (ADR 0018).
+
+## Resolution notes
+
+### 2026-10-18: accepted by the owner
+
+Accepted by the owner (explicit instruction in the session of 2026-10-18, applied by the
+coordinating Claude session) — implemented as described; evidence: claims `spectrogram-mapping`
+and `phase-and-lissajous-model`; `src/js/visualization/p5-host.js`, the uPlot charts under
+`src/js/charts/`, the OffscreenCanvas ring of `src/js/analysis/spectrogram.js` and the one loop
+of `src/js/charts/frame-loop.js`.

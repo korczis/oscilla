@@ -3,7 +3,7 @@ schema: adr/v1
 id: adr-0002
 kind: adr
 title: A new voice fades every earlier one out first; a waveshaper ceiling backs up the output cap
-status: proposed
+status: accepted
 date: 2026-10-02
 tags:
   - audio
@@ -57,3 +57,12 @@ Appended; the sections above are left as written, and the status stays `proposed
 V1's single file in the V2 change (9fe0a15, #3) and stay readable at tag `v1.0.0`. The
 voice-count and peak checks run on the current engine as `tests/browser/engine-v1port.cjs`
 (`npm run test:engine`, in CI).
+
+### 2026-10-18: accepted by the owner
+
+Accepted by the owner (explicit instruction in the session of 2026-10-18, applied by the
+coordinating Claude session) — implemented as described; evidence: `play()` fades every earlier
+voice with `FAST_RELEASE_S` and starts the new one after it, and `ceilingCurve(MAX_OUTPUT_GAIN)`
+is the 4097-point WaveShaper after `trim` (`src/js/audio/audio-engine.js`,
+`src/js/audio/scheduler.js`); the checks "20 retriggers with release 3000 ms" (peak at most the
+cap, at most 2 voices) in `tests/browser/engine-v1port.cjs` (`npm run test:engine`, CI).

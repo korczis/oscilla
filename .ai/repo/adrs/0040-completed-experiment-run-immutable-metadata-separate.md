@@ -3,7 +3,7 @@ schema: adr/v1
 id: adr-0040
 kind: adr
 title: A completed experiment run is immutable; metadata is separate
-status: proposed
+status: accepted
 date: 2026-10-04
 tags:
   - measurement
@@ -214,3 +214,12 @@ measurement starts:
 Proven by `tests/unit/v3-evidence-at-completion.test.mjs` and checks `evidence-at-completion`,
 `resave-after-link`, `notes-after-save` and `older-claim` in `tests/browser/v3-ui.cjs`
 (chromium, firefox, webkit; file:// and /oscilla/).
+
+### 2026-10-18: accepted by the owner
+
+Accepted by the owner (explicit instruction in the session of 2026-10-18, applied by the
+coordinating Claude session) — implemented as described; evidence: claims
+`experiment-run-immutable` and `experiment-calibration-as-measured`;
+`src/js/experiments/store.js` and `src/js/experiments/schema.js`;
+`tests/unit/v3-experiment-immutable.test.mjs` and
+`tests/unit/v3-evidence-at-completion.test.mjs`.

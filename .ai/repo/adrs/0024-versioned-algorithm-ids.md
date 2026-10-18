@@ -3,7 +3,7 @@ schema: adr/v1
 id: adr-0024
 kind: adr
 title: Every stored result names the algorithm that produced it by a stable versioned ID; a material change mints a new ID
-status: proposed
+status: accepted
 date: 2026-10-02
 tags:
   - dsp
@@ -68,3 +68,11 @@ current `v4`), and the import allow-list (`KNOWN_ALGORITHM_IDS`). Several IDs ha
 minted anew for material changes, as decided (V382 among them). Golden fixtures under
 `tests/unit/fixtures/v3/` pin each ID's output (`tests/unit/v3-golden.test.mjs`), and an
 unknown ID is refused on import. Proven by claim `algorithm-ids-on-results`.
+
+### 2026-10-18: accepted by the owner
+
+Accepted by the owner (explicit instruction in the session of 2026-10-18, applied by the
+coordinating Claude session) — implemented as described; evidence: claim
+`algorithm-ids-on-results`; the registry `src/js/measurement/algorithms.js` (`ALGORITHMS`,
+`RETAINED_ALGORITHMS`, `KNOWN_ALGORITHM_IDS`); `tests/unit/v3-golden.test.mjs` (its 2026-10-05
+note).

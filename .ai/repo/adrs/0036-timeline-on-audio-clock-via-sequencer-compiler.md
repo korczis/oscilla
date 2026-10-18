@@ -3,7 +3,7 @@ schema: adr/v1
 id: adr-0036
 kind: adr
 title: The Studio timeline runs on the audio clock through the existing sequencer compiler, in absolute seconds
-status: proposed
+status: accepted
 date: 2026-10-02
 tags:
   - studio
@@ -75,3 +75,13 @@ Proposed:
   the timeline test (specification §212) shows clip starts and loop boundaries at the
   scheduled AudioContext times within one render quantum, live and offline renders of one
   timeline agree, and stop and Escape leave zero nodes.
+
+## Resolution notes
+
+### 2026-10-18: accepted by the owner
+
+Accepted by the owner (explicit instruction in the session of 2026-10-18, applied by the
+coordinating Claude session) — implemented as described; evidence: claim
+`studio-transport-audio-clock` (`tests/browser/v31-studio-transport.cjs`);
+`src/js/studio/timeline-compiler.js` compiles clips through `src/js/sequencer/compiler.js`
+`buildTimeline` and `planFromTimeline`; `tests/unit/v31-studio-timeline.test.mjs`.

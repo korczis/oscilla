@@ -3,7 +3,7 @@ schema: adr/v1
 id: adr-0022
 kind: adr
 title: Experiments persist in IndexedDB with an in-memory fallback; file export and import are the durable path
-status: proposed
+status: accepted
 date: 2026-10-02
 tags:
   - storage
@@ -76,3 +76,11 @@ V3.6 a completed run is immutable in the store (ADR 0040). The confirmation crit
 check persistence in `tests/browser/v3-ui.cjs`, per browser and origin, which reloads the
 page and reads the record back or reports the memory fallback. Proven by claims
 `experiment-persistence`, `experiment-import-validated` and `experiment-run-immutable`.
+
+### 2026-10-18: accepted by the owner
+
+Accepted by the owner (explicit instruction in the session of 2026-10-18, applied by the
+coordinating Claude session) — implemented as described; evidence: claims
+`experiment-persistence`, `experiment-import-validated` and `experiment-run-immutable`;
+`src/js/experiments/store.js` and `src/js/experiments/validate.js`; check `persistence` in
+`tests/browser/v3-ui.cjs` (its 2026-10-05 note).

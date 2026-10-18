@@ -3,7 +3,7 @@ schema: adr/v1
 id: adr-0046
 kind: adr
 title: A finding is an interpretation linked to the evidence it rests on, never measurement truth
-status: proposed
+status: accepted
 date: 2026-10-06
 tags:
   - experiments
@@ -216,3 +216,12 @@ Proposed:
   supported, the backlinks, the export carrying the result hash, deleting the cited experiment with
   the dialog's warning and the missing reference, 390 px, light theme; chromium, firefox and
   webkit over file:// and /oscilla/).
+
+## Resolution notes
+
+### 2026-10-18: accepted by the owner
+
+Accepted by the owner (explicit instruction in the session of 2026-10-18, applied by the
+coordinating Claude session) — implemented as described; evidence: claim
+`findings-linked-to-evidence`; `src/js/experiments/findings.js`;
+`tests/unit/v4-findings.test.mjs`.

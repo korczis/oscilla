@@ -3,7 +3,7 @@ schema: adr/v1
 id: adr-0006
 kind: adr
 title: The audio engine is verified on a sample-accurate output tap, not on its own bookkeeping
-status: proposed
+status: accepted
 date: 2026-10-02
 tags:
   - testing
@@ -57,3 +57,11 @@ V1's single file in the V2 change (9fe0a15, #3) and stay readable at tag `v1.0.0
 instrumentation this decision describes (independent oscillator accounting, the AudioParam log
 and the frame-indexed output tap) is carried verbatim by `tests/browser/engine-v1port.cjs`
 (`npm run test:engine`, in CI), which runs V1's engine checks against the current modules.
+
+### 2026-10-18: accepted by the owner
+
+Accepted by the owner (explicit instruction in the session of 2026-10-18, applied by the
+coordinating Claude session) — implemented as described; evidence: the independent oscillator
+accounting, the AudioParam log, the frame-indexed AudioWorklet output tap (blob:, then data:,
+then ScriptProcessor) and the forced 22 050 / 32 000 Hz runs in
+`tests/browser/engine-v1port.cjs`, run by `npm run test:engine` in CI (its 2026-10-05 note).

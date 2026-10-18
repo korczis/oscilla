@@ -3,7 +3,7 @@ schema: adr/v1
 id: adr-0035
 kind: adr
 title: The StudioModel compiles into the existing AudioEngine and measurement engine, and edits patch the running graph incrementally in transactions
-status: proposed
+status: accepted
 date: 2026-10-02
 tags:
   - studio
@@ -206,3 +206,12 @@ cleared when a move takes its revision number, and `sameExecutionState` agreeing
 `studioHash` on node, edge, track, clip, automation, loop and transport edits; it fails on the
 code before the change) and `presentation-edit` in `tests/browser/v31-studio-runtime.cjs`
 (a node dragged while the Basic Tone plays: no compile, no glitch on the output).
+
+### 2026-10-18: accepted by the owner
+
+Accepted by the owner (explicit instruction in the session of 2026-10-18, applied by the
+coordinating Claude session) — implemented as described; evidence: claims
+`studio-compiled-topology` and `studio-click-free-live-edit`
+(`tests/browser/v31-studio-audio.cjs`); the commit gate and the closures its notes record
+(`tests/unit/v431-studio-refused-edit.test.mjs`,
+`tests/unit/v40-studio-runtime-closure.test.mjs`, `tests/unit/v4-presentation-edits.test.mjs`).

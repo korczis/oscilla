@@ -3,7 +3,7 @@ schema: adr/v1
 id: adr-0025
 kind: adr
 title: Measurement quality is a rule-based status (GOOD, USABLE, POOR, INVALID) computed from named metrics, always with its reasons
-status: proposed
+status: accepted
 date: 2026-10-02
 tags:
   - measurement
@@ -56,3 +56,11 @@ Proposed:
 - Confirmation criteria: synthetic cases (clean repeated, low SNR, clipped, high variance, missing
   calibration, partial coverage) yield the expected status and reasons that name the cause
   (§143); no status is ever shown without at least one reason.
+
+## Resolution notes
+
+### 2026-10-18: accepted by the owner
+
+Accepted by the owner (explicit instruction in the session of 2026-10-18, applied by the
+coordinating Claude session) — implemented as described; evidence: claim `measurement-quality`;
+`src/js/measurement/quality.js`; `tests/unit/v3-quality.test.mjs`.

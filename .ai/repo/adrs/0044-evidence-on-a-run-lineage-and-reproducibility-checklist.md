@@ -3,7 +3,7 @@ schema: adr/v1
 id: adr-0044
 kind: adr
 title: Evidence on a run is read from stored fields, as a lineage and a checklist, never a score
-status: proposed
+status: accepted
 date: 2026-10-06
 tags:
   - measurement
@@ -194,3 +194,9 @@ This decision stated three facts of the ledger it must not contradict. Each was 
   show which input it was taken with, and the item stays partial for it.
 - **D4, the recipe item.** It stays partial for a stimulus this build cannot measure and gives
   the reason the import finding gives (ADR 0043, resolution 2026-10-06).
+
+### 2026-10-18: accepted by the owner
+
+Accepted by the owner (explicit instruction in the session of 2026-10-18, applied by the
+coordinating Claude session) — implemented as described; evidence: claim `run-evidence`;
+`src/js/experiments/evidence.js`; `tests/unit/v3-run-evidence.test.mjs`.

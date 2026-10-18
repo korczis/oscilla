@@ -3,7 +3,7 @@ schema: adr/v1
 id: adr-0032
 kind: adr
 title: Studio ports are typed with roles, and connection validity is pure model logic checked before any runtime mutation
-status: proposed
+status: accepted
 date: 2026-10-02
 tags:
   - studio
@@ -80,3 +80,13 @@ Recorded as a Majordomus decision and repeated here: `STUDIO_IMPORT_LIMITS` are 
 before parsing, nesting depth 12, 512 nodes, 2048 edges, 64 tracks, 2048 clips, 512
 automation lanes, 20000 automation points (4096 per lane), 512 markers, strings of 256
 characters (names 64, notes 10000).
+
+## Resolution notes
+
+### 2026-10-18: accepted by the owner
+
+Accepted by the owner (explicit instruction in the session of 2026-10-18, applied by the
+coordinating Claude session) — implemented as described; evidence: claims
+`studio-typed-connections`, `studio-untrusted-import` and `studio-measurement-topology`;
+`canConnect` in `src/js/studio/ports.js`, used by `src/js/ui/studio/graph-view.js`;
+`STUDIO_IMPORT_LIMITS` in `src/js/studio/validate.js`.
