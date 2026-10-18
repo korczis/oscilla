@@ -49,6 +49,8 @@
 //   v272-c5-keyboard-multiselect  V272 C5: Tab, T, Shift+Tab select Oscillator 1 and Envelope 1
 //                        by keyboard alone; Save as patch covers both; T removes; Ctrl/Cmd A
 //                        then Tab keeps the selection
+//   v272-c7-add-status   V272 C7: the Add node dialog's status region says "No node type
+//                        matches" and counts the matches
 //   inspector-focus      V431 U2: keyboard Enter on an Inspector connection link, "Select
 //                        source" and "Duplicate" lands on the resulting view's heading or the
 //                        same action of the copy, never <body>
@@ -1075,6 +1077,40 @@ function defineChecks() {
       tRemoves: removed === 'env-1',
       selectAllThenTab: all.split(',').length > 2 && allKept === all,
     }), first, second, both, back, kept, info, removed, all, allKept };
+  });
+
+  def('v272-c7-add-status', async ({ page }) => {
+    // V272 C7 (WCAG status messages): the Add node dialog says what its search found, in a
+    // status region inside the dialog that describes the search field.
+    const status = () => page.evaluate(() => {
+      const s = document.querySelector('#osc-dlg-studio-add [data-osc="studio.add.status"]');
+      const q = document.querySelector('[data-osc="studio.add.search"]');
+      return s ? { role: s.getAttribute('role'), text: s.textContent.trim(),
+        describes: !!s.id && (q.getAttribute('aria-describedby') || '').split(' ')
+          .includes(s.id) } : { role: null, text: '', describes: false };
+    });
+    await H.fresh(page);
+    const n0 = (await H.model(page)).nodes.length;
+    await page.focus('.osc-sg-viewport');
+    await page.keyboard.press('n');
+    await H.settle(() => H.where(page), (a) => a === 'studio.add.search',
+      'C7: the Add node search has focus');
+    await page.keyboard.type('zzz');
+    const none = await H.settle(status, (s) => /No node type matches/.test(s.text),
+      'C7: no match is said');
+    await page.keyboard.press('Enter');
+    const stillOpen = await page.evaluate(() => document.getElementById('osc-dlg-studio-add')
+      .open);
+    const n1 = (await H.model(page)).nodes.length;
+    await page.fill('[data-osc="studio.add.search"]', 'filter');
+    const some = await H.settle(status, (s) => /^\d+ node types? match/.test(s.text),
+      'C7: matches are counted');
+    await page.keyboard.press('Escape');
+    return { ...H.verdict({
+      noMatchSaid: none.role === 'status' && none.describes,
+      enterAddsNothing: stillOpen && n1 === n0,
+      matchesCounted: some.role === 'status' && /^\d+ node types? match/.test(some.text),
+    }), none, some };
   });
 
   /** In-page: where focus is (for the Inspector checks); `shown` when it can be seen. */
