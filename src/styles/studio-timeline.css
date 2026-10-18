@@ -187,8 +187,10 @@
   border-bottom: 1px solid var(--osc-border-strong);
 }
 
+/* 10 px: the secondary-readout token keeps 4.5:1 in both themes (--osc-text-dim did not,
+   §272 C6). */
 .osc-stl-corner .osc-label {
-  color: var(--osc-text-dim);
+  color: var(--osc-text-muted);
   font-size: var(--osc-fs-2xs);
   letter-spacing: 0.06em;
   text-transform: uppercase;

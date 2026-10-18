@@ -87,9 +87,12 @@ rest.
 ## Edit parameters
 
 Select a node: the **Inspector** shows its parameters with their units and ranges. Type a value
-("2.4k" for 2400 Hz) or use the slider; a value out of range is refused with the range. Each
-edit is one undo step (Ctrl/⌘ Z). **Automate** creates the parameter's automation lane, or shows
-it when it exists.
+("2.4k" for 2400 Hz) or use the slider; a value out of range is refused with the range, shown on
+the field, and the field shows the stored value again once you leave it (Escape restores it at
+once). Each edit is one undo step (Ctrl/⌘ Z). **Automate <parameter>** creates the parameter's
+automation lane; once the lane exists the button reads **Show <parameter> lane** and the field
+reads "Base …": the lane sets the parameter, and the value typed there is used only without
+the lane.
 
 A **Microphone** node starts with its input off. Select it and choose **Allow microphone** in the
 Inspector: the browser asks for permission, and once it is given the node opens the input when
