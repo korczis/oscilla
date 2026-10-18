@@ -10,14 +10,17 @@ import assert from 'node:assert/strict';
 import { AudioEngine } from '../../src/js/audio/audio-engine.js';
 import { getSchedule, valueAtTime } from '../../src/js/audio/envelope.js';
 import { createIdGenerator, createStudioStore } from '../../src/js/studio/actions.js';
+import { STUDIO_STOP_S } from '../../src/js/studio/compiler.js';
 import { createStudioMeasurementRun } from '../../src/js/studio/measurement-run.js';
+import { planOfflineRender, renderStudioOffline } from '../../src/js/studio/offline.js';
 import { createStudioRuntime } from '../../src/js/studio/runtime.js';
 import { createStudioModel } from '../../src/js/studio/schema.js';
+import { timelineEnd } from '../../src/js/studio/timeline.js';
 import {
   MEASUREMENT_TEMPLATE_ID, REFERENCE_TEMPLATE_ID, templateModel,
 } from '../../src/js/studio/templates/index.js';
 import { createStudioTransport } from '../../src/js/studio/transport.js';
-import { createFakeAudioEnv } from './sequencer-fake-audio.mjs';
+import { StudioFakeContext, createFakeAudioEnv } from './sequencer-fake-audio.mjs';
 
 const SR = 48000;
 
@@ -285,4 +288,47 @@ test('V272 B9: overlapping gates on one Envelope release at the later end', () =
   const [t05, t09] = gatesAt([[0, 0.5], [0.5, 0.5]], [0.505, 0.9]);
   assert.ok(t05 > SUSTAIN, `the second gate's attack at 0.5 s: ${t05}`);
   assert.ok(near(t09, SUSTAIN), `then its sustain: ${t09}`);
+});
+
+// ---------------------------------------------------------------- B11
+
+function fakeOfflineCtor(made) {
+  return class extends StudioFakeContext {
+    constructor({ numberOfChannels, length, sampleRate }) {
+      super({ sampleRate, state: 'suspended' });
+      this.numberOfChannels = numberOfChannels;
+      this.length = length;
+      made.push(this);
+    }
+
+    startRendering() {
+      return Promise.resolve(this.createBuffer(this.numberOfChannels, this.length,
+        this.sampleRate));
+    }
+  };
+}
+
+test('V272 B11: the default offline render keeps the end of the last clip', async () => {
+  const model = templateModel(REFERENCE_TEMPLATE_ID);
+  const made = [];
+  const r = await renderStudioOffline(model, { sampleRate: SR,
+    OfflineAudioContext: fakeOfflineCtor(made) });
+  assert.ok(r.ok, JSON.stringify(r.errors));
+  const ctx = made[0];
+  const bufferEnd = ctx.length / ctx.sampleRate;
+  const lastEnd = r.startTime + timelineEnd(model); // the last clip's end on the audio clock
+  const master = ctx.created.find((n) => n.kind === 'gain' && n.outputs.includes(ctx.destination));
+  const fade = master.gain.calls.find((c) => c[0] === 'setValueAtTime');
+  assert.ok(lastEnd <= fade[2] + 1e-9, `the output fade (${fade[2]} s) starts after the last `
+    + `clip's end (${lastEnd} s)`);
+  assert.ok(bufferEnd >= lastEnd + STUDIO_STOP_S - 1e-9, `buffer ${bufferEnd} s`);
+  // The plan says how long the default render is: the timeline, its start time and the fade.
+  const plan = planOfflineRender(model);
+  assert.ok(plan.duration >= r.startTime + timelineEnd(model) + STUDIO_STOP_S - 1e-9);
+  assert.equal(plan.duration, r.plan.duration);
+  // An explicit duration is the buffer length, as before.
+  const two = [];
+  ok(await renderStudioOffline(model, { duration: 2, sampleRate: SR,
+    OfflineAudioContext: fakeOfflineCtor(two) }));
+  assert.equal(two[0].length, 2 * SR);
 });
