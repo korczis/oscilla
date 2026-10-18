@@ -1,0 +1,18 @@
+id: M045
+title: "MIDI jam companion: first usable version"
+slug: midi-jam-companion
+order: 45
+priority: p2
+problem: "OSCILLA can sound, analyse and measure, but it cannot play with a musician: there is no MIDI input, so a player cannot jam with it and see what their playing does to the sound."
+outcome: "A player connects a MIDI keyboard; OSCILLA shows incoming notes, sounds them through its engine, answers in one bounded deterministic response mode, shows incoming and generated notes beside the spectrum and waveform, and records the jam into an editable event track; without Web MIDI, OSCILLA is unchanged (ADR 0058)."
+acceptance_criteria:
+  - "The MIDI support state is detected and stated, and its absence changes nothing else (V501)."
+  - "MIDI notes sound through the AudioEngine within its safety limits (V502)."
+  - "One deterministic response mode plays on the audio clock (V503)."
+  - "Incoming and generated notes are visible beside the spectrum and waveform (V504)."
+  - "A jam records into an editable event track that saves, reloads and replays identically (V505)."
+validation:
+  - "npm run release-gate"
+evidence_required:
+  - "milestone_verified"
+created_at: 2026-10-18

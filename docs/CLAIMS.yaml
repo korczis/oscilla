@@ -681,3 +681,44 @@ claims:
     status: guaranteed
     responsibility: product
     note: 'Every v31-studio-graph.cjs check runs from file:// and the smoke checks from the sub-path, each ending with no-console-errors; tests/browser/v31-studio-timeline.cjs runs every check from both origins. That nothing is fetched is claim dist-self-contained (scripts/verify-dist.mjs). From file:// the browser''s storage may be unavailable; the library then keeps projects in memory and says so.'
+
+  # ---- MIDI jam companion (M045, ADR 0058), planned
+  - id: midi-support-state
+    claim: 'OSCILLA will state whether Web MIDI is unsupported, needs permission, is denied, has no devices or is connected (naming the devices), and nothing else will change when MIDI is absent.'
+    source: .ai/repo/adrs/0058-midi-is-an-optional-local-input-layer-over-the-audio-engine.md
+    implementation: '-'
+    test: '-'
+    status: planned
+    note: 'Issue V501. Which gate browsers and origins expose Web MIDI is to be measured, not assumed.'
+
+  - id: midi-notes-sound
+    claim: 'Note On and Note Off from a MIDI input will sound through the AudioEngine, with velocity under the safety level cap, bounded polyphony and click-free starts and stops.'
+    source: .ai/repo/adrs/0058-midi-is-an-optional-local-input-layer-over-the-audio-engine.md
+    implementation: '-'
+    test: '-'
+    status: planned
+    note: 'Issue V502.'
+
+  - id: midi-response-deterministic
+    claim: 'A MIDI response mode will produce the same output events for the same input events, scheduled on the audio clock, with no network call or model inference in the path.'
+    source: .ai/repo/adrs/0058-midi-is-an-optional-local-input-layer-over-the-audio-engine.md
+    implementation: '-'
+    test: '-'
+    status: planned
+    note: 'Issue V503.'
+
+  - id: midi-notes-visible
+    claim: 'Incoming and generated MIDI notes will be shown with their names and velocities beside the spectrum and waveform.'
+    source: .ai/repo/adrs/0058-midi-is-an-optional-local-input-layer-over-the-audio-engine.md
+    implementation: '-'
+    test: '-'
+    status: planned
+    note: 'Issue V504.'
+
+  - id: midi-jam-recorded
+    claim: 'A MIDI jam will be recorded as an editable event track that saves, reloads and replays identically.'
+    source: .ai/repo/adrs/0058-midi-is-an-optional-local-input-layer-over-the-audio-engine.md
+    implementation: '-'
+    test: '-'
+    status: planned
+    note: 'Issue V505; where the track lives is decided against project.studio-model-is-canonical.'
