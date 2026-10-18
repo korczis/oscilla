@@ -3,7 +3,7 @@ schema: adr/v1
 id: adr-0016
 kind: adr
 title: p5 draws conceptual views, uPlot draws quantitative charts, custom canvas draws the spectrogram and editors, on one frame loop
-status: accepted
+status: proposed
 date: 2026-10-02
 tags:
   - visualization
@@ -62,3 +62,13 @@ coordinating Claude session) — implemented as described; evidence: claims `spe
 and `phase-and-lissajous-model`; `src/js/visualization/p5-host.js`, the uPlot charts under
 `src/js/charts/`, the OffscreenCanvas ring of `src/js/analysis/spectrogram.js` and the one loop
 of `src/js/charts/frame-loop.js`.
+
+### 2026-10-18: acceptance withdrawn
+
+The independent review of the acceptance (pull request #198, finding R-1) showed the decision
+is not implemented as written: not every live renderer subscribes to the one loop of
+`src/js/charts/frame-loop.js` — p5 runs its own draw loop (`src/js/visualization/visualization-bridge.js`)
+and the Studio playhead and graph editor run their own requestAnimationFrame chains
+(`src/js/ui/studio/workspace.js`, `src/js/ui/studio/graph-editor.js`). The status returns to
+`proposed` until the decision is scoped to what it covers or the renderers follow it; the note
+above is kept as history.

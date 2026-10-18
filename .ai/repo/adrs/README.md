@@ -42,6 +42,8 @@ accepted` lists them. The rest stay `proposed`, each for a stated reason:
   the owner's call.
 - 0011: Pages no longer serves the committed file unchanged; it stamps one metadata region
   (ADR 0028).
+- 0016: accepted on 2026-10-18 and withdrawn the same day after the review of the acceptance
+  (pull request #198, R-1): not every live renderer follows the one frame loop it decides.
 - 0019: the configuration hash covers the calibration, sample rate, algorithms and build
   besides the recipe (`src/js/experiments/hash.js`), and the setup a user repeats is now
   named by a definition version (ADR 0043).
@@ -59,6 +61,7 @@ accepted` lists them. The rest stay `proposed`, each for a stated reason:
   `src/js/measurement/` are not built.
 - 0053: the user-visible "run" strings its consequences list are not changed yet.
 - 0058: a proposed direction; nothing implements it.
+- 0059: new on 2026-10-18 (pull request #197) and `extracted`; it amends 0028.
 
 A worker still never promotes a status without the owner: this was the owner's act, and a
 later acceptance, supersession or rejection is too.
