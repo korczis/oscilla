@@ -47,6 +47,13 @@
 //                       click replaces every row object, so the bindings of all 500 rows are
 //                       evaluated again; no row element changes) is reported, not budgeted
 //   no-console-errors
+//   frame-time          SPIKE (E012, branch spike/p5-canvas2d; only with --frame-time, never
+//                       budgeted): the per-frame cost of every p5 view of the primary analysis
+//                       host and of the Phase & Stereo view on an idle page. Per view:
+//                       --frame-batches batches (default 30) of --frame-batch redraws (default
+//                       10) each followed by a 1-pixel getImageData, so the rasterised frame is
+//                       counted, not only the recorded commands; reported in ms per frame
+//                       (median and min over the batches). Ten warm-up batches are not counted.
 //
 // Where a click's time ends: in the first requestAnimationFrame callback in which the
 // condition holds, which runs before that frame's style, layout and paint. The numbers
@@ -83,6 +90,11 @@ const LIBRARY_SAMPLES = Number(arg('library-samples', '5'));
 const CACHE = path.resolve(arg('cache', path.join(os.tmpdir(), 'oscilla-perf-cache')));
 const MEASURE_ONLY = flag('measure-only');
 const JSON_OUT = arg('json', '');
+const FRAME_TIME = flag('frame-time');
+const FRAME_BATCH = Number(arg('frame-batch', '10'));
+const FRAME_BATCHES = Number(arg('frame-batches', '30'));
+// The views of the primary analysis host (main.js) and the phase lab's view.
+const FRAME_VIEWS = ['scope', 'wave', 'path', 'interference', 'harmonicBars'];
 const BUDGET_FILE = path.join(__dirname, 'fixtures', 'perf-budgets.json');
 // Measuring the first budgets needs no budget file; asserting them does.
 const BUDGETS = MEASURE_ONLY && !fs.existsSync(BUDGET_FILE) ? { budgets: {} }
@@ -299,6 +311,45 @@ function seedChunk({ db: name, experiments, definitions, studio }) {
       tx.onabort = refuse('abort');
     };
   });
+}
+
+/**
+ * SPIKE (E012): ms per frame of each p5 view on an idle page (see frame-time above). The
+ * primary host's instance is window.OSCILLA.host.p5; the phase view's is labs.phase.view.
+ */
+function frameTimes({ views, batch, batches }) {
+  const time = (redraw, canvas) => {
+    const ctx = canvas.getContext('2d');
+    const one = () => {
+      const t0 = performance.now();
+      for (let i = 0; i < batch; i++) redraw();
+      ctx.getImageData(0, 0, 1, 1);
+      return (performance.now() - t0) / batch;
+    };
+    for (let i = 0; i < 10; i++) one();
+    const xs = [];
+    for (let i = 0; i < batches; i++) xs.push(one());
+    return xs;
+  };
+  const out = {};
+  const O = window.OSCILLA;
+  const host = O.host;
+  const p = host && host.p5;
+  const before = host ? host.view : null;
+  for (const id of views) {
+    if (!p || !p.canvas) { out[id] = null; continue; }
+    host.setView(id);
+    out[id] = time(() => p.redraw(), p.canvas);
+  }
+  if (host) host.setView(before);
+  const phase = O.labs && O.labs.phase && O.labs.phase.view;
+  const inst = phase && phase.instance;
+  const visible = inst && inst.canvas && inst.canvas.parentNode
+    && inst.canvas.parentNode.clientWidth > 0;
+  out.phaseStereo = visible ? time(() => inst.redraw(), inst.canvas) : null;
+  return { views: out, dpr: window.devicePixelRatio,
+    canvas: p && p.canvas ? [p.canvas.width, p.canvas.height] : null,
+    phaseCanvas: visible ? [inst.canvas.width, inst.canvas.height] : null };
 }
 
 // ------------------------------------------------------------------------------ node side
@@ -526,6 +577,31 @@ function defineChecks() {
   def('experiments-list', series('list', 'experimentsList'));
   def('experiment-detail', series('detail', 'experimentDetail'));
   def('compare', series('compare', 'compare'));
+
+  if (FRAME_TIME) {
+    def('frame-time', async (ctx) => {
+      const context = await ctx.browser.newContext({ viewport: VIEWPORT, reducedMotion: 'reduce' });
+      try {
+        const page = await readyPage(context, ctx.url, ctx.errors, { studio: false });
+        await settle(page);
+        const r = await page.evaluate(frameTimes, { views: FRAME_VIEWS, batch: FRAME_BATCH,
+          batches: FRAME_BATCHES });
+        const views = {};
+        const ms3 = (x) => Math.round(x * 1000) / 1000;
+        for (const [id, xs] of Object.entries(r.views)) {
+          views[id] = xs ? { median: ms3(median(xs)), min: ms3(Math.min(...xs)),
+            max: ms3(Math.max(...xs)), batches: xs.length } : null;
+        }
+        const line = Object.entries(views).map(([id, v]) => `${id} ${v ? v.median : 'n/a'}`)
+          .join(', ');
+        console.log(`    frame-time ${ctx.browserName} (ms/frame, median): ${line}`);
+        return { ok: views.scope !== null, views, dpr: r.dpr, canvas: r.canvas,
+          phaseCanvas: r.phaseCanvas };
+      } finally {
+        await closeQuietly(context, 'closing the frame-time context');
+      }
+    });
+  }
 
   def('no-console-errors', async (ctx) => ({ ok: ctx.errors.length === 0,
     errors: ctx.errors.slice(0, 8) }));
