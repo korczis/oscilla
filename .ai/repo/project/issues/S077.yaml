@@ -10,6 +10,8 @@ scope:
   - "tests"
 depends_on:
   - "S000"
+  - "Q001"
+current_state: "Text exists, not adopted: section 77, \"Link Audit\", of the numbered multi-page V1 specification, recorded verbatim in docs/specs/oscilla-v1-sections-64-95.md (ChatGPT project conversation 6abec18d, 2026-10-01T20:46:12Z). Its numbering and premises differ from the single-file prompt of S001-S063, and parts of it conflict with the single-file deliverable rule and with later ADRs, so before any work this section is triaged against them. Whether M005 adopts the text at all is the owner's decision Q001, and this issue waits on it."
 acceptance_criteria:
   - "The pasted specification was truncated inside section 63; this section's text was never delivered. Blocked until the text is supplied."
 validation:
@@ -17,3 +19,4 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-01
+updated_at: 2026-10-18

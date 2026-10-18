@@ -35,3 +35,28 @@ they owe no contract until this repository decides to describe them
 majordomus plan next          # the issues whose dependencies are satisfied
 majordomus plan validate      # the graph: acyclic, every edge resolves
 ```
+
+## Issue identifiers
+
+An issue's id is a letter and three digits; the letter says which line of work it belongs to,
+and nothing derives a status from it.
+
+```text
+S001-S095   V1 specification sections (M001-M005); S000 received the text of 64-95
+D001-D003   V1 delivery (M006)
+V2xx        V2 laboratory (M007-M010, M034)          R0xx  release engineering (M011, M035)
+V3xx        V3 MEASURE (M012-M020); V39x its measurement extensions after 3.11 (M047)
+V4xx        V3.1 Studio (M021-M033); V44x its completion after 3.11 (M048)
+V5xx        MIDI jam companion (M045)
+E0xx        engineering integrity: structure, size and checks of the code base (M046)
+L0xx        Learn lessons (M049)
+P0xx        product: first run, positioning, productization (M050, M051)
+Q0xx        questions only the owner can answer (M052)
+```
+
+A Q issue is answered by the owner. A worker records the answer as evidence (covers
+`owner_decision`) only by quoting the owner's words with their date and source, and never answers
+one itself. Work that waits on an answer names the Q issue in `depends_on`, and M052 sorts after
+every live milestone, so `majordomus plan next` never nominates a question to a worker. A question
+recorded with `majordomus question add` lives in one checkout's `.ai/local/` and is read by nobody
+else; a question the next worker must see is a Q issue.

@@ -1,0 +1,17 @@
+id: M052
+title: "Owner decisions raised by the ChatGPT project conversations"
+slug: owner-decisions-chatgpt-project
+order: 998
+priority: p2
+problem: "The owner's ChatGPT project \"Oscilla\" (knowledge record chatgpt-oscilla-project) raised questions that only the owner can answer, and planned work waits on them; a question kept in one checkout's .ai/local/ state is read by nobody else."
+current_state: "Each question is a Q issue here, answered by the owner. A worker records the answer as evidence (covers owner_decision) only when it quotes the owner's own words with their date and source; a worker never answers one. The issues that wait on an answer name the Q issue in depends_on, so majordomus plan next cannot nominate them first. The milestone sorts after every live milestone (order 998, before M005) so that the roadmap never nominates a question to a worker."
+outcome: "Every question raised by the ChatGPT project is answered by the owner and recorded, and the work that waited on it is planned from the answer or cancelled."
+acceptance_criteria:
+  - "Every Q issue of this milestone carries owner_decision evidence that quotes the owner, with date and source, or is cancelled with the owner's reason."
+validation:
+  - "manual"
+evidence_required:
+  - "milestone_verified"
+risks:
+  - "Nobody asks the owner: the questions are listed by majordomus plan list --milestone M052, and a coordinator raises them; the plan cannot."
+created_at: 2026-10-18

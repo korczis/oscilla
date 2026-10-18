@@ -47,3 +47,16 @@ Done as decided. V1 (sections 1-63) was finished, verified and deployed from `ma
 `v1.0.0`; V2 was built on its own branch and shipped as its own pull request (9fe0a15, #3);
 S064-S095 remain blocked on S000. V3 and the V3.1 Studio followed the same pattern. The
 `oscilla-wt/feature/v2` worktree and the V1-only file layout it names no longer exist.
+
+### 2026-10-18: the tail was not lost; the decision stands
+
+The Context's first sentence is not what happened. The owner's ChatGPT export (conversation
+`6abec18d`, knowledge record `chatgpt-oscilla-project`) shows two V1 prompts: the unnumbered
+single-file prompt of 2026-10-01T20:42:59Z, whose 63 headings are S001-S063 and which ChatGPT's
+own message ended after section 63, "The initial UI"; and a separate numbered multi-page
+specification of 20:46:12Z with sections 0-95, the one the "95 sections" of the execution
+protocol named. Sections 64-95 of the second are now recorded verbatim in
+`docs/specs/oscilla-v1-sections-64-95.md`, with the parts that conflict with later decisions
+listed. The decision is unchanged: V1 was sections 1-63, and nothing was invented for the rest.
+S000 (receive the text) is satisfied by that file; whether M005 adopts it, triaged against
+`project.single-file-deliverable`, or closes is the owner's decision, issue Q001.
