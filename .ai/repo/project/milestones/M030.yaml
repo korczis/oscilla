@@ -1,6 +1,7 @@
 id: M030
 title: "V3.1 Studio persistence and patches"
 slug: v31-studio-patches
+version: "3.1.0"
 order: 30
 priority: p0
 problem: "Work in Studio cannot be kept, reused or exported."

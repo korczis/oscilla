@@ -1,6 +1,7 @@
 id: M013
 title: "V3 calibration"
 slug: v3-calibration
+version: "3.0.0"
 order: 13
 priority: p0
 problem: "Every V2 level is relative and uncalibrated; there is no way to apply a microphone correction or an explicit SPL reference."

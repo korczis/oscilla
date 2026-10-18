@@ -1,6 +1,7 @@
 id: M021
 title: "V3.1 Studio architecture"
 slug: v31-studio-architecture
+version: "3.1.0"
 order: 21
 priority: p0
 problem: "Studio is an idea; nothing in the repository says what it is, which state is canonical or which decisions govern it."

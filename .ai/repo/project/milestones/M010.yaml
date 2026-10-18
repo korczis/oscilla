@@ -1,6 +1,7 @@
 id: M010
 title: "V2 verified public deployment"
 slug: v2-deploy
+version: "2.0.0"
 order: 10
 priority: p0
 problem: "V2 is not public."

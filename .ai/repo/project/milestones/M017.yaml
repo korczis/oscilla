@@ -1,6 +1,7 @@
 id: M017
 title: "V3 experiment model"
 slug: v3-experiments
+version: "3.0.0"
 order: 17
 priority: p0
 problem: "Presets store settings only; nothing records what was measured, how, with which calibration and software."

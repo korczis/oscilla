@@ -1,6 +1,7 @@
 id: M004
 title: "Quality, design and accessibility"
 slug: quality
+version: "1.0.0"
 order: 4
 priority: p1
 problem: "Unreviewed UI and robustness."

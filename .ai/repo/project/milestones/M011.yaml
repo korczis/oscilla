@@ -1,6 +1,7 @@
 id: M011
 title: "Release engineering, provenance and product graph"
 slug: release-engineering
+version: "2.0.0"
 order: 11
 priority: p0
 problem: "V2 is public but its version has several authorities, the deployed page cannot prove which commit produced it, a Pages mismatch only warns, visual and specialised suites are not gated, and Majordomus does not model the product."
