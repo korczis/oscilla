@@ -144,6 +144,25 @@ test('V272 B4: a lane restored by undo starts from the value the param has, no s
   near(actualAt(s, p, s.ctx.currentTime), 500, 1e-3, 'the restored lane');
 });
 
+test('V272 B4: a lane restored while its release glide runs starts from the glide', () => {
+  const s = setup();
+  ok(s.transport.start());
+  s.fx.advance(1.0);
+  dispatch(s, { type: 'AUTOMATION_POINT_REMOVE', laneId: 'lane-1', pointId: 'pt-2' });
+  dispatch(s, { type: 'AUTOMATION_POINT_REMOVE', laneId: 'lane-1', pointId: 'pt-1' });
+  s.fx.advance(0.03); // the cutoff is still on its way back to 500 Hz
+  const p = param(s, 'filter-1', 'frequency');
+  const n0 = p.calls.length;
+  ok(s.store.undo());
+  const sets = p.calls.slice(n0).filter((c) => c[0] === 'setValueAtTime');
+  assert.ok(sets.length, 'the restored lane is anchored');
+  for (const c of sets) {
+    near(c[1], actualAt(s, p, c[2] - 1e-7), 1e-2, `setValueAtTime at ${c[2]} is no step`);
+  }
+  s.fx.advance(0.2);
+  near(actualAt(s, p, s.ctx.currentTime), 500, 1e-3, 'the restored lane');
+});
+
 test('V272 B4: a lane restored with its node (undo of a delete) plays the lane value', () => {
   const s = setup();
   ok(s.transport.start());
@@ -178,7 +197,8 @@ test('V272 B6: a changed edge offset reaches a lane that is already scheduled', 
     'cutoff base at position 2.0 s');
 });
 
-test('V272 B7: an exponential lane plus a constant offset is the lane plus the offset', () => {
+test('V272 B7: an exponential lane plus a constant offset is the lane plus the offset',
+  async () => {
   const s = setup();
   linearEdge(s, 3000);
   const { baseTime: b } = ok(s.transport.start());
@@ -191,6 +211,48 @@ test('V272 B7: an exponential lane plus a constant offset is the lane plus the o
     const cents = 1200 * Math.log2(actualAt(s, p, b + pos) / want);
     assert.ok(Math.abs(cents) < 1, `position ${pos} s: ${cents.toFixed(2)} cents off`);
   }
+  // Whatever carries the offset leaves with the graph: STOP leaves no node and no source.
+  const done = s.transport.stop();
+  s.fx.advance(1);
+  const c = await done;
+  assert.deepEqual([c.nodes, c.sources], [0, 0]);
+  for (const n of s.ctx.created) {
+    if (n.kind !== 'constant-source' || !n.outputs.includes(p)) continue;
+    assert.fail('an offset source is still connected after STOP');
+  }
+});
+
+test('V272 B7: a lane with an offset removed while playing leaves the base + offset', () => {
+  // The offset source glides out with the lane while the param glides to base + offset: the
+  // sum is the runtime's base, the offset counted once.
+  const s = setup();
+  linearEdge(s, 3000);
+  ok(s.transport.start());
+  s.fx.advance(1.0);
+  const p = param(s, 'filter-1', 'frequency');
+  dispatch(s, { type: 'AUTOMATION_POINT_REMOVE', laneId: 'lane-1', pointId: 'pt-2' });
+  dispatch(s, { type: 'AUTOMATION_POINT_REMOVE', laneId: 'lane-1', pointId: 'pt-1' });
+  s.fx.advance(0.5);
+  near(actualAt(s, p, s.ctx.currentTime), 500 + 3100, 1e-3, 'the base the runtime owns again');
+});
+
+test('V272 B4/B7: a lane added while playing on a parameter with an offset starts there', () => {
+  const m = templateModel(REFERENCE_TEMPLATE_ID);
+  const s = setup({ ...m, timeline: { ...m.timeline, automation: [] } });
+  linearEdge(s, 3000);
+  ok(s.transport.start());
+  s.fx.advance(0.5);
+  const p = param(s, 'filter-1', 'frequency');
+  const t = s.ctx.currentTime;
+  const n0 = p.calls.length;
+  dispatch(s, { type: 'AUTOMATION_POINT_ADD', target: { node: 'filter-1', param: 'frequency' },
+    time: 0, value: 2000, curve: 'linear' });
+  const h = p.calls.slice(n0).find((c) => c[0] === 'setValueAtTime')[2];
+  assert.ok(h > t, 'anchored after now');
+  near(actualAt(s, p, h), actualAt(s, p, h - 1e-7), 1e-2, 'no step where the lane starts');
+  near(actualAt(s, p, h), 500 + 3100, 1e-2, 'from the base the runtime gave it');
+  s.fx.advance(0.3);
+  near(actualAt(s, p, s.ctx.currentTime), 2000 + 3100, 1e-3, 'the lane plus the offset');
 });
 
 // ---------------------------------------------------------------- B8
