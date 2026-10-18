@@ -171,6 +171,13 @@ on a Microphone, ...) is refused with the reason, whether you drag it, type it o
 Selecting one clip announces it by name and track ("Sweep clip on Source selected" in the
 Subtractive Synth).
 
+A Sequence's trigger cable into a Random's or a Step Modulator's **Clock** steps it at each
+of its clip starts, counted from PLAY, and its Rate then has no effect. From PLAY the node
+holds its first value (the first step, or the seed's first value); the first trigger plays
+that same first value and each further trigger the next one. A Sequence clip at 0 s therefore
+starts on the first step. When the first clip starts later, the first value holds until then
+and its trigger brings no audible change: the second trigger is the first change.
+
 ## Automate a parameter
 
 An automation lane belongs to one parameter and is drawn in that parameter's own scale (a

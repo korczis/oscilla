@@ -461,3 +461,28 @@ test('V272 A2: every PLAY counts its clock triggers from 0 (also right after a S
     .map((c) => [c[1], c[2]]);
   assert.deepEqual(sets.slice(0, 2), [[steps[0], b], [steps[1], (bF + 0.5 * SR) / SR]]);
 });
+
+// R-5 (review of #197), decided: a clocked node holds its first value from PLAY and the k-th
+// trigger since PLAY (k from 0) plays value / step k, so a Sequence clip at 0 s starts on the
+// first step. A first trigger after PLAY plays that held first step again (no audible change);
+// the next trigger is the second step. Stated in the node help and docs/v31/user-guide.md.
+test('V272 R-5: a clocked Step Modulator holds step 0 until its first trigger, which is step 0',
+  () => {
+  const { store, target } = triggerStudio('step-modulator', { trigger: true });
+  const steps = store.getModel().graph.nodes.find((n) => n.id === target).params.steps;
+  for (const c of [...store.getModel().timeline.clips].sort((a, b) => b.start - a.start)) {
+    ok(store.dispatch({ type: 'CLIP_MOVE', clipId: c.id, start: c.start + 0.25 }));
+  }
+  const fx = createFakeAudioEnv({ sampleRate: SR });
+  const engine = new AudioEngine({ env: fx.env });
+  assert.ok(engine.init());
+  const runtime = createStudioRuntime({ engine });
+  const transport = createStudioTransport({ runtime, engine, store });
+  const { baseTime: b } = ok(transport.start());
+  fx.advance(1.5);
+  const offset = runtime.nodes.get(target).outputs.control.offset;
+  const bF = Math.round(b * SR);
+  const value = (p) => offset.events.filter((e) => e.t <= (bF + p * SR) / SR).at(-1).value;
+  assert.deepEqual([value(0.1), value(0.3), value(0.8), value(1.3)],
+    [steps[0], steps[0], steps[1], steps[2]], 'held from PLAY, then one step per trigger');
+});
