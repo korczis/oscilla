@@ -22,6 +22,17 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-01
-updated_at: 2026-10-18T13:20:45Z
+updated_at: 2026-10-18T13:55:27Z
 started_at: 2026-10-18T13:20:45Z
 started_event: sha256:cdc94a1f96ed87b05719ee21cb5129e5003dd143fe0f61e8e307e8c5b8c0515f
+verified_at: 2026-10-18T13:55:11Z
+verified_event: sha256:bdc8d6775d7484a2a03e684568b8a534e08d90d489438db811589f0a853c5356
+completed_at: 2026-10-18T13:55:27Z
+completed_event: sha256:a9c34177ffdd6ae658016b6ff7283db08bb1c77e69cbee753ad98f3bfc935899
+evidence:
+  - covers: verified
+    type: test
+    command: "node --test tests/unit/audio-test-matrix.test.mjs"
+    result: "4 tests, 4 pass, 0 fail: the 10 listed frequencies and 22049 Hz at 44.1 kHz and 23999 Hz at 48 kHz, each checked for validation (parseFrequency, setFrequencyOn in HUMAN and ADVANCED, representability), readout, period, wavelength, nearest note and region via src/js/core and createInstrument; on merge base 50f6d6c 2 of 4 fail (40 Hz wavelength read 8.57 m, expected 8.58 m), fixed in src/js/core/math.js round(); full npm test 2969/2969 pass"
+    commit: ea2655cb5f632bd5779685a545bea1a5267c27eb
+    recorded_at: 2026-10-18T13:55:04Z
