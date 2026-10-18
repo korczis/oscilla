@@ -1,0 +1,25 @@
+id: E001
+milestone: M046
+serves:
+  - "engineering-integrity#source-size-budget"
+title: "A source-size budget that only falls"
+slug: a-source-size-budget-that-only-falls
+priority: p1
+profile: implementation
+objective: "Add tests/unit/source-size-budget.test.mjs and a baseline file beside it, on the model of tests/browser/timing-baseline.json: every tracked file under src/js and src/index.html above 40 000 bytes has a recorded cap; the test fails when a file exceeds its cap, when a file above 40 000 bytes has no cap, when a cap names a file that no longer exists, and when a cap is more than 5 % above its file's size (so a shrink must lower the cap in the same change). The first baseline is the current size of each file."
+why: "Conversation 6ac1beb8, 2026-10-04T02:55:11Z and prompt 1 sections 17-22; conversation 6ac3ead5, 2026-10-05T18:32:06Z, section 6: the hotspots grew 15-50 % in two weeks with nothing measuring them."
+scope:
+  - "tests/unit/source-size-budget.test.mjs"
+  - "tests/unit/source-size-baseline.json"
+  - "tests/README.md"
+  - "docs/CLAIMS.yaml"
+acceptance_criteria:
+  - "The test fails on each of the four mutations (a file grown past its cap, a new large file, a stale cap, a cap left high after a shrink) and passes on the tree."
+  - "tests/README.md names the test, and the baseline's header says that a cap only falls and that raising one is stated in the pull request."
+  - "docs/CLAIMS.yaml gains the guaranteed claim `source-size-budget` naming the source and the test that prove it, and the intent criterion this issue serves names that claim as its evidence in place of the command."
+validation:
+  - "node --test tests/unit/source-size-budget.test.mjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-10-18

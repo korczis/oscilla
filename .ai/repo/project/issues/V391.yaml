@@ -1,0 +1,34 @@
+id: V391
+milestone: M047
+serves:
+  - "measurement-extensions#room-decay"
+  - "measurement-extensions#extensions-from-file-and-subpath"
+title: "Room decay from the impulse response: Schroeder integral, EDT, T20 and T30"
+slug: room-decay-from-the-impulse-response-schroeder-integral-edt
+priority: p1
+profile: implementation
+objective: "From a measured impulse response compute the energy-time curve and the backward (Schroeder) integral with a stated noise-floor truncation, and per octave band EDT (0 to -10 dB), T20 (-5 to -25 dB) and T30 (-5 to -35 dB) as reverberation-time estimates, each only when the band's decay range above the noise floor covers its evaluation range plus a stated margin; mint a versioned algorithm ID; store, export (CSV) and compare (B minus A per band) the figures like the existing results."
+why: "V3 MEASURE specification sections 4 and 90-92 (docs/specs/oscilla-v3-measure.md); conversation 6abec18d, 2026-10-02T03:15:06Z."
+scope:
+  - "src/js/measurement"
+  - "src/js/experiments"
+  - "src/js/ui"
+  - "tests/unit"
+  - "tests/browser"
+  - "docs/v3"
+  - ".ai/repo/features"
+  - "dist"
+  - "docs/CLAIMS.yaml"
+depends_on:
+  - "E002"
+acceptance_criteria:
+  - "On synthetic exponential decays with known reverberation times (0.3, 0.8 and 2.0 s) at 44.1 and 48 kHz, EDT, T20 and T30 are within 5 % in every band."
+  - "A band whose decay range is too short yields no figure and the reason, never a number."
+  - "The figures carry the new algorithm ID, survive the experiment round trip and CSV export, and the comparison shows B minus A per band."
+  - "docs/v3/algorithms.md documents the method, and .ai/repo/features/impulse-response.md no longer says these figures are not computed."
+  - "docs/CLAIMS.yaml gains the guaranteed claim `room-decay-metrics` naming the source and the test that prove it, and the intent criterion this issue serves names that claim as its evidence in place of the command."
+validation:
+  - "npm run release-gate"
+evidence_required:
+  - "verified"
+created_at: 2026-10-18

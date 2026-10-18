@@ -1,0 +1,27 @@
+id: E003
+milestone: M046
+serves:
+  - "engineering-integrity#studio-workspace-split"
+title: "Split the Studio workspace orchestrator by responsibility"
+slug: split-the-studio-workspace-orchestrator-by-responsibility
+priority: p1
+profile: implementation
+objective: "Split src/js/ui/studio/workspace.js (75 076 bytes, 1 730 lines) by lifecycle and capability (document and session, runtime and transport, graph, timeline, measurement bridge, file I/O, navigation), each module under 40 000 bytes, with no behaviour change; the STUDIO workspace stays the only caller of createStudioStore (tests/unit/v4-one-studio-store.test.mjs)."
+why: "Conversation 6ac3ead5, 2026-10-05T18:32:06Z, section 6: every new Studio capability lands in the same coordinator."
+scope:
+  - "src/js/ui/studio"
+  - "tests/unit"
+  - "tests/browser"
+  - "dist"
+  - "docs/CLAIMS.yaml"
+depends_on:
+  - "E001"
+acceptance_criteria:
+  - "workspace.js and each module split from it are under 40 000 bytes and the baseline records the lower caps."
+  - "npm run test:studio, npm run test:visual and npm test pass with no change to any expected value or reference, including tests/unit/v4-one-studio-store.test.mjs."
+  - "docs/CLAIMS.yaml gains the guaranteed claim `studio-workspace-split` naming the source and the test that prove it, and the intent criterion this issue serves names that claim as its evidence in place of the command."
+validation:
+  - "npm run release-gate"
+evidence_required:
+  - "verified"
+created_at: 2026-10-18

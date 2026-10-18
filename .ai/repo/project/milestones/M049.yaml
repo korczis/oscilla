@@ -1,0 +1,16 @@
+id: M049
+title: "Learn: five perception lessons"
+slug: learn-five-perception-lessons
+order: 49
+priority: p2
+problem: "Learn has 18 topics about signals, sampling and hearing range and none about perception phenomena; the psychoacoustics experiments planned with V2 were never built."
+outcome: "Learn teaches the missing fundamental, the Shepard tone, masking, critical bands and equal loudness, each with a playable demonstration, as teaching and never as a test."
+acceptance_criteria:
+  - "Every issue of M049 is done with its evidence; npm run release-gate passes at the last one."
+validation:
+  - "npm run release-gate"
+evidence_required:
+  - "milestone_verified"
+risks:
+  - "A perception lesson drifts into telling listeners about their hearing: the no-fake-science scan and the review hold every lesson to describing the phenomenon."
+created_at: 2026-10-18

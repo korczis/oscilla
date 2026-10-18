@@ -1,0 +1,41 @@
+id: product-direction
+title: "OSCILLA states one positioning sentence the owner chose, everywhere it describes itself, and has a recorded decision on whether and how it becomes a product, with nothing commercial built before that decision"
+statement: "The owner asked whether OSCILLA can be productized and what is missing to make money from it (ChatGPT project conversation 6abf3077, 2026-10-02T04:18:12Z and 04:30:50Z), and the conversations proposed about a dozen positioning sentences (knowledge record positioning-candidates) while README and About still say \"interactive sound and frequency laboratory\". The owner chooses one sentence, and README, About and the page metadata say it alike; the owner decides the product path: who would pay, for what offer, which pilot comes first, or that there is none, knowing that under the MIT licence anyone may resell the core, so revenue could rest only on content or services; and the public origin and pace say what the owner confirmed against the record."
+invariants:
+  - "Nothing commercial is built before the owner decides the product path: no checkout, account, backend, analytics or pricing page (README \"Privacy\")"
+  - "A positioning sentence makes no claim the product cannot support (project.no-fake-science)"
+  - "No worker chooses the sentence, the buyer or the offer; the owner does (Q002, Q003)"
+milestones:
+  - "M051"
+  - "M052"
+satisfaction:
+  - id: "positioning-chosen"
+    criterion: "The owner's choice of one positioning sentence is recorded"
+    evidence: "command"
+    ref: "majordomus plan show Q002"
+  - id: "positioning-consistent"
+    criterion: "README, the About lede and the page's description and Open Graph metadata state the chosen sentence, and a unit test fails when they differ"
+    evidence: "command"
+    ref: "npm test"
+  - id: "product-path-decided"
+    criterion: "The owner's decision on buyer, offer, pilot and licence consequences, or that there is no product path, is recorded as an ADR"
+    evidence: "command"
+    ref: "majordomus plan show P004"
+  - id: "public-story-sourced"
+    criterion: "The origin and the pace the public copy states are the ones the owner confirmed against the recorded history"
+    evidence: "command"
+    ref: "majordomus plan show Q005"
+  - id: "collaborator-brief-current"
+    criterion: "The instructions of the owner's ChatGPT project describe OSCILLA's stack, scope and authority order as the repository does, or the owner has recorded leaving them as they are"
+    evidence: "command"
+    ref: "majordomus plan show Q006"
+governance:
+  - "rule:project.no-fake-science"
+  - "rule:project.about-names-current-release"
+  - "file:.ai/repo/knowledge/curated/positioning-candidates.md"
+  - "file:.ai/repo/knowledge/curated/oscilla-origin-in-the-transcripts.md"
+non_goals:
+  - "Subscriptions, accounts, a cloud backend or a payment gateway before a paid pilot (conversation 6abf3077, 2026-10-02T04:31:55Z)"
+  - "Selling OSCILLA as calibrated measurement software or as a paid tone generator (project.no-fake-science)"
+  - "Changing the licence: MIT is the owner's decision of record (LICENSE)"
+created_at: 2026-10-18

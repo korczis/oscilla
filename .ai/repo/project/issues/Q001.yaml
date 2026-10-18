@@ -1,5 +1,5 @@
 id: Q001
-milestone: M052
+milestone: M005
 title: "Owner decision: adopt V1 specification sections 64-95 into M005, or close M005"
 slug: adopt-or-close-v1-spec-tail
 priority: p2
@@ -8,7 +8,7 @@ owner: "repository owner"
 objective: "Decide what M005 becomes now that the text exists. The single-file V1 prompt that S001-S063 implement has 63 sections and ended at section 63 in ChatGPT's own message; the 95 sections the plan was built for are the separate numbered multi-page specification, whose sections 64-95 are now recorded verbatim in docs/specs/oscilla-v1-sections-64-95.md with their provenance and their conflicts. Option (a): adopt those sections as M005's requirements, each triaged against the single-file deliverable rule and the ADRs that came later, the conflicting parts recorded as superseded, the rest renumbered onto S064-S095 or onto new issues. Option (b): close S064-S095 and M005 as cancelled, because the prompt they continue has no tail and the multi-page variant's tail was never the plan's."
 why: "S064-S095 have waited on S000 since 2026-10-01 for a text that, as the export shows, was never missing from the single-file prompt. Which of the two the plan follows is a scope decision, not a worker's (ChatGPT project conversation 6abec18d, 2026-10-01T20:42:59Z, 20:46:12Z, 20:52:28Z)."
 scope:
-  - ".ai/repo/project"
+  - ".ai/repo/project/issues/Q001.yaml"
 depends_on:
   - "S000"
 acceptance_criteria:

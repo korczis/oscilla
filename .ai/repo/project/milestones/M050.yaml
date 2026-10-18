@@ -1,0 +1,16 @@
+id: M050
+title: "First-run experience chosen by the owner and built"
+slug: first-run-experience-chosen-by-the-owner-and-built
+order: 50
+priority: p2
+problem: "OSCILLA opens on the Playground generator (src/js/ui/app.js), and the owner felt the first screen no longer reflects the product (conversation 6ac1beb8, 2026-10-05T19:17:26Z)."
+outcome: "The current first screen is analysed, the owner chooses what it shows, and that layout is built without breaking any entry path."
+acceptance_criteria:
+  - "P001 and P002 are done with their evidence and Q004 is answered."
+validation:
+  - "npm run release-gate"
+evidence_required:
+  - "milestone_verified"
+risks:
+  - "Designing the screen before the owner answers: P002 depends on Q004."
+created_at: 2026-10-18

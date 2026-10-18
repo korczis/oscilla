@@ -1,0 +1,27 @@
+id: L003
+milestone: M049
+serves:
+  - "perception-lessons#masking"
+title: "Learn: masking"
+slug: learn-masking
+priority: p2
+profile: implementation
+objective: "A lesson whose demonstration plays a tone with a band of noise at stated relative levels and separations, near and far in frequency, with controls for level and separation."
+why: "Conversation 6abec18d, 2026-10-01T21:08:07Z (V2 roadmap item 9) and the multi-page specification sections 89-90."
+scope:
+  - "src/js/data"
+  - "src/js/labs"
+  - "src/js/ui"
+  - "tests/unit/learn-masking.test.mjs"
+  - "tests/browser"
+  - "dist"
+  - "docs/CLAIMS.yaml"
+acceptance_criteria:
+  - "The demonstration's relative levels and separations are the stated ones in a unit test of its schedule."
+  - "Levels are labelled relative; nothing states an SPL or a threshold of the listener."
+  - "docs/CLAIMS.yaml gains the guaranteed claim `lesson-masking` naming the source and the test that prove it, and the intent criterion this issue serves names that claim as its evidence in place of the command."
+validation:
+  - "npm run release-gate"
+evidence_required:
+  - "verified"
+created_at: 2026-10-18

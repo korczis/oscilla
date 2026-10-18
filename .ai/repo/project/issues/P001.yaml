@@ -1,0 +1,20 @@
+id: P001
+milestone: M050
+serves:
+  - "first-run-experience#layout-analysed"
+title: "Analyse the first screen and propose layouts for the owner"
+slug: analyse-the-first-screen-and-propose-layouts-for-the-owner
+priority: p1
+profile: deep-work
+objective: "Do what the owner asked first (conversation 6ac1beb8, 2026-10-05T19:17:26Z): measure the current first screen at 1536x1024 and 390x844 (the share of the viewport each part takes, what a visitor can do without scrolling), read the changes, ADRs and commits since V3, and write two or three layout options for the owner, each traced to the features and decisions it serves and to what it costs; build nothing."
+scope:
+  - "docs/first-screen-options.md"
+  - ".ai/repo/project/issues/P001.yaml"
+acceptance_criteria:
+  - "The analysis and options are docs/first-screen-options.md, whose measurements name the command or screenshot that produced them."
+  - "No file under src/ changes."
+validation:
+  - "manual"
+evidence_required:
+  - "verified"
+created_at: 2026-10-18

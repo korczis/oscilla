@@ -1,0 +1,27 @@
+id: E004
+milestone: M046
+serves:
+  - "engineering-integrity#studio-inspector-split"
+title: "Split the Studio inspector by responsibility"
+slug: split-the-studio-inspector-by-responsibility
+priority: p2
+profile: implementation
+objective: "Split src/js/ui/studio/inspector.js (69 711 bytes, 1 457 lines) into modules per subject (node, connection, clip, automation, measurement) each under 40 000 bytes, with no behaviour change and the inspector's focus behaviour unchanged."
+why: "Conversation 6ac1beb8, 2026-10-04T02:55:11Z (inspector about 47 kB then, 69.7 kB now)."
+scope:
+  - "src/js/ui/studio"
+  - "tests/unit"
+  - "tests/browser"
+  - "dist"
+  - "docs/CLAIMS.yaml"
+depends_on:
+  - "E001"
+acceptance_criteria:
+  - "inspector.js and each module split from it are under 40 000 bytes and the baseline records the lower caps."
+  - "npm run test:studio, npm run test:visual and npm test pass with no change to any expected value or reference."
+  - "docs/CLAIMS.yaml gains the guaranteed claim `studio-inspector-split` naming the source and the test that prove it, and the intent criterion this issue serves names that claim as its evidence in place of the command."
+validation:
+  - "npm run release-gate"
+evidence_required:
+  - "verified"
+created_at: 2026-10-18

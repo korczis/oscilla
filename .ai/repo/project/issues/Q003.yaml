@@ -1,0 +1,21 @@
+id: Q003
+milestone: M052
+serves:
+  - "product-direction#product-path-decided"
+title: "Owner decision: whether OSCILLA becomes a product, for whom and with which offer"
+slug: owner-decision-whether-oscilla-becomes-a-product-for-whom-an
+priority: p2
+profile: routine
+owner: "repository owner"
+objective: "Answer the questions the conversations left open (conversation 6abf3077, 2026-10-02T04:18:12Z, 04:21:01Z, 04:30:50Z, 04:31:55Z; conversation 6ac1beb8, 2026-10-04T03:30:06Z): (1) Is there a product path at all, or is OSCILLA an open instrument and a proof of method? (2) If yes, who pays: teachers and schools, speaker developers, room tuning, audio engineering, labs and R&D, or another buyer? (3) Which offer: ChatGPT proposed a paid teaching pack on top of the free lab (guided experiments with goals and steps, teacher materials, student questions, ready configurations, worksheets); the measurement segments would need another offer. (4) Which pilot comes first, with whom, and what would show demand? Demand is unproven next to free browser tools and REW. (5) The licence consequence: under MIT anyone may resell the core, so revenue can rest only on content, services or support; is that acceptable, or does the licence question reopen? (6) What must exist before a first sale (terms, privacy notice, support contact, tax handling)?"
+why: "No intent, milestone, ADR or record names a buyer, an offer or a pilot, and none may be invented (knowledge records product-landscape-and-the-pigments-path, positioning-candidates)."
+scope:
+  - ".ai/repo/project/issues/Q003.yaml"
+acceptance_criteria:
+  - "The owner's answer is recorded as evidence on this issue (covers owner_decision) in the owner's words, with date and source; a worker never answers it."
+  - "Each of the six questions has an answer or an explicit \"not now\"."
+validation:
+  - "manual"
+evidence_required:
+  - "owner_decision"
+created_at: 2026-10-18

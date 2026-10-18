@@ -1,0 +1,29 @@
+id: L004
+milestone: M049
+serves:
+  - "perception-lessons#critical-band"
+title: "Learn: critical bands"
+slug: learn-critical-bands
+priority: p2
+profile: implementation
+objective: "A lesson whose demonstration plays two tones whose separation crosses the critical bandwidth of the centre frequency (a cited formula), from beating roughness to two separate tones."
+why: "Conversation 6abec18d, 2026-10-01T21:08:07Z (V2 roadmap item 9) and the multi-page specification sections 89-90."
+scope:
+  - "src/js/data"
+  - "src/js/labs"
+  - "src/js/ui"
+  - "tests/unit/learn-critical-bands.test.mjs"
+  - "tests/browser"
+  - "dist"
+  - "docs/CLAIMS.yaml"
+depends_on:
+  - "L003"
+acceptance_criteria:
+  - "The bandwidth shown comes from the cited formula, checked at three centre frequencies in a unit test."
+  - "The copy cites the formula's source."
+  - "docs/CLAIMS.yaml gains the guaranteed claim `lesson-critical-band` naming the source and the test that prove it, and the intent criterion this issue serves names that claim as its evidence in place of the command."
+validation:
+  - "npm run release-gate"
+evidence_required:
+  - "verified"
+created_at: 2026-10-18

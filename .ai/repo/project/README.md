@@ -51,7 +51,7 @@ V5xx        MIDI jam companion (M045)
 E0xx        engineering integrity: structure, size and checks of the code base (M046)
 L0xx        Learn lessons (M049)
 P0xx        product: first run, positioning, productization (M050, M051)
-Q0xx        questions only the owner can answer (M052)
+Q0xx        questions only the owner can answer (M052; Q001 under M005)
 ```
 
 A Q issue is answered by the owner. A worker records the answer as evidence (covers

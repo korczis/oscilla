@@ -1,0 +1,32 @@
+id: V398
+milestone: M047
+serves:
+  - "measurement-extensions#chain-profile"
+title: "Keep a characterized chain as a named chain profile"
+slug: keep-a-characterized-chain-as-a-named-chain-profile
+priority: p2
+profile: implementation
+objective: "Let \"Characterize playback chain\" save its observed response as a named chain profile with its setup (devices as far as the browser reports them, sample rate, level, notes), labelled \"observed chain response under this setup\", separate from the digital capability of Device & Limits; a later measurement can be compared against a stored profile; a profile is never applied as a calibration."
+why: "Conversation 6abec18d, 2026-10-02T03:15:06Z, item 6; today the workflow saves an experiment, not a reusable profile."
+scope:
+  - "src/js/measurement"
+  - "src/js/experiments"
+  - "src/js/ui"
+  - "tests/unit"
+  - "tests/browser"
+  - "docs/v3"
+  - ".ai/repo/features"
+  - "dist"
+  - "docs/CLAIMS.yaml"
+depends_on:
+  - "E002"
+acceptance_criteria:
+  - "A saved profile round-trips through export and import with its setup and hash."
+  - "No path applies a chain profile as a frequency-response or level calibration, and no copy calls it the speaker's response."
+  - "Comparing a measurement with a profile flags differing conditions like experiment comparison does."
+  - "docs/CLAIMS.yaml gains the guaranteed claim `chain-profile` naming the source and the test that prove it, and the intent criterion this issue serves names that claim as its evidence in place of the command."
+validation:
+  - "npm run release-gate"
+evidence_required:
+  - "verified"
+created_at: 2026-10-18

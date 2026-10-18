@@ -1,0 +1,27 @@
+id: L005
+milestone: M049
+serves:
+  - "perception-lessons#equal-loudness"
+title: "Learn: equal-loudness contours as published data"
+slug: learn-equal-loudness-contours-as-published-data
+priority: p2
+profile: implementation
+objective: "A lesson that draws published equal-loudness contours with their citation and lets the user play tones across frequency at one relative level, explaining why they do not sound equally loud, without computing or reporting anything about the listener."
+why: "Conversation 6abec18d, 2026-10-01T21:08:07Z (V2 roadmap item 9) and the multi-page specification sections 89-90."
+scope:
+  - "src/js/data"
+  - "src/js/labs"
+  - "src/js/ui"
+  - "tests/unit/learn-equal-loudness.test.mjs"
+  - "tests/browser"
+  - "dist"
+  - "docs/CLAIMS.yaml"
+acceptance_criteria:
+  - "The contours are drawn from a cited table embedded in the build, and a unit test checks three points against it."
+  - "No control, text or stored value describes the listener's hearing; tests/unit/no-fake-science.test.mjs passes."
+  - "docs/CLAIMS.yaml gains the guaranteed claim `lesson-equal-loudness` naming the source and the test that prove it, and the intent criterion this issue serves names that claim as its evidence in place of the command."
+validation:
+  - "npm run release-gate"
+evidence_required:
+  - "verified"
+created_at: 2026-10-18

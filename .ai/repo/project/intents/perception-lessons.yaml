@@ -1,0 +1,39 @@
+id: perception-lessons
+title: "Learn teaches five perception phenomena with playable demonstrations: the missing fundamental, the Shepard tone, masking, critical bands and equal loudness, as teaching and never as a hearing test"
+statement: "ChatGPT's V2 roadmap placed psychoacoustics experiments in Learn (ChatGPT project conversation 6abec18d, 2026-10-01T21:08:07Z, item 9; the multi-page specification, sections 89-90) and none was built. Each lesson pairs an explanation with a demonstration the user plays through the existing engine and a takeaway, in the form of the existing Learn topics: a harmonic series without its fundamental that is still heard at the fundamental's pitch; a Shepard tone that seems to rise without end; a tone hidden by a louder band of noise near it and audible again far from it; two tones beating inside a critical band and separating outside it; and published equal-loudness contours shown as data with their source. No lesson measures, scores or describes the listener's hearing."
+invariants:
+  - "No lesson measures, scores or diagnoses hearing, and none claims an effect (project.no-fake-science); levels are relative and the speaker output is unknown"
+  - "Every demonstration sounds through the AudioEngine within its safety limits (project.audio-engine-discipline)"
+  - "Published data (equal-loudness contours) is cited with its source"
+milestones:
+  - "M049"
+satisfaction:
+  - id: "missing-fundamental"
+    criterion: "The missing-fundamental demonstration plays harmonics 2 to N of a stated fundamental with no energy at the fundamental, which a spectrum test confirms"
+    evidence: "command"
+    ref: "node --test tests/unit/learn-missing-fundamental.test.mjs"
+  - id: "shepard-tone"
+    criterion: "The Shepard demonstration plays octave-spaced partials under a fixed spectral envelope whose state repeats after one octave of travel"
+    evidence: "command"
+    ref: "node --test tests/unit/learn-shepard-tone.test.mjs"
+  - id: "masking"
+    criterion: "The masking demonstration plays a tone and a noise band at stated relative levels and frequency separations"
+    evidence: "command"
+    ref: "node --test tests/unit/learn-masking.test.mjs"
+  - id: "critical-band"
+    criterion: "The critical-band demonstration plays two tones whose separation crosses the stated critical bandwidth of the centre frequency"
+    evidence: "command"
+    ref: "node --test tests/unit/learn-critical-bands.test.mjs"
+  - id: "equal-loudness"
+    criterion: "The equal-loudness lesson shows published contours with their citation, and nothing in it computes or reports the listener's hearing"
+    evidence: "command"
+    ref: "node --test tests/unit/learn-equal-loudness.test.mjs"
+governance:
+  - "rule:project.no-fake-science"
+  - "rule:project.audio-engine-discipline"
+  - "rule:project.visual-identity-lock"
+  - "file:src/js/data/learn.js"
+non_goals:
+  - "Audiometry, hearing tests, a hearing profile or any score of the listener"
+  - "Sound therapy, focus or relaxation content of any kind"
+created_at: 2026-10-18

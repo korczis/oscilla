@@ -1,0 +1,22 @@
+id: P004
+milestone: M051
+serves:
+  - "product-direction#product-path-decided"
+title: "Record the owner's product-path decision as an ADR"
+slug: record-the-owner-s-product-path-decision-as-an-adr
+priority: p2
+profile: routine
+objective: "Write the ADR that states the owner's answers of Q003 (product path or none, buyer, offer, pilot, licence consequence, preconditions of a first sale), quoting them, with the alternatives the conversations raised and what they cost; plan follow-up work only from it."
+scope:
+  - ".ai/repo/adrs"
+  - ".ai/repo/project/issues/P004.yaml"
+depends_on:
+  - "Q003"
+acceptance_criteria:
+  - "The ADR cites Q003's evidence and passes majordomus adr check."
+  - "The follow-up work it implies is named in the ADR's consequences, to be planned in a separate change, each item serving a criterion of an intent."
+validation:
+  - "majordomus adr check"
+evidence_required:
+  - "verified"
+created_at: 2026-10-18

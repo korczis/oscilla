@@ -1,0 +1,21 @@
+id: Q005
+milestone: M052
+serves:
+  - "product-direction#public-story-sourced"
+title: "Owner decision: the origin and the pace the public copy tells"
+slug: owner-decision-the-origin-and-the-pace-the-public-copy-tells
+priority: p2
+profile: routine
+owner: "repository owner"
+objective: "Two statements of the public copy differ from the recorded history. (1) Origin: About says OSCILLA \"began with a simple question: how much of an acoustic laboratory could live entirely inside a web browser?\"; the transcripts show it starting from a debunked Paw Plan \"Bark Button\" ad and the owner's reply \"Tak tohle se da spichnout v jednom html5\" (knowledge record oscilla-origin-in-the-transcripts). Keep About as it is, tell the ad story, or tell another one; and is there a personal motive the copy should name? (2) Pace: About says \"Built in one night\" with 5 h 51 min from the first tracked commit to V2; the record says that was wall-clock time with several AI workers in parallel (knowledge record built-in-one-night-is-wall-clock). Add that qualifier, or keep the copy as it is?"
+why: "The public story must not be invented, and About is the owner's text: the owner decided not to change it in the synthesis of 2026-10-18."
+scope:
+  - ".ai/repo/project/issues/Q005.yaml"
+acceptance_criteria:
+  - "The owner's answer is recorded as evidence on this issue (covers owner_decision) in the owner's words, with date and source; a worker never answers it."
+  - "If the answer changes copy, a follow-up issue under M051 is planned from it; this issue changes no copy."
+validation:
+  - "manual"
+evidence_required:
+  - "owner_decision"
+created_at: 2026-10-18

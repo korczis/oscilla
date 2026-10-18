@@ -1,0 +1,20 @@
+id: E012
+milestone: M046
+serves:
+  - "engineering-integrity#p5-cost-measured"
+title: "Spike: what replacing p5 with a Canvas2D adapter would cost and save"
+slug: spike-what-replacing-p5-with-a-canvas2d-adapter-would-cost-a
+priority: p2
+profile: implementation
+objective: "Inventory the p5 calls the conceptual views use, build a throwaway Canvas2D adapter for them on a branch, and measure the gzip size saved, the visual difference against the references and the frame time; record the numbers as a resolution note on ADR 0013 for the owner. Nothing is adopted."
+why: "p5 is about a third of the gzip size and the 1 MB budget was a stopgap (scripts/build-config.mjs); conversation 6ac3ead5, section 7, put the threshold for adoption at about 180-230 KB gzip saved."
+scope:
+  - ".ai/repo/adrs/0013-p5-unmodified-separable-block.md"
+acceptance_criteria:
+  - "ADR 0013 carries a dated resolution note with the inventory, the gzip bytes saved, the per-view visual difference and the frame-time change, each with the command that measured it."
+  - "main carries no adapter code from the spike."
+validation:
+  - "manual"
+evidence_required:
+  - "verified"
+created_at: 2026-10-18

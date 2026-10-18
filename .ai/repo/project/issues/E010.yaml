@@ -1,0 +1,25 @@
+id: E010
+milestone: M046
+serves:
+  - "engineering-integrity#flake-ledger"
+title: "A ledger of CI checks that passed only on retry"
+slug: a-ledger-of-ci-checks-that-passed-only-on-retry
+priority: p2
+profile: implementation
+objective: "When a browser suite or check fails and passes on a retry, record the check, the browser, the attempt outcomes and a cause class (product, browser, infrastructure, test defect) in a CI artifact and the step summary, so that a rerun never erases the failure."
+why: "Conversation 6ac3ead5, 2026-10-05T18:32:06Z, sections 10 and 15.4."
+scope:
+  - "tests/browser/lib"
+  - ".github/workflows/ci.yml"
+  - "tests/unit/flake-ledger.test.mjs"
+  - "tests/README.md"
+  - "docs/CLAIMS.yaml"
+acceptance_criteria:
+  - "A suite that fails once and passes on retry appears in the ledger with both outcomes; a unit test proves the recording on a fixture."
+  - "project.bounded-test-timing and project.suite-harness hold; the change carries a review verdict (.github is guarded)."
+  - "docs/CLAIMS.yaml gains the guaranteed claim `ci-flake-ledger` naming the source and the test that prove it, and the intent criterion this issue serves names that claim as its evidence in place of the command."
+validation:
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-10-18

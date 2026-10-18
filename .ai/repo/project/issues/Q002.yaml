@@ -1,0 +1,21 @@
+id: Q002
+milestone: M052
+serves:
+  - "product-direction#positioning-chosen"
+title: "Owner decision: the one positioning sentence OSCILLA uses"
+slug: owner-decision-the-one-positioning-sentence-oscilla-uses
+priority: p2
+profile: routine
+owner: "repository owner"
+objective: "Choose the sentence README, About and the page metadata will say alike, or write a new one. The candidates, with their sources, are in .ai/repo/knowledge/curated/positioning-candidates.md: C1 \"a zero-install, scientifically honest, reproducible acoustic laboratory that runs in the browser\"; C2 \"Arturia: make sound. Oscilla: understand sound, program signal flow, measure reality, reproduce experiment\"; C3 an \"audio systems laboratory\"; C4 \"local-first acoustic experimentation instrument with composable signal topology, reproducible measurements and inspectable execution\"; C5 \"a local-first environment for composing, executing, measuring and explaining reproducible experiments\"; C6 \"a local sound lab for learning and experimenting\"; C7 \"an interactive scientific instrument you can play\"; or keep \"an interactive sound and frequency laboratory\". The record also lists the framings (three pillars, two axes, harder to fool) and ChatGPT's own advice to lead with concrete jobs such as measuring a speaker or comparing two rooms."
+why: "README.md and the About lede say different things, the conversations proposed a dozen sentences, and choosing one is the owner's act (conversation 6ac1beb8, 2026-10-04T03:30:06Z: \"business clarity 5/10, too many possible identities\")."
+scope:
+  - ".ai/repo/project/issues/Q002.yaml"
+acceptance_criteria:
+  - "The owner's answer is recorded as evidence on this issue (covers owner_decision) in the owner's words, with date and source; a worker never answers it."
+  - "The answer names the sentence verbatim and whether the tagline \"See sound. Shape frequency.\" stays."
+validation:
+  - "manual"
+evidence_required:
+  - "owner_decision"
+created_at: 2026-10-18

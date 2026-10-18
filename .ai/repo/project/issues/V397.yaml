@@ -1,0 +1,30 @@
+id: V397
+milestone: M047
+serves:
+  - "measurement-extensions#context-overlays"
+title: "Optional context overlays on the response chart"
+slug: optional-context-overlays-on-the-response-chart
+priority: p2
+profile: implementation
+objective: "Offer overlays on the measured response chart, off by default: the nominal human hearing range, a speech band, musical note frequencies and the bioacoustics species ranges with their citations (src/js/data/bioacoustics.js); each names its source and none changes data."
+why: "V3 MEASURE specification section 95; conversation 6abec18d, 2026-10-02T03:18:10Z."
+scope:
+  - "src/js/ui"
+  - "src/js/charts"
+  - "src/js/data"
+  - "tests/unit"
+  - "tests/browser"
+  - "dist"
+  - "docs/CLAIMS.yaml"
+depends_on:
+  - "E002"
+acceptance_criteria:
+  - "Turning each overlay on and off leaves the result hash, the CSV export and the stored record byte-identical."
+  - "Each overlay shows its source; tests/unit/no-fake-science.test.mjs passes on the new copy."
+  - "The overlays have a keyboard path and use the existing tokens."
+  - "docs/CLAIMS.yaml gains the guaranteed claim `response-context-overlays` naming the source and the test that prove it, and the intent criterion this issue serves names that claim as its evidence in place of the command."
+validation:
+  - "npm run release-gate"
+evidence_required:
+  - "verified"
+created_at: 2026-10-18

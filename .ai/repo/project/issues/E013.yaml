@@ -1,0 +1,20 @@
+id: E013
+milestone: M046
+serves:
+  - "engineering-integrity#screen-reader-pass"
+title: "Record a screen-reader pass over the main flows"
+slug: record-a-screen-reader-pass-over-the-main-flows
+priority: p2
+profile: routine
+objective: "With VoiceOver and Safari on macOS, walk the main flows (play a tone in the Playground, run a measurement in TEST CONTEXT, save and open an experiment, build and play a Studio graph without a pointer) and record what was announced, what was missing and what failed, as evidence on this issue; each failure becomes its own issue."
+why: "Automated semantic checks are not assistive-technology use; the audit of conversation 6ac3ead5 (section 11) marked it UNKNOWN."
+scope:
+  - ".ai/repo/project/issues/E013.yaml"
+acceptance_criteria:
+  - "The evidence names the browser, VoiceOver and OS versions, each flow and its result."
+  - "Every failure found has an issue that names it."
+validation:
+  - "manual"
+evidence_required:
+  - "verified"
+created_at: 2026-10-18

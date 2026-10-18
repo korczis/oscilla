@@ -1,0 +1,27 @@
+id: L002
+milestone: M049
+serves:
+  - "perception-lessons#shepard-tone"
+title: "Learn: the Shepard tone"
+slug: learn-the-shepard-tone
+priority: p2
+profile: implementation
+objective: "A lesson whose demonstration plays octave-spaced partials under a fixed spectral envelope, gliding so that its state repeats after one octave of travel, with a control and a takeaway."
+why: "Conversation 6abec18d, 2026-10-01T21:08:07Z (V2 roadmap item 9) and the multi-page specification sections 89-90."
+scope:
+  - "src/js/data"
+  - "src/js/labs"
+  - "src/js/ui"
+  - "tests/unit/learn-shepard-tone.test.mjs"
+  - "tests/browser"
+  - "dist"
+  - "docs/CLAIMS.yaml"
+acceptance_criteria:
+  - "A unit test of the generator shows the partial set after one octave of travel equals the initial one within a stated tolerance."
+  - "Playback is bounded by the session safety limit like every other sound."
+  - "docs/CLAIMS.yaml gains the guaranteed claim `lesson-shepard-tone` naming the source and the test that prove it, and the intent criterion this issue serves names that claim as its evidence in place of the command."
+validation:
+  - "npm run release-gate"
+evidence_required:
+  - "verified"
+created_at: 2026-10-18

@@ -1,0 +1,17 @@
+id: M046
+title: "Engineering integrity: orchestration split, structural checks, measured costs"
+slug: engineering-integrity-orchestration-split-structural-checks
+order: 46
+priority: p2
+problem: "The owner asked for less orchestration entropy and for no hard-coding, mockups or placeholders (conversation 6ac1beb8, 2026-10-04T03:01:41Z). Since then the hotspots grew: src/js/ui/measure.js from about 77 kB to 115 572 B, ui/studio/workspace.js to 75 076 B, ui/studio/inspector.js to 69 711 B, src/index.html to 255 020 B; the experiments schema and definition modules import each other; no rule bans placeholders or inert controls; and nothing reports a pull request's size change or a check that passed only on retry."
+outcome: "Every source file stays under a cap that only falls, the three orchestration hotspots and the shell are split with no behaviour change, the import graph is acyclic, the no-placeholder rule is in force with mutation-proven checks, and the remaining costs are measured for the owner."
+acceptance_criteria:
+  - "Every issue of M046 is done with its evidence; npm run release-gate passes at the last one."
+validation:
+  - "npm run release-gate"
+evidence_required:
+  - "milestone_verified"
+risks:
+  - "A split that changes behaviour hides inside a refactor: each split keeps the suites and the visual references unchanged, and anything else is a separate issue."
+  - "The splits touch the files other work also edits (Measure, Studio): land them first and small, which is why M047 and M048 depend on them."
+created_at: 2026-10-18

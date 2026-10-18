@@ -1,0 +1,31 @@
+id: V396
+milestone: M047
+serves:
+  - "measurement-extensions#run-coherence"
+title: "Coherence of repeated runs"
+slug: coherence-of-repeated-runs
+priority: p2
+profile: implementation
+objective: "For a measurement of three or more runs compute the coherence of the transfer estimates across runs per frequency, show it as a reliability view, and add it to the quality reasons where it is low."
+why: "Conversation 6abec18d, 2026-10-02T03:15:06Z, item 16; \"coherence\" appears nowhere in the repository."
+scope:
+  - "src/js/measurement"
+  - "src/js/experiments"
+  - "src/js/ui"
+  - "tests/unit"
+  - "tests/browser"
+  - "docs/v3"
+  - ".ai/repo/features"
+  - "dist"
+  - "docs/CLAIMS.yaml"
+depends_on:
+  - "E002"
+acceptance_criteria:
+  - "Identical runs give a coherence of 1; runs with independent noise at a known SNR follow SNR/(1+SNR) within 0.05."
+  - "A measurement of fewer than three runs shows no coherence and says why."
+  - "docs/CLAIMS.yaml gains the guaranteed claim `run-coherence` naming the source and the test that prove it, and the intent criterion this issue serves names that claim as its evidence in place of the command."
+validation:
+  - "npm run release-gate"
+evidence_required:
+  - "verified"
+created_at: 2026-10-18

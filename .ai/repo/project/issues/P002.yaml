@@ -1,0 +1,27 @@
+id: P002
+milestone: M050
+serves:
+  - "first-run-experience#first-screen-built"
+title: "Build the first screen the owner chose"
+slug: build-the-first-screen-the-owner-chose
+priority: p2
+profile: implementation
+objective: "Implement the layout Q004 records, with acceptance criteria written from it before any code."
+scope:
+  - "src"
+  - "tests/unit"
+  - "tests/browser"
+  - "tests/visual"
+  - "dist"
+  - "docs/CLAIMS.yaml"
+depends_on:
+  - "Q004"
+acceptance_criteria:
+  - "The criteria written from Q004 pass in Chromium, Firefox and WebKit from file:// and from the sub-path."
+  - "Every deep link of the hash dispatcher (ADR 0045) and every use case that opens a workspace resolves as before; the visual references are updated only for the first screen, with the reason."
+  - "docs/CLAIMS.yaml gains the guaranteed claim `first-screen-layout` naming the source and the test that prove it, and the intent criterion this issue serves names that claim as its evidence in place of the command."
+validation:
+  - "npm run release-gate"
+evidence_required:
+  - "verified"
+created_at: 2026-10-18

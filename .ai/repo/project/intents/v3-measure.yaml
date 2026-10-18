@@ -122,7 +122,7 @@ governance:
   - "adr:adr-0047"
   - "file:docs/specs/oscilla-v3-measure.md"
 non_goals:
-  - "The future V3.x measurement capabilities of specification section 4 (RT60, EDT, T20/T30, ETC, THD, THD+N, latency, phase transfer, group delay, device characterization, batch measurement, WASM DSP): interfaces only where they improve V3.0"
+  - "The future V3.x measurement capabilities of specification section 4 (RT60, EDT, T20/T30, ETC, THD, THD+N, latency, phase transfer, group delay, device characterization, batch measurement, WASM DSP): interfaces only where they improve V3.0. Since 2026-10-18 the room, distortion, latency, phase and coherence figures and the chain profile are planned by the intent measurement-extensions (M047); batch measurement and WASM DSP stay unplanned"
   - "The excluded scope of specification section 10: MIDI, accounts, a backend, collaboration, AI classification, generative music, DAW multitrack, room simulation, VST-style effects, healing or focus frequencies, medical interpretation"
   - "IEC, ANSI or class certification: results are measurement estimates (section 189)"
   - "The v4.0 experiment-record work not yet released (findings, connected records, raw capture retention and the work of ADRs 0046-0053, on main after v3.10.3): it has no milestone in the plan, so no intent names it. The released part (immutable runs, semantic comparison, versioned definitions, evidence on a run; ADRs 0040, 0041, 0043 and 0044, releases 3.6 to 3.10) is recorded retrospectively by M040, M041, M043 and M044"

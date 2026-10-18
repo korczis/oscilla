@@ -1,0 +1,25 @@
+id: E009
+milestone: M046
+serves:
+  - "engineering-integrity#size-delta-reported"
+title: "CI reports the size change of every pull request"
+slug: ci-reports-the-size-change-of-every-pull-request
+priority: p2
+profile: implementation
+objective: "Make the CI build job print, for dist/index.html, the raw and gzip size, the headroom to the budget of scripts/build-config.mjs and the change from the merge base's build, as a step summary; a pull request that adds more than a stated threshold names where the bytes come from in its body (a review convention, not a gate)."
+why: "Conversation 6ac1beb8, 2026-10-04T02:55:11Z and prompt 1 section 22; scripts/verify-dist.mjs prints the size against the budget but no delta."
+scope:
+  - "scripts/size-report.mjs"
+  - ".github/workflows/ci.yml"
+  - "tests/unit/size-report.test.mjs"
+  - "tests/README.md"
+  - "docs/CLAIMS.yaml"
+acceptance_criteria:
+  - "The CI step summary of a pull request shows the four numbers; a unit test of the script checks the arithmetic and the output on fixtures."
+  - "The workflow change keeps project.ci-bounded (bounded, pinned, retried) and carries a review verdict (.github is guarded)."
+  - "docs/CLAIMS.yaml gains the guaranteed claim `dist-size-delta-reported` naming the source and the test that prove it, and the intent criterion this issue serves names that claim as its evidence in place of the command."
+validation:
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-10-18
