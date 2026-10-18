@@ -21,3 +21,18 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-18
+updated_at: 2026-10-18T05:16:23Z
+started_at: 2026-10-18T05:15:57Z
+started_event: sha256:c856bac44c67280820a54f8067ca79aca1a8927ad19dc8d391f2569af9b04c5a
+verified_at: 2026-10-18T05:16:05Z
+verified_event: sha256:6cfb43788549bba6648a1f0f1910abc58ee45c8cd4c69a185a4652a670ebd7ca
+completed_at: 2026-10-18T05:16:23Z
+completed_event: sha256:9af1ac99b2c7ad1c1a9f2edd5edc683e9ea2dda61eca1b514a27dda4933339f4
+evidence:
+  - covers: verified
+    type: ci
+    command: "npm run release:prepare; npm run release:publish -- --yes"
+    result: "release:prepare passed the full gate (source fa7cf5c01f75, dist 898270c49449, gate tree 352859970f32); chore(release): v3.11.0 landed as #192 (2b63ec3) with every CI job green (run 39096946525); release:publish tagged v3.11.0, created the Release and verify-deploy passed on attempt 1/10"
+    artifact: "https://github.com/korczis/oscilla/releases/tag/v3.11.0"
+    commit: 78dfd0c34fc0b73e8a03192999081569e5914162
+    recorded_at: 2026-10-18T05:14:51Z

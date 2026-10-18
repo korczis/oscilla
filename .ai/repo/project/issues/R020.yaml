@@ -19,3 +19,18 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-18
+updated_at: 2026-10-18T05:16:45Z
+started_at: 2026-10-18T05:16:31Z
+started_event: sha256:a8ff304f195f7dc98db325f7f91bded7e187b96c75c42274b4000b785e4c54a2
+verified_at: 2026-10-18T05:16:38Z
+verified_event: sha256:0c6b41e89f7bcf4a0ccda896afdfbe41669e23359229de24185b3f9c2b12b83b
+completed_at: 2026-10-18T05:16:45Z
+completed_event: sha256:18e8a41b0243cb725eecb7948351a1365734a735a13b3bd2020b4287d870a784
+evidence:
+  - covers: verified
+    type: ci
+    command: "npm run test:live -- --expect-version 3.11.0 --expect-commit 2b63ec3 (Pages run 39097666998, Public smoke x3); npm run release:record -- --version 3.11.0"
+    result: "the public page carried 3.11.0 at release commit 2b63ec3, artifact 898270c49449 (verify-deploy PASS attempt 1/10); test:live 17/17 in chromium, firefox and webkit; release record .ai/repo/releases/v3.11.0.yaml landed as #193 (19ef719)"
+    artifact: "https://github.com/korczis/oscilla/actions/runs/39097666998"
+    commit: 78dfd0c34fc0b73e8a03192999081569e5914162
+    recorded_at: 2026-10-18T05:14:55Z

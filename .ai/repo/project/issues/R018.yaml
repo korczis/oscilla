@@ -18,3 +18,18 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-18
+updated_at: 2026-10-18T05:15:48Z
+started_at: 2026-10-18T05:15:33Z
+started_event: sha256:c8f0996d9fbc4f161e5577fb59b97e9c2639833546467eabc52ac6e5ed6758ba
+verified_at: 2026-10-18T05:15:40Z
+verified_event: sha256:4966715c5af4b95fb2ef00c1594fcdc7dcb3fcd38fcc3e91b9a7be553dea27ab
+completed_at: 2026-10-18T05:15:48Z
+completed_event: sha256:3786c6e266de261e83ced829548ac1dda2ffe8021722fafd0f56ca8742b95a80
+evidence:
+  - covers: verified
+    type: ci
+    command: "npm run release:verify-deploy; npm run test:live (Pages run 39084400974, jobs deploy and Public smoke x3)"
+    result: "#179 merged by merge commit ee70a21 (tree 98ffbfa = train head); verdict .ai/repo/reviews/179.yaml written by an independent review agent, not the builder (commit 5a77eb1); Pages run 39084400974 at ee70a21: verify-deploy PASS attempt 1/10, test:live 17/17 in chromium, firefox and webkit"
+    artifact: "https://github.com/korczis/oscilla/actions/runs/39084400974"
+    commit: 78dfd0c34fc0b73e8a03192999081569e5914162
+    recorded_at: 2026-10-18T05:14:48Z
