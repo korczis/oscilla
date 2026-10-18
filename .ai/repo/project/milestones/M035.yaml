@@ -17,4 +17,12 @@ validation:
 evidence_required:
   - "milestone_verified"
 created_at: 2026-10-18
-updated_at: 2026-10-18
+updated_at: 2026-10-18T05:15:15Z
+evidence:
+  - covers: milestone_verified
+    type: ci
+    command: "npm run release:verify-deploy; npm run test:live (Pages runs 39084400974 and 39097666998)"
+    result: "Verified on 2026-10-18: R018-R020 done. Train 2 (#179) merged by merge commit ee70a21 and its Pages run 39084400974 passed verify-deploy and test:live 17/17 in three browsers; v3.11.0 released from receipt gate tree 352859970f32 via #192 (2b63ec3), Pages run 39097666998 verify-deploy PASS 1/10 and test:live 17/17 in chromium, firefox and webkit at 3.11.0 and 2b63ec3; record landed as #193"
+    artifact: "https://github.com/korczis/oscilla/releases/tag/v3.11.0"
+    commit: 78dfd0c34fc0b73e8a03192999081569e5914162
+    recorded_at: 2026-10-18T05:15:15Z
