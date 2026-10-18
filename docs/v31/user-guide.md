@@ -229,6 +229,9 @@ the output, Studio PLAY is refused.
 ## Keyboard shortcuts
 
 They apply while the Studio has focus and no text field is being edited; Tab is never taken.
+Tab onto a node selects it; to select several by keyboard, Tab to the next one and press **T**:
+it joins the nodes selected before. Tab onto a node that is already part of the selection
+keeps the selection, and **T** on a selected node takes it out.
 The same table is the Studio part of the one **Keyboard shortcuts** dialog. The keyboard button
 in the toolbar, Help (**?**) and the menu all open that dialog, and it lists the keys of the
 workspace in view and the keys that work everywhere (ADR 0050).
@@ -266,6 +269,7 @@ anywhere else in those workspaces Space is the instrument's.
 | Ctrl/⌘ Z | Undo |
 | Ctrl/⌘ Shift Z, Ctrl Y | Redo |
 | Ctrl/⌘ A | Select every node |
+| T | Add the focused node to the selection, or take it out |
 | N | Add a node (searchable picker) |
 | / | Find a node by name or type and frame it |
 | C | Connect the selected node (list of compatible inputs) |

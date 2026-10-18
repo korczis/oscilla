@@ -1325,7 +1325,9 @@
     <section class="osc-panel osc-p-studio" id="osc-panel-studio" data-osc="studio.compact"
       data-osc-panel="studio" data-osc-modes="playground sequencer"></section>
 
-    <!-- Studio announcements (outside the views: the compact widget announces too). -->
+    <!-- Studio announcements (outside the views: the compact widget announces too). A modal
+         dialog makes them inert, so while one is open workspace.js also says the sentence in
+         that dialog's own regions (data-osc studio.dlg.live / studio.dlg.alert, V272 C4). -->
     <p class="osc-sr-only" aria-live="polite" aria-atomic="true" data-osc="studio.live"
       x-text="studio.live"></p>
     <p class="osc-sr-only" aria-live="assertive" aria-atomic="true" data-osc="studio.alert"
