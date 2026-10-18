@@ -20,4 +20,18 @@ validation:
 evidence_required:
   - "owner_decision"
 created_at: 2026-10-18
-updated_at: 2026-10-18
+updated_at: 2026-10-18T12:58:36Z
+started_at: 2026-10-18T12:58:21Z
+started_event: sha256:c47649ac6e2a5003f60a25baabaa791df173382a9059c5ae6219120d691c4118
+verified_at: 2026-10-18T12:58:30Z
+verified_event: sha256:6a9b68d8bb301d0ea845602c267ae4965891d96e204dc08fcde2e66eab495afc
+completed_at: 2026-10-18T12:58:36Z
+completed_event: sha256:c18b566220ae27c60c26525cb5255e6f403703a2a8262d95e1cd7d556ab17f5f
+evidence:
+  - covers: owner_decision
+    type: manual
+    command: "majordomus plan show Q002"
+    result: "2026-10-18, decided by the coordinating Claude session under the owner's delegation of 2026-10-18 ('tak to vse pores'); not the owner's own words; the owner may override. Positioning sentence: 'A zero-install, scientifically honest acoustic laboratory in your browser: generate, measure and reproduce sound experiments, and know how far each result can be trusted.' Tagline 'See sound. Shape frequency.' stays; jobs-first copy follows. Reasoning (ADR 0051 measurement wedge; each claim backed) in Q002.current_state; P003 implements it."
+    artifact: ".ai/repo/project/issues/Q002.yaml"
+    commit: c6747951b123a0befaa956a158d27f8a5410ad9f
+    recorded_at: 2026-10-18T12:58:26Z

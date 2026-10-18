@@ -19,3 +19,18 @@ validation:
 evidence_required:
   - "owner_decision"
 created_at: 2026-10-18
+started_at: 2026-10-18T12:59:27Z
+started_event: sha256:77be156ddf6f94f6f80d9ab8767351ed2d320396516a3c1a7a0d059f0b558a66
+updated_at: 2026-10-18T12:59:40Z
+verified_at: 2026-10-18T12:59:35Z
+verified_event: sha256:77b7411edea3c1df54d3f2bb29f4b7d41ce31e9c7b7ab4fb6ce66f67bad9881c
+completed_at: 2026-10-18T12:59:40Z
+completed_event: sha256:c221d8f4154d45889bb6702fad274c1e044e893452a5e45180f2c2a16c8f05b6
+evidence:
+  - covers: owner_decision
+    type: manual
+    command: "majordomus plan show Q006"
+    result: "2026-10-18: under the owner's delegation ('tak to vse pores') and explicit approval in the session ('Ano, nahraj je'), the coordinating session replaced the ChatGPT project 'Oscilla' Instructions with a 3,697-character text derived from .ai/ (read back from the ChatGPT API: 3,697 characters, header 'OSCILLA project instructions (2026-10-18; ...'). The 2026-10-02 Sources files remain (follow-up in the owner's account)."
+    artifact: ".ai/repo/project/issues/Q006.yaml"
+    commit: c6747951b123a0befaa956a158d27f8a5410ad9f
+    recorded_at: 2026-10-18T12:59:33Z
