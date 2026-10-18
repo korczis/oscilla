@@ -4,7 +4,11 @@
 // so a WAV export is what live playback plays, rendered — never a second engine (§42) and never
 // a second copy of the timeline routing.
 //
-//   planOfflineRender(model, { duration, registry }) -> plan
+//   defaultRenderDuration(model, { sampleRate }) -> seconds   the render length when none is
+//     given: the graph's start time (one scheduling lead on a render-quantum boundary), the
+//     timeline (timelineEnd) and the output fade STUDIO_STOP_S, rounded up to a millisecond, so
+//     the last clip ends before the fade starts (V272 B11); 0 for a model without a timeline
+//   planOfflineRender(model, { duration, registry, sampleRate }) -> plan
 //     plan = { ok, refused, duration, render: { sampleRate, channels }, errors: [Diagnostic],
 //              limitations: [text], warnings: [text],
 //              nodes: [{ id, name, type, role: 'rendered' | 'skipped' | 'refused', reason }],
@@ -48,6 +52,7 @@ import { DEFAULT_RENDER, bufferStats, normalizeRenderOptions, render } from
   '../audio/offline-renderer.js';
 import { encodeWav } from '../audio/wav.js';
 import { MAX_OUTPUT_GAIN, RENDER_QUANTUM, SAFE_NYQUIST_FACTOR } from '../core/constants.js';
+import { SCHEDULE_LEAD_S } from '../audio/scheduler.js';
 import { clipTarget } from './clip-targets.js';
 import { NODE_REGISTRY } from './registry.js';
 import { validateStudioModel } from './validate.js';
@@ -90,8 +95,20 @@ function nodeRole(def, node) {
   return { role: 'skipped', reason: OFFLINE_TEXT.analysis };
 }
 
+/** The render length when no duration is given (see the header). */
+export function defaultRenderDuration(model, { sampleRate = DEFAULT_RENDER.sampleRate } = {}) {
+  const end = timelineEnd(model);
+  if (!(end > 0)) return 0;
+  // The runtime's start time on a fresh offline context (engine-hooks.js soon() at 0).
+  const q = RENDER_QUANTUM / sampleRate;
+  const start = Math.ceil(Math.max(SCHEDULE_LEAD_S, 2 * q) / q) * q;
+  return Math.ceil((start + end + STUDIO_STOP_S) * 1000 - 1e-6) / 1000;
+}
+
 /** What an offline render of `model` would contain (see the header). Never throws. */
-export function planOfflineRender(model, { duration = null, registry = NODE_REGISTRY } = {}) {
+export function planOfflineRender(model, {
+  duration = null, registry = NODE_REGISTRY, sampleRate = null,
+} = {}) {
   const plan = { ok: false, refused: false, duration: null,
     render: { sampleRate: DEFAULT_RENDER.sampleRate, channels: DEFAULT_RENDER.channels },
     errors: [], limitations: [], warnings: [], nodes: [], clips: [], automation: [] };
@@ -108,16 +125,6 @@ export function planOfflineRender(model, { duration = null, registry = NODE_REGI
     return plan;
   }
   plan.warnings = report.warnings.map((w) => w.message);
-  const d = duration != null ? duration : timelineEnd(model);
-  if (!(typeof d === 'number' && Number.isFinite(d) && d > 0)) {
-    plan.errors.push({ code: 'no-duration', severity: 'error', path: 'duration',
-      message: OFFLINE_TEXT.noDuration });
-  } else if (d > DEFAULT_RENDER.maxDuration) {
-    plan.errors.push({ code: 'too-long', severity: 'error', path: 'duration',
-      message: OFFLINE_TEXT.tooLong(DEFAULT_RENDER.maxDuration) });
-  } else {
-    plan.duration = d;
-  }
   const byId = new Map(model.graph.nodes.map((n) => [n.id, n]));
   const rendered = new Set();
   for (const n of model.graph.nodes) {
@@ -132,6 +139,17 @@ export function planOfflineRender(model, { duration = null, registry = NODE_REGI
     if (n.type === 'recorder') {
       plan.render = { sampleRate: n.params.sampleRate, channels: n.params.channels };
     }
+  }
+  const d = duration != null ? duration
+    : defaultRenderDuration(model, { sampleRate: sampleRate || plan.render.sampleRate });
+  if (!(typeof d === 'number' && Number.isFinite(d) && d > 0)) {
+    plan.errors.push({ code: 'no-duration', severity: 'error', path: 'duration',
+      message: OFFLINE_TEXT.noDuration });
+  } else if (d > DEFAULT_RENDER.maxDuration) {
+    plan.errors.push({ code: 'too-long', severity: 'error', path: 'duration',
+      message: OFFLINE_TEXT.tooLong(DEFAULT_RENDER.maxDuration) });
+  } else {
+    plan.duration = d;
   }
   const master = model.graph.nodes.find((n) => n.type === 'master');
   if (!master || !model.graph.edges.some((e) => e.to.node === master.id)) {
@@ -243,7 +261,7 @@ function trackProgress(ctx, duration, onProgress, aborted) {
 /** Render `model` offline (see the header). Rejects only on a browser/render failure. */
 export async function renderStudioOffline(model, opts = {}) {
   const plan = planOfflineRender(model, { duration: opts.duration ?? null,
-    registry: opts.registry });
+    registry: opts.registry, sampleRate: opts.sampleRate ?? null });
   if (!plan.ok) {
     return { ok: false, plan, errors: plan.errors.map((e) => e.message),
       limitations: plan.limitations };

@@ -114,8 +114,9 @@ test('§110 the recipe is derived from the topology and the measurement engine a
     /not logarithmic/);
   const noClips = JSON.parse(serializeStudio(m));
   noClips.timeline.clips = [];
-  assert.deepStrictEqual(recipeFromStudio(normalizeStudio(noClips), { sampleRate: SR }).recipe
-    .analysis, { ...DEFAULT_TIMING, phase: false, aggregation: 'mean' }, 'engine defaults');
+  // No engine default stands in for a missing clip: the timeline shows no pass (V272 A8).
+  assert.match(recipeFromStudio(normalizeStudio(noClips), { sampleRate: SR }).reason,
+    /There is no noise-check clip/);
 });
 
 test('ADR 0019: the recipe stays authoritative — Studio never enters configHash', () => {

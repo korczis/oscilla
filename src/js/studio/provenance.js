@@ -34,8 +34,8 @@
 //     the Studio semantics experiments/validate.js does not check (node types, ports, cycles),
 //     plus hash and canonical-form agreement and, when the block has one, that `measured` names
 //     the measured path of its own graph; ok and present false when there is no block
-//   recipeFromStudio(model, { sampleRate, repeats, profileId }) -> { ok: true, recipe, sweepId,
-//     analyzerId } | { ok: false, reason }
+//   recipeFromStudio(model, { sampleRate, repeats, profileId, outputLevel }) -> { ok: true,
+//     recipe, sweepId, analyzerId } | { ok: false, reason }
 
 import { canonicalJson } from '../experiments/canonical-json.js';
 import { MEASURED_PATH_VERSION, measuredPathHash } from '../experiments/hash.js';
@@ -154,21 +154,27 @@ const nameOf = (n) => (n.metadata && n.metadata.name) || n.id;
 const byCode = (x, y) => (x < y ? -1 : x > y ? 1 : 0);
 
 /**
- * The measurement reference of a model: the first Transfer Analyzer (array order) whose
- * REFERENCE input comes from a Sweep's reference output, with that Sweep and edge; null when
- * there is none. { byId, analyzer, sweep, edge } | null; `analyzers` counts the analyzers.
+ * The measurement reference of a model: the Transfer Analyzer whose REFERENCE input comes from a
+ * Sweep's reference output, with that Sweep and edge; null when there is none. With more than
+ * one such analyzer the one with the lowest id (code unit) is named, so the answer never depends
+ * on array order (studioHash sorts records by id; V272 review A4), and recipeFromStudio refuses
+ * the graph. { byId, analyzer, sweep, edge, analyzers, references }: `analyzers` counts the
+ * analyzers, `references` the Sweep references into them.
  */
 function measurementReference(model) {
   const byId = new Map(model.graph.nodes.map((n) => [n.id, n]));
-  const analyzers = model.graph.nodes.filter((n) => n.type === 'transfer-analyzer');
+  const analyzers = model.graph.nodes.filter((n) => n.type === 'transfer-analyzer')
+    .sort((x, y) => byCode(x.id, y.id));
+  const found = [];
   for (const a of analyzers) {
     const ref = model.graph.edges.find((e) => e.to.node === a.id && e.to.port === 'reference');
     const src = ref ? byId.get(ref.from.node) : null;
     if (src && src.type === 'sweep' && ref.from.port === 'reference') {
-      return { byId, analyzer: a, sweep: src, edge: ref, analyzers: analyzers.length };
+      found.push({ analyzer: a, sweep: src, edge: ref });
     }
   }
-  return { byId, analyzer: null, sweep: null, edge: null, analyzers: analyzers.length };
+  const [first = { analyzer: null, sweep: null, edge: null }] = found;
+  return { byId, ...first, analyzers: analyzers.length, references: found.length };
 }
 
 /** The analyzer's observed chain, walked back through OBSERVED inputs: { nodes, edges }. */
@@ -194,7 +200,8 @@ const sweepRoute = (model, sweep) => model.graph.edges.filter((e) => e.from.node
 /**
  * The measured path of a model (see the header): the ids, each list sorted by code unit, of the
  * nodes, edges and measurement clips recipeFromStudio reads; null without a Sweep reference
- * into a Transfer Analyzer. The path is reported whether or not recipeFromStudio would accept
+ * into a Transfer Analyzer (with more than one, the one into the lowest analyzer id: see
+ * measurementReference). The path is reported whether or not recipeFromStudio would accept
  * the graph; a Studio run records it only after the recipe was derived.
  */
 export function measuredPath(model) {
@@ -210,11 +217,23 @@ export function measuredPath(model) {
     clips: [...new Set(clips)].sort(byCode) };
 }
 
+/** Two output levels closer than this are the same (the gain controls round to 1e-4). */
+const LEVEL_TOLERANCE = 1e-6;
+
+/** "Sweep 1 audio to Master audio" for an edge (plain names, as the reasons use them). */
+const edgeText = (byId, e) => {
+  const a = byId.get(e.from.node);
+  const b = byId.get(e.to.node);
+  return `${a ? nameOf(a) : e.from.node} ${e.from.port} to ${b ? nameOf(b) : e.to.node} `
+    + `${e.to.port}`;
+};
+
 /**
  * Why the graph shows processing a MEASURE run does not do (null when it shows none): see
- * recipeFromStudio (V431 review A1).
+ * recipeFromStudio (V431 review A1, V272 review A5).
  */
-function unusedProcessing(model, byId, sweep, analyzer, applied) {
+function unusedProcessing(model, byId, ref, applied, outputLevel) {
+  const { sweep, analyzer } = ref;
   const out = sweepRoute(model, sweep);
   if (!out.length) {
     return `${nameOf(sweep)} is not connected to the Master Output; the measurement plays the `
@@ -228,7 +247,25 @@ function unusedProcessing(model, byId, sweep, analyzer, applied) {
         + 'recorded and never measured. Connect the Sweep directly to the Master Output.';
     }
   }
-  const cals = observedWalk(model, byId, analyzer).nodes.filter((n) => n.type === 'calibration');
+  const walk = observedWalk(model, byId, analyzer);
+  for (const e of [ref.edge, ...out, ...walk.edges]) {
+    if (e.props && e.props.muted === true) {
+      return `The connection from ${edgeText(byId, e)} is muted, but the measurement plays the `
+        + 'sweep and records the input regardless. Unmute it.';
+    }
+  }
+  if (isNum(outputLevel)) {
+    for (const e of out) {
+      const m = byId.get(e.to.node);
+      const level = m.params.level;
+      if (isNum(level) && Math.abs(level - outputLevel) > LEVEL_TOLERANCE) {
+        return `${nameOf(m)} shows level ${level}, but the measurement plays at ${outputLevel}, `
+          + 'the output level MEASURE uses (the Studio gives the output back before the run). '
+          + 'Make them agree (the Master Output level, or the output level in MEASURE).';
+      }
+    }
+  }
+  const cals = walk.nodes.filter((n) => n.type === 'calibration');
   for (const c of cals) {
     const id = c.params.profileId || null;
     if (id !== applied) {
@@ -252,6 +289,52 @@ function unusedProcessing(model, byId, sweep, analyzer, applied) {
   return null;
 }
 
+/** The measurement clip actions, the phases in the order the engine runs them (planTimeline). */
+const PHASES = Object.freeze(['noise-check', 'pre-roll', 'stimulus', 'tail', 'analysis']);
+const ACTIONS = Object.freeze([...PHASES, 'capture']);
+const PHASE_TEXT = 'noise check, pre-roll, stimulus, tail and analysis';
+const secs = (x) => +x.toFixed(6);
+const clipEndS = (c) => c.start + c.duration;
+
+/**
+ * Why the measurement clips are not the pass the engine runs (null when they are; V272 review
+ * A8): the engine runs the noise check, then one capture of pre-roll + whole sweep + tail
+ * straight after it, then the analysis, so each phase clip must be there, in that order, back to
+ * back, the stimulus clip exactly the Sweep's length, and the capture clip from the pre-roll's
+ * start to the tail's end. `clips` maps each action to its one clip.
+ */
+function passMismatch(clips, sweep) {
+  const stim = clips.stimulus;
+  if (stim.duration > sweep.params.duration + DURATION_TOLERANCE_S) {
+    return `The stimulus clip (${stim.duration} s) is longer than ${nameOf(sweep)} `
+      + `(${sweep.params.duration} s); the tail starts when the sweep ends.`;
+  }
+  const pairs = PHASES.slice(1).map((b, i) => [PHASES[i], b]);
+  for (const [a, b] of pairs) {
+    const end = clipEndS(clips[a]);
+    if (clips[b].start < end - DURATION_TOLERANCE_S) {
+      return `The ${b} clip starts at ${secs(clips[b].start)} s, before the ${a} clip ends `
+        + `(${secs(end)} s); the measurement runs ${PHASE_TEXT} in that order.`;
+    }
+  }
+  for (const [a, b] of pairs) {
+    const gap = clips[b].start - clipEndS(clips[a]);
+    if (gap > DURATION_TOLERANCE_S) {
+      return `${secs(gap)} s pass between the ${a} clip and the ${b} clip; the measurement runs `
+        + `${PHASE_TEXT} back to back.`;
+    }
+  }
+  const cap = clips.capture;
+  const from = clips['pre-roll'].start;
+  const to = clipEndS(clips.tail);
+  if (Math.abs(cap.start - from) > DURATION_TOLERANCE_S
+    || Math.abs(clipEndS(cap) - to) > DURATION_TOLERANCE_S) {
+    return `The capture clip spans ${secs(cap.start)}-${secs(clipEndS(cap))} s; the measurement `
+      + `records from the pre-roll's start to the tail's end (${secs(from)}-${secs(to)} s).`;
+  }
+  return null;
+}
+
 /**
  * The measurement recipe a Studio measurement topology describes (§106, §110, ADR 0038):
  *   stimulus  the logarithmic Sweep wired to a Transfer Analyzer REFERENCE, exactly as the Sweep
@@ -259,19 +342,29 @@ function unusedProcessing(model, byId, sweep, analyzer, applied) {
  *             f1 = start, f2 = end, duration, level, fade = min(SWEEP_FADE_S, duration / 4) }
  *             at `sampleRate`)
  *   analysis  timing from the measurement clips (pre-roll → preRollS, tail → postRollS,
- *             noise-check → noiseCheckS; engine DEFAULT_TIMING only where a clip is absent),
- *             phase from the Transfer Analyzer, aggregation 'mean'
+ *             noise-check → noiseCheckS), phase from the Transfer Analyzer, gapS the engine's
+ *             DEFAULT_TIMING (one repeat has no gap), aggregation 'mean'
  *   repeats   opts.repeats (1)
- * The recipe must be what the timeline shows (V431 review A3/A7, X5), so it is REFUSED with a
- * reason — never silently substituted — when a timing clip is outside the engine's
- * TIMING_LIMITS, when more than one clip has the same timing or stimulus action (the pass would
- * be ambiguous: `studioHash` sorts records by id, array order is not part of the setup), or when
- * a stimulus clip is shorter than the Sweep it plays (the engine always plays the whole sweep).
+ * The recipe must be what the timeline shows (V431 review A3/A7, X5; V272 review A8), so it is
+ * REFUSED with a reason — never silently substituted — when a measurement clip action (noise
+ * check, pre-roll, stimulus, tail, analysis, capture) has no clip or more than one (the pass
+ * would be ambiguous: `studioHash` sorts records by id, array order is not part of the setup),
+ * when a timing clip is outside the engine's TIMING_LIMITS, when a stimulus clip is shorter or
+ * longer than the Sweep it plays (the engine always plays the whole sweep, and the tail follows
+ * it), and when the clips are not the pass the engine runs: the phases in engine order, back to
+ * back, the capture clip from the pre-roll's start to the tail's end (passMismatch).
  * It is also REFUSED when the graph shows processing the run does not do (V431 review A1), since
  * the experiment records the whole Studio graph beside the recipe:
+ *   - more than one Sweep reference reaches a Transfer Analyzer (V272 review A4): which one is
+ *     measured would be a choice the graph does not show
  *   - the Sweep's audio output reaches anything but the Master Output directly, or nothing:
  *     the engine plays its own stimulus straight into the output, so a filter in between would
  *     be listed and never measured
+ *   - a connection on the measured path (the Sweep reference, its route out, the observed chain)
+ *     is muted (V272 review A5): the run plays and records through it regardless
+ *   - the Master Output level differs from `outputLevel`, the output level the run plays at
+ *     (MEASURE's, engine.gainLevel once the Studio gave the output back; V272 review A5);
+ *     not checked when `outputLevel` is not a number
  *   - a Calibration node on the observed path names a profile other than `profileId`, the one
  *     MEASURE applies (null or absent: none), or MEASURE applies one the graph does not show,
  *     or it holds the profile's edges (MEASURE never extrapolates)
@@ -280,15 +373,21 @@ function unusedProcessing(model, byId, sweep, analyzer, applied) {
  * The result passes experiments/schema.js createRecipe; measurement/engine.js validateRecipe
  * accepts it (unit test). Never throws.
  */
-export function recipeFromStudio(model, { sampleRate, repeats = 1, profileId = null } = {}) {
+export function recipeFromStudio(model, { sampleRate, repeats = 1, profileId = null,
+  outputLevel = null } = {}) {
   const no = (reason) => ({ ok: false, reason });
   if (!isNum(sampleRate)) return no('A sample rate is needed to derive the stimulus.');
-  const { byId, analyzer, sweep, analyzers } = measurementReference(model);
+  const ref = measurementReference(model);
+  const { byId, analyzer, sweep, analyzers } = ref;
   if (!analyzers) return no('The Studio has no Transfer Analyzer.');
   if (!sweep) return no('No Sweep reference reaches a Transfer Analyzer.');
+  if (ref.references > 1) {
+    return no(`More than one Sweep reference reaches a Transfer Analyzer (${ref.references}); `
+      + 'one measurement measures one Sweep against one analyzer. Remove the others.');
+  }
   const p = sweep.params;
   if (p.curve !== 'log') return no(`${sweep.metadata.name} is not logarithmic.`);
-  const unused = unusedProcessing(model, byId, sweep, analyzer, profileId || null);
+  const unused = unusedProcessing(model, byId, ref, profileId || null, outputLevel);
   if (unused) return no(unused);
   let stimulus;
   try {
@@ -298,30 +397,36 @@ export function recipeFromStudio(model, { sampleRate, repeats = 1, profileId = n
   } catch (e) {
     return no(`${sweep.metadata.name}: ${e && e.message}`);
   }
-  for (const action of ['noise-check', 'pre-roll', 'stimulus', 'tail']) {
-    if (measurementClips(model, action).length > 1) {
+  const clips = {};
+  for (const action of ACTIONS) {
+    const found = measurementClips(model, action);
+    if (found.length > 1) {
       return no(`More than one ${action} clip: one pass of the timeline is one measurement.`);
     }
+    if (!found.length) {
+      return no(`There is no ${action} clip; one pass of the measurement clips is the whole `
+        + `measurement (${PHASE_TEXT}, and the capture window).`);
+    }
+    [clips[action]] = found;
   }
-  const [stim] = measurementClips(model, 'stimulus');
-  if (stim && stim.duration < p.duration - DURATION_TOLERANCE_S) {
+  const stim = clips.stimulus;
+  if (stim.duration < p.duration - DURATION_TOLERANCE_S) {
     return no(`The stimulus clip (${stim.duration} s) is shorter than ${sweep.metadata.name} `
       + `(${p.duration} s); the measurement plays the whole sweep.`);
   }
   const timing = {};
   for (const [action, key] of [['pre-roll', 'preRollS'], ['tail', 'postRollS'],
     ['noise-check', 'noiseCheckS']]) {
-    const [c] = measurementClips(model, action);
-    if (!c) {
-      timing[key] = DEFAULT_TIMING[key];
-    } else if (within(c.duration, TIMING_LIMITS[key])) {
-      timing[key] = c.duration;
-    } else {
+    const c = clips[action];
+    if (!within(c.duration, TIMING_LIMITS[key])) {
       const [lo, hi] = TIMING_LIMITS[key];
       return no(`The ${action} clip lasts ${c.duration} s; the measurement engine accepts `
         + `${lo}-${hi} s.`);
     }
+    timing[key] = c.duration;
   }
+  const mismatch = passMismatch(clips, sweep);
+  if (mismatch) return no(mismatch);
   const analysis = {
     preRollS: timing.preRollS,
     postRollS: timing.postRollS,

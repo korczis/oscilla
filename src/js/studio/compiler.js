@@ -13,7 +13,9 @@
 //     Audio never discovers a topology (§38). Unsupported or unavailable nodes compile to an
 //     explicit status with a reason instead of throwing (§170-§171).
 //     PlanNode = { id, type, name, def, adapter, params, status: 'ready' | 'degraded' |
-//                  'offline-only' | 'data', code, reason }
+//                  'offline-only' | 'data', code, reason, clocked }
+//                clocked: an unmuted TRIGGER edge reaches the adapter's `clock` input (Random,
+//                Step Modulator): the node steps on the transport's triggers (adapters/nodes.js)
 //     PlanEdge = { id, kind: 'audio' | 'control' | 'trigger' | 'analysis', from, to, fromPort,
 //                  toPort, paramDef, props (complete), status: 'active' | 'inactive' |
 //                  'logical' | 'data', code, reason }
@@ -35,7 +37,8 @@
 //                                                      toPort, kind, gain, detached); connect
 //                                                      false: the gain is not connected to its
 //                                                      target (an owner wires it, runtime.js)
-//   computeBases(planNode, incoming, hooks, peaks) -> { base, gains, limited, exceeds }
+//   computeBases(planNode, incoming, hooks, peaks) -> { base, gains, limited, clamped,
+//                                                      lowered, exceeds }
 //   disposeHandle(handle, acct)                       stop, disconnect, untrack
 //
 // Routing semantics:
@@ -55,6 +58,10 @@
 //     the base is clamped and the upward excursion of the edges is scaled down to fit
 //     (`limited`, visible in debugInfo). A frequency an automation lane owns is sized from the
 //     lane's peak, not from the static parameter it overrides (`peaks`, V431 review X1).
+//     An Oscillator's detune (cents) shifts its frequency and spends the same headroom: the
+//     static detune is lowered to fit (`clamped`, by `lowered` cents), its edges scaled (V272
+//     review A7). That lowering is not an edge offset: a lane that owns the parameter overrides
+//     the static value and is bounded on its own (V272 review R-1).
 //     Other parameters may exceed their range through
 //     modulation; that is reported (`exceeds`), never hidden (§242).
 //   - TRIGGER and ANALYSIS edges have no Web Audio connection: they are logical bindings for
@@ -163,8 +170,10 @@ export function compileStudio(model, {
       reason = why.reason || why;
     } else status = 'ready';
     if (node.type === 'master') masterId = id;
+    const clocked = !!(adapter && adapter.clock) && model.graph.edges.some((e) => e.to.node === id
+      && e.to.port === adapter.clock && !(e.props && e.props.muted));
     nodes.set(id, Object.freeze({ id, type: node.type, name: nameOf(node, def), def, adapter,
-      params: node.params, status, code, reason }));
+      params: node.params, status, code, reason, clocked }));
   }
   const rank = new Map(report.order.map((id, i) => [id, i]));
   const edges = new Map();
@@ -257,7 +266,8 @@ const changedKeys = (a, b) => [...new Set([...Object.keys(a), ...Object.keys(b)]
 
 /**
  * The minimal patch from `prev` to `next` (both plans). A parameter change on a running node
- * is `node-params` unless it touches a structural key of its adapter (`node-replace`); edges of
+ * is `node-params` unless it touches a structural key of its adapter (`node-replace`), as a
+ * node that becomes clocked or free-running is (`clocked`, another builder); edges of
  * a replaced node are `edge-rewire` (rebuilt and crossfaded); a modulation edge whose mapping
  * changes is rewired (it targets another AudioParam); other edge property changes are
  * `edge-props`. `owned` (Map node id → Set of owned parameter keys): on a node with an owned
@@ -274,7 +284,7 @@ export function diffPlans(prev, next, { owned = null, replace = null } = {}) {
     const p = prev.nodes.get(id);
     if (!p) { ops.push({ op: 'node-add', id }); continue; }
     if (p.type !== n.type || p.status !== n.status || p.reason !== n.reason
-      || (replace && replace.has(id))) {
+      || p.clocked !== n.clocked || (replace && replace.has(id))) {
       replaced.add(id);
       ops.push({ op: 'node-replace', id, keys: [] });
       continue;
@@ -440,12 +450,21 @@ export function createEdgeHandle(planEdge, fromHandle, toHandle, ctxEnv,
  *   base:    { key: { value (parameter unit, offsets included), cents (log edges) } }
  *   gains:   Map<edgeId, edge GainNode value>   (muted edges: 0)
  *   limited: Set<edgeId>   upward excursion scaled down to stay ≤ 0.95 × Nyquist
+ *   clamped: Set<key>      static base lowered to stay ≤ 0.95 × Nyquist
+ *   lowered: { key: amount } how far each base was moved to fit its range (positive: down), so
+ *                          base.value + lowered − param is the edges' constant part alone
  *   exceeds: [key]         base + modulation may leave the parameter range (reported, §242)
  * peaks: { key: value } (optional) the highest value another owner (an automation lane) gives a
  * parameter, in its unit and before the edges' offsets. A frequency's headroom is sized from
  * the larger of its base and that peak (plus the same offsets), never above the cap: the lane
  * overrides the static value, so a lane held at 20 kHz under a static 440 Hz still limits a
  * two-octave LFO to 0.95 × Nyquist (V431 review X1).
+ * A `detune` in cents beside a `frequency` in Hz (the Oscillator) shifts that frequency by
+ * 2^(cents/1200) and spends the same headroom (V272 review A7). In order: the static detune
+ * (its base or lane peak, offsets included) is lowered to fit above the frequency's reference
+ * and, when positive, lowers the cap of everything after it; then the frequency's linear and
+ * log edges as above; then the upward excursion of the detune's own edges is scaled to what
+ * is left. A negative detune grants the frequency parameter no extra room.
  */
 export function computeBases(planNode, incoming, hooks, peaks = null) {
   const base = {};
@@ -457,6 +476,12 @@ export function computeBases(planNode, incoming, hooks, peaks = null) {
   }
   const gains = new Map();
   const limited = new Set();
+  const clamped = new Set();
+  const lowered = {};
+  const lower = (key, to) => {
+    lowered[key] = (lowered[key] || 0) + base[key].value - to;
+    base[key].value = to;
+  };
   const exceeds = [];
   const groups = new Map();
   for (const { edge, handle } of incoming) {
@@ -476,33 +501,59 @@ export function computeBases(planNode, incoming, hooks, peaks = null) {
     groups.get(key).push({ id: edge.id, a, up: Math.max(a * lo, a * hi),
       down: Math.min(a * lo, a * hi), log, scale: handle.scale });
   }
-  for (const [key, b] of Object.entries(base)) {
+  const offsetOf = (key) => {
+    const d = base[key].value + (lowered[key] || 0) - planNode.params[key];
+    return Number.isFinite(d) ? d : 0;
+  };
+  const peakOf = (key) => (peaks && Number.isFinite(peaks[key])
+    ? peaks[key] + offsetOf(key) : -Infinity);
+  // The detune that shifts the frequency (V272 A7), and the scale its edges get from it.
+  const unitOf = (key) => (defs.get(key) || {}).unit;
+  const detune = unitOf('frequency') === 'Hz' && unitOf('detune') === 'cents' ? base.detune
+    : null;
+  const detunePeak = detune ? peakOf('detune') : -Infinity; // before its base is lowered
+  let detuneK = 1;
+  // Frequencies first: a detune's room is decided while its frequency is sized.
+  const keys = Object.keys(base).sort((x, y) => (defs.get(y).unit === 'Hz')
+    - (defs.get(x).unit === 'Hz'));
+  for (const key of keys) {
+    const b = base[key];
     const p = defs.get(key);
     const list = groups.get(key) || [];
     const isFreq = p.unit === 'Hz';
     const cap = isFreq && hooks ? Math.min(p.max, hooks.safeMaximum) : p.max;
-    const offset = Number.isFinite(b.value - planNode.params[key])
-      ? b.value - planNode.params[key] : 0;
+    const peak = peakOf(key);
     if (isFreq) {
-      if (b.value > cap) b.value = cap;
-      if (b.value < p.min) b.value = p.min;
+      if (b.value > cap) { lower(key, cap); clamped.add(key); }
+      if (b.value < p.min) lower(key, p.min);
     }
-    const peak = peaks && Number.isFinite(peaks[key]) ? peaks[key] + offset : -Infinity;
     const ref = isFreq ? Math.min(cap, Math.max(b.value, peak)) : b.value;
+    // A positive static detune lowers the cap of the frequency's linear and log edges.
+    let capF = cap;
+    if (isFreq && key === 'frequency' && detune && hooks) {
+      const room0 = CENTS_PER_OCTAVE * Math.log2(cap / Math.max(ref, 1e-9));
+      if (detune.value + detune.cents > room0) {
+        lower('detune', room0 - detune.cents);
+        clamped.add('detune');
+      }
+      const stat = Math.max(detune.value, detunePeak) + detune.cents;
+      capF = cap / 2 ** (Math.max(0, Math.min(room0, stat)) / CENTS_PER_OCTAVE);
+    }
     const lin = list.filter((x) => !x.log);
     const logs = list.filter((x) => x.log);
     let up = lin.reduce((s, x) => s + x.up, 0);
-    let k = 1;
-    if (isFreq && up > 0 && ref + up > cap) {
-      k = Math.max(0, cap - ref) / up;
+    let k = key === 'detune' && detune ? detuneK : 1;
+    if (isFreq && up > 0 && ref + up > capF) {
+      k = Math.max(0, capF - ref) / up;
       for (const x of lin) limited.add(x.id);
-      up *= k;
     }
+    up *= k;
     for (const x of lin) gains.set(x.id, x.a * k * x.scale);
     let kc = 1;
+    let usedC = 0;
     if (logs.length) {
       const top = Math.max(ref + up, 1e-9);
-      const room = CENTS_PER_OCTAVE * Math.log2(cap / top);
+      const room = CENTS_PER_OCTAVE * Math.log2(capF / top);
       const upC = logs.reduce((s, x) => s + CENTS_PER_OCTAVE * x.up, 0);
       if (isFreq && b.cents > room) {
         b.cents = room;
@@ -513,6 +564,17 @@ export function computeBases(planNode, incoming, hooks, peaks = null) {
         for (const x of logs) limited.add(x.id);
       }
       for (const x of logs) gains.set(x.id, x.a * kc * x.scale);
+      usedC = b.cents + upC * kc;
+    }
+    // The detune's edges share the detune AudioParam with the log edges: what is left of it.
+    if (isFreq && key === 'frequency' && detune && hooks) {
+      const dl = (groups.get('detune') || []).filter((x) => !x.log);
+      const upD = dl.reduce((s, x) => s + x.up, 0);
+      const roomD = CENTS_PER_OCTAVE * Math.log2(capF / Math.max(ref + up, 1e-9)) - usedC;
+      if (upD > 0 && upD > roomD) {
+        detuneK = Math.max(0, roomD) / upD;
+        for (const x of dl) limited.add(x.id);
+      }
     }
     if (!isFreq && list.length) {
       const down = lin.reduce((s, x) => s + x.down, 0);
@@ -521,5 +583,5 @@ export function computeBases(planNode, incoming, hooks, peaks = null) {
       exceeds.push(key);
     }
   }
-  return { base, gains, limited, exceeds };
+  return { base, gains, limited, clamped, lowered, exceeds };
 }

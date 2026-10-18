@@ -4,13 +4,13 @@ version: 1
 kind: rule
 title: The release-gate receipt binds everything the verdict depended on
 description: The receipt release:prepare writes binds the version, the dist sha256, the source digest and a digest of every tracked file except the release record files, so any change on main between prepare and publish makes release:publish refuse until the gate is re-run.
-statement: The release-gate receipt binds the version, the source digest, the sha256 of dist/index.html and gateTree, a digest of every tracked file except the release records .ai/repo/releases/v*.yaml and .ai/local/. release:publish refuses while any of the four differs from the checkout it runs in or is absent from the receipt or from the current fingerprint, so a change to tests, package.json, scripts, workflows, the .ai layer or source after the gate passed needs the full gate again before a tag is created.
+statement: The release-gate receipt binds the version, the source digest, the sha256 of dist/index.html and gateTree, a digest of every tracked file except the release records .ai/repo/releases/v*.yaml and .ai/local/. release:publish refuses while any of the four differs from the checkout it runs in or is absent from the receipt or from the current fingerprint, so a change to tests, package.json, scripts, workflows, the .ai layer or source after the gate passed needs the full gate again before a tag is created. The receipt also binds how the gate ran: release:prepare refuses to start while OSC_BROWSERS or OSC_ORIGINS is set, runs the gate with OSC_STRICT_SKIPS=1 (an undeclared skip fails, as under CI) and records browsers chromium,firefox,webkit, origins file,http and skips declared-only, and release:publish refuses a receipt that records anything else or nothing.
 status: active
 class: blocking
 depends_on: [project.single-file-deliverable@2]
 tags: [release, gate, provenance]
 x-majordomus:
-  tests: [tests/unit/release-publish.test.mjs]
+  tests: [tests/unit/release-publish.test.mjs, tests/unit/release-gate-env.test.mjs]
 ---
 
 # Rationale
@@ -50,6 +50,16 @@ disarmed by hand, because nothing would have noticed them landing.
   `chore(release)` pull request.
 - Do not arm auto-merge on another pull request while a release is between prepare and
   publish. Nothing stops the merge; this rule makes the publish refuse afterwards.
+- The gate runs everything, the way CI runs it. A suite narrows its browsers and origins by
+  `OSC_BROWSERS` / `OSC_ORIGINS`, and outside CI it lets an undeclared skip pass with a
+  printed line (`tests/browser/lib/suite.cjs`), so a tree-bound receipt alone could say
+  "passed" for a gate that ran one browser (V272 D6: `OSC_BROWSERS=chromium npm run
+  release:prepare` wrote `result: passed`). `release:prepare` therefore refuses to start
+  while either variable is set (also as a dry run), runs every gate command with
+  `OSC_STRICT_SKIPS=1` and without them, and writes `browsers`, `origins` and `skips`
+  (`GATE_RUN`) into the receipt. `OSC_LOAD_MAX` and `OSC_LOAD_WAIT_MS` say when a suite may
+  start, not what it runs, and stay allowed; CI itself is not switched on, so the load gate
+  still holds the start on a busy machine.
 
 # Enforcement
 
@@ -57,7 +67,10 @@ disarmed by hand, because nothing would have noticed them landing.
 `git ls-files` outside `GATE_TREE_EXCLUDE`, in the source digest's manifest format;
 `currentFingerprint()` returns it as `gateTree`; `receiptProblems()` compares the keys of
 `RECEIPT_KEYS`, of which `gateTree` is one, and reports a key that either side lacks.
-`scripts/release-publish.mjs` puts every problem
+`gateEnvProblems()` refuses the
+narrowing variables, `gateEnv()` is the environment of the gate commands, and
+`receiptProblems()` refuses a receipt whose `browsers`, `origins` or `skips` is absent or
+differs from `GATE_RUN`. `scripts/release-publish.mjs` puts every problem
 `receiptProblems()` returns among its preconditions and refuses on any of them.
 
 `tests/unit/release-publish.test.mjs`, on a throwaway git repository:
@@ -78,6 +91,13 @@ disarmed by hand, because nothing would have noticed them landing.
   `--yes` both exit non-zero and nothing is tagged.
 - "gate receipt must match version, source digest, dist bytes and gate tree": a receipt
   written before this rule, which has no `gateTree`, is refused.
+
+`tests/unit/release-gate-env.test.mjs` ("V272 D6"): `release:prepare --dry-run` through
+`main()` with `OSC_BROWSERS=chromium`, an empty `OSC_BROWSERS`, the full list spelled out and
+`OSC_ORIGINS=file` each refuses and changes nothing, while `OSC_LOAD_MAX` and
+`OSC_LOAD_WAIT_MS` alone start; `gateEnv()` sets `OSC_STRICT_SKIPS` and leaves `CI` alone; a
+suite run in that environment throws on a skip the README does not declare; a receipt with
+`browsers: [chromium]`, `origins: [file]`, another `skips` or none of the three is refused.
 
 Not enforced here: that nobody merges to main during a release. The rule makes such a merge
 cost a second gate run instead of shipping untested. Not covered by the digest: file modes

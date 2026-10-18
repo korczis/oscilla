@@ -15,7 +15,9 @@ acceptance_criteria:
   - "npm run test:live -- --expect-version 3.11.0 --expect-commit <release commit> passes in chromium, firefox and webkit."
   - "node scripts/release-record.mjs --version 3.11.0 --check passes on the landed record."
 validation:
-  - "npm run test:live"
+  - "gh run view 39097666998 --json conclusion,headSha --jq '.conclusion + \" \" + .headSha' | grep -qx 'success 2b63ec382d4d4c49efa2553a2a6368cb41068fe2'"
+  - "npm run test:live -- --expect-version 3.11.0 --expect-commit 2b63ec382d4d4c49efa2553a2a6368cb41068fe2 (while Pages serves the release commit)"
+  - "npm run release:record -- --version 3.11.0 --check"
 evidence_required:
   - "verified"
 created_at: 2026-10-18

@@ -4,7 +4,12 @@ The working closure ledger for the v4.0 generation. It is built from evidence: f
 read-only audits of `main` at 27f7c62 (the V3.8 release) on 2026-10-05 (Studio and runtime; experiments,
 runs and measurement; workspace, persistence, accessibility, artifact and CI; the `.ai/` layer
 and docs), with tests run and failures reproduced by scripts. It is updated as items close; each
-closed item names the pull request that closed it.
+closed item names the pull request that closed it. The completion matrix, the findings tables
+and the release criteria below were last reconciled with `main` at 2d56148 (the V3.11 line) on
+2026-10-18; the dated "Update" sections after them are history. The matrix's Claims column
+names the `docs/CLAIMS.yaml` claims of each capability, and
+`tests/unit/knowledge-integrity.test.mjs` refuses a row or a criterion that names a guaranteed
+claim and reads MISSING, in review or fixing.
 
 Status words: **EXISTS** (the whole user path works and is tested), **PARTIAL**, **BROKEN**,
 **DUPLICATED**, **STALE**, **MISSING**. Priorities: **P0** (data integrity, false provenance,
@@ -26,30 +31,33 @@ mobile, significant performance), **P2** (polish, debt).
 
 ## Completion matrix
 
-| Capability | Model | Validate | Execute | Persist | UI | Provenance | A11y | Tests | Status |
-|---|---|---|---|---|---|---|---|---|---|
-| Studio model, desired/plan/applied, divergence | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | EXISTS — but see R1, R2 |
-| Runtime transaction (prepare/commit) | ✓ | ✓ | ✓ (#119) | – | ✓ | – | ✓ | prepare + commit injection | EXISTS |
-| Operation trace (Studio) | ✓ | – | ✓ | ephemeral by design | ✓ | – | ✓ | ✓ | EXISTS (gaps: locate, edges) |
-| Sequencer / timeline / automation | ✓ | ✓ | ✓ | ✓ | ✓ | – | ✓ | ✓ | EXISTS (one clip-target policy, R7 **closed** #154) |
-| Studio Microphone node | ✓ | ✓ | ✓ (#119) | – | Allow microphone | – | ✓ | ✓ | EXISTS |
-| Experiment definition | ✓ (#116) | ✓ | engine runs the bound recipe | ✓ (append-only versions) | ✓ | definition ref in result hash v4 | ✓ | ✓ | EXISTS (no separate plan compiler) |
-| Measurement run (state machine, cancel, repeats) | ✓ | ✓ | ✓ | aggregate only | ✓ | ✓ | ✓ | ✓ | EXISTS (no retry/attempt record) |
-| Calibration (level, frequency profile) | ✓ | ✓ | ✓ | session only | ✓ | as applied (#121); bound to its input (C1, #139) | ✓ | ✓ | EXISTS |
-| Quality | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | glyph + shape | ✓ | EXISTS |
-| Run store, immutability, baseline | ✓ | ✓ | – | IndexedDB / memory | ✓ | ✓ | ✓ | ✓ | EXISTS (unverified-import marker missing) |
-| Import / export / migration | ✓ | ✓ (validate before put) | – | ✓ | ✓ | hash recomputed | – | ✓ | EXISTS |
-| Semantic comparison | ✓ | – | – | – | ✓ | ✓ | ✓ | ✓ | EXISTS |
-| Studio provenance on a measurement | ✓ | ✓ | ✓ | ✓ | evidence, compare | whole graph + measured path (D3, #139) | – | ✓ | EXISTS |
-| Raw data retention | ADR 0049 | raw fields refused | released when a measurement settles; `keepRaw` tests only | derived only | MEASURE, About, README | IR carries post-roll sound (stated) | – | raw-retention | EXISTS (**closed** #158) |
-| Findings | – | – | – | – | – | – | – | – | MISSING |
-| Cross-domain Trace (result → run → definition → build → Studio) | ✓ (connections.js, ADR 0048) | record links refused whole | – | list-row links, no DB version | experiment detail, definition and finding rows, Studio dialog | every entry names its stored field; present only when the identity verifies | keyboard, focus, state in words | ✓ | in review (branch `feat/record-relations`, after #149) |
-| Knowledge explorer | – | – | – | – | static About | – | – | – | DESCOPED (ADR 0051, proposed) |
-| Method claims on evidence ("Why trust the method?" on a saved experiment) | – | – | – | – | – | – | – | claim-prose id check only | MISSING (ADR 0051; built after #149 and #151) |
-| Project model | singletons | – | – | split by domain | – | – | – | – | PARTIAL |
-| Workspace navigation / history / deep links | ✓ | – | – | URL only | ✓ | – | ✓ | ✓ | PARTIAL (W2, W3) |
-| Unsaved-work protection | – | – | – | – | – | – | – | – | MISSING (W2) |
-| `.ai/` knowledge layer | ✓ | doctor (local + CI) | – | – | – | – | – | all claims, rules, refs | EXISTS (ADRs still `proposed`; plan stale) |
+| Capability | Model | Validate | Execute | Persist | UI | Provenance | A11y | Tests | Status | Claims |
+|---|---|---|---|---|---|---|---|---|---|---|
+| Studio model, desired/plan/applied, divergence | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | EXISTS (R1, R2 **closed** #119) | `studio-model-plain-data`, `studio-runtime-divergence` |
+| Runtime transaction (prepare/commit) | ✓ | ✓ | ✓ (#119) | – | ✓ | – | ✓ | prepare + commit injection | EXISTS | `studio-click-free-live-edit` |
+| Operation trace (Studio) | ✓ | – | ✓ | ephemeral by design | ✓ | – | ✓ | ✓ | EXISTS (gaps: locate, edges) | `studio-operation-trace` |
+| Sequencer / timeline / automation | ✓ | ✓ | ✓ | ✓ | ✓ | – | ✓ | ✓ | EXISTS (one clip-target policy, R7 **closed** #154) | `studio-timeline-model`, `studio-automation-model`, `studio-transport-audio-clock` |
+| Studio Microphone node | ✓ | ✓ | ✓ (#119) | – | Allow microphone | – | ✓ | ✓ | EXISTS | – |
+| Experiment definition | ✓ (#116) | ✓ | engine runs the bound recipe | ✓ (append-only versions) | ✓ | definition ref in result hash v4 | ✓ | ✓ | EXISTS (no separate plan compiler) | `experiment-definitions` |
+| Measurement run (state machine, cancel, repeats) | ✓ | ✓ | ✓ | aggregate only | ✓ | ✓ | ✓ | ✓ | EXISTS (no retry/attempt record) | `measurement-workbench`, `measurement-abort-releases-everything`, `aggregate-primary-response` |
+| Calibration (level, frequency profile) | ✓ | ✓ | ✓ | session only | ✓ | as applied (#121); bound to its input (C1, #139) | ✓ | ✓ | EXISTS | `calibration-profiles`, `level-calibration-bound-to-input`, `experiment-calibration-as-measured` |
+| Quality | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | glyph + shape | ✓ | EXISTS | `measurement-quality` |
+| Run store, immutability, baseline | ✓ | ✓ | – | IndexedDB / memory | ✓ | ✓ | ✓ | ✓ | EXISTS (unverified-import marker missing) | `experiment-persistence`, `experiment-run-immutable` |
+| Import / export / migration | ✓ | ✓ (validate before put) | – | ✓ | ✓ | hash recomputed | – | ✓ | EXISTS | `experiment-round-trip`, `experiment-import-validated` |
+| Semantic comparison | ✓ | – | – | – | ✓ | ✓ | ✓ | ✓ | EXISTS | `semantic-run-comparison` |
+| Evidence on a run (value trace, reproducibility checklist) | ✓ (ADR 0044) | – | – | read from the stored record | experiment detail | every item names its stored field | states in words | ✓ | EXISTS (**shipped** #129, V3.10) | `run-evidence` |
+| Studio provenance on a measurement | ✓ | ✓ | ✓ | ✓ | evidence, compare | whole graph + measured path (D3, #139) | – | ✓ | EXISTS | `studio-experiment-provenance` |
+| Raw data retention | ADR 0049 | raw fields refused | released when a measurement settles; `keepRaw` tests only | derived only | MEASURE, About, README | IR carries post-roll sound (stated) | – | raw-retention | EXISTS (**closed** #158) | `raw-capture-retention` |
+| Findings | ✓ (findings.js, ADR 0046) | ✓ (statuses, references, unsafe input) | – | ✓ (IndexedDB DB version 4, memory fallback) | experiment detail, backlinks, export / import | each cited experiment's id and result hash | 390 px, light theme | ✓ | EXISTS (**shipped** #149, V3.11) | `findings-linked-to-evidence` |
+| Cross-domain Trace (result → run → definition → build → Studio) | ✓ (connections.js, ADR 0048) | record links refused whole | – | list-row links, no DB version | experiment detail, definition and finding rows, Studio dialog | every entry names its stored field; present only when the identity verifies | keyboard, focus, state in words | ✓ | EXISTS (**shipped** #151, V3.11) | `connected-records` |
+| Knowledge explorer | – | – | – | – | static About | – | – | – | DESCOPED (ADR 0051, proposed) | – |
+| Method claims on evidence ("Why trust the method?" on a saved experiment) | – | – | – | – | – | – | – | claim-prose id check only | MISSING (ADR 0051; open: #149 and #151, which it waited for, have landed, and nothing implements it) | – |
+| Project model | singletons | – | – | split by domain | – | – | – | – | PARTIAL | – |
+| Workspace navigation / history / deep links | ✓ (one hash dispatcher, ADR 0045) | refused links leave the address | – | URL only | ✓ | – | ✓ | ✓ | EXISTS (W2, W4 **closed** #130) | `workspace-navigation-history` |
+| Unsaved-work protection | ✓ (unsaved.js sources) | – | one beforeunload listener while anything would be lost | – | the browser's dialog; "unsaved result" in MEASURE | – | – | ✓ | EXISTS (W2 **closed** #130, V3.10) | `unsaved-work-guard` |
+| Keyboard: Space and the shortcut dialog | ✓ (shortcuts.js, ADR 0050) | – | ✓ | – | one dialog | – | ✓ | ✓ | EXISTS (W5 **closed** #159) | `space-one-owner` |
+| Test seam (`window.OSCILLA`) | ✓ (ADR 0052, proposed) | hooks refuse whole | TEST CONTEXT only for injection | – | – | – | – | ✓ | EXISTS (W7 **closed in code** #161, #169; W7d, W7j, W7k open) | `test-seam-contract` |
+| `.ai/` knowledge layer | ✓ | doctor (local + CI) | – | – | – | – | – | all claims, rules, refs | EXISTS (ADRs still `proposed`; plan reconciled with git, #144) | – |
 
 ## Findings and where they stand
 
@@ -70,7 +78,7 @@ mobile, significant performance), **P2** (polish, debt).
 | R2 | Runtime commit phase not exception-safe: a throw after the plan swap leaves the applied record stale (hidden divergence) | **closed** #119: post-swap failures are sticky Diagnostics, verdict `degraded` |
 | R3 | Studio Microphone node can never be enabled; help text points to a control that does not exist | **closed** #119: Allow microphone, including re-allow while playing |
 | W1 | Deleting the open Studio project leaves it looking saved; the next template replaces the graph without the unsaved-changes prompt (data loss) | **closed** #119: the open document detaches and stays unsaved |
-| W2 | No `beforeunload` guard, no history entries; reload/Back silently loses unsaved Studio work and an unsaved measurement | fixing: branch `fix/unsaved-work-is-protected` (ADR 0045) |
+| W2 | No `beforeunload` guard, no history entries; reload/Back silently loses unsaved Studio work and an unsaved measurement | **closed** #130 (V3.10.1, ADR 0045): claims `unsaved-work-guard` and `workspace-navigation-history` |
 | W3 | README privacy statement omits the `studio` / `studioSummaries` stores | **closed** #120: inventory test derives keys and stores from code |
 | C1 | Unbound manual level calibration applies to every input | **closed** #139: a reading is stored only once an input is known and bound to it; an unbound calibration never applies to a known input; records say "not bound to an input" (ADR 0017 resolution) |
 | D3 | Studio provenance hashes unconnected nodes, so identical measurements read as an execution change | **closed** #139: the Studio block also names the measured path with its own hash (experiment schema 4); compare classes changes outside it as unmeasured; earlier blocks record the whole graph and say so (ADR 0038 resolution) |
@@ -82,7 +90,8 @@ mobile, significant performance), **P2** (polish, debt).
 
 ### P2 (tracked)
 
-Diagnostic codes derived from message text (R5, fixing); clip-target policy duplicated between
+Diagnostic codes derived from message text (R5, **closed** #119: F5 of
+`tests/unit/v40-studio-runtime-closure.test.mjs`); clip-target policy duplicated between
 registry, timeline UI and transport (R7, **closed** #154: one pure function,
 `studio/clip-targets.js` `clipTarget`, read by the store, the timeline UI and the transport; the
 UI had offered event-clip targets, measurement targets and Automate on parameters the transport
@@ -94,12 +103,12 @@ silent carrier (R8); presentation-only edits pay a full compile while playing (R
 takes the revision with no compile, no runtime transaction and no timeline re-plan, the plan
 identity unchanged and the verdict in-sync, `tests/unit/v4-presentation-edits.test.mjs` and
 `presentation-edit` in `tests/browser/v31-studio-runtime.cjs`);
-`mode`/`workspace` split state and three hash routers (W4, fixing with W2: one dispatcher, ADR 0045); Space has two meanings and two
+`mode`/`workspace` split state and three hash routers (W4, **closed** #130 with W2: one dispatcher, ADR 0045); Space has two meanings and two
 shortcut dialogs (W5, **closed** #159, ADR 0050: Space has one owner per workspace, the same
 at every width (Hold to Play in the seven workspaces that play, load or analyse the instrument's
 signal, the Studio transport in Studio, nothing in Measure, Experiments, Learn and About, where
 it used to start the instrument), and one dialog lists the keys of the workspace in view and
-the global ones, each key once); disabled controls without a reason (W6, partly fixing); WebKit absent from
+the global ones, each key once); disabled controls without a reason (W6, open: no pull request on `main` names it); WebKit absent from
 engine/dsp/labs/sequencer CI and the About provenance tests skip in CI's shallow clone (CI1,
 **closed** #147: WebKit legs in both jobs, nothing narrowed; the unit job checks out full
 history and tags, and the About checks fail instead of skipping under CI without them);
@@ -138,23 +147,29 @@ held by `tests/unit/vocabulary.test.mjs`; still open: the same renames inside #1
 before they merge, and the import, validation and store messages and the derived-definition
 wording that the ADR's Consequences lists); the glossary exists since #120.
 
-## What v4.0 still lacks entirely
+## The v4.0 release criteria
 
-These are release criteria of the v4.0 brief that no code implements yet. They are built only
-as real, tested slices, in dependency order, never as placeholders:
+These are the release criteria of the v4.0 brief that no code implemented at the baseline. They
+are built only as real, tested slices, in dependency order, never as placeholders; a shipped one
+names its pull request and its claims:
 
-1. Experiment definition separate from run (#116, in review).
-2. Evidence on a run: a value traced through stored provenance, and a reproducibility checklist.
-3. Findings linked to evidence (ADR 0046, branch `feat/findings`, in review).
-4. Cross-domain Trace over real stored relations ("Connected records", ADR 0048, branch
-   `feat/record-relations`, in review; lands after #149).
-5. Unsaved-work protection and navigation history in the workspace.
+1. Experiment definition separate from run: **shipped** #116 (V3.9.0), claim
+   `experiment-definitions`.
+2. Evidence on a run (a value traced through stored provenance, and a reproducibility
+   checklist): **shipped** #129 (V3.10.0), claim `run-evidence`.
+3. Findings linked to evidence (ADR 0046): **shipped** #149 (the V3.11 line), claim
+   `findings-linked-to-evidence`.
+4. Cross-domain Trace over real stored relations ("Connected records", ADR 0048): **shipped**
+   #151 (the V3.11 line), claim `connected-records`.
+5. Unsaved-work protection and navigation history in the workspace (ADR 0045): **shipped** #130
+   (V3.10.1), claims `unsaved-work-guard` and `workspace-navigation-history`.
 6. ~~A knowledge explorer fed by a build-time index of claims, features, rules, ADRs and
    releases.~~ — descoped by ADR 0051 (proposed); replaced by method claims on a saved
    experiment's Evidence (item 7).
 7. "Why trust the method?" on a saved experiment's Evidence: for each recorded algorithm id,
    the published claim that covers exactly that version with its test, or a plain statement
-   that none does (ADR 0051). Open; built after #149 and #151 land.
+   that none does (ADR 0051). Open: #149 and #151, which it waited for, have landed, and no code
+   implements it.
 
 ## Release decision at this baseline
 

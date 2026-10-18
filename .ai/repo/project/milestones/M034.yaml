@@ -18,7 +18,6 @@ evidence:
   - covers: milestone_verified
     type: test
     command: "npm run release-gate"
-    result: "Release gate passes at 6512083 (V250 lanes, V251 coherent times, V253 first cycle on main): unit incl. freeze, version/build/dist checks, doctor, engine, dsp, labs, sequencer, browser (app, layout, qa), visual, V3 and Studio suites. Every known V2 limitation is fixed and proven (V249, V250, V251, V253) or accepted with evidence (V252)"
+    result: "Release gate passes at 6512083 (V250 lanes, V251 coherent times, V253 first cycle on main): unit incl. freeze, version/build/dist checks, doctor, engine, dsp, labs, sequencer, browser (app, layout, qa), visual, V3 and Studio suites. Every known V2 limitation is fixed and proven (V249, V250, V251, V253) or accepted with evidence (V252). (Commit 6512083, which majordomus recorded for this evidence, was not preserved: it was a local commit, rebased before the branch was pushed, and neither GitHub nor any clone holds it; the pushed commits of #46 are dated 13:05, after this record. The fixes this names are on main: V253 ccc54f6 (#39), V250 84e2c05 (#42) and V251 95f7b97 (#46, rebased from 6512083 as ad2a1ae).)"
     artifact: "fix/v251-coherent-times"
-    commit: 6512083573aa786499ab821b1ca08543279f0d22
     recorded_at: 2026-10-03T13:04:48Z

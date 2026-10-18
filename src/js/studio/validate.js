@@ -6,6 +6,8 @@
 //   analyzeCycles(model, { registry }) -> { order, cycles: [{ kind, nodes, edges }] }
 //   validateStudioImport(input, limits?, { registry }) ->
 //     { ok: true, model, warnings } | { ok: false, errors, warnings }
+//   validateStudioCommit(model, { registry }) -> validateStudioModel's report: the store's,
+//     the library's save and the export's predicate (a model its own import returns unchanged)
 // Diagnostic = studioDiagnostic (below, owner 'validate') + { path, nodeId?, edgeId?, detail? }.
 //
 // Graph rules (errors unless noted):
@@ -53,9 +55,9 @@ import { NODE_REGISTRY, validateParamValue } from './registry.js';
 import { clipRules } from './timeline.js';
 import {
   AUTOMATION_CURVES, MARKER_KINDS, MIN_CLIP_S, MUSICAL_TOLERANCE_S, NAME_MAX_CHARS,
-  NOTES_MAX_CHARS, POSITION_LIMIT, STUDIO_KIND, STUDIO_SCHEMA_VERSION, TEMPO_RANGE,
-  TIMELINE_MAX_S, TIME_MODES, TIME_SIGNATURE_DENOMINATORS, TITLE_MAX_CHARS,
-  TRACK_KINDS, CLIP_KINDS, normalizeStudio,
+  NOTES_MAX_CHARS, POSITION_LIMIT, POSITION_MESSAGE, STUDIO_KIND, STUDIO_SCHEMA_VERSION,
+  TEMPO_RANGE, TIMELINE_MAX_S, TIME_MODES, TIME_SIGNATURE_DENOMINATORS, TITLE_MAX_CHARS,
+  TRACK_KINDS, CLIP_KINDS, VIEW_LIMITS, isPosition, normalizeStudio,
 } from './schema.js';
 
 export const AUDIO_FEEDBACK_MESSAGE = 'Connection rejected: This would create an unsupported '
@@ -320,9 +322,8 @@ function validateGraph(model, registry, sink, ids) {
       return;
     }
     counts.set(n.type, (counts.get(n.type) || 0) + 1);
-    if (!n.position || !finite(n.position.x) || !finite(n.position.y)
-      || Math.abs(n.position.x) > POSITION_LIMIT || Math.abs(n.position.y) > POSITION_LIMIT) {
-      sink.error('invalid-position', `${nameOf(n)} has an invalid position.`,
+    if (!isPosition(n.position)) {
+      sink.error('invalid-position', `${nameOf(n)}: ${POSITION_MESSAGE}`,
         { path: `${path}.position`, nodeId: n.id });
     }
     checkName(n.metadata && n.metadata.name, `${path}.metadata.name`, sink);
@@ -811,19 +812,20 @@ function structure(c, doc, lim, registry) {
   }
   if (doc.view !== undefined && c.keys(doc.view, 'view', [], ['graph', 'timeline'])) {
     const v = doc.view;
+    const { pan, scale } = VIEW_LIMITS;
     if (v.graph !== undefined && c.keys(v.graph, 'view.graph', [], ['panX', 'panY', 'zoom'])) {
       for (const k of ['panX', 'panY']) {
-        if (v.graph[k] !== undefined) c.num(v.graph[k], `view.graph.${k}`, -1e9, 1e9);
+        if (v.graph[k] !== undefined) c.num(v.graph[k], `view.graph.${k}`, -pan, pan);
       }
-      if (v.graph.zoom !== undefined) c.num(v.graph.zoom, 'view.graph.zoom', 1e-6, 1e6);
+      if (v.graph.zoom !== undefined) c.num(v.graph.zoom, 'view.graph.zoom', ...scale);
     }
     if (v.timeline !== undefined
       && c.keys(v.timeline, 'view.timeline', [], ['pxPerSecond', 'scrollX'])) {
       if (v.timeline.pxPerSecond !== undefined) {
-        c.num(v.timeline.pxPerSecond, 'view.timeline.pxPerSecond', 1e-6, 1e6);
+        c.num(v.timeline.pxPerSecond, 'view.timeline.pxPerSecond', ...scale);
       }
       if (v.timeline.scrollX !== undefined) {
-        c.num(v.timeline.scrollX, 'view.timeline.scrollX', -1e9, 1e9);
+        c.num(v.timeline.scrollX, 'view.timeline.scrollX', -pan, pan);
       }
     }
   }
@@ -912,4 +914,59 @@ export function validateStudioImport(input, limits = STUDIO_IMPORT_LIMITS,
   const report = validateStudioModel(model, { registry });
   if (!report.ok) return { ok: false, errors: report.errors, warnings: report.warnings };
   return { ok: true, model, warnings: report.warnings };
+}
+
+// ---------------------------------------------------------------- the commit predicate
+
+/** Equal plain JSON data (key order ignored), as canonicalJson would compare it, without text. */
+function samePlain(a, b) {
+  if (a === b) return true;
+  if (a === null || b === null || typeof a !== 'object' || typeof b !== 'object') return false;
+  if (Array.isArray(a) !== Array.isArray(b)) return false;
+  const ka = Object.keys(a);
+  if (ka.length !== Object.keys(b).length) return false;
+  return ka.every((k) => Object.prototype.hasOwnProperty.call(b, k) && samePlain(a[k], b[k]));
+}
+
+export const NOT_NORMALIZED_MESSAGE = 'The change was refused: its result is not in the '
+  + 'Studio\'s normalized form, so a saved copy would differ from it.';
+
+/**
+ * What may be committed, saved and exported (V272 A1, A6): a model that the untrusted import of
+ * its own serialization accepts and returns unchanged, so that a save always loads again and
+ * matches its studioHash. It is the import's own stages (readStudioInput, the strict structure
+ * with its limits and string rules, validateStudioModel) over a model that must already be in
+ * normalized form; validateStudioModel runs first, so its messages stay the reasons of the
+ * semantic rules. An import-only refusal says what would not load again. The report has
+ * validateStudioModel's shape.
+ */
+export function validateStudioCommit(model, { registry = NODE_REGISTRY } = {}) {
+  const refused = (errors, warnings = []) => ({ ok: false, errors, warnings,
+    diagnostics: [...errors, ...warnings], order: null });
+  let normalized = false;
+  try {
+    normalized = samePlain(normalizeStudio(model, { registry }), model);
+  } catch (err) {
+    return refused([asError({ path: '', text: String(err && err.message) })]);
+  }
+  if (!normalized) {
+    return refused([asError({ path: '', text: NOT_NORMALIZED_MESSAGE }, 'not-normalized')]);
+  }
+  const report = validateStudioModel(model, { registry });
+  if (!report.ok) return report;
+  const lim = STUDIO_IMPORT_LIMITS;
+  const read = readStudioInput(model, lim);
+  let errors = read.ok ? [] : read.errors;
+  if (read.ok) {
+    const c = createChecker(lim.maxErrors);
+    try {
+      structure(c, model, lim, registry);
+    } catch (err) {
+      c.add('', `could not be checked (${String(err && err.message).slice(0, 120)})`);
+    }
+    errors = c.errors.map((e) => asError(e, e.code || 'invalid-structure'));
+  }
+  if (!errors.length) return report;
+  return refused(errors.map((e) => ({ ...e, message: 'A saved Studio would not load again: '
+    + `${e.path ? `${e.path} ` : ''}${e.message}.` })), report.warnings);
 }

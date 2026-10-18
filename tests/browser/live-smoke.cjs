@@ -5,14 +5,22 @@
 // deployed commit; a failed check fails the Pages workflow).
 //
 //   node tests/browser/live-smoke.cjs [--url https://korczis.github.io/oscilla/]
-//     [--expect-version X.Y.Z] [--expect-commit <40-hex sha>] [--browsers chromium,firefox,webkit]
+//     [--expect-version X.Y.Z] [--expect-commit <rev>] [--browsers chromium,firefox,webkit]
+//
+// --expect-commit takes a full SHA or a revision git resolves here (origin/main, a v* tag).
 //
 // Per browser, at 1536x1024:
 //   boot           html[data-ready] set, no boot/lab error, no console error or page error
 //   provenance     <script type="application/json" id="oscilla-build"> parses and has a version;
 //                  window.OSCILLA.version === region.version (=== --expect-version if given);
 //                  window.OSCILLA.build.commit === region commit (=== --expect-commit if given)
-//   status bar     reads "OSCILLA v<version>"
+//   release label  the page names itself as its stamp's release state says (ADR 0059):
+//                  window.OSCILLA.build.label is v<version> for a release commit ("tagged",
+//                  or "untagged": deployed before release:publish tagged it) and
+//                  <version>+<distance>.g<short> for a commit after its version's tag
+//                  ("after-tag"); a production page without a release state fails.
+//                  verify-deploy, before this smoke, checks that state against git
+//   status bar     reads "OSCILLA v<label>"
 //   panels         every core panel is visible
 //   compact Studio the Playground's Studio widget loads (V3.1 §269): it is visible, and its title,
 //                  signal path chips and clip chips are the Studio document's title, nodes and
@@ -57,7 +65,7 @@ const arg = (name, fallback) => {
 };
 const URL_ = arg('url', 'https://korczis.github.io/oscilla/');
 const EXPECT_VERSION = arg('expect-version', '');
-const EXPECT_COMMIT = arg('expect-commit', '');
+const EXPECT_COMMIT = resolveCommit(arg('expect-commit', ''));
 const RUN = suite.open({ name: 'live-smoke', browsers: arg('browsers') });
 const playwright = RUN.playwright;
 const BROWSERS = RUN.browsers;
@@ -111,6 +119,24 @@ function documentedUrl(base) {
   return u.href;
 }
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+/** A full SHA as given; anything else through git rev-parse (exit 2 when it resolves to none). */
+function resolveCommit(rev) {
+  if (!rev || /^[0-9a-f]{40}$/.test(rev)) return rev;
+  const r = require('node:child_process').spawnSync('git',
+    ['rev-parse', '--verify', `${rev}^{commit}`], { encoding: 'utf8' });
+  if (r.status !== 0) {
+    console.error(`[live-smoke] --expect-commit ${rev}: not a revision git resolves here`);
+    process.exit(2);
+  }
+  return r.stdout.trim();
+}
+
+/** The label a region's release state gives (releaseLabel() of scripts/release-metadata.mjs). */
+function labelOf(r) {
+  return r.release === 'after-tag' ? `${r.version}+${r.distance}.g${r.shortCommit}` : r.version;
+}
+const RELEASE_STATES = ['tagged', 'after-tag', 'untagged'];
 
 async function until(fn, test, ms) {
   const t0 = Date.now();
@@ -233,7 +259,8 @@ async function runOne(name) {
       }
       const b = window.OSCILLA && window.OSCILLA.build;
       return { region, error, version: window.OSCILLA && window.OSCILLA.version,
-        build: b ? { version: b.version, commit: b.commit, channel: b.channel } : null };
+        build: b ? { version: b.version, commit: b.commit, channel: b.channel, label: b.label,
+          release: b.release } : null };
     });
     const r = prov.region || {};
     check('provenance region parses', !prov.error && typeof r.version === 'string',
@@ -248,12 +275,21 @@ async function runOne(name) {
       && (!EXPECT_COMMIT || prov.build.commit === EXPECT_COMMIT),
     `build ${prov.build ? prov.build.commit : 'missing window.OSCILLA.build'}, region ${r.commit}`);
 
+    const label = r.version ? labelOf(r) : null;
+    const stamped = r.channel === 'production';
+    check(`the page names itself by its release state: v${label}`
+      + (stamped ? ` (${r.release}${r.distance ? ` +${r.distance}` : ''})` : ' (source build)'),
+    !!prov.build && prov.build.label === label
+      && (!stamped || (RELEASE_STATES.includes(r.release) && prov.build.release === r.release)),
+    `build.label ${prov.build && prov.build.label}, region release ${r.release}, `
+      + `distance ${r.distance}`);
+
     const sb = await page.evaluate(() => {
       const n = document.querySelector('.osc-statusbar .osc-sb-name');
       const v = document.querySelector('.osc-statusbar .osc-sb-version');
       return n && v ? `${n.textContent.trim()} ${v.textContent.trim()}` : null;
     });
-    const want = `OSCILLA v${prov.version}`;
+    const want = `OSCILLA v${label}`;
     check(`status bar reads "${want}"`, sb === want, `status bar "${sb}"`);
 
     const hidden = await page.evaluate((sels) => sels.filter((s) => {

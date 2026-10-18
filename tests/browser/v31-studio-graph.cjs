@@ -34,18 +34,35 @@
 //                        a slider drag is one history entry; AUTOMATE creates / reveals a lane;
 //                        no AUTOMATE on a low-pass Q, with the reason (R7); rename; clip
 //                        start/duration
+//   v272-inspector       §272 C2, C3, C8: a refused clip Start, Position X or Name is marked
+//                        on its field (aria-invalid, a visible message it describes) and shows
+//                        the model's value after blur; units are in each field's description
+//                        (Depth across Mapping); Automate reads "Automate <param>" / "Show
+//                        <param> lane" with no aria-pressed and follows a lane added or
+//                        removed; compact chips mark the selection with aria-current
 //   keyboard-connect     keyboard only: focus a node, C opens the list of compatible inputs,
 //                        Enter connects; arrows nudge (one entry per key sequence)
 //   focus-never-body     V431 review: Tab after a press that moved no focus selects the
 //                        focused node (Delete removes it, not the old selection); undo /
 //                        redo, a disabled Undo button, the timeline, the compact chips and
 //                        Back never leave focus on <body>
+//   v272-c1-timeline-focus  V272 C1: Delete on a lane's only point, Remove lane, undo on the
+//                        details panel's Close and details Delete point move focus to the next
+//                        lane's add button, Automate, or the track's add button; never <body>
+//   v272-c4-dialog-live  V272 C4: what is said while a Studio dialog stays open (patch Export,
+//                        Library Delete) is said in a live region inside it, exposed (chromium
+//                        reads the accessibility tree)
+//   v272-c5-keyboard-multiselect  V272 C5: Tab, T, Shift+Tab select Oscillator 1 and Envelope 1
+//                        by keyboard alone; Save as patch covers both; T removes; Ctrl/Cmd A
+//                        then Tab keeps the selection
+//   v272-c7-add-status   V272 C7: the Add node dialog's status region says "No node type
+//                        matches" and counts the matches
 //   inspector-focus      V431 U2: keyboard Enter on an Inspector connection link, "Select
 //                        source" and "Duplicate" lands on the resulting view's heading or the
 //                        same action of the copy, never <body>
 //   inspector-phone-focus  V431 U7, U8 at 390 x 844 touch: Inspector Connect… and Delete keep
 //                        focus in the visible Inspector (never the hidden graph, <body> or
-//                        main); "Automated · show lane" opens the Timeline subview, shows the
+//                        main); "Show Cutoff lane" opens the Timeline subview, shows the
 //                        lane, focuses its add-point button and says so
 //   inactive-cables      V431 A5/X3: Osc → Recorder (no Web Audio route) and LFO → Q on a
 //                        low-pass filter (no audible effect) are drawn is-inactive with a
@@ -74,6 +91,8 @@
 //   phone-port-targets   V431 U9, U10 at 390 x 844 touch: after Frame all every port target is
 //                        at least 24 px tall; the empty-graph hint shows on the phone
 //   light-theme          node titles, port labels and cables keep contrast on the light theme
+//   dark-theme           §272 C6: node category and control-input labels keep 4.5:1 on the
+//                        node surface in the dark theme
 //   screenshots          tests/visual/out-studio/ (not committed): desktop, phone, light
 //   no-console-errors
 'use strict';
@@ -197,6 +216,26 @@ const H = {
     const f = () => (++i >= k ? r() : requestAnimationFrame(f));
     requestAnimationFrame(f);
   }), n),
+  /** Where keyboard focus is: 'BODY', `node:<id>`, `key:<data-key>`, a data-osc or a tag. */
+  where: (page) => page.evaluate(() => {
+    const a = document.activeElement;
+    if (!a || a === document.body) return 'BODY';
+    return a.dataset.nodeId ? `node:${a.dataset.nodeId}` : a.dataset.key ? `key:${a.dataset.key}`
+      : a.dataset.osc || a.tagName.toLowerCase();
+  }),
+  /** Poll read() until test(value) holds, under a named deadline; the last value either way. */
+  settle: async (read, test, what, ms = 5000) => {
+    let last;
+    try {
+      return await until(async () => {
+        last = await read();
+        return test(last) ? last : null;
+      }, { ms, what });
+    } catch (e) {
+      if (e.name !== 'WaitTimeout') throw e;
+      return last;
+    }
+  },
 };
 
 /**
@@ -730,6 +769,141 @@ function defineChecks() {
     }), f1, f2, err, depth0, depth1, q, live: live.slice(-4) };
   });
 
+  // V272 C2, C3, C8 (§272 review). C2: a refused or non-numeric entry in an Inspector field
+  // (clip Start, Position X, Name) is marked on that field (aria-invalid, a visible message it
+  // is described by) and the field shows the model's value again once it loses focus. C8: the
+  // unit beside a field is part of its accessible description, also after Mapping changes it.
+  // C3: Automate is a plain action that follows the model ("Automate <param>" / "Show <param>
+  // lane", no aria-pressed): pressing it relabels the button and keeps focus on it, and a lane
+  // removed in the timeline turns it back; the compact chips mark the selection with
+  // aria-current, not with a toggle state that pressing never clears.
+  def('v272-inspector', async ({ page }) => {
+    await H.fresh(page);
+    const select = (s) => page.evaluate((x) => window.OSCILLA.studio.store.dispatch({
+      type: 'SELECTION_CHANGE', selection: x }), s);
+    const probe = (sel) => page.$eval(sel, (i) => {
+      const ids = (i.getAttribute('aria-describedby') || '').split(/\s+/).filter(Boolean);
+      const desc = ids.map((id) => document.getElementById(id)).filter(Boolean);
+      const err = desc.find((e) => e.classList.contains('osc-si-error') && !e.hidden);
+      const unit = i.closest('.osc-si-field').querySelector('.osc-si-unit');
+      return { shown: i.value, invalid: i.getAttribute('aria-invalid'),
+        error: err && err.getClientRects().length ? err.textContent : '',
+        description: desc.map((e) => e.textContent.trim()).filter(Boolean).join(' '),
+        unit: unit ? unit.textContent.trim() : '' };
+    });
+    // A reading that meets `test`, or the last one read when the deadline passes (the verdict
+    // then names the condition).
+    const read = (fn, test, what) => until(async () => {
+      const v = await fn();
+      return test(v) ? v : null;
+    }, { ms: 5000, what: `v272-inspector: ${what}` }).catch(() => fn());
+    const start = '[data-osc="studio.inspector.start"]';
+    const px = '[data-osc="studio.inspector.x"]';
+    const nm = '[data-osc="studio.inspector.name"]';
+    // C2: clip Start, non-numeric, then refused by the store (a negative start).
+    await select({ clips: ['clip-1'] });
+    await page.waitForSelector(start, { timeout: 5000 });
+    await page.fill(start, 'abc');
+    await page.press(start, 'Enter');
+    const nonNumeric = await read(() => probe(start), (v) => !!v.error, 'Start "abc" refused');
+    await page.fill(start, '-5');
+    await page.press(start, 'Enter');
+    const startRefused = await read(() => probe(start), (v) => /Clip start/.test(v.error),
+      'Start "-5" refused on the field');
+    await page.keyboard.press('Tab');
+    const startModel = (await H.model(page)).clips.find((c) => c.id === 'clip-1').start;
+    const startBlurred = await read(() => probe(start), (v) => v.shown === String(startModel),
+      'Start shows the model value after blur');
+    // C2: Position X out of range.
+    await select({ nodes: ['osc-1'] });
+    await page.waitForSelector(px, { timeout: 5000 });
+    await page.fill(px, '1e9');
+    await page.press(px, 'Enter');
+    const xRefused = await read(() => probe(px), (v) => !!v.error, 'Position X "1e9" refused');
+    await page.keyboard.press('Tab');
+    const oscX = (await H.model(page)).nodes.find((n) => n.id === 'osc-1').x;
+    const xBlurred = await read(() => probe(px), (v) => v.shown === String(oscX),
+      'Position X shows the model value after blur');
+    // C2: an empty name is refused on the Name field.
+    await page.fill(nm, '');
+    await page.press(nm, 'Enter');
+    const nameRefused = await read(() => probe(nm), (v) => !!v.error, 'empty name refused');
+    await page.keyboard.press('Tab');
+    const nameBlurred = await read(() => probe(nm), (v) => v.shown === 'Oscillator 1',
+      'Name shows the model value after blur');
+    // C8: units in the description (a parameter, a clip time, an edge depth across Mapping).
+    await select({ nodes: ['filter-1'] });
+    const cutoffSel = '[data-osc="studio.inspector.param"][data-key="frequency"]';
+    await page.waitForSelector(cutoffSel, { timeout: 5000 });
+    const cutoff = await probe(cutoffSel);
+    await select({ clips: ['clip-1'] });
+    await page.waitForSelector(start, { timeout: 5000 });
+    const clipStart = await probe(start);
+    const lfoEdge = await page.evaluate(() => window.OSCILLA.studio.model.graph.edges
+      .find((e) => e.from.node === 'lfo-1').id);
+    await select({ edges: [lfoEdge] });
+    const depth = '[data-osc="studio.inspector.depth"]';
+    await page.waitForSelector(depth, { timeout: 5000 });
+    const depth0 = await probe(depth);
+    const mapping = await page.$eval('[data-osc="studio.inspector.mapping"]', (s) => s.value);
+    await page.selectOption('[data-osc="studio.inspector.mapping"]',
+      mapping === 'log' ? 'linear' : 'log');
+    const depth1 = await read(() => probe(depth), (v) => v.unit && v.unit !== depth0.unit,
+      'the Depth unit follows Mapping');
+    const described = (v) => !!v.unit && v.description.split(' ').includes(v.unit);
+    // C3: Automate on Oscillator 1 Frequency, then a lane removed in the timeline.
+    const auto = (key) => `.osc-si-field[data-field="${key}"] `
+      + '[data-osc="studio.inspector.automate"]';
+    const btn = (key) => page.$eval(auto(key), (b) => ({ text: b.textContent.trim(),
+      pressed: b.getAttribute('aria-pressed'), focused: document.activeElement === b }));
+    const lanes = () => page.evaluate(() => window.OSCILLA.studio.model.timeline.automation
+      .map((l) => `${l.target.node}.${l.target.param}`).sort());
+    await select({ nodes: ['osc-1'] });
+    await page.waitForSelector(auto('frequency'), { timeout: 5000 });
+    const oscBefore = await btn('frequency');
+    await page.focus(auto('frequency'));
+    await page.keyboard.press('Enter');
+    const oscAfter = await read(() => btn('frequency'), (v) => /^Show /.test(v.text),
+      'Automate relabels to Show … lane');
+    const lanesA = await lanes();
+    await H.fresh(page);
+    await select({ nodes: ['filter-1'] });
+    await page.waitForSelector(auto('frequency'), { timeout: 5000 });
+    const filterBefore = await btn('frequency');
+    await page.click('button[aria-label="Remove the Filter 1 Cutoff automation lane"]');
+    const filterAfter = await read(() => btn('frequency'), (v) => /^Automate /.test(v.text),
+      'a removed lane turns the button back to Automate');
+    // Compact chips: the selected one is aria-current, none carries aria-pressed.
+    await page.evaluate(() => window.OSCILLA.app.setWorkspace('playground'));
+    await page.waitForSelector('[data-osc="studio.compact.node"]', { timeout: 5000 });
+    const chips = await read(() => page.evaluate(() => [...document.querySelectorAll(
+      '[data-osc="studio.compact.node"], [data-osc="studio.compact.clip"]')].map((b) => ({
+      id: b.dataset.nodeId || b.dataset.clipId, pressed: b.getAttribute('aria-pressed'),
+      current: b.getAttribute('aria-current') }))), (v) => v.some((c) => c.current === 'true'),
+    'the selected compact chip is aria-current');
+    await page.evaluate(() => window.OSCILLA.app.setWorkspace('studio'));
+    return { ...H.verdict({
+      c2NonNumeric: nonNumeric.invalid === 'true' && /must be a number/.test(nonNumeric.error),
+      c2Refused: startRefused.invalid === 'true' && /Clip start/.test(startRefused.error),
+      c2RefusedBlur: startBlurred.shown === String(startModel) && startBlurred.invalid === null
+        && startModel === 0,
+      c2PositionX: xRefused.invalid === 'true' && !!xRefused.error,
+      c2PositionXBlur: xBlurred.shown === String(oscX) && xBlurred.invalid === null,
+      c2Name: nameRefused.invalid === 'true' && /name must be/.test(nameRefused.error),
+      c2NameBlur: nameBlurred.shown === 'Oscillator 1' && nameBlurred.invalid === null,
+      c8Cutoff: described(cutoff), c8ClipStart: described(clipStart),
+      c8Depth: described(depth0) && described(depth1) && depth1.unit !== depth0.unit,
+      c3Before: oscBefore.text === 'Automate Frequency' && oscBefore.pressed === null,
+      c3After: oscAfter.text === 'Show Frequency lane' && oscAfter.pressed === null
+        && oscAfter.focused && lanesA.includes('osc-1.frequency'),
+      c3Removed: filterBefore.text === 'Show Cutoff lane' && filterAfter.text === 'Automate Cutoff'
+        && filterAfter.pressed === null,
+      c3Chips: chips.every((c) => c.pressed === null)
+        && chips.filter((c) => c.current === 'true').map((c) => c.id).join() === 'filter-1',
+    }), nonNumeric, startRefused, startBlurred, xRefused, xBlurred, nameRefused, nameBlurred,
+    cutoff, clipStart, depth0, depth1, oscBefore, oscAfter, filterBefore, filterAfter, chips };
+  });
+
   def('keyboard-connect', async ({ page }) => {
     await H.fresh(page);
     const id = await page.evaluate(() => window.OSCILLA.studio.store.dispatch({ type: 'NODE_ADD',
@@ -865,6 +1039,223 @@ function defineChecks() {
     afterClipChip };
   });
 
+  def('v272-c1-timeline-focus', async ({ page }) => {
+    // V272 C1 (spec §142, WCAG 2.4.3): a timeline action that removes the focused object with
+    // its lane, or closes the details panel that held focus, moves focus to a neighbour, never
+    // <body>. T1 Delete on a lane's only point; T2 Enter on "Remove … automation lane"; T3 undo
+    // on the details panel's Close, undoing the clip it shows; T4 details "Delete point".
+    const lanes = () => page.evaluate(() => window.OSCILLA.studio.model.timeline.automation
+      .map((l) => l.id));
+    const newLane = () => page.evaluate(() => {
+      const s = window.OSCILLA.studio.store;
+      s.dispatch({ type: 'AUTOMATION_POINT_ADD', target: { node: 'osc-1', param: 'frequency' },
+        time: 0.5, value: 440, curve: 'linear' });
+      const lane = s.getModel().timeline.automation.find((l) => l.target.node === 'osc-1');
+      return { laneId: lane.id, key: `pt:${lane.id}:${lane.points[0].id}` };
+    });
+    const focusOn = async (sel, what) => {
+      await until(() => page.$(sel), { ms: 5000, what });
+      await page.focus(sel);
+    };
+    const state = async () => ({ lanes: await lanes(), at: await H.where(page) });
+    // T1: the template's Filter 1 Cutoff lane stays; the new lane goes with its only point.
+    await H.fresh(page);
+    const [kept] = await lanes();
+    let ln = await newLane();
+    await focusOn(`.osc-stl [data-key="${ln.key}"]`, 'C1 T1: the new point is drawn');
+    await page.keyboard.press('Delete');
+    const t1 = await H.settle(state, (v) => v.lanes.length === 1 && v.at !== 'BODY',
+      'C1 T1: Delete removes the lane and focus stays in the timeline');
+    // T2: the only lane removed from its head.
+    await H.fresh(page);
+    await focusOn('.osc-stl button[aria-label="Remove the Filter 1 Cutoff automation lane"]',
+      'C1 T2: the lane head is drawn');
+    await page.keyboard.press('Enter');
+    const t2 = await H.settle(state, (v) => v.lanes.length === 0 && v.at !== 'BODY',
+      'C1 T2: the lane is removed and focus stays in the timeline');
+    // T3: add a clip by keyboard, open its details, focus Close, undo the clip.
+    await H.fresh(page);
+    const add = await page.$eval('.osc-stl [data-key^="track-add:"]', (b) => b.dataset.key);
+    const clips0 = (await H.model(page)).clips.length;
+    await page.focus(`.osc-stl [data-key="${add}"]`);
+    await page.keyboard.press('Enter');
+    const clipAt = await H.settle(() => H.where(page), (a) => a.startsWith('key:clip:'),
+      'C1 T3: focus is on the added clip');
+    await page.keyboard.press('Enter');
+    await focusOn('.osc-stl [data-osc="studio.tl.d-close"]', 'C1 T3: the clip details open');
+    await page.keyboard.press(`${MOD}+z`);
+    const t3 = await H.settle(async () => ({ clips: (await H.model(page)).clips.length,
+      details: !!(await page.$('.osc-stl [data-osc="studio.tl.d-close"]')),
+      at: await H.where(page) }), (v) => v.clips === clips0 && !v.details && v.at !== 'BODY',
+    'C1 T3: undo removes the clip, closes its details and focus stays in the timeline');
+    // T4: the details panel's Delete point on a lane's only point.
+    await H.fresh(page);
+    ln = await newLane();
+    await focusOn(`.osc-stl [data-key="${ln.key}"]`, 'C1 T4: the new point is drawn');
+    await page.keyboard.press('Enter');
+    await focusOn('.osc-stl [data-osc="studio.tl.d-delete"]', 'C1 T4: the point details open');
+    await page.keyboard.press('Enter');
+    const t4 = await H.settle(state, (v) => v.lanes.length === 1 && v.at !== 'BODY',
+      'C1 T4: Delete point removes the lane and focus stays in the timeline');
+    return { ...H.verdict({
+      t1NextLane: t1.lanes.join() === kept && t1.at === `key:lane-add:${kept}`,
+      t2Automate: t2.lanes.length === 0 && t2.at === 'key:tool:automate',
+      t3TrackAdd: clipAt.startsWith('key:clip:') && t3.clips === clips0 && !t3.details
+        && t3.at === `key:${add}`,
+      t4NextLane: t4.lanes.join() === kept && t4.at === `key:lane-add:${kept}`,
+    }), kept, t1, t2, clipAt, t3, t4 };
+  });
+
+  def('v272-c4-dialog-live', async ({ page, browserName }) => {
+    // V272 C4 (WCAG status messages): an open modal dialog makes the rest of the page inert,
+    // the Studio live regions included, so what is said while one stays open is said inside
+    // it: Export in Save as patch, Delete in the Library. Chromium also reads the region's
+    // node in the accessibility tree (CDP): it must not be ignored.
+    const said = (id, src) => page.evaluate(([dlgId, re]) => {
+      const d = document.getElementById(dlgId);
+      const rx = new RegExp(re, 'i');
+      const r = [...d.querySelectorAll('[aria-live], [role="status"], [role="alert"]')]
+        .find((x) => rx.test(x.textContent));
+      return { open: d.open, region: r ? r.dataset.osc || '(unnamed)' : null };
+    }, [id, src]);
+    const axIgnored = async (sel) => {
+      if (browserName !== 'chromium') return null; // the AX tree is read through CDP
+      const cdp = await page.context().newCDPSession(page);
+      try {
+        await cdp.send('DOM.enable');
+        await cdp.send('Accessibility.enable');
+        const { root } = await cdp.send('DOM.getDocument', { depth: -1, pierce: true });
+        const { nodeId } = await cdp.send('DOM.querySelector', { nodeId: root.nodeId,
+          selector: sel });
+        if (!nodeId) return 'missing';
+        const { nodes } = await cdp.send('Accessibility.getPartialAXTree', { nodeId,
+          fetchRelatives: false });
+        return nodes[0].ignored ? (nodes[0].ignoredReasons || []).map((r) => r.name).join()
+          || 'ignored' : false;
+      } finally {
+        await cdp.detach();
+      }
+    };
+    await H.fresh(page);
+    await H.recordLive(page);
+    await page.click('[data-osc="studio.save"]');
+    await H.settle(() => H.live(page), (l) => l.some((t) => /^Saved /.test(t)),
+      'C4: the project is saved');
+    // Save as patch, then Export file: the dialog stays open.
+    await page.click(H.nodeTitle('osc-1'));
+    await page.click('[data-osc="studio.inspector.savePatch"]');
+    await page.waitForSelector('#osc-dlg-studio-patch[open]', { timeout: 10000 });
+    await page.fill('[data-osc="studio.patch.name"]', 'Probe');
+    await Promise.all([page.waitForEvent('download', { timeout: 10000 }),
+      page.click('[data-osc="studio.patch.export"]')]);
+    const exp = await H.settle(() => said('osc-dlg-studio-patch', '^Exported patch Probe'),
+      (v) => !!v.region, 'C4: Export is said inside Save as patch');
+    const expAx = exp.region ? await axIgnored(`#osc-dlg-studio-patch [data-osc="${exp.region}"]`)
+      : 'missing';
+    await page.evaluate(() => document.getElementById('osc-dlg-studio-patch').close());
+    // Library, Delete, Confirm delete: the dialog stays open.
+    await page.click('[data-osc="studio.open"]');
+    await page.waitForSelector('#osc-dlg-studio-library[open] [data-osc="studio.saved.delete"]',
+      { timeout: 10000 });
+    await page.click('#osc-dlg-studio-library [data-osc="studio.saved.delete"]');
+    await page.waitForSelector('#osc-dlg-studio-library button[aria-label^="Confirm delete"]',
+      { timeout: 10000 });
+    await page.click('#osc-dlg-studio-library button[aria-label^="Confirm delete"]');
+    const del = await H.settle(() => said('osc-dlg-studio-library', 'deleted|no longer|detached'),
+      (v) => !!v.region, 'C4: Delete is said inside the Library');
+    const delAx = del.region ? await axIgnored(`#osc-dlg-studio-library [data-osc="${del.region}"]`)
+      : 'missing';
+    const live = await H.live(page);
+    return { ...H.verdict({
+      exportInDialog: exp.open && !!exp.region && !expAx,
+      deleteInDialog: del.open && !!del.region && !delAx,
+      pageRegionsToo: live.includes('Exported patch Probe')
+        && live.some((t) => /deleted|no longer|detached/i.test(t)),
+    }), exp, expAx, del, delAx, live: live.slice(-4) };
+  });
+
+  def('v272-c5-keyboard-multiselect', async ({ page }) => {
+    // V272 C5 (WCAG 2.1.1): a subset of nodes is selected by keyboard alone. T adds the focused
+    // node to the selection that moving focus replaced (or removes a selected one), and focus
+    // landing on a member of a multi-selection keeps it; Save as patch then covers both.
+    const playing = () => page.evaluate(() => !!(window.OSCILLA.studio.transport
+      && window.OSCILLA.studio.transport.playing));
+    const nodes = async () => (await H.sel(page)).nodes.slice().sort().join();
+    await H.fresh(page);
+    await page.focus('.osc-sg-node[data-node-id="osc-1"]');
+    const first = await H.settle(nodes, (s) => s === 'osc-1', 'C5: focus selects Oscillator 1');
+    await page.keyboard.press('Tab');
+    const second = await H.settle(() => H.where(page), (a) => a === 'node:env-1',
+      'C5: Tab reaches Envelope 1');
+    await page.keyboard.press('t');
+    const both = await H.settle(nodes, (s) => s === 'env-1,osc-1', 'C5: T adds Envelope 1');
+    const playedOnT = await playing();
+    await page.keyboard.press('Shift+Tab');
+    const back = await H.settle(() => H.where(page), (a) => a === 'node:osc-1',
+      'C5: Shift+Tab returns to Oscillator 1');
+    const kept = await H.settle(nodes, (s) => s === 'env-1,osc-1',
+      'C5: focus on a member keeps the selection');
+    await page.focus('[data-osc="studio.inspector.savePatch"]');
+    await page.keyboard.press('Enter');
+    await until(() => page.$('#osc-dlg-studio-patch[open]'), { ms: 5000,
+      what: 'C5: Save as patch opens' });
+    const info = await page.$eval('[data-osc="studio.patch.info"]', (p) => p.textContent);
+    await page.keyboard.press('Escape');
+    // T on a member removes it from the selection.
+    await page.focus('.osc-sg-node[data-node-id="osc-1"]');
+    await page.keyboard.press('t');
+    const removed = await H.settle(nodes, (s) => s === 'env-1', 'C5: T removes Oscillator 1');
+    // Ctrl/Cmd A, then Tab onto a member: every node stays selected.
+    await H.fresh(page);
+    await page.focus('.osc-sg-node[data-node-id="osc-1"]');
+    await page.keyboard.press(`${MOD}+a`);
+    const all = await H.settle(nodes, (s) => s.split(',').length > 2, 'C5: Ctrl/Cmd A');
+    await page.keyboard.press('Tab');
+    const allKept = await H.settle(nodes, (s) => s === all, 'C5: Tab keeps the whole selection');
+    return { ...H.verdict({
+      tAdds: first === 'osc-1' && second === 'node:env-1' && both === 'env-1,osc-1',
+      tPlaysNothing: !playedOnT,
+      memberFocusKeeps: back === 'node:osc-1' && kept === 'env-1,osc-1',
+      patchCoversBoth: /^2 nodes \(Oscillator 1, Envelope 1\)/.test(info),
+      tRemoves: removed === 'env-1',
+      selectAllThenTab: all.split(',').length > 2 && allKept === all,
+    }), first, second, both, back, kept, info, removed, all, allKept };
+  });
+
+  def('v272-c7-add-status', async ({ page }) => {
+    // V272 C7 (WCAG status messages): the Add node dialog says what its search found, in a
+    // status region inside the dialog that describes the search field.
+    const status = () => page.evaluate(() => {
+      const s = document.querySelector('#osc-dlg-studio-add [data-osc="studio.add.status"]');
+      const q = document.querySelector('[data-osc="studio.add.search"]');
+      return s ? { role: s.getAttribute('role'), text: s.textContent.trim(),
+        describes: !!s.id && (q.getAttribute('aria-describedby') || '').split(' ')
+          .includes(s.id) } : { role: null, text: '', describes: false };
+    });
+    await H.fresh(page);
+    const n0 = (await H.model(page)).nodes.length;
+    await page.focus('.osc-sg-viewport');
+    await page.keyboard.press('n');
+    await H.settle(() => H.where(page), (a) => a === 'studio.add.search',
+      'C7: the Add node search has focus');
+    await page.keyboard.type('zzz');
+    const none = await H.settle(status, (s) => /No node type matches/.test(s.text),
+      'C7: no match is said');
+    await page.keyboard.press('Enter');
+    const stillOpen = await page.evaluate(() => document.getElementById('osc-dlg-studio-add')
+      .open);
+    const n1 = (await H.model(page)).nodes.length;
+    await page.fill('[data-osc="studio.add.search"]', 'filter');
+    const some = await H.settle(status, (s) => /^\d+ node types? match/.test(s.text),
+      'C7: matches are counted');
+    await page.keyboard.press('Escape');
+    return { ...H.verdict({
+      noMatchSaid: none.role === 'status' && none.describes,
+      enterAddsNothing: stillOpen && n1 === n0,
+      matchesCounted: some.role === 'status' && /^\d+ node types? match/.test(some.text),
+    }), none, some };
+  });
+
   /** In-page: where focus is (for the Inspector checks); `shown` when it can be seen. */
   const focusAt = (page) => page.evaluate(() => {
     const a = document.activeElement;
@@ -965,7 +1356,7 @@ function defineChecks() {
       const afterDelete = await focusAt(page);
       const deleted = !(await H.model(page)).nodes.some((n) => n.id === 'filter-1');
       const subviewAfterDelete = await page.evaluate(() => window.OSCILLA.app.studio.subview);
-      // U8: "Automated · show lane" on Filter 1 cutoff (the template automates it).
+      // U8: "Show Cutoff lane" on Filter 1 cutoff (the template automates it).
       await inspectorOf('filter-1');
       await H.recordLive(page);
       const laneId = await page.evaluate(() => window.OSCILLA.studio.model.timeline.automation
@@ -1387,6 +1778,43 @@ function defineChecks() {
       + '-desktop-light.png') });
     await page.evaluate(() => { if (window.OSCILLA.app.theme !== 'dark') window.OSCILLA.app.toggleTheme(); });
     return { ...H.verdict({ title: c.title >= 7, port: c.port >= 4.5, cable: c.cable >= 3 }), c };
+  });
+
+  // V272 C6 (§272 review, WCAG 1.4.3): the node's small labels (the category, 9 px, and the
+  // label of a control input, 9.5 px) keep 4.5:1 on the node surface in the dark theme too, as
+  // light-theme already holds for the light one. Read once two readings agree (the controls'
+  // colour transitions have ended).
+  def('dark-theme', async ({ page }) => {
+    await H.fresh(page);
+    await page.evaluate(() => {
+      if (window.OSCILLA.app.theme !== 'dark') window.OSCILLA.app.toggleTheme();
+    });
+    const measure = () => page.evaluate(() => {
+      const parse = (s) => (s.match(/[\d.]+/g) || []).slice(0, 3).map(Number);
+      const lum = ([r, g, b]) => {
+        const f = (v) => { const x = v / 255; return x <= 0.03928 ? x / 12.92
+          : ((x + 0.055) / 1.055) ** 2.4; };
+        return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b);
+      };
+      const ratio = (el) => {
+        const node = el.closest('.osc-sg-node');
+        const [x, y] = [lum(parse(getComputedStyle(el).color)),
+          lum(parse(getComputedStyle(node).backgroundColor))].sort((p, q) => q - p);
+        return Math.round(((x + 0.05) / (y + 0.05)) * 100) / 100;
+      };
+      const min = (sel) => Math.min(...[...document.querySelectorAll(sel)].map(ratio));
+      return { theme: window.OSCILLA.app.theme, cat: min('.osc-sg-cat'),
+        param: min('.osc-sg-port.is-param .osc-sg-plabel'), port: min('.osc-sg-plabel') };
+    });
+    let last = null;
+    const c = await until(async () => {
+      const next = await measure();
+      const same = last && JSON.stringify(next) === JSON.stringify(last);
+      last = next;
+      return same ? next : null;
+    }, { ms: 5000, what: 'dark-theme: two equal contrast readings' }).catch(() => last);
+    return { ...H.verdict({ dark: c.theme === 'dark', cat: c.cat >= 4.5, param: c.param >= 4.5,
+      port: c.port >= 4.5 }), c };
   });
 
   def('screenshots', async ({ page, browserName }) => {

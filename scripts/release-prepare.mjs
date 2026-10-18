@@ -26,6 +26,11 @@
 //      tree (rule project.release-receipt-binds-gate) at the time the gate passed. Any later
 //      change to a tracked file other than a release record (.ai/repo/releases/v*.yaml)
 //      invalidates it.
+// The receipt also binds how the gate ran (GATE_RUN): every browser and origin, because
+// release:prepare refuses to start while OSC_BROWSERS or OSC_ORIGINS narrows the selection,
+// and declared skips only, because the gate runs with OSC_STRICT_SKIPS=1 (an undeclared skip
+// fails it, as under CI). OSC_LOAD_MAX and OSC_LOAD_WAIT_MS say when a suite may start, not
+// what it runs, and stay allowed.
 import { spawnSync } from 'node:child_process';
 import {
   existsSync, lstatSync, readFileSync, readdirSync, readlinkSync, writeFileSync,
@@ -106,6 +111,32 @@ export function currentFingerprint(root = ROOT, run = gitRunner(root)) {
 
 export const RECEIPT_KEYS = ['version', 'sourceDigest', 'distSha256', 'gateTree'];
 
+// ------------------------------------------------------------------------------- gate run
+// How the gate ran, recorded in the receipt and required by receiptProblems(): the full
+// browser and origin sets of tests/browser/lib/suite.cjs and CI's skip semantics.
+export const GATE_RUN = Object.freeze({
+  browsers: Object.freeze(['chromium', 'firefox', 'webkit']),
+  origins: Object.freeze(['file', 'http']),
+  skips: 'declared-only',
+});
+export const NARROWING_ENV = ['OSC_BROWSERS', 'OSC_ORIGINS'];
+
+/** Why the gate cannot run in `env` (empty = it can): a variable that narrows a suite. */
+export function gateEnvProblems(env = process.env) {
+  return NARROWING_ENV.filter((k) => env[k] !== undefined).map((k) => `${k} is set `
+    + `(${JSON.stringify(env[k])}): the release gate runs every browser and origin; unset it `
+    + '(OSC_LOAD_MAX and OSC_LOAD_WAIT_MS stay allowed)');
+}
+
+/** The environment the gate commands run in: `env` with CI's skip semantics. */
+export function gateEnv(env = process.env) {
+  const out = { ...env, OSC_STRICT_SKIPS: '1' };
+  for (const k of NARROWING_ENV) delete out[k];
+  return out;
+}
+
+const sameList = (a, b) => Array.isArray(a) && a.join(',') === b.join(',');
+
 const present = (v) => typeof v === 'string' && v !== '';
 
 /**
@@ -128,6 +159,17 @@ export function receiptProblems(receipt, now) {
       + 'project.release-receipt-binds-gate): re-run npm run release:prepare on this tree');
   }
   if (receipt.result !== 'passed') problems.push(`gate receipt result is ${receipt.result}`);
+  for (const k of ['browsers', 'origins']) {
+    if (receipt[k] === undefined) problems.push(`gate receipt has no ${k}`);
+    else if (!sameList(receipt[k], GATE_RUN[k])) {
+      problems.push(`gate receipt ${k} ${[].concat(receipt[k]).join(',')} != `
+        + `${GATE_RUN[k].join(',')}: the gate did not run every ${k.slice(0, -1)}`);
+    }
+  }
+  if (receipt.skips === undefined) problems.push('gate receipt has no skips');
+  else if (receipt.skips !== GATE_RUN.skips) {
+    problems.push(`gate receipt skips ${receipt.skips} != ${GATE_RUN.skips}`);
+  }
   return problems;
 }
 
@@ -262,9 +304,9 @@ export function readReceipt(run = gitRunner(), root = ROOT) {
   }
 }
 
-function sh(cmd, args, root) {
+function sh(cmd, args, root, env = process.env) {
   console.log(`\n$ ${cmd} ${args.join(' ')}`);
-  const r = spawnSync(cmd, args, { cwd: root, stdio: 'inherit' });
+  const r = spawnSync(cmd, args, { cwd: root, stdio: 'inherit', env });
   if (r.error) return { ok: false, why: `${cmd}: ${r.error.message}` };
   return { ok: r.status === 0, why: `${cmd} ${args.join(' ')} exited ${r.status}` };
 }
@@ -274,7 +316,14 @@ function loud(lines) {
   console.error(`\n${bar}\n${lines.map((l) => `RELEASE:PREPARE FAILED  ${l}`).join('\n')}\n${bar}`);
 }
 
-export function main(argv = process.argv.slice(2), root = ROOT, run = gitRunner(root)) {
+export function main(argv = process.argv.slice(2), root = ROOT, run = gitRunner(root),
+  env = process.env) {
+  const narrowed = gateEnvProblems(env);
+  if (narrowed.length) {
+    loud(['refusing to start (rule project.release-receipt-binds-gate):', ...narrowed,
+      'nothing was changed']);
+    return 1;
+  }
   const dirty = run(['status', '--porcelain', '--untracked-files=normal']);
   if (dirty) {
     loud(['the working tree is not clean; commit or copy aside first:', ...dirty.split('\n')]);
@@ -313,7 +362,7 @@ export function main(argv = process.argv.slice(2), root = ROOT, run = gitRunner(
   console.log(`\n${proposal.action === 'bump' ? `Bumping ${current} -> ${proposal.version}`
     : `Confirming the untagged v${current}`}; then the full gate.`);
   for (const [cmd, args] of plan) {
-    const r = sh(cmd, args, root);
+    const r = sh(cmd, args, root, gateEnv(env));
     if (!r.ok) {
       const restore = spawnSync('git', ['checkout', 'HEAD', '--', ...RESTORE_PATHS],
         { cwd: root, stdio: 'inherit' });
@@ -328,7 +377,8 @@ export function main(argv = process.argv.slice(2), root = ROOT, run = gitRunner(
     }
   }
   const receipt = {
-    ...currentFingerprint(root, run), result: 'passed', base: run(['rev-parse', 'HEAD']),
+    ...currentFingerprint(root, run), ...GATE_RUN, result: 'passed',
+    base: run(['rev-parse', 'HEAD']),
     gate: GATE_COMMANDS.map(([c, a]) => `${c} ${a.join(' ')}`), at: new Date().toISOString(),
   };
   if (receipt.version !== proposal.version) {

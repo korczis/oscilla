@@ -87,9 +87,12 @@ rest.
 ## Edit parameters
 
 Select a node: the **Inspector** shows its parameters with their units and ranges. Type a value
-("2.4k" for 2400 Hz) or use the slider; a value out of range is refused with the range. Each
-edit is one undo step (Ctrl/⌘ Z). **Automate** creates the parameter's automation lane, or shows
-it when it exists.
+("2.4k" for 2400 Hz) or use the slider; a value out of range is refused with the range, shown on
+the field, and the field shows the stored value again once you leave it (Escape restores it at
+once). Each edit is one undo step (Ctrl/⌘ Z). **Automate <parameter>** creates the parameter's
+automation lane; once the lane exists the button reads **Show <parameter> lane** and the field
+reads "Base …": the lane sets the parameter, and the value typed there is used only without
+the lane.
 
 A **Microphone** node starts with its input off. Select it and choose **Allow microphone** in the
 Inspector: the browser asks for permission, and once it is given the node opens the input when
@@ -168,6 +171,13 @@ on a Microphone, ...) is refused with the reason, whether you drag it, type it o
 Selecting one clip announces it by name and track ("Sweep clip on Source selected" in the
 Subtractive Synth).
 
+A Sequence's trigger cable into a Random's or a Step Modulator's **Clock** steps it at each
+of its clip starts, counted from PLAY, and its Rate then has no effect. From PLAY the node
+holds its first value (the first step, or the seed's first value); the first trigger plays
+that same first value and each further trigger the next one. A Sequence clip at 0 s therefore
+starts on the first step. When the first clip starts later, the first value holds until then
+and its trigger brings no audible change: the second trigger is the first change.
+
 ## Automate a parameter
 
 An automation lane belongs to one parameter and is drawn in that parameter's own scale (a
@@ -229,6 +239,9 @@ the output, Studio PLAY is refused.
 ## Keyboard shortcuts
 
 They apply while the Studio has focus and no text field is being edited; Tab is never taken.
+Tab onto a node selects it; to select several by keyboard, Tab to the next one and press **T**:
+it joins the nodes selected before. Tab onto a node that is already part of the selection
+keeps the selection, and **T** on a selected node takes it out.
 The same table is the Studio part of the one **Keyboard shortcuts** dialog. The keyboard button
 in the toolbar, Help (**?**) and the menu all open that dialog, and it lists the keys of the
 workspace in view and the keys that work everywhere (ADR 0050).
@@ -266,6 +279,7 @@ anywhere else in those workspaces Space is the instrument's.
 | Ctrl/⌘ Z | Undo |
 | Ctrl/⌘ Shift Z, Ctrl Y | Redo |
 | Ctrl/⌘ A | Select every node |
+| T | Add the focused node to the selection, or take it out |
 | N | Add a node (searchable picker) |
 | / | Find a node by name or type and frame it |
 | C | Connect the selected node (list of compatible inputs) |

@@ -47,7 +47,11 @@ export const SCHEMA = 'review-verdict/v1';
 
 /**
  * A changed path matching one of these needs a verdict. A trailing `*` matches any suffix;
- * an entry without one is that file. The second group is what enforces the process rules
+ * an entry without one is that file. The first group is the product code where review found
+ * defects the suites passed (#139 measurement, calibration and its UI; #140 Studio; #149
+ * experiments and findings); the second is what proves a build, a deployment and a release
+ * (the build and pack scripts, the deploy stamp and its verifiers, the release scripts and
+ * the release rules' tests); the third is what enforces the process rules
  * (project.ci-bounded, project.fail-first, project.review-verdict): the workflows and
  * everything else under .github/, the three programs with their parser, and their tests.
  */
@@ -56,8 +60,23 @@ export const GUARDED = [
   'src/js/analysis/*',
   'src/js/experiments/*',
   'src/js/studio/*',
+  'src/js/measurement/*',
+  'src/js/calibration/*',
   'src/js/core/storage*',
+  'src/js/core/safety*',
+  'src/js/ui/measure.js',
+  'src/js/ui/experiments.js',
+  'src/js/ui/findings.js',
+
   'scripts/release-*',
+  'scripts/build*',
+  'scripts/pack-single-file.mjs',
+  'scripts/stamp-build.mjs',
+  'scripts/verify-deploy.mjs',
+  'scripts/verify-dist.mjs',
+  'tests/unit/release-*',
+  'tests/unit/version-authority.test.mjs',
+  'tests/browser/live-smoke.cjs',
 
   '.github/*',
   'scripts/review-verdict.mjs',

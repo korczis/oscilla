@@ -44,8 +44,8 @@ The runtime never creates an AudioContext or an output chain. It takes the appli
 | Microphone | `audio/microphone.js#openMicrophone` | `openMicrophone` → output gain (analysis only); degraded without getUserMedia or until the Inspector's Allow microphone; its tracks stop on dispose, also when the context closes |
 | LFO | `audio/modulation.js#buildLfo` | `engine._osc` as modulator; the depth gain belongs to the edge |
 | Envelope | `audio/envelope.js#applyAdsr` | `applyAdsr` / `releaseAt` on a VCA gain and on a ConstantSourceNode offset (contour 0..1) |
-| Random | `audio/noise.js#mulberry32` | seeded values in a looping AudioBuffer (`steppedControl`) |
-| Step Modulator | `audio/scheduler.js#scheduleSteps` | the step list in a looping AudioBuffer (`once`: holds the last step) |
+| Random | `audio/noise.js#mulberry32` | seeded values in a looping AudioBuffer (`steppedControl`); clocked (below): a ConstantSourceNode holding one value per trigger (`clockedControl`) |
+| Step Modulator | `audio/scheduler.js#scheduleSteps` | the step list in a looping AudioBuffer (`once`: holds the last step); clocked: a ConstantSourceNode holding one step per trigger (`clockedControl`; `once`: stays on the last step) |
 | Gain | `audio/audio-engine.js#AudioEngine` | GainNode |
 | Filter | `audio/filters.js#createFilterStage` | `createFilterStage` (glides, bypass crossfade, Q conversion) |
 | Pan | `audio/stereo.js#createStereoRouter` | StereoPannerNode on a 1-channel input (the engine's `buildDual` panner); fallback `createStereoRouter` 'pan' mode |
@@ -99,14 +99,27 @@ The runtime then instantiates the plan in order and routes it:
   are listed in `debugInfo().limitedEdges`. A frequency an automation lane owns is sized from
   the lane's peak (the transport claims it with `setOwnedParams([{ node, param, peak }])`),
   not from the static value the lane overrides, and a changed peak re-sizes the node on the
-  next apply (review V431 X1). Other parameters are not clamped at audio rate
-  (an AudioParam sum cannot be); when base ± modulation can leave the range it is listed in
-  `debugInfo().exceeds` (§242: excessive gain made visible, the limiter is a last resort).
+  next apply (review V431 X1). An Oscillator's `detune` shifts its frequency by
+  `2^(cents/1200)` and spends the same headroom (review V272 A7): the static detune is lowered
+  to fit above the frequency (a lane's peak counts as its reference), a positive one lowers the
+  cap of the frequency's own edges, and the upward excursion of the detune's edges is scaled to
+  what is left; a static base lowered this way is listed in `debugInfo().limitedParams`
+  (`{ node, param }`), a scaled edge in `limitedEdges`. That lowering is not an edge offset:
+  `runtime.baseOffset` leaves it out, so a detune lane, which overrides the static value, plays
+  its own values within its own bound (review V272 R-1). Other parameters are not clamped at
+  audio rate (an AudioParam sum cannot be); when base ± modulation can leave the range it is
+  listed in `debugInfo().exceeds` (§242: excessive gain made visible, the limiter is a last
+  resort).
 - Unsupported modulation targets become **inactive routes with a reason**: Q of a low- or
   high-pass filter (a dB AudioParam in Web Audio, a linear depth would be mis-scaled), log
   mapping without a detune AudioParam, pan without StereoPannerNode.
 - **TRIGGER / ANALYSIS** edges get no Web Audio connection; `runtime.bindings()` lists them for
-  the timeline scheduler and the measurement engine.
+  the timeline scheduler and the measurement engine. An unmuted TRIGGER edge into the clock
+  input of a Random (`trigger`) or Step Modulator (`clock`) makes the plan node `clocked`: its
+  adapter builds the clocked control (step 0 until the first trigger, then the k-th trigger since
+  PLAY sets value / step k on the audio clock, scheduled by the transport, live and offline);
+  `rate` then has no modulation target, so a rate edge or lane on it is inactive with that
+  reason. A node becoming clocked or free-running is a `node-replace`.
 
 ## Runtime representation (§43)
 
@@ -124,7 +137,7 @@ never stored in it or in Alpine state.
 | Model change | Operation | Runtime effect |
 | --- | --- | --- |
 | parameter value | `node-params` | modulatable keys: base re-computed and glided (`setTargetAtTime`, τ 15 ms, as `engine.updateLive`); other keys: the builder's own `update` (filter bypass crossfade, noise colour crossfade, router glide, analyser size, engine master gain) |
-| structural key (`waveform`, LFO `shape`, filter `type`, every sweep parameter, Random `seed`/`smooth`, Steps `steps`/`playback`, RTA averaging) or status change | `node-replace` | a new node is built and its edges are `edge-rewire`d: crossfade old → new |
+| structural key (`waveform`, LFO `shape`, filter `type`, every sweep parameter, Random `seed`/`smooth`, Steps `steps`/`playback`, RTA averaging), a status change or a clock edge added, removed, muted or unmuted (`clocked`) | `node-replace` | a new node is built and its edges are `edge-rewire`d: crossfade old → new |
 | an adapter's `rebuildWhenOwned` key (filter `enabled`) on a node with an owned parameter | `node-replace` | as above: the builder's live update cannot skip the owned parameter |
 | node added / removed | `node-add` / `node-remove` | built silent and faded in / routes faded out, sources stopped after the fade, disposed |
 | edge added / removed | `edge-add` / `edge-remove` | route gain 0 → 1 / → floor, then disconnected |
@@ -246,8 +259,8 @@ shaped it (`tests/browser/v31-studio-audio.cjs`):
 
 `debugInfo()` → `{ state, compiledRevision, modelNodeCount, modelEdgeCount, runtimeNodeCount,
 runtimeSourceCount, handleCount, routedEdgeCount, pendingCleanups, engineNodeCount,
-engineSourceCount, degraded, inactiveEdges, limitedEdges, exceeds, warnings, diagnostics,
-lastOps, lastError, applied, ownedParams }`. `degraded` and `inactiveEdges` are
+engineSourceCount, degraded, inactiveEdges, limitedEdges, limitedParams, exceeds, warnings,
+diagnostics, lastOps, lastError, applied, ownedParams }`. `degraded` and `inactiveEdges` are
 `{ id, status, code, reason }` (the live handle's or route's, else the plan's); `diagnostics`
 holds validation's warnings and the runtime's own, structured; `warnings` is their message text.
 
@@ -526,9 +539,10 @@ method (an engine change, out of this issue's scope):
   during playback with edits on owned nodes.
 - `runtime.baseOffset(id, key)` is the constant part the modulation edges add to a parameter's
   base (linear edges: unipolar polarity, `offset`), in the parameter's unit. The lane owns the
-  intrinsic value, so the transport adds it to the values it schedules (actual = base +
-  Σ edges, `combineAutomationAndModulation`); log-mapped edges stay on `detune`, which the
-  runtime keeps writing.
+  intrinsic value, so the transport adds it (actual = base + Σ edges,
+  `combineAutomationAndModulation`): to the values it schedules, or, on a strictly positive
+  parameter, through an offset source summed into the same AudioParam (`docs/v31/timeline.md`
+  "Transport integration"); log-mapped edges stay on `detune`, which the runtime keeps writing.
 - Pattern clips play into `nodes.get(sequenceId).info.destination` with the handle's accounting
   (`handle.acct`, whose `track` / `source` are `info.accounting`), or, on an Oscillator, into a
   pattern bus routed into the oscillator's AUDIO routes (`runtime.edges`, `fromNode`, `gain`).

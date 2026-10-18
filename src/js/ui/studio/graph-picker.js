@@ -8,6 +8,7 @@
 // Focus returns to the node the dialog was opened for (§142).
 //
 //   createQuickAdd(dialog, svc) -> { open({ at, from }), close(), isOpen() }
+//   quickAddStatus(view, query) -> the quick-add status line (V272 C7)        pure
 //   createConnectDialog(dialog, svc) -> { open(nodeId), close(), isOpen() }
 //   createFindNode(dialog, svc) -> { open(), close(), isOpen() }      graph search (§251)
 //   svc: { store, registry, editor, announce, openModal(id), closeModal(id), focusFallback()? }
@@ -33,6 +34,20 @@ function listKeys(e, list, input) {
   }
 }
 
+/**
+ * What the Add node search found (V272 C7, the dialog's status line): "3 node types match.",
+ * "No node type matches “zzz”."; with no query, how many types are listed.
+ */
+export function quickAddStatus(view, query = '') {
+  const q = String(query || '').trim();
+  const n = view.count;
+  if (!q) return `${n} node type${n === 1 ? '' : 's'} listed.`;
+  if (!n) return `No node type matches “${q}”.`;
+  const what = `${n} node type${n === 1 ? ' matches' : 's match'}`;
+  return view.first ? `${what}; Enter adds ${view.first.name}.`
+    : `${what}; none can be added now.`;
+}
+
 export function createQuickAdd(dialog, svc) {
   const registry = svc.registry || NODE_REGISTRY;
   const title = h('h2', { class: 'osc-dialog-title', id: 'osc-dlg-studio-add-title',
@@ -40,12 +55,15 @@ export function createQuickAdd(dialog, svc) {
   const note = h('p', { class: 'osc-muted osc-dialog-note', 'data-osc': 'studio.add.note' });
   const input = h('input', { class: 'osc-number osc-dialog-input', type: 'search',
     autocomplete: 'off', spellcheck: 'false', 'aria-label': 'Search node types',
-    placeholder: 'Oscillator, filter, lfo…', 'data-osc': 'studio.add.search' });
+    placeholder: 'Oscillator, filter, lfo…', 'data-osc': 'studio.add.search',
+    'aria-describedby': 'osc-dlg-studio-add-status' });
+  const status = h('p', { class: 'osc-muted osc-dialog-note', id: 'osc-dlg-studio-add-status',
+    role: 'status', 'aria-live': 'polite', 'data-osc': 'studio.add.status' });
   const list = h('div', { class: 'osc-sp-list', 'data-osc': 'studio.add.list' });
   const cancel = h('button', { type: 'button', class: 'osc-btn osc-btn-secondary',
     'data-osc': 'studio.add.cancel', text: 'Cancel' });
-  replaceChildren(dialog, h('div', { class: 'osc-dialog-body' }, [title, note, input, list,
-    h('div', { class: 'osc-dialog-actions' }, [cancel])]));
+  replaceChildren(dialog, h('div', { class: 'osc-dialog-body' }, [title, note, input, status,
+    list, h('div', { class: 'osc-dialog-actions' }, [cancel])]));
   dialog.setAttribute('aria-labelledby', 'osc-dlg-studio-add-title');
   let ctx = { at: null, from: null };
 
@@ -70,6 +88,7 @@ export function createQuickAdd(dialog, svc) {
         h('span', { class: 'osc-sl-name', text: it.name }),
         h('span', { class: 'osc-sl-what', text: `${it.categoryLabel} · ${it.what}` }),
       ])]))) : h('p', { class: 'osc-sl-empty', text: 'No node type matches.' }));
+    status.textContent = quickAddStatus(view, input.value);
     return view;
   }
 
@@ -79,6 +98,7 @@ export function createQuickAdd(dialog, svc) {
       e.preventDefault();
       const v = render();
       if (v.first) choose(v.first.type);
+      else svc.announce(quickAddStatus(v, input.value), { assertive: true });
     } else listKeys(e, list, input);
   });
   list.addEventListener('keydown', (e) => listKeys(e, list, input));

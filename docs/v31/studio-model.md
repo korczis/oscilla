@@ -251,10 +251,18 @@ read nowhere else.
 | DUPLICATE | `nodeIds?, clipIds?, offset?` | Duplicate Filter 1 |
 | SELECTION_CHANGE, VIEW_SET | view state: no history, no revision | — |
 
-- A semantic action is reduced, then the whole result is validated; any error rejects it with
-  the first error's message and leaves model, history, selection and revision untouched. The
-  initial model must be valid, so the store's model always is. NODE_MOVE alone skips graph
-  validation (positions cannot change validity), keeping a 400-event drag cheap.
+- A semantic action is reduced, then the whole result is judged by `validateStudioCommit`:
+  `validateStudioModel`, then the untrusted import's own stages (`readStudioInput` and the
+  strict schema with its limits and string rules), over a model that must already be in
+  normalized form. Any error rejects the action with the first error's message and leaves
+  model, history, selection and revision untouched; an import-only refusal reads "A saved
+  Studio would not load again: <path> <reason>." So what the store holds, the library saves
+  and loads again with the same studioHash, and an exported file re-imports (review V272 A1,
+  A6); saving and exporting apply the same predicate. The initial model must pass it, so the
+  store's model always does. NODE_MOVE alone skips it (positions cannot change validity, and
+  each is held to `isPosition`), keeping a 400-event drag cheap; VIEW_SET is held to
+  `VIEW_LIMITS`. PASTE completes edge properties as EDGE_ADD does, and TRANSPORT_SET refuses a
+  time signature that is not `[beats, unit]`.
 - Paste and duplicate map every node to a new id, keep only edges with both ends in the set,
   renumber default names ("Filter 2") and keep custom names; nodes over `maxInstances` (Master
   Output) are skipped and reported in `skipped`.
@@ -311,16 +319,18 @@ fails when a value or a cited line stops matching the code.
 | Initial Studio schema version | 1 | `STUDIO_SCHEMA_VERSION` | `src/js/studio/schema.js:54` |
 | Studio project file extension | .oscilla-studio.json | `STUDIO_FILE_EXTENSION` | `src/js/studio/schema.js:56` |
 | Patch file extension | .oscilla-patch.json | `PATCH_FILE_EXTENSION` | `src/js/studio/patches.js:50` |
-| Default timeline scale | 100 px/s | `pxPerSecond` | `src/js/studio/schema.js:100` |
+| Default timeline scale | 100 px/s | `pxPerSecond` | `src/js/studio/schema.js:111` |
 | Timeline zoom bounds | 4-4000 px/s | `TIMELINE_ZOOM` | `src/js/ui/studio/timeline-view.js:27` |
 | Timeline snap default | 0.1 s time grid | `EDITOR_DEFAULT_SNAP` | `src/js/ui/studio/timeline-view.js:38` |
-| Maximum node import count | 512 nodes | `STUDIO_IMPORT_LIMITS` | `src/js/studio/validate.js:74` |
+| Maximum node import count | 512 nodes | `STUDIO_IMPORT_LIMITS` | `src/js/studio/validate.js:76` |
 | Undo history limit | 200 entries | `STUDIO_HISTORY_LIMIT` | `src/js/studio/history.js:34` |
-| Paste and duplicate offset | (24, 24) units | `PASTE_OFFSET` | `src/js/studio/actions.js:79` |
+| Paste and duplicate offset | (24, 24) units | `PASTE_OFFSET` | `src/js/studio/actions.js:82` |
 <!-- studio-decisions:end -->
 
-The model stores the graph view's zoom as any finite number (`src/js/studio/schema.js:356`,
-default 1); the editor clamps every view it applies to the bounds above
+The model stores the graph view's zoom within the import's range, `VIEW_LIMITS` 1e-6 to 1e6
+(`src/js/studio/schema.js:108`, default 1; VIEW_SET is held to it as well, so a view the store
+keeps is one its saved file reopens with, review V272 A1); the editor clamps every view it
+applies to the bounds above
 (`clampZoom`/`normalizeView`, `src/js/ui/studio/graph-geometry.js:40-50`), so an imported file
 with zoom 10 opens at 2.5. On a coarse pointer Frame all and Frame selection stop at
 `COARSE_FIT_MIN_ZOOM`, where a 26-unit port row is 24 px on screen (WCAG 2.5.8, review V431

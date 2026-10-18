@@ -42,7 +42,7 @@ evidence:
   - covers: verified
     type: test
     command: "npm run release-gate (main b36fb9c + this branch); docs/v3/dsp-review-v382.md"
-    result: "Independent critique recorded in docs/v3/dsp-review-v382.md: three reviewers (sweep/transfer/IR; RTA/spectrum/aggregation; calibration/quality), every finding with a synthetic proof. Fixed and proven, each with a test failing on the old method and the old algorithm ID retained: live RTA profile sign (#51), level/profile double count (#52), transfer.v3 + ir.v3 + doc corrections (#57), clip.v2 (#55), rta.v2 + smoothing.v2 (#58), confidence.v4 (#59), align.v2 (#60). Release readiness: release-gate exit 0 on b36fb9c; Pages verify-deploy PASS at b36fb9c"
+    result: "Independent critique recorded in docs/v3/dsp-review-v382.md: three reviewers (sweep/transfer/IR; RTA/spectrum/aggregation; calibration/quality), every finding with a synthetic proof. Fixed and proven, each with a test failing on the old method and the old algorithm ID retained: live RTA profile sign (#51), level/profile double count (#52), transfer.v3 + ir.v3 + doc corrections (#57), clip.v2 (#55), rta.v2 + smoothing.v2 (#58), confidence.v4 (#59), align.v2 (#60). Release readiness: release-gate exit 0 on b36fb9c; Pages verify-deploy PASS at b36fb9c. Commit 65dbed8 is the fourth commit of #61 before its squash merge to main as 1f68c76; GitHub keeps it under refs/pull/61/head"
     artifact: "docs/v3/dsp-review-v382.md"
     commit: 65dbed84a63f1012d414bc5cfc8c99dd65a746c0
     recorded_at: 2026-10-03T18:01:05Z
