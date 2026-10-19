@@ -360,6 +360,45 @@ test('mutation: ci.yml started by anything but a pull request', () => {
   assert.deepEqual(checkWorkflow('pages.yml', PAGES, SUITES), []);
 });
 
+/** What keeps the size step of `unit` from reporting a pull request over the budget. */
+function problemsOfSizeStep(text) {
+  const steps = parse(text).jobs.unit.steps.filter((s) => typeof s.run === 'string'
+    && s.run.includes('scripts/size-report.mjs'));
+  if (steps.length !== 1) return [`${steps.length} size steps in the unit job`];
+  const [step] = steps;
+  const out = [];
+  if (step.if !== '${{ !cancelled() }}') out.push(`if is ${JSON.stringify(step.if)}`);
+  if (!(Number(step['timeout-minutes']) > 0)) out.push('no timeout-minutes');
+  if (step['continue-on-error'] !== undefined) out.push('continue-on-error');
+  // it only reports: the program and its tee into the summary, nothing that gates on a size
+  const run = 'node scripts/size-report.mjs --base-branch "origin/$GITHUB_BASE_REF" \\\n'
+    + '  | tee -a "$GITHUB_STEP_SUMMARY"\n';
+  if (step.run !== run) out.push(`run is ${JSON.stringify(step.run)}`);
+  return out;
+}
+
+test('E022: the size step reports a pull request over the budget, bounded and never gating',
+  () => {
+    // #208 R-2: verify-dist fails the job over the budget; the size step still writes the
+    // summary then, because it runs unless the run was cancelled.
+    assert.deepEqual(problemsOfSizeStep(CI), []);
+    const name = '      - name: Size of dist/index.html against the budget and the merge base '
+      + '(step summary)\n';
+    const always = '        if: ${{ !cancelled() }}\n';
+    assert.deepEqual(problemsOfSizeStep(mutate(CI, always, '')), ['if is undefined']);
+    assert.deepEqual(problemsOfSizeStep(mutate(CI, always, '        if: success()\n')),
+      ['if is "success()"']);
+    assert.deepEqual(problemsOfSizeStep(mutate(CI, '        timeout-minutes: 2\n        run: |\n'
+      + '          node scripts/size-report.mjs', '        run: |\n'
+      + '          node scripts/size-report.mjs')), ['no timeout-minutes']);
+    const gated = mutate(CI, '| tee -a "$GITHUB_STEP_SUMMARY"\n',
+      '| tee -a "$GITHUB_STEP_SUMMARY"\n          grep -q "within the threshold" '
+      + '"$GITHUB_STEP_SUMMARY"\n');
+    assert.equal(problemsOfSizeStep(gated).length, 1);
+    assert.match(problemsOfSizeStep(gated)[0], /^run is /);
+    assert.ok(CI.includes(name), 'the step keeps its name');
+  });
+
 test('the pull-request rules are judged by the base branch\'s programs, and need a PR', () => {
   const jobs = parse(CI).jobs;
   for (const [job, call] of [

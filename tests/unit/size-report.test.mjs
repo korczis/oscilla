@@ -69,6 +69,29 @@ test('measure gives the byte length and the gzip size verify-dist checks against
     assert.equal(m.gzip, v.gzip);
   });
 
+/** Repetitive markup like a real build's, on which gzip level 9 beats the default level 6. */
+function markup(rows = 400) {
+  const items = [];
+  for (let i = 0; i < rows; i += 1) {
+    items.push(`<li class="row r${i % 7}" data-i="${i}"><span>${(i * 7919) % 1009}</span>`
+      + `<a href="#p${(i * 31) % 97}">item ${i}</a></li>`);
+  }
+  return page(`<ul>${items.join('\n')}</ul>`);
+}
+
+test('measure holds verify-dist\'s gzip level 9 on markup where the default level differs',
+  () => {
+    // #208 R-1: noise compresses the same at every level, so only a fixture like this one tells
+    // a measure() at the default level (6) from verify-dist's level 9.
+    const buf = Buffer.from(markup());
+    const level9 = gzipSync(buf, { level: 9 }).length;
+    const level6 = gzipSync(buf).length;
+    assert.notEqual(level6, level9, 'the fixture tells the default level from level 9');
+    const m = measure(buf);
+    assert.equal(m.gzip, level9, `measure() gzips at level 9 (${level9} B), not ${m.gzip} B`);
+    assert.equal(m.gzip, verifyHtml(buf.toString('utf8')).gzip, 'as verify-dist measures it');
+  });
+
 test('sizeReport: headroom is budget minus size, the change is head minus base', () => {
   const budget = { rawBytes: 10_000, gzipBytes: 4_000 };
   const r = sizeReport({ head: { raw: 7_500, gzip: 3_100 }, base: { raw: 7_000, gzip: 2_950 },
@@ -167,6 +190,27 @@ test('the program names a growth above the threshold', () => {
     const r = run(repo, '--base-branch', 'main', '--head', 'HEAD');
     assert.equal(r.status, 0, r.err);
     assert.match(r.out, /above the threshold/);
+  } finally {
+    repo.dispose();
+  }
+});
+
+test('the program reports a head over the gzip budget and exits 0: verify-dist holds it', () => {
+  const repo = gitRepo('oscilla-size-report-');
+  try {
+    repo.commit('base', { 'dist/index.html': page('<p>small</p>') });
+    repo.branch('pr');
+    const overHtml = page(`<p>${noise(Math.ceil(BUDGET.gzipBytes * 1.3), 11)}</p>`);
+    repo.commit('pr grows past the budget', { 'dist/index.html': overHtml });
+    const over = measure(Buffer.from(overHtml));
+    assert.ok(over.gzip > BUDGET.gzipBytes, `the fixture is over the budget: ${over.gzip} B`);
+    assert.ok(verifyHtml(overHtml).problems.some((p) => /gzip size .* exceeds budget/.test(p)),
+      'verify-dist fails it');
+    const r = run(repo, '--base-branch', 'main');
+    assert.equal(r.status, 0, r.err);
+    const headroom = groupBytes(BUDGET.gzipBytes - over.gzip);
+    assert.ok(headroom.startsWith('-'));
+    assert.ok(r.out.includes(`| ${headroom} B (`), r.out);
   } finally {
     repo.dispose();
   }
