@@ -152,7 +152,7 @@ against this module's constants (`DURATION_LIMITS`, `SAMPLE_RATE_LIMITS`, fade �
 - Frequencies below `MIN_FREQUENCY_HZ = 1` throw. Frequencies above
   `SAFE_NYQUIST_FRACTION · sampleRate/2` (0.95 × Nyquist) are **clamped** and the clamp is
   reported as `clampedTo` (Hz); the limit is `safeMaxFrequency(sampleRate)`, the one
-  expression `schema.js` also uses; everything else invalid throws `StimulusError` with a code
+  expression `recipe.js` also uses; everything else invalid throws `StimulusError` with a code
   (`BAD_SPEC`, `UNKNOWN_KIND`, `BAD_SAMPLE_RATE`, `BAD_DURATION`, `BAD_LEVEL`, `BAD_FADE`,
   `BAD_SEED`, `BAD_FREQUENCY`, `BAD_OPTION`). After clamping `f1 < f2` is required.
 - Defaults: sine 1 kHz / 1 s; log-sweep 20 Hz-20 kHz / 5 s; band-noise 20 Hz-20 kHz, colour
@@ -1539,7 +1539,11 @@ length equal to `ceil(length·bytes/3)·4`, only the RFC alphabet, padding only 
 unused bits. `serializeExperiment` turns every typed array into an EncodedArray;
 `experimentToJson` writes the `.oscilla.json` text.
 
-### Recipe stimulus (`schema.js`) — Changed (integration), was G2
+### Recipe stimulus (`recipe.js`) — Changed (integration), was G2
+
+The code lives in `src/js/experiments/recipe.js` (plan issue E006); `schema.js` re-exports
+`checkRecipe`, `createRecipe` and `LIMITS` unchanged, so importers of `schema.js` see the same
+names and values.
 
 `checkRecipe` stores the stimulus in `stimulus.js`'s normalized form — `kind, sampleRate,
 duration, level, f, f1, f2, fade, seed, color, law`, null where the kind does not use a field —
