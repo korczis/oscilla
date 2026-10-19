@@ -35,4 +35,23 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-18
-updated_at: 2026-10-18
+updated_at: 2026-10-19T11:47:09Z
+started_at: 2026-10-19T11:39:56Z
+started_event: sha256:597061bcb3ecb2bca7bbc975987b70d6761928050df02d1040f85f0f1b978381
+verified_at: 2026-10-19T11:47:09Z
+verified_event: sha256:211a9b9ff8e82720e0ce76c5ae974ffaf665c2e0d7c176fc675438bbb6b5950a
+evidence:
+  - covers: verified
+    type: test
+    command: "node --test tests/unit/about-origin.test.mjs tests/unit/about.test.mjs tests/unit/no-fake-science.test.mjs tests/unit/positioning-consistency.test.mjs"
+    result: "pass 27, fail 0 at f1f7ca0: About's Origin opens with the anti-bark ad, the 15-16 kHz physics point and the reply, keeps the browser-laboratory question as framing; the 5 h 51 min carries the wall-clock and parallel-workers qualifier; mutations (pre-Q005 copy, missing qualifier, named product, vendor frequency, unmeasured figures, personal story) fail the checker; npm run verify pass 3096, fail 0"
+    artifact: "tests/unit/about-origin.test.mjs"
+    commit: f1f7ca09e398c266b276787c12864a3329127ffd
+    recorded_at: 2026-10-19T11:47:01Z
+  - covers: verified
+    type: test
+    command: "node scripts/fail-first.mjs --title 'fix(about): P005'"
+    result: "fail-first proven by 1 of 1 file against merge base 2185a12: tests/unit/about-origin.test.mjs fails without the change (assertion; 2 tests not ok) and passes with it"
+    artifact: "tests/unit/about-origin.test.mjs"
+    commit: f1f7ca09e398c266b276787c12864a3329127ffd
+    recorded_at: 2026-10-19T11:47:04Z
