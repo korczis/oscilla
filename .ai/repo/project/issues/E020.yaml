@@ -1,5 +1,7 @@
 id: E020
 milestone: M046
+serves:
+  - "engineering-integrity#adr-index-complete"
 title: "The ADR index names every accepted ADR and marks those whose decision still opens with 'Proposed'"
 slug: the-adr-index-names-every-accepted-adr-and-marks-stale-proposed-openings
 priority: p3
