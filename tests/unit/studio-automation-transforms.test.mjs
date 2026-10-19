@@ -21,6 +21,9 @@
 //   R-1   a static detune the compiler lowered into that headroom does not shift a detune lane
 //   B7    an exponential lane on a strictly positive parameter with a constant edge offset is
 //         the lane plus the offset (the offset summed in by a ConstantSourceNode)
+//   E016  a Random / Step Modulator rate lane keeps the 480 / sampleRate scale on every write
+//         path while playing: an edit, an edge offset change, a bounds clamp it brings, a
+//         rebind, removal (hold and glide) and STOP (#213 R-1; rateLaneWhilePlaying)
 // A parameter added to the registry without a row fails, and so does a row naming a parameter
 // the registry lacks; the mutation tests at the end prove that the comparisons can fail.
 //
@@ -94,6 +97,63 @@ const mixerLevel = (n) => ({ type: 'mixer', key: `level${n}`, unit: '', scale: '
 const split = (key, min) => ({ type: 'stereo-split', key, unit: '', scale: 'linear', min,
   max: 1, display: key.startsWith('pan') ? 'bipolar' : 'db', points: [[0, min, 'step']],
   plays: { code: 'no-parameter', reason: /no single AudioParam/ } });
+
+/** A linear unipolar edge from the template's LFO onto `rate`: a constant offset + depth / 2. */
+const rateEdge = (offset) => ({ add: { from: { node: 'lfo-1', port: 'control' }, port: 'rate',
+  props: { mapping: 'linear', polarity: 'unipolar', depth: 2, offset } } });
+const rateEdgeOf = (m, id) => m.graph.edges.find((e) => e.to.node === id && e.to.port === 'rate');
+/** Remove every point of the lane, the one at `last` s last (it removes the lane). */
+const removeLane = (last) => (m) => {
+  const lane = m.timeline.automation[0];
+  const order = [...lane.points.filter((p) => p.time !== last),
+    ...lane.points.filter((p) => p.time === last)];
+  return order.map((p) => ({ type: 'AUTOMATION_POINT_REMOVE', laneId: lane.id, pointId: p.id }));
+};
+
+/**
+ * E016 (#213 R-1): a Random / Step Modulator rate lane in Hz on every write path of the
+ * transport that scales it to playbackRate (480 / sampleRate) while playing: an edit, an edge
+ * offset changed (the offset source glides), an offset that makes the bounds clamp the lane (the
+ * re-applied lane), a rebind on a structural edit (`rebuild`: params that rebuild the node),
+ * removal (the hold at the horizon, then the glide to the static rate) and STOP (the hold).
+ * Each `play` step runs at its position; `hold` is the lane value the AudioParam takes at the
+ * horizon the step writes; `checks` follow the last step. The offsets are analytic: a linear
+ * unipolar edge of depth 2 adds its offset + 1 Hz.
+ */
+function rateLaneWhilePlaying(type, rebuild) {
+  const row = { type, key: 'rate', param: (h) => h.outputs.control.playbackRate,
+    toAudio: controlPlaybackRate };
+  const flat = [[0, 0.5, 'step'], [1, 8, 'step'], [2, 100, 'step']];
+  return [
+    { ...row, case: 'rate lane edited while playing', ...rateLane,
+      play: [{ at: 0.5, edit: (m) => {
+        const lane = m.timeline.automation[0];
+        return [{ type: 'AUTOMATION_POINT_MOVE', laneId: lane.id,
+          pointId: lane.points.find((p) => p.time === 2).id, value: 50 }];
+      } }],
+      checks: () => [[1, 8], [1.5, lin(8, 50, 0.5)], [2, 50]] },
+    { ...row, case: 'rate lane under an edge offset changed while playing', edge: rateEdge(1),
+      points: [[0, 1, 'step'], [1, 4, 'exponential'], [2, 10, 'linear']],
+      play: [{ at: 0.5, edit: (m, id) => [{ type: 'EDGE_UPDATE', edgeId: rateEdgeOf(m, id).id,
+        props: { offset: 3 } }] }],
+      checks: () => [[1.5, 7 + 4], [2, 10 + 4]] },
+    { ...row, case: 'rate lane the bounds clamp after an edge offset change', edge: rateEdge(1),
+      points: [[0, 97, 'step']], limited: true,
+      play: [{ at: 0.5, edit: (m, id) => [{ type: 'EDGE_UPDATE', edgeId: rateEdgeOf(m, id).id,
+        props: { offset: 4 } }] }],
+      checks: () => [[1.5, Math.min(97 + 5, 100)], [2, Math.min(97 + 5, 100)]] },
+    { ...row, case: 'rate lane rebound on a structural edit', ...rateLane,
+      play: [{ at: 0.5, decision: 'rebind', edit: (m, id) => [{ type: 'NODE_PARAM_SET',
+        nodeId: id, params: rebuild }] }],
+      checks: () => [[1, 8], [1.5, lin(8, 100, 0.5)], [2, 100]] },
+    { ...row, case: 'rate lane removed while playing', node: { rate: 3 }, points: flat,
+      play: [{ at: 1.5, edit: removeLane(1), hold: 8 }],
+      checks: () => [[2.5, 3], [3, 3]] },
+    { ...row, case: 'rate lane held by STOP', points: flat,
+      play: [{ at: 1.5, stop: true, hold: 8 }],
+      checks: () => [[1.75, 8], [2.5, 8]] },
+  ];
+}
 
 /**
  * One row per automatable registry parameter, plus the scenario rows of #78, A7, R-1 and B7
@@ -176,6 +236,8 @@ const ROWS = [
     points: [[0, 1, 'step'], [1, 4, 'exponential'], [2, 10, 'linear']],
     checks: () => [[0, 1 + 2], [0.5, geo(1, 4, 0.5) + 2], [1, 4 + 2], [1.5, 7 + 2],
       [2, 10 + 2]] },
+  ...rateLaneWhilePlaying('random', { seed: 7 }),
+  ...rateLaneWhilePlaying('step-modulator', { playback: 'once' }),
 ];
 
 const DESCRIPTORS = ROWS.filter((r) => !r.case);
@@ -304,13 +366,16 @@ const near = (a, b) => Math.abs(a - b) <= 1e-9 * Math.max(1, Math.abs(b));
  */
 function transformMismatches(row, sr) {
   const { model, id } = rowModel(row);
-  const store = createStudioStore(model, { idGenerator: createIdGenerator(model) });
+  let transport = null;
+  // The workspace's commit gate: while playing, the transport admits an edit first.
+  const store = createStudioStore(model, { idGenerator: createIdGenerator(model),
+    gate: (next, info) => (transport ? transport.admit(next, info) : null) });
   const fx = createFakeAudioEnv({ sampleRate: sr });
   const engine = new AudioEngine({ env: fx.env });
   assert.ok(engine.init(), 'engine.init');
   if (engine.limiterFeed) engine.limiterFeed.infrastructure = true;
   const runtime = createStudioRuntime({ engine });
-  const transport = createStudioTransport({ runtime, engine, store });
+  transport = createStudioTransport({ runtime, engine, store });
   const started = ok(transport.start(), 'PLAY');
   const out = [];
   try {
@@ -325,9 +390,33 @@ function transformMismatches(row, sr) {
       return out;
     }
     if (un) return [`the lane is not played: ${un.code} ${un.reason}`];
-    const h = runtime.nodes.get(id);
-    const p = row.param(h);
     const toAudio = row.toAudio || ((v) => v);
+    let h = runtime.nodes.get(id);
+    for (const step of row.play || []) {
+      fx.advanceTo(started.baseTime + step.at);
+      const before = row.param(h);
+      const n0 = before.calls.length;
+      if (step.edit) {
+        for (const a of step.edit(store.getModel(), id)) ok(store.dispatch(a), a.type);
+      }
+      if (step.stop) transport.stop().catch(() => {});
+      if (step.decision && !transport.debugInfo().decisions
+        .some((d) => d.decision === step.decision && d.key === lane.id)) {
+        out.push(`${step.at} s: no ${step.decision} decision for the lane`);
+      }
+      h = runtime.nodes.get(id) || h;
+      if (step.hold === undefined) continue;
+      // The horizon: the time of the last value the step wrote on the AudioParam.
+      const set = before.calls.slice(n0).filter((c) => c[0] === 'setValueAtTime').pop();
+      if (!set) {
+        out.push(`${step.at} s: no hold written`);
+        continue;
+      }
+      const got = actualAt(fx.ctx, before, set[2]);
+      const want = toAudio(step.hold, sr);
+      if (!near(got, want)) out.push(`${step.at} s: hold ${got}, row ${want}`);
+    }
+    const p = row.param(h);
     const oscFreq = row.frequency ? osc(h).frequency : null;
     for (const [pos, value] of row.checks(sr)) {
       const t = started.baseTime + pos;
@@ -466,4 +555,24 @@ test('mutation: an AudioParam value that differs from the row at one point fails
   const b7 = ROWS.find((r) => r.case && r.case.startsWith('B7'));
   const noOffset = { ...b7, checks: () => b7.checks().map(([pos, v]) => [pos, v - 3100]) };
   assert.equal(transformMismatches(noOffset, 48000).length, 3, 'the edge offset left out');
+});
+
+test('mutation: a rate lane hold or decision that differs from the row fails (E016)', () => {
+  const removed = ROWS.find((r) => r.type === 'random' && r.case === 'rate lane removed while '
+    + 'playing');
+  const stopped = ROWS.find((r) => r.type === 'step-modulator' && r.case === 'rate lane held '
+    + 'by STOP');
+  const rebound = ROWS.find((r) => r.type === 'random' && r.case === 'rate lane rebound on a '
+    + 'structural edit');
+  for (const sr of RATES) {
+    for (const row of [removed, stopped]) {
+      const off = { ...row, play: row.play.map((s) => ({ ...s, hold: s.hold + 1 })) };
+      const m = transformMismatches(off, sr);
+      assert.equal(m.length, 1, `${rowLabel(row)}: ${m.join('; ')}`);
+      assert.ok(m[0].startsWith('1.5 s: hold ') && m[0].endsWith(`row ${
+        controlPlaybackRate(9, sr)}`), m[0]);
+    }
+    const never = { ...rebound, play: rebound.play.map((s) => ({ ...s, decision: 'locate' })) };
+    assert.deepEqual(transformMismatches(never, sr), ['0.5 s: no locate decision for the lane']);
+  }
 });
