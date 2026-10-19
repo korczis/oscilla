@@ -40,4 +40,56 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-18
-updated_at: 2026-10-18
+updated_at: 2026-10-18T13:47:35Z
+started_at: 2026-10-18T13:21:28Z
+started_event: sha256:7201befed1187ec374ac1778ad31ab34330ff6a9ca49039709861b8693fd7355
+verified_at: 2026-10-18T13:47:26Z
+verified_event: sha256:b564e56434b7d22f029a9934e36e3be5268559f8ccc6e0d1d16c5e85eef7fe73
+completed_at: 2026-10-18T13:47:35Z
+completed_event: sha256:a1249a2b479636c3a00adf005dfc85a19efbbd3619e56883078e99cad34c2061
+evidence:
+  - covers: verified
+    type: test
+    command: "node --test tests/unit/positioning-consistency.test.mjs tests/unit/about.test.mjs tests/unit/social-meta.test.mjs tests/unit/no-fake-science.test.mjs"
+    result: "pass 31, fail 0 at c25ed12: every surface carries Q002's sentence within 200 characters, the title surfaces and brand label carry the name within 70; the mutations (a changed or missing surface, an over-long sentence or title, an unlisted surface) fail the checker"
+    artifact: "tests/unit/positioning-consistency.test.mjs"
+    commit: c25ed122ab0062d78cd516be4658f3f9535866c4
+    recorded_at: 2026-10-18T13:38:43Z
+  - covers: verified
+    type: test
+    command: "node scripts/fail-first.mjs --title 'feat(positioning): P003'"
+    result: "fail-first proven by 1 of 1 file against merge base 50f6d6c: tests/unit/positioning-consistency.test.mjs fails without the change (assertion; 4 tests not ok) and passes with it"
+    artifact: "tests/unit/positioning-consistency.test.mjs"
+    commit: c25ed122ab0062d78cd516be4658f3f9535866c4
+    recorded_at: 2026-10-18T13:38:51Z
+  - covers: verified
+    type: build
+    command: "npm run social -- --check"
+    result: "social: src/index.html carries the current block (og:description and twitter:description follow the exported DESCRIPTION; site/ untouched)"
+    artifact: "scripts/social-assets.mjs"
+    commit: c25ed122ab0062d78cd516be4658f3f9535866c4
+    recorded_at: 2026-10-18T13:39:03Z
+  - covers: verified
+    type: test
+    command: "npm test"
+    result: "tests 2973, pass 2973, fail 0 at c25ed12 (a first run under load 100 failed only the timing budget of v31-studio-performance; the whole suite was re-run and passed)"
+    commit: c25ed122ab0062d78cd516be4658f3f9535866c4
+    recorded_at: 2026-10-18T13:39:17Z
+  - covers: verified
+    type: test
+    command: "OSC_LOAD_MAX=200 node tests/browser/layout.cjs"
+    result: "PASS chromium, firefox and webkit layout 99/99 checks each, About included, after the lede and jobs paragraph change"
+    commit: c25ed122ab0062d78cd516be4658f3f9535866c4
+    recorded_at: 2026-10-18T13:39:26Z
+  - covers: verified
+    type: manual
+    command: "gh repo view korczis/oscilla --json description -q .description"
+    result: "2026-10-18: the committer ran gh repo edit korczis/oscilla --description with the sentence; the description now reads the sentence verbatim. It was: 'OSCILLA — browser-based acoustic laboratory for sound generation, analysis, sequencing, synthesis and visualization. One static file, Web Audio, no backend.'"
+    commit: c25ed122ab0062d78cd516be4658f3f9535866c4
+    recorded_at: 2026-10-18T13:39:35Z
+  - covers: verified
+    type: test
+    command: "OSC_LOAD_MAX=200 node tests/browser/navigation.cjs"
+    result: "PASS 17/17 checks in each of chromium, firefox and webkit over file:// and /oscilla/ http"
+    commit: c25ed122ab0062d78cd516be4658f3f9535866c4
+    recorded_at: 2026-10-18T13:47:21Z
