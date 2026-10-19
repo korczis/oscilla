@@ -1,0 +1,25 @@
+id: E016
+milestone: M046
+serves:
+  - "engineering-integrity#automation-transforms"
+title: "Every scaled write path of a Modulator rate lane is held by a unit row"
+slug: every-scaled-write-path-of-a-modulator-rate-lane-is-held-by-a-unit-row
+priority: p2
+profile: implementation
+objective: "#213 R-1 (P2): #213 scales a Random or Step Modulator rate lane by its modTarget scale (480 / sampleRate) on nine write paths of src/js/studio/transport.js, but six of them are unproven: removing the scale from the moveOffset glide (setTargetAtTime), the removal glide, the removal hold, rebindLanes, the reoffsetLanes clamp path or the stop hold leaves all 179 tests of the eight transport unit files passing. Add rows to tests/unit/studio-automation-transforms.test.mjs (E008's table) for a rate lane of Random and of Step Modulator at 44.1 and 48 kHz under an edit while playing, an edge offset change, a rebind on a structural edit, removal (the hold, then the glide to base x scale) and stop, each comparing the AudioParam with the lane value in Hz x 480 / sampleRate. Start after #213 has merged into main."
+why: "Review verdict .ai/repo/reviews/213.yaml (branch fix/modulator-rate-lane-scale), finding R-1: the head is correct on each path, as the reviewer's probe shows, but a regression on any of the six would ship with every unit test passing. The pull request body's claim that reverting the moveOffset scale fails a row holds only for its setValueAtTime line."
+scope:
+  - "tests/unit/studio-automation-transforms.test.mjs"
+  - "tests/README.md"
+acceptance_criteria:
+  - "For each of the six paths (moveOffset glide, removal glide, removal hold, rebindLanes, the reoffsetLanes clamp path, stop hold), removing the scale from that path alone in src/js/studio/transport.js makes at least one new row fail at 44.1 and at 48 kHz; the evidence names the mutation and the failing row for each path."
+  - "The new rows pass on the unmutated main after #213; src/js/studio/transport.js is not changed by this issue."
+  - "A row's expected value is computed in the test from the lane value and the sample rate, not read from the transport or the compiler."
+  - "npm test passes; tests/README.md's existing row for the test names the rate-lane cases (no new row)."
+validation:
+  - "node --test tests/unit/studio-automation-transforms.test.mjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-10-19
+updated_at: 2026-10-19

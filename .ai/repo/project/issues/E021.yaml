@@ -1,0 +1,29 @@
+id: E021
+milestone: M046
+title: "Every release script parses its flags with parseFlags, reads ADR front matter as YAML and cleans its test fixtures"
+slug: every-release-script-parses-flags-one-way-and-cleans-its-fixtures
+priority: p3
+profile: implementation
+objective: "#199 R-1: parseFlags (scripts/release-analyze.mjs) refuses a negative value as missing: release:publish --pages-timeout -5 says '--pages-timeout needs a value' (exit 2), where 0 gets 'needs a positive number of minutes'. #199 R-2: an empty value is accepted and then dropped: --preid '' parses as '' and o['--preid'] || 'rc' silently uses rc. #199 R-3: scripts/stamp-build.mjs (release:stamp) and scripts/verify-deploy.mjs (release:verify-deploy) answer --help with 'unknown option/argument --help' and exit 1, and refuse an unknown flag with 1, not 2; move both to parseFlags and name them in CLAUDE.md's release line. #199 R-4: tests/unit/release-cli-args.test.mjs creates one mkdtemp fixture per harness() call and never removes it (618 oscilla-cli-args-* directories after a few runs), and tests/unit/release-analyze.test.mjs and tests/unit/release-gate-env.test.mjs do the same; remove each in a finally. #198 R-3: frontMatterList (scripts/release-prepare.mjs) is a line-based subset parser, so a comment or blank line inside a block list, a trailing comment, a multi-line flow list or CRLF makes a valid RC exemption read as none (it fails closed and names what is missing); read the front matter with scripts/yaml-subset.mjs."
+why: "Review verdicts .ai/repo/reviews/199.yaml (R-1 to R-4) and .ai/repo/reviews/198.yaml (R-3): each is safe today (refused, or fails closed), but the messages mislead, two release scripts break the CLI contract the others keep, and the tests leave files behind on a shared machine."
+scope:
+  - "scripts/release-analyze.mjs"
+  - "scripts/release-prepare.mjs"
+  - "scripts/stamp-build.mjs"
+  - "scripts/verify-deploy.mjs"
+  - "tests/unit/release-cli-args.test.mjs"
+  - "tests/unit/release-analyze.test.mjs"
+  - "tests/unit/release-gate-env.test.mjs"
+  - "CLAUDE.md"
+acceptance_criteria:
+  - "In tests/unit/release-cli-args.test.mjs: --pages-timeout -5 is refused as not a positive number (exit 2); --preid '' is refused as an empty value (exit 2); release:stamp and release:verify-deploy print usage for --help (exit 0, acting on nothing) and refuse an unknown flag with exit 2; each case fails on the merge base (fail-first)."
+  - "In tests/unit/release-analyze.test.mjs (which covers adrStatus), an RC exemption ADR whose tags list has a comment line, a blank line, a trailing comment, a multi-line flow list or CRLF line ends is read with its tags; the case fails on the merge base."
+  - "Each of the three test files removes every fixture directory it creates (rmSync in a finally), and a case of tests/unit/release-cli-args.test.mjs proves that the directory harness() created no longer exists after it returns."
+  - "CLAUDE.md's release line names every release:* script that follows the contract; npm test passes; the pull request carries a review verdict (release scripts are guarded)."
+validation:
+  - "node --test tests/unit/release-cli-args.test.mjs tests/unit/release-analyze.test.mjs tests/unit/release-gate-env.test.mjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-10-19
+updated_at: 2026-10-19
