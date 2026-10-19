@@ -7,10 +7,22 @@
 // the repository-side check (a refusal inside `plan done` is upstream work):
 //
 //   every issue of .ai/repo/project/issues with `completed_at` whose acceptance criteria
-//   require a review verdict (a criterion that says "review verdict" or "review-verdict") has
-//   an evidence entry covering `verified` whose `artifact:` is `.ai/repo/reviews/<pr>.yaml`,
-//   that file exists, and the entry's `recorded_at` is not earlier than the first commit of
-//   that file (the commit that added it, committer time).
+//   require a review verdict (a criterion that says "review verdict", "review-verdict" or "a
+//   reviewer's verdict") has an evidence entry covering `verified` that EITHER
+//   (a) names `.ai/repo/reviews/<pr>.yaml` as its `artifact:`, that file exists, and the
+//       entry's `recorded_at` is not earlier than the first commit of that file (the commit
+//       that added it, committer time); OR
+//   (b) records that the base program (scripts/review-verdict.mjs) found no guarded path for
+//       the issue's pull request: its command, result or artifact carries the empty content
+//       digest (EMPTY_DIGEST, the SHA-256 of no guarded path) or the program's "no verdict
+//       needed" line, together with the PR number ("PR 224", "#224", "--pr 224", "/pull/224").
+//
+// (b) is #224 R-1: by project.review-verdict a pull request that touches no guarded path has no
+// verdict file, so with (a) alone such an issue (E017 itself; E003, E004, V397, V602, V603,
+// whose criterion says "where it touches a guarded path") could never be recorded done
+// without turning main red. Both ways are decidable from the record. An issue whose PR does
+// have a verdict file and that records (b) is not refused: the required gate already held that
+// PR's merge on its verdict, and this check does not judge the PR a second time.
 //
 // The evidence is the time the entry was recorded, not the issue's `verified_at`: `plan verify`
 // is stamped when the implementation is complete and before the review, which is the order the
@@ -39,7 +51,11 @@ import { gitRepo } from './fixtures/git-repo.mjs';
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const ISSUES = '.ai/repo/project/issues';
 const VERDICT_PATH = /^\.ai\/repo\/reviews\/\d+\.yaml$/;
-const NEEDS_VERDICT = /review[ -]verdict/i;
+const NEEDS_VERDICT = /review[ -]verdict|reviewer['\u2019]?s verdict/i;
+/** The content digest scripts/review-verdict.mjs computes over no guarded path. */
+export const EMPTY_DIGEST = 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855';
+const NOT_NEEDED = new RegExp(`${EMPTY_DIGEST}|no verdict needed`, 'i');
+const PR_NUMBER = /(?:--pr[ =]|\bPR\s*#?|#|\/pull\/)(\d+)\b/i;
 const ALLOWANCE_CUTOFF = Date.parse('2026-10-19T00:00:00Z');
 
 // issue id -> why its record is not corrected. Only issues completed before 2026-10-19.
@@ -55,8 +71,21 @@ export function needsVerdict(issue) {
 }
 
 /**
+ * The PR number a verified evidence entry records the base program finding no guarded path
+ * for, or null when it records no such finding.
+ */
+export function notNeededPr(e) {
+  if (!e || e.covers !== 'verified') return null;
+  const text = [e.command, e.result, e.artifact].filter(Boolean).map(String).join('\n');
+  if (!NOT_NEEDED.test(text)) return null;
+  const m = text.match(PR_NUMBER);
+  return m ? Number(m[1]) : null;
+}
+
+/**
  * One problem per completed issue that needs a review verdict and has no verified evidence
- * entry naming an existing, committed verdict file recorded no earlier than its first commit.
+ * entry naming an existing, committed verdict file recorded no earlier than its first commit,
+ * nor one recording that the base program found no guarded path for its PR.
  * `verdictExists(rel)` answers whether the file is in the tree; `firstCommit(rel)` returns its
  * first commit time (ms), `null` when it has none, or `undefined` when history is unknown (the
  * time is then not judged).
@@ -65,11 +94,14 @@ export function doneEvidenceProblems(issues, { verdictExists, firstCommit }) {
   const problems = [];
   for (const issue of issues) {
     if (!issue.completed_at || !needsVerdict(issue)) continue;
+    if ((issue.evidence || []).some((e) => notNeededPr(e) !== null)) continue;
     const named = (issue.evidence || [])
       .filter((e) => e && e.covers === 'verified' && VERDICT_PATH.test(String(e.artifact || '')));
     if (named.length === 0) {
       problems.push({ id: issue.id, why: 'completed, a criterion requires a review verdict, and '
-        + 'no evidence covering verified names .ai/repo/reviews/<pr>.yaml as its artifact' });
+        + 'no evidence covering verified names .ai/repo/reviews/<pr>.yaml as its artifact, nor '
+        + 'records the base program finding no guarded path for its PR '
+        + `(${EMPTY_DIGEST.slice(0, 12)}... or "no verdict needed", with the PR number)` });
       continue;
     }
     const whys = named.map((e) => entryProblem(e, verdictExists, firstCommit));
@@ -207,7 +239,42 @@ test('E017 mutation: a missing file, a non-verdict artifact, a wrong cover and e
     assert.deepEqual(doneEvidenceProblems(
       [{ ...fixture([]), acceptance_criteria: ['A test passes.'] }], io), []);
     assert.ok(needsVerdict({ acceptance_criteria: ['needs a review-verdict file'] }));
+    assert.ok(needsVerdict({ acceptance_criteria: ["the pull request carries a reviewer's "
+      + 'verdict (src/js/audio is guarded).'] }));
+    assert.ok(!needsVerdict({ acceptance_criteria: ['a reviewer reads it'] }));
   });
+
+const notNeededEvidence = (over = {}) => ({
+  covers: 'verified', type: 'test',
+  command: 'node scripts/review-verdict.mjs --pr 224 --base-branch origin/main',
+  result: 'review-verdict: none of the 3 changed path(s) is guarded; no verdict needed',
+  recorded_at: '2026-10-19T11:00:00Z', ...over,
+});
+
+test('E017 mutation (#224 R-1): no guarded path is proved by the base program, both ways', () => {
+  const io = { verdictExists: (rel) => rel === '.ai/repo/reviews/1.yaml',
+    firstCommit: () => Date.parse('2026-10-19T10:30:00Z') };
+  const run = (...e) => doneEvidenceProblems([fixture([testEvidence, ...e])], io);
+  // The "no verdict needed" line with the PR number passes, and so does the empty digest.
+  assert.deepEqual(run(notNeededEvidence()), []);
+  assert.deepEqual(run(notNeededEvidence({ command: 'gh pr checks 224',
+    result: `PR #224: content ${EMPTY_DIGEST} (no guarded path)` })), []);
+  assert.equal(notNeededPr(notNeededEvidence()), 224);
+  assert.equal(notNeededPr(notNeededEvidence({ command: 'gh api repos/x/y/pulls',
+    result: `no verdict needed, https://github.com/x/y/pull/7` })), 7);
+  // Not-needed evidence for an issue whose PR in fact has a verdict file is still fine.
+  assert.deepEqual(run(notNeededEvidence({ command: 'node scripts/review-verdict.mjs --pr 1' })),
+    []);
+  assert.deepEqual(run(notNeededEvidence(), verdictEvidence('.ai/repo/reviews/1.yaml')), []);
+  // Neither fails, and so do a finding without the PR number, a wrong cover, another digest.
+  const neither = run();
+  assert.equal(neither.length, 1);
+  assert.match(neither[0].why, /nor records the base program finding no guarded path/);
+  assert.equal(run(notNeededEvidence({ command: 'node scripts/review-verdict.mjs' })).length, 1);
+  assert.equal(run(notNeededEvidence({ covers: 'started' })).length, 1);
+  assert.equal(run(notNeededEvidence({ result: `content ${'0'.repeat(64)}` })).length, 1);
+  assert.equal(notNeededPr(null), null);
+});
 
 test('E017 mutation: the allowance only shrinks', () => {
   const old = { ...fixture([]), completed_at: '2026-10-18T12:00:00Z' };
