@@ -1,5 +1,7 @@
 id: E023
 milestone: M046
+serves:
+  - "engineering-integrity#docs-locate-the-code"
 title: "The V3 architecture and algorithms docs place the recipe code in experiments/recipe.js"
 slug: the-v3-docs-place-the-recipe-code-in-experiments-recipe-js
 priority: p3

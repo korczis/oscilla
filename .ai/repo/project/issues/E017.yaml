@@ -1,5 +1,7 @@
 id: E017
 milestone: M046
+serves:
+  - "engineering-integrity#done-after-evidence"
 title: "An issue is recorded done only after the review verdict and validation its criteria name"
 slug: an-issue-is-recorded-done-only-after-its-review-verdict-and-validation
 priority: p2

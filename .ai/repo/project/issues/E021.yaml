@@ -1,5 +1,7 @@
 id: E021
 milestone: M046
+serves:
+  - "engineering-integrity#release-cli-consistent"
 title: "Every release script parses its flags with parseFlags, reads ADR front matter as YAML and cleans its test fixtures"
 slug: every-release-script-parses-flags-one-way-and-cleans-its-fixtures
 priority: p3

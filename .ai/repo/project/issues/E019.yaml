@@ -1,5 +1,7 @@
 id: E019
 milestone: M046
+serves:
+  - "engineering-integrity#measurement-level-refused-in-browser"
 title: "A browser check that a Studio measurement refuses a Master Output level other than the run's"
 slug: a-browser-check-that-a-studio-measurement-refuses-a-foreign-output-level
 priority: p3
