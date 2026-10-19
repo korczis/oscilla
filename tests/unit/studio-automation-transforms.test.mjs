@@ -86,10 +86,6 @@ const detuneLane = {
   checks: () => [[0, -1200], [0.5, 0], [1, 1200], [1.5, 1200], [2, 0]],
 };
 
-const RATE_DEFECT = 'transport.js applyLane writes a rate lane in Hz straight onto the '
-  + 'AudioBufferSourceNode playbackRate and ignores the adapter\'s modTarget scale '
-  + '(480 / sampleRate), so the control signal steps sampleRate / 480 times too fast';
-
 const osc = (h) => h.info.oscillator;
 const biquad = (h) => h.info.stage.node;
 const level = (h) => h.outputs.audio.gain;
@@ -124,11 +120,10 @@ const ROWS = [
   { type: 'lfo', key: 'rate', unit: 'Hz', scale: 'log', min: 0.01, max: 100, display: 'log',
     param: (h) => osc(h).frequency, ...rateLane },
   { type: 'random', key: 'rate', unit: 'Hz', scale: 'log', min: 0.01, max: 100, display: 'log',
-    param: (h) => h.outputs.control.playbackRate, toAudio: controlPlaybackRate, ...rateLane,
-    defect: RATE_DEFECT },
+    param: (h) => h.outputs.control.playbackRate, toAudio: controlPlaybackRate, ...rateLane },
   { type: 'step-modulator', key: 'rate', unit: 'Hz', scale: 'log', min: 0.01, max: 100,
     display: 'log', param: (h) => h.outputs.control.playbackRate,
-    toAudio: controlPlaybackRate, ...rateLane, defect: RATE_DEFECT },
+    toAudio: controlPlaybackRate, ...rateLane },
   { type: 'gain', key: 'gain', unit: '', scale: 'linear', min: 0, max: 2, display: 'db',
     param: level, ...levelLane(2) },
   { type: 'filter', key: 'frequency', unit: 'Hz', scale: 'log', min: 10, max: FREQUENCY_MAX,
@@ -172,6 +167,15 @@ const ROWS = [
       offset: 3000 } },
     points: [[0, 500, 'step'], [2, 8000, 'exponential']],
     checks: () => [[0, 500 + 3100], [1, geo(500, 8000, 0.5) + 3100], [2, 8000 + 3100]] },
+  // A Random's rate lane over a linear unipolar edge (depth 2, offset 1: a constant 2 Hz): the
+  // lane plus 2 Hz, in Hz, reaches playbackRate at 480 / sampleRate, offset source included.
+  { case: 'rate lane plus a constant edge offset', type: 'random', key: 'rate',
+    param: (h) => h.outputs.control.playbackRate, toAudio: controlPlaybackRate,
+    edge: { add: { from: { node: 'lfo-1', port: 'control' }, port: 'rate',
+      props: { mapping: 'linear', polarity: 'unipolar', depth: 2, offset: 1 } } },
+    points: [[0, 1, 'step'], [1, 4, 'exponential'], [2, 10, 'linear']],
+    checks: () => [[0, 1 + 2], [0.5, geo(1, 4, 0.5) + 2], [1, 4 + 2], [1.5, 7 + 2],
+      [2, 10 + 2]] },
 ];
 
 const DESCRIPTORS = ROWS.filter((r) => !r.case);
@@ -393,6 +397,20 @@ test('E008: every defect marker still describes a mismatch (remove it with the f
     for (const sr of RATES) {
       assert.notDeepEqual(transformMismatches(row, sr), [],
         `${rowLabel(row)} at ${sr} Hz now matches its row: remove its defect marker`);
+    }
+  }
+});
+
+test('rate lane on a Random / Step Modulator plays its value in Hz (E008 defect)', () => {
+  // Strict whatever the rows' markers say: the playbackRate a rate lane schedules is the lane's
+  // value in Hz x 480 / sampleRate, as the static rate and a linear rate edge are.
+  for (const type of ['random', 'step-modulator']) {
+    const row = { ...ROWS.find((r) => !r.case && r.type === type && r.key === 'rate'),
+      defect: undefined };
+    assert.equal(row.toAudio, controlPlaybackRate);
+    for (const sr of RATES) {
+      assert.equal(controlPlaybackRate(8, sr), (8 * 480) / sr);
+      assert.deepEqual(transformMismatches(row, sr), [], `${type}.rate at ${sr} Hz`);
     }
   }
 });
