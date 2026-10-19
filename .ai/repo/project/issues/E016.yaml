@@ -22,4 +22,16 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-19
-updated_at: 2026-10-19
+updated_at: 2026-10-19T11:49:42Z
+started_at: 2026-10-19T11:39:12Z
+started_event: sha256:9325c21b0ec556719eac7fd1f97f4ba38d9005652c2e58233e606ceedc962057
+verified_at: 2026-10-19T11:49:42Z
+verified_event: sha256:726a752fc48d87192ec48d3cd3fb3c979e87ffb72a59621fa0dd46b255146672
+evidence:
+  - covers: verified
+    type: test
+    command: "node --test tests/unit/studio-automation-transforms.test.mjs; npm run verify; scratch mutation harness (one mutation of src/js/studio/transport.js per copy)"
+    result: "At 16e473a: 104 of 104 pass in tests/unit/studio-automation-transforms.test.mjs (24 new rate-lane rows: Random and Step Modulator x 6 scenarios x 44.1/48 kHz, plus one mutation test); npm run verify 3119/3119 pass; transport.js unchanged. Each mutation drops the scale on one path alone, and the named rows fail at 44.1 and 48 kHz for both types: moveOffset glide (setTargetAtTime(to, ...)) -> 'edge offset changed while playing' and 'bounds clamp after an edge offset change' (8 fail); removal glide (setTargetAtTime(to, cancelFrom)) -> 'removed while playing' at 2.5/3 s (4); removal hold (applyAutomation in the removal branch) -> 'removed while playing' hold at 1.5 s (4); rebindLanes (applyAutomation) -> 'rebound on a structural edit' (4); reoffsetLanes clamp path (applyAutomation) -> 'bounds clamp after an edge offset change' (4); stop hold (applyAutomation in applyStop) -> 'held by STOP' (4). Expected values are the lane in Hz x 480 / sampleRate, computed in the test."
+    artifact: "16e473a"
+    commit: 16e473ae28f2289073aa389bb9b1db5d9622f87a
+    recorded_at: 2026-10-19T11:49:36Z
