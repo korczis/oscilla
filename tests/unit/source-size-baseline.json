@@ -28,7 +28,6 @@
     "src/index.html": 281000,
     "src/js/audio/audio-engine.js": 51000,
     "src/js/core/instrument.js": 61000,
-    "src/js/experiments/schema.js": 53000,
     "src/js/experiments/validate.js": 64000,
     "src/js/measurement/capture.js": 55000,
     "src/js/measurement/engine.js": 79000,

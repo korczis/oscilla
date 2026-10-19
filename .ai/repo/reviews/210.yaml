@@ -1,0 +1,68 @@
+# Review verdict for pull request #210, plan issue E006: break the experiments
+# schema/definition import cycle and keep the static import graph of src/js acyclic.
+# Branch fix/e006-imports-acyclic. Reviewed head 2a5e251efec9845d1450e2485e778db2fabd671e
+# (e79a78c test, 7874b55 fix, ad87967 build(dist), 2a5e251 chore(plan) evidence). Merge base
+# origin/main 50f6d6c: main has not moved. Another builder wrote all of it, not me.
+#
+# The digest: the base branch's scripts/review-verdict.mjs judges this pull request. I ran it
+# from `git archive origin/main scripts` with --repo on this worktree, `--content --list
+# --base-branch origin/main`: eb3ae010...7293 over src/js/experiments/definition.js,
+# recipe.js and schema.js. It matches the digest the builder named.
+#
+# What was checked:
+# - The design (the issue asks to decide it): a third module. src/js/experiments/recipe.js
+#   holds LIMITS, the patterns, createChecker, checkRecipe, createRecipe, formatErrors and
+#   toIsoTimestamp, and imports only ../measurement/stimulus.js. definition.js imports them
+#   from recipe.js; schema.js imports and re-exports them. The decision is recorded in the
+#   module headers, not as an ADR or a majordomus decision (R-3).
+# - No behaviour change.
+#   - A sorted line comparison of base schema.js against head schema.js + recipe.js: the only
+#     base lines missing at the head are `const CTRL_SINGLE` and `const isPlainObject`, which
+#     became `export const` in recipe.js. Nothing else was removed.
+#   - The export sets of schema.js, definition.js, validate.js and store.js, read by a
+#     dynamic import() of the base tree and of the head, are identical. recipe.js's two
+#     extra exports (isPlainObject, CTRL_SINGLE) are not re-exported by schema.js.
+#   - recipe.js has no top-level side effect beyond frozen constants, so the changed module
+#     evaluation order changes nothing observable.
+#   - tests/ differs from 50f6d6c only by the new test and one tests/README.md row: no
+#     expected hash or value changed.
+# - Fail-first.
+#   - In a scratch copy of the head with base schema.js and definition.js and no recipe.js,
+#     the new test fails 1 of 4: "src/js/experiments/definition.js -> schema.js ->
+#     definition.js". The 3 fixture tests pass there; all 4 pass at the head.
+#   - `node scripts/fail-first.mjs --title 'fix(experiments): break the schema/definition
+#     import cycle (E006)'` prints "proven by 1 of 1 file(s); failure kind(s) without the
+#     change: assertion".
+# - The detector. esbuild metafile import-statement records, non-external, all of src/js as
+#   entry points; every .js under src/js is asserted to be a node (src/js holds no other file
+#   type). Tarjan SCCs, each printed as a shortest closed path. The fixtures cover
+#   `import ... from`, `export * from` and a bare `import`, an acyclic graph and an import()
+#   loop. The base failure proves the graph has edges, so the test is not vacuous.
+# - Plan evidence. The four E006 evidence commands run as written and their results
+#   reproduce. E006 was taken to DONE before the review verdict and without its validation
+#   command (R-1).
+# - Ran:
+#   - npm test at 2a5e251: first run 2968/2969. The one failure was
+#     v31-studio-performance "build: 1186 ms > budget 1000 ms" at load about 80 on 18
+#     cores; that file passed alone (401 ms), and a whole re-run gave 2969/2969.
+#   - npm run build:check: up to date.
+#   - OSC_LOAD_MAX=200 npm run test:measure at load 55-90: v3-measure 116/116,
+#     analysis-worker 49/49, v3-ui 37/37 in five of six legs. chromium/file failed
+#     view-options with "timeout 150 s" after 1789 s, a stalled machine. v3-ui on
+#     chromium re-run alone at load about 30: 37/37 over file and http. The whole
+#     test:measure was not re-run; CI's V3 measurement and UI jobs passed in all three
+#     browsers.
+#   - CI on 2a5e251: every job passed except review-verdict (this file) and V3.1 Studio UI
+#     (webkit): v31-studio-timeline playback `follows` failed by a hair (playhead at 74.6 %
+#     against transport 0.868, tolerance 0.12). Locally, OSC_BROWSERS=webkit v31-studio-timeline: 14/14 over file and
+#     http (R-2).
+schema: review-verdict/v1
+pr: 210
+verdict: merge
+reviewer: "independent review subagent (Claude Opus 5.5) with its own context, spawned by orchestrating session e4a1ac78, whose other agents may have built this change; this agent did not build, merge or edit any of it and wrote only this file"
+content: eb3ae010a87edd652dca97ddf4bb53894b7e2951610c7b05765fae0637777293
+findings:
+  - { id: R-1, severity: P2, status: open, title: "E006 is DONE (verified_at, completed_at 13:59Z) before two of its own terms were met: the acceptance criterion 'the pull request carries a review verdict' (met only by this file) and the validation command npm run release-gate, which never ran locally (the builder disclosed it; CI's gate runs the same suites). The plan records completion ahead of evidence; the criterion should be closed by a verdict commit, or the plan should refuse done while a guarded path lacks one" }
+  - { id: R-2, severity: P3, status: open, title: "CI V3.1 Studio UI (webkit) on 2a5e251 failed v31-studio-timeline playback 'follows' (|0.746 - 0.868| = 0.122 > 0.12). The change does not touch studio/ or timing and the exports studio imports are identical; it is a timing check one hundredth over tolerance. It must pass on the re-run this commit triggers" }
+  - { id: R-3, severity: P3, status: open, title: "the issue's design decision (third module vs createExperiment taking the derived reference) is recorded only in the recipe.js and schema.js headers, not as a majordomus decision or ADR; docs/v3/architecture.md's module tree and docs/v3/algorithms.md 'Recipe stimulus (schema.js)' still place the recipe code in schema.js (true of the export, not of the code). Out of the issue's scope; the builder named both" }
+  - { id: R-4, severity: P3, status: open, title: "reviewer independence is at agent level: this reviewer is an agent of orchestrating session e4a1ac78, which likely built the change through other agents, as in #197-#199. The owner decides whether that satisfies the rule (open question R-3 of the owner)" }
