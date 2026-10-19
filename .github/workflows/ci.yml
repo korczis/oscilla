@@ -69,8 +69,10 @@ jobs:
       # E009: the raw and gzip size of dist/index.html, the headroom to the budget and the
       # change from the merge base's build, in the step summary. It reports and never fails on
       # a size (verify-dist holds the budget); it reads both builds from git, and the full
-      # history above holds the base branch.
+      # history above holds the base branch. E022: it runs unless the run was cancelled, so a
+      # pull request over the budget, failing on verify-dist, still gets its size summary.
       - name: Size of dist/index.html against the budget and the merge base (step summary)
+        if: ${{ !cancelled() }}
         timeout-minutes: 2
         run: |
           node scripts/size-report.mjs --base-branch "origin/$GITHUB_BASE_REF" \

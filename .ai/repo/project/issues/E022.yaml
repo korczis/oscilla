@@ -23,4 +23,21 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-19
-updated_at: 2026-10-19
+updated_at: 2026-10-19T11:45:11Z
+started_at: 2026-10-19T11:39:15Z
+started_event: sha256:b8242362bac49c4615dba36af7d45ab67c84a7c7d05f38c837f30b142ea788df
+verified_at: 2026-10-19T11:45:11Z
+verified_event: sha256:67bf21259c8b85ccc7af6342e8cfe369287b36f322795193bb8f129082d8ce2d
+evidence:
+  - covers: verified
+    type: test
+    command: "node --test tests/unit/size-report.test.mjs tests/unit/ci-workflows.test.mjs"
+    result: "39 of 39 pass at 07fd9cc. Mutation R-1: measure() in scripts/size-report.mjs changed to gzipSync(buf) (default level 6) fails 'measure holds verify-dist's gzip level 9 on markup where the default level differs' (4 415 B expected, 4 800 B measured); the 9 other cases pass. R-2: with origin/main's .github/workflows/ci.yml (size step without if: ${{ !cancelled() }}) 'E022: the size step reports a pull request over the budget, bounded and never gating' fails; the case also fails without the step's timeout-minutes, with if: success(), and with a run that gates on the summary. A head over the gzip budget is reported with negative headroom and exit 0 while verifyHtml fails it."
+    commit: 07fd9ccecaaf285b07b17725b70618ff1e30431e
+    recorded_at: 2026-10-19T11:44:59Z
+  - covers: verified
+    type: test
+    command: "npm run verify"
+    result: "npm test 3097 tests, 3097 pass, 0 fail at 07fd9cc; version/build checks, verify-dist and majordomus doctor (0 failures) pass"
+    commit: 07fd9ccecaaf285b07b17725b70618ff1e30431e
+    recorded_at: 2026-10-19T11:45:05Z
