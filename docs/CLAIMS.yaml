@@ -264,6 +264,15 @@ claims:
     responsibility: product
     note: Scans src/index.html without comments and the string literals of every module under src/js/, normalised (entities, tags as clause boundaries, collapsed whitespace, concatenated literals); a negation excuses a phrase only where it governs it (its own clause, a negated list of claim nouns, a negation right after it); the matcher is proven on claims, disclaimers and legitimate look-alike copy. Whether dB SPL is shown only under a level calibration is claim spl-only-with-level-calibration.
 
+  - id: positioning-sentence-consistent
+    claim: README's opening line, the About lede, the page's meta description, the og:description and twitter:description generated from scripts/social-assets.mjs and package.json's description contain the positioning sentence Q002 chose verbatim within 200 characters, the title surfaces and the brand label carry the name within 70, and a self-description the test neither checks nor exempts with a reason fails it
+    source: .ai/repo/project/issues/Q002.yaml
+    implementation: src/index.html
+    test: tests/unit/positioning-consistency.test.mjs
+    status: guaranteed
+    responsibility: product
+    note: Intent product-direction, criterion positioning-consistent (P003). The other surfaces are README.md, package.json and DESCRIPTION in scripts/social-assets.mjs; the Open Graph and Twitter tags are read from the dist head. Exempt with their reasons in the test are site/og-image.png and site/apple-touch-icon.png (no copy), CLAUDE.md, AGENTS.md and GEMINI.md (operating contracts for workers) and the GitHub repository description, which lies outside the tree and is set by gh repo edit (recorded on P003). Whether the copy around the sentence implies an unsupported effect stays with the reviewer (project.no-fake-science).
+
   # ---- V3 MEASURE (milestones M012-M020), on feature/v3. `npm test` runs tests/unit/v3-*.test.mjs;
   # `npm run test:measure` runs tests/browser/v3-measure.cjs and tests/browser/v3-ui.cjs; both
   # are in the release gate. Every browser check runs on a TEST CONTEXT digital loopback or a

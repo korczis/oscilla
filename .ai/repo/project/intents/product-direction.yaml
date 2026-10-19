@@ -15,8 +15,8 @@ satisfaction:
     ref: "majordomus plan list | grep -Eq '^Q002 +DONE '"
   - id: "positioning-consistent"
     criterion: "README's opening line, the About lede, the page's meta description, the og:description and twitter:description generated from scripts/social-assets.mjs, and package.json's description contain the chosen sentence verbatim and stay within 200 characters; the title, og:title, twitter:title and the brand label keep the name within 70 characters; and a unit test fails when any of them differs or a surface is added that the test neither checks nor exempts with a reason"
-    evidence: "command"
-    ref: "node --test tests/unit/positioning-consistency.test.mjs"
+    evidence: claim
+    ref: "positioning-sentence-consistent"
   - id: "product-path-decided"
     criterion: "Q003's decision (no commercial path before v4.0, the MIT licence not reopened, revisited as a new intent after v4.0) is recorded as an ADR with status proposed"
     evidence: "command"
