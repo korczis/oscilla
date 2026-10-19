@@ -1,5 +1,7 @@
 id: E024
 milestone: M046
+serves:
+  - "engineering-integrity#studio-import-limit-one"
 title: "The Studio import limit is one number measured one way, and a refused Studio setting says why beside its field"
 slug: the-studio-import-limit-is-measured-one-way-and-refused-settings-say-why
 priority: p3

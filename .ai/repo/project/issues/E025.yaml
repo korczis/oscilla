@@ -1,5 +1,7 @@
 id: E025
 milestone: M046
+serves:
+  - "engineering-integrity#release-page-shows-tag"
 title: "After tagging, release:publish redeploys Pages so the release commit's live page shows its tag"
 slug: after-tagging-release-publish-redeploys-pages-so-the-page-shows-its-tag
 priority: p3

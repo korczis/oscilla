@@ -1,5 +1,7 @@
 id: E018
 milestone: M046
+serves:
+  - "engineering-integrity#automation-edges-hold"
 title: "An overridden detune leaves the frequency headroom free, and a released parameter holds before it glides"
 slug: an-overridden-detune-leaves-the-headroom-free-and-a-release-holds-first
 priority: p3
