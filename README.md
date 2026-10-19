@@ -2,7 +2,17 @@
 
 [![Deploy to GitHub Pages](https://github.com/korczis/oscilla/actions/workflows/pages.yml/badge.svg?branch=main)](https://github.com/korczis/oscilla/actions/workflows/pages.yml)
 
-An interactive sound and frequency laboratory that runs in the browser from one static file.
+A zero-install, scientifically honest acoustic laboratory in your browser: generate, measure and reproduce sound experiments, and know how far each result can be trusted.
+
+What you can do with it today, from one static file and with no account:
+
+- measure the response of your speaker, room and microphone chain with a log sweep, and see the
+  quality reasons that say how far that response can be trusted;
+- compare two experiments, for example two setups or two microphone positions, with every
+  difference between their records named;
+- save an experiment and repeat it later from its recipe;
+- generate tones, sweeps and sequences and see them as waveform, spectrum and spectrogram;
+- patch a signal graph in the Studio and run it.
 
 ![OSCILLA playing a 440 Hz sine: source, waveform, relative spectrum, spectrogram, microphone analyzer, sequencer and device limits](site/og-image.png)
 
