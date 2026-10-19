@@ -1,0 +1,50 @@
+# Review verdict for pull request #218, plan issue E022: the size report holds verify-dist's
+# gzip level 9 and reports on a pull request over the budget (findings R-1 and R-2 of the
+# #208 verdict). Branch test/e022-size-report-gzip-level-over-budget.
+# Reviewed head a0c21ede4b8b0acc280fcebd0389393185c11922 (07fd9cc test, a0c21ed plan evidence).
+# Merge base origin/main 2185a12: main has not moved. Another builder wrote all of it, not me.
+#
+# The digest: the base branch's scripts/review-verdict.mjs judges this pull request. I ran it
+# from `git archive origin/main scripts` with --repo on this worktree, `--content --list
+# --base-branch origin/main`: 8f33ca7b...48daf over .github/workflows/ci.yml and
+# tests/unit/ci-workflows.test.mjs, the two guarded paths. It matches the builder's claim.
+#
+# What was checked:
+# - Acceptance criteria (majordomus plan show E022).
+#   - R-1. In a scratch clone at a0c21ed with measure() in scripts/size-report.mjs changed to
+#     gzipSync(buf) (default level 6), "measure holds verify-dist's gzip level 9 on markup where
+#     the default level differs" fails and the 9 other size-report cases pass. The merge base's
+#     size-report.test.mjs passes 8/8 under the same mutation, so the new case is what catches
+#     it. The case also asserts the fixture tells the two levels apart, so a fixture that
+#     stopped doing so would fail rather than pass vacuously.
+#   - R-2. The head's ci-workflows.test.mjs against the merge base's ci.yml (no `if`) fails
+#     "E022: the size step reports a pull request over the budget, bounded and never gating";
+#     the other 38 cases pass. With `if: ${{ always() }}` it fails too. The case holds the
+#     step's timeout-minutes (project.ci-bounded), no continue-on-error, and the exact
+#     report-and-tee run, so nothing on the step gates on a size.
+#   - Never gating. The program exits 0 on a head over the gzip budget while verifyHtml fails
+#     it (the new case). `defaults.run.shell: bash` gives -eo pipefail, so a refusal (exit 1)
+#     is still not hidden by tee. With !cancelled() the step also runs after an earlier step
+#     failed; it then only reads both builds from git, and the job is failing anyway.
+#   - The step on GitHub: in CI run 39247144256 the unit job's size step ran and succeeded on
+#     this pull request, which is within the budget. The over-budget path, the step running
+#     after verify-dist failed, is held by the test and the wiring, not observed (R-2 below).
+#   - Scope: the three declared paths plus the issue's own evidence record. Nothing else.
+# - Fail-first: the title is test(ci), so project.fail-first does not bind it; the body records
+#   the mutation proof anyway, and the CI fail-first job passes.
+# - Ran:
+#   - node --test tests/unit/size-report.test.mjs tests/unit/ci-workflows.test.mjs in this
+#     worktree: 39/39 pass.
+#   - npm test in this worktree at a0c21ed, load 28: 3097/3097 pass; the tree stayed clean.
+#   - npm test in a scratch clone failed version-authority tests with EISDIR. That was my
+#     symlinked node_modules in the clone, not the change: the same tests pass in the worktree.
+#   - No browser suite is touched, so none was run.
+schema: review-verdict/v1
+pr: 218
+verdict: merge
+reviewer: "independent review subagent (Claude Opus 5.5) with its own context, spawned by orchestrating session e4a1ac78, whose other agents built this change; this agent did not build, merge or edit any of it and wrote only this file"
+content: 8f33ca7bb0e69b56fe38e71d6313845be9f4d3fedc5f36534b664dc506748daf
+findings:
+  - { id: R-1, severity: P3, status: open, title: "reviewer independence is at agent level: this reviewer is an agent of orchestrating session e4a1ac78, whose other agents built the change. The owner's open question R-3 decides whether that satisfies the rule" }
+  - { id: R-2, severity: P3, status: open, title: "the step's run after a verify-dist failure is modelled (the ci-workflows case and if: ${{ !cancelled() }}), not observed: CI run 39247144256 is within the budget, so the over-budget summary has not yet been seen on GitHub" }
+  - { id: R-3, severity: P3, status: closed, title: "the ci-workflows case pins the step's run string exactly. That is brittle by design: any change to the size step's command needs the case updated, which is how a gating command is kept out" }
