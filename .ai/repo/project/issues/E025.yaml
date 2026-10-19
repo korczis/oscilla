@@ -1,0 +1,23 @@
+id: E025
+milestone: M046
+title: "After tagging, release:publish redeploys Pages so the release commit's live page shows its tag"
+slug: after-tagging-release-publish-redeploys-pages-so-the-page-shows-its-tag
+priority: p3
+profile: implementation
+objective: "docs/v31/review-v272.md, Open, builders' follow-up 'a Pages redeploy after tagging, so the release commit's page also shows its tag': Pages deploys main when the release commit merges, before release:publish -- --yes creates the tag v<version>, so the stamp (scripts/stamp-build.mjs, ADR 0059) records the commit as untagged and the live page of a release never shows its tag. After it creates the tag, scripts/release-publish.mjs dispatches .github/workflows/pages.yml (workflow_dispatch) for main, waits for that deploy under the existing bounded wait, and runs verify-deploy expecting the release state tagged before it creates the GitHub Release."
+why: "docs/v31/review-v272.md, the follow-ups named by the V272 builders: the published page of every release describes its commit as untagged although the tag exists."
+scope:
+  - "scripts/release-publish.mjs"
+  - "tests/unit/release-publish.test.mjs"
+acceptance_criteria:
+  - "tests/unit/release-publish.test.mjs, with a stubbed gh and git: after the tag step the script dispatches pages.yml for main, waits for that run, and calls verify-deploy expecting the release state tagged; the case fails on the merge base (fail-first)."
+  - "A dispatched deploy that does not finish within the bounded wait fails the publish with the run's id and state, and no GitHub Release is created."
+  - "The dry run (no --yes) prints the dispatch step and dispatches nothing."
+  - "npm test passes; the pull request carries a review verdict (release scripts are guarded); project.release-flow-complete holds."
+validation:
+  - "node --test tests/unit/release-publish.test.mjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-10-19
+updated_at: 2026-10-19

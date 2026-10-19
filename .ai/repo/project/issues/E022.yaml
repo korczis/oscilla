@@ -1,0 +1,26 @@
+id: E022
+milestone: M046
+serves:
+  - "engineering-integrity#size-delta-reported"
+title: "The size report holds verify-dist's gzip level and reports on a pull request over the budget"
+slug: the-size-report-holds-the-gzip-level-and-reports-over-the-budget
+priority: p3
+profile: implementation
+objective: "#208 R-1: tests/unit/size-report.test.mjs does not hold the gzip level: measure() in scripts/size-report.mjs with gzipSync(buf) (default level 6) instead of level 9 passes all 8 tests, because the noise fixture compresses the same at both levels; on the real dist the two differ by 2 863 B (818 220 vs 815 357), so a drift from verify-dist's measurement would go unseen. Add a fixture of repetitive markup on which the two levels differ. #208 R-2: the size step of .github/workflows/ci.yml runs only when npm test, build:check and verify-dist all passed, so a pull request over the budget, the case where the number matters most, gets no size summary. Give the step if: ${{ !cancelled() }} so the report is written while the job still fails on verify-dist."
+why: "Review verdict .ai/repo/reviews/208.yaml, findings R-1 and R-2: the report could drift from the budget's own measurement unseen, and it is missing exactly when a pull request breaks the budget."
+scope:
+  - "tests/unit/size-report.test.mjs"
+  - ".github/workflows/ci.yml"
+  - "tests/unit/ci-workflows.test.mjs"
+acceptance_criteria:
+  - "With measure() changed to the default gzip level, a case of tests/unit/size-report.test.mjs fails (the evidence records the mutation); the case passes on the unmutated head."
+  - "tests/unit/ci-workflows.test.mjs fails when the size step lacks if: ${{ !cancelled() }} and passes with it; the step keeps its timeout-minutes (project.ci-bounded)."
+  - "The size step never fails the job on a size: verify-dist alone holds the budget."
+  - "npm test passes; the pull request carries a review verdict (.github is guarded)."
+validation:
+  - "node --test tests/unit/size-report.test.mjs tests/unit/ci-workflows.test.mjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-10-19
+updated_at: 2026-10-19
