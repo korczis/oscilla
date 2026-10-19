@@ -1,0 +1,27 @@
+id: E018
+milestone: M046
+title: "An overridden detune leaves the frequency headroom free, and a released parameter holds before it glides"
+slug: an-overridden-detune-leaves-the-headroom-free-and-a-release-holds-first
+priority: p3
+profile: implementation
+objective: "#197 R-7: computeBases (src/js/studio/compiler.js) sizes a frequency's log-edge headroom from max(static detune, detune lane peak) even when a detune lane owns the detune, the same sizing as V431 X1. With an Oscillator at 12 kHz, static detune +1200 ct, a detune lane at 0 ct and a log LFO->frequency edge with offset 0.1 (120 ct constant), the edge's cents drop to 0 although the ceiling is 1111 ct; it is reported in limitedEdges (edge-6), so it is visible, not silent. Size a lane-owned detune from its lane peak alone. docs/v31/review-v272.md, Open, builders' follow-up: in a window of about 20 ms the runtime's base glide (src/js/studio/runtime.js) precedes the transport's hold (src/js/studio/transport.js) on a released parameter (pre-existing). Order the two so that no base glide event is scheduled before the hold time of the release."
+why: "Review verdict .ai/repo/reviews/197.yaml, finding R-7, and the follow-ups the V272 builders named in docs/v31/review-v272.md: both are conservative today (a limited edge, a short glide), but each makes the played value differ from the model's for no stated reason."
+scope:
+  - "src/js/studio/compiler.js"
+  - "src/js/studio/runtime.js"
+  - "src/js/studio/transport.js"
+  - "tests/unit/studio-automation-edges.test.mjs"
+  - "tests/README.md"
+  - "dist/index.html"
+acceptance_criteria:
+  - "In tests/unit/studio-automation-edges.test.mjs, the R-7 example at 44.1 and 48 kHz plays the edge's 120 ct constant and lists no limitedEdges entry for it; the case fails on the merge base (fail-first)."
+  - "A static detune without a detune lane is still sized from its static value: the V272 R-1 and V431 X1 tests pass unchanged."
+  - "On the fake context, releasing a lane-owned parameter schedules no base-glide event earlier than the transport's hold time; the case fails on the merge base."
+  - "npm test passes; the pull request carries a review verdict (src/js/studio is guarded); tests/README.md has a row for the test (one appended row)."
+validation:
+  - "node --test tests/unit/studio-automation-edges.test.mjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-10-19
+updated_at: 2026-10-19
