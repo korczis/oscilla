@@ -23,8 +23,8 @@ satisfaction:
     ref: "majordomus plan list | grep -Eq '^P004 +DONE '"
   - id: "public-story-sourced"
     criterion: "The origin and the pace About states are the ones Q005 decided against the recorded history, and a unit test fails when the copy differs from that decision"
-    evidence: "command"
-    ref: "node --test tests/unit/about-origin.test.mjs"
+    evidence: claim
+    ref: "about-origin-sourced"
   - id: "collaborator-brief-current"
     criterion: "The instructions of the owner's ChatGPT project describe OSCILLA's stack, scope and authority order as the repository does; because that is an act in the owner's account that no repository command can see, the evidence is the record on Q006 of who changed them, when and to what"
     evidence: "command"

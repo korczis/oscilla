@@ -273,6 +273,15 @@ claims:
     responsibility: product
     note: Intent product-direction, criterion positioning-consistent (P003). The other surfaces are README.md, package.json and DESCRIPTION in scripts/social-assets.mjs; the Open Graph and Twitter tags are read from the dist head. Exempt with their reasons in the test are site/og-image.png and site/apple-touch-icon.png (no copy), CLAUDE.md, AGENTS.md and GEMINI.md (operating contracts for workers) and the GitHub repository description, which lies outside the tree and is set by gh repo edit (recorded on P003). Whether the copy around the sentence implies an unsupported effect stays with the reviewer (project.no-fake-science).
 
+  - id: about-origin-sourced
+    claim: "About's Origin tells the start Q005 decided against the record, an anti-bark ad promising 'ultrasound through any phone's speaker' and the reply 'this can be knocked together in one HTML5', keeping the browser-laboratory question only as the framing the project grew into; 'Built in one night' keeps its 5 h 51 min qualified as wall-clock time with several AI workers in parallel; and About names no company behind the ad, no vendor frequency, no personal motive and no figure the knowledge records do not measure"
+    source: .ai/repo/project/issues/Q005.yaml
+    implementation: src/index.html
+    test: tests/unit/about-origin.test.mjs
+    status: guaranteed
+    responsibility: product
+    note: Intent product-direction, criterion public-story-sourced (P005). Q005 was decided on 2026-10-18 by the coordinating Claude session under the owner's delegation of that date; the owner may override it, and the test then follows the owner's decision. The history behind it is in the knowledge records oscilla-origin-in-the-transcripts and built-in-one-night-is-wall-clock; whether a sentence the test does not anticipate invents part of the story stays with the reviewer.
+
   # ---- V3 MEASURE (milestones M012-M020), on feature/v3. `npm test` runs tests/unit/v3-*.test.mjs;
   # `npm run test:measure` runs tests/browser/v3-measure.cjs and tests/browser/v3-ui.cjs; both
   # are in the release gate. Every browser check runs on a TEST CONTEXT digital loopback or a
