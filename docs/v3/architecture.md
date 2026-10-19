@@ -229,7 +229,8 @@ src/js/measurement/views/   common.js  measure-flow.js  quality-bar.js  response
 src/js/calibration/   profile.js  parse.js  export.js  interpolate.js  level.js  sha256.js
                       device-id.js  reference.js
 src/js/core/          url-state-measure.js (the MEASURE recipe in the URL hash)
-src/js/experiments/   schema.js  migrate.js  validate.js  hash.js  csv.js  store.js  compare.js
+src/js/experiments/   recipe.js (limits, checker, recipe; schema.js re-exports it)
+                      schema.js  migrate.js  validate.js  hash.js  csv.js  store.js  compare.js
                       semantic-diff.js
                       canonical-json.js  encode.js
 src/js/ui/            measure.js  measure-experiment.js  experiments.js
@@ -279,7 +280,7 @@ renderStimulus(spec) -> { spec /* normalized, Nyquist-clamped */, samples: Float
   clampedTo /* Hz or null */ }
 // The sweep inverse is derived from the SAME normalized spec (spec §206):
 inverseSweep(spec) -> Float32Array
-safeMaxFrequency(sampleRate) -> 0.95 × Nyquist   // the clamp; schema.js uses the same
+safeMaxFrequency(sampleRate) -> 0.95 × Nyquist   // the clamp; recipe.js uses the same
 
 // spectrum.js — scale 'tone' (default): a full-scale bin-centred sine reads 1 (0 dB);
 // scale 'mean-square': Σ P = mean square (FS sine 0.5, −3.01 dB) = the band-level scale
@@ -470,6 +471,8 @@ RELATIVE_SCALE_LABEL = 'Relative level · dBFS-like / analyser-relative scale'
 levelLabel(levelCalibration, currentInput?) -> { unit: 'dB SPL'|RELATIVE_UNIT, calibrated,
   indicator: 'CALIBRATED'|'UNCALIBRATED', reason? /* another input */ }
 
+// experiments/recipe.js (plan issue E006) — LIMITS, the ID patterns, createChecker, checkRecipe,
+// createRecipe(spec) -> Recipe, formatErrors, toIsoTimestamp; schema.js re-exports them as before
 // experiments/schema.js — schema versions are independent of the product version (spec §131)
 Experiment = { kind: 'oscilla-experiment', schemaVersion: 3, oscillaVersion, oscillaCommit,
   experimentId, name, recipe: { stimulus /* = renderStimulus(spec).spec, incl. color, law */,

@@ -22,4 +22,16 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-19
-updated_at: 2026-10-19
+updated_at: 2026-10-19T12:58:00Z
+started_at: 2026-10-19T12:53:34Z
+started_event: sha256:f8f0413cb8359f41f2e916990a5df54f5dbc0ca632ae594e8d2630fd4565db2b
+verified_at: 2026-10-19T12:58:00Z
+verified_event: sha256:4bb157a1d39510cc38c497feebf63bedfa854521671746ce7edecdc4d0a65d6e
+evidence:
+  - covers: verified
+    type: test
+    command: "node --test tests/unit/knowledge-integrity.test.mjs; grep -q 'experiments/recipe.js' docs/v3/architecture.md && grep -q 'experiments/recipe.js' docs/v3/algorithms.md; npm run verify; majordomus decision show 'third module'"
+    result: "At 83fec47: tests/unit/knowledge-integrity.test.mjs 34/34 pass; the engineering-integrity#docs-locate-the-code grep finds experiments/recipe.js in docs/v3/architecture.md (module tree line and interface block) and docs/v3/algorithms.md (section 'Recipe stimulus (recipe.js)', which names src/js/experiments/recipe.js as the home of the code and schema.js as its re-export); npm run verify 3121/3121 pass, doctor 0 failures. majordomus decision records the third module over createExperiment taking the derived reference, with its reason (task t-20261019125327-63f1)."
+    artifact: "83fec47"
+    commit: 83fec4707284026ee182363e457f718287f6d6db
+    recorded_at: 2026-10-19T12:57:57Z
