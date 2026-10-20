@@ -61,7 +61,8 @@
 //     An Oscillator's detune (cents) shifts its frequency and spends the same headroom: the
 //     static detune is lowered to fit (`clamped`, by `lowered` cents), its edges scaled (V272
 //     review A7). That lowering is not an edge offset: a lane that owns the parameter overrides
-//     the static value and is bounded on its own (V272 review R-1).
+//     the static value and is bounded on its own (V272 review R-1), and the headroom an owned
+//     detune spends is its lane's peak alone (#197 R-7).
 //     Other parameters may exceed their range through
 //     modulation; that is reported (`exceeds`), never hidden (§242).
 //   - TRIGGER and ANALYSIS edges have no Web Audio connection: they are logical bindings for
@@ -461,8 +462,9 @@ export function createEdgeHandle(planEdge, fromHandle, toHandle, ctxEnv,
  * two-octave LFO to 0.95 × Nyquist (V431 review X1).
  * A `detune` in cents beside a `frequency` in Hz (the Oscillator) shifts that frequency by
  * 2^(cents/1200) and spends the same headroom (V272 review A7). In order: the static detune
- * (its base or lane peak, offsets included) is lowered to fit above the frequency's reference
- * and, when positive, lowers the cap of everything after it; then the frequency's linear and
+ * is lowered to fit above the frequency's reference and, when positive, lowers the cap of
+ * everything after it — by its lane peak alone when a lane owns it (offsets included; the lane
+ * overrides the static value, #197 R-7), else by its base; then the frequency's linear and
  * log edges as above; then the upward excursion of the detune's own edges is scaled to what
  * is left. A negative detune grants the frequency parameter no extra room.
  */
@@ -512,6 +514,9 @@ export function computeBases(planNode, incoming, hooks, peaks = null) {
   const detune = unitOf('frequency') === 'Hz' && unitOf('detune') === 'cents' ? base.detune
     : null;
   const detunePeak = detune ? peakOf('detune') : -Infinity; // before its base is lowered
+  // A detune a lane owns plays the lane, never the static value: its peak alone spends the
+  // frequency's headroom (#197 R-7); a static detune without a lane is sized from itself.
+  const detuneOwned = detunePeak > -Infinity;
   let detuneK = 1;
   // Frequencies first: a detune's room is decided while its frequency is sized.
   const keys = Object.keys(base).sort((x, y) => (defs.get(y).unit === 'Hz')
@@ -536,7 +541,7 @@ export function computeBases(planNode, incoming, hooks, peaks = null) {
         lower('detune', room0 - detune.cents);
         clamped.add('detune');
       }
-      const stat = Math.max(detune.value, detunePeak) + detune.cents;
+      const stat = (detuneOwned ? detunePeak : detune.value) + detune.cents;
       capF = cap / 2 ** (Math.max(0, Math.min(room0, stat)) / CENTS_PER_OCTAVE);
     }
     const lin = list.filter((x) => !x.log);

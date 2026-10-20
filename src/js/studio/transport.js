@@ -75,7 +75,10 @@
 //                                gates is closed at PLAY (the timeline owns its gate)
 //   automation lane              applyAutomation on handle.modTarget(key, 'linear').param, the
 //                                lane's parameter owned by the transport (runtime.setOwnedParams:
-//                                the runtime does not glide it); the modulation edges' constant
+//                                the runtime does not glide it; a lane removed while playing is
+//                                held at the edit's horizon and glided to its base from there,
+//                                and the runtime glides no base of it before then: releaseAt,
+//                                E018); the modulation edges' constant
 //                                offset (runtime.baseOffset) is added to the values, or on a
 //                                strictly positive parameter summed in by an offset source (fit);
 //                                values, bounds and offsets in the parameter's unit, written in
@@ -360,6 +363,17 @@ export function createStudioTransport({
       list.push({ node: id, param: 'level', initial: ROUTE_FLOOR });
     }
     return list;
+  }
+
+  /**
+   * The claims of `m`, handed to the runtime while playing: a claim they drop is held by this
+   * transport until the edit's horizon (applyLaneEdit, releaseClaim) and glided from there, so
+   * the runtime glides no base of it before that time (E018).
+   */
+  function claimFor(m) {
+    const now = ctxNow();
+    const releaseAt = Math.max(safeHorizon(now, hooks.ctx.sampleRate), hooks.soon());
+    return runtime.setOwnedParams(ownedFor(m), { releaseAt });
   }
 
   const laneOn = (id, param) => model.timeline.automation.some((l) => l.target.node === id
@@ -1359,7 +1373,7 @@ export function createStudioTransport({
     const rev = store.getRevision();
     lastRevision = rev; // not retried every wake-up; the next store change tries again
     const next = store.getModel();
-    runtime.setOwnedParams(ownedFor(next));
+    claimFor(next);
     const r = runtime.apply(next, { revision: rev });
     if (!r.ok) {
       refusedBy(r, 'sync-refused', rev);
@@ -1394,7 +1408,7 @@ export function createStudioTransport({
         detail: { playing, disposed } });
       return null;
     }
-    runtime.setOwnedParams(ownedFor(next));
+    claimFor(next);
     const r = runtime.apply(next, { revision });
     if (!r.ok) {
       return { ok: false, phase: r.phase, reason: refusedBy(r, 'edit-refused', revision) };
