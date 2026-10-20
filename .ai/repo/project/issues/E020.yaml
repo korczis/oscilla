@@ -22,4 +22,16 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-19
-updated_at: 2026-10-19
+updated_at: 2026-10-19T12:59:21Z
+started_at: 2026-10-19T12:53:49Z
+started_event: sha256:da886bff97e878de35253d3d0a3e659b6a327c4441ca10fea4f782a9acfcdc1f
+verified_at: 2026-10-19T12:59:21Z
+verified_event: sha256:4650ad43bc19643ceb7fda9e49999d82d60fa9c04db83a6b21894a36c3814e1a
+evidence:
+  - covers: verified
+    type: test
+    command: "node --test tests/unit/adr-accepted-list.test.mjs; npm test; npm run verify; the test copied beside origin/main's .ai/repo/adrs"
+    result: "At 270a19f: 8 of 8 pass in tests/unit/adr-accepted-list.test.mjs (7 fixture cases: a correct list passes; a missing accepted ADR, a listed ADR that is not accepted, a listed ADR that does not exist, a 'Proposed' mark wrong either way, a wrong date, title or link, an accepted ADR without an acceptance note and a README without the list each fail; 1 case over the real tree: 39 accepted ADRs listed, 26 marked yes); npm test 3129/3129 pass; npm run verify passes. Fail-first: over origin/main's .ai/repo/adrs the real-tree case fails (no list section, 0002 ... 0049 missing). No ADR file changed."
+    artifact: "270a19f"
+    commit: 270a19f26c635a6925c1410f0557755ee0f7e0f8
+    recorded_at: 2026-10-19T12:59:17Z
