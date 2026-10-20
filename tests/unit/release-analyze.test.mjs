@@ -8,7 +8,7 @@
 // driven through main() as a dry run against a fake git runner and a fixture checkout: the
 // newest release is recorded, and a major release follows a published release candidate.
 import assert from 'node:assert/strict';
-import { mkdirSync, mkdtempSync, readdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
@@ -16,7 +16,9 @@ import {
   analyzeCommits, parseCommit, proposeVersion, readCommits, lastReleaseTag,
 } from '../../scripts/release-analyze.mjs';
 import { bumpVersion, compareSemver, parseSemver } from '../../scripts/release-metadata.mjs';
-import { adrStatus, flowProblems, main as prepare } from '../../scripts/release-prepare.mjs';
+import {
+  adrStatus, flowProblems, joinFlowLines, main as prepare,
+} from '../../scripts/release-prepare.mjs';
 
 const c = (subject, body = '') => ({ sha: `${subject.length}`.padEnd(40, '0'), subject, body });
 
@@ -146,43 +148,49 @@ const record = (version, channel) => `schema: release/v1\nversion: "${version}"\
 /**
  * A fixture checkout (package.json, release records, ADRs) and a fake git that answers what
  * release:prepare asks before it would change anything. Returns the dry run's exit code and
- * everything it printed.
+ * everything it printed. An ADR is a status, { status, tags, related } or { text } (the whole
+ * file). The fixture directory is removed before it returns (R-4 of #199).
  */
 function prepareDryRun({ version, tags, records = {}, adrs = {}, subject = 'feat(x): y',
   argv = [] }) {
   const root = mkdtempSync(path.join(os.tmpdir(), 'oscilla-prepare-'));
-  const write = (rel, text) => {
-    mkdirSync(path.dirname(path.join(root, rel)), { recursive: true });
-    writeFileSync(path.join(root, rel), text);
-  };
-  write('package.json', JSON.stringify({ version }));
-  for (const [tag, channel] of Object.entries(records)) {
-    write(`.ai/repo/releases/${tag}.yaml`, record(tag.slice(1), channel));
-  }
-  for (const [name, adr] of Object.entries(adrs)) {
-    const { status, tags = [], related = [] } = typeof adr === 'string' ? { status: adr } : adr;
-    const list = (key, items) => (items.length
-      ? `${key}:\n${items.map((i) => `  - ${i}\n`).join('')}` : '');
-    write(`.ai/repo/adrs/${name}.md`, `---\nschema: adr/v1\nstatus: ${status}\n`
-      + `${list('tags', tags)}${list('related', related)}---\n\n# x\n`);
-  }
-  const run = (args) => {
-    if (args[0] === 'status') return '';
-    if (args[0] === 'tag') return tags.join('\n');
-    if (args[0] === 'log') return `${'a'.repeat(40)}\x1f${subject}\x1f\x1e\n`;
-    throw new Error(`release:prepare --dry-run must not run git ${args.join(' ')}`);
-  };
-  const out = [];
-  const real = { log: console.log, error: console.error };
-  console.log = (l) => out.push(String(l));
-  console.error = (l) => out.push(String(l));
-  let code;
   try {
-    code = prepare(['--dry-run', ...argv], root, run);
+    const write = (rel, text) => {
+      mkdirSync(path.dirname(path.join(root, rel)), { recursive: true });
+      writeFileSync(path.join(root, rel), text);
+    };
+    write('package.json', JSON.stringify({ version }));
+    for (const [tag, channel] of Object.entries(records)) {
+      write(`.ai/repo/releases/${tag}.yaml`, record(tag.slice(1), channel));
+    }
+    for (const [name, adr] of Object.entries(adrs)) {
+      const { status, tags = [], related = [], text } = typeof adr === 'string'
+        ? { status: adr } : adr;
+      const list = (key, items) => (items.length
+        ? `${key}:\n${items.map((i) => `  - ${i}\n`).join('')}` : '');
+      write(`.ai/repo/adrs/${name}.md`, text ?? `---\nschema: adr/v1\nstatus: ${status}\n`
+        + `${list('tags', tags)}${list('related', related)}---\n\n# x\n`);
+    }
+    const run = (args) => {
+      if (args[0] === 'status') return '';
+      if (args[0] === 'tag') return tags.join('\n');
+      if (args[0] === 'log') return `${'a'.repeat(40)}\x1f${subject}\x1f\x1e\n`;
+      throw new Error(`release:prepare --dry-run must not run git ${args.join(' ')}`);
+    };
+    const out = [];
+    const real = { log: console.log, error: console.error };
+    console.log = (l) => out.push(String(l));
+    console.error = (l) => out.push(String(l));
+    let code;
+    try {
+      code = prepare(['--dry-run', ...argv], root, run);
+    } finally {
+      Object.assign(console, real);
+    }
+    return { code, text: out.join('\n') };
   } finally {
-    Object.assign(console, real);
+    rmSync(root, { recursive: true, force: true });
   }
-  return { code, text: out.join('\n') };
 }
 
 const RECORDED = { 'v40.10.2': 'stable', 'v40.10.3': 'stable' };
@@ -307,22 +315,26 @@ test('a new major line needs its candidate whatever minor and patch it starts at
 
 test('prepare reads the tags reachable from HEAD, not every tag of the clone', () => {
   const root = mkdtempSync(path.join(os.tmpdir(), 'oscilla-prepare-tags-'));
-  writeFileSync(path.join(root, 'package.json'), JSON.stringify({ version: '3.3.3' }));
-  const asked = [];
-  const run = (args) => {
-    if (args[0] === 'status') return '';
-    if (args[0] === 'tag') { asked.push(args.join(' ')); return 'v3.3.2\nv3.3.3'; }
-    if (args[0] === 'log') return '';
-    throw new Error(`unexpected git ${args.join(' ')}`);
-  };
-  const real = console.log;
-  console.log = () => {};
   try {
-    prepare(['--dry-run'], root, run);
+    writeFileSync(path.join(root, 'package.json'), JSON.stringify({ version: '3.3.3' }));
+    const asked = [];
+    const run = (args) => {
+      if (args[0] === 'status') return '';
+      if (args[0] === 'tag') { asked.push(args.join(' ')); return 'v3.3.2\nv3.3.3'; }
+      if (args[0] === 'log') return '';
+      throw new Error(`unexpected git ${args.join(' ')}`);
+    };
+    const real = console.log;
+    console.log = () => {};
+    try {
+      prepare(['--dry-run'], root, run);
+    } finally {
+      console.log = real;
+    }
+    assert.deepEqual([...new Set(asked)], ['tag --merged HEAD --list v*']);
   } finally {
-    console.log = real;
+    rmSync(root, { recursive: true, force: true });
   }
-  assert.deepEqual([...new Set(asked)], ['tag --merged HEAD --list v*']);
 });
 
 test('proposeVersion: a published candidate is finalised even with no releasable commit', () => {
@@ -400,7 +412,7 @@ test('V272 ADR acceptance: --no-rc-because refuses an accepted ADR that is not a
     assert.match(asAccepted[0], /adr-0047 is not an RC exemption for major 41/);
     const accepted = readdirSync(new URL('../../.ai/repo/adrs/', import.meta.url))
       .filter((n) => /^\d{4}-.*\.md$/.test(n)).map((n) => adrStatus(n.slice(0, 4)))
-      .filter((a) => a.status === 'accepted');
+      .filter((a) => a.status === 'accepted' || a.error);
     assert.ok(accepted.length > 0, 'the repository has accepted ADRs to try');
     for (const a of accepted) {
       const p = flowProblems({ ...f, noRcBecause: a.id, adr: a });
@@ -415,4 +427,72 @@ test('flowProblems is pure: both refusals from facts alone', () => {
   assert.equal(flowProblems(f).length, 2);
   assert.deepEqual(flowProblems({ ...f, proposed: '40.11.0', hasRecord: () => true }), []);
   assert.deepEqual(flowProblems({ ...f, lastTag: null, proposed: null }), []);
+});
+
+// R-3 of #198: the front matter is read as YAML (scripts/yaml-subset.mjs), so an exemption
+// written as valid YAML in any of these shapes reads with its tags, and one that is not YAML
+// the reader accepts is refused and says so.
+const EXEMPTION_SHAPES = {
+  'a comment line in the block list': 'tags:\n  - release\n  # the exemption\n'
+    + '  - rc-exemption\n  - major-41\nrelated:\n  - adr:adr-0047\n',
+  'a blank line in the block list': 'tags:\n  - release\n\n  - rc-exemption\n  - major-41\n'
+    + 'related:\n\n  - adr:adr-0047\n',
+  'a trailing comment': 'tags: [release, rc-exemption, major-41] # exempts major 41\n'
+    + 'related: [adr:adr-0047]  # ADR 0047\n',
+  'a multi-line flow list': 'tags: [\n  release,\n  rc-exemption, # this one\n  major-41,\n]\n'
+    + 'related: [adr:adr-0047,\n  file:scripts/release-prepare.mjs]\n',
+  'quoted items at the key\'s indentation': 'tags:\n- "release"\n- \'rc-exemption\'\n'
+    + '- major-41\nrelated:\n- "adr:adr-0047"\n',
+};
+
+test('R-3 of #198: adrStatus reads an RC exemption in every YAML shape, also with CRLF', () => {
+  const adrs = {};
+  let n = 70;
+  for (const [what, body] of Object.entries(EXEMPTION_SHAPES)) {
+    const text = `---\nschema: adr/v1\nid: adr-00${n}\nstatus: accepted # owner, 2026-10-19\n`
+      + `${body}---\n\n# ${what}\n`;
+    adrs[`00${n}-lf`] = { text };
+    adrs[`00${n + 1}-crlf`] = { text: text.replace(/\n/g, '\r\n') };
+    n += 2;
+  }
+  const root = mkdtempSync(path.join(os.tmpdir(), 'oscilla-prepare-adr-'));
+  try {
+    for (const [name, { text }] of Object.entries(adrs)) {
+      mkdirSync(path.join(root, '.ai/repo/adrs'), { recursive: true });
+      writeFileSync(path.join(root, `.ai/repo/adrs/${name}.md`), text);
+    }
+    for (const name of Object.keys(adrs)) {
+      const a = adrStatus(name.slice(0, 4), root);
+      const what = `${name} (${adrs[name].text.split('# ').pop().trim()})`;
+      assert.equal(a.error, undefined, what);
+      assert.equal(a.status, 'accepted', what);
+      assert.deepEqual(a.tags, ['release', 'rc-exemption', 'major-41'], what);
+      assert.ok(a.related.includes('adr:adr-0047'), what);
+    }
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+  // and release:prepare accepts each as the exemption for major 41
+  for (const name of Object.keys(adrs)) {
+    const r = prepareDryRun({ version: '41.0.0', tags: TAGS, records: RECORDED, adrs,
+      argv: ['--no-rc-because', name.slice(0, 4)] });
+    assert.equal(r.code, 0, `${name}: ${r.text}`);
+  }
+});
+
+test('R-3 of #198: front matter that is not YAML the reader accepts lifts nothing', () => {
+  const r = prepareDryRun({ version: '41.0.0', tags: TAGS, records: RECORDED, adrs: {
+    '0080-not-yaml': { text: '---\nstatus: accepted\ntitle: a: b\ntags: [rc-exemption, '
+      + 'major-41]\nrelated: [adr:adr-0047]\n---\n' } }, argv: ['--no-rc-because', '0080'] });
+  assert.equal(r.code, 1, r.text);
+  assert.match(r.text, new RegExp('adr-0080 is not an RC exemption for major 41: its front '
+    + 'matter is not YAML the release scripts read \\(line 2: '));
+});
+
+test('joinFlowLines folds only a flow collection that spans lines', () => {
+  assert.equal(joinFlowLines('tags: [a,\n  # c\n  "b#c", # d\n\n  c]  # e\nk: v'),
+    'tags: [a, "b#c", c]\nk: v');
+  for (const same of ['title: a [b] c', 'tags: [a, b] # c', "t: 'it''s [' # x", '- [a]']) {
+    assert.equal(joinFlowLines(same), same);
+  }
 });

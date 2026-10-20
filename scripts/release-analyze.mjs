@@ -122,26 +122,33 @@ export function proposeVersion({
 /**
  * Parse a release script's argv against its declared flags (`spec`: flag -> 'boolean' or
  * 'value'). Returns { help: true } when --help or -h is given, else an object keyed by flag (a
- * boolean flag true, a value flag its string). An argument the spec does not declare, or a
- * value flag followed by nothing or by another flag, throws an Error with exitCode 2 that ends
- * in `usage`, so a typo is refused before the script touches git, a file or the network
- * (R-4 of the #198 review).
+ * boolean flag true, a value flag its string) whose `_` lists the positional arguments, of
+ * which a script accepts at most `positional` (0 unless it says so). An argument the spec does
+ * not declare, a positional beyond that count, a value flag followed by nothing or by another
+ * flag, or a value flag given an empty value throws an Error with exitCode 2 that ends in
+ * `usage`, so a typo is refused before the script touches git, a file or the network (R-4 of
+ * the #198 review). A value that starts with "-" but is no flag ("-5") is a value, which the
+ * script then judges (R-1 of #199); an empty one is never silently replaced by a default
+ * (R-2 of #199).
  */
-export function parseFlags(argv, spec, usage) {
+export function parseFlags(argv, spec, usage, { positional = 0 } = {}) {
   const refuse = (m) => Object.assign(new Error(`${m}\n${usage}`), { exitCode: 2 });
-  const o = {};
+  const isFlag = (v) => v.startsWith('--') || /^-[A-Za-z]/.test(v);
+  const o = { _: [] };
   let help = false;
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === '--help' || a === '-h') {
       help = true;
     } else if (!Object.hasOwn(spec, a)) {
-      throw refuse(`unknown argument ${a}`);
+      if (isFlag(a) || o._.length >= positional) throw refuse(`unknown argument ${a}`);
+      o._.push(a);
     } else if (spec[a] === 'boolean') {
       o[a] = true;
     } else {
       const v = argv[i + 1];
-      if (v === undefined || v.startsWith('-')) throw refuse(`${a} needs a value`);
+      if (v === undefined || isFlag(v)) throw refuse(`${a} needs a value`);
+      if (v === '') throw refuse(`${a} needs a non-empty value`);
       o[a] = v;
       i++;
     }
@@ -225,7 +232,7 @@ export function main({
   }
   try {
     const a = analyzeRepository({ root, run, prerelease: !!o['--prerelease'],
-      preid: o['--preid'] || 'rc' });
+      preid: o['--preid'] ?? 'rc' });
     log(o['--json'] ? JSON.stringify(a, null, 2) : formatAnalysis(a));
     return 0;
   } catch (e) {

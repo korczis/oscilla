@@ -5,7 +5,7 @@
 // Driven through main() as a dry run against a fake git and a fixture checkout: no gate runs.
 //   node --test tests/unit/release-gate-env.test.mjs
 import assert from 'node:assert/strict';
-import { mkdtempSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import os from 'node:os';
 import path from 'node:path';
@@ -15,27 +15,34 @@ import * as prep from '../../scripts/release-prepare.mjs';
 const require = createRequire(import.meta.url);
 const suite = require('../browser/lib/suite.cjs');
 
-/** release:prepare --dry-run on a fixture checkout with `env`; its exit code and output. */
+/**
+ * release:prepare --dry-run on a fixture checkout with `env`; its exit code and output. The
+ * fixture directory is removed before it returns (R-4 of #199).
+ */
 function prepareDryRun(env) {
   const root = mkdtempSync(path.join(os.tmpdir(), 'oscilla-gate-env-'));
-  writeFileSync(path.join(root, 'package.json'), JSON.stringify({ version: '3.3.3' }));
-  const run = (args) => {
-    if (args[0] === 'status') return '';
-    if (args[0] === 'tag') return 'v3.3.3'; // before the record floor: no record needed
-    if (args[0] === 'log') return `${'a'.repeat(40)}\x1ffix(x): y\x1f\x1e\n`;
-    throw new Error(`release:prepare --dry-run must not run git ${args.join(' ')}`);
-  };
-  const out = [];
-  const real = { log: console.log, error: console.error };
-  console.log = (l) => out.push(String(l));
-  console.error = (l) => out.push(String(l));
-  let code;
   try {
-    code = prep.main(['--dry-run'], root, run, env);
+    writeFileSync(path.join(root, 'package.json'), JSON.stringify({ version: '3.3.3' }));
+    const run = (args) => {
+      if (args[0] === 'status') return '';
+      if (args[0] === 'tag') return 'v3.3.3'; // before the record floor: no record needed
+      if (args[0] === 'log') return `${'a'.repeat(40)}\x1ffix(x): y\x1f\x1e\n`;
+      throw new Error(`release:prepare --dry-run must not run git ${args.join(' ')}`);
+    };
+    const out = [];
+    const real = { log: console.log, error: console.error };
+    console.log = (l) => out.push(String(l));
+    console.error = (l) => out.push(String(l));
+    let code;
+    try {
+      code = prep.main(['--dry-run'], root, run, env);
+    } finally {
+      Object.assign(console, real);
+    }
+    return { code, text: out.join('\n') };
   } finally {
-    Object.assign(console, real);
+    rmSync(root, { recursive: true, force: true });
   }
-  return { code, text: out.join('\n') };
 }
 
 test('V272 D6: release:prepare refuses a gate narrowed by OSC_BROWSERS or OSC_ORIGINS', () => {
@@ -62,10 +69,15 @@ test('V272 D6: the gate runs with CI skip semantics and the receipt names its br
   assert.ok(!('OSC_BROWSERS' in env) && !('OSC_ORIGINS' in env));
 
   // a skip the README does not declare fails under the gate's environment, as under CI
-  const readme = path.join(mkdtempSync(path.join(os.tmpdir(), 'oscilla-gate-env-')), 'R.md');
-  writeFileSync(readme, '# Tests\n\n## Declared skips\n\n| Skip | Reason |\n| --- | --- |\n');
-  const strict = suite.createRun({ name: 's', browsers: ['webkit'], env, readme, log() {} });
-  assert.throws(() => strict.skip('webkit', 'undeclared', 'because'), /Declared skips/);
+  const dir = mkdtempSync(path.join(os.tmpdir(), 'oscilla-gate-env-'));
+  try {
+    const readme = path.join(dir, 'R.md');
+    writeFileSync(readme, '# Tests\n\n## Declared skips\n\n| Skip | Reason |\n| --- | --- |\n');
+    const strict = suite.createRun({ name: 's', browsers: ['webkit'], env, readme, log() {} });
+    assert.throws(() => strict.skip('webkit', 'undeclared', 'because'), /Declared skips/);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 
   const fp = { version: '40.1.0', sourceDigest: 'a'.repeat(64), distSha256: 'b'.repeat(64),
     gateTree: 'c'.repeat(64) };
