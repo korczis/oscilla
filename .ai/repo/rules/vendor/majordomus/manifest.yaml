@@ -5,7 +5,7 @@ vendor: majordomus
 package: majordomus-standard-rules
 version: 1
 format: ai-rules/v1
-source_revision: 0.30.0
+source_revision: 1.0.0-alpha.1
 rules:
   - id: majordomus.adr-integrity
     version: 1
