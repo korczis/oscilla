@@ -1,0 +1,69 @@
+# Review verdict for pull request #230: migrate the .ai layer and the CI doctor pin from
+# Majordomus 0.30.0 to 1.0.0-alpha.1 (MJ_VERSION, MJ_SHA256, job name and comment, the relaxed
+# MJ_VERSION check and CAPTURED_WITH in ci-knowledge-job, the vendored rules' source_revision)
+# and set policy session.ensure_server_on_start: true. Branch chore/majordomus-1.0.0-alpha.1.
+# Reviewed head 40aca1c (the change); the branch then gained 92af637, a merge of main 5dd6c81
+# that adds only .ai/repo/releases/v3.12.1.yaml, so the PR diff and the digest are unchanged.
+# Another builder wrote all of it, not me.
+#
+# The digest: the base branch's scripts/review-verdict.mjs judges this pull request. I ran it
+# from `git archive origin/main scripts` with --repo on this worktree, `--content --list
+# --base-branch origin/main`: d542cb36...7db over .github/workflows/ci.yml and
+# tests/unit/ci-knowledge-job.test.mjs, the two guarded paths (same at 40aca1c and 92af637).
+#
+# What was checked:
+# - The diff (`gh pr diff 230`): four files. ci.yml changes MJ_VERSION, MJ_SHA256, the job
+#   name and the comment's release URL together; the install, version and verdict steps are
+#   untouched. policy.yaml changes one line. The vendored manifest changes source_revision only.
+# - The relaxed MJ_VERSION regex, probed on a scratch copy of the test with ci.yml's value
+#   rewritten: 1.0.0-alpha.1, 1.0.0 and 0.30.0 are accepted; latest, ^1.0.0, ~1.0.0, 1.x, 1,
+#   1.0, v1.0.0, >=1.0.0, *, "1.0.0-", 1.0.0-alpha_1, 1.0.0+build, a trailing space and
+#   "1.0.0-alpha.1 || latest" are refused. It still refuses ranges and moving tags.
+# - The vendored rules. `.ai/repo/rules/vendor/majordomus/` is byte-identical (diff -r) to
+#   ~/.local/share/majordomus/versions/1.0.0-alpha.1/share/standard/majordomus/; against
+#   0.30.0's it differs only in source_revision, so no rule text changed.
+# - The digest of the pin. https://majordomus.dev/releases/v1.0.0-alpha.1.json (channel
+#   prerelease, commit 9a5a9b7) gives x86_64-unknown-linux-gnu sha256 45b14249...a5d2. I
+#   downloaded the asset from the GitHub release URL the job builds (same curl flags) and
+#   hashed it: 45b14249...a5d2, equal to MJ_SHA256. Its top directory is
+#   majordomus-v1.0.0-alpha.1-x86_64-unknown-linux-gnu/ with bin/majordomus, the path the job
+#   adds to GITHUB_PATH. Its RELEASE.json says version 1.0.0-alpha.1, target
+#   x86_64-unknown-linux-gnu; share/version.txt says version=1.0.0-alpha.1, and the archive's
+#   own bin/majordomus (a bash launcher) run with `version` printed "majordomus 1.0.0-alpha.1",
+#   the string the job's version step compares. On the PR's CI the knowledge job
+#   ".ai layer (majordomus doctor 1.0.0-alpha.1)" passed, so the runner agreed.
+# - The capture. A full-history clone of the head under /private/tmp/claude-501/ (not shallow;
+#   .git/hooks pre-commit and pre-push removed), doctor run with MAJORDOMUS_RUNTIME=off:
+#   - Unmodified: `majordomus doctor --json` 1.0.0-alpha.1 exits 10; `jq -e -s -f
+#     .github/doctor-verdict.jq` prints true. The only FAILs are the four excused wiring ones.
+#   - With the `knowledge:` block of policy.yaml stripped: the layout OK line, the four wiring
+#     FAILs, the deriver OK line, the missing-key WARN and the stderr line equal PINNED field
+#     for field (compared by a script that evaluates the test's PINNED object), and the
+#     verdict is false, as it should be. So only CAPTURED_WITH needed to change.
+#   - The same unmodified clone under the 0.30.0 versioned binary: exit 10, verdict true, the
+#     four wiring FAILs only. The head passes both versions (see R-1).
+# - ensure_server_on_start. A second scratch clone with the branch's policy: piping
+#   {"session_id":"rv230","source":"startup"} into .claude/hooks/majordomus-session-start
+#   (exit 0) opened a session and started a server about 4 s later. server.json names
+#   executable ~/.local/share/majordomus/versions/1.0.0-alpha.1/libexec/majordomus-cli,
+#   version 1.0.0-alpha.1; ensure.log says "started a server for this checkout"; ps shows that
+#   install path, and the clone has no libexec/ of its own, so the 0.10.0 repo-root bug does
+#   not recur. Negative control: after `majordomus serve stop` (my own server, pid 6936) and
+#   the flag set to false in that clone, the same hook started no server (no lease written).
+#   The 1.0.0-alpha.1 skeleton ships the same value (true). No scratch server is left running.
+# - Ran in this worktree without changing tracked files: node --test on ci-knowledge-job,
+#   knowledge-integrity, majordomus-pin and ci-workflows: 73/73 pass. `majordomus plan
+#   validate`: 0 failures, 5 WARNs (M052 evidence, four tests/README.md scope conflicts), exit
+#   0. `majordomus doctor`: 0 failures (WARNs are machine-level: unpushed branches, stale
+#   .claude/worktrees, the doctor time budget).
+# - No 0.30.x mention outside history (reviews/214.yaml) remains to describe the pin.
+schema: review-verdict/v1
+pr: 230
+verdict: merge
+reviewer: "independent review subagent (Claude Opus 5.5) with its own context, spawned by orchestrating session e4a1ac78, which built this change; this agent did not build it and wrote only this file"
+content: d542cb3689b174ced3144b382650635d9c5681747958511b4e1f48ec05c807db
+findings:
+  - { id: R-1, severity: P3, status: open, title: "procedure (project.majordomus-layer-current): the head passes doctor under both 0.30.0 and 1.0.0-alpha.1 (verified: four wiring FAILs only, verdict true), so the rule's default order would land the layer (vendor source_revision, policy) first and move the pin in its own PR. Nothing goes unchecked by combining them, because CI judges with alpha.1 and 0.30.0 was checked by hand here. But the PR body neither names the exception nor shows both versions' doctor output" }
+  - { id: R-2, severity: P3, status: open, title: "step 4 (the owner's machine-wide launcher flip, which already runs 1.0.0-alpha.1) again came before steps 2-3, as R-2 of #214. That is owner-side ordering, outside the change" }
+  - { id: R-3, severity: P3, status: open, title: "tests/unit/ci-knowledge-job.test.mjs still says the PINNED lines were printed by CAPTURED_WITH 'on 2026-10-18', but 1.0.0-alpha.1 was released on 2026-10-20: the date is stale and should be the re-capture date. Separately, the new policy.yaml comment on ensure_server_on_start is about 240 characters on one line, over the 100-column limit; the owner order and the libexec proof would read better as a short comment block, or as a majordomus decision it cites" }
+  - { id: R-4, severity: P3, status: open, title: "reviewer independence is at agent level: this reviewer is an agent of orchestrating session e4a1ac78, which built this change. The owner's open question R-3 (of #197) decides whether that satisfies the rule" }

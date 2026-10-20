@@ -71,7 +71,7 @@ session:
   # moves the oldest over the cap into sessions/archive/ when it is run.
   retention_max_files: 500
   archive: true
-  ensure_server_on_start: false         # 0.10.0 packaged installs: mj_rust_bin resolves libexec/ under the repo root, not the install; see decisions
+  ensure_server_on_start: true          # every session attaches to the mesh on start (owner order 2026-10-21); proven on a packaged 1.0.0-alpha.1 install: the start event started the server from the install's libexec, not the repo root (the 0.10.0 bug)
   stranded_after: 12h                    # an open episode silent this long may be recovered
   # How old a continuation record may be before it stops being current. Divergence
   # (exact/advanced/diverged/different_context) is a fact about git topology and says
