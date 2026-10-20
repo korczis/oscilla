@@ -45,10 +45,16 @@
 //   runtime.on(fn) -> off          fn(type, detail): 'applied' | 'error' | 'state' | 'handle'
 //                                  ('handle': { id, status, code }, a pending handle settled:
 //                                  a Microphone opened or failed after its permission prompt)
-//   runtime.setOwnedParams([{ node, param, peak?, initial? }]) -> list   parameters another
+//   runtime.setOwnedParams([{ node, param, peak?, initial? }], { releaseAt? }) -> list
+//                                  parameters another
 //                                  owner drives (the transport: automation lanes, pattern-played
 //                                  oscillator levels). The runtime never glides their base value
 //                                  nor lets a live update rewrite them; [] releases every claim.
+//                                  `releaseAt` (audio time): a claim this call drops is held by
+//                                  its owner until then (the transport's hold at the edit's
+//                                  horizon, then its own glide to the base), so the runtime
+//                                  glides no base of it before that time (E018, review V272
+//                                  follow-up); a claim made again, or [], ends the hold.
 //                                  `peak`, the highest value the owner gives the parameter, sizes
 //                                  a frequency's Nyquist headroom (computeBases peaks, V431 X1);
 //                                  a changed peak re-sizes that node on the next apply.
@@ -253,6 +259,9 @@ export function createStudioRuntime({
   const peaks = new Map(); // node id → { key: peak value } of owned parameters (computeBases)
   const initials = new Map(); // node id → { key: value } an owned parameter is built at
   const peaksDirty = new Set(); // node ids whose peaks changed since the last apply
+  // node id → { key: audio time } a released parameter is still held by its former owner until
+  // (setOwnedParams releaseAt): its base is not glided before then.
+  const releasing = new Map();
   // The engine's master level before the Studio first wrote it: the Master Output level drives
   // the ONE engine gain only while the Studio plays; every way out gives it back, so MEASURE,
   // Labs and the Playground never inherit the Studio's level (V431 review X4, v4.0 audit F1).
@@ -482,6 +491,24 @@ export function createStudioRuntime({
     return out.size ? out : NONE_OWNED;
   }
 
+  /**
+   * The keys of handle `h` whose base the adapter must not glide at audio time `now`: the owned
+   * keys and the released ones their former owner still holds (setOwnedParams releaseAt).
+   */
+  function heldKeys(h, now) {
+    const own = ownedKeys(h);
+    const rel = h && releasing.get(h.id);
+    if (!rel) return own;
+    const out = new Set(own);
+    for (const [key, until] of Object.entries(rel)) {
+      if (!(now < until)) continue;
+      let target = null;
+      try { target = h.modTarget(key, 'linear'); } catch (e) { target = null; }
+      if (target && target.param) out.add(key);
+    }
+    return out.size ? out : NONE_OWNED;
+  }
+
   /** ownedKeys of every running node, for diffPlans (`rebuildWhenOwned`). */
   function ownedMap() {
     const out = new Map();
@@ -492,7 +519,8 @@ export function createStudioRuntime({
     return out;
   }
 
-  function setOwnedParams(list = []) {
+  function setOwnedParams(list = [], { releaseAt = null } = {}) {
+    const was = new Map(owned);
     owned.clear();
     const before = new Map(peaks);
     peaks.clear();
@@ -513,6 +541,25 @@ export function createStudioRuntime({
     const sig = (v) => (v ? JSON.stringify(Object.entries(v).sort()) : '');
     for (const id of new Set([...before.keys(), ...peaks.keys()])) {
       if (sig(before.get(id)) !== sig(peaks.get(id))) peaksDirty.add(id);
+    }
+    // Released claims: held by their former owner until releaseAt; claimed again: no hold.
+    const now = hooks.ctx ? hooks.ctx.currentTime : 0;
+    if (!owned.size) releasing.clear();
+    for (const [id, rel] of [...releasing]) {
+      const keys = owned.get(id);
+      for (const [key, until] of Object.entries(rel)) {
+        if ((keys && keys.has(key)) || !(now < until)) delete rel[key];
+      }
+      if (!Object.keys(rel).length) releasing.delete(id);
+    }
+    if (Number.isFinite(releaseAt) && now < releaseAt) {
+      for (const [id, keys] of was) {
+        for (const key of keys) {
+          if (owned.has(id) && owned.get(id).has(key)) continue;
+          if (!releasing.has(id)) releasing.set(id, {});
+          releasing.get(id)[key] = releaseAt;
+        }
+      }
     }
     return ownedParams();
   }
@@ -728,7 +775,8 @@ export function createStudioRuntime({
         const prev = bases.get(id);
         bases.set(id, cb);
         if (!created.handles.has(id)) {
-          const own = ownedKeys(h);
+          // A parameter released by this apply's claims glides from its owner's hold, not now.
+          const own = heldKeys(h, now);
           const w = tracing ? {} : null;
           if (guard('parameters', id, () => h.applyBase(cb.base, false, own, w)) && w) {
             // Each AudioParam value the adapter reports it wrote that differs from its last
