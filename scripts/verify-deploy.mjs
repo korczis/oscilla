@@ -21,8 +21,11 @@
 //             image/png and byte-equal to site/ (the crawler-only share assets)
 //
 //   node scripts/verify-deploy.mjs [--url <url>] [--commit <rev>] [--attempts 10] [--delay 10]
-//        [--dist dist/index.html] [--site site] [--no-assets] [--no-cache-bust]
+//        [--dist dist/index.html] [--site site] [--no-assets] [--no-cache-bust] [--help]
 //
+// The arguments are parsed against that list first (parseFlags of release-analyze.mjs): --help
+// prints the usage and exits 0; an unknown flag, a flag missing its value or a bad --attempts
+// or --delay exits 2, before git, a file or the network is asked anything.
 // --commit takes a full SHA or any revision git resolves (origin/main, a v* tag); without it
 // the expected commit is $GITHUB_SHA, then the checkout's HEAD. The bytes, version and digest
 // checks compare with this checkout, so run it in a checkout of the expected commit. The
@@ -32,6 +35,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { parseFlags } from './release-analyze.mjs';
 import {
   PUBLIC_URL, ROOT, commitDate, computeSourceDigest, findRegion, gitRunner, isFullSha,
   normalizeStamped, readVersion, releaseLabel, releaseState, sha256, validateRecord,
@@ -141,32 +145,31 @@ export function checkAsset({ name, status, contentType, body, expected }) {
   return problems;
 }
 
+export const USAGE = 'usage: node scripts/verify-deploy.mjs [--url <url>] [--commit <rev>] '
+  + '[--attempts 10] [--delay 10] [--dist dist/index.html] [--site site] [--no-assets] '
+  + '[--no-cache-bust] [--help]';
+const FLAGS = {
+  '--url': 'value', '--commit': 'value', '--attempts': 'value', '--delay': 'value',
+  '--dist': 'value', '--site': 'value', '--no-assets': 'boolean', '--no-cache-bust': 'boolean',
+};
+
+/** The options of `argv` (parseFlags of release-analyze.mjs); throws exitCode 2 on misuse. */
 function parseArgs(argv) {
+  const f = parseFlags(argv, FLAGS, USAGE);
+  if (f.help) return f;
+  const refuse = (m) => Object.assign(new Error(`${m}\n${USAGE}`), { exitCode: 2 });
   const o = {
-    url: PUBLIC_URL, attempts: 10, delay: 10, dist: 'dist/index.html', site: 'site',
-    assets: true, bust: true,
+    url: f['--url'] ?? PUBLIC_URL, commit: f['--commit'],
+    attempts: '--attempts' in f ? Number(f['--attempts']) : 10,
+    delay: '--delay' in f ? Number(f['--delay']) : 10,
+    dist: f['--dist'] ?? 'dist/index.html', site: f['--site'] ?? 'site',
+    assets: !f['--no-assets'], bust: !f['--no-cache-bust'],
   };
-  for (let i = 0; i < argv.length; i++) {
-    const a = argv[i];
-    const next = () => {
-      if (argv[i + 1] === undefined) throw new Error(`${a} needs a value`);
-      return argv[++i];
-    };
-    if (a === '--url') o.url = next();
-    else if (a === '--commit') o.commit = next();
-    else if (a === '--attempts') o.attempts = Number(next());
-    else if (a === '--delay') o.delay = Number(next());
-    else if (a === '--dist') o.dist = next();
-    else if (a === '--site') o.site = next();
-    else if (a === '--no-assets') o.assets = false;
-    else if (a === '--no-cache-bust') o.bust = false;
-    else throw new Error(`unknown argument ${a}`);
-  }
   if (!o.url.endsWith('/')) o.url += '/';
   if (!(Number.isInteger(o.attempts) && o.attempts >= 1)) {
-    throw new Error('--attempts must be an integer >= 1');
+    throw refuse('--attempts must be an integer >= 1');
   }
-  if (!(o.delay >= 0)) throw new Error('--delay must be >= 0 seconds');
+  if (!(o.delay >= 0)) throw refuse('--delay must be >= 0 seconds');
   return o;
 }
 
@@ -180,7 +183,7 @@ async function get(url) {
 
 const sleep = (s) => new Promise((r) => { setTimeout(r, s * 1000); });
 
-async function attempt(o, expected, dist, n) {
+async function attempt(o, expected, dist, n, root) {
   const q = (u) => (o.bust ? `${u}?oscilla-verify=${expected.commit.slice(0, 12)}.${n}` : u);
   const problems = [];
   let page;
@@ -196,7 +199,7 @@ async function attempt(o, expected, dist, n) {
   problems.push(...checkLive({ html: page.body.toString('utf8'), dist, url: o.url, expected }));
   if (o.assets) {
     for (const name of SHARE_ASSETS) {
-      const local = path.resolve(ROOT, o.site, name);
+      const local = path.resolve(root, o.site, name);
       const want = existsSync(local) ? readFileSync(local) : null;
       if (!want) problems.push(`og: ${o.site}/${name} missing locally`);
       try {
@@ -210,10 +213,36 @@ async function attempt(o, expected, dist, n) {
   return problems;
 }
 
-async function main() {
-  const o = parseArgs(process.argv.slice(2));
-  const run = gitRunner(ROOT);
-  let commit = o.commit || process.env.GITHUB_SHA;
+/**
+ * The command line; resolves to the exit code (0 verified or usage printed, 1 not verified, 2
+ * a usage error). The arguments are parsed first (R-3 of #199): --help prints the usage and an
+ * unknown flag is refused before git, a file or the network is asked anything.
+ */
+export async function main({
+  argv = process.argv.slice(2), root = ROOT, run = gitRunner(root), env = process.env,
+  log = console.log, err = console.error,
+} = {}) {
+  let o;
+  try {
+    o = parseArgs(argv);
+  } catch (e) {
+    err(`verify-deploy: ${e.message}`);
+    return e.exitCode ?? 2;
+  }
+  if (o.help) {
+    log(USAGE);
+    return 0;
+  }
+  try {
+    return await verify(o, { root, run, env, log, err });
+  } catch (e) {
+    err(`verify-deploy: ${e.message}`);
+    return 1;
+  }
+}
+
+async function verify(o, { root, run, env, log, err }) {
+  let commit = o.commit || env.GITHUB_SHA;
   if (!commit) commit = run(['rev-parse', 'HEAD']);
   if (!isFullSha(commit)) {
     try {
@@ -227,7 +256,7 @@ async function main() {
   try {
     sourceDate = commitDate(commit, run);
   } catch { /* commit unknown to this clone: the date check is skipped */ }
-  const version = readVersion(ROOT);
+  const version = readVersion(root);
   let release = null;
   let releaseError = null;
   try {
@@ -236,34 +265,31 @@ async function main() {
     releaseError = e.message;
   }
   const expected = {
-    commit, sourceDate, version, sourceDigest: computeSourceDigest(ROOT), release, releaseError,
+    commit, sourceDate, version, sourceDigest: computeSourceDigest(root), release, releaseError,
   };
-  const dist = readFileSync(path.resolve(ROOT, o.dist), 'utf8');
-  console.log(`verify-deploy ${o.url}: expecting v${expected.version}, commit ${commit}, `
+  const dist = readFileSync(path.resolve(root, o.dist), 'utf8');
+  log(`verify-deploy ${o.url}: expecting v${expected.version}, commit ${commit}, `
     + `release ${release ? describe(release) : `unknown (${releaseError})`}, `
     + `source ${expected.sourceDigest}, artifact ${sha256(dist)}`);
 
   let problems = [];
   for (let n = 1; n <= o.attempts; n++) {
-    problems = await attempt(o, expected, dist, n);
+    problems = await attempt(o, expected, dist, n, root);
     if (!problems.length) {
-      console.log(`  PASS attempt ${n}/${o.attempts}: live page is the committed dist stamped `
+      log(`  PASS attempt ${n}/${o.attempts}: live page is the committed dist stamped `
         + `with commit ${commit}; version, release state, digest, shape and share assets `
         + 'verified');
-      return;
+      return 0;
     }
-    console.log(`  attempt ${n}/${o.attempts}: ${problems.length} problem(s); `
+    log(`  attempt ${n}/${o.attempts}: ${problems.length} problem(s); `
       + `first: ${problems[0]}`);
     if (n < o.attempts) await sleep(o.delay);
   }
-  console.error(`FAIL ${o.url} after ${o.attempts} attempt(s):`);
-  for (const p of problems) console.error(`  FAIL ${p}`);
-  process.exit(1);
+  err(`FAIL ${o.url} after ${o.attempts} attempt(s):`);
+  for (const p of problems) err(`  FAIL ${p}`);
+  return 1;
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  main().catch((e) => {
-    console.error(`verify-deploy: ${e.message}`);
-    process.exit(1);
-  });
+  main().then((code) => { process.exitCode = code; });
 }
