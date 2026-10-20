@@ -26,4 +26,16 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-19
-updated_at: 2026-10-19
+updated_at: 2026-10-19T14:05:59Z
+started_at: 2026-10-19T13:55:23Z
+started_event: sha256:dfd38ec63875d07f934220e4d9ba71f123117f1de1101c03ffadf6f71615c0b9
+verified_at: 2026-10-19T14:05:59Z
+verified_event: sha256:660062238f841532b1228beefe0b206c1b0553523f5dd13f1a35cc008ac6562e
+evidence:
+  - covers: verified
+    type: test
+    command: "node --test tests/unit/studio-automation-edges.test.mjs; node scripts/fail-first.mjs --title 'fix(studio): E018 probe' --base-branch origin/main; npm test; npm run verify"
+    result: "At f5e925f: tests/unit/studio-automation-edges.test.mjs 7/7 pass: the R-7 example (Oscillator 12 kHz, static detune +1200 ct, detune lane 0 ct, log LFO->frequency edge offset 0.1) plays the edge's 120 ct constant at 44.1 and 48 kHz with no limitedEdges entry for it; releasing a filter-frequency or a detune lane while playing schedules no setTargetAtTime before the transport's hold at safeHorizon (runtime.setOwnedParams releaseAt). fail-first proves the file (6 cases fail on merge base 0da7299 with assertions, pass with the change). V272 R-1 and V431 X1 tests pass unchanged (v272-studio-automation, v31-studio-compiler, v431-studio-detune-lane, studio-automation-transforms 147/147). npm run verify: 3128/3128 pass, build:check, verify-dist, doctor 0 failures."
+    artifact: "f5e925f"
+    commit: f5e925f4106ffaf7429a53a3f04babc1ae5560c9
+    recorded_at: 2026-10-19T14:05:54Z

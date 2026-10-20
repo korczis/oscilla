@@ -1,0 +1,57 @@
+# Review verdict for pull request #226, plan issue E018: an owned detune leaves the frequency
+# headroom free (#197 R-7), and a released parameter holds before it glides (V272 review
+# follow-up). Branch fix/e018-detune-headroom-release-hold.
+# Reviewed head ea007a36047dddf594ca4efaaa36865250870a28 (f5e925f fix, ea007a3 plan evidence).
+# Merge base 0da7299. Main has moved to 50b685a (#218: ci.yml, size-report and ci-workflows
+# tests, a review file). None of it touches this change's files, and `git merge-tree` merges
+# cleanly. Another builder wrote all of it, not me.
+#
+# The digest: the base branch's scripts/review-verdict.mjs judges this pull request. I ran it
+# from `git archive origin/main scripts` with --repo on this worktree, `--content --list
+# --base-branch origin/main`: 269f1069...0f79e over src/js/studio/compiler.js,
+# src/js/studio/runtime.js and src/js/studio/transport.js, the three guarded paths.
+#
+# What was checked:
+# - Acceptance criteria (majordomus plan show E018).
+#   - R-7. computeBases now spends the frequency's headroom by the detune lane's peak alone
+#     when peaks carry a finite detune, offsets included (peakOf adds offsetOf), else by the
+#     static value. The R-1 clamp of the static detune under a lane is unchanged. A lane with
+#     no finite point keeps the static sizing, which is the conservative side. The new test
+#     plays the edge's 120 ct constant at 44.1 and 48 kHz, with edge-N not in limitedEdges.
+#   - V272 R-1 and V431 X1 still hold. v272-studio-automation, v31-studio-compiler,
+#     v431-studio-detune-lane and studio-automation-transforms pass 147/147, and none of those
+#     files is changed.
+#   - The release window. setOwnedParams(list, { releaseAt }) puts each dropped claim in
+#     `releasing` until releaseAt. heldKeys adds those keys to the owned set only for
+#     applyBase, and only while now < until. A re-claim, a lapse, or [] (stop, dispose, play
+#     refused) clears the entry. claimFor passes max(safeHorizon(now), soon()), only on the
+#     playing paths (admitNow returns early when stopped; syncNow runs while playing).
+#     refusedBy re-claims the current model without releaseAt, so a refused edit leaves no
+#     hold behind. The runtime decides to skip at apply time and queues no later glide, so a
+#     transport hold that lands a frame later than releaseAt in a browser does not reorder
+#     them. The pattern-level claim (releaseClaim at soon()) is held too, and its own ramp
+#     takes it to the base, as before.
+#   - npm test passes. tests/README.md has one appended row, and it matches what the test holds.
+# - Fail-first. I put the new test file into a scratch `git archive` of merge base 0da7299. It
+#   fails 6 of 7 with assertions: "the edge's constant: 0 vs 120" for R-7 at both rates, and
+#   "a glide to 500 at 1 s precedes the hold at 1.02 s" (filter) and "a glide to 300 ..."
+#   (detune) at both rates. Case 7 (claimed again inside the window) passes on the base (R-2).
+#   At the head it passes 7/7.
+# - Probe (scratch copies only). A NODE_PARAM_SET of the filter cutoff 0 s or 5 ms after a
+#   lane removal ends at the old base (500 instead of 2000) at both the head and the merge
+#   base. 50 ms after, it reaches the new base. This is pre-existing, not a regression (R-1).
+# - Ran in this worktree at ea007a3, with no tracked file modified:
+#   - node --test tests/unit/studio-automation-edges.test.mjs: 7/7.
+#   - npm test: 3128/3128 pass.
+#   - npm run build:check: dist/index.html is up to date.
+#   - The PR's CI unit job is green. The browser jobs were still running when I reviewed. No
+#     browser suite is touched.
+schema: review-verdict/v1
+pr: 226
+verdict: merge
+reviewer: "independent review subagent (Claude Opus 5.5) with its own context, spawned by orchestrating session e4a1ac78, whose other agents built this change; this agent did not build, merge or edit any of it and wrote only this file"
+content: 269f10699167b2d6205166c6f42794224448670e7294ef6fd426b80fb950f79e
+findings:
+  - { id: R-1, severity: P3, status: open, title: "a modulatable base edit within the release window (about 20 ms after a lane is removed while playing) is lost: the transport's glide at the hold goes to the base it read at removal, and now heldKeys also skips the runtime's write of the new base (before the change, the runtime's glide at now was overridden by the later hold). Probe: filter cutoff set to 2000 at 0 s and 5 ms after the removal ends at 500 on both head and merge base, and it stays wrong until the node's next apply. This is pre-existing and outside E018's acceptance criteria, but it is the same 'played value differs from the model' class. Follow-up: at a later apply inside the window, the transport re-targets its release glide (released map) or the runtime defers the base write to releaseAt" }
+  - { id: R-2, severity: P3, status: open, title: "case 7 ('claimed again inside the release window is owned again') passes on the merge base, and the re-claim pruning in setOwnedParams cannot be observed: heldKeys unions the owned keys anyway. The case is a sanity check, not a proof of that branch" }
+  - { id: R-3, severity: P3, status: open, title: "reviewer independence is at agent level: this reviewer is an agent of orchestrating session e4a1ac78, whose other agents built the change. The owner's open question R-3 decides whether that satisfies project.review-verdict" }
