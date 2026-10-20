@@ -62,7 +62,8 @@ test('the pinned download retries transient errors and checks the digest', () =>
   }
   assert.match(k, /MJ_SHA256: [0-9a-f]{64}\n/);
   assert.match(k, /sha256sum -c -/);
-  assert.match(k, /MJ_VERSION: \d+\.\d+\.\d+\n/);
+  // An exact release, a pre-release included (1.0.0-alpha.1): never a range or a moving tag.
+  assert.match(k, /MJ_VERSION: \d+\.\d+\.\d+(-[0-9A-Za-z.]+)?\n/);
 });
 
 test('the verdict: hook wiring is excused, any other FAIL and an empty output are not', {
@@ -95,7 +96,7 @@ const MISSING_KEY = {
 // repository with the `knowledge:` block removed and no git hooks, as on a CI runner. The
 // missing-key WARN is word for word the 0.13.2 line; the stderr line gained the policy path.
 // Capture again when a pin change alters doctor's output.
-const CAPTURED_WITH = '0.30.0';
+const CAPTURED_WITH = '1.0.0-alpha.1';
 const PINNED = {
   layout: { level: 'OK', category: 'layout', subject: '.ai/manifest.yaml',
     message: 'schema ai-repository/v1', reproduce: '' },
