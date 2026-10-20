@@ -6,7 +6,8 @@
 //
 //   0. parse the arguments against that list (parseFlags of release-analyze.mjs): --help / -h
 //      prints the usage and exits 0; an unknown flag (a typo such as --dryrun) or a flag
-//      missing its value exits 2; both before any git, file or npm action (R-4 of #198)
+//      missing its value or given an empty one exits 2; both before any git, file or npm
+//      action (R-4 of #198, R-2 of #199)
 //   1. refuse a dirty tree (a release candidate is exactly a commit)
 //   2. analyse conventional commits since the last v* tag (release-analyze.mjs)
 //   2a. refuse to start (rule project.release-flow-complete), also as a dry run, when
@@ -48,6 +49,7 @@ import {
 import {
   RECORDS_DIR, hasRecordFile, missingRecords, needsRecord, parseRecord,
 } from './release-record.mjs';
+import { parseYaml } from './yaml-subset.mjs';
 
 export const RECEIPT_NAME = 'oscilla-release-gate.json';
 export const RESTORE_PATHS = ['package.json', 'package-lock.json', 'dist/index.html'];
@@ -180,22 +182,62 @@ export function receiptProblems(receipt, now) {
 // ------------------------------------------------------------------------------- flow
 // Rule project.release-flow-complete: what must be true before a release starts.
 
-/** The items of the YAML list `key` in front matter `fm`, block (`  - a`) or flow (`[a, b]`). */
-function frontMatterList(fm, key) {
-  const lines = fm.split('\n');
-  const at = lines.findIndex((l) => l.startsWith(`${key}:`));
-  if (at < 0) return [];
-  const inline = lines[at].slice(key.length + 1).trim();
-  const rest = lines.slice(at + 1);
-  const end = rest.findIndex((l) => !/^\s*-/.test(l));
-  const items = inline.startsWith('[') ? inline.replace(/^\[|\]$/g, '').split(',')
-    : rest.slice(0, end < 0 ? rest.length : end).map((l) => l.replace(/^\s*-/, ''));
-  return items.map((i) => i.trim().replace(/^(['"])(.*)\1$/, '$2')).filter(Boolean);
+/**
+ * Where a flow collection opened at `s[from]` stands at the end of the line: its `depth` of
+ * open brackets and the `end` of the text before a comment. A quoted scalar (a quote where a
+ * flow item starts) is skipped whole.
+ */
+function flowScan(s, from, depth) {
+  let d = depth;
+  let prev = '[';
+  for (let i = from; i < s.length; i += 1) {
+    const ch = s[i];
+    if ((ch === '"' || ch === "'") && '[{,:'.includes(prev)) {
+      let j = i + 1;
+      if (ch === '"') while (j < s.length && s[j] !== '"') j += s[j] === '\\' ? 2 : 1;
+      else while (j < s.length && !(s[j] === "'" && s[j + 1] !== "'")) j += s[j] === "'" ? 2 : 1;
+      i = j;
+    } else if (ch === '[' || ch === '{') d += 1;
+    else if (ch === ']' || ch === '}') d -= 1;
+    else if (ch === '#' && (i === 0 || /\s/.test(s[i - 1]))) return { depth: d, end: i };
+    if (!/\s/.test(ch)) prev = ch;
+  }
+  return { depth: d, end: s.length };
 }
 
 /**
+ * Front matter text with every flow collection that spans lines joined onto its first line
+ * (YAML folds a line break inside a flow collection to a space; scripts/yaml-subset.mjs reads
+ * a flow collection written on one line) and the comments inside it dropped.
+ */
+export function joinFlowLines(text) {
+  const out = [];
+  let depth = 0;
+  for (const line of text.split('\n')) {
+    if (depth > 0) {
+      const r = flowScan(line, 0, depth);
+      const part = line.slice(0, r.end).trim();
+      if (part) out[out.length - 1] += ` ${part}`;
+      depth = r.depth;
+      continue;
+    }
+    const start = /^\s*(?:- +)*(?:(?:"[^"]*"|'[^']*'|[^\s#'"[{][^#]*?)\s*: +)?(?=[[{])/.exec(line);
+    const r = start ? flowScan(line, start[0].length, 0) : { depth: 0 };
+    if (r.depth > 0) {
+      out.push(line.slice(0, r.end).trimEnd());
+      depth = r.depth;
+    } else out.push(line);
+  }
+  return out.join('\n');
+}
+
+const asList = (v) => (Array.isArray(v) ? v.filter((x) => x !== null).map(String) : []);
+
+/**
  * Status, tags and related references of ADR `ref` ("0047", "adr-0047", "ADR 0047"), or null
- * when there is none.
+ * when there is none. The front matter is read as YAML (scripts/yaml-subset.mjs), so comments,
+ * blank lines, flow lists over several lines and CRLF line ends read as YAML means them (R-3 of
+ * #198); front matter that is not YAML the reader accepts gives `error` and no tags.
  */
 export function adrStatus(ref, root = ROOT) {
   const m = /(\d{1,4})\s*$/.exec(String(ref ?? '').trim());
@@ -205,11 +247,18 @@ export function adrStatus(ref, root = ROOT) {
   const file = existsSync(dir) && readdirSync(dir).find((f) => f.startsWith(prefix)
     && f.endsWith('.md'));
   if (!file) return null;
-  const fm = /^---\n([\s\S]*?)\n---\n/.exec(readFileSync(path.join(dir, file), 'utf8'));
-  const status = fm && /^status:\s*(\S+)\s*$/m.exec(fm[1]);
-  return { id: `adr-${m[1].padStart(4, '0')}`, file, status: status ? status[1] : null,
-    tags: fm ? frontMatterList(fm[1], 'tags') : [],
-    related: fm ? frontMatterList(fm[1], 'related') : [] };
+  const id = `adr-${m[1].padStart(4, '0')}`;
+  const text = readFileSync(path.join(dir, file), 'utf8').replace(/\r\n?/g, '\n');
+  const fm = /^---\n([\s\S]*?)\n---(?:\n|$)/.exec(text);
+  let data = null;
+  try {
+    data = fm ? parseYaml(joinFlowLines(fm[1])) : null;
+  } catch (e) {
+    return { id, file, status: null, tags: [], related: [], error: e.message };
+  }
+  const o = data && typeof data === 'object' && !Array.isArray(data) ? data : {};
+  return { id, file, status: typeof o.status === 'string' ? o.status : null,
+    tags: asList(o.tags), related: asList(o.related) };
 }
 
 /**
@@ -286,7 +335,8 @@ export function flowProblems({
         problems.push(`${why}: --no-rc-because ${noRcBecause} names no ADR in .ai/repo/adrs/`);
       } else {
         const not = rcExemptionProblems(adr, v.major);
-        const reasons = [
+        const reasons = adr.error ? [`${adr.id} is not an RC exemption for major ${v.major}: `
+          + `its front matter is not YAML the release scripts read (${adr.error})`] : [
           adr.status !== 'accepted' && `${adr.id} is ${adr.status}, not accepted`,
           not.length && `${adr.id} is not an RC exemption for major ${v.major} (${not.join('; ')}`
             + '; see .ai/repo/adrs/README.md)',
@@ -352,7 +402,7 @@ export function main(argv = process.argv.slice(2), root = ROOT, run = gitRunner(
     return 1;
   }
   const analysis = analyzeRepository({ root, run, prerelease: !!o['--prerelease'],
-    preid: o['--preid'] || 'rc' });
+    preid: o['--preid'] ?? 'rc' });
   console.log(formatAnalysis(analysis));
   const { proposal, current } = analysis;
   const noRcBecause = o['--no-rc-because'] ?? null;

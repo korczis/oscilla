@@ -1,0 +1,70 @@
+# Review verdict for pull request #225, plan issue E021: every release script parses its flags
+# with parseFlags, adrStatus reads ADR front matter as YAML, and the release tests clean up
+# their fixtures. Branch fix/e021-release-cli-consistent.
+# Reviewed head 4169b5d (01b1779 fix, 4169b5d plan evidence) on merge base 833192e. While I
+# reviewed, the branch gained cfcac1a, a merge of main 0da7299 (#222: docs/v3 and E023.yaml
+# only). That merge touches no guarded path, and the digest is the same before and after it.
+# Another builder wrote all of it, not me.
+#
+# The digest: I ran the base branch's scripts/review-verdict.mjs from `git archive origin/main
+# scripts` with --repo on this worktree and `--content --list --base-branch origin/main`. It
+# gives 27d2e8a1...91c7d82 over seven paths: scripts/release-analyze.mjs,
+# scripts/release-prepare.mjs, scripts/stamp-build.mjs, scripts/verify-deploy.mjs and three
+# tests/unit release tests. That matches the builder's claim.
+#
+# What was checked:
+# - Acceptance criteria (majordomus plan show E021).
+#   - parseFlags. `-5` is passed through as a value, and release:publish says it is not a
+#     positive number (exit 2). An empty value is refused with exit 2. release:stamp and
+#     release:verify-deploy go through parseFlags and an exported main(). I checked the real
+#     CLIs. --help exits 0. --bogus exits 2. A third stamp positional, `--commit` with no value,
+#     `--channel ''`, `--attempts 0`, `--delay -1` and `--url ''` each exit 2.
+#   - The Pages workflow lines. `stamp-build dist/index.html _site/index.html --commit` and
+#     `verify-deploy --url --commit --attempts 10 --delay 10` use only declared flags.
+#     release-publish's verify-deploy call (`--commit <head>`) does too.
+#   - Stamp output. With fixed --commit/--source-date/--release/--distance and
+#     --no-source-check, the base and head stamp-build write byte-identical files. A real stamp
+#     of dist/ at the head reports `reversible true`.
+#   - adrStatus. In this repository only one ADR reads differently on base and head: ADR 0012.
+#     Base read it as accepted. Head gives an error and no status (R-2).
+#   - CLAUDE.md's release line names publish/analyze/record/stamp/verify-deploy and cadence.
+#   - The cleanup case. It proves that harness() removes its directory, both after the case
+#     returns and after it throws. The three files remove every mkdtemp in a finally. A run of
+#     the three files left no oscilla-cli-args-*, oscilla-prepare-* or oscilla-gate-env-*
+#     directory (0 before, 0 after).
+# - Fail-first. I made a scratch copy of origin/main and copied the three new test files over.
+#   - release-cli-args: 6 of 9 fail on their merits. Examples: "--pages-timeout -5 says why",
+#     "--preid '' acted before refusing: ... before git", and stamp/verify-deploy export no
+#     main().
+#   - release-analyze fails to load (no joinFlowLines export). With that one import replaced by
+#     an identity stub, the YAML-shapes adrStatus case fails on its merits (status expected
+#     'accepted', actual null), and so does the not-YAML case.
+#   - release-gate-env passes on base, as expected: the change there is cleanup only.
+#   - The repository's own fail-first program (`node scripts/fail-first.mjs --title <PR title>
+#     --base-branch origin/main`) says "proven by 2 of 3 file(s)".
+# - Mutations of the head in a scratch copy. These were caught:
+#   - dropping the empty-value refusal;
+#   - positional 3 for stamp;
+#   - isFlag back to startsWith('-');
+#   - dropping CRLF normalisation;
+#   - parsing without joinFlowLines;
+#   - a plain Error for a bad --attempts.
+#   Two survive: `o['--preid'] || 'rc'` in place of `?? 'rc'`, in analyze and in prepare. They
+#   are equivalent now that parseFlags refuses '' before either line runs, so this is not a
+#   finding.
+# - Ran:
+#   - The issue's validation: the three files, 31/31 pass in this worktree.
+#   - npm test in this worktree at 4169b5d, load about 40-58 on 18 cores: 3127/3127 pass.
+#   - The worktree stayed clean throughout.
+#   - CI at review time: fail-first, visual and .ai-layer jobs pass. The browser jobs are
+#     pending. review-verdict fails, waiting for this file.
+schema: review-verdict/v1
+pr: 225
+verdict: merge
+reviewer: "independent review subagent (Claude Opus 5.5) with its own context, spawned by orchestrating session e4a1ac78, whose other agents built this change; this agent did not build, merge or edit any of it and wrote only this file"
+content: 27d2e8a1e65ca445fe663f490ee93d93643e05a49d18ee1a02dc8737d91c7d82
+findings:
+  - { id: R-1, severity: P3, status: open, title: "joinFlowLines does not know block scalars. A line inside a `|` or `>` scalar that looks like `key: [` with no closing bracket opens a 'flow collection', and every later line is folded into it. Example: front matter `notes: |\\n  a: [b\\n  c\\nstatus: accepted\\ntags: [rc-exemption]` is valid YAML, and yaml-subset reads it right on its own (status accepted, tags kept). After joinFlowLines it reads as notes only: no status, no tags, no error. It fails closed (the ADR lifts nothing) and no ADR front matter in the repository has a block scalar today. Skipping the lines of a block scalar, plus a test, would close it" }
+  - { id: R-2, severity: P3, status: open, title: "ADR 0012's front matter is now refused as not YAML (an unquoted ': ' in its title, also invalid in real YAML). adrStatus('0012') used to give status accepted with its tags, and now gives status null and an error. It was never an RC exemption, so no release outcome changes. The PR body says this. Quoting the title in a follow-up would make every ADR readable again" }
+  - { id: R-3, severity: P3, status: open, title: "the merge of main (cfcac1a, docs and E023.yaml only) landed after the local npm test run, which was at 4169b5d. No guarded or test path changed, so the result carries over, but CI on cfcac1a is the run of record" }
+  - { id: R-4, severity: P3, status: open, title: "reviewer independence is at agent level: this reviewer is an agent of orchestrating session e4a1ac78, which built the change through other agents. The owner's open question R-3 decides whether that satisfies the rule" }

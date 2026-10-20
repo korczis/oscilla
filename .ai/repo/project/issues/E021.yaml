@@ -28,4 +28,16 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-19
-updated_at: 2026-10-19
+updated_at: 2026-10-19T13:05:46Z
+started_at: 2026-10-19T12:53:35Z
+started_event: sha256:73e0ed14e2bd410f23456d25f351e1462a569ca575640b10bde9c2b4fb417814
+verified_at: 2026-10-19T13:05:46Z
+verified_event: sha256:cb24f994c33aa18898ae61f6f3097ec2104a88aa88b67b311ce0dead222314c5
+evidence:
+  - covers: verified
+    type: test
+    command: "node --test tests/unit/release-cli-args.test.mjs tests/unit/release-analyze.test.mjs tests/unit/release-gate-env.test.mjs; npm run verify; the three files against the merge base's scripts in a scratch archive"
+    result: "At 01b1779: 31 of 31 pass in the three files; a run creates no oscilla-cli-args-*, oscilla-prepare-* or oscilla-gate-env-* directory (15858 before and after). On the merge base 833192e (scripts from git archive, the new tests copied over) 7 fail on their merits: --pages-timeout -5 says 'needs a value'; --preid '' reaches git; release:stamp and release:verify-deploy export no main() (--help, unknown flag, bad --attempts); adrStatus reads the comment/blank-line/trailing-comment/multi-line-flow/CRLF exemptions without status or tags; an unparseable front matter is not named. The harness() cleanup case is test-code only and passes on both. npm run verify: 3126/3127, the one failure the Studio build budget under load 65 on 18 cores (1472 ms > 1000 ms), passing alone at 316 ms; version:check, build:check, verify-dist, pin check and majordomus doctor pass."
+    artifact: "01b1779"
+    commit: 01b17791af887e3fbfe61725f50f7dddbe3c2e5e
+    recorded_at: 2026-10-19T13:05:42Z
