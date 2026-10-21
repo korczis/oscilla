@@ -1,0 +1,64 @@
+# Review verdict for pull request #232, plan issue E025: after the tag, release:publish
+# redeploys Pages and requires the live page to say release `tagged` before the GitHub Release
+# (scripts/release-publish.mjs). Branch fix/e025-release-publish-redeploys-pages-after-tag.
+# Reviewed head 8ba0e3d1b483a1a7097acf31e00f6ff1e6e9420c (a9e60fc fix, 8ba0e3d plan evidence).
+# Merge base origin/main b5c373d, and main has not moved. Another builder wrote all of it.
+#
+# The digest: the base branch's scripts/review-verdict.mjs judges this pull request. I ran it
+# from `git archive origin/main scripts` with --repo on this worktree, `--content --list
+# --base-branch origin/main`. It gave 09275ff7...c044e6f over scripts/release-publish.mjs and
+# tests/unit/release-publish.test.mjs, the two guarded paths, which matches the builder's claim.
+#
+# What was checked:
+# - Acceptance criteria (majordomus plan show E025):
+#   - After the tag and the watched push run, the script lists the workflow_dispatch runs of
+#     HEAD and runs `gh workflow run pages.yml --ref main`. It then polls `gh run list --event
+#     workflow_dispatch --commit <HEAD>` for a run it had not listed before, bounded by
+#     --pages-timeout and never handed to gh run watch. Next it runs verify-deploy --commit
+#     HEAD and reads the live metadata region (3 reads, 10 s apart, cache-busting query)
+#     until it says release `tagged` for HEAD. Only then does it run gh release create.
+#     tests/unit/release-publish.test.mjs pins that order.
+#   - A dispatched run still queued, in_progress or waiting at the bound fails with its id
+#     and state. So do a run that never appears, a run completed without success and an
+#     unreadable list before the dispatch. In each case no GitHub Release is created, no
+#     verify-deploy runs, and the undo line for the tag is printed.
+#   - The dry run prints the dispatch, the poll and the tagged check after the tag push, and
+#     runs no gh workflow run.
+#   - pages.yml declares workflow_dispatch and checks out with fetch-depth 0, so the
+#     dispatched run sees the pushed tag and stamps `tagged`. The `pages` concurrency group
+#     does not cancel in progress. A redeploy cancelled by a later push ends `cancelled`,
+#     which the script fails on, never takes for success.
+#   - project.release-flow-complete: its statement still holds and its test files pass. Its
+#     prose still describes the flow without the redeploy (R-2).
+# - Fail-first. In a scratch copy I put the head's tests over `git archive origin/main
+#   scripts`. The file fails to import (taggedPageProblem is not exported). With that import
+#   removed, 4 fail and 21 pass: the dry-run case, the full --yes sequence, the
+#   dispatch/wait/tagged case and the not-finished case. This matches the PR body. At the
+#   head all 25 pass.
+# - Mutations of scripts/release-publish.mjs, run in a scratch copy against the test file.
+#   These were caught: dropping the dispatch; accepting any conclusion; accepting any status;
+#   breaking out of the poll on any status; taggedPageProblem accepting untagged; ignoring
+#   the commit of the live region; a single tagged read; ignoring an unreadable list before
+#   the dispatch. One survives: taking any listed dispatch run instead of one not listed
+#   before the dispatch (R-1).
+# - Ran in this worktree, no tracked file changed:
+#   - node --test tests/unit/release-publish.test.mjs: 25/25.
+#   - npm test, first run at load 80 on a shared Mac: 3154/3155. The failure was the timing
+#     budget of v31-studio-performance (build 1044.85 ms against a 1000 ms budget), a file
+#     this pull request does not touch.
+#   - npm test, the whole suite run again: 3155/3155.
+#   - CI on the head, at review time: unit, fail-first, visual, the .ai layer and most
+#     browser legs pass. The firefox and webkit legs of V3 measurement and V3.1 Studio were
+#     still pending. The required gate check decides the merge.
+# - Not run: a live release. The real gh and Pages behaviour is shown only by the fakes and
+#   by the first release published with this change.
+schema: review-verdict/v1
+pr: 232
+verdict: merge
+reviewer: "independent review subagent (Claude Opus 5.5) with its own context, spawned by orchestrating session e4a1ac78, whose other agents built this change; this agent did not build, merge or edit any of it and wrote only this file"
+content: 09275ff755f9d2bdb410cfb3f87b96b3f19c99bf508f1bdef38c475fbc044e6f
+findings:
+  - { id: R-1, severity: P3, status: open, title: "the test does not hold the earlier-dispatch filter. Replacing `.find((r) => !earlier.has(r.databaseId))` with `.find(() => true)` passes all 25 tests, because no fixture has a workflow_dispatch run of HEAD before the dispatch. An earlier manual redeploy of the release commit (the stuck-waiting remedy) would then be taken for the redeploy. The tagged-page check still fails the publish in that case, so it is a test gap, not a false release" }
+  - { id: R-2, severity: P3, status: open, title: "project.release-flow-complete still describes the flow without the redeploy: step 4, step 5 (verify-deploy after the tag accepts the untagged page as the release), its Enforcement section, and the by-hand resume path under Failure behaviour. The resume path skips the redeploy, which leaves the page untagged. The PR body names this as a follow-up, but no plan issue records it" }
+  - { id: R-3, severity: P3, status: open, title: "the worst-case --yes wait is now two --pages-timeout windows (the push run, then the redeploy) plus verify-deploy and the tagged reads. The script header says the redeploy has its own window, but the rule's account of --pages-timeout (sized as one run ahead in the pages group) describes a single wait" }
+  - { id: R-4, severity: P3, status: open, title: "reviewer independence is at agent level: this reviewer is an agent of orchestrating session e4a1ac78, which built the change through other agents. The owner's open question R-3 decides whether that satisfies the rule" }
