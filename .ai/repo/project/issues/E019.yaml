@@ -21,6 +21,16 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-19
-updated_at: 2026-10-21T00:14:09Z
+updated_at: 2026-10-21T00:26:13Z
 started_at: 2026-10-21T00:14:09Z
 started_event: sha256:8ac8bffe325a5e2f81160e226c403c76dec97c0b5ea0af80c658e6e3f5ce8050
+verified_at: 2026-10-21T00:26:13Z
+verified_event: sha256:191879500a10b7c047165e67ccaae4e6d1f33de0f3d4d1f177988867a9520153
+evidence:
+  - covers: verified
+    type: test
+    command: "OSC_LOAD_MAX=400 node tests/browser/v31-studio-workflows.cjs --browsers chromium --origins file [--only measure-level-refused]"
+    result: "commit 809b6d5: measure-level-refused PASS on the unmutated head in chromium/file (whole suite 12/12); with the outputLevel line removed from the hand-off in src/js/ui/studio/workspace.js (local mutation, rebuilt dist, reverted, never committed) it FAILS [refused, notMeasured]: the foreign-level run was measured and saved. firefox and webkit: the CI studio job of the PR"
+    artifact: "tests/browser/v31-studio-workflows.cjs#measure-level-refused"
+    commit: 809b6d5ebc7a24977b555e5d821d7c47ea9ca844
+    recorded_at: 2026-10-21T00:25:58Z
