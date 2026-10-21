@@ -605,6 +605,50 @@
   text-align: center;
 }
 
+.osc-sg-ctl[aria-pressed="true"] {
+  border-color: var(--osc-blue-deep-border);
+  background: var(--osc-surface-3);
+  color: var(--osc-text);
+}
+
+/* The minimap (§153, graph-minimap.js): the whole graph and the viewport rectangle. */
+.osc-sg-minimap {
+  position: absolute;
+  right: 8px;
+  bottom: 48px;
+  z-index: 5;
+  width: 176px;
+  height: 112px;
+  border: 1px solid var(--osc-border-strong);
+  border-radius: var(--osc-radius-control);
+  background: var(--osc-surface-1);
+  cursor: crosshair;
+  touch-action: none;
+}
+
+.osc-sg-minimap:focus-visible {
+  outline: 2px solid var(--osc-focus);
+  outline-offset: 1px;
+}
+
+.osc-sg-mm-svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.osc-sg-mm-node {
+  fill: var(--osc-surface-4);
+  stroke: var(--osc-text-dim);
+  stroke-width: 0.5;
+}
+
+.osc-sg-mm-view {
+  fill: none;
+  stroke: var(--osc-blue-trace);
+  stroke-width: 1.5;
+}
+
 .osc-sg-banner {
   position: absolute;
   top: 8px;
@@ -1451,6 +1495,10 @@
   .osc-si-input {
     min-width: 44px;
     min-height: 44px;
+  }
+
+  .osc-sg-minimap {
+    bottom: 62px;
   }
 
   .osc-sc-grid {
