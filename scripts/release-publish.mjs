@@ -23,8 +23,15 @@
 //   git tag -a v<version> on HEAD; git push origin v<version>; wait for the Pages run of HEAD
 //   to start (gh run list + gh run view; a run of which no job has started at --pages-timeout,
 //   default PAGES_TIMEOUT_MIN, is diagnosed the same way, never watched forever), then gh run
-//   watch;
-//   node scripts/verify-deploy.mjs --commit <HEAD>; gh release create
+//   watch; then redeploy Pages so the page of the release commit names its tag (the deploy
+//   of the merge stamped it `untagged`, before the tag existed; ADR 0059): gh workflow run
+//   pages.yml --ref main, and wait, under the same --pages-timeout, for that dispatched run
+//   (a workflow_dispatch run of HEAD that was not listed before the dispatch) to complete
+//   with success, polling gh run list, never watching it; a run that has not completed by
+//   then fails the publish with its id and state, before any GitHub Release;
+//   node scripts/verify-deploy.mjs --commit <HEAD>, and the live metadata region must say
+//   release `tagged` for HEAD (verify-deploy alone also accepts the untagged page of the
+//   release commit); gh release create
 //   with notes generated from the commits since the previous tag and the committed
 //   dist/index.html attached as oscilla-v<version>.html (the artifact the release record of
 //   scripts/release-record.mjs names); a SemVer prerelease (X.Y.Z-rc.N) is created with
@@ -41,7 +48,7 @@ import { fileURLToPath } from 'node:url';
 import {
   analyzeCommits, lastReleaseTag, parseCommit, parseFlags, readCommits,
 } from './release-analyze.mjs';
-import { PUBLIC_URL, REPO_URL, ROOT, gitRunner } from './release-metadata.mjs';
+import { PUBLIC_URL, REPO_URL, ROOT, findRegion, gitRunner } from './release-metadata.mjs';
 import { currentFingerprint, readReceipt, receiptProblems } from './release-prepare.mjs';
 import { DIST_PATH, channelFor, releaseAssetName } from './release-record.mjs';
 
@@ -158,6 +165,37 @@ export function diagnoseStuckRuns({ stuck, head, now, ancestry }) {
   });
 }
 
+// The redeploy after the tag: pages.yml dispatched for main, found by its event and commit.
+export const DISPATCH_ARGS = ['workflow', 'run', 'pages.yml', '--ref', 'main'];
+export const dispatchedListArgs = (head) => ['--event', 'workflow_dispatch', '--commit', head,
+  '--limit', '5'];
+// Reads of the live page after verify-deploy passed, 10 s apart: a CDN edge that still serves
+// the previous stamp gets that long to catch up, and no longer.
+export const TAGGED_ATTEMPTS = 3;
+
+/**
+ * Pure: why the live page does not name the tag of `commit` (null when its metadata region
+ * says release `tagged` for that commit).
+ */
+export function taggedPageProblem(html, commit) {
+  let record;
+  try {
+    ({ record } = findRegion(html));
+  } catch (e) {
+    return `the live page has no readable metadata region: ${e.message}`;
+  }
+  if (record.commit === commit && record.release === 'tagged') return null;
+  return `the live page says release '${record.release}' for ${record.commit}, expected `
+    + `'tagged' for ${commit}`;
+}
+
+async function defaultFetchPage(url) {
+  const res = await fetch(url, { cache: 'no-store', redirect: 'follow',
+    signal: AbortSignal.timeout(30_000) });
+  if (res.status !== 200) throw new Error(`GET ${url}: HTTP ${res.status}`);
+  return res.text();
+}
+
 /** The line that closes the release task against the published commit. */
 export function finishLine(tag, commit) {
   return `majordomus finish --outcome completed --note "published ${tag}" `
@@ -198,14 +236,15 @@ const FLAGS = { '--yes': 'boolean', '--pages-timeout': 'value' };
 
 /**
  * @param {{ argv?: string[], root?: string, run?: Function, sh?: Function, log?: Function,
- *   receipt?: object|null, fingerprint?: object, sleep?: Function, clock?: () => number }} [o]
+ *   receipt?: object|null, fingerprint?: object, sleep?: Function, clock?: () => number,
+ *   fetchPage?: (url: string) => Promise<string> }} [o]  fetchPage: the live page's text
  * @returns {Promise<number>} exit code
  */
 export async function publish({
   argv = process.argv.slice(2), root = ROOT, run = gitRunner(root), sh = defaultSh(root),
   log = console.log, receipt, fingerprint, sleep = (s) => new Promise((r) => {
     setTimeout(r, s * 1000);
-  }), clock = Date.now,
+  }), clock = Date.now, fetchPage = defaultFetchPage,
 } = {}) {
   let o;
   try {
@@ -297,7 +336,13 @@ export async function publish({
     ['gh', ['run', 'list', '--workflow', 'pages.yml', '--commit', head, '--limit', '1', '--json',
       PAGES_RUN_FIELDS], '(poll, with gh run view <id> --json jobs, until one of its jobs has '
       + 'started; then gh run watch --exit-status)'],
-    ['node', ['scripts/verify-deploy.mjs', '--commit', head]],
+    ['gh', DISPATCH_ARGS, '(redeploy: the page of the release commit is re-stamped with its '
+      + 'tag)'],
+    ['gh', ['run', 'list', '--workflow', 'pages.yml', ...dispatchedListArgs(head), '--json',
+      PAGES_RUN_FIELDS], `(poll the dispatched run until it has completed with success, at most `
+      + `${pagesTimeoutMin} min)`],
+    ['node', ['scripts/verify-deploy.mjs', '--commit', head],
+      '(then the live page must say release tagged)'],
     ['gh', ['release', 'create', tag, asset, ...releaseCreateFlags(version, '<generated notes>')],
       `(${asset} = the committed ${DIST_PATH})`],
   ];
@@ -347,7 +392,52 @@ export async function publish({
         : `no Pages run for ${head} within ${pagesTimeoutMin} min`);
     }
     must('gh', ['run', 'watch', runId, '--exit-status'], `Pages run ${runId}`);
+    // That run stamped the release commit `untagged`: it deployed before the tag existed.
+    // Redeploy main, now tagged, and wait for that run to finish under the same bound. It is
+    // polled, not watched (gh run watch has no timeout), and told from earlier dispatches of
+    // the same commit by the runs listed before the dispatch.
+    const dispatchList = dispatchedListArgs(head);
+    const before = listRuns(dispatchList);
+    if (!before) {
+      throw new Error('could not list the dispatched pages.yml runs (gh run list --workflow '
+        + `pages.yml ${dispatchList.join(' ')}), so the redeploy could not be told apart`);
+    }
+    const earlier = new Set(before.map((r) => r.databaseId));
+    must('gh', DISPATCH_ARGS, 'dispatching the Pages redeploy');
+    let redeploy = null;
+    const redeployDeadline = clock() + pagesTimeoutMin * 60_000;
+    while (clock() < redeployDeadline) {
+      const fresh = (listRuns(dispatchList) || []).find((r) => !earlier.has(r.databaseId));
+      redeploy = fresh || redeploy;
+      if (redeploy && redeploy.status === 'completed') break;
+      await sleep(15);
+    }
+    if (!redeploy) {
+      throw new Error(`no dispatched Pages run for ${head} appeared within ${pagesTimeoutMin} `
+        + `min (gh ${DISPATCH_ARGS.join(' ')})`);
+    }
+    if (redeploy.status !== 'completed') {
+      throw new Error(`dispatched Pages run ${redeploy.databaseId} for ${head} is still `
+        + `'${redeploy.status}' after ${pagesTimeoutMin} min. Inspect: gh run view `
+        + `${redeploy.databaseId}`);
+    }
+    if (redeploy.conclusion !== 'success') {
+      throw new Error(`dispatched Pages run ${redeploy.databaseId} for ${head} completed `
+        + `'${redeploy.conclusion}'. Inspect: gh run view ${redeploy.databaseId}`);
+    }
     must('node', ['scripts/verify-deploy.mjs', '--commit', head], 'deployment verification');
+    let tagged = 'not read';
+    for (let n = 1; n <= TAGGED_ATTEMPTS; n++) {
+      try {
+        tagged = taggedPageProblem(await fetchPage(`${PUBLIC_URL}?oscilla-publish=`
+          + `${head.slice(0, 12)}.${n}`), head);
+      } catch (e) {
+        tagged = `the live page could not be read: ${e.message}`;
+      }
+      if (tagged === null) break;
+      if (n < TAGGED_ATTEMPTS) await sleep(10);
+    }
+    if (tagged !== null) throw new Error(`after the redeploy of ${tag}, ${tagged}`);
     const dir = mkdtempSync(path.join(os.tmpdir(), 'oscilla-release-'));
     const notesFile = path.join(dir, 'notes.md');
     writeFileSync(notesFile, notes);
