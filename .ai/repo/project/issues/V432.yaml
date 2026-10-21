@@ -7,7 +7,7 @@ slug: studio-documentation-and-self-knowledge
 priority: p1
 profile: implementation
 objective: "README Studio section, architecture doc, user guide, canonical shortcut table, Majordomus knowledge/evidence audit, repository self-knowledge test (§221-§226, §266)."
-current_state: "Updated 2026-10-18. Evidence under verified records each verification round, met or not, and every round so far is PARTIAL; all_criteria_met is recorded only when every acceptance criterion is met, so majordomus plan done refuses until then. What remains is the dependency V431; the spec 225 feature indexing gap closed under majordomus 0.29.0 (round of 2026-10-18)."
+current_state: "Updated 2026-10-21. Every round before 2026-10-21 was PARTIAL, last only behind the dependency V431; V431 is done (2026-10-18) and the round of 2026-10-21 at main b5c373d records every acceptance criterion met (verified and all_criteria_met). Left at verify: majordomus plan done follows once this PR's CI gate (the release gate) and review pass."
 scope:
   - "docs"
   - "README.md"
@@ -23,7 +23,11 @@ evidence_required:
   - "verified"
   - "all_criteria_met"
 created_at: 2026-10-02
-updated_at: 2026-10-18T10:43:15Z
+updated_at: 2026-10-21T00:20:31Z
+started_at: 2026-10-21T00:16:09Z
+started_event: sha256:81cdfa267b5675b18585f83182c00a0b3c1dffe162c86332bc86dfdd32f89250
+verified_at: 2026-10-21T00:20:31Z
+verified_event: sha256:2fbc35be241fffacebc45fbcfbc9a17377465e596b3048c9b7c2d1bee4c17c04
 evidence:
   - covers: verified
     type: manual
@@ -55,3 +59,17 @@ evidence:
     result: "PARTIAL (do not mark done; blocked behind V431): at 2e80461 (code as main 044f98a): self-knowledge and docs tests 26/26 pass; majordomus 0.29.0 knowledge check: 20 records, 0 failing; knowledge nodes --kind feature indexes 29 feature nodes, among them the 6 Studio feature records (feature:studio, studio-automation, studio-measurement-routing, studio-patches, studio-signal-graph, studio-timeline), and knowledge edges lists 100 edge lines with a Studio feature at one end, so the spec 225 gap of the caf7764 round (kind unknown under 0.13.2, relations not edges) is closed. Unmet: (1) dependency V431 not done"
     commit: 2e80461b7a2d20022bb282d5ef3a16c15d461da5
     recorded_at: 2026-10-18T10:43:15Z
+  - covers: verified
+    type: test
+    command: "node --test tests/unit/v31-studio-self-knowledge.test.mjs tests/unit/v31-studio-docs.test.mjs tests/unit/knowledge-integrity.test.mjs && majordomus knowledge check && majordomus knowledge nodes --kind feature && majordomus knowledge edges && npm run verify"
+    result: "MET at main b5c373d (round of 2026-10-21): the dependency V431 is DONE (completed 2026-10-18T13:00:47Z, spec 272 final review landed with #197); self-knowledge, docs and knowledge-integrity tests 60/60 pass, the spec 266 questions answered from the tracked records and checked against the shipped code, with the spec 225 no-orphan checks; majordomus 1.0.0-alpha.1 knowledge check: 20 records, 0 failing; knowledge nodes --kind feature indexes the 6 Studio feature records, 101 edge lines name feature:studio*; 6 Studio features stable and 14 Studio use cases active; README 'The V3.1 Studio' section, docs/v31 architecture docs, docs/v31/user-guide.md with the canonical shortcut table, and tests/README rows for every v31 unit and browser suite present; npm run verify passes (3152 tests; one run of the full unit suite under load 97 on 18 cores failed one test and the rerun passed). The release gate's browser suites are run by the CI gate of this PR, not locally on the loaded shared machine."
+    artifact: "tests/unit/v31-studio-self-knowledge.test.mjs"
+    commit: b5c373d05fdadcc83e39c315a31b66c8bfa97e0a
+    recorded_at: 2026-10-21T00:20:13Z
+  - covers: all_criteria_met
+    type: manual
+    command: "majordomus plan show V432; ls README.md docs/v31/user-guide.md docs/v31/studio-model.md docs/v31/compiler.md tests/unit/v31-studio-self-knowledge.test.mjs tests/unit/v31-studio-docs.test.mjs"
+    result: "Every acceptance criterion of V432 is met at main b5c373d: README Studio section (spec 221, 'The V3.1 Studio'); Studio architecture docs under docs/v31 (spec 222: studio-model, compiler, timeline, signal-path, patches-and-provenance); the user guide docs/v31/user-guide.md (spec 223); the canonical shortcut table in the guide checked against STUDIO_SHORTCUTS and KEY_HELP by v31-studio-docs (spec 224); the Majordomus knowledge and evidence audit (spec 225-226: knowledge check 0 failing, Studio features stable and use cases active and indexed with edges, 31 of the 33 V4xx issues done, each implementation issue with test or CI evidence and V401, the current-state audit, with manual evidence); the spec 266 repository self-knowledge test v31-studio-self-knowledge; the dependency V431 done. The specification and visual identity lock applied (no visual change)."
+    artifact: "docs/v31/user-guide.md"
+    commit: b5c373d05fdadcc83e39c315a31b66c8bfa97e0a
+    recorded_at: 2026-10-21T00:20:27Z
