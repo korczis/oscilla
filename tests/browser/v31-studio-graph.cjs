@@ -30,6 +30,11 @@
 //                        focus lands on a node, never on <body>
 //   pan-zoom-frame       blank-canvas drag pans, wheel zooms at the pointer (logical point kept),
 //                        buttons and F / A frame; view changes are not undoable and not dirty
+//   minimap              V602 (§153): the Minimap toggle shows the graph and the viewport
+//                        rectangle; a pointer press, a pointer drag and the keys (arrows,
+//                        Shift+arrows, Home) move the viewport, and a key and the pointer at
+//                        the point it stands for give the same view; the graph, history,
+//                        revision and dirty state never change
 //   inspector            typed cutoff "2.4k" → 2400 Hz; invalid text refused with the range;
 //                        a slider drag is one history entry; AUTOMATE creates / reveals a lane;
 //                        no AUTOMATE on a low-pass Q, with the reason (R7); rename; clip
@@ -319,6 +324,8 @@ function defineChecks() {
       type: 'SELECTION_CHANGE', selection: { nodes: ['osc-1', 'env-1'] } })));
     await step(() => page.click(H.port('lfo-1', 'out', 'control'))); // tap-connect banner
     await page.keyboard.press('Escape');
+    await step(() => page.click('[data-osc="studio.graph.minimapToggle"]')); // the minimap (V602)
+    await page.click('[data-osc="studio.graph.minimapToggle"]');
     for (const open of ['studio.templates', 'studio.keys', 'studio.add', 'studio.find',
       'studio.renderWav']) {
       await step(() => page.click(`[data-osc="${open}"]`));
@@ -693,6 +700,100 @@ function defineChecks() {
       notUndoable: depth1 === depth0, notDirty: dirty === false,
       zoomShown: zoomText === `${Math.round(v5.zoom * 100)} %`,
     }), v0, v1, v2, v3, v4, v5 };
+  });
+
+  def('minimap', async ({ page }) => {
+    await H.fresh(page);
+    const MM = '[data-osc="studio.graph.minimap"]';
+    const TOGGLE = '[data-osc="studio.graph.minimapToggle"]';
+    const hiddenAtStart = await page.evaluate((q) => document.querySelector(q).hidden, MM);
+    const s0 = await page.evaluate(() => ({ info: window.OSCILLA.studio.store.debugInfo(),
+      graph: JSON.stringify(window.OSCILLA.studio.model.graph) }));
+    await page.click(TOGGLE);
+    const shown = await H.settle(() => page.evaluate(({ mm, tg }) => {
+      const el = document.querySelector(mm);
+      const r = el.getBoundingClientRect();
+      return { visible: !el.hidden && r.width > 0 && r.height > 0,
+        pressed: document.querySelector(tg).getAttribute('aria-pressed'),
+        rects: el.querySelectorAll('.osc-sg-mm-node').length,
+        nodes: window.OSCILLA.studio.model.graph.nodes.length };
+    }, { mm: MM, tg: TOGGLE }), (v) => v.visible && v.rects === v.nodes, 'minimap shown');
+    const ed = () => page.evaluate(() => {
+      const e = window.OSCILLA.studio.editor;
+      return { view: e.getView(), layout: e.minimapLayout() };
+    });
+    const v0 = (await ed()).view;
+    /** Back to v0, polled until the minimap draws it again. */
+    const reset = async () => {
+      await page.evaluate((v) => window.OSCILLA.studio.editor.setView(v), v0);
+      return H.settle(ed, (s) => s.view.panX === v0.panX && s.view.panY === v0.panY
+        && s.layout && s.layout.viewport, 'minimap reset to the start view');
+    };
+    /** Client point of minimap point (mx, my), and the minimap px one CSS px is worth. */
+    const client = (L, mx, my) => page.evaluate(({ q, x, y, w, h }) => {
+      const r = document.querySelector(q).querySelector('svg').getBoundingClientRect();
+      return { x: r.left + x * r.width / w, y: r.top + y * r.height / h, px: w / r.width };
+    }, { q: MM, x: mx, y: my, w: L.map.w, h: L.map.h });
+    const centreOf = (L) => ({ x: L.viewport.x + L.viewport.w / 2,
+      y: L.viewport.y + L.viewport.h / 2 });
+    const viewTol = (L, px) => px * v0.zoom / L.scale; // one CSS px of pointer, in pan px
+    const same = (a, b, tol) => Math.abs(a.panX - b.panX) <= tol
+      && Math.abs(a.panY - b.panY) <= tol && a.zoom === b.zoom;
+    const pairs = [];
+    for (const [key, dx, dy] of [['ArrowRight', 8, 0], ['ArrowUp', 0, -8],
+      ['Shift+ArrowDown', 0, 32], ['Shift+ArrowLeft', -32, 0]]) {
+      const L = (await reset()).layout;
+      await page.focus(MM);
+      await page.keyboard.press(key);
+      const byKey = (await ed()).view;
+      await reset();
+      const c = centreOf(L);
+      const p = await client(L, c.x + dx, c.y + dy);
+      await page.mouse.click(p.x, p.y);
+      const byPointer = (await ed()).view;
+      pairs.push({ key, moved: !same(byKey, v0, 1e-9), byKey, byPointer,
+        same: same(byKey, byPointer, viewTol(L, p.px)) });
+    }
+    // Home and a pointer drag that ends on the graph centre (the drag keeps its press's layout).
+    const L = (await reset()).layout;
+    await page.focus(MM);
+    await page.keyboard.press('Home');
+    const home = (await ed()).view;
+    await reset();
+    const g = L.graph;
+    const gc = { x: (g.x + g.w / 2) * L.scale + L.ox, y: (g.y + g.h / 2) * L.scale + L.oy };
+    const a = await client(L, 8, 8);
+    const b = await client(L, gc.x, gc.y);
+    await page.mouse.move(a.x, a.y);
+    await page.mouse.down();
+    const mid = (await ed()).view;
+    await page.mouse.move(b.x, b.y, { steps: 8 });
+    await page.mouse.up();
+    const dragged = (await ed()).view;
+    const drag = { moved: !same(mid, v0, 1e-9), same: same(home, dragged, viewTol(L, b.px)) };
+    // A minimap key is the minimap's: the selection's nodes are not nudged by it.
+    await page.click(H.nodeTitle('filter-1'));
+    const before = (await H.model(page)).nodes.find((n) => n.id === 'filter-1');
+    await page.focus(MM);
+    await page.keyboard.press('ArrowRight');
+    const after = (await H.model(page)).nodes.find((n) => n.id === 'filter-1');
+    const s1 = await H.settle(() => page.evaluate(() => ({
+      info: window.OSCILLA.studio.store.debugInfo(), dirty: window.OSCILLA.studio.dirty,
+      graph: JSON.stringify(window.OSCILLA.studio.model.graph) })), (s) => s.dirty === false,
+    'not dirty after minimap navigation');
+    await page.click(TOGGLE);
+    const off = await page.evaluate(({ mm, tg }) => ({ hidden: document.querySelector(mm).hidden,
+      pressed: document.querySelector(tg).getAttribute('aria-pressed') }), { mm: MM, tg: TOGGLE });
+    return { ...H.verdict({
+      hiddenAtStart, shown: shown.visible && shown.pressed === 'true',
+      nodeRects: shown.rects === shown.nodes,
+      keysMove: pairs.every((x) => x.moved), keyEqualsPointer: pairs.every((x) => x.same),
+      dragMoves: drag.moved, homeEqualsDrag: drag.same,
+      noNudge: before.x === after.x && before.y === after.y,
+      graphUnchanged: s1.graph === s0.graph, revisionKept: s1.info.revision === s0.info.revision,
+      notUndoable: s1.info.undoDepth === s0.info.undoDepth, notDirty: s1.dirty === false,
+      hiddenAgain: off.hidden && off.pressed === 'false',
+    }), pairs, home, dragged, shown };
   });
 
   def('inspector', async ({ page }) => {
