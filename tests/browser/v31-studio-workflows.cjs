@@ -29,6 +29,11 @@
 //                        Studio PLAY is
 //                        refused while the measurement owns the output; Escape aborts a second
 //                        run; 0 engine, Studio runtime and capture nodes after each (V424, V425)
+//   measure-level-refused  a Master Output level other than MEASURE's output level: PLAY of the
+//                        measurement clip is refused and the reason (both levels) shows in the
+//                        Studio's measurement note and the alert region; set equal, the same
+//                        PLAY runs MEASURE to COMPLETE and the note says it was saved (#197 R-4,
+//                        plan E019)
 //   large-graph-render   the 100-node / 200-edge fixture imported through the UI path renders
 //                        100 node cards and 200 cables within BROWSER_BUDGETS.importMs; one edit
 //                        (store dispatch + every projection) and Frame All within
@@ -63,6 +68,7 @@ const os = require('node:os');
 const path = require('node:path');
 const { pathToFileURL } = require('node:url');
 const suite = require('./lib/suite.cjs');
+const { until } = require('./lib/wait.cjs');
 
 const argv = process.argv.slice(2);
 const arg = (name, fallback) => {
@@ -493,6 +499,85 @@ function defineChecks(fx) {
       measured: m && m.nodes },
     derived: derived.ok ? derived.recipe.stimulus : derived.reason, aborted, quiet1, quiet2,
     live: live.slice(-8) };
+  });
+
+  // #197 R-4 (plan E019): the hand-off compares the Master Output level with the level MEASURE
+  // plays at (src/js/ui/studio/workspace.js passes outputLevel: cmp.gainLevel). The refusal is
+  // read from the page, as the user sees it: the Studio's measurement note and the alert region.
+  def('measure-level-refused', async ({ page }) => {
+    const note = () => page.evaluate(() => {
+      const el = document.querySelector('[data-osc="studio.measureNote"]');
+      return { shown: !!el && el.getClientRects().length > 0,
+        text: el ? el.textContent.trim() : '', run: window.OSCILLA.studio.measurementRun.state,
+        state: window.OSCILLA.measure.state, history: window.OSCILLA.measure.history };
+    });
+    // The note a run ends with: refused, saved, failed or aborted.
+    const settled = (what) => until(async () => {
+      const n = await note();
+      return n.shown && /^Measurement (not run|saved|did not complete|aborted)/.test(n.text)
+        ? n : null;
+    }, { ms: 30000, what });
+    const quiet = (what) => until(async () => {
+      const c = await H.counts(page);
+      return !c.playing && c.engineNodes === 0 && c.engineSources === 0 && c.runtimeNodes === 0
+        && c.ioNodes === 0 && c.ioSources === 0 && c.captures === 0 ? c : null;
+    }, { ms: 5000, what });
+    const setLevel = (level) => page.evaluate((v) => {
+      const r = window.OSCILLA.studio.store.dispatch({ type: 'NODE_PARAM_SET',
+        nodeId: 'master-1', key: 'level', value: v });
+      if (!r.ok) throw new Error(r.reason);
+    }, level);
+    await page.evaluate(() => window.OSCILLA.measure.useLoopback({ type: 'biquad',
+      filter: 'lowpass', frequency: 2000, Q: Math.SQRT1_2 }));
+    await H.fresh(page, 'measurement-sweep');
+    await H.recordLive(page);
+    await page.evaluate(() => {
+      const s = window.OSCILLA.studio.store;
+      for (const a of [
+        { type: 'NODE_PARAM_SET', nodeId: 'sweep-1', key: 'duration', value: 1 },
+        { type: 'NODE_PARAM_SET', nodeId: 'sweep-1', key: 'level', value: 0.25 },
+        { type: 'CLIP_RESIZE', clipId: 'clip-1', duration: 0.25 },
+        { type: 'CLIP_MOVE', clipId: 'clip-2', start: 0.25 },
+        { type: 'CLIP_RESIZE', clipId: 'clip-3', start: 0.75, duration: 1 },
+        { type: 'CLIP_MOVE', clipId: 'clip-4', start: 1.75 },
+        { type: 'CLIP_MOVE', clipId: 'clip-5', start: 2.75 },
+        { type: 'CLIP_RESIZE', clipId: 'clip-6', start: 0.25, duration: 2.5 },
+      ]) {
+        const r = s.dispatch(a);
+        if (!r.ok) throw new Error(r.reason);
+      }
+    });
+    // MEASURE's output level, and a Master Output level other than it.
+    const gain = await page.evaluate(() => window.OSCILLA.app.gainLevel);
+    const foreign = Math.abs(gain - 0.05) > 0.01 ? 0.05 : 0.12;
+    await setLevel(foreign);
+    const h0 = (await note()).history.length;
+    await page.click('[data-osc="studio.play"]');
+    const refused = await settled('the measurement note after PLAY with a foreign Master level');
+    await page.evaluate(() => window.OSCILLA.app.studioStop());
+    const quiet1 = await quiet('0 nodes after the refused measurement and STOP');
+    // The same Studio with the Master Output at MEASURE's level runs.
+    await setLevel(gain);
+    await page.click('[data-osc="studio.play"]');
+    const ran = await settled('the measurement note after PLAY with the Master at MEASURE level');
+    const quiet2 = await quiet('0 nodes after the measurement at an equal level');
+    const live = await H.live(page);
+    await page.evaluate(() => window.OSCILLA.measure.useMicrophone());
+    // The template names its Master Output node "Master".
+    const reason = `Master shows level ${foreign}, but the measurement plays at ${gain}, `
+      + 'the output level MEASURE uses';
+    return { ...H.verdict({
+      levelsDiffer: Number.isFinite(gain) && Math.abs(gain - foreign) > 1e-3,
+      refused: refused.run === 'failed' && refused.text.startsWith('Measurement not run: ')
+        && refused.text.includes(reason),
+      notMeasured: !refused.history.slice(h0).some((s) => s === 'PREFLIGHT' || s === 'MEASURING'),
+      announced: live.includes(refused.text),
+      released: !!quiet1,
+      equalRuns: ran.run === 'done' && ran.state === 'COMPLETE'
+        && ran.text.startsWith('Measurement saved as experiment'),
+      releasedAfterRun: !!quiet2,
+    }), gain, foreign, refused: { ...refused, history: refused.history.slice(h0) },
+    ran: { ...ran, history: ran.history.slice(-5) }, live: live.slice(-6) };
   });
 
   // Connected records (ADR 0048): a run measured from a saved project names it (the hash
