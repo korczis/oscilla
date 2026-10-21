@@ -13,6 +13,7 @@ scope:
   - ".github/workflows/ci.yml"
   - "tests/unit/size-report.test.mjs"
   - "tests/README.md"
+  - ".ai/repo/ci/gates.yaml"
 acceptance_criteria:
   - "The CI step summary of a pull request shows the four numbers; tests/unit/size-report.test.mjs checks the arithmetic and the output on fixtures, and fails on the merge base (the script is absent)."
   - "The workflow change keeps project.ci-bounded (bounded, pinned, retried) and carries a review verdict (.github is guarded)."
@@ -23,7 +24,7 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-18
-updated_at: 2026-10-18T13:58:13Z
+updated_at: 2026-10-19T12:58:54Z
 started_at: 2026-10-18T13:20:42Z
 started_event: sha256:84006e793edacd69081644c8100285373fe792b82022ef9d79b10506837bb05a
 verified_at: 2026-10-18T13:57:51Z
@@ -37,3 +38,17 @@ evidence:
     result: "MET at 5c07435: scripts/size-report.mjs prints raw and gzip size of dist/index.html, headroom to the scripts/build-config.mjs budget and the change from the merge base; the unit job of ci.yml appends it to the step summary (2-minute step limit; ci-workflows and ci-gates-model pass, .ai/repo/ci/gates.yaml unit gate names the program). size-report.test.mjs 8/8 pass; fail-first: fails without the change (module-not-found), passes with it; tests/README.md one appended row; docs/CLAIMS.yaml and the intent untouched (E015). npm test 2973/2973 pass (after two whole-suite runs failed only v31-studio-performance build 1024 ms > 1000 ms at load 77-165, cleared by a whole re-run at load 97). Locally on this branch: 2 817 241 B raw / 815 357 B gzip, headroom 682 759 / 184 643 B, change 0 / 0 B. Review verdict for the .github change is the reviewer's, pending"
     commit: 5c07435d08728ca2c1da8644d63902a68957c1e6
     recorded_at: 2026-10-18T13:57:40Z
+  - covers: verified
+    type: artifact
+    command: "grep -E '^(pr|verdict|content):' .ai/repo/reviews/208.yaml"
+    result: "verdict merge for #208 by a reviewer that did not build it (first commit 9ea0739, 2026-10-18T14:06:37Z), content 642d1c8b...dceba over .github/workflows/ci.yml, no open P0 or P1: meets the criterion 'carries a review verdict (.github is guarded)', pending when E009 was recorded DONE at 13:58Z (#208 R-4, corrected by E017)"
+    artifact: ".ai/repo/reviews/208.yaml"
+    commit: 84a8e1420d09ff7ddc804993cedbc227b64e0d5c
+    recorded_at: 2026-10-19T12:58:50Z
+  - covers: verified
+    type: ci
+    command: "gh api repos/korczis/oscilla/actions/jobs/117757571141/logs (step 'Size of dist/index.html against the budget and the merge base')"
+    result: "the unit job of CI run 39155181453 on #208's head c01a2cc (pull-request merge commit 4749992) wrote the step summary with the four numbers: size 2 817 270 B raw / 815 370 B gzip, budget 3 500 000 / 1 000 000 B, headroom 682 730 B (19.5 %) / 184 630 B (18.5 %), change from merge base 9f8a3ed 0 B / 0 B; gate SUCCESS (the summary was unobserved when E009 was recorded DONE, #208 R-4; corrected by E017)"
+    artifact: "https://github.com/korczis/oscilla/actions/runs/39155181453"
+    commit: 84a8e1420d09ff7ddc804993cedbc227b64e0d5c
+    recorded_at: 2026-10-19T12:58:54Z

@@ -24,7 +24,7 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-18
-updated_at: 2026-10-18T13:59:26Z
+updated_at: 2026-10-19T12:58:47Z
 started_at: 2026-10-18T13:20:38Z
 started_event: sha256:087f77ae00166f7313e5ebd184ca52724c22d3b816d8dc5468845d57c42bde69
 verified_at: 2026-10-18T13:59:17Z
@@ -56,3 +56,17 @@ evidence:
     result: "v3-measure 116/116, analysis-worker 49/49, v3-ui 37/37 in chromium, firefox, webkit over file and http at ad87967"
     commit: ad87967e4de95fc4752523c530b2b48e250b6c65
     recorded_at: 2026-10-18T13:59:10Z
+  - covers: verified
+    type: artifact
+    command: "grep -E '^(pr|verdict|content):' .ai/repo/reviews/210.yaml"
+    result: "verdict merge for #210 by a reviewer that did not build it (first commit 9a05e65, 2026-10-18T14:59:24Z), content eb3ae010...7293 over src/js/experiments/definition.js, recipe.js and schema.js, no open P0 or P1: meets the criterion 'the pull request carries a review verdict', unmet when E006 was recorded DONE at 13:59Z (#210 R-1, corrected by E017)"
+    artifact: ".ai/repo/reviews/210.yaml"
+    commit: 84a8e1420d09ff7ddc804993cedbc227b64e0d5c
+    recorded_at: 2026-10-19T12:58:43Z
+  - covers: verified
+    type: ci
+    command: "gh pr view 210 --json statusCheckRollup (CI run 39241368944 on head 3b08eae)"
+    result: "the validation npm run release-gate never ran locally (#210 R-1); CI run 39241368944 on #210's merged head 3b08eae ran the suites the gate aggregates and passed: unit, build, artifact rules; V1 engine, DSP/labs/sequencer, V3 measurement and UI, V3.1 Studio UI and Browser gate in chromium, firefox and webkit; visual regression; .ai layer; fail-first; review-verdict; gate SUCCESS; merged as 2185a12 (corrected by E017)"
+    artifact: "https://github.com/korczis/oscilla/actions/runs/39241368944"
+    commit: 84a8e1420d09ff7ddc804993cedbc227b64e0d5c
+    recorded_at: 2026-10-19T12:58:47Z
