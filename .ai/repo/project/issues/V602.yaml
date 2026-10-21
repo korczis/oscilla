@@ -35,4 +35,16 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-18
-updated_at: 2026-10-18
+updated_at: 2026-10-21T00:33:04Z
+started_at: 2026-10-21T00:17:35Z
+started_event: sha256:cd7a327397be0e4dedb624f46d3792689e7a98130a46475b6f97274fff86c600
+verified_at: 2026-10-21T00:33:04Z
+verified_event: sha256:c78d312ea92d23a424657857add23f9e94d9d918aafdc4bce2b8ebaa690dcb94
+evidence:
+  - covers: verified
+    type: test
+    command: "node --test tests/unit/studio-minimap.test.mjs && OSC_LOAD_MAX=200 node tests/browser/v31-studio-graph.cjs --browsers chromium --origins file --only minimap,controls-labelled,pan-zoom-frame && node scripts/visual-studio.mjs dist"
+    result: "at 925b5fc: tests/unit/studio-minimap.test.mjs 7/7 pass (fails on origin/main b5c373d: graph-minimap.js missing); the minimap check of tests/browser/v31-studio-graph.cjs passes in chromium/file (key and pointer views equal exactly, Home = drag to the graph centre, graph, revision, undo depth and dirty unchanged), controls-labelled and pan-zoom-frame still pass; firefox and webkit not installed locally, CI runs them; Studio visual references pass (desktop 0.007 %, phone 0.018 %). npm run verify: everything passes but v31-studio-performance 'build' budget under load 90-116 on 18 cores, which fails the same way on origin/main's tree at the same load (environmental). Not yet: CI, the reviewer's verdict"
+    artifact: "925b5fc"
+    commit: 925b5fc774f1c7b664fbd94dc1719dfad2d5c7b4
+    recorded_at: 2026-10-21T00:33:01Z
