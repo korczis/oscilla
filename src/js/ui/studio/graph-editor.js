@@ -11,6 +11,8 @@
 //            onActivateNode(id) }
 //   editor.render()                     project the model and selection (keyed, incremental)
 //   editor.frameAll(), frameSelection(), zoomBy(f), panBy(dx, dy), setView(view)
+//   editor.toggleMinimap(on?) -> shown, minimapLayout() -> layout | null     (§153, V602:
+//                        graph-minimap.js; view state only, it moves the viewport like a pan)
 //   editor.addNodeAt(type, at?, { connectFrom }) -> result     at: logical point (default centre)
 //   editor.addNodeAtClient(type, clientX, clientY) -> bool      library drop (§63)
 //   editor.isOverViewport(clientX, clientY), clientToGraph(x, y), centerPoint()
@@ -47,6 +49,7 @@ import {
 } from './graph-view.js';
 import { coarsePointer, h, s, setAttr, setText, replaceChildren } from './graph-dom.js';
 import { focusSelection, toggleFocusedSelection } from './graph-keys.js';
+import { createMinimap } from './graph-minimap.js';
 
 const VIEW_COMMIT_MS = 250;
 const NODE_HEAD_OFFSET = 18; // logical units above the pointer where an inserted node's top sits
@@ -79,7 +82,11 @@ export function createGraphEditor(host, svc) {
   const ctl = (label, osc, glyph, fn) => h('button', { type: 'button',
     class: 'osc-icon-btn osc-sg-ctl', 'aria-label': label, title: label, 'data-osc': osc,
     onClick: fn }, [h('span', { class: 'osc-sg-ctl-glyph', 'aria-hidden': 'true', text: glyph })]);
+  // Hidden until shown (graph-minimap.js); first in the group, so the others keep their place.
+  const minimapBtn = ctl('Minimap', 'studio.graph.minimapToggle', '▣', () => toggleMinimap());
+  minimapBtn.setAttribute('aria-pressed', 'false');
   const controls = h('div', { class: 'osc-sg-controls', role: 'group', 'aria-label': 'View' }, [
+    minimapBtn,
     ctl('Zoom out', 'studio.graph.zoomOut', '−', () => zoomBy(1 / ZOOM_STEP)),
     zoomLabel,
     ctl('Zoom in', 'studio.graph.zoomIn', '+', () => zoomBy(ZOOM_STEP)),
@@ -90,7 +97,10 @@ export function createGraphEditor(host, svc) {
   // where the Inspector's hint is in another subview.
   const empty = h('p', { class: 'osc-sg-empty', 'data-osc': 'studio.graph.empty',
     text: 'Empty graph. Press N or use Add node, or open a setup from Templates.' });
-  replaceChildren(host, [viewport, empty, summary, banner, controls]);
+  const minimap = createMinimap({ rects: () => nodeRects(), view: () => view,
+    size: () => (size.w > 0 ? size : (measureSize(), size)),
+    setView: (v, commit) => setView(v, commit), commit: () => commitView(true) });
+  replaceChildren(host, [viewport, empty, summary, banner, minimap.el, controls]);
   host.classList.add('osc-sg');
 
   // ---------------------------------------------------------------- state
@@ -132,6 +142,14 @@ export function createGraphEditor(host, svc) {
     viewport.style.backgroundSize = `${g}px ${g}px`;
     viewport.style.backgroundPosition = `${view.panX}px ${view.panY}px`;
     setText(zoomLabel, `${Math.round(view.zoom * 100)} %`);
+    minimap.render();
+  }
+
+  function toggleMinimap(on = !minimap.isShown()) {
+    const shown = minimap.setShown(on);
+    minimapBtn.setAttribute('aria-pressed', String(shown));
+    announce(shown ? 'Minimap shown' : 'Minimap hidden');
+    return shown;
   }
 
   function commitView(now = false) {
@@ -420,6 +438,7 @@ export function createGraphEditor(host, svc) {
   function routeAll() {
     for (const entry of edgeEls.values()) routeEdge(entry);
     fitSvg();
+    minimap.render();
   }
 
   function fitSvg() {
@@ -1205,6 +1224,8 @@ export function createGraphEditor(host, svc) {
     panBy: (dx, dy) => setView(panBy(view, dx, dy)),
     setView,
     getView: () => ({ ...view }),
+    toggleMinimap,
+    minimapLayout: () => minimap.layout(),
     addNodeAt,
     addNodeAtClient,
     isOverViewport,
@@ -1258,6 +1279,7 @@ export function createGraphEditor(host, svc) {
       if (ro) ro.disconnect();
       if (nodeRo) nodeRo.disconnect();
       mo.disconnect();
+      minimap.destroy();
       replaceChildren(host, []);
     },
   };
