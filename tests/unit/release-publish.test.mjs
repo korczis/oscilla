@@ -8,11 +8,13 @@ import { appendFileSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
-import { gitRunner } from '../../scripts/release-metadata.mjs';
+import {
+  PUBLIC_URL, REGION_CLOSE, REGION_OPEN, gitRunner,
+} from '../../scripts/release-metadata.mjs';
 import {
   PAGES_TIMEOUT_MIN, STUCK_AFTER_MIN, WAITING_STATUSES, diagnoseStuckRuns, finishLine,
   jobStarted, preconditionProblems, publish, releaseCreateFlags, releaseNotes, runStarted,
-  stuckPagesRuns,
+  stuckPagesRuns, taggedPageProblem,
 } from '../../scripts/release-publish.mjs';
 import {
   GATE_RUN, GATE_TREE_EXCLUDE, RECEIPT_KEYS, computeGateTree, currentFingerprint, gateTreePaths,
@@ -35,11 +37,20 @@ const COMMITS = `${'a'.repeat(40)}\x1ffeat(labs): new lab\x1f\x1e\n`
  * makes the command fail); `jobs` answers `gh run view <id> --json jobs` (an object by run id,
  * or a function of the id; a run it does not name has no jobs yet, null makes the command
  * fail); `ancestor` is the exit status of `git merge-base --is-ancestor` (0 yes, 1 no, 128
- * unknown).
+ * unknown). `redeploy` answers the `gh run list --event workflow_dispatch` of the redeploy
+ * after the tag, as a function of whether `gh workflow run` has been called (default: nothing
+ * before it, a completed successful run 8001 after it); `page` is what `fetchPage` returns
+ * for the live page (default: its region says release tagged for HEAD).
  */
+const page = (record) => `<!doctype html>${REGION_OPEN}${JSON.stringify(record)}${REGION_CLOSE}`;
+const TAGGED_PAGE = page({ commit: HEAD, release: 'tagged', distance: 0 });
+const REDEPLOYED = [{ databaseId: 8001, status: 'completed', conclusion: 'success',
+  headSha: HEAD, createdAt: ago(0) }];
 function fakes({ branch = 'main', dirty = '', originMain = HEAD, tagRemote = '', ok = true,
-  runs = [], jobs = {}, ancestor = 0 } = {}) {
+  runs = [], jobs = {}, ancestor = 0,
+  redeploy = (dispatched) => (dispatched ? REDEPLOYED : []), live = TAGGED_PAGE } = {}) {
   const calls = [];
+  let dispatched = false;
   const run = (args) => {
     calls.push(['git', ...args]);
     if (args[0] === 'rev-parse' && args[1] === 'HEAD') return HEAD;
@@ -59,6 +70,16 @@ function fakes({ branch = 'main', dirty = '', originMain = HEAD, tagRemote = '',
     }
     if (cmd === 'git' && args[0] === 'rev-parse') return { status: 1, stdout: '' }; // no local tag
     if (cmd === 'git' && args[0] === 'merge-base') return { status: ancestor, stdout: '' };
+    if (cmd === 'gh' && args[0] === 'workflow' && args[1] === 'run') {
+      dispatched = true;
+      return { status: 0, stdout: '' };
+    }
+    if (cmd === 'gh' && args[0] === 'run' && args[1] === 'list'
+      && args.includes('workflow_dispatch')) {
+      const answer = redeploy(dispatched);
+      return answer === null ? { status: 1, stdout: '', stderr: 'HTTP 502' }
+        : { status: 0, stdout: JSON.stringify(answer) };
+    }
     if (cmd === 'gh' && args[0] === 'run' && args[1] === 'list') {
       const answer = typeof runs === 'function' ? runs(args) : runs;
       return answer === null ? { status: 1, stdout: '', stderr: 'HTTP 502' }
@@ -75,15 +96,22 @@ function fakes({ branch = 'main', dirty = '', originMain = HEAD, tagRemote = '',
     return { status: 0, stdout: '' };
   };
   const out = [];
-  return { run, sh, calls, out, log: (l) => out.push(l) };
+  const fetchPage = async (url) => {
+    calls.push(['fetch', url]);
+    if (live instanceof Error) throw live;
+    return typeof live === 'function' ? live() : live;
+  };
+  return { run, sh, calls, out, log: (l) => out.push(l), fetchPage };
 }
 
-// Anything that would create a tag, push, watch/release on GitHub or hit the live site.
-// `gh run list` and `gh run view` only read the runs of pages.yml and their jobs, and the
-// precondition check needs them.
+// Anything that would create a tag, push, dispatch, watch/release on GitHub or hit the live
+// site. `gh run list` and `gh run view` only read the runs of pages.yml and their jobs, and
+// the precondition check needs them.
 const MUTATING = (c) => (c[0] === 'git' && c[1] === 'tag' && !c.includes('--list'))
   || (c[0] === 'git' && c[1] === 'push')
   || (c[0] === 'gh' && c[1] === 'release')
+  || (c[0] === 'gh' && c[1] === 'workflow')
+  || c[0] === 'fetch'
   || (c[0] === 'gh' && c[1] === 'run' && c[2] !== 'list' && c[2] !== 'view')
   || (c[0] === 'node' && /verify-deploy/.test(c[1]));
 
@@ -99,6 +127,25 @@ test('dry run with every precondition met: plans, prints notes, mutates nothing'
   assert.match(text, /git tag -a v40\.0\.0 .* f187f66/);
   assert.match(text, /gh release create v40\.0\.0/);
   assert.match(text, /### Breaking changes\n\n- drop v=0 links — old links fail/);
+});
+
+// E025: the deploy of the release commit ran before the tag existed, so its page says
+// untagged. The dry run names the redeploy after the tag, and dispatches nothing.
+test('dry run: prints the Pages redeploy after the tag and dispatches nothing', async () => {
+  const f = fakes();
+  const code = await publish({ argv: [], run: f.run, sh: f.sh, log: f.log, receipt: RECEIPT,
+    fingerprint: FP, fetchPage: f.fetchPage });
+  assert.equal(code, 0);
+  const lines = f.out.filter((l) => /^ {2}(git|gh|node) /.test(l));
+  const at = (re) => lines.findIndex((l) => re.test(l));
+  assert.ok(at(/^ {2}gh workflow run pages\.yml --ref main \(redeploy/) > at(/git push origin/),
+    lines.join('\n'));
+  assert.ok(at(/--event workflow_dispatch --commit f187f66\S* .*completed with success, at most 30/)
+    > at(/gh workflow run/), lines.join('\n'));
+  assert.ok(at(/verify-deploy\.mjs --commit .*must say release tagged/) > at(/workflow_dispatch/));
+  assert.ok(at(/gh release create/) > at(/verify-deploy/));
+  assert.deepEqual(f.calls.filter(MUTATING), []);
+  assert.ok(!f.calls.some((c) => c[0] === 'gh' && c[1] === 'workflow'), 'nothing dispatched');
 });
 
 test('the GitHub Release attaches the committed dist; only a prerelease is marked so', async () => {
@@ -493,7 +540,7 @@ test('--yes: the default wait outlasts one whole Pages run ahead in the group', 
     jobs: () => (time.clock() - NOW < 24 * 60_000 ? NEVER_STARTED : [job('deploy', 'in_progress')]),
   });
   const code = await publish({ argv: ['--yes'], run: f.run, sh: f.sh, log: f.log,
-    receipt: RECEIPT, fingerprint: FP, ...time });
+    receipt: RECEIPT, fingerprint: FP, fetchPage: f.fetchPage, ...time });
   assert.equal(code, 0, f.out.join('\n'));
   assert.ok(f.calls.some((c) => c.join(' ') === 'gh run watch 7004 --exit-status'));
   // and it is still a bound: a run of which no job ever starts ends the publish at the default
@@ -517,11 +564,12 @@ test('--yes: tags, waits for a job of the Pages run to start, verifies, releases
       : [job('deploy', 'in_progress'), job('Public smoke (chromium)', 'queued')]),
   });
   const code = await publish({ argv: ['--yes'], run: f.run, sh: f.sh, log: f.log,
-    receipt: RECEIPT, fingerprint: FP, ...fakeTime() });
+    receipt: RECEIPT, fingerprint: FP, fetchPage: f.fetchPage, ...fakeTime() });
   assert.equal(code, 0, f.out.join('\n'));
   const acted = f.calls.filter(MUTATING).map((c) => c.slice(0, 3).join(' '));
-  assert.deepEqual(acted, ['git tag -a', 'git push origin', 'gh run watch',
-    'node scripts/verify-deploy.mjs --commit', 'gh release create']);
+  assert.deepEqual(acted, ['git tag -a', 'git push origin', 'gh run watch', 'gh workflow run',
+    'node scripts/verify-deploy.mjs --commit', `fetch ${PUBLIC_URL}?oscilla-publish=f187f664893c.1`,
+    'gh release create']);
   assert.equal(polls, 3);
   assert.ok(f.calls.some((c) => c.join(' ') === 'gh run watch 7003 --exit-status'));
   assert.ok(f.out.join('\n').includes(`\n  ${finishLine('v40.0.0', HEAD)}`));
@@ -529,8 +577,102 @@ test('--yes: tags, waits for a job of the Pages run to start, verifies, releases
   const direct = fakes({ runs: (args) => (args.includes('--commit')
     ? [{ databaseId: 7005, status: 'in_progress', headSha: HEAD, createdAt: ago(1) }] : []) });
   assert.equal(await publish({ argv: ['--yes'], run: direct.run, sh: direct.sh, log: direct.log,
-    receipt: RECEIPT, fingerprint: FP, ...fakeTime() }), 0);
+    receipt: RECEIPT, fingerprint: FP, fetchPage: direct.fetchPage, ...fakeTime() }), 0);
   assert.ok(!direct.calls.some((c) => c[0] === 'gh' && c[1] === 'run' && c[2] === 'view'));
+});
+
+// ---------------------------------------------------------------- E025: the redeploy after the tag
+const sequence = (f) => f.calls.map((c) => c.join(' '));
+// The deploy of the merge: the Pages run of HEAD, under way when the tag is pushed.
+const PUSH_RUN = (args) => (args.includes('--commit') && !args.includes('workflow_dispatch')
+  ? [{ databaseId: 7003, status: 'in_progress', headSha: HEAD, createdAt: ago(1) }] : []);
+
+test('--yes: after the tag, pages.yml is dispatched for main, waited for, and the live page '
+  + 'must say tagged before the GitHub Release', async () => {
+  // The dispatched run is listed in_progress twice before it completes; a run of the same
+  // commit dispatched earlier (8000) is never taken for it.
+  let polls = 0;
+  const earlier = { databaseId: 8000, status: 'completed', conclusion: 'success', headSha: HEAD,
+    createdAt: ago(90) };
+  const f = fakes({
+    runs: PUSH_RUN,
+    redeploy: (dispatched) => {
+      if (!dispatched) return [earlier];
+      polls += 1;
+      const status = polls < 3 ? 'in_progress' : 'completed';
+      return [{ databaseId: 8001, status, conclusion: status === 'completed' ? 'success' : '',
+        headSha: HEAD, createdAt: ago(0) }, earlier];
+    },
+  });
+  const code = await publish({ argv: ['--yes'], run: f.run, sh: f.sh, log: f.log,
+    receipt: RECEIPT, fingerprint: FP, fetchPage: f.fetchPage, ...fakeTime() });
+  assert.equal(code, 0, f.out.join('\n'));
+  const s = sequence(f);
+  const at = (line) => s.indexOf(line);
+  const push = at('git push origin refs/tags/v40.0.0');
+  const dispatch = at('gh workflow run pages.yml --ref main');
+  const verify = at(`node scripts/verify-deploy.mjs --commit ${HEAD}`);
+  assert.ok(push >= 0 && dispatch > push, 'the dispatch follows the tag');
+  assert.ok(dispatch > at('gh run watch 7003 --exit-status'), 'after the deploy of the merge');
+  const listed = s.filter((c) => c === 'gh run list --workflow pages.yml --event '
+    + `workflow_dispatch --commit ${HEAD} --limit 5 --json `
+    + 'databaseId,status,conclusion,headSha,createdAt');
+  assert.equal(listed.length, 4, 'listed once before the dispatch and polled until completed');
+  assert.ok(s.lastIndexOf(listed[0]) < verify, 'verify-deploy only once the redeploy completed');
+  assert.ok(!s.includes('gh run watch 8001 --exit-status'), 'the redeploy is polled, not watched');
+  const fetched = s.findIndex((c) => c.startsWith('fetch '));
+  assert.ok(fetched > verify, 'the live page is read after verify-deploy');
+  assert.ok(s.findIndex((c) => c.startsWith('gh release create v40.0.0 ')) > fetched);
+
+  // verify-deploy accepts the untagged page of the release commit; the publish does not
+  for (const live of [page({ commit: HEAD, release: 'untagged', distance: null }),
+    page({ commit: OLDER, release: 'tagged', distance: 0 }), '<!doctype html>',
+    new Error('connect ETIMEDOUT')]) {
+    const u = fakes({ runs: PUSH_RUN, live });
+    assert.equal(await publish({ argv: ['--yes'], run: u.run, sh: u.sh, log: u.log,
+      receipt: RECEIPT, fingerprint: FP, fetchPage: u.fetchPage, ...fakeTime() }), 1);
+    const text = u.out.join('\n');
+    assert.match(text, /RELEASE:PUBLISH FAILED: after the redeploy of v40\.0\.0, the live page /);
+    assert.equal(sequence(u).filter((c) => c.startsWith('fetch ')).length, 3, 'bounded reads');
+    assert.ok(!u.calls.some((c) => c[0] === 'gh' && c[1] === 'release'), String(live));
+    assert.match(text, /no GitHub Release was created/);
+  }
+  assert.equal(taggedPageProblem(TAGGED_PAGE, HEAD), null);
+  assert.match(taggedPageProblem(page({ commit: HEAD, release: 'untagged' }), HEAD),
+    /says release 'untagged' for f187f66\S+, expected 'tagged' for f187f66/);
+});
+
+test('--yes: a dispatched redeploy that does not finish within the wait fails the publish '
+  + 'with its id and state, and creates no GitHub Release', async () => {
+  const drive = async (redeploy) => {
+    const f = fakes({ runs: PUSH_RUN, redeploy });
+    const code = await publish({ argv: ['--yes', '--pages-timeout', '5'], run: f.run, sh: f.sh,
+      log: f.log, receipt: RECEIPT, fingerprint: FP, fetchPage: f.fetchPage, ...fakeTime() });
+    const text = f.out.join('\n');
+    assert.equal(code, 1, text);
+    assert.ok(sequence(f).includes('gh workflow run pages.yml --ref main'));
+    assert.ok(!f.calls.some((c) => c[0] === 'gh' && c[1] === 'release'), text);
+    assert.ok(!f.calls.some((c) => c[0] === 'node' && /verify-deploy/.test(c[1])), text);
+    assert.match(text, /The tag v40\.0\.0 is on origin but no GitHub Release was created/);
+    return text;
+  };
+  for (const status of ['queued', 'in_progress', 'waiting']) {
+    const text = await drive((d) => (d ? [{ databaseId: 8002, status, conclusion: '',
+      headSha: HEAD, createdAt: ago(0) }] : []));
+    assert.match(text, new RegExp(`RELEASE:PUBLISH FAILED: dispatched Pages run 8002 for ${HEAD} `
+      + `is still '${status}' after 5 min`));
+  }
+  assert.match(await drive(() => []), /no dispatched Pages run for f187f66\S+ appeared within 5/);
+  assert.match(await drive((d) => (d ? [{ databaseId: 8003, status: 'completed',
+    conclusion: 'failure', headSha: HEAD, createdAt: ago(0) }] : [])),
+  /dispatched Pages run 8003 for f187f66\S+ completed 'failure'/);
+  // an unreadable list before the dispatch: the redeploy could not be told apart, so none
+  const f = fakes({ runs: PUSH_RUN, redeploy: () => null });
+  assert.equal(await publish({ argv: ['--yes'], run: f.run, sh: f.sh, log: f.log,
+    receipt: RECEIPT, fingerprint: FP, fetchPage: f.fetchPage, ...fakeTime() }), 1);
+  assert.match(f.out.join('\n'), /could not list the dispatched pages\.yml runs/);
+  assert.ok(!sequence(f).includes('gh workflow run pages.yml --ref main'));
+  assert.ok(!f.calls.some((c) => c[0] === 'gh' && c[1] === 'release'));
 });
 
 test('the finish line verifies the published commit, not the worktree HEAD', async () => {
