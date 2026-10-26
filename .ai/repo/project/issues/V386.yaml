@@ -28,7 +28,13 @@ evidence_required:
   - "verified"
   - "all_criteria_met"
 created_at: 2026-10-02
-updated_at: 2026-10-06T21:11:25Z
+updated_at: 2026-10-25T23:59:41Z
+started_at: 2026-10-25T23:59:12Z
+started_event: sha256:044a3ee625ea5955c44c8184f6bfbc2a46a0c72778bed3bbdcc15215927807e9
+verified_at: 2026-10-25T23:59:35Z
+verified_event: sha256:8155d5fd752e0d4e78ddfa3b50d32916d30348595c1de5ba28e4247cf5a9ecc8
+completed_at: 2026-10-25T23:59:41Z
+completed_event: sha256:f659b1cdf4224bfb3e83db51fbe0def25f7edf4cbe671ab96169664e7a918a12
 evidence:
   - covers: verified
     type: ci
@@ -60,3 +66,17 @@ evidence:
     result: "PARTIAL (do not mark done): spec 233 is answered by ADR 0047 (proposed, #145): v3.0.0 shipped without a release candidate although release-prepare supported --prerelease; the deviation is recorded rather than repaired with a retroactive tag, and every major release from now on is preceded by an rc verified live (verify-deploy, test:live). Unmet: no Majordomus release record for v3.0.0 - its GitHub Release has no asset; attaching the committed dist (git show v3.0.0:dist/index.html) is the documented route (.ai/repo/releases/README.md) and awaits the owner's approval because it modifies a published release; ADR 0047 awaits the owner's acceptance"
     commit: 3a9f762f02ec517530212fcb8e8fe1a9180255d5
     recorded_at: 2026-10-06T21:11:25Z
+  - covers: verified
+    type: ci
+    command: "node scripts/release-record.mjs --version 3.0.0 --check"
+    result: "MET: after Q007 (owner decision 2026-10-26) attached git show v3.0.0:dist/index.html as oscilla-v3.0.0.html, npm run release:record -- --version 3.0.0 wrote .ai/repo/releases/v3.0.0.yaml (release/v1, stable, commit 5d94576, sha256 39b6dcc7..., 2146727 B) and --check reports it matches what was published. This closes the last gap of the 2026-10-07 round; spec 233 stays answered by ADR 0047 and spec 230 public verify was met at caf7764."
+    artifact: ".ai/repo/releases/v3.0.0.yaml"
+    commit: 3e00b86ff850330e6d0491d7756879bcc630be22
+    recorded_at: 2026-10-25T23:59:28Z
+  - covers: all_criteria_met
+    type: manual
+    command: "majordomus plan show V386; node scripts/release-record.mjs --version 3.0.0 --check"
+    result: "Every acceptance criterion of V386 is met: single-source version 3.0.0 tagged at 5d94576 with a GitHub Release, gated release and Pages deploy of the same artifact (verify-deploy PASS), public MEASURE/Playground smoke (test:live, round at caf7764), the rc-first deviation recorded by ADR 0047 (spec 233), and the release/v1 record for v3.0.0 whose --check passes (spec 181); dependencies V383, V384, V385 and Q007 done."
+    artifact: ".ai/repo/releases/v3.0.0.yaml"
+    commit: 3e00b86ff850330e6d0491d7756879bcc630be22
+    recorded_at: 2026-10-25T23:59:32Z

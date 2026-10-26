@@ -18,3 +18,18 @@ validation:
 evidence_required:
   - "owner_decision"
 created_at: 2026-10-18
+started_at: 2026-10-25T23:58:45Z
+started_event: sha256:1b9b1539e30cb0334045ff8d47f3e4c2e5068a1d85cc91dff40c4c5987fe3bbb
+updated_at: 2026-10-25T23:58:58Z
+verified_at: 2026-10-25T23:58:53Z
+verified_event: sha256:a22197ed3e74ecf76f6da1f2aaf45f80c2365bb76228b9730d23b560043a06b5
+completed_at: 2026-10-25T23:58:58Z
+completed_event: sha256:2f617b7b95873f5d1094147726ffcaa9d6b934a92cf384f76006330f637bb4ba
+evidence:
+  - covers: owner_decision
+    type: manual
+    command: "gh release upload v3.0.0 oscilla-v3.0.0.html; gh release upload v3.1.0 oscilla-v3.1.0.html; gh release download vX.Y.Z -p oscilla-vX.Y.Z.html | shasum -a 256 vs git show vX.Y.Z:dist/index.html | shasum -a 256"
+    result: "Owner decision 2026-10-26, the owner's own answer in the Claude Code session asked 'Should I upload oscilla-v3.0.0.html and oscilla-v3.1.0.html to their GitHub Releases, and record your answer as the owner_decision evidence?': 'Yes, upload both'. Uploaded the same day under that decision. Each downloaded asset is byte-identical to dist/index.html at its tag: v3.0.0 oscilla-v3.0.0.html sha256 39b6dcc7f1385dfcc7fafb9ce01853bd88eecd187e506b5d3813cdd11d77c0f1 (2146727 B), v3.1.0 oscilla-v3.1.0.html sha256 0cf037e5fbb1a9435bbe80107632046237729915ea0d3e7ea26d266dcd79bb5a (2561441 B)."
+    artifact: "https://github.com/korczis/oscilla/releases/tag/v3.0.0"
+    commit: 3e00b86ff850330e6d0491d7756879bcc630be22
+    recorded_at: 2026-10-25T23:58:50Z
