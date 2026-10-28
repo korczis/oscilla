@@ -3,6 +3,7 @@ milestone: M055
 serves:
   - "ui-flowbite-pro#pro-shell"
   - "ui-flowbite-pro#pro-accessible"
+  - "ui-flowbite-pro#licence-clean"
 title: "The Pro admin shell replaces the header and the tab bar"
 slug: the-pro-admin-shell-replaces-the-header-and-the-tab-bar
 priority: p1
@@ -35,6 +36,7 @@ acceptance_criteria:
   - "The deep-link inventory lands passing on the current interface before the shell changes, and passes unchanged after it in Chromium, Firefox and WebKit from file:// and from the sub-path; the default workspace is unchanged."
   - "At 1536x1024 the sidebar is open and collapses to icons, and the choice persists; at 390x844 it is a drawer behind the hamburger with a backdrop, and nothing scrolls sideways."
   - "navigation.cjs, layout.cjs and the rest of npm run test:browser pass with selectors moved only where a hook moved; the accessibility checks of ui-flowbite-pro.cjs pass in both themes."
+  - "The sidebar collapse, hover-expand, mobile drawer and theme toggle are OSCILLA's own Alpine code; tests/unit/ui-flowbite-pro.test.mjs (clause d, the Pro fingerprints and markers) passes on the tree."
   - "The visual references the shell changes are updated through the visual gate with the reason; the ratchet baseline's debt is lower (the surfaces migrated move from surfaces.pending to surfaces.migrated and the primitive uses removed leave the counts); dist's size is stated and within BUDGET."
 validation:
   - "node tests/browser/ui-flowbite-pro.cjs"
