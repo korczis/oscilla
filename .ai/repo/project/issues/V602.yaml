@@ -35,7 +35,7 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-18
-updated_at: 2026-10-28T13:29:28Z
+updated_at: 2026-10-28T16:09:26Z
 started_at: 2026-10-21T00:17:35Z
 started_event: sha256:cd7a327397be0e4dedb624f46d3792689e7a98130a46475b6f97274fff86c600
 verified_at: 2026-10-21T00:33:04Z
@@ -50,3 +50,9 @@ evidence:
     artifact: "925b5fc"
     commit: 925b5fc774f1c7b664fbd94dc1719dfad2d5c7b4
     recorded_at: 2026-10-21T00:33:01Z
+  - covers: verified
+    type: ci
+    command: "node scripts/review-verdict.mjs --pr 233 --head 5e7ff1f --base-branch 5e7ff1f^1"
+    result: "review-verdict: PR 233, none of the changed paths is guarded; no verdict needed (the base program at the merge 5e7ff1f of PR #233)."
+    commit: dcb28f29686156c586e32eff54225aa079c14be7
+    recorded_at: 2026-10-28T16:09:26Z

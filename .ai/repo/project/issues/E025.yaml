@@ -22,7 +22,7 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-19
-updated_at: 2026-10-28T13:29:17Z
+updated_at: 2026-10-28T16:09:20Z
 started_at: 2026-10-21T00:15:04Z
 started_event: sha256:5c44fee298700ae2d927cd096ab24f2065f5de58d161aed1ee344794b4f14aac
 verified_at: 2026-10-21T00:29:19Z
@@ -37,3 +37,10 @@ evidence:
     artifact: "commit:a9e60fc"
     commit: a9e60fcd1403bde4d590f01de9c3c1ccdc04de8c
     recorded_at: 2026-10-21T00:29:12Z
+  - covers: verified
+    type: manual
+    command: "cat .ai/repo/reviews/232.yaml"
+    result: "The review verdict for PR #232, which landed E025: .ai/repo/reviews/232.yaml (verdict: merge), judged by the base program in that PR's review-verdict job."
+    artifact: ".ai/repo/reviews/232.yaml"
+    commit: dcb28f29686156c586e32eff54225aa079c14be7
+    recorded_at: 2026-10-28T16:09:20Z

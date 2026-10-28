@@ -27,7 +27,7 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-19
-updated_at: 2026-10-28T13:28:52Z
+updated_at: 2026-10-28T16:09:22Z
 started_at: 2026-10-19T12:55:19Z
 started_event: sha256:59c80bb762ccd387ae71ad45f4ebee942679a0a4de450dee0ebf4e4e43f47111
 verified_at: 2026-10-19T13:05:05Z
@@ -41,3 +41,9 @@ evidence:
     result: "MET at 1d10292 (test 84a8e14): plan-done-evidence.test.mjs 6/6 pass (real issues: E006, E009 corrected, R018 allowed with its reason; fixtures: no verdict evidence fails, the evidence plus an existing verdict file passes; a missing file, a non-verdict artifact, a wrong cover, an uncommitted file and evidence recorded before the verdict's first commit fail; the allowance only shrinks; first commit read from a fixture repository). Fail-first: fails on merge base 833192e (assertion: E006 and E009 name no verdict), passes on the head. E006 names reviews/210.yaml and CI run 39241368944; E009 names reviews/208.yaml and CI run 39155181453 (step summary with the four numbers), its scope names .ai/repo/ci/gates.yaml. plan validate 0 failures (5 warnings). npm test 3127/3127 on the third whole run; the first two failed only v31-studio-performance build 1606 ms > 1000 ms at load 25-51 on 18 cores (it passes alone). tests/README.md one appended row"
     commit: 1d10292744762cfd2d62913bf4f3c4d4d1f7ae42
     recorded_at: 2026-10-19T13:05:02Z
+  - covers: verified
+    type: ci
+    command: "node scripts/review-verdict.mjs --pr 224 --head b5c373d --base-branch b5c373d^1"
+    result: "review-verdict: PR 224, none of the changed paths is guarded; no verdict needed (the base program at the merge b5c373d of PR #224)."
+    commit: dcb28f29686156c586e32eff54225aa079c14be7
+    recorded_at: 2026-10-28T16:09:22Z
