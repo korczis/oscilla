@@ -1,0 +1,34 @@
+id: U003
+milestone: M054
+serves:
+  - "ui-current#empty-states-lead-somewhere"
+title: "Empty Experiments, Findings and Studio patches offer a real example and the next step"
+slug: empty-experiments-findings-and-studio-patches-offer-a-real-e
+priority: p2
+profile: implementation
+objective: "Resolves docs/ui-audit.md A03, A04. When the store is empty, Experiments offers 'Run the loopback example', which runs the TEST CONTEXT loopback measurement through MEASURE and saves it labelled TEST CONTEXT, then opens it; Findings offers to record one from that experiment; the Studio's Open dialog with no saved patch offers the templates. Nothing is pre-seeded and nothing claims to be a real room measurement. A browser check in tests/browser/ui-current.cjs drives each empty state from a clean profile."
+why: "Audit 2026-10-28: Experiments with an empty store is a half-empty screen that says only that nothing is saved."
+scope:
+  - "src/js/ui/experiments.js"
+  - "src/js/ui/findings.js"
+  - "src/js/ui/measure-experiment.js"
+  - "src/js/ui/studio"
+  - "src/index.html"
+  - "tests/browser/ui-current.cjs"
+  - "tests/unit"
+  - "tests/README.md"
+  - "dist"
+depends_on:
+  - "U001"
+  - "U005"
+acceptance_criteria:
+  - "From a clean profile each empty state offers its example and the example is labelled TEST CONTEXT where it measures."
+  - "No stored record exists before the person acts (project.no-fake-science)."
+  - "The pull request carries a review verdict (experiments and findings are guarded)."
+validation:
+  - "node tests/browser/ui-current.cjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-10-28
+updated_at: 2026-10-28
