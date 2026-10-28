@@ -306,8 +306,9 @@ export function decisionRowProblems(row, readFile, expected = {}) {
   const [, file, symbol] = where;
   const problems = [];
   const text = readFile(file);
-  if (symbol && !new RegExp(`\\b(export\\s+)?(const|let|function|class)\\s+${symbol}\\b`)
-    .test(text)) {
+  // A declaration starts its line: `// const X` and `'const X'` mid-line are not one.
+  if (symbol && !new RegExp(String.raw`^[ \t]*(export\s+)?(async\s+)?(const|let|function\*?|class)`
+    + String.raw`\s+${symbol}\b`, 'm').test(text)) {
     problems.push(`row ${name}: ${file} declares no ${symbol}`);
   }
   if (!text.includes(name)) problems.push(`row ${name}: ${file} does not name ${name}`);
@@ -369,6 +370,12 @@ test('§19 mutation: a wrong value, an undeclared symbol and a file:line citatio
     assert.match(decisionRowProblems(row.replace('#ZOOM_MIN`', '#clampZoomX`'),
       () => 'export const ZOOM_MIN = 0.25; // see clampZoomX', expected)[0],
     /declares no clampZoomX/);
+    // Nor is one in a comment or a string.
+    for (const text of ['export const ZOOM_MIN = 0.25;\n// const ZOOM_X = 1;',
+      "export const ZOOM_MIN = 0.25; const s = 'const ZOOM_X = 1';"]) {
+      assert.match(decisionRowProblems(row.replace('#ZOOM_MIN`', '#ZOOM_X`'), () => text,
+        expected)[0], /declares no ZOOM_X/, text);
+    }
   });
 
 test('§20 every Studio ADR with open questions carries a dated resolution note after them', () => {
