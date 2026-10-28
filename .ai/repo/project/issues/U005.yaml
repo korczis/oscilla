@@ -6,7 +6,7 @@ title: "Analyzer and Compare fill their workspace and lead to MEASURE"
 slug: analyzer-and-compare-fill-their-workspace-and-lead-to-measur
 priority: p2
 profile: implementation
-objective: "Lay out the Analyzer and Compare workspaces so their panels use the viewport at 1536x1024 and stack at 390x844, and link each analysis to its calibrated counterpart: the live spectrum to MEASURE's RTA, Compare to comparing saved experiments. Introduce tests/browser/ui-current.cjs (through tests/browser/lib/suite.cjs, bounded waits) with the definition of an empty area: a fixed grid of points sampled with elementFromPoint, a point empty when it hits only the workspace container or the page background; U003, U004, U006, U007 and U008 extend this suite."
+objective: "Resolves docs/ui-audit.md A05, A07, A09. Lay out the Analyzer and Compare workspaces so their panels use the viewport at 1536x1024 and stack at 390x844, and link each analysis to its calibrated counterpart: the live spectrum to MEASURE's RTA, Compare to comparing saved experiments. Introduce tests/browser/ui-current.cjs (through tests/browser/lib/suite.cjs, bounded waits) with the definition of an empty area: a fixed grid of points sampled with elementFromPoint, a point empty when it hits only the workspace container or the page background; U003, U004, U006, U007 and U008 extend this suite."
 why: "Audit 2026-10-28: Compare leaves the lower half of the viewport empty; neither view says where the trustworthy measurement lives."
 scope:
   - "src/index.html"

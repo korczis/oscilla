@@ -6,7 +6,7 @@ title: "Empty Experiments, Findings and Studio patches offer a real example and 
 slug: empty-experiments-findings-and-studio-patches-offer-a-real-e
 priority: p2
 profile: implementation
-objective: "When the store is empty, Experiments offers 'Run the loopback example', which runs the TEST CONTEXT loopback measurement through MEASURE and saves it labelled TEST CONTEXT, then opens it; Findings offers to record one from that experiment; the Studio's Open dialog with no saved patch offers the templates. Nothing is pre-seeded and nothing claims to be a real room measurement. A browser check in tests/browser/ui-current.cjs drives each empty state from a clean profile."
+objective: "Resolves docs/ui-audit.md A03, A04. When the store is empty, Experiments offers 'Run the loopback example', which runs the TEST CONTEXT loopback measurement through MEASURE and saves it labelled TEST CONTEXT, then opens it; Findings offers to record one from that experiment; the Studio's Open dialog with no saved patch offers the templates. Nothing is pre-seeded and nothing claims to be a real room measurement. A browser check in tests/browser/ui-current.cjs drives each empty state from a clean profile."
 why: "Audit 2026-10-28: Experiments with an empty store is a half-empty screen that says only that nothing is saved."
 scope:
   - "src/js/ui/experiments.js"

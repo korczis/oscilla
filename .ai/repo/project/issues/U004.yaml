@@ -6,7 +6,7 @@ title: "Filter Lab filters the sound you hear and leads to the Studio filter"
 slug: filter-lab-filters-the-sound-you-hear-and-leads-to-the-studi
 priority: p2
 profile: implementation
-objective: "Filter Lab today draws one response curve over most of an empty workspace. Show the current source's spectrum before and after the filter beside the response, let the person play the source through it, and offer 'Open in Studio' that creates the same filter node in a Studio graph. Reuse the existing analysis and Studio actions; no second filter implementation."
+objective: "Resolves docs/ui-audit.md A06. Filter Lab today draws one response curve over most of an empty workspace. Show the current source's spectrum before and after the filter beside the response, let the person play the source through it, and offer 'Open in Studio' that creates the same filter node in a Studio graph. Reuse the existing analysis and Studio actions; no second filter implementation."
 why: "Audit 2026-10-28: Filter Lab is an isolated panel and leaves most of its viewport empty."
 scope:
   - "src/js/labs"
