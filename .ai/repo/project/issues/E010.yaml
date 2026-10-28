@@ -26,6 +26,16 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-18
-updated_at: 2026-10-28T13:36:41Z
+updated_at: 2026-10-28T13:43:08Z
 started_at: 2026-10-28T13:36:41Z
 started_event: sha256:5eb7d5484e674500579f5689f882f8742007b63eb3cc12e7d6d7da9452d3e347
+verified_at: 2026-10-28T13:43:03Z
+verified_event: sha256:2f19434d1d8b8b0e8cb632d11f8756b9509e3a6dc441b82d6f78d348cc6690cd
+evidence:
+  - covers: verified
+    type: test
+    command: "node --test tests/unit/flake-ledger.test.mjs; node --test tests/unit/ci-gates-model.test.mjs tests/unit/ci-workflows.test.mjs; node scripts/ci-workflow-rules.mjs; npm run verify (pinned majordomus 1.0.0-alpha.1)"
+    result: "At f492bcd: flake-ledger 12/12 pass (a first attempt failing a suite and a second passing it is one entry with both outcomes, browser and cause unclassified; a first attempt reads and writes nothing; a carried-over job, one still failing and the running gate are no entry; requests bounded and retried, an API that stays down refuses after 3 tries; the gate job runs the ledger only on a re-run, with actions: read, before its verdict). The test fails on the merge base: scripts/flake-ledger.mjs is absent on origin/main e272fac, so its import fails. ci-workflow-rules: project.ci-bounded holds; ci-gates-model and ci-workflows 63/63; npm run verify 3174/3174, doctor 0 failures. No change under tests/browser/lib; docs/CLAIMS.yaml and the intent untouched (E015 registers the claim)."
+    artifact: "scripts/flake-ledger.mjs"
+    commit: f492bcd1a03ae507b8c9a17d830e9088fe7537f6
+    recorded_at: 2026-10-28T13:43:08Z
