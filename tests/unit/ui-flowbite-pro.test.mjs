@@ -4,6 +4,13 @@
 // tests/unit/ui-flowbite-pro-baseline.json records the legacy interface (measure MEASURE), and
 // the tree must equal it exactly, so a migration lowers the record in the same change:
 //   (a) the record:
+//     inputs    what the build bundles (treeInputs): every tracked file under src (src/index.html
+//               read as markup, every .css file as a stylesheet, every other file as JavaScript
+//               text, whatever its extension), plus every file a relative import of one of them
+//               reaches, transitively, wherever it lives in the repository (JavaScript import,
+//               export ... from, import(), require(), new URL(); CSS @import, quoted or url(),
+//               with or without ./): a reached .css file is a stylesheet, any other a JavaScript
+//               text. Packages (bare specifiers, node_modules) are clause (c)'s.
 //     surfaces  the UI surfaces of src/index.html (HTML comments removed):
 //                 navbar   the element with role="banner"
 //                 sidebar  the element with aria-label="Workspace"
@@ -17,46 +24,57 @@
 //               sidebar drawer, #main-content, footer card, page gutter, card and modal
 //               content) AND the build compiles Tailwind with the flowbite plugin
 //               (buildCompilesFlowbite: the tailwindcss and flowbite packages, the plugin in
-//               the Tailwind entry or config, a build script that imports Tailwind) AND the
-//               committed dist/index.html defines a rule for every class of that set. Every
-//               other surface is pending. Until F001 lands that build, no surface is migrated.
+//               the Tailwind entry or config, a build script that imports Tailwind) AND every
+//               class of that set is a Pro class: the committed dist/index.html defines a rule
+//               for it and no legacy stylesheet has a selector naming it. Every other surface
+//               is pending. Until F001 lands that build, no surface is migrated.
 //     classes   every osc-* class token, each name counted apart (BEM variants, shell, view
 //               and domain-view classes included; a literal 'osc-' or `osc-x--${...}` prefix
 //               of a name built at run time counts as its own name): in src/index.html, the
 //               osc-* tokens of class attributes and of Alpine attributes (:..., x-bind:...,
 //               @..., x-on:..., x-...) other than the bound id references (:id, :for, :href,
-//               :name, :aria-*, x-ref); in every tracked file under src/js, whatever its
-//               extension, every osc-* token of the text, comments included. A token is not
-//               counted when it is an element id (a static id of src/index.html, a literal of
-//               :id, a literal assigned to id:, .id = or setAttribute('id', ...) in src/js) and
-//               never appears in a class position (a class attribute, :class, class: or
-//               className: keys, .className =, classList.*(...), setAttribute('class', ...),
-//               class="..." inside a string, or a .osc-* selector in src/js or the stylesheets).
-//     vocabulary  the other class tokens in class positions (class attributes, the literals of
-//               :class not compared with ===/!==, the literals of the JS class positions above):
-//               the legacy set, frozen. A class token outside it fails unless the build
-//               compiles Tailwind with the flowbite plugin and dist/index.html defines it.
-//     stylesheets  per tracked .css file under src (TAILWIND_ENTRY excepted): its selectors (each
+//               :name, :aria-*, x-ref); in every JavaScript text of the inputs, every osc-*
+//               token of the text, comments included. A token is not counted when it is an
+//               element id (a static id of src/index.html, a literal of :id, a literal assigned
+//               to id:, .id = or setAttribute('id', ...) in JavaScript) or a Studio node id
+//               (osc- and digits only, as 'osc-1') and never appears in a class position (a
+//               class attribute, :class, class: or className: keys, .className =,
+//               classList.*(...), setAttribute('class', ...), class="..." inside a string, or a
+//               .osc-* selector in JavaScript or the stylesheets).
+//     vocabulary  every other class token in a class position (class attributes, the literals
+//               of :class not compared with ===/!==, the literals of the JS class positions
+//               above), counted per token and per use, unless it is a Pro class (see surfaces):
+//               the legacy vocabulary. A token outside it fails, and a token in it may not be
+//               used more often than recorded, so a legacy class renamed to another legacy
+//               token, or a legacy token reused by new markup, raises a count. A token a legacy
+//               stylesheet names stays legacy whatever dist defines, so removing its last
+//               legacy rule never turns it into a new class.
+//     stylesheets  per stylesheet of the inputs (TAILWIND_ENTRY excepted): its selectors (each
 //               comma-separated selector of a rule prelude that is not an at-rule) and its
 //               declarations (property: value inside a block), comments removed.
 //     inlineStyles  the style, :style and x-bind:style attributes of src/index.html.
-//     debt      pending surfaces + every counted osc-* class token + every legacy selector.
-//   Beside the record: TAILWIND_ENTRY holds no selector rule (only @import, @plugin, @source,
-//   @theme and other at-rules), and src/index.html holds no <style> element.
+//     debt      pending surfaces + every counted osc-* class token + every use of a legacy
+//               vocabulary token + every legacy selector.
+//   Beside the record: TAILWIND_ENTRY defines no ad-hoc CSS (no selector rule, @layer
+//   components and the like included, and no @utility: only @import, @plugin, @source, @theme
+//   and similar at-rules), no tailwind.config.* and no local plugin file it or the entry loads
+//   calls addComponents, addUtilities, matchComponents, matchUtilities or addBase, and
+//   src/index.html holds no <style> element.
 //   The record only shrinks: the working tree's record is judged against every committed
 //   version of it in its first-parent git history (git log --first-parent, git show), and no
-//   number may be above an earlier one of the same measure (debt, a class name, absent counts
-//   as 0, a stylesheet's selectors or declarations, the inline styles), no vocabulary token,
-//   stylesheet or pending surface may be one an earlier version did not list, a surface
-//   pending in an earlier version must still be pending or migrated (it never vanishes), a
-//   migrated one stays migrated, and the measure never goes back. The numbers of an earlier
-//   measure are not compared. Outside CI a missing history skips this check; in CI (with
-//   fetch-depth: 0) a git failure or an empty history fails it.
+//   number may be above an earlier one of the same measure (debt, a class name or a
+//   vocabulary token, absent counts as 0, a stylesheet's selectors or declarations, the
+//   inline styles), no vocabulary token, stylesheet or pending surface may be one an earlier
+//   version did not list (of any measure that lists them), a surface pending in an earlier
+//   version must still be pending or migrated (it never vanishes), a migrated one stays
+//   migrated, and the measure never goes back. The numbers of an earlier measure are not
+//   compared. Outside CI a missing history skips this check; in CI (with fetch-depth: 0) a
+//   git failure or an empty history fails it.
 //   (b) every surface the record lists as migrated exists and is migrated as defined above.
 //   (c) no other UI kit: no dependency, JavaScript import or CSS @import of a package of
 //       OTHER_UI_KITS; no CSS @import of a package (its exact name) outside
 //       ALLOWED_CSS_PACKAGES; no stylesheet beyond the recorded ones and TAILWIND_ENTRY; and no
-//       module of an ad-hoc component library (a path under src/ with a components, widgets,
+//       module of an ad-hoc component library (an input path with a components, widgets,
 //       ui-kit or design-system segment) beyond the recorded stylesheets.
 //   (d) no Flowbite Pro source file is tracked: no path with a segment named like a Pro
 //       package (PRO_PACKAGE_NAME) or a vendor/flowbite directory, no file whose fingerprint
@@ -64,15 +82,19 @@
 //       and no file carrying a marker of the Pro packages (PRO_MARKERS: their licence URL and
 //       repository names). OSCILLA is a public repository and a public Pages site.
 // What no check here decides (the rule's "What no check decides" lists it for the reviewer):
-// a non-osc class reached in src/js through a variable, a helper argument or a ternary branch
-// that is not a literal of a class position; styling set from src/js (el.style, style: keys,
-// injected <style> or insertRule); an osc-* class name that is also an element id and is never
-// in a class position; whether a surface on the Pro class set follows its Pro template in
-// substance; a markup surface that is neither a landmark, a section nor a dialog with an id
-// (its classes are still counted); a Pro file copied with edits (it escapes the fingerprint,
-// and only about 120 of the roughly 1,800 Pro files carry a marker) or inlined as a data: URI
-// inside another file, dist/index.html included; and a change of MEASURE itself, which resets
-// the numeric comparison with earlier versions and is a change of this test.
+// a non-osc class reached in JavaScript through a variable, a helper argument or a ternary
+// branch that is not a literal of a class position; an osc-* name assembled from parts none of
+// which holds "osc-" (['osc', 'btn'].join('-')); styling set from JavaScript (el.style, style:
+// keys, injected <style> or insertRule); an osc-* class name that is also an element id and is
+// never in a class position; new markup without classes that legacy descendant selectors
+// style; a legacy rule rewritten in place at the same counts; whether a surface on the Pro
+// class set follows its Pro template in substance; a markup surface that is neither a
+// landmark, a section nor a dialog with an id (its classes are still counted); a module the
+// build reaches other than by a relative import (an alias, a plugin, a package); a Pro file
+// copied with edits (it escapes the fingerprint, and only about 120 of the roughly 1,800 Pro
+// files carry a marker) or inlined as a data: URI inside another file, dist/index.html
+// included; and a change of MEASURE itself, which resets the numeric comparison with earlier
+// versions and is a change of this test.
 // Every clause has a fixture mutation beside the check on the real tree that makes it fail.
 //   node --test tests/unit/ui-flowbite-pro.test.mjs
 
@@ -91,9 +113,10 @@ const RULE_REL = '.ai/repo/rules/project/ui-uses-flowbite-pro.v1.md';
 const ADR_REL = '.ai/repo/adrs/0061-the-ui-is-built-on-flowbite-pro.md';
 export const TAILWIND_ENTRY = 'src/styles/tailwind.css';
 const DIST_REL = 'dist/index.html';
+const SRC_HTML = 'src/index.html';
 
 /** The version of what the record measures; the numbers of another measure are not compared. */
-export const MEASURE = 2;
+export const MEASURE = 3;
 
 /** The Flowbite Pro structure of each surface kind: alternatives, each a set of classes. */
 export const PRO_STRUCTURE = {
@@ -359,12 +382,18 @@ function splitSelectors(prelude) {
   return out.filter((s) => s.trim());
 }
 
-/** { selectors, declarations, classes } of a stylesheet, comments removed (see the header). */
+/**
+ * { selectors, declarations, classes, names, utilities } of a stylesheet, comments removed (see
+ * the header): classes are the osc-* class names of its selectors, names every class name of
+ * them, utilities its @utility rules.
+ */
 export function cssShape(text) {
   const t = text.replace(/\/\*[\s\S]*?\*\//g, '');
   let selectors = 0;
   let declarations = 0;
+  let utilities = 0;
   const classes = new Set();
+  const names = new Set();
   let buf = '';
   let paren = 0;
   let quote = null;
@@ -381,9 +410,11 @@ export function cssShape(text) {
     else if (c === ')') paren = Math.max(0, paren - 1);
     if (paren === 0 && c === '{') {
       const prelude = buf.trim();
+      if (/^@utility\b/.test(prelude)) utilities += 1;
       if (prelude && !prelude.startsWith('@')) {
         selectors += splitSelectors(prelude).length;
         for (const [, name] of prelude.matchAll(/\.(osc-[\w-]*)/g)) classes.add(name);
+        for (const [, name] of prelude.matchAll(/\.(-?[_a-zA-Z][\w-]*)/g)) names.add(name);
       }
       depth += 1;
       buf = '';
@@ -394,7 +425,7 @@ export function cssShape(text) {
       buf = '';
     } else buf += c;
   }
-  return { selectors, declarations, classes };
+  return { selectors, declarations, classes, names, utilities };
 }
 
 // ---------------------------------------------------------------- the build
@@ -426,6 +457,13 @@ export function buildCompilesFlowbite({ pkg, files }) {
     && compiler.test(stripJsComments(text)));
 }
 
+/** The calls of Tailwind's plugin API that define CSS, in a config or a local plugin file. */
+const PLUGIN_CSS_API = new RegExp(String.raw`\b(addComponents|addUtilities|matchComponents|`
+  + String.raw`matchUtilities|addBase)\s*\(`, 'g');
+
+/** The ad-hoc CSS a tailwind.config.* or a local plugin file defines: its plugin API calls. */
+export const pluginApiCalls = (text) => (stripJsComments(text).match(PLUGIN_CSS_API) || []).length;
+
 /** class -> whether the <style> of a built page defines a rule for it (Tailwind escapes). */
 export function definedClasses(distHtml) {
   const css = [...distHtml.matchAll(/<style[^>]*>([\s\S]*?)<\/style>/gi)].map((m) => m[1])
@@ -441,24 +479,104 @@ export function definedClasses(distHtml) {
   };
 }
 
-// ---------------------------------------------------------------- measuring a tree
+// ---------------------------------------------------------------- what the build bundles
 
-/** The files whose text the class tokens are read from: every path under src/js. */
-export const uiSourceFiles = (paths) => paths.filter((p) => p.startsWith('src/js/'));
+const JS_IMPORT = new RegExp(String.raw`(?:\bfrom\s*|\bimport\s*\(?\s*|\brequire\s*\(\s*|`
+  + String.raw`\bnew\s+URL\s*\(\s*)(['"${'`'}])([^'"${'`'}\n]+)\1`, 'g');
+const CSS_IMPORT_ANY = /@(?:import|plugin|config)\s+(?:url\(\s*)?(['"]?)([^'")\s;]+)\1/g;
+const JS_EXTENSIONS = ['', '.js', '.mjs', '.cjs', '.ts', '.jsx', '.tsx', '.json', '/index.js',
+  '/index.mjs'];
 
 /**
- * What the rule measures on a tree: { html, js: [text], css: { path: text }, build }, where
- * build is { compiles, defines(class) } (NO_BUILD without Tailwind).
+ * The repository path a relative specifier of `from` names, or null: a package (bare, with a
+ * scheme, absolute or under node_modules) or a path outside the repository is not one. In a
+ * stylesheet, a specifier without ./ is relative too, as the CSS bundler resolves it.
  */
-export function measure({ html, js, css = {}, build = NO_BUILD }) {
+export function resolveRelative(from, spec, exists, css = false) {
+  const clean = spec.replace(/[?#].*$/, '');
+  if (!clean || /^[a-z][\w+.-]*:/i.test(clean) || clean.startsWith('/')) return null;
+  if (!css && !/^\.\.?\//.test(clean)) return null;
+  const joined = path.posix.normalize(path.posix.join(path.posix.dirname(from), clean));
+  if (joined.startsWith('../') || joined === '..') return null;
+  if (/(^|\/)node_modules\//.test(joined)) return null;
+  for (const ext of css ? [''] : JS_EXTENSIONS) {
+    if (exists(joined + ext)) return joined + ext;
+  }
+  return null;
+}
+
+/** The repository paths the relative imports of one file reach (see the header). */
+export function importsOf(file, text, exists) {
+  const css = file.endsWith('.css');
+  const specs = css
+    ? [...text.replace(/\/\*[\s\S]*?\*\//g, '').matchAll(CSS_IMPORT_ANY)].map((m) => m[2])
+    : [...text.matchAll(JS_IMPORT)].map((m) => m[2]);
+  return specs.map((s) => resolveRelative(file, s, exists, css)).filter(Boolean);
+}
+
+/**
+ * What the build bundles: { html, js: [path], css: [path] } from the tracked paths under src,
+ * then every file their relative imports reach, transitively (see the header).
+ * `read(path)` -> text, `exists(path)` -> whether that file exists.
+ */
+export function bundledInputs({ paths, read: readFile, exists }) {
+  const seen = new Set();
+  const queue = paths.filter((p) => p.startsWith('src/') && exists(p));
+  while (queue.length) {
+    const p = queue.shift();
+    if (seen.has(p)) continue;
+    seen.add(p);
+    if (p === SRC_HTML) continue;
+    for (const next of importsOf(p, readFile(p), exists)) if (!seen.has(next)) queue.push(next);
+  }
+  const all = [...seen].sort();
+  return { html: seen.has(SRC_HTML) ? SRC_HTML : null,
+    js: all.filter((p) => p !== SRC_HTML && !p.endsWith('.css')),
+    css: all.filter((p) => p.endsWith('.css')) };
+}
+
+/**
+ * The Tailwind configuration files and the local plugin files they and TAILWIND_ENTRY load
+ * (relative imports, @plugin and @config, transitively): { path: text }.
+ */
+export function tailwindFiles({ paths, read: readFile, exists }) {
+  const out = {};
+  const queue = paths.filter((p) => TAILWIND_CONFIG.test(p) && exists(p));
+  if (exists(TAILWIND_ENTRY)) {
+    queue.push(...importsOf(TAILWIND_ENTRY, readFile(TAILWIND_ENTRY), exists)
+      .filter((p) => !p.endsWith('.css')));
+  }
+  while (queue.length) {
+    const p = queue.shift();
+    if (Object.hasOwn(out, p)) continue;
+    out[p] = readFile(p);
+    queue.push(...importsOf(p, out[p], exists).filter((n) => !n.endsWith('.css')));
+  }
+  return out;
+}
+
+// ---------------------------------------------------------------- measuring a tree
+
+const add = (counts, name, n = 1) => { counts[name] = (counts[name] || 0) + n; };
+const sum = (o) => Object.values(o).reduce((a, b) => a + b, 0);
+const sorted = (o) => Object.fromEntries(Object.entries(o).sort(([a], [b]) => a.localeCompare(b)));
+const STUDIO_NODE_ID = /^osc-\d+$/;
+
+/**
+ * What the rule measures on a tree: { html, js: [text], css: { path: text }, build, tailwind },
+ * where build is { compiles, defines(class) } (NO_BUILD without Tailwind) and tailwind is
+ * { path: text } of the Tailwind configuration and local plugin files (tailwindFiles).
+ */
+export function measure({ html, js, css = {}, build = NO_BUILD, tailwind = {} }) {
   const tags = openingTags(stripComments(html));
   const surfaces = [];
   const classPositions = new Set();
   const ids = new Set();
-  const vocabulary = new Set();
+  const uses = {};
   const counted = [];
   let inlineStyles = 0;
   let styleElements = 0;
+  const token = (v) => (v.startsWith('osc-') ? classPositions.add(v) : add(uses, v));
   for (const { tag, attrs } of tags) {
     if (tag === 'style') styleElements += 1;
     const s = surfaceOf(tag, attrs);
@@ -476,10 +594,7 @@ export function measure({ html, js, css = {}, build = NO_BUILD }) {
       else if (isBound(name) && bound(name) === 'id') {
         for (const v of tokensOf(literalsIn(value))) if (v.startsWith('osc-')) ids.add(v);
       }
-      for (const v of tokens) {
-        if (v.startsWith('osc-')) classPositions.add(v);
-        else vocabulary.add(v);
-      }
+      tokens.forEach(token);
       if (name === 'class' || isClassBinding(name)) {
         counted.push(...(value.match(OSC) || []).map((v) => [v, true]));
       } else if (isExpression(name)) {
@@ -488,37 +603,48 @@ export function measure({ html, js, css = {}, build = NO_BUILD }) {
     }
   }
   for (const text of js) {
-    for (const v of jsClassTokens(text)) {
-      if (v.startsWith('osc-')) classPositions.add(v);
-      else vocabulary.add(v);
-    }
+    jsClassTokens(text).forEach(token);
     for (const [, v] of text.matchAll(OSC_SELECTOR)) classPositions.add(v);
     for (const v of jsIds(text)) ids.add(v);
     counted.push(...(text.match(OSC) || []).map((v) => [v, false]));
   }
   const stylesheets = {};
-  let tailwindSelectors = 0;
+  const legacyNames = new Set();
+  const tailwindAdHoc = {};
   for (const [file, text] of Object.entries(css).sort(([a], [b]) => a.localeCompare(b))) {
     const shape = cssShape(text);
     for (const c of shape.classes) classPositions.add(c);
-    if (file === TAILWIND_ENTRY) tailwindSelectors = shape.selectors;
-    else stylesheets[file] = { selectors: shape.selectors, declarations: shape.declarations };
+    if (file === TAILWIND_ENTRY) {
+      if (shape.selectors + shape.utilities) {
+        tailwindAdHoc[file] = shape.selectors + shape.utilities;
+      }
+    } else {
+      stylesheets[file] = { selectors: shape.selectors, declarations: shape.declarations };
+      for (const c of shape.names) legacyNames.add(c);
+    }
+  }
+  for (const [file, text] of Object.entries(tailwind)) {
+    const n = pluginApiCalls(text);
+    if (n) tailwindAdHoc[file] = (tailwindAdHoc[file] || 0) + n;
   }
   const classes = {};
   for (const [v, inClassAttr] of counted) {
-    if (!inClassAttr && ids.has(v) && !classPositions.has(v)) continue;
-    classes[v] = (classes[v] || 0) + 1;
+    if (!inClassAttr && (ids.has(v) || STUDIO_NODE_ID.test(v)) && !classPositions.has(v)) continue;
+    add(classes, v);
   }
-  const sortedClasses = Object.fromEntries(Object.entries(classes)
-    .sort(([a], [b]) => a.localeCompare(b)));
-  const pending = surfaces.filter((s) => !onPro(s, build)).map((s) => s.key).sort();
-  const migrated = surfaces.filter((s) => onPro(s, build)).map((s) => s.key).sort();
-  const sum = (o) => Object.values(o).reduce((a, b) => a + b, 0);
-  const debt = pending.length + sum(classes)
+  // A Pro class: the build compiles Tailwind, dist defines it and no legacy stylesheet does.
+  const pro = { compiles: build.compiles,
+    defines: (c) => build.compiles && build.defines(c) && !legacyNames.has(c) };
+  const pending = surfaces.filter((s) => !onPro(s, pro)).map((s) => s.key).sort();
+  const migrated = surfaces.filter((s) => onPro(s, pro)).map((s) => s.key).sort();
+  const vocabulary = sorted(Object.fromEntries(Object.entries(uses)
+    .filter(([v]) => !pro.defines(v))));
+  const proClasses = sorted(Object.fromEntries(Object.entries(uses)
+    .filter(([v]) => pro.defines(v))));
+  const debt = pending.length + sum(classes) + sum(vocabulary)
     + sum(Object.fromEntries(Object.entries(stylesheets).map(([f, s]) => [f, s.selectors])));
-  const legacy = [...vocabulary].filter((v) => !(build.compiles && build.defines(v))).sort();
-  return { surfaces, pending, migrated, classes: sortedClasses, vocabulary: legacy,
-    stylesheets, tailwindSelectors, inlineStyles, styleElements, debt, build };
+  return { surfaces, pending, migrated, classes: sorted(classes), vocabulary, proClasses,
+    stylesheets, tailwindAdHoc, inlineStyles, styleElements, debt, build: pro };
 }
 
 // ---------------------------------------------------------------- (a), (b): the record
@@ -538,6 +664,13 @@ function whyNotMigrated(measured, key) {
   if (!measured.build.compiles) return `${NO_COMPILE}, so its Pro classes do nothing`;
   return `the compiled CSS of ${DIST_REL} defines none of ${set
     .filter((c) => !measured.build.defines(c)).join(' ')}`;
+}
+
+/** token -> recorded uses (null when a record of an earlier measure lists the token only). */
+export function vocabularyOf(record) {
+  const v = record.vocabulary;
+  if (Array.isArray(v)) return new Map(v.map((name) => [name, null]));
+  return new Map(Object.entries(v || {}));
 }
 
 /** Every difference between the measured tree and the record. */
@@ -596,16 +729,29 @@ export function recordProblems(measured, baseline) {
         + 'same change');
     }
   }
-  const vocabulary = new Set(baseline.vocabulary || []);
-  for (const v of measured.vocabulary) {
-    if (vocabulary.has(v)) continue;
-    problems.push(`${v}: a class outside the legacy vocabulary of the record, and ${measured.build
-      .compiles ? `the compiled CSS of ${DIST_REL} does not define it`
-      : `${NO_COMPILE}, so no new class does anything: build from Flowbite Pro once it does`}`);
-  }
-  for (const v of vocabulary) {
-    if (!measured.vocabulary.includes(v)) {
-      problems.push(`${v}: in the recorded vocabulary, but no longer used: remove it`);
+  const words = vocabularyOf(baseline);
+  for (const v of [...new Set([...Object.keys(measured.vocabulary), ...words.keys()])].sort()) {
+    const n = measured.vocabulary[v] || 0;
+    const w = words.get(v);
+    if (w === undefined) {
+      problems.push(`${v}: a class outside the legacy vocabulary of the record, and ${measured
+        .build.compiles ? `it is not a Pro class (the compiled CSS of ${DIST_REL} does not `
+          + 'define it, or a legacy stylesheet does)'
+        : `${NO_COMPILE}, so no new class does anything: build from Flowbite Pro once it does`}`);
+    } else if (w === null) {
+      continue;
+    } else if (w === 0) {
+      problems.push(`${v}: recorded with 0 uses: remove it from the vocabulary`);
+    } else if (n === 0) {
+      problems.push(`${v}: in the recorded vocabulary, but ${measured.proClasses[v]
+        ? 'now a Pro class (dist defines it and no legacy stylesheet does)'
+        : 'no longer used'}: remove it`);
+    } else if (n > w) {
+      problems.push(`${v}: ${n} uses, above the recorded ${w}: a legacy class token is not `
+        + 'reused or renamed into; use the Flowbite Pro classes instead');
+    } else if (n < w) {
+      problems.push(`${v}: ${n} uses, below the recorded ${w}: lower the record in the same `
+        + 'change');
     }
   }
   const sheets = baseline.stylesheets || {};
@@ -631,10 +777,14 @@ export function recordProblems(measured, baseline) {
       problems.push(`${f}: listed, but not a stylesheet: remove it`);
     }
   }
-  if (measured.tailwindSelectors > 0) {
-    problems.push(`${TAILWIND_ENTRY}: ${measured.tailwindSelectors} selector rule(s); the `
-      + 'Tailwind entry holds only @import, @plugin, @source, @theme and other at-rules: style '
-      + 'with Tailwind and Flowbite Pro classes');
+  for (const [file, n] of Object.entries(measured.tailwindAdHoc)) {
+    problems.push(file === TAILWIND_ENTRY
+      ? `${TAILWIND_ENTRY}: ${n} selector rule(s) or @utility rule(s); the Tailwind entry holds `
+        + 'only @import, @plugin, @source, @theme and other at-rules: style with Tailwind and '
+        + 'Flowbite Pro classes'
+      : `${file}: ${n} call(s) of addComponents, addUtilities, matchComponents, matchUtilities `
+        + 'or addBase: ad-hoc CSS in the Tailwind configuration; style with Tailwind and '
+        + 'Flowbite Pro classes');
   }
   if (measured.styleElements > 0) {
     problems.push(`src/index.html: a <style> element (${measured.styleElements}); style with `
@@ -665,6 +815,7 @@ export function historyProblems(current, history) {
   const curM = current.measure ?? 1;
   const curPending = new Set(current.surfaces?.pending || []);
   const curMigrated = new Set(current.surfaces?.migrated || []);
+  const curWords = vocabularyOf(current);
   for (const { sha, baseline: then } of history) {
     const thenM = then.measure ?? 1;
     if (curM < thenM) {
@@ -687,6 +838,12 @@ export function historyProblems(current, history) {
     for (const f of sheetNames(current)) {
       if (!sheets.has(f)) problems.push(`${f}: a legacy stylesheet not listed at ${sha}`);
     }
+    const words = vocabularyOf(then);
+    if (then.vocabulary !== undefined) {
+      for (const v of curWords.keys()) {
+        if (!words.has(v)) problems.push(`${v}: a class not in the vocabulary at ${sha}`);
+      }
+    }
     if (curM !== thenM) continue;
     if (current.debt > then.debt) {
       problems.push(`debt ${current.debt} is above ${then.debt} at ${sha}`);
@@ -695,9 +852,11 @@ export function historyProblems(current, history) {
       const w = then.classes?.[name] || 0;
       if (n > w) problems.push(`${name}: ${n} occurrences, above ${w} at ${sha}`);
     }
-    const vocab = new Set(then.vocabulary || []);
-    for (const v of current.vocabulary || []) {
-      if (!vocab.has(v)) problems.push(`${v}: a class not in the vocabulary at ${sha}`);
+    for (const [v, n] of curWords) {
+      const w = words.get(v);
+      if (n !== null && w !== null && w !== undefined && n > w) {
+        problems.push(`${v}: ${n} uses, above ${w} at ${sha}`);
+      }
     }
     for (const [f, s] of Object.entries(current.stylesheets || {})) {
       const w = then.stylesheets?.[f];
@@ -823,8 +982,14 @@ function tracked(...paths) {
 }
 
 const readBaseline = () => JSON.parse(read(BASELINE_REL));
-const jsFiles = () => uiSourceFiles(tracked('src/js'));
-const stylesheets = () => tracked('src').filter((f) => f.endsWith('.css'));
+const isFile = (rel) => {
+  const full = path.join(ROOT, rel);
+  return existsSync(full) && statSync(full).isFile();
+};
+const repo = () => ({ paths: tracked(), read, exists: isFile });
+
+/** What the build bundles in this tree (see bundledInputs). */
+export const treeInputs = () => bundledInputs(repo());
 
 function treeBuild() {
   const pkg = JSON.parse(read('package.json'));
@@ -838,8 +1003,12 @@ function treeBuild() {
     ? read(DIST_REL) : '') };
 }
 
-const treeMeasure = () => measure({ html: read('src/index.html'), js: jsFiles().map(read),
-  css: Object.fromEntries(stylesheets().map((f) => [f, read(f)])), build: treeBuild() });
+/** The measure of this tree (exported so a tool can write the record from it). */
+export function treeMeasure(inputs = treeInputs()) {
+  return measure({ html: read(SRC_HTML), js: inputs.js.map(read),
+    css: Object.fromEntries(inputs.css.map((f) => [f, read(f)])), build: treeBuild(),
+    tailwind: tailwindFiles(repo()) });
+}
 
 test('the rule and the ADR exist, name this test and state what no check decides', () => {
   const rule = read(RULE_REL);
@@ -855,19 +1024,24 @@ test('the rule and the ADR exist, name this test and state what no check decides
 });
 
 test('(a) the tree holds exactly the record, and (b) every migrated surface is on Pro', (t) => {
-  const measured = treeMeasure();
+  const inputs = treeInputs();
+  const measured = treeMeasure(inputs);
   assert.ok(measured.surfaces.length > 50, `surfaces found (${measured.surfaces.length})`);
   for (const kind of Object.keys(PRO_STRUCTURE)) {
     assert.ok(measured.surfaces.some((s) => s.kind === kind), `a ${kind} surface is found`);
   }
-  assert.ok(jsFiles().length > 50, 'the modules of src/js are read');
-  assert.ok(stylesheets().length > 5, 'the stylesheets are read');
-  const tokens = Object.values(measured.classes).reduce((a, b) => a + b, 0);
+  assert.ok(inputs.js.filter((f) => f.startsWith('src/js/')).length > 50,
+    'the modules of src/js are read');
+  assert.ok(inputs.css.length > 5, 'the stylesheets are read');
+  const tokens = sum(measured.classes);
+  const words = sum(measured.vocabulary);
   t.diagnostic(`debt ${measured.debt}: ${measured.pending.length} of `
     + `${measured.surfaces.length} surfaces not on Flowbite Pro, ${tokens} osc-* class tokens `
-    + `(${Object.keys(measured.classes).length} names), `
-    + `${measured.debt - measured.pending.length - tokens} legacy selectors; build compiles `
-    + `Tailwind with flowbite: ${measured.build.compiles}`);
+    + `(${Object.keys(measured.classes).length} names), ${words} uses of `
+    + `${Object.keys(measured.vocabulary).length} legacy vocabulary tokens, `
+    + `${measured.debt - measured.pending.length - tokens - words} legacy selectors; `
+    + `${inputs.js.length} JavaScript and ${inputs.css.length} stylesheet inputs; build `
+    + `compiles Tailwind with flowbite: ${measured.build.compiles}`);
   const problems = recordProblems(measured, readBaseline());
   assert.deepEqual(problems, [], `the Flowbite Pro record (${BASELINE_REL}):\n  `
     + problems.join('\n  '));
@@ -912,10 +1086,12 @@ test('(a) the record only shrinks: it rises above no committed version of itself
 });
 
 test('(c) no other UI kit, no foreign stylesheet import, no ad-hoc component library', () => {
-  const js = Object.fromEntries(jsFiles().map((f) => [f, read(f)]));
-  const css = Object.fromEntries(stylesheets().map((f) => [f, read(f)]));
+  const inputs = treeInputs();
+  const js = Object.fromEntries(inputs.js.map((f) => [f, read(f)]));
+  const css = Object.fromEntries(inputs.css.map((f) => [f, read(f)]));
   const problems = kitProblems({ pkg: JSON.parse(read('package.json')), js, css,
-    paths: tracked('src'), legacyStylesheets: Object.keys(readBaseline().stylesheets) });
+    paths: [...new Set([...tracked('src'), ...inputs.js, ...inputs.css])].sort(),
+    legacyStylesheets: Object.keys(readBaseline().stylesheets) });
   assert.deepEqual(problems, [], problems.join('\n'));
 });
 
@@ -984,12 +1160,13 @@ test('fixture: surfaces, class tokens, vocabulary, CSS and the debt as the heade
     assert.equal(m.classes['osc-only-id'], undefined, 'an id that is never a class is not one');
     assert.equal(m.classes['osc-dlg-a'], undefined, 'an id referenced from an expression');
     assert.equal(m.classes['osc-panel-a-title'], undefined);
-    assert.deepEqual(m.vocabulary, ['is-', 'is-active', 'is-on'],
+    assert.deepEqual(m.vocabulary, { 'is-': 1, 'is-active': 1, 'is-on': 1 },
       "'linear' is compared, not a class");
     assert.deepEqual(m.stylesheets, { 'src/styles/a.css': { selectors: 4, declarations: 5 } });
     assert.equal(m.inlineStyles, 1);
-    const tokens = Object.values(m.classes).reduce((a, b) => a + b, 0);
-    assert.equal(m.debt, 8 + tokens + 4);
+    const tokens = sum(m.classes);
+    assert.equal(m.debt, 8 + tokens + 3 + 4,
+      'pending + osc-* tokens + vocabulary uses + selectors');
     assert.deepEqual(recordProblems(m, fixRecord()), []);
   });
 
@@ -1042,10 +1219,17 @@ test('mutation M3: CSS appended to a legacy stylesheet, or rules in the Tailwind
       ['src/styles/a.css: 4 selectors, above 3 at a1']);
   });
 
+/** A repository of `files` ({ path: text }) of which `tracked` paths are tracked. */
+const fakeRepo = (files, tracked = Object.keys(files)) => ({ paths: tracked,
+  read: (p) => files[p], exists: (p) => Object.hasOwn(files, p) });
+
 test('mutation M4/M5: a class used from .mjs or built by concatenation is counted', () => {
-  assert.deepEqual(uiSourceFiles(['src/js/a.js', 'src/js/b.mjs', 'src/js/c.cjs', 'src/js/d.ts',
-    'src/js/e.jsx', 'src/js/f.json', 'src/styles/x.css', 'scripts/s.mjs']),
-  ['src/js/a.js', 'src/js/b.mjs', 'src/js/c.cjs', 'src/js/d.ts', 'src/js/e.jsx', 'src/js/f.json']);
+  const tree = fakeRepo(Object.fromEntries(['src/index.html', 'src/js/a.js', 'src/js/b.mjs',
+    'src/js/c.cjs', 'src/js/d.ts', 'src/js/f.json', 'src/extra/e.jsx', 'src/styles/x.css',
+    'scripts/s.mjs'].map((p) => [p, ''])));
+  assert.deepEqual(bundledInputs(tree), { html: 'src/index.html', js: ['src/extra/e.jsx',
+    'src/js/a.js', 'src/js/b.mjs', 'src/js/c.cjs', 'src/js/d.ts', 'src/js/f.json'],
+  css: ['src/styles/x.css'] }, 'every tracked file under src, whatever its extension');
   const b = fixRecord();
   const concat = [...FIX_JS, "el.className = 'osc-' + 'btn';"];
   has(recordProblems(measure({ ...FIX, js: concat }), b),
@@ -1068,7 +1252,7 @@ test('mutation M7: renaming a legacy class and lowering the record fails against
   delete fewer.classes['osc-btn-alt'];
   fewer.debt -= 1;
   assert.deepEqual(historyProblems(fewer, [{ sha: 'a1', baseline: was }]), []);
-  const vocab = { ...was, vocabulary: [...was.vocabulary, 'is-new'] };
+  const vocab = { ...was, vocabulary: { ...was.vocabulary, 'is-new': 1 } };
   assert.deepEqual(historyProblems(vocab, [{ sha: 'a1', baseline: was }]),
     ['is-new: a class not in the vocabulary at a1']);
   const styles = { ...was, inlineStyles: was.inlineStyles + 1 };
@@ -1130,6 +1314,150 @@ test('fixture: the build compiles Tailwind with the flowbite plugin only when al
     assert.equal(buildCompilesFlowbite({ pkg, files: { 'scripts/build.mjs':
       `// ${build}`, [TAILWIND_ENTRY]: entry } }), false, 'a commented-out compiler');
   });
+
+test('mutation N4/N5: a module or a stylesheet the build reaches outside src/js or src counts',
+  () => {
+    const files = {
+      'src/index.html': '<body></body>',
+      'src/js/main.js': "import './ui/a.js';\nimport '../extra/card.js';\n"
+        + "import { x } from '../../lib/card';\nimport Alpine from 'alpinejs';\n"
+        + "import w from './w.worklet.js?raw';\n"
+        + "const u = new URL('../../lib/u.js', import.meta.url);"
+        + "\nimport('./missing.js');",
+      'src/js/ui/a.js': "export const a = require('../../../lib/components/btn.js');",
+      'src/js/w.worklet.js': '',
+      'src/extra/card.js': "export const card = (el) => { el.className = 'osc-btn my-new-card'; };",
+      'lib/card.js': "export * from '../outside/deep.mjs';",
+      'lib/u.js': '',
+      'lib/components/btn.js': '',
+      'outside/deep.mjs': "el.className = 'osc-btn';",
+      'src/styles/main.css': '@import "uplot/dist/uPlot.min.css";\n@import "./a.css";\n'
+        + '@import "../../assets-ui/x.css";\n@import url(tokens2.css);\n'
+        + '/* @import "./commented.css"; */',
+      'src/styles/a.css': '',
+      'src/styles/tokens2.css': '',
+      'src/styles/commented.css': '',
+      'assets-ui/x.css': '.my-card { padding: 4px; color: red }\n',
+      'node_modules/alpinejs/index.js': '',
+    };
+    const tracked = Object.keys(files).filter((p) => p.startsWith('src/')
+      && !['src/styles/tokens2.css', 'src/styles/commented.css'].includes(p));
+    const inputs = bundledInputs(fakeRepo(files, tracked));
+    assert.deepEqual(inputs.js, ['lib/card.js', 'lib/components/btn.js', 'lib/u.js',
+      'outside/deep.mjs', 'src/extra/card.js', 'src/js/main.js', 'src/js/ui/a.js',
+      'src/js/w.worklet.js']);
+    assert.deepEqual(inputs.css, ['assets-ui/x.css', 'src/styles/a.css', 'src/styles/main.css',
+      'src/styles/tokens2.css'], 'an untracked stylesheet the build reaches is measured too');
+    const b = fixRecord();
+    const reached = measure({ ...FIX, js: [...FIX_JS, ...inputs.js.map((p) => files[p])],
+      css: { ...FIX_CSS, 'assets-ui/x.css': files['assets-ui/x.css'] } });
+    const p = recordProblems(reached, b);
+    has(p, /^osc-btn: 4 occurrences, above the recorded 2/);
+    has(p, /^my-new-card: a class outside the legacy vocabulary/);
+    has(p, /^assets-ui\/x\.css: a new stylesheet/);
+    assert.deepEqual(kitProblems({ pkg: {}, js: {}, css: {},
+      paths: [...inputs.js, ...inputs.css] }),
+      ['lib/components/btn.js: an ad-hoc component library; adapt the Flowbite Pro component']);
+    assert.equal(resolveRelative('src/js/a.js', '../../../etc/x.js', () => true), null,
+      'a path outside the repository is not an input');
+    assert.equal(resolveRelative('src/js/a.js', 'alpinejs', () => true), null, 'nor a package');
+  });
+
+test('mutation N7/N2: renaming into, or reusing, a legacy vocabulary token raises its count',
+  () => {
+    const was = fixRecord();
+    const renamed = FIX_JS.map((s) => s
+      .replace("'osc-btn osc-btn-secondary'", "'osc-btn is-active'"));
+    const m = measure({ ...FIX, js: renamed });
+    has(recordProblems(m, was), /^is-active: 2 uses, above the recorded 1/);
+    const now = record(m);
+    assert.equal(now.debt, was.debt, 'a rename into the vocabulary does not lower the debt');
+    assert.deepEqual(historyProblems(now, [{ sha: 'a1', baseline: was }]),
+      ['is-active: 2 uses, above 1 at a1']);
+    const reused = FIX_HTML.replace('</main>',
+      '<div class="is-on x"><b class="is-">y</b></div></main>');
+    const p = recordProblems(measure({ ...FIX, html: reused }), was);
+    has(p, /^is-on: 2 uses, above the recorded 1/);
+    has(p, /^is-: 2 uses, above the recorded 1/);
+    has(p, /^x: a class outside the legacy vocabulary/);
+    const v2 = { ...was, measure: MEASURE - 1, vocabulary: Object.keys(was.vocabulary) };
+    assert.deepEqual(historyProblems({ ...was, vocabulary: { ...was.vocabulary, y: 1 } },
+      [{ sha: 'm2', baseline: v2 }]), ['y: a class not in the vocabulary at m2'],
+    'a token is new against a version of an earlier measure too');
+  });
+
+const proBuild = (css) => ({ compiles: true, defines: definedClasses(`<style>${css}</style>`) });
+
+test('mutation N10: ad-hoc CSS in the Tailwind entry, its config or a local plugin fails', () => {
+  const b = fixRecord();
+  const html = FIX_HTML.replace('</main>', '<div class="my-card"></div></main>');
+  const utility = { ...FIX_CSS, [TAILWIND_ENTRY]: '@import "tailwindcss";\n'
+    + '@plugin "flowbite/plugin";\n@utility my-card { padding: 4px; border: 1px solid red; }\n' };
+  const built = proBuild('.my-card{padding:4px}');
+  assert.deepEqual(recordProblems(measure({ ...FIX, html, css: utility, build: built }), b), [
+    `${TAILWIND_ENTRY}: 1 selector rule(s) or @utility rule(s); the Tailwind entry holds only `
+      + '@import, @plugin, @source, @theme and other at-rules: style with Tailwind and Flowbite '
+      + 'Pro classes'], 'the class it defines is in dist, but the entry defines it');
+  const config = { 'tailwind.config.cjs': "const plugin = require('tailwindcss/plugin');\n"
+    + 'module.exports = { plugins: [plugin(({ addComponents }) => {\n'
+    + "  addComponents({ '.my-card': { padding: '4px' } });\n  // addUtilities({})\n})] };" };
+  has(recordProblems(measure({ ...FIX, html, build: built, tailwind: config }), b),
+    /^tailwind\.config\.cjs: 1 call\(s\) of addComponents/);
+  const files = {
+    [TAILWIND_ENTRY]: '@import "tailwindcss";\n@plugin "./cards.js";\n@plugin "flowbite/plugin";',
+    'src/styles/cards.js': "export default ({ matchUtilities }) => matchUtilities({});",
+    'tailwind.config.js': "module.exports = { plugins: [require('./tw/base.cjs')] };",
+    'tw/base.cjs': 'module.exports = ({ addBase }) => addBase({ h1: {} });',
+  };
+  const loaded = tailwindFiles(fakeRepo(files));
+  assert.deepEqual(Object.keys(loaded).sort(), ['src/styles/cards.js', 'tailwind.config.js',
+    'tw/base.cjs']);
+  const p = recordProblems(measure({ ...FIX, tailwind: loaded }), b);
+  has(p, /^src\/styles\/cards\.js: 1 call/);
+  has(p, /^tw\/base\.cjs: 1 call/);
+});
+
+test('mutation: after F001 a legacy class stays legacy whatever dist defines (is-active, N8)',
+  () => {
+    const legacy = '.osc-panel-title.is-active { color: red }\n';
+    const css = { 'src/styles/a.css': FIX_CSS['src/styles/a.css'] + legacy };
+    const f001 = proBuild('.osc-panel-title.is-active{color:red}');
+    const atF001 = measure({ ...FIX, css, build: f001 });
+    assert.equal(atF001.vocabulary['is-active'], 1, 'a legacy stylesheet names it: legacy');
+    const recF001 = record(atF001);
+    assert.deepEqual(recordProblems(atF001, recF001), []);
+    const later = measure({ ...FIX, build: proBuild('') });
+    assert.equal(later.vocabulary['is-active'], 1, 'its last legacy rule removed: still legacy');
+    const recLater = record(later);
+    assert.deepEqual(recordProblems(later, recLater), []);
+    assert.deepEqual(historyProblems(recLater, [{ sha: 'f001', baseline: recF001 }]), [],
+      'removing legacy CSS never turns a used legacy class into a new one');
+    const flowbiteToo = measure({ ...FIX, build: proBuild('.is-active{color:blue}') });
+    has(recordProblems(flowbiteToo, recLater),
+      /^is-active: in the recorded vocabulary, but now a Pro class/);
+    const renamed = FIX_JS.map((s) => s
+      .replace("'osc-btn osc-btn-secondary'", "'osc-btn btn-secondary'"));
+    const n8 = measure({ ...FIX, js: renamed, build: proBuild('.btn-secondary{color:red}'),
+      css: { 'src/styles/a.css': `${FIX_CSS['src/styles/a.css']}.btn-secondary { color: red }` } });
+    has(recordProblems(n8, fixRecord()),
+      /^btn-secondary: a class outside the legacy vocabulary of the record, and it is not a Pro/);
+    const proHtml = FIX_HTML.replace('class="osc-panel" id="osc-panel-b"',
+      `class="p-4 ${PRO_CARD}" id="osc-panel-b"`);
+    const fake = measure({ ...FIX, html: proHtml, build: proBuild('.bg-white{x:y}.rounded-lg{x:y}'
+      + '.shadow{x:y}.dark\\:bg-gray-800{x:y}'), css: { 'src/styles/a.css':
+      `${FIX_CSS['src/styles/a.css']}.bg-white { color: white }` } });
+    assert.ok(fake.pending.includes('card#osc-panel-b'),
+      'a Pro class a legacy stylesheet defines does not migrate a surface');
+  });
+
+test('fixture: a Studio node id that is never in a class position is not counted', () => {
+  const js = [...FIX_JS, "node('osc-1', 'oscillator'); edge('e-1', 'osc-1', 'audio', 'env-1');",
+    "el.className = 'osc-2'; const n = 'osc-3';", '.osc-3 {}'];
+  const m = measure({ ...FIX, js });
+  assert.equal(m.classes['osc-1'], undefined, 'a node id');
+  assert.equal(m.classes['osc-2'], 1, 'in a class position');
+  assert.equal(m.classes['osc-3'], 2, 'a selector names it');
+});
 
 test('fixture: the history gate fails in CI when git fails, and skips only outside CI', () => {
   assert.equal(historyGate({ error: 'git log failed' }, true).verdict, 'fail');

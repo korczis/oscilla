@@ -49,9 +49,11 @@ toolchain for a design that is token-driven anyway". Rule `project.visual-identi
 then bound every surface to the existing tokens and panel primitives. Measured at the commit
 this decision was written on, none of the 62 UI surfaces of `src/index.html` (the shell, six
 workspaces, 30 panels and 22 dialogs) carries the Flowbite Pro structure; `src/index.html`
-and `src/js` hold 2563 osc-* class tokens of 758 names (`osc-panel`, `osc-btn`,
-`osc-dialog`, `osc-tab`, their BEM variants and the rest); and the legacy stylesheets under
-`src/styles` hold 1627 selectors (the record's measure 2; see the rule for the definitions).
+and `src/js` hold 2550 osc-* class tokens of 756 names (`osc-panel`, `osc-btn`,
+`osc-dialog`, `osc-tab`, their BEM variants and the rest) and 103 uses of 38 other class
+names (`is-active` and the other state classes); and the legacy stylesheets under
+`src/styles` hold 1627 selectors (the record's measure 3, debt 4342; see the rule for the
+definitions).
 
 The owner holds a Flowbite Pro licence. OSCILLA is a public MIT repository and a public
 GitHub Pages site, so Pro-derived markup in `src/` is published under the MIT grant. On
@@ -126,13 +128,15 @@ What is not changed:
   the pull request: a new surface (a landmark, an `osc-view-*` workspace, a `<section>` or
   `<dialog>` with an id) that is not migrated; a pending surface that leaves the record other
   than into `migrated`; a rise of any osc-* class name (in the class and Alpine attributes of
-  `src/index.html` or in any file under `src/js`), a class name outside the frozen legacy vocabulary that the compiled Tailwind CSS
-  does not define, a rise of a legacy stylesheet's selectors or declarations, a selector rule
-  in the Tailwind entry, a `<style>` element or a further inline style in `src/index.html`; a
-  migrated surface that regresses, or one counted as migrated without the Tailwind build;
-  another UI kit, a new stylesheet or a Pro source file. Until F001 builds Tailwind with the
-  flowbite plugin, no surface can be migrated and no class name can be added. What no check
-  decides is listed below.
+  `src/index.html` or in any file the build bundles), a class name outside the frozen legacy
+  vocabulary that is not a Pro class (defined by the compiled Tailwind CSS, named by no
+  legacy stylesheet), a further use of a legacy class name, a rise of a legacy stylesheet's
+  selectors or declarations, a selector rule or `@utility` in the Tailwind entry or a
+  component defined by the Tailwind configuration, a `<style>` element or a further inline
+  style in `src/index.html`; a migrated surface that regresses, or one counted as migrated
+  without the Tailwind build; another UI kit, a new stylesheet or a Pro source file. Until
+  F001 builds Tailwind with the flowbite plugin, no surface can be migrated and no class name
+  can be added. What no check decides is listed below.
 - Each migration rebuilds the visual references of the views it changes (ADR 0029): a
   reference accepted under the token CSS no longer describes the page.
 - Adding Tailwind and `flowbite` changes `package.json`, the build and the licence notices;
@@ -143,8 +147,13 @@ What is not changed:
 
 The rule `project.ui-uses-flowbite-pro` lists these in full; a reviewer owns them:
 
-- a non-osc class reached in `src/js` through a variable, a helper's argument or a ternary
-  branch, and styling set from `src/js` (`el.style`, `style:` keys, injected CSS);
+- a non-osc class reached in JavaScript through a variable, a helper's argument or a ternary
+  branch, an osc-* name assembled from parts that hold no `osc-`, and styling set from
+  JavaScript (`el.style`, `style:` keys, injected CSS);
+- new markup without classes that legacy descendant selectors style, and a legacy rule
+  rewritten in place at the same counts;
+- a module or stylesheet the build reaches other than by a relative import (an alias, a
+  plugin, a package);
 - an osc-* class name that is also an element id and never appears in a class position;
 - whether a surface on the Pro class set follows its Pro template in substance, and a markup
   surface that is not a landmark, a `<section>` or a `<dialog>` with an id;
@@ -179,3 +188,16 @@ surface that may leave only into `migrated`, and no surface migrated before the 
 Tailwind with the flowbite plugin (debt 4252 on the same `src/`). The same review asked for
 the licence statement under Context to rest on the owner's dated confirmation rather than on
 the worker's reading, and it now does.
+
+### 2026-10-28: the ratchet measures every file the build bundles
+
+The second review of pull request #250 found that a module outside `src/js` or a stylesheet
+outside `src/` reached the build without being measured, that a class renamed into a legacy
+token already in the vocabulary lowered the debt, that an `@utility` in the Tailwind entry was
+not counted, and that after F001 a legacy state class would have come back as new once its
+last legacy rule was removed. Before landing, the record became measure 3: the inputs are
+every tracked file under `src/` and every file their relative imports reach; each legacy
+class name outside osc-* is counted per use and its uses join the debt; a class is a Pro
+class only when `dist/index.html` defines it and no legacy stylesheet names it; the Tailwind
+entry and configuration define no ad-hoc CSS; and a Studio node id (`osc-1`) that is never
+in a class position is not counted (debt 4342 on the same `src/`).
