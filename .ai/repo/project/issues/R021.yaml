@@ -1,0 +1,25 @@
+id: R021
+milestone: M011
+serves:
+  - "release-provenance#public-release-verified"
+title: "release:publish resumes a publish interrupted after the tag was pushed"
+slug: release-publish-resumes-a-publish-interrupted-after-the-tag
+priority: p1
+profile: implementation
+objective: "On 2026-10-28 the owner ran npm run release:publish -- --yes for v3.13.0. The tag was pushed and pages.yml was dispatched, but GitHub Actions on the whole account stopped picking up runs, so the dispatched redeploy stayed queued past the bounded wait. The publish exited without verify-deploy and without the GitHub Release. A second run now refuses, because 'tag v3.13.0 already exists on origin' (scripts/release-publish.mjs, preconditions), so the only way to finish is by hand. Make release:publish resumable: when the remote tag exists and points at the release commit of the current receipt, skip the tag step and continue from the first step not yet done (the dispatched redeploy, verify-deploy expecting tagged, the GitHub Release); a tag pointing at another commit still refuses. The dry run says which steps it would resume."
+why: "A publish interrupted by the forge must be finishable through the same gated script; a hand-made Release skips verify-deploy and the generated notes that project.release-flow-complete requires."
+scope:
+  - "scripts/release-publish.mjs"
+  - "tests/unit/release-publish.test.mjs"
+  - "tests/README.md"
+depends_on: []
+acceptance_criteria:
+  - "tests/unit/release-publish.test.mjs, with stubbed git and gh: a remote tag at the receipt's commit resumes from the redeploy, verify-deploy and the Release; a remote tag at another commit refuses; a dry run lists the resumed steps; the cases fail on the merge base (fail-first)."
+  - "The pull request carries a review verdict (scripts/release-* is guarded); project.release-flow-complete and project.release-receipt-binds-gate hold."
+validation:
+  - "node --test tests/unit/release-publish.test.mjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-10-28
+updated_at: 2026-10-28

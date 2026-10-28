@@ -1,0 +1,29 @@
+id: U007
+milestone: M054
+serves:
+  - "ui-current#no-isolated-workspace"
+title: "Every workspace works at phone width"
+slug: every-workspace-works-at-phone-width
+priority: p2
+profile: implementation
+objective: "Fix what the audit records at 390x844: no horizontal page scroll, controls reachable, panels stacked, the Studio's subviews switchable; extend tests/browser/layout.cjs or ui-current.cjs to every workspace at that size."
+why: "Audit 2026-10-28 (390x844 findings)."
+scope:
+  - "src/styles"
+  - "src/index.html"
+  - "tests/browser/layout.cjs"
+  - "tests/browser/ui-current.cjs"
+  - "tests/README.md"
+  - "dist"
+depends_on:
+  - "U001"
+  - "U005"
+acceptance_criteria:
+  - "The browser check passes for all twelve workspaces at 390x844 in every gate browser."
+validation:
+  - "node tests/browser/ui-current.cjs"
+  - "node tests/browser/layout.cjs"
+evidence_required:
+  - "verified"
+created_at: 2026-10-28
+updated_at: 2026-10-28
