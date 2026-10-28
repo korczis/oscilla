@@ -26,11 +26,13 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-19
-updated_at: 2026-10-19T14:05:59Z
+updated_at: 2026-10-28T16:09:14Z
 started_at: 2026-10-19T13:55:23Z
 started_event: sha256:dfd38ec63875d07f934220e4d9ba71f123117f1de1101c03ffadf6f71615c0b9
 verified_at: 2026-10-19T14:05:59Z
 verified_event: sha256:660062238f841532b1228beefe0b206c1b0553523f5dd13f1a35cc008ac6562e
+completed_at: 2026-10-28T13:28:56Z
+completed_event: sha256:1175d2cf2a404d561153f5a0340700be64ece99b4b886377532814aaf982cc79
 evidence:
   - covers: verified
     type: test
@@ -39,3 +41,10 @@ evidence:
     artifact: "f5e925f"
     commit: f5e925f4106ffaf7429a53a3f04babc1ae5560c9
     recorded_at: 2026-10-19T14:05:54Z
+  - covers: verified
+    type: manual
+    command: "cat .ai/repo/reviews/226.yaml"
+    result: "The review verdict for PR #226, which landed E018: .ai/repo/reviews/226.yaml (verdict: merge), judged by the base program in that PR's review-verdict job."
+    artifact: ".ai/repo/reviews/226.yaml"
+    commit: dcb28f29686156c586e32eff54225aa079c14be7
+    recorded_at: 2026-10-28T16:09:14Z
