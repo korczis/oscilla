@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // OSCILLA V2 chart renderers and lab controllers: browser checks with a fake engine adapter.
 //
-//   NODE_PATH=/Users/korczis/dev/oscilla/tests/node_modules node tests/browser/labs.cjs
+//   NODE_PATH=<checkout>/tests/node_modules node tests/browser/labs.cjs
 //   node tests/browser/labs.cjs --browser firefox        # chromium | firefox | webkit (default: all)
 //   node tests/browser/labs.cjs --build <dir>             # write labs-fixture.html and
 //                                                         # labs-visual.html (15.5 kHz) to <dir>

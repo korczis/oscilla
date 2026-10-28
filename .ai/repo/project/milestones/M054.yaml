@@ -1,0 +1,19 @@
+id: M054
+title: "The whole interface shows the current product"
+slug: the-whole-interface-shows-the-current-product
+order: 54
+priority: p1
+problem: "The owner found the live Studio, About and, in their view, the whole interface outdated at v3.13.0 (2026-10-28). About opens on the first night alone; Experiments, Filter Lab and the Analyze views are isolated or half-empty panels that do not lead to the workspaces doing the same thing in depth."
+outcome: "Every workspace is audited, About tells the project as it stands and what comes next, no workspace is an isolated or half-empty panel, empty states offer a real example and a next step, and the workspaces link to each other; a browser check holds it in every gate browser and origin."
+acceptance_criteria:
+  - "U001 to U008 are done with their evidence."
+validation:
+  - "npm run release-gate"
+evidence_required:
+  - "milestone_verified"
+risks:
+  - "Layout work colliding with the first screen: no issue here changes the default workspace, and P002 builds the layout Q004 chooses."
+  - "src/index.html is shared with E005 (partials), P002, S083 and MIDI V504: every U issue that edits it lands in its own train round with one rebuild."
+  - "About's pace statement was kept by Q005's delegated decision; the owner's 2026-10-28 statement that About is outdated overrides it, so U002 changes about-origin.test.mjs with that reason."
+created_at: 2026-10-28
+updated_at: 2026-10-28
