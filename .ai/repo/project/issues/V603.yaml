@@ -13,6 +13,7 @@ scope:
   - "src/js/ui/studio/timeline-view.js"
   - "src/js/ui/studio/graph-geometry.js"
   - "src/styles/studio-timeline.css"
+  - "docs/v31/studio-model.md"
   - "tests/unit/studio-timeline-pinch.test.mjs"
   - "tests/unit/source-size-baseline.json"
   - "tests/browser/v31-studio-timeline.cjs"
