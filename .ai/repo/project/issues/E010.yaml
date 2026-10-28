@@ -26,4 +26,6 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-18
-updated_at: 2026-10-18
+updated_at: 2026-10-28T13:36:41Z
+started_at: 2026-10-28T13:36:41Z
+started_event: sha256:5eb7d5484e674500579f5689f882f8742007b63eb3cc12e7d6d7da9452d3e347

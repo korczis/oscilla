@@ -439,12 +439,42 @@ jobs:
             --pr "$PR" --head HEAD --base-branch "origin/$GITHUB_BASE_REF"
 
   gate:
+    # E010: on a re-run (github.run_attempt above 1) the gate first records the flake ledger,
+    # every job that failed on an earlier attempt of this run and passed on this one
+    # (scripts/flake-ledger.mjs, tested by tests/unit/flake-ledger.test.mjs), in the step summary
+    # and the artifact flake-ledger. It reads the attempts' jobs from the API (actions: read),
+    # each request bounded and retried; it reports and never fails the gate. A first attempt
+    # checks nothing out and runs only the verdict step, as before.
     name: gate
     if: always()
     needs: [unit, knowledge, fail-first, review-verdict, engine, suites, measure, studio, browser, visual]
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    permissions:
+      contents: read
+      actions: read
     steps:
+      - uses: actions/checkout@v7
+        if: ${{ fromJSON(github.run_attempt) > 1 }}
+      - uses: actions/setup-node@v7
+        if: ${{ fromJSON(github.run_attempt) > 1 }}
+        with:
+          node-version: 22
+      - name: Flake ledger (checks that failed on an earlier attempt and passed now)
+        if: ${{ fromJSON(github.run_attempt) > 1 }}
+        timeout-minutes: 3
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          node scripts/flake-ledger.mjs --repo "$GITHUB_REPOSITORY" --run "$GITHUB_RUN_ID" \
+            --attempt "$GITHUB_RUN_ATTEMPT" --out flake-ledger.json | tee -a "$GITHUB_STEP_SUMMARY"
+      - name: Upload the flake ledger
+        if: ${{ fromJSON(github.run_attempt) > 1 && hashFiles('flake-ledger.json') != '' }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: flake-ledger
+          path: flake-ledger.json
+          retention-days: 90
       - name: Every release-gate job passed
         env:
           RESULTS: ${{ toJSON(needs) }}
