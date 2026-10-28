@@ -48,7 +48,8 @@ const REDEPLOYED = [{ databaseId: 8001, status: 'completed', conclusion: 'succes
   headSha: HEAD, createdAt: ago(0) }];
 function fakes({ branch = 'main', dirty = '', originMain = HEAD, tagRemote = '', ok = true,
   runs = [], jobs = {}, ancestor = 0,
-  redeploy = (dispatched) => (dispatched ? REDEPLOYED : []), live = TAGGED_PAGE } = {}) {
+  redeploy = (dispatched) => (dispatched ? REDEPLOYED : []), live = TAGGED_PAGE,
+  releaseExists = false } = {}) {
   const calls = [];
   let dispatched = false;
   const run = (args) => {
@@ -90,6 +91,9 @@ function fakes({ branch = 'main', dirty = '', originMain = HEAD, tagRemote = '',
       return answer === null ? { status: 1, stdout: '', stderr: 'HTTP 502' }
         : { status: 0, stdout: JSON.stringify({ jobs: answer || [] }) };
     }
+    if (cmd === 'gh' && args[0] === 'release' && args[1] === 'view') {
+      return { status: releaseExists ? 0 : 1, stdout: '' };
+    }
     if (cmd === 'npm' || (cmd === 'gh' && args[0] === 'auth')) {
       return { status: ok ? 0 : 1, stdout: '' };
     }
@@ -101,7 +105,8 @@ function fakes({ branch = 'main', dirty = '', originMain = HEAD, tagRemote = '',
     if (live instanceof Error) throw live;
     return typeof live === 'function' ? live() : live;
   };
-  return { run, sh, calls, out, log: (l) => out.push(l), fetchPage };
+  return { run, sh, calls, out, log: (l) => out.push(l), fetchPage,
+    dispatched: () => dispatched };
 }
 
 // Anything that would create a tag, push, dispatch, watch/release on GitHub or hit the live
@@ -109,7 +114,7 @@ function fakes({ branch = 'main', dirty = '', originMain = HEAD, tagRemote = '',
 // the precondition check needs them.
 const MUTATING = (c) => (c[0] === 'git' && c[1] === 'tag' && !c.includes('--list'))
   || (c[0] === 'git' && c[1] === 'push')
-  || (c[0] === 'gh' && c[1] === 'release')
+  || (c[0] === 'gh' && c[1] === 'release' && c[2] !== 'view')
   || (c[0] === 'gh' && c[1] === 'workflow')
   || c[0] === 'fetch'
   || (c[0] === 'gh' && c[1] === 'run' && c[2] !== 'list' && c[2] !== 'view')
@@ -172,7 +177,7 @@ test('the GitHub Release attaches the committed dist; only a prerelease is marke
 
 test('dry run reports every blocked precondition and exits non-zero', async () => {
   const f = fakes({ branch: 'release/x', dirty: ' M a', originMain: 'f'.repeat(40),
-    tagRemote: `${HEAD}\trefs/tags/v40.0.0`, ok: false });
+    tagRemote: `${OLDER}\trefs/tags/v40.0.0`, ok: false });
   const code = await publish({ argv: [], run: f.run, sh: f.sh, log: f.log, receipt: null,
     fingerprint: FP });
   assert.equal(code, 1);
@@ -703,4 +708,92 @@ test('release notes come from the real commit list, grouped by impact', () => {
   assert.match(notes, /### Fixes\n\n- stop click .*\n- Update README/);
   assert.match(notes, /compare\/v40\.0\.0\.\.\.v40\.1\.0/);
   assert.match(notes, new RegExp(FP.sourceDigest));
+});
+
+// R021: the v3.13.0 publish of 2026-10-28 pushed its tag, then the dispatched redeploy stayed
+// queued past the bounded wait and the publish ended before verify-deploy and the Release. A
+// re-run refused on the existing tag. A tag on origin at the release commit now resumes.
+const TAG_OBJECT = '9'.repeat(40);
+const TAG_AT = (commit) => `${TAG_OBJECT}\trefs/tags/v40.0.0\n${commit}\trefs/tags/v40.0.0^{}`;
+const UNTAGGED_PAGE = page({ commit: HEAD, release: 'untagged', distance: 0 });
+const yesRun = (f) => publish({ argv: ['--yes'], run: f.run, sh: f.sh, log: f.log,
+  receipt: RECEIPT, fingerprint: FP, fetchPage: f.fetchPage, sleep: async () => {},
+  clock: (() => { let t = NOW; return () => (t += 60_000); })() });
+
+test('R021 dry run: a tag on origin at HEAD resumes after the tag and mutates nothing', async () => {
+  const f = fakes({ tagRemote: TAG_AT(HEAD) });
+  const code = await publish({ argv: [], run: f.run, sh: f.sh, log: f.log, receipt: RECEIPT,
+    fingerprint: FP });
+  assert.equal(code, 0);
+  const text = f.out.join('\n');
+  assert.match(text, /OK all preconditions hold/);
+  assert.match(text, /RESUME v40\.0\.0 is on origin at f187f66/);
+  assert.doesNotMatch(text, /^ {2}git tag -a/m);
+  assert.doesNotMatch(text, /^ {2}git push/m);
+  assert.match(text, /^ {2}gh workflow run pages\.yml/m);
+  assert.match(text, /^ {2}node scripts\/verify-deploy\.mjs/m);
+  assert.match(text, /^ {2}gh release create v40\.0\.0/m);
+  assert.deepEqual(f.calls.filter(MUTATING), []);
+});
+
+test('R021 --yes resume: no tag or push, redeploy, verify, then the Release', async () => {
+  const f = fakes({ tagRemote: TAG_AT(HEAD) });
+  f.fetchPage = async (url) => {
+    f.calls.push(['fetch', url]);
+    return f.dispatched() ? TAGGED_PAGE : UNTAGGED_PAGE;
+  };
+  const code = await yesRun(f);
+  assert.equal(code, 0, f.out.join('\n'));
+  const cmds = f.calls.map((c) => c.slice(0, 3).join(' '));
+  assert.ok(!cmds.some((c) => c.startsWith('git tag') || c.startsWith('git push')), cmds.join('\n'));
+  const at = (re) => cmds.findIndex((c) => re.test(c));
+  assert.ok(at(/^gh workflow run/) >= 0);
+  assert.ok(at(/^node scripts\/verify-deploy\.mjs/) > at(/^gh workflow run/));
+  assert.ok(at(/^gh release create/) > at(/^node scripts\/verify-deploy\.mjs/));
+});
+
+test('R021 --yes resume adopts a dispatched redeploy still waiting instead of dispatching', async () => {
+  let polls = 0;
+  const pending = { databaseId: 7001, headSha: HEAD, createdAt: ago(60) };
+  const f = fakes({ tagRemote: TAG_AT(HEAD), live: TAGGED_PAGE,
+    redeploy: () => {
+      polls += 1;
+      return [polls < 3 ? { ...pending, status: 'queued', conclusion: '' }
+        : { ...pending, status: 'completed', conclusion: 'success' }];
+    } });
+  f.fetchPage = async (url) => {
+    f.calls.push(['fetch', url]);
+    return polls >= 3 ? TAGGED_PAGE : UNTAGGED_PAGE;
+  };
+  const code = await yesRun(f);
+  assert.equal(code, 0, f.out.join('\n'));
+  assert.equal(f.dispatched(), false, 'the waiting run 7001 is adopted, no second dispatch');
+  assert.match(f.out.join('\n'), /7001/);
+  assert.ok(f.calls.some((c) => c[0] === 'gh' && c[1] === 'release' && c[2] === 'create'));
+});
+
+test('R021 --yes resume: a page already tagged for HEAD needs no redeploy', async () => {
+  const f = fakes({ tagRemote: TAG_AT(HEAD), live: TAGGED_PAGE });
+  const code = await yesRun(f);
+  assert.equal(code, 0, f.out.join('\n'));
+  assert.equal(f.dispatched(), false);
+  assert.ok(f.calls.some((c) => c[0] === 'gh' && c[1] === 'release' && c[2] === 'create'));
+});
+
+test('R021: a tag on origin at another commit still refuses, naming that commit', async () => {
+  const f = fakes({ tagRemote: TAG_AT(OLDER) });
+  const code = await publish({ argv: ['--yes'], run: f.run, sh: f.sh, log: f.log,
+    receipt: RECEIPT, fingerprint: FP });
+  assert.equal(code, 1);
+  assert.match(f.out.join('\n'), /BLOCKED tag v40\.0\.0 already exists on origin at 0a1b2c3, not /);
+  assert.deepEqual(f.calls.filter(MUTATING), []);
+});
+
+test('R021: resuming when the GitHub Release already exists refuses: nothing to publish', async () => {
+  const f = fakes({ tagRemote: TAG_AT(HEAD), releaseExists: true });
+  const code = await publish({ argv: ['--yes'], run: f.run, sh: f.sh, log: f.log,
+    receipt: RECEIPT, fingerprint: FP });
+  assert.equal(code, 1);
+  assert.match(f.out.join('\n'), /BLOCKED the GitHub Release v40\.0\.0 already exists/);
+  assert.deepEqual(f.calls.filter(MUTATING), []);
 });
