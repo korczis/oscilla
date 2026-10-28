@@ -17,7 +17,10 @@ The binding constraints are the project rules in `.ai/repo/rules/project/` (vers
 name): `project.single-file-deliverable`, `project.audio-engine-discipline`,
 `project.no-fake-science`, `project.about-names-current-release`,
 `project.studio-model-is-canonical`, `project.typed-ports`, `project.no-silent-feedback`,
-`project.visual-identity-lock`, `project.no-inert-surfaces`. Read them before changing `src/`.
+`project.visual-identity-lock`, `project.no-inert-surfaces`, `project.ui-uses-flowbite-pro`
+(ADR 0061: the UI is Flowbite Pro on Tailwind, built and inlined at build time; no other kit,
+no Pro source file committed; the legacy surfaces and primitives in
+`tests/unit/ui-flowbite-pro-baseline.json` only shrink). Read them before changing `src/`.
 Releases are bound by `project.release-receipt-binds-gate`, `project.release-flow-complete`
 (the flow, in order) and `project.deploy-often`. Four more bind how the repository is worked on:
 `project.rules-name-their-enforcement`, `project.no-conflict-markers`,
