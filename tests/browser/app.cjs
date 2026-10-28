@@ -6,7 +6,7 @@
 //   node tests/browser/app.cjs [--dist dist/index.html] [--browsers chromium,firefox,webkit]
 //                              [--origins file,http] [--only name1,name2] [--json out.json]
 //
-// Playwright resolves from app/node_modules or NODE_PATH (e.g. /Users/korczis/dev/oscilla/tests/
+// Playwright resolves from app/node_modules or NODE_PATH (e.g. <checkout>/tests/
 // node_modules). Exit code 1 when any check fails.
 'use strict';
 const { serveDist } = require('./lib/serve.cjs');

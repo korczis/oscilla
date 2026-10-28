@@ -20,6 +20,7 @@ import {
 } from '../../studio/timeline.js';
 import { truncatePatternPayload } from '../../studio/timeline-compiler.js';
 import { clipPlayReason } from '../../studio/transport.js';
+import { pinchGeometry } from './graph-geometry.js';
 
 // ---------------------------------------------------------------- constants
 
@@ -119,6 +120,21 @@ export function zoomAround({ pxPerSecond, scrollX }, steps, anchorPx = 0) {
   const next = clampZoom(pxPerSecond * Math.pow(TIMELINE_ZOOM.factor, steps));
   const t = (scrollX + anchorPx) / pxPerSecond;
   return { pxPerSecond: next, scrollX: Math.max(0, t * next - anchorPx) };
+}
+
+/**
+ * A two-pointer pinch on the timeline (V603): the graph's pinch geometry (pinchGeometry) turned
+ * into zoom steps about the pointers' first midpoint, so a spread by one TIMELINE_ZOOM.factor is
+ * exactly one zoomAround step with the same limits, then a scroll by the midpoint's horizontal
+ * movement. `prev` and `next` are pointer pairs in px from the left edge of the visible area.
+ * View state only: { pxPerSecond, scrollX }.
+ */
+export function pinchTimeline(view, prev, next) {
+  const { factor, from, to, spread } = pinchGeometry(prev, next);
+  const steps = spread && factor > 0 ? Math.log(factor) / Math.log(TIMELINE_ZOOM.factor) : 0;
+  const zoomed = zoomAround(view, steps, from.x);
+  return { pxPerSecond: zoomed.pxPerSecond,
+    scrollX: Math.max(0, zoomed.scrollX - (to.x - from.x)) };
 }
 
 /** The scale that shows [0, spanS] in `widthPx` (Fit). */

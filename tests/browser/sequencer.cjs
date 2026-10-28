@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // OSCILLA V2 pattern sequencer: browser checks against the real Web Audio implementation.
 //
-//   NODE_PATH=/Users/korczis/dev/oscilla/tests/node_modules node tests/browser/sequencer.cjs
+//   NODE_PATH=<checkout>/tests/node_modules node tests/browser/sequencer.cjs
 //   node tests/browser/sequencer.cjs --browser firefox     # chromium | firefox | webkit (default: all)
 //   (stop and teardown checks poll against a deadline; no fixed sleep precedes an assertion)
 //
