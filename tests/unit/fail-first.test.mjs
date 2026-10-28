@@ -374,6 +374,39 @@ test('a train is known by the skill\'s own title and by its train/ branch', (t) 
   assert.match(plain.out, /not a feat or fix PR; nothing to prove/);
 });
 
+test('a feat or fix title is judged as one on a train/ branch, not by its member table', (t) => {
+  const repo = fixture();
+  t.after(() => repo.dispose());
+  repo.commit('docs', { 'README.md': 'fixture, documented\n' });
+  const docsOnly = ['| member | what |', '|---|---|', '| #1 | docs(x): a |', ''].join('\n');
+  for (const title of ['feat(midi): V501 MIDI input', 'fix: the value']) {
+    const r = run(repo, title, docsOnly, 'train/x');
+    assert.equal(r.status, 1, `${title}: ${r.out}`);
+    assert.match(r.out, /a feat or fix title on the train branch train\/x is judged as a feat/);
+    assert.doesNotMatch(r.out, /judged by its members|train of 1 member/);
+    assert.match(r.out, /adds or changes no tests\/unit\/\*\*\/\*\.test\.mjs file/);
+  }
+});
+
+test('a train title is known with a suffix, a hyphen, a plural or no colon', (t) => {
+  const repo = fixture();
+  t.after(() => repo.dispose());
+  repo.commit('docs', { 'README.md': 'fixture, documented\n' });
+  const feat = TRAIN_BODY(['| #1 | docs(x): say more |', '| #2 | feat(y): a new control |']);
+  for (const title of ['Merge train 2026-10-17 (night): #1, #2', 'Merge train #1, #2: two',
+    'Merge-train 2026-10-17: #1, #2', 'Merge trains 2026-10-17 and 2026-10-18',
+    'merge train 2026-10-17 \u2014 #1']) {
+    const r = run(repo, title, feat, 'chore/x');
+    assert.equal(r.status, 1, `${title}: ${r.out}`);
+    assert.match(r.out, /a train \(title\), judged by its members/, title);
+    assert.match(r.out, /train member #2 is feat\(y\): a new control/, title);
+  }
+  // A word that only starts with "train" is not a train.
+  const plain = run(repo, 'Training notes: more', 'Nothing.\n', 'chore/x');
+  assert.equal(plain.status, 0, plain.out);
+  assert.match(plain.out, /not a feat or fix PR; nothing to prove/);
+});
+
 test('a train member needs a conventional type, and every member table is read', (t) => {
   const repo = fixture();
   t.after(() => repo.dispose());

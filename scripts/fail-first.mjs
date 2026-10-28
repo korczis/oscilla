@@ -47,8 +47,11 @@ import { fileURLToPath } from 'node:url';
 // Any case, any spacing, and behind bracketed tags ("[WIP] Fix (x) : ..."): a title that reads
 // as feat or fix is one, whatever a stricter parser downstream makes of it.
 export const TITLE = /^\s*(?:\[[^\]]*\]\s*)*(feat|fix)\s*(\([^)]*\))?\s*!?\s*:/i;
-// `train(x):`, `Train:`, `Merge train 2026-10-17:` (the skill's title), behind bracketed tags.
-export const TRAIN = /^\s*(?:\[[^\]]*\]\s*)*(?:merge\s+)?train\b\s*(?:\([^)]*\)|[\w.-]+)?\s*:/i;
+// `train(x):`, `Train:`, `Merge train 2026-10-17:` (the skill's title), `Merge-train ...`,
+// `Merge trains ...`, `merge train 2026-10-17 (night) - #1`, behind bracketed tags: a title that
+// starts with the word train(s), or merge and then train(s), whatever follows. A feat or fix
+// title is judged as one before this is asked (failFirst), so it never makes a train.
+export const TRAIN = /^\s*(?:\[[^\]]*\]\s*)*(?:merge[\s-]+)?trains?\b/i;
 export const TRAIN_BRANCH = /^train\//;
 const TYPES = 'feat|fix|docs|chore|test|build|ci|perf|refactor|style|revert';
 const TYPED = new RegExp(
@@ -206,14 +209,20 @@ export function failFirst({ repo, title, body, head = 'HEAD', headBranch = '', b
   const branch = String(headBranch || '').trim();
   say(`fail-first: PR title: ${t || '(none)'}`);
   if (branch) say(`fail-first: PR head branch: ${branch}`);
-  if (TRAIN_BRANCH.test(branch) || TRAIN.test(t)) {
-    say(`fail-first: a train (${TRAIN_BRANCH.test(branch) ? `branch ${branch}` : 'title'}),`
-      + ' judged by its members');
-    return { status: judgeTrain(body, say), lines };
-  }
+  // The title first: a feat or fix title is a feat or fix PR on any branch, train/ included,
+  // so a branch name cannot turn a change that must prove its tests into a train of members.
   if (!TITLE.test(t)) {
+    if (TRAIN_BRANCH.test(branch) || TRAIN.test(t)) {
+      say(`fail-first: a train (${TRAIN_BRANCH.test(branch) ? `branch ${branch}` : 'title'}),`
+        + ' judged by its members');
+      return { status: judgeTrain(body, say), lines };
+    }
     say('fail-first: not a feat or fix PR; nothing to prove');
     return { status: 'not-applicable', lines };
+  }
+  if (TRAIN_BRANCH.test(branch)) {
+    say(`fail-first: a feat or fix title on the train branch ${branch} is judged as a feat or`
+      + ' fix PR, not by a member table');
   }
   const w = waiver(body);
   if (w && w.reason) {
