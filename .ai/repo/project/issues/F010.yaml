@@ -33,6 +33,7 @@ acceptance_criteria:
   - "ui-flowbite-pro.cjs opens every dialog and asserts the Pro modal structure, that focus moves into it, that Escape closes it and focus returns to the opener, and that the background is inert, in every gate browser from file:// and the sub-path."
   - "The headphones safety prompt still appears before any output that requires it; qa-regressions.cjs and no-inert-surfaces pass."
   - "The references of the changed views are updated through the visual gate with the reason; the ratchet baseline is lower; dist's size is stated and within BUDGET."
+  - "The class tokens tests/browser/live-smoke.cjs reads after every Pages deploy (.osc-statusbar .osc-sb-name, .osc-sb-version, .osc-sg-node, .osc-sg-title, .osc-sg-cat, .osc-sg-edge-line, .osc-block-name, .osc-stl-hrow--track) stay on their elements, unstyled if need be, until F011 moves the smoke to data-osc hooks; the smoke passes against the built file."
 validation:
   - "node tests/browser/ui-flowbite-pro.cjs"
   - "npm run test:browser"

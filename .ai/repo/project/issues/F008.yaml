@@ -29,6 +29,7 @@ acceptance_criteria:
   - "npm run test:studio passes with no behaviour check changed; keyboard operation of the graph and the timeline (V428, V429) is unchanged."
   - "The Studio references (tests/visual/studio: compact, desktop with and without the timeline, phone graph and timeline, darwin and linux) are updated through the visual gate with the reason; the ratchet baseline is lower; dist's size is stated and within BUDGET."
   - "Where the change touches src/js/studio the pull request carries a review verdict."
+  - "The class tokens tests/browser/live-smoke.cjs reads after every Pages deploy (.osc-statusbar .osc-sb-name, .osc-sb-version, .osc-sg-node, .osc-sg-title, .osc-sg-cat, .osc-sg-edge-line, .osc-block-name, .osc-stl-hrow--track) stay on their elements, unstyled if need be, until F011 moves the smoke to data-osc hooks; the smoke passes against the built file."
 validation:
   - "node tests/browser/ui-flowbite-pro.cjs"
   - "npm run test:studio"

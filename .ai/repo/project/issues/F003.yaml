@@ -30,6 +30,7 @@ acceptance_criteria:
   - "ui-flowbite-pro.cjs asserts, for each of the four workspaces at both sizes, that every panel is a Pro card in the shell's page body and that no element carries a legacy chrome class; it passes in every gate browser from file:// and the sub-path."
   - "npm run test:engine, test:labs, test:sequencer and test:browser pass with no behaviour check changed; the default workspace and its arrangement are unchanged."
   - "The Playground --play reference is updated through the visual gate with the reason; the ratchet baseline is lower; dist's size is stated and within BUDGET."
+  - "The class tokens tests/browser/live-smoke.cjs reads after every Pages deploy (.osc-statusbar .osc-sb-name, .osc-sb-version, .osc-sg-node, .osc-sg-title, .osc-sg-cat, .osc-sg-edge-line, .osc-block-name, .osc-stl-hrow--track) stay on their elements, unstyled if need be, until F011 moves the smoke to data-osc hooks; the smoke passes against the built file."
 validation:
   - "node tests/browser/ui-flowbite-pro.cjs"
   - "npm run test:labs"
