@@ -320,8 +320,8 @@ fails when a value or a cited line stops matching the code.
 | Studio project file extension | .oscilla-studio.json | `STUDIO_FILE_EXTENSION` | `src/js/studio/schema.js:56` |
 | Patch file extension | .oscilla-patch.json | `PATCH_FILE_EXTENSION` | `src/js/studio/patches.js:50` |
 | Default timeline scale | 100 px/s | `pxPerSecond` | `src/js/studio/schema.js:111` |
-| Timeline zoom bounds | 4-4000 px/s | `TIMELINE_ZOOM` | `src/js/ui/studio/timeline-view.js:27` |
-| Timeline snap default | 0.1 s time grid | `EDITOR_DEFAULT_SNAP` | `src/js/ui/studio/timeline-view.js:38` |
+| Timeline zoom bounds | 4-4000 px/s | `TIMELINE_ZOOM` | `src/js/ui/studio/timeline-view.js:28` |
+| Timeline snap default | 0.1 s time grid | `EDITOR_DEFAULT_SNAP` | `src/js/ui/studio/timeline-view.js:39` |
 | Maximum node import count | 512 nodes | `STUDIO_IMPORT_LIMITS` | `src/js/studio/validate.js:76` |
 | Undo history limit | 200 entries | `STUDIO_HISTORY_LIMIT` | `src/js/studio/history.js:34` |
 | Paste and duplicate offset | (24, 24) units | `PASTE_OFFSET` | `src/js/studio/actions.js:82` |

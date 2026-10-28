@@ -30,13 +30,15 @@ test('the graph pinch still zooms about the midpoint through the shared geometry
   assert.ok(v.zoom > 1);
 });
 
-test('a pinch spreading by one zoom factor equals one keyboard zoom-in step at the same anchor', () => {
+test('a spread by one zoom factor is one keyboard zoom-in step at the same anchor', () => {
   for (const [pps, scrollX, anchor] of [[100, 0, 200], [100, 340, 75], [37.5, 12, 410]]) {
     const view = { pxPerSecond: pps, scrollX };
     const key = zoomAround(view, 1, anchor);
     const half = 40;
-    const pinch = pinchTimeline(view, pair(anchor, half), pair(anchor, half * TIMELINE_ZOOM.factor));
-    assert.ok(near(pinch.pxPerSecond, key.pxPerSecond), `${pps}: ${pinch.pxPerSecond} vs ${key.pxPerSecond}`);
+    const pinch = pinchTimeline(view, pair(anchor, half),
+      pair(anchor, half * TIMELINE_ZOOM.factor));
+    assert.ok(near(pinch.pxPerSecond, key.pxPerSecond),
+      `${pps}: ${pinch.pxPerSecond} vs ${key.pxPerSecond}`);
     assert.ok(near(pinch.scrollX, key.scrollX, 1e-7), `${pps}: ${pinch.scrollX} vs ${key.scrollX}`);
     assert.ok(near(pinch.pxPerSecond, pps * TIMELINE_ZOOM.factor));
     assert.ok(near(timeAt(pinch, anchor), timeAt(view, anchor), 1e-7), 'the anchor keeps its time');
