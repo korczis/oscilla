@@ -23,6 +23,13 @@
 // missing-file, error, timeout) with the names of the failing tests, so a test that only fails
 // because a new module does not exist yet is visible as that.
 //
+// A train (title `train(...)` or `train:`, .ai/repo/workflows/merge-train.md) lands several
+// member pull requests in one merge commit and is judged by its body instead: a table
+// `| member | what |` in the body's own prose, one row per member, `#<n>` and the member's pull
+// request title. A train without the table, with an empty one, with a row that is not `#<n>` or
+// whose `what` does not start with a conventional type is refused; so is one with a feat or
+// fix member, which lands as its own pull request. The train's waiver line does not count.
+//
 // Exit 0: nothing to prove, waived, or proven. Exit 1: not proven. Exit 2: usage.
 
 import { spawnSync } from 'node:child_process';
@@ -35,6 +42,8 @@ import { fileURLToPath } from 'node:url';
 // Any case, any spacing, and behind bracketed tags ("[WIP] Fix (x) : ..."): a title that reads
 // as feat or fix is one, whatever a stricter parser downstream makes of it.
 export const TITLE = /^\s*(?:\[[^\]]*\]\s*)*(feat|fix)\s*(\([^)]*\))?\s*!?\s*:/i;
+export const TRAIN = /^\s*(?:\[[^\]]*\]\s*)*train\s*(\([^)]*\))?\s*:/i;
+const TYPED = /^\s*(?:\[[^\]]*\]\s*)*[a-z]+\s*(\([^)]*\))?\s*!?\s*:/i;
 export const WAIVER = /^[ \t]*(?:[*-][ \t]+)?fail-first:[ \t]*n\/a\b[ \t]*(.*)$/im;
 const TEST_FILE = /^tests\/unit\/.+\.test\.mjs$/;
 const FILE_TIMEOUT_MS = 180_000;
@@ -56,6 +65,57 @@ export function waiver(body) {
   if (!m) return null;
   const reason = m[1].trim();
   return { reason: /[\p{L}\p{N}]/u.test(reason.replace(/<[^>]*>/g, '')) ? reason : '' };
+}
+
+/**
+ * The rows of a train body's `| member | what |` table ([{ member, what }]), or null when the
+ * body's own prose has no such table.
+ */
+export function trainMembers(body) {
+  const lines = proseOf(body).split('\n');
+  const at = lines.findIndex((l) => /^\s*\|\s*member\s*\|\s*what\s*\|\s*$/i.test(l));
+  if (at < 0) return null;
+  const rows = [];
+  for (const line of lines.slice(at + 1)) {
+    if (!/^\s*\|/.test(line)) break;
+    if (/^\s*\|[\s:|-]+\|\s*$/.test(line)) continue;
+    const cells = line.trim().replace(/^\||\|$/g, '').split('|').map((c) => c.trim());
+    rows.push({ member: cells[0], what: cells.slice(1).join('|') });
+  }
+  return rows;
+}
+
+function judgeTrain(body, say) {
+  const rows = trainMembers(body);
+  const refuse = (why) => {
+    say(`fail-first: ${why}`);
+    say('fail-first: a train lists each member as `| #<n> | <its pull request title> |` under a'
+      + ' `| member | what |` table and has no feat or fix member'
+      + ' (.ai/repo/workflows/merge-train.md)');
+    return 'not-proven';
+  };
+  if (rows === null) return refuse('a train, and its body has no `| member | what |` table');
+  if (!rows.length) return refuse('a train, and the member table lists no member');
+  let bad = 0;
+  for (const { member, what } of rows) {
+    if (!/^#\d+$/.test(member)) {
+      say(`fail-first: train member ${JSON.stringify(member)} is not a pull request number`);
+      bad += 1;
+    } else if (!TYPED.test(what)) {
+      say(`fail-first: train member ${member} does not start with its pull request title`
+        + ` (a conventional type): ${what}`);
+      bad += 1;
+    } else if (TITLE.test(what)) {
+      say(`fail-first: train member ${member} is ${what}; a feat or fix lands as its own pull`
+        + ' request, where its tests are judged');
+      bad += 1;
+    } else {
+      say(`fail-first: train member ${member}: ${what}`);
+    }
+  }
+  if (bad) return refuse(`${bad} of ${rows.length} train member(s) refused`);
+  say(`fail-first: train of ${rows.length} member(s), none feat or fix; nothing to prove`);
+  return 'not-applicable';
 }
 
 /** The kind of a failed `node --test` run, from its output. */
@@ -122,6 +182,7 @@ export function failFirst({ repo, title, body, head = 'HEAD', base, baseBranch =
   const say = (s) => lines.push(s);
   const t = String(title || '').trim();
   say(`fail-first: PR title: ${t || '(none)'}`);
+  if (TRAIN.test(t)) return { status: judgeTrain(body, say), lines };
   if (!TITLE.test(t)) {
     say('fail-first: not a feat or fix PR; nothing to prove');
     return { status: 'not-applicable', lines };

@@ -286,3 +286,64 @@ test('a unit test file with a non-ASCII name is seen', (t) => {
   assert.equal(r.status, 0, r.out);
   assert.match(r.out, /výstup\.test\.mjs: fails without the change \(assertion\)/);
 });
+
+// A train (.ai/repo/workflows/merge-train.md) lands several member pull requests in one merge
+// commit. Its own title is `train(...)`, which no type check matches, so without this a feat or
+// fix member would land with nothing proven. The body's `| member | what |` table names each
+// member with its pull request title; a feat or fix member is refused, and so is a train that
+// does not say what its members are. A waiver line in the train's body does not count.
+const TRAIN_BODY = (rows) => ['A train.', '', '| member | what |', '|---|---|', ...rows, '',
+  'fail-first: n/a (train of chore/docs members)', ''].join('\n');
+
+test('a train with only chore and docs members passes, and names its members', (t) => {
+  const repo = fixture();
+  t.after(() => repo.dispose());
+  repo.commit('docs', { 'README.md': 'fixture, documented\n' });
+  const r = run(repo, 'train(2026-10-28): #243, #244 in one CI run', TRAIN_BODY([
+    '| #243 | chore(release): record v1.2.3 |',
+    '| #244 | docs(pack): usage comments name the checkout |',
+  ]));
+  assert.equal(r.status, 0, r.out);
+  assert.match(r.out, /fail-first: train member #243: chore\(release\): record v1\.2\.3/);
+  assert.match(r.out, /fail-first: train of 2 member\(s\), none feat or fix; nothing to prove/);
+});
+
+test('a train with a feat or fix member is refused, whatever the train body waives', (t) => {
+  const repo = fixture();
+  t.after(() => repo.dispose());
+  repo.commit('feat', {
+    'src/value.mjs': 'export const value = () => 1; // tidied\n',
+    'tests/unit/tidy.test.mjs': VALUE_TEST(1),
+  });
+  for (const title of ['train(2026-10-28): #1, #2', 'Train: two members', '[WIP] train (x) : y']) {
+    const r = run(repo, title, TRAIN_BODY([
+      '| #1 | docs(x): say more |',
+      '| #2 | feat(y): a new control |',
+    ]));
+    assert.equal(r.status, 1, `${title}: ${r.out}`);
+    assert.match(r.out, /train member #2 is feat\(y\): a new control/);
+    assert.match(r.out, /a feat or fix lands as its own pull request/);
+  }
+});
+
+test('a train without a member table, or with a row that names no type, is refused', (t) => {
+  const repo = fixture();
+  t.after(() => repo.dispose());
+  repo.commit('docs', { 'README.md': 'fixture, documented\n' });
+  const none = run(repo, 'train(2026-10-28): #1', 'Two members.\n\nfail-first: n/a train\n');
+  assert.equal(none.status, 1, none.out);
+  assert.match(none.out, /no `\| member \| what \|` table/);
+  const quoted = run(repo, 'train(x): #1', '```\n| member | what |\n|---|---|\n'
+    + '| #1 | docs(x): y |\n```\n');
+  assert.equal(quoted.status, 1, quoted.out);
+  assert.match(quoted.out, /no `\| member \| what \|` table/);
+  const empty = run(repo, 'train(x): #1', TRAIN_BODY([]));
+  assert.equal(empty.status, 1, empty.out);
+  assert.match(empty.out, /the member table lists no member/);
+  const untyped = run(repo, 'train(x): #1', TRAIN_BODY(['| #1 | a new control |']));
+  assert.equal(untyped.status, 1, untyped.out);
+  assert.match(untyped.out, /train member #1 does not start with its pull request title/);
+  const unnumbered = run(repo, 'train(x): #1', TRAIN_BODY(['| one | docs(x): y |']));
+  assert.equal(unnumbered.status, 1, unnumbered.out);
+  assert.match(unnumbered.out, /train member "one" is not a pull request number/);
+});

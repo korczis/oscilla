@@ -46,6 +46,13 @@ A claim a person types is not evidence; a run against the merge base is.
   log, and whether it is a good reason is for the reviewer.
 - The program that judges a pull request is the base branch's `scripts/fail-first.mjs`, not
   the copy the pull request carries.
+- A train (title `train(...)` or `train:`, `.ai/repo/workflows/merge-train.md`) has no change
+  of its own to prove and is judged by its members instead. Its body carries, in its own
+  prose, a table `| member | what |` with one row per member: `#<n>` and that member's pull
+  request title. A train without the table or with an empty one, a row that is not `#<n>`, a
+  `what` that does not start with a conventional type, and a feat or fix member are refused:
+  a feat or fix lands as its own pull request, where its tests are judged. The train's
+  waiver line does not count for its members.
 - One proving file satisfies the rule. It does not prove that every test in the pull request
   is meaningful: the job lists the files that pass without the change so a reviewer sees
   them, and the #149 defect (a test beside the path it claims to cover) is caught only when
@@ -82,7 +89,10 @@ that fails on the head too is not evidence, and one that fails there once and pa
 the retry still is; a test file with a non-ASCII name is seen; `Fix(x):`, `fix (x):`, `[WIP] fix(x):` and `FEAT!:` are checked like
 `fix(x):`; a waiver whose reason is `<reason>` or `...`, or that stands in a code block, an
 HTML comment, a blockquote or mid-sentence, is refused; a test that reads `git ls-files`
-is evidence.
+is evidence; a train of chore and docs members passes and prints each member; a train with a
+`feat` member is refused under the titles `train(x):`, `Train:` and `[WIP] train (x) :` even
+with a waiver in its body; a train with no member table, a table inside a code block, an
+empty table, an untyped row or a row that is not `#<n>` is refused.
 
 What it cannot see:
 
@@ -100,12 +110,15 @@ What it cannot see:
   a check GitHub runs from the base branch and branch protection requiring it, which is the
   owner's setting. Both change guarded paths, so `project.review-verdict` asks for a
   reviewer's verdict on them, with the same limit on its own job.
-- A branch that does not contain this rule. Branch protection on `main` requires `gate` and
-  not an up-to-date branch (`strict: false`), so a pull request whose last run was green
-  before the rule reached `main` keeps that `gate` and can merge without a fail-first run.
-  It is bound from its next run, which needs a new commit on it, in practice a merge of
-  `main`. Merging `main` into every pull request open when the rule landed is a step of the
-  coordinator's landing procedure and is not machine-checked
+- Whether a train's member table tells the truth. The job reads the titles the body states;
+  that a row's title is its member's and that every merged member is listed is for the
+  reviewer of the train (`gh pr view <n> --json title` answers it).
+- A merge that bypasses branch protection. Protection on `main` requires `gate` on an
+  up-to-date branch (`strict: true`, `contexts: [gate]`, read from
+  `gh api repos/korczis/oscilla/branches/main/protection` on 2026-10-28), so a pull request
+  merges only after a run on a head that contains `main`, and therefore this rule; a branch
+  whose last green run predates the rule must merge `main` and run again first. An
+  administrator's merge past protection is the owner's and is not checked here
   (`project.review-verdict` says the same of itself).
 
 Locally: `node scripts/fail-first.mjs --title "fix(scope): ..."` checks the committed head against
