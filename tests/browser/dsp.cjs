@@ -7,7 +7,7 @@
 // Bundles tests/browser/fixtures/dsp-entry.js in memory with esbuild and serves it with
 // fixtures/dsp.html through page.route (nothing is written to disk). Resolves esbuild and
 // playwright from app/node_modules, or from NODE_PATH
-// (e.g. NODE_PATH=/Users/korczis/dev/oscilla/tests/node_modules).
+// (e.g. NODE_PATH=<checkout>/tests/node_modules).
 'use strict';
 
 const path = require('path');

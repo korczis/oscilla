@@ -22,4 +22,18 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-01
-updated_at: 2026-10-18
+updated_at: 2026-10-28T19:59:08Z
+started_at: 2026-10-28T17:29:37Z
+started_event: sha256:a385808f0570fdfafdca091a7b0dbbaea7dbcf8f649d3177bc298c7cbee6f467
+verified_at: 2026-10-28T17:59:15Z
+verified_event: sha256:5c1fea0d3b59aae5afdc9f2b53a948cbfea57f1fc87018f9bd6a07e74537def4
+completed_at: 2026-10-28T19:59:08Z
+completed_event: sha256:f7b3e6ebc25184e253d30e037a4eb92226e0de6ef50e22740b5d81f5b5bd543e
+evidence:
+  - covers: verified
+    type: test
+    command: "OSC_LOAD_MAX=64 node tests/browser/engine-v1port.cjs (chromium, firefox, webkit); node --test tests/unit/browser-timing.test.mjs"
+    result: "At 44a4eda, §80 section: 16 patterns x (trigger+stop, retrigger+stop, 8 rapid start/stop, mode switch then stop) plus the 15 listed-name checks. chromium 215/215, webkit 215/215. firefox at load 35-48: 5 §80 timing-bound misses with an empty graph (oscs 0, voices 0, nodes 0; audio-clock tick 48-85 ms); the whole suite re-run at load 58: every §80 check passes, 214/215, the one miss being the existing 'continuous sweep: main-thread scheduling cost < 20 ms' (21 ms). Timing debt unchanged (timer-sleep 52, counted-poll 6). npm test 3161/3162; the miss is the load-sensitive §145-§147 budget test (load 56), not touched here."
+    artifact: "tests/browser/engine-v1port.cjs"
+    commit: 44a4eda8424a9125b5c9828b367d5a69bf69bc9e
+    recorded_at: 2026-10-28T17:59:25Z

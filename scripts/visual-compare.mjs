@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Visual comparison against the reference screenshot.
 //
-//   NODE_PATH=/Users/korczis/dev/oscilla/tests/node_modules node scripts/visual-compare.mjs \
+//   NODE_PATH=<checkout>/tests/node_modules node scripts/visual-compare.mjs \
 //     [target] [--mock] [--responsive] [--crops] [--label <name>] [--out <dir>] [--play]
 //
 // --out <dir>  write every artifact there instead of tests/visual/out (agents running in
