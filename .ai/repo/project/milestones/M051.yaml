@@ -15,4 +15,11 @@ risks:
   - "A worker picking a sentence or a buyer because the plan seems to need one: both were decided under a recorded delegation (Q002, Q003), and the owner may override them."
   - "Commercial work starting before v4.0: the product-direction invariant and P004's ADR forbid it; the question returns as a new intent after v4.0."
 created_at: 2026-10-18
-updated_at: 2026-10-18
+updated_at: 2026-10-28T13:32:44Z
+evidence:
+  - covers: milestone_verified
+    type: manual
+    command: "majordomus plan list --milestone M051; npm test"
+    result: "P003, P004 and P005 DONE with their evidence; their Q dependencies Q002, Q003 and Q005 DONE with owner_decision evidence (delegated decisions of 2026-10-18, attributed to the deciding session). P005 recorded done on chore/plan-done-verify-backlog after its two evidence rows."
+    commit: 9135c8f417edc0f39b3a345c5e2e677149b6ac3c
+    recorded_at: 2026-10-28T13:32:44Z
