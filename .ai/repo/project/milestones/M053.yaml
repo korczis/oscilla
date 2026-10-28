@@ -15,4 +15,11 @@ evidence_required:
 risks:
   - "An act on a published release cannot be undone silently: an attached asset changes what the Release serves, so each act names the exact bytes (git show <tag>:dist/index.html) and the route (.ai/repo/releases/README.md)."
 created_at: 2026-10-18
-updated_at: 2026-10-18
+updated_at: 2026-10-28T13:32:52Z
+evidence:
+  - covers: milestone_verified
+    type: manual
+    command: "majordomus plan list --milestone M053; node scripts/release-record.mjs --version 3.0.0 --check; node scripts/release-record.mjs --version 3.1.0 --check"
+    result: "Q007 DONE with owner_decision evidence (owner act 2026-10-26: oscilla-v3.0.0.html and oscilla-v3.1.0.html attached). On 2026-10-28 both release records --check report they match what was published (sha256 39b6dcc7... and 0cf037e5...), so V386 and V433 are no longer waiting on an owner act."
+    commit: 9135c8f417edc0f39b3a345c5e2e677149b6ac3c
+    recorded_at: 2026-10-28T13:32:52Z

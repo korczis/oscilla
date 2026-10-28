@@ -13,3 +13,11 @@ validation:
 evidence_required:
   - "milestone_verified"
 created_at: 2026-10-02
+updated_at: 2026-10-28T13:33:54Z
+evidence:
+  - covers: milestone_verified
+    type: ci
+    command: "npm run test:live -- --expect-version 3.13.0 --expect-commit e272fac0e41693d0a2e3d16545710ecae653dfce; node scripts/release-record.mjs --version 3.0.0 --check; node scripts/release-record.mjs --version 3.1.0 --check"
+    result: "V433 DONE: 3.1.x released through the single-source version and Pages workflow (v3.1.0 at a810b94 with its release/v1 record, --check passes), publicly smoke-tested (test:live 18/18 in chromium, firefox, webkit against the live 3.13.0 page on 2026-10-28), deployment evidence in .ai/repo/releases/."
+    commit: 9135c8f417edc0f39b3a345c5e2e677149b6ac3c
+    recorded_at: 2026-10-28T13:33:54Z
