@@ -13,3 +13,11 @@ validation:
 evidence_required:
   - "milestone_verified"
 created_at: 2026-10-02
+updated_at: 2026-10-28T13:33:52Z
+evidence:
+  - covers: milestone_verified
+    type: ci
+    command: "npm run test:live -- --expect-version 3.13.0 --expect-commit e272fac0e41693d0a2e3d16545710ecae653dfce; node scripts/release-record.mjs --version 3.0.0 --check; node scripts/release-record.mjs --version 3.1.0 --check"
+    result: "Studio unit, audio, timeline, interaction, accessibility, file:// and visual suites run in the release gate (test:release carries test:studio and test:visual; the 3.13.0 receipt records result passed for chromium,firefox,webkit over file,http, declared-only skips); the independent reviews V430/V431 are done with their findings fixed; performance and bundle audited and documentation and self-knowledge complete (V432 done). Every issue of M032 DONE."
+    commit: 9135c8f417edc0f39b3a345c5e2e677149b6ac3c
+    recorded_at: 2026-10-28T13:33:52Z
