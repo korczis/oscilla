@@ -47,6 +47,10 @@
 //                       light and dark theme text contrast >= 4.5:1 on its surfaces (§272 C6:
 //                       the corner "Tracks" label included)
 //   touch-targets       coarse pointer: buttons and handles >= 44 px
+//   pinch               V603: a two-pointer pinch spreading by one zoom factor about the playhead
+//                       reaches the zoom level and anchor of the toolbar zoom-in; the pointers
+//                       are SYNTHESIZED touch PointerEvents (Playwright has no multi-touch), so it
+//                       proves the handler, not a real gesture; the model's clips do not change
 //   no-console-errors
 // --screens writes PNGs to tests/visual/out-studio/ (not committed).
 'use strict';
@@ -713,6 +717,71 @@ function defineChecks() {
       const light = Object.values(contrast).every((r) => r >= 4.5);
       return result({ noOverflow: ok, light, dark: Object.values(dark).every((r) => r >= 4.5) },
         { out, contrast, dark });
+    } },
+
+    { name: 'pinch', fn: async ({ page }) => {
+      // V603. Playwright has no multi-touch API: this check dispatches SYNTHESIZED touch
+      // PointerEvent pairs on the timeline, so it proves the editor's pinch handler and its
+      // geometry, not a real two-finger gesture. The reference is the toolbar's zoom-in, which
+      // zooms one step about the playhead; from the same view, the pinch spreads its pointers by
+      // the same factor (80 px apart to 100 px) about the same point.
+      const view = () => page.evaluate(() => {
+        const sc = document.querySelector('.osc-stl .osc-stl-scroll');
+        const c2 = document.querySelector('.osc-stl [data-clip="clip-2"]');
+        return { scroll: sc.scrollLeft, pps: parseFloat(c2.style.left), // clip-2 starts at 1 s
+          room: sc.scrollWidth - sc.clientWidth, width: sc.clientWidth };
+      });
+      const click = (k) => page.click(`.osc-stl [data-osc="studio.tl.${k}"]`);
+      const scaled = (ref, factor, what) => until(async () => {
+        const v = await view();
+        return near(v.pps, ref.pps * factor, ref.pps * 1e-3) ? v : null;
+      }, { ms: 3000, what });
+      await fresh(page);
+      await page.evaluate(() => window.OSCILLA.studio.transport.locate(2));
+      await until(async () => near((await H.playhead(page)).p, 2, 1e-6),
+        { ms: 3000, what: 'the transport is located at 2 s' });
+      // Zoom in until the timeline can scroll, so the anchor is observable in scrollLeft.
+      let s0 = await view();
+      const roomBy = Date.now() + 15000; // wall-clock bound; `scrollable` below names a miss
+      while (s0.room < 400 && s0.pps < 2000 && Date.now() < roomBy) {
+        await click('zoom-in');
+        s0 = await scaled(s0, 1.25, 'a toolbar zoom-in step lands');
+      }
+      const anchor = 2 * s0.pps - s0.scroll; // the playhead, where the toolbar zoom anchors
+      await click('zoom-in');
+      const key = await scaled(s0, 1.25, 'the toolbar zoom-in reference step lands');
+      await click('zoom-out');
+      const back = await scaled(s0, 1, 'the toolbar zoom-out returns to the start view');
+      const clipsBefore = JSON.stringify((await H.model(page)).timeline.clips);
+      const sc = await H.rect(page, '.osc-stl .osc-stl-scroll');
+      const lane = await H.rect(page, '.osc-stl .osc-stl-row--lane');
+      await page.evaluate(({ x0, y, a }) => {
+        const scroller = document.querySelector('.osc-stl .osc-stl-scroll');
+        const fire = (type, id, x) => {
+          const target = document.elementFromPoint(x0 + x, y) || scroller;
+          target.dispatchEvent(new PointerEvent(type, { pointerId: id, pointerType: 'touch',
+            isPrimary: id === 11, clientX: x0 + x, clientY: y, bubbles: true, cancelable: true,
+            composed: true }));
+        };
+        fire('pointerdown', 11, a - 40);
+        fire('pointerdown', 12, a + 40);
+        fire('pointermove', 11, a - 50);
+        fire('pointermove', 12, a + 50);
+        fire('pointerup', 11, a - 50);
+        fire('pointerup', 12, a + 50);
+      }, { x0: sc.x, y: lane.cy, a: anchor });
+      const pinched = await scaled(s0, 1.25, 'the synthesized pinch zooms one step');
+      const clipsAfter = JSON.stringify((await H.model(page)).timeline.clips);
+      return result({
+        scrollable: s0.room >= 400 && anchor > 50 && anchor < s0.width - 50,
+        backToStart: near(back.scroll, s0.scroll, 1),
+        sameLevel: near(pinched.pps, key.pps, key.pps * 1e-3),
+        // scrollLeft is read in whole pixels (WebKit rounds it, and the toolbar reference reads
+        // it too), so the anchor is held to 3 px: about 0.01 s at this scale.
+        sameAnchor: near(pinched.scroll, key.scroll, 3)
+          && near((pinched.scroll + anchor) / pinched.pps, 2, 3 / pinched.pps),
+        viewOnly: clipsAfter === clipsBefore,
+      }, { s0, anchor, key, back, pinched });
     } },
 
     { name: 'touch-targets', fn: async ({ browser }) => {
