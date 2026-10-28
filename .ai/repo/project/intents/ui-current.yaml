@@ -1,0 +1,42 @@
+id: ui-current
+title: "Every workspace of OSCILLA shows the product as it is at its current release, connected to the features it relates to"
+statement: "On 2026-10-28 the owner looked at the live Studio (#m=studio) and About (#m=about) at v3.13.0 and said they are outdated, and that so is, in their view, the whole interface: update everything, develop everything, add every related feature (Claude Code session oscilla-b0, in Czech: 'tohle je outdated ... imho cele ui - vse updatni, vse rozvin, pridej veskere souvisejici features, update vse'). An audit of the live page the same day found the interface working but behind the product: About opens on 'Built in one night', 5 h 51 min, for a project of seventeen release stations over four weeks, and says nothing of where OSCILLA is going; Experiments with an empty store is half an empty screen; Filter Lab and the Analyze views are isolated panels that leave most of the viewport empty and do not lead to the Studio or MEASURE that do the same thing in depth; nothing links a Learn concept to the workspace that demonstrates it beyond a single demo button. The features the owner calls related are already planned and stay where they are: MIDI (M045), measurement extensions (M047), Studio completion (M048), the perception lessons (M049) and the first screen (M050, whose layout the owner still chooses on Q004). This intent covers what they do not: every workspace audited against the product, About telling the project as it stands and what comes next, no workspace left as an isolated or half-empty panel, and the workspaces connected to each other."
+invariants:
+  - "No fake data: an example a workspace offers is produced by actually running OSCILLA (for a measurement, the TEST CONTEXT loopback) and is labelled as such (project.no-fake-science)"
+  - "The single file, file:// and the /oscilla/ sub-path keep working, and every inventoried deep link resolves as before (project.single-file-deliverable)"
+  - "The existing tokens and visual language stay (project.visual-identity-lock); the visual reference changes only through the visual gate with a recorded reason"
+  - "About names the current release (project.about-names-current-release) and cites only what the repository records"
+  - "The first screen's layout stays the owner's choice on Q004; this intent changes no default workspace"
+milestones:
+  - "M054"
+satisfaction:
+  - id: "ui-audited"
+    criterion: "Every workspace (Playground, Measure, Experiments, Analyzer, Filter Lab, Compare, Synthesis, Sequencer, Presets, Learn, Studio, About) is audited at 1536x1024 and 390x844 against the features it serves: what is stale, empty, isolated or missing, each finding traced to a feature record or a plan issue"
+    evidence: "command"
+    ref: "test -s docs/ui-audit.md"
+  - id: "about-tells-the-project"
+    criterion: "About tells the project as it stands: the release line to the current release, the workspaces and what each is for, and what comes next as the open milestones of the plan, from records embedded at build time; it no longer opens on the first night alone"
+    evidence: "command"
+    ref: "node --test tests/unit/about-current.test.mjs"
+  - id: "no-isolated-workspace"
+    criterion: "No workspace at 1536x1024 leaves more than a quarter of its viewport as an empty area, and each links to the workspaces that do the same thing in depth"
+    evidence: "command"
+    ref: "node tests/browser/ui-current.cjs"
+  - id: "empty-states-lead-somewhere"
+    criterion: "A workspace with nothing stored (Experiments, Findings, Studio patches) offers a real, labelled example produced by running OSCILLA and the next step, never an empty panel alone"
+    evidence: "command"
+    ref: "node tests/browser/ui-current.cjs"
+governance:
+  - "rule:project.visual-identity-lock"
+  - "rule:project.single-file-deliverable"
+  - "rule:project.no-fake-science"
+  - "rule:project.no-inert-surfaces"
+  - "rule:project.about-names-current-release"
+  - "adr:adr-0045"
+  - "adr:adr-0051"
+non_goals:
+  - "Choosing the first screen's layout (Q004, M050)"
+  - "Re-planning MIDI, the measurement extensions, Studio completion or the perception lessons, which their own milestones carry"
+  - "A new visual identity, a framework change or a marketing page outside the application"
+created_at: 2026-10-28
+updated_at: 2026-10-28
