@@ -15,7 +15,9 @@ pointer and by keyboard.
 - Loading the page never asks for MIDI access and shows no prompt. At load the page reads only
   `window.isSecureContext`, `typeof navigator.requestMIDIAccess` and one
   `navigator.permissions.query({ name: 'midi' })`, which the Permissions API defines as never
-  prompting.
+  prompting. If that query has not answered within 2 s (`MIDI_QUERY_TIMEOUT_MS`), the state is
+  `unknown` and Connect MIDI is offered; a later answer still sets the state.
+- Where Connect MIDI is not offered (`insecure`, `unsupported`) its whole row is hidden.
 - Only Connect MIDI asks the browser for access, always with `{ sysex: false }`. Choosing it
   again asks again; the state follows the latest request.
 - A permission already granted does not connect by itself: it reads "allowed" until Connect
@@ -56,20 +58,25 @@ name reads "unnamed input". The copy is `MIDI_COPY` in `src/js/midi/support.js`,
 ## What the gate builds do, measured
 
 `tests/browser/midi.cjs` measures the three browser builds the release gate runs (Playwright
-1.63.0) from `file://` and from `http://127.0.0.1/oscilla/`, in browser contexts with no MIDI
-test script, and prints each result on a `RECORD` line. On darwin arm64 (2026-10-28, the same
-builds ADR 0058 probed):
+1.63.0) from `file://` and from `http://127.0.0.1:<port>/oscilla/`, in browser contexts with no
+MIDI test script, and prints each result on a `RECORD` line. The http origin is the Pages-like
+sub-path served locally on 127.0.0.1, not the Pages origin `https://korczis.github.io`: no check
+loads the deployed site, so nothing here is a measurement of Pages itself, and each `RECORD`
+line names its origin that way. On darwin arm64 (2026-10-28, the same builds ADR 0058 probed):
 
-| Gate build | `file://` | `http://127.0.0.1` |
+| Gate build | `file://` | `http://127.0.0.1:<port>/oscilla/` (Pages-like, not Pages) |
 |---|---|---|
 | Chromium 153.0.8010.12 | `needs-permission`; Connect MIDI ends `denied`. With Playwright's `midi` grant: `allowed`, then `denied`; with `midi` and `midi-sysex`: `allowed`, then `no-devices`, and clearing the grant reads `revoked` | as `file://` |
-| Firefox 155.0 | `unsupported` (Connect MIDI not offered) | `needs-permission`; Connect MIDI shows `pending`, then `blocked` after several seconds (about 10 s in this run) |
+| Firefox 155.0 | `unsupported` (Connect MIDI not offered) | `needs-permission`; Connect MIDI shows `pending`, then `blocked` after several seconds: 7.0 s, 9.99 s and 9.98 s in three V501 runs on 2026-10-28 (ADR 0058 measured 3.0 to 12.9 s over 32 runs; the suite allows up to 60 s) |
 | WebKit 26.6 | `unsupported` | `unsupported` |
 
 These are gate builds, not the browsers people install: no statement here says what a released
 browser does. The CI runners (`ubuntu-latest`) were not measured when this was written; there
 the suite accepts the states ADR 0058 allows for a platform that may have no MIDI backend
-(`denied` or `failed`, and `no-devices` or `failed` with the grant) and records what it saw.
+(`denied` or `failed`, and `no-devices` or `failed` with the grant) and records what it saw. A
+Chromium request still `pending` at its deadline there is recorded as such ("pending at the
+30000 ms deadline", with the pending copy checked) rather than failed, and the revocation check
+is then skipped, because there is no access to withdraw; on darwin the same outcome fails.
 `insecure` is reached only over plain http on a non-local address, which no gate origin is, and
 `connected`, `disconnected` and the other states without a real device are proved with the test
 seam below.

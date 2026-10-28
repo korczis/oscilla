@@ -1,7 +1,9 @@
 #!/usr/bin/env node
 // OSCILLA MIDI support state (plan issue V501; ADR 0058 and its V500 note) on the built
 // dist/index.html in chromium, firefox and webkit, from file:// and from the Pages-like
-// sub-path http://127.0.0.1:<port>/oscilla/. The one browser suite the M045 issues share.
+// sub-path http://127.0.0.1:<port>/oscilla/ (served locally on 127.0.0.1: it is not the Pages
+// origin https://korczis.github.io, which this suite never loads). The one browser suite the
+// M045 issues share.
 //
 //   node tests/browser/midi.cjs [--dist dist/index.html] [--browsers chromium,firefox,webkit]
 //        [--origins file,http]   (or OSC_BROWSERS / OSC_ORIGINS through the harness)
@@ -17,7 +19,8 @@
 // Checks (asserted), per browser and origin:
 //   midi-measured-load          the state at load is the one measured for the gate build and
 //                               origin (darwin record of ADR 0058), with its exact copy
-//   midi-measured-no-prompt     where the query reads `prompt` at load it still does after it
+//   midi-measured-no-prompt     where the API exists, the permission query reads `prompt` both
+//                               just after the load and again after the load's own read
 //   midi-measured-connect       Connect MIDI where offered: Chromium settles to `denied`
 //                               (NotAllowedError); Firefox over http shows `pending`, then
 //                               `blocked` (SecurityError, 3-13 s); where the API is missing
@@ -31,6 +34,7 @@
 //                               at most one permission query, for `midi`; Connect MIDI then makes
 //                               exactly one call, { sysex: false }
 //   midi-seam-load              under the stub the page reads the query (WebKit's rejects: unknown)
+//   (each midi-seam-* check below first asserts the seam group in its page, as the ones above do)
 //   midi-seam-connect           by keyboard: pending, connected with the stub's self-naming device,
 //                               a second input, one leaves (still connected), the last leaves
 //                               (disconnected with its name), one plugs in (connected); the stub's
@@ -38,9 +42,17 @@
 //   midi-seam-no-devices        a resolved access without inputs; a device plugged in connects
 //   midi-seam-rejections        SecurityError blocked, NotAllowedError denied, NotSupportedError
 //                               failed with the name; a newer request wins over an older one
+//                               (polled until the older settlement has reached the page, and
+//                               nothing listens to its access)
 //
 // A gate build or platform not in the record (the CI runners, ubuntu-latest) is held to the
-// states the ADR allows for it and prints what it measured on a RECORD line.
+// states the ADR allows for it and prints what it measured on a RECORD line. There a Chromium
+// request still `pending` at its deadline is a recorded outcome, not a failure: the check
+// asserts the pending copy, the RECORD line says "pending at the <n> ms deadline", and
+// midi-measured-revoke is the declared skip (no access to withdraw). On darwin, the record,
+// the same request still pending fails.
+//
+// Loaded as a module (tests/unit/midi), it opens no run and exports its pure judgements.
 'use strict';
 
 const path = require('node:path');
@@ -57,15 +69,19 @@ const arg = (name, fallback) => {
 };
 const ROOT = path.resolve(__dirname, '..', '..');
 const DIST = path.resolve(arg('dist', path.join(ROOT, 'dist', 'index.html')));
-const RUN = suite.open({ name: 'midi', browsers: arg('browsers'), origins: arg('origins'),
-  defaultOrigins: ['file', 'http'] });
-const playwright = RUN.playwright;
+const RUN = require.main === module
+  ? suite.open({ name: 'midi', browsers: arg('browsers'), origins: arg('origins'),
+    defaultOrigins: ['file', 'http'] })
+  : null;
+const playwright = RUN ? RUN.playwright : null;
 
 const LOAD_MS = 90000;       // the page has reported ready and stated a MIDI state
 const SETTLE_MS = 30000;     // a request the stub or Chromium settles
 const FIREFOX_MS = 60000;    // Firefox rejects after 3.0-12.9 s (32 runs, ADR 0058)
 const STEP_MS = 15000;       // a state change the test drives through the stub
 const DARWIN = process.platform === 'darwin';
+// Off darwin (never measured) a Chromium request the platform leaves unanswered is recorded.
+const PENDING_RECORDED = !DARWIN;
 
 // The record of ADR 0058 (darwin arm64, Playwright 1.63.0): the state at load and after
 // Connect MIDI without a grant. Off darwin, the states the table allows for that condition.
@@ -79,6 +95,35 @@ const MEASURED = {
 const GRANTED = DARWIN ? ['no-devices'] : ['no-devices', 'failed'];
 const MIDI_ONLY = DARWIN ? ['denied'] : ['denied', 'failed'];
 const SEAM_LOAD = { chromium: 'needs-permission', firefox: 'needs-permission', webkit: 'unknown' };
+
+// ------------------------------------------------------------------------- pure judgements
+/**
+ * How a request's poll ended. `m` is view()'s result (`timedOut` set when `settled` was not
+ * reached by the deadline). With `pendingRecorded`, a request still `pending` at the deadline
+ * is an accepted, recorded outcome ({ ok: true, pending: true }); without it, a failure.
+ */
+function judgeSettled(m, settled, { pendingRecorded = false } = {}) {
+  if (!m.timedOut && settled.includes(m.state)) return { ok: true, pending: false };
+  if (pendingRecorded && m.timedOut && m.state === 'pending') return { ok: true, pending: true };
+  return { ok: false, pending: false };
+}
+
+/**
+ * midi-measured-no-prompt: null where the page has no API (it queried nothing); otherwise the
+ * query must read `prompt` just after the load and again after it.
+ */
+function judgeNoPrompt(atLoad, after) {
+  if (atLoad.api !== 'function') return null;
+  return { ok: atLoad.query === 'prompt' && after.query === 'prompt',
+    detail: `${atLoad.query} after the load, then ${after.query}` };
+}
+
+/** What a RECORD line says the origin was: never the Pages origin itself. */
+function originLabel(origin, url) {
+  if (origin === 'file') return `file:// (${url})`;
+  return `${url} (the Pages-like sub-path served locally on 127.0.0.1, `
+    + 'not the Pages origin https://korczis.github.io)';
+}
 
 let midiText;
 let failures = 0;
@@ -111,9 +156,12 @@ async function openPage(browser, url, { init, permissions } = {}) {
 const readMidi = (page) => page.evaluate(() => {
   const el = document.querySelector('[data-osc="midi.status"]');
   const btn = document.querySelector('[data-osc="midi.connect"]');
+  const row = document.querySelector('[data-osc="midi.actions"]');
   const app = window.OSCILLA && window.OSCILLA.engine;
   return { state: el.dataset.midiState || null, text: el.textContent.trim(),
-    offered: !!btn && btn.style.display !== 'none',
+    // Offered: the button and its whole actions row are shown (the row is what x-show hides).
+    offered: !!btn && !!row && row.contains(btn) && row.style.display !== 'none'
+      && btn.style.display !== 'none',
     lastError: app && app.lastError ? app.lastError.message : null,
     alerts: document.querySelectorAll('[data-osc="alerts"] .osc-toast').length };
 });
@@ -177,11 +225,20 @@ const seam = (page, fn, ...a) => page.evaluate(([f, args]) => window.__oscMidiSe
   [fn, a]);
 
 // ----------------------------------------------------------------------------- measured group
+// A request's poll: settled where it ends in `settled`, else what judgeSettled makes of it.
+async function settle(page, leg, settled, what, ms, pendingRecorded) {
+  const m = await view(page, (v) => settled.includes(v.state), what, ms);
+  return { m, g: judgeSettled(m, settled, { pendingRecorded }) };
+}
+
 async function measured(browser, b, origin, url, site) {
   const leg = `${b}/${origin}`;
   const build = `gate build ${b} ${browser.version()}, ${process.platform} ${process.arch}, `
     + `${origin}`;
+  const where = originLabel(origin, url);
   const expected = MEASURED[b];
+  const lenient = b === 'chromium' && PENDING_RECORDED;
+  const pendingAt = (ms) => `pending at the ${ms} ms deadline`;
 
   // midi-measured-load, midi-measured-no-prompt
   {
@@ -191,15 +248,16 @@ async function measured(browser, b, origin, url, site) {
       const p = await assertGroup(leg, id, page, 'measured');
       const m = await view(page, (v) => v.offered === (p.api === 'function'),
         `${leg}: Connect MIDI is offered exactly where the API is`);
-      console.log(`  RECORD [${leg}] ${JSON.stringify({ build, ...p, state: m.state })}`);
+      console.log(`  RECORD [${leg}] ${JSON.stringify({ build, origin: where, ...p,
+        state: m.state })}`);
       check(leg, id, `${build}: the state at load is ${expected.load[origin].join(' or ')}`,
         expected.load[origin].includes(m.state) && p.secure === true, m.state);
       check(leg, id, `${build}: the copy is the ADR's`, m.text === midiText(m.state, { site }),
         m.text);
-      if (p.query === 'prompt') {
-        const after = await probe(page);
-        check(leg, 'midi-measured-no-prompt', `${build}: the query still reads prompt after the `
-          + 'load', after.query === 'prompt', after.query);
+      const np = judgeNoPrompt(p, await probe(page));
+      if (np) {
+        check(leg, 'midi-measured-no-prompt', `${build}: where the API exists the query reads `
+          + 'prompt after the load, and still does', np.ok, np.detail);
       }
       check(leg, id, `${build}: Connect MIDI is offered exactly where the API is`,
         m.offered === (p.api === 'function'), JSON.stringify(m));
@@ -220,7 +278,8 @@ async function measured(browser, b, origin, url, site) {
       if (!before.offered) {
         check(leg, id, `${build}: Connect MIDI is not offered (${before.state})`,
           ['unsupported', 'insecure'].includes(before.state)
-            && await page.locator('[data-osc="midi.connect"]').isHidden(), before.state);
+            && await page.locator('[data-osc="midi.connect"]').isHidden()
+            && await page.locator('[data-osc="midi.actions"]').isHidden(), before.state);
       } else {
         const t0 = Date.now();
         await page.locator('[data-osc="midi.connect"]').click();
@@ -231,17 +290,23 @@ async function measured(browser, b, origin, url, site) {
             p.state === 'pending' && p.text === midiText('pending', { site }),
             `${p.state} after ${Date.now() - t0} ms`);
         }
-        const m = await stateIs(page, expected.connect,
-          `${leg}: the request settles to ${expected.connect.join(' or ')}`,
-          b === 'firefox' ? FIREFOX_MS : SETTLE_MS);
+        const ms = b === 'firefox' ? FIREFOX_MS : SETTLE_MS;
+        const { m, g } = await settle(page, leg, expected.connect,
+          `${leg}: the request settles to ${expected.connect.join(' or ')}`, ms, lenient);
         const after = await probe(page);
-        console.log(`  RECORD [${leg}] ${JSON.stringify({ build, connect: m.state,
-          ms: Date.now() - t0, query: after.query })}`);
-        const copyOk = m.state === 'failed'
-          ? /^MIDI could not start on this computer \(the browser reported \w+\)\.$/.test(m.text)
-          : m.text === midiText(m.state, { site });
-        check(leg, id, `${build}: Connect MIDI ends ${m.state}, with the ADR's copy`, copyOk,
-          `${m.text} (${Date.now() - t0} ms)`);
+        console.log(`  RECORD [${leg}] ${JSON.stringify({ build, origin: where,
+          connect: g.pending ? pendingAt(ms) : m.state, ms: Date.now() - t0,
+          query: after.query })}`);
+        if (g.pending) {
+          check(leg, id, `${build}: Connect MIDI is still ${pendingAt(ms)} (recorded off darwin), `
+            + 'with the ADR\'s copy', m.text === midiText('pending', { site }), m.text);
+        } else {
+          const copyOk = m.state === 'failed'
+            ? /^MIDI could not start on this computer \(the browser reported \w+\)\.$/.test(m.text)
+            : m.text === midiText(m.state, { site });
+          check(leg, id, `${build}: Connect MIDI ends ${m.state}, with the ADR's copy`,
+            g.ok && copyOk, `${m.text} (${Date.now() - t0} ms)`);
+        }
         check(leg, id, `${build}: the query no longer chooses the state (reads ${after.query})`,
           after.query === 'prompt', after.query);
       }
@@ -269,9 +334,13 @@ async function measured(browser, b, origin, url, site) {
           m.state === 'allowed' && m.text === midiText('allowed', { site }), m.text);
         await openSettings(page);
         await page.locator('[data-osc="midi.connect"]').click();
-        const r = await stateIs(page, MIDI_ONLY, `${leg}: midi alone settles`, SETTLE_MS);
-        check(leg, id, `${build}: midi alone still ends ${r.state}`, MIDI_ONLY.includes(r.state),
-          r.text);
+        const { m: r, g } = await settle(page, leg, MIDI_ONLY, `${leg}: midi alone settles`,
+          SETTLE_MS, lenient);
+        console.log(`  RECORD [${leg}] ${JSON.stringify({ build, origin: where,
+          midiOnly: g.pending ? pendingAt(SETTLE_MS) : r.state })}`);
+        check(leg, id, `${build}: midi alone still ends `
+          + `${g.pending ? pendingAt(SETTLE_MS) : r.state}`, g.ok
+          && (!g.pending || r.text === midiText('pending', { site })), r.text);
       } finally {
         await context.close();
       }
@@ -285,18 +354,27 @@ async function measured(browser, b, origin, url, site) {
         m.text);
       await openSettings(page);
       await page.locator('[data-osc="midi.connect"]').click();
-      const r = await stateIs(page, GRANTED, `${leg}: the granted request settles`, SETTLE_MS);
-      console.log(`  RECORD [${leg}] ${JSON.stringify({ build, granted: r.state, text: r.text })}`);
-      check(leg, id, `${build}: the granted request ends ${r.state}`, GRANTED.includes(r.state)
-        && (r.state !== 'no-devices' || r.text === midiText('no-devices', { site })), r.text);
-      if (r.state === 'no-devices') {
+      const { m: r, g } = await settle(page, leg, GRANTED, `${leg}: the granted request settles`,
+        SETTLE_MS, lenient);
+      const outcome = g.pending ? pendingAt(SETTLE_MS) : r.state;
+      console.log(`  RECORD [${leg}] ${JSON.stringify({ build, origin: where, granted: outcome,
+        text: r.text })}`);
+      if (g.pending) {
+        check(leg, id, `${build}: the granted request is still ${outcome} (recorded off darwin), `
+          + 'with the ADR\'s copy', r.text === midiText('pending', { site }), r.text);
+      } else {
+        check(leg, id, `${build}: the granted request ends ${r.state}`, g.ok
+          && (r.state !== 'no-devices' || r.text === midiText('no-devices', { site })), r.text);
+      }
+      if (g.ok && r.state === 'no-devices') {
         await context.clearPermissions();
         const v = await stateIs(page, ['revoked'], `${leg}: a cleared grant is revoked`);
         check(leg, id, `${build}: clearing the grant reads revoked`,
           v.text === midiText('revoked', { site }), v.text);
       } else {
-        RUN.skip(leg, 'midi-measured-revoke', `${build}: the granted request ended ${r.state}, `
-          + 'so there is no access to withdraw');
+        RUN.skip(leg, 'midi-measured-revoke', `${build}: the granted request `
+          + `${g.pending ? `was still ${outcome}` : `ended ${r.state}`}, so there is no access `
+          + 'to withdraw');
       }
     } finally {
       await context.close();
@@ -387,6 +465,7 @@ async function seamChecks(browser, b, origin, url, site) {
     // midi-seam-connect (by keyboard)
     {
       const id = 'midi-seam-connect';
+      await assertGroup(leg, id, page, 'seam');
       const NAME = midiStub.STUB_NAME;
       const SECOND = `${NAME} 2`;
       const THIRD = `${NAME} 3`;
@@ -437,6 +516,7 @@ async function seamChecks(browser, b, origin, url, site) {
     // midi-seam-no-devices
     {
       const id = 'midi-seam-no-devices';
+      await assertGroup(leg, id, page, 'seam');
       await page.locator('[data-osc="midi.connect"]').click();
       await stateIs(page, ['pending'], `${leg}: Connect MIDI again starts a new request`);
       await seam(page, 'resolve', 1, []);
@@ -452,6 +532,7 @@ async function seamChecks(browser, b, origin, url, site) {
     // midi-seam-rejections
     {
       const id = 'midi-seam-rejections';
+      await assertGroup(leg, id, page, 'seam');
       let i = 2;
       for (const [name, state] of [['SecurityError', 'blocked'], ['NotAllowedError', 'denied'],
         ['NotSupportedError', 'failed']]) {
@@ -470,9 +551,15 @@ async function seamChecks(browser, b, origin, url, site) {
       await seam(page, 'reject', i + 1, 'NotAllowedError');
       await stateIs(page, ['denied'], `${leg}: the newer request is denied`);
       await seam(page, 'resolve', i, [midiStub.STUB_NAME]);
+      // The condition: the older request's settlement has reached the page (every reaction the
+      // page attached to it has run), polled against a named deadline; only then is it judged.
+      await until(() => seam(page, 'delivered', i),
+        { ms: STEP_MS, what: `${leg}: the older request's resolution reaches the page` });
       const last = await readMidi(page);
+      const stale = await seam(page, 'listening', i);
       check(leg, id, 'handles (stubbed API): an older request that resolves later is ignored',
-        last.state === 'denied', last.state);
+        last.state === 'denied' && stale === 0,
+        `${last.state}; ${stale} statechange listener(s) on the older access`);
       check(leg, id, 'the page reports no error and raises no notification for MIDI',
         !last.lastError && last.alerts === 0 && errors.length === 0,
         JSON.stringify({ lastError: last.lastError, alerts: last.alerts, errors }));
@@ -483,7 +570,7 @@ async function seamChecks(browser, b, origin, url, site) {
 }
 
 // ----------------------------------------------------------------------------------- the run
-(async () => {
+async function main() {
   ({ midiText } = await import(pathToFileURL(path.join(ROOT, 'src', 'js', 'midi',
     'support.js')).href));
   await RUN.ready();
@@ -497,6 +584,7 @@ async function seamChecks(browser, b, origin, url, site) {
         for (const origin of RUN.origins) {
           const url = origin === 'http' ? server.url : pathToFileURL(DIST).href;
           const site = origin === 'http' ? new URL(server.url).host : 'this page';
+          console.log(`  origin [${b}/${origin}] ${originLabel(origin, url)}`);
           try {
             await measured(browser, b, origin, url, site);
             await seamChecks(browser, b, origin, url, site);
@@ -513,4 +601,8 @@ async function seamChecks(browser, b, origin, url, site) {
   }
   console.log(`\n${failures ? `${failures} FAILURE(S)` : 'ALL PASS'} (${passes} checks passed)`);
   process.exit(failures ? 1 : 0);
-})();
+}
+
+if (require.main === module) main().catch((e) => { console.error(e); process.exit(1); });
+
+module.exports = { judgeSettled, judgeNoPrompt, originLabel, MEASURED, GRANTED, MIDI_ONLY };

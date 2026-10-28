@@ -19,6 +19,10 @@
 //                              statechange with its port is dispatched on the access and port
 //   message(name, bytes)       a midimessage with a Uint8Array data and a timeStamp on an input
 //   port(name)                 the stub input itself (in the page), to listen on it
+//   delivered(i)               true once request i's settlement has reached the page: the
+//                              stub's own reaction, attached at settle time after the page's,
+//                              has run, so every reaction the page attached has run before it
+//   listening(i)               how many statechange listeners request i's access holds
 //
 // PAGE_READS lists every member src/js/midi reads on these objects (tests/unit/midi holds the
 // module to it); tests/browser/midi.cjs compares them with MIDIAccess.prototype,
@@ -69,11 +73,22 @@ function install(cfg) {
   class StubAccess extends EventTarget {
     constructor(names) {
       super();
+      this.listening = 0;
       this.inputs = new Map();
       this.outputs = new Map();
       this.sysexEnabled = false;
       this.onstatechange = null;
       for (const n of names) this.add(n);
+    }
+
+    addEventListener(type, fn, options) {
+      if (type === 'statechange' && fn) this.listening += 1;
+      super.addEventListener(type, fn, options);
+    }
+
+    removeEventListener(type, fn, options) {
+      if (type === 'statechange' && fn) this.listening = Math.max(0, this.listening - 1);
+      super.removeEventListener(type, fn, options);
     }
 
     add(name) {
@@ -132,17 +147,26 @@ function install(cfg) {
     enumerable: true,
     writable: true,
     value: function requestMIDIAccess(options) {
-      return new Promise((resolve, reject) => {
-        const copy = options === undefined ? null : JSON.parse(JSON.stringify(options));
-        requests.push({ options: copy, resolve, reject, settled: false });
-      });
+      const r = { options: options === undefined ? null : JSON.parse(JSON.stringify(options)),
+        settled: false, delivered: false, access: null };
+      r.promise = new Promise((resolve, reject) => { r.resolve = resolve; r.reject = reject; });
+      requests.push(r);
+      return r.promise;
     },
   });
-  const settle = (i) => {
+  const request = (i) => {
     const r = requests[i];
     if (!r) throw new Error(`midi stub: no request ${i} (${requests.length} made)`);
+    return r;
+  };
+  const settle = (i) => {
+    const r = request(i);
     if (r.settled) throw new Error(`midi stub: request ${i} is already settled`);
     r.settled = true;
+    // Reactions run in the order they were attached: this one, attached now, runs after every
+    // reaction the page attached when it made the request.
+    const mark = () => { r.delivered = true; };
+    r.promise.then(mark, mark);
     return r;
   };
   window.__oscMidiSeam = Object.freeze({
@@ -153,9 +177,13 @@ function install(cfg) {
     resolve(i, names) {
       const access = new StubAccess(names || []);
       latest = access;
-      settle(i).resolve(access);
+      const r = settle(i);
+      r.access = access;
+      r.resolve(access);
       return true;
     },
+    delivered: (i) => request(i).delivered,
+    listening: (i) => (request(i).access ? request(i).access.listening : 0),
     reject(i, name, message) {
       settle(i).reject(new DOMException(message || `${name} (stub)`, name));
       return true;
