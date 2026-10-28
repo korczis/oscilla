@@ -32,6 +32,16 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-18
-updated_at: 2026-10-28T19:32:10Z
+updated_at: 2026-10-28T19:54:06Z
 started_at: 2026-10-28T19:32:10Z
 started_event: sha256:0765f729c05298a9e68050364caffdf10c6e8b86abd9018bb0ad28388c10a82d
+verified_at: 2026-10-28T19:53:53Z
+verified_event: sha256:e7cbe7e2530af90220f79eb746bb5c7c6ce7770e55ddd523fc636eaf028a7321
+evidence:
+  - covers: verified
+    type: test
+    command: "OSC_LOAD_MAX=80 OSC_STRICT_SKIPS=1 node tests/browser/midi.cjs && npm test && node scripts/fail-first.mjs --title 'feat(midi): V501 MIDI input capability and support state' --base-branch origin/main"
+    result: "midi.cjs exit 0, ALL PASS (210 checks) on darwin arm64: chromium 153.0.8010.12 file 42/http 42, firefox 155.0 file 33/http 35, webkit 26.6 file 29/http 29; measured: chromium needs-permission then denied, grant no-devices then revoked; firefox file unsupported, http needs-permission then pending then blocked (7.0 s); webkit unsupported; spy: 0 requestMIDIAccess calls at load in every build; declared skips midi-measured-grant (firefox, webkit) and midi-measured-stub-fidelity (webkit). npm test 3184/3184 pass. fail-first proven by tests/unit/midi/support.test.mjs and wiring.test.mjs against origin/main 22498bc"
+    artifact: "tests/browser/midi.cjs"
+    commit: 44eca337ce286810ef500916a2e37b3a431de5be
+    recorded_at: 2026-10-28T19:54:06Z
