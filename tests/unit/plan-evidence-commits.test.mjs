@@ -46,6 +46,12 @@ const OFF_HISTORY = new Map([
     'V382: fourth commit of #61 (chore/v382-evidence), squash-merged as 1f68c76'],
   ['b8c59532fa90bf6ff6719c856bfeb7228f84ce95',
     'V433: second commit of #146 (ci/pages-runs-live-smoke), squash-merged as 3514628'],
+  ['9135c8f417edc0f39b3a345c5e2e677149b6ac3c',
+    'V433, M020, M032: first commit of #238 (chore/plan-done-verify-backlog), squash-merged as '
+      + '508bd3d'],
+  ['dcb28f29686156c586e32eff54225aa079c14be7',
+    'E017, E018, E021, E022, E025, V602: second commit of #238 (chore/plan-done-verify-backlog), '
+      + 'squash-merged as 508bd3d'],
 ]);
 
 /** Every evidence entry of the plan records: [{ file, index, commit?, result }]. */
