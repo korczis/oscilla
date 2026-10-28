@@ -3,6 +3,9 @@
 export const SRC_HTML = 'src/index.html';
 export const JS_ENTRY = 'src/js/main.js';
 export const CSS_ENTRY = 'src/styles/main.css';
+// The one Tailwind entry (ADR 0061) and its config; compiled after the legacy CSS (build.mjs).
+export const TAILWIND_ENTRY = 'src/styles/tailwind.css';
+export const TAILWIND_CONFIG = 'tailwind.config.cjs';
 export const DIST_HTML = 'dist/index.html';
 
 // Browsers the bundle is lowered for (esbuild syntax + CSS lowering, e.g. CSS nesting).
@@ -21,8 +24,10 @@ export const VENDOR_SCRIPTS = [
   },
 ];
 
-// Packages whose content ends up in dist/ without being imported by the JS bundle.
-export const BUILD_TIME_ASSETS = ['lucide-static'];
+// Packages whose content ends up in dist/ without being imported by the JS bundle: the Lucide
+// icons, and the CSS Tailwind generates with the flowbite plugin (tailwind.config.cjs). The
+// third-party notice names each, and verify-dist requires it there.
+export const BUILD_TIME_ASSETS = ['flowbite', 'lucide-static', 'tailwindcss'];
 
 // Size budget for dist/index.html (bytes). p5.min.js alone is ~1.03 MiB raw / ~244 KiB gzip.
 // V3 (MEASURE, EXPERIMENTS) raised it from 2 000 000 / 560 000 after measuring the contributors
@@ -41,6 +46,12 @@ export const BUILD_TIME_ASSETS = ['lucide-static'];
 // ~245 KB of the gzip, while the views call only about 28 of its 2D drawing functions; replacing
 // it is the deferred alternative. Raw follows gzip at the measured ratio (3.47), so gzip stays
 // the binding limit.
+// F001 (ADR 0061) compiles Tailwind with the flowbite plugin into the <style> and bundles five
+// flowbite components (drawer, dropdown, collapse, tooltip, tabs, with @popperjs/core) into the
+// app script, within the budget (gzip at level 9, as verify-dist measures): before
+// 2 824 602 B raw / 814 409 B gzip, after 2 884 461 B raw / about 831 490 B gzip (+59 859 B raw,
+// about +17 080 B gzip; the source digest the file carries moves gzip by a few bytes): about
+// 9 KB of compiled CSS, 47 KB of components and 3 KB of licence text in the notice.
 export const BUDGET = {
   rawBytes: 3_500_000,
   gzipBytes: 1_000_000,

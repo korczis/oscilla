@@ -1,10 +1,17 @@
 #!/usr/bin/env node
-// OSCILLA build: esbuild bundles src/styles/main.css and src/js/main.js (IIFE), then
-// pack-single-file.mjs assembles ONE static dist/index.html.
+// OSCILLA build: esbuild bundles src/styles/main.css and src/js/main.js (IIFE), Tailwind compiles
+// src/styles/tailwind.css (ADR 0061), then pack-single-file.mjs assembles ONE static
+// dist/index.html.
 //
 //   node scripts/build.mjs           write dist/index.html
 //   node scripts/build.mjs --check   rebuild in memory; exit 1 if dist/index.html differs
 //   node scripts/build.mjs --debug   unminified + inline source maps -> .debug/index.html
+//
+// Tailwind (ADR 0061, issue F001): TAILWIND_ENTRY is compiled with tailwind.config.cjs through
+// Tailwind's PostCSS API (the flowbite plugin, preflight off), then lowered and minified by the
+// same esbuild CSS pass as the legacy stylesheets. pack() emits it after the legacy CSS in the
+// one <style>, so a utility wins over a legacy rule of the same specificity. The compile reads
+// src/index.html and src/js (the config's content globs), which the source digest covers.
 //
 // Deterministic by construction: pinned esbuild, no timestamps, no absolute paths, sorted
 // notices, LF output. dist/index.html is committed, so CI runs --check on every push.
@@ -26,13 +33,16 @@ import { createRequire } from 'node:module';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import * as esbuild from 'esbuild';
+import postcss from 'postcss';
+import tailwindcss from 'tailwindcss';
 import { pack } from './pack-single-file.mjs';
 import { bundleWithAnalysisLibrary } from './build-analysis-worker.mjs';
 import {
   bannerComment, computeSourceDigest, readPackage, readVersion, renderRegion, sourceRecord,
 } from './release-metadata.mjs';
 import {
-  BUILD_TIME_ASSETS, CSS_ENTRY, DIST_HTML, JS_ENTRY, SRC_HTML, TARGETS, VENDOR_SCRIPTS,
+  BUILD_TIME_ASSETS, CSS_ENTRY, DIST_HTML, JS_ENTRY, SRC_HTML, TAILWIND_CONFIG, TAILWIND_ENTRY,
+  TARGETS, VENDOR_SCRIPTS,
 } from './build-config.mjs';
 
 const require = createRequire(import.meta.url);
@@ -154,6 +164,20 @@ async function buildCss() {
   return { code: result.outputFiles[0].text.trim(), inputs: Object.keys(result.metafile.inputs) };
 }
 
+// Tailwind's PostCSS API, then the esbuild CSS pass (lowering for TARGETS, minify unless DEBUG).
+async function buildTailwind() {
+  const from = path.join(ROOT, TAILWIND_ENTRY);
+  const result = await postcss([tailwindcss({ config: path.join(ROOT, TAILWIND_CONFIG) })])
+    .process(readFileSync(from, 'utf8'), { from });
+  const warnings = result.warnings();
+  if (warnings.length) throw new Error(`${TAILWIND_ENTRY}: ${warnings.map(String).join('; ')}`);
+  const out = await esbuild.transform(result.css, {
+    loader: 'css', minify: !DEBUG, target: TARGETS, legalComments: 'none', charset: 'utf8',
+    sourcefile: TAILWIND_ENTRY, logLevel: 'warning',
+  });
+  return out.code.trim();
+}
+
 // The app bundle, built twice by bundleWithAnalysisLibrary (scripts/build-analysis-worker.mjs):
 // a pass that finds the analysis exports the app uses, then the bundle that imports them from
 // the analysis library script.
@@ -182,7 +206,7 @@ async function buildJs() {
 
 async function main() {
   const t0 = performance.now();
-  const [css, js] = await Promise.all([buildCss(), buildJs()]);
+  const [css, tailwind, js] = await Promise.all([buildCss(), buildTailwind(), buildJs()]);
   const { library } = js;
   const vendors = VENDOR_SCRIPTS.map(({ pkg, file }) => ({
     id: `${pkg}@${require(`${pkg}/package.json`).version}`,
@@ -196,6 +220,7 @@ async function main() {
   const html = pack({
     template: readFileSync(path.join(ROOT, SRC_HTML), 'utf8').replace(/\r\n/g, '\n'),
     css: css.code,
+    tailwind,
     js: js.code,
     analysis: library.code,
     vendors,

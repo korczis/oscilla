@@ -2,7 +2,8 @@
 // and the app bundle. Pure string work: no timestamps, no paths, no randomness.
 //
 // Template markers (each exactly once; icons any number of times):
-//   <!-- @inline-css -->    -> <style>…</style>
+//   <!-- @inline-css -->    -> <style>…</style>: the legacy CSS, then the compiled Tailwind
+//                              (o.tailwind, ADR 0061) when given, in that one element
 //   <!-- @inline-js -->     -> vendor <script>s in order, the analysis library <script
 //                              data-analysis> when given (o.analysis), then the app <script>
 //   <!-- @icon:<name> -->   -> inline SVG from lucide-static/icons/<name>.svg
@@ -177,6 +178,9 @@ function replaceOnce(html, marker, replacement) {
  * @param {object} o
  * @param {string} o.template  source HTML containing the markers
  * @param {string} o.css       compiled, minified CSS
+ * @param {string} [o.tailwind]  the compiled Tailwind (src/styles/tailwind.css with the flowbite
+ *   plugin, scripts/build.mjs), emitted after o.css in the same <style> so a utility follows the
+ *   legacy rules in the cascade
  * @param {string} o.js        app bundle (IIFE)
  * @param {string} [o.analysis]  the analysis library (scripts/build-analysis-worker.mjs), placed
  *   before the app, whose bundle imports it through its global; its element text is also the
@@ -189,8 +193,8 @@ function replaceOnce(html, marker, replacement) {
  * @returns {string} the complete HTML document
  */
 export function pack({
-  template, css, js, analysis = '', vendors = [], notice = '', banner = '', buildInfo = '',
-  icon = inlineIcon,
+  template, css, tailwind = '', js, analysis = '', vendors = [], notice = '', banner = '',
+  buildInfo = '', icon = inlineIcon,
 }) {
   if (!/^<!doctype html>/i.test(template)) throw new Error('template must start with a doctype');
   let html = compactMarkup(template)
@@ -198,7 +202,8 @@ export function pack({
     .replace(/<!-- @icon:([a-z0-9-]+) -->/g, (_, name) => icon(name));
   if (html.includes('<!-- @icon:')) throw new Error('malformed icon marker');
 
-  const style = `<style>${guardRawText(css, 'style', 'css')}</style>`;
+  const style = `<style>${guardRawText(css, 'style', 'css')}`
+    + `${tailwind ? `\n${guardRawText(tailwind, 'style', 'tailwind')}` : ''}</style>`;
   html = replaceOnce(html, '<!-- @inline-css -->', style);
 
   const scripts = vendors.map(({ id, code }) => (

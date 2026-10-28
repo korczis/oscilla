@@ -1,0 +1,6 @@
+/* The one Tailwind entry (ADR 0061): scripts/build.mjs compiles it with tailwind.config.cjs
+   through Tailwind's PostCSS API and emits it after the legacy CSS of main.css in the one
+   <style>. At-rules only: no selector rule is written here. Preflight is off (the config). */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;

@@ -12,7 +12,9 @@
 //     sendBeacon or localhost,
 //   - carries a source map reference,
 //   - embeds a vendor script that is not byte-identical to the pinned package file,
-//   - lacks the third-party notice for every vendor,
+//   - lacks the third-party notice for every vendor and every build-time package
+//     (BUILD_TIME_ASSETS: the Lucide icons, and tailwindcss and flowbite, whose compiled CSS is
+//     in the <style>, ADR 0061),
 //   - exceeds the raw or gzip size budget,
 //   - (provenance, verifyProvenance) lacks the top-of-file banner or the ONE metadata region,
 //     or the region does not parse, is not a build-time "source" record, or names a version or
@@ -25,7 +27,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { gzipSync } from 'node:zlib';
 import { guardRawText } from './pack-single-file.mjs';
-import { BUDGET, DIST_HTML, VENDOR_SCRIPTS } from './build-config.mjs';
+import { BUDGET, BUILD_TIME_ASSETS, DIST_HTML, VENDOR_SCRIPTS } from './build-config.mjs';
 import {
   computeSourceDigest, findRegion, readBanner, readVersion, validateRecord,
 } from './release-metadata.mjs';
@@ -85,6 +87,8 @@ function isInert(url, { nav = false } = {}) {
   return nav && /^(https?:|mailto:|tel:)/i.test(v);
 }
 
+// CSS may reference data: URLs only (isInert): that is all the flowbite plugin emits (its form
+// base styles inline their SVG icons with mini-svg-data-uri), so ADR 0061 adds no allowance.
 function cssProblems(css, where) {
   const out = [];
   if (/@import\b/i.test(css)) out.push(`${where}: CSS @import (must be bundled)`);
@@ -100,8 +104,9 @@ function cssProblems(css, where) {
  * @param {object} [opts]
  * @param {Map<string, string>} [opts.vendors]  vendor id ("p5@1.11.3") -> expected verbatim code
  * @param {{rawBytes: number, gzipBytes: number}} [opts.budget]
+ * @param {string[]} [opts.notices]  "pkg@version" of the build-time packages the notice must name
  */
-export function verifyHtml(html, { vendors = new Map(), budget = BUDGET } = {}) {
+export function verifyHtml(html, { vendors = new Map(), budget = BUDGET, notices = [] } = {}) {
   const problems = [];
   const seenVendors = new Set();
   let appScripts = 0;
@@ -183,14 +188,13 @@ export function verifyHtml(html, { vendors = new Map(), budget = BUDGET } = {}) 
   }
   if (appScripts === 0) problems.push('no first-party script found');
 
+  const htmlTag = html.search(/<html[\s>]/i);
+  const head = htmlTag < 0 ? html.slice(0, html.indexOf('-->') + 3) : html.slice(0, htmlTag);
   for (const id of vendors.keys()) {
     if (!seenVendors.has(id)) problems.push(`vendor script ${id} missing`);
-    const [pkg, version] = [id.slice(0, id.lastIndexOf('@')), id.slice(id.lastIndexOf('@') + 1)];
-    const htmlTag = html.search(/<html[\s>]/i);
-    const head = htmlTag < 0 ? html.slice(0, html.indexOf('-->') + 3) : html.slice(0, htmlTag);
-    if (!head.includes(`== ${pkg}@${version} - `)) {
-      problems.push(`third-party notice for ${id} missing`);
-    }
+  }
+  for (const id of [...vendors.keys(), ...notices]) {
+    if (!head.includes(`== ${id} - `)) problems.push(`third-party notice for ${id} missing`);
   }
 
   const raw = Buffer.byteLength(html);
@@ -233,6 +237,12 @@ export function verifyProvenance(html, { version, sourceDigest, allowStamped = f
   return problems;
 }
 
+/** "pkg@version" of every BUILD_TIME_ASSETS package, at its installed (pinned) version. */
+export function buildTimeNotices(resolve = require.resolve) {
+  return BUILD_TIME_ASSETS.map((pkg) => (
+    `${pkg}@${JSON.parse(readFileSync(resolve(`${pkg}/package.json`), 'utf8')).version}`));
+}
+
 export function pinnedVendors(resolve = require.resolve) {
   return new Map(VENDOR_SCRIPTS.map(({ pkg, file }) => {
     const version = JSON.parse(readFileSync(resolve(`${pkg}/package.json`), 'utf8')).version;
@@ -254,7 +264,7 @@ function main() {
     }
   }
   const html = readFileSync(file, 'utf8');
-  const result = verifyHtml(html, { vendors: pinnedVendors() });
+  const result = verifyHtml(html, { vendors: pinnedVendors(), notices: buildTimeNotices() });
   problems.push(...result.problems);
   const version = readVersion(root);
   const sourceDigest = computeSourceDigest(root);

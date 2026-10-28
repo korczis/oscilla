@@ -62,6 +62,7 @@ import { createExperimentsUi } from './ui/experiments.js';
 import { createFindingsUi } from './ui/findings.js';
 import { createConnectionsUi } from './ui/connections.js';
 import { createStudioUi } from './ui/studio/workspace.js';
+import { startFlowbiteAfterAlpine } from './ui/flowbite.js';
 import { createScopeView, createHarmonicBarsView } from './ui/p5-views.js';
 import { buildConfigExport, parseConfigImport, CONFIG_FILE_VERSION } from './ui/config-file.js';
 import { renderPlanToWav, renderSequenceToWav, screenshotCanvases } from './ui/exporters.js';
@@ -883,4 +884,5 @@ Object.defineProperties(window.OSCILLA, {
 registerOscillaUi(Alpine, { compose: createOscillaComponent });
 for (const [name, fn] of Object.entries(TEMPLATE_HELPERS)) Alpine.magic(name, () => fn);
 window.Alpine = Alpine;
+startFlowbiteAfterAlpine();
 Alpine.start();
