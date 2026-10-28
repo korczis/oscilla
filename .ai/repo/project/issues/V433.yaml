@@ -27,7 +27,13 @@ evidence_required:
   - "verified"
   - "all_criteria_met"
 created_at: 2026-10-02
-updated_at: 2026-10-18T10:43:19Z
+updated_at: 2026-10-28T13:33:47Z
+started_at: 2026-10-28T13:33:19Z
+started_event: sha256:f8292b3bcb22f5811dd9ab30d6977f2fe485652a9038b831da9317e9deda6a6d
+verified_at: 2026-10-28T13:33:26Z
+verified_event: sha256:0c06255b4d3375a9a5c657830bd2323ca68b57bd17d3b862b34b4e75c97e64a3
+completed_at: 2026-10-28T13:33:47Z
+completed_event: sha256:300d02076c21d9c15c4950f5b3d3930933562963e55e11bb3e51c23da56afce6
 evidence:
   - covers: verified
     type: ci
@@ -71,3 +77,17 @@ evidence:
     result: "PARTIAL (do not mark done; blocked behind V432, V386 and Q007): at 2e80461 (code as main 044f98a): spec 259 is met by docs/v31/studio-report.md (d3bdcb1), checked against the code by tests/unit/v31-studio-report.test.mjs (17/17 pass); spec 269/270 stay met (#146, round of 2026-10-06T18:30Z); spec 227/271 under ADR 0057 (proposed): the release v3.11.0, which carries the Studio, has the pair: .ai/repo/releases/v3.11.0.yaml (commit 2b63ec3; release-record --check: matches what was published) and Pages run 39097666998 at 2b63ec3 (deploy and Public smoke chromium, firefox, webkit: success). Unmet: (1) dependencies V432 and V386 not done; (2) v3.1.0, the release this issue names, has no release/v1 record: gh release view v3.1.0 --json assets returns no asset, and .ai/repo/releases holds 14 records, v3.4.0 to v3.11.0; attaching the asset is the owner act Q007"
     commit: 2e80461b7a2d20022bb282d5ef3a16c15d461da5
     recorded_at: 2026-10-18T10:43:19Z
+  - covers: verified
+    type: test
+    command: "npm run test:live -- --expect-version 3.13.0 --expect-commit e272fac0e41693d0a2e3d16545710ecae653dfce; node scripts/release-record.mjs --version 3.1.0 --check"
+    result: "MET on 2026-10-28: every dependency is DONE (V432 on this branch, V386 and Q007 on main). SemVer from history holds (v3.0.0 -> v3.1.0 Studio, now 3.13.0; package.json single source). npm run test:live against the public page serving 3.13.0 at e272fac: 18/18 checks PASS in chromium, firefox and webkit, incl. compact Studio in the Playground, STUDIO from navigation, the Subtractive Synth graph and timeline, Studio PLAY/STOP leaving 0 nodes, the Measurement Sweep graph, no getUserMedia, no console errors. node scripts/release-record.mjs --version 3.1.0 --check: .ai/repo/releases/v3.1.0.yaml matches what was published (oscilla-v3.1.0.html sha256 0cf037e5..., attached by Q007). The 3.13.0 gate receipt records result passed for chromium,firefox,webkit over file,http with declared-only skips, and test:release carries test:studio and test:visual. Spec 259 stays met by docs/v31/studio-report.md, 227/271 by the release pair of ADR 0057, 269/270 by the live smoke above."
+    artifact: ".ai/repo/releases/v3.1.0.yaml"
+    commit: 9135c8f417edc0f39b3a345c5e2e677149b6ac3c
+    recorded_at: 2026-10-28T13:33:31Z
+  - covers: all_criteria_met
+    type: manual
+    command: "majordomus plan show V433; node scripts/release-record.mjs --version 3.1.0 --check"
+    result: "Every acceptance criterion of V433 is met: 3.1.0 was released through the single-source version and Pages workflow (tag v3.1.0 at a810b94), the full gate binds the release receipt, post-deploy verification with bounded retry and the public Studio smoke pass on the live page (18/18 x3 browsers at 3.13.0), release notes come from landed work, and the release/v1 record for v3.1.0 exists and its --check passes."
+    artifact: ".ai/repo/releases/v3.1.0.yaml"
+    commit: 9135c8f417edc0f39b3a345c5e2e677149b6ac3c
+    recorded_at: 2026-10-28T13:33:45Z

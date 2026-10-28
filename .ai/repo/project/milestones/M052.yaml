@@ -16,4 +16,11 @@ risks:
   - "Nobody asks the owner: the questions are listed by majordomus plan list --milestone M052, and a coordinator raises them; the plan cannot."
   - "A delegated decision read as the owner's own: each records who decided and under which delegation, and the owner may override it."
 created_at: 2026-10-18
-updated_at: 2026-10-18
+updated_at: 2026-10-28T13:32:48Z
+evidence:
+  - covers: milestone_verified
+    type: manual
+    command: "majordomus plan list --milestone M052; grep -c 'covers: owner_decision' .ai/repo/project/issues/Q00{2,3,5,6}.yaml"
+    result: "Q002, Q003, Q005 and Q006 DONE, each with one owner_decision evidence row dated 2026-10-18 and attributed to the coordinating session under the owner's quoted delegation ('tak to vse pores'); none cancelled. The work that waited on them (P003, P004, P005) is DONE under M051."
+    commit: 9135c8f417edc0f39b3a345c5e2e677149b6ac3c
+    recorded_at: 2026-10-28T13:32:48Z
