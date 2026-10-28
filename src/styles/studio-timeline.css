@@ -294,6 +294,8 @@
   overflow-y: hidden;
   overscroll-behavior-x: contain;
   scrollbar-color: var(--osc-border-strong) transparent;
+  /* One finger scrolls; two fingers pinch the timeline's zoom (V603), not the page's. */
+  touch-action: pan-x pan-y;
 }
 
 .osc-stl-content {
