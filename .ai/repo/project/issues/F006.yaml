@@ -10,7 +10,6 @@ objective: "Rebuild the three Analyze workspaces from Pro components: each analy
 why: "Owner, 2026-10-28: the whole interface on Flowbite Pro. The audit (A05 to A07) found Filter Lab and Compare a third empty; U004 and U005 lay them out on this markup."
 scope:
   - "src/index.html"
-  - "src/partials"
   - "src/styles"
   - "src/js/labs/analysis.js"
   - "src/js/labs/filter-lab.js"

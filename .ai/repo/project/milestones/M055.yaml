@@ -1,7 +1,7 @@
 id: M055
 title: "The whole interface on Flowbite Pro"
 slug: the-whole-interface-on-flowbite-pro
-order: 55
+order: 54
 priority: p1
 problem: "The owner ordered on 2026-10-28 that every one of their projects is built on their licensed Flowbite Pro, enforced and always used. OSCILLA's interface is plain token-based CSS (ADR 0012 dropped the V1 Tailwind and Flowbite CDN scripts), with its own header, tab bar, panels and dialogs."
 outcome: "Tailwind 3 and the MIT flowbite package are compiled at build time into the single file within the budget; the Pro admin shell replaces the header and tab bar with every deep link kept; every workspace group, the dialogs and the settings are rebuilt from Pro components with the domain visuals inside Pro cards; the legacy chrome ratchet is at 0; the visual references and the live smoke are regenerated from the Pro shell; the claims are registered and the intent's criteria point at them."
@@ -16,7 +16,12 @@ risks:
   - "Budget: dist measured 2 824 602 B raw / 817 426 B gzip at 91c89b0, 182 574 B gzip under BUDGET; flowbite 2.5.2's whole minified script is 135 824 B raw / 29 632 B gzip, and the legacy CSS coexists with the Pro CSS until each workspace issue removes its share. F001 measures the real addition and every F issue states dist's size; the budget is raised only by owner decision."
   - "src/index.html is shared by F002 to F010, by M054's U issues and by P002, E005, S083 and V504: each lands in its own train round with one rebuild, and the F workspace issues rebase on each other's markup, not on a design conflict."
   - "Visual references: every F issue that changes a referenced view updates that reference through the visual gate with its reason in the same pull request, so main never carries a failing gate; F011 regenerates all of them from the finished shell."
-  - "Reviewer seat: F001 (scripts/build*, scripts/verify-dist.mjs), F004 (src/js/ui/measure.js), F005 (src/js/ui/experiments.js, findings.js), F008 where it touches src/js/studio and F011 (tests/browser/live-smoke.cjs) change guarded paths and need a verdict from a session that did not build them."
+  - "Reviewer seat: F001 (scripts/build*, scripts/pack-single-file.mjs, scripts/verify-dist.mjs, scripts/release-metadata.mjs), F004 (src/js/ui/measure.js, with Measure's three dialogs), F005 (src/js/ui/experiments.js and findings.js, with their five dialogs) and F011 (tests/browser/live-smoke.cjs) change guarded paths and need a verdict from a session that did not build them; F008 and F010 stay off src/js/studio, src/js/core/safety* and src/js/core/storage*, or widen their scope and take a verdict."
+  - "Dialogs: all 22 have an owner (F010 the six shared ones and the modal pattern with the dialog table; F004 three, F005 five, F008 eight), so F004, F005 and F008 depend on F010 as well as F002."
+  - "Order of the roadmap: M055 has order 54 and M054 order 55, because M054's U issues depend on M055's F issues."
+  - "Landing: the critiques cite commits of their plan branches (ui-current reviewed_at 72dca24, reachable from main since #240 landed through the merge-commit train #248; ui-flowbite-pro reviewed_at on chore/plan-ui-flowbite-pro), so #251 lands by a merge commit, never a squash, or that reference dangles."
+  - "src/partials does not exist until E005 lands it; the F issues name src/index.html, and an F issue that starts after E005 names src/partials in its place, as E005's objective requires of every later shell edit."
+  - "Governance: rule:project.ui-uses-flowbite-pro and adr:adr-0061 land with #250; until #250 is on main, naming them in the intent fails intent validate (unresolved_governance), so F001 adds them, unless the merge of main that brings #250 into #251 already has."
   - "M054 (ui-current) builds on this milestone: its U issues that build interface depend on F002 or on the F issue of their workspace, so the new content is built once, on Pro."
 created_at: 2026-10-28
 updated_at: 2026-10-28

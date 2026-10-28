@@ -10,7 +10,6 @@ objective: "Rebuild the Playground (generator, device panel, microphone analyzer
 why: "Owner, 2026-10-28: the whole interface on Flowbite Pro. These four workspaces share the V1 instrument markup and land together."
 scope:
   - "src/index.html"
-  - "src/partials"
   - "src/styles"
   - "src/js/ui/app.js"
   - "src/js/ui/workbench.js"

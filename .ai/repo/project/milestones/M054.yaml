@@ -1,7 +1,7 @@
 id: M054
 title: "The whole interface shows the current product"
 slug: the-whole-interface-shows-the-current-product
-order: 54
+order: 55
 priority: p1
 problem: "The owner found the live Studio, About and, in their view, the whole interface outdated at v3.13.0 (2026-10-28). About opens on the first night alone; Experiments, Filter Lab and the Analyze views are isolated or half-empty panels that do not lead to the workspaces doing the same thing in depth."
 outcome: "Every workspace is audited, About tells the project as it stands and what comes next, no workspace is an isolated or half-empty panel, empty states offer a real example and a next step, and the workspaces link to each other; a browser check holds it in every gate browser and origin."

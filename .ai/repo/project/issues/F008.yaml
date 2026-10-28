@@ -6,11 +6,10 @@ title: "The Studio's chrome on Pro, its graph, timeline and inspector kept as do
 slug: the-studio-s-chrome-on-pro-its-graph-timeline-and-inspector
 priority: p2
 profile: implementation
-objective: "Put the Studio's chrome on Pro components and keep its domain visuals: the toolbar and transport bar as a Pro button group and Pro icon buttons with tooltips, the library and patches panels as Pro lists with search inputs and badges, the inspector as a Pro card with Pro form controls (labels, inputs, selects, toggles, range sliders) for the node parameters, the subview switch (graph, timeline) as Pro tabs, the render and patch dialogs left to F010. The graph's nodes and cables (Signal Path lineage, ADR 0034, project.typed-ports port colours), the timeline's lanes, clips and automation curves and the minimap keep their drawing and palette; they are the content of Pro cards (ADR 0061, decision 3) and sit on the Pro surfaces. The compact Studio widget follows the same chrome. Remove the legacy primitives and selectors, lower the ratchet baseline by the surfaces migrated and the primitive uses removed, keep every data-osc hook and id the eight Studio suites address."
+objective: "Put the Studio's chrome on Pro components and keep its domain visuals: the toolbar and transport bar as a Pro button group and Pro icon buttons with tooltips, the library and patches panels as Pro lists with search inputs and badges, the inspector as a Pro card with Pro form controls (labels, inputs, selects, toggles, range sliders) for the node parameters, the subview switch (graph, timeline) as Pro tabs, and the Studio's eight dialogs (osc-dlg-studio-templates, -link, -add, -connect, -find, -render, -library and -patch, built by src/js/ui/studio/workspace.js) on the Pro modal pattern F010 lands, with their rows of its dialog table turned on. The graph's nodes and cables (Signal Path lineage, ADR 0034, project.typed-ports port colours), the timeline's lanes, clips and automation curves and the minimap keep their drawing and palette; they are the content of Pro cards (ADR 0061, decision 3) and sit on the Pro surfaces. The compact Studio widget follows the same chrome. Remove the legacy primitives and selectors, lower the ratchet baseline by the surfaces migrated and the primitive uses removed, keep every data-osc hook and id the eight Studio suites address."
 why: "Owner, 2026-10-28: the whole interface on Flowbite Pro; the Studio graph and timeline are OSCILLA's own visual language and stay readable as such."
 scope:
   - "src/index.html"
-  - "src/partials"
   - "src/styles/studio.css"
   - "src/styles/studio-timeline.css"
   - "src/styles"
@@ -23,11 +22,12 @@ scope:
   - "dist"
 depends_on:
   - "F002"
+  - "F010"
 acceptance_criteria:
-  - "ui-flowbite-pro.cjs asserts the Studio's toolbar, panels and inspector are Pro components with every surface listed as migrated by the ratchet at both sizes, in every gate browser from file:// and the sub-path; the graph, timeline and minimap render as before inside them."
+  - "ui-flowbite-pro.cjs asserts the Studio's toolbar, panels and inspector are Pro components with every surface listed as migrated by the ratchet at both sizes, in every gate browser from file:// and the sub-path; the graph, timeline and minimap render as before inside them; the eight Studio dialogs carry the Pro modal structure with focus entry, Escape, focus return and an inert background."
   - "npm run test:studio passes with no behaviour check changed; keyboard operation of the graph and the timeline (V428, V429) is unchanged."
   - "The Studio references (tests/visual/studio: compact, desktop with and without the timeline, phone graph and timeline, darwin and linux) are updated through the visual gate with the reason; the ratchet baseline's debt is lower (the surfaces migrated move from surfaces.pending to surfaces.migrated and the primitive uses removed leave the counts); dist's size is stated and within BUDGET."
-  - "Where the change touches src/js/studio the pull request carries a review verdict."
+  - "The chrome and the dialogs live in src/js/ui/studio, which is not guarded; src/js/studio (guarded) is outside the scope, and a change that must touch it widens the scope to it and carries a reviewer's verdict (project.review-verdict)."
   - "The class tokens tests/browser/live-smoke.cjs reads after every Pages deploy (.osc-statusbar .osc-sb-name, .osc-sb-version, .osc-sg-node, .osc-sg-title, .osc-sg-cat, .osc-sg-edge-line, .osc-block-name, .osc-stl-hrow--track) stay on their elements, unstyled if need be, until F011 moves the smoke to data-osc hooks; the smoke passes against the built file."
 validation:
   - "node tests/browser/ui-flowbite-pro.cjs"

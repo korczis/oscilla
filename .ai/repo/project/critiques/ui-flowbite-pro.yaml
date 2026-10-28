@@ -14,12 +14,12 @@ findings:
   - id: preflight-restyles-everything-at-once
     class: regression_risk
     subject: "F001"
-    finding: "Tailwind's preflight resets the margins of headings and lists, button and form-control appearance, and makes svg, canvas and img display:block. Enabled together with the build integration, it would restyle every legacy workspace at once: the inline Lucide icons would drop onto their own lines and the uPlot and p5 canvases would reflow. The visual gate would then fail on every reference in a pull request that is meant to change no pixel."
+    finding: "Tailwind's preflight resets the margins of headings and lists, button and form-control appearance, and makes svg, canvas and img display:block. Enabled together with the build integration, it would restyle every legacy workspace at once: the inline Lucide icons would drop onto their own lines and the uPlot and p5 canvases would reflow. The flowbite plugin adds its own form base styles by element selector (every [type=text], select, checkbox, radio and range), with forms on by default and independently of preflight (flowbite 4.0.2's plugin.js, read 2026-10-28), so turning preflight off alone does not keep the sliders and selects as they are. The visual gate would then fail on every reference in a pull request that is meant to change no pixel."
     blocking: true
     resolution:
       state: planned
       issue: "F002"
-      because: "F001 ships with preflight disabled and must pass the visual gate with no reference changed. F002 enables preflight together with the shell, checks the icons, canvases and dialogs for its resets, and updates the references it changes with the reason (2026-10-28)."
+      because: "F001 ships with preflight disabled and the plugin loaded with forms: false (or, if the pinned 2.5.x line lacks that option, without the plugin), and must pass the visual gate at the recorded thresholds with no reference or threshold changed; that measured result is what 'nothing renders differently' means. F002 enables preflight and the form base styles together with the shell, checks the icons, canvases, sliders and dialogs for their resets, and updates the references it changes with the reason (2026-10-28; review of #251, P2-4)."
   - id: visual-identity-lock-contradicts-the-order
     class: missed_requirement
     subject: "ui-flowbite-pro"
@@ -28,7 +28,7 @@ findings:
     resolution:
       state: planned
       issue: "F001"
-      because: "Pull request #250, written the same day, lands ADR 0061 (accepted on the owner's order), a resolution note on ADR 0012 that supersedes only its Tailwind and Flowbite bullet, project.visual-identity-lock v2 and rule project.ui-uses-flowbite-pro. F001 starts only once #250 is on main, and its acceptance says so. This plan change already rewrites the ui-current and first-run-experience invariants and ui-current's non-goal to cite the order and ADR 0061 (2026-10-28)."
+      because: "Pull request #250, written the same day, lands ADR 0061 (accepted on the owner's order), a resolution note on ADR 0012 that supersedes only its Tailwind and Flowbite bullet, project.visual-identity-lock v2 and rule project.ui-uses-flowbite-pro. F001 starts only once #250 is on main, and its acceptance says so. This plan change already rewrites the ui-current and first-run-experience invariants and ui-current's non-goal to cite the order and ADR 0061, and the invariants of midi-jam-companion (M045) and studio-completion (M048), which required new surfaces to extend the existing tokens, so that their new surfaces are built on Pro (2026-10-28; review of #251, P2-5)."
   - id: licence-in-a-public-mit-repository
     class: unproven_assumption
     subject: "ui-flowbite-pro#licence-clean"
@@ -59,12 +59,12 @@ findings:
   - id: dark-mode-mechanism-differs
     class: missed_requirement
     subject: "F001"
-    finding: "The Pro template toggles a 'dark' class on <html> and stores 'color-theme' in localStorage. OSCILLA keeps a three-state theme (system, dark, light) under oscilla.theme and sets data-theme on <html> (src/js/ui/app.js, theme.js). Copying the Pro mechanism would discard every visitor's stored choice, would drop the system state, and would leave the charts, which re-theme from data-theme (src/js/charts/chart-theme.js), out of step with the chrome."
+    finding: "The Pro template toggles a 'dark' class on <html> and stores 'color-theme' in localStorage. OSCILLA keeps a two-state theme under oscilla.theme and sets data-theme on <html>: resolveTheme in src/js/ui/app.js returns 'light' for a stored 'light' and 'dark' for anything else, dark being the default and the reference, and nothing reads prefers-color-scheme. Copying the Pro mechanism would discard every visitor's stored choice, would bring in a system default OSCILLA does not have, and would leave the charts, which re-theme from data-theme (src/js/charts/chart-theme.js), out of step with the chrome."
     blocking: false
     resolution:
       state: planned
       issue: "F001"
-      because: "F001 configures darkMode ['selector', '[data-theme=\"dark\"]'], so the existing theme drives Tailwind's dark variant, and the intent's invariant keeps OSCILLA's mechanism. F002 wires the Pro toggle button to that mechanism and F006 checks that the charts re-theme (2026-10-28)."
+      because: "F001 configures darkMode ['selector', '[data-theme=\"dark\"]'], so the existing two-state theme drives Tailwind's dark variant, and the intent's invariant keeps OSCILLA's mechanism; a system state is a non-goal of the intent and would be a separate owner decision. F002 wires the Pro toggle button to that mechanism and F006 checks that the charts re-theme (2026-10-28; corrected after review of #251, P2-3: the plan first called the theme three-state)."
   - id: accessibility-of-the-pro-shell
     class: missed_requirement
     subject: "ui-flowbite-pro#pro-accessible"
@@ -73,7 +73,7 @@ findings:
     resolution:
       state: planned
       issue: "F002"
-      because: "F002 adds aria-current to the active sidebar link and introduces the accessibility checks in tests/browser/ui-flowbite-pro.cjs: keyboard reach, visible focus, Escape returning focus, and contrast of at least 4.5:1 in both themes. F010 keeps the native <dialog> elements with Pro modal markup and checks focus entry, Escape, return and inertness for every dialog (2026-10-28)."
+      because: "F002 adds aria-current to the active sidebar link and introduces the accessibility checks in tests/browser/ui-flowbite-pro.cjs: keyboard reach, visible focus, Escape returning focus, and contrast of at least 4.5:1 in both themes. F010 keeps the native <dialog> elements with Pro modal markup and lands the dialog table of ui-flowbite-pro.cjs, which lists all 22 dialogs with their owning issue, fails on an unlisted one, and checks focus entry, Escape, return and inertness for every dialog; F004, F005 and F008 turn on the Pro structure rows of their own dialogs (2026-10-28)."
   - id: visual-references-per-platform-and-per-issue
     class: delivery_verification
     subject: "F011"
@@ -119,3 +119,39 @@ findings:
       state: planned
       issue: "F002"
       because: "F002 lands the table-driven inventory in tests/browser/ui-flowbite-pro.cjs, passing on the current interface before the shell changes, and P002's objective now imports it rather than restating it (2026-10-28)."
+  - id: owner-verifier-is-not-evidence
+    class: unproven_assumption
+    subject: "F012"
+    finding: "F012 made the owner's verifier the issue's evidence ('reports OSCILLA compliant'). Run on pull request #250's tree on 2026-10-28, ~/.claude/skills/flowbite-pro/verify.mjs reported 'PASS (no UI: S0 false, vacuous pass)': its S0 did not recognise src/index.html as a UI, so it would have called OSCILLA compliant before a single surface moved. A later copy of the file (dated 2026-10-28 23:01) recognises src/index.html and reports FAIL with 8 findings, which shows the other half of the problem: the file lives outside the repository and changes without this repository's review, so what it says of OSCILLA is not fixed by any commit here."
+    blocking: true
+    resolution:
+      state: planned
+      issue: "F012"
+      because: "F012's evidence is the repository's own: the ratchet at debt 0 and tests/browser/ui-flowbite-pro.cjs asserting the Pro structure of the shell, the twelve workspaces and the 22 dialogs. The verifier's output may be quoted for information and is never a criterion or a validation command. The file belongs to the dev-68 session; this plan records the gap and does not edit it (2026-10-28; review of #251, P2-2)."
+  - id: debt-zero-without-pro
+    class: delivery_verification
+    subject: "ui-flowbite-pro#no-legacy-chrome"
+    finding: "The no-legacy-chrome criterion rested on the ratchet's debt reaching 0. The ratchet counts 28 named primitives and the surfaces that are a <section> or <dialog> with an id, so renaming osc-btn-secondary to osc-btn-alt, dropping a surface's id or putting Tailwind classes on a surface before Tailwind is built lowers the debt with no Pro adoption (review of #250, P1-1, mutations M7 to M9). Only the shell had a browser check of its structure."
+    blocking: true
+    resolution:
+      state: planned
+      issue: "F012"
+      because: "The criterion now also requires tests/browser/ui-flowbite-pro.cjs to assert, in the rendered page, the Pro structure of the shell, of each of the twelve workspaces and of each of the 22 dialogs in every gate browser and origin, and its command runs that suite after the debt check. Every workspace issue F003 to F010 already asserts its own Pro structure there; F012 makes the whole suite part of the release gate (2026-10-28; review of #251, P2-7)."
+  - id: dialogs-without-owner
+    class: insufficient_work
+    subject: "F010"
+    finding: "The shell holds 22 native dialogs; F010 named about eight. The three of Measure (level-cal, cal-convention, recipe-link), the five of Experiments and Findings (exp-rename, def, exp-delete, finding, finding-delete) and six of the Studio's eight (templates, link, add, connect, find, library) had no issue that named them, and the code that opens Measure's, Experiments' and Findings' dialogs sits in the guarded src/js/ui/measure.js, experiments.js and findings.js, which F010's scope left out and for which it required no verdict."
+    blocking: false
+    resolution:
+      state: planned
+      issue: "F010"
+      because: "F010 owns the six shared dialogs (save, headphones, copy, help, mic, settings), the modal pattern and the dialog table, which lists all 22 with their owner and fails on an unlisted one, and changes no guarded path. F004 owns Measure's three and F005 the five of Experiments and Findings, each with its guarded file in scope and a review verdict; F008 owns the Studio's eight in src/js/ui/studio. F004, F005 and F008 depend on F010 (2026-10-28; review of #251, P2-6)."
+  - id: governance-before-the-rule-exists
+    class: missed_requirement
+    subject: "ui-flowbite-pro"
+    finding: "The intent is governed by rule project.ui-uses-flowbite-pro and ADR 0061, but its governance does not name them. Both land with #250, which is not on main: naming them now makes intent validate fail with unresolved_governance."
+    blocking: false
+    resolution:
+      state: planned
+      issue: "F001"
+      because: "F001 starts only once #250 is on main and adds both to the intent's governance as its tenth step, unless the merge of main that brings #250 into this plan's pull request already has; its acceptance requires intent validate to report 0 failures. The intent's statement records why they are absent until then (2026-10-28; review of #251, P3-10)."

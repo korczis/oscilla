@@ -10,7 +10,6 @@ objective: "Rebuild Learn from Pro components: the concept index as Pro cards or
 why: "Owner, 2026-10-28: the whole interface on Flowbite Pro."
 scope:
   - "src/index.html"
-  - "src/partials"
   - "src/styles"
   - "src/js/ui/app.js"
   - "src/js/data"

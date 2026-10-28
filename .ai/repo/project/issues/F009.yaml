@@ -10,7 +10,6 @@ objective: "Rebuild About from Pro components: the release line as a Pro timelin
 why: "Owner, 2026-10-28: the whole interface on Flowbite Pro; About is where the owner first found the interface outdated."
 scope:
   - "src/index.html"
-  - "src/partials"
   - "src/styles/about.css"
   - "src/styles"
   - "src/js/ui/version.js"
