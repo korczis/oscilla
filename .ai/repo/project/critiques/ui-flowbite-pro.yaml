@@ -1,0 +1,121 @@
+intent: ui-flowbite-pro
+reviewed_at: "b976233dcb9838ce1e6ffbbab0f9b49a44548bc7"
+reviewed_by: "claude-opus-5.5 (critic, plan-ui-flowbite-pro session)"
+findings:
+  - id: budget-headroom-is-shared
+    class: regression_risk
+    subject: "F001"
+    finding: "dist measured 2 824 602 B raw / 817 426 B gzip at 91c89b0, which leaves 182 574 B gzip under BUDGET (1 000 000 B). flowbite 2.5.2's whole minified script is 135 824 B raw / 29 632 B gzip, and its prebuilt full stylesheet is 181 924 B raw / 25 569 B gzip, measured from the npm tarball on 2026-10-28. A purged Tailwind build is smaller, but the 711 legacy osc-* class selectors of src/styles stay in the file until each workspace issue removes its share. The same headroom also has to carry M045, M047, M048 and M049. If no issue measures the addition, the budget fails in the middle of the migration, and the reflex would be to raise it again without an owner decision."
+    blocking: false
+    resolution:
+      state: planned
+      issue: "F001"
+      because: "F001 imports only the flowbite components the shell uses, states dist's raw and gzip size before and after in the pull request and in the BUDGET comment, and every F issue removes the legacy selectors it replaces in the same change and states the size. The intent's invariant allows a budget raise only by owner decision (2026-10-28)."
+  - id: preflight-restyles-everything-at-once
+    class: regression_risk
+    subject: "F001"
+    finding: "Tailwind's preflight resets the margins of headings and lists, button and form-control appearance, and makes svg, canvas and img display:block. Enabled together with the build integration, it would restyle every legacy workspace at once: the inline Lucide icons would drop onto their own lines and the uPlot and p5 canvases would reflow. The visual gate would then fail on every reference in a pull request that is meant to change no pixel."
+    blocking: true
+    resolution:
+      state: planned
+      issue: "F002"
+      because: "F001 ships with preflight disabled and must pass the visual gate with no reference changed. F002 enables preflight together with the shell, checks the icons, canvases and dialogs for its resets, and updates the references it changes with the reason (2026-10-28)."
+  - id: visual-identity-lock-contradicts-the-order
+    class: missed_requirement
+    subject: "ui-flowbite-pro"
+    finding: "Three records contradict the owner's order. project.visual-identity-lock v1 is blocking and binds every surface to src/styles/tokens.css and the hidden-logo question. ADR 0012 states that Tailwind and Flowbite are dropped. The invariants of ui-current and first-run-experience cite the existing tokens, and ui-current's non-goals exclude 'a framework change'. If they stay as written, each F pull request would be refused under those rules, or would land against them."
+    blocking: true
+    resolution:
+      state: planned
+      issue: "F001"
+      because: "F001 lands ADR 0061, a resolution note on ADR 0012 superseding only its Tailwind and Flowbite bullet, and project.visual-identity-lock v2: the identity is the Pro shell and components with OSCILLA's logo, domain visuals and signal palette, and the review checks Pro fidelity. This plan change already rewrites the ui-current and first-run-experience invariants and ui-current's non-goal to cite the order (2026-10-28)."
+  - id: licence-in-a-public-mit-repository
+    class: unproven_assumption
+    subject: "ui-flowbite-pro#licence-clean"
+    finding: "The Pro set is licensed under the Flowbite EULA (the Admin Dashboard's package.json and README), while OSCILLA is MIT-licensed and served on public Pages. Everything committed here is public. The Admin Dashboard ships Pro-only JavaScript (src/js/sidebar.js, dark-mode.js, charts.js), illustrations (images/illustrations/404.svg) and demo copy (names, avatars). Copied in, any of these would be Pro source published verbatim. Nothing in the repository detects that today."
+    blocking: true
+    resolution:
+      state: planned
+      issue: "F001"
+      because: "F001 adds tests/unit/ui-flowbite-pro-licence.test.mjs, which refuses the Pro templates' fingerprints (demo names and copy, asset paths, licence headers, sidebar.js and dark-mode.js) in every tracked file. F002 writes the sidebar collapse in OSCILLA's own Alpine code. Only the MIT flowbite and tailwindcss packages are dependencies. Adapting markup is what the owner's licence statement of 2026-10-28 allows."
+  - id: file-protocol-and-no-remote-font
+    class: delivery_verification
+    subject: "ui-flowbite-pro#pro-build"
+    finding: "The Pro <head> loads Inter from Google Fonts and the bundle from a path. ADR 0012 and verify-dist forbid both: no remote font, no root-relative asset, no runtime fetch. The flowbite plugin's form styles carry data: SVG URLs, which verify-dist's CSS url() check must accept explicitly and narrowly. The flowbite 2.5.2 minified script contains no fetch( and no import( (checked 2026-10-28), but that holds only for the version measured."
+    blocking: false
+    resolution:
+      state: planned
+      issue: "F001"
+      because: "F001's font stack names Inter first and falls back to the system stack with no download. verify-dist accepts the plugin's data: URLs and nothing else new. The build test and verify-dist run on the pinned version, and the gate browsers open dist from file:// and from the sub-path with zero console errors (2026-10-28)."
+  - id: alpine-and-flowbite-own-the-same-element
+    class: regression_risk
+    subject: "F001"
+    finding: "Flowbite binds its drawer, dropdown, collapse and tooltip instances once, when it initialises. An element that Alpine re-renders (x-for, x-if) loses its instance, and an element whose hidden state both Alpine and a data-*-toggle attribute flip drifts out of sync. OSCILLA's navigation groups, menus and dialogs are already Alpine state (navGroup, navGroupButton, openDialog)."
+    blocking: false
+    resolution:
+      state: planned
+      issue: "F001"
+      because: "src/js/ui/flowbite.js initialises Flowbite after Alpine has rendered. An element is driven either by Alpine state or by a data-*-toggle attribute, never both, and F001's ratchet test checks this. F010 keeps the native <dialog> elements instead of Flowbite's modal script (2026-10-28)."
+  - id: dark-mode-mechanism-differs
+    class: missed_requirement
+    subject: "F001"
+    finding: "The Pro template toggles a 'dark' class on <html> and stores 'color-theme' in localStorage. OSCILLA keeps a three-state theme (system, dark, light) under oscilla.theme and sets data-theme on <html> (src/js/ui/app.js, theme.js). Copying the Pro mechanism would discard every visitor's stored choice, would drop the system state, and would leave the charts, which re-theme from data-theme (src/js/charts/chart-theme.js), out of step with the chrome."
+    blocking: false
+    resolution:
+      state: planned
+      issue: "F001"
+      because: "F001 configures darkMode ['selector', '[data-theme=\"dark\"]'], so the existing theme drives Tailwind's dark variant, and the intent's invariant keeps OSCILLA's mechanism. F002 wires the Pro toggle button to that mechanism and F006 checks that the charts re-theme (2026-10-28)."
+  - id: accessibility-of-the-pro-shell
+    class: missed_requirement
+    subject: "ui-flowbite-pro#pro-accessible"
+    finding: "The Pro sidebar marks the active link with a background colour only, with no aria-current (reference.md section 4). The Pro modal is a div with no focus trap or inert background. Flowbite's dropdowns put no roving focus on their items. Today's tab bar carries aria-current, and the native dialogs trap focus. A faithful copy of the Pro shell would remove both for keyboard and screen-reader users. text-gray-500 on gray-50 is close to the 4.5:1 limit."
+    blocking: false
+    resolution:
+      state: planned
+      issue: "F002"
+      because: "F002 adds aria-current to the active sidebar link and introduces the accessibility checks in tests/browser/ui-flowbite-pro.cjs: keyboard reach, visible focus, Escape returning focus, and contrast of at least 4.5:1 in both themes. F010 keeps the native <dialog> elements with Pro modal markup and checks focus entry, Escape, return and inertness for every dialog (2026-10-28)."
+  - id: visual-references-per-platform-and-per-issue
+    class: delivery_verification
+    subject: "F011"
+    finding: "The visual references exist per platform (tests/visual/measure and tests/visual/studio hold darwin-arm64 and linux-x64 images), and CI renders in a Linux runner. A reference regenerated only on the Mac fails CI. A migration that defers every reference update to the end leaves main with a failing visual gate after the first workspace lands. Nine of the twelve workspaces have no reference at all, and none has one in the light theme."
+    blocking: false
+    resolution:
+      state: planned
+      issue: "F011"
+      because: "Every F issue that changes a referenced view updates that reference through the visual gate with its reason, in the same pull request. F011 regenerates every reference from the finished shell, adds references for every workspace in both themes and at both sizes, and produces the linux-x64 images in the CI runner's container image (2026-10-28)."
+  - id: live-smoke-reads-legacy-classes
+    class: regression_risk
+    subject: "F011"
+    finding: "tests/browser/live-smoke.cjs runs after every Pages deploy, not on the pull request. It reads presentation classes: .osc-statusbar .osc-sb-name, .osc-sb-version, .osc-sg-node, .osc-sg-title, .osc-sg-cat, .osc-sg-edge-line, .osc-block-name and .osc-stl-hrow--track. A workspace issue that removes one of them passes its own gate and then breaks the deployed page's smoke."
+    blocking: false
+    resolution:
+      state: planned
+      issue: "F011"
+      because: "F003, F008 and F010 keep those class tokens on their elements, unstyled if need be, and run the smoke against the built file. F011 moves the smoke to data-osc hooks and has it check the Pro shell (2026-10-28)."
+  - id: other-open-milestones-build-interface
+    class: insufficient_work
+    subject: "M055"
+    finding: "Open issues in M045 (MIDI), M047 (measurement figures), M048 (Studio completion), M049 (lessons) and M050 (P002, the first screen) also add interface. Editing every one of them would churn the plan. Leaving them unchanged would let them add legacy chrome while the migration removes it."
+    blocking: false
+    resolution:
+      state: planned
+      issue: "F001"
+      because: "F001's ratchet fails any change that adds a legacy chrome selector, whichever issue it belongs to. P002 now depends on F003 and builds on the Pro shell, and M054's U002 to U008 depend on F002 or on their workspace's F issue (this plan change, 2026-10-28)."
+  - id: m054-would-be-built-twice
+    class: unnecessary_work
+    subject: "ui-current"
+    finding: "M054 was planned the same day on the legacy chrome: U004 and U005 lay out the Analyze views, U003 fills the empty states and U002 rewrites About. If they ran before the F issues, each layout would be built once in osc-* CSS and again in Pro components."
+    blocking: false
+    resolution:
+      state: planned
+      issue: "F002"
+      because: "U002 depends on F009, U003 on F005 and F010, U004 and U005 on F006, U006 on F002, U007 on F003 to F010 and U008 on F011. Each of their objectives says it is built on Pro. U001's audit stays as recorded (2026-10-28)."
+  - id: deep-link-inventory-shared-with-p002
+    class: delivery_verification
+    subject: "F002"
+    finding: "P002 plans its own deep-link inventory in tests/browser/first-screen.cjs, and F002 needs the same inventory before it moves the navigation. Two copies of the same table would drift apart."
+    blocking: false
+    resolution:
+      state: planned
+      issue: "F002"
+      because: "F002 lands the table-driven inventory in tests/browser/ui-flowbite-pro.cjs, passing on the current interface before the shell changes, and P002's objective now imports it rather than restating it (2026-10-28)."
