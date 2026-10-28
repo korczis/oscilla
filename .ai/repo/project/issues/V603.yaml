@@ -35,6 +35,16 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-18
-updated_at: 2026-10-28T18:35:34Z
+updated_at: 2026-10-28T18:47:36Z
 started_at: 2026-10-28T18:35:34Z
 started_event: sha256:4e46666e28a3bc1f271651a98d25146e6d0e50bf2efef013f9b9e9a33a47515c
+verified_at: 2026-10-28T18:47:24Z
+verified_event: sha256:00133a675befac7257c29e81a195ef5404f6f68d7b05b21983c1b20441f4acc1
+evidence:
+  - covers: verified
+    type: test
+    command: "node --test tests/unit/studio-timeline-pinch.test.mjs; OSC_LOAD_MAX=80 node tests/browser/v31-studio-timeline.cjs; npm test; npm run build:check"
+    result: "At a4a82bf: studio-timeline-pinch 7/7 (one factor of spread = one zoomAround step at the same anchor, three = three, pinching in = zooming out, limits, pan without spread, view only), fails on origin/main (no pinchGeometry export). v31-studio-timeline 15/15 in chromium, firefox and webkit, file and http, incl. the new pinch check: synthesized touch PointerEvents spreading 80 to 100 px about the playhead reach the toolbar zoom-in scale and anchor (within 3 px: scrollLeft is whole pixels), clips unchanged. npm test 3168/3169: the one miss is V272 D4 inherited from main (#238), fixed by #246. build:check clean; timing debt unchanged; timeline-editor.js 49330 B under its 53000 B cap."
+    artifact: "tests/unit/studio-timeline-pinch.test.mjs"
+    commit: a4a82bff501d01adfcc122010e7c82d69b872492
+    recorded_at: 2026-10-28T18:47:36Z
