@@ -6,6 +6,29 @@ export const CSS_ENTRY = 'src/styles/main.css';
 // The one Tailwind entry (ADR 0061) and its config; compiled after the legacy CSS (build.mjs).
 export const TAILWIND_ENTRY = 'src/styles/tailwind.css';
 export const TAILWIND_CONFIG = 'tailwind.config.cjs';
+
+// OSCILLA's dark theme is data-theme="dark" on <html> (never class="dark"). tailwind.config.cjs
+// points the dark: variant at it, but the flowbite plugin hard-codes a .dark ancestor whatever
+// darkMode says (its tooltip arrows; with forms: true, F002, its form controls too).
+export const DARK_THEME_SELECTOR = '[data-theme="dark"]';
+// A .dark class in a selector: not the escaped dark: variant class (.dark\:bg-opacity-80).
+const DARK_CLASS = /\.dark(?![\w\\-])/g;
+
+/**
+ * PostCSS plugin run after Tailwind (build.mjs): rewrites every .dark class in a selector to
+ * DARK_THEME_SELECTOR, so the plugin's dark rules follow OSCILLA's theme.
+ */
+export function darkThemeSelector() {
+  return {
+    postcssPlugin: 'oscilla-dark-theme-selector',
+    Rule(rule) {
+      DARK_CLASS.lastIndex = 0;
+      if (!DARK_CLASS.test(rule.selector)) return;
+      rule.selectors = rule.selectors.map((sel) => sel.replace(DARK_CLASS, DARK_THEME_SELECTOR));
+    },
+  };
+}
+darkThemeSelector.postcss = true;
 export const DIST_HTML = 'dist/index.html';
 
 // Browsers the bundle is lowered for (esbuild syntax + CSS lowering, e.g. CSS nesting).
@@ -48,10 +71,13 @@ export const BUILD_TIME_ASSETS = ['flowbite', 'lucide-static', 'tailwindcss'];
 // the binding limit.
 // F001 (ADR 0061) compiles Tailwind with the flowbite plugin into the <style> and bundles five
 // flowbite components (drawer, dropdown, collapse, tooltip, tabs, with @popperjs/core) into the
-// app script, within the budget (gzip at level 9, as verify-dist measures): before
-// 2 824 602 B raw / 814 409 B gzip, after 2 884 461 B raw / about 831 490 B gzip (+59 859 B raw,
-// about +17 080 B gzip; the source digest the file carries moves gzip by a few bytes): about
-// 9 KB of compiled CSS, 47 KB of components and 3 KB of licence text in the notice.
+// app script, within the budget. Both sides are measured as verify-dist and size-report measure
+// (bytes, and node:zlib gzipSync at level 9): before (main 9de0108)
+// 2 825 605 B raw / 818 005 B gzip, after 2 885 512 B raw / about 831 850 B gzip
+// (+59 907 B raw, about +13 845 B gzip): about 9 KB of compiled CSS, 47 KB of components
+// and 3 KB of licence text in the notice. The gzip figure is "about" because this file is an
+// input of the source digest that dist carries: writing a figure here changes the digest and so
+// moves gzip by a few bytes (raw does not move: the digest has a fixed length).
 export const BUDGET = {
   rawBytes: 3_500_000,
   gzipBytes: 1_000_000,

@@ -10,7 +10,8 @@
 // Tailwind (ADR 0061, issue F001): TAILWIND_ENTRY is compiled with tailwind.config.cjs through
 // Tailwind's PostCSS API (the flowbite plugin, preflight off), then lowered and minified by the
 // same esbuild CSS pass as the legacy stylesheets. pack() emits it after the legacy CSS in the
-// one <style>, so a utility wins over a legacy rule of the same specificity. The compile reads
+// one <style> (after TAILWIND_BOUNDARY), so a utility wins over a legacy rule of the same
+// specificity. The compile reads
 // src/index.html and src/js (the config's content globs), which the source digest covers.
 //
 // Deterministic by construction: pinned esbuild, no timestamps, no absolute paths, sorted
@@ -42,7 +43,7 @@ import {
 } from './release-metadata.mjs';
 import {
   BUILD_TIME_ASSETS, CSS_ENTRY, DIST_HTML, JS_ENTRY, SRC_HTML, TAILWIND_CONFIG, TAILWIND_ENTRY,
-  TARGETS, VENDOR_SCRIPTS,
+  TARGETS, VENDOR_SCRIPTS, darkThemeSelector,
 } from './build-config.mjs';
 
 const require = createRequire(import.meta.url);
@@ -164,11 +165,13 @@ async function buildCss() {
   return { code: result.outputFiles[0].text.trim(), inputs: Object.keys(result.metafile.inputs) };
 }
 
-// Tailwind's PostCSS API, then the esbuild CSS pass (lowering for TARGETS, minify unless DEBUG).
+// Tailwind's PostCSS API (then darkThemeSelector: the plugin's .dark ancestor becomes
+// [data-theme="dark"]), then the esbuild CSS pass (lowering for TARGETS, minify unless DEBUG).
 async function buildTailwind() {
   const from = path.join(ROOT, TAILWIND_ENTRY);
-  const result = await postcss([tailwindcss({ config: path.join(ROOT, TAILWIND_CONFIG) })])
-    .process(readFileSync(from, 'utf8'), { from });
+  const result = await postcss([
+    tailwindcss({ config: path.join(ROOT, TAILWIND_CONFIG) }), darkThemeSelector(),
+  ]).process(readFileSync(from, 'utf8'), { from });
   const warnings = result.warnings();
   if (warnings.length) throw new Error(`${TAILWIND_ENTRY}: ${warnings.map(String).join('; ')}`);
   const out = await esbuild.transform(result.css, {
@@ -236,7 +239,7 @@ async function main() {
       console.error(`${rel} is stale or not reproducible: run "npm run build" and commit it`);
       process.exit(1);
     }
-    console.log(`${rel} is up to date (${html.length} bytes; v${VERSION}, `
+    console.log(`${rel} is up to date (${Buffer.byteLength(html)} bytes; v${VERSION}, `
       + `source ${SOURCE_DIGEST.slice(0, 12)})`);
     return;
   }

@@ -87,14 +87,62 @@ function isInert(url, { nav = false } = {}) {
   return nav && /^(https?:|mailto:|tel:)/i.test(v);
 }
 
-// CSS may reference data: URLs only (isInert): that is all the flowbite plugin emits (its form
-// base styles inline their SVG icons with mini-svg-data-uri), so ADR 0061 adds no allowance.
+// A url() in either quote style (the other quote may occur inside: mini-svg-data-uri's SVGs
+// carry xmlns='…' inside url("…")), or unquoted; each quote style is matched on its own.
+const CSS_URL = /url\(\s*(?:"([^"]*)"|'([^']*)'|([^\s'"()]*))\s*\)/gi;
+const CSS_STRING = /"([^"]*)"|'([^']*)'/g;
+
+/**
+ * Every reference a stylesheet makes: the target of each url(), the bare strings inside each
+ * image-set() / -webkit-image-set() (which takes them as well as url()), and the number of
+ * url( openings the scan could not parse, so nothing is skipped in silence.
+ * @param {string} css
+ * @returns {{urls: string[], imageSet: string[], unparsed: number}}
+ */
+export function cssReferences(css) {
+  const urls = [];
+  for (const m of css.matchAll(CSS_URL)) urls.push(m[1] ?? m[2] ?? m[3]);
+  const unparsed = (css.match(/url\(/gi) || []).length - urls.length;
+  const imageSet = [];
+  for (const m of css.matchAll(/image-set\(/gi)) {
+    // The argument list up to its closing parenthesis, skipping strings and nested url().
+    let depth = 1;
+    let i = m.index + m[0].length;
+    let args = '';
+    while (i < css.length && depth > 0) {
+      const c = css[i];
+      if (c === '"' || c === "'") {
+        const end = css.indexOf(c, i + 1);
+        const stop = end < 0 ? css.length : end + 1;
+        args += css.slice(i, stop);
+        i = stop;
+        continue;
+      }
+      if (c === '(') depth += 1;
+      else if (c === ')') depth -= 1;
+      if (depth > 0) args += c;
+      i += 1;
+    }
+    const bare = args.replace(CSS_URL, '');
+    for (const s of bare.matchAll(CSS_STRING)) imageSet.push(s[1] ?? s[2]);
+  }
+  return { urls, imageSet, unparsed };
+}
+
+// CSS may reference data: URLs (and #fragments) only (isInert). The flowbite plugin emits data:
+// SVGs only (mini-svg-data-uri, forms: true included), so ADR 0061 adds no allowance; every
+// url() and image-set() string is examined, whichever quote it uses.
 function cssProblems(css, where) {
   const out = [];
   if (/@import\b/i.test(css)) out.push(`${where}: CSS @import (must be bundled)`);
-  for (const m of css.matchAll(/url\(\s*(['"]?)([^'")]*)\1\s*\)/gi)) {
-    if (!isInert(m[2])) out.push(`${where}: CSS url(${m[2].slice(0, 60)}) is not a data: URL`);
+  const { urls, imageSet, unparsed } = cssReferences(css);
+  for (const u of urls) {
+    if (!isInert(u)) out.push(`${where}: CSS url(${u.slice(0, 60)}) is not a data: URL`);
   }
+  for (const u of imageSet) {
+    if (!isInert(u)) out.push(`${where}: CSS image-set("${u.slice(0, 60)}") is not a data: URL`);
+  }
+  if (unparsed > 0) out.push(`${where}: ${unparsed} CSS url( the scan cannot parse`);
   return out;
 }
 

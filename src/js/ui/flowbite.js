@@ -9,6 +9,14 @@
 // on 'alpine:initialized', which Alpine.start() dispatches once its first pass over the
 // document is done. An element is driven either by Alpine state or by a data-*-toggle
 // attribute, never both (rule project.ui-uses-flowbite-pro).
+//
+// What the modules leave on window: each imported module assigns its class and initialiser
+// (window.Collapse, Drawer, Dropdown, Tabs, Tooltip and initCollapses, initDrawers,
+// initDropdowns, initTabs, initTooltips) and the shared registry window.FlowbiteInstances. They
+// are flowbite's own surface, not part of window.OSCILLA.
+//
+// The components start once. Markup rendered later (x-if, x-for, the Studio's DOM builders)
+// gets no instance until initFlowbite() runs again over it; F002 decides where that happens.
 import { initCollapses } from 'flowbite/lib/esm/components/collapse';
 import { initDrawers } from 'flowbite/lib/esm/components/drawer';
 import { initDropdowns } from 'flowbite/lib/esm/components/dropdown';

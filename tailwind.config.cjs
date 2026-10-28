@@ -8,7 +8,10 @@
 //   - Inter first in the sans stack, then the system stack of src/styles/tokens.css. No font is
 //     downloaded: Inter applies only where it is installed.
 // darkMode follows OSCILLA's own two-state theme (data-theme="dark" | "light" on <html>), so the
-// dark: variant matches [data-theme="dark"] and never the media query.
+// dark: variant matches [data-theme="dark"] and never the media query. The flowbite plugin's
+// own dark rules hard-code a .dark ancestor instead; scripts/build.mjs rewrites it to
+// [data-theme="dark"] (darkThemeSelector, scripts/build-config.mjs), as OSCILLA never sets
+// class="dark".
 //
 // Preflight is off and the flowbite plugin runs with forms: false: its form base styles restyle
 // every input, select, checkbox, radio and range by element selector, so the legacy interface
@@ -22,6 +25,11 @@ const SYSTEM_MONO = ['ui-monospace', '"SF Mono"', 'Menlo', 'Consolas', 'monospac
 /** @type {import('tailwindcss').Config} */
 module.exports = {
   // src/partials joins these globs when E005 creates it (whichever of E005 and F001 lands second).
+  // Tailwind reads every word of these files, comments and identifiers included, so it also
+  // emits utilities no element uses yet (.hidden, .table, .collapse, .!block from a JavaScript
+  // `!block`, ...). They follow the legacy CSS in the cascade, so a legacy class of the same
+  // name would lose to them: tests/unit/ui-flowbite-pro-build.test.mjs refuses any class that
+  // both the legacy CSS and the compiled Tailwind define.
   content: {
     relative: true,
     files: ['./src/index.html', './src/js/**/*.js'],
