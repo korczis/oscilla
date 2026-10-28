@@ -1,5 +1,5 @@
 intent: ui-flowbite-pro
-reviewed_at: "70385adc11e3932f9523a1b542fea038ea776959"
+reviewed_at: "d041f2c26807789efe2745edbd0dcf7a10616427"
 reviewed_by: "claude-opus-5.5 (critic, plan-ui-flowbite-pro session)"
 findings:
   - id: budget-headroom-is-shared
@@ -36,7 +36,7 @@ findings:
     blocking: true
     resolution:
       state: planned
-      issue: "F001"
+      issue: "F002"
       because: "Clause (d) of the ratchet that #250 lands refuses any tracked file that matches a fingerprint of the Pro set (tests/unit/flowbite-pro-fingerprints.json) or carries a Pro package marker, and F001 starts on it. F002 writes the sidebar collapse and the theme toggle in OSCILLA's own Alpine code. Only the MIT flowbite and tailwindcss packages become dependencies. Adapting markup is what the owner's licence statement of 2026-10-28 allows."
   - id: file-protocol-and-no-remote-font
     class: delivery_verification
