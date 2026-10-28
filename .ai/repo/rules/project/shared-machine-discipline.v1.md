@@ -77,10 +77,13 @@ Shipping
 
 12. Ship through small pull requests with `gh pr merge --auto --squash`, gated on `gate`;
     open long work as an early draft. Record plan evidence at a commit of main, in a
-    follow-up `chore(plan)` pull request, never at a branch commit: a squash leaves it
-    outside every clone (#238), and the `V272 D4` test refuses it on the pull request. While
-    runners are slow, land several ready pull requests as a train, by merge commit
-    (`.ai/repo/workflows/merge-train.md`). Read release and deploy state from GitHub
+    follow-up `chore(plan)` pull request, never at a branch commit: a branch commit is lost
+    to every clone once the branch is squashed or deleted (#238), and the `V272 D4` test
+    refuses it on the pull request whatever the merge method. `plan evidence` records HEAD,
+    so record every entry on a fresh branch from `origin/main` before its first commit
+    (`.ai/repo/workflows/plan.md`, "Evidence names a commit of main", has the commands).
+    While runners are slow, land several ready non-`feat`/`fix` pull requests as a train, by
+    merge commit (skill `merge-train`). Read release and deploy state from GitHub
     (`gh release list`, `npm run release:verify-deploy`), never from memory.
 13. Land dist-changing pull requests one at a time, each merged up to date with main and
     rebuilt. Do not arm auto-merge on a pull request that changes build inputs between

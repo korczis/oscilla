@@ -55,6 +55,26 @@ When several PRs are ready, they land together through one integration branch, a
 
 Train 1 was #174 (2026-10-12). Train 2 is #179 (2026-10-17: #178, #167, #155, #154).
 
+### Amendment, 2026-10-28: decision 5 (#252)
+
+Decision 5's second sentence is replaced. The train-wide `fail-first: n/a` let an unproven
+`feat` member land: the train's waiver excused a member whose tests no run had judged.
+From this date:
+
+- A `feat` or `fix` pull request does not ride a train. It lands as its own pull request,
+  where `project.fail-first` runs its tests against the merge base. The `fail-first` job
+  recognises a train by its head branch `train/...` or its title (`Merge train <date>: ...`,
+  `train(...)`), reads the `| member | what |` table of its body, refuses a `feat` or `fix`
+  row, and does not count the train's waiver line for its members.
+- A member that changes a guarded path rides only with the train's own reviewer-written
+  verdict (`project.review-verdict`), as decision 5's first sentence already says.
+- Decisions 1 to 4 stand: each member is merged with `--no-ff --no-commit` so the
+  pre-commit hook judges each merge commit, `npm run verify` is the gate on the train head,
+  and the train lands by merge commit.
+
+The procedure is the skill `merge-train` (`.ai/repo/skills/merge-train/SKILL.md`), the only
+one; the code is `scripts/fail-first.mjs` and `tests/unit/fail-first.test.mjs`.
+
 ## Alternatives rejected
 
 - **Merging the ready PRs one by one** (ADR 0009 alone): N CI rounds in sequence, each after a

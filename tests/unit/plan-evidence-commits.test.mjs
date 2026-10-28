@@ -21,8 +21,10 @@
 // fails here on main afterwards (#238, squash-merged as 508bd3d, turned main red until #246).
 // So on a pull request (GITHUB_BASE_REF set, as in CI's unit job) a second check refuses, before
 // the merge, every evidence commit that is neither reachable from origin/<base> nor in
-// OFF_HISTORY, whatever merge method the pull request will use: record it at the landing commit
-// of main in a follow-up chore(plan) pull request (offBase below).
+// OFF_HISTORY, whatever merge method the pull request will use: remove it and record it in a
+// follow-up chore(plan) pull request from a fresh branch of origin/main, before that branch's
+// first commit, since `plan evidence` records HEAD (offBase below; the commands are in
+// .ai/repo/workflows/plan.md, "Evidence names a commit of main").
 //
 // It needs full history. CI's unit job checks out with fetch-depth: 0, so under GitHub Actions
 // a shallow clone fails the check; elsewhere (a shallow clone, an export without .git) it
@@ -126,9 +128,13 @@ export function offBase(entries, { reachableFromBase, offHistory, base = 'main' 
   for (const e of entries) {
     if (!SHA.test(e.commit || '') || /^0+$/.test(e.commit)) continue;
     if (offHistory.has(e.commit) || reachableFromBase(e.commit)) continue;
-    problems.push(`${e.file} evidence ${e.index}: commit ${e.commit} is not on ${base}; a squash`
-      + ` merge would leave it outside every clone. Record it at the landing commit of ${base}`
-      + ' in a follow-up chore(plan) pull request');
+    problems.push(`${e.file} evidence ${e.index}: commit ${e.commit} is not on ${base}, and a`
+      + ' branch commit is lost to every clone once the branch is squashed or deleted, whatever'
+      + ' the merge method. Remove the entry from this pull request; after it lands, record it'
+      + ` in a follow-up chore(plan) pull request: \`majordomus worktree create chore/plan-<id>\`,`
+      + ` then in that worktree, before its first commit (HEAD still on origin/${base}),`
+      + ' `majordomus plan evidence <id> ...` and `majordomus plan done <id>`, commit, push and'
+      + ' open the pull request (.ai/repo/workflows/plan.md, "Evidence names a commit of main")');
   }
   return problems;
 }
@@ -203,6 +209,10 @@ test('V272 D4 mutation: a branch-only evidence commit is refused before the merg
   assert.equal(problems.length, 1);
   assert.match(problems[0], /x\.yaml evidence 1: commit c{40} is not on main/);
   assert.match(problems[0], /follow-up chore\(plan\) pull request/);
+  assert.match(problems[0], /whatever the merge method/);
+  assert.match(problems[0], /before its first commit \(HEAD still on origin\/main\)/);
+  assert.match(problems[0], /majordomus worktree create chore\/plan-<id>/);
+  assert.doesNotMatch(problems[0], /a squash merge would/);
   assert.deepEqual(offBase(entries.slice(0, 1), {
     reachableFromBase: () => true, offHistory: new Map(),
   }), []);
