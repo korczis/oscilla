@@ -65,12 +65,14 @@ From this date:
   where `project.fail-first` runs its tests against the merge base. The `fail-first` job
   recognises a train by its head branch `train/...` or its title (`Merge train <date>: ...`,
   `train(...)`), reads the `| member | what |` table of its body, refuses a `feat` or `fix`
-  row, and does not count the train's waiver line for its members.
+  row, and does not count the train's waiver line for its members. A pull request titled
+  `feat` or `fix` is judged as one even on a `train/...` branch: a train is not titled so.
 - A member that changes a guarded path rides only with the train's own reviewer-written
   verdict (`project.review-verdict`), as decision 5's first sentence already says.
-- Decisions 1 to 4 stand: each member is merged with `--no-ff --no-commit` so the
-  pre-commit hook judges each merge commit, `npm run verify` is the gate on the train head,
-  and the train lands by merge commit.
+- Decision 1 is amended: each member is merged with `--no-ff --no-commit` (decision 1 said
+  `--no-ff` only), and the merge is committed after its unmerged paths and conflict markers
+  are checked, so the pre-commit hook judges each merge commit. Decisions 2 to 4 stand:
+  `npm run verify` is the gate on the train head, and the train lands by merge commit.
 
 The procedure is the skill `merge-train` (`.ai/repo/skills/merge-train/SKILL.md`), the only
 one; the code is `scripts/fail-first.mjs` and `tests/unit/fail-first.test.mjs`.
