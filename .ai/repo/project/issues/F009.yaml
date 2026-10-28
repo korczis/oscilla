@@ -6,7 +6,7 @@ title: "About on Pro components"
 slug: about-on-pro-components
 priority: p2
 profile: implementation
-objective: "Rebuild About from Pro components: the release line as a Pro timeline of stations (the publisher blocks' timeline pattern adapted to the Pro tokens), the workspaces as Pro cards with an icon, a sentence and a link, the provenance and licence facts as a Pro description list, and the build information (version, source digest, commit) as Pro badges. The text stays what the repository records and the current release is named (project.about-names-current-release); U002 rewrites the story on this markup. Remove the legacy selectors About no longer uses (src/styles/about.css), lower the ratchet baseline, keep every data-osc hook and id."
+objective: "Rebuild About from Pro components: the release line as a Pro timeline of stations (the publisher blocks' timeline pattern adapted to the Pro tokens), the workspaces as Pro cards with an icon, a sentence and a link, the provenance and licence facts as a Pro description list, and the build information (version, source digest, commit) as Pro badges. The text stays what the repository records and the current release is named (project.about-names-current-release); U002 rewrites the story on this markup. Remove the legacy primitives and selectors About no longer uses (src/styles/about.css), lower the ratchet baseline by the surfaces migrated and the primitive uses removed, keep every data-osc hook and id."
 why: "Owner, 2026-10-28: the whole interface on Flowbite Pro; About is where the owner first found the interface outdated."
 scope:
   - "src/index.html"
@@ -26,9 +26,9 @@ scope:
 depends_on:
   - "F002"
 acceptance_criteria:
-  - "ui-flowbite-pro.cjs asserts About is Pro cards, timeline and description list with no legacy chrome class at both sizes, in every gate browser from file:// and the sub-path."
+  - "ui-flowbite-pro.cjs asserts About is Pro cards, timeline and description list with every surface listed as migrated by the ratchet at both sizes, in every gate browser from file:// and the sub-path."
   - "about.test.mjs and about-origin.test.mjs pass with their content checks unchanged (only selectors that moved change); project.about-names-current-release holds."
-  - "An About reference is added through the visual gate with the reason; the ratchet baseline is lower; dist's size is stated and within BUDGET."
+  - "An About reference is added through the visual gate with the reason; the ratchet baseline's debt is lower (the surfaces migrated move from surfaces.pending to surfaces.migrated and the primitive uses removed leave the counts); dist's size is stated and within BUDGET."
 validation:
   - "node tests/browser/ui-flowbite-pro.cjs"
   - "node --test tests/unit/about.test.mjs tests/unit/about-origin.test.mjs"

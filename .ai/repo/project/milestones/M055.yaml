@@ -12,6 +12,7 @@ validation:
 evidence_required:
   - "milestone_verified"
 risks:
+  - "Order: pull request #250 (ADR 0061, rule project.ui-uses-flowbite-pro, project.visual-identity-lock v2, the ratchet at debt 905) lands before F001 starts; every F issue lowers that ratchet in the same change that migrates its surfaces."
   - "Budget: dist measured 2 824 602 B raw / 817 426 B gzip at 91c89b0, 182 574 B gzip under BUDGET; flowbite 2.5.2's whole minified script is 135 824 B raw / 29 632 B gzip, and the legacy CSS coexists with the Pro CSS until each workspace issue removes its share. F001 measures the real addition and every F issue states dist's size; the budget is raised only by owner decision."
   - "src/index.html is shared by F002 to F010, by M054's U issues and by P002, E005, S083 and V504: each lands in its own train round with one rebuild, and the F workspace issues rebase on each other's markup, not on a design conflict."
   - "Visual references: every F issue that changes a referenced view updates that reference through the visual gate with its reason in the same pull request, so main never carries a failing gate; F011 regenerates all of them from the finished shell."

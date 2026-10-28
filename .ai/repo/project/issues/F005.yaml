@@ -6,7 +6,7 @@ title: "Experiments and Findings on Pro components"
 slug: experiments-and-findings-on-pro-components
 priority: p2
 profile: implementation
-objective: "Rebuild Experiments and Findings from Pro components: the definitions, saved experiments and findings lists as Pro tables (reference.md section 9) with status badges, row actions and the sticky footer where a list pages, the detail pane as a Pro card with a description list (the Read Sections block), the comparison and export actions as Pro buttons and dropdowns, and the empty states as the in-card variant of section 12 with the slot U003 fills with its real example. Every stored record keeps its provenance and quality labels. Remove the legacy selectors these views no longer use, lower the ratchet baseline, keep every data-osc hook and id."
+objective: "Rebuild Experiments and Findings from Pro components: the definitions, saved experiments and findings lists as Pro tables (reference.md section 9) with status badges, row actions and the sticky footer where a list pages, the detail pane as a Pro card with a description list (the Read Sections block), the comparison and export actions as Pro buttons and dropdowns, and the empty states as the in-card variant of section 12 with the slot U003 fills with its real example. Every stored record keeps its provenance and quality labels. Remove the legacy primitives and selectors these views no longer use, lower the ratchet baseline by the surfaces migrated and the primitive uses removed, keep every data-osc hook and id."
 why: "Owner, 2026-10-28: the whole interface on Flowbite Pro. The audit (A03, A04) found these views two thirds empty; U003 fills them on this markup."
 scope:
   - "src/index.html"
@@ -26,9 +26,9 @@ scope:
 depends_on:
   - "F002"
 acceptance_criteria:
-  - "ui-flowbite-pro.cjs asserts the Experiments and Findings views are Pro tables and cards with no legacy chrome class at both sizes, in every gate browser from file:// and the sub-path, with an empty store and with saved records."
+  - "ui-flowbite-pro.cjs asserts the Experiments and Findings views are Pro tables and cards with every surface listed as migrated by the ratchet at both sizes, in every gate browser from file:// and the sub-path, with an empty store and with saved records."
   - "npm run test:measure (v3-ui) passes with no behaviour check changed; no record is created before the person acts."
-  - "The references of the views changed are updated or added through the visual gate with the reason; the ratchet baseline is lower; dist's size is stated and within BUDGET."
+  - "The references of the views changed are updated or added through the visual gate with the reason; the ratchet baseline's debt is lower (the surfaces migrated move from surfaces.pending to surfaces.migrated and the primitive uses removed leave the counts); dist's size is stated and within BUDGET."
   - "The pull request carries a review verdict (src/js/ui/experiments.js, findings.js and src/js/measurement are guarded)."
 validation:
   - "node tests/browser/ui-flowbite-pro.cjs"

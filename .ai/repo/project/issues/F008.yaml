@@ -6,7 +6,7 @@ title: "The Studio's chrome on Pro, its graph, timeline and inspector kept as do
 slug: the-studio-s-chrome-on-pro-its-graph-timeline-and-inspector
 priority: p2
 profile: implementation
-objective: "Put the Studio's chrome on Pro components and keep its domain visuals: the toolbar and transport bar as a Pro button group and Pro icon buttons with tooltips, the library and patches panels as Pro lists with search inputs and badges, the inspector as a Pro card with Pro form controls (labels, inputs, selects, toggles, range sliders) for the node parameters, the subview switch (graph, timeline) as Pro tabs, the render and patch dialogs left to F010. The graph's nodes and cables (Signal Path lineage, ADR 0034, project.typed-ports port colours), the timeline's lanes, clips and automation curves and the minimap keep their drawing and palette and are listed in the domain allowlist (tests/unit/ui-flowbite-pro-domain.json) with their reason; they sit inside Pro cards on the Pro surfaces. The compact Studio widget follows the same chrome. Remove the legacy chrome selectors, lower the ratchet baseline, keep every data-osc hook and id the eight Studio suites address."
+objective: "Put the Studio's chrome on Pro components and keep its domain visuals: the toolbar and transport bar as a Pro button group and Pro icon buttons with tooltips, the library and patches panels as Pro lists with search inputs and badges, the inspector as a Pro card with Pro form controls (labels, inputs, selects, toggles, range sliders) for the node parameters, the subview switch (graph, timeline) as Pro tabs, the render and patch dialogs left to F010. The graph's nodes and cables (Signal Path lineage, ADR 0034, project.typed-ports port colours), the timeline's lanes, clips and automation curves and the minimap keep their drawing and palette; they are the content of Pro cards (ADR 0061, decision 3) and sit on the Pro surfaces. The compact Studio widget follows the same chrome. Remove the legacy primitives and selectors, lower the ratchet baseline by the surfaces migrated and the primitive uses removed, keep every data-osc hook and id the eight Studio suites address."
 why: "Owner, 2026-10-28: the whole interface on Flowbite Pro; the Studio graph and timeline are OSCILLA's own visual language and stay readable as such."
 scope:
   - "src/index.html"
@@ -17,7 +17,6 @@ scope:
   - "src/js/ui/studio"
   - "tests/browser/ui-flowbite-pro.cjs"
   - "tests/unit/ui-flowbite-pro-baseline.json"
-  - "tests/unit/ui-flowbite-pro-domain.json"
   - "tests/unit/source-size-baseline.json"
   - "tests/visual/studio"
   - "tests/README.md"
@@ -25,9 +24,9 @@ scope:
 depends_on:
   - "F002"
 acceptance_criteria:
-  - "ui-flowbite-pro.cjs asserts the Studio's toolbar, panels and inspector are Pro components with no legacy chrome class at both sizes, in every gate browser from file:// and the sub-path; every allowlisted domain selector has its reason."
+  - "ui-flowbite-pro.cjs asserts the Studio's toolbar, panels and inspector are Pro components with every surface listed as migrated by the ratchet at both sizes, in every gate browser from file:// and the sub-path; the graph, timeline and minimap render as before inside them."
   - "npm run test:studio passes with no behaviour check changed; keyboard operation of the graph and the timeline (V428, V429) is unchanged."
-  - "The Studio references (tests/visual/studio: compact, desktop with and without the timeline, phone graph and timeline, darwin and linux) are updated through the visual gate with the reason; the ratchet baseline is lower; dist's size is stated and within BUDGET."
+  - "The Studio references (tests/visual/studio: compact, desktop with and without the timeline, phone graph and timeline, darwin and linux) are updated through the visual gate with the reason; the ratchet baseline's debt is lower (the surfaces migrated move from surfaces.pending to surfaces.migrated and the primitive uses removed leave the counts); dist's size is stated and within BUDGET."
   - "Where the change touches src/js/studio the pull request carries a review verdict."
   - "The class tokens tests/browser/live-smoke.cjs reads after every Pages deploy (.osc-statusbar .osc-sb-name, .osc-sb-version, .osc-sg-node, .osc-sg-title, .osc-sg-cat, .osc-sg-edge-line, .osc-block-name, .osc-stl-hrow--track) stay on their elements, unstyled if need be, until F011 moves the smoke to data-osc hooks; the smoke passes against the built file."
 validation:

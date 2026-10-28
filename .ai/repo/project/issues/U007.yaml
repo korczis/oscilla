@@ -6,7 +6,7 @@ title: "Every workspace works at phone width"
 slug: every-workspace-works-at-phone-width
 priority: p2
 profile: implementation
-objective: "Built on Flowbite Pro (intent ui-flowbite-pro, owner 2026-10-28): the phone pass runs on the Pro workspaces (F003 to F010) inside the Pro shell's drawer layout, fixes with Tailwind's responsive variants and adds no legacy chrome class (the ratchet of tests/unit/ui-flowbite-pro.test.mjs refuses one). Fix what the audit records at 390x844: no horizontal page scroll, controls reachable, panels stacked, the Studio's subviews switchable; extend tests/browser/layout.cjs or ui-current.cjs to every workspace at that size."
+objective: "Built on Flowbite Pro (intent ui-flowbite-pro, owner 2026-10-28): the phone pass runs on the Pro workspaces (F003 to F010) inside the Pro shell's drawer layout, fixes with Tailwind's responsive variants and adds no surface off Pro and no legacy primitive (the ratchet of tests/unit/ui-flowbite-pro.test.mjs refuses either). Fix what the audit records at 390x844: no horizontal page scroll, controls reachable, panels stacked, the Studio's subviews switchable; extend tests/browser/layout.cjs or ui-current.cjs to every workspace at that size."
 why: "Audit 2026-10-28 (390x844 findings)."
 scope:
   - "src/styles"

@@ -7,7 +7,7 @@ title: "Dialogs, settings, menus, toasts and the status bar on Pro components"
 slug: dialogs-settings-menus-toasts-and-the-status-bar-on-pro-comp
 priority: p2
 profile: implementation
-objective: "Rebuild every dialog (save preset, headphones, copy link, help, microphone settings, the Studio's render and patch dialogs, unsaved changes) with the Pro modal markup of reference.md section 11 (header with title and close button, body, footer with the Pro primary and secondary buttons; the confirm variant for destructive actions) on the native <dialog> elements OSCILLA already uses, so the browser's focus trap, inert background and Escape keep working; Flowbite's modal script is not used for them. Settings become Pro form sections with toggles (the 2.x peer pattern) and selects; the context and overflow menus Pro dropdowns; transient messages Pro toasts with role=status; the status bar a Pro footer bar. Remove the legacy selectors these no longer use (osc-dialog, osc-menu and their kin), lower the ratchet baseline, keep every data-osc hook and id."
+objective: "Rebuild every dialog (save preset, headphones, copy link, help, microphone settings, the Studio's render and patch dialogs, unsaved changes) with the Pro modal markup of reference.md section 11 (header with title and close button, body, footer with the Pro primary and secondary buttons; the confirm variant for destructive actions) on the native <dialog> elements OSCILLA already uses, so the browser's focus trap, inert background and Escape keep working; Flowbite's modal script is not used for them. Settings become Pro form sections with toggles (the 2.x peer pattern) and selects; the context and overflow menus Pro dropdowns; transient messages Pro toasts with role=status; the status bar a Pro footer bar. Remove the legacy primitives and selectors these no longer use (osc-dialog, osc-menu and their kin), lower the ratchet baseline by the surfaces migrated and the primitive uses removed, keep every data-osc hook and id."
 why: "Owner, 2026-10-28: the whole interface on Flowbite Pro; dialogs are shared by every workspace and carry the safety prompts (headphones), so they land once for all."
 scope:
   - "src/index.html"
@@ -32,7 +32,7 @@ depends_on:
 acceptance_criteria:
   - "ui-flowbite-pro.cjs opens every dialog and asserts the Pro modal structure, that focus moves into it, that Escape closes it and focus returns to the opener, and that the background is inert, in every gate browser from file:// and the sub-path."
   - "The headphones safety prompt still appears before any output that requires it; qa-regressions.cjs and no-inert-surfaces pass."
-  - "The references of the changed views are updated through the visual gate with the reason; the ratchet baseline is lower; dist's size is stated and within BUDGET."
+  - "The references of the changed views are updated through the visual gate with the reason; the ratchet baseline's debt is lower (the surfaces migrated move from surfaces.pending to surfaces.migrated and the primitive uses removed leave the counts); dist's size is stated and within BUDGET."
   - "The class tokens tests/browser/live-smoke.cjs reads after every Pages deploy (.osc-statusbar .osc-sb-name, .osc-sb-version, .osc-sg-node, .osc-sg-title, .osc-sg-cat, .osc-sg-edge-line, .osc-block-name, .osc-stl-hrow--track) stay on their elements, unstyled if need be, until F011 moves the smoke to data-osc hooks; the smoke passes against the built file."
 validation:
   - "node tests/browser/ui-flowbite-pro.cjs"

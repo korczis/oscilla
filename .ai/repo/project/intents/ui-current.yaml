@@ -4,7 +4,7 @@ statement: "On 2026-10-28 the owner looked at the live Studio (#m=studio) and Ab
 invariants:
   - "No fake data: an example a workspace offers is produced by actually running OSCILLA (for a measurement, the TEST CONTEXT loopback) and is labelled as such (project.no-fake-science)"
   - "The single file, file:// and the /oscilla/ sub-path keep working, and every inventoried deep link resolves as before (project.single-file-deliverable)"
-  - "The interface is built on Flowbite Pro (intent ui-flowbite-pro, owner 2026-10-28; project.visual-identity-lock as F001 revises it); the visual reference changes only through the visual gate with a recorded reason"
+  - "The interface is built on Flowbite Pro (intent ui-flowbite-pro, owner 2026-10-28; ADR 0061 and project.visual-identity-lock v2, pull request #250); the visual reference changes only through the visual gate with a recorded reason"
   - "About names the current release (project.about-names-current-release) and cites only what the repository records"
   - "The first screen's layout stays the owner's choice on Q004; this intent changes no default workspace"
 milestones:

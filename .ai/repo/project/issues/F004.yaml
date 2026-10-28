@@ -6,7 +6,7 @@ title: "Measure on Pro components"
 slug: measure-on-pro-components
 priority: p2
 profile: implementation
-objective: "Rebuild the MEASURE workspace from Pro components: the guided seven-step flow as a Pro stepper inside a card, the stimulus, live input and quality panels as Pro cards with the quality states as Pro status badges (green, yellow, red pairs with their dark variants), the device and calibration selectors as Pro form controls, the result views (frequency response, impulse response, RTA) as Pro chart cards whose header carries the view's actions. The measurement charts keep their axes, units, traces and the signal palette; the TEST CONTEXT label and every quality warning stay as prominent as today (project.no-fake-science). Remove the legacy selectors Measure no longer uses, lower the ratchet baseline, keep every data-osc hook and id."
+objective: "Rebuild the MEASURE workspace from Pro components: the guided seven-step flow as a Pro stepper inside a card, the stimulus, live input and quality panels as Pro cards with the quality states as Pro status badges (green, yellow, red pairs with their dark variants), the device and calibration selectors as Pro form controls, the result views (frequency response, impulse response, RTA) as Pro chart cards whose header carries the view's actions. The measurement charts keep their axes, units, traces and the signal palette; the TEST CONTEXT label and every quality warning stay as prominent as today (project.no-fake-science). Remove the legacy primitives and selectors Measure no longer uses, lower the ratchet baseline by the surfaces migrated and the primitive uses removed, keep every data-osc hook and id."
 why: "Owner, 2026-10-28: the whole interface on Flowbite Pro. Measure is the wedge (ADR 0051) and its labels carry scientific meaning, so it lands on its own."
 scope:
   - "src/index.html"
@@ -19,7 +19,6 @@ scope:
   - "tests/browser/ui-flowbite-pro.cjs"
   - "tests/browser/v3-ui.cjs"
   - "tests/unit/ui-flowbite-pro-baseline.json"
-  - "tests/unit/ui-flowbite-pro-domain.json"
   - "tests/unit/source-size-baseline.json"
   - "tests/visual/measure"
   - "tests/README.md"
@@ -27,9 +26,9 @@ scope:
 depends_on:
   - "F002"
 acceptance_criteria:
-  - "ui-flowbite-pro.cjs asserts the Measure panels are Pro cards and carry no legacy chrome class at both sizes, in every gate browser from file:// and the sub-path."
+  - "ui-flowbite-pro.cjs asserts the Measure panels are Pro cards and are listed as migrated by the ratchet at both sizes, in every gate browser from file:// and the sub-path."
   - "npm run test:measure passes with no behaviour check changed; the TEST CONTEXT label and the quality warnings are visible in the same steps as before."
-  - "The Measure references (tests/visual/measure, desktop and phone, darwin and linux) are updated through the visual gate with the reason; the ratchet baseline is lower; dist's size is stated and within BUDGET."
+  - "The Measure references (tests/visual/measure, desktop and phone, darwin and linux) are updated through the visual gate with the reason; the ratchet baseline's debt is lower (the surfaces migrated move from surfaces.pending to surfaces.migrated and the primitive uses removed leave the counts); dist's size is stated and within BUDGET."
   - "The pull request carries a review verdict (src/js/ui/measure.js and src/js/measurement are guarded)."
 validation:
   - "node tests/browser/ui-flowbite-pro.cjs"
