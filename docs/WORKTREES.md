@@ -28,6 +28,7 @@ rule exists.
 | Bring a misplaced worktree home, dirty state included | `majordomus worktree migrate` (`--plan` shows the steps) |
 | Every worktree and its standing | `majordomus worktree list` |
 | Remove a merged, clean worktree | `majordomus worktree remove <branch>` |
+| Land several ready pull requests in one CI run while runners are slow | a train on `train/<date>`: [`.ai/repo/workflows/merge-train.md`](../.ai/repo/workflows/merge-train.md) |
 
 Run `majordomus finish` and read `finish: <id> completed` before removing a worktree: the
 task record lives in the worktree's `.ai/local/`, and removing it first loses the record.
