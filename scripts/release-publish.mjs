@@ -8,7 +8,8 @@
 // --pages-timeout that is not a positive number exits 2, before any git, gh or npm call.
 // Preconditions (all checked, all reported, in both modes):
 //   on branch main, clean tree, HEAD == origin/main (Pages deploys main), tag v<version>
-//   absent locally and on origin, a release-gate receipt (release:prepare) matching the
+//   absent locally and on origin (or, to resume, present on origin at HEAD; below), a
+//   release-gate receipt (release:prepare) matching the
 //   current version, source digest, dist bytes and gate tree (every tracked file except the
 //   release records; rule project.release-receipt-binds-gate), committed dist up to date
 //   (npm run build:check), gh authenticated, and no pages.yml run of which no job has started
@@ -40,6 +41,12 @@
 //   and says how to undo the tag. Both modes print the `majordomus finish` line that closes
 //   the release task against the published commit (verify-deploy defaults to the worktree
 //   HEAD, which is not the published commit once main has moved).
+// Resume (R021): when the tag is already on origin at HEAD (and a local tag, if any, too), an
+// earlier publish was interrupted after the push. The run skips the tag, the push and the wait
+// for the merge's deploy; it redeploys unless the live page already says tagged for HEAD,
+// adopting a dispatched run of HEAD that is still waiting instead of dispatching another, then
+// verifies and creates the Release. A tag at another commit, or a Release that already
+// exists, refuses.
 import { spawnSync } from 'node:child_process';
 import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
@@ -202,9 +209,35 @@ export function finishLine(tag, commit) {
     + `--verify-command "npm run release:verify-deploy -- --commit ${commit}"`;
 }
 
+/**
+ * The commit a tag names in `git ls-remote --tags origin refs/tags/<tag> refs/tags/<tag>^{}`
+ * output: the peeled line of an annotated tag, else the tag's own line; null when absent.
+ */
+export function remoteTagCommit(stdout, tag) {
+  let plain = null;
+  let peeled = null;
+  for (const line of String(stdout || '').split('\n')) {
+    const [sha, ref] = line.trim().split(/\s+/);
+    if (ref === `refs/tags/${tag}^{}`) peeled = sha;
+    else if (ref === `refs/tags/${tag}`) plain = sha;
+  }
+  return peeled || plain;
+}
+
+/**
+ * R021: a publish interrupted after its tag reached origin resumes when that tag names HEAD
+ * (and a local tag, if any, does too): the tag and push are done, the rest is not.
+ */
+export function resumable(f) {
+  return !!f.tagRemote && f.tagRemoteCommit === f.head
+    && (!f.tagLocal || f.tagLocalCommit === f.head);
+}
+
 /** Pure precondition check over gathered facts. */
 export function preconditionProblems(f) {
   const problems = [];
+  const short = (sha) => String(sha || 'an unreadable commit').slice(0, 7);
+  const resume = resumable(f);
   if (f.branch !== 'main') problems.push(`on branch ${f.branch}, releases are cut from main`);
   if (f.dirty) problems.push('working tree is not clean');
   if (f.originMain && f.head !== f.originMain) {
@@ -212,8 +245,17 @@ export function preconditionProblems(f) {
       + '(push/merge first: Pages deploys main)');
   }
   if (!f.originMain) problems.push('could not read origin/main');
-  if (f.tagLocal) problems.push(`tag ${f.tag} already exists locally`);
-  if (f.tagRemote) problems.push(`tag ${f.tag} already exists on origin`);
+  if (f.tagLocal && !resume) {
+    problems.push(`tag ${f.tag} already exists locally`
+      + (f.tagLocalCommit ? ` at ${short(f.tagLocalCommit)}, not HEAD ${short(f.head)}` : ''));
+  }
+  if (f.tagRemote && !resume) {
+    problems.push(`tag ${f.tag} already exists on origin at ${short(f.tagRemoteCommit)}, `
+      + `not HEAD ${short(f.head)}`);
+  }
+  if (resume && f.releaseExists) {
+    problems.push(`the GitHub Release ${f.tag} already exists: nothing to publish`);
+  }
   problems.push(...f.receiptProblems);
   if (!f.buildCheck) problems.push('npm run build:check failed: dist/index.html is stale');
   if (!f.ghAuth) problems.push('gh is not authenticated (gh auth status)');
@@ -270,7 +312,9 @@ export async function publish({
   const asset = releaseAssetName(version);
   const head = run(['rev-parse', 'HEAD']);
   const remoteMain = sh('git', ['ls-remote', 'origin', 'refs/heads/main']);
-  const remoteTag = sh('git', ['ls-remote', '--tags', 'origin', `refs/tags/${tag}`]);
+  const remoteTag = sh('git', ['ls-remote', '--tags', 'origin', `refs/tags/${tag}`,
+    `refs/tags/${tag}^{}`]);
+  const localTag = sh('git', ['rev-parse', '-q', '--verify', `refs/tags/${tag}^{commit}`]);
   // null when the list cannot be read: an unreadable list is not an empty one.
   const listRuns = (extra) => {
     const r = sh('gh', ['run', 'list', '--workflow', 'pages.yml', ...extra, '--json',
@@ -313,13 +357,19 @@ export async function publish({
     branch: run(['rev-parse', '--abbrev-ref', 'HEAD']),
     dirty: run(['status', '--porcelain', '--untracked-files=normal']) !== '',
     originMain: remoteMain.status === 0 ? (remoteMain.stdout.split(/\s/)[0] || null) : null,
-    tagLocal: sh('git', ['rev-parse', '-q', '--verify', `refs/tags/${tag}`]).status === 0,
+    tagLocal: localTag.status === 0,
+    tagLocalCommit: localTag.status === 0 ? localTag.stdout || null : null,
     tagRemote: remoteTag.status === 0 && remoteTag.stdout !== '',
+    tagRemoteCommit: remoteTag.status === 0 ? remoteTagCommit(remoteTag.stdout, tag) : null,
     receiptProblems: receiptProblems(receipt === undefined ? readReceipt(run, root) : receipt, now),
     buildCheck: sh('npm', ['run', '--silent', 'build:check']).status === 0,
     ghAuth: sh('gh', ['auth', 'status']).status === 0,
     stuckRuns: diagnose(STUCK_AFTER_MIN),
   };
+  const resume = resumable(facts);
+  // Only a resumed publish can find its Release already made; asked only then.
+  facts.releaseExists = resume && sh('gh', ['release', 'view', tag, '--json', 'tagName'])
+    .status === 0;
   const previousTag = lastReleaseTag(run);
   const commits = readCommits(previousTag, run);
   const notes = releaseNotes({ version, previousTag, commits, commit: head,
@@ -330,7 +380,12 @@ export async function publish({
   log(`previous tag: ${previousTag || '(none)'}; ${commits.length} commit(s) in the notes`);
   for (const p of problems) log(`  BLOCKED ${p}`);
   if (!problems.length) log('  OK all preconditions hold');
-  const steps = [
+  if (resume) {
+    log(`  RESUME ${tag} is on origin at ${head.slice(0, 7)}: the tag, its push and the deploy `
+      + 'of the merge are done; this run continues with the redeploy, verify-deploy and the '
+      + 'GitHub Release (R021)');
+  }
+  const allSteps = [
     ['git', ['tag', '-a', tag, '-m', `OSCILLA ${tag}`, head]],
     ['git', ['push', 'origin', `refs/tags/${tag}`]],
     ['gh', ['run', 'list', '--workflow', 'pages.yml', '--commit', head, '--limit', '1', '--json',
@@ -346,6 +401,8 @@ export async function publish({
     ['gh', ['release', 'create', tag, asset, ...releaseCreateFlags(version, '<generated notes>')],
       `(${asset} = the committed ${DIST_PATH})`],
   ];
+  // Resuming skips the tag, its push and the wait for the merge's deploy.
+  const steps = resume ? allSteps.slice(3) : allSteps;
   if (!yes) {
     log('\nWould run:');
     for (const [cmd, args, note] of steps) {
@@ -365,65 +422,88 @@ export async function publish({
     if (r.status !== 0) throw new Error(`${what} failed (${cmd} ${args.join(' ')})`);
     return r;
   };
-  let pushed = false;
+  let pushed = resume;
   try {
-    must('git', ['tag', '-a', tag, '-m', `OSCILLA ${tag}`, head], 'tagging');
-    must('git', ['push', 'origin', `refs/tags/${tag}`], 'pushing the tag');
-    pushed = true;
-    // Wait for the Pages run of HEAD to START: for one of its jobs to have run. A run of
-    // which no job has started is not watched: `gh run watch` has no timeout, and a run
-    // awaiting approval or held behind another run would hold this publish for as long as it
-    // sits there. A run whose deploy job is under way or done is watched whatever the run
-    // status says, so a slow but healthy run (smoke legs waiting for a runner) is waited for.
-    let runId = null;
-    let seen = null;
-    const deadline = clock() + pagesTimeoutMin * 60_000;
-    while (!runId && clock() < deadline) {
-      const [first] = withJobs(listRuns(['--commit', head, '--limit', '1']) || []);
-      seen = first || seen;
-      if (first && runStarted(first)) runId = String(first.databaseId);
-      else await sleep(15);
+    if (!resume) {
+      must('git', ['tag', '-a', tag, '-m', `OSCILLA ${tag}`, head], 'tagging');
+      must('git', ['push', 'origin', `refs/tags/${tag}`], 'pushing the tag');
+      pushed = true;
+      // Wait for the Pages run of HEAD to START: for one of its jobs to have run. A run of
+      // which no job has started is not watched: `gh run watch` has no timeout, and a run
+      // awaiting approval or held behind another run would hold this publish for as long as it
+      // sits there. A run whose deploy job is under way or done is watched whatever the run
+      // status says, so a slow but healthy run (smoke legs waiting for a runner) is waited for.
+      let runId = null;
+      let seen = null;
+      const deadline = clock() + pagesTimeoutMin * 60_000;
+      while (!runId && clock() < deadline) {
+        const [first] = withJobs(listRuns(['--commit', head, '--limit', '1']) || []);
+        seen = first || seen;
+        if (first && runStarted(first)) runId = String(first.databaseId);
+        else await sleep(15);
+      }
+      if (!runId) {
+        for (const line of diagnose(0)) log(`  STUCK ${line}`);
+        throw new Error(seen
+          ? `Pages run ${seen.databaseId} for ${head} is still '${seen.status}' with no job `
+            + `started after ${pagesTimeoutMin} min`
+          : `no Pages run for ${head} within ${pagesTimeoutMin} min`);
+      }
+      must('gh', ['run', 'watch', runId, '--exit-status'], `Pages run ${runId}`);
     }
-    if (!runId) {
-      for (const line of diagnose(0)) log(`  STUCK ${line}`);
-      throw new Error(seen
-        ? `Pages run ${seen.databaseId} for ${head} is still '${seen.status}' with no job `
-          + `started after ${pagesTimeoutMin} min`
-        : `no Pages run for ${head} within ${pagesTimeoutMin} min`);
+    // A resumed publish whose live page already says tagged for HEAD needs no redeploy.
+    let redeployed = false;
+    if (resume) {
+      try {
+        redeployed = taggedPageProblem(await fetchPage(`${PUBLIC_URL}?oscilla-publish=`
+          + `${head.slice(0, 12)}.0`), head) === null;
+      } catch { /* unread: redeploy */ }
+      if (redeployed) {
+        log(`  the live page already says ${tag} tagged for ${head.slice(0, 7)}`);
+      }
     }
-    must('gh', ['run', 'watch', runId, '--exit-status'], `Pages run ${runId}`);
-    // That run stamped the release commit `untagged`: it deployed before the tag existed.
-    // Redeploy main, now tagged, and wait for that run to finish under the same bound. It is
-    // polled, not watched (gh run watch has no timeout), and told from earlier dispatches of
-    // the same commit by the runs listed before the dispatch.
-    const dispatchList = dispatchedListArgs(head);
-    const before = listRuns(dispatchList);
-    if (!before) {
-      throw new Error('could not list the dispatched pages.yml runs (gh run list --workflow '
-        + `pages.yml ${dispatchList.join(' ')}), so the redeploy could not be told apart`);
-    }
-    const earlier = new Set(before.map((r) => r.databaseId));
-    must('gh', DISPATCH_ARGS, 'dispatching the Pages redeploy');
-    let redeploy = null;
-    const redeployDeadline = clock() + pagesTimeoutMin * 60_000;
-    while (clock() < redeployDeadline) {
-      const fresh = (listRuns(dispatchList) || []).find((r) => !earlier.has(r.databaseId));
-      redeploy = fresh || redeploy;
-      if (redeploy && redeploy.status === 'completed') break;
-      await sleep(15);
-    }
-    if (!redeploy) {
-      throw new Error(`no dispatched Pages run for ${head} appeared within ${pagesTimeoutMin} `
-        + `min (gh ${DISPATCH_ARGS.join(' ')})`);
-    }
-    if (redeploy.status !== 'completed') {
-      throw new Error(`dispatched Pages run ${redeploy.databaseId} for ${head} is still `
-        + `'${redeploy.status}' after ${pagesTimeoutMin} min. Inspect: gh run view `
-        + `${redeploy.databaseId}`);
-    }
-    if (redeploy.conclusion !== 'success') {
-      throw new Error(`dispatched Pages run ${redeploy.databaseId} for ${head} completed `
-        + `'${redeploy.conclusion}'. Inspect: gh run view ${redeploy.databaseId}`);
+    if (!redeployed) {
+      // That run stamped the release commit `untagged`: it deployed before the tag existed.
+      // Redeploy main, now tagged, and wait for that run to finish under the same bound. It is
+      // polled, not watched (gh run watch has no timeout), and told from earlier dispatches of
+      // the same commit by the runs listed before the dispatch.
+      const dispatchList = dispatchedListArgs(head);
+      const before = listRuns(dispatchList);
+      if (!before) {
+        throw new Error('could not list the dispatched pages.yml runs (gh run list --workflow '
+          + `pages.yml ${dispatchList.join(' ')}), so the redeploy could not be told apart`);
+      }
+      // R021: a dispatched run of HEAD that an interrupted publish left waiting is adopted, not
+      // dispatched a second time behind it.
+      const waiting = resume ? before.find((r) => r.status !== 'completed') : null;
+      const earlier = new Set(before.filter((r) => r !== waiting).map((r) => r.databaseId));
+      if (waiting) {
+        log(`  adopting the dispatched Pages run ${waiting.databaseId} ('${waiting.status}') `
+          + 'left by the interrupted publish');
+      } else {
+        must('gh', DISPATCH_ARGS, 'dispatching the Pages redeploy');
+      }
+      let redeploy = null;
+      const redeployDeadline = clock() + pagesTimeoutMin * 60_000;
+      while (clock() < redeployDeadline) {
+        const fresh = (listRuns(dispatchList) || []).find((r) => !earlier.has(r.databaseId));
+        redeploy = fresh || redeploy;
+        if (redeploy && redeploy.status === 'completed') break;
+        await sleep(15);
+      }
+      if (!redeploy) {
+        throw new Error(`no dispatched Pages run for ${head} appeared within ${pagesTimeoutMin} `
+          + `min (gh ${DISPATCH_ARGS.join(' ')})`);
+      }
+      if (redeploy.status !== 'completed') {
+        throw new Error(`dispatched Pages run ${redeploy.databaseId} for ${head} is still `
+          + `'${redeploy.status}' after ${pagesTimeoutMin} min. Inspect: gh run view `
+          + `${redeploy.databaseId}`);
+      }
+      if (redeploy.conclusion !== 'success') {
+        throw new Error(`dispatched Pages run ${redeploy.databaseId} for ${head} completed `
+          + `'${redeploy.conclusion}'. Inspect: gh run view ${redeploy.databaseId}`);
+      }
     }
     must('node', ['scripts/verify-deploy.mjs', '--commit', head], 'deployment verification');
     let tagged = 'not read';
@@ -449,8 +529,9 @@ export async function publish({
   } catch (e) {
     log(`\nRELEASE:PUBLISH FAILED: ${e.message}`);
     if (pushed) {
-      log(`The tag ${tag} is on origin but no GitHub Release was created. Fix and re-run the `
-        + `failed step, or undo with: git push origin :refs/tags/${tag} && git tag -d ${tag}`);
+      log(`The tag ${tag} is on origin but no GitHub Release was created. Fix the cause and `
+        + 're-run npm run release:publish -- --yes, which resumes after the tag (R021), or undo '
+        + `with: git push origin :refs/tags/${tag} && git tag -d ${tag}`);
       log(`Once the page is live, prove it with: npm run release:verify-deploy -- --commit ${head}`);
     }
     return 1;
