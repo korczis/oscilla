@@ -6,7 +6,7 @@ title: "About tells the project as it stands and what comes next"
 slug: about-tells-the-project-as-it-stands-and-what-comes-next
 priority: p1
 profile: implementation
-objective: "Rewrite the About story so it opens on what OSCILLA is at the current release, not on the first night: the release line to the current release (the existing stations), the workspaces and what each is for, and a 'What comes next' section listing the open milestones of the plan (title and progress) read from src/data/roadmap.json, which scripts/roadmap.mjs generates from .ai/repo/project and release:prepare refreshes, so a plan-only commit never changes dist and the page stays one file with no runtime fetch. The first-night pace stays as one dated station with its wall-clock qualifier instead of the headline. Update tests/unit/about-origin.test.mjs, whose pace check followed Q005's delegated decision, to the owner's 2026-10-28 override, and add tests/unit/about-current.test.mjs, which fails when About's headline is the first night, when a workspace of the navigation is missing from the workspace list, or when src/data/roadmap.json lists a milestone the plan has DONE or omits an open one (run by release:prepare, not by every pull request)."
+objective: "Built on Flowbite Pro (intent ui-flowbite-pro, owner 2026-10-28): the story is written into the Pro About markup F009 lands (Pro timeline, cards, description list), and adds no legacy chrome class (the ratchet of tests/unit/ui-flowbite-pro.test.mjs refuses one). Rewrite the About story so it opens on what OSCILLA is at the current release, not on the first night: the release line to the current release (the existing stations), the workspaces and what each is for, and a 'What comes next' section listing the open milestones of the plan (title and progress) read from src/data/roadmap.json, which scripts/roadmap.mjs generates from .ai/repo/project and release:prepare refreshes, so a plan-only commit never changes dist and the page stays one file with no runtime fetch. The first-night pace stays as one dated station with its wall-clock qualifier instead of the headline. Update tests/unit/about-origin.test.mjs, whose pace check followed Q005's delegated decision, to the owner's 2026-10-28 override, and add tests/unit/about-current.test.mjs, which fails when About's headline is the first night, when a workspace of the navigation is missing from the workspace list, or when src/data/roadmap.json lists a milestone the plan has DONE or omits an open one (run by release:prepare, not by every pull request)."
 why: "Owner, 2026-10-28: About at #m=about is outdated. Q005's delegated decision kept 'Built in one night' as the headline; the owner overrides it."
 scope:
   - "src/index.html"
@@ -24,6 +24,7 @@ scope:
   - "dist"
 depends_on:
   - "U001"
+  - "F009"
 acceptance_criteria:
   - "tests/unit/about-current.test.mjs passes and fails on the merge base."
   - "about.test.mjs, about-origin.test.mjs (updated, with the override named) and no-fake-science pass; project.about-names-current-release holds."

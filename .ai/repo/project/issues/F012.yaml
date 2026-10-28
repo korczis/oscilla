@@ -1,0 +1,36 @@
+id: F012
+milestone: M055
+serves:
+  - "ui-flowbite-pro#no-legacy-chrome"
+  - "ui-flowbite-pro#pro-shell"
+title: "Hold the Pro interface in the gate and register its claims"
+slug: hold-the-pro-interface-in-the-gate-and-register-its-claims
+priority: p2
+profile: implementation
+objective: "Make tests/browser/ui-flowbite-pro.cjs part of the release gate (package.json test:release) in every gate browser and origin; confirm the ratchet debt of tests/unit/ui-flowbite-pro-baseline.json is 0 and delete what is left of the legacy chrome (the base reset preflight replaced, unused tokens of src/styles/tokens.css that only chrome read); register the claims of ui-flowbite-pro in docs/CLAIMS.yaml (pro-build, pro-shell, no-legacy-chrome, pro-accessible, visual-references-pro, licence-clean) with the sources and tests that prove them; point the intent's criteria at those claims; add rule:project.ui-uses-flowbite-pro to the intent's governance and its Verification section's list of tests; and run the owner's verifier (node ~/.claude/skills/flowbite-pro/verify.mjs on this repository) and record its output on the issue."
+why: "The intent is held only when a check fails on regression; the claims make the guarantee visible to the knowledge integrity test."
+scope:
+  - "package.json"
+  - "src/styles"
+  - "tests/unit/ui-flowbite-pro-baseline.json"
+  - "tests/unit/ui-flowbite-pro.test.mjs"
+  - "docs/CLAIMS.yaml"
+  - ".ai/repo/project/intents/ui-flowbite-pro.yaml"
+  - ".ai/repo/rules/project/ui-uses-flowbite-pro.v1.md"
+  - "tests/README.md"
+  - "dist"
+depends_on:
+  - "F011"
+acceptance_criteria:
+  - "npm run release-gate runs ui-flowbite-pro.cjs in every gate browser and origin and passes."
+  - "The ratchet debt is 0 (the intent's no-legacy-chrome command exits 0) and the domain allowlist names only domain visuals."
+  - "docs/CLAIMS.yaml names the six claims with their tests and every ui-flowbite-pro criterion points at its claim; knowledge-integrity passes; majordomus intent validate shows 0 failures."
+  - "The owner's verifier reports OSCILLA compliant, and its output is the issue's evidence."
+validation:
+  - "npm run release-gate"
+  - "majordomus intent validate"
+  - "node ~/.claude/skills/flowbite-pro/verify.mjs ."
+evidence_required:
+  - "verified"
+created_at: 2026-10-28
+updated_at: 2026-10-28

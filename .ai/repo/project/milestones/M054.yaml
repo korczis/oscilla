@@ -12,6 +12,7 @@ validation:
 evidence_required:
   - "milestone_verified"
 risks:
+  - "Built on Flowbite Pro (owner, 2026-10-28; intent ui-flowbite-pro, M055): U002 to U008 build their interface on the Pro shell and components, so each depends on F002 or on the F issue of its workspace (U002 on F009, U003 on F005 and F010, U004 and U005 on F006, U006 on F002, U007 on F003 to F010, U008 on F011) and the new content is built once; U001's audit stays as recorded."
   - "Layout work colliding with the first screen: no issue here changes the default workspace, and P002 builds the layout Q004 chooses."
   - "src/index.html is shared with E005 (partials), P002, S083 and MIDI V504: every U issue that edits it lands in its own train round with one rebuild."
   - "About's pace statement was kept by Q005's delegated decision; the owner's 2026-10-28 statement that About is outdated overrides it, so U002 changes about-origin.test.mjs with that reason."

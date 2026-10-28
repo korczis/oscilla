@@ -1,0 +1,42 @@
+id: F003
+milestone: M055
+serves:
+  - "ui-flowbite-pro#no-legacy-chrome"
+title: "Playground, Synthesis, Sequencer and Presets on Pro components"
+slug: playground-synthesis-sequencer-and-presets-on-pro-components
+priority: p2
+profile: implementation
+objective: "Rebuild the Playground (generator, device panel, microphone analyzer, the five labs and the compact Studio widget), Synthesis, Sequencer and Presets from Pro components: each panel a Pro card (reference.md section 6) with its title row and actions, the controls Pro form controls (section 13: inputs, selects, toggles, range sliders), the buttons the Pro primary and secondary buttons, the preset list a Pro compact list or table (section 9) with badges, empty states the in-card variant of section 12. Keep today's Playground arrangement: the first screen's layout is the owner's choice on Q004, so this issue changes the components, not what the first screen shows. The waveform, spectrum, spectrogram, Lissajous, envelope and sequencer grid keep their drawing and the signal palette inside the cards. Remove the legacy selectors these workspaces no longer use and lower the ratchet baseline by them; keep every data-osc hook and id."
+why: "Owner, 2026-10-28: the whole interface on Flowbite Pro. These four workspaces share the V1 instrument markup and land together."
+scope:
+  - "src/index.html"
+  - "src/partials"
+  - "src/styles"
+  - "src/js/ui/app.js"
+  - "src/js/ui/workbench.js"
+  - "src/js/labs"
+  - "src/js/sequencer"
+  - "src/js/charts"
+  - "tests/browser/ui-flowbite-pro.cjs"
+  - "tests/unit/ui-flowbite-pro-baseline.json"
+  - "tests/unit/ui-flowbite-pro-domain.json"
+  - "tests/unit/source-size-baseline.json"
+  - "tests/visual"
+  - "tests/README.md"
+  - "dist"
+depends_on:
+  - "F002"
+acceptance_criteria:
+  - "ui-flowbite-pro.cjs asserts, for each of the four workspaces at both sizes, that every panel is a Pro card in the shell's page body and that no element carries a legacy chrome class; it passes in every gate browser from file:// and the sub-path."
+  - "npm run test:engine, test:labs, test:sequencer and test:browser pass with no behaviour check changed; the default workspace and its arrangement are unchanged."
+  - "The Playground --play reference is updated through the visual gate with the reason; the ratchet baseline is lower; dist's size is stated and within BUDGET."
+validation:
+  - "node tests/browser/ui-flowbite-pro.cjs"
+  - "npm run test:labs"
+  - "npm run test:sequencer"
+  - "npm run test:visual"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-10-28
+updated_at: 2026-10-28

@@ -1,0 +1,40 @@
+id: F011
+milestone: M055
+serves:
+  - "ui-flowbite-pro#visual-references-pro"
+title: "Regenerate the visual references and the live smoke from the Pro shell"
+slug: regenerate-the-visual-references-and-the-live-smoke-from-the
+priority: p2
+profile: implementation
+objective: "Once every workspace is on Pro, regenerate every visual reference from the finished shell, each with its recorded reason: the Playground --play scene (tests/visual/reference.png, baseline.json, regions.json), Measure (tests/visual/measure), the Studio (tests/visual/studio), and new references for the workspaces that had none (Experiments, Analyzer, Filter Lab, Compare, Synthesis, Sequencer, Presets, Learn, About), in the dark and the light theme at 1536x1024 and 390x844, the linux-x64 images produced in the CI runner's container image and the darwin-arm64 ones on the Mac. Update tests/browser/live-smoke.cjs so the post-deploy smoke checks the Pro shell (navbar, sidebar, the active workspace, the compact Studio widget) instead of the legacy selectors it reads today. Run the whole visual gate and the live smoke against the built file."
+why: "The intent is held only when a pixel regression of the Pro interface fails a gate; the per-issue reference updates of F002 to F010 leave gaps (both themes, workspaces without a reference)."
+scope:
+  - "tests/visual"
+  - "scripts/visual-gate.mjs"
+  - "scripts/visual-measure.mjs"
+  - "scripts/visual-studio.mjs"
+  - "scripts/visual-compare.mjs"
+  - "tests/browser/live-smoke.cjs"
+  - "package.json"
+  - "tests/README.md"
+depends_on:
+  - "F003"
+  - "F004"
+  - "F005"
+  - "F006"
+  - "F007"
+  - "F008"
+  - "F009"
+  - "F010"
+acceptance_criteria:
+  - "npm run test:visual passes against references regenerated from the Pro shell, each with its reason; every workspace has a reference in both themes at both sizes for darwin-arm64 and linux-x64."
+  - "tests/browser/live-smoke.cjs passes against the built file served from a sub-path and reads no legacy chrome selector."
+  - "The pull request carries a review verdict (tests/browser/live-smoke.cjs is guarded)."
+validation:
+  - "npm run test:visual"
+  - "node tests/browser/live-smoke.cjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-10-28
+updated_at: 2026-10-28
