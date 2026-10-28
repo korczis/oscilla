@@ -1112,7 +1112,7 @@ test('mutation M9: a surface on the Pro class set counts as migrated only with t
 
 test('fixture: the build compiles Tailwind with the flowbite plugin only when all of it is there',
   () => {
-    const pkg = { devDependencies: { tailwindcss: '4.1.0', flowbite: '2.5.2' } };
+    const pkg = { devDependencies: { tailwindcss: '4', flowbite: '2' } };
     const build = "import { compile } from '@tailwindcss/node';";
     const entry = '@import "tailwindcss";\n@plugin "flowbite/plugin";\n';
     assert.equal(buildCompilesFlowbite({ pkg, files: { 'scripts/build.mjs': build,
