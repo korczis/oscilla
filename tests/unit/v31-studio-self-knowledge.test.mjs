@@ -291,45 +291,85 @@ test('§225 every Studio claim is named by a Studio feature or use case', () => 
 
 // ---------------------------------------------------------------- §19-§20 decisions, questions
 
-test('§19 the decisions table of studio-model.md is what the code decided, line by line', () => {
+/**
+ * Problems of one row of the studio-decisions table. A `Where` cell is `path#SYMBOL` (the file
+ * declares SYMBOL and names the decision) or, for a decision no symbol carries, `path` alone
+ * (the file names it). Never `path:line`: a line moves with every import above it (#235).
+ */
+export function decisionRowProblems(row, readFile, expected = {}) {
+  const cells = row.split('|').slice(1, -1).map((c) => c.trim());
+  if (cells.length !== 4) return [`row ${row}: ${cells.length} cells, not 4`];
+  const [, value, nameCell, whereCell] = cells;
+  const name = nameCell.replace(/`/g, '');
+  const where = whereCell.replace(/`/g, '').match(/^([^\s#:]+)(?:#(\w+))?$/);
+  if (!where) return [`row ${name}: Where is ${whereCell}, not path#SYMBOL (or a path)`];
+  const [, file, symbol] = where;
+  const problems = [];
+  const text = readFile(file);
+  if (symbol && !new RegExp(`\\b(export\\s+)?(const|let|function|class)\\s+${symbol}\\b`)
+    .test(text)) {
+    problems.push(`row ${name}: ${file} declares no ${symbol}`);
+  }
+  if (!text.includes(name)) problems.push(`row ${name}: ${file} does not name ${name}`);
+  if (name in expected && value !== expected[name]) {
+    problems.push(`row ${name}: value ${value}, the code says ${expected[name]}`);
+  }
+  return problems;
+}
+
+const decisionsRegion = (doc) => doc.match(
+  /<!-- studio-decisions:begin -->\n([\s\S]*?)\n<!-- studio-decisions:end -->/);
+
+const decisionsExpected = () => ({
+  ZOOM_MIN: String(ZOOM_MIN),
+  ZOOM_MAX: String(ZOOM_MAX),
+  ZOOM_STEP: String(ZOOM_STEP),
+  GRID: `${GRID} units`,
+  DRAG_THRESHOLD_PX: `${DRAG_THRESHOLD_PX} px`,
+  CABLE_HIT_PX: `${CABLE_HIT_PX.fine} px fine pointer, ${CABLE_HIT_PX.coarse} px coarse pointer`,
+  STUDIO_SCHEMA_VERSION: String(STUDIO_SCHEMA_VERSION),
+  STUDIO_FILE_EXTENSION,
+  PATCH_FILE_EXTENSION,
+  pxPerSecond: `${DEFAULT_VIEW.timeline.pxPerSecond} px/s`,
+  TIMELINE_ZOOM: `${TIMELINE_ZOOM.min}-${TIMELINE_ZOOM.max} px/s`,
+  EDITOR_DEFAULT_SNAP: `${EDITOR_DEFAULT_SNAP.gridS} s time grid`,
+  STUDIO_IMPORT_LIMITS: `${STUDIO_IMPORT_LIMITS.nodes} nodes`,
+  STUDIO_HISTORY_LIMIT: `${STUDIO_HISTORY_LIMIT} entries`,
+  PASTE_OFFSET: `(${PASTE_OFFSET.x}, ${PASTE_OFFSET.y}) units`,
+});
+
+test('§19 the decisions table of studio-model.md is what the code decided, by symbol', () => {
   const doc = read('docs/v31/studio-model.md');
-  const m = doc.match(/<!-- studio-decisions:begin -->\n([\s\S]*?)\n<!-- studio-decisions:end -->/);
+  const m = decisionsRegion(doc);
   assert.ok(m, 'studio-decisions region');
-  const expected = {
-    ZOOM_MIN: String(ZOOM_MIN),
-    ZOOM_MAX: String(ZOOM_MAX),
-    ZOOM_STEP: String(ZOOM_STEP),
-    GRID: `${GRID} units`,
-    DRAG_THRESHOLD_PX: `${DRAG_THRESHOLD_PX} px`,
-    CABLE_HIT_PX: `${CABLE_HIT_PX.fine} px fine pointer, ${CABLE_HIT_PX.coarse} px coarse pointer`,
-    STUDIO_SCHEMA_VERSION: String(STUDIO_SCHEMA_VERSION),
-    STUDIO_FILE_EXTENSION,
-    PATCH_FILE_EXTENSION,
-    pxPerSecond: `${DEFAULT_VIEW.timeline.pxPerSecond} px/s`,
-    TIMELINE_ZOOM: `${TIMELINE_ZOOM.min}-${TIMELINE_ZOOM.max} px/s`,
-    EDITOR_DEFAULT_SNAP: `${EDITOR_DEFAULT_SNAP.gridS} s time grid`,
-    STUDIO_IMPORT_LIMITS: `${STUDIO_IMPORT_LIMITS.nodes} nodes`,
-    STUDIO_HISTORY_LIMIT: `${STUDIO_HISTORY_LIMIT} entries`,
-    PASTE_OFFSET: `(${PASTE_OFFSET.x}, ${PASTE_OFFSET.y}) units`,
-  };
+  const expected = decisionsExpected();
   const rows = m[1].split('\n').slice(2);
   const seen = new Set();
   for (const row of rows) {
-    const cells = row.split('|').slice(1, -1).map((c) => c.trim());
-    assert.equal(cells.length, 4, `row ${row}`);
-    const [, value, nameCell, whereCell] = cells;
-    const name = nameCell.replace(/`/g, '');
-    const where = whereCell.replace(/`/g, '').match(/^(.+):(\d+)$/);
-    assert.ok(where, `row ${name} cites file:line`);
-    const lines = read(where[1]).split('\n');
-    assert.ok(lines[Number(where[2]) - 1].includes(name),
-      `${where[1]}:${where[2]} holds ${name}`);
-    if (name in expected) assert.equal(value, expected[name], `${name} value`);
-    seen.add(name);
+    assert.deepEqual(decisionRowProblems(row, read, expected), []);
+    seen.add(row.split('|')[3].trim().replace(/`/g, ''));
   }
   for (const name of Object.keys(expected)) assert.ok(seen.has(name), `row for ${name}`);
   assert.ok(!/not decided/i.test(doc), 'no decided value is described as undecided');
 });
+
+test('§19 mutation: a wrong value, an undeclared symbol and a file:line citation are refused',
+  () => {
+    const row = decisionsRegion(read('docs/v31/studio-model.md'))[1].split('\n')
+      .find((r) => r.includes('`ZOOM_MIN`'));
+    const expected = decisionsExpected();
+    assert.deepEqual(decisionRowProblems(row, read, expected), []);
+    assert.match(decisionRowProblems(row.replace('| 0.25 |', '| 0.3 |'), read, expected)[0],
+      /value 0\.3, the code says 0\.25/);
+    assert.match(decisionRowProblems(row.replace('#ZOOM_MIN`', '#ZOOM_MINIMUM`'), read,
+      expected)[0], /declares no ZOOM_MINIMUM/);
+    assert.match(decisionRowProblems(row.replace('#ZOOM_MIN`', ':16`'), read, expected)[0],
+      /not path#SYMBOL/);
+    // A symbol that occurs in the file without being declared there is not a declaration.
+    assert.match(decisionRowProblems(row.replace('#ZOOM_MIN`', '#clampZoomX`'),
+      () => 'export const ZOOM_MIN = 0.25; // see clampZoomX', expected)[0],
+    /declares no clampZoomX/);
+  });
 
 test('§20 every Studio ADR with open questions carries a dated resolution note after them', () => {
   // The V3.1 Studio ADRs are 0030-0038 (spec §16; their block-list tags are not parsed here).

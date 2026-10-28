@@ -14,7 +14,7 @@
     "build:debug": "node scripts/build.mjs --debug",
     "verify-dist": "node scripts/verify-dist.mjs",
     "version:check": "node scripts/release-version-check.mjs",
-    "verify": "npm test && npm run version:check && npm run build:check && npm run verify-dist && node scripts/majordomus-pin-check.mjs && majordomus doctor",
+    "verify": "node scripts/disk-preflight.mjs && npm test && npm run version:check && npm run build:check && npm run verify-dist && node scripts/majordomus-pin-check.mjs && majordomus doctor",
     "release:analyze": "node scripts/release-analyze.mjs",
     "release:prepare": "node scripts/release-prepare.mjs",
     "release:publish": "node scripts/release-publish.mjs",
@@ -32,7 +32,7 @@
     "test:live": "node tests/browser/live-smoke.cjs",
     "test:perf": "node tests/browser/perf-budgets.cjs",
     "test:release": "npm run test:engine && npm run test:dsp && npm run test:labs && npm run test:sequencer && npm run test:measure && npm run test:studio && npm run test:browser && npm run test:visual",
-    "release-gate": "npm run verify && npm run test:release",
+    "release-gate": "node scripts/disk-preflight.mjs && npm run verify && npm run test:release",
     "visual": "node scripts/visual-compare.mjs dist --play --out tests/visual/out-integration",
     "test:engine": "node tests/browser/engine-v1port.cjs",
     "social": "node scripts/social-assets.mjs"
