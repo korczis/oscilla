@@ -35,8 +35,8 @@ import { el, pathIcon, setAttr, spriteIcon, coarsePointer } from './timeline-dom
 import {
   EDITOR_DEFAULT_SNAP, SNAP_CHOICES, addClipAction, applySplit, choiceForSnap, clampZoom,
   clipOrder, clipView, contentSpanS, describeTime, fitZoom, focusAfterDelete, followScroll,
-  freeStartOnTrack, keyboardStepS, markerAria, rulerTicks, snapForChoice, splitClipPlan,
-  trackView, visibleRange, xToTime, zoomAround,
+  freeStartOnTrack, keyboardStepS, markerAria, pinchTimeline, rulerTicks, snapForChoice,
+  splitClipPlan, trackView, visibleRange, xToTime, zoomAround,
 } from './timeline-view.js';
 import { mountTransportBar } from './transport-bar.js';
 import { createTransportCommands } from './transport-commands.js';
@@ -642,6 +642,45 @@ export function mountStudioTimeline(host, ctx) {
     const anchor = e.clientX - scroller.getBoundingClientRect().left;
     zoom(e.deltaY < 0 ? 1 : -1, anchor);
   }, { passive: false });
+
+  // Two touch pointers pinch-zoom the timeline about their midpoint (V603) with the graph's
+  // pinch geometry (pinchTimeline): the keyboard zoom's levels and limits, view state only,
+  // committed like any zoom. The second finger cancels a gesture the first one started.
+  const touches = new Map();
+  let pinchLast = null;
+  const touchPoint = (e) => ({ x: e.clientX - scroller.getBoundingClientRect().left,
+    y: e.clientY });
+  scroller.addEventListener('pointerdown', (e) => {
+    if (e.pointerType !== 'touch' || destroyed) return;
+    touches.set(e.pointerId, touchPoint(e));
+    if (touches.size !== 2) return;
+    e.stopPropagation(); // the second finger starts no clip, point or marker gesture
+    if (gesture) gesture.finish(false);
+    pinchLast = [...touches.values()];
+  }, true);
+  scroller.addEventListener('pointermove', (e) => {
+    if (!touches.has(e.pointerId)) return;
+    touches.set(e.pointerId, touchPoint(e));
+    if (!pinchLast || touches.size !== 2) return;
+    e.preventDefault();
+    const next = [...touches.values()];
+    // Keep the sub-pixel scroll between moves: WebKit rounds scrollLeft to whole pixels.
+    const base = Math.abs(view.scrollX - scroller.scrollLeft) < 1 ? view.scrollX
+      : scroller.scrollLeft;
+    const v = pinchTimeline({ pxPerSecond: view.pps, scrollX: base }, pinchLast, next);
+    pinchLast = next;
+    if (v.pxPerSecond === view.pps && v.scrollX === base) return;
+    view.pps = v.pxPerSecond;
+    view.scrollX = v.scrollX;
+    render(true);
+    scroller.scrollLeft = view.scrollX;
+    commitView();
+  });
+  const lift = (e) => {
+    if (touches.delete(e.pointerId) && touches.size < 2) pinchLast = null;
+  };
+  scroller.addEventListener('pointerup', lift);
+  scroller.addEventListener('pointercancel', lift);
 
   function setSnap(id) {
     if (!SNAP_CHOICES.some((c) => c.id === id)) return;

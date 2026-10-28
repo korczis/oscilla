@@ -216,15 +216,24 @@ export function dragPosition(start, dxPx, dyPx, zoom, grid = GRID) {
   return snapPoint({ x: start.x + dxPx / z, y: start.y + dyPx / z }, grid);
 }
 
-/** Two-pointer pinch: the new view from the previous and current pointer pairs. */
-export function pinchView(view, prev, next) {
+/**
+ * The geometry of a two-pointer pinch, shared by the graph and the timeline (V603): the ratio of
+ * the pointers' distance now to before, both midpoints, and whether the pair started apart (a
+ * pair that started together has no ratio, so `factor` is 1 and `spread` false).
+ */
+export function pinchGeometry(prev, next) {
   const d = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
   const d0 = d(prev[0], prev[1]);
-  const d1 = d(next[0], next[1]);
-  const mid0 = { x: (prev[0].x + prev[1].x) / 2, y: (prev[0].y + prev[1].y) / 2 };
-  const mid1 = { x: (next[0].x + next[1].x) / 2, y: (next[0].y + next[1].y) / 2 };
-  const zoomed = d0 > 0 ? zoomAt(view, d1 / d0, mid0.x, mid0.y) : normalizeView(view);
-  return panBy(zoomed, mid1.x - mid0.x, mid1.y - mid0.y);
+  const mid = (p) => ({ x: (p[0].x + p[1].x) / 2, y: (p[0].y + p[1].y) / 2 });
+  return { factor: d0 > 0 ? d(next[0], next[1]) / d0 : 1, from: mid(prev), to: mid(next),
+    spread: d0 > 0 };
+}
+
+/** Two-pointer pinch: the new view from the previous and current pointer pairs. */
+export function pinchView(view, prev, next) {
+  const { factor, from, to, spread } = pinchGeometry(prev, next);
+  const zoomed = spread ? zoomAt(view, factor, from.x, from.y) : normalizeView(view);
+  return panBy(zoomed, to.x - from.x, to.y - from.y);
 }
 
 /** Zoom text for the toolbar: "100 %". */
