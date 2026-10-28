@@ -1,0 +1,38 @@
+id: U002
+milestone: M054
+serves:
+  - "ui-current#about-tells-the-project"
+title: "About tells the project as it stands and what comes next"
+slug: about-tells-the-project-as-it-stands-and-what-comes-next
+priority: p1
+profile: implementation
+objective: "Rewrite the About story so it opens on what OSCILLA is at the current release, not on the first night: the release line to the current release (the existing stations), the workspaces and what each is for, and a 'What comes next' section listing the open milestones of the plan (title and progress) read from src/data/roadmap.json, which scripts/roadmap.mjs generates from .ai/repo/project and release:prepare refreshes, so a plan-only commit never changes dist and the page stays one file with no runtime fetch. The first-night pace stays as one dated station with its wall-clock qualifier instead of the headline. Update tests/unit/about-origin.test.mjs, whose pace check followed Q005's delegated decision, to the owner's 2026-10-28 override, and add tests/unit/about-current.test.mjs, which fails when About's headline is the first night, when a workspace of the navigation is missing from the workspace list, or when src/data/roadmap.json lists a milestone the plan has DONE or omits an open one (run by release:prepare, not by every pull request)."
+why: "Owner, 2026-10-28: About at #m=about is outdated. Q005's delegated decision kept 'Built in one night' as the headline; the owner overrides it."
+scope:
+  - "src/index.html"
+  - "src/partials"
+  - "src/js/ui"
+  - "scripts/roadmap.mjs"
+  - "src/data/roadmap.json"
+  - "scripts/release-prepare.mjs"
+  - "tests/unit/about-current.test.mjs"
+  - "tests/unit/about-origin.test.mjs"
+  - "tests/unit/about.test.mjs"
+  - "tests/unit/source-size-baseline.json"
+  - "tests/browser/app.cjs"
+  - "tests/README.md"
+  - "dist"
+depends_on:
+  - "U001"
+acceptance_criteria:
+  - "tests/unit/about-current.test.mjs passes and fails on the merge base."
+  - "about.test.mjs, about-origin.test.mjs (updated, with the override named) and no-fake-science pass; project.about-names-current-release holds."
+  - "release:prepare refreshes src/data/roadmap.json and refuses a stale one; a plan-only commit leaves dist unchanged; dist stays one file with no runtime fetch (verify-dist); the pull request carries a review verdict (scripts/release-prepare.mjs is guarded)."
+validation:
+  - "node --test tests/unit/about-current.test.mjs"
+  - "npm test"
+  - "npm run build"
+evidence_required:
+  - "verified"
+created_at: 2026-10-28
+updated_at: 2026-10-28
