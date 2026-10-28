@@ -92,9 +92,10 @@ export const OTHER_UI_KITS = [
 /** Bare packages a stylesheet may @import. */
 export const ALLOWED_CSS_PACKAGES = ['uplot/', 'tailwindcss', 'flowbite'];
 
-/** A path segment named like a licensed Pro package. */
-export const PRO_PACKAGE_NAME =
-  /^(flowbite-admin-dashboard|flowbite-pro|flowbite-react-blocks|publisher-ui-blocks)([-.\w]*)$/i;
+/** A path segment named like a licensed Pro package (its directory, a version or -main). */
+export const PRO_PACKAGE_NAME = new RegExp('^(flowbite-admin-dashboard|flowbite-pro-(nextjs|react)'
+  + '-admin-dashboard|flowbite-react-blocks|publisher-ui-blocks)(-v?\\d[\\w.-]*|-main|-beta)?'
+  + '(\\.(zip|tgz|tar\\.gz))?$', 'i');
 
 /** Text only the licensed Pro packages carry (built from parts, so this file carries none). */
 export const PRO_MARKERS = [
@@ -467,7 +468,8 @@ test('(d) no licensed Flowbite Pro source file is tracked', () => {
 
 const PRO_CARD = 'bg-white rounded-lg shadow dark:bg-gray-800';
 const SHELL = (body, { navbar = 'osc-header' } = {}) => `<body>
-  <header class="${navbar}" role="banner"><nav class="osc-nav" aria-label="Workspace"></nav></header>
+  <header class="${navbar}" role="banner">
+    <nav class="osc-nav" aria-label="Workspace"></nav></header>
   <main class="osc-main" id="osc-main">${body}</main>
   <footer class="osc-statusbar" aria-label="Status and actions"></footer></body>`;
 const FIX_HTML = SHELL(`
@@ -563,7 +565,8 @@ test('mutation (b): a migrated surface that stops using the Pro structure fails'
 test('mutation (c): another UI kit, a foreign @import, a new stylesheet or a component library',
   () => {
     const clean = { pkg: { dependencies: { alpinejs: '3', flowbite: '2' },
-      devDependencies: { tailwindcss: '3' } }, js: { 'src/js/a.js': "import Alpine from 'alpinejs';" },
+      devDependencies: { tailwindcss: '3' } },
+    js: { 'src/js/a.js': "import Alpine from 'alpinejs';" },
     css: { 'src/styles/main.css': '@import "uplot/dist/uPlot.min.css";\n@import "./a.css";\n'
       + '@import "flowbite";' }, paths: ['src/js/a.js', 'src/styles/a.css'] };
     assert.deepEqual(kitProblems(clean), []);
@@ -602,7 +605,8 @@ test('mutation (d): a Pro package path, a fingerprinted file or a Pro marker fai
     { path: 'assets/vendor/flowbite/app.js', bytes: ok },
     { path: 'src/pages/copied.html', bytes: Buffer.from(pro.toString().replace(/\n/g, '\r\n')) },
     { path: 'docs/notes.md', bytes: Buffer.from(`see ${PRO_MARKERS[0]}/ for terms`) },
-    { path: 'package.json', bytes: Buffer.from(`"url": "git+https://github.com/${PRO_MARKERS[1]}"`) },
+    { path: 'package.json',
+      bytes: Buffer.from(`"url": "git+https://github.com/${PRO_MARKERS[1]}"`) },
   ], prints), [
     'vendor/flowbite-admin-dashboard-1.1.1/src/html/index.html: a path named like a licensed '
       + 'Flowbite Pro package',
@@ -611,6 +615,15 @@ test('mutation (d): a Pro package path, a fingerprinted file or a Pro marker fai
     `docs/notes.md: carries ${PRO_MARKERS[0]}, a marker of the licensed Pro packages`,
     `package.json: carries ${PRO_MARKERS[1]}, a marker of the licensed Pro packages`,
   ]);
+  for (const own of ['scripts/flowbite-pro-fingerprints.mjs', FINGERPRINTS_REL,
+    'tests/unit/ui-flowbite-pro.test.mjs']) {
+    assert.deepEqual(proSourceProblems([{ path: own, bytes: ok }], prints), [], own);
+  }
+  for (const pkg of ['flowbite-admin-dashboard-1.1.1', 'flowbite-pro-nextjs-admin-dashboard-1.2.2',
+    'flowbite-pro-react-admin-dashboard-main', 'flowbite-react-blocks-1.5.0-beta',
+    'publisher-ui-blocks-v1.0.0', 'flowbite-react-blocks-main.zip']) {
+    assert.match(pkg, PRO_PACKAGE_NAME, pkg);
+  }
   assert.equal(fingerprint('small.js', Buffer.from('module.exports = {};')), null,
     'a file below the minimum is not fingerprinted');
 });
