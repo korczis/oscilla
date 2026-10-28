@@ -2989,6 +2989,18 @@
       <p class="osc-muted osc-dialog-note">Browser: <span x-text="browserText"></span> ·
         Platform: <span x-text="platformText"></span> · Audio: <span x-text="audioState"></span>
         <span x-show="!provisional" x-text="' · ' + effectiveSampleRate + ' Hz'"></span></p>
+      <!-- MIDI input (V501, ADR 0058): optional. The support state is read at load; access is
+           asked for only by Connect MIDI, which is not offered without a secure context or
+           Web MIDI. The copy of every state is MIDI_COPY in src/js/midi/support.js. -->
+      <hr class="osc-divider">
+      <h3 class="osc-label" id="osc-midi-title">MIDI input</h3>
+      <p id="osc-midi-status" data-osc="midi.status" role="status"
+        :data-midi-state="midiState" x-text="midiText"></p>
+      <div class="osc-dialog-actions">
+        <button type="button" class="osc-btn osc-btn-secondary" data-osc="midi.connect"
+          x-show="midiCanConnect" aria-describedby="osc-midi-status"
+          @click="midiConnect()">Connect MIDI</button>
+      </div>
       <div class="osc-dialog-actions">
         <button type="button" class="osc-btn osc-btn-secondary" data-osc="settings.reset"
           @click="resetDefaults()">Reset instrument</button>

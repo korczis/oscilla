@@ -20,7 +20,8 @@ const root = new URL('../../../', import.meta.url);
 const read = (p) => readFileSync(new URL(p, root), 'utf8');
 const has = (p) => existsSync(new URL(p, root));
 const require = createRequire(import.meta.url);
-const ADR = read('.ai/repo/adrs/0058-midi-is-an-optional-local-input-layer-over-the-audio-engine.md');
+const ADR = read('.ai/repo/adrs/'
+  + '0058-midi-is-an-optional-local-input-layer-over-the-audio-engine.md');
 
 function jsFiles(dir) {
   const out = [];
@@ -32,8 +33,12 @@ function jsFiles(dir) {
   return out;
 }
 
-/** Code without comments (line and block), so a mention in prose is not a call. */
-const code = (text) => text.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:'"`\\])\/\/.*$/gm, '$1');
+/**
+ * Code without its comment lines (`//`, `/*`, ` *`) and trailing ` // ...` comments, so a
+ * mention in prose is not a call. The sources this reads keep comments on lines of their own.
+ */
+const code = (text) => text.split('\n').filter((l) => !/^\s*(?:\/\/|\/\*|\*)/.test(l))
+  .join('\n').replace(/\s\/\/\s.*$/gm, '');
 
 test('the shell offers Connect MIDI and a status line for the support state', () => {
   const html = read('src/index.html');
