@@ -1,0 +1,58 @@
+intent: ui-current
+reviewed_at: "72dca248752a5f6d3ca0a3b8a96c5e301bef427d"
+reviewed_by: "claude-opus-5.5 (critic, oscilla-b0 session)"
+findings:
+  - id: roadmap-at-build-time-breaks-build-check
+    class: regression_risk
+    subject: "U002"
+    finding: "Embedding the open milestones from .ai/repo/project in the build would make dist depend on the plan. Every plan-only commit (plan start, evidence, done) would then change dist/index.html, so build:check would fail on every plan pull request, and so would the release receipt, which binds the dist sha256. It would also widen the source digest to the plan."
+    blocking: true
+    resolution:
+      state: planned
+      issue: "U002"
+      because: "U002 reads a committed src/data/roadmap.json that scripts/roadmap.mjs generates and release:prepare refreshes and checks, so a plan-only commit never changes dist (2026-10-28)."
+  - id: layout-changes-hit-live-smoke-and-visual-gate
+    class: regression_risk
+    subject: "U008"
+    finding: "U004, U005 and U007 move panels in the Analyze, Synthesis and Playground workspaces. The visual gate's references (tests/visual) and the live smoke on every Pages deploy (tests/browser/live-smoke.cjs) read today's layout. A layout change that updates neither fails the deployed page after the merge, not the pull request."
+    blocking: false
+    resolution:
+      state: planned
+      issue: "U008"
+      because: "U008 updates the visual reference through the visual gate with its reason and the live smoke where a changed layout moves what it checks (2026-10-28)."
+  - id: empty-area-needs-a-definition
+    class: delivery_verification
+    subject: "ui-current#no-isolated-workspace"
+    finding: "'No more than a quarter of the viewport empty' is decidable only once 'empty' is defined. The check must sample a fixed grid of points with elementFromPoint and count a point as empty when it hits only the workspace container or the page background. Otherwise each worker measures it differently and the criterion turns on taste."
+    blocking: false
+    resolution:
+      state: planned
+      issue: "U005"
+      because: "U005 introduces tests/browser/ui-current.cjs with the grid-sampling definition, which U003, U004, U006, U007 and U008 extend (2026-10-28)."
+  - id: q005-override-must-be-recorded
+    class: missed_requirement
+    subject: "U002"
+    finding: "About's pace headline is held by tests/unit/about-origin.test.mjs, which follows Q005's delegated decision. Changing it silently would make the test and the decision disagree with no record of why."
+    blocking: false
+    resolution:
+      state: planned
+      issue: "U002"
+      because: "The intent quotes the owner's 2026-10-28 statement, and U002 updates about-origin.test.mjs naming that override (2026-10-28)."
+  - id: reviewer-bottleneck
+    class: delivery_verification
+    subject: "M054"
+    finding: "U002 (scripts/release-prepare.mjs) and U003 (experiments and findings) change guarded paths. They need a verdict from a session that did not build them, the same seat that already blocks #239 and the measurement lane."
+    blocking: false
+    resolution:
+      state: planned
+      issue: "U008"
+      because: "The dispatch board lists a reviewer seat as a blocker for the whole run; M054's risks name it (2026-10-28)."
+  - id: related-features-already-planned
+    class: unnecessary_work
+    subject: "ui-current"
+    finding: "'Add every related feature' could be read as a licence to plan MIDI, the measurement extensions, Studio completion and Learn again under this intent, which would duplicate M045, M047, M048 and M049."
+    blocking: false
+    resolution:
+      state: planned
+      issue: "U001"
+      because: "The intent's non-goals exclude re-planning them, and U001's audit traces each finding to the existing issue that changes it (2026-10-28)."
