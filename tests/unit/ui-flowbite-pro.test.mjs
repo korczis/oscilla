@@ -72,8 +72,10 @@
 //   no <style> element.
 //   The record only shrinks: the working tree's record is judged against every committed
 //   version of it on the base branch's first-parent chain (the base is GITHUB_BASE_REF in CI,
-//   main otherwise; the chain runs from git merge-base HEAD origin/<base> backwards, git log
-//   --first-parent, git show), never against a commit of the branch itself, so a branch that
+//   main otherwise; the chain runs backwards from the fork, the newest commit of the first-
+//   parent chain of origin/<base> that HEAD contains, which is git merge-base HEAD
+//   origin/<base> when the branch forked from or merged that chain; git log --first-parent,
+//   git show), never against a commit of the branch itself, so a branch that
 //   merges its base and re-measures is judged as its pull request is. No number may be above
 //   an earlier one of the same measure (debt, an osc-* class name or a vocabulary token,
 //   absent counts as 0, a stylesheet's or domain view's selectors or declarations, the inline
@@ -815,6 +817,11 @@ test('fixture: only the base branch chain is judged, never the branch\'s own com
   assert.equal(judge().gate, 'introduce', 'the pull request\'s merge ref passes too');
   repo.git('checkout', '-q', 'main');
   repo.git('merge', '-q', '--no-ff', '--no-edit', 'rule');
+  repo.git('checkout', '-q', 'rule');
+  const landed = judge();
+  assert.equal(landed.gate, 'introduce', 'once the base holds the branch, the walk stays on the '
+    + 'base\'s chain and never reaches the branch\'s own commits');
+  repo.git('checkout', '-q', 'main');
   repo.git('checkout', '-q', '-b', 'next');
   repo.commit(json(at(4, 7)), 'a later branch raises a count against the base\'s record');
   const raised = judge();

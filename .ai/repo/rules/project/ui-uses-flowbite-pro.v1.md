@@ -146,21 +146,21 @@ a rise: the test judges the written record against the base branch's versions.
   - debt: pending surfaces + osc-* class tokens + uses of legacy vocabulary names + legacy
     selectors (the domain views' not among them).
 
-  Beside it, the Tailwind entry holds no selector rule and no `@utility`, the Tailwind
-  configuration and the local plugins it or the entry loads mention none of Tailwind's
-  CSS-defining plugin functions, and `src/index.html` holds no `<style>` element. The working
-  tree's record is judged against every committed version of itself on the base branch's
-  first-parent chain (the base is `GITHUB_BASE_REF` in CI, `main` otherwise; the chain runs
-  from `git merge-base HEAD origin/<base>` backwards), never against a commit of the branch
-  itself, so a branch that merges its base and re-measures is judged as its pull request is:
-  no number above one of the same measure (an osc-* class name or a vocabulary token absent
-  there counts as 0), no vocabulary token, stylesheet or pending surface an earlier version
-  (of any measure that lists them) did not list, no pending surface that is now neither
-  pending nor migrated, no migrated surface lost, no measure going back. osc-* class names
-  are compared within the same measure only. When the base holds no record at the fork, the
-  change introduces it and nothing is judged. In CI a git failure, a shallow clone, a missing
-  base or an empty history of a base that holds the record fails the check; outside CI it
-  skips.
+  Beside it, the Tailwind entry holds no selector rule and no `@utility`, the Tailwind configuration
+  and the local plugins it or the entry loads mention none of Tailwind's CSS-defining plugin
+  functions, and `src/index.html` holds no `<style>` element. The working tree's record is judged
+  against every committed version of itself on the base branch's first-parent chain (the base is
+  `GITHUB_BASE_REF` in CI, `main` otherwise; the chain runs backwards from the newest commit of that
+  chain the branch contains, which is `git merge-base HEAD origin/<base>` when the branch forked
+  from or merged it), never against a commit of the branch itself, even once the base holds the
+  branch, so a branch that merges its base and re-measures is judged as its pull request is: no
+  number above one of the same measure (an osc-* class name or a vocabulary token absent there
+  counts as 0), no vocabulary token, stylesheet or pending surface an earlier version (of any
+  measure that lists them) did not list, no pending surface that is now neither pending nor
+  migrated, no migrated surface lost, no measure going back. osc-* class names are compared within
+  the same measure only. When the base holds no record at the fork, the change introduces it and
+  nothing is judged. In CI a git failure, a shallow clone, a missing base or an empty history of a
+  base that holds the record fails the check; outside CI it skips.
 - (b) a surface listed as migrated exists and is migrated as defined in (a).
 - (c) another UI kit in `package.json`, an import or an `@import`; an `@import` that is
   neither relative (`./`, `../`) nor a package of uPlot, Tailwind and Flowbite (exact names),

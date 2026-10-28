@@ -999,9 +999,12 @@ export const baseBranch = (env = process.env) => env.GITHUB_BASE_REF || 'main';
 
 /**
  * Every committed version of the record on the base branch's first-parent chain, newest first:
- * from the fork (git merge-base HEAD origin/<base>, or <base> without the remote ref)
- * backwards, never a commit of the branch itself. { versions, base, fork, baseHolds } or
- * { error }; a shallow clone is an error, since its chain is cut.
+ * from the fork backwards, never a commit of the branch itself. The base is origin/<base>, or
+ * <base> without the remote ref; the fork is the newest commit of the base's first-parent chain
+ * that HEAD contains (the merge base when the branch forked from or merged that chain), so the
+ * walk never leaves the base's chain for the branch's, even once the base holds the branch.
+ * { versions, base, fork, baseHolds } or { error }; a shallow clone is an error, since its
+ * chain is cut.
  */
 export function baselineHistory({ root = ROOT, base = baseBranch() } = {}) {
   const git = (...args) => spawnSync('git', args, { cwd: root, encoding: 'utf8' });
@@ -1013,9 +1016,19 @@ export function baselineHistory({ root = ROOT, base = baseBranch() } = {}) {
   const ref = [`origin/${base}`, base].find((r) => git('rev-parse', '--verify', '-q',
     `${r}^{commit}`).status === 0);
   if (!ref) return { error: `no base branch: neither origin/${base} nor ${base} resolves` };
-  const mb = git('merge-base', 'HEAD', ref);
-  if (mb.status !== 0) return { error: `git merge-base HEAD ${ref}: ${mb.stderr || 'no fork'}` };
-  const fork = mb.stdout.trim();
+  // The base's chain commits HEAD does not contain are a prefix of the chain (ancestry is
+  // monotone along first parents); the fork is the first parent of the oldest of them.
+  const ahead = git('rev-list', '--first-parent', ref, '^HEAD');
+  if (ahead.status !== 0) return { error: `git rev-list ${ref} ^HEAD: ${ahead.stderr}` };
+  const oldest = ahead.stdout.split('\n').filter(Boolean).pop();
+  const at = oldest ? git('rev-parse', '--verify', '-q', `${oldest}^1`) : git('rev-parse', ref);
+  if (at.status !== 0) {
+    return { versions: [], base: ref, fork: '(none)', baseHolds: false };
+  }
+  const fork = at.stdout.trim();
+  if (git('merge-base', '--is-ancestor', fork, 'HEAD').status !== 0) {
+    return { error: `the fork ${fork.slice(0, 12)} of ${ref} is not an ancestor of HEAD` };
+  }
   const log = git('log', '--first-parent', '--format=%H', fork, '--', BASELINE_REL);
   if (log.status !== 0) return { error: `git log: ${log.stderr || log.error}` };
   const versions = [];

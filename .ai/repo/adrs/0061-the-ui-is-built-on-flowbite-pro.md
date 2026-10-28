@@ -221,14 +221,14 @@ in a class position is not counted (debt 4342 on the same `src/`).
 
 The third review of pull request #250 found that the history check read the branch's own
 first-parent commits: once #247 raised a count on `main`, a branch that merged `main` and
-re-measured failed its own test, while its pull request's merge ref passed. The check now
-judges only the record's versions on the base branch's first-parent chain, from the merge
-base backwards, as CI does; a fixture proves it on a scratch git repository. The same review
-found an aliased plugin call, an osc-* class carried by a `data-` attribute, a `data:`
-`@import` and a tracked `node_modules` file escaping the record, and that decision 3 left the
-domain views' own selectors as debt with no exit. Before landing, the record became measure
-4: every attribute but the id references is read, any mention of a CSS-defining plugin
-function fails, an `@import` must be relative or an allowed package, and the domain views'
+re-measured failed its own test, while its pull request's merge ref passed. The check now judges
+only the record's versions on the base branch's first-parent chain, backwards from the newest commit
+of it the branch contains (the merge base), as CI does; a fixture proves it on a scratch git
+repository. The same review found an aliased plugin call, an osc-* class carried by a `data-`
+attribute, a `data:` `@import` and a tracked `node_modules` file escaping the record, and that
+decision 3 left the domain views' own selectors as debt with no exit. Before landing, the record
+became measure 4: every attribute but the id references is read, any mention of a CSS-defining
+plugin function fails, an `@import` must be relative or an allowed package, and the domain views'
 stylesheets and `tokens.css` are recorded apart, ratcheted and not debt (debt 3905 on the same
 `src/`, with 438 domain-view selectors apart). The record now has a committed writer,
 `scripts/ui-flowbite-pro-record.mjs`, with a `--check` mode.
