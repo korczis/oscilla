@@ -57,8 +57,11 @@ is a review rejection even when every functional test passes.
 # Verification
 
 - `tests/unit/ui-flowbite-pro.test.mjs`, in `npm test` (CI `unit` job): the interface half.
-  A new surface off Pro, a new use of a legacy token primitive, a migrated surface that
-  regresses, another UI kit or a new stylesheet fails (rule `project.ui-uses-flowbite-pro`).
+  Growth of the recorded legacy interface (a surface not migrated, an osc-* class token, a
+  class name outside the frozen vocabulary, a legacy selector or declaration, an inline
+  style), a migrated surface that regresses or is counted without the Tailwind build, another
+  UI kit or a new stylesheet fails; what it does not decide is listed in rule
+  `project.ui-uses-flowbite-pro`.
 - `npm run test:visual`, in the release gate and CI's visual job (ADR 0029): a pixel
   regression, beyond the accepted tolerance, of a view with an accepted reference
   (`scripts/visual-gate.mjs`, `scripts/visual-measure.mjs`, `scripts/visual-studio.mjs`;

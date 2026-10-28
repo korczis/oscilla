@@ -48,13 +48,19 @@ the runtime fetch, not the component system: a build-time Tailwind was rejected 
 toolchain for a design that is token-driven anyway". Rule `project.visual-identity-lock` v1
 then bound every surface to the existing tokens and panel primitives. Measured at the commit
 this decision was written on, none of the 62 UI surfaces of `src/index.html` (the shell, six
-workspaces, 30 panels and 22 dialogs) carries the Flowbite Pro structure, and the legacy
-primitives (`osc-panel`, `osc-btn`, `osc-dialog`, `osc-tab` and the rest) occur 843 times in
-`src/index.html` and `src/js`.
+workspaces, 30 panels and 22 dialogs) carries the Flowbite Pro structure; `src/index.html`
+and `src/js` hold 2563 osc-* class tokens of 758 names (`osc-panel`, `osc-btn`,
+`osc-dialog`, `osc-tab`, their BEM variants and the rest); and the legacy stylesheets under
+`src/styles` hold 1627 selectors (the record's measure 2; see the rule for the definitions).
 
-The owner holds a Flowbite Pro licence. Its terms let the owner adapt the Pro markup into the
-owner's products; they do not allow publishing the Pro source files as such. OSCILLA is a
-public MIT repository and a public GitHub Pages site.
+The owner holds a Flowbite Pro licence. OSCILLA is a public MIT repository and a public
+GitHub Pages site, so Pro-derived markup in `src/` is published under the MIT grant. On
+2026-10-28 the owner was asked, by AskUserQuestion in session oscilla-b0, whether the Flowbite
+Pro EULA permits adapted Pro markup in a public MIT project, and answered that it does. This
+decision rests on that dated confirmation by the owner: the worker that wrote it did not read
+the EULA, and no EULA text is checked in or quoted here (the vendored Pro READMEs only link
+to Flowbite's licence page). Independently of that answer, the Pro source files themselves
+are never committed (decision 5).
 
 ## Decision
 
@@ -81,10 +87,12 @@ Accepted on the owner's order of 2026-10-28 quoted above.
    them; the Pro set does not replace them. This amends the visual identity: rule
    `project.visual-identity-lock` v2 replaces v1's "existing tokens and primitives" with
    Flowbite Pro for the interface, and keeps the hidden-logo question for the domain views.
-4. **Migration is a ratchet.** The surfaces and primitives that predate this decision are
-   debt, recorded in `tests/unit/ui-flowbite-pro-baseline.json`; rule
-   `project.ui-uses-flowbite-pro` makes every new surface Pro, every surface migrated stay
-   Pro, and the recorded debt only shrink.
+4. **Migration is a ratchet.** The legacy interface that predates this decision (its
+   surfaces, every osc-* class token, its other class names, the selectors and declarations
+   of its stylesheets, its inline styles) is debt, recorded in
+   `tests/unit/ui-flowbite-pro-baseline.json`; rule `project.ui-uses-flowbite-pro` keeps the
+   record from growing, every surface migrated on Pro, and a surface pending until the build
+   compiles Tailwind with the flowbite plugin and defines its Pro classes.
 5. **The licence holds in a public repository.** No Flowbite Pro source file (the admin
    dashboard, the React and Next.js dashboards, the block libraries, their images and
    configuration) is committed, bundled verbatim or served by Pages. Only markup adapted into
@@ -114,23 +122,60 @@ What is not changed:
 
 ## Consequences
 
-- `tests/unit/ui-flowbite-pro.test.mjs` runs in `npm test` and CI's `unit` job: a new
-  surface off Pro, a new use of a legacy primitive, a migrated surface that regresses, another
-  UI kit, a new stylesheet or a Pro source file fails the pull request.
+- `tests/unit/ui-flowbite-pro.test.mjs` runs in `npm test` and CI's `unit` job. These fail
+  the pull request: a new surface (a landmark, an `osc-view-*` workspace, a `<section>` or
+  `<dialog>` with an id) that is not migrated; a pending surface that leaves the record other
+  than into `migrated`; a rise of any osc-* class name (in the class and Alpine attributes of
+  `src/index.html` or in any file under `src/js`), a class name outside the frozen legacy vocabulary that the compiled Tailwind CSS
+  does not define, a rise of a legacy stylesheet's selectors or declarations, a selector rule
+  in the Tailwind entry, a `<style>` element or a further inline style in `src/index.html`; a
+  migrated surface that regresses, or one counted as migrated without the Tailwind build;
+  another UI kit, a new stylesheet or a Pro source file. Until F001 builds Tailwind with the
+  flowbite plugin, no surface can be migrated and no class name can be added. What no check
+  decides is listed below.
 - Each migration rebuilds the visual references of the views it changes (ADR 0029): a
   reference accepted under the token CSS no longer describes the page.
 - Adding Tailwind and `flowbite` changes `package.json`, the build and the licence notices;
   `scripts/verify-dist.mjs` and the budget judge the result like any dependency (ADR 0012).
 - The migration is planned work under its own intent and milestone in `.ai/repo/project/`.
 
+## What no check decides
+
+The rule `project.ui-uses-flowbite-pro` lists these in full; a reviewer owns them:
+
+- a non-osc class reached in `src/js` through a variable, a helper's argument or a ternary
+  branch, and styling set from `src/js` (`el.style`, `style:` keys, injected CSS);
+- an osc-* class name that is also an element id and never appears in a class position;
+- whether a surface on the Pro class set follows its Pro template in substance, and a markup
+  surface that is not a landmark, a `<section>` or a `<dialog>` with an id;
+- a Pro file copied with edits, which escapes the fingerprint (only about 120 of the roughly
+  1,800 Pro files carry a marker), and Pro content inlined as a `data:` URI inside another
+  file, `dist/index.html` included;
+- a change of the measure itself, which is a change of the test;
+- whether a domain view's own classes leave the record by migration or by an owner decision;
+- whether the EULA permits what decision 5 allows: that rests on the owner's confirmation.
+
 ## Resolution notes
 
 Appended; the sections above are left as written.
 
-### 2026-10-28: accepted by the owner
+### 2026-10-28: accepted on the owner's order; the status was written by a worker
 
-Accepted by the owner's order of 2026-10-28 quoted under Context, in the session that wrote
-this decision; the order itself asks for the decision to be documented and enforced. The
-enforcement lands with it: rule `project.ui-uses-flowbite-pro` v1 and
-`tests/unit/ui-flowbite-pro.test.mjs` with its baseline. The migration of the surfaces it
-records is not done; the baseline says how much remains.
+The `accepted` status was set by the worker that wrote this decision, on the owner's explicit
+order of 2026-10-28 quoted under Context (the order asks for the decision to be documented
+and enforced), not by the owner editing this file. The ADR README says a worker never
+promotes a status without the owner; this promotion rests on that order alone, and the owner
+may confirm or withdraw it. The enforcement lands with it: rule `project.ui-uses-flowbite-pro`
+v1 and `tests/unit/ui-flowbite-pro.test.mjs` with its record. The migration of the surfaces
+it records is not done; the record says how much remains.
+
+### 2026-10-28: the ratchet measures the whole legacy interface
+
+The review of pull request #250 showed that the first record (28 primitive class names and
+the list of stylesheet files, debt 905) could be met without adopting Pro. Before landing, the
+record became measure 2: every osc-* class token per name, a frozen vocabulary of the other
+class names, the selectors and declarations of each stylesheet, the inline styles, a pending
+surface that may leave only into `migrated`, and no surface migrated before the build compiles
+Tailwind with the flowbite plugin (debt 4252 on the same `src/`). The same review asked for
+the licence statement under Context to rest on the owner's dated confirmation rather than on
+the worker's reading, and it now does.
