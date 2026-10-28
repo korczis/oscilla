@@ -24,6 +24,8 @@ related:
   - file:tests/unit/ui-flowbite-pro-baseline.json
   - file:tests/unit/flowbite-pro-fingerprints.json
   - file:scripts/flowbite-pro-fingerprints.mjs
+  - file:scripts/ui-flowbite-pro-measure.mjs
+  - file:scripts/ui-flowbite-pro-record.mjs
   - file:scripts/build-config.mjs
 provenance:
   origin: authored
@@ -51,9 +53,11 @@ this decision was written on, none of the 62 UI surfaces of `src/index.html` (th
 workspaces, 30 panels and 22 dialogs) carries the Flowbite Pro structure; `src/index.html`
 and `src/js` hold 2550 osc-* class tokens of 756 names (`osc-panel`, `osc-btn`,
 `osc-dialog`, `osc-tab`, their BEM variants and the rest) and 103 uses of 38 other class
-names (`is-active` and the other state classes); and the legacy stylesheets under
-`src/styles` hold 1627 selectors (the record's measure 3, debt 4342; see the rule for the
-definitions).
+names (`is-active` and the other state classes); and the stylesheets under `src/styles` hold
+1627 selectors, 438 of them in the domain views' own stylesheets and `tokens.css` (decision 3).
+The record's measure 4 counts 2551 osc-* class tokens of 757 names (it reads every attribute
+but the id references) and debt 3905, the domain views' selectors not among it; see the rule
+for the definitions.
 
 The owner holds a Flowbite Pro licence. OSCILLA is a public MIT repository and a public
 GitHub Pages site, so Pro-derived markup in `src/` is published under the MIT grant. On
@@ -86,15 +90,21 @@ Accepted on the owner's order of 2026-10-28 quoted above.
    Signal Path, the Studio graph (ADR 0034) and timeline, the spectrogram and the meters are
    the content of Pro cards and keep their own rendering and the dataviz rules (validated
    palette, one axis, labelled status, tabular numerals). The Pro shell and components carry
-   them; the Pro set does not replace them. This amends the visual identity: rule
+   them; the Pro set does not replace them. Their own stylesheets (`charts.css`, `studio.css`,
+   `studio-timeline.css`) and `tokens.css`, the custom properties they read, are therefore
+   not migration debt: the record lists them apart and keeps them from growing, and the
+   interface reaches debt 0 with them in place. This amends the visual identity: rule
    `project.visual-identity-lock` v2 replaces v1's "existing tokens and primitives" with
    Flowbite Pro for the interface, and keeps the hidden-logo question for the domain views.
 4. **Migration is a ratchet.** The legacy interface that predates this decision (its
    surfaces, every osc-* class token, its other class names, the selectors and declarations
    of its stylesheets, its inline styles) is debt, recorded in
-   `tests/unit/ui-flowbite-pro-baseline.json`; rule `project.ui-uses-flowbite-pro` keeps the
-   record from growing, every surface migrated on Pro, and a surface pending until the build
-   compiles Tailwind with the flowbite plugin and defines its Pro classes.
+   `tests/unit/ui-flowbite-pro-baseline.json` (written from the tree by
+   `scripts/ui-flowbite-pro-record.mjs`); rule `project.ui-uses-flowbite-pro` keeps the
+   record from growing against the base branch, every surface migrated on Pro, and a surface
+   pending until the build compiles Tailwind with the flowbite plugin and defines its Pro
+   classes. The domain views' stylesheets of decision 3 are recorded apart and do not grow,
+   but are not debt.
 5. **The licence holds in a public repository.** No Flowbite Pro source file (the admin
    dashboard, the React and Next.js dashboards, the block libraries, their images and
    configuration) is committed, bundled verbatim or served by Pages. Only markup adapted into
@@ -127,16 +137,17 @@ What is not changed:
 - `tests/unit/ui-flowbite-pro.test.mjs` runs in `npm test` and CI's `unit` job. These fail
   the pull request: a new surface (a landmark, an `osc-view-*` workspace, a `<section>` or
   `<dialog>` with an id) that is not migrated; a pending surface that leaves the record other
-  than into `migrated`; a rise of any osc-* class name (in the class and Alpine attributes of
-  `src/index.html` or in any file the build bundles), a class name outside the frozen legacy
-  vocabulary that is not a Pro class (defined by the compiled Tailwind CSS, named by no
+  than into `migrated`; a rise of any osc-* class name (in the attributes of `src/index.html`
+  but its id references, or in any file the build bundles), a class name outside the frozen
+  legacy vocabulary that is not a Pro class (defined by the compiled Tailwind CSS, named by no
   legacy stylesheet), a further use of a legacy class name, a rise of a legacy stylesheet's
-  selectors or declarations, a selector rule or `@utility` in the Tailwind entry or a
-  component defined by the Tailwind configuration, a `<style>` element or a further inline
-  style in `src/index.html`; a migrated surface that regresses, or one counted as migrated
-  without the Tailwind build; another UI kit, a new stylesheet or a Pro source file. Until
-  F001 builds Tailwind with the flowbite plugin, no surface can be migrated and no class name
-  can be added. What no check decides is listed below.
+  selectors or declarations or of a domain view's, a selector rule or `@utility` in the
+  Tailwind entry or a mention of a CSS-defining plugin function in the Tailwind configuration,
+  an `@import` that is neither relative nor an allowed package, a `<style>` element or a
+  further inline style in `src/index.html`; a migrated surface that regresses, or one
+  counted as migrated without the Tailwind build; another UI kit, a new stylesheet or a Pro
+  source file. Until F001 builds Tailwind with the flowbite plugin, no surface can be
+  migrated and no class name can be added. What no check decides is listed below.
 - Each migration rebuilds the visual references of the views it changes (ADR 0029): a
   reference accepted under the token CSS no longer describes the page.
 - Adding Tailwind and `flowbite` changes `package.json`, the build and the licence notices;
@@ -160,8 +171,12 @@ The rule `project.ui-uses-flowbite-pro` lists these in full; a reviewer owns the
 - a Pro file copied with edits, which escapes the fingerprint (only about 120 of the roughly
   1,800 Pro files carry a marker), and Pro content inlined as a `data:` URI inside another
   file, `dist/index.html` included;
-- a change of the measure itself, which is a change of the test;
-- whether a domain view's own classes leave the record by migration or by an owner decision;
+- a change of the measure itself, the list of domain-view stylesheets included, which is a
+  change of the measure;
+- whether a domain view belongs inside a Pro card; its own stylesheets and the `tokens.css`
+  custom properties they read are outside the debt by decision 3 (recorded apart, never
+  growing), and whether its own classes, still debt, leave the record by migration or by an
+  owner decision;
 - whether the EULA permits what decision 5 allows: that rests on the owner's confirmation.
 
 ## Resolution notes
@@ -201,3 +216,19 @@ class name outside osc-* is counted per use and its uses join the debt; a class 
 class only when `dist/index.html` defines it and no legacy stylesheet names it; the Tailwind
 entry and configuration define no ad-hoc CSS; and a Studio node id (`osc-1`) that is never
 in a class position is not counted (debt 4342 on the same `src/`).
+
+### 2026-10-29: the record is judged against the base branch, and the domain views are not debt
+
+The third review of pull request #250 found that the history check read the branch's own
+first-parent commits: once #247 raised a count on `main`, a branch that merged `main` and
+re-measured failed its own test, while its pull request's merge ref passed. The check now
+judges only the record's versions on the base branch's first-parent chain, from the merge
+base backwards, as CI does; a fixture proves it on a scratch git repository. The same review
+found an aliased plugin call, an osc-* class carried by a `data-` attribute, a `data:`
+`@import` and a tracked `node_modules` file escaping the record, and that decision 3 left the
+domain views' own selectors as debt with no exit. Before landing, the record became measure
+4: every attribute but the id references is read, any mention of a CSS-defining plugin
+function fails, an `@import` must be relative or an allowed package, and the domain views'
+stylesheets and `tokens.css` are recorded apart, ratcheted and not debt (debt 3905 on the same
+`src/`, with 438 domain-view selectors apart). The record now has a committed writer,
+`scripts/ui-flowbite-pro-record.mjs`, with a `--check` mode.

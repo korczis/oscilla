@@ -1,20 +1,21 @@
 {
   "rule": "project.ui-uses-flowbite-pro",
-  "note": "The Flowbite Pro record of rule project.ui-uses-flowbite-pro (ADR 0061), measured by tests/unit/ui-flowbite-pro.test.mjs (measure 3), whose header defines every field. The inputs are what the build bundles: every tracked file under src/ and every file a relative JavaScript import or CSS @import of one of them reaches, wherever it lives. debt is the UI surfaces of src/index.html not migrated to Flowbite Pro (surfaces.pending; a surface is migrated only when it carries the Pro class set of its kind, the build compiles Tailwind with the flowbite plugin and dist/index.html defines those classes while no legacy stylesheet names them, so none is before F001), plus every occurrence of every osc-* class token in src/index.html and in the JavaScript inputs (classes, per name; element ids and Studio node ids that are never in a class position excepted), plus every use of a legacy vocabulary token (vocabulary, the other class tokens in class positions, per token), plus the selectors of the legacy stylesheets (stylesheets, with their declarations). inlineStyles counts the style attributes of src/index.html. The tree must hold exactly these values, so a migration lowers them in the same change, and the record only shrinks: against every committed version of the same measure in its first-parent git history no number may be higher, and against every version no class, vocabulary token, stylesheet or pending surface may be new; a pending surface leaves only into migrated. measured records the tree the first record of this measure was taken on (src/ unchanged since commit ee70253, where the measure-1 record of 905 and the measure-2 record of 4252 were taken); it is history and is not updated.",
-  "measure": 3,
+  "note": "The Flowbite Pro record of rule project.ui-uses-flowbite-pro (ADR 0061), measured by scripts/ui-flowbite-pro-measure.mjs (measure 4) and written by scripts/ui-flowbite-pro-record.mjs; the header of tests/unit/ui-flowbite-pro.test.mjs defines every field. The inputs are what the build bundles: every tracked file under src/ and every file a relative JavaScript import or CSS @import of one of them reaches, wherever it lives. debt is the UI surfaces of src/index.html not migrated to Flowbite Pro (surfaces.pending; a surface is migrated only when it carries the Pro class set of its kind, the build compiles Tailwind with the flowbite plugin and dist/index.html defines those classes while no legacy stylesheet names them, so none is before F001), plus every occurrence of every osc-* class token in the attributes of src/index.html (id references excepted) and in the JavaScript inputs (classes, per name; element ids and Studio node ids that are never in a class position excepted), plus every use of a legacy vocabulary token (vocabulary, the other class tokens in class positions, per token), plus the selectors of the legacy stylesheets (stylesheets, with their declarations). domainViews holds the same counts for the domain views' own stylesheets and tokens.css, the custom properties they read (ADR 0061 decision 3): ratcheted like the stylesheets, but not debt. inlineStyles counts the style attributes of src/index.html. The tree must hold exactly these values, so a migration lowers them in the same change, and the record only shrinks: against every committed version on the base branch's first-parent chain, from the merge base backwards, no number of the same measure may be higher, and no vocabulary token, stylesheet or pending surface may be new against any version that lists them (osc-* class names are compared within the same measure); a pending surface leaves only into migrated. measured records the tree the first record of this measure was taken on (src/ unchanged since commit ee70253, where the records of measure 1, debt 905, measure 2, debt 4252, and measure 3, debt 4342, were taken); it is history and is not updated.",
+  "measure": 4,
   "measured": {
     "commit": "ee70253c4c04b34ed3d5f78b45d00be617fdca01",
-    "measure": 3,
-    "debt": 4342,
+    "measure": 4,
+    "debt": 3905,
     "surfaces": 62,
     "pending": 62,
-    "classTokens": 2550,
-    "classNames": 756,
+    "classTokens": 2551,
+    "classNames": 757,
     "vocabularyUses": 103,
     "vocabularyNames": 38,
-    "selectors": 1627
+    "selectors": 1189,
+    "domainViewSelectors": 438
   },
-  "debt": 4342,
+  "debt": 3905,
   "surfaces": {
     "pending": [
       "card#osc-exp-compare",
@@ -146,6 +147,7 @@
     "osc-btn-primary": 34,
     "osc-btn-secondary": 94,
     "osc-btn-success": 1,
+    "osc-cal-convention": 1,
     "osc-chart-host": 19,
     "osc-chart-inset": 1,
     "osc-chart-note": 2,
@@ -889,10 +891,6 @@
       "selectors": 38,
       "declarations": 63
     },
-    "src/styles/charts.css": {
-      "selectors": 19,
-      "declarations": 50
-    },
     "src/styles/components.css": {
       "selectors": 137,
       "declarations": 509
@@ -916,6 +914,12 @@
     "src/styles/responsive.css": {
       "selectors": 192,
       "declarations": 234
+    }
+  },
+  "domainViews": {
+    "src/styles/charts.css": {
+      "selectors": 19,
+      "declarations": 50
     },
     "src/styles/studio-timeline.css": {
       "selectors": 140,
