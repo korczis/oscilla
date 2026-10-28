@@ -22,4 +22,16 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-28
-updated_at: 2026-10-28
+updated_at: 2026-10-28T17:10:59Z
+started_at: 2026-10-28T17:04:59Z
+started_event: sha256:69be8d82feda4f18b0f7a013566c31c5823eea3a843219a3e52eaec2bfd4eacc
+verified_at: 2026-10-28T17:10:53Z
+verified_event: sha256:a54b67aae724ddce921c64d40b22f63eb935b87cac6389951e6486b6e31fbc00
+evidence:
+  - covers: verified
+    type: test
+    command: "node --test tests/unit/release-publish.test.mjs; node scripts/fail-first.mjs --title 'fix(release): R021 ...' --base-branch origin/chore/plan-ui-current; npm test"
+    result: "At d3a789c: release-publish 37/37 with release-cli-args (6 new R021 cases: the dry run of a tag on origin at HEAD resumes and mutates nothing; --yes resumes with no tag or push and runs redeploy, verify-deploy, the Release in order; a dispatched run still waiting is adopted, no second dispatch; a page already tagged needs no redeploy; a tag at another commit refuses naming it; an existing Release refuses). fail-first proven by 1 of 1 file against origin/chore/plan-ui-current (assertion). npm test 3168/3168, build:check clean. A review verdict is still owed: scripts/release-* is guarded."
+    artifact: "tests/unit/release-publish.test.mjs"
+    commit: d3a789cd891c7e306175675812836e55802bcf50
+    recorded_at: 2026-10-28T17:10:59Z
