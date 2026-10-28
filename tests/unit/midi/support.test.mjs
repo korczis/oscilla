@@ -15,9 +15,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
-import {
-  MIDI_STATES, MIDI_COPY, midiSite, midiText, createMidiSupport,
-} from '../../../src/js/midi/support.js';
+import * as support from '../../../src/js/midi/support.js';
+
+const { MIDI_STATES, MIDI_COPY, midiSite, midiText, createMidiSupport } = support;
 
 const root = new URL('../../../', import.meta.url);
 const ADR = readFileSync(new URL(
@@ -84,8 +84,9 @@ const domError = (name) => Object.assign(new Error(`${name} raised`), { name });
 
 /**
  * A navigator: `api` false leaves requestMIDIAccess out; `query` is a PermissionState, or
- * 'missing' (no permissions.query), 'throws' or 'rejects'. Each request is held until the
- * test settles it.
+ * 'missing' (no permissions.query), 'throws', 'rejects' or 'hangs' (a query that has not
+ * answered until the test calls nav.answer(state)). Each request is held until the test
+ * settles it.
  */
 function fakeNavigator({ api = true, query = 'prompt' } = {}) {
   const nav = { requests: [], queries: [] };
@@ -97,6 +98,11 @@ function fakeNavigator({ api = true, query = 'prompt' } = {}) {
         nav.queries.push(descriptor);
         if (query === 'throws') throw new TypeError('not a valid permission name');
         if (query === 'rejects') return Promise.reject(domError('NotSupportedError'));
+        if (query === 'hangs') {
+          return new Promise((resolve) => {
+            nav.answer = (state) => { nav.status = new FakeStatus(state); resolve(nav.status); };
+          });
+        }
         return Promise.resolve(status);
       },
     };
@@ -165,6 +171,21 @@ test('the copy fills {site}, {names}, {name} and {error}, and names no browser',
   assert.throws(() => midiText('bogus', {}), /unknown MIDI state/);
 });
 
+test('a value is inserted verbatim and never read as a placeholder or a $ pattern', () => {
+  // String.prototype.replace with a string expands $& / $' / $` / $$ in the replacement, and a
+  // chain of replaces searches each inserted value for the placeholders that follow.
+  assert.equal(midiText('connected', { names: ['Pads $& X'] }), 'MIDI is on: Pads $& X.');
+  assert.equal(midiText('connected', { names: ['{error}'] }), 'MIDI is on: {error}.');
+  assert.equal(midiText('connected', { names: ['{name}', "$' $` $$"] }),
+    "MIDI is on: {name}, $' $` $$.");
+  assert.equal(midiText('disconnected', { name: '{error} $&' }),
+    'MIDI input disconnected: {error} $&. No MIDI input is connected.');
+  assert.equal(midiText('failed', { error: '$&{site}' }),
+    'MIDI could not start on this computer (the browser reported $&{site}).');
+  assert.equal(midiText('denied', { site: '{names}$&' }), 'MIDI access is not allowed for '
+    + '{names}$&. Allow MIDI in the browser\'s site settings, then choose Connect MIDI again.');
+});
+
 test('{site} is location.host over http(s) and "this page" on file://', () => {
   assert.equal(midiSite({ protocol: 'https:', host: 'korczis.github.io' }), 'korczis.github.io');
   assert.equal(midiSite({ protocol: 'http:', host: '127.0.0.1:5173' }), '127.0.0.1:5173');
@@ -210,6 +231,45 @@ test('loading queries the permission once and never requests access', async () =
     assert.deepEqual(nav.queries, query === 'missing' ? [] : [{ name: 'midi' }]);
   }
 });
+
+test('a permission query that does not answer in time reads unknown and offers Connect MIDI',
+  async () => {
+    assert.ok(Number.isFinite(support.MIDI_QUERY_TIMEOUT_MS)
+      && support.MIDI_QUERY_TIMEOUT_MS > 0 && support.MIDI_QUERY_TIMEOUT_MS <= 5000,
+    'the load-time query is bounded by a short named deadline');
+    const nav = fakeNavigator({ query: 'hangs' });
+    const midi = createMidiSupport({ navigator: nav, isSecureContext: true, site: 'x',
+      queryTimeoutMs: 20 });
+    const t0 = Date.now();
+    await midi.init(); // must settle although the query never does
+    assert.ok(Date.now() - t0 < 2000, 'init returns at the deadline');
+    assert.equal(midi.snapshot().state, 'unknown');
+    assert.equal(midi.snapshot().text, midiText('unknown', { site: 'x' }));
+    assert.equal(midi.snapshot().canConnect, true, 'Connect MIDI is offered');
+    assert.equal(nav.requests.length, 0, 'still no request');
+    // A late answer still chooses the state before Connect MIDI, and its status is kept.
+    nav.answer('granted');
+    await flush();
+    assert.equal(midi.snapshot().state, 'allowed');
+    nav.status.change('denied');
+    assert.equal(midi.snapshot().state, 'denied', 'the late status is listened to');
+  });
+
+test('a late query answer after Connect MIDI does not choose the state, but is kept',
+  async () => {
+    const nav = fakeNavigator({ query: 'hangs' });
+    const midi = createMidiSupport({ navigator: nav, isSecureContext: true, site: 'x',
+      queryTimeoutMs: 20 });
+    await midi.init();
+    midi.connect();
+    nav.requests[0].resolve(new FakeAccess([new FakePort('a', 'Keys')]));
+    await flush();
+    nav.answer('granted');
+    await flush();
+    assert.equal(midi.snapshot().state, 'connected');
+    nav.status.change('prompt');
+    assert.equal(midi.snapshot().state, 'revoked', 'the kept late status detects a withdrawal');
+  });
 
 test('before any Connect MIDI the kept PermissionStatus chooses the state', async () => {
   const { nav, midi, seen } = await loaded({ query: 'prompt' });

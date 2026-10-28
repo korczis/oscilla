@@ -46,8 +46,15 @@ test('the shell offers Connect MIDI and a status line for the support state', ()
   assert.ok(button, 'a button data-osc="midi.connect"');
   assert.match(button[0], /type="button"/);
   assert.match(button[0], /@click="midiConnect\(\)"/);
-  assert.match(button[0], /x-show="midiCanConnect"/, 'not offered in rows 1 and 2');
   assert.doesNotMatch(button[0], /\bdisabled\b/, 'offered or not, never disabled');
+  // Not offered in rows 1 and 2: the whole actions row is hidden, not only the button, so no
+  // empty osc-dialog-actions row with its margin stays behind (WebKit, Firefox on file://).
+  const row = /<div\b([^>]*)>\s*<button\b[^>]*data-osc="midi\.connect"[^>]*>[\s\S]*?<\/button>\s*<\/div>/
+    .exec(html);
+  assert.ok(row, 'Connect MIDI is alone in its row');
+  assert.match(row[1], /class="osc-dialog-actions"/);
+  assert.match(row[1], /data-osc="midi\.actions"/);
+  assert.match(row[1], /x-show="midiCanConnect"/, 'the row is hidden where MIDI is not offered');
   assert.equal(button[1].replace(/<[^>]*>/g, '').trim(), 'Connect MIDI');
   const status = /<p\b[^>]*data-osc="midi\.status"[^>]*>/.exec(html);
   assert.ok(status, 'a status line data-osc="midi.status"');

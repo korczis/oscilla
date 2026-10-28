@@ -7,7 +7,8 @@
 // What happens when:
 //   at load      reads window.isSecureContext, typeof navigator.requestMIDIAccess and, only when
 //                both allow MIDI, one navigator.permissions.query({ name: 'midi' }), which the
-//                Permissions API defines as never prompting. It never requests access.
+//                Permissions API defines as never prompting. It never requests access. A query
+//                that has not answered within MIDI_QUERY_TIMEOUT_MS reads `unknown`.
 //   connect()    the explicit user action "Connect MIDI": requestMIDIAccess({ sysex: false }).
 //                A new request replaces the one before it; a request that settles after a newer
 //                one started is ignored.
@@ -64,11 +65,12 @@ export function midiSite(location) {
 export function midiText(state, { site = 'this page', names = [], name = '', error = '' } = {}) {
   const copy = MIDI_COPY[state];
   if (copy === undefined) throw new Error(`unknown MIDI state ${JSON.stringify(state)}`);
-  return copy
-    .replace('{site}', site)
-    .replace('{names}', names.map(portName).join(', '))
-    .replace('{name}', portName(name))
-    .replace('{error}', error || 'Error');
+  const values = {
+    site, names: names.map(portName).join(', '), name: portName(name), error: error || 'Error',
+  };
+  // One pass with a function: a value is inserted verbatim ("$&" in a device name stays "$&")
+  // and is never searched for a later placeholder (a device named "{error}" stays "{error}").
+  return copy.replace(/\{(site|names|name|error)\}/g, (_, key) => values[key]);
 }
 
 /** The names of the connected inputs of a MIDIAccess, in the access's order. */
@@ -80,6 +82,13 @@ function connectedNames(access) {
   return names;
 }
 
+/**
+ * How long the load-time permission query may take before the page states `unknown` (and
+ * offers Connect MIDI). A query that answers later still chooses the state, if Connect MIDI has
+ * not been chosen by then, and its PermissionStatus is kept.
+ */
+export const MIDI_QUERY_TIMEOUT_MS = 2000;
+
 const QUERY_STATES = { prompt: 'needs-permission', granted: 'allowed', denied: 'denied' };
 const REJECTED = { SecurityError: 'blocked', NotAllowedError: 'denied' };
 
@@ -88,7 +97,7 @@ const REJECTED = { SecurityError: 'blocked', NotAllowedError: 'denied' };
  * `onChange(snapshot)` is called after every change of the state or of the input names.
  */
 export function createMidiSupport({ navigator: nav, isSecureContext, site = 'this page',
-  onChange = () => {} } = {}) {
+  onChange = () => {}, queryTimeoutMs = MIDI_QUERY_TIMEOUT_MS } = {}) {
   let state = null;
   let detail = {};
   let status = null;        // the kept PermissionStatus
@@ -156,14 +165,32 @@ export function createMidiSupport({ navigator: nav, isSecureContext, site = 'thi
       if (!available()) { set('unsupported'); return; }
       const perms = nav.permissions;
       if (!perms || typeof perms.query !== 'function') { fromQuery(); return; }
+      let query;
       try {
-        status = await perms.query({ name: 'midi' });
-      } catch {
-        status = null;
+        query = Promise.resolve(perms.query({ name: 'midi' }));
+      } catch (error) {
+        query = Promise.reject(error);
       }
-      if (status && typeof status.addEventListener === 'function') {
-        status.addEventListener('change', onPermissionChange);
+      const keep = (s) => {
+        status = s || null;
+        if (status && typeof status.addEventListener === 'function') {
+          status.addEventListener('change', onPermissionChange);
+        }
+      };
+      let timer = null;
+      const late = Symbol('late');
+      const timeout = new Promise((resolve) => {
+        timer = setTimeout(() => resolve(late), queryTimeoutMs);
+      });
+      const first = await Promise.race([query.catch(() => null), timeout]);
+      clearTimeout(timer);
+      if (first === late) {
+        // No answer in time: unknown, Connect MIDI offered. A late answer still counts.
+        fromQuery();
+        query.then((s) => { if (s) { keep(s); fromQuery(); } }, () => {});
+        return;
       }
+      keep(first);
       fromQuery();
     },
 
