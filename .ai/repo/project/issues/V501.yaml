@@ -14,6 +14,7 @@ scope:
   - "src/index.html"
   - "tests/unit/midi"
   - "tests/browser/midi.cjs"
+  - "tests/browser/app.cjs"
   - "tests/browser/lib/midi-stub.cjs"
   - "package.json"
   - "docs/midi.md"
