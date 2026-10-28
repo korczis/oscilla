@@ -41,6 +41,7 @@ acceptance_criteria:
   - "The three new tests pass and fail on the merge base (fail-first); npm test passes."
   - "npm run build twice gives byte-identical dist (build:check); verify-dist passes with no runtime fetch, no remote font and no root-relative asset; the gate browsers open dist from file:// and from the sub-path with zero console errors."
   - "The visual gate (npm run test:visual) passes against the existing references with no reference changed: with preflight off and no Pro class in the markup yet, nothing renders differently."
+  - "tests/unit/ui-flowbite-pro.test.mjs also refuses an element of src/index.html that carries both Alpine state (x-bind, x-show, @click toggling it) and a flowbite data-*-toggle or data-*-target attribute."
   - "dist's size before and after is stated, within BUDGET; tests/unit/ui-flowbite-pro-baseline.json records the starting debt and the domain allowlist gives a reason for every entry."
   - "ADR 0061 (proposed), the ADR 0012 resolution note and project.visual-identity-lock v2 land in the same change; the licence test passes on the whole tree."
   - "The pull request carries a review verdict (scripts/build*, scripts/verify-dist.mjs and scripts/release-metadata.mjs are guarded)."
