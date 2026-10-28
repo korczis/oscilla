@@ -2,8 +2,9 @@
 // project.fail-first: a feat or fix PR's unit tests fail without the change.
 //
 //   node scripts/fail-first.mjs --title "fix(x): ..." [--body-file <f>]
-//   node scripts/fail-first.mjs --pr-json <file>          # {"title": ..., "body": ...}
-//        [--repo <dir>] [--head <ref>] [--base <ref> | --base-branch <ref>]
+//   node scripts/fail-first.mjs --pr-json <file>   # {title, body, headRefName} of `gh pr view`
+//        [--repo <dir>] [--head <ref>] [--head-branch <name>]
+//        [--base <ref> | --base-branch <ref>]
 //
 // For a PR whose title starts with feat or fix (in any case, behind bracketed tags), the unit
 // test files the PR adds or changes (tests/unit/**/*.test.mjs between the merge base and the
@@ -23,12 +24,16 @@
 // missing-file, error, timeout) with the names of the failing tests, so a test that only fails
 // because a new module does not exist yet is visible as that.
 //
-// A train (title `train(...)` or `train:`, .ai/repo/workflows/merge-train.md) lands several
-// member pull requests in one merge commit and is judged by its body instead: a table
-// `| member | what |` in the body's own prose, one row per member, `#<n>` and the member's pull
-// request title. A train without the table, with an empty one, with a row that is not `#<n>` or
-// whose `what` does not start with a conventional type is refused; so is one with a feat or
-// fix member, which lands as its own pull request. The train's waiver line does not count.
+// A train (.ai/repo/skills/merge-train/SKILL.md, ADR 0055) lands several member pull requests
+// in one merge commit and is judged by its body instead. A pull request is a train when its head
+// branch is `train/...` (`headRefName` of --pr-json, or --head-branch), or its title starts,
+// behind bracketed tags, with `train` or `merge train` and then a scope, a date or nothing before
+// the colon (`Merge train 2026-10-17: #1, #2`, `train(x):`, `Train:`). Its body carries a table
+// `| member | what |` in its own prose, one row per member, `#<n>` and the member's pull request
+// title. A train without the table, with an empty one, with a row that is not `#<n>` or whose
+// `what` does not start with a conventional type (feat, fix, docs, chore, test, build, ci, perf,
+// refactor, style, revert) is refused; so is one with a feat or fix member, which lands as its
+// own pull request. The train's waiver line does not count.
 //
 // Exit 0: nothing to prove, waived, or proven. Exit 1: not proven. Exit 2: usage.
 
@@ -42,8 +47,12 @@ import { fileURLToPath } from 'node:url';
 // Any case, any spacing, and behind bracketed tags ("[WIP] Fix (x) : ..."): a title that reads
 // as feat or fix is one, whatever a stricter parser downstream makes of it.
 export const TITLE = /^\s*(?:\[[^\]]*\]\s*)*(feat|fix)\s*(\([^)]*\))?\s*!?\s*:/i;
-export const TRAIN = /^\s*(?:\[[^\]]*\]\s*)*train\s*(\([^)]*\))?\s*:/i;
-const TYPED = /^\s*(?:\[[^\]]*\]\s*)*[a-z]+\s*(\([^)]*\))?\s*!?\s*:/i;
+// `train(x):`, `Train:`, `Merge train 2026-10-17:` (the skill's title), behind bracketed tags.
+export const TRAIN = /^\s*(?:\[[^\]]*\]\s*)*(?:merge\s+)?train\b\s*(?:\([^)]*\)|[\w.-]+)?\s*:/i;
+export const TRAIN_BRANCH = /^train\//;
+const TYPES = 'feat|fix|docs|chore|test|build|ci|perf|refactor|style|revert';
+const TYPED = new RegExp(
+  String.raw`^\s*(?:\[[^\]]*\]\s*)*(?:${TYPES})\s*(\([^)]*\))?\s*!?\s*:`, 'i');
 export const WAIVER = /^[ \t]*(?:[*-][ \t]+)?fail-first:[ \t]*n\/a\b[ \t]*(.*)$/im;
 const TEST_FILE = /^tests\/unit\/.+\.test\.mjs$/;
 const FILE_TIMEOUT_MS = 180_000;
@@ -67,20 +76,33 @@ export function waiver(body) {
   return { reason: /[\p{L}\p{N}]/u.test(reason.replace(/<[^>]*>/g, '')) ? reason : '' };
 }
 
+/** A table row's cells, split on `|` but not on an escaped `\|`, which is a `|` in the cell. */
+function cellsOf(line) {
+  return line.trim().replace(/^\|/, '').replace(/(?<!\\)\|$/, '').split(/(?<!\\)\|/)
+    .map((c) => c.trim().replace(/\\\|/g, '|'));
+}
+
 /**
- * The rows of a train body's `| member | what |` table ([{ member, what }]), or null when the
- * body's own prose has no such table.
+ * The rows of every `| member | what |` table of a train body ([{ member, what }]), or null when
+ * the body's own prose has no such table.
  */
 export function trainMembers(body) {
   const lines = proseOf(body).split('\n');
-  const at = lines.findIndex((l) => /^\s*\|\s*member\s*\|\s*what\s*\|\s*$/i.test(l));
-  if (at < 0) return null;
-  const rows = [];
-  for (const line of lines.slice(at + 1)) {
-    if (!/^\s*\|/.test(line)) break;
-    if (/^\s*\|[\s:|-]+\|\s*$/.test(line)) continue;
-    const cells = line.trim().replace(/^\||\|$/g, '').split('|').map((c) => c.trim());
-    rows.push({ member: cells[0], what: cells.slice(1).join('|') });
+  const HEADER = /^\s*\|\s*member\s*\|\s*what\s*\|\s*$/i;
+  let rows = null;
+  let inTable = false;
+  for (const line of lines) {
+    if (HEADER.test(line)) {
+      rows ??= [];
+      inTable = true;
+    } else if (!inTable) {
+      continue;
+    } else if (!/^\s*\|/.test(line)) {
+      inTable = false;
+    } else if (!/^\s*\|[\s:|-]+\|\s*$/.test(line)) {
+      const cells = cellsOf(line);
+      rows.push({ member: cells[0], what: cells.slice(1).join(' | ') });
+    }
   }
   return rows;
 }
@@ -91,7 +113,7 @@ function judgeTrain(body, say) {
     say(`fail-first: ${why}`);
     say('fail-first: a train lists each member as `| #<n> | <its pull request title> |` under a'
       + ' `| member | what |` table and has no feat or fix member'
-      + ' (.ai/repo/workflows/merge-train.md)');
+      + ' (.ai/repo/skills/merge-train/SKILL.md)');
     return 'not-proven';
   };
   if (rows === null) return refuse('a train, and its body has no `| member | what |` table');
@@ -176,13 +198,19 @@ function runFile(tree, file) {
 /**
  * @returns {{ status: 'not-applicable'|'waived'|'proven'|'not-proven', lines: string[] }}
  */
-export function failFirst({ repo, title, body, head = 'HEAD', base, baseBranch = 'origin/main',
-  keep = false }) {
+export function failFirst({ repo, title, body, head = 'HEAD', headBranch = '', base,
+  baseBranch = 'origin/main', keep = false }) {
   const lines = [];
   const say = (s) => lines.push(s);
   const t = String(title || '').trim();
+  const branch = String(headBranch || '').trim();
   say(`fail-first: PR title: ${t || '(none)'}`);
-  if (TRAIN.test(t)) return { status: judgeTrain(body, say), lines };
+  if (branch) say(`fail-first: PR head branch: ${branch}`);
+  if (TRAIN_BRANCH.test(branch) || TRAIN.test(t)) {
+    say(`fail-first: a train (${TRAIN_BRANCH.test(branch) ? `branch ${branch}` : 'title'}),`
+      + ' judged by its members');
+    return { status: judgeTrain(body, say), lines };
+  }
   if (!TITLE.test(t)) {
     say('fail-first: not a feat or fix PR; nothing to prove');
     return { status: 'not-applicable', lines };
@@ -276,7 +304,8 @@ export function failFirst({ repo, title, body, head = 'HEAD', base, baseBranch =
 function usage(message) {
   if (message) console.error(`fail-first: ${message}`);
   console.error('usage: node scripts/fail-first.mjs (--title <t> [--body-file <f>] | --pr-json <f>)'
-    + ' [--repo <dir>] [--head <ref>] [--base <ref> | --base-branch <ref>] [--keep]');
+    + ' [--repo <dir>] [--head <ref>] [--head-branch <name>] [--base <ref> | --base-branch <ref>]'
+    + ' [--keep]');
   process.exit(2);
 }
 
@@ -300,8 +329,10 @@ if (isMain) {
       const pr = JSON.parse(readFileSync(value(a), 'utf8'));
       opts.title = pr.title;
       opts.body = pr.body;
+      if (typeof pr.headRefName === 'string') opts.headBranch = pr.headRefName;
     } else if (a === '--repo') opts.repo = path.resolve(value(a));
     else if (a === '--head') opts.head = value(a);
+    else if (a === '--head-branch') opts.headBranch = value(a);
     else if (a === '--base') opts.base = value(a);
     else if (a === '--base-branch') opts.baseBranch = value(a);
     else if (a === '--keep') opts.keep = true;

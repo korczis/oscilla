@@ -3,8 +3,8 @@ id: project.fail-first
 version: 1
 kind: rule
 title: A feat or fix PR's tests fail without the change
-description: For a pull request titled feat or fix, CI runs the unit tests it adds or changes against the merge base and at least one must fail there and pass on the head, unless the body carries a printed waiver.
-statement: For a pull request whose title starts with feat or fix (in any case or spacing, behind bracketed tags), at least one tests/unit/**/*.test.mjs file the pull request adds or changes fails when run against the merge base's tree (its src/ and everything else outside tests/) and passes against the head's, unless the pull request body carries, in its own prose, a line `fail-first: n/a <reason>` with a real reason, which the CI job prints; the program that judges is the base branch's copy.
+description: For a pull request titled feat or fix, CI runs the unit tests it adds or changes against the merge base and at least one must fail there and pass on the head, unless the body carries a printed waiver; a merge train is judged by its member table and may not carry a feat or fix member.
+statement: For a pull request whose title starts with feat or fix (in any case or spacing, behind bracketed tags), at least one tests/unit/**/*.test.mjs file the pull request adds or changes fails when run against the merge base's tree (its src/ and everything else outside tests/) and passes against the head's, unless the pull request body carries, in its own prose, a line `fail-first: n/a <reason>` with a real reason, which the CI job prints; a merge train (head branch train/..., or a title train(...), train: or Merge train <date>:) has no change of its own and passes only when its body's `| member | what |` table lists every member with a conventional type and none is feat or fix; the program that judges is the base branch's copy.
 status: active
 class: blocking
 depends_on: []
@@ -46,13 +46,18 @@ A claim a person types is not evidence; a run against the merge base is.
   log, and whether it is a good reason is for the reviewer.
 - The program that judges a pull request is the base branch's `scripts/fail-first.mjs`, not
   the copy the pull request carries.
-- A train (title `train(...)` or `train:`, `.ai/repo/workflows/merge-train.md`) has no change
-  of its own to prove and is judged by its members instead. Its body carries, in its own
-  prose, a table `| member | what |` with one row per member: `#<n>` and that member's pull
-  request title. A train without the table or with an empty one, a row that is not `#<n>`, a
-  `what` that does not start with a conventional type, and a feat or fix member are refused:
-  a feat or fix lands as its own pull request, where its tests are judged. The train's
-  waiver line does not count for its members.
+- A train (skill `merge-train`, `.ai/repo/skills/merge-train/SKILL.md`; ADR 0055 as amended
+  on 2026-10-28) has no change of its own to prove and is judged by its members instead. A
+  pull request is a train when its head branch is `train/...` or its title starts, behind
+  bracketed tags, with `train` or `merge train` and then a scope, a date or nothing before the
+  colon (`Merge train 2026-10-17: #1, #2`, `train(x):`, `Train:`). Its body carries, in its
+  own prose, a table `| member | what |` with one row per member: `#<n>` and that member's
+  pull request title (every such table is read; `\|` is a `|` inside a cell). A train
+  without the table or with an empty one, a row that is not `#<n>`, a `what` that does not
+  start with a conventional type (`feat`, `fix`, `docs`, `chore`, `test`, `build`, `ci`,
+  `perf`, `refactor`, `style`, `revert`), and a feat or fix member are refused: a feat or fix
+  lands as its own pull request, where its tests are judged. The train's waiver line does not
+  count for its members.
 - One proving file satisfies the rule. It does not prove that every test in the pull request
   is meaningful: the job lists the files that pass without the change so a reviewer sees
   them, and the #149 defect (a test beside the path it claims to cover) is caught only when
@@ -68,7 +73,7 @@ evidence, the kind of failure on the base (`assertion`, `module-not-found`, `mis
 new module does not exist yet is visible as that. It exits 1 when no file is evidence.
 
 The `fail-first` job of `.github/workflows/ci.yml` runs it on every pull request with the
-title and body read from the pull request at run time, and `gate` needs the job
+title, body and head branch (`headRefName`) read from the pull request at run time, and `gate` needs the job
 (`tests/unit/ci-workflows.test.mjs` fails if `gate` stops needing it). The job runs it
 through `.github/scripts/base-rule.sh`, which extracts `scripts/` of the base branch outside
 the checkout and runs that copy on the pull request, printing the commit it came from; the
@@ -90,9 +95,12 @@ the retry still is; a test file with a non-ASCII name is seen; `Fix(x):`, `fix (
 `fix(x):`; a waiver whose reason is `<reason>` or `...`, or that stands in a code block, an
 HTML comment, a blockquote or mid-sentence, is refused; a test that reads `git ls-files`
 is evidence; a train of chore and docs members passes and prints each member; a train with a
-`feat` member is refused under the titles `train(x):`, `Train:` and `[WIP] train (x) :` even
-with a waiver in its body; a train with no member table, a table inside a code block, an
-empty table, an untyped row or a row that is not `#<n>` is refused.
+`feat` member is refused under the titles `train(x):`, `Train:`, `[WIP] train (x) :` and the
+skill's own `Merge train 2026-10-17: #1, #2`, and on a `train/x` branch under a `chore(train):`
+title, even with a waiver in its body; a train with no member table, a table inside a code
+block, an empty table, an untyped row (`a new control`, `feature(y):`, `fixes:`, `wip:`) or a
+row that is not `#<n>` is refused; a `fix` row in a second member table is refused; a
+`chore(train):` title on a branch that is not `train/...` has nothing to prove.
 
 What it cannot see:
 
@@ -110,6 +118,8 @@ What it cannot see:
   a check GitHub runs from the base branch and branch protection requiring it, which is the
   owner's setting. Both change guarded paths, so `project.review-verdict` asks for a
   reviewer's verdict on them, with the same limit on its own job.
+- A train that is neither on a `train/...` branch nor titled as one: it is judged by its title
+  like any other pull request. The skill names both.
 - Whether a train's member table tells the truth. The job reads the titles the body states;
   that a row's title is its member's and that every merged member is listed is for the
   reviewer of the train (`gh pr view <n> --json title` answers it).
