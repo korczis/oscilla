@@ -28,11 +28,11 @@ depends_on:
   - "F010"
 acceptance_criteria:
   - "npm run test:visual passes against references regenerated from the Pro shell, each with its reason; every workspace has a reference in both themes at both sizes for darwin-arm64 and linux-x64."
-  - "tests/browser/live-smoke.cjs passes against the built file served from a sub-path and reads no legacy chrome selector."
+  - "tests/browser/live-smoke.cjs reads no legacy chrome selector, passes as a local dry run on the built file (--url file://.../dist/index.html) before the merge, and passes on the deployed page pinned to the merge commit (--expect-commit) after the Pages deploy."
   - "The pull request carries a review verdict (tests/browser/live-smoke.cjs is guarded)."
 validation:
   - "npm run test:visual"
-  - "node tests/browser/live-smoke.cjs"
+  - "node tests/browser/live-smoke.cjs --expect-commit origin/main"
   - "npm test"
 evidence_required:
   - "verified"
