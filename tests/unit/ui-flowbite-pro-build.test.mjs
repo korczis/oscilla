@@ -17,7 +17,15 @@
 //   - the notice names flowbite and tailwindcss (MIT), and verify-dist refuses a dist that
 //     lacks a build-time package's notice;
 //   - npm run build:check reproduces dist, and dist is within BUDGET, whose comment states the
-//     F001 sizes.
+//     F001 sizes;
+//   - the two parts of the <style> are split on TAILWIND_BOUNDARY, which pack() emits once and
+//     refuses inside either part;
+//   - the plugin's hard-coded .dark ancestor is rewritten to [data-theme="dark"], the selector
+//     OSCILLA sets (it never sets class="dark");
+//   - no class the legacy CSS styles is also a class the compiled Tailwind defines, because the
+//     Tailwind part follows it in the cascade and would win silently;
+//   - verify-dist examines every url() the plugin emits (forms: true included) and finds data:
+//     URLs only.
 //   node --test tests/unit/ui-flowbite-pro-build.test.mjs
 
 import test from 'node:test';
@@ -28,6 +36,8 @@ import { createRequire } from 'node:module';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { gzipSync } from 'node:zlib';
+import { pack, splitStyle, TAILWIND_BOUNDARY } from '../../scripts/pack-single-file.mjs';
+import { darkThemeSelector } from '../../scripts/build-config.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const require = createRequire(path.join(ROOT, 'package.json'));
@@ -50,10 +60,18 @@ function distStyle() {
   const html = read(DIST);
   const styles = [...html.matchAll(/<style>([\s\S]*?)<\/style>/g)].map((m) => m[1]);
   assert.equal(styles.length, 1, 'dist has exactly one <style>');
-  const css = styles[0];
-  const cut = css.lastIndexOf('\n');
-  assert.ok(cut > 0, 'the <style> holds the legacy CSS, a line break, then the Tailwind CSS');
-  return { html, legacy: css.slice(0, cut), tailwind: css.slice(cut + 1) };
+  const { legacy, tailwind } = splitStyle(styles[0]);
+  assert.ok(legacy && tailwind, 'the <style> holds the legacy CSS, then the Tailwind CSS');
+  return { html, legacy, tailwind };
+}
+
+/** The class names a stylesheet's selectors name (unescaped). */
+function classesOf(css) {
+  const out = new Set();
+  for (const sel of selectorsOf(css)) {
+    for (const m of sel.matchAll(/\.((?:[\w-]|\\.)+)/g)) out.add(m[1].replace(/\\(.)/g, '$1'));
+  }
+  return out;
 }
 
 /** Every selector of a stylesheet (the comma-separated parts of each rule prelude). */
@@ -84,11 +102,24 @@ function bareFormSelectors(css) {
     || /^\[(?:type|multiple)\b/i.test(compound))));
 }
 
-async function compileTailwind(config, from = path.join(ROOT, ENTRY)) {
+async function compileTailwind(config, { from = path.join(ROOT, ENTRY), dark = false } = {}) {
   const postcss = require('postcss');
   const tailwindcss = require('tailwindcss');
-  const result = await postcss([tailwindcss(config)]).process(read(ENTRY), { from });
+  const plugins = [tailwindcss(config), ...(dark ? [darkThemeSelector()] : [])];
+  const result = await postcss(plugins).process(read(ENTRY), { from });
   return result.css;
+}
+
+/** A .dark class selector (not the escaped dark: variant class, e.g. .dark\:bg-opacity-80). */
+const DARK_CLASS = /\.dark(?![\w\\-])/;
+
+/** The flowbite plugin with its form base styles on, compiled with the shipped config. */
+async function compileForms(opts) {
+  const config = require(path.join(ROOT, CONFIG));
+  return compileTailwind({
+    ...config, content: [{ raw: '<p class="hidden"></p>' }], safelist: [],
+    plugins: [require('flowbite/plugin')({ forms: true })],
+  }, opts);
 }
 
 test('package.json pins tailwindcss 3.4, postcss and flowbite 2.5 exactly, at build time', () => {
@@ -184,16 +215,67 @@ test('the built CSS carries no flowbite rule for a bare input, select or [type] 
     const { tailwind } = distStyle();
     assert.deepEqual(bareFormSelectors(tailwind), [], 'no bare form-control selector');
     // The check bites: the same plugin with its form base styles on produces such rules.
-    const config = require(path.join(ROOT, CONFIG));
-    const forms = await compileTailwind({
-      ...config, content: [{ raw: '<p class="hidden"></p>' }], safelist: [],
-      plugins: [require('flowbite/plugin')({ forms: true })],
-    });
+    const forms = await compileForms();
     const found = bareFormSelectors(forms);
     assert.ok(found.some((s) => /^\[type=/.test(s)), `forms: true has [type] rules: ${found}`);
     assert.ok(found.some((s) => /^select\b/.test(s)), 'and select rules');
     assert.deepEqual(bareFormSelectors('.osc-x input.osc-y{a:b}[data-type=x]{a:b}'), []);
   });
+
+test('the <style> parts are split on TAILWIND_BOUNDARY, which pack() emits exactly once', () => {
+  const template = '<!doctype html><html><head><!-- @inline-css --></head><body>'
+    + '<!-- @inline-js --></body></html>';
+  const base = { template, js: '1', icon: () => '' };
+  const one = pack({ ...base, css: 'a{b:c}', tailwind: '.x{y:z}' })
+    .match(/<style>([\s\S]*?)<\/style>/)[1];
+  assert.deepEqual(splitStyle(one), { legacy: 'a{b:c}', tailwind: '.x{y:z}' });
+  // An unminified (--debug) build keeps line breaks: the split does not depend on them.
+  const debug = pack({ ...base, css: 'a {\n  b: c;\n}\n', tailwind: '.x {\n  y: z;\n}\n' })
+    .match(/<style>([\s\S]*?)<\/style>/)[1];
+  assert.deepEqual(splitStyle(debug),
+    { legacy: 'a {\n  b: c;\n}\n', tailwind: '.x {\n  y: z;\n}\n' });
+  assert.deepEqual(splitStyle('a{b:c}'), { legacy: 'a{b:c}', tailwind: '' }, 'no Tailwind part');
+  assert.throws(() => splitStyle(`a${TAILWIND_BOUNDARY}b${TAILWIND_BOUNDARY}c`), /boundary/);
+  assert.throws(() => pack({ ...base, css: `a${TAILWIND_BOUNDARY}`, tailwind: 'b' }), /boundary/);
+  assert.throws(() => pack({ ...base, css: 'a', tailwind: `${TAILWIND_BOUNDARY}b` }), /boundary/);
+});
+
+test('the plugin\'s .dark ancestor is rewritten to the data-theme selector OSCILLA sets',
+  async () => {
+    const { tailwind } = distStyle();
+    assert.ok(!DARK_CLASS.test(tailwind), 'no .dark class selector in the Tailwind part');
+    assert.match(tailwind, /\[data-theme=["']?dark["']?\] \[role=tooltip\]>\[data-popper-arrow\]/,
+      'the tooltip arrow\'s dark rule follows data-theme');
+    // The plugin does hard-code .dark, and with forms: true on many more rules (F002).
+    const raw = await compileForms();
+    assert.ok(DARK_CLASS.test(raw), 'the plugin emits .dark selectors');
+    const fixed = await compileForms({ dark: true });
+    assert.ok(!DARK_CLASS.test(fixed), 'darkThemeSelector rewrites every one of them');
+    assert.match(fixed, /\[data-theme="dark"\] \[type=['"]?checkbox/, 'the form rules too');
+    assert.ok(/\.dark\\:bg-opacity-80/.test(tailwind), 'the dark: variant class is untouched');
+  });
+
+test('no class the legacy CSS styles is a class the compiled Tailwind defines', () => {
+  const { legacy, tailwind } = distStyle();
+  const utilities = classesOf(tailwind);
+  assert.ok(utilities.has('lg:w-16') && utilities.has('tooltip-arrow'),
+    'classesOf reads the utilities');
+  const shared = [...classesOf(legacy)].filter((c) => utilities.has(c));
+  assert.deepEqual(shared, [], 'a legacy class of the same name would lose to the utility');
+});
+
+test('verify-dist examines every url() the plugin emits and finds data: URLs only', async () => {
+  const { cssReferences } = await import('../../scripts/verify-dist.mjs');
+  const forms = await compileForms({ dark: true });
+  const refs = cssReferences(forms);
+  assert.ok(refs.unparsed === 0, 'every url( parses');
+  assert.equal(refs.urls.length, (forms.match(/url\(/g) || []).length, 'every url( is examined');
+  assert.ok(refs.urls.length > 0 && refs.urls.every((u) => /^data:image\/svg\+xml,/.test(u)),
+    `the plugin's url()s are data: SVGs: ${refs.urls.map((u) => u.slice(0, 30))}`);
+  assert.ok(refs.urls.some((u) => u.includes("'")), 'with the other quote inside');
+  const { tailwind } = distStyle();
+  assert.deepEqual(cssReferences(tailwind).urls.filter((u) => !/^data:/.test(u)), []);
+});
 
 test('the app script carries the five flowbite components, started after Alpine', () => {
   const src = read('src/js/ui/flowbite.js');

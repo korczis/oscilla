@@ -78,6 +78,26 @@ test('file and remote references fail', () => {
   fails(doc({ head: '<meta http-equiv="refresh" content="0;url=x">' }), /meta refresh/);
 });
 
+test('a CSS url() quoted with one quote and holding the other is examined (F001)', () => {
+  const css = (rule) => doc({ head: `<style>${rule}</style>` });
+  fails(css(`.a{background:url("https://evil.example/x'.png")}`), /evil\.example/);
+  fails(css(`.a{background:url("https://evil.example/a.png?x='1'")}`), /evil\.example/);
+  fails(css(`.a{background:url('https://evil.example/a.png?x="1"')}`), /evil\.example/);
+  fails(css('@font-face{font-family:x;src:url("https://fonts.gstatic.com/a\'b.woff2")}'),
+    /fonts\.gstatic/);
+  fails(css('.a{background:url( https://evil.example/x.png )}'), /evil\.example/);
+  // image-set() and -webkit-image-set() take bare strings as well as url().
+  fails(css('.a{background:image-set("https://evil.example/x.png" 1x)}'), /image-set/);
+  fails(css(".a{background:-webkit-image-set('img/a.png' 1x)}"), /image-set/);
+  // A url( the scan cannot parse is a problem, never silently skipped.
+  fails(css('.a{background:url("https://evil.example/x.png)}'), /url\(/);
+  // The flowbite plugin's data: URIs (mini-svg-data-uri, the other quote inside) pass.
+  assert.deepEqual(check(css(".a{background-image:url(\"data:image/svg+xml,%3csvg xmlns='"
+    + "http://www.w3.org/2000/svg'%3e%3c/svg%3e\")}")), []);
+  assert.deepEqual(check(css('.a{background:image-set("data:image/png;base64,AA" 1x)}')), []);
+  assert.deepEqual(check(css('.a{fill:url(#grad)}')), []);
+});
+
 test('source maps, missing notice and malformed markup fail', () => {
   fails(doc({ app: '1\n//# sourceMappingURL=app.js.map' }), /source map/);
   fails(doc().replace('== lib@1.0.0 - MIT', ''), /notice/);
