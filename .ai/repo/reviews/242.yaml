@@ -34,6 +34,8 @@
 #   which is what the interrupted run leaves in its own checkout. The resumed --yes run exits 0
 #   and logs `previous tag: v40.0.0`. In a real repository, `git tag --merged HEAD --list 'v*'`
 #   with v1.1.0 at HEAD lists v1.1.0, so readCommits(v1.1.0..HEAD) is empty.
+schema: review-verdict/v1
+pr: 242
 verdict: changes-requested
 reviewer: "dev-68 (Claude Opus 5.5), prismatic-majordomus session; a fork of it reviewed and wrote only this file and did not build, merge or edit the change"
 content: 1c1ac51be4ec388e0516fb8c2556b5d205222f6649cba9e2ccc7093e2560b531
