@@ -1647,6 +1647,126 @@ function defineChecks() {
     return { ok, ...out };
   });
 
+  // ---- C001: every stop path reads the sequencer's live state, not the 150 ms seqPlaying copy.
+  // In-page probe: start the looped sequence and fire `how` in the SAME task, so the poll that
+  // copies editor.playing into app.seqPlaying cannot have run (the window a fast Escape or a
+  // backgrounded tab falls into). Returns the state read straight after the event.
+  const seqPollWindow = (page, how) => page.evaluate((h) => {
+    const a = window.OSCILLA.app;
+    const ed = window.OSCILLA.labs.sequencer.editor;
+    const played = ed.play();
+    const at = { mirror: a.seqPlaying, editor: ed.playing };
+    if (h === 'escape') {
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    } else if (h === 'pagehide') {
+      window.dispatchEvent(new Event('pagehide'));
+    } else if (h === 'visibilitychange') {
+      // A hidden document without hiding the test's page: shadow the getter for one dispatch.
+      Object.defineProperty(document, 'hidden', { configurable: true, get: () => true });
+      try {
+        document.dispatchEvent(new Event('visibilitychange'));
+      } finally {
+        delete document.hidden;
+      }
+    } else if (h === 'status-key') {
+      document.querySelector('#osc-sb-play').click();
+    }
+    const after = { editor: ed.playing, mirror: a.seqPlaying, instrument: a.playing,
+      voice: !!(window.OSCILLA.engine.voice && !window.OSCILLA.engine.voice.ended) };
+    return { played, at, after };
+  }, how);
+  // The stopped sequence's voices drain (they fade, then release every node) and it stays off.
+  const seqDrained = (page, what) => until(() => page.evaluate(() => {
+    const ed = window.OSCILLA.labs.sequencer.editor;
+    const st = ed.stats();
+    return !ed.playing && !window.OSCILLA.app.seqPlaying && st.activeSourceCount === 0
+      && st.activeNodeCount === 0 ? st : null;
+  }), { ms: 6000, what });
+  // The probes loop the sequence (so a missed stop keeps sounding) on a running context.
+  const seqReady = async (page) => {
+    await page.evaluate(() => window.OSCILLA.app.setWorkspace('sequencer'));
+    await page.waitForSelector('#osc-seq-play', { state: 'visible', timeout: 8000 });
+    await page.evaluate(() => window.OSCILLA.app.ensureAudio());
+    await until(() => page.evaluate(() => {
+      const ctx = window.OSCILLA.engine.ctx;
+      return !!ctx && ctx.state === 'running';
+    }), { ms: 8000, what: 'the audio context runs before the sequence probes' });
+    await page.evaluate(() => window.OSCILLA.labs.sequencer.editor.setLoop(true));
+  };
+  const seqDone = (page) => page.evaluate(() => {
+    window.OSCILLA.labs.sequencer.editor.setLoop(false);
+    window.OSCILLA.app.setWorkspace('playground');
+  });
+
+  def('seq-stop-in-poll-window', async ({ page }) => {
+    const res = {};
+    try {
+      await seqReady(page);
+      for (const how of ['escape', 'pagehide', 'visibilitychange']) {
+        const r = await seqPollWindow(page, how);
+        res[how] = r;
+        r.drained = await seqDrained(page, `${how} in the poll window: the sequence drains`);
+      }
+    } finally {
+      await seqDone(page);
+    }
+    const ok = Object.values(res).every((r) => r.played && r.at.editor && !r.at.mirror
+      && !r.after.editor && !r.after.mirror && !!r.drained);
+    return { ok, ...res };
+  });
+
+  // The status-bar transport key (shown below 768 px) reads "Stop playback" while the sequence
+  // plays: one press (click or Enter) stops it and starts no instrument voice. Pressed inside
+  // the poll window it still stops the sequence (the live state); its label returns to Play.
+  def('status-key-stops-only', async ({ page }) => {
+    const res = {};
+    const st = () => page.evaluate(() => {
+      const a = window.OSCILLA.app;
+      const e = window.OSCILLA.engine;
+      return { editor: window.OSCILLA.labs.sequencer.editor.playing, mirror: a.seqPlaying,
+        instrument: a.playing, voice: !!(e.voice && !e.voice.ended), nodes: e.activeNodeCount,
+        label: document.querySelector('#osc-sb-play').getAttribute('aria-label') };
+    });
+    const quiet = (what) => until(async () => {
+      const s = await st();
+      return !s.editor && !s.mirror && !s.instrument && !s.voice && s.nodes === 0
+        && s.label !== 'Stop playback' ? s : null;
+    }, { ms: 6000, what });
+    await page.setViewportSize({ width: 390, height: 844 });
+    try {
+      await seqReady(page);
+      await page.waitForSelector('#osc-sb-play', { state: 'visible', timeout: 8000 });
+      for (const how of ['click', 'enter']) {
+        await page.click('#osc-seq-play');
+        const before = await until(async () => {
+          const s = await st();
+          return s.label === 'Stop playback' && s.editor ? s : null;
+        }, { ms: 6000, what: `status key (${how}) reads Stop playback while the sequence plays` });
+        res[how] = { before };
+        if (how === 'click') {
+          await page.click('#osc-sb-play');
+        } else {
+          await page.focus('#osc-sb-play');
+          await page.keyboard.press('Enter');
+        }
+        res[how].after = await st();
+        res[how].quiet = await quiet(`status key (${how}): nothing sounds after Stop playback`);
+      }
+      res.pollWindow = await seqPollWindow(page, 'status-key');
+      res.pollWindow.quiet = await quiet('status key in the poll window: nothing sounds');
+    } finally {
+      await page.setViewportSize({ width: 1536, height: 1024 });
+      await seqDone(page);
+    }
+    const pressed = (r) => r.before.label === 'Stop playback' && !r.after.editor
+      && !r.after.instrument && !r.after.voice && !!r.quiet;
+    const pw = res.pollWindow;
+    const ok = pressed(res.click) && pressed(res.enter) && pw.played && pw.at.editor
+      && !pw.at.mirror && !pw.after.editor && !pw.after.instrument && !pw.after.voice
+      && !!pw.quiet;
+    return { ok, ...res };
+  });
+
   // ---- accessibility residuals of the final V1 probe (WCAG 2.4.11, focus loss, overlap)
   def('a11y-alerts-never-cover-focus', async ({ page, browserName, run }) => {
     const res = {};

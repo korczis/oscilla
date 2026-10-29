@@ -212,13 +212,30 @@ engine.play = (plan, o = {}) => {
 };
 
 /**
- * Measure (and Studio PLAY) take the output: stop the instrument and the sequencer (their
- * voices fade), and a playing Studio (V3.1; it is not playing while it claims the output).
+ * Measure (and Studio PLAY, and the status-bar stop key) take the output: stop the instrument
+ * and the sequencer (their voices fade), and a playing Studio (V3.1; it is not playing while it
+ * claims the output).
  */
 function stopPlayback(cmp) {
-  if (cmp.seqPlaying && labs.sequencer) labs.sequencer.editor.stop();
+  stopSequence(cmp);
   if (cmp.playing) cmp.stopNow();
   if (typeof cmp.studioOwnsOutput === 'function' && cmp.studioOwnsOutput()) cmp.studioStop();
+}
+
+/** The sequencer is playing now (its editor, not the 150 ms `seqPlaying` copy; V502). */
+const sequencerPlaying = () => !!(labs.sequencer && labs.sequencer.editor.playing);
+
+/**
+ * Stop a playing sequence (C001): decided by the editor, so a sequence started inside the poll
+ * period is stopped too, and the `seqPlaying` copy is cleared at once rather than on the poll.
+ */
+function stopSequence(cmp) {
+  if (!sequencerPlaying()) return;
+  labs.sequencer.editor.stop();
+  if (cmp.seqPlaying) {
+    cmp.seqPlaying = false;
+    notifyAdapter();
+  }
 }
 
 /** Revert the sounding voice from a PeriodicWave to its oscillator type (additive off). */
@@ -532,9 +549,7 @@ function integrationInit() {
   const unlock = () => { if (engine.isSupported()) cmp.ensureAudio(); };
   window.addEventListener('pointerdown', unlock, { capture: true });
   window.addEventListener('keydown', unlock, { capture: true });
-  const stopSequencer = () => {
-    if (cmp.seqPlaying && labs.sequencer) labs.sequencer.editor.stop();
-  };
+  const stopSequencer = () => stopSequence(cmp);
   window.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {
       stopSequencer();
@@ -731,6 +746,7 @@ function createOscillaComponent(ui) {
   const workbench = createWorkbench({
     engine, bridge, labs, exportConfigDoc, applyImport, renderWav, screenshot,
     relayout: () => { if (host) host.resize(); repairCharts(); },
+    stopPlayback, sequencerPlaying,
   });
   const measure = createMeasureUi({
     engine, build: BUILD, stopPlayback,
