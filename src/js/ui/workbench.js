@@ -3,7 +3,8 @@
 // component by main.js (Object.defineProperties, never spread). Audio objects, labs and p5
 // hosts live in `svc` (a closure), never in reactive state.
 //
-// svc: { engine, bridge, labs, exportConfigDoc(cmp), applyImport(cmp, parsed),
+// svc: { engine, bridge, labs, exportConfigDoc(cmp),
+//        applyImport(cmp, parsed) -> { issues, limited },
 //        renderWav(cmp, kind), screenshot(cmp), relayout() }
 
 import { STORAGE_KEYS, WAVEFORM_LABELS } from '../core/constants.js';
@@ -21,7 +22,7 @@ import { scopeWindow } from './p5-views.js';
 import { OSCILLA_VERSION } from './version.js';
 import { formatHz } from '../charts/axes.js';
 import { rovingKeydown } from './app.js';
-import { parseConfigImport, exportFileName } from './config-file.js';
+import { parseConfigImport, exportFileName, importNotice } from './config-file.js';
 import { downloadBlob, readFileText } from './exporters.js';
 import { focusSafely, isFocusable } from './dialogs.js';
 import { sessionStore } from '../core/storage.js';
@@ -385,11 +386,9 @@ export function createWorkbench(svc) {
         this.notify('error', 'Config not imported', parsed.errors.slice(0, 3).join(' '));
         return false;
       }
-      const issues = svc.applyImport(this, parsed);
-      const warn = parsed.warnings.length + issues;
-      this.notify(warn ? 'warning' : 'success', 'Config imported', warn
-        ? `${warn} value(s) were invalid and kept at their previous setting.`
-        : 'All settings were restored.');
+      const { issues, limited } = svc.applyImport(this, parsed);
+      const notice = importNotice({ invalid: parsed.warnings.length + issues, limited });
+      this.notify(notice.level, 'Config imported', notice.message);
       return true;
     },
     async exportAudio(kind) {
