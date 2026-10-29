@@ -30,7 +30,9 @@ rest.
 
 On the graph, drag empty canvas, turn the wheel or scroll with two fingers to pan (Shift turns
 a vertical wheel sideways). Ctrl/⌘ + wheel, a trackpad pinch and a two-finger touch pinch zoom
-at the pointer, as do **+** and **−**. **Minimap** in the graph controls shows the whole graph
+at the pointer, as do **+** and **−**. Chromium and Firefox report a trackpad pinch as a Ctrl
+wheel and Safari as its own gesture events; both are handled, but the browser checks send
+these events rather than a real trackpad pinch. **Minimap** in the graph controls shows the whole graph
 and the part in view; press or drag on it to move there.
 
 ## Links and fullscreen
@@ -82,11 +84,16 @@ and the part in view; press or drag on it to move there.
   list of inputs that can take its output; Enter connects. On a touch screen, tap an output,
   then tap a highlighted input.
 - Drop a cable on empty canvas to add a node that accepts it, already connected.
-- Drop a cable on an input that already has one: the new cable replaces it. Drag a cable off
-  its input to move it to another input, or drop it on empty canvas to delete it. Each is one
-  undo step, and a move the types or a feedback loop forbid is refused with the reason.
-- **Shift+Delete** deletes the selected node and connects what fed it to what it fed, where the
-  types allow (otherwise it deletes the node and says why). **L** lays the graph out in signal
+- Drop a cable on a single input that already has one: the new cable replaces it (a parameter
+  input takes several cables, so the new one is added beside them). Dropped on a node's body, a
+  cable takes a free input first. Drag a cable off its input to move it to another input, or
+  drop it on empty canvas to delete it; a muted cable stays muted, and its depth and mapping
+  carry over only to the same parameter. On a parameter input with several cables, click the
+  cable you want first. Each is one undo step, and a move the types or a feedback loop forbid
+  is refused with the reason.
+- **Shift+Delete** deletes the selected node and connects what fed its signal input (not a
+  modulator of its own parameters) to what it fed, where the types allow, muted if either
+  cable was (otherwise it deletes the node and says why; a source left out is named). **L** lays the graph out in signal
   order as one undo step; **M** mutes or unmutes the selected connections.
 - With a screen reader, a node reads its name, kind, settings and how many input and output
   connections it has; the Inspector's Connections list and the Connect dialog name each port

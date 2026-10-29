@@ -33,10 +33,12 @@ locked visual identity (ADR 0034), shipped inside the single `dist/index.html` a
 from `file://` and the Pages sub-path.
 
 The graph pans by dragging empty canvas, by the wheel or a two-finger scroll, and zooms at the
-pointer with Ctrl/⌘ + wheel, a trackpad or touch pinch, the buttons and the keys; the minimap
-shows the whole graph and moves the view. Every editor has a keyboard path: a Connect… list instead of dragging a cable, a details
-panel instead of dragging a clip, arrow-key nudges, screen-reader announcements, and tap to
-connect on touch, with a split Graph / Timeline / Inspector view below 768 px. Studio output
+pointer with Ctrl/⌘ + wheel, a touch pinch, a trackpad pinch (a Ctrl wheel in Chromium and
+Firefox, gesture events in Safari, both proven with synthesized events only), the buttons and
+the keys; the minimap shows the whole graph and moves the view. Every editor has a keyboard
+path: a Connect… list instead of dragging a cable, a details panel instead of dragging a clip,
+arrow-key nudges, screen-reader announcements, and tap to connect on touch, with a split
+Graph / Timeline / Inspector view below 768 px. Studio output
 and Playground output are exclusive, and a measurement stops the Studio. It stays responsive
 at about 100 nodes and 200 connections (`docs/v31/performance.md`).
 
@@ -55,9 +57,9 @@ bounds, grid, hit widths, schema version, import limits) are tabled in
 
 ## What it does not do
 
-Not built: node groups, dragging several clips at once, autosave and crash recovery. A deep link opens Studio, a view and a shipped template
-only; a saved project or an edited graph is shared as an exported file, never in a URL. The
-Playground's Signal Path view draws the Playground voice as a derived Studio graph
-(`docs/v31/signal-path.md`), read-only; it cannot yet open that voice in the Studio.
+Not built: node groups, dragging several clips at once, autosave and crash recovery. A deep
+link opens Studio, a view and a shipped template only; a saved project or an edited graph is
+shared as an exported file, never in a URL. The Playground's Signal Path view draws the
+Playground voice as a derived Studio graph (`docs/v31/signal-path.md`), read-only; it cannot yet open that voice in the Studio.
 Studio is not a DAW or an audio-file editor, adds no second audio engine, and does not
 replace the Playground or the Measure workspace; it orchestrates them.
