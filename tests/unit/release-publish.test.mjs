@@ -4,7 +4,9 @@
 // the diagnosis of a Pages run that never starts (rule project.release-flow-complete).
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { appendFileSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
+import {
+  appendFileSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync,
+} from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
@@ -46,9 +48,15 @@ const page = (record) => `<!doctype html>${REGION_OPEN}${JSON.stringify(record)}
 const TAGGED_PAGE = page({ commit: HEAD, release: 'tagged', distance: 0 });
 const REDEPLOYED = [{ databaseId: 8001, status: 'completed', conclusion: 'success',
   headSha: HEAD, createdAt: ago(0) }];
+// `localTag` is the commit the local tag v40.0.0 names (null: no local tag); `tags` is what
+// `git tag --merged HEAD --list v*` prints, by default v39.0.0 plus v40.0.0 when the local tag
+// is at HEAD, as in the checkout of an interrupted publish. `git log <tag>..HEAD` of a tag at
+// HEAD is empty, as in git.
 function fakes({ branch = 'main', dirty = '', originMain = HEAD, tagRemote = '', ok = true,
   runs = [], jobs = {}, ancestor = 0,
-  redeploy = (dispatched) => (dispatched ? REDEPLOYED : []), live = TAGGED_PAGE } = {}) {
+  redeploy = (dispatched) => (dispatched ? REDEPLOYED : []), live = TAGGED_PAGE,
+  releaseExists = false, localTag = null,
+  tags = localTag === HEAD ? 'v39.0.0\nv40.0.0' : 'v39.0.0' } = {}) {
   const calls = [];
   let dispatched = false;
   const run = (args) => {
@@ -56,8 +64,10 @@ function fakes({ branch = 'main', dirty = '', originMain = HEAD, tagRemote = '',
     if (args[0] === 'rev-parse' && args[1] === 'HEAD') return HEAD;
     if (args[0] === 'rev-parse' && args[1] === '--abbrev-ref') return branch;
     if (args[0] === 'status') return dirty;
-    if (args[0] === 'tag') return 'v39.0.0';
-    if (args[0] === 'log') return COMMITS;
+    if (args[0] === 'tag') return tags;
+    if (args[0] === 'log') {
+      return localTag === HEAD && args.at(-1) === 'v40.0.0..HEAD' ? '' : COMMITS;
+    }
     throw new Error(`unexpected git ${args.join(' ')}`);
   };
   const sh = (cmd, args) => {
@@ -68,7 +78,9 @@ function fakes({ branch = 'main', dirty = '', originMain = HEAD, tagRemote = '',
     if (cmd === 'git' && args[0] === 'ls-remote') {
       return { status: 0, stdout: `${originMain}\trefs/heads/main` };
     }
-    if (cmd === 'git' && args[0] === 'rev-parse') return { status: 1, stdout: '' }; // no local tag
+    if (cmd === 'git' && args[0] === 'rev-parse') {
+      return localTag ? { status: 0, stdout: localTag } : { status: 1, stdout: '' };
+    }
     if (cmd === 'git' && args[0] === 'merge-base') return { status: ancestor, stdout: '' };
     if (cmd === 'gh' && args[0] === 'workflow' && args[1] === 'run') {
       dispatched = true;
@@ -90,6 +102,9 @@ function fakes({ branch = 'main', dirty = '', originMain = HEAD, tagRemote = '',
       return answer === null ? { status: 1, stdout: '', stderr: 'HTTP 502' }
         : { status: 0, stdout: JSON.stringify({ jobs: answer || [] }) };
     }
+    if (cmd === 'gh' && args[0] === 'release' && args[1] === 'view') {
+      return { status: releaseExists ? 0 : 1, stdout: '' };
+    }
     if (cmd === 'npm' || (cmd === 'gh' && args[0] === 'auth')) {
       return { status: ok ? 0 : 1, stdout: '' };
     }
@@ -101,7 +116,8 @@ function fakes({ branch = 'main', dirty = '', originMain = HEAD, tagRemote = '',
     if (live instanceof Error) throw live;
     return typeof live === 'function' ? live() : live;
   };
-  return { run, sh, calls, out, log: (l) => out.push(l), fetchPage };
+  return { run, sh, calls, out, log: (l) => out.push(l), fetchPage,
+    dispatched: () => dispatched };
 }
 
 // Anything that would create a tag, push, dispatch, watch/release on GitHub or hit the live
@@ -109,7 +125,7 @@ function fakes({ branch = 'main', dirty = '', originMain = HEAD, tagRemote = '',
 // the precondition check needs them.
 const MUTATING = (c) => (c[0] === 'git' && c[1] === 'tag' && !c.includes('--list'))
   || (c[0] === 'git' && c[1] === 'push')
-  || (c[0] === 'gh' && c[1] === 'release')
+  || (c[0] === 'gh' && c[1] === 'release' && c[2] !== 'view')
   || (c[0] === 'gh' && c[1] === 'workflow')
   || c[0] === 'fetch'
   || (c[0] === 'gh' && c[1] === 'run' && c[2] !== 'list' && c[2] !== 'view')
@@ -172,7 +188,7 @@ test('the GitHub Release attaches the committed dist; only a prerelease is marke
 
 test('dry run reports every blocked precondition and exits non-zero', async () => {
   const f = fakes({ branch: 'release/x', dirty: ' M a', originMain: 'f'.repeat(40),
-    tagRemote: `${HEAD}\trefs/tags/v40.0.0`, ok: false });
+    tagRemote: `${OLDER}\trefs/tags/v40.0.0`, ok: false });
   const code = await publish({ argv: [], run: f.run, sh: f.sh, log: f.log, receipt: null,
     fingerprint: FP });
   assert.equal(code, 1);
@@ -704,3 +720,151 @@ test('release notes come from the real commit list, grouped by impact', () => {
   assert.match(notes, /compare\/v40\.0\.0\.\.\.v40\.1\.0/);
   assert.match(notes, new RegExp(FP.sourceDigest));
 });
+
+// R021: the publish of 2026-10-28 (release commit e272fac) pushed its tag, then the
+// dispatched redeploy stayed queued past the bounded wait and the publish ended before
+// verify-deploy and the Release. A re-run refused on the existing tag. A tag on origin at the
+// release commit now resumes.
+const TAG_OBJECT = '9'.repeat(40);
+const TAG_AT = (commit) => `${TAG_OBJECT}\trefs/tags/v40.0.0\n${commit}\trefs/tags/v40.0.0^{}`;
+const UNTAGGED_PAGE = page({ commit: HEAD, release: 'untagged', distance: 0 });
+const yesRun = (f) => publish({ argv: ['--yes'], run: f.run, sh: f.sh, log: f.log,
+  receipt: RECEIPT, fingerprint: FP, fetchPage: f.fetchPage, sleep: async () => {},
+  clock: (() => { let t = NOW; return () => (t += 60_000); })() });
+
+test('R021 dry run: a tag on origin at HEAD resumes after it, mutating nothing', async () => {
+  const f = fakes({ tagRemote: TAG_AT(HEAD) });
+  const code = await publish({ argv: [], run: f.run, sh: f.sh, log: f.log, receipt: RECEIPT,
+    fingerprint: FP });
+  assert.equal(code, 0);
+  const text = f.out.join('\n');
+  assert.match(text, /OK all preconditions hold/);
+  assert.match(text, /RESUME v40\.0\.0 is on origin at f187f66/);
+  assert.doesNotMatch(text, /^ {2}git tag -a/m);
+  assert.doesNotMatch(text, /^ {2}git push/m);
+  assert.match(text, /^ {2}gh workflow run pages\.yml/m);
+  assert.match(text, /^ {2}node scripts\/verify-deploy\.mjs/m);
+  assert.match(text, /^ {2}gh release create v40\.0\.0/m);
+  assert.deepEqual(f.calls.filter(MUTATING), []);
+});
+
+test('R021 --yes resume: no tag or push, redeploy, verify, then the Release', async () => {
+  const f = fakes({ tagRemote: TAG_AT(HEAD) });
+  f.fetchPage = async (url) => {
+    f.calls.push(['fetch', url]);
+    return f.dispatched() ? TAGGED_PAGE : UNTAGGED_PAGE;
+  };
+  const code = await yesRun(f);
+  assert.equal(code, 0, f.out.join('\n'));
+  const cmds = f.calls.map((c) => c.slice(0, 3).join(' '));
+  assert.ok(!cmds.some((c) => c.startsWith('git tag -a') || c.startsWith('git push')),
+    cmds.join('\n'));
+  const at = (re) => cmds.findIndex((c) => re.test(c));
+  assert.ok(at(/^gh workflow run/) >= 0);
+  assert.ok(at(/^node scripts\/verify-deploy\.mjs/) > at(/^gh workflow run/));
+  assert.ok(at(/^gh release create/) > at(/^node scripts\/verify-deploy\.mjs/));
+});
+
+test('R021 --yes resume adopts a dispatched redeploy still waiting', async () => {
+  let polls = 0;
+  const pending = { databaseId: 7001, headSha: HEAD, createdAt: ago(60) };
+  const f = fakes({ tagRemote: TAG_AT(HEAD), live: TAGGED_PAGE,
+    redeploy: () => {
+      polls += 1;
+      return [polls < 3 ? { ...pending, status: 'queued', conclusion: '' }
+        : { ...pending, status: 'completed', conclusion: 'success' }];
+    } });
+  f.fetchPage = async (url) => {
+    f.calls.push(['fetch', url]);
+    return polls >= 3 ? TAGGED_PAGE : UNTAGGED_PAGE;
+  };
+  const code = await yesRun(f);
+  assert.equal(code, 0, f.out.join('\n'));
+  assert.equal(f.dispatched(), false, 'the waiting run 7001 is adopted, no second dispatch');
+  assert.match(f.out.join('\n'), /7001/);
+  assert.ok(f.calls.some((c) => c[0] === 'gh' && c[1] === 'release' && c[2] === 'create'));
+});
+
+test('R021 --yes resume: a page already tagged for HEAD needs no redeploy', async () => {
+  const f = fakes({ tagRemote: TAG_AT(HEAD), live: TAGGED_PAGE });
+  const code = await yesRun(f);
+  assert.equal(code, 0, f.out.join('\n'));
+  assert.equal(f.dispatched(), false);
+  assert.ok(f.calls.some((c) => c[0] === 'gh' && c[1] === 'release' && c[2] === 'create'));
+});
+
+test('R021: a tag on origin at another commit still refuses, naming that commit', async () => {
+  const f = fakes({ tagRemote: TAG_AT(OLDER) });
+  const code = await publish({ argv: ['--yes'], run: f.run, sh: f.sh, log: f.log,
+    receipt: RECEIPT, fingerprint: FP });
+  assert.equal(code, 1);
+  assert.match(f.out.join('\n'), /BLOCKED tag v40\.0\.0 already exists on origin at 0a1b2c3, not /);
+  assert.deepEqual(f.calls.filter(MUTATING), []);
+});
+
+test('R021: resuming when the GitHub Release already exists refuses', async () => {
+  const f = fakes({ tagRemote: TAG_AT(HEAD), releaseExists: true });
+  const code = await publish({ argv: ['--yes'], run: f.run, sh: f.sh, log: f.log,
+    receipt: RECEIPT, fingerprint: FP });
+  assert.equal(code, 1);
+  assert.match(f.out.join('\n'), /BLOCKED the GitHub Release v40\.0\.0 already exists/);
+  assert.deepEqual(f.calls.filter(MUTATING), []);
+});
+
+// Review R-1 and R-2 of #242. The interrupted run left its own local tag at HEAD: that tag is
+// never the previous release, and the local tag decides whether the publish may resume.
+const notesOf = (f) => {
+  const create = f.calls.find((c) => c[0] === 'gh' && c[1] === 'release' && c[2] === 'create');
+  return readFileSync(create[create.indexOf('--notes-file') + 1], 'utf8');
+};
+
+test('R021 resume with the local tag at HEAD: the notes run from the previous release',
+  async () => {
+    const dry = fakes({ tagRemote: TAG_AT(HEAD), localTag: HEAD });
+    assert.equal(await publish({ argv: [], run: dry.run, sh: dry.sh, log: dry.log,
+      receipt: RECEIPT, fingerprint: FP }), 0, dry.out.join('\n'));
+    const text = dry.out.join('\n');
+    assert.match(text, /RESUME v40\.0\.0/);
+    assert.match(text, /previous tag: v39\.0\.0; 3 commit\(s\) in the notes/);
+    assert.match(text, /compare\/v39\.0\.0\.\.\.v40\.0\.0/);
+    assert.ok(dry.calls.some((c) => c.join(' ') === 'git log --format=%H%x1f%s%x1f%b%x1e '
+      + 'v39.0.0..HEAD'));
+    const f = fakes({ tagRemote: TAG_AT(HEAD), localTag: HEAD, live: TAGGED_PAGE });
+    assert.equal(await yesRun(f), 0, f.out.join('\n'));
+    const notes = notesOf(f);
+    assert.match(notes, /### Features\n\n- \*\*labs:\*\* new lab/);
+    assert.match(notes, /compare\/v39\.0\.0\.\.\.v40\.0\.0/);
+    assert.doesNotMatch(notes, /v40\.0\.0\.\.\.v40\.0\.0/);
+  });
+
+test('R021: a local tag at another commit refuses although origin has it at HEAD', async () => {
+  const f = fakes({ tagRemote: TAG_AT(HEAD), localTag: OLDER });
+  const code = await publish({ argv: ['--yes'], run: f.run, sh: f.sh, log: f.log,
+    receipt: RECEIPT, fingerprint: FP });
+  assert.equal(code, 1);
+  const text = f.out.join('\n');
+  assert.match(text, /BLOCKED tag v40\.0\.0 already exists locally at 0a1b2c3, not HEAD f187f66/);
+  assert.doesNotMatch(text, /RESUME/);
+  assert.deepEqual(f.calls.filter(MUTATING), []);
+});
+
+test('R021: a tag made locally at HEAD whose push failed refuses and says it was never pushed',
+  async () => {
+    const f = fakes({ localTag: HEAD });
+    const code = await publish({ argv: ['--yes'], run: f.run, sh: f.sh, log: f.log,
+      receipt: RECEIPT, fingerprint: FP });
+    assert.equal(code, 1);
+    const blocked = f.out.filter((l) => l.includes('BLOCKED')).join('\n');
+    assert.match(blocked, /tag v40\.0\.0 exists locally at HEAD f187f66 but was never pushed/);
+    assert.match(blocked, /git push origin refs\/tags\/v40\.0\.0/);
+    assert.match(blocked, /git tag -d v40\.0\.0/);
+    assert.doesNotMatch(blocked, /not HEAD/);
+    assert.deepEqual(f.calls.filter(MUTATING), []);
+    // A local tag only, at another commit, keeps the plain refusal.
+    const g = fakes({ localTag: OLDER });
+    assert.equal(await publish({ argv: ['--yes'], run: g.run, sh: g.sh, log: g.log,
+      receipt: RECEIPT, fingerprint: FP }), 1);
+    assert.match(g.out.join('\n'),
+      /BLOCKED tag v40\.0\.0 already exists locally at 0a1b2c3, not HEAD/);
+    assert.deepEqual(g.calls.filter(MUTATING), []);
+  });
