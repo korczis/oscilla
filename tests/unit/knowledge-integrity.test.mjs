@@ -1104,6 +1104,9 @@ const ADR_NOT_A_CAPABILITY = new Map([
   ['0057', 'release evidence: what proves a static Pages deployment'],
   ['0060', 'a product-path decision (Q003): no commercial path before v4.0; it adds no'
     + ' capability of the page'],
+  ['0061', 'the UI system (Flowbite Pro on Tailwind, built and inlined): rule'
+    + ' project.ui-uses-flowbite-pro and tests/unit/ui-flowbite-pro.test.mjs hold it; it adds'
+    + ' no capability of the page'],
 ]);
 
 /** ADR numbers (from 0011 on) that `corpus` never cites, and exemptions it does cite. */
