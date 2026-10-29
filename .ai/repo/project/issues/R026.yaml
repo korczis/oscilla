@@ -1,7 +1,7 @@
 id: R026
 milestone: M056
 serves:
-  - "engineering-integrity#pr-names-its-plan"
+  - "engineering-integrity#github-drift-reported"
 title: "GitHub drift is reported on a schedule; cadence issues carry release-overdue"
 slug: github-drift-reported-on-a-schedule
 priority: p3

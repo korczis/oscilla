@@ -1,7 +1,7 @@
 id: R024
 milestone: M056
 serves:
-  - "engineering-integrity#pr-names-its-plan"
+  - "engineering-integrity#forge-projection-adopted"
 title: "Adopt Majordomus forge: the rendered projection workflows and the actor of pr-meta.yaml"
 slug: adopt-majordomus-forge-projection
 priority: p2

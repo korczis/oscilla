@@ -1,7 +1,7 @@
 id: R025
 milestone: M056
 serves:
-  - "engineering-integrity#pr-names-its-plan"
+  - "engineering-integrity#github-backfilled"
 title: "Backfill GitHub from the records: labels, milestones, open and merged pull requests"
 slug: backfill-github-from-the-records
 priority: p3

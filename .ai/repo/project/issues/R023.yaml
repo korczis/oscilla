@@ -1,7 +1,7 @@
 id: R023
 milestone: M056
 serves:
-  - "engineering-integrity#pr-names-its-plan"
+  - "engineering-integrity#release-notes-first-parent"
 title: "Release analysis and notes read first-parent history, with pull request and plan links"
 slug: release-analysis-reads-first-parent-history
 priority: p2
