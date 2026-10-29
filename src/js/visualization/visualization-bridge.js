@@ -16,6 +16,7 @@ import { isNum, sig } from '../core/math.js';
 import { formatFrequency, formatMs, formatPeriod, formatWavelength } from '../core/frequency.js';
 import { planFreqAt } from '../audio/patterns.js';
 import { additiveHarmonicTable, harmonicTable } from './harmonics.js';
+import { assertOutputOwner } from './output-owner.js';
 import { playgroundVoiceModel } from '../studio/playground-voice.js';
 import { projectSignalPath } from '../studio/signal-path-projection.js';
 
@@ -93,7 +94,9 @@ export class VisualizationBridge {
       vizMode: 'wave', frequency: 440, waveform: 'sine', gain: DEFAULT_GAIN, rangeMin: 20, rangeMax: 20000,
       nyquist: PROVISIONAL_SAMPLE_RATE / 2, safeMax: (PROVISIONAL_SAMPLE_RATE / 2) * SAFE_NYQUIST_FACTOR,
       provisional: true, spectrumScale: 'log', overlays: { regions: true, notes: false, thirds: false },
-      plan: null, playing: false, status: 'READY', a4: 440, source: 'single', reducedMotion: false, mic: false, paused: false,
+      // outputOwner: what sounds through the output analyser ('instrument' | 'sequencer' |
+      // 'studio' | null), set by the composition root through setOutputOwner (C013).
+      plan: null, playing: false, outputOwner: null, status: 'READY', a4: 440, source: 'single', reducedMotion: false, mic: false, paused: false,
       dual: { fa: 440, fb: 442, la: 0.8, lb: 0.8, stereo: false, waveA: 'sine', waveB: 'sine' },
       // Engine scalars copied by viz.pull() once per frame without allocating: the sketch reads
       // these and the analyser buffers, never the engine object graph.
@@ -256,7 +259,8 @@ export class VisualizationBridge {
     const s = this.state;
     // the visible pause toggle and reduced motion (when idle) both stop the loop; a stopped loop
     // still redraws once per state change and on resize
-    const want = !this.hidden && !s.paused && !(s.reducedMotion && !s.playing && !s.mic);
+    const sounding = s.playing || !!s.outputOwner;
+    const want = !this.hidden && !s.paused && !(s.reducedMotion && !sounding && !s.mic);
     if (want !== this.looping) {
       this.looping = want;
       for (const p of ps) { if (want) p.loop(); else p.noLoop(); }
@@ -264,6 +268,20 @@ export class VisualizationBridge {
     this.sketchState = this.hidden ? 'paused (tab hidden)' : want ? 'running'
       : s.paused ? 'paused (animation toggle: redraw on change)' : 'idle (reduced motion: redraw on change)';
     this.requestRedraw();
+  }
+
+  /**
+   * Which source owns the output analyser now: 'instrument' | 'sequencer' | 'studio' | null
+   * (visualization/output-owner.js). A plain string from the composition root, never an engine,
+   * store or transport object. The scope draws the live trace while there is an owner, and the
+   * loop keeps running under reduced motion while one sounds. Anything else throws a TypeError
+   * and changes nothing.
+   */
+  setOutputOwner(owner) {
+    const o = assertOutputOwner(owner);
+    if (o === this.state.outputOwner) return;
+    this.state.outputOwner = o;
+    this.updateLoop(); // redraws once when the loop stays stopped
   }
 
   /** The wave view's layout for the current canvas size; notifies onWaveLayout on a change. */

@@ -18,6 +18,7 @@ import { LEARN_VIZ_TARGETS } from '../data/learn.js';
 import { additiveHarmonicTable, harmonicTable } from '../visualization/harmonics.js';
 import { totalDurationMs } from '../sequencer/model.js';
 import { scopeWindow } from './p5-views.js';
+import { OUTPUT_OWNER_NAMES, outputOwnerOf } from '../visualization/output-owner.js';
 import { OSCILLA_VERSION } from './version.js';
 import { formatHz } from '../charts/axes.js';
 import { rovingKeydown } from './app.js';
@@ -84,6 +85,18 @@ export function createWorkbench(svc) {
     },
     get gainFill() { return `${this.gainPct}%`; },
     get isSounding() { return this.playing || this.seqPlaying; },
+    /**
+     * Who owns the one output now ('instrument' | 'sequencer' | 'studio' | null), for the views
+     * that describe it (C013). The Studio is read through its transport (studioOwnsOutput);
+     * studio.playing, the workspace's mirror of the transport's state events, only makes the
+     * getter reactive.
+     */
+    get outputOwner() {
+      const st = this.studio;
+      const studio = !!(st && st.playing) && (typeof this.studioOwnsOutput !== 'function'
+        || this.studioOwnsOutput());
+      return outputOwnerOf({ instrument: this.playing, sequencer: this.seqPlaying, studio });
+    },
     get holdLabel() {
       if (this.status === 'SUSPENDED') return 'Waiting for audio';
       if (this.playing && this.releasing) return 'Releasing';
@@ -181,7 +194,20 @@ export function createWorkbench(svc) {
       const w = `${this.timeWindowMs} ms window`;
       const f = this.source === 'dual' ? this.dualFa : this.metricFrequency;
       const sr = this.effectiveSampleRate;
-      if (!this.playing) {
+      const owner = this.outputOwner;
+      if (owner && owner !== 'instrument') {
+        // Another source sounds through the same output analyser: its trace, at full scale.
+        const an = svc.engine && svc.engine.analyser;
+        const sw = scopeWindow({ requestedMs: this.timeWindowMs,
+          bufferLength: an ? an.fftSize : 0, sampleRate: sr, freqHz: 0 });
+        const lw = sw.limited
+          ? `${Math.round(sw.ms)} ms window (the analyser buffer limit; ${this.timeWindowMs} ms `
+            + 'requested)'
+          : w;
+        return `Live output analyser waveform (${OUTPUT_OWNER_NAMES[owner]}) over a ${lw}, `
+          + 'relative to full scale.';
+      }
+      if (owner !== 'instrument') {
         const wave = this.source === 'dual' ? this.dual.a.wave : this.waveform;
         return `Waveform, not playing: computed ${wave} at ${formatFrequency(f)} over a ${w}. `
           + 'Hold to Play shows the live output analyser trace.';

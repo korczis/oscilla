@@ -35,6 +35,7 @@ import { buildPeriodicWave } from './audio/additive.js';
 import { encodeWav, parseWav } from './audio/wav.js';
 import { buildPlan, planFreqAt, PATTERNS } from './audio/patterns.js';
 import { createVisualizationBridge } from './visualization/visualization-bridge.js';
+import { requestedFrequencyFor } from './visualization/output-owner.js';
 import { startVisualizer, createDefaultViews } from './visualization/p5-host.js';
 import { harmonicTable } from './visualization/harmonics.js';
 import { createInstrument } from './core/instrument.js';
@@ -106,9 +107,17 @@ const adapter = {
   getSampleRate: () => engine.sampleRate,
   getAnalyser: () => engine.analyser,
   getMicAnalyser: () => null,
+  // The Spectrum's requested marker follows what sounds (C013): the instrument while it plays,
+  // else the sequence while the editor plays (its own flag, not the 150 ms seqPlaying copy; null
+  // in a gap hides the marker and its chip), else the instrument's idle frequency. Read every
+  // frame: currentFrequency() reads the audio clock and allocates nothing.
   requestedFrequency: () => {
     if (!app) return null;
-    return app.source === 'dual' ? app.dualFa : app.metricFrequency;
+    const ed = labs.sequencer ? labs.sequencer.editor : null;
+    const seq = !!(ed && ed.playing);
+    return requestedFrequencyFor(app.playing,
+      app.source === 'dual' ? app.dualFa : app.metricFrequency, seq,
+      seq ? ed.currentFrequency() : null);
   },
   isPlaying: () => !!(app && (app.playing || app.seqPlaying)),
   getA4: () => (app && app.a4) || 440,
@@ -564,6 +573,9 @@ function integrationInit() {
 
   // live state -> plan, readouts, bridge and live audio (unthrottled, K2)
   Alpine.effect(() => cmp.syncViz());
+  // C013: the views of the one output follow its owner (instrument, sequencer or Studio), handed
+  // to the bridge as a plain string on every play, stop and Studio transport state change.
+  Alpine.effect(() => bridge.setOutputOwner(cmp.outputOwner));
   // Calm announcements (V1 a7b7a23): only PLAYING, SUSPENDED, STOPPED and ERROR, kept until the
   // next one; RELEASING/READY and readout changes are not announced.
   Alpine.effect(() => {

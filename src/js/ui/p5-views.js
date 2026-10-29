@@ -2,8 +2,10 @@
 // V1 views (wave, path, phase):
 //   scope      the real output analyser trace over the selected time window (5–100 ms), with a
 //              rising-zero-crossing trigger, ms ticks and a min/max band when the cycles are
-//              denser than the pixels; idle: the configured waveform computed analytically over
-//              the same window, drawn dim and labelled "not playing".
+//              denser than the pixels, live whenever a source owns the output
+//              (st.outputOwner: the instrument, scaled to its set gain; the sequencer or the
+//              Studio, at full scale and named in the label); idle: the configured waveform
+//              computed analytically over the same window, drawn dim and labelled "not playing".
 //   harmonics  the theoretical partials of the built-in oscillator (bridge.state.harm, from
 //              visualization/harmonics.js harmonicTable) as bars on a log-frequency axis,
 //              with the Nyquist line; partials above Nyquist are outlined only. With additive
@@ -15,6 +17,7 @@
 import { clamp, sig } from '../core/math.js';
 import { formatFrequency } from '../core/frequency.js';
 import { waveSample } from '../visualization/waveform.js';
+import { OUTPUT_OWNER_NAMES } from '../visualization/output-owner.js';
 import {
   HARMONIC_DB_GRID, harmonicAxis, harmonicBarFraction,
 } from '../visualization/harmonics.js';
@@ -125,8 +128,12 @@ export function createScopeView({ getWindowMs }) {
       const requestedMs = clamp(Number(getWindowMs()) || 5, 0.5, 200);
       const d = L.timeData;
       const sr = L.sampleRate;
-      const live = !!(d && st.playing && sr > 0);
-      const fLive = Number.isFinite(L.inst) && L.inst > 0 ? L.inst : L.refFreq;
+      // Live while anything owns the one output (the analyser after engine.master). Only the
+      // instrument's frequency and gain describe what sounds when the instrument owns it.
+      const owner = st.outputOwner || (st.playing ? 'instrument' : null);
+      const live = !!(d && owner && sr > 0);
+      const inst = owner === 'instrument';
+      const fLive = !inst ? 0 : Number.isFinite(L.inst) && L.inst > 0 ? L.inst : L.refFreq;
       // Live: the window the analyser buffer can fill (labelled and ticked as such).
       const sw = live ? scopeWindow({ requestedMs, bufferLength: d.length, sampleRate: sr,
         freqHz: fLive }) : null;
@@ -152,7 +159,7 @@ export function createScopeView({ getWindowMs }) {
       uiLabel(p, '0', x0 - 4, ymid + 3, pal.muted, 8.5, p.RIGHT);
       uiLabel(p, '-1', x0 - 4, ymid + hh + 3, pal.muted, 8.5, p.RIGHT);
 
-      const g = Math.max(st.gain, 1e-4);
+      const g = inst ? Math.max(st.gain, 1e-4) : 1;
       if (live) {
         const win = sw.samples;
         let start = 0;
@@ -191,11 +198,14 @@ export function createScopeView({ getWindowMs }) {
           drawBand(p, pal, x0, cols, bandMin, bandMax, pal.accent, bandFill(p, pal));
         }
         const room = x1 - x0 - 4;
-        const head = `output analyser · ${msLabel(windowMs)} window${sw.limited
+        const src = inst ? '' : ` · ${OUTPUT_OWNER_NAMES[owner]}`;
+        const head = `output analyser${src} · ${msLabel(windowMs)} window${sw.limited
           ? ` (buffer limit; ${msLabel(requestedMs)} requested)` : ''}`;
+        const scale = inst ? 'relative to set gain' : 'relative to full scale';
         uiLabel(p, uiPickFit(p, [
-          `${head} · relative to set gain${sparse ? ' · < 4 samples per cycle: min/max band' : ''}`,
-          `${head}${sparse ? ' · min/max band' : ''}`, head, 'output analyser'], 9, room),
+          `${head} · ${scale}${sparse ? ' · < 4 samples per cycle: min/max band' : ''}`,
+          `${head}${sparse ? ' · min/max band' : ''}`, head, `output analyser${src}`,
+          'output analyser'], 9, room),
         x0 + 2, 11, pal.muted, 9);
         return;
       }
