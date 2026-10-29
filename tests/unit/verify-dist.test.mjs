@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { verifyHtml } from '../../scripts/verify-dist.mjs';
+import { cssReferences, decodeCssEscapes, verifyHtml } from '../../scripts/verify-dist.mjs';
 
 const VENDOR = 'window.lib=function(){return fetch("x")};';
 const vendors = new Map([['lib@1.0.0', VENDOR]]);
@@ -90,12 +90,36 @@ test('a CSS url() quoted with one quote and holding the other is examined (F001)
   fails(css('.a{background:image-set("https://evil.example/x.png" 1x)}'), /image-set/);
   fails(css(".a{background:-webkit-image-set('img/a.png' 1x)}"), /image-set/);
   // A url( the scan cannot parse is a problem, never silently skipped.
-  fails(css('.a{background:url("https://evil.example/x.png)}'), /url\(/);
+  const broken = '.a{background:url("https://evil.example/x.png)}';
+  fails(css(broken), /1 CSS url\( the scan cannot parse/);
+  assert.equal(cssReferences(broken).unparsed, 1, 'exactly the one url( is unparsed');
   // The flowbite plugin's data: URIs (mini-svg-data-uri, the other quote inside) pass.
   assert.deepEqual(check(css(".a{background-image:url(\"data:image/svg+xml,%3csvg xmlns='"
     + "http://www.w3.org/2000/svg'%3e%3c/svg%3e\")}")), []);
   assert.deepEqual(check(css('.a{background:image-set("data:image/png;base64,AA" 1x)}')), []);
   assert.deepEqual(check(css('.a{fill:url(#grad)}')), []);
+});
+
+test('CSS escapes do not hide a url(), image-set() or @import (F001 review R-7)', () => {
+  const css = (rule) => doc({ head: `<style>${rule}</style>` });
+  // A hex escape (with its optional trailing space) or a character escape in the function name
+  // or the at-keyword is the same token to the browser.
+  fails(css('.a{background:\\75 rl(https://evil.example/x.png)}'), /evil\.example/);
+  fails(css('.a{background:\\000075rl("https://evil.example/x.png")}'), /evil\.example/);
+  fails(css('.a{background:u\\rl(https://evil.example/x.png)}'), /evil\.example/);
+  fails(css('@\\69mport "https://evil.example/a.css";'), /@import/);
+  fails(css('@\\import url(x.css);'), /@import/);
+  fails(css('.a{background:\\69mage-set("https://evil.example/x.png" 1x)}'), /image-set/);
+  // Escapes inside the URL are decoded too, and an escaped quote does not end the string.
+  fails(css('.a{background:url("ht\\74ps://evil.example/x.png")}'), /evil\.example/);
+  fails(css('.a{background:url("https://evil.example/\\"x.png")}'), /evil\.example/);
+  assert.deepEqual(check(css('.a{background:url("\\64 ata:image/png;base64,AA")}')), []);
+  assert.deepEqual(check(css('.a{background:url("data:image/svg+xml,a\\"b")}')), []);
+  // Escaped selectors and content strings (Tailwind's .lg\:w-16, a glyph) stay clean.
+  assert.deepEqual(check(css('.lg\\:w-16{width:4rem}.b:after{content:"\\2014\\""}')), []);
+  // An escaped "(" is part of the name, not a function opening, as in the browser.
+  assert.deepEqual(check(css('.url\\(x\\){color:red}')), []);
+  assert.equal(decodeCssEscapes('\\75 rl(\\28 \\"\\\n'), 'url(%28%22');
 });
 
 test('source maps, missing notice and malformed markup fail', () => {
