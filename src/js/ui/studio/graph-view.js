@@ -137,7 +137,7 @@ export function runtimeStatus(model, runtime, revision = null) {
   return { nodes, edges };
 }
 
-/** The filter adapter's reason for not applying Q modulation (adapters/nodes.js modTarget). */
+/** The filter adapter's reason for not applying Q modulation (adapters/processing.js modTarget). */
 export const FILTER_Q_NOT_APPLIED = 'Low-/high-pass Q is a dB AudioParam in Web Audio; a linear Q '
   + 'modulation would be mis-scaled, so it is not applied.';
 
@@ -145,7 +145,7 @@ export const FILTER_Q_NOT_APPLIED = 'Low-/high-pass Q is a dB AudioParam in Web 
  * Why a modulation the compiler routes cannot be heard, or null (§237: a graph must not look
  * live when it is not). Two rules, both from the node's own model:
  *   - Filter Q on a low-pass or high-pass filter: the adapter does not apply it (Q is a dB
- *     AudioParam there; adapters/nodes.js filter.modTarget, the same reason text; the parity
+ *     AudioParam there; adapters/processing.js filter.modTarget, the same reason text; the parity
  *     with the runtime's inactive edges is a unit test).
  *   - Filter gain on any type but peaking: Web Audio ignores a biquad's gain for low-pass,
  *     high-pass, band-pass and notch (the registry's own constraint: "gain applies to peaking

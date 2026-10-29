@@ -89,7 +89,7 @@ export const CLIP_TARGET_TEXT = Object.freeze({
 
 /**
  * Parameters a lane may hold but cannot play: (node, paramDef) -> reason | null. The adapters
- * (adapters/nodes.js modTarget) refuse the same parameters; the R7 test proves they agree.
+ * (adapters/processing.js modTarget) refuse the same parameters; the R7 test proves they agree.
  */
 const LANE_LIMITS = Object.freeze({
   filter: (node, p) => {

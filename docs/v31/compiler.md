@@ -8,7 +8,9 @@ runtime patching). ADR 0035 says why; this document says how. Code:
 | --- | --- |
 | `src/js/studio/compiler.js` | `compileStudio` (model → plan), `diffPlans`, `instantiateNode`, `createEdgeHandle`, `computeBases`, `disposeHandle` |
 | `src/js/studio/runtime.js` | `createStudioRuntime`: id → handle map, transactional `apply`, `start` / `stop` / `dispose`, `debugInfo`, owned parameters (`setOwnedParams`, `baseOffset`) |
-| `src/js/studio/adapters/nodes.js` | one adapter per registry node type, built only from existing builders |
+| `src/js/studio/adapters/nodes.js` | the adapter contract (header) and `NODE_ADAPTERS`, one adapter per registry node type, built only from existing builders |
+| `src/js/studio/adapters/{sources,modulation,processing,output,analysis,measurement}.js` | the adapters by node category, as the definitions in `src/js/studio/nodes/` (K005) |
+| `src/js/studio/adapters/common.js` | the helpers the adapters share (`setParam`, `free`, `linearOnly`, `inertHandle`) |
 | `src/js/studio/adapters/engine-hooks.js` | the single place that touches the AudioEngine instance; accounting closures |
 | `src/js/studio/adapters/ramp.js` | click-free route ramps (ADR 0001 applied to edge gains) |
 
