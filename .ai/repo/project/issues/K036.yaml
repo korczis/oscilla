@@ -1,0 +1,47 @@
+id: K036
+milestone: M062
+serves:
+  - "playable-instrument#chart-cost"
+title: "One frame loop for every continuous chart draw, the p5 fps cap kept, no work while hidden"
+slug: one-frame-loop-for-every-continuous-chart-draw-the-p5-fps-ca
+priority: p2
+profile: implementation
+objective: "Lands as perf(charts). frame-loop.onFrame(fn, { hosts, essential }) skips a subscriber when none of its hosts is rendered (display none or an inactive tab) and intersecting (one cached IntersectionObserver flag per host), so one subscriber can serve several views, and skips every non-essential subscriber while setFramesPaused (the Pause animation toggle) is on; an essential subscriber (a transport clock or a playhead) runs while paused, so a playing position is never shown stale. Its tick iterates a subscriber snapshot replaced only on subscribe and unsubscribe, so a tick allocates nothing (frame-loop.js:12 spreads [...subscribers] on every tick today). The main p5 visualizer runs noLoop and is redrawn from the frame loop through a time gate that keeps its 30 fps idle and 60 fps playing cap (p5-host.js:139 and :177), so a 120 Hz display does not double its draws; visualization-bridge updateLoop becomes a subscriber gate. One-shot rAFs that coalesce an edit (timeline-editor.js, graph-editor.js, visualization-bridge requestRedraw) are not loops and are listed by name. phase-stereo stops getData() while its tab hides the view; measure-charts redraw() sets a dirty flag while its host has no size; the spectrum setShow flags become a bitmask; the V1 wave and phase views leave createDefaultViews() (main.js never selects them) and the maths the tests import stays. It creates tests/browser/chart-cost.cjs with every check of intent criterion chart-cost, and tests/browser/chart-cost-baseline.json records the per-tick allocation ceiling and the checks still pending, which only shrink: scope vertex calls (K032), phase and Lissajous (K034), the hidden live RTA (K037) and the Studio transport tick, which K057 moves onto the loop after E003 splits workspace.js. It adds no markup, so it waits on no F issue."
+why: "Owner order of 2026-10-29: \"make the charts really sexy, modern, interactive\", for all charts; reviewer f3 scoped it to every surface that draws data. Revised after f3's review of the plan (CHANGES-REQUESTED, 2026-10-29): owner decisions are Q issues under M063, Pro chrome waits on F002 and on the card issue of its workspace, every chart that claims chart-interaction delivers the keyboard cursor and the announced readout, chart keys never take Escape or Space; revision 3 answers f3's delta review. Facts checked against origin/main at e2720e07 and the branches of #251, #253, #263 and #265 (charts-plan.md, charts-plan-changes.md)."
+scope:
+  - "src/js/charts/frame-loop.js"
+  - "src/js/visualization/p5-host.js"
+  - "src/js/visualization/visualization-bridge.js"
+  - "src/js/ui/p5-views.js"
+  - "src/js/labs/phase-stereo.js"
+  - "src/js/charts/measure-charts.js"
+  - "src/js/charts/spectrum-chart.js"
+  - "tests/unit/frame-loop.test.mjs"
+  - "tests/browser/chart-cost.cjs"
+  - "tests/browser/chart-cost-baseline.json"
+  - "package.json"
+  - "README.md"
+  - "tests/visual"
+  - "tests/README.md"
+  - "dist"
+depends_on:
+  - "K028"
+  - "K056"
+acceptance_criteria:
+  - "tests/unit/frame-loop.test.mjs: a subscriber whose hosts are all hidden is skipped and one with any host shown runs; no rAF is requested while every host is hidden; a non-essential subscriber is skipped while frames are paused and an essential one is not; the subscriber snapshot is the same object across ticks without a subscription change, and unsubscribing inside a tick is safe; the p5 time gate draws at most 30 per second idle and 60 playing with a fake clock at 60, 120 and 144 Hz."
+  - "tests/browser/chart-cost.cjs wraps requestAnimationFrame and counts self-re-arming chains: at most one is armed while the Playground plays, the named one-shots excepted, and while the Studio transport plays once K057 removes its pending entry; p5 draws over a polled window stay at or below the cap times the measured elapsed time plus one; the draw hooks of hidden-tab hosts do not rise; in Chromium, the bytes allocated per frame-loop tick while a tone plays (CDP heap sampling over a polled window) are at or below the ceiling in tests/browser/chart-cost-baseline.json, with the before and after figures in the pull request, and the Firefox and WebKit legs skip that one check with the reason; the vertex and beginShape spy over the scope, phase and Lissajous views, the hidden live RTA check and the Studio tick check run and are recorded as pending; --require-complete fails while any check is pending or the ceiling is above 60 KB. Browser checks run inside tests/browser/lib/suite.cjs, wait through tests/browser/lib/wait.cjs with a named deadline and assume no sample rate (44.1 kHz in CI, 48 kHz on the Mac); tests/browser/timing-baseline.json does not grow (project.suite-harness, project.bounded-test-timing)."
+  - "package.json runs tests/browser/chart-cost.cjs in npm run test:browser, and README.md's Testing table names it, so CI and the release gate run it."
+  - "tests/browser/perf-budgets.cjs (npm run test:perf, run by hand) keeps oscilla:ready within budget, stated in the pull request."
+  - "The chart reads existing AnalyserNodes on the main thread only, creates no audio node and adds no work to the audio path, and no draw loop writes the DOM per frame (project.audio-engine-discipline v2)."
+  - "Its paths are not guarded (scripts/review-verdict.mjs GUARDED); as a perf change it is outside project.fail-first and still adds the tests above."
+  - "The visual references of the analysis region, if it moves, are re-accepted in darwin-arm64 and linux-x64, in each theme that has references (light ones exist once F011 lands), with the reason \"p5 driven from the shared frame loop\" in the pull request body (npm run test:visual)."
+  - "scripts/size-report.mjs shows at most 0.5 KB gzip added, compiled CSS included, with the base and head figures in the pull request body; the sum of M062's figures stays within the cap Q014 records, under the 1 000 000 B gzip budget (project.single-file-deliverable)."
+  - "tests/README.md has a row for each new test; dist is rebuilt and npm run build:check passes."
+validation:
+  - "node --test tests/unit/frame-loop.test.mjs"
+  - "node tests/browser/chart-cost.cjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-10-29
+updated_at: 2026-10-29
