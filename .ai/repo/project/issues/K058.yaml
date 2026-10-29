@@ -15,6 +15,7 @@ scope:
   - "tests/unit/demo-song.test.mjs"
   - "tests/unit/v31-studio-templates.test.mjs"
   - "tests/browser/demo-song.cjs"
+  - "tests/browser/qa-regressions.cjs"
   - "docs/v31/patches-and-provenance.md"
   - "docs/v31/studio-report.md"
   - "tests/README.md"

@@ -29,8 +29,10 @@
 //   bio-sources-keyboard [17]     a keyboard-reachable sources list with the citations
 //   safety-notice [V247]          first-run notice; focus dismiss → reopen → dismiss; stored
 //   no-inert-controls [E007]      rule project.no-inert-surfaces (c): every data-osc control
-//                                 of every workspace, Studio template selection and library
-//                                 node type has a handler registered for it, or is listed in
+//                                 of every workspace, Studio template selection (every node
+//                                 and edge, one clip per track, kind and block type or
+//                                 action) and library node type has a handler registered for
+//                                 it, or is listed in
 //                                 tests/unit/no-inert-surfaces-allowance.json; a fixture
 //                                 control without one is found
 // Exit code 1 when any check fails.
@@ -360,9 +362,14 @@ async function walkControls(page) {
     const r = await page.evaluate(() => {
       const s = window.OSCILLA.studio;
       const m = s.model;
+      // One clip per track, kind and block type or action: clips that differ only in their
+      // times and values show the same Inspector controls (the demo song has 744 of them).
+      const variant = (c) => `${c.trackId}|${c.kind}|${(c.payload && (c.payload.blockType
+        || c.payload.action)) || ''}`;
+      const clips = [...new Map(m.timeline.clips.map((c) => [variant(c), c])).values()];
       const sels = [...m.graph.nodes.map((n) => ({ nodes: [n.id] })),
         ...m.graph.edges.map((e) => ({ edges: [e.id] })),
-        ...m.timeline.clips.map((c) => ({ clips: [c.id] }))];
+        ...clips.map((c) => ({ clips: [c.id] }))];
       const out = [];
       for (const sel of sels) {
         s.store.dispatch({ type: 'SELECTION_CHANGE', selection: sel });
