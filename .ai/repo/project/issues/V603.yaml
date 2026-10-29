@@ -36,11 +36,13 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-18
-updated_at: 2026-10-28T18:47:36Z
+updated_at: 2026-10-28T23:31:05Z
 started_at: 2026-10-28T18:35:34Z
 started_event: sha256:4e46666e28a3bc1f271651a98d25146e6d0e50bf2efef013f9b9e9a33a47515c
 verified_at: 2026-10-28T18:47:24Z
 verified_event: sha256:00133a675befac7257c29e81a195ef5404f6f68d7b05b21983c1b20441f4acc1
+completed_at: 2026-10-28T23:31:05Z
+completed_event: sha256:f4a277c749880ad554691627cd5efe4b7adf3029028d22b913f7a072cb305999
 evidence:
   - covers: verified
     type: test
@@ -49,3 +51,10 @@ evidence:
     artifact: "tests/unit/studio-timeline-pinch.test.mjs"
     commit: a4a82bff501d01adfcc122010e7c82d69b872492
     recorded_at: 2026-10-28T18:47:36Z
+  - covers: verified
+    type: ci
+    command: "node scripts/review-verdict.mjs --pr 247 --head 9de0108 --base-branch 9de0108^1"
+    result: "PR #247 landed by merge commit 9de0108; none of its 10 changed paths is guarded, the base program printed 'no verdict needed' (project.review-verdict); fail-first passed in CI on the PR."
+    artifact: "https://github.com/korczis/oscilla/pull/247"
+    commit: 9de0108dfc3b6a018a8c68b29e44ca32ac8840de
+    recorded_at: 2026-10-28T23:31:01Z
