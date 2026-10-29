@@ -15,9 +15,9 @@
 # Not part of the required `gate`: the owner adds `metadata` to branch protection after it has
 # run green on three or more pull requests (owner decision C2). Nothing is installed: the
 # program uses Node built-ins and git. Nothing of the pull request runs before the judge, and
-# the judge is the base commit's copy, extracted before the checkout's files are read and
-# started under `env -i` (rule `judge-first` of scripts/ci-workflow-rules.mjs, review of #255,
-# R12, R17-R19).
+# the judge is the base commit's copy, extracted before the checkout's files are read, made
+# read-only with a manifest the judge checks, and started under `env -i` (review of #255,
+# R12, R17-R22; rule `judge-first` of scripts/ci-workflow-rules.mjs lints the shape).
 name: metadata
 
 on:
@@ -53,10 +53,12 @@ jobs:
         with:
           fetch-depth: 0
       # The judge, from the base commit, before anything of the pull request runs: the base's
-      # base-rule.sh and scripts/ into $RUNNER_TEMP/judge, the commit in .base-commit, and the
-      # node setup-node put on PATH (before the checkout, so it read no file of the pull
-      # request) as an absolute path. What the job runs later cannot change what this step
-      # recorded (#255, R12, R17-R19).
+      # base-rule.sh and scripts/ into $RUNNER_TEMP/judge, the commit in .base-commit, the
+      # sha256 of every file in .manifest, the copy made read-only, and as outputs the judge's
+      # PATH (the node setup-node put there before the checkout, so it read no file of the pull
+      # request, then the system's) and the manifest's own sha256, which the judge checks its
+      # copy against (defence in depth: the same user could chmod the copy back). Nothing of
+      # the pull request runs in this job before the judge's step (#255, R12, R17-R22).
       - name: The judge, taken from the base commit
         id: judge
         timeout-minutes: 1
@@ -67,10 +69,13 @@ jobs:
           mkdir -p "$judge" "$RUNNER_TEMP/judge-home"
           git archive "$sha" -- .github/scripts/base-rule.sh scripts | tar -x -C "$judge"
           echo "$sha" > "$judge/.base-commit"
+          (cd "$judge" && find . -type f ! -path ./.manifest -print0 | LC_ALL=C sort -z \
+            | xargs -0 sha256sum) > "$judge/.manifest"
+          chmod -R a-w "$judge"
           node="$(readlink -f "$(command -v node)")"
-          echo "node=$node" >> "$GITHUB_OUTPUT"
           echo "path=$(dirname "$node"):/usr/bin:/bin:/usr/sbin:/sbin" >> "$GITHUB_OUTPUT"
-          echo "the judge: $base (${sha:0:12}), node $node"
+          echo "manifest=$(sha256sum < "$judge/.manifest" | cut -d ' ' -f 1)" >> "$GITHUB_OUTPUT"
+          echo "the judge: $base (${sha:0:12}), node $node, $(wc -l < "$judge/.manifest") files"
       # Title, body and branch are read from the pull request as it is now (3 tries, 10 s
       # apart), not from the event, so a re-run after an edit judges the edit. The base is named
       # by its full ref, refs/remotes/origin/<base>: a tag named origin/<base>, which the full
@@ -94,6 +99,7 @@ jobs:
           done
           /usr/bin/env -i PATH="${{ steps.judge.outputs.path }}" \
             HOME="${{ runner.temp }}/judge-home" GITHUB_REPOSITORY="$GITHUB_REPOSITORY" \
+            JUDGE_MANIFEST="${{ steps.judge.outputs.manifest }}" \
             /bin/bash "${{ runner.temp }}/judge/.github/scripts/base-rule.sh" \
             "refs/remotes/origin/$GITHUB_BASE_REF" scripts/pr-metadata.mjs \
             --pr-json "${{ runner.temp }}/pr.json" --head HEAD \

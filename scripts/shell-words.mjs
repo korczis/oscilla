@@ -251,7 +251,7 @@ function withoutHeredocBodies(text) {
 }
 
 const KEYWORDS = new Set(['if', 'then', 'else', 'elif', 'fi', 'do', 'done', 'while', 'until',
-  '!', '{', '}', 'time', 'coproc', '[[', ']]', 'esac']);
+  '!', '{', '}', 'coproc', '[[', ']]', 'esac']);
 /** Wrappers (each runs the command after it): their options, and those that take a value. */
 const WRAPPERS = {
   env: [new RegExp(String.raw`^-[iv0]+$|^--(?:ignore-environment|null|debug)$|^-[uCS]$`
@@ -263,6 +263,8 @@ const WRAPPERS = {
   exec: [/^-[cl]+$|^-a$/, /^-a$/],
   nice: [/^-n$|^-\d+$|^--adjustment(?:=.*)?$/, /^(?:-n|--adjustment)$/],
   nohup: [null, null],
+  // the keyword `time` and /usr/bin/time: -p (and GNU time's options)
+  time: [/^-\S*$/, /^-[fo]$/],
   setsid: [/^-\S*$/, null],
   stdbuf: [/^-[ioe]\S*$|^--(?:input|output|error)(?:=.*)?$/, /^-[ioe]$/],
   timeout: [/^-\S*$/, /^-[sk]$/],
@@ -289,11 +291,18 @@ function command(all) {
   for (;;) {
     const w = words[k];
     if (!w) return result(null);
+    // `function f { ...; }` and `coproc NAME { ...; }`: the name is no program, the body's
+    // first command is one (a one-line function hid `exit 0`, review of #255, R7)
+    if (!w.dynamic && (w.text === 'function'
+      || (w.text === 'coproc' && words[k + 2] && words[k + 2].text === '{'))) {
+      k += 2;
+      continue;
+    }
     if (ASSIGNMENT.test(w.raw) || (!w.dynamic && KEYWORDS.has(w.text))) {
       k++;
       continue;
     }
-    if (!w.dynamic && ['for', 'select', 'case', 'function'].includes(w.text)) return result(null);
+    if (!w.dynamic && ['for', 'select', 'case'].includes(w.text)) return result(null);
     const name = w.dynamic ? null : basename(w.text);
     if (!name || !Object.hasOwn(WRAPPERS, name)) return result(w, words.slice(k + 1));
     wrappers.push(name);

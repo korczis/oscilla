@@ -81,35 +81,52 @@ that is repaired where it last hurt regresses in the next job somebody adds.
   request's branch would have none to judge, and its `gate` would land on the same commit as
   the required check.
 - A job that calls `.github/scripts/base-rule.sh` (a judge job: `fail-first`,
-  `review-verdict`, `metadata`) is shaped so that nothing of the pull request reaches the
-  judge (`judge-first`): `actions/setup-node` first, without `cache` or `node-version-file`,
-  so it reads no file of the checkout; the checkout; then the step `id: judge`, which takes
+  `review-verdict`, `metadata`) is shaped so that nothing of the pull request runs before the
+  judge, and the judge drives the install. That shape is the guarantee (review of #255,
+  round 4): `actions/setup-node` first, without `cache` or `node-version-file`, so it reads
+  no file of the checkout; the checkout; the step `id: judge`, which takes
   `.github/scripts/base-rule.sh` and `scripts/` from the base commit into
-  `$RUNNER_TEMP/judge`, writes the commit to `.base-commit` and records setup-node's node as
-  an absolute path and the judge's PATH (that node's directory and the system's) as step
-  outputs. Up to the call no action runs, and no command runs code of the pull request: no
-  local action, no package manager but `npm ci --ignore-scripts` (with `--no-audit`,
-  `--no-fund`, `--prefer-offline`, `--no-progress` at most) after the step that runs the
-  base's `scripts/install-guard.mjs` with that node, no interpreter or task runner, no
-  `eval`, `source` / `.`, no program named by a relative path, a variable or a
-  substitution; each command is read as bash reads it (`scripts/shell-words.mjs`), its
-  program the word after assignments, redirections, shell keywords (`if`, `!`, `{`,
-  `while`) and wrappers (`env`, `sudo`, `command`, `exec`, `time`, `nice`, `nohup`,
-  `timeout`, `xargs`, ...), quotes removed, and npm behind any of them is refused. The
-  judge's step runs in `/usr/bin/env -u BASH_ENV -u ENV /bin/bash --noprofile --norc -eo
-  pipefail {0}` and calls `"${{ runner.temp }}/judge/.github/scripts/base-rule.sh"` with
-  `/bin/bash` under `/usr/bin/env -i`, with the `judge` step's PATH, a HOME under
-  `runner.temp`, and none of `NODE_OPTIONS`, `BASH_ENV` or any name outside PATH, HOME, CI,
-  GH_TOKEN, GITHUB_REPOSITORY, LANG, LC_ALL, TZ. The rule finds the call by its structure,
-  not by the first mention of `base-rule.sh`, and refuses a judge named through a variable
-  or reached through a local action. Review of #255, R12 and R17-R20: the `fail-first` job ran
-  `npm ci` before the judge, so the pull request's own `postinstall` could rewrite
-  `base-rule.sh`, or put a `node` on `$GITHUB_PATH` or a `NODE_OPTIONS` on `$GITHUB_ENV` for
-  the judge's step; `--ignore-scripts` closed that route only, since npm still runs a git
-  dependency's `prepare` and a PR `.npmrc`'s `git=` program; and a list of forbidden
-  commands kept losing to wrappers, keywords and variables. What the judge itself runs
-  (fail-first runs the pull request's tests) runs after the base's program is started; a
-  test with the runner's sudo can still tamper with that job.
+  `$RUNNER_TEMP/judge`, writes the commit to `.base-commit` and the sha256 of every file to
+  `.manifest`, makes the copy read-only (`chmod -R a-w`) and records the judge's PATH (setup-
+  node's node directory and the system's) and the manifest's own sha256 as step outputs;
+  then the judge's step, the job's last, which runs in `/usr/bin/env -u BASH_ENV -u ENV
+  /bin/bash --noprofile --norc -eo pipefail {0}` and calls `"${{ runner.temp
+  }}/judge/.github/scripts/base-rule.sh"` with `/bin/bash` under `/usr/bin/env -i`, with that
+  PATH, `JUDGE_MANIFEST` set to that digest, a HOME under `runner.temp`, and no name outside
+  PATH, HOME, CI, GH_TOKEN, GITHUB_REPOSITORY, LANG, LC_ALL, TZ, JUDGE_MANIFEST. The copy
+  checks itself against the manifest (`scripts/judge-isolation.mjs --verify`) and then
+  `exec`s the program, so no shell reads a file after the program starts. Nothing is
+  installed before the judge: the fail-first judge (the base's `fail-first.mjs`) runs the
+  base's `install-guard.mjs` in-process, then `npm ci --ignore-scripts` and the pull
+  request's tests as its own children, each in a process group of its own with a cleared
+  environment (no `GITHUB_ENV`, `GITHUB_PATH`, `GITHUB_OUTPUT`, `GITHUB_STEP_SUMMARY`,
+  `RUNNER_TEMP`, `NODE_OPTIONS`, `BASH_ENV`), and judges in its own memory; it refuses to
+  judge where Yama's `ptrace_scope` is 0 or missing, and when its copy departs from the
+  manifest before the first child or after the last (defence in depth: the same user could
+  chmod the copy back). The `review-verdict` and `metadata` judges install nothing. The
+  verdict of each is the judge's exit status alone; nothing reads its log.
+- `judge-first` is advisory: a lint backing `project.review-verdict` (every change under
+  `.github/` is reviewed), not the guarantee. It reads the shape above: up to the call no
+  action runs, no command installs or runs code of the pull request (any package manager,
+  an interpreter or task runner, `eval`, `source` / `.`, a program named by a relative or
+  workspace path, a glob, a variable or a substitution, `git -c`, awk's `system()`, a PATH
+  or loader variable assigned or exported on the way), each command read as bash reads it
+  (`scripts/shell-words.mjs`), its program the word after assignments, redirections, shell
+  keywords and definitions (`if`, `!`, `{`, `while`, `coproc`, `function`) and wrappers
+  (`env`, `sudo`, `command`, `exec`, `time`, `nice`, `nohup`, `timeout`, `xargs`, ...); no
+  workflow, job or step `env:` before the call sets `BASH_ENV`, `ENV`, `PATH`,
+  `NODE_OPTIONS`, `LD_*`, `DYLD_*`, `GIT_*`, `npm_config_*` or another loader variable, and
+  no step before it runs in a `shell:` of its own or under a default shell other than bash
+  (R23); the call is found by its structure, not by the first mention of `base-rule.sh`, and
+  a judge named through a variable or reached through a local action is refused. It reads a
+  subset of bash, so a form it cannot read can pass it (R19); the review of the `.github`
+  change is what catches that. History: the `fail-first` job ran `npm ci` before the judge,
+  so a `postinstall` could rewrite `base-rule.sh` or reach the judge's step through
+  `$GITHUB_PATH` or `$GITHUB_ENV` (R12); `--ignore-scripts` left a git dependency's
+  `prepare` and a PR `.npmrc`'s `git=` (R17, R18); round 4 showed both together, from a tree
+  the guard passed, rewriting even the read-only extracted copy before the judge ran (R22).
+  What the judge itself runs (fail-first runs the pull request's tests) runs after the
+  base's program has loaded; see `project.fail-first` for what that does not cover.
 
 By convention, not checked: a job's limit is the sum of its steps', rounded up.
 
@@ -158,9 +175,14 @@ it cannot read fails the test instead of passing unread.
   arguments, in the judge's shell, unconditional, and the step fails when there is no pull
   request; "a rule job whose call can no longer refuse" applies thirteen such edits and
   requires each to be reported. The `judge-first` tests refuse each departure from the
-  job's shape and each wrapped, keyworded, variable-named or flag-reversed install, and
+  job's shape, any install, each wrapped, keyworded or variable-named command, and each
+  loader `env:` or shell of a step's own before the judge (R23), and
   `tests/unit/base-rule.test.mjs` runs the judge jobs step by step against a postinstall, a
-  git dependency's `prepare` and a `.npmrc` `git=` (R12, R17, R18).
+  git dependency's `prepare`, a `.npmrc` `git=` and the reproduction of R22 (a git spec
+  nested in a registry entry and a `git=` after a lone CR): with an install step before the
+  judge (the control) the PR's code rewrites the read-only copy and the judge's step prints a
+  forged pass; in each job as it is the judge's guard refuses first and the copy is the one
+  extracted (R12, R17, R18, R22).
 
 `tests/unit/ci-knowledge-job.test.mjs` keeps the `knowledge` job's own assertions (the exact
 retry flags, the verdict program).

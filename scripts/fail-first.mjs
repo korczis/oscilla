@@ -23,7 +23,23 @@
 // missing-file, error, timeout) with the names of the failing tests, so a test that only fails
 // because a new module does not exist yet is visible as that.
 //
-// Exit 0: nothing to prove, waived, or proven. Exit 1: not proven. Exit 2: usage.
+// Every child (each `node --test`, and in CI the install) runs through
+// scripts/judge-isolation.mjs: in a process group of its own that is killed when it ends, with
+// a whole environment of a fixed PATH and a HOME of its own, so it never sees the runner's
+// GITHUB_ENV, GITHUB_PATH, GITHUB_OUTPUT, GITHUB_STEP_SUMMARY or RUNNER_TEMP; the judgement is
+// made in this process from the children's exit statuses. First the Yama ptrace probe: where a
+// same-uid child could ptrace this process the program refuses to judge (off Linux it is
+// skipped with a note, outside CI only).
+//
+// In CI this program is the base commit's copy in $RUNNER_TEMP/judge, and JUDGE_MANIFEST
+// carries the sha256 of that copy's .manifest, which its job's `judge` step wrote (review of
+// #255, round 4, R12, R22). Then, before any child, the copy is checked against the manifest
+// (and again after the last child: a copy that changed refuses), and the judge drives the
+// install itself: scripts/install-guard.mjs in-process on the checkout (nothing installed yet,
+// so a node_modules there is refused), then `npm ci --ignore-scripts` as a child, then the
+// tests. No step of the job runs anything of the pull request before this program has loaded.
+//
+// Exit 0: nothing to prove, waived, or proven. Exit 1: not proven, or refused. Exit 2: usage.
 
 import { spawnSync } from 'node:child_process';
 import { appendFileSync, existsSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync }
@@ -32,6 +48,9 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { commitOf } from './git-ref.mjs';
+import { guard } from './install-guard.mjs';
+import { copyProblems, isolatedEnv, loadManifest, ptraceProbe, runIsolated }
+  from './judge-isolation.mjs';
 
 // Any case, any spacing, and behind bracketed tags ("[WIP] Fix (x) : ..."): a title that reads
 // as feat or fix is one, whatever a stricter parser downstream makes of it.
@@ -39,6 +58,7 @@ export const TITLE = /^\s*(?:\[[^\]]*\]\s*)*(feat|fix)\s*(\([^)]*\))?\s*!?\s*:/i
 export const WAIVER = /^[ \t]*(?:[*-][ \t]+)?fail-first:[ \t]*n\/a\b[ \t]*(.*)$/im;
 const TEST_FILE = /^tests\/unit\/.+\.test\.mjs$/;
 const FILE_TIMEOUT_MS = 180_000;
+const INSTALL_TIMEOUT_MS = 300_000;
 
 // what an inline code span leaves in the prose: a mark (U+0001), its index, U+0002 on its
 // first line and the bare marks on each further one. No letter or digit outside the index,
@@ -84,6 +104,13 @@ function inline(text, spans) {
         continue;
       }
     }
+    // an inline tag: its attributes, across lines too, are not rendered (round 4, R5)
+    const tag = c === '<' ? INLINE_TAG.exec(text.slice(i)) : null;
+    if (tag) {
+      out += MORE.repeat(tag[0].split('\n').length - 1);
+      i += tag[0].length;
+      continue;
+    }
     if (c === '`') {
       const open = /^`+/.exec(text.slice(i))[0];
       const run = /`+/g;
@@ -112,6 +139,79 @@ function inline(text, spans) {
   return out;
 }
 
+const ATTRIBUTE = String.raw`\s+[A-Za-z_:][\w.:-]*(?:\s*=\s*(?:[^\s"'=<>\x60]+|'[^']*'|"[^"]*"))?`;
+const OPEN_TAG = String.raw`<[A-Za-z][A-Za-z0-9-]*(?:${ATTRIBUTE})*\s*\/?>`;
+const INLINE_TAG = new RegExp(`^(?:${OPEN_TAG}|<\\/[A-Za-z][A-Za-z0-9-]*\\s*>)`);
+const BLOCK_TAGS = 'address|article|aside|base|basefont|blockquote|body|caption|center|col'
+  + '|colgroup|dd|details|dialog|dir|div|dl|dt|fieldset|figcaption|figure|footer|form|frame'
+  + '|frameset|h[1-6]|head|header|hr|html|iframe|legend|li|link|main|menu|menuitem|nav'
+  + '|noframes|ol|optgroup|option|p|param|search|section|summary|table|tbody|td|tfoot|th'
+  + '|thead|title|tr|track|ul';
+/**
+ * The HTML blocks of CommonMark 0.31 (4.6): [start, end] per kind, `end` null for a block
+ * that ends at a blank line; the 7th kind (a lone complete tag) cannot interrupt a paragraph.
+ */
+const HTML_BLOCKS = [
+  [/^<(?:script|pre|style|textarea)(?:[\s>]|$)/i, /<\/(?:script|pre|style|textarea)>/i],
+  [/^<!--/, /-->/],
+  [/^<\?/, /\?>/],
+  [/^<![A-Za-z]/, />/],
+  [/^<!\[CDATA\[/, /\]\]>/],
+  [new RegExp(`^<\\/?(?:${BLOCK_TAGS})(?:[\\s>]|\\/>|$)`, 'i'), null],
+];
+const HTML_BLOCK_7 = new RegExp(`^(?:${OPEN_TAG}|<\\/[A-Za-z][A-Za-z0-9-]*\\s*>)\\s*$`);
+
+/** The HTML block `t` opens, or null: { end, rest } (`rest` the text after the start). */
+function htmlBlockOf(t, inParagraph) {
+  for (const [start, end] of HTML_BLOCKS) {
+    if (start.test(t)) return { end, rest: t.slice(4) };
+  }
+  if (!inParagraph && HTML_BLOCK_7.test(t)) return { end: null, rest: '' };
+  return null;
+}
+
+/**
+ * Where the link reference definitions at the start of a paragraph's text end (CommonMark
+ * 0.31, 4.7): GitHub renders none of a definition, its title across lines included (round 4,
+ * R5). 0 when the paragraph starts with none.
+ */
+function definitionsEnd(text) {
+  let pos = 0;
+  for (;;) {
+    const rest = text.slice(pos);
+    const label = /^ {0,3}\[((?:[^\\[\]]|\\.){1,999})\]:/.exec(rest);
+    if (!label || !label[1].trim()) return pos;
+    let k = label[0].length;
+    const space = /^[ \t]*\n?[ \t]*/.exec(rest.slice(k))[0];
+    k += space.length;
+    const dest = /^(?:<[^<>\n]*>|[^\s<][^\s]*)/.exec(rest.slice(k));
+    if (!dest) return pos;
+    k += dest[0].length;
+    const lineEnd = (at) => {
+      const n = rest.indexOf('\n', at);
+      return n < 0 ? rest.length : n + 1;
+    };
+    const afterDest = lineEnd(k);
+    const restOfLine = rest.slice(k, afterDest).replace(/\n$/, '');
+    const gap = /^[ \t]*\n?[ \t]*/.exec(rest.slice(k))[0];
+    const open = rest[k + gap.length];
+    let end = null;
+    if (gap.length && /["'(]/.test(open ?? '')) {
+      const close = open === '(' ? ')' : open;
+      let j = k + gap.length + 1;
+      while (j < rest.length && rest[j] !== close) j += rest[j] === '\\' ? 2 : 1;
+      if (rest[j] === close && /^[ \t]*(?:\n|$)/.test(rest.slice(j + 1))) end = lineEnd(j + 1);
+    }
+    if (end === null) {
+      // no title (or none that closes): the definition is its destination's line, if nothing
+      // else is on it
+      if (restOfLine.trim() !== '') return pos;
+      end = afterDest;
+    }
+    pos += end;
+  }
+}
+
 const FENCE_OPEN = /^(`{3,}|~{3,})(.*)$/;
 const THEMATIC = /^(?:(?:\*[ \t]*){3,}|(?:-[ \t]*){3,}|(?:_[ \t]*){3,})$/;
 const SETEXT = /^(?:=+|-+)[ \t]*$/;
@@ -135,7 +235,7 @@ function interrupts(text) {
   const t = text.slice(indent);
   const fence = FENCE_OPEN.exec(t);
   if (fence && !(fence[1][0] === '`' && fence[2].includes('`'))) return true;
-  if (t.startsWith('>') || HEADING.test(t) || THEMATIC.test(t) || t.startsWith('<!--')) return true;
+  if (t.startsWith('>') || HEADING.test(t) || THEMATIC.test(t) || htmlBlockOf(t, true)) return true;
   const item = itemOf(t, indent);
   return Boolean(item && !item.blank && (item.start === undefined || Number(item.start) === 1));
 }
@@ -158,8 +258,13 @@ export function proseOf(body, spans = []) {
   let leaf = null;
   const close = () => {
     if (leaf && leaf.type === 'para' && !leaf.quoted) {
-      const text = inline(leaf.lines.map((l) => l.text).join('\n'), spans).split('\n');
-      leaf.lines.forEach((l, j) => {
+      // the link reference definitions at its start are no prose (round 4, R5)
+      const raw = leaf.lines.map((l) => l.text).join('\n');
+      const defs = raw.slice(0, definitionsEnd(raw)).split('\n').length - 1
+        + (definitionsEnd(raw) === raw.length && raw.length ? 1 : 0);
+      const lines = leaf.lines.slice(defs);
+      const text = inline(lines.map((l) => l.text).join('\n'), spans).split('\n');
+      lines.forEach((l, j) => {
         out[l.n] = `${l.prefix}${text[j]}`;
       });
     }
@@ -196,7 +301,7 @@ export function proseOf(body, spans = []) {
       return;
     }
     if (matched === stack.length && leaf && leaf.type === 'html') {
-      if (rest.includes('-->')) leaf = null;
+      if (leaf.end ? leaf.end.test(rest) : rest.trim() === '') leaf = null;
       return;
     }
     if (matched < stack.length) {
@@ -249,9 +354,11 @@ export function proseOf(body, spans = []) {
       leaf = { type: 'fence', fence: fence[1] };
       return;
     }
-    if (t.startsWith('<!--')) {
+    // an HTML block (round 4, R5: a type-6 block's attribute across lines is no prose)
+    const html = htmlBlockOf(t, Boolean(leaf && leaf.type === 'para'));
+    if (html) {
       close();
-      if (!t.slice(4).includes('-->')) leaf = { type: 'html' };
+      if (!(html.end && html.end.test(html.rest))) leaf = { type: 'html', end: html.end };
       return;
     }
     if (HEADING.test(t)) {
@@ -337,27 +444,80 @@ function stage(tree) {
   appendFileSync(path.join(tree, '.git', 'info', 'exclude'), '\n/node_modules\n');
 }
 
-function runFile(tree, file) {
-  const env = { ...process.env };
-  // A `node --test` started from inside a test file would otherwise run nothing.
-  delete env.NODE_TEST_CONTEXT;
-  const r = spawnSync(process.execPath, ['--test', '--test-reporter=tap', file], {
-    cwd: tree, env, encoding: 'utf8', timeout: FILE_TIMEOUT_MS, maxBuffer: 256 * 1024 * 1024,
+/** One `node --test` of `file` in `tree`, as an isolated child with the environment `env`. */
+async function runFile(tree, file, env) {
+  const r = await runIsolated(process.execPath, ['--test', '--test-reporter=tap', file], {
+    cwd: tree, env, timeoutMs: FILE_TIMEOUT_MS, maxBuffer: 256 * 1024 * 1024,
   });
   const output = `${r.stdout || ''}\n${r.stderr || ''}`;
-  const timedOut = r.error?.code === 'ETIMEDOUT';
   const failed = [...output.matchAll(/^\s*not ok \d+ - (.+)$/gm)].map((m) => m[1].trim())
     .filter((name) => name !== file && !name.endsWith(path.basename(file)));
-  return { ok: r.status === 0, output, timedOut, failed };
+  return { ok: r.status === 0, output, timedOut: r.timedOut, failed };
+}
+
+/** The flags and settings of the judge's own install: no script, no audit, no network chatter. */
+const NPM_ENV = { npm_config_ignore_scripts: 'true', npm_config_audit: 'false',
+  npm_config_fund: 'false', npm_config_update_notifier: 'false', npm_config_progress: 'false' };
+
+/**
+ * The judge's install (review of #255, round 4, R12, R22): the guard in this process, then
+ * `npm ci --ignore-scripts` (the npm beside this node) as an isolated child in `repo`.
+ * Returns the refusals, [] when the packages are installed.
+ */
+async function install(repo, home, say) {
+  const problems = guard(repo, { beforeInstall: true });
+  for (const p of problems) say(`::error::install-guard: ${p}`);
+  if (problems.length) {
+    say(`fail-first: install-guard: REFUSED, ${problems.length} problem(s): npm ci would run or`
+      + ' fetch something of the pull request outside the registry; nothing was installed');
+    return problems;
+  }
+  say('fail-first: install-guard: only registry tarballs checked by sha512, no .npmrc program');
+  const npm = path.join(path.dirname(process.execPath), 'npm');
+  if (!existsSync(npm)) return [`no npm beside the judge's node (${npm})`];
+  const r = await runIsolated(npm, ['ci', '--ignore-scripts', '--no-audit', '--no-fund'], {
+    cwd: repo, env: isolatedEnv({ home, extra: NPM_ENV }), timeoutMs: INSTALL_TIMEOUT_MS,
+  });
+  const tail = `${r.stdout}\n${r.stderr}`.trim().split('\n').slice(-6);
+  for (const l of tail) say(`  npm: ${l}`);
+  if (r.status !== 0) {
+    return [`npm ci --ignore-scripts failed (${r.timedOut ? 'timed out' : r.signal
+      || `exit ${r.status}`})`];
+  }
+  say('fail-first: installed with `npm ci --ignore-scripts` by the judge, as its own child');
+  return [];
 }
 
 /**
- * @returns {{ status: 'not-applicable'|'waived'|'proven'|'not-proven', lines: string[] }}
+ * The judgement of a pull request. `judge` ({ dir, digest }): this program is the CI judge,
+ * the base commit's copy at `dir` with the manifest digest its job's `judge` step recorded;
+ * the copy is checked before the first child and after the last, and the judge installs the
+ * packages itself. `probe` is the ptrace probe (scripts/judge-isolation.mjs ptraceProbe).
+ * @returns {Promise<{ status: 'not-applicable'|'waived'|'proven'|'not-proven'|'refused',
+ *   lines: string[] }>}
  */
-export function failFirst({ repo, title, body, head = 'HEAD', base, baseBranch = 'origin/main',
-  keep = false }) {
+export async function failFirst({ repo, title, body, head = 'HEAD', base,
+  baseBranch = 'origin/main', keep = false, judge = null, probe = ptraceProbe }) {
   const lines = [];
   const say = (s) => lines.push(s);
+  const refuse = (why) => {
+    say(`fail-first: REFUSED to judge: ${why}`);
+    return { status: 'refused', lines };
+  };
+  const ptrace = probe();
+  say(`fail-first: ${ptrace.message}`);
+  if (!ptrace.ok) return refuse('the judge cannot keep its children out of its memory');
+  let entries = null;
+  if (judge) {
+    const m = loadManifest(judge.dir, judge.digest);
+    if (m.problem) return refuse(`the judge copy: ${m.problem}`);
+    const changed = copyProblems(judge.dir, m.entries);
+    if (changed.length) {
+      return refuse(`the judge copy is not the one extracted: ${changed.join('; ')}`);
+    }
+    entries = m.entries;
+    say(`fail-first: the judge copy matches its manifest (${entries.size} files)`);
+  }
   const t = String(title || '').trim();
   say(`fail-first: PR title: ${t || '(none)'}`);
   if (!TITLE.test(t)) {
@@ -391,33 +551,42 @@ export function failFirst({ repo, title, body, head = 'HEAD', base, baseBranch =
   }
 
   const tmp = mkdtempSync(path.join(os.tmpdir(), 'fail-first-'));
+  const home = mkdtempSync(path.join(os.tmpdir(), 'fail-first-home-'));
   const evidence = [];
+  let refused = null;
   try {
+    if (judge) {
+      const problems = await install(repo, home, say);
+      if (problems.length) refused = `the install: ${problems.join('; ')}`;
+    }
     const withTree = path.join(tmp, 'with');
     const withoutTree = path.join(tmp, 'without');
-    extract(repo, headSha, withTree);
-    extract(repo, baseSha, withoutTree);
-    rmSync(path.join(withoutTree, 'tests'), { recursive: true, force: true });
-    extract(repo, headSha, withoutTree, 'tests');
-    // A test that asks git for the tracked files (`git ls-files`) must find them in both
-    // trees: each becomes a repository with everything staged and no history.
-    for (const tree of [withTree, withoutTree]) stage(tree);
-    const modules = path.join(repo, 'node_modules');
-    if (existsSync(modules)) {
-      for (const tree of [withTree, withoutTree]) {
-        symlinkSync(modules, path.join(tree, 'node_modules'));
+    if (!refused) {
+      extract(repo, headSha, withTree);
+      extract(repo, baseSha, withoutTree);
+      rmSync(path.join(withoutTree, 'tests'), { recursive: true, force: true });
+      extract(repo, headSha, withoutTree, 'tests');
+      // A test that asks git for the tracked files (`git ls-files`) must find them in both
+      // trees: each becomes a repository with everything staged and no history.
+      for (const tree of [withTree, withoutTree]) stage(tree);
+      const modules = path.join(repo, 'node_modules');
+      if (existsSync(modules)) {
+        for (const tree of [withTree, withoutTree]) {
+          symlinkSync(modules, path.join(tree, 'node_modules'));
+        }
       }
     }
-    for (const file of files) {
-      let withRun = runFile(withTree, file);
+    const env = isolatedEnv({ home });
+    for (const file of refused ? [] : files) {
+      let withRun = await runFile(withTree, file, env);
       if (!withRun.ok) {
         // The head run is the control for the harness. One retry, said out loud: a test that
         // is sensitive to a loaded machine must not turn real evidence into "not evidence".
         say(`  ${file}: failed with the change (${failureKind(withRun.output, withRun.timedOut)});`
           + ' running it once more');
-        withRun = runFile(withTree, file);
+        withRun = await runFile(withTree, file, env);
       }
-      const withoutRun = runFile(withoutTree, file);
+      const withoutRun = await runFile(withoutTree, file, env);
       if (!withRun.ok) {
         const kind = failureKind(withRun.output, withRun.timedOut);
         say(`  ${file}: FAILS WITH THE CHANGE TOO (${kind}) - not evidence`);
@@ -436,7 +605,17 @@ export function failFirst({ repo, title, body, head = 'HEAD', base, baseBranch =
   } finally {
     if (keep) say(`fail-first: trees kept in ${tmp}`);
     else rmSync(tmp, { recursive: true, force: true });
+    rmSync(home, { recursive: true, force: true });
   }
+  // after the last child: the copy this process loaded from is still the one extracted
+  // (defence in depth: what decides is already in memory)
+  if (entries) {
+    const changed = copyProblems(judge.dir, entries);
+    if (changed.length) {
+      return refuse(`the judge copy changed while the children ran: ${changed.join('; ')}`);
+    }
+  }
+  if (refused) return refuse(refused);
   if (!evidence.length) {
     say(`fail-first: none of the ${files.length} added or changed unit test file(s) fails on the`
       + ' merge base and passes on the head');
@@ -485,13 +664,19 @@ if (isMain) {
     else usage(`unknown argument ${a}`);
   }
   if (typeof opts.title !== 'string') usage('a PR title is required');
+  // the CI judge: the copy its job extracted, whose manifest digest the `judge` step recorded
+  if (process.env.JUDGE_MANIFEST !== undefined) {
+    opts.judge = { dir: path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..'),
+      digest: process.env.JUDGE_MANIFEST };
+  }
   let result;
   try {
-    result = failFirst(opts);
+    result = await failFirst(opts);
   } catch (e) {
     console.error(`fail-first: ${e.message}`);
     process.exit(1);
   }
   for (const l of result.lines) console.log(l);
-  process.exit(result.status === 'not-proven' ? 1 : 0);
+  // the verdict is this exit status alone (nothing downstream reads the log)
+  process.exit(result.status === 'not-proven' || result.status === 'refused' ? 1 : 0);
 }

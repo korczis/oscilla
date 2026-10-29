@@ -145,14 +145,16 @@ gates:
 
   # The two process rules judge a pull request, and the program that judges is the base
   # branch's copy: .github/scripts/base-rule.sh and scripts/ taken from the base commit into
-  # $RUNNER_TEMP/judge before anything of the pull request runs, started under env -i (review
-  # of #255, R12); fail-first refuses an install that would fetch or run anything outside the
-  # registry first (install-guard.mjs, the base's copy). <base>, <pr.json>, <head> and <pr> are
-  # the pull request's.
+  # $RUNNER_TEMP/judge before anything of the pull request runs, read-only with a manifest,
+  # started under env -i (review of #255, R12, R22). Nothing of the pull request runs before
+  # it: the fail-first judge runs its install-guard.mjs in-process and then `npm ci
+  # --ignore-scripts` and the tests as its own children. Each verdict is the judge's exit
+  # status alone; nothing reads its log. <base>, <pr.json>, <head> and <pr> are the pull
+  # request's.
   - id: fail-first
     job: fail-first
     always: true
-    runs: $RUNNER_TEMP/judge/scripts/install-guard.mjs --repo .; npm ci --ignore-scripts; $RUNNER_TEMP/judge/.github/scripts/base-rule.sh refs/remotes/origin/<base> scripts/fail-first.mjs --pr-json <pr.json> --head <head> --base-branch refs/remotes/origin/<base>
+    runs: $RUNNER_TEMP/judge/.github/scripts/base-rule.sh refs/remotes/origin/<base> scripts/fail-first.mjs --pr-json <pr.json> --head <head> --base-branch refs/remotes/origin/<base>
     summary: a feat or fix pull request's added or changed unit tests fail on the merge base and pass on the head, or its body says fail-first n/a with a reason (project.fail-first)
 
   - id: review-verdict

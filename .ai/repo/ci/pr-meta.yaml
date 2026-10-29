@@ -39,8 +39,9 @@ judge:
     pull-requests: read
   # how the judge is reached (review of #255, R12): setup-node before the checkout, the step
   # `judge` third (it takes base-rule.sh and scripts/ from the base commit into
-  # $RUNNER_TEMP/judge before anything of the pull request runs), and the judge's step run by
-  # a shell that reads no BASH_ENV, its call under `env -i` with a fixed PATH and HOME
+  # $RUNNER_TEMP/judge before anything of the pull request runs, read-only, with a manifest
+  # whose digest the call passes), and the judge's step run by a shell that reads no
+  # BASH_ENV, its call under `env -i` with a fixed PATH and HOME; nothing is installed
   steps: [actions/setup-node, actions/checkout, judge]
   shell: /usr/bin/env -u BASH_ENV -u ENV /bin/bash --noprofile --norc -eo pipefail {0}
   # the last command of the job's last step, exactly
@@ -48,6 +49,7 @@ judge:
   call: >-
     /usr/bin/env -i PATH="${{ steps.judge.outputs.path }}"
     HOME="${{ runner.temp }}/judge-home" GITHUB_REPOSITORY="$GITHUB_REPOSITORY"
+    JUDGE_MANIFEST="${{ steps.judge.outputs.manifest }}"
     /bin/bash "${{ runner.temp }}/judge/.github/scripts/base-rule.sh"
     "refs/remotes/origin/$GITHUB_BASE_REF" scripts/pr-metadata.mjs
     --pr-json "${{ runner.temp }}/pr.json" --head HEAD

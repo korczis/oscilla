@@ -15,16 +15,21 @@
 #
 # In CI this file is itself the base commit's copy: the `judge` step of every judge job
 # extracts the base's .github/scripts/base-rule.sh and scripts/ into <judge>
-# ($RUNNER_TEMP/judge) and writes the commit's full name to <judge>/.base-commit before
-# anything of the pull request runs, and the judge's step starts this copy under `env -i` with
-# a fixed PATH (the runner's node first), so nothing the pull request writes to the checkout,
-# $GITHUB_ENV or $GITHUB_PATH reaches it (review of #255, R12, R17-R19). Run so, <base-ref>
-# must name exactly that commit, and the program is <judge>/<program>. Run from a checkout
-# (no .base-commit beside it), the program and the rest of that commit's scripts/ (its
-# imports) are extracted outside the checkout as before. Either way the program runs on this
-# checkout (the current directory's repository) with --repo, and which commit judged is
-# printed. Only when the base has no such program (the pull request that introduces the
-# rule) does the checkout's own copy run, and that is printed as a warning.
+# ($RUNNER_TEMP/judge), writes the commit's full name to <judge>/.base-commit and the sha256 of
+# every file to <judge>/.manifest, makes the copy read-only and records the manifest's own
+# sha256, all before anything of the pull request runs; the judge's step, the job's next and
+# last, starts this copy under `env -i` with a fixed PATH (the runner's node first) and that
+# digest as JUDGE_MANIFEST (review of #255, R12, R17-R22). Run so, <base-ref> must name exactly
+# that commit, the copy must match its manifest (scripts/judge-isolation.mjs --verify: defence
+# in depth, since the same user could chmod the copy back), and the program is
+# <judge>/<program>, which replaces this shell (exec): nothing reads this file once the program
+# runs. The fail-first program then drives the install itself. Run from a checkout (no
+# .base-commit beside it), the program and the rest of that commit's scripts/ (its imports)
+# are extracted outside the checkout as before. Either way the program runs on this checkout
+# (the current directory's repository) with --repo, and which commit judged is printed. Only
+# when the base commit has no such program (the pull request that introduces the rule) does
+# the checkout's own copy run, and that is printed as a warning; a judge copy that lacks a
+# program its commit has is refused (R25).
 set -euo pipefail
 
 base="${1:?usage: $0 <base-ref> scripts/<rule>.mjs [arguments...]}"
@@ -64,16 +69,17 @@ case "$judge/" in "$(cd "$repo" && pwd -P)/"*) extracted=false ;; *) extracted=t
 if $extracted && [ -f "$judge/.base-commit" ]; then
   want="$(cat "$judge/.base-commit")"
   [ "$sha" = "$want" ] || refuse "is $sha, not the commit the judge was taken from ($want)"
-  if [ ! -f "$judge/$program" ]; then
+  [ -n "${JUDGE_MANIFEST:-}" ] \
+    || refuse "is judged from $judge, but no JUDGE_MANIFEST names the digest of its .manifest"
+  node "$judge/scripts/judge-isolation.mjs" --verify "$judge" "$JUDGE_MANIFEST" >&2 \
+    || refuse "is judged from $judge, which is not the copy its step extracted"
+  if ! git -C "$repo" cat-file -e "$sha:$program" 2> /dev/null; then
     echo "::warning::base-rule: $base (${sha:0:12}) has no $program; this checkout's copy judges"
-    status=0
-    node "$repo/$program" --repo "$repo" "$@" || status=$?
-    exit "$status"
+    exec node "$repo/$program" --repo "$repo" "$@"
   fi
+  [ -f "$judge/$program" ] || refuse "names $program, which the judge copy lacks"
   echo "base-rule: $program of $base (${sha:0:12}) judges this pull request"
-  status=0
-  node "$judge/$program" --repo "$repo" "$@" || status=$?
-  exit "$status"
+  exec node "$judge/$program" --repo "$repo" "$@"
 fi
 
 if ! git -C "$repo" cat-file -e "$sha:$program" 2> /dev/null; then

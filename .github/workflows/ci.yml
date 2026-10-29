@@ -375,16 +375,21 @@ jobs:
     # branch's copy (.github/scripts/base-rule.sh), not the one this pull request carries; the
     # base is named by its full ref, refs/remotes/origin/<base>, since a tag named
     # origin/<base> (the full history fetches tags) would otherwise answer for it (#255, R2).
-    # The judge is isolated by structure (#255, R12, R17-R19; rule `judge-first` of
-    # scripts/ci-workflow-rules.mjs checks the shape): setup-node runs before the checkout,
-    # the `judge` step extracts base-rule.sh and the programs from the base commit before
-    # anything of the pull request runs, the base's install-guard.mjs refuses a lockfile entry
-    # outside the registry and a .npmrc that names a program or another registry before the
-    # install, the install runs no lifecycle script, and the judge's step starts the extracted
-    # copy under `env -i` with a fixed PATH (that node first), a temporary HOME and no
-    # NODE_OPTIONS, from a shell that reads no BASH_ENV. The tests the judge runs need the
-    # packages, not their scripts (esbuild, the one package with an install script, works
-    # without it). What this does not cover: the PR's tests run inside the judge's step.
+    # The judge is isolated by structure (#255, rounds 2-4, R12, R17-R22): setup-node runs
+    # before the checkout, the `judge` step extracts base-rule.sh and the programs from the
+    # base commit, makes them read-only and records their manifest, and the judge's step is
+    # the next and last: nothing of the pull request runs before it. The judge starts the
+    # extracted copy under `env -i` (a fixed PATH, that node first, a temporary HOME, no
+    # NODE_OPTIONS, from a shell that reads no BASH_ENV) and drives the install itself: the
+    # base's fail-first.mjs checks its copy against the manifest, runs the base's
+    # install-guard.mjs in-process (a lockfile entry or a spec inside one outside the
+    # registry, a .npmrc that names a program or another registry or holds a carriage
+    # return, a committed node_modules), then `npm ci --ignore-scripts` and the PR's tests as
+    # its own children, each in a process group of its own with a cleared environment, and
+    # judges by their exit statuses in its own memory; its exit status is the verdict. It
+    # refuses to judge where Yama's ptrace_scope is 0. Rule `judge-first` of
+    # scripts/ci-workflow-rules.mjs lints this shape (advisory, behind review-verdict). What
+    # this does not cover is in the PR body of #255 and in project.fail-first.
     name: fail-first (feat/fix tests fail without the change)
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -399,10 +404,12 @@ jobs:
         with:
           fetch-depth: 0
       # The judge, from the base commit, before anything of the pull request runs: the base's
-      # base-rule.sh and scripts/ into $RUNNER_TEMP/judge, the commit in .base-commit, and the
-      # node setup-node put on PATH (before the checkout, so it read no file of the pull
-      # request) as an absolute path. What the job runs later cannot change what this step
-      # recorded (#255, R12, R17-R19).
+      # base-rule.sh and scripts/ into $RUNNER_TEMP/judge, the commit in .base-commit, the
+      # sha256 of every file in .manifest, the copy made read-only, and as outputs the judge's
+      # PATH (the node setup-node put there before the checkout, so it read no file of the pull
+      # request, then the system's) and the manifest's own sha256, which the judge checks its
+      # copy against (defence in depth: the same user could chmod the copy back). Nothing of
+      # the pull request runs in this job before the judge's step (#255, R12, R17-R22).
       - name: The judge, taken from the base commit
         id: judge
         run: |
@@ -412,19 +419,13 @@ jobs:
           mkdir -p "$judge" "$RUNNER_TEMP/judge-home"
           git archive "$sha" -- .github/scripts/base-rule.sh scripts | tar -x -C "$judge"
           echo "$sha" > "$judge/.base-commit"
-          if [ ! -f "$judge/scripts/install-guard.mjs" ]; then
-            echo "::warning::the base has no scripts/install-guard.mjs; this checkout's copy guards"
-            cp scripts/install-guard.mjs "$judge/scripts/install-guard.mjs"
-          fi
+          (cd "$judge" && find . -type f ! -path ./.manifest -print0 | LC_ALL=C sort -z \
+            | xargs -0 sha256sum) > "$judge/.manifest"
+          chmod -R a-w "$judge"
           node="$(readlink -f "$(command -v node)")"
-          echo "node=$node" >> "$GITHUB_OUTPUT"
           echo "path=$(dirname "$node"):/usr/bin:/bin:/usr/sbin:/sbin" >> "$GITHUB_OUTPUT"
-          echo "the judge: $base (${sha:0:12}), node $node"
-      - name: Nothing the install would run or fetch comes from outside the registry
-        run: |
-          "${{ steps.judge.outputs.node }}" "${{ runner.temp }}/judge/scripts/install-guard.mjs" \
-            --repo "$GITHUB_WORKSPACE"
-      - run: npm ci --ignore-scripts
+          echo "manifest=$(sha256sum < "$judge/.manifest" | cut -d ' ' -f 1)" >> "$GITHUB_OUTPUT"
+          echo "the judge: $base (${sha:0:12}), node $node, $(wc -l < "$judge/.manifest") files"
       - name: The PR's added or changed unit tests fail on the merge base
         timeout-minutes: 10
         shell: /usr/bin/env -u BASH_ENV -u ENV /bin/bash --noprofile --norc -eo pipefail {0}
@@ -444,6 +445,7 @@ jobs:
           done
           /usr/bin/env -i PATH="${{ steps.judge.outputs.path }}" \
             HOME="${{ runner.temp }}/judge-home" CI=true \
+            JUDGE_MANIFEST="${{ steps.judge.outputs.manifest }}" \
             /bin/bash "${{ runner.temp }}/judge/.github/scripts/base-rule.sh" \
             "refs/remotes/origin/$GITHUB_BASE_REF" scripts/fail-first.mjs \
             --pr-json "${{ runner.temp }}/pr.json" --head "$HEAD_SHA" \
@@ -476,10 +478,12 @@ jobs:
         with:
           fetch-depth: 0
       # The judge, from the base commit, before anything of the pull request runs: the base's
-      # base-rule.sh and scripts/ into $RUNNER_TEMP/judge, the commit in .base-commit, and the
-      # node setup-node put on PATH (before the checkout, so it read no file of the pull
-      # request) as an absolute path. What the job runs later cannot change what this step
-      # recorded (#255, R12, R17-R19).
+      # base-rule.sh and scripts/ into $RUNNER_TEMP/judge, the commit in .base-commit, the
+      # sha256 of every file in .manifest, the copy made read-only, and as outputs the judge's
+      # PATH (the node setup-node put there before the checkout, so it read no file of the pull
+      # request, then the system's) and the manifest's own sha256, which the judge checks its
+      # copy against (defence in depth: the same user could chmod the copy back). Nothing of
+      # the pull request runs in this job before the judge's step (#255, R12, R17-R22).
       - name: The judge, taken from the base commit
         id: judge
         run: |
@@ -489,10 +493,13 @@ jobs:
           mkdir -p "$judge" "$RUNNER_TEMP/judge-home"
           git archive "$sha" -- .github/scripts/base-rule.sh scripts | tar -x -C "$judge"
           echo "$sha" > "$judge/.base-commit"
+          (cd "$judge" && find . -type f ! -path ./.manifest -print0 | LC_ALL=C sort -z \
+            | xargs -0 sha256sum) > "$judge/.manifest"
+          chmod -R a-w "$judge"
           node="$(readlink -f "$(command -v node)")"
-          echo "node=$node" >> "$GITHUB_OUTPUT"
           echo "path=$(dirname "$node"):/usr/bin:/bin:/usr/sbin:/sbin" >> "$GITHUB_OUTPUT"
-          echo "the judge: $base (${sha:0:12}), node $node"
+          echo "manifest=$(sha256sum < "$judge/.manifest" | cut -d ' ' -f 1)" >> "$GITHUB_OUTPUT"
+          echo "the judge: $base (${sha:0:12}), node $node, $(wc -l < "$judge/.manifest") files"
       - name: A guarded change carries a verdict for the content it changes
         shell: /usr/bin/env -u BASH_ENV -u ENV /bin/bash --noprofile --norc -eo pipefail {0}
         env:
@@ -501,6 +508,7 @@ jobs:
           if [ -z "$PR" ]; then echo "::error::review-verdict: no pull request to judge"; exit 1; fi
           /usr/bin/env -i PATH="${{ steps.judge.outputs.path }}" \
             HOME="${{ runner.temp }}/judge-home" \
+            JUDGE_MANIFEST="${{ steps.judge.outputs.manifest }}" \
             /bin/bash "${{ runner.temp }}/judge/.github/scripts/base-rule.sh" \
             "refs/remotes/origin/$GITHUB_BASE_REF" scripts/review-verdict.mjs --pr "$PR" \
             --head HEAD --base-branch "refs/remotes/origin/$GITHUB_BASE_REF"

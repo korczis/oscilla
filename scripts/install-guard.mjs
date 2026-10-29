@@ -1,16 +1,16 @@
 #!/usr/bin/env node
 // What `npm ci --ignore-scripts` would run or fetch of a pull request, refused before it runs.
 //
-//   node scripts/install-guard.mjs [--repo <dir>]     # exit 1 and one line per refusal
+//   node scripts/install-guard.mjs [--repo <dir>] [--before-install]   # exit 1, a line each
 //
-// The fail-first job installs the pull request's packages before its judge runs the PR's
-// tests, and --ignore-scripts turns off lifecycle scripts only: npm still clones a git
+// The fail-first judge (scripts/fail-first.mjs, the base commit's copy) installs the pull
+// request's packages itself, as a child, before it runs the PR's tests, and calls guard()
+// in-process first; --ignore-scripts turns off lifecycle scripts only: npm still clones a git
 // dependency and runs its `prepare` (review of #255, R17), and still spawns the helper
 // programs a project .npmrc names, `git=./evil.sh` among them (R18). Either can rewrite the
 // judge or write $GITHUB_ENV and $GITHUB_PATH for the steps after it. package.json, the
 // lockfile and .npmrc are not guarded paths, so this program reads them as the pull request
-// left them, from the copy of the base commit the job extracted before anything of the pull
-// request ran, and refuses:
+// left them, from the judge's own copy of the base commit, and refuses:
 //   lockfile   no package-lock.json (or npm-shrinkwrap.json), a lockfileVersion below 2, an
 //              entry whose `resolved` is not a tarball of https://registry.npmjs.org/ (git,
 //              file, http, another host, none), one without a sha512 `integrity`, a link
@@ -24,6 +24,17 @@
 //              programs (git, script-shell, shell, node-options, onload-script, ...), other
 //              registries (registry, @scope:registry, replace-registry-host), strict-ssl=false
 //              and every key not listed; ignore-scripts other than true
+//   entries    in every lock entry, the root entry "" included, each spec of its
+//              dependencies, optionalDependencies, peerDependencies and devDependencies maps,
+//              as package.json's (npm resolves an edge whose spec its locked package does not
+//              satisfy, and clones a git spec there under --ignore-scripts too: round 4, R17),
+//              and a bundleDependencies or workspaces list in an entry; a bare tarball file
+//              name (`evil.tgz`) is a file of the checkout, not a registry name (R24)
+//   npmrc      any carriage return: npm's ini splits lines on [\r\n]+, so a key after a lone
+//              CR is a line of its own to npm (round 4, R18)
+//   modules    a node_modules at the checkout's root that is a symbolic link (npm ci empties
+//              what it points to, R25), and with --before-install any node_modules at all
+//              (in CI the install has not run yet, so one there was committed)
 // So nothing is resolved outside the registry, and what comes from it is checked against the
 // lockfile's sha512: the guard trusts the registry and those hashes (esbuild's platform
 // binary is such a package). Tested by tests/unit/install-guard.test.mjs and the replay of
@@ -66,7 +77,31 @@ export function nonRegistrySpec(spec) {
     return 'is a path of the checkout';
   }
   if (/^[^@\s/<>=~^|][^\s/]*\/[^\s/]+$/.test(s)) return 'is an owner/repo shorthand (GitHub)';
+  // npm reads a name ending in a tarball extension as a file of the checkout (R24)
+  if (/\.(?:tgz|tar\.gz|tar)$/i.test(s)) return 'is a tarball file of the checkout';
   return null;
+}
+
+/** The refusals of the dependency maps and lists of one manifest or lock entry `pkg`. */
+function specProblems(pkg, at) {
+  const out = [];
+  for (const k of ['bundleDependencies', 'bundledDependencies']) {
+    if (k in pkg) out.push(`${at}: ${k} (a bundled dependency has no lockfile entry)`);
+  }
+  if ('workspaces' in pkg) out.push(`${at}: workspaces (packages installed from the checkout)`);
+  for (const field of DEPENDENCY_FIELDS) {
+    const deps = pkg[field];
+    if (deps === undefined) continue;
+    if (!deps || typeof deps !== 'object' || Array.isArray(deps)) {
+      out.push(`${at}: ${field} is not a map of names to versions`);
+      continue;
+    }
+    for (const [dep, spec] of Object.entries(deps)) {
+      const why = typeof spec === 'string' ? nonRegistrySpec(spec) : 'is not a version';
+      if (why) out.push(`${at}: ${field}.${dep} = ${JSON.stringify(spec)} ${why}`);
+    }
+  }
+  return out;
 }
 
 /** The refusals of a lockfile's text (`name` the file's). */
@@ -83,12 +118,14 @@ export function lockfileProblems(text, name = 'package-lock.json') {
   }
   const out = [];
   for (const [key, entry] of Object.entries(lock.packages)) {
-    if (key === '') continue;
-    const at = `${name}: ${key}`;
+    const at = `${name}: ${key || '(the root entry "")'}`;
     if (!entry || typeof entry !== 'object') {
       out.push(`${at} is no entry`);
       continue;
     }
+    // the specs inside the entry: an edge npm finds unsatisfied it resolves again (R17)
+    out.push(...specProblems(entry, at));
+    if (key === '') continue;
     if (entry.link) {
       out.push(`${at} links ${entry.resolved ?? 'a directory'} of the checkout (link: true)`);
       continue;
@@ -118,17 +155,7 @@ export function manifestProblems(text, name = 'package.json') {
     return [`${name}: not JSON (${e.message})`];
   }
   if (!pkg || typeof pkg !== 'object') return [`${name}: not a manifest`];
-  const out = [];
-  for (const k of ['bundleDependencies', 'bundledDependencies']) {
-    if (k in pkg) out.push(`${name}: ${k} (a bundled dependency has no lockfile entry)`);
-  }
-  if ('workspaces' in pkg) out.push(`${name}: workspaces (packages installed from the checkout)`);
-  for (const field of DEPENDENCY_FIELDS) {
-    for (const [dep, spec] of Object.entries(pkg[field] || {})) {
-      const why = nonRegistrySpec(spec);
-      if (why) out.push(`${name}: ${field}.${dep} = ${JSON.stringify(spec)} ${why}`);
-    }
-  }
+  const out = specProblems(pkg, name);
   const walk = (value, at) => {
     if (typeof value === 'string') {
       const why = nonRegistrySpec(value);
@@ -153,7 +180,12 @@ export function manifestProblems(text, name = 'package.json') {
 /** The refusals of an .npmrc's text (`name` the file's). */
 export function npmrcProblems(text, name = '.npmrc') {
   const out = [];
-  String(text).split(/\r?\n/).forEach((raw, i) => {
+  // npm's ini splits on [\r\n]+: a lone CR starts a line npm reads and a \r?\n split does not
+  // (round 4, R18), so a CR anywhere is refused and the lines are npm's
+  if (String(text).includes('\r')) {
+    out.push(`${name}: a carriage return (npm's ini starts a new line at it)`);
+  }
+  String(text).split(/[\r\n]+/).forEach((raw, i) => {
     const line = raw.trim();
     if (!line || /^[;#]/.test(line)) return;
     const at = `${name}:${i + 1}`;
@@ -194,9 +226,24 @@ function npmrcFiles(repo) {
   return found.map((p) => path.relative(repo, p)).sort();
 }
 
-/** Every refusal for the checkout at `repo`. */
-export function guard(repo) {
+/**
+ * Every refusal for the checkout at `repo`; `beforeInstall`: the install has not run, so any
+ * node_modules there is the pull request's (R25).
+ */
+export function guard(repo, { beforeInstall = false } = {}) {
   const out = [];
+  const modules = path.join(repo, 'node_modules');
+  let stat = null;
+  try {
+    stat = lstatSync(modules);
+  } catch {
+    // none: what a fresh checkout has
+  }
+  if (stat?.isSymbolicLink()) {
+    out.push('node_modules is a symbolic link: npm ci would empty the directory it points to');
+  } else if (stat && beforeInstall) {
+    out.push('node_modules exists before the install: the pull request committed it');
+  }
   const read = (rel) => readFileSync(path.join(repo, rel), 'utf8');
   const locks = ['npm-shrinkwrap.json', 'package-lock.json']
     .filter((f) => existsSync(path.join(repo, f)));
@@ -220,16 +267,18 @@ const isMain = process.argv[1] && existsSync(process.argv[1])
 if (isMain) {
   const argv = process.argv.slice(2);
   let repo = process.cwd();
+  let beforeInstall = false;
   while (argv.length) {
     const a = argv.shift();
     if (a === '--repo' && argv.length) repo = path.resolve(argv.shift());
+    else if (a === '--before-install') beforeInstall = true;
     else {
       console.error(`install-guard: unknown argument ${a}`);
-      console.error('usage: node scripts/install-guard.mjs [--repo <dir>]');
+      console.error('usage: node scripts/install-guard.mjs [--repo <dir>] [--before-install]');
       process.exit(2);
     }
   }
-  const problems = guard(repo);
+  const problems = guard(repo, { beforeInstall });
   for (const p of problems) console.log(`::error::install-guard: ${p}`);
   if (problems.length) {
     console.log(`install-guard: REFUSED, ${problems.length} problem(s): npm ci would run or`

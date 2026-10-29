@@ -90,6 +90,7 @@ export const GUARDED = [
   'scripts/pr-metadata.mjs',
   'scripts/install-guard.mjs',
   'scripts/shell-words.mjs',
+  'scripts/judge-isolation.mjs',
   '.ai/repo/ci/pr-meta.yaml',
   'tests/unit/review-verdict.test.mjs',
   'tests/unit/fail-first.test.mjs',
@@ -100,6 +101,8 @@ export const GUARDED = [
   'tests/unit/pr-metadata.test.mjs',
   'tests/unit/git-ref.test.mjs',
   'tests/unit/install-guard.test.mjs',
+  'tests/unit/judge-isolation.test.mjs',
+  'tests/unit/shell-words.test.mjs',
   'tests/unit/fixtures/git-repo.mjs',
 ];
 

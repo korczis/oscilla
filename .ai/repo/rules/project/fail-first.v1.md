@@ -69,19 +69,31 @@ through `.github/scripts/base-rule.sh`, which runs the base branch's copy of the
 the pull request, printing the commit it came from, with the base named by its full ref
 `refs/remotes/origin/<base>`, which no tag can shadow (review of #255, R2; see
 `project.review-verdict`). The wrapper is itself the base commit's: the job's `judge` step
-takes it and `scripts/` from the base commit into `$RUNNER_TEMP/judge` before anything of
-the pull request runs, the base's `scripts/install-guard.mjs` then refuses a lockfile entry
-that is not a sha512-checked tarball of `https://registry.npmjs.org/` (a git dependency,
-whose `prepare` npm runs even under `--ignore-scripts`), a `package.json` with bundled
-dependencies, workspaces or an `overrides` value outside the registry, and any `.npmrc` key
-that names a program, another registry or turns a check off (`git=`, `script-shell`,
-`registry`, `strict-ssl=false`, ...), the install runs no lifecycle script, and the judge's
-step starts the extracted copy under `env -i` with a fixed PATH, a HOME of its own and no
-`NODE_OPTIONS`, from a shell that reads no `BASH_ENV` (review of #255, R12, R17-R19; the
-shape is `project.ci-bounded`'s `judge-first`). What this does not cover: the pull request's
-tests run inside the judge's step, so a test with the runner's sudo can tamper with the job;
-and the guard trusts the registry and the lockfile's integrity hashes (esbuild's platform
-binary is such a package). The
+takes it and `scripts/` from the base commit into `$RUNNER_TEMP/judge`, makes the copy
+read-only and records its sha256 manifest, and the judge's step, the next and the last,
+starts that copy under `env -i` with a fixed PATH, a HOME of its own and the manifest digest,
+from a shell that reads no `BASH_ENV`. Nothing of the pull request runs before it: the judge
+drives the install (review of #255, round 4, R12, R17-R22). The program, already loaded,
+first refuses to judge where Yama's `ptrace_scope` is 0 or missing on Linux (off Linux it is
+skipped with a note, outside CI only) and checks its copy against the manifest; then it runs
+its `scripts/install-guard.mjs` in-process, which refuses a lockfile entry that is not a
+sha512-checked tarball of `https://registry.npmjs.org/`, a spec in any lock entry's own
+dependency maps (the root entry's included) or in `package.json` that names git, `file:`,
+`link:`, `http(s):`, `github:`, an owner/repo shorthand, a path or a bare tarball name,
+bundled dependencies, workspaces, an `overrides` value outside the registry, a `.npmrc` key
+that names a program, another registry or turns a check off, a carriage return in a
+`.npmrc` (npm's ini splits lines on `[\r\n]+`), and a `node_modules` already there (a
+symlink npm ci would empty, or one committed); then `npm ci --ignore-scripts` and the tests,
+each as its own child in a process group of its own, killed with its group when it ends,
+with only a fixed PATH, its own HOME and CI in its environment; the verdict is the program's
+exit status, decided in its memory, and a copy that departs from the manifest after the last
+child refuses (defence in depth: the same user could chmod the copy back, and what decides is
+already loaded). The shape is linted by `project.ci-bounded`'s `judge-first` (advisory).
+What this does not cover: the pull request's tests run as the runner's user, so a test with
+the runner's sudo can tamper with the job (the probe, the group kill and the manifest raise
+the bar, they do not make root code safe); a grandchild that starts a session of its own
+leaves the group; and the guard trusts the registry and the lockfile's integrity hashes
+(esbuild's platform binary is such a package). The
 same test fails if the last command of the job's last step is anything but that call with
 its exact arguments (`--title` in place of `--pr-json`, `|| true`, an `if:`), if the step
 passes when there is no pull request, or if `ci.yml` can be started by anything but a pull
