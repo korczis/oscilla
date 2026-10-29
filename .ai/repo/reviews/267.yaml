@@ -1,73 +1,87 @@
 # Review verdict for pull request #267, plan items K005 (src/js/studio/nodes.js split into eight
 # adapter modules under src/js/studio/adapters/) and K010-K013 (LFO audio rate, shelf and
 # all-pass filters, brown noise, the Drive stage, and the Macro, K013 partial) (branch
-# feat/k005-k013-studio-nodes). Reviewed head d2e325bff412 (== origin at fetch; the branch has
-# not moved); merge base origin/main e2720e07d312 (0 commits behind). Reviewed by dev-68.
+# feat/k005-k013-studio-nodes). Reviewed head b2c5e25ee157 (== origin at fetch; delta
+# d72a0b4d..8c209100 over the first review at d2e325bf, the merge of main 6467e56f aside: it
+# brings in only #258's tests/browser/v31-studio-timeline.cjs and timing-baseline.json, and its
+# diff is byte-identical to 6467e56f's own); merge base origin/main 6467e56f9749 (0 commits
+# behind). Reviewed by dev-68.
 #
 # The digest: the base branch's scripts/review-verdict.mjs (git archive origin/main scripts
 # into a scratchpad dir), both `--content --base-branch origin/main` and `--repo . --head HEAD
-# --content --list --base-branch origin/main`, over the 16 guarded paths the PR changes:
+# --content --list --base-branch origin/main`, over the guarded paths the PR changes. The set
+# grew from 16 to 19 files with this delta (src/js/studio/automation.js,
+# src/js/studio/nodes/common.js and src/js/studio/registry.js added):
 # src/js/audio/{drive,filters,noise}.js, src/js/studio/adapters/* (8 files),
-# src/js/studio/clip-targets.js, src/js/studio/nodes/{modulation,processing,sources}.js and
-# src/js/studio/playground-voice.js: 33fd4882...6e46436, which matches the builder's. R-1 and
-# R-2 touch guarded files (adapters/modulation.js, adapters/processing.js), so the digest must
-# be recomputed after the fix.
+# src/js/studio/automation.js, src/js/studio/clip-targets.js,
+# src/js/studio/nodes/{common,modulation,processing,sources}.js,
+# src/js/studio/playground-voice.js and src/js/studio/registry.js: c0a48ddb...8d9642, which
+# matches the builder's.
 #
-# Lenses:
-# (a) K005 is a pure move. studioHash(templateModel(id)) for all six templates is identical at
-#     origin/main, at 169c8209 (the K005-only commit) and at HEAD, and equals the pinned
-#     values. A normalized line-multiset diff of main's nodes.js against the eight adapter
-#     files at 169c8209 differs only in headers, imports, `export` on moved declarations, the
-#     NODE_ADAPTERS table as `category.x`, re-exports and two JSDoc lines; the unused
-#     hasMicrophoneApi import was dropped. The 8 exports and the NODE_ADAPTERS key order are
-#     identical; HEAD only adds macro and drive.
-# (b) DSP. LFO rate clamp 0.01 Hz to 0.95 x Nyquist at 44.1/48/96 kHz through computeBases and
-#     hooks.clampFrequency; Random and Step stay at 100 Hz. Shelf and all-pass semantics match
-#     the Web Audio spec (shelves: gain in dB, Q ignored; all-pass: linear Q, no gain). Brown
-#     noise is a leaky integrator a = exp(-2*pi*20/fs) in double precision in a looped buffer,
-#     mean removed: no DC, nothing unbounded, no denormal risk. Gap: the lane scale (R-5).
-# (c) Drive. Real 4x oversampling on the shaper; the clip WaveShaper (oversample 'none') after
-#     the trim is the output node, so the 0.95 bound holds by construction. Changes glide with
-#     tau 15 ms but untested (R-4). Removal disposes and untracks every node; census 0. The trim
-#     clamp mis-maps edge offsets (R-2).
-# (d) The K013 partial label: title, body and docs say partial with LFO depth open; tests and
-#     help claim cutoff and LFO rate only. The Macro's modulatable value breaks its UNIPOLAR
-#     range contract (R-1). Stale PR-body and commit-message figures (R-6).
-# (e) Tests and mutation: the safety-shaper threshold mutation and the compiler Nyquist cap
-#     mutation both fail tests; the adapter-level LFO clamp and the glides survive (R-4).
+# First review (d2e325bf): five lenses (K005 as a pure move, the DSP, the Drive, the K013
+# partial label, tests with mutations), every finding re-checked against the code; R-3 dropped
+# and R-5 raised to P2; verdict changes for R-1, R-2 and R-5 (P2).
 #
-# Runs (nothing installed; existing node_modules and cached Playwright browsers; disk below
-# the floor throughout):
-# - The 11 touching unit test files 291/291; full unit suite in the worktree 3280 pass, 0 fail,
-#   1 skip; build.mjs --check: dist up to date.
-# - node tests/browser/v31-studio-offline.cjs: 102/102 in Chromium, Firefox and WebKit; K012
-#   peak max 0.23750001192, 0 clipped samples (saws, 10/15 kHz and 0.45 x rate sines, white
-#   noise, at 44.1 and 48 kHz).
-# - Unit mutations in a scratchpad git-archive copy: DRIVE_CLIP 0.99/0.9, clip curve identity,
-#   output = trim, clip oversample 4x, shaper oversample none, brown without mean removal,
-#   brown leak a = 1, usesQ true for shelves, usesGain peaking only, compiler Nyquist cap
-#   removed, Macro never degrades: all fail tests. Survivors: the LFO adapter clamp, trimOf
-#   identity, and the trim/drive glides replaced by steps.
-# - Probes on the fake context (real AudioEngine): LFO clamp at 44.1/48/96 kHz, Drive + Macro
-#   removal census, the Macro range overrun (R-1), the Drive trim mapping (R-2), the lane
-#   scale (R-5), brown noise RMS/peak/mean/seam at 44.1/48/96 kHz.
-# - The worktree was clean at start and end; no PR file was modified. Scratch copies deleted.
+# Delta review (b2c5e25e), lenses:
+# - R-1: the Macro output is clip = WaveShaper(macroClipCurve(), 41 points, oversample 'none')
+#   fed by cs, outputRange UNIPOLAR. On the real AudioEngine (fake context), 24 configurations
+#   at 44.1/48/96 kHz (Macro 1 and 0.5, bipolar and unipolar edges at depth 50000, LFO onto the
+#   Macro value at depth 1 and 0.75, offset driven over -0.5..2.0): the clip output is exactly
+#   [0,1], a 100 Hz osc peaks at 20947.5/22800/45600 Hz = 0.95 x Nyquist (was 41795/45500/91100)
+#   and the edge is in limitedEdges every time. The curve is exact at 0, 0.25, 0.5 and 1 and
+#   within 2.4e-8 elsewhere (float32 rounding); nothing leaks beyond [0,1] for inputs out of
+#   range. A real OfflineAudioContext render in Chromium, Firefox and WebKit at 44.1 and 48 kHz
+#   (steps, out-of-range values, a ramp): 0 samples latency, output 0..1, max error 1.8e-7. The
+#   clip is a static node, so it cannot click; the census-0 test covers it.
+# - R-2: applyBase writes b.trim.value unclamped (trimOf removed). Trim 0.1 depth 0.25 gives
+#   -0.15/0.1/0.35 on a bipolar edge and 0.1/0.225/0.35 on a unipolar one; trim 1 gives
+#   0.75/1/1.25 and the LFO unipolar 1/1.125/1.25. A log edge onto trim, and depth or offset
+#   beyond +-1, are refused. The stage output is the clip in every case: max 0.95 with trim
+#   beyond +-1, in the fake context and in a real render (Chromium, WebKit 0.95; Firefox
+#   0.95000005, 1 ulp of the float32 endpoint). debugInfo.exceeds reports a trim beyond 0..1.
+# - R-5: nodes/common.js adds a frozen laneRange, the registry refuses one outside [min,max],
+#   and automation.js uses laneRange || softRange. lfo.rate's lane is log 0.01 Hz to
+#   20947.5/22800/45600 Hz at 44.1/48/96 kHz; a typed 2000 Hz point is unchanged, a nudge moves
+#   it one lane step (2313.3 up, 1729.1 down at 44.1 kHz); the inspector slider stays 0.01-100
+#   log. Of 120 number-param lane scales at three rates compared with the d72a0b4d tree, only
+#   lfo.rate changed (Random, Step Modulator and filter cutoff unchanged).
+# - R-4: drive and trim glides replaced by steps, hooks.clampFrequency made Math.max(0.01, v),
+#   and drive applyBase with immediate=true each fail tests; GLIDE_TAU_S is exported, pinned at
+#   0.015.
+# - R-6: the PR body gives modulation.js at 12 037 B (wc -c at HEAD), records the c78c9b45
+#   history caveat, says to use the body as the squash message; title says 'K013 partial';
+#   digest and test figures updated.
 #
-# Adversarial re-check: every finding was re-checked against the code. R-3 (the browser K012
-# check asserts peak <= ceiling, not <= DRIVE_CLIP x ceiling) was dropped: the check asserts
-# the user-facing ceiling it claims, and the 0.95 clip is pinned by the unit suite, which kills
-# both mutations. R-5 was raised from P3 to P2: a keyboard nudge on an audio-rate point
-# rewrites it to 100 Hz or below.
+# Runs (nothing installed; existing node_modules and cached Playwright browsers):
+# - k010-k013 plus automation-transforms 136/136; full unit suite 3288 tests, 3287 pass, 0
+#   fail, 1 skip; build.mjs --check: dist up to date.
+# - node tests/browser/v31-studio-offline.cjs: ALL PASS, 108 checks (36 per browser, with the
+#   new R-1 rows); the K012 checks still peak at 0.2375 (ceiling 0.25), 0 clipped samples.
+# - npm run test:studio was started but did not finish within the review (the first suite,
+#   v31-studio-graph, was still running): no result recorded for the eight suites.
+# - studioHash for all six templates identical at HEAD, at d72a0b4d and at origin/main, and
+#   equal to the pinned values.
+# - Mutations in a scratchpad git-archive copy: Macro output = cs, clip lower bound -1, curve
+#   scaled to 1.5, clip oversample 4x, the trim sum re-clamped to 0..1, laneRange dropped,
+#   automationScale ignoring laneRange, and the R-4 mutants above all fail tests. 'min(1.5,
+#   ...)' is an equivalent mutant. Survivors: the registry's laneRange check and, as a control,
+#   its softRange check, both replaced by `if (false)` (N-1).
+# - No PR file was modified; git status clean at start and end; scratch copies deleted.
 #
-# Open: R-1, R-2, R-5 (P2); R-4, R-6 (P3). No P0 or P1.
+# Adversarial re-check: N-1 could not be refuted. With the check replaced by `if (false)` the
+# full unit suite fails only 5 dist-digest/stamp tests, which a comment-only control edit to
+# registry.js fails the same way; no behavioral test catches it.
+#
+# Open: N-1 (P3). No P0, P1 or P2 is open.
 schema: review-verdict/v1
 pr: 267
-verdict: changes
+verdict: merge
 reviewer: "dev-68 (Claude Opus 5.5 session 4f90795d); did not build, merge or edit this change; wrote only this file"
-content: 33fd4882b978826b1259f4bff5337414126173c399c1514ab3f944f2c6e46436
+content: c0a48ddb8cb74ca9c8b19cc62755a49bb89910aeb4664f50c531b2e2468d9642
 findings:
-  - { id: R-1, severity: P2, status: open, title: "A modulated Macro leaves its declared 0..1 output range, so the 0.95 x Nyquist headroom of a downstream frequency is overrun: Macro value is modulatable (nodes/modulation.js:174) and routed onto cs.offset (adapters/modulation.js:259) while outputRange stays UNIPOLAR (:258); computeBases sizes edges from hi = 1. Probe: 100 Hz osc, Macro 1 -> frequency (depth 50000), LFO -> Macro value (depth 1) peaks at 41795/45500/91100 Hz against caps 20947.5/22800/45600 at 44.1/48/96 kHz, reported only as `exceeds` on macro.value; at the default modDepth 0.25 a 20 kHz edge peaks at 25.1 kHz with limitedEdges empty. Fix: hold the Macro output to [0,1] (automatable, not modulatable, or clamp the offset) or size edges from the source's real peak; test at 44.1, 48 and 96 kHz." }
-  - { id: R-2, severity: P2, status: open, title: "The Drive adapter clamps the trim base with the edge offsets included (trimOf = clamp 0..1 on b.trim.value, adapters/processing.js:238, 248), so a unipolar source on the default bipolar edge plays at the wrong level: trim 0.1 with a Macro/Envelope edge (depth 0.25) writes 0 instead of -0.15, giving 0/0.25/0.5 instead of -0.15/0.1/0.35 (+8 dB at the midpoint, +3.1 dB at 1); trim 1 with a unipolar edge from an LFO sits 0.125 low. Output stays bounded by the clip. Mutation trimOf -> identity passes all tests. Fix: write b.trim.value unclamped (the clip bounds the output) or clamp only the static param; add a unit test with a unipolar source on a bipolar edge." }
-  - { id: R-5, severity: P2, status: open, title: "An LFO rate automation lane spans only softRange 0.01-100 Hz (automation.js:374-377, LFO_SLIDER_RANGE nodes/modulation.js:34), so audio rates cannot be drawn, a typed 2000 Hz point is pinned at the top, and a keyboard nudge rewrites it: Up gives 100 Hz, Down about 91.2 Hz (automation-view.js:204, automation.js:504). Fix: give lanes the full log range up to the Nyquist cap, or a separate lane range distinct from the slider's softRange." }
-  - { id: R-4, severity: P3, status: open, title: "Click-free Drive changes and the LFO adapter's Nyquist clamp are untested: the drive gain glide (drive.js:105) and trim glide (drive.js:107, reachable only via stage.update({ trim })) replaced by steps, and hooks.clampFrequency -> Math.max(0.01, v) (adapters/modulation.js:36), each pass the suite. The adapter clamp is the last bound when a lane initial overrides the computeBases base (runtime.js:657). Fix: assert ramp 'target' with tau GLIDE_TAU_S on stage.update for drive and trim, and test the adapter clamp directly." }
-  - { id: R-6, severity: P3, status: open, title: "The PR body says the largest adapter file is sources.js at 10 635 B; at HEAD it is modulation.js at 10 970 B (still under the 40 000 B cap). Commit c78c9b45's body says the Drive 'peaks below its trim', withdrawn by d2e325bf, and its subject reads K010-K013 without 'partial'. Fix: update the body to 10 970 B (modulation.js) and use the PR body as the squash message." }
+  - { id: R-1, severity: P2, status: closed, title: "[fixed in 72dc1744: the Macro output is a static [0,1] clip WaveShaper (41 points, oversample none) after cs; peaks are 0.95 x Nyquist at 44.1/48/96 kHz with the edge in limitedEdges, checked in the fake context and in Chromium, Firefox and WebKit] A modulated Macro left its declared 0..1 output range, so the 0.95 x Nyquist headroom of a downstream frequency was overrun: Macro value is modulatable (nodes/modulation.js:174) and routed onto cs.offset (adapters/modulation.js:259) while outputRange stayed UNIPOLAR (:258); computeBases sizes edges from hi = 1. Probe: 100 Hz osc, Macro 1 -> frequency (depth 50000), LFO -> Macro value (depth 1) peaked at 41795/45500/91100 Hz against caps 20947.5/22800/45600 at 44.1/48/96 kHz." }
+  - { id: R-2, severity: P2, status: closed, title: "[fixed in 72dc1744: applyBase writes b.trim.value unclamped; trim 0.1 with a bipolar edge gives -0.15/0.1/0.35; the clip still bounds the output at 0.95; re-clamping the sum fails the R-2 test] The Drive adapter clamped the trim base with the edge offsets included (trimOf = clamp 0..1 on b.trim.value, adapters/processing.js:238, 248), so a unipolar source on the default bipolar edge played at the wrong level: trim 0.1 with a Macro/Envelope edge (depth 0.25) wrote 0 instead of -0.15, giving 0/0.25/0.5 instead of -0.15/0.1/0.35." }
+  - { id: R-5, severity: P2, status: closed, title: "[fixed in 72dc1744: a frozen laneRange (registry-checked) that automation.js prefers over softRange; lfo.rate's lane runs log 0.01 Hz to 0.95 x Nyquist, a 2000 Hz point survives a nudge (one lane step), the slider stays 0.01-100; only lfo.rate's lane scale changed] An LFO rate automation lane spanned only softRange 0.01-100 Hz (automation.js:374-377, LFO_SLIDER_RANGE nodes/modulation.js:34), so audio rates could not be drawn, a typed 2000 Hz point was pinned at the top, and a keyboard nudge rewrote it to 100 Hz or about 91.2 Hz." }
+  - { id: R-4, severity: P3, status: closed, title: "[fixed in 66022945: drive and trim glides made steps, hooks.clampFrequency made Math.max(0.01, v), and drive applyBase immediate each fail tests; GLIDE_TAU_S exported and pinned at 0.015] Click-free Drive changes and the LFO adapter's Nyquist clamp were untested: the drive gain glide (drive.js:105) and trim glide (drive.js:107) replaced by steps, and hooks.clampFrequency -> Math.max(0.01, v) (adapters/modulation.js:36), each passed the suite." }
+  - { id: R-6, severity: P3, status: closed, title: "[fixed in the PR body at b2c5e25e: modulation.js at 12 037 B, matching wc -c at HEAD; the c78c9b45 caveat recorded and the body named as the squash message; title says K013 partial] The PR body gave the largest adapter file as sources.js at 10 635 B, and commit c78c9b45's body said the Drive 'peaks below its trim', withdrawn by d2e325bf, with a subject reading K010-K013 without 'partial'." }
+  - { id: N-1, severity: P3, status: open, title: "new with this delta: the registry's laneRange bound check is untested (src/js/studio/registry.js:133-135, cited by the PR body). Replacing it with `if (false)` fails no behavioral test across k010-k013, automation-transforms and v31-studio-model (the only file that calls validateNodeDefinition, and only with the shipping definitions); the softRange check beside it has the same gap. The check works: a manual call with an lfo laneRange of [min, max+1] returns 'lfo: rate: laneRange outside the range'. Fix: one validateNodeDefinition case each with an out-of-range laneRange and softRange." }
