@@ -15,7 +15,7 @@
     "selectors": 1189,
     "domainViewSelectors": 438
   },
-  "debt": 3910,
+  "debt": 3901,
   "surfaces": {
     "pending": [
       "card#osc-exp-compare",
@@ -88,10 +88,8 @@
     "osc-about-block": 4,
     "osc-about-chain": 1,
     "osc-about-chips": 1,
-    "osc-about-coda": 1,
-    "osc-about-credits": 1,
     "osc-about-digest": 1,
-    "osc-about-grid": 2,
+    "osc-about-grid": 1,
     "osc-about-grid--foot": 1,
     "osc-about-h": 5,
     "osc-about-hero": 1,
@@ -103,12 +101,9 @@
     "osc-about-majordomus": 1,
     "osc-about-name": 1,
     "osc-about-night": 1,
-    "osc-about-night-head": 1,
     "osc-about-rules": 1,
     "osc-about-spec": 2,
     "osc-about-spec--credits": 1,
-    "osc-about-stamp": 1,
-    "osc-about-stamp-sep": 2,
     "osc-about-statement": 1,
     "osc-about-step": 17,
     "osc-about-sub": 1,
@@ -357,7 +352,7 @@
     "osc-nav-group-btn": 2,
     "osc-nav-item": 6,
     "osc-nav-menu": 2,
-    "osc-num": 75,
+    "osc-num": 74,
     "osc-number": 60,
     "osc-p-additive": 1,
     "osc-p-analysis": 3,
@@ -884,8 +879,8 @@
   },
   "stylesheets": {
     "src/styles/about.css": {
-      "selectors": 90,
-      "declarations": 333
+      "selectors": 89,
+      "declarations": 317
     },
     "src/styles/base.css": {
       "selectors": 38,

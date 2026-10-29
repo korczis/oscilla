@@ -81,12 +81,16 @@ test('the document title follows page-like workspaces only', () => {
   }
 });
 
+// The first night is one dated station (U002, the owner's override of Q005's headline): the
+// duration it states runs from the first station, the first tracked commit, to its own time.
 test('the stated duration matches the stated timestamps', () => {
-  const stamp = aboutView.slice(aboutView.indexOf('osc-about-stamp'));
-  const [from, to] = [...stamp.matchAll(/<time datetime="([^"]+)">/g)].map((m) => Date.parse(m[1]));
-  const minutes = Math.round((to - from) / 60000); // to the nearest minute
-  const text = stamp.match(/(\d+) h (\d+) min/);
-  assert.ok(text, 'duration is stated');
+  const list = aboutView.slice(aboutView.indexOf('osc-about-timeline'), aboutView.indexOf('</ol>'));
+  const stations = [...list.matchAll(/<li data-state[^>]*>([\s\S]*?)<\/li>/g)].map((m) => m[1]);
+  const at = (body) => Date.parse(body.match(/<time [^>]*datetime="([^"]+)"/)[1]);
+  const night = stations.filter((body) => /(\d+) h (\d+) min/.test(body));
+  assert.equal(night.length, 1, 'one station states the duration');
+  const text = night[0].match(/(\d+) h (\d+) min/);
+  const minutes = Math.round((at(night[0]) - at(stations[0])) / 60000); // to the nearest minute
   assert.equal(Number(text[1]) * 60 + Number(text[2]), minutes);
 });
 

@@ -67,6 +67,7 @@ import { createScopeView, createHarmonicBarsView } from './ui/p5-views.js';
 import { buildConfigExport, parseConfigImport, CONFIG_FILE_VERSION } from './ui/config-file.js';
 import { renderPlanToWav, renderSequenceToWav, screenshotCanvases } from './ui/exporters.js';
 import { BUILD } from './core/build-info.js';
+import { aboutPart } from './ui/about.js';
 
 import { mount as mountAnalysis } from './labs/analysis.js';
 import { mount as mountFilter } from './labs/filter-lab.js';
@@ -743,7 +744,7 @@ function createOscillaComponent(ui) {
   const navigation = createNavigation();
   const midi = createMidiUi(); // optional input (ADR 0058): reads support at load, never requests
   const cmp = compose(instrument, ui, workbench, measure, experiments, findings, connections,
-    studio, navigation, midi, provenancePart(), TEMPLATE_HELPERS);
+    studio, navigation, midi, provenancePart(), aboutPart(), TEMPLATE_HELPERS);
   cmp.dismissAlert = focusSafeDismiss(cmp.dismissAlert);
   const baseRefreshDebug = cmp.refreshDebug;
   Object.defineProperty(cmp, 'refreshDebug', {
