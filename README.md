@@ -95,7 +95,8 @@ changed.
   species, every value cited.
 - **Export:** WAV of the current tone, pattern or sequence, rendered offline through the same
   signal chain as live playback; a PNG of the graphs; the configuration as JSON (export and
-  import); a shareable configuration URL.
+  import; an import names every value it had to limit to the supported range, such as a
+  filter Q above 30, apart from the values it rejected); a shareable configuration URL.
 - **About:** the last workspace tells how OSCILLA was built and with what discipline, and shows
   the running build's version, commit, channel and source digest.
 

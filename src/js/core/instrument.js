@@ -899,6 +899,10 @@ export function createInstrument(deps = {}) {
     resetDefaults() {
       this.stopNow();
       Object.assign(this, defaultInstrumentState());
+      // The Custom range fields follow the restored bounds, as applyConfig keeps them (C017).
+      this.customMinText = formatFrequency(this.customMin);
+      this.customMaxText = formatFrequency(this.customMax);
+      this.rangeError = '';
       this.continuousAllowed = false;
       this.safetyLimit = 2;
       this.noteMode = false;
