@@ -1,0 +1,38 @@
+id: C016
+milestone: M090
+serves:
+  - "coherent-state#one-output-owner"
+title: "MEASURE's setup check counts every output owner as other audio"
+slug: measure-s-setup-check-counts-every-output-owner-as-other-aud
+priority: p2
+profile: implementation
+objective: "Lands as fix(measure). Finding coupling-5. runPreflight's only guard is OTHER_AUDIO from facts.output.audibleVoices = engine.audibleVoiceCount, which counts engine.voices only. With the sequencer or the Studio sounding (analyser peak 0.08) Check setup reports READY with no warning and takes its input-level reading with that output in it, so NOISE_HIGH and INPUT_CLIPPING would blame the room for the app's own sound (project.no-fake-science); runMeasure itself stops every source. Add outputBusy(cmp) in main.js next to stopPlayback, naming the same owners (the live editor.playing, cmp.playing, cmp.studioOwnsOutput(), and the MIDI notes once V502 lands), pass it to the MEASURE adapter, and let runPreflight hand it to the preflight facts as output.otherAudio, OR-ed with audibleVoiceCount; OTHER_AUDIO is raised on it, and when it is set the noise and clipping reasons say the reading includes the app's own output. The check stops nothing. If E002 (pull request #262) has split the adapter, edit the module it names."
+why: "Owner brief OSCILLA PACK 03, 'One Instrument, One Coherent State' (2026-10-29): every control must provably reach its subsystem and every view that reflects it, and be covered by a test (owner: 'filters, sequencer, bpm and many other interactive knobs / sliders / control elements are not reflected / working / tested'). The findings named here were reproduced by an independent skeptic on a fresh export of origin/main b67d1e58 (v3.13.0)."
+scope:
+  - "src/js/main.js"
+  - "src/js/ui/measure.js"
+  - "src/js/ui/measure"
+  - "src/js/measurement/capture.js"
+  - "src/js/measurement/engine.js"
+  - "tests/unit/v3-engine.test.mjs"
+  - "tests/unit"
+  - "tests/browser/v3-measure.cjs"
+  - "tests/README.md"
+  - "dist"
+depends_on:
+  - "C002"
+acceptance_criteria:
+  - "A unit test: the preflight with otherAudio set from a sequencer or Studio source raises OTHER_AUDIO, and a structural test keeps the owners named by stopPlayback and outputBusy the same set; it fails on the merge base."
+  - "Browser check `preflight-other-audio` in tests/browser/v3-measure.cjs with ?measure=loopback: Check setup with the instrument, the sequencer and the Studio each playing shows OTHER_AUDIO in all three and leaves each source playing."
+  - "fail-first holds: the unit test or browser check named above fails on the merge base (project.fail-first)."
+  - "Every new browser check runs through tests/browser/lib/suite.cjs and waits only through tests/browser/lib/wait.cjs with a named wall-clock deadline; tests/browser/timing-baseline.json does not grow (project.suite-harness, project.bounded-test-timing)."
+  - "The pull request carries a reviewer-written .ai/repo/reviews/<pr>.yaml because it changes src/js/ui/measure.js and src/js/measurement (project.review-verdict); the builder never writes it."
+  - "tests/README.md has a row for each new test; dist is rebuilt and npm run build:check passes."
+validation:
+  - "node --test tests/unit/v3-engine.test.mjs"
+  - "node tests/browser/v3-measure.cjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-10-29
+updated_at: 2026-10-29

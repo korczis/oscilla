@@ -1,0 +1,43 @@
+id: C002
+milestone: M090
+serves:
+  - "coherent-state#one-output-owner"
+title: "One output owner at a time: the sequencer claims the output before it schedules"
+slug: one-output-owner-at-a-time-the-sequencer-claims-the-output-b
+priority: p1
+profile: implementation
+objective: "Lands as fix(sequencer). Findings coupling-1, coupling-2 and coupling-3. The engine.play wrapper in src/js/main.js is the only output-ownership gate, and editor.play() schedules compileSequence into engine.master without it. The sequencer therefore plays during a MEASURE run (measureOwnsOutput() true, state PREFLIGHT; the sequence is captured through NOISE_CHECK into MEASURING), sounds together with the instrument in either order, and hands over with the Studio only through the 150 ms seqPlaying poll and Studio's $watch('seqPlaying'), so a Studio PLAY inside that window is the action that gets stopped. Add an optional claimOutput() to the sequencer editor's engine contract (sequencer-panel.js passes the adapter's), called by editor.play() before _stopVoices and the first _schedulePass and again in _pump before each loop pass; false refuses with editor.error set and nothing scheduled. main.js implements it from one output-owner table shared with the engine.play wrapper: refuse with 'Measurement in progress' while app.measureOwnsOutput(), otherwise stop the instrument and a playing Studio and set app.seqPlaying at once. The engine.play wrapper stops a playing sequence (editor.stop(), click-free) before an instrument voice starts. Whether Space in the Sequencer workspace stops a playing loop follows ADR 0050 and is written into it. If the owner prefers layering, that is stated in the UI and in docs/v31/signal-path.md and the views show both sources; silent summing is not an outcome."
+why: "Owner brief OSCILLA PACK 03, 'One Instrument, One Coherent State' (2026-10-29): every control must provably reach its subsystem and every view that reflects it, and be covered by a test (owner: 'filters, sequencer, bpm and many other interactive knobs / sliders / control elements are not reflected / working / tested'). The findings named here were reproduced by an independent skeptic on a fresh export of origin/main b67d1e58 (v3.13.0)."
+scope:
+  - "src/js/sequencer/editor.js"
+  - "src/js/labs/sequencer-panel.js"
+  - "src/js/labs/index.js"
+  - "src/js/main.js"
+  - ".ai/repo/adrs/0050-space-is-the-play-key-of-the-workspace-in-view-one-shortcut-.md"
+  - "tests/unit/sequencer-editor.test.mjs"
+  - "tests/unit/sequencer-fake-audio.mjs"
+  - "tests/unit"
+  - "tests/browser/app.cjs"
+  - "tests/browser/v3-measure.cjs"
+  - "tests/README.md"
+  - "dist"
+depends_on:
+  - "C001"
+acceptance_criteria:
+  - "A unit test in tests/unit/sequencer-editor.test.mjs with a fake engine whose claimOutput returns false: play() returns false, playing stays false and no source is created on the fake context; it fails on the merge base."
+  - "Browser check `seq-refused-during-measure` in tests/browser/v3-measure.cjs: with ?measure=loopback and the Studio measurement-sweep template playing, poll until measureOwnsOutput(), click #osc-seq-play: editor.playing stays false and the 'Measurement in progress' notice is shown."
+  - "Browser check `one-output-owner` in tests/browser/app.cjs: instrument then sequencer, and sequencer then instrument, each end with exactly one of app.playing and editor.playing true; sequencer Play followed in the same task by Studio PLAY ends with the Studio playing and the sequencer stopped, and the reverse order the other way round, read in the same evaluate without waiting on the poll."
+  - "fail-first holds: the unit test or browser check named above fails on the merge base (project.fail-first)."
+  - "Every new browser check runs through tests/browser/lib/suite.cjs and waits only through tests/browser/lib/wait.cjs with a named wall-clock deadline; tests/browser/timing-baseline.json does not grow (project.suite-harness, project.bounded-test-timing)."
+  - "engine.activeNodeCount returns to 0 after every stop in the new checks, in Chromium, Firefox and WebKit (project.audio-engine-discipline v2)."
+  - "A reviewer's verdict is needed if the change reaches a path in scripts/review-verdict.mjs GUARDED (project.review-verdict); the builder never writes it."
+  - "tests/README.md has a row for each new test; dist is rebuilt and npm run build:check passes."
+validation:
+  - "node --test tests/unit/sequencer-editor.test.mjs"
+  - "node tests/browser/app.cjs"
+  - "node tests/browser/v3-measure.cjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-10-29
+updated_at: 2026-10-29

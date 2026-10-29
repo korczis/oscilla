@@ -1,0 +1,29 @@
+id: C022
+milestone: M090
+serves:
+  - "coherent-state#every-control-reaches-its-subsystem"
+title: "Every control in the interface is driven by a browser test: the control-drive baseline is empty"
+slug: every-control-in-the-interface-is-driven-by-a-browser-test-t
+priority: p2
+profile: implementation
+objective: "Lands as test(controls). The owner asked that every control provably reach its subsystem and every view that reflects it, covered by a test. After C020 the ratchet still lists the controls outside the owner-named families (MEASURE, Experiments, Findings, Studio, Learn, Presets, Analyzer, Compare and the remaining Playground and menu controls, about 160 at b67d1e58). Drive each in the suite that owns its workspace, with its effect asserted at its subsystem and at a view that reflects it, until tests/unit/control-drive-baseline.json is empty and the ratchet then refuses any new undriven control. A control that is found to reach nothing becomes a fix issue under this milestone, not a test that accepts it."
+why: "Owner brief OSCILLA PACK 03, 'One Instrument, One Coherent State' (2026-10-29): every control must provably reach its subsystem and every view that reflects it, and be covered by a test (owner: 'filters, sequencer, bpm and many other interactive knobs / sliders / control elements are not reflected / working / tested'). The findings named here were reproduced by an independent skeptic on a fresh export of origin/main b67d1e58 (v3.13.0)."
+scope:
+  - "tests/browser"
+  - "tests/unit/control-drive-baseline.json"
+  - "tests/README.md"
+depends_on:
+  - "C020"
+  - "C021"
+acceptance_criteria:
+  - "tests/unit/control-drive-baseline.json is an empty list and node --test tests/unit/control-drive-baseline.test.mjs passes."
+  - "Each added drive asserts an effect at the control's subsystem and at a view that reflects it, not only that a handler ran."
+  - "Every new browser check runs through tests/browser/lib/suite.cjs and waits only through tests/browser/lib/wait.cjs with a named wall-clock deadline; tests/browser/timing-baseline.json does not grow (project.suite-harness, project.bounded-test-timing)."
+  - "tests/README.md has a row for each new test."
+validation:
+  - "node --test tests/unit/control-drive-baseline.test.mjs"
+  - "npm run test:release"
+evidence_required:
+  - "verified"
+created_at: 2026-10-29
+updated_at: 2026-10-29
