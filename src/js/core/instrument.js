@@ -744,7 +744,15 @@ export function createInstrument(deps = {}) {
       const r = parseFrequency(raw);
       if (!r.ok) { this.setParamError(`sweep-${key}`, r.error); return; }
       this.sweep[key] = round(clamp(r.value, MIN_FREQUENCY, this.safeMax), 3);
-      this.setParamError(`sweep-${key}`, r.value > this.safeMax ? `Limited to the digital limit ${formatFrequency(this.safeMax)}.` : '');
+      // Before audio starts the limit comes from the assumed 44.1 kHz rate: say so (T003).
+      const provisional = this.provisional ? ' (provisional until audio starts)' : '';
+      let msg = '';
+      if (r.value > this.safeMax) {
+        msg = `Limited to the digital limit ${formatFrequency(this.safeMax)}${provisional}.`;
+      } else if (r.value < MIN_FREQUENCY) {
+        msg = `Raised to the minimum ${formatFrequency(MIN_FREQUENCY)}.`;
+      }
+      this.setParamError(`sweep-${key}`, msg);
     },
     sweepSlider(key) { return Math.round(frequencyToNormalized(this.sweep[key], 10, this.safeMax) * 1000); },
     setSweepSlider(key, v) { this.sweep[key] = round(normalizedToFrequency(Number(v) / 1000, 10, this.safeMax), 2); },

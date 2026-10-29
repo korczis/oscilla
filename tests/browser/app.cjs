@@ -1218,6 +1218,70 @@ function defineChecks() {
       fftB: fb.hz, status, zeroAfter: zero };
   });
 
+  // T003 (truth-table GEN-04): a clamped or unparsable sweep value shows its error on the field,
+  // tied to the input, at desktop size and at 390x844; a limit from the provisional rate says so.
+  def('sweep-field-errors-inline', async ({ page }) => {
+    const END = '#sw-end';
+    const view = () => page.evaluate(() => {
+      const input = document.querySelector('#sw-end');
+      const alert = document.querySelector('#sw-end-error');
+      const box = alert ? alert.getBoundingClientRect() : null;
+      return {
+        value: input ? input.value : null,
+        invalid: input ? input.getAttribute('aria-invalid') : null,
+        describedBy: input ? input.getAttribute('aria-describedby') : null,
+        text: alert ? alert.textContent.trim() : null,
+        role: alert ? alert.getAttribute('role') : null,
+        inParams: !!(alert && alert.closest('#osc-pattern-params')),
+        shown: !!(box && box.width > 0 && box.height > 0),
+        inside: !!(box && box.left >= 0 && box.right <= window.innerWidth + 0.5),
+        scroll: document.documentElement.scrollWidth > window.innerWidth,
+        provisional: window.OSCILLA.app.provisional,
+      };
+    });
+    const type = async (sel, text) => {
+      await page.fill(sel, text);
+      await page.press(sel, 'Enter');
+    };
+    const seen = (w, h, what, pred) => until(async () => {
+      const v = await view();
+      return pred(v) ? v : null;
+    }, { ms: 5000, what: `sweep-field-errors-inline ${w}x${h}: ${what}` });
+    const res = {};
+    await page.click('#osc-source-pattern');
+    await page.evaluate(() => { window.OSCILLA.app.source = 'sweep'; });
+    await page.waitForSelector(END, { state: 'visible', timeout: 8000 });
+    for (const [w, h] of [[1536, 1024], [390, 844]]) {
+      await page.setViewportSize({ width: w, height: h });
+      await type(END, '30000');
+      const over = await seen(w, h, 'the End error is shown', (v) => v.shown && !!v.text);
+      await type(END, '10000');
+      const fine = await seen(w, h, 'the End error clears', (v) => !v.shown
+        && v.invalid === 'false');
+      await type(END, 'abc');
+      const parse = await seen(w, h, 'the parse error is shown', (v) => v.shown
+        && /is not a frequency/.test(v.text));
+      await type(END, '10000');
+      await seen(w, h, 'the parse error clears', (v) => !v.shown);
+      res[`${w}x${h}`] = { over, fine, parse };
+    }
+    await page.setViewportSize({ width: 1536, height: 1024 });
+    await page.evaluate(() => { window.OSCILLA.app.source = 'single'; });
+    await page.selectOption('#osc-pattern-select', 'tone');
+    await page.click('#osc-source-osc');
+    // The clamped value is the limit the message names, and "provisional" appears exactly
+    // while no AudioContext has given the real rate.
+    const good = ({ over, fine, parse }) => over.role === 'alert' && over.inParams
+      && over.inside && !over.scroll && over.invalid === 'true'
+      && over.describedBy === 'sw-end-error' && /kHz$/.test(over.value)
+      && over.text.includes(`digital limit ${over.value}`)
+      && /provisional/.test(over.text) === over.provisional
+      && fine.value === '10.00 kHz' && fine.describedBy === null
+      && parse.invalid === 'true' && parse.inside;
+    const bad = Object.entries(res).filter(([, r]) => !good(r));
+    return { ok: !bad.length, res };
+  });
+
   def('presets-save-load', async ({ page }) => {
     await page.evaluate(() => window.OSCILLA.app.setFrequency(1234));
     await page.click('#osc-wave-triangle');

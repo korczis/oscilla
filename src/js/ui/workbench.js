@@ -247,6 +247,29 @@ export function createWorkbench(svc) {
       else if (d.type === 'select') this.sweep[d.key] = raw;
     },
     sweepLabel(d) { return d.key === 'durationMs' ? 'Duration (s)' : d.label; },
+    /** paramErrors key of a sweep field (setSweepFreq, setSweepDuration); null for a select. */
+    sweepErrorKey(d) {
+      if (d.type === 'freq') return `sweep-${d.key}`;
+      return d.key === 'durationMs' ? 'sweep-duration' : null;
+    },
+    // One field template renders the pattern parameters and the sweep form (T003), so every
+    // field, sweep or pattern, shows its own error beside it.
+    get ppSweep() { return this.source === 'sweep'; },
+    get ppFields() { return this.ppSweep ? SWEEP_FORM : this.currentPattern.params; },
+    ppId(d) { return this.ppSweep ? `sw-${d.key}` : this.paramId(d); },
+    ppLabel(d) { return this.ppSweep ? this.sweepLabel(d) : d.label; },
+    ppAriaLabel(d) { return this.ppSweep ? null : d.label + this.paramUnit(d); },
+    ppValue(d) { return this.ppSweep ? this.sweepValue(d) : this.paramValue(d); },
+    ppSet(d, raw) {
+      if (this.ppSweep) this.setSweepField(d, raw);
+      else this.setParam(d, raw);
+    },
+    ppErrorKey(d) { return this.ppSweep ? this.sweepErrorKey(d) : this.paramId(d); },
+    ppError(d) {
+      const key = this.ppErrorKey(d);
+      return (key && this.paramErrors[key]) || '';
+    },
+    ppErrorId(d) { return `${this.ppId(d)}-error`; },
 
     // ------------------------------------------------------------------ transport extras
     /** Status-bar play key: stop when sounding, else latch (continuous allowed) or trigger. */
