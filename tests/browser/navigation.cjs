@@ -548,7 +548,8 @@ function defineChecks() {
       const el = document.querySelector('[data-osc="copy.note"]');
       return el && el.closest('dialog[open]') && el.textContent.trim() ? el.textContent.trim()
         : null;
-    }), { ms: 5000, what: 'lab-state-round-trip: the copy toast or the copy dialog' });
+    }), { ms: 5000, what: 'lab-state-round-trip: the copy toast or the copy dialog' })
+      .catch(() => ''); // judged below, with the restores
     const url = await page.evaluate(() => window.location.href);
     await page.evaluate(() => {
       for (const d of document.querySelectorAll('dialog[open]')) d.close();
