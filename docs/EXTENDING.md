@@ -37,8 +37,9 @@ existing engine already has. Four pieces carry it:
 
 **Ports.** `src/js/studio/ports.js#canConnect` decides from the two port definitions alone, so a
 cable joins only compatible types. Graph rules (multiplicity, duplicates, cycles) are
-`src/js/studio/validate.js#validateStudioModel`. Every audio input takes one connection except
-the Mixer's, so accidental summing cannot happen. A modulatable parameter gets a generated
+`src/js/studio/validate.js#validateStudioModel`. Every audio input takes one connection; the
+Mixer, with one input per channel, is the only node that sums, so accidental summing cannot
+happen. A modulatable parameter gets a generated
 `PARAMETER` input port (`src/js/studio/ports.js#parameterPort`): you declare the parameter, not
 the port.
 
@@ -117,27 +118,39 @@ export const polarityAdapter = {
 };
 ```
 
-The test that proves it (`tests/unit/extending-guide.test.mjs`, "the example node compiles
-through the real registry") does what you would do by hand:
+Save it at that path and add its unit test; `node --test tests/unit/my-node.test.mjs` runs it.
+Give the test a row in [tests/README.md](../tests/README.md):
+`tests/unit/knowledge-integrity.test.mjs` fails a unit test or browser suite that has none.
+`tests/unit/extending-guide.test.mjs` runs this test, as printed, against the example above:
 
+<!-- extending-guide:example studio-node-test -->
 ```js
-// tests/unit/my-node.test.mjs (a sketch of the same steps)
+// tests/unit/my-node.test.mjs
+import test from 'node:test';
+import assert from 'node:assert/strict';
 import { NODE_DEFINITIONS, createNodeRegistry } from '../../src/js/studio/registry.js';
 import { NODE_ADAPTERS } from '../../src/js/studio/adapters/nodes.js';
 import { compileStudio } from '../../src/js/studio/compiler.js';
 import { createStudioModel } from '../../src/js/studio/schema.js';
 import { edge, node } from '../../src/js/studio/templates/data.js';
+import { polarity, polarityAdapter } from '../../src/js/studio/nodes/polarity.js';
 
-const registry = createNodeRegistry([...NODE_DEFINITIONS, polarity]); // throws if invalid
-const adapters = { ...NODE_ADAPTERS, polarity: polarityAdapter };
-const model = createStudioModel({ graph: {
-  nodes: [node('osc-1', 'oscillator', 0, 0), node('pol-1', 'polarity', 200, 0),
-    node('master-1', 'master', 400, 0)],
-  edges: [edge('e1', 'osc-1', 'audio', 'pol-1', 'audio'),
-    edge('e2', 'pol-1', 'audio', 'master-1', 'audio')],
-} }, { registry });
-const plan = compileStudio(model, { engine: { isSupported: () => true }, registry, adapters });
-// plan.ok === true and plan.nodes.get('pol-1').status === 'ready'
+test('Polarity compiles to a ready node between an oscillator and the master', () => {
+  // Before step 1 below. Once the node ships, NODE_DEFINITIONS holds it and NODE_ADAPTERS its
+  // adapter: pass NODE_DEFINITIONS and NODE_ADAPTERS alone (a second polarity is refused as a
+  // duplicate type).
+  const registry = createNodeRegistry([...NODE_DEFINITIONS, polarity]); // throws if invalid
+  const adapters = { ...NODE_ADAPTERS, polarity: polarityAdapter };
+  const model = createStudioModel({ graph: {
+    nodes: [node('osc-1', 'oscillator', 0, 0), node('pol-1', 'polarity', 200, 0),
+      node('master-1', 'master', 400, 0)],
+    edges: [edge('e1', 'osc-1', 'audio', 'pol-1', 'audio'),
+      edge('e2', 'pol-1', 'audio', 'master-1', 'audio')],
+  } }, { registry });
+  const plan = compileStudio(model, { engine: { isSupported: () => true }, registry, adapters });
+  assert.equal(plan.ok, true, JSON.stringify(plan.errors));
+  assert.equal(plan.nodes.get('pol-1').status, 'ready');
+});
 ```
 
 To ship the node in the library:
@@ -148,11 +161,17 @@ To ship the node in the library:
 2. Add the adapter to `src/js/studio/adapters/nodes.js#NODE_ADAPTERS` under the node's type.
    `tests/unit/v31-studio-compiler.test.mjs` fails while a registry type has no adapter or a
    different key.
-3. Update the library list in `tests/unit/v31-studio-model.test.mjs` ("registry holds the §29
-   library"), which names every type and the count of each category.
+3. Update the three lists that tests hold to the registry, each of which names every type:
+   - the library list of `tests/unit/v31-studio-model.test.mjs` ("registry holds the §29
+     library"), with the count of each category;
+   - the "Node registry" list of [docs/v31/studio-model.md](v31/studio-model.md), held by
+     `tests/unit/docs-derived.test.mjs`;
+   - the node-types table of [docs/v31/studio-report.md](v31/studio-report.md), held by
+     `tests/unit/v31-studio-report.test.mjs`.
 4. The Library panel, search, Inspector help and port glyphs read the registry, so nothing else
    is wired by hand. Describe the node in [docs/v31/studio-model.md](v31/studio-model.md) and,
-   for its audio, [docs/v31/compiler.md](v31/compiler.md).
+   for its audio, [docs/v31/compiler.md](v31/compiler.md). Then `npm run build` and commit
+   `dist/` with the source.
 
 Nodes are created only through `acct.track` or `acct.source` (rule
 `project.audio-engine-discipline`). Studio is orchestration: an adapter reuses an existing
@@ -197,7 +216,10 @@ the labs are `tests/browser/labs.cjs` (`npm run test:labs`).
    [0045](../.ai/repo/adrs/0045-workspace-in-history-one-hash-dispatcher-unsaved-guard.md)).
 4. Tests: `tests/unit/navigation.test.mjs` round-trips every id of `WORKSPACES` through the
    router, and the `open-every-workspace` check of `tests/browser/navigation.cjs` opens each one
-   from a fresh page in Chromium, Firefox and WebKit.
+   from a fresh page in Chromium, Firefox and WebKit. Two checks copy the navigation and change
+   with it: the `nav-links` check of the same suite counts the nav links, and the "Navigation"
+   section of [README.md](../README.md) lists the header entries and groups in order, held by
+   `tests/unit/docs-derived.test.mjs`.
 
 A new workspace or panel is a new UI surface, and rule `project.ui-uses-flowbite-pro` (ADR
 [0061](../.ai/repo/adrs/0061-the-ui-is-built-on-flowbite-pro.md)) requires it to be built on

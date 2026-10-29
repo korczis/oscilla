@@ -12,13 +12,15 @@
 //     script, and every file a `node <file>` command runs exists;
 //   - every relative Markdown link target exists, and an in-page #anchor names a heading;
 //   - every import and require of a js block resolves, from the path the block's first comment
-//     line declares, to a file that exports each imported name;
+//     line declares, to a file that exports each imported name, or to another block of the
+//     guide that declares that path (the file the guide asks you to create) and exports it;
 //   - the Studio node example is imported as written and compiles through the real registry,
-//     compiler and adapter contract.
+//     compiler and adapter contract, and the guide's test of it passes as printed.
 // The checker is run on a broken fixture too, so it cannot pass by finding nothing.
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { dirname, join, normalize } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -100,8 +102,9 @@ export function checkGuide(md, { root = ROOT, docPath = GUIDE, scripts }) {
       if (!exists(dir)) problems.push(`${where}: ${ref}: directory ${dir} does not exist`);
       return;
     }
-    if (!exists(p)) { problems.push(`${where}: ${ref}: no such file`); return; }
-    if (name && !exportsName(text(p), name, p)) {
+    const declared = !exists(p) && declaredBlocks.get(p);
+    if (!exists(p) && !declared) { problems.push(`${where}: ${ref}: no such file`); return; }
+    if (name && !exportsName(declared || text(p), name, p)) {
       problems.push(`${where}: ${ref}: ${p} does not export ${name}`);
     }
   };
@@ -118,6 +121,11 @@ export function checkGuide(md, { root = ROOT, docPath = GUIDE, scripts }) {
     if (m) checkPath(m[1], where);
   };
   const { prose, blocks } = splitFences(md);
+  // A js example that declares a path the tree does not have yet is the file the guide asks you
+  // to create: prose and other examples may name it, and its exports are read from the block.
+  const declaredBlocks = new Map(blocks.filter((b) => b.lang === 'js')
+    .map((b) => [(b.body.match(/^\/\/\s*(\S+\.(?:c?js|mjs))\b/) || [])[1], b.body])
+    .filter(([p]) => p));
   for (const [, span] of prose.matchAll(/`([^`\n]+)`/g)) {
     if (PATH_SPAN.test(span)) checkPath(span, 'span');
     if (RULE_SPAN.test(span)) {
@@ -165,12 +173,13 @@ export function checkGuide(md, { root = ROOT, docPath = GUIDE, scripts }) {
     for (const { names, spec } of imports) {
       if (!spec.startsWith('.')) continue;
       const file = normalize(join(dirname(declared), spec)).replace(/\\/g, '/');
-      if (!exists(file)) {
+      const source = exists(file) ? text(file) : declaredBlocks.get(file);
+      if (source === undefined) {
         problems.push(`${declared}: ${spec}: ${file} does not exist`);
         continue;
       }
       for (const name of names) {
-        if (!exportsName(text(file), name, file)) {
+        if (!exportsName(source, name, file)) {
           problems.push(`${declared}: ${spec} does not export ${name}`);
         }
       }
@@ -190,13 +199,23 @@ function example(md, id) {
   return m[1];
 }
 
-/** Import a js block as the module it declares itself to be (relative imports resolved). */
-async function importBlock(body) {
+/**
+ * A js block's source as the module it declares itself to be: relative imports resolved from
+ * that path, and an import of a path in `modules` (path -> URL) sent to that URL instead.
+ */
+function blockSource(body, modules = {}) {
   const declared = body.match(/^\/\/\s*(\S+)/)[1];
   const base = pathToFileURL(join(ROOT, declared));
-  const src = body.replace(/from '(\.[^']+)'/g, (_, spec) => `from '${new URL(spec, base).href}'`);
-  return import(`data:text/javascript,${encodeURIComponent(src)}`);
+  return body.replace(/from '(\.[^']+)'/g, (_, spec) => {
+    const file = normalize(join(dirname(declared), spec)).replace(/\\/g, '/');
+    return `from '${modules[file] || new URL(spec, base).href}'`;
+  });
 }
+
+const dataUrl = (src) => `data:text/javascript,${encodeURIComponent(src).replace(/'/g, '%27')}`;
+
+/** Import a js block as the module it declares itself to be. */
+const importBlock = (body) => import(dataUrl(blockSource(body)));
 
 // ---------------------------------------------------------------- the guide
 
@@ -224,16 +243,19 @@ test('the checker refuses a missing file, export, script, link and import (mutat
     '# T', '', '`src/js/nope.js` and `src/js/studio/registry.js#noSuchExport`,',
     '`npm run no-such-script`, [gone](nope.md) and [here](#nowhere), `project.no-such-rule`.', '',
     '```js', '// src/js/studio/nodes/x.js', "import { noSuchPort } from '../ports.js';", '```', '',
+    '```js', '// src/js/studio/nodes/y.js', "import { gone } from './x.js';", '```', '',
     '```bash', 'node tests/browser/no-such-suite.cjs', '```', '',
   ].join('\n');
   const problems = checkGuide(broken, { scripts: SCRIPTS });
   for (const re of [/src\/js\/nope\.js: no such file/, /does not export noSuchExport/,
     /no-such-script is missing/, /docs\/nope\.md does not exist/, /#nowhere: no such heading/,
     /does not export noSuchPort/, /no-such-suite\.cjs: no such file/,
-    /rule project\.no-such-rule has no file/]) {
+    /rule project\.no-such-rule has no file/, /nodes\/y\.js: \.\/x\.js does not export gone/]) {
     assert.ok(problems.some((p) => re.test(p)), `${re} in ${JSON.stringify(problems)}`);
   }
-  assert.equal(problems.length, 8, problems.join('\n'));
+  // x.js is not in the tree, but the first block declares it: y.js's import of it resolves.
+  assert.ok(!problems.some((p) => /x\.js does not exist/.test(p)), problems.join('\n'));
+  assert.equal(problems.length, 9, problems.join('\n'));
   // The static export reader sees each export form the guide relies on.
   assert.ok(exportsName('export const A = 1;', 'A', 'x.js'));
   assert.ok(exportsName('export async function b() {}', 'b', 'x.js'));
@@ -304,6 +326,24 @@ test('the example node compiles through the real registry, compiler and adapter 
     }
     assert.deepEqual(polarityAdapter.structural, ['inverted']);
   });
+
+test('the example node test passes as printed, against the example node', () => {
+  const md = read(GUIDE);
+  const nodeBody = example(md, 'studio-node');
+  const nodePath = nodeBody.match(/^\/\/\s*(\S+)/)[1];
+  const src = blockSource(example(md, 'studio-node-test'),
+    { [nodePath]: dataUrl(blockSource(nodeBody)) });
+  assert.ok(src.includes(dataUrl(blockSource(nodeBody))), 'the test imports the example node');
+  // Its own process, as `node --test tests/unit/my-node.test.mjs` would run it; the parent
+  // runner's context variable is dropped so the child reports as a plain test file.
+  const env = { ...process.env };
+  delete env.NODE_TEST_CONTEXT;
+  const run = spawnSync(process.execPath, ['--input-type=module', '-e', src],
+    { cwd: ROOT, env, encoding: 'utf8', timeout: 120000 });
+  assert.equal(run.status, 0, `${run.stdout}\n${run.stderr}`);
+  assert.match(run.stdout, /^# pass 1$/m);
+  assert.match(run.stdout, /^# fail 0$/m);
+});
 
 // ---------------------------------------------------------------- the README landing
 

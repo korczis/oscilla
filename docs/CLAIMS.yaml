@@ -292,7 +292,7 @@ claims:
     note: 'Plan issue E028. The links are decoded by the shipped routeOfHash, decodeRecipeLink and decodeStudioLink. That a page opened at such a link lands there in a browser is checked for the Studio keys by tests/browser/v31-studio-links.cjs and for m by the open-every-workspace check of tests/browser/navigation.cjs, not for this recipe value; that applying a link starts nothing is the claim of those suites. Whether the landing prose overstates what a workspace does stays with the reviewer (project.no-fake-science).'
 
   - id: extending-guide-checked
-    claim: 'Every file, module export, link target and npm script that docs/EXTENDING.md names exists, every import of its code examples resolves to an export, and its example Studio node type validates in createNodeRegistry and compiles through compileStudio to a ready node whose adapter flips the polarity'
+    claim: 'Every file, module export, link target and npm script that docs/EXTENDING.md names exists, every import of its code examples resolves to an export, and its example Studio node type validates in createNodeRegistry and compiles through compileStudio to a ready node whose adapter flips the polarity, and the guide''s unit test of that node passes as printed in its own process'
     source: docs/EXTENDING.md
     implementation: src/js/studio/registry.js
     test: tests/unit/extending-guide.test.mjs
