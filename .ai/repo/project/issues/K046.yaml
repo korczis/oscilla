@@ -1,0 +1,50 @@
+id: K046
+milestone: M062
+serves:
+  - "playable-instrument#chart-interaction"
+  - "playable-instrument#chart-states-honest"
+title: "Studio automation lanes: value axis, scheduled-value readout, playhead values"
+slug: studio-automation-lanes-value-axis-scheduled-value-readout-p
+priority: p2
+profile: implementation
+objective: "Lands as feat(studio-ui). Lanes get SVG tick labels with the unit from info.scale.ticks(); the kit's crosshair, dot and keyboard cursor with a readout \"1.250 s . 1.20 kHz\" from laneValueAt, which a unit test pins to scheduledValueAt(compileLaneEvents(...)) within 1e-6 relative, so the readout is what the transport schedules; the snapped time as a dashed tick named in the lane's legend; a playhead dot per lane moved by transform from timeline-editor.js's existing onFrame subscription (:25 and :579 on main), marked essential (K036) so Pause animation does not freeze it, and a head chip captioned \"scheduled\" (never AudioParam.value), its text changed only when it changes; a drag preview chip with a ghost of the original point; segments that pointProblem rejects drawn in the warning role with a hatch and the reason in the point title; a modulationRange band when an LFO or Random modulates the same parameter, with \"lane = base value; shaded = modulated range\"; lane colour by target node family from the node-family role set of K027's registry, validated in both themes and applied through the palette's classes, never a hex; playhead dots only on the compact timeline. New code goes into src/js/ui/studio/lane-readout.js (timeline-editor.js is 49 330 of 53 000 B). It imports src/js/studio/automation.js and edits nothing under src/js/studio. The lane host shadows Studio's arrow shortcuts and the timeline keys of transport-view.js KEY_HELP (Home, the arrows with Shift for fine, up and down) only while it has focus, and adds them by name to the kit's key test."
+why: "Owner order of 2026-10-29: \"make the charts really sexy, modern, interactive\", for all charts; reviewer f3 scoped it to every surface that draws data. Revised after f3's review of the plan (CHANGES-REQUESTED, 2026-10-29): owner decisions are Q issues under M063, Pro chrome waits on F002 and on the card issue of its workspace, every chart that claims chart-interaction delivers the keyboard cursor and the announced readout, chart keys never take Escape or Space; revision 3 answers f3's delta review. Facts checked against origin/main at e2720e07 and the branches of #251, #253, #263 and #265 (charts-plan.md, charts-plan-changes.md)."
+scope:
+  - "src/js/ui/studio/automation-editor.js"
+  - "src/js/ui/studio/automation-view.js"
+  - "src/js/ui/studio/compact-timeline.js"
+  - "src/js/ui/studio/lane-readout.js"
+  - "src/js/ui/studio/timeline-editor.js"
+  - "src/js/charts/palette.js"
+  - "tests/unit/v31-studio-ui-timeline-automation.test.mjs"
+  - "tests/unit/chart-interaction.test.mjs"
+  - "tests/browser/v31-studio-timeline.cjs"
+  - "tests/unit/chart-host-census.json"
+  - "tests/browser/charts-interaction.cjs"
+  - "tests/visual"
+  - "tests/README.md"
+  - "dist"
+depends_on:
+  - "K027"
+  - "K053"
+  - "K036"
+  - "F008"
+acceptance_criteria:
+  - "tests/unit/v31-studio-ui-timeline-automation.test.mjs, failing on the merge base: tick-label placement, the hover hit test, and laneValueAt equal to scheduledValueAt(compileLaneEvents(...)) within 1e-6 relative."
+  - "tests/browser/v31-studio-timeline.cjs: hovering a lane at a known time shows the expected formatted value; after the timeline scrolls the cursor is re-hit-tested. Browser checks run inside tests/browser/lib/suite.cjs, wait through tests/browser/lib/wait.cjs with a named deadline and assume no sample rate (44.1 kHz in CI, 48 kHz on the Mac); tests/browser/timing-baseline.json does not grow (project.suite-harness, project.bounded-test-timing)."
+  - "Its chart hosts (Studio automation lanes) move from pending to done in tests/unit/chart-host-census.json, each carrying data-osc-chart, and the table-driven pass of tests/browser/charts-interaction.cjs holds for each: the host is role=group holding the aria-describedby summary and the snapshot data table, and its focusable plot surface is role=application with aria-roledescription \"interactive chart\" (never role=img), both asserted in the accessibility tree, with a visible focus ring; ArrowRight moves the cursor one step and the one polite live region announces the readout once after the keys settle; Escape clears the cursor and still reaches the page's stop (a playing tone stops); Space keeps its workspace meaning (SPACE_MEANING of src/js/ui/shortcuts.js) and is never taken (ADR 0050); on a touch pointer a tap pins the cursor and it stays after the finger lifts."
+  - "Every file stays under its cap in tests/unit/source-size-baseline.json."
+  - "Chart chrome (legend, toolbar, toggle, badge, tooltip, readout row) is Flowbite Pro markup adapted from the matching Pro component and lands after F002 turned on preflight and the form base styles (the border trap of review #253, R-3) and after F008 placed the card it sits in; no osc-* class token or legacy selector is added and src/styles/tokens.css, charts.css, measure.css, studio.css and studio-timeline.css gain no selector or declaration (project.ui-uses-flowbite-pro, project.visual-identity-lock, ADR 0061; node --test tests/unit/ui-flowbite-pro.test.mjs)."
+  - "Its paths are not guarded (scripts/review-verdict.mjs GUARDED), so no review verdict is needed; as a feat or fix change it carries a unit test that fails on the merge base (project.fail-first). An edit under src/js/studio would need a reviewer's verdict."
+  - "The visual references of the visual-studio timeline scenes are re-accepted in darwin-arm64 and linux-x64, in each theme that has references (light ones exist once F011 lands), with the reason \"lane value axis and lane colours\" in the pull request body (npm run test:visual)."
+  - "scripts/size-report.mjs shows at most 3 KB gzip added, compiled CSS included, with the base and head figures in the pull request body; the sum of M062's figures stays within the cap Q014 records, under the 1 000 000 B gzip budget (project.single-file-deliverable)."
+  - "tests/README.md has a row for each new test; dist is rebuilt and npm run build:check passes."
+validation:
+  - "node --test tests/unit/v31-studio-ui-timeline-automation.test.mjs"
+  - "node tests/browser/v31-studio-timeline.cjs"
+  - "node tests/browser/charts-interaction.cjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-10-29
+updated_at: 2026-10-29
